@@ -338,6 +338,28 @@ approvals:
   `/websites/cli_github_manual` (актуальный `gh issue/pr` синтаксис) и `/mermaid-js/mermaid` (валидный C4 синтаксис).
 - Scope этапа сохранён policy-safe: markdown-only изменения без модификации code/runtime артефактов.
 
+## Актуализация по Issue #238 (`run:design`, 2026-03-02)
+- Для FR-026/FR-028/FR-033/FR-053/FR-054 и NFR-010/NFR-018 добавлен design traceability пакет Sprint S7:
+  `docs/delivery/epics/s7/epic-s7-day5-mvp-readiness-design.md`,
+  `docs/architecture/s7_mvp_readiness_gap_closure_design_doc.md`,
+  `docs/architecture/s7_mvp_readiness_gap_closure_api_contract.md`,
+  `docs/architecture/s7_mvp_readiness_gap_closure_data_model.md`,
+  `docs/architecture/s7_mvp_readiness_gap_closure_migrations_policy.md`,
+  `docs/delivery/epics/s7/epic_s7.md`,
+  `docs/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`,
+  `docs/delivery/delivery_plan.md`,
+  `docs/delivery/issue_map.md`.
+- На design-stage зафиксированы typed contract decisions для потоков:
+  `S7-E06`, `S7-E07`, `S7-E09`, `S7-E10`, `S7-E13`, `S7-E16`, `S7-E17`.
+- Зафиксированы persisted-state изменения и migration/rollback политика:
+  `runtime_deploy_tasks`, `agent_runs`, `agent_sessions` (+ flow-events payload hardening).
+- Через Context7 подтверждён dependency baseline и актуальная документация:
+  `/getkin/kin-openapi` (OpenAPI request/response validation path),
+  `/microsoft/monaco-editor` (DiffEditor API `createDiffEditor`/`setModel`).
+- Новые внешние зависимости не добавлялись; каталог зависимостей не требует обновления.
+- Для stage continuity создана follow-up issue `#241` (`run:plan`) без trigger-лейбла.
+- Scope этапа сохранён policy-safe: markdown-only изменения без модификации code/runtime артефактов.
+
 ## Актуализация по Issue #225 (`run:dev`, 2026-02-28)
 - Для FR-002/FR-033 и NFR-002/NFR-010/NFR-018 выполнен рефакторинг bounded scope `S8-E01`:
   декомпозированы oversized-файлы `webhook/service.go`, `staff/service_methods.go`, `transport/grpc/server.go`

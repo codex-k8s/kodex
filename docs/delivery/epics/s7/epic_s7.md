@@ -6,7 +6,7 @@ status: in-progress
 owner_role: PM
 created_at: 2026-02-27
 updated_at: 2026-03-02
-related_issues: [212, 218, 220, 222, 238, 199, 201, 210, 216]
+related_issues: [212, 218, 220, 222, 238, 241, 199, 201, 210, 216]
 related_prs: [213, 215]
 approvals:
   required: ["Owner"]
@@ -26,8 +26,9 @@ approvals:
 - Day 2 (Vision): `docs/delivery/epics/s7/epic-s7-day2-mvp-readiness-vision.md` (Issue `#218`).
 - Day 3 (PRD): `docs/delivery/epics/s7/epic-s7-day3-mvp-readiness-prd.md` + `docs/delivery/epics/s7/prd-s7-day3-mvp-readiness-gap-closure.md` (Issue `#220`).
 - Day 4 (Architecture): `docs/delivery/epics/s7/epic-s7-day4-mvp-readiness-arch.md` (Issue `#222`).
-- Day 5 (Design/Plan): `run:design` в Issue `#238`, затем handover в `run:plan`.
-- Day 6+ (Execution): реализация и приемка `run:dev -> run:qa -> run:release -> run:postdeploy -> run:ops -> run:doc-audit`.
+- Day 5 (Design): `docs/delivery/epics/s7/epic-s7-day5-mvp-readiness-design.md` (Issue `#238`).
+- Day 6 (Plan): `run:plan` в Issue `#241`.
+- Day 7+ (Execution): реализация и приемка `run:dev -> run:qa -> run:release -> run:postdeploy -> run:ops -> run:doc-audit`.
 
 ## Day 2 vision fact
 - В Issue `#218` зафиксированы mission, KPI/success metrics и measurable readiness criteria для потоков `S7-E01..S7-E18`.
@@ -59,6 +60,17 @@ approvals:
 - Подтверждены wave-sequencing ограничения и architecture guard перед `run:dev`:
   `approved_execution_epics_count == created_run_dev_issues_count`.
 - Создана continuity issue `#238` для этапа `run:design` без trigger-лейбла.
+
+## Day 5 design fact
+- В Issue `#238` выпущен design package Sprint S7:
+  - `docs/delivery/epics/s7/epic-s7-day5-mvp-readiness-design.md`;
+  - `docs/architecture/s7_mvp_readiness_gap_closure_design_doc.md`;
+  - `docs/architecture/s7_mvp_readiness_gap_closure_api_contract.md`;
+  - `docs/architecture/s7_mvp_readiness_gap_closure_data_model.md`;
+  - `docs/architecture/s7_mvp_readiness_gap_closure_migrations_policy.md`.
+- Для потоков `S7-E06/S7-E07/S7-E09/S7-E10/S7-E13/S7-E16/S7-E17` зафиксированы typed contract decisions и risk-mitigation.
+- Для persisted-state потоков определены migration/rollback правила и rollout order `migrations -> internal -> edge -> frontend`.
+- Создана continuity issue `#241` для этапа `run:plan` без trigger-лейбла.
 
 ## Candidate execution backlog (18 эпиков)
 

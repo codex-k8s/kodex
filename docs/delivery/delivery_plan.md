@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-02-06
 updated_at: 2026-03-02
-related_issues: [1, 19, 74, 100, 106, 112, 154, 155, 170, 171, 184, 185, 187, 189, 195, 197, 199, 201, 210, 212, 218, 220, 222, 223, 225, 226, 227, 228, 229, 230, 238, 216]
+related_issues: [1, 19, 74, 100, 106, 112, 154, 155, 170, 171, 184, 185, 187, 189, 195, 197, 199, 201, 210, 212, 218, 220, 222, 223, 225, 226, 227, 228, 229, 230, 238, 241, 216]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -170,7 +170,17 @@ approvals:
   - зафиксированы service boundaries/ownership matrix по `S7-E01..S7-E18`;
   - подтверждены wave-sequencing ограничения и architecture parity-gate перед `run:dev`;
   - создана follow-up issue `#238` для stage `run:design` без trigger-лейбла.
-- Day 5+ (planned): `design -> plan -> dev -> qa -> release -> postdeploy -> ops -> doc-audit` с отдельной issue на каждый stage и owner-governed trigger-лейблами.
+- Day 5 (in-review): design stage в issue `#238`:
+  - `docs/delivery/epics/s7/epic-s7-day5-mvp-readiness-design.md`;
+  - `docs/architecture/s7_mvp_readiness_gap_closure_design_doc.md`;
+  - `docs/architecture/s7_mvp_readiness_gap_closure_api_contract.md`;
+  - `docs/architecture/s7_mvp_readiness_gap_closure_data_model.md`;
+  - `docs/architecture/s7_mvp_readiness_gap_closure_migrations_policy.md`.
+- Результат Day 5 (факт):
+  - зафиксированы typed contract decisions для потоков `S7-E06/S7-E07/S7-E09/S7-E10/S7-E13/S7-E16/S7-E17`;
+  - формализованы data/migration/rollback правила для persisted-state потоков;
+  - создана follow-up issue `#241` для stage `run:plan` без trigger-лейбла.
+- Day 6+ (planned): `plan -> dev -> qa -> release -> postdeploy -> ops -> doc-audit` с отдельной issue на каждый stage и owner-governed trigger-лейблами.
 
 ### Sprint S8: Go refactoring parallelization (Issue #223)
 - Day 1 (in-review): plan-пакет по параллельному Go-рефакторингу (`docs/delivery/epics/s8/epic-s8-day1-go-refactoring-plan.md`).
