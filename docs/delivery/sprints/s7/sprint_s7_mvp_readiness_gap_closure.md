@@ -6,7 +6,7 @@ status: in-progress
 owner_role: PM
 created_at: 2026-02-27
 updated_at: 2026-03-02
-related_issues: [212, 218, 220, 222, 238, 199, 201, 210, 216]
+related_issues: [212, 218, 220, 222, 238, 241, 199, 201, 210, 216]
 related_prs: [213, 215]
 approvals:
   required: ["Owner"]
@@ -41,8 +41,9 @@ approvals:
 | Day 2 | Vision: целевая картина MVP closeout, KPI и decomposition baseline | P0 | `docs/delivery/epics/s7/epic-s7-day2-mvp-readiness-vision.md` | in-review (`#218`) |
 | Day 3 | PRD: FR/AC/NFR и sequencing для gap-closure streams | P0 | `docs/delivery/epics/s7/epic-s7-day3-mvp-readiness-prd.md` + `docs/delivery/epics/s7/prd-s7-day3-mvp-readiness-gap-closure.md` | in-review (`#220`) |
 | Day 4 | Architecture: границы и ownership по stream'ам | P0 | `docs/delivery/epics/s7/epic-s7-day4-mvp-readiness-arch.md` | in-review (`#222`) |
-| Day 5 | Design + Plan: execution package и quality gates | P0 | Issue `#238` (`run:design`) + TBD (`run:plan`) | planned |
-| Day 6+ | Dev/QA/Release/Postdeploy/Ops/Doc-Audit | P0/P1 | TBD (`run:dev..run:doc-audit`) | planned |
+| Day 5 | Design: execution-ready contracts/data/migrations package | P0 | `docs/delivery/epics/s7/epic-s7-day5-mvp-readiness-design.md` (`#238`) | in-review (`#238`) |
+| Day 6 | Plan: execution package и quality gates | P0 | Issue `#241` (`run:plan`) | planned |
+| Day 7+ | Dev/QA/Release/Postdeploy/Ops/Doc-Audit | P0/P1 | TBD (`run:dev..run:doc-audit`) | planned |
 
 ## Candidate execution-эпики (`S7-E01..S7-E18`)
 
@@ -79,6 +80,7 @@ approvals:
 | QG-S7-06 Decomposition parity rule | Перед `run:dev` зафиксировано правило `approved_execution_epics == implementation issues` | passed |
 | QG-S7-07 PRD completion | Для Day3 выпущен PRD-пакет (`epic + prd`) и создана follow-up issue `#222` в `run:arch` | passed |
 | QG-S7-08 Architecture completion | Для Day4 выпущен architecture-пакет (ownership matrix + C4 overlays + ADR-0010) и создана follow-up issue `#238` в `run:design` | passed |
+| QG-S7-09 Design completion | Для Day5 выпущен design package (`design_doc`, `api_contract`, `data_model`, `migrations_policy`) и создана follow-up issue `#241` в `run:plan` | passed |
 
 ## Completion критерии спринта
 - [ ] Закрыт открытый P0-блокер S6 (`#216`, `run:release`) и подтверждён переход в `run:postdeploy`.
@@ -98,12 +100,11 @@ approvals:
 | assumption | ASM-212-02 | Owner подтверждает последовательное закрытие stage-цепочки без параллельных конфликтующих `run:*` | accepted |
 
 ## Handover в следующий этап
-- Следующий этап: `run:design`.
-- Для continuity создана отдельная issue `#238` в `run:design` (без trigger-лейбла при создании, лейбл ставит Owner).
-- В Stage `run:design` переданы обязательные артефакты Day4:
-  - `docs/delivery/epics/s7/epic-s7-day4-mvp-readiness-arch.md`;
-  - `docs/architecture/s7_mvp_readiness_gap_closure_architecture.md`;
-  - `docs/architecture/c4_context_s7_mvp_readiness_gap_closure.md`;
-  - `docs/architecture/c4_container_s7_mvp_readiness_gap_closure.md`;
-  - `docs/architecture/adr/ADR-0010-s7-mvp-readiness-stream-boundaries-and-parity-gate.md`;
-  - `docs/architecture/alternatives/ALT-0002-s7-mvp-readiness-stream-architecture.md`.
+- Следующий этап: `run:plan`.
+- Для continuity создана отдельная issue `#241` в `run:plan` (без trigger-лейбла при создании, лейбл ставит Owner).
+- В Stage `run:plan` переданы обязательные артефакты Day5:
+  - `docs/delivery/epics/s7/epic-s7-day5-mvp-readiness-design.md`;
+  - `docs/architecture/s7_mvp_readiness_gap_closure_design_doc.md`;
+  - `docs/architecture/s7_mvp_readiness_gap_closure_api_contract.md`;
+  - `docs/architecture/s7_mvp_readiness_gap_closure_data_model.md`;
+  - `docs/architecture/s7_mvp_readiness_gap_closure_migrations_policy.md`.
