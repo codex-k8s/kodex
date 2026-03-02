@@ -5,7 +5,7 @@ title: "Epic S7 Day 3: PRD для закрытия MVP readiness gaps (Issue #22
 status: in-review
 owner_role: PM
 created_at: 2026-02-27
-updated_at: 2026-02-27
+updated_at: 2026-03-02
 related_issues: [212, 218, 220, 222, 216]
 related_prs: []
 approvals:
@@ -20,6 +20,7 @@ approvals:
 - Подготовлен PRD-пакет Sprint S7 для потоков `S7-E01..S7-E18` с формализацией `user story`, `FR`, `AC`, `NFR`, `edge cases`, `expected evidence`.
 - Зафиксированы dependency graph и execution sequencing для перехода `run:prd -> run:arch -> run:design -> run:plan`.
 - Подтверждено governance-правило decomposition parity перед входом в `run:dev`: `approved_execution_epics == run:dev implementation issues`.
+- В PRD закреплён owner policy для MVP: без custom agents/prompt lifecycle, prompt templates изменяются только через repo workflow.
 - Создана follow-up issue `#222` для stage `run:arch` без trigger-лейбла.
 
 ## Priority
@@ -41,6 +42,7 @@ approvals:
 ### Out of scope
 - Кодовые изменения.
 - Изменение архитектурных границ вне PRD-детализации.
+- Возврат custom agents/prompt lifecycle в MVP scope.
 - Запуск `run:arch` trigger-лейбла (ставит Owner после review).
 
 ## PRD package
@@ -61,9 +63,9 @@ graph TD
     B --> E[S7-E05 Agents table cleanup]
     C --> E
     D --> E
-    E --> F[S7-E06 Agents import defaults]
-    F --> G[S7-E07 Prompt source selector]
-    G --> H[S7-E08 Agents UX hardening]
+    E --> F[S7-E06 Agents settings de-scope]
+    F --> G[S7-E07 Prompt repo-only policy]
+    G --> H[S7-E08 Agents UX de-scope hardening]
 
     A --> I[S7-E09 Runs UX cleanup]
     I --> J[S7-E10 Runtime deploy cancel/stop]
@@ -76,7 +78,7 @@ graph TD
     M --> N[S7-E14 QA DNS-path policy]
     N --> K
 
-    G --> O[S7-E15 Prompt refresh with version bump]
+    G --> O[S7-E15 Repo-only prompt workflow]
     O --> K
 
     L --> P[S7-E16 run:intake:revise status reliability]
@@ -92,7 +94,7 @@ graph TD
 ### Sequencing waves
 - Wave 1 (foundation): `S7-E01`, `S7-E11`, `S7-E13`.
 - Wave 2 (UI cleanup): `S7-E02`, `S7-E03`, `S7-E04`, `S7-E05`.
-- Wave 3 (agents lifecycle): `S7-E06`, `S7-E07`, `S7-E08`, `S7-E15`, `S7-E17`.
+- Wave 3 (agents de-scope and repo-only policy): `S7-E06`, `S7-E07`, `S7-E08`, `S7-E15`, `S7-E17`.
 - Wave 4 (runs/deploy reliability): `S7-E09`, `S7-E10`, `S7-E16`.
 - Wave 5 (QA/governance closeout): `S7-E14`, `S7-E18`, `S7-E12`.
 

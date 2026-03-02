@@ -5,7 +5,7 @@ title: "Epic Catalog: Sprint S7 (MVP readiness gap closure)"
 status: in-progress
 owner_role: PM
 created_at: 2026-02-27
-updated_at: 2026-02-27
+updated_at: 2026-03-02
 related_issues: [212, 218, 220, 222, 199, 201, 210, 216]
 related_prs: [213, 215]
 approvals:
@@ -44,6 +44,7 @@ approvals:
 - Зафиксированы dependency graph и sequencing-waves для перехода `run:prd -> run:arch -> run:design -> run:plan`.
 - Подтверждено parity-правило перед `run:dev`:
   `approved_execution_epics_count == created_run_dev_issues_count`.
+- Зафиксирована owner policy для MVP: custom agents/prompt lifecycle выведены из scope, prompt templates изменяются через repo workflow.
 - Создана continuity issue `#222` для этапа `run:arch` без trigger-лейбла.
 
 ## Candidate execution backlog (18 эпиков)
@@ -55,16 +56,16 @@ approvals:
 | S7-E03 | P0 | Удаление глобального frontend-фильтра и связанного неиспользуемого кода | PRC-04 |
 | S7-E04 | P0 | Удаление runtime-deploy/images контуров и cleanup связанных страниц | PRC-02, PRC-05 |
 | S7-E05 | P0 | Agents UI cleanup: убрать badge `Скоро`, пересобрать таблицу (без role/project-id) | PRC-03 |
-| S7-E06 | P0 | Agents import defaults: runtime mode + locale policy (owner locale + bulk update) | PRC-03 |
-| S7-E07 | P0 | Prompt source selector для worker (`repo` vs `db`) и policy в UI | PRC-03 |
-| S7-E08 | P1 | Agents UX hardening: массовые операции и консистентность конфигурации | PRC-03 |
+| S7-E06 | P0 | Agents MVP de-scope: убрать runtime mode/locale настройки, оставить фиксированные platform defaults | PRC-03 |
+| S7-E07 | P0 | Prompt source MVP contract: удалить selector `repo|db`, закрепить `repo-only` policy | PRC-03 |
+| S7-E08 | P1 | Agents UX de-scope hardening: удалить non-MVP массовые операции и cleanup зависимого UX | PRC-03 |
 | S7-E09 | P0 | Runs UX: удалить колонку типа запуска и гарантировать namespace delete из run details | PRC-06 |
 | S7-E10 | P0 | Runtime deploy UX: кнопка cancel/stop для зависших deploy tasks + guardrails | PRC-07 |
 | S7-E11 | P0 | Label orchestration reliability: исправить `mode:discussion` trigger-поведение | PRC-08 |
 | S7-E12 | P1 | Final MVP readiness gate: e2e evidence bundle + go/no-go для release chain | PRC-01..PRC-08 |
 | S7-E13 | P0 | Label policy alignment: добавить `run:qa:revise` и покрыть revise-loop QA-stage | PRC-09 |
 | S7-E14 | P0 | QA execution contract: проверка новых/изменённых ручек через Kubernetes DNS path + evidence | PRC-10 |
-| S7-E15 | P0 | Agents prompt lifecycle UX: кнопка обновления prompt templates из repo с версионированием | PRC-11 |
+| S7-E15 | P0 | Prompt templates MVP policy: изменения только через repo commit workflow, без UI refresh/versioning | PRC-11 |
 | S7-E16 | P0 | Run status reliability: устранить false-failed для фактически успешных `run:intake:revise` | PRC-12 |
 | S7-E17 | P0 | Self-improve reliability: доступность и корректная перезапись `agent_sessions` snapshot | PRC-13 |
 | S7-E18 | P0 | Documentation governance: единый стандарт issue/PR + doc IA + role-template matrix | PRC-14, PRC-15, PRC-16 |

@@ -5,7 +5,7 @@ title: "codex-k8s — Delivery Plan"
 status: active
 owner_role: EM
 created_at: 2026-02-06
-updated_at: 2026-02-27
+updated_at: 2026-03-02
 related_issues: [1, 19, 74, 100, 106, 112, 154, 155, 170, 171, 184, 185, 187, 189, 195, 197, 199, 201, 210, 212, 218, 220, 222, 223, 225, 226, 227, 228, 229, 230, 216]
 related_prs: []
 approvals:
@@ -156,6 +156,7 @@ approvals:
 - Результат Day 3 (факт):
   - по всем потокам `S7-E01..S7-E18` формализованы `user story`, `FR/AC/NFR`, `edge cases`, `expected evidence`;
   - зафиксированы dependency graph и sequencing-waves для перехода `run:prd -> run:arch -> run:design -> run:plan`;
+  - закреплён owner policy для MVP: custom agents/prompt lifecycle выведены в post-MVP, prompt templates меняются через repo workflow;
   - подтверждено parity-правило перед `run:dev`: `approved_execution_epics_count == created_run_dev_issues_count`;
   - создана follow-up issue `#222` для stage `run:arch` без trigger-лейбла.
 - Day 4+ (planned): `arch -> design -> plan -> dev -> qa -> release -> postdeploy -> ops -> doc-audit` с отдельной issue на каждый stage и owner-governed trigger-лейблами.

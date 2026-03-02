@@ -5,7 +5,7 @@ title: "Sprint S7: MVP readiness gap closure (Issue #212)"
 status: in-progress
 owner_role: PM
 created_at: 2026-02-27
-updated_at: 2026-02-27
+updated_at: 2026-03-02
 related_issues: [212, 218, 220, 222, 199, 201, 210, 216]
 related_prs: [213, 215]
 approvals:
@@ -53,16 +53,16 @@ approvals:
 | S7-E03 | P0 | Удаление глобального фильтра и зависимого кода | UI readiness gate |
 | S7-E04 | P0 | Удаление runtime-deploy/images секции и связанного фронтенд-кода | UI readiness gate |
 | S7-E05 | P0 | Agents table cleanup + removal of `Скоро` badge | depends on S6 baseline |
-| S7-E06 | P0 | Agents import defaults: runtime mode + locale policy + bulk update | depends on S6 baseline |
-| S7-E07 | P0 | Worker prompt source selector (`repo`/`db`) в agents settings | depends on API/worker contracts |
-| S7-E08 | P1 | Agents UX hardening и массовые операции | after S7-E05..E07 |
+| S7-E06 | P0 | Agents MVP de-scope: убрать runtime mode/locale настройки, оставить фиксированные defaults | depends on S6 baseline |
+| S7-E07 | P0 | Prompt source contract: удалить selector `repo|db`, закрепить `repo-only` policy | depends on API/worker contracts |
+| S7-E08 | P1 | Agents UX de-scope hardening: удалить non-MVP массовые операции | after S7-E05..E07 |
 | S7-E09 | P0 | Runs UX: убрать run type + гарантировать delete namespace | release-blocking UX |
 | S7-E10 | P0 | Runtime deploy task cancel/stop control | release-blocking ops UX |
 | S7-E11 | P0 | Исправление поведения `mode:discussion` в label orchestration | stage reliability |
 | S7-E12 | P1 | Финальный readiness gate (`qa -> release -> postdeploy -> ops -> doc-audit`) | requires S7-E01..E11 |
 | S7-E13 | P0 | Добавить revise-петлю `run:qa:revise` в stage/labels policy | review/revise reliability |
 | S7-E14 | P0 | QA policy: проверка новых/изменённых ручек через Kubernetes DNS path | QA acceptance gate |
-| S7-E15 | P0 | Agents: обновление prompt templates из repo с version bump | agents lifecycle readiness |
+| S7-E15 | P0 | Prompt templates MVP policy: изменения только через repo commit workflow (без UI refresh/versioning) | agents/prompt policy readiness |
 | S7-E16 | P0 | Run status reliability: false-failed для `run:intake:revise` | stage reliability |
 | S7-E17 | P0 | Self-improve: доступность и перезапись session snapshot | self-improve reliability |
 | S7-E18 | P0 | Documentation governance: issue/PR standard + doc IA + role-template matrix | backlog quality gate |
