@@ -87,7 +87,14 @@ approvals:
   зафиксирован единый deterministic rebase/mainline процесс для revise-итераций в `run:dev`.
 - Process baseline закреплён в `docs/delivery/development_process_requirements.md`:
   обязательный `rebase -> conflict-marker check -> checks -> force-with-lease` и PR checklist для команды.
-- В traceability добавлена отдельная запись по issue `#243`; remaining backlog нормализован как `#244..#260`.
+- В traceability добавлена отдельная запись по issue `#243`; remaining backlog нормализован как `#245..#260` после реализации `#244`.
+
+## Day 7 execution fact (`S7-E02`)
+- В Issue `#244` реализован UI cleanup stream `S7-E02`:
+  из sidebar удалены non-MVP секции `governance`/`admin` и non-MVP пункты `configuration/docs`, `configuration/mcp-tools`.
+- В роутинге staff UI удалены соответствующие non-MVP маршруты и добавлен fallback redirect на `projects` для stale deep-links.
+- Удалён связанный dead code non-MVP страниц и feature-адаптера stage transition.
+- В traceability добавлены обновления по issue `#244`; remaining backlog нормализован как `#245..#260`.
 
 ## Candidate execution backlog (18 эпиков)
 

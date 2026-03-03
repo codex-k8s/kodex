@@ -1,4 +1,4 @@
-export type NavGroupId = "operations" | "projects" | "platform" | "governance" | "admin";
+export type NavGroupId = "operations" | "projects" | "platform";
 
 export type NavGroup = {
   id: NavGroupId;
@@ -19,8 +19,6 @@ export const navGroups: NavGroup[] = [
   { id: "operations", titleKey: "nav.operations" },
   { id: "projects", titleKey: "nav.projectManagement" },
   { id: "platform", titleKey: "nav.platform" },
-  { id: "governance", titleKey: "nav.governance" },
-  { id: "admin", titleKey: "nav.adminCluster" },
 ];
 
 export const navItems: NavItem[] = [
@@ -40,25 +38,10 @@ export const navItems: NavItem[] = [
   // Platform
   { groupId: "platform", routeName: "users", titleKey: "nav.users", icon: "mdi-account-multiple-outline", adminOnly: true },
 
-  // Governance (scaffold)
-  { groupId: "governance", routeName: "audit-log", titleKey: "nav.auditLog", icon: "mdi-history", comingSoon: true },
-  { groupId: "governance", routeName: "labels-stages", titleKey: "nav.labelsStages", icon: "mdi-tag-multiple-outline", comingSoon: true },
-
-  // Admin / Cluster (scaffold)
-  { groupId: "admin", routeName: "cluster-namespaces", titleKey: "nav.cluster.namespaces", icon: "mdi-home-group", comingSoon: true },
-  { groupId: "admin", routeName: "cluster-configmaps", titleKey: "nav.cluster.configMaps", icon: "mdi-file-cog-outline", comingSoon: true },
-  { groupId: "admin", routeName: "cluster-secrets", titleKey: "nav.cluster.secrets", icon: "mdi-key-outline", comingSoon: true },
-  { groupId: "admin", routeName: "cluster-deployments", titleKey: "nav.cluster.deployments", icon: "mdi-rocket-launch-outline", comingSoon: true },
-  { groupId: "admin", routeName: "cluster-pods", titleKey: "nav.cluster.pods", icon: "mdi-cube-outline", comingSoon: true },
-  { groupId: "admin", routeName: "cluster-jobs", titleKey: "nav.cluster.jobs", icon: "mdi-briefcase-outline", comingSoon: true },
-  { groupId: "admin", routeName: "cluster-pvc", titleKey: "nav.cluster.pvc", icon: "mdi-database-outline", comingSoon: true },
-
   // Platform configuration (scaffold)
   { groupId: "platform", routeName: "agents", titleKey: "nav.agents", icon: "mdi-robot-outline", comingSoon: true },
   { groupId: "platform", routeName: "system-settings", titleKey: "nav.systemSettings", icon: "mdi-cog-outline", adminOnly: true },
   { groupId: "platform", routeName: "config-entries", titleKey: "nav.configEntries", icon: "mdi-tune-variant", adminOnly: true },
-  { groupId: "platform", routeName: "docs-knowledge", titleKey: "nav.docs", icon: "mdi-book-open-page-variant-outline", comingSoon: true },
-  { groupId: "platform", routeName: "mcp-tools", titleKey: "nav.mcpTools", icon: "mdi-wrench-cog-outline", comingSoon: true },
 ];
 
 export function findNavItemByRouteName(name: string | undefined): NavItem | undefined {
