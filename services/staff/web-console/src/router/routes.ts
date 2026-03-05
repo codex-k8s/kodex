@@ -7,8 +7,6 @@ import RuntimeDeployTaskDetailsPage from "../pages/operations/RuntimeDeployTaskD
 import RuntimeDeployTasksPage from "../pages/operations/RuntimeDeployTasksPage.vue";
 import WaitQueuePage from "../pages/operations/WaitQueuePage.vue";
 
-import AgentsPage from "../pages/configuration/AgentsPage.vue";
-import AgentDetailsPage from "../pages/configuration/AgentDetailsPage.vue";
 import ConfigEntriesPage from "../pages/configuration/ConfigEntriesPage.vue";
 import ProjectMembersPage from "../pages/ProjectMembersPage.vue";
 import ProjectDetailsPage from "../pages/ProjectDetailsPage.vue";
@@ -48,14 +46,6 @@ export const routes: RouteRecordRaw[] = [
   { path: "/approvals", name: "approvals", component: ApprovalsCenterPage, meta: { section: "operations", crumbKey: "crumb.approvals" } },
 
   // Configuration (scaffold)
-  { path: "/configuration/agents", name: "agents", component: AgentsPage, meta: { section: "configuration", crumbKey: "crumb.agents" } },
-  {
-    path: "/configuration/agents/:agentId",
-    name: "agent-details",
-    component: AgentDetailsPage,
-    props: (r) => ({ agentId: typeof r.params.agentId === "string" ? r.params.agentId : "" }),
-    meta: { section: "configuration", crumbKey: "crumb.agents" },
-  },
   { path: "/configuration/system-settings", name: "system-settings", component: SystemSettingsPage, meta: { adminOnly: true, section: "configuration", crumbKey: "crumb.systemSettings" } },
   { path: "/configuration/config-entries", name: "config-entries", component: ConfigEntriesPage, meta: { adminOnly: true, section: "configuration", crumbKey: "crumb.configEntries" } },
 

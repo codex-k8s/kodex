@@ -39,7 +39,6 @@ export const navItems: NavItem[] = [
   { groupId: "platform", routeName: "users", titleKey: "nav.users", icon: "mdi-account-multiple-outline", adminOnly: true },
 
   // Platform configuration (scaffold)
-  { groupId: "platform", routeName: "agents", titleKey: "nav.agents", icon: "mdi-robot-outline", comingSoon: true },
   { groupId: "platform", routeName: "system-settings", titleKey: "nav.systemSettings", icon: "mdi-cog-outline", adminOnly: true },
   { groupId: "platform", routeName: "config-entries", titleKey: "nav.configEntries", icon: "mdi-tune-variant", adminOnly: true },
 ];
