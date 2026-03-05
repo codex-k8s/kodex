@@ -5,8 +5,8 @@ title: "Epic Catalog: Sprint S7 (MVP readiness gap closure)"
 status: in-progress
 owner_role: PM
 created_at: 2026-02-27
-updated_at: 2026-03-02
-related_issues: [212, 218, 220, 222, 238, 241, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 199, 201, 210, 216]
+updated_at: 2026-03-05
+related_issues: [212, 218, 220, 222, 238, 241, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 274, 199, 201, 210, 216]
 related_prs: [213, 215]
 approvals:
   required: ["Owner"]
@@ -19,7 +19,7 @@ approvals:
 ## TL;DR
 - Sprint S7 консолидирует незакрытые MVP-разрывы из UI, stage-flow и delivery-governance в единый execution backlog.
 - Day1 intake (`#212`) зафиксировал P0/P1/P2-потоки и актуализировал S6 dependency-chain: `#199/#201` закрыты, открытый блокер — `#216` (`run:release`).
-- Цель каталога: дать однозначную stage-декомпозицию и candidate backlog на 18 эпиков до полного readiness цикла `dev -> qa -> release -> postdeploy -> ops -> doc-audit`.
+- Цель каталога: дать однозначную stage-декомпозицию и candidate backlog на 18 эпиков + post-plan `S7-E19` до полного readiness цикла `dev -> qa -> release -> postdeploy -> ops -> doc-audit`.
 
 ## Stage roadmap
 - Day 1 (Intake): `docs/delivery/epics/s7/epic-s7-day1-mvp-readiness-intake.md` (Issue `#212`).
@@ -81,22 +81,31 @@ approvals:
   `approved_execution_epics_count == created_run_dev_issues_count` (`18 == 18`).
 - Зафиксирован launch-order по waves и правило запуска:
   trigger `run:dev` на implementation issues ставит Owner в порядке wave-sequencing.
+- Post-plan добавление: issue `#274` (`S7-E19`) для backend cleanup Agents/Configs/Secrets (Owner request из PR #272).
 
 ## Day 7 execution fact (`S7-E01`)
 - В Issue `#243` реализован foundation stream `S7-E01`:
   зафиксирован единый deterministic rebase/mainline процесс для revise-итераций в `run:dev`.
 - Process baseline закреплён в `docs/delivery/development_process_requirements.md`:
   обязательный `rebase -> conflict-marker check -> checks -> force-with-lease` и PR checklist для команды.
-- В traceability добавлена отдельная запись по issue `#243`; remaining backlog нормализован как `#244..#260`.
+- В traceability добавлена отдельная запись по issue `#243`; remaining backlog нормализован как `#245..#260` после реализации `#244`.
 
-## Candidate execution backlog (18 эпиков)
+## Day 7 execution fact (`S7-E02`)
+- В Issue `#244` реализован UI cleanup stream `S7-E02`:
+  из sidebar удалены non-MVP секции `governance`/`admin`, non-MVP пункты `configuration/docs`, `configuration/mcp-tools`,
+  `configuration/agents`, `configuration/config-entries`, а также operations-контуры `runtime-deploy/images` и `running-jobs`.
+- В роутинге staff UI удалены соответствующие non-MVP маршруты и добавлен fallback redirect на `projects` для stale deep-links.
+- Удалён связанный dead code non-MVP страниц, UI-контур `config-entries` и platform-tokens scaffold в `system-settings`.
+- В traceability добавлены обновления по issue `#244`; remaining backlog нормализован как `#245..#260` + post-plan `#274`.
+
+## Candidate execution backlog (19 эпиков)
 
 | Epic ID | Priority | Scope | Источник замечаний |
 |---|---|---|---|
 | S7-E01 | P0 | Rebase/mainline hygiene и merge-conflict policy для PR-итераций | PRC-01 |
-| S7-E02 | P0 | Удаление не-MVP разделов и связанного dead code из sidebar/routes | PRC-05 |
+| S7-E02 | P0 | Удаление не-MVP разделов (включая Agents, Configs/Secrets, Registry images, Running jobs) и связанного dead code | PRC-05 |
 | S7-E03 | P0 | Удаление глобального frontend-фильтра и связанного неиспользуемого кода | PRC-04 |
-| S7-E04 | P0 | Удаление runtime-deploy/images контуров и cleanup связанных страниц | PRC-02, PRC-05 |
+| S7-E04 | P0 | Удаление runtime-deploy/images контуров и cleanup связанных страниц (закрыто в `#244`) | PRC-02, PRC-05 |
 | S7-E05 | P0 | Agents UI cleanup: убрать badge `Скоро`, пересобрать таблицу (без role/project-id) | PRC-03 |
 | S7-E06 | P0 | Agents MVP de-scope: убрать runtime mode/locale настройки, оставить фиксированные platform defaults | PRC-03 |
 | S7-E07 | P0 | Prompt source MVP contract: удалить selector `repo|db`, закрепить `repo-only` policy | PRC-03 |
@@ -111,6 +120,7 @@ approvals:
 | S7-E16 | P0 | Run status reliability: устранить false-failed для фактически успешных `run:intake:revise` | PRC-12 |
 | S7-E17 | P0 | Self-improve reliability: доступность и корректная перезапись `agent_sessions` snapshot | PRC-13 |
 | S7-E18 | P0 | Documentation governance: единый стандарт issue/PR + doc IA + role-template matrix | PRC-14, PRC-15, PRC-16 |
+| S7-E19 | P1 | Backend cleanup: удалить non-MVP контуры Agents/Configs/Secrets + registry images + running jobs | Owner request (PR #272) |
 
 ## Delivery-governance правила
 - Каждая следующая stage-issue создаётся отдельной задачей и без trigger-лейбла.

@@ -429,10 +429,27 @@ approvals:
   `git fetch -> git rebase origin/main -> conflict-marker check -> checks -> git push --force-with-lease`,
   запрет `git merge origin/main` для revise-веток и обязательный PR rebase-checklist.
 - Актуализирована traceability-матрица Sprint S7:
-  `docs/delivery/issue_map.md` (выделен отдельный статус issue `#243`, остаток backlog перенесён в диапазон `#244..#260`).
+  `docs/delivery/issue_map.md` (выделен отдельный статус issue `#243`, остаток backlog перенесён в диапазон `#245..#260` после закрытия `#244`).
 - Через Context7 (`/websites/git-scm`) подтверждены актуальные команды `git rebase --continue|--abort`
   и безопасный push-path `git push --force-with-lease` для rebased PR-веток.
 - Новые внешние зависимости не добавлялись; изменения ограничены markdown/process governance контуром.
+
+## Актуализация по Issue #244 (`run:dev`, 2026-03-05)
+- Для FR-026/FR-028/FR-033 и NFR-010/NFR-018 реализован stream `S7-E02`:
+  из staff sidebar удалены non-MVP navigation entries (`governance`, `admin`, `configuration/docs`, `configuration/mcp-tools`, `configuration/agents`, `configuration/config-entries`).
+- В `services/staff/web-console/src/router/routes.ts` удалены связанные non-MVP маршруты и добавлен fallback redirect на `projects` для stale deep-links,
+  чтобы после cleanup не возникало broken transitions.
+- Удалён связанный dead code:
+  страницы `pages/governance/*`, `pages/admin/*`, `pages/configuration/{DocsKnowledgePage,McpToolsPage}.vue`,
+  UI-контур `config-entries` (страница + feature-слой) и platform-tokens scaffold в `System settings`.
+- Актуализирована Sprint S7 traceability:
+  `docs/delivery/issue_map.md`, `docs/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`, `docs/delivery/epics/s7/epic_s7.md`.
+- По owner request оформлен follow-up issue `#274` (`S7-E19`) на backend cleanup Agents/Configs/Secrets,
+  синхронизированы sprint/epic/plan документы.
+- Проверки по scope:
+  `npm --prefix services/staff/web-console run build`, route inventory search (`rg -n` по удалённым route names),
+  smoke-check MVP навигации (`projects`, `project-repositories`, `project-members`, `runs`, `runtime-deploy/tasks`, `runtime-deploy/images`,
+  `running-jobs`, `wait-queue`, `approvals`, `system-settings`, `users`).
 
 ## Актуализация по Issue #225 (`run:dev`, 2026-02-28)
 - Для FR-002/FR-033 и NFR-002/NFR-010/NFR-018 выполнен рефакторинг bounded scope `S8-E01`:

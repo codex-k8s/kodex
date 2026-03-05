@@ -329,7 +329,7 @@ watch(
 const showContextFilter = computed(() => {
   if (!auth.isAuthed) return false;
   const section = String((route.meta as Record<string, unknown>).section || "");
-  return section === "runs" || section === "operations" || section === "admin";
+  return section === "runs" || section === "operations";
 });
 
 const filterSummaryParts = computed(() => {
