@@ -5,7 +5,6 @@ import (
 
 	"github.com/codex-k8s/codex-k8s/libs/go/crypto/tokencrypt"
 	"github.com/codex-k8s/codex-k8s/libs/go/repo/provider"
-	agentrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/repository/agent"
 	learningfeedbackrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/repository/learningfeedback"
 	projectrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/repository/project"
 	projectmemberrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/repository/projectmember"
@@ -41,7 +40,6 @@ type Service struct {
 	users         userrepo.Repository
 	projects      projectrepo.Repository
 	members       projectmemberrepo.Repository
-	agents        agentrepo.Repository
 	repos         repocfgrepo.Repository
 	projectTokens projecttokenrepo.Repository
 	feedback      learningfeedbackrepo.Repository
@@ -90,7 +88,6 @@ type Dependencies struct {
 	Users          userrepo.Repository
 	Projects       projectrepo.Repository
 	Members        projectmemberrepo.Repository
-	Agents         agentrepo.Repository
 	Repos          repocfgrepo.Repository
 	ProjectTokens  projecttokenrepo.Repository
 	Feedback       learningfeedbackrepo.Repository
@@ -112,7 +109,6 @@ func NewService(cfg Config, deps Dependencies) *Service {
 		users:          deps.Users,
 		projects:       deps.Projects,
 		members:        deps.Members,
-		agents:         deps.Agents,
 		repos:          deps.Repos,
 		projectTokens:  deps.ProjectTokens,
 		feedback:       deps.Feedback,

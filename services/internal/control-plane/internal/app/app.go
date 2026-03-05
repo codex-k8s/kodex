@@ -329,7 +329,6 @@ func Run() error {
 		Users:          users,
 		Projects:       projects,
 		Members:        members,
-		Agents:         agents,
 		Repos:          repos,
 		ProjectTokens:  projectTokens,
 		Feedback:       feedback,

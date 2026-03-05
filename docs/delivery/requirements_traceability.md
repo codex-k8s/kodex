@@ -476,14 +476,23 @@ approvals:
   `/staff/runs/jobs`, `/staff/runtime-deploy/images*`; синхронно обновлены backend/frontend codegen артефакты.
 - В `control-plane` удалены соответствующие non-MVP RPC из `ControlPlaneService` и
   runtime/domain-реализации staff use-cases (transport + domain + app wiring).
+- В control-plane удалены неиспользуемые SQL/repository слои:
+  `internal/repository/postgres/prompttemplate/*`,
+  `internal/repository/postgres/configentry/*`,
+  staff-only части `internal/repository/postgres/agent/*` (list/get/update settings),
+  а также связанные domain types/repository contracts.
+- Добавлена миграция
+  `services/internal/control-plane/cmd/cli/migrations/20260305170000_day27_staff_non_mvp_schema_cleanup.sql`
+  для удаления non-MVP схемы:
+  `drop table prompt_templates`, `drop table config_entries`,
+  `alter table agents drop columns settings/settings_version`.
 - В `api-gateway` удалены связанные transport handlers/call-builders;
   для `web-console` очищен dead scaffold (`features/agents`, `configuration/Agents*`).
 - Обновлены архитектурные и delivery-артефакты трассировки:
   `docs/architecture/api_contract.md`, `docs/delivery/issue_map.md`, `docs/delivery/requirements_traceability.md`.
 - Проверки по scope:
-  `make gen-openapi`, `make gen-proto-go`,
   `go test ./services/external/api-gateway/... ./services/internal/control-plane/...`,
-  `npm --prefix services/staff/web-console run build`,
+  `go mod tidy`,
   `make lint-go`, `make dupl-go`.
 
 ## Актуализация по Issue #225 (`run:dev`, 2026-02-28)
