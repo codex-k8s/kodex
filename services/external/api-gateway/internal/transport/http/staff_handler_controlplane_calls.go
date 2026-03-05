@@ -32,26 +32,8 @@ func buildUpsertProjectRequest(principal *controlplanev1.Principal, req models.U
 	return &controlplanev1.UpsertProjectRequest{Principal: principal, Slug: req.Slug, Name: req.Name}
 }
 
-func buildListAgentsRequest(principal *controlplanev1.Principal, limit int32) *controlplanev1.ListAgentsRequest {
-	return &controlplanev1.ListAgentsRequest{Principal: principal, Limit: limit}
-}
-
-func buildGetAgentRequest(principal *controlplanev1.Principal, id string) *controlplanev1.GetAgentRequest {
-	return &controlplanev1.GetAgentRequest{Principal: principal, AgentId: id}
-}
-
 func buildListRunsRequest(principal *controlplanev1.Principal, limit int32) *controlplanev1.ListRunsRequest {
 	return &controlplanev1.ListRunsRequest{Principal: principal, Limit: limit}
-}
-
-func buildListRunJobsRequest(principal *controlplanev1.Principal, arg runListFilterArg) *controlplanev1.ListRunJobsRequest {
-	return &controlplanev1.ListRunJobsRequest{
-		Principal:   principal,
-		Limit:       arg.limit,
-		TriggerKind: optionalStringPtr(arg.triggerKind),
-		Status:      optionalStringPtr(arg.status),
-		AgentKey:    optionalStringPtr(arg.agentKey),
-	}
 }
 
 func buildListRunWaitsRequest(principal *controlplanev1.Principal, arg runListFilterArg) *controlplanev1.ListRunWaitsRequest {
@@ -84,22 +66,6 @@ func buildGetRunLogsRequest(principal *controlplanev1.Principal, arg runLogsArg)
 type approvalDecisionArg struct {
 	approvalRequestID int64
 	body              models.ResolveApprovalDecisionRequest
-}
-
-type createPromptTemplateVersionArg struct {
-	templateKey string
-	req         models.CreatePromptTemplateVersionRequest
-}
-
-func buildCreatePromptTemplateVersionRequest(principal *controlplanev1.Principal, arg createPromptTemplateVersionArg) *controlplanev1.CreatePromptTemplateVersionRequest {
-	return &controlplanev1.CreatePromptTemplateVersionRequest{
-		Principal:       principal,
-		TemplateKey:     arg.templateKey,
-		BodyMarkdown:    arg.req.BodyMarkdown,
-		ExpectedVersion: arg.req.ExpectedVersion,
-		Source:          arg.req.Source,
-		ChangeReason:    arg.req.ChangeReason,
-	}
 }
 
 func buildResolveApprovalDecisionRequest(principal *controlplanev1.Principal, arg approvalDecisionArg) *controlplanev1.ResolveApprovalDecisionRequest {
@@ -158,33 +124,6 @@ func buildMarkRuntimeErrorViewedRequest(principal *controlplanev1.Principal, run
 	}
 }
 
-func buildListRegistryImagesRequest(principal *controlplanev1.Principal, arg registryImagesListArg) *controlplanev1.ListRegistryImagesRequest {
-	return &controlplanev1.ListRegistryImagesRequest{
-		Principal:         principal,
-		Repository:        optionalStringPtr(arg.repository),
-		LimitRepositories: arg.limitRepositories,
-		LimitTags:         arg.limitTags,
-	}
-}
-
-func buildDeleteRegistryImageTagRequest(principal *controlplanev1.Principal, req models.DeleteRegistryImageTagRequest) *controlplanev1.DeleteRegistryImageTagRequest {
-	return &controlplanev1.DeleteRegistryImageTagRequest{
-		Principal:  principal,
-		Repository: strings.TrimSpace(req.Repository),
-		Tag:        strings.TrimSpace(req.Tag),
-	}
-}
-
-func buildCleanupRegistryImagesRequest(principal *controlplanev1.Principal, req models.CleanupRegistryImagesRequest) *controlplanev1.CleanupRegistryImagesRequest {
-	return &controlplanev1.CleanupRegistryImagesRequest{
-		Principal:         principal,
-		RepositoryPrefix:  optionalStringPtr(req.RepositoryPrefix),
-		LimitRepositories: req.LimitRepositories,
-		KeepTags:          req.KeepTags,
-		DryRun:            req.DryRun,
-	}
-}
-
 func buildListUsersRequest(principal *controlplanev1.Principal, limit int32) *controlplanev1.ListUsersRequest {
 	return &controlplanev1.ListUsersRequest{Principal: principal, Limit: limit}
 }
@@ -213,32 +152,8 @@ func (h *staffHandler) upsertProjectCall(ctx context.Context, principal *control
 	return callUnaryWithArg(ctx, principal, req, buildUpsertProjectRequest, h.cp.Service().UpsertProject)
 }
 
-func (h *staffHandler) listAgentsCall(ctx context.Context, principal *controlplanev1.Principal, limit int32) (*controlplanev1.ListAgentsResponse, error) {
-	return callUnaryWithArg(ctx, principal, limit, buildListAgentsRequest, h.cp.Service().ListAgents)
-}
-
-func (h *staffHandler) getAgentCall(ctx context.Context, principal *controlplanev1.Principal, id string) (*controlplanev1.Agent, error) {
-	return callUnaryWithArg(ctx, principal, id, buildGetAgentRequest, h.cp.Service().GetAgent)
-}
-
-func (h *staffHandler) createPromptTemplateVersionCall(
-	ctx context.Context,
-	principal *controlplanev1.Principal,
-	arg createPromptTemplateVersionArg,
-) (*controlplanev1.PromptTemplateVersion, error) {
-	return callUnaryWithArg(ctx, principal, arg, buildCreatePromptTemplateVersionRequest, h.cp.Service().CreatePromptTemplateVersion)
-}
-
 func (h *staffHandler) listRunsCall(ctx context.Context, principal *controlplanev1.Principal, limit int32) (*controlplanev1.ListRunsResponse, error) {
 	return callUnaryWithArg(ctx, principal, limit, buildListRunsRequest, h.cp.Service().ListRuns)
-}
-
-func (h *staffHandler) listRunJobsCall(ctx context.Context, principal *controlplanev1.Principal, arg runListFilterArg) (*controlplanev1.ListRunJobsResponse, error) {
-	return callUnaryWithArg(ctx, principal, arg, buildListRunJobsRequest, h.cp.Service().ListRunJobs)
-}
-
-func (h *staffHandler) listRunJobsAsGetter(ctx context.Context, principal *controlplanev1.Principal, arg runListFilterArg) (runItemsGetter, error) {
-	return h.listRunJobsCall(ctx, principal, arg)
 }
 
 func (h *staffHandler) listRunWaitsCall(ctx context.Context, principal *controlplanev1.Principal, arg runListFilterArg) (*controlplanev1.ListRunWaitsResponse, error) {
@@ -303,18 +218,6 @@ func (h *staffHandler) listRuntimeErrorsCall(ctx context.Context, principal *con
 
 func (h *staffHandler) markRuntimeErrorViewedCall(ctx context.Context, principal *controlplanev1.Principal, runtimeErrorID string) (*controlplanev1.RuntimeError, error) {
 	return callUnaryWithArg(ctx, principal, runtimeErrorID, buildMarkRuntimeErrorViewedRequest, h.cp.Service().MarkRuntimeErrorViewed)
-}
-
-func (h *staffHandler) listRegistryImagesCall(ctx context.Context, principal *controlplanev1.Principal, arg registryImagesListArg) (*controlplanev1.ListRegistryImagesResponse, error) {
-	return callUnaryWithArg(ctx, principal, arg, buildListRegistryImagesRequest, h.cp.Service().ListRegistryImages)
-}
-
-func (h *staffHandler) deleteRegistryImageTagCall(ctx context.Context, principal *controlplanev1.Principal, req models.DeleteRegistryImageTagRequest) (*controlplanev1.RegistryImageDeleteResult, error) {
-	return callUnaryWithArg(ctx, principal, req, buildDeleteRegistryImageTagRequest, h.cp.Service().DeleteRegistryImageTag)
-}
-
-func (h *staffHandler) cleanupRegistryImagesCall(ctx context.Context, principal *controlplanev1.Principal, req models.CleanupRegistryImagesRequest) (*controlplanev1.CleanupRegistryImagesResponse, error) {
-	return callUnaryWithArg(ctx, principal, req, buildCleanupRegistryImagesRequest, h.cp.Service().CleanupRegistryImages)
 }
 
 func (h *staffHandler) listUsersCall(ctx context.Context, principal *controlplanev1.Principal, limit int32) (*controlplanev1.ListUsersResponse, error) {

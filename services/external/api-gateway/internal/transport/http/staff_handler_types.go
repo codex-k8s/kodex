@@ -59,10 +59,3 @@ type runtimeErrorsListArg struct {
 	runID         string
 	correlationID string
 }
-
-// registryImagesListArg keeps list filters for registry images endpoint.
-type registryImagesListArg struct {
-	repository        string
-	limitRepositories int32
-	limitTags         int32
-}

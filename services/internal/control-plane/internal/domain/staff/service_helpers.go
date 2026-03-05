@@ -21,30 +21,6 @@ type dnsCandidate struct {
 
 var repositoryAliasPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 
-func parseNamespaceNameSpec(spec string) (namespace string, name string, err error) {
-	spec = strings.TrimSpace(spec)
-	if spec == "" {
-		return "", "", fmt.Errorf("k8s target is empty")
-	}
-
-	// Accept both "<namespace>/<name>" and "<namespace>:<name>" forms.
-	if strings.Contains(spec, "/") {
-		parts := strings.SplitN(spec, "/", 2)
-		namespace = strings.TrimSpace(parts[0])
-		name = strings.TrimSpace(parts[1])
-	} else if strings.Contains(spec, ":") {
-		parts := strings.SplitN(spec, ":", 2)
-		namespace = strings.TrimSpace(parts[0])
-		name = strings.TrimSpace(parts[1])
-	} else {
-		return "", "", fmt.Errorf("k8s target must be <namespace>/<name>")
-	}
-	if namespace == "" || name == "" {
-		return "", "", fmt.Errorf("k8s target must be <namespace>/<name>")
-	}
-	return namespace, name, nil
-}
-
 func parseGitHubFullName(fullName string) (owner string, repo string, err error) {
 	fullName = strings.TrimSpace(fullName)
 	parts := strings.Split(fullName, "/")

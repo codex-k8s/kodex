@@ -461,39 +461,6 @@ func runtimeDeployLogsToProto(items []entitytypes.RuntimeDeployTaskLogEntry) []*
 	return out
 }
 
-func registryImageRepositoryToProto(item entitytypes.RegistryImageRepository) *controlplanev1.RegistryImageRepository {
-	out := &controlplanev1.RegistryImageRepository{
-		Repository: item.Repository,
-		TagCount:   int32(item.TagCount),
-		Tags:       make([]*controlplanev1.RegistryImageTag, 0, len(item.Tags)),
-	}
-	for _, tag := range item.Tags {
-		out.Tags = append(out.Tags, registryImageTagToProto(tag))
-	}
-	return out
-}
-
-func registryImageTagToProto(item entitytypes.RegistryImageTag) *controlplanev1.RegistryImageTag {
-	out := &controlplanev1.RegistryImageTag{
-		Tag:             item.Tag,
-		Digest:          item.Digest,
-		ConfigSizeBytes: item.ConfigSizeBytes,
-	}
-	if item.CreatedAt != nil {
-		out.CreatedAt = timestamppb.New(item.CreatedAt.UTC())
-	}
-	return out
-}
-
-func registryImageDeleteToProto(item entitytypes.RegistryImageDeleteResult) *controlplanev1.RegistryImageDeleteResult {
-	return &controlplanev1.RegistryImageDeleteResult{
-		Repository: item.Repository,
-		Tag:        item.Tag,
-		Digest:     item.Digest,
-		Deleted:    item.Deleted,
-	}
-}
-
 func approvalToProto(item mcpdomain.ApprovalListItem) *controlplanev1.ApprovalRequest {
 	return &controlplanev1.ApprovalRequest{
 		Id:            item.ID,

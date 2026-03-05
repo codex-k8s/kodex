@@ -467,6 +467,25 @@ approvals:
   cleanup-поиск `rg -n` по `Global filter`/`uiContext.env`/`uiContext.namespace`,
   `npm --prefix services/staff/web-console run build`.
 
+## Актуализация по Issue #274 (`run:dev`, 2026-03-05)
+- Для FR-026/FR-028/FR-033 и NFR-010/NFR-018 реализован stream `S7-E19`:
+  выполнен backend cleanup non-MVP контуров `agents`, `prompt templates`, `config entries`,
+  `runtime-deploy registry images` и `running jobs`.
+- В OpenAPI удалены staff endpoint-ы:
+  `/staff/agents*`, `/staff/prompt-templates*`, `/staff/config-entries*`,
+  `/staff/runs/jobs`, `/staff/runtime-deploy/images*`; синхронно обновлены backend/frontend codegen артефакты.
+- В `control-plane` удалены соответствующие non-MVP RPC из `ControlPlaneService` и
+  runtime/domain-реализации staff use-cases (transport + domain + app wiring).
+- В `api-gateway` удалены связанные transport handlers/call-builders;
+  для `web-console` очищен dead scaffold (`features/agents`, `configuration/Agents*`).
+- Обновлены архитектурные и delivery-артефакты трассировки:
+  `docs/architecture/api_contract.md`, `docs/delivery/issue_map.md`, `docs/delivery/requirements_traceability.md`.
+- Проверки по scope:
+  `make gen-openapi`, `make gen-proto-go`,
+  `go test ./services/external/api-gateway/... ./services/internal/control-plane/...`,
+  `npm --prefix services/staff/web-console run build`,
+  `make lint-go`, `make dupl-go`.
+
 ## Актуализация по Issue #225 (`run:dev`, 2026-02-28)
 - Для FR-002/FR-033 и NFR-002/NFR-010/NFR-018 выполнен рефакторинг bounded scope `S8-E01`:
   декомпозированы oversized-файлы `webhook/service.go`, `staff/service_methods.go`, `transport/grpc/server.go`

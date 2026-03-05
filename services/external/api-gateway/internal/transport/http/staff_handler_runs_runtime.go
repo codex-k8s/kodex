@@ -17,10 +17,6 @@ func (h *staffHandler) ListRuns(c *echo.Context) error {
 	return listByLimitResp(c, 200, h.listRunsCall, casters.Runs)
 }
 
-func (h *staffHandler) ListRunJobs(c *echo.Context) error {
-	return h.listRunsByFilter(c, false, h.listRunJobsAsGetter)
-}
-
 func (h *staffHandler) ListRunWaits(c *echo.Context) error {
 	return h.listRunsByFilter(c, true, h.listRunWaitsAsGetter)
 }
@@ -88,16 +84,4 @@ func (h *staffHandler) ListRuntimeDeployTasks(c *echo.Context) error {
 
 func (h *staffHandler) GetRuntimeDeployTask(c *echo.Context) error {
 	return getByPathResp(c, "run_id", h.getRuntimeDeployTaskCall, casters.RuntimeDeployTask)
-}
-
-func (h *staffHandler) ListRegistryImages(c *echo.Context) error {
-	return listByResolvedResp(c, resolveRegistryImagesListFilters(100, 50), h.listRegistryImagesCall, casters.RegistryImageRepositories)
-}
-
-func (h *staffHandler) DeleteRegistryImageTag(c *echo.Context) error {
-	return createByBodyResp(c, http.StatusOK, h.deleteRegistryImageTagCall, casters.RegistryImageDeleteResult)
-}
-
-func (h *staffHandler) CleanupRegistryImages(c *echo.Context) error {
-	return createByBodyResp(c, http.StatusOK, h.cleanupRegistryImagesCall, casters.RegistryImageCleanupResult)
 }
