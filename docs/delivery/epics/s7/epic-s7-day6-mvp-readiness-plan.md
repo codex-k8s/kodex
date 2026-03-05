@@ -5,8 +5,8 @@ title: "Epic S7 Day 6: Plan для закрытия MVP readiness gaps (Issue #2
 status: in-review
 owner_role: EM
 created_at: 2026-03-02
-updated_at: 2026-03-02
-related_issues: [212, 218, 220, 222, 238, 241, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 216]
+updated_at: 2026-03-05
+related_issues: [212, 218, 220, 222, 238, 241, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 274, 216]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -20,6 +20,7 @@ approvals:
 - Подготовлен execution package для перехода в `run:dev` по Sprint S7.
 - По требованию Owner создана отдельная implementation issue на каждый поток `S7-E01..S7-E18`: `#243..#260`.
 - Зафиксированы sequencing-waves, quality-gates, DoR/DoD и parity-check (`18/18`) перед запуском dev-этапа.
+- Post-plan дополнение: создан issue `#274` (`S7-E19`) для backend cleanup Agents/Configs/Secrets.
 
 ## Контекст
 - Stage continuity: `#212 -> #218 -> #220 -> #222 -> #238 -> #241`.
@@ -48,6 +49,9 @@ approvals:
 | `S7-E14` | #256 | Wave 5 | P0 | QA acceptance policy через Kubernetes DNS path |
 | `S7-E18` | #260 | Wave 5 | P0 | Documentation governance standardization |
 | `S7-E12` | #254 | Wave 5 | P1 | Финальный MVP readiness gate + go/no-go пакет |
+
+## Post-plan additions
+- `S7-E19` (`#274`): backend cleanup Agents/Configs/Secrets (Owner request после plan; не входит в parity `18/18`).
 
 ## Sequencing constraints
 - Wave 1 (`#243`, `#253`, `#255`) — foundation для стабильного dev/revise контура.

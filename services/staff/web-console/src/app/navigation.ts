@@ -38,9 +38,8 @@ export const navItems: NavItem[] = [
   // Platform
   { groupId: "platform", routeName: "users", titleKey: "nav.users", icon: "mdi-account-multiple-outline", adminOnly: true },
 
-  // Platform configuration (scaffold)
+  // Platform settings (scaffold)
   { groupId: "platform", routeName: "system-settings", titleKey: "nav.systemSettings", icon: "mdi-cog-outline", adminOnly: true },
-  { groupId: "platform", routeName: "config-entries", titleKey: "nav.configEntries", icon: "mdi-tune-variant", adminOnly: true },
 ];
 
 export function findNavItemByRouteName(name: string | undefined): NavItem | undefined {

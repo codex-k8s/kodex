@@ -5,8 +5,8 @@ title: "codex-k8s — Delivery Plan"
 status: active
 owner_role: EM
 created_at: 2026-02-06
-updated_at: 2026-03-02
-related_issues: [1, 19, 74, 100, 106, 112, 154, 155, 170, 171, 184, 185, 187, 189, 195, 197, 199, 201, 210, 212, 218, 220, 222, 223, 225, 226, 227, 228, 229, 230, 238, 241, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 216, 262, 263, 265]
+updated_at: 2026-03-05
+related_issues: [1, 19, 74, 100, 106, 112, 154, 155, 170, 171, 184, 185, 187, 189, 195, 197, 199, 201, 210, 212, 218, 220, 222, 223, 225, 226, 227, 228, 229, 230, 238, 241, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 274, 216, 262, 263, 265]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -141,7 +141,7 @@ approvals:
   - release-зависимость S6 закрыта (`#262`), активный continuity-блокер перенесён в postdeploy issue `#263`;
   - крупный UI-scaffold контур с `comingSoon`/TODO в staff web-console;
   - отсутствие подтверждённого run-evidence для `run:doc-audit` в текущем delivery-цикле.
-- Дополнительно по owner-review комментариям сформирована candidate-декомпозиция на 18 execution-эпиков (`S7-E01..S7-E18`) с приоритетами и трассировкой в `docs/delivery/epics/s7/epic_s7.md`.
+- Дополнительно по owner-review комментариям сформирована candidate-декомпозиция на 18 execution-эпиков (`S7-E01..S7-E18`) + post-plan `S7-E19` с приоритетами и трассировкой в `docs/delivery/epics/s7/epic_s7.md`.
 - Добавлены отдельные P0-потоки для:
   - coverage `run:qa:revise` в stage/labels policy;
   - QA acceptance-проверок через Kubernetes DNS path для новых/изменённых ручек;
@@ -190,7 +190,8 @@ approvals:
   - по owner-уточнению создана отдельная implementation issue на каждый execution-поток `S7-E01..S7-E18`;
   - сформирован execution issue package `#243..#260` без trigger-лейблов с wave-sequencing;
   - parity-гейт перед `run:dev` подтверждён: `approved_execution_epics_count == created_run_dev_issues_count` (`18 == 18`).
-- Day 7+ (planned): `dev -> qa -> release -> postdeploy -> ops -> doc-audit` по implementation issues `#243..#260` и owner-governed trigger-лейблам.
+  - post-plan добавление: issue `#274` (`S7-E19`) на backend cleanup Agents/Configs/Secrets.
+- Day 7+ (planned): `dev -> qa -> release -> postdeploy -> ops -> doc-audit` по implementation issues `#243..#260`, `#274` и owner-governed trigger-лейблам.
 
 ### Sprint S8: Go refactoring parallelization (Issue #223)
 - Day 1 (in-review): plan-пакет по параллельному Go-рефакторингу (`docs/delivery/epics/s8/epic-s8-day1-go-refactoring-plan.md`).

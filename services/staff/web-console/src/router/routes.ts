@@ -7,7 +7,6 @@ import RuntimeDeployTaskDetailsPage from "../pages/operations/RuntimeDeployTaskD
 import RuntimeDeployTasksPage from "../pages/operations/RuntimeDeployTasksPage.vue";
 import WaitQueuePage from "../pages/operations/WaitQueuePage.vue";
 
-import ConfigEntriesPage from "../pages/configuration/ConfigEntriesPage.vue";
 import ProjectMembersPage from "../pages/ProjectMembersPage.vue";
 import ProjectDetailsPage from "../pages/ProjectDetailsPage.vue";
 import ProjectRepositoriesPage from "../pages/ProjectRepositoriesPage.vue";
@@ -47,7 +46,6 @@ export const routes: RouteRecordRaw[] = [
 
   // Configuration (scaffold)
   { path: "/configuration/system-settings", name: "system-settings", component: SystemSettingsPage, meta: { adminOnly: true, section: "configuration", crumbKey: "crumb.systemSettings" } },
-  { path: "/configuration/config-entries", name: "config-entries", component: ConfigEntriesPage, meta: { adminOnly: true, section: "configuration", crumbKey: "crumb.configEntries" } },
 
   { path: "/users", name: "users", component: UsersPage, meta: { adminOnly: true, section: "users" } },
   { path: "/:pathMatch(.*)*", redirect: { name: "projects" } },

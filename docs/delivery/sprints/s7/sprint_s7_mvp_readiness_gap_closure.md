@@ -5,8 +5,8 @@ title: "Sprint S7: MVP readiness gap closure (Issue #212)"
 status: in-progress
 owner_role: PM
 created_at: 2026-02-27
-updated_at: 2026-03-03
-related_issues: [212, 218, 220, 222, 238, 241, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 199, 201, 210, 216]
+updated_at: 2026-03-05
+related_issues: [212, 218, 220, 222, 238, 241, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 274, 199, 201, 210, 216]
 related_prs: [213, 215]
 approvals:
   required: ["Owner"]
@@ -43,14 +43,14 @@ approvals:
 | Day 4 | Architecture: границы и ownership по stream'ам | P0 | `docs/delivery/epics/s7/epic-s7-day4-mvp-readiness-arch.md` | in-review (`#222`) |
 | Day 5 | Design: execution-ready contracts/data/migrations package | P0 | `docs/delivery/epics/s7/epic-s7-day5-mvp-readiness-design.md` (`#238`) | in-review (`#238`) |
 | Day 6 | Plan: execution package и quality gates | P0 | `docs/delivery/epics/s7/epic-s7-day6-mvp-readiness-plan.md` (`#241`) | in-review (`#241`) |
-| Day 7+ | Dev/QA/Release/Postdeploy/Ops/Doc-Audit | P0/P1 | implementation issues `#243..#260` (`run:dev`) | in-progress (`#243` и `#244` completed + owner-approved; `#245..#260` planned) |
+| Day 7+ | Dev/QA/Release/Postdeploy/Ops/Doc-Audit | P0/P1 | implementation issues `#243..#260`, `#274` (`run:dev`) | in-progress (`#243` и `#244` completed + owner-approved; `#245..#260`, `#274` planned) |
 
 ## Candidate execution-эпики (`S7-E01..S7-E18`)
 
 | Epic | Priority | Scope | Блокер/зависимость |
 |---|---|---|---|
 | S7-E01 | P0 | Rebase/mainline hygiene для PR revise-итераций | done (owner-approved, `#243`) |
-| S7-E02 | P0 | Sidebar cleanup: удаление не-MVP разделов и dead code | done (owner-approved, `#244`) |
+| S7-E02 | P0 | Sidebar cleanup: удаление не-MVP разделов (включая Agents и Configs/Secrets) и dead code | done (owner-approved, `#244`) |
 | S7-E03 | P0 | Удаление глобального фильтра и зависимого кода | UI readiness gate |
 | S7-E04 | P0 | Удаление runtime-deploy/images секции и связанного фронтенд-кода | UI readiness gate |
 | S7-E05 | P0 | Agents table cleanup + removal of `Скоро` badge | depends on S6 baseline |
@@ -67,6 +67,7 @@ approvals:
 | S7-E16 | P0 | Run status reliability: false-failed для `run:intake:revise` | stage reliability |
 | S7-E17 | P0 | Self-improve: доступность и перезапись session snapshot | self-improve reliability |
 | S7-E18 | P0 | Documentation governance: issue/PR standard + doc IA + role-template matrix | backlog quality gate |
+| S7-E19 | P1 | Backend cleanup: удалить non-MVP контуры Agents/Configs/Secrets | after S7-E02 |
 
 ## Quality gates (S7 governance)
 
@@ -83,7 +84,7 @@ approvals:
 | QG-S7-09 Design completion | Для Day5 выпущен design package (`design_doc`, `api_contract`, `data_model`, `migrations_policy`) и создана follow-up issue `#241` в `run:plan` | passed |
 | QG-S7-10 Plan completion | Для Day6 выпущен execution package, создано 18 implementation issues `#243..#260`, parity-check `18/18` подтверждён | passed |
 | QG-S7-11 Foundation stream S7-E01 | Для issue `#243` зафиксирован единый rebase/mainline process и обязательный PR checklist для revise-итераций | passed (owner-approved) |
-| QG-S7-12 UI stream S7-E02 | Для issue `#244` удалены non-MVP sidebar/routes и выполнен навигационный smoke-check без broken transitions | passed (owner-approved) |
+| QG-S7-12 UI stream S7-E02 | Для issue `#244` удалены non-MVP sidebar/routes (включая Agents и Configs/Secrets) и выполнен навигационный smoke-check без broken transitions | passed (owner-approved) |
 
 ## Completion критерии спринта
 - [ ] Закрыт открытый P0-блокер S6 (`#216`, `run:release`) и подтверждён переход в `run:postdeploy`.
@@ -109,7 +110,8 @@ approvals:
   - Wave 2: `#244`, `#245`, `#246`, `#247`;
   - Wave 3: `#248`, `#249`, `#250`, `#257`, `#259`;
   - Wave 4: `#251`, `#252`, `#258`;
-  - Wave 5: `#256`, `#260`, `#254`.
+- Wave 5: `#256`, `#260`, `#254`.
+- Дополнительно (post-plan): `#274` (`S7-E19`, backend cleanup Agents/Configs/Secrets).
 - Trigger-лейбл `run:dev` на implementation issues ставит Owner, сохраняя wave-sequencing.
 - Обязательные артефакты handover:
   - `docs/delivery/epics/s7/epic-s7-day6-mvp-readiness-plan.md`;
