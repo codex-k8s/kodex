@@ -27,8 +27,6 @@ var (
 	queryResetDesiredToPending string
 	//go:embed sql/cancel_superseded_deploy_only.sql
 	queryCancelSupersededDeployOnly string
-	//go:embed sql/cancel_superseded_pending.sql
-	queryCancelSupersededPending string
 	//go:embed sql/claim_next.sql
 	queryClaimNext string
 	//go:embed sql/mark_succeeded.sql
@@ -81,11 +79,6 @@ func (r *Repository) UpsertDesired(ctx context.Context, params domainrepo.Upsert
 		if insertErr != nil {
 			return domainrepo.Task{}, insertErr
 		}
-		if shouldCancelSupersededPending(inserted, normalized) {
-			if _, cancelErr := cancelSupersededPendingTasks(ctx, tx, inserted.RunID); cancelErr != nil {
-				return domainrepo.Task{}, cancelErr
-			}
-		}
 		if shouldCancelSupersededDeployOnly(inserted, normalized) {
 			if _, cancelErr := cancelSupersededDeployOnlyTasks(ctx, tx, inserted.RunID, normalized); cancelErr != nil {
 				return domainrepo.Task{}, cancelErr
@@ -107,11 +100,6 @@ func (r *Repository) UpsertDesired(ctx context.Context, params domainrepo.Upsert
 	updated, err := resetDesiredToPending(ctx, tx, normalized)
 	if err != nil {
 		return domainrepo.Task{}, err
-	}
-	if shouldCancelSupersededPending(updated, normalized) {
-		if _, cancelErr := cancelSupersededPendingTasks(ctx, tx, updated.RunID); cancelErr != nil {
-			return domainrepo.Task{}, cancelErr
-		}
 	}
 	if shouldCancelSupersededDeployOnly(updated, normalized) {
 		if _, cancelErr := cancelSupersededDeployOnlyTasks(ctx, tx, updated.RunID, normalized); cancelErr != nil {
@@ -560,31 +548,6 @@ func sameDesired(existing domainrepo.Task, params domainrepo.UpsertDesiredParams
 		return false
 	}
 	return true
-}
-
-func shouldCancelSupersededPending(task domainrepo.Task, params domainrepo.UpsertDesiredParams) bool {
-	if strings.TrimSpace(task.RunID) == "" {
-		return false
-	}
-	if strings.TrimSpace(params.TargetEnv) == "" {
-		return false
-	}
-	if strings.TrimSpace(params.RepositoryFullName) == "" {
-		return false
-	}
-	return true
-}
-
-func cancelSupersededPendingTasks(ctx context.Context, tx pgx.Tx, currentRunID string) (int64, error) {
-	reason := fmt.Sprintf("superseded by newer pending deploy task run_id=%s", currentRunID)
-	if len(reason) > 4000 {
-		reason = reason[:4000]
-	}
-	tag, err := tx.Exec(ctx, queryCancelSupersededPending, currentRunID, reason)
-	if err != nil {
-		return 0, fmt.Errorf("cancel superseded pending tasks for run_id=%s: %w", currentRunID, err)
-	}
-	return tag.RowsAffected(), nil
 }
 
 func shouldCancelSupersededDeployOnly(task domainrepo.Task, params domainrepo.UpsertDesiredParams) bool {
