@@ -44,106 +44,6 @@ export type Project = {
     role: string;
 };
 
-export type AgentRuntimeMode = 'full-env' | 'code-only';
-
-export type AgentRoleKind = 'system' | 'custom';
-
-export type AgentSettings = {
-    runtime_mode: AgentRuntimeMode;
-    timeout_seconds: number;
-    max_retry_count: number;
-    prompt_locale: string;
-    approvals_required: boolean;
-};
-
-export type Agent = {
-    id: string;
-    agent_key: string;
-    role_kind: AgentRoleKind;
-    project_id?: string | null;
-    name: string;
-    is_active: boolean;
-    settings: AgentSettings;
-    settings_version: number;
-};
-
-export type PromptTemplateScope = 'global' | 'project';
-
-export type PromptTemplateKind = 'work' | 'revise';
-
-export type PromptTemplateStatus = 'draft' | 'active' | 'archived';
-
-export type PromptTemplateSource = 'project_override' | 'global_override' | 'repo_seed';
-
-export type PromptTemplateKey = {
-    template_key: string;
-    scope: PromptTemplateScope;
-    project_id?: string | null;
-    role: string;
-    kind: PromptTemplateKind;
-    locale: string;
-    active_version: number;
-    updated_at: string;
-};
-
-export type PromptTemplateVersion = {
-    template_key: string;
-    version: number;
-    status: PromptTemplateStatus;
-    source: PromptTemplateSource;
-    checksum: string;
-    body_markdown: string;
-    change_reason?: string | null;
-    supersedes_version?: number | null;
-    updated_by: string;
-    updated_at: string;
-    activated_at?: string | null;
-};
-
-export type PromptTemplateSeedSyncMode = 'dry_run' | 'apply';
-
-export type PromptTemplateSeedSyncItem = {
-    template_key: string;
-    action: 'created' | 'updated' | 'skipped';
-    checksum?: string | null;
-    reason?: string | null;
-};
-
-export type PromptTemplateSeedSyncResponse = {
-    created_count: number;
-    updated_count: number;
-    skipped_count: number;
-    items: Array<PromptTemplateSeedSyncItem>;
-};
-
-export type PreviewPromptTemplateResponse = {
-    template_key: string;
-    version: number;
-    source: PromptTemplateSource;
-    checksum: string;
-    body_markdown: string;
-};
-
-export type PromptTemplateDiffResponse = {
-    template_key: string;
-    from_version: number;
-    to_version: number;
-    from_body_markdown: string;
-    to_body_markdown: string;
-};
-
-export type PromptTemplateAuditEvent = {
-    id: number;
-    correlation_id: string;
-    project_id?: string | null;
-    template_key?: string | null;
-    version?: number | null;
-    actor_id?: string | null;
-    event_type: string;
-    payload_json: string;
-    created_at: string;
-};
-
 export type Run = {
     id: string;
     correlation_id: string;
@@ -287,46 +187,6 @@ export type RuntimeError = {
     created_at: string;
 };
 
-export type RegistryImageTag = {
-    tag: string;
-    digest: string;
-    created_at?: string | null;
-    config_size_bytes: number;
-};
-
-export type RegistryImageRepository = {
-    repository: string;
-    tag_count: number;
-    tags: Array<RegistryImageTag>;
-};
-
-export type DeleteRegistryImageTagRequest = {
-    repository: string;
-    tag: string;
-};
-
-export type RegistryImageDeleteResult = {
-    repository: string;
-    tag: string;
-    digest: string;
-    deleted: boolean;
-};
-
-export type CleanupRegistryImagesRequest = {
-    repository_prefix?: string;
-    limit_repositories?: number;
-    keep_tags?: number;
-    dry_run: boolean;
-};
-
-export type CleanupRegistryImagesResponse = {
-    repositories_scanned: number;
-    tags_deleted: number;
-    tags_skipped: number;
-    deleted: Array<RegistryImageDeleteResult>;
-    skipped: Array<RegistryImageDeleteResult>;
-};
-
 export type LearningFeedback = {
     id: number;
     run_id: string;
@@ -423,40 +283,6 @@ export type RunRepositoryPreflightResponse = {
     finished_at: string;
 };
 
-export type ConfigEntryMutability = 'startup_required' | 'runtime_mutable';
-
-export type ConfigEntry = {
-    id: string;
-    scope: 'platform' | 'project' | 'repository';
-    kind: 'variable' | 'secret';
-    project_id?: string | null;
-    repository_id?: string | null;
-    key: string;
-    value?: string | null;
-    sync_targets: Array<string>;
-    mutability: ConfigEntryMutability;
-    is_dangerous: boolean;
-    updated_at?: string | null;
-};
-
-export type ConfigEntryItemsResponse = {
-    items: Array<ConfigEntry>;
-};
-
-export type UpsertConfigEntryRequest = {
-    scope: 'platform' | 'project' | 'repository';
-    kind: 'variable' | 'secret';
-    project_id?: string | null;
-    repository_id?: string | null;
-    key: string;
-    value_plain?: string | null;
-    value_secret?: string | null;
-    sync_targets?: Array<string>;
-    mutability?: ConfigEntryMutability;
-    is_dangerous?: boolean;
-    dangerous_confirmed?: boolean;
-};
-
 export type DocsetGroup = {
     id: string;
     title: string;
@@ -513,10 +339,6 @@ export type RuntimeErrorItemsResponse = {
     items: Array<RuntimeError>;
 };
 
-export type RegistryImageRepositoryItemsResponse = {
-    items: Array<RegistryImageRepository>;
-};
-
 export type ApprovalRequestItemsResponse = {
     items: Array<ApprovalRequest>;
 };
@@ -539,22 +361,6 @@ export type ProjectMemberItemsResponse = {
 
 export type RepositoryBindingItemsResponse = {
     items: Array<RepositoryBinding>;
-};
-
-export type AgentItemsResponse = {
-    items: Array<Agent>;
-};
-
-export type PromptTemplateKeyItemsResponse = {
-    items: Array<PromptTemplateKey>;
-};
-
-export type PromptTemplateVersionItemsResponse = {
-    items: Array<PromptTemplateVersion>;
-};
-
-export type PromptTemplateAuditEventItemsResponse = {
-    items: Array<PromptTemplateAuditEvent>;
 };
 
 export type UpsertProjectRequest = {
@@ -589,36 +395,6 @@ export type UpsertProjectRepositoryRequest = {
     docs_root_path?: string;
 };
 
-export type UpdateAgentSettingsRequest = {
-    expected_version: number;
-    settings: AgentSettings;
-};
-
-export type CreatePromptTemplateVersionRequest = {
-    body_markdown: string;
-    expected_version: number;
-    source?: PromptTemplateSource;
-    change_reason?: string;
-};
-
-export type ActivatePromptTemplateVersionRequest = {
-    expected_version: number;
-    change_reason: string;
-};
-
-export type PromptTemplateSeedSyncRequest = {
-    mode: PromptTemplateSeedSyncMode;
-    scope?: PromptTemplateScope;
-    project_id?: string | null;
-    include_locales?: Array<string>;
-    force_overwrite?: boolean;
-};
-
-export type PreviewPromptTemplateRequest = {
-    project_id?: string | null;
-    version?: number;
-};
-
 export type ProjectId = string;
 
 export type RunId = string;
@@ -628,16 +404,6 @@ export type RuntimeErrorId = string;
 export type ApprovalRequestId = number;
 
 export type UserId = string;
-
-export type AgentId = string;
-
-export type TemplateKey = string;
-
-export type TemplateVersion = number;
-
-export type FromVersion = number;
-
-export type ToVersion = number;
 
 export type Limit = number;
 

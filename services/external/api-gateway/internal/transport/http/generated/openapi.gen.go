@@ -17,42 +17,11 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
-// Defines values for AgentRoleKind.
-const (
-	Custom AgentRoleKind = "custom"
-	System AgentRoleKind = "system"
-)
-
-// Defines values for AgentRuntimeMode.
-const (
-	CodeOnly AgentRuntimeMode = "code-only"
-	FullEnv  AgentRuntimeMode = "full-env"
-)
-
 // Defines values for ApprovalRequestApprovalMode.
 const (
 	Delegated ApprovalRequestApprovalMode = "delegated"
 	None      ApprovalRequestApprovalMode = "none"
 	Owner     ApprovalRequestApprovalMode = "owner"
-)
-
-// Defines values for ConfigEntryKind.
-const (
-	ConfigEntryKindSecret   ConfigEntryKind = "secret"
-	ConfigEntryKindVariable ConfigEntryKind = "variable"
-)
-
-// Defines values for ConfigEntryScope.
-const (
-	ConfigEntryScopePlatform   ConfigEntryScope = "platform"
-	ConfigEntryScopeProject    ConfigEntryScope = "project"
-	ConfigEntryScopeRepository ConfigEntryScope = "repository"
-)
-
-// Defines values for ConfigEntryMutability.
-const (
-	RuntimeMutable  ConfigEntryMutability = "runtime_mutable"
-	StartupRequired ConfigEntryMutability = "startup_required"
 )
 
 // Defines values for ErrorResponseCode.
@@ -97,45 +66,6 @@ const (
 	ProjectMemberRoleAdmin     ProjectMemberRole = "admin"
 	ProjectMemberRoleRead      ProjectMemberRole = "read"
 	ProjectMemberRoleReadWrite ProjectMemberRole = "read_write"
-)
-
-// Defines values for PromptTemplateKind.
-const (
-	Revise PromptTemplateKind = "revise"
-	Work   PromptTemplateKind = "work"
-)
-
-// Defines values for PromptTemplateScope.
-const (
-	PromptTemplateScopeGlobal  PromptTemplateScope = "global"
-	PromptTemplateScopeProject PromptTemplateScope = "project"
-)
-
-// Defines values for PromptTemplateSeedSyncItemAction.
-const (
-	Created PromptTemplateSeedSyncItemAction = "created"
-	Skipped PromptTemplateSeedSyncItemAction = "skipped"
-	Updated PromptTemplateSeedSyncItemAction = "updated"
-)
-
-// Defines values for PromptTemplateSeedSyncMode.
-const (
-	Apply  PromptTemplateSeedSyncMode = "apply"
-	DryRun PromptTemplateSeedSyncMode = "dry_run"
-)
-
-// Defines values for PromptTemplateSource.
-const (
-	GlobalOverride  PromptTemplateSource = "global_override"
-	ProjectOverride PromptTemplateSource = "project_override"
-	RepoSeed        PromptTemplateSource = "repo_seed"
-)
-
-// Defines values for PromptTemplateStatus.
-const (
-	PromptTemplateStatusActive   PromptTemplateStatus = "active"
-	PromptTemplateStatusArchived PromptTemplateStatus = "archived"
-	PromptTemplateStatusDraft    PromptTemplateStatus = "draft"
 )
 
 // Defines values for RepositoryBindingRole.
@@ -194,19 +124,6 @@ const (
 	RuntimeErrorLevelWarning  RuntimeErrorLevel = "warning"
 )
 
-// Defines values for UpsertConfigEntryRequestKind.
-const (
-	UpsertConfigEntryRequestKindSecret   UpsertConfigEntryRequestKind = "secret"
-	UpsertConfigEntryRequestKindVariable UpsertConfigEntryRequestKind = "variable"
-)
-
-// Defines values for UpsertConfigEntryRequestScope.
-const (
-	UpsertConfigEntryRequestScopePlatform   UpsertConfigEntryRequestScope = "platform"
-	UpsertConfigEntryRequestScopeProject    UpsertConfigEntryRequestScope = "project"
-	UpsertConfigEntryRequestScopeRepository UpsertConfigEntryRequestScope = "repository"
-)
-
 // Defines values for UpsertProjectMemberRequestRole.
 const (
 	UpsertProjectMemberRequestRoleAdmin     UpsertProjectMemberRequestRole = "admin"
@@ -238,9 +155,9 @@ const (
 
 // Defines values for ListRuntimeErrorsParamsState.
 const (
-	ListRuntimeErrorsParamsStateActive ListRuntimeErrorsParamsState = "active"
-	ListRuntimeErrorsParamsStateAll    ListRuntimeErrorsParamsState = "all"
-	ListRuntimeErrorsParamsStateViewed ListRuntimeErrorsParamsState = "viewed"
+	Active ListRuntimeErrorsParamsState = "active"
+	All    ListRuntimeErrorsParamsState = "all"
+	Viewed ListRuntimeErrorsParamsState = "viewed"
 )
 
 // Defines values for ListRuntimeErrorsParamsLevel.
@@ -249,44 +166,6 @@ const (
 	Error    ListRuntimeErrorsParamsLevel = "error"
 	Warning  ListRuntimeErrorsParamsLevel = "warning"
 )
-
-// ActivatePromptTemplateVersionRequest defines model for ActivatePromptTemplateVersionRequest.
-type ActivatePromptTemplateVersionRequest struct {
-	ChangeReason    string `json:"change_reason"`
-	ExpectedVersion int32  `json:"expected_version"`
-}
-
-// Agent defines model for Agent.
-type Agent struct {
-	AgentKey        string        `json:"agent_key"`
-	Id              string        `json:"id"`
-	IsActive        bool          `json:"is_active"`
-	Name            string        `json:"name"`
-	ProjectId       *string       `json:"project_id"`
-	RoleKind        AgentRoleKind `json:"role_kind"`
-	Settings        AgentSettings `json:"settings"`
-	SettingsVersion int32         `json:"settings_version"`
-}
-
-// AgentItemsResponse defines model for AgentItemsResponse.
-type AgentItemsResponse struct {
-	Items []Agent `json:"items"`
-}
-
-// AgentRoleKind defines model for AgentRoleKind.
-type AgentRoleKind string
-
-// AgentRuntimeMode defines model for AgentRuntimeMode.
-type AgentRuntimeMode string
-
-// AgentSettings defines model for AgentSettings.
-type AgentSettings struct {
-	ApprovalsRequired bool             `json:"approvals_required"`
-	MaxRetryCount     int32            `json:"max_retry_count"`
-	PromptLocale      string           `json:"prompt_locale"`
-	RuntimeMode       AgentRuntimeMode `json:"runtime_mode"`
-	TimeoutSeconds    int32            `json:"timeout_seconds"`
-}
 
 // ApprovalRequest defines model for ApprovalRequest.
 type ApprovalRequest struct {
@@ -314,70 +193,10 @@ type ApprovalRequestItemsResponse struct {
 	Items []ApprovalRequest `json:"items"`
 }
 
-// CleanupRegistryImagesRequest defines model for CleanupRegistryImagesRequest.
-type CleanupRegistryImagesRequest struct {
-	DryRun            bool    `json:"dry_run"`
-	KeepTags          *int32  `json:"keep_tags,omitempty"`
-	LimitRepositories *int32  `json:"limit_repositories,omitempty"`
-	RepositoryPrefix  *string `json:"repository_prefix,omitempty"`
-}
-
-// CleanupRegistryImagesResponse defines model for CleanupRegistryImagesResponse.
-type CleanupRegistryImagesResponse struct {
-	Deleted             []RegistryImageDeleteResult `json:"deleted"`
-	RepositoriesScanned int32                       `json:"repositories_scanned"`
-	Skipped             []RegistryImageDeleteResult `json:"skipped"`
-	TagsDeleted         int32                       `json:"tags_deleted"`
-	TagsSkipped         int32                       `json:"tags_skipped"`
-}
-
-// ConfigEntry defines model for ConfigEntry.
-type ConfigEntry struct {
-	Id           string                `json:"id"`
-	IsDangerous  bool                  `json:"is_dangerous"`
-	Key          string                `json:"key"`
-	Kind         ConfigEntryKind       `json:"kind"`
-	Mutability   ConfigEntryMutability `json:"mutability"`
-	ProjectId    *string               `json:"project_id"`
-	RepositoryId *string               `json:"repository_id"`
-	Scope        ConfigEntryScope      `json:"scope"`
-	SyncTargets  []string              `json:"sync_targets"`
-	UpdatedAt    *string               `json:"updated_at"`
-	Value        *string               `json:"value"`
-}
-
-// ConfigEntryKind defines model for ConfigEntry.Kind.
-type ConfigEntryKind string
-
-// ConfigEntryScope defines model for ConfigEntry.Scope.
-type ConfigEntryScope string
-
-// ConfigEntryItemsResponse defines model for ConfigEntryItemsResponse.
-type ConfigEntryItemsResponse struct {
-	Items []ConfigEntry `json:"items"`
-}
-
-// ConfigEntryMutability defines model for ConfigEntryMutability.
-type ConfigEntryMutability string
-
-// CreatePromptTemplateVersionRequest defines model for CreatePromptTemplateVersionRequest.
-type CreatePromptTemplateVersionRequest struct {
-	BodyMarkdown    string                `json:"body_markdown"`
-	ChangeReason    *string               `json:"change_reason,omitempty"`
-	ExpectedVersion int32                 `json:"expected_version"`
-	Source          *PromptTemplateSource `json:"source,omitempty"`
-}
-
 // CreateUserRequest defines model for CreateUserRequest.
 type CreateUserRequest struct {
 	Email           openapi_types.Email `json:"email"`
 	IsPlatformAdmin bool                `json:"is_platform_admin"`
-}
-
-// DeleteRegistryImageTagRequest defines model for DeleteRegistryImageTagRequest.
-type DeleteRegistryImageTagRequest struct {
-	Repository string `json:"repository"`
-	Tag        string `json:"tag"`
 }
 
 // DocsetGroup defines model for DocsetGroup.
@@ -497,21 +316,6 @@ type PreflightCheckResult struct {
 	Status  string  `json:"status"`
 }
 
-// PreviewPromptTemplateRequest defines model for PreviewPromptTemplateRequest.
-type PreviewPromptTemplateRequest struct {
-	ProjectId *string `json:"project_id"`
-	Version   *int32  `json:"version,omitempty"`
-}
-
-// PreviewPromptTemplateResponse defines model for PreviewPromptTemplateResponse.
-type PreviewPromptTemplateResponse struct {
-	BodyMarkdown string               `json:"body_markdown"`
-	Checksum     string               `json:"checksum"`
-	Source       PromptTemplateSource `json:"source"`
-	TemplateKey  string               `json:"template_key"`
-	Version      int32                `json:"version"`
-}
-
 // Project defines model for Project.
 type Project struct {
 	Id   string `json:"id"`
@@ -549,141 +353,6 @@ type ProjectMemberRole string
 // ProjectMemberItemsResponse defines model for ProjectMemberItemsResponse.
 type ProjectMemberItemsResponse struct {
 	Items []ProjectMember `json:"items"`
-}
-
-// PromptTemplateAuditEvent defines model for PromptTemplateAuditEvent.
-type PromptTemplateAuditEvent struct {
-	ActorId       *string   `json:"actor_id"`
-	CorrelationId string    `json:"correlation_id"`
-	CreatedAt     time.Time `json:"created_at"`
-	EventType     string    `json:"event_type"`
-	Id            int64     `json:"id"`
-	PayloadJson   string    `json:"payload_json"`
-	ProjectId     *string   `json:"project_id"`
-	TemplateKey   *string   `json:"template_key"`
-	Version       *int32    `json:"version"`
-}
-
-// PromptTemplateAuditEventItemsResponse defines model for PromptTemplateAuditEventItemsResponse.
-type PromptTemplateAuditEventItemsResponse struct {
-	Items []PromptTemplateAuditEvent `json:"items"`
-}
-
-// PromptTemplateDiffResponse defines model for PromptTemplateDiffResponse.
-type PromptTemplateDiffResponse struct {
-	FromBodyMarkdown string `json:"from_body_markdown"`
-	FromVersion      int32  `json:"from_version"`
-	TemplateKey      string `json:"template_key"`
-	ToBodyMarkdown   string `json:"to_body_markdown"`
-	ToVersion        int32  `json:"to_version"`
-}
-
-// PromptTemplateKey defines model for PromptTemplateKey.
-type PromptTemplateKey struct {
-	ActiveVersion int32               `json:"active_version"`
-	Kind          PromptTemplateKind  `json:"kind"`
-	Locale        string              `json:"locale"`
-	ProjectId     *string             `json:"project_id"`
-	Role          string              `json:"role"`
-	Scope         PromptTemplateScope `json:"scope"`
-	TemplateKey   string              `json:"template_key"`
-	UpdatedAt     time.Time           `json:"updated_at"`
-}
-
-// PromptTemplateKeyItemsResponse defines model for PromptTemplateKeyItemsResponse.
-type PromptTemplateKeyItemsResponse struct {
-	Items []PromptTemplateKey `json:"items"`
-}
-
-// PromptTemplateKind defines model for PromptTemplateKind.
-type PromptTemplateKind string
-
-// PromptTemplateScope defines model for PromptTemplateScope.
-type PromptTemplateScope string
-
-// PromptTemplateSeedSyncItem defines model for PromptTemplateSeedSyncItem.
-type PromptTemplateSeedSyncItem struct {
-	Action      PromptTemplateSeedSyncItemAction `json:"action"`
-	Checksum    *string                          `json:"checksum"`
-	Reason      *string                          `json:"reason"`
-	TemplateKey string                           `json:"template_key"`
-}
-
-// PromptTemplateSeedSyncItemAction defines model for PromptTemplateSeedSyncItem.Action.
-type PromptTemplateSeedSyncItemAction string
-
-// PromptTemplateSeedSyncMode defines model for PromptTemplateSeedSyncMode.
-type PromptTemplateSeedSyncMode string
-
-// PromptTemplateSeedSyncRequest defines model for PromptTemplateSeedSyncRequest.
-type PromptTemplateSeedSyncRequest struct {
-	ForceOverwrite *bool                      `json:"force_overwrite,omitempty"`
-	IncludeLocales *[]string                  `json:"include_locales,omitempty"`
-	Mode           PromptTemplateSeedSyncMode `json:"mode"`
-	ProjectId      *string                    `json:"project_id"`
-	Scope          *PromptTemplateScope       `json:"scope,omitempty"`
-}
-
-// PromptTemplateSeedSyncResponse defines model for PromptTemplateSeedSyncResponse.
-type PromptTemplateSeedSyncResponse struct {
-	CreatedCount int32                        `json:"created_count"`
-	Items        []PromptTemplateSeedSyncItem `json:"items"`
-	SkippedCount int32                        `json:"skipped_count"`
-	UpdatedCount int32                        `json:"updated_count"`
-}
-
-// PromptTemplateSource defines model for PromptTemplateSource.
-type PromptTemplateSource string
-
-// PromptTemplateStatus defines model for PromptTemplateStatus.
-type PromptTemplateStatus string
-
-// PromptTemplateVersion defines model for PromptTemplateVersion.
-type PromptTemplateVersion struct {
-	ActivatedAt       *time.Time           `json:"activated_at"`
-	BodyMarkdown      string               `json:"body_markdown"`
-	ChangeReason      *string              `json:"change_reason"`
-	Checksum          string               `json:"checksum"`
-	Source            PromptTemplateSource `json:"source"`
-	Status            PromptTemplateStatus `json:"status"`
-	SupersedesVersion *int32               `json:"supersedes_version"`
-	TemplateKey       string               `json:"template_key"`
-	UpdatedAt         time.Time            `json:"updated_at"`
-	UpdatedBy         string               `json:"updated_by"`
-	Version           int32                `json:"version"`
-}
-
-// PromptTemplateVersionItemsResponse defines model for PromptTemplateVersionItemsResponse.
-type PromptTemplateVersionItemsResponse struct {
-	Items []PromptTemplateVersion `json:"items"`
-}
-
-// RegistryImageDeleteResult defines model for RegistryImageDeleteResult.
-type RegistryImageDeleteResult struct {
-	Deleted    bool   `json:"deleted"`
-	Digest     string `json:"digest"`
-	Repository string `json:"repository"`
-	Tag        string `json:"tag"`
-}
-
-// RegistryImageRepository defines model for RegistryImageRepository.
-type RegistryImageRepository struct {
-	Repository string             `json:"repository"`
-	TagCount   int32              `json:"tag_count"`
-	Tags       []RegistryImageTag `json:"tags"`
-}
-
-// RegistryImageRepositoryItemsResponse defines model for RegistryImageRepositoryItemsResponse.
-type RegistryImageRepositoryItemsResponse struct {
-	Items []RegistryImageRepository `json:"items"`
-}
-
-// RegistryImageTag defines model for RegistryImageTag.
-type RegistryImageTag struct {
-	ConfigSizeBytes int64      `json:"config_size_bytes"`
-	CreatedAt       *time.Time `json:"created_at"`
-	Digest          string     `json:"digest"`
-	Tag             string     `json:"tag"`
 }
 
 // RepositoryBinding defines model for RepositoryBinding.
@@ -921,33 +590,6 @@ type TransitionIssueStageLabelResponse struct {
 	RepositoryFullName string   `json:"repository_full_name"`
 }
 
-// UpdateAgentSettingsRequest defines model for UpdateAgentSettingsRequest.
-type UpdateAgentSettingsRequest struct {
-	ExpectedVersion int32         `json:"expected_version"`
-	Settings        AgentSettings `json:"settings"`
-}
-
-// UpsertConfigEntryRequest defines model for UpsertConfigEntryRequest.
-type UpsertConfigEntryRequest struct {
-	DangerousConfirmed *bool                         `json:"dangerous_confirmed,omitempty"`
-	IsDangerous        *bool                         `json:"is_dangerous,omitempty"`
-	Key                string                        `json:"key"`
-	Kind               UpsertConfigEntryRequestKind  `json:"kind"`
-	Mutability         *ConfigEntryMutability        `json:"mutability,omitempty"`
-	ProjectId          *string                       `json:"project_id"`
-	RepositoryId       *string                       `json:"repository_id"`
-	Scope              UpsertConfigEntryRequestScope `json:"scope"`
-	SyncTargets        *[]string                     `json:"sync_targets,omitempty"`
-	ValuePlain         *string                       `json:"value_plain"`
-	ValueSecret        *string                       `json:"value_secret"`
-}
-
-// UpsertConfigEntryRequestKind defines model for UpsertConfigEntryRequest.Kind.
-type UpsertConfigEntryRequestKind string
-
-// UpsertConfigEntryRequestScope defines model for UpsertConfigEntryRequest.Scope.
-type UpsertConfigEntryRequestScope string
-
 // UpsertProjectGitHubTokensRequest defines model for UpsertProjectGitHubTokensRequest.
 type UpsertProjectGitHubTokensRequest struct {
 	BotEmail      *string `json:"bot_email"`
@@ -1017,17 +659,11 @@ type UserItemsResponse struct {
 	Items []User `json:"items"`
 }
 
-// AgentID defines model for AgentID.
-type AgentID = string
-
 // AgentKeyFilter defines model for AgentKeyFilter.
 type AgentKeyFilter = string
 
 // ApprovalRequestID defines model for ApprovalRequestID.
 type ApprovalRequestID = int64
-
-// FromVersion defines model for FromVersion.
-type FromVersion = int32
 
 // IncludeLogs defines model for IncludeLogs.
 type IncludeLogs = bool
@@ -1058,15 +694,6 @@ type RuntimeErrorID = string
 
 // TailLines defines model for TailLines.
 type TailLines = int
-
-// TemplateKey defines model for TemplateKey.
-type TemplateKey = string
-
-// TemplateVersion defines model for TemplateVersion.
-type TemplateVersion = int32
-
-// ToVersion defines model for ToVersion.
-type ToVersion = int32
 
 // TriggerKindFilter defines model for TriggerKindFilter.
 type TriggerKindFilter = string
