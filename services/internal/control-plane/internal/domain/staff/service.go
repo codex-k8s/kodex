@@ -5,20 +5,16 @@ import (
 
 	"github.com/codex-k8s/codex-k8s/libs/go/crypto/tokencrypt"
 	"github.com/codex-k8s/codex-k8s/libs/go/repo/provider"
-	agentrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/repository/agent"
-	configentryrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/repository/configentry"
 	learningfeedbackrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/repository/learningfeedback"
 	projectrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/repository/project"
 	projectmemberrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/repository/projectmember"
 	projecttokenrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/repository/projecttoken"
-	prompttemplaterepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/repository/prompttemplate"
 	repocfgrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/repository/repocfg"
 	runtimedeploytaskrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/repository/runtimedeploytask"
 	runtimeerrorrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/repository/runtimeerror"
 	staffrunrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/repository/staffrun"
 	userrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/repository/user"
 	entitytypes "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/types/entity"
-	querytypes "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/types/query"
 	valuetypes "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/types/value"
 )
 
@@ -40,21 +36,17 @@ type Config struct {
 
 // Service exposes staff-only read/write operations protected by JWT + RBAC.
 type Service struct {
-	cfg             Config
-	users           userrepo.Repository
-	projects        projectrepo.Repository
-	members         projectmemberrepo.Repository
-	agents          agentrepo.Repository
-	repos           repocfgrepo.Repository
-	promptTemplates prompttemplaterepo.Repository
-	projectTokens   projecttokenrepo.Repository
-	configEntries   configentryrepo.Repository
-	feedback        learningfeedbackrepo.Repository
-	runs            staffrunrepo.Repository
-	tasks           runtimedeploytaskrepo.Repository
-	runtimeErrors   runtimeerrorrepo.Repository
-	images          registryImageService
-	k8s             kubernetesConfigSync
+	cfg           Config
+	users         userrepo.Repository
+	projects      projectrepo.Repository
+	members       projectmemberrepo.Repository
+	repos         repocfgrepo.Repository
+	projectTokens projecttokenrepo.Repository
+	feedback      learningfeedbackrepo.Repository
+	runs          staffrunrepo.Repository
+	tasks         runtimedeploytaskrepo.Repository
+	runtimeErrors runtimeerrorrepo.Repository
+	k8s           kubernetesConfigSync
 
 	tokencrypt     *tokencrypt.Service
 	platformTokens platformTokensRepository
@@ -82,12 +74,6 @@ type githubManagementClient interface {
 	UpsertEnvVariable(ctx context.Context, token string, owner string, repo string, envName string, key string, value string) error
 }
 
-type registryImageService interface {
-	List(ctx context.Context, filter querytypes.RegistryImageListFilter) ([]entitytypes.RegistryImageRepository, error)
-	DeleteTag(ctx context.Context, params querytypes.RegistryImageDeleteParams) (entitytypes.RegistryImageDeleteResult, error)
-	Cleanup(ctx context.Context, filter querytypes.RegistryImageCleanupFilter) (entitytypes.RegistryImageCleanupResult, error)
-}
-
 type kubernetesConfigSync interface {
 	ListSecretNames(ctx context.Context, namespace string) ([]string, error)
 	ListConfigMapNames(ctx context.Context, namespace string) ([]string, error)
@@ -99,49 +85,41 @@ type kubernetesConfigSync interface {
 
 // Dependencies defines external collaborators required by staff service.
 type Dependencies struct {
-	Users           userrepo.Repository
-	Projects        projectrepo.Repository
-	Members         projectmemberrepo.Repository
-	Agents          agentrepo.Repository
-	Repos           repocfgrepo.Repository
-	PromptTemplates prompttemplaterepo.Repository
-	ProjectTokens   projecttokenrepo.Repository
-	ConfigEntries   configentryrepo.Repository
-	Feedback        learningfeedbackrepo.Repository
-	Runs            staffrunrepo.Repository
-	Tasks           runtimedeploytaskrepo.Repository
-	RuntimeErrors   runtimeerrorrepo.Repository
-	Images          registryImageService
-	K8s             kubernetesConfigSync
-	Tokencrypt      *tokencrypt.Service
-	PlatformTokens  platformTokensRepository
-	GitHub          provider.RepositoryProvider
-	GitHubMgmt      githubManagementClient
-	RunStatus       runNamespaceService
+	Users          userrepo.Repository
+	Projects       projectrepo.Repository
+	Members        projectmemberrepo.Repository
+	Repos          repocfgrepo.Repository
+	ProjectTokens  projecttokenrepo.Repository
+	Feedback       learningfeedbackrepo.Repository
+	Runs           staffrunrepo.Repository
+	Tasks          runtimedeploytaskrepo.Repository
+	RuntimeErrors  runtimeerrorrepo.Repository
+	K8s            kubernetesConfigSync
+	Tokencrypt     *tokencrypt.Service
+	PlatformTokens platformTokensRepository
+	GitHub         provider.RepositoryProvider
+	GitHubMgmt     githubManagementClient
+	RunStatus      runNamespaceService
 }
 
 // NewService constructs staff service.
 func NewService(cfg Config, deps Dependencies) *Service {
 	return &Service{
-		cfg:             cfg,
-		users:           deps.Users,
-		projects:        deps.Projects,
-		members:         deps.Members,
-		agents:          deps.Agents,
-		repos:           deps.Repos,
-		promptTemplates: deps.PromptTemplates,
-		projectTokens:   deps.ProjectTokens,
-		configEntries:   deps.ConfigEntries,
-		feedback:        deps.Feedback,
-		runs:            deps.Runs,
-		tasks:           deps.Tasks,
-		runtimeErrors:   deps.RuntimeErrors,
-		images:          deps.Images,
-		k8s:             deps.K8s,
-		tokencrypt:      deps.Tokencrypt,
-		platformTokens:  deps.PlatformTokens,
-		github:          deps.GitHub,
-		githubMgmt:      deps.GitHubMgmt,
-		runStatus:       deps.RunStatus,
+		cfg:            cfg,
+		users:          deps.Users,
+		projects:       deps.Projects,
+		members:        deps.Members,
+		repos:          deps.Repos,
+		projectTokens:  deps.ProjectTokens,
+		feedback:       deps.Feedback,
+		runs:           deps.Runs,
+		tasks:          deps.Tasks,
+		runtimeErrors:  deps.RuntimeErrors,
+		k8s:            deps.K8s,
+		tokencrypt:     deps.Tokencrypt,
+		platformTokens: deps.PlatformTokens,
+		github:         deps.GitHub,
+		githubMgmt:     deps.GitHubMgmt,
+		runStatus:      deps.RunStatus,
 	}
 }

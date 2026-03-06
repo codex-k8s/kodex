@@ -5,8 +5,8 @@ title: "codex-k8s — API Contract Overview"
 status: active
 owner_role: SA
 created_at: 2026-02-06
-updated_at: 2026-02-25
-related_issues: [1, 19, 100, 154, 155, 175]
+updated_at: 2026-03-05
+related_issues: [1, 19, 100, 154, 155, 175, 274]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -113,7 +113,6 @@ approvals:
 | List pending approvals | GET | `/api/v1/staff/approvals` | staff JWT | MCP approval queue for privileged actions |
 | Resolve approval decision | POST | `/api/v1/staff/approvals/{approval_request_id}/decision` | staff JWT | approve/deny/expire/fail action request |
 | List run learning feedback | GET | `/api/v1/staff/runs/{run_id}/learning-feedback` | staff JWT | educational feedback |
-| List running jobs | GET | `/api/v1/staff/runs/jobs` | staff JWT | runtime jobs monitor |
 | Stream run logs | GET | `/api/v1/staff/runs/{run_id}/logs/stream` | staff JWT | live tail (SSE/WebSocket) |
 | List run log snapshots | GET | `/api/v1/staff/runs/{run_id}/logs` | staff JWT | historical logs |
 | List wait queue | GET | `/api/v1/staff/runs/waits` | staff JWT | `waiting_mcp`/`waiting_owner_review` with reasons |
@@ -132,7 +131,7 @@ approvals:
 | List project docs sources | GET | `/api/v1/staff/projects/{project_id}/docs/sources` | staff JWT | planned: effective role-aware docs graph |
 
 Примечание:
-- маршруты staff runtime debug (`/runs/jobs`, `/runs/{run_id}/logs*`, `/runs/waits`) относятся к MVP target и вводятся в Sprint S3.
+- маршруты staff runtime debug (`/runs/{run_id}/logs*`, `/runs/waits`) относятся к MVP target и вводятся в Sprint S3.
 - будущие маршруты сверх MVP (`docs search/edit`, advanced policy management UI и т.д.) вводятся отдельными эпиками post-MVP.
 - маршруты `composition*` и `/docs/sources` относятся к design backlog по Issue #100 и реализуются отдельным `run:dev` циклом.
 

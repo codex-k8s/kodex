@@ -147,21 +147,6 @@ func resolveRuntimeErrorsListFilters(defLimit int) func(c *echo.Context) (runtim
 	}
 }
 
-func parseOptionalPositiveInt(raw string, field string) (int, error) {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return 0, nil
-	}
-	value, err := strconv.Atoi(trimmed)
-	if err != nil || value <= 0 {
-		return 0, errs.Validation{Field: field, Msg: "must be a positive integer"}
-	}
-	if value > 1000 {
-		value = 1000
-	}
-	return value, nil
-}
-
 func parseOptionalBool(raw string, field string) (bool, error) {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "":
@@ -172,32 +157,6 @@ func parseOptionalBool(raw string, field string) (bool, error) {
 		return false, nil
 	default:
 		return false, errs.Validation{Field: field, Msg: "must be a boolean"}
-	}
-}
-
-func resolveRegistryImagesListFilters(defLimitRepositories int, defLimitTags int) func(c *echo.Context) (registryImagesListArg, error) {
-	return func(c *echo.Context) (registryImagesListArg, error) {
-		limitRepositories, err := parseOptionalPositiveInt(c.QueryParam("limit_repositories"), "limit_repositories")
-		if err != nil {
-			return registryImagesListArg{}, err
-		}
-		if limitRepositories == 0 {
-			limitRepositories = defLimitRepositories
-		}
-
-		limitTags, err := parseOptionalPositiveInt(c.QueryParam("limit_tags"), "limit_tags")
-		if err != nil {
-			return registryImagesListArg{}, err
-		}
-		if limitTags == 0 {
-			limitTags = defLimitTags
-		}
-
-		return registryImagesListArg{
-			repository:        strings.TrimSpace(c.QueryParam("repository")),
-			limitRepositories: int32(limitRepositories),
-			limitTags:         int32(limitTags),
-		}, nil
 	}
 }
 

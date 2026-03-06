@@ -29,7 +29,6 @@ import (
 	agentcallbackdomain "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/agentcallback"
 	codexauthdomain "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/codexauth"
 	mcpdomain "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/mcp"
-	registryimagesdomain "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/registryimages"
 	runstatusdomain "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/runstatus"
 	runtimedeploydomain "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/runtimedeploy"
 	runtimeerrordomain "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/runtimeerror"
@@ -38,7 +37,6 @@ import (
 	agentrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/repository/postgres/agent"
 	agentrunrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/repository/postgres/agentrun"
 	agentsessionrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/repository/postgres/agentsession"
-	configentryrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/repository/postgres/configentry"
 	floweventrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/repository/postgres/flowevent"
 	learningfeedbackrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/repository/postgres/learningfeedback"
 	mcpactionrequestrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/repository/postgres/mcpactionrequest"
@@ -47,7 +45,6 @@ import (
 	projectdatabaserepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/repository/postgres/projectdatabase"
 	projectmemberrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/repository/postgres/projectmember"
 	projecttokenrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/repository/postgres/projecttoken"
-	prompttemplaterepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/repository/postgres/prompttemplate"
 	repocfgrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/repository/postgres/repocfg"
 	runtimedeploytaskrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/repository/postgres/runtimedeploytask"
 	runtimeerrorrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/repository/postgres/runtimeerror"
@@ -90,14 +87,12 @@ func Run() error {
 	users := userrepo.NewRepository(pgxPool)
 	projects := projectrepo.NewRepository(pgxPool)
 	members := projectmemberrepo.NewRepository(pgxPool)
-	promptTemplates := prompttemplaterepo.NewRepository(pgxPool)
 	runs := staffrunrepo.NewRepository(pgxPool)
 	repos := repocfgrepo.NewRepository(pgxPool)
 	feedback := learningfeedbackrepo.NewRepository(pgxPool)
 	agentSessions := agentsessionrepo.NewRepository(pgxPool)
 	platformTokens := platformtokenrepo.NewRepository(pgxPool)
 	projectTokens := projecttokenrepo.NewRepository(pgxPool)
-	configEntries := configentryrepo.NewRepository(pgxPool)
 	mcpActionRequests := mcpactionrequestrepo.NewRepository(pgxPool)
 	projectDatabases := projectdatabaserepo.NewRepository(pgxPool)
 	runtimeDeployTasks := runtimedeploytaskrepo.NewRepository(pgxPool)
@@ -242,12 +237,6 @@ func Run() error {
 	if err != nil {
 		return fmt.Errorf("init registry client: %w", err)
 	}
-	registryImagesService, err := registryimagesdomain.NewService(registryimagesdomain.Config{
-		DefaultCleanupKeepTags: cfg.RegistryCleanupKeepTags,
-	}, registryClient)
-	if err != nil {
-		return fmt.Errorf("init registry images service: %w", err)
-	}
 	runtimeErrorService, err := runtimeerrordomain.NewService(runtimeErrors, logger)
 	if err != nil {
 		return fmt.Errorf("init runtime error service: %w", err)
@@ -337,29 +326,25 @@ func Run() error {
 		ProtectedProjectIDs:    bootstrapSeed.ProtectedProjectIDs,
 		ProtectedRepositoryIDs: bootstrapSeed.ProtectedRepositoryIDs,
 	}, staff.Dependencies{
-		Users:           users,
-		Projects:        projects,
-		Members:         members,
-		Agents:          agents,
-		Repos:           repos,
-		PromptTemplates: promptTemplates,
-		ProjectTokens:   projectTokens,
-		ConfigEntries:   configEntries,
-		Feedback:        feedback,
-		Runs:            runs,
-		Tasks:           runtimeDeployTasks,
-		RuntimeErrors:   runtimeErrors,
-		Images:          registryImagesService,
-		K8s:             k8sClient,
-		Tokencrypt:      tokenCrypto,
-		PlatformTokens:  platformTokens,
-		GitHub:          githubRepoProvider,
-		GitHubMgmt:      githubMgmtClient,
-		RunStatus:       runStatusService,
+		Users:          users,
+		Projects:       projects,
+		Members:        members,
+		Repos:          repos,
+		ProjectTokens:  projectTokens,
+		Feedback:       feedback,
+		Runs:           runs,
+		Tasks:          runtimeDeployTasks,
+		RuntimeErrors:  runtimeErrors,
+		K8s:            k8sClient,
+		Tokencrypt:     tokenCrypto,
+		PlatformTokens: platformTokens,
+		GitHub:         githubRepoProvider,
+		GitHubMgmt:     githubMgmtClient,
+		RunStatus:      runStatusService,
 	})
 
 	// Ensure bootstrap users exist so that the first login can be matched by email.
-	bootstrapOwner, err := users.EnsureOwner(runCtx, cfg.BootstrapOwnerEmail)
+	_, err = users.EnsureOwner(runCtx, cfg.BootstrapOwnerEmail)
 	if err != nil {
 		return fmt.Errorf("ensure bootstrap owner user: %w", err)
 	}
@@ -368,9 +353,6 @@ func Run() error {
 	}
 	if err := ensureBootstrapPlatformAdmins(runCtx, users, cfg.BootstrapOwnerEmail, cfg.BootstrapPlatformAdminEmails, logger); err != nil {
 		return fmt.Errorf("ensure bootstrap platform admins: %w", err)
-	}
-	if err := syncBootstrapPromptTemplateSeeds(runCtx, staffService, bootstrapOwner.ID, logger); err != nil {
-		return fmt.Errorf("sync bootstrap prompt template seeds: %w", err)
 	}
 
 	grpcLis, err := net.Listen("tcp", cfg.GRPCAddr)

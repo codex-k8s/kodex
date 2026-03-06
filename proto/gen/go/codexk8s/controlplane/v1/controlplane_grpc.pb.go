@@ -27,19 +27,7 @@ const (
 	ControlPlaneService_UpsertProject_FullMethodName                        = "/codexk8s.controlplane.v1.ControlPlaneService/UpsertProject"
 	ControlPlaneService_GetProject_FullMethodName                           = "/codexk8s.controlplane.v1.ControlPlaneService/GetProject"
 	ControlPlaneService_DeleteProject_FullMethodName                        = "/codexk8s.controlplane.v1.ControlPlaneService/DeleteProject"
-	ControlPlaneService_ListAgents_FullMethodName                           = "/codexk8s.controlplane.v1.ControlPlaneService/ListAgents"
-	ControlPlaneService_GetAgent_FullMethodName                             = "/codexk8s.controlplane.v1.ControlPlaneService/GetAgent"
-	ControlPlaneService_UpdateAgentSettings_FullMethodName                  = "/codexk8s.controlplane.v1.ControlPlaneService/UpdateAgentSettings"
-	ControlPlaneService_ListPromptTemplateKeys_FullMethodName               = "/codexk8s.controlplane.v1.ControlPlaneService/ListPromptTemplateKeys"
-	ControlPlaneService_ListPromptTemplateVersions_FullMethodName           = "/codexk8s.controlplane.v1.ControlPlaneService/ListPromptTemplateVersions"
-	ControlPlaneService_CreatePromptTemplateVersion_FullMethodName          = "/codexk8s.controlplane.v1.ControlPlaneService/CreatePromptTemplateVersion"
-	ControlPlaneService_ActivatePromptTemplateVersion_FullMethodName        = "/codexk8s.controlplane.v1.ControlPlaneService/ActivatePromptTemplateVersion"
-	ControlPlaneService_SyncPromptTemplateSeeds_FullMethodName              = "/codexk8s.controlplane.v1.ControlPlaneService/SyncPromptTemplateSeeds"
-	ControlPlaneService_PreviewPromptTemplate_FullMethodName                = "/codexk8s.controlplane.v1.ControlPlaneService/PreviewPromptTemplate"
-	ControlPlaneService_DiffPromptTemplateVersions_FullMethodName           = "/codexk8s.controlplane.v1.ControlPlaneService/DiffPromptTemplateVersions"
-	ControlPlaneService_ListPromptTemplateAuditEvents_FullMethodName        = "/codexk8s.controlplane.v1.ControlPlaneService/ListPromptTemplateAuditEvents"
 	ControlPlaneService_ListRuns_FullMethodName                             = "/codexk8s.controlplane.v1.ControlPlaneService/ListRuns"
-	ControlPlaneService_ListRunJobs_FullMethodName                          = "/codexk8s.controlplane.v1.ControlPlaneService/ListRunJobs"
 	ControlPlaneService_ListRunWaits_FullMethodName                         = "/codexk8s.controlplane.v1.ControlPlaneService/ListRunWaits"
 	ControlPlaneService_GetRun_FullMethodName                               = "/codexk8s.controlplane.v1.ControlPlaneService/GetRun"
 	ControlPlaneService_GetRunLogs_FullMethodName                           = "/codexk8s.controlplane.v1.ControlPlaneService/GetRunLogs"
@@ -62,9 +50,6 @@ const (
 	ControlPlaneService_GetProjectGitHubTokens_FullMethodName               = "/codexk8s.controlplane.v1.ControlPlaneService/GetProjectGitHubTokens"
 	ControlPlaneService_UpsertProjectGitHubTokens_FullMethodName            = "/codexk8s.controlplane.v1.ControlPlaneService/UpsertProjectGitHubTokens"
 	ControlPlaneService_TransitionIssueStageLabel_FullMethodName            = "/codexk8s.controlplane.v1.ControlPlaneService/TransitionIssueStageLabel"
-	ControlPlaneService_ListConfigEntries_FullMethodName                    = "/codexk8s.controlplane.v1.ControlPlaneService/ListConfigEntries"
-	ControlPlaneService_UpsertConfigEntry_FullMethodName                    = "/codexk8s.controlplane.v1.ControlPlaneService/UpsertConfigEntry"
-	ControlPlaneService_DeleteConfigEntry_FullMethodName                    = "/codexk8s.controlplane.v1.ControlPlaneService/DeleteConfigEntry"
 	ControlPlaneService_ListDocsetGroups_FullMethodName                     = "/codexk8s.controlplane.v1.ControlPlaneService/ListDocsetGroups"
 	ControlPlaneService_ImportDocset_FullMethodName                         = "/codexk8s.controlplane.v1.ControlPlaneService/ImportDocset"
 	ControlPlaneService_SyncDocset_FullMethodName                           = "/codexk8s.controlplane.v1.ControlPlaneService/SyncDocset"
@@ -74,9 +59,6 @@ const (
 	ControlPlaneService_GetRuntimeDeployTask_FullMethodName                 = "/codexk8s.controlplane.v1.ControlPlaneService/GetRuntimeDeployTask"
 	ControlPlaneService_ListRuntimeErrors_FullMethodName                    = "/codexk8s.controlplane.v1.ControlPlaneService/ListRuntimeErrors"
 	ControlPlaneService_MarkRuntimeErrorViewed_FullMethodName               = "/codexk8s.controlplane.v1.ControlPlaneService/MarkRuntimeErrorViewed"
-	ControlPlaneService_ListRegistryImages_FullMethodName                   = "/codexk8s.controlplane.v1.ControlPlaneService/ListRegistryImages"
-	ControlPlaneService_DeleteRegistryImageTag_FullMethodName               = "/codexk8s.controlplane.v1.ControlPlaneService/DeleteRegistryImageTag"
-	ControlPlaneService_CleanupRegistryImages_FullMethodName                = "/codexk8s.controlplane.v1.ControlPlaneService/CleanupRegistryImages"
 	ControlPlaneService_UpsertAgentSession_FullMethodName                   = "/codexk8s.controlplane.v1.ControlPlaneService/UpsertAgentSession"
 	ControlPlaneService_GetLatestAgentSession_FullMethodName                = "/codexk8s.controlplane.v1.ControlPlaneService/GetLatestAgentSession"
 	ControlPlaneService_InsertRunFlowEvent_FullMethodName                   = "/codexk8s.controlplane.v1.ControlPlaneService/InsertRunFlowEvent"
@@ -99,19 +81,7 @@ type ControlPlaneServiceClient interface {
 	UpsertProject(ctx context.Context, in *UpsertProjectRequest, opts ...grpc.CallOption) (*Project, error)
 	GetProject(ctx context.Context, in *GetProjectRequest, opts ...grpc.CallOption) (*Project, error)
 	DeleteProject(ctx context.Context, in *DeleteProjectRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
-	ListAgents(ctx context.Context, in *ListAgentsRequest, opts ...grpc.CallOption) (*ListAgentsResponse, error)
-	GetAgent(ctx context.Context, in *GetAgentRequest, opts ...grpc.CallOption) (*Agent, error)
-	UpdateAgentSettings(ctx context.Context, in *UpdateAgentSettingsRequest, opts ...grpc.CallOption) (*Agent, error)
-	ListPromptTemplateKeys(ctx context.Context, in *ListPromptTemplateKeysRequest, opts ...grpc.CallOption) (*ListPromptTemplateKeysResponse, error)
-	ListPromptTemplateVersions(ctx context.Context, in *ListPromptTemplateVersionsRequest, opts ...grpc.CallOption) (*ListPromptTemplateVersionsResponse, error)
-	CreatePromptTemplateVersion(ctx context.Context, in *CreatePromptTemplateVersionRequest, opts ...grpc.CallOption) (*PromptTemplateVersion, error)
-	ActivatePromptTemplateVersion(ctx context.Context, in *ActivatePromptTemplateVersionRequest, opts ...grpc.CallOption) (*PromptTemplateVersion, error)
-	SyncPromptTemplateSeeds(ctx context.Context, in *PromptTemplateSeedSyncRequest, opts ...grpc.CallOption) (*PromptTemplateSeedSyncResponse, error)
-	PreviewPromptTemplate(ctx context.Context, in *PreviewPromptTemplateRequest, opts ...grpc.CallOption) (*PreviewPromptTemplateResponse, error)
-	DiffPromptTemplateVersions(ctx context.Context, in *DiffPromptTemplateVersionsRequest, opts ...grpc.CallOption) (*DiffPromptTemplateVersionsResponse, error)
-	ListPromptTemplateAuditEvents(ctx context.Context, in *ListPromptTemplateAuditEventsRequest, opts ...grpc.CallOption) (*ListPromptTemplateAuditEventsResponse, error)
 	ListRuns(ctx context.Context, in *ListRunsRequest, opts ...grpc.CallOption) (*ListRunsResponse, error)
-	ListRunJobs(ctx context.Context, in *ListRunJobsRequest, opts ...grpc.CallOption) (*ListRunJobsResponse, error)
 	ListRunWaits(ctx context.Context, in *ListRunWaitsRequest, opts ...grpc.CallOption) (*ListRunWaitsResponse, error)
 	GetRun(ctx context.Context, in *GetRunRequest, opts ...grpc.CallOption) (*Run, error)
 	GetRunLogs(ctx context.Context, in *GetRunLogsRequest, opts ...grpc.CallOption) (*RunLogs, error)
@@ -134,9 +104,6 @@ type ControlPlaneServiceClient interface {
 	GetProjectGitHubTokens(ctx context.Context, in *GetProjectGitHubTokensRequest, opts ...grpc.CallOption) (*ProjectGitHubTokens, error)
 	UpsertProjectGitHubTokens(ctx context.Context, in *UpsertProjectGitHubTokensRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	TransitionIssueStageLabel(ctx context.Context, in *TransitionIssueStageLabelRequest, opts ...grpc.CallOption) (*TransitionIssueStageLabelResponse, error)
-	ListConfigEntries(ctx context.Context, in *ListConfigEntriesRequest, opts ...grpc.CallOption) (*ListConfigEntriesResponse, error)
-	UpsertConfigEntry(ctx context.Context, in *UpsertConfigEntryRequest, opts ...grpc.CallOption) (*ConfigEntry, error)
-	DeleteConfigEntry(ctx context.Context, in *DeleteConfigEntryRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	ListDocsetGroups(ctx context.Context, in *ListDocsetGroupsRequest, opts ...grpc.CallOption) (*ListDocsetGroupsResponse, error)
 	ImportDocset(ctx context.Context, in *ImportDocsetRequest, opts ...grpc.CallOption) (*ImportDocsetResponse, error)
 	SyncDocset(ctx context.Context, in *SyncDocsetRequest, opts ...grpc.CallOption) (*SyncDocsetResponse, error)
@@ -146,9 +113,6 @@ type ControlPlaneServiceClient interface {
 	GetRuntimeDeployTask(ctx context.Context, in *GetRuntimeDeployTaskRequest, opts ...grpc.CallOption) (*RuntimeDeployTask, error)
 	ListRuntimeErrors(ctx context.Context, in *ListRuntimeErrorsRequest, opts ...grpc.CallOption) (*ListRuntimeErrorsResponse, error)
 	MarkRuntimeErrorViewed(ctx context.Context, in *MarkRuntimeErrorViewedRequest, opts ...grpc.CallOption) (*RuntimeError, error)
-	ListRegistryImages(ctx context.Context, in *ListRegistryImagesRequest, opts ...grpc.CallOption) (*ListRegistryImagesResponse, error)
-	DeleteRegistryImageTag(ctx context.Context, in *DeleteRegistryImageTagRequest, opts ...grpc.CallOption) (*RegistryImageDeleteResult, error)
-	CleanupRegistryImages(ctx context.Context, in *CleanupRegistryImagesRequest, opts ...grpc.CallOption) (*CleanupRegistryImagesResponse, error)
 	// Used by agent-runner for run-bound session persistence and event callbacks.
 	UpsertAgentSession(ctx context.Context, in *UpsertAgentSessionRequest, opts ...grpc.CallOption) (*UpsertAgentSessionResponse, error)
 	GetLatestAgentSession(ctx context.Context, in *GetLatestAgentSessionRequest, opts ...grpc.CallOption) (*GetLatestAgentSessionResponse, error)
@@ -237,130 +201,10 @@ func (c *controlPlaneServiceClient) DeleteProject(ctx context.Context, in *Delet
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) ListAgents(ctx context.Context, in *ListAgentsRequest, opts ...grpc.CallOption) (*ListAgentsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListAgentsResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListAgents_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) GetAgent(ctx context.Context, in *GetAgentRequest, opts ...grpc.CallOption) (*Agent, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Agent)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetAgent_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) UpdateAgentSettings(ctx context.Context, in *UpdateAgentSettingsRequest, opts ...grpc.CallOption) (*Agent, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Agent)
-	err := c.cc.Invoke(ctx, ControlPlaneService_UpdateAgentSettings_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ListPromptTemplateKeys(ctx context.Context, in *ListPromptTemplateKeysRequest, opts ...grpc.CallOption) (*ListPromptTemplateKeysResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListPromptTemplateKeysResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListPromptTemplateKeys_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ListPromptTemplateVersions(ctx context.Context, in *ListPromptTemplateVersionsRequest, opts ...grpc.CallOption) (*ListPromptTemplateVersionsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListPromptTemplateVersionsResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListPromptTemplateVersions_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) CreatePromptTemplateVersion(ctx context.Context, in *CreatePromptTemplateVersionRequest, opts ...grpc.CallOption) (*PromptTemplateVersion, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(PromptTemplateVersion)
-	err := c.cc.Invoke(ctx, ControlPlaneService_CreatePromptTemplateVersion_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ActivatePromptTemplateVersion(ctx context.Context, in *ActivatePromptTemplateVersionRequest, opts ...grpc.CallOption) (*PromptTemplateVersion, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(PromptTemplateVersion)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ActivatePromptTemplateVersion_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) SyncPromptTemplateSeeds(ctx context.Context, in *PromptTemplateSeedSyncRequest, opts ...grpc.CallOption) (*PromptTemplateSeedSyncResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(PromptTemplateSeedSyncResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_SyncPromptTemplateSeeds_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) PreviewPromptTemplate(ctx context.Context, in *PreviewPromptTemplateRequest, opts ...grpc.CallOption) (*PreviewPromptTemplateResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(PreviewPromptTemplateResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_PreviewPromptTemplate_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) DiffPromptTemplateVersions(ctx context.Context, in *DiffPromptTemplateVersionsRequest, opts ...grpc.CallOption) (*DiffPromptTemplateVersionsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(DiffPromptTemplateVersionsResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_DiffPromptTemplateVersions_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ListPromptTemplateAuditEvents(ctx context.Context, in *ListPromptTemplateAuditEventsRequest, opts ...grpc.CallOption) (*ListPromptTemplateAuditEventsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListPromptTemplateAuditEventsResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListPromptTemplateAuditEvents_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *controlPlaneServiceClient) ListRuns(ctx context.Context, in *ListRunsRequest, opts ...grpc.CallOption) (*ListRunsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListRunsResponse)
 	err := c.cc.Invoke(ctx, ControlPlaneService_ListRuns_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ListRunJobs(ctx context.Context, in *ListRunJobsRequest, opts ...grpc.CallOption) (*ListRunJobsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListRunJobsResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListRunJobs_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -587,36 +431,6 @@ func (c *controlPlaneServiceClient) TransitionIssueStageLabel(ctx context.Contex
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) ListConfigEntries(ctx context.Context, in *ListConfigEntriesRequest, opts ...grpc.CallOption) (*ListConfigEntriesResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListConfigEntriesResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListConfigEntries_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) UpsertConfigEntry(ctx context.Context, in *UpsertConfigEntryRequest, opts ...grpc.CallOption) (*ConfigEntry, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ConfigEntry)
-	err := c.cc.Invoke(ctx, ControlPlaneService_UpsertConfigEntry_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) DeleteConfigEntry(ctx context.Context, in *DeleteConfigEntryRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, ControlPlaneService_DeleteConfigEntry_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *controlPlaneServiceClient) ListDocsetGroups(ctx context.Context, in *ListDocsetGroupsRequest, opts ...grpc.CallOption) (*ListDocsetGroupsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListDocsetGroupsResponse)
@@ -707,36 +521,6 @@ func (c *controlPlaneServiceClient) MarkRuntimeErrorViewed(ctx context.Context, 
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) ListRegistryImages(ctx context.Context, in *ListRegistryImagesRequest, opts ...grpc.CallOption) (*ListRegistryImagesResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListRegistryImagesResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListRegistryImages_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) DeleteRegistryImageTag(ctx context.Context, in *DeleteRegistryImageTagRequest, opts ...grpc.CallOption) (*RegistryImageDeleteResult, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RegistryImageDeleteResult)
-	err := c.cc.Invoke(ctx, ControlPlaneService_DeleteRegistryImageTag_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) CleanupRegistryImages(ctx context.Context, in *CleanupRegistryImagesRequest, opts ...grpc.CallOption) (*CleanupRegistryImagesResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CleanupRegistryImagesResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_CleanupRegistryImages_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *controlPlaneServiceClient) UpsertAgentSession(ctx context.Context, in *UpsertAgentSessionRequest, opts ...grpc.CallOption) (*UpsertAgentSessionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(UpsertAgentSessionResponse)
@@ -820,19 +604,7 @@ type ControlPlaneServiceServer interface {
 	UpsertProject(context.Context, *UpsertProjectRequest) (*Project, error)
 	GetProject(context.Context, *GetProjectRequest) (*Project, error)
 	DeleteProject(context.Context, *DeleteProjectRequest) (*emptypb.Empty, error)
-	ListAgents(context.Context, *ListAgentsRequest) (*ListAgentsResponse, error)
-	GetAgent(context.Context, *GetAgentRequest) (*Agent, error)
-	UpdateAgentSettings(context.Context, *UpdateAgentSettingsRequest) (*Agent, error)
-	ListPromptTemplateKeys(context.Context, *ListPromptTemplateKeysRequest) (*ListPromptTemplateKeysResponse, error)
-	ListPromptTemplateVersions(context.Context, *ListPromptTemplateVersionsRequest) (*ListPromptTemplateVersionsResponse, error)
-	CreatePromptTemplateVersion(context.Context, *CreatePromptTemplateVersionRequest) (*PromptTemplateVersion, error)
-	ActivatePromptTemplateVersion(context.Context, *ActivatePromptTemplateVersionRequest) (*PromptTemplateVersion, error)
-	SyncPromptTemplateSeeds(context.Context, *PromptTemplateSeedSyncRequest) (*PromptTemplateSeedSyncResponse, error)
-	PreviewPromptTemplate(context.Context, *PreviewPromptTemplateRequest) (*PreviewPromptTemplateResponse, error)
-	DiffPromptTemplateVersions(context.Context, *DiffPromptTemplateVersionsRequest) (*DiffPromptTemplateVersionsResponse, error)
-	ListPromptTemplateAuditEvents(context.Context, *ListPromptTemplateAuditEventsRequest) (*ListPromptTemplateAuditEventsResponse, error)
 	ListRuns(context.Context, *ListRunsRequest) (*ListRunsResponse, error)
-	ListRunJobs(context.Context, *ListRunJobsRequest) (*ListRunJobsResponse, error)
 	ListRunWaits(context.Context, *ListRunWaitsRequest) (*ListRunWaitsResponse, error)
 	GetRun(context.Context, *GetRunRequest) (*Run, error)
 	GetRunLogs(context.Context, *GetRunLogsRequest) (*RunLogs, error)
@@ -855,9 +627,6 @@ type ControlPlaneServiceServer interface {
 	GetProjectGitHubTokens(context.Context, *GetProjectGitHubTokensRequest) (*ProjectGitHubTokens, error)
 	UpsertProjectGitHubTokens(context.Context, *UpsertProjectGitHubTokensRequest) (*emptypb.Empty, error)
 	TransitionIssueStageLabel(context.Context, *TransitionIssueStageLabelRequest) (*TransitionIssueStageLabelResponse, error)
-	ListConfigEntries(context.Context, *ListConfigEntriesRequest) (*ListConfigEntriesResponse, error)
-	UpsertConfigEntry(context.Context, *UpsertConfigEntryRequest) (*ConfigEntry, error)
-	DeleteConfigEntry(context.Context, *DeleteConfigEntryRequest) (*emptypb.Empty, error)
 	ListDocsetGroups(context.Context, *ListDocsetGroupsRequest) (*ListDocsetGroupsResponse, error)
 	ImportDocset(context.Context, *ImportDocsetRequest) (*ImportDocsetResponse, error)
 	SyncDocset(context.Context, *SyncDocsetRequest) (*SyncDocsetResponse, error)
@@ -867,9 +636,6 @@ type ControlPlaneServiceServer interface {
 	GetRuntimeDeployTask(context.Context, *GetRuntimeDeployTaskRequest) (*RuntimeDeployTask, error)
 	ListRuntimeErrors(context.Context, *ListRuntimeErrorsRequest) (*ListRuntimeErrorsResponse, error)
 	MarkRuntimeErrorViewed(context.Context, *MarkRuntimeErrorViewedRequest) (*RuntimeError, error)
-	ListRegistryImages(context.Context, *ListRegistryImagesRequest) (*ListRegistryImagesResponse, error)
-	DeleteRegistryImageTag(context.Context, *DeleteRegistryImageTagRequest) (*RegistryImageDeleteResult, error)
-	CleanupRegistryImages(context.Context, *CleanupRegistryImagesRequest) (*CleanupRegistryImagesResponse, error)
 	// Used by agent-runner for run-bound session persistence and event callbacks.
 	UpsertAgentSession(context.Context, *UpsertAgentSessionRequest) (*UpsertAgentSessionResponse, error)
 	GetLatestAgentSession(context.Context, *GetLatestAgentSessionRequest) (*GetLatestAgentSessionResponse, error)
@@ -909,44 +675,8 @@ func (UnimplementedControlPlaneServiceServer) GetProject(context.Context, *GetPr
 func (UnimplementedControlPlaneServiceServer) DeleteProject(context.Context, *DeleteProjectRequest) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteProject not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) ListAgents(context.Context, *ListAgentsRequest) (*ListAgentsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ListAgents not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) GetAgent(context.Context, *GetAgentRequest) (*Agent, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetAgent not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) UpdateAgentSettings(context.Context, *UpdateAgentSettingsRequest) (*Agent, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UpdateAgentSettings not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ListPromptTemplateKeys(context.Context, *ListPromptTemplateKeysRequest) (*ListPromptTemplateKeysResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ListPromptTemplateKeys not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ListPromptTemplateVersions(context.Context, *ListPromptTemplateVersionsRequest) (*ListPromptTemplateVersionsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ListPromptTemplateVersions not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) CreatePromptTemplateVersion(context.Context, *CreatePromptTemplateVersionRequest) (*PromptTemplateVersion, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CreatePromptTemplateVersion not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ActivatePromptTemplateVersion(context.Context, *ActivatePromptTemplateVersionRequest) (*PromptTemplateVersion, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ActivatePromptTemplateVersion not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) SyncPromptTemplateSeeds(context.Context, *PromptTemplateSeedSyncRequest) (*PromptTemplateSeedSyncResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SyncPromptTemplateSeeds not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) PreviewPromptTemplate(context.Context, *PreviewPromptTemplateRequest) (*PreviewPromptTemplateResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PreviewPromptTemplate not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) DiffPromptTemplateVersions(context.Context, *DiffPromptTemplateVersionsRequest) (*DiffPromptTemplateVersionsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DiffPromptTemplateVersions not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ListPromptTemplateAuditEvents(context.Context, *ListPromptTemplateAuditEventsRequest) (*ListPromptTemplateAuditEventsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ListPromptTemplateAuditEvents not implemented")
-}
 func (UnimplementedControlPlaneServiceServer) ListRuns(context.Context, *ListRunsRequest) (*ListRunsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListRuns not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ListRunJobs(context.Context, *ListRunJobsRequest) (*ListRunJobsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ListRunJobs not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) ListRunWaits(context.Context, *ListRunWaitsRequest) (*ListRunWaitsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListRunWaits not implemented")
@@ -1014,15 +744,6 @@ func (UnimplementedControlPlaneServiceServer) UpsertProjectGitHubTokens(context.
 func (UnimplementedControlPlaneServiceServer) TransitionIssueStageLabel(context.Context, *TransitionIssueStageLabelRequest) (*TransitionIssueStageLabelResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method TransitionIssueStageLabel not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) ListConfigEntries(context.Context, *ListConfigEntriesRequest) (*ListConfigEntriesResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ListConfigEntries not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) UpsertConfigEntry(context.Context, *UpsertConfigEntryRequest) (*ConfigEntry, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UpsertConfigEntry not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) DeleteConfigEntry(context.Context, *DeleteConfigEntryRequest) (*emptypb.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DeleteConfigEntry not implemented")
-}
 func (UnimplementedControlPlaneServiceServer) ListDocsetGroups(context.Context, *ListDocsetGroupsRequest) (*ListDocsetGroupsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListDocsetGroups not implemented")
 }
@@ -1049,15 +770,6 @@ func (UnimplementedControlPlaneServiceServer) ListRuntimeErrors(context.Context,
 }
 func (UnimplementedControlPlaneServiceServer) MarkRuntimeErrorViewed(context.Context, *MarkRuntimeErrorViewedRequest) (*RuntimeError, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method MarkRuntimeErrorViewed not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ListRegistryImages(context.Context, *ListRegistryImagesRequest) (*ListRegistryImagesResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ListRegistryImages not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) DeleteRegistryImageTag(context.Context, *DeleteRegistryImageTagRequest) (*RegistryImageDeleteResult, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DeleteRegistryImageTag not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) CleanupRegistryImages(context.Context, *CleanupRegistryImagesRequest) (*CleanupRegistryImagesResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CleanupRegistryImages not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) UpsertAgentSession(context.Context, *UpsertAgentSessionRequest) (*UpsertAgentSessionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpsertAgentSession not implemented")
@@ -1227,204 +939,6 @@ func _ControlPlaneService_DeleteProject_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ListAgents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListAgentsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListAgents(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ListAgents_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListAgents(ctx, req.(*ListAgentsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_GetAgent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetAgentRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetAgent(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_GetAgent_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetAgent(ctx, req.(*GetAgentRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_UpdateAgentSettings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UpdateAgentSettingsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).UpdateAgentSettings(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_UpdateAgentSettings_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).UpdateAgentSettings(ctx, req.(*UpdateAgentSettingsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ListPromptTemplateKeys_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListPromptTemplateKeysRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListPromptTemplateKeys(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ListPromptTemplateKeys_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListPromptTemplateKeys(ctx, req.(*ListPromptTemplateKeysRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ListPromptTemplateVersions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListPromptTemplateVersionsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListPromptTemplateVersions(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ListPromptTemplateVersions_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListPromptTemplateVersions(ctx, req.(*ListPromptTemplateVersionsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_CreatePromptTemplateVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CreatePromptTemplateVersionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).CreatePromptTemplateVersion(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_CreatePromptTemplateVersion_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).CreatePromptTemplateVersion(ctx, req.(*CreatePromptTemplateVersionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ActivatePromptTemplateVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ActivatePromptTemplateVersionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ActivatePromptTemplateVersion(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ActivatePromptTemplateVersion_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ActivatePromptTemplateVersion(ctx, req.(*ActivatePromptTemplateVersionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_SyncPromptTemplateSeeds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PromptTemplateSeedSyncRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).SyncPromptTemplateSeeds(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_SyncPromptTemplateSeeds_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).SyncPromptTemplateSeeds(ctx, req.(*PromptTemplateSeedSyncRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_PreviewPromptTemplate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PreviewPromptTemplateRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).PreviewPromptTemplate(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_PreviewPromptTemplate_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).PreviewPromptTemplate(ctx, req.(*PreviewPromptTemplateRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_DiffPromptTemplateVersions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DiffPromptTemplateVersionsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).DiffPromptTemplateVersions(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_DiffPromptTemplateVersions_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).DiffPromptTemplateVersions(ctx, req.(*DiffPromptTemplateVersionsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ListPromptTemplateAuditEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListPromptTemplateAuditEventsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListPromptTemplateAuditEvents(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ListPromptTemplateAuditEvents_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListPromptTemplateAuditEvents(ctx, req.(*ListPromptTemplateAuditEventsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _ControlPlaneService_ListRuns_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListRunsRequest)
 	if err := dec(in); err != nil {
@@ -1439,24 +953,6 @@ func _ControlPlaneService_ListRuns_Handler(srv interface{}, ctx context.Context,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlPlaneServiceServer).ListRuns(ctx, req.(*ListRunsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ListRunJobs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListRunJobsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListRunJobs(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ListRunJobs_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListRunJobs(ctx, req.(*ListRunJobsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1857,60 +1353,6 @@ func _ControlPlaneService_TransitionIssueStageLabel_Handler(srv interface{}, ctx
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ListConfigEntries_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListConfigEntriesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListConfigEntries(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ListConfigEntries_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListConfigEntries(ctx, req.(*ListConfigEntriesRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_UpsertConfigEntry_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UpsertConfigEntryRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).UpsertConfigEntry(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_UpsertConfigEntry_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).UpsertConfigEntry(ctx, req.(*UpsertConfigEntryRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_DeleteConfigEntry_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DeleteConfigEntryRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).DeleteConfigEntry(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_DeleteConfigEntry_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).DeleteConfigEntry(ctx, req.(*DeleteConfigEntryRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _ControlPlaneService_ListDocsetGroups_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListDocsetGroupsRequest)
 	if err := dec(in); err != nil {
@@ -2069,60 +1511,6 @@ func _ControlPlaneService_MarkRuntimeErrorViewed_Handler(srv interface{}, ctx co
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlPlaneServiceServer).MarkRuntimeErrorViewed(ctx, req.(*MarkRuntimeErrorViewedRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ListRegistryImages_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListRegistryImagesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListRegistryImages(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ListRegistryImages_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListRegistryImages(ctx, req.(*ListRegistryImagesRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_DeleteRegistryImageTag_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DeleteRegistryImageTagRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).DeleteRegistryImageTag(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_DeleteRegistryImageTag_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).DeleteRegistryImageTag(ctx, req.(*DeleteRegistryImageTagRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_CleanupRegistryImages_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CleanupRegistryImagesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).CleanupRegistryImages(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_CleanupRegistryImages_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).CleanupRegistryImages(ctx, req.(*CleanupRegistryImagesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2289,56 +1677,8 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ControlPlaneService_DeleteProject_Handler,
 		},
 		{
-			MethodName: "ListAgents",
-			Handler:    _ControlPlaneService_ListAgents_Handler,
-		},
-		{
-			MethodName: "GetAgent",
-			Handler:    _ControlPlaneService_GetAgent_Handler,
-		},
-		{
-			MethodName: "UpdateAgentSettings",
-			Handler:    _ControlPlaneService_UpdateAgentSettings_Handler,
-		},
-		{
-			MethodName: "ListPromptTemplateKeys",
-			Handler:    _ControlPlaneService_ListPromptTemplateKeys_Handler,
-		},
-		{
-			MethodName: "ListPromptTemplateVersions",
-			Handler:    _ControlPlaneService_ListPromptTemplateVersions_Handler,
-		},
-		{
-			MethodName: "CreatePromptTemplateVersion",
-			Handler:    _ControlPlaneService_CreatePromptTemplateVersion_Handler,
-		},
-		{
-			MethodName: "ActivatePromptTemplateVersion",
-			Handler:    _ControlPlaneService_ActivatePromptTemplateVersion_Handler,
-		},
-		{
-			MethodName: "SyncPromptTemplateSeeds",
-			Handler:    _ControlPlaneService_SyncPromptTemplateSeeds_Handler,
-		},
-		{
-			MethodName: "PreviewPromptTemplate",
-			Handler:    _ControlPlaneService_PreviewPromptTemplate_Handler,
-		},
-		{
-			MethodName: "DiffPromptTemplateVersions",
-			Handler:    _ControlPlaneService_DiffPromptTemplateVersions_Handler,
-		},
-		{
-			MethodName: "ListPromptTemplateAuditEvents",
-			Handler:    _ControlPlaneService_ListPromptTemplateAuditEvents_Handler,
-		},
-		{
 			MethodName: "ListRuns",
 			Handler:    _ControlPlaneService_ListRuns_Handler,
-		},
-		{
-			MethodName: "ListRunJobs",
-			Handler:    _ControlPlaneService_ListRunJobs_Handler,
 		},
 		{
 			MethodName: "ListRunWaits",
@@ -2429,18 +1769,6 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ControlPlaneService_TransitionIssueStageLabel_Handler,
 		},
 		{
-			MethodName: "ListConfigEntries",
-			Handler:    _ControlPlaneService_ListConfigEntries_Handler,
-		},
-		{
-			MethodName: "UpsertConfigEntry",
-			Handler:    _ControlPlaneService_UpsertConfigEntry_Handler,
-		},
-		{
-			MethodName: "DeleteConfigEntry",
-			Handler:    _ControlPlaneService_DeleteConfigEntry_Handler,
-		},
-		{
 			MethodName: "ListDocsetGroups",
 			Handler:    _ControlPlaneService_ListDocsetGroups_Handler,
 		},
@@ -2475,18 +1803,6 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "MarkRuntimeErrorViewed",
 			Handler:    _ControlPlaneService_MarkRuntimeErrorViewed_Handler,
-		},
-		{
-			MethodName: "ListRegistryImages",
-			Handler:    _ControlPlaneService_ListRegistryImages_Handler,
-		},
-		{
-			MethodName: "DeleteRegistryImageTag",
-			Handler:    _ControlPlaneService_DeleteRegistryImageTag_Handler,
-		},
-		{
-			MethodName: "CleanupRegistryImages",
-			Handler:    _ControlPlaneService_CleanupRegistryImages_Handler,
 		},
 		{
 			MethodName: "UpsertAgentSession",

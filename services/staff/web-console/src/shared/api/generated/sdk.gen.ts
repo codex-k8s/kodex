@@ -2,7 +2,7 @@
 
 import type { Client, Options as Options2, TDataShape } from './client';
 import { client } from './client.gen';
-import type { ActivatePromptTemplateVersionData, ActivatePromptTemplateVersionErrors, ActivatePromptTemplateVersionResponses, CallbackGithubData, CallbackGithubErrors, CleanupRegistryImagesData, CleanupRegistryImagesErrors, CleanupRegistryImagesResponses, CreatePromptTemplateVersionData, CreatePromptTemplateVersionErrors, CreatePromptTemplateVersionResponses, CreateUserData, CreateUserErrors, CreateUserResponses, DeleteConfigEntryData, DeleteConfigEntryErrors, DeleteConfigEntryResponses, DeleteProjectData, DeleteProjectErrors, DeleteProjectMemberData, DeleteProjectMemberErrors, DeleteProjectMemberResponses, DeleteProjectRepositoryData, DeleteProjectRepositoryErrors, DeleteProjectRepositoryResponses, DeleteProjectResponses, DeleteRegistryImageTagData, DeleteRegistryImageTagErrors, DeleteRegistryImageTagResponses, DeleteRunNamespaceData, DeleteRunNamespaceErrors, DeleteRunNamespaceResponses, DeleteUserData, DeleteUserErrors, DeleteUserResponses, DiffPromptTemplateVersionsData, DiffPromptTemplateVersionsErrors, DiffPromptTemplateVersionsResponses, GetAgentData, GetAgentErrors, GetAgentResponses, GetMeData, GetMeErrors, GetMeResponses, GetProjectData, GetProjectErrors, GetProjectGitHubTokensData, GetProjectGitHubTokensErrors, GetProjectGitHubTokensResponses, GetProjectResponses, GetRunData, GetRunErrors, GetRunLogsData, GetRunLogsErrors, GetRunLogsResponses, GetRunResponses, GetRuntimeDeployTaskData, GetRuntimeDeployTaskErrors, GetRuntimeDeployTaskResponses, ImportDocsetData, ImportDocsetErrors, ImportDocsetResponses, IngestGithubWebhookData, IngestGithubWebhookErrors, IngestGithubWebhookResponses, ListAgentsData, ListAgentsErrors, ListAgentsResponses, ListConfigEntriesData, ListConfigEntriesErrors, ListConfigEntriesResponses, ListDocsetGroupsData, ListDocsetGroupsErrors, ListDocsetGroupsResponses, ListPendingApprovalsData, ListPendingApprovalsErrors, ListPendingApprovalsResponses, ListProjectMembersData, ListProjectMembersErrors, ListProjectMembersResponses, ListProjectRepositoriesData, ListProjectRepositoriesErrors, ListProjectRepositoriesResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListPromptTemplateAuditEventsData, ListPromptTemplateAuditEventsErrors, ListPromptTemplateAuditEventsResponses, ListPromptTemplateKeysData, ListPromptTemplateKeysErrors, ListPromptTemplateKeysResponses, ListPromptTemplateVersionsData, ListPromptTemplateVersionsErrors, ListPromptTemplateVersionsResponses, ListRegistryImagesData, ListRegistryImagesErrors, ListRegistryImagesResponses, ListRunEventsData, ListRunEventsErrors, ListRunEventsResponses, ListRunJobsData, ListRunJobsErrors, ListRunJobsResponses, ListRunLearningFeedbackData, ListRunLearningFeedbackErrors, ListRunLearningFeedbackResponses, ListRunsData, ListRunsErrors, ListRunsResponses, ListRuntimeDeployTasksData, ListRuntimeDeployTasksErrors, ListRuntimeDeployTasksResponses, ListRuntimeErrorsData, ListRuntimeErrorsErrors, ListRuntimeErrorsResponses, ListRunWaitsData, ListRunWaitsErrors, ListRunWaitsResponses, ListUsersData, ListUsersErrors, ListUsersResponses, LoginGithubData, LoginGithubErrors, LogoutData, LogoutErrors, LogoutResponses, MarkRuntimeErrorViewedData, MarkRuntimeErrorViewedErrors, MarkRuntimeErrorViewedResponses, McpApproverCallbackData, McpApproverCallbackErrors, McpApproverCallbackResponses, McpExecutorCallbackData, McpExecutorCallbackErrors, McpExecutorCallbackResponses, PreviewPromptTemplateData, PreviewPromptTemplateErrors, PreviewPromptTemplateResponses, ResolveApprovalDecisionData, ResolveApprovalDecisionErrors, ResolveApprovalDecisionResponses, RunRealtimeData, RunRealtimeErrors, RunRealtimeResponses, RunRepositoryPreflightData, RunRepositoryPreflightErrors, RunRepositoryPreflightResponses, SetProjectMemberLearningModeOverrideData, SetProjectMemberLearningModeOverrideErrors, SetProjectMemberLearningModeOverrideResponses, SyncDocsetData, SyncDocsetErrors, SyncDocsetResponses, SyncPromptTemplateSeedsData, SyncPromptTemplateSeedsErrors, SyncPromptTemplateSeedsResponses, TransitionIssueStageLabelData, TransitionIssueStageLabelErrors, TransitionIssueStageLabelResponses, UpdateAgentSettingsData, UpdateAgentSettingsErrors, UpdateAgentSettingsResponses, UpsertConfigEntryData, UpsertConfigEntryErrors, UpsertConfigEntryResponses, UpsertProjectData, UpsertProjectErrors, UpsertProjectGitHubTokensData, UpsertProjectGitHubTokensErrors, UpsertProjectGitHubTokensResponses, UpsertProjectMemberData, UpsertProjectMemberErrors, UpsertProjectMemberResponses, UpsertProjectRepositoryData, UpsertProjectRepositoryErrors, UpsertProjectRepositoryResponses, UpsertProjectResponses, UpsertRepositoryBotParamsData, UpsertRepositoryBotParamsErrors, UpsertRepositoryBotParamsResponses } from './types.gen';
+import type { CallbackGithubData, CallbackGithubErrors, CreateUserData, CreateUserErrors, CreateUserResponses, DeleteProjectData, DeleteProjectErrors, DeleteProjectMemberData, DeleteProjectMemberErrors, DeleteProjectMemberResponses, DeleteProjectRepositoryData, DeleteProjectRepositoryErrors, DeleteProjectRepositoryResponses, DeleteProjectResponses, DeleteRunNamespaceData, DeleteRunNamespaceErrors, DeleteRunNamespaceResponses, DeleteUserData, DeleteUserErrors, DeleteUserResponses, GetMeData, GetMeErrors, GetMeResponses, GetProjectData, GetProjectErrors, GetProjectGitHubTokensData, GetProjectGitHubTokensErrors, GetProjectGitHubTokensResponses, GetProjectResponses, GetRunData, GetRunErrors, GetRunLogsData, GetRunLogsErrors, GetRunLogsResponses, GetRunResponses, GetRuntimeDeployTaskData, GetRuntimeDeployTaskErrors, GetRuntimeDeployTaskResponses, ImportDocsetData, ImportDocsetErrors, ImportDocsetResponses, IngestGithubWebhookData, IngestGithubWebhookErrors, IngestGithubWebhookResponses, ListDocsetGroupsData, ListDocsetGroupsErrors, ListDocsetGroupsResponses, ListPendingApprovalsData, ListPendingApprovalsErrors, ListPendingApprovalsResponses, ListProjectMembersData, ListProjectMembersErrors, ListProjectMembersResponses, ListProjectRepositoriesData, ListProjectRepositoriesErrors, ListProjectRepositoriesResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListRunEventsData, ListRunEventsErrors, ListRunEventsResponses, ListRunLearningFeedbackData, ListRunLearningFeedbackErrors, ListRunLearningFeedbackResponses, ListRunsData, ListRunsErrors, ListRunsResponses, ListRuntimeDeployTasksData, ListRuntimeDeployTasksErrors, ListRuntimeDeployTasksResponses, ListRuntimeErrorsData, ListRuntimeErrorsErrors, ListRuntimeErrorsResponses, ListRunWaitsData, ListRunWaitsErrors, ListRunWaitsResponses, ListUsersData, ListUsersErrors, ListUsersResponses, LoginGithubData, LoginGithubErrors, LogoutData, LogoutErrors, LogoutResponses, MarkRuntimeErrorViewedData, MarkRuntimeErrorViewedErrors, MarkRuntimeErrorViewedResponses, McpApproverCallbackData, McpApproverCallbackErrors, McpApproverCallbackResponses, McpExecutorCallbackData, McpExecutorCallbackErrors, McpExecutorCallbackResponses, ResolveApprovalDecisionData, ResolveApprovalDecisionErrors, ResolveApprovalDecisionResponses, RunRealtimeData, RunRealtimeErrors, RunRealtimeResponses, RunRepositoryPreflightData, RunRepositoryPreflightErrors, RunRepositoryPreflightResponses, SetProjectMemberLearningModeOverrideData, SetProjectMemberLearningModeOverrideErrors, SetProjectMemberLearningModeOverrideResponses, SyncDocsetData, SyncDocsetErrors, SyncDocsetResponses, TransitionIssueStageLabelData, TransitionIssueStageLabelErrors, TransitionIssueStageLabelResponses, UpsertProjectData, UpsertProjectErrors, UpsertProjectGitHubTokensData, UpsertProjectGitHubTokensErrors, UpsertProjectGitHubTokensResponses, UpsertProjectMemberData, UpsertProjectMemberErrors, UpsertProjectMemberResponses, UpsertProjectRepositoryData, UpsertProjectRepositoryErrors, UpsertProjectRepositoryResponses, UpsertProjectResponses, UpsertRepositoryBotParamsData, UpsertRepositoryBotParamsErrors, UpsertRepositoryBotParamsResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean> = Options2<TData, ThrowOnError> & {
     /**
@@ -118,139 +118,11 @@ export const getProject = <ThrowOnError extends boolean = false>(options: Option
 });
 
 /**
- * List agents
- */
-export const listAgents = <ThrowOnError extends boolean = false>(options?: Options<ListAgentsData, ThrowOnError>) => (options?.client ?? client).get<ListAgentsResponses, ListAgentsErrors, ThrowOnError>({
-    responseType: 'json',
-    url: '/api/v1/staff/agents',
-    ...options
-});
-
-/**
- * Get agent details
- */
-export const getAgent = <ThrowOnError extends boolean = false>(options: Options<GetAgentData, ThrowOnError>) => (options.client ?? client).get<GetAgentResponses, GetAgentErrors, ThrowOnError>({
-    responseType: 'json',
-    url: '/api/v1/staff/agents/{agent_id}',
-    ...options
-});
-
-/**
- * Update agent settings
- */
-export const updateAgentSettings = <ThrowOnError extends boolean = false>(options: Options<UpdateAgentSettingsData, ThrowOnError>) => (options.client ?? client).patch<UpdateAgentSettingsResponses, UpdateAgentSettingsErrors, ThrowOnError>({
-    responseType: 'json',
-    url: '/api/v1/staff/agents/{agent_id}/settings',
-    ...options,
-    headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-    }
-});
-
-/**
- * List prompt template keys
- */
-export const listPromptTemplateKeys = <ThrowOnError extends boolean = false>(options?: Options<ListPromptTemplateKeysData, ThrowOnError>) => (options?.client ?? client).get<ListPromptTemplateKeysResponses, ListPromptTemplateKeysErrors, ThrowOnError>({
-    responseType: 'json',
-    url: '/api/v1/staff/prompt-templates',
-    ...options
-});
-
-/**
- * List prompt template versions
- */
-export const listPromptTemplateVersions = <ThrowOnError extends boolean = false>(options: Options<ListPromptTemplateVersionsData, ThrowOnError>) => (options.client ?? client).get<ListPromptTemplateVersionsResponses, ListPromptTemplateVersionsErrors, ThrowOnError>({
-    responseType: 'json',
-    url: '/api/v1/staff/prompt-templates/{template_key}/versions',
-    ...options
-});
-
-/**
- * Create prompt template version
- */
-export const createPromptTemplateVersion = <ThrowOnError extends boolean = false>(options: Options<CreatePromptTemplateVersionData, ThrowOnError>) => (options.client ?? client).post<CreatePromptTemplateVersionResponses, CreatePromptTemplateVersionErrors, ThrowOnError>({
-    responseType: 'json',
-    url: '/api/v1/staff/prompt-templates/{template_key}/versions',
-    ...options,
-    headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-    }
-});
-
-/**
- * Activate prompt template version
- */
-export const activatePromptTemplateVersion = <ThrowOnError extends boolean = false>(options: Options<ActivatePromptTemplateVersionData, ThrowOnError>) => (options.client ?? client).post<ActivatePromptTemplateVersionResponses, ActivatePromptTemplateVersionErrors, ThrowOnError>({
-    responseType: 'json',
-    url: '/api/v1/staff/prompt-templates/{template_key}/versions/{version}/activate',
-    ...options,
-    headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-    }
-});
-
-/**
- * Sync prompt template seeds into DB
- */
-export const syncPromptTemplateSeeds = <ThrowOnError extends boolean = false>(options: Options<SyncPromptTemplateSeedsData, ThrowOnError>) => (options.client ?? client).post<SyncPromptTemplateSeedsResponses, SyncPromptTemplateSeedsErrors, ThrowOnError>({
-    responseType: 'json',
-    url: '/api/v1/staff/prompt-templates/seeds/sync',
-    ...options,
-    headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-    }
-});
-
-/**
- * Preview effective prompt template
- */
-export const previewPromptTemplate = <ThrowOnError extends boolean = false>(options: Options<PreviewPromptTemplateData, ThrowOnError>) => (options.client ?? client).post<PreviewPromptTemplateResponses, PreviewPromptTemplateErrors, ThrowOnError>({
-    responseType: 'json',
-    url: '/api/v1/staff/prompt-templates/{template_key}/preview',
-    ...options,
-    headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-    }
-});
-
-/**
- * Compare prompt template versions
- */
-export const diffPromptTemplateVersions = <ThrowOnError extends boolean = false>(options: Options<DiffPromptTemplateVersionsData, ThrowOnError>) => (options.client ?? client).get<DiffPromptTemplateVersionsResponses, DiffPromptTemplateVersionsErrors, ThrowOnError>({
-    responseType: 'json',
-    url: '/api/v1/staff/prompt-templates/{template_key}/diff',
-    ...options
-});
-
-/**
- * List prompt template audit events
- */
-export const listPromptTemplateAuditEvents = <ThrowOnError extends boolean = false>(options?: Options<ListPromptTemplateAuditEventsData, ThrowOnError>) => (options?.client ?? client).get<ListPromptTemplateAuditEventsResponses, ListPromptTemplateAuditEventsErrors, ThrowOnError>({
-    responseType: 'json',
-    url: '/api/v1/staff/audit/prompt-templates',
-    ...options
-});
-
-/**
  * List runs
  */
 export const listRuns = <ThrowOnError extends boolean = false>(options?: Options<ListRunsData, ThrowOnError>) => (options?.client ?? client).get<ListRunsResponses, ListRunsErrors, ThrowOnError>({
     responseType: 'json',
     url: '/api/v1/staff/runs',
-    ...options
-});
-
-/**
- * List running jobs
- */
-export const listRunJobs = <ThrowOnError extends boolean = false>(options?: Options<ListRunJobsData, ThrowOnError>) => (options?.client ?? client).get<ListRunJobsResponses, ListRunJobsErrors, ThrowOnError>({
-    responseType: 'json',
-    url: '/api/v1/staff/runs/jobs',
     ...options
 });
 
@@ -369,41 +241,6 @@ export const markRuntimeErrorViewed = <ThrowOnError extends boolean = false>(opt
     responseType: 'json',
     url: '/api/v1/staff/runtime-errors/{runtime_error_id}/viewed',
     ...options
-});
-
-/**
- * Delete one internal registry image tag
- */
-export const deleteRegistryImageTag = <ThrowOnError extends boolean = false>(options: Options<DeleteRegistryImageTagData, ThrowOnError>) => (options.client ?? client).delete<DeleteRegistryImageTagResponses, DeleteRegistryImageTagErrors, ThrowOnError>({
-    responseType: 'json',
-    url: '/api/v1/staff/runtime-deploy/images',
-    ...options,
-    headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-    }
-});
-
-/**
- * List internal registry images
- */
-export const listRegistryImages = <ThrowOnError extends boolean = false>(options?: Options<ListRegistryImagesData, ThrowOnError>) => (options?.client ?? client).get<ListRegistryImagesResponses, ListRegistryImagesErrors, ThrowOnError>({
-    responseType: 'json',
-    url: '/api/v1/staff/runtime-deploy/images',
-    ...options
-});
-
-/**
- * Cleanup stale internal registry image tags
- */
-export const cleanupRegistryImages = <ThrowOnError extends boolean = false>(options: Options<CleanupRegistryImagesData, ThrowOnError>) => (options.client ?? client).post<CleanupRegistryImagesResponses, CleanupRegistryImagesErrors, ThrowOnError>({
-    responseType: 'json',
-    url: '/api/v1/staff/runtime-deploy/images/cleanup',
-    ...options,
-    headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-    }
 });
 
 /**
@@ -552,33 +389,6 @@ export const transitionIssueStageLabel = <ThrowOnError extends boolean = false>(
         ...options.headers
     }
 });
-
-/**
- * List configuration entries
- */
-export const listConfigEntries = <ThrowOnError extends boolean = false>(options: Options<ListConfigEntriesData, ThrowOnError>) => (options.client ?? client).get<ListConfigEntriesResponses, ListConfigEntriesErrors, ThrowOnError>({
-    responseType: 'json',
-    url: '/api/v1/staff/config-entries',
-    ...options
-});
-
-/**
- * Upsert configuration entry
- */
-export const upsertConfigEntry = <ThrowOnError extends boolean = false>(options: Options<UpsertConfigEntryData, ThrowOnError>) => (options.client ?? client).post<UpsertConfigEntryResponses, UpsertConfigEntryErrors, ThrowOnError>({
-    responseType: 'json',
-    url: '/api/v1/staff/config-entries',
-    ...options,
-    headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-    }
-});
-
-/**
- * Delete configuration entry
- */
-export const deleteConfigEntry = <ThrowOnError extends boolean = false>(options: Options<DeleteConfigEntryData, ThrowOnError>) => (options.client ?? client).delete<DeleteConfigEntryResponses, DeleteConfigEntryErrors, ThrowOnError>({ url: '/api/v1/staff/config-entries/{config_entry_id}', ...options });
 
 /**
  * List docset groups (manifest v1)

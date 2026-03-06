@@ -25,17 +25,6 @@ type runLogsRuntime struct {
 	GitPushOutput   string `json:"git_push_output"`
 }
 
-// ListRunJobs returns runtime jobs list with optional filters.
-func (s *Service) ListRunJobs(ctx context.Context, principal Principal, filter querytypes.StaffRunListFilter) ([]entitytypes.StaffRun, error) {
-	return s.listRuntimeRunsByScope(
-		ctx,
-		principal,
-		filter,
-		s.runs.ListJobsAll,
-		s.runs.ListJobsForUser,
-	)
-}
-
 // ListRunWaits returns wait queue list with optional filters.
 func (s *Service) ListRunWaits(ctx context.Context, principal Principal, filter querytypes.StaffRunListFilter) ([]entitytypes.StaffRun, error) {
 	return s.listRuntimeRunsByScope(

@@ -43,7 +43,7 @@ approvals:
 | Day 4 | Architecture: границы и ownership по stream'ам | P0 | `docs/delivery/epics/s7/epic-s7-day4-mvp-readiness-arch.md` | in-review (`#222`) |
 | Day 5 | Design: execution-ready contracts/data/migrations package | P0 | `docs/delivery/epics/s7/epic-s7-day5-mvp-readiness-design.md` (`#238`) | in-review (`#238`) |
 | Day 6 | Plan: execution package и quality gates | P0 | `docs/delivery/epics/s7/epic-s7-day6-mvp-readiness-plan.md` (`#241`) | in-review (`#241`) |
-| Day 7+ | Dev/QA/Release/Postdeploy/Ops/Doc-Audit | P0/P1 | implementation issues `#243..#260`, `#274` (`run:dev`) | in-progress (`#243` и `#244` completed + owner-approved; `#245` in-review; `#246..#260`, `#274` planned) |
+| Day 7+ | Dev/QA/Release/Postdeploy/Ops/Doc-Audit | P0/P1 | implementation issues `#243..#260`, `#274` (`run:dev`) | in-progress (`#243` и `#244` completed + owner-approved; `#245` и `#274` in-review; `#246..#260` planned) |
 
 ## Candidate execution-эпики (`S7-E01..S7-E18`)
 

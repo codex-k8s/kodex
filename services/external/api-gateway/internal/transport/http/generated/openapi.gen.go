@@ -17,42 +17,11 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
-// Defines values for AgentRoleKind.
-const (
-	Custom AgentRoleKind = "custom"
-	System AgentRoleKind = "system"
-)
-
-// Defines values for AgentRuntimeMode.
-const (
-	CodeOnly AgentRuntimeMode = "code-only"
-	FullEnv  AgentRuntimeMode = "full-env"
-)
-
 // Defines values for ApprovalRequestApprovalMode.
 const (
 	Delegated ApprovalRequestApprovalMode = "delegated"
 	None      ApprovalRequestApprovalMode = "none"
 	Owner     ApprovalRequestApprovalMode = "owner"
-)
-
-// Defines values for ConfigEntryKind.
-const (
-	ConfigEntryKindSecret   ConfigEntryKind = "secret"
-	ConfigEntryKindVariable ConfigEntryKind = "variable"
-)
-
-// Defines values for ConfigEntryScope.
-const (
-	ConfigEntryScopePlatform   ConfigEntryScope = "platform"
-	ConfigEntryScopeProject    ConfigEntryScope = "project"
-	ConfigEntryScopeRepository ConfigEntryScope = "repository"
-)
-
-// Defines values for ConfigEntryMutability.
-const (
-	RuntimeMutable  ConfigEntryMutability = "runtime_mutable"
-	StartupRequired ConfigEntryMutability = "startup_required"
 )
 
 // Defines values for ErrorResponseCode.
@@ -97,45 +66,6 @@ const (
 	ProjectMemberRoleAdmin     ProjectMemberRole = "admin"
 	ProjectMemberRoleRead      ProjectMemberRole = "read"
 	ProjectMemberRoleReadWrite ProjectMemberRole = "read_write"
-)
-
-// Defines values for PromptTemplateKind.
-const (
-	PromptTemplateKindRevise PromptTemplateKind = "revise"
-	PromptTemplateKindWork   PromptTemplateKind = "work"
-)
-
-// Defines values for PromptTemplateScope.
-const (
-	PromptTemplateScopeGlobal  PromptTemplateScope = "global"
-	PromptTemplateScopeProject PromptTemplateScope = "project"
-)
-
-// Defines values for PromptTemplateSeedSyncItemAction.
-const (
-	Created PromptTemplateSeedSyncItemAction = "created"
-	Skipped PromptTemplateSeedSyncItemAction = "skipped"
-	Updated PromptTemplateSeedSyncItemAction = "updated"
-)
-
-// Defines values for PromptTemplateSeedSyncMode.
-const (
-	Apply  PromptTemplateSeedSyncMode = "apply"
-	DryRun PromptTemplateSeedSyncMode = "dry_run"
-)
-
-// Defines values for PromptTemplateSource.
-const (
-	GlobalOverride  PromptTemplateSource = "global_override"
-	ProjectOverride PromptTemplateSource = "project_override"
-	RepoSeed        PromptTemplateSource = "repo_seed"
-)
-
-// Defines values for PromptTemplateStatus.
-const (
-	PromptTemplateStatusActive   PromptTemplateStatus = "active"
-	PromptTemplateStatusArchived PromptTemplateStatus = "archived"
-	PromptTemplateStatusDraft    PromptTemplateStatus = "draft"
 )
 
 // Defines values for RepositoryBindingRole.
@@ -194,19 +124,6 @@ const (
 	RuntimeErrorLevelWarning  RuntimeErrorLevel = "warning"
 )
 
-// Defines values for UpsertConfigEntryRequestKind.
-const (
-	UpsertConfigEntryRequestKindSecret   UpsertConfigEntryRequestKind = "secret"
-	UpsertConfigEntryRequestKindVariable UpsertConfigEntryRequestKind = "variable"
-)
-
-// Defines values for UpsertConfigEntryRequestScope.
-const (
-	UpsertConfigEntryRequestScopePlatform   UpsertConfigEntryRequestScope = "platform"
-	UpsertConfigEntryRequestScopeProject    UpsertConfigEntryRequestScope = "project"
-	UpsertConfigEntryRequestScopeRepository UpsertConfigEntryRequestScope = "repository"
-)
-
 // Defines values for UpsertProjectMemberRequestRole.
 const (
 	UpsertProjectMemberRequestRoleAdmin     UpsertProjectMemberRequestRole = "admin"
@@ -222,29 +139,10 @@ const (
 	UpsertProjectRepositoryRequestRoleService      UpsertProjectRepositoryRequestRole = "service"
 )
 
-// Defines values for ListConfigEntriesParamsScope.
-const (
-	ListConfigEntriesParamsScopePlatform   ListConfigEntriesParamsScope = "platform"
-	ListConfigEntriesParamsScopeProject    ListConfigEntriesParamsScope = "project"
-	ListConfigEntriesParamsScopeRepository ListConfigEntriesParamsScope = "repository"
-)
-
 // Defines values for ListDocsetGroupsParamsLocale.
 const (
 	ListDocsetGroupsParamsLocaleEn ListDocsetGroupsParamsLocale = "en"
 	ListDocsetGroupsParamsLocaleRu ListDocsetGroupsParamsLocale = "ru"
-)
-
-// Defines values for ListPromptTemplateKeysParamsScope.
-const (
-	ListPromptTemplateKeysParamsScopeGlobal  ListPromptTemplateKeysParamsScope = "global"
-	ListPromptTemplateKeysParamsScopeProject ListPromptTemplateKeysParamsScope = "project"
-)
-
-// Defines values for ListPromptTemplateKeysParamsKind.
-const (
-	ListPromptTemplateKeysParamsKindRevise ListPromptTemplateKeysParamsKind = "revise"
-	ListPromptTemplateKeysParamsKindWork   ListPromptTemplateKeysParamsKind = "work"
 )
 
 // Defines values for ListRuntimeDeployTasksParamsStatus.
@@ -257,9 +155,9 @@ const (
 
 // Defines values for ListRuntimeErrorsParamsState.
 const (
-	ListRuntimeErrorsParamsStateActive ListRuntimeErrorsParamsState = "active"
-	ListRuntimeErrorsParamsStateAll    ListRuntimeErrorsParamsState = "all"
-	ListRuntimeErrorsParamsStateViewed ListRuntimeErrorsParamsState = "viewed"
+	Active ListRuntimeErrorsParamsState = "active"
+	All    ListRuntimeErrorsParamsState = "all"
+	Viewed ListRuntimeErrorsParamsState = "viewed"
 )
 
 // Defines values for ListRuntimeErrorsParamsLevel.
@@ -268,44 +166,6 @@ const (
 	Error    ListRuntimeErrorsParamsLevel = "error"
 	Warning  ListRuntimeErrorsParamsLevel = "warning"
 )
-
-// ActivatePromptTemplateVersionRequest defines model for ActivatePromptTemplateVersionRequest.
-type ActivatePromptTemplateVersionRequest struct {
-	ChangeReason    string `json:"change_reason"`
-	ExpectedVersion int32  `json:"expected_version"`
-}
-
-// Agent defines model for Agent.
-type Agent struct {
-	AgentKey        string        `json:"agent_key"`
-	Id              string        `json:"id"`
-	IsActive        bool          `json:"is_active"`
-	Name            string        `json:"name"`
-	ProjectId       *string       `json:"project_id"`
-	RoleKind        AgentRoleKind `json:"role_kind"`
-	Settings        AgentSettings `json:"settings"`
-	SettingsVersion int32         `json:"settings_version"`
-}
-
-// AgentItemsResponse defines model for AgentItemsResponse.
-type AgentItemsResponse struct {
-	Items []Agent `json:"items"`
-}
-
-// AgentRoleKind defines model for AgentRoleKind.
-type AgentRoleKind string
-
-// AgentRuntimeMode defines model for AgentRuntimeMode.
-type AgentRuntimeMode string
-
-// AgentSettings defines model for AgentSettings.
-type AgentSettings struct {
-	ApprovalsRequired bool             `json:"approvals_required"`
-	MaxRetryCount     int32            `json:"max_retry_count"`
-	PromptLocale      string           `json:"prompt_locale"`
-	RuntimeMode       AgentRuntimeMode `json:"runtime_mode"`
-	TimeoutSeconds    int32            `json:"timeout_seconds"`
-}
 
 // ApprovalRequest defines model for ApprovalRequest.
 type ApprovalRequest struct {
@@ -333,70 +193,10 @@ type ApprovalRequestItemsResponse struct {
 	Items []ApprovalRequest `json:"items"`
 }
 
-// CleanupRegistryImagesRequest defines model for CleanupRegistryImagesRequest.
-type CleanupRegistryImagesRequest struct {
-	DryRun            bool    `json:"dry_run"`
-	KeepTags          *int32  `json:"keep_tags,omitempty"`
-	LimitRepositories *int32  `json:"limit_repositories,omitempty"`
-	RepositoryPrefix  *string `json:"repository_prefix,omitempty"`
-}
-
-// CleanupRegistryImagesResponse defines model for CleanupRegistryImagesResponse.
-type CleanupRegistryImagesResponse struct {
-	Deleted             []RegistryImageDeleteResult `json:"deleted"`
-	RepositoriesScanned int32                       `json:"repositories_scanned"`
-	Skipped             []RegistryImageDeleteResult `json:"skipped"`
-	TagsDeleted         int32                       `json:"tags_deleted"`
-	TagsSkipped         int32                       `json:"tags_skipped"`
-}
-
-// ConfigEntry defines model for ConfigEntry.
-type ConfigEntry struct {
-	Id           string                `json:"id"`
-	IsDangerous  bool                  `json:"is_dangerous"`
-	Key          string                `json:"key"`
-	Kind         ConfigEntryKind       `json:"kind"`
-	Mutability   ConfigEntryMutability `json:"mutability"`
-	ProjectId    *string               `json:"project_id"`
-	RepositoryId *string               `json:"repository_id"`
-	Scope        ConfigEntryScope      `json:"scope"`
-	SyncTargets  []string              `json:"sync_targets"`
-	UpdatedAt    *string               `json:"updated_at"`
-	Value        *string               `json:"value"`
-}
-
-// ConfigEntryKind defines model for ConfigEntry.Kind.
-type ConfigEntryKind string
-
-// ConfigEntryScope defines model for ConfigEntry.Scope.
-type ConfigEntryScope string
-
-// ConfigEntryItemsResponse defines model for ConfigEntryItemsResponse.
-type ConfigEntryItemsResponse struct {
-	Items []ConfigEntry `json:"items"`
-}
-
-// ConfigEntryMutability defines model for ConfigEntryMutability.
-type ConfigEntryMutability string
-
-// CreatePromptTemplateVersionRequest defines model for CreatePromptTemplateVersionRequest.
-type CreatePromptTemplateVersionRequest struct {
-	BodyMarkdown    string                `json:"body_markdown"`
-	ChangeReason    *string               `json:"change_reason,omitempty"`
-	ExpectedVersion int32                 `json:"expected_version"`
-	Source          *PromptTemplateSource `json:"source,omitempty"`
-}
-
 // CreateUserRequest defines model for CreateUserRequest.
 type CreateUserRequest struct {
 	Email           openapi_types.Email `json:"email"`
 	IsPlatformAdmin bool                `json:"is_platform_admin"`
-}
-
-// DeleteRegistryImageTagRequest defines model for DeleteRegistryImageTagRequest.
-type DeleteRegistryImageTagRequest struct {
-	Repository string `json:"repository"`
-	Tag        string `json:"tag"`
 }
 
 // DocsetGroup defines model for DocsetGroup.
@@ -516,21 +316,6 @@ type PreflightCheckResult struct {
 	Status  string  `json:"status"`
 }
 
-// PreviewPromptTemplateRequest defines model for PreviewPromptTemplateRequest.
-type PreviewPromptTemplateRequest struct {
-	ProjectId *string `json:"project_id"`
-	Version   *int32  `json:"version,omitempty"`
-}
-
-// PreviewPromptTemplateResponse defines model for PreviewPromptTemplateResponse.
-type PreviewPromptTemplateResponse struct {
-	BodyMarkdown string               `json:"body_markdown"`
-	Checksum     string               `json:"checksum"`
-	Source       PromptTemplateSource `json:"source"`
-	TemplateKey  string               `json:"template_key"`
-	Version      int32                `json:"version"`
-}
-
 // Project defines model for Project.
 type Project struct {
 	Id   string `json:"id"`
@@ -568,141 +353,6 @@ type ProjectMemberRole string
 // ProjectMemberItemsResponse defines model for ProjectMemberItemsResponse.
 type ProjectMemberItemsResponse struct {
 	Items []ProjectMember `json:"items"`
-}
-
-// PromptTemplateAuditEvent defines model for PromptTemplateAuditEvent.
-type PromptTemplateAuditEvent struct {
-	ActorId       *string   `json:"actor_id"`
-	CorrelationId string    `json:"correlation_id"`
-	CreatedAt     time.Time `json:"created_at"`
-	EventType     string    `json:"event_type"`
-	Id            int64     `json:"id"`
-	PayloadJson   string    `json:"payload_json"`
-	ProjectId     *string   `json:"project_id"`
-	TemplateKey   *string   `json:"template_key"`
-	Version       *int32    `json:"version"`
-}
-
-// PromptTemplateAuditEventItemsResponse defines model for PromptTemplateAuditEventItemsResponse.
-type PromptTemplateAuditEventItemsResponse struct {
-	Items []PromptTemplateAuditEvent `json:"items"`
-}
-
-// PromptTemplateDiffResponse defines model for PromptTemplateDiffResponse.
-type PromptTemplateDiffResponse struct {
-	FromBodyMarkdown string `json:"from_body_markdown"`
-	FromVersion      int32  `json:"from_version"`
-	TemplateKey      string `json:"template_key"`
-	ToBodyMarkdown   string `json:"to_body_markdown"`
-	ToVersion        int32  `json:"to_version"`
-}
-
-// PromptTemplateKey defines model for PromptTemplateKey.
-type PromptTemplateKey struct {
-	ActiveVersion int32               `json:"active_version"`
-	Kind          PromptTemplateKind  `json:"kind"`
-	Locale        string              `json:"locale"`
-	ProjectId     *string             `json:"project_id"`
-	Role          string              `json:"role"`
-	Scope         PromptTemplateScope `json:"scope"`
-	TemplateKey   string              `json:"template_key"`
-	UpdatedAt     time.Time           `json:"updated_at"`
-}
-
-// PromptTemplateKeyItemsResponse defines model for PromptTemplateKeyItemsResponse.
-type PromptTemplateKeyItemsResponse struct {
-	Items []PromptTemplateKey `json:"items"`
-}
-
-// PromptTemplateKind defines model for PromptTemplateKind.
-type PromptTemplateKind string
-
-// PromptTemplateScope defines model for PromptTemplateScope.
-type PromptTemplateScope string
-
-// PromptTemplateSeedSyncItem defines model for PromptTemplateSeedSyncItem.
-type PromptTemplateSeedSyncItem struct {
-	Action      PromptTemplateSeedSyncItemAction `json:"action"`
-	Checksum    *string                          `json:"checksum"`
-	Reason      *string                          `json:"reason"`
-	TemplateKey string                           `json:"template_key"`
-}
-
-// PromptTemplateSeedSyncItemAction defines model for PromptTemplateSeedSyncItem.Action.
-type PromptTemplateSeedSyncItemAction string
-
-// PromptTemplateSeedSyncMode defines model for PromptTemplateSeedSyncMode.
-type PromptTemplateSeedSyncMode string
-
-// PromptTemplateSeedSyncRequest defines model for PromptTemplateSeedSyncRequest.
-type PromptTemplateSeedSyncRequest struct {
-	ForceOverwrite *bool                      `json:"force_overwrite,omitempty"`
-	IncludeLocales *[]string                  `json:"include_locales,omitempty"`
-	Mode           PromptTemplateSeedSyncMode `json:"mode"`
-	ProjectId      *string                    `json:"project_id"`
-	Scope          *PromptTemplateScope       `json:"scope,omitempty"`
-}
-
-// PromptTemplateSeedSyncResponse defines model for PromptTemplateSeedSyncResponse.
-type PromptTemplateSeedSyncResponse struct {
-	CreatedCount int32                        `json:"created_count"`
-	Items        []PromptTemplateSeedSyncItem `json:"items"`
-	SkippedCount int32                        `json:"skipped_count"`
-	UpdatedCount int32                        `json:"updated_count"`
-}
-
-// PromptTemplateSource defines model for PromptTemplateSource.
-type PromptTemplateSource string
-
-// PromptTemplateStatus defines model for PromptTemplateStatus.
-type PromptTemplateStatus string
-
-// PromptTemplateVersion defines model for PromptTemplateVersion.
-type PromptTemplateVersion struct {
-	ActivatedAt       *time.Time           `json:"activated_at"`
-	BodyMarkdown      string               `json:"body_markdown"`
-	ChangeReason      *string              `json:"change_reason"`
-	Checksum          string               `json:"checksum"`
-	Source            PromptTemplateSource `json:"source"`
-	Status            PromptTemplateStatus `json:"status"`
-	SupersedesVersion *int32               `json:"supersedes_version"`
-	TemplateKey       string               `json:"template_key"`
-	UpdatedAt         time.Time            `json:"updated_at"`
-	UpdatedBy         string               `json:"updated_by"`
-	Version           int32                `json:"version"`
-}
-
-// PromptTemplateVersionItemsResponse defines model for PromptTemplateVersionItemsResponse.
-type PromptTemplateVersionItemsResponse struct {
-	Items []PromptTemplateVersion `json:"items"`
-}
-
-// RegistryImageDeleteResult defines model for RegistryImageDeleteResult.
-type RegistryImageDeleteResult struct {
-	Deleted    bool   `json:"deleted"`
-	Digest     string `json:"digest"`
-	Repository string `json:"repository"`
-	Tag        string `json:"tag"`
-}
-
-// RegistryImageRepository defines model for RegistryImageRepository.
-type RegistryImageRepository struct {
-	Repository string             `json:"repository"`
-	TagCount   int32              `json:"tag_count"`
-	Tags       []RegistryImageTag `json:"tags"`
-}
-
-// RegistryImageRepositoryItemsResponse defines model for RegistryImageRepositoryItemsResponse.
-type RegistryImageRepositoryItemsResponse struct {
-	Items []RegistryImageRepository `json:"items"`
-}
-
-// RegistryImageTag defines model for RegistryImageTag.
-type RegistryImageTag struct {
-	ConfigSizeBytes int64      `json:"config_size_bytes"`
-	CreatedAt       *time.Time `json:"created_at"`
-	Digest          string     `json:"digest"`
-	Tag             string     `json:"tag"`
 }
 
 // RepositoryBinding defines model for RepositoryBinding.
@@ -940,33 +590,6 @@ type TransitionIssueStageLabelResponse struct {
 	RepositoryFullName string   `json:"repository_full_name"`
 }
 
-// UpdateAgentSettingsRequest defines model for UpdateAgentSettingsRequest.
-type UpdateAgentSettingsRequest struct {
-	ExpectedVersion int32         `json:"expected_version"`
-	Settings        AgentSettings `json:"settings"`
-}
-
-// UpsertConfigEntryRequest defines model for UpsertConfigEntryRequest.
-type UpsertConfigEntryRequest struct {
-	DangerousConfirmed *bool                         `json:"dangerous_confirmed,omitempty"`
-	IsDangerous        *bool                         `json:"is_dangerous,omitempty"`
-	Key                string                        `json:"key"`
-	Kind               UpsertConfigEntryRequestKind  `json:"kind"`
-	Mutability         *ConfigEntryMutability        `json:"mutability,omitempty"`
-	ProjectId          *string                       `json:"project_id"`
-	RepositoryId       *string                       `json:"repository_id"`
-	Scope              UpsertConfigEntryRequestScope `json:"scope"`
-	SyncTargets        *[]string                     `json:"sync_targets,omitempty"`
-	ValuePlain         *string                       `json:"value_plain"`
-	ValueSecret        *string                       `json:"value_secret"`
-}
-
-// UpsertConfigEntryRequestKind defines model for UpsertConfigEntryRequest.Kind.
-type UpsertConfigEntryRequestKind string
-
-// UpsertConfigEntryRequestScope defines model for UpsertConfigEntryRequest.Scope.
-type UpsertConfigEntryRequestScope string
-
 // UpsertProjectGitHubTokensRequest defines model for UpsertProjectGitHubTokensRequest.
 type UpsertProjectGitHubTokensRequest struct {
 	BotEmail      *string `json:"bot_email"`
@@ -1036,17 +659,11 @@ type UserItemsResponse struct {
 	Items []User `json:"items"`
 }
 
-// AgentID defines model for AgentID.
-type AgentID = string
-
 // AgentKeyFilter defines model for AgentKeyFilter.
 type AgentKeyFilter = string
 
 // ApprovalRequestID defines model for ApprovalRequestID.
 type ApprovalRequestID = int64
-
-// FromVersion defines model for FromVersion.
-type FromVersion = int32
 
 // IncludeLogs defines model for IncludeLogs.
 type IncludeLogs = bool
@@ -1077,15 +694,6 @@ type RuntimeErrorID = string
 
 // TailLines defines model for TailLines.
 type TailLines = int
-
-// TemplateKey defines model for TemplateKey.
-type TemplateKey = string
-
-// TemplateVersion defines model for TemplateVersion.
-type TemplateVersion = int32
-
-// ToVersion defines model for ToVersion.
-type ToVersion = int32
 
 // TriggerKindFilter defines model for TriggerKindFilter.
 type TriggerKindFilter = string
@@ -1130,34 +738,10 @@ type McpExecutorCallbackParams struct {
 	XCodexMCPToken *MCPCallbackToken `json:"X-Codex-MCP-Token,omitempty"`
 }
 
-// ListAgentsParams defines parameters for ListAgents.
-type ListAgentsParams struct {
-	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
-}
-
 // ListPendingApprovalsParams defines parameters for ListPendingApprovals.
 type ListPendingApprovalsParams struct {
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 }
-
-// ListPromptTemplateAuditEventsParams defines parameters for ListPromptTemplateAuditEvents.
-type ListPromptTemplateAuditEventsParams struct {
-	Limit       *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
-	ProjectId   *string `form:"project_id,omitempty" json:"project_id,omitempty"`
-	TemplateKey *string `form:"template_key,omitempty" json:"template_key,omitempty"`
-	ActorId     *string `form:"actor_id,omitempty" json:"actor_id,omitempty"`
-}
-
-// ListConfigEntriesParams defines parameters for ListConfigEntries.
-type ListConfigEntriesParams struct {
-	Scope        ListConfigEntriesParamsScope `form:"scope" json:"scope"`
-	ProjectId    *string                      `form:"project_id,omitempty" json:"project_id,omitempty"`
-	RepositoryId *string                      `form:"repository_id,omitempty" json:"repository_id,omitempty"`
-	Limit        *Limit                       `form:"limit,omitempty" json:"limit,omitempty"`
-}
-
-// ListConfigEntriesParamsScope defines parameters for ListConfigEntries.
-type ListConfigEntriesParamsScope string
 
 // ListDocsetGroupsParams defines parameters for ListDocsetGroups.
 type ListDocsetGroupsParams struct {
@@ -1183,44 +767,9 @@ type ListProjectRepositoriesParams struct {
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
-// ListPromptTemplateKeysParams defines parameters for ListPromptTemplateKeys.
-type ListPromptTemplateKeysParams struct {
-	Limit     *Limit                             `form:"limit,omitempty" json:"limit,omitempty"`
-	Scope     *ListPromptTemplateKeysParamsScope `form:"scope,omitempty" json:"scope,omitempty"`
-	ProjectId *string                            `form:"project_id,omitempty" json:"project_id,omitempty"`
-	Role      *string                            `form:"role,omitempty" json:"role,omitempty"`
-	Kind      *ListPromptTemplateKeysParamsKind  `form:"kind,omitempty" json:"kind,omitempty"`
-	Locale    *string                            `form:"locale,omitempty" json:"locale,omitempty"`
-}
-
-// ListPromptTemplateKeysParamsScope defines parameters for ListPromptTemplateKeys.
-type ListPromptTemplateKeysParamsScope string
-
-// ListPromptTemplateKeysParamsKind defines parameters for ListPromptTemplateKeys.
-type ListPromptTemplateKeysParamsKind string
-
-// DiffPromptTemplateVersionsParams defines parameters for DiffPromptTemplateVersions.
-type DiffPromptTemplateVersionsParams struct {
-	FromVersion FromVersion `form:"from_version" json:"from_version"`
-	ToVersion   ToVersion   `form:"to_version" json:"to_version"`
-}
-
-// ListPromptTemplateVersionsParams defines parameters for ListPromptTemplateVersions.
-type ListPromptTemplateVersionsParams struct {
-	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
-}
-
 // ListRunsParams defines parameters for ListRuns.
 type ListRunsParams struct {
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
-}
-
-// ListRunJobsParams defines parameters for ListRunJobs.
-type ListRunJobsParams struct {
-	Limit       *Limit             `form:"limit,omitempty" json:"limit,omitempty"`
-	TriggerKind *TriggerKindFilter `form:"trigger_kind,omitempty" json:"trigger_kind,omitempty"`
-	Status      *RunStatusFilter   `form:"status,omitempty" json:"status,omitempty"`
-	AgentKey    *AgentKeyFilter    `form:"agent_key,omitempty" json:"agent_key,omitempty"`
 }
 
 // ListRunWaitsParams defines parameters for ListRunWaits.
@@ -1254,13 +803,6 @@ type RunRealtimeParams struct {
 	Limit       *Limit       `form:"limit,omitempty" json:"limit,omitempty"`
 	TailLines   *TailLines   `form:"tail_lines,omitempty" json:"tail_lines,omitempty"`
 	IncludeLogs *IncludeLogs `form:"include_logs,omitempty" json:"include_logs,omitempty"`
-}
-
-// ListRegistryImagesParams defines parameters for ListRegistryImages.
-type ListRegistryImagesParams struct {
-	Repository        *string `form:"repository,omitempty" json:"repository,omitempty"`
-	LimitRepositories *int32  `form:"limit_repositories,omitempty" json:"limit_repositories,omitempty"`
-	LimitTags         *int32  `form:"limit_tags,omitempty" json:"limit_tags,omitempty"`
 }
 
 // ListRuntimeDeployTasksParams defines parameters for ListRuntimeDeployTasks.
@@ -1310,14 +852,8 @@ type McpApproverCallbackJSONRequestBody = MCPApprovalCallbackRequest
 // McpExecutorCallbackJSONRequestBody defines body for McpExecutorCallback for application/json ContentType.
 type McpExecutorCallbackJSONRequestBody = MCPApprovalCallbackRequest
 
-// UpdateAgentSettingsJSONRequestBody defines body for UpdateAgentSettings for application/json ContentType.
-type UpdateAgentSettingsJSONRequestBody = UpdateAgentSettingsRequest
-
 // ResolveApprovalDecisionJSONRequestBody defines body for ResolveApprovalDecision for application/json ContentType.
 type ResolveApprovalDecisionJSONRequestBody = ResolveApprovalDecisionRequest
-
-// UpsertConfigEntryJSONRequestBody defines body for UpsertConfigEntry for application/json ContentType.
-type UpsertConfigEntryJSONRequestBody = UpsertConfigEntryRequest
 
 // TransitionIssueStageLabelJSONRequestBody defines body for TransitionIssueStageLabel for application/json ContentType.
 type TransitionIssueStageLabelJSONRequestBody = TransitionIssueStageLabelRequest
@@ -1345,24 +881,6 @@ type UpsertProjectRepositoryJSONRequestBody = UpsertProjectRepositoryRequest
 
 // UpsertRepositoryBotParamsJSONRequestBody defines body for UpsertRepositoryBotParams for application/json ContentType.
 type UpsertRepositoryBotParamsJSONRequestBody = UpsertRepositoryBotParamsRequest
-
-// SyncPromptTemplateSeedsJSONRequestBody defines body for SyncPromptTemplateSeeds for application/json ContentType.
-type SyncPromptTemplateSeedsJSONRequestBody = PromptTemplateSeedSyncRequest
-
-// PreviewPromptTemplateJSONRequestBody defines body for PreviewPromptTemplate for application/json ContentType.
-type PreviewPromptTemplateJSONRequestBody = PreviewPromptTemplateRequest
-
-// CreatePromptTemplateVersionJSONRequestBody defines body for CreatePromptTemplateVersion for application/json ContentType.
-type CreatePromptTemplateVersionJSONRequestBody = CreatePromptTemplateVersionRequest
-
-// ActivatePromptTemplateVersionJSONRequestBody defines body for ActivatePromptTemplateVersion for application/json ContentType.
-type ActivatePromptTemplateVersionJSONRequestBody = ActivatePromptTemplateVersionRequest
-
-// DeleteRegistryImageTagJSONRequestBody defines body for DeleteRegistryImageTag for application/json ContentType.
-type DeleteRegistryImageTagJSONRequestBody = DeleteRegistryImageTagRequest
-
-// CleanupRegistryImagesJSONRequestBody defines body for CleanupRegistryImages for application/json ContentType.
-type CleanupRegistryImagesJSONRequestBody = CleanupRegistryImagesRequest
 
 // CreateUserJSONRequestBody defines body for CreateUser for application/json ContentType.
 type CreateUserJSONRequestBody = CreateUserRequest
@@ -1514,33 +1032,12 @@ type ServerInterface interface {
 	// Resolve one MCP approval request from external executor callback
 	// (POST /api/v1/mcp/executor/callback)
 	McpExecutorCallback(w http.ResponseWriter, r *http.Request, params McpExecutorCallbackParams)
-	// List agents
-	// (GET /api/v1/staff/agents)
-	ListAgents(w http.ResponseWriter, r *http.Request, params ListAgentsParams)
-	// Get agent details
-	// (GET /api/v1/staff/agents/{agent_id})
-	GetAgent(w http.ResponseWriter, r *http.Request, agentId AgentID)
-	// Update agent settings
-	// (PATCH /api/v1/staff/agents/{agent_id}/settings)
-	UpdateAgentSettings(w http.ResponseWriter, r *http.Request, agentId AgentID)
 	// List pending approval requests
 	// (GET /api/v1/staff/approvals)
 	ListPendingApprovals(w http.ResponseWriter, r *http.Request, params ListPendingApprovalsParams)
 	// Resolve one approval request (approve/deny/expire/fail)
 	// (POST /api/v1/staff/approvals/{approval_request_id}/decision)
 	ResolveApprovalDecision(w http.ResponseWriter, r *http.Request, approvalRequestId ApprovalRequestID)
-	// List prompt template audit events
-	// (GET /api/v1/staff/audit/prompt-templates)
-	ListPromptTemplateAuditEvents(w http.ResponseWriter, r *http.Request, params ListPromptTemplateAuditEventsParams)
-	// List configuration entries
-	// (GET /api/v1/staff/config-entries)
-	ListConfigEntries(w http.ResponseWriter, r *http.Request, params ListConfigEntriesParams)
-	// Upsert configuration entry
-	// (POST /api/v1/staff/config-entries)
-	UpsertConfigEntry(w http.ResponseWriter, r *http.Request)
-	// Delete configuration entry
-	// (DELETE /api/v1/staff/config-entries/{config_entry_id})
-	DeleteConfigEntry(w http.ResponseWriter, r *http.Request, configEntryId string)
 	// List docset groups (manifest v1)
 	// (GET /api/v1/staff/docset/groups)
 	ListDocsetGroups(w http.ResponseWriter, r *http.Request, params ListDocsetGroupsParams)
@@ -1598,33 +1095,9 @@ type ServerInterface interface {
 	// Run repository onboarding preflight
 	// (POST /api/v1/staff/projects/{project_id}/repositories/{repository_id}/preflight)
 	RunRepositoryPreflight(w http.ResponseWriter, r *http.Request, projectId ProjectID, repositoryId string)
-	// List prompt template keys
-	// (GET /api/v1/staff/prompt-templates)
-	ListPromptTemplateKeys(w http.ResponseWriter, r *http.Request, params ListPromptTemplateKeysParams)
-	// Sync prompt template seeds into DB
-	// (POST /api/v1/staff/prompt-templates/seeds/sync)
-	SyncPromptTemplateSeeds(w http.ResponseWriter, r *http.Request)
-	// Compare prompt template versions
-	// (GET /api/v1/staff/prompt-templates/{template_key}/diff)
-	DiffPromptTemplateVersions(w http.ResponseWriter, r *http.Request, templateKey TemplateKey, params DiffPromptTemplateVersionsParams)
-	// Preview effective prompt template
-	// (POST /api/v1/staff/prompt-templates/{template_key}/preview)
-	PreviewPromptTemplate(w http.ResponseWriter, r *http.Request, templateKey TemplateKey)
-	// List prompt template versions
-	// (GET /api/v1/staff/prompt-templates/{template_key}/versions)
-	ListPromptTemplateVersions(w http.ResponseWriter, r *http.Request, templateKey TemplateKey, params ListPromptTemplateVersionsParams)
-	// Create prompt template version
-	// (POST /api/v1/staff/prompt-templates/{template_key}/versions)
-	CreatePromptTemplateVersion(w http.ResponseWriter, r *http.Request, templateKey TemplateKey)
-	// Activate prompt template version
-	// (POST /api/v1/staff/prompt-templates/{template_key}/versions/{version}/activate)
-	ActivatePromptTemplateVersion(w http.ResponseWriter, r *http.Request, templateKey TemplateKey, version TemplateVersion)
 	// List runs
 	// (GET /api/v1/staff/runs)
 	ListRuns(w http.ResponseWriter, r *http.Request, params ListRunsParams)
-	// List running jobs
-	// (GET /api/v1/staff/runs/jobs)
-	ListRunJobs(w http.ResponseWriter, r *http.Request, params ListRunJobsParams)
 	// List wait queue runs
 	// (GET /api/v1/staff/runs/waits)
 	ListRunWaits(w http.ResponseWriter, r *http.Request, params ListRunWaitsParams)
@@ -1646,15 +1119,6 @@ type ServerInterface interface {
 	// Open realtime run stream (WebSocket upgrade)
 	// (GET /api/v1/staff/runs/{run_id}/realtime)
 	RunRealtime(w http.ResponseWriter, r *http.Request, runId RunID, params RunRealtimeParams)
-	// Delete one internal registry image tag
-	// (DELETE /api/v1/staff/runtime-deploy/images)
-	DeleteRegistryImageTag(w http.ResponseWriter, r *http.Request)
-	// List internal registry images
-	// (GET /api/v1/staff/runtime-deploy/images)
-	ListRegistryImages(w http.ResponseWriter, r *http.Request, params ListRegistryImagesParams)
-	// Cleanup stale internal registry image tags
-	// (POST /api/v1/staff/runtime-deploy/images/cleanup)
-	CleanupRegistryImages(w http.ResponseWriter, r *http.Request)
 	// List runtime deploy tasks
 	// (GET /api/v1/staff/runtime-deploy/tasks)
 	ListRuntimeDeployTasks(w http.ResponseWriter, r *http.Request, params ListRuntimeDeployTasksParams)
@@ -1861,83 +1325,6 @@ func (siw *ServerInterfaceWrapper) McpExecutorCallback(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
-// ListAgents operation middleware
-func (siw *ServerInterfaceWrapper) ListAgents(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListAgentsParams
-
-	// ------------- Optional query parameter "limit" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListAgents(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetAgent operation middleware
-func (siw *ServerInterfaceWrapper) GetAgent(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "agent_id" -------------
-	var agentId AgentID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "agent_id", r.PathValue("agent_id"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent_id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetAgent(w, r, agentId)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// UpdateAgentSettings operation middleware
-func (siw *ServerInterfaceWrapper) UpdateAgentSettings(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "agent_id" -------------
-	var agentId AgentID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "agent_id", r.PathValue("agent_id"), &agentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent_id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.UpdateAgentSettings(w, r, agentId)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // ListPendingApprovals operation middleware
 func (siw *ServerInterfaceWrapper) ListPendingApprovals(w http.ResponseWriter, r *http.Request) {
 
@@ -1981,154 +1368,6 @@ func (siw *ServerInterfaceWrapper) ResolveApprovalDecision(w http.ResponseWriter
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ResolveApprovalDecision(w, r, approvalRequestId)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListPromptTemplateAuditEvents operation middleware
-func (siw *ServerInterfaceWrapper) ListPromptTemplateAuditEvents(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListPromptTemplateAuditEventsParams
-
-	// ------------- Optional query parameter "limit" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "project_id" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "project_id", r.URL.Query(), &params.ProjectId)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "project_id", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "template_key" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "template_key", r.URL.Query(), &params.TemplateKey)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "template_key", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "actor_id" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "actor_id", r.URL.Query(), &params.ActorId)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "actor_id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListPromptTemplateAuditEvents(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListConfigEntries operation middleware
-func (siw *ServerInterfaceWrapper) ListConfigEntries(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListConfigEntriesParams
-
-	// ------------- Required query parameter "scope" -------------
-
-	if paramValue := r.URL.Query().Get("scope"); paramValue != "" {
-
-	} else {
-		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "scope"})
-		return
-	}
-
-	err = runtime.BindQueryParameter("form", true, true, "scope", r.URL.Query(), &params.Scope)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scope", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "project_id" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "project_id", r.URL.Query(), &params.ProjectId)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "project_id", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "repository_id" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "repository_id", r.URL.Query(), &params.RepositoryId)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repository_id", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "limit" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListConfigEntries(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// UpsertConfigEntry operation middleware
-func (siw *ServerInterfaceWrapper) UpsertConfigEntry(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.UpsertConfigEntry(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// DeleteConfigEntry operation middleware
-func (siw *ServerInterfaceWrapper) DeleteConfigEntry(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "config_entry_id" -------------
-	var configEntryId string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "config_entry_id", r.PathValue("config_entry_id"), &configEntryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "config_entry_id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DeleteConfigEntry(w, r, configEntryId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2670,265 +1909,6 @@ func (siw *ServerInterfaceWrapper) RunRepositoryPreflight(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
-// ListPromptTemplateKeys operation middleware
-func (siw *ServerInterfaceWrapper) ListPromptTemplateKeys(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListPromptTemplateKeysParams
-
-	// ------------- Optional query parameter "limit" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "scope" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "scope", r.URL.Query(), &params.Scope)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scope", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "project_id" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "project_id", r.URL.Query(), &params.ProjectId)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "project_id", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "role" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "role", r.URL.Query(), &params.Role)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "role", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "kind" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "kind", r.URL.Query(), &params.Kind)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "locale" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "locale", r.URL.Query(), &params.Locale)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "locale", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListPromptTemplateKeys(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// SyncPromptTemplateSeeds operation middleware
-func (siw *ServerInterfaceWrapper) SyncPromptTemplateSeeds(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.SyncPromptTemplateSeeds(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// DiffPromptTemplateVersions operation middleware
-func (siw *ServerInterfaceWrapper) DiffPromptTemplateVersions(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "template_key" -------------
-	var templateKey TemplateKey
-
-	err = runtime.BindStyledParameterWithOptions("simple", "template_key", r.PathValue("template_key"), &templateKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "template_key", Err: err})
-		return
-	}
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params DiffPromptTemplateVersionsParams
-
-	// ------------- Required query parameter "from_version" -------------
-
-	if paramValue := r.URL.Query().Get("from_version"); paramValue != "" {
-
-	} else {
-		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "from_version"})
-		return
-	}
-
-	err = runtime.BindQueryParameter("form", true, true, "from_version", r.URL.Query(), &params.FromVersion)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from_version", Err: err})
-		return
-	}
-
-	// ------------- Required query parameter "to_version" -------------
-
-	if paramValue := r.URL.Query().Get("to_version"); paramValue != "" {
-
-	} else {
-		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "to_version"})
-		return
-	}
-
-	err = runtime.BindQueryParameter("form", true, true, "to_version", r.URL.Query(), &params.ToVersion)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to_version", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DiffPromptTemplateVersions(w, r, templateKey, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// PreviewPromptTemplate operation middleware
-func (siw *ServerInterfaceWrapper) PreviewPromptTemplate(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "template_key" -------------
-	var templateKey TemplateKey
-
-	err = runtime.BindStyledParameterWithOptions("simple", "template_key", r.PathValue("template_key"), &templateKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "template_key", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.PreviewPromptTemplate(w, r, templateKey)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListPromptTemplateVersions operation middleware
-func (siw *ServerInterfaceWrapper) ListPromptTemplateVersions(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "template_key" -------------
-	var templateKey TemplateKey
-
-	err = runtime.BindStyledParameterWithOptions("simple", "template_key", r.PathValue("template_key"), &templateKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "template_key", Err: err})
-		return
-	}
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListPromptTemplateVersionsParams
-
-	// ------------- Optional query parameter "limit" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListPromptTemplateVersions(w, r, templateKey, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// CreatePromptTemplateVersion operation middleware
-func (siw *ServerInterfaceWrapper) CreatePromptTemplateVersion(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "template_key" -------------
-	var templateKey TemplateKey
-
-	err = runtime.BindStyledParameterWithOptions("simple", "template_key", r.PathValue("template_key"), &templateKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "template_key", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CreatePromptTemplateVersion(w, r, templateKey)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ActivatePromptTemplateVersion operation middleware
-func (siw *ServerInterfaceWrapper) ActivatePromptTemplateVersion(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "template_key" -------------
-	var templateKey TemplateKey
-
-	err = runtime.BindStyledParameterWithOptions("simple", "template_key", r.PathValue("template_key"), &templateKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "template_key", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "version" -------------
-	var version TemplateVersion
-
-	err = runtime.BindStyledParameterWithOptions("simple", "version", r.PathValue("version"), &version, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ActivatePromptTemplateVersion(w, r, templateKey, version)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // ListRuns operation middleware
 func (siw *ServerInterfaceWrapper) ListRuns(w http.ResponseWriter, r *http.Request) {
 
@@ -2947,57 +1927,6 @@ func (siw *ServerInterfaceWrapper) ListRuns(w http.ResponseWriter, r *http.Reque
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListRuns(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListRunJobs operation middleware
-func (siw *ServerInterfaceWrapper) ListRunJobs(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListRunJobsParams
-
-	// ------------- Optional query parameter "limit" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "trigger_kind" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "trigger_kind", r.URL.Query(), &params.TriggerKind)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "trigger_kind", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "status" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "status", r.URL.Query(), &params.Status)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "agent_key" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "agent_key", r.URL.Query(), &params.AgentKey)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent_key", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListRunJobs(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3283,77 +2212,6 @@ func (siw *ServerInterfaceWrapper) RunRealtime(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RunRealtime(w, r, runId, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// DeleteRegistryImageTag operation middleware
-func (siw *ServerInterfaceWrapper) DeleteRegistryImageTag(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DeleteRegistryImageTag(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListRegistryImages operation middleware
-func (siw *ServerInterfaceWrapper) ListRegistryImages(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListRegistryImagesParams
-
-	// ------------- Optional query parameter "repository" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "repository", r.URL.Query(), &params.Repository)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repository", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "limit_repositories" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "limit_repositories", r.URL.Query(), &params.LimitRepositories)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit_repositories", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "limit_tags" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "limit_tags", r.URL.Query(), &params.LimitTags)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit_tags", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListRegistryImages(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// CleanupRegistryImages operation middleware
-func (siw *ServerInterfaceWrapper) CleanupRegistryImages(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CleanupRegistryImages(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3805,15 +2663,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/auth/me", wrapper.GetMe)
 	m.HandleFunc("POST "+options.BaseURL+"/api/v1/mcp/approver/callback", wrapper.McpApproverCallback)
 	m.HandleFunc("POST "+options.BaseURL+"/api/v1/mcp/executor/callback", wrapper.McpExecutorCallback)
-	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/agents", wrapper.ListAgents)
-	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/agents/{agent_id}", wrapper.GetAgent)
-	m.HandleFunc("PATCH "+options.BaseURL+"/api/v1/staff/agents/{agent_id}/settings", wrapper.UpdateAgentSettings)
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/approvals", wrapper.ListPendingApprovals)
 	m.HandleFunc("POST "+options.BaseURL+"/api/v1/staff/approvals/{approval_request_id}/decision", wrapper.ResolveApprovalDecision)
-	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/audit/prompt-templates", wrapper.ListPromptTemplateAuditEvents)
-	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/config-entries", wrapper.ListConfigEntries)
-	m.HandleFunc("POST "+options.BaseURL+"/api/v1/staff/config-entries", wrapper.UpsertConfigEntry)
-	m.HandleFunc("DELETE "+options.BaseURL+"/api/v1/staff/config-entries/{config_entry_id}", wrapper.DeleteConfigEntry)
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/docset/groups", wrapper.ListDocsetGroups)
 	m.HandleFunc("POST "+options.BaseURL+"/api/v1/staff/github/issues/stage-transition", wrapper.TransitionIssueStageLabel)
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/projects", wrapper.ListProjects)
@@ -3833,15 +2684,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("DELETE "+options.BaseURL+"/api/v1/staff/projects/{project_id}/repositories/{repository_id}", wrapper.DeleteProjectRepository)
 	m.HandleFunc("PUT "+options.BaseURL+"/api/v1/staff/projects/{project_id}/repositories/{repository_id}/bot-params", wrapper.UpsertRepositoryBotParams)
 	m.HandleFunc("POST "+options.BaseURL+"/api/v1/staff/projects/{project_id}/repositories/{repository_id}/preflight", wrapper.RunRepositoryPreflight)
-	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/prompt-templates", wrapper.ListPromptTemplateKeys)
-	m.HandleFunc("POST "+options.BaseURL+"/api/v1/staff/prompt-templates/seeds/sync", wrapper.SyncPromptTemplateSeeds)
-	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/prompt-templates/{template_key}/diff", wrapper.DiffPromptTemplateVersions)
-	m.HandleFunc("POST "+options.BaseURL+"/api/v1/staff/prompt-templates/{template_key}/preview", wrapper.PreviewPromptTemplate)
-	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/prompt-templates/{template_key}/versions", wrapper.ListPromptTemplateVersions)
-	m.HandleFunc("POST "+options.BaseURL+"/api/v1/staff/prompt-templates/{template_key}/versions", wrapper.CreatePromptTemplateVersion)
-	m.HandleFunc("POST "+options.BaseURL+"/api/v1/staff/prompt-templates/{template_key}/versions/{version}/activate", wrapper.ActivatePromptTemplateVersion)
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/runs", wrapper.ListRuns)
-	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/runs/jobs", wrapper.ListRunJobs)
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/runs/waits", wrapper.ListRunWaits)
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/runs/{run_id}", wrapper.GetRun)
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/runs/{run_id}/events", wrapper.ListRunEvents)
@@ -3849,9 +2692,6 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/runs/{run_id}/logs", wrapper.GetRunLogs)
 	m.HandleFunc("DELETE "+options.BaseURL+"/api/v1/staff/runs/{run_id}/namespace", wrapper.DeleteRunNamespace)
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/runs/{run_id}/realtime", wrapper.RunRealtime)
-	m.HandleFunc("DELETE "+options.BaseURL+"/api/v1/staff/runtime-deploy/images", wrapper.DeleteRegistryImageTag)
-	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/runtime-deploy/images", wrapper.ListRegistryImages)
-	m.HandleFunc("POST "+options.BaseURL+"/api/v1/staff/runtime-deploy/images/cleanup", wrapper.CleanupRegistryImages)
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/runtime-deploy/tasks", wrapper.ListRuntimeDeployTasks)
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/runtime-deploy/tasks/{run_id}", wrapper.GetRuntimeDeployTask)
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/runtime-errors", wrapper.ListRuntimeErrors)
@@ -4082,166 +2922,6 @@ func (response McpExecutorCallback500JSONResponse) VisitMcpExecutorCallbackRespo
 	return json.NewEncoder(w).Encode(response)
 }
 
-type ListAgentsRequestObject struct {
-	Params ListAgentsParams
-}
-
-type ListAgentsResponseObject interface {
-	VisitListAgentsResponse(w http.ResponseWriter) error
-}
-
-type ListAgents200JSONResponse AgentItemsResponse
-
-func (response ListAgents200JSONResponse) VisitListAgentsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListAgents400JSONResponse struct{ BadRequestJSONResponse }
-
-func (response ListAgents400JSONResponse) VisitListAgentsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListAgents401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response ListAgents401JSONResponse) VisitListAgentsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListAgents403JSONResponse struct{ ForbiddenJSONResponse }
-
-func (response ListAgents403JSONResponse) VisitListAgentsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetAgentRequestObject struct {
-	AgentId AgentID `json:"agent_id"`
-}
-
-type GetAgentResponseObject interface {
-	VisitGetAgentResponse(w http.ResponseWriter) error
-}
-
-type GetAgent200JSONResponse Agent
-
-func (response GetAgent200JSONResponse) VisitGetAgentResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetAgent400JSONResponse struct{ BadRequestJSONResponse }
-
-func (response GetAgent400JSONResponse) VisitGetAgentResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetAgent401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response GetAgent401JSONResponse) VisitGetAgentResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetAgent403JSONResponse struct{ ForbiddenJSONResponse }
-
-func (response GetAgent403JSONResponse) VisitGetAgentResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetAgent404JSONResponse struct{ NotFoundJSONResponse }
-
-func (response GetAgent404JSONResponse) VisitGetAgentResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(404)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type UpdateAgentSettingsRequestObject struct {
-	AgentId AgentID `json:"agent_id"`
-	Body    *UpdateAgentSettingsJSONRequestBody
-}
-
-type UpdateAgentSettingsResponseObject interface {
-	VisitUpdateAgentSettingsResponse(w http.ResponseWriter) error
-}
-
-type UpdateAgentSettings200JSONResponse Agent
-
-func (response UpdateAgentSettings200JSONResponse) VisitUpdateAgentSettingsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type UpdateAgentSettings400JSONResponse struct{ BadRequestJSONResponse }
-
-func (response UpdateAgentSettings400JSONResponse) VisitUpdateAgentSettingsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type UpdateAgentSettings401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response UpdateAgentSettings401JSONResponse) VisitUpdateAgentSettingsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type UpdateAgentSettings403JSONResponse struct{ ForbiddenJSONResponse }
-
-func (response UpdateAgentSettings403JSONResponse) VisitUpdateAgentSettingsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type UpdateAgentSettings404JSONResponse struct{ NotFoundJSONResponse }
-
-func (response UpdateAgentSettings404JSONResponse) VisitUpdateAgentSettingsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(404)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type UpdateAgentSettings409JSONResponse struct{ ConflictJSONResponse }
-
-func (response UpdateAgentSettings409JSONResponse) VisitUpdateAgentSettingsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(409)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
 type ListPendingApprovalsRequestObject struct {
 	Params ListPendingApprovalsParams
 }
@@ -4336,181 +3016,6 @@ type ResolveApprovalDecision404JSONResponse struct{ NotFoundJSONResponse }
 func (response ResolveApprovalDecision404JSONResponse) VisitResolveApprovalDecisionResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListPromptTemplateAuditEventsRequestObject struct {
-	Params ListPromptTemplateAuditEventsParams
-}
-
-type ListPromptTemplateAuditEventsResponseObject interface {
-	VisitListPromptTemplateAuditEventsResponse(w http.ResponseWriter) error
-}
-
-type ListPromptTemplateAuditEvents200JSONResponse PromptTemplateAuditEventItemsResponse
-
-func (response ListPromptTemplateAuditEvents200JSONResponse) VisitListPromptTemplateAuditEventsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListPromptTemplateAuditEvents400JSONResponse struct{ BadRequestJSONResponse }
-
-func (response ListPromptTemplateAuditEvents400JSONResponse) VisitListPromptTemplateAuditEventsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListPromptTemplateAuditEvents401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response ListPromptTemplateAuditEvents401JSONResponse) VisitListPromptTemplateAuditEventsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListPromptTemplateAuditEvents403JSONResponse struct{ ForbiddenJSONResponse }
-
-func (response ListPromptTemplateAuditEvents403JSONResponse) VisitListPromptTemplateAuditEventsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListConfigEntriesRequestObject struct {
-	Params ListConfigEntriesParams
-}
-
-type ListConfigEntriesResponseObject interface {
-	VisitListConfigEntriesResponse(w http.ResponseWriter) error
-}
-
-type ListConfigEntries200JSONResponse ConfigEntryItemsResponse
-
-func (response ListConfigEntries200JSONResponse) VisitListConfigEntriesResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListConfigEntries400JSONResponse struct{ BadRequestJSONResponse }
-
-func (response ListConfigEntries400JSONResponse) VisitListConfigEntriesResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListConfigEntries401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response ListConfigEntries401JSONResponse) VisitListConfigEntriesResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListConfigEntries403JSONResponse struct{ ForbiddenJSONResponse }
-
-func (response ListConfigEntries403JSONResponse) VisitListConfigEntriesResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type UpsertConfigEntryRequestObject struct {
-	Body *UpsertConfigEntryJSONRequestBody
-}
-
-type UpsertConfigEntryResponseObject interface {
-	VisitUpsertConfigEntryResponse(w http.ResponseWriter) error
-}
-
-type UpsertConfigEntry201JSONResponse ConfigEntry
-
-func (response UpsertConfigEntry201JSONResponse) VisitUpsertConfigEntryResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(201)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type UpsertConfigEntry400JSONResponse struct{ BadRequestJSONResponse }
-
-func (response UpsertConfigEntry400JSONResponse) VisitUpsertConfigEntryResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type UpsertConfigEntry401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response UpsertConfigEntry401JSONResponse) VisitUpsertConfigEntryResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type UpsertConfigEntry403JSONResponse struct{ ForbiddenJSONResponse }
-
-func (response UpsertConfigEntry403JSONResponse) VisitUpsertConfigEntryResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type DeleteConfigEntryRequestObject struct {
-	ConfigEntryId string `json:"config_entry_id"`
-}
-
-type DeleteConfigEntryResponseObject interface {
-	VisitDeleteConfigEntryResponse(w http.ResponseWriter) error
-}
-
-type DeleteConfigEntry204Response struct {
-}
-
-func (response DeleteConfigEntry204Response) VisitDeleteConfigEntryResponse(w http.ResponseWriter) error {
-	w.WriteHeader(204)
-	return nil
-}
-
-type DeleteConfigEntry400JSONResponse struct{ BadRequestJSONResponse }
-
-func (response DeleteConfigEntry400JSONResponse) VisitDeleteConfigEntryResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type DeleteConfigEntry401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response DeleteConfigEntry401JSONResponse) VisitDeleteConfigEntryResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type DeleteConfigEntry403JSONResponse struct{ ForbiddenJSONResponse }
-
-func (response DeleteConfigEntry403JSONResponse) VisitDeleteConfigEntryResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -5340,356 +3845,6 @@ func (response RunRepositoryPreflight403JSONResponse) VisitRunRepositoryPrefligh
 	return json.NewEncoder(w).Encode(response)
 }
 
-type ListPromptTemplateKeysRequestObject struct {
-	Params ListPromptTemplateKeysParams
-}
-
-type ListPromptTemplateKeysResponseObject interface {
-	VisitListPromptTemplateKeysResponse(w http.ResponseWriter) error
-}
-
-type ListPromptTemplateKeys200JSONResponse PromptTemplateKeyItemsResponse
-
-func (response ListPromptTemplateKeys200JSONResponse) VisitListPromptTemplateKeysResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListPromptTemplateKeys400JSONResponse struct{ BadRequestJSONResponse }
-
-func (response ListPromptTemplateKeys400JSONResponse) VisitListPromptTemplateKeysResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListPromptTemplateKeys401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response ListPromptTemplateKeys401JSONResponse) VisitListPromptTemplateKeysResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListPromptTemplateKeys403JSONResponse struct{ ForbiddenJSONResponse }
-
-func (response ListPromptTemplateKeys403JSONResponse) VisitListPromptTemplateKeysResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type SyncPromptTemplateSeedsRequestObject struct {
-	Body *SyncPromptTemplateSeedsJSONRequestBody
-}
-
-type SyncPromptTemplateSeedsResponseObject interface {
-	VisitSyncPromptTemplateSeedsResponse(w http.ResponseWriter) error
-}
-
-type SyncPromptTemplateSeeds200JSONResponse PromptTemplateSeedSyncResponse
-
-func (response SyncPromptTemplateSeeds200JSONResponse) VisitSyncPromptTemplateSeedsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type SyncPromptTemplateSeeds400JSONResponse struct{ BadRequestJSONResponse }
-
-func (response SyncPromptTemplateSeeds400JSONResponse) VisitSyncPromptTemplateSeedsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type SyncPromptTemplateSeeds401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response SyncPromptTemplateSeeds401JSONResponse) VisitSyncPromptTemplateSeedsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type SyncPromptTemplateSeeds403JSONResponse struct{ ForbiddenJSONResponse }
-
-func (response SyncPromptTemplateSeeds403JSONResponse) VisitSyncPromptTemplateSeedsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type DiffPromptTemplateVersionsRequestObject struct {
-	TemplateKey TemplateKey `json:"template_key"`
-	Params      DiffPromptTemplateVersionsParams
-}
-
-type DiffPromptTemplateVersionsResponseObject interface {
-	VisitDiffPromptTemplateVersionsResponse(w http.ResponseWriter) error
-}
-
-type DiffPromptTemplateVersions200JSONResponse PromptTemplateDiffResponse
-
-func (response DiffPromptTemplateVersions200JSONResponse) VisitDiffPromptTemplateVersionsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type DiffPromptTemplateVersions400JSONResponse struct{ BadRequestJSONResponse }
-
-func (response DiffPromptTemplateVersions400JSONResponse) VisitDiffPromptTemplateVersionsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type DiffPromptTemplateVersions401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response DiffPromptTemplateVersions401JSONResponse) VisitDiffPromptTemplateVersionsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type DiffPromptTemplateVersions403JSONResponse struct{ ForbiddenJSONResponse }
-
-func (response DiffPromptTemplateVersions403JSONResponse) VisitDiffPromptTemplateVersionsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type DiffPromptTemplateVersions404JSONResponse struct{ NotFoundJSONResponse }
-
-func (response DiffPromptTemplateVersions404JSONResponse) VisitDiffPromptTemplateVersionsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(404)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type PreviewPromptTemplateRequestObject struct {
-	TemplateKey TemplateKey `json:"template_key"`
-	Body        *PreviewPromptTemplateJSONRequestBody
-}
-
-type PreviewPromptTemplateResponseObject interface {
-	VisitPreviewPromptTemplateResponse(w http.ResponseWriter) error
-}
-
-type PreviewPromptTemplate200JSONResponse PreviewPromptTemplateResponse
-
-func (response PreviewPromptTemplate200JSONResponse) VisitPreviewPromptTemplateResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type PreviewPromptTemplate400JSONResponse struct{ BadRequestJSONResponse }
-
-func (response PreviewPromptTemplate400JSONResponse) VisitPreviewPromptTemplateResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type PreviewPromptTemplate401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response PreviewPromptTemplate401JSONResponse) VisitPreviewPromptTemplateResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type PreviewPromptTemplate403JSONResponse struct{ ForbiddenJSONResponse }
-
-func (response PreviewPromptTemplate403JSONResponse) VisitPreviewPromptTemplateResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type PreviewPromptTemplate404JSONResponse struct{ NotFoundJSONResponse }
-
-func (response PreviewPromptTemplate404JSONResponse) VisitPreviewPromptTemplateResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(404)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListPromptTemplateVersionsRequestObject struct {
-	TemplateKey TemplateKey `json:"template_key"`
-	Params      ListPromptTemplateVersionsParams
-}
-
-type ListPromptTemplateVersionsResponseObject interface {
-	VisitListPromptTemplateVersionsResponse(w http.ResponseWriter) error
-}
-
-type ListPromptTemplateVersions200JSONResponse PromptTemplateVersionItemsResponse
-
-func (response ListPromptTemplateVersions200JSONResponse) VisitListPromptTemplateVersionsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListPromptTemplateVersions400JSONResponse struct{ BadRequestJSONResponse }
-
-func (response ListPromptTemplateVersions400JSONResponse) VisitListPromptTemplateVersionsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListPromptTemplateVersions401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response ListPromptTemplateVersions401JSONResponse) VisitListPromptTemplateVersionsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListPromptTemplateVersions403JSONResponse struct{ ForbiddenJSONResponse }
-
-func (response ListPromptTemplateVersions403JSONResponse) VisitListPromptTemplateVersionsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type CreatePromptTemplateVersionRequestObject struct {
-	TemplateKey TemplateKey `json:"template_key"`
-	Body        *CreatePromptTemplateVersionJSONRequestBody
-}
-
-type CreatePromptTemplateVersionResponseObject interface {
-	VisitCreatePromptTemplateVersionResponse(w http.ResponseWriter) error
-}
-
-type CreatePromptTemplateVersion201JSONResponse PromptTemplateVersion
-
-func (response CreatePromptTemplateVersion201JSONResponse) VisitCreatePromptTemplateVersionResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(201)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type CreatePromptTemplateVersion400JSONResponse struct{ BadRequestJSONResponse }
-
-func (response CreatePromptTemplateVersion400JSONResponse) VisitCreatePromptTemplateVersionResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type CreatePromptTemplateVersion401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response CreatePromptTemplateVersion401JSONResponse) VisitCreatePromptTemplateVersionResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type CreatePromptTemplateVersion403JSONResponse struct{ ForbiddenJSONResponse }
-
-func (response CreatePromptTemplateVersion403JSONResponse) VisitCreatePromptTemplateVersionResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type CreatePromptTemplateVersion409JSONResponse struct{ ConflictJSONResponse }
-
-func (response CreatePromptTemplateVersion409JSONResponse) VisitCreatePromptTemplateVersionResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(409)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ActivatePromptTemplateVersionRequestObject struct {
-	TemplateKey TemplateKey     `json:"template_key"`
-	Version     TemplateVersion `json:"version"`
-	Body        *ActivatePromptTemplateVersionJSONRequestBody
-}
-
-type ActivatePromptTemplateVersionResponseObject interface {
-	VisitActivatePromptTemplateVersionResponse(w http.ResponseWriter) error
-}
-
-type ActivatePromptTemplateVersion200JSONResponse PromptTemplateVersion
-
-func (response ActivatePromptTemplateVersion200JSONResponse) VisitActivatePromptTemplateVersionResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ActivatePromptTemplateVersion400JSONResponse struct{ BadRequestJSONResponse }
-
-func (response ActivatePromptTemplateVersion400JSONResponse) VisitActivatePromptTemplateVersionResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ActivatePromptTemplateVersion401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response ActivatePromptTemplateVersion401JSONResponse) VisitActivatePromptTemplateVersionResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ActivatePromptTemplateVersion403JSONResponse struct{ ForbiddenJSONResponse }
-
-func (response ActivatePromptTemplateVersion403JSONResponse) VisitActivatePromptTemplateVersionResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ActivatePromptTemplateVersion409JSONResponse struct{ ConflictJSONResponse }
-
-func (response ActivatePromptTemplateVersion409JSONResponse) VisitActivatePromptTemplateVersionResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(409)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
 type ListRunsRequestObject struct {
 	Params ListRunsParams
 }
@@ -5719,41 +3874,6 @@ func (response ListRuns400JSONResponse) VisitListRunsResponse(w http.ResponseWri
 type ListRuns401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ListRuns401JSONResponse) VisitListRunsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListRunJobsRequestObject struct {
-	Params ListRunJobsParams
-}
-
-type ListRunJobsResponseObject interface {
-	VisitListRunJobsResponse(w http.ResponseWriter) error
-}
-
-type ListRunJobs200JSONResponse RunItemsResponse
-
-func (response ListRunJobs200JSONResponse) VisitListRunJobsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListRunJobs400JSONResponse struct{ BadRequestJSONResponse }
-
-func (response ListRunJobs400JSONResponse) VisitListRunJobsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListRunJobs401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response ListRunJobs401JSONResponse) VisitListRunJobsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
 
@@ -6031,138 +4151,6 @@ type RunRealtime401JSONResponse struct{ UnauthorizedJSONResponse }
 func (response RunRealtime401JSONResponse) VisitRunRealtimeResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type DeleteRegistryImageTagRequestObject struct {
-	Body *DeleteRegistryImageTagJSONRequestBody
-}
-
-type DeleteRegistryImageTagResponseObject interface {
-	VisitDeleteRegistryImageTagResponse(w http.ResponseWriter) error
-}
-
-type DeleteRegistryImageTag200JSONResponse RegistryImageDeleteResult
-
-func (response DeleteRegistryImageTag200JSONResponse) VisitDeleteRegistryImageTagResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type DeleteRegistryImageTag400JSONResponse struct{ BadRequestJSONResponse }
-
-func (response DeleteRegistryImageTag400JSONResponse) VisitDeleteRegistryImageTagResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type DeleteRegistryImageTag401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response DeleteRegistryImageTag401JSONResponse) VisitDeleteRegistryImageTagResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type DeleteRegistryImageTag403JSONResponse struct{ ForbiddenJSONResponse }
-
-func (response DeleteRegistryImageTag403JSONResponse) VisitDeleteRegistryImageTagResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListRegistryImagesRequestObject struct {
-	Params ListRegistryImagesParams
-}
-
-type ListRegistryImagesResponseObject interface {
-	VisitListRegistryImagesResponse(w http.ResponseWriter) error
-}
-
-type ListRegistryImages200JSONResponse RegistryImageRepositoryItemsResponse
-
-func (response ListRegistryImages200JSONResponse) VisitListRegistryImagesResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListRegistryImages400JSONResponse struct{ BadRequestJSONResponse }
-
-func (response ListRegistryImages400JSONResponse) VisitListRegistryImagesResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListRegistryImages401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response ListRegistryImages401JSONResponse) VisitListRegistryImagesResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type ListRegistryImages403JSONResponse struct{ ForbiddenJSONResponse }
-
-func (response ListRegistryImages403JSONResponse) VisitListRegistryImagesResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type CleanupRegistryImagesRequestObject struct {
-	Body *CleanupRegistryImagesJSONRequestBody
-}
-
-type CleanupRegistryImagesResponseObject interface {
-	VisitCleanupRegistryImagesResponse(w http.ResponseWriter) error
-}
-
-type CleanupRegistryImages200JSONResponse CleanupRegistryImagesResponse
-
-func (response CleanupRegistryImages200JSONResponse) VisitCleanupRegistryImagesResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type CleanupRegistryImages400JSONResponse struct{ BadRequestJSONResponse }
-
-func (response CleanupRegistryImages400JSONResponse) VisitCleanupRegistryImagesResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type CleanupRegistryImages401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response CleanupRegistryImages401JSONResponse) VisitCleanupRegistryImagesResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type CleanupRegistryImages403JSONResponse struct{ ForbiddenJSONResponse }
-
-func (response CleanupRegistryImages403JSONResponse) VisitCleanupRegistryImagesResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -6557,33 +4545,12 @@ type StrictServerInterface interface {
 	// Resolve one MCP approval request from external executor callback
 	// (POST /api/v1/mcp/executor/callback)
 	McpExecutorCallback(ctx context.Context, request McpExecutorCallbackRequestObject) (McpExecutorCallbackResponseObject, error)
-	// List agents
-	// (GET /api/v1/staff/agents)
-	ListAgents(ctx context.Context, request ListAgentsRequestObject) (ListAgentsResponseObject, error)
-	// Get agent details
-	// (GET /api/v1/staff/agents/{agent_id})
-	GetAgent(ctx context.Context, request GetAgentRequestObject) (GetAgentResponseObject, error)
-	// Update agent settings
-	// (PATCH /api/v1/staff/agents/{agent_id}/settings)
-	UpdateAgentSettings(ctx context.Context, request UpdateAgentSettingsRequestObject) (UpdateAgentSettingsResponseObject, error)
 	// List pending approval requests
 	// (GET /api/v1/staff/approvals)
 	ListPendingApprovals(ctx context.Context, request ListPendingApprovalsRequestObject) (ListPendingApprovalsResponseObject, error)
 	// Resolve one approval request (approve/deny/expire/fail)
 	// (POST /api/v1/staff/approvals/{approval_request_id}/decision)
 	ResolveApprovalDecision(ctx context.Context, request ResolveApprovalDecisionRequestObject) (ResolveApprovalDecisionResponseObject, error)
-	// List prompt template audit events
-	// (GET /api/v1/staff/audit/prompt-templates)
-	ListPromptTemplateAuditEvents(ctx context.Context, request ListPromptTemplateAuditEventsRequestObject) (ListPromptTemplateAuditEventsResponseObject, error)
-	// List configuration entries
-	// (GET /api/v1/staff/config-entries)
-	ListConfigEntries(ctx context.Context, request ListConfigEntriesRequestObject) (ListConfigEntriesResponseObject, error)
-	// Upsert configuration entry
-	// (POST /api/v1/staff/config-entries)
-	UpsertConfigEntry(ctx context.Context, request UpsertConfigEntryRequestObject) (UpsertConfigEntryResponseObject, error)
-	// Delete configuration entry
-	// (DELETE /api/v1/staff/config-entries/{config_entry_id})
-	DeleteConfigEntry(ctx context.Context, request DeleteConfigEntryRequestObject) (DeleteConfigEntryResponseObject, error)
 	// List docset groups (manifest v1)
 	// (GET /api/v1/staff/docset/groups)
 	ListDocsetGroups(ctx context.Context, request ListDocsetGroupsRequestObject) (ListDocsetGroupsResponseObject, error)
@@ -6641,33 +4608,9 @@ type StrictServerInterface interface {
 	// Run repository onboarding preflight
 	// (POST /api/v1/staff/projects/{project_id}/repositories/{repository_id}/preflight)
 	RunRepositoryPreflight(ctx context.Context, request RunRepositoryPreflightRequestObject) (RunRepositoryPreflightResponseObject, error)
-	// List prompt template keys
-	// (GET /api/v1/staff/prompt-templates)
-	ListPromptTemplateKeys(ctx context.Context, request ListPromptTemplateKeysRequestObject) (ListPromptTemplateKeysResponseObject, error)
-	// Sync prompt template seeds into DB
-	// (POST /api/v1/staff/prompt-templates/seeds/sync)
-	SyncPromptTemplateSeeds(ctx context.Context, request SyncPromptTemplateSeedsRequestObject) (SyncPromptTemplateSeedsResponseObject, error)
-	// Compare prompt template versions
-	// (GET /api/v1/staff/prompt-templates/{template_key}/diff)
-	DiffPromptTemplateVersions(ctx context.Context, request DiffPromptTemplateVersionsRequestObject) (DiffPromptTemplateVersionsResponseObject, error)
-	// Preview effective prompt template
-	// (POST /api/v1/staff/prompt-templates/{template_key}/preview)
-	PreviewPromptTemplate(ctx context.Context, request PreviewPromptTemplateRequestObject) (PreviewPromptTemplateResponseObject, error)
-	// List prompt template versions
-	// (GET /api/v1/staff/prompt-templates/{template_key}/versions)
-	ListPromptTemplateVersions(ctx context.Context, request ListPromptTemplateVersionsRequestObject) (ListPromptTemplateVersionsResponseObject, error)
-	// Create prompt template version
-	// (POST /api/v1/staff/prompt-templates/{template_key}/versions)
-	CreatePromptTemplateVersion(ctx context.Context, request CreatePromptTemplateVersionRequestObject) (CreatePromptTemplateVersionResponseObject, error)
-	// Activate prompt template version
-	// (POST /api/v1/staff/prompt-templates/{template_key}/versions/{version}/activate)
-	ActivatePromptTemplateVersion(ctx context.Context, request ActivatePromptTemplateVersionRequestObject) (ActivatePromptTemplateVersionResponseObject, error)
 	// List runs
 	// (GET /api/v1/staff/runs)
 	ListRuns(ctx context.Context, request ListRunsRequestObject) (ListRunsResponseObject, error)
-	// List running jobs
-	// (GET /api/v1/staff/runs/jobs)
-	ListRunJobs(ctx context.Context, request ListRunJobsRequestObject) (ListRunJobsResponseObject, error)
 	// List wait queue runs
 	// (GET /api/v1/staff/runs/waits)
 	ListRunWaits(ctx context.Context, request ListRunWaitsRequestObject) (ListRunWaitsResponseObject, error)
@@ -6689,15 +4632,6 @@ type StrictServerInterface interface {
 	// Open realtime run stream (WebSocket upgrade)
 	// (GET /api/v1/staff/runs/{run_id}/realtime)
 	RunRealtime(ctx context.Context, request RunRealtimeRequestObject) (RunRealtimeResponseObject, error)
-	// Delete one internal registry image tag
-	// (DELETE /api/v1/staff/runtime-deploy/images)
-	DeleteRegistryImageTag(ctx context.Context, request DeleteRegistryImageTagRequestObject) (DeleteRegistryImageTagResponseObject, error)
-	// List internal registry images
-	// (GET /api/v1/staff/runtime-deploy/images)
-	ListRegistryImages(ctx context.Context, request ListRegistryImagesRequestObject) (ListRegistryImagesResponseObject, error)
-	// Cleanup stale internal registry image tags
-	// (POST /api/v1/staff/runtime-deploy/images/cleanup)
-	CleanupRegistryImages(ctx context.Context, request CleanupRegistryImagesRequestObject) (CleanupRegistryImagesResponseObject, error)
 	// List runtime deploy tasks
 	// (GET /api/v1/staff/runtime-deploy/tasks)
 	ListRuntimeDeployTasks(ctx context.Context, request ListRuntimeDeployTasksRequestObject) (ListRuntimeDeployTasksResponseObject, error)
@@ -6917,91 +4851,6 @@ func (sh *strictHandler) McpExecutorCallback(w http.ResponseWriter, r *http.Requ
 	}
 }
 
-// ListAgents operation middleware
-func (sh *strictHandler) ListAgents(w http.ResponseWriter, r *http.Request, params ListAgentsParams) {
-	var request ListAgentsRequestObject
-
-	request.Params = params
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ListAgents(ctx, request.(ListAgentsRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListAgents")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ListAgentsResponseObject); ok {
-		if err := validResponse.VisitListAgentsResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// GetAgent operation middleware
-func (sh *strictHandler) GetAgent(w http.ResponseWriter, r *http.Request, agentId AgentID) {
-	var request GetAgentRequestObject
-
-	request.AgentId = agentId
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetAgent(ctx, request.(GetAgentRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetAgent")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetAgentResponseObject); ok {
-		if err := validResponse.VisitGetAgentResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// UpdateAgentSettings operation middleware
-func (sh *strictHandler) UpdateAgentSettings(w http.ResponseWriter, r *http.Request, agentId AgentID) {
-	var request UpdateAgentSettingsRequestObject
-
-	request.AgentId = agentId
-
-	var body UpdateAgentSettingsJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.UpdateAgentSettings(ctx, request.(UpdateAgentSettingsRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "UpdateAgentSettings")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(UpdateAgentSettingsResponseObject); ok {
-		if err := validResponse.VisitUpdateAgentSettingsResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
 // ListPendingApprovals operation middleware
 func (sh *strictHandler) ListPendingApprovals(w http.ResponseWriter, r *http.Request, params ListPendingApprovalsParams) {
 	var request ListPendingApprovalsRequestObject
@@ -7054,115 +4903,6 @@ func (sh *strictHandler) ResolveApprovalDecision(w http.ResponseWriter, r *http.
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ResolveApprovalDecisionResponseObject); ok {
 		if err := validResponse.VisitResolveApprovalDecisionResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// ListPromptTemplateAuditEvents operation middleware
-func (sh *strictHandler) ListPromptTemplateAuditEvents(w http.ResponseWriter, r *http.Request, params ListPromptTemplateAuditEventsParams) {
-	var request ListPromptTemplateAuditEventsRequestObject
-
-	request.Params = params
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ListPromptTemplateAuditEvents(ctx, request.(ListPromptTemplateAuditEventsRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListPromptTemplateAuditEvents")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ListPromptTemplateAuditEventsResponseObject); ok {
-		if err := validResponse.VisitListPromptTemplateAuditEventsResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// ListConfigEntries operation middleware
-func (sh *strictHandler) ListConfigEntries(w http.ResponseWriter, r *http.Request, params ListConfigEntriesParams) {
-	var request ListConfigEntriesRequestObject
-
-	request.Params = params
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ListConfigEntries(ctx, request.(ListConfigEntriesRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListConfigEntries")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ListConfigEntriesResponseObject); ok {
-		if err := validResponse.VisitListConfigEntriesResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// UpsertConfigEntry operation middleware
-func (sh *strictHandler) UpsertConfigEntry(w http.ResponseWriter, r *http.Request) {
-	var request UpsertConfigEntryRequestObject
-
-	var body UpsertConfigEntryJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.UpsertConfigEntry(ctx, request.(UpsertConfigEntryRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "UpsertConfigEntry")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(UpsertConfigEntryResponseObject); ok {
-		if err := validResponse.VisitUpsertConfigEntryResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// DeleteConfigEntry operation middleware
-func (sh *strictHandler) DeleteConfigEntry(w http.ResponseWriter, r *http.Request, configEntryId string) {
-	var request DeleteConfigEntryRequestObject
-
-	request.ConfigEntryId = configEntryId
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.DeleteConfigEntry(ctx, request.(DeleteConfigEntryRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "DeleteConfigEntry")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(DeleteConfigEntryResponseObject); ok {
-		if err := validResponse.VisitDeleteConfigEntryResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -7730,217 +5470,6 @@ func (sh *strictHandler) RunRepositoryPreflight(w http.ResponseWriter, r *http.R
 	}
 }
 
-// ListPromptTemplateKeys operation middleware
-func (sh *strictHandler) ListPromptTemplateKeys(w http.ResponseWriter, r *http.Request, params ListPromptTemplateKeysParams) {
-	var request ListPromptTemplateKeysRequestObject
-
-	request.Params = params
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ListPromptTemplateKeys(ctx, request.(ListPromptTemplateKeysRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListPromptTemplateKeys")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ListPromptTemplateKeysResponseObject); ok {
-		if err := validResponse.VisitListPromptTemplateKeysResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// SyncPromptTemplateSeeds operation middleware
-func (sh *strictHandler) SyncPromptTemplateSeeds(w http.ResponseWriter, r *http.Request) {
-	var request SyncPromptTemplateSeedsRequestObject
-
-	var body SyncPromptTemplateSeedsJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.SyncPromptTemplateSeeds(ctx, request.(SyncPromptTemplateSeedsRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "SyncPromptTemplateSeeds")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(SyncPromptTemplateSeedsResponseObject); ok {
-		if err := validResponse.VisitSyncPromptTemplateSeedsResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// DiffPromptTemplateVersions operation middleware
-func (sh *strictHandler) DiffPromptTemplateVersions(w http.ResponseWriter, r *http.Request, templateKey TemplateKey, params DiffPromptTemplateVersionsParams) {
-	var request DiffPromptTemplateVersionsRequestObject
-
-	request.TemplateKey = templateKey
-	request.Params = params
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.DiffPromptTemplateVersions(ctx, request.(DiffPromptTemplateVersionsRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "DiffPromptTemplateVersions")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(DiffPromptTemplateVersionsResponseObject); ok {
-		if err := validResponse.VisitDiffPromptTemplateVersionsResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// PreviewPromptTemplate operation middleware
-func (sh *strictHandler) PreviewPromptTemplate(w http.ResponseWriter, r *http.Request, templateKey TemplateKey) {
-	var request PreviewPromptTemplateRequestObject
-
-	request.TemplateKey = templateKey
-
-	var body PreviewPromptTemplateJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.PreviewPromptTemplate(ctx, request.(PreviewPromptTemplateRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "PreviewPromptTemplate")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(PreviewPromptTemplateResponseObject); ok {
-		if err := validResponse.VisitPreviewPromptTemplateResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// ListPromptTemplateVersions operation middleware
-func (sh *strictHandler) ListPromptTemplateVersions(w http.ResponseWriter, r *http.Request, templateKey TemplateKey, params ListPromptTemplateVersionsParams) {
-	var request ListPromptTemplateVersionsRequestObject
-
-	request.TemplateKey = templateKey
-	request.Params = params
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ListPromptTemplateVersions(ctx, request.(ListPromptTemplateVersionsRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListPromptTemplateVersions")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ListPromptTemplateVersionsResponseObject); ok {
-		if err := validResponse.VisitListPromptTemplateVersionsResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// CreatePromptTemplateVersion operation middleware
-func (sh *strictHandler) CreatePromptTemplateVersion(w http.ResponseWriter, r *http.Request, templateKey TemplateKey) {
-	var request CreatePromptTemplateVersionRequestObject
-
-	request.TemplateKey = templateKey
-
-	var body CreatePromptTemplateVersionJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.CreatePromptTemplateVersion(ctx, request.(CreatePromptTemplateVersionRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "CreatePromptTemplateVersion")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(CreatePromptTemplateVersionResponseObject); ok {
-		if err := validResponse.VisitCreatePromptTemplateVersionResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// ActivatePromptTemplateVersion operation middleware
-func (sh *strictHandler) ActivatePromptTemplateVersion(w http.ResponseWriter, r *http.Request, templateKey TemplateKey, version TemplateVersion) {
-	var request ActivatePromptTemplateVersionRequestObject
-
-	request.TemplateKey = templateKey
-	request.Version = version
-
-	var body ActivatePromptTemplateVersionJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ActivatePromptTemplateVersion(ctx, request.(ActivatePromptTemplateVersionRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ActivatePromptTemplateVersion")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ActivatePromptTemplateVersionResponseObject); ok {
-		if err := validResponse.VisitActivatePromptTemplateVersionResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
 // ListRuns operation middleware
 func (sh *strictHandler) ListRuns(w http.ResponseWriter, r *http.Request, params ListRunsParams) {
 	var request ListRunsRequestObject
@@ -7960,32 +5489,6 @@ func (sh *strictHandler) ListRuns(w http.ResponseWriter, r *http.Request, params
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListRunsResponseObject); ok {
 		if err := validResponse.VisitListRunsResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// ListRunJobs operation middleware
-func (sh *strictHandler) ListRunJobs(w http.ResponseWriter, r *http.Request, params ListRunJobsParams) {
-	var request ListRunJobsRequestObject
-
-	request.Params = params
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ListRunJobs(ctx, request.(ListRunJobsRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListRunJobs")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ListRunJobsResponseObject); ok {
-		if err := validResponse.VisitListRunJobsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -8172,94 +5675,6 @@ func (sh *strictHandler) RunRealtime(w http.ResponseWriter, r *http.Request, run
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RunRealtimeResponseObject); ok {
 		if err := validResponse.VisitRunRealtimeResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// DeleteRegistryImageTag operation middleware
-func (sh *strictHandler) DeleteRegistryImageTag(w http.ResponseWriter, r *http.Request) {
-	var request DeleteRegistryImageTagRequestObject
-
-	var body DeleteRegistryImageTagJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.DeleteRegistryImageTag(ctx, request.(DeleteRegistryImageTagRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "DeleteRegistryImageTag")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(DeleteRegistryImageTagResponseObject); ok {
-		if err := validResponse.VisitDeleteRegistryImageTagResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// ListRegistryImages operation middleware
-func (sh *strictHandler) ListRegistryImages(w http.ResponseWriter, r *http.Request, params ListRegistryImagesParams) {
-	var request ListRegistryImagesRequestObject
-
-	request.Params = params
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ListRegistryImages(ctx, request.(ListRegistryImagesRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListRegistryImages")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ListRegistryImagesResponseObject); ok {
-		if err := validResponse.VisitListRegistryImagesResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// CleanupRegistryImages operation middleware
-func (sh *strictHandler) CleanupRegistryImages(w http.ResponseWriter, r *http.Request) {
-	var request CleanupRegistryImagesRequestObject
-
-	var body CleanupRegistryImagesJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.CleanupRegistryImages(ctx, request.(CleanupRegistryImagesRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "CleanupRegistryImages")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(CleanupRegistryImagesResponseObject); ok {
-		if err := validResponse.VisitCleanupRegistryImagesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

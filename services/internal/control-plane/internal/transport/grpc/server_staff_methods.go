@@ -7,9 +7,7 @@ import (
 
 	controlplanev1 "github.com/codex-k8s/codex-k8s/proto/gen/go/codexk8s/controlplane/v1"
 	mcpdomain "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/mcp"
-	configentryrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/repository/configentry"
 	repocfgrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/repository/repocfg"
-	enumtypes "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/types/enum"
 	querytypes "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/types/query"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -91,30 +89,6 @@ func (s *Server) ListRuns(ctx context.Context, req *controlplanev1.ListRunsReque
 		out = append(out, runToProto(r))
 	}
 	return &controlplanev1.ListRunsResponse{Items: out}, nil
-}
-
-func (s *Server) ListRunJobs(ctx context.Context, req *controlplanev1.ListRunJobsRequest) (*controlplanev1.ListRunJobsResponse, error) {
-	if req == nil {
-		return nil, status.Error(codes.InvalidArgument, "request is required")
-	}
-	p, err := requirePrincipal(req.GetPrincipal())
-	if err != nil {
-		return nil, err
-	}
-	items, err := s.staff.ListRunJobs(ctx, p, querytypes.StaffRunListFilter{
-		Limit:       clampLimit(req.GetLimit(), 200),
-		TriggerKind: optionalProtoString(req.TriggerKind),
-		Status:      optionalProtoString(req.Status),
-		AgentKey:    optionalProtoString(req.AgentKey),
-	})
-	if err != nil {
-		return nil, toStatus(err)
-	}
-	out := make([]*controlplanev1.Run, 0, len(items))
-	for _, item := range items {
-		out = append(out, runToProto(item))
-	}
-	return &controlplanev1.ListRunJobsResponse{Items: out}, nil
 }
 
 func (s *Server) ListRunWaits(ctx context.Context, req *controlplanev1.ListRunWaitsRequest) (*controlplanev1.ListRunWaitsResponse, error) {
@@ -630,58 +604,6 @@ func (s *Server) TransitionIssueStageLabel(ctx context.Context, req *controlplan
 	}, nil
 }
 
-func (s *Server) ListConfigEntries(ctx context.Context, req *controlplanev1.ListConfigEntriesRequest) (*controlplanev1.ListConfigEntriesResponse, error) {
-	p, err := requirePrincipal(req.GetPrincipal())
-	if err != nil {
-		return nil, err
-	}
-	scope := strings.TrimSpace(req.Scope)
-	projectID := strings.TrimSpace(req.GetProjectId())
-	repositoryID := strings.TrimSpace(req.GetRepositoryId())
-	limit := clampLimit(req.Limit, 200)
-	items, err := s.staff.ListConfigEntries(ctx, p, scope, projectID, repositoryID, limit)
-	if err != nil {
-		return nil, toStatus(err)
-	}
-	out := make([]*controlplanev1.ConfigEntry, 0, len(items))
-	for _, item := range items {
-		out = append(out, configEntryToProto(item))
-	}
-	return &controlplanev1.ListConfigEntriesResponse{Items: out}, nil
-}
-
-func (s *Server) UpsertConfigEntry(ctx context.Context, req *controlplanev1.UpsertConfigEntryRequest) (*controlplanev1.ConfigEntry, error) {
-	p, err := requirePrincipal(req.GetPrincipal())
-	if err != nil {
-		return nil, err
-	}
-	valueSecret := strings.TrimSpace(req.GetValueSecret())
-	var encrypted []byte
-	if valueSecret != "" {
-		encrypted, err = s.staff.EncryptSecretValue(valueSecret)
-		if err != nil {
-			return nil, toStatus(err)
-		}
-	}
-	item, err := s.staff.UpsertConfigEntry(ctx, p, querytypes.ConfigEntryUpsertParams{
-		Scope:           enumtypes.ConfigEntryScope(strings.TrimSpace(req.Scope)),
-		Kind:            enumtypes.ConfigEntryKind(strings.TrimSpace(req.Kind)),
-		ProjectID:       strings.TrimSpace(req.GetProjectId()),
-		RepositoryID:    strings.TrimSpace(req.GetRepositoryId()),
-		Key:             strings.TrimSpace(req.Key),
-		ValuePlain:      strings.TrimSpace(req.GetValuePlain()),
-		ValueEncrypted:  encrypted,
-		SyncTargets:     req.SyncTargets,
-		Mutability:      enumtypes.ConfigEntryMutability(strings.TrimSpace(req.Mutability)),
-		IsDangerous:     req.IsDangerous,
-		CreatedByUserID: p.UserID,
-	}, req.DangerousConfirmed)
-	if err != nil {
-		return nil, toStatus(err)
-	}
-	return configEntryToProto(item), nil
-}
-
 func repositoryBindingToProto(item repocfgrepo.RepositoryBinding) *controlplanev1.RepositoryBinding {
 	botUsername := strings.TrimSpace(item.BotUsername)
 	botEmail := strings.TrimSpace(item.BotEmail)
@@ -702,33 +624,6 @@ func repositoryBindingToProto(item repocfgrepo.RepositoryBinding) *controlplanev
 		BotEmail:           stringPtrOrNil(botEmail),
 		PreflightUpdatedAt: stringPtrOrNil(preflightUpdatedAt),
 	}
-}
-
-func configEntryToProto(item configentryrepo.ConfigEntry) *controlplanev1.ConfigEntry {
-	return &controlplanev1.ConfigEntry{
-		Id:           item.ID,
-		Scope:        string(item.Scope),
-		Kind:         string(item.Kind),
-		ProjectId:    stringPtrOrNil(strings.TrimSpace(item.ProjectID)),
-		RepositoryId: stringPtrOrNil(strings.TrimSpace(item.RepositoryID)),
-		Key:          item.Key,
-		Value:        stringPtrOrNil(strings.TrimSpace(item.Value)),
-		SyncTargets:  item.SyncTargets,
-		Mutability:   string(item.Mutability),
-		IsDangerous:  item.IsDangerous,
-		UpdatedAt:    stringPtrOrNil(strings.TrimSpace(item.UpdatedAt)),
-	}
-}
-
-func (s *Server) DeleteConfigEntry(ctx context.Context, req *controlplanev1.DeleteConfigEntryRequest) (*emptypb.Empty, error) {
-	p, err := requirePrincipal(req.GetPrincipal())
-	if err != nil {
-		return nil, err
-	}
-	if err := s.staff.DeleteConfigEntry(ctx, p, strings.TrimSpace(req.ConfigEntryId)); err != nil {
-		return nil, toStatus(err)
-	}
-	return &emptypb.Empty{}, nil
 }
 
 func (s *Server) ListDocsetGroups(ctx context.Context, req *controlplanev1.ListDocsetGroupsRequest) (*controlplanev1.ListDocsetGroupsResponse, error) {

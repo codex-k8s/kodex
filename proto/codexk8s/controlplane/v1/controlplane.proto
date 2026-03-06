@@ -1018,20 +1018,8 @@ service ControlPlaneService {
   rpc UpsertProject(UpsertProjectRequest) returns (Project);
   rpc GetProject(GetProjectRequest) returns (Project);
   rpc DeleteProject(DeleteProjectRequest) returns (google.protobuf.Empty);
-  rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
-  rpc GetAgent(GetAgentRequest) returns (Agent);
-  rpc UpdateAgentSettings(UpdateAgentSettingsRequest) returns (Agent);
-  rpc ListPromptTemplateKeys(ListPromptTemplateKeysRequest) returns (ListPromptTemplateKeysResponse);
-  rpc ListPromptTemplateVersions(ListPromptTemplateVersionsRequest) returns (ListPromptTemplateVersionsResponse);
-  rpc CreatePromptTemplateVersion(CreatePromptTemplateVersionRequest) returns (PromptTemplateVersion);
-  rpc ActivatePromptTemplateVersion(ActivatePromptTemplateVersionRequest) returns (PromptTemplateVersion);
-  rpc SyncPromptTemplateSeeds(PromptTemplateSeedSyncRequest) returns (PromptTemplateSeedSyncResponse);
-  rpc PreviewPromptTemplate(PreviewPromptTemplateRequest) returns (PreviewPromptTemplateResponse);
-  rpc DiffPromptTemplateVersions(DiffPromptTemplateVersionsRequest) returns (DiffPromptTemplateVersionsResponse);
-  rpc ListPromptTemplateAuditEvents(ListPromptTemplateAuditEventsRequest) returns (ListPromptTemplateAuditEventsResponse);
 
   rpc ListRuns(ListRunsRequest) returns (ListRunsResponse);
-  rpc ListRunJobs(ListRunJobsRequest) returns (ListRunJobsResponse);
   rpc ListRunWaits(ListRunWaitsRequest) returns (ListRunWaitsResponse);
   rpc GetRun(GetRunRequest) returns (Run);
   rpc GetRunLogs(GetRunLogsRequest) returns (RunLogs);
@@ -1059,10 +1047,6 @@ service ControlPlaneService {
   rpc UpsertProjectGitHubTokens(UpsertProjectGitHubTokensRequest) returns (google.protobuf.Empty);
   rpc TransitionIssueStageLabel(TransitionIssueStageLabelRequest) returns (TransitionIssueStageLabelResponse);
 
-  rpc ListConfigEntries(ListConfigEntriesRequest) returns (ListConfigEntriesResponse);
-  rpc UpsertConfigEntry(UpsertConfigEntryRequest) returns (ConfigEntry);
-  rpc DeleteConfigEntry(DeleteConfigEntryRequest) returns (google.protobuf.Empty);
-
   rpc ListDocsetGroups(ListDocsetGroupsRequest) returns (ListDocsetGroupsResponse);
   rpc ImportDocset(ImportDocsetRequest) returns (ImportDocsetResponse);
   rpc SyncDocset(SyncDocsetRequest) returns (SyncDocsetResponse);
@@ -1072,9 +1056,6 @@ service ControlPlaneService {
   rpc GetRuntimeDeployTask(GetRuntimeDeployTaskRequest) returns (RuntimeDeployTask);
   rpc ListRuntimeErrors(ListRuntimeErrorsRequest) returns (ListRuntimeErrorsResponse);
   rpc MarkRuntimeErrorViewed(MarkRuntimeErrorViewedRequest) returns (RuntimeError);
-  rpc ListRegistryImages(ListRegistryImagesRequest) returns (ListRegistryImagesResponse);
-  rpc DeleteRegistryImageTag(DeleteRegistryImageTagRequest) returns (RegistryImageDeleteResult);
-  rpc CleanupRegistryImages(CleanupRegistryImagesRequest) returns (CleanupRegistryImagesResponse);
 
   // Used by agent-runner for run-bound session persistence and event callbacks.
   rpc UpsertAgentSession(UpsertAgentSessionRequest) returns (UpsertAgentSessionResponse);

@@ -96,7 +96,7 @@ approvals:
   `configuration/agents`, `configuration/config-entries`, а также operations-контуры `runtime-deploy/images` и `running-jobs`.
 - В роутинге staff UI удалены соответствующие non-MVP маршруты и добавлен fallback redirect на `projects` для stale deep-links.
 - Удалён связанный dead code non-MVP страниц, UI-контур `config-entries` и platform-tokens scaffold в `system-settings`.
-- В traceability добавлены обновления по issue `#244`; remaining backlog нормализован как `#245..#260` + post-plan `#274`.
+- В traceability добавлены обновления по issue `#244`; remaining backlog нормализован как `#245..#260`, а post-plan issue `#274` переведён в `in-review`.
 
 ## Day 7 execution fact (`S7-E03`)
 - В Issue `#245` реализован stream удаления глобального фильтра:
