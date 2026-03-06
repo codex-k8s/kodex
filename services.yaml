@@ -84,7 +84,7 @@ spec:
         - libs/go
         - proto
     control-plane:
-      value: "0.1.66"
+      value: "0.1.67"
       bumpOn:
         - services/internal/control-plane
         - deploy/base/kaniko
@@ -92,13 +92,13 @@ spec:
         - libs/go
         - proto
     worker:
-      value: "0.1.29"
+      value: "0.1.30"
       bumpOn:
         - services/jobs/worker
         - libs/go
         - proto
     agent-runner:
-      value: "0.1.25"
+      value: "0.1.26"
       bumpOn:
         - services/jobs/agent-runner
         - libs/go
