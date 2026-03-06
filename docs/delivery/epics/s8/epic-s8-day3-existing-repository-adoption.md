@@ -1,12 +1,12 @@
 ---
 doc_id: EPC-CK8S-S8-D3-EXISTING-REPO
 type: epic
-title: "Epic S8 Day 3: Existing repository adoption on onboarding (scan -> docs/services.yaml PR) (Issue __ISSUE_EXISTING__)"
+title: "Epic S8 Day 3: Existing repository adoption on onboarding (scan -> docs/services.yaml PR) (Issue 282)"
 status: planned
 owner_role: EM
 created_at: 2026-03-06
 updated_at: 2026-03-06
-related_issues: [__ISSUE_EXISTING__]
+related_issues: [282]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -141,7 +141,7 @@ approvals:
 
 ## Handover
 - Next stage: `run:dev`.
-- Execution issue: `__ISSUE_EXISTING__`.
+- Execution issue: `282`.
 - Handover package:
   - этот epic;
   - `docs/delivery/epics/s3/epic-s3-day14-repository-onboarding-preflight.md`;

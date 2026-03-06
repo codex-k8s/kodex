@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-02-06
 updated_at: 2026-03-06
-related_issues: [1, 19, 74, 90, 100, 112, 154, 155, 159, 165, 170, 171, 175, 184, 185, 187, 189, 195, 197, 199, 201, 210, 212, 218, 220, 222, 223, 225, 226, 227, 228, 229, 230, 238, 241, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 216, 262, 263, 265, __ISSUE_EMPTY__, __ISSUE_EXISTING__]
+related_issues: [1, 19, 74, 90, 100, 112, 154, 155, 159, 165, 170, 171, 175, 184, 185, 187, 189, 195, 197, 199, 201, 210, 212, 218, 220, 222, 223, 225, 226, 227, 228, 229, 230, 238, 241, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 216, 262, 263, 265, 281, 282]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -281,7 +281,7 @@ approvals:
   - `#230` cross-service hygiene closure.
 - Через Context7 (`/websites/cli_github_manual`) подтвержден актуальный CLI-синтаксис `gh issue create`/`gh pr create`/`gh pr edit`; новые внешние зависимости не добавлялись.
 
-## Актуализация по Issue #__ISSUE_EMPTY__ (`run:dev`, planned 2026-03-06)
+## Актуализация по Issue #281 (`run:dev`, planned 2026-03-06)
 - Для FR-020/FR-033/FR-049/FR-050 и NFR-010/NFR-018 добавлен execution backlog Sprint S8 Day2:
   `docs/delivery/epics/s8/epic-s8-day2-empty-repository-initialization.md`,
   `docs/delivery/epics/s8/epic_s8.md`,
@@ -300,7 +300,7 @@ approvals:
   - FR-050 (docs tree в prompt context);
   - ADR-0007 (multi-repo composition/docs federation как будущий режим).
 
-## Актуализация по Issue #__ISSUE_EXISTING__ (`run:dev`, planned 2026-03-06)
+## Актуализация по Issue #282 (`run:dev`, planned 2026-03-06)
 - Для FR-002/FR-020/FR-033/FR-049/FR-050 и NFR-010/NFR-018 добавлен execution backlog Sprint S8 Day3:
   `docs/delivery/epics/s8/epic-s8-day3-existing-repository-adoption.md`,
   `docs/delivery/epics/s8/epic_s8.md`,

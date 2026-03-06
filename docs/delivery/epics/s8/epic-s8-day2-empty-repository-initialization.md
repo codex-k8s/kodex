@@ -1,12 +1,12 @@
 ---
 doc_id: EPC-CK8S-S8-D2-EMPTY-REPO
 type: epic
-title: "Epic S8 Day 2: Empty repository initialization on onboarding (services.yaml + docs scaffold) (Issue __ISSUE_EMPTY__)"
+title: "Epic S8 Day 2: Empty repository initialization on onboarding (services.yaml + docs scaffold) (Issue 281)"
 status: planned
 owner_role: EM
 created_at: 2026-03-06
 updated_at: 2026-03-06
-related_issues: [__ISSUE_EMPTY__]
+related_issues: [281]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -133,7 +133,7 @@ approvals:
 
 ## Handover
 - Next stage: `run:dev`.
-- Execution issue: `__ISSUE_EMPTY__`.
+- Execution issue: `281`.
 - Handover package:
   - этот epic;
   - `docs/delivery/epics/s3/epic-s3-day14-repository-onboarding-preflight.md`;

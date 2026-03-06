@@ -6,7 +6,7 @@ status: in-progress
 owner_role: EM
 created_at: 2026-02-27
 updated_at: 2026-03-06
-related_issues: [223, 225, 226, 227, 228, 229, 230, __ISSUE_EMPTY__, __ISSUE_EXISTING__]
+related_issues: [223, 225, 226, 227, 228, 229, 230, 281, 282]
 related_prs: [231]
 approvals:
   required: ["Owner"]
@@ -31,5 +31,5 @@ approvals:
 | S8-E04 | `#228` | agent-runner: normalization helpers и dedup prompt context |
 | S8-E05 | `#229` | shared libs: pgx alignment + modularization `servicescfg` |
 | S8-E06 | `#230` | cross-service hygiene closure и residual debt report |
-| S8-E07 | `#__ISSUE_EMPTY__` | empty repository initialization: default branch + `services.yaml` + docs scaffold |
-| S8-E08 | `#__ISSUE_EXISTING__` | existing repository adoption: deterministic scan + bootstrap PR with `services.yaml` and docs |
+| S8-E07 | `#281` | empty repository initialization: default branch + `services.yaml` + docs scaffold |
+| S8-E08 | `#282` | existing repository adoption: deterministic scan + bootstrap PR with `services.yaml` and docs |
