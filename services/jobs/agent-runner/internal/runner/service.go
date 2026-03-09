@@ -139,7 +139,7 @@ func (s *Service) Run(ctx context.Context) (err error) {
 		syncCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 20*time.Second)
 		defer cancel()
 
-		// Best-effort: Codex может обновить auth.json во время выполнения (ротация/refresh).
+		// Best-effort: Codex may update auth.json during execution (token refresh/rotation).
 		if err := s.syncCodexAuthToControlPlane(syncCtx, state, "final"); err != nil {
 			s.logger.Warn("final sync codex auth failed", "err", err)
 		}
@@ -172,30 +172,12 @@ func (s *Service) Run(ctx context.Context) (err error) {
 		if err := s.emitEvent(ctx, floweventdomain.EventTypeRunAgentResumeUsed, map[string]string{"restored_session_path": result.restoredSessionPath}); err != nil {
 			s.logger.Warn("emit run.agent.resume.used failed", "err", err)
 		}
-		codexOutput, err = runCommandCaptureOutput(
-			ctx,
-			"codex",
-			"exec",
-			"resume",
-			"--last",
-			"--cd", state.repoDir,
-			"--output-schema", outputSchemaFile,
-			prompt,
-		)
-	} else {
-		codexOutput, err = runCommandCaptureOutput(
-			ctx,
-			"codex",
-			"exec",
-			"--cd", state.repoDir,
-			"--output-schema", outputSchemaFile,
-			prompt,
-		)
 	}
-	result.codexExecOutput = redactSensitiveOutput(trimCapturedOutput(string(codexOutput), maxCapturedCommandOutput), sensitiveValues)
+	codexOutput, err = s.runCodexExecWithAuthRecovery(ctx, state, result.restoredSessionPath != "", outputSchemaFile, prompt)
 	if err != nil {
 		return fmt.Errorf("codex exec failed: %w", err)
 	}
+	result.codexExecOutput = redactSensitiveOutput(trimCapturedOutput(string(codexOutput), maxCapturedCommandOutput), sensitiveValues)
 
 	report, _, err := parseCodexReportOutput(codexOutput)
 	if err != nil {
@@ -308,6 +290,52 @@ func (s *Service) Run(ctx context.Context) (err error) {
 	finalized = true
 	s.logger.Info("agent-runner completed", "branch", result.targetBranch, "pr_number", result.prNumber)
 	return nil
+}
+
+func (s *Service) runCodexExecWithAuthRecovery(ctx context.Context, state codexState, resume bool, outputSchemaFile string, prompt string) ([]byte, error) {
+	output, stderr, err := runCodexExec(ctx, state.repoDir, resume, outputSchemaFile, prompt)
+	if err == nil {
+		return output, nil
+	}
+	if !isCodexAuthenticationError(err.Error(), string(output), stderr) {
+		return nil, err
+	}
+
+	s.logger.Warn("codex exec returned auth error; retrying after device auth", "run_id", s.cfg.RunID)
+	if authErr := s.ensureCodexAuthenticated(ctx, state); authErr != nil {
+		return nil, fmt.Errorf("recover codex auth: %w", authErr)
+	}
+
+	output, _, err = runCodexExec(ctx, state.repoDir, resume, outputSchemaFile, prompt)
+	if err != nil {
+		return nil, err
+	}
+	return output, nil
+}
+
+func runCodexExec(ctx context.Context, repoDir string, resume bool, outputSchemaFile string, prompt string) ([]byte, string, error) {
+	if resume {
+		return runCommandCaptureOutputWithStderr(
+			ctx,
+			repoDir,
+			"codex",
+			"exec",
+			"resume",
+			"--last",
+			"--cd", repoDir,
+			"--output-schema", outputSchemaFile,
+			prompt,
+		)
+	}
+	return runCommandCaptureOutputWithStderr(
+		ctx,
+		repoDir,
+		"codex",
+		"exec",
+		"--cd", repoDir,
+		"--output-schema", outputSchemaFile,
+		prompt,
+	)
 }
 
 func (s *Service) failRevisePRNotFound(ctx context.Context, result runResult, state codexState, reason string) error {

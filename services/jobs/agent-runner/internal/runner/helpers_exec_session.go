@@ -109,15 +109,17 @@ func runCommandWithInput(ctx context.Context, input []byte, stdout io.Writer, st
 	return cmd.Run()
 }
 
-func runCommandCaptureOutput(ctx context.Context, name string, args ...string) ([]byte, error) {
+func runCommandCaptureOutputWithStderr(ctx context.Context, dir string, name string, args ...string) ([]byte, string, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
-	var stdoutBuffer bytes.Buffer
-	cmd.Stdout = &stdoutBuffer
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return nil, err
+	if strings.TrimSpace(dir) != "" {
+		cmd.Dir = dir
 	}
-	return stdoutBuffer.Bytes(), nil
+	var stdoutBuffer bytes.Buffer
+	var stderrBuffer bytes.Buffer
+	cmd.Stdout = &stdoutBuffer
+	cmd.Stderr = io.MultiWriter(os.Stderr, &stderrBuffer)
+	err := cmd.Run()
+	return stdoutBuffer.Bytes(), trimCapturedOutput(stderrBuffer.String(), maxCapturedCommandOutput), err
 }
 
 func runCommandCaptureCombinedOutput(ctx context.Context, dir string, name string, args ...string) (string, error) {
