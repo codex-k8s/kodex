@@ -52,9 +52,27 @@ approvals:
   - список candidate services/components для `services.yaml`.
 - Generation task должен:
   - подготовить draft `services.yaml`;
+  - добавить или актуализировать полный template-catalog `docs/templates/*.md`;
   - подготовить docs baseline/расширение текущей документации;
   - не переписывать прикладной код, если это не требуется для bootstrap платформы;
   - открыть PR с explanation bundle.
+- Template-catalog, который должен добавляться в onboarding PR при его отсутствии, обязан включать весь текущий набор `docs/templates/*.md` платформы:
+  - индекс: `index.md`;
+  - product templates: `problem.md`, `brief.md`, `constraints.md`, `scope_mvp.md`, `personas.md`, `risks_register.md`, `project_charter.md`, `success_metrics.md`, `prd.md`, `nfr.md`, `user_story.md`;
+  - architecture templates: `c4_context.md`, `c4_container.md`, `adr.md`, `alternatives.md`, `design_doc.md`, `api_contract.md`, `data_model.md`, `migrations_policy.md`;
+  - delivery templates: `delivery_plan.md`, `epic.md`, `definition_of_done.md`, `issue_map.md`, `roadmap.md`, `docset_issue.md`, `docset_pr.md`;
+  - quality/release/ops templates: `test_strategy.md`, `test_plan.md`, `test_matrix.md`, `regression_checklist.md`, `release_plan.md`, `release_notes.md`, `rollback_plan.md`, `postdeploy_review.md`, `runbook.md`, `monitoring.md`, `alerts.md`, `slo.md`, `incident_playbook.md`, `incident_postmortem.md`.
+- Стартовый docs baseline, который должен формироваться в PR поверх template-catalog, включает как минимум:
+  - `docs/README.md`;
+  - `docs/product/problem.md`;
+  - `docs/product/brief.md`;
+  - `docs/product/constraints.md`;
+  - `docs/product/scope_mvp.md`;
+  - `docs/product/personas.md`;
+  - `docs/product/risks_register.md`;
+  - `docs/architecture/README.md`;
+  - `docs/delivery/README.md`;
+  - `docs/ops/README.md`.
 - Explanation bundle в PR должен включать:
   - что платформа обнаружила в репозитории;
   - какие файлы добавила/изменила;
@@ -95,7 +113,7 @@ approvals:
   - Ограничение scan scope по ref и path policy.
 - Story-3: Dedicated onboarding generation task.
   - Специализированный prompt/инструкции.
-  - Фиксированный writable scope: `services.yaml`, docs baseline, onboarding metadata.
+  - Фиксированный writable scope: `services.yaml`, `docs/templates/*`, docs baseline, onboarding metadata.
   - PR с structured explanation bundle.
 - Story-4: Conflict policy.
   - Если в репозитории уже есть `services.yaml`/docs, но они расходятся с ожиданиями, task не должна silently overwrite всё подряд.
@@ -129,6 +147,7 @@ approvals:
 - Оператор может запустить scan и увидеть structured adoption report до генерации PR.
 - Платформа создаёт PR, в котором присутствуют:
   - draft `services.yaml`;
+  - полный `docs/templates/*` каталог или его актуализация;
   - docs baseline/дополнение;
   - explanation bundle с допущениями и зонами ручной проверки.
 - PR-based adoption не меняет прикладной код вне bootstrap-scope без явного justification в отчёте.

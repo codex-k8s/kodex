@@ -43,13 +43,25 @@ approvals:
   - создание default branch (по policy проекта, default `main`);
   - initial commit в репозиторий;
   - минимальный `services.yaml`, совместимый с typed contract платформы;
-  - минимальный docs pack из шаблонов платформы с понятными TODO/next-step маркерами.
-- Минимальный docs pack должен включать:
+  - полный template-catalog `docs/templates/*`;
+  - стартовый docs baseline, сгенерированный из шаблонов платформы и снабжённый понятными TODO/next-step маркерами.
+- Template-catalog, который должен появиться в репозитории при bootstrap, обязан включать весь текущий набор `docs/templates/*.md` платформы:
+  - индекс: `index.md`;
+  - product templates: `problem.md`, `brief.md`, `constraints.md`, `scope_mvp.md`, `personas.md`, `risks_register.md`, `project_charter.md`, `success_metrics.md`, `prd.md`, `nfr.md`, `user_story.md`;
+  - architecture templates: `c4_context.md`, `c4_container.md`, `adr.md`, `alternatives.md`, `design_doc.md`, `api_contract.md`, `data_model.md`, `migrations_policy.md`;
+  - delivery templates: `delivery_plan.md`, `epic.md`, `definition_of_done.md`, `issue_map.md`, `roadmap.md`, `docset_issue.md`, `docset_pr.md`;
+  - quality/release/ops templates: `test_strategy.md`, `test_plan.md`, `test_matrix.md`, `regression_checklist.md`, `release_plan.md`, `release_notes.md`, `rollback_plan.md`, `postdeploy_review.md`, `runbook.md`, `monitoring.md`, `alerts.md`, `slo.md`, `incident_playbook.md`, `incident_postmortem.md`.
+- Стартовый docs baseline, который генерируется поверх template-catalog, должен включать как минимум:
   - `docs/README.md` с описанием структуры и следующего шага;
+  - `docs/product/problem.md`;
   - `docs/product/brief.md`;
   - `docs/product/constraints.md`;
+  - `docs/product/scope_mvp.md`;
+  - `docs/product/personas.md`;
+  - `docs/product/risks_register.md`;
   - `docs/architecture/README.md`;
-  - `docs/delivery/README.md`.
+  - `docs/delivery/README.md`;
+  - `docs/ops/README.md`.
 - UI flow:
   - preview будущего bootstrap-пакета;
   - явная команда `Initialize repository`;
@@ -84,7 +96,8 @@ approvals:
   - Не считать репозиторий пустым, если в нём уже есть пользовательский код или docs baseline.
 - Story-2: Bootstrap bundle generator.
   - Сгенерировать минимальный `services.yaml`.
-  - Сгенерировать docs pack из `docs/templates/**`/репозиторных seed-шаблонов платформы.
+  - Скопировать в репозиторий полный template-catalog `docs/templates/*.md`.
+  - Сгенерировать стартовый docs baseline из `docs/templates/**`/репозиторных seed-шаблонов платформы.
   - Все generated файлы должны содержать traceable header/markers, по которым можно понять, что это bootstrap-слой.
 - Story-3: GitHub write path для empty repo.
   - Создание default branch и initial commit.
@@ -119,6 +132,7 @@ approvals:
 - После запуска initialization в репозитории появляются:
   - default branch;
   - `services.yaml`;
+  - полный каталог `docs/templates/*.md`;
   - docs pack baseline.
 - Bootstrap является идемпотентным:
   - повторный запуск не создаёт дубли;
