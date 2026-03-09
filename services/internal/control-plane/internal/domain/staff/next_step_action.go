@@ -12,40 +12,38 @@ import (
 	querytypes "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/types/query"
 )
 
-const nextStepReviewerLabel = "need:reviewer"
-
 var knownNextStepStageLabels = map[string]struct{}{
-	webhookdomain.DefaultRunIntakeLabel:       {},
-	webhookdomain.DefaultRunIntakeReviseLabel: {},
-	webhookdomain.DefaultRunVisionLabel:       {},
-	webhookdomain.DefaultRunVisionReviseLabel: {},
-	webhookdomain.DefaultRunPRDLabel:          {},
-	webhookdomain.DefaultRunPRDReviseLabel:    {},
-	webhookdomain.DefaultRunArchLabel:         {},
-	webhookdomain.DefaultRunArchReviseLabel:   {},
-	webhookdomain.DefaultRunDesignLabel:       {},
-	webhookdomain.DefaultRunDesignReviseLabel: {},
-	webhookdomain.DefaultRunPlanLabel:         {},
-	webhookdomain.DefaultRunPlanReviseLabel:   {},
-	webhookdomain.DefaultRunDevLabel:          {},
-	webhookdomain.DefaultRunDevReviseLabel:    {},
-	webhookdomain.DefaultRunDocAuditLabel:     {},
-	"run:doc-audit:revise":                    {},
-	webhookdomain.DefaultRunQALabel:           {},
-	"run:qa:revise":                           {},
-	webhookdomain.DefaultRunReleaseLabel:      {},
-	"run:release:revise":                      {},
-	webhookdomain.DefaultRunPostDeployLabel:   {},
-	"run:postdeploy:revise":                   {},
-	webhookdomain.DefaultRunOpsLabel:          {},
-	"run:ops:revise":                          {},
-	webhookdomain.DefaultRunSelfImproveLabel:  {},
-	"run:self-improve:revise":                 {},
-	webhookdomain.DefaultRunRethinkLabel:      {},
+	webhookdomain.DefaultRunIntakeLabel:            {},
+	webhookdomain.DefaultRunIntakeReviseLabel:      {},
+	webhookdomain.DefaultRunVisionLabel:            {},
+	webhookdomain.DefaultRunVisionReviseLabel:      {},
+	webhookdomain.DefaultRunPRDLabel:               {},
+	webhookdomain.DefaultRunPRDReviseLabel:         {},
+	webhookdomain.DefaultRunArchLabel:              {},
+	webhookdomain.DefaultRunArchReviseLabel:        {},
+	webhookdomain.DefaultRunDesignLabel:            {},
+	webhookdomain.DefaultRunDesignReviseLabel:      {},
+	webhookdomain.DefaultRunPlanLabel:              {},
+	webhookdomain.DefaultRunPlanReviseLabel:        {},
+	webhookdomain.DefaultRunDevLabel:               {},
+	webhookdomain.DefaultRunDevReviseLabel:         {},
+	webhookdomain.DefaultRunDocAuditLabel:          {},
+	webhookdomain.DefaultRunDocAuditReviseLabel:    {},
+	webhookdomain.DefaultRunQALabel:                {},
+	webhookdomain.DefaultRunQAReviseLabel:          {},
+	webhookdomain.DefaultRunReleaseLabel:           {},
+	webhookdomain.DefaultRunReleaseReviseLabel:     {},
+	webhookdomain.DefaultRunPostDeployLabel:        {},
+	webhookdomain.DefaultRunPostDeployReviseLabel:  {},
+	webhookdomain.DefaultRunOpsLabel:               {},
+	webhookdomain.DefaultRunOpsReviseLabel:         {},
+	webhookdomain.DefaultRunSelfImproveLabel:       {},
+	webhookdomain.DefaultRunSelfImproveReviseLabel: {},
+	webhookdomain.DefaultRunRethinkLabel:           {},
 }
 
 var knownNextStepPRLabels = map[string]struct{}{
-	nextStepReviewerLabel: {},
+	webhookdomain.DefaultNeedReviewerLabel: {},
 }
 
 // PreviewNextStepAction returns label diff preview without mutating GitHub state.

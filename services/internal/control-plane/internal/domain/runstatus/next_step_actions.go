@@ -79,17 +79,17 @@ func stageDescriptorByName(stage string) (stageDescriptor, bool) {
 	case "dev":
 		return stageDescriptor{Stage: "dev", RunLabel: webhookdomain.DefaultRunDevLabel, ReviseLabel: webhookdomain.DefaultRunDevReviseLabel}, true
 	case "doc-audit":
-		return stageDescriptor{Stage: "doc-audit", RunLabel: webhookdomain.DefaultRunDocAuditLabel, ReviseLabel: "run:doc-audit:revise"}, true
+		return stageDescriptor{Stage: "doc-audit", RunLabel: webhookdomain.DefaultRunDocAuditLabel, ReviseLabel: webhookdomain.DefaultRunDocAuditReviseLabel}, true
 	case "qa":
-		return stageDescriptor{Stage: "qa", RunLabel: webhookdomain.DefaultRunQALabel, ReviseLabel: "run:qa:revise"}, true
+		return stageDescriptor{Stage: "qa", RunLabel: webhookdomain.DefaultRunQALabel, ReviseLabel: webhookdomain.DefaultRunQAReviseLabel}, true
 	case "release":
-		return stageDescriptor{Stage: "release", RunLabel: webhookdomain.DefaultRunReleaseLabel, ReviseLabel: "run:release:revise"}, true
+		return stageDescriptor{Stage: "release", RunLabel: webhookdomain.DefaultRunReleaseLabel, ReviseLabel: webhookdomain.DefaultRunReleaseReviseLabel}, true
 	case "postdeploy":
-		return stageDescriptor{Stage: "postdeploy", RunLabel: webhookdomain.DefaultRunPostDeployLabel, ReviseLabel: "run:postdeploy:revise"}, true
+		return stageDescriptor{Stage: "postdeploy", RunLabel: webhookdomain.DefaultRunPostDeployLabel, ReviseLabel: webhookdomain.DefaultRunPostDeployReviseLabel}, true
 	case "ops":
-		return stageDescriptor{Stage: "ops", RunLabel: webhookdomain.DefaultRunOpsLabel, ReviseLabel: "run:ops:revise"}, true
+		return stageDescriptor{Stage: "ops", RunLabel: webhookdomain.DefaultRunOpsLabel, ReviseLabel: webhookdomain.DefaultRunOpsReviseLabel}, true
 	case "self-improve":
-		return stageDescriptor{Stage: "self-improve", RunLabel: webhookdomain.DefaultRunSelfImproveLabel, ReviseLabel: "run:self-improve:revise"}, true
+		return stageDescriptor{Stage: "self-improve", RunLabel: webhookdomain.DefaultRunSelfImproveLabel, ReviseLabel: webhookdomain.DefaultRunSelfImproveReviseLabel}, true
 	case "rethink":
 		return stageDescriptor{Stage: "rethink", RunLabel: webhookdomain.DefaultRunRethinkLabel}, true
 	default:
@@ -140,21 +140,21 @@ func buildNextStepActions(publicBaseURL string, runCtx runContext, state comment
 
 	if descriptor.Stage == "doc-audit" {
 		return buildSpecialMatrixActions(publicBaseURL, state.RepositoryFullName, state.IssueNumber, pullRequestNumberFromRunContext(runCtx), descriptor, []specialMatrixAction{
-			{TargetLabel: "run:plan", DisplayVariant: nextStepDisplayPreparePlan},
-			{TargetLabel: "run:dev", DisplayVariant: nextStepDisplayGoToDev},
-			{TargetLabel: "run:qa", DisplayVariant: nextStepDisplayGoToQA},
+			{TargetLabel: webhookdomain.DefaultRunPlanLabel, DisplayVariant: nextStepDisplayPreparePlan},
+			{TargetLabel: webhookdomain.DefaultRunDevLabel, DisplayVariant: nextStepDisplayGoToDev},
+			{TargetLabel: webhookdomain.DefaultRunQALabel, DisplayVariant: nextStepDisplayGoToQA},
 		}, true, false, false)
 	}
 	if descriptor.Stage == "self-improve" {
 		return buildSpecialMatrixActions(publicBaseURL, state.RepositoryFullName, state.IssueNumber, pullRequestNumberFromRunContext(runCtx), descriptor, []specialMatrixAction{
-			{TargetLabel: "run:qa", DisplayVariant: nextStepDisplayGoToQA},
+			{TargetLabel: webhookdomain.DefaultRunQALabel, DisplayVariant: nextStepDisplayGoToQA},
 		}, false, false, true)
 	}
 	if descriptor.Stage == "rethink" {
 		return buildSpecialMatrixActions(publicBaseURL, state.RepositoryFullName, state.IssueNumber, pullRequestNumberFromRunContext(runCtx), descriptor, []specialMatrixAction{
-			{TargetLabel: "run:intake", DisplayVariant: nextStepDisplayRestartFull},
-			{TargetLabel: "run:prd", DisplayVariant: nextStepDisplayRestartShortened},
-			{TargetLabel: "run:plan", DisplayVariant: nextStepDisplayRestartVeryShort},
+			{TargetLabel: webhookdomain.DefaultRunIntakeLabel, DisplayVariant: nextStepDisplayRestartFull},
+			{TargetLabel: webhookdomain.DefaultRunPRDLabel, DisplayVariant: nextStepDisplayRestartShortened},
+			{TargetLabel: webhookdomain.DefaultRunPlanLabel, DisplayVariant: nextStepDisplayRestartVeryShort},
 		}, false, false, false)
 	}
 
