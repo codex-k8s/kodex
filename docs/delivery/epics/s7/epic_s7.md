@@ -108,6 +108,13 @@ approvals:
 - Удалён неиспользуемый компонент `shared/ui/AdminClusterContextBar.vue` и очищены i18n-ключи глобального фильтра.
 - В traceability добавлены обновления по issue `#245`; remaining backlog нормализован как `#246..#260` + post-plan `#274`.
 
+## Day 7 execution fact (`S7-E04`)
+- В Issue `#246` финализирован stream удаления `runtime-deploy/images` из MVP:
+  после базового cleanup `#244` в staff UI добавлен dedicated redirect `/runtime-deploy/images* -> runtime-deploy/tasks`.
+- Redirect оформлен в `router/routes.ts` через named route `runtime-deploy-tasks`, чтобы stale deeplink
+  оставался в operations-контуре, а не проваливался в общий fallback `projects`.
+- В traceability добавлены updates по issue `#246`; remaining backlog нормализован как `#247..#260` + post-plan `#274`.
+
 ## Candidate execution backlog (19 эпиков)
 
 | Epic ID | Priority | Scope | Источник замечаний |
@@ -115,7 +122,7 @@ approvals:
 | S7-E01 | P0 | Rebase/mainline hygiene и merge-conflict policy для PR-итераций | PRC-01 |
 | S7-E02 | P0 | Удаление не-MVP разделов (включая Agents, Configs/Secrets, Registry images, Running jobs) и связанного dead code | PRC-05 |
 | S7-E03 | P0 | Удаление глобального frontend-фильтра и связанного неиспользуемого кода (выполнено в `#245`) | PRC-04 |
-| S7-E04 | P0 | Удаление runtime-deploy/images контуров и cleanup связанных страниц (закрыто в `#244`) | PRC-02, PRC-05 |
+| S7-E04 | P0 | Удаление runtime-deploy/images контуров и hardening stale deeplinks (in-review `#246`) | PRC-02, PRC-05 |
 | S7-E05 | P0 | Agents UI cleanup: убрать badge `Скоро`, пересобрать таблицу (без role/project-id) | PRC-03 |
 | S7-E06 | P0 | Agents MVP de-scope: убрать runtime mode/locale настройки, оставить фиксированные platform defaults | PRC-03 |
 | S7-E07 | P0 | Prompt source MVP contract: удалить selector `repo|db`, закрепить `repo-only` policy | PRC-03 |
