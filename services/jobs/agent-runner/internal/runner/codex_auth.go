@@ -40,6 +40,19 @@ var (
 	deviceAuthUserCodeRegexp = regexp.MustCompile(`[A-Z0-9]{4,}-[A-Z0-9]{4,}`)
 )
 
+var codexAuthErrorMarkers = []string{
+	"401 unauthorized",
+	"403 forbidden",
+	"error code: 4013",
+	"\"code\":\"4013\"",
+	`"code":4013`,
+	"missing bearer or basic authentication in header",
+	"authentication required",
+	"invalid api key",
+	"insufficient permissions",
+	"subscription required",
+}
+
 type codexAuthStatus struct {
 	LoggedIn bool
 	Mode     codexAuthMode
@@ -260,19 +273,25 @@ func parseCodexAuthMode(raw string) codexAuthMode {
 }
 
 func (s *Service) desiredCodexAuthMode() codexAuthMode {
-	// Subscription-backed models typically require ChatGPT auth.
-	if isCodexSubscriptionModel(s.cfg.AgentModel) {
-		return codexAuthModeChatGPT
-	}
-	if strings.TrimSpace(s.cfg.OpenAIAPIKey) != "" {
-		return codexAuthModeAPIKey
-	}
+	// Основной поток платформы — device-code / ChatGPT auth.
+	// Выбор API-key режима из UI будет реализован отдельной задачей.
 	return codexAuthModeChatGPT
 }
 
-func isCodexSubscriptionModel(model string) bool {
-	normalized := strings.ToLower(strings.TrimSpace(model))
-	return strings.HasPrefix(normalized, "gpt-5.3-") || strings.HasPrefix(normalized, "gpt-5.2-")
+func isCodexAuthenticationError(parts ...string) bool {
+	if len(parts) == 0 {
+		return false
+	}
+	combined := strings.ToLower(strings.TrimSpace(stripANSI(strings.Join(parts, "\n"))))
+	if combined == "" {
+		return false
+	}
+	for _, marker := range codexAuthErrorMarkers {
+		if strings.Contains(combined, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func stripANSI(raw string) string {
