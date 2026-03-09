@@ -487,8 +487,9 @@ approvals:
   синхронизированы sprint/epic/plan документы.
 - Проверки по scope:
   `npm --prefix services/staff/web-console run build`, route inventory search (`rg -n` по удалённым route names),
-  smoke-check MVP навигации (`projects`, `project-repositories`, `project-members`, `runs`, `runtime-deploy/tasks`, `runtime-deploy/images`,
-  `running-jobs`, `wait-queue`, `approvals`, `system-settings`, `users`).
+  smoke-check MVP навигации (`projects`, `project-repositories`, `project-members`, `runs`, `runtime-deploy/tasks`,
+  `wait-queue`, `approvals`, `system-settings`, `users`) и отсутствие broken links на удалённых
+  `/runtime-deploy/images` и `/running-jobs`.
 
 ## Актуализация по Issue #245 (`run:dev`, 2026-03-05)
 - Для FR-026/FR-028/FR-033 и NFR-010/NFR-018 реализован stream `S7-E03`:
@@ -504,6 +505,22 @@ approvals:
   remaining backlog нормализован как `#246..#260` + post-plan `#274`.
 - Проверки по scope:
   cleanup-поиск `rg -n` по `Global filter`/`uiContext.env`/`uiContext.namespace`,
+  `npm --prefix services/staff/web-console run build`.
+
+## Актуализация по Issue #246 (`run:dev`, 2026-03-09)
+- Для FR-E04-1/FR-E04-2 и NFR-E04-1 stream `S7-E04` финализирован без нового redirect-кода:
+  owner-review подтвердил, что после удаления UI-контура `runtime-deploy/images`
+  отдельный redirect для `/runtime-deploy/images*` не нужен.
+- В `services/staff/web-console/src/router/routes.ts` сохраняется только общий fallback
+  `/:pathMatch(.*)* -> projects`; stale URL `/runtime-deploy/images*` попадает в него
+  после cleanup `#244`, поэтому удалённый раздел не возвращается в MVP navigation.
+- Нормализована Sprint S7 traceability:
+  `docs/delivery/issue_map.md`, `docs/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`, `docs/delivery/epics/s7/epic_s7.md`;
+  remaining backlog нормализован как `#247..#260` + post-plan `#274`.
+- Через Context7 (`/vuejs/router`) подтверждён актуальный синтаксис Vue Router 4 для catch-all path
+  `:pathMatch(.*)*`, которым закрываются удалённые пути без отдельного route record.
+- Проверки по scope:
+  `rg -n "pathMatch" services/staff/web-console/src/router/routes.ts`,
   `npm --prefix services/staff/web-console run build`.
 
 ## Актуализация по Issue #274 (`run:dev`, 2026-03-05)
