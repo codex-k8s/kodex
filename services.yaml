@@ -98,7 +98,7 @@ spec:
         - libs/go
         - proto
     agent-runner:
-      value: "0.1.33"
+      value: "0.1.34"
       bumpOn:
         - services/jobs/agent-runner
         - libs/go
