@@ -346,7 +346,9 @@ func runCodexExec(ctx context.Context, params codexExecParams) ([]byte, string, 
 	}
 	outputFilePath := outputFile.Name()
 	_ = outputFile.Close()
-	defer os.Remove(outputFilePath)
+	defer func() {
+		_ = os.Remove(outputFilePath)
+	}()
 
 	args := make([]string, 0, 12)
 	if params.Resume {
