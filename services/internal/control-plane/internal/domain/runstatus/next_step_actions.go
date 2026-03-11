@@ -122,7 +122,7 @@ func stageDescriptorFromTriggerKind(triggerKind string) (stageDescriptor, bool) 
 		return stageDescriptorByName("dev")
 	case string(webhookdomain.TriggerKindDocAudit):
 		return stageDescriptorByName("doc-audit")
-	case string(webhookdomain.TriggerKindQA):
+	case string(webhookdomain.TriggerKindQA), string(webhookdomain.TriggerKindQARevise):
 		return stageDescriptorByName("qa")
 	case string(webhookdomain.TriggerKindRelease):
 		return stageDescriptorByName("release")

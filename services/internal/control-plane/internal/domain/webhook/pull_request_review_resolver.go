@@ -46,6 +46,7 @@ func (s *Service) pullRequestReviewStageCatalog() []pullRequestReviewStageCandid
 		{stage: "design", runLabel: strings.TrimSpace(s.triggerLabels.RunDesign), reviseLabel: strings.TrimSpace(s.triggerLabels.RunDesignRevise), kind: "design_revise"},
 		{stage: "plan", runLabel: strings.TrimSpace(s.triggerLabels.RunPlan), reviseLabel: strings.TrimSpace(s.triggerLabels.RunPlanRevise), kind: "plan_revise"},
 		{stage: "dev", runLabel: strings.TrimSpace(s.triggerLabels.RunDev), reviseLabel: strings.TrimSpace(s.triggerLabels.RunDevRevise), kind: "dev_revise"},
+		{stage: "qa", runLabel: strings.TrimSpace(s.triggerLabels.RunQA), reviseLabel: strings.TrimSpace(s.triggerLabels.RunQARevise), kind: "qa_revise"},
 	}
 }
 

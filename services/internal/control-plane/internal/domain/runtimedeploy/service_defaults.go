@@ -102,6 +102,7 @@ var labelCatalogDefaults = map[string]string{
 	"CODEXK8S_RUN_DOC_AUDIT_LABEL":                webhookdomain.DefaultRunDocAuditLabel,
 	"CODEXK8S_RUN_AI_REPAIR_LABEL":                webhookdomain.DefaultRunAIRepairLabel,
 	"CODEXK8S_RUN_QA_LABEL":                       webhookdomain.DefaultRunQALabel,
+	"CODEXK8S_RUN_QA_REVISE_LABEL":                webhookdomain.DefaultRunQAReviseLabel,
 	"CODEXK8S_RUN_RELEASE_LABEL":                  webhookdomain.DefaultRunReleaseLabel,
 	"CODEXK8S_RUN_POSTDEPLOY_LABEL":               webhookdomain.DefaultRunPostDeployLabel,
 	"CODEXK8S_RUN_OPS_LABEL":                      webhookdomain.DefaultRunOpsLabel,

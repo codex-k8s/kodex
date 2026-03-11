@@ -40,7 +40,7 @@ func promptSeedStageByTriggerKind(triggerKind string) string {
 		return "doc-audit"
 	case webhookdomain.TriggerKindAIRepair:
 		return "ai-repair"
-	case webhookdomain.TriggerKindQA:
+	case webhookdomain.TriggerKindQA, webhookdomain.TriggerKindQARevise:
 		return "qa"
 	case webhookdomain.TriggerKindRelease:
 		return "release"

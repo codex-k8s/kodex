@@ -21,6 +21,7 @@ func buildWebhookTriggerLabels(cfg Config) webhook.TriggerLabels {
 	labels.RunDocAudit = cfg.RunDocAuditLabel
 	labels.RunAIRepair = cfg.RunAIRepairLabel
 	labels.RunQA = cfg.RunQALabel
+	labels.RunQARevise = cfg.RunQAReviseLabel
 	labels.RunRelease = cfg.RunReleaseLabel
 	labels.RunPostDeploy = cfg.RunPostDeployLabel
 	labels.RunOps = cfg.RunOpsLabel

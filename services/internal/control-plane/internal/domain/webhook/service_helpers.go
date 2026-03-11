@@ -761,7 +761,7 @@ func resolveRunAgentKey(trigger *issueRunTrigger) string {
 		return agentKeyEM
 	case webhookdomain.TriggerKindDocAudit:
 		return agentKeyKM
-	case webhookdomain.TriggerKindQA:
+	case webhookdomain.TriggerKindQA, webhookdomain.TriggerKindQARevise:
 		return agentKeyQA
 	case webhookdomain.TriggerKindAIRepair, webhookdomain.TriggerKindPostDeploy, webhookdomain.TriggerKindOps:
 		return agentKeySRE

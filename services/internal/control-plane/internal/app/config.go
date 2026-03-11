@@ -57,6 +57,7 @@ type Config struct {
 	RunDocAuditLabel     string   `env:"CODEXK8S_RUN_DOC_AUDIT_LABEL" envDefault:"run:doc-audit"`
 	RunAIRepairLabel     string   `env:"CODEXK8S_RUN_AI_REPAIR_LABEL" envDefault:"run:ai-repair"`
 	RunQALabel           string   `env:"CODEXK8S_RUN_QA_LABEL" envDefault:"run:qa"`
+	RunQAReviseLabel     string   `env:"CODEXK8S_RUN_QA_REVISE_LABEL" envDefault:"run:qa:revise"`
 	RunReleaseLabel      string   `env:"CODEXK8S_RUN_RELEASE_LABEL" envDefault:"run:release"`
 	RunPostDeployLabel   string   `env:"CODEXK8S_RUN_POSTDEPLOY_LABEL" envDefault:"run:postdeploy"`
 	RunOpsLabel          string   `env:"CODEXK8S_RUN_OPS_LABEL" envDefault:"run:ops"`

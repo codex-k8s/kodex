@@ -60,6 +60,9 @@ func (labels TriggerLabels) withDefaults() TriggerLabels {
 	if strings.TrimSpace(labels.RunQA) == "" {
 		labels.RunQA = defaults.RunQA
 	}
+	if strings.TrimSpace(labels.RunQARevise) == "" {
+		labels.RunQARevise = defaults.RunQARevise
+	}
 	if strings.TrimSpace(labels.RunRelease) == "" {
 		labels.RunRelease = defaults.RunRelease
 	}
@@ -104,6 +107,7 @@ func (labels TriggerLabels) labelToKind() map[string]webhookdomain.TriggerKind {
 		normalizeLabelToken(normalized.RunDocAudit):     webhookdomain.TriggerKindDocAudit,
 		normalizeLabelToken(normalized.RunAIRepair):     webhookdomain.TriggerKindAIRepair,
 		normalizeLabelToken(normalized.RunQA):           webhookdomain.TriggerKindQA,
+		normalizeLabelToken(normalized.RunQARevise):     webhookdomain.TriggerKindQARevise,
 		normalizeLabelToken(normalized.RunRelease):      webhookdomain.TriggerKindRelease,
 		normalizeLabelToken(normalized.RunPostDeploy):   webhookdomain.TriggerKindPostDeploy,
 		normalizeLabelToken(normalized.RunOps):          webhookdomain.TriggerKindOps,

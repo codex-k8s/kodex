@@ -53,6 +53,7 @@ const (
 	TriggerKindDocAudit     TriggerKind = "doc_audit"
 	TriggerKindAIRepair     TriggerKind = "ai_repair"
 	TriggerKindQA           TriggerKind = "qa"
+	TriggerKindQARevise     TriggerKind = "qa_revise"
 	TriggerKindRelease      TriggerKind = "release"
 	TriggerKindPostDeploy   TriggerKind = "postdeploy"
 	TriggerKindOps          TriggerKind = "ops"

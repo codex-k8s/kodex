@@ -35,6 +35,13 @@ func TestResolveRunWriteScopePolicy(t *testing.T) {
 			wantRequirePR: false,
 		},
 		{
+			name:          "qa revise is markdown only",
+			triggerKind:   "qa_revise",
+			agentKey:      "qa",
+			wantMode:      runWriteScopeModeMarkdownOnly,
+			wantRequirePR: false,
+		},
+		{
 			name:          "ops is markdown only",
 			triggerKind:   "ops",
 			agentKey:      "sre",

@@ -41,6 +41,7 @@ var markdownOnlyTriggerKinds = map[webhookdomain.TriggerKind]struct{}{
 	webhookdomain.TriggerKindPlanRevise:   {},
 	webhookdomain.TriggerKindDocAudit:     {},
 	webhookdomain.TriggerKindQA:           {},
+	webhookdomain.TriggerKindQARevise:     {},
 	webhookdomain.TriggerKindRelease:      {},
 	webhookdomain.TriggerKindPostDeploy:   {},
 	webhookdomain.TriggerKindOps:          {},
