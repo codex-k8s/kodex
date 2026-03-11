@@ -65,20 +65,25 @@ kubectl -n "$CODEXK8S_PRODUCTION_NAMESPACE" logs deploy/codex-k8s-worker --tail=
 - при fail — `kubectl`-диагностика по сервису и pod'ам.
 
 Канонический формат service DNS по Kubernetes:
-- в том же namespace: `<service>`;
-- между namespace: `<service>.<namespace>.svc.cluster.local`.
+- короткое имя `<service>` работает только внутри того же namespace и зависит от search path pod'а;
+- для QA evidence использовать явный FQDN `<service>.<namespace>.svc.cluster.local`, чтобы было видно, какой namespace/service проверялся.
 
 Минимальный шаблон проверки:
 
 ```bash
-ns="${CODEXK8S_PRODUCTION_NAMESPACE:-codex-k8s-prod}"
+ns="<runtime-namespace>" # например codex-k8s-dev-1; не подставлять production default
 svc="codex-k8s"
-base="http://${svc}.${ns}.svc.cluster.local"
+fqdn="${svc}.${ns}.svc.cluster.local"
+base="http://${fqdn}"
+ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+issue_or_pr="<issue-or-pr-url>"
+checklist_ref="<checklist-url-or-path>"
 
-getent hosts "${svc}.${ns}.svc.cluster.local"
+getent hosts "$fqdn"
 curl -sS -o /tmp/health.out -D /tmp/health.headers -w '%{http_code}\n' "$base/healthz"
 curl -sS -o /tmp/authme.out -D /tmp/authme.headers -w '%{http_code}\n' "$base/api/v1/auth/me"
 curl -sS -o /tmp/webhook.out -D /tmp/webhook.headers -w '%{http_code}\n' -X POST "$base/api/v1/webhooks/github"
+printf 'timestamp=%s\nissue_or_pr=%s\nchecklist=%s\n' "$ts" "$issue_or_pr" "$checklist_ref"
 ```
 
 Интерпретация baseline:

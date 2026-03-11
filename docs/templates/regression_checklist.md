@@ -35,7 +35,7 @@ approvals:
 
 ### DNS-path acceptance (для новых/изменённых HTTP-ручек)
 - [ ] Зафиксированы namespace и service FQDN
-- [ ] Сохранены команда, HTTP status и excerpt ответа
+- [ ] Сохранены команда, HTTP status, excerpt ответа, timestamp и ссылка на issue/PR/checklist
 - [ ] Browser/OAuth flow не используется как единственный acceptance gate
 - [ ] При fail приложены `kubectl get/logs/events` diagnostics
 

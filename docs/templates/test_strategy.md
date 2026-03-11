@@ -66,7 +66,7 @@ approvals:
 
 ### Exit criteria
 - [ ] ...
-- [ ] Для применимых HTTP-ручек приложен DNS evidence bundle: namespace, FQDN, команда, status, excerpt ответа.
+- [ ] Для применимых HTTP-ручек приложен DNS evidence bundle: namespace, FQDN, команда, status, excerpt ответа, timestamp, ссылка на issue/PR/checklist.
 
 ## Риски и меры
 - ...

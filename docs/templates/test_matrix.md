@@ -30,7 +30,7 @@ approvals:
 
 | Ручка | Service DNS | Метод | Ожидаемый status | Evidence |
 |---|---|---|---|---|
-|  |  |  |  |  |
+|  |  |  |  | `status`; excerpt; timestamp; issue/PR/checklist |
 
 ## Дефекты/риски по зонам
 - ...

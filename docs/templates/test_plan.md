@@ -65,7 +65,7 @@ approvals:
 ## 11. Test deliverables
 - Отчеты:
 - Логи:
-- DNS evidence bundle (namespace/FQDN/команда/status/headers-body excerpt):
+- DNS evidence bundle (namespace/FQDN/команда/status/headers-body excerpt/timestamp/issue-or-pr/checklist reference):
 - Баг-репорты:
 
 ## 12. Remaining test tasks

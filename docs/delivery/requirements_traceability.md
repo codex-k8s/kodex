@@ -625,9 +625,9 @@ approvals:
   `kubectl config view --minify -o jsonpath='{..namespace}'`,
   `kubectl get svc -o wide`,
   `getent hosts codex-k8s.codex-k8s-dev-1.svc.cluster.local`,
-  `curl -sS -o /tmp/codex-health.out -D /tmp/codex-health.headers -w '%{http_code}\n' http://codex-k8s/healthz`,
-  `curl -sS -o /tmp/codex-authme.out -D /tmp/codex-authme.headers -w '%{http_code}\n' http://codex-k8s/api/v1/auth/me`,
-  `curl -sS -o /tmp/codex-webhook.out -D /tmp/codex-webhook.headers -w '%{http_code}\n' -X POST http://codex-k8s/api/v1/webhooks/github`.
+  `curl -sS -o /tmp/codex-health.out -D /tmp/codex-health.headers -w '%{http_code}\n' http://codex-k8s.codex-k8s-dev-1.svc.cluster.local/healthz`,
+  `curl -sS -o /tmp/codex-authme.out -D /tmp/codex-authme.headers -w '%{http_code}\n' http://codex-k8s.codex-k8s-dev-1.svc.cluster.local/api/v1/auth/me`,
+  `curl -sS -o /tmp/codex-webhook.out -D /tmp/codex-webhook.headers -w '%{http_code}\n' -X POST http://codex-k8s.codex-k8s-dev-1.svc.cluster.local/api/v1/webhooks/github`.
 
 ## Актуализация по Issue #274 (`run:dev`, 2026-03-05)
 - Для FR-026/FR-028/FR-033 и NFR-010/NFR-018 реализован stream `S7-E19`:
