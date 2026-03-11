@@ -257,7 +257,7 @@ approvals:
   - отсутствие подтверждённого run-evidence для `run:doc-audit` в текущем delivery-цикле.
 - Для всех открытых owner-замечаний PR #213 выставлен статус `fix_required`; замечания сгруппированы по приоритету `behavior/data -> quality/style`.
 - В backlog S7 добавлены 18 candidate execution-эпиков (`S7-E01..S7-E18`) с owner-aligned handover в `run:vision`:
-  rebase/mainline hygiene, UI cleanup (navigation/sections/filter), agents de-scope + repo-only prompt policy для MVP, runs/deploy UX, `mode:discussion` reliability, `run:qa:revise` coverage, QA DNS acceptance-policy, `run:intake:revise` status consistency, `run:self-improve` session reliability, финальный readiness gate.
+  rebase/mainline hygiene, UI cleanup (navigation/sections/filter), agents de-scope + repo-only prompt policy для MVP, runs/deploy UX, `mode:discussion` reliability, late-stage `run:<stage>:revise` coverage, QA DNS acceptance-policy, `run:intake:revise` status consistency, `run:self-improve` session reliability, финальный readiness gate.
 - Для стандартизации качества backlog зафиксировано требование PMO из Issue `#210`:
   формулировка задач в формате user story и обязательный блок edge cases для QA-ready acceptance.
 - Для процессного governance добавлен единый стандарт:

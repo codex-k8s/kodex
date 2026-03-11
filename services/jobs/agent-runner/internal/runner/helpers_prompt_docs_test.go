@@ -102,6 +102,9 @@ func TestResolvePromptDocsEnv(t *testing.T) {
 	if got, want := resolvePromptDocsEnv("qa_revise", runtimeModeFullEnv), "ai"; got != want {
 		t.Fatalf("resolvePromptDocsEnv(qa_revise, full-env)=%q, want %q", got, want)
 	}
+	if got, want := resolvePromptDocsEnv("ops_revise", runtimeModeFullEnv), "ai"; got != want {
+		t.Fatalf("resolvePromptDocsEnv(ops_revise, full-env)=%q, want %q", got, want)
+	}
 	if got, want := resolvePromptDocsEnv("plan", runtimeModeFullEnv), "production"; got != want {
 		t.Fatalf("resolvePromptDocsEnv(plan, full-env)=%q, want %q", got, want)
 	}

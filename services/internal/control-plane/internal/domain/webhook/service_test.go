@@ -2346,6 +2346,115 @@ func TestIngestGitHubWebhook_PullRequestReviewChangesRequested_WithRunQALabel_Cr
 	}
 }
 
+func TestIngestGitHubWebhook_PullRequestReviewChangesRequested_WithAdditionalStageLabels_CreatesReviseRuns(t *testing.T) {
+	ctx := context.Background()
+
+	testCases := []struct {
+		name      string
+		prNumber  int64
+		runLabel  string
+		wantKind  webhookdomain.TriggerKind
+		wantLabel string
+		wantAgent string
+	}{
+		{name: "doc audit", prNumber: 204, runLabel: webhookdomain.DefaultRunDocAuditLabel, wantKind: webhookdomain.TriggerKindDocAuditRevise, wantLabel: webhookdomain.DefaultRunDocAuditReviseLabel, wantAgent: "km"},
+		{name: "release", prNumber: 205, runLabel: webhookdomain.DefaultRunReleaseLabel, wantKind: webhookdomain.TriggerKindReleaseRevise, wantLabel: webhookdomain.DefaultRunReleaseReviseLabel, wantAgent: "em"},
+		{name: "postdeploy", prNumber: 206, runLabel: webhookdomain.DefaultRunPostDeployLabel, wantKind: webhookdomain.TriggerKindPostDeployRevise, wantLabel: webhookdomain.DefaultRunPostDeployReviseLabel, wantAgent: "sre"},
+		{name: "ops", prNumber: 207, runLabel: webhookdomain.DefaultRunOpsLabel, wantKind: webhookdomain.TriggerKindOpsRevise, wantLabel: webhookdomain.DefaultRunOpsReviseLabel, wantAgent: "sre"},
+		{name: "self improve", prNumber: 208, runLabel: webhookdomain.DefaultRunSelfImproveLabel, wantKind: webhookdomain.TriggerKindSelfImproveRevise, wantLabel: webhookdomain.DefaultRunSelfImproveReviseLabel, wantAgent: "km"},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			runs := &inMemoryRunRepo{items: map[string]string{}}
+			events := &inMemoryEventRepo{}
+			agents := &inMemoryAgentRepo{items: map[string]agentrepo.Agent{
+				"em":  {ID: "agent-em", AgentKey: "em", Name: "AI EM"},
+				"km":  {ID: "agent-km", AgentKey: "km", Name: "AI KM"},
+				"sre": {ID: "agent-sre", AgentKey: "sre", Name: "AI SRE"},
+			}}
+			repos := &inMemoryRepoCfgRepo{
+				byExternalID: map[int64]repocfgrepo.FindResult{
+					42: {
+						ProjectID:        "project-1",
+						RepositoryID:     "repo-1",
+						ServicesYAMLPath: "services.yaml",
+					},
+				},
+			}
+			users := &inMemoryUserRepo{
+				byLogin: map[string]userrepo.User{
+					"member": {ID: "user-1", GitHubLogin: "member"},
+				},
+			}
+			members := &inMemoryProjectMemberRepo{
+				roles: map[string]string{"project-1|user-1": "read_write"},
+			}
+			svc := NewService(Config{
+				AgentRuns:  runs,
+				Agents:     agents,
+				FlowEvents: events,
+				Repos:      repos,
+				Users:      users,
+				Members:    members,
+			})
+
+			payload := json.RawMessage(fmt.Sprintf(`{
+		"action":"submitted",
+		"review":{"state":"changes_requested"},
+		"pull_request":{
+			"id":501,
+			"number":%d,
+			"title":"Docs artifacts",
+			"html_url":"https://github.com/codex-k8s/codex-k8s/pull/%d",
+			"state":"open",
+			"labels":[{"name":"%s"}],
+			"head":{"ref":"codex/issue-%d"},
+			"user":{"id":55,"login":"member"}
+		},
+		"repository":{"id":42,"full_name":"codex-k8s/codex-k8s","name":"codex-k8s"},
+		"sender":{"id":10,"login":"member"}
+	}`, testCase.prNumber, testCase.prNumber, testCase.runLabel, testCase.prNumber))
+			cmd := IngestCommand{
+				CorrelationID: "delivery-pr-review-" + testCase.name,
+				DeliveryID:    "delivery-pr-review-" + testCase.name,
+				EventType:     string(webhookdomain.GitHubEventPullRequestReview),
+				ReceivedAt:    time.Now().UTC(),
+				Payload:       payload,
+			}
+
+			got, err := svc.IngestGitHubWebhook(ctx, cmd)
+			if err != nil {
+				t.Fatalf("ingest failed: %v", err)
+			}
+			if got.RunID == "" {
+				t.Fatalf("expected run id for pull_request_review trigger with label %q", testCase.runLabel)
+			}
+
+			var runPayload githubRunPayload
+			if err := json.Unmarshal(runs.last.RunPayload, &runPayload); err != nil {
+				t.Fatalf("unmarshal run payload: %v", err)
+			}
+			if runPayload.Trigger == nil {
+				t.Fatalf("expected trigger object in run payload")
+			}
+			if runPayload.Trigger.Kind != testCase.wantKind {
+				t.Fatalf("unexpected trigger kind: got %#v want %#v", runPayload.Trigger.Kind, testCase.wantKind)
+			}
+			if runPayload.Trigger.Label != testCase.wantLabel {
+				t.Fatalf("unexpected trigger label: got %#v want %#v", runPayload.Trigger.Label, testCase.wantLabel)
+			}
+			if runPayload.Agent.Key != testCase.wantAgent {
+				t.Fatalf("unexpected agent key: got %#v want %#v", runPayload.Agent.Key, testCase.wantAgent)
+			}
+			if got, want := runPayload.Runtime.BuildRef, fmt.Sprintf("codex/issue-%d", testCase.prNumber); got != want {
+				t.Fatalf("unexpected runtime build ref: got %q want %q", got, want)
+			}
+		})
+	}
+}
+
 func TestIngestGitHubWebhook_PullRequestReviewChangesRequested_WithRunIntakeLabel_CreatesIntakeReviseRun(t *testing.T) {
 	ctx := context.Background()
 	runs := &inMemoryRunRepo{items: map[string]string{}}

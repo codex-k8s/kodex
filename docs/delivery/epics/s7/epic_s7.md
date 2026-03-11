@@ -157,11 +157,11 @@ approvals:
 
 ## Day 7 execution fact (`S7-E13`)
 - В Issue `#255` реализован stream `S7-E13`:
-  - в `libs/go/domain/webhook` добавлен typed trigger kind `qa_revise` с default label `run:qa:revise`;
-  - в `control-plane` доведены env/runtime defaults, PR review resolver, QA agent routing и next-step stage mapping для revise-loop QA-stage;
-  - в `agent-runner` синхронизированы prompt stage mapping, full-env docs env и markdown-only write-scope policy для `qa_revise`.
+  - в `libs/go/domain/webhook` добавлены typed trigger kinds `doc_audit_revise`, `qa_revise`, `release_revise`, `postdeploy_revise`, `ops_revise`, `self_improve_revise` с default labels `run:<stage>:revise`;
+  - в `control-plane` доведены env/runtime defaults, PR review resolver, stage-agent routing и next-step stage mapping для всех недостающих revise-loop стадий `doc-audit|qa|release|postdeploy|ops|self-improve`;
+  - в `agent-runner` синхронизированы prompt stage mapping, runtime env selection и markdown-only/self-improve write-scope policy для этих revise trigger kinds.
 - Unit coverage подтверждает ключевой сценарий:
-  review `changes_requested` на PR с label `run:qa` создаёт revise-run c trigger `run:qa:revise` и агентом `qa`.
+  review `changes_requested` на PR с label `run:<stage>` создаёт revise-run c trigger `run:<stage>:revise` и корректной ролью для `doc-audit|qa|release|postdeploy|ops|self-improve`.
 - Remaining backlog после этого stream остаётся `#254`, `#256`, `#258..#260`.
 
 ## Day 7 execution fact (`S7-E14`)

@@ -28,6 +28,13 @@ func TestResolveRunWriteScopePolicy(t *testing.T) {
 			wantRequirePR: false,
 		},
 		{
+			name:          "doc audit revise is markdown only",
+			triggerKind:   "doc_audit_revise",
+			agentKey:      "km",
+			wantMode:      runWriteScopeModeMarkdownOnly,
+			wantRequirePR: false,
+		},
+		{
 			name:          "qa is markdown only",
 			triggerKind:   "qa",
 			agentKey:      "qa",
@@ -42,6 +49,20 @@ func TestResolveRunWriteScopePolicy(t *testing.T) {
 			wantRequirePR: false,
 		},
 		{
+			name:          "release revise is markdown only",
+			triggerKind:   "release_revise",
+			agentKey:      "em",
+			wantMode:      runWriteScopeModeMarkdownOnly,
+			wantRequirePR: false,
+		},
+		{
+			name:          "postdeploy revise is markdown only",
+			triggerKind:   "postdeploy_revise",
+			agentKey:      "sre",
+			wantMode:      runWriteScopeModeMarkdownOnly,
+			wantRequirePR: false,
+		},
+		{
 			name:          "ops is markdown only",
 			triggerKind:   "ops",
 			agentKey:      "sre",
@@ -49,8 +70,22 @@ func TestResolveRunWriteScopePolicy(t *testing.T) {
 			wantRequirePR: false,
 		},
 		{
+			name:          "ops revise is markdown only",
+			triggerKind:   "ops_revise",
+			agentKey:      "sre",
+			wantMode:      runWriteScopeModeMarkdownOnly,
+			wantRequirePR: false,
+		},
+		{
 			name:          "self improve has restricted scope",
 			triggerKind:   "self_improve",
+			agentKey:      "km",
+			wantMode:      runWriteScopeModeSelfImproveOnly,
+			wantRequirePR: false,
+		},
+		{
+			name:          "self improve revise has restricted scope",
+			triggerKind:   "self_improve_revise",
 			agentKey:      "km",
 			wantMode:      runWriteScopeModeSelfImproveOnly,
 			wantRequirePR: false,

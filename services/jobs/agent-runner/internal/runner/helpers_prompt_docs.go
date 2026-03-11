@@ -138,7 +138,8 @@ func resolvePromptDocsEnv(triggerKind string, runtimeMode string) string {
 			webhookdomain.TriggerKindDevRevise,
 			webhookdomain.TriggerKindQA,
 			webhookdomain.TriggerKindQARevise,
-			webhookdomain.TriggerKindOps:
+			webhookdomain.TriggerKindOps,
+			webhookdomain.TriggerKindOpsRevise:
 			return "ai"
 		}
 	}

@@ -62,14 +62,24 @@ func (s *stubNextStepGitHubMgmt) UpsertEnvVariable(context.Context, string, stri
 
 var _ githubManagementClient = (*stubNextStepGitHubMgmt)(nil)
 
-func TestPreviewOrExecuteIssueStageTransition_AcceptsConfiguredReviseLabel(t *testing.T) {
+func TestPreviewOrExecuteIssueStageTransition_AcceptsConfiguredReviseLabels(t *testing.T) {
 	t.Parallel()
 
 	service := &Service{
 		cfg: Config{
 			NextStepLabels: nextstepdomain.NewLabels(nextstepdomain.Config{
-				RunQA:       "run:quality-assurance",
-				RunQARevise: "run:quality-assurance:revise",
+				RunDocAudit:          "run:docs-audit",
+				RunDocAuditRevise:    "run:docs-audit:revise",
+				RunQA:                "run:quality-assurance",
+				RunQARevise:          "run:quality-assurance:revise",
+				RunRelease:           "run:ship",
+				RunReleaseRevise:     "run:ship:revise",
+				RunPostDeploy:        "run:post-release",
+				RunPostDeployRevise:  "run:post-release:revise",
+				RunOps:               "run:operations",
+				RunOpsRevise:         "run:operations:revise",
+				RunSelfImprove:       "run:self-patch",
+				RunSelfImproveRevise: "run:self-patch:revise",
 			}),
 		},
 		githubMgmt: &stubNextStepGitHubMgmt{
@@ -77,11 +87,30 @@ func TestPreviewOrExecuteIssueStageTransition_AcceptsConfiguredReviseLabel(t *te
 		},
 	}
 
-	result, err := service.previewOrExecuteIssueStageTransition(context.Background(), "token", "codex-k8s", "codex-k8s", 255, "run:quality-assurance:revise", false)
-	if err != nil {
-		t.Fatalf("previewOrExecuteIssueStageTransition() error = %v", err)
+	testCases := []struct {
+		name        string
+		targetLabel string
+	}{
+		{name: "doc audit", targetLabel: "run:docs-audit:revise"},
+		{name: "qa", targetLabel: "run:quality-assurance:revise"},
+		{name: "release", targetLabel: "run:ship:revise"},
+		{name: "postdeploy", targetLabel: "run:post-release:revise"},
+		{name: "ops", targetLabel: "run:operations:revise"},
+		{name: "self improve", targetLabel: "run:self-patch:revise"},
 	}
-	if len(result.AddedLabels) != 1 || result.AddedLabels[0] != "run:quality-assurance:revise" {
-		t.Fatalf("previewOrExecuteIssueStageTransition().AddedLabels = %#v, want configured revise label", result.AddedLabels)
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			result, err := service.previewOrExecuteIssueStageTransition(context.Background(), "token", "codex-k8s", "codex-k8s", 255, testCase.targetLabel, false)
+			if err != nil {
+				t.Fatalf("previewOrExecuteIssueStageTransition() error = %v", err)
+			}
+			if len(result.AddedLabels) != 1 || result.AddedLabels[0] != testCase.targetLabel {
+				t.Fatalf("previewOrExecuteIssueStageTransition().AddedLabels = %#v, want %q", result.AddedLabels, testCase.targetLabel)
+			}
+		})
 	}
 }

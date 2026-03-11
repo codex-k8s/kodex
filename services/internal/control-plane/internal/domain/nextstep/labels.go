@@ -13,28 +13,33 @@ type StageDescriptor struct {
 }
 
 type Config struct {
-	RunIntake       string
-	RunIntakeRevise string
-	RunVision       string
-	RunVisionRevise string
-	RunPRD          string
-	RunPRDRevise    string
-	RunArch         string
-	RunArchRevise   string
-	RunDesign       string
-	RunDesignRevise string
-	RunPlan         string
-	RunPlanRevise   string
-	RunDev          string
-	RunDevRevise    string
-	RunDocAudit     string
-	RunQA           string
-	RunQARevise     string
-	RunRelease      string
-	RunPostDeploy   string
-	RunOps          string
-	RunSelfImprove  string
-	RunRethink      string
+	RunIntake            string
+	RunIntakeRevise      string
+	RunVision            string
+	RunVisionRevise      string
+	RunPRD               string
+	RunPRDRevise         string
+	RunArch              string
+	RunArchRevise        string
+	RunDesign            string
+	RunDesignRevise      string
+	RunPlan              string
+	RunPlanRevise        string
+	RunDev               string
+	RunDevRevise         string
+	RunDocAudit          string
+	RunDocAuditRevise    string
+	RunQA                string
+	RunQARevise          string
+	RunRelease           string
+	RunReleaseRevise     string
+	RunPostDeploy        string
+	RunPostDeployRevise  string
+	RunOps               string
+	RunOpsRevise         string
+	RunSelfImprove       string
+	RunSelfImproveRevise string
+	RunRethink           string
 }
 
 type Labels struct {
@@ -56,12 +61,12 @@ func NewLabels(cfg Config) Labels {
 		{Stage: "design", RunLabel: valueOrDefault(cfg.RunDesign, webhookdomain.DefaultRunDesignLabel), ReviseLabel: valueOrDefault(cfg.RunDesignRevise, webhookdomain.DefaultRunDesignReviseLabel)},
 		{Stage: "plan", RunLabel: valueOrDefault(cfg.RunPlan, webhookdomain.DefaultRunPlanLabel), ReviseLabel: valueOrDefault(cfg.RunPlanRevise, webhookdomain.DefaultRunPlanReviseLabel)},
 		{Stage: "dev", RunLabel: valueOrDefault(cfg.RunDev, webhookdomain.DefaultRunDevLabel), ReviseLabel: valueOrDefault(cfg.RunDevRevise, webhookdomain.DefaultRunDevReviseLabel)},
-		{Stage: "doc-audit", RunLabel: valueOrDefault(cfg.RunDocAudit, webhookdomain.DefaultRunDocAuditLabel), ReviseLabel: webhookdomain.DefaultRunDocAuditReviseLabel},
+		{Stage: "doc-audit", RunLabel: valueOrDefault(cfg.RunDocAudit, webhookdomain.DefaultRunDocAuditLabel), ReviseLabel: valueOrDefault(cfg.RunDocAuditRevise, webhookdomain.DefaultRunDocAuditReviseLabel)},
 		{Stage: "qa", RunLabel: valueOrDefault(cfg.RunQA, webhookdomain.DefaultRunQALabel), ReviseLabel: valueOrDefault(cfg.RunQARevise, webhookdomain.DefaultRunQAReviseLabel)},
-		{Stage: "release", RunLabel: valueOrDefault(cfg.RunRelease, webhookdomain.DefaultRunReleaseLabel), ReviseLabel: webhookdomain.DefaultRunReleaseReviseLabel},
-		{Stage: "postdeploy", RunLabel: valueOrDefault(cfg.RunPostDeploy, webhookdomain.DefaultRunPostDeployLabel), ReviseLabel: webhookdomain.DefaultRunPostDeployReviseLabel},
-		{Stage: "ops", RunLabel: valueOrDefault(cfg.RunOps, webhookdomain.DefaultRunOpsLabel), ReviseLabel: webhookdomain.DefaultRunOpsReviseLabel},
-		{Stage: "self-improve", RunLabel: valueOrDefault(cfg.RunSelfImprove, webhookdomain.DefaultRunSelfImproveLabel), ReviseLabel: webhookdomain.DefaultRunSelfImproveReviseLabel},
+		{Stage: "release", RunLabel: valueOrDefault(cfg.RunRelease, webhookdomain.DefaultRunReleaseLabel), ReviseLabel: valueOrDefault(cfg.RunReleaseRevise, webhookdomain.DefaultRunReleaseReviseLabel)},
+		{Stage: "postdeploy", RunLabel: valueOrDefault(cfg.RunPostDeploy, webhookdomain.DefaultRunPostDeployLabel), ReviseLabel: valueOrDefault(cfg.RunPostDeployRevise, webhookdomain.DefaultRunPostDeployReviseLabel)},
+		{Stage: "ops", RunLabel: valueOrDefault(cfg.RunOps, webhookdomain.DefaultRunOpsLabel), ReviseLabel: valueOrDefault(cfg.RunOpsRevise, webhookdomain.DefaultRunOpsReviseLabel)},
+		{Stage: "self-improve", RunLabel: valueOrDefault(cfg.RunSelfImprove, webhookdomain.DefaultRunSelfImproveLabel), ReviseLabel: valueOrDefault(cfg.RunSelfImproveRevise, webhookdomain.DefaultRunSelfImproveReviseLabel)},
 		{Stage: "rethink", RunLabel: valueOrDefault(cfg.RunRethink, webhookdomain.DefaultRunRethinkLabel)},
 	} {
 		labels.put(descriptor)
@@ -96,17 +101,17 @@ func (l Labels) DescriptorByTriggerKind(triggerKind string) (StageDescriptor, bo
 		return l.DescriptorByStage("plan")
 	case string(webhookdomain.TriggerKindDev), string(webhookdomain.TriggerKindDevRevise):
 		return l.DescriptorByStage("dev")
-	case string(webhookdomain.TriggerKindDocAudit):
+	case string(webhookdomain.TriggerKindDocAudit), string(webhookdomain.TriggerKindDocAuditRevise):
 		return l.DescriptorByStage("doc-audit")
 	case string(webhookdomain.TriggerKindQA), string(webhookdomain.TriggerKindQARevise):
 		return l.DescriptorByStage("qa")
-	case string(webhookdomain.TriggerKindRelease):
+	case string(webhookdomain.TriggerKindRelease), string(webhookdomain.TriggerKindReleaseRevise):
 		return l.DescriptorByStage("release")
-	case string(webhookdomain.TriggerKindPostDeploy):
+	case string(webhookdomain.TriggerKindPostDeploy), string(webhookdomain.TriggerKindPostDeployRevise):
 		return l.DescriptorByStage("postdeploy")
-	case string(webhookdomain.TriggerKindOps):
+	case string(webhookdomain.TriggerKindOps), string(webhookdomain.TriggerKindOpsRevise):
 		return l.DescriptorByStage("ops")
-	case string(webhookdomain.TriggerKindSelfImprove):
+	case string(webhookdomain.TriggerKindSelfImprove), string(webhookdomain.TriggerKindSelfImproveRevise):
 		return l.DescriptorByStage("self-improve")
 	case string(webhookdomain.TriggerKindRethink):
 		return l.DescriptorByStage("rethink")
