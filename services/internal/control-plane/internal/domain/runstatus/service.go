@@ -128,6 +128,12 @@ func (s *Service) UpsertRunStatusComment(ctx context.Context, params UpsertComme
 	if err != nil {
 		return UpsertCommentResult{}, err
 	}
+	if !found && trackedCommentID > 0 {
+		existingComment, existingState, found, err = s.lookupRunStatusCommentByID(ctx, runCtx, runID, trackedCommentID)
+		if err != nil {
+			return UpsertCommentResult{}, err
+		}
+	}
 	if !found && params.Phase != PhaseCreated {
 		existingComment, existingState, found, err = s.lookupRunStatusCommentWithAttempts(
 			ctx,
@@ -719,6 +725,32 @@ func (s *Service) lookupRunStatusCommentWithAttempts(ctx context.Context, runCtx
 			return mcpdomain.GitHubIssueComment{}, commentState{}, false, nil
 		}
 	}
+}
+
+func (s *Service) lookupRunStatusCommentByID(ctx context.Context, runCtx runContext, runID string, commentID int64) (mcpdomain.GitHubIssueComment, commentState, bool, error) {
+	if commentID <= 0 {
+		return mcpdomain.GitHubIssueComment{}, commentState{}, false, nil
+	}
+
+	comment, err := s.github.GetIssueComment(ctx, mcpdomain.GitHubGetIssueCommentParams{
+		Token:      runCtx.githubToken,
+		Owner:      runCtx.repoOwner,
+		Repository: runCtx.repoName,
+		CommentID:  commentID,
+	})
+	if err != nil {
+		if isGitHubCommentNotFoundError(err) {
+			return mcpdomain.GitHubIssueComment{}, commentState{}, false, nil
+		}
+		return mcpdomain.GitHubIssueComment{}, commentState{}, false, fmt.Errorf("get issue comment: %w", err)
+	}
+
+	state, ok := extractStateMarker(comment.Body)
+	if !ok || strings.TrimSpace(state.RunID) != strings.TrimSpace(runID) {
+		return comment, commentState{}, false, nil
+	}
+
+	return comment, state, true, nil
 }
 
 func sleepWithContext(ctx context.Context, delay time.Duration) error {
