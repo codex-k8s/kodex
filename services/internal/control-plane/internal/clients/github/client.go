@@ -103,6 +103,15 @@ func (c *Client) ListIssueComments(ctx context.Context, params mcpdomain.GitHubL
 	return out, nil
 }
 
+func (c *Client) GetIssueComment(ctx context.Context, params mcpdomain.GitHubGetIssueCommentParams) (mcpdomain.GitHubIssueComment, error) {
+	client := c.clientWithToken(params.Token)
+	item, _, err := client.Issues.GetComment(ctx, params.Owner, params.Repository, params.CommentID)
+	if err != nil {
+		return mcpdomain.GitHubIssueComment{}, err
+	}
+	return toIssueComment(item), nil
+}
+
 func (c *Client) ListIssueReactions(ctx context.Context, params mcpdomain.GitHubListIssueReactionsParams) ([]mcpdomain.GitHubIssueReaction, error) {
 	client := c.clientWithToken(params.Token)
 	limit := clampLimit(params.Limit, defaultPageSize, maxPageSize)

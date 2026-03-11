@@ -178,6 +178,7 @@ type KubernetesClient interface {
 // GitHubClient provides issue comment operations for runstatus service.
 type GitHubClient interface {
 	ListIssueComments(ctx context.Context, params mcpdomain.GitHubListIssueCommentsParams) ([]mcpdomain.GitHubIssueComment, error)
+	GetIssueComment(ctx context.Context, params mcpdomain.GitHubGetIssueCommentParams) (mcpdomain.GitHubIssueComment, error)
 	CreateIssueComment(ctx context.Context, params mcpdomain.GitHubCreateIssueCommentParams) (mcpdomain.GitHubIssueComment, error)
 	EditIssueComment(ctx context.Context, params mcpdomain.GitHubEditIssueCommentParams) (mcpdomain.GitHubIssueComment, error)
 	DeleteIssueComment(ctx context.Context, params mcpdomain.GitHubDeleteIssueCommentParams) error

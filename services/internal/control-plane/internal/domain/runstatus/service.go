@@ -128,6 +128,12 @@ func (s *Service) UpsertRunStatusComment(ctx context.Context, params UpsertComme
 	if err != nil {
 		return UpsertCommentResult{}, err
 	}
+	if !found && trackedCommentID > 0 {
+		existingComment, existingState, found, err = s.lookupRunStatusCommentByID(ctx, runCtx, runID, trackedCommentID)
+		if err != nil {
+			return UpsertCommentResult{}, err
+		}
+	}
 	if !found && params.Phase != PhaseCreated {
 		existingComment, existingState, found, err = s.lookupRunStatusCommentWithAttempts(
 			ctx,
@@ -721,6 +727,32 @@ func (s *Service) lookupRunStatusCommentWithAttempts(ctx context.Context, runCtx
 	}
 }
 
+func (s *Service) lookupRunStatusCommentByID(ctx context.Context, runCtx runContext, runID string, commentID int64) (mcpdomain.GitHubIssueComment, commentState, bool, error) {
+	if commentID <= 0 {
+		return mcpdomain.GitHubIssueComment{}, commentState{}, false, nil
+	}
+
+	comment, err := s.github.GetIssueComment(ctx, mcpdomain.GitHubGetIssueCommentParams{
+		Token:      runCtx.githubToken,
+		Owner:      runCtx.repoOwner,
+		Repository: runCtx.repoName,
+		CommentID:  commentID,
+	})
+	if err != nil {
+		if isGitHubCommentNotFoundError(err) {
+			return mcpdomain.GitHubIssueComment{}, commentState{}, false, nil
+		}
+		return mcpdomain.GitHubIssueComment{}, commentState{}, false, fmt.Errorf("get issue comment: %w", err)
+	}
+
+	state, ok := extractStateMarker(comment.Body)
+	if !ok || strings.TrimSpace(state.RunID) != strings.TrimSpace(runID) {
+		return comment, commentState{}, false, nil
+	}
+
+	return comment, state, true, nil
+}
+
 func sleepWithContext(ctx context.Context, delay time.Duration) error {
 	if delay <= 0 {
 		return nil
@@ -779,11 +811,9 @@ func (s *Service) dedupeRunStatusCommentsOnce(ctx context.Context, runCtx runCon
 		return fallback, false, true
 	}
 
-	selected := matches[0]
-	for _, item := range matches[1:] {
-		if item.ID > selected.ID {
-			selected = item
-		}
+	selected, _, found := findRunStatusComment(matches, runID)
+	if !found {
+		return fallback, false, true
 	}
 	if len(matches) == 1 {
 		return selected, false, true
@@ -1051,7 +1081,7 @@ func findRunStatusComment(comments []mcpdomain.GitHubIssueComment, runID string)
 		if !ok {
 			continue
 		}
-		if !found || comment.ID > selectedComment.ID {
+		if !found || shouldPreferCommentState(selectedState, selectedComment.ID, state, comment.ID) {
 			selectedComment = comment
 			selectedState = state
 			found = true

@@ -122,7 +122,7 @@ func TestNormalizeRuntimeMode_PreservesExplicitCodeOnly(t *testing.T) {
 	}
 }
 
-func TestFindRunStatusComment_PicksLatestCommentByID(t *testing.T) {
+func TestFindRunStatusComment_PrefersHigherPhaseAndFallsBackToLatestCommentByID(t *testing.T) {
 	t.Parallel()
 
 	bodyOld := testRunStatusCommentBody(t, commentState{RunID: "run-1", Phase: PhaseCreated})
@@ -142,6 +142,37 @@ func TestFindRunStatusComment_PicksLatestCommentByID(t *testing.T) {
 	}
 	if gotState.Phase != PhaseStarted {
 		t.Fatalf("expected phase %q from latest comment, got %q", PhaseStarted, gotState.Phase)
+	}
+}
+
+func TestFindRunStatusComment_PrefersSucceededTerminalStatusOverLaterFailedDuplicate(t *testing.T) {
+	t.Parallel()
+
+	bodySucceeded := testRunStatusCommentBody(t, commentState{
+		RunID:     "run-terminal",
+		Phase:     PhaseFinished,
+		RunStatus: runStatusSucceeded,
+	})
+	bodyFailed := testRunStatusCommentBody(t, commentState{
+		RunID:     "run-terminal",
+		Phase:     PhaseFinished,
+		RunStatus: runStatusFailed,
+	})
+
+	comments := []mcpdomain.GitHubIssueComment{
+		{ID: 401, Body: bodySucceeded},
+		{ID: 402, Body: bodyFailed},
+	}
+
+	gotComment, gotState, found := findRunStatusComment(comments, "run-terminal")
+	if !found {
+		t.Fatal("expected to find run status comment")
+	}
+	if gotComment.ID != 401 {
+		t.Fatalf("expected succeeded comment id 401 to win, got %d", gotComment.ID)
+	}
+	if gotState.RunStatus != runStatusSucceeded {
+		t.Fatalf("expected terminal status %q, got %q", runStatusSucceeded, gotState.RunStatus)
 	}
 }
 
@@ -165,6 +196,35 @@ func TestFindRunStatusComment_IgnoresMalformedMarkerAndFindsValid(t *testing.T) 
 	}
 	if gotState.Phase != PhaseFinished {
 		t.Fatalf("expected phase %q, got %q", PhaseFinished, gotState.Phase)
+	}
+}
+
+func TestMergeState_PreservesSucceededTerminalStatusAgainstFailedDuplicate(t *testing.T) {
+	t.Parallel()
+
+	merged := mergeState(
+		commentState{RunID: "run-1", Phase: PhaseFinished, RunStatus: runStatusSucceeded},
+		commentState{RunID: "run-1", Phase: PhaseFinished, RunStatus: runStatusFailed},
+	)
+
+	if merged.RunStatus != runStatusSucceeded {
+		t.Fatalf("expected merged terminal status %q, got %q", runStatusSucceeded, merged.RunStatus)
+	}
+}
+
+func TestMergeState_PreservesTerminalStatusAgainstEarlierRunningUpdate(t *testing.T) {
+	t.Parallel()
+
+	merged := mergeState(
+		commentState{RunID: "run-2", Phase: PhaseFinished, RunStatus: runStatusSucceeded},
+		commentState{RunID: "run-2", Phase: PhaseStarted, RunStatus: "running"},
+	)
+
+	if merged.RunStatus != runStatusSucceeded {
+		t.Fatalf("expected merged terminal status %q, got %q", runStatusSucceeded, merged.RunStatus)
+	}
+	if merged.Phase != PhaseFinished {
+		t.Fatalf("expected phase %q, got %q", PhaseFinished, merged.Phase)
 	}
 }
 

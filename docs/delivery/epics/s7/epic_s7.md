@@ -168,6 +168,15 @@ approvals:
     `200` для `/healthz`, `401` для `/api/v1/auth/me`, `400` для invalid `POST /api/v1/webhooks/github`.
 - В traceability добавлены updates по issue `#256`; remaining backlog нормализован как `#254`, `#255`, `#258..#260`.
 
+## Day 7 execution fact (`S7-E16`)
+- В Issue `#258` реализован stream `S7-E16`:
+  - run-status comment normalization в `control-plane` больше не позволяет позднему duplicate/stale update
+    понизить успешный terminal status до `failed`;
+  - canonical comment и dedupe path теперь выбираются по state precedence
+    (`succeeded > failed > running/pending`) с phase-aware fallback, а не по одному только `comment_id`;
+  - добавлены unit-тесты на merge/dedupe сценарии, покрывающие false-failed regression class для `run:intake:revise`.
+- В traceability добавлены updates по issue `#258`; remaining backlog нормализован как `#254`, `#255`, `#259..#260`.
+
 ## Candidate execution backlog (19 эпиков)
 
 | Epic ID | Priority | Scope | Источник замечаний |

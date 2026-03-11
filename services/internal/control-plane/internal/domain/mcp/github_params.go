@@ -25,6 +25,14 @@ type GitHubListIssueCommentsParams struct {
 	Limit       int
 }
 
+// GitHubGetIssueCommentParams describes issue comment read operation in adapter.
+type GitHubGetIssueCommentParams struct {
+	Token      string
+	Owner      string
+	Repository string
+	CommentID  int64
+}
+
 // GitHubListIssueReactionsParams describes issue reactions list operation in adapter.
 type GitHubListIssueReactionsParams struct {
 	Token       string
