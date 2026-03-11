@@ -32,11 +32,14 @@ func TestRenderPromptArtifactContractBlocks_ReviseInstructsAppendNotOverwrite(t 
 	if err != nil {
 		t.Fatalf("renderPromptArtifactContractBlocks() error = %v", err)
 	}
-	if !strings.Contains(prBlock, "Не перезатирайте PR body новым revise-summary") {
-		t.Fatalf("revise pr contract must preserve the existing body, got: %q", prBlock)
+	if !strings.Contains(prBlock, "сохраняйте текущий заголовок существующего PR") {
+		t.Fatalf("revise pr contract must preserve the existing title, got: %q", prBlock)
 	}
-	if !strings.Contains(prBlock, "gh pr view <current-pr> --json body --jq '.body'") {
-		t.Fatalf("revise pr contract must instruct to read current pr body, got: %q", prBlock)
+	if !strings.Contains(prBlock, "gh pr view <current-pr> --json title,body") {
+		t.Fatalf("revise pr contract must instruct to read current pr title and body, got: %q", prBlock)
+	}
+	if !strings.Contains(prBlock, "Не перезатирайте PR title/body новым revise-summary") {
+		t.Fatalf("revise pr contract must preserve the existing title/body, got: %q", prBlock)
 	}
 }
 
@@ -143,10 +146,13 @@ func TestBuildPrompt_RevisePreservesExistingPRBodyInstructions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildPrompt() error = %v", err)
 	}
-	if !strings.Contains(prompt, "Не перезатирайте body существующего PR") {
-		t.Fatalf("revise prompt must preserve existing pr body, got: %q", prompt)
+	if !strings.Contains(prompt, "Не перезатирайте title/body существующего PR") {
+		t.Fatalf("revise prompt must preserve existing pr title/body, got: %q", prompt)
 	}
-	if !strings.Contains(prompt, "Не перезатирайте PR body новым revise-summary") {
-		t.Fatalf("revise prompt must include revise append contract, got: %q", prompt)
+	if !strings.Contains(prompt, "Не перезатирайте PR title/body новым revise-summary") {
+		t.Fatalf("revise prompt must include revise append contract for title/body, got: %q", prompt)
+	}
+	if !strings.Contains(prompt, "gh pr view <current-pr> --json title,body") {
+		t.Fatalf("revise prompt must instruct to read current pr title/body, got: %q", prompt)
 	}
 }

@@ -10,11 +10,10 @@ Review summary contract for a revise iteration:
 {{- else -}}
 Revise-iteration PR contract:
 - Title:
-  - pattern: `Issue #{{ .IssueNumber }}: revise — <what was fixed> (#{{ .IssueNumber }})`
-  - one line;
-  - must include `Issue #{{ .IssueNumber }}` and the `revise` marker.
-- Before editing the PR body, load the current description of the existing PR first (`gh pr view <current-pr> --json body --jq '.body'`).
-- Do not overwrite the PR body with a revise-only summary: keep the existing PR sections and append the revise block before the final `## Closure`.
+  - keep the current title of the existing PR; a revise cycle must not rename the PR just to publish a new revise summary.
+  - if the title lost the `Issue #{{ .IssueNumber }}` linkage or became factually incorrect, make only the smallest fix that preserves the main subject of the PR.
+- Before editing the PR title/body, load the current title and description of the existing PR first (`gh pr view <current-pr> --json title,body`).
+- Do not overwrite the PR title/body with a revise-only summary: keep the existing title and PR sections, and append the revise block before the final `## Closure`.
 - For the appended revise block, use exact `##` sections in this order:
   1. `## Revision context`
   2. `## Basis for changes`
