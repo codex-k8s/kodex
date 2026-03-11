@@ -779,11 +779,9 @@ func (s *Service) dedupeRunStatusCommentsOnce(ctx context.Context, runCtx runCon
 		return fallback, false, true
 	}
 
-	selected := matches[0]
-	for _, item := range matches[1:] {
-		if item.ID > selected.ID {
-			selected = item
-		}
+	selected, _, found := findRunStatusComment(matches, runID)
+	if !found {
+		return fallback, false, true
 	}
 	if len(matches) == 1 {
 		return selected, false, true
@@ -1051,7 +1049,7 @@ func findRunStatusComment(comments []mcpdomain.GitHubIssueComment, runID string)
 		if !ok {
 			continue
 		}
-		if !found || comment.ID > selectedComment.ID {
+		if !found || shouldPreferCommentState(selectedState, selectedComment.ID, state, comment.ID) {
 			selectedComment = comment
 			selectedState = state
 			found = true

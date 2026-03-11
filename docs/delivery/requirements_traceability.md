@@ -596,6 +596,29 @@ approvals:
   `go test ./services/internal/control-plane/... ./services/external/api-gateway/...`,
   `npm --prefix services/staff/web-console run build`.
 
+## Актуализация по Issue #258 (`run:dev`, 2026-03-11)
+- Для FR-026/FR-028/FR-033 и NFR-010/NFR-018 реализован stream `S7-E16`:
+  в `services/internal/control-plane/internal/domain/runstatus`
+  нормализована логика выбора и слияния run-status comment state,
+  чтобы поздний duplicate/stale update не мог понизить фактически успешный terminal status.
+- Добавлен приоритет terminal-state для service-message:
+  `succeeded > failed > running/pending`, а при равном status rank
+  сохраняется более поздняя lifecycle phase и только затем fallback к `comment_id`.
+- Dedupe run-status comments теперь выбирает канонический comment по state precedence,
+  а не только по максимальному GitHub `comment_id`,
+  что устраняет false-failed при дублирующих terminal updates.
+- Добавлено регрессионное unit-покрытие для:
+  - merge terminal states (`succeeded` не понижается до `failed`);
+  - защиты terminal state от позднего non-terminal update;
+  - выбора canonical comment при duplicate terminal comments.
+- Актуализирована Sprint S7 traceability:
+  `docs/delivery/issue_map.md`,
+  `docs/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`,
+  `docs/delivery/epics/s7/epic_s7.md`;
+  remaining backlog нормализован как `#254..#256`, `#259..#260`.
+- Проверки по scope:
+  `go test ./services/internal/control-plane/internal/domain/runstatus/...`.
+
 ## Актуализация по Issue #274 (`run:dev`, 2026-03-05)
 - Для FR-026/FR-028/FR-033 и NFR-010/NFR-018 реализован stream `S7-E19`:
   выполнен backend cleanup non-MVP контуров `agents`, `prompt templates`, `config entries`,

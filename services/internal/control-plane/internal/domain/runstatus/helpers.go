@@ -159,9 +159,7 @@ func mergeState(base commentState, update commentState) commentState {
 	if strings.TrimSpace(update.ReasoningEffort) != "" {
 		base.ReasoningEffort = strings.TrimSpace(update.ReasoningEffort)
 	}
-	if strings.TrimSpace(update.RunStatus) != "" {
-		base.RunStatus = strings.TrimSpace(update.RunStatus)
-	}
+	base.RunStatus = mergeRunStatus(base.RunStatus, update.RunStatus, base.Phase, update.Phase)
 	if strings.TrimSpace(update.CodexAuthVerificationURL) != "" {
 		base.CodexAuthVerificationURL = strings.TrimSpace(update.CodexAuthVerificationURL)
 	}
@@ -175,6 +173,69 @@ func mergeState(base commentState, update commentState) commentState {
 		base.AlreadyDeleted = true
 	}
 	return base
+}
+
+func mergeRunStatus(base string, update string, basePhase Phase, updatePhase Phase) string {
+	normalizedBase := normalizeRunStatus(base)
+	normalizedUpdate := normalizeRunStatus(update)
+	switch {
+	case normalizedUpdate == "":
+		return normalizedBase
+	case normalizedBase == "":
+		return normalizedUpdate
+	}
+
+	baseRank := runStatusPriority(normalizedBase)
+	updateRank := runStatusPriority(normalizedUpdate)
+	if updateRank > baseRank {
+		return normalizedUpdate
+	}
+	if updateRank < baseRank {
+		return normalizedBase
+	}
+	if phaseOrder(updatePhase) >= phaseOrder(basePhase) {
+		return normalizedUpdate
+	}
+	return normalizedBase
+}
+
+func normalizeRunStatus(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func runStatusPriority(value string) int {
+	switch normalizeRunStatus(value) {
+	case runStatusSucceeded:
+		return 4
+	case "cancelled", "canceled":
+		return 3
+	case runStatusFailed:
+		return 2
+	case "running":
+		return 1
+	case "pending":
+		return 0
+	default:
+		return 0
+	}
+}
+
+func shouldPreferCommentState(selected commentState, selectedCommentID int64, candidate commentState, candidateCommentID int64) bool {
+	selectedStatus := normalizeRunStatus(selected.RunStatus)
+	candidateStatus := normalizeRunStatus(candidate.RunStatus)
+	selectedRank := runStatusPriority(selectedStatus)
+	candidateRank := runStatusPriority(candidateStatus)
+	if candidateRank != selectedRank {
+		return candidateRank > selectedRank
+	}
+
+	selectedPhaseOrder := phaseOrder(selected.Phase)
+	candidatePhaseOrder := phaseOrder(candidate.Phase)
+	if candidatePhaseOrder != selectedPhaseOrder {
+		return candidatePhaseOrder > selectedPhaseOrder
+	}
+
+	return candidateCommentID > selectedCommentID
 }
 
 func extractStateMarker(body string) (commentState, bool) {
