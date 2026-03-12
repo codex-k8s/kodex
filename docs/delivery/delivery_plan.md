@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-02-06
 updated_at: 2026-03-12
-related_issues: [1, 19, 74, 100, 106, 112, 154, 155, 170, 171, 184, 185, 187, 189, 195, 197, 199, 201, 210, 212, 218, 220, 222, 223, 225, 226, 227, 228, 229, 230, 238, 241, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 274, 216, 262, 263, 265, 281, 282, 320, 333, 335, 337, 340, 360, 378]
+related_issues: [1, 19, 74, 100, 106, 112, 154, 155, 170, 171, 184, 185, 187, 189, 195, 197, 199, 201, 210, 212, 218, 220, 222, 223, 225, 226, 227, 228, 229, 230, 238, 241, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 274, 216, 262, 263, 265, 281, 282, 320, 333, 335, 337, 340, 351, 360, 363, 369, 370, 371, 372, 373, 374, 375, 378]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -251,6 +251,13 @@ approvals:
   - inline write-path ограничен provider-safe typed commands, а provider review/merge/comment editing оставлены deep-link-only;
   - зафиксирован rollout order `migrations -> control-plane -> worker -> api-gateway -> web-console` и limited rollback после provider side effects;
   - создана follow-up issue `#363` для stage `run:plan` без trigger-лейбла.
+- Day 6 (in-review): plan-пакет для Mission Control Dashboard (`docs/delivery/epics/s9/epic-s9-day6-mission-control-dashboard-plan.md`, Issue `#363`).
+- Результат Day 6 (факт):
+  - execution backlog декомпозирован на issues `#369..#375` с wave-sequencing и owner-managed handover в `run:dev`;
+  - foundation/backend/transport/UI/observability разнесены по отдельным implementation streams, чтобы не смешивать schema, domain, edge и UX scope;
+  - `#374` зафиксирован как обязательный evidence gate перед `run:qa`, а `#375` сохранён как conditional voice continuation без блокировки core MVP;
+  - quality-gates, DoR/DoD, blockers/risks/owner decisions синхронизированы в delivery traceability.
+- Day 7+ (planned): `run:dev -> qa -> release -> postdeploy -> ops` по issues `#369..#374`; issue `#375` запускается только отдельным owner decision после core waves.
 
 ### Sprint S10: Built-in MCP user interactions
 - Day 1 (in-review): intake-пакет для built-in MCP user interactions (`docs/delivery/epics/s10/epic-s10-day1-mcp-user-interactions-intake.md`, Issue `#360`).

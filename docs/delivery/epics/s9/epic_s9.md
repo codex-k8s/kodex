@@ -6,7 +6,7 @@ status: in-review
 owner_role: PM
 created_at: 2026-03-12
 updated_at: 2026-03-12
-related_issues: [333, 335, 337, 340, 351, 363]
+related_issues: [333, 335, 337, 340, 351, 363, 369, 370, 371, 372, 373, 374, 375]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -23,7 +23,8 @@ approvals:
 - Day3 PRD (`#337`) формализует user stories, FR/AC/NFR, edge cases и wave priorities и передаёт continuity в architecture issue `#340`.
 - Day4 architecture (`#340`) закрепляет ownership для projections, commands, provider sync/reconciliation и degraded realtime path и передаёт continuity в design issue `#351`.
 - Day5 design (`#351`) фиксирует implementation-ready contracts по API/data/realtime/rollout и передаёт continuity в plan issue `#363`.
-- До `run:plan` Sprint S9 остаётся markdown-only контуром: execution issues и library lock-in откладываются до подтверждённых product/architecture decisions.
+- Day6 plan (`#363`) формирует execution backlog `#369..#375`, sequencing-waves, quality-gates и owner decisions для перехода в `run:dev`.
+- Voice contour вынесен в отдельный conditional stream `#375` и не блокирует core dashboard MVP.
 
 ## Stage roadmap
 - Day 1 (Intake): `docs/delivery/epics/s9/epic-s9-day1-mission-control-dashboard-intake.md` (Issue `#333`).
@@ -31,19 +32,22 @@ approvals:
 - Day 3 (PRD): `docs/delivery/epics/s9/epic-s9-day3-mission-control-dashboard-prd.md` + `docs/delivery/epics/s9/prd-s9-day3-mission-control-dashboard.md` (Issue `#337`).
 - Day 4 (Architecture): `docs/delivery/epics/s9/epic-s9-day4-mission-control-dashboard-arch.md` + architecture package in `docs/architecture/initiatives/s9_mission_control_dashboard/` (Issue `#340`).
 - Day 5 (Design): `docs/delivery/epics/s9/epic-s9-day5-mission-control-dashboard-design.md` + design package in `docs/architecture/initiatives/s9_mission_control_dashboard/` (Issue `#351`).
-- Day 6 (Plan): follow-up issue `#363`; должна сформировать execution backlog и quality-gates перед `run:dev`.
+- Day 6 (Plan): `docs/delivery/epics/s9/epic-s9-day6-mission-control-dashboard-plan.md` (Issue `#363`) + execution issues `#369..#375`.
 
-## Candidate product streams
+## Execution streams (finalized by Issue #363)
 
-| Epic ID | Scope | Почему это отдельный поток |
-|---|---|---|
-| `S9-E01` | Active-set dashboard shell: landing page, summary, board/list toggle, side panel | Это core UX-слой, который должен давать situational awareness за 5-10 секунд |
-| `S9-E02` | Work item / discussion / PR / agent модель и связи | Без общей сущностной модели dashboard превратится в набор несвязанных карточек |
-| `S9-E03` | Realtime snapshot/delta, side-panel chat, comment/timeline projections | Realtime и chat формируют основной operational loop и требуют отдельной data/reconciliation проработки |
-| `S9-E04` | UI-command -> outbound sync -> webhook echo dedupe/correlation | Это ключевой guardrail против дублей issue/run/comment и ложных повторных запусков |
-| `S9-E05` | Voice intake и AI-assisted draft structuring | Высокая ценность для discussion-first сценария, но отдельный риск/зависимость по AI policy и ROI |
+| Stream | Implementation issue | Wave | Scope | Почему это отдельный поток |
+|---|---:|---|---|---|
+| `S9-E01` | `#369` | Wave 1 | Projection schema, additive indexes, warmup/backfill foundation | Без foundation-stream остальные потоки рискуют стартовать на непроверенной persisted projection |
+| `S9-E02` | `#370` | Wave 2 | `control-plane` active-set model, relations и command lifecycle | Это единственный owner persisted projection и admission policy |
+| `S9-E03` | `#371` | Wave 3 | `worker` reconcile, provider sync/retry и echo dedupe | Нужен отдельный background contour для idempotent provider mutations и recovery |
+| `S9-E04` | `#372` | Wave 3 | Contract-first `api-gateway` transport и realtime envelope | Edge должен сохранить thin-edge boundary и transport consistency |
+| `S9-E05` | `#373` | Wave 4 | Dashboard shell, board/list toggle и side panel state integration | Core UX-слой, который даёт situational awareness и explicit degraded fallback |
+| `S9-E06` | `#374` | Wave 5 | Observability, rollout-readiness и rollback discipline | Cross-cutting evidence gate перед `run:qa`/`run:release` |
+| `S9-E07` | `#375` | Wave 6 (conditional) | Optional voice-candidate contour | Высокая ценность, но отдельный риск по ROI, policy и dependency choices |
 
 ## Delivery-governance правила
 - До `run:plan` Sprint S9 не создаёт implementation issues и не добавляет внешние зависимости в репозиторий.
+- После `run:plan` созданы handover issues `#369..#375` без trigger-лейблов; запуск `run:dev` остаётся owner-managed по waves.
 - Каждый stage обязан создавать следующую issue без trigger-лейбла; trigger на запуск следующего stage ставит Owner.
-- `S9-E05` не считается blocking scope для первой волны dashboard MVP, пока vision/PRD не докажут его приоритет и измеримый вклад.
+- `S9-E07` не считается blocking scope для первой волны dashboard MVP, пока core backlog `#369..#374` не даст подтверждённый value/evidence.

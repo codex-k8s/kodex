@@ -6,7 +6,7 @@ status: in-review
 owner_role: KM
 created_at: 2026-03-12
 updated_at: 2026-03-12
-related_issues: [333, 335, 337, 340, 351, 363]
+related_issues: [333, 335, 337, 340, 351, 363, 369, 370, 371, 372, 373, 374, 375]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -80,3 +80,13 @@ approvals:
   - rollout discipline `migrations -> control-plane -> worker -> api-gateway -> web-console` и limited rollback после provider side effects.
 - Через Context7 подтверждён актуальный GitHub CLI syntax для continuity issue и PR flow (`/websites/cli_github_manual`).
 - Для continuity подготовлена follow-up issue `#363` (`run:plan`) без trigger-лейбла.
+
+## Актуализация по Issue #363 (`run:plan`, 2026-03-12)
+- Подготовлен Day6 plan package:
+  - `docs/delivery/epics/s9/epic-s9-day6-mission-control-dashboard-plan.md`.
+- Зафиксированы:
+  - execution streams `S9-E01..S9-E07` с явным split `foundation -> domain -> reconcile/transport -> UI -> observability -> conditional voice`;
+  - handover issues `#369..#375` без trigger-лейблов и с owner-managed wave sequencing;
+  - правило, что `#374` закрывает observability/rollout-readiness gate перед `run:qa`, а `#375` остаётся optional continuation и не блокирует core MVP rollout.
+- Попытка использовать Context7 для GitHub CLI manual завершилась ошибкой `Monthly quota exceeded`; неинтерактивный issue/PR flow дополнительно сверен локально по `gh issue create --help`, `gh pr create --help`, `gh pr edit --help`.
+- Root FR/NFR matrix в `docs/delivery/requirements_traceability.md` не менялась, потому что plan-stage обновляет delivery governance и handover backlog, а не канонический product requirements baseline.
