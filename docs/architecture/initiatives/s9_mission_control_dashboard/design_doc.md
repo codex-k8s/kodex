@@ -87,6 +87,10 @@ approvals:
   - `command.retry_sync` (operator-only, после failure/degraded diagnosis)
 - Все inline команды проходят одинаковый admission path:
   - validate -> persist command -> acknowledge -> enqueue worker sync -> reconcile by webhook/provider outcome.
+- Для approval-gated действий:
+  - `stage.next_step.execute` может завершать admission со статусом `pending_approval`;
+  - в этом состоянии `control-plane` уже создал audit/approval record, но `worker` и provider mutations ещё не запускаются;
+  - только после approval decision `approved` команда переводится в `queued`.
 
 ### Provider deep-link-only actions в MVP
 - В staff console не попадают в inline write path и остаются provider deep-link-only:
@@ -178,6 +182,7 @@ sequenceDiagram
 ### Command status behavior
 - UX-статусы равны доменным статусам и не конвертируются на edge:
   - `accepted`
+  - `pending_approval`
   - `queued`
   - `pending_sync`
   - `reconciled`
@@ -186,10 +191,11 @@ sequenceDiagram
   - `cancelled`
 - Правила:
   - `accepted` и `queued` допускаются только как краткоживущие acknowledgement states.
+  - `pending_approval` означает, что команда принята в ledger, но ждёт owner decision и ещё не выполняет side effects.
   - `pending_sync` означает, что provider outcome ещё не подтверждён.
   - `reconciled` фиксирует успешную консистентную запись provider outcome в projection.
   - `failed` всегда несёт typed `failure_reason`.
-  - `blocked` используется для policy denial, stale precondition failure или owner-approval stop.
+  - `blocked` используется для policy denial, stale precondition failure или approval decision `denied|expired`, но не для состояния ожидания.
 
 ### Timeline/comments projection
 - Timeline panel объединяет:
@@ -214,7 +220,8 @@ sequenceDiagram
 - Contract discipline:
   - HTTP/staff DTO only typed models;
   - gRPC request/response only typed models;
-  - realtime envelopes typed and versioned, no `map[string]any`.
+  - realtime envelopes typed and versioned, no `map[string]any`;
+  - every polymorphic payload is described as a closed variant set by `entity_kind`, `command_kind`, `source_kind` or `event_kind`.
 
 ## Модель данных и миграции
 - Детализация сущностей и индексов:

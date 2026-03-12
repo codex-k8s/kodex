@@ -27,6 +27,8 @@ approvals:
 - Назначение: persisted active-set projection по сущностям `work_item|discussion|pull_request|agent`.
 - Важные инварианты:
   - `project_id + entity_kind + entity_external_key` уникальны;
+  - `entity_external_key` is the source of truth for transport field `entity_public_id`;
+  - internal bigint `id` never leaks into HTTP/gRPC DTO or deep-link contracts;
   - `active_state` принадлежит закрытому enum и используется как primary filter;
   - presentation payload хранится в JSONB, но canonical status/freshness fields остаются typed.
 
@@ -51,10 +53,15 @@ approvals:
 | created_at | timestamptz | no | now() |  | |
 | updated_at | timestamptz | no | now() |  | |
 
+Примечание:
+- Все transport references используют `(entity_kind, entity_public_id=entity_external_key)`.
+- Поле `id` остаётся только внутренним FK/индексным ключом для схемы `control-plane`.
+
 ### Entity: `mission_control_relations`
 - Назначение: typed relation graph между сущностями active set.
 - Важные инварианты:
   - relation всегда соединяет две существующие `mission_control_entities`;
+  - transport exposure relation refs always resolves back to `(entity_kind, entity_public_id)` пары;
   - duplicate relation по `(source_entity_id, relation_kind, target_entity_id)` запрещён.
 
 | Field | Type | Nullable | Default | Constraints | Notes |
@@ -73,6 +80,7 @@ approvals:
 - Важные инварианты:
   - `entry_external_key` уникален в пределах `(project_id, source_kind)` для dedupe;
   - provider-originated entries read-only in MVP;
+  - `entity_id` is an internal FK only; transport returns the owner entity via `entity_public_id`;
   - timeline ordering не зависит от client-side heuristics.
 
 | Field | Type | Nullable | Default | Constraints | Notes |
@@ -95,6 +103,7 @@ approvals:
 - Назначение: command ledger для inline write-path и reconciliation evidence.
 - Важные инварианты:
   - `business_intent_key` уникален на проект в пределах активного semantic window;
+  - commands that require explicit approval must enter `pending_approval` before any provider mutation or label transition;
   - command state machine monotonic;
   - every mutating command writes audit and status transition.
 
@@ -107,10 +116,14 @@ approvals:
 | actor_id | text | no |  |  | JWT principal / platform actor |
 | business_intent_key | text | no |  | unique(project_id, business_intent_key) | dedupe anchor |
 | correlation_id | text | no |  | unique | end-to-end audit correlation |
-| status | text | no | `accepted` | check(accepted/queued/pending_sync/reconciled/failed/blocked/cancelled) | |
-| failure_reason | text | yes |  | check(provider_error/policy_denied/projection_stale/duplicate_intent/timeout/unknown) | |
+| status | text | no | `accepted` | check(accepted/pending_approval/queued/pending_sync/reconciled/failed/blocked/cancelled) | |
+| failure_reason | text | yes |  | check(provider_error/policy_denied/projection_stale/duplicate_intent/timeout/approval_denied/approval_expired/unknown) | |
+| approval_request_id | uuid | yes |  |  | nullable until approval flow required |
+| approval_state | text | no | `not_required` | check(not_required/pending/approved/denied/expired) | |
+| approval_requested_at | timestamptz | yes |  |  | |
+| approval_decided_at | timestamptz | yes |  |  | |
 | payload | jsonb | no | '{}'::jsonb |  | typed request body |
-| result_payload | jsonb | no | '{}'::jsonb |  | typed status/result |
+| result_payload | jsonb | no | '{}'::jsonb |  | typed status/result + approval metadata |
 | provider_delivery_ids | jsonb | no | '[]'::jsonb |  | observed provider events |
 | requested_at | timestamptz | no | now() |  | |
 | updated_at | timestamptz | no | now() |  | |
@@ -136,6 +149,39 @@ approvals:
 | created_by | text | no |  |  | |
 | created_at | timestamptz | no | now() |  | |
 | updated_at | timestamptz | no | now() |  | |
+
+## JSONB payload variant mapping
+### `mission_control_entities.detail_payload`
+| `entity_kind` | Stored variant |
+|---|---|
+| `work_item` | `WorkItemDetailsPayload` |
+| `discussion` | `DiscussionDetailsPayload` |
+| `pull_request` | `PullRequestDetailsPayload` |
+| `agent` | `AgentDetailsPayload` |
+
+### `mission_control_timeline_entries.payload`
+| `source_kind` | Stored variant |
+|---|---|
+| `provider` | `ProviderTimelinePayload` |
+| `platform` | `PlatformTimelinePayload` |
+| `command` | `CommandTimelinePayload` |
+| `voice_candidate` | `VoiceCandidateTimelinePayload` |
+
+### `mission_control_commands.payload`
+| `command_kind` | Stored variant |
+|---|---|
+| `discussion.create` | `DiscussionCreatePayload` |
+| `work_item.create` | `WorkItemCreatePayload` |
+| `discussion.formalize` | `DiscussionFormalizePayload` |
+| `stage.next_step.execute` | `StageNextStepExecutePayload` |
+| `command.retry_sync` | `RetrySyncPayload` |
+
+### `mission_control_commands.result_payload`
+| Status/event scope | Stored variant |
+|---|---|
+| acknowledgement | `MissionControlCommandAck` |
+| approval metadata | `MissionControlApprovalStatus` |
+| reconcile result | `MissionControlCommandResultPayload` |
 
 ## Связи
 - `projects` 1:N `mission_control_entities`
@@ -185,10 +231,12 @@ approvals:
 
 ## Доменные инварианты
 - `projection_version` increments on every entity mutation visible to commands.
+- `entity_external_key` remains stable across warmup/rebuild and is the only public identifier exposed by transport.
 - `business_intent_key` represents semantic uniqueness, not transport retry uniqueness.
 - Duplicate provider delivery must not create new command row or duplicate timeline entry.
 - `degraded` entity/snapshot state does not alter canonical provider/platform truth; it only marks freshness and UX safety envelope.
 - Voice candidate cannot bypass discussion/task creation guardrails.
+- `stage.next_step.execute` cannot move from `pending_approval` to `queued` without recorded `approval_request_id` and `approval_state=approved`.
 
 ## Ownership and write-path
 - `control-plane`:

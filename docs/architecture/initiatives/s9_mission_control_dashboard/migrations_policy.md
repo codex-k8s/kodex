@@ -41,10 +41,12 @@ approvals:
 ## Процесс миграции (план для `run:dev`)
 1. Expand:
    - создать таблицы `mission_control_entities`, `mission_control_relations`, `mission_control_timeline_entries`, `mission_control_commands`;
+   - в `mission_control_commands` сразу добавить approval-поля (`approval_request_id`, `approval_state`, `approval_requested_at`, `approval_decided_at`) и closed enum со статусом `pending_approval`;
    - опционально создать `mission_control_voice_candidates` в той же волне либо второй additive migration.
 2. Index hardening:
    - unique key on entity external identity;
    - dedupe indexes for timeline/provider deliveries and `business_intent_key`;
+   - lookup index for approval queue (`project_id`, `approval_state`, `updated_at desc`);
    - query indexes for active-state and timeline sorting.
 3. Warmup/backfill:
    - запустить rebuild job под owner-логикой `control-plane` / execution `worker`;
@@ -58,6 +60,7 @@ approvals:
    - начать публиковать `stale`/`degraded` events.
 6. Enable core inline commands:
    - включить `discussion.create`, `work_item.create`, `discussion.formalize`, `stage.next_step.execute`, `command.retry_sync`.
+   - `stage.next_step.execute` сначала включается только с path `pending_approval -> queued`, без bypass approval state.
 7. Enable optional voice path:
    - только после отдельной owner decision и `CODEXK8S_MISSION_CONTROL_VOICE_ENABLED=true`.
 
@@ -94,6 +97,7 @@ approvals:
 - Limited rollback after write-path enable:
   - new inline writes must be disabled first
   - provider-created issues/discussions/tasks are not reverted automatically
+  - pending approval records and denied/expired approval audit are retained even if command execution stays disabled
   - command/timeline ledger remains preserved for audit and replay diagnosis
 - Voice rollback:
   - disable `CODEXK8S_MISSION_CONTROL_VOICE_ENABLED`
@@ -117,6 +121,7 @@ approvals:
 - snapshot latency within target
 - duplicate webhook delivery does not create extra timeline entries
 - command status transitions reach `reconciled` or `failed` deterministically
+- approval-gated commands reach `pending_approval` before any side effect and only then progress to `queued`
 - degraded fallback path works with realtime disabled
 
 ## Runtime impact / Migration impact
@@ -127,3 +132,4 @@ approvals:
 - If warmup lags, rollout may expose read-only snapshot path with `freshness_status=degraded`, but MUST NOT expose core inline commands yet.
 - If realtime path is unstable, keep HTTP snapshot/details read path and disable WS stream independently.
 - If voice path is unstable, disable only voice feature flag; core Mission Control rollout continues.
+- If approval integration is unavailable, `stage.next_step.execute` MUST remain disabled rather than silently downgrading to direct label mutation.
