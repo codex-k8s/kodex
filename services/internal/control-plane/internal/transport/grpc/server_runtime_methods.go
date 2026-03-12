@@ -388,6 +388,61 @@ func (s *Server) GetLatestAgentSession(ctx context.Context, req *controlplanev1.
 	}, nil
 }
 
+func (s *Server) LookupRunPullRequest(ctx context.Context, req *controlplanev1.LookupRunPullRequestRequest) (*controlplanev1.LookupRunPullRequestResponse, error) {
+	if s.agentCallbacks == nil {
+		return nil, status.Error(codes.FailedPrecondition, "agent callback service is not configured")
+	}
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "request is required")
+	}
+
+	runSession, err := s.authenticateRunToken(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	projectID := strings.TrimSpace(req.GetProjectId())
+	if projectID == "" {
+		projectID = strings.TrimSpace(runSession.ProjectID)
+	}
+	repositoryFullName := strings.TrimSpace(req.GetRepositoryFullName())
+	headBranch := strings.TrimSpace(req.GetHeadBranch())
+	pullRequestNumber := intFromOptional(req.GetPrNumber())
+	if projectID == "" || repositoryFullName == "" || (pullRequestNumber <= 0 && headBranch == "") {
+		return nil, status.Error(codes.InvalidArgument, "project_id, repository_full_name and one of pr_number/head_branch are required")
+	}
+
+	item, found, err := s.agentCallbacks.LookupPullRequest(ctx, agentcallbackdomain.LookupPullRequestQuery{
+		ProjectID:          projectID,
+		RepositoryFullName: repositoryFullName,
+		PullRequestNumber:  pullRequestNumber,
+		HeadBranch:         headBranch,
+	})
+	if err != nil {
+		s.logger.Error(
+			"lookup run pull request via grpc failed",
+			"project_id", projectID,
+			"repository_full_name", repositoryFullName,
+			"pr_number", pullRequestNumber,
+			"head_branch", headBranch,
+			"err", err,
+		)
+		return nil, status.Error(codes.Internal, "failed to lookup pull request")
+	}
+	if !found {
+		return &controlplanev1.LookupRunPullRequestResponse{Found: false}, nil
+	}
+
+	return &controlplanev1.LookupRunPullRequestResponse{
+		Found:      true,
+		PrNumber:   int32(item.Number),
+		PrUrl:      item.URL,
+		PrState:    stringPtrOrNil(item.State),
+		HeadBranch: stringPtrOrNil(item.Head),
+		BaseBranch: stringPtrOrNil(item.Base),
+	}, nil
+}
+
 func (s *Server) InsertRunFlowEvent(ctx context.Context, req *controlplanev1.InsertRunFlowEventRequest) (*controlplanev1.InsertRunFlowEventResponse, error) {
 	if s.agentCallbacks == nil {
 		return nil, status.Error(codes.FailedPrecondition, "agent callback service is not configured")

@@ -2,27 +2,35 @@ package runner
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	floweventdomain "github.com/codex-k8s/codex-k8s/libs/go/domain/flowevent"
+	cpclient "github.com/codex-k8s/codex-k8s/services/jobs/agent-runner/internal/controlplane"
 )
 
-func TestResolveCodexReport_RecoversPRMetadataFromGitHub(t *testing.T) {
-	t.Setenv("PATH", buildFakeOutputRecoveryPath(t, fakeOutputRecoveryConfig{
-		GHViewOutput: `{"number":354,"url":"https://example.test/pr/354","state":"OPEN"}`,
-	}))
-
+func TestResolveCodexReport_RecoversPRMetadataFromControlPlane(t *testing.T) {
 	service := NewService(Config{
 		RunID:                  "run-1",
-		PromptConfig:           PromptConfig{PromptTemplateLocale: promptLocaleRU},
+		ProjectID:              "project-1",
 		RepositoryFullName:     "codex-k8s/codex-k8s",
+		PromptConfig:           PromptConfig{PromptTemplateLocale: promptLocaleRU},
 		ExistingPRNumber:       354,
 		RunTargetBranch:        "codex/issue-347",
 		IssueNumber:            347,
 		AgentKey:               "dev",
 		ControlPlaneGRPCTarget: "codex-k8s-control-plane:9090",
-	}, nil, nil)
+	}, &fakeOutputRecoveryControlPlane{
+		lookupResult: cpclient.RunPullRequestLookupResult{
+			PRNumber: 354,
+			PRURL:    "https://example.test/pr/354",
+			PRState:  "open",
+		},
+		lookupFound: true,
+	}, nil)
 
 	state := codexState{repoDir: t.TempDir()}
 	result := runResult{
@@ -50,20 +58,18 @@ func TestResolveCodexReport_RecoversPRMetadataFromGitHub(t *testing.T) {
 }
 
 func TestResolveCodexReport_RepairsStructuredOutputWhenRequiredFieldsMissing(t *testing.T) {
-	t.Setenv("PATH", buildFakeOutputRecoveryPath(t, fakeOutputRecoveryConfig{
-		GHListOutput:      `[]`,
-		CodexRepairOutput: `{"summary":"repaired","branch":"codex/issue-347","pr_number":354,"pr_url":"https://example.test/pr/354","session_id":"sess-1","model":"gpt-5.4","reasoning_effort":"high"}`,
-	}))
+	t.Setenv("PATH", buildFakeOutputRecoveryPath(t, `{"summary":"repaired","branch":"codex/issue-347","pr_number":354,"pr_url":"https://example.test/pr/354","session_id":"sess-1","model":"gpt-5.4","reasoning_effort":"high"}`))
 
 	service := NewService(Config{
 		RunID:              "run-2",
-		PromptConfig:       PromptConfig{PromptTemplateLocale: promptLocaleRU},
+		ProjectID:          "project-1",
 		RepositoryFullName: "codex-k8s/codex-k8s",
+		PromptConfig:       PromptConfig{PromptTemplateLocale: promptLocaleRU},
 		ExistingPRNumber:   354,
 		RunTargetBranch:    "codex/issue-347",
 		IssueNumber:        347,
 		AgentKey:           "dev",
-	}, nil, nil)
+	}, &fakeOutputRecoveryControlPlane{}, nil)
 
 	state := codexState{repoDir: t.TempDir()}
 	result := runResult{
@@ -90,35 +96,48 @@ func TestResolveCodexReport_RepairsStructuredOutputWhenRequiredFieldsMissing(t *
 	}
 }
 
-type fakeOutputRecoveryConfig struct {
-	GHViewOutput      string
-	GHListOutput      string
-	CodexRepairOutput string
+type fakeOutputRecoveryControlPlane struct {
+	lookupParams  []cpclient.RunPullRequestLookupParams
+	lookupResult  cpclient.RunPullRequestLookupResult
+	lookupFound   bool
+	lookupErr     error
+	sessionResult cpclient.AgentSessionUpsertResult
 }
 
-func buildFakeOutputRecoveryPath(t *testing.T, cfg fakeOutputRecoveryConfig) string {
+func (f *fakeOutputRecoveryControlPlane) UpsertAgentSession(context.Context, cpclient.AgentSessionUpsertParams) (cpclient.AgentSessionUpsertResult, error) {
+	return f.sessionResult, nil
+}
+
+func (f *fakeOutputRecoveryControlPlane) GetLatestAgentSession(context.Context, cpclient.LatestAgentSessionQuery) (cpclient.AgentSessionSnapshot, bool, error) {
+	return cpclient.AgentSessionSnapshot{}, false, nil
+}
+
+func (f *fakeOutputRecoveryControlPlane) LookupRunPullRequest(_ context.Context, params cpclient.RunPullRequestLookupParams) (cpclient.RunPullRequestLookupResult, bool, error) {
+	f.lookupParams = append(f.lookupParams, params)
+	return f.lookupResult, f.lookupFound, f.lookupErr
+}
+
+func (f *fakeOutputRecoveryControlPlane) InsertRunFlowEvent(context.Context, string, floweventdomain.EventType, json.RawMessage) error {
+	return nil
+}
+
+func (f *fakeOutputRecoveryControlPlane) GetCodexAuth(context.Context) ([]byte, bool, error) {
+	return nil, false, nil
+}
+
+func (f *fakeOutputRecoveryControlPlane) UpsertCodexAuth(context.Context, []byte) error {
+	return nil
+}
+
+func (f *fakeOutputRecoveryControlPlane) UpsertRunStatusComment(context.Context, cpclient.UpsertRunStatusCommentParams) error {
+	return nil
+}
+
+func buildFakeOutputRecoveryPath(t *testing.T, repairOutput string) string {
 	t.Helper()
 
 	binDir := t.TempDir()
-	ghScriptPath := filepath.Join(binDir, "gh")
 	codexScriptPath := filepath.Join(binDir, "codex")
-
-	ghScript := `#!/usr/bin/env bash
-set -euo pipefail
-if [[ "${1:-}" == "pr" && "${2:-}" == "view" ]]; then
-  printf '%s' "$FAKE_GH_PR_VIEW_OUTPUT"
-  exit 0
-fi
-if [[ "${1:-}" == "pr" && "${2:-}" == "list" ]]; then
-  printf '%s' "$FAKE_GH_PR_LIST_OUTPUT"
-  exit 0
-fi
-printf 'unsupported gh invocation: %s\n' "$*" >&2
-exit 1
-`
-	if err := os.WriteFile(ghScriptPath, []byte(ghScript), 0o755); err != nil {
-		t.Fatalf("write fake gh script: %v", err)
-	}
 
 	codexScript := `#!/usr/bin/env bash
 set -euo pipefail
@@ -139,9 +158,7 @@ printf 'stdout-fallback'
 		t.Fatalf("write fake codex script: %v", err)
 	}
 
-	t.Setenv("FAKE_GH_PR_VIEW_OUTPUT", cfg.GHViewOutput)
-	t.Setenv("FAKE_GH_PR_LIST_OUTPUT", cfg.GHListOutput)
-	t.Setenv("FAKE_CODEX_REPAIR_OUTPUT", cfg.CodexRepairOutput)
+	t.Setenv("FAKE_CODEX_REPAIR_OUTPUT", repairOutput)
 
 	return binDir + string(os.PathListSeparator) + os.Getenv("PATH")
 }

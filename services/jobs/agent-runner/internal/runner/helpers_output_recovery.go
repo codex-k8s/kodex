@@ -2,17 +2,12 @@ package runner
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
-)
 
-type githubPullRequestSnapshot struct {
-	Number int    `json:"number"`
-	URL    string `json:"url"`
-	State  string `json:"state"`
-}
+	cpclient "github.com/codex-k8s/codex-k8s/services/jobs/agent-runner/internal/controlplane"
+)
 
 type outputRepairPromptTemplateData struct {
 	PromptLocale     string
@@ -27,9 +22,9 @@ func (s *Service) resolveCodexReport(ctx context.Context, state codexState, resu
 		report = enrichCodexReportWithLocalState(report, *result)
 	}
 
-	recoveredReport, recovered, recoverErr := s.recoverCodexReportFromGitHub(ctx, state.repoDir, *result, report, requiresPRFlow)
+	recoveredReport, recovered, recoverErr := s.recoverCodexReportFromControlPlane(ctx, *result, report, requiresPRFlow)
 	if recoverErr != nil {
-		s.logger.Warn("recover codex report from github failed", "run_id", s.cfg.RunID, "err", recoverErr)
+		s.logger.Warn("recover codex report from control-plane failed", "run_id", s.cfg.RunID, "err", recoverErr)
 	}
 	if recovered {
 		report = recoveredReport
@@ -53,9 +48,9 @@ func (s *Service) resolveCodexReport(ctx context.Context, state codexState, resu
 	}
 	repairedReport = enrichCodexReportWithLocalState(repairedReport, *result)
 
-	recoveredReport, recovered, recoverErr = s.recoverCodexReportFromGitHub(ctx, state.repoDir, *result, repairedReport, requiresPRFlow)
+	recoveredReport, recovered, recoverErr = s.recoverCodexReportFromControlPlane(ctx, *result, repairedReport, requiresPRFlow)
 	if recoverErr != nil {
-		s.logger.Warn("recover repaired codex report from github failed", "run_id", s.cfg.RunID, "err", recoverErr)
+		s.logger.Warn("recover repaired codex report from control-plane failed", "run_id", s.cfg.RunID, "err", recoverErr)
 	}
 	if recovered {
 		repairedReport = recoveredReport
@@ -98,10 +93,11 @@ func missingCriticalCodexReportFields(report codexReport, requiresPRFlow bool) [
 	return fields
 }
 
-func (s *Service) recoverCodexReportFromGitHub(ctx context.Context, repoDir string, result runResult, report codexReport, requiresPRFlow bool) (codexReport, bool, error) {
-	if !requiresPRFlow {
+func (s *Service) recoverCodexReportFromControlPlane(ctx context.Context, result runResult, report codexReport, requiresPRFlow bool) (codexReport, bool, error) {
+	if !requiresPRFlow || s.cp == nil {
 		return report, false, nil
 	}
+
 	recovered := false
 	prNumber := report.PRNumber
 	prURL := strings.TrimSpace(report.PRURL)
@@ -112,7 +108,7 @@ func (s *Service) recoverCodexReportFromGitHub(ctx context.Context, repoDir stri
 	}
 
 	if prNumber > 0 && prURL == "" {
-		snapshot, found, err := lookupPullRequestByNumber(ctx, repoDir, prNumber)
+		snapshot, found, err := s.lookupRunPullRequest(ctx, prNumber, "")
 		if err != nil {
 			return report, recovered, err
 		}
@@ -123,7 +119,7 @@ func (s *Service) recoverCodexReportFromGitHub(ctx context.Context, repoDir stri
 	}
 
 	if prNumber <= 0 || prURL == "" {
-		snapshot, found, err := lookupPullRequestByBranch(ctx, repoDir, result.targetBranch)
+		snapshot, found, err := s.lookupRunPullRequest(ctx, 0, result.targetBranch)
 		if err != nil {
 			return report, recovered, err
 		}
@@ -147,41 +143,26 @@ func (s *Service) recoverCodexReportFromGitHub(ctx context.Context, repoDir stri
 	return report, true, nil
 }
 
-func lookupPullRequestByNumber(ctx context.Context, repoDir string, prNumber int) (githubPullRequestSnapshot, bool, error) {
-	if prNumber <= 0 {
-		return githubPullRequestSnapshot{}, false, nil
+func (s *Service) lookupRunPullRequest(ctx context.Context, prNumber int, headBranch string) (pullRequestSnapshot, bool, error) {
+	if s.cp == nil {
+		return pullRequestSnapshot{}, false, nil
 	}
-	output, err := runCommandCaptureCombinedOutput(ctx, repoDir, "gh", "pr", "view", fmt.Sprintf("%d", prNumber), "--json", "number,url,state")
-	if err != nil {
-		return githubPullRequestSnapshot{}, false, fmt.Errorf("gh pr view %d: %w", prNumber, err)
-	}
-	var snapshot githubPullRequestSnapshot
-	if err := json.Unmarshal([]byte(output), &snapshot); err != nil {
-		return githubPullRequestSnapshot{}, false, fmt.Errorf("decode gh pr view %d: %w", prNumber, err)
-	}
-	if snapshot.Number <= 0 {
-		return githubPullRequestSnapshot{}, false, nil
-	}
-	return snapshot, true, nil
-}
 
-func lookupPullRequestByBranch(ctx context.Context, repoDir string, branch string) (githubPullRequestSnapshot, bool, error) {
-	trimmedBranch := strings.TrimSpace(branch)
-	if trimmedBranch == "" {
-		return githubPullRequestSnapshot{}, false, nil
-	}
-	output, err := runCommandCaptureCombinedOutput(ctx, repoDir, "gh", "pr", "list", "--head", trimmedBranch, "--state", "all", "--limit", "20", "--json", "number,url,state")
+	item, found, err := s.cp.LookupRunPullRequest(ctx, runPullRequestLookupParams(s.cfg, prNumber, headBranch))
 	if err != nil {
-		return githubPullRequestSnapshot{}, false, fmt.Errorf("gh pr list --head %s: %w", trimmedBranch, err)
+		return pullRequestSnapshot{}, false, err
 	}
-	var items []githubPullRequestSnapshot
-	if err := json.Unmarshal([]byte(output), &items); err != nil {
-		return githubPullRequestSnapshot{}, false, fmt.Errorf("decode gh pr list for branch %s: %w", trimmedBranch, err)
+	if !found || item.PRNumber <= 0 {
+		return pullRequestSnapshot{}, false, nil
 	}
-	if len(items) == 0 {
-		return githubPullRequestSnapshot{}, false, nil
-	}
-	return items[0], true, nil
+
+	return pullRequestSnapshot{
+		Number: item.PRNumber,
+		URL:    strings.TrimSpace(item.PRURL),
+		State:  strings.TrimSpace(item.PRState),
+		Head:   strings.TrimSpace(item.HeadBranch),
+		Base:   strings.TrimSpace(item.BaseBranch),
+	}, true, nil
 }
 
 func (s *Service) repairCodexStructuredOutput(ctx context.Context, state codexState, result runResult, outputSchemaFile string, report codexReport, requiresPRFlow bool) ([]byte, error) {
@@ -213,4 +194,21 @@ func maxInt(left int, right int) int {
 		return left
 	}
 	return right
+}
+
+type pullRequestSnapshot struct {
+	Number int
+	URL    string
+	State  string
+	Head   string
+	Base   string
+}
+
+func runPullRequestLookupParams(cfg Config, prNumber int, headBranch string) cpclient.RunPullRequestLookupParams {
+	return cpclient.RunPullRequestLookupParams{
+		ProjectID:          strings.TrimSpace(cfg.ProjectID),
+		RepositoryFullName: strings.TrimSpace(cfg.RepositoryFullName),
+		PRNumber:           prNumber,
+		HeadBranch:         strings.TrimSpace(headBranch),
+	}
 }
