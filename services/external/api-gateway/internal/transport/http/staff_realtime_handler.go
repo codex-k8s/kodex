@@ -20,18 +20,18 @@ import (
 const (
 	runRealtimeDefaultEventsLimit = 200
 	runRealtimeDefaultTailLines   = 200
-	runRealtimeFetchTimeout       = 8 * time.Second
-	runRealtimeWriteTimeout       = 10 * time.Second
-	runRealtimePongTimeout        = 60 * time.Second
-	runRealtimeUpdateInterval     = 2 * time.Second
-	runRealtimePingInterval       = 25 * time.Second
+	realtimeFetchTimeout          = 8 * time.Second
+	realtimeWriteTimeout          = 10 * time.Second
+	realtimePongTimeout           = 60 * time.Second
+	realtimeUpdateInterval        = 2 * time.Second
+	realtimePingInterval          = 25 * time.Second
 )
 
-var runRealtimeUpgrader = websocket.Upgrader{
+var staffRealtimeUpgrader = websocket.Upgrader{
 	HandshakeTimeout: 10 * time.Second,
 	ReadBufferSize:   4 * 1024,
 	WriteBufferSize:  4 * 1024,
-	CheckOrigin:      allowRunRealtimeOrigin,
+	CheckOrigin:      allowStaffRealtimeOrigin,
 }
 
 type runRealtimeSnapshot struct {
@@ -46,7 +46,7 @@ type runRealtimeFingerprint struct {
 	logs   string
 }
 
-func allowRunRealtimeOrigin(r *http.Request) bool {
+func allowStaffRealtimeOrigin(r *http.Request) bool {
 	originRaw := strings.TrimSpace(r.Header.Get("Origin"))
 	if originRaw == "" {
 		return true
@@ -109,7 +109,7 @@ func (h *staffHandler) RunRealtime(c *echo.Context) error {
 }
 
 func (h *staffHandler) streamRunRealtime(c *echo.Context, principal *controlplanev1.Principal, arg runRealtimeArg) error {
-	conn, err := runRealtimeUpgrader.Upgrade(c.Response(), c.Request(), nil)
+	conn, err := staffRealtimeUpgrader.Upgrade(c.Response(), c.Request(), nil)
 	if err != nil {
 		// Upgrader already wrote response details on error.
 		return nil
@@ -117,9 +117,9 @@ func (h *staffHandler) streamRunRealtime(c *echo.Context, principal *controlplan
 	defer conn.Close()
 
 	conn.SetReadLimit(64 * 1024)
-	_ = conn.SetReadDeadline(time.Now().Add(runRealtimePongTimeout))
+	_ = conn.SetReadDeadline(time.Now().Add(realtimePongTimeout))
 	conn.SetPongHandler(func(string) error {
-		return conn.SetReadDeadline(time.Now().Add(runRealtimePongTimeout))
+		return conn.SetReadDeadline(time.Now().Add(realtimePongTimeout))
 	})
 
 	readerDone := make(chan struct{})
@@ -132,60 +132,60 @@ func (h *staffHandler) streamRunRealtime(c *echo.Context, principal *controlplan
 		}
 	}()
 
-	fetchCtx, cancelFetch := context.WithTimeout(c.Request().Context(), runRealtimeFetchTimeout)
+	fetchCtx, cancelFetch := context.WithTimeout(c.Request().Context(), realtimeFetchTimeout)
 	initialSnapshot, err := h.fetchRunRealtimeSnapshot(fetchCtx, principal, arg)
 	cancelFetch()
 	if err != nil {
-		_ = writeRunRealtimeMessage(conn, runRealtimeErrorMessage(err))
-		sendRunRealtimeClose(conn)
+		_ = writeRealtimeJSONMessage(conn, runRealtimeErrorMessage(err))
+		sendRealtimeClose(conn)
 		return nil
 	}
 
-	if err := writeRunRealtimeMessage(conn, runRealtimeSnapshotMessage(initialSnapshot)); err != nil {
+	if err := writeRealtimeJSONMessage(conn, runRealtimeSnapshotMessage(initialSnapshot)); err != nil {
 		return nil
 	}
 
 	fingerprint := buildRunRealtimeFingerprint(initialSnapshot)
 
-	updateTicker := time.NewTicker(runRealtimeUpdateInterval)
+	updateTicker := time.NewTicker(realtimeUpdateInterval)
 	defer updateTicker.Stop()
-	pingTicker := time.NewTicker(runRealtimePingInterval)
+	pingTicker := time.NewTicker(realtimePingInterval)
 	defer pingTicker.Stop()
 
 	for {
 		select {
 		case <-c.Request().Context().Done():
-			sendRunRealtimeClose(conn)
+			sendRealtimeClose(conn)
 			return nil
 		case <-readerDone:
 			return nil
 		case <-pingTicker.C:
-			_ = conn.SetWriteDeadline(time.Now().Add(runRealtimeWriteTimeout))
+			_ = conn.SetWriteDeadline(time.Now().Add(realtimeWriteTimeout))
 			if pingErr := conn.WriteMessage(websocket.PingMessage, nil); pingErr != nil {
 				return nil
 			}
 		case <-updateTicker.C:
-			nextFetchCtx, nextCancel := context.WithTimeout(c.Request().Context(), runRealtimeFetchTimeout)
+			nextFetchCtx, nextCancel := context.WithTimeout(c.Request().Context(), realtimeFetchTimeout)
 			nextSnapshot, fetchErr := h.fetchRunRealtimeSnapshot(nextFetchCtx, principal, arg)
 			nextCancel()
 			if fetchErr != nil {
-				_ = writeRunRealtimeMessage(conn, runRealtimeErrorMessage(fetchErr))
+				_ = writeRealtimeJSONMessage(conn, runRealtimeErrorMessage(fetchErr))
 				continue
 			}
 
 			nextFingerprint := buildRunRealtimeFingerprint(nextSnapshot)
 			if nextFingerprint.run != fingerprint.run {
-				if writeErr := writeRunRealtimeMessage(conn, runRealtimeRunMessage(nextSnapshot.Run)); writeErr != nil {
+				if writeErr := writeRealtimeJSONMessage(conn, runRealtimeRunMessage(nextSnapshot.Run)); writeErr != nil {
 					return nil
 				}
 			}
 			if nextFingerprint.events != fingerprint.events {
-				if writeErr := writeRunRealtimeMessage(conn, runRealtimeEventsMessage(nextSnapshot.Events)); writeErr != nil {
+				if writeErr := writeRealtimeJSONMessage(conn, runRealtimeEventsMessage(nextSnapshot.Events)); writeErr != nil {
 					return nil
 				}
 			}
 			if nextSnapshot.Logs != nil && nextFingerprint.logs != fingerprint.logs {
-				if writeErr := writeRunRealtimeMessage(conn, runRealtimeLogsMessage(*nextSnapshot.Logs)); writeErr != nil {
+				if writeErr := writeRealtimeJSONMessage(conn, runRealtimeLogsMessage(*nextSnapshot.Logs)); writeErr != nil {
 					return nil
 				}
 			}
@@ -230,31 +230,31 @@ func (h *staffHandler) fetchRunRealtimeSnapshot(ctx context.Context, principal *
 	return out, nil
 }
 
-func writeRunRealtimeMessage(conn *websocket.Conn, message models.RunRealtimeMessage) error {
-	_ = conn.SetWriteDeadline(time.Now().Add(runRealtimeWriteTimeout))
+func writeRealtimeJSONMessage(conn *websocket.Conn, message any) error {
+	_ = conn.SetWriteDeadline(time.Now().Add(realtimeWriteTimeout))
 	return conn.WriteJSON(message)
 }
 
-func sendRunRealtimeClose(conn *websocket.Conn) {
+func sendRealtimeClose(conn *websocket.Conn) {
 	_ = conn.WriteControl(
 		websocket.CloseMessage,
 		websocket.FormatCloseMessage(websocket.CloseNormalClosure, "closing"),
-		time.Now().Add(runRealtimeWriteTimeout),
+		time.Now().Add(realtimeWriteTimeout),
 	)
 }
 
 func buildRunRealtimeFingerprint(snapshot runRealtimeSnapshot) runRealtimeFingerprint {
 	fp := runRealtimeFingerprint{
-		run:    marshalRunRealtimeFingerprint(snapshot.Run),
-		events: marshalRunRealtimeFingerprint(snapshot.Events),
+		run:    marshalRealtimeFingerprint(snapshot.Run),
+		events: marshalRealtimeFingerprint(snapshot.Events),
 	}
 	if snapshot.Logs != nil {
-		fp.logs = marshalRunRealtimeFingerprint(snapshot.Logs)
+		fp.logs = marshalRealtimeFingerprint(snapshot.Logs)
 	}
 	return fp
 }
 
-func marshalRunRealtimeFingerprint(value any) string {
+func marshalRealtimeFingerprint(value any) string {
 	raw, err := json.Marshal(value)
 	if err != nil {
 		return ""

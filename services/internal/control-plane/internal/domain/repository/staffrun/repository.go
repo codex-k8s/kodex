@@ -17,9 +17,9 @@ type (
 // Repository loads staff run state from PostgreSQL.
 type Repository interface {
 	// ListAll returns recent runs for platform admins.
-	ListAll(ctx context.Context, limit int) ([]Run, error)
+	ListAll(ctx context.Context, page int, pageSize int) ([]Run, int, error)
 	// ListForUser returns recent runs for user's projects.
-	ListForUser(ctx context.Context, userID string, limit int) ([]Run, error)
+	ListForUser(ctx context.Context, userID string, page int, pageSize int) ([]Run, int, error)
 	// ListJobsAll returns runtime jobs list for platform admins.
 	ListJobsAll(ctx context.Context, filter ListFilter) ([]Run, error)
 	// ListJobsForUser returns runtime jobs list scoped to user projects.

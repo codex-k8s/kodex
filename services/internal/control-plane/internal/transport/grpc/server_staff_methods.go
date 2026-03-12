@@ -79,8 +79,9 @@ func (s *Server) ListRuns(ctx context.Context, req *controlplanev1.ListRunsReque
 	if err != nil {
 		return nil, err
 	}
-	limit := clampLimit(req.Limit, 200)
-	items, err := s.staff.ListRuns(ctx, p, limit)
+	page := clampPage(req.GetPage())
+	pageSize := clampLimit(req.GetPageSize(), 20)
+	items, totalCount, err := s.staff.ListRuns(ctx, p, page, pageSize)
 	if err != nil {
 		return nil, toStatus(err)
 	}
@@ -88,7 +89,12 @@ func (s *Server) ListRuns(ctx context.Context, req *controlplanev1.ListRunsReque
 	for _, r := range items {
 		out = append(out, runToProto(r))
 	}
-	return &controlplanev1.ListRunsResponse{Items: out}, nil
+	return &controlplanev1.ListRunsResponse{
+		Items:      out,
+		TotalCount: int32(totalCount),
+		Page:       int32(page),
+		PageSize:   int32(pageSize),
+	}, nil
 }
 
 func (s *Server) ListRunWaits(ctx context.Context, req *controlplanev1.ListRunWaitsRequest) (*controlplanev1.ListRunWaitsResponse, error) {

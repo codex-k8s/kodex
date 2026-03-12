@@ -1407,7 +1407,8 @@ func (x *ResolveApprovalDecisionResponse) GetApprovalState() string {
 type ListRunsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Principal     *Principal             `protobuf:"bytes,1,opt,name=principal,proto3" json:"principal,omitempty"`
-	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
+	Page          int32                  `protobuf:"varint,2,opt,name=page,proto3" json:"page,omitempty"`
+	PageSize      int32                  `protobuf:"varint,3,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1449,9 +1450,16 @@ func (x *ListRunsRequest) GetPrincipal() *Principal {
 	return nil
 }
 
-func (x *ListRunsRequest) GetLimit() int32 {
+func (x *ListRunsRequest) GetPage() int32 {
 	if x != nil {
-		return x.Limit
+		return x.Page
+	}
+	return 0
+}
+
+func (x *ListRunsRequest) GetPageSize() int32 {
+	if x != nil {
+		return x.PageSize
 	}
 	return 0
 }
@@ -1459,6 +1467,9 @@ func (x *ListRunsRequest) GetLimit() int32 {
 type ListRunsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Items         []*Run                 `protobuf:"bytes,1,rep,name=items,proto3" json:"items,omitempty"`
+	TotalCount    int32                  `protobuf:"varint,2,opt,name=total_count,json=totalCount,proto3" json:"total_count,omitempty"`
+	Page          int32                  `protobuf:"varint,3,opt,name=page,proto3" json:"page,omitempty"`
+	PageSize      int32                  `protobuf:"varint,4,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1498,6 +1509,27 @@ func (x *ListRunsResponse) GetItems() []*Run {
 		return x.Items
 	}
 	return nil
+}
+
+func (x *ListRunsResponse) GetTotalCount() int32 {
+	if x != nil {
+		return x.TotalCount
+	}
+	return 0
+}
+
+func (x *ListRunsResponse) GetPage() int32 {
+	if x != nil {
+		return x.Page
+	}
+	return 0
+}
+
+func (x *ListRunsResponse) GetPageSize() int32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
 }
 
 type ListRunJobsRequest struct {
@@ -5647,9 +5679,10 @@ func (x *RuntimeDeployTask) GetLogs() []*RuntimeDeployTaskLog {
 type ListRuntimeDeployTasksRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Principal     *Principal             `protobuf:"bytes,1,opt,name=principal,proto3" json:"principal,omitempty"`
-	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
-	Status        *string                `protobuf:"bytes,3,opt,name=status,proto3,oneof" json:"status,omitempty"`
-	TargetEnv     *string                `protobuf:"bytes,4,opt,name=target_env,json=targetEnv,proto3,oneof" json:"target_env,omitempty"`
+	Page          int32                  `protobuf:"varint,2,opt,name=page,proto3" json:"page,omitempty"`
+	PageSize      int32                  `protobuf:"varint,3,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	Status        *string                `protobuf:"bytes,4,opt,name=status,proto3,oneof" json:"status,omitempty"`
+	TargetEnv     *string                `protobuf:"bytes,5,opt,name=target_env,json=targetEnv,proto3,oneof" json:"target_env,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5691,9 +5724,16 @@ func (x *ListRuntimeDeployTasksRequest) GetPrincipal() *Principal {
 	return nil
 }
 
-func (x *ListRuntimeDeployTasksRequest) GetLimit() int32 {
+func (x *ListRuntimeDeployTasksRequest) GetPage() int32 {
 	if x != nil {
-		return x.Limit
+		return x.Page
+	}
+	return 0
+}
+
+func (x *ListRuntimeDeployTasksRequest) GetPageSize() int32 {
+	if x != nil {
+		return x.PageSize
 	}
 	return 0
 }
@@ -5715,6 +5755,9 @@ func (x *ListRuntimeDeployTasksRequest) GetTargetEnv() string {
 type ListRuntimeDeployTasksResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Items         []*RuntimeDeployTask   `protobuf:"bytes,1,rep,name=items,proto3" json:"items,omitempty"`
+	TotalCount    int32                  `protobuf:"varint,2,opt,name=total_count,json=totalCount,proto3" json:"total_count,omitempty"`
+	Page          int32                  `protobuf:"varint,3,opt,name=page,proto3" json:"page,omitempty"`
+	PageSize      int32                  `protobuf:"varint,4,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5754,6 +5797,27 @@ func (x *ListRuntimeDeployTasksResponse) GetItems() []*RuntimeDeployTask {
 		return x.Items
 	}
 	return nil
+}
+
+func (x *ListRuntimeDeployTasksResponse) GetTotalCount() int32 {
+	if x != nil {
+		return x.TotalCount
+	}
+	return 0
+}
+
+func (x *ListRuntimeDeployTasksResponse) GetPage() int32 {
+	if x != nil {
+		return x.Page
+	}
+	return 0
+}
+
+func (x *ListRuntimeDeployTasksResponse) GetPageSize() int32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
 }
 
 type GetRuntimeDeployTaskRequest struct {
@@ -8332,12 +8396,17 @@ const file_codexk8s_controlplane_v1_controlplane_proto_rawDesc = "" +
 	"\ttool_name\x18\x04 \x01(\tR\btoolName\x12\x16\n" +
 	"\x06action\x18\x05 \x01(\tR\x06action\x12%\n" +
 	"\x0eapproval_state\x18\x06 \x01(\tR\rapprovalStateB\t\n" +
-	"\a_run_id\"j\n" +
+	"\a_run_id\"\x85\x01\n" +
 	"\x0fListRunsRequest\x12A\n" +
-	"\tprincipal\x18\x01 \x01(\v2#.codexk8s.controlplane.v1.PrincipalR\tprincipal\x12\x14\n" +
-	"\x05limit\x18\x02 \x01(\x05R\x05limit\"G\n" +
+	"\tprincipal\x18\x01 \x01(\v2#.codexk8s.controlplane.v1.PrincipalR\tprincipal\x12\x12\n" +
+	"\x04page\x18\x02 \x01(\x05R\x04page\x12\x1b\n" +
+	"\tpage_size\x18\x03 \x01(\x05R\bpageSize\"\x99\x01\n" +
 	"\x10ListRunsResponse\x123\n" +
-	"\x05items\x18\x01 \x03(\v2\x1d.codexk8s.controlplane.v1.RunR\x05items\"\xfe\x01\n" +
+	"\x05items\x18\x01 \x03(\v2\x1d.codexk8s.controlplane.v1.RunR\x05items\x12\x1f\n" +
+	"\vtotal_count\x18\x02 \x01(\x05R\n" +
+	"totalCount\x12\x12\n" +
+	"\x04page\x18\x03 \x01(\x05R\x04page\x12\x1b\n" +
+	"\tpage_size\x18\x04 \x01(\x05R\bpageSize\"\xfe\x01\n" +
 	"\x12ListRunJobsRequest\x12A\n" +
 	"\tprincipal\x18\x01 \x01(\v2#.codexk8s.controlplane.v1.PrincipalR\tprincipal\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12&\n" +
@@ -8789,17 +8858,22 @@ const file_codexk8s_controlplane_v1_controlplane_proto_rawDesc = "" +
 	"\x0e_cancel_reasonB\x14\n" +
 	"\x12_stop_requested_byB\x0e\n" +
 	"\f_stop_reasonB\x19\n" +
-	"\x17_terminal_status_source\"\xd3\x01\n" +
+	"\x17_terminal_status_source\"\xee\x01\n" +
 	"\x1dListRuntimeDeployTasksRequest\x12A\n" +
-	"\tprincipal\x18\x01 \x01(\v2#.codexk8s.controlplane.v1.PrincipalR\tprincipal\x12\x14\n" +
-	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x1b\n" +
-	"\x06status\x18\x03 \x01(\tH\x00R\x06status\x88\x01\x01\x12\"\n" +
+	"\tprincipal\x18\x01 \x01(\v2#.codexk8s.controlplane.v1.PrincipalR\tprincipal\x12\x12\n" +
+	"\x04page\x18\x02 \x01(\x05R\x04page\x12\x1b\n" +
+	"\tpage_size\x18\x03 \x01(\x05R\bpageSize\x12\x1b\n" +
+	"\x06status\x18\x04 \x01(\tH\x00R\x06status\x88\x01\x01\x12\"\n" +
 	"\n" +
-	"target_env\x18\x04 \x01(\tH\x01R\ttargetEnv\x88\x01\x01B\t\n" +
+	"target_env\x18\x05 \x01(\tH\x01R\ttargetEnv\x88\x01\x01B\t\n" +
 	"\a_statusB\r\n" +
-	"\v_target_env\"c\n" +
+	"\v_target_env\"\xb5\x01\n" +
 	"\x1eListRuntimeDeployTasksResponse\x12A\n" +
-	"\x05items\x18\x01 \x03(\v2+.codexk8s.controlplane.v1.RuntimeDeployTaskR\x05items\"w\n" +
+	"\x05items\x18\x01 \x03(\v2+.codexk8s.controlplane.v1.RuntimeDeployTaskR\x05items\x12\x1f\n" +
+	"\vtotal_count\x18\x02 \x01(\x05R\n" +
+	"totalCount\x12\x12\n" +
+	"\x04page\x18\x03 \x01(\x05R\x04page\x12\x1b\n" +
+	"\tpage_size\x18\x04 \x01(\x05R\bpageSize\"w\n" +
 	"\x1bGetRuntimeDeployTaskRequest\x12A\n" +
 	"\tprincipal\x18\x01 \x01(\v2#.codexk8s.controlplane.v1.PrincipalR\tprincipal\x12\x15\n" +
 	"\x06run_id\x18\x02 \x01(\tR\x05runId\"\xa2\x01\n" +

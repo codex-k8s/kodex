@@ -26,3 +26,19 @@ export type RunRealtimeMessage = {
   message?: string;
   sent_at: string;
 };
+
+export type RealtimePagination = {
+  page: number;
+  page_size: number;
+  total_count: number;
+};
+
+export type RunsRealtimeMessageType = "snapshot" | "error";
+
+export type RunsRealtimeMessage = {
+  type: RunsRealtimeMessageType;
+  items?: Run[];
+  pagination?: RealtimePagination;
+  message?: string;
+  sent_at: string;
+};

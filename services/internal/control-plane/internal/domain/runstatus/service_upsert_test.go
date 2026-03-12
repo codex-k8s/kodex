@@ -299,12 +299,12 @@ type runstatusTestStaffRunsRepository struct {
 	events []staffrunrepo.FlowEvent
 }
 
-func (r *runstatusTestStaffRunsRepository) ListAll(context.Context, int) ([]staffrunrepo.Run, error) {
-	return nil, nil
+func (r *runstatusTestStaffRunsRepository) ListAll(context.Context, int, int) ([]staffrunrepo.Run, int, error) {
+	return nil, 0, nil
 }
 
-func (r *runstatusTestStaffRunsRepository) ListForUser(context.Context, string, int) ([]staffrunrepo.Run, error) {
-	return nil, nil
+func (r *runstatusTestStaffRunsRepository) ListForUser(context.Context, string, int, int) ([]staffrunrepo.Run, int, error) {
+	return nil, 0, nil
 }
 
 func (r *runstatusTestStaffRunsRepository) ListJobsAll(context.Context, staffrunrepo.ListFilter) ([]staffrunrepo.Run, error) {

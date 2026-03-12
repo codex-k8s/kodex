@@ -111,12 +111,12 @@ func (s *Service) GetProject(ctx context.Context, principal Principal, projectID
 	return p, nil
 }
 
-// ListRuns returns runs visible to the principal.
-func (s *Service) ListRuns(ctx context.Context, principal Principal, limit int) ([]staffrunrepo.Run, error) {
+// ListRuns returns one paginated runs slice visible to the principal.
+func (s *Service) ListRuns(ctx context.Context, principal Principal, page int, pageSize int) ([]staffrunrepo.Run, int, error) {
 	if principal.IsPlatformAdmin {
-		return s.runs.ListAll(ctx, limit)
+		return s.runs.ListAll(ctx, page, pageSize)
 	}
-	return s.runs.ListForUser(ctx, principal.UserID, limit)
+	return s.runs.ListForUser(ctx, principal.UserID, page, pageSize)
 }
 
 // GetRun returns a single run record visible to the principal.

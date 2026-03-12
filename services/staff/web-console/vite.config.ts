@@ -48,7 +48,11 @@ export default defineConfig({
       };
     })(),
     proxy: {
-      "/api": "http://127.0.0.1:8080",
+      "/api": {
+        target: "http://127.0.0.1:8080",
+        // Keep the original dev host so api-gateway origin validation still matches websocket upgrades.
+        ws: true,
+      },
       "/metrics": "http://127.0.0.1:8080",
       "/health": "http://127.0.0.1:8080",
     },

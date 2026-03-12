@@ -430,6 +430,10 @@ export type RuntimeErrorId = string;
 
 export type ApprovalRequestId = number;
 
+export type Page = number;
+
+export type PageSize = number;
+
 export type UserId = string;
 
 export type Limit = number;
@@ -799,37 +803,6 @@ export type GetProjectResponses = {
 
 export type GetProjectResponse = GetProjectResponses[keyof GetProjectResponses];
 
-export type ListRunsData = {
-    body?: never;
-    path?: never;
-    query?: {
-        limit?: number;
-    };
-    url: '/api/v1/staff/runs';
-};
-
-export type ListRunsErrors = {
-    /**
-     * Invalid request
-     */
-    400: ErrorResponse;
-    /**
-     * Unauthorized
-     */
-    401: ErrorResponse;
-};
-
-export type ListRunsError = ListRunsErrors[keyof ListRunsErrors];
-
-export type ListRunsResponses = {
-    /**
-     * Runs list
-     */
-    200: RunItemsResponse;
-};
-
-export type ListRunsResponse = ListRunsResponses[keyof ListRunsResponses];
-
 export type ListRunWaitsData = {
     body?: never;
     path?: never;
@@ -864,6 +837,36 @@ export type ListRunWaitsResponses = {
 };
 
 export type ListRunWaitsResponse = ListRunWaitsResponses[keyof ListRunWaitsResponses];
+
+export type RunsRealtimeData = {
+    body?: never;
+    path?: never;
+    query?: {
+        page?: number;
+        page_size?: number;
+    };
+    url: '/api/v1/staff/runs/realtime';
+};
+
+export type RunsRealtimeErrors = {
+    /**
+     * Invalid request
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+};
+
+export type RunsRealtimeError = RunsRealtimeErrors[keyof RunsRealtimeErrors];
+
+export type RunsRealtimeResponses = {
+    /**
+     * Realtime runs list stream endpoint (expects WebSocket upgrade)
+     */
+    200: unknown;
+};
 
 export type ListPendingApprovalsData = {
     body?: never;
@@ -1147,18 +1150,19 @@ export type ListRunLearningFeedbackResponses = {
 
 export type ListRunLearningFeedbackResponse = ListRunLearningFeedbackResponses[keyof ListRunLearningFeedbackResponses];
 
-export type ListRuntimeDeployTasksData = {
+export type RuntimeDeployTasksRealtimeData = {
     body?: never;
     path?: never;
     query?: {
-        limit?: number;
+        page?: number;
+        page_size?: number;
         status?: 'pending' | 'running' | 'succeeded' | 'failed' | 'canceled';
         target_env?: string;
     };
-    url: '/api/v1/staff/runtime-deploy/tasks';
+    url: '/api/v1/staff/runtime-deploy/tasks/realtime';
 };
 
-export type ListRuntimeDeployTasksErrors = {
+export type RuntimeDeployTasksRealtimeErrors = {
     /**
      * Invalid request
      */
@@ -1173,16 +1177,14 @@ export type ListRuntimeDeployTasksErrors = {
     403: ErrorResponse;
 };
 
-export type ListRuntimeDeployTasksError = ListRuntimeDeployTasksErrors[keyof ListRuntimeDeployTasksErrors];
+export type RuntimeDeployTasksRealtimeError = RuntimeDeployTasksRealtimeErrors[keyof RuntimeDeployTasksRealtimeErrors];
 
-export type ListRuntimeDeployTasksResponses = {
+export type RuntimeDeployTasksRealtimeResponses = {
     /**
-     * Runtime deploy tasks list
+     * Realtime runtime deploy tasks stream endpoint (expects WebSocket upgrade)
      */
-    200: RuntimeDeployTaskItemsResponse;
+    200: unknown;
 };
-
-export type ListRuntimeDeployTasksResponse = ListRuntimeDeployTasksResponses[keyof ListRuntimeDeployTasksResponses];
 
 export type GetRuntimeDeployTaskData = {
     body?: never;

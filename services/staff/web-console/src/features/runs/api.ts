@@ -5,7 +5,6 @@ import {
   listPendingApprovals as listPendingApprovalsRequest,
   listRunEvents as listRunEventsRequest,
   listRunWaits as listRunWaitsRequest,
-  listRuns as listRunsRequest,
   resolveApprovalDecision as resolveApprovalDecisionRequest,
 } from "../../shared/api/sdk";
 
@@ -27,11 +26,6 @@ export type RunListFilters = {
 export type RunWaitFilters = RunListFilters & {
   waitState?: string;
 };
-
-export async function listRuns(limit = 40): Promise<Run[]> {
-  const resp = await listRunsRequest({ query: { limit }, throwOnError: true });
-  return resp.data.items ?? [];
-}
 
 export async function listRunWaits(filters: RunWaitFilters = {}, limit = 20): Promise<Run[]> {
   const resp = await listRunWaitsRequest({

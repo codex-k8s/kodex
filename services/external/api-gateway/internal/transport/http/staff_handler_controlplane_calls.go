@@ -32,8 +32,12 @@ func buildUpsertProjectRequest(principal *controlplanev1.Principal, req models.U
 	return &controlplanev1.UpsertProjectRequest{Principal: principal, Slug: req.Slug, Name: req.Name}
 }
 
-func buildListRunsRequest(principal *controlplanev1.Principal, limit int32) *controlplanev1.ListRunsRequest {
-	return &controlplanev1.ListRunsRequest{Principal: principal, Limit: limit}
+func buildListRunsRequest(principal *controlplanev1.Principal, arg runListPageArg) *controlplanev1.ListRunsRequest {
+	return &controlplanev1.ListRunsRequest{
+		Principal: principal,
+		Page:      arg.page,
+		PageSize:  arg.pageSize,
+	}
 }
 
 func buildListRunWaitsRequest(principal *controlplanev1.Principal, arg runListFilterArg) *controlplanev1.ListRunWaitsRequest {
@@ -92,7 +96,8 @@ func buildListRunLearningFeedbackRequest(principal *controlplanev1.Principal, ar
 func buildListRuntimeDeployTasksRequest(principal *controlplanev1.Principal, arg runtimeDeployListArg) *controlplanev1.ListRuntimeDeployTasksRequest {
 	return &controlplanev1.ListRuntimeDeployTasksRequest{
 		Principal: principal,
-		Limit:     arg.limit,
+		Page:      arg.page,
+		PageSize:  arg.pageSize,
 		Status:    optionalStringPtr(arg.status),
 		TargetEnv: optionalStringPtr(arg.targetEnv),
 	}
@@ -169,8 +174,8 @@ func (h *staffHandler) upsertProjectCall(ctx context.Context, principal *control
 	return callUnaryWithArg(ctx, principal, req, buildUpsertProjectRequest, h.cp.Service().UpsertProject)
 }
 
-func (h *staffHandler) listRunsCall(ctx context.Context, principal *controlplanev1.Principal, limit int32) (*controlplanev1.ListRunsResponse, error) {
-	return callUnaryWithArg(ctx, principal, limit, buildListRunsRequest, h.cp.Service().ListRuns)
+func (h *staffHandler) listRunsCall(ctx context.Context, principal *controlplanev1.Principal, arg runListPageArg) (*controlplanev1.ListRunsResponse, error) {
+	return callUnaryWithArg(ctx, principal, arg, buildListRunsRequest, h.cp.Service().ListRuns)
 }
 
 func (h *staffHandler) listRunWaitsCall(ctx context.Context, principal *controlplanev1.Principal, arg runListFilterArg) (*controlplanev1.ListRunWaitsResponse, error) {

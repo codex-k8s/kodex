@@ -41,6 +41,8 @@ var (
 	queryRequeueRunning string
 	//go:embed sql/request_action.sql
 	queryRequestAction string
+	//go:embed sql/count_recent.sql
+	queryCountRecent string
 	//go:embed sql/list_recent.sql
 	queryListRecent string
 	//go:embed sql/append_log.sql
@@ -326,39 +328,65 @@ func hasActiveLease(task domainrepo.Task, requestedAt time.Time) bool {
 	return task.LeaseUntil.UTC().After(requestedAt.UTC())
 }
 
-// ListRecent returns runtime deploy tasks ordered by updated_at desc.
-func (r *Repository) ListRecent(ctx context.Context, filter domainrepo.ListFilter) ([]domainrepo.Task, error) {
-	limit := filter.Limit
-	if limit <= 0 {
-		limit = 200
+// ListRecent returns one runtime deploy task page ordered by updated_at desc.
+func (r *Repository) ListRecent(ctx context.Context, filter domainrepo.ListFilter) ([]domainrepo.Task, int, error) {
+	page := filter.Page
+	if page <= 0 {
+		page = 1
 	}
-	if limit > 1000 {
-		limit = 1000
+	pageSize := filter.PageSize
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	if pageSize > 1000 {
+		pageSize = 1000
+	}
+	offset := (page - 1) * pageSize
+	if offset < 0 {
+		offset = 0
+	}
+	totalCount, err := r.countRecent(ctx, filter)
+	if err != nil {
+		return nil, 0, err
 	}
 	rows, err := r.db.Query(
 		ctx,
 		queryListRecent,
 		strings.TrimSpace(filter.Status),
 		strings.TrimSpace(filter.TargetEnv),
-		limit,
+		pageSize,
+		offset,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("list runtime deploy tasks: %w", err)
+		return nil, 0, fmt.Errorf("list runtime deploy tasks: %w", err)
 	}
 	defer rows.Close()
 
-	items := make([]domainrepo.Task, 0, limit)
+	items := make([]domainrepo.Task, 0, pageSize)
 	for rows.Next() {
 		item, scanErr := scanTask(rows)
 		if scanErr != nil {
-			return nil, fmt.Errorf("scan runtime deploy task list item: %w", scanErr)
+			return nil, 0, fmt.Errorf("scan runtime deploy task list item: %w", scanErr)
 		}
 		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate runtime deploy task list rows: %w", err)
+		return nil, 0, fmt.Errorf("iterate runtime deploy task list rows: %w", err)
 	}
-	return items, nil
+	return items, totalCount, nil
+}
+
+func (r *Repository) countRecent(ctx context.Context, filter domainrepo.ListFilter) (int, error) {
+	var totalCount int
+	if err := r.db.QueryRow(
+		ctx,
+		queryCountRecent,
+		strings.TrimSpace(filter.Status),
+		strings.TrimSpace(filter.TargetEnv),
+	).Scan(&totalCount); err != nil {
+		return 0, fmt.Errorf("count runtime deploy tasks: %w", err)
+	}
+	return totalCount, nil
 }
 
 // AppendLog appends one task log line.

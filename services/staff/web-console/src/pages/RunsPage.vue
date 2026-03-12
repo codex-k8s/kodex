@@ -2,6 +2,9 @@
   <div>
     <PageHeader :title="t('pages.runs.title')" />
 
+    <VAlert v-if="runsError" type="error" variant="tonal" class="mt-4">
+      {{ t(runsError.messageKey) }}
+    </VAlert>
     <VAlert v-if="runs.error" type="error" variant="tonal" class="mt-4">
       {{ t(runs.error.messageKey) }}
     </VAlert>
@@ -14,7 +17,7 @@
         <VCard variant="tonal">
           <VCardText>
             <div class="text-caption text-medium-emphasis">{{ t("pages.runs.title") }}</div>
-            <div class="text-h6 font-weight-bold">{{ runs.items.length }}</div>
+            <div class="text-h6 font-weight-bold">{{ totalCount }}</div>
           </VCardText>
         </VCard>
       </VCol>
@@ -44,7 +47,16 @@
 
     <VCard class="mt-4" variant="outlined">
       <VCardText>
-        <VDataTable v-model:page="runsTablePage" :headers="headers" :items="runs.items" :loading="runs.loading" :items-per-page="runsItemsPerPage" hover>
+        <VDataTableServer
+          v-model:page="tablePage"
+          v-model:items-per-page="itemsPerPage"
+          :headers="headers"
+          :items="runItems"
+          :items-length="totalCount"
+          :loading="loading"
+          :items-per-page-options="itemsPerPageOptions"
+          hover
+        >
           <template #item.status="{ item }">
             <div class="d-flex justify-center">
               <VChip size="small" variant="tonal" class="font-weight-bold" :color="colorForRunStatus(item.status)">
@@ -116,7 +128,7 @@
               {{ t("states.noRuns") }}
             </div>
           </template>
-        </VDataTable>
+        </VDataTableServer>
       </VCardText>
     </VCard>
   </div>
@@ -124,22 +136,30 @@
 
 <script setup lang="ts">
 // TODO(#19): Добавить table settings + row actions menu через общий DataTable wrapper и master-detail layout для Runs/Approvals.
-import { onBeforeUnmount, onMounted, watch } from "vue";
+import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 import { useI18n } from "vue-i18n";
 
 import PageHeader from "../shared/ui/PageHeader.vue";
+import { ApiError } from "../shared/api/errors";
 import { formatDateTime } from "../shared/lib/datetime";
 import { colorForRunStatus } from "../shared/lib/chips";
-import { createProgressiveTableState } from "../shared/lib/progressive-table";
+import { bindRealtimePageLifecycle } from "../shared/ws/lifecycle";
+import { subscribeRunsRealtime } from "../features/runs/list-realtime";
 import { useRunsStore } from "../features/runs/store";
+import type { Run, RunsRealtimeMessage } from "../features/runs/types";
 
 const { t, locale } = useI18n({ useScope: "global" });
 const runs = useRunsStore();
-const runsItemsPerPage = 20;
-const runsPaging = createProgressiveTableState({ itemsPerPage: runsItemsPerPage });
-const runsTablePage = runsPaging.page;
-let autoRefreshTimer: number | null = null;
+const loading = ref(true);
+const runsError = ref<ApiError | null>(null);
+const runItems = ref<Run[]>([]);
+const totalCount = ref(0);
+const tablePage = ref(1);
+const itemsPerPage = ref(20);
+const stopRunsRealtimeRef = ref<(() => void) | null>(null);
+const stopLifecycleBindingRef = ref<(() => void) | null>(null);
+const itemsPerPageOptions = [10, 20, 50, 100];
 
 const headers = [
   { title: t("pages.runs.status"), key: "status", width: 140, align: "center" },
@@ -152,60 +172,102 @@ const headers = [
   { title: "", key: "actions", sortable: false, width: 72, align: "end" },
 ] as const;
 
-async function loadAll() {
+async function refreshSidebarCards(): Promise<void> {
   await Promise.all([
-    loadRuns(),
     runs.loadRunWaits(20),
     runs.loadPendingApprovals(20),
   ]);
 }
 
-async function loadRuns(): Promise<void> {
-  await runs.load(runsPaging.limit.value);
-  runsPaging.markLoaded(runs.items.length);
-}
-
-async function refreshAll(): Promise<void> {
-  runsPaging.reset();
-  await loadAll();
-}
-
-function startAutoRefresh(): void {
-  if (autoRefreshTimer !== null) return;
-  autoRefreshTimer = window.setInterval(() => {
-    void loadAll();
-  }, 10000);
-}
-
-function stopAutoRefresh(): void {
-  if (autoRefreshTimer === null) return;
-  window.clearInterval(autoRefreshTimer);
-  autoRefreshTimer = null;
-}
-
-async function loadMoreRunsIfNeeded(nextPage: number, prevPage: number): Promise<void> {
-  if (runs.loading) {
+function applyRunsRealtimeMessage(message: RunsRealtimeMessage): void {
+  if (message.type === "error") {
+    runsError.value = new ApiError({ kind: "unknown", messageKey: "errors.unknown" });
+    loading.value = false;
     return;
   }
-  if (!runsPaging.shouldGrowForPage(runs.items.length, nextPage, prevPage)) {
+  if (!message.pagination) {
     return;
   }
-  await loadRuns();
+  const maxPage = Math.max(1, Math.ceil(message.pagination.total_count / message.pagination.page_size));
+  if (tablePage.value > maxPage) {
+    tablePage.value = maxPage;
+    return;
+  }
+  runItems.value = message.items ?? [];
+  totalCount.value = message.pagination.total_count;
+  runsError.value = null;
+  loading.value = false;
 }
 
-watch(
-  runsTablePage,
-  (nextPage, prevPage) => void loadMoreRunsIfNeeded(nextPage, prevPage),
-);
+function handleInitialRunsRealtimeTimeout(): void {
+  runsError.value = new ApiError({ kind: "network", messageKey: "errors.realtimeUnavailable" });
+  loading.value = false;
+}
+
+function stopRunsRealtime(): void {
+  stopRunsRealtimeRef.value?.();
+  stopRunsRealtimeRef.value = null;
+}
+
+function startRunsRealtime(): void {
+  stopRunsRealtime();
+  loading.value = true;
+  runsError.value = null;
+  stopRunsRealtimeRef.value = subscribeRunsRealtime({
+    page: tablePage.value,
+    pageSize: itemsPerPage.value,
+    onMessage: applyRunsRealtimeMessage,
+    onInitialMessageTimeout: handleInitialRunsRealtimeTimeout,
+  });
+}
+
+function stopLifecycleBinding(): void {
+  stopLifecycleBindingRef.value?.();
+  stopLifecycleBindingRef.value = null;
+}
+
+function handlePageSuspend(): void {
+  stopRunsRealtime();
+}
+
+function handlePageResume(): void {
+  void refreshSidebarCards();
+  startRunsRealtime();
+}
 
 onMounted(() => {
-  void refreshAll();
-  startAutoRefresh();
+  void refreshSidebarCards();
+  startRunsRealtime();
+  stopLifecycleBindingRef.value = bindRealtimePageLifecycle({
+    onResume: handlePageResume,
+    onSuspend: handlePageSuspend,
+  });
 });
 
 onBeforeUnmount(() => {
-  stopAutoRefresh();
+  stopLifecycleBinding();
+  stopRunsRealtime();
 });
+
+watch(
+  itemsPerPage,
+  (nextValue, prevValue) => {
+    if (nextValue === prevValue) return;
+    if (tablePage.value !== 1) {
+      tablePage.value = 1;
+      return;
+    }
+    startRunsRealtime();
+  },
+);
+
+watch(
+  tablePage,
+  (nextValue, prevValue) => {
+    if (nextValue === prevValue) return;
+    startRunsRealtime();
+  },
+);
 </script>
 
 <style scoped>

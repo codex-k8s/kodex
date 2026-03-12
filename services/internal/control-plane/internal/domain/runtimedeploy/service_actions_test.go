@@ -142,8 +142,8 @@ func (f *fakeTaskActionRepo) RequestAction(_ context.Context, params runtimedepl
 	return f.requestActionResult, nil
 }
 
-func (*fakeTaskActionRepo) ListRecent(_ context.Context, _ runtimedeploytaskrepo.ListFilter) ([]runtimedeploytaskrepo.Task, error) {
-	return nil, nil
+func (*fakeTaskActionRepo) ListRecent(_ context.Context, _ runtimedeploytaskrepo.ListFilter) ([]runtimedeploytaskrepo.Task, int, error) {
+	return nil, 0, nil
 }
 
 func (f *fakeTaskActionRepo) AppendLog(_ context.Context, params runtimedeploytaskrepo.AppendLogParams) error {

@@ -33,4 +33,5 @@ FROM runtime_deploy_tasks
 WHERE ($1::text = '' OR status = $1::text)
   AND ($2::text = '' OR target_env = $2::text)
 ORDER BY updated_at DESC
-LIMIT $3;
+LIMIT $3
+OFFSET $4;

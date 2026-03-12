@@ -2,6 +2,7 @@ package runtimedeploytask
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -60,5 +61,16 @@ func TestHasActiveLease(t *testing.T) {
 		LeaseUntil: now.Add(30 * time.Second),
 	}, now) {
 		t.Fatal("expected empty owner to be inactive")
+	}
+}
+
+func TestRealtimeListQueriesSupportPaginationAndCount(t *testing.T) {
+	t.Parallel()
+
+	if !strings.Contains(queryListRecent, "OFFSET $4") {
+		t.Fatal("list_recent query must support pagination offset")
+	}
+	if !strings.Contains(queryCountRecent, "COUNT(*)") {
+		t.Fatal("count_recent query must count filtered tasks")
 	}
 }

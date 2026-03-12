@@ -15,6 +15,10 @@ import (
 )
 
 var (
+	//go:embed sql/count_all.sql
+	queryCountAll string
+	//go:embed sql/count_for_user.sql
+	queryCountForUser string
 	//go:embed sql/list_all.sql
 	queryListAll string
 	//go:embed sql/list_for_user.sql
@@ -49,28 +53,44 @@ func NewRepository(db *pgxpool.Pool) *Repository {
 	return &Repository{db: db}
 }
 
-// ListAll returns recent runs for platform admins.
-func (r *Repository) ListAll(ctx context.Context, limit int) ([]domainrepo.Run, error) {
-	if limit <= 0 {
-		limit = 200
-	}
-	rows, err := r.db.Query(ctx, queryListAll, limit)
+// ListAll returns one runs page for platform admins.
+func (r *Repository) ListAll(ctx context.Context, page int, pageSize int) ([]domainrepo.Run, int, error) {
+	offset, pageSize := normalizePage(page, pageSize)
+
+	totalCount, err := r.countRows(ctx, queryCountAll)
 	if err != nil {
-		return nil, fmt.Errorf("list runs: %w", err)
+		return nil, 0, fmt.Errorf("count runs: %w", err)
 	}
-	return collectRuns(rows, "runs")
+
+	rows, err := r.db.Query(ctx, queryListAll, pageSize, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list runs: %w", err)
+	}
+	items, err := collectRuns(rows, "runs")
+	if err != nil {
+		return nil, 0, err
+	}
+	return items, totalCount, nil
 }
 
-// ListForUser returns runs for projects the user is a member of.
-func (r *Repository) ListForUser(ctx context.Context, userID string, limit int) ([]domainrepo.Run, error) {
-	if limit <= 0 {
-		limit = 200
-	}
-	rows, err := r.db.Query(ctx, queryListForUser, userID, limit)
+// ListForUser returns one runs page for projects the user is a member of.
+func (r *Repository) ListForUser(ctx context.Context, userID string, page int, pageSize int) ([]domainrepo.Run, int, error) {
+	offset, pageSize := normalizePage(page, pageSize)
+
+	totalCount, err := r.countRows(ctx, queryCountForUser, userID)
 	if err != nil {
-		return nil, fmt.Errorf("list runs for user: %w", err)
+		return nil, 0, fmt.Errorf("count runs for user: %w", err)
 	}
-	return collectRuns(rows, "runs for user")
+
+	rows, err := r.db.Query(ctx, queryListForUser, userID, pageSize, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list runs for user: %w", err)
+	}
+	items, err := collectRuns(rows, "runs for user")
+	if err != nil {
+		return nil, 0, err
+	}
+	return items, totalCount, nil
 }
 
 // ListJobsAll returns runtime jobs list for platform admins.
@@ -170,13 +190,16 @@ func (r *Repository) GetCorrelationByRunID(ctx context.Context, runID string) (s
 }
 
 func collectRuns(rows pgx.Rows, operationLabel string) ([]domainrepo.Run, error) {
-	runRows, err := pgx.CollectRows(rows, pgx.RowToStructByName[dbmodel.RunRow])
-	if err != nil {
-		return nil, fmt.Errorf("collect %s: %w", operationLabel, err)
-	}
-	out := make([]domainrepo.Run, 0, len(runRows))
-	for _, runRow := range runRows {
+	out := make([]domainrepo.Run, 0, 32)
+	for rows.Next() {
+		runRow, err := pgx.RowToStructByName[dbmodel.RunRow](rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan %s row: %w", operationLabel, err)
+		}
 		out = append(out, runFromDBModel(runRow))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate %s rows: %w", operationLabel, err)
 	}
 	return out, nil
 }
@@ -194,6 +217,31 @@ func normalizeListFilter(filter domainrepo.ListFilter) domainrepo.ListFilter {
 	normalized.AgentKey = strings.TrimSpace(normalized.AgentKey)
 	normalized.WaitState = strings.TrimSpace(normalized.WaitState)
 	return normalized
+}
+
+func normalizePage(page int, pageSize int) (offset int, normalizedPageSize int) {
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	if pageSize > 1000 {
+		pageSize = 1000
+	}
+	offset = (page - 1) * pageSize
+	if offset < 0 {
+		offset = 0
+	}
+	return offset, pageSize
+}
+
+func (r *Repository) countRows(ctx context.Context, query string, args ...any) (int, error) {
+	var totalCount int
+	if err := r.db.QueryRow(ctx, query, args...).Scan(&totalCount); err != nil {
+		return 0, err
+	}
+	return totalCount, nil
 }
 
 func queryOneRowByID[T any](ctx context.Context, db *pgxpool.Pool, query string, id string, operationLabel string) (T, bool, error) {

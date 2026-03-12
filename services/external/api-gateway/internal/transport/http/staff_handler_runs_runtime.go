@@ -14,10 +14,6 @@ import (
 	"github.com/codex-k8s/codex-k8s/services/external/api-gateway/internal/transport/http/models"
 )
 
-func (h *staffHandler) ListRuns(c *echo.Context) error {
-	return listByLimitResp(c, 200, h.listRunsCall, casters.Runs)
-}
-
 func (h *staffHandler) ListRunWaits(c *echo.Context) error {
 	return h.listRunsByFilter(c, true, h.listRunWaitsAsGetter)
 }
@@ -77,10 +73,6 @@ func (h *staffHandler) ListRunEvents(c *echo.Context) error {
 
 func (h *staffHandler) ListRunLearningFeedback(c *echo.Context) error {
 	return listByPathLimitResp(c, "run_id", 200, h.listRunLearningFeedbackCall, casters.LearningFeedbackList)
-}
-
-func (h *staffHandler) ListRuntimeDeployTasks(c *echo.Context) error {
-	return listByResolvedResp(c, resolveRuntimeDeployListFilters(200), h.listRuntimeDeployTasksCall, casters.RuntimeDeployTaskListItems)
 }
 
 func (h *staffHandler) GetRuntimeDeployTask(c *echo.Context) error {

@@ -48,3 +48,20 @@ func TestRunQueriesNormalizeDiscussionTriggerKind(t *testing.T) {
 		}
 	}
 }
+
+func TestRunQueriesSupportRealtimeListPagination(t *testing.T) {
+	t.Parallel()
+
+	if !strings.Contains(queryListAll, "OFFSET $2") {
+		t.Fatal("list_all query must support pagination offset")
+	}
+	if !strings.Contains(queryListForUser, "OFFSET $3") {
+		t.Fatal("list_for_user query must support pagination offset")
+	}
+	if !strings.Contains(queryCountAll, "COUNT(*)") {
+		t.Fatal("count_all query must count visible runs")
+	}
+	if !strings.Contains(queryCountForUser, "COUNT(*)") {
+		t.Fatal("count_for_user query must count visible runs")
+	}
+}

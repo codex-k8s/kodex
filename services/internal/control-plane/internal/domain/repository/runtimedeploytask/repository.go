@@ -41,7 +41,7 @@ type Repository interface {
 	// RequestAction records operator cancel/stop request and moves task to terminal state idempotently.
 	RequestAction(ctx context.Context, params RequestActionParams) (RequestActionResult, error)
 	// ListRecent returns recent runtime deploy tasks ordered by update time.
-	ListRecent(ctx context.Context, filter ListFilter) ([]Task, error)
+	ListRecent(ctx context.Context, filter ListFilter) ([]Task, int, error)
 	// AppendLog appends one task log line and keeps latest MaxLines entries.
 	AppendLog(ctx context.Context, params AppendLogParams) error
 	// CleanupTaskLogsUpdatedBefore clears heavy logs_json payloads for old tasks.
