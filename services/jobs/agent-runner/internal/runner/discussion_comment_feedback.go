@@ -116,11 +116,7 @@ func (s *Service) ensureDiscussionIssueCommentReactions(ctx context.Context, com
 }
 
 func (s *Service) createDiscussionIssueCommentReaction(ctx context.Context, commentID int64, content string) error {
-	repositoryFullName := strings.TrimSpace(s.cfg.RepositoryFullName)
 	reactionContent := strings.TrimSpace(content)
-	if repositoryFullName == "" {
-		return fmt.Errorf("repository full name is required")
-	}
 	if commentID <= 0 {
 		return fmt.Errorf("comment id must be positive")
 	}
@@ -128,21 +124,14 @@ func (s *Service) createDiscussionIssueCommentReaction(ctx context.Context, comm
 		return fmt.Errorf("reaction content is required")
 	}
 
-	_, err := runCommandCaptureCombinedOutput(
-		ctx,
-		"",
-		"gh",
-		"api",
-		"--method",
-		"POST",
-		fmt.Sprintf("repos/%s/issues/comments/%d/reactions", repositoryFullName, commentID),
-		"-H",
-		"Accept: application/vnd.github+json",
-		"-f",
-		"content="+reactionContent,
-	)
+	client, repositoryOwner, repositoryName, err := s.newDiscussionGitHubClient()
 	if err != nil {
+		return fmt.Errorf("build github client: %w", err)
+	}
+
+	if _, _, err := client.Reactions.CreateIssueCommentReaction(ctx, repositoryOwner, repositoryName, commentID, reactionContent); err != nil {
 		return fmt.Errorf("create github issue comment reaction: %w", err)
 	}
+
 	return nil
 }
