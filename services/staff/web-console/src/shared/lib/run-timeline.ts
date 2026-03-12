@@ -25,6 +25,7 @@ export type TimelinePhaseStep = {
 
 export type TimelineStatusEntry = {
   key: string;
+  at: string | null;
   text: string;
   timeLabel: string;
   repeatCount: number;
@@ -198,6 +199,7 @@ export function buildRunTimelineStatuses(events: FlowEvent[], locale: string, re
 
     entries.push({
       key: `status:${eventItem.created_at}:${statusText}`,
+      at: eventItem.created_at || null,
       text: statusText,
       timeLabel: formatCompactDateTime(eventItem.created_at, locale, referenceDate),
       repeatCount: 1,

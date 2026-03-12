@@ -7,44 +7,26 @@
     <VCardText>
       <VTimeline density="compact" align="start" line-thickness="2">
         <VTimelineItem
-          v-for="s in phaseSteps"
-          :key="s.key"
-          :dot-color="s.color"
-          :icon="s.icon"
+          v-for="item in timelineItems"
+          :key="item.key"
+          :dot-color="item.color"
+          :icon="item.icon"
           size="small"
         >
-          <template v-if="s.showSpinner" #icon>
+          <template v-if="item.showSpinner" #icon>
             <VProgressCircular indeterminate size="18" width="2" color="warning" />
           </template>
           <div class="d-flex align-center justify-space-between ga-4 flex-wrap">
-            <div class="font-weight-bold">{{ titleForStep(s.key) }}</div>
-            <VChip size="x-small" variant="tonal" class="font-weight-bold">
-              {{ s.atLabel || t("runs.timeline.inProgress") }}
+            <div class="font-weight-bold">{{ titleForItem(item) }}</div>
+            <VChip v-if="item.atLabel" size="x-small" variant="tonal" class="font-weight-bold">
+              {{ item.atLabel }}
             </VChip>
           </div>
-          <div v-if="subtitleForStep(s)" class="text-body-2 text-medium-emphasis mt-1">
-            {{ subtitleForStep(s) }}
+          <div v-if="subtitleForItem(item)" class="text-body-2 text-medium-emphasis mt-1">
+            {{ subtitleForItem(item) }}
           </div>
         </VTimelineItem>
       </VTimeline>
-
-      <template v-if="statusEntries.length">
-        <VDivider class="my-4" />
-        <div class="text-subtitle-2 font-weight-bold mb-3">{{ t("runs.timeline.statusUpdates") }}</div>
-        <div class="d-flex flex-column ga-2">
-          <div
-            v-for="entry in statusEntries"
-            :key="entry.key"
-            class="d-flex align-center justify-space-between ga-3 flex-wrap"
-          >
-            <div class="text-body-2">{{ entry.text }}</div>
-            <div class="d-flex align-center ga-2 flex-wrap">
-              <VChip v-if="entry.repeatCount > 1" size="x-small" variant="outlined">x{{ entry.repeatCount }}</VChip>
-              <VChip size="x-small" variant="tonal" class="font-weight-bold">{{ entry.timeLabel }}</VChip>
-            </div>
-          </div>
-        </div>
-      </template>
     </VCardText>
   </VCard>
 </template>
@@ -53,7 +35,7 @@
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 
-import type { TimelinePhaseStep, TimelinePhaseStepKey } from "../lib/run-timeline";
+import type { TimelinePhaseStep, TimelinePhaseStepKey, TimelineStatusEntry } from "../lib/run-timeline";
 import { buildRunTimelinePhases, buildRunTimelineStatuses } from "../lib/run-timeline";
 import type { FlowEvent, Run } from "../../features/runs/types";
 
@@ -64,6 +46,21 @@ const props = defineProps<{
 }>();
 
 const { t } = useI18n({ useScope: "global" });
+
+type TimelineDisplayItem = {
+  key: string;
+  at: string | null;
+  atLabel: string | null;
+  color: string;
+  icon: string;
+  showSpinner?: boolean;
+  kind: "phase" | "agentStatus";
+  phaseKey?: TimelinePhaseStepKey;
+  subtitleKind?: TimelinePhaseStep["subtitleKind"];
+  subtitleValue?: string;
+  statusText?: string;
+  repeatCount?: number;
+};
 
 function titleForStep(key: TimelinePhaseStepKey): string {
   switch (key) {
@@ -85,12 +82,12 @@ function titleForStep(key: TimelinePhaseStepKey): string {
   }
 }
 
-function subtitleForStep(step: TimelinePhaseStep): string {
-  switch (step.subtitleKind) {
+function subtitleForStep(subtitleKind?: TimelinePhaseStep["subtitleKind"], subtitleValue?: string): string {
+  switch (subtitleKind) {
     case "waitState":
-      return `${t("runs.timeline.waitState")}: ${step.subtitleValue || "-"}`;
+      return `${t("runs.timeline.waitState")}: ${subtitleValue || "-"}`;
     case "status":
-      return `${t("runs.timeline.status")}: ${step.subtitleValue || "-"}`;
+      return `${t("runs.timeline.status")}: ${subtitleValue || "-"}`;
     case "buildFailed":
       return t("runs.timeline.buildFailed");
     default:
@@ -100,6 +97,65 @@ function subtitleForStep(step: TimelinePhaseStep): string {
 
 const phaseSteps = computed(() => buildRunTimelinePhases(props.run, props.events, props.locale));
 const statusEntries = computed(() => buildRunTimelineStatuses(props.events, props.locale));
+
+function titleForItem(item: TimelineDisplayItem): string {
+  if (item.kind === "agentStatus") {
+    return item.statusText || "";
+  }
+  return titleForStep(item.phaseKey || "created");
+}
+
+function subtitleForItem(item: TimelineDisplayItem): string {
+  if (item.kind === "agentStatus" && Number(item.repeatCount || 0) > 1) {
+    return `x${item.repeatCount}`;
+  }
+  return subtitleForStep(item.subtitleKind, item.subtitleValue);
+}
+
+function toTimelinePhaseItem(step: TimelinePhaseStep): TimelineDisplayItem {
+  return {
+    key: `phase:${step.key}:${step.at || "pending"}`,
+    at: step.at,
+    atLabel: step.atLabel,
+    color: step.color,
+    icon: step.icon,
+    showSpinner: step.showSpinner,
+    kind: "phase",
+    phaseKey: step.key,
+    subtitleKind: step.subtitleKind,
+    subtitleValue: step.subtitleValue,
+  };
+}
+
+function toTimelineStatusItem(status: TimelineStatusEntry): TimelineDisplayItem {
+  return {
+    key: status.key,
+    at: status.at,
+    atLabel: status.timeLabel,
+    color: "primary",
+    icon: "mdi-robot-outline",
+    kind: "agentStatus",
+    statusText: status.text,
+    repeatCount: status.repeatCount,
+  };
+}
+
+function compareTimelineItems(a: TimelineDisplayItem, b: TimelineDisplayItem): number {
+  if (a.at && b.at) {
+    if (a.at > b.at) return -1;
+    if (a.at < b.at) return 1;
+    return 0;
+  }
+  if (a.at && !b.at) return 1;
+  if (!a.at && b.at) return -1;
+  return 0;
+}
+
+const timelineItems = computed(() => {
+  const phaseItems = phaseSteps.value.map(toTimelinePhaseItem);
+  const statusItems = statusEntries.value.map(toTimelineStatusItem);
+  return [...phaseItems, ...statusItems].sort(compareTimelineItems);
+});
 </script>
 
 <style scoped>
