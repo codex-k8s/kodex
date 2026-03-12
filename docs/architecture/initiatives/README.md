@@ -23,3 +23,4 @@ approvals:
 ## Пакеты
 - `docs/architecture/initiatives/agents_prompt_templates_lifecycle/README.md`
 - `docs/architecture/initiatives/s7_mvp_readiness_gap_closure/README.md`
+- `docs/architecture/initiatives/s9_mission_control_dashboard/README.md`
