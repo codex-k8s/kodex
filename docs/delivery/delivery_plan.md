@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-02-06
 updated_at: 2026-03-12
-related_issues: [1, 19, 74, 100, 106, 112, 154, 155, 170, 171, 184, 185, 187, 189, 195, 197, 199, 201, 210, 212, 218, 220, 222, 223, 225, 226, 227, 228, 229, 230, 238, 241, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 274, 216, 262, 263, 265, 281, 282, 320, 333, 335]
+related_issues: [1, 19, 74, 100, 106, 112, 154, 155, 170, 171, 184, 185, 187, 189, 195, 197, 199, 201, 210, 212, 218, 220, 222, 223, 225, 226, 227, 228, 229, 230, 238, 241, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 274, 216, 262, 263, 265, 281, 282, 320, 333, 335, 337]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -224,6 +224,13 @@ approvals:
   - закреплены неподвижные ограничения: GitHub-first MVP, human review в provider UI, webhook-driven orchestration, contract-first API и audit-safe command/reconciliation path;
   - рекомендован launch profile `feature` с обязательной эскалацией в `vision` и `arch`;
   - создана follow-up issue `#335` для stage `run:vision` без trigger-лейбла.
+- Day 2 (in-review): vision-пакет для Mission Control Dashboard (`docs/delivery/epics/s9/epic-s9-day2-mission-control-dashboard-vision.md`, Issue `#335`).
+- Результат Day 2 (факт):
+  - зафиксированы mission statement, persona outcomes и north star для Mission Control Dashboard как primary control plane staff console;
+  - определены measurable KPI/guardrails по situational awareness, discussion-to-task lead time, console-start coverage и reconciliation correctness;
+  - подтверждены границы первой волны MVP: active-set dashboard shell, typed entities/relations, provider-safe commands и realtime baseline; voice оставлен отдельным candidate stream;
+  - сохранены неподвижные ограничения инициативы: GitHub-first MVP, human review во внешнем provider UI, webhook-driven orchestration и active-set default;
+  - создана follow-up issue `#337` для stage `run:prd` без trigger-лейбла.
 
 ### Daily delivery contract (обязательный)
 - Каждый день задачи дня влиты в `main`.
