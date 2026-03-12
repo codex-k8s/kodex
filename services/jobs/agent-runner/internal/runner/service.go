@@ -531,7 +531,7 @@ func (s *Service) prepareRepository(ctx context.Context, result runResult, state
 	if err := runCommandQuiet(ctx, state.repoDir, "git", "reset", "--hard"); err != nil {
 		return fmt.Errorf("git reset failed")
 	}
-	if err := runCommandQuiet(ctx, state.repoDir, "git", "clean", "-fdx"); err != nil {
+	if err := runCommandQuiet(ctx, state.repoDir, "git", gitCleanArgs(s.cfg.RuntimeMode)...); err != nil {
 		return fmt.Errorf("git clean failed")
 	}
 

@@ -18,6 +18,15 @@ func normalizeRuntimeMode(value string) string {
 	return runtimeModeCodeOnly
 }
 
+func gitCleanArgs(runtimeMode string) []string {
+	if normalizeRuntimeMode(runtimeMode) == runtimeModeFullEnv {
+		// Full-env runner shares repo-cache PVC with hot-reload services, so ignored runtime
+		// artifacts (for example web-console `node_modules/`) must survive branch resets.
+		return []string{"clean", "-fd"}
+	}
+	return []string{"clean", "-fdx"}
+}
+
 func normalizeTemplateKind(value string, triggerKind string) string {
 	if strings.EqualFold(strings.TrimSpace(value), promptTemplateKindDiscussion) {
 		return promptTemplateKindDiscussion
