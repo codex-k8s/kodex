@@ -238,6 +238,12 @@ approvals:
   - подтверждены product guardrails: active-set default, list fallback, provider-safe typed commands, degraded realtime fallback и external human review;
   - voice intake явно вынесен из blocking scope core MVP и оставлен условной следующей волной;
   - создана follow-up issue `#340` для stage `run:arch` без trigger-лейбла.
+- Day 4 (in-review): architecture-пакет для Mission Control Dashboard (`docs/delivery/epics/s9/epic-s9-day4-mission-control-dashboard-arch.md`, `docs/architecture/initiatives/s9_mission_control_dashboard/architecture.md`, `docs/architecture/adr/ADR-0011-mission-control-dashboard-active-set-projection-and-command-reconciliation.md`, Issue `#340`).
+- Результат Day 4 (факт):
+  - зафиксирован ownership split: `control-plane` владеет active-set projection, relations, timeline mirror и command lifecycle, `worker` владеет provider sync/retries/reconciliation;
+  - подтверждён snapshot-first / delta-second realtime baseline с обязательным degraded mode через HTTP snapshot, explicit refresh и list fallback;
+  - voice intake изолирован как optional candidate stream и не входит в core MVP contracts;
+  - подготовлена follow-up issue `#351` для stage `run:design` без trigger-лейбла.
 
 ### Daily delivery contract (обязательный)
 - Каждый день задачи дня влиты в `main`.

@@ -38,3 +38,4 @@ approvals:
 ## Навигация по пакетам
 - Lifecycle agents/prompt templates: `docs/architecture/initiatives/agents_prompt_templates_lifecycle/README.md`
 - Sprint S7 MVP readiness package: `docs/architecture/initiatives/s7_mvp_readiness_gap_closure/README.md`
+- Sprint S9 Mission Control Dashboard package: `docs/architecture/initiatives/s9_mission_control_dashboard/README.md`
