@@ -244,6 +244,13 @@ approvals:
   - подтверждён snapshot-first / delta-second realtime baseline с обязательным degraded mode через HTTP snapshot, explicit refresh и list fallback;
   - voice intake изолирован как optional candidate stream и не входит в core MVP contracts;
   - подготовлена follow-up issue `#351` для stage `run:design` без trigger-лейбла.
+- Day 5 (in-review): design-пакет для Mission Control Dashboard (`docs/delivery/epics/s9/epic-s9-day5-mission-control-dashboard-design.md`, `docs/architecture/initiatives/s9_mission_control_dashboard/design_doc.md`, `docs/architecture/initiatives/s9_mission_control_dashboard/api_contract.md`, `docs/architecture/initiatives/s9_mission_control_dashboard/data_model.md`, `docs/architecture/initiatives/s9_mission_control_dashboard/migrations_policy.md`, Issue `#351`).
+- Результат Day 5 (факт):
+  - зафиксирован implementation-ready package по snapshot/details/commands/realtime/voice candidate contracts;
+  - выбран hybrid persisted projection model с typed tables + JSONB payload fragments под ownership `control-plane`;
+  - inline write-path ограничен provider-safe typed commands, а provider review/merge/comment editing оставлены deep-link-only;
+  - зафиксирован rollout order `migrations -> control-plane -> worker -> api-gateway -> web-console` и limited rollback после provider side effects;
+  - создана follow-up issue `#363` для stage `run:plan` без trigger-лейбла.
 
 ### Daily delivery contract (обязательный)
 - Каждый день задачи дня влиты в `main`.

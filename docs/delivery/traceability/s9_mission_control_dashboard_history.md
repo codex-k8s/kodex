@@ -6,7 +6,7 @@ status: in-review
 owner_role: KM
 created_at: 2026-03-12
 updated_at: 2026-03-12
-related_issues: [333, 335, 337, 340, 351]
+related_issues: [333, 335, 337, 340, 351, 363]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -65,3 +65,18 @@ approvals:
 - Для continuity подготовлена follow-up issue `#351` (`run:design`) без trigger-лейбла.
 - Через Context7 повторно подтверждён актуальный Mermaid C4 syntax (`/mermaid-js/mermaid`) и GitHub CLI syntax для issue/PR handover (`/websites/cli_github_manual`).
 - Root FR/NFR matrix в `docs/delivery/requirements_traceability.md` не менялась, потому что architecture stage не изменяет канонический requirements baseline, а уточняет service boundaries и trade-offs.
+
+## Актуализация по Issue #351 (`run:design`, 2026-03-12)
+- Подготовлен Day5 design package:
+  - `docs/delivery/epics/s9/epic-s9-day5-mission-control-dashboard-design.md`;
+  - `docs/architecture/initiatives/s9_mission_control_dashboard/design_doc.md`;
+  - `docs/architecture/initiatives/s9_mission_control_dashboard/api_contract.md`;
+  - `docs/architecture/initiatives/s9_mission_control_dashboard/data_model.md`;
+  - `docs/architecture/initiatives/s9_mission_control_dashboard/migrations_policy.md`.
+- Зафиксированы:
+  - typed HTTP/gRPC/realtime contracts для snapshot, entity details, command admission/status и optional voice candidate flow;
+  - hybrid persisted projection model (`entities + relations + timeline + commands + optional voice_candidates` under `control-plane` ownership);
+  - inline write-path только для provider-safe typed commands, при этом PR review/merge/comment editing остаются provider deep-link-only;
+  - rollout discipline `migrations -> control-plane -> worker -> api-gateway -> web-console` и limited rollback после provider side effects.
+- Через Context7 подтверждён актуальный GitHub CLI syntax для continuity issue и PR flow (`/websites/cli_github_manual`).
+- Для continuity подготовлена follow-up issue `#363` (`run:plan`) без trigger-лейбла.
