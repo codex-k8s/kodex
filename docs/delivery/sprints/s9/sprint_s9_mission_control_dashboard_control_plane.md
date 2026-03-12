@@ -60,9 +60,9 @@ approvals:
 
 | Wave | Issues | Что открывает |
 |---|---|---|
-| Wave 1 | `#369` | Foundation schema + warmup/backfill, без которой запрещён core read/write exposure |
+| Wave 1 | `#369` | Foundation schema, repository contracts и rollout guards, без которых запрещён core read/write exposure |
 | Wave 2 | `#370` | `control-plane` domain owner для active-set projection и command lifecycle |
-| Wave 3 | `#371`, `#372` | Reconcile/retry path и thin-edge transport/realtime contracts |
+| Wave 3 | `#371`, `#372` | `#371` владеет warmup/backfill execution и reconcile/retry path, `#372` владеет только core thin-edge transport/realtime contracts |
 | Wave 4 | `#373` | Dashboard shell, board/list toggle и side panel UX на typed contracts |
 | Wave 5 | `#374` | Observability, rollout-readiness и evidence gate перед `run:qa` |
 | Wave 6 | `#375` | Conditional voice contour; запускается только отдельным owner decision |
@@ -72,6 +72,7 @@ approvals:
 - MVP default view обязан работать от active set (`working`, `waiting`, `blocked`, `review`, `recent critical updates`), а не от полного архива.
 - GitHub остаётся каноническим provider'ом MVP; GitLab допускается только как future-compatible continuation через provider abstraction.
 - Voice intake рассматривается как условная последующая волна: не блокирует core dashboard wave, пока не подтверждены ROI, AI policy и operational readiness.
+- Voice-specific OpenAPI/codegen не входят в core transport wave и активируются только через conditional issue `#375`.
 
 ## Handover
 - Текущий stage в review: `run:plan` в Issue `#363`.

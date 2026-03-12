@@ -254,7 +254,8 @@ approvals:
 - Day 6 (in-review): plan-пакет для Mission Control Dashboard (`docs/delivery/epics/s9/epic-s9-day6-mission-control-dashboard-plan.md`, Issue `#363`).
 - Результат Day 6 (факт):
   - execution backlog декомпозирован на issues `#369..#375` с wave-sequencing и owner-managed handover в `run:dev`;
-  - foundation/backend/transport/UI/observability разнесены по отдельным implementation streams, чтобы не смешивать schema, domain, edge и UX scope;
+  - foundation/backend/transport/UI/observability разнесены по отдельным implementation streams, чтобы не смешивать schema, domain, worker warmup execution, edge и UX scope;
+  - `#371` закреплён как owner warmup/backfill execution gate, а `#372` ограничен core transport paths без voice-specific OpenAPI/codegen;
   - `#374` зафиксирован как обязательный evidence gate перед `run:qa`, а `#375` сохранён как conditional voice continuation без блокировки core MVP;
   - quality-gates, DoR/DoD, blockers/risks/owner decisions синхронизированы в delivery traceability.
 - Day 7+ (planned): `run:dev -> qa -> release -> postdeploy -> ops` по issues `#369..#374`; issue `#375` запускается только отдельным owner decision после core waves.

@@ -38,16 +38,18 @@ approvals:
 
 | Stream | Implementation issue | Wave | Scope | Почему это отдельный поток |
 |---|---:|---|---|---|
-| `S9-E01` | `#369` | Wave 1 | Projection schema, additive indexes, warmup/backfill foundation | Без foundation-stream остальные потоки рискуют стартовать на непроверенной persisted projection |
+| `S9-E01` | `#369` | Wave 1 | Projection schema, additive indexes, repository foundation и rollout guards | Без foundation-stream остальные потоки рискуют стартовать на непроверенной persisted projection |
 | `S9-E02` | `#370` | Wave 2 | `control-plane` active-set model, relations и command lifecycle | Это единственный owner persisted projection и admission policy |
-| `S9-E03` | `#371` | Wave 3 | `worker` reconcile, provider sync/retry и echo dedupe | Нужен отдельный background contour для idempotent provider mutations и recovery |
-| `S9-E04` | `#372` | Wave 3 | Contract-first `api-gateway` transport и realtime envelope | Edge должен сохранить thin-edge boundary и transport consistency |
+| `S9-E03` | `#371` | Wave 3 | `worker` warmup/backfill execution, provider sync/retry и echo dedupe | Нужен отдельный background contour для idempotent provider mutations, rebuild и recovery |
+| `S9-E04` | `#372` | Wave 3 | Core contract-first `api-gateway` transport и realtime envelope | Edge должен сохранить thin-edge boundary и transport consistency без смешения с optional voice path |
 | `S9-E05` | `#373` | Wave 4 | Dashboard shell, board/list toggle и side panel state integration | Core UX-слой, который даёт situational awareness и explicit degraded fallback |
 | `S9-E06` | `#374` | Wave 5 | Observability, rollout-readiness и rollback discipline | Cross-cutting evidence gate перед `run:qa`/`run:release` |
-| `S9-E07` | `#375` | Wave 6 (conditional) | Optional voice-candidate contour | Высокая ценность, но отдельный риск по ROI, policy и dependency choices |
+| `S9-E07` | `#375` | Wave 6 (conditional) | Optional voice-candidate transport + rollout contour | Высокая ценность, но отдельный риск по ROI, policy и dependency choices |
 
 ## Delivery-governance правила
 - До `run:plan` Sprint S9 не создаёт implementation issues и не добавляет внешние зависимости в репозиторий.
 - После `run:plan` созданы handover issues `#369..#375` без trigger-лейблов; запуск `run:dev` остаётся owner-managed по waves.
 - Каждый stage обязан создавать следующую issue без trigger-лейбла; trigger на запуск следующего stage ставит Owner.
+- Warmup/backfill execution закреплён за `#371`, а `#369` ограничен schema/repository foundation и rollout guards.
+- Voice-specific OpenAPI/codegen/DTO/casters закреплены за `#375`; `#372` покрывает только core snapshot/details/commands/realtime transport.
 - `S9-E07` не считается blocking scope для первой волны dashboard MVP, пока core backlog `#369..#374` не даст подтверждённый value/evidence.
