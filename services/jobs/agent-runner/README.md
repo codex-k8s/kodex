@@ -11,6 +11,13 @@ Prompt seed policy:
   - `role-<agent_key>-<kind>_<locale>.md` / `role-<agent_key>-<kind>.md`;
 - fallback chain: `stage+role -> role -> stage -> dev -> default -> embedded runner template`.
 
+## Full-env repo cache
+
+В `full-env` runner работает поверх общего repo-cache PVC namespace и перед запуском только
+сбрасывает tracked-файлы и не-ignored untracked файлы. Ignored runtime-артефакты hot-reload
+сервисов (например `services/staff/web-console/node_modules/`) сохраняются, чтобы dev-slot не
+ломал live Vite/CompileDaemon окружение во время branch reset.
+
 ```text
 services/jobs/agent-runner/                          runtime исполнитель агентных запусков
 ├── README.md                                        карта структуры сервиса и run-пайплайна
