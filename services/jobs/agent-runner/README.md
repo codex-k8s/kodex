@@ -13,10 +13,17 @@ Prompt seed policy:
 
 ## Full-env repo cache
 
-В `full-env` runner работает поверх общего repo-cache PVC namespace и перед запуском только
-сбрасывает tracked-файлы и не-ignored untracked файлы. Ignored runtime-артефакты hot-reload
-сервисов (например `services/staff/web-console/node_modules/`) сохраняются, чтобы dev-slot не
-ломал live Vite/CompileDaemon окружение во время branch reset.
+В `full-env` live сервисы и `agent-runner` работают с одним и тем же repo-cache PVC в `/workspace`:
+branch/ref туда заранее доставляет runtime deploy (`repo-sync`) до запуска agent pod.
+
+После этого runner больше не делает `git fetch/checkout/reset/clean` по живому дереву и не создаёт
+вторую рабочую директорию. Агент работает прямо в уже подготовленном git worktree `/workspace`, а
+из служебных файлов runner создаёт только короткоживущие объекты в `/tmp` (например, `git-askpass`
+скрипт для git auth и временный каталог для проверки `codex` auth), чтобы не триггерить
+hot-reload watcher-ы.
+
+Для `run:*:revise` при переиспользовании живого namespace worker повторно не запускает runtime
+prepare/repo-sync и просто стартует нового агента в существующем `/workspace`.
 
 ```text
 services/jobs/agent-runner/                          runtime исполнитель агентных запусков
