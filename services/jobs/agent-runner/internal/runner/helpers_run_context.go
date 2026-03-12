@@ -2,6 +2,7 @@ package runner
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	webhookdomain "github.com/codex-k8s/codex-k8s/libs/go/domain/webhook"
@@ -18,12 +19,29 @@ func normalizeRuntimeMode(value string) string {
 	return runtimeModeCodeOnly
 }
 
-func gitCleanArgs(runtimeMode string) []string {
-	if normalizeRuntimeMode(runtimeMode) == runtimeModeFullEnv {
-		// Full-env runner shares repo-cache PVC with hot-reload services, so ignored runtime
-		// artifacts (for example web-console `node_modules/`) must survive branch resets.
-		return []string{"clean", "-fd"}
+func runnerWorkspaceDir(runtimeMode string, agentKey string, targetBranch string) string {
+	if normalizeRuntimeMode(runtimeMode) != runtimeModeFullEnv {
+		return "/workspace"
 	}
+	agentToken := sanitizePathComponent(agentKey)
+	if agentToken == "" {
+		agentToken = "agent"
+	}
+	branchToken := sanitizePathComponent(targetBranch)
+	if branchToken == "" {
+		branchToken = "branch"
+	}
+	return filepath.Join("/workspace", ".codex-runner", agentToken, branchToken)
+}
+
+func runnerRepoDir(runtimeMode string, agentKey string, targetBranch string) string {
+	if normalizeRuntimeMode(runtimeMode) != runtimeModeFullEnv {
+		return filepath.Join("/workspace", "repo")
+	}
+	return filepath.Join(runnerWorkspaceDir(runtimeMode, agentKey, targetBranch), "repo")
+}
+
+func gitCleanArgs(runtimeMode string) []string {
 	return []string{"clean", "-fdx"}
 }
 

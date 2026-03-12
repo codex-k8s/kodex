@@ -18,6 +18,7 @@ import (
 
 // Run executes full runner flow and returns nil on successful completion.
 func (s *Service) Run(ctx context.Context) (err error) {
+	targetBranch := buildTargetBranch(s.cfg.RunTargetBranch, s.cfg.RunID, s.cfg.IssueNumber, s.cfg.TriggerKind, s.cfg.AgentBaseBranch)
 	homeDir := strings.TrimSpace(os.Getenv("HOME"))
 	if homeDir == "" {
 		homeDir = "/root"
@@ -27,17 +28,14 @@ func (s *Service) Run(ctx context.Context) (err error) {
 		codexHomeDir = filepath.Join(homeDir, ".codex")
 	}
 	runtimeMode := normalizeRuntimeMode(s.cfg.RuntimeMode)
-
-	repoDir := filepath.Join("/workspace", "repo")
-	if runtimeMode == runtimeModeFullEnv {
-		repoDir = "/workspace"
-	}
+	workspaceDir := runnerWorkspaceDir(runtimeMode, s.cfg.AgentKey, targetBranch)
+	repoDir := runnerRepoDir(runtimeMode, s.cfg.AgentKey, targetBranch)
 
 	state := codexState{
 		homeDir:      homeDir,
 		codexDir:     codexHomeDir,
 		sessionsDir:  filepath.Join(codexHomeDir, "sessions"),
-		workspaceDir: "/workspace",
+		workspaceDir: workspaceDir,
 		repoDir:      repoDir,
 	}
 
@@ -64,8 +62,6 @@ func (s *Service) Run(ctx context.Context) (err error) {
 		return fmt.Errorf("configure kubectl access: %w", err)
 	}
 	defer cleanupKubectlEnv()
-
-	targetBranch := buildTargetBranch(s.cfg.RunTargetBranch, s.cfg.RunID, s.cfg.IssueNumber, s.cfg.TriggerKind, s.cfg.AgentBaseBranch)
 	triggerKind := normalizeTriggerKind(s.cfg.TriggerKind)
 	templateKind := normalizeTemplateKind(s.cfg.PromptTemplateKind, triggerKind)
 	sensitiveValues := s.sensitiveValues()

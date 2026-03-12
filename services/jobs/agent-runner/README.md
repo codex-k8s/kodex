@@ -13,10 +13,14 @@ Prompt seed policy:
 
 ## Full-env repo cache
 
-В `full-env` runner работает поверх общего repo-cache PVC namespace и перед запуском только
-сбрасывает tracked-файлы и не-ignored untracked файлы. Ignored runtime-артефакты hot-reload
-сервисов (например `services/staff/web-console/node_modules/`) сохраняются, чтобы dev-slot не
-ломал live Vite/CompileDaemon окружение во время branch reset.
+В `full-env` live сервисы продолжают работать из общего repo-cache PVC в `/workspace`, но сам
+runner больше не делает `git checkout/reset/clean` в этом дереве. Для агентной сессии создаётся
+отдельный checkout в `/workspace/.codex-runner/<agent>/<branch>/repo`, и жёсткая очистка
+`git reset --hard && git clean -fdx` выполняется только там.
+
+Такой split не трогает уже запущенные hot-reload контейнеры (`Vite`, `CompileDaemon` и другие
+runtime-зависимости проекта), поэтому переключение ветки или повторный revise-run не ломает
+live repo, из которого работает dev-slot.
 
 ```text
 services/jobs/agent-runner/                          runtime исполнитель агентных запусков
