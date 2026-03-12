@@ -17,9 +17,10 @@ approvals:
 # Sprint Index
 
 ## TL;DR
-- Спринты вынесены в отдельную структуру `docs/delivery/sprints/s<номер>/` (S1..S8).
+- Спринты ведутся в структуре `docs/delivery/sprints/s<номер>/` (S1..S8).
 - Для каждого спринта сохранён единый формат: sprint plan + epic catalog + day epics + traceability.
-- Исторические issue-specific updates по спринтам вынесены в `docs/delivery/traceability/*.md`, чтобы sprint index не превращался в execution log.
+- Sprint index хранит только каноническую карту спринтов и ссылки на sprint/epic артефакты.
+- Исторические issue-specific updates по спринтам размещаются в `docs/delivery/traceability/s<номер>_*.md` и не дублируются в sprint index.
 - Источник процесса: `docs/delivery/development_process_requirements.md`.
 
 ## Карта спринтов
