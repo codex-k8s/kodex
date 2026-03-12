@@ -30,6 +30,12 @@ type runLogsArg struct {
 	includeSnapshot bool
 }
 
+// runListPageArg keeps query input for one runs list page.
+type runListPageArg struct {
+	page     int32
+	pageSize int32
+}
+
 // runEventsArg keeps path+query input for run events endpoint.
 type runEventsArg struct {
 	runID          string
@@ -47,7 +53,8 @@ type runRealtimeArg struct {
 
 // runtimeDeployListArg keeps filters for runtime deploy tasks list endpoint.
 type runtimeDeployListArg struct {
-	limit     int32
+	page      int32
+	pageSize  int32
 	status    string
 	targetEnv string
 }

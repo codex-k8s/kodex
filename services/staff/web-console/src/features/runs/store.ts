@@ -8,7 +8,6 @@ import {
   listPendingApprovals,
   listRunEvents,
   listRunWaits,
-  listRuns,
   resolveApprovalDecision,
   type RunWaitFilters,
 } from "./api";
@@ -29,7 +28,6 @@ function sortEventsNewest(items: FlowEvent[]): FlowEvent[] {
 
 export const useRunsStore = defineStore("runs", {
   state: () => ({
-    items: [] as Run[],
     waitQueue: [] as Run[],
     pendingApprovals: [] as ApprovalRequest[],
     waitsFilters: {
@@ -38,7 +36,6 @@ export const useRunsStore = defineStore("runs", {
       agentKey: "",
       waitState: "",
     } as RunWaitFilters,
-    loading: false,
     waitsLoading: false,
     approvalsLoading: false,
     resolvingApprovalID: null as number | null,
@@ -73,18 +70,6 @@ export const useRunsStore = defineStore("runs", {
         this.approvalsError = null;
         this.approvalsErrorTimerId = null;
       }, errorAutoHideMs);
-    },
-    async load(limit?: number): Promise<void> {
-      this.loading = true;
-      this.error = null;
-      try {
-        this.items = await listRuns(limit);
-      } catch (e) {
-        this.error = normalizeApiError(e);
-        this.scheduleErrorHide();
-      } finally {
-        this.loading = false;
-      }
     },
     async loadRunWaits(limit?: number): Promise<void> {
       this.waitsLoading = true;

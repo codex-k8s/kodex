@@ -13,6 +13,7 @@ import (
 	agentsessionrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/repository/agentsession"
 	runstatusdomain "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/runstatus"
 	runtimedeploydomain "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/runtimedeploy"
+	"github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/staff"
 	querytypes "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/types/query"
 	agentcallback "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/transport/agentcallback"
 	"google.golang.org/grpc/codes"
@@ -94,7 +95,16 @@ func (s *Server) ListRuntimeDeployTasks(ctx context.Context, req *controlplanev1
 	if err != nil {
 		return nil, err
 	}
-	items, err := s.staff.ListRuntimeDeployTasks(ctx, p, clampLimit(req.GetLimit(), 200), optionalProtoString(req.Status), optionalProtoString(req.TargetEnv))
+	page := clampPage(req.GetPage())
+	pageSize := clampLimit(req.GetPageSize(), 20)
+	items, totalCount, err := s.staff.ListRuntimeDeployTasks(
+		ctx,
+		p,
+		page,
+		pageSize,
+		optionalProtoString(req.Status),
+		optionalProtoString(req.TargetEnv),
+	)
 	if err != nil {
 		return nil, toStatus(err)
 	}
@@ -102,22 +112,16 @@ func (s *Server) ListRuntimeDeployTasks(ctx context.Context, req *controlplanev1
 	for _, item := range items {
 		out = append(out, runtimeDeployTaskToProto(item))
 	}
-	return &controlplanev1.ListRuntimeDeployTasksResponse{Items: out}, nil
+	return &controlplanev1.ListRuntimeDeployTasksResponse{
+		Items:      out,
+		TotalCount: int32(totalCount),
+		Page:       int32(page),
+		PageSize:   int32(pageSize),
+	}, nil
 }
 
 func (s *Server) GetRuntimeDeployTask(ctx context.Context, req *controlplanev1.GetRuntimeDeployTaskRequest) (*controlplanev1.RuntimeDeployTask, error) {
-	if req == nil {
-		return nil, status.Error(codes.InvalidArgument, "request is required")
-	}
-	p, err := requirePrincipal(req.GetPrincipal())
-	if err != nil {
-		return nil, err
-	}
-	item, err := s.staff.GetRuntimeDeployTask(ctx, p, strings.TrimSpace(req.GetRunId()))
-	if err != nil {
-		return nil, toStatus(err)
-	}
-	return runtimeDeployTaskToProto(item), nil
+	return requestStaffEntity(ctx, req, req.GetRunId(), s.staff.GetRuntimeDeployTask, runtimeDeployTaskToProto)
 }
 
 type runtimeDeployTaskActionRequest interface {
@@ -196,18 +200,33 @@ func (s *Server) ListRuntimeErrors(ctx context.Context, req *controlplanev1.List
 // TODO(codex-k8s#81): This RPC is temporarily unused after staff UI removed
 // "platform error" alerts. Decide later whether to keep, repurpose, or remove it.
 func (s *Server) MarkRuntimeErrorViewed(ctx context.Context, req *controlplanev1.MarkRuntimeErrorViewedRequest) (*controlplanev1.RuntimeError, error) {
-	if req == nil {
-		return nil, status.Error(codes.InvalidArgument, "request is required")
-	}
-	p, err := requirePrincipal(req.GetPrincipal())
+	return requestStaffEntity(ctx, req, req.GetRuntimeErrorId(), s.staff.MarkRuntimeErrorViewed, runtimeErrorToProto)
+}
+
+func mapStaffEntity[Item any, Out any](fetch func() (Item, error), cast func(Item) Out) (Out, error) {
+	item, err := fetch()
 	if err != nil {
-		return nil, err
+		var zero Out
+		return zero, toStatus(err)
 	}
-	item, err := s.staff.MarkRuntimeErrorViewed(ctx, p, strings.TrimSpace(req.GetRuntimeErrorId()))
-	if err != nil {
-		return nil, toStatus(err)
-	}
-	return runtimeErrorToProto(item), nil
+	return cast(item), nil
+}
+
+func requestStaffEntity[Req principalRequest, Item any, Out any](
+	ctx context.Context,
+	req Req,
+	rawID string,
+	fetch func(context.Context, staff.Principal, string) (Item, error),
+	cast func(Item) Out,
+) (Out, error) {
+	return withRequestPrincipal(req, func(principal staff.Principal) (Out, error) {
+		return mapStaffEntity(
+			func() (Item, error) {
+				return fetch(ctx, principal, strings.TrimSpace(rawID))
+			},
+			cast,
+		)
+	})
 }
 
 func (s *Server) UpsertAgentSession(ctx context.Context, req *controlplanev1.UpsertAgentSessionRequest) (*controlplanev1.UpsertAgentSessionResponse, error) {

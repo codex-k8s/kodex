@@ -14,6 +14,16 @@ channels:
       summary: Staff UI realtime stream for one run (WebSocket message envelope)
       message:
         $ref: "#/components/messages/RunRealtimeMessage"
+  ws.staff.runs.list.realtime:
+    subscribe:
+      summary: Staff UI realtime stream for paginated runs list (WebSocket message envelope)
+      message:
+        $ref: "#/components/messages/RunsRealtimeMessage"
+  ws.staff.runtime-deploy.tasks.realtime:
+    subscribe:
+      summary: Staff UI realtime stream for paginated runtime deploy tasks list (WebSocket message envelope)
+      message:
+        $ref: "#/components/messages/RuntimeDeployTasksRealtimeMessage"
 components:
   messages:
     FlowEvent:
@@ -58,7 +68,59 @@ components:
               $ref: "#/components/schemas/FlowEvent"
           logs:
             $ref: "#/components/schemas/RunLogs"
+    RunsRealtimeMessage:
+      payload:
+        type: object
+        required: [type, sent_at]
+        properties:
+          type:
+            type: string
+            enum: [snapshot, error]
+          sent_at:
+            type: string
+            format: date-time
+          message:
+            type: string
+          items:
+            type: array
+            items:
+              $ref: "#/components/schemas/Run"
+          pagination:
+            $ref: "#/components/schemas/Pagination"
+    RuntimeDeployTasksRealtimeMessage:
+      payload:
+        type: object
+        required: [type, sent_at]
+        properties:
+          type:
+            type: string
+            enum: [snapshot, error]
+          sent_at:
+            type: string
+            format: date-time
+          message:
+            type: string
+          items:
+            type: array
+            items:
+              $ref: "#/components/schemas/RuntimeDeployTaskListItem"
+          pagination:
+            $ref: "#/components/schemas/Pagination"
   schemas:
+    Pagination:
+      type: object
+      additionalProperties: false
+      required: [page, page_size, total_count]
+      properties:
+        page:
+          type: integer
+          minimum: 1
+        page_size:
+          type: integer
+          minimum: 1
+        total_count:
+          type: integer
+          minimum: 0
     Run:
       type: object
       additionalProperties: false
@@ -123,3 +185,32 @@ components:
           type: array
           items:
             type: string
+    RuntimeDeployTaskListItem:
+      type: object
+      additionalProperties: false
+      required: [run_id, status, repository_full_name, target_env, namespace, runtime_mode, build_ref]
+      properties:
+        run_id:
+          type: string
+        status:
+          type: string
+        repository_full_name:
+          type: string
+        target_env:
+          type: string
+        result_target_env:
+          type: string
+        namespace:
+          type: string
+        result_namespace:
+          type: string
+        runtime_mode:
+          type: string
+        build_ref:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time

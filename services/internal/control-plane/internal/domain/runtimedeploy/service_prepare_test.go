@@ -89,8 +89,8 @@ func (*fakePrepareRuntimeDeployTasksRepo) RequestAction(_ context.Context, _ run
 	return runtimedeploytaskrepo.RequestActionResult{}, nil
 }
 
-func (*fakePrepareRuntimeDeployTasksRepo) ListRecent(_ context.Context, _ runtimedeploytaskrepo.ListFilter) ([]runtimedeploytaskrepo.Task, error) {
-	return nil, nil
+func (*fakePrepareRuntimeDeployTasksRepo) ListRecent(_ context.Context, _ runtimedeploytaskrepo.ListFilter) ([]runtimedeploytaskrepo.Task, int, error) {
+	return nil, 0, nil
 }
 
 func (*fakePrepareRuntimeDeployTasksRepo) AppendLog(_ context.Context, _ runtimedeploytaskrepo.AppendLogParams) error {

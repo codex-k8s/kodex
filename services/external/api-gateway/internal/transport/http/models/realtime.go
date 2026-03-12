@@ -20,3 +20,29 @@ type RunRealtimeMessage struct {
 	Message *string                `json:"message,omitempty"`
 	SentAt  string                 `json:"sent_at"`
 }
+
+// ListRealtimeMessageType is one envelope discriminator for paginated staff list streams.
+type ListRealtimeMessageType string
+
+const (
+	ListRealtimeMessageTypeSnapshot ListRealtimeMessageType = "snapshot"
+	ListRealtimeMessageTypeError    ListRealtimeMessageType = "error"
+)
+
+// RunsRealtimeMessage is a typed websocket message for the paginated runs list.
+type RunsRealtimeMessage struct {
+	Type       ListRealtimeMessageType `json:"type"`
+	Items      []Run                   `json:"items,omitempty"`
+	Pagination *Pagination             `json:"pagination,omitempty"`
+	Message    *string                 `json:"message,omitempty"`
+	SentAt     string                  `json:"sent_at"`
+}
+
+// RuntimeDeployTasksRealtimeMessage is a typed websocket message for the paginated runtime deploy tasks list.
+type RuntimeDeployTasksRealtimeMessage struct {
+	Type       ListRealtimeMessageType     `json:"type"`
+	Items      []RuntimeDeployTaskListItem `json:"items,omitempty"`
+	Pagination *Pagination                 `json:"pagination,omitempty"`
+	Message    *string                     `json:"message,omitempty"`
+	SentAt     string                      `json:"sent_at"`
+}

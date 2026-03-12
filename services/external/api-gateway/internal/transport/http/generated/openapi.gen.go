@@ -178,13 +178,13 @@ const (
 	ListDocsetGroupsParamsLocaleRu ListDocsetGroupsParamsLocale = "ru"
 )
 
-// Defines values for ListRuntimeDeployTasksParamsStatus.
+// Defines values for RuntimeDeployTasksRealtimeParamsStatus.
 const (
-	Canceled  ListRuntimeDeployTasksParamsStatus = "canceled"
-	Failed    ListRuntimeDeployTasksParamsStatus = "failed"
-	Pending   ListRuntimeDeployTasksParamsStatus = "pending"
-	Running   ListRuntimeDeployTasksParamsStatus = "running"
-	Succeeded ListRuntimeDeployTasksParamsStatus = "succeeded"
+	Canceled  RuntimeDeployTasksRealtimeParamsStatus = "canceled"
+	Failed    RuntimeDeployTasksRealtimeParamsStatus = "failed"
+	Pending   RuntimeDeployTasksRealtimeParamsStatus = "pending"
+	Running   RuntimeDeployTasksRealtimeParamsStatus = "running"
+	Succeeded RuntimeDeployTasksRealtimeParamsStatus = "succeeded"
 )
 
 // Defines values for ListRuntimeErrorsParamsState.
@@ -753,6 +753,12 @@ type Limit = int
 // MCPCallbackToken defines model for MCPCallbackToken.
 type MCPCallbackToken = string
 
+// Page defines model for Page.
+type Page = int
+
+// PageSize defines model for PageSize.
+type PageSize = int
+
 // ProjectID defines model for ProjectID.
 type ProjectID = string
 
@@ -840,9 +846,10 @@ type ListProjectRepositoriesParams struct {
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
-// ListRunsParams defines parameters for ListRuns.
-type ListRunsParams struct {
-	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+// RunsRealtimeParams defines parameters for RunsRealtime.
+type RunsRealtimeParams struct {
+	Page     *Page     `form:"page,omitempty" json:"page,omitempty"`
+	PageSize *PageSize `form:"page_size,omitempty" json:"page_size,omitempty"`
 }
 
 // ListRunWaitsParams defines parameters for ListRunWaits.
@@ -878,15 +885,16 @@ type RunRealtimeParams struct {
 	IncludeLogs *IncludeLogs `form:"include_logs,omitempty" json:"include_logs,omitempty"`
 }
 
-// ListRuntimeDeployTasksParams defines parameters for ListRuntimeDeployTasks.
-type ListRuntimeDeployTasksParams struct {
-	Limit     *Limit                              `form:"limit,omitempty" json:"limit,omitempty"`
-	Status    *ListRuntimeDeployTasksParamsStatus `form:"status,omitempty" json:"status,omitempty"`
-	TargetEnv *string                             `form:"target_env,omitempty" json:"target_env,omitempty"`
+// RuntimeDeployTasksRealtimeParams defines parameters for RuntimeDeployTasksRealtime.
+type RuntimeDeployTasksRealtimeParams struct {
+	Page      *Page                                   `form:"page,omitempty" json:"page,omitempty"`
+	PageSize  *PageSize                               `form:"page_size,omitempty" json:"page_size,omitempty"`
+	Status    *RuntimeDeployTasksRealtimeParamsStatus `form:"status,omitempty" json:"status,omitempty"`
+	TargetEnv *string                                 `form:"target_env,omitempty" json:"target_env,omitempty"`
 }
 
-// ListRuntimeDeployTasksParamsStatus defines parameters for ListRuntimeDeployTasks.
-type ListRuntimeDeployTasksParamsStatus string
+// RuntimeDeployTasksRealtimeParamsStatus defines parameters for RuntimeDeployTasksRealtime.
+type RuntimeDeployTasksRealtimeParamsStatus string
 
 // ListRuntimeErrorsParams defines parameters for ListRuntimeErrors.
 type ListRuntimeErrorsParams struct {
@@ -1180,9 +1188,9 @@ type ServerInterface interface {
 	// Run repository onboarding preflight
 	// (POST /api/v1/staff/projects/{project_id}/repositories/{repository_id}/preflight)
 	RunRepositoryPreflight(w http.ResponseWriter, r *http.Request, projectId ProjectID, repositoryId string)
-	// List runs
-	// (GET /api/v1/staff/runs)
-	ListRuns(w http.ResponseWriter, r *http.Request, params ListRunsParams)
+	// Open realtime runs list stream (WebSocket upgrade)
+	// (GET /api/v1/staff/runs/realtime)
+	RunsRealtime(w http.ResponseWriter, r *http.Request, params RunsRealtimeParams)
 	// List wait queue runs
 	// (GET /api/v1/staff/runs/waits)
 	ListRunWaits(w http.ResponseWriter, r *http.Request, params ListRunWaitsParams)
@@ -1204,9 +1212,9 @@ type ServerInterface interface {
 	// Open realtime run stream (WebSocket upgrade)
 	// (GET /api/v1/staff/runs/{run_id}/realtime)
 	RunRealtime(w http.ResponseWriter, r *http.Request, runId RunID, params RunRealtimeParams)
-	// List runtime deploy tasks
-	// (GET /api/v1/staff/runtime-deploy/tasks)
-	ListRuntimeDeployTasks(w http.ResponseWriter, r *http.Request, params ListRuntimeDeployTasksParams)
+	// Open realtime runtime deploy tasks list stream (WebSocket upgrade)
+	// (GET /api/v1/staff/runtime-deploy/tasks/realtime)
+	RuntimeDeployTasksRealtime(w http.ResponseWriter, r *http.Request, params RuntimeDeployTasksRealtimeParams)
 	// Get runtime deploy task details
 	// (GET /api/v1/staff/runtime-deploy/tasks/{run_id})
 	GetRuntimeDeployTask(w http.ResponseWriter, r *http.Request, runId RunID)
@@ -2014,24 +2022,32 @@ func (siw *ServerInterfaceWrapper) RunRepositoryPreflight(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
-// ListRuns operation middleware
-func (siw *ServerInterfaceWrapper) ListRuns(w http.ResponseWriter, r *http.Request) {
+// RunsRealtime operation middleware
+func (siw *ServerInterfaceWrapper) RunsRealtime(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 
 	// Parameter object where we will unmarshal all parameters from the context
-	var params ListRunsParams
+	var params RunsRealtimeParams
 
-	// ------------- Optional query parameter "limit" -------------
+	// ------------- Optional query parameter "page" -------------
 
-	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	err = runtime.BindQueryParameter("form", true, false, "page", r.URL.Query(), &params.Page)
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "page_size" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "page_size", r.URL.Query(), &params.PageSize)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page_size", Err: err})
 		return
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListRuns(w, r, params)
+		siw.Handler.RunsRealtime(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2326,19 +2342,27 @@ func (siw *ServerInterfaceWrapper) RunRealtime(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
-// ListRuntimeDeployTasks operation middleware
-func (siw *ServerInterfaceWrapper) ListRuntimeDeployTasks(w http.ResponseWriter, r *http.Request) {
+// RuntimeDeployTasksRealtime operation middleware
+func (siw *ServerInterfaceWrapper) RuntimeDeployTasksRealtime(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 
 	// Parameter object where we will unmarshal all parameters from the context
-	var params ListRuntimeDeployTasksParams
+	var params RuntimeDeployTasksRealtimeParams
 
-	// ------------- Optional query parameter "limit" -------------
+	// ------------- Optional query parameter "page" -------------
 
-	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	err = runtime.BindQueryParameter("form", true, false, "page", r.URL.Query(), &params.Page)
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "page_size" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "page_size", r.URL.Query(), &params.PageSize)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page_size", Err: err})
 		return
 	}
 
@@ -2359,7 +2383,7 @@ func (siw *ServerInterfaceWrapper) ListRuntimeDeployTasks(w http.ResponseWriter,
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListRuntimeDeployTasks(w, r, params)
+		siw.Handler.RuntimeDeployTasksRealtime(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2840,7 +2864,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("DELETE "+options.BaseURL+"/api/v1/staff/projects/{project_id}/repositories/{repository_id}", wrapper.DeleteProjectRepository)
 	m.HandleFunc("PUT "+options.BaseURL+"/api/v1/staff/projects/{project_id}/repositories/{repository_id}/bot-params", wrapper.UpsertRepositoryBotParams)
 	m.HandleFunc("POST "+options.BaseURL+"/api/v1/staff/projects/{project_id}/repositories/{repository_id}/preflight", wrapper.RunRepositoryPreflight)
-	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/runs", wrapper.ListRuns)
+	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/runs/realtime", wrapper.RunsRealtime)
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/runs/waits", wrapper.ListRunWaits)
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/runs/{run_id}", wrapper.GetRun)
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/runs/{run_id}/events", wrapper.ListRunEvents)
@@ -2848,7 +2872,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/runs/{run_id}/logs", wrapper.GetRunLogs)
 	m.HandleFunc("DELETE "+options.BaseURL+"/api/v1/staff/runs/{run_id}/namespace", wrapper.DeleteRunNamespace)
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/runs/{run_id}/realtime", wrapper.RunRealtime)
-	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/runtime-deploy/tasks", wrapper.ListRuntimeDeployTasks)
+	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/runtime-deploy/tasks/realtime", wrapper.RuntimeDeployTasksRealtime)
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/runtime-deploy/tasks/{run_id}", wrapper.GetRuntimeDeployTask)
 	m.HandleFunc("POST "+options.BaseURL+"/api/v1/staff/runtime-deploy/tasks/{run_id}/cancel", wrapper.CancelRuntimeDeployTask)
 	m.HandleFunc("POST "+options.BaseURL+"/api/v1/staff/runtime-deploy/tasks/{run_id}/stop", wrapper.StopRuntimeDeployTask)
@@ -4047,35 +4071,34 @@ func (response RunRepositoryPreflight403JSONResponse) VisitRunRepositoryPrefligh
 	return json.NewEncoder(w).Encode(response)
 }
 
-type ListRunsRequestObject struct {
-	Params ListRunsParams
+type RunsRealtimeRequestObject struct {
+	Params RunsRealtimeParams
 }
 
-type ListRunsResponseObject interface {
-	VisitListRunsResponse(w http.ResponseWriter) error
+type RunsRealtimeResponseObject interface {
+	VisitRunsRealtimeResponse(w http.ResponseWriter) error
 }
 
-type ListRuns200JSONResponse RunItemsResponse
+type RunsRealtime200Response struct {
+}
 
-func (response ListRuns200JSONResponse) VisitListRunsResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
+func (response RunsRealtime200Response) VisitRunsRealtimeResponse(w http.ResponseWriter) error {
 	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
+	return nil
 }
 
-type ListRuns400JSONResponse struct{ BadRequestJSONResponse }
+type RunsRealtime400JSONResponse struct{ BadRequestJSONResponse }
 
-func (response ListRuns400JSONResponse) VisitListRunsResponse(w http.ResponseWriter) error {
+func (response RunsRealtime400JSONResponse) VisitRunsRealtimeResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
 
 	return json.NewEncoder(w).Encode(response)
 }
 
-type ListRuns401JSONResponse struct{ UnauthorizedJSONResponse }
+type RunsRealtime401JSONResponse struct{ UnauthorizedJSONResponse }
 
-func (response ListRuns401JSONResponse) VisitListRunsResponse(w http.ResponseWriter) error {
+func (response RunsRealtime401JSONResponse) VisitRunsRealtimeResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
 
@@ -4357,44 +4380,43 @@ func (response RunRealtime401JSONResponse) VisitRunRealtimeResponse(w http.Respo
 	return json.NewEncoder(w).Encode(response)
 }
 
-type ListRuntimeDeployTasksRequestObject struct {
-	Params ListRuntimeDeployTasksParams
+type RuntimeDeployTasksRealtimeRequestObject struct {
+	Params RuntimeDeployTasksRealtimeParams
 }
 
-type ListRuntimeDeployTasksResponseObject interface {
-	VisitListRuntimeDeployTasksResponse(w http.ResponseWriter) error
+type RuntimeDeployTasksRealtimeResponseObject interface {
+	VisitRuntimeDeployTasksRealtimeResponse(w http.ResponseWriter) error
 }
 
-type ListRuntimeDeployTasks200JSONResponse RuntimeDeployTaskItemsResponse
+type RuntimeDeployTasksRealtime200Response struct {
+}
 
-func (response ListRuntimeDeployTasks200JSONResponse) VisitListRuntimeDeployTasksResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
+func (response RuntimeDeployTasksRealtime200Response) VisitRuntimeDeployTasksRealtimeResponse(w http.ResponseWriter) error {
 	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
+	return nil
 }
 
-type ListRuntimeDeployTasks400JSONResponse struct{ BadRequestJSONResponse }
+type RuntimeDeployTasksRealtime400JSONResponse struct{ BadRequestJSONResponse }
 
-func (response ListRuntimeDeployTasks400JSONResponse) VisitListRuntimeDeployTasksResponse(w http.ResponseWriter) error {
+func (response RuntimeDeployTasksRealtime400JSONResponse) VisitRuntimeDeployTasksRealtimeResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
 
 	return json.NewEncoder(w).Encode(response)
 }
 
-type ListRuntimeDeployTasks401JSONResponse struct{ UnauthorizedJSONResponse }
+type RuntimeDeployTasksRealtime401JSONResponse struct{ UnauthorizedJSONResponse }
 
-func (response ListRuntimeDeployTasks401JSONResponse) VisitListRuntimeDeployTasksResponse(w http.ResponseWriter) error {
+func (response RuntimeDeployTasksRealtime401JSONResponse) VisitRuntimeDeployTasksRealtimeResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
 
 	return json.NewEncoder(w).Encode(response)
 }
 
-type ListRuntimeDeployTasks403JSONResponse struct{ ForbiddenJSONResponse }
+type RuntimeDeployTasksRealtime403JSONResponse struct{ ForbiddenJSONResponse }
 
-func (response ListRuntimeDeployTasks403JSONResponse) VisitListRuntimeDeployTasksResponse(w http.ResponseWriter) error {
+func (response RuntimeDeployTasksRealtime403JSONResponse) VisitRuntimeDeployTasksRealtimeResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(403)
 
@@ -4939,9 +4961,9 @@ type StrictServerInterface interface {
 	// Run repository onboarding preflight
 	// (POST /api/v1/staff/projects/{project_id}/repositories/{repository_id}/preflight)
 	RunRepositoryPreflight(ctx context.Context, request RunRepositoryPreflightRequestObject) (RunRepositoryPreflightResponseObject, error)
-	// List runs
-	// (GET /api/v1/staff/runs)
-	ListRuns(ctx context.Context, request ListRunsRequestObject) (ListRunsResponseObject, error)
+	// Open realtime runs list stream (WebSocket upgrade)
+	// (GET /api/v1/staff/runs/realtime)
+	RunsRealtime(ctx context.Context, request RunsRealtimeRequestObject) (RunsRealtimeResponseObject, error)
 	// List wait queue runs
 	// (GET /api/v1/staff/runs/waits)
 	ListRunWaits(ctx context.Context, request ListRunWaitsRequestObject) (ListRunWaitsResponseObject, error)
@@ -4963,9 +4985,9 @@ type StrictServerInterface interface {
 	// Open realtime run stream (WebSocket upgrade)
 	// (GET /api/v1/staff/runs/{run_id}/realtime)
 	RunRealtime(ctx context.Context, request RunRealtimeRequestObject) (RunRealtimeResponseObject, error)
-	// List runtime deploy tasks
-	// (GET /api/v1/staff/runtime-deploy/tasks)
-	ListRuntimeDeployTasks(ctx context.Context, request ListRuntimeDeployTasksRequestObject) (ListRuntimeDeployTasksResponseObject, error)
+	// Open realtime runtime deploy tasks list stream (WebSocket upgrade)
+	// (GET /api/v1/staff/runtime-deploy/tasks/realtime)
+	RuntimeDeployTasksRealtime(ctx context.Context, request RuntimeDeployTasksRealtimeRequestObject) (RuntimeDeployTasksRealtimeResponseObject, error)
 	// Get runtime deploy task details
 	// (GET /api/v1/staff/runtime-deploy/tasks/{run_id})
 	GetRuntimeDeployTask(ctx context.Context, request GetRuntimeDeployTaskRequestObject) (GetRuntimeDeployTaskResponseObject, error)
@@ -5838,25 +5860,25 @@ func (sh *strictHandler) RunRepositoryPreflight(w http.ResponseWriter, r *http.R
 	}
 }
 
-// ListRuns operation middleware
-func (sh *strictHandler) ListRuns(w http.ResponseWriter, r *http.Request, params ListRunsParams) {
-	var request ListRunsRequestObject
+// RunsRealtime operation middleware
+func (sh *strictHandler) RunsRealtime(w http.ResponseWriter, r *http.Request, params RunsRealtimeParams) {
+	var request RunsRealtimeRequestObject
 
 	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ListRuns(ctx, request.(ListRunsRequestObject))
+		return sh.ssi.RunsRealtime(ctx, request.(RunsRealtimeRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListRuns")
+		handler = middleware(handler, "RunsRealtime")
 	}
 
 	response, err := handler(r.Context(), w, r, request)
 
 	if err != nil {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ListRunsResponseObject); ok {
-		if err := validResponse.VisitListRunsResponse(w); err != nil {
+	} else if validResponse, ok := response.(RunsRealtimeResponseObject); ok {
+		if err := validResponse.VisitRunsRealtimeResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -6050,25 +6072,25 @@ func (sh *strictHandler) RunRealtime(w http.ResponseWriter, r *http.Request, run
 	}
 }
 
-// ListRuntimeDeployTasks operation middleware
-func (sh *strictHandler) ListRuntimeDeployTasks(w http.ResponseWriter, r *http.Request, params ListRuntimeDeployTasksParams) {
-	var request ListRuntimeDeployTasksRequestObject
+// RuntimeDeployTasksRealtime operation middleware
+func (sh *strictHandler) RuntimeDeployTasksRealtime(w http.ResponseWriter, r *http.Request, params RuntimeDeployTasksRealtimeParams) {
+	var request RuntimeDeployTasksRealtimeRequestObject
 
 	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ListRuntimeDeployTasks(ctx, request.(ListRuntimeDeployTasksRequestObject))
+		return sh.ssi.RuntimeDeployTasksRealtime(ctx, request.(RuntimeDeployTasksRealtimeRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListRuntimeDeployTasks")
+		handler = middleware(handler, "RuntimeDeployTasksRealtime")
 	}
 
 	response, err := handler(r.Context(), w, r, request)
 
 	if err != nil {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ListRuntimeDeployTasksResponseObject); ok {
-		if err := validResponse.VisitListRuntimeDeployTasksResponse(w); err != nil {
+	} else if validResponse, ok := response.(RuntimeDeployTasksRealtimeResponseObject); ok {
+		if err := validResponse.VisitRuntimeDeployTasksRealtimeResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

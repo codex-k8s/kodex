@@ -333,6 +333,36 @@ func clampLimit(n int32, def int) int {
 	return int(n)
 }
 
+func clampPage(n int32) int {
+	if n <= 0 {
+		return 1
+	}
+	if n > 1000000 {
+		return 1000000
+	}
+	return int(n)
+}
+
+type principalRequest interface {
+	GetPrincipal() *controlplanev1.Principal
+}
+
+func requireRequestPrincipal(req principalRequest) (staff.Principal, error) {
+	if req == nil {
+		return staff.Principal{}, status.Error(codes.InvalidArgument, "request is required")
+	}
+	return requirePrincipal(req.GetPrincipal())
+}
+
+func withRequestPrincipal[Out any](req principalRequest, fn func(principal staff.Principal) (Out, error)) (Out, error) {
+	principal, err := requireRequestPrincipal(req)
+	if err != nil {
+		var zero Out
+		return zero, err
+	}
+	return fn(principal)
+}
+
 func tsToTime(ts *timestamppb.Timestamp) time.Time {
 	if ts == nil {
 		return time.Time{}

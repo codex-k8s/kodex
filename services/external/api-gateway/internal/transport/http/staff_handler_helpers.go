@@ -30,6 +30,21 @@ func parseLimit(c *echo.Context, def int) (int, error) {
 	return n, nil
 }
 
+func parsePositiveIntQuery(c *echo.Context, field string, def int, max int) (int, error) {
+	raw := strings.TrimSpace(c.QueryParam(field))
+	if raw == "" {
+		return def, nil
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n <= 0 {
+		return 0, errs.Validation{Field: field, Msg: "must be a positive integer"}
+	}
+	if n > max {
+		n = max
+	}
+	return n, nil
+}
+
 func requirePrincipal(c *echo.Context) (*controlplanev1.Principal, error) {
 	p, ok := getPrincipal(c)
 	if !ok || p == nil || strings.TrimSpace(p.UserId) == "" {
@@ -116,14 +131,36 @@ func resolveRunListFilters(defLimit int, includeWaitState bool) func(c *echo.Con
 	}
 }
 
-func resolveRuntimeDeployListFilters(defLimit int) func(c *echo.Context) (runtimeDeployListArg, error) {
+func resolveRunListPage(defPage int, defPageSize int) func(c *echo.Context) (runListPageArg, error) {
+	return func(c *echo.Context) (runListPageArg, error) {
+		page, err := parsePositiveIntQuery(c, "page", defPage, 1000000)
+		if err != nil {
+			return runListPageArg{}, err
+		}
+		pageSize, err := parsePositiveIntQuery(c, "page_size", defPageSize, 1000)
+		if err != nil {
+			return runListPageArg{}, err
+		}
+		return runListPageArg{
+			page:     int32(page),
+			pageSize: int32(pageSize),
+		}, nil
+	}
+}
+
+func resolveRuntimeDeployListFilters(defPage int, defPageSize int) func(c *echo.Context) (runtimeDeployListArg, error) {
 	return func(c *echo.Context) (runtimeDeployListArg, error) {
-		limit, err := parseLimit(c, defLimit)
+		page, err := parsePositiveIntQuery(c, "page", defPage, 1000000)
+		if err != nil {
+			return runtimeDeployListArg{}, err
+		}
+		pageSize, err := parsePositiveIntQuery(c, "page_size", defPageSize, 1000)
 		if err != nil {
 			return runtimeDeployListArg{}, err
 		}
 		return runtimeDeployListArg{
-			limit:     int32(limit),
+			page:      int32(page),
+			pageSize:  int32(pageSize),
 			status:    strings.TrimSpace(c.QueryParam("status")),
 			targetEnv: strings.TrimSpace(c.QueryParam("target_env")),
 		}, nil

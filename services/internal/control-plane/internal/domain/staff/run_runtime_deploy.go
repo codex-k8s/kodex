@@ -9,28 +9,40 @@ import (
 	runtimedeploydomain "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/runtimedeploy"
 )
 
-const defaultRuntimeDeployTaskLimit = 200
+const defaultRuntimeDeployTaskPage = 1
+const defaultRuntimeDeployTaskPageSize = 20
 
-// ListRuntimeDeployTasks returns runtime deploy task list (platform admin only).
-func (s *Service) ListRuntimeDeployTasks(ctx context.Context, principal Principal, limit int, status string, targetEnv string) ([]runtimedeploytaskrepo.Task, error) {
+// ListRuntimeDeployTasks returns one paginated runtime deploy task slice (platform admin only).
+func (s *Service) ListRuntimeDeployTasks(
+	ctx context.Context,
+	principal Principal,
+	page int,
+	pageSize int,
+	status string,
+	targetEnv string,
+) ([]runtimedeploytaskrepo.Task, int, error) {
 	if !principal.IsPlatformAdmin {
-		return nil, errs.Forbidden{Msg: "platform admin required"}
+		return nil, 0, errs.Forbidden{Msg: "platform admin required"}
 	}
 	if s.tasks == nil {
-		return nil, errs.Validation{Field: "runtime_deploy", Msg: "task repository is not configured"}
+		return nil, 0, errs.Validation{Field: "runtime_deploy", Msg: "task repository is not configured"}
 	}
-	if limit <= 0 {
-		limit = defaultRuntimeDeployTaskLimit
+	if page <= 0 {
+		page = defaultRuntimeDeployTaskPage
 	}
-	items, err := s.tasks.ListRecent(ctx, runtimedeploytaskrepo.ListFilter{
-		Limit:     limit,
+	if pageSize <= 0 {
+		pageSize = defaultRuntimeDeployTaskPageSize
+	}
+	items, totalCount, err := s.tasks.ListRecent(ctx, runtimedeploytaskrepo.ListFilter{
+		Page:      page,
+		PageSize:  pageSize,
 		Status:    strings.TrimSpace(status),
 		TargetEnv: strings.TrimSpace(targetEnv),
 	})
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return items, nil
+	return items, totalCount, nil
 }
 
 // GetRuntimeDeployTask returns one runtime deploy task by run id (platform admin only).

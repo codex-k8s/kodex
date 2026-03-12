@@ -252,25 +252,6 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
-  /api/v1/staff/runs:
-    get:
-      summary: List runs
-      operationId: listRuns
-      tags: [staff-runs]
-      parameters:
-        - $ref: "#/components/parameters/Limit"
-      responses:
-        "200":
-          description: Runs list
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RunItemsResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-
   /api/v1/staff/runs/waits:
     get:
       summary: List wait queue runs
@@ -289,6 +270,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RunItemsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/staff/runs/realtime:
+    get:
+      summary: Open realtime runs list stream (WebSocket upgrade)
+      operationId: runsRealtime
+      tags: [staff-runs]
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Realtime runs list stream endpoint (expects WebSocket upgrade)
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -468,13 +465,14 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
-  /api/v1/staff/runtime-deploy/tasks:
+  /api/v1/staff/runtime-deploy/tasks/realtime:
     get:
-      summary: List runtime deploy tasks
-      operationId: listRuntimeDeployTasks
+      summary: Open realtime runtime deploy tasks list stream (WebSocket upgrade)
+      operationId: runtimeDeployTasksRealtime
       tags: [staff-runtime-deploy]
       parameters:
-        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
         - in: query
           name: status
           schema:
@@ -486,11 +484,7 @@ paths:
             type: string
       responses:
         "200":
-          description: Runtime deploy tasks list
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RuntimeDeployTaskItemsResponse"
+          description: Realtime runtime deploy tasks stream endpoint (expects WebSocket upgrade)
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1116,6 +1110,22 @@ components:
       schema:
         type: integer
         format: int64
+    Page:
+      in: query
+      name: page
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 1000000
+    PageSize:
+      in: query
+      name: page_size
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 1000
     UserID:
       in: path
       name: user_id

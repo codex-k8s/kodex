@@ -116,4 +116,5 @@ WHERE pm.user_id = $1::uuid
         OR COALESCE(ar.run_payload->'trigger'->>'label', '') ILIKE 'need:reviewer'
       )
 ORDER BY ar.created_at DESC
-LIMIT $2;
+LIMIT $2
+OFFSET $3;

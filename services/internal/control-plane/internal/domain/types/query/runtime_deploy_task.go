@@ -82,7 +82,8 @@ type RuntimeDeployTaskRequestActionResult struct {
 
 // RuntimeDeployTaskListFilter describes optional task list filters.
 type RuntimeDeployTaskListFilter struct {
-	Limit     int
+	Page      int
+	PageSize  int
 	Status    string
 	TargetEnv string
 }

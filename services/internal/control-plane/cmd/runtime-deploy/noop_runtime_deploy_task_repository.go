@@ -44,8 +44,8 @@ func (noopRuntimeDeployTaskRepository) RequestAction(_ context.Context, _ runtim
 	return runtimedeploytaskrepo.RequestActionResult{}, fmt.Errorf("runtime deploy queue is not available in one-shot mode")
 }
 
-func (noopRuntimeDeployTaskRepository) ListRecent(_ context.Context, _ runtimedeploytaskrepo.ListFilter) ([]runtimedeploytaskrepo.Task, error) {
-	return nil, fmt.Errorf("runtime deploy queue is not available in one-shot mode")
+func (noopRuntimeDeployTaskRepository) ListRecent(_ context.Context, _ runtimedeploytaskrepo.ListFilter) ([]runtimedeploytaskrepo.Task, int, error) {
+	return nil, 0, fmt.Errorf("runtime deploy queue is not available in one-shot mode")
 }
 
 func (noopRuntimeDeployTaskRepository) AppendLog(_ context.Context, _ runtimedeploytaskrepo.AppendLogParams) error {

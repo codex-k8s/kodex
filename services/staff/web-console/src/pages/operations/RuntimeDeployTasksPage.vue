@@ -26,12 +26,14 @@
 
     <VCard class="mt-4" variant="outlined">
       <VCardText>
-        <VDataTable
+        <VDataTableServer
           v-model:page="tablePage"
+          v-model:items-per-page="itemsPerPage"
           :headers="headers"
           :items="items"
+          :items-length="totalCount"
           :loading="loading"
-          :items-per-page="itemsPerPage"
+          :items-per-page-options="itemsPerPageOptions"
           density="comfortable"
           hover
         >
@@ -77,7 +79,7 @@
               {{ t("states.noRuntimeDeployTasks") }}
             </div>
           </template>
-        </VDataTable>
+        </VDataTableServer>
       </VCardText>
     </VCard>
   </div>
@@ -89,52 +91,27 @@ import { RouterLink } from "vue-router";
 import { useI18n } from "vue-i18n";
 
 import PageHeader from "../../shared/ui/PageHeader.vue";
-import { normalizeApiError, type ApiError } from "../../shared/api/errors";
+import { ApiError } from "../../shared/api/errors";
 import { formatDateTime } from "../../shared/lib/datetime";
 import { colorForRunStatus } from "../../shared/lib/chips";
-import { createProgressiveTableState } from "../../shared/lib/progressive-table";
 import { bindRealtimePageLifecycle } from "../../shared/ws/lifecycle";
-import { listRuntimeDeployTasks } from "../../features/runtime-deploy/api";
-import { subscribeRuntimeDeployRealtime, type RuntimeDeployRealtimeState } from "../../features/runtime-deploy/realtime";
-import type { RuntimeDeployTaskListItem } from "../../features/runtime-deploy/types";
+import { subscribeRuntimeDeployTasksRealtime, type RuntimeDeployTasksListRealtimeState } from "../../features/runtime-deploy/list-realtime";
+import type { RuntimeDeployTaskListItem, RuntimeDeployTasksRealtimeMessage } from "../../features/runtime-deploy/types";
 
 const { t, locale } = useI18n({ useScope: "global" });
 
-const loading = ref(false);
+const loading = ref(true);
 const error = ref<ApiError | null>(null);
 const statusFilter = ref<"" | "pending" | "running" | "succeeded" | "failed" | "canceled" | null>("");
 const items = ref<RuntimeDeployTaskListItem[]>([]);
-const itemsPerPage = 15;
-const paging = createProgressiveTableState({ itemsPerPage });
-const tablePage = paging.page;
-const trackedRunRealtimeStates = ref<Record<string, RuntimeDeployRealtimeState>>({});
-const reloadPending = ref(false);
-const realtimeReloadTimer = ref<number | null>(null);
-const fallbackPollTimer = ref<number | null>(null);
-const realtimeSubscriptions = new Map<string, () => void>();
+const totalCount = ref(0);
+const tablePage = ref(1);
+const itemsPerPage = ref(15);
+const itemsPerPageOptions = [10, 15, 30, 50, 100];
+const stopRealtimeRef = ref<(() => void) | null>(null);
 const stopLifecycleBindingRef = ref<(() => void) | null>(null);
 
-const activeRunIDs = computed(() => {
-  const out: string[] = [];
-  for (const item of items.value) {
-    const status = String(item.status || "").trim().toLowerCase();
-    if (status !== "pending" && status !== "running") {
-      continue;
-    }
-    const runID = String(item.run_id || "").trim();
-    if (!runID) continue;
-    out.push(runID);
-  }
-  return out;
-});
-
-const realtimeState = computed<RuntimeDeployRealtimeState>(() => {
-  if (!activeRunIDs.value.length) return "connected";
-  const states = activeRunIDs.value.map((runID) => trackedRunRealtimeStates.value[runID] ?? "connecting");
-  if (states.some((state) => state === "connected")) return "connected";
-  if (states.some((state) => state === "reconnecting")) return "reconnecting";
-  return "connecting";
-});
+const realtimeState = ref<RuntimeDeployTasksListRealtimeState>("connecting");
 
 const realtimeChipColor = computed(() => {
   if (realtimeState.value === "connected") return "success";
@@ -183,118 +160,43 @@ function envLabel(value: string | null | undefined): string {
 }
 
 async function loadTasks(): Promise<void> {
-  if (loading.value) {
-    reloadPending.value = true;
-    return;
-  }
-
+  stopRealtime();
   loading.value = true;
   error.value = null;
-  try {
-    const loaded = await listRuntimeDeployTasks({
-      status: statusFilter.value || undefined,
-    }, paging.limit.value);
-    paging.markLoaded(loaded.length);
-    items.value = loaded;
-  } catch (err) {
-    error.value = normalizeApiError(err);
-  } finally {
+  realtimeState.value = "connecting";
+  stopRealtimeRef.value = subscribeRuntimeDeployTasksRealtime({
+    page: tablePage.value,
+    pageSize: itemsPerPage.value,
+    status: statusFilter.value || undefined,
+    onMessage: applyRealtimeMessage,
+    onStateChange: (state) => {
+      realtimeState.value = state;
+    },
+  });
+}
+
+function applyRealtimeMessage(message: RuntimeDeployTasksRealtimeMessage): void {
+  if (message.type === "error") {
+    error.value = new ApiError({ kind: "unknown", messageKey: "errors.unknown" });
     loading.value = false;
-    if (reloadPending.value) {
-      reloadPending.value = false;
-      void loadTasks();
-    }
-  }
-}
-
-async function reloadTasks(): Promise<void> {
-  paging.reset();
-  await loadTasks();
-}
-
-async function loadMoreTasksIfNeeded(nextPage: number, prevPage: number): Promise<void> {
-  if (loading.value) {
     return;
   }
-  if (!paging.shouldGrowForPage(items.value.length, nextPage, prevPage)) {
+  if (!message.pagination) return;
+  const maxPage = Math.max(1, Math.ceil(message.pagination.total_count / message.pagination.page_size));
+  if (tablePage.value > maxPage) {
+    tablePage.value = maxPage;
     return;
   }
-  await loadTasks();
+  items.value = message.items ?? [];
+  totalCount.value = message.pagination.total_count;
+  error.value = null;
+  loading.value = false;
 }
 
-function upsertRealtimeState(runID: string, state: RuntimeDeployRealtimeState): void {
-  trackedRunRealtimeStates.value = {
-    ...trackedRunRealtimeStates.value,
-    [runID]: state,
-  };
-}
-
-function removeRealtimeState(runID: string): void {
-  if (!(runID in trackedRunRealtimeStates.value)) return;
-  const next = { ...trackedRunRealtimeStates.value };
-  delete next[runID];
-  trackedRunRealtimeStates.value = next;
-}
-
-function stopRealtimeSubscriptions(): void {
-  for (const stop of realtimeSubscriptions.values()) {
-    stop();
-  }
-  realtimeSubscriptions.clear();
-  trackedRunRealtimeStates.value = {};
-}
-
-function syncRealtimeSubscriptions(): void {
-  const nextRunIDs = new Set(activeRunIDs.value);
-
-  for (const [runID, stop] of realtimeSubscriptions.entries()) {
-    if (nextRunIDs.has(runID)) continue;
-    stop();
-    realtimeSubscriptions.delete(runID);
-    removeRealtimeState(runID);
-  }
-
-  for (const runID of nextRunIDs.values()) {
-    if (realtimeSubscriptions.has(runID)) continue;
-    upsertRealtimeState(runID, "connecting");
-    const stop = subscribeRuntimeDeployRealtime({
-      runId: runID,
-      onMessage: () => {
-        scheduleRealtimeReload();
-      },
-      onStateChange: (state) => {
-        upsertRealtimeState(runID, state);
-      },
-    });
-    realtimeSubscriptions.set(runID, stop);
-  }
-}
-
-function scheduleRealtimeReload(): void {
-  if (realtimeReloadTimer.value !== null) return;
-  realtimeReloadTimer.value = window.setTimeout(() => {
-    realtimeReloadTimer.value = null;
-    void loadTasks();
-  }, 700);
-}
-
-function clearRealtimeReloadTimer(): void {
-  if (realtimeReloadTimer.value === null) return;
-  window.clearTimeout(realtimeReloadTimer.value);
-  realtimeReloadTimer.value = null;
-}
-
-function startFallbackPolling(): void {
-  if (fallbackPollTimer.value !== null) return;
-  fallbackPollTimer.value = window.setInterval(() => {
-    void loadTasks();
-  }, 15000);
-}
-
-function stopFallbackPolling(): void {
-  if (fallbackPollTimer.value === null) return;
-  window.clearInterval(fallbackPollTimer.value);
-  fallbackPollTimer.value = null;
+function stopRealtime(): void {
+  stopRealtimeRef.value?.();
+  stopRealtimeRef.value = null;
+  realtimeState.value = "connecting";
 }
 
 function stopLifecycleBinding(): void {
@@ -303,18 +205,15 @@ function stopLifecycleBinding(): void {
 }
 
 function handlePageSuspend(): void {
-  clearRealtimeReloadTimer();
-  stopRealtimeSubscriptions();
+  stopRealtime();
 }
 
 function handlePageResume(): void {
-  syncRealtimeSubscriptions();
   void loadTasks();
 }
 
 onMounted(() => {
-  void reloadTasks();
-  startFallbackPolling();
+  void loadTasks();
   stopLifecycleBindingRef.value = bindRealtimePageLifecycle({
     onResume: handlePageResume,
     onSuspend: handlePageSuspend,
@@ -323,27 +222,38 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   stopLifecycleBinding();
-  stopFallbackPolling();
-  clearRealtimeReloadTimer();
-  stopRealtimeSubscriptions();
+  stopRealtime();
 });
 
 watch(
   () => statusFilter.value,
-  () => void reloadTasks(),
+  () => {
+    if (tablePage.value !== 1) {
+      tablePage.value = 1;
+      return;
+    }
+    void loadTasks();
+  },
 );
 
 watch(
-  activeRunIDs,
-  () => {
-    syncRealtimeSubscriptions();
+  itemsPerPage,
+  (nextValue, prevValue) => {
+    if (nextValue === prevValue) return;
+    if (tablePage.value !== 1) {
+      tablePage.value = 1;
+      return;
+    }
+    void loadTasks();
   },
-  { immediate: true },
 );
 
 watch(
   tablePage,
-  (nextPage, prevPage) => void loadMoreTasksIfNeeded(nextPage, prevPage),
+  (nextValue, prevValue) => {
+    if (nextValue === prevValue) return;
+    void loadTasks();
+  },
 );
 </script>
 

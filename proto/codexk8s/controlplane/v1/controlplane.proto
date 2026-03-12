@@ -154,11 +154,15 @@ message ResolveApprovalDecisionResponse {
 
 message ListRunsRequest {
   Principal principal = 1;
-  int32 limit = 2;
+  int32 page = 2;
+  int32 page_size = 3;
 }
 
 message ListRunsResponse {
   repeated Run items = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
 }
 
 message ListRunJobsRequest {
@@ -597,13 +601,17 @@ message RuntimeDeployTask {
 
 message ListRuntimeDeployTasksRequest {
   Principal principal = 1;
-  int32 limit = 2;
-  optional string status = 3;
-  optional string target_env = 4;
+  int32 page = 2;
+  int32 page_size = 3;
+  optional string status = 4;
+  optional string target_env = 5;
 }
 
 message ListRuntimeDeployTasksResponse {
   repeated RuntimeDeployTask items = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
 }
 
 message GetRuntimeDeployTaskRequest {

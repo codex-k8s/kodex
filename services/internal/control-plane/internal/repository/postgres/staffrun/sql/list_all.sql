@@ -114,4 +114,5 @@ WHERE (
         OR COALESCE(ar.run_payload->'trigger'->>'label', '') ILIKE 'need:reviewer'
     )
 ORDER BY created_at DESC
-LIMIT $1;
+LIMIT $1
+OFFSET $2;
