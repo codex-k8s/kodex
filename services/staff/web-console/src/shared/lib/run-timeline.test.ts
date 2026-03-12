@@ -89,6 +89,7 @@ test("buildRunTimelineStatuses collapses adjacent duplicates and formats compact
 
   const entries = buildRunTimelineStatuses(events as never, "ru", new Date("2026-03-12T12:00:00Z"));
   assert.equal(entries.length, 2);
+  assert.equal(entries[0]?.at, "2026-03-12T10:06:00Z");
   assert.equal(entries[0]?.repeatCount, 2);
   assert.equal(entries[0]?.timeLabel, "10:06");
   assert.equal(entries[1]?.timeLabel, "11 мар 16:00");
