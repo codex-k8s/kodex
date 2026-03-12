@@ -30,7 +30,9 @@ SELECT c.id,
        COALESCE(s.slot_no, 0) AS slot_no,
        c.learning_mode,
        c.run_payload,
-       c.started_at
+       c.started_at,
+       COALESCE(c.lease_owner, '') AS lease_owner,
+       c.lease_until
 FROM claimed AS c
 LEFT JOIN slots AS s
   ON s.project_id = c.project_id
