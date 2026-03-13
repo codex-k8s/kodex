@@ -20,4 +20,5 @@ SELECT
     updated_at,
     reconciled_at
 FROM mission_control_commands
-WHERE id = $1;
+WHERE project_id = $1
+  AND id = $2;

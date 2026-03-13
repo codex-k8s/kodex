@@ -14,6 +14,7 @@ SELECT
     is_read_only,
     created_at
 FROM mission_control_timeline_entries
-WHERE entity_id = $1
+WHERE project_id = $1
+  AND entity_id = $2
 ORDER BY occurred_at DESC, id DESC
-LIMIT $2;
+LIMIT $3;

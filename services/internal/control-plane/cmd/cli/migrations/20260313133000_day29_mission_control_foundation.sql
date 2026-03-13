@@ -30,15 +30,17 @@ CREATE TABLE IF NOT EXISTS mission_control_entities (
     CONSTRAINT chk_mission_control_entities_projection_version
         CHECK (projection_version >= 1),
     CONSTRAINT uq_mission_control_entities_identity
-        UNIQUE (project_id, entity_kind, entity_external_key)
+        UNIQUE (project_id, entity_kind, entity_external_key),
+    CONSTRAINT uq_mission_control_entities_project_row
+        UNIQUE (project_id, id)
 );
 
 CREATE TABLE IF NOT EXISTS mission_control_relations (
     id BIGSERIAL PRIMARY KEY,
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    source_entity_id BIGINT NOT NULL REFERENCES mission_control_entities(id) ON DELETE CASCADE,
+    source_entity_id BIGINT NOT NULL,
     relation_kind TEXT NOT NULL,
-    target_entity_id BIGINT NOT NULL REFERENCES mission_control_entities(id) ON DELETE CASCADE,
+    target_entity_id BIGINT NOT NULL,
     source_kind TEXT NOT NULL DEFAULT 'platform',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -47,13 +49,21 @@ CREATE TABLE IF NOT EXISTS mission_control_relations (
     CONSTRAINT chk_mission_control_relations_source_kind
         CHECK (source_kind IN ('platform', 'provider', 'command', 'voice_candidate')),
     CONSTRAINT uq_mission_control_relations_edge
-        UNIQUE (source_entity_id, relation_kind, target_entity_id)
+        UNIQUE (source_entity_id, relation_kind, target_entity_id),
+    CONSTRAINT fk_mission_control_relations_source_entity
+        FOREIGN KEY (project_id, source_entity_id)
+        REFERENCES mission_control_entities(project_id, id)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_mission_control_relations_target_entity
+        FOREIGN KEY (project_id, target_entity_id)
+        REFERENCES mission_control_entities(project_id, id)
+        ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS mission_control_timeline_entries (
     id BIGSERIAL PRIMARY KEY,
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    entity_id BIGINT NOT NULL REFERENCES mission_control_entities(id) ON DELETE CASCADE,
+    entity_id BIGINT NOT NULL,
     source_kind TEXT NOT NULL,
     entry_external_key TEXT NOT NULL,
     command_id UUID NULL,
@@ -67,14 +77,18 @@ CREATE TABLE IF NOT EXISTS mission_control_timeline_entries (
     CONSTRAINT chk_mission_control_timeline_entries_source_kind
         CHECK (source_kind IN ('provider', 'platform', 'command', 'voice_candidate')),
     CONSTRAINT uq_mission_control_timeline_entries_external_key
-        UNIQUE (project_id, source_kind, entry_external_key)
+        UNIQUE (project_id, source_kind, entry_external_key),
+    CONSTRAINT fk_mission_control_timeline_entries_entity
+        FOREIGN KEY (project_id, entity_id)
+        REFERENCES mission_control_entities(project_id, id)
+        ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS mission_control_commands (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     command_kind TEXT NOT NULL,
-    target_entity_id BIGINT NULL REFERENCES mission_control_entities(id) ON DELETE SET NULL,
+    target_entity_id BIGINT NULL,
     actor_id TEXT NOT NULL,
     business_intent_key TEXT NOT NULL,
     correlation_id TEXT NOT NULL,
@@ -104,15 +118,23 @@ CREATE TABLE IF NOT EXISTS mission_control_commands (
     CONSTRAINT uq_mission_control_commands_business_intent
         UNIQUE (project_id, business_intent_key),
     CONSTRAINT uq_mission_control_commands_correlation_id
-        UNIQUE (correlation_id)
+        UNIQUE (correlation_id),
+    CONSTRAINT uq_mission_control_commands_project_row
+        UNIQUE (project_id, id),
+    CONSTRAINT fk_mission_control_commands_target_entity
+        FOREIGN KEY (project_id, target_entity_id)
+        REFERENCES mission_control_entities(project_id, id)
+        ON DELETE SET NULL (target_entity_id)
 );
 
 ALTER TABLE mission_control_timeline_entries
-    DROP CONSTRAINT IF EXISTS fk_mission_control_timeline_entries_command_id;
+    DROP CONSTRAINT IF EXISTS fk_mission_control_timeline_entries_command;
 
 ALTER TABLE mission_control_timeline_entries
-    ADD CONSTRAINT fk_mission_control_timeline_entries_command_id
-        FOREIGN KEY (command_id) REFERENCES mission_control_commands(id) ON DELETE SET NULL;
+    ADD CONSTRAINT fk_mission_control_timeline_entries_command
+        FOREIGN KEY (project_id, command_id)
+        REFERENCES mission_control_commands(project_id, id)
+        ON DELETE SET NULL (command_id);
 
 CREATE INDEX IF NOT EXISTS idx_mission_control_entities_project_active_updated
     ON mission_control_entities (project_id, active_state, projected_at DESC, id DESC);
@@ -154,7 +176,7 @@ DROP INDEX IF EXISTS idx_mission_control_entities_project_sync_updated;
 DROP INDEX IF EXISTS idx_mission_control_entities_project_active_updated;
 
 ALTER TABLE mission_control_timeline_entries
-    DROP CONSTRAINT IF EXISTS fk_mission_control_timeline_entries_command_id;
+    DROP CONSTRAINT IF EXISTS fk_mission_control_timeline_entries_command;
 
 DROP TABLE IF EXISTS mission_control_commands;
 DROP TABLE IF EXISTS mission_control_timeline_entries;

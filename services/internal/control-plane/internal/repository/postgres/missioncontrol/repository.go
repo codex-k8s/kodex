@@ -271,7 +271,7 @@ func (r *Repository) UpsertTimelineEntry(ctx context.Context, params domainrepo.
 // ListTimelineEntries returns one entity timeline ordered newest first.
 func (r *Repository) ListTimelineEntries(ctx context.Context, filter domainrepo.TimelineListFilter) ([]domainrepo.TimelineEntry, error) {
 	normalized := normalizeTimelineListFilter(filter)
-	rows, err := r.db.Query(ctx, queryListTimelineEntries, normalized.EntityID, normalized.Limit)
+	rows, err := r.db.Query(ctx, queryListTimelineEntries, normalized.ProjectID, normalized.EntityID, normalized.Limit)
 	if err != nil {
 		return nil, fmt.Errorf("list mission control timeline entries: %w", err)
 	}
@@ -321,9 +321,9 @@ func (r *Repository) CreateCommand(ctx context.Context, params domainrepo.Create
 	return fromCommandRow(row), nil
 }
 
-// GetCommandByID loads one command row.
-func (r *Repository) GetCommandByID(ctx context.Context, commandID string) (domainrepo.Command, bool, error) {
-	rows, err := r.db.Query(ctx, queryGetCommandByID, strings.TrimSpace(commandID))
+// GetCommandByID loads one command row scoped to one project.
+func (r *Repository) GetCommandByID(ctx context.Context, projectID string, commandID string) (domainrepo.Command, bool, error) {
+	rows, err := r.db.Query(ctx, queryGetCommandByID, strings.TrimSpace(projectID), strings.TrimSpace(commandID))
 	if err != nil {
 		return domainrepo.Command{}, false, fmt.Errorf("query mission control command by id: %w", err)
 	}
@@ -351,20 +351,37 @@ func (r *Repository) ListCommands(ctx context.Context, filter domainrepo.Command
 // UpdateCommandStatus persists one command transition.
 func (r *Repository) UpdateCommandStatus(ctx context.Context, params domainrepo.UpdateCommandStatusParams) (domainrepo.Command, bool, error) {
 	normalized := normalizeCommandStatusUpdateParams(params)
+	failureReasonSet, failureReasonValue := failureReasonPatchArg(normalized.FailureReasonPatch)
+	approvalRequestIDSet, approvalRequestIDValue := uuidStringPatchArg(normalized.ApprovalRequestIDPatch)
+	approvalStateSet, approvalStateValue := approvalStatePatchArg(normalized.ApprovalStatePatch)
+	approvalRequestedAtSet, approvalRequestedAtValue := timestamptzPatchArg(normalized.ApprovalRequestedAtPatch)
+	approvalDecidedAtSet, approvalDecidedAtValue := timestamptzPatchArg(normalized.ApprovalDecidedAtPatch)
+	resultPayloadSet, resultPayloadValue := jsonPatchArg(normalized.ResultPayloadPatch, jsonOrEmptyObject)
+	providerDeliveriesSet, providerDeliveriesValue := jsonPatchArg(normalized.ProviderDeliveriesPatch, jsonOrEmptyArray)
+	reconciledAtSet, reconciledAtValue := timestamptzPatchArg(normalized.ReconciledAtPatch)
 	rows, err := r.db.Query(
 		ctx,
 		queryUpdateCommandStatus,
+		normalized.ProjectID,
 		normalized.CommandID,
 		string(normalized.Status),
-		nullableFailureReason(normalized.FailureReason),
-		nullableUUID(normalized.ApprovalRequestID),
-		string(normalized.ApprovalState),
-		timestamptzPtrOrNil(normalized.ApprovalRequestedAt),
-		timestamptzPtrOrNil(normalized.ApprovalDecidedAt),
-		jsonOrEmptyObject(normalized.ResultPayloadJSON),
-		jsonOrEmptyArray(normalized.ProviderDeliveries),
+		failureReasonSet,
+		failureReasonValue,
+		approvalRequestIDSet,
+		approvalRequestIDValue,
+		approvalStateSet,
+		approvalStateValue,
+		approvalRequestedAtSet,
+		approvalRequestedAtValue,
+		approvalDecidedAtSet,
+		approvalDecidedAtValue,
+		resultPayloadSet,
+		resultPayloadValue,
+		providerDeliveriesSet,
+		providerDeliveriesValue,
 		timestamptzOrNil(normalized.UpdatedAt),
-		timestamptzPtrOrNil(normalized.ReconciledAt),
+		reconciledAtSet,
+		reconciledAtValue,
 	)
 	if err != nil {
 		return domainrepo.Command{}, false, fmt.Errorf("update mission control command status: %w", err)
@@ -454,6 +471,7 @@ func normalizeTimelineEntryParams(params domainrepo.UpsertTimelineEntryParams) d
 
 func normalizeTimelineListFilter(filter domainrepo.TimelineListFilter) domainrepo.TimelineListFilter {
 	normalized := filter
+	normalized.ProjectID = strings.TrimSpace(normalized.ProjectID)
 	normalized.Limit = normalizeLimit(normalized.Limit)
 	return normalized
 }
@@ -489,15 +507,71 @@ func normalizeCommandListFilter(filter domainrepo.CommandListFilter) domainrepo.
 
 func normalizeCommandStatusUpdateParams(params domainrepo.UpdateCommandStatusParams) domainrepo.UpdateCommandStatusParams {
 	normalized := params
+	normalized.ProjectID = strings.TrimSpace(normalized.ProjectID)
 	normalized.CommandID = strings.TrimSpace(normalized.CommandID)
-	normalized.ApprovalRequestID = strings.TrimSpace(normalized.ApprovalRequestID)
-	if normalized.ApprovalState == "" {
-		normalized.ApprovalState = enumtypes.MissionControlApprovalStateNotRequired
+	normalized.ApprovalRequestIDPatch = normalizeStringPatch(normalized.ApprovalRequestIDPatch)
+	normalized.ApprovalRequestedAtPatch = normalizeTimePatch(normalized.ApprovalRequestedAtPatch)
+	normalized.ApprovalDecidedAtPatch = normalizeTimePatch(normalized.ApprovalDecidedAtPatch)
+	normalized.ReconciledAtPatch = normalizeTimePatch(normalized.ReconciledAtPatch)
+	if normalized.ApprovalStatePatch.Set && normalized.ApprovalStatePatch.Value == "" {
+		normalized.ApprovalStatePatch.Value = enumtypes.MissionControlApprovalStateNotRequired
 	}
 	if normalized.UpdatedAt.IsZero() {
 		normalized.UpdatedAt = time.Now().UTC()
 	}
 	return normalized
+}
+
+func normalizeStringPatch(patch domainrepo.OptionalStringPatch) domainrepo.OptionalStringPatch {
+	normalized := patch
+	if normalized.Set {
+		normalized.Value = strings.TrimSpace(normalized.Value)
+	}
+	return normalized
+}
+
+func normalizeTimePatch(patch domainrepo.OptionalTimePatch) domainrepo.OptionalTimePatch {
+	normalized := patch
+	if normalized.Set && normalized.Value != nil {
+		value := normalized.Value.UTC()
+		normalized.Value = &value
+	}
+	return normalized
+}
+
+func failureReasonPatchArg(patch domainrepo.CommandFailureReasonPatch) (bool, any) {
+	if !patch.Set {
+		return false, nil
+	}
+	return true, nullableFailureReason(patch.Value)
+}
+
+func uuidStringPatchArg(patch domainrepo.OptionalStringPatch) (bool, any) {
+	if !patch.Set {
+		return false, nil
+	}
+	return true, nullableUUID(patch.Value)
+}
+
+func approvalStatePatchArg(patch domainrepo.CommandApprovalStatePatch) (bool, any) {
+	if !patch.Set {
+		return false, nil
+	}
+	return true, string(patch.Value)
+}
+
+func timestamptzPatchArg(patch domainrepo.OptionalTimePatch) (bool, pgtype.Timestamptz) {
+	if !patch.Set {
+		return false, pgtype.Timestamptz{}
+	}
+	return true, timestamptzPtrOrNil(patch.Value)
+}
+
+func jsonPatchArg(patch domainrepo.OptionalJSONPatch, normalize func([]byte) []byte) (bool, []byte) {
+	if !patch.Set {
+		return false, nil
+	}
+	return true, normalize(patch.Value)
 }
 
 func nullableText(value string) any {

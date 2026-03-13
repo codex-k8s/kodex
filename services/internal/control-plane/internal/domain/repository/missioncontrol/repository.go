@@ -20,6 +20,11 @@ type (
 	ReplaceRelationsParams    = querytypes.MissionControlRelationReplaceParams
 	UpsertTimelineEntryParams = querytypes.MissionControlTimelineEntryUpsertParams
 	TimelineListFilter        = querytypes.MissionControlTimelineListFilter
+	OptionalStringPatch       = querytypes.MissionControlOptionalStringPatch
+	OptionalTimePatch         = querytypes.MissionControlOptionalTimePatch
+	OptionalJSONPatch         = querytypes.MissionControlOptionalJSONPatch
+	CommandFailureReasonPatch = querytypes.MissionControlCommandFailureReasonPatch
+	CommandApprovalStatePatch = querytypes.MissionControlCommandApprovalStatePatch
 	CreateCommandParams       = querytypes.MissionControlCommandCreateParams
 	UpdateCommandStatusParams = querytypes.MissionControlCommandStatusUpdateParams
 	CommandListFilter         = querytypes.MissionControlCommandListFilter
@@ -46,8 +51,8 @@ type Repository interface {
 	ListTimelineEntries(ctx context.Context, filter TimelineListFilter) ([]TimelineEntry, error)
 	// CreateCommand inserts one command-ledger row.
 	CreateCommand(ctx context.Context, params CreateCommandParams) (Command, error)
-	// GetCommandByID loads one command row by id.
-	GetCommandByID(ctx context.Context, commandID string) (Command, bool, error)
+	// GetCommandByID loads one command row by id scoped to one project.
+	GetCommandByID(ctx context.Context, projectID string, commandID string) (Command, bool, error)
 	// ListCommands returns command rows for one project with optional status filter.
 	ListCommands(ctx context.Context, filter CommandListFilter) ([]Command, error)
 	// UpdateCommandStatus persists one command status transition.

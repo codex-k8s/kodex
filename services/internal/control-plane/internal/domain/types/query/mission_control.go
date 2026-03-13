@@ -83,8 +83,42 @@ type MissionControlTimelineEntryUpsertParams struct {
 
 // MissionControlTimelineListFilter defines one timeline lookup filter.
 type MissionControlTimelineListFilter struct {
-	EntityID int64
-	Limit    int
+	ProjectID string
+	EntityID  int64
+	Limit     int
+}
+
+// MissionControlOptionalStringPatch defines one optional string patch field.
+// Set=false keeps the existing column value; Set=true with empty Value writes NULL.
+type MissionControlOptionalStringPatch struct {
+	Set   bool
+	Value string
+}
+
+// MissionControlOptionalTimePatch defines one optional timestamptz patch field.
+// Set=false keeps the existing column value; Set=true with nil Value writes NULL.
+type MissionControlOptionalTimePatch struct {
+	Set   bool
+	Value *time.Time
+}
+
+// MissionControlOptionalJSONPatch defines one optional JSONB patch field.
+// Set=false keeps the existing column value; Set=true with empty Value writes an empty container.
+type MissionControlOptionalJSONPatch struct {
+	Set   bool
+	Value json.RawMessage
+}
+
+// MissionControlCommandFailureReasonPatch defines one optional failure reason update.
+type MissionControlCommandFailureReasonPatch struct {
+	Set   bool
+	Value enumtypes.MissionControlCommandFailureReason
+}
+
+// MissionControlCommandApprovalStatePatch defines one optional approval state update.
+type MissionControlCommandApprovalStatePatch struct {
+	Set   bool
+	Value enumtypes.MissionControlApprovalState
 }
 
 // MissionControlCommandCreateParams defines one command-ledger insert.
@@ -111,17 +145,18 @@ type MissionControlCommandCreateParams struct {
 
 // MissionControlCommandStatusUpdateParams defines one command status transition persistence update.
 type MissionControlCommandStatusUpdateParams struct {
-	CommandID           string
-	Status              enumtypes.MissionControlCommandStatus
-	FailureReason       enumtypes.MissionControlCommandFailureReason
-	ApprovalRequestID   string
-	ApprovalState       enumtypes.MissionControlApprovalState
-	ApprovalRequestedAt *time.Time
-	ApprovalDecidedAt   *time.Time
-	ResultPayloadJSON   json.RawMessage
-	ProviderDeliveries  json.RawMessage
-	UpdatedAt           time.Time
-	ReconciledAt        *time.Time
+	ProjectID                string
+	CommandID                string
+	Status                   enumtypes.MissionControlCommandStatus
+	FailureReasonPatch       MissionControlCommandFailureReasonPatch
+	ApprovalRequestIDPatch   MissionControlOptionalStringPatch
+	ApprovalStatePatch       MissionControlCommandApprovalStatePatch
+	ApprovalRequestedAtPatch MissionControlOptionalTimePatch
+	ApprovalDecidedAtPatch   MissionControlOptionalTimePatch
+	ResultPayloadPatch       MissionControlOptionalJSONPatch
+	ProviderDeliveriesPatch  MissionControlOptionalJSONPatch
+	UpdatedAt                time.Time
+	ReconciledAtPatch        MissionControlOptionalTimePatch
 }
 
 // MissionControlCommandListFilter defines one command lookup filter for warmup/reconcile workers.
