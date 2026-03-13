@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-02-06
 updated_at: 2026-03-13
-related_issues: [1, 19, 74, 100, 106, 112, 154, 155, 170, 171, 184, 185, 187, 189, 195, 197, 199, 201, 210, 212, 218, 220, 222, 223, 225, 226, 227, 228, 229, 230, 238, 241, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 274, 216, 262, 263, 265, 281, 282, 320, 333, 335, 337, 340, 351, 360, 363, 366, 369, 370, 371, 372, 373, 374, 375, 378, 383, 385, 387, 389, 391, 392, 393, 394, 395, 413]
+related_issues: [1, 19, 74, 100, 106, 112, 154, 155, 170, 171, 184, 185, 187, 189, 195, 197, 199, 201, 210, 212, 218, 220, 222, 223, 225, 226, 227, 228, 229, 230, 238, 241, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 274, 216, 262, 263, 265, 281, 282, 320, 333, 335, 337, 340, 351, 360, 363, 366, 369, 370, 371, 372, 373, 374, 375, 378, 383, 385, 387, 389, 391, 392, 393, 394, 395, 413, 416]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -312,11 +312,17 @@ approvals:
   - закреплены продуктовые инварианты: controlled wait-state вместо ложного failed, split `platform PAT` vs `agent bot-token`, owner/operator transparency и MCP backpressure на agent path;
   - зафиксировано ограничение: GitHub primary и secondary rate-limit semantics провайдер-управляемы и не сводятся к одному фиксированному countdown, поэтому UX должен опираться на typed recovery hints, а не на жёстко зашитый threshold;
   - создана follow-up issue `#413` для stage `run:vision` без trigger-лейбла.
-- Day 2 (planned): vision-пакет для GitHub API rate-limit resilience (Issue `#413`).
-- Ожидаемый результат Day 2:
-  - mission, north star, persona outcomes и KPI/guardrails для controlled wait-state и rate-limit transparency;
-  - MVP/Post-MVP границы для notifications, resume behavior и provider-specific assumptions;
-  - continuity issue для `run:prd` без trigger-лейбла.
+- Day 2 (in-review): vision-пакет для GitHub API rate-limit resilience (`docs/delivery/epics/s12/epic-s12-day2-github-api-rate-limit-vision.md`, Issue `#413`).
+- Результат Day 2 (факт):
+  - инициатива зафиксирована как GitHub-first product capability вокруг controlled wait-state, а не как общий redesign quota-management или retry framework;
+  - сформированы mission, north star, persona outcomes, KPI/guardrails и risk frame для owner/reviewer, operator и agent-path flows;
+  - подтверждены MVP/Post-MVP границы: clarity, contour attribution, backpressure и safe resume входят в core wave, а notification/adapters и multi-provider governance остаются deferred;
+  - создана follow-up issue `#416` для stage `run:prd` без trigger-лейбла.
+- Day 3 (planned): PRD-пакет для GitHub API rate-limit resilience (Issue `#416`).
+- Ожидаемый результат Day 3:
+  - user stories, FR/AC/NFR и edge cases для controlled wait-state, rate-limit transparency и resume semantics;
+  - продуктовый контракт для split `platform PAT` vs `agent bot-token`, provider-driven recovery hints и запрета infinite local retries;
+  - continuity issue для `run:arch` без trigger-лейбла.
 
 ### Daily delivery contract (обязательный)
 - Каждый день задачи дня влиты в `main`.
