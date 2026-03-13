@@ -23,6 +23,8 @@ type Config struct {
 	ClaimLimit int
 	// RunningCheckLimit limits running runs reconciled per tick.
 	RunningCheckLimit int
+	// StaleLeaseSweepLimit limits how many stale running leases are released per tick.
+	StaleLeaseSweepLimit int
 	// SlotsPerProject defines slot pool size per project scope.
 	SlotsPerProject int
 	// SlotLeaseTTL defines maximum duration of slot ownership.
@@ -160,6 +162,9 @@ func NewService(cfg Config, deps Dependencies) *Service {
 	}
 	if cfg.RunningCheckLimit <= 0 {
 		cfg.RunningCheckLimit = 100
+	}
+	if cfg.StaleLeaseSweepLimit <= 0 {
+		cfg.StaleLeaseSweepLimit = 100
 	}
 	if cfg.SlotsPerProject <= 0 {
 		cfg.SlotsPerProject = 1
