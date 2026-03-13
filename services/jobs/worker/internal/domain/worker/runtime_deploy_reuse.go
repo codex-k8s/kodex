@@ -12,8 +12,11 @@ import (
 )
 
 const (
-	runtimeReuseReasonFingerprintMatch = "fingerprint_match"
-	runtimeReuseReasonEvaluationFailed = "reuse_evaluation_failed"
+	runtimeReuseReasonFingerprintMatch     = "fingerprint_match"
+	runtimeReuseReasonEvaluationFailed     = "reuse_evaluation_failed"
+	runtimeReuseReasonNamespaceNotManaged  = "namespace_not_managed"
+	runtimeReuseReasonNamespaceTerminating = "namespace_terminating"
+	runtimeReuseReasonNamespaceMismatch    = "namespace_mismatch"
 )
 
 type runtimeReuseResolution struct {
@@ -69,8 +72,6 @@ func (s *Service) resolveRuntimeReuseForRevise(
 	if namespace == "" {
 		return result, nil
 	}
-	result.prepareParams.Namespace = namespace
-	result.execution.Namespace = namespace
 
 	evaluated, err := s.deployer.EvaluateRuntimeReuse(ctx, EvaluateRuntimeReuseParams{
 		RunID:              run.RunID,
@@ -104,12 +105,14 @@ func (s *Service) resolveRuntimeReuseForRevise(
 		}); eventErr != nil {
 			return result, eventErr
 		}
+		result.prepareParams.Namespace = namespace
+		result.execution.Namespace = namespace
 		return result, nil
 	}
 
+	eventNamespace := namespace
 	if evaluatedNamespace := sanitizeDNSLabelValue(evaluated.Namespace); evaluatedNamespace != "" {
-		result.prepareParams.Namespace = evaluatedNamespace
-		result.execution.Namespace = evaluatedNamespace
+		eventNamespace = evaluatedNamespace
 	}
 	if targetEnv := strings.TrimSpace(evaluated.TargetEnv); targetEnv != "" {
 		result.prepareParams.TargetEnv = targetEnv
@@ -118,7 +121,7 @@ func (s *Service) resolveRuntimeReuseForRevise(
 	eventPayload := runtimeReuseEventPayload{
 		RunID:             run.RunID,
 		ProjectID:         run.ProjectID,
-		Namespace:         result.execution.Namespace,
+		Namespace:         eventNamespace,
 		IssueNumber:       leaseCtx.IssueNumber,
 		AgentKey:          leaseCtx.AgentKey,
 		TriggerKind:       triggerKind,
@@ -127,6 +130,8 @@ func (s *Service) resolveRuntimeReuseForRevise(
 		FingerprintHash:   strings.TrimSpace(evaluated.FingerprintHash),
 	}
 	if evaluated.Reusable {
+		result.prepareParams.Namespace = eventNamespace
+		result.execution.Namespace = eventNamespace
 		if eventPayload.Reason == "" {
 			eventPayload.Reason = runtimeReuseReasonFingerprintMatch
 		}
@@ -136,11 +141,27 @@ func (s *Service) resolveRuntimeReuseForRevise(
 		result.reusable = true
 		return result, nil
 	}
+	if shouldResetNamespaceForReuseFallback(eventPayload.Reason) {
+		result.prepareParams.Namespace = ""
+		result.execution.Namespace = ""
+	} else {
+		result.prepareParams.Namespace = eventNamespace
+		result.execution.Namespace = eventNamespace
+	}
 
 	if err := s.insertRuntimeReuseEvent(ctx, run, floweventdomain.EventTypeRunNamespaceReuseFallback, eventPayload); err != nil {
 		return result, err
 	}
 	return result, nil
+}
+
+func shouldResetNamespaceForReuseFallback(reason string) bool {
+	switch strings.TrimSpace(reason) {
+	case runtimeReuseReasonNamespaceNotManaged, runtimeReuseReasonNamespaceTerminating, runtimeReuseReasonNamespaceMismatch:
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *Service) insertRuntimeReuseEvent(

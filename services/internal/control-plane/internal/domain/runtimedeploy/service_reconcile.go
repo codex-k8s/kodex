@@ -327,7 +327,7 @@ func (s *Service) applyDesiredState(ctx context.Context, params PrepareParams) (
 		s.appendTaskLogBestEffort(ctx, runID, "tls", "error", "Finalize TLS failed: "+err.Error())
 		return zero, fmt.Errorf("finalize tls: %w", err)
 	}
-	if fingerprint, fingerprintErr := s.buildRuntimeFingerprint(EvaluateReuseParams{
+	if fingerprint, fingerprintErr := s.buildRuntimeFingerprint(ctx, EvaluateReuseParams{
 		RunID:              params.RunID,
 		RuntimeMode:        params.RuntimeMode,
 		Namespace:          targetNamespace,

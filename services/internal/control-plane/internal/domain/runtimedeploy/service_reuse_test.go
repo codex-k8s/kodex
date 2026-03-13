@@ -2,11 +2,13 @@ package runtimedeploy
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	agentrunrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/repository/agentrun"
 	runtimedeploytaskrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/repository/runtimedeploytask"
 	entitytypes "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/types/entity"
 )
@@ -15,7 +17,7 @@ func TestEvaluateRuntimeReuse_AllowsFastPathWhenFingerprintMatches(t *testing.T)
 	t.Parallel()
 
 	svc, params, k8s := newRuntimeReuseTestService(t)
-	fingerprint, err := svc.buildRuntimeFingerprint(params)
+	fingerprint, err := svc.buildRuntimeFingerprint(context.Background(), params)
 	if err != nil {
 		t.Fatalf("buildRuntimeFingerprint() error = %v", err)
 	}
@@ -59,7 +61,7 @@ func TestEvaluateRuntimeReuse_ReturnsFingerprintMismatchWhenRenderedManifestsDri
 	t.Parallel()
 
 	svc, params, _ := newRuntimeReuseTestService(t)
-	fingerprint, err := svc.buildRuntimeFingerprint(params)
+	fingerprint, err := svc.buildRuntimeFingerprint(context.Background(), params)
 	if err != nil {
 		t.Fatalf("buildRuntimeFingerprint() error = %v", err)
 	}
@@ -156,6 +158,48 @@ func TestEvaluateRuntimeReuse_RejectsMutableBuildRef(t *testing.T) {
 	}
 	if got, want := result.Reason, runtimeReuseReasonBuildRefNotImmutable; got != want {
 		t.Fatalf("expected reason %q, got %q", want, got)
+	}
+}
+
+func TestBuildRuntimeFingerprint_EnrichesMissingScopeFromRunPayload(t *testing.T) {
+	t.Parallel()
+
+	svc, params, _ := newRuntimeReuseTestService(t)
+	svc.runs = &fakeRuntimeReuseRunReader{
+		run: agentrunrepo.Run{
+			ID:        params.RunID,
+			ProjectID: params.ProjectID,
+			RunPayload: json.RawMessage(`{
+				"agent":{"key":"dev"},
+				"issue":{"number":312}
+			}`),
+		},
+	}
+
+	expected, err := svc.buildRuntimeFingerprint(context.Background(), params)
+	if err != nil {
+		t.Fatalf("buildRuntimeFingerprint() with explicit scope error = %v", err)
+	}
+
+	params.ProjectID = ""
+	params.IssueNumber = 0
+	params.AgentKey = ""
+
+	fingerprint, err := svc.buildRuntimeFingerprint(context.Background(), params)
+	if err != nil {
+		t.Fatalf("buildRuntimeFingerprint() with missing scope error = %v", err)
+	}
+	if got, want := fingerprint.ProjectID, expected.ProjectID; got != want {
+		t.Fatalf("expected project_id %q, got %q", want, got)
+	}
+	if got, want := fingerprint.IssueNumber, expected.IssueNumber; got != want {
+		t.Fatalf("expected issue_number %d, got %d", want, got)
+	}
+	if got, want := fingerprint.AgentKey, expected.AgentKey; got != want {
+		t.Fatalf("expected agent_key %q, got %q", want, got)
+	}
+	if got, want := fingerprint.Hash, expected.Hash; got != want {
+		t.Fatalf("expected hash %q, got %q", want, got)
 	}
 }
 
@@ -340,6 +384,10 @@ type fakeRuntimeReuseTasksRepo struct {
 	activeOK bool
 }
 
+type fakeRuntimeReuseRunReader struct {
+	run agentrunrepo.Run
+}
+
 func (*fakeRuntimeReuseTasksRepo) UpsertDesired(_ context.Context, _ runtimedeploytaskrepo.UpsertDesiredParams) (runtimedeploytaskrepo.Task, error) {
 	return runtimedeploytaskrepo.Task{}, nil
 }
@@ -386,4 +434,8 @@ func (*fakeRuntimeReuseTasksRepo) AppendLog(_ context.Context, _ runtimedeployta
 
 func (*fakeRuntimeReuseTasksRepo) CleanupTaskLogsUpdatedBefore(_ context.Context, _ time.Time) (int64, error) {
 	return 0, nil
+}
+
+func (f *fakeRuntimeReuseRunReader) GetByID(_ context.Context, _ string) (agentrunrepo.Run, bool, error) {
+	return f.run, true, nil
 }

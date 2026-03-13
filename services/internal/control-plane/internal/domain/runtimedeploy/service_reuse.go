@@ -14,6 +14,7 @@ import (
 
 	"github.com/codex-k8s/codex-k8s/libs/go/manifesttpl"
 	"github.com/codex-k8s/codex-k8s/libs/go/servicescfg"
+	querytypes "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/types/query"
 )
 
 const runtimeFingerprintVersion = "v1"
@@ -124,7 +125,7 @@ func (s *Service) EvaluateRuntimeReuse(ctx context.Context, params EvaluateReuse
 		return result, nil
 	}
 
-	fingerprint, err := s.buildRuntimeFingerprint(params)
+	fingerprint, err := s.buildRuntimeFingerprint(ctx, params)
 	if err != nil {
 		var invalid runtimeReuseInvalidation
 		if ok := asRuntimeReuseInvalidation(err, &invalid); ok {
@@ -181,8 +182,12 @@ func normalizeEvaluateReuseParams(params EvaluateReuseParams) EvaluateReuseParam
 	return params
 }
 
-func (s *Service) buildRuntimeFingerprint(params EvaluateReuseParams) (runtimeFingerprintRecord, error) {
+func (s *Service) buildRuntimeFingerprint(ctx context.Context, params EvaluateReuseParams) (runtimeFingerprintRecord, error) {
 	params = normalizeEvaluateReuseParams(params)
+	params, err := s.enrichRuntimeFingerprintScope(ctx, params)
+	if err != nil {
+		return runtimeFingerprintRecord{}, err
+	}
 	if !isImmutableGitRef(params.BuildRef) {
 		return runtimeFingerprintRecord{}, runtimeReuseInvalidation{reason: runtimeReuseReasonBuildRefNotImmutable}
 	}
@@ -281,6 +286,49 @@ func (s *Service) buildRuntimeFingerprint(params EvaluateReuseParams) (runtimeFi
 	}
 	record.Hash = hashRuntimeFingerprint(record)
 	return record, nil
+}
+
+func (s *Service) enrichRuntimeFingerprintScope(ctx context.Context, params EvaluateReuseParams) (EvaluateReuseParams, error) {
+	if params.ProjectID != "" && params.IssueNumber > 0 && params.AgentKey != "" {
+		return params, nil
+	}
+	if s.runs == nil {
+		return EvaluateReuseParams{}, fmt.Errorf("runtime fingerprint scope requires run reader")
+	}
+	run, found, err := s.runs.GetByID(ctx, params.RunID)
+	if err != nil {
+		return EvaluateReuseParams{}, fmt.Errorf("load run %s for runtime fingerprint scope: %w", params.RunID, err)
+	}
+	if !found {
+		return EvaluateReuseParams{}, fmt.Errorf("run %s for runtime fingerprint scope not found", params.RunID)
+	}
+	if params.ProjectID == "" {
+		params.ProjectID = strings.TrimSpace(run.ProjectID)
+	}
+	if params.IssueNumber > 0 && params.AgentKey != "" {
+		return normalizeEvaluateReuseParams(params), nil
+	}
+	if len(run.RunPayload) == 0 {
+		return EvaluateReuseParams{}, fmt.Errorf("run %s payload is required for runtime fingerprint scope", params.RunID)
+	}
+
+	var payload querytypes.RunPayload
+	if err := json.Unmarshal(run.RunPayload, &payload); err != nil {
+		return EvaluateReuseParams{}, fmt.Errorf("decode run %s payload for runtime fingerprint scope: %w", params.RunID, err)
+	}
+	if params.ProjectID == "" {
+		params.ProjectID = strings.TrimSpace(payload.Project.ID)
+	}
+	if params.IssueNumber <= 0 && payload.Issue != nil && payload.Issue.Number > 0 {
+		params.IssueNumber = payload.Issue.Number
+	}
+	if params.AgentKey == "" && payload.Agent != nil {
+		params.AgentKey = strings.ToLower(strings.TrimSpace(payload.Agent.Key))
+	}
+	if params.ProjectID == "" || params.IssueNumber <= 0 || params.AgentKey == "" {
+		return EvaluateReuseParams{}, fmt.Errorf("runtime fingerprint scope for run %s is incomplete", params.RunID)
+	}
+	return normalizeEvaluateReuseParams(params), nil
 }
 
 func (s *Service) resolveRunRepositoryRootForReuse(params EvaluateReuseParams) (string, error) {
