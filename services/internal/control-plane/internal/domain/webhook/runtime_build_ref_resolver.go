@@ -48,6 +48,9 @@ func (s *Service) resolveRuntimeBuildRefForIssueTrigger(ctx context.Context, pro
 					continue
 				}
 				if ref := extractPullRequestHeadBuildRefFromNormalizedRunPayload(runItem.RunPayload); ref != "" {
+					if resolvedSHA := s.resolveRepositoryRefToSHA(ctx, repositoryFullName, ref); resolvedSHA != "" {
+						return resolvedSHA
+					}
 					return ref
 				}
 			}

@@ -14,6 +14,7 @@ import (
 
 	"github.com/codex-k8s/codex-k8s/libs/go/k8s/clientcfg"
 	mcpdomain "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/mcp"
+	runtimedeploydomain "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/runtimedeploy"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -160,10 +161,12 @@ func (c *Client) ListEvents(ctx context.Context, namespace string, limit int) ([
 	}
 
 	sort.Slice(out, func(i, j int) bool {
-		if out[i].Timestamp == out[j].Timestamp {
-			return out[i].Object < out[j].Object
+		switch {
+		case out[i].Timestamp != out[j].Timestamp:
+			return out[i].Timestamp > out[j].Timestamp
+		default:
+			return strings.Compare(out[i].Object, out[j].Object) < 0
 		}
-		return out[i].Timestamp > out[j].Timestamp
 	})
 	return out, nil
 }
@@ -303,6 +306,67 @@ func (c *Client) EnsureNamespace(ctx context.Context, namespace string) error {
 	return nil
 }
 
+// GetManagedRunNamespace returns metadata for one worker-managed run namespace.
+func (c *Client) GetManagedRunNamespace(ctx context.Context, namespace string) (runtimedeploydomain.RuntimeNamespaceState, bool, error) {
+	targetNamespace := strings.TrimSpace(namespace)
+	if targetNamespace == "" {
+		return runtimedeploydomain.RuntimeNamespaceState{}, false, fmt.Errorf("namespace is required")
+	}
+
+	ns, err := c.clientset.CoreV1().Namespaces().Get(ctx, targetNamespace, metav1.GetOptions{})
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			return runtimedeploydomain.RuntimeNamespaceState{}, false, nil
+		}
+		return runtimedeploydomain.RuntimeNamespaceState{}, false, fmt.Errorf("get namespace %s: %w", targetNamespace, err)
+	}
+	if strings.TrimSpace(ns.Labels[runNamespaceManagedByLabel]) != runNamespaceManagedByValue {
+		return runtimedeploydomain.RuntimeNamespaceState{}, false, nil
+	}
+	if strings.TrimSpace(ns.Labels[runNamespacePurposeLabel]) != runNamespacePurposeValue {
+		return runtimedeploydomain.RuntimeNamespaceState{}, false, nil
+	}
+
+	return runtimedeploydomain.RuntimeNamespaceState{
+		Name:        strings.TrimSpace(ns.Name),
+		Labels:      cloneStringMap(ns.Labels),
+		Annotations: cloneStringMap(ns.Annotations),
+		Terminating: ns.DeletionTimestamp != nil,
+	}, true, nil
+}
+
+// UpsertNamespaceAnnotations merges annotations into an existing namespace.
+func (c *Client) UpsertNamespaceAnnotations(ctx context.Context, namespace string, annotations map[string]string) error {
+	targetNamespace := strings.TrimSpace(namespace)
+	if targetNamespace == "" {
+		return fmt.Errorf("namespace is required")
+	}
+	if len(annotations) == 0 {
+		return nil
+	}
+
+	ns, err := c.clientset.CoreV1().Namespaces().Get(ctx, targetNamespace, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("get namespace %s: %w", targetNamespace, err)
+	}
+	if ns.DeletionTimestamp != nil {
+		return fmt.Errorf("namespace %s is terminating", targetNamespace)
+	}
+	if ns.Annotations == nil {
+		ns.Annotations = map[string]string{}
+	}
+	for key, value := range annotations {
+		if strings.TrimSpace(key) == "" {
+			continue
+		}
+		ns.Annotations[key] = value
+	}
+	if _, err := c.clientset.CoreV1().Namespaces().Update(ctx, ns, metav1.UpdateOptions{}); err != nil {
+		return fmt.Errorf("update namespace %s annotations: %w", targetNamespace, err)
+	}
+	return nil
+}
+
 // UpsertSecret creates or updates one namespaced Kubernetes Secret with deterministic data keys.
 func (c *Client) UpsertSecret(ctx context.Context, namespace string, secretName string, data map[string][]byte) error {
 	return c.upsertSecret(ctx, namespace, secretName, corev1.SecretTypeOpaque, data)
@@ -396,6 +460,65 @@ func (c *Client) DeleteManagedRunNamespace(ctx context.Context, namespace string
 	}
 
 	return true, nil
+}
+
+func cloneStringMap(input map[string]string) map[string]string {
+	if len(input) == 0 {
+		return map[string]string{}
+	}
+	out := make(map[string]string, len(input))
+	for key, value := range input {
+		out[key] = value
+	}
+	return out
+}
+
+func collectSortedObjectNames[T any](items []T, name func(T) string) []string {
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		itemName := strings.TrimSpace(name(item))
+		if itemName == "" {
+			continue
+		}
+		out = append(out, itemName)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func listNamespaceObjectNames[T any](
+	ctx context.Context,
+	namespace string,
+	kind string,
+	list func(context.Context, string) ([]T, error),
+	name func(T) string,
+) ([]string, error) {
+	targetNamespace := strings.TrimSpace(namespace)
+	if targetNamespace == "" {
+		return nil, fmt.Errorf("kubernetes namespace is required")
+	}
+	items, err := list(ctx, targetNamespace)
+	if err != nil {
+		return nil, fmt.Errorf("list kubernetes %s %s: %w", kind, targetNamespace, err)
+	}
+	return collectSortedObjectNames(items, name), nil
+}
+
+func (c *Client) listSecrets(ctx context.Context, namespace string) ([]corev1.Secret, error) {
+	items, err := c.clientset.CoreV1().Secrets(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return items.Items, nil
+}
+
+func (c *Client) listConfigMaps(ctx context.Context, namespace string) ([]corev1.ConfigMap, error) {
+	options := metav1.ListOptions{}
+	configMaps, err := c.clientset.CoreV1().ConfigMaps(namespace).List(ctx, options)
+	if err != nil {
+		return nil, err
+	}
+	return configMaps.Items, nil
 }
 
 // FindManagedRunNamespaceByRunID resolves one managed run namespace by run id label.
@@ -587,48 +710,16 @@ func (c *Client) UpsertConfigMap(ctx context.Context, namespace string, name str
 
 // ListSecretNames returns secret names in namespace with deterministic ordering.
 func (c *Client) ListSecretNames(ctx context.Context, namespace string) ([]string, error) {
-	targetNamespace := strings.TrimSpace(namespace)
-	if targetNamespace == "" {
-		return nil, fmt.Errorf("kubernetes namespace is required")
-	}
-
-	items, err := c.clientset.CoreV1().Secrets(targetNamespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list kubernetes secrets %s: %w", targetNamespace, err)
-	}
-	out := make([]string, 0, len(items.Items))
-	for _, item := range items.Items {
-		name := strings.TrimSpace(item.Name)
-		if name == "" {
-			continue
-		}
-		out = append(out, name)
-	}
-	sort.Strings(out)
-	return out, nil
+	return listNamespaceObjectNames(ctx, namespace, "secrets", c.listSecrets, func(item corev1.Secret) string {
+		return item.Name
+	})
 }
 
 // ListConfigMapNames returns configmap names in namespace with deterministic ordering.
 func (c *Client) ListConfigMapNames(ctx context.Context, namespace string) ([]string, error) {
-	targetNamespace := strings.TrimSpace(namespace)
-	if targetNamespace == "" {
-		return nil, fmt.Errorf("kubernetes namespace is required")
-	}
-
-	items, err := c.clientset.CoreV1().ConfigMaps(targetNamespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list kubernetes configmaps %s: %w", targetNamespace, err)
-	}
-	out := make([]string, 0, len(items.Items))
-	for _, item := range items.Items {
-		name := strings.TrimSpace(item.Name)
-		if name == "" {
-			continue
-		}
-		out = append(out, name)
-	}
-	sort.Strings(out)
-	return out, nil
+	return listNamespaceObjectNames(ctx, namespace, "configmaps", c.listConfigMaps, func(item corev1.ConfigMap) string {
+		return item.Name
+	})
 }
 
 // GetConfigMapData returns one namespaced configmap data map when configmap exists.
