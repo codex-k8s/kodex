@@ -57,7 +57,9 @@ approvals:
 - Запуск выполняется в отдельном issue/run namespace рядом со стеком проекта.
 - Агент имеет доступ к логам, events, pod/deploy/service runtime и диагностике через `kubectl`.
 - Прямой доступ к `secrets` запрещен RBAC.
-- Для `run:*:revise` namespace переиспользуется и TTL lease продлевается.
+- Для `run:*:revise` worker сначала валидирует reusable namespace по persisted runtime fingerprint
+  и immutable `build_ref`; только при совпадении fingerprint fast-path пропускает runtime deploy/build,
+  иначе выполняется обычный redeploy в тот же namespace с продлением lease.
 - GitHub операции выполняются напрямую через `gh`/`git` с `CODEXK8S_GIT_BOT_TOKEN`.
 
 ### `code-only`

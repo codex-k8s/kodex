@@ -36,7 +36,7 @@ func TestExtractPullRequestHeadBuildRefFromNormalizedRunPayload_FallbackToRawPay
 	}
 }
 
-func TestResolveRuntimeBuildRefForIssueTrigger_UsesRunHistoryPullRequestRef(t *testing.T) {
+func TestResolveRuntimeBuildRefForIssueTrigger_UsesRunHistoryPullRequestRefResolvedToSHA(t *testing.T) {
 	t.Parallel()
 
 	runs := &inMemoryRunRepo{
@@ -56,15 +56,23 @@ func TestResolveRuntimeBuildRefForIssueTrigger_UsesRunHistoryPullRequestRef(t *t
 			},
 		},
 	}
-	svc := &Service{agentRuns: runs}
+	svc := &Service{
+		agentRuns:   runs,
+		githubToken: "token",
+		githubMgmt: &inMemoryPushMainVersionBumpClient{
+			refToSHA: map[string]string{
+				"codex-k8s/codex-k8s@feature/pr-100": "0123456789abcdef0123456789abcdef01234567",
+			},
+		},
+	}
 
 	envelope := githubWebhookEnvelope{
 		Repository: githubRepositoryRecord{FullName: "codex-k8s/codex-k8s"},
 		Issue:      githubIssueRecord{Number: 205},
 	}
 	got := svc.resolveRuntimeBuildRefForIssueTrigger(context.Background(), "project-1", envelope, "main", agentdomain.RuntimeModeFullEnv)
-	if got != "feature/pr-100" {
-		t.Fatalf("resolveRuntimeBuildRefForIssueTrigger() = %q, want %q", got, "feature/pr-100")
+	if got != "0123456789abcdef0123456789abcdef01234567" {
+		t.Fatalf("resolveRuntimeBuildRefForIssueTrigger() = %q, want %q", got, "0123456789abcdef0123456789abcdef01234567")
 	}
 }
 
