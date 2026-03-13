@@ -334,11 +334,13 @@ approvals:
   - зафиксированы typed contracts для signal handoff, dominant/related wait visibility, persisted wait aggregate/evidence и rollout/rollback notes;
   - выбран отдельный coarse wait-state `waiting_backpressure`, finite auto-resume policy для primary/secondary limits и best-effort GitHub service-comment mirror;
   - создана follow-up issue `#423` для stage `run:plan` без trigger-лейбла.
-- Day 6 (in-review): plan-пакет для GitHub API rate-limit resilience (`docs/delivery/epics/s12/epic-s12-day6-github-api-rate-limit-plan.md`, Issue `#423`).
+- Day 6 (in-review): plan-пакет для GitHub API rate-limit resilience (`docs/delivery/epics/s12/epic-s12-day6-github-api-rate-limit-resilience-plan.md`, Issue `#423`).
 - Результат Day 6 (факт):
-  - сформирован execution package `#425..#431` без trigger-лейблов для persistence foundation, `control-plane`, `worker`, `agent-runner`, `api-gateway`, `web-console` и observability/readiness;
+  - execution backlog декомпозирован на issues `#425..#431` без trigger-лейблов, с wave-sequencing и owner-managed handover в `run:dev`;
+  - `#425` закреплён за schema foundation, `#426` за `control-plane` classification/projection, `#427` за worker auto-resume, `#428` за `agent-runner` handoff, `#429` за `api-gateway` transport, `#430` за `web-console` visibility, `#431` за observability/readiness gate;
   - зафиксирован sequencing order `#425 -> #426 -> #427 -> #428 -> #429 -> #430 -> #431` и rollout `migrations -> control-plane -> worker -> agent-runner -> api-gateway -> web-console -> evidence gate`;
-  - `#431` закреплён как обязательный observability/readiness gate перед `run:qa`, а predictive budgeting/multi-provider governance оставлены за пределами core Sprint S12 execution package.
+  - документный контур `intake -> vision -> prd -> arch -> design -> plan` согласован и завершён, quality-gates/DoR/DoD/blockers/risks/owner decisions синхронизированы в delivery traceability, а predictive budgeting/multi-provider governance оставлены за пределами core Sprint S12 execution package;
+- Day 7+ (planned): `run:dev -> qa -> release -> postdeploy -> ops` по issues `#425..#431` с owner-managed wave launch и обязательным evidence gate `#431` перед `run:qa`.
 
 ### Daily delivery contract (обязательный)
 - Каждый день задачи дня влиты в `main`.
