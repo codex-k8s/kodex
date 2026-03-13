@@ -6,7 +6,7 @@ status: in-review
 owner_role: KM
 created_at: 2026-03-13
 updated_at: 2026-03-13
-related_issues: [366, 413, 416, 418, 420, 423]
+related_issues: [366, 413, 416, 418, 420, 423, 425, 426, 427, 428, 429, 430, 431]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -95,3 +95,17 @@ approvals:
   - Context7 `/github/docs` использован для актуальной верификации primary/secondary rate-limit semantics, `Retry-After`, response headers и best-practice guidance по pacing/backoff;
   - локально подтверждён non-interactive GitHub flow через `gh issue create --help`, `gh pr create --help`, `gh pr edit --help`.
 - Root FR/NFR matrix в `docs/delivery/requirements_traceability.md` не менялась по существу: design stage переводит architecture package в implementation-ready contracts и rollout notes, а не добавляет новые канонические требования.
+
+## Актуализация по Issue #423 (`run:plan`, 2026-03-13)
+- Подготовлен plan package:
+  - `docs/delivery/epics/s12/epic-s12-day6-github-api-rate-limit-plan.md`.
+- Зафиксированы:
+  - execution streams `#425..#431` для persistence foundation, `control-plane`, `worker`, `agent-runner`, `api-gateway`, `web-console` и observability/readiness;
+  - sequencing-waves `#425 -> #426 -> #427 -> #428 -> #429 -> #430 -> #431` и rollout order `migrations -> control-plane -> worker -> agent-runner -> api-gateway -> web-console -> evidence gate`;
+  - quality gates, DoR/DoD, blockers, risks и owner decisions для handover в `run:dev`;
+  - обязательный evidence gate `#431` перед `run:qa`.
+- Для continuity созданы follow-up issues `#425`, `#426`, `#427`, `#428`, `#429`, `#430`, `#431` без trigger-лейблов.
+- Внешний baseline дополнительно сверен:
+  - Context7 `/github/docs` повторно подтверждает guidance GitHub по primary vs secondary rate-limit semantics, `Retry-After`, ожиданию минимум минуты и exponential backoff при отсутствии deterministic retry header;
+  - локально подтверждён non-interactive GitHub flow через `gh issue create --help`, `gh pr create --help`, `gh pr edit --help`.
+- Root FR/NFR matrix в `docs/delivery/requirements_traceability.md` не менялась по существу: plan stage декомпозирует реализацию и quality gates, а не добавляет новые канонические требования.

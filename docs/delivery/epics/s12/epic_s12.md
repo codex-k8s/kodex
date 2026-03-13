@@ -6,7 +6,7 @@ status: in-review
 owner_role: PM
 created_at: 2026-03-13
 updated_at: 2026-03-13
-related_issues: [366, 413, 416, 418, 420, 423]
+related_issues: [366, 413, 416, 418, 420, 423, 425, 426, 427, 428, 429, 430, 431]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -23,7 +23,8 @@ approvals:
 - Day3 PRD (`#416`) формализует user stories, FR/AC/NFR, edge cases и expected evidence и передаёт continuity в architecture issue `#418`.
 - Day4 architecture (`#418`) закрепляет ownership matrix и handover в design issue `#420`.
 - Day5 design (`#420`) фиксирует typed wait contracts, persisted model, finite auto-resume policy и continuity issue `#423` для `run:plan`.
-- Дальнейшие stage-issues (`arch -> design -> plan`) создаются последовательно после review предыдущего этапа; trigger-лейблы остаются owner-managed.
+- Day6 plan (`#423`) формирует execution package `#425..#431`, sequencing-waves и quality gates для перехода в `run:dev`.
+- Дальнейшие stage-issues и execution waves создаются последовательно после review предыдущего этапа; trigger-лейблы остаются owner-managed.
 
 ## Stage roadmap
 - Day 1 (Intake): `docs/delivery/epics/s12/epic-s12-day1-github-api-rate-limit-intake.md` (Issue `#366`).
@@ -31,11 +32,11 @@ approvals:
 - Day 3 (PRD): `docs/delivery/epics/s12/epic-s12-day3-github-api-rate-limit-prd.md` + `docs/delivery/epics/s12/prd-s12-day3-github-api-rate-limit-resilience.md` (Issue `#416`).
 - Day 4 (Architecture): `docs/delivery/epics/s12/epic-s12-day4-github-api-rate-limit-arch.md` + architecture initiative package (Issue `#418`).
 - Day 5 (Design): `docs/delivery/epics/s12/epic-s12-day5-github-api-rate-limit-design.md` + design initiative package (Issue `#420`).
-- Day 6 (Plan): Issue `#423`, создаётся на выходе `run:design`.
+- Day 6 (Plan): `docs/delivery/epics/s12/epic-s12-day6-github-api-rate-limit-plan.md` (Issue `#423`).
 
 ## Delivery-governance правила
-- До `run:plan` Sprint S12 не создаёт implementation issues и не добавляет runtime/library decisions в репозиторий.
+- До `run:plan` Sprint S12 не создаёт implementation issues и не добавляет runtime/library decisions в репозиторий; на выходе `run:plan` создаются handover issues `#425..#431` без trigger-лейблов.
 - Каждый stage создаёт следующую issue без trigger-лейбла; запуск следующего stage остаётся owner-managed.
 - Rate-limit resilience рассматривается как единая инициатива только пока сохраняется один product story: controlled wait-state, transparency и безопасный resume для GitHub-first контуров.
 - Если на `run:vision` выяснится, что notification/adapters или provider abstraction становятся самостоятельным потоком ценности, они выделяются в отдельный follow-up issue, а не раздувают core Sprint S12.
-- После `run:prd` continuity зафиксирована через issue `#418`; после `run:arch` подготовлена issue `#420` для `run:design`; после `run:design` подготовлена issue `#423` для `run:plan`.
+- После `run:prd` continuity зафиксирована через issue `#418`; после `run:arch` подготовлена issue `#420` для `run:design`; после `run:design` подготовлена issue `#423` для `run:plan`; после `run:plan` execution continuity переведена в issues `#425..#431`.

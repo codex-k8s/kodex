@@ -6,7 +6,7 @@ status: in-review
 owner_role: PM
 created_at: 2026-03-13
 updated_at: 2026-03-13
-related_issues: [366, 413, 416, 418, 420, 423]
+related_issues: [366, 413, 416, 418, 420, 423, 425, 426, 427, 428, 429, 430, 431]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -18,7 +18,7 @@ approvals:
 
 ## TL;DR
 - Цель спринта: убрать непрозрачные `403/429`-провалы при исчерпании GitHub API budget и заменить их на управляемый, audit-safe controlled wait-state для platform path и agent path.
-- Sprint S12 стартовал с intake-этапа в Issue `#366`; vision-пакет оформлен в Issue `#413`, PRD-пакет оформлен в Issue `#416`, architecture continuity зафиксирована в Issue `#418`, design package оформлен в Issue `#420`, а handover в `run:plan` подготовлен в Issue `#423`.
+- Sprint S12 стартовал с intake-этапа в Issue `#366`; vision-пакет оформлен в Issue `#413`, PRD-пакет оформлен в Issue `#416`, architecture continuity зафиксирована в Issue `#418`, design package оформлен в Issue `#420`, а execution package `run:plan` подготовлен в Issue `#423` с handover issues `#425..#431`.
 - Базовые ограничения спринта: сохраняется split `platform PAT` vs `agent bot-token`, GitHub остаётся текущим provider baseline, controlled wait не должен маскировать реальные auth/authz ошибки, а агент не должен уходить в бесконечные локальные retry-loop.
 
 ## Scope спринта
@@ -44,7 +44,7 @@ approvals:
   - `vision` обязателен, потому что инициатива меняет пользовательский опыт ожидания и операционную прозрачность;
   - `arch` обязателен, потому что затрагиваются service boundaries, persisted wait-state, MCP/runtime semantics, notifications и staff UX.
 - Целевая continuity-цепочка:
-  `#366 (intake) -> #413 (vision) -> #416 (prd) -> #418 (arch) -> #420 (design) -> #423 (plan) -> dev -> qa -> release -> postdeploy -> ops`.
+  `#366 (intake) -> #413 (vision) -> #416 (prd) -> #418 (arch) -> #420 (design) -> #423 (plan) -> #425..#431 (dev waves) -> qa -> release -> postdeploy -> ops`.
 
 ## План этапов и handover
 
@@ -55,7 +55,7 @@ approvals:
 | PRD (`#416`) | User stories, FR/AC/NFR, edge cases и expected evidence | `pm` + `sa` | Подтверждён PRD package и создана issue `#418` для `run:arch` |
 | Architecture (`#418`) | Service boundaries, ownership matrix, wait-state lifecycle | `sa` | Подтверждены архитектурные границы и создана issue `#420` для `run:design` |
 | Design (`#420`) | API/data/notification/runtime contracts и rollout notes | `sa` + `qa` | Подготовлен implementation-ready design package и создана issue `#423` для `run:plan` |
-| Plan (`#423`) | Delivery waves, execution issues, DoR/DoD, quality-gates | `em` + `km` | Сформирован execution package и отдельные implementation issues |
+| Plan (`#423`) | Delivery waves, execution issues, DoR/DoD, quality-gates | `em` + `km` | Сформирован execution package и отдельные implementation issues `#425..#431` |
 
 ## Guardrails спринта
 - `platform PAT` и `agent bot-token` остаются разными operational contour; UI и audit должны показывать, какой именно контур упёрся в лимит.
@@ -66,12 +66,13 @@ approvals:
 - До `run:plan` инициатива остаётся markdown-only контуром.
 
 ## Handover
-- Текущий stage в review: `run:design` в Issue `#420`.
-- Следующий stage: `run:plan` в Issue `#423`.
-- На `run:plan` нельзя терять Day5 design decisions:
+- Текущий stage в review: `run:plan` в Issue `#423`.
+- Следующий operational stage: `run:dev` через execution waves `#425 -> #426 -> #427 -> #428 -> #429 -> #430 -> #431`.
+- На execution stage нельзя терять Day5/Day6 decisions:
   - `waiting_backpressure` остаётся отдельным coarse wait-state для GitHub rate-limit;
   - `control-plane` сохраняет ownership wait aggregate, visibility projection и dominant wait election;
   - `worker` остаётся владельцем finite auto-resume sweeps и manual escalation;
   - `agent-runner` работает только через typed signal handoff и deterministic resume payload;
   - staff/private surfaces остаются каноничными, а GitHub service-comment остаётся best-effort mirror;
+  - `#431` остаётся обязательным observability/readiness gate перед `run:qa`;
   - predictive budgeting, multi-provider governance и adapter-specific notifications не блокируют core Sprint S12.
