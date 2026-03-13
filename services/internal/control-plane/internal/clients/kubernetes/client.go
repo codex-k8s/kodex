@@ -8,6 +8,7 @@ import (
 	"io"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -21,6 +22,7 @@ import (
 	metav1api "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
@@ -159,11 +161,11 @@ func (c *Client) ListEvents(ctx context.Context, namespace string, limit int) ([
 		})
 	}
 
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Timestamp == out[j].Timestamp {
-			return out[i].Object < out[j].Object
+	slices.SortFunc(out, func(left, right mcpdomain.KubernetesEvent) int {
+		if left.Timestamp != right.Timestamp {
+			return strings.Compare(right.Timestamp, left.Timestamp)
 		}
-		return out[i].Timestamp > out[j].Timestamp
+		return strings.Compare(left.Object, right.Object)
 	})
 	return out, nil
 }
@@ -587,41 +589,55 @@ func (c *Client) UpsertConfigMap(ctx context.Context, namespace string, name str
 
 // ListSecretNames returns secret names in namespace with deterministic ordering.
 func (c *Client) ListSecretNames(ctx context.Context, namespace string) ([]string, error) {
-	targetNamespace := strings.TrimSpace(namespace)
-	if targetNamespace == "" {
-		return nil, fmt.Errorf("kubernetes namespace is required")
-	}
-
-	items, err := c.clientset.CoreV1().Secrets(targetNamespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list kubernetes secrets %s: %w", targetNamespace, err)
-	}
-	out := make([]string, 0, len(items.Items))
-	for _, item := range items.Items {
-		name := strings.TrimSpace(item.Name)
-		if name == "" {
-			continue
-		}
-		out = append(out, name)
-	}
-	sort.Strings(out)
-	return out, nil
+	return c.listCoreV1ObjectNames(ctx, namespace, coreV1ObjectNameSecret)
 }
 
 // ListConfigMapNames returns configmap names in namespace with deterministic ordering.
 func (c *Client) ListConfigMapNames(ctx context.Context, namespace string) ([]string, error) {
+	return c.listCoreV1ObjectNames(ctx, namespace, coreV1ObjectNameConfigMap)
+}
+
+type coreV1ObjectNameKind string
+
+const (
+	coreV1ObjectNameSecret    coreV1ObjectNameKind = "secrets"
+	coreV1ObjectNameConfigMap coreV1ObjectNameKind = "configmaps"
+)
+
+func (c *Client) listCoreV1ObjectNames(ctx context.Context, namespace string, kind coreV1ObjectNameKind) ([]string, error) {
 	targetNamespace := strings.TrimSpace(namespace)
 	if targetNamespace == "" {
 		return nil, fmt.Errorf("kubernetes namespace is required")
 	}
 
-	items, err := c.clientset.CoreV1().ConfigMaps(targetNamespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list kubernetes configmaps %s: %w", targetNamespace, err)
+	var (
+		listObj runtime.Object
+		err     error
+	)
+	switch kind {
+	case coreV1ObjectNameSecret:
+		listObj, err = c.clientset.CoreV1().Secrets(targetNamespace).List(ctx, metav1.ListOptions{})
+	case coreV1ObjectNameConfigMap:
+		listObj, err = c.clientset.CoreV1().ConfigMaps(targetNamespace).List(ctx, metav1.ListOptions{})
+	default:
+		return nil, fmt.Errorf("unsupported core object name kind %q", kind)
 	}
-	out := make([]string, 0, len(items.Items))
-	for _, item := range items.Items {
-		name := strings.TrimSpace(item.Name)
+	if err != nil {
+		return nil, fmt.Errorf("list kubernetes %s %s: %w", kind, targetNamespace, err)
+	}
+
+	items, err := metav1api.ExtractList(listObj)
+	if err != nil {
+		return nil, fmt.Errorf("extract kubernetes %s %s items: %w", kind, targetNamespace, err)
+	}
+
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		accessor, accessorErr := metav1api.Accessor(item)
+		if accessorErr != nil {
+			return nil, fmt.Errorf("access kubernetes %s %s metadata: %w", kind, targetNamespace, accessorErr)
+		}
+		name := strings.TrimSpace(accessor.GetName())
 		if name == "" {
 			continue
 		}

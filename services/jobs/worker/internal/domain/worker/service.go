@@ -74,6 +74,8 @@ type Config struct {
 	JobImageFallback string
 	// KubernetesNamespace is default worker namespace for run workloads.
 	KubernetesNamespace string
+	// ProductionNamespace is namespace used by production read-only postdeploy/ops runs.
+	ProductionNamespace string
 	// AIRepairNamespace is namespace used by ai-repair workload runs.
 	AIRepairNamespace string
 	// AIRepairServiceAccount is service account used by ai-repair workload pod.
@@ -237,9 +239,13 @@ func NewService(cfg Config, deps Dependencies) *Service {
 	if cfg.KubernetesNamespace == "" {
 		cfg.KubernetesNamespace = "default"
 	}
+	cfg.ProductionNamespace = sanitizeDNSLabelValue(cfg.ProductionNamespace)
+	if cfg.ProductionNamespace == "" {
+		cfg.ProductionNamespace = cfg.KubernetesNamespace
+	}
 	cfg.AIRepairNamespace = sanitizeDNSLabelValue(cfg.AIRepairNamespace)
 	if cfg.AIRepairNamespace == "" {
-		cfg.AIRepairNamespace = cfg.KubernetesNamespace
+		cfg.AIRepairNamespace = cfg.ProductionNamespace
 	}
 	cfg.AIRepairServiceAccount = strings.TrimSpace(cfg.AIRepairServiceAccount)
 	if cfg.AIRepairServiceAccount == "" {

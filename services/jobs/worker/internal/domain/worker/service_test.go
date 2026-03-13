@@ -229,6 +229,85 @@ func TestTickLaunchesAIRepairCodeOnlyRunAsPodWorkload(t *testing.T) {
 	}
 }
 
+func TestTickLaunchesProductionReadOnlyRunWithoutRuntimePrepare(t *testing.T) {
+	t.Parallel()
+
+	runs := &fakeRunQueue{
+		claims: []runqueuerepo.ClaimedRun{
+			{
+				RunID:         "run-postdeploy",
+				CorrelationID: "corr-postdeploy",
+				ProjectID:     "proj-1",
+				RunPayload: json.RawMessage(`{
+					"repository":{"full_name":"codex-k8s/codex-k8s"},
+					"trigger":{"kind":"postdeploy"},
+					"issue":{"number":46},
+					"agent":{"key":"sre","name":"AI SRE"},
+					"runtime":{
+						"mode":"full-env",
+						"target_env":"production",
+						"namespace":"codex-k8s-prod",
+						"build_ref":"0123456789abcdef0123456789abcdef01234567",
+						"access_profile":"production-readonly"
+					}
+				}`),
+				SlotNo: 1,
+			},
+		},
+	}
+	events := &fakeFlowEvents{}
+	launcher := &fakeLauncher{states: map[string]JobState{}}
+	mcpTokens := &fakeMCPTokenIssuer{token: "token-postdeploy"}
+	deployer := &fakeRuntimePreparer{}
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+
+	svc := NewService(Config{
+		WorkerID:            "worker-1",
+		ClaimLimit:          1,
+		RunningCheckLimit:   10,
+		SlotsPerProject:     2,
+		SlotLeaseTTL:        time.Minute,
+		ProductionNamespace: "codex-k8s-prod",
+	}, Dependencies{
+		Runs:            runs,
+		Events:          events,
+		Launcher:        launcher,
+		MCPTokenIssuer:  mcpTokens,
+		RuntimePreparer: deployer,
+		Logger:          logger,
+	})
+	svc.now = func() time.Time { return time.Date(2026, 3, 13, 12, 0, 0, 0, time.UTC) }
+
+	if err := svc.Tick(context.Background()); err != nil {
+		t.Fatalf("Tick() error = %v", err)
+	}
+
+	if len(deployer.prepared) != 0 {
+		t.Fatalf("expected no runtime prepare calls, got %d", len(deployer.prepared))
+	}
+	if len(launcher.prepared) != 0 {
+		t.Fatalf("expected no managed namespace prepare calls, got %d", len(launcher.prepared))
+	}
+	if len(launcher.accessProfiles) != 1 {
+		t.Fatalf("expected one access profile ensure call, got %d", len(launcher.accessProfiles))
+	}
+	if len(launcher.launched) != 1 {
+		t.Fatalf("expected one launched workload, got %d", len(launcher.launched))
+	}
+	if got, want := launcher.launched[0].Namespace, "codex-k8s-prod"; got != want {
+		t.Fatalf("namespace = %q, want %q", got, want)
+	}
+	if got, want := launcher.launched[0].RuntimeTargetEnv, "production"; got != want {
+		t.Fatalf("runtime target env = %q, want %q", got, want)
+	}
+	if got, want := launcher.launched[0].RuntimeAccessProfile, agentdomain.RuntimeAccessProfileProductionReadOnly; got != want {
+		t.Fatalf("runtime access profile = %q, want %q", got, want)
+	}
+	if got, want := launcher.launched[0].ServiceAccountName, "codex-runner-readonly"; got != want {
+		t.Fatalf("service account = %q, want %q", got, want)
+	}
+}
+
 func TestTickDeployOnlyRun_PreparesEnvironmentWithoutLaunchingJob(t *testing.T) {
 	t.Parallel()
 
@@ -1059,6 +1138,7 @@ type fakeLauncher struct {
 	states           map[string]JobState
 	launched         []JobSpec
 	prepared         []NamespaceSpec
+	accessProfiles   []string
 	ensureResult     NamespaceEnsureResult
 	reusable         NamespaceReuseResult
 	reusableFound    bool
@@ -1130,6 +1210,14 @@ func (f *fakeLauncher) EnsureNamespace(_ context.Context, spec NamespaceSpec) (N
 		f.ensureResult.LeaseExpiresAt = spec.LeaseExpiresAt
 	}
 	return f.ensureResult, nil
+}
+
+func (f *fakeLauncher) EnsureAccessProfile(_ context.Context, namespace string, profile agentdomain.RuntimeAccessProfile) (string, error) {
+	f.accessProfiles = append(f.accessProfiles, namespace+"|"+string(profile))
+	if profile == agentdomain.RuntimeAccessProfileProductionReadOnly {
+		return "codex-runner-readonly", nil
+	}
+	return "codex-runner", nil
 }
 
 func (f *fakeLauncher) CleanupExpiredNamespaces(_ context.Context, params NamespaceCleanupParams) ([]NamespaceCleanupResult, error) {
