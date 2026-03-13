@@ -34,7 +34,7 @@ approvals:
 - Day 3 (PRD): `docs/delivery/epics/s12/epic-s12-day3-github-api-rate-limit-prd.md` + `docs/delivery/epics/s12/prd-s12-day3-github-api-rate-limit-resilience.md` (Issue `#416`).
 - Day 4 (Architecture): `docs/delivery/epics/s12/epic-s12-day4-github-api-rate-limit-arch.md` + architecture initiative package (Issue `#418`).
 - Day 5 (Design): `docs/delivery/epics/s12/epic-s12-day5-github-api-rate-limit-design.md` + design initiative package (Issue `#420`).
-- Day 6 (Plan): `docs/delivery/epics/s12/epic-s12-day6-github-api-rate-limit-resilience-plan.md` (Issue `#423`); execution package зафиксирован через issues `#425..#431`.
+- Day 6 (Plan): `docs/delivery/epics/s12/epic-s12-day6-github-api-rate-limit-plan.md` (Issue `#423`); execution package зафиксирован через issues `#425..#431`.
 
 ## Execution package (S12-E01..S12-E07)
 

@@ -334,7 +334,7 @@ approvals:
   - зафиксированы typed contracts для signal handoff, dominant/related wait visibility, persisted wait aggregate/evidence и rollout/rollback notes;
   - выбран отдельный coarse wait-state `waiting_backpressure`, finite auto-resume policy для primary/secondary limits и best-effort GitHub service-comment mirror;
   - создана follow-up issue `#423` для stage `run:plan` без trigger-лейбла.
-- Day 6 (in-review): plan-пакет для GitHub API rate-limit resilience (`docs/delivery/epics/s12/epic-s12-day6-github-api-rate-limit-resilience-plan.md`, Issue `#423`).
+- Day 6 (in-review): plan-пакет для GitHub API rate-limit resilience (`docs/delivery/epics/s12/epic-s12-day6-github-api-rate-limit-plan.md`, Issue `#423`).
 - Результат Day 6 (факт):
   - execution backlog декомпозирован на issues `#425..#431` без trigger-лейблов, с wave-sequencing и owner-managed handover в `run:dev`;
   - `#425` закреплён за schema foundation, `#426` за `control-plane` classification/projection, `#427` за worker auto-resume, `#428` за `agent-runner` handoff, `#429` за `api-gateway` transport, `#430` за `web-console` visibility, `#431` за observability/readiness gate;

@@ -44,7 +44,7 @@ approvals:
 - `docs/delivery/epics/s12/epic-s12-day5-github-api-rate-limit-design.md`
 - `docs/delivery/epics/s12/epic-s12-day3-github-api-rate-limit-prd.md`
 - `docs/delivery/epics/s12/prd-s12-day3-github-api-rate-limit-resilience.md`
-- `docs/delivery/epics/s12/epic-s12-day6-github-api-rate-limit-resilience-plan.md`
+- `docs/delivery/epics/s12/epic-s12-day6-github-api-rate-limit-plan.md`
 
 ## Continuity after `run:plan`
 - Документный контур `intake -> vision -> prd -> arch -> design -> plan` согласован и завершён.

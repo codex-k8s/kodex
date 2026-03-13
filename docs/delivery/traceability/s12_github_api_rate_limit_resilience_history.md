@@ -100,7 +100,7 @@ approvals:
 
 ## Актуализация по Issue #423 (`run:plan`, 2026-03-13)
 - Подготовлен plan package:
-  - `docs/delivery/epics/s12/epic-s12-day6-github-api-rate-limit-resilience-plan.md`;
+  - `docs/delivery/epics/s12/epic-s12-day6-github-api-rate-limit-plan.md`;
   - `docs/delivery/sprints/s12/sprint_s12_github_api_rate_limit_resilience.md`;
   - `docs/delivery/epics/s12/epic_s12.md`;
   - `docs/delivery/delivery_plan.md`;
