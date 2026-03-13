@@ -10,8 +10,10 @@ related_issues: [360, 378, 383, 385, 387, 389, 391, 392, 393, 394, 395]
 related_prs: []
 approvals:
   required: ["Owner"]
-  status: pending
+  status: approved
   request_id: "owner-2026-03-13-issue-389-plan"
+  approved_by: "ai-da-stas"
+  approved_at: 2026-03-13
 ---
 
 # Epic S10 Day 6: Plan для built-in MCP user interactions (Issue #389)

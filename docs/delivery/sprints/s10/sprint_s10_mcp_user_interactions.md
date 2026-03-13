@@ -10,8 +10,10 @@ related_issues: [360, 378, 383, 385, 387, 389, 391, 392, 393, 394, 395]
 related_prs: []
 approvals:
   required: ["Owner"]
-  status: pending
+  status: approved
   request_id: "owner-2026-03-12-issue-360-intake"
+  approved_by: "ai-da-stas"
+  approved_at: 2026-03-13
 ---
 
 # Sprint S10: Built-in MCP user interactions and channel-neutral adapter contracts (Issue #360)
