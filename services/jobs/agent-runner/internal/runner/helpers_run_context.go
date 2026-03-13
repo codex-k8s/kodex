@@ -12,6 +12,17 @@ func normalizeTriggerKind(value string) string {
 	return string(webhookdomain.NormalizeTriggerKind(value))
 }
 
+func hasInteractionResumePayload(rawPayload string) bool {
+	return strings.TrimSpace(rawPayload) != ""
+}
+
+func shouldRestoreLatestSession(triggerKind string, discussionMode bool, interactionResumePayload string) bool {
+	if discussionMode || hasInteractionResumePayload(interactionResumePayload) {
+		return true
+	}
+	return webhookdomain.IsReviseTriggerKind(webhookdomain.NormalizeTriggerKind(triggerKind))
+}
+
 func normalizeRuntimeMode(value string) string {
 	if strings.EqualFold(strings.TrimSpace(value), runtimeModeFullEnv) {
 		return runtimeModeFullEnv

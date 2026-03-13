@@ -40,3 +40,29 @@ func TestRunnerRepoDir(t *testing.T) {
 		}
 	})
 }
+
+func TestShouldRestoreLatestSession(t *testing.T) {
+	t.Run("returns true for revise trigger", func(t *testing.T) {
+		if !shouldRestoreLatestSession("dev_revise", false, "") {
+			t.Fatal("expected revise trigger to require latest session restore")
+		}
+	})
+
+	t.Run("returns true for discussion mode", func(t *testing.T) {
+		if !shouldRestoreLatestSession("dev", true, "") {
+			t.Fatal("expected discussion mode to require latest session restore")
+		}
+	})
+
+	t.Run("returns true for interaction resume payload", func(t *testing.T) {
+		if !shouldRestoreLatestSession("dev", false, `{"interaction_id":"interaction-1"}`) {
+			t.Fatal("expected interaction resume payload to require latest session restore")
+		}
+	})
+
+	t.Run("returns false for plain work run", func(t *testing.T) {
+		if shouldRestoreLatestSession("dev", false, "") {
+			t.Fatal("expected plain work run to skip latest session restore")
+		}
+	})
+}

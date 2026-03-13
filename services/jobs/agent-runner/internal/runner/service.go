@@ -104,7 +104,7 @@ func (s *Service) Run(ctx context.Context) (err error) {
 		s.logger.Warn("emit run.agent.started failed", "err", err)
 	}
 
-	if s.cfg.DiscussionMode || webhookdomain.IsReviseTriggerKind(webhookdomain.NormalizeTriggerKind(triggerKind)) {
+	if shouldRestoreLatestSession(triggerKind, s.cfg.DiscussionMode, s.cfg.InteractionResumePayload) {
 		restored, restoreErr := s.restoreLatestSession(ctx, result.targetBranch, state.sessionsDir)
 		if restoreErr != nil {
 			return ExitError{ExitCode: 5, Err: fmt.Errorf("restore latest session: %w", restoreErr)}
@@ -437,9 +437,13 @@ func (s *Service) restoreLatestSession(ctx context.Context, branch string, sessi
 		return restoredSession{}, nil
 	}
 
+	allowsSessionRestoreWithoutPR := s.cfg.DiscussionMode || hasInteractionResumePayload(s.cfg.InteractionResumePayload)
 	if snapshot.PRNumber <= 0 {
-		if s.cfg.DiscussionMode {
+		if allowsSessionRestoreWithoutPR {
 			result := restoredSession{}
+			if s.cfg.ExistingPRNumber > 0 {
+				result.existingPRNumber = s.cfg.ExistingPRNumber
+			}
 			if snapshot.RunID == s.cfg.RunID {
 				result.snapshotVersion = snapshot.SnapshotVersion
 				result.snapshotChecksum = snapshot.SnapshotChecksum
