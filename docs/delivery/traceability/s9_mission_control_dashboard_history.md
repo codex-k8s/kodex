@@ -202,3 +202,14 @@ approvals:
   - `run:qa:revise` по policy разрешает только markdown-изменения;
   - поэтому removal non-markdown diff из PR `#463` остаётся обязательным отдельным шагом для следующего `run:dev:revise` до merge.
 - Root FR/NFR matrix в `docs/delivery/requirements_traceability.md` не менялась, потому что это reprioritization delivery backlog, а не изменение канонического product baseline.
+
+## Актуализация по Issue #374 / PR #463 (`run:dev:revise`, 2026-03-14)
+- По итогам `run:dev:revise` удалён весь non-markdown diff из PR `#463`, который относился к отклонённой реализации `S9-E06`.
+- Ветку возвращены к `origin/main` для:
+  - `go.mod`;
+  - Mission Control observability-кода в `services/external/api-gateway/internal/transport/http/**`;
+  - Mission Control observability-кода в `services/internal/control-plane/internal/{app,domain/missioncontrol,transport/grpc}/**`;
+  - Mission Control observability-логов в `services/jobs/worker/internal/domain/worker/mission_control.go`.
+- После этого PR `#463` содержит только markdown-артефакты, фиксирующие owner decision о снятии `#374` из planned scope.
+- Проверки текущей итерации: `git diff --name-status origin/main...HEAD`, `git diff --check`, `git rev-list --left-right --count HEAD...origin/main`, `git merge-tree $(git merge-base HEAD origin/main) HEAD origin/main`.
+- Root FR/NFR matrix в `docs/delivery/requirements_traceability.md` не менялась, потому что это cleanup отклонённого implementation scope, а не изменение продуктового baseline.

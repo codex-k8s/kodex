@@ -43,9 +43,10 @@ approvals:
 - Любые runbook instructions или dependency updates, которые были добавлены только ради PR `#463`.
 - Требование считать `#374` обязательным gate перед `run:qa`.
 
-## Ограничение текущей revise-итерации
-- Текущий `run:qa:revise` по policy ограничен markdown-only изменениями.
-- Поэтому документация и traceability приведены к owner decision уже сейчас, но removal non-markdown diff из PR `#463` остаётся отдельной задачей для последующего `run:dev:revise`.
+## Итог revise-цепочки по PR `#463`
+- `run:qa:revise` синхронизировал delivery/docs с owner decision и перевёл `#374` в historical superseded artifact.
+- Последующий `run:dev:revise` удалил весь non-markdown diff из PR `#463`: `go.mod` и Go-файлы в `api-gateway`, `control-plane`, `worker` возвращены к состоянию `origin/main`.
+- В результате PR сохраняет только markdown-след owner decision и больше не содержит кодовой реализации `S9-E06`.
 
 ## Если scope когда-нибудь вернётся
 - Нужен новый owner-approved issue с явным решением о том, что observability/readiness wave снова планируется.
