@@ -1,0 +1,51 @@
+{{ define "recovery_hint_rate_limit_reset" -}}
+GitHub зафиксировал primary rate-limit для контура `{{ .ContourKind }}`. Платформа попробует повторить `{{ .OperationClass }}` не раньше `{{ .ResumeNotBeforeRFC3339 }}`.
+{{- end }}
+
+{{ define "recovery_hint_retry_after" -}}
+GitHub вернул `Retry-After` для secondary rate-limit в контуре `{{ .ContourKind }}`. Следующая безопасная попытка `{{ .OperationClass }}` запланирована не раньше `{{ .ResumeNotBeforeRFC3339 }}`.
+{{- end }}
+
+{{ define "recovery_hint_exponential_backoff" -}}
+GitHub не дал детерминированный countdown для secondary rate-limit в контуре `{{ .ContourKind }}`. Платформа использует exponential backoff и запланировала попытку `{{ .OperationClass }}` не раньше `{{ .ResumeNotBeforeRFC3339 }}`.
+{{- end }}
+
+{{ define "recovery_hint_manual_only" -}}
+Автоматические попытки для `{{ .OperationClass }}` исчерпаны. Контур `{{ .ContourKind }}` требует ручного решения{{ if .ResumeNotBeforeRFC3339 }}; безопасное окно для нового действия начинается не раньше `{{ .ResumeNotBeforeRFC3339 }}`{{ end }}.
+{{- end }}
+
+{{ define "manual_action_requeue_platform_operation_summary" -}}
+Повторить platform GitHub-операцию через существующий operator flow
+{{- end }}
+
+{{ define "manual_action_requeue_platform_operation_details" -}}
+Операция `{{ .OperationClass }}` относится к platform contour и больше не будет автоматически ретраиться. Перезапускайте её только через существующий platform/operator flow{{ if .SuggestedNotBeforeRFC3339 }} после `{{ .SuggestedNotBeforeRFC3339 }}`{{ end }}.
+{{- end }}
+
+{{ define "manual_action_resume_agent_session_summary" -}}
+Возобновить агентную сессию из сохранённого snapshot
+{{- end }}
+
+{{ define "manual_action_resume_agent_session_details" -}}
+Контур `{{ .ContourKind }}` относится к agent session resume path. Продолжайте run только через детерминированное возобновление с сохранённого snapshot{{ if .SuggestedNotBeforeRFC3339 }} после `{{ .SuggestedNotBeforeRFC3339 }}`{{ end }}, не вручную через локальные retry-loop.
+{{- end }}
+
+{{ define "manual_action_retry_after_operator_review_summary" -}}
+Подождать и выполнить ручную проверку перед новым действием
+{{- end }}
+
+{{ define "manual_action_retry_after_operator_review_details" -}}
+GitHub не дал достаточно надёжный recovery signal для `{{ .OperationClass }}`. Нужна operator review и дополнительная пауза{{ if .SuggestedNotBeforeRFC3339 }} до `{{ .SuggestedNotBeforeRFC3339 }}`{{ end }} перед новым действием.
+{{- end }}
+
+{{ define "comment_headline_auto_resume" -}}
+GitHub rate-limit: `{{ .LimitKind }}` в контуре `{{ .ContourKind }}`; auto-resume для `{{ .OperationClass }}` не раньше `{{ .ResumeNotBeforeRFC3339 }}`
+{{- end }}
+
+{{ define "comment_headline_manual_action" -}}
+GitHub rate-limit: `{{ .LimitKind }}` в контуре `{{ .ContourKind }}`; `{{ .OperationClass }}` требует ручного действия
+{{- end }}
+
+{{ define "resume_guidance_agent_session_resume" -}}
+Продолжи run из сохранённого snapshot; не переигрывай локальный retry-loop и не выводи новую GitHub классификацию из старых stderr/headers.
+{{- end }}
