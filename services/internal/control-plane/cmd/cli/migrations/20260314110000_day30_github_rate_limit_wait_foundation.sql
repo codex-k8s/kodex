@@ -45,6 +45,27 @@ CREATE TABLE IF NOT EXISTS github_rate_limit_waits (
         CHECK (resume_action_kind IN ('run_status_comment_retry', 'platform_github_call_replay', 'agent_session_resume')),
     CONSTRAINT chk_github_rate_limit_waits_manual_action_kind
         CHECK (manual_action_kind IS NULL OR manual_action_kind IN ('requeue_platform_operation', 'resume_agent_session', 'retry_after_operator_review')),
+    CONSTRAINT chk_github_rate_limit_waits_auto_resume_budget
+        CHECK (auto_resume_attempts_used <= max_auto_resume_attempts),
+    CONSTRAINT chk_github_rate_limit_waits_resolved_at
+        CHECK (state <> 'resolved' OR resolved_at IS NOT NULL),
+    CONSTRAINT chk_github_rate_limit_waits_manual_action_terminality
+        CHECK (
+            state <> 'manual_action_required'
+            OR (
+                manual_action_kind IS NOT NULL
+                AND auto_resume_attempts_used = max_auto_resume_attempts
+            )
+        ),
+    CONSTRAINT chk_github_rate_limit_waits_resume_not_before
+        CHECK (
+            resume_not_before IS NOT NULL
+            OR (
+                recovery_hint_kind = 'manual_only'
+                AND confidence = 'provider_uncertain'
+                AND auto_resume_attempts_used = max_auto_resume_attempts
+            )
+        ),
     CONSTRAINT chk_github_rate_limit_waits_signal_id
         UNIQUE (signal_id)
 );

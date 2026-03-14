@@ -57,6 +57,17 @@ type Repository struct {
 	db *pgxpool.Pool
 }
 
+type waitLifecycleValidationInput struct {
+	State                  enumtypes.GitHubRateLimitWaitState
+	Confidence             enumtypes.GitHubRateLimitConfidence
+	RecoveryHintKind       enumtypes.GitHubRateLimitRecoveryHintKind
+	ManualActionKind       enumtypes.GitHubRateLimitManualActionKind
+	AutoResumeAttemptsUsed int
+	MaxAutoResumeAttempts  int
+	ResumeNotBefore        *time.Time
+	ResolvedAt             *time.Time
+}
+
 // NewRepository constructs PostgreSQL wait repository.
 func NewRepository(db *pgxpool.Pool) *Repository {
 	return &Repository{db: db}
@@ -239,6 +250,7 @@ func (r *Repository) RefreshRunProjection(ctx context.Context, runID string) (va
 	result := valuetypes.GitHubRateLimitProjectionRefreshResult{
 		RunID:         trimmedRunID,
 		OpenWaitCount: len(openWaits),
+		SyncState:     enumtypes.GitHubRateLimitProjectionSyncStateCleared,
 	}
 
 	if !found {
@@ -265,31 +277,54 @@ func (r *Repository) RefreshRunProjection(ctx context.Context, runID string) (va
 		return result, nil
 	}
 
-	if _, err := tx.Exec(ctx, querySetDominantFlagByID, dominant.ID); err != nil {
-		return valuetypes.GitHubRateLimitProjectionRefreshResult{}, fmt.Errorf("set github rate-limit dominant wait: %w", err)
-	}
-	if _, err := tx.Exec(
+	runLinkRows, err := execRowsAffected(
 		ctx,
+		tx,
+		"set github rate-limit run linkage",
 		querySetRunWaitContext,
 		trimmedRunID,
 		string(enumtypes.AgentRunWaitReasonGitHubRateLimit),
 		string(enumtypes.AgentRunWaitTargetKindGitHubRateLimitWait),
 		dominant.ID,
 		timestamptzPtrOrNil(dominant.ResumeNotBefore),
-	); err != nil {
-		return valuetypes.GitHubRateLimitProjectionRefreshResult{}, fmt.Errorf("set github rate-limit run linkage: %w", err)
+	)
+	if err != nil {
+		return valuetypes.GitHubRateLimitProjectionRefreshResult{}, err
 	}
-	if _, err := tx.Exec(
+	if runLinkRows == 0 {
+		// Another coarse wait already owns run linkage, so keep the previous projection untouched.
+		result.SyncState = enumtypes.GitHubRateLimitProjectionSyncStateBlockedByRunWaitContext
+		return result, nil
+	}
+
+	sessionLinkRows, err := execRowsAffected(
 		ctx,
+		tx,
+		"set github rate-limit session linkage",
 		querySetSessionBackpressure,
 		trimmedRunID,
 		string(enumtypes.AgentSessionWaitStateBackpressure),
-	); err != nil {
-		return valuetypes.GitHubRateLimitProjectionRefreshResult{}, fmt.Errorf("set github rate-limit session linkage: %w", err)
+	)
+	if err != nil {
+		return valuetypes.GitHubRateLimitProjectionRefreshResult{}, err
+	}
+	if sessionLinkRows == 0 {
+		// Keep run/session linkage atomic: if the session snapshot cannot move to backpressure, rollback both mutations.
+		result.SyncState = enumtypes.GitHubRateLimitProjectionSyncStateBlockedBySessionWaitState
+		return result, nil
+	}
+
+	dominantFlagRows, err := execRowsAffected(ctx, tx, "set github rate-limit dominant wait", querySetDominantFlagByID, dominant.ID)
+	if err != nil {
+		return valuetypes.GitHubRateLimitProjectionRefreshResult{}, err
+	}
+	if dominantFlagRows != 1 {
+		return valuetypes.GitHubRateLimitProjectionRefreshResult{}, fmt.Errorf("set github rate-limit dominant wait: expected 1 affected row, got %d", dominantFlagRows)
 	}
 
 	result.DominantWaitID = dominant.ID
 	result.WaitDeadlineAt = dominant.ResumeNotBefore
+	result.SyncState = enumtypes.GitHubRateLimitProjectionSyncStateApplied
 
 	if err := tx.Commit(ctx); err != nil {
 		return valuetypes.GitHubRateLimitProjectionRefreshResult{}, fmt.Errorf("commit refresh github rate-limit projection tx: %w", err)
@@ -334,6 +369,14 @@ func listOpenWaitsForRun(ctx context.Context, tx pgx.Tx, runID string) ([]domain
 		result = append(result, waitFromDBModel(item))
 	}
 	return result, nil
+}
+
+func execRowsAffected(ctx context.Context, tx pgx.Tx, op string, query string, args ...any) (int64, error) {
+	commandTag, err := tx.Exec(ctx, query, args...)
+	if err != nil {
+		return 0, fmt.Errorf("%s: %w", op, err)
+	}
+	return commandTag.RowsAffected(), nil
 }
 
 func scanWait(row pgx.Row) (domainrepo.Wait, error) {
@@ -449,6 +492,18 @@ func normalizeCreateParams(params domainrepo.CreateWaitParams) (domainrepo.Creat
 	if record.MaxAutoResumeAttempts < 0 {
 		return domainrepo.CreateWaitParams{}, fmt.Errorf("max_auto_resume_attempts must be >= 0")
 	}
+	if err := validateWaitMutation(
+		record.State,
+		record.Confidence,
+		record.RecoveryHintKind,
+		record.ManualActionKind,
+		record.AutoResumeAttemptsUsed,
+		record.MaxAutoResumeAttempts,
+		record.ResumeNotBefore,
+		record.ResolvedAt,
+	); err != nil {
+		return domainrepo.CreateWaitParams{}, err
+	}
 	if record.FirstDetectedAt.IsZero() {
 		record.FirstDetectedAt = time.Now().UTC()
 	}
@@ -498,6 +553,18 @@ func normalizeUpdateParams(params domainrepo.UpdateWaitParams) (domainrepo.Updat
 	}
 	if record.MaxAutoResumeAttempts < 0 {
 		return domainrepo.UpdateWaitParams{}, fmt.Errorf("max_auto_resume_attempts must be >= 0")
+	}
+	if err := validateWaitMutation(
+		record.State,
+		record.Confidence,
+		record.RecoveryHintKind,
+		record.ManualActionKind,
+		record.AutoResumeAttemptsUsed,
+		record.MaxAutoResumeAttempts,
+		record.ResumeNotBefore,
+		record.ResolvedAt,
+	); err != nil {
+		return domainrepo.UpdateWaitParams{}, err
 	}
 	if record.LastSignalAt.IsZero() {
 		record.LastSignalAt = time.Now().UTC()
@@ -555,4 +622,50 @@ func intPtrToPGInt4(value *int) pgtype.Int4 {
 		return pgtype.Int4{}
 	}
 	return pgtype.Int4{Int32: int32(*value), Valid: true}
+}
+
+func validateWaitMutation(
+	state enumtypes.GitHubRateLimitWaitState,
+	confidence enumtypes.GitHubRateLimitConfidence,
+	recoveryHintKind enumtypes.GitHubRateLimitRecoveryHintKind,
+	manualActionKind enumtypes.GitHubRateLimitManualActionKind,
+	autoResumeAttemptsUsed int,
+	maxAutoResumeAttempts int,
+	resumeNotBefore *time.Time,
+	resolvedAt *time.Time,
+) error {
+	return validateWaitLifecycle(waitLifecycleValidationInput{
+		State:                  state,
+		Confidence:             confidence,
+		RecoveryHintKind:       recoveryHintKind,
+		ManualActionKind:       manualActionKind,
+		AutoResumeAttemptsUsed: autoResumeAttemptsUsed,
+		MaxAutoResumeAttempts:  maxAutoResumeAttempts,
+		ResumeNotBefore:        resumeNotBefore,
+		ResolvedAt:             resolvedAt,
+	})
+}
+
+func validateWaitLifecycle(input waitLifecycleValidationInput) error {
+	if input.AutoResumeAttemptsUsed > input.MaxAutoResumeAttempts {
+		return fmt.Errorf("auto_resume_attempts_used must be <= max_auto_resume_attempts")
+	}
+	if input.State == enumtypes.GitHubRateLimitWaitStateResolved && input.ResolvedAt == nil {
+		return fmt.Errorf("resolved_at is required when state=resolved")
+	}
+	if input.State == enumtypes.GitHubRateLimitWaitStateManualActionRequired {
+		if strings.TrimSpace(string(input.ManualActionKind)) == "" {
+			return fmt.Errorf("manual_action_kind is required when state=manual_action_required")
+		}
+		if input.AutoResumeAttemptsUsed != input.MaxAutoResumeAttempts {
+			return fmt.Errorf("manual_action_required requires exhausted auto-resume budget")
+		}
+	}
+	if input.ResumeNotBefore == nil &&
+		(input.RecoveryHintKind != enumtypes.GitHubRateLimitRecoveryHintKindManualOnly ||
+			input.Confidence != enumtypes.GitHubRateLimitConfidenceProviderUnclear ||
+			input.AutoResumeAttemptsUsed != input.MaxAutoResumeAttempts) {
+		return fmt.Errorf("resume_not_before is required outside exhausted manual-only provider-uncertain path")
+	}
+	return nil
 }
