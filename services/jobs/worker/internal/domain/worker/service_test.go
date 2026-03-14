@@ -1723,6 +1723,48 @@ func TestTickReclaimsRunAfterStaleLeaseAndLaunchesMissingWorkload(t *testing.T) 
 	}
 }
 
+func TestReleaseOwnedRunLeasesOnShutdown_ReleasesOwnedLeasesAndEmitsEvent(t *testing.T) {
+	t.Parallel()
+
+	runs := &fakeRunQueue{
+		releasedOwnedLeases: []runqueuerepo.ReleasedStaleLease{{
+			RunID:              "run-shutdown",
+			CorrelationID:      "corr-shutdown",
+			ProjectID:          "proj-shutdown",
+			PreviousLeaseOwner: "worker-1",
+			PreviousLeaseUntil: timePtr(time.Date(2026, 3, 14, 16, 0, 0, 0, time.UTC)),
+			WorkerStatus:       "stopped",
+		}},
+	}
+	events := &fakeFlowEvents{}
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+
+	svc := NewService(Config{
+		WorkerID: "worker-1",
+	}, Dependencies{
+		Runs:   runs,
+		Events: events,
+		Logger: logger,
+	})
+	svc.now = func() time.Time { return time.Date(2026, 3, 14, 16, 5, 0, 0, time.UTC) }
+
+	if err := svc.ReleaseOwnedRunLeasesOnShutdown(context.Background()); err != nil {
+		t.Fatalf("ReleaseOwnedRunLeasesOnShutdown() error = %v", err)
+	}
+	if len(runs.releaseOwnedParams) != 1 {
+		t.Fatalf("expected one graceful release call, got %d", len(runs.releaseOwnedParams))
+	}
+	if got, want := runs.releaseOwnedParams[0].WorkerID, "worker-1"; got != want {
+		t.Fatalf("release worker_id = %q, want %q", got, want)
+	}
+	if len(events.inserted) != 1 {
+		t.Fatalf("expected one release event, got %d", len(events.inserted))
+	}
+	if got, want := events.inserted[0].EventType, floweventdomain.EventTypeRunLeaseReleased; got != want {
+		t.Fatalf("event_type = %q, want %q", got, want)
+	}
+}
+
 func TestTickRunningFullEnvJobNotFound_ReviseReuseFastPathRelaunchesWithoutRuntimePrepare(t *testing.T) {
 	t.Parallel()
 
@@ -1808,8 +1850,10 @@ type fakeRunQueue struct {
 	claimRunningCalls   int
 	claimRunning        []runqueuerepo.ClaimRunningParams
 	releasedStaleLeases []runqueuerepo.ReleasedStaleLease
+	releasedOwnedLeases []runqueuerepo.ReleasedStaleLease
 	releaseStaleCalls   int
 	releaseStaleParams  []runqueuerepo.ReleaseStaleLeasesParams
+	releaseOwnedParams  []runqueuerepo.ReleaseOwnedLeasesParams
 	resumePending       []runqueuerepo.CreatePendingResumeParams
 	finished            []runqueuerepo.FinishParams
 	extended            []runqueuerepo.ExtendLeaseParams
@@ -1865,6 +1909,14 @@ func (f *fakeRunQueue) ReleaseStaleLeases(_ context.Context, params runqueuerepo
 	f.releaseStaleCalls++
 	f.releaseStaleParams = append(f.releaseStaleParams, params)
 	return f.releasedStaleLeases, nil
+}
+
+func (f *fakeRunQueue) ReleaseOwnedLeases(_ context.Context, params runqueuerepo.ReleaseOwnedLeasesParams) ([]runqueuerepo.ReleasedStaleLease, error) {
+	if f.releaseStaleErr != nil {
+		return nil, f.releaseStaleErr
+	}
+	f.releaseOwnedParams = append(f.releaseOwnedParams, params)
+	return f.releasedOwnedLeases, nil
 }
 
 func (f *fakeRunQueue) CreatePendingResumeIfAbsent(_ context.Context, params runqueuerepo.CreatePendingResumeParams) (bool, error) {
