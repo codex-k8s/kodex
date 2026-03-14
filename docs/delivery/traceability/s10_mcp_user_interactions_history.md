@@ -207,3 +207,44 @@ approvals:
   - в логах `control-plane` зафиксирован ожидаемый transient compile failure во время hot-reload до regeneration нового proto-stub, после чего сервис перезапустился штатно;
   - в логах `worker` зафиксирован кратковременный `dial tcp ...:9090: connect: connection refused` во время restart окна `control-plane`, после чего worker восстановился без новых resume-specific ошибок.
 - Root FR/NFR matrix в `docs/delivery/requirements_traceability.md` не менялась по существу: issue `#437` ужесточает transport/runtime handoff и payload limits внутри approved Sprint S10 scope, не меняя продуктовый baseline.
+
+## Актуализация по Issue #395 (`run:dev`, 2026-03-14)
+- Реализован observability/readiness package для stream `S10-E05` в `services/internal/control-plane`, `services/jobs/worker`, `services/external/api-gateway`, `docs/ops` и `docs/architecture/initiatives/s10_mcp_user_interactions`:
+  - `control-plane` публикует runtime counters/histogram (`codexk8s_interaction_requests_created_total`, `codexk8s_interaction_resume_total`, `codexk8s_interaction_decision_turnaround_seconds`) и persisted custom collector поверх БД snapshot path для state/backlog/overdue/callback/dispatch evidence;
+  - `worker` публикует runtime metrics `codexk8s_interaction_dispatch_attempt_total` и `codexk8s_interaction_dispatch_retry_scheduled_total`, расширяет structured logs по dispatch/expiry и теперь отдаёт `/metrics`, `/health/livez`, `/health/readyz` на отдельном HTTP bind address;
+  - `api-gateway` публикует callback ingress metrics `codexk8s_interaction_callback_requests_total` и `codexk8s_interaction_callback_duration_seconds`, а также structured success log `interaction callback handled` без утечки `free_text` в логи;
+  - добавлен handover-документ `docs/architecture/initiatives/s10_mcp_user_interactions/observability_readiness.md`, а `docs/architecture/initiatives/s10_mcp_user_interactions/design_doc.md`, `docs/ops/production_runbook.md`, `docs/delivery/traceability/s10_mcp_user_interactions_history.md` и `docs/delivery/issue_map.md` синхронизированы под точные metric/log names, runtime smoke и readiness gate.
+- Rollout/readiness discipline сохранены:
+  - ownership split между `control-plane`, `worker` и `api-gateway` не изменён;
+  - platform-wide OTel bootstrap/exporter rollout не добавлялся в scope текущей волны;
+  - version bumps для `api-gateway`, `control-plane` и `worker` уже присутствуют в ветке, поэтому candidate/prod сборка не пропустит новые образы.
+- Выполнены проверки:
+  - `go test ./services/internal/control-plane/... ./services/jobs/worker/... ./services/external/api-gateway/...`
+  - `make lint-go`
+  - `make dupl-go`
+  - `git diff --check`
+  - runtime diagnostics:
+    - `kubectl config view --minify -o jsonpath='{..namespace}'`
+    - `kubectl get pods,deploy,job -n codex-k8s-dev-4 -o wide`
+    - `kubectl get svc -n codex-k8s-dev-4 -o wide`
+    - `kubectl logs deploy/codex-k8s-control-plane -n codex-k8s-dev-4 --tail=120`
+    - `kubectl logs deploy/codex-k8s-worker -n codex-k8s-dev-4 --tail=120`
+    - `kubectl logs deploy/codex-k8s -n codex-k8s-dev-4 --tail=120`
+    - `kubectl port-forward deploy/codex-k8s-control-plane -n codex-k8s-dev-4 18081:8081`
+    - `kubectl port-forward deploy/codex-k8s-worker -n codex-k8s-dev-4 18082:8082`
+    - `kubectl port-forward deploy/codex-k8s -n codex-k8s-dev-4 18080:8080`
+    - `curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18081/metrics`
+    - `curl -s http://127.0.0.1:18082/metrics | rg 'codexk8s_interaction_dispatch_'`
+    - `curl -s -o /tmp/interaction_callback_probe.out -w '%{http_code}' -H 'Content-Type: application/json' -X POST http://127.0.0.1:18080/api/v1/mcp/interactions/callback --data '{"interaction_id":"smoke-probe","callback_kind":"decision_response"}'`
+    - `curl -s http://127.0.0.1:18080/metrics | rg 'codexk8s_interaction_callback_'`
+- Runtime evidence:
+  - текущий candidate namespace `codex-k8s-dev-4` содержит running deployments `codex-k8s-control-plane`, `codex-k8s-worker`, `codex-k8s`, `codex-k8s-web-console`, migration job `Complete` и активный run job;
+  - `kubectl get svc -n codex-k8s-dev-4 -o wide` показывает только `codex-k8s`, `codex-k8s-control-plane`, `codex-k8s-web-console`, `postgres`; новый `codex-k8s-worker` Service добавлен в repo-манифесты, но ещё не materialized в текущем hot-reload candidate, поэтому worker `/metrics` проверялся через `port-forward` на deployment;
+  - `/metrics` у `control-plane`, `worker` и `api-gateway` отвечают `200`; `worker` экспортирует preinitialized families `codexk8s_interaction_dispatch_attempt_total{adapter="noop",status=...}` и `codexk8s_interaction_dispatch_retry_scheduled_total{adapter="noop",error_code=...}`;
+  - synthetic callback probe без токена вернул `401`, тело `/tmp/interaction_callback_probe.out` = `{"code":"unauthorized","message":"missing mcp callback token"}`, после чего `api-gateway` `/metrics` показал `codexk8s_interaction_callback_requests_total{callback_kind="unknown",classification="error"} 1` и соответствующий histogram sample;
+  - `control-plane` `/metrics` доступен без 5xx, но interaction-specific samples в текущем candidate ещё не появились из-за отсутствия реального tool/callback traffic; в последних 120 строках логов нет `collect interaction metrics snapshot failed`;
+  - recent `control-plane`/`worker` logs содержат ожидаемые hot-reload restarts во время локальной пересборки; последние successful restarts подтверждают `control-plane http started`, `control-plane grpc started` и `worker http started`, без новых interaction-specific panic/crash evidence.
+- Для verification использован Context7:
+  - `/prometheus/client_golang` для проверки актуального паттерна custom collector и `CounterVec` / `HistogramVec`.
+- Новых внешних зависимостей в issue `#395` не добавлялось.
+- Root FR/NFR matrix в `docs/delivery/requirements_traceability.md` не менялась по существу: issue `#395` закрывает observability/readiness wave и evidence gate из execution package, не меняя продуктовый baseline.

@@ -2,6 +2,11 @@
 
 `worker` — фоновый сервис очередей и reconciliation: исполняет отложенные задачи, синхронизирует состояние и обслуживает lifecycle run.
 
+Сервис также публикует health/metrics endpoints:
+- `/health/livez`
+- `/health/readyz`
+- `/metrics`
+
 ```text
 services/jobs/worker/                                фоновые jobs и reconciliation контур
 ├── README.md                                        карта структуры worker-сервиса

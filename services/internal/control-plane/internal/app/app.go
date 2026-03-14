@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
 
@@ -37,6 +38,7 @@ import (
 	"github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/staff"
 	valuetypes "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/types/value"
 	"github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/webhook"
+	"github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/observability"
 	agentrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/repository/postgres/agent"
 	agentrunrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/repository/postgres/agentrun"
 	agentsessionrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/repository/postgres/agentsession"
@@ -438,6 +440,12 @@ func Run() error {
 	); err != nil {
 		return fmt.Errorf("start runtime deploy reconciler loop: %w", err)
 	}
+
+	interactionCollector := observability.NewInteractionCollector(interactionRequests, logger)
+	if err := registerOrReplaceCollector(prometheus.DefaultRegisterer, interactionCollector); err != nil {
+		return fmt.Errorf("register interaction collector: %w", err)
+	}
+	defer prometheus.DefaultRegisterer.Unregister(interactionCollector)
 
 	grpcServer := grpc.NewServer()
 	controlplanev1.RegisterControlPlaneServiceServer(grpcServer, grpctransport.NewServer(grpctransport.Dependencies{

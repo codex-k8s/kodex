@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
@@ -20,6 +21,7 @@ import (
 	learningfeedbackrepo "github.com/codex-k8s/codex-k8s/services/jobs/worker/internal/repository/postgres/learningfeedback"
 	runqueuerepo "github.com/codex-k8s/codex-k8s/services/jobs/worker/internal/repository/postgres/runqueue"
 	workerinstancerepo "github.com/codex-k8s/codex-k8s/services/jobs/worker/internal/repository/postgres/workerinstance"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // Run starts worker loop and blocks until termination signal.
@@ -277,6 +279,32 @@ func Run() error {
 		TTL:       workerInstanceTTL,
 	})
 
+	httpMux := http.NewServeMux()
+	httpMux.Handle("/metrics", promhttp.Handler())
+	httpMux.HandleFunc("/health/readyz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+	httpMux.HandleFunc("/health/livez", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("alive"))
+	})
+	httpMux.HandleFunc("/readyz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+	httpMux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("alive"))
+	})
+
+	httpServer := &http.Server{Addr: cfg.HTTPAddr, Handler: httpMux}
+	httpErrCh := make(chan error, 1)
+	go func() {
+		logger.Info("worker http started", "addr", cfg.HTTPAddr)
+		httpErrCh <- httpServer.ListenAndServe()
+	}()
+
 	logger.Info("worker started", "worker_id", cfg.WorkerID, "poll_interval", pollInterval.String())
 
 	if err := service.Tick(ctx); err != nil {
@@ -288,7 +316,18 @@ func Run() error {
 
 	for {
 		select {
+		case err := <-httpErrCh:
+			if err == nil || err == http.ErrServerClosed {
+				return nil
+			}
+			return fmt.Errorf("worker http server failed: %w", err)
 		case <-ctx.Done():
+			shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 15*time.Second)
+			if err := httpServer.Shutdown(shutdownCtx); err != nil {
+				cancelShutdown()
+				return fmt.Errorf("shutdown worker http server: %w", err)
+			}
+			cancelShutdown()
 			stopCtx, cancelStop := context.WithTimeout(context.Background(), 5*time.Second)
 			if err := markWorkerStopped(stopCtx, workerInstances, cfg.WorkerID, time.Now().UTC()); err != nil {
 				logger.Warn("mark worker stopped failed", "worker_id", cfg.WorkerID, "err", err)

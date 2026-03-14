@@ -31,6 +31,7 @@ approvals:
 - `docs/architecture/initiatives/s10_mcp_user_interactions/api_contract.md`
 - `docs/architecture/initiatives/s10_mcp_user_interactions/data_model.md`
 - `docs/architecture/initiatives/s10_mcp_user_interactions/migrations_policy.md`
+- `docs/architecture/initiatives/s10_mcp_user_interactions/observability_readiness.md`
 
 ## Связанные source-of-truth документы
 - `docs/architecture/api_contract.md`

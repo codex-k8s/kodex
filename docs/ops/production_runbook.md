@@ -5,8 +5,8 @@ title: "Production Runbook (MVP)"
 status: active
 owner_role: SRE
 created_at: 2026-02-09
-updated_at: 2026-03-11
-related_issues: [1, 256]
+updated_at: 2026-03-14
+related_issues: [1, 256, 395]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -103,6 +103,56 @@ kubectl -n "$ns" get events --sort-by=.lastTimestamp | tail -n 80
 Примечание:
 - Ingress/TLS/browser smoke остаются отдельной проверкой для production;
 - для acceptance новых/изменённых HTTP-ручек первичным evidence считается именно service DNS path из runtime namespace.
+
+## MCP interaction observability smoke (S10-E05)
+
+Использовать для candidate/prod contour после rollout built-in MCP user interactions.
+
+Минимальный evidence bundle:
+- namespace и service DNS/FQDN;
+- `/metrics` excerpt для `control-plane` и `api-gateway`;
+- `/metrics` excerpt для `worker` через service DNS, а для hot-reload candidate без materialized `codex-k8s-worker` Service — через `kubectl port-forward`;
+- хотя бы один callback probe с ожидаемым `401`/`400`, чтобы подтвердить, что edge-метрики инкрементируются даже на rejected ingress;
+- логи `control-plane` и `worker` после rollout без repeated crash/restart pattern.
+
+Команды:
+
+```bash
+ns="<runtime-namespace>"
+control_plane_fqdn="codex-k8s-control-plane.${ns}.svc.cluster.local"
+worker_fqdn="codex-k8s-worker.${ns}.svc.cluster.local"
+api_fqdn="codex-k8s.${ns}.svc.cluster.local"
+worker_metrics_url="http://${worker_fqdn}:8082/metrics"
+
+if ! kubectl -n "$ns" get svc codex-k8s-worker >/dev/null 2>&1; then
+  echo "codex-k8s-worker Service is not materialized in this namespace; using port-forward fallback"
+  kubectl -n "$ns" port-forward deploy/codex-k8s-worker 18082:8082 >/tmp/codex-k8s-worker-port-forward.log 2>&1 &
+  worker_port_forward_pid=$!
+  trap 'kill "${worker_port_forward_pid}" >/dev/null 2>&1 || true' EXIT
+  worker_metrics_url="http://127.0.0.1:18082/metrics"
+fi
+
+curl -fsS "http://${control_plane_fqdn}:8081/metrics" | grep 'codexk8s_interaction' || true
+curl -fsS "${worker_metrics_url}" | grep 'codexk8s_interaction_dispatch_' || true
+curl -fsS "http://${api_fqdn}/metrics" | grep 'codexk8s_interaction_callback_' || true
+
+curl -sS -o /tmp/interaction-callback.out -D /tmp/interaction-callback.headers -w '%{http_code}\n' \
+  -H 'Content-Type: application/json' \
+  -X POST "http://${api_fqdn}/api/v1/mcp/interactions/callback" \
+  --data '{"interaction_id":"smoke-probe","callback_kind":"decision_response"}'
+
+curl -fsS "http://${api_fqdn}/metrics" | grep 'codexk8s_interaction_callback_' || true
+kubectl -n "$ns" logs deploy/codex-k8s-control-plane --tail=120
+kubectl -n "$ns" logs deploy/codex-k8s-worker --tail=120
+```
+
+Интерпретация:
+- `control-plane` должен отдавать `/metrics` без 5xx и без `promhttp_metric_handler_errors_total` роста по interaction collector path;
+- `worker` должен отдавать `/metrics` и публиковать `codexk8s_interaction_dispatch_attempt_total` / `codexk8s_interaction_dispatch_retry_scheduled_total`;
+- service DNS остаётся основным evidence path для fully applied namespace/prod; `port-forward` fallback допустим только для hot-reload candidate, где `codex-k8s-worker` Service ещё не materialized;
+- `api-gateway` после probe должен показать `codexk8s_interaction_callback_requests_total{callback_kind="unknown",classification="error"}` и histogram `codexk8s_interaction_callback_duration_seconds`;
+- отсутствие interaction-specific samples в `control-plane` допустимо до первого реального tool/callback traffic, но endpoint и collector registration должны оставаться стабильными;
+- repeated restart loops, repeated collector errors или невозможность прочитать `/metrics` считаются rollout blocker до `run:qa`.
 
 ## Postdeploy checklist (S6 continuity)
 
