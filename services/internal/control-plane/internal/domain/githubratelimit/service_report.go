@@ -81,7 +81,7 @@ func (s *Service) ReportSignal(ctx context.Context, params ReportSignalParams) (
 		return ReportSignalResult{}, fmt.Errorf("correlation_id is required")
 	}
 
-	wait, err := s.upsertWait(ctx, run, signal, classification, existingWait, correlationID)
+	wait, err := s.upsertWait(ctx, run, signal, classification, existingWait, correlationID, params.ReplayPayloadJSON)
 	if err != nil {
 		return ReportSignalResult{}, err
 	}
@@ -131,6 +131,9 @@ func (s *Service) ReportSignal(ctx context.Context, params ReportSignalParams) (
 		ObservedAt: signal.OccurredAt,
 	}); err != nil {
 		return ReportSignalResult{}, fmt.Errorf("append github rate-limit classification evidence: %w", err)
+	}
+	if err := s.appendPostClassificationEvidence(ctx, wait, signal, classification); err != nil {
+		return ReportSignalResult{}, err
 	}
 
 	projection, commentRenderContext, err := s.loadProjectionAndCommentContext(ctx, trimmedRunID)
@@ -197,10 +200,10 @@ func validateDuplicateSignalContext(runID string, signal Signal, wait Wait) erro
 	return nil
 }
 
-func (s *Service) upsertWait(ctx context.Context, run agentrunrepo.Run, signal Signal, classification Classification, existing Wait, correlationID string) (Wait, error) {
-	resumePayload := existing.ResumePayloadJSON
-	if len(resumePayload) == 0 {
-		resumePayload = json.RawMessage(`{}`)
+func (s *Service) upsertWait(ctx context.Context, run agentrunrepo.Run, signal Signal, classification Classification, existing Wait, correlationID string, replayPayload json.RawMessage) (Wait, error) {
+	resumePayload, err := resolveWaitResumePayload(classification.ResumeActionKind, existing.ResumePayloadJSON, replayPayload)
+	if err != nil {
+		return Wait{}, err
 	}
 
 	if strings.TrimSpace(existing.ID) != "" {
@@ -246,7 +249,7 @@ func (s *Service) upsertWait(ctx context.Context, run agentrunrepo.Run, signal S
 		RequestFingerprint:     signal.RequestFingerprint,
 		CorrelationID:          correlationID,
 		ResumeActionKind:       classification.ResumeActionKind,
-		ResumePayloadJSON:      json.RawMessage(`{}`),
+		ResumePayloadJSON:      resumePayload,
 		ManualActionKind:       classification.ManualActionKind,
 		AutoResumeAttemptsUsed: 0,
 		MaxAutoResumeAttempts:  classification.MaxAutoResumeAttempts,
@@ -258,6 +261,58 @@ func (s *Service) upsertWait(ctx context.Context, run agentrunrepo.Run, signal S
 		return Wait{}, fmt.Errorf("create github rate-limit wait: %w", err)
 	}
 	return wait, nil
+}
+
+func (s *Service) appendPostClassificationEvidence(ctx context.Context, wait Wait, signal Signal, classification Classification) error {
+	observedAt := signal.OccurredAt
+	if classification.NextStepKind == enumtypes.GitHubRateLimitNextStepKindAutoResumeScheduled {
+		return s.appendResumeScheduledEvidence(ctx, wait, signal.SignalID, signal.SignalOrigin, observedAt, classification.NextStepKind)
+	}
+	if classification.NextStepKind == enumtypes.GitHubRateLimitNextStepKindManualActionRequired {
+		if _, err := s.waits.AppendEvidence(ctx, querytypes.GitHubRateLimitWaitEvidenceCreateParams{
+			WaitID:       wait.ID,
+			EventKind:    enumtypes.GitHubRateLimitEvidenceEventManualActionRequired,
+			SignalID:     signal.SignalID,
+			SignalOrigin: signal.SignalOrigin,
+			PayloadJSON: marshalJSONPayload(waitManualActionEvidencePayload{
+				WaitID:           wait.ID,
+				AttemptNo:        wait.AutoResumeAttemptsUsed,
+				ManualActionKind: wait.ManualActionKind,
+			}),
+			ObservedAt: observedAt,
+		}); err != nil {
+			return fmt.Errorf("append github rate-limit manual-action evidence: %w", err)
+		}
+	}
+	return nil
+}
+
+func resolveWaitResumePayload(resumeActionKind enumtypes.GitHubRateLimitResumeActionKind, existing json.RawMessage, incoming json.RawMessage) (json.RawMessage, error) {
+	if len(incoming) == 0 {
+		if len(existing) == 0 {
+			switch resumeActionKind {
+			case enumtypes.GitHubRateLimitResumeActionKindRunStatusCommentRetry,
+				enumtypes.GitHubRateLimitResumeActionKindPlatformCallReplay:
+				return nil, errGitHubRateLimitReplayPayloadMissing
+			default:
+				return json.RawMessage(`{}`), nil
+			}
+		}
+		return existing, nil
+	}
+	if !json.Valid(incoming) {
+		return nil, fmt.Errorf("github rate-limit replay payload must be valid JSON")
+	}
+	switch resumeActionKind {
+	case enumtypes.GitHubRateLimitResumeActionKindRunStatusCommentRetry,
+		enumtypes.GitHubRateLimitResumeActionKindPlatformCallReplay:
+		return incoming, nil
+	default:
+		if len(existing) == 0 {
+			return json.RawMessage(`{}`), nil
+		}
+		return existing, nil
+	}
 }
 
 func (s *Service) loadProjectionAndCommentContext(ctx context.Context, runID string) (WaitProjection, CommentRenderContext, error) {

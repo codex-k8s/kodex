@@ -3,12 +3,15 @@ package joblauncher
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	agentdomain "github.com/codex-k8s/codex-k8s/libs/go/domain/agent"
+	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -31,6 +34,8 @@ const (
 
 	runNamespaceManagedByValue = "codex-k8s-worker"
 	runNamespacePurposeValue   = "run"
+
+	runNamespaceCleanupSlotPrefix = "codex-k8s-dev-"
 )
 
 // EnsureNamespace prepares baseline runtime resources for managed run execution.
@@ -76,28 +81,9 @@ func (l *Launcher) CleanupNamespace(ctx context.Context, spec NamespaceSpec) err
 	if namespace == "" {
 		return nil
 	}
-	if namespace == l.cfg.Namespace {
-		return nil
-	}
-
-	ns, err := l.client.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
+	_, err := l.DeleteManagedNamespace(ctx, namespace)
 	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return nil
-		}
-		return fmt.Errorf("get namespace %s: %w", namespace, err)
-	}
-	if strings.TrimSpace(ns.Labels[runNamespaceManagedByLabel]) != runNamespaceManagedByValue {
-		return nil
-	}
-	if strings.TrimSpace(ns.Labels[runNamespacePurposeLabel]) != runNamespacePurposeValue {
-		return nil
-	}
-	if err := l.client.CoreV1().Namespaces().Delete(ctx, namespace, metav1.DeleteOptions{}); err != nil {
-		if apierrors.IsNotFound(err) {
-			return nil
-		}
-		return fmt.Errorf("delete namespace %s: %w", namespace, err)
+		return err
 	}
 	return nil
 }
@@ -167,17 +153,16 @@ func (l *Launcher) FindReusableNamespace(ctx context.Context, lookup NamespaceRe
 	return best, true, nil
 }
 
-// CleanupExpiredNamespaces removes managed run namespaces when lease is expired.
-func (l *Launcher) CleanupExpiredNamespaces(ctx context.Context, params NamespaceCleanupParams) ([]NamespaceCleanupResult, error) {
-	now := params.Now.UTC()
-	if now.IsZero() {
-		now = time.Now().UTC()
+// ListManagedRunNamespaces returns worker-managed runtime namespaces with deterministic ordering.
+// Cleanup keeps the configured issue-run prefix and known platform slot prefixes in scope.
+func (l *Launcher) ListManagedRunNamespaces(ctx context.Context, params ManagedNamespaceListParams) ([]ManagedNamespaceState, error) {
+	prefix := strings.TrimSpace(params.NamespacePrefix)
+	if prefix != "" {
+		prefix = sanitizeLabel(prefix)
+		if prefix == "unknown" {
+			prefix = ""
+		}
 	}
-	limit := params.Limit
-	if limit <= 0 {
-		limit = 200
-	}
-
 	items, err := l.client.CoreV1().Namespaces().List(ctx, metav1.ListOptions{
 		LabelSelector: fmt.Sprintf(
 			"%s=%s,%s=%s",
@@ -194,36 +179,119 @@ func (l *Launcher) CleanupExpiredNamespaces(ctx context.Context, params Namespac
 		return items.Items[i].Name < items.Items[j].Name
 	})
 
-	cleaned := make([]NamespaceCleanupResult, 0, limit)
+	states := make([]ManagedNamespaceState, 0, len(items.Items))
 	for _, item := range items.Items {
-		if len(cleaned) >= limit {
-			break
-		}
-		if strings.TrimSpace(item.Name) == strings.TrimSpace(l.cfg.Namespace) {
+		namespace := strings.TrimSpace(item.Name)
+		if namespace == "" || namespace == strings.TrimSpace(l.cfg.Namespace) {
 			continue
 		}
 		if item.DeletionTimestamp != nil {
 			continue
 		}
-		expiresAt, ok := parseNamespaceLeaseExpiresAt(item.Annotations)
-		if !ok || expiresAt.After(now) {
+		if !managedRunNamespaceMatchesCleanupScope(namespace, prefix) {
 			continue
 		}
-
-		deleteErr := l.client.CoreV1().Namespaces().Delete(ctx, item.Name, metav1.DeleteOptions{})
-		if deleteErr != nil && !apierrors.IsNotFound(deleteErr) {
-			return nil, fmt.Errorf("delete expired run namespace %s: %w", item.Name, deleteErr)
+		runtimeModeRaw := strings.TrimSpace(item.Labels[runNamespaceRuntimeModeLabel])
+		if runtimeModeRaw == "" {
+			continue
 		}
-
-		cleaned = append(cleaned, NamespaceCleanupResult{
-			Namespace:   strings.TrimSpace(item.Name),
-			RunID:       strings.TrimSpace(item.Labels[runNamespaceRunIDLabel]),
-			RuntimeMode: agentdomain.ParseRuntimeMode(item.Labels[runNamespaceRuntimeModeLabel]),
-			ExpiresAt:   expiresAt,
+		expiresAt, _ := parseNamespaceLeaseExpiresAt(item.Annotations)
+		states = append(states, ManagedNamespaceState{
+			Namespace:       namespace,
+			RunID:           strings.TrimSpace(item.Labels[runNamespaceRunIDLabel]),
+			ProjectID:       strings.TrimSpace(item.Labels[runNamespaceProjectIDLabel]),
+			CorrelationID:   strings.TrimSpace(item.Annotations[runNamespaceCorrelationAnnotKey]),
+			RuntimeMode:     agentdomain.ParseRuntimeMode(runtimeModeRaw),
+			RuntimeModeRaw:  runtimeModeRaw,
+			CreatedAt:       item.CreationTimestamp.Time.UTC(),
+			LeaseTTL:        parseNamespaceLeaseTTL(item.Annotations),
+			LeaseExpiresAt:  expiresAt,
+			LeaseExpiresRaw: strings.TrimSpace(item.Annotations[runNamespaceLeaseExpAnnotKey]),
 		})
 	}
+	return states, nil
+}
 
-	return cleaned, nil
+// InspectNamespaceWorkloads returns active workload objects inside one managed namespace.
+func (l *Launcher) InspectNamespaceWorkloads(ctx context.Context, namespace string) (NamespaceWorkloadState, error) {
+	targetNamespace := strings.TrimSpace(namespace)
+	if targetNamespace == "" {
+		return NamespaceWorkloadState{}, fmt.Errorf("namespace is required")
+	}
+
+	pods, err := l.client.CoreV1().Pods(targetNamespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return NamespaceWorkloadState{}, fmt.Errorf("list pods in namespace %s: %w", targetNamespace, err)
+	}
+	jobs, err := l.client.BatchV1().Jobs(targetNamespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return NamespaceWorkloadState{}, fmt.Errorf("list jobs in namespace %s: %w", targetNamespace, err)
+	}
+	cronJobs, err := l.client.BatchV1().CronJobs(targetNamespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return NamespaceWorkloadState{}, fmt.Errorf("list cronjobs in namespace %s: %w", targetNamespace, err)
+	}
+	deployments, err := l.client.AppsV1().Deployments(targetNamespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return NamespaceWorkloadState{}, fmt.Errorf("list deployments in namespace %s: %w", targetNamespace, err)
+	}
+	statefulSets, err := l.client.AppsV1().StatefulSets(targetNamespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return NamespaceWorkloadState{}, fmt.Errorf("list statefulsets in namespace %s: %w", targetNamespace, err)
+	}
+	daemonSets, err := l.client.AppsV1().DaemonSets(targetNamespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return NamespaceWorkloadState{}, fmt.Errorf("list daemonsets in namespace %s: %w", targetNamespace, err)
+	}
+	replicaSets, err := l.client.AppsV1().ReplicaSets(targetNamespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return NamespaceWorkloadState{}, fmt.Errorf("list replicasets in namespace %s: %w", targetNamespace, err)
+	}
+
+	return NamespaceWorkloadState{
+		ActivePods:         activePodNames(pods.Items),
+		ActiveJobs:         activeJobNames(jobs.Items),
+		ActiveCronJobs:     activeCronJobNames(cronJobs.Items),
+		ActiveDeployments:  activeReplicatedWorkloadNames(deployments.Items),
+		ActiveStatefulSets: activeReplicatedWorkloadNames(statefulSets.Items),
+		ActiveDaemonSets:   activeDaemonSetNames(daemonSets.Items),
+		ActiveReplicaSets:  activeReplicatedWorkloadNames(replicaSets.Items),
+	}, nil
+}
+
+// DeleteManagedNamespace removes one worker-managed run namespace.
+func (l *Launcher) DeleteManagedNamespace(ctx context.Context, namespace string) (bool, error) {
+	targetNamespace := strings.TrimSpace(namespace)
+	if targetNamespace == "" {
+		return false, nil
+	}
+	if targetNamespace == strings.TrimSpace(l.cfg.Namespace) {
+		return false, nil
+	}
+
+	ns, err := l.client.CoreV1().Namespaces().Get(ctx, targetNamespace, metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("get namespace %s: %w", targetNamespace, err)
+	}
+	if strings.TrimSpace(ns.Labels[runNamespaceManagedByLabel]) != runNamespaceManagedByValue {
+		return false, nil
+	}
+	if strings.TrimSpace(ns.Labels[runNamespacePurposeLabel]) != runNamespacePurposeValue {
+		return false, nil
+	}
+	if strings.TrimSpace(ns.Labels[runNamespaceRuntimeModeLabel]) == "" {
+		return false, nil
+	}
+	if err := l.client.CoreV1().Namespaces().Delete(ctx, targetNamespace, metav1.DeleteOptions{}); err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("delete namespace %s: %w", targetNamespace, err)
+	}
+	return true, nil
 }
 
 type accessProfileSpec struct {
@@ -380,6 +448,166 @@ func parseNamespaceLeaseExpiresAt(annotations map[string]string) (time.Time, boo
 		return time.Time{}, false
 	}
 	return parsed.UTC(), true
+}
+
+func parseNamespaceLeaseTTL(annotations map[string]string) time.Duration {
+	if len(annotations) == 0 {
+		return 0
+	}
+	raw := strings.TrimSpace(annotations[runNamespaceLeaseTTLAnnotKey])
+	if raw == "" {
+		return 0
+	}
+	parsed, err := time.ParseDuration(raw)
+	if err != nil || parsed <= 0 {
+		return 0
+	}
+	return parsed
+}
+
+func managedRunNamespaceMatchesCleanupScope(namespace string, configuredPrefix string) bool {
+	targetNamespace := strings.TrimSpace(namespace)
+	if targetNamespace == "" {
+		return false
+	}
+	if configuredPrefix == "" {
+		return true
+	}
+	return strings.HasPrefix(targetNamespace, configuredPrefix) || strings.HasPrefix(targetNamespace, runNamespaceCleanupSlotPrefix)
+}
+
+func activePodNames(items []corev1.Pod) []string {
+	names := make([]string, 0, len(items))
+	for _, item := range items {
+		if item.DeletionTimestamp != nil {
+			continue
+		}
+		switch item.Status.Phase {
+		case corev1.PodSucceeded, corev1.PodFailed:
+			continue
+		}
+		names = append(names, strings.TrimSpace(item.Name))
+	}
+	sort.Strings(names)
+	return names
+}
+
+func activeJobNames(items []batchv1.Job) []string {
+	names := make([]string, 0, len(items))
+	for _, item := range items {
+		if item.DeletionTimestamp != nil {
+			continue
+		}
+		if jobIsTerminal(item) {
+			continue
+		}
+		names = append(names, strings.TrimSpace(item.Name))
+	}
+	sort.Strings(names)
+	return names
+}
+
+func activeCronJobNames(items []batchv1.CronJob) []string {
+	names := make([]string, 0, len(items))
+	for _, item := range items {
+		if item.DeletionTimestamp != nil {
+			continue
+		}
+		if len(item.Status.Active) > 0 {
+			names = append(names, strings.TrimSpace(item.Name))
+			continue
+		}
+		if item.Spec.Suspend != nil && *item.Spec.Suspend {
+			continue
+		}
+		names = append(names, strings.TrimSpace(item.Name))
+	}
+	sort.Strings(names)
+	return names
+}
+
+func activeDaemonSetNames(items []appsv1.DaemonSet) []string {
+	names := make([]string, 0, len(items))
+	for _, item := range items {
+		if item.DeletionTimestamp != nil {
+			continue
+		}
+		if item.Status.DesiredNumberScheduled == 0 &&
+			item.Status.CurrentNumberScheduled == 0 &&
+			item.Status.NumberReady == 0 {
+			continue
+		}
+		names = append(names, strings.TrimSpace(item.Name))
+	}
+	sort.Strings(names)
+	return names
+}
+
+func activeReplicatedWorkloadNames[T any](items []T) []string {
+	names := make([]string, 0, len(items))
+	for _, item := range items {
+		name, deletionTimestamp, specReplicas, statusReplicas, readyReplicas, ok := replicatedWorkloadStatus(reflect.ValueOf(item))
+		if !ok || deletionTimestamp != nil {
+			continue
+		}
+		desired := int32(1)
+		if specReplicas != nil {
+			desired = *specReplicas
+		}
+		if desired <= 0 && statusReplicas == 0 && readyReplicas == 0 {
+			continue
+		}
+		names = append(names, strings.TrimSpace(name))
+	}
+	sort.Strings(names)
+	return names
+}
+
+func replicatedWorkloadStatus(value reflect.Value) (string, *metav1.Time, *int32, int32, int32, bool) {
+	if !value.IsValid() {
+		return "", nil, nil, 0, 0, false
+	}
+	objectMeta := value.FieldByName("ObjectMeta")
+	spec := value.FieldByName("Spec")
+	status := value.FieldByName("Status")
+	if !objectMeta.IsValid() || !spec.IsValid() || !status.IsValid() {
+		return "", nil, nil, 0, 0, false
+	}
+
+	nameField := objectMeta.FieldByName("Name")
+	deletionTimestampField := objectMeta.FieldByName("DeletionTimestamp")
+	specReplicasField := spec.FieldByName("Replicas")
+	statusReplicasField := status.FieldByName("Replicas")
+	readyReplicasField := status.FieldByName("ReadyReplicas")
+	if !nameField.IsValid() || !deletionTimestampField.IsValid() || !specReplicasField.IsValid() || !statusReplicasField.IsValid() || !readyReplicasField.IsValid() {
+		return "", nil, nil, 0, 0, false
+	}
+
+	var deletionTimestamp *metav1.Time
+	if !deletionTimestampField.IsNil() {
+		value := deletionTimestampField.Interface().(*metav1.Time)
+		deletionTimestamp = value
+	}
+
+	var specReplicas *int32
+	if !specReplicasField.IsNil() {
+		value := int32(specReplicasField.Elem().Int())
+		specReplicas = &value
+	}
+
+	return nameField.String(), deletionTimestamp, specReplicas, int32(statusReplicasField.Int()), int32(readyReplicasField.Int()), true
+}
+
+func jobIsTerminal(item batchv1.Job) bool {
+	for _, condition := range item.Status.Conditions {
+		if condition.Status != corev1.ConditionTrue {
+			continue
+		}
+		if condition.Type == batchv1.JobComplete || condition.Type == batchv1.JobFailed {
+			return true
+		}
+	}
+	return false
 }
 
 func (l *Launcher) ensureServiceAccount(ctx context.Context, namespace string, name string) error {

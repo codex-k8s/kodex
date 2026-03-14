@@ -60,6 +60,7 @@ const (
 	ControlPlaneService_ClaimNextInteractionDispatch_FullMethodName         = "/codexk8s.controlplane.v1.ControlPlaneService/ClaimNextInteractionDispatch"
 	ControlPlaneService_CompleteInteractionDispatch_FullMethodName          = "/codexk8s.controlplane.v1.ControlPlaneService/CompleteInteractionDispatch"
 	ControlPlaneService_ExpireNextInteraction_FullMethodName                = "/codexk8s.controlplane.v1.ControlPlaneService/ExpireNextInteraction"
+	ControlPlaneService_ProcessNextGitHubRateLimitWait_FullMethodName       = "/codexk8s.controlplane.v1.ControlPlaneService/ProcessNextGitHubRateLimitWait"
 	ControlPlaneService_GetMissionControlSnapshot_FullMethodName            = "/codexk8s.controlplane.v1.ControlPlaneService/GetMissionControlSnapshot"
 	ControlPlaneService_GetMissionControlEntity_FullMethodName              = "/codexk8s.controlplane.v1.ControlPlaneService/GetMissionControlEntity"
 	ControlPlaneService_ListMissionControlTimeline_FullMethodName           = "/codexk8s.controlplane.v1.ControlPlaneService/ListMissionControlTimeline"
@@ -136,6 +137,7 @@ type ControlPlaneServiceClient interface {
 	ClaimNextInteractionDispatch(ctx context.Context, in *ClaimNextInteractionDispatchRequest, opts ...grpc.CallOption) (*ClaimNextInteractionDispatchResponse, error)
 	CompleteInteractionDispatch(ctx context.Context, in *CompleteInteractionDispatchRequest, opts ...grpc.CallOption) (*CompleteInteractionDispatchResponse, error)
 	ExpireNextInteraction(ctx context.Context, in *ExpireNextInteractionRequest, opts ...grpc.CallOption) (*ExpireNextInteractionResponse, error)
+	ProcessNextGitHubRateLimitWait(ctx context.Context, in *ProcessNextGitHubRateLimitWaitRequest, opts ...grpc.CallOption) (*ProcessNextGitHubRateLimitWaitResponse, error)
 	GetMissionControlSnapshot(ctx context.Context, in *GetMissionControlSnapshotRequest, opts ...grpc.CallOption) (*GetMissionControlSnapshotResponse, error)
 	GetMissionControlEntity(ctx context.Context, in *GetMissionControlEntityRequest, opts ...grpc.CallOption) (*MissionControlEntityDetails, error)
 	ListMissionControlTimeline(ctx context.Context, in *ListMissionControlTimelineRequest, opts ...grpc.CallOption) (*ListMissionControlTimelineResponse, error)
@@ -575,6 +577,16 @@ func (c *controlPlaneServiceClient) ExpireNextInteraction(ctx context.Context, i
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) ProcessNextGitHubRateLimitWait(ctx context.Context, in *ProcessNextGitHubRateLimitWaitRequest, opts ...grpc.CallOption) (*ProcessNextGitHubRateLimitWaitResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ProcessNextGitHubRateLimitWaitResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ProcessNextGitHubRateLimitWait_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) GetMissionControlSnapshot(ctx context.Context, in *GetMissionControlSnapshotRequest, opts ...grpc.CallOption) (*GetMissionControlSnapshotResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetMissionControlSnapshotResponse)
@@ -901,6 +913,7 @@ type ControlPlaneServiceServer interface {
 	ClaimNextInteractionDispatch(context.Context, *ClaimNextInteractionDispatchRequest) (*ClaimNextInteractionDispatchResponse, error)
 	CompleteInteractionDispatch(context.Context, *CompleteInteractionDispatchRequest) (*CompleteInteractionDispatchResponse, error)
 	ExpireNextInteraction(context.Context, *ExpireNextInteractionRequest) (*ExpireNextInteractionResponse, error)
+	ProcessNextGitHubRateLimitWait(context.Context, *ProcessNextGitHubRateLimitWaitRequest) (*ProcessNextGitHubRateLimitWaitResponse, error)
 	GetMissionControlSnapshot(context.Context, *GetMissionControlSnapshotRequest) (*GetMissionControlSnapshotResponse, error)
 	GetMissionControlEntity(context.Context, *GetMissionControlEntityRequest) (*MissionControlEntityDetails, error)
 	ListMissionControlTimeline(context.Context, *ListMissionControlTimelineRequest) (*ListMissionControlTimelineResponse, error)
@@ -1059,6 +1072,9 @@ func (UnimplementedControlPlaneServiceServer) CompleteInteractionDispatch(contex
 }
 func (UnimplementedControlPlaneServiceServer) ExpireNextInteraction(context.Context, *ExpireNextInteractionRequest) (*ExpireNextInteractionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ExpireNextInteraction not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ProcessNextGitHubRateLimitWait(context.Context, *ProcessNextGitHubRateLimitWaitRequest) (*ProcessNextGitHubRateLimitWaitResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ProcessNextGitHubRateLimitWait not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) GetMissionControlSnapshot(context.Context, *GetMissionControlSnapshotRequest) (*GetMissionControlSnapshotResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetMissionControlSnapshot not implemented")
@@ -1885,6 +1901,24 @@ func _ControlPlaneService_ExpireNextInteraction_Handler(srv interface{}, ctx con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_ProcessNextGitHubRateLimitWait_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProcessNextGitHubRateLimitWaitRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ProcessNextGitHubRateLimitWait(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ProcessNextGitHubRateLimitWait_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ProcessNextGitHubRateLimitWait(ctx, req.(*ProcessNextGitHubRateLimitWaitRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_GetMissionControlSnapshot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetMissionControlSnapshotRequest)
 	if err := dec(in); err != nil {
@@ -2555,6 +2589,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ExpireNextInteraction",
 			Handler:    _ControlPlaneService_ExpireNextInteraction_Handler,
+		},
+		{
+			MethodName: "ProcessNextGitHubRateLimitWait",
+			Handler:    _ControlPlaneService_ProcessNextGitHubRateLimitWait_Handler,
 		},
 		{
 			MethodName: "GetMissionControlSnapshot",

@@ -138,6 +138,8 @@ approvals:
 | `platform_github_call_replay` | `PlatformGitHubCallReplayPayload` |
 | `agent_session_resume` | `AgentSessionRateLimitResumePayload` |
 
+Для `platform_github_call_replay` с `issue_stage_transition` payload хранит `target_label`, `expected_current_run_labels`, `request_fingerprint` и `correlation_id`, чтобы replay оставался retry-safe и не перетирал более новый `run:*` label-set.
+
 ### `github_rate_limit_wait_evidence.payload_json`
 | `event_kind` | Stored variant |
 |---|---|

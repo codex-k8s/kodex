@@ -47,6 +47,10 @@ type Config struct {
 	InteractionRetryMaxInterval time.Duration
 	// InteractionMaxAttempts caps total dispatch attempts before marking delivery exhausted.
 	InteractionMaxAttempts int
+	// GitHubRateLimitWaitEnabled enables worker sweeps for persisted GitHub rate-limit waits.
+	GitHubRateLimitWaitEnabled bool
+	// GitHubRateLimitSweepLimit limits how many due waits worker can reconcile per tick.
+	GitHubRateLimitSweepLimit int
 	// MissionControlEnabled enables Mission Control warmup and command reconciliation loop.
 	MissionControlEnabled bool
 	// MissionControlWarmupInterval throttles per-project warmup execution.
@@ -66,6 +70,8 @@ type Config struct {
 	ProjectLearningModeDefault bool
 	// RunNamespacePrefix defines prefix for full-env run namespaces.
 	RunNamespacePrefix string
+	// RunNamespaceCleanupEnabled toggles namespace cleanup sweep execution.
+	RunNamespaceCleanupEnabled bool
 	// DefaultNamespaceTTL applies to full-env namespace retention when role-specific override is absent.
 	DefaultNamespaceTTL time.Duration
 	// NamespaceTTLByRole contains full-env namespace retention overrides per agent role key.
@@ -152,6 +158,8 @@ type Dependencies struct {
 	RunStatus RunStatusNotifier
 	// Interactions claims and completes built-in interaction delivery lifecycle through control-plane.
 	Interactions InteractionLifecycleClient
+	// GitHubRateLimits claims and processes due GitHub rate-limit waits through control-plane.
+	GitHubRateLimits GitHubRateLimitWaitProcessor
 	// MissionControl coordinates Mission Control warmup and command execution through control-plane.
 	MissionControl MissionControlClient
 	// InteractionDispatcher sends interaction envelopes to the current adapter implementation.
@@ -173,6 +181,7 @@ type Service struct {
 	mcpTokens                MCPTokenIssuer
 	runStatus                RunStatusNotifier
 	interactions             InteractionLifecycleClient
+	githubRateLimits         GitHubRateLimitWaitProcessor
 	missionCtl               MissionControlClient
 	dispatcher               InteractionDispatcher
 	logger                   *slog.Logger
@@ -241,6 +250,9 @@ func NewService(cfg Config, deps Dependencies) *Service {
 	}
 	if cfg.InteractionMaxAttempts <= 0 {
 		cfg.InteractionMaxAttempts = 3
+	}
+	if cfg.GitHubRateLimitSweepLimit <= 0 {
+		cfg.GitHubRateLimitSweepLimit = 20
 	}
 	if cfg.MissionControlWarmupInterval <= 0 {
 		cfg.MissionControlWarmupInterval = 15 * time.Minute
@@ -351,6 +363,9 @@ func NewService(cfg Config, deps Dependencies) *Service {
 	if deps.Interactions == nil {
 		deps.Interactions = noopInteractionLifecycleClient{}
 	}
+	if deps.GitHubRateLimits == nil {
+		deps.GitHubRateLimits = noopGitHubRateLimitWaitProcessor{}
+	}
 	if deps.MissionControl == nil {
 		deps.MissionControl = noopMissionControlClient{}
 	}
@@ -359,19 +374,20 @@ func NewService(cfg Config, deps Dependencies) *Service {
 	}
 
 	return &Service{
-		cfg:          cfg,
-		runs:         deps.Runs,
-		events:       deps.Events,
-		feedback:     deps.Feedback,
-		launcher:     deps.Launcher,
-		deployer:     deps.RuntimePreparer,
-		mcpTokens:    deps.MCPTokenIssuer,
-		runStatus:    deps.RunStatus,
-		interactions: deps.Interactions,
-		missionCtl:   deps.MissionControl,
-		dispatcher:   deps.InteractionDispatcher,
-		logger:       deps.Logger,
-		labels:       labelCatalog,
+		cfg:              cfg,
+		runs:             deps.Runs,
+		events:           deps.Events,
+		feedback:         deps.Feedback,
+		launcher:         deps.Launcher,
+		deployer:         deps.RuntimePreparer,
+		mcpTokens:        deps.MCPTokenIssuer,
+		runStatus:        deps.RunStatus,
+		interactions:     deps.Interactions,
+		githubRateLimits: deps.GitHubRateLimits,
+		missionCtl:       deps.MissionControl,
+		dispatcher:       deps.InteractionDispatcher,
+		logger:           deps.Logger,
+		labels:           labelCatalog,
 		image: JobImageSelectionPolicy{
 			Primary:  cfg.JobImage,
 			Fallback: cfg.JobImageFallback,

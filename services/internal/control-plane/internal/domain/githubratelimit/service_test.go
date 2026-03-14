@@ -26,7 +26,7 @@ func TestReportSignalPrimaryLimitCreatesScheduledWaitAndProjection(t *testing.T)
 	now := time.Date(2026, time.March, 14, 12, 0, 0, 0, time.UTC)
 	resetAt := now.Add(55 * time.Second)
 
-	runs := fakeRunReader{
+	runs := &fakeRunRepository{
 		items: map[string]agentrunrepo.Run{
 			"run-1": {ID: "run-1", ProjectID: "project-1", CorrelationID: "corr-1", Status: runStatusRunning},
 		},
@@ -37,10 +37,19 @@ func TestReportSignalPrimaryLimitCreatesScheduledWaitAndProjection(t *testing.T)
 		CoreFeatureEnabled: true,
 		SchemaReady:        true,
 		DomainReady:        true,
-	}, waits, runs, events, now)
+	}, waits, runs, events, now, nil, nil)
 
 	result, err := service.ReportSignal(context.Background(), ReportSignalParams{
 		RunID: "run-1",
+		ReplayPayloadJSON: marshalJSONPayload(valuetypes.GitHubRateLimitRunStatusCommentRetryPayload{
+			GitHubRateLimitRunStatusCommentRetryTarget: valuetypes.GitHubRateLimitRunStatusCommentRetryTarget{
+				RunID: "run-1",
+				Phase: "started",
+			},
+			GitHubRateLimitRunStatusCommentRetryRender: valuetypes.GitHubRateLimitRunStatusCommentRetryRender{
+				RunStatus: "running",
+			},
+		}),
 		Signal: Signal{
 			SignalID:           "signal-primary",
 			ContourKind:        enumtypes.GitHubRateLimitContourKindPlatformPAT,
@@ -83,8 +92,8 @@ func TestReportSignalPrimaryLimitCreatesScheduledWaitAndProjection(t *testing.T)
 	if !strings.Contains(result.CommentRenderContext.Headline, "platform_pat") {
 		t.Fatalf("comment headline must mention contour, got %q", result.CommentRenderContext.Headline)
 	}
-	if got := len(waits.evidence); got != 2 {
-		t.Fatalf("evidence count = %d, want 2", got)
+	if got := len(waits.evidence); got != 3 {
+		t.Fatalf("evidence count = %d, want 3", got)
 	}
 	if got := len(events.items); got != 1 {
 		t.Fatalf("flow event count = %d, want 1", got)
@@ -121,7 +130,7 @@ func TestReportSignalSecondaryBackoffEscalatesToManualActionAfterBudget(t *testi
 		UpdatedAt:              now.Add(-4 * time.Minute),
 	}
 
-	runs := fakeRunReader{
+	runs := &fakeRunRepository{
 		items: map[string]agentrunrepo.Run{
 			"run-2": {ID: "run-2", ProjectID: "project-1", CorrelationID: "corr-2", Status: runStatusWaitingBackpressure},
 		},
@@ -134,7 +143,7 @@ func TestReportSignalSecondaryBackoffEscalatesToManualActionAfterBudget(t *testi
 		DomainReady:        true,
 		WorkerReady:        true,
 		RunnerReady:        true,
-	}, waits, runs, &fakeFlowEventRecorder{}, now)
+	}, waits, runs, &fakeFlowEventRecorder{}, now, nil, nil)
 
 	result, err := service.ReportSignal(context.Background(), ReportSignalParams{
 		RunID: "run-2",
@@ -176,7 +185,7 @@ func TestReportSignalHardFailureDoesNotPersistWait(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, time.March, 14, 14, 0, 0, 0, time.UTC)
-	runs := fakeRunReader{
+	runs := &fakeRunRepository{
 		items: map[string]agentrunrepo.Run{
 			"run-3": {ID: "run-3", ProjectID: "project-1", CorrelationID: "corr-3", Status: runStatusRunning},
 		},
@@ -186,7 +195,7 @@ func TestReportSignalHardFailureDoesNotPersistWait(t *testing.T) {
 		CoreFeatureEnabled: true,
 		SchemaReady:        true,
 		DomainReady:        true,
-	}, waits, runs, &fakeFlowEventRecorder{}, now)
+	}, waits, runs, &fakeFlowEventRecorder{}, now, nil, nil)
 
 	result, err := service.ReportSignal(context.Background(), ReportSignalParams{
 		RunID: "run-3",
@@ -241,7 +250,7 @@ func TestReportSignalDuplicateSignalReturnsExistingWait(t *testing.T) {
 		DominantForRun:        true,
 	}
 
-	runs := fakeRunReader{
+	runs := &fakeRunRepository{
 		items: map[string]agentrunrepo.Run{
 			"run-4": {ID: "run-4", ProjectID: "project-1", CorrelationID: "corr-4", Status: runStatusWaitingBackpressure},
 		},
@@ -253,7 +262,7 @@ func TestReportSignalDuplicateSignalReturnsExistingWait(t *testing.T) {
 		CoreFeatureEnabled: true,
 		SchemaReady:        true,
 		DomainReady:        true,
-	}, waits, runs, events, now)
+	}, waits, runs, events, now, nil, nil)
 
 	result, err := service.ReportSignal(context.Background(), ReportSignalParams{
 		RunID: "run-4",
@@ -307,7 +316,7 @@ func TestReportSignalDuplicateSignalRejectsStaleContext(t *testing.T) {
 		DominantForRun:        true,
 	}
 
-	runs := fakeRunReader{
+	runs := &fakeRunRepository{
 		items: map[string]agentrunrepo.Run{
 			"run-5": {ID: "run-5", ProjectID: "project-1", CorrelationID: "corr-5", Status: runStatusWaitingBackpressure},
 		},
@@ -318,7 +327,7 @@ func TestReportSignalDuplicateSignalRejectsStaleContext(t *testing.T) {
 		CoreFeatureEnabled: true,
 		SchemaReady:        true,
 		DomainReady:        true,
-	}, waits, runs, &fakeFlowEventRecorder{}, now)
+	}, waits, runs, &fakeFlowEventRecorder{}, now, nil, nil)
 
 	_, err := service.ReportSignal(context.Background(), ReportSignalParams{
 		RunID: "run-5",
@@ -438,7 +447,7 @@ func TestBuildAgentSessionResumePayload(t *testing.T) {
 		CoreFeatureEnabled: true,
 		SchemaReady:        true,
 		DomainReady:        true,
-	}, newFakeWaitRepository(now), fakeRunReader{}, &fakeFlowEventRecorder{}, now)
+	}, newFakeWaitRepository(now), &fakeRunRepository{}, &fakeFlowEventRecorder{}, now, nil, nil)
 
 	result, err := service.BuildAgentSessionResumePayload(BuildResumePayloadParams{
 		Wait: Wait{
@@ -466,13 +475,34 @@ func TestBuildAgentSessionResumePayload(t *testing.T) {
 	}
 }
 
-func newTestService(t *testing.T, rollout valuetypes.GitHubRateLimitRolloutState, waits *fakeWaitRepository, runs fakeRunReader, events *fakeFlowEventRecorder, now time.Time) *Service {
+func newTestService(
+	t *testing.T,
+	rollout valuetypes.GitHubRateLimitRolloutState,
+	waits *fakeWaitRepository,
+	runs *fakeRunRepository,
+	events *fakeFlowEventRecorder,
+	now time.Time,
+	runStatus *fakeRunStatusRetrier,
+	platform *fakePlatformCallReplayer,
+) *Service {
 	t.Helper()
 
+	if runs == nil {
+		runs = &fakeRunRepository{}
+	}
+	if runStatus == nil {
+		runStatus = &fakeRunStatusRetrier{}
+	}
+	if platform == nil {
+		platform = &fakePlatformCallReplayer{}
+	}
+
 	service, err := NewService(Config{RolloutState: rollout}, Dependencies{
-		Runs:       runs,
-		Waits:      waits,
-		FlowEvents: events,
+		Runs:           runs,
+		Waits:          waits,
+		FlowEvents:     events,
+		RunStatusRetry: runStatus,
+		PlatformReplay: platform,
 	})
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
@@ -481,18 +511,36 @@ func newTestService(t *testing.T, rollout valuetypes.GitHubRateLimitRolloutState
 	return service
 }
 
-type fakeRunReader struct {
-	items map[string]agentrunrepo.Run
+type fakeRunRepository struct {
+	items        map[string]agentrunrepo.Run
+	creates      []agentrunrepo.CreateParams
+	createResult agentrunrepo.CreateResult
+	createErr    error
 }
 
-func (f fakeRunReader) GetByID(_ context.Context, runID string) (agentrunrepo.Run, bool, error) {
+func (f *fakeRunRepository) GetByID(_ context.Context, runID string) (agentrunrepo.Run, bool, error) {
 	item, found := f.items[runID]
 	return item, found, nil
+}
+
+func (f *fakeRunRepository) CreatePendingIfAbsent(_ context.Context, params agentrunrepo.CreateParams) (agentrunrepo.CreateResult, error) {
+	if f.createErr != nil {
+		return agentrunrepo.CreateResult{}, f.createErr
+	}
+	f.creates = append(f.creates, params)
+	if strings.TrimSpace(f.createResult.RunID) != "" {
+		return f.createResult, nil
+	}
+	return agentrunrepo.CreateResult{
+		RunID:    fmt.Sprintf("resume-run-%d", len(f.creates)),
+		Inserted: true,
+	}, nil
 }
 
 type fakeWaitRepository struct {
 	waits    map[string]Wait
 	evidence []querytypes.GitHubRateLimitWaitEvidenceCreateParams
+	claimIDs []string
 	nextID   int
 	now      time.Time
 }
@@ -563,6 +611,9 @@ func (f *fakeWaitRepository) Update(_ context.Context, params querytypes.GitHubR
 	item.LastSignalAt = params.LastSignalAt
 	item.ResolvedAt = params.ResolvedAt
 	item.UpdatedAt = params.LastSignalAt
+	if params.LastResumeAttemptAt != nil {
+		item.UpdatedAt = params.LastResumeAttemptAt.UTC()
+	}
 	f.waits[item.ID] = item
 	return item, true, nil
 }
@@ -609,6 +660,61 @@ func (f *fakeWaitRepository) ListByRunID(_ context.Context, runID string) ([]Wai
 	return items, nil
 }
 
+func (f *fakeWaitRepository) ClaimNextDueAutoResume(_ context.Context, dueBefore time.Time, staleInProgressBefore time.Time) (Wait, bool, error) {
+	if len(f.claimIDs) > 0 {
+		waitID := f.claimIDs[0]
+		f.claimIDs = f.claimIDs[1:]
+		item, found := f.waits[waitID]
+		if !found {
+			return Wait{}, false, nil
+		}
+		if item.State != enumtypes.GitHubRateLimitWaitStateAutoResumeInProgress {
+			item.AutoResumeAttemptsUsed++
+		}
+		item.State = enumtypes.GitHubRateLimitWaitStateAutoResumeInProgress
+		item.SignalOrigin = enumtypes.GitHubRateLimitSignalOriginWorker
+		item.LastResumeAttemptAt = ptrTime(dueBefore.UTC())
+		item.UpdatedAt = dueBefore.UTC()
+		f.waits[item.ID] = item
+		return item, true, nil
+	}
+
+	var chosen *Wait
+	for _, item := range f.waits {
+		if item.State == enumtypes.GitHubRateLimitWaitStateAutoResumeInProgress {
+			if item.LastResumeAttemptAt != nil && !item.LastResumeAttemptAt.After(staleInProgressBefore.UTC()) {
+				candidate := item
+				chosen = &candidate
+				break
+			}
+			continue
+		}
+		if item.State != enumtypes.GitHubRateLimitWaitStateOpen && item.State != enumtypes.GitHubRateLimitWaitStateAutoResumeScheduled {
+			continue
+		}
+		if item.ResumeNotBefore != nil && item.ResumeNotBefore.After(dueBefore.UTC()) {
+			continue
+		}
+		candidate := item
+		chosen = &candidate
+		break
+	}
+	if chosen == nil {
+		return Wait{}, false, nil
+	}
+
+	item := *chosen
+	if item.State != enumtypes.GitHubRateLimitWaitStateAutoResumeInProgress {
+		item.AutoResumeAttemptsUsed++
+	}
+	item.State = enumtypes.GitHubRateLimitWaitStateAutoResumeInProgress
+	item.SignalOrigin = enumtypes.GitHubRateLimitSignalOriginWorker
+	item.LastResumeAttemptAt = ptrTime(dueBefore.UTC())
+	item.UpdatedAt = dueBefore.UTC()
+	f.waits[item.ID] = item
+	return item, true, nil
+}
+
 func (f *fakeWaitRepository) AppendEvidence(_ context.Context, params querytypes.GitHubRateLimitWaitEvidenceCreateParams) (entitytypes.GitHubRateLimitWaitEvidence, error) {
 	f.evidence = append(f.evidence, params)
 	return entitytypes.GitHubRateLimitWaitEvidence{
@@ -653,6 +759,32 @@ func (f *fakeWaitRepository) RefreshRunProjection(_ context.Context, runID strin
 
 type fakeFlowEventRecorder struct {
 	items []floweventrepo.InsertParams
+}
+
+type fakeRunStatusRetrier struct {
+	payloads []valuetypes.GitHubRateLimitRunStatusCommentRetryPayload
+	err      error
+}
+
+func (f *fakeRunStatusRetrier) RetryGitHubRateLimitComment(_ context.Context, payload valuetypes.GitHubRateLimitRunStatusCommentRetryPayload) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.payloads = append(f.payloads, payload)
+	return nil
+}
+
+type fakePlatformCallReplayer struct {
+	payloads []valuetypes.GitHubRateLimitPlatformCallReplayPayload
+	err      error
+}
+
+func (f *fakePlatformCallReplayer) ReplayGitHubRateLimitPlatformCall(_ context.Context, payload valuetypes.GitHubRateLimitPlatformCallReplayPayload) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.payloads = append(f.payloads, payload)
+	return nil
 }
 
 func (f *fakeFlowEventRecorder) Insert(_ context.Context, params floweventrepo.InsertParams) error {

@@ -196,6 +196,36 @@ func (c *Client) ExpireNextInteraction(ctx context.Context) (workerdomain.Expire
 	}, nil
 }
 
+// ProcessNextGitHubRateLimitWait claims and processes one due GitHub rate-limit wait.
+func (c *Client) ProcessNextGitHubRateLimitWait(ctx context.Context, workerID string) (workerdomain.GitHubRateLimitProcessResult, bool, error) {
+	resp, err := c.svc.ProcessNextGitHubRateLimitWait(ctx, &controlplanev1.ProcessNextGitHubRateLimitWaitRequest{
+		WorkerId: strings.TrimSpace(workerID),
+	})
+	if err != nil {
+		return workerdomain.GitHubRateLimitProcessResult{}, false, err
+	}
+	if !resp.GetFound() {
+		return workerdomain.GitHubRateLimitProcessResult{}, false, nil
+	}
+
+	var resumeNotBefore *time.Time
+	if resp.GetResumeNotBefore() != nil {
+		value := resp.GetResumeNotBefore().AsTime().UTC()
+		resumeNotBefore = &value
+	}
+
+	return workerdomain.GitHubRateLimitProcessResult{
+		WaitID:                strings.TrimSpace(resp.GetWaitId()),
+		RunID:                 strings.TrimSpace(resp.GetRunId()),
+		State:                 strings.TrimSpace(resp.GetState()),
+		ResolutionKind:        strings.TrimSpace(resp.GetResolutionKind()),
+		AttemptNo:             int(resp.GetAttemptNo()),
+		ManualActionKind:      strings.TrimSpace(resp.GetManualActionKind()),
+		ResumeNotBefore:       resumeNotBefore,
+		RequeuedCorrelationID: strings.TrimSpace(resp.GetRequeuedCorrelationId()),
+	}, true, nil
+}
+
 // ListMissionControlWarmupProjects returns projects that require Mission Control backfill.
 func (c *Client) ListMissionControlWarmupProjects(ctx context.Context, limit int) ([]workerdomain.MissionControlWarmupProject, error) {
 	resp, err := c.svc.ListMissionControlWarmupProjects(ctx, &controlplanev1.ListMissionControlWarmupProjectsRequest{

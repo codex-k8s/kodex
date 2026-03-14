@@ -57,8 +57,16 @@ func (a *Adapter) EnsureAccessProfile(ctx context.Context, namespace string, pro
 	return a.impl.EnsureAccessProfile(ctx, namespace, profile)
 }
 
-func (a *Adapter) CleanupExpiredNamespaces(ctx context.Context, params worker.NamespaceCleanupParams) ([]worker.NamespaceCleanupResult, error) {
-	return a.impl.CleanupExpiredNamespaces(ctx, params)
+func (a *Adapter) ListManagedRunNamespaces(ctx context.Context, params worker.ManagedNamespaceListParams) ([]worker.ManagedNamespaceState, error) {
+	return a.impl.ListManagedRunNamespaces(ctx, params)
+}
+
+func (a *Adapter) InspectNamespaceWorkloads(ctx context.Context, namespace string) (worker.NamespaceWorkloadState, error) {
+	return a.impl.InspectNamespaceWorkloads(ctx, namespace)
+}
+
+func (a *Adapter) DeleteManagedNamespace(ctx context.Context, namespace string) (bool, error) {
+	return a.impl.DeleteManagedNamespace(ctx, namespace)
 }
 
 // Launch creates Kubernetes Job for run.
