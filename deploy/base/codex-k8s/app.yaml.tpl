@@ -343,6 +343,8 @@ spec:
                   optional: true
             - name: CODEXK8S_MISSION_CONTROL_ENABLED
               value: '{{ envOr "CODEXK8S_MISSION_CONTROL_ENABLED" "" }}'
+            - name: CODEXK8S_GITHUB_RATE_LIMIT_WAIT_ENABLED
+              value: '{{ envOr "CODEXK8S_GITHUB_RATE_LIMIT_WAIT_ENABLED" "" }}'
             - name: CODEXK8S_MISSION_CONTROL_VOICE_ENABLED
               value: '{{ envOr "CODEXK8S_MISSION_CONTROL_VOICE_ENABLED" "" }}'
             - name: CODEXK8S_MISSION_CONTROL_WARMUP_VERIFIED
@@ -817,6 +819,10 @@ spec:
               value: '{{ envOr "CODEXK8S_WORKER_RUN_LEASE_TTL" "" }}'
             - name: CODEXK8S_MISSION_CONTROL_ENABLED
               value: '{{ envOr "CODEXK8S_MISSION_CONTROL_ENABLED" "" }}'
+            - name: CODEXK8S_GITHUB_RATE_LIMIT_WAIT_ENABLED
+              value: '{{ envOr "CODEXK8S_GITHUB_RATE_LIMIT_WAIT_ENABLED" "" }}'
+            - name: CODEXK8S_WORKER_GITHUB_RATE_LIMIT_SWEEP_LIMIT
+              value: '{{ envOr "CODEXK8S_WORKER_GITHUB_RATE_LIMIT_SWEEP_LIMIT" "" }}'
             - name: CODEXK8S_WORKER_MISSION_CONTROL_WARMUP_INTERVAL
               value: '{{ envOr "CODEXK8S_WORKER_MISSION_CONTROL_WARMUP_INTERVAL" "" }}'
             - name: CODEXK8S_WORKER_MISSION_CONTROL_WARMUP_PROJECT_LIMIT

@@ -122,6 +122,8 @@ type Config struct {
 	ControlPlaneMCPBaseURL string `env:"CODEXK8S_CONTROL_PLANE_MCP_BASE_URL" envDefault:"http://codex-k8s-control-plane:8081/mcp"`
 	// MissionControlEnabled gates all Mission Control domain and worker-facing internal APIs.
 	MissionControlEnabled bool `env:"CODEXK8S_MISSION_CONTROL_ENABLED" envDefault:"false"`
+	// GitHubRateLimitWaitEnabled gates GitHub rate-limit wait persistence and worker sweep ownership.
+	GitHubRateLimitWaitEnabled bool `env:"CODEXK8S_GITHUB_RATE_LIMIT_WAIT_ENABLED" envDefault:"false"`
 	// MissionControlVoiceEnabled gates optional Mission Control voice flows.
 	MissionControlVoiceEnabled bool `env:"CODEXK8S_MISSION_CONTROL_VOICE_ENABLED" envDefault:"false"`
 	// MissionControlWarmupVerified explicitly opens read/write gates after worker warmup evidence.

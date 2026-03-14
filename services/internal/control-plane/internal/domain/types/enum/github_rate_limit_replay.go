@@ -1,0 +1,8 @@
+package enum
+
+// GitHubRateLimitPlatformReplayOperationKind identifies supported platform-managed GitHub replays.
+type GitHubRateLimitPlatformReplayOperationKind string
+
+const (
+	GitHubRateLimitPlatformReplayOperationKindIssueStageTransition GitHubRateLimitPlatformReplayOperationKind = "issue_stage_transition"
+)

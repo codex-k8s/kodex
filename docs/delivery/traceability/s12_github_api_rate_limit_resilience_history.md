@@ -157,3 +157,27 @@ approvals:
 - Внешний baseline дополнительно сверен:
   - Context7 `/github/docs` использован для повторной проверки GitHub guidance по primary/secondary rate limits, `Retry-After`, `x-ratelimit-reset` и backoff discipline перед реализацией classification policy.
 - Root FR/NFR matrix в `docs/delivery/requirements_traceability.md` не менялась по существу: Issue `#426` закрывает domain semantics/control-plane ownership wave и не добавляет новых продуктовых требований.
+
+## Актуализация по Issue #427 (`run:dev`, 2026-03-14)
+- Реализован worker stream `S12-E03`:
+  - `services/internal/control-plane/internal/domain/githubratelimit/service_worker.go`;
+  - `services/internal/control-plane/internal/domain/runstatus/github_rate_limit_retry.go`;
+  - `services/internal/control-plane/internal/domain/staff/github_rate_limit_replay.go`;
+  - `services/internal/control-plane/internal/transport/grpc/server_github_rate_limit_worker_methods.go`;
+  - `services/jobs/worker/internal/domain/worker/github_rate_limit.go`;
+  - `proto/codexk8s/controlplane/v1/controlplane.proto`.
+- Зафиксированы:
+  - `control-plane` теперь владеет worker-facing `ProcessNextGitHubRateLimitWait` RPC, claim/resume lifecycle, resolved/manual-action evidence append и `run.wait.resumed` flow-event для deterministic replay outcome;
+  - `worker` получил bounded sweep loop с отдельным feature flag `CODEXK8S_GITHUB_RATE_LIMIT_WAIT_ENABLED` и лимитом `CODEXK8S_WORKER_GITHUB_RATE_LIMIT_SWEEP_LIMIT`, который обрабатывает due waits до exhaustion/empty queue без собственной domain classification;
+  - `run_status_comment_retry`, `platform_github_call_replay` и `agent_session_resume` теперь исполняются через typed replay payloads; agent path создаёт pending resume run с persisted `github_rate_limit_resume_payload`, а replay failure эскалируется в `manual_action_required` вместо бесконечного retry-loop;
+  - config/deploy/codegen синхронизированы: proto regenerated, control-plane/worker wiring добавлен в app/grpc/client layers, production manifest и bootstrap example получили новые env.
+- Проверки:
+  - `make gen-proto-go`
+  - `go test ./services/internal/control-plane/internal/domain/githubratelimit ./services/internal/control-plane/internal/domain/runstatus ./services/internal/control-plane/internal/domain/staff`
+  - `go test ./services/jobs/worker/internal/domain/worker ./services/jobs/worker/internal/controlplane`
+  - `go test ./services/internal/control-plane/internal/app ./services/internal/control-plane/internal/transport/grpc ./services/internal/control-plane/internal/repository/postgres/githubratelimitwait`
+  - `go test ./services/jobs/worker/internal/app`
+  - `git diff --check`
+- Внешний baseline дополнительно сверен:
+  - Context7 `/github/docs` повторно использован как source of truth для приоритета `Retry-After`, fallback к `x-ratelimit-reset`, ожидания не меньше минуты и bounded backoff при secondary limit.
+- Root FR/NFR matrix в `docs/delivery/requirements_traceability.md` не менялась по существу: Issue `#427` закрывает worker orchestration wave и не добавляет новых продуктовых требований.
