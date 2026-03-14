@@ -6,7 +6,7 @@ status: active
 owner_role: SRE
 created_at: 2026-02-09
 updated_at: 2026-03-14
-related_issues: [1, 256, 395]
+related_issues: [1, 256, 395, 461]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -243,6 +243,42 @@ done
 
 # Legacy runtime keys must not appear after Day3 rollout
 kubectl get ns -o json | grep -E 'codexk8s.io/(managed-by|namespace-purpose|runtime-mode|project-id|run-id|correlation-id)' || true
+```
+
+## Namespace cleanup (автоматический)
+
+- В production развёрнут `CronJob` `codex-k8s-worker-namespace-cleanup`.
+- Расписание по умолчанию: каждые `15` минут (`*/15 * * * *`, `Etc/UTC`).
+- Cleanup работает только для managed runtime namespace с guardrails:
+  - labels `codex-k8s.dev/managed-by=codex-k8s-worker` и `codex-k8s.dev/namespace-purpose=run`;
+  - platform prefix `codex-issue*`;
+  - в БД нет non-terminal run для `codex-k8s.dev/run-id`;
+  - в namespace нет active `pod/job/deployment/statefulset/daemonset/replicaset`.
+- Аудит причин пишется в worker logs и `flow_events` (`run.namespace.cleaned`, `run.namespace.cleanup_skipped`, `run.namespace.cleanup_failed`).
+- In-band cleanup в worker tick остаётся как best-effort backstop; для полного отключения нужно выключить и tick, и CronJob.
+
+Проверка статуса:
+
+```bash
+ns="codex-k8s-prod"
+
+kubectl -n "$ns" get cronjob codex-k8s-worker-namespace-cleanup
+kubectl -n "$ns" get jobs -l app.kubernetes.io/component=worker-namespace-cleanup
+kubectl -n "$ns" logs job/<cleanup_job_name> --tail=200
+kubectl -n "$ns" logs deploy/codex-k8s-worker --tail=200 | grep 'namespace cleanup' || true
+kubectl get ns -l codex-k8s.dev/managed-by=codex-k8s-worker,codex-k8s.dev/namespace-purpose=run
+```
+
+Как отключить:
+
+```bash
+# 1. Остановить периодический CronJob:
+export CODEXK8S_WORKER_NAMESPACE_CLEANUP_CRON_SUSPEND="true"
+
+# 2. Если нужно полностью выключить и in-band cleanup внутри worker:
+export CODEXK8S_WORKER_RUN_NAMESPACE_CLEANUP="false"
+
+# 3. Применить обновлённые env и дождаться rollout платформы.
 ```
 
 ## Registry GC (автоматический)

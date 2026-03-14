@@ -5,8 +5,8 @@ title: "codex-k8s — Agent Runtime and RBAC Model"
 status: active
 owner_role: SA
 created_at: 2026-02-11
-updated_at: 2026-03-13
-related_issues: [1, 19, 74, 341]
+updated_at: 2026-03-14
+related_issues: [1, 19, 74, 341, 461]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -69,7 +69,10 @@ approvals:
   - `run:qa` и `run:release` обязаны продолжать существующий candidate identity той же Issue/PR; fallback на default branch запрещён, при отсутствии lineage платформа публикует диагностический warning и ставит `need:input`;
   - `run:postdeploy` и `run:ops` не используют candidate namespace, а запускаются в production namespace платформы и читают production runtime с профилем `production-readonly`.
 - Отдельный debug-label для manual-retention не используется.
-- В Kubernetes нет встроенного TTL-контроллера для namespace; cleanup реализуется worker-sweep по lease-метаданным (аннотация/БД) managed namespace'ов.
+- В Kubernetes нет встроенного TTL-контроллера для namespace; cleanup реализуется безопасным sweeper-контуром:
+  - in-band sweep в worker reconcile tick;
+  - production `CronJob` `codex-k8s-worker-namespace-cleanup` как out-of-band backstop;
+  - удаление допускается только для managed namespace'ов с ownership-label, ожидаемым prefix и без non-terminal run / active workload.
 
 Целевой baseline реализации (S2 Day3 + Issue #74):
 - Worker создаёт namespace idempotent, применяет `ServiceAccount + Role + RoleBinding + ResourceQuota + LimitRange`.
@@ -78,9 +81,10 @@ approvals:
   - `run.namespace.ttl_scheduled`,
   - `run.namespace.ttl_extended`,
   - `run.namespace.cleaned`,
-  - `run.namespace.cleanup_failed`.
+  - `run.namespace.cleanup_failed`,
+  - `run.namespace.cleanup_skipped`.
 - Runtime metadata namespace/job унифицированы через labels/annotations с префиксом `codex-k8s.dev/*`.
-- Cleanup удаляет только managed namespaces с `codex-k8s.dev/managed-by=codex-k8s-worker` и `codex-k8s.dev/namespace-purpose=run`.
+- Cleanup удаляет только managed namespaces с `codex-k8s.dev/managed-by=codex-k8s-worker` и `codex-k8s.dev/namespace-purpose=run`, prefix `codex-issue*`, terminal run state в БД и без active workload в namespace.
 
 ## Права `full-env` в рамках namespace
 

@@ -205,6 +205,7 @@ func Run() error {
 		MissionControlRetryBaseInterval:   missionControlRetryBaseInterval,
 		ProjectLearningModeDefault:        learningDefault,
 		RunNamespacePrefix:                cfg.RunNamespacePrefix,
+		RunNamespaceCleanupEnabled:        cfg.RunNamespaceCleanup,
 		DefaultNamespaceTTL:               namespaceLeaseDefaultTTL,
 		NamespaceTTLByRole:                namespaceLeaseTTLByRole,
 		NamespaceLeaseSweepLimit:          cfg.NamespaceLeaseSweepLimit,
@@ -251,6 +252,12 @@ func Run() error {
 		JobImageChecker: jobImageChecker,
 		Logger:          logger,
 	})
+
+	if resolveWorkerMode(cfg.Mode) == workerModeNamespaceCleanupOnce {
+		cleanupCtx, cancelCleanup := context.WithTimeout(appCtx, tickTimeout)
+		defer cancelCleanup()
+		return service.RunNamespaceCleanupOnce(cleanupCtx)
+	}
 
 	ctx, stop := signal.NotifyContext(appCtx, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGHUP)
 	defer stop()

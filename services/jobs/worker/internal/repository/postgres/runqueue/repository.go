@@ -47,6 +47,8 @@ var (
 	queryReleaseStaleRunningLeases string
 	//go:embed sql/list_running.sql
 	queryListRunning string
+	//go:embed sql/list_non_terminal_by_run_ids.sql
+	queryListNonTerminalByRunIDs string
 	//go:embed sql/extend_slot_lease.sql
 	queryExtendSlotLease string
 	//go:embed sql/mark_run_finished.sql
@@ -307,6 +309,33 @@ func (r *Repository) ListRunning(ctx context.Context, limit int) ([]domainrepo.R
 	return items, nil
 }
 
+// ListNonTerminalByRunIDs returns non-terminal runs referenced by managed namespace labels.
+func (r *Repository) ListNonTerminalByRunIDs(ctx context.Context, runIDs []string) ([]domainrepo.NonTerminalRun, error) {
+	normalized := normalizeRunIDs(runIDs)
+	if len(normalized) == 0 {
+		return nil, nil
+	}
+
+	rows, err := r.db.Query(ctx, queryListNonTerminalByRunIDs, normalized)
+	if err != nil {
+		return nil, fmt.Errorf("list non-terminal runs by ids: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]domainrepo.NonTerminalRun, 0, len(normalized))
+	for rows.Next() {
+		var item domainrepo.NonTerminalRun
+		if err := rows.Scan(&item.RunID, &item.Status); err != nil {
+			return nil, fmt.Errorf("scan non-terminal run row: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate non-terminal runs by ids: %w", err)
+	}
+	return items, nil
+}
+
 // ExtendLease refreshes slot lease ownership for one running run.
 func (r *Repository) ExtendLease(ctx context.Context, params domainrepo.ExtendLeaseParams) (bool, error) {
 	projectID := strings.TrimSpace(params.ProjectID)
@@ -322,6 +351,26 @@ func (r *Repository) ExtendLease(ctx context.Context, params domainrepo.ExtendLe
 	}
 
 	return res.RowsAffected() > 0, nil
+}
+
+func normalizeRunIDs(runIDs []string) []string {
+	if len(runIDs) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(runIDs))
+	result := make([]string, 0, len(runIDs))
+	for _, raw := range runIDs {
+		runID := strings.TrimSpace(raw)
+		if runID == "" {
+			continue
+		}
+		if _, ok := seen[runID]; ok {
+			continue
+		}
+		seen[runID] = struct{}{}
+		result = append(result, runID)
+	}
+	return result
 }
 
 // FinishRun sets final status and releases leased slot.

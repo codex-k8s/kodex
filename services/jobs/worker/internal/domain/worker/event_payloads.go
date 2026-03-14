@@ -27,6 +27,22 @@ const (
 	runFailureReasonPreconditionFailed     runFailureReason = "failed_precondition"
 )
 
+const (
+	namespaceCleanupReasonTTLExpired          namespaceCleanupSkipReason = "ttl_expired"
+	namespaceCleanupReasonMissingRunIDLabel   namespaceCleanupSkipReason = "missing_run_id_label"
+	namespaceCleanupReasonActiveRunInDB       namespaceCleanupSkipReason = "active_run_in_db"
+	namespaceCleanupReasonActiveWorkloads     namespaceCleanupSkipReason = "active_workloads_present"
+	namespaceCleanupReasonNoEffectiveLease    namespaceCleanupSkipReason = "missing_effective_lease"
+	namespaceCleanupReasonDeleteFailed        namespaceCleanupSkipReason = "delete_failed"
+	namespaceCleanupReasonInspectFailed       namespaceCleanupSkipReason = "workload_inspection_failed"
+	namespaceCleanupReasonCommentUpdateFailed namespaceCleanupSkipReason = "status_comment_update_failed"
+	namespaceCleanupReasonEventsInsertFailed  namespaceCleanupSkipReason = "audit_insert_failed"
+	namespaceCleanupReasonDisabledByConfig    namespaceCleanupSkipReason = "cleanup_disabled"
+	namespaceCleanupReasonRunLookupFailed     namespaceCleanupSkipReason = "run_lookup_failed"
+	namespaceCleanupReasonAlreadyDeleted      namespaceCleanupSkipReason = "already_deleted"
+	namespaceCleanupReasonNoExpiredNamespaces namespaceCleanupSkipReason = "no_expired_namespaces"
+)
+
 // runStartedEventPayload defines payload shape for run.started flow events.
 type runStartedEventPayload struct {
 	RunID                string                  `json:"run_id"`
@@ -140,6 +156,7 @@ type namespaceLifecycleEventPayload struct {
 	Namespace               string                     `json:"namespace"`
 	Error                   string                     `json:"error,omitempty"`
 	Reason                  namespaceCleanupSkipReason `json:"reason,omitempty"`
+	GuardrailDetails        []string                   `json:"guardrail_details,omitempty"`
 	CleanupCommand          string                     `json:"cleanup_command,omitempty"`
 	NamespaceLeaseTTL       string                     `json:"namespace_lease_ttl,omitempty"`
 	NamespaceLeaseExpiresAt string                     `json:"namespace_lease_expires_at,omitempty"`
@@ -150,6 +167,7 @@ type namespaceLifecycleEventPayload struct {
 type namespaceLifecycleEventExtra struct {
 	Error                   string
 	Reason                  namespaceCleanupSkipReason
+	GuardrailDetails        []string
 	CleanupCommand          string
 	NamespaceLeaseTTL       time.Duration
 	NamespaceLeaseExpiresAt time.Time

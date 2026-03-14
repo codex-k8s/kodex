@@ -17,6 +17,9 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.PollInterval != "5s" {
 		t.Fatalf("expected default poll interval 5s, got %s", cfg.PollInterval)
 	}
+	if cfg.Mode != "service" {
+		t.Fatalf("expected default worker mode service, got %s", cfg.Mode)
+	}
 	if cfg.K8sNamespace != "codex-k8s-prod" {
 		t.Fatalf("expected default namespace codex-k8s-prod, got %s", cfg.K8sNamespace)
 	}
@@ -25,6 +28,9 @@ func TestLoadConfigDefaults(t *testing.T) {
 	}
 	if cfg.RunNamespacePrefix != "codex-issue" {
 		t.Fatalf("expected default run namespace prefix codex-issue, got %s", cfg.RunNamespacePrefix)
+	}
+	if !cfg.RunNamespaceCleanup {
+		t.Fatal("expected namespace cleanup to be enabled by default")
 	}
 	if cfg.ServicesConfigPath != "services.yaml" {
 		t.Fatalf("expected default services config path services.yaml, got %s", cfg.ServicesConfigPath)

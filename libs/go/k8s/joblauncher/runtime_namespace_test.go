@@ -2,10 +2,13 @@ package joblauncher
 
 import (
 	"context"
+	"reflect"
 	"testing"
 	"time"
 
 	agentdomain "github.com/codex-k8s/codex-k8s/libs/go/domain/agent"
+	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
@@ -119,42 +122,96 @@ func TestLauncher_FindReusableNamespace_ReturnsLatestActiveLease(t *testing.T) {
 	}
 }
 
-func TestLauncher_CleanupExpiredNamespaces_DeletesOnlyExpired(t *testing.T) {
+func TestLauncher_ListManagedRunNamespaces_FiltersByPrefixAndCapturesLeaseMetadata(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	now := time.Date(2026, 2, 21, 10, 0, 0, 0, time.UTC)
 	client := fake.NewClientset(
-		newLeaseNamespace("ns-expired", leaseNamespaceParams{
+		newLeaseNamespace("codex-issue-expired", leaseNamespaceParams{
 			runID:     "run-expired",
-			expiresAt: now.Add(-1 * time.Minute),
+			expiresAt: time.Date(2026, 2, 21, 9, 0, 0, 0, time.UTC),
 		}),
-		newLeaseNamespace("ns-active", leaseNamespaceParams{
+		newLeaseNamespace("other-prefix-expired", leaseNamespaceParams{
 			runID:     "run-active",
-			expiresAt: now.Add(1 * time.Hour),
+			expiresAt: time.Date(2026, 2, 21, 9, 0, 0, 0, time.UTC),
 		}),
 	)
 	launcher := NewForClient(Config{Namespace: "codex-k8s-prod"}, client)
 
-	cleaned, err := launcher.CleanupExpiredNamespaces(ctx, NamespaceCleanupParams{Now: now, Limit: 10})
+	items, err := launcher.ListManagedRunNamespaces(ctx, ManagedNamespaceListParams{NamespacePrefix: "codex-issue"})
 	if err != nil {
-		t.Fatalf("CleanupExpiredNamespaces() error = %v", err)
+		t.Fatalf("ListManagedRunNamespaces() error = %v", err)
 	}
-	if len(cleaned) != 1 {
-		t.Fatalf("expected one expired namespace cleaned, got %d", len(cleaned))
+	if len(items) != 1 {
+		t.Fatalf("expected one managed namespace, got %d", len(items))
 	}
-	if got, want := cleaned[0].Namespace, "ns-expired"; got != want {
-		t.Fatalf("unexpected cleaned namespace: got %q want %q", got, want)
+	if got, want := items[0].Namespace, "codex-issue-expired"; got != want {
+		t.Fatalf("unexpected managed namespace: got %q want %q", got, want)
 	}
-	if got, want := cleaned[0].RunID, "run-expired"; got != want {
-		t.Fatalf("unexpected cleaned run id: got %q want %q", got, want)
+	if got, want := items[0].RunID, "run-expired"; got != want {
+		t.Fatalf("unexpected managed run id: got %q want %q", got, want)
 	}
+	if got, want := items[0].LeaseTTL, 24*time.Hour; got != want {
+		t.Fatalf("unexpected managed lease ttl: got %s want %s", got, want)
+	}
+	if got, want := items[0].LeaseExpiresAt.Format(time.RFC3339), "2026-02-21T09:00:00Z"; got != want {
+		t.Fatalf("unexpected lease expiry: got %q want %q", got, want)
+	}
+}
 
-	if _, err := client.CoreV1().Namespaces().Get(ctx, "ns-expired", metav1.GetOptions{}); err == nil {
-		t.Fatal("expected expired namespace to be deleted")
+func TestLauncher_InspectNamespaceWorkloads_DetectsActiveResources(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	namespace := "codex-issue-run"
+	var zeroReplicas int32
+	client := fake.NewClientset(
+		newLeaseNamespace(namespace, leaseNamespaceParams{}),
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: "running-pod", Namespace: namespace},
+			Status:     corev1.PodStatus{Phase: corev1.PodRunning},
+		},
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: "done-pod", Namespace: namespace},
+			Status:     corev1.PodStatus{Phase: corev1.PodSucceeded},
+		},
+		&batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{Name: "active-job", Namespace: namespace},
+			Status:     batchv1.JobStatus{Active: 1},
+		},
+		&batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{Name: "finished-job", Namespace: namespace},
+			Status: batchv1.JobStatus{Conditions: []batchv1.JobCondition{{
+				Type:   batchv1.JobComplete,
+				Status: corev1.ConditionTrue,
+			}}},
+		},
+		&appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{Name: "live-deploy", Namespace: namespace},
+			Spec:       appsv1.DeploymentSpec{Replicas: int32Ptr(1)},
+		},
+		&appsv1.ReplicaSet{
+			ObjectMeta: metav1.ObjectMeta{Name: "scaled-down-rs", Namespace: namespace},
+			Spec:       appsv1.ReplicaSetSpec{Replicas: &zeroReplicas},
+		},
+	)
+	launcher := NewForClient(Config{Namespace: "codex-k8s-prod"}, client)
+
+	workloads, err := launcher.InspectNamespaceWorkloads(ctx, namespace)
+	if err != nil {
+		t.Fatalf("InspectNamespaceWorkloads() error = %v", err)
 	}
-	if _, err := client.CoreV1().Namespaces().Get(ctx, "ns-active", metav1.GetOptions{}); err != nil {
-		t.Fatalf("expected active namespace to remain: %v", err)
+	if got, want := workloads.ActivePods, []string{"running-pod"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("active pods = %v, want %v", got, want)
+	}
+	if got, want := workloads.ActiveJobs, []string{"active-job"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("active jobs = %v, want %v", got, want)
+	}
+	if got, want := workloads.ActiveDeployments, []string{"live-deploy"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("active deployments = %v, want %v", got, want)
+	}
+	if workloads.HasActiveWorkloads() == false {
+		t.Fatal("expected active workloads to be detected")
 	}
 }
 
@@ -271,6 +328,7 @@ type leaseNamespaceParams struct {
 	issueNumber  string
 	agentKey     string
 	runID        string
+	leaseTTL     time.Duration
 	expiresAt    time.Time
 }
 
@@ -295,6 +353,11 @@ func newLeaseNamespace(name string, params leaseNamespaceParams) *corev1.Namespa
 
 	annotations := map[string]string{}
 	if !params.expiresAt.IsZero() {
+		leaseTTL := params.leaseTTL
+		if leaseTTL <= 0 {
+			leaseTTL = 24 * time.Hour
+		}
+		annotations[runNamespaceLeaseTTLAnnotKey] = leaseTTL.String()
 		annotations[runNamespaceLeaseExpAnnotKey] = params.expiresAt.Format(time.RFC3339)
 	}
 
@@ -305,4 +368,8 @@ func newLeaseNamespace(name string, params leaseNamespaceParams) *corev1.Namespa
 			Annotations: annotations,
 		},
 	}
+}
+
+func int32Ptr(value int32) *int32 {
+	return &value
 }

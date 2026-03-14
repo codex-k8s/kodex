@@ -66,6 +66,8 @@ type Config struct {
 	ProjectLearningModeDefault bool
 	// RunNamespacePrefix defines prefix for full-env run namespaces.
 	RunNamespacePrefix string
+	// RunNamespaceCleanupEnabled toggles namespace cleanup sweep execution.
+	RunNamespaceCleanupEnabled bool
 	// DefaultNamespaceTTL applies to full-env namespace retention when role-specific override is absent.
 	DefaultNamespaceTTL time.Duration
 	// NamespaceTTLByRole contains full-env namespace retention overrides per agent role key.

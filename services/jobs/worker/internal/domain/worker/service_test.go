@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -1267,23 +1268,25 @@ func TestTickCleanupExpiredNamespaces_UpdatesRunStatusComment(t *testing.T) {
 	events := &fakeFlowEvents{}
 	launcher := &fakeLauncher{
 		states: map[string]JobState{},
-		expiredCleanups: []NamespaceCleanupResult{
-			{
-				Namespace: "codex-k8s-dev-1",
-				RunID:     "run-expired",
-				ExpiresAt: time.Date(2026, 2, 11, 9, 0, 0, 0, time.UTC),
-			},
-		},
+		managedNamespaces: []ManagedNamespaceState{{
+			Namespace:      "codex-issue-project-i74-runexpired",
+			RunID:          "run-expired",
+			RuntimeMode:    agentdomain.RuntimeModeFullEnv,
+			LeaseTTL:       24 * time.Hour,
+			LeaseExpiresAt: time.Date(2026, 2, 11, 9, 0, 0, 0, time.UTC),
+		}},
 	}
 	runStatus := &fakeRunStatusNotifier{}
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 
 	svc := NewService(Config{
-		WorkerID:          "worker-1",
-		ClaimLimit:        1,
-		RunningCheckLimit: 10,
-		SlotsPerProject:   2,
-		SlotLeaseTTL:      time.Minute,
+		WorkerID:                   "worker-1",
+		ClaimLimit:                 1,
+		RunningCheckLimit:          10,
+		SlotsPerProject:            2,
+		SlotLeaseTTL:               time.Minute,
+		RunNamespaceCleanupEnabled: true,
+		RunNamespacePrefix:         "codex-issue",
 	}, Dependencies{
 		Runs:      runs,
 		Events:    events,
@@ -1301,6 +1304,77 @@ func TestTickCleanupExpiredNamespaces_UpdatesRunStatusComment(t *testing.T) {
 	}
 	if got := runStatus.upserts[0]; got.RunID != "run-expired" || got.Phase != RunStatusPhaseNamespaceDeleted || !got.Deleted {
 		t.Fatalf("unexpected ttl cleanup run-status params: %+v", got)
+	}
+	if got, want := launcher.deletedNamespaces, []string{"codex-issue-project-i74-runexpired"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("deleted namespaces = %v, want %v", got, want)
+	}
+}
+
+func TestTickCleanupExpiredNamespaces_SkipsActiveRunsAndWorkloads(t *testing.T) {
+	t.Parallel()
+
+	runs := &fakeRunQueue{
+		nonTerminalByRunID: []runqueuerepo.NonTerminalRun{{
+			RunID:  "run-active",
+			Status: string(rundomain.StatusRunning),
+		}},
+	}
+	events := &fakeFlowEvents{}
+	launcher := &fakeLauncher{
+		states: map[string]JobState{},
+		managedNamespaces: []ManagedNamespaceState{
+			{
+				Namespace:      "codex-issue-proj-i74-active",
+				RunID:          "run-active",
+				RuntimeMode:    agentdomain.RuntimeModeFullEnv,
+				LeaseTTL:       24 * time.Hour,
+				LeaseExpiresAt: time.Date(2026, 2, 11, 9, 0, 0, 0, time.UTC),
+			},
+			{
+				Namespace:      "codex-issue-proj-i74-pods",
+				RunID:          "run-pods",
+				RuntimeMode:    agentdomain.RuntimeModeFullEnv,
+				LeaseTTL:       24 * time.Hour,
+				LeaseExpiresAt: time.Date(2026, 2, 11, 9, 0, 0, 0, time.UTC),
+			},
+		},
+		workloadStates: map[string]NamespaceWorkloadState{
+			"codex-issue-proj-i74-pods": {ActivePods: []string{"discussion-pod"}},
+		},
+	}
+	runStatus := &fakeRunStatusNotifier{}
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+
+	svc := NewService(Config{
+		WorkerID:                   "worker-1",
+		RunNamespaceCleanupEnabled: true,
+		RunNamespacePrefix:         "codex-issue",
+	}, Dependencies{
+		Runs:      runs,
+		Events:    events,
+		Launcher:  launcher,
+		RunStatus: runStatus,
+		Logger:    logger,
+	})
+	svc.now = func() time.Time { return time.Date(2026, 2, 11, 10, 0, 0, 0, time.UTC) }
+
+	if err := svc.Tick(context.Background()); err != nil {
+		t.Fatalf("Tick() error = %v", err)
+	}
+	if len(runStatus.upserts) != 0 {
+		t.Fatalf("expected no namespace-delete status comments for skipped namespaces, got %d", len(runStatus.upserts))
+	}
+	if len(launcher.deletedNamespaces) != 0 {
+		t.Fatalf("expected no deleted namespaces, got %v", launcher.deletedNamespaces)
+	}
+	if len(events.inserted) != 2 {
+		t.Fatalf("expected two cleanup skip events, got %d", len(events.inserted))
+	}
+	if got, want := events.inserted[0].EventType, floweventdomain.EventTypeRunNamespaceCleanupSkipped; got != want {
+		t.Fatalf("first event type = %q, want %q", got, want)
+	}
+	if got, want := events.inserted[1].EventType, floweventdomain.EventTypeRunNamespaceCleanupSkipped; got != want {
+		t.Fatalf("second event type = %q, want %q", got, want)
 	}
 }
 
@@ -1719,6 +1793,7 @@ type fakeRunQueue struct {
 	claims              []runqueuerepo.ClaimedRun
 	claimCalls          int
 	running             []runqueuerepo.RunningRun
+	nonTerminalByRunID  []runqueuerepo.NonTerminalRun
 	claimRunningCalls   int
 	claimRunning        []runqueuerepo.ClaimRunningParams
 	releasedStaleLeases []runqueuerepo.ReleasedStaleLease
@@ -1731,6 +1806,7 @@ type fakeRunQueue struct {
 	claimRunningErr     error
 	releaseStaleErr     error
 	listErr             error
+	listNonTerminalErr  error
 	resumePendingErr    error
 	finishErr           error
 	extendErr           error
@@ -1753,6 +1829,13 @@ func (f *fakeRunQueue) ListRunning(_ context.Context, _ int) ([]runqueuerepo.Run
 		return nil, f.listErr
 	}
 	return f.running, nil
+}
+
+func (f *fakeRunQueue) ListNonTerminalByRunIDs(_ context.Context, _ []string) ([]runqueuerepo.NonTerminalRun, error) {
+	if f.listNonTerminalErr != nil {
+		return nil, f.listNonTerminalErr
+	}
+	return f.nonTerminalByRunID, nil
 }
 
 func (f *fakeRunQueue) ClaimRunning(_ context.Context, params runqueuerepo.ClaimRunningParams) ([]runqueuerepo.RunningRun, error) {
@@ -1823,10 +1906,14 @@ type fakeLauncher struct {
 	ensureResult            NamespaceEnsureResult
 	reusable                NamespaceReuseResult
 	reusableFound           bool
-	expiredCleanups         []NamespaceCleanupResult
-	cleanupSweepCall        []NamespaceCleanupParams
+	managedNamespaces       []ManagedNamespaceState
+	workloadStates          map[string]NamespaceWorkloadState
+	deletedNamespaces       []string
 	launchErr               error
 	statusErr               error
+	listManagedErr          error
+	inspectWorkloadsErr     error
+	deleteManagedErr        error
 }
 
 type fakeMCPTokenIssuer struct {
@@ -1921,15 +2008,34 @@ func (f *fakeLauncher) EnsureAccessProfile(_ context.Context, namespace string, 
 	return "codex-runner", nil
 }
 
-func (f *fakeLauncher) CleanupExpiredNamespaces(_ context.Context, params NamespaceCleanupParams) ([]NamespaceCleanupResult, error) {
-	f.callLog = append(f.callLog, "cleanup_expired")
-	f.cleanupSweepCall = append(f.cleanupSweepCall, params)
-	if len(f.expiredCleanups) == 0 {
-		return nil, nil
+func (f *fakeLauncher) ListManagedRunNamespaces(_ context.Context, _ ManagedNamespaceListParams) ([]ManagedNamespaceState, error) {
+	f.callLog = append(f.callLog, "list_managed_namespaces")
+	if f.listManagedErr != nil {
+		return nil, f.listManagedErr
 	}
-	out := make([]NamespaceCleanupResult, len(f.expiredCleanups))
-	copy(out, f.expiredCleanups)
+	out := make([]ManagedNamespaceState, len(f.managedNamespaces))
+	copy(out, f.managedNamespaces)
 	return out, nil
+}
+
+func (f *fakeLauncher) InspectNamespaceWorkloads(_ context.Context, namespace string) (NamespaceWorkloadState, error) {
+	f.callLog = append(f.callLog, "inspect_namespace_workloads")
+	if f.inspectWorkloadsErr != nil {
+		return NamespaceWorkloadState{}, f.inspectWorkloadsErr
+	}
+	if f.workloadStates == nil {
+		return NamespaceWorkloadState{}, nil
+	}
+	return f.workloadStates[namespace], nil
+}
+
+func (f *fakeLauncher) DeleteManagedNamespace(_ context.Context, namespace string) (bool, error) {
+	f.callLog = append(f.callLog, "delete_managed_namespace")
+	if f.deleteManagedErr != nil {
+		return false, f.deleteManagedErr
+	}
+	f.deletedNamespaces = append(f.deletedNamespaces, namespace)
+	return true, nil
 }
 
 func (f *fakeLauncher) Launch(_ context.Context, spec JobSpec) (JobRef, error) {
