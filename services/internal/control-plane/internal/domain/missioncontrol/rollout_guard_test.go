@@ -10,7 +10,6 @@ func TestResolveRolloutCapabilities_FullyEnabledCore(t *testing.T) {
 	t.Parallel()
 
 	caps, err := ResolveRolloutCapabilities(valuetypes.MissionControlRolloutState{
-		CoreFeatureEnabled:  true,
 		SchemaReady:         true,
 		DomainReady:         true,
 		WarmupVerified:      true,
@@ -37,7 +36,7 @@ func TestResolveRolloutCapabilities_AllDisabledByDefault(t *testing.T) {
 	}
 }
 
-func TestResolveRolloutCapabilities_ReadPathAlwaysAvailableWithSchemaAndDomain(t *testing.T) {
+func TestResolveRolloutCapabilities_ReadPathAndWarmupAvailableWithSchemaAndDomain(t *testing.T) {
 	t.Parallel()
 
 	caps, err := ResolveRolloutCapabilities(valuetypes.MissionControlRolloutState{
@@ -50,7 +49,10 @@ func TestResolveRolloutCapabilities_ReadPathAlwaysAvailableWithSchemaAndDomain(t
 	if !caps.CanServeSnapshot || !caps.CanOpenRealtime {
 		t.Fatalf("expected read/realtime path to be available, got %+v", caps)
 	}
-	if caps.CanRunWarmup || caps.CanSubmitCoreCommand || caps.CanUseVoicePath {
+	if !caps.CanRunWarmup {
+		t.Fatalf("expected warmup path to be available, got %+v", caps)
+	}
+	if caps.CanSubmitCoreCommand || caps.CanUseVoicePath {
 		t.Fatalf("expected write-side capabilities to stay disabled, got %+v", caps)
 	}
 }
@@ -59,7 +61,6 @@ func TestValidateRolloutState_VoiceRequiresWritePath(t *testing.T) {
 	t.Parallel()
 
 	err := ValidateRolloutState(valuetypes.MissionControlRolloutState{
-		CoreFeatureEnabled:  true,
 		SchemaReady:         true,
 		DomainReady:         true,
 		WarmupVerified:      true,
@@ -74,10 +75,9 @@ func TestValidateRolloutState_WritePathRequiresWarmupVerification(t *testing.T) 
 	t.Parallel()
 
 	err := ValidateRolloutState(valuetypes.MissionControlRolloutState{
-		CoreFeatureEnabled: true,
-		SchemaReady:        true,
-		DomainReady:        true,
-		WritePathEnabled:   true,
+		SchemaReady:      true,
+		DomainReady:      true,
+		WritePathEnabled: true,
 	})
 	if err == nil {
 		t.Fatal("expected write-path validation error, got nil")

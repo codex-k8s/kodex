@@ -206,7 +206,6 @@ func Run() error {
 	var githubRateLimitService *githubratelimitdomain.Service
 	missionControlService, err := missioncontroldomain.NewService(missioncontroldomain.Config{
 		RolloutState: valuetypes.MissionControlRolloutState{
-			CoreFeatureEnabled:  cfg.MissionControlEnabled,
 			VoiceFeatureEnabled: cfg.MissionControlVoiceEnabled,
 			SchemaReady:         true,
 			DomainReady:         true,

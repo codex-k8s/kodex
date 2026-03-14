@@ -21,11 +21,10 @@ func TestSubmitCommandPendingApprovalForStageNextStep(t *testing.T) {
 	t.Parallel()
 
 	svc, repo, events, now := newTestService(t, valuetypes.MissionControlRolloutState{
-		CoreFeatureEnabled: true,
-		SchemaReady:        true,
-		DomainReady:        true,
-		WarmupVerified:     true,
-		WritePathEnabled:   true,
+		SchemaReady:      true,
+		DomainReady:      true,
+		WarmupVerified:   true,
+		WritePathEnabled: true,
 	})
 	_, err := repo.UpsertEntity(context.Background(), missioncontrolrepo.UpsertEntityParams{
 		ProjectID:         "proj-1",
@@ -81,11 +80,10 @@ func TestSubmitCommandBlocksOnStaleProjectionVersion(t *testing.T) {
 	t.Parallel()
 
 	svc, repo, events, now := newTestService(t, valuetypes.MissionControlRolloutState{
-		CoreFeatureEnabled: true,
-		SchemaReady:        true,
-		DomainReady:        true,
-		WarmupVerified:     true,
-		WritePathEnabled:   true,
+		SchemaReady:      true,
+		DomainReady:      true,
+		WarmupVerified:   true,
+		WritePathEnabled: true,
 	})
 	_, err := repo.UpsertEntity(context.Background(), missioncontrolrepo.UpsertEntityParams{
 		ProjectID:         "proj-1",
@@ -134,11 +132,10 @@ func TestSubmitCommandFormalizeUsesPayloadSourceAsEffectiveTarget(t *testing.T) 
 	t.Parallel()
 
 	svc, repo, _, now := newTestService(t, valuetypes.MissionControlRolloutState{
-		CoreFeatureEnabled: true,
-		SchemaReady:        true,
-		DomainReady:        true,
-		WarmupVerified:     true,
-		WritePathEnabled:   true,
+		SchemaReady:      true,
+		DomainReady:      true,
+		WarmupVerified:   true,
+		WritePathEnabled: true,
 	})
 	sourceDiscussion, err := repo.UpsertEntity(context.Background(), missioncontrolrepo.UpsertEntityParams{
 		ProjectID:         "proj-1",
@@ -186,11 +183,10 @@ func TestSubmitCommandRejectsFormalizeTargetMismatch(t *testing.T) {
 	t.Parallel()
 
 	svc, repo, _, now := newTestService(t, valuetypes.MissionControlRolloutState{
-		CoreFeatureEnabled: true,
-		SchemaReady:        true,
-		DomainReady:        true,
-		WarmupVerified:     true,
-		WritePathEnabled:   true,
+		SchemaReady:      true,
+		DomainReady:      true,
+		WarmupVerified:   true,
+		WritePathEnabled: true,
 	})
 	_, err := repo.UpsertEntity(context.Background(), missioncontrolrepo.UpsertEntityParams{
 		ProjectID:         "proj-1",
@@ -248,11 +244,10 @@ func TestQueueCommandIsIdempotentAfterPendingSync(t *testing.T) {
 	t.Parallel()
 
 	svc, repo, _, now := newTestService(t, valuetypes.MissionControlRolloutState{
-		CoreFeatureEnabled: true,
-		SchemaReady:        true,
-		DomainReady:        true,
-		WarmupVerified:     true,
-		WritePathEnabled:   true,
+		SchemaReady:      true,
+		DomainReady:      true,
+		WarmupVerified:   true,
+		WritePathEnabled: true,
 	})
 	command := seedCommandForTransitionTest(t, repo, "proj-1", now)
 	if _, err := svc.MarkCommandPendingSync(context.Background(), CommandSyncProgressParams{
@@ -281,11 +276,10 @@ func TestMarkCommandReconciledIsIdempotentForDuplicateDelivery(t *testing.T) {
 	t.Parallel()
 
 	svc, repo, _, now := newTestService(t, valuetypes.MissionControlRolloutState{
-		CoreFeatureEnabled: true,
-		SchemaReady:        true,
-		DomainReady:        true,
-		WarmupVerified:     true,
-		WritePathEnabled:   true,
+		SchemaReady:      true,
+		DomainReady:      true,
+		WarmupVerified:   true,
+		WritePathEnabled: true,
 	})
 	command := seedCommandForTransitionTest(t, repo, "proj-1", now)
 	if _, err := svc.MarkCommandPendingSync(context.Background(), CommandSyncProgressParams{
@@ -325,11 +319,10 @@ func TestMarkCommandFailedIsIdempotentForDuplicateDelivery(t *testing.T) {
 	t.Parallel()
 
 	svc, repo, _, now := newTestService(t, valuetypes.MissionControlRolloutState{
-		CoreFeatureEnabled: true,
-		SchemaReady:        true,
-		DomainReady:        true,
-		WarmupVerified:     true,
-		WritePathEnabled:   true,
+		SchemaReady:      true,
+		DomainReady:      true,
+		WarmupVerified:   true,
+		WritePathEnabled: true,
 	})
 	command := seedCommandForTransitionTest(t, repo, "proj-1", now)
 	if _, err := svc.MarkCommandFailed(context.Background(), CommandFailureParams{
@@ -361,11 +354,10 @@ func TestSubmitCommandDedupesBusinessIntent(t *testing.T) {
 	t.Parallel()
 
 	svc, _, events, now := newTestService(t, valuetypes.MissionControlRolloutState{
-		CoreFeatureEnabled: true,
-		SchemaReady:        true,
-		DomainReady:        true,
-		WarmupVerified:     true,
-		WritePathEnabled:   true,
+		SchemaReady:      true,
+		DomainReady:      true,
+		WarmupVerified:   true,
+		WritePathEnabled: true,
 	})
 
 	params := SubmitCommandParams{
@@ -407,11 +399,10 @@ func TestCommandLifecycleTransitions(t *testing.T) {
 	t.Parallel()
 
 	svc, _, _, now := newTestService(t, valuetypes.MissionControlRolloutState{
-		CoreFeatureEnabled: true,
-		SchemaReady:        true,
-		DomainReady:        true,
-		WarmupVerified:     true,
-		WritePathEnabled:   true,
+		SchemaReady:      true,
+		DomainReady:      true,
+		WarmupVerified:   true,
+		WritePathEnabled: true,
 	})
 
 	admission, err := svc.SubmitCommand(context.Background(), SubmitCommandParams{
@@ -490,11 +481,10 @@ func TestApplyApprovalDecisionQueuesPendingCommand(t *testing.T) {
 	t.Parallel()
 
 	svc, repo, _, now := newTestService(t, valuetypes.MissionControlRolloutState{
-		CoreFeatureEnabled: true,
-		SchemaReady:        true,
-		DomainReady:        true,
-		WarmupVerified:     true,
-		WritePathEnabled:   true,
+		SchemaReady:      true,
+		DomainReady:      true,
+		WarmupVerified:   true,
+		WritePathEnabled: true,
 	})
 	_, err := repo.UpsertEntity(context.Background(), missioncontrolrepo.UpsertEntityParams{
 		ProjectID:         "proj-1",
@@ -553,11 +543,10 @@ func TestSubmitCommandRetrySyncRejectsNonRetryableStatus(t *testing.T) {
 	t.Parallel()
 
 	svc, _, _, now := newTestService(t, valuetypes.MissionControlRolloutState{
-		CoreFeatureEnabled: true,
-		SchemaReady:        true,
-		DomainReady:        true,
-		WarmupVerified:     true,
-		WritePathEnabled:   true,
+		SchemaReady:      true,
+		DomainReady:      true,
+		WarmupVerified:   true,
+		WritePathEnabled: true,
 	})
 
 	accepted, err := svc.SubmitCommand(context.Background(), SubmitCommandParams{
@@ -598,11 +587,10 @@ func TestListActiveSetAndEntityDetails(t *testing.T) {
 	t.Parallel()
 
 	svc, repo, _, now := newTestService(t, valuetypes.MissionControlRolloutState{
-		CoreFeatureEnabled: true,
-		SchemaReady:        true,
-		DomainReady:        true,
-		WarmupVerified:     true,
-		WritePathEnabled:   true,
+		SchemaReady:      true,
+		DomainReady:      true,
+		WarmupVerified:   true,
+		WritePathEnabled: true,
 	})
 	discussion, err := repo.UpsertEntity(context.Background(), missioncontrolrepo.UpsertEntityParams{
 		ProjectID:         "proj-1",
@@ -1248,11 +1236,10 @@ func TestGetCommandStatusDecodesResultPayload(t *testing.T) {
 	t.Parallel()
 
 	svc, _, _, now := newTestService(t, valuetypes.MissionControlRolloutState{
-		CoreFeatureEnabled: true,
-		SchemaReady:        true,
-		DomainReady:        true,
-		WarmupVerified:     true,
-		WritePathEnabled:   true,
+		SchemaReady:      true,
+		DomainReady:      true,
+		WarmupVerified:   true,
+		WritePathEnabled: true,
 	})
 	admission, err := svc.SubmitCommand(context.Background(), SubmitCommandParams{
 		ProjectID:         "proj-1",

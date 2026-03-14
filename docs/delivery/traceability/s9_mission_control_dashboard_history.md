@@ -99,10 +99,9 @@ approvals:
   - rollout guard + worker warmup entry contract в `internal/domain/missioncontrol/{rollout_guard.go,contract.go}`;
   - PostgreSQL foundation repository `internal/repository/postgres/missioncontrol/**` с `projection_version` CAS update, relation replace, timeline upsert, command ledger access и warmup summary query.
 - Зафиксированы guardrails:
-  - core Mission Control path остаётся закрытым без `CODEXK8S_MISSION_CONTROL_ENABLED`;
-  - read-path требует `schema + domain + warmup verification`;
+  - core Mission Control read-side доступен при `schema + domain`;
   - realtime требует `read-path`;
-  - write-path и optional voice path не открываются до прохождения предыдущих gates.
+  - write-path и optional voice path не открываются до прохождения warmup verification и write-path enablement.
 - Через Context7 подтверждён актуальный pgx v5 baseline для scan JSONB/arrays/timestamptz (`/jackc/pgx`), после чего repository foundation собран на `pgx.RowToStructByName`, `pgtype.*` и typed `json.RawMessage` payloads.
 - Проверки:
   - `go test ./services/internal/control-plane/...`

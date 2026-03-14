@@ -223,7 +223,6 @@ func Run() error {
 		RuntimePrepareRetryInterval:       runtimePrepareRetryInterval,
 		GitHubRateLimitWaitEnabled:        cfg.GitHubRateLimitWaitEnabled,
 		GitHubRateLimitSweepLimit:         cfg.GitHubRateLimitSweepLimit,
-		MissionControlEnabled:             cfg.MissionControlEnabled,
 		MissionControlWarmupInterval:      missionControlWarmupInterval,
 		MissionControlWarmupProjectLimit:  cfg.MissionControlWarmupProjectLimit,
 		MissionControlPendingCommandLimit: cfg.MissionControlPendingCommandLimit,

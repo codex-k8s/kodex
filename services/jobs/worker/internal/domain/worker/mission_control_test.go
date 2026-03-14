@@ -29,7 +29,6 @@ func TestReconcileMissionControlExecutesAcceptedStageNextStep(t *testing.T) {
 
 	svc := NewService(Config{
 		WorkerID:                          "worker-1",
-		MissionControlEnabled:             true,
 		MissionControlPendingCommandLimit: 10,
 		MissionControlRetryMaxAttempts:    3,
 		MissionControlRetryBaseInterval:   time.Millisecond,
@@ -84,7 +83,6 @@ func TestReconcileMissionControlFailsAfterRetryBudget(t *testing.T) {
 
 	svc := NewService(Config{
 		WorkerID:                          "worker-1",
-		MissionControlEnabled:             true,
 		MissionControlPendingCommandLimit: 10,
 		MissionControlRetryMaxAttempts:    3,
 		MissionControlRetryBaseInterval:   time.Millisecond,
@@ -121,8 +119,7 @@ func TestReconcileMissionControlFailsUnsupportedCommandKind(t *testing.T) {
 	}
 
 	svc := NewService(Config{
-		WorkerID:              "worker-1",
-		MissionControlEnabled: true,
+		WorkerID: "worker-1",
 	}, Dependencies{
 		MissionControl: missionControl,
 	})
@@ -152,7 +149,6 @@ func TestReconcileMissionControlWarmupUsesThrottle(t *testing.T) {
 
 	svc := NewService(Config{
 		WorkerID:                     "worker-1",
-		MissionControlEnabled:        true,
 		MissionControlWarmupInterval: time.Hour,
 	}, Dependencies{
 		MissionControl: missionControl,

@@ -120,8 +120,6 @@ type Config struct {
 	MCPTokenTTL string `env:"CODEXK8S_MCP_TOKEN_TTL" envDefault:"24h"`
 	// ControlPlaneMCPBaseURL is effective MCP endpoint included in prompt context and run env.
 	ControlPlaneMCPBaseURL string `env:"CODEXK8S_CONTROL_PLANE_MCP_BASE_URL" envDefault:"http://codex-k8s-control-plane:8081/mcp"`
-	// MissionControlEnabled gates all Mission Control domain and worker-facing internal APIs.
-	MissionControlEnabled bool `env:"CODEXK8S_MISSION_CONTROL_ENABLED" envDefault:"false"`
 	// GitHubRateLimitWaitEnabled gates GitHub rate-limit wait persistence and worker sweep ownership.
 	GitHubRateLimitWaitEnabled bool `env:"CODEXK8S_GITHUB_RATE_LIMIT_WAIT_ENABLED" envDefault:"false"`
 	// MissionControlVoiceEnabled gates optional Mission Control voice flows.

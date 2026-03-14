@@ -109,7 +109,8 @@ approvals:
 ### Pre-migration checks
 - absence of conflicting entity identity keys
 - availability of feature flags:
-  - `CODEXK8S_MISSION_CONTROL_ENABLED`
+  - `CODEXK8S_MISSION_CONTROL_WARMUP_VERIFIED`
+  - `CODEXK8S_MISSION_CONTROL_WRITE_PATH_ENABLED`
   - `CODEXK8S_MISSION_CONTROL_VOICE_ENABLED`
 - provider credentials and webhook ingestion baseline healthy
 

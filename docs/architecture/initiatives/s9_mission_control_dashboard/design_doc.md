@@ -307,10 +307,11 @@ sequenceDiagram
   4. API gateway OpenAPI handlers + realtime endpoint.
   5. Web-console page/state integration.
 - Feature flags:
-  - `CODEXK8S_MISSION_CONTROL_ENABLED`
+  - `CODEXK8S_MISSION_CONTROL_WARMUP_VERIFIED`
+  - `CODEXK8S_MISSION_CONTROL_WRITE_PATH_ENABLED`
   - `CODEXK8S_MISSION_CONTROL_VOICE_ENABLED`
 - Rollout discipline:
-  - `voice` флаг не включается вместе с core dashboard флагом по умолчанию;
+  - read-side остаётся always-on при готовой схеме и доменном сервисе;
   - write-path разрешается только после projection warmup verification.
 
 ## План отката (Rollback)
@@ -320,7 +321,7 @@ sequenceDiagram
   - repeated degraded state without recovery;
   - provider mutation incidents on inline write path.
 - Шаги:
-  1. выключить `CODEXK8S_MISSION_CONTROL_ENABLED` write-path или вернуть read-only mode;
+  1. выключить `CODEXK8S_MISSION_CONTROL_WRITE_PATH_ENABLED` или вернуть read-only mode;
   2. отключить realtime stream route при необходимости и оставить explicit refresh snapshot path;
   3. отключить `CODEXK8S_MISSION_CONTROL_VOICE_ENABLED`, не трогая core dashboard read path;
   4. сохранить projection/timeline/command tables для postmortem и replay-safe retry.

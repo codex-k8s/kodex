@@ -248,7 +248,6 @@ func TestTickMissionControlErrorDoesNotBlockPendingRuns(t *testing.T) {
 		RunningCheckLimit:      10,
 		SlotsPerProject:        2,
 		SlotLeaseTTL:           time.Minute,
-		MissionControlEnabled:  true,
 		RunNamespacePrefix:     "codex-issue",
 		ControlPlaneGRPCTarget: "codex-k8s-control-plane:9090",
 	}, Dependencies{
