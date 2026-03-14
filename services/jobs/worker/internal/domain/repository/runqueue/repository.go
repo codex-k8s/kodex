@@ -13,6 +13,7 @@ type (
 	ReleaseStaleLeasesParams  = querytypes.RunQueueReleaseStaleLeasesParams
 	ClaimedRun                = querytypes.RunQueueClaimedRun
 	RunningRun                = querytypes.RunQueueRunningRun
+	NonTerminalRun            = querytypes.RunQueueNonTerminalRun
 	ReleasedStaleLease        = querytypes.RunQueueReleasedStaleLease
 	FinishParams              = querytypes.RunQueueFinishParams
 	ExtendLeaseParams         = querytypes.RunQueueExtendLeaseParams
@@ -30,6 +31,8 @@ type Repository interface {
 	ReleaseStaleLeases(ctx context.Context, params ReleaseStaleLeasesParams) ([]ReleasedStaleLease, error)
 	// ListRunning returns active runs for reconciliation.
 	ListRunning(ctx context.Context, limit int) ([]RunningRun, error)
+	// ListNonTerminalByRunIDs returns non-terminal agent_runs referenced by managed namespaces.
+	ListNonTerminalByRunIDs(ctx context.Context, runIDs []string) ([]NonTerminalRun, error)
 	// ExtendLease refreshes slot lease for one running run.
 	ExtendLease(ctx context.Context, params ExtendLeaseParams) (bool, error)
 	// FinishRun finalizes run status and releases slot lease when it exists.

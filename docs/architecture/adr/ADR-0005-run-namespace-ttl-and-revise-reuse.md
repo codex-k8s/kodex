@@ -5,8 +5,8 @@ title: "Run namespace TTL retention and revise lease extension"
 status: accepted
 owner_role: SA
 created_at: 2026-02-20
-updated_at: 2026-02-20
-related_issues: [74]
+updated_at: 2026-03-14
+related_issues: [74, 461]
 related_prs: []
 supersedes: []
 superseded_by: []
@@ -97,8 +97,11 @@ webhookRuntime:
 
 ### Cleanup policy
 - В Kubernetes нет built-in TTL для namespace (TTL-after-finished работает только для Job).
-- Cleanup реализуется worker sweep-контуром по managed namespace:
+- Cleanup реализуется sweeper-контуром по managed namespace:
+  - in-band sweep в worker reconcile tick;
+  - отдельный production `CronJob` `codex-k8s-worker-namespace-cleanup` как backstop при сбоях/простоях worker;
   - отбор по `codex-k8s.dev/namespace-purpose=run`;
+  - guardrails: ownership-label + allowlist platform runtime namespace names (issue-run prefix + slot namespaces `codex-k8s-dev-*`) + отсутствие non-terminal run в БД + отсутствие active workload в namespace, включая unsuspended `CronJob`;
   - удаление по достижении lease expiry;
   - write-audit на каждое действие.
 
@@ -133,7 +136,9 @@ webhookRuntime:
   - `run.namespace.reuse_fallback_redeploy`,
   - `run.namespace.ttl_scheduled`,
   - `run.namespace.ttl_extended`,
-  - `run.namespace.cleaned` (reason=`ttl_expired`).
+  - `run.namespace.cleaned` (reason=`ttl_expired`),
+  - `run.namespace.cleanup_skipped`,
+  - `run.namespace.cleanup_failed`.
 - `run_payload`/runtime metadata (минимум):
   - `namespace_lease_ttl`,
   - `namespace_lease_expires_at`,

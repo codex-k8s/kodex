@@ -176,18 +176,60 @@ type NamespaceReuseResult struct {
 	ExpiresAt time.Time
 }
 
-// NamespaceCleanupParams configures ttl-based cleanup sweep over managed namespaces.
-type NamespaceCleanupParams struct {
-	Now   time.Time
-	Limit int
+// ManagedNamespaceState captures labels and annotations required for cleanup guardrails.
+type ManagedNamespaceState struct {
+	Namespace       string
+	RunID           string
+	ProjectID       string
+	CorrelationID   string
+	RuntimeMode     agentdomain.RuntimeMode
+	RuntimeModeRaw  string
+	CreatedAt       time.Time
+	LeaseTTL        time.Duration
+	LeaseExpiresAt  time.Time
+	LeaseExpiresRaw string
 }
 
-// NamespaceCleanupResult describes one namespace deleted by ttl sweep.
-type NamespaceCleanupResult struct {
-	Namespace   string
-	RunID       string
-	RuntimeMode agentdomain.RuntimeMode
-	ExpiresAt   time.Time
+// ManagedNamespaceListParams configures managed namespace listing for cleanup reconciliation.
+type ManagedNamespaceListParams struct {
+	// NamespacePrefix is the primary run namespace prefix configured for issue-scoped runtimes.
+	// Cleanup also keeps known platform slot namespace prefixes in scope as an additional guardrail.
+	NamespacePrefix string
+}
+
+// NamespaceWorkloadState summarizes active workload objects inside one managed namespace.
+type NamespaceWorkloadState struct {
+	ActivePods         []string
+	ActiveJobs         []string
+	ActiveCronJobs     []string
+	ActiveDeployments  []string
+	ActiveStatefulSets []string
+	ActiveDaemonSets   []string
+	ActiveReplicaSets  []string
+}
+
+// HasActiveWorkloads reports whether namespace still contains running workload objects.
+func (s NamespaceWorkloadState) HasActiveWorkloads() bool {
+	return len(s.ActivePods) > 0 ||
+		len(s.ActiveJobs) > 0 ||
+		len(s.ActiveCronJobs) > 0 ||
+		len(s.ActiveDeployments) > 0 ||
+		len(s.ActiveStatefulSets) > 0 ||
+		len(s.ActiveDaemonSets) > 0 ||
+		len(s.ActiveReplicaSets) > 0
+}
+
+// Details returns deterministic workload diagnostics for logs and audit payloads.
+func (s NamespaceWorkloadState) Details() []string {
+	details := make([]string, 0, 7)
+	details = appendWorkloadDetails(details, "pods", s.ActivePods)
+	details = appendWorkloadDetails(details, "jobs", s.ActiveJobs)
+	details = appendWorkloadDetails(details, "cronjobs", s.ActiveCronJobs)
+	details = appendWorkloadDetails(details, "deployments", s.ActiveDeployments)
+	details = appendWorkloadDetails(details, "statefulsets", s.ActiveStatefulSets)
+	details = appendWorkloadDetails(details, "daemonsets", s.ActiveDaemonSets)
+	details = appendWorkloadDetails(details, "replicasets", s.ActiveReplicaSets)
+	return details
 }
 
 // Config defines Job launcher runtime options.
@@ -298,6 +340,13 @@ func NewForClient(cfg Config, client kubernetes.Interface) *Launcher {
 	}
 
 	return &Launcher{cfg: cfg, client: client}
+}
+
+func appendWorkloadDetails(dst []string, kind string, names []string) []string {
+	if len(names) == 0 {
+		return dst
+	}
+	return append(dst, kind+"="+strings.Join(names, ","))
 }
 
 // JobRef builds deterministic Job reference for run.
