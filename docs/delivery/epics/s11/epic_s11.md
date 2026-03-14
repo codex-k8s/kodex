@@ -6,7 +6,7 @@ status: in-review
 owner_role: PM
 created_at: 2026-03-14
 updated_at: 2026-03-14
-related_issues: [361, 444, 447, 448]
+related_issues: [361, 444, 447, 448, 452]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -19,15 +19,15 @@ approvals:
 ## TL;DR
 - Sprint S11 открывает отдельную product initiative вокруг Telegram как первого внешнего канала поверх нового platform interaction contract.
 - Day1 intake (`#361`) фиксирует проблему, MVP scope, sequencing guardrails и continuity в `run:vision`.
-- Day2 vision выполняется в issue `#447`: mission, north star, persona outcomes, KPI/guardrails и MVP/Post-MVP границы уже зафиксированы, а issue `#444` сохранена только как historical handover от intake-stage и 2026-03-14 закрыта как `state:superseded`.
-- Создана follow-up issue `#448` для stage `run:prd` без trigger-лейбла; следующий этап должен формализовать user stories, FR/AC/NFR, expected evidence и сохранить continuity-цепочку до `run:dev`.
+- Day2 vision выполнен в issue `#447`: mission, north star, persona outcomes, KPI/guardrails и MVP/Post-MVP границы зафиксированы, а issue `#444` сохранена только как historical handover от intake-stage и 2026-03-14 закрыта как `state:superseded`.
+- Day3 PRD выполнен в issue `#448`: подготовлены user stories, FR/AC/NFR, expected evidence, callback/webhook guardrails и continuity issue `#452` для `run:arch`.
 - До `run:plan` Sprint S11 остаётся markdown-only контуром: код, runtime topology и library/runtime binding decisions начинаются только после owner review последующих stage-пакетов.
 
 ## Stage roadmap
 - Day 1 (Intake): `docs/delivery/epics/s11/epic-s11-day1-telegram-user-interaction-adapter-intake.md` (Issue `#361`).
-- Day 2 (Vision): `docs/delivery/epics/s11/epic-s11-day2-telegram-user-interaction-adapter-vision.md` (Issue `#447`); active stage сохраняет prerequisite `#389 closed` + `#387` как typed contract baseline.
-- Day 3 (PRD): follow-up issue `#448`; stage фиксирует user stories, FR/AC/NFR, expected evidence и Telegram-specific edge cases.
-- Day 4 (Architecture): continuity issue создаётся на завершении `run:prd`; stage фиксирует adapter/service boundaries, callback ownership и security/correlation lifecycle.
+- Day 2 (Vision): `docs/delivery/epics/s11/epic-s11-day2-telegram-user-interaction-adapter-vision.md` (Issue `#447`); stage зафиксировал prerequisite `#389 closed` + `#387` как typed contract baseline.
+- Day 3 (PRD): `docs/delivery/epics/s11/epic-s11-day3-telegram-user-interaction-adapter-prd.md` + `docs/delivery/epics/s11/prd-s11-day3-telegram-user-interaction-adapter.md` (Issue `#448`).
+- Day 4 (Architecture): follow-up issue `#452`; stage фиксирует adapter/service boundaries, callback ownership и security/correlation lifecycle.
 - Day 5 (Design): continuity issue создаётся на завершении `run:arch`; stage фиксирует implementation-ready API/data/runtime contracts.
 - Day 6 (Plan): continuity issue создаётся на завершении `run:design`; stage формирует execution package, sequencing-waves и owner-managed handover в `run:dev`.
 

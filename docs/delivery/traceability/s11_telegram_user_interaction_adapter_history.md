@@ -6,7 +6,7 @@ status: in-review
 owner_role: KM
 created_at: 2026-03-14
 updated_at: 2026-03-14
-related_issues: [361, 444, 447, 448]
+related_issues: [361, 444, 447, 448, 452]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -43,3 +43,14 @@ approvals:
 - Sequencing gate повторно подтверждён для active stage: `#447` может двигаться дальше только пока Sprint S10 сохраняет `#389 closed` и design package `#387` как effective typed interaction contract baseline.
 - Создана follow-up issue `#448` для stage `run:prd`; в её body явно проброшено continuity-требование продолжить цепочку `prd -> arch -> design -> plan -> dev` без разрывов.
 - Root FR/NFR matrix не менялась: vision stage уточнил product baseline и traceability, но не добавлял новые канонические FR/NFR в `docs/product/requirements_machine_driven.md`.
+
+## Актуализация по Issue #448 (`run:prd`, 2026-03-14)
+- PRD stage выполнен в Issue `#448`; подготовлены `docs/delivery/epics/s11/epic-s11-day3-telegram-user-interaction-adapter-prd.md` и `docs/delivery/epics/s11/prd-s11-day3-telegram-user-interaction-adapter.md`.
+- PRD package зафиксировал:
+  - user stories, FR/AC/NFR и wave priorities для `user.notify`, `user.decision.request`, inline callbacks и optional free-text;
+  - product guardrails по callback acknowledgement, duplicate/replay/expired handling, webhook authenticity expectations и fallback clarity;
+  - separation from approval flow, channel-neutral meaning полей interaction-domain и deferred scope для voice/STT, reminders, rich threads и дополнительных каналов.
+- Через Context7 по `/mymmrac/telego` подтверждено, что reference SDK покрывает webhook mode, text updates, inline keyboards и callback query handling; `go list -m -json github.com/mymmrac/telego@latest` на `2026-03-14` подтвердил latest stable `v1.7.0`.
+- Дополнительно сверены официальные Telegram Bot API constraints для callback/webhook semantics: callback query требует `answerCallbackQuery`, webhook и polling взаимоисключающи, updates хранятся до 24 часов; эти факты зафиксированы как product-level expectations без premature implementation lock-in.
+- Создана follow-up issue `#452` для stage `run:arch`; в её body повторено continuity-требование продолжить цепочку `arch -> design -> plan -> dev` без разрывов.
+- Root FR/NFR matrix обновлена точечно: coverage FR-039 расширено документами Day2/Day3 Sprint S11, при этом канонический requirements baseline в `docs/product/requirements_machine_driven.md` не менялся.
