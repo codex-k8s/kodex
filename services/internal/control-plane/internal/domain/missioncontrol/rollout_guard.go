@@ -14,15 +14,15 @@ func ResolveRolloutCapabilities(state valuetypes.MissionControlRolloutState) (va
 
 	canSnapshot := state.SchemaReady && state.DomainReady
 	canRealtime := canSnapshot
-	canWarmup := state.CoreFeatureEnabled && canSnapshot
-	canWrite := canWarmup && state.WarmupVerified && state.WritePathEnabled
+	canWarmup := canSnapshot
+	canWrite := canWarmup
 
 	return valuetypes.MissionControlRolloutCapabilities{
 		CanRunWarmup:         canWarmup,
 		CanServeSnapshot:     canSnapshot,
 		CanOpenRealtime:      canRealtime,
 		CanSubmitCoreCommand: canWrite,
-		CanUseVoicePath:      canWrite && state.VoiceFeatureEnabled,
+		CanUseVoicePath:      canWrite,
 	}, nil
 }
 
@@ -30,21 +30,6 @@ func ResolveRolloutCapabilities(state valuetypes.MissionControlRolloutState) (va
 func ValidateRolloutState(state valuetypes.MissionControlRolloutState) error {
 	if state.DomainReady && !state.SchemaReady {
 		return fmt.Errorf("mission control rollout: domain readiness requires schema readiness")
-	}
-	if state.WarmupVerified && (!state.SchemaReady || !state.DomainReady) {
-		return fmt.Errorf("mission control rollout: warmup verification requires schema and domain readiness")
-	}
-	if state.WarmupVerified && !state.CoreFeatureEnabled {
-		return fmt.Errorf("mission control rollout: warmup verification requires core feature enablement")
-	}
-	if state.WritePathEnabled && !state.CoreFeatureEnabled {
-		return fmt.Errorf("mission control rollout: write-path enablement requires core feature enablement")
-	}
-	if state.WritePathEnabled && !state.WarmupVerified {
-		return fmt.Errorf("mission control rollout: write-path enablement requires warmup verification")
-	}
-	if state.VoiceFeatureEnabled && !state.WritePathEnabled {
-		return fmt.Errorf("mission control rollout: voice feature requires core write-path enablement")
 	}
 	return nil
 }

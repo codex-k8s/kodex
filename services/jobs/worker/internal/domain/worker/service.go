@@ -51,8 +51,6 @@ type Config struct {
 	GitHubRateLimitWaitEnabled bool
 	// GitHubRateLimitSweepLimit limits how many due waits worker can reconcile per tick.
 	GitHubRateLimitSweepLimit int
-	// MissionControlEnabled enables Mission Control warmup and command reconciliation loop.
-	MissionControlEnabled bool
 	// MissionControlWarmupInterval throttles per-project warmup execution.
 	MissionControlWarmupInterval time.Duration
 	// MissionControlWarmupProjectLimit limits warmup candidates inspected per tick.

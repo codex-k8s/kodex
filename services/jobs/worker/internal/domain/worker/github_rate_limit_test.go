@@ -26,7 +26,6 @@ func TestTickReconcilesGitHubRateLimitWaitsBeforeMissionControl(t *testing.T) {
 		WorkerID:                   "worker-1",
 		GitHubRateLimitWaitEnabled: true,
 		GitHubRateLimitSweepLimit:  5,
-		MissionControlEnabled:      true,
 	}, Dependencies{
 		Runs:             &fakeRunQueue{},
 		Events:           &fakeFlowEvents{},

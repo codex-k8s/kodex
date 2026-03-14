@@ -43,8 +43,6 @@ type Config struct {
 	GitHubRateLimitWaitEnabled bool `env:"CODEXK8S_GITHUB_RATE_LIMIT_WAIT_ENABLED" envDefault:"false"`
 	// GitHubRateLimitSweepLimit limits how many due GitHub rate-limit waits worker processes per tick.
 	GitHubRateLimitSweepLimit int `env:"CODEXK8S_WORKER_GITHUB_RATE_LIMIT_SWEEP_LIMIT" envDefault:"20"`
-	// MissionControlEnabled enables Mission Control warmup and command execution loop.
-	MissionControlEnabled bool `env:"CODEXK8S_MISSION_CONTROL_ENABLED" envDefault:"false"`
 	// MissionControlWarmupInterval throttles per-project Mission Control warmup execution.
 	MissionControlWarmupInterval string `env:"CODEXK8S_WORKER_MISSION_CONTROL_WARMUP_INTERVAL" envDefault:"15m"`
 	// MissionControlWarmupProjectLimit limits Mission Control warmup candidates per tick.

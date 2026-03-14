@@ -130,7 +130,7 @@ type MissionControlClient interface {
 }
 
 func (s *Service) reconcileMissionControl(ctx context.Context) error {
-	if !s.cfg.MissionControlEnabled || s.missionCtl == nil {
+	if s.missionCtl == nil {
 		return nil
 	}
 	if err := s.reconcileMissionControlWarmups(ctx); err != nil {
