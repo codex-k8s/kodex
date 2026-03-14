@@ -865,6 +865,8 @@ spec:
               value: '{{ envOr "CODEXK8S_WORKER_RUN_NAMESPACE_PREFIX" "" }}'
             - name: CODEXK8S_WORKER_RUN_NAMESPACE_CLEANUP
               value: '{{ envOr "CODEXK8S_WORKER_RUN_NAMESPACE_CLEANUP" "" }}'
+            - name: CODEXK8S_WORKER_NAMESPACE_LEASE_SWEEP_LIMIT
+              value: '{{ envOr "CODEXK8S_WORKER_NAMESPACE_LEASE_SWEEP_LIMIT" "" }}'
             - name: CODEXK8S_INTERNAL_REGISTRY_HOST
               value: '{{ envOr "CODEXK8S_INTERNAL_REGISTRY_HOST" "" }}'
             - name: CODEXK8S_INTERNAL_REGISTRY_SCHEME
@@ -995,6 +997,78 @@ spec:
         - name: repo-cache
           persistentVolumeClaim:
             claimName: codex-k8s-repo-cache
+{{ end }}
+{{ if eq (envOr "CODEXK8S_ENV" "production") "production" }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: codex-k8s-worker-namespace-cleanup
+  namespace: {{ envOr "CODEXK8S_PRODUCTION_NAMESPACE" "" }}
+  labels:
+    app.kubernetes.io/name: codex-k8s
+    app.kubernetes.io/component: worker-namespace-cleanup
+spec:
+  schedule: '{{ envOr "CODEXK8S_WORKER_NAMESPACE_CLEANUP_CRON_SCHEDULE" "*/15 * * * *" }}'
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  suspend: {{ eq (envOr "CODEXK8S_WORKER_NAMESPACE_CLEANUP_CRON_SUSPEND" "false") "true" }}
+  startingDeadlineSeconds: {{ envOr "CODEXK8S_WORKER_NAMESPACE_CLEANUP_CRON_STARTING_DEADLINE_SECONDS" "300" }}
+  successfulJobsHistoryLimit: {{ envOr "CODEXK8S_WORKER_NAMESPACE_CLEANUP_CRON_SUCCESS_HISTORY_LIMIT" "1" }}
+  failedJobsHistoryLimit: {{ envOr "CODEXK8S_WORKER_NAMESPACE_CLEANUP_CRON_FAILED_HISTORY_LIMIT" "3" }}
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      ttlSecondsAfterFinished: 86400
+      activeDeadlineSeconds: {{ envOr "CODEXK8S_WORKER_NAMESPACE_CLEANUP_CRON_ACTIVE_DEADLINE_SECONDS" "900" }}
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: codex-k8s
+            app.kubernetes.io/component: worker-namespace-cleanup
+        spec:
+          serviceAccountName: codex-k8s-worker
+          restartPolicy: Never
+          containers:
+            - name: namespace-cleanup
+              image: {{ envOr "CODEXK8S_WORKER_IMAGE" "" }}
+              imagePullPolicy: Always
+              env:
+                - name: CODEXK8S_WORKER_MODE
+                  value: namespace_cleanup_once
+                - name: CODEXK8S_WORKER_ID
+                  value: codex-k8s-worker-namespace-cleanup
+                - name: CODEXK8S_DB_HOST
+                  value: postgres
+                - name: CODEXK8S_DB_PORT
+                  value: "5432"
+                - name: CODEXK8S_DB_NAME
+                  valueFrom:
+                    secretKeyRef:
+                      name: codex-k8s-postgres
+                      key: CODEXK8S_POSTGRES_DB
+                - name: CODEXK8S_DB_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: codex-k8s-postgres
+                      key: CODEXK8S_POSTGRES_USER
+                - name: CODEXK8S_DB_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: codex-k8s-postgres
+                      key: CODEXK8S_POSTGRES_PASSWORD
+                - name: CODEXK8S_CONTROL_PLANE_GRPC_TARGET
+                  value: '{{ envOr "CODEXK8S_CONTROL_PLANE_GRPC_TARGET" "" }}'
+                - name: CODEXK8S_WORKER_K8S_NAMESPACE
+                  value: '{{ envOr "CODEXK8S_WORKER_K8S_NAMESPACE" "" }}'
+                - name: CODEXK8S_PRODUCTION_NAMESPACE
+                  value: '{{ envOr "CODEXK8S_PRODUCTION_NAMESPACE" "" }}'
+                - name: CODEXK8S_WORKER_RUN_NAMESPACE_PREFIX
+                  value: '{{ envOr "CODEXK8S_WORKER_RUN_NAMESPACE_PREFIX" "" }}'
+                - name: CODEXK8S_WORKER_RUN_NAMESPACE_CLEANUP
+                  value: '{{ envOr "CODEXK8S_WORKER_RUN_NAMESPACE_CLEANUP" "" }}'
+                - name: CODEXK8S_WORKER_NAMESPACE_LEASE_SWEEP_LIMIT
+                  value: '{{ envOr "CODEXK8S_WORKER_NAMESPACE_LEASE_SWEEP_LIMIT" "" }}'
 {{ end }}
 ---
 apiVersion: v1

@@ -126,3 +126,11 @@ type RunQueueExtendLeaseParams struct {
 	// LeaseTTL extends lease_until from current timestamp.
 	LeaseTTL time.Duration
 }
+
+// RunQueueNonTerminalRun describes one run that must block namespace cleanup.
+type RunQueueNonTerminalRun struct {
+	// RunID is a run referenced by managed namespace labels.
+	RunID string
+	// Status is current non-terminal lifecycle status from agent_runs.
+	Status string
+}
