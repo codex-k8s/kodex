@@ -7,7 +7,9 @@ import type {
   MissionControlDashboardSnapshot,
   MissionControlEntityCard,
   MissionControlEntityDetails,
+  MissionControlFreshnessStatus,
   MissionControlEntityRef,
+  MissionControlRealtimeEvent,
   MissionControlRealtimeNotice,
   MissionControlRealtimeState,
   MissionControlRelation,
@@ -49,11 +51,50 @@ function uniqueMissionControlTimeline(items: MissionControlTimelineEntry[]): Mis
 function freshnessStatusFromNotice(
   snapshot: MissionControlDashboardSnapshot | null,
   notice: MissionControlRealtimeNotice | null,
-): "fresh" | "stale" | "degraded" | "" {
+  connectedFreshnessStatus: MissionControlFreshnessStatus,
+): MissionControlFreshnessStatus {
   if (notice?.kind === "degraded") return "degraded";
   if (notice?.kind === "stale") return "stale";
+  if (connectedFreshnessStatus !== "") return connectedFreshnessStatus;
   if (snapshot) return snapshot.freshness_status;
   return "";
+}
+
+function relationTouchesEntity(relation: MissionControlRelation, ref: MissionControlEntityRef): boolean {
+  return (
+    (relation.source_entity_kind === ref.entity_kind && relation.source_entity_public_id === ref.entity_public_id) ||
+    (relation.target_entity_kind === ref.entity_kind && relation.target_entity_public_id === ref.entity_public_id)
+  );
+}
+
+function timelineEntryBelongsToEntity(entry: MissionControlTimelineEntry, ref: MissionControlEntityRef): boolean {
+  return entry.entity_kind === ref.entity_kind && entry.entity_public_id === ref.entity_public_id;
+}
+
+function updateSelectedDetailsWithRealtimeDelta(
+  details: MissionControlEntityDetails,
+  ref: MissionControlEntityRef,
+  payload: Extract<MissionControlRealtimeEvent, { event_kind: "delta" }>["payload"],
+): MissionControlEntityDetails {
+  const nextEntity =
+    payload.delta_entities.find(
+      (entity) => entity.entity_kind === ref.entity_kind && entity.entity_public_id === ref.entity_public_id,
+    ) ?? details.entity;
+  const nextRelations = uniqueMissionControlRelations([
+    ...details.relations,
+    ...payload.delta_relations.filter((relation) => relationTouchesEntity(relation, ref)),
+  ]);
+  const nextTimelinePreview = uniqueMissionControlTimeline([
+    ...details.timeline_preview,
+    ...payload.delta_timeline_entries.filter((entry) => timelineEntryBelongsToEntity(entry, ref)),
+  ]);
+
+  return {
+    ...details,
+    entity: nextEntity,
+    relations: nextRelations,
+    timeline_preview: nextTimelinePreview,
+  };
 }
 
 export const useMissionControlStore = defineStore("missionControl", {
@@ -80,19 +121,21 @@ export const useMissionControlStore = defineStore("missionControl", {
     selectedTimelineCursor: "",
     selectedLoading: false,
     selectedTimelineLoading: false,
-    selectedError: null as ApiError | null,
+    selectedDetailsError: null as ApiError | null,
+    selectedTimelineError: null as ApiError | null,
     realtimeState: "closed" as MissionControlRealtimeState | "closed",
     realtimeNotice: null as MissionControlRealtimeNotice | null,
+    connectedFreshnessStatus: "" as MissionControlFreshnessStatus,
     snapshotRequestId: 0,
     detailsRequestId: 0,
     timelineRequestId: 0,
   }),
   getters: {
-    effectiveFreshnessStatus(state): "fresh" | "stale" | "degraded" | "" {
-      return freshnessStatusFromNotice(state.snapshot, state.realtimeNotice);
+    effectiveFreshnessStatus(state): MissionControlFreshnessStatus {
+      return freshnessStatusFromNotice(state.snapshot, state.realtimeNotice, state.connectedFreshnessStatus);
     },
     effectiveViewMode(state): "board" | "list" {
-      return resolveMissionControlEffectiveViewMode(state.viewMode, freshnessStatusFromNotice(state.snapshot, state.realtimeNotice));
+      return resolveMissionControlEffectiveViewMode(state.viewMode, freshnessStatusFromNotice(state.snapshot, state.realtimeNotice, state.connectedFreshnessStatus));
     },
     hasMore(state): boolean {
       return String(state.snapshot?.next_page_cursor || "").trim() !== "";
@@ -122,6 +165,30 @@ export const useMissionControlStore = defineStore("missionControl", {
 
     applyRealtimeNotice(notice: MissionControlRealtimeNotice): void {
       this.realtimeNotice = notice;
+    },
+
+    setConnectedFreshnessStatus(status: MissionControlFreshnessStatus): void {
+      this.connectedFreshnessStatus = status;
+    },
+
+    applyRealtimeDelta(payload: Extract<MissionControlRealtimeEvent, { event_kind: "delta" }>["payload"]): void {
+      this.entities = uniqueMissionControlEntities([...this.entities, ...payload.delta_entities]);
+      this.relations = uniqueMissionControlRelations([...this.relations, ...payload.delta_relations]);
+
+      const selectedRef = this.selectedRef;
+      if (!selectedRef) {
+        return;
+      }
+
+      if (this.selectedDetails) {
+        this.selectedDetails = updateSelectedDetailsWithRealtimeDelta(this.selectedDetails, selectedRef, payload);
+      }
+
+      const selectedTimelineEntries = payload.delta_timeline_entries.filter((entry) => timelineEntryBelongsToEntity(entry, selectedRef));
+      if (selectedTimelineEntries.length > 0) {
+        this.selectedTimeline = uniqueMissionControlTimeline([...this.selectedTimeline, ...selectedTimelineEntries]);
+        this.selectedTimelineError = null;
+      }
     },
 
     async loadSnapshot(options: { append?: boolean; refresh?: boolean } = {}): Promise<void> {
@@ -167,6 +234,7 @@ export const useMissionControlStore = defineStore("missionControl", {
           this.entities = snapshot.entities ?? [];
           this.relations = snapshot.relations ?? [];
         }
+        this.connectedFreshnessStatus = snapshot.freshness_status;
 
         if ((this.realtimeNotice?.kind === "stale" || this.realtimeNotice?.kind === "degraded") && snapshot.freshness_status === "fresh") {
           this.realtimeNotice = null;
@@ -198,7 +266,9 @@ export const useMissionControlStore = defineStore("missionControl", {
       const requestId = this.detailsRequestId + 1;
       this.detailsRequestId = requestId;
       this.selectedLoading = true;
-      this.selectedError = null;
+      this.selectedDetailsError = null;
+      this.selectedTimelineError = null;
+      this.selectedTimelineCursor = "";
 
       try {
         const details = await getMissionControlEntity({
@@ -211,6 +281,7 @@ export const useMissionControlStore = defineStore("missionControl", {
         }
         this.selectedDetails = details;
         this.selectedTimeline = uniqueMissionControlTimeline(details.timeline_preview ?? []);
+        this.selectedTimelineCursor = "";
         await this.loadSelectedTimeline({ append: false });
       } catch (error) {
         if (this.detailsRequestId !== requestId) {
@@ -219,7 +290,8 @@ export const useMissionControlStore = defineStore("missionControl", {
         this.selectedDetails = null;
         this.selectedTimeline = [];
         this.selectedTimelineCursor = "";
-        this.selectedError = normalizeApiError(error);
+        this.selectedDetailsError = normalizeApiError(error);
+        this.selectedTimelineError = null;
       } finally {
         if (this.detailsRequestId !== requestId) {
           return;
@@ -235,7 +307,8 @@ export const useMissionControlStore = defineStore("missionControl", {
       this.selectedTimelineCursor = "";
       this.selectedLoading = false;
       this.selectedTimelineLoading = false;
-      this.selectedError = null;
+      this.selectedDetailsError = null;
+      this.selectedTimelineError = null;
     },
 
     async loadSelectedTimeline(options: { append: boolean }): Promise<void> {
@@ -245,6 +318,7 @@ export const useMissionControlStore = defineStore("missionControl", {
       const requestId = this.timelineRequestId + 1;
       this.timelineRequestId = requestId;
       this.selectedTimelineLoading = true;
+      this.selectedTimelineError = null;
       const cursor = options.append ? this.selectedTimelineCursor : "";
 
       try {
@@ -263,7 +337,7 @@ export const useMissionControlStore = defineStore("missionControl", {
         if (this.timelineRequestId !== requestId) {
           return;
         }
-        this.selectedError = normalizeApiError(error);
+        this.selectedTimelineError = normalizeApiError(error);
       } finally {
         if (this.timelineRequestId !== requestId) {
           return;

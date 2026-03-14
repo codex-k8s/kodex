@@ -6,7 +6,7 @@
       </VCardText>
     </template>
 
-    <template v-else-if="error">
+    <template v-else-if="error && !details">
       <VCardText>
         <VAlert type="error" variant="tonal">
           {{ t(error.messageKey) }}
@@ -130,6 +130,9 @@
             <VProgressCircular v-if="timelineLoading" indeterminate size="18" width="2" />
           </VCardTitle>
           <VCardText>
+            <VAlert v-if="timelineError" type="error" variant="tonal" class="mb-4">
+              {{ t(timelineError.messageKey) }}
+            </VAlert>
             <div v-if="timeline.length" class="mission-side-panel__timeline">
               <div v-for="entry in timeline" :key="entry.entry_id" class="mission-side-panel__timeline-entry">
                 <div class="mission-side-panel__timeline-head">
@@ -253,6 +256,7 @@ const props = defineProps<{
   loading: boolean;
   error: ApiError | null;
   timeline: MissionControlTimelineEntry[];
+  timelineError: ApiError | null;
   timelineLoading: boolean;
   hasMoreTimeline: boolean;
   locale: string;

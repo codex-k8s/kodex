@@ -38,6 +38,7 @@ export type MissionControlRouteState = {
 };
 
 export type MissionControlEntityState = MissionControlEntityCard["state"];
+export type MissionControlFreshnessStatus = MissionControlDashboardSnapshot["freshness_status"] | "";
 
 export type MissionControlBoardGroups = Record<MissionControlEntityState, MissionControlEntityCard[]>;
 
@@ -52,6 +53,18 @@ export type MissionControlRealtimeEvent =
       payload: {
         snapshot_freshness_status: MissionControlDashboardSnapshot["freshness_status"];
         server_cursor: string;
+      };
+    }
+  | {
+      event_kind: "delta";
+      snapshot_id: string;
+      resume_token: string;
+      occurred_at: string;
+      payload: {
+        delta_entities: MissionControlEntityCard[];
+        delta_relations: MissionControlRelation[];
+        delta_timeline_entries: MissionControlTimelineEntry[];
+        changed_command_ids: string[];
       };
     }
   | {

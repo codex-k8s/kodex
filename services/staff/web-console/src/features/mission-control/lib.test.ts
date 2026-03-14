@@ -111,6 +111,114 @@ test("parseMissionControlRealtimeEnvelope validates degraded payload", () => {
   });
 });
 
+test("parseMissionControlRealtimeEnvelope validates delta payload", () => {
+  const parsed = parseMissionControlRealtimeEnvelope(
+    JSON.stringify({
+      event_kind: "delta",
+      snapshot_id: "snapshot-2",
+      resume_token: "resume-2",
+      occurred_at: "2026-03-14T11:00:00Z",
+      payload: {
+        delta_entities: [
+          {
+            entity_kind: "work_item",
+            entity_public_id: "issue-2",
+            title: "Issue 2",
+            state: "working",
+            sync_status: "synced",
+            provider_reference: {
+              provider: "github",
+              external_id: "repo#2",
+            },
+            relation_count: 2,
+            badges: ["owner_review", "unknown_badge"],
+            projection_version: 4,
+          },
+        ],
+        delta_relations: [
+          {
+            relation_kind: "linked_to",
+            source_kind: "provider",
+            source_entity_kind: "work_item",
+            source_entity_public_id: "issue-2",
+            target_entity_kind: "pull_request",
+            target_entity_public_id: "repo/pull/2",
+            direction: "outbound",
+          },
+        ],
+        delta_timeline_entries: [
+          {
+            entry_id: "timeline-2",
+            entity_kind: "work_item",
+            entity_public_id: "issue-2",
+            source_kind: "provider",
+            source_ref: "comment-2",
+            occurred_at: "2026-03-14T11:00:00Z",
+            summary: "Updated status",
+            is_read_only: true,
+          },
+        ],
+        changed_command_ids: ["command-2"],
+      },
+    }),
+  );
+
+  assert.deepEqual(parsed, {
+    event_kind: "delta",
+    snapshot_id: "snapshot-2",
+    resume_token: "resume-2",
+    occurred_at: "2026-03-14T11:00:00Z",
+    payload: {
+      delta_entities: [
+        {
+          entity_kind: "work_item",
+          entity_public_id: "issue-2",
+          title: "Issue 2",
+          state: "working",
+          sync_status: "synced",
+          provider_reference: {
+            provider: "github",
+            external_id: "repo#2",
+            url: undefined,
+          },
+          primary_actor: undefined,
+          relation_count: 2,
+          last_timeline_at: undefined,
+          badges: ["owner_review"],
+          projection_version: 4,
+        },
+      ],
+      delta_relations: [
+        {
+          relation_kind: "linked_to",
+          source_kind: "provider",
+          source_entity_kind: "work_item",
+          source_entity_public_id: "issue-2",
+          target_entity_kind: "pull_request",
+          target_entity_public_id: "repo/pull/2",
+          direction: "outbound",
+        },
+      ],
+      delta_timeline_entries: [
+        {
+          entry_id: "timeline-2",
+          entity_kind: "work_item",
+          entity_public_id: "issue-2",
+          source_kind: "provider",
+          source_ref: "comment-2",
+          occurred_at: "2026-03-14T11:00:00Z",
+          summary: "Updated status",
+          body_markdown: undefined,
+          command_id: undefined,
+          provider_url: undefined,
+          is_read_only: true,
+        },
+      ],
+      changed_command_ids: ["command-2"],
+    },
+  });
+});
+
 test("parseMissionControlRealtimeEnvelope rejects invalid payload", () => {
   assert.equal(
     parseMissionControlRealtimeEnvelope(

@@ -226,8 +226,9 @@
         <MissionControlSidePanel
           :details="missionControl.selectedDetails"
           :loading="missionControl.selectedLoading"
-          :error="missionControl.selectedError"
+          :error="missionControl.selectedDetailsError"
           :timeline="missionControl.selectedTimeline"
+          :timeline-error="missionControl.selectedTimelineError"
           :timeline-loading="missionControl.selectedTimelineLoading"
           :has-more-timeline="missionControl.hasSelectedTimelineMore"
           :locale="locale"
@@ -243,8 +244,9 @@
         <MissionControlSidePanel
           :details="missionControl.selectedDetails"
           :loading="missionControl.selectedLoading"
-          :error="missionControl.selectedError"
+          :error="missionControl.selectedDetailsError"
           :timeline="missionControl.selectedTimeline"
+          :timeline-error="missionControl.selectedTimelineError"
           :timeline-loading="missionControl.selectedTimelineLoading"
           :has-more-timeline="missionControl.hasSelectedTimelineMore"
           :locale="locale"
@@ -273,7 +275,13 @@ import MissionControlSidePanel from "../../features/mission-control/MissionContr
 import { buildMissionControlRouteQuery, groupMissionControlEntitiesByState, missionControlRouteStateEquals, normalizeMissionControlRouteQuery } from "../../features/mission-control/lib";
 import { subscribeMissionControlRealtime } from "../../features/mission-control/realtime";
 import { missionControlEntityKindLabelKey, missionControlStateColor } from "../../features/mission-control/presenters";
-import type { MissionControlEntityKind, MissionControlRealtimeNotice, MissionControlRelation, MissionControlRouteState } from "../../features/mission-control/types";
+import type {
+  MissionControlEntityKind,
+  MissionControlFreshnessStatus,
+  MissionControlRealtimeNotice,
+  MissionControlRelation,
+  MissionControlRouteState,
+} from "../../features/mission-control/types";
 
 const route = useRoute();
 const router = useRouter();
@@ -349,7 +357,7 @@ const canvasTitleKey = computed(() =>
   missionControl.effectiveViewMode === "board" ? "pages.missionControl.boardTitle" : "pages.missionControl.listTitle",
 );
 
-const realtimeAlert = computed(() => buildRealtimeAlert(missionControl.realtimeNotice));
+const realtimeAlert = computed(() => buildRealtimeAlert(missionControl.realtimeNotice, missionControl.effectiveFreshnessStatus));
 
 watch(
   routeState,
@@ -514,11 +522,18 @@ function restartRealtime(): void {
     resumeToken,
     onMessage: (message) => {
       missionControl.setRealtimeState("connected");
+      if (
+        message.event_kind === "connected" &&
+        (message.payload.snapshot_freshness_status === "fresh" || missionControl.realtimeNotice?.kind === "error")
+      ) {
+        missionControl.clearRealtimeNotice();
+      }
       switch (message.event_kind) {
         case "connected":
-          if (message.payload.snapshot_freshness_status === "fresh") {
-            missionControl.clearRealtimeNotice();
-          }
+          missionControl.setConnectedFreshnessStatus(message.payload.snapshot_freshness_status);
+          return;
+        case "delta":
+          missionControl.applyRealtimeDelta(message.payload);
           return;
         case "invalidate":
           missionControl.applyRealtimeNotice({
@@ -596,8 +611,27 @@ function entityStateColor(state: Parameters<typeof missionControlStateColor>[0])
   return missionControlStateColor(state);
 }
 
-function buildRealtimeAlert(notice: MissionControlRealtimeNotice | null): { type: "info" | "warning" | "error"; titleKey: string; text: string } | null {
-  if (!notice) return null;
+function buildRealtimeAlert(
+  notice: MissionControlRealtimeNotice | null,
+  freshnessStatus: MissionControlFreshnessStatus,
+): { type: "info" | "warning" | "error"; titleKey: string; text: string } | null {
+  if (!notice) {
+    if (freshnessStatus === "stale") {
+      return {
+        type: "warning",
+        titleKey: "pages.missionControl.alerts.staleTitle",
+        text: t("pages.missionControl.alerts.snapshotStaleText"),
+      };
+    }
+    if (freshnessStatus === "degraded") {
+      return {
+        type: "error",
+        titleKey: "pages.missionControl.alerts.degradedTitle",
+        text: t("pages.missionControl.alerts.snapshotDegradedText"),
+      };
+    }
+    return null;
+  }
 
   switch (notice.kind) {
     case "invalidate":
