@@ -87,7 +87,7 @@ spec:
         - libs/go
         - proto
     control-plane:
-      value: "0.1.120"
+      value: "0.1.121"
       bumpOn:
         - services/internal/control-plane
         - deploy/base/kaniko
