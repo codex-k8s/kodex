@@ -1,5 +1,6 @@
 import type { RouteRecordRaw } from "vue-router";
 
+import MissionControlPage from "../pages/operations/MissionControlPage.vue";
 import ApprovalsCenterPage from "../pages/operations/ApprovalsCenterPage.vue";
 import RuntimeDeployTaskDetailsPage from "../pages/operations/RuntimeDeployTaskDetailsPage.vue";
 import RuntimeDeployTasksPage from "../pages/operations/RuntimeDeployTasksPage.vue";
@@ -15,7 +16,8 @@ import SystemSettingsPage from "../pages/configuration/SystemSettingsPage.vue";
 import UsersPage from "../pages/UsersPage.vue";
 
 export const routes: RouteRecordRaw[] = [
-  { path: "/", name: "projects", component: ProjectsPage, meta: { section: "projects" } },
+  { path: "/", alias: "/mission-control", name: "mission-control", component: MissionControlPage, meta: { section: "operations" } },
+  { path: "/projects", name: "projects", component: ProjectsPage, meta: { section: "projects" } },
   { path: "/projects/:projectId", name: "project-details", component: ProjectDetailsPage, props: true, meta: { section: "projects", crumbKey: "crumb.projectDetails" } },
   {
     path: "/projects/:projectId/repositories",
@@ -44,5 +46,5 @@ export const routes: RouteRecordRaw[] = [
   { path: "/configuration/system-settings", name: "system-settings", component: SystemSettingsPage, meta: { adminOnly: true, section: "configuration", crumbKey: "crumb.systemSettings" } },
 
   { path: "/users", name: "users", component: UsersPage, meta: { adminOnly: true, section: "users" } },
-  { path: "/:pathMatch(.*)*", redirect: { name: "projects" } },
+  { path: "/:pathMatch(.*)*", redirect: { name: "mission-control" } },
 ];

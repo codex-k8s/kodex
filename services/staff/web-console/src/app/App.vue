@@ -3,7 +3,7 @@
     <VAppBar border :elevation="0" density="comfortable">
       <VAppBarNavIcon v-if="auth.isAuthed" @click="toggleDrawer" />
 
-      <RouterLink class="brand" :to="{ name: 'projects' }">
+      <RouterLink class="brand" :to="{ name: 'mission-control' }">
         <img class="logo" src="/brand/logo.png" alt="codex-k8s logo" />
         <div class="brand-text">
           <div class="brand-title">{{ t("app.title") }}</div>
