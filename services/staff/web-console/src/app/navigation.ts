@@ -23,6 +23,7 @@ export const navGroups: NavGroup[] = [
 
 export const navItems: NavItem[] = [
   // Operations
+  { groupId: "operations", routeName: "mission-control", titleKey: "nav.missionControl", icon: "mdi-radar" },
   { groupId: "operations", routeName: "runs", titleKey: "nav.runs", icon: "mdi-play-circle-outline" },
   { groupId: "operations", routeName: "runtime-deploy-tasks", titleKey: "nav.runtimeDeployTasks", icon: "mdi-rocket-launch-outline" },
   { groupId: "operations", routeName: "wait-queue", titleKey: "nav.waitQueue", icon: "mdi-timer-sand" },

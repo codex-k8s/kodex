@@ -19,7 +19,7 @@ services/staff/web-console/                          staff UI-приложени
     ├── i18n/                                        локализация интерфейса
     ├── router/                                      маршрутизация страниц
     ├── pages/                                       page-level компоненты экранов
-    ├── features/                                    feature-модули (auth/projects/runs/users)
+    ├── features/                                    feature-модули (auth/mission-control/projects/runs/users)
     └── shared/                                      переиспользуемый слой UI/lib/api
         └── api/                                     typed API-клиенты и контракты транспорта
 ```

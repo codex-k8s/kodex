@@ -18,7 +18,7 @@ export function createAppRouter(pinia: Pinia) {
     await auth.ensureLoaded();
 
     if (to.meta.adminOnly && !auth.isPlatformAdmin) {
-      return { name: "projects" };
+      return { name: "mission-control" };
     }
     return true;
   });

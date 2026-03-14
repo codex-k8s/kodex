@@ -5,7 +5,7 @@ title: "Sprint S9 Traceability History"
 status: in-review
 owner_role: KM
 created_at: 2026-03-12
-updated_at: 2026-03-13
+updated_at: 2026-03-14
 related_issues: [333, 335, 337, 340, 351, 363, 369, 370, 371, 372, 373, 374, 375]
 related_prs: []
 approvals:
@@ -174,3 +174,20 @@ approvals:
   - `go test ./services/external/api-gateway/internal/transport/http/... ./services/internal/control-plane/internal/transport/grpc/...`
 - Runtime kubectl/log inspection и ручные DB queries не выполнялись: scope issue закрыт contract/codegen/test evidence без отдельного cluster-debug шага.
 - Root FR/NFR matrix в `docs/delivery/requirements_traceability.md` не менялась, потому что `#372` реализует transport/codegen слой на уже утверждённом design package и не меняет канонический product baseline.
+
+## Актуализация по Issue #373 (`run:dev`, 2026-03-14)
+- Реализован frontend stream `S9-E05` в `services/staff/web-console`:
+  - добавлен новый feature-контур `src/features/mission-control/**` с typed API wrappers, Pinia store, realtime parser и UI-presenter helpers без локального дублирования backend projection policy;
+  - staff console переведена на Mission Control landing page: новый маршрут `/` (`alias /mission-control`), навигационный пункт `Mission Control`, board/list toggle, summary strip, active-set filters/search и explicit refresh поверх typed contracts `dashboard -> entity details -> timeline`;
+  - side panel теперь показывает typed details, relations, timeline, allowed action policy и provider deep-links, а mobile-path использует fullscreen dialog вместо unsafe inline fallback;
+  - realtime shell подключён к `/api/v1/staff/mission-control/realtime`: connected/stale/degraded/resync/error события переводят UI в safe banner/list-fallback semantics и не вводят mock-only action execution.
+- Зафиксированы guardrails:
+  - degraded snapshot принудительно переводит presentation в list fallback, но сохраняет preferred board/list state в route query для recovery path;
+  - side panel не исполняет provider-unsafe или недоопределённые команды локально, а показывает typed action policy и provider deep-links как read-only decision surface;
+  - traceability и service README синхронизированы, при этом root FR/NFR matrix не меняется, так как issue закрывает UI integration wave на уже утверждённом design baseline.
+- Через Context7 подтверждены актуальные рекомендации для feature-scoped Pinia stores (`/vuejs/pinia`) и responsive Vuetify dashboard layout (`/vuetifyjs/vuetify`), после чего UI state/realtime wiring и responsive side panel собраны без ad-hoc глобального state.
+- Проверки:
+  - `npm --prefix services/staff/web-console run build`
+  - `node --test --experimental-strip-types --experimental-specifier-resolution=node services/staff/web-console/src/features/mission-control/lib.test.ts services/staff/web-console/src/shared/lib/*.test.ts`
+  - `git diff --check`
+- Runtime kubectl/log inspection и ручные API/DB queries не выполнялись: scope issue закрыт frontend build/unit evidence и traceability sync без отдельного cluster-debug шага.
