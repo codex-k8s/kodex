@@ -121,6 +121,14 @@ type MissionControlCommandApprovalStatePatch struct {
 	Value enumtypes.MissionControlApprovalState
 }
 
+// MissionControlCommandClaimParams defines one global worker claim request over pending commands.
+type MissionControlCommandClaimParams struct {
+	WorkerID string
+	LeaseTTL time.Duration
+	Statuses []enumtypes.MissionControlCommandStatus
+	Limit    int
+}
+
 // MissionControlCommandCreateParams defines one command-ledger insert.
 type MissionControlCommandCreateParams struct {
 	ProjectID           string
@@ -155,6 +163,8 @@ type MissionControlCommandStatusUpdateParams struct {
 	ApprovalDecidedAtPatch   MissionControlOptionalTimePatch
 	ResultPayloadPatch       MissionControlOptionalJSONPatch
 	ProviderDeliveriesPatch  MissionControlOptionalJSONPatch
+	LeaseOwnerPatch          MissionControlOptionalStringPatch
+	LeaseUntilPatch          MissionControlOptionalTimePatch
 	UpdatedAt                time.Time
 	ReconciledAtPatch        MissionControlOptionalTimePatch
 }
@@ -164,6 +174,12 @@ type MissionControlCommandListFilter struct {
 	ProjectID string
 	Statuses  []enumtypes.MissionControlCommandStatus
 	Limit     int
+}
+
+// MissionControlGlobalCommandListFilter defines one global command lookup filter for worker-owned execution.
+type MissionControlGlobalCommandListFilter struct {
+	Statuses []enumtypes.MissionControlCommandStatus
+	Limit    int
 }
 
 // MissionControlWarmupRequest defines the owner-owned entry-point contract for worker warmup/backfill.

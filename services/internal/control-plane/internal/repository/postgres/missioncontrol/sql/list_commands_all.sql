@@ -1,4 +1,4 @@
--- name: missioncontrol__get_command_by_business_intent :one
+-- name: missioncontrol__list_commands_all :many
 SELECT
     id::text AS id,
     project_id::text AS project_id,
@@ -22,5 +22,9 @@ SELECT
     updated_at,
     reconciled_at
 FROM mission_control_commands
-WHERE project_id = $1
-  AND business_intent_key = $2;
+WHERE (
+      COALESCE(array_length($1::text[], 1), 0) = 0
+      OR status = ANY($1::text[])
+  )
+ORDER BY updated_at DESC, requested_at DESC, id DESC
+LIMIT $2;
