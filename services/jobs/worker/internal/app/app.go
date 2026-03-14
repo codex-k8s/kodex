@@ -365,6 +365,9 @@ func Run() error {
 			}
 			cancelShutdown()
 			stopCtx, cancelStop := context.WithTimeout(context.Background(), 5*time.Second)
+			if err := service.ReleaseOwnedRunLeasesOnShutdown(stopCtx); err != nil {
+				logger.Warn("release owned run leases on shutdown failed", "worker_id", cfg.WorkerID, "err", err)
+			}
 			if err := markWorkerStopped(stopCtx, workerInstances, cfg.WorkerID, time.Now().UTC()); err != nil {
 				logger.Warn("mark worker stopped failed", "worker_id", cfg.WorkerID, "err", err)
 			}

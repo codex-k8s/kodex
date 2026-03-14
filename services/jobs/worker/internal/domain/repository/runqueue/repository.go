@@ -11,6 +11,7 @@ type (
 	ClaimRunningParams        = querytypes.RunQueueClaimRunningParams
 	CreatePendingResumeParams = querytypes.RunQueueCreatePendingResumeParams
 	ReleaseStaleLeasesParams  = querytypes.RunQueueReleaseStaleLeasesParams
+	ReleaseOwnedLeasesParams  = querytypes.RunQueueReleaseOwnedLeasesParams
 	ClaimedRun                = querytypes.RunQueueClaimedRun
 	RunningRun                = querytypes.RunQueueRunningRun
 	NonTerminalRun            = querytypes.RunQueueNonTerminalRun
@@ -29,6 +30,8 @@ type Repository interface {
 	ClaimRunning(ctx context.Context, params ClaimRunningParams) ([]RunningRun, error)
 	// ReleaseStaleLeases clears running-run leases whose owner worker instance is stale.
 	ReleaseStaleLeases(ctx context.Context, params ReleaseStaleLeasesParams) ([]ReleasedStaleLease, error)
+	// ReleaseOwnedLeases clears running-run leases currently owned by one worker during graceful shutdown.
+	ReleaseOwnedLeases(ctx context.Context, params ReleaseOwnedLeasesParams) ([]ReleasedStaleLease, error)
 	// ListRunning returns active runs for reconciliation.
 	ListRunning(ctx context.Context, limit int) ([]RunningRun, error)
 	// ListNonTerminalByRunIDs returns non-terminal agent_runs referenced by managed namespaces.

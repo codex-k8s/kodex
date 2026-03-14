@@ -43,6 +43,12 @@ type RunQueueReleaseStaleLeasesParams struct {
 	ActiveWorkerIDs []string
 }
 
+// RunQueueReleaseOwnedLeasesParams describes one graceful running-lease release during worker shutdown.
+type RunQueueReleaseOwnedLeasesParams struct {
+	// WorkerID identifies worker instance that currently owns running-run leases.
+	WorkerID string
+}
+
 // RunQueueClaimedRun represents a pending run promoted into running state.
 type RunQueueClaimedRun struct {
 	// RunID is a unique run identifier.

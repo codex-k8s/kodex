@@ -45,6 +45,8 @@ var (
 	queryClaimRunning string
 	//go:embed sql/release_stale_running_leases.sql
 	queryReleaseStaleRunningLeases string
+	//go:embed sql/release_owned_running_leases.sql
+	queryReleaseOwnedRunningLeases string
 	//go:embed sql/list_running.sql
 	queryListRunning string
 	//go:embed sql/list_non_terminal_by_run_ids.sql
@@ -290,6 +292,44 @@ func (r *Repository) ReleaseStaleLeases(ctx context.Context, params domainrepo.R
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate released stale running leases: %w", err)
+	}
+	return items, nil
+}
+
+// ReleaseOwnedLeases clears running-run leases currently owned by one worker during graceful shutdown.
+func (r *Repository) ReleaseOwnedLeases(ctx context.Context, params domainrepo.ReleaseOwnedLeasesParams) ([]domainrepo.ReleasedStaleLease, error) {
+	workerID := strings.TrimSpace(params.WorkerID)
+	if workerID == "" {
+		return nil, fmt.Errorf("release owned running leases: worker_id is required")
+	}
+
+	rows, err := r.db.Query(ctx, queryReleaseOwnedRunningLeases, workerID)
+	if err != nil {
+		return nil, fmt.Errorf("release owned running leases: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]domainrepo.ReleasedStaleLease, 0, 8)
+	for rows.Next() {
+		var (
+			item                  domainrepo.ReleasedStaleLease
+			previousLeaseUntilRaw pgtype.Timestamptz
+		)
+		if err := rows.Scan(
+			&item.RunID,
+			&item.CorrelationID,
+			&item.ProjectID,
+			&item.PreviousLeaseOwner,
+			&previousLeaseUntilRaw,
+			&item.WorkerStatus,
+		); err != nil {
+			return nil, fmt.Errorf("scan released owned running lease row: %w", err)
+		}
+		item.PreviousLeaseUntil = timestamptzPtr(previousLeaseUntilRaw)
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate released owned running leases: %w", err)
 	}
 	return items, nil
 }
