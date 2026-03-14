@@ -138,3 +138,22 @@ approvals:
 - Внешний baseline дополнительно сверен:
   - Context7 `/jackc/pgx` использован для перепроверки idiomatic transaction + row-locking patterns (`BeginTx`, safe `defer Rollback`, `CollectRows`) перед реализацией repository refresh path.
 - Root FR/NFR matrix в `docs/delivery/requirements_traceability.md` не менялась по существу: Issue `#425` закрывает foundation implementation wave и не вводит новых продуктовых требований.
+
+## Актуализация по Issue #426 (`run:dev`, 2026-03-14)
+- Реализован domain stream `S12-E02`:
+  - новый service layer в `services/internal/control-plane/internal/domain/githubratelimit/{contract.go,model.go,service.go,service_classification.go,service_projection.go,service_report.go,service_resume_payload.go,service_templates.go,templates/messages_ru.tmpl}`;
+  - новые domain value/enum типы в `services/internal/control-plane/internal/domain/types/{enum/github_rate_limit_visibility.go,value/github_rate_limit_signal.go,value/github_rate_limit_visibility.go,value/github_rate_limit_resume_payload.go}`.
+- Зафиксированы:
+  - canonical `GitHubRateLimitSignal` normalization/classification для primary limit, secondary limit с `Retry-After`, secondary/abuse path без countdown и hard-failure separation без создания wait aggregate;
+  - wait aggregate lifecycle поверх foundation repository: idempotent signal dedupe по `signal_id`, upsert open wait per contour, evidence append (`signal_detected`, `classified`), `RefreshRunProjection` и `run.wait.paused` flow-event payload с `github_rate_limit.wait.entered` / `github_rate_limit.manual_action_required`;
+  - typed visibility projection с dominant/related waits, comment mirror state, recovery hints, manual-action guidance и best-effort comment render context, который строится только из persisted projection, а не из raw headers/logs;
+  - deterministic agent-session resume payload builder для future runner/worker waves без повторного derive semantics from raw stderr/headers.
+- Проверки:
+  - `go test ./services/internal/control-plane/internal/domain/githubratelimit`
+  - `go test ./services/internal/control-plane/...`
+  - `make lint-go`
+  - `make dupl-go`
+  - `git diff --check`
+- Внешний baseline дополнительно сверен:
+  - Context7 `/github/docs` использован для повторной проверки GitHub guidance по primary/secondary rate limits, `Retry-After`, `x-ratelimit-reset` и backoff discipline перед реализацией classification policy.
+- Root FR/NFR matrix в `docs/delivery/requirements_traceability.md` не менялась по существу: Issue `#426` закрывает domain semantics/control-plane ownership wave и не добавляет новых продуктовых требований.
