@@ -266,24 +266,7 @@ func (s *Service) upsertWait(ctx context.Context, run agentrunrepo.Run, signal S
 func (s *Service) appendPostClassificationEvidence(ctx context.Context, wait Wait, signal Signal, classification Classification) error {
 	observedAt := signal.OccurredAt
 	if classification.NextStepKind == enumtypes.GitHubRateLimitNextStepKindAutoResumeScheduled {
-		if _, err := s.waits.AppendEvidence(ctx, querytypes.GitHubRateLimitWaitEvidenceCreateParams{
-			WaitID:       wait.ID,
-			EventKind:    enumtypes.GitHubRateLimitEvidenceEventResumeScheduled,
-			SignalID:     signal.SignalID,
-			SignalOrigin: signal.SignalOrigin,
-			PayloadJSON: marshalJSONPayload(waitResumeScheduledEvidencePayload{
-				WaitID:          wait.ID,
-				ResumeNotBefore: wait.ResumeNotBefore,
-				AttemptsUsed:    wait.AutoResumeAttemptsUsed,
-				MaxAttempts:     wait.MaxAutoResumeAttempts,
-				NextStepKind:    classification.NextStepKind,
-				SignalOrigin:    signal.SignalOrigin,
-			}),
-			ObservedAt: observedAt,
-		}); err != nil {
-			return fmt.Errorf("append github rate-limit resume schedule evidence: %w", err)
-		}
-		return nil
+		return s.appendResumeScheduledEvidence(ctx, wait, signal.SignalID, signal.SignalOrigin, observedAt, classification.NextStepKind)
 	}
 	if classification.NextStepKind == enumtypes.GitHubRateLimitNextStepKindManualActionRequired {
 		if _, err := s.waits.AppendEvidence(ctx, querytypes.GitHubRateLimitWaitEvidenceCreateParams{

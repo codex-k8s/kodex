@@ -49,13 +49,19 @@ func (s *Service) ReplayGitHubRateLimitPlatformCall(ctx context.Context, payload
 
 	switch enumtypes.GitHubRateLimitPlatformReplayOperationKind(operationKind) {
 	case enumtypes.GitHubRateLimitPlatformReplayOperationKindIssueStageTransition:
-		_, err = s.previewOrExecuteIssueStageTransition(
+		expectedCurrentRunLabels := normalizeRunStageLabels(payload.ExpectedCurrentRunLabels)
+		if len(expectedCurrentRunLabels) == 0 {
+			return errs.Validation{Field: "expected_current_run_labels", Msg: "is required for retry-safe issue stage transition replay"}
+		}
+
+		_, err = s.previewOrExecuteIssueStageTransitionWithCAS(
 			ctx,
 			botToken,
 			owner,
 			repo,
 			payload.IssueNumber,
 			strings.TrimSpace(payload.TargetLabel),
+			expectedCurrentRunLabels,
 			true,
 		)
 		if err != nil {

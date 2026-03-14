@@ -169,7 +169,8 @@ approvals:
 - Зафиксированы:
   - `control-plane` теперь владеет worker-facing `ProcessNextGitHubRateLimitWait` RPC, claim/resume lifecycle, resolved/manual-action evidence append и `run.wait.resumed` flow-event для deterministic replay outcome;
   - `worker` получил bounded sweep loop с отдельным feature flag `CODEXK8S_GITHUB_RATE_LIMIT_WAIT_ENABLED` и лимитом `CODEXK8S_WORKER_GITHUB_RATE_LIMIT_SWEEP_LIMIT`, который обрабатывает due waits до exhaustion/empty queue без собственной domain classification;
-  - `run_status_comment_retry`, `platform_github_call_replay` и `agent_session_resume` теперь исполняются через typed replay payloads; agent path создаёт pending resume run с persisted `github_rate_limit_resume_payload`, а replay failure эскалируется в `manual_action_required` вместо бесконечного retry-loop;
+  - `run_status_comment_retry`, `platform_github_call_replay` и `agent_session_resume` теперь исполняются через typed replay payloads; agent path создаёт pending resume run с persisted `github_rate_limit_resume_payload`, а replay failure reschedule’ится по finite budget и эскалируется в `manual_action_required` только после реального исчерпания safe attempts;
+  - `platform_github_call_replay` для issue stage transition получил CAS snapshot `expected_current_run_labels` и request metadata, поэтому delayed replay не удаляет более новый `run:*` label-set вслепую, а уходит в conflict/manual review path;
   - config/deploy/codegen синхронизированы: proto regenerated, control-plane/worker wiring добавлен в app/grpc/client layers, production manifest и bootstrap example получили новые env.
 - Проверки:
   - `make gen-proto-go`

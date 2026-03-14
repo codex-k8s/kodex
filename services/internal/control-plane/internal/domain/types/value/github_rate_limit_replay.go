@@ -35,8 +35,11 @@ type GitHubRateLimitRunStatusCommentRetryPayload struct {
 
 // GitHubRateLimitPlatformCallReplayPayload stores deterministic platform-managed replay parameters.
 type GitHubRateLimitPlatformCallReplayPayload struct {
-	OperationKind      enumtypes.GitHubRateLimitPlatformReplayOperationKind `json:"operation_kind"`
-	RepositoryFullName string                                               `json:"repository_full_name"`
-	IssueNumber        int                                                  `json:"issue_number,omitempty"`
-	TargetLabel        string                                               `json:"target_label,omitempty"`
+	OperationKind            enumtypes.GitHubRateLimitPlatformReplayOperationKind `json:"operation_kind"`
+	RepositoryFullName       string                                               `json:"repository_full_name"`
+	IssueNumber              int                                                  `json:"issue_number,omitempty"`
+	TargetLabel              string                                               `json:"target_label,omitempty"`
+	RequestFingerprint       string                                               `json:"request_fingerprint,omitempty"`
+	CorrelationID            string                                               `json:"correlation_id,omitempty"`
+	ExpectedCurrentRunLabels []string                                             `json:"expected_current_run_labels,omitempty"`
 }

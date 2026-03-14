@@ -162,7 +162,7 @@ func TestProcessNextAutoResumeRetriesRunStatusComment(t *testing.T) {
 	}
 }
 
-func TestProcessNextAutoResumeEscalatesReplayFailureToManualAction(t *testing.T) {
+func TestProcessNextAutoResumeReschedulesReplayFailureWithinBudget(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, time.March, 14, 19, 0, 0, 0, time.UTC)
@@ -182,16 +182,99 @@ func TestProcessNextAutoResumeEscalatesReplayFailureToManualAction(t *testing.T)
 		CorrelationID:    "corr-platform",
 		ResumeActionKind: enumtypes.GitHubRateLimitResumeActionKindPlatformCallReplay,
 		ResumePayloadJSON: marshalJSONPayload(valuetypes.GitHubRateLimitPlatformCallReplayPayload{
-			OperationKind:      enumtypes.GitHubRateLimitPlatformReplayOperationKindIssueStageTransition,
-			RepositoryFullName: "codex-k8s/codex-k8s",
-			IssueNumber:        427,
-			TargetLabel:        "run:qa",
+			OperationKind:            enumtypes.GitHubRateLimitPlatformReplayOperationKindIssueStageTransition,
+			RepositoryFullName:       "codex-k8s/codex-k8s",
+			IssueNumber:              427,
+			TargetLabel:              "run:qa",
+			RequestFingerprint:       "issue:427:run:dev:revise->run:qa",
+			CorrelationID:            "corr-platform",
+			ExpectedCurrentRunLabels: []string{"run:dev:revise"},
 		}),
 		MaxAutoResumeAttempts: 2,
 		ResumeNotBefore:       ptrTime(now.Add(-time.Minute)),
 		FirstDetectedAt:       now.Add(-2 * time.Minute),
-		LastSignalAt:          now.Add(-time.Minute),
+		LastSignalAt:          now.Add(-2*time.Minute + 15*time.Second),
 		CreatedAt:             now.Add(-2 * time.Minute),
+		UpdatedAt:             now.Add(-time.Minute),
+	}
+	waits.claimIDs = []string{"wait-platform"}
+	platform := &fakePlatformCallReplayer{err: errors.New("github still rate limited")}
+
+	service := newTestService(t, valuetypes.GitHubRateLimitRolloutState{
+		CoreFeatureEnabled: true,
+		SchemaReady:        true,
+		DomainReady:        true,
+		WorkerReady:        true,
+	}, waits, &fakeRunRepository{}, &fakeFlowEventRecorder{}, now, nil, platform)
+
+	result, err := service.ProcessNextAutoResume(context.Background(), ProcessNextAutoResumeParams{WorkerID: "worker-1"})
+	if err != nil {
+		t.Fatalf("ProcessNextAutoResume() error = %v", err)
+	}
+	if !result.Found {
+		t.Fatal("expected due wait to be found")
+	}
+	if got, want := result.Wait.State, enumtypes.GitHubRateLimitWaitStateAutoResumeScheduled; got != want {
+		t.Fatalf("wait.state = %q, want %q", got, want)
+	}
+	if result.ManualActionKind != "" {
+		t.Fatalf("manual_action_kind = %q, want empty", result.ManualActionKind)
+	}
+	if result.Wait.ResumeNotBefore == nil {
+		t.Fatal("expected resume_not_before to be rescheduled")
+	}
+	if got, want := result.Wait.AutoResumeAttemptsUsed, 1; got != want {
+		t.Fatalf("auto_resume_attempts_used = %d, want %d", got, want)
+	}
+	if got, want := result.Wait.Confidence, enumtypes.GitHubRateLimitConfidenceConservative; got != want {
+		t.Fatalf("confidence = %q, want %q", got, want)
+	}
+	if got, want := result.Wait.RecoveryHintKind, enumtypes.GitHubRateLimitRecoveryHintKindRetryAfter; got != want {
+		t.Fatalf("recovery_hint_kind = %q, want %q", got, want)
+	}
+	expectedResume := now.Add(45 * time.Second)
+	if got := result.Wait.ResumeNotBefore.UTC(); !got.Equal(expectedResume) {
+		t.Fatalf("resume_not_before = %s, want %s", got, expectedResume)
+	}
+	if got := len(waits.evidence); got != 3 {
+		t.Fatalf("evidence count = %d, want 3", got)
+	}
+}
+
+func TestProcessNextAutoResumeEscalatesReplayFailureAfterBudgetExhausted(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.March, 14, 19, 10, 0, 0, time.UTC)
+	waits := newFakeWaitRepository(now)
+	waits.waits["wait-platform"] = Wait{
+		ID:                     "wait-platform",
+		ProjectID:              "project-1",
+		RunID:                  "run-platform",
+		ContourKind:            enumtypes.GitHubRateLimitContourKindPlatformPAT,
+		SignalOrigin:           enumtypes.GitHubRateLimitSignalOriginControlPlane,
+		OperationClass:         enumtypes.GitHubRateLimitOperationClassIssueLabelTransition,
+		State:                  enumtypes.GitHubRateLimitWaitStateAutoResumeScheduled,
+		LimitKind:              enumtypes.GitHubRateLimitLimitKindSecondary,
+		Confidence:             enumtypes.GitHubRateLimitConfidenceConservative,
+		RecoveryHintKind:       enumtypes.GitHubRateLimitRecoveryHintKindRetryAfter,
+		SignalID:               "signal-platform-2",
+		CorrelationID:          "corr-platform-2",
+		ResumeActionKind:       enumtypes.GitHubRateLimitResumeActionKindPlatformCallReplay,
+		AutoResumeAttemptsUsed: 1,
+		ResumePayloadJSON: marshalJSONPayload(valuetypes.GitHubRateLimitPlatformCallReplayPayload{
+			OperationKind:            enumtypes.GitHubRateLimitPlatformReplayOperationKindIssueStageTransition,
+			RepositoryFullName:       "codex-k8s/codex-k8s",
+			IssueNumber:              427,
+			TargetLabel:              "run:qa",
+			RequestFingerprint:       "issue:427:run:dev:revise->run:qa",
+			CorrelationID:            "corr-platform-2",
+			ExpectedCurrentRunLabels: []string{"run:dev:revise"},
+		}),
+		MaxAutoResumeAttempts: 2,
+		ResumeNotBefore:       ptrTime(now.Add(-time.Minute)),
+		FirstDetectedAt:       now.Add(-3 * time.Minute),
+		LastSignalAt:          now.Add(-2*time.Minute + 15*time.Second),
+		CreatedAt:             now.Add(-3 * time.Minute),
 		UpdatedAt:             now.Add(-time.Minute),
 	}
 	waits.claimIDs = []string{"wait-platform"}
@@ -216,6 +299,9 @@ func TestProcessNextAutoResumeEscalatesReplayFailureToManualAction(t *testing.T)
 	}
 	if got, want := result.ManualActionKind, enumtypes.GitHubRateLimitManualActionKindRequeuePlatformOperation; got != want {
 		t.Fatalf("manual_action_kind = %q, want %q", got, want)
+	}
+	if got, want := result.Wait.AutoResumeAttemptsUsed, 2; got != want {
+		t.Fatalf("auto_resume_attempts_used = %d, want %d", got, want)
 	}
 	if got := len(waits.evidence); got != 3 {
 		t.Fatalf("evidence count = %d, want 3", got)

@@ -77,13 +77,15 @@ func (s *Service) ProcessNextAutoResume(ctx context.Context, params ProcessNextA
 
 	resumePayloadJSON, requeuedCorrelationID, attemptErr := s.executeAutoResume(ctx, wait, now)
 	if attemptErr != nil {
-		wait, err = s.escalateAutoResumeFailure(ctx, wait, workerID, now, attemptErr)
+		wait, err = s.handleAutoResumeFailure(ctx, wait, workerID, now, attemptErr)
 		if err != nil {
 			return ProcessNextAutoResumeResult{}, err
 		}
 		result.Wait = wait
-		result.ManualActionKind = wait.ManualActionKind
 		result.ResumeNotBefore = wait.ResumeNotBefore
+		if wait.State == enumtypes.GitHubRateLimitWaitStateManualActionRequired {
+			result.ManualActionKind = wait.ManualActionKind
+		}
 		return result, nil
 	}
 
@@ -259,7 +261,7 @@ func (s *Service) resolveAutoResumeSuccess(
 	return wait, nil
 }
 
-func (s *Service) escalateAutoResumeFailure(
+func (s *Service) handleAutoResumeFailure(
 	ctx context.Context,
 	wait Wait,
 	workerID string,
@@ -267,11 +269,8 @@ func (s *Service) escalateAutoResumeFailure(
 	attemptErr error,
 ) (Wait, error) {
 	attemptNo := wait.AutoResumeAttemptsUsed
-	nextResumeNotBefore := wait.ResumeNotBefore
-	if nextResumeNotBefore == nil {
-		value := now.UTC()
-		nextResumeNotBefore = &value
-	}
+	classification := classifyAutoResumeReplayFailure(wait, now)
+	nextResumeNotBefore := classification.ResumeNotBefore
 
 	if _, err := s.waits.AppendEvidence(ctx, querytypes.GitHubRateLimitWaitEvidenceCreateParams{
 		WaitID:       wait.ID,
@@ -283,7 +282,7 @@ func (s *Service) escalateAutoResumeFailure(
 			AttemptNo:       attemptNo,
 			WorkerID:        workerID,
 			Error:           trimToMaxBytes(strings.TrimSpace(attemptErr.Error()), signalExcerptMaxBytes),
-			NextStepKind:    enumtypes.GitHubRateLimitNextStepKindManualActionRequired,
+			NextStepKind:    classification.NextStepKind,
 			ResumeNotBefore: nextResumeNotBefore,
 		}),
 		ObservedAt: now,
@@ -291,70 +290,126 @@ func (s *Service) escalateAutoResumeFailure(
 		return Wait{}, fmt.Errorf("append github rate-limit resume-failed evidence: %w", err)
 	}
 
-	manualActionKind := resolveManualActionKind(
-		wait.ResumeActionKind,
-		wait.Confidence,
-		enumtypes.GitHubRateLimitRecoveryHintKindManualOnly,
-	)
-
 	lastResumeAttemptAt := now.UTC()
 	wait, found, err := s.waits.Update(ctx, querytypes.GitHubRateLimitWaitUpdateParams{
 		ID:                     wait.ID,
 		SignalOrigin:           enumtypes.GitHubRateLimitSignalOriginWorker,
 		OperationClass:         wait.OperationClass,
-		State:                  enumtypes.GitHubRateLimitWaitStateManualActionRequired,
-		LimitKind:              wait.LimitKind,
-		Confidence:             wait.Confidence,
-		RecoveryHintKind:       enumtypes.GitHubRateLimitRecoveryHintKindManualOnly,
+		State:                  classification.State,
+		LimitKind:              classification.LimitKind,
+		Confidence:             classification.Confidence,
+		RecoveryHintKind:       classification.RecoveryHintKind,
 		SignalID:               wait.SignalID,
 		RequestFingerprint:     wait.RequestFingerprint,
 		CorrelationID:          wait.CorrelationID,
 		ResumeActionKind:       wait.ResumeActionKind,
 		ResumePayloadJSON:      wait.ResumePayloadJSON,
-		ManualActionKind:       manualActionKind,
-		AutoResumeAttemptsUsed: wait.MaxAutoResumeAttempts,
-		MaxAutoResumeAttempts:  wait.MaxAutoResumeAttempts,
+		ManualActionKind:       classification.ManualActionKind,
+		AutoResumeAttemptsUsed: attemptNo,
+		MaxAutoResumeAttempts:  classification.MaxAutoResumeAttempts,
 		ResumeNotBefore:        nextResumeNotBefore,
 		LastResumeAttemptAt:    &lastResumeAttemptAt,
 		LastSignalAt:           wait.LastSignalAt,
 		ResolvedAt:             nil,
 	})
 	if err != nil {
-		return Wait{}, fmt.Errorf("mark github rate-limit wait manual_action_required: %w", err)
+		return Wait{}, fmt.Errorf("update github rate-limit wait after replay failure: %w", err)
 	}
 	if !found {
-		return Wait{}, fmt.Errorf("wait %s not found while escalating github rate-limit replay failure", wait.ID)
+		return Wait{}, fmt.Errorf("wait %s not found while handling github rate-limit replay failure", wait.ID)
 	}
 
-	if _, err := s.waits.AppendEvidence(ctx, querytypes.GitHubRateLimitWaitEvidenceCreateParams{
-		WaitID:       wait.ID,
-		EventKind:    enumtypes.GitHubRateLimitEvidenceEventManualActionRequired,
-		SignalID:     wait.SignalID,
-		SignalOrigin: enumtypes.GitHubRateLimitSignalOriginWorker,
-		PayloadJSON: marshalJSONPayload(waitManualActionEvidencePayload{
-			WaitID:           wait.ID,
-			AttemptNo:        attemptNo,
-			ManualActionKind: wait.ManualActionKind,
-			WorkerID:         workerID,
-		}),
-		ObservedAt: now,
-	}); err != nil {
-		return Wait{}, fmt.Errorf("append github rate-limit manual-action evidence after replay failure: %w", err)
+	if classification.NextStepKind == enumtypes.GitHubRateLimitNextStepKindAutoResumeScheduled {
+		if err := s.appendResumeScheduledEvidence(
+			ctx,
+			wait,
+			wait.SignalID,
+			enumtypes.GitHubRateLimitSignalOriginWorker,
+			now,
+			classification.NextStepKind,
+		); err != nil {
+			return Wait{}, fmt.Errorf("append github rate-limit resume-scheduled evidence after replay failure: %w", err)
+		}
+	} else {
+		if _, err := s.waits.AppendEvidence(ctx, querytypes.GitHubRateLimitWaitEvidenceCreateParams{
+			WaitID:       wait.ID,
+			EventKind:    enumtypes.GitHubRateLimitEvidenceEventManualActionRequired,
+			SignalID:     wait.SignalID,
+			SignalOrigin: enumtypes.GitHubRateLimitSignalOriginWorker,
+			PayloadJSON: marshalJSONPayload(waitManualActionEvidencePayload{
+				WaitID:           wait.ID,
+				AttemptNo:        attemptNo,
+				ManualActionKind: wait.ManualActionKind,
+				WorkerID:         workerID,
+			}),
+			ObservedAt: now,
+		}); err != nil {
+			return Wait{}, fmt.Errorf("append github rate-limit manual-action evidence after replay failure: %w", err)
+		}
 	}
 
 	refreshResult, err := s.waits.RefreshRunProjection(ctx, wait.RunID)
 	if err != nil {
-		return Wait{}, fmt.Errorf("refresh github rate-limit projection after manual escalation: %w", err)
+		return Wait{}, fmt.Errorf("refresh github rate-limit projection after replay failure: %w", err)
 	}
 	projection, _, err := s.loadProjectionAndCommentContext(ctx, wait.RunID)
 	if err != nil {
 		return Wait{}, err
 	}
-	s.insertRunWaitFlowEvent(ctx, wait.CorrelationID, wait, Classification{
-		NextStepKind: enumtypes.GitHubRateLimitNextStepKindManualActionRequired,
-	}, refreshResult, projection)
+	s.insertRunWaitFlowEvent(ctx, wait.CorrelationID, wait, classification, refreshResult, projection)
 
 	return wait, nil
+}
+
+func classifyAutoResumeReplayFailure(wait Wait, now time.Time) Classification {
+	attemptNo := wait.AutoResumeAttemptsUsed
+	switch wait.LimitKind {
+	case enumtypes.GitHubRateLimitLimitKindPrimary:
+		return classifyPrimaryReset(derivePrimaryResetAt(wait, now), attemptNo, wait.ResumeActionKind, now)
+	case enumtypes.GitHubRateLimitLimitKindSecondary:
+		if wait.RecoveryHintKind == enumtypes.GitHubRateLimitRecoveryHintKindRetryAfter {
+			if retryAfterSeconds, ok := deriveRetryAfterSeconds(wait); ok {
+				return classifySecondaryRetryAfter(retryAfterSeconds, attemptNo, wait.ResumeActionKind, now)
+			}
+		}
+		return classifySecondaryBackoff(attemptNo, wait.ResumeActionKind, now)
+	default:
+		return Classification{
+			LimitKind:              wait.LimitKind,
+			Confidence:             wait.Confidence,
+			RecoveryHintKind:       enumtypes.GitHubRateLimitRecoveryHintKindManualOnly,
+			State:                  enumtypes.GitHubRateLimitWaitStateManualActionRequired,
+			NextStepKind:           enumtypes.GitHubRateLimitNextStepKindManualActionRequired,
+			ResumeActionKind:       wait.ResumeActionKind,
+			ManualActionKind:       resolveManualActionKind(wait.ResumeActionKind, wait.Confidence, enumtypes.GitHubRateLimitRecoveryHintKindManualOnly),
+			AutoResumeAttemptsUsed: attemptNo,
+			MaxAutoResumeAttempts:  wait.MaxAutoResumeAttempts,
+		}
+	}
+}
+
+func derivePrimaryResetAt(wait Wait, now time.Time) time.Time {
+	if wait.ResumeNotBefore == nil {
+		return now
+	}
+	return wait.ResumeNotBefore.Add(-primaryLimitGuardDelay).UTC()
+}
+
+func deriveRetryAfterSeconds(wait Wait) (int, bool) {
+	if wait.ResumeNotBefore == nil || wait.LastSignalAt.IsZero() {
+		return 0, false
+	}
+
+	delay := wait.ResumeNotBefore.Sub(wait.LastSignalAt.UTC()) - secondaryRetryAfterGuardDelay
+	if delay <= 0 {
+		return 0, false
+	}
+
+	seconds := int((delay + time.Second - 1) / time.Second)
+	if seconds <= 0 {
+		return 0, false
+	}
+	return seconds, true
 }
 
 func decodeGitHubRateLimitReplayPayload[T any](raw json.RawMessage, contextMessage string) (T, error) {
