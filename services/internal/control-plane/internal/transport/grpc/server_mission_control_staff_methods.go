@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -26,6 +25,7 @@ import (
 const (
 	missionControlSnapshotDefaultLimit  = 50
 	missionControlSnapshotFetchLimit    = 500
+	missionControlSnapshotSearchLimit   = 500
 	missionControlTimelineDefaultLimit  = 50
 	missionControlVisibleProjectsLimit  = 1000
 	missionControlDefaultSnapshotView   = "board"
@@ -51,30 +51,6 @@ type missionControlTimelineQuery struct {
 type missionControlSnapshotEntity struct {
 	projectID string
 	entity    missioncontroldomain.Entity
-}
-
-type missionControlDetailPayloadWorkItem struct {
-	RepositoryFullName string `json:"repository_full_name"`
-	IssueNumber        int64  `json:"issue_number"`
-	IssueURL           string `json:"issue_url,omitempty"`
-	LastRunID          string `json:"last_run_id,omitempty"`
-	LastStatus         string `json:"last_status,omitempty"`
-	TriggerKind        string `json:"trigger_kind,omitempty"`
-}
-
-type missionControlDetailPayloadPullRequest struct {
-	RepositoryFullName string `json:"repository_full_name"`
-	PullRequestNumber  int64  `json:"pull_request_number"`
-	PullRequestURL     string `json:"pull_request_url,omitempty"`
-	LastRunID          string `json:"last_run_id,omitempty"`
-	LastStatus         string `json:"last_status,omitempty"`
-}
-
-type missionControlDetailPayloadAgent struct {
-	AgentKey    string `json:"agent_key"`
-	LastRunID   string `json:"last_run_id,omitempty"`
-	LastStatus  string `json:"last_status,omitempty"`
-	LastRunRepo string `json:"last_run_repository,omitempty"`
 }
 
 func (s *Server) GetMissionControlSnapshot(ctx context.Context, req *controlplanev1.GetMissionControlSnapshotRequest) (*controlplanev1.GetMissionControlSnapshotResponse, error) {
@@ -335,7 +311,9 @@ func (s *Server) collectMissionControlActiveSet(
 	if fetchLimit <= 0 {
 		fetchLimit = missionControlSnapshotDefaultLimit
 	}
-	if searchRequested || fetchLimit < missionControlSnapshotFetchLimit {
+	if searchRequested {
+		fetchLimit = missionControlSnapshotSearchLimit + 1
+	} else if fetchLimit < missionControlSnapshotFetchLimit {
 		fetchLimit = missionControlSnapshotFetchLimit
 	}
 
@@ -347,6 +325,11 @@ func (s *Server) collectMissionControlActiveSet(
 		})
 		if err != nil {
 			return nil, nil, err
+		}
+		if searchRequested && len(activeSet.Entities) > missionControlSnapshotSearchLimit {
+			return nil, nil, errs.FailedPrecondition{
+				Msg: "mission control search is available only for projects with 500 or fewer active entities until full server-side filtering lands",
+			}
 		}
 		for _, entity := range activeSet.Entities {
 			entities = append(entities, missionControlSnapshotEntity{projectID: projectID, entity: entity})
@@ -645,10 +628,15 @@ func buildMissionControlSnapshotID(
 	builder.WriteString(query.search)
 	builder.WriteByte('|')
 	builder.WriteString(strconv.Itoa(query.limit))
-	builder.WriteByte('|')
-	builder.WriteString(generatedAt.UTC().Format(time.RFC3339Nano))
-	builder.WriteByte('|')
-	builder.WriteString(staleAfter.UTC().Format(time.RFC3339Nano))
+	if len(entities) == 0 && len(relations) == 0 {
+		builder.WriteByte('|')
+		builder.WriteString("empty")
+	} else {
+		builder.WriteByte('|')
+		builder.WriteString(generatedAt.UTC().Format(time.RFC3339Nano))
+		builder.WriteByte('|')
+		builder.WriteString(staleAfter.UTC().Format(time.RFC3339Nano))
+	}
 	for _, entity := range entities {
 		builder.WriteByte('|')
 		builder.WriteString(entity.entity.EntityExternalKey)
@@ -759,7 +747,7 @@ func missionControlEntityDetailsToProto(details missioncontroldomain.EntityDetai
 		Entity:            missionControlEntityCardToProto(details.Entity, relationCounts[missionControlEntityKey(details.Entity)]),
 		Relations:         make([]*controlplanev1.MissionControlRelation, 0, len(details.Relations)),
 		TimelinePreview:   make([]*controlplanev1.MissionControlTimelineEntry, 0, len(details.Timeline)),
-		AllowedActions:    nil,
+		AllowedActions:    missionControlAllowedActions(details.Entity),
 		ProviderDeepLinks: missionControlProviderDeepLinks(details.Entity),
 	}
 	for _, relation := range details.Relations {
@@ -768,73 +756,8 @@ func missionControlEntityDetailsToProto(details missioncontroldomain.EntityDetai
 	for _, item := range details.Timeline {
 		out.TimelinePreview = append(out.TimelinePreview, missionControlTimelineEntryToProto(details.Entity.EntityKind, details.Entity.EntityExternalKey, item))
 	}
-	missionControlApplyDetailPayload(out, details.Entity)
+	missionControlApplyDetailPayload(out, details)
 	return out
-}
-
-func missionControlProviderDeepLinks(entity missioncontroldomain.Entity) []*controlplanev1.MissionControlProviderDeepLink {
-	url := strings.TrimSpace(entity.ProviderURL)
-	if url == "" {
-		return nil
-	}
-	actionKind := "provider.open_issue"
-	switch entity.EntityKind {
-	case enumtypes.MissionControlEntityKindPullRequest:
-		actionKind = "provider.open_pr"
-	case enumtypes.MissionControlEntityKindDiscussion:
-		actionKind = "provider.reply_comment"
-	}
-	return []*controlplanev1.MissionControlProviderDeepLink{{
-		ActionKind: actionKind,
-		Url:        url,
-		Reason:     "not_in_mvp_inline_scope",
-	}}
-}
-
-func missionControlApplyDetailPayload(out *controlplanev1.MissionControlEntityDetails, entity missioncontroldomain.Entity) {
-	switch entity.EntityKind {
-	case enumtypes.MissionControlEntityKindWorkItem:
-		payload := &controlplanev1.MissionControlWorkItemDetailsPayload{}
-		var decoded missionControlDetailPayloadWorkItem
-		if err := json.Unmarshal(entity.DetailPayloadJSON, &decoded); err == nil {
-			payload.RepositoryFullName = strings.TrimSpace(decoded.RepositoryFullName)
-			payload.IssueNumber = decoded.IssueNumber
-			payload.IssueUrl = stringPtrOrNil(strings.TrimSpace(decoded.IssueURL))
-			payload.LastRunId = stringPtrOrNil(strings.TrimSpace(decoded.LastRunID))
-			payload.LastStatus = stringPtrOrNil(strings.TrimSpace(decoded.LastStatus))
-			payload.TriggerKind = stringPtrOrNil(strings.TrimSpace(decoded.TriggerKind))
-		}
-		if entity.ProviderUpdatedAt != nil {
-			payload.LastProviderSyncAt = timestamppb.New(entity.ProviderUpdatedAt.UTC())
-		}
-		out.DetailPayload = &controlplanev1.MissionControlEntityDetails_WorkItem{WorkItem: payload}
-	case enumtypes.MissionControlEntityKindPullRequest:
-		payload := &controlplanev1.MissionControlPullRequestDetailsPayload{}
-		var decoded missionControlDetailPayloadPullRequest
-		if err := json.Unmarshal(entity.DetailPayloadJSON, &decoded); err == nil {
-			payload.RepositoryFullName = strings.TrimSpace(decoded.RepositoryFullName)
-			payload.PullRequestNumber = decoded.PullRequestNumber
-			payload.PullRequestUrl = stringPtrOrNil(strings.TrimSpace(decoded.PullRequestURL))
-			payload.LastRunId = stringPtrOrNil(strings.TrimSpace(decoded.LastRunID))
-			payload.LastStatus = stringPtrOrNil(strings.TrimSpace(decoded.LastStatus))
-		}
-		out.DetailPayload = &controlplanev1.MissionControlEntityDetails_PullRequest{PullRequest: payload}
-	case enumtypes.MissionControlEntityKindAgent:
-		payload := &controlplanev1.MissionControlAgentDetailsPayload{}
-		var decoded missionControlDetailPayloadAgent
-		if err := json.Unmarshal(entity.DetailPayloadJSON, &decoded); err == nil {
-			payload.AgentKey = strings.TrimSpace(decoded.AgentKey)
-			payload.RunStatus = stringPtrOrNil(strings.TrimSpace(decoded.LastStatus))
-			payload.ActiveRunId = stringPtrOrNil(strings.TrimSpace(decoded.LastRunID))
-			payload.LastRunRepository = stringPtrOrNil(strings.TrimSpace(decoded.LastRunRepo))
-		}
-		out.DetailPayload = &controlplanev1.MissionControlEntityDetails_Agent{Agent: payload}
-	case enumtypes.MissionControlEntityKindDiscussion:
-		out.DetailPayload = &controlplanev1.MissionControlEntityDetails_Discussion{
-			Discussion: &controlplanev1.MissionControlDiscussionDetailsPayload{},
-		}
-		out.GetDiscussion().DiscussionKind = stringPtrOrNil("discussion")
-	}
 }
 
 func missionControlTimelineEntryToProto(
