@@ -9,6 +9,8 @@ import (
 
 // Config defines environment-backed runtime settings for worker service.
 type Config struct {
+	// HTTPAddr is the bind address for worker health and metrics server.
+	HTTPAddr string `env:"CODEXK8S_WORKER_HTTP_ADDR" envDefault:":8082"`
 	// WorkerID identifies current worker instance in logs and events.
 	WorkerID string `env:"CODEXK8S_WORKER_ID"`
 	// PollInterval controls tick interval for run-loop.

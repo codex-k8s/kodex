@@ -28,7 +28,6 @@ func newInteractionCallbackHandler(cp *controlplane.Client) *interactionCallback
 
 func (h *interactionCallbackHandler) Callback(c *echo.Context) error {
 	startedAt := time.Now().UTC()
-
 	callbackToken := strings.TrimSpace(resolveMCPCallbackToken(
 		c.Request().Header.Get(headerMCPCallbackToken),
 		c.Request().Header.Get(echo.HeaderAuthorization),

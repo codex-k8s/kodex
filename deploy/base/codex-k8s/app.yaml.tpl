@@ -734,7 +734,12 @@ spec:
         - name: worker
           image: {{ envOr "CODEXK8S_WORKER_IMAGE" "" }}
           imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8082
           env:
+            - name: CODEXK8S_WORKER_HTTP_ADDR
+              value: '{{ envOr "CODEXK8S_WORKER_HTTP_ADDR" ":8082" }}'
             - name: CODEXK8S_ENV
               value: '{{ envOr "CODEXK8S_ENV" "" }}'
             - name: CODEXK8S_HOT_RELOAD
@@ -956,6 +961,18 @@ spec:
               value: '{{ envOr "CODEXK8S_AGENT_DEFAULT_LOCALE" "" }}'
             - name: CODEXK8S_AGENT_BASE_BRANCH
               value: '{{ envOr "CODEXK8S_AGENT_BASE_BRANCH" "" }}'
+          readinessProbe:
+            httpGet:
+              path: /health/readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health/livez
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
 {{ if eq (envOr "CODEXK8S_HOT_RELOAD" "") "true" }}
           volumeMounts:
             - name: repo-cache
@@ -967,3 +984,20 @@ spec:
           persistentVolumeClaim:
             claimName: codex-k8s-repo-cache
 {{ end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: codex-k8s-worker
+  namespace: {{ envOr "CODEXK8S_PRODUCTION_NAMESPACE" "" }}
+  labels:
+    app.kubernetes.io/name: codex-k8s
+    app.kubernetes.io/component: worker
+spec:
+  selector:
+    app.kubernetes.io/name: codex-k8s
+    app.kubernetes.io/component: worker
+  ports:
+    - name: http
+      port: 8082
+      targetPort: http
