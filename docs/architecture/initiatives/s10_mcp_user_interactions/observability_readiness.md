@@ -26,14 +26,15 @@ approvals:
 
 ### В коде реализовано
 - `control-plane` публикует:
-  - `codexk8s_interaction_requests_total{tool_name,state}`
-  - `codexk8s_interaction_resume_total{request_status}`
+  - `codexk8s_interaction_requests_created_total{tool_name,interaction_kind}`
+  - `codexk8s_interaction_resume_total{interaction_kind,request_status}`
   - `codexk8s_interaction_decision_turnaround_seconds{request_status}`
+  - persisted snapshot collector: `codexk8s_interaction_requests_state`, `codexk8s_interaction_pending_dispatch_backlog`, `codexk8s_interaction_wait_deadline_overdue`, `codexk8s_interaction_callback_events_total`, `codexk8s_interaction_dispatch_attempts_total`
 - `worker` публикует:
   - `codexk8s_interaction_dispatch_attempt_total{adapter,status}`
   - `codexk8s_interaction_dispatch_retry_scheduled_total{adapter,error_code}`
 - `api-gateway` публикует:
-  - `codexk8s_interaction_callback_total{callback_kind,classification}`
+  - `codexk8s_interaction_callback_requests_total{callback_kind,classification}`
   - `codexk8s_interaction_callback_duration_seconds{callback_kind,classification}`
 - Для runtime triage добавлены structured logs по dispatch completion, expiry processing и callback classification.
 
@@ -46,12 +47,16 @@ approvals:
 
 | Компонент | Метрика | Что показывает | Как использовать |
 |---|---|---|---|
-| `control-plane` | `codexk8s_interaction_requests_total{tool_name,state}` | переходы aggregate по состояниям `pending_dispatch/open/resolved/expired/delivery_exhausted` | rollout smoke и acceptance evidence по `notify`/`decision_request` |
-| `control-plane` | `codexk8s_interaction_resume_total{request_status}` | сколько terminal interaction outcomes реально создали resume request | контроль `answered/expired/delivery_exhausted` resume path |
+| `control-plane` | `codexk8s_interaction_requests_created_total{tool_name,interaction_kind}` | сколько interaction requests принято built-in tools | rollout smoke и acceptance evidence по `notify`/`decision_request` |
+| `control-plane` | `codexk8s_interaction_resume_total{interaction_kind,request_status}` | сколько terminal interaction outcomes реально создали resume request | контроль `answered/expired/delivery_exhausted` resume path |
 | `control-plane` | `codexk8s_interaction_decision_turnaround_seconds{request_status}` | latency между созданием decision interaction и terminal outcome | SLI для expiry/backlog regression |
+| `control-plane` | `codexk8s_interaction_requests_state{interaction_kind,state}` | текущее распределение aggregate по состояниям | smoke для open/resolved/expired drift и backlog triage |
+| `control-plane` | `codexk8s_interaction_pending_dispatch_backlog{interaction_kind,queue_kind}` | текущий pending/retry backlog dispatch | контроль queue saturation и retry spillover |
+| `control-plane` | `codexk8s_interaction_callback_events_total{callback_kind,classification}` | persisted callback classifications `applied/duplicate/stale/expired/invalid` | source-of-truth для duplicate/stale alerting |
+| `control-plane` | `codexk8s_interaction_dispatch_attempts_total{interaction_kind,adapter_kind,status}` | persisted dispatch outcomes по adapter/status | контроль exhausted/failed trends независимо от pod restarts |
 | `worker` | `codexk8s_interaction_dispatch_attempt_total{adapter,status}` | распределение delivery attempts по `accepted/failed/exhausted` | проверка delivery outcome и exhaustion spikes |
 | `worker` | `codexk8s_interaction_dispatch_retry_scheduled_total{adapter,error_code}` | накопление retry scheduling по transport errors | early warning для retry backlog и adapter instability |
-| `api-gateway` | `codexk8s_interaction_callback_total{callback_kind,classification}` | callback classification `applied/duplicate/stale/expired/invalid` | replay/idempotency evidence и duplicate safety |
+| `api-gateway` | `codexk8s_interaction_callback_requests_total{callback_kind,classification}` | callback ingress classifications на edge, включая rejected requests | smoke для callback auth/idempotency edge behavior |
 | `api-gateway` | `codexk8s_interaction_callback_duration_seconds{callback_kind,classification}` | latency callback ingress до typed outcome | smoke после открытия callback path и latency regressions |
 
 ## Логи, flow events и trace-correlation
@@ -67,7 +72,7 @@ approvals:
 - `interaction.wait.resumed`
 
 ### Structured logs
-- `api-gateway`: `interaction callback processed`
+- `api-gateway`: `interaction callback handled`
 - `worker`: `interaction dispatch completed`
 - `worker`: `interaction dispatch failed`
 - `worker`: `interaction expiry processed`
@@ -83,7 +88,7 @@ approvals:
 
 ### Базовые `/metrics` probes
 1. `kubectl -n <candidate-namespace> port-forward deploy/codex-k8s-control-plane 18081:8081`
-2. `curl -s http://127.0.0.1:18081/metrics | rg 'codexk8s_interaction_(requests_total|resume_total|decision_turnaround_seconds)'`
+2. `curl -s http://127.0.0.1:18081/metrics | rg 'codexk8s_interaction_(requests_created_total|resume_total|decision_turnaround_seconds|requests_state|pending_dispatch_backlog|wait_deadline_overdue|callback_events_total|dispatch_attempts_total)'`
 3. `kubectl -n <candidate-namespace> port-forward deploy/codex-k8s-worker 18082:8082`
 4. `curl -s http://127.0.0.1:18082/metrics | rg 'codexk8s_interaction_dispatch_'`
 5. `kubectl -n <candidate-namespace> port-forward deploy/codex-k8s 18080:8080`
@@ -91,7 +96,7 @@ approvals:
 
 ### Логи
 - `kubectl -n <candidate-namespace> logs deploy/codex-k8s-worker --tail=200 | rg 'interaction (dispatch|expiry)'`
-- `kubectl -n <candidate-namespace> logs deploy/codex-k8s --tail=200 | rg 'interaction callback processed'`
+- `kubectl -n <candidate-namespace> logs deploy/codex-k8s --tail=200 | rg 'interaction callback handled'`
 
 ### SQL / psql evidence
 - Retry backlog:
@@ -130,7 +135,7 @@ ORDER BY ir.response_deadline_at ASC;
 ### Duplicate / stale callback spike
 ```promql
 sum by (callback_kind, classification) (
-  rate(codexk8s_interaction_callback_total{classification=~"duplicate|stale|expired"}[15m])
+  rate(codexk8s_interaction_callback_events_total{classification=~"duplicate|stale|expired"}[15m])
 )
 ```
 - Ticket threshold: steady рост выше собственного baseline 15m подряд.
@@ -159,8 +164,8 @@ histogram_quantile(
 
 ### Resume / expiry readiness
 ```promql
-sum by (request_status) (
-  rate(codexk8s_interaction_resume_total{request_status=~"expired|delivery_exhausted"}[30m])
+sum by (interaction_kind, request_status) (
+  rate(codexk8s_interaction_resume_total{interaction_kind="decision_request",request_status=~"expired|delivery_exhausted"}[30m])
 )
 ```
 - Использовать вместе с SQL-проверкой open interactions, чтобы отлавливать залипание expiry scan или resume scheduling.
@@ -175,7 +180,7 @@ sum by (request_status) (
 
 ### Что проверяем после каждого шага
 - После `migrations`: interaction tables и wait-linkage columns существуют; backfill `wait_reason='approval_pending'` завершён без drift.
-- После `control-plane`: видны `codexk8s_interaction_requests_total` и `codexk8s_interaction_resume_total`; новые tools остаются скрыты rollout gate-ом.
+- После `control-plane`: видны `codexk8s_interaction_requests_created_total`, `codexk8s_interaction_resume_total` и collector family `codexk8s_interaction_requests_state`; новые tools остаются скрыты rollout gate-ом.
 - После `worker`: видны dispatch/retry metrics и structured logs по completion/expiry; terminal outcomes schedule-ят resume без duplicate completion.
 - После `api-gateway`: callback metrics/latency появляются, а `classification=duplicate|stale|expired|invalid` даёт typed outcome вместо silent drop.
 
@@ -193,10 +198,10 @@ sum by (request_status) (
 5. DDL не удалять: interaction tables/columns остаются и корректируются только forward-fix.
 
 ## Acceptance evidence перед `run:qa`
-- `notify` happy-path создаёт `pending_dispatch -> resolved` и delivery attempt `accepted`.
-- `decision_request` happy-path создаёт `pending_dispatch -> open -> resolved` и `interaction_resume_total{request_status="answered"}`.
-- Duplicate callback отражается в `codexk8s_interaction_callback_total{classification="duplicate"}` без второго effective response.
-- Expiry path создаёт terminal outcome и `interaction_resume_total{request_status="expired"}` без зависшего wait target.
+- `notify` happy-path создаёт `codexk8s_interaction_requests_created_total{tool_name="user.notify",interaction_kind="notify"}` и terminal delivery evidence без retry drift.
+- `decision_request` happy-path создаёт `pending_dispatch -> open -> resolved` и `codexk8s_interaction_resume_total{interaction_kind="decision_request",request_status="answered"}`.
+- Duplicate callback отражается в `codexk8s_interaction_callback_events_total{classification="duplicate"}` без второго effective response.
+- Expiry path создаёт terminal outcome и `codexk8s_interaction_resume_total{interaction_kind="decision_request",request_status="expired"}` без зависшего wait target.
 - Delivery exhaustion даёт `status="exhausted"` и deterministic resume без silent loss.
 
 ## Связанные документы

@@ -224,15 +224,26 @@ approvals:
   - `make dupl-go`
   - `git diff --check`
   - runtime diagnostics:
-    - `kubectl get pods,deploy,job -n <candidate-namespace> -o wide`
-    - `kubectl logs deploy/codex-k8s-control-plane -n <candidate-namespace> --tail=120`
-    - `kubectl logs deploy/codex-k8s-worker -n <candidate-namespace> --tail=60`
-    - `kubectl logs deploy/codex-k8s -n <candidate-namespace> --tail=120`
-    - `/metrics` probes для `control-plane`, `worker`, `api-gateway` через service DNS и `kubectl port-forward` + `curl`
+    - `kubectl config view --minify -o jsonpath='{..namespace}'`
+    - `kubectl get pods,deploy,job -n codex-k8s-dev-4 -o wide`
+    - `kubectl get svc -n codex-k8s-dev-4 -o wide`
+    - `kubectl logs deploy/codex-k8s-control-plane -n codex-k8s-dev-4 --tail=120`
+    - `kubectl logs deploy/codex-k8s-worker -n codex-k8s-dev-4 --tail=120`
+    - `kubectl logs deploy/codex-k8s -n codex-k8s-dev-4 --tail=120`
+    - `kubectl port-forward deploy/codex-k8s-control-plane -n codex-k8s-dev-4 18081:8081`
+    - `kubectl port-forward deploy/codex-k8s-worker -n codex-k8s-dev-4 18082:8082`
+    - `kubectl port-forward deploy/codex-k8s -n codex-k8s-dev-4 18080:8080`
+    - `curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18081/metrics`
+    - `curl -s http://127.0.0.1:18082/metrics | rg 'codexk8s_interaction_dispatch_'`
+    - `curl -s -o /tmp/interaction_callback_probe.out -w '%{http_code}' -H 'Content-Type: application/json' -X POST http://127.0.0.1:18080/api/v1/mcp/interactions/callback --data '{"interaction_id":"smoke-probe","callback_kind":"decision_response"}'`
+    - `curl -s http://127.0.0.1:18080/metrics | rg 'codexk8s_interaction_callback_'`
 - Runtime evidence:
-  - candidate namespace содержит running deployments `codex-k8s-control-plane`, `codex-k8s-worker`, `codex-k8s`, `codex-k8s-web-console`, migration job `Complete` и активный run job;
-  - `/metrics` доступны у `control-plane`, `worker` и `api-gateway`, а synthetic callback probe без токена должен инкрементировать `codexk8s_interaction_callback_requests_total{callback_kind="unknown",classification="error"}` без crash evidence;
-  - recent `control-plane`/`worker` logs содержат только ожидаемые hot-reload restarts во время локальной пересборки, без новых interaction-specific panic/crash evidence.
+  - текущий candidate namespace `codex-k8s-dev-4` содержит running deployments `codex-k8s-control-plane`, `codex-k8s-worker`, `codex-k8s`, `codex-k8s-web-console`, migration job `Complete` и активный run job;
+  - `kubectl get svc -n codex-k8s-dev-4 -o wide` показывает только `codex-k8s`, `codex-k8s-control-plane`, `codex-k8s-web-console`, `postgres`; новый `codex-k8s-worker` Service добавлен в repo-манифесты, но ещё не materialized в текущем hot-reload candidate, поэтому worker `/metrics` проверялся через `port-forward` на deployment;
+  - `/metrics` у `control-plane`, `worker` и `api-gateway` отвечают `200`; `worker` экспортирует preinitialized families `codexk8s_interaction_dispatch_attempt_total{adapter="noop",status=...}` и `codexk8s_interaction_dispatch_retry_scheduled_total{adapter="noop",error_code=...}`;
+  - synthetic callback probe без токена вернул `401`, тело `/tmp/interaction_callback_probe.out` = `{"code":"unauthorized","message":"missing mcp callback token"}`, после чего `api-gateway` `/metrics` показал `codexk8s_interaction_callback_requests_total{callback_kind="unknown",classification="error"} 1` и соответствующий histogram sample;
+  - `control-plane` `/metrics` доступен без 5xx, но interaction-specific samples в текущем candidate ещё не появились из-за отсутствия реального tool/callback traffic; в последних 120 строках логов нет `collect interaction metrics snapshot failed`;
+  - recent `control-plane`/`worker` logs содержат ожидаемые hot-reload restarts во время локальной пересборки; последние successful restarts подтверждают `control-plane http started`, `control-plane grpc started` и `worker http started`, без новых interaction-specific panic/crash evidence.
 - Для verification использован Context7:
   - `/prometheus/client_golang` для проверки актуального паттерна custom collector и `CounterVec` / `HistogramVec`.
 - Новых внешних зависимостей в issue `#395` не добавлялось.

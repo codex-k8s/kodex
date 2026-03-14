@@ -119,9 +119,11 @@ kubectl -n "$ns" get events --sort-by=.lastTimestamp | tail -n 80
 ```bash
 ns="<runtime-namespace>"
 control_plane_fqdn="codex-k8s-control-plane.${ns}.svc.cluster.local"
+worker_fqdn="codex-k8s-worker.${ns}.svc.cluster.local"
 api_fqdn="codex-k8s.${ns}.svc.cluster.local"
 
 curl -fsS "http://${control_plane_fqdn}:8081/metrics" | grep 'codexk8s_interaction' || true
+curl -fsS "http://${worker_fqdn}:8082/metrics" | grep 'codexk8s_interaction_dispatch_' || true
 curl -fsS "http://${api_fqdn}/metrics" | grep 'codexk8s_interaction_callback_' || true
 
 curl -sS -o /tmp/interaction-callback.out -D /tmp/interaction-callback.headers -w '%{http_code}\n' \
@@ -136,6 +138,7 @@ kubectl -n "$ns" logs deploy/codex-k8s-worker --tail=120
 
 Интерпретация:
 - `control-plane` должен отдавать `/metrics` без 5xx и без `promhttp_metric_handler_errors_total` роста по interaction collector path;
+- `worker` должен отдавать `/metrics` и публиковать `codexk8s_interaction_dispatch_attempt_total` / `codexk8s_interaction_dispatch_retry_scheduled_total`;
 - `api-gateway` после probe должен показать `codexk8s_interaction_callback_requests_total{callback_kind="unknown",classification="error"}` и histogram `codexk8s_interaction_callback_duration_seconds`;
 - отсутствие interaction-specific samples в `control-plane` допустимо до первого реального tool/callback traffic, но endpoint и collector registration должны оставаться стабильными;
 - repeated restart loops, repeated collector errors или невозможность прочитать `/metrics` считаются rollout blocker до `run:qa`.

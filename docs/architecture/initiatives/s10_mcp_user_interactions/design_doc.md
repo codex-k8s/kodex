@@ -200,14 +200,17 @@ sequenceDiagram
 ## Наблюдаемость (Observability)
 - Логи:
   - `interaction callback handled` в `api-gateway` с полями `interaction_id`, `delivery_id`, `adapter_event_id`, `callback_kind`, `classification`, `interaction_state`, `resume_required`;
-  - `interaction dispatch completed` в `worker` с полями terminal/non-terminal outcome, retry decision и `resume_required`;
-  - `interaction expiry processed` в `worker` с полями `interaction_id`, `request_status`, `run_id`, `resume_required`;
+  - `interaction dispatch completed` в `worker` с полями `interaction_id`, `run_id`, `attempt_no`, `delivery_id`, `adapter_kind`, `status`, `retryable`, `error_code`, `next_retry_at`, `interaction_state`, `resume_required`;
+  - `interaction expiry processed` в `worker` с полями `interaction_id`, `interaction_state`, `run_id`, `resume_required`, `resume_scheduled`;
   - existing control-plane audit/flow events `interaction.request.created`, `interaction.callback.received`, `interaction.response.accepted|rejected`, `interaction.wait.entered`, `interaction.wait.resumed` остаются каноническим source-of-truth для lifecycle evidence.
 - Метрики:
   - runtime counters/histograms в `control-plane`:
     - `codexk8s_interaction_requests_created_total{tool_name,interaction_kind}`;
     - `codexk8s_interaction_resume_total{interaction_kind,request_status}`;
     - `codexk8s_interaction_decision_turnaround_seconds{request_status}`;
+  - runtime metrics в `worker`:
+    - `codexk8s_interaction_dispatch_attempt_total{adapter,status}`;
+    - `codexk8s_interaction_dispatch_retry_scheduled_total{adapter,error_code}`;
   - persisted collector metrics в `control-plane`:
     - `codexk8s_interaction_requests_state{interaction_kind,state}`;
     - `codexk8s_interaction_pending_dispatch_backlog{interaction_kind,queue_kind}`;
