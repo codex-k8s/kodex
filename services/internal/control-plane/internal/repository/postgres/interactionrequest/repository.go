@@ -774,6 +774,35 @@ type decisionRequestPayload struct {
 	} `json:"options"`
 }
 
+func fitsInteractionResumePayloadLimit(
+	requestID string,
+	responseKind enumtypes.InteractionResponseKind,
+	selectedOptionID string,
+	freeText string,
+	occurredAt time.Time,
+) bool {
+	candidate := valuetypes.InteractionResumePayload{
+		InteractionID:    requestID,
+		ToolName:         interactionResumeToolName,
+		RequestStatus:    enumtypes.InteractionRequestStatusAnswered,
+		ResponseKind:     responseKind,
+		ResolvedAt:       occurredAt.UTC().Format(time.RFC3339Nano),
+		ResolutionReason: string(enumtypes.InteractionCallbackResultClassificationAccepted),
+	}
+	switch responseKind {
+	case enumtypes.InteractionResponseKindOption:
+		candidate.SelectedOptionID = selectedOptionID
+	case enumtypes.InteractionResponseKindFreeText:
+		candidate.FreeText = freeText
+	}
+
+	encodedCandidate, err := json.Marshal(candidate)
+	if err != nil {
+		return false
+	}
+	return len(encodedCandidate) <= userinteraction.ResumePayloadMaxBytes
+}
+
 func classifyDecisionResponsePayload(request domainrepo.Request, params domainrepo.ApplyCallbackParams) (decisionResponseValidation, bool) {
 	responseKind := enumtypes.InteractionResponseKind(strings.ToLower(strings.TrimSpace(string(params.ResponseKind))))
 	switch responseKind {
@@ -788,6 +817,9 @@ func classifyDecisionResponsePayload(request domainrepo.Request, params domainre
 		}
 		for _, option := range payload.Options {
 			if strings.TrimSpace(option.OptionID) == optionID {
+				if !fitsInteractionResumePayloadLimit(request.ID, responseKind, optionID, "", params.OccurredAt) {
+					return decisionResponseValidation{}, false
+				}
 				return decisionResponseValidation{responseKind: responseKind, selectedOptionID: optionID}, true
 			}
 		}
@@ -807,17 +839,7 @@ func classifyDecisionResponsePayload(request domainrepo.Request, params domainre
 		if !payload.AllowFreeText {
 			return decisionResponseValidation{}, false
 		}
-		candidate := valuetypes.InteractionResumePayload{
-			InteractionID:    request.ID,
-			ToolName:         interactionResumeToolName,
-			RequestStatus:    enumtypes.InteractionRequestStatusAnswered,
-			ResponseKind:     enumtypes.InteractionResponseKindFreeText,
-			FreeText:         freeText,
-			ResolvedAt:       params.OccurredAt.UTC().Format(time.RFC3339Nano),
-			ResolutionReason: string(enumtypes.InteractionCallbackResultClassificationAccepted),
-		}
-		encodedCandidate, err := json.Marshal(candidate)
-		if err != nil || len(encodedCandidate) > userinteraction.ResumePayloadMaxBytes {
+		if !fitsInteractionResumePayloadLimit(request.ID, responseKind, "", freeText, params.OccurredAt) {
 			return decisionResponseValidation{}, false
 		}
 		return decisionResponseValidation{responseKind: responseKind, freeText: freeText}, true

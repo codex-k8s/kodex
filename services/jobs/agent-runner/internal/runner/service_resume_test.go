@@ -50,22 +50,58 @@ func TestRestoreLatestSession_AllowsInteractionResumeWithoutPR(t *testing.T) {
 	}
 }
 
-func TestLoadInteractionResumePayload_FetchesCurrentRunPayload(t *testing.T) {
+func TestResolveInteractionResumePayload_SkipsLookupForPlainRun(t *testing.T) {
 	t.Parallel()
 
-	service := NewService(Config{RunID: "run-resume"}, &fakeSessionRestoreControlPlane{
+	service := NewService(Config{
+		RunID:         "run-plain",
+		CorrelationID: "corr-plain",
+	}, &fakeSessionRestoreControlPlane{
+		resumeErr: assertResumeLookupShouldNotRunError{},
+	}, nil)
+
+	payload, err := service.resolveInteractionResumePayload(context.Background())
+	if err != nil {
+		t.Fatalf("resolveInteractionResumePayload() error = %v", err)
+	}
+	if payload != "" {
+		t.Fatalf("payload = %q, want empty", payload)
+	}
+}
+
+func TestResolveInteractionResumePayload_FetchesCurrentRunPayload(t *testing.T) {
+	t.Parallel()
+
+	service := NewService(Config{
+		RunID:         "run-resume",
+		CorrelationID: "interaction-resume:interaction-1",
+	}, &fakeSessionRestoreControlPlane{
 		resumePayload: cpclient.RunInteractionResumePayload{
 			Payload: json.RawMessage(`{"interaction_id":"interaction-1","tool_name":"user.decision.request"}`),
 		},
 		resumeFound: true,
 	}, nil)
 
-	payload, err := service.loadInteractionResumePayload(context.Background())
+	payload, err := service.resolveInteractionResumePayload(context.Background())
 	if err != nil {
-		t.Fatalf("loadInteractionResumePayload() error = %v", err)
+		t.Fatalf("resolveInteractionResumePayload() error = %v", err)
 	}
 	if got, want := payload, `{"interaction_id":"interaction-1","tool_name":"user.decision.request"}`; got != want {
 		t.Fatalf("payload = %q, want %q", got, want)
+	}
+}
+
+func TestResolveInteractionResumePayload_RequiresPersistedPayloadForResumeRun(t *testing.T) {
+	t.Parallel()
+
+	service := NewService(Config{
+		RunID:         "run-resume",
+		CorrelationID: "interaction-resume:interaction-1",
+	}, &fakeSessionRestoreControlPlane{}, nil)
+
+	_, err := service.resolveInteractionResumePayload(context.Background())
+	if err == nil {
+		t.Fatal("expected missing persisted resume payload to fail interaction resume run")
 	}
 }
 
@@ -104,6 +140,12 @@ type fakeSessionRestoreControlPlane struct {
 	resumePayload cpclient.RunInteractionResumePayload
 	resumeFound   bool
 	resumeErr     error
+}
+
+type assertResumeLookupShouldNotRunError struct{}
+
+func (assertResumeLookupShouldNotRunError) Error() string {
+	return "resume lookup should not have been called"
 }
 
 func (f *fakeSessionRestoreControlPlane) UpsertAgentSession(context.Context, cpclient.AgentSessionUpsertParams) (cpclient.AgentSessionUpsertResult, error) {

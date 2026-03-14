@@ -97,6 +97,24 @@ func TestClassifyDecisionResponsePayloadRejectsOversizedFreeText(t *testing.T) {
 	}
 }
 
+func TestClassifyDecisionResponsePayloadRejectsOversizedOption(t *testing.T) {
+	t.Parallel()
+
+	oversizedOptionID := strings.Repeat("a", userinteraction.ResumePayloadMaxBytes)
+	request := entitytypes.InteractionRequest{
+		ID:                 "interaction-1",
+		RequestPayloadJSON: json.RawMessage(`{"options":[{"option_id":"` + oversizedOptionID + `"}]}`),
+	}
+	_, ok := classifyDecisionResponsePayload(request, querytypes.InteractionCallbackApplyParams{
+		ResponseKind:     enumtypes.InteractionResponseKindOption,
+		SelectedOptionID: oversizedOptionID,
+		OccurredAt:       time.Date(2026, time.March, 13, 16, 5, 0, 0, time.UTC),
+	})
+	if ok {
+		t.Fatal("expected payload validation failure for oversized option response")
+	}
+}
+
 func TestClassifyCallbackMarksExpiredPastDeadline(t *testing.T) {
 	t.Parallel()
 

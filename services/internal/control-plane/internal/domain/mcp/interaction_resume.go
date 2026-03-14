@@ -12,8 +12,6 @@ import (
 	valuetypes "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/types/value"
 )
 
-const interactionResumeCorrelationPrefix = "interaction-resume:"
-
 type interactionResumeRunPayload struct {
 	Project struct {
 		ID string `json:"id"`
@@ -161,5 +159,5 @@ func buildInteractionResumePendingRunPayload(
 }
 
 func buildInteractionResumeCorrelationID(interactionID string) string {
-	return interactionResumeCorrelationPrefix + strings.TrimSpace(interactionID)
+	return userinteraction.ResumeCorrelationPrefix + strings.TrimSpace(interactionID)
 }

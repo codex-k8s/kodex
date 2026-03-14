@@ -104,7 +104,7 @@ func (s *Service) Run(ctx context.Context) (err error) {
 		s.logger.Warn("emit run.agent.started failed", "err", err)
 	}
 
-	interactionResumePayload, err := s.loadInteractionResumePayload(ctx)
+	interactionResumePayload, err := s.resolveInteractionResumePayload(ctx)
 	if err != nil {
 		return err
 	}
@@ -342,6 +342,21 @@ func (s *Service) Run(ctx context.Context) (err error) {
 	finalized = true
 	s.logger.Info("agent-runner completed", "branch", result.targetBranch, "pr_number", result.prNumber)
 	return nil
+}
+
+func (s *Service) resolveInteractionResumePayload(ctx context.Context) (string, error) {
+	if !isInteractionResumeRun(s.cfg.CorrelationID) {
+		return "", nil
+	}
+
+	payload, err := s.loadInteractionResumePayload(ctx)
+	if err != nil {
+		return "", err
+	}
+	if !hasInteractionResumePayload(payload) {
+		return "", fmt.Errorf("interaction resume payload is required for correlation %q", strings.TrimSpace(s.cfg.CorrelationID))
+	}
+	return payload, nil
 }
 
 func (s *Service) loadInteractionResumePayload(ctx context.Context) (string, error) {
