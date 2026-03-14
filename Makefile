@@ -1,10 +1,11 @@
-.PHONY: help lint lint-go dupl-go test-go fmt-go gen-openapi-go gen-openapi-ts gen-openapi gen-proto-go
+.PHONY: help lint lint-go dupl-go test-go test-go-migrations fmt-go gen-openapi-go gen-openapi-ts gen-openapi gen-proto-go
 
 help:
 	@echo "Targets:"
 	@echo "  make lint-go   - golangci-lint ./..."
 	@echo "  make dupl-go   - fail on duplicated Go code (dupl -t 50)"
 	@echo "  make test-go   - go test ./..."
+	@echo "  make test-go-migrations - run migration guard tests for control-plane goose files"
 	@echo "  make fmt-go    - gofmt -w on tracked .go files"
 	@echo "  make gen-openapi-go [SVC=services/external/api-gateway] - generate Go transport code from OpenAPI"
 	@echo "  make gen-openapi-ts [APP=services/staff/web-console] - generate TS API client from OpenAPI"
@@ -34,6 +35,9 @@ dupl-go:
 
 test-go:
 	@go test ./...
+
+test-go-migrations:
+	@go test ./services/internal/control-plane/cmd/cli/migrations
 
 fmt-go:
 	@git ls-files '*.go' | xargs gofmt -w
