@@ -29,6 +29,7 @@ import (
 	postgresadminclient "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/clients/postgresadmin"
 	agentcallbackdomain "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/agentcallback"
 	codexauthdomain "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/codexauth"
+	githubratelimitdomain "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/githubratelimit"
 	mcpdomain "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/mcp"
 	missioncontroldomain "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/missioncontrol"
 	missioncontrolworkerdomain "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/missioncontrolworker"
@@ -43,6 +44,7 @@ import (
 	agentrunrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/repository/postgres/agentrun"
 	agentsessionrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/repository/postgres/agentsession"
 	floweventrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/repository/postgres/flowevent"
+	githubratelimitwaitrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/repository/postgres/githubratelimitwait"
 	interactionrequestrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/repository/postgres/interactionrequest"
 	learningfeedbackrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/repository/postgres/learningfeedback"
 	mcpactionrequestrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/repository/postgres/mcpactionrequest"
@@ -90,6 +92,7 @@ func Run() error {
 	agentRuns := agentrunrepo.NewRepository(pgxPool)
 	agents := agentrepo.NewRepository(pgxPool)
 	flowEvents := floweventrepo.NewRepository(pgxPool)
+	githubRateLimitWaits := githubratelimitwaitrepo.NewRepository(pgxPool)
 
 	users := userrepo.NewRepository(pgxPool)
 	projects := projectrepo.NewRepository(pgxPool)
@@ -200,6 +203,7 @@ func Run() error {
 	if err != nil {
 		return fmt.Errorf("init runstatus domain service: %w", err)
 	}
+	var githubRateLimitService *githubratelimitdomain.Service
 	missionControlService, err := missioncontroldomain.NewService(missioncontroldomain.Config{
 		RolloutState: valuetypes.MissionControlRolloutState{
 			CoreFeatureEnabled:  cfg.MissionControlEnabled,
@@ -392,6 +396,24 @@ func Run() error {
 		RunStatus:      runStatusService,
 		RuntimeDeploy:  runtimeDeployService,
 	})
+	githubRateLimitService, err = githubratelimitdomain.NewService(githubratelimitdomain.Config{
+		RolloutState: valuetypes.GitHubRateLimitRolloutState{
+			CoreFeatureEnabled: cfg.GitHubRateLimitWaitEnabled,
+			SchemaReady:        cfg.GitHubRateLimitWaitEnabled,
+			DomainReady:        cfg.GitHubRateLimitWaitEnabled,
+			WorkerReady:        cfg.GitHubRateLimitWaitEnabled,
+			RunnerReady:        false,
+		},
+	}, githubratelimitdomain.Dependencies{
+		Runs:           agentRuns,
+		Waits:          githubRateLimitWaits,
+		FlowEvents:     flowEvents,
+		RunStatusRetry: runStatusService,
+		PlatformReplay: staffService,
+	})
+	if err != nil {
+		return fmt.Errorf("init github rate-limit domain service with platform replay: %w", err)
+	}
 
 	// Ensure bootstrap users exist so that the first login can be matched by email.
 	_, err = users.EnsureOwner(runCtx, cfg.BootstrapOwnerEmail)
@@ -452,6 +474,7 @@ func Run() error {
 		Webhook:              webhookService,
 		Staff:                staffService,
 		AgentCallbacks:       agentCallbackService,
+		GitHubRateLimit:      githubRateLimitService,
 		MissionControl:       missionControlWorkerService,
 		MissionControlDomain: missionControlService,
 		RunStatus:            runStatusService,

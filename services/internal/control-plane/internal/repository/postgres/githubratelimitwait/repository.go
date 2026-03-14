@@ -32,6 +32,8 @@ var (
 	queryGetOpenWaitByRunAndContour string
 	//go:embed sql/list_waits_by_run_id.sql
 	queryListWaitsByRunID string
+	//go:embed sql/claim_next_due_auto_resume_candidate.sql
+	queryClaimNextDueAutoResumeCandidate string
 	//go:embed sql/insert_evidence.sql
 	queryInsertEvidence string
 	//go:embed sql/lock_run_for_update.sql
@@ -182,6 +184,67 @@ func (r *Repository) ListByRunID(ctx context.Context, runID string) ([]domainrep
 		result = append(result, waitFromDBModel(item))
 	}
 	return result, nil
+}
+
+// ClaimNextDueAutoResume moves one due wait into auto_resume_in_progress and returns it for worker processing.
+func (r *Repository) ClaimNextDueAutoResume(ctx context.Context, dueBefore time.Time, staleInProgressBefore time.Time) (domainrepo.Wait, bool, error) {
+	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return domainrepo.Wait{}, false, fmt.Errorf("begin claim github rate-limit auto-resume tx: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	candidate, err := scanWait(tx.QueryRow(
+		ctx,
+		queryClaimNextDueAutoResumeCandidate,
+		dueBefore.UTC(),
+		staleInProgressBefore.UTC(),
+	))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domainrepo.Wait{}, false, nil
+		}
+		return domainrepo.Wait{}, false, fmt.Errorf("claim due github rate-limit wait: %w", err)
+	}
+
+	attemptsUsed := candidate.AutoResumeAttemptsUsed
+	if candidate.State != enumtypes.GitHubRateLimitWaitStateAutoResumeInProgress {
+		attemptsUsed++
+	}
+
+	claimed, err := scanWait(tx.QueryRow(
+		ctx,
+		queryUpdateWait,
+		candidate.ID,
+		string(enumtypes.GitHubRateLimitSignalOriginWorker),
+		string(candidate.OperationClass),
+		string(enumtypes.GitHubRateLimitWaitStateAutoResumeInProgress),
+		string(candidate.LimitKind),
+		string(candidate.Confidence),
+		string(candidate.RecoveryHintKind),
+		candidate.SignalID,
+		nullableTrimmedText(candidate.RequestFingerprint),
+		candidate.CorrelationID,
+		string(candidate.ResumeActionKind),
+		jsonOrEmptyObject(candidate.ResumePayloadJSON),
+		nullableTrimmedText(string(candidate.ManualActionKind)),
+		attemptsUsed,
+		candidate.MaxAutoResumeAttempts,
+		timestamptzPtrOrNil(candidate.ResumeNotBefore),
+		timestamptzOrNow(dueBefore.UTC()),
+		timestamptzOrNow(candidate.LastSignalAt),
+		timestamptzPtrOrNil(candidate.ResolvedAt),
+	))
+	if err != nil {
+		return domainrepo.Wait{}, false, fmt.Errorf("mark github rate-limit wait %s in progress: %w", candidate.ID, err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return domainrepo.Wait{}, false, fmt.Errorf("commit claim github rate-limit auto-resume tx: %w", err)
+	}
+	return claimed, true, nil
 }
 
 // AppendEvidence inserts one append-only evidence row.

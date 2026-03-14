@@ -3,6 +3,7 @@ package githubratelimit
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	floweventdomain "github.com/codex-k8s/codex-k8s/libs/go/domain/flowevent"
@@ -39,15 +40,18 @@ type Config struct {
 
 // Dependencies contains collaborators required by the domain service.
 type Dependencies struct {
-	Runs       runReader
-	Waits      waitrepo.Repository
-	FlowEvents floweventrepo.Repository
+	Runs           runRepository
+	Waits          waitrepo.Repository
+	FlowEvents     floweventrepo.Repository
+	RunStatusRetry runStatusCommentRetrier
+	PlatformReplay platformCallReplayer
 }
 
 // ReportSignalParams carries one canonical provider signal into control-plane.
 type ReportSignalParams struct {
-	RunID  string
-	Signal Signal
+	RunID             string
+	Signal            Signal
+	ReplayPayloadJSON json.RawMessage
 }
 
 // ReportSignalResult returns persisted wait state, projection, and comment context for one signal.
@@ -69,18 +73,45 @@ type BuildResumePayloadParams struct {
 	AttemptNo      int
 }
 
+// ProcessNextAutoResumeParams describes one worker-triggered sweep attempt.
+type ProcessNextAutoResumeParams struct {
+	WorkerID string
+}
+
+// ProcessNextAutoResumeResult reports worker sweep outcome for one due wait.
+type ProcessNextAutoResumeResult struct {
+	Found                 bool
+	Wait                  Wait
+	ResolutionKind        enumtypes.GitHubRateLimitResolutionKind
+	AttemptNo             int
+	ManualActionKind      enumtypes.GitHubRateLimitManualActionKind
+	ResumeNotBefore       *time.Time
+	RequeuedCorrelationID string
+}
+
 // Service implements canonical GitHub rate-limit domain ownership under control-plane.
 type Service struct {
 	cfg          Config
-	runs         runReader
+	runs         runRepository
 	waits        waitrepo.Repository
 	flowEvents   floweventrepo.Repository
+	runStatus    runStatusCommentRetrier
+	platform     platformCallReplayer
 	capabilities valuetypes.GitHubRateLimitRolloutCapabilities
 	now          func() time.Time
 }
 
-type runReader interface {
+type runRepository interface {
 	GetByID(ctx context.Context, runID string) (agentrunrepo.Run, bool, error)
+	CreatePendingIfAbsent(ctx context.Context, params agentrunrepo.CreateParams) (agentrunrepo.CreateResult, error)
+}
+
+type runStatusCommentRetrier interface {
+	RetryGitHubRateLimitComment(ctx context.Context, payload valuetypes.GitHubRateLimitRunStatusCommentRetryPayload) error
+}
+
+type platformCallReplayer interface {
+	ReplayGitHubRateLimitPlatformCall(ctx context.Context, payload valuetypes.GitHubRateLimitPlatformCallReplayPayload) error
 }
 
 type waitSignalEvidencePayload struct {
@@ -100,6 +131,44 @@ type waitClassificationEvidencePayload struct {
 	ProjectionSyncState enumtypes.GitHubRateLimitProjectionSyncState `json:"projection_sync_state"`
 }
 
+type waitResumeScheduledEvidencePayload struct {
+	WaitID          string                                `json:"wait_id"`
+	ResumeNotBefore *time.Time                            `json:"resume_not_before,omitempty"`
+	AttemptsUsed    int                                   `json:"attempts_used"`
+	MaxAttempts     int                                   `json:"max_attempts"`
+	NextStepKind    enumtypes.GitHubRateLimitNextStepKind `json:"next_step_kind"`
+	SignalOrigin    enumtypes.GitHubRateLimitSignalOrigin `json:"signal_origin"`
+}
+
+type waitResumeAttemptEvidencePayload struct {
+	WaitID    string `json:"wait_id"`
+	AttemptNo int    `json:"attempt_no"`
+	WorkerID  string `json:"worker_id,omitempty"`
+}
+
+type waitResumeFailureEvidencePayload struct {
+	WaitID          string                                `json:"wait_id"`
+	AttemptNo       int                                   `json:"attempt_no"`
+	WorkerID        string                                `json:"worker_id,omitempty"`
+	Error           string                                `json:"error,omitempty"`
+	NextStepKind    enumtypes.GitHubRateLimitNextStepKind `json:"next_step_kind"`
+	ResumeNotBefore *time.Time                            `json:"resume_not_before,omitempty"`
+}
+
+type waitResolvedEvidencePayload struct {
+	WaitID                string                                  `json:"wait_id"`
+	AttemptNo             int                                     `json:"attempt_no"`
+	ResolutionKind        enumtypes.GitHubRateLimitResolutionKind `json:"resolution_kind"`
+	RequeuedCorrelationID string                                  `json:"requeued_correlation_id,omitempty"`
+}
+
+type waitManualActionEvidencePayload struct {
+	WaitID           string                                    `json:"wait_id"`
+	AttemptNo        int                                       `json:"attempt_no"`
+	ManualActionKind enumtypes.GitHubRateLimitManualActionKind `json:"manual_action_kind"`
+	WorkerID         string                                    `json:"worker_id,omitempty"`
+}
+
 type runWaitFlowEventPayload struct {
 	RunID              string                                      `json:"run_id"`
 	WaitID             string                                      `json:"wait_id"`
@@ -114,9 +183,24 @@ type runWaitFlowEventPayload struct {
 	CommentMirrorState enumtypes.GitHubRateLimitCommentMirrorState `json:"comment_mirror_state"`
 }
 
+type runWaitResolvedFlowEventPayload struct {
+	RunID                 string                                      `json:"run_id"`
+	WaitID                string                                      `json:"wait_id"`
+	ContourKind           enumtypes.GitHubRateLimitContourKind        `json:"contour_kind"`
+	LimitKind             enumtypes.GitHubRateLimitLimitKind          `json:"limit_kind"`
+	OperationClass        enumtypes.GitHubRateLimitOperationClass     `json:"operation_class"`
+	ResolutionKind        enumtypes.GitHubRateLimitResolutionKind     `json:"resolution_kind"`
+	AttemptNo             int                                         `json:"attempt_no"`
+	EventKey              string                                      `json:"event_key"`
+	RequeuedCorrelationID string                                      `json:"requeued_correlation_id,omitempty"`
+	CommentMirrorState    enumtypes.GitHubRateLimitCommentMirrorState `json:"comment_mirror_state,omitempty"`
+}
+
 type marshalErrorPayload struct {
 	Error string `json:"error"`
 }
+
+var errGitHubRateLimitReplayPayloadMissing = errors.New("github rate-limit replay payload is required")
 
 type messageTemplateData struct {
 	ContourKind               string
