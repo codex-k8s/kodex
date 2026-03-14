@@ -142,13 +142,14 @@ func (s *Service) insertNamespaceLifecycleEvent(ctx context.Context, params name
 		ActorID:       floweventdomain.ActorID(s.cfg.WorkerID),
 		EventType:     params.EventType,
 		Payload: encodeNamespaceLifecycleEventPayload(namespaceLifecycleEventPayload{
-			RunID:          params.RunID,
-			ProjectID:      params.ProjectID,
-			RuntimeMode:    params.Execution.RuntimeMode,
-			Namespace:      params.Execution.Namespace,
-			Error:          params.Extra.Error,
-			Reason:         params.Extra.Reason,
-			CleanupCommand: params.Extra.CleanupCommand,
+			RunID:            params.RunID,
+			ProjectID:        params.ProjectID,
+			RuntimeMode:      params.Execution.RuntimeMode,
+			Namespace:        params.Execution.Namespace,
+			Error:            params.Extra.Error,
+			Reason:           params.Extra.Reason,
+			GuardrailDetails: append([]string(nil), params.Extra.GuardrailDetails...),
+			CleanupCommand:   params.Extra.CleanupCommand,
 			NamespaceLeaseTTL: func() string {
 				if params.Extra.NamespaceLeaseTTL <= 0 {
 					return ""

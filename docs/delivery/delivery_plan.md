@@ -389,6 +389,7 @@ approvals:
 - Day 7+ (planned): `run:dev -> qa -> release -> postdeploy -> ops` по issues `#425..#431` с owner-managed wave launch и обязательным evidence gate `#431` перед `run:qa`.
   - Wave 1 / Issue `#425` переведён в `in-review`: добавлены schema foundation tables `github_rate_limit_waits` / `github_rate_limit_wait_evidence`, enum/check expansion для `agent_runs` / `agent_sessions`, postgres repository foundation и rollout guards для последующих волн.
   - Wave 2 / Issue `#426` переведён в `in-review`: `control-plane` получил canonical `GitHubRateLimitSignal` classification, typed wait projection/comment context, evidence append и deterministic agent resume payload builder для дальнейших волн `#427` / `#428` / `#429`.
+  - Wave 3 / Issue `#427` переведён в `in-review`: `worker` получил due-wait sweep через новый `ProcessNextGitHubRateLimitWait` RPC, bounded replay/resume loop, manual escalation path и env/codegen wiring для дальнейшей волны `#428`.
 
 ### Daily delivery contract (обязательный)
 - Каждый день задачи дня влиты в `main`.

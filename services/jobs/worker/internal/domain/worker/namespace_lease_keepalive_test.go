@@ -36,11 +36,12 @@ func TestTickExtendsNamespaceLeaseBeforeCleanupForRunningFullEnvRun(t *testing.T
 		},
 	}
 	svc := NewService(Config{
-		WorkerID:            "worker-1",
-		RunningCheckLimit:   1,
-		RunLeaseTTL:         5 * time.Minute,
-		DefaultNamespaceTTL: 24 * time.Hour,
-		RunNamespacePrefix:  defaultRunNamespacePrefix,
+		WorkerID:                   "worker-1",
+		RunningCheckLimit:          1,
+		RunLeaseTTL:                5 * time.Minute,
+		RunNamespaceCleanupEnabled: true,
+		DefaultNamespaceTTL:        24 * time.Hour,
+		RunNamespacePrefix:         defaultRunNamespacePrefix,
 	}, Dependencies{
 		Runs:     runs,
 		Launcher: launcher,
@@ -69,12 +70,12 @@ func TestTickExtendsNamespaceLeaseBeforeCleanupForRunningFullEnvRun(t *testing.T
 	if !gotSpec.LeaseExpiresAt.Equal(wantLeaseExpiry) {
 		t.Fatalf("lease expires at = %s, want %s", gotSpec.LeaseExpiresAt.Format(time.RFC3339), wantLeaseExpiry.Format(time.RFC3339))
 	}
-	if len(launcher.cleanupSweepCall) != 1 {
-		t.Fatalf("cleanup sweeps = %d, want 1", len(launcher.cleanupSweepCall))
+	if got := slices.Index(launcher.callLog, "list_managed_namespaces"); got == -1 {
+		t.Fatalf("expected managed namespace listing in call log, got %v", launcher.callLog)
 	}
 
 	ensureIdx := slices.Index(launcher.callLog, "ensure_namespace")
-	cleanupIdx := slices.Index(launcher.callLog, "cleanup_expired")
+	cleanupIdx := slices.Index(launcher.callLog, "list_managed_namespaces")
 	if ensureIdx == -1 || cleanupIdx == -1 {
 		t.Fatalf("call log missing ensure/cleanup markers: %v", launcher.callLog)
 	}

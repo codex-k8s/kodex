@@ -76,6 +76,19 @@ func (s *Service) resolveNextStepAction(ctx context.Context, principal Principal
 }
 
 func (s *Service) previewOrExecuteIssueStageTransition(ctx context.Context, botToken string, owner string, repo string, issueNumber int, targetLabel string, apply bool) (querytypes.NextStepActionResult, error) {
+	return s.previewOrExecuteIssueStageTransitionWithCAS(ctx, botToken, owner, repo, issueNumber, targetLabel, nil, apply)
+}
+
+func (s *Service) previewOrExecuteIssueStageTransitionWithCAS(
+	ctx context.Context,
+	botToken string,
+	owner string,
+	repo string,
+	issueNumber int,
+	targetLabel string,
+	expectedCurrentRunLabels []string,
+	apply bool,
+) (querytypes.NextStepActionResult, error) {
 	if issueNumber <= 0 {
 		return querytypes.NextStepActionResult{}, errs.Validation{Field: "issue_number", Msg: "must be positive"}
 	}
@@ -88,6 +101,19 @@ func (s *Service) previewOrExecuteIssueStageTransition(ctx context.Context, botT
 		return querytypes.NextStepActionResult{}, fmt.Errorf("list issue labels: %w", err)
 	}
 	normalizedExisting := normalizeManagedLabels(existingLabels)
+	if len(expectedCurrentRunLabels) > 0 {
+		actualCurrentRunLabels := collectRunStageLabels(normalizedExisting)
+		normalizedExpectedRunLabels := normalizeRunStageLabels(expectedCurrentRunLabels)
+		if !slices.Equal(actualCurrentRunLabels, normalizedExpectedRunLabels) {
+			return querytypes.NextStepActionResult{}, errs.Conflict{
+				Msg: fmt.Sprintf(
+					"current run labels %v do not match expected replay labels %v",
+					actualCurrentRunLabels,
+					normalizedExpectedRunLabels,
+				),
+			}
+		}
+	}
 	removed := collectRunLabelsToRemove(normalizedExisting, targetLabel)
 	added, finalLabels := previewIssueStageTransitionLabels(normalizedExisting, removed, targetLabel)
 	if apply {
@@ -187,11 +213,9 @@ func previewLabelAdd(existingLabels []string, targetLabel string) (addedLabels [
 }
 
 func collectRunLabelsToRemove(existing []string, targetLabel string) []string {
-	out := make([]string, 0, len(existing))
-	for _, label := range existing {
-		if !strings.HasPrefix(label, "run:") {
-			continue
-		}
+	runLabels := collectRunStageLabels(existing)
+	out := make([]string, 0, len(runLabels))
+	for _, label := range runLabels {
 		if label == targetLabel {
 			continue
 		}
@@ -199,6 +223,22 @@ func collectRunLabelsToRemove(existing []string, targetLabel string) []string {
 	}
 	slices.Sort(out)
 	return out
+}
+
+func collectRunStageLabels(existing []string) []string {
+	out := make([]string, 0, len(existing))
+	for _, label := range existing {
+		if !strings.HasPrefix(label, "run:") {
+			continue
+		}
+		out = append(out, label)
+	}
+	slices.Sort(out)
+	return out
+}
+
+func normalizeRunStageLabels(labels []string) []string {
+	return collectRunStageLabels(normalizeManagedLabels(labels))
 }
 
 func normalizeManagedLabels(labels []string) []string {

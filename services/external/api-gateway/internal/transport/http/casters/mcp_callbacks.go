@@ -148,30 +148,12 @@ func normalizeInteractionCallbackEnvelope(item models.InteractionCallbackEnvelop
 			return models.InteractionCallbackEnvelope{}, time.Time{}, errs.Validation{Field: "delivery_status", Msg: "must be accepted, delivered, or failed"}
 		}
 	case interactionCallbackKindOptionSelected:
-		if item.CallbackHandle == "" {
-			return models.InteractionCallbackEnvelope{}, time.Time{}, errs.Validation{Field: "callback_handle", Msg: "is required for option_selected"}
-		}
-		if item.FreeText != "" {
-			return models.InteractionCallbackEnvelope{}, time.Time{}, errs.Validation{Field: "free_text", Msg: "must be omitted for option_selected"}
-		}
-		if item.DeliveryStatus != "" {
-			return models.InteractionCallbackEnvelope{}, time.Time{}, errs.Validation{Field: "delivery_status", Msg: "must be omitted for option_selected"}
-		}
-		if item.Error != nil {
-			return models.InteractionCallbackEnvelope{}, time.Time{}, errs.Validation{Field: "error", Msg: "must be omitted for option_selected"}
+		if err := validateResolvedInteractionCallback(item, interactionCallbackKindOptionSelected, false); err != nil {
+			return models.InteractionCallbackEnvelope{}, time.Time{}, err
 		}
 	case interactionCallbackKindFreeTextReceived:
-		if item.CallbackHandle == "" {
-			return models.InteractionCallbackEnvelope{}, time.Time{}, errs.Validation{Field: "callback_handle", Msg: "is required for free_text_received"}
-		}
-		if item.FreeText == "" {
-			return models.InteractionCallbackEnvelope{}, time.Time{}, errs.Validation{Field: "free_text", Msg: "is required for free_text_received"}
-		}
-		if item.DeliveryStatus != "" {
-			return models.InteractionCallbackEnvelope{}, time.Time{}, errs.Validation{Field: "delivery_status", Msg: "must be omitted for free_text_received"}
-		}
-		if item.Error != nil {
-			return models.InteractionCallbackEnvelope{}, time.Time{}, errs.Validation{Field: "error", Msg: "must be omitted for free_text_received"}
+		if err := validateResolvedInteractionCallback(item, interactionCallbackKindFreeTextReceived, true); err != nil {
+			return models.InteractionCallbackEnvelope{}, time.Time{}, err
 		}
 	case interactionCallbackKindTransportFailure:
 		if item.CallbackHandle != "" {
@@ -217,6 +199,27 @@ func normalizeInteractionProviderMessageRef(item *models.InteractionProviderMess
 		return nil, nil
 	}
 	return &normalized, nil
+}
+
+func validateResolvedInteractionCallback(item models.InteractionCallbackEnvelope, callbackKind string, requireFreeText bool) error {
+	if item.CallbackHandle == "" {
+		return errs.Validation{Field: "callback_handle", Msg: "is required for " + callbackKind}
+	}
+	if requireFreeText {
+		if item.FreeText == "" {
+			return errs.Validation{Field: "free_text", Msg: "is required for " + callbackKind}
+		}
+	} else if item.FreeText != "" {
+		return errs.Validation{Field: "free_text", Msg: "must be omitted for " + callbackKind}
+	}
+	if item.DeliveryStatus != "" {
+		return errs.Validation{Field: "delivery_status", Msg: "must be omitted for " + callbackKind}
+	}
+	if item.Error != nil {
+		return errs.Validation{Field: "error", Msg: "must be omitted for " + callbackKind}
+	}
+
+	return nil
 }
 
 func marshalInteractionProviderMessageRef(item *models.InteractionProviderMessageRef) ([]byte, error) {

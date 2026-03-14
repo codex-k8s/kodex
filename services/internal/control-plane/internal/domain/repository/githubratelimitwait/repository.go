@@ -2,6 +2,7 @@ package githubratelimitwait
 
 import (
 	"context"
+	"time"
 
 	entitytypes "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/types/entity"
 	enumtypes "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/types/enum"
@@ -32,6 +33,8 @@ type Repository interface {
 	GetOpenByRunAndContour(ctx context.Context, runID string, contourKind enumtypes.GitHubRateLimitContourKind) (Wait, bool, error)
 	// ListByRunID returns all waits for one run ordered by newest update first.
 	ListByRunID(ctx context.Context, runID string) ([]Wait, error)
+	// ClaimNextDueAutoResume moves one due wait into auto_resume_in_progress and returns it for worker processing.
+	ClaimNextDueAutoResume(ctx context.Context, dueBefore time.Time, staleInProgressBefore time.Time) (Wait, bool, error)
 	// AppendEvidence inserts one append-only evidence row.
 	AppendEvidence(ctx context.Context, params CreateEvidenceParams) (Evidence, error)
 	// RefreshRunProjection elects dominant open wait and synchronizes typed run/session wait linkage.

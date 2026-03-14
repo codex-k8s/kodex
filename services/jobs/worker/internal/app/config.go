@@ -9,6 +9,8 @@ import (
 
 // Config defines environment-backed runtime settings for worker service.
 type Config struct {
+	// Mode selects service loop or one-off maintenance execution.
+	Mode string `env:"CODEXK8S_WORKER_MODE" envDefault:"service"`
 	// HTTPAddr is the bind address for worker health and metrics server.
 	HTTPAddr string `env:"CODEXK8S_WORKER_HTTP_ADDR" envDefault:":8082"`
 	// WorkerID identifies current worker instance in logs and events.
@@ -37,6 +39,10 @@ type Config struct {
 	RuntimePrepareRetryTimeout string `env:"CODEXK8S_WORKER_RUNTIME_PREPARE_RETRY_TIMEOUT" envDefault:"30m"`
 	// RuntimePrepareRetryInterval defines delay between retryable runtime deploy preparation attempts.
 	RuntimePrepareRetryInterval string `env:"CODEXK8S_WORKER_RUNTIME_PREPARE_RETRY_INTERVAL" envDefault:"3s"`
+	// GitHubRateLimitWaitEnabled enables worker sweeps for persisted GitHub rate-limit waits.
+	GitHubRateLimitWaitEnabled bool `env:"CODEXK8S_GITHUB_RATE_LIMIT_WAIT_ENABLED" envDefault:"false"`
+	// GitHubRateLimitSweepLimit limits how many due GitHub rate-limit waits worker processes per tick.
+	GitHubRateLimitSweepLimit int `env:"CODEXK8S_WORKER_GITHUB_RATE_LIMIT_SWEEP_LIMIT" envDefault:"20"`
 	// MissionControlEnabled enables Mission Control warmup and command execution loop.
 	MissionControlEnabled bool `env:"CODEXK8S_MISSION_CONTROL_ENABLED" envDefault:"false"`
 	// MissionControlWarmupInterval throttles per-project Mission Control warmup execution.
@@ -149,6 +155,8 @@ type Config struct {
 	JobActiveDeadlineSeconds int64 `env:"CODEXK8S_WORKER_JOB_ACTIVE_DEADLINE_SECONDS" envDefault:"18000"`
 	// RunNamespacePrefix defines prefix for full-env runtime namespaces.
 	RunNamespacePrefix string `env:"CODEXK8S_WORKER_RUN_NAMESPACE_PREFIX" envDefault:"codex-issue"`
+	// RunNamespaceCleanup toggles namespace sweeps in worker tick and one-off cleanup mode.
+	RunNamespaceCleanup bool `env:"CODEXK8S_WORKER_RUN_NAMESPACE_CLEANUP" envDefault:"true"`
 	// NamespaceLeaseSweepLimit limits managed namespaces inspected per tick for ttl-based cleanup.
 	NamespaceLeaseSweepLimit int `env:"CODEXK8S_WORKER_NAMESPACE_LEASE_SWEEP_LIMIT" envDefault:"200"`
 	// StateInReviewLabel is applied to PR when agent run is ready for owner review.

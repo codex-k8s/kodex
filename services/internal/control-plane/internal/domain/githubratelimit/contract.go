@@ -35,4 +35,5 @@ type DomainService interface {
 	GetRunProjection(ctx context.Context, runID string) (WaitProjection, bool, error)
 	BuildCommentRenderContext(projection WaitProjection) (CommentRenderContext, error)
 	BuildAgentSessionResumePayload(params BuildResumePayloadParams) (ResumePayloadBuildResult, error)
+	ProcessNextAutoResume(ctx context.Context, params ProcessNextAutoResumeParams) (ProcessNextAutoResumeResult, error)
 }

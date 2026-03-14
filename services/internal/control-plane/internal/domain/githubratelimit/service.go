@@ -24,6 +24,8 @@ func NewService(cfg Config, deps Dependencies) (*Service, error) {
 		runs:         deps.Runs,
 		waits:        deps.Waits,
 		flowEvents:   deps.FlowEvents,
+		runStatus:    deps.RunStatusRetry,
+		platform:     deps.PlatformReplay,
 		capabilities: capabilities,
 		now: func() time.Time {
 			return time.Now().UTC()

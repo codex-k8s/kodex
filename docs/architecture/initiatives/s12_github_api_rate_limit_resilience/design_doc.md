@@ -104,6 +104,7 @@ approvals:
   - best-effort replay of comment mirror that was blocked by platform contour.
 - `platform_github_call_replay`
   - idempotent replay of one blocked platform-managed GitHub operation.
+  - for issue stage transitions payload carries CAS context (`expected_current_run_labels`) plus request metadata, so delayed replay never overwrites a newer `run:*` state blindly.
 - `agent_session_resume`
   - deterministic resume of one persisted `codex exec resume` path after agent contour wait resolves.
 

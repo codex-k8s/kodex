@@ -9,7 +9,9 @@ import (
 )
 
 type stubNextStepGitHubMgmt struct {
-	labels []string
+	labels        []string
+	addedLabels   [][]string
+	removedLabels []string
 }
 
 func (s *stubNextStepGitHubMgmt) Preflight(context.Context, valuetypes.GitHubPreflightParams) (valuetypes.GitHubPreflightReport, error) {
@@ -32,11 +34,23 @@ func (s *stubNextStepGitHubMgmt) ListIssueLabels(context.Context, string, string
 	return append([]string(nil), s.labels...), nil
 }
 
-func (s *stubNextStepGitHubMgmt) AddIssueLabels(context.Context, string, string, string, int, []string) ([]string, error) {
-	return nil, nil
+func (s *stubNextStepGitHubMgmt) AddIssueLabels(_ context.Context, _ string, _ string, _ string, _ int, labels []string) ([]string, error) {
+	copiedLabels := append([]string(nil), labels...)
+	s.addedLabels = append(s.addedLabels, copiedLabels)
+	s.labels = append(s.labels, copiedLabels...)
+	return append([]string(nil), s.labels...), nil
 }
 
-func (s *stubNextStepGitHubMgmt) RemoveIssueLabel(context.Context, string, string, string, int, string) error {
+func (s *stubNextStepGitHubMgmt) RemoveIssueLabel(_ context.Context, _ string, _ string, _ string, _ int, label string) error {
+	s.removedLabels = append(s.removedLabels, label)
+	filtered := make([]string, 0, len(s.labels))
+	for _, item := range s.labels {
+		if item == label {
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+	s.labels = filtered
 	return nil
 }
 
@@ -92,5 +106,30 @@ func TestPreviewOrExecuteIssueStageTransition_AcceptsConfiguredReviseLabels(t *t
 				t.Fatalf("previewOrExecuteIssueStageTransition().AddedLabels = %#v, want %q", result.AddedLabels, testCase.targetLabel)
 			}
 		})
+	}
+}
+
+func TestPreviewOrExecuteIssueStageTransitionWithCASDetectsRunLabelDrift(t *testing.T) {
+	t.Parallel()
+
+	service := &Service{
+		cfg: Config{NextStepLabels: nextstepdomain.DefaultLabels()},
+		githubMgmt: &stubNextStepGitHubMgmt{
+			labels: []string{"run:qa", "state:in-review"},
+		},
+	}
+
+	_, err := service.previewOrExecuteIssueStageTransitionWithCAS(
+		context.Background(),
+		"token",
+		"codex-k8s",
+		"codex-k8s",
+		427,
+		"run:release",
+		[]string{"run:dev:revise"},
+		false,
+	)
+	if err == nil {
+		t.Fatal("expected conflict when current run labels drifted")
 	}
 }

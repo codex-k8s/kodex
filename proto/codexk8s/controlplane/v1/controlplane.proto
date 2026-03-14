@@ -641,6 +641,22 @@ message ExpireNextInteractionResponse {
   string resume_correlation_id = 6;
 }
 
+message ProcessNextGitHubRateLimitWaitRequest {
+  string worker_id = 1;
+}
+
+message ProcessNextGitHubRateLimitWaitResponse {
+  bool found = 1;
+  string wait_id = 2;
+  string run_id = 3;
+  string state = 4;
+  string resolution_kind = 5;
+  int32 attempt_no = 6;
+  string manual_action_kind = 7;
+  google.protobuf.Timestamp resume_not_before = 8;
+  string requeued_correlation_id = 9;
+}
+
 message MissionControlWarmupProject {
   string project_id = 1;
   string project_name = 2;
@@ -1415,6 +1431,7 @@ service ControlPlaneService {
   rpc ClaimNextInteractionDispatch(ClaimNextInteractionDispatchRequest) returns (ClaimNextInteractionDispatchResponse);
   rpc CompleteInteractionDispatch(CompleteInteractionDispatchRequest) returns (CompleteInteractionDispatchResponse);
   rpc ExpireNextInteraction(ExpireNextInteractionRequest) returns (ExpireNextInteractionResponse);
+  rpc ProcessNextGitHubRateLimitWait(ProcessNextGitHubRateLimitWaitRequest) returns (ProcessNextGitHubRateLimitWaitResponse);
   rpc GetMissionControlSnapshot(GetMissionControlSnapshotRequest) returns (GetMissionControlSnapshotResponse);
   rpc GetMissionControlEntity(GetMissionControlEntityRequest) returns (MissionControlEntityDetails);
   rpc ListMissionControlTimeline(ListMissionControlTimelineRequest) returns (ListMissionControlTimelineResponse);
