@@ -2,7 +2,7 @@
 doc_id: EPC-CK8S-S11-D6-TELEGRAM-ADAPTER
 type: epic
 title: "Epic S11 Day 6: Plan для Telegram-адаптера взаимодействия с пользователем, sequencing-waves и handover в run:dev (Issue #456)"
-status: in-review
+status: completed
 owner_role: EM
 created_at: 2026-03-14
 updated_at: 2026-03-14
@@ -10,8 +10,10 @@ related_issues: [361, 444, 447, 448, 452, 454, 456, 458]
 related_prs: []
 approvals:
   required: ["Owner"]
-  status: pending
+  status: approved
   request_id: "owner-2026-03-14-issue-456-plan-epic"
+  approved_by: "ai-da-stas"
+  approved_at: 2026-03-14
 ---
 
 # Epic S11 Day 6: Plan для Telegram-адаптера взаимодействия с пользователем, sequencing-waves и handover в run:dev (Issue #456)
@@ -30,7 +32,7 @@ approvals:
   - `docs/architecture/initiatives/s11_telegram_user_interaction_adapter/data_model.md`
   - `docs/architecture/initiatives/s11_telegram_user_interaction_adapter/migrations_policy.md`
 - Scope текущего stage: только markdown-изменения и handover backlog.
-- Правило continuity: trigger-лейбл `run:dev` на issue `#458` ставит только Owner и только после review/approval plan package Issue `#456`.
+- Правило continuity: trigger-лейбл `run:dev` на issue `#458` ставит только Owner; plan package Issue `#456` зафиксирован как завершённый governance baseline для этого handover.
 
 ## Execution package (S11-E01..S11-E06)
 
@@ -91,16 +93,16 @@ approvals:
 
 | Тип | ID | Описание | Статус |
 |---|---|---|---|
-| blocker | `BLK-S11-D6-01` | До старта `run:dev` нужен owner review/approval plan package по Issue `#456` | open |
+| blocker | `BLK-S11-D6-01` | Owner review/approval plan package по Issue `#456` требуется до старта `run:dev` | resolved |
 | blocker | `BLK-S11-D6-02` | Trigger-лейбл `run:dev` на issue `#458` должен поставить Owner после review sequencing-waves и quality-gates | open |
 | risk | `RSK-S11-D6-01` | Если Wave 1 разрастётся beyond additive schema foundation, ownership drift по `control-plane` заблокирует все последующие waves | monitoring |
 | risk | `RSK-S11-D6-02` | Старт Worker/edge/adapter waves до стабилизации Wave 2 приведёт к drift между callback classification и delivery semantics | monitoring |
 | risk | `RSK-S11-D6-03` | Если `api-gateway` или adapter contour начнут выводить смысл из raw Telegram payloads, platform-owned interaction semantics будут размыты | monitoring |
 | risk | `RSK-S11-D6-04` | Отставание Wave 6 по observability/fallback evidence заблокирует `run:qa`, даже если локально notify/callback path уже работает | monitoring |
-| owner-decision | `OD-S11-D6-01` | Реализация идёт только по issue `#458` и по последовательным waves `S11-E01 -> S11-E02 -> S11-E03 -> S11-E04 -> S11-E05 -> S11-E06`; параллельный execution anchor не создаётся | proposed |
-| owner-decision | `OD-S11-D6-02` | `run:dev` trigger на issue `#458` выставляется только Owner и только после review/approval plan package Issue `#456` | proposed |
-| owner-decision | `OD-S11-D6-03` | Handover в `run:qa` допускается только после acceptance evidence Wave 6 и подтверждённого fallback/manual-action readiness | proposed |
-| owner-decision | `OD-S11-D6-04` | Voice/STT, reminders, richer conversation threads, multi-chat routing policy и дополнительные каналы остаются отдельным follow-up контуром вне core Sprint S11 | proposed |
+| owner-decision | `OD-S11-D6-01` | Реализация идёт только по issue `#458` и по последовательным waves `S11-E01 -> S11-E02 -> S11-E03 -> S11-E04 -> S11-E05 -> S11-E06`; параллельный execution anchor не создаётся | accepted |
+| owner-decision | `OD-S11-D6-02` | `run:dev` trigger на issue `#458` выставляется только Owner и только после review/approval plan package Issue `#456` | accepted |
+| owner-decision | `OD-S11-D6-03` | Handover в `run:qa` допускается только после acceptance evidence Wave 6 и подтверждённого fallback/manual-action readiness | accepted |
+| owner-decision | `OD-S11-D6-04` | Voice/STT, reminders, richer conversation threads, multi-chat routing policy и дополнительные каналы остаются отдельным follow-up контуром вне core Sprint S11 | accepted |
 
 ## Tooling validation
 - Context7 `/websites/cli_github` использован для актуальной верификации неинтерактивного GitHub CLI flow:

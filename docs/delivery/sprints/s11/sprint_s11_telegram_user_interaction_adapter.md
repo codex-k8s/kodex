@@ -2,7 +2,7 @@
 doc_id: SPR-CK8S-0011
 type: sprint-plan
 title: "Sprint S11: Telegram-адаптер взаимодействия с пользователем и первый внешний канал доставки (Issue #361)"
-status: in-review
+status: completed
 owner_role: PM
 created_at: 2026-03-14
 updated_at: 2026-03-14
@@ -10,8 +10,10 @@ related_issues: [361, 444, 447, 448, 452, 454, 456, 458]
 related_prs: []
 approvals:
   required: ["Owner"]
-  status: pending
+  status: approved
   request_id: "owner-2026-03-14-issue-361-intake"
+  approved_by: "ai-da-stas"
+  approved_at: 2026-03-14
 ---
 
 # Sprint S11: Telegram-адаптер взаимодействия с пользователем и первый внешний канал доставки (Issue #361)
@@ -38,7 +40,7 @@ approvals:
 - Создание последовательных follow-up issue без автоматической постановки `run:*`-лейблов.
 
 ### Out of scope
-- Кодовая реализация до завершения и owner approval `run:plan` по Issue `#456`.
+- Кодовая реализация не входит в doc-stage контур Sprint S11 и выполняется только через owner-managed issue `#458`.
 - Попытка использовать Telegram как shortcut вместо platform-core contracts Sprint S10.
 - Voice/STT, advanced reminders, richer conversation threads, multi-chat routing policy и дополнительные каналы в рамках core Sprint S11.
 - Преждевременная фиксация schema/migration/runtime-topology решений до `run:arch` и `run:design`.
@@ -80,7 +82,7 @@ approvals:
 - Channel-specific UX может оптимизировать delivery experience, но не должен ломать audit trail, correlation discipline и wait-state policy, зафиксированные на platform side.
 
 ## Handover
-- Текущий stage in-review: `run:plan` в Issue `#456`.
+- Документный контур Sprint S11 `intake -> vision -> prd -> arch -> design -> plan` завершён и зафиксирован.
 - Plan package:
   - `docs/delivery/sprints/s11/sprint_s11_telegram_user_interaction_adapter.md`;
   - `docs/delivery/epics/s11/epic_s11.md`;
@@ -98,4 +100,4 @@ approvals:
   - `docs/delivery/sprints/s10/sprint_s10_mcp_user_interactions.md`;
   - `docs/delivery/epics/s10/epic-s10-day6-mcp-user-interactions-plan.md`;
   - `docs/architecture/initiatives/s10_mcp_user_interactions/README.md`.
-- Trigger-лейбл для Issue `#458` не ставится автоматически и остаётся owner-managed переходом после review plan package Issue `#456`.
+- Trigger-лейбл для Issue `#458` не ставится автоматически и остаётся owner-managed переходом после завершения doc-flow Sprint S11.
