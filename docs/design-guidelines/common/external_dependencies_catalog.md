@@ -36,12 +36,13 @@
 | `google.golang.org/protobuf` | `v1.36.10` | Internal contracts | protobuf runtime для gRPC контрактов и сгенерированного кода в `proto/gen/go/**` |
 | `google.golang.org/genproto/googleapis/rpc` | `v0.0.0-20251029180050-ab9386a59fda` | gRPC error details | типизированные `errdetails` для conflict/status metadata во внутренних gRPC callback-ах |
 | `github.com/modelcontextprotocol/go-sdk` | `v1.3.0` | MCP transport | встроенный StreamableHTTP MCP transport/auth/resource/tool runtime для `control-plane` |
+| `github.com/openai/openai-go/v3` | `v3.28.0` | Sprint S11 Telegram adapter voice STT | официальный OpenAI Go SDK для speech-to-text в `telegram-interaction-adapter`; используется для voice reply transcription после `ffmpeg` normalization |
 
 ## Backend (Go) — planned baselines
 
 | Dependency | Version | Scope | Why |
 |---|---|---|---|
-| `github.com/mymmrac/telego` | `v1.7.0` | Sprint S11 Telegram adapter (`planned`, ещё не добавлен в `go.mod`) | pragmatic Telegram Bot API SDK baseline для webhook mode, inline keyboards и callback queries; каталогизирован заранее по policy, а финальное code adoption остаётся за последующими `run:prd`/`run:arch`/`run:design` и implementation PR |
+| `github.com/mymmrac/telego` | `v1.7.0` | Sprint S11 Telegram adapter (`adopted` в `go.mod`) | pragmatic Telegram Bot API SDK baseline для webhook mode, inline keyboards и callback queries; используется в platform-owned Telegram adapter contour для webhook/auth, callback acknowledgement и Bot API mediation |
 
 ## Frontend (Vue/TS) — in use
 
