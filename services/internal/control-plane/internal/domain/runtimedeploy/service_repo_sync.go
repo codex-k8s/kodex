@@ -65,15 +65,9 @@ func (s *Service) resolveRunRepositoryRoot(ctx context.Context, params PreparePa
 		valueOr(vars, "CODEXK8S_AGENT_BASE_BRANCH", ""),
 	)
 
-	syncNamespace := strings.TrimSpace(params.Namespace)
+	syncNamespace := resolveSourceRepoSyncNamespace(params.Namespace, vars)
 	if syncNamespace == "" {
-		syncNamespace = strings.TrimSpace(valueOr(vars, "CODEXK8S_PRODUCTION_NAMESPACE", ""))
-	}
-	if syncNamespace == "" {
-		syncNamespace = strings.TrimSpace(valueOr(vars, "CODEXK8S_PLATFORM_NAMESPACE", ""))
-	}
-	if syncNamespace == "" {
-		return "", fmt.Errorf("target namespace is required for repo sync")
+		return "", fmt.Errorf("source namespace is required for repo sync")
 	}
 
 	repoRoot := s.repoSnapshotPath(params.TargetEnv, owner, name, buildRef)
@@ -119,6 +113,16 @@ func shouldUseDirectRepositoryRoot(configuredRoot string, repositoryFullName str
 	return looksLikeRepositoryRoot(configuredRoot) && strings.TrimSpace(repositoryFullName) == ""
 }
 
+func resolveSourceRepoSyncNamespace(targetNamespace string, vars map[string]string) string {
+	if platformNamespace := strings.TrimSpace(valueOr(vars, "CODEXK8S_PLATFORM_NAMESPACE", "")); platformNamespace != "" {
+		return platformNamespace
+	}
+	if productionNamespace := strings.TrimSpace(valueOr(vars, "CODEXK8S_PRODUCTION_NAMESPACE", "")); productionNamespace != "" {
+		return productionNamespace
+	}
+	return strings.TrimSpace(targetNamespace)
+}
+
 func isImmutableGitRef(ref string) bool {
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
@@ -141,9 +145,6 @@ func (s *Service) repoSnapshotPath(targetEnv string, owner string, name string, 
 	cacheRoot := strings.TrimSpace(s.cfg.RepositoryRoot)
 	if cacheRoot == "" {
 		return ""
-	}
-	if isAIEnv(targetEnv) {
-		return cacheRoot
 	}
 	refToken := sanitizeNameToken(buildRef, 120)
 	if refToken == "" {

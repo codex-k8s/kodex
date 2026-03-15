@@ -3,6 +3,7 @@ package runtimedeploy
 import (
 	"context"
 	cryptorand "crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -13,7 +14,22 @@ import (
 	"github.com/codex-k8s/codex-k8s/libs/go/servicescfg"
 )
 
-const defaultLetsEncryptDirectoryURL = "https://acme-v02.api.letsencrypt.org/directory"
+const (
+	defaultLetsEncryptDirectoryURL           = "https://acme-v02.api.letsencrypt.org/directory"
+	defaultTelegramInteractionAdapterBaseURL = "http://codex-k8s-telegram-interaction-adapter:8080"
+	defaultTelegramInteractionAdapterTimeout = "10s"
+	telegramInteractionAdapterSecretBytes    = 32
+)
+
+type telegramRuntimeSecretValues struct {
+	BaseURL               string
+	BearerToken           string
+	WebhookSecret         string
+	Timeout               string
+	BotToken              string
+	ChatID                string
+	RecipientBindingsJSON string
+}
 
 func (s *Service) ensureCodexK8sPrerequisites(ctx context.Context, repositoryRoot string, namespace string, vars map[string]string, stack *servicescfg.Stack, runID string) error {
 	targetNamespace := strings.TrimSpace(namespace)
@@ -128,11 +144,15 @@ func (s *Service) ensureCodexK8sPrerequisites(ctx context.Context, repositoryRoo
 		return fmt.Errorf("resolve CODEXK8S_POSTGRES_PASSWORD: %w", err)
 	}
 
-	appSecretKey, err := valueOrExistingOrSharedOrRandomHex(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_APP_SECRET_KEY", 32)
+	appSecretKey, err := valueOrExistingOrSharedOrGenerated(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_APP_SECRET_KEY", func() (string, error) {
+		return randomHex(32)
+	})
 	if err != nil {
 		return fmt.Errorf("resolve CODEXK8S_APP_SECRET_KEY: %w", err)
 	}
-	tokenEncryptionKey, err := valueOrExistingOrSharedOrRandomHex(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_TOKEN_ENCRYPTION_KEY", 32)
+	tokenEncryptionKey, err := valueOrExistingOrSharedOrGenerated(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_TOKEN_ENCRYPTION_KEY", func() (string, error) {
+		return randomHex(32)
+	})
 	if err != nil {
 		return fmt.Errorf("resolve CODEXK8S_TOKEN_ENCRYPTION_KEY: %w", err)
 	}
@@ -140,11 +160,15 @@ func (s *Service) ensureCodexK8sPrerequisites(ctx context.Context, repositoryRoo
 	if mcpTokenSigningKey == "" {
 		mcpTokenSigningKey = tokenEncryptionKey
 	}
-	githubWebhookSecret, err := valueOrExistingOrSharedOrRandomHex(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_GITHUB_WEBHOOK_SECRET", 32)
+	githubWebhookSecret, err := valueOrExistingOrSharedOrGenerated(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_GITHUB_WEBHOOK_SECRET", func() (string, error) {
+		return randomHex(32)
+	})
 	if err != nil {
 		return fmt.Errorf("resolve CODEXK8S_GITHUB_WEBHOOK_SECRET: %w", err)
 	}
-	jwtSigningKey, err := valueOrExistingOrSharedOrRandomHex(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_JWT_SIGNING_KEY", 32)
+	jwtSigningKey, err := valueOrExistingOrSharedOrGenerated(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_JWT_SIGNING_KEY", func() (string, error) {
+		return randomHex(32)
+	})
 	if err != nil {
 		return fmt.Errorf("resolve CODEXK8S_JWT_SIGNING_KEY: %w", err)
 	}
@@ -152,6 +176,10 @@ func (s *Service) ensureCodexK8sPrerequisites(ctx context.Context, repositoryRoo
 	letsEncryptEmailFallback := strings.TrimSpace(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_BOOTSTRAP_OWNER_EMAIL", ""))
 	letsEncryptEmail := strings.TrimSpace(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_LETSENCRYPT_EMAIL", letsEncryptEmailFallback))
 	letsEncryptServer := strings.TrimSpace(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_LETSENCRYPT_SERVER", defaultLetsEncryptDirectoryURL))
+	telegramRuntime, err := resolveTelegramRuntimeSecretValues(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime)
+	if err != nil {
+		return err
+	}
 
 	// TLS preparation runs in the same reconcile cycle; keep resolved values in template vars.
 	vars["CODEXK8S_LETSENCRYPT_EMAIL"] = letsEncryptEmail
@@ -182,38 +210,46 @@ func (s *Service) ensureCodexK8sPrerequisites(ctx context.Context, repositoryRoo
 		"CODEXK8S_OPENAI_API_KEY":                 []byte(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_OPENAI_API_KEY", "")),
 		// Project DB admin settings are tied to the Postgres instance deployed into the target namespace.
 		// Do not inherit them from platform (production) env/secrets, otherwise ai slots break with auth mismatch.
-		"CODEXK8S_PROJECT_DB_ADMIN_HOST":             []byte("postgres"),
-		"CODEXK8S_PROJECT_DB_ADMIN_PORT":             []byte("5432"),
-		"CODEXK8S_PROJECT_DB_ADMIN_USER":             []byte(postgresUser),
-		"CODEXK8S_PROJECT_DB_ADMIN_PASSWORD":         []byte(postgresPassword),
-		"CODEXK8S_PROJECT_DB_ADMIN_SSLMODE":          []byte("disable"),
-		"CODEXK8S_PROJECT_DB_ADMIN_DATABASE":         []byte("postgres"),
-		"CODEXK8S_PROJECT_DB_LIFECYCLE_ALLOWED_ENVS": []byte(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_PROJECT_DB_LIFECYCLE_ALLOWED_ENVS", "dev,production,prod")),
-		"CODEXK8S_GIT_BOT_TOKEN":                     []byte(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_GIT_BOT_TOKEN", "")),
-		"CODEXK8S_GIT_BOT_USERNAME":                  []byte(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_GIT_BOT_USERNAME", "codex-bot")),
-		"CODEXK8S_GIT_BOT_MAIL":                      []byte(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_GIT_BOT_MAIL", "codex-bot@codex-k8s.local")),
-		"CODEXK8S_CONTEXT7_API_KEY":                  []byte(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_CONTEXT7_API_KEY", "")),
-		"CODEXK8S_APP_SECRET_KEY":                    []byte(appSecretKey),
-		"CODEXK8S_TOKEN_ENCRYPTION_KEY":              []byte(tokenEncryptionKey),
-		"CODEXK8S_MCP_TOKEN_SIGNING_KEY":             []byte(mcpTokenSigningKey),
-		"CODEXK8S_MCP_TOKEN_TTL":                     []byte(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_MCP_TOKEN_TTL", "24h")),
-		"CODEXK8S_RUN_AGENT_LOGS_RETENTION_DAYS":     []byte(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_RUN_AGENT_LOGS_RETENTION_DAYS", "14")),
-		"CODEXK8S_LEARNING_MODE_DEFAULT":             []byte(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_LEARNING_MODE_DEFAULT", "true")),
-		"CODEXK8S_GITHUB_WEBHOOK_SECRET":             []byte(githubWebhookSecret),
-		"CODEXK8S_GITHUB_WEBHOOK_URL":                []byte(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_GITHUB_WEBHOOK_URL", "")),
-		"CODEXK8S_GITHUB_WEBHOOK_EVENTS":             []byte(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_GITHUB_WEBHOOK_EVENTS", "push,pull_request,issues,issue_comment,pull_request_review,pull_request_review_comment")),
-		"CODEXK8S_PRODUCTION_DOMAIN":                 []byte(valueOr(vars, "CODEXK8S_PRODUCTION_DOMAIN", "")),
-		"CODEXK8S_AI_DOMAIN":                         []byte(valueOr(vars, "CODEXK8S_AI_DOMAIN", "")),
-		"CODEXK8S_PUBLIC_BASE_URL":                   []byte(valueOr(vars, "CODEXK8S_PUBLIC_BASE_URL", "https://example.invalid")),
-		"CODEXK8S_BOOTSTRAP_OWNER_EMAIL":             []byte(bootstrapOwnerEmail),
-		"CODEXK8S_LETSENCRYPT_EMAIL":                 []byte(letsEncryptEmail),
-		"CODEXK8S_LETSENCRYPT_SERVER":                []byte(letsEncryptServer),
-		"CODEXK8S_BOOTSTRAP_ALLOWED_EMAILS":          []byte(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_BOOTSTRAP_ALLOWED_EMAILS", "")),
-		"CODEXK8S_BOOTSTRAP_PLATFORM_ADMIN_EMAILS":   []byte(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_BOOTSTRAP_PLATFORM_ADMIN_EMAILS", "")),
-		"CODEXK8S_GITHUB_OAUTH_CLIENT_ID":            []byte(oauthClientID),
-		"CODEXK8S_GITHUB_OAUTH_CLIENT_SECRET":        []byte(oauthClientSecret),
-		"CODEXK8S_JWT_SIGNING_KEY":                   []byte(jwtSigningKey),
-		"CODEXK8S_JWT_TTL":                           []byte(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_JWT_TTL", "15m")),
+		"CODEXK8S_PROJECT_DB_ADMIN_HOST":                                []byte("postgres"),
+		"CODEXK8S_PROJECT_DB_ADMIN_PORT":                                []byte("5432"),
+		"CODEXK8S_PROJECT_DB_ADMIN_USER":                                []byte(postgresUser),
+		"CODEXK8S_PROJECT_DB_ADMIN_PASSWORD":                            []byte(postgresPassword),
+		"CODEXK8S_PROJECT_DB_ADMIN_SSLMODE":                             []byte("disable"),
+		"CODEXK8S_PROJECT_DB_ADMIN_DATABASE":                            []byte("postgres"),
+		"CODEXK8S_PROJECT_DB_LIFECYCLE_ALLOWED_ENVS":                    []byte(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_PROJECT_DB_LIFECYCLE_ALLOWED_ENVS", "dev,production,prod")),
+		"CODEXK8S_GIT_BOT_TOKEN":                                        []byte(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_GIT_BOT_TOKEN", "")),
+		"CODEXK8S_GIT_BOT_USERNAME":                                     []byte(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_GIT_BOT_USERNAME", "codex-bot")),
+		"CODEXK8S_GIT_BOT_MAIL":                                         []byte(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_GIT_BOT_MAIL", "codex-bot@codex-k8s.local")),
+		"CODEXK8S_TELEGRAM_BOT_TOKEN":                                   []byte(telegramRuntime.BotToken),
+		"CODEXK8S_TELEGRAM_CHAT_ID":                                     []byte(telegramRuntime.ChatID),
+		"CODEXK8S_TELEGRAM_INTERACTION_ADAPTER_BASE_URL":                []byte(telegramRuntime.BaseURL),
+		"CODEXK8S_TELEGRAM_INTERACTION_ADAPTER_BEARER_TOKEN":            []byte(telegramRuntime.BearerToken),
+		"CODEXK8S_TELEGRAM_INTERACTION_ADAPTER_WEBHOOK_SECRET":          []byte(telegramRuntime.WebhookSecret),
+		"CODEXK8S_TELEGRAM_INTERACTION_ADAPTER_TIMEOUT":                 []byte(telegramRuntime.Timeout),
+		"CODEXK8S_TELEGRAM_INTERACTION_ADAPTER_RECIPIENT_BINDINGS_JSON": []byte(telegramRuntime.RecipientBindingsJSON),
+		"CODEXK8S_CONTEXT7_API_KEY":                                     []byte(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_CONTEXT7_API_KEY", "")),
+		"CODEXK8S_APP_SECRET_KEY":                                       []byte(appSecretKey),
+		"CODEXK8S_TOKEN_ENCRYPTION_KEY":                                 []byte(tokenEncryptionKey),
+		"CODEXK8S_MCP_TOKEN_SIGNING_KEY":                                []byte(mcpTokenSigningKey),
+		"CODEXK8S_MCP_TOKEN_TTL":                                        []byte(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_MCP_TOKEN_TTL", "24h")),
+		"CODEXK8S_RUN_AGENT_LOGS_RETENTION_DAYS":                        []byte(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_RUN_AGENT_LOGS_RETENTION_DAYS", "14")),
+		"CODEXK8S_LEARNING_MODE_DEFAULT":                                []byte(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_LEARNING_MODE_DEFAULT", "true")),
+		"CODEXK8S_GITHUB_WEBHOOK_SECRET":                                []byte(githubWebhookSecret),
+		"CODEXK8S_GITHUB_WEBHOOK_URL":                                   []byte(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_GITHUB_WEBHOOK_URL", "")),
+		"CODEXK8S_GITHUB_WEBHOOK_EVENTS":                                []byte(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_GITHUB_WEBHOOK_EVENTS", "push,pull_request,issues,issue_comment,pull_request_review,pull_request_review_comment")),
+		"CODEXK8S_PRODUCTION_DOMAIN":                                    []byte(valueOr(vars, "CODEXK8S_PRODUCTION_DOMAIN", "")),
+		"CODEXK8S_AI_DOMAIN":                                            []byte(valueOr(vars, "CODEXK8S_AI_DOMAIN", "")),
+		"CODEXK8S_PUBLIC_BASE_URL":                                      []byte(valueOr(vars, "CODEXK8S_PUBLIC_BASE_URL", "https://example.invalid")),
+		"CODEXK8S_INTERACTION_CALLBACK_BASE_URL":                        []byte(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_INTERACTION_CALLBACK_BASE_URL", "http://codex-k8s")),
+		"CODEXK8S_BOOTSTRAP_OWNER_EMAIL":                                []byte(bootstrapOwnerEmail),
+		"CODEXK8S_LETSENCRYPT_EMAIL":                                    []byte(letsEncryptEmail),
+		"CODEXK8S_LETSENCRYPT_SERVER":                                   []byte(letsEncryptServer),
+		"CODEXK8S_BOOTSTRAP_ALLOWED_EMAILS":                             []byte(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_BOOTSTRAP_ALLOWED_EMAILS", "")),
+		"CODEXK8S_BOOTSTRAP_PLATFORM_ADMIN_EMAILS":                      []byte(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_BOOTSTRAP_PLATFORM_ADMIN_EMAILS", "")),
+		"CODEXK8S_GITHUB_OAUTH_CLIENT_ID":                               []byte(oauthClientID),
+		"CODEXK8S_GITHUB_OAUTH_CLIENT_SECRET":                           []byte(oauthClientSecret),
+		"CODEXK8S_JWT_SIGNING_KEY":                                      []byte(jwtSigningKey),
+		"CODEXK8S_JWT_TTL":                                              []byte(valueOrExistingOrShared(secretResolver, targetEnv, vars, existingRuntime, sharedRuntime, "CODEXK8S_JWT_TTL", "15m")),
 		// UI hot-reload is only supported in ai slots. For production/production we
 		// intentionally keep the value empty so api-gateway serves embedded static UI.
 		"CODEXK8S_VITE_DEV_UPSTREAM": []byte(resolveViteDevUpstream(vars)),
@@ -381,7 +417,7 @@ func valueOrExistingOrRandomHex(values map[string]string, existing map[string][]
 	return randomHex(numBytes)
 }
 
-func valueOrExistingOrSharedOrRandomHex(resolver servicescfg.SecretResolver, envName string, values map[string]string, existing map[string][]byte, shared map[string][]byte, key string, numBytes int) (string, error) {
+func valueOrExistingOrSharedOrGenerated(resolver servicescfg.SecretResolver, envName string, values map[string]string, existing map[string][]byte, shared map[string][]byte, key string, generate func() (string, error)) (string, error) {
 	if overrideValue, _, ok := valueForEnvironment(resolver, envName, values, key); ok {
 		if err := ensureNoSecretConflict(existing, key, overrideValue, "existing"); err != nil {
 			return "", err
@@ -408,7 +444,45 @@ func valueOrExistingOrSharedOrRandomHex(resolver servicescfg.SecretResolver, env
 	if value := strings.TrimSpace(valueOr(values, key, "")); value != "" {
 		return value, nil
 	}
-	return randomHex(numBytes)
+	return generate()
+}
+
+func resolveTelegramRuntimeSecretValues(resolver servicescfg.SecretResolver, envName string, values map[string]string, existing map[string][]byte, shared map[string][]byte) (telegramRuntimeSecretValues, error) {
+	bearerToken, err := valueOrExistingOrSharedOrGenerated(resolver, envName, values, existing, shared, "CODEXK8S_TELEGRAM_INTERACTION_ADAPTER_BEARER_TOKEN", func() (string, error) {
+		return randomBase64URL(telegramInteractionAdapterSecretBytes)
+	})
+	if err != nil {
+		return telegramRuntimeSecretValues{}, fmt.Errorf("resolve CODEXK8S_TELEGRAM_INTERACTION_ADAPTER_BEARER_TOKEN: %w", err)
+	}
+	webhookSecret, err := valueOrExistingOrSharedOrGenerated(resolver, envName, values, existing, shared, "CODEXK8S_TELEGRAM_INTERACTION_ADAPTER_WEBHOOK_SECRET", func() (string, error) {
+		return randomBase64URL(telegramInteractionAdapterSecretBytes)
+	})
+	if err != nil {
+		return telegramRuntimeSecretValues{}, fmt.Errorf("resolve CODEXK8S_TELEGRAM_INTERACTION_ADAPTER_WEBHOOK_SECRET: %w", err)
+	}
+
+	botToken := strings.TrimSpace(valueOrExistingOrShared(resolver, envName, values, existing, shared, "CODEXK8S_TELEGRAM_BOT_TOKEN", ""))
+	chatID := strings.TrimSpace(valueOrExistingOrShared(resolver, envName, values, existing, shared, "CODEXK8S_TELEGRAM_CHAT_ID", ""))
+	recipientBindingsJSON := strings.TrimSpace(valueOrExistingOrShared(resolver, envName, values, existing, shared, "CODEXK8S_TELEGRAM_INTERACTION_ADAPTER_RECIPIENT_BINDINGS_JSON", ""))
+	baseURL := strings.TrimSpace(valueOrExistingOrShared(resolver, envName, values, existing, shared, "CODEXK8S_TELEGRAM_INTERACTION_ADAPTER_BASE_URL", ""))
+	if baseURL == "" && (botToken != "" || recipientBindingsJSON != "") {
+		baseURL = defaultTelegramInteractionAdapterBaseURL
+	}
+
+	timeout := strings.TrimSpace(valueOrExistingOrShared(resolver, envName, values, existing, shared, "CODEXK8S_TELEGRAM_INTERACTION_ADAPTER_TIMEOUT", defaultTelegramInteractionAdapterTimeout))
+	if timeout == "" {
+		timeout = defaultTelegramInteractionAdapterTimeout
+	}
+
+	return telegramRuntimeSecretValues{
+		BaseURL:               baseURL,
+		BearerToken:           bearerToken,
+		WebhookSecret:         webhookSecret,
+		Timeout:               timeout,
+		BotToken:              botToken,
+		ChatID:                chatID,
+		RecipientBindingsJSON: recipientBindingsJSON,
+	}, nil
 }
 
 func valueForEnvironment(resolver servicescfg.SecretResolver, envName string, values map[string]string, key string) (string, string, bool) {
@@ -487,6 +561,17 @@ func randomHex(numBytes int) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(raw), nil
+}
+
+func randomBase64URL(numBytes int) (string, error) {
+	if numBytes <= 0 {
+		numBytes = 32
+	}
+	raw := make([]byte, numBytes)
+	if _, err := cryptorand.Read(raw); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(raw), nil
 }
 
 func isValidOAuthCookieSecret(value string) bool {

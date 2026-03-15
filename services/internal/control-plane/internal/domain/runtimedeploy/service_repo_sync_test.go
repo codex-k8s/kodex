@@ -31,6 +31,50 @@ func TestShouldUseDirectRepositoryRoot_FalseForNonRepositoryPath(t *testing.T) {
 	}
 }
 
+func TestResolveSourceRepoSyncNamespace(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name            string
+		targetNamespace string
+		vars            map[string]string
+		want            string
+	}{
+		{
+			name:            "prefers platform namespace for full env source snapshot",
+			targetNamespace: "codex-issue-3278207d1cd3-i473-r4a5958f0757f",
+			vars: map[string]string{
+				"CODEXK8S_PLATFORM_NAMESPACE":   "codex-k8s-prod",
+				"CODEXK8S_PRODUCTION_NAMESPACE": "codex-issue-3278207d1cd3-i473-r4a5958f0757f",
+			},
+			want: "codex-k8s-prod",
+		},
+		{
+			name:            "falls back to production namespace when platform missing",
+			targetNamespace: "codex-issue-3278207d1cd3-i473-r4a5958f0757f",
+			vars: map[string]string{
+				"CODEXK8S_PRODUCTION_NAMESPACE": "codex-k8s-prod",
+			},
+			want: "codex-k8s-prod",
+		},
+		{
+			name:            "falls back to target namespace when no platform vars available",
+			targetNamespace: "codex-k8s-dev-1",
+			vars:            map[string]string{},
+			want:            "codex-k8s-dev-1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := resolveSourceRepoSyncNamespace(tt.targetNamespace, tt.vars); got != tt.want {
+				t.Fatalf("resolveSourceRepoSyncNamespace() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestShouldSyncRepoSnapshotToRuntimeNamespace(t *testing.T) {
 	t.Parallel()
 
@@ -107,5 +151,37 @@ func TestShouldSyncRepoSnapshotToRuntimeNamespace(t *testing.T) {
 				t.Fatalf("shouldSyncRepoSnapshotToRuntimeNamespace() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestRepoSnapshotPath_UsesBuildRefScopedSnapshotForAIEnv(t *testing.T) {
+	t.Parallel()
+
+	svc := &Service{
+		cfg: Config{
+			RepositoryRoot: "/repo-cache",
+		},
+	}
+
+	got := svc.repoSnapshotPath("ai", "codex-k8s", "codex-k8s", "3e7c26a0470fbab877607df5f82f5874a8119b5f")
+	want := "/repo-cache/github/codex-k8s/codex-k8s/3e7c26a0470fbab877607df5f82f5874a8119b5f"
+	if got != want {
+		t.Fatalf("repoSnapshotPath(ai) = %q, want %q", got, want)
+	}
+}
+
+func TestRepoSnapshotPath_FallsBackToMainWhenBuildRefIsEmpty(t *testing.T) {
+	t.Parallel()
+
+	svc := &Service{
+		cfg: Config{
+			RepositoryRoot: "/repo-cache",
+		},
+	}
+
+	got := svc.repoSnapshotPath("ai", "codex-k8s", "codex-k8s", "")
+	want := "/repo-cache/github/codex-k8s/codex-k8s/main"
+	if got != want {
+		t.Fatalf("repoSnapshotPath(empty build ref) = %q, want %q", got, want)
 	}
 }

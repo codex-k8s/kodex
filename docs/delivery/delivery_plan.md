@@ -349,6 +349,7 @@ approvals:
   - `control-plane` получил additive schema foundation, callback handle/binding persistence, operator projections и typed Telegram delivery envelope;
   - `worker` получил HTTP bridge к внешнему Telegram adapter contour, transport-aware retry/fallback metadata и callback token propagation;
   - `api-gateway`/gRPC contracts и generated artifacts синхронно обновлены под normalized callback family `delivery_receipt|option_selected|free_text_received|transport_failure`;
+  - follow-up issue `#473` закрывает оставшийся runtime gap: in-repo `telegram-interaction-adapter` materializes raw webhook/auth, callback acknowledgement, Bot API mediation и deploy wiring вместо внешнего placeholder bridge;
   - dev-итерация закрыта сервисными тестами/codegen и готова к handover `run:qa -> release -> postdeploy -> ops` после review.
 
 ### Sprint S12: GitHub API rate-limit resilience
@@ -392,6 +393,7 @@ approvals:
   - Wave 3 / Issue `#427` переведён в `in-review`: `worker` получил due-wait sweep через новый `ProcessNextGitHubRateLimitWait` RPC, bounded replay/resume loop, manual escalation path и env/codegen wiring для дальнейшей волны `#428`.
   - Wave 4 / Issue `#428` переведён в `in-review`: `agent-runner` получил typed handoff `ReportGitHubRateLimitSignal`, coarse session snapshots `running -> waiting_backpressure`, dedicated resume payload lookup и stop-local-retry discipline для дальнейшей волны `#429`.
   - Wave 5 / Issue `#429` переведён в `in-review`: `api-gateway` получил contract-first wait visibility (`wait_projection`, dominant/related waits, typed realtime wait envelopes), codegen синхронизацию `OpenAPI+proto` и thin-edge mapping без доменной классификации в transport handlers.
+  - Wave 6 / Issue `#430` переведён в `in-review`: `web-console` получил typed wait queue / run details surfaces для dominant/related waits, contour attribution, manual-action guidance и realtime wait activity без дублирования recovery/classification logic из `control-plane`.
 
 ### Sprint S13: Quality governance system for agent-scale delivery (Issue #469)
 - Day 1 (in-review): intake-пакет для `Quality Governance System` (`docs/delivery/epics/s13/epic-s13-day1-quality-governance-intake.md`, Issue `#469`).
