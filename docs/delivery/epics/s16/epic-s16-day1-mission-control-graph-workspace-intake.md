@@ -18,13 +18,13 @@ approvals:
 
 ## TL;DR
 - Текущий Mission Control не соответствует ожиданиям Owner: нужен не улучшенный board/list, а новый primary workspace платформы с fullscreen canvas, detached top toolbar, правым drawer/chat и явным lineage `discussion/work_item -> run -> PR/follow-up issue -> next run`.
-- Sprint S16 поглощает foundation issue `#480`: persisted GitHub inventory mirror и bounded reconcile остаются обязательным нижним слоем, но больше не являются самостоятельной конечной формой Mission Control.
-- Intake фиксирует hybrid truth matrix, filtered multi-root workspace, закрытый Wave 1 node set `discussion/work_item/run/pull_request`, typed metadata/watermark contract, platform-canonical launch params и continuity-rule `PR + follow-up issue` для каждого stage до `run:dev` включительно.
+- Sprint S16 поглощает foundation issue `#480`: persisted GitHub inventory mirror и bounded reconcile остаются обязательным нижним слоем, при этом foundation coverage contract сохраняется как `all open Issues/PR + bounded recent closed history`, а не заменяется расплывчатым backlog mirror.
+- Intake фиксирует hybrid truth matrix, filtered multi-root workspace с точным Wave 1 filter baseline `open_only`, `assigned_to_me_or_unassigned` и active-state presets, закрытый Wave 1 node set `discussion/work_item/run/pull_request`, typed metadata/watermark contract, platform-canonical launch params и continuity-rule `PR + follow-up issue` для каждого stage до `run:dev` включительно.
 - Создана continuity issue `#496` для stage `run:vision`; на следующем этапе нельзя возвращаться к GitHub-first single-root board framing или превращать voice path в blocking scope.
 
 ## Контекст
 - Sprint S9 (`#333`, `#335`, `#337`, `#340`, `#351`, `#363`, `#369..#375`) уже построил первый Mission Control baseline: active-set dashboard, typed projection, core transport/UI foundations и execution backlog.
-- Issue `#480` затем зафиксировал product gap: текущий Mission Control строится в основном из platform execution evidence и поэтому не покрывает GitHub inventory как полный active backlog; был предложен persisted provider mirror как обязательный foundation stream.
+- Issue `#480` затем зафиксировал product gap: текущий Mission Control строится в основном из platform execution evidence и поэтому не покрывает GitHub inventory как полный active backlog; был предложен persisted provider mirror как обязательный foundation stream с concrete coverage contract `all open Issues/PR + bounded recent closed history`.
 - Owner discussion в `#490` отменила trajectory «дополировать текущий dashboard» и явно потребовала новый рабочий контур:
   - fullscreen canvas вместо board/list-first страницы;
   - detached top toolbar и правый drawer/chat;
@@ -55,7 +55,7 @@ approvals:
 
 ### To-Be
 - Mission Control становится fullscreen graph workspace/control plane, а не incremental улучшением существующей dashboard-страницы.
-- Workspace по умолчанию показывает все сущности, прошедшие owner filters, и позволяет одновременно видеть несколько инициатив; graph layout остаётся left-to-right по каждой инициативе.
+- Workspace по умолчанию показывает все сущности, прошедшие точный Wave 1 filter baseline `open_only`, `assigned_to_me_or_unassigned` и active-state presets, и позволяет одновременно видеть несколько инициатив; graph layout остаётся left-to-right по каждой инициативе, а узлы, нужные для graph integrity, но не прошедшие основной фильтр, остаются secondary/dimmed вместо полного скрытия.
 - Platform и GitHub получают явный hybrid truth split:
   - platform canonical: operational graph, relations, run nodes, launch params, dashboard metadata, sync state, platform-generated watermarks;
   - GitHub canonical: issue/pr/comment/review/provider-native state и development links.
@@ -74,9 +74,10 @@ approvals:
 - Полное перепроектирование Mission Control как primary graph workspace/control plane staff console.
 - Fullscreen canvas с detached top toolbar и правым drawer/chat/details panel.
 - Filtered multi-root workspace:
-  - по умолчанию отображаются все сущности, прошедшие текущие owner filters;
+  - по умолчанию отображаются все сущности, прошедшие точные Wave 1 filters `open_only`, `assigned_to_me_or_unassigned` и active-state presets;
   - в одном срезе видно несколько инициатив одновременно;
-  - каждая инициатива должна уметь визуально раскладываться слева направо: discussion/root nodes слева, затем runs и последующие артефакты вправо.
+  - каждая инициатива должна уметь визуально раскладываться слева направо: discussion/root nodes слева, затем runs и последующие артефакты вправо;
+  - узлы, которые нужны только для связности графа и не проходят основной фильтр, показываются secondary/dimmed, а не исчезают.
 - Закрытый Wave 1 node set:
   - `discussion`
   - `work_item`
@@ -93,6 +94,7 @@ approvals:
   - GitHub Projects / Issue Type / Relationships допускаются только как mirror/enrichment, но не как primary graph model.
 - Inventory-backed foundation из `#480`:
   - persisted provider mirror обязателен;
+  - coverage contract foundation stream = все открытые Issues, все открытые PR и bounded recent closed history по Issues/PR;
   - backfill/rebuild baseline = `hybrid warmup + lazy repair`;
   - dashboard summary/graph должны строиться по persisted projection, а не по page-load live fetch.
 - Typed metadata contract и будущие MCP/control-plane surfaces для:
@@ -143,10 +145,10 @@ approvals:
 
 ## Acceptance Criteria (Intake stage)
 - [x] Формально зафиксировано, что Sprint S16 — это полное перепроектирование Mission Control в graph workspace/control plane, а не incremental UX-tuning текущего dashboard.
-- [x] Зафиксирован filtered multi-root workspace baseline с left-to-right layout и secondary/dimmed handling для связующих узлов вне primary selection.
+- [x] Зафиксирован filtered multi-root workspace baseline с точными Wave 1 filters `open_only`, `assigned_to_me_or_unassigned`, active-state presets, left-to-right layout и secondary/dimmed handling для связующих узлов вне primary selection.
 - [x] Зафиксирован закрытый Wave 1 node set `discussion + work_item + run + pull_request`, а `agent` не входит в Wave 1 canvas nodes.
 - [x] Зафиксирована hybrid truth matrix по ownership boundaries между platform state и GitHub state.
-- [x] Зафиксировано, что inventory-backed provider mirror из `#480` является обязательным foundation, а не альтернативным backlog.
+- [x] Зафиксировано, что inventory-backed provider mirror из `#480` является обязательным foundation с coverage contract `all open Issues/PR + bounded recent closed history`, а не альтернативным backlog.
 - [x] Зафиксирован typed metadata/watermark contract baseline: platform-generated watermark, no markdown scraping as canonical source.
 - [x] Зафиксировано platform-canonical хранение launch params с defaults + overrides.
 - [x] Зафиксировано, что voice/STT не блокирует core Wave 1 и выносится в later wave через dashboard orchestrator path.
@@ -165,9 +167,12 @@ approvals:
 - Созданная issue следующего этапа: `#496`.
 - На stage `run:vision` обязательно сохранить и не переоткрывать без owner-решения следующие intake-decisions:
   - Sprint S16 поглощает issue `#480` как mandatory foundation stream;
+  - foundation coverage contract из `#480` сохраняется как `all open Issues/PR + bounded recent closed history`;
+  - multi-root filtered workspace удерживает точные Wave 1 filters `open_only`, `assigned_to_me_or_unassigned` и active-state presets;
   - multi-root filtered workspace является default baseline;
   - Wave 1 nodes = `discussion`, `work_item`, `run`, `pull_request`, без `agent` node;
   - comments/chat/summaries остаются drawer/timeline entities, а не canvas nodes;
+  - secondary/dimmed handling используется только для graph integrity, а не как замена primary filter baseline;
   - hybrid truth matrix между platform и GitHub обязательна;
   - typed metadata contract, platform-generated watermarks и platform-canonical launch params обязательны;
   - voice/STT и dashboard orchestrator agent не входят в blocking scope core Wave 1;

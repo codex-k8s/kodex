@@ -20,7 +20,7 @@ approvals:
 - Цель спринта: перепроектировать Mission Control в primary graph workspace/control plane, где Owner может вести несколько инициатив, видеть lineage `discussion/work_item -> run -> PR/follow-up issue -> next run` и управлять следующими шагами без возврата к board/list-only модели.
 - Sprint S16 стартовал intake-этапом в Issue `#492`; continuity issue `#496` создана для `run:vision`.
 - Foundation issue `#480` поглощена как обязательный нижний слой: persisted GitHub inventory mirror и bounded reconcile становятся частью продукта, но не заменяют новый workspace.
-- Базовые ограничения спринта: hybrid truth matrix, filtered multi-root workspace, Wave 1 nodes `discussion/work_item/run/pull_request`, typed metadata/watermarks, platform-canonical launch params и non-blocking voice later-wave.
+- Базовые ограничения спринта: hybrid truth matrix, filtered multi-root workspace с точными Wave 1 filters `open_only`, `assigned_to_me_or_unassigned` и active-state presets, foundation coverage contract `all open Issues/PR + bounded recent closed history`, Wave 1 nodes `discussion/work_item/run/pull_request`, typed metadata/watermarks, platform-canonical launch params и non-blocking voice later-wave.
 
 ## Scope спринта
 ### In scope
@@ -54,8 +54,9 @@ approvals:
 
 ### Product shape
 - Mission Control должен стать fullscreen graph workspace/control plane, а не улучшенной dashboard-страницей Sprint S9.
-- Workspace по умолчанию multi-root: показывает все сущности, прошедшие owner filters, а не только одну выбранную инициативу и не «весь мир».
+- Workspace по умолчанию multi-root: показывает все сущности, прошедшие точные Wave 1 filters `open_only`, `assigned_to_me_or_unassigned` и active-state presets, а не только одну выбранную инициативу и не «весь мир».
 - Graph layout для каждой инициативы идёт слева направо: discussion/root слева, runs и downstream artifacts справа.
+- Узлы, нужные для graph integrity, но не прошедшие основной фильтр, остаются secondary/dimmed, а не исчезают полностью.
 
 ### Truth matrix and continuity
 - Platform canonical:
@@ -74,7 +75,7 @@ approvals:
 - Node types: `discussion`, `work_item`, `run`, `pull_request`.
 - `agent` не становится canvas node в первой волне.
 - Comments/chat/summaries остаются drawer/timeline entities.
-- Inventory-backed provider mirror из `#480` входит в core foundation, но сам по себе не считается финальным продуктовым результатом.
+- Inventory-backed provider mirror из `#480` входит в core foundation с coverage contract `all open Issues/PR + bounded recent closed history`, но сам по себе не считается финальным продуктовым результатом.
 - Voice/STT и dashboard orchestrator agent остаются later-wave path.
 
 ## План этапов и handover
@@ -101,7 +102,10 @@ approvals:
 - На `run:vision` нельзя потерять следующие решения Day1:
   - Sprint S16 = полный redesign Mission Control;
   - `#480` = mandatory foundation stream;
+  - coverage contract `#480` = `all open Issues/PR + bounded recent closed history`;
   - multi-root filtered workspace = default baseline;
+  - Wave 1 filters = `open_only`, `assigned_to_me_or_unassigned`, active-state presets;
+  - secondary/dimmed handling используется только для graph integrity;
   - Wave 1 nodes = `discussion/work_item/run/pull_request`;
   - typed metadata, platform-generated watermarks и platform-canonical launch params обязательны;
   - stage continuity до `run:dev` = `PR + linked follow-up issue`.

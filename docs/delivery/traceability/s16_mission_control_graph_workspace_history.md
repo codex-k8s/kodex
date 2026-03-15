@@ -28,9 +28,9 @@ approvals:
   - `docs/delivery/epics/s16/epic-s16-day1-mission-control-graph-workspace-intake.md`.
 - Зафиксированы:
   - Sprint S16 как полный redesign Mission Control в graph workspace/control plane, а не как incremental tuning Sprint S9 dashboard;
-  - поглощение issue `#480` как mandatory foundation layer для persisted provider mirror и bounded reconcile;
+  - поглощение issue `#480` как mandatory foundation layer для persisted provider mirror, bounded reconcile и coverage contract `all open Issues/PR + bounded recent closed history`;
   - hybrid truth matrix между platform state и GitHub state;
-  - filtered multi-root workspace, left-to-right graph layout и secondary/dimmed semantics для связующих узлов;
+  - filtered multi-root workspace с точными Wave 1 filters `open_only`, `assigned_to_me_or_unassigned`, active-state presets, left-to-right graph layout и secondary/dimmed semantics только для связующих узлов;
   - Wave 1 node set `discussion`, `work_item`, `run`, `pull_request`, без `agent` node;
   - typed metadata contract, platform-generated watermarks и platform-canonical launch params;
   - continuity rule: каждый stage до `run:dev` включительно обязан завершаться `PR + linked follow-up issue`.

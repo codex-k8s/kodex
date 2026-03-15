@@ -18,8 +18,8 @@ approvals:
 
 ## TL;DR
 - Sprint S16 открывает новый product stream вокруг полного redesign Mission Control: staff console должна стать graph workspace/control plane, а не оставаться board/list слоем над частичной platform evidence.
-- Day1 intake (`#492`) зафиксировал fullscreen workspace, hybrid truth matrix, filtered multi-root graph, закрытый Wave 1 node set `discussion/work_item/run/pull_request`, platform-canonical metadata/watermarks/launch params и continuity rule `PR + follow-up issue`.
-- Issue `#480` не исчезает, а становится обязательным foundation layer внутри S16: persisted GitHub inventory mirror и bounded reconcile должны питать новый workspace.
+- Day1 intake (`#492`) зафиксировал fullscreen workspace, hybrid truth matrix, filtered multi-root graph с точными Wave 1 filters `open_only`, `assigned_to_me_or_unassigned` и active-state presets, закрытый Wave 1 node set `discussion/work_item/run/pull_request`, platform-canonical metadata/watermarks/launch params и continuity rule `PR + follow-up issue`.
+- Issue `#480` не исчезает, а становится обязательным foundation layer внутри S16: persisted GitHub inventory mirror и bounded reconcile с coverage contract `all open Issues/PR + bounded recent closed history` должны питать новый workspace.
 - Создана continuity issue `#496` для stage `run:vision`; до `run:plan` Sprint S16 остаётся markdown-only и не создаёт implementation issues.
 
 ## Stage roadmap

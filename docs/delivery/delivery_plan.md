@@ -424,8 +424,8 @@ approvals:
 - Day 1 (in-review): intake-пакет для полного redesign Mission Control (`docs/delivery/epics/s16/epic-s16-day1-mission-control-graph-workspace-intake.md`, Issue `#492`).
 - Результат Day 1 (факт):
   - Mission Control зафиксирован как новый graph workspace/control plane, а не как incremental refresh Sprint S9 dashboard;
-  - issue `#480` поглощена как mandatory foundation layer для persisted GitHub inventory mirror, bounded reconcile и future hybrid warmup/lazy repair;
-  - hybrid truth matrix, filtered multi-root workspace, left-to-right graph baseline и Wave 1 nodes `discussion/work_item/run/pull_request` закреплены как intake baseline;
+  - issue `#480` поглощена как mandatory foundation layer для persisted GitHub inventory mirror, bounded reconcile, coverage contract `all open Issues/PR + bounded recent closed history` и future hybrid warmup/lazy repair;
+  - hybrid truth matrix, filtered multi-root workspace с точными Wave 1 filters `open_only`, `assigned_to_me_or_unassigned`, active-state presets, left-to-right graph baseline и Wave 1 nodes `discussion/work_item/run/pull_request` закреплены как intake baseline;
   - typed metadata/watermark contract, platform-canonical launch params и continuity rule `PR + linked follow-up issue` через `run:dev` закреплены как обязательный product contract;
   - создана continuity issue `#496` для stage `run:vision` без trigger-лейбла.
 - Day 2 (planned): vision issue `#496`.
