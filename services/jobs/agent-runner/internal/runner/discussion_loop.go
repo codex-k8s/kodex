@@ -42,6 +42,7 @@ func (s *Service) runDiscussionLoop(ctx context.Context, state codexState, resul
 	}
 
 	var lastProcessedHumanCommentID int64
+	completedAtLeastOneCycle := result.restoredSessionPath != "" || result.sessionID != "" || result.sessionFilePath != ""
 	for {
 		issueState, err := s.loadDiscussionIssueState(ctx)
 		if err != nil {
@@ -71,7 +72,7 @@ func (s *Service) runDiscussionLoop(ctx context.Context, state codexState, resul
 			}
 			return nil
 		}
-		if !shouldRunDiscussionCycle(issueState, lastProcessedHumanCommentID) {
+		if !shouldRunDiscussionCycle(issueState, lastProcessedHumanCommentID, completedAtLeastOneCycle) {
 			if err := waitForDiscussionPoll(ctx, pollInterval); err != nil {
 				return err
 			}
@@ -167,6 +168,7 @@ func (s *Service) runDiscussionLoop(ctx context.Context, state codexState, resul
 
 		lastProcessedHumanCommentID = issueState.MaxHumanCommentID
 		result.restoredSessionPath = result.sessionFilePath
+		completedAtLeastOneCycle = true
 		if err := waitForDiscussionPoll(ctx, pollInterval); err != nil {
 			return err
 		}
@@ -228,7 +230,10 @@ func (s *Service) loadDiscussionIssueState(ctx context.Context) (discussionIssue
 	return deriveDiscussionIssueState(issue, comments, s.cfg.GitBotUsername), nil
 }
 
-func shouldRunDiscussionCycle(state discussionIssueState, lastProcessedHumanCommentID int64) bool {
+func shouldRunDiscussionCycle(state discussionIssueState, lastProcessedHumanCommentID int64, completedAtLeastOneCycle bool) bool {
+	if !completedAtLeastOneCycle {
+		return true
+	}
 	if !state.HasAgentReply {
 		return true
 	}
