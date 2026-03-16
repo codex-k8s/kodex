@@ -44,7 +44,9 @@ func coverageClassForPullRequestState(state string) enumtypes.MissionControlCove
 
 func coverageClassForGitHubState(state string) enumtypes.MissionControlCoverageClass {
 	switch strings.ToLower(strings.TrimSpace(state)) {
-	case "", "open":
+	case "":
+		return enumtypes.MissionControlCoverageClassOutOfScope
+	case "open":
 		return enumtypes.MissionControlCoverageClassOpenPrimary
 	default:
 		return enumtypes.MissionControlCoverageClassRecentClosedContext
@@ -80,14 +82,17 @@ func runContinuityStatus(
 	if strings.TrimSpace(pullRequestEntityKey) == "" {
 		return enumtypes.MissionControlContinuityStatusMissingPullRequest
 	}
-	return enumtypes.MissionControlContinuityStatusMissingFollowUpIssue
+	// Follow-up continuity needs explicit link evidence; the shadow foundation must not infer
+	// a blocking missing_follow_up_issue from the absence of a newer run alone.
+	return enumtypes.MissionControlContinuityStatusOutOfScope
 }
 
 func workItemContinuityStatus(runContinuity enumtypes.MissionControlContinuityStatus) enumtypes.MissionControlContinuityStatus {
 	switch runContinuity {
 	case enumtypes.MissionControlContinuityStatusMissingPullRequest,
 		enumtypes.MissionControlContinuityStatusMissingFollowUpIssue,
-		enumtypes.MissionControlContinuityStatusStaleProvider:
+		enumtypes.MissionControlContinuityStatusStaleProvider,
+		enumtypes.MissionControlContinuityStatusOutOfScope:
 		return runContinuity
 	default:
 		return enumtypes.MissionControlContinuityStatusComplete
@@ -98,7 +103,8 @@ func pullRequestContinuityStatus(
 	runContinuity enumtypes.MissionControlContinuityStatus,
 	pullRequestCoverage enumtypes.MissionControlCoverageClass,
 ) enumtypes.MissionControlContinuityStatus {
-	if pullRequestCoverage == enumtypes.MissionControlCoverageClassOutOfScope {
+	if pullRequestCoverage == enumtypes.MissionControlCoverageClassOutOfScope ||
+		runContinuity == enumtypes.MissionControlContinuityStatusOutOfScope {
 		return enumtypes.MissionControlContinuityStatusOutOfScope
 	}
 	if runContinuity == enumtypes.MissionControlContinuityStatusMissingFollowUpIssue {

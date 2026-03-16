@@ -31,7 +31,7 @@ func TestRunContinuityStatusUsesLatestSucceededRunState(t *testing.T) {
 		enumtypes.MissionControlCoverageClassOpenPrimary,
 		"codex-k8s/codex-k8s/pull/542",
 		"",
-	), enumtypes.MissionControlContinuityStatusMissingFollowUpIssue; got != want {
+	), enumtypes.MissionControlContinuityStatusOutOfScope; got != want {
 		t.Fatalf("runContinuityStatus() = %s, want %s", got, want)
 	}
 
@@ -51,6 +51,34 @@ func TestRunContinuityStatusUsesLatestSucceededRunState(t *testing.T) {
 		"run-2",
 	), enumtypes.MissionControlContinuityStatusComplete; got != want {
 		t.Fatalf("runContinuityStatus() for superseded run = %s, want %s", got, want)
+	}
+}
+
+func TestCoverageClassForPullRequestStateRequiresExplicitProviderState(t *testing.T) {
+	t.Parallel()
+
+	if got, want := coverageClassForPullRequestState(""), enumtypes.MissionControlCoverageClassOutOfScope; got != want {
+		t.Fatalf("coverageClassForPullRequestState(empty) = %s, want %s", got, want)
+	}
+	if got, want := coverageClassForPullRequestState("open"), enumtypes.MissionControlCoverageClassOpenPrimary; got != want {
+		t.Fatalf("coverageClassForPullRequestState(open) = %s, want %s", got, want)
+	}
+	if got, want := coverageClassForPullRequestState("closed"), enumtypes.MissionControlCoverageClassRecentClosedContext; got != want {
+		t.Fatalf("coverageClassForPullRequestState(closed) = %s, want %s", got, want)
+	}
+}
+
+func TestContinuityStatusPropagatesOutOfScopeFollowUpCoverage(t *testing.T) {
+	t.Parallel()
+
+	if got, want := workItemContinuityStatus(enumtypes.MissionControlContinuityStatusOutOfScope), enumtypes.MissionControlContinuityStatusOutOfScope; got != want {
+		t.Fatalf("workItemContinuityStatus(out_of_scope) = %s, want %s", got, want)
+	}
+	if got, want := pullRequestContinuityStatus(
+		enumtypes.MissionControlContinuityStatusOutOfScope,
+		enumtypes.MissionControlCoverageClassOpenPrimary,
+	), enumtypes.MissionControlContinuityStatusOutOfScope; got != want {
+		t.Fatalf("pullRequestContinuityStatus(out_of_scope) = %s, want %s", got, want)
 	}
 }
 

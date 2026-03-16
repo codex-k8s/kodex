@@ -620,22 +620,6 @@ func (s *Service) collectProjectionSeeds(
 			detectedAt: gapDetectedAt(run, projectedAt),
 		})
 	}
-	if nextRunEntityKey == "" && runContinuity == enumtypes.MissionControlContinuityStatusMissingFollowUpIssue && pullRequestEntityKey != "" {
-		seedContinuityGap(gapSeeds, continuityGapCompositeKey(pullRequestEntityKey, enumtypes.MissionControlGapKindMissingFollowUpIssue), continuityGapSeed{
-			subjectEntityKey:   pullRequestEntityKey,
-			gapKind:            enumtypes.MissionControlGapKindMissingFollowUpIssue,
-			severity:           enumtypes.MissionControlGapSeverityBlocking,
-			expectedEntityKind: enumtypes.MissionControlEntityKindWorkItem,
-			resolutionHint:     "Связать follow-up issue с pull request до следующего запуска stage continuity.",
-			payloadJSON: mustMarshal(valuetypes.MissionControlMissingFollowUpGapPayload{
-				RepositoryFullName: repositoryFullName,
-				PullRequestRef:     pullRequestEntityKey,
-				RunID:              strings.TrimSpace(run.RunID),
-				StageLabel:         strings.TrimSpace(runContext.StageLabel),
-			}),
-			detectedAt: gapDetectedAt(run, projectedAt),
-		})
-	}
 
 	eventEntityKeys := relatedProjectionKeys(workItemEntityKey, runEntityKey, pullRequestEntityKey)
 	if len(eventEntityKeys) == 0 || strings.TrimSpace(run.CorrelationID) == "" {
