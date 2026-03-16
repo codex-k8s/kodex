@@ -93,3 +93,27 @@ func TestProcessedDiscussionCommentIDs(t *testing.T) {
 		t.Fatalf("unexpected processed ids: %#v", processed)
 	}
 }
+
+func TestShouldRunDiscussionCycleForFreshRunWithoutNewHumanComment(t *testing.T) {
+	state := discussionIssueState{
+		HasAgentReply:           true,
+		HasHumanAfterAgentReply: false,
+		MaxHumanCommentID:       0,
+	}
+
+	if !shouldRunDiscussionCycle(state, 0, false) {
+		t.Fatal("expected fresh discussion run to execute initial cycle")
+	}
+}
+
+func TestShouldRunDiscussionCycleWaitsAfterInitialCycleWithoutNewHumanComment(t *testing.T) {
+	state := discussionIssueState{
+		HasAgentReply:           true,
+		HasHumanAfterAgentReply: false,
+		MaxHumanCommentID:       0,
+	}
+
+	if shouldRunDiscussionCycle(state, 0, true) {
+		t.Fatal("expected discussion loop to poll after initial cycle when no new human comment exists")
+	}
+}
