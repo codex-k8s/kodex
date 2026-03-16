@@ -14,6 +14,7 @@ import (
 
 const defaultWorkerID = "worker"
 const defaultStateInReviewLabel = webhookdomain.DefaultStateInReviewLabel
+const defaultProductionNamespace = "codex-k8s-prod"
 
 // Config defines worker run-loop behavior.
 type Config struct {
@@ -292,6 +293,10 @@ func NewService(cfg Config, deps Dependencies) *Service {
 	cfg.StateInReviewLabel = strings.TrimSpace(cfg.StateInReviewLabel)
 	if cfg.StateInReviewLabel == "" {
 		cfg.StateInReviewLabel = defaultStateInReviewLabel
+	}
+	cfg.ProductionNamespace = strings.TrimSpace(cfg.ProductionNamespace)
+	if cfg.ProductionNamespace == "" {
+		cfg.ProductionNamespace = defaultProductionNamespace
 	}
 	cfg.ControlPlaneGRPCTarget = strings.TrimSpace(cfg.ControlPlaneGRPCTarget)
 	if cfg.ControlPlaneGRPCTarget == "" {
