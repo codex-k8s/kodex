@@ -6,7 +6,7 @@ status: in-review
 owner_role: KM
 created_at: 2026-03-14
 updated_at: 2026-03-16
-related_issues: [469, 471, 476, 484, 494]
+related_issues: [469, 471, 476, 484, 494, 512]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -82,6 +82,25 @@ approvals:
 - Создана follow-up issue `#494` для stage `run:design` без trigger-лейбла.
 - Для GitHub continuity повторно подтверждён актуальный non-interactive CLI flow через Context7 (`/websites/cli_github_manual`) и локальные `gh issue create --help`, `gh pr create --help`, `gh pr edit --help`.
 - Root FR/NFR matrix в `docs/delivery/requirements_traceability.md` не менялась по существу: architecture stage закрепил ownership и lifecycle baseline, а не вводил новые root requirements.
+
+## Актуализация по Issue #494 (`run:design`, 2026-03-16)
+- Подготовлен design package:
+  - `docs/architecture/initiatives/s13_quality_governance_system/README.md`;
+  - `docs/architecture/initiatives/s13_quality_governance_system/design_doc.md`;
+  - `docs/architecture/initiatives/s13_quality_governance_system/api_contract.md`;
+  - `docs/architecture/initiatives/s13_quality_governance_system/data_model.md`;
+  - `docs/architecture/initiatives/s13_quality_governance_system/migrations_policy.md`;
+  - `docs/delivery/epics/s13/epic-s13-day5-quality-governance-design.md`.
+- Зафиксированы:
+  - hidden `internal working draft` как internal-only ledger без raw draft leakage в owner/reviewer/operator surfaces;
+  - `semantic wave map` как первая publishable единица и обязательный bridge между внутренним draft и review stream;
+  - canonical aggregate `change_governance_package` с отдельными constructs `risk tier / evidence completeness / verification minimum / waiver state / release readiness / governance feedback`;
+  - typed staff/private decision surfaces и GitHub service-comment mirror как read-only projection, а не source-of-truth;
+  - bounded historical backfill, который создаёт только evidence-backed packages и gaps, не фабрикуя hidden drafts, waivers или release decisions;
+  - rollout order `migrations -> control-plane -> worker -> api-gateway -> web-console`.
+- Создана follow-up issue `#512` для stage `run:plan` без trigger-лейбла.
+- Для GitHub continuity повторно подтверждён non-interactive CLI flow локальными `gh issue create --help`, `gh pr create --help`, `gh pr edit --help`; kubectl/logs/БД-запросы не выполнялись, потому что stage ограничен documentation-only scope.
+- Root FR/NFR matrix в `docs/delivery/requirements_traceability.md` не менялась по существу: design stage уточнил typed contracts/data model/rollout baseline; в root-матрице синхронизирован related-issues index.
 
 ## Актуализация по PR #497 revise-итерации (`run:arch:revise`, 2026-03-16)
 - Повторно синхронизирован локальный worktree с фактическим head PR `e4d6a28c`, потому что локальная ветка `codex/issue-484` в runtime сначала указывала на `main`, а не на удалённую PR-ветку.
