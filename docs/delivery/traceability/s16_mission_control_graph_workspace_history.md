@@ -6,7 +6,7 @@ status: in-review
 owner_role: KM
 created_at: 2026-03-15
 updated_at: 2026-03-16
-related_issues: [480, 490, 492, 496, 510]
+related_issues: [480, 490, 492, 496, 510, 516]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -53,3 +53,17 @@ approvals:
 - Через `gh issue create` создана follow-up issue `#510` для stage `run:prd`; в её body сохранено continuity-требование продолжить цепочку `arch -> design -> plan -> dev` после PRD.
 - Выполнены markdown-only проверки: traceability sync, `git diff --check`, локальная проверка `gh issue create --help`; kubectl/logs/БД-запросы не выполнялись, потому что stage ограничен documentation-only scope.
 - Root FR/NFR matrix в `docs/delivery/requirements_traceability.md` не менялась: vision stage уточнил product baseline и handover, но не добавлял новые канонические FR/NFR в `docs/product/requirements_machine_driven.md`.
+
+## Актуализация по Issue #510 (`run:prd`, 2026-03-16)
+- Подготовлен PRD package:
+  - `docs/delivery/epics/s16/epic-s16-day3-mission-control-graph-workspace-prd.md`;
+  - `docs/delivery/epics/s16/prd-s16-day3-mission-control-graph-workspace.md`;
+  - обновлены `docs/delivery/sprints/s16/sprint_s16_mission_control_graph_workspace.md`, `docs/delivery/epics/s16/epic_s16.md`, `docs/delivery/delivery_plan.md`, `docs/delivery/issue_map.md` и `docs/delivery/sprints/README.md`.
+- Зафиксированы:
+  - user stories, FR/AC/NFR, scenario matrix и expected evidence для fullscreen graph workspace, filtered multi-root continuity, inventory-backed foundation, typed metadata/watermarks, platform-canonical launch params и platform-safe inline actions;
+  - locked baseline по issue `#480`, exact Wave 1 filters `open_only`, `assigned_to_me_or_unassigned`, `active-state presets`, secondary/dimmed semantics только для graph integrity и Wave 1 nodes `discussion`, `work_item`, `run`, `pull_request`;
+  - explicit continuity contract: stage through `run:dev` считается complete только при наличии `PR + linked follow-up issue`, а отсутствие любого из этих артефактов трактуется как continuity gap;
+  - deferred boundary для voice/STT, dashboard orchestrator agent, отдельной `agent` node taxonomy, full-history/archive и richer provider enrichment.
+- Через `gh issue create` создана follow-up issue `#516` для stage `run:arch`; в её body сохранено continuity-требование продолжить цепочку `arch -> design -> plan -> dev`.
+- Выполнены markdown-only проверки: traceability sync и `git diff --check`; kubectl/logs/БД-запросы не выполнялись, потому что stage ограничен documentation-only scope.
+- Root FR/NFR matrix в `docs/delivery/requirements_traceability.md` не менялась: PRD package формализует stage-specific contract Sprint S16 и handover в architecture, но не меняет repo-wide baseline `docs/product/requirements_machine_driven.md`.

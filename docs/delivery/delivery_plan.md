@@ -437,8 +437,14 @@ approvals:
   - inventory foundation из `#480`, exact Wave 1 filters `open_only`, `assigned_to_me_or_unassigned`, `active-state presets`, secondary/dimmed semantics только для graph integrity, Wave 1 nodes `discussion/work_item/run/pull_request`, typed metadata/watermarks, platform-canonical launch params и continuity rule `PR + follow-up issue` повторно зафиксированы как non-negotiable;
   - voice/STT, dashboard orchestrator agent и отдельная `agent` node taxonomy оставлены в later-wave scope и не блокируют core Wave 1;
   - создана follow-up issue `#510` для stage `run:prd` без trigger-лейбла.
-- Day 3 (planned): PRD issue `#510`.
-  - Цель: формализовать user stories, FR/AC/NFR, scenario matrix и expected evidence для graph workspace, hybrid truth matrix, inventory foundation и continuity control plane.
+- Day 3 (in-review): PRD package для Mission Control graph workspace (`docs/delivery/epics/s16/epic-s16-day3-mission-control-graph-workspace-prd.md`, `docs/delivery/epics/s16/prd-s16-day3-mission-control-graph-workspace.md`, Issue `#510`).
+- Результат Day 3 (факт):
+  - user stories, FR/AC/NFR, scenario matrix и expected evidence зафиксированы для fullscreen graph workspace, filtered multi-root continuity, inventory-backed foundation, typed metadata/watermarks, platform-canonical launch params и platform-safe inline actions;
+  - explicit continuity contract сохранён: stage through `run:dev` считается complete только при наличии `PR + linked follow-up issue`, а later-wave contours voice/STT, dashboard orchestrator agent, отдельная `agent` node taxonomy, full-history/archive и richer provider enrichment не блокируют core Wave 1;
+  - создана continuity issue `#516` для stage `run:arch` без trigger-лейбла.
+- Day 4 (planned): architecture issue `#516`.
+  - Цель: ownership matrix, hybrid truth merge model, persisted graph truth boundaries и service decisions для `control-plane` / `worker` / `api-gateway` / `web-console`.
+  - Ожидаемый результат: architecture package + новая issue для `run:design` без trigger-лейбла.
 
 ### Daily delivery contract (обязательный)
 - Каждый день задачи дня влиты в `main`.
