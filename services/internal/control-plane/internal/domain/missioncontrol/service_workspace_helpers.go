@@ -105,7 +105,7 @@ func (s *Service) loadWorkspaceGraph(ctx context.Context, projectID string) (wor
 	return graph, nil
 }
 
-func deriveDesiredContinuityGapSeeds(graph workspaceGraph, observedAt time.Time) []missioncontrolrepo.ContinuityGapSeed {
+func deriveDesiredContinuityGapSeeds(graph workspaceGraph, observedAt time.Time, labels nextstepdomain.Labels) []missioncontrolrepo.ContinuityGapSeed {
 	if observedAt.IsZero() {
 		observedAt = time.Now().UTC()
 	}
@@ -146,7 +146,7 @@ func deriveDesiredContinuityGapSeeds(graph workspaceGraph, observedAt time.Time)
 			}
 			continue
 		}
-		if !runStageRequiresFollowUp(entity) || runHasLinkedFollowUpIssue(graph, entity, pullRequests) {
+		if !runStageRequiresFollowUp(entity, labels) || runHasLinkedFollowUpIssue(graph, entity, pullRequests, labels) {
 			continue
 		}
 		pullRequest := newestEntity(pullRequests)
@@ -155,7 +155,7 @@ func deriveDesiredContinuityGapSeeds(graph workspaceGraph, observedAt time.Time)
 			GapKind:            enumtypes.MissionControlGapKindMissingFollowUpIssue,
 			Severity:           enumtypes.MissionControlGapSeverityBlocking,
 			ExpectedEntityKind: enumtypes.MissionControlEntityKindWorkItem,
-			ExpectedStageLabel: nextStageLabelForRun(entity),
+			ExpectedStageLabel: nextStageLabelForRun(entity, labels),
 			ResolutionHint:     "Нужна linked follow-up issue для следующего stage перед launch preview.",
 			PayloadJSON:        buildMissingFollowUpPayload(entity, pullRequest),
 			DetectedAt:         lastRelevantActivity(pullRequest, observedAt),
@@ -727,9 +727,9 @@ func hasRelationKind(relations []Relation, kind enumtypes.MissionControlRelation
 	return false
 }
 
-func runHasLinkedFollowUpIssue(graph workspaceGraph, runEntity Entity, pullRequests []Entity) bool {
+func runHasLinkedFollowUpIssue(graph workspaceGraph, runEntity Entity, pullRequests []Entity, labels nextstepdomain.Labels) bool {
 	sourceIssueRef := runIssueRef(runEntity)
-	expectedStageLabel := nextStageLabelForRun(runEntity)
+	expectedStageLabel := nextStageLabelForRun(runEntity, labels)
 	if strings.TrimSpace(expectedStageLabel) == "" {
 		return false
 	}
@@ -850,21 +850,12 @@ func StageNextStepApprovalRequirement(entity Entity) enumtypes.MissionControlApp
 	}
 }
 
-func runStageRequiresFollowUp(entity Entity) bool {
-	return stageLabelRequiresFollowUp(runStageLabel(entity))
-}
-
-func stageLabelRequiresFollowUp(label string) bool {
-	normalized := strings.ToLower(strings.TrimSpace(label))
-	if normalized == "" {
+func runStageRequiresFollowUp(entity Entity, labels nextstepdomain.Labels) bool {
+	descriptor, ok := labels.DescriptorByRunLabel(runStageLabel(entity))
+	if !ok {
 		return false
 	}
-	if !strings.HasPrefix(normalized, "run:") {
-		return false
-	}
-	stagePart := strings.TrimPrefix(normalized, "run:")
-	stage := strings.Split(stagePart, ":")[0]
-	switch stage {
+	switch descriptor.Stage {
 	case "intake", "vision", "prd", "arch", "design", "plan", "dev":
 		return true
 	default:
@@ -880,24 +871,13 @@ func runStageLabel(entity Entity) string {
 	return strings.TrimSpace(payload.StageLabel)
 }
 
-func nextStageLabelForRun(entity Entity) string {
+func nextStageLabelForRun(entity Entity, labels nextstepdomain.Labels) string {
 	current := runStageLabel(entity)
-	if !stageLabelRequiresFollowUp(current) {
+	if !runStageRequiresFollowUp(entity, labels) {
 		return ""
 	}
-	order := []string{"intake", "vision", "prd", "arch", "design", "plan", "dev", "doc-audit", "qa", "release", "postdeploy", "ops", "self-improve"}
-	currentStage := strings.Split(strings.TrimPrefix(strings.ToLower(strings.TrimSpace(current)), "run:"), ":")[0]
-	for idx, stage := range order {
-		if stage != currentStage {
-			continue
-		}
-		if idx+1 >= len(order) {
-			return ""
-		}
-		if descriptor, ok := nextstepdomain.DefaultLabels().DescriptorByStage(order[idx+1]); ok {
-			return descriptor.RunLabel
-		}
-		return "run:" + order[idx+1]
+	if nextLabel, ok := labels.NextMainPathRunLabel(current); ok {
+		return nextLabel
 	}
 	return ""
 }

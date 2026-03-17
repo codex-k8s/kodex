@@ -309,21 +309,18 @@ func launchProfileOrder(profile launchProfile) int {
 }
 
 func resolveProfileTargetStage(currentStage string, profile launchProfile) (string, bool) {
-	currentIndex := slices.Index(fullStagePath(), currentStage)
+	stagePath := nextstepdomain.CanonicalMainStagePath()
+	currentIndex := slices.Index(stagePath, currentStage)
 	if currentIndex < 0 {
 		return "", false
 	}
 	profilePath := profileStagePath(profile)
-	for _, candidate := range fullStagePath()[currentIndex+1:] {
+	for _, candidate := range stagePath[currentIndex+1:] {
 		if slices.Contains(profilePath, candidate) {
 			return candidate, true
 		}
 	}
 	return "", false
-}
-
-func fullStagePath() []string {
-	return []string{"intake", "vision", "prd", "arch", "design", "plan", "dev", "qa", "release", "postdeploy", "ops"}
 }
 
 func profileStagePath(profile launchProfile) []string {

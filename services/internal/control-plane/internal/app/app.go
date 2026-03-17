@@ -213,6 +213,7 @@ func Run() error {
 			DomainReady: true,
 		},
 		DefaultTimelineLimit: 100,
+		NextStepLabels:       buildNextStepLabels(cfg),
 	}, missioncontroldomain.Dependencies{
 		Repository: missionControlProjection,
 		FlowEvents: flowEvents,

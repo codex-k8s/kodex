@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	nextstepdomain "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/nextstep"
 	floweventrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/repository/flowevent"
 	missioncontrolrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/repository/missioncontrol"
 	valuetypes "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/types/value"
@@ -13,6 +14,8 @@ import (
 type Config struct {
 	RolloutState         valuetypes.MissionControlRolloutState
 	DefaultTimelineLimit int
+	// NextStepLabels carries env-aware run:* and PR label policy used by preview/admission and continuity checks.
+	NextStepLabels nextstepdomain.Labels
 }
 
 // Dependencies contains required collaborators for Mission Control use-cases.

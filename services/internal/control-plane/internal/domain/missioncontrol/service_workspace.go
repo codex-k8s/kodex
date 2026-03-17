@@ -3,7 +3,6 @@ package missioncontrol
 import (
 	"context"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -34,7 +33,7 @@ func (s *Service) RefreshWorkspaceProjection(ctx context.Context, params Workspa
 		return WorkspaceProjectionSummary{}, err
 	}
 
-	desiredGaps := deriveDesiredContinuityGapSeeds(graph, observedAt)
+	desiredGaps := deriveDesiredContinuityGapSeeds(graph, observedAt, s.cfg.NextStepLabels)
 	if err := s.repository.SyncContinuityGaps(ctx, missioncontrolrepo.SyncContinuityGapsParams{
 		ProjectID:   projectID,
 		ResolvedAt:  observedAt,
@@ -140,7 +139,7 @@ func (s *Service) previewLaunchAgainstEntity(
 	if params.ExpectedProjectionVersion > 0 && entity.ProjectionVersion != params.ExpectedProjectionVersion {
 		return LaunchPreview{}, errs.FailedPrecondition{Msg: "mission control preview projection is stale"}
 	}
-	if !nextstepLabelKnown(threadKind, targetLabel) {
+	if !nextstepLabelKnown(s.cfg.NextStepLabels, threadKind, targetLabel) {
 		return LaunchPreview{}, errs.Validation{Field: "target_label", Msg: "must be a known next-step label for this thread kind"}
 	}
 
@@ -321,36 +320,6 @@ func previewResolvesFollowUpGap(
 	return workItemMatchesStageAfterLabelChange(targetEntity, removedLabels, targetLabel, gap.ExpectedStageLabel)
 }
 
-func currentIssueNumber(entity Entity) int64 {
-	switch entity.EntityKind {
-	case enumtypes.MissionControlEntityKindWorkItem:
-		if payload, ok := decodeWorkItemPayload(entity); ok {
-			return payload.IssueNumber
-		}
-	case enumtypes.MissionControlEntityKindRun:
-		if payload, ok := decodeRunPayload(entity); ok && payload.IssueRef != "" {
-			return issueNumberFromPublicID(payload.IssueRef)
-		}
-	case enumtypes.MissionControlEntityKindPullRequest:
-		if payload, ok := decodePullRequestPayload(entity); ok && len(payload.LinkedIssueRefs) > 0 {
-			return issueNumberFromPublicID(payload.LinkedIssueRefs[0])
-		}
-	}
-	return 0
-}
-
-func issueNumberFromPublicID(publicID string) int64 {
-	parts := strings.Split(strings.TrimSpace(publicID), "#")
-	if len(parts) != 2 {
-		return 0
-	}
-	number, err := strconv.ParseInt(parts[1], 10, 64)
-	if err != nil {
-		return 0
-	}
-	return number
-}
-
 func previewCurrentLabels(graph workspaceGraph, sourceEntity Entity, threadKind string, threadNumber int) []string {
 	ref := guessedThreadEntityRef(sourceEntity, threadKind, threadNumber)
 	if ref == nil {
@@ -385,6 +354,6 @@ func previewFinalLabels(current []string, removed []string, targetLabel string) 
 	return final
 }
 
-func nextstepLabelKnown(threadKind string, label string) bool {
-	return nextstepdomain.DefaultLabels().IsKnownLabelForThreadKind(threadKind, label)
+func nextstepLabelKnown(labels nextstepdomain.Labels, threadKind string, label string) bool {
+	return labels.IsKnownLabelForThreadKind(threadKind, label)
 }

@@ -13,6 +13,7 @@ import (
 
 	webhookdomain "github.com/codex-k8s/codex-k8s/libs/go/domain/webhook"
 	"github.com/codex-k8s/codex-k8s/libs/go/errs"
+	nextstepdomain "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/nextstep"
 	floweventrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/repository/flowevent"
 	missioncontrolrepo "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/repository/missioncontrol"
 	enumtypes "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/types/enum"
@@ -683,6 +684,8 @@ func TestReadPathQueriesStayAvailableWithoutWriteSideFlags(t *testing.T) {
 type workspaceGraphSeedOptions struct {
 	SkipPullRequest          bool
 	PullRequestCoverageClass enumtypes.MissionControlCoverageClass
+	RunStageLabel            string
+	WorkItemStageLabel       string
 }
 
 func seedWorkspaceProjectionGraph(
@@ -701,12 +704,20 @@ func seedWorkspaceProjectionGraph(
 			opts.PullRequestCoverageClass = enumtypes.MissionControlCoverageClassOpenPrimary
 		}
 	}
+	workItemStageLabel := strings.TrimSpace(opts.WorkItemStageLabel)
+	if workItemStageLabel == "" {
+		workItemStageLabel = "run:design"
+	}
+	runStageLabel := strings.TrimSpace(opts.RunStageLabel)
+	if runStageLabel == "" {
+		runStageLabel = workItemStageLabel
+	}
 
 	workItemPayload := mustMarshalPayload(t, valuetypes.MissionControlWorkItemProjectionPayload{
 		RepositoryFullName: "repo",
 		IssueNumber:        372,
-		StageLabel:         "run:design",
-		Labels:             []string{"run:design"},
+		StageLabel:         workItemStageLabel,
+		Labels:             []string{workItemStageLabel},
 	})
 	workItemEntity, err := repo.UpsertEntity(context.Background(), missioncontrolrepo.UpsertEntityParams{
 		ProjectID:         "proj-1",
@@ -730,7 +741,7 @@ func seedWorkspaceProjectionGraph(
 	runPayload := mustMarshalPayload(t, valuetypes.MissionControlRunProjectionPayload{
 		RunID:              "run-18",
 		RepositoryFullName: "repo",
-		StageLabel:         "run:design",
+		StageLabel:         runStageLabel,
 		IssueRef:           "repo#372",
 		LastStatus:         "succeeded",
 	})
@@ -929,6 +940,98 @@ func TestRefreshWorkspaceProjectionCreatesMissingFollowUpGapAndWatermarks(t *tes
 	}
 	if _, ok := repo.entitiesByKey[entityKey("proj-1", enumtypes.MissionControlEntityKindRun, runEntity.EntityExternalKey)]; !ok {
 		t.Fatal("expected run entity to remain in projection after refresh")
+	}
+}
+
+func TestRefreshWorkspaceProjectionUsesMainPathStageForDevFollowUp(t *testing.T) {
+	t.Parallel()
+
+	svc, repo, _, now := newTestService(t, valuetypes.MissionControlRolloutState{
+		SchemaReady: true,
+		DomainReady: true,
+	})
+	_, _, _ = seedWorkspaceProjectionGraph(t, repo, now, workspaceGraphSeedOptions{
+		RunStageLabel:      "run:dev",
+		WorkItemStageLabel: "run:dev",
+	})
+
+	summary, err := svc.RefreshWorkspaceProjection(context.Background(), WorkspaceRefreshParams{
+		ProjectID:  "proj-1",
+		ObservedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("RefreshWorkspaceProjection() error = %v", err)
+	}
+	if got, want := summary.MissingFollowUpIssueGapCount, 1; got != want {
+		t.Fatalf("missing follow-up gap count = %d, want %d", got, want)
+	}
+
+	gaps, err := repo.ListContinuityGaps(context.Background(), missioncontrolrepo.ContinuityGapListFilter{
+		ProjectID: "proj-1",
+		Statuses:  []enumtypes.MissionControlGapStatus{enumtypes.MissionControlGapStatusOpen},
+	})
+	if err != nil {
+		t.Fatalf("ListContinuityGaps() error = %v", err)
+	}
+	if got, want := len(gaps), 1; got != want {
+		t.Fatalf("open gap count = %d, want %d", got, want)
+	}
+	if got, want := gaps[0].ExpectedStageLabel, "run:qa"; got != want {
+		t.Fatalf("expected stage label = %q, want %q", got, want)
+	}
+}
+
+func TestRefreshWorkspaceProjectionAndPreviewUseConfiguredRunLabels(t *testing.T) {
+	t.Parallel()
+
+	labels := nextstepdomain.NewLabels(nextstepdomain.Config{
+		RunDesign: "stage:design",
+		RunPlan:   "stage:plan",
+	})
+	svc, repo, _, now := newTestServiceWithLabels(t, valuetypes.MissionControlRolloutState{
+		SchemaReady: true,
+		DomainReady: true,
+	}, labels)
+	_, _, pullRequestEntity := seedWorkspaceProjectionGraph(t, repo, now, workspaceGraphSeedOptions{
+		RunStageLabel:      "stage:design",
+		WorkItemStageLabel: "stage:design",
+	})
+
+	if _, err := svc.RefreshWorkspaceProjection(context.Background(), WorkspaceRefreshParams{
+		ProjectID:  "proj-1",
+		ObservedAt: now,
+	}); err != nil {
+		t.Fatalf("RefreshWorkspaceProjection() error = %v", err)
+	}
+
+	gaps, err := repo.ListContinuityGaps(context.Background(), missioncontrolrepo.ContinuityGapListFilter{
+		ProjectID: "proj-1",
+		Statuses:  []enumtypes.MissionControlGapStatus{enumtypes.MissionControlGapStatusOpen},
+	})
+	if err != nil {
+		t.Fatalf("ListContinuityGaps() error = %v", err)
+	}
+	if got, want := len(gaps), 1; got != want {
+		t.Fatalf("open gap count = %d, want %d", got, want)
+	}
+	if got, want := gaps[0].ExpectedStageLabel, "stage:plan"; got != want {
+		t.Fatalf("expected stage label = %q, want %q", got, want)
+	}
+
+	preview, err := svc.PreviewLaunch(context.Background(), LaunchPreviewParams{
+		ProjectID:                 "proj-1",
+		NodeKind:                  enumtypes.MissionControlEntityKindPullRequest,
+		NodePublicID:              pullRequestEntity.EntityExternalKey,
+		ThreadKind:                "issue",
+		ThreadNumber:              543,
+		TargetLabel:               "stage:plan",
+		ExpectedProjectionVersion: pullRequestEntity.ProjectionVersion,
+	})
+	if err != nil {
+		t.Fatalf("PreviewLaunch() error = %v", err)
+	}
+	if got, want := preview.LabelDiff.AddedLabels, []string{"stage:plan"}; !slices.Equal(got, want) {
+		t.Fatalf("added labels = %v, want %v", got, want)
 	}
 }
 
@@ -1788,11 +1891,17 @@ func (r *flowEventRecorder) Insert(_ context.Context, params floweventrepo.Inser
 
 func newTestService(t *testing.T, rolloutState valuetypes.MissionControlRolloutState) (*Service, *inMemoryRepository, *flowEventRecorder, time.Time) {
 	t.Helper()
+	return newTestServiceWithLabels(t, rolloutState, nextstepdomain.DefaultLabels())
+}
+
+func newTestServiceWithLabels(t *testing.T, rolloutState valuetypes.MissionControlRolloutState, labels nextstepdomain.Labels) (*Service, *inMemoryRepository, *flowEventRecorder, time.Time) {
+	t.Helper()
 
 	repo := newInMemoryRepository()
 	events := &flowEventRecorder{}
 	service, err := NewService(Config{
-		RolloutState: rolloutState,
+		RolloutState:   rolloutState,
+		NextStepLabels: labels,
 	}, Dependencies{
 		Repository: repo,
 		FlowEvents: events,

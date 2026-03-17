@@ -48,6 +48,20 @@ type Labels struct {
 	knownPullRequestLabels map[string]struct{}
 }
 
+var canonicalMainStagePath = []string{
+	"intake",
+	"vision",
+	"prd",
+	"arch",
+	"design",
+	"plan",
+	"dev",
+	"qa",
+	"release",
+	"postdeploy",
+	"ops",
+}
+
 func NewLabels(cfg Config) Labels {
 	labels := Labels{
 		descriptors:            make(map[string]StageDescriptor, 13),
@@ -121,6 +135,56 @@ func (l Labels) DescriptorByTriggerKind(triggerKind string) (StageDescriptor, bo
 	default:
 		return StageDescriptor{}, false
 	}
+}
+
+func (l Labels) DescriptorByRunLabel(runLabel string) (StageDescriptor, bool) {
+	labels := l.withDefaults()
+	normalized := normalizeToken(runLabel)
+	if normalized == "" {
+		return StageDescriptor{}, false
+	}
+	for _, descriptor := range labels.descriptors {
+		if descriptor.RunLabel == normalized {
+			return descriptor, true
+		}
+	}
+	return StageDescriptor{}, false
+}
+
+func (l Labels) NextMainPathRunLabel(currentRunLabel string) (string, bool) {
+	descriptor, ok := l.DescriptorByRunLabel(currentRunLabel)
+	if !ok {
+		return "", false
+	}
+	nextStage, ok := NextMainPathStage(descriptor.Stage)
+	if !ok {
+		return "", false
+	}
+	nextDescriptor, ok := l.DescriptorByStage(nextStage)
+	if !ok || normalizeToken(nextDescriptor.RunLabel) == "" {
+		return "", false
+	}
+	return nextDescriptor.RunLabel, true
+}
+
+func CanonicalMainStagePath() []string {
+	path := make([]string, len(canonicalMainStagePath))
+	copy(path, canonicalMainStagePath)
+	return path
+}
+
+func NextMainPathStage(currentStage string) (string, bool) {
+	normalized := normalizeStage(currentStage)
+	for idx, stage := range canonicalMainStagePath {
+		if stage != normalized {
+			continue
+		}
+		if idx+1 >= len(canonicalMainStagePath) {
+			return "", false
+		}
+		return canonicalMainStagePath[idx+1], true
+	}
+	return "", false
 }
 
 func (l Labels) IsKnownStageLabel(label string) bool {
