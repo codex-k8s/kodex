@@ -43,15 +43,32 @@ type Config struct {
 }
 
 type Labels struct {
-	descriptors      map[string]StageDescriptor
-	knownStageLabels map[string]struct{}
+	descriptors            map[string]StageDescriptor
+	knownStageLabels       map[string]struct{}
+	knownPullRequestLabels map[string]struct{}
+}
+
+var canonicalMainStagePath = []string{
+	"intake",
+	"vision",
+	"prd",
+	"arch",
+	"design",
+	"plan",
+	"dev",
+	"qa",
+	"release",
+	"postdeploy",
+	"ops",
 }
 
 func NewLabels(cfg Config) Labels {
 	labels := Labels{
-		descriptors:      make(map[string]StageDescriptor, 13),
-		knownStageLabels: make(map[string]struct{}, 25),
+		descriptors:            make(map[string]StageDescriptor, 13),
+		knownStageLabels:       make(map[string]struct{}, 25),
+		knownPullRequestLabels: make(map[string]struct{}, 1),
 	}
+	labels.knownPullRequestLabels[normalizeToken(webhookdomain.DefaultNeedReviewerLabel)] = struct{}{}
 
 	for _, descriptor := range []StageDescriptor{
 		{Stage: "intake", RunLabel: valueOrDefault(cfg.RunIntake, webhookdomain.DefaultRunIntakeLabel), ReviseLabel: valueOrDefault(cfg.RunIntakeRevise, webhookdomain.DefaultRunIntakeReviseLabel)},
@@ -120,10 +137,77 @@ func (l Labels) DescriptorByTriggerKind(triggerKind string) (StageDescriptor, bo
 	}
 }
 
+func (l Labels) DescriptorByRunLabel(runLabel string) (StageDescriptor, bool) {
+	labels := l.withDefaults()
+	normalized := normalizeToken(runLabel)
+	if normalized == "" {
+		return StageDescriptor{}, false
+	}
+	for _, descriptor := range labels.descriptors {
+		if descriptor.RunLabel == normalized {
+			return descriptor, true
+		}
+	}
+	return StageDescriptor{}, false
+}
+
+func (l Labels) NextMainPathRunLabel(currentRunLabel string) (string, bool) {
+	descriptor, ok := l.DescriptorByRunLabel(currentRunLabel)
+	if !ok {
+		return "", false
+	}
+	nextStage, ok := NextMainPathStage(descriptor.Stage)
+	if !ok {
+		return "", false
+	}
+	nextDescriptor, ok := l.DescriptorByStage(nextStage)
+	if !ok || normalizeToken(nextDescriptor.RunLabel) == "" {
+		return "", false
+	}
+	return nextDescriptor.RunLabel, true
+}
+
+func CanonicalMainStagePath() []string {
+	path := make([]string, len(canonicalMainStagePath))
+	copy(path, canonicalMainStagePath)
+	return path
+}
+
+func NextMainPathStage(currentStage string) (string, bool) {
+	normalized := normalizeStage(currentStage)
+	for idx, stage := range canonicalMainStagePath {
+		if stage != normalized {
+			continue
+		}
+		if idx+1 >= len(canonicalMainStagePath) {
+			return "", false
+		}
+		return canonicalMainStagePath[idx+1], true
+	}
+	return "", false
+}
+
 func (l Labels) IsKnownStageLabel(label string) bool {
 	labels := l.withDefaults()
 	_, ok := labels.knownStageLabels[normalizeToken(label)]
 	return ok
+}
+
+func (l Labels) IsKnownPullRequestLabel(label string) bool {
+	labels := l.withDefaults()
+	_, ok := labels.knownPullRequestLabels[normalizeToken(label)]
+	return ok
+}
+
+func (l Labels) IsKnownLabelForThreadKind(threadKind string, label string) bool {
+	switch normalizeToken(threadKind) {
+	case "issue":
+		return l.IsKnownStageLabel(label)
+	case "pull_request", "pr":
+		return l.IsKnownPullRequestLabel(label)
+	default:
+		return false
+	}
 }
 
 func (l Labels) put(descriptor StageDescriptor) {
@@ -145,7 +229,7 @@ func (l Labels) put(descriptor StageDescriptor) {
 }
 
 func (l Labels) withDefaults() Labels {
-	if len(l.descriptors) == 0 || len(l.knownStageLabels) == 0 {
+	if len(l.descriptors) == 0 || len(l.knownStageLabels) == 0 || len(l.knownPullRequestLabels) == 0 {
 		return DefaultLabels()
 	}
 	return l
