@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -24,15 +25,31 @@ type MissionControlWarmupProject struct {
 
 // MissionControlWarmupResult returns the current warmup evidence after one run.
 type MissionControlWarmupResult struct {
-	ProjectID            string
-	EntityCount          int64
-	RelationCount        int64
-	TimelineEntryCount   int64
-	CommandCount         int64
-	MaxProjectionVersion int64
-	BackfilledEntities   int
-	BackfilledRelations  int
-	BackfilledTimelines  int
+	ProjectID                    string
+	EntityCount                  int64
+	RelationCount                int64
+	TimelineEntryCount           int64
+	CommandCount                 int64
+	MaxProjectionVersion         int64
+	RunEntityCount               int64
+	LegacyAgentCount             int64
+	ContinuityGapCount           int64
+	OpenGapCount                 int64
+	BlockingGapCount             int64
+	MissingPullRequestGapCount   int64
+	MissingFollowUpIssueGapCount int64
+	WatermarkCount               int64
+	ReadyForReconcile            bool
+	ReconcileGatingReason        string
+	ReadyForTransport            bool
+	TransportGatingReason        string
+	ProviderFreshnessStatus      string
+	ProviderCoverageStatus       string
+	GraphProjectionStatus        string
+	LaunchPolicyStatus           string
+	BackfilledEntities           int
+	BackfilledRelations          int
+	BackfilledTimelines          int
 }
 
 // MissionControlStageNextStepPayload contains the executable stage transition details.
@@ -133,13 +150,14 @@ func (s *Service) reconcileMissionControl(ctx context.Context) error {
 	if s.missionCtl == nil {
 		return nil
 	}
+	var errs []error
 	if err := s.reconcileMissionControlWarmups(ctx); err != nil {
-		return fmt.Errorf("reconcile mission control warmups: %w", err)
+		errs = append(errs, fmt.Errorf("reconcile mission control warmups: %w", err))
 	}
 	if err := s.reconcileMissionControlCommands(ctx); err != nil {
-		return fmt.Errorf("reconcile mission control commands: %w", err)
+		errs = append(errs, fmt.Errorf("reconcile mission control commands: %w", err))
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 func (s *Service) reconcileMissionControlWarmups(ctx context.Context) error {
@@ -148,18 +166,28 @@ func (s *Service) reconcileMissionControlWarmups(ctx context.Context) error {
 		return err
 	}
 	now := s.now().UTC()
+	var errs []error
 	for _, project := range projects {
-		lastWarmupAt, ok := s.lastMissionControlWarmup[strings.TrimSpace(project.ProjectID)]
+		projectID := strings.TrimSpace(project.ProjectID)
+		lastWarmupAt, ok := s.lastMissionControlWarmup[projectID]
 		if ok && now.Sub(lastWarmupAt) < s.cfg.MissionControlWarmupInterval {
 			continue
 		}
-		correlationID := fmt.Sprintf("%s:warmup:%s:%d", missionControlSyntheticDeliveryPrefix, strings.TrimSpace(project.ProjectID), now.Unix())
-		if _, err := s.missionCtl.RunMissionControlWarmup(ctx, strings.TrimSpace(project.ProjectID), s.cfg.WorkerID, correlationID, false); err != nil {
-			return err
+		correlationID := fmt.Sprintf("%s:warmup:%s:%d", missionControlSyntheticDeliveryPrefix, projectID, now.Unix())
+		result, warmupErr := s.missionCtl.RunMissionControlWarmup(ctx, projectID, s.cfg.WorkerID, correlationID, false)
+		if warmupErr != nil {
+			errs = append(errs, fmt.Errorf(
+				"project %s (%s): %w",
+				projectID,
+				strings.TrimSpace(project.RepositoryFullName),
+				warmupErr,
+			))
+			continue
 		}
-		s.lastMissionControlWarmup[strings.TrimSpace(project.ProjectID)] = now
+		s.lastMissionControlWarmup[projectID] = now
+		s.logMissionControlWarmupResult(project, correlationID, result)
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 func (s *Service) reconcileMissionControlCommands(ctx context.Context) error {
@@ -172,12 +200,19 @@ func (s *Service) reconcileMissionControlCommands(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	var errs []error
 	for _, command := range commands {
-		if err := s.processMissionControlCommand(ctx, command); err != nil {
-			return err
+		if commandErr := s.processMissionControlCommand(ctx, command); commandErr != nil {
+			errs = append(errs, fmt.Errorf(
+				"project %s command %s (%s): %w",
+				strings.TrimSpace(command.ProjectID),
+				strings.TrimSpace(command.CommandID),
+				strings.TrimSpace(command.EffectiveCommandKind),
+				commandErr,
+			))
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 func (s *Service) processMissionControlCommand(ctx context.Context, command MissionControlPendingCommand) error {
@@ -295,4 +330,47 @@ func sleepWithContext(ctx context.Context, delay time.Duration) error {
 	case <-time.After(delay):
 		return nil
 	}
+}
+
+func (s *Service) logMissionControlWarmupResult(project MissionControlWarmupProject, correlationID string, result MissionControlWarmupResult) {
+	if !result.ReadyForTransport {
+		s.logger.Info(
+			"mission control warmup completed with open rollout gates",
+			"project_id", strings.TrimSpace(result.ProjectID),
+			"project_name", strings.TrimSpace(project.ProjectName),
+			"repository_full_name", strings.TrimSpace(project.RepositoryFullName),
+			"correlation_id", strings.TrimSpace(correlationID),
+			"entity_count", result.EntityCount,
+			"run_entity_count", result.RunEntityCount,
+			"continuity_gap_count", result.ContinuityGapCount,
+			"open_gap_count", result.OpenGapCount,
+			"blocking_gap_count", result.BlockingGapCount,
+			"watermark_count", result.WatermarkCount,
+			"ready_for_reconcile", result.ReadyForReconcile,
+			"reconcile_gating_reason", strings.TrimSpace(result.ReconcileGatingReason),
+			"ready_for_transport", result.ReadyForTransport,
+			"transport_gating_reason", strings.TrimSpace(result.TransportGatingReason),
+			"provider_freshness_status", strings.TrimSpace(result.ProviderFreshnessStatus),
+			"provider_coverage_status", strings.TrimSpace(result.ProviderCoverageStatus),
+			"graph_projection_status", strings.TrimSpace(result.GraphProjectionStatus),
+			"launch_policy_status", strings.TrimSpace(result.LaunchPolicyStatus),
+		)
+		return
+	}
+
+	s.logger.Info(
+		"mission control warmup completed",
+		"project_id", strings.TrimSpace(result.ProjectID),
+		"project_name", strings.TrimSpace(project.ProjectName),
+		"repository_full_name", strings.TrimSpace(project.RepositoryFullName),
+		"correlation_id", strings.TrimSpace(correlationID),
+		"entity_count", result.EntityCount,
+		"run_entity_count", result.RunEntityCount,
+		"continuity_gap_count", result.ContinuityGapCount,
+		"open_gap_count", result.OpenGapCount,
+		"blocking_gap_count", result.BlockingGapCount,
+		"watermark_count", result.WatermarkCount,
+		"ready_for_reconcile", result.ReadyForReconcile,
+		"ready_for_transport", result.ReadyForTransport,
+	)
 }

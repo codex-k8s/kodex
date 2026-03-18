@@ -819,6 +819,22 @@ message RunMissionControlWarmupResponse {
   int32 backfilled_entities = 7;
   int32 backfilled_relations = 8;
   int32 backfilled_timelines = 9;
+  int64 run_entity_count = 10;
+  int64 legacy_agent_count = 11;
+  int64 continuity_gap_count = 12;
+  int64 open_continuity_gap_count = 13;
+  int64 blocking_gap_count = 14;
+  int64 missing_pull_request_gap_count = 15;
+  int64 missing_follow_up_issue_gap_count = 16;
+  int64 watermark_count = 17;
+  bool ready_for_reconcile = 18;
+  string reconcile_gating_reason = 19;
+  bool ready_for_transport = 20;
+  string transport_gating_reason = 21;
+  string provider_freshness_status = 22;
+  string provider_coverage_status = 23;
+  string graph_projection_status = 24;
+  string launch_policy_status = 25;
 }
 
 message MissionControlEntityRef {

@@ -92,7 +92,7 @@ spec:
         - services/external/telegram-interaction-adapter
         - libs/go
     control-plane:
-      value: "0.1.153"
+      value: "0.1.154"
       bumpOn:
         - services/internal/control-plane
         - deploy/base/kaniko
@@ -100,13 +100,13 @@ spec:
         - libs/go
         - proto
     worker:
-      value: "0.1.85"
+      value: "0.1.86"
       bumpOn:
         - services/jobs/worker
         - libs/go
         - proto
     agent-runner:
-      value: "0.1.84"
+      value: "0.1.85"
       bumpOn:
         - services/jobs/agent-runner
         - libs/go

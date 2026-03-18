@@ -1,5 +1,7 @@
 package value
 
+import enumtypes "github.com/codex-k8s/codex-k8s/services/internal/control-plane/internal/domain/types/enum"
+
 // MissionControlWarmupSummary captures aggregate verification evidence for warmup/backfill.
 type MissionControlWarmupSummary struct {
 	ProjectID                    string
@@ -16,6 +18,14 @@ type MissionControlWarmupSummary struct {
 	MissingPullRequestGapCount   int64
 	MissingFollowUpIssueGapCount int64
 	WatermarkCount               int64
+	ReadyForReconcile            bool
+	ReconcileGatingReason        string
+	ReadyForTransport            bool
+	TransportGatingReason        string
+	ProviderFreshnessStatus      enumtypes.MissionControlWorkspaceWatermarkStatus
+	ProviderCoverageStatus       enumtypes.MissionControlWorkspaceWatermarkStatus
+	GraphProjectionStatus        enumtypes.MissionControlWorkspaceWatermarkStatus
+	LaunchPolicyStatus           enumtypes.MissionControlWorkspaceWatermarkStatus
 }
 
 // MissionControlRolloutState captures rollout readiness and enablement gates.

@@ -943,6 +943,77 @@ func TestRefreshWorkspaceProjectionCreatesMissingFollowUpGapAndWatermarks(t *tes
 	}
 }
 
+func TestRunWarmupReturnsReconcileAndTransportSignals(t *testing.T) {
+	t.Parallel()
+
+	svc, repo, _, now := newTestService(t, valuetypes.MissionControlRolloutState{
+		SchemaReady: true,
+		DomainReady: true,
+	})
+	labels := nextstepdomain.DefaultLabels()
+	devDescriptor, ok := labels.DescriptorByStage("dev")
+	if !ok {
+		t.Fatal("expected default next-step labels to include dev stage")
+	}
+	qaDescriptor, ok := labels.DescriptorByStage("qa")
+	if !ok {
+		t.Fatal("expected default next-step labels to include qa stage")
+	}
+	_, _, pullRequestEntity := seedWorkspaceProjectionGraph(t, repo, now, workspaceGraphSeedOptions{
+		RunStageLabel: devDescriptor.RunLabel,
+	})
+	seedLinkedFollowUpIssue(
+		t,
+		repo,
+		now,
+		pullRequestEntity,
+		545,
+		qaDescriptor.RunLabel,
+		[]string{qaDescriptor.RunLabel},
+	)
+
+	if _, err := svc.RefreshWorkspaceProjection(context.Background(), WorkspaceRefreshParams{
+		ProjectID:     "proj-1",
+		CorrelationID: "corr-refresh",
+		ObservedAt:    now,
+	}); err != nil {
+		t.Fatalf("RefreshWorkspaceProjection() error = %v", err)
+	}
+
+	summary, err := svc.RunWarmup(context.Background(), WarmupRequest{
+		ProjectID:     "proj-1",
+		RequestedBy:   "worker",
+		CorrelationID: "corr-warmup",
+	})
+	if err != nil {
+		t.Fatalf("RunWarmup() error = %v", err)
+	}
+	if !summary.ReadyForReconcile {
+		t.Fatal("expected reconcile gate to open once blocking continuity gaps are resolved")
+	}
+	if got := summary.ReconcileGatingReason; got != "" {
+		t.Fatalf("reconcile gating reason = %q, want empty", got)
+	}
+	if summary.ReadyForTransport {
+		t.Fatal("expected transport gate to remain closed while provider coverage watermark is out_of_scope")
+	}
+	if got, want := summary.TransportGatingReason, warmupTransportGatingCoverage; got != want {
+		t.Fatalf("transport gating reason = %q, want %q", got, want)
+	}
+	if got, want := summary.ProviderCoverageStatus, enumtypes.MissionControlWorkspaceWatermarkStatusOutOfScope; got != want {
+		t.Fatalf("provider coverage status = %s, want %s", got, want)
+	}
+	if got, want := summary.ProviderFreshnessStatus, enumtypes.MissionControlWorkspaceWatermarkStatusFresh; got != want {
+		t.Fatalf("provider freshness status = %s, want %s", got, want)
+	}
+	if got, want := summary.GraphProjectionStatus, enumtypes.MissionControlWorkspaceWatermarkStatusFresh; got != want {
+		t.Fatalf("graph projection status = %s, want %s", got, want)
+	}
+	if got, want := summary.LaunchPolicyStatus, enumtypes.MissionControlWorkspaceWatermarkStatusFresh; got != want {
+		t.Fatalf("launch policy status = %s, want %s", got, want)
+	}
+}
+
 func TestRefreshWorkspaceProjectionUsesMainPathStageForDevFollowUp(t *testing.T) {
 	t.Parallel()
 

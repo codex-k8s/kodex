@@ -7682,18 +7682,34 @@ func (x *RunMissionControlWarmupRequest) GetForceRebuild() bool {
 }
 
 type RunMissionControlWarmupResponse struct {
-	state                protoimpl.MessageState `protogen:"open.v1"`
-	ProjectId            string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	EntityCount          int64                  `protobuf:"varint,2,opt,name=entity_count,json=entityCount,proto3" json:"entity_count,omitempty"`
-	RelationCount        int64                  `protobuf:"varint,3,opt,name=relation_count,json=relationCount,proto3" json:"relation_count,omitempty"`
-	TimelineEntryCount   int64                  `protobuf:"varint,4,opt,name=timeline_entry_count,json=timelineEntryCount,proto3" json:"timeline_entry_count,omitempty"`
-	CommandCount         int64                  `protobuf:"varint,5,opt,name=command_count,json=commandCount,proto3" json:"command_count,omitempty"`
-	MaxProjectionVersion int64                  `protobuf:"varint,6,opt,name=max_projection_version,json=maxProjectionVersion,proto3" json:"max_projection_version,omitempty"`
-	BackfilledEntities   int32                  `protobuf:"varint,7,opt,name=backfilled_entities,json=backfilledEntities,proto3" json:"backfilled_entities,omitempty"`
-	BackfilledRelations  int32                  `protobuf:"varint,8,opt,name=backfilled_relations,json=backfilledRelations,proto3" json:"backfilled_relations,omitempty"`
-	BackfilledTimelines  int32                  `protobuf:"varint,9,opt,name=backfilled_timelines,json=backfilledTimelines,proto3" json:"backfilled_timelines,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	state                        protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId                    string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	EntityCount                  int64                  `protobuf:"varint,2,opt,name=entity_count,json=entityCount,proto3" json:"entity_count,omitempty"`
+	RelationCount                int64                  `protobuf:"varint,3,opt,name=relation_count,json=relationCount,proto3" json:"relation_count,omitempty"`
+	TimelineEntryCount           int64                  `protobuf:"varint,4,opt,name=timeline_entry_count,json=timelineEntryCount,proto3" json:"timeline_entry_count,omitempty"`
+	CommandCount                 int64                  `protobuf:"varint,5,opt,name=command_count,json=commandCount,proto3" json:"command_count,omitempty"`
+	MaxProjectionVersion         int64                  `protobuf:"varint,6,opt,name=max_projection_version,json=maxProjectionVersion,proto3" json:"max_projection_version,omitempty"`
+	BackfilledEntities           int32                  `protobuf:"varint,7,opt,name=backfilled_entities,json=backfilledEntities,proto3" json:"backfilled_entities,omitempty"`
+	BackfilledRelations          int32                  `protobuf:"varint,8,opt,name=backfilled_relations,json=backfilledRelations,proto3" json:"backfilled_relations,omitempty"`
+	BackfilledTimelines          int32                  `protobuf:"varint,9,opt,name=backfilled_timelines,json=backfilledTimelines,proto3" json:"backfilled_timelines,omitempty"`
+	RunEntityCount               int64                  `protobuf:"varint,10,opt,name=run_entity_count,json=runEntityCount,proto3" json:"run_entity_count,omitempty"`
+	LegacyAgentCount             int64                  `protobuf:"varint,11,opt,name=legacy_agent_count,json=legacyAgentCount,proto3" json:"legacy_agent_count,omitempty"`
+	ContinuityGapCount           int64                  `protobuf:"varint,12,opt,name=continuity_gap_count,json=continuityGapCount,proto3" json:"continuity_gap_count,omitempty"`
+	OpenContinuityGapCount       int64                  `protobuf:"varint,13,opt,name=open_continuity_gap_count,json=openContinuityGapCount,proto3" json:"open_continuity_gap_count,omitempty"`
+	BlockingGapCount             int64                  `protobuf:"varint,14,opt,name=blocking_gap_count,json=blockingGapCount,proto3" json:"blocking_gap_count,omitempty"`
+	MissingPullRequestGapCount   int64                  `protobuf:"varint,15,opt,name=missing_pull_request_gap_count,json=missingPullRequestGapCount,proto3" json:"missing_pull_request_gap_count,omitempty"`
+	MissingFollowUpIssueGapCount int64                  `protobuf:"varint,16,opt,name=missing_follow_up_issue_gap_count,json=missingFollowUpIssueGapCount,proto3" json:"missing_follow_up_issue_gap_count,omitempty"`
+	WatermarkCount               int64                  `protobuf:"varint,17,opt,name=watermark_count,json=watermarkCount,proto3" json:"watermark_count,omitempty"`
+	ReadyForReconcile            bool                   `protobuf:"varint,18,opt,name=ready_for_reconcile,json=readyForReconcile,proto3" json:"ready_for_reconcile,omitempty"`
+	ReconcileGatingReason        string                 `protobuf:"bytes,19,opt,name=reconcile_gating_reason,json=reconcileGatingReason,proto3" json:"reconcile_gating_reason,omitempty"`
+	ReadyForTransport            bool                   `protobuf:"varint,20,opt,name=ready_for_transport,json=readyForTransport,proto3" json:"ready_for_transport,omitempty"`
+	TransportGatingReason        string                 `protobuf:"bytes,21,opt,name=transport_gating_reason,json=transportGatingReason,proto3" json:"transport_gating_reason,omitempty"`
+	ProviderFreshnessStatus      string                 `protobuf:"bytes,22,opt,name=provider_freshness_status,json=providerFreshnessStatus,proto3" json:"provider_freshness_status,omitempty"`
+	ProviderCoverageStatus       string                 `protobuf:"bytes,23,opt,name=provider_coverage_status,json=providerCoverageStatus,proto3" json:"provider_coverage_status,omitempty"`
+	GraphProjectionStatus        string                 `protobuf:"bytes,24,opt,name=graph_projection_status,json=graphProjectionStatus,proto3" json:"graph_projection_status,omitempty"`
+	LaunchPolicyStatus           string                 `protobuf:"bytes,25,opt,name=launch_policy_status,json=launchPolicyStatus,proto3" json:"launch_policy_status,omitempty"`
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
 }
 
 func (x *RunMissionControlWarmupResponse) Reset() {
@@ -7787,6 +7803,118 @@ func (x *RunMissionControlWarmupResponse) GetBackfilledTimelines() int32 {
 		return x.BackfilledTimelines
 	}
 	return 0
+}
+
+func (x *RunMissionControlWarmupResponse) GetRunEntityCount() int64 {
+	if x != nil {
+		return x.RunEntityCount
+	}
+	return 0
+}
+
+func (x *RunMissionControlWarmupResponse) GetLegacyAgentCount() int64 {
+	if x != nil {
+		return x.LegacyAgentCount
+	}
+	return 0
+}
+
+func (x *RunMissionControlWarmupResponse) GetContinuityGapCount() int64 {
+	if x != nil {
+		return x.ContinuityGapCount
+	}
+	return 0
+}
+
+func (x *RunMissionControlWarmupResponse) GetOpenContinuityGapCount() int64 {
+	if x != nil {
+		return x.OpenContinuityGapCount
+	}
+	return 0
+}
+
+func (x *RunMissionControlWarmupResponse) GetBlockingGapCount() int64 {
+	if x != nil {
+		return x.BlockingGapCount
+	}
+	return 0
+}
+
+func (x *RunMissionControlWarmupResponse) GetMissingPullRequestGapCount() int64 {
+	if x != nil {
+		return x.MissingPullRequestGapCount
+	}
+	return 0
+}
+
+func (x *RunMissionControlWarmupResponse) GetMissingFollowUpIssueGapCount() int64 {
+	if x != nil {
+		return x.MissingFollowUpIssueGapCount
+	}
+	return 0
+}
+
+func (x *RunMissionControlWarmupResponse) GetWatermarkCount() int64 {
+	if x != nil {
+		return x.WatermarkCount
+	}
+	return 0
+}
+
+func (x *RunMissionControlWarmupResponse) GetReadyForReconcile() bool {
+	if x != nil {
+		return x.ReadyForReconcile
+	}
+	return false
+}
+
+func (x *RunMissionControlWarmupResponse) GetReconcileGatingReason() string {
+	if x != nil {
+		return x.ReconcileGatingReason
+	}
+	return ""
+}
+
+func (x *RunMissionControlWarmupResponse) GetReadyForTransport() bool {
+	if x != nil {
+		return x.ReadyForTransport
+	}
+	return false
+}
+
+func (x *RunMissionControlWarmupResponse) GetTransportGatingReason() string {
+	if x != nil {
+		return x.TransportGatingReason
+	}
+	return ""
+}
+
+func (x *RunMissionControlWarmupResponse) GetProviderFreshnessStatus() string {
+	if x != nil {
+		return x.ProviderFreshnessStatus
+	}
+	return ""
+}
+
+func (x *RunMissionControlWarmupResponse) GetProviderCoverageStatus() string {
+	if x != nil {
+		return x.ProviderCoverageStatus
+	}
+	return ""
+}
+
+func (x *RunMissionControlWarmupResponse) GetGraphProjectionStatus() string {
+	if x != nil {
+		return x.GraphProjectionStatus
+	}
+	return ""
+}
+
+func (x *RunMissionControlWarmupResponse) GetLaunchPolicyStatus() string {
+	if x != nil {
+		return x.LaunchPolicyStatus
+	}
+	return ""
 }
 
 type MissionControlEntityRef struct {
@@ -15201,7 +15329,8 @@ const file_codexk8s_controlplane_v1_controlplane_proto_rawDesc = "" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12!\n" +
 	"\frequested_by\x18\x02 \x01(\tR\vrequestedBy\x12%\n" +
 	"\x0ecorrelation_id\x18\x03 \x01(\tR\rcorrelationId\x12#\n" +
-	"\rforce_rebuild\x18\x04 \x01(\bR\fforceRebuild\"\xae\x03\n" +
+	"\rforce_rebuild\x18\x04 \x01(\bR\fforceRebuild\"\x87\n" +
+	"\n" +
 	"\x1fRunMissionControlWarmupResponse\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12!\n" +
@@ -15212,7 +15341,24 @@ const file_codexk8s_controlplane_v1_controlplane_proto_rawDesc = "" +
 	"\x16max_projection_version\x18\x06 \x01(\x03R\x14maxProjectionVersion\x12/\n" +
 	"\x13backfilled_entities\x18\a \x01(\x05R\x12backfilledEntities\x121\n" +
 	"\x14backfilled_relations\x18\b \x01(\x05R\x13backfilledRelations\x121\n" +
-	"\x14backfilled_timelines\x18\t \x01(\x05R\x13backfilledTimelines\"d\n" +
+	"\x14backfilled_timelines\x18\t \x01(\x05R\x13backfilledTimelines\x12(\n" +
+	"\x10run_entity_count\x18\n" +
+	" \x01(\x03R\x0erunEntityCount\x12,\n" +
+	"\x12legacy_agent_count\x18\v \x01(\x03R\x10legacyAgentCount\x120\n" +
+	"\x14continuity_gap_count\x18\f \x01(\x03R\x12continuityGapCount\x129\n" +
+	"\x19open_continuity_gap_count\x18\r \x01(\x03R\x16openContinuityGapCount\x12,\n" +
+	"\x12blocking_gap_count\x18\x0e \x01(\x03R\x10blockingGapCount\x12B\n" +
+	"\x1emissing_pull_request_gap_count\x18\x0f \x01(\x03R\x1amissingPullRequestGapCount\x12G\n" +
+	"!missing_follow_up_issue_gap_count\x18\x10 \x01(\x03R\x1cmissingFollowUpIssueGapCount\x12'\n" +
+	"\x0fwatermark_count\x18\x11 \x01(\x03R\x0ewatermarkCount\x12.\n" +
+	"\x13ready_for_reconcile\x18\x12 \x01(\bR\x11readyForReconcile\x126\n" +
+	"\x17reconcile_gating_reason\x18\x13 \x01(\tR\x15reconcileGatingReason\x12.\n" +
+	"\x13ready_for_transport\x18\x14 \x01(\bR\x11readyForTransport\x126\n" +
+	"\x17transport_gating_reason\x18\x15 \x01(\tR\x15transportGatingReason\x12:\n" +
+	"\x19provider_freshness_status\x18\x16 \x01(\tR\x17providerFreshnessStatus\x128\n" +
+	"\x18provider_coverage_status\x18\x17 \x01(\tR\x16providerCoverageStatus\x126\n" +
+	"\x17graph_projection_status\x18\x18 \x01(\tR\x15graphProjectionStatus\x120\n" +
+	"\x14launch_policy_status\x18\x19 \x01(\tR\x12launchPolicyStatus\"d\n" +
 	"\x17MissionControlEntityRef\x12\x1f\n" +
 	"\ventity_kind\x18\x01 \x01(\tR\n" +
 	"entityKind\x12(\n" +
