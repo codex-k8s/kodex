@@ -89,14 +89,6 @@ type MissionControlCommandState struct {
 	ReconciledAt        *time.Time
 }
 
-type missionControlCommandLogContext struct {
-	ProjectID            string `json:"project_id"`
-	CommandID            string `json:"command_id"`
-	CommandKind          string `json:"command_kind"`
-	EffectiveCommandKind string `json:"effective_command_kind"`
-	CorrelationID        string `json:"correlation_id"`
-}
-
 // MissionControlQueueCommandParams requests transition to queued state.
 type MissionControlQueueCommandParams struct {
 	ProjectID     string
@@ -184,15 +176,12 @@ func (s *Service) reconcileMissionControlWarmups(ctx context.Context) error {
 		correlationID := fmt.Sprintf("%s:warmup:%s:%d", missionControlSyntheticDeliveryPrefix, projectID, now.Unix())
 		result, warmupErr := s.missionCtl.RunMissionControlWarmup(ctx, projectID, s.cfg.WorkerID, correlationID, false)
 		if warmupErr != nil {
-			errs = append(errs, fmt.Errorf("project %s: %w", projectID, warmupErr))
-			s.logger.Warn(
-				"mission control warmup failed",
-				"project_id", projectID,
-				"project_name", strings.TrimSpace(project.ProjectName),
-				"repository_full_name", strings.TrimSpace(project.RepositoryFullName),
-				"correlation_id", correlationID,
-				"err", warmupErr,
-			)
+			errs = append(errs, fmt.Errorf(
+				"project %s (%s): %w",
+				projectID,
+				strings.TrimSpace(project.RepositoryFullName),
+				warmupErr,
+			))
 			continue
 		}
 		s.lastMissionControlWarmup[projectID] = now
@@ -214,12 +203,13 @@ func (s *Service) reconcileMissionControlCommands(ctx context.Context) error {
 	var errs []error
 	for _, command := range commands {
 		if commandErr := s.processMissionControlCommand(ctx, command); commandErr != nil {
-			errs = append(errs, fmt.Errorf("command %s: %w", strings.TrimSpace(command.CommandID), commandErr))
-			s.logger.Warn(
-				"mission control command processing failed",
-				"command", missionControlCommandLogContextFromCommand(command),
-				"err", commandErr,
-			)
+			errs = append(errs, fmt.Errorf(
+				"project %s command %s (%s): %w",
+				strings.TrimSpace(command.ProjectID),
+				strings.TrimSpace(command.CommandID),
+				strings.TrimSpace(command.EffectiveCommandKind),
+				commandErr,
+			))
 		}
 	}
 	return errors.Join(errs...)
@@ -344,7 +334,7 @@ func sleepWithContext(ctx context.Context, delay time.Duration) error {
 
 func (s *Service) logMissionControlWarmupResult(project MissionControlWarmupProject, correlationID string, result MissionControlWarmupResult) {
 	if !result.ReadyForTransport {
-		s.logger.Warn(
+		s.logger.Info(
 			"mission control warmup completed with open rollout gates",
 			"project_id", strings.TrimSpace(result.ProjectID),
 			"project_name", strings.TrimSpace(project.ProjectName),
@@ -383,14 +373,4 @@ func (s *Service) logMissionControlWarmupResult(project MissionControlWarmupProj
 		"ready_for_reconcile", result.ReadyForReconcile,
 		"ready_for_transport", result.ReadyForTransport,
 	)
-}
-
-func missionControlCommandLogContextFromCommand(command MissionControlPendingCommand) missionControlCommandLogContext {
-	return missionControlCommandLogContext{
-		ProjectID:            strings.TrimSpace(command.ProjectID),
-		CommandID:            strings.TrimSpace(command.CommandID),
-		CommandKind:          strings.TrimSpace(command.CommandKind),
-		EffectiveCommandKind: strings.TrimSpace(command.EffectiveCommandKind),
-		CorrelationID:        strings.TrimSpace(command.CorrelationID),
-	}
 }

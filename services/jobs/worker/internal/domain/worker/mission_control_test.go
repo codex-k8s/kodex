@@ -1,8 +1,12 @@
 package worker
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"log/slog"
+	"strings"
 	"testing"
 	"time"
 )
@@ -211,6 +215,39 @@ func TestReconcileMissionControlContinuesCommandsWhenWarmupFails(t *testing.T) {
 	}
 }
 
+func TestReconcileMissionControlWarmupsDoesNotLogPerProjectFailure(t *testing.T) {
+	t.Parallel()
+
+	logger, buf := newMissionControlTestLogger()
+	missionControl := &fakeMissionControlClient{
+		warmupProjects: []MissionControlWarmupProject{
+			{ProjectID: "proj-1", ProjectName: "Project", RepositoryFullName: "codex-k8s/codex-k8s"},
+		},
+		warmupErrorsByProject: map[string]error{
+			"proj-1": errors.New("warmup failed"),
+		},
+	}
+
+	svc := NewService(Config{
+		WorkerID:                     "worker-1",
+		MissionControlWarmupInterval: time.Hour,
+	}, Dependencies{
+		Logger:         logger,
+		MissionControl: missionControl,
+	})
+
+	err := svc.reconcileMissionControlWarmups(context.Background())
+	if err == nil {
+		t.Fatal("reconcileMissionControlWarmups() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "project proj-1 (codex-k8s/codex-k8s)") {
+		t.Fatalf("reconcileMissionControlWarmups() error = %q, want project context", err)
+	}
+	if got := strings.TrimSpace(buf.String()); got != "" {
+		t.Fatalf("expected no per-project logs below boundary, got %q", got)
+	}
+}
+
 func TestReconcileMissionControlCommandsContinueAfterQueueFailure(t *testing.T) {
 	t.Parallel()
 
@@ -263,6 +300,108 @@ func TestReconcileMissionControlCommandsContinueAfterQueueFailure(t *testing.T) 
 	if len(missionControl.executeCalls) != 1 {
 		t.Fatalf("expected second command to continue after queue failure, got %d execute calls", len(missionControl.executeCalls))
 	}
+}
+
+func TestReconcileMissionControlCommandsDoesNotLogPerCommandFailure(t *testing.T) {
+	t.Parallel()
+
+	logger, buf := newMissionControlTestLogger()
+	missionControl := &fakeMissionControlClient{
+		pendingCommands: []MissionControlPendingCommand{
+			{
+				ProjectID:            "proj-1",
+				CommandID:            "cmd-broken",
+				Status:               "accepted",
+				EffectiveCommandKind: "stage.next_step.execute",
+				RepositoryFullName:   "codex-k8s/codex-k8s",
+				StageNextStep: &MissionControlStageNextStepPayload{
+					ThreadKind:  "issue",
+					ThreadNo:    544,
+					TargetLabel: "run:qa",
+				},
+			},
+		},
+		queueErrorsByCommand: map[string]error{
+			"cmd-broken": errors.New("queue failed"),
+		},
+	}
+
+	svc := NewService(Config{
+		WorkerID:                          "worker-1",
+		MissionControlPendingCommandLimit: 10,
+		MissionControlRetryMaxAttempts:    1,
+	}, Dependencies{
+		Logger:         logger,
+		MissionControl: missionControl,
+	})
+
+	err := svc.reconcileMissionControlCommands(context.Background())
+	if err == nil {
+		t.Fatal("reconcileMissionControlCommands() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "project proj-1 command cmd-broken (stage.next_step.execute)") {
+		t.Fatalf("reconcileMissionControlCommands() error = %q, want command context", err)
+	}
+	if got := strings.TrimSpace(buf.String()); got != "" {
+		t.Fatalf("expected no per-command logs below boundary, got %q", got)
+	}
+}
+
+func TestLogMissionControlWarmupResultUsesInfoForOpenRolloutGates(t *testing.T) {
+	t.Parallel()
+
+	logger, buf := newMissionControlTestLogger()
+	svc := NewService(Config{
+		WorkerID: "worker-1",
+	}, Dependencies{
+		Logger: logger,
+	})
+
+	svc.logMissionControlWarmupResult(
+		MissionControlWarmupProject{
+			ProjectID:          "proj-1",
+			ProjectName:        "Project",
+			RepositoryFullName: "codex-k8s/codex-k8s",
+		},
+		"corr-1",
+		MissionControlWarmupResult{
+			ProjectID:               "proj-1",
+			EntityCount:             3,
+			RunEntityCount:          1,
+			ContinuityGapCount:      0,
+			OpenGapCount:            0,
+			BlockingGapCount:        0,
+			WatermarkCount:          1,
+			ReadyForReconcile:       true,
+			ReadyForTransport:       false,
+			TransportGatingReason:   "provider_coverage_not_ready",
+			ProviderFreshnessStatus: "ready",
+			ProviderCoverageStatus:  "out_of_scope",
+			GraphProjectionStatus:   "ready",
+			LaunchPolicyStatus:      "ready",
+		},
+	)
+
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if len(lines) != 1 {
+		t.Fatalf("expected 1 log line, got %d", len(lines))
+	}
+
+	var record map[string]any
+	if err := json.Unmarshal([]byte(lines[0]), &record); err != nil {
+		t.Fatalf("json.Unmarshal() log record error = %v", err)
+	}
+	if got, want := record["level"], "INFO"; got != want {
+		t.Fatalf("log level = %v, want %q", got, want)
+	}
+	if got, want := record["msg"], "mission control warmup completed with open rollout gates"; got != want {
+		t.Fatalf("log message = %v, want %q", got, want)
+	}
+}
+
+func newMissionControlTestLogger() (*slog.Logger, *bytes.Buffer) {
+	var buf bytes.Buffer
+	return slog.New(slog.NewJSONHandler(&buf, nil)), &buf
 }
 
 type fakeMissionControlClient struct {
