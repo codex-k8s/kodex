@@ -35,22 +35,30 @@ const (
 )
 
 type warmupEventPayload struct {
-	ProjectID                    string `json:"project_id"`
-	RequestedBy                  string `json:"requested_by"`
-	CorrelationID                string `json:"correlation_id"`
-	EntityCount                  int64  `json:"entity_count"`
-	RelationCount                int64  `json:"relation_count"`
-	TimelineEntryCount           int64  `json:"timeline_entry_count"`
-	CommandCount                 int64  `json:"command_count"`
-	MaxProjectionVersion         int64  `json:"max_projection_version"`
-	RunEntityCount               int64  `json:"run_entity_count"`
-	LegacyAgentCount             int64  `json:"legacy_agent_count"`
-	ContinuityGapCount           int64  `json:"continuity_gap_count"`
-	OpenContinuityGapCount       int64  `json:"open_continuity_gap_count"`
-	BlockingGapCount             int64  `json:"blocking_gap_count"`
-	MissingPullRequestGapCount   int64  `json:"missing_pull_request_gap_count"`
-	MissingFollowUpIssueGapCount int64  `json:"missing_follow_up_issue_gap_count"`
-	WatermarkCount               int64  `json:"watermark_count"`
+	ProjectID                    string                                           `json:"project_id"`
+	RequestedBy                  string                                           `json:"requested_by"`
+	CorrelationID                string                                           `json:"correlation_id"`
+	EntityCount                  int64                                            `json:"entity_count"`
+	RelationCount                int64                                            `json:"relation_count"`
+	TimelineEntryCount           int64                                            `json:"timeline_entry_count"`
+	CommandCount                 int64                                            `json:"command_count"`
+	MaxProjectionVersion         int64                                            `json:"max_projection_version"`
+	RunEntityCount               int64                                            `json:"run_entity_count"`
+	LegacyAgentCount             int64                                            `json:"legacy_agent_count"`
+	ContinuityGapCount           int64                                            `json:"continuity_gap_count"`
+	OpenContinuityGapCount       int64                                            `json:"open_continuity_gap_count"`
+	BlockingGapCount             int64                                            `json:"blocking_gap_count"`
+	MissingPullRequestGapCount   int64                                            `json:"missing_pull_request_gap_count"`
+	MissingFollowUpIssueGapCount int64                                            `json:"missing_follow_up_issue_gap_count"`
+	WatermarkCount               int64                                            `json:"watermark_count"`
+	ReadyForReconcile            bool                                             `json:"ready_for_reconcile"`
+	ReconcileGatingReason        string                                           `json:"reconcile_gating_reason,omitempty"`
+	ReadyForTransport            bool                                             `json:"ready_for_transport"`
+	TransportGatingReason        string                                           `json:"transport_gating_reason,omitempty"`
+	ProviderFreshnessStatus      enumtypes.MissionControlWorkspaceWatermarkStatus `json:"provider_freshness_status"`
+	ProviderCoverageStatus       enumtypes.MissionControlWorkspaceWatermarkStatus `json:"provider_coverage_status"`
+	GraphProjectionStatus        enumtypes.MissionControlWorkspaceWatermarkStatus `json:"graph_projection_status"`
+	LaunchPolicyStatus           enumtypes.MissionControlWorkspaceWatermarkStatus `json:"launch_policy_status"`
 }
 
 type entityProjectionEventPayload struct {

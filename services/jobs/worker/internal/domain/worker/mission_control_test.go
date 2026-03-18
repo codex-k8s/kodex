@@ -166,17 +166,118 @@ func TestReconcileMissionControlWarmupUsesThrottle(t *testing.T) {
 	}
 }
 
+func TestReconcileMissionControlContinuesCommandsWhenWarmupFails(t *testing.T) {
+	t.Parallel()
+
+	missionControl := &fakeMissionControlClient{
+		warmupProjects: []MissionControlWarmupProject{
+			{ProjectID: "proj-1", ProjectName: "Project", RepositoryFullName: "codex-k8s/codex-k8s"},
+		},
+		warmupErrorsByProject: map[string]error{
+			"proj-1": errors.New("warmup failed"),
+		},
+		pendingCommands: []MissionControlPendingCommand{
+			{
+				ProjectID:            "proj-1",
+				CommandID:            "cmd-1",
+				Status:               "accepted",
+				EffectiveCommandKind: "stage.next_step.execute",
+				RepositoryFullName:   "codex-k8s/codex-k8s",
+				StageNextStep: &MissionControlStageNextStepPayload{
+					ThreadKind:  "issue",
+					ThreadNo:    544,
+					TargetLabel: "run:qa",
+				},
+			},
+		},
+	}
+
+	svc := NewService(Config{
+		WorkerID:                          "worker-1",
+		MissionControlPendingCommandLimit: 10,
+		MissionControlRetryMaxAttempts:    1,
+	}, Dependencies{
+		MissionControl: missionControl,
+	})
+
+	if err := svc.reconcileMissionControl(context.Background()); err == nil {
+		t.Fatal("reconcileMissionControl() error = nil, want joined warmup error")
+	}
+	if len(missionControl.runWarmupCalls) != 1 {
+		t.Fatalf("expected 1 warmup call, got %d", len(missionControl.runWarmupCalls))
+	}
+	if len(missionControl.executeCalls) != 1 {
+		t.Fatalf("expected command processing to continue after warmup failure, got %d execute calls", len(missionControl.executeCalls))
+	}
+}
+
+func TestReconcileMissionControlCommandsContinueAfterQueueFailure(t *testing.T) {
+	t.Parallel()
+
+	missionControl := &fakeMissionControlClient{
+		pendingCommands: []MissionControlPendingCommand{
+			{
+				ProjectID:            "proj-1",
+				CommandID:            "cmd-broken",
+				Status:               "accepted",
+				EffectiveCommandKind: "stage.next_step.execute",
+				RepositoryFullName:   "codex-k8s/codex-k8s",
+				StageNextStep: &MissionControlStageNextStepPayload{
+					ThreadKind:  "issue",
+					ThreadNo:    544,
+					TargetLabel: "run:qa",
+				},
+			},
+			{
+				ProjectID:            "proj-1",
+				CommandID:            "cmd-ok",
+				Status:               "accepted",
+				EffectiveCommandKind: "stage.next_step.execute",
+				RepositoryFullName:   "codex-k8s/codex-k8s",
+				StageNextStep: &MissionControlStageNextStepPayload{
+					ThreadKind:  "issue",
+					ThreadNo:    545,
+					TargetLabel: "run:qa",
+				},
+			},
+		},
+		queueErrorsByCommand: map[string]error{
+			"cmd-broken": errors.New("queue failed"),
+		},
+	}
+
+	svc := NewService(Config{
+		WorkerID:                          "worker-1",
+		MissionControlPendingCommandLimit: 10,
+		MissionControlRetryMaxAttempts:    1,
+	}, Dependencies{
+		MissionControl: missionControl,
+	})
+
+	if err := svc.reconcileMissionControlCommands(context.Background()); err == nil {
+		t.Fatal("reconcileMissionControlCommands() error = nil, want joined queue error")
+	}
+	if len(missionControl.queueCalls) != 2 {
+		t.Fatalf("expected both commands to be queued, got %d calls", len(missionControl.queueCalls))
+	}
+	if len(missionControl.executeCalls) != 1 {
+		t.Fatalf("expected second command to continue after queue failure, got %d execute calls", len(missionControl.executeCalls))
+	}
+}
+
 type fakeMissionControlClient struct {
-	warmupProjects   []MissionControlWarmupProject
-	pendingCommands  []MissionControlPendingCommand
-	claimErr         error
-	executeErrors    []error
-	queueCalls       []MissionControlQueueCommandParams
-	pendingSyncCalls []MissionControlPendingSyncParams
-	reconciledCalls  []MissionControlReconciledParams
-	failedCalls      []MissionControlFailedParams
-	executeCalls     []NextStepExecuteParams
-	runWarmupCalls   []struct {
+	warmupProjects        []MissionControlWarmupProject
+	warmupErrorsByProject map[string]error
+	pendingCommands       []MissionControlPendingCommand
+	claimErr              error
+	executeErrors         []error
+	queueErrorsByCommand  map[string]error
+	queueCalls            []MissionControlQueueCommandParams
+	pendingSyncCalls      []MissionControlPendingSyncParams
+	reconciledCalls       []MissionControlReconciledParams
+	failedCalls           []MissionControlFailedParams
+	executeCalls          []NextStepExecuteParams
+	runWarmupCalls        []struct {
 		projectID     string
 		requestedBy   string
 		correlationID string
@@ -200,6 +301,9 @@ func (f *fakeMissionControlClient) RunMissionControlWarmup(_ context.Context, pr
 		correlationID: correlationID,
 		forceRebuild:  forceRebuild,
 	})
+	if err, ok := f.warmupErrorsByProject[projectID]; ok {
+		return MissionControlWarmupResult{}, err
+	}
 	return MissionControlWarmupResult{ProjectID: projectID, EntityCount: 3}, nil
 }
 
@@ -212,6 +316,9 @@ func (f *fakeMissionControlClient) ClaimMissionControlPendingCommands(_ context.
 
 func (f *fakeMissionControlClient) QueueMissionControlCommand(_ context.Context, params MissionControlQueueCommandParams) (MissionControlCommandState, error) {
 	f.queueCalls = append(f.queueCalls, params)
+	if err, ok := f.queueErrorsByCommand[params.CommandID]; ok {
+		return MissionControlCommandState{}, err
+	}
 	return MissionControlCommandState{ProjectID: params.ProjectID, CommandID: params.CommandID, Status: "queued"}, nil
 }
 

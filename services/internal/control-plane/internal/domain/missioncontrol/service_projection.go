@@ -15,6 +15,11 @@ func (s *Service) RunWarmup(ctx context.Context, params WarmupRequest) (WarmupSu
 	if err != nil {
 		return WarmupSummary{}, err
 	}
+	watermarks, err := s.repository.ListLatestWorkspaceWatermarks(ctx, params.ProjectID)
+	if err != nil {
+		return WarmupSummary{}, err
+	}
+	summary = enrichWarmupSummary(summary, watermarks)
 	s.insertFlowEvent(ctx, params.CorrelationID, eventTypeMissionControlWarmupRequested, warmupEventPayload{
 		ProjectID:                    summary.ProjectID,
 		RequestedBy:                  params.RequestedBy,
@@ -32,6 +37,14 @@ func (s *Service) RunWarmup(ctx context.Context, params WarmupRequest) (WarmupSu
 		MissingPullRequestGapCount:   summary.MissingPullRequestGapCount,
 		MissingFollowUpIssueGapCount: summary.MissingFollowUpIssueGapCount,
 		WatermarkCount:               summary.WatermarkCount,
+		ReadyForReconcile:            summary.ReadyForReconcile,
+		ReconcileGatingReason:        normalizeWarmupGatingReason(summary.ReconcileGatingReason),
+		ReadyForTransport:            summary.ReadyForTransport,
+		TransportGatingReason:        normalizeWarmupGatingReason(summary.TransportGatingReason),
+		ProviderFreshnessStatus:      summary.ProviderFreshnessStatus,
+		ProviderCoverageStatus:       summary.ProviderCoverageStatus,
+		GraphProjectionStatus:        summary.GraphProjectionStatus,
+		LaunchPolicyStatus:           summary.LaunchPolicyStatus,
 	})
 	return summary, nil
 }
