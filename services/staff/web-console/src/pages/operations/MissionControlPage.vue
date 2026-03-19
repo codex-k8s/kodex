@@ -284,7 +284,12 @@ import MissionControlEntityCard from "../../features/mission-control/MissionCont
 import MissionControlLaunchPreviewDialog from "../../features/mission-control/MissionControlLaunchPreviewDialog.vue";
 import MissionControlRootGroupLane from "../../features/mission-control/MissionControlRootGroupLane.vue";
 import MissionControlSidePanel from "../../features/mission-control/MissionControlSidePanel.vue";
-import { buildMissionControlRouteQuery, missionControlRouteStateEquals, normalizeMissionControlRouteQuery } from "../../features/mission-control/lib";
+import {
+  buildMissionControlRouteQuery,
+  missionControlRouteStateEquals,
+  normalizeMissionControlRouteQuery,
+  patchMissionControlRouteState,
+} from "../../features/mission-control/lib";
 import {
   missionControlNodeKindLabelKey,
   missionControlStateColor,
@@ -503,15 +508,7 @@ function scheduleRealtimeRefresh(delayMs = 500): void {
 }
 
 function updateRoute(patch: Partial<MissionControlRouteState>): void {
-  const nextState: MissionControlRouteState = {
-    ...routeState.value,
-    ...patch,
-  };
-
-  if ("viewMode" in patch || "statePreset" in patch || "search" in patch) {
-    nextState.nodeKind = "";
-    nextState.nodePublicId = "";
-  }
+  const nextState = patchMissionControlRouteState(routeState.value, patch);
 
   if (missionControlRouteStateEquals(nextState, routeState.value)) {
     return;

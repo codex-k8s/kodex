@@ -98,6 +98,16 @@ export function buildMissionControlRouteQuery(state: MissionControlRouteState): 
   };
 }
 
+export function patchMissionControlRouteState(
+  current: MissionControlRouteState,
+  patch: Partial<MissionControlRouteState>,
+): MissionControlRouteState {
+  return {
+    ...current,
+    ...patch,
+  };
+}
+
 export function missionControlRouteStateEquals(left: MissionControlRouteState, right: MissionControlRouteState): boolean {
   return (
     left.viewMode === right.viewMode &&

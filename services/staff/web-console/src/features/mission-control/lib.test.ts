@@ -6,6 +6,7 @@ import {
   missionControlGraphColumns,
   missionControlNodeKey,
   normalizeMissionControlRouteQuery,
+  patchMissionControlRouteState,
   parseMissionControlRealtimeEnvelope,
   workspaceFreshnessStatus,
 } from "./lib.ts";
@@ -59,6 +60,38 @@ test("buildMissionControlRouteQuery omits default values", () => {
     q: undefined,
     node_kind: undefined,
     node_id: undefined,
+  });
+});
+
+test("patchMissionControlRouteState preserves selected node across workspace controls", () => {
+  const state = {
+    viewMode: "graph" as const,
+    statePreset: "all_active" as const,
+    search: "",
+    nodeKind: "run" as const,
+    nodePublicId: "run-1",
+  };
+
+  assert.deepEqual(patchMissionControlRouteState(state, { viewMode: "list" }), {
+    viewMode: "list",
+    statePreset: "all_active",
+    search: "",
+    nodeKind: "run",
+    nodePublicId: "run-1",
+  });
+  assert.deepEqual(patchMissionControlRouteState(state, { statePreset: "blocked" }), {
+    viewMode: "graph",
+    statePreset: "blocked",
+    search: "",
+    nodeKind: "run",
+    nodePublicId: "run-1",
+  });
+  assert.deepEqual(patchMissionControlRouteState(state, { search: "review" }), {
+    viewMode: "graph",
+    statePreset: "all_active",
+    search: "review",
+    nodeKind: "run",
+    nodePublicId: "run-1",
   });
 });
 
