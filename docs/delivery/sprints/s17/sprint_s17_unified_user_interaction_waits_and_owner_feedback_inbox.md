@@ -6,7 +6,7 @@ status: in-review
 owner_role: PM
 created_at: 2026-03-20
 updated_at: 2026-03-25
-related_issues: [360, 361, 458, 473, 532, 540, 541, 554, 557]
+related_issues: [360, 361, 458, 473, 532, 540, 541, 554, 557, 559]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -21,7 +21,8 @@ approvals:
 - Intake stage в Issue `#541` уже зафиксировал ключевой baseline: primary happy-path = same live pod / same `codex` session until user response, while snapshot-resume is recovery-only fallback.
 - Sprint S17 также фиксирует обязательные guardrails: long human-wait target `>=24h`, delivery-before-wait lifecycle, Telegram pending inbox, staff-console fallback, persisted text/voice binding и self-improve exclusion.
 - Vision package в Issue `#554` зафиксировал mission, north star, persona outcomes, KPI/guardrails и wave boundaries для unified owner feedback loop, не переоткрывая Day1 baseline, и явно добавил product guardrail: built-in `codex_k8s` MCP wait path обязан использовать максимальный timeout/TTL не ниже owner wait window.
-- Continuity issue `#557` создана для stage `run:prd`; дальнейшие stage issues создаются последовательно после owner review.
+- PRD package в Issue `#557` формализовал user stories, FR/AC/NFR, scenario matrix, expected evidence и recovery/lifecycle guardrails для owner feedback loop без reopening Day1/Day2 baseline.
+- Continuity issue `#559` создана для stage `run:arch`; дальнейшие stage issues создаются последовательно после owner review.
 
 ## Scope спринта
 ### In scope
@@ -59,8 +60,8 @@ approvals:
 |---|---|---|---|
 | Intake (`#541`) | Problem/Brief/Scope/Constraints + intake AC | `pm` | Owner review intake-пакета и создана issue следующего этапа |
 | Vision (`#554`) | Mission, north star, persona outcomes, KPI/guardrails, wave boundaries | `pm` | Зафиксирован vision baseline и создана issue `#557` для `run:prd` |
-| PRD (`#557`) | User stories, FR/AC/NFR, expected evidence и edge cases | `pm` + `sa` | Подтверждён PRD package и создана issue для `run:arch` |
-| Architecture (TBD) | Execution model, ownership split, lifetime policy, continuation semantics | `sa` | Подтверждены архитектурные границы и создана issue для `run:design` |
+| PRD (`#557`) | User stories, FR/AC/NFR, scenario matrix, expected evidence и edge cases | `pm` + `sa` | Подтверждён PRD package и создана issue `#559` для `run:arch` |
+| Architecture (`#559`) | Execution model, ownership split, lifetime policy, continuation semantics | `sa` | Подтверждены архитектурные границы и создана issue для `run:design` |
 | Design (TBD) | API/data/UI/runtime contracts и rollout notes | `sa` + `qa` | Подготовлен implementation-ready design package и создана issue для `run:plan` |
 | Plan (TBD) | Delivery waves, execution issues, DoR/DoD, quality-gates | `em` + `km` | Сформирован execution package и owner-managed handover в `run:dev` |
 
@@ -74,12 +75,13 @@ approvals:
 - До `run:plan` Sprint S17 остаётся markdown-only и не создаёт code/runtime diff.
 
 ## Handover
-- Текущий stage in-review: `run:vision` в Issue `#554`.
-- Vision package:
-  - `docs/delivery/epics/s17/epic-s17-day2-unified-user-interaction-waits-and-owner-feedback-inbox-vision.md`;
-  - follow-up issue `#557` для `run:prd`.
-- Следующий stage: `run:prd` через issue `#557`.
-- До завершения следующего stage нельзя потерять следующие Day1/Day2 decisions:
+- Текущий stage in-review: `run:prd` в Issue `#557`.
+- PRD package:
+  - `docs/delivery/epics/s17/epic-s17-day3-unified-user-interaction-waits-and-owner-feedback-inbox-prd.md`;
+  - `docs/delivery/epics/s17/prd-s17-day3-unified-user-interaction-waits-and-owner-feedback-inbox.md`;
+  - follow-up issue `#559` для `run:arch`.
+- Следующий stage: `run:arch` через issue `#559`.
+- До завершения следующего stage нельзя потерять следующие Day1/Day2/Day3 decisions:
   - same live session как primary continuation model;
   - max timeout/TTL built-in `codex_k8s` MCP wait path не ниже owner wait window, чтобы happy-path оставался live wait, а не synthetic resume;
   - snapshot-resume как recovery-only fallback;
@@ -89,4 +91,4 @@ approvals:
   - deterministic text/voice binding;
   - visibility для overdue / expired / manual-fallback scenarios;
   - self-improve exclusion.
-- Trigger-лейбл для issue `#557` не ставится автоматически и остаётся owner-managed переходом после review vision package.
+- Trigger-лейбл для issue `#559` не ставится автоматически и остаётся owner-managed переходом после review PRD package.
