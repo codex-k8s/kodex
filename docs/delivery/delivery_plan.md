@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-02-06
 updated_at: 2026-03-25
-related_issues: [1, 19, 74, 100, 106, 112, 154, 155, 170, 171, 184, 185, 187, 189, 195, 197, 199, 201, 210, 212, 216, 218, 220, 222, 223, 225, 226, 227, 228, 229, 230, 238, 241, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 262, 263, 265, 274, 281, 282, 320, 333, 335, 337, 340, 351, 360, 361, 363, 366, 369, 370, 371, 372, 373, 374, 375, 378, 383, 385, 387, 389, 391, 392, 393, 394, 395, 413, 416, 418, 420, 423, 425, 426, 427, 428, 429, 430, 431, 444, 447, 448, 452, 454, 456, 458, 469, 471, 476, 480, 484, 490, 492, 494, 496, 500, 510, 512, 516, 519, 521, 522, 523, 524, 525, 537, 541, 542, 543, 544, 545, 546, 547, 554, 557]
+related_issues: [1, 19, 74, 100, 106, 112, 154, 155, 170, 171, 184, 185, 187, 189, 195, 197, 199, 201, 210, 212, 216, 218, 220, 222, 223, 225, 226, 227, 228, 229, 230, 238, 241, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 262, 263, 265, 274, 281, 282, 320, 333, 335, 337, 340, 351, 360, 361, 363, 366, 369, 370, 371, 372, 373, 374, 375, 378, 383, 385, 387, 389, 391, 392, 393, 394, 395, 413, 416, 418, 420, 423, 425, 426, 427, 428, 429, 430, 431, 444, 447, 448, 452, 454, 456, 458, 469, 471, 476, 480, 484, 490, 492, 494, 496, 500, 510, 512, 516, 519, 521, 522, 523, 524, 525, 537, 541, 542, 543, 544, 545, 546, 547, 554, 557, 559]
 
 related_prs: []
 approvals:
@@ -500,9 +500,15 @@ approvals:
   - отдельно закреплён product guardrail: built-in `codex_k8s` MCP wait path обязан иметь максимальный timeout/TTL не ниже owner wait window, чтобы happy-path оставался реальным live wait, а synthetic resume с подложенным tool result не нормализовался как основная модель;
   - дополнительные каналы, reminders/escalations, attachments, multi-party routing, richer conversation UX и detached resume-run как равноправный happy-path оставлены в later-wave scope и не блокируют core MVP;
   - создана follow-up issue `#557` для stage `run:prd` без trigger-лейбла.
-- Day 3 (planned): PRD package для owner feedback loop (Issue `#557`).
-  - Цель: формализовать user stories, FR/AC/NFR, scenario matrix и expected evidence для same-session continuity, dual-channel inbox, lifecycle transparency и max timeout/TTL baseline built-in `codex_k8s` MCP wait path.
-  - Ожидаемый результат: follow-up issue для `run:arch` и continuity-требование сохранить цепочку `arch -> design -> plan -> dev` без разрывов.
+- Day 3 (in-review): PRD package для owner feedback loop (`docs/delivery/epics/s17/epic-s17-day3-unified-user-interaction-waits-and-owner-feedback-inbox-prd.md`, `docs/delivery/epics/s17/prd-s17-day3-unified-user-interaction-waits-and-owner-feedback-inbox.md`, Issue `#557`).
+- Результат Day 3 (факт):
+  - формализованы user stories, FR/AC/NFR, scenario matrix и expected evidence для owner inbox, same-session continuity, lifecycle transparency, deterministic text/voice/callback binding и recovery-only fallback;
+  - зафиксирован blocking baseline: same live pod / same `codex` session как primary happy-path, max timeout/TTL built-in `codex_k8s` MCP wait path не ниже owner wait window, snapshot-resume только как recovery fallback, long human-wait target `>=24h`, delivery-before-wait lifecycle, Telegram pending inbox, staff-console fallback и `run:self-improve` exclusion;
+  - дополнительные каналы, reminders/escalations, attachments, multi-party routing, richer conversation UX и detached resume-run как равноправный happy-path сохранены в later-wave scope и не блокируют core MVP;
+  - создана follow-up issue `#559` для stage `run:arch` без trigger-лейбла и с continuity-требованием сохранить цепочку `arch -> design -> plan -> dev`.
+- Day 4 (planned): architecture package для owner feedback loop (Issue `#559`).
+  - Цель: зафиксировать service boundaries, ownership split, lifetime policy и persisted state truth для unified owner feedback loop.
+  - Ожидаемый результат: follow-up issue для `run:design` и continuity-требование сохранить цепочку `design -> plan -> dev` без разрывов.
 
 ### Daily delivery contract (обязательный)
 - Каждый день задачи дня влиты в `main`.
