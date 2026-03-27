@@ -7,7 +7,7 @@ export const ru = {
     operations: "Операции",
     projectManagement: "Управление проектами",
     platform: "Платформа",
-    missionControl: "Mission Control",
+    missionControl: "Панель управления",
     projects: "Проекты",
     runs: "Запуски",
     runtimeDeployTasks: "Сборка и деплой",
