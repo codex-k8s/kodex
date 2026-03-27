@@ -1,5 +1,5 @@
 ---
-doc_id: ADR-0017
+doc_id: ADR-0018
 type: adr
 title: "Mission Control frontend-first prototype: web-console-owned fake-data slice with explicit backend handover boundary"
 status: proposed
@@ -16,7 +16,7 @@ approvals:
   request_id: "owner-2026-03-27-issue-571-arch"
 ---
 
-# ADR-0017: Mission Control frontend-first prototype — web-console-owned fake-data slice with explicit backend handover boundary
+# ADR-0018: Mission Control frontend-first prototype — web-console-owned fake-data slice with explicit backend handover boundary
 
 ## TL;DR
 - Контекст: Sprint S18 требует сначала доказать новый Mission Control UX на fake data и только потом запускать backend rebuild `#563`.
@@ -148,6 +148,6 @@ approvals:
 - Architecture:
   - `docs/architecture/initiatives/s18_mission_control_frontend_first_canvas/architecture.md`
 - Alternatives:
-  - `docs/architecture/alternatives/ALT-0009-mission-control-frontend-first-prototype-boundaries.md`
+  - `docs/architecture/alternatives/ALT-0010-mission-control-frontend-first-prototype-boundaries.md`
 - Related issues:
   - `#561`, `#563`, `#571`, `#573`, `#480`

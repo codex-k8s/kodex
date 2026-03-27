@@ -37,8 +37,8 @@ approvals:
 - `docs/architecture/initiatives/s18_mission_control_frontend_first_canvas/architecture.md`
 - `docs/architecture/initiatives/s18_mission_control_frontend_first_canvas/c4_context.md`
 - `docs/architecture/initiatives/s18_mission_control_frontend_first_canvas/c4_container.md`
-- `docs/architecture/adr/ADR-0017-mission-control-frontend-first-prototype-and-backend-handover-boundary.md`
-- `docs/architecture/alternatives/ALT-0009-mission-control-frontend-first-prototype-boundaries.md`
+- `docs/architecture/adr/ADR-0018-mission-control-frontend-first-prototype-and-backend-handover-boundary.md`
+- `docs/architecture/alternatives/ALT-0010-mission-control-frontend-first-prototype-boundaries.md`
 - `docs/delivery/traceability/s18_mission_control_frontend_first_canvas_history.md`
 
 ## Ключевые решения Stage

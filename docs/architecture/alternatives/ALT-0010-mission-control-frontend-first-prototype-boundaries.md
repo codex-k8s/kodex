@@ -1,5 +1,5 @@
 ---
-doc_id: ALT-0009
+doc_id: ALT-0010
 type: alternatives
 title: "Mission Control frontend-first prototype — alternatives and trade-offs"
 status: in-review

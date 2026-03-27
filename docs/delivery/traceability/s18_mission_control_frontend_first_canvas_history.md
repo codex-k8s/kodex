@@ -74,8 +74,8 @@ approvals:
   - `docs/architecture/initiatives/s18_mission_control_frontend_first_canvas/architecture.md`;
   - `docs/architecture/initiatives/s18_mission_control_frontend_first_canvas/c4_context.md`;
   - `docs/architecture/initiatives/s18_mission_control_frontend_first_canvas/c4_container.md`;
-  - `docs/architecture/adr/ADR-0017-mission-control-frontend-first-prototype-and-backend-handover-boundary.md`;
-  - `docs/architecture/alternatives/ALT-0009-mission-control-frontend-first-prototype-boundaries.md`;
+  - `docs/architecture/adr/ADR-0018-mission-control-frontend-first-prototype-and-backend-handover-boundary.md`;
+  - `docs/architecture/alternatives/ALT-0010-mission-control-frontend-first-prototype-boundaries.md`;
   - обновлены `docs/architecture/README.md`, `docs/architecture/initiatives/README.md`, `docs/delivery/sprints/s18/sprint_s18_mission_control_frontend_first_canvas_fake_data.md`, `docs/delivery/epics/s18/epic_s18.md`, `docs/delivery/delivery_plan.md`, `docs/delivery/issue_map.md`.
 - Зафиксированы:
   - `web-console` как единственный owner isolated fake-data prototype, canvas/view-state и workflow preview UX для Sprint S18;
