@@ -1,7 +1,7 @@
 ---
 doc_id: PLN-CK8S-0001
 type: delivery-plan
-title: "codex-k8s — Delivery Plan"
+title: "kodex — Delivery Plan"
 status: active
 owner_role: EM
 created_at: 2026-02-06
@@ -16,7 +16,7 @@ approvals:
   approved_at: 2026-02-19
 ---
 
-# Delivery Plan: codex-k8s
+# Delivery Plan: kodex
 
 ## TL;DR
 - Что поставляем: MVP control-plane + staff UI + webhook orchestration + MCP governance + self-improve loop + production bootstrap/deploy loop.
@@ -263,7 +263,7 @@ approvals:
 ### Sprint S10: Built-in MCP user interactions
 - Day 1 (in-review): intake-пакет для built-in MCP user interactions (`docs/delivery/epics/s10/epic-s10-day1-mcp-user-interactions-intake.md`, Issue `#360`).
 - Результат Day 1 (факт):
-  - инициатива зафиксирована как отдельный platform stream поверх существующего built-in server `codex_k8s`, а не как расширение approval flow;
+  - инициатива зафиксирована как отдельный platform stream поверх существующего built-in server `kodex`, а не как расширение approval flow;
   - MVP baseline ограничен `user.notify` и `user.decision.request` с channel-neutral semantics и typed response contract;
   - закреплены неподвижные ограничения: отдельный interaction-domain, wait-state только для response-required сценариев, platform-owned retry/idempotency/audit/correlation, Telegram как отдельный follow-up stream;
   - создана follow-up issue `#378` для stage `run:vision` без trigger-лейбла.
@@ -394,7 +394,7 @@ approvals:
   - Wave 4 / Issue `#428` переведён в `in-review`: `agent-runner` получил typed handoff `ReportGitHubRateLimitSignal`, coarse session snapshots `running -> waiting_backpressure`, dedicated resume payload lookup и stop-local-retry discipline для дальнейшей волны `#429`.
   - Wave 5 / Issue `#429` переведён в `in-review`: `api-gateway` получил contract-first wait visibility (`wait_projection`, dominant/related waits, typed realtime wait envelopes), codegen синхронизацию `OpenAPI+proto` и thin-edge mapping без доменной классификации в transport handlers.
   - Wave 6 / Issue `#430` переведён в `in-review`: `web-console` получил typed wait queue / run details surfaces для dominant/related waits, contour attribution, manual-action guidance и realtime wait activity без дублирования recovery/classification logic из `control-plane`.
-  - Wave 7 / Issue `#431` переведён в `in-review`: подготовлен readiness bundle `docs/architecture/initiatives/s12_github_api_rate_limit_resilience/observability_readiness.md` с rollout order, typed evidence surfaces, candidate `kubectl`/SQL diagnostics и rollback notes; текущий candidate namespace `codex-k8s-dev-1` подтверждает готовность deploy/job resources, но live rate-limit smoke пока не выполнялся, а `CODEXK8S_GITHUB_RATE_LIMIT_WAIT_ENABLED` остаётся на default-disabled wiring.
+  - Wave 7 / Issue `#431` переведён в `in-review`: подготовлен readiness bundle `docs/architecture/initiatives/s12_github_api_rate_limit_resilience/observability_readiness.md` с rollout order, typed evidence surfaces, candidate `kubectl`/SQL diagnostics и rollback notes; текущий candidate namespace `kodex-dev-1` подтверждает готовность deploy/job resources, но live rate-limit smoke пока не выполнялся, а `KODEX_GITHUB_RATE_LIMIT_WAIT_ENABLED` остаётся на default-disabled wiring.
 
 ### Sprint S13: Quality governance system for agent-scale delivery (Issue #469)
 - Day 1 (in-review): intake-пакет для `Quality Governance System` (`docs/delivery/epics/s13/epic-s13-day1-quality-governance-intake.md`, Issue `#469`).
@@ -478,19 +478,19 @@ approvals:
   - unified owner feedback loop закреплён как platform capability: owner отвечает в Telegram или staff-console, видит pending request и получает детерминированное продолжение той же задачи без GitHub-comment detour;
   - mission, north star, persona outcomes, KPI/guardrails и wave boundaries определены для owner/product lead path, same-session runtime path и staff/operator fallback path;
   - повторно зафиксирован locked baseline: same live pod / same `codex` session как primary happy-path, snapshot-resume как recovery-only fallback, long human-wait target `>=24h`, delivery-before-wait lifecycle, Telegram pending inbox, staff-console fallback, deterministic text/voice binding и `run:self-improve` exclusion;
-  - отдельно закреплён product guardrail: built-in `codex_k8s` MCP wait path обязан иметь максимальный timeout/TTL не ниже owner wait window, чтобы happy-path оставался реальным live wait, а synthetic resume с подложенным tool result не нормализовался как основная модель;
+  - отдельно закреплён product guardrail: built-in `kodex` MCP wait path обязан иметь максимальный timeout/TTL не ниже owner wait window, чтобы happy-path оставался реальным live wait, а synthetic resume с подложенным tool result не нормализовался как основная модель;
   - дополнительные каналы, reminders/escalations, attachments, multi-party routing, richer conversation UX и detached resume-run как равноправный happy-path оставлены в later-wave scope и не блокируют core MVP;
   - создана follow-up issue `#557` для stage `run:prd` без trigger-лейбла.
 - Day 3 (in-review): PRD package для owner feedback loop (`docs/delivery/epics/s17/epic-s17-day3-unified-user-interaction-waits-and-owner-feedback-inbox-prd.md`, `docs/delivery/epics/s17/prd-s17-day3-unified-user-interaction-waits-and-owner-feedback-inbox.md`, Issue `#557`).
 - Результат Day 3 (факт):
   - формализованы user stories, FR/AC/NFR, scenario matrix и expected evidence для owner inbox, same-session continuity, lifecycle transparency, deterministic text/voice/callback binding и recovery-only fallback;
-  - зафиксирован blocking baseline: same live pod / same `codex` session как primary happy-path, max timeout/TTL built-in `codex_k8s` MCP wait path не ниже owner wait window, snapshot-resume только как recovery fallback, long human-wait target `>=24h`, delivery-before-wait lifecycle, Telegram pending inbox, staff-console fallback и `run:self-improve` exclusion;
+  - зафиксирован blocking baseline: same live pod / same `codex` session как primary happy-path, max timeout/TTL built-in `kodex` MCP wait path не ниже owner wait window, snapshot-resume только как recovery fallback, long human-wait target `>=24h`, delivery-before-wait lifecycle, Telegram pending inbox, staff-console fallback и `run:self-improve` exclusion;
   - дополнительные каналы, reminders/escalations, attachments, multi-party routing, richer conversation UX и detached resume-run как равноправный happy-path сохранены в later-wave scope и не блокируют core MVP;
   - создана follow-up issue `#559` для stage `run:arch` без trigger-лейбла и с continuity-требованием сохранить цепочку `arch -> design -> plan -> dev`.
 - Day 4 (in-review): architecture package для owner feedback loop (`docs/delivery/epics/s17/epic-s17-day4-unified-user-interaction-waits-and-owner-feedback-inbox-arch.md`, `docs/architecture/initiatives/s17_unified_owner_feedback_loop/*`, Issue `#559`).
 - Результат Day 4 (факт):
   - зафиксированы service boundaries и ownership split для `control-plane`, `worker`, `agent-runner`, `api-gateway`, `staff web-console` и `telegram-interaction-adapter`;
-  - подтверждён execution model: same live pod / same `codex` session остаётся primary happy-path, snapshot-resume допускается только как recovery fallback, а effective max timeout/TTL built-in `codex_k8s` MCP wait path не ниже owner wait window;
+  - подтверждён execution model: same live pod / same `codex` session остаётся primary happy-path, snapshot-resume допускается только как recovery fallback, а effective max timeout/TTL built-in `kodex` MCP wait path не ниже owner wait window;
   - закреплён единый persisted backend truth для Telegram inbox и staff-console fallback, а deterministic text/voice/callback binding и visibility для `overdue / expired / manual-fallback` оформлены как platform-owned outcomes;
   - оформлены ADR-0017 и ALT-0009 с trade-offs по live wait primary model, channel ownership и отказом от premature dedicated service split;
   - создана follow-up issue `#568` для stage `run:design` без trigger-лейбла и с continuity-требованием сохранить цепочку `design -> plan -> dev`.
@@ -571,8 +571,8 @@ approvals:
 - ставит k3s и сетевой baseline (ingress, cert-manager, network policy baseline);
 - ставит зависимости платформы;
 - поднимает внутренний registry (`ClusterIP`, без auth на уровне registry) и Kaniko pipeline для сборки образа в кластере;
-- разворачивает PostgreSQL и `codex-k8s`;
-- спрашивает внешние креды (`GitHub fine-grained token`, `CODEXK8S_OPENAI_API_KEY`), внутренние секреты генерирует сам;
+- разворачивает PostgreSQL и `kodex`;
+- спрашивает внешние креды (`GitHub fine-grained token`, `KODEX_OPENAI_API_KEY`), внутренние секреты генерирует сам;
 - передаёт default `learning_mode` из `bootstrap/host/config.env` (по умолчанию включён, пустое значение = выключен);
 - настраивает GitHub webhook/labels через API без GitHub Actions runner и хранит runtime config/secrets только в Kubernetes;
 - запускает self-deploy через control-plane runtime deploy job (build/mirror/apply/cleanup).
