@@ -5,7 +5,8 @@ title: "kodex — Delivery Plan"
 status: active
 owner_role: EM
 created_at: 2026-02-06
-related_issues: [1, 19, 74, 100, 106, 112, 154, 155, 170, 171, 184, 185, 187, 189, 195, 197, 199, 201, 210, 212, 216, 218, 220, 222, 223, 225, 226, 227, 228, 229, 230, 238, 241, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 262, 263, 265, 274, 281, 282, 320, 333, 335, 337, 340, 351, 360, 361, 363, 366, 369, 370, 371, 372, 373, 374, 375, 378, 383, 385, 387, 389, 391, 392, 393, 394, 395, 413, 416, 418, 420, 423, 425, 426, 427, 428, 429, 430, 431, 444, 447, 448, 452, 454, 456, 458, 469, 471, 476, 480, 484, 490, 492, 494, 496, 500, 510, 512, 516, 519, 521, 522, 523, 524, 525, 537, 541, 542, 543, 544, 545, 546, 547, 554, 557, 559, 561, 562, 563, 565, 567, 568, 571, 573, 575, 579]
+updated_at: 2026-04-01
+related_issues: [1, 19, 74, 100, 106, 112, 154, 155, 170, 171, 184, 185, 187, 189, 195, 197, 199, 201, 210, 212, 216, 218, 220, 222, 223, 225, 226, 227, 228, 229, 230, 238, 241, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 262, 263, 265, 274, 281, 282, 320, 333, 335, 337, 340, 351, 360, 361, 363, 366, 369, 370, 371, 372, 373, 374, 375, 378, 383, 385, 387, 389, 391, 392, 393, 394, 395, 413, 416, 418, 420, 423, 425, 426, 427, 428, 429, 430, 431, 444, 447, 448, 452, 454, 456, 458, 469, 471, 476, 480, 484, 490, 492, 494, 496, 500, 510, 512, 516, 519, 521, 522, 523, 524, 525, 537, 541, 542, 543, 544, 545, 546, 547, 554, 557, 559, 561, 562, 563, 565, 567, 568, 571, 573, 575, 579, 581]
 
 related_prs: []
 approvals:
@@ -540,9 +541,15 @@ approvals:
   - workflow editor закреплён как local policy-preview UX с deterministic generated `workflow-policy block`, repo-seed refs и без free-form prompt editing или provider mutation path;
   - data model и migration policy явно подтвердили отсутствие OpenAPI/proto/schema/runtime migrations в Sprint S18, а backend rebuild `#563` сохранён как отдельный deferred flow;
   - создана follow-up issue `#579` для stage `run:plan` без trigger-лейбла и с continuity-требованием сохранить цепочку `plan -> dev`.
-- Day 6 (planned): execution package для frontend-first Mission Control canvas prototype (Issue `#579`).
-  - Цель: разложить frontend-only prototype на execution waves, quality gates, DoR/DoD и owner-managed handover в `run:dev`.
-  - Ожидаемый результат: review-ready plan package и follow-up issue для `run:dev` без разрыва continuity.
+- Day 6 (in-review): execution package для frontend-first Mission Control canvas prototype (`docs/delivery/epics/s18/epic-s18-day6-mission-control-frontend-first-canvas-plan.md`, Issue `#579`).
+- Результат Day 6 (факт):
+  - execution package зафиксировал одну owner-managed implementation issue `#581` с последовательными waves `route shell + prototype source -> canvas/drawer composition -> workflow preview/prompt-source evidence -> acceptance/demo evidence`;
+  - quality gates `QG-S18-D6-01..QG-S18-D6-08`, DoR/DoD, blockers, risks и owner decisions оформлены для перехода `run:plan -> run:dev`;
+  - frontend-only boundary Sprint S18 сохранена без drift: backend rebuild `#563`, live provider sync, DB prompt editor, release-safety cockpit и waves `#524/#525` остались вне execution package;
+  - continuity `plan -> dev` закреплена через follow-up issue `#581` без trigger-лейбла.
+- Day 7 (planned): isolated `web-console` prototype на fake data (Issue `#581`).
+  - Цель: реализовать owner-approved Sprint S18 canvas baseline в `services/staff/web-console` без backend/API/runtime prerequisites.
+  - Ожидаемый результат: PR с implementation evidence, checks и traceability sync; дальнейший stage остаётся owner-managed.
 
 ### Daily delivery contract (обязательный)
 - Каждый день задачи дня влиты в `main`.
