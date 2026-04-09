@@ -693,12 +693,12 @@ export const ru = {
     missionControlPrototype: {
       title: "Mission Control",
       hint:
-        "Frontend-first прототип нового центра управления: Home для портфеля инициатив, Workspace для ведения инициативы, Workflow Studio для шаблонов и Executions для диагностики.",
+        "Frontend-first прототип нового центра управления: главная для портфеля инициатив, экран инициативы для ведения работы, редактор workflow для шаблонов и исполнения для диагностики.",
       screens: {
-        home: "Home",
-        initiative: "Workspace",
-        studio: "Studio",
-        executions: "Executions",
+        home: "Главная",
+        initiative: "Инициатива",
+        studio: "Шаблоны",
+        executions: "Исполнения",
       },
       voice: {
         title: "Голосовая команда",

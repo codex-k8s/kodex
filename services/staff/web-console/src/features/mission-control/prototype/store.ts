@@ -87,7 +87,9 @@ export const useMissionControlPrototypeStore = defineStore("missionControlProtot
     model.value?.activity.filter((item) => item.initiativeId === initiativeId.value) ?? [],
   );
   const attentionCards = computed(() => buildAttentionCards(model.value, projectId.value));
-  const homeColumns = computed(() => buildHomeColumns(model.value, projectId.value, search.value));
+  const homeColumns = computed(() =>
+    buildHomeColumns(model.value, projectId.value, search.value, screen.value === "home" ? initiativeId.value : ""),
+  );
   const workspaceStageViews = computed(() => buildWorkspaceStageViews(currentInitiative.value, currentWorkflow.value));
   const workspaceArtifacts = computed(() =>
     buildWorkspaceArtifactViews(currentInitiativeArtifacts.value, artifactId.value, search.value),
@@ -125,9 +127,16 @@ export const useMissionControlPrototypeStore = defineStore("missionControlProtot
     const normalizedProjectId =
       model.value.projects.some((project) => project.projectId === nextState.projectId) ? nextState.projectId : defaultProjectId.value;
     const initiativesForProject = model.value.initiatives.filter((initiative) => initiative.projectId === normalizedProjectId);
-    const normalizedInitiativeId = initiativesForProject.some((initiative) => initiative.initiativeId === nextState.initiativeId)
+    const initiativeIsOptional = nextState.screen !== "initiative";
+    const requestedInitiativeId = initiativesForProject.some((initiative) => initiative.initiativeId === nextState.initiativeId)
       ? nextState.initiativeId
-      : initiativesForProject[0]?.initiativeId ?? "";
+      : "";
+    const normalizedInitiativeId =
+      requestedInitiativeId !== ""
+        ? requestedInitiativeId
+        : initiativeIsOptional
+          ? ""
+          : initiativesForProject[0]?.initiativeId ?? "";
     const workflowsForProject = model.value.workflows.filter((workflow) =>
       workflow.kind === "system" ? true : workflow.projectId === normalizedProjectId,
     );

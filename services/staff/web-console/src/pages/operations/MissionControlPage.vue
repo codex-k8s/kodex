@@ -15,57 +15,31 @@
 
     <section v-else class="mission-control-page__shell mt-4">
       <div class="mission-control-page__toolbar">
-        <div class="mission-control-page__toolbar-main">
-          <VBtnToggle divided mandatory :model-value="activeRouteState.screen" @update:model-value="onSelectScreen">
-            <VBtn v-for="option in screenOptions" :key="option.screen" :value="option.screen">
-              {{ option.label }}
-            </VBtn>
-          </VBtnToggle>
+        <VBtnToggle divided mandatory :model-value="activeRouteState.screen" @update:model-value="onSelectScreen">
+          <VBtn v-for="option in screenOptions" :key="option.screen" :value="option.screen">
+            {{ option.label }}
+          </VBtn>
+        </VBtnToggle>
 
-          <VSelect
-            :model-value="activeRouteState.projectId"
-            :items="prototype.projectOptions"
-            item-title="title"
-            item-value="projectId"
-            density="compact"
-            variant="outlined"
-            hide-details
-            label="Проект"
-            class="mission-control-page__select"
-            @update:model-value="onSelectProject"
-          />
+        <VBtn
+          variant="outlined"
+          prepend-icon="mdi-briefcase-search-outline"
+          class="mission-control-page__initiative-button"
+          @click="initiativePickerOpen = true"
+        >
+          {{ initiativePickerLabel }}
+        </VBtn>
 
-          <VSelect
-            :model-value="activeRouteState.initiativeId"
-            :items="initiativeOptions"
-            item-title="title"
-            item-value="initiativeId"
-            density="compact"
-            variant="outlined"
-            hide-details
-            label="Инициатива"
-            class="mission-control-page__select mission-control-page__select--wide"
-            @update:model-value="onSelectInitiative"
-          />
-
-          <VTextField
-            :model-value="activeRouteState.search"
-            density="compact"
-            variant="outlined"
-            hide-details
-            prepend-inner-icon="mdi-magnify"
-            label="Поиск по инициативам, артефактам и executions"
-            class="mission-control-page__search"
-            @update:model-value="onUpdateSearch"
-          />
-        </div>
-
-        <div class="mission-control-page__toolbar-side">
-          <VChip v-if="prototype.currentProject" size="small" variant="tonal" color="primary">
-            {{ prototype.currentProject.title }}
-          </VChip>
-          <VBtn variant="text" prepend-icon="mdi-microphone" @click="voiceDialogOpen = true">Голос</VBtn>
-        </div>
+        <VTextField
+          :model-value="activeRouteState.search"
+          density="compact"
+          variant="outlined"
+          hide-details
+          prepend-inner-icon="mdi-magnify"
+          label="Поиск по инициативам, артефактам и executions"
+          class="mission-control-page__search"
+          @update:model-value="onUpdateSearch"
+        />
       </div>
 
       <MissionControlPrototypeHomeView
@@ -74,9 +48,12 @@
         :project-summary="prototype.currentProject?.summary || ''"
         :attention-cards="prototype.attentionCards"
         :columns="prototype.homeColumns"
+        :selected-initiative-title="homeSelectedInitiativeTitle"
         @open-voice="voiceDialogOpen = true"
         @launch-workflow="onOpenStudio"
-        @select-initiative="onOpenInitiative"
+        @select-initiative="onFocusInitiative"
+        @open-workspace="onOpenInitiative"
+        @clear-initiative="onClearInitiative"
       />
 
       <MissionControlPrototypeWorkspaceView
@@ -113,6 +90,45 @@
 
     <MissionControlPrototypeVoiceFab @click="voiceDialogOpen = true" />
 
+    <VDialog v-model="initiativePickerOpen" max-width="760">
+      <VCard rounded="xl">
+        <VCardTitle>Выбор инициативы</VCardTitle>
+        <VCardText class="mission-control-page__initiative-sheet">
+          <VTextField
+            v-model="initiativePickerSearch"
+            density="compact"
+            variant="outlined"
+            hide-details
+            prepend-inner-icon="mdi-magnify"
+            label="Поиск по инициативам"
+          />
+
+          <div v-if="activeRouteState.screen === 'home'" class="mission-control-page__initiative-actions">
+            <VBtn variant="text" prepend-icon="mdi-format-list-bulleted" @click="onPickAllInitiatives">
+              Все инициативы проекта
+            </VBtn>
+          </div>
+
+          <div class="mission-control-page__initiative-list">
+            <button
+              v-for="initiative in filteredInitiatives"
+              :key="initiative.initiativeId"
+              type="button"
+              class="mission-control-page__initiative-option"
+              @click="onPickInitiative(initiative.initiativeId)"
+            >
+              <div class="mission-control-page__initiative-option-title">{{ initiative.title }}</div>
+              <div class="mission-control-page__initiative-option-summary">{{ initiative.summary }}</div>
+            </button>
+          </div>
+        </VCardText>
+        <VCardActions>
+          <VSpacer />
+          <VBtn variant="text" @click="initiativePickerOpen = false">Закрыть</VBtn>
+        </VCardActions>
+      </VCard>
+    </VDialog>
+
     <VDialog v-model="voiceDialogOpen" max-width="760">
       <VCard rounded="xl">
         <VCardTitle>{{ t("pages.missionControlPrototype.voice.title") }}</VCardTitle>
@@ -140,7 +156,9 @@
         <VCardActions>
           <VSpacer />
           <VBtn variant="text" @click="voiceDialogOpen = false">Закрыть</VBtn>
-          <VBtn color="primary" prepend-icon="mdi-rocket-launch-outline" @click="onOpenStudio">Перейти к workflow</VBtn>
+          <VBtn color="primary" prepend-icon="mdi-rocket-launch-outline" @click="onOpenStudio">
+            Перейти к редактору workflow
+          </VBtn>
         </VCardActions>
       </VCard>
     </VDialog>
@@ -166,18 +184,23 @@ import {
 import { useMissionControlPrototypeStore } from "../../features/mission-control/prototype/store";
 import type {
   MissionControlPrototypeRouteState,
-  MissionControlScreen,
   MissionInitiativeWorkspaceView,
 } from "../../features/mission-control/prototype/types";
+import { useUiContextStore } from "../../features/ui-context/store";
 import PageHeader from "../../shared/ui/PageHeader.vue";
 
 const route = useRoute();
 const router = useRouter();
 const prototype = useMissionControlPrototypeStore();
+const uiContext = useUiContextStore();
 const { t } = useI18n({ useScope: "global" });
 
+const initiativePickerOpen = ref(false);
+const initiativePickerSearch = ref("");
 const voiceDialogOpen = ref(false);
-const voiceDraft = ref("Собери новый workflow для инициативы Mission Control: сначала owner narrative, потом дизайн, затем фронтенд-прототип и follow-up задачу на backend.");
+const voiceDraft = ref(
+  "Собери новый workflow для инициативы Mission Control: сначала owner narrative, потом дизайн, затем фронтенд-прототип и follow-up задачу на backend.",
+);
 const activeRouteState = ref<MissionControlPrototypeRouteState>({
   screen: "home",
   projectId: "",
@@ -195,23 +218,40 @@ const screenOptions = computed(() => [
   { screen: "studio" as const, label: t("pages.missionControlPrototype.screens.studio") },
   { screen: "executions" as const, label: t("pages.missionControlPrototype.screens.executions") },
 ]);
-const initiativeOptions = computed(() =>
-  prototype.projectInitiatives.map((initiative) => ({
-    initiativeId: initiative.initiativeId,
-    title: initiative.title,
-  })),
+const filteredInitiatives = computed(() => {
+  const needle = initiativePickerSearch.value.trim().toLowerCase();
+  if (needle === "") {
+    return prototype.projectInitiatives;
+  }
+
+  return prototype.projectInitiatives.filter((initiative) =>
+    [initiative.title, initiative.summary, ...initiative.tags].some((part) => part.toLowerCase().includes(needle)),
+  );
+});
+const initiativePickerLabel = computed(() => {
+  if (activeRouteState.value.screen === "home" && activeRouteState.value.initiativeId === "") {
+    return "Все инициативы проекта";
+  }
+  return prototype.currentInitiative?.title || "Выбрать инициативу";
+});
+const homeSelectedInitiativeTitle = computed(() =>
+  activeRouteState.value.screen === "home" ? prototype.currentInitiative?.title || "" : "",
 );
 const selectedArtifactView = computed(
   () => prototype.workspaceArtifacts.find((artifact) => artifact.artifactId === activeRouteState.value.artifactId) ?? null,
 );
 
 watch(
-  routeState,
-  async (nextState) => {
-    const normalizedState = await prototype.syncRouteState(nextState);
+  [routeState, () => uiContext.projectId],
+  async ([nextState, selectedProjectId]) => {
+    const requestedState = {
+      ...nextState,
+      projectId: typeof selectedProjectId === "string" && selectedProjectId !== "" ? selectedProjectId : nextState.projectId,
+    };
+    const normalizedState = await prototype.syncRouteState(requestedState);
     activeRouteState.value = normalizedState;
 
-    if (!missionControlPrototypeRouteStateEquals(nextState, normalizedState)) {
+    if (!missionControlPrototypeRouteStateEquals(requestedState, normalizedState)) {
       await replaceRoute(normalizedState);
     }
   },
@@ -246,19 +286,6 @@ function onSelectScreen(nextScreen: string): void {
   }
 }
 
-function onSelectProject(nextProjectId: string | null): void {
-  if (!nextProjectId) {
-    return;
-  }
-  updateRoute({
-    projectId: nextProjectId,
-    initiativeId: "",
-    workflowId: "",
-    artifactId: "",
-    screen: activeRouteState.value.screen === "studio" ? "studio" : "home",
-  });
-}
-
 function onSelectInitiative(nextInitiativeId: string | null): void {
   if (!nextInitiativeId) {
     return;
@@ -278,6 +305,40 @@ function onOpenInitiative(nextInitiativeId: string): void {
     screen: "initiative",
     workspaceView: "overview",
   });
+}
+
+function onFocusInitiative(nextInitiativeId: string): void {
+  updateRoute({
+    initiativeId: nextInitiativeId,
+    artifactId: "",
+    screen: "home",
+  });
+}
+
+function onClearInitiative(): void {
+  updateRoute({
+    initiativeId: "",
+    artifactId: "",
+    screen: "home",
+  });
+}
+
+function onPickInitiative(nextInitiativeId: string): void {
+  initiativePickerOpen.value = false;
+  initiativePickerSearch.value = "";
+
+  if (activeRouteState.value.screen === "home") {
+    onFocusInitiative(nextInitiativeId);
+    return;
+  }
+
+  onSelectInitiative(nextInitiativeId);
+}
+
+function onPickAllInitiatives(): void {
+  initiativePickerOpen.value = false;
+  initiativePickerSearch.value = "";
+  onClearInitiative();
 }
 
 function onSelectWorkflow(nextWorkflowId: string): void {
@@ -338,37 +399,19 @@ function onSelectArtifact(nextArtifactId: string): void {
 
 .mission-control-page__toolbar {
   display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: flex-start;
-  flex-wrap: wrap;
-}
-
-.mission-control-page__toolbar-main {
-  display: flex;
   gap: 12px;
   align-items: center;
   flex-wrap: wrap;
-  flex: 1;
 }
 
-.mission-control-page__toolbar-side {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.mission-control-page__select {
-  width: 220px;
-}
-
-.mission-control-page__select--wide {
-  width: 340px;
+.mission-control-page__initiative-button {
+  min-width: 300px;
+  justify-content: flex-start;
 }
 
 .mission-control-page__search {
   min-width: 320px;
-  max-width: 480px;
+  flex: 1;
 }
 
 .mission-control-page__loading {
@@ -377,16 +420,50 @@ function onSelectArtifact(nextArtifactId: string): void {
   background: rgba(255, 255, 255, 0.88);
 }
 
+.mission-control-page__initiative-sheet,
 .mission-control-page__voice-sheet {
   display: grid;
   gap: 14px;
 }
 
+.mission-control-page__initiative-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.mission-control-page__initiative-list {
+  display: grid;
+  gap: 10px;
+  max-height: 440px;
+  overflow: auto;
+}
+
+.mission-control-page__initiative-option {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(223, 228, 235, 0.9);
+  background: rgba(248, 250, 252, 0.94);
+  text-align: left;
+}
+
+.mission-control-page__initiative-option-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: rgb(33, 38, 46);
+}
+
+.mission-control-page__initiative-option-summary,
+.mission-control-page__voice-copy {
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: rgb(96, 104, 118);
+}
+
 .mission-control-page__voice-copy {
   margin: 0;
   font-size: 0.95rem;
-  line-height: 1.55;
-  color: rgb(89, 98, 112);
 }
 
 .mission-control-page__voice-chips {
@@ -400,8 +477,7 @@ function onSelectArtifact(nextArtifactId: string): void {
     padding: 14px;
   }
 
-  .mission-control-page__select,
-  .mission-control-page__select--wide,
+  .mission-control-page__initiative-button,
   .mission-control-page__search {
     width: 100%;
     min-width: 0;

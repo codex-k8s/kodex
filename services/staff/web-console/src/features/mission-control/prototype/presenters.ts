@@ -225,6 +225,7 @@ export function buildHomeColumns(
   model: MissionControlPrototypeModel | null,
   projectId: string,
   search: string,
+  selectedInitiativeId: string,
 ): MissionHomeColumn[] {
   if (!model) {
     return [];
@@ -235,6 +236,7 @@ export function buildHomeColumns(
   return stageColumnCatalog.map((column) => {
     const items: MissionHomeInitiativeCard[] = model.initiatives
       .filter((initiative) => initiative.projectId === projectId)
+      .filter((initiative) => (selectedInitiativeId === "" ? true : initiative.initiativeId === selectedInitiativeId))
       .filter((initiative) => stageToColumnId(initiative.currentStageKey) === column.columnId)
       .filter((initiative) =>
         initiativeMatchesSearch(
@@ -267,7 +269,7 @@ export function buildHomeColumns(
       summary: column.summary,
       items,
     };
-  });
+  }).filter((column) => column.items.length > 0);
 }
 
 export function buildWorkspaceStageViews(
@@ -335,8 +337,8 @@ export function buildWorkspaceFlowNodes(stageViews: MissionWorkspaceStageView[])
     summary: stageView.summary,
     statusLabel: stageView.exitLabel,
     tone: statusToTone(stageView.status),
-    layoutX: index * 280,
-    layoutY: stageView.status === "blocked" ? 110 : stageView.status === "active" ? 70 : 0,
+    layoutX: 56 + index * 220,
+    layoutY: index % 2 === 0 ? 150 : 110,
     artifactIds: stageView.artifactIds,
     stageKey: stageView.stageKey,
   }));
@@ -363,8 +365,8 @@ export function buildWorkflowStudioNodes(workflow: MissionWorkflowTemplate | nul
     summary: stageDefinition.summary,
     statusLabel: `Выход: ${stageDefinition.outputLabel}`,
     tone: index === 0 ? "warning" : "info",
-    layoutX: index * 250,
-    layoutY: index % 2 === 0 ? 0 : 120,
+    layoutX: 48 + index * 205,
+    layoutY: index % 2 === 0 ? 160 : 100,
     artifactIds: [],
     stageKey: stageDefinition.stageKey,
   }));
@@ -378,8 +380,8 @@ export function buildWorkflowStudioNodes(workflow: MissionWorkflowTemplate | nul
       summary: stageDefinition.stageKey === "design" ? "Владелец принимает структуру решения." : "Выпуск идет только после проверки.",
       statusLabel: "Gate node",
       tone: "warning",
-      layoutX: index === 0 ? 560 : 1120,
-      layoutY: index === 0 ? 250 : 250,
+      layoutX: index === 0 ? 430 : 850,
+      layoutY: 310,
       artifactIds: [],
     }));
 

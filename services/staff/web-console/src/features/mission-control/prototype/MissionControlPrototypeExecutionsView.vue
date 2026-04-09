@@ -2,10 +2,10 @@
   <div class="mission-executions">
     <section class="mission-executions__hero">
       <div>
-        <div class="mission-executions__eyebrow">Executions</div>
+        <div class="mission-executions__eyebrow">Исполнения</div>
         <h2 class="mission-executions__title">Диагностика исполнений по артефактам</h2>
         <p class="mission-executions__summary">
-          Здесь живут технические исполнения. На Home и Workspace они скрыты за карточками задач и PR, чтобы не
+          Здесь живут технические исполнения. На главном экране и в инициативе они скрыты за карточками задач и PR, чтобы не
           перегружать основной поток управления.
         </p>
       </div>

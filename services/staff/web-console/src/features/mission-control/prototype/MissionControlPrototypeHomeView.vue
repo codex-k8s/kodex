@@ -24,7 +24,7 @@
           <VSpacer />
           <VBtn variant="tonal" prepend-icon="mdi-microphone" @click="$emit('open-voice')">Продиктовать</VBtn>
           <VBtn color="primary" prepend-icon="mdi-rocket-launch-outline" @click="$emit('launch-workflow')">
-            Открыть workflow studio
+            Открыть редактор workflow
           </VBtn>
         </div>
       </div>
@@ -43,6 +43,14 @@
       </article>
     </section>
 
+    <section v-if="selectedInitiativeTitle" class="mission-home__focus">
+      <div>
+        <div class="mission-home__focus-label">Фокус инициативы</div>
+        <div class="mission-home__focus-title">{{ selectedInitiativeTitle }}</div>
+      </div>
+      <VBtn variant="text" prepend-icon="mdi-close" @click="$emit('clear-initiative')">Показать все инициативы</VBtn>
+    </section>
+
     <section class="mission-home__board">
       <article v-for="column in columns" :key="column.columnId" class="mission-home__column">
         <div class="mission-home__column-head">
@@ -54,12 +62,10 @@
         </div>
 
         <div class="mission-home__column-items">
-          <button
+          <article
             v-for="item in column.items"
             :key="item.initiativeId"
-            type="button"
             class="mission-home__initiative-card"
-            @click="$emit('select-initiative', item.initiativeId)"
           >
             <div class="mission-home__initiative-topline">
               <VChip size="x-small" variant="tonal">{{ item.stageLabel }}</VChip>
@@ -74,20 +80,19 @@
               <strong>{{ item.nextAction }}</strong>
             </div>
 
-            <div class="mission-home__initiative-tags">
-              <VChip v-for="tag in item.tags" :key="tag" size="x-small" variant="outlined">{{ tag }}</VChip>
-            </div>
-
             <div class="mission-home__initiative-metrics">
               <span>Исполнений: {{ item.runSummary.total }}</span>
-              <span>Активных: {{ item.runSummary.running }}</span>
+              <span v-if="item.runSummary.running > 0">Активных: {{ item.runSummary.running }}</span>
               <span v-if="item.runSummary.failed > 0">Ошибок: {{ item.runSummary.failed }}</span>
             </div>
-          </button>
 
-          <div v-if="column.items.length === 0" class="mission-home__column-empty">
-            По текущему проекту и фильтру здесь пока ничего нет.
-          </div>
+            <div class="mission-home__initiative-actions">
+              <VBtn size="small" variant="text" @click="$emit('select-initiative', item.initiativeId)">Сфокусировать</VBtn>
+              <VBtn size="small" color="primary" variant="tonal" @click="$emit('open-workspace', item.initiativeId)">
+                Открыть workspace
+              </VBtn>
+            </div>
+          </article>
         </div>
       </article>
     </section>
@@ -105,12 +110,15 @@ defineProps<{
   projectSummary: string;
   attentionCards: MissionHomeAttentionCard[];
   columns: MissionHomeColumn[];
+  selectedInitiativeTitle: string;
 }>();
 
 defineEmits<{
   (event: "open-voice"): void;
   (event: "launch-workflow"): void;
   (event: "select-initiative", initiativeId: string): void;
+  (event: "open-workspace", initiativeId: string): void;
+  (event: "clear-initiative"): void;
 }>();
 
 const draftPrompt = ref("");
@@ -183,6 +191,29 @@ function toneColor(tone: MissionAttentionTone): string {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.mission-home__focus {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 18px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(223, 228, 235, 0.88);
+}
+
+.mission-home__focus-label {
+  font-size: 0.8rem;
+  color: rgb(101, 110, 124);
+}
+
+.mission-home__focus-title {
+  margin-top: 4px;
+  font-size: 1rem;
+  font-weight: 700;
+  color: rgb(30, 35, 43);
+}
+
 .mission-home__attention-card {
   padding: 18px;
   border-radius: 22px;
@@ -228,10 +259,9 @@ function toneColor(tone: MissionAttentionTone): string {
 
 .mission-home__board {
   display: grid;
-  grid-template-columns: repeat(5, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 16px;
   align-items: start;
-  overflow-x: auto;
   padding-bottom: 8px;
 }
 
@@ -280,16 +310,6 @@ function toneColor(tone: MissionAttentionTone): string {
   border-radius: 20px;
   background: white;
   text-align: left;
-  transition:
-    transform 0.18s ease,
-    box-shadow 0.18s ease,
-    border-color 0.18s ease;
-}
-
-.mission-home__initiative-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 14px 30px rgba(26, 29, 35, 0.08);
-  border-color: rgba(156, 169, 191, 0.65);
 }
 
 .mission-home__initiative-topline {
@@ -322,7 +342,7 @@ function toneColor(tone: MissionAttentionTone): string {
   color: rgb(35, 41, 50);
 }
 
-.mission-home__initiative-tags,
+.mission-home__initiative-actions,
 .mission-home__initiative-metrics {
   display: flex;
   gap: 8px;
@@ -332,16 +352,6 @@ function toneColor(tone: MissionAttentionTone): string {
 .mission-home__initiative-metrics {
   font-size: 0.8rem;
   color: rgb(107, 115, 129);
-}
-
-.mission-home__column-empty {
-  padding: 18px 16px;
-  border-radius: 18px;
-  border: 1px dashed rgba(195, 201, 210, 0.9);
-  font-size: 0.88rem;
-  line-height: 1.5;
-  color: rgb(105, 114, 128);
-  background: rgba(255, 255, 255, 0.72);
 }
 
 @media (max-width: 1200px) {

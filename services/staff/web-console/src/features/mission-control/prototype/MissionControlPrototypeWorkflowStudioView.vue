@@ -1,8 +1,8 @@
 <template>
   <div v-if="workflow" class="mission-studio">
-    <div class="mission-studio__canvas">
+    <div ref="studioCanvasRef" class="mission-studio__canvas">
       <div class="mission-studio__float mission-studio__float--top-left">
-        <div class="mission-studio__eyebrow">Workflow Studio</div>
+        <div class="mission-studio__eyebrow">Редактор workflow</div>
         <div class="mission-studio__title">{{ workflow.title }}</div>
         <div class="mission-studio__summary">{{ workflow.summary }}</div>
       </div>
@@ -20,20 +20,16 @@
             hide-details
             @update:model-value="onSelectWorkflow"
           />
-          <VChip size="small" :color="workflow.kind === 'project' ? 'warning' : 'info'" variant="tonal">
-            {{ workflow.kind === "project" ? "Проектный шаблон" : "Системный шаблон" }}
-          </VChip>
         </div>
       </div>
 
       <aside class="mission-studio__float mission-studio__float--left-panel">
         <div class="mission-studio__panel-title">Библиотека блоков</div>
         <div class="mission-studio__block-list">
-          <div class="mission-studio__block">Этап workflow</div>
+          <div class="mission-studio__block">Этап</div>
           <div class="mission-studio__block">Owner gate</div>
           <div class="mission-studio__block">Quality gate</div>
-          <div class="mission-studio__block">Follow-up задача</div>
-          <div class="mission-studio__block">Роль агента</div>
+          <div class="mission-studio__block">Follow-up</div>
         </div>
       </aside>
 
@@ -54,32 +50,33 @@
         </div>
       </aside>
 
-      <svg class="mission-studio__svg" :viewBox="`0 0 ${canvasWidth} 620`" preserveAspectRatio="xMinYMin meet">
+      <svg class="mission-studio__svg" :viewBox="`0 0 ${canvasWidth} ${canvasHeight}`" preserveAspectRatio="xMinYMin meet">
         <path
           v-for="relation in relations"
           :key="relation.relationId"
           :d="relationPath(relation.sourceNodeId, relation.targetNodeId)"
           class="mission-studio__path"
         />
-        <text
-          v-for="relation in relations"
-          :key="`${relation.relationId}-label`"
-          class="mission-studio__path-label"
-          :x="relationLabelX(relation.sourceNodeId, relation.targetNodeId)"
-          :y="relationLabelY(relation.sourceNodeId, relation.targetNodeId)"
-        >
-          {{ relation.label }}
-        </text>
       </svg>
 
       <article
-        v-for="node in nodes"
+        v-for="node in localNodes"
         :key="node.nodeId"
         class="mission-studio__node"
         :class="`mission-studio__node--${node.kind}`"
-        :style="{ transform: `translate(${node.layoutX + 280}px, ${node.layoutY + 140}px)` }"
+        :style="{ transform: `translate(${node.layoutX}px, ${node.layoutY}px)` }"
       >
-        <div class="mission-studio__node-title">{{ node.title }}</div>
+        <div class="mission-studio__node-head">
+          <div class="mission-studio__node-title">{{ node.title }}</div>
+          <button
+            type="button"
+            class="mission-studio__drag-handle"
+            aria-label="Перетащить блок"
+            @pointerdown.prevent="startDrag($event, node.nodeId)"
+          >
+            <VIcon icon="mdi-drag" size="16" />
+          </button>
+        </div>
         <div class="mission-studio__node-summary">{{ node.summary }}</div>
         <div class="mission-studio__node-status">{{ node.statusLabel }}</div>
       </article>
@@ -88,7 +85,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 
 import type { MissionCanvasNode, MissionCanvasRelation, MissionWorkflowOption, MissionWorkflowTemplate } from "./types";
 
@@ -103,8 +100,21 @@ const emit = defineEmits<{
   (event: "select-workflow", workflowId: string): void;
 }>();
 
-const nodeById = computed(() => new Map(props.nodes.map((node) => [node.nodeId, node])));
-const canvasWidth = computed(() => Math.max(1600, ...props.nodes.map((node) => node.layoutX + 420)));
+const studioCanvasRef = ref<HTMLElement | null>(null);
+const localNodes = ref<MissionCanvasNode[]>([]);
+const dragState = ref<null | { nodeId: string; offsetX: number; offsetY: number }>(null);
+
+const nodeById = computed(() => new Map(localNodes.value.map((node) => [node.nodeId, node])));
+const canvasWidth = computed(() => Math.max(1460, ...localNodes.value.map((node) => node.layoutX + 620)));
+const canvasHeight = computed(() => 680);
+
+watch(
+  () => props.nodes,
+  (nextNodes) => {
+    localNodes.value = nextNodes.map((node) => ({ ...node }));
+  },
+  { immediate: true, deep: true },
+);
 
 function onSelectWorkflow(nextWorkflowId: string | null): void {
   if (typeof nextWorkflowId === "string" && nextWorkflowId !== "") {
@@ -119,31 +129,68 @@ function relationPath(sourceNodeId: string, targetNodeId: string): string {
     return "";
   }
 
-  const startX = source.layoutX + 500;
-  const startY = source.layoutY + 230;
-  const endX = target.layoutX + 280;
-  const endY = target.layoutY + 230;
-  const controlOffset = Math.max(70, Math.abs(endX - startX) * 0.28);
+  const startX = source.layoutX + 192;
+  const startY = source.layoutY + 74;
+  const endX = target.layoutX + 10;
+  const endY = target.layoutY + 74;
+  const controlOffset = Math.max(64, Math.abs(endX - startX) * 0.28);
   return `M ${startX} ${startY} C ${startX + controlOffset} ${startY}, ${endX - controlOffset} ${endY}, ${endX} ${endY}`;
 }
 
-function relationLabelX(sourceNodeId: string, targetNodeId: string): number {
-  const source = nodeById.value.get(sourceNodeId);
-  const target = nodeById.value.get(targetNodeId);
-  if (!source || !target) {
-    return 0;
+function startDrag(event: PointerEvent, nodeId: string): void {
+  const node = nodeById.value.get(nodeId);
+  if (!node) {
+    return;
   }
-  return (source.layoutX + target.layoutX) / 2 + 360;
+
+  dragState.value = {
+    nodeId,
+    offsetX: pointerXInCanvas(event) - node.layoutX,
+    offsetY: pointerYInCanvas(event) - node.layoutY,
+  };
+  window.addEventListener("pointermove", onDragMove);
+  window.addEventListener("pointerup", stopDrag);
 }
 
-function relationLabelY(sourceNodeId: string, targetNodeId: string): number {
-  const source = nodeById.value.get(sourceNodeId);
-  const target = nodeById.value.get(targetNodeId);
-  if (!source || !target) {
-    return 0;
+function onDragMove(event: PointerEvent): void {
+  if (!dragState.value) {
+    return;
   }
-  return (source.layoutY + target.layoutY) / 2 + 188;
+
+  const targetNode = localNodes.value.find((node) => node.nodeId === dragState.value?.nodeId);
+  if (!targetNode) {
+    return;
+  }
+
+  targetNode.layoutX = Math.max(
+    36,
+    Math.min(canvasWidth.value - 560, pointerXInCanvas(event) - dragState.value.offsetX),
+  );
+  targetNode.layoutY = Math.max(
+    150,
+    Math.min(canvasHeight.value - 180, pointerYInCanvas(event) - dragState.value.offsetY),
+  );
 }
+
+function stopDrag(): void {
+  dragState.value = null;
+  window.removeEventListener("pointermove", onDragMove);
+  window.removeEventListener("pointerup", stopDrag);
+}
+
+function pointerXInCanvas(event: PointerEvent): number {
+  const rect = studioCanvasRef.value?.getBoundingClientRect();
+  return event.clientX - (rect?.left ?? 0) + (studioCanvasRef.value?.scrollLeft ?? 0);
+}
+
+function pointerYInCanvas(event: PointerEvent): number {
+  const rect = studioCanvasRef.value?.getBoundingClientRect();
+  return event.clientY - (rect?.top ?? 0) + (studioCanvasRef.value?.scrollTop ?? 0);
+}
+
+onBeforeUnmount(() => {
+  stopDrag();
+});
 </script>
 
 <style scoped>
@@ -155,14 +202,13 @@ function relationLabelY(sourceNodeId: string, targetNodeId: string): number {
   position: relative;
   min-height: 720px;
   overflow: auto;
-  padding: 24px;
+  padding: 24px 340px 36px 250px;
   border-radius: 30px;
   background:
-    radial-gradient(circle at center, rgba(251, 242, 215, 0.18), transparent 28%),
-    linear-gradient(rgba(208, 213, 221, 0.32) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(208, 213, 221, 0.32) 1px, transparent 1px),
+    linear-gradient(rgba(208, 213, 221, 0.3) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(208, 213, 221, 0.3) 1px, transparent 1px),
     linear-gradient(145deg, rgb(248, 249, 252), rgb(244, 246, 250));
-  background-size: auto, 32px 32px, 32px 32px, auto;
+  background-size: 32px 32px, 32px 32px, auto;
   border: 1px solid rgba(220, 225, 232, 0.92);
 }
 
@@ -171,7 +217,7 @@ function relationLabelY(sourceNodeId: string, targetNodeId: string): number {
   z-index: 3;
   padding: 16px;
   border-radius: 22px;
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.94);
   border: 1px solid rgba(223, 227, 233, 0.94);
   box-shadow: 0 18px 38px rgba(26, 29, 35, 0.08);
   backdrop-filter: blur(12px);
@@ -180,25 +226,25 @@ function relationLabelY(sourceNodeId: string, targetNodeId: string): number {
 .mission-studio__float--top-left {
   top: 18px;
   left: 18px;
-  max-width: 360px;
+  max-width: 220px;
 }
 
 .mission-studio__float--top-right {
   top: 18px;
   right: 18px;
-  width: 320px;
+  width: 280px;
 }
 
 .mission-studio__float--left-panel {
   left: 18px;
-  top: 170px;
-  width: 240px;
+  top: 146px;
+  width: 200px;
 }
 
 .mission-studio__float--right-panel {
   right: 18px;
-  top: 160px;
-  width: 320px;
+  top: 146px;
+  width: 280px;
 }
 
 .mission-studio__eyebrow {
@@ -211,14 +257,14 @@ function relationLabelY(sourceNodeId: string, targetNodeId: string): number {
 
 .mission-studio__title {
   margin-top: 8px;
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   font-weight: 700;
   color: rgb(31, 36, 44);
 }
 
 .mission-studio__summary {
   margin-top: 8px;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   line-height: 1.5;
   color: rgb(91, 100, 114);
 }
@@ -247,7 +293,7 @@ function relationLabelY(sourceNodeId: string, targetNodeId: string): number {
   border-radius: 16px;
   background: rgba(248, 250, 252, 0.94);
   border: 1px solid rgba(224, 229, 235, 0.92);
-  font-size: 0.86rem;
+  font-size: 0.84rem;
   color: rgb(87, 96, 109);
 }
 
@@ -263,7 +309,7 @@ function relationLabelY(sourceNodeId: string, targetNodeId: string): number {
 }
 
 .mission-studio__inspector-line strong {
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   line-height: 1.45;
   color: rgb(33, 38, 45);
 }
@@ -278,50 +324,67 @@ function relationLabelY(sourceNodeId: string, targetNodeId: string): number {
 
 .mission-studio__path {
   fill: none;
-  stroke: rgba(77, 121, 206, 0.62);
+  stroke: rgba(77, 121, 206, 0.58);
   stroke-width: 3;
-}
-
-.mission-studio__path-label {
-  fill: rgb(95, 104, 117);
-  font-size: 12px;
 }
 
 .mission-studio__node {
   position: absolute;
   z-index: 2;
-  width: 220px;
+  width: 180px;
   display: grid;
   gap: 10px;
-  padding: 16px;
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.95);
+  padding: 14px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.96);
   border: 1px solid rgba(223, 227, 233, 0.92);
   box-shadow: 0 16px 32px rgba(26, 29, 35, 0.08);
-}
-
-.mission-studio__node--stage {
-  min-height: 156px;
 }
 
 .mission-studio__node--gate {
   background: linear-gradient(180deg, rgba(255, 247, 226, 0.96), rgba(255, 255, 255, 0.92));
 }
 
+.mission-studio__node-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+
 .mission-studio__node-title {
-  font-size: 0.98rem;
+  font-size: 0.96rem;
   font-weight: 700;
   color: rgb(31, 36, 43);
 }
 
+.mission-studio__drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid rgba(221, 226, 233, 0.92);
+  background: rgba(248, 250, 252, 0.92);
+  color: rgb(96, 104, 118);
+  cursor: grab;
+}
+
 .mission-studio__node-summary,
 .mission-studio__node-status {
-  font-size: 0.84rem;
-  line-height: 1.5;
+  font-size: 0.8rem;
+  line-height: 1.45;
   color: rgb(95, 104, 117);
 }
 
 @media (max-width: 1100px) {
+  .mission-studio__canvas {
+    padding-right: 24px;
+    padding-left: 24px;
+    padding-top: 180px;
+  }
+
   .mission-studio__float {
     position: static;
     width: auto;
