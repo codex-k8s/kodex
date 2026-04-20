@@ -5,7 +5,7 @@ title: "kodex — Development and Documentation Process Requirements"
 status: active
 owner_role: EM
 created_at: 2026-02-06
-updated_at: 2026-03-13
+updated_at: 2026-04-21
 related_issues: [1, 112, 210, 212, 241, 243, 327, 397]
 related_prs: []
 approvals:
@@ -24,6 +24,8 @@ approvals:
 - Любое отклонение от процесса фиксируется явно и согласуется с Owner.
 - Для Issue/PR действует единый стандарт заголовков и содержимого, зависящий от stage и роли агента.
 - Проектная документация ведётся по фиксированной карте размещения (`product/architecture/delivery/ops/templates`) без смешения типов документов.
+- Для approval PR документ сразу публикуется в целевом финальном статусе; merge PR считается фактом согласования.
+- Production-ориентированные изменения должны поставляться компактными PR; быстрый прототип не заменяет последующую production-декомпозицию.
 
 ## Нормативные ссылки (source of truth)
 - `AGENTS.md`
@@ -51,6 +53,10 @@ approvals:
 - Docs-as-code: изменения кода и документации синхронны в одном рабочем цикле.
 - Traceability by default: каждое решение привязано к требованиям и артефактам.
 - Security by default: секреты не хранятся в репозитории, префикс переменных платформы `KODEX_`.
+- Русскоязычная документация и PR пишутся по-русски; английский используется только там, где это необходимо для точного технического смысла.
+- Compact PR by default: один PR должен закрывать один понятный срез, а не смешивать несколько больших направлений.
+- Прототип допустим как быстрый инструмент проверки идеи, но production-путь обязан быть разложен на последовательность компактных PR.
+- Owner утверждает документы, архитектурные и risk/release решения; обязательный построчный review каждого PR самим Owner не является требованием процесса.
 
 ## Роли и ответственность
 
@@ -65,6 +71,11 @@ approvals:
 | QA | Ручной smoke/regression на production, acceptance evidence | test evidence, regression checklist |
 | SRE | Bootstrap/deploy/runbook/операционная устойчивость | bootstrap scripts, deploy manifests, runbook |
 | KM | Трассируемость документации и актуальность карты связей | `docs/delivery/issue_map.md`, `docs/delivery/requirements_traceability.md`, `docs/delivery/traceability/README.md` |
+
+Уточнение по review-модели:
+- Owner не рассматривается как обязательный line-by-line reviewer каждого изменения кода.
+- Техническое ревью, QA и эксплуатационные проверки распределяются по risk-gates между `reviewer`, `QA`, `SRE` и другими профильными участниками процесса.
+- Для high-risk изменений обязательный human approval сохраняется, но он должен быть основан на риск-классе и evidence package, а не на привычке проверять весь код вручную.
 
 ## Нейминг артефактов (обязателен)
 
@@ -169,6 +180,22 @@ approvals:
 - в разделе закрытия последней строкой должен стоять exact directive:
   `Closes https://github.com/<owner>/<repo>/issues/<номер>`;
 - short form `Closes #<номер>` допустим только если платформа работает в том же репозитории, но каноническим форматом для cloud agents считается полная ссылка.
+
+### Политика согласования документов
+- Документ, который входит в PR на принятие, сразу публикуется в целевом финальном состоянии.
+- В approval PR не использовать внутри самого документа статусы `pending approval`, `in-review`, `ожидает согласования` и аналогичные формулировки.
+- Merge PR является фактом согласования документа и закрепляет frontmatter без отдельного post-merge редактирования.
+
+### Политика размера PR и перехода от прототипа к production
+- Большой прототип не должен напрямую становиться production baseline.
+- После подтверждения идеи обязателен отдельный цикл production conversion:
+  - зафиксировать целевую модель;
+  - разбить переход на последовательность компактных PR;
+  - убрать временные решения и скрытые швы по мере продвижения.
+- Для production-ориентированных PR приоритетны:
+  - ясный доменный scope;
+  - понятный список удаляемого legacy;
+  - ограниченный объём diff, который реально можно проверить.
 
 ### PR body: role-specific детализация
 
@@ -384,9 +411,18 @@ Daily gate (must pass):
 ## Обязательные quality gates
 - Planning gate: DoR пройден, приоритеты и артефакты на день назначены.
 - Mainline hygiene gate: рабочая PR-ветка ребейзнута на актуальный `origin/main`, conflict-markers отсутствуют, rewritten history опубликована только через `--force-with-lease`.
-- Merge gate: green CI + pre-review (`reviewer`) + финальное ревью Owner + синхронная документация.
+- Merge gate: green CI + обязательные проверки по risk-class + синхронная документация.
 - Deploy gate: production deployment success + ручной smoke.
 - Close gate: regression pass + согласованный backlog следующего спринта.
+
+### Risk-oriented review baseline
+- Для каждого крупного направления рефакторинга и для каждого production-slice должен определяться risk-class.
+- Базовая шкала:
+  - `R0`: docs-only, naming, governance без исполняемой логики;
+  - `R1`: локальный код без изменения контрактов, данных и runtime policy;
+  - `R2`: бизнес-логика, provider semantics, data model, runtime behavior;
+  - `R3`: auth, токены, destructive ops, release gates, production DB/cluster impact.
+- Для `R2` и `R3` обязательны дополнительные technical/human gates, состав которых фиксируется в доменной документации.
 
 ## Правило разрешения противоречий
 - Если задача противоречит `docs/design-guidelines/**` или source-of-truth требованиям, работа останавливается.

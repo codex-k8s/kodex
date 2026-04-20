@@ -1,0 +1,126 @@
+---
+doc_id: REF-CK8S-0003
+type: domain-map
+title: "kodex — доменная карта новой платформы"
+status: active
+owner_role: SA
+created_at: 2026-04-21
+updated_at: 2026-04-21
+related_issues: [470, 488]
+related_prs: []
+approvals:
+  required: ["Owner"]
+  status: approved
+  request_id: "owner-2026-04-21-refactoring-wave0"
+  approved_by: "ai-da-stas"
+  approved_at: 2026-04-21
+---
+
+# Доменная карта новой платформы
+
+## Принцип
+Платформа должна строиться не вокруг внутренних "магических" work-entity, а вокруг сущностей, которыми реально управляют GitHub/GitLab и сам runtime платформы.
+
+## Домены первой итерации
+
+### 1. Доступ, администрирование и внешние аккаунты
+Что входит:
+- пользователи платформы;
+- права доступа;
+- проектные и репозиторные разрешения;
+- аккаунты GitHub/GitLab;
+- аккаунты Codex/OpenAI и других model/runtime providers;
+- системные настройки.
+
+### 2. Проекты и репозитории
+Что входит:
+- проекты;
+- репозитории внутри проекта;
+- project/repository configuration;
+- `services.yaml` policy;
+- onboarding новых репозиториев;
+- привязка документации и базовых project rules.
+
+### 3. Provider-native рабочие сущности
+Что входит:
+- `Issue`;
+- `PR/MR`;
+- комментарии и mentions;
+- relationships;
+- type / labels / milestones / project fields / provider metadata;
+- platform watermarks и открытые инструкции в body/comment слоях.
+
+Ключевое решение:
+- инициатива = `Issue` типа `initiative`;
+- follow-up работа = такие же `Issue` с другими типами;
+- платформа не плодит отдельную собственную work-entity для инициативы.
+
+### 4. Агент-менеджер и оркестрация работы
+Что входит:
+- agent-manager как центральный управляющий агент;
+- разбор пользовательских запросов;
+- запуск role-агентов;
+- управление flow;
+- продолжение сессий;
+- acceptance machine;
+- правила создания follow-up задач и артефактов.
+
+### 5. Runtime-платформа и слоты
+Что входит:
+- `code-only` и `full-env` execution;
+- namespace-per-task slot;
+- prewarmed slots;
+- очистка и переинициализация слота;
+- future seam для nested cluster;
+- подготовка окружения, миграции, фикстуры, runtime reuse.
+
+### 6. Контур пользовательских взаимодействий и внешних каналов
+Что входит:
+- взаимодействие через UI фронта;
+- голосовой интерфейс;
+- внешние каналы уведомлений и запросов;
+- callback/resolution contract;
+- подключаемые внешние интеграции.
+
+Ключевое решение:
+- список каналов не фиксируется заранее;
+- проектируется общий расширяемый контракт;
+- механизм реализации (плагины, адаптеры, OpenAPI-контракт, гибрид) выбирается отдельным design-срезом.
+
+### 7. Консоль и операционные интерфейсы
+Что входит:
+- central chat с agent-manager;
+- управление проектами, репозиториями, доступами;
+- рабочие представления по задачам;
+- операционные статусы и диагностика;
+- UX для запуска flow и наблюдения за выполнением.
+
+### 8. Risk/release governance
+Что входит:
+- классификация риска;
+- матрица review gates;
+- release decision package;
+- правила human approval;
+- правила, когда owner утверждает документы, high-risk переходы и релизы, а не обязательно код построчно.
+
+Это не optional домен. Он должен закладываться с самого начала, даже если полная реализация будет позже.
+
+### 9. Документация и knowledge lifecycle
+Что входит:
+- шаблоны документов;
+- project rules для агентов;
+- индексы и структура проектной документации;
+- будущий переход к knowledge storage через векторные БД и MCP.
+
+## Cross-cutting требования
+- Provider-first model.
+- Minimal internal truth beyond provider and runtime state.
+- Risk-based approvals.
+- Compact PR discipline.
+- Русскоязычная документация без лишнего смешивания с английским.
+
+## Что будет спроектировано позже
+- Точная сервисная карта и количество внутренних сервисов.
+- Точный контракт внешних interaction channels.
+- Точная модель risk classes и release gates.
+- Точный frontend information architecture.
