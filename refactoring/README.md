@@ -32,6 +32,9 @@ approvals:
    - `refactoring/03-domain-map.md`
    - `refactoring/04-backlog-audit.md`
    - `refactoring/05-delivery-and-risk-principles.md`
+   - `refactoring/06-product-model.md`
+   - `refactoring/07-glossary.md`
+   - `refactoring/08-provider-native-work-model.md`
 3. `docs/design-guidelines/**` как инженерные ограничения реализации
 4. Исторические документы из `docs/**` и `refactoring/control-plane-refactor-agent-pack/**` как reference material
 
@@ -69,8 +72,8 @@ approvals:
   - его список сервисов, приоритеты и старая целевая модель не считаются source of truth для новой программы.
 
 ## Следующие артефакты
-- После этой волны следующими каноническими документами должны стать:
-  - новая продуктовая модель платформы;
+- После первой волны следующими каноническими документами должны стать:
   - новая target architecture;
   - новая модель данных и provider integration;
-  - новая карта frontend и operator UX.
+  - новая карта frontend и operator UX;
+  - контракт внешних каналов взаимодействия.
