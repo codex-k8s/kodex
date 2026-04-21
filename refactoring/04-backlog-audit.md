@@ -31,14 +31,19 @@ approvals:
 
 | Issue | Домен | Решение | Причина | Следующее действие |
 |---|---|---|---|---|
-| #488 | Delivery governance | keep and absorb | идея про compact PR и prototype -> production conversion нужна новой программе | после принятия wave 4 решить: закрыть как absorbed или переписать в execution issue |
-| #470 | Risk/release governance | keep, rewrite into new domain | суть нужна, но старый Mission Control/Sprint S14 framing устарел | переписать после принятия wave 4 по risk/release governance |
-| #281 | Repo onboarding | rewrite later | полезный сценарий, но требует новой provider-first и project/repo model | переписать после доменов `Проекты и репозитории` + `Provider-native work items` |
-| #282 | Existing repo adoption | rewrite later | полезный сценарий, но сейчас завязан на старую модель платформы | переписать после новой onboarding-архитектуры |
-| #309 | First-run onboarding | keep as reference, rewrite later | проблема валидна, но текущее описание привязано к старой stage-терминологии | использовать как reference при проектировании onboarding и agent-manager UX |
-| #376 | Provider metadata usage | keep and absorb into wave 3 | напрямую относится к выбору provider-native полей, relationships, milestone и project fields | после принятия wave 3 решить: закрыть как absorbed или переформулировать под implementation scope |
-| #489 | PR revise trigger | re-evaluate after new orchestration model | может стать obsolete или поменять смысл после новой orchestration model | не трогать до фиксации новой модели запусков |
-| #586 | Knowledge/memory | defer | зависит от новой knowledge architecture и не должен утащить дизайн раньше времени | вернуться после доменов `Документация и knowledge lifecycle` |
+| #470 | Risk/release governance | rewrite | суть нужна, но старый Sprint/Mission Control framing заменён новой wave-моделью | использовать как execution-anchor волны 4 |
+| #281 | Repo onboarding | rewrite | сценарий остаётся релевантным, но должен жить в новой provider-first модели onboarding | держать как будущий execution issue после доменов `Проекты и репозитории` + `Provider-native рабочие сущности` |
+| #282 | Existing repo adoption | rewrite | сценарий остаётся релевантным, но должен жить в новой provider-first модели onboarding | держать как будущий execution issue после доменов `Проекты и репозитории` + `Provider-native рабочие сущности` |
+| #309 | First-run onboarding | rewrite | проблема `time to first successful run` остаётся, но старое stage/launcher framing устарело | держать как reference issue до волны 5 по UX/frontend |
+| #586 | Knowledge/memory | rewrite, defer | vendor-specific формулировка больше не подходит, но сам домен останется нужен позже | вернуться после домена `Документация и knowledge lifecycle` |
+
+## Закрытые issues по результатам checkpoint после wave 3
+
+| Issue | Домен | Решение | Причина | Зафиксировано в |
+|---|---|---|---|---|
+| #376 | Provider metadata usage | close as absorbed | provider-native поля, relationships, milestone/project fields, watermark и приёмка уже вошли в канонику wave 1-3 | `refactoring/06-product-model.md`, `refactoring/08-provider-native-work-model.md`, `refactoring/11-data-and-state-model.md`, `refactoring/12-provider-integration-model.md`, `refactoring/13-artifact-contract-and-acceptance.md` |
+| #488 | Delivery governance | close as absorbed | compact PR policy и `prototype -> production conversion` уже вошли в канонику программы | `refactoring/01-program-charter.md`, `refactoring/05-delivery-and-risk-principles.md`, `docs/delivery/development_process_requirements.md` |
+| #489 | Legacy revise trigger | close as obsolete | старый label-driven `run:*:revise` trigger не является каноникой новой orchestration-модели | wave 1-3 каноника `agent-manager` / `provider-hub` / acceptance policy |
 
 ## Дополнительные legacy-кандидаты
 - Открытые issues из старых спринтов и stage-пакетов, построенные вокруг старой control-plane-центричной модели, считаются legacy-candidate backlog.
@@ -56,11 +61,16 @@ approvals:
 - проверить старые открытые PR на предмет `close / supersede / rewrite later`;
 - обновить этот файл по фактическому состоянию GitHub backlog.
 
-### Следующее обязательное действие после принятия wave 3
-После принятия текущей волны должен быть отдельный компактный проход по GitHub backlog:
-- перепроверить open issues `#376`, `#470`, `#488`, `#489`, `#586` и onboarding-ветку `#281/#282/#309`;
-- решить по каждому артефакту только один из вариантов: `close as obsolete`, `close as absorbed`, `rewrite`, `defer`;
-- не смешивать этот cleanup с implementation PR.
+### Результат checkpoint после принятия wave 3
+Отдельный компактный GitHub backlog pass выполнен.
+
+Зафиксированы такие действия:
+- `#376` закрыт как `absorbed`;
+- `#488` закрыт как `absorbed`;
+- `#489` закрыт как `obsolete`;
+- `#470`, `#281`, `#282`, `#309`, `#586` переписаны под новую программу без legacy-framing.
+
+Следующий обязательный backlog checkpoint выполняется перед стартом первых больших implementation waves.
 
 ## Ритуал обновления этого файла
 Перед стартом каждой новой волны:
