@@ -33,10 +33,9 @@ approvals:
 |---|---|---|---|---|
 | #281 | Repo onboarding | rewrite | сценарий остаётся релевантным, но должен жить в новой provider-first модели onboarding | держать как будущий execution issue после доменов `Проекты и репозитории` + `Provider-native рабочие сущности` |
 | #282 | Existing repo adoption | rewrite | сценарий остаётся релевантным, но должен жить в новой provider-first модели onboarding | держать как будущий execution issue после доменов `Проекты и репозитории` + `Provider-native рабочие сущности` |
-| #309 | First-run onboarding | rewrite | проблема `time to first successful run` остаётся, но старое stage/launcher framing устарело | держать как reference issue до волны 5 по UX/frontend |
 | #586 | Knowledge/memory | rewrite, defer | vendor-specific формулировка больше не подходит, но сам домен останется нужен позже | вернуться после домена `Документация и knowledge lifecycle` |
 
-## Закрытые issues по результатам checkpoint после wave 3
+## Закрытые issues по результатам wave 5 и предыдущих checkpoint
 
 | Issue | Домен | Решение | Причина | Зафиксировано в |
 |---|---|---|---|---|
@@ -44,6 +43,7 @@ approvals:
 | #376 | Provider metadata usage | close as absorbed | provider-native поля, relationships, milestone/project fields, watermark и приёмка уже вошли в канонику wave 1-3 | `refactoring/06-product-model.md`, `refactoring/08-provider-native-work-model.md`, `refactoring/11-data-and-state-model.md`, `refactoring/12-provider-integration-model.md`, `refactoring/13-artifact-contract-and-acceptance.md` |
 | #488 | Delivery governance | close as absorbed | compact PR policy и `prototype -> production conversion` уже вошли в канонику программы | `refactoring/01-program-charter.md`, `refactoring/05-delivery-and-risk-principles.md`, `docs/delivery/development_process_requirements.md` |
 | #489 | Legacy revise trigger | close as obsolete | старый label-driven `run:*:revise` trigger не является каноникой новой orchestration-модели | wave 1-3 каноника `agent-manager` / `provider-hub` / acceptance policy |
+| #309 | First-run onboarding | close as absorbed | проблема `time to first successful run`, домашнего экрана, guided first-run path и универсальных workspaces вошла в канонику wave 5 | `refactoring/17-console-and-ux-model.md`, `refactoring/18-workspaces-onboarding-and-operator-surfaces.md`, `refactoring/19-flow-role-prompt-and-settings-ux.md` |
 
 ## Дополнительные legacy-кандидаты
 - Открытые issues из старых спринтов и stage-пакетов, построенные вокруг старой control-plane-центричной модели, считаются legacy-candidate backlog.
