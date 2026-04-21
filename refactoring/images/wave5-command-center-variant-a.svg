@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="960" viewBox="0 0 1600 960">
+  <defs>
+    <style>
+      .bg { fill: #f6f1e8; }
+      .panel { fill: #fffdfa; stroke: #d8cfbf; stroke-width: 2; }
+      .soft { fill: #faf6ef; stroke: #e3d8c7; stroke-width: 1.5; }
+      .accent { fill: #d96b3b; }
+      .accent-soft { fill: #f8d8c9; }
+      .blue-soft { fill: #dfeffc; }
+      .green-soft { fill: #dff3e8; }
+      .yellow-soft { fill: #f7edd2; }
+      .muted { fill: #6e655a; font-family: Arial, sans-serif; font-size: 18px; }
+      .small { fill: #6e655a; font-family: Arial, sans-serif; font-size: 16px; }
+      .title { fill: #201a15; font-family: Arial, sans-serif; font-size: 34px; font-weight: 700; }
+      .heading { fill: #201a15; font-family: Arial, sans-serif; font-size: 24px; font-weight: 700; }
+      .label { fill: #201a15; font-family: Arial, sans-serif; font-size: 18px; font-weight: 700; }
+      .body { fill: #312a24; font-family: Arial, sans-serif; font-size: 17px; }
+      .chipText { fill: #5c4b3f; font-family: Arial, sans-serif; font-size: 14px; font-weight: 700; }
+      .white { fill: #ffffff; font-family: Arial, sans-serif; font-size: 18px; font-weight: 700; }
+      .line { stroke: #cbbfae; stroke-width: 2; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1600" height="960"/>
+
+  <rect class="panel" x="28" y="24" width="1544" height="912" rx="28"/>
+  <rect class="soft" x="28" y="24" width="1544" height="70" rx="28"/>
+  <text class="label" x="66" y="67">kodex</text>
+  <text class="small" x="148" y="67">Платформа КОДЕКС</text>
+  <rect class="panel" x="300" y="42" width="260" height="34" rx="10"/>
+  <text class="small" x="320" y="64">Все проекты</text>
+  <rect class="panel" x="584" y="42" width="500" height="34" rx="10"/>
+  <text class="small" x="606" y="64">Поиск по задачам, PR, исполнениям и решениям</text>
+  <rect class="accent" x="1120" y="38" width="130" height="42" rx="14"/>
+  <text class="white" x="1156" y="64">Создать</text>
+  <rect class="panel" x="1270" y="38" width="250" height="42" rx="14"/>
+  <text class="small" x="1290" y="64">Непрочитанные решения: 4</text>
+
+  <rect class="soft" x="52" y="118" width="150" height="770" rx="22"/>
+  <text class="small" x="78" y="162">Командный центр</text>
+  <text class="small" x="78" y="208">Проекты</text>
+  <text class="small" x="78" y="254">Репозитории</text>
+  <text class="small" x="78" y="300">Работа</text>
+  <text class="small" x="78" y="346">Исполнения</text>
+  <text class="small" x="78" y="392">Настройка</text>
+  <rect class="accent-soft" x="66" y="138" width="122" height="38" rx="12"/>
+  <text class="chipText" x="84" y="162">Домашний экран</text>
+
+  <text class="title" x="236" y="150">Вариант A — командный центр с центральным чатом</text>
+  <text class="muted" x="236" y="184">Чат — главная поверхность, действия и блокировки сгруппированы справа, последние задачи — снизу.</text>
+
+  <rect class="panel" x="236" y="214" width="840" height="486" rx="26"/>
+  <text class="heading" x="266" y="256">Диалог с agent-manager</text>
+  <rect class="blue-soft" x="266" y="282" width="430" height="86" rx="18"/>
+  <text class="label" x="290" y="318">Пользователь</text>
+  <text class="body" x="290" y="344">Нужно подготовить новый поток для empty-repo onboarding</text>
+  <rect class="green-soft" x="612" y="388" width="430" height="126" rx="18"/>
+  <text class="label" x="638" y="424">agent-manager</text>
+  <text class="body" x="638" y="452">Предлагаю начать с guided path:</text>
+  <text class="body" x="638" y="478">1. подключить репозиторий</text>
+  <text class="body" x="638" y="502">2. пройти предпроверку</text>
+  <text class="body" x="638" y="526">3. создать первый `Issue` типа `initiative`</text>
+  <rect class="blue-soft" x="266" y="536" width="520" height="78" rx="18"/>
+  <text class="label" x="290" y="570">Пользователь</text>
+  <text class="body" x="290" y="596">Открой мне шаблоны ролей и создай задачу на первый запуск</text>
+  <rect class="soft" x="266" y="634" width="780" height="42" rx="14"/>
+  <text class="small" x="292" y="660">Поле ввода чата • вложения • переключение на голос • история сессий</text>
+
+  <rect class="panel" x="1098" y="214" width="440" height="486" rx="26"/>
+  <text class="heading" x="1128" y="256">Центр внимания</text>
+
+  <rect class="yellow-soft" x="1128" y="282" width="380" height="98" rx="18"/>
+  <text class="label" x="1152" y="318">Требует решения</text>
+  <text class="body" x="1152" y="346">Release gate для PR #614</text>
+  <text class="body" x="1152" y="370">Действие: открыть рабочее пространство PR</text>
+
+  <rect class="accent-soft" x="1128" y="398" width="380" height="98" rx="18"/>
+  <text class="label" x="1152" y="434">Блокировки</text>
+  <text class="body" x="1152" y="462">Cleanup `job` завершилась с ошибкой</text>
+  <text class="body" x="1152" y="486">Действие: открыть диагностику исполнения</text>
+
+  <rect class="blue-soft" x="1128" y="514" width="380" height="98" rx="18"/>
+  <text class="label" x="1152" y="550">Входящие</text>
+  <text class="body" x="1152" y="578">Нужен ответ owner по adoption-задаче</text>
+  <text class="body" x="1152" y="602">Действие: ответить через чат или Telegram</text>
+
+  <rect class="green-soft" x="1128" y="630" width="380" height="48" rx="16"/>
+  <text class="chipText" x="1154" y="660">Смотреть все события и уведомления</text>
+
+  <rect class="panel" x="236" y="724" width="1302" height="164" rx="26"/>
+  <text class="heading" x="266" y="766">Последняя работа и быстрые переходы</text>
+
+  <rect class="soft" x="266" y="788" width="300" height="74" rx="18"/>
+  <text class="label" x="288" y="820">`Issue` #721</text>
+  <text class="body" x="288" y="846">Initiative: первый запуск через agent-manager</text>
+
+  <rect class="soft" x="586" y="788" width="300" height="74" rx="18"/>
+  <text class="label" x="608" y="820">PR #614</text>
+  <text class="body" x="608" y="846">Нужен release gate перед merge</text>
+
+  <rect class="soft" x="906" y="788" width="300" height="74" rx="18"/>
+  <text class="label" x="928" y="820">`run` dev-2481</text>
+  <text class="body" x="928" y="846">Работает в `full-env`, slot переиспользован</text>
+
+  <rect class="soft" x="1226" y="788" width="282" height="74" rx="18"/>
+  <text class="label" x="1248" y="820">Flow / Роли / Шаблоны</text>
+  <text class="body" x="1248" y="846">Переход в раздел настройки</text>
+
+  <circle class="accent" cx="1490" cy="854" r="34"/>
+  <text class="white" x="1477" y="862">🎤</text>
+</svg>

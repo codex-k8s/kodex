@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="960" viewBox="0 0 1600 960">
+  <defs>
+    <style>
+      .bg { fill: #f5f0e7; }
+      .panel { fill: #fffdfa; stroke: #d8cfbf; stroke-width: 2; }
+      .soft { fill: #faf6ef; stroke: #e1d7c8; stroke-width: 1.5; }
+      .blue { fill: #dcecff; }
+      .green { fill: #ddf3e6; }
+      .yellow { fill: #f8efd4; }
+      .rose { fill: #f7d9cf; }
+      .accent { fill: #d96b3b; }
+      .title { fill: #1f1914; font-family: Arial, sans-serif; font-size: 34px; font-weight: 700; }
+      .heading { fill: #1f1914; font-family: Arial, sans-serif; font-size: 23px; font-weight: 700; }
+      .label { fill: #1f1914; font-family: Arial, sans-serif; font-size: 18px; font-weight: 700; }
+      .body { fill: #342d26; font-family: Arial, sans-serif; font-size: 17px; }
+      .small { fill: #6d655b; font-family: Arial, sans-serif; font-size: 16px; }
+      .chip { fill: #5e4d42; font-family: Arial, sans-serif; font-size: 14px; font-weight: 700; }
+      .white { fill: #ffffff; font-family: Arial, sans-serif; font-size: 18px; font-weight: 700; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1600" height="960"/>
+  <rect class="panel" x="28" y="24" width="1544" height="912" rx="28"/>
+  <text class="title" x="64" y="78">Вариант B — рабочее пространство с фокусом на следующее действие</text>
+  <text class="small" x="64" y="108">Сверху — решение и контекст, ниже — три ленты: задача, PR и исполнения. Подходит для быстрых управленческих сценариев.</text>
+
+  <rect class="panel" x="54" y="136" width="1494" height="140" rx="24"/>
+  <text class="heading" x="84" y="176">Следующее действие по `Issue` #721</text>
+  <rect class="yellow" x="84" y="198" width="520" height="56" rx="18"/>
+  <text class="label" x="108" y="232">Подтвердить продуктовую контрольную точку</text>
+  <rect class="blue" x="626" y="198" width="240" height="56" rx="18"/>
+  <text class="label" x="650" y="232">Открыть PR #614</text>
+  <rect class="green" x="888" y="198" width="302" height="56" rx="18"/>
+  <text class="label" x="912" y="232">Перейти к flow и ролям</text>
+  <rect class="soft" x="1210" y="198" width="308" height="56" rx="18"/>
+  <text class="body" x="1234" y="232">Risk: R1 • Acceptance: зелёная</text>
+
+  <rect class="panel" x="54" y="302" width="474" height="562" rx="26"/>
+  <text class="heading" x="84" y="342">Задача</text>
+  <rect class="soft" x="84" y="366" width="414" height="112" rx="18"/>
+  <text class="label" x="108" y="400">`Issue` #721 • initiative</text>
+  <text class="body" x="108" y="426">Первый запуск через agent-manager</text>
+  <text class="body" x="108" y="452">Тип: `initiative` • follow-up: `intake`</text>
+
+  <rect class="soft" x="84" y="496" width="414" height="160" rx="18"/>
+  <text class="label" x="108" y="530">Диалог и активность</text>
+  <text class="body" x="108" y="556">• agent-manager предложил guided onboarding</text>
+  <text class="body" x="108" y="582">• пользователь запросил PR с базовой конфигурацией</text>
+  <text class="body" x="108" y="608">• follow-up `Issue` типа `intake` уже создан</text>
+
+  <rect class="soft" x="84" y="674" width="414" height="160" rx="18"/>
+  <text class="label" x="108" y="708">Принять решение</text>
+  <text class="body" x="108" y="734">• подтвердить продуктовый смысл</text>
+  <text class="body" x="108" y="760">• открыть PR workspace</text>
+  <text class="body" x="108" y="786">• дать ответ agent-manager через чат</text>
+
+  <rect class="panel" x="550" y="302" width="474" height="562" rx="26"/>
+  <text class="heading" x="580" y="342">Связанный PR</text>
+  <rect class="soft" x="580" y="366" width="414" height="112" rx="18"/>
+  <text class="label" x="604" y="400">PR #614 • onboarding configuration</text>
+  <text class="body" x="604" y="426">Review открыт, diff читается у провайдера</text>
+  <text class="body" x="604" y="452">Следующее действие: открыть нативный review UI</text>
+
+  <rect class="soft" x="580" y="496" width="414" height="160" rx="18"/>
+  <text class="label" x="604" y="530">Сводка ревью</text>
+  <text class="body" x="604" y="556">• 1 открытый тред</text>
+  <text class="body" x="604" y="582">• approval не требуется до product gate</text>
+  <text class="body" x="604" y="608">• risk role не запускалась</text>
+
+  <rect class="soft" x="580" y="674" width="414" height="160" rx="18"/>
+  <text class="label" x="604" y="708">Acceptance и release</text>
+  <text class="body" x="604" y="734">• контракт артефакта заполнен</text>
+  <text class="body" x="604" y="760">• release gate пока не нужен</text>
+  <text class="body" x="604" y="786">• переход в рабочее пространство `PR/MR`</text>
+
+  <rect class="panel" x="1046" y="302" width="502" height="562" rx="26"/>
+  <text class="heading" x="1076" y="342">Исполнения и среда</text>
+  <rect class="soft" x="1076" y="366" width="442" height="120" rx="18"/>
+  <text class="label" x="1100" y="400">`run` intake-481</text>
+  <text class="body" x="1100" y="426">Не запускался. Старт возможен сразу после product gate.</text>
+  <text class="body" x="1100" y="452">Режим: `code-only`</text>
+
+  <rect class="soft" x="1076" y="506" width="442" height="120" rx="18"/>
+  <text class="label" x="1100" y="540">`job` cleanup-slot-19</text>
+  <text class="body" x="1100" y="566">Последняя housekeeping-операция завершена успешно.</text>
+  <text class="body" x="1100" y="592">Доступна диагностика и хвост лога.</text>
+
+  <rect class="soft" x="1076" y="646" width="442" height="188" rx="18"/>
+  <text class="label" x="1100" y="680">Слот и внешние зависимости</text>
+  <text class="body" x="1100" y="706">• slot ещё не поднят</text>
+  <text class="body" x="1100" y="732">• GitHub аккаунт валиден</text>
+  <text class="body" x="1100" y="758">• лимиты OpenAI в норме</text>
+  <text class="body" x="1100" y="784">• можно перейти в настройки ролей и шаблонов</text>
+
+  <circle class="accent" cx="1486" cy="884" r="34"/>
+  <text class="white" x="1473" y="892">🎤</text>
+</svg>

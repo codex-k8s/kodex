@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="960" viewBox="0 0 1600 960">
+  <defs>
+    <style>
+      .bg { fill: #f4efe6; }
+      .panel { fill: #fffdfa; stroke: #d7cfbf; stroke-width: 2; }
+      .soft { fill: #faf6ef; stroke: #e2d8c8; stroke-width: 1.5; }
+      .blue { fill: #dcecff; }
+      .green { fill: #ddf3e6; }
+      .yellow { fill: #f8efd4; }
+      .accent { fill: #d86a3b; }
+      .title { fill: #1f1914; font-family: Arial, sans-serif; font-size: 34px; font-weight: 700; }
+      .heading { fill: #1f1914; font-family: Arial, sans-serif; font-size: 23px; font-weight: 700; }
+      .label { fill: #1f1914; font-family: Arial, sans-serif; font-size: 18px; font-weight: 700; }
+      .body { fill: #342d26; font-family: Arial, sans-serif; font-size: 17px; }
+      .small { fill: #6d655b; font-family: Arial, sans-serif; font-size: 16px; }
+      .chip { fill: #5d4c41; font-family: Arial, sans-serif; font-size: 14px; font-weight: 700; }
+      .white { fill: #ffffff; font-family: Arial, sans-serif; font-size: 18px; font-weight: 700; }
+      .line { stroke: #c8bca9; stroke-width: 3; fill: none; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1600" height="960"/>
+  <rect class="panel" x="28" y="24" width="1544" height="912" rx="28"/>
+  <text class="title" x="64" y="78">Вариант A — последовательный редактор flow</text>
+  <text class="small" x="64" y="108">Источник истины — список этапов и правил. Полотно справа только объясняет поток и не является каноническим местом редактирования.</text>
+
+  <rect class="panel" x="54" y="136" width="330" height="754" rx="26"/>
+  <text class="heading" x="84" y="176">Этапы flow</text>
+  <rect class="yellow" x="84" y="198" width="270" height="52" rx="16"/>
+  <text class="chip" x="108" y="228">1. `initiative` → `intake`</text>
+  <rect class="soft" x="84" y="266" width="270" height="52" rx="16"/>
+  <text class="chip" x="108" y="296">2. `vision`</text>
+  <rect class="soft" x="84" y="334" width="270" height="52" rx="16"/>
+  <text class="chip" x="108" y="364">3. `prd`</text>
+  <rect class="soft" x="84" y="402" width="270" height="52" rx="16"/>
+  <text class="chip" x="108" y="432">4. `arch`</text>
+  <rect class="soft" x="84" y="470" width="270" height="52" rx="16"/>
+  <text class="chip" x="108" y="500">5. `design`</text>
+  <rect class="soft" x="84" y="538" width="270" height="52" rx="16"/>
+  <text class="chip" x="108" y="568">6. `plan`</text>
+  <rect class="soft" x="84" y="606" width="270" height="52" rx="16"/>
+  <text class="chip" x="108" y="636">7. `dev`</text>
+  <rect class="soft" x="84" y="674" width="270" height="52" rx="16"/>
+  <text class="chip" x="108" y="704">8. `qa` → `release`</text>
+
+  <rect class="panel" x="408" y="136" width="650" height="754" rx="26"/>
+  <text class="heading" x="438" y="176">Инспектор выбранного этапа</text>
+  <rect class="soft" x="438" y="198" width="590" height="96" rx="18"/>
+  <text class="label" x="464" y="232">Этап `initiative` → `intake`</text>
+  <text class="body" x="464" y="258">Тип создаваемой задачи: `initiative`</text>
+  <text class="body" x="464" y="282">Следующий тип follow-up: `intake`</text>
+
+  <rect class="soft" x="438" y="314" width="280" height="156" rx="18"/>
+  <text class="label" x="462" y="348">Артефакты</text>
+  <text class="body" x="462" y="374">• нужен PR: да</text>
+  <text class="body" x="462" y="400">• нужен follow-up `Issue`: да</text>
+  <text class="body" x="462" y="426">• комментарий agent-manager: да</text>
+
+  <rect class="soft" x="748" y="314" width="280" height="156" rx="18"/>
+  <text class="label" x="772" y="348">Приёмка и gates</text>
+  <text class="body" x="772" y="374">• watermark обязателен</text>
+  <text class="body" x="772" y="400">• human gate: продуктовый</text>
+  <text class="body" x="772" y="426">• risk role: по policy</text>
+
+  <rect class="soft" x="438" y="490" width="280" height="156" rx="18"/>
+  <text class="label" x="462" y="524">Роли</text>
+  <text class="body" x="462" y="550">• исполнитель: analyst</text>
+  <text class="body" x="462" y="576">• проверка: reviewer</text>
+  <text class="body" x="462" y="602">• lexical-gatekeeper: optional</text>
+
+  <rect class="soft" x="748" y="490" width="280" height="156" rx="18"/>
+  <text class="label" x="772" y="524">Runtime</text>
+  <text class="body" x="772" y="550">• режим: `code-only`</text>
+  <text class="body" x="772" y="576">• reuse slot: нет</text>
+  <text class="body" x="772" y="602">• production-read-only: нет</text>
+
+  <rect class="soft" x="438" y="666" width="590" height="182" rx="18"/>
+  <text class="label" x="462" y="700">Публикация изменений</text>
+  <text class="body" x="462" y="726">Изменения flow не сохраняются скрыто: система создаёт branch и PR.</text>
+  <text class="body" x="462" y="752">В diff показываются изменённые этапы, роли, runtime-policy и acceptance profile.</text>
+  <rect class="accent" x="820" y="782" width="176" height="42" rx="14"/>
+  <text class="white" x="852" y="808">Создать PR</text>
+
+  <rect class="panel" x="1082" y="136" width="466" height="754" rx="26"/>
+  <text class="heading" x="1112" y="176">Предварительный просмотр потока</text>
+  <rect class="soft" x="1122" y="220" width="128" height="70" rx="18"/>
+  <text class="chip" x="1148" y="260">initiative</text>
+  <rect class="soft" x="1328" y="220" width="128" height="70" rx="18"/>
+  <text class="chip" x="1362" y="260">intake</text>
+  <rect class="soft" x="1222" y="350" width="128" height="70" rx="18"/>
+  <text class="chip" x="1260" y="390">vision</text>
+  <rect class="soft" x="1122" y="480" width="128" height="70" rx="18"/>
+  <text class="chip" x="1168" y="520">prd</text>
+  <rect class="soft" x="1328" y="480" width="128" height="70" rx="18"/>
+  <text class="chip" x="1370" y="520">arch</text>
+  <rect class="soft" x="1222" y="610" width="128" height="70" rx="18"/>
+  <text class="chip" x="1260" y="650">design</text>
+  <path class="line" d="M1250 255 L1328 255"/>
+  <path class="line" d="M1392 290 C1392 330 1340 330 1290 350"/>
+  <path class="line" d="M1222 390 C1178 412 1178 448 1186 480"/>
+  <path class="line" d="M1250 515 L1328 515"/>
+  <path class="line" d="M1392 550 C1392 590 1340 590 1290 610"/>
+  <text class="small" x="1118" y="760">Полотно — объясняющий режим. Перетаскивание нод не меняет канонику.</text>
+</svg>
