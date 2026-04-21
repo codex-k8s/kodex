@@ -70,6 +70,7 @@ approvals:
 - `code-only` и `full-env` execution;
 - namespace-per-task slot;
 - prewarmed slots;
+- platform jobs для mirror/build/deploy;
 - очистка и переинициализация слота;
 - future seam для nested cluster;
 - подготовка окружения, миграции, фикстуры, runtime reuse.
