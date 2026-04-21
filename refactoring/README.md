@@ -37,6 +37,9 @@ approvals:
    - `refactoring/08-provider-native-work-model.md`
    - `refactoring/09-target-architecture.md`
    - `refactoring/10-service-boundaries.md`
+   - `refactoring/11-data-and-state-model.md`
+   - `refactoring/12-provider-integration-model.md`
+   - `refactoring/13-artifact-contract-and-acceptance.md`
 3. `docs/design-guidelines/**` как инженерные ограничения реализации
 4. Исторические документы из `docs/**` и `refactoring/control-plane-refactor-agent-pack/**` как reference material
 
@@ -62,7 +65,7 @@ approvals:
 1. Волна 0: правила программы, doc governance, аудит backlog, compact PR policy
 2. Волна 1: каноническая продуктовая модель
 3. Волна 2: целевая архитектура и доменные границы
-4. Волна 3: модель данных, provider integration и watermarks
+4. Волна 3: модель данных, provider integration, watermark и acceptance contract
 5. Волна 4: risk/release governance
 6. Волна 5: UX и frontend-консоль
 7. Волна 6: runtime/deploy/bootstrap
@@ -74,8 +77,8 @@ approvals:
   - его список сервисов, приоритеты и старая целевая модель не считаются source of truth для новой программы.
 
 ## Следующие артефакты
-- После второй волны следующими каноническими документами должны стать:
-  - новая модель данных и provider integration;
+- После третьей волны следующими каноническими документами должны стать:
+  - risk/release governance с матрицей обязательных human gates;
   - новая карта frontend и operator UX;
-  - контракт внешних каналов взаимодействия;
-  - wave-gate для первой большой ревизии GitHub backlog под новую архитектуру.
+  - отдельный design-срез по внешним каналам взаимодействия и уведомлениям;
+  - отдельный GitHub backlog alignment pass под уже принятую канонику первых трёх волн.
