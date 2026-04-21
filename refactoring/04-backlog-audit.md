@@ -25,18 +25,18 @@ approvals:
 
 | Артефакт | Решение | Причина | Следующее действие |
 |---|---|---|---|
-| PR #587 | supersede / закрыть без продолжения текущего scope | PR реализует legacy-подход к Mission Control prototype и не является базой новой платформы | после фиксации wave 0 оформить закрытие/суперсединг отдельным действием |
+| PR #587 | closed as superseded reference | PR реализовывал legacy-подход к Mission Control prototype и не является базой новой платформы | оставить как historical reference без продолжения |
 
 ## Ключевые open issues
 
 | Issue | Домен | Решение | Причина | Следующее действие |
 |---|---|---|---|---|
-| #488 | Delivery governance | keep and absorb | идея про compact PR и prototype -> production conversion нужна новой программе | включить в новые process rules и после этого переоценить issue |
-| #470 | Risk/release governance | keep, rewrite into new domain | суть нужна, но старый Mission Control/Sprint S14 framing устарел | вернуться после фиксации новой продуктовой модели и risk-domain |
+| #488 | Delivery governance | keep and absorb | идея про compact PR и prototype -> production conversion нужна новой программе | после принятия wave 4 решить: закрыть как absorbed или переписать в execution issue |
+| #470 | Risk/release governance | keep, rewrite into new domain | суть нужна, но старый Mission Control/Sprint S14 framing устарел | переписать после принятия wave 4 по risk/release governance |
 | #281 | Repo onboarding | rewrite later | полезный сценарий, но требует новой provider-first и project/repo model | переписать после доменов `Проекты и репозитории` + `Provider-native work items` |
 | #282 | Existing repo adoption | rewrite later | полезный сценарий, но сейчас завязан на старую модель платформы | переписать после новой onboarding-архитектуры |
 | #309 | First-run onboarding | keep as reference, rewrite later | проблема валидна, но текущее описание привязано к старой stage-терминологии | использовать как reference при проектировании onboarding и agent-manager UX |
-| #376 | Provider metadata usage | keep | напрямую относится к новой provider-first модели | включить в волну по provider data model |
+| #376 | Provider metadata usage | keep and absorb into wave 3 | напрямую относится к выбору provider-native полей, relationships, milestone и project fields | после принятия wave 3 решить: закрыть как absorbed или переформулировать под implementation scope |
 | #489 | PR revise trigger | re-evaluate after new orchestration model | может стать obsolete или поменять смысл после новой orchestration model | не трогать до фиксации новой модели запусков |
 | #586 | Knowledge/memory | defer | зависит от новой knowledge architecture и не должен утащить дизайн раньше времени | вернуться после доменов `Документация и knowledge lifecycle` |
 
@@ -55,6 +55,12 @@ approvals:
 - переписать или пересоздать issues, которые остаются релевантными, но меняют смысл в новой архитектуре;
 - проверить старые открытые PR на предмет `close / supersede / rewrite later`;
 - обновить этот файл по фактическому состоянию GitHub backlog.
+
+### Следующее обязательное действие после принятия wave 3
+После принятия текущей волны должен быть отдельный компактный проход по GitHub backlog:
+- перепроверить open issues `#376`, `#470`, `#488`, `#489`, `#586` и onboarding-ветку `#281/#282/#309`;
+- решить по каждому артефакту только один из вариантов: `close as obsolete`, `close as absorbed`, `rewrite`, `defer`;
+- не смешивать этот cleanup с implementation PR.
 
 ## Ритуал обновления этого файла
 Перед стартом каждой новой волны:
