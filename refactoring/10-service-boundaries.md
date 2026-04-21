@@ -63,11 +63,12 @@ approvals:
 - репозиториями;
 - project/repository config;
 - `services.yaml` ссылками и policy;
-- project rules и onboarding metadata.
+- project rules и метаинформацией первичной настройки.
 
 Не владеет:
 - provider webhook events;
 - статусами run;
+- профилями ролей и логикой исполнения шаблонов промптов;
 - slot lifecycle;
 - approvals и уведомлениями.
 
@@ -90,11 +91,15 @@ approvals:
 - run lifecycle;
 - agent sessions;
 - flow execution logic;
+- каталогом встроенных и пользовательских ролей;
+- политикой исполнения профилей ролей;
+- ссылками на `work`/`revise` шаблоны;
 - acceptance machine;
 - handover и follow-up решениями;
 - wait states, связанные с выполнением agent work.
 
 Не владеет:
+- каноническим текстом шаблонов промптов как содержимым БД;
 - деталями provider API и provider mirror state;
 - слотом и build/deploy orchestration;
 - отправкой уведомлений как отдельным доменным процессом;
