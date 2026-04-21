@@ -35,6 +35,8 @@ approvals:
    - `refactoring/06-product-model.md`
    - `refactoring/07-glossary.md`
    - `refactoring/08-provider-native-work-model.md`
+   - `refactoring/09-target-architecture.md`
+   - `refactoring/10-service-boundaries.md`
 3. `docs/design-guidelines/**` как инженерные ограничения реализации
 4. Исторические документы из `docs/**` и `refactoring/control-plane-refactor-agent-pack/**` как reference material
 
@@ -72,8 +74,8 @@ approvals:
   - его список сервисов, приоритеты и старая целевая модель не считаются source of truth для новой программы.
 
 ## Следующие артефакты
-- После первой волны следующими каноническими документами должны стать:
-  - новая target architecture;
+- После второй волны следующими каноническими документами должны стать:
   - новая модель данных и provider integration;
   - новая карта frontend и operator UX;
-  - контракт внешних каналов взаимодействия.
+  - контракт внешних каналов взаимодействия;
+  - wave-gate для первой большой ревизии GitHub backlog под новую архитектуру.
