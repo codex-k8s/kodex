@@ -31,7 +31,6 @@ approvals:
 
 | Issue | Домен | Решение | Причина | Следующее действие |
 |---|---|---|---|---|
-| #470 | Risk/release governance | rewrite | суть нужна, но старый Sprint/Mission Control framing заменён новой wave-моделью | использовать как execution-anchor волны 4 |
 | #281 | Repo onboarding | rewrite | сценарий остаётся релевантным, но должен жить в новой provider-first модели onboarding | держать как будущий execution issue после доменов `Проекты и репозитории` + `Provider-native рабочие сущности` |
 | #282 | Existing repo adoption | rewrite | сценарий остаётся релевантным, но должен жить в новой provider-first модели onboarding | держать как будущий execution issue после доменов `Проекты и репозитории` + `Provider-native рабочие сущности` |
 | #309 | First-run onboarding | rewrite | проблема `time to first successful run` остаётся, но старое stage/launcher framing устарело | держать как reference issue до волны 5 по UX/frontend |
@@ -41,6 +40,7 @@ approvals:
 
 | Issue | Домен | Решение | Причина | Зафиксировано в |
 |---|---|---|---|---|
+| #470 | Risk/release governance | close as absorbed | каноника risk/release governance, human gates, evidence contract и release safety-loop зафиксированы в wave 4 | `refactoring/14-risk-and-release-governance.md`, `refactoring/15-human-gates-and-evidence.md`, `refactoring/16-release-safety-observability-and-notifications.md` |
 | #376 | Provider metadata usage | close as absorbed | provider-native поля, relationships, milestone/project fields, watermark и приёмка уже вошли в канонику wave 1-3 | `refactoring/06-product-model.md`, `refactoring/08-provider-native-work-model.md`, `refactoring/11-data-and-state-model.md`, `refactoring/12-provider-integration-model.md`, `refactoring/13-artifact-contract-and-acceptance.md` |
 | #488 | Delivery governance | close as absorbed | compact PR policy и `prototype -> production conversion` уже вошли в канонику программы | `refactoring/01-program-charter.md`, `refactoring/05-delivery-and-risk-principles.md`, `docs/delivery/development_process_requirements.md` |
 | #489 | Legacy revise trigger | close as obsolete | старый label-driven `run:*:revise` trigger не является каноникой новой orchestration-модели | wave 1-3 каноника `agent-manager` / `provider-hub` / acceptance policy |
@@ -70,7 +70,7 @@ approvals:
 - `#489` закрыт как `obsolete`;
 - `#470`, `#281`, `#282`, `#309`, `#586` переписаны под новую программу без legacy-framing.
 
-Следующий обязательный backlog checkpoint выполняется перед стартом первых больших implementation waves.
+Следующий обязательный backlog checkpoint выполняется после wave 6 и до старта первых больших implementation waves.
 
 ## Ритуал обновления этого файла
 Перед стартом каждой новой волны:
