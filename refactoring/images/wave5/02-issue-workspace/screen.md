@@ -1,6 +1,6 @@
 # Рабочее пространство Issue
 
-Статус: `reviewing`
+Статус: `approved`
 
 ## Назначение
 Единый рабочий экран для `Issue` любого типа: `initiative`, этапной задачи, follow-up, `risk`, `incident`, `self-improve`.

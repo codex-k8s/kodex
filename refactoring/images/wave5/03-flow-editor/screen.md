@@ -1,6 +1,6 @@
 # Редактор flow
 
-Статус: `reviewing`
+Статус: `approved`
 
 ## Назначение
 Последовательный экран настройки flow как набора этапов, правил, `stage role binding`, acceptance profile и Human gate.

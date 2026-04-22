@@ -1,6 +1,6 @@
 # Пакет макетов wave 5
 
-Статус: `reviewing`
+Статус: `in-progress`
 
 Назначение пакета:
 - визуально уточнять wave 5 до начала реализации frontend;
@@ -10,17 +10,17 @@
 ## Текущие экраны
 
 1. `01-command-center`
-   - статус: `reviewing`
+   - статус: `approved`
    - экран: командный центр
    - файлы: `screen.png`, `screen.md`
 
 2. `02-issue-workspace`
-   - статус: `reviewing`
+   - статус: `approved`
    - экран: рабочее пространство `Issue`
    - файлы: `screen.png`, `screen.md`
 
 3. `03-flow-editor`
-   - статус: `reviewing`
+   - статус: `approved`
    - экран: редактор flow
    - файлы: `screen.png`, `screen.md`
 
