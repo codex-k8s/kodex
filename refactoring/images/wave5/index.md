@@ -29,12 +29,24 @@
    - экран: каталог ролей и шаблонов
    - файлы: `screen.png`, `screen.md`
 
+5. `05-pr-workspace`
+   - статус: `reviewing`
+   - экран: рабочее пространство `PR/MR`
+   - файлы: `screen.png`, `screen.md`
+
+6. `06-inbox-and-approvals`
+   - статус: `reviewing`
+   - экран: входящие, approvals и уведомления
+   - файлы: `screen.png`, `screen.md`
+
+7. `07-executions-jobs-slots`
+   - статус: `reviewing`
+   - экран: исполнения, platform `job` и slot
+   - файлы: `screen.png`, `screen.md`
+
 ## Следующие пакеты
 
 Следующими экранами для макетирования считаются:
-- рабочее пространство `PR/MR`;
-- входящие, approvals и уведомления;
-- исполнения, platform `job` и slot;
 - проекты и репозитории;
 - внешние аккаунты, интеграции и MCP;
 - пользователи и доступы;
