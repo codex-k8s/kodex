@@ -25,7 +25,7 @@
    - файлы: `screen.png`, `screen.md`
 
 4. `04-role-catalog`
-   - статус: `reviewing`
+   - статус: `approved`
    - экран: каталог ролей и шаблонов
    - файлы: `screen.png`, `screen.md`
 
