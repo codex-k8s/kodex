@@ -1,6 +1,6 @@
 # Пакет макетов wave 5
 
-Статус: `in-progress`
+Статус: `approved`
 
 Назначение пакета:
 - визуально уточнять wave 5 до начала реализации frontend;
@@ -45,21 +45,21 @@
    - файлы: `screen.png`, `screen.md`
 
 8. `08-projects-and-repositories`
-   - статус: `reviewing`
+   - статус: `approved`
    - экран: проекты и репозитории
    - файлы: `screen.png`, `screen.md`
 
 9. `09-integrations-and-accounts`
-   - статус: `reviewing`
+   - статус: `approved`
    - экран: внешние аккаунты, интеграции и MCP
    - файлы: `screen.png`, `screen.md`
 
 10. `10-users-and-access`
-   - статус: `reviewing`
+   - статус: `approved`
    - экран: пользователи и доступы
    - файлы: `screen.png`, `screen.md`
 
 11. `11-onboarding-and-empty-states`
-   - статус: `reviewing`
+   - статус: `approved`
    - экран: первый запуск и empty states
    - файлы: `screen.png`, `screen.md`
