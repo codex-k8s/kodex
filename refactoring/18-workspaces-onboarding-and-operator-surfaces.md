@@ -379,7 +379,20 @@ Wave 5 закрывает проблему первого запуска на у
 
 Спецификация экрана: [screen.md](images/wave5/07-executions-jobs-slots/screen.md)
 
-## 12. Что wave 5 deliberately не фиксирует
+## 12. Текущий макет первого запуска и empty states
+
+Для текущей итерации wave 5 базовым направлением считается onboarding-экран с:
+- переключателем трёх дорожек первого запуска;
+- вертикальным путём к первому успешному `run`;
+- компактным блоком agent-manager с action badges;
+- правой панелью readiness и найденных проблем;
+- отдельными empty states для репозиториев, flow и запусков.
+
+![Текущий макет первого запуска и empty states](images/wave5/11-onboarding-and-empty-states/screen.png)
+
+Спецификация экрана: [screen.md](images/wave5/11-onboarding-and-empty-states/screen.md)
+
+## 13. Что wave 5 deliberately не фиксирует
 В этой волне не фиксируются:
 - детальные wireframes;
 - финальная визуальная иерархия PrimeVue-компонентов;

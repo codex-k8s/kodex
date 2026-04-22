@@ -30,24 +30,36 @@
    - файлы: `screen.png`, `screen.md`
 
 5. `05-pr-workspace`
-   - статус: `reviewing`
+   - статус: `approved`
    - экран: рабочее пространство `PR/MR`
    - файлы: `screen.png`, `screen.md`
 
 6. `06-inbox-and-approvals`
-   - статус: `reviewing`
+   - статус: `approved`
    - экран: входящие, approvals и уведомления
    - файлы: `screen.png`, `screen.md`
 
 7. `07-executions-jobs-slots`
-   - статус: `reviewing`
+   - статус: `approved`
    - экран: исполнения, platform `job` и slot
    - файлы: `screen.png`, `screen.md`
 
-## Следующие пакеты
+8. `08-projects-and-repositories`
+   - статус: `reviewing`
+   - экран: проекты и репозитории
+   - файлы: `screen.png`, `screen.md`
 
-Следующими экранами для макетирования считаются:
-- проекты и репозитории;
-- внешние аккаунты, интеграции и MCP;
-- пользователи и доступы;
-- onboarding и empty states.
+9. `09-integrations-and-accounts`
+   - статус: `reviewing`
+   - экран: внешние аккаунты, интеграции и MCP
+   - файлы: `screen.png`, `screen.md`
+
+10. `10-users-and-access`
+   - статус: `reviewing`
+   - экран: пользователи и доступы
+   - файлы: `screen.png`, `screen.md`
+
+11. `11-onboarding-and-empty-states`
+   - статус: `reviewing`
+   - экран: первый запуск и empty states
+   - файлы: `screen.png`, `screen.md`

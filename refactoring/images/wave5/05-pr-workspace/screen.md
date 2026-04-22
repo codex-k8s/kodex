@@ -1,6 +1,6 @@
 # Рабочее пространство PR/MR
 
-Статус: `reviewing`
+Статус: `approved`
 
 ## Назначение
 Операционный экран для одного `PR/MR`, который показывает review state, acceptance, риск, связанные `run`/`job` и release context, но не пытается заменить нативный diff review провайдера.
