@@ -5,7 +5,7 @@ title: "kodex — модель данных и владение состояни
 status: active
 owner_role: SA
 created_at: 2026-04-21
-updated_at: 2026-04-22
+updated_at: 2026-04-23
 related_issues: [376, 470, 488, 586]
 related_prs: []
 approvals:
@@ -25,6 +25,7 @@ approvals:
 - Платформа не заводит собственную сущность образа, не дублирует полный лог `job`, не превращает provider mirror в новый источник истины.
 - Регламентные cleanup и health-check `job` считаются тем же классом платформенных `job`, что и сборка/выкладка, и должны быть видимы оператору.
 - Канонический текст шаблонов промптов хранится в репозитории платформы; в БД живут только профили ролей, ссылки на шаблоны и их операционная метаинформация.
+- Package metadata, tenant access graph, fleet inventory, billing и automation rules также считаются canonical platform state и не должны прятаться в ad-hoc `JSONB` без owner-сервиса.
 
 ## 1. Цель этой волны
 Эта волна фиксирует не физические SQL-схемы и не полный список таблиц по каждой миграции, а каноническую модель владения состоянием:
@@ -126,7 +127,10 @@ Kubernetes остаётся владельцем:
 ### `access-manager`
 Канонически владеет:
 - пользователями платформы;
+- организациями;
+- группами;
 - глобальными ролями и membership;
+- inheritance и override-моделью доступа;
 - allowlist и состоянием входа;
 - административным аудитом доступа.
 
@@ -142,7 +146,11 @@ Kubernetes остаётся владельцем:
 - project/repository policy;
 - путями к `services.yaml`;
 - метаинформацией первичной настройки и preflight-проверок;
-- привязкой project rules и источников документации.
+- привязкой project rules и источников документации;
+- branch rules;
+- release policy;
+- привязками guidance packages;
+- placement policy проекта и репозитория.
 
 Не владеет:
 - webhook-событиями;
@@ -165,6 +173,21 @@ Kubernetes остаётся владельцем:
 - учётные данные для поставщиков моделей и runtime-доступа, если они участвуют в запуске агентов и их лимиты/авторизация должны быть видимы платформе.
 - учётные данные внешних MCP-источников, если они требуют отдельной авторизации, имеют собственные лимиты или должны маршрутизироваться по policy.
 
+### `package-hub`
+Канонически владеет:
+- package catalog;
+- package entries и их версиями;
+- metadata по plugins и guidance packages;
+- verification status;
+- package install/import state;
+- package secret schemas;
+- package pricing и marketplace metadata.
+
+Не владеет:
+- authoritative provider state package source repositories;
+- runtime lifecycle запущенных plugin workloads;
+- memberships и правами пользователей.
+
 ### `agent-manager`
 Канонически владеет:
 - flow execution state;
@@ -176,6 +199,9 @@ Kubernetes остаётся владельцем:
 - снимками продолжаемых сессий и их резюмируемым состоянием;
 - `run`;
 - короткими структурированными статус-отчётами, привязанными к `run` и сессии;
+- schedule rules;
+- trigger bindings;
+- release line execution state;
 - состояниями ожидания, связанными с работой агента;
 - результатами acceptance machine;
 - правилами handover и follow-up.
@@ -185,6 +211,14 @@ Kubernetes остаётся владельцем:
 - slot/job execution details;
 - доставкой уведомлений как отдельной доменной сущностью.
 
+### `fleet-manager`
+Канонически владеет:
+- inventory серверов;
+- inventory Kubernetes-кластеров;
+- health и connectivity infrastructure scopes;
+- placement policy;
+- привязками организаций, проектов, репозиториев и runtime-контуров к server/cluster scopes.
+
 ### `runtime-manager`
 Канонически владеет:
 - slot lifecycle;
@@ -192,13 +226,27 @@ Kubernetes остаётся владельцем:
 - platform `job`;
 - retention и housekeeping policy среды;
 - ссылками на технические артефакты runtime-контура;
-- краткими итогами операций сборки, выкладки и очистки.
+- краткими итогами операций сборки, выкладки и очистки;
+- исполнением runtime на уже выбранном fleet scope.
 
 `runtime-manager` не заводит собственную сущность-владельца образа.
 Вместо этого он хранит:
 - ссылки на использованные image refs;
 - статус операций публикации и выкладки;
 - идентификаторы внешних технических объектов, если они нужны для продолжения или диагностики.
+
+### `billing-hub`
+Канонически владеет:
+- billing accounts;
+- cost records;
+- allocation затрат;
+- invoice basis;
+- pricing и revenue rules.
+
+Не владеет:
+- authoritative runtime state;
+- provider-native repository entities;
+- memberships и оргструктурой как первичным access-слоем.
 
 ### `interaction-hub`
 Канонически владеет:
@@ -224,8 +272,11 @@ Kubernetes остаётся владельцем:
 ### 5.1. Доступ и администрирование
 Минимально нужны:
 - пользователь платформы;
+- организация;
+- группа;
 - глобальная роль;
-- membership пользователя в проекте;
+- membership пользователя в организации, группе и проекте;
+- inheritance и override правило;
 - административный журнал аудита;
 - состояние входа и allowlist.
 
@@ -235,6 +286,9 @@ Kubernetes остаётся владельцем:
 - репозиторий;
 - project/repository policy;
 - привязка документации и project rules;
+- branch rules;
+- release policy;
+- placement policy;
 - признаки onboarding/preflight.
 
 ### 5.3. Provider-native контур
@@ -250,7 +304,19 @@ Kubernetes остаётся владельцем:
 - записи о попытках внешних операций;
 - ссылки на provider-native поля, которые платформа реально использует.
 
-### 5.4. Агентная оркестрация
+### 5.4. Package platform
+Минимально нужны:
+- package entry;
+- `package kind`;
+- package source repository;
+- verification status;
+- pricing metadata;
+- package install/import record;
+- secret schema;
+- локализованные metadata package;
+- связь package с организацией, проектом, репозиторием или платформой.
+
+### 5.5. Агентная оркестрация
 Минимально нужны:
 - flow template и его версия;
 - шаблон этапа flow;
@@ -270,7 +336,10 @@ Kubernetes остаётся владельцем:
 - результат классификации намерения;
 - результат acceptance-проверки;
 - связь между текущим артефактом и следующим ожидаемым шагом;
-- ссылка на целевой slot, release-контур или production-контекст, если роль проверяет уже выложенное состояние.
+- ссылка на целевой slot, release-контур или production-контекст, если роль проверяет уже выложенное состояние;
+- automation rule;
+- trigger binding;
+- release line state.
 
 #### Шаблоны промптов и профили ролей, хранящиеся в репозитории
 Для этой волны фиксируется жёсткое правило:
@@ -286,8 +355,11 @@ Kubernetes остаётся владельцем:
 - тип участия роли в конкретном этапе только через `stage role binding`, а не как ad-hoc поле профиля роли;
 - метаинформацию, нужную для аудита и воспроизводимости запуска.
 
-### 5.5. Runtime и platform jobs
+### 5.6. Fleet, runtime и platform jobs
 Минимально нужны:
+- сервер;
+- Kubernetes-кластер;
+- состояние привязки scope к cluster;
 - slot;
 - состояние прогрева и переиспользования;
 - `job`;
@@ -298,7 +370,15 @@ Kubernetes остаётся владельцем:
 - краткий хвост лога;
 - ссылки на внешние технические объекты.
 
-### 5.6. Уведомления и запросы к человеку
+### 5.7. Billing и cost accounting
+Минимально нужны:
+- billing account;
+- cost record;
+- allocation scope;
+- invoice basis;
+- provider/package usage cost link.
+
+### 5.8. Уведомления и запросы к человеку
 Минимально нужны:
 - диалоговая ветка;
 - сообщение;

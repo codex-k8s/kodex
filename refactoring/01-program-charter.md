@@ -5,7 +5,7 @@ title: "kodex — charter программы полного рефакторин
 status: active
 owner_role: EM
 created_at: 2026-04-21
-updated_at: 2026-04-21
+updated_at: 2026-04-23
 related_issues: [470, 488]
 related_prs: []
 approvals:
@@ -39,6 +39,7 @@ approvals:
 - GitHub остаётся первым провайдером, GitLab проектируется сразу через интерфейсы и provider contracts.
 - В центре пользовательского опыта будет не dashboard из произвольных сущностей, а agent-manager с чатовым и голосовым управлением.
 - Внешние каналы взаимодействия не фиксируются жёстким списком: нужен расширяемый контракт для подключения новых каналов.
+- Enterprise seams по package platform, organizations и groups, fleet, billing, release policy и automation rules закладываются сразу, даже если implementation floors этих направлений будут поэтапными.
 
 ## Что не входит в первую волну
 - Немедленная реализация новой архитектуры в коде.

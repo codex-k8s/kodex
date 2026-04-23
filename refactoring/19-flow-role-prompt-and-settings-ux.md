@@ -5,7 +5,7 @@ title: "kodex — UX редактирования flow, ролей, шаблон
 status: active
 owner_role: PM
 created_at: 2026-04-21
-updated_at: 2026-04-22
+updated_at: 2026-04-23
 related_issues: [281, 282, 309]
 related_prs: []
 approvals:
@@ -25,6 +25,7 @@ approvals:
 - Редактор flow и каталог ролей — это не конкурирующие варианты одного экрана, а два разных канонических экрана настроечного контура.
 - Пользовательские роли поддерживаются наравне со встроенными, но проходят тот же контур политик прав, MCP-доступов, аккаунтов и review.
 - UI может запускать редактирование шаблонов, flow и ролевых политик, но публикует изменения через обычный `PR`, а не через "магическое сохранение в БД".
+- Wave 5.1 добавляет в настроечный контур package catalogs, organizations и groups, fleet, billing, release policy и automation rules; эти surfaces считаются обязательными даже до их полной visual detailing.
 
 ## 1. Почему нужен последовательный подход
 Flow платформы — это не произвольный граф чего угодно.
@@ -253,6 +254,53 @@ UI должен проектироваться вокруг расширяемо
 Эти вкладки не должны смешиваться с общей таблицей пользователей: таблица остаётся inventory-слоем, а правая панель раскрывает выбранного пользователя.
 
 Визуальный пакет пользователей и доступов: [screen.md](images/wave5/10-users-and-access/screen.md).
+
+## 6.1. Настройка организаций и групп
+Wave 5.1 фиксирует, что access UX не заканчивается списком пользователей.
+
+Обязательные поверхности:
+- inventory организаций;
+- inventory глобальных и организационных групп;
+- membership graph пользователя;
+- inheritance и override-правила;
+- scope-права по организациям, проектам, репозиториям, roles и packages.
+
+Эти экраны могут быть детализированы отдельным mockup-пакетом позже, но они уже входят в канонический настроечный контур.
+
+## 6.2. Package catalogs и package installs
+Настроечный UX обязан различать:
+- package catalog как inventory и marketplace layer;
+- package details;
+- install/import flow;
+- verification и risk profile;
+- package secrets и capability forms;
+- различие между `plugin package` и `guidance package`.
+
+Канонические вкладки package-экрана:
+- `Обзор`;
+- `Версии`;
+- `Права и возможности`;
+- `Секреты`;
+- `Установка и scopes`;
+- `История`.
+
+## 6.3. Fleet, servers и clusters
+Настроечный контур обязан поддерживать:
+- inventory серверов;
+- inventory Kubernetes-кластеров;
+- placement policies;
+- привязки организаций, проектов и packages к infrastructure scopes;
+- health и capacity summaries.
+
+Эти экраны не должны быть спрятаны внутри runtime-диагностики: fleet — это отдельный policy и inventory слой.
+
+## 6.4. Billing, release policy и automation rules
+Wave 5.1 добавляет ещё три обязательных настроечных направления:
+- `Billing и учёт` — cost records, allocation, invoice basis, pricing;
+- `Release policy` — branch rules, release lines, rollout strategies, release gates;
+- `Automation rules` — cron, event triggers, bindings к flow и политика unattended запуска.
+
+Эти сущности должны редактироваться не как свободные заметки, а как последовательные формы с preview влияния на проекты, роли и risk-gates.
 
 ## 7. Связь с рабочими поверхностями
 Настроечный контур не должен быть изолированным "бэк-офисом".

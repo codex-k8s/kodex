@@ -5,7 +5,7 @@ title: "kodex — delivery и risk principles для новой программ
 status: active
 owner_role: EM
 created_at: 2026-04-21
-updated_at: 2026-04-21
+updated_at: 2026-04-23
 related_issues: [470, 488]
 related_prs: []
 approvals:
@@ -33,6 +33,10 @@ approvals:
   - прототип разбирается на последовательность компактных PR;
   - каждый PR меняет только один логический кусок;
   - временные решения удаляются по мере перехода к production-quality.
+
+Дополнительное правило wave 5.1:
+- enterprise target по package platform, tenancy, fleet, billing, release policy и automation rules фиксируется сразу в канонике;
+- implementation floors по этим направлениям могут идти позже и поэтапно, но не должны менять уже принятую target-модель задним числом.
 
 ## 3. Owner review model
 - Owner утверждает:

@@ -46,6 +46,7 @@ approvals:
    - `refactoring/17-console-and-ux-model.md`
    - `refactoring/18-workspaces-onboarding-and-operator-surfaces.md`
    - `refactoring/19-flow-role-prompt-and-settings-ux.md`
+   - `refactoring/20-foundation-expansion-wave5-1.md`
 3. `docs/design-guidelines/**` как инженерные ограничения реализации
 4. Исторические документы из `docs/**` и `refactoring/control-plane-refactor-agent-pack/**` как reference material
 
@@ -57,15 +58,17 @@ approvals:
 - Вычищать устаревший код и документацию сразу после завершения соответствующего vertical slice.
 
 ## Канонический первый набор доменов
-1. Доступ, администрирование и внешние аккаунты
-2. Проекты и репозитории
-3. Provider-native рабочие сущности (`Issue`, `PR/MR`, комментарии, mentions, relationships)
-4. Агент-менеджер и оркестрация выполнения
-5. Runtime-платформа и слоты
-6. Контур пользовательских взаимодействий и внешних каналов
-7. Консоль и операционные интерфейсы
-8. Risk/release governance
-9. Документация и knowledge lifecycle
+1. Доступ, организации, группы и внешние аккаунты
+2. Проекты, репозитории и release policies
+3. Provider-native рабочие сущности (`Issue`, `PR/MR`, комментарии, mentions, relationships, branches, tags)
+4. Package-платформа: плагины, guidance packages и каталоги
+5. Агент-менеджер, flow и automation rules
+6. Runtime-платформа, fleet, servers, clusters и slots
+7. Контур пользовательских взаимодействий, внешних каналов и уведомлений
+8. Консоль и операционные интерфейсы
+9. Billing, cost accounting и коммерческий контур
+10. Risk/release governance
+11. Документация и knowledge lifecycle
 
 ## Порядок волн
 1. Волна 0: правила программы, doc governance, аудит backlog, compact PR policy
@@ -74,8 +77,9 @@ approvals:
 4. Волна 3: модель данных, provider integration, watermark и acceptance contract
 5. Волна 4: risk/release governance
 6. Волна 5: UX и frontend-консоль
-7. Волна 6: runtime/deploy/bootstrap
-8. Волна 7+: implementation waves по одному домену за раз
+7. Волна 5.1: расширение платформенного основания перед runtime-волной
+8. Волна 6: runtime/deploy/bootstrap
+9. Волна 7+: implementation waves по одному домену за раз
 
 ## Состояние historical reference
 - `refactoring/control-plane-refactor-agent-pack/**` оставляем в репозитории как исторический пакет:
@@ -83,7 +87,7 @@ approvals:
   - его список сервисов, приоритеты и старая целевая модель не считаются source of truth для новой программы.
 
 ## Следующие артефакты
-- После пятой волны следующими каноническими документами должны стать:
+- После wave 5.1 следующими каноническими документами должны стать:
   - runtime/deploy/bootstrap каноника для первой волны реального развёртывания;
   - sequencing для первых implementation waves по доменам без возврата к legacy-модели;
   - очередной backlog checkpoint перед началом больших implementation waves.

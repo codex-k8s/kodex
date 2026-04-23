@@ -5,7 +5,7 @@ title: "kodex — доменная карта новой платформы"
 status: active
 owner_role: SA
 created_at: 2026-04-21
-updated_at: 2026-04-21
+updated_at: 2026-04-23
 related_issues: [470, 488]
 related_prs: []
 approvals:
@@ -23,23 +23,29 @@ approvals:
 
 ## Домены первой итерации
 
-### 1. Доступ, администрирование и внешние аккаунты
+### 1. Доступ, организации, группы и внешние аккаунты
 Что входит:
 - пользователи платформы;
+- организации;
+- глобальные и организационные группы;
 - права доступа;
+- membership и inheritance политики;
 - проектные и репозиторные разрешения;
 - аккаунты GitHub/GitLab;
 - аккаунты Codex/OpenAI и других model/runtime providers;
 - системные настройки.
 
-### 2. Проекты и репозитории
+### 2. Проекты, репозитории и release policy
 Что входит:
 - проекты;
 - репозитории внутри проекта;
 - project/repository configuration;
 - `services.yaml` policy;
 - onboarding новых репозиториев;
-- привязка документации и базовых project rules.
+- привязка документации и базовых project rules;
+- branch rules;
+- release policies;
+- release lines и rollout strategy bindings.
 
 ### 3. Provider-native рабочие сущности
 Что входит:
@@ -55,18 +61,37 @@ approvals:
 - follow-up работа = такие же `Issue` с другими типами;
 - платформа не плодит отдельную собственную рабочую сущность для инициативы.
 
-### 4. Агент-менеджер и оркестрация работы
+### 4. Package-платформа: плагины и guidance packages
+Что входит:
+- `plugin package`;
+- `guidance package`;
+- package catalog;
+- package source repositories;
+- verification status;
+- package install/import state;
+- package pricing и marketplace metadata;
+- secret schemas и package capability declarations.
+
+Ключевое решение:
+- плагины и руководящие пакеты документации не проектируются как две разные несвязанные системы;
+- они сходятся в общем package-контракте с разными runtime/import путями.
+
+### 5. Агент-менеджер и оркестрация работы
 Что входит:
 - agent-manager как центральный управляющий агент;
 - разбор пользовательских запросов;
 - запуск role-агентов;
 - управление flow;
+- schedule rules;
+- trigger bindings;
 - продолжение сессий;
 - acceptance machine;
 - правила создания follow-up задач и артефактов.
 
-### 5. Runtime-платформа и слоты
+### 6. Runtime-платформа, fleet и слоты
 Что входит:
+- inventory серверов и Kubernetes-кластеров;
+- placement policy;
 - `code-only` и `full-env` execution;
 - namespace-per-task slot;
 - prewarmed slots;
@@ -76,7 +101,7 @@ approvals:
 - future seam для nested cluster;
 - подготовка окружения, миграции, фикстуры, runtime reuse.
 
-### 6. Контур пользовательских взаимодействий и внешних каналов
+### 7. Контур пользовательских взаимодействий и внешних каналов
 Что входит:
 - взаимодействие через UI фронта;
 - голосовой интерфейс;
@@ -90,28 +115,41 @@ approvals:
 - проектируется общий расширяемый контракт;
 - механизм реализации (плагины, адаптеры, OpenAPI-контракт, гибрид) выбирается отдельным design-срезом.
 
-### 7. Консоль и операционные интерфейсы
+### 8. Консоль и операционные интерфейсы
 Что входит:
 - central chat с agent-manager;
 - управление проектами, репозиториями, доступами;
 - рабочие представления по задачам;
 - операционные статусы и диагностика;
-- UX для запуска flow и наблюдения за выполнением.
+- UX для запуска flow и наблюдения за выполнением;
+- экраны package catalogs, fleet, billing и automation settings.
 
-### 8. Risk/release governance
+### 9. Billing и cost accounting
+Что входит:
+- cost records;
+- allocation по организациям, проектам и другим scopes;
+- usage внешних провайдеров и runtime;
+- invoice basis;
+- payment-provider seams;
+- package marketplace economics.
+
+### 10. Risk/release governance
 Что входит:
 - классификация риска;
 - матрица review gates;
 - release decision package;
 - правила human approval;
-- правила, когда owner утверждает документы, high-risk переходы и релизы, а не обязательно код построчно.
+- правила, когда owner утверждает документы, high-risk переходы и релизы, а не обязательно код построчно;
+- unattended automation governance;
+- release branches, release lines и rollout policies.
 
 Это не optional домен. Он должен закладываться с самого начала, даже если полная реализация будет позже.
 
-### 9. Документация и knowledge lifecycle
+### 11. Документация и knowledge lifecycle
 Что входит:
 - шаблоны документов;
 - project rules для агентов;
+- guidance packages;
 - индексы и структура проектной документации;
 - будущий переход к knowledge storage через векторные БД и MCP.
 
