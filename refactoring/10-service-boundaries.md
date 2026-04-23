@@ -94,27 +94,27 @@ approvals:
 
 ### 2.4. `package-hub`
 Владеет:
-- package catalog;
-- package entries и их версиями;
-- metadata по plugins и guidance packages;
-- verification status;
-- package install/import state;
-- package secret schemas;
-- package pricing и marketplace metadata.
+- каталогом пакетов;
+- записями пакетов и их версиями;
+- метаданными плагинов и пакетов руководящей документации;
+- статусом верификации;
+- состоянием установки и импорта пакетов;
+- схемами секретов пакетов;
+- ценовыми данными пакетов и метаданными каталога.
 
 Не владеет:
-- первичным provider state самих source repositories;
-- runtime lifecycle уже установленных slot и job;
-- memberships и access-графом пользователей.
+- первичным состоянием исходных репозиториев у провайдера;
+- жизненным циклом уже установленных slot и job;
+- membership-моделью и графом доступа пользователей.
 
 ### 2.5. `agent-manager`
 Владеет:
-- run lifecycle;
-- agent sessions;
-- flow execution logic;
-- automation rules;
-- trigger bindings;
-- release line execution state;
+- жизненным циклом run;
+- агентными сессиями;
+- логикой выполнения flow;
+- правилами автоматизации;
+- привязками триггеров;
+- состоянием выполнения релизной линии;
 - каталогом встроенных и пользовательских ролей;
 - политикой исполнения профилей ролей;
 - ссылками на `work`/`revise` шаблоны;
@@ -131,15 +131,15 @@ approvals:
 
 ### 2.6. `fleet-manager`
 Владеет:
-- inventory серверов и Kubernetes-кластеров;
-- connectivity и health infrastructure scopes;
-- placement policy;
-- привязками организаций, проектов, репозиториев и runtime-контуров к server/cluster scopes.
+- реестром серверов, нод и Kubernetes-кластеров;
+- инфраструктурными контурами подключения и проверки здоровья;
+- политикой размещения;
+- привязками организаций, проектов, репозиториев и runtime-контуров к серверным и кластерным контурам.
 
 Не владеет:
-- run lifecycle;
-- build/deploy job execution status как канонической runtime-истиной;
-- нативным provider state;
+- жизненным циклом run;
+- статусом build/deploy job как канонической runtime-истиной;
+- нативным состоянием у провайдера;
 - UI-проекциями как первичным контуром.
 
 ### 2.7. `runtime-manager`
@@ -159,16 +159,16 @@ approvals:
 
 ### 2.8. `billing-hub`
 Владеет:
-- billing accounts;
-- cost records;
-- usage allocation;
-- invoice basis;
-- pricing и revenue rules для packages и SaaS-контуров.
+- биллинговыми аккаунтами;
+- записями затрат;
+- распределением потребления;
+- основой для выставления счетов;
+- ценовыми правилами и правилами распределения выручки для пакетов и SaaS-контуров.
 
 Не владеет:
-- authoritative runtime state;
-- provider-native repository сущностями;
-- memberships и оргструктурой как первичным access-слоем.
+- каноническим runtime-состоянием;
+- нативными сущностями репозиториев провайдера;
+- membership-моделью и оргструктурой как первичным контуром доступа.
 
 ### 2.9. `interaction-hub`
 Владеет:
