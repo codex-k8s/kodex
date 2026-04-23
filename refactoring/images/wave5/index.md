@@ -1,6 +1,6 @@
 # Пакет макетов wave 5
 
-Статус: `reviewing`
+Статус: `in-progress`
 
 Назначение пакета:
 - визуально уточнять wave 5 до начала реализации frontend;
@@ -77,9 +77,13 @@
    - спецификация: [screen.md](08-projects-and-repositories/screen.md)
    - макеты:
      - [Основной экран](08-projects-and-repositories/screen.png)
+     - [Вкладка `Репозитории`](08-projects-and-repositories/tab-repositories.png)
+     - [Вкладка `Документация`](08-projects-and-repositories/tab-documentation.png)
+     - [Вкладка `Рабочая область`](08-projects-and-repositories/tab-workspace.png)
+     - [Вкладка `Релизная политика`](08-projects-and-repositories/tab-release-policy.png)
 
 9. `09-integrations-and-accounts`
-   - статус: `reviewing`
+   - статус: `approved`
    - экран: внешние аккаунты, интеграции и MCP
    - спецификация: [screen.md](09-integrations-and-accounts/screen.md)
    - макеты:
@@ -104,3 +108,16 @@
    - спецификация: [screen.md](11-onboarding-and-empty-states/screen.md)
    - макеты:
      - [Основной экран](11-onboarding-and-empty-states/screen.png)
+
+12. `12-package-catalog`
+   - статус: `partial`
+   - экран: каталог плагинов и пакетов документации
+   - спецификация: [screen.md](12-package-catalog/screen.md)
+   - макеты:
+     - [Основной экран](12-package-catalog/screen.png)
+     - [Вкладка `Документация`](12-package-catalog/tab-documentation.png)
+     - [Вкладка `Версии`](12-package-catalog/tab-versions.png)
+
+## Незавершённая часть wave 5.2
+
+Текущий пакет зафиксирован частично из-за сбоя генерации вкладки `Права и секреты` для каталога пакетов. Подробный список того, что нужно догенерировать и проверить, лежит в [wave5-2-backlog.md](wave5-2-backlog.md).
