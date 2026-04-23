@@ -48,9 +48,9 @@
 
 ## Макеты
 - [Основной макет](screen.png) — вкладка `Проверки`, базовый экран рабочего пространства `PR/MR`.
-- [Вкладка `Acceptance`](tab-acceptance.png) — Human gate, risk class, требуемые доказательства, blockers и release readiness.
-- [Вкладка `Связи`](tab-links.png) — связанные `Issue`, `run`, `job`, slot, release и follow-up.
-- [Вкладка `Журнал активности`](tab-activity.png) — timeline событий по `PR/MR`, ревью, queue и release context.
+- [Вкладка `Acceptance`](tab-acceptance.png) — вырезка нижнего блока вкладки: Human gate, risk class, требуемые доказательства, blockers и release readiness.
+- [Вкладка `Связи`](tab-links.png) — вырезка нижнего блока вкладки: связанные `Issue`, `run`, `job`, slot, release и follow-up.
+- [Вкладка `Журнал активности`](tab-activity.png) — вырезка нижнего блока вкладки: timeline событий по `PR/MR`, ревью, queue и release context.
 
 ## Открытые вопросы
 - нет

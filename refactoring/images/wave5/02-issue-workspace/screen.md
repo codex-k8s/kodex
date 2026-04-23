@@ -48,10 +48,10 @@
 
 ## Макеты
 - [Основной макет](screen.png) — вкладка `Артефакты`, базовый вид рабочего пространства `Issue`.
-- [Вкладка `Проверки`](tab-checks.png) — acceptance state, review-роли, Human gate и checklist качества.
-- [Вкладка `История переходов`](tab-stage-history.png) — движение по этапам flow, решения, revise-циклы и follow-up.
-- [Вкладка `Связи`](tab-links.png) — связанные `PR/MR`, `Issue`, `run`, `job`, slot, release и flow context.
-- [Вкладка `Журнал активности`](tab-activity.png) — единая timeline событий по задаче, агентам, provider-комментариям и runtime.
+- [Вкладка `Проверки`](tab-checks.png) — вырезка нижнего блока вкладки: acceptance state, review-роли, Human gate и checklist качества.
+- [Вкладка `История переходов`](tab-stage-history.png) — вырезка нижнего блока вкладки: движение по этапам flow, решения, revise-циклы и follow-up.
+- [Вкладка `Связи`](tab-links.png) — вырезка нижнего блока вкладки: связанные `PR/MR`, `Issue`, `run`, `job`, slot, release и flow context.
+- [Вкладка `Журнал активности`](tab-activity.png) — вырезка нижнего блока вкладки: единая timeline событий по задаче, агентам, provider-комментариям и runtime.
 
 ## Открытые вопросы
 - нет
