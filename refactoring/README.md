@@ -43,6 +43,9 @@ approvals:
    - `refactoring/14-risk-and-release-governance.md`
    - `refactoring/15-human-gates-and-evidence.md`
    - `refactoring/16-release-safety-observability-and-notifications.md`
+   - `refactoring/17-console-and-ux-model.md`
+   - `refactoring/18-workspaces-onboarding-and-operator-surfaces.md`
+   - `refactoring/19-flow-role-prompt-and-settings-ux.md`
 3. `docs/design-guidelines/**` как инженерные ограничения реализации
 4. Исторические документы из `docs/**` и `refactoring/control-plane-refactor-agent-pack/**` как reference material
 
@@ -80,7 +83,7 @@ approvals:
   - его список сервисов, приоритеты и старая целевая модель не считаются source of truth для новой программы.
 
 ## Следующие артефакты
-- После четвёртой волны следующими каноническими документами должны стать:
-  - новая карта frontend и operator UX;
+- После пятой волны следующими каноническими документами должны стать:
   - runtime/deploy/bootstrap каноника для первой волны реального развёртывания;
-  - sequencing для первых implementation waves по доменам без возврата к legacy-модели.
+  - sequencing для первых implementation waves по доменам без возврата к legacy-модели;
+  - очередной backlog checkpoint перед началом больших implementation waves.
