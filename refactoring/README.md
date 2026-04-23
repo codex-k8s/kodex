@@ -58,17 +58,17 @@ approvals:
 - Вычищать устаревший код и документацию сразу после завершения соответствующего vertical slice.
 
 ## Канонический первый набор доменов
-1. Доступ, организации, группы и внешние аккаунты
-2. Проекты, репозитории, проектная документация и release policies
-3. Provider-native рабочие сущности (`Issue`, `PR/MR`, комментарии, mentions, relationships, branches, tags)
-4. Пакетная платформа: плагины, пакеты руководящей документации и каталоги
-5. Агент-менеджер, flow, репозитории конфигурации и automation rules
-6. Runtime-платформа, контур серверов и кластеров, и слоты
-7. Контур пользовательских взаимодействий, внешних каналов и уведомлений
-8. Консоль и операционные интерфейсы
-9. Billing, cost accounting и коммерческий контур
-10. Risk/release governance
-11. Документация, граф проектной документации и knowledge lifecycle
+1. Access and accounts (доступ, организации, группы и внешние аккаунты)
+2. Projects and repositories (проекты, репозитории, проектная документация и release policies)
+3. Provider-native work items (рабочие сущности провайдера: `Issue`, `PR/MR`, комментарии, mentions, relationships, branches, tags)
+4. Package platform (пакетная платформа: плагины, пакеты руководящей документации и каталоги)
+5. Agent orchestration (агент-менеджер, flow, роли, шаблоны промптов и automation rules)
+6. Runtime and fleet (runtime-платформа, контур серверов и кластеров, слоты)
+7. Interaction hub (пользовательские взаимодействия, внешние каналы и уведомления)
+8. Console and operations UX (консоль и операционные интерфейсы)
+9. Billing and cost accounting (биллинг, учёт затрат и коммерческий контур)
+10. Risk and release governance (управление рисками и релизами)
+11. Knowledge lifecycle (руководящая и проектная документация, жизненный цикл знаний)
 
 ## Порядок волн
 1. Волна 0: правила программы, doc governance, аудит backlog, compact PR policy
