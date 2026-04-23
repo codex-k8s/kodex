@@ -19,7 +19,7 @@ approvals:
 # Доменная карта новой платформы
 
 ## Принцип
-Платформа должна строиться не вокруг внутренних "магических" рабочих сущностей, а вокруг сущностей, которыми реально управляют GitHub/GitLab и сам runtime платформы.
+Платформа должна строиться не вокруг внутренних магических рабочих сущностей, а вокруг сущностей, которыми реально управляют GitHub/GitLab и сам runtime платформы.
 
 ## Домены первой итерации
 
@@ -29,31 +29,31 @@ approvals:
 - организации;
 - глобальные и организационные группы;
 - права доступа;
-- membership и inheritance политики;
+- политики членства и наследования;
 - проектные и репозиторные разрешения;
 - аккаунты GitHub/GitLab;
-- аккаунты Codex/OpenAI и других model/runtime providers;
+- аккаунты Codex/OpenAI и других поставщиков моделей и runtime-контуров;
 - системные настройки.
 
 ### 2. Проекты, репозитории и release policy
 Что входит:
 - проекты;
 - репозитории внутри проекта;
-- project/repository configuration;
+- конфигурация проекта и репозитория;
 - `services.yaml` policy;
 - onboarding новых репозиториев;
-- привязка документации и базовых project rules;
+- привязка документации и базовых правил проекта;
 - branch rules;
 - release policies;
-- release lines и rollout strategy bindings.
+- релизные линии и привязки к стратегиям выкладки.
 
 ### 3. Provider-native рабочие сущности
 Что входит:
 - `Issue`;
 - `PR/MR`;
 - комментарии и mentions;
-- relationships;
-- type / labels / milestones / project fields / provider metadata;
+- связи;
+- type / labels / milestones / поля проекта / метаданные провайдера;
 - platform watermarks и открытые инструкции в body/comment слоях.
 
 Ключевое решение:
@@ -61,44 +61,44 @@ approvals:
 - follow-up работа = такие же `Issue` с другими типами;
 - платформа не плодит отдельную собственную рабочую сущность для инициативы.
 
-### 4. Package-платформа: плагины и guidance packages
+### 4. Пакетная платформа: плагины и пакеты руководящей документации
 Что входит:
 - `plugin package`;
 - `guidance package`;
-- package catalog;
-- package source repositories;
-- verification status;
-- package install/import state;
-- package pricing и marketplace metadata;
-- secret schemas и package capability declarations.
+- каталог пакетов;
+- репозитории-источники пакетов;
+- статус верификации;
+- состояние установки и импорта пакета;
+- ценовые данные и метаданные каталога;
+- схемы секретов и описания возможностей пакета.
 
 Ключевое решение:
 - плагины и руководящие пакеты документации не проектируются как две разные несвязанные системы;
-- они сходятся в общем package-контракте с разными runtime/import путями.
+- они сходятся в общем пакетном контракте с разными путями исполнения и импорта.
 
 ### 5. Агент-менеджер и оркестрация работы
 Что входит:
 - agent-manager как центральный управляющий агент;
 - разбор пользовательских запросов;
-- запуск role-агентов;
+- запуск ролевых агентов;
 - управление flow;
-- schedule rules;
-- trigger bindings;
+- правила расписания;
+- привязки триггеров;
 - продолжение сессий;
 - acceptance machine;
 - правила создания follow-up задач и артефактов.
 
-### 6. Runtime-платформа, fleet и слоты
+### 6. Runtime-платформа, контур серверов и кластеров, и слоты
 Что входит:
-- inventory серверов и Kubernetes-кластеров;
-- placement policy;
+- реестр серверов и Kubernetes-кластеров;
+- политика размещения;
 - `code-only` и `full-env` execution;
 - namespace-per-task slot;
 - prewarmed slots;
 - platform jobs для mirror/build/deploy;
 - регламентные cleanup и health-check jobs;
 - очистка и переинициализация слота;
-- future seam для nested cluster;
+- задел на nested cluster;
 - подготовка окружения, миграции, фикстуры, runtime reuse.
 
 ### 7. Контур пользовательских взаимодействий и внешних каналов
@@ -117,21 +117,21 @@ approvals:
 
 ### 8. Консоль и операционные интерфейсы
 Что входит:
-- central chat с agent-manager;
+- центральный чат с agent-manager;
 - управление проектами, репозиториями, доступами;
 - рабочие представления по задачам;
 - операционные статусы и диагностика;
 - UX для запуска flow и наблюдения за выполнением;
-- экраны package catalogs, fleet, billing и automation settings.
+- экраны каталогов пакетов, контура серверов и кластеров, биллинга и настроек автоматизации.
 
 ### 9. Billing и cost accounting
 Что входит:
-- cost records;
-- allocation по организациям, проектам и другим scopes;
+- записи затрат;
+- распределение по организациям, проектам и другим контурам;
 - usage внешних провайдеров и runtime;
-- invoice basis;
-- payment-provider seams;
-- package marketplace economics.
+- основа для счёта;
+- задел под платёжных провайдеров;
+- экономика каталога пакетов.
 
 ### 10. Risk/release governance
 Что входит:
@@ -143,21 +143,21 @@ approvals:
 - unattended automation governance;
 - release branches, release lines и rollout policies.
 
-Это не optional домен. Он должен закладываться с самого начала, даже если полная реализация будет позже.
+Это не опциональный домен. Он должен закладываться с самого начала, даже если полная реализация будет позже.
 
 ### 11. Документация и knowledge lifecycle
 Что входит:
 - шаблоны документов;
 - project rules для агентов;
-- guidance packages;
+- пакеты руководящей документации;
 - индексы и структура проектной документации;
 - будущий переход к knowledge storage через векторные БД и MCP.
 
 ## Cross-cutting требования
-- Provider-first model.
-- Minimal internal truth beyond provider and runtime state.
-- Risk-based approvals.
-- Compact PR discipline.
+- Приоритет нативной модели провайдера.
+- Минимум внутренней правды поверх состояния провайдера и runtime.
+- Апрувы на основе риска.
+- Дисциплина компактных PR.
 - Русскоязычная документация без лишнего смешивания с английским.
 
 ## Что будет спроектировано позже
