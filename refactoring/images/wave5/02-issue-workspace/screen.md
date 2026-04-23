@@ -46,5 +46,12 @@
 - плавающая кнопка микрофона на уровне экрана
 - одна общая кнопка `Открыть в GitHub` на весь блок связанных `PR/MR`
 
+## Макеты
+- [Основной макет](screen.png) — вкладка `Артефакты`, базовый вид рабочего пространства `Issue`.
+- [Вкладка `Проверки`](tab-checks.png) — acceptance state, review-роли, Human gate и checklist качества.
+- [Вкладка `История переходов`](tab-stage-history.png) — движение по этапам flow, решения, revise-циклы и follow-up.
+- [Вкладка `Связи`](tab-links.png) — связанные `PR/MR`, `Issue`, `run`, `job`, slot, release и flow context.
+- [Вкладка `Журнал активности`](tab-activity.png) — единая timeline событий по задаче, агентам, provider-комментариям и runtime.
+
 ## Открытые вопросы
 - нет

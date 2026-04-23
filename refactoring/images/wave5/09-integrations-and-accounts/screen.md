@@ -45,5 +45,11 @@
 - хаотичное смешение provider settings, runtime и release-диагностики
 - общий блок MCP-серверов внутри provider-экрана, если активна конкретная категория вроде GitHub
 
+## Макеты
+- [Основной макет](screen.png) — вкладка `Права`, policy layer для выбранной категории `GitHub`.
+- [Вкладка `Аккаунты`](tab-accounts.png) — inventory GitHub-аккаунтов, scopes, auth state и статусы.
+- [Вкладка `Ограничения`](tab-limits.png) — rate limits, ограничения, деградация scope, вебхуки и blocked operations.
+- [Вкладка `История`](tab-history.png) — auth failures, token rotation, policy changes и события интеграции.
+
 ## Открытые вопросы
 - нет
