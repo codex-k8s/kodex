@@ -20,7 +20,7 @@ approvals:
 
 ## TL;DR
 - Главный документ программы: `refactoring/task.md`.
-- Документы в `refactoring/*.md`, кроме historical reference-пакетов, являются рабочим source of truth для новой версии платформы.
+- Документы в `refactoring/*.md`, кроме исторических reference-пакетов, являются рабочим источником правды для новой версии платформы.
 - `refactoring/control-plane-refactor-agent-pack/**` используется только как справочный пакет по дисциплине декомпозиции, а не как целевая модель платформы.
 - Старые документы из `docs/**` считаются действующими только до момента, когда соответствующий домен будет переписан и явно заменён новой каноникой.
 
@@ -46,26 +46,29 @@ approvals:
    - `refactoring/17-console-and-ux-model.md`
    - `refactoring/18-workspaces-onboarding-and-operator-surfaces.md`
    - `refactoring/19-flow-role-prompt-and-settings-ux.md`
+   - `refactoring/20-foundation-expansion-wave5-1.md`
 3. `docs/design-guidelines/**` как инженерные ограничения реализации
 4. Исторические документы из `docs/**` и `refactoring/control-plane-refactor-agent-pack/**` как reference material
 
 ## Цели программы
 - Переосмыслить платформу сверху вниз: от бизнес-модели и пользовательских сценариев до сервисных границ и реализации.
-- Уйти от старой control-plane-центричной и label-центричной модели к manager-driven платформе, которая работает с provider-native сущностями.
+- Уйти от старой control-plane-центричной и label-центричной модели к платформе, управляемой `agent-manager` и работающей с provider-native сущностями.
 - Не плодить искусственные рабочие сущности, которыми нельзя нормально управлять через GitHub/GitLab.
 - Переписывать систему доменами и компактными PR, а не одним большим переносом всего репозитория.
 - Вычищать устаревший код и документацию сразу после завершения соответствующего vertical slice.
 
 ## Канонический первый набор доменов
-1. Доступ, администрирование и внешние аккаунты
-2. Проекты и репозитории
-3. Provider-native рабочие сущности (`Issue`, `PR/MR`, комментарии, mentions, relationships)
-4. Агент-менеджер и оркестрация выполнения
-5. Runtime-платформа и слоты
-6. Контур пользовательских взаимодействий и внешних каналов
-7. Консоль и операционные интерфейсы
-8. Risk/release governance
-9. Документация и knowledge lifecycle
+1. Access and accounts (доступ, организации, группы и внешние аккаунты)
+2. Projects and repositories (проекты, репозитории, проектная документация и release policies)
+3. Provider-native work items (рабочие сущности провайдера: `Issue`, `PR/MR`, комментарии, mentions, relationships, branches, tags)
+4. Package platform (пакетная платформа: плагины, пакеты руководящей документации и каталоги)
+5. Agent orchestration (агент-менеджер, flow, роли, шаблоны промптов и automation rules)
+6. Runtime and fleet (runtime-платформа, контур серверов и кластеров, слоты)
+7. Interaction hub (пользовательские взаимодействия, внешние каналы и уведомления)
+8. Console and operations UX (консоль и операционные интерфейсы)
+9. Billing and cost accounting (биллинг, учёт затрат и коммерческий контур)
+10. Risk and release governance (управление рисками и релизами)
+11. Knowledge lifecycle (руководящая и проектная документация, жизненный цикл знаний)
 
 ## Порядок волн
 1. Волна 0: правила программы, doc governance, аудит backlog, compact PR policy
@@ -74,16 +77,17 @@ approvals:
 4. Волна 3: модель данных, provider integration, watermark и acceptance contract
 5. Волна 4: risk/release governance
 6. Волна 5: UX и frontend-консоль
-7. Волна 6: runtime/deploy/bootstrap
-8. Волна 7+: implementation waves по одному домену за раз
+7. Волна 5.1: расширение платформенного основания перед runtime-волной
+8. Волна 6: runtime/deploy/bootstrap
+9. Волна 7+: волны реализации по одному домену за раз
 
 ## Состояние historical reference
 - `refactoring/control-plane-refactor-agent-pack/**` оставляем в репозитории как исторический пакет:
   - он полезен по темам `ownership`, `service split`, `database-per-service`, `legacy removal`;
-  - его список сервисов, приоритеты и старая целевая модель не считаются source of truth для новой программы.
+  - его список сервисов, приоритеты и старая целевая модель не считаются источником правды для новой программы.
 
 ## Следующие артефакты
-- После пятой волны следующими каноническими документами должны стать:
+- После wave 5.1 следующими каноническими документами должны стать:
   - runtime/deploy/bootstrap каноника для первой волны реального развёртывания;
-  - sequencing для первых implementation waves по доменам без возврата к legacy-модели;
-  - очередной backlog checkpoint перед началом больших implementation waves.
+  - sequencing для первых волн реализации по доменам без возврата к legacy-модели;
+  - очередной backlog checkpoint перед началом больших волн реализации.
