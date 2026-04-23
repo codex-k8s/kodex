@@ -22,6 +22,12 @@
 - правая колонка `Acceptance и риск`, `Исполнения`, `Платформенные jobs`, `Release context`
 - нижние вкладки `Проверки`, `Acceptance`, `Связи`, `Журнал активности`
 
+## Семантика вкладок
+- `Проверки` — checks, approvals и итог review;
+- `Acceptance` — Human gate, risk class и решение о переходе дальше;
+- `Связи` — связанные `Issue`, `run`, `job`, release context;
+- `Журнал активности` — timeline событий по `PR/MR` и платформе.
+
 ## Ключевые действия
 - открыть `PR/MR` в GitHub/GitLab
 - открыть связанный `Issue`
