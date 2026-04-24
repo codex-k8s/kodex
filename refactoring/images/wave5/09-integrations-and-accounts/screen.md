@@ -1,6 +1,6 @@
 # Внешние аккаунты, интеграции и MCP
 
-Статус: `reviewing`
+Статус: `approved`
 
 ## Назначение
 Экран настройки внешних аккаунтов, provider-интеграций, лимитов и проблем авторизации с отдельной категорией MCP и явной моделью вкладок внутри выбранного provider.
@@ -47,9 +47,9 @@
 
 ## Макеты
 - [Основной макет](screen.png) — вкладка `Права`, policy layer для выбранной категории `GitHub`.
-- [Вкладка `Аккаунты`](tab-accounts.png) — вырезка центрального provider-блока: inventory GitHub-аккаунтов, scopes, auth state и статусы.
-- [Вкладка `Ограничения`](tab-limits.png) — вырезка центрального provider-блока: rate limits, ограничения, деградация scope, вебхуки и blocked operations.
-- [Вкладка `История`](tab-history.png) — вырезка центрального provider-блока: auth failures, token rotation, policy changes и события интеграции.
+- [Вкладка `Аккаунты`](tab-accounts.png) — вырезка центрального provider-блока: inventory GitHub-аккаунтов, scopes, auth state, статусы и быстрые проверки.
+- [Вкладка `Ограничения`](tab-limits.png) — вырезка центрального provider-блока: лимиты API, проблемы `webhook`, защитные политики и рекомендации.
+- [Вкладка `История`](tab-history.png) — вырезка центрального provider-блока: token rotation, auth failures, policy changes, проверки и аудит.
 
 ## Открытые вопросы
 - нет
