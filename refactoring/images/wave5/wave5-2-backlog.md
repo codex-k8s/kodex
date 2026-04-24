@@ -29,4 +29,14 @@
 ## Следующие волны после wave 5.2
 - Волна 6: runtime, deploy и bootstrap — серверы, кластеры, slots, platform jobs, сборка, выкладка, cleanup и первичный production-контур.
 - Backlog checkpoint после wave 6: сверить старые GitHub Issues с новой каноникой, закрыть поглощённые и переписать те, что остаются актуальными.
-- Волна 7+: реализация по доменам небольшими PR, начиная с foundation-слоя и контрактов, затем сервисные домены, затем frontend-срезы поверх утверждённых экранных моделей.
+- Волна 7: Access and accounts — доступ, организации, группы и внешние аккаунты.
+- Волна 8: Projects and repositories — проекты, репозитории, релизные политики и источники проектной документации.
+- Волна 9: Package platform — пакеты, каталоги, установка, версии и пакеты руководящей документации.
+- Волна 10: Provider-native work items — `Issue`, `PR/MR`, comments, relationships, ветки и теги.
+- Волна 11: Agent orchestration — `agent-manager`, flow, stage, role, шаблоны промптов и automation rules.
+- Волна 12: Runtime and fleet — слоты, `run`, `job`, runtime manager, fleet manager, серверы и кластеры.
+- Волна 13: Interaction hub — платформенный MCP, согласования, уведомления, внешняя обратная связь и каналы взаимодействия.
+- Волна 14: Console and operations UX — реализация утверждённых операторских экранов и рабочих пространств.
+- Волна 15: Risk and release governance — risk gates, release lines, branch rules и автоматизация по триггерам.
+- Волна 16: Billing and cost accounting — затраты, распределение расходов, счета и коммерческий контур.
+- Волна 17: Knowledge lifecycle — руководящая и проектная документация, самоулучшение и жизненный цикл знаний.
