@@ -47,6 +47,8 @@ approvals:
    - `refactoring/18-workspaces-onboarding-and-operator-surfaces.md`
    - `refactoring/19-flow-role-prompt-and-settings-ux.md`
    - `refactoring/20-foundation-expansion-wave5-1.md`
+   - `refactoring/21-runtime-deploy-and-bootstrap.md`
+   - `refactoring/22-first-deployment-and-wave7-gate.md`
 3. `docs/design-guidelines/**` как инженерные ограничения реализации
 4. Исторические документы из `docs/**` и `refactoring/control-plane-refactor-agent-pack/**` как reference material
 
@@ -97,7 +99,7 @@ approvals:
   - его список сервисов, приоритеты и старая целевая модель не считаются источником правды для новой программы.
 
 ## Следующие артефакты
-- После завершённой wave 5.2 следующими каноническими артефактами должны стать:
-  - runtime/deploy/bootstrap каноника для wave 6 и первой волны реального развёртывания;
-  - sequencing явных волн 7-17 без возврата к legacy-модели и без безразмерной фазы `Wave 7+`;
-  - backlog checkpoint после wave 6 перед стартом первой кодовой доменной волны.
+- После завершённой wave 6 следующими обязательными артефактами должны стать:
+  - backlog checkpoint после wave 6 перед стартом первой кодовой доменной волны;
+  - выравнивание GitHub backlog, чтобы legacy-задачи и старые ожидания не утянули реализацию назад;
+  - первый кодовый пакет wave 7 `Access and accounts`.
