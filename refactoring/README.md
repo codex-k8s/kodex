@@ -5,7 +5,7 @@ title: "kodex — индекс программы рефакторинга"
 status: active
 owner_role: EM
 created_at: 2026-04-21
-updated_at: 2026-04-21
+updated_at: 2026-04-25
 related_issues: [470, 488]
 related_prs: []
 approvals:
@@ -79,7 +79,17 @@ approvals:
 6. Волна 5: UX и frontend-консоль
 7. Волна 5.1: расширение платформенного основания перед runtime-волной
 8. Волна 6: runtime/deploy/bootstrap
-9. Волна 7+: волны реализации по одному домену за раз
+9. Волна 7: Access and accounts — доступ, организации, группы и внешние аккаунты
+10. Волна 8: Projects and repositories — проекты, репозитории, релизные политики и источники проектной документации
+11. Волна 9: Package platform — пакеты, каталоги, установка, версии и пакеты руководящей документации
+12. Волна 10: Provider-native work items — `Issue`, `PR/MR`, комментарии, relationships, ветки и теги
+13. Волна 11: Agent orchestration — `agent-manager`, flow, stage, role, шаблоны промптов и automation rules
+14. Волна 12: Runtime and fleet — слоты, `run`, `job`, runtime manager, fleet manager, серверы и кластеры
+15. Волна 13: Interaction hub — платформенный MCP, согласования, уведомления, внешняя обратная связь и каналы взаимодействия
+16. Волна 14: Console and operations UX — реализация утверждённых операторских экранов и рабочих пространств
+17. Волна 15: Risk and release governance — risk gates, release lines, branch rules и автоматизация по триггерам
+18. Волна 16: Billing and cost accounting — затраты, распределение расходов, счета и коммерческий контур
+19. Волна 17: Knowledge lifecycle — руководящая и проектная документация, самоулучшение и жизненный цикл знаний
 
 ## Состояние historical reference
 - `refactoring/control-plane-refactor-agent-pack/**` оставляем в репозитории как исторический пакет:
@@ -87,7 +97,7 @@ approvals:
   - его список сервисов, приоритеты и старая целевая модель не считаются источником правды для новой программы.
 
 ## Следующие артефакты
-- После wave 5.1 следующими каноническими документами должны стать:
-  - runtime/deploy/bootstrap каноника для первой волны реального развёртывания;
-  - sequencing для первых волн реализации по доменам без возврата к legacy-модели;
-  - очередной backlog checkpoint перед началом больших волн реализации.
+- После завершённой wave 5.2 следующими каноническими артефактами должны стать:
+  - runtime/deploy/bootstrap каноника для wave 6 и первой волны реального развёртывания;
+  - sequencing явных волн 7-17 без возврата к legacy-модели и без безразмерной фазы `Wave 7+`;
+  - backlog checkpoint после wave 6 перед стартом первой кодовой доменной волны.
