@@ -7,10 +7,9 @@
 - `04-role-catalog/screen.png` и вкладки `Шаблоны`, `Инструменты (MCP)`, `Аккаунты`, `Использование`, `История версий`.
 - `08-projects-and-repositories/screen.png` и вкладки `Репозитории`, `Документация`, `Рабочая область`, `Релизная политика`.
 - `09-integrations-and-accounts/tab-accounts.png`, `tab-limits.png`, `tab-history.png`.
-- `12-package-catalog/screen.png`, `tab-documentation.png`, `tab-versions.png`.
+- `12-package-catalog/screen.png`, `tab-documentation.png`, `tab-versions.png`, `tab-permissions-secrets.png`.
 
 ## Что нужно подправить или догенерировать
-- `12-package-catalog/tab-permissions-secrets.png` — перегенерировать через `imagegen`; предыдущие попытки ушли в нерелевантную инфографику, файл не сохранён.
 - `12-package-catalog/tab-installation.png` — сгенерировать с нуля.
 - `13-organizations-and-groups` — сгенерировать с нуля основной экран и вкладки: организации, группы, модель доступа, наследование, аудит.
 - `14-fleet-servers-clusters` — сгенерировать с нуля основной экран и вкладки: серверы, кластеры, размещение, здоровье/ёмкость, история.
