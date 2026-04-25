@@ -266,6 +266,103 @@ func Users(items []*controlplanev1.User) []models.User {
 	return out
 }
 
+func Organization(item *controlplanev1.Organization) models.Organization {
+	if item == nil {
+		return models.Organization{}
+	}
+	return models.Organization{
+		ID:   item.GetId(),
+		Slug: item.GetSlug(),
+		Name: item.GetName(),
+	}
+}
+
+func Organizations(items []*controlplanev1.Organization) []models.Organization {
+	out := make([]models.Organization, 0, len(items))
+	for _, item := range items {
+		out = append(out, Organization(item))
+	}
+	return out
+}
+
+func UserGroup(item *controlplanev1.UserGroup) models.UserGroup {
+	if item == nil {
+		return models.UserGroup{}
+	}
+	return models.UserGroup{
+		ID:             item.GetId(),
+		OrganizationID: cast.OptionalTrimmedString(item.OrganizationId),
+		Scope:          item.GetScope(),
+		Slug:           item.GetSlug(),
+		Name:           item.GetName(),
+	}
+}
+
+func UserGroups(items []*controlplanev1.UserGroup) []models.UserGroup {
+	out := make([]models.UserGroup, 0, len(items))
+	for _, item := range items {
+		out = append(out, UserGroup(item))
+	}
+	return out
+}
+
+func OrganizationMembership(item *controlplanev1.OrganizationMembership) models.OrganizationMembership {
+	if item == nil {
+		return models.OrganizationMembership{}
+	}
+	role := item.GetRole()
+	return models.OrganizationMembership{
+		OrganizationID: item.GetOrganizationId(),
+		UserID:         item.GetUserId(),
+		Email:          item.GetEmail(),
+		Role:           role,
+	}
+}
+
+func OrganizationMemberships(items []*controlplanev1.OrganizationMembership) []models.OrganizationMembership {
+	out := make([]models.OrganizationMembership, 0, len(items))
+	for _, item := range items {
+		out = append(out, OrganizationMembership(item))
+	}
+	return out
+}
+
+func UserGroupMembership(item *controlplanev1.UserGroupMembership) models.UserGroupMembership {
+	if item == nil {
+		return models.UserGroupMembership{}
+	}
+	return models.UserGroupMembership{
+		GroupID: item.GetGroupId(),
+		UserID:  item.GetUserId(),
+		Email:   item.GetEmail(),
+	}
+}
+
+func UserGroupMemberships(items []*controlplanev1.UserGroupMembership) []models.UserGroupMembership {
+	out := make([]models.UserGroupMembership, 0, len(items))
+	for _, item := range items {
+		out = append(out, UserGroupMembership(item))
+	}
+	return out
+}
+
+func AccessMembershipGraph(item *controlplanev1.AccessMembershipGraph) models.AccessMembershipGraph {
+	if item == nil {
+		return models.AccessMembershipGraph{
+			Organizations:           []models.Organization{},
+			Groups:                  []models.UserGroup{},
+			OrganizationMemberships: []models.OrganizationMembership{},
+			UserGroupMemberships:    []models.UserGroupMembership{},
+		}
+	}
+	return models.AccessMembershipGraph{
+		Organizations:           Organizations(item.GetOrganizations()),
+		Groups:                  UserGroups(item.GetGroups()),
+		OrganizationMemberships: OrganizationMemberships(item.GetOrganizationMemberships()),
+		UserGroupMemberships:    UserGroupMemberships(item.GetUserGroupMemberships()),
+	}
+}
+
 func ProjectMember(item *controlplanev1.ProjectMember) models.ProjectMember {
 	if item == nil {
 		return models.ProjectMember{}

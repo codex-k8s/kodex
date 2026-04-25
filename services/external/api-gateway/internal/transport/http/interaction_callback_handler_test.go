@@ -51,7 +51,9 @@ func TestInteractionCallbackHandlerForwardsTypedRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
-	defer listener.Close()
+	defer func() {
+		_ = listener.Close()
+	}()
 
 	grpcServer := grpc.NewServer()
 	controlplanev1.RegisterControlPlaneServiceServer(grpcServer, &testInteractionCallbackServer{t: t})

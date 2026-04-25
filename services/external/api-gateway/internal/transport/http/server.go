@@ -134,6 +134,7 @@ func NewServer(initCtx context.Context, cfg ServerConfig, cp *controlplane.Clien
 	staffGroup.GET("/mission-control/commands/:command_id", staffH.GetMissionControlCommand)
 	staffGroup.GET("/mission-control/realtime", staffH.MissionControlRealtime)
 	staffGroup.GET("/users", staffH.ListUsers)
+	staffGroup.GET("/access/membership-graph", staffH.GetAccessMembershipGraph)
 	staffGroup.POST("/users", staffH.CreateUser)
 	staffGroup.DELETE("/users/:user_id", staffH.DeleteUser)
 	staffGroup.GET("/projects/:project_id/members", staffH.ListProjectMembers)

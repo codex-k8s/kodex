@@ -203,7 +203,7 @@ func (l *Launcher) ListManagedRunNamespaces(ctx context.Context, params ManagedN
 			CorrelationID:   strings.TrimSpace(item.Annotations[runNamespaceCorrelationAnnotKey]),
 			RuntimeMode:     agentdomain.ParseRuntimeMode(runtimeModeRaw),
 			RuntimeModeRaw:  runtimeModeRaw,
-			CreatedAt:       item.CreationTimestamp.Time.UTC(),
+			CreatedAt:       item.CreationTimestamp.UTC(),
 			LeaseTTL:        parseNamespaceLeaseTTL(item.Annotations),
 			LeaseExpiresAt:  expiresAt,
 			LeaseExpiresRaw: strings.TrimSpace(item.Annotations[runNamespaceLeaseExpAnnotKey]),

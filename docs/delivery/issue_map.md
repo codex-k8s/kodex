@@ -193,3 +193,8 @@ approvals:
 - Если нет обязательного документа — статус `blocked`.
 - Ссылки должны быть кликабельны.
 - Матрица обновляется при каждом переходе этапа Delivery Plan.
+
+## Refactoring Waves 7-17
+| Issue/PR | Traceability bundle | PRD | Design | ADRs | Test Plan | Release Notes | Postdeploy | Status |
+|---|---|---|---|---|---|---|---|---|
+| #599 | `docs/delivery/issue_map.md` + `refactoring/task.md` + `refactoring/23-backlog-checkpoint-before-wave7.md` | `refactoring/06-product-model.md` | `refactoring/11-data-and-state-model.md` + `refactoring/20-foundation-expansion-wave5-1.md` + `refactoring/17-console-and-ux-model.md` | n/a | Реализован foundation domain `organizations/user_groups/organization_memberships/user_group_memberships`, bootstrap owner-organization membership и admin-only operator read-path `Организации и группы`; проверки: `make gen-proto-go gen-openapi`, `go test ./services/internal/control-plane/... ./services/external/api-gateway/...`, `npm --prefix services/staff/web-console run build` | TBD | TBD | in-review |

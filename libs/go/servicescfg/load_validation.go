@@ -312,7 +312,7 @@ func isValidRepositoryAlias(value string) bool {
 		isLetter := r >= 'a' && r <= 'z'
 		isDigit := r >= '0' && r <= '9'
 		isAllowedSpecial := r == '.' || r == '_' || r == '-'
-		if !(isLetter || isDigit || isAllowedSpecial) {
+		if !isLetter && !isDigit && !isAllowedSpecial {
 			return false
 		}
 		if i == 0 && !isLetter && !isDigit {

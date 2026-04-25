@@ -281,6 +281,40 @@ type User struct {
 	IsPlatformOwner bool    `json:"is_platform_owner"`
 }
 
+type Organization struct {
+	ID   string `json:"id"`
+	Slug string `json:"slug"`
+	Name string `json:"name"`
+}
+
+type UserGroup struct {
+	ID             string  `json:"id"`
+	OrganizationID *string `json:"organization_id"`
+	Scope          string  `json:"scope"`
+	Slug           string  `json:"slug"`
+	Name           string  `json:"name"`
+}
+
+type OrganizationMembership struct {
+	OrganizationID string `json:"organization_id"`
+	UserID         string `json:"user_id"`
+	Email          string `json:"email"`
+	Role           string `json:"role"`
+}
+
+type UserGroupMembership struct {
+	GroupID string `json:"group_id"`
+	UserID  string `json:"user_id"`
+	Email   string `json:"email"`
+}
+
+type AccessMembershipGraph struct {
+	Organizations           []Organization           `json:"organizations"`
+	Groups                  []UserGroup              `json:"groups"`
+	OrganizationMemberships []OrganizationMembership `json:"organization_memberships"`
+	UserGroupMemberships    []UserGroupMembership    `json:"user_group_memberships"`
+}
+
 type ProjectMember struct {
 	ProjectID            string `json:"project_id"`
 	UserID               string `json:"user_id"`

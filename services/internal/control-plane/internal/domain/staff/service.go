@@ -6,6 +6,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/crypto/tokencrypt"
 	"github.com/codex-k8s/kodex/libs/go/repo/provider"
 	nextstepdomain "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/nextstep"
+	accessgraphrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/accessgraph"
 	learningfeedbackrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/learningfeedback"
 	projectrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/project"
 	projectmemberrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/projectmember"
@@ -43,6 +44,7 @@ type Config struct {
 type Service struct {
 	cfg           Config
 	users         userrepo.Repository
+	accessGraph   accessgraphrepo.Repository
 	projects      projectrepo.Repository
 	members       projectmemberrepo.Repository
 	repos         repocfgrepo.Repository
@@ -99,6 +101,7 @@ type systemSettingsService interface {
 // Dependencies defines external collaborators required by staff service.
 type Dependencies struct {
 	Users          userrepo.Repository
+	AccessGraph    accessgraphrepo.Repository
 	Projects       projectrepo.Repository
 	Members        projectmemberrepo.Repository
 	Repos          repocfgrepo.Repository
@@ -122,6 +125,7 @@ func NewService(cfg Config, deps Dependencies) *Service {
 	return &Service{
 		cfg:            cfg,
 		users:          deps.Users,
+		accessGraph:    deps.AccessGraph,
 		projects:       deps.Projects,
 		members:        deps.Members,
 		repos:          deps.Repos,

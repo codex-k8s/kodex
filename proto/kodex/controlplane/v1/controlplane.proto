@@ -362,6 +362,45 @@ message ListUsersResponse {
   repeated User items = 1;
 }
 
+message Organization {
+  string id = 1;
+  string slug = 2;
+  string name = 3;
+}
+
+message UserGroup {
+  string id = 1;
+  optional string organization_id = 2;
+  string scope = 3;
+  string slug = 4;
+  string name = 5;
+}
+
+message OrganizationMembership {
+  string organization_id = 1;
+  string user_id = 2;
+  string email = 3;
+  string role = 4;
+}
+
+message UserGroupMembership {
+  string group_id = 1;
+  string user_id = 2;
+  string email = 3;
+}
+
+message GetAccessMembershipGraphRequest {
+  Principal principal = 1;
+  int32 limit = 2;
+}
+
+message AccessMembershipGraph {
+  repeated Organization organizations = 1;
+  repeated UserGroup groups = 2;
+  repeated OrganizationMembership organization_memberships = 3;
+  repeated UserGroupMembership user_group_memberships = 4;
+}
+
 message CreateUserRequest {
   Principal principal = 1;
   string email = 2;
@@ -1903,6 +1942,7 @@ service ControlPlaneService {
   rpc ResetSystemSetting(ResetSystemSettingRequest) returns (SystemSetting);
 
   rpc ListUsers(ListUsersRequest) returns (ListUsersResponse);
+  rpc GetAccessMembershipGraph(GetAccessMembershipGraphRequest) returns (AccessMembershipGraph);
   rpc CreateUser(CreateUserRequest) returns (User);
   rpc DeleteUser(DeleteUserRequest) returns (google.protobuf.Empty);
 

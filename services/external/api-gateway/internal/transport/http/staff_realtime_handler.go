@@ -123,7 +123,9 @@ func (h *staffHandler) streamRunRealtime(c *echo.Context, principal *controlplan
 		// Upgrader already wrote response details on error.
 		return nil
 	}
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	conn.SetReadLimit(64 * 1024)
 	_ = conn.SetReadDeadline(time.Now().Add(realtimePongTimeout))

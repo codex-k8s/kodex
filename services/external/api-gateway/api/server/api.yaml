@@ -854,6 +854,27 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
+  /api/v1/staff/access/membership-graph:
+    get:
+      summary: Get access membership graph
+      operationId: getAccessMembershipGraph
+      tags: [staff-access]
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Organizations, groups and user memberships
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccessMembershipGraph"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
   /api/v1/staff/users/{user_id}:
     delete:
       summary: Delete user
@@ -2671,6 +2692,85 @@ components:
           type: boolean
         is_platform_owner:
           type: boolean
+
+    Organization:
+      type: object
+      additionalProperties: false
+      required: [id, slug, name]
+      properties:
+        id:
+          type: string
+        slug:
+          type: string
+        name:
+          type: string
+
+    UserGroup:
+      type: object
+      additionalProperties: false
+      required: [id, scope, slug, name]
+      properties:
+        id:
+          type: string
+        organization_id:
+          type: string
+          nullable: true
+        scope:
+          type: string
+          enum: [global, organization]
+        slug:
+          type: string
+        name:
+          type: string
+
+    OrganizationMembership:
+      type: object
+      additionalProperties: false
+      required: [organization_id, user_id, email, role]
+      properties:
+        organization_id:
+          type: string
+        user_id:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [member, admin, owner]
+
+    UserGroupMembership:
+      type: object
+      additionalProperties: false
+      required: [group_id, user_id, email]
+      properties:
+        group_id:
+          type: string
+        user_id:
+          type: string
+        email:
+          type: string
+
+    AccessMembershipGraph:
+      type: object
+      additionalProperties: false
+      required: [organizations, groups, organization_memberships, user_group_memberships]
+      properties:
+        organizations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Organization"
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserGroup"
+        organization_memberships:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrganizationMembership"
+        user_group_memberships:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserGroupMembership"
 
     ProjectMember:
       type: object

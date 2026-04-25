@@ -564,7 +564,8 @@ func duplicateDeliveryTransition(
 ) bool {
 	switch target {
 	case enumtypes.MissionControlCommandStatusPendingSync, enumtypes.MissionControlCommandStatusReconciled:
-		if command.Status != target && !(target == enumtypes.MissionControlCommandStatusPendingSync && command.Status == enumtypes.MissionControlCommandStatusReconciled) {
+		if command.Status != target &&
+			(target != enumtypes.MissionControlCommandStatusPendingSync || command.Status != enumtypes.MissionControlCommandStatusReconciled) {
 			return false
 		}
 		return commandContainsProviderDeliveries(command, providerDeliveryIDs)

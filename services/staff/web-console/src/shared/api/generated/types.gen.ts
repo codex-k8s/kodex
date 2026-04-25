@@ -373,6 +373,40 @@ export type User = {
     is_platform_owner: boolean;
 };
 
+export type Organization = {
+    id: string;
+    slug: string;
+    name: string;
+};
+
+export type UserGroup = {
+    id: string;
+    organization_id?: string | null;
+    scope: 'global' | 'organization';
+    slug: string;
+    name: string;
+};
+
+export type OrganizationMembership = {
+    organization_id: string;
+    user_id: string;
+    email: string;
+    role: 'member' | 'admin' | 'owner';
+};
+
+export type UserGroupMembership = {
+    group_id: string;
+    user_id: string;
+    email: string;
+};
+
+export type AccessMembershipGraph = {
+    organizations: Array<Organization>;
+    groups: Array<UserGroup>;
+    organization_memberships: Array<OrganizationMembership>;
+    user_group_memberships: Array<UserGroupMembership>;
+};
+
 export type ProjectMember = {
     project_id: string;
     user_id: string;
@@ -2461,6 +2495,41 @@ export type CreateUserResponses = {
 };
 
 export type CreateUserResponse = CreateUserResponses[keyof CreateUserResponses];
+
+export type GetAccessMembershipGraphData = {
+    body?: never;
+    path?: never;
+    query?: {
+        limit?: number;
+    };
+    url: '/api/v1/staff/access/membership-graph';
+};
+
+export type GetAccessMembershipGraphErrors = {
+    /**
+     * Invalid request
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+};
+
+export type GetAccessMembershipGraphError = GetAccessMembershipGraphErrors[keyof GetAccessMembershipGraphErrors];
+
+export type GetAccessMembershipGraphResponses = {
+    /**
+     * Organizations, groups and user memberships
+     */
+    200: AccessMembershipGraph;
+};
+
+export type GetAccessMembershipGraphResponse = GetAccessMembershipGraphResponses[keyof GetAccessMembershipGraphResponses];
 
 export type DeleteUserData = {
     body?: never;

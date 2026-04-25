@@ -178,6 +178,38 @@ func (s *Service) ListUsers(ctx context.Context, principal Principal, limit int)
 	return s.users.List(ctx, limit)
 }
 
+// GetAccessMembershipGraph returns the foundational organization/group
+// membership graph for operator inspection (platform admin only).
+func (s *Service) GetAccessMembershipGraph(ctx context.Context, principal Principal, limit int) (querytypes.AccessMembershipGraphSnapshot, error) {
+	if !principal.IsPlatformAdmin {
+		return querytypes.AccessMembershipGraphSnapshot{}, errs.Forbidden{Msg: "platform admin required"}
+	}
+
+	organizations, err := s.accessGraph.ListOrganizations(ctx, limit)
+	if err != nil {
+		return querytypes.AccessMembershipGraphSnapshot{}, err
+	}
+	groups, err := s.accessGraph.ListGroups(ctx, limit)
+	if err != nil {
+		return querytypes.AccessMembershipGraphSnapshot{}, err
+	}
+	organizationMemberships, err := s.accessGraph.ListOrganizationMemberships(ctx, limit)
+	if err != nil {
+		return querytypes.AccessMembershipGraphSnapshot{}, err
+	}
+	userGroupMemberships, err := s.accessGraph.ListUserGroupMemberships(ctx, limit)
+	if err != nil {
+		return querytypes.AccessMembershipGraphSnapshot{}, err
+	}
+
+	return querytypes.AccessMembershipGraphSnapshot{
+		Organizations:           organizations,
+		Groups:                  groups,
+		OrganizationMemberships: organizationMemberships,
+		UserGroupMemberships:    userGroupMemberships,
+	}, nil
+}
+
 // CreateAllowedUser creates/updates an allowed user record (platform admin only).
 func (s *Service) CreateAllowedUser(ctx context.Context, principal Principal, email string, isPlatformAdmin bool) (userrepo.User, error) {
 	if !principal.IsPlatformAdmin {

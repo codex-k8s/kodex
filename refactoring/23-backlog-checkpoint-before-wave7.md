@@ -10,7 +10,9 @@ related_issues: [78, 281, 282, 294, 322, 380, 582, 586, 599, 600, 601, 602]
 related_prs: []
 approvals:
   required: ["Owner"]
-  status: pending
+  status: approved
+  approved_by: "ai-da-stas"
+  approved_at: 2026-04-25
 ---
 
 # Backlog checkpoint между wave 6 и wave 7
@@ -73,6 +75,14 @@ approvals:
 | `#602` | вычисление доступа | вычисление прав доступа, `explicit deny` и аудит решений |
 
 Wave 7 считается открытой в backlog только после появления именно этой очереди, а не по факту наличия старых open issues.
+
+### 4.1. Что считается целевым результатом `#599`
+После принятия PR по `#599` в коде и operator path должно существовать следующее минимальное основание:
+- owner-схема хранения для `organizations`, `user_groups`, `organization_memberships`, `user_group_memberships`;
+- bootstrap owner-user автоматически получает membership в канонической owner-organization;
+- группы умеют быть глобальными и организационными;
+- staff console имеет отдельный admin-only read-path `Организации и группы` для просмотра foundation graph;
+- effective permissions, allowlist lifecycle и каталог внешних аккаунтов остаются вне `#599` и переходят в `#600-#602`.
 
 ## 5. Какие `docs/**` теперь считаются историческими справочными материалами для новых доменов
 Для новых волн они больше не считаются source of truth, а используются только как исторический материал:

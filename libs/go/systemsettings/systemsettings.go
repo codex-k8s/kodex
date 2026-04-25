@@ -79,7 +79,9 @@ func waitForReloadSignal(ctx context.Context, cfg ReloadLoopConfig, reload func(
 	if err != nil {
 		return fmt.Errorf("connect notification listener: %w", err)
 	}
-	defer conn.Close(ctx)
+	defer func() {
+		_ = conn.Close(ctx)
+	}()
 
 	if _, err := conn.Exec(ctx, cfg.ListenQuery); err != nil {
 		return fmt.Errorf("listen for system settings changes: %w", err)

@@ -185,6 +185,10 @@ func buildListUsersRequest(principal *controlplanev1.Principal, limit int32) *co
 	return &controlplanev1.ListUsersRequest{Principal: principal, Limit: limit}
 }
 
+func buildGetAccessMembershipGraphRequest(principal *controlplanev1.Principal, limit int32) *controlplanev1.GetAccessMembershipGraphRequest {
+	return &controlplanev1.GetAccessMembershipGraphRequest{Principal: principal, Limit: limit}
+}
+
 func buildCreateUserRequest(principal *controlplanev1.Principal, req models.CreateUserRequest) *controlplanev1.CreateUserRequest {
 	return &controlplanev1.CreateUserRequest{Principal: principal, Email: req.Email, IsPlatformAdmin: req.IsPlatformAdmin}
 }
@@ -357,6 +361,10 @@ func (h *staffHandler) markRuntimeErrorViewedCall(ctx context.Context, principal
 
 func (h *staffHandler) listUsersCall(ctx context.Context, principal *controlplanev1.Principal, limit int32) (*controlplanev1.ListUsersResponse, error) {
 	return callUnaryWithArg(ctx, principal, limit, buildListUsersRequest, h.cp.Service().ListUsers)
+}
+
+func (h *staffHandler) getAccessMembershipGraphCall(ctx context.Context, principal *controlplanev1.Principal, limit int32) (*controlplanev1.AccessMembershipGraph, error) {
+	return callUnaryWithArg(ctx, principal, limit, buildGetAccessMembershipGraphRequest, h.cp.Service().GetAccessMembershipGraph)
 }
 
 func (h *staffHandler) createUserCall(ctx context.Context, principal *controlplanev1.Principal, req models.CreateUserRequest) (*controlplanev1.User, error) {

@@ -41,6 +41,7 @@ const (
 	ControlPlaneService_UpdateSystemSettingBoolean_FullMethodName           = "/kodex.controlplane.v1.ControlPlaneService/UpdateSystemSettingBoolean"
 	ControlPlaneService_ResetSystemSetting_FullMethodName                   = "/kodex.controlplane.v1.ControlPlaneService/ResetSystemSetting"
 	ControlPlaneService_ListUsers_FullMethodName                            = "/kodex.controlplane.v1.ControlPlaneService/ListUsers"
+	ControlPlaneService_GetAccessMembershipGraph_FullMethodName             = "/kodex.controlplane.v1.ControlPlaneService/GetAccessMembershipGraph"
 	ControlPlaneService_CreateUser_FullMethodName                           = "/kodex.controlplane.v1.ControlPlaneService/CreateUser"
 	ControlPlaneService_DeleteUser_FullMethodName                           = "/kodex.controlplane.v1.ControlPlaneService/DeleteUser"
 	ControlPlaneService_ListProjectMembers_FullMethodName                   = "/kodex.controlplane.v1.ControlPlaneService/ListProjectMembers"
@@ -133,6 +134,7 @@ type ControlPlaneServiceClient interface {
 	UpdateSystemSettingBoolean(ctx context.Context, in *UpdateSystemSettingBooleanRequest, opts ...grpc.CallOption) (*SystemSetting, error)
 	ResetSystemSetting(ctx context.Context, in *ResetSystemSettingRequest, opts ...grpc.CallOption) (*SystemSetting, error)
 	ListUsers(ctx context.Context, in *ListUsersRequest, opts ...grpc.CallOption) (*ListUsersResponse, error)
+	GetAccessMembershipGraph(ctx context.Context, in *GetAccessMembershipGraphRequest, opts ...grpc.CallOption) (*AccessMembershipGraph, error)
 	CreateUser(ctx context.Context, in *CreateUserRequest, opts ...grpc.CallOption) (*User, error)
 	DeleteUser(ctx context.Context, in *DeleteUserRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	ListProjectMembers(ctx context.Context, in *ListProjectMembersRequest, opts ...grpc.CallOption) (*ListProjectMembersResponse, error)
@@ -411,6 +413,16 @@ func (c *controlPlaneServiceClient) ListUsers(ctx context.Context, in *ListUsers
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListUsersResponse)
 	err := c.cc.Invoke(ctx, ControlPlaneService_ListUsers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) GetAccessMembershipGraph(ctx context.Context, in *GetAccessMembershipGraphRequest, opts ...grpc.CallOption) (*AccessMembershipGraph, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AccessMembershipGraph)
+	err := c.cc.Invoke(ctx, ControlPlaneService_GetAccessMembershipGraph_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1074,6 +1086,7 @@ type ControlPlaneServiceServer interface {
 	UpdateSystemSettingBoolean(context.Context, *UpdateSystemSettingBooleanRequest) (*SystemSetting, error)
 	ResetSystemSetting(context.Context, *ResetSystemSettingRequest) (*SystemSetting, error)
 	ListUsers(context.Context, *ListUsersRequest) (*ListUsersResponse, error)
+	GetAccessMembershipGraph(context.Context, *GetAccessMembershipGraphRequest) (*AccessMembershipGraph, error)
 	CreateUser(context.Context, *CreateUserRequest) (*User, error)
 	DeleteUser(context.Context, *DeleteUserRequest) (*emptypb.Empty, error)
 	ListProjectMembers(context.Context, *ListProjectMembersRequest) (*ListProjectMembersResponse, error)
@@ -1210,6 +1223,9 @@ func (UnimplementedControlPlaneServiceServer) ResetSystemSetting(context.Context
 }
 func (UnimplementedControlPlaneServiceServer) ListUsers(context.Context, *ListUsersRequest) (*ListUsersResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListUsers not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) GetAccessMembershipGraph(context.Context, *GetAccessMembershipGraphRequest) (*AccessMembershipGraph, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetAccessMembershipGraph not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) CreateUser(context.Context, *CreateUserRequest) (*User, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateUser not implemented")
@@ -1795,6 +1811,24 @@ func _ControlPlaneService_ListUsers_Handler(srv interface{}, ctx context.Context
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlPlaneServiceServer).ListUsers(ctx, req.(*ListUsersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_GetAccessMembershipGraph_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAccessMembershipGraphRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).GetAccessMembershipGraph(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_GetAccessMembershipGraph_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).GetAccessMembershipGraph(ctx, req.(*GetAccessMembershipGraphRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3023,6 +3057,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListUsers",
 			Handler:    _ControlPlaneService_ListUsers_Handler,
+		},
+		{
+			MethodName: "GetAccessMembershipGraph",
+			Handler:    _ControlPlaneService_GetAccessMembershipGraph_Handler,
 		},
 		{
 			MethodName: "CreateUser",

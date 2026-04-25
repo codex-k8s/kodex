@@ -721,6 +721,13 @@ const (
 	ProviderFreshness MissionControlWorkspaceWatermarkWatermarkKind = "provider_freshness"
 )
 
+// Defines values for OrganizationMembershipRole.
+const (
+	OrganizationMembershipRoleAdmin  OrganizationMembershipRole = "admin"
+	OrganizationMembershipRoleMember OrganizationMembershipRole = "member"
+	OrganizationMembershipRoleOwner  OrganizationMembershipRole = "owner"
+)
+
 // Defines values for ProjectMemberRole.
 const (
 	ProjectMemberRoleAdmin     ProjectMemberRole = "admin"
@@ -889,9 +896,9 @@ const (
 
 // Defines values for UpsertProjectMemberRequestRole.
 const (
-	UpsertProjectMemberRequestRoleAdmin     UpsertProjectMemberRequestRole = "admin"
-	UpsertProjectMemberRequestRoleRead      UpsertProjectMemberRequestRole = "read"
-	UpsertProjectMemberRequestRoleReadWrite UpsertProjectMemberRequestRole = "read_write"
+	Admin     UpsertProjectMemberRequestRole = "admin"
+	Read      UpsertProjectMemberRequestRole = "read"
+	ReadWrite UpsertProjectMemberRequestRole = "read_write"
 )
 
 // Defines values for UpsertProjectRepositoryRequestRole.
@@ -900,6 +907,12 @@ const (
 	UpsertProjectRepositoryRequestRoleMixed        UpsertProjectRepositoryRequestRole = "mixed"
 	UpsertProjectRepositoryRequestRoleOrchestrator UpsertProjectRepositoryRequestRole = "orchestrator"
 	UpsertProjectRepositoryRequestRoleService      UpsertProjectRepositoryRequestRole = "service"
+)
+
+// Defines values for UserGroupScope.
+const (
+	UserGroupScopeGlobal       UserGroupScope = "global"
+	UserGroupScopeOrganization UserGroupScope = "organization"
 )
 
 // Defines values for MissionControlActiveFilter.
@@ -1010,6 +1023,14 @@ const (
 	Error    ListRuntimeErrorsParamsLevel = "error"
 	Warning  ListRuntimeErrorsParamsLevel = "warning"
 )
+
+// AccessMembershipGraph defines model for AccessMembershipGraph.
+type AccessMembershipGraph struct {
+	Groups                  []UserGroup              `json:"groups"`
+	OrganizationMemberships []OrganizationMembership `json:"organization_memberships"`
+	Organizations           []Organization           `json:"organizations"`
+	UserGroupMemberships    []UserGroupMembership    `json:"user_group_memberships"`
+}
 
 // AgentDetailsPayload defines model for AgentDetailsPayload.
 type AgentDetailsPayload struct {
@@ -2084,6 +2105,24 @@ type NextStepActionResponse struct {
 	ThreadUrl          *string  `json:"thread_url"`
 }
 
+// Organization defines model for Organization.
+type Organization struct {
+	Id   string `json:"id"`
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+}
+
+// OrganizationMembership defines model for OrganizationMembership.
+type OrganizationMembership struct {
+	Email          string                     `json:"email"`
+	OrganizationId string                     `json:"organization_id"`
+	Role           OrganizationMembershipRole `json:"role"`
+	UserId         string                     `json:"user_id"`
+}
+
+// OrganizationMembershipRole defines model for OrganizationMembership.Role.
+type OrganizationMembershipRole string
+
 // PreflightCheckResult defines model for PreflightCheckResult.
 type PreflightCheckResult struct {
 	Details *string `json:"details"`
@@ -2576,6 +2615,25 @@ type User struct {
 	IsPlatformOwner bool    `json:"is_platform_owner"`
 }
 
+// UserGroup defines model for UserGroup.
+type UserGroup struct {
+	Id             string         `json:"id"`
+	Name           string         `json:"name"`
+	OrganizationId *string        `json:"organization_id"`
+	Scope          UserGroupScope `json:"scope"`
+	Slug           string         `json:"slug"`
+}
+
+// UserGroupScope defines model for UserGroup.Scope.
+type UserGroupScope string
+
+// UserGroupMembership defines model for UserGroupMembership.
+type UserGroupMembership struct {
+	Email   string `json:"email"`
+	GroupId string `json:"group_id"`
+	UserId  string `json:"user_id"`
+}
+
 // UserItemsResponse defines model for UserItemsResponse.
 type UserItemsResponse struct {
 	Items []User `json:"items"`
@@ -2747,6 +2805,11 @@ type McpExecutorCallbackParams struct {
 type McpInteractionCallbackParams struct {
 	// XCodexMCPToken Callback bearer token. Authorization: Bearer ... is also accepted.
 	XCodexMCPToken *MCPCallbackToken `json:"X-Codex-MCP-Token,omitempty"`
+}
+
+// GetAccessMembershipGraphParams defines parameters for GetAccessMembershipGraph.
+type GetAccessMembershipGraphParams struct {
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListPendingApprovalsParams defines parameters for ListPendingApprovals.
@@ -3696,6 +3759,9 @@ type ServerInterface interface {
 	// Apply one built-in MCP user interaction callback
 	// (POST /api/v1/mcp/interactions/callback)
 	McpInteractionCallback(w http.ResponseWriter, r *http.Request, params McpInteractionCallbackParams)
+	// Get access membership graph
+	// (GET /api/v1/staff/access/membership-graph)
+	GetAccessMembershipGraph(w http.ResponseWriter, r *http.Request, params GetAccessMembershipGraphParams)
 	// List pending approval requests
 	// (GET /api/v1/staff/approvals)
 	ListPendingApprovals(w http.ResponseWriter, r *http.Request, params ListPendingApprovalsParams)
@@ -4068,6 +4134,33 @@ func (siw *ServerInterfaceWrapper) McpInteractionCallback(w http.ResponseWriter,
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.McpInteractionCallback(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAccessMembershipGraph operation middleware
+func (siw *ServerInterfaceWrapper) GetAccessMembershipGraph(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetAccessMembershipGraphParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAccessMembershipGraph(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5906,6 +5999,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("POST "+options.BaseURL+"/api/v1/mcp/approver/callback", wrapper.McpApproverCallback)
 	m.HandleFunc("POST "+options.BaseURL+"/api/v1/mcp/executor/callback", wrapper.McpExecutorCallback)
 	m.HandleFunc("POST "+options.BaseURL+"/api/v1/mcp/interactions/callback", wrapper.McpInteractionCallback)
+	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/access/membership-graph", wrapper.GetAccessMembershipGraph)
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/approvals", wrapper.ListPendingApprovals)
 	m.HandleFunc("POST "+options.BaseURL+"/api/v1/staff/approvals/{approval_request_id}/decision", wrapper.ResolveApprovalDecision)
 	m.HandleFunc("GET "+options.BaseURL+"/api/v1/staff/docset/groups", wrapper.ListDocsetGroups)
@@ -6242,6 +6336,50 @@ type McpInteractionCallback500JSONResponse struct{ InternalJSONResponse }
 func (response McpInteractionCallback500JSONResponse) VisitMcpInteractionCallbackResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAccessMembershipGraphRequestObject struct {
+	Params GetAccessMembershipGraphParams
+}
+
+type GetAccessMembershipGraphResponseObject interface {
+	VisitGetAccessMembershipGraphResponse(w http.ResponseWriter) error
+}
+
+type GetAccessMembershipGraph200JSONResponse AccessMembershipGraph
+
+func (response GetAccessMembershipGraph200JSONResponse) VisitGetAccessMembershipGraphResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAccessMembershipGraph400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetAccessMembershipGraph400JSONResponse) VisitGetAccessMembershipGraphResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAccessMembershipGraph401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetAccessMembershipGraph401JSONResponse) VisitGetAccessMembershipGraphResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetAccessMembershipGraph403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetAccessMembershipGraph403JSONResponse) VisitGetAccessMembershipGraphResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }
@@ -8750,6 +8888,9 @@ type StrictServerInterface interface {
 	// Apply one built-in MCP user interaction callback
 	// (POST /api/v1/mcp/interactions/callback)
 	McpInteractionCallback(ctx context.Context, request McpInteractionCallbackRequestObject) (McpInteractionCallbackResponseObject, error)
+	// Get access membership graph
+	// (GET /api/v1/staff/access/membership-graph)
+	GetAccessMembershipGraph(ctx context.Context, request GetAccessMembershipGraphRequestObject) (GetAccessMembershipGraphResponseObject, error)
 	// List pending approval requests
 	// (GET /api/v1/staff/approvals)
 	ListPendingApprovals(ctx context.Context, request ListPendingApprovalsRequestObject) (ListPendingApprovalsResponseObject, error)
@@ -9130,6 +9271,32 @@ func (sh *strictHandler) McpInteractionCallback(w http.ResponseWriter, r *http.R
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(McpInteractionCallbackResponseObject); ok {
 		if err := validResponse.VisitMcpInteractionCallbackResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAccessMembershipGraph operation middleware
+func (sh *strictHandler) GetAccessMembershipGraph(w http.ResponseWriter, r *http.Request, params GetAccessMembershipGraphParams) {
+	var request GetAccessMembershipGraphRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAccessMembershipGraph(ctx, request.(GetAccessMembershipGraphRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAccessMembershipGraph")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAccessMembershipGraphResponseObject); ok {
+		if err := validResponse.VisitGetAccessMembershipGraphResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

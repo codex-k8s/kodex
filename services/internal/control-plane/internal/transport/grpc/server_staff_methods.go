@@ -356,6 +356,64 @@ func (s *Server) ListUsers(ctx context.Context, req *controlplanev1.ListUsersReq
 	return &controlplanev1.ListUsersResponse{Items: out}, nil
 }
 
+func (s *Server) GetAccessMembershipGraph(ctx context.Context, req *controlplanev1.GetAccessMembershipGraphRequest) (*controlplanev1.AccessMembershipGraph, error) {
+	p, err := requirePrincipal(req.GetPrincipal())
+	if err != nil {
+		return nil, err
+	}
+	limit := clampLimit(req.GetLimit(), 500)
+	snapshot, err := s.staff.GetAccessMembershipGraph(ctx, p, limit)
+	if err != nil {
+		return nil, toStatus(err)
+	}
+
+	organizations := make([]*controlplanev1.Organization, 0, len(snapshot.Organizations))
+	for _, item := range snapshot.Organizations {
+		organizations = append(organizations, &controlplanev1.Organization{
+			Id:   item.ID,
+			Slug: item.Slug,
+			Name: item.Name,
+		})
+	}
+
+	groups := make([]*controlplanev1.UserGroup, 0, len(snapshot.Groups))
+	for _, item := range snapshot.Groups {
+		groups = append(groups, &controlplanev1.UserGroup{
+			Id:             item.ID,
+			OrganizationId: item.OrganizationID,
+			Scope:          string(item.Scope),
+			Slug:           item.Slug,
+			Name:           item.Name,
+		})
+	}
+
+	organizationMemberships := make([]*controlplanev1.OrganizationMembership, 0, len(snapshot.OrganizationMemberships))
+	for _, item := range snapshot.OrganizationMemberships {
+		organizationMemberships = append(organizationMemberships, &controlplanev1.OrganizationMembership{
+			OrganizationId: item.OrganizationID,
+			UserId:         item.UserID,
+			Email:          item.Email,
+			Role:           item.Role,
+		})
+	}
+
+	userGroupMemberships := make([]*controlplanev1.UserGroupMembership, 0, len(snapshot.UserGroupMemberships))
+	for _, item := range snapshot.UserGroupMemberships {
+		userGroupMemberships = append(userGroupMemberships, &controlplanev1.UserGroupMembership{
+			GroupId: item.GroupID,
+			UserId:  item.UserID,
+			Email:   item.Email,
+		})
+	}
+
+	return &controlplanev1.AccessMembershipGraph{
+		Organizations:           organizations,
+		Groups:                  groups,
+		OrganizationMemberships: organizationMemberships,
+		UserGroupMemberships:    userGroupMemberships,
+	}, nil
+}
+
 func (s *Server) CreateUser(ctx context.Context, req *controlplanev1.CreateUserRequest) (*controlplanev1.User, error) {
 	p, err := requirePrincipal(req.GetPrincipal())
 	if err != nil {

@@ -186,7 +186,9 @@ func (s *Service) codexAuthPing(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("create codex auth check dir: %w", err)
 	}
-	defer os.RemoveAll(pingDir)
+	defer func() {
+		_ = os.RemoveAll(pingDir)
+	}()
 
 	checkCtx, cancel := context.WithTimeout(ctx, 75*time.Second)
 	defer cancel()

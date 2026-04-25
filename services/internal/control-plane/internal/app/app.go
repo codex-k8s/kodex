@@ -43,6 +43,7 @@ import (
 	valuetypes "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/webhook"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/observability"
+	accessgraphrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/repository/postgres/accessgraph"
 	agentrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/repository/postgres/agent"
 	agentrunrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/repository/postgres/agentrun"
 	agentsessionrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/repository/postgres/agentsession"
@@ -101,6 +102,7 @@ func Run() error {
 	githubRateLimitWaits := githubratelimitwaitrepo.NewRepository(pgxPool)
 
 	users := userrepo.NewRepository(pgxPool)
+	accessGraph := accessgraphrepo.NewRepository(pgxPool)
 	projects := projectrepo.NewRepository(pgxPool)
 	members := projectmemberrepo.NewRepository(pgxPool)
 	runs := staffrunrepo.NewRepository(pgxPool)
@@ -409,6 +411,7 @@ func Run() error {
 		NextStepLabels:         buildNextStepLabels(cfg),
 	}, staff.Dependencies{
 		Users:          users,
+		AccessGraph:    accessGraph,
 		Projects:       projects,
 		Members:        members,
 		Repos:          repos,
@@ -441,9 +444,12 @@ func Run() error {
 	}
 
 	// Ensure bootstrap users exist so that the first login can be matched by email.
-	_, err = users.EnsureOwner(runCtx, cfg.BootstrapOwnerEmail)
+	bootstrapOwner, err := users.EnsureOwner(runCtx, cfg.BootstrapOwnerEmail)
 	if err != nil {
 		return fmt.Errorf("ensure bootstrap owner user: %w", err)
+	}
+	if err := accessGraph.EnsureBootstrapOwnerOrganizationMembership(runCtx, bootstrapOwner.ID); err != nil {
+		return fmt.Errorf("ensure bootstrap owner organization membership: %w", err)
 	}
 	if err := ensureBootstrapAllowedUsers(runCtx, users, cfg.BootstrapOwnerEmail, cfg.BootstrapAllowedEmails, logger); err != nil {
 		return fmt.Errorf("ensure bootstrap allowed users: %w", err)

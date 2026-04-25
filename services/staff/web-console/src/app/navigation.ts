@@ -35,6 +35,7 @@ export const navItems: NavItem[] = [
   { groupId: "projects", routeName: "project-members", titleKey: "nav.members", icon: "mdi-account-group-outline", requiresProject: true, adminOnly: true },
 
   // Platform
+  { groupId: "platform", routeName: "organizations-and-groups", titleKey: "nav.organizationsAndGroups", icon: "mdi-domain", adminOnly: true },
   { groupId: "platform", routeName: "users", titleKey: "nav.users", icon: "mdi-account-multiple-outline", adminOnly: true },
 
   // Platform settings (scaffold)

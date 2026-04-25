@@ -3437,6 +3437,390 @@ func (x *ListUsersResponse) GetItems() []*User {
 	return nil
 }
 
+type Organization struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Slug          string                 `protobuf:"bytes,2,opt,name=slug,proto3" json:"slug,omitempty"`
+	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Organization) Reset() {
+	*x = Organization{}
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Organization) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Organization) ProtoMessage() {}
+
+func (x *Organization) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Organization.ProtoReflect.Descriptor instead.
+func (*Organization) Descriptor() ([]byte, []int) {
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{49}
+}
+
+func (x *Organization) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *Organization) GetSlug() string {
+	if x != nil {
+		return x.Slug
+	}
+	return ""
+}
+
+func (x *Organization) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+type UserGroup struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	OrganizationId *string                `protobuf:"bytes,2,opt,name=organization_id,json=organizationId,proto3,oneof" json:"organization_id,omitempty"`
+	Scope          string                 `protobuf:"bytes,3,opt,name=scope,proto3" json:"scope,omitempty"`
+	Slug           string                 `protobuf:"bytes,4,opt,name=slug,proto3" json:"slug,omitempty"`
+	Name           string                 `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *UserGroup) Reset() {
+	*x = UserGroup{}
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[50]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UserGroup) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserGroup) ProtoMessage() {}
+
+func (x *UserGroup) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[50]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserGroup.ProtoReflect.Descriptor instead.
+func (*UserGroup) Descriptor() ([]byte, []int) {
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{50}
+}
+
+func (x *UserGroup) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *UserGroup) GetOrganizationId() string {
+	if x != nil && x.OrganizationId != nil {
+		return *x.OrganizationId
+	}
+	return ""
+}
+
+func (x *UserGroup) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+func (x *UserGroup) GetSlug() string {
+	if x != nil {
+		return x.Slug
+	}
+	return ""
+}
+
+func (x *UserGroup) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+type OrganizationMembership struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	UserId         string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Email          string                 `protobuf:"bytes,3,opt,name=email,proto3" json:"email,omitempty"`
+	Role           string                 `protobuf:"bytes,4,opt,name=role,proto3" json:"role,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *OrganizationMembership) Reset() {
+	*x = OrganizationMembership{}
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[51]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OrganizationMembership) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OrganizationMembership) ProtoMessage() {}
+
+func (x *OrganizationMembership) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[51]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OrganizationMembership.ProtoReflect.Descriptor instead.
+func (*OrganizationMembership) Descriptor() ([]byte, []int) {
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{51}
+}
+
+func (x *OrganizationMembership) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *OrganizationMembership) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *OrganizationMembership) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *OrganizationMembership) GetRole() string {
+	if x != nil {
+		return x.Role
+	}
+	return ""
+}
+
+type UserGroupMembership struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	GroupId       string                 `protobuf:"bytes,1,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
+	UserId        string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Email         string                 `protobuf:"bytes,3,opt,name=email,proto3" json:"email,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UserGroupMembership) Reset() {
+	*x = UserGroupMembership{}
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[52]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UserGroupMembership) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserGroupMembership) ProtoMessage() {}
+
+func (x *UserGroupMembership) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[52]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserGroupMembership.ProtoReflect.Descriptor instead.
+func (*UserGroupMembership) Descriptor() ([]byte, []int) {
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{52}
+}
+
+func (x *UserGroupMembership) GetGroupId() string {
+	if x != nil {
+		return x.GroupId
+	}
+	return ""
+}
+
+func (x *UserGroupMembership) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *UserGroupMembership) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+type GetAccessMembershipGraphRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Principal     *Principal             `protobuf:"bytes,1,opt,name=principal,proto3" json:"principal,omitempty"`
+	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetAccessMembershipGraphRequest) Reset() {
+	*x = GetAccessMembershipGraphRequest{}
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[53]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAccessMembershipGraphRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAccessMembershipGraphRequest) ProtoMessage() {}
+
+func (x *GetAccessMembershipGraphRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[53]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAccessMembershipGraphRequest.ProtoReflect.Descriptor instead.
+func (*GetAccessMembershipGraphRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{53}
+}
+
+func (x *GetAccessMembershipGraphRequest) GetPrincipal() *Principal {
+	if x != nil {
+		return x.Principal
+	}
+	return nil
+}
+
+func (x *GetAccessMembershipGraphRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+type AccessMembershipGraph struct {
+	state                   protoimpl.MessageState    `protogen:"open.v1"`
+	Organizations           []*Organization           `protobuf:"bytes,1,rep,name=organizations,proto3" json:"organizations,omitempty"`
+	Groups                  []*UserGroup              `protobuf:"bytes,2,rep,name=groups,proto3" json:"groups,omitempty"`
+	OrganizationMemberships []*OrganizationMembership `protobuf:"bytes,3,rep,name=organization_memberships,json=organizationMemberships,proto3" json:"organization_memberships,omitempty"`
+	UserGroupMemberships    []*UserGroupMembership    `protobuf:"bytes,4,rep,name=user_group_memberships,json=userGroupMemberships,proto3" json:"user_group_memberships,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
+}
+
+func (x *AccessMembershipGraph) Reset() {
+	*x = AccessMembershipGraph{}
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[54]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AccessMembershipGraph) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AccessMembershipGraph) ProtoMessage() {}
+
+func (x *AccessMembershipGraph) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[54]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AccessMembershipGraph.ProtoReflect.Descriptor instead.
+func (*AccessMembershipGraph) Descriptor() ([]byte, []int) {
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{54}
+}
+
+func (x *AccessMembershipGraph) GetOrganizations() []*Organization {
+	if x != nil {
+		return x.Organizations
+	}
+	return nil
+}
+
+func (x *AccessMembershipGraph) GetGroups() []*UserGroup {
+	if x != nil {
+		return x.Groups
+	}
+	return nil
+}
+
+func (x *AccessMembershipGraph) GetOrganizationMemberships() []*OrganizationMembership {
+	if x != nil {
+		return x.OrganizationMemberships
+	}
+	return nil
+}
+
+func (x *AccessMembershipGraph) GetUserGroupMemberships() []*UserGroupMembership {
+	if x != nil {
+		return x.UserGroupMemberships
+	}
+	return nil
+}
+
 type CreateUserRequest struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	Principal       *Principal             `protobuf:"bytes,1,opt,name=principal,proto3" json:"principal,omitempty"`
@@ -3448,7 +3832,7 @@ type CreateUserRequest struct {
 
 func (x *CreateUserRequest) Reset() {
 	*x = CreateUserRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[49]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3460,7 +3844,7 @@ func (x *CreateUserRequest) String() string {
 func (*CreateUserRequest) ProtoMessage() {}
 
 func (x *CreateUserRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[49]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3473,7 +3857,7 @@ func (x *CreateUserRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateUserRequest.ProtoReflect.Descriptor instead.
 func (*CreateUserRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{49}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *CreateUserRequest) GetPrincipal() *Principal {
@@ -3507,7 +3891,7 @@ type DeleteUserRequest struct {
 
 func (x *DeleteUserRequest) Reset() {
 	*x = DeleteUserRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[50]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3519,7 +3903,7 @@ func (x *DeleteUserRequest) String() string {
 func (*DeleteUserRequest) ProtoMessage() {}
 
 func (x *DeleteUserRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[50]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3532,7 +3916,7 @@ func (x *DeleteUserRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteUserRequest.ProtoReflect.Descriptor instead.
 func (*DeleteUserRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{50}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *DeleteUserRequest) GetPrincipal() *Principal {
@@ -3562,7 +3946,7 @@ type ProjectMember struct {
 
 func (x *ProjectMember) Reset() {
 	*x = ProjectMember{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[51]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3574,7 +3958,7 @@ func (x *ProjectMember) String() string {
 func (*ProjectMember) ProtoMessage() {}
 
 func (x *ProjectMember) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[51]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3587,7 +3971,7 @@ func (x *ProjectMember) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProjectMember.ProtoReflect.Descriptor instead.
 func (*ProjectMember) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{51}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *ProjectMember) GetProjectId() string {
@@ -3636,7 +4020,7 @@ type ListProjectMembersRequest struct {
 
 func (x *ListProjectMembersRequest) Reset() {
 	*x = ListProjectMembersRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[52]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3648,7 +4032,7 @@ func (x *ListProjectMembersRequest) String() string {
 func (*ListProjectMembersRequest) ProtoMessage() {}
 
 func (x *ListProjectMembersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[52]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3661,7 +4045,7 @@ func (x *ListProjectMembersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectMembersRequest.ProtoReflect.Descriptor instead.
 func (*ListProjectMembersRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{52}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *ListProjectMembersRequest) GetPrincipal() *Principal {
@@ -3694,7 +4078,7 @@ type ListProjectMembersResponse struct {
 
 func (x *ListProjectMembersResponse) Reset() {
 	*x = ListProjectMembersResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[53]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3706,7 +4090,7 @@ func (x *ListProjectMembersResponse) String() string {
 func (*ListProjectMembersResponse) ProtoMessage() {}
 
 func (x *ListProjectMembersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[53]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3719,7 +4103,7 @@ func (x *ListProjectMembersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectMembersResponse.ProtoReflect.Descriptor instead.
 func (*ListProjectMembersResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{53}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *ListProjectMembersResponse) GetItems() []*ProjectMember {
@@ -3742,7 +4126,7 @@ type UpsertProjectMemberRequest struct {
 
 func (x *UpsertProjectMemberRequest) Reset() {
 	*x = UpsertProjectMemberRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[54]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3754,7 +4138,7 @@ func (x *UpsertProjectMemberRequest) String() string {
 func (*UpsertProjectMemberRequest) ProtoMessage() {}
 
 func (x *UpsertProjectMemberRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[54]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3767,7 +4151,7 @@ func (x *UpsertProjectMemberRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpsertProjectMemberRequest.ProtoReflect.Descriptor instead.
 func (*UpsertProjectMemberRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{54}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *UpsertProjectMemberRequest) GetPrincipal() *Principal {
@@ -3816,7 +4200,7 @@ type DeleteProjectMemberRequest struct {
 
 func (x *DeleteProjectMemberRequest) Reset() {
 	*x = DeleteProjectMemberRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[55]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3828,7 +4212,7 @@ func (x *DeleteProjectMemberRequest) String() string {
 func (*DeleteProjectMemberRequest) ProtoMessage() {}
 
 func (x *DeleteProjectMemberRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[55]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3841,7 +4225,7 @@ func (x *DeleteProjectMemberRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteProjectMemberRequest.ProtoReflect.Descriptor instead.
 func (*DeleteProjectMemberRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{55}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *DeleteProjectMemberRequest) GetPrincipal() *Principal {
@@ -3877,7 +4261,7 @@ type SetProjectMemberLearningModeOverrideRequest struct {
 
 func (x *SetProjectMemberLearningModeOverrideRequest) Reset() {
 	*x = SetProjectMemberLearningModeOverrideRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[56]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3889,7 +4273,7 @@ func (x *SetProjectMemberLearningModeOverrideRequest) String() string {
 func (*SetProjectMemberLearningModeOverrideRequest) ProtoMessage() {}
 
 func (x *SetProjectMemberLearningModeOverrideRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[56]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3902,7 +4286,7 @@ func (x *SetProjectMemberLearningModeOverrideRequest) ProtoReflect() protoreflec
 
 // Deprecated: Use SetProjectMemberLearningModeOverrideRequest.ProtoReflect.Descriptor instead.
 func (*SetProjectMemberLearningModeOverrideRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{56}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *SetProjectMemberLearningModeOverrideRequest) GetPrincipal() *Principal {
@@ -3955,7 +4339,7 @@ type RepositoryBinding struct {
 
 func (x *RepositoryBinding) Reset() {
 	*x = RepositoryBinding{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[57]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3967,7 +4351,7 @@ func (x *RepositoryBinding) String() string {
 func (*RepositoryBinding) ProtoMessage() {}
 
 func (x *RepositoryBinding) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[57]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3980,7 +4364,7 @@ func (x *RepositoryBinding) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RepositoryBinding.ProtoReflect.Descriptor instead.
 func (*RepositoryBinding) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{57}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *RepositoryBinding) GetId() string {
@@ -4092,7 +4476,7 @@ type ListProjectRepositoriesRequest struct {
 
 func (x *ListProjectRepositoriesRequest) Reset() {
 	*x = ListProjectRepositoriesRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[58]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4104,7 +4488,7 @@ func (x *ListProjectRepositoriesRequest) String() string {
 func (*ListProjectRepositoriesRequest) ProtoMessage() {}
 
 func (x *ListProjectRepositoriesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[58]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4117,7 +4501,7 @@ func (x *ListProjectRepositoriesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectRepositoriesRequest.ProtoReflect.Descriptor instead.
 func (*ListProjectRepositoriesRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{58}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *ListProjectRepositoriesRequest) GetPrincipal() *Principal {
@@ -4150,7 +4534,7 @@ type ListProjectRepositoriesResponse struct {
 
 func (x *ListProjectRepositoriesResponse) Reset() {
 	*x = ListProjectRepositoriesResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[59]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4162,7 +4546,7 @@ func (x *ListProjectRepositoriesResponse) String() string {
 func (*ListProjectRepositoriesResponse) ProtoMessage() {}
 
 func (x *ListProjectRepositoriesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[59]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4175,7 +4559,7 @@ func (x *ListProjectRepositoriesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectRepositoriesResponse.ProtoReflect.Descriptor instead.
 func (*ListProjectRepositoriesResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{59}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *ListProjectRepositoriesResponse) GetItems() []*RepositoryBinding {
@@ -4204,7 +4588,7 @@ type UpsertProjectRepositoryRequest struct {
 
 func (x *UpsertProjectRepositoryRequest) Reset() {
 	*x = UpsertProjectRepositoryRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[60]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4216,7 +4600,7 @@ func (x *UpsertProjectRepositoryRequest) String() string {
 func (*UpsertProjectRepositoryRequest) ProtoMessage() {}
 
 func (x *UpsertProjectRepositoryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[60]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4229,7 +4613,7 @@ func (x *UpsertProjectRepositoryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpsertProjectRepositoryRequest.ProtoReflect.Descriptor instead.
 func (*UpsertProjectRepositoryRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{60}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *UpsertProjectRepositoryRequest) GetPrincipal() *Principal {
@@ -4320,7 +4704,7 @@ type DeleteProjectRepositoryRequest struct {
 
 func (x *DeleteProjectRepositoryRequest) Reset() {
 	*x = DeleteProjectRepositoryRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[61]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4332,7 +4716,7 @@ func (x *DeleteProjectRepositoryRequest) String() string {
 func (*DeleteProjectRepositoryRequest) ProtoMessage() {}
 
 func (x *DeleteProjectRepositoryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[61]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4345,7 +4729,7 @@ func (x *DeleteProjectRepositoryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteProjectRepositoryRequest.ProtoReflect.Descriptor instead.
 func (*DeleteProjectRepositoryRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{61}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *DeleteProjectRepositoryRequest) GetPrincipal() *Principal {
@@ -4383,7 +4767,7 @@ type UpsertRepositoryBotParamsRequest struct {
 
 func (x *UpsertRepositoryBotParamsRequest) Reset() {
 	*x = UpsertRepositoryBotParamsRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[62]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4395,7 +4779,7 @@ func (x *UpsertRepositoryBotParamsRequest) String() string {
 func (*UpsertRepositoryBotParamsRequest) ProtoMessage() {}
 
 func (x *UpsertRepositoryBotParamsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[62]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4408,7 +4792,7 @@ func (x *UpsertRepositoryBotParamsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpsertRepositoryBotParamsRequest.ProtoReflect.Descriptor instead.
 func (*UpsertRepositoryBotParamsRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{62}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *UpsertRepositoryBotParamsRequest) GetPrincipal() *Principal {
@@ -4464,7 +4848,7 @@ type RunRepositoryPreflightRequest struct {
 
 func (x *RunRepositoryPreflightRequest) Reset() {
 	*x = RunRepositoryPreflightRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[63]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4476,7 +4860,7 @@ func (x *RunRepositoryPreflightRequest) String() string {
 func (*RunRepositoryPreflightRequest) ProtoMessage() {}
 
 func (x *RunRepositoryPreflightRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[63]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4489,7 +4873,7 @@ func (x *RunRepositoryPreflightRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunRepositoryPreflightRequest.ProtoReflect.Descriptor instead.
 func (*RunRepositoryPreflightRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{63}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *RunRepositoryPreflightRequest) GetPrincipal() *Principal {
@@ -4524,7 +4908,7 @@ type PreflightCheckResult struct {
 
 func (x *PreflightCheckResult) Reset() {
 	*x = PreflightCheckResult{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[64]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4536,7 +4920,7 @@ func (x *PreflightCheckResult) String() string {
 func (*PreflightCheckResult) ProtoMessage() {}
 
 func (x *PreflightCheckResult) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[64]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4549,7 +4933,7 @@ func (x *PreflightCheckResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PreflightCheckResult.ProtoReflect.Descriptor instead.
 func (*PreflightCheckResult) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{64}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *PreflightCheckResult) GetName() string {
@@ -4586,7 +4970,7 @@ type RunRepositoryPreflightResponse struct {
 
 func (x *RunRepositoryPreflightResponse) Reset() {
 	*x = RunRepositoryPreflightResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[65]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4598,7 +4982,7 @@ func (x *RunRepositoryPreflightResponse) String() string {
 func (*RunRepositoryPreflightResponse) ProtoMessage() {}
 
 func (x *RunRepositoryPreflightResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[65]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4611,7 +4995,7 @@ func (x *RunRepositoryPreflightResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunRepositoryPreflightResponse.ProtoReflect.Descriptor instead.
 func (*RunRepositoryPreflightResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{65}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *RunRepositoryPreflightResponse) GetRepositoryId() string {
@@ -4662,7 +5046,7 @@ type ProjectGitHubTokens struct {
 
 func (x *ProjectGitHubTokens) Reset() {
 	*x = ProjectGitHubTokens{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[66]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4674,7 +5058,7 @@ func (x *ProjectGitHubTokens) String() string {
 func (*ProjectGitHubTokens) ProtoMessage() {}
 
 func (x *ProjectGitHubTokens) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[66]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4687,7 +5071,7 @@ func (x *ProjectGitHubTokens) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProjectGitHubTokens.ProtoReflect.Descriptor instead.
 func (*ProjectGitHubTokens) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{66}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *ProjectGitHubTokens) GetProjectId() string {
@@ -4735,7 +5119,7 @@ type GetProjectGitHubTokensRequest struct {
 
 func (x *GetProjectGitHubTokensRequest) Reset() {
 	*x = GetProjectGitHubTokensRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[67]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4747,7 +5131,7 @@ func (x *GetProjectGitHubTokensRequest) String() string {
 func (*GetProjectGitHubTokensRequest) ProtoMessage() {}
 
 func (x *GetProjectGitHubTokensRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[67]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4760,7 +5144,7 @@ func (x *GetProjectGitHubTokensRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetProjectGitHubTokensRequest.ProtoReflect.Descriptor instead.
 func (*GetProjectGitHubTokensRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{67}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *GetProjectGitHubTokensRequest) GetPrincipal() *Principal {
@@ -4791,7 +5175,7 @@ type UpsertProjectGitHubTokensRequest struct {
 
 func (x *UpsertProjectGitHubTokensRequest) Reset() {
 	*x = UpsertProjectGitHubTokensRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[68]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4803,7 +5187,7 @@ func (x *UpsertProjectGitHubTokensRequest) String() string {
 func (*UpsertProjectGitHubTokensRequest) ProtoMessage() {}
 
 func (x *UpsertProjectGitHubTokensRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[68]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4816,7 +5200,7 @@ func (x *UpsertProjectGitHubTokensRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpsertProjectGitHubTokensRequest.ProtoReflect.Descriptor instead.
 func (*UpsertProjectGitHubTokensRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{68}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *UpsertProjectGitHubTokensRequest) GetPrincipal() *Principal {
@@ -4875,7 +5259,7 @@ type NextStepActionRequest struct {
 
 func (x *NextStepActionRequest) Reset() {
 	*x = NextStepActionRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[69]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4887,7 +5271,7 @@ func (x *NextStepActionRequest) String() string {
 func (*NextStepActionRequest) ProtoMessage() {}
 
 func (x *NextStepActionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[69]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4900,7 +5284,7 @@ func (x *NextStepActionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NextStepActionRequest.ProtoReflect.Descriptor instead.
 func (*NextStepActionRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{69}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *NextStepActionRequest) GetPrincipal() *Principal {
@@ -4960,7 +5344,7 @@ type NextStepActionResponse struct {
 
 func (x *NextStepActionResponse) Reset() {
 	*x = NextStepActionResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[70]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4972,7 +5356,7 @@ func (x *NextStepActionResponse) String() string {
 func (*NextStepActionResponse) ProtoMessage() {}
 
 func (x *NextStepActionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[70]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4985,7 +5369,7 @@ func (x *NextStepActionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NextStepActionResponse.ProtoReflect.Descriptor instead.
 func (*NextStepActionResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{70}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *NextStepActionResponse) GetRepositoryFullName() string {
@@ -5056,7 +5440,7 @@ type ConfigEntry struct {
 
 func (x *ConfigEntry) Reset() {
 	*x = ConfigEntry{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[71]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5068,7 +5452,7 @@ func (x *ConfigEntry) String() string {
 func (*ConfigEntry) ProtoMessage() {}
 
 func (x *ConfigEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[71]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5081,7 +5465,7 @@ func (x *ConfigEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfigEntry.ProtoReflect.Descriptor instead.
 func (*ConfigEntry) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{71}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{77}
 }
 
 func (x *ConfigEntry) GetId() string {
@@ -5174,7 +5558,7 @@ type ListConfigEntriesRequest struct {
 
 func (x *ListConfigEntriesRequest) Reset() {
 	*x = ListConfigEntriesRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[72]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[78]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5186,7 +5570,7 @@ func (x *ListConfigEntriesRequest) String() string {
 func (*ListConfigEntriesRequest) ProtoMessage() {}
 
 func (x *ListConfigEntriesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[72]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[78]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5199,7 +5583,7 @@ func (x *ListConfigEntriesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListConfigEntriesRequest.ProtoReflect.Descriptor instead.
 func (*ListConfigEntriesRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{72}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{78}
 }
 
 func (x *ListConfigEntriesRequest) GetPrincipal() *Principal {
@@ -5246,7 +5630,7 @@ type ListConfigEntriesResponse struct {
 
 func (x *ListConfigEntriesResponse) Reset() {
 	*x = ListConfigEntriesResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[73]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5258,7 +5642,7 @@ func (x *ListConfigEntriesResponse) String() string {
 func (*ListConfigEntriesResponse) ProtoMessage() {}
 
 func (x *ListConfigEntriesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[73]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5271,7 +5655,7 @@ func (x *ListConfigEntriesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListConfigEntriesResponse.ProtoReflect.Descriptor instead.
 func (*ListConfigEntriesResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{73}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *ListConfigEntriesResponse) GetItems() []*ConfigEntry {
@@ -5301,7 +5685,7 @@ type UpsertConfigEntryRequest struct {
 
 func (x *UpsertConfigEntryRequest) Reset() {
 	*x = UpsertConfigEntryRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[74]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[80]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5313,7 +5697,7 @@ func (x *UpsertConfigEntryRequest) String() string {
 func (*UpsertConfigEntryRequest) ProtoMessage() {}
 
 func (x *UpsertConfigEntryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[74]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[80]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5326,7 +5710,7 @@ func (x *UpsertConfigEntryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpsertConfigEntryRequest.ProtoReflect.Descriptor instead.
 func (*UpsertConfigEntryRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{74}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{80}
 }
 
 func (x *UpsertConfigEntryRequest) GetPrincipal() *Principal {
@@ -5423,7 +5807,7 @@ type DeleteConfigEntryRequest struct {
 
 func (x *DeleteConfigEntryRequest) Reset() {
 	*x = DeleteConfigEntryRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[75]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5435,7 +5819,7 @@ func (x *DeleteConfigEntryRequest) String() string {
 func (*DeleteConfigEntryRequest) ProtoMessage() {}
 
 func (x *DeleteConfigEntryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[75]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5448,7 +5832,7 @@ func (x *DeleteConfigEntryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteConfigEntryRequest.ProtoReflect.Descriptor instead.
 func (*DeleteConfigEntryRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{75}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{81}
 }
 
 func (x *DeleteConfigEntryRequest) GetPrincipal() *Principal {
@@ -5477,7 +5861,7 @@ type DocsetGroup struct {
 
 func (x *DocsetGroup) Reset() {
 	*x = DocsetGroup{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[76]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5489,7 +5873,7 @@ func (x *DocsetGroup) String() string {
 func (*DocsetGroup) ProtoMessage() {}
 
 func (x *DocsetGroup) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[76]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5502,7 +5886,7 @@ func (x *DocsetGroup) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DocsetGroup.ProtoReflect.Descriptor instead.
 func (*DocsetGroup) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{76}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{82}
 }
 
 func (x *DocsetGroup) GetId() string {
@@ -5544,7 +5928,7 @@ type ListDocsetGroupsRequest struct {
 
 func (x *ListDocsetGroupsRequest) Reset() {
 	*x = ListDocsetGroupsRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[77]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5556,7 +5940,7 @@ func (x *ListDocsetGroupsRequest) String() string {
 func (*ListDocsetGroupsRequest) ProtoMessage() {}
 
 func (x *ListDocsetGroupsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[77]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5569,7 +5953,7 @@ func (x *ListDocsetGroupsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDocsetGroupsRequest.ProtoReflect.Descriptor instead.
 func (*ListDocsetGroupsRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{77}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{83}
 }
 
 func (x *ListDocsetGroupsRequest) GetPrincipal() *Principal {
@@ -5602,7 +5986,7 @@ type ListDocsetGroupsResponse struct {
 
 func (x *ListDocsetGroupsResponse) Reset() {
 	*x = ListDocsetGroupsResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[78]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5614,7 +5998,7 @@ func (x *ListDocsetGroupsResponse) String() string {
 func (*ListDocsetGroupsResponse) ProtoMessage() {}
 
 func (x *ListDocsetGroupsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[78]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5627,7 +6011,7 @@ func (x *ListDocsetGroupsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDocsetGroupsResponse.ProtoReflect.Descriptor instead.
 func (*ListDocsetGroupsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{78}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{84}
 }
 
 func (x *ListDocsetGroupsResponse) GetGroups() []*DocsetGroup {
@@ -5651,7 +6035,7 @@ type ImportDocsetRequest struct {
 
 func (x *ImportDocsetRequest) Reset() {
 	*x = ImportDocsetRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[79]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5663,7 +6047,7 @@ func (x *ImportDocsetRequest) String() string {
 func (*ImportDocsetRequest) ProtoMessage() {}
 
 func (x *ImportDocsetRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[79]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5676,7 +6060,7 @@ func (x *ImportDocsetRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportDocsetRequest.ProtoReflect.Descriptor instead.
 func (*ImportDocsetRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{79}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{85}
 }
 
 func (x *ImportDocsetRequest) GetPrincipal() *Principal {
@@ -5734,7 +6118,7 @@ type ImportDocsetResponse struct {
 
 func (x *ImportDocsetResponse) Reset() {
 	*x = ImportDocsetResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[80]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[86]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5746,7 +6130,7 @@ func (x *ImportDocsetResponse) String() string {
 func (*ImportDocsetResponse) ProtoMessage() {}
 
 func (x *ImportDocsetResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[80]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[86]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5759,7 +6143,7 @@ func (x *ImportDocsetResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportDocsetResponse.ProtoReflect.Descriptor instead.
 func (*ImportDocsetResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{80}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{86}
 }
 
 func (x *ImportDocsetResponse) GetRepositoryFullName() string {
@@ -5809,7 +6193,7 @@ type SyncDocsetRequest struct {
 
 func (x *SyncDocsetRequest) Reset() {
 	*x = SyncDocsetRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[81]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5821,7 +6205,7 @@ func (x *SyncDocsetRequest) String() string {
 func (*SyncDocsetRequest) ProtoMessage() {}
 
 func (x *SyncDocsetRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[81]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5834,7 +6218,7 @@ func (x *SyncDocsetRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncDocsetRequest.ProtoReflect.Descriptor instead.
 func (*SyncDocsetRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{81}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{87}
 }
 
 func (x *SyncDocsetRequest) GetPrincipal() *Principal {
@@ -5879,7 +6263,7 @@ type SyncDocsetResponse struct {
 
 func (x *SyncDocsetResponse) Reset() {
 	*x = SyncDocsetResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[82]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5891,7 +6275,7 @@ func (x *SyncDocsetResponse) String() string {
 func (*SyncDocsetResponse) ProtoMessage() {}
 
 func (x *SyncDocsetResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[82]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5904,7 +6288,7 @@ func (x *SyncDocsetResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncDocsetResponse.ProtoReflect.Descriptor instead.
 func (*SyncDocsetResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{82}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{88}
 }
 
 func (x *SyncDocsetResponse) GetRepositoryFullName() string {
@@ -5961,7 +6345,7 @@ type IssueRunMCPTokenRequest struct {
 
 func (x *IssueRunMCPTokenRequest) Reset() {
 	*x = IssueRunMCPTokenRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[83]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5973,7 +6357,7 @@ func (x *IssueRunMCPTokenRequest) String() string {
 func (*IssueRunMCPTokenRequest) ProtoMessage() {}
 
 func (x *IssueRunMCPTokenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[83]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5986,7 +6370,7 @@ func (x *IssueRunMCPTokenRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IssueRunMCPTokenRequest.ProtoReflect.Descriptor instead.
 func (*IssueRunMCPTokenRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{83}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{89}
 }
 
 func (x *IssueRunMCPTokenRequest) GetRunId() string {
@@ -6027,7 +6411,7 @@ type IssueRunMCPTokenResponse struct {
 
 func (x *IssueRunMCPTokenResponse) Reset() {
 	*x = IssueRunMCPTokenResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[84]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[90]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6039,7 +6423,7 @@ func (x *IssueRunMCPTokenResponse) String() string {
 func (*IssueRunMCPTokenResponse) ProtoMessage() {}
 
 func (x *IssueRunMCPTokenResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[84]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[90]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6052,7 +6436,7 @@ func (x *IssueRunMCPTokenResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IssueRunMCPTokenResponse.ProtoReflect.Descriptor instead.
 func (*IssueRunMCPTokenResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{84}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{90}
 }
 
 func (x *IssueRunMCPTokenResponse) GetToken() string {
@@ -6086,7 +6470,7 @@ type PrepareRunEnvironmentRequest struct {
 
 func (x *PrepareRunEnvironmentRequest) Reset() {
 	*x = PrepareRunEnvironmentRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[85]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[91]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6098,7 +6482,7 @@ func (x *PrepareRunEnvironmentRequest) String() string {
 func (*PrepareRunEnvironmentRequest) ProtoMessage() {}
 
 func (x *PrepareRunEnvironmentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[85]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[91]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6111,7 +6495,7 @@ func (x *PrepareRunEnvironmentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrepareRunEnvironmentRequest.ProtoReflect.Descriptor instead.
 func (*PrepareRunEnvironmentRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{85}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{91}
 }
 
 func (x *PrepareRunEnvironmentRequest) GetRunId() string {
@@ -6189,7 +6573,7 @@ type PrepareRunEnvironmentResponse struct {
 
 func (x *PrepareRunEnvironmentResponse) Reset() {
 	*x = PrepareRunEnvironmentResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[86]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[92]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6201,7 +6585,7 @@ func (x *PrepareRunEnvironmentResponse) String() string {
 func (*PrepareRunEnvironmentResponse) ProtoMessage() {}
 
 func (x *PrepareRunEnvironmentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[86]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[92]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6214,7 +6598,7 @@ func (x *PrepareRunEnvironmentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrepareRunEnvironmentResponse.ProtoReflect.Descriptor instead.
 func (*PrepareRunEnvironmentResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{86}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{92}
 }
 
 func (x *PrepareRunEnvironmentResponse) GetOk() bool {
@@ -6265,7 +6649,7 @@ type EvaluateRuntimeReuseRequest struct {
 
 func (x *EvaluateRuntimeReuseRequest) Reset() {
 	*x = EvaluateRuntimeReuseRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[87]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[93]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6277,7 +6661,7 @@ func (x *EvaluateRuntimeReuseRequest) String() string {
 func (*EvaluateRuntimeReuseRequest) ProtoMessage() {}
 
 func (x *EvaluateRuntimeReuseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[87]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[93]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6290,7 +6674,7 @@ func (x *EvaluateRuntimeReuseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvaluateRuntimeReuseRequest.ProtoReflect.Descriptor instead.
 func (*EvaluateRuntimeReuseRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{87}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{93}
 }
 
 func (x *EvaluateRuntimeReuseRequest) GetRunId() string {
@@ -6391,7 +6775,7 @@ type EvaluateRuntimeReuseResponse struct {
 
 func (x *EvaluateRuntimeReuseResponse) Reset() {
 	*x = EvaluateRuntimeReuseResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[88]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[94]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6403,7 +6787,7 @@ func (x *EvaluateRuntimeReuseResponse) String() string {
 func (*EvaluateRuntimeReuseResponse) ProtoMessage() {}
 
 func (x *EvaluateRuntimeReuseResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[88]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[94]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6416,7 +6800,7 @@ func (x *EvaluateRuntimeReuseResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvaluateRuntimeReuseResponse.ProtoReflect.Descriptor instead.
 func (*EvaluateRuntimeReuseResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{88}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{94}
 }
 
 func (x *EvaluateRuntimeReuseResponse) GetReusable() bool {
@@ -6470,7 +6854,7 @@ type ClaimNextInteractionDispatchRequest struct {
 
 func (x *ClaimNextInteractionDispatchRequest) Reset() {
 	*x = ClaimNextInteractionDispatchRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[89]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[95]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6482,7 +6866,7 @@ func (x *ClaimNextInteractionDispatchRequest) String() string {
 func (*ClaimNextInteractionDispatchRequest) ProtoMessage() {}
 
 func (x *ClaimNextInteractionDispatchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[89]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[95]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6495,7 +6879,7 @@ func (x *ClaimNextInteractionDispatchRequest) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use ClaimNextInteractionDispatchRequest.ProtoReflect.Descriptor instead.
 func (*ClaimNextInteractionDispatchRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{89}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{95}
 }
 
 func (x *ClaimNextInteractionDispatchRequest) GetPendingAttemptTimeoutSeconds() int32 {
@@ -6526,7 +6910,7 @@ type ClaimNextInteractionDispatchResponse struct {
 
 func (x *ClaimNextInteractionDispatchResponse) Reset() {
 	*x = ClaimNextInteractionDispatchResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[90]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[96]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6538,7 +6922,7 @@ func (x *ClaimNextInteractionDispatchResponse) String() string {
 func (*ClaimNextInteractionDispatchResponse) ProtoMessage() {}
 
 func (x *ClaimNextInteractionDispatchResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[90]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[96]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6551,7 +6935,7 @@ func (x *ClaimNextInteractionDispatchResponse) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use ClaimNextInteractionDispatchResponse.ProtoReflect.Descriptor instead.
 func (*ClaimNextInteractionDispatchResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{90}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{96}
 }
 
 func (x *ClaimNextInteractionDispatchResponse) GetFound() bool {
@@ -6667,7 +7051,7 @@ type CompleteInteractionDispatchRequest struct {
 
 func (x *CompleteInteractionDispatchRequest) Reset() {
 	*x = CompleteInteractionDispatchRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[91]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[97]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6679,7 +7063,7 @@ func (x *CompleteInteractionDispatchRequest) String() string {
 func (*CompleteInteractionDispatchRequest) ProtoMessage() {}
 
 func (x *CompleteInteractionDispatchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[91]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[97]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6692,7 +7076,7 @@ func (x *CompleteInteractionDispatchRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use CompleteInteractionDispatchRequest.ProtoReflect.Descriptor instead.
 func (*CompleteInteractionDispatchRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{91}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{97}
 }
 
 func (x *CompleteInteractionDispatchRequest) GetInteractionId() string {
@@ -6806,7 +7190,7 @@ type CompleteInteractionDispatchResponse struct {
 
 func (x *CompleteInteractionDispatchResponse) Reset() {
 	*x = CompleteInteractionDispatchResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[92]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[98]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6818,7 +7202,7 @@ func (x *CompleteInteractionDispatchResponse) String() string {
 func (*CompleteInteractionDispatchResponse) ProtoMessage() {}
 
 func (x *CompleteInteractionDispatchResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[92]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[98]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6831,7 +7215,7 @@ func (x *CompleteInteractionDispatchResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use CompleteInteractionDispatchResponse.ProtoReflect.Descriptor instead.
 func (*CompleteInteractionDispatchResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{92}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{98}
 }
 
 func (x *CompleteInteractionDispatchResponse) GetInteractionId() string {
@@ -6877,7 +7261,7 @@ type ExpireNextInteractionRequest struct {
 
 func (x *ExpireNextInteractionRequest) Reset() {
 	*x = ExpireNextInteractionRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[93]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[99]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6889,7 +7273,7 @@ func (x *ExpireNextInteractionRequest) String() string {
 func (*ExpireNextInteractionRequest) ProtoMessage() {}
 
 func (x *ExpireNextInteractionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[93]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[99]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6902,7 +7286,7 @@ func (x *ExpireNextInteractionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExpireNextInteractionRequest.ProtoReflect.Descriptor instead.
 func (*ExpireNextInteractionRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{93}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{99}
 }
 
 type ExpireNextInteractionResponse struct {
@@ -6919,7 +7303,7 @@ type ExpireNextInteractionResponse struct {
 
 func (x *ExpireNextInteractionResponse) Reset() {
 	*x = ExpireNextInteractionResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[94]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[100]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6931,7 +7315,7 @@ func (x *ExpireNextInteractionResponse) String() string {
 func (*ExpireNextInteractionResponse) ProtoMessage() {}
 
 func (x *ExpireNextInteractionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[94]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[100]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6944,7 +7328,7 @@ func (x *ExpireNextInteractionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExpireNextInteractionResponse.ProtoReflect.Descriptor instead.
 func (*ExpireNextInteractionResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{94}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{100}
 }
 
 func (x *ExpireNextInteractionResponse) GetFound() bool {
@@ -6998,7 +7382,7 @@ type ProcessNextGitHubRateLimitWaitRequest struct {
 
 func (x *ProcessNextGitHubRateLimitWaitRequest) Reset() {
 	*x = ProcessNextGitHubRateLimitWaitRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[95]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[101]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7010,7 +7394,7 @@ func (x *ProcessNextGitHubRateLimitWaitRequest) String() string {
 func (*ProcessNextGitHubRateLimitWaitRequest) ProtoMessage() {}
 
 func (x *ProcessNextGitHubRateLimitWaitRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[95]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[101]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7023,7 +7407,7 @@ func (x *ProcessNextGitHubRateLimitWaitRequest) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use ProcessNextGitHubRateLimitWaitRequest.ProtoReflect.Descriptor instead.
 func (*ProcessNextGitHubRateLimitWaitRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{95}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{101}
 }
 
 func (x *ProcessNextGitHubRateLimitWaitRequest) GetWorkerId() string {
@@ -7050,7 +7434,7 @@ type ProcessNextGitHubRateLimitWaitResponse struct {
 
 func (x *ProcessNextGitHubRateLimitWaitResponse) Reset() {
 	*x = ProcessNextGitHubRateLimitWaitResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[96]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[102]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7062,7 +7446,7 @@ func (x *ProcessNextGitHubRateLimitWaitResponse) String() string {
 func (*ProcessNextGitHubRateLimitWaitResponse) ProtoMessage() {}
 
 func (x *ProcessNextGitHubRateLimitWaitResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[96]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[102]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7075,7 +7459,7 @@ func (x *ProcessNextGitHubRateLimitWaitResponse) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use ProcessNextGitHubRateLimitWaitResponse.ProtoReflect.Descriptor instead.
 func (*ProcessNextGitHubRateLimitWaitResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{96}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{102}
 }
 
 func (x *ProcessNextGitHubRateLimitWaitResponse) GetFound() bool {
@@ -7157,7 +7541,7 @@ type GitHubRateLimitHeaders struct {
 
 func (x *GitHubRateLimitHeaders) Reset() {
 	*x = GitHubRateLimitHeaders{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[97]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[103]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7169,7 +7553,7 @@ func (x *GitHubRateLimitHeaders) String() string {
 func (*GitHubRateLimitHeaders) ProtoMessage() {}
 
 func (x *GitHubRateLimitHeaders) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[97]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[103]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7182,7 +7566,7 @@ func (x *GitHubRateLimitHeaders) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GitHubRateLimitHeaders.ProtoReflect.Descriptor instead.
 func (*GitHubRateLimitHeaders) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{97}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{103}
 }
 
 func (x *GitHubRateLimitHeaders) GetRateLimitLimit() int32 {
@@ -7262,7 +7646,7 @@ type ReportGitHubRateLimitSignalRequest struct {
 
 func (x *ReportGitHubRateLimitSignalRequest) Reset() {
 	*x = ReportGitHubRateLimitSignalRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[98]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[104]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7274,7 +7658,7 @@ func (x *ReportGitHubRateLimitSignalRequest) String() string {
 func (*ReportGitHubRateLimitSignalRequest) ProtoMessage() {}
 
 func (x *ReportGitHubRateLimitSignalRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[98]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[104]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7287,7 +7671,7 @@ func (x *ReportGitHubRateLimitSignalRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use ReportGitHubRateLimitSignalRequest.ProtoReflect.Descriptor instead.
 func (*ReportGitHubRateLimitSignalRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{98}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{104}
 }
 
 func (x *ReportGitHubRateLimitSignalRequest) GetRunId() string {
@@ -7395,7 +7779,7 @@ type ReportGitHubRateLimitSignalResponse struct {
 
 func (x *ReportGitHubRateLimitSignalResponse) Reset() {
 	*x = ReportGitHubRateLimitSignalResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[99]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[105]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7407,7 +7791,7 @@ func (x *ReportGitHubRateLimitSignalResponse) String() string {
 func (*ReportGitHubRateLimitSignalResponse) ProtoMessage() {}
 
 func (x *ReportGitHubRateLimitSignalResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[99]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[105]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7420,7 +7804,7 @@ func (x *ReportGitHubRateLimitSignalResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use ReportGitHubRateLimitSignalResponse.ProtoReflect.Descriptor instead.
 func (*ReportGitHubRateLimitSignalResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{99}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{105}
 }
 
 func (x *ReportGitHubRateLimitSignalResponse) GetWaitId() string {
@@ -7475,7 +7859,7 @@ type ChangeGovernanceScopeHint struct {
 
 func (x *ChangeGovernanceScopeHint) Reset() {
 	*x = ChangeGovernanceScopeHint{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[100]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[106]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7487,7 +7871,7 @@ func (x *ChangeGovernanceScopeHint) String() string {
 func (*ChangeGovernanceScopeHint) ProtoMessage() {}
 
 func (x *ChangeGovernanceScopeHint) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[100]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[106]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7500,7 +7884,7 @@ func (x *ChangeGovernanceScopeHint) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChangeGovernanceScopeHint.ProtoReflect.Descriptor instead.
 func (*ChangeGovernanceScopeHint) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{100}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{106}
 }
 
 func (x *ChangeGovernanceScopeHint) GetContextKey() string {
@@ -7527,7 +7911,7 @@ type ChangeGovernanceVerificationTarget struct {
 
 func (x *ChangeGovernanceVerificationTarget) Reset() {
 	*x = ChangeGovernanceVerificationTarget{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[101]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[107]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7539,7 +7923,7 @@ func (x *ChangeGovernanceVerificationTarget) String() string {
 func (*ChangeGovernanceVerificationTarget) ProtoMessage() {}
 
 func (x *ChangeGovernanceVerificationTarget) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[101]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[107]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7552,7 +7936,7 @@ func (x *ChangeGovernanceVerificationTarget) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use ChangeGovernanceVerificationTarget.ProtoReflect.Descriptor instead.
 func (*ChangeGovernanceVerificationTarget) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{101}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{107}
 }
 
 func (x *ChangeGovernanceVerificationTarget) GetTargetKind() string {
@@ -7583,7 +7967,7 @@ type ChangeGovernanceWaveDraft struct {
 
 func (x *ChangeGovernanceWaveDraft) Reset() {
 	*x = ChangeGovernanceWaveDraft{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[102]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[108]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7595,7 +7979,7 @@ func (x *ChangeGovernanceWaveDraft) String() string {
 func (*ChangeGovernanceWaveDraft) ProtoMessage() {}
 
 func (x *ChangeGovernanceWaveDraft) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[102]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[108]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7608,7 +7992,7 @@ func (x *ChangeGovernanceWaveDraft) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChangeGovernanceWaveDraft.ProtoReflect.Descriptor instead.
 func (*ChangeGovernanceWaveDraft) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{102}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{108}
 }
 
 func (x *ChangeGovernanceWaveDraft) GetWaveKey() string {
@@ -7665,7 +8049,7 @@ type ChangeGovernanceArtifactLinkSeed struct {
 
 func (x *ChangeGovernanceArtifactLinkSeed) Reset() {
 	*x = ChangeGovernanceArtifactLinkSeed{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[103]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[109]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7677,7 +8061,7 @@ func (x *ChangeGovernanceArtifactLinkSeed) String() string {
 func (*ChangeGovernanceArtifactLinkSeed) ProtoMessage() {}
 
 func (x *ChangeGovernanceArtifactLinkSeed) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[103]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[109]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7690,7 +8074,7 @@ func (x *ChangeGovernanceArtifactLinkSeed) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChangeGovernanceArtifactLinkSeed.ProtoReflect.Descriptor instead.
 func (*ChangeGovernanceArtifactLinkSeed) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{103}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{109}
 }
 
 func (x *ChangeGovernanceArtifactLinkSeed) GetArtifactKind() string {
@@ -7743,7 +8127,7 @@ type ReportChangeGovernanceDraftSignalRequest struct {
 
 func (x *ReportChangeGovernanceDraftSignalRequest) Reset() {
 	*x = ReportChangeGovernanceDraftSignalRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[104]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[110]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7755,7 +8139,7 @@ func (x *ReportChangeGovernanceDraftSignalRequest) String() string {
 func (*ReportChangeGovernanceDraftSignalRequest) ProtoMessage() {}
 
 func (x *ReportChangeGovernanceDraftSignalRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[104]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[110]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7768,7 +8152,7 @@ func (x *ReportChangeGovernanceDraftSignalRequest) ProtoReflect() protoreflect.M
 
 // Deprecated: Use ReportChangeGovernanceDraftSignalRequest.ProtoReflect.Descriptor instead.
 func (*ReportChangeGovernanceDraftSignalRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{104}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{110}
 }
 
 func (x *ReportChangeGovernanceDraftSignalRequest) GetRunId() string {
@@ -7880,7 +8264,7 @@ type ReportChangeGovernanceDraftSignalResponse struct {
 
 func (x *ReportChangeGovernanceDraftSignalResponse) Reset() {
 	*x = ReportChangeGovernanceDraftSignalResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[105]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[111]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7892,7 +8276,7 @@ func (x *ReportChangeGovernanceDraftSignalResponse) String() string {
 func (*ReportChangeGovernanceDraftSignalResponse) ProtoMessage() {}
 
 func (x *ReportChangeGovernanceDraftSignalResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[105]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[111]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7905,7 +8289,7 @@ func (x *ReportChangeGovernanceDraftSignalResponse) ProtoReflect() protoreflect.
 
 // Deprecated: Use ReportChangeGovernanceDraftSignalResponse.ProtoReflect.Descriptor instead.
 func (*ReportChangeGovernanceDraftSignalResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{105}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{111}
 }
 
 func (x *ReportChangeGovernanceDraftSignalResponse) GetPackageId() string {
@@ -7943,7 +8327,7 @@ type PublishChangeGovernanceWaveMapRequest struct {
 
 func (x *PublishChangeGovernanceWaveMapRequest) Reset() {
 	*x = PublishChangeGovernanceWaveMapRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[106]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[112]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7955,7 +8339,7 @@ func (x *PublishChangeGovernanceWaveMapRequest) String() string {
 func (*PublishChangeGovernanceWaveMapRequest) ProtoMessage() {}
 
 func (x *PublishChangeGovernanceWaveMapRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[106]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[112]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7968,7 +8352,7 @@ func (x *PublishChangeGovernanceWaveMapRequest) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use PublishChangeGovernanceWaveMapRequest.ProtoReflect.Descriptor instead.
 func (*PublishChangeGovernanceWaveMapRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{106}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{112}
 }
 
 func (x *PublishChangeGovernanceWaveMapRequest) GetRunId() string {
@@ -8024,7 +8408,7 @@ type PublishChangeGovernanceWaveMapResponse struct {
 
 func (x *PublishChangeGovernanceWaveMapResponse) Reset() {
 	*x = PublishChangeGovernanceWaveMapResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[107]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[113]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8036,7 +8420,7 @@ func (x *PublishChangeGovernanceWaveMapResponse) String() string {
 func (*PublishChangeGovernanceWaveMapResponse) ProtoMessage() {}
 
 func (x *PublishChangeGovernanceWaveMapResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[107]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[113]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8049,7 +8433,7 @@ func (x *PublishChangeGovernanceWaveMapResponse) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use PublishChangeGovernanceWaveMapResponse.ProtoReflect.Descriptor instead.
 func (*PublishChangeGovernanceWaveMapResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{107}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{113}
 }
 
 func (x *PublishChangeGovernanceWaveMapResponse) GetPackageId() string {
@@ -8092,7 +8476,7 @@ type UpsertChangeGovernanceEvidenceSignalRequest struct {
 
 func (x *UpsertChangeGovernanceEvidenceSignalRequest) Reset() {
 	*x = UpsertChangeGovernanceEvidenceSignalRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[108]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[114]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8104,7 +8488,7 @@ func (x *UpsertChangeGovernanceEvidenceSignalRequest) String() string {
 func (*UpsertChangeGovernanceEvidenceSignalRequest) ProtoMessage() {}
 
 func (x *UpsertChangeGovernanceEvidenceSignalRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[108]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[114]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8117,7 +8501,7 @@ func (x *UpsertChangeGovernanceEvidenceSignalRequest) ProtoReflect() protoreflec
 
 // Deprecated: Use UpsertChangeGovernanceEvidenceSignalRequest.ProtoReflect.Descriptor instead.
 func (*UpsertChangeGovernanceEvidenceSignalRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{108}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{114}
 }
 
 func (x *UpsertChangeGovernanceEvidenceSignalRequest) GetRunId() string {
@@ -8209,7 +8593,7 @@ type UpsertChangeGovernanceEvidenceSignalResponse struct {
 
 func (x *UpsertChangeGovernanceEvidenceSignalResponse) Reset() {
 	*x = UpsertChangeGovernanceEvidenceSignalResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[109]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[115]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8221,7 +8605,7 @@ func (x *UpsertChangeGovernanceEvidenceSignalResponse) String() string {
 func (*UpsertChangeGovernanceEvidenceSignalResponse) ProtoMessage() {}
 
 func (x *UpsertChangeGovernanceEvidenceSignalResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[109]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[115]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8234,7 +8618,7 @@ func (x *UpsertChangeGovernanceEvidenceSignalResponse) ProtoReflect() protorefle
 
 // Deprecated: Use UpsertChangeGovernanceEvidenceSignalResponse.ProtoReflect.Descriptor instead.
 func (*UpsertChangeGovernanceEvidenceSignalResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{109}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{115}
 }
 
 func (x *UpsertChangeGovernanceEvidenceSignalResponse) GetPackageId() string {
@@ -8276,7 +8660,7 @@ type MissionControlWarmupProject struct {
 
 func (x *MissionControlWarmupProject) Reset() {
 	*x = MissionControlWarmupProject{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[110]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[116]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8288,7 +8672,7 @@ func (x *MissionControlWarmupProject) String() string {
 func (*MissionControlWarmupProject) ProtoMessage() {}
 
 func (x *MissionControlWarmupProject) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[110]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[116]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8301,7 +8685,7 @@ func (x *MissionControlWarmupProject) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MissionControlWarmupProject.ProtoReflect.Descriptor instead.
 func (*MissionControlWarmupProject) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{110}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{116}
 }
 
 func (x *MissionControlWarmupProject) GetProjectId() string {
@@ -8334,7 +8718,7 @@ type ListMissionControlWarmupProjectsRequest struct {
 
 func (x *ListMissionControlWarmupProjectsRequest) Reset() {
 	*x = ListMissionControlWarmupProjectsRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[111]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[117]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8346,7 +8730,7 @@ func (x *ListMissionControlWarmupProjectsRequest) String() string {
 func (*ListMissionControlWarmupProjectsRequest) ProtoMessage() {}
 
 func (x *ListMissionControlWarmupProjectsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[111]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[117]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8359,7 +8743,7 @@ func (x *ListMissionControlWarmupProjectsRequest) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use ListMissionControlWarmupProjectsRequest.ProtoReflect.Descriptor instead.
 func (*ListMissionControlWarmupProjectsRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{111}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{117}
 }
 
 func (x *ListMissionControlWarmupProjectsRequest) GetLimit() int32 {
@@ -8378,7 +8762,7 @@ type ListMissionControlWarmupProjectsResponse struct {
 
 func (x *ListMissionControlWarmupProjectsResponse) Reset() {
 	*x = ListMissionControlWarmupProjectsResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[112]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[118]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8390,7 +8774,7 @@ func (x *ListMissionControlWarmupProjectsResponse) String() string {
 func (*ListMissionControlWarmupProjectsResponse) ProtoMessage() {}
 
 func (x *ListMissionControlWarmupProjectsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[112]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[118]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8403,7 +8787,7 @@ func (x *ListMissionControlWarmupProjectsResponse) ProtoReflect() protoreflect.M
 
 // Deprecated: Use ListMissionControlWarmupProjectsResponse.ProtoReflect.Descriptor instead.
 func (*ListMissionControlWarmupProjectsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{112}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{118}
 }
 
 func (x *ListMissionControlWarmupProjectsResponse) GetItems() []*MissionControlWarmupProject {
@@ -8425,7 +8809,7 @@ type RunMissionControlWarmupRequest struct {
 
 func (x *RunMissionControlWarmupRequest) Reset() {
 	*x = RunMissionControlWarmupRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[113]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[119]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8437,7 +8821,7 @@ func (x *RunMissionControlWarmupRequest) String() string {
 func (*RunMissionControlWarmupRequest) ProtoMessage() {}
 
 func (x *RunMissionControlWarmupRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[113]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[119]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8450,7 +8834,7 @@ func (x *RunMissionControlWarmupRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunMissionControlWarmupRequest.ProtoReflect.Descriptor instead.
 func (*RunMissionControlWarmupRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{113}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{119}
 }
 
 func (x *RunMissionControlWarmupRequest) GetProjectId() string {
@@ -8514,7 +8898,7 @@ type RunMissionControlWarmupResponse struct {
 
 func (x *RunMissionControlWarmupResponse) Reset() {
 	*x = RunMissionControlWarmupResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[114]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[120]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8526,7 +8910,7 @@ func (x *RunMissionControlWarmupResponse) String() string {
 func (*RunMissionControlWarmupResponse) ProtoMessage() {}
 
 func (x *RunMissionControlWarmupResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[114]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[120]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8539,7 +8923,7 @@ func (x *RunMissionControlWarmupResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunMissionControlWarmupResponse.ProtoReflect.Descriptor instead.
 func (*RunMissionControlWarmupResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{114}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{120}
 }
 
 func (x *RunMissionControlWarmupResponse) GetProjectId() string {
@@ -8727,7 +9111,7 @@ type MissionControlEntityRef struct {
 
 func (x *MissionControlEntityRef) Reset() {
 	*x = MissionControlEntityRef{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[115]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[121]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8739,7 +9123,7 @@ func (x *MissionControlEntityRef) String() string {
 func (*MissionControlEntityRef) ProtoMessage() {}
 
 func (x *MissionControlEntityRef) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[115]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[121]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8752,7 +9136,7 @@ func (x *MissionControlEntityRef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MissionControlEntityRef.ProtoReflect.Descriptor instead.
 func (*MissionControlEntityRef) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{115}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{121}
 }
 
 func (x *MissionControlEntityRef) GetEntityKind() string {
@@ -8780,7 +9164,7 @@ type MissionControlProviderReference struct {
 
 func (x *MissionControlProviderReference) Reset() {
 	*x = MissionControlProviderReference{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[116]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[122]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8792,7 +9176,7 @@ func (x *MissionControlProviderReference) String() string {
 func (*MissionControlProviderReference) ProtoMessage() {}
 
 func (x *MissionControlProviderReference) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[116]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[122]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8805,7 +9189,7 @@ func (x *MissionControlProviderReference) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MissionControlProviderReference.ProtoReflect.Descriptor instead.
 func (*MissionControlProviderReference) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{116}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{122}
 }
 
 func (x *MissionControlProviderReference) GetProvider() string {
@@ -8840,7 +9224,7 @@ type MissionControlPrimaryActor struct {
 
 func (x *MissionControlPrimaryActor) Reset() {
 	*x = MissionControlPrimaryActor{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[117]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[123]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8852,7 +9236,7 @@ func (x *MissionControlPrimaryActor) String() string {
 func (*MissionControlPrimaryActor) ProtoMessage() {}
 
 func (x *MissionControlPrimaryActor) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[117]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[123]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8865,7 +9249,7 @@ func (x *MissionControlPrimaryActor) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MissionControlPrimaryActor.ProtoReflect.Descriptor instead.
 func (*MissionControlPrimaryActor) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{117}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{123}
 }
 
 func (x *MissionControlPrimaryActor) GetActorType() string {
@@ -8908,7 +9292,7 @@ type MissionControlEntityCard struct {
 
 func (x *MissionControlEntityCard) Reset() {
 	*x = MissionControlEntityCard{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[118]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[124]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8920,7 +9304,7 @@ func (x *MissionControlEntityCard) String() string {
 func (*MissionControlEntityCard) ProtoMessage() {}
 
 func (x *MissionControlEntityCard) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[118]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[124]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8933,7 +9317,7 @@ func (x *MissionControlEntityCard) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MissionControlEntityCard.ProtoReflect.Descriptor instead.
 func (*MissionControlEntityCard) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{118}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{124}
 }
 
 func (x *MissionControlEntityCard) GetEntityKind() string {
@@ -9028,7 +9412,7 @@ type MissionControlRelation struct {
 
 func (x *MissionControlRelation) Reset() {
 	*x = MissionControlRelation{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[119]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[125]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9040,7 +9424,7 @@ func (x *MissionControlRelation) String() string {
 func (*MissionControlRelation) ProtoMessage() {}
 
 func (x *MissionControlRelation) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[119]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[125]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9053,7 +9437,7 @@ func (x *MissionControlRelation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MissionControlRelation.ProtoReflect.Descriptor instead.
 func (*MissionControlRelation) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{119}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{125}
 }
 
 func (x *MissionControlRelation) GetRelationKind() string {
@@ -9124,7 +9508,7 @@ type MissionControlTimelineEntry struct {
 
 func (x *MissionControlTimelineEntry) Reset() {
 	*x = MissionControlTimelineEntry{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[120]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[126]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9136,7 +9520,7 @@ func (x *MissionControlTimelineEntry) String() string {
 func (*MissionControlTimelineEntry) ProtoMessage() {}
 
 func (x *MissionControlTimelineEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[120]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[126]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9149,7 +9533,7 @@ func (x *MissionControlTimelineEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MissionControlTimelineEntry.ProtoReflect.Descriptor instead.
 func (*MissionControlTimelineEntry) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{120}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{126}
 }
 
 func (x *MissionControlTimelineEntry) GetEntryId() string {
@@ -9242,7 +9626,7 @@ type MissionControlAllowedAction struct {
 
 func (x *MissionControlAllowedAction) Reset() {
 	*x = MissionControlAllowedAction{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[121]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[127]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9254,7 +9638,7 @@ func (x *MissionControlAllowedAction) String() string {
 func (*MissionControlAllowedAction) ProtoMessage() {}
 
 func (x *MissionControlAllowedAction) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[121]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[127]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9267,7 +9651,7 @@ func (x *MissionControlAllowedAction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MissionControlAllowedAction.ProtoReflect.Descriptor instead.
 func (*MissionControlAllowedAction) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{121}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{127}
 }
 
 func (x *MissionControlAllowedAction) GetActionKind() string {
@@ -9316,7 +9700,7 @@ type MissionControlProviderDeepLink struct {
 
 func (x *MissionControlProviderDeepLink) Reset() {
 	*x = MissionControlProviderDeepLink{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[122]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[128]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9328,7 +9712,7 @@ func (x *MissionControlProviderDeepLink) String() string {
 func (*MissionControlProviderDeepLink) ProtoMessage() {}
 
 func (x *MissionControlProviderDeepLink) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[122]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[128]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9341,7 +9725,7 @@ func (x *MissionControlProviderDeepLink) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MissionControlProviderDeepLink.ProtoReflect.Descriptor instead.
 func (*MissionControlProviderDeepLink) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{122}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{128}
 }
 
 func (x *MissionControlProviderDeepLink) GetActionKind() string {
@@ -9385,7 +9769,7 @@ type MissionControlWorkItemDetailsPayload struct {
 
 func (x *MissionControlWorkItemDetailsPayload) Reset() {
 	*x = MissionControlWorkItemDetailsPayload{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[123]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[129]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9397,7 +9781,7 @@ func (x *MissionControlWorkItemDetailsPayload) String() string {
 func (*MissionControlWorkItemDetailsPayload) ProtoMessage() {}
 
 func (x *MissionControlWorkItemDetailsPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[123]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[129]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9410,7 +9794,7 @@ func (x *MissionControlWorkItemDetailsPayload) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use MissionControlWorkItemDetailsPayload.ProtoReflect.Descriptor instead.
 func (*MissionControlWorkItemDetailsPayload) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{123}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{129}
 }
 
 func (x *MissionControlWorkItemDetailsPayload) GetRepositoryFullName() string {
@@ -9511,7 +9895,7 @@ type MissionControlDiscussionDetailsPayload struct {
 
 func (x *MissionControlDiscussionDetailsPayload) Reset() {
 	*x = MissionControlDiscussionDetailsPayload{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[124]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[130]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9523,7 +9907,7 @@ func (x *MissionControlDiscussionDetailsPayload) String() string {
 func (*MissionControlDiscussionDetailsPayload) ProtoMessage() {}
 
 func (x *MissionControlDiscussionDetailsPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[124]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[130]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9536,7 +9920,7 @@ func (x *MissionControlDiscussionDetailsPayload) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use MissionControlDiscussionDetailsPayload.ProtoReflect.Descriptor instead.
 func (*MissionControlDiscussionDetailsPayload) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{124}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{130}
 }
 
 func (x *MissionControlDiscussionDetailsPayload) GetDiscussionKind() string {
@@ -9600,7 +9984,7 @@ type MissionControlPullRequestDetailsPayload struct {
 
 func (x *MissionControlPullRequestDetailsPayload) Reset() {
 	*x = MissionControlPullRequestDetailsPayload{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[125]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[131]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9612,7 +9996,7 @@ func (x *MissionControlPullRequestDetailsPayload) String() string {
 func (*MissionControlPullRequestDetailsPayload) ProtoMessage() {}
 
 func (x *MissionControlPullRequestDetailsPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[125]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[131]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9625,7 +10009,7 @@ func (x *MissionControlPullRequestDetailsPayload) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use MissionControlPullRequestDetailsPayload.ProtoReflect.Descriptor instead.
 func (*MissionControlPullRequestDetailsPayload) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{125}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{131}
 }
 
 func (x *MissionControlPullRequestDetailsPayload) GetRepositoryFullName() string {
@@ -9720,7 +10104,7 @@ type MissionControlAgentDetailsPayload struct {
 
 func (x *MissionControlAgentDetailsPayload) Reset() {
 	*x = MissionControlAgentDetailsPayload{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[126]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[132]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9732,7 +10116,7 @@ func (x *MissionControlAgentDetailsPayload) String() string {
 func (*MissionControlAgentDetailsPayload) ProtoMessage() {}
 
 func (x *MissionControlAgentDetailsPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[126]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[132]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9745,7 +10129,7 @@ func (x *MissionControlAgentDetailsPayload) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use MissionControlAgentDetailsPayload.ProtoReflect.Descriptor instead.
 func (*MissionControlAgentDetailsPayload) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{126}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{132}
 }
 
 func (x *MissionControlAgentDetailsPayload) GetAgentKey() string {
@@ -9817,7 +10201,7 @@ type MissionControlEntityDetails struct {
 
 func (x *MissionControlEntityDetails) Reset() {
 	*x = MissionControlEntityDetails{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[127]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[133]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9829,7 +10213,7 @@ func (x *MissionControlEntityDetails) String() string {
 func (*MissionControlEntityDetails) ProtoMessage() {}
 
 func (x *MissionControlEntityDetails) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[127]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[133]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9842,7 +10226,7 @@ func (x *MissionControlEntityDetails) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MissionControlEntityDetails.ProtoReflect.Descriptor instead.
 func (*MissionControlEntityDetails) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{127}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{133}
 }
 
 func (x *MissionControlEntityDetails) GetEntity() *MissionControlEntityCard {
@@ -9965,7 +10349,7 @@ type MissionControlSnapshotSummary struct {
 
 func (x *MissionControlSnapshotSummary) Reset() {
 	*x = MissionControlSnapshotSummary{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[128]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[134]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9977,7 +10361,7 @@ func (x *MissionControlSnapshotSummary) String() string {
 func (*MissionControlSnapshotSummary) ProtoMessage() {}
 
 func (x *MissionControlSnapshotSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[128]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[134]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9990,7 +10374,7 @@ func (x *MissionControlSnapshotSummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MissionControlSnapshotSummary.ProtoReflect.Descriptor instead.
 func (*MissionControlSnapshotSummary) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{128}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{134}
 }
 
 func (x *MissionControlSnapshotSummary) GetTotalEntities() int32 {
@@ -10052,7 +10436,7 @@ type MissionControlDashboardSnapshot struct {
 
 func (x *MissionControlDashboardSnapshot) Reset() {
 	*x = MissionControlDashboardSnapshot{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[129]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[135]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10064,7 +10448,7 @@ func (x *MissionControlDashboardSnapshot) String() string {
 func (*MissionControlDashboardSnapshot) ProtoMessage() {}
 
 func (x *MissionControlDashboardSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[129]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[135]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10077,7 +10461,7 @@ func (x *MissionControlDashboardSnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MissionControlDashboardSnapshot.ProtoReflect.Descriptor instead.
 func (*MissionControlDashboardSnapshot) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{129}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{135}
 }
 
 func (x *MissionControlDashboardSnapshot) GetSnapshotId() string {
@@ -10157,7 +10541,7 @@ type GetMissionControlSnapshotRequest struct {
 
 func (x *GetMissionControlSnapshotRequest) Reset() {
 	*x = GetMissionControlSnapshotRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[130]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[136]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10169,7 +10553,7 @@ func (x *GetMissionControlSnapshotRequest) String() string {
 func (*GetMissionControlSnapshotRequest) ProtoMessage() {}
 
 func (x *GetMissionControlSnapshotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[130]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[136]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10182,7 +10566,7 @@ func (x *GetMissionControlSnapshotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMissionControlSnapshotRequest.ProtoReflect.Descriptor instead.
 func (*GetMissionControlSnapshotRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{130}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{136}
 }
 
 func (x *GetMissionControlSnapshotRequest) GetPrincipal() *Principal {
@@ -10236,7 +10620,7 @@ type GetMissionControlSnapshotResponse struct {
 
 func (x *GetMissionControlSnapshotResponse) Reset() {
 	*x = GetMissionControlSnapshotResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[131]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[137]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10248,7 +10632,7 @@ func (x *GetMissionControlSnapshotResponse) String() string {
 func (*GetMissionControlSnapshotResponse) ProtoMessage() {}
 
 func (x *GetMissionControlSnapshotResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[131]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[137]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10261,7 +10645,7 @@ func (x *GetMissionControlSnapshotResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use GetMissionControlSnapshotResponse.ProtoReflect.Descriptor instead.
 func (*GetMissionControlSnapshotResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{131}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{137}
 }
 
 func (x *GetMissionControlSnapshotResponse) GetSnapshot() *MissionControlDashboardSnapshot {
@@ -10283,7 +10667,7 @@ type GetMissionControlEntityRequest struct {
 
 func (x *GetMissionControlEntityRequest) Reset() {
 	*x = GetMissionControlEntityRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[132]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[138]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10295,7 +10679,7 @@ func (x *GetMissionControlEntityRequest) String() string {
 func (*GetMissionControlEntityRequest) ProtoMessage() {}
 
 func (x *GetMissionControlEntityRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[132]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[138]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10308,7 +10692,7 @@ func (x *GetMissionControlEntityRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMissionControlEntityRequest.ProtoReflect.Descriptor instead.
 func (*GetMissionControlEntityRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{132}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{138}
 }
 
 func (x *GetMissionControlEntityRequest) GetPrincipal() *Principal {
@@ -10352,7 +10736,7 @@ type ListMissionControlTimelineRequest struct {
 
 func (x *ListMissionControlTimelineRequest) Reset() {
 	*x = ListMissionControlTimelineRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[133]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[139]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10364,7 +10748,7 @@ func (x *ListMissionControlTimelineRequest) String() string {
 func (*ListMissionControlTimelineRequest) ProtoMessage() {}
 
 func (x *ListMissionControlTimelineRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[133]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[139]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10377,7 +10761,7 @@ func (x *ListMissionControlTimelineRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use ListMissionControlTimelineRequest.ProtoReflect.Descriptor instead.
 func (*ListMissionControlTimelineRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{133}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{139}
 }
 
 func (x *ListMissionControlTimelineRequest) GetPrincipal() *Principal {
@@ -10425,7 +10809,7 @@ type ListMissionControlTimelineResponse struct {
 
 func (x *ListMissionControlTimelineResponse) Reset() {
 	*x = ListMissionControlTimelineResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[134]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[140]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10437,7 +10821,7 @@ func (x *ListMissionControlTimelineResponse) String() string {
 func (*ListMissionControlTimelineResponse) ProtoMessage() {}
 
 func (x *ListMissionControlTimelineResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[134]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[140]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10450,7 +10834,7 @@ func (x *ListMissionControlTimelineResponse) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use ListMissionControlTimelineResponse.ProtoReflect.Descriptor instead.
 func (*ListMissionControlTimelineResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{134}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{140}
 }
 
 func (x *ListMissionControlTimelineResponse) GetItems() []*MissionControlTimelineEntry {
@@ -10477,7 +10861,7 @@ type MissionControlNodeRef struct {
 
 func (x *MissionControlNodeRef) Reset() {
 	*x = MissionControlNodeRef{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[135]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[141]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10489,7 +10873,7 @@ func (x *MissionControlNodeRef) String() string {
 func (*MissionControlNodeRef) ProtoMessage() {}
 
 func (x *MissionControlNodeRef) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[135]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[141]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10502,7 +10886,7 @@ func (x *MissionControlNodeRef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MissionControlNodeRef.ProtoReflect.Descriptor instead.
 func (*MissionControlNodeRef) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{135}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{141}
 }
 
 func (x *MissionControlNodeRef) GetNodeKind() string {
@@ -10531,7 +10915,7 @@ type MissionControlWorkspaceFilters struct {
 
 func (x *MissionControlWorkspaceFilters) Reset() {
 	*x = MissionControlWorkspaceFilters{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[136]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[142]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10543,7 +10927,7 @@ func (x *MissionControlWorkspaceFilters) String() string {
 func (*MissionControlWorkspaceFilters) ProtoMessage() {}
 
 func (x *MissionControlWorkspaceFilters) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[136]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[142]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10556,7 +10940,7 @@ func (x *MissionControlWorkspaceFilters) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MissionControlWorkspaceFilters.ProtoReflect.Descriptor instead.
 func (*MissionControlWorkspaceFilters) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{136}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{142}
 }
 
 func (x *MissionControlWorkspaceFilters) GetOpenScope() string {
@@ -10605,7 +10989,7 @@ type MissionControlWorkspaceSummary struct {
 
 func (x *MissionControlWorkspaceSummary) Reset() {
 	*x = MissionControlWorkspaceSummary{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[137]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[143]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10617,7 +11001,7 @@ func (x *MissionControlWorkspaceSummary) String() string {
 func (*MissionControlWorkspaceSummary) ProtoMessage() {}
 
 func (x *MissionControlWorkspaceSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[137]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[143]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10630,7 +11014,7 @@ func (x *MissionControlWorkspaceSummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MissionControlWorkspaceSummary.ProtoReflect.Descriptor instead.
 func (*MissionControlWorkspaceSummary) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{137}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{143}
 }
 
 func (x *MissionControlWorkspaceSummary) GetRootCount() int32 {
@@ -10717,7 +11101,7 @@ type MissionControlWorkspaceWatermark struct {
 
 func (x *MissionControlWorkspaceWatermark) Reset() {
 	*x = MissionControlWorkspaceWatermark{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[138]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[144]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10729,7 +11113,7 @@ func (x *MissionControlWorkspaceWatermark) String() string {
 func (*MissionControlWorkspaceWatermark) ProtoMessage() {}
 
 func (x *MissionControlWorkspaceWatermark) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[138]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[144]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10742,7 +11126,7 @@ func (x *MissionControlWorkspaceWatermark) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MissionControlWorkspaceWatermark.ProtoReflect.Descriptor instead.
 func (*MissionControlWorkspaceWatermark) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{138}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{144}
 }
 
 func (x *MissionControlWorkspaceWatermark) GetWatermarkKind() string {
@@ -10801,7 +11185,7 @@ type MissionControlRootGroup struct {
 
 func (x *MissionControlRootGroup) Reset() {
 	*x = MissionControlRootGroup{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[139]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[145]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10813,7 +11197,7 @@ func (x *MissionControlRootGroup) String() string {
 func (*MissionControlRootGroup) ProtoMessage() {}
 
 func (x *MissionControlRootGroup) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[139]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[145]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10826,7 +11210,7 @@ func (x *MissionControlRootGroup) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MissionControlRootGroup.ProtoReflect.Descriptor instead.
 func (*MissionControlRootGroup) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{139}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{145}
 }
 
 func (x *MissionControlRootGroup) GetRootNodeKind() string {
@@ -10893,7 +11277,7 @@ type MissionControlNode struct {
 
 func (x *MissionControlNode) Reset() {
 	*x = MissionControlNode{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[140]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[146]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10905,7 +11289,7 @@ func (x *MissionControlNode) String() string {
 func (*MissionControlNode) ProtoMessage() {}
 
 func (x *MissionControlNode) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[140]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[146]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10918,7 +11302,7 @@ func (x *MissionControlNode) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MissionControlNode.ProtoReflect.Descriptor instead.
 func (*MissionControlNode) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{140}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{146}
 }
 
 func (x *MissionControlNode) GetNodeKind() string {
@@ -11035,7 +11419,7 @@ type MissionControlEdge struct {
 
 func (x *MissionControlEdge) Reset() {
 	*x = MissionControlEdge{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[141]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[147]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11047,7 +11431,7 @@ func (x *MissionControlEdge) String() string {
 func (*MissionControlEdge) ProtoMessage() {}
 
 func (x *MissionControlEdge) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[141]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[147]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11060,7 +11444,7 @@ func (x *MissionControlEdge) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MissionControlEdge.ProtoReflect.Descriptor instead.
 func (*MissionControlEdge) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{141}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{147}
 }
 
 func (x *MissionControlEdge) GetEdgeKind() string {
@@ -11137,7 +11521,7 @@ type MissionControlWorkspaceSnapshot struct {
 
 func (x *MissionControlWorkspaceSnapshot) Reset() {
 	*x = MissionControlWorkspaceSnapshot{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[142]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[148]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11149,7 +11533,7 @@ func (x *MissionControlWorkspaceSnapshot) String() string {
 func (*MissionControlWorkspaceSnapshot) ProtoMessage() {}
 
 func (x *MissionControlWorkspaceSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[142]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[148]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11162,7 +11546,7 @@ func (x *MissionControlWorkspaceSnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MissionControlWorkspaceSnapshot.ProtoReflect.Descriptor instead.
 func (*MissionControlWorkspaceSnapshot) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{142}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{148}
 }
 
 func (x *MissionControlWorkspaceSnapshot) GetSnapshotId() string {
@@ -11249,7 +11633,7 @@ type GetMissionControlWorkspaceRequest struct {
 
 func (x *GetMissionControlWorkspaceRequest) Reset() {
 	*x = GetMissionControlWorkspaceRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[143]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[149]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11261,7 +11645,7 @@ func (x *GetMissionControlWorkspaceRequest) String() string {
 func (*GetMissionControlWorkspaceRequest) ProtoMessage() {}
 
 func (x *GetMissionControlWorkspaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[143]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[149]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11274,7 +11658,7 @@ func (x *GetMissionControlWorkspaceRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use GetMissionControlWorkspaceRequest.ProtoReflect.Descriptor instead.
 func (*GetMissionControlWorkspaceRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{143}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{149}
 }
 
 func (x *GetMissionControlWorkspaceRequest) GetPrincipal() *Principal {
@@ -11328,7 +11712,7 @@ type GetMissionControlWorkspaceResponse struct {
 
 func (x *GetMissionControlWorkspaceResponse) Reset() {
 	*x = GetMissionControlWorkspaceResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[144]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[150]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11340,7 +11724,7 @@ func (x *GetMissionControlWorkspaceResponse) String() string {
 func (*GetMissionControlWorkspaceResponse) ProtoMessage() {}
 
 func (x *GetMissionControlWorkspaceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[144]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[150]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11353,7 +11737,7 @@ func (x *GetMissionControlWorkspaceResponse) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use GetMissionControlWorkspaceResponse.ProtoReflect.Descriptor instead.
 func (*GetMissionControlWorkspaceResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{144}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{150}
 }
 
 func (x *GetMissionControlWorkspaceResponse) GetSnapshot() *MissionControlWorkspaceSnapshot {
@@ -11382,7 +11766,7 @@ type MissionControlContinuityGap struct {
 
 func (x *MissionControlContinuityGap) Reset() {
 	*x = MissionControlContinuityGap{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[145]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[151]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11394,7 +11778,7 @@ func (x *MissionControlContinuityGap) String() string {
 func (*MissionControlContinuityGap) ProtoMessage() {}
 
 func (x *MissionControlContinuityGap) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[145]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[151]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11407,7 +11791,7 @@ func (x *MissionControlContinuityGap) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MissionControlContinuityGap.ProtoReflect.Descriptor instead.
 func (*MissionControlContinuityGap) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{145}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{151}
 }
 
 func (x *MissionControlContinuityGap) GetGapId() int64 {
@@ -11502,7 +11886,7 @@ type MissionControlStageNextStepTemplate struct {
 
 func (x *MissionControlStageNextStepTemplate) Reset() {
 	*x = MissionControlStageNextStepTemplate{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[146]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[152]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11514,7 +11898,7 @@ func (x *MissionControlStageNextStepTemplate) String() string {
 func (*MissionControlStageNextStepTemplate) ProtoMessage() {}
 
 func (x *MissionControlStageNextStepTemplate) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[146]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[152]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11527,7 +11911,7 @@ func (x *MissionControlStageNextStepTemplate) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use MissionControlStageNextStepTemplate.ProtoReflect.Descriptor instead.
 func (*MissionControlStageNextStepTemplate) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{146}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{152}
 }
 
 func (x *MissionControlStageNextStepTemplate) GetThreadKind() string {
@@ -11592,7 +11976,7 @@ type MissionControlLaunchSurface struct {
 
 func (x *MissionControlLaunchSurface) Reset() {
 	*x = MissionControlLaunchSurface{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[147]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[153]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11604,7 +11988,7 @@ func (x *MissionControlLaunchSurface) String() string {
 func (*MissionControlLaunchSurface) ProtoMessage() {}
 
 func (x *MissionControlLaunchSurface) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[147]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[153]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11617,7 +12001,7 @@ func (x *MissionControlLaunchSurface) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MissionControlLaunchSurface.ProtoReflect.Descriptor instead.
 func (*MissionControlLaunchSurface) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{147}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{153}
 }
 
 func (x *MissionControlLaunchSurface) GetActionKind() string {
@@ -11669,7 +12053,7 @@ type MissionControlDiscussionNodeDetails struct {
 
 func (x *MissionControlDiscussionNodeDetails) Reset() {
 	*x = MissionControlDiscussionNodeDetails{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[148]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[154]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11681,7 +12065,7 @@ func (x *MissionControlDiscussionNodeDetails) String() string {
 func (*MissionControlDiscussionNodeDetails) ProtoMessage() {}
 
 func (x *MissionControlDiscussionNodeDetails) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[148]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[154]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11694,7 +12078,7 @@ func (x *MissionControlDiscussionNodeDetails) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use MissionControlDiscussionNodeDetails.ProtoReflect.Descriptor instead.
 func (*MissionControlDiscussionNodeDetails) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{148}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{154}
 }
 
 func (x *MissionControlDiscussionNodeDetails) GetDiscussionKind() string {
@@ -11755,7 +12139,7 @@ type MissionControlWorkItemNodeDetails struct {
 
 func (x *MissionControlWorkItemNodeDetails) Reset() {
 	*x = MissionControlWorkItemNodeDetails{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[149]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[155]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11767,7 +12151,7 @@ func (x *MissionControlWorkItemNodeDetails) String() string {
 func (*MissionControlWorkItemNodeDetails) ProtoMessage() {}
 
 func (x *MissionControlWorkItemNodeDetails) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[149]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[155]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11780,7 +12164,7 @@ func (x *MissionControlWorkItemNodeDetails) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use MissionControlWorkItemNodeDetails.ProtoReflect.Descriptor instead.
 func (*MissionControlWorkItemNodeDetails) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{149}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{155}
 }
 
 func (x *MissionControlWorkItemNodeDetails) GetRepositoryFullName() string {
@@ -11858,7 +12242,7 @@ type MissionControlRunNodeDetails struct {
 
 func (x *MissionControlRunNodeDetails) Reset() {
 	*x = MissionControlRunNodeDetails{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[150]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[156]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11870,7 +12254,7 @@ func (x *MissionControlRunNodeDetails) String() string {
 func (*MissionControlRunNodeDetails) ProtoMessage() {}
 
 func (x *MissionControlRunNodeDetails) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[150]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[156]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11883,7 +12267,7 @@ func (x *MissionControlRunNodeDetails) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MissionControlRunNodeDetails.ProtoReflect.Descriptor instead.
 func (*MissionControlRunNodeDetails) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{150}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{156}
 }
 
 func (x *MissionControlRunNodeDetails) GetRunId() string {
@@ -11980,7 +12364,7 @@ type MissionControlPullRequestNodeDetails struct {
 
 func (x *MissionControlPullRequestNodeDetails) Reset() {
 	*x = MissionControlPullRequestNodeDetails{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[151]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[157]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11992,7 +12376,7 @@ func (x *MissionControlPullRequestNodeDetails) String() string {
 func (*MissionControlPullRequestNodeDetails) ProtoMessage() {}
 
 func (x *MissionControlPullRequestNodeDetails) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[151]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[157]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12005,7 +12389,7 @@ func (x *MissionControlPullRequestNodeDetails) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use MissionControlPullRequestNodeDetails.ProtoReflect.Descriptor instead.
 func (*MissionControlPullRequestNodeDetails) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{151}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{157}
 }
 
 func (x *MissionControlPullRequestNodeDetails) GetRepositoryFullName() string {
@@ -12089,7 +12473,7 @@ type MissionControlActivityEntry struct {
 
 func (x *MissionControlActivityEntry) Reset() {
 	*x = MissionControlActivityEntry{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[152]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[158]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12101,7 +12485,7 @@ func (x *MissionControlActivityEntry) String() string {
 func (*MissionControlActivityEntry) ProtoMessage() {}
 
 func (x *MissionControlActivityEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[152]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[158]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12114,7 +12498,7 @@ func (x *MissionControlActivityEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MissionControlActivityEntry.ProtoReflect.Descriptor instead.
 func (*MissionControlActivityEntry) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{152}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{158}
 }
 
 func (x *MissionControlActivityEntry) GetEntryId() string {
@@ -12210,7 +12594,7 @@ type MissionControlNodeDetails struct {
 
 func (x *MissionControlNodeDetails) Reset() {
 	*x = MissionControlNodeDetails{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[153]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[159]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12222,7 +12606,7 @@ func (x *MissionControlNodeDetails) String() string {
 func (*MissionControlNodeDetails) ProtoMessage() {}
 
 func (x *MissionControlNodeDetails) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[153]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[159]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12235,7 +12619,7 @@ func (x *MissionControlNodeDetails) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MissionControlNodeDetails.ProtoReflect.Descriptor instead.
 func (*MissionControlNodeDetails) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{153}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{159}
 }
 
 func (x *MissionControlNodeDetails) GetNode() *MissionControlNode {
@@ -12376,7 +12760,7 @@ type GetMissionControlNodeRequest struct {
 
 func (x *GetMissionControlNodeRequest) Reset() {
 	*x = GetMissionControlNodeRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[154]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[160]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12388,7 +12772,7 @@ func (x *GetMissionControlNodeRequest) String() string {
 func (*GetMissionControlNodeRequest) ProtoMessage() {}
 
 func (x *GetMissionControlNodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[154]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[160]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12401,7 +12785,7 @@ func (x *GetMissionControlNodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMissionControlNodeRequest.ProtoReflect.Descriptor instead.
 func (*GetMissionControlNodeRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{154}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{160}
 }
 
 func (x *GetMissionControlNodeRequest) GetPrincipal() *Principal {
@@ -12438,7 +12822,7 @@ type ListMissionControlNodeActivityRequest struct {
 
 func (x *ListMissionControlNodeActivityRequest) Reset() {
 	*x = ListMissionControlNodeActivityRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[155]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[161]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12450,7 +12834,7 @@ func (x *ListMissionControlNodeActivityRequest) String() string {
 func (*ListMissionControlNodeActivityRequest) ProtoMessage() {}
 
 func (x *ListMissionControlNodeActivityRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[155]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[161]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12463,7 +12847,7 @@ func (x *ListMissionControlNodeActivityRequest) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use ListMissionControlNodeActivityRequest.ProtoReflect.Descriptor instead.
 func (*ListMissionControlNodeActivityRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{155}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{161}
 }
 
 func (x *ListMissionControlNodeActivityRequest) GetPrincipal() *Principal {
@@ -12511,7 +12895,7 @@ type ListMissionControlNodeActivityResponse struct {
 
 func (x *ListMissionControlNodeActivityResponse) Reset() {
 	*x = ListMissionControlNodeActivityResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[156]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[162]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12523,7 +12907,7 @@ func (x *ListMissionControlNodeActivityResponse) String() string {
 func (*ListMissionControlNodeActivityResponse) ProtoMessage() {}
 
 func (x *ListMissionControlNodeActivityResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[156]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[162]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12536,7 +12920,7 @@ func (x *ListMissionControlNodeActivityResponse) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use ListMissionControlNodeActivityResponse.ProtoReflect.Descriptor instead.
 func (*ListMissionControlNodeActivityResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{156}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{162}
 }
 
 func (x *ListMissionControlNodeActivityResponse) GetItems() []*MissionControlActivityEntry {
@@ -12569,7 +12953,7 @@ type PreviewMissionControlLaunchRequest struct {
 
 func (x *PreviewMissionControlLaunchRequest) Reset() {
 	*x = PreviewMissionControlLaunchRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[157]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[163]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12581,7 +12965,7 @@ func (x *PreviewMissionControlLaunchRequest) String() string {
 func (*PreviewMissionControlLaunchRequest) ProtoMessage() {}
 
 func (x *PreviewMissionControlLaunchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[157]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[163]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12594,7 +12978,7 @@ func (x *PreviewMissionControlLaunchRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use PreviewMissionControlLaunchRequest.ProtoReflect.Descriptor instead.
 func (*PreviewMissionControlLaunchRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{157}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{163}
 }
 
 func (x *PreviewMissionControlLaunchRequest) GetPrincipal() *Principal {
@@ -12664,7 +13048,7 @@ type MissionControlLaunchPreviewLabelDiff struct {
 
 func (x *MissionControlLaunchPreviewLabelDiff) Reset() {
 	*x = MissionControlLaunchPreviewLabelDiff{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[158]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[164]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12676,7 +13060,7 @@ func (x *MissionControlLaunchPreviewLabelDiff) String() string {
 func (*MissionControlLaunchPreviewLabelDiff) ProtoMessage() {}
 
 func (x *MissionControlLaunchPreviewLabelDiff) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[158]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[164]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12689,7 +13073,7 @@ func (x *MissionControlLaunchPreviewLabelDiff) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use MissionControlLaunchPreviewLabelDiff.ProtoReflect.Descriptor instead.
 func (*MissionControlLaunchPreviewLabelDiff) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{158}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{164}
 }
 
 func (x *MissionControlLaunchPreviewLabelDiff) GetRemovedLabels() []string {
@@ -12725,7 +13109,7 @@ type MissionControlLaunchPreviewContinuityEffect struct {
 
 func (x *MissionControlLaunchPreviewContinuityEffect) Reset() {
 	*x = MissionControlLaunchPreviewContinuityEffect{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[159]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[165]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12737,7 +13121,7 @@ func (x *MissionControlLaunchPreviewContinuityEffect) String() string {
 func (*MissionControlLaunchPreviewContinuityEffect) ProtoMessage() {}
 
 func (x *MissionControlLaunchPreviewContinuityEffect) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[159]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[165]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12750,7 +13134,7 @@ func (x *MissionControlLaunchPreviewContinuityEffect) ProtoReflect() protoreflec
 
 // Deprecated: Use MissionControlLaunchPreviewContinuityEffect.ProtoReflect.Descriptor instead.
 func (*MissionControlLaunchPreviewContinuityEffect) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{159}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{165}
 }
 
 func (x *MissionControlLaunchPreviewContinuityEffect) GetResolvedGapIds() []int64 {
@@ -12794,7 +13178,7 @@ type MissionControlLaunchPreview struct {
 
 func (x *MissionControlLaunchPreview) Reset() {
 	*x = MissionControlLaunchPreview{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[160]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[166]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12806,7 +13190,7 @@ func (x *MissionControlLaunchPreview) String() string {
 func (*MissionControlLaunchPreview) ProtoMessage() {}
 
 func (x *MissionControlLaunchPreview) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[160]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[166]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12819,7 +13203,7 @@ func (x *MissionControlLaunchPreview) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MissionControlLaunchPreview.ProtoReflect.Descriptor instead.
 func (*MissionControlLaunchPreview) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{160}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{166}
 }
 
 func (x *MissionControlLaunchPreview) GetPreviewId() string {
@@ -12871,7 +13255,7 @@ type MissionControlStageNextStepPayload struct {
 
 func (x *MissionControlStageNextStepPayload) Reset() {
 	*x = MissionControlStageNextStepPayload{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[161]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[167]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12883,7 +13267,7 @@ func (x *MissionControlStageNextStepPayload) String() string {
 func (*MissionControlStageNextStepPayload) ProtoMessage() {}
 
 func (x *MissionControlStageNextStepPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[161]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[167]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12896,7 +13280,7 @@ func (x *MissionControlStageNextStepPayload) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use MissionControlStageNextStepPayload.ProtoReflect.Descriptor instead.
 func (*MissionControlStageNextStepPayload) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{161}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{167}
 }
 
 func (x *MissionControlStageNextStepPayload) GetThreadKind() string {
@@ -12961,7 +13345,7 @@ type MissionControlPendingCommand struct {
 
 func (x *MissionControlPendingCommand) Reset() {
 	*x = MissionControlPendingCommand{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[162]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[168]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12973,7 +13357,7 @@ func (x *MissionControlPendingCommand) String() string {
 func (*MissionControlPendingCommand) ProtoMessage() {}
 
 func (x *MissionControlPendingCommand) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[162]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[168]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12986,7 +13370,7 @@ func (x *MissionControlPendingCommand) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MissionControlPendingCommand.ProtoReflect.Descriptor instead.
 func (*MissionControlPendingCommand) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{162}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{168}
 }
 
 func (x *MissionControlPendingCommand) GetProjectId() string {
@@ -13084,7 +13468,7 @@ type ClaimMissionControlPendingCommandsRequest struct {
 
 func (x *ClaimMissionControlPendingCommandsRequest) Reset() {
 	*x = ClaimMissionControlPendingCommandsRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[163]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[169]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13096,7 +13480,7 @@ func (x *ClaimMissionControlPendingCommandsRequest) String() string {
 func (*ClaimMissionControlPendingCommandsRequest) ProtoMessage() {}
 
 func (x *ClaimMissionControlPendingCommandsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[163]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[169]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13109,7 +13493,7 @@ func (x *ClaimMissionControlPendingCommandsRequest) ProtoReflect() protoreflect.
 
 // Deprecated: Use ClaimMissionControlPendingCommandsRequest.ProtoReflect.Descriptor instead.
 func (*ClaimMissionControlPendingCommandsRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{163}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{169}
 }
 
 func (x *ClaimMissionControlPendingCommandsRequest) GetLimit() int32 {
@@ -13142,7 +13526,7 @@ type ClaimMissionControlPendingCommandsResponse struct {
 
 func (x *ClaimMissionControlPendingCommandsResponse) Reset() {
 	*x = ClaimMissionControlPendingCommandsResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[164]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[170]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13154,7 +13538,7 @@ func (x *ClaimMissionControlPendingCommandsResponse) String() string {
 func (*ClaimMissionControlPendingCommandsResponse) ProtoMessage() {}
 
 func (x *ClaimMissionControlPendingCommandsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[164]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[170]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13167,7 +13551,7 @@ func (x *ClaimMissionControlPendingCommandsResponse) ProtoReflect() protoreflect
 
 // Deprecated: Use ClaimMissionControlPendingCommandsResponse.ProtoReflect.Descriptor instead.
 func (*ClaimMissionControlPendingCommandsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{164}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{170}
 }
 
 func (x *ClaimMissionControlPendingCommandsResponse) GetItems() []*MissionControlPendingCommand {
@@ -13199,7 +13583,7 @@ type MissionControlCommandState struct {
 
 func (x *MissionControlCommandState) Reset() {
 	*x = MissionControlCommandState{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[165]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[171]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13211,7 +13595,7 @@ func (x *MissionControlCommandState) String() string {
 func (*MissionControlCommandState) ProtoMessage() {}
 
 func (x *MissionControlCommandState) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[165]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[171]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13224,7 +13608,7 @@ func (x *MissionControlCommandState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MissionControlCommandState.ProtoReflect.Descriptor instead.
 func (*MissionControlCommandState) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{165}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{171}
 }
 
 func (x *MissionControlCommandState) GetProjectId() string {
@@ -13338,7 +13722,7 @@ type MissionControlCommandApproval struct {
 
 func (x *MissionControlCommandApproval) Reset() {
 	*x = MissionControlCommandApproval{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[166]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[172]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13350,7 +13734,7 @@ func (x *MissionControlCommandApproval) String() string {
 func (*MissionControlCommandApproval) ProtoMessage() {}
 
 func (x *MissionControlCommandApproval) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[166]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[172]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13363,7 +13747,7 @@ func (x *MissionControlCommandApproval) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MissionControlCommandApproval.ProtoReflect.Descriptor instead.
 func (*MissionControlCommandApproval) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{166}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{172}
 }
 
 func (x *MissionControlCommandApproval) GetApprovalState() string {
@@ -13413,7 +13797,7 @@ type MissionControlDiscussionCreatePayload struct {
 
 func (x *MissionControlDiscussionCreatePayload) Reset() {
 	*x = MissionControlDiscussionCreatePayload{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[167]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[173]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13425,7 +13809,7 @@ func (x *MissionControlDiscussionCreatePayload) String() string {
 func (*MissionControlDiscussionCreatePayload) ProtoMessage() {}
 
 func (x *MissionControlDiscussionCreatePayload) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[167]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[173]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13438,7 +13822,7 @@ func (x *MissionControlDiscussionCreatePayload) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use MissionControlDiscussionCreatePayload.ProtoReflect.Descriptor instead.
 func (*MissionControlDiscussionCreatePayload) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{167}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{173}
 }
 
 func (x *MissionControlDiscussionCreatePayload) GetTitle() string {
@@ -13481,7 +13865,7 @@ type MissionControlWorkItemCreatePayload struct {
 
 func (x *MissionControlWorkItemCreatePayload) Reset() {
 	*x = MissionControlWorkItemCreatePayload{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[168]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[174]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13493,7 +13877,7 @@ func (x *MissionControlWorkItemCreatePayload) String() string {
 func (*MissionControlWorkItemCreatePayload) ProtoMessage() {}
 
 func (x *MissionControlWorkItemCreatePayload) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[168]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[174]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13506,7 +13890,7 @@ func (x *MissionControlWorkItemCreatePayload) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use MissionControlWorkItemCreatePayload.ProtoReflect.Descriptor instead.
 func (*MissionControlWorkItemCreatePayload) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{168}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{174}
 }
 
 func (x *MissionControlWorkItemCreatePayload) GetTitle() string {
@@ -13550,7 +13934,7 @@ type MissionControlDiscussionFormalizePayload struct {
 
 func (x *MissionControlDiscussionFormalizePayload) Reset() {
 	*x = MissionControlDiscussionFormalizePayload{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[169]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[175]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13562,7 +13946,7 @@ func (x *MissionControlDiscussionFormalizePayload) String() string {
 func (*MissionControlDiscussionFormalizePayload) ProtoMessage() {}
 
 func (x *MissionControlDiscussionFormalizePayload) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[169]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[175]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13575,7 +13959,7 @@ func (x *MissionControlDiscussionFormalizePayload) ProtoReflect() protoreflect.M
 
 // Deprecated: Use MissionControlDiscussionFormalizePayload.ProtoReflect.Descriptor instead.
 func (*MissionControlDiscussionFormalizePayload) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{169}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{175}
 }
 
 func (x *MissionControlDiscussionFormalizePayload) GetSourceEntityKind() string {
@@ -13624,7 +14008,7 @@ type MissionControlRetrySyncPayload struct {
 
 func (x *MissionControlRetrySyncPayload) Reset() {
 	*x = MissionControlRetrySyncPayload{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[170]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[176]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13636,7 +14020,7 @@ func (x *MissionControlRetrySyncPayload) String() string {
 func (*MissionControlRetrySyncPayload) ProtoMessage() {}
 
 func (x *MissionControlRetrySyncPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[170]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[176]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13649,7 +14033,7 @@ func (x *MissionControlRetrySyncPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MissionControlRetrySyncPayload.ProtoReflect.Descriptor instead.
 func (*MissionControlRetrySyncPayload) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{170}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{176}
 }
 
 func (x *MissionControlRetrySyncPayload) GetCommandId() string {
@@ -13698,7 +14082,7 @@ type SubmitMissionControlCommandRequest struct {
 
 func (x *SubmitMissionControlCommandRequest) Reset() {
 	*x = SubmitMissionControlCommandRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[171]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[177]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13710,7 +14094,7 @@ func (x *SubmitMissionControlCommandRequest) String() string {
 func (*SubmitMissionControlCommandRequest) ProtoMessage() {}
 
 func (x *SubmitMissionControlCommandRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[171]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[177]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13723,7 +14107,7 @@ func (x *SubmitMissionControlCommandRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use SubmitMissionControlCommandRequest.ProtoReflect.Descriptor instead.
 func (*SubmitMissionControlCommandRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{171}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{177}
 }
 
 func (x *SubmitMissionControlCommandRequest) GetPrincipal() *Principal {
@@ -13889,7 +14273,7 @@ type GetMissionControlCommandRequest struct {
 
 func (x *GetMissionControlCommandRequest) Reset() {
 	*x = GetMissionControlCommandRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[172]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[178]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13901,7 +14285,7 @@ func (x *GetMissionControlCommandRequest) String() string {
 func (*GetMissionControlCommandRequest) ProtoMessage() {}
 
 func (x *GetMissionControlCommandRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[172]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[178]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13914,7 +14298,7 @@ func (x *GetMissionControlCommandRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMissionControlCommandRequest.ProtoReflect.Descriptor instead.
 func (*GetMissionControlCommandRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{172}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{178}
 }
 
 func (x *GetMissionControlCommandRequest) GetPrincipal() *Principal {
@@ -13943,7 +14327,7 @@ type QueueMissionControlCommandRequest struct {
 
 func (x *QueueMissionControlCommandRequest) Reset() {
 	*x = QueueMissionControlCommandRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[173]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[179]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13955,7 +14339,7 @@ func (x *QueueMissionControlCommandRequest) String() string {
 func (*QueueMissionControlCommandRequest) ProtoMessage() {}
 
 func (x *QueueMissionControlCommandRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[173]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[179]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13968,7 +14352,7 @@ func (x *QueueMissionControlCommandRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use QueueMissionControlCommandRequest.ProtoReflect.Descriptor instead.
 func (*QueueMissionControlCommandRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{173}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{179}
 }
 
 func (x *QueueMissionControlCommandRequest) GetProjectId() string {
@@ -14012,7 +14396,7 @@ type MarkMissionControlCommandPendingSyncRequest struct {
 
 func (x *MarkMissionControlCommandPendingSyncRequest) Reset() {
 	*x = MarkMissionControlCommandPendingSyncRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[174]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[180]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14024,7 +14408,7 @@ func (x *MarkMissionControlCommandPendingSyncRequest) String() string {
 func (*MarkMissionControlCommandPendingSyncRequest) ProtoMessage() {}
 
 func (x *MarkMissionControlCommandPendingSyncRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[174]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[180]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14037,7 +14421,7 @@ func (x *MarkMissionControlCommandPendingSyncRequest) ProtoReflect() protoreflec
 
 // Deprecated: Use MarkMissionControlCommandPendingSyncRequest.ProtoReflect.Descriptor instead.
 func (*MarkMissionControlCommandPendingSyncRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{174}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{180}
 }
 
 func (x *MarkMissionControlCommandPendingSyncRequest) GetProjectId() string {
@@ -14089,7 +14473,7 @@ type MarkMissionControlCommandReconciledRequest struct {
 
 func (x *MarkMissionControlCommandReconciledRequest) Reset() {
 	*x = MarkMissionControlCommandReconciledRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[175]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[181]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14101,7 +14485,7 @@ func (x *MarkMissionControlCommandReconciledRequest) String() string {
 func (*MarkMissionControlCommandReconciledRequest) ProtoMessage() {}
 
 func (x *MarkMissionControlCommandReconciledRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[175]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[181]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14114,7 +14498,7 @@ func (x *MarkMissionControlCommandReconciledRequest) ProtoReflect() protoreflect
 
 // Deprecated: Use MarkMissionControlCommandReconciledRequest.ProtoReflect.Descriptor instead.
 func (*MarkMissionControlCommandReconciledRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{175}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{181}
 }
 
 func (x *MarkMissionControlCommandReconciledRequest) GetProjectId() string {
@@ -14173,7 +14557,7 @@ type MarkMissionControlCommandFailedRequest struct {
 
 func (x *MarkMissionControlCommandFailedRequest) Reset() {
 	*x = MarkMissionControlCommandFailedRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[176]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[182]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14185,7 +14569,7 @@ func (x *MarkMissionControlCommandFailedRequest) String() string {
 func (*MarkMissionControlCommandFailedRequest) ProtoMessage() {}
 
 func (x *MarkMissionControlCommandFailedRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[176]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[182]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14198,7 +14582,7 @@ func (x *MarkMissionControlCommandFailedRequest) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use MarkMissionControlCommandFailedRequest.ProtoReflect.Descriptor instead.
 func (*MarkMissionControlCommandFailedRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{176}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{182}
 }
 
 func (x *MarkMissionControlCommandFailedRequest) GetProjectId() string {
@@ -14266,7 +14650,7 @@ type SubmitInteractionCallbackRequest struct {
 
 func (x *SubmitInteractionCallbackRequest) Reset() {
 	*x = SubmitInteractionCallbackRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[177]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[183]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14278,7 +14662,7 @@ func (x *SubmitInteractionCallbackRequest) String() string {
 func (*SubmitInteractionCallbackRequest) ProtoMessage() {}
 
 func (x *SubmitInteractionCallbackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[177]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[183]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14291,7 +14675,7 @@ func (x *SubmitInteractionCallbackRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitInteractionCallbackRequest.ProtoReflect.Descriptor instead.
 func (*SubmitInteractionCallbackRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{177}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{183}
 }
 
 func (x *SubmitInteractionCallbackRequest) GetInteractionId() string {
@@ -14413,7 +14797,7 @@ type SubmitInteractionCallbackResponse struct {
 
 func (x *SubmitInteractionCallbackResponse) Reset() {
 	*x = SubmitInteractionCallbackResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[178]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[184]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14425,7 +14809,7 @@ func (x *SubmitInteractionCallbackResponse) String() string {
 func (*SubmitInteractionCallbackResponse) ProtoMessage() {}
 
 func (x *SubmitInteractionCallbackResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[178]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[184]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14438,7 +14822,7 @@ func (x *SubmitInteractionCallbackResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use SubmitInteractionCallbackResponse.ProtoReflect.Descriptor instead.
 func (*SubmitInteractionCallbackResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{178}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{184}
 }
 
 func (x *SubmitInteractionCallbackResponse) GetAccepted() bool {
@@ -14495,7 +14879,7 @@ type RuntimeDeployTaskLog struct {
 
 func (x *RuntimeDeployTaskLog) Reset() {
 	*x = RuntimeDeployTaskLog{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[179]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[185]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14507,7 +14891,7 @@ func (x *RuntimeDeployTaskLog) String() string {
 func (*RuntimeDeployTaskLog) ProtoMessage() {}
 
 func (x *RuntimeDeployTaskLog) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[179]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[185]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14520,7 +14904,7 @@ func (x *RuntimeDeployTaskLog) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RuntimeDeployTaskLog.ProtoReflect.Descriptor instead.
 func (*RuntimeDeployTaskLog) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{179}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{185}
 }
 
 func (x *RuntimeDeployTaskLog) GetStage() string {
@@ -14588,7 +14972,7 @@ type RuntimeDeployTask struct {
 
 func (x *RuntimeDeployTask) Reset() {
 	*x = RuntimeDeployTask{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[180]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[186]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14600,7 +14984,7 @@ func (x *RuntimeDeployTask) String() string {
 func (*RuntimeDeployTask) ProtoMessage() {}
 
 func (x *RuntimeDeployTask) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[180]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[186]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14613,7 +14997,7 @@ func (x *RuntimeDeployTask) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RuntimeDeployTask.ProtoReflect.Descriptor instead.
 func (*RuntimeDeployTask) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{180}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{186}
 }
 
 func (x *RuntimeDeployTask) GetRunId() string {
@@ -14832,7 +15216,7 @@ type ListRuntimeDeployTasksRequest struct {
 
 func (x *ListRuntimeDeployTasksRequest) Reset() {
 	*x = ListRuntimeDeployTasksRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[181]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[187]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14844,7 +15228,7 @@ func (x *ListRuntimeDeployTasksRequest) String() string {
 func (*ListRuntimeDeployTasksRequest) ProtoMessage() {}
 
 func (x *ListRuntimeDeployTasksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[181]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[187]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14857,7 +15241,7 @@ func (x *ListRuntimeDeployTasksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRuntimeDeployTasksRequest.ProtoReflect.Descriptor instead.
 func (*ListRuntimeDeployTasksRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{181}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{187}
 }
 
 func (x *ListRuntimeDeployTasksRequest) GetPrincipal() *Principal {
@@ -14907,7 +15291,7 @@ type ListRuntimeDeployTasksResponse struct {
 
 func (x *ListRuntimeDeployTasksResponse) Reset() {
 	*x = ListRuntimeDeployTasksResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[182]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[188]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14919,7 +15303,7 @@ func (x *ListRuntimeDeployTasksResponse) String() string {
 func (*ListRuntimeDeployTasksResponse) ProtoMessage() {}
 
 func (x *ListRuntimeDeployTasksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[182]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[188]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14932,7 +15316,7 @@ func (x *ListRuntimeDeployTasksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRuntimeDeployTasksResponse.ProtoReflect.Descriptor instead.
 func (*ListRuntimeDeployTasksResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{182}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{188}
 }
 
 func (x *ListRuntimeDeployTasksResponse) GetItems() []*RuntimeDeployTask {
@@ -14973,7 +15357,7 @@ type GetRuntimeDeployTaskRequest struct {
 
 func (x *GetRuntimeDeployTaskRequest) Reset() {
 	*x = GetRuntimeDeployTaskRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[183]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[189]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14985,7 +15369,7 @@ func (x *GetRuntimeDeployTaskRequest) String() string {
 func (*GetRuntimeDeployTaskRequest) ProtoMessage() {}
 
 func (x *GetRuntimeDeployTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[183]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[189]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14998,7 +15382,7 @@ func (x *GetRuntimeDeployTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRuntimeDeployTaskRequest.ProtoReflect.Descriptor instead.
 func (*GetRuntimeDeployTaskRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{183}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{189}
 }
 
 func (x *GetRuntimeDeployTaskRequest) GetPrincipal() *Principal {
@@ -15026,7 +15410,7 @@ type CancelRuntimeDeployTaskRequest struct {
 
 func (x *CancelRuntimeDeployTaskRequest) Reset() {
 	*x = CancelRuntimeDeployTaskRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[184]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[190]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15038,7 +15422,7 @@ func (x *CancelRuntimeDeployTaskRequest) String() string {
 func (*CancelRuntimeDeployTaskRequest) ProtoMessage() {}
 
 func (x *CancelRuntimeDeployTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[184]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[190]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15051,7 +15435,7 @@ func (x *CancelRuntimeDeployTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelRuntimeDeployTaskRequest.ProtoReflect.Descriptor instead.
 func (*CancelRuntimeDeployTaskRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{184}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{190}
 }
 
 func (x *CancelRuntimeDeployTaskRequest) GetPrincipal() *Principal {
@@ -15088,7 +15472,7 @@ type StopRuntimeDeployTaskRequest struct {
 
 func (x *StopRuntimeDeployTaskRequest) Reset() {
 	*x = StopRuntimeDeployTaskRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[185]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[191]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15100,7 +15484,7 @@ func (x *StopRuntimeDeployTaskRequest) String() string {
 func (*StopRuntimeDeployTaskRequest) ProtoMessage() {}
 
 func (x *StopRuntimeDeployTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[185]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[191]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15113,7 +15497,7 @@ func (x *StopRuntimeDeployTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopRuntimeDeployTaskRequest.ProtoReflect.Descriptor instead.
 func (*StopRuntimeDeployTaskRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{185}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{191}
 }
 
 func (x *StopRuntimeDeployTaskRequest) GetPrincipal() *Principal {
@@ -15157,7 +15541,7 @@ type RuntimeDeployTaskActionResponse struct {
 
 func (x *RuntimeDeployTaskActionResponse) Reset() {
 	*x = RuntimeDeployTaskActionResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[186]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[192]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15169,7 +15553,7 @@ func (x *RuntimeDeployTaskActionResponse) String() string {
 func (*RuntimeDeployTaskActionResponse) ProtoMessage() {}
 
 func (x *RuntimeDeployTaskActionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[186]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[192]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15182,7 +15566,7 @@ func (x *RuntimeDeployTaskActionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RuntimeDeployTaskActionResponse.ProtoReflect.Descriptor instead.
 func (*RuntimeDeployTaskActionResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{186}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{192}
 }
 
 func (x *RuntimeDeployTaskActionResponse) GetRunId() string {
@@ -15242,7 +15626,7 @@ type RuntimeError struct {
 
 func (x *RuntimeError) Reset() {
 	*x = RuntimeError{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[187]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[193]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15254,7 +15638,7 @@ func (x *RuntimeError) String() string {
 func (*RuntimeError) ProtoMessage() {}
 
 func (x *RuntimeError) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[187]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[193]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15267,7 +15651,7 @@ func (x *RuntimeError) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RuntimeError.ProtoReflect.Descriptor instead.
 func (*RuntimeError) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{187}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{193}
 }
 
 func (x *RuntimeError) GetId() string {
@@ -15383,7 +15767,7 @@ type ListRuntimeErrorsRequest struct {
 
 func (x *ListRuntimeErrorsRequest) Reset() {
 	*x = ListRuntimeErrorsRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[188]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[194]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15395,7 +15779,7 @@ func (x *ListRuntimeErrorsRequest) String() string {
 func (*ListRuntimeErrorsRequest) ProtoMessage() {}
 
 func (x *ListRuntimeErrorsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[188]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[194]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15408,7 +15792,7 @@ func (x *ListRuntimeErrorsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRuntimeErrorsRequest.ProtoReflect.Descriptor instead.
 func (*ListRuntimeErrorsRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{188}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{194}
 }
 
 func (x *ListRuntimeErrorsRequest) GetPrincipal() *Principal {
@@ -15469,7 +15853,7 @@ type ListRuntimeErrorsResponse struct {
 
 func (x *ListRuntimeErrorsResponse) Reset() {
 	*x = ListRuntimeErrorsResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[189]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[195]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15481,7 +15865,7 @@ func (x *ListRuntimeErrorsResponse) String() string {
 func (*ListRuntimeErrorsResponse) ProtoMessage() {}
 
 func (x *ListRuntimeErrorsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[189]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[195]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15494,7 +15878,7 @@ func (x *ListRuntimeErrorsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRuntimeErrorsResponse.ProtoReflect.Descriptor instead.
 func (*ListRuntimeErrorsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{189}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{195}
 }
 
 func (x *ListRuntimeErrorsResponse) GetItems() []*RuntimeError {
@@ -15514,7 +15898,7 @@ type MarkRuntimeErrorViewedRequest struct {
 
 func (x *MarkRuntimeErrorViewedRequest) Reset() {
 	*x = MarkRuntimeErrorViewedRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[190]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[196]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15526,7 +15910,7 @@ func (x *MarkRuntimeErrorViewedRequest) String() string {
 func (*MarkRuntimeErrorViewedRequest) ProtoMessage() {}
 
 func (x *MarkRuntimeErrorViewedRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[190]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[196]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15539,7 +15923,7 @@ func (x *MarkRuntimeErrorViewedRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarkRuntimeErrorViewedRequest.ProtoReflect.Descriptor instead.
 func (*MarkRuntimeErrorViewedRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{190}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{196}
 }
 
 func (x *MarkRuntimeErrorViewedRequest) GetPrincipal() *Principal {
@@ -15568,7 +15952,7 @@ type RegistryImageTag struct {
 
 func (x *RegistryImageTag) Reset() {
 	*x = RegistryImageTag{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[191]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[197]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15580,7 +15964,7 @@ func (x *RegistryImageTag) String() string {
 func (*RegistryImageTag) ProtoMessage() {}
 
 func (x *RegistryImageTag) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[191]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[197]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15593,7 +15977,7 @@ func (x *RegistryImageTag) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegistryImageTag.ProtoReflect.Descriptor instead.
 func (*RegistryImageTag) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{191}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{197}
 }
 
 func (x *RegistryImageTag) GetTag() string {
@@ -15635,7 +16019,7 @@ type RegistryImageRepository struct {
 
 func (x *RegistryImageRepository) Reset() {
 	*x = RegistryImageRepository{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[192]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[198]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15647,7 +16031,7 @@ func (x *RegistryImageRepository) String() string {
 func (*RegistryImageRepository) ProtoMessage() {}
 
 func (x *RegistryImageRepository) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[192]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[198]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15660,7 +16044,7 @@ func (x *RegistryImageRepository) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegistryImageRepository.ProtoReflect.Descriptor instead.
 func (*RegistryImageRepository) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{192}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{198}
 }
 
 func (x *RegistryImageRepository) GetRepository() string {
@@ -15696,7 +16080,7 @@ type ListRegistryImagesRequest struct {
 
 func (x *ListRegistryImagesRequest) Reset() {
 	*x = ListRegistryImagesRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[193]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[199]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15708,7 +16092,7 @@ func (x *ListRegistryImagesRequest) String() string {
 func (*ListRegistryImagesRequest) ProtoMessage() {}
 
 func (x *ListRegistryImagesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[193]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[199]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15721,7 +16105,7 @@ func (x *ListRegistryImagesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRegistryImagesRequest.ProtoReflect.Descriptor instead.
 func (*ListRegistryImagesRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{193}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{199}
 }
 
 func (x *ListRegistryImagesRequest) GetPrincipal() *Principal {
@@ -15761,7 +16145,7 @@ type ListRegistryImagesResponse struct {
 
 func (x *ListRegistryImagesResponse) Reset() {
 	*x = ListRegistryImagesResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[194]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[200]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15773,7 +16157,7 @@ func (x *ListRegistryImagesResponse) String() string {
 func (*ListRegistryImagesResponse) ProtoMessage() {}
 
 func (x *ListRegistryImagesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[194]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[200]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15786,7 +16170,7 @@ func (x *ListRegistryImagesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRegistryImagesResponse.ProtoReflect.Descriptor instead.
 func (*ListRegistryImagesResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{194}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{200}
 }
 
 func (x *ListRegistryImagesResponse) GetItems() []*RegistryImageRepository {
@@ -15807,7 +16191,7 @@ type DeleteRegistryImageTagRequest struct {
 
 func (x *DeleteRegistryImageTagRequest) Reset() {
 	*x = DeleteRegistryImageTagRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[195]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[201]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15819,7 +16203,7 @@ func (x *DeleteRegistryImageTagRequest) String() string {
 func (*DeleteRegistryImageTagRequest) ProtoMessage() {}
 
 func (x *DeleteRegistryImageTagRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[195]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[201]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15832,7 +16216,7 @@ func (x *DeleteRegistryImageTagRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteRegistryImageTagRequest.ProtoReflect.Descriptor instead.
 func (*DeleteRegistryImageTagRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{195}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{201}
 }
 
 func (x *DeleteRegistryImageTagRequest) GetPrincipal() *Principal {
@@ -15868,7 +16252,7 @@ type RegistryImageDeleteResult struct {
 
 func (x *RegistryImageDeleteResult) Reset() {
 	*x = RegistryImageDeleteResult{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[196]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[202]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15880,7 +16264,7 @@ func (x *RegistryImageDeleteResult) String() string {
 func (*RegistryImageDeleteResult) ProtoMessage() {}
 
 func (x *RegistryImageDeleteResult) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[196]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[202]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15893,7 +16277,7 @@ func (x *RegistryImageDeleteResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegistryImageDeleteResult.ProtoReflect.Descriptor instead.
 func (*RegistryImageDeleteResult) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{196}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{202}
 }
 
 func (x *RegistryImageDeleteResult) GetRepository() string {
@@ -15937,7 +16321,7 @@ type CleanupRegistryImagesRequest struct {
 
 func (x *CleanupRegistryImagesRequest) Reset() {
 	*x = CleanupRegistryImagesRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[197]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[203]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15949,7 +16333,7 @@ func (x *CleanupRegistryImagesRequest) String() string {
 func (*CleanupRegistryImagesRequest) ProtoMessage() {}
 
 func (x *CleanupRegistryImagesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[197]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[203]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15962,7 +16346,7 @@ func (x *CleanupRegistryImagesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CleanupRegistryImagesRequest.ProtoReflect.Descriptor instead.
 func (*CleanupRegistryImagesRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{197}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{203}
 }
 
 func (x *CleanupRegistryImagesRequest) GetPrincipal() *Principal {
@@ -16013,7 +16397,7 @@ type CleanupRegistryImagesResponse struct {
 
 func (x *CleanupRegistryImagesResponse) Reset() {
 	*x = CleanupRegistryImagesResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[198]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[204]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16025,7 +16409,7 @@ func (x *CleanupRegistryImagesResponse) String() string {
 func (*CleanupRegistryImagesResponse) ProtoMessage() {}
 
 func (x *CleanupRegistryImagesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[198]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[204]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16038,7 +16422,7 @@ func (x *CleanupRegistryImagesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CleanupRegistryImagesResponse.ProtoReflect.Descriptor instead.
 func (*CleanupRegistryImagesResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{198}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{204}
 }
 
 func (x *CleanupRegistryImagesResponse) GetRepositoriesScanned() int32 {
@@ -16108,7 +16492,7 @@ type UpsertAgentSessionRequest struct {
 
 func (x *UpsertAgentSessionRequest) Reset() {
 	*x = UpsertAgentSessionRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[199]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[205]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16120,7 +16504,7 @@ func (x *UpsertAgentSessionRequest) String() string {
 func (*UpsertAgentSessionRequest) ProtoMessage() {}
 
 func (x *UpsertAgentSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[199]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[205]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16133,7 +16517,7 @@ func (x *UpsertAgentSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpsertAgentSessionRequest.ProtoReflect.Descriptor instead.
 func (*UpsertAgentSessionRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{199}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{205}
 }
 
 func (x *UpsertAgentSessionRequest) GetRunId() string {
@@ -16316,7 +16700,7 @@ type UpsertAgentSessionResponse struct {
 
 func (x *UpsertAgentSessionResponse) Reset() {
 	*x = UpsertAgentSessionResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[200]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[206]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16328,7 +16712,7 @@ func (x *UpsertAgentSessionResponse) String() string {
 func (*UpsertAgentSessionResponse) ProtoMessage() {}
 
 func (x *UpsertAgentSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[200]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[206]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16341,7 +16725,7 @@ func (x *UpsertAgentSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpsertAgentSessionResponse.ProtoReflect.Descriptor instead.
 func (*UpsertAgentSessionResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{200}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{206}
 }
 
 func (x *UpsertAgentSessionResponse) GetOk() bool {
@@ -16407,7 +16791,7 @@ type AgentSessionSnapshot struct {
 
 func (x *AgentSessionSnapshot) Reset() {
 	*x = AgentSessionSnapshot{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[201]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[207]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16419,7 +16803,7 @@ func (x *AgentSessionSnapshot) String() string {
 func (*AgentSessionSnapshot) ProtoMessage() {}
 
 func (x *AgentSessionSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[201]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[207]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16432,7 +16816,7 @@ func (x *AgentSessionSnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentSessionSnapshot.ProtoReflect.Descriptor instead.
 func (*AgentSessionSnapshot) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{201}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{207}
 }
 
 func (x *AgentSessionSnapshot) GetRunId() string {
@@ -16635,7 +17019,7 @@ type GetLatestAgentSessionRequest struct {
 
 func (x *GetLatestAgentSessionRequest) Reset() {
 	*x = GetLatestAgentSessionRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[202]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[208]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16647,7 +17031,7 @@ func (x *GetLatestAgentSessionRequest) String() string {
 func (*GetLatestAgentSessionRequest) ProtoMessage() {}
 
 func (x *GetLatestAgentSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[202]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[208]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16660,7 +17044,7 @@ func (x *GetLatestAgentSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetLatestAgentSessionRequest.ProtoReflect.Descriptor instead.
 func (*GetLatestAgentSessionRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{202}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{208}
 }
 
 func (x *GetLatestAgentSessionRequest) GetRepositoryFullName() string {
@@ -16694,7 +17078,7 @@ type GetLatestAgentSessionResponse struct {
 
 func (x *GetLatestAgentSessionResponse) Reset() {
 	*x = GetLatestAgentSessionResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[203]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[209]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16706,7 +17090,7 @@ func (x *GetLatestAgentSessionResponse) String() string {
 func (*GetLatestAgentSessionResponse) ProtoMessage() {}
 
 func (x *GetLatestAgentSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[203]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[209]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16719,7 +17103,7 @@ func (x *GetLatestAgentSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetLatestAgentSessionResponse.ProtoReflect.Descriptor instead.
 func (*GetLatestAgentSessionResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{203}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{209}
 }
 
 func (x *GetLatestAgentSessionResponse) GetFound() bool {
@@ -16744,7 +17128,7 @@ type GetRunInteractionResumePayloadRequest struct {
 
 func (x *GetRunInteractionResumePayloadRequest) Reset() {
 	*x = GetRunInteractionResumePayloadRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[204]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[210]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16756,7 +17140,7 @@ func (x *GetRunInteractionResumePayloadRequest) String() string {
 func (*GetRunInteractionResumePayloadRequest) ProtoMessage() {}
 
 func (x *GetRunInteractionResumePayloadRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[204]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[210]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16769,7 +17153,7 @@ func (x *GetRunInteractionResumePayloadRequest) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use GetRunInteractionResumePayloadRequest.ProtoReflect.Descriptor instead.
 func (*GetRunInteractionResumePayloadRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{204}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{210}
 }
 
 type GetRunInteractionResumePayloadResponse struct {
@@ -16782,7 +17166,7 @@ type GetRunInteractionResumePayloadResponse struct {
 
 func (x *GetRunInteractionResumePayloadResponse) Reset() {
 	*x = GetRunInteractionResumePayloadResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[205]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[211]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16794,7 +17178,7 @@ func (x *GetRunInteractionResumePayloadResponse) String() string {
 func (*GetRunInteractionResumePayloadResponse) ProtoMessage() {}
 
 func (x *GetRunInteractionResumePayloadResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[205]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[211]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16807,7 +17191,7 @@ func (x *GetRunInteractionResumePayloadResponse) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use GetRunInteractionResumePayloadResponse.ProtoReflect.Descriptor instead.
 func (*GetRunInteractionResumePayloadResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{205}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{211}
 }
 
 func (x *GetRunInteractionResumePayloadResponse) GetFound() bool {
@@ -16832,7 +17216,7 @@ type GetRunGitHubRateLimitResumePayloadRequest struct {
 
 func (x *GetRunGitHubRateLimitResumePayloadRequest) Reset() {
 	*x = GetRunGitHubRateLimitResumePayloadRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[206]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[212]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16844,7 +17228,7 @@ func (x *GetRunGitHubRateLimitResumePayloadRequest) String() string {
 func (*GetRunGitHubRateLimitResumePayloadRequest) ProtoMessage() {}
 
 func (x *GetRunGitHubRateLimitResumePayloadRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[206]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[212]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16857,7 +17241,7 @@ func (x *GetRunGitHubRateLimitResumePayloadRequest) ProtoReflect() protoreflect.
 
 // Deprecated: Use GetRunGitHubRateLimitResumePayloadRequest.ProtoReflect.Descriptor instead.
 func (*GetRunGitHubRateLimitResumePayloadRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{206}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{212}
 }
 
 type GetRunGitHubRateLimitResumePayloadResponse struct {
@@ -16870,7 +17254,7 @@ type GetRunGitHubRateLimitResumePayloadResponse struct {
 
 func (x *GetRunGitHubRateLimitResumePayloadResponse) Reset() {
 	*x = GetRunGitHubRateLimitResumePayloadResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[207]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[213]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16882,7 +17266,7 @@ func (x *GetRunGitHubRateLimitResumePayloadResponse) String() string {
 func (*GetRunGitHubRateLimitResumePayloadResponse) ProtoMessage() {}
 
 func (x *GetRunGitHubRateLimitResumePayloadResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[207]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[213]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16895,7 +17279,7 @@ func (x *GetRunGitHubRateLimitResumePayloadResponse) ProtoReflect() protoreflect
 
 // Deprecated: Use GetRunGitHubRateLimitResumePayloadResponse.ProtoReflect.Descriptor instead.
 func (*GetRunGitHubRateLimitResumePayloadResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{207}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{213}
 }
 
 func (x *GetRunGitHubRateLimitResumePayloadResponse) GetFound() bool {
@@ -16924,7 +17308,7 @@ type LookupRunPullRequestRequest struct {
 
 func (x *LookupRunPullRequestRequest) Reset() {
 	*x = LookupRunPullRequestRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[208]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[214]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16936,7 +17320,7 @@ func (x *LookupRunPullRequestRequest) String() string {
 func (*LookupRunPullRequestRequest) ProtoMessage() {}
 
 func (x *LookupRunPullRequestRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[208]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[214]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16949,7 +17333,7 @@ func (x *LookupRunPullRequestRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LookupRunPullRequestRequest.ProtoReflect.Descriptor instead.
 func (*LookupRunPullRequestRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{208}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{214}
 }
 
 func (x *LookupRunPullRequestRequest) GetProjectId() string {
@@ -16994,7 +17378,7 @@ type LookupRunPullRequestResponse struct {
 
 func (x *LookupRunPullRequestResponse) Reset() {
 	*x = LookupRunPullRequestResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[209]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[215]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17006,7 +17390,7 @@ func (x *LookupRunPullRequestResponse) String() string {
 func (*LookupRunPullRequestResponse) ProtoMessage() {}
 
 func (x *LookupRunPullRequestResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[209]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[215]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17019,7 +17403,7 @@ func (x *LookupRunPullRequestResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LookupRunPullRequestResponse.ProtoReflect.Descriptor instead.
 func (*LookupRunPullRequestResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{209}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{215}
 }
 
 func (x *LookupRunPullRequestResponse) GetFound() bool {
@@ -17075,7 +17459,7 @@ type InsertRunFlowEventRequest struct {
 
 func (x *InsertRunFlowEventRequest) Reset() {
 	*x = InsertRunFlowEventRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[210]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[216]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17087,7 +17471,7 @@ func (x *InsertRunFlowEventRequest) String() string {
 func (*InsertRunFlowEventRequest) ProtoMessage() {}
 
 func (x *InsertRunFlowEventRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[210]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[216]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17100,7 +17484,7 @@ func (x *InsertRunFlowEventRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InsertRunFlowEventRequest.ProtoReflect.Descriptor instead.
 func (*InsertRunFlowEventRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{210}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{216}
 }
 
 func (x *InsertRunFlowEventRequest) GetRunId() string {
@@ -17134,7 +17518,7 @@ type InsertRunFlowEventResponse struct {
 
 func (x *InsertRunFlowEventResponse) Reset() {
 	*x = InsertRunFlowEventResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[211]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[217]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17146,7 +17530,7 @@ func (x *InsertRunFlowEventResponse) String() string {
 func (*InsertRunFlowEventResponse) ProtoMessage() {}
 
 func (x *InsertRunFlowEventResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[211]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[217]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17159,7 +17543,7 @@ func (x *InsertRunFlowEventResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InsertRunFlowEventResponse.ProtoReflect.Descriptor instead.
 func (*InsertRunFlowEventResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{211}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{217}
 }
 
 func (x *InsertRunFlowEventResponse) GetOk() bool {
@@ -17199,7 +17583,7 @@ type UpsertRunStatusCommentRequest struct {
 
 func (x *UpsertRunStatusCommentRequest) Reset() {
 	*x = UpsertRunStatusCommentRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[212]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[218]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17211,7 +17595,7 @@ func (x *UpsertRunStatusCommentRequest) String() string {
 func (*UpsertRunStatusCommentRequest) ProtoMessage() {}
 
 func (x *UpsertRunStatusCommentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[212]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[218]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17224,7 +17608,7 @@ func (x *UpsertRunStatusCommentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpsertRunStatusCommentRequest.ProtoReflect.Descriptor instead.
 func (*UpsertRunStatusCommentRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{212}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{218}
 }
 
 func (x *UpsertRunStatusCommentRequest) GetRunId() string {
@@ -17344,7 +17728,7 @@ type UpsertRunStatusCommentResponse struct {
 
 func (x *UpsertRunStatusCommentResponse) Reset() {
 	*x = UpsertRunStatusCommentResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[213]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[219]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17356,7 +17740,7 @@ func (x *UpsertRunStatusCommentResponse) String() string {
 func (*UpsertRunStatusCommentResponse) ProtoMessage() {}
 
 func (x *UpsertRunStatusCommentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[213]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[219]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17369,7 +17753,7 @@ func (x *UpsertRunStatusCommentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpsertRunStatusCommentResponse.ProtoReflect.Descriptor instead.
 func (*UpsertRunStatusCommentResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{213}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{219}
 }
 
 func (x *UpsertRunStatusCommentResponse) GetOk() bool {
@@ -17408,7 +17792,7 @@ type GetCodexAuthRequest struct {
 
 func (x *GetCodexAuthRequest) Reset() {
 	*x = GetCodexAuthRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[214]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[220]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17420,7 +17804,7 @@ func (x *GetCodexAuthRequest) String() string {
 func (*GetCodexAuthRequest) ProtoMessage() {}
 
 func (x *GetCodexAuthRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[214]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[220]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17433,7 +17817,7 @@ func (x *GetCodexAuthRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCodexAuthRequest.ProtoReflect.Descriptor instead.
 func (*GetCodexAuthRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{214}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{220}
 }
 
 type GetCodexAuthResponse struct {
@@ -17446,7 +17830,7 @@ type GetCodexAuthResponse struct {
 
 func (x *GetCodexAuthResponse) Reset() {
 	*x = GetCodexAuthResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[215]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[221]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17458,7 +17842,7 @@ func (x *GetCodexAuthResponse) String() string {
 func (*GetCodexAuthResponse) ProtoMessage() {}
 
 func (x *GetCodexAuthResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[215]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[221]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17471,7 +17855,7 @@ func (x *GetCodexAuthResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCodexAuthResponse.ProtoReflect.Descriptor instead.
 func (*GetCodexAuthResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{215}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{221}
 }
 
 func (x *GetCodexAuthResponse) GetFound() bool {
@@ -17497,7 +17881,7 @@ type UpsertCodexAuthRequest struct {
 
 func (x *UpsertCodexAuthRequest) Reset() {
 	*x = UpsertCodexAuthRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[216]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[222]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17509,7 +17893,7 @@ func (x *UpsertCodexAuthRequest) String() string {
 func (*UpsertCodexAuthRequest) ProtoMessage() {}
 
 func (x *UpsertCodexAuthRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[216]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[222]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17522,7 +17906,7 @@ func (x *UpsertCodexAuthRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpsertCodexAuthRequest.ProtoReflect.Descriptor instead.
 func (*UpsertCodexAuthRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{216}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{222}
 }
 
 func (x *UpsertCodexAuthRequest) GetAuthJson() []byte {
@@ -17541,7 +17925,7 @@ type UpsertCodexAuthResponse struct {
 
 func (x *UpsertCodexAuthResponse) Reset() {
 	*x = UpsertCodexAuthResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[217]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[223]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17553,7 +17937,7 @@ func (x *UpsertCodexAuthResponse) String() string {
 func (*UpsertCodexAuthResponse) ProtoMessage() {}
 
 func (x *UpsertCodexAuthResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[217]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[223]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17566,7 +17950,7 @@ func (x *UpsertCodexAuthResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpsertCodexAuthResponse.ProtoReflect.Descriptor instead.
 func (*UpsertCodexAuthResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{217}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{223}
 }
 
 func (x *UpsertCodexAuthResponse) GetOk() bool {
@@ -17586,7 +17970,7 @@ type DeleteRunNamespaceRequest struct {
 
 func (x *DeleteRunNamespaceRequest) Reset() {
 	*x = DeleteRunNamespaceRequest{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[218]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[224]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17598,7 +17982,7 @@ func (x *DeleteRunNamespaceRequest) String() string {
 func (*DeleteRunNamespaceRequest) ProtoMessage() {}
 
 func (x *DeleteRunNamespaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[218]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[224]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17611,7 +17995,7 @@ func (x *DeleteRunNamespaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteRunNamespaceRequest.ProtoReflect.Descriptor instead.
 func (*DeleteRunNamespaceRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{218}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{224}
 }
 
 func (x *DeleteRunNamespaceRequest) GetPrincipal() *Principal {
@@ -17642,7 +18026,7 @@ type DeleteRunNamespaceResponse struct {
 
 func (x *DeleteRunNamespaceResponse) Reset() {
 	*x = DeleteRunNamespaceResponse{}
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[219]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[225]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -17654,7 +18038,7 @@ func (x *DeleteRunNamespaceResponse) String() string {
 func (*DeleteRunNamespaceResponse) ProtoMessage() {}
 
 func (x *DeleteRunNamespaceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[219]
+	mi := &file_kodex_controlplane_v1_controlplane_proto_msgTypes[225]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -17667,7 +18051,7 @@ func (x *DeleteRunNamespaceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteRunNamespaceResponse.ProtoReflect.Descriptor instead.
 func (*DeleteRunNamespaceResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{219}
+	return file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP(), []int{225}
 }
 
 func (x *DeleteRunNamespaceResponse) GetOk() bool {
@@ -18063,7 +18447,35 @@ const file_kodex_controlplane_v1_controlplane_proto_rawDesc = "" +
 	"\tprincipal\x18\x01 \x01(\v2 .kodex.controlplane.v1.PrincipalR\tprincipal\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"F\n" +
 	"\x11ListUsersResponse\x121\n" +
-	"\x05items\x18\x01 \x03(\v2\x1b.kodex.controlplane.v1.UserR\x05items\"\x95\x01\n" +
+	"\x05items\x18\x01 \x03(\v2\x1b.kodex.controlplane.v1.UserR\x05items\"F\n" +
+	"\fOrganization\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04slug\x18\x02 \x01(\tR\x04slug\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\"\x9b\x01\n" +
+	"\tUserGroup\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12,\n" +
+	"\x0forganization_id\x18\x02 \x01(\tH\x00R\x0eorganizationId\x88\x01\x01\x12\x14\n" +
+	"\x05scope\x18\x03 \x01(\tR\x05scope\x12\x12\n" +
+	"\x04slug\x18\x04 \x01(\tR\x04slug\x12\x12\n" +
+	"\x04name\x18\x05 \x01(\tR\x04nameB\x12\n" +
+	"\x10_organization_id\"\x84\x01\n" +
+	"\x16OrganizationMembership\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x14\n" +
+	"\x05email\x18\x03 \x01(\tR\x05email\x12\x12\n" +
+	"\x04role\x18\x04 \x01(\tR\x04role\"_\n" +
+	"\x13UserGroupMembership\x12\x19\n" +
+	"\bgroup_id\x18\x01 \x01(\tR\agroupId\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x14\n" +
+	"\x05email\x18\x03 \x01(\tR\x05email\"w\n" +
+	"\x1fGetAccessMembershipGraphRequest\x12>\n" +
+	"\tprincipal\x18\x01 \x01(\v2 .kodex.controlplane.v1.PrincipalR\tprincipal\x12\x14\n" +
+	"\x05limit\x18\x02 \x01(\x05R\x05limit\"\xe8\x02\n" +
+	"\x15AccessMembershipGraph\x12I\n" +
+	"\rorganizations\x18\x01 \x03(\v2#.kodex.controlplane.v1.OrganizationR\rorganizations\x128\n" +
+	"\x06groups\x18\x02 \x03(\v2 .kodex.controlplane.v1.UserGroupR\x06groups\x12h\n" +
+	"\x18organization_memberships\x18\x03 \x03(\v2-.kodex.controlplane.v1.OrganizationMembershipR\x17organizationMemberships\x12`\n" +
+	"\x16user_group_memberships\x18\x04 \x03(\v2*.kodex.controlplane.v1.UserGroupMembershipR\x14userGroupMemberships\"\x95\x01\n" +
 	"\x11CreateUserRequest\x12>\n" +
 	"\tprincipal\x18\x01 \x01(\v2 .kodex.controlplane.v1.PrincipalR\tprincipal\x12\x14\n" +
 	"\x05email\x18\x02 \x01(\tR\x05email\x12*\n" +
@@ -19691,7 +20103,7 @@ const file_kodex_controlplane_v1_controlplane_proto_rawDesc = "" +
 	"\x0falready_deleted\x18\x05 \x01(\bR\x0ealreadyDeleted\x12$\n" +
 	"\vcomment_url\x18\x06 \x01(\tH\x00R\n" +
 	"commentUrl\x88\x01\x01B\x0e\n" +
-	"\f_comment_url2\xd7S\n" +
+	"\f_comment_url2\xdaT\n" +
 	"\x13ControlPlaneService\x12|\n" +
 	"\x13IngestGitHubWebhook\x121.kodex.controlplane.v1.IngestGitHubWebhookRequest\x1a2.kodex.controlplane.v1.IngestGitHubWebhookResponse\x12|\n" +
 	"\x13ResolveStaffByEmail\x121.kodex.controlplane.v1.ResolveStaffByEmailRequest\x1a2.kodex.controlplane.v1.ResolveStaffByEmailResponse\x12y\n" +
@@ -19715,7 +20127,8 @@ const file_kodex_controlplane_v1_controlplane_proto_rawDesc = "" +
 	"\x10GetSystemSetting\x12..kodex.controlplane.v1.GetSystemSettingRequest\x1a$.kodex.controlplane.v1.SystemSetting\x12|\n" +
 	"\x1aUpdateSystemSettingBoolean\x128.kodex.controlplane.v1.UpdateSystemSettingBooleanRequest\x1a$.kodex.controlplane.v1.SystemSetting\x12l\n" +
 	"\x12ResetSystemSetting\x120.kodex.controlplane.v1.ResetSystemSettingRequest\x1a$.kodex.controlplane.v1.SystemSetting\x12^\n" +
-	"\tListUsers\x12'.kodex.controlplane.v1.ListUsersRequest\x1a(.kodex.controlplane.v1.ListUsersResponse\x12S\n" +
+	"\tListUsers\x12'.kodex.controlplane.v1.ListUsersRequest\x1a(.kodex.controlplane.v1.ListUsersResponse\x12\x80\x01\n" +
+	"\x18GetAccessMembershipGraph\x126.kodex.controlplane.v1.GetAccessMembershipGraphRequest\x1a,.kodex.controlplane.v1.AccessMembershipGraph\x12S\n" +
 	"\n" +
 	"CreateUser\x12(.kodex.controlplane.v1.CreateUserRequest\x1a\x1b.kodex.controlplane.v1.User\x12N\n" +
 	"\n" +
@@ -19795,7 +20208,7 @@ func file_kodex_controlplane_v1_controlplane_proto_rawDescGZIP() []byte {
 	return file_kodex_controlplane_v1_controlplane_proto_rawDescData
 }
 
-var file_kodex_controlplane_v1_controlplane_proto_msgTypes = make([]protoimpl.MessageInfo, 220)
+var file_kodex_controlplane_v1_controlplane_proto_msgTypes = make([]protoimpl.MessageInfo, 226)
 var file_kodex_controlplane_v1_controlplane_proto_goTypes = []any{
 	(*Principal)(nil),                                    // 0: kodex.controlplane.v1.Principal
 	(*IngestGitHubWebhookRequest)(nil),                   // 1: kodex.controlplane.v1.IngestGitHubWebhookRequest
@@ -19846,185 +20259,191 @@ var file_kodex_controlplane_v1_controlplane_proto_goTypes = []any{
 	(*User)(nil),                                         // 46: kodex.controlplane.v1.User
 	(*ListUsersRequest)(nil),                             // 47: kodex.controlplane.v1.ListUsersRequest
 	(*ListUsersResponse)(nil),                            // 48: kodex.controlplane.v1.ListUsersResponse
-	(*CreateUserRequest)(nil),                            // 49: kodex.controlplane.v1.CreateUserRequest
-	(*DeleteUserRequest)(nil),                            // 50: kodex.controlplane.v1.DeleteUserRequest
-	(*ProjectMember)(nil),                                // 51: kodex.controlplane.v1.ProjectMember
-	(*ListProjectMembersRequest)(nil),                    // 52: kodex.controlplane.v1.ListProjectMembersRequest
-	(*ListProjectMembersResponse)(nil),                   // 53: kodex.controlplane.v1.ListProjectMembersResponse
-	(*UpsertProjectMemberRequest)(nil),                   // 54: kodex.controlplane.v1.UpsertProjectMemberRequest
-	(*DeleteProjectMemberRequest)(nil),                   // 55: kodex.controlplane.v1.DeleteProjectMemberRequest
-	(*SetProjectMemberLearningModeOverrideRequest)(nil),  // 56: kodex.controlplane.v1.SetProjectMemberLearningModeOverrideRequest
-	(*RepositoryBinding)(nil),                            // 57: kodex.controlplane.v1.RepositoryBinding
-	(*ListProjectRepositoriesRequest)(nil),               // 58: kodex.controlplane.v1.ListProjectRepositoriesRequest
-	(*ListProjectRepositoriesResponse)(nil),              // 59: kodex.controlplane.v1.ListProjectRepositoriesResponse
-	(*UpsertProjectRepositoryRequest)(nil),               // 60: kodex.controlplane.v1.UpsertProjectRepositoryRequest
-	(*DeleteProjectRepositoryRequest)(nil),               // 61: kodex.controlplane.v1.DeleteProjectRepositoryRequest
-	(*UpsertRepositoryBotParamsRequest)(nil),             // 62: kodex.controlplane.v1.UpsertRepositoryBotParamsRequest
-	(*RunRepositoryPreflightRequest)(nil),                // 63: kodex.controlplane.v1.RunRepositoryPreflightRequest
-	(*PreflightCheckResult)(nil),                         // 64: kodex.controlplane.v1.PreflightCheckResult
-	(*RunRepositoryPreflightResponse)(nil),               // 65: kodex.controlplane.v1.RunRepositoryPreflightResponse
-	(*ProjectGitHubTokens)(nil),                          // 66: kodex.controlplane.v1.ProjectGitHubTokens
-	(*GetProjectGitHubTokensRequest)(nil),                // 67: kodex.controlplane.v1.GetProjectGitHubTokensRequest
-	(*UpsertProjectGitHubTokensRequest)(nil),             // 68: kodex.controlplane.v1.UpsertProjectGitHubTokensRequest
-	(*NextStepActionRequest)(nil),                        // 69: kodex.controlplane.v1.NextStepActionRequest
-	(*NextStepActionResponse)(nil),                       // 70: kodex.controlplane.v1.NextStepActionResponse
-	(*ConfigEntry)(nil),                                  // 71: kodex.controlplane.v1.ConfigEntry
-	(*ListConfigEntriesRequest)(nil),                     // 72: kodex.controlplane.v1.ListConfigEntriesRequest
-	(*ListConfigEntriesResponse)(nil),                    // 73: kodex.controlplane.v1.ListConfigEntriesResponse
-	(*UpsertConfigEntryRequest)(nil),                     // 74: kodex.controlplane.v1.UpsertConfigEntryRequest
-	(*DeleteConfigEntryRequest)(nil),                     // 75: kodex.controlplane.v1.DeleteConfigEntryRequest
-	(*DocsetGroup)(nil),                                  // 76: kodex.controlplane.v1.DocsetGroup
-	(*ListDocsetGroupsRequest)(nil),                      // 77: kodex.controlplane.v1.ListDocsetGroupsRequest
-	(*ListDocsetGroupsResponse)(nil),                     // 78: kodex.controlplane.v1.ListDocsetGroupsResponse
-	(*ImportDocsetRequest)(nil),                          // 79: kodex.controlplane.v1.ImportDocsetRequest
-	(*ImportDocsetResponse)(nil),                         // 80: kodex.controlplane.v1.ImportDocsetResponse
-	(*SyncDocsetRequest)(nil),                            // 81: kodex.controlplane.v1.SyncDocsetRequest
-	(*SyncDocsetResponse)(nil),                           // 82: kodex.controlplane.v1.SyncDocsetResponse
-	(*IssueRunMCPTokenRequest)(nil),                      // 83: kodex.controlplane.v1.IssueRunMCPTokenRequest
-	(*IssueRunMCPTokenResponse)(nil),                     // 84: kodex.controlplane.v1.IssueRunMCPTokenResponse
-	(*PrepareRunEnvironmentRequest)(nil),                 // 85: kodex.controlplane.v1.PrepareRunEnvironmentRequest
-	(*PrepareRunEnvironmentResponse)(nil),                // 86: kodex.controlplane.v1.PrepareRunEnvironmentResponse
-	(*EvaluateRuntimeReuseRequest)(nil),                  // 87: kodex.controlplane.v1.EvaluateRuntimeReuseRequest
-	(*EvaluateRuntimeReuseResponse)(nil),                 // 88: kodex.controlplane.v1.EvaluateRuntimeReuseResponse
-	(*ClaimNextInteractionDispatchRequest)(nil),          // 89: kodex.controlplane.v1.ClaimNextInteractionDispatchRequest
-	(*ClaimNextInteractionDispatchResponse)(nil),         // 90: kodex.controlplane.v1.ClaimNextInteractionDispatchResponse
-	(*CompleteInteractionDispatchRequest)(nil),           // 91: kodex.controlplane.v1.CompleteInteractionDispatchRequest
-	(*CompleteInteractionDispatchResponse)(nil),          // 92: kodex.controlplane.v1.CompleteInteractionDispatchResponse
-	(*ExpireNextInteractionRequest)(nil),                 // 93: kodex.controlplane.v1.ExpireNextInteractionRequest
-	(*ExpireNextInteractionResponse)(nil),                // 94: kodex.controlplane.v1.ExpireNextInteractionResponse
-	(*ProcessNextGitHubRateLimitWaitRequest)(nil),        // 95: kodex.controlplane.v1.ProcessNextGitHubRateLimitWaitRequest
-	(*ProcessNextGitHubRateLimitWaitResponse)(nil),       // 96: kodex.controlplane.v1.ProcessNextGitHubRateLimitWaitResponse
-	(*GitHubRateLimitHeaders)(nil),                       // 97: kodex.controlplane.v1.GitHubRateLimitHeaders
-	(*ReportGitHubRateLimitSignalRequest)(nil),           // 98: kodex.controlplane.v1.ReportGitHubRateLimitSignalRequest
-	(*ReportGitHubRateLimitSignalResponse)(nil),          // 99: kodex.controlplane.v1.ReportGitHubRateLimitSignalResponse
-	(*ChangeGovernanceScopeHint)(nil),                    // 100: kodex.controlplane.v1.ChangeGovernanceScopeHint
-	(*ChangeGovernanceVerificationTarget)(nil),           // 101: kodex.controlplane.v1.ChangeGovernanceVerificationTarget
-	(*ChangeGovernanceWaveDraft)(nil),                    // 102: kodex.controlplane.v1.ChangeGovernanceWaveDraft
-	(*ChangeGovernanceArtifactLinkSeed)(nil),             // 103: kodex.controlplane.v1.ChangeGovernanceArtifactLinkSeed
-	(*ReportChangeGovernanceDraftSignalRequest)(nil),     // 104: kodex.controlplane.v1.ReportChangeGovernanceDraftSignalRequest
-	(*ReportChangeGovernanceDraftSignalResponse)(nil),    // 105: kodex.controlplane.v1.ReportChangeGovernanceDraftSignalResponse
-	(*PublishChangeGovernanceWaveMapRequest)(nil),        // 106: kodex.controlplane.v1.PublishChangeGovernanceWaveMapRequest
-	(*PublishChangeGovernanceWaveMapResponse)(nil),       // 107: kodex.controlplane.v1.PublishChangeGovernanceWaveMapResponse
-	(*UpsertChangeGovernanceEvidenceSignalRequest)(nil),  // 108: kodex.controlplane.v1.UpsertChangeGovernanceEvidenceSignalRequest
-	(*UpsertChangeGovernanceEvidenceSignalResponse)(nil), // 109: kodex.controlplane.v1.UpsertChangeGovernanceEvidenceSignalResponse
-	(*MissionControlWarmupProject)(nil),                  // 110: kodex.controlplane.v1.MissionControlWarmupProject
-	(*ListMissionControlWarmupProjectsRequest)(nil),      // 111: kodex.controlplane.v1.ListMissionControlWarmupProjectsRequest
-	(*ListMissionControlWarmupProjectsResponse)(nil),     // 112: kodex.controlplane.v1.ListMissionControlWarmupProjectsResponse
-	(*RunMissionControlWarmupRequest)(nil),               // 113: kodex.controlplane.v1.RunMissionControlWarmupRequest
-	(*RunMissionControlWarmupResponse)(nil),              // 114: kodex.controlplane.v1.RunMissionControlWarmupResponse
-	(*MissionControlEntityRef)(nil),                      // 115: kodex.controlplane.v1.MissionControlEntityRef
-	(*MissionControlProviderReference)(nil),              // 116: kodex.controlplane.v1.MissionControlProviderReference
-	(*MissionControlPrimaryActor)(nil),                   // 117: kodex.controlplane.v1.MissionControlPrimaryActor
-	(*MissionControlEntityCard)(nil),                     // 118: kodex.controlplane.v1.MissionControlEntityCard
-	(*MissionControlRelation)(nil),                       // 119: kodex.controlplane.v1.MissionControlRelation
-	(*MissionControlTimelineEntry)(nil),                  // 120: kodex.controlplane.v1.MissionControlTimelineEntry
-	(*MissionControlAllowedAction)(nil),                  // 121: kodex.controlplane.v1.MissionControlAllowedAction
-	(*MissionControlProviderDeepLink)(nil),               // 122: kodex.controlplane.v1.MissionControlProviderDeepLink
-	(*MissionControlWorkItemDetailsPayload)(nil),         // 123: kodex.controlplane.v1.MissionControlWorkItemDetailsPayload
-	(*MissionControlDiscussionDetailsPayload)(nil),       // 124: kodex.controlplane.v1.MissionControlDiscussionDetailsPayload
-	(*MissionControlPullRequestDetailsPayload)(nil),      // 125: kodex.controlplane.v1.MissionControlPullRequestDetailsPayload
-	(*MissionControlAgentDetailsPayload)(nil),            // 126: kodex.controlplane.v1.MissionControlAgentDetailsPayload
-	(*MissionControlEntityDetails)(nil),                  // 127: kodex.controlplane.v1.MissionControlEntityDetails
-	(*MissionControlSnapshotSummary)(nil),                // 128: kodex.controlplane.v1.MissionControlSnapshotSummary
-	(*MissionControlDashboardSnapshot)(nil),              // 129: kodex.controlplane.v1.MissionControlDashboardSnapshot
-	(*GetMissionControlSnapshotRequest)(nil),             // 130: kodex.controlplane.v1.GetMissionControlSnapshotRequest
-	(*GetMissionControlSnapshotResponse)(nil),            // 131: kodex.controlplane.v1.GetMissionControlSnapshotResponse
-	(*GetMissionControlEntityRequest)(nil),               // 132: kodex.controlplane.v1.GetMissionControlEntityRequest
-	(*ListMissionControlTimelineRequest)(nil),            // 133: kodex.controlplane.v1.ListMissionControlTimelineRequest
-	(*ListMissionControlTimelineResponse)(nil),           // 134: kodex.controlplane.v1.ListMissionControlTimelineResponse
-	(*MissionControlNodeRef)(nil),                        // 135: kodex.controlplane.v1.MissionControlNodeRef
-	(*MissionControlWorkspaceFilters)(nil),               // 136: kodex.controlplane.v1.MissionControlWorkspaceFilters
-	(*MissionControlWorkspaceSummary)(nil),               // 137: kodex.controlplane.v1.MissionControlWorkspaceSummary
-	(*MissionControlWorkspaceWatermark)(nil),             // 138: kodex.controlplane.v1.MissionControlWorkspaceWatermark
-	(*MissionControlRootGroup)(nil),                      // 139: kodex.controlplane.v1.MissionControlRootGroup
-	(*MissionControlNode)(nil),                           // 140: kodex.controlplane.v1.MissionControlNode
-	(*MissionControlEdge)(nil),                           // 141: kodex.controlplane.v1.MissionControlEdge
-	(*MissionControlWorkspaceSnapshot)(nil),              // 142: kodex.controlplane.v1.MissionControlWorkspaceSnapshot
-	(*GetMissionControlWorkspaceRequest)(nil),            // 143: kodex.controlplane.v1.GetMissionControlWorkspaceRequest
-	(*GetMissionControlWorkspaceResponse)(nil),           // 144: kodex.controlplane.v1.GetMissionControlWorkspaceResponse
-	(*MissionControlContinuityGap)(nil),                  // 145: kodex.controlplane.v1.MissionControlContinuityGap
-	(*MissionControlStageNextStepTemplate)(nil),          // 146: kodex.controlplane.v1.MissionControlStageNextStepTemplate
-	(*MissionControlLaunchSurface)(nil),                  // 147: kodex.controlplane.v1.MissionControlLaunchSurface
-	(*MissionControlDiscussionNodeDetails)(nil),          // 148: kodex.controlplane.v1.MissionControlDiscussionNodeDetails
-	(*MissionControlWorkItemNodeDetails)(nil),            // 149: kodex.controlplane.v1.MissionControlWorkItemNodeDetails
-	(*MissionControlRunNodeDetails)(nil),                 // 150: kodex.controlplane.v1.MissionControlRunNodeDetails
-	(*MissionControlPullRequestNodeDetails)(nil),         // 151: kodex.controlplane.v1.MissionControlPullRequestNodeDetails
-	(*MissionControlActivityEntry)(nil),                  // 152: kodex.controlplane.v1.MissionControlActivityEntry
-	(*MissionControlNodeDetails)(nil),                    // 153: kodex.controlplane.v1.MissionControlNodeDetails
-	(*GetMissionControlNodeRequest)(nil),                 // 154: kodex.controlplane.v1.GetMissionControlNodeRequest
-	(*ListMissionControlNodeActivityRequest)(nil),        // 155: kodex.controlplane.v1.ListMissionControlNodeActivityRequest
-	(*ListMissionControlNodeActivityResponse)(nil),       // 156: kodex.controlplane.v1.ListMissionControlNodeActivityResponse
-	(*PreviewMissionControlLaunchRequest)(nil),           // 157: kodex.controlplane.v1.PreviewMissionControlLaunchRequest
-	(*MissionControlLaunchPreviewLabelDiff)(nil),         // 158: kodex.controlplane.v1.MissionControlLaunchPreviewLabelDiff
-	(*MissionControlLaunchPreviewContinuityEffect)(nil),  // 159: kodex.controlplane.v1.MissionControlLaunchPreviewContinuityEffect
-	(*MissionControlLaunchPreview)(nil),                  // 160: kodex.controlplane.v1.MissionControlLaunchPreview
-	(*MissionControlStageNextStepPayload)(nil),           // 161: kodex.controlplane.v1.MissionControlStageNextStepPayload
-	(*MissionControlPendingCommand)(nil),                 // 162: kodex.controlplane.v1.MissionControlPendingCommand
-	(*ClaimMissionControlPendingCommandsRequest)(nil),    // 163: kodex.controlplane.v1.ClaimMissionControlPendingCommandsRequest
-	(*ClaimMissionControlPendingCommandsResponse)(nil),   // 164: kodex.controlplane.v1.ClaimMissionControlPendingCommandsResponse
-	(*MissionControlCommandState)(nil),                   // 165: kodex.controlplane.v1.MissionControlCommandState
-	(*MissionControlCommandApproval)(nil),                // 166: kodex.controlplane.v1.MissionControlCommandApproval
-	(*MissionControlDiscussionCreatePayload)(nil),        // 167: kodex.controlplane.v1.MissionControlDiscussionCreatePayload
-	(*MissionControlWorkItemCreatePayload)(nil),          // 168: kodex.controlplane.v1.MissionControlWorkItemCreatePayload
-	(*MissionControlDiscussionFormalizePayload)(nil),     // 169: kodex.controlplane.v1.MissionControlDiscussionFormalizePayload
-	(*MissionControlRetrySyncPayload)(nil),               // 170: kodex.controlplane.v1.MissionControlRetrySyncPayload
-	(*SubmitMissionControlCommandRequest)(nil),           // 171: kodex.controlplane.v1.SubmitMissionControlCommandRequest
-	(*GetMissionControlCommandRequest)(nil),              // 172: kodex.controlplane.v1.GetMissionControlCommandRequest
-	(*QueueMissionControlCommandRequest)(nil),            // 173: kodex.controlplane.v1.QueueMissionControlCommandRequest
-	(*MarkMissionControlCommandPendingSyncRequest)(nil),  // 174: kodex.controlplane.v1.MarkMissionControlCommandPendingSyncRequest
-	(*MarkMissionControlCommandReconciledRequest)(nil),   // 175: kodex.controlplane.v1.MarkMissionControlCommandReconciledRequest
-	(*MarkMissionControlCommandFailedRequest)(nil),       // 176: kodex.controlplane.v1.MarkMissionControlCommandFailedRequest
-	(*SubmitInteractionCallbackRequest)(nil),             // 177: kodex.controlplane.v1.SubmitInteractionCallbackRequest
-	(*SubmitInteractionCallbackResponse)(nil),            // 178: kodex.controlplane.v1.SubmitInteractionCallbackResponse
-	(*RuntimeDeployTaskLog)(nil),                         // 179: kodex.controlplane.v1.RuntimeDeployTaskLog
-	(*RuntimeDeployTask)(nil),                            // 180: kodex.controlplane.v1.RuntimeDeployTask
-	(*ListRuntimeDeployTasksRequest)(nil),                // 181: kodex.controlplane.v1.ListRuntimeDeployTasksRequest
-	(*ListRuntimeDeployTasksResponse)(nil),               // 182: kodex.controlplane.v1.ListRuntimeDeployTasksResponse
-	(*GetRuntimeDeployTaskRequest)(nil),                  // 183: kodex.controlplane.v1.GetRuntimeDeployTaskRequest
-	(*CancelRuntimeDeployTaskRequest)(nil),               // 184: kodex.controlplane.v1.CancelRuntimeDeployTaskRequest
-	(*StopRuntimeDeployTaskRequest)(nil),                 // 185: kodex.controlplane.v1.StopRuntimeDeployTaskRequest
-	(*RuntimeDeployTaskActionResponse)(nil),              // 186: kodex.controlplane.v1.RuntimeDeployTaskActionResponse
-	(*RuntimeError)(nil),                                 // 187: kodex.controlplane.v1.RuntimeError
-	(*ListRuntimeErrorsRequest)(nil),                     // 188: kodex.controlplane.v1.ListRuntimeErrorsRequest
-	(*ListRuntimeErrorsResponse)(nil),                    // 189: kodex.controlplane.v1.ListRuntimeErrorsResponse
-	(*MarkRuntimeErrorViewedRequest)(nil),                // 190: kodex.controlplane.v1.MarkRuntimeErrorViewedRequest
-	(*RegistryImageTag)(nil),                             // 191: kodex.controlplane.v1.RegistryImageTag
-	(*RegistryImageRepository)(nil),                      // 192: kodex.controlplane.v1.RegistryImageRepository
-	(*ListRegistryImagesRequest)(nil),                    // 193: kodex.controlplane.v1.ListRegistryImagesRequest
-	(*ListRegistryImagesResponse)(nil),                   // 194: kodex.controlplane.v1.ListRegistryImagesResponse
-	(*DeleteRegistryImageTagRequest)(nil),                // 195: kodex.controlplane.v1.DeleteRegistryImageTagRequest
-	(*RegistryImageDeleteResult)(nil),                    // 196: kodex.controlplane.v1.RegistryImageDeleteResult
-	(*CleanupRegistryImagesRequest)(nil),                 // 197: kodex.controlplane.v1.CleanupRegistryImagesRequest
-	(*CleanupRegistryImagesResponse)(nil),                // 198: kodex.controlplane.v1.CleanupRegistryImagesResponse
-	(*UpsertAgentSessionRequest)(nil),                    // 199: kodex.controlplane.v1.UpsertAgentSessionRequest
-	(*UpsertAgentSessionResponse)(nil),                   // 200: kodex.controlplane.v1.UpsertAgentSessionResponse
-	(*AgentSessionSnapshot)(nil),                         // 201: kodex.controlplane.v1.AgentSessionSnapshot
-	(*GetLatestAgentSessionRequest)(nil),                 // 202: kodex.controlplane.v1.GetLatestAgentSessionRequest
-	(*GetLatestAgentSessionResponse)(nil),                // 203: kodex.controlplane.v1.GetLatestAgentSessionResponse
-	(*GetRunInteractionResumePayloadRequest)(nil),        // 204: kodex.controlplane.v1.GetRunInteractionResumePayloadRequest
-	(*GetRunInteractionResumePayloadResponse)(nil),       // 205: kodex.controlplane.v1.GetRunInteractionResumePayloadResponse
-	(*GetRunGitHubRateLimitResumePayloadRequest)(nil),    // 206: kodex.controlplane.v1.GetRunGitHubRateLimitResumePayloadRequest
-	(*GetRunGitHubRateLimitResumePayloadResponse)(nil),   // 207: kodex.controlplane.v1.GetRunGitHubRateLimitResumePayloadResponse
-	(*LookupRunPullRequestRequest)(nil),                  // 208: kodex.controlplane.v1.LookupRunPullRequestRequest
-	(*LookupRunPullRequestResponse)(nil),                 // 209: kodex.controlplane.v1.LookupRunPullRequestResponse
-	(*InsertRunFlowEventRequest)(nil),                    // 210: kodex.controlplane.v1.InsertRunFlowEventRequest
-	(*InsertRunFlowEventResponse)(nil),                   // 211: kodex.controlplane.v1.InsertRunFlowEventResponse
-	(*UpsertRunStatusCommentRequest)(nil),                // 212: kodex.controlplane.v1.UpsertRunStatusCommentRequest
-	(*UpsertRunStatusCommentResponse)(nil),               // 213: kodex.controlplane.v1.UpsertRunStatusCommentResponse
-	(*GetCodexAuthRequest)(nil),                          // 214: kodex.controlplane.v1.GetCodexAuthRequest
-	(*GetCodexAuthResponse)(nil),                         // 215: kodex.controlplane.v1.GetCodexAuthResponse
-	(*UpsertCodexAuthRequest)(nil),                       // 216: kodex.controlplane.v1.UpsertCodexAuthRequest
-	(*UpsertCodexAuthResponse)(nil),                      // 217: kodex.controlplane.v1.UpsertCodexAuthResponse
-	(*DeleteRunNamespaceRequest)(nil),                    // 218: kodex.controlplane.v1.DeleteRunNamespaceRequest
-	(*DeleteRunNamespaceResponse)(nil),                   // 219: kodex.controlplane.v1.DeleteRunNamespaceResponse
-	(*timestamppb.Timestamp)(nil),                        // 220: google.protobuf.Timestamp
-	(*wrapperspb.Int32Value)(nil),                        // 221: google.protobuf.Int32Value
-	(*wrapperspb.BoolValue)(nil),                         // 222: google.protobuf.BoolValue
-	(*durationpb.Duration)(nil),                          // 223: google.protobuf.Duration
-	(*emptypb.Empty)(nil),                                // 224: google.protobuf.Empty
+	(*Organization)(nil),                                 // 49: kodex.controlplane.v1.Organization
+	(*UserGroup)(nil),                                    // 50: kodex.controlplane.v1.UserGroup
+	(*OrganizationMembership)(nil),                       // 51: kodex.controlplane.v1.OrganizationMembership
+	(*UserGroupMembership)(nil),                          // 52: kodex.controlplane.v1.UserGroupMembership
+	(*GetAccessMembershipGraphRequest)(nil),              // 53: kodex.controlplane.v1.GetAccessMembershipGraphRequest
+	(*AccessMembershipGraph)(nil),                        // 54: kodex.controlplane.v1.AccessMembershipGraph
+	(*CreateUserRequest)(nil),                            // 55: kodex.controlplane.v1.CreateUserRequest
+	(*DeleteUserRequest)(nil),                            // 56: kodex.controlplane.v1.DeleteUserRequest
+	(*ProjectMember)(nil),                                // 57: kodex.controlplane.v1.ProjectMember
+	(*ListProjectMembersRequest)(nil),                    // 58: kodex.controlplane.v1.ListProjectMembersRequest
+	(*ListProjectMembersResponse)(nil),                   // 59: kodex.controlplane.v1.ListProjectMembersResponse
+	(*UpsertProjectMemberRequest)(nil),                   // 60: kodex.controlplane.v1.UpsertProjectMemberRequest
+	(*DeleteProjectMemberRequest)(nil),                   // 61: kodex.controlplane.v1.DeleteProjectMemberRequest
+	(*SetProjectMemberLearningModeOverrideRequest)(nil),  // 62: kodex.controlplane.v1.SetProjectMemberLearningModeOverrideRequest
+	(*RepositoryBinding)(nil),                            // 63: kodex.controlplane.v1.RepositoryBinding
+	(*ListProjectRepositoriesRequest)(nil),               // 64: kodex.controlplane.v1.ListProjectRepositoriesRequest
+	(*ListProjectRepositoriesResponse)(nil),              // 65: kodex.controlplane.v1.ListProjectRepositoriesResponse
+	(*UpsertProjectRepositoryRequest)(nil),               // 66: kodex.controlplane.v1.UpsertProjectRepositoryRequest
+	(*DeleteProjectRepositoryRequest)(nil),               // 67: kodex.controlplane.v1.DeleteProjectRepositoryRequest
+	(*UpsertRepositoryBotParamsRequest)(nil),             // 68: kodex.controlplane.v1.UpsertRepositoryBotParamsRequest
+	(*RunRepositoryPreflightRequest)(nil),                // 69: kodex.controlplane.v1.RunRepositoryPreflightRequest
+	(*PreflightCheckResult)(nil),                         // 70: kodex.controlplane.v1.PreflightCheckResult
+	(*RunRepositoryPreflightResponse)(nil),               // 71: kodex.controlplane.v1.RunRepositoryPreflightResponse
+	(*ProjectGitHubTokens)(nil),                          // 72: kodex.controlplane.v1.ProjectGitHubTokens
+	(*GetProjectGitHubTokensRequest)(nil),                // 73: kodex.controlplane.v1.GetProjectGitHubTokensRequest
+	(*UpsertProjectGitHubTokensRequest)(nil),             // 74: kodex.controlplane.v1.UpsertProjectGitHubTokensRequest
+	(*NextStepActionRequest)(nil),                        // 75: kodex.controlplane.v1.NextStepActionRequest
+	(*NextStepActionResponse)(nil),                       // 76: kodex.controlplane.v1.NextStepActionResponse
+	(*ConfigEntry)(nil),                                  // 77: kodex.controlplane.v1.ConfigEntry
+	(*ListConfigEntriesRequest)(nil),                     // 78: kodex.controlplane.v1.ListConfigEntriesRequest
+	(*ListConfigEntriesResponse)(nil),                    // 79: kodex.controlplane.v1.ListConfigEntriesResponse
+	(*UpsertConfigEntryRequest)(nil),                     // 80: kodex.controlplane.v1.UpsertConfigEntryRequest
+	(*DeleteConfigEntryRequest)(nil),                     // 81: kodex.controlplane.v1.DeleteConfigEntryRequest
+	(*DocsetGroup)(nil),                                  // 82: kodex.controlplane.v1.DocsetGroup
+	(*ListDocsetGroupsRequest)(nil),                      // 83: kodex.controlplane.v1.ListDocsetGroupsRequest
+	(*ListDocsetGroupsResponse)(nil),                     // 84: kodex.controlplane.v1.ListDocsetGroupsResponse
+	(*ImportDocsetRequest)(nil),                          // 85: kodex.controlplane.v1.ImportDocsetRequest
+	(*ImportDocsetResponse)(nil),                         // 86: kodex.controlplane.v1.ImportDocsetResponse
+	(*SyncDocsetRequest)(nil),                            // 87: kodex.controlplane.v1.SyncDocsetRequest
+	(*SyncDocsetResponse)(nil),                           // 88: kodex.controlplane.v1.SyncDocsetResponse
+	(*IssueRunMCPTokenRequest)(nil),                      // 89: kodex.controlplane.v1.IssueRunMCPTokenRequest
+	(*IssueRunMCPTokenResponse)(nil),                     // 90: kodex.controlplane.v1.IssueRunMCPTokenResponse
+	(*PrepareRunEnvironmentRequest)(nil),                 // 91: kodex.controlplane.v1.PrepareRunEnvironmentRequest
+	(*PrepareRunEnvironmentResponse)(nil),                // 92: kodex.controlplane.v1.PrepareRunEnvironmentResponse
+	(*EvaluateRuntimeReuseRequest)(nil),                  // 93: kodex.controlplane.v1.EvaluateRuntimeReuseRequest
+	(*EvaluateRuntimeReuseResponse)(nil),                 // 94: kodex.controlplane.v1.EvaluateRuntimeReuseResponse
+	(*ClaimNextInteractionDispatchRequest)(nil),          // 95: kodex.controlplane.v1.ClaimNextInteractionDispatchRequest
+	(*ClaimNextInteractionDispatchResponse)(nil),         // 96: kodex.controlplane.v1.ClaimNextInteractionDispatchResponse
+	(*CompleteInteractionDispatchRequest)(nil),           // 97: kodex.controlplane.v1.CompleteInteractionDispatchRequest
+	(*CompleteInteractionDispatchResponse)(nil),          // 98: kodex.controlplane.v1.CompleteInteractionDispatchResponse
+	(*ExpireNextInteractionRequest)(nil),                 // 99: kodex.controlplane.v1.ExpireNextInteractionRequest
+	(*ExpireNextInteractionResponse)(nil),                // 100: kodex.controlplane.v1.ExpireNextInteractionResponse
+	(*ProcessNextGitHubRateLimitWaitRequest)(nil),        // 101: kodex.controlplane.v1.ProcessNextGitHubRateLimitWaitRequest
+	(*ProcessNextGitHubRateLimitWaitResponse)(nil),       // 102: kodex.controlplane.v1.ProcessNextGitHubRateLimitWaitResponse
+	(*GitHubRateLimitHeaders)(nil),                       // 103: kodex.controlplane.v1.GitHubRateLimitHeaders
+	(*ReportGitHubRateLimitSignalRequest)(nil),           // 104: kodex.controlplane.v1.ReportGitHubRateLimitSignalRequest
+	(*ReportGitHubRateLimitSignalResponse)(nil),          // 105: kodex.controlplane.v1.ReportGitHubRateLimitSignalResponse
+	(*ChangeGovernanceScopeHint)(nil),                    // 106: kodex.controlplane.v1.ChangeGovernanceScopeHint
+	(*ChangeGovernanceVerificationTarget)(nil),           // 107: kodex.controlplane.v1.ChangeGovernanceVerificationTarget
+	(*ChangeGovernanceWaveDraft)(nil),                    // 108: kodex.controlplane.v1.ChangeGovernanceWaveDraft
+	(*ChangeGovernanceArtifactLinkSeed)(nil),             // 109: kodex.controlplane.v1.ChangeGovernanceArtifactLinkSeed
+	(*ReportChangeGovernanceDraftSignalRequest)(nil),     // 110: kodex.controlplane.v1.ReportChangeGovernanceDraftSignalRequest
+	(*ReportChangeGovernanceDraftSignalResponse)(nil),    // 111: kodex.controlplane.v1.ReportChangeGovernanceDraftSignalResponse
+	(*PublishChangeGovernanceWaveMapRequest)(nil),        // 112: kodex.controlplane.v1.PublishChangeGovernanceWaveMapRequest
+	(*PublishChangeGovernanceWaveMapResponse)(nil),       // 113: kodex.controlplane.v1.PublishChangeGovernanceWaveMapResponse
+	(*UpsertChangeGovernanceEvidenceSignalRequest)(nil),  // 114: kodex.controlplane.v1.UpsertChangeGovernanceEvidenceSignalRequest
+	(*UpsertChangeGovernanceEvidenceSignalResponse)(nil), // 115: kodex.controlplane.v1.UpsertChangeGovernanceEvidenceSignalResponse
+	(*MissionControlWarmupProject)(nil),                  // 116: kodex.controlplane.v1.MissionControlWarmupProject
+	(*ListMissionControlWarmupProjectsRequest)(nil),      // 117: kodex.controlplane.v1.ListMissionControlWarmupProjectsRequest
+	(*ListMissionControlWarmupProjectsResponse)(nil),     // 118: kodex.controlplane.v1.ListMissionControlWarmupProjectsResponse
+	(*RunMissionControlWarmupRequest)(nil),               // 119: kodex.controlplane.v1.RunMissionControlWarmupRequest
+	(*RunMissionControlWarmupResponse)(nil),              // 120: kodex.controlplane.v1.RunMissionControlWarmupResponse
+	(*MissionControlEntityRef)(nil),                      // 121: kodex.controlplane.v1.MissionControlEntityRef
+	(*MissionControlProviderReference)(nil),              // 122: kodex.controlplane.v1.MissionControlProviderReference
+	(*MissionControlPrimaryActor)(nil),                   // 123: kodex.controlplane.v1.MissionControlPrimaryActor
+	(*MissionControlEntityCard)(nil),                     // 124: kodex.controlplane.v1.MissionControlEntityCard
+	(*MissionControlRelation)(nil),                       // 125: kodex.controlplane.v1.MissionControlRelation
+	(*MissionControlTimelineEntry)(nil),                  // 126: kodex.controlplane.v1.MissionControlTimelineEntry
+	(*MissionControlAllowedAction)(nil),                  // 127: kodex.controlplane.v1.MissionControlAllowedAction
+	(*MissionControlProviderDeepLink)(nil),               // 128: kodex.controlplane.v1.MissionControlProviderDeepLink
+	(*MissionControlWorkItemDetailsPayload)(nil),         // 129: kodex.controlplane.v1.MissionControlWorkItemDetailsPayload
+	(*MissionControlDiscussionDetailsPayload)(nil),       // 130: kodex.controlplane.v1.MissionControlDiscussionDetailsPayload
+	(*MissionControlPullRequestDetailsPayload)(nil),      // 131: kodex.controlplane.v1.MissionControlPullRequestDetailsPayload
+	(*MissionControlAgentDetailsPayload)(nil),            // 132: kodex.controlplane.v1.MissionControlAgentDetailsPayload
+	(*MissionControlEntityDetails)(nil),                  // 133: kodex.controlplane.v1.MissionControlEntityDetails
+	(*MissionControlSnapshotSummary)(nil),                // 134: kodex.controlplane.v1.MissionControlSnapshotSummary
+	(*MissionControlDashboardSnapshot)(nil),              // 135: kodex.controlplane.v1.MissionControlDashboardSnapshot
+	(*GetMissionControlSnapshotRequest)(nil),             // 136: kodex.controlplane.v1.GetMissionControlSnapshotRequest
+	(*GetMissionControlSnapshotResponse)(nil),            // 137: kodex.controlplane.v1.GetMissionControlSnapshotResponse
+	(*GetMissionControlEntityRequest)(nil),               // 138: kodex.controlplane.v1.GetMissionControlEntityRequest
+	(*ListMissionControlTimelineRequest)(nil),            // 139: kodex.controlplane.v1.ListMissionControlTimelineRequest
+	(*ListMissionControlTimelineResponse)(nil),           // 140: kodex.controlplane.v1.ListMissionControlTimelineResponse
+	(*MissionControlNodeRef)(nil),                        // 141: kodex.controlplane.v1.MissionControlNodeRef
+	(*MissionControlWorkspaceFilters)(nil),               // 142: kodex.controlplane.v1.MissionControlWorkspaceFilters
+	(*MissionControlWorkspaceSummary)(nil),               // 143: kodex.controlplane.v1.MissionControlWorkspaceSummary
+	(*MissionControlWorkspaceWatermark)(nil),             // 144: kodex.controlplane.v1.MissionControlWorkspaceWatermark
+	(*MissionControlRootGroup)(nil),                      // 145: kodex.controlplane.v1.MissionControlRootGroup
+	(*MissionControlNode)(nil),                           // 146: kodex.controlplane.v1.MissionControlNode
+	(*MissionControlEdge)(nil),                           // 147: kodex.controlplane.v1.MissionControlEdge
+	(*MissionControlWorkspaceSnapshot)(nil),              // 148: kodex.controlplane.v1.MissionControlWorkspaceSnapshot
+	(*GetMissionControlWorkspaceRequest)(nil),            // 149: kodex.controlplane.v1.GetMissionControlWorkspaceRequest
+	(*GetMissionControlWorkspaceResponse)(nil),           // 150: kodex.controlplane.v1.GetMissionControlWorkspaceResponse
+	(*MissionControlContinuityGap)(nil),                  // 151: kodex.controlplane.v1.MissionControlContinuityGap
+	(*MissionControlStageNextStepTemplate)(nil),          // 152: kodex.controlplane.v1.MissionControlStageNextStepTemplate
+	(*MissionControlLaunchSurface)(nil),                  // 153: kodex.controlplane.v1.MissionControlLaunchSurface
+	(*MissionControlDiscussionNodeDetails)(nil),          // 154: kodex.controlplane.v1.MissionControlDiscussionNodeDetails
+	(*MissionControlWorkItemNodeDetails)(nil),            // 155: kodex.controlplane.v1.MissionControlWorkItemNodeDetails
+	(*MissionControlRunNodeDetails)(nil),                 // 156: kodex.controlplane.v1.MissionControlRunNodeDetails
+	(*MissionControlPullRequestNodeDetails)(nil),         // 157: kodex.controlplane.v1.MissionControlPullRequestNodeDetails
+	(*MissionControlActivityEntry)(nil),                  // 158: kodex.controlplane.v1.MissionControlActivityEntry
+	(*MissionControlNodeDetails)(nil),                    // 159: kodex.controlplane.v1.MissionControlNodeDetails
+	(*GetMissionControlNodeRequest)(nil),                 // 160: kodex.controlplane.v1.GetMissionControlNodeRequest
+	(*ListMissionControlNodeActivityRequest)(nil),        // 161: kodex.controlplane.v1.ListMissionControlNodeActivityRequest
+	(*ListMissionControlNodeActivityResponse)(nil),       // 162: kodex.controlplane.v1.ListMissionControlNodeActivityResponse
+	(*PreviewMissionControlLaunchRequest)(nil),           // 163: kodex.controlplane.v1.PreviewMissionControlLaunchRequest
+	(*MissionControlLaunchPreviewLabelDiff)(nil),         // 164: kodex.controlplane.v1.MissionControlLaunchPreviewLabelDiff
+	(*MissionControlLaunchPreviewContinuityEffect)(nil),  // 165: kodex.controlplane.v1.MissionControlLaunchPreviewContinuityEffect
+	(*MissionControlLaunchPreview)(nil),                  // 166: kodex.controlplane.v1.MissionControlLaunchPreview
+	(*MissionControlStageNextStepPayload)(nil),           // 167: kodex.controlplane.v1.MissionControlStageNextStepPayload
+	(*MissionControlPendingCommand)(nil),                 // 168: kodex.controlplane.v1.MissionControlPendingCommand
+	(*ClaimMissionControlPendingCommandsRequest)(nil),    // 169: kodex.controlplane.v1.ClaimMissionControlPendingCommandsRequest
+	(*ClaimMissionControlPendingCommandsResponse)(nil),   // 170: kodex.controlplane.v1.ClaimMissionControlPendingCommandsResponse
+	(*MissionControlCommandState)(nil),                   // 171: kodex.controlplane.v1.MissionControlCommandState
+	(*MissionControlCommandApproval)(nil),                // 172: kodex.controlplane.v1.MissionControlCommandApproval
+	(*MissionControlDiscussionCreatePayload)(nil),        // 173: kodex.controlplane.v1.MissionControlDiscussionCreatePayload
+	(*MissionControlWorkItemCreatePayload)(nil),          // 174: kodex.controlplane.v1.MissionControlWorkItemCreatePayload
+	(*MissionControlDiscussionFormalizePayload)(nil),     // 175: kodex.controlplane.v1.MissionControlDiscussionFormalizePayload
+	(*MissionControlRetrySyncPayload)(nil),               // 176: kodex.controlplane.v1.MissionControlRetrySyncPayload
+	(*SubmitMissionControlCommandRequest)(nil),           // 177: kodex.controlplane.v1.SubmitMissionControlCommandRequest
+	(*GetMissionControlCommandRequest)(nil),              // 178: kodex.controlplane.v1.GetMissionControlCommandRequest
+	(*QueueMissionControlCommandRequest)(nil),            // 179: kodex.controlplane.v1.QueueMissionControlCommandRequest
+	(*MarkMissionControlCommandPendingSyncRequest)(nil),  // 180: kodex.controlplane.v1.MarkMissionControlCommandPendingSyncRequest
+	(*MarkMissionControlCommandReconciledRequest)(nil),   // 181: kodex.controlplane.v1.MarkMissionControlCommandReconciledRequest
+	(*MarkMissionControlCommandFailedRequest)(nil),       // 182: kodex.controlplane.v1.MarkMissionControlCommandFailedRequest
+	(*SubmitInteractionCallbackRequest)(nil),             // 183: kodex.controlplane.v1.SubmitInteractionCallbackRequest
+	(*SubmitInteractionCallbackResponse)(nil),            // 184: kodex.controlplane.v1.SubmitInteractionCallbackResponse
+	(*RuntimeDeployTaskLog)(nil),                         // 185: kodex.controlplane.v1.RuntimeDeployTaskLog
+	(*RuntimeDeployTask)(nil),                            // 186: kodex.controlplane.v1.RuntimeDeployTask
+	(*ListRuntimeDeployTasksRequest)(nil),                // 187: kodex.controlplane.v1.ListRuntimeDeployTasksRequest
+	(*ListRuntimeDeployTasksResponse)(nil),               // 188: kodex.controlplane.v1.ListRuntimeDeployTasksResponse
+	(*GetRuntimeDeployTaskRequest)(nil),                  // 189: kodex.controlplane.v1.GetRuntimeDeployTaskRequest
+	(*CancelRuntimeDeployTaskRequest)(nil),               // 190: kodex.controlplane.v1.CancelRuntimeDeployTaskRequest
+	(*StopRuntimeDeployTaskRequest)(nil),                 // 191: kodex.controlplane.v1.StopRuntimeDeployTaskRequest
+	(*RuntimeDeployTaskActionResponse)(nil),              // 192: kodex.controlplane.v1.RuntimeDeployTaskActionResponse
+	(*RuntimeError)(nil),                                 // 193: kodex.controlplane.v1.RuntimeError
+	(*ListRuntimeErrorsRequest)(nil),                     // 194: kodex.controlplane.v1.ListRuntimeErrorsRequest
+	(*ListRuntimeErrorsResponse)(nil),                    // 195: kodex.controlplane.v1.ListRuntimeErrorsResponse
+	(*MarkRuntimeErrorViewedRequest)(nil),                // 196: kodex.controlplane.v1.MarkRuntimeErrorViewedRequest
+	(*RegistryImageTag)(nil),                             // 197: kodex.controlplane.v1.RegistryImageTag
+	(*RegistryImageRepository)(nil),                      // 198: kodex.controlplane.v1.RegistryImageRepository
+	(*ListRegistryImagesRequest)(nil),                    // 199: kodex.controlplane.v1.ListRegistryImagesRequest
+	(*ListRegistryImagesResponse)(nil),                   // 200: kodex.controlplane.v1.ListRegistryImagesResponse
+	(*DeleteRegistryImageTagRequest)(nil),                // 201: kodex.controlplane.v1.DeleteRegistryImageTagRequest
+	(*RegistryImageDeleteResult)(nil),                    // 202: kodex.controlplane.v1.RegistryImageDeleteResult
+	(*CleanupRegistryImagesRequest)(nil),                 // 203: kodex.controlplane.v1.CleanupRegistryImagesRequest
+	(*CleanupRegistryImagesResponse)(nil),                // 204: kodex.controlplane.v1.CleanupRegistryImagesResponse
+	(*UpsertAgentSessionRequest)(nil),                    // 205: kodex.controlplane.v1.UpsertAgentSessionRequest
+	(*UpsertAgentSessionResponse)(nil),                   // 206: kodex.controlplane.v1.UpsertAgentSessionResponse
+	(*AgentSessionSnapshot)(nil),                         // 207: kodex.controlplane.v1.AgentSessionSnapshot
+	(*GetLatestAgentSessionRequest)(nil),                 // 208: kodex.controlplane.v1.GetLatestAgentSessionRequest
+	(*GetLatestAgentSessionResponse)(nil),                // 209: kodex.controlplane.v1.GetLatestAgentSessionResponse
+	(*GetRunInteractionResumePayloadRequest)(nil),        // 210: kodex.controlplane.v1.GetRunInteractionResumePayloadRequest
+	(*GetRunInteractionResumePayloadResponse)(nil),       // 211: kodex.controlplane.v1.GetRunInteractionResumePayloadResponse
+	(*GetRunGitHubRateLimitResumePayloadRequest)(nil),    // 212: kodex.controlplane.v1.GetRunGitHubRateLimitResumePayloadRequest
+	(*GetRunGitHubRateLimitResumePayloadResponse)(nil),   // 213: kodex.controlplane.v1.GetRunGitHubRateLimitResumePayloadResponse
+	(*LookupRunPullRequestRequest)(nil),                  // 214: kodex.controlplane.v1.LookupRunPullRequestRequest
+	(*LookupRunPullRequestResponse)(nil),                 // 215: kodex.controlplane.v1.LookupRunPullRequestResponse
+	(*InsertRunFlowEventRequest)(nil),                    // 216: kodex.controlplane.v1.InsertRunFlowEventRequest
+	(*InsertRunFlowEventResponse)(nil),                   // 217: kodex.controlplane.v1.InsertRunFlowEventResponse
+	(*UpsertRunStatusCommentRequest)(nil),                // 218: kodex.controlplane.v1.UpsertRunStatusCommentRequest
+	(*UpsertRunStatusCommentResponse)(nil),               // 219: kodex.controlplane.v1.UpsertRunStatusCommentResponse
+	(*GetCodexAuthRequest)(nil),                          // 220: kodex.controlplane.v1.GetCodexAuthRequest
+	(*GetCodexAuthResponse)(nil),                         // 221: kodex.controlplane.v1.GetCodexAuthResponse
+	(*UpsertCodexAuthRequest)(nil),                       // 222: kodex.controlplane.v1.UpsertCodexAuthRequest
+	(*UpsertCodexAuthResponse)(nil),                      // 223: kodex.controlplane.v1.UpsertCodexAuthResponse
+	(*DeleteRunNamespaceRequest)(nil),                    // 224: kodex.controlplane.v1.DeleteRunNamespaceRequest
+	(*DeleteRunNamespaceResponse)(nil),                   // 225: kodex.controlplane.v1.DeleteRunNamespaceResponse
+	(*timestamppb.Timestamp)(nil),                        // 226: google.protobuf.Timestamp
+	(*wrapperspb.Int32Value)(nil),                        // 227: google.protobuf.Int32Value
+	(*wrapperspb.BoolValue)(nil),                         // 228: google.protobuf.BoolValue
+	(*durationpb.Duration)(nil),                          // 229: google.protobuf.Duration
+	(*emptypb.Empty)(nil),                                // 230: google.protobuf.Empty
 }
 var file_kodex_controlplane_v1_controlplane_proto_depIdxs = []int32{
-	220, // 0: kodex.controlplane.v1.IngestGitHubWebhookRequest.received_at:type_name -> google.protobuf.Timestamp
+	226, // 0: kodex.controlplane.v1.IngestGitHubWebhookRequest.received_at:type_name -> google.protobuf.Timestamp
 	0,   // 1: kodex.controlplane.v1.ResolveStaffByEmailResponse.principal:type_name -> kodex.controlplane.v1.Principal
 	0,   // 2: kodex.controlplane.v1.AuthorizeOAuthUserResponse.principal:type_name -> kodex.controlplane.v1.Principal
 	0,   // 3: kodex.controlplane.v1.ListProjectsRequest.principal:type_name -> kodex.controlplane.v1.Principal
@@ -20032,23 +20451,23 @@ var file_kodex_controlplane_v1_controlplane_proto_depIdxs = []int32{
 	0,   // 5: kodex.controlplane.v1.UpsertProjectRequest.principal:type_name -> kodex.controlplane.v1.Principal
 	0,   // 6: kodex.controlplane.v1.GetProjectRequest.principal:type_name -> kodex.controlplane.v1.Principal
 	0,   // 7: kodex.controlplane.v1.DeleteProjectRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	220, // 8: kodex.controlplane.v1.Run.created_at:type_name -> google.protobuf.Timestamp
-	220, // 9: kodex.controlplane.v1.Run.started_at:type_name -> google.protobuf.Timestamp
-	220, // 10: kodex.controlplane.v1.Run.finished_at:type_name -> google.protobuf.Timestamp
-	220, // 11: kodex.controlplane.v1.Run.wait_since:type_name -> google.protobuf.Timestamp
-	220, // 12: kodex.controlplane.v1.Run.last_heartbeat_at:type_name -> google.protobuf.Timestamp
+	226, // 8: kodex.controlplane.v1.Run.created_at:type_name -> google.protobuf.Timestamp
+	226, // 9: kodex.controlplane.v1.Run.started_at:type_name -> google.protobuf.Timestamp
+	226, // 10: kodex.controlplane.v1.Run.finished_at:type_name -> google.protobuf.Timestamp
+	226, // 11: kodex.controlplane.v1.Run.wait_since:type_name -> google.protobuf.Timestamp
+	226, // 12: kodex.controlplane.v1.Run.last_heartbeat_at:type_name -> google.protobuf.Timestamp
 	14,  // 13: kodex.controlplane.v1.Run.wait_projection:type_name -> kodex.controlplane.v1.RunWaitProjection
 	15,  // 14: kodex.controlplane.v1.RunWaitProjection.dominant_wait:type_name -> kodex.controlplane.v1.GitHubRateLimitWaitItem
 	15,  // 15: kodex.controlplane.v1.RunWaitProjection.related_waits:type_name -> kodex.controlplane.v1.GitHubRateLimitWaitItem
-	220, // 16: kodex.controlplane.v1.GitHubRateLimitWaitItem.entered_at:type_name -> google.protobuf.Timestamp
-	220, // 17: kodex.controlplane.v1.GitHubRateLimitWaitItem.resume_not_before:type_name -> google.protobuf.Timestamp
+	226, // 16: kodex.controlplane.v1.GitHubRateLimitWaitItem.entered_at:type_name -> google.protobuf.Timestamp
+	226, // 17: kodex.controlplane.v1.GitHubRateLimitWaitItem.resume_not_before:type_name -> google.protobuf.Timestamp
 	16,  // 18: kodex.controlplane.v1.GitHubRateLimitWaitItem.recovery_hint:type_name -> kodex.controlplane.v1.GitHubRateLimitRecoveryHint
 	17,  // 19: kodex.controlplane.v1.GitHubRateLimitWaitItem.manual_action:type_name -> kodex.controlplane.v1.GitHubRateLimitManualAction
-	220, // 20: kodex.controlplane.v1.GitHubRateLimitRecoveryHint.resume_not_before:type_name -> google.protobuf.Timestamp
-	220, // 21: kodex.controlplane.v1.GitHubRateLimitManualAction.suggested_not_before:type_name -> google.protobuf.Timestamp
-	221, // 22: kodex.controlplane.v1.ApprovalRequest.issue_number:type_name -> google.protobuf.Int32Value
-	221, // 23: kodex.controlplane.v1.ApprovalRequest.pr_number:type_name -> google.protobuf.Int32Value
-	220, // 24: kodex.controlplane.v1.ApprovalRequest.created_at:type_name -> google.protobuf.Timestamp
+	226, // 20: kodex.controlplane.v1.GitHubRateLimitRecoveryHint.resume_not_before:type_name -> google.protobuf.Timestamp
+	226, // 21: kodex.controlplane.v1.GitHubRateLimitManualAction.suggested_not_before:type_name -> google.protobuf.Timestamp
+	227, // 22: kodex.controlplane.v1.ApprovalRequest.issue_number:type_name -> google.protobuf.Int32Value
+	227, // 23: kodex.controlplane.v1.ApprovalRequest.pr_number:type_name -> google.protobuf.Int32Value
+	226, // 24: kodex.controlplane.v1.ApprovalRequest.created_at:type_name -> google.protobuf.Timestamp
 	0,   // 25: kodex.controlplane.v1.ListPendingApprovalsRequest.principal:type_name -> kodex.controlplane.v1.Principal
 	18,  // 26: kodex.controlplane.v1.ListPendingApprovalsResponse.items:type_name -> kodex.controlplane.v1.ApprovalRequest
 	0,   // 27: kodex.controlplane.v1.ResolveApprovalDecisionRequest.principal:type_name -> kodex.controlplane.v1.Principal
@@ -20061,382 +20480,389 @@ var file_kodex_controlplane_v1_controlplane_proto_depIdxs = []int32{
 	0,   // 34: kodex.controlplane.v1.GetRunRequest.principal:type_name -> kodex.controlplane.v1.Principal
 	0,   // 35: kodex.controlplane.v1.GetRunLogsRequest.principal:type_name -> kodex.controlplane.v1.Principal
 	0,   // 36: kodex.controlplane.v1.CancelRunRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	220, // 37: kodex.controlplane.v1.RunLogs.updated_at:type_name -> google.protobuf.Timestamp
-	220, // 38: kodex.controlplane.v1.FlowEvent.created_at:type_name -> google.protobuf.Timestamp
+	226, // 37: kodex.controlplane.v1.RunLogs.updated_at:type_name -> google.protobuf.Timestamp
+	226, // 38: kodex.controlplane.v1.FlowEvent.created_at:type_name -> google.protobuf.Timestamp
 	0,   // 39: kodex.controlplane.v1.ListRunEventsRequest.principal:type_name -> kodex.controlplane.v1.Principal
 	34,  // 40: kodex.controlplane.v1.ListRunEventsResponse.items:type_name -> kodex.controlplane.v1.FlowEvent
-	220, // 41: kodex.controlplane.v1.SystemSetting.updated_at:type_name -> google.protobuf.Timestamp
+	226, // 41: kodex.controlplane.v1.SystemSetting.updated_at:type_name -> google.protobuf.Timestamp
 	0,   // 42: kodex.controlplane.v1.ListSystemSettingsRequest.principal:type_name -> kodex.controlplane.v1.Principal
 	37,  // 43: kodex.controlplane.v1.ListSystemSettingsResponse.items:type_name -> kodex.controlplane.v1.SystemSetting
 	0,   // 44: kodex.controlplane.v1.GetSystemSettingRequest.principal:type_name -> kodex.controlplane.v1.Principal
 	0,   // 45: kodex.controlplane.v1.UpdateSystemSettingBooleanRequest.principal:type_name -> kodex.controlplane.v1.Principal
 	0,   // 46: kodex.controlplane.v1.ResetSystemSettingRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	220, // 47: kodex.controlplane.v1.LearningFeedback.created_at:type_name -> google.protobuf.Timestamp
+	226, // 47: kodex.controlplane.v1.LearningFeedback.created_at:type_name -> google.protobuf.Timestamp
 	0,   // 48: kodex.controlplane.v1.ListRunLearningFeedbackRequest.principal:type_name -> kodex.controlplane.v1.Principal
 	43,  // 49: kodex.controlplane.v1.ListRunLearningFeedbackResponse.items:type_name -> kodex.controlplane.v1.LearningFeedback
 	0,   // 50: kodex.controlplane.v1.ListUsersRequest.principal:type_name -> kodex.controlplane.v1.Principal
 	46,  // 51: kodex.controlplane.v1.ListUsersResponse.items:type_name -> kodex.controlplane.v1.User
-	0,   // 52: kodex.controlplane.v1.CreateUserRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	0,   // 53: kodex.controlplane.v1.DeleteUserRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	222, // 54: kodex.controlplane.v1.ProjectMember.learning_mode_override:type_name -> google.protobuf.BoolValue
-	0,   // 55: kodex.controlplane.v1.ListProjectMembersRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	51,  // 56: kodex.controlplane.v1.ListProjectMembersResponse.items:type_name -> kodex.controlplane.v1.ProjectMember
-	0,   // 57: kodex.controlplane.v1.UpsertProjectMemberRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	0,   // 58: kodex.controlplane.v1.DeleteProjectMemberRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	0,   // 59: kodex.controlplane.v1.SetProjectMemberLearningModeOverrideRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	222, // 60: kodex.controlplane.v1.SetProjectMemberLearningModeOverrideRequest.enabled:type_name -> google.protobuf.BoolValue
-	0,   // 61: kodex.controlplane.v1.ListProjectRepositoriesRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	57,  // 62: kodex.controlplane.v1.ListProjectRepositoriesResponse.items:type_name -> kodex.controlplane.v1.RepositoryBinding
-	0,   // 63: kodex.controlplane.v1.UpsertProjectRepositoryRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	0,   // 64: kodex.controlplane.v1.DeleteProjectRepositoryRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	0,   // 65: kodex.controlplane.v1.UpsertRepositoryBotParamsRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	0,   // 66: kodex.controlplane.v1.RunRepositoryPreflightRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	64,  // 67: kodex.controlplane.v1.RunRepositoryPreflightResponse.checks:type_name -> kodex.controlplane.v1.PreflightCheckResult
-	220, // 68: kodex.controlplane.v1.RunRepositoryPreflightResponse.finished_at:type_name -> google.protobuf.Timestamp
-	0,   // 69: kodex.controlplane.v1.GetProjectGitHubTokensRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	0,   // 70: kodex.controlplane.v1.UpsertProjectGitHubTokensRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	0,   // 71: kodex.controlplane.v1.NextStepActionRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	0,   // 72: kodex.controlplane.v1.ListConfigEntriesRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	71,  // 73: kodex.controlplane.v1.ListConfigEntriesResponse.items:type_name -> kodex.controlplane.v1.ConfigEntry
-	0,   // 74: kodex.controlplane.v1.UpsertConfigEntryRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	0,   // 75: kodex.controlplane.v1.DeleteConfigEntryRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	0,   // 76: kodex.controlplane.v1.ListDocsetGroupsRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	76,  // 77: kodex.controlplane.v1.ListDocsetGroupsResponse.groups:type_name -> kodex.controlplane.v1.DocsetGroup
-	0,   // 78: kodex.controlplane.v1.ImportDocsetRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	0,   // 79: kodex.controlplane.v1.SyncDocsetRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	220, // 80: kodex.controlplane.v1.IssueRunMCPTokenResponse.expires_at:type_name -> google.protobuf.Timestamp
-	220, // 81: kodex.controlplane.v1.ClaimNextInteractionDispatchResponse.response_deadline_at:type_name -> google.protobuf.Timestamp
-	220, // 82: kodex.controlplane.v1.CompleteInteractionDispatchRequest.next_retry_at:type_name -> google.protobuf.Timestamp
-	220, // 83: kodex.controlplane.v1.CompleteInteractionDispatchRequest.finished_at:type_name -> google.protobuf.Timestamp
-	220, // 84: kodex.controlplane.v1.CompleteInteractionDispatchRequest.callback_token_expires_at:type_name -> google.protobuf.Timestamp
-	220, // 85: kodex.controlplane.v1.ProcessNextGitHubRateLimitWaitResponse.resume_not_before:type_name -> google.protobuf.Timestamp
-	220, // 86: kodex.controlplane.v1.GitHubRateLimitHeaders.rate_limit_reset_at:type_name -> google.protobuf.Timestamp
-	220, // 87: kodex.controlplane.v1.ReportGitHubRateLimitSignalRequest.occurred_at:type_name -> google.protobuf.Timestamp
-	97,  // 88: kodex.controlplane.v1.ReportGitHubRateLimitSignalRequest.github_headers:type_name -> kodex.controlplane.v1.GitHubRateLimitHeaders
-	220, // 89: kodex.controlplane.v1.ReportGitHubRateLimitSignalResponse.resume_not_before:type_name -> google.protobuf.Timestamp
-	101, // 90: kodex.controlplane.v1.ChangeGovernanceWaveDraft.verification_targets:type_name -> kodex.controlplane.v1.ChangeGovernanceVerificationTarget
-	221, // 91: kodex.controlplane.v1.ReportChangeGovernanceDraftSignalRequest.pr_number:type_name -> google.protobuf.Int32Value
-	100, // 92: kodex.controlplane.v1.ReportChangeGovernanceDraftSignalRequest.change_scope_hints:type_name -> kodex.controlplane.v1.ChangeGovernanceScopeHint
-	220, // 93: kodex.controlplane.v1.ReportChangeGovernanceDraftSignalRequest.occurred_at:type_name -> google.protobuf.Timestamp
-	102, // 94: kodex.controlplane.v1.PublishChangeGovernanceWaveMapRequest.waves:type_name -> kodex.controlplane.v1.ChangeGovernanceWaveDraft
-	220, // 95: kodex.controlplane.v1.PublishChangeGovernanceWaveMapRequest.published_at:type_name -> google.protobuf.Timestamp
-	103, // 96: kodex.controlplane.v1.UpsertChangeGovernanceEvidenceSignalRequest.artifact_links:type_name -> kodex.controlplane.v1.ChangeGovernanceArtifactLinkSeed
-	220, // 97: kodex.controlplane.v1.UpsertChangeGovernanceEvidenceSignalRequest.occurred_at:type_name -> google.protobuf.Timestamp
-	110, // 98: kodex.controlplane.v1.ListMissionControlWarmupProjectsResponse.items:type_name -> kodex.controlplane.v1.MissionControlWarmupProject
-	116, // 99: kodex.controlplane.v1.MissionControlEntityCard.provider_reference:type_name -> kodex.controlplane.v1.MissionControlProviderReference
-	117, // 100: kodex.controlplane.v1.MissionControlEntityCard.primary_actor:type_name -> kodex.controlplane.v1.MissionControlPrimaryActor
-	220, // 101: kodex.controlplane.v1.MissionControlEntityCard.last_timeline_at:type_name -> google.protobuf.Timestamp
-	220, // 102: kodex.controlplane.v1.MissionControlTimelineEntry.occurred_at:type_name -> google.protobuf.Timestamp
-	220, // 103: kodex.controlplane.v1.MissionControlWorkItemDetailsPayload.last_provider_sync_at:type_name -> google.protobuf.Timestamp
-	220, // 104: kodex.controlplane.v1.MissionControlAgentDetailsPayload.last_heartbeat_at:type_name -> google.protobuf.Timestamp
-	118, // 105: kodex.controlplane.v1.MissionControlEntityDetails.entity:type_name -> kodex.controlplane.v1.MissionControlEntityCard
-	119, // 106: kodex.controlplane.v1.MissionControlEntityDetails.relations:type_name -> kodex.controlplane.v1.MissionControlRelation
-	120, // 107: kodex.controlplane.v1.MissionControlEntityDetails.timeline_preview:type_name -> kodex.controlplane.v1.MissionControlTimelineEntry
-	121, // 108: kodex.controlplane.v1.MissionControlEntityDetails.allowed_actions:type_name -> kodex.controlplane.v1.MissionControlAllowedAction
-	122, // 109: kodex.controlplane.v1.MissionControlEntityDetails.provider_deep_links:type_name -> kodex.controlplane.v1.MissionControlProviderDeepLink
-	123, // 110: kodex.controlplane.v1.MissionControlEntityDetails.work_item:type_name -> kodex.controlplane.v1.MissionControlWorkItemDetailsPayload
-	124, // 111: kodex.controlplane.v1.MissionControlEntityDetails.discussion:type_name -> kodex.controlplane.v1.MissionControlDiscussionDetailsPayload
-	125, // 112: kodex.controlplane.v1.MissionControlEntityDetails.pull_request:type_name -> kodex.controlplane.v1.MissionControlPullRequestDetailsPayload
-	126, // 113: kodex.controlplane.v1.MissionControlEntityDetails.agent:type_name -> kodex.controlplane.v1.MissionControlAgentDetailsPayload
-	220, // 114: kodex.controlplane.v1.MissionControlDashboardSnapshot.generated_at:type_name -> google.protobuf.Timestamp
-	220, // 115: kodex.controlplane.v1.MissionControlDashboardSnapshot.stale_after:type_name -> google.protobuf.Timestamp
-	128, // 116: kodex.controlplane.v1.MissionControlDashboardSnapshot.summary:type_name -> kodex.controlplane.v1.MissionControlSnapshotSummary
-	118, // 117: kodex.controlplane.v1.MissionControlDashboardSnapshot.entities:type_name -> kodex.controlplane.v1.MissionControlEntityCard
-	119, // 118: kodex.controlplane.v1.MissionControlDashboardSnapshot.relations:type_name -> kodex.controlplane.v1.MissionControlRelation
-	0,   // 119: kodex.controlplane.v1.GetMissionControlSnapshotRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	129, // 120: kodex.controlplane.v1.GetMissionControlSnapshotResponse.snapshot:type_name -> kodex.controlplane.v1.MissionControlDashboardSnapshot
-	0,   // 121: kodex.controlplane.v1.GetMissionControlEntityRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	0,   // 122: kodex.controlplane.v1.ListMissionControlTimelineRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	120, // 123: kodex.controlplane.v1.ListMissionControlTimelineResponse.items:type_name -> kodex.controlplane.v1.MissionControlTimelineEntry
-	220, // 124: kodex.controlplane.v1.MissionControlWorkspaceWatermark.observed_at:type_name -> google.protobuf.Timestamp
-	220, // 125: kodex.controlplane.v1.MissionControlWorkspaceWatermark.window_started_at:type_name -> google.protobuf.Timestamp
-	220, // 126: kodex.controlplane.v1.MissionControlWorkspaceWatermark.window_ended_at:type_name -> google.protobuf.Timestamp
-	135, // 127: kodex.controlplane.v1.MissionControlRootGroup.node_refs:type_name -> kodex.controlplane.v1.MissionControlNodeRef
-	220, // 128: kodex.controlplane.v1.MissionControlRootGroup.latest_activity_at:type_name -> google.protobuf.Timestamp
-	116, // 129: kodex.controlplane.v1.MissionControlNode.provider_reference:type_name -> kodex.controlplane.v1.MissionControlProviderReference
-	220, // 130: kodex.controlplane.v1.MissionControlNode.last_activity_at:type_name -> google.protobuf.Timestamp
-	220, // 131: kodex.controlplane.v1.MissionControlWorkspaceSnapshot.generated_at:type_name -> google.protobuf.Timestamp
-	136, // 132: kodex.controlplane.v1.MissionControlWorkspaceSnapshot.effective_filters:type_name -> kodex.controlplane.v1.MissionControlWorkspaceFilters
-	137, // 133: kodex.controlplane.v1.MissionControlWorkspaceSnapshot.summary:type_name -> kodex.controlplane.v1.MissionControlWorkspaceSummary
-	138, // 134: kodex.controlplane.v1.MissionControlWorkspaceSnapshot.workspace_watermarks:type_name -> kodex.controlplane.v1.MissionControlWorkspaceWatermark
-	139, // 135: kodex.controlplane.v1.MissionControlWorkspaceSnapshot.root_groups:type_name -> kodex.controlplane.v1.MissionControlRootGroup
-	140, // 136: kodex.controlplane.v1.MissionControlWorkspaceSnapshot.nodes:type_name -> kodex.controlplane.v1.MissionControlNode
-	141, // 137: kodex.controlplane.v1.MissionControlWorkspaceSnapshot.edges:type_name -> kodex.controlplane.v1.MissionControlEdge
-	0,   // 138: kodex.controlplane.v1.GetMissionControlWorkspaceRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	142, // 139: kodex.controlplane.v1.GetMissionControlWorkspaceResponse.snapshot:type_name -> kodex.controlplane.v1.MissionControlWorkspaceSnapshot
-	220, // 140: kodex.controlplane.v1.MissionControlContinuityGap.detected_at:type_name -> google.protobuf.Timestamp
-	220, // 141: kodex.controlplane.v1.MissionControlContinuityGap.resolved_at:type_name -> google.protobuf.Timestamp
-	146, // 142: kodex.controlplane.v1.MissionControlLaunchSurface.command_template:type_name -> kodex.controlplane.v1.MissionControlStageNextStepTemplate
-	135, // 143: kodex.controlplane.v1.MissionControlDiscussionNodeDetails.formalization_target_refs:type_name -> kodex.controlplane.v1.MissionControlNodeRef
-	135, // 144: kodex.controlplane.v1.MissionControlWorkItemNodeDetails.linked_run_refs:type_name -> kodex.controlplane.v1.MissionControlNodeRef
-	135, // 145: kodex.controlplane.v1.MissionControlWorkItemNodeDetails.linked_follow_up_refs:type_name -> kodex.controlplane.v1.MissionControlNodeRef
-	220, // 146: kodex.controlplane.v1.MissionControlWorkItemNodeDetails.last_provider_sync_at:type_name -> google.protobuf.Timestamp
-	220, // 147: kodex.controlplane.v1.MissionControlRunNodeDetails.started_at:type_name -> google.protobuf.Timestamp
-	220, // 148: kodex.controlplane.v1.MissionControlRunNodeDetails.finished_at:type_name -> google.protobuf.Timestamp
-	135, // 149: kodex.controlplane.v1.MissionControlRunNodeDetails.linked_pull_request_refs:type_name -> kodex.controlplane.v1.MissionControlNodeRef
-	135, // 150: kodex.controlplane.v1.MissionControlRunNodeDetails.produced_issue_refs:type_name -> kodex.controlplane.v1.MissionControlNodeRef
-	135, // 151: kodex.controlplane.v1.MissionControlPullRequestNodeDetails.linked_issue_refs:type_name -> kodex.controlplane.v1.MissionControlNodeRef
-	135, // 152: kodex.controlplane.v1.MissionControlPullRequestNodeDetails.linked_run_ref:type_name -> kodex.controlplane.v1.MissionControlNodeRef
-	220, // 153: kodex.controlplane.v1.MissionControlActivityEntry.occurred_at:type_name -> google.protobuf.Timestamp
-	140, // 154: kodex.controlplane.v1.MissionControlNodeDetails.node:type_name -> kodex.controlplane.v1.MissionControlNode
-	140, // 155: kodex.controlplane.v1.MissionControlNodeDetails.adjacent_nodes:type_name -> kodex.controlplane.v1.MissionControlNode
-	141, // 156: kodex.controlplane.v1.MissionControlNodeDetails.adjacent_edges:type_name -> kodex.controlplane.v1.MissionControlEdge
-	145, // 157: kodex.controlplane.v1.MissionControlNodeDetails.continuity_gaps:type_name -> kodex.controlplane.v1.MissionControlContinuityGap
-	138, // 158: kodex.controlplane.v1.MissionControlNodeDetails.node_watermarks:type_name -> kodex.controlplane.v1.MissionControlWorkspaceWatermark
-	152, // 159: kodex.controlplane.v1.MissionControlNodeDetails.activity_preview:type_name -> kodex.controlplane.v1.MissionControlActivityEntry
-	147, // 160: kodex.controlplane.v1.MissionControlNodeDetails.launch_surfaces:type_name -> kodex.controlplane.v1.MissionControlLaunchSurface
-	122, // 161: kodex.controlplane.v1.MissionControlNodeDetails.provider_deep_links:type_name -> kodex.controlplane.v1.MissionControlProviderDeepLink
-	148, // 162: kodex.controlplane.v1.MissionControlNodeDetails.discussion:type_name -> kodex.controlplane.v1.MissionControlDiscussionNodeDetails
-	149, // 163: kodex.controlplane.v1.MissionControlNodeDetails.work_item:type_name -> kodex.controlplane.v1.MissionControlWorkItemNodeDetails
-	150, // 164: kodex.controlplane.v1.MissionControlNodeDetails.run:type_name -> kodex.controlplane.v1.MissionControlRunNodeDetails
-	151, // 165: kodex.controlplane.v1.MissionControlNodeDetails.pull_request:type_name -> kodex.controlplane.v1.MissionControlPullRequestNodeDetails
-	0,   // 166: kodex.controlplane.v1.GetMissionControlNodeRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	0,   // 167: kodex.controlplane.v1.ListMissionControlNodeActivityRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	152, // 168: kodex.controlplane.v1.ListMissionControlNodeActivityResponse.items:type_name -> kodex.controlplane.v1.MissionControlActivityEntry
-	0,   // 169: kodex.controlplane.v1.PreviewMissionControlLaunchRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	135, // 170: kodex.controlplane.v1.MissionControlLaunchPreviewContinuityEffect.resulting_node_refs:type_name -> kodex.controlplane.v1.MissionControlNodeRef
-	158, // 171: kodex.controlplane.v1.MissionControlLaunchPreview.label_diff:type_name -> kodex.controlplane.v1.MissionControlLaunchPreviewLabelDiff
-	159, // 172: kodex.controlplane.v1.MissionControlLaunchPreview.continuity_effect:type_name -> kodex.controlplane.v1.MissionControlLaunchPreviewContinuityEffect
-	161, // 173: kodex.controlplane.v1.MissionControlPendingCommand.stage_next_step:type_name -> kodex.controlplane.v1.MissionControlStageNextStepPayload
-	220, // 174: kodex.controlplane.v1.MissionControlPendingCommand.requested_at:type_name -> google.protobuf.Timestamp
-	220, // 175: kodex.controlplane.v1.MissionControlPendingCommand.updated_at:type_name -> google.protobuf.Timestamp
-	223, // 176: kodex.controlplane.v1.ClaimMissionControlPendingCommandsRequest.lease_ttl:type_name -> google.protobuf.Duration
-	162, // 177: kodex.controlplane.v1.ClaimMissionControlPendingCommandsResponse.items:type_name -> kodex.controlplane.v1.MissionControlPendingCommand
-	220, // 178: kodex.controlplane.v1.MissionControlCommandState.updated_at:type_name -> google.protobuf.Timestamp
-	220, // 179: kodex.controlplane.v1.MissionControlCommandState.reconciled_at:type_name -> google.protobuf.Timestamp
-	115, // 180: kodex.controlplane.v1.MissionControlCommandState.entity_refs:type_name -> kodex.controlplane.v1.MissionControlEntityRef
-	166, // 181: kodex.controlplane.v1.MissionControlCommandState.approval:type_name -> kodex.controlplane.v1.MissionControlCommandApproval
-	220, // 182: kodex.controlplane.v1.MissionControlCommandApproval.requested_at:type_name -> google.protobuf.Timestamp
-	220, // 183: kodex.controlplane.v1.MissionControlCommandApproval.decided_at:type_name -> google.protobuf.Timestamp
-	115, // 184: kodex.controlplane.v1.MissionControlWorkItemCreatePayload.related_entity_refs:type_name -> kodex.controlplane.v1.MissionControlEntityRef
-	0,   // 185: kodex.controlplane.v1.SubmitMissionControlCommandRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	220, // 186: kodex.controlplane.v1.SubmitMissionControlCommandRequest.requested_at:type_name -> google.protobuf.Timestamp
-	167, // 187: kodex.controlplane.v1.SubmitMissionControlCommandRequest.discussion_create:type_name -> kodex.controlplane.v1.MissionControlDiscussionCreatePayload
-	168, // 188: kodex.controlplane.v1.SubmitMissionControlCommandRequest.work_item_create:type_name -> kodex.controlplane.v1.MissionControlWorkItemCreatePayload
-	169, // 189: kodex.controlplane.v1.SubmitMissionControlCommandRequest.discussion_formalize:type_name -> kodex.controlplane.v1.MissionControlDiscussionFormalizePayload
-	161, // 190: kodex.controlplane.v1.SubmitMissionControlCommandRequest.stage_next_step:type_name -> kodex.controlplane.v1.MissionControlStageNextStepPayload
-	170, // 191: kodex.controlplane.v1.SubmitMissionControlCommandRequest.retry_sync:type_name -> kodex.controlplane.v1.MissionControlRetrySyncPayload
-	0,   // 192: kodex.controlplane.v1.GetMissionControlCommandRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	220, // 193: kodex.controlplane.v1.QueueMissionControlCommandRequest.updated_at:type_name -> google.protobuf.Timestamp
-	220, // 194: kodex.controlplane.v1.MarkMissionControlCommandPendingSyncRequest.updated_at:type_name -> google.protobuf.Timestamp
-	220, // 195: kodex.controlplane.v1.MarkMissionControlCommandReconciledRequest.updated_at:type_name -> google.protobuf.Timestamp
-	220, // 196: kodex.controlplane.v1.MarkMissionControlCommandReconciledRequest.reconciled_at:type_name -> google.protobuf.Timestamp
-	220, // 197: kodex.controlplane.v1.MarkMissionControlCommandFailedRequest.updated_at:type_name -> google.protobuf.Timestamp
-	220, // 198: kodex.controlplane.v1.SubmitInteractionCallbackRequest.occurred_at:type_name -> google.protobuf.Timestamp
-	220, // 199: kodex.controlplane.v1.RuntimeDeployTaskLog.created_at:type_name -> google.protobuf.Timestamp
-	220, // 200: kodex.controlplane.v1.RuntimeDeployTask.lease_until:type_name -> google.protobuf.Timestamp
-	220, // 201: kodex.controlplane.v1.RuntimeDeployTask.cancel_requested_at:type_name -> google.protobuf.Timestamp
-	220, // 202: kodex.controlplane.v1.RuntimeDeployTask.stop_requested_at:type_name -> google.protobuf.Timestamp
-	220, // 203: kodex.controlplane.v1.RuntimeDeployTask.created_at:type_name -> google.protobuf.Timestamp
-	220, // 204: kodex.controlplane.v1.RuntimeDeployTask.updated_at:type_name -> google.protobuf.Timestamp
-	220, // 205: kodex.controlplane.v1.RuntimeDeployTask.started_at:type_name -> google.protobuf.Timestamp
-	220, // 206: kodex.controlplane.v1.RuntimeDeployTask.finished_at:type_name -> google.protobuf.Timestamp
-	179, // 207: kodex.controlplane.v1.RuntimeDeployTask.logs:type_name -> kodex.controlplane.v1.RuntimeDeployTaskLog
-	0,   // 208: kodex.controlplane.v1.ListRuntimeDeployTasksRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	180, // 209: kodex.controlplane.v1.ListRuntimeDeployTasksResponse.items:type_name -> kodex.controlplane.v1.RuntimeDeployTask
-	0,   // 210: kodex.controlplane.v1.GetRuntimeDeployTaskRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	0,   // 211: kodex.controlplane.v1.CancelRuntimeDeployTaskRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	0,   // 212: kodex.controlplane.v1.StopRuntimeDeployTaskRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	220, // 213: kodex.controlplane.v1.RuntimeError.viewed_at:type_name -> google.protobuf.Timestamp
-	220, // 214: kodex.controlplane.v1.RuntimeError.created_at:type_name -> google.protobuf.Timestamp
-	0,   // 215: kodex.controlplane.v1.ListRuntimeErrorsRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	187, // 216: kodex.controlplane.v1.ListRuntimeErrorsResponse.items:type_name -> kodex.controlplane.v1.RuntimeError
-	0,   // 217: kodex.controlplane.v1.MarkRuntimeErrorViewedRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	220, // 218: kodex.controlplane.v1.RegistryImageTag.created_at:type_name -> google.protobuf.Timestamp
-	191, // 219: kodex.controlplane.v1.RegistryImageRepository.tags:type_name -> kodex.controlplane.v1.RegistryImageTag
-	0,   // 220: kodex.controlplane.v1.ListRegistryImagesRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	192, // 221: kodex.controlplane.v1.ListRegistryImagesResponse.items:type_name -> kodex.controlplane.v1.RegistryImageRepository
-	0,   // 222: kodex.controlplane.v1.DeleteRegistryImageTagRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	0,   // 223: kodex.controlplane.v1.CleanupRegistryImagesRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	196, // 224: kodex.controlplane.v1.CleanupRegistryImagesResponse.deleted:type_name -> kodex.controlplane.v1.RegistryImageDeleteResult
-	196, // 225: kodex.controlplane.v1.CleanupRegistryImagesResponse.skipped:type_name -> kodex.controlplane.v1.RegistryImageDeleteResult
-	221, // 226: kodex.controlplane.v1.UpsertAgentSessionRequest.issue_number:type_name -> google.protobuf.Int32Value
-	221, // 227: kodex.controlplane.v1.UpsertAgentSessionRequest.pr_number:type_name -> google.protobuf.Int32Value
-	220, // 228: kodex.controlplane.v1.UpsertAgentSessionRequest.started_at:type_name -> google.protobuf.Timestamp
-	220, // 229: kodex.controlplane.v1.UpsertAgentSessionRequest.finished_at:type_name -> google.protobuf.Timestamp
-	221, // 230: kodex.controlplane.v1.AgentSessionSnapshot.issue_number:type_name -> google.protobuf.Int32Value
-	221, // 231: kodex.controlplane.v1.AgentSessionSnapshot.pr_number:type_name -> google.protobuf.Int32Value
-	220, // 232: kodex.controlplane.v1.AgentSessionSnapshot.started_at:type_name -> google.protobuf.Timestamp
-	220, // 233: kodex.controlplane.v1.AgentSessionSnapshot.finished_at:type_name -> google.protobuf.Timestamp
-	220, // 234: kodex.controlplane.v1.AgentSessionSnapshot.created_at:type_name -> google.protobuf.Timestamp
-	220, // 235: kodex.controlplane.v1.AgentSessionSnapshot.updated_at:type_name -> google.protobuf.Timestamp
-	220, // 236: kodex.controlplane.v1.AgentSessionSnapshot.snapshot_updated_at:type_name -> google.protobuf.Timestamp
-	201, // 237: kodex.controlplane.v1.GetLatestAgentSessionResponse.session:type_name -> kodex.controlplane.v1.AgentSessionSnapshot
-	221, // 238: kodex.controlplane.v1.LookupRunPullRequestRequest.pr_number:type_name -> google.protobuf.Int32Value
-	0,   // 239: kodex.controlplane.v1.DeleteRunNamespaceRequest.principal:type_name -> kodex.controlplane.v1.Principal
-	1,   // 240: kodex.controlplane.v1.ControlPlaneService.IngestGitHubWebhook:input_type -> kodex.controlplane.v1.IngestGitHubWebhookRequest
-	3,   // 241: kodex.controlplane.v1.ControlPlaneService.ResolveStaffByEmail:input_type -> kodex.controlplane.v1.ResolveStaffByEmailRequest
-	5,   // 242: kodex.controlplane.v1.ControlPlaneService.AuthorizeOAuthUser:input_type -> kodex.controlplane.v1.AuthorizeOAuthUserRequest
-	8,   // 243: kodex.controlplane.v1.ControlPlaneService.ListProjects:input_type -> kodex.controlplane.v1.ListProjectsRequest
-	10,  // 244: kodex.controlplane.v1.ControlPlaneService.UpsertProject:input_type -> kodex.controlplane.v1.UpsertProjectRequest
-	11,  // 245: kodex.controlplane.v1.ControlPlaneService.GetProject:input_type -> kodex.controlplane.v1.GetProjectRequest
-	12,  // 246: kodex.controlplane.v1.ControlPlaneService.DeleteProject:input_type -> kodex.controlplane.v1.DeleteProjectRequest
-	23,  // 247: kodex.controlplane.v1.ControlPlaneService.ListRuns:input_type -> kodex.controlplane.v1.ListRunsRequest
-	27,  // 248: kodex.controlplane.v1.ControlPlaneService.ListRunWaits:input_type -> kodex.controlplane.v1.ListRunWaitsRequest
-	29,  // 249: kodex.controlplane.v1.ControlPlaneService.GetRun:input_type -> kodex.controlplane.v1.GetRunRequest
-	31,  // 250: kodex.controlplane.v1.ControlPlaneService.CancelRun:input_type -> kodex.controlplane.v1.CancelRunRequest
-	30,  // 251: kodex.controlplane.v1.ControlPlaneService.GetRunLogs:input_type -> kodex.controlplane.v1.GetRunLogsRequest
-	19,  // 252: kodex.controlplane.v1.ControlPlaneService.ListPendingApprovals:input_type -> kodex.controlplane.v1.ListPendingApprovalsRequest
-	21,  // 253: kodex.controlplane.v1.ControlPlaneService.ResolveApprovalDecision:input_type -> kodex.controlplane.v1.ResolveApprovalDecisionRequest
-	35,  // 254: kodex.controlplane.v1.ControlPlaneService.ListRunEvents:input_type -> kodex.controlplane.v1.ListRunEventsRequest
-	44,  // 255: kodex.controlplane.v1.ControlPlaneService.ListRunLearningFeedback:input_type -> kodex.controlplane.v1.ListRunLearningFeedbackRequest
-	38,  // 256: kodex.controlplane.v1.ControlPlaneService.ListSystemSettings:input_type -> kodex.controlplane.v1.ListSystemSettingsRequest
-	40,  // 257: kodex.controlplane.v1.ControlPlaneService.GetSystemSetting:input_type -> kodex.controlplane.v1.GetSystemSettingRequest
-	41,  // 258: kodex.controlplane.v1.ControlPlaneService.UpdateSystemSettingBoolean:input_type -> kodex.controlplane.v1.UpdateSystemSettingBooleanRequest
-	42,  // 259: kodex.controlplane.v1.ControlPlaneService.ResetSystemSetting:input_type -> kodex.controlplane.v1.ResetSystemSettingRequest
-	47,  // 260: kodex.controlplane.v1.ControlPlaneService.ListUsers:input_type -> kodex.controlplane.v1.ListUsersRequest
-	49,  // 261: kodex.controlplane.v1.ControlPlaneService.CreateUser:input_type -> kodex.controlplane.v1.CreateUserRequest
-	50,  // 262: kodex.controlplane.v1.ControlPlaneService.DeleteUser:input_type -> kodex.controlplane.v1.DeleteUserRequest
-	52,  // 263: kodex.controlplane.v1.ControlPlaneService.ListProjectMembers:input_type -> kodex.controlplane.v1.ListProjectMembersRequest
-	54,  // 264: kodex.controlplane.v1.ControlPlaneService.UpsertProjectMember:input_type -> kodex.controlplane.v1.UpsertProjectMemberRequest
-	55,  // 265: kodex.controlplane.v1.ControlPlaneService.DeleteProjectMember:input_type -> kodex.controlplane.v1.DeleteProjectMemberRequest
-	56,  // 266: kodex.controlplane.v1.ControlPlaneService.SetProjectMemberLearningModeOverride:input_type -> kodex.controlplane.v1.SetProjectMemberLearningModeOverrideRequest
-	58,  // 267: kodex.controlplane.v1.ControlPlaneService.ListProjectRepositories:input_type -> kodex.controlplane.v1.ListProjectRepositoriesRequest
-	60,  // 268: kodex.controlplane.v1.ControlPlaneService.UpsertProjectRepository:input_type -> kodex.controlplane.v1.UpsertProjectRepositoryRequest
-	61,  // 269: kodex.controlplane.v1.ControlPlaneService.DeleteProjectRepository:input_type -> kodex.controlplane.v1.DeleteProjectRepositoryRequest
-	62,  // 270: kodex.controlplane.v1.ControlPlaneService.UpsertRepositoryBotParams:input_type -> kodex.controlplane.v1.UpsertRepositoryBotParamsRequest
-	63,  // 271: kodex.controlplane.v1.ControlPlaneService.RunRepositoryPreflight:input_type -> kodex.controlplane.v1.RunRepositoryPreflightRequest
-	67,  // 272: kodex.controlplane.v1.ControlPlaneService.GetProjectGitHubTokens:input_type -> kodex.controlplane.v1.GetProjectGitHubTokensRequest
-	68,  // 273: kodex.controlplane.v1.ControlPlaneService.UpsertProjectGitHubTokens:input_type -> kodex.controlplane.v1.UpsertProjectGitHubTokensRequest
-	69,  // 274: kodex.controlplane.v1.ControlPlaneService.PreviewNextStepAction:input_type -> kodex.controlplane.v1.NextStepActionRequest
-	69,  // 275: kodex.controlplane.v1.ControlPlaneService.ExecuteNextStepAction:input_type -> kodex.controlplane.v1.NextStepActionRequest
-	77,  // 276: kodex.controlplane.v1.ControlPlaneService.ListDocsetGroups:input_type -> kodex.controlplane.v1.ListDocsetGroupsRequest
-	79,  // 277: kodex.controlplane.v1.ControlPlaneService.ImportDocset:input_type -> kodex.controlplane.v1.ImportDocsetRequest
-	81,  // 278: kodex.controlplane.v1.ControlPlaneService.SyncDocset:input_type -> kodex.controlplane.v1.SyncDocsetRequest
-	83,  // 279: kodex.controlplane.v1.ControlPlaneService.IssueRunMCPToken:input_type -> kodex.controlplane.v1.IssueRunMCPTokenRequest
-	85,  // 280: kodex.controlplane.v1.ControlPlaneService.PrepareRunEnvironment:input_type -> kodex.controlplane.v1.PrepareRunEnvironmentRequest
-	87,  // 281: kodex.controlplane.v1.ControlPlaneService.EvaluateRuntimeReuse:input_type -> kodex.controlplane.v1.EvaluateRuntimeReuseRequest
-	89,  // 282: kodex.controlplane.v1.ControlPlaneService.ClaimNextInteractionDispatch:input_type -> kodex.controlplane.v1.ClaimNextInteractionDispatchRequest
-	91,  // 283: kodex.controlplane.v1.ControlPlaneService.CompleteInteractionDispatch:input_type -> kodex.controlplane.v1.CompleteInteractionDispatchRequest
-	93,  // 284: kodex.controlplane.v1.ControlPlaneService.ExpireNextInteraction:input_type -> kodex.controlplane.v1.ExpireNextInteractionRequest
-	95,  // 285: kodex.controlplane.v1.ControlPlaneService.ProcessNextGitHubRateLimitWait:input_type -> kodex.controlplane.v1.ProcessNextGitHubRateLimitWaitRequest
-	98,  // 286: kodex.controlplane.v1.ControlPlaneService.ReportGitHubRateLimitSignal:input_type -> kodex.controlplane.v1.ReportGitHubRateLimitSignalRequest
-	104, // 287: kodex.controlplane.v1.ControlPlaneService.ReportChangeGovernanceDraftSignal:input_type -> kodex.controlplane.v1.ReportChangeGovernanceDraftSignalRequest
-	106, // 288: kodex.controlplane.v1.ControlPlaneService.PublishChangeGovernanceWaveMap:input_type -> kodex.controlplane.v1.PublishChangeGovernanceWaveMapRequest
-	108, // 289: kodex.controlplane.v1.ControlPlaneService.UpsertChangeGovernanceEvidenceSignal:input_type -> kodex.controlplane.v1.UpsertChangeGovernanceEvidenceSignalRequest
-	143, // 290: kodex.controlplane.v1.ControlPlaneService.GetMissionControlWorkspace:input_type -> kodex.controlplane.v1.GetMissionControlWorkspaceRequest
-	154, // 291: kodex.controlplane.v1.ControlPlaneService.GetMissionControlNode:input_type -> kodex.controlplane.v1.GetMissionControlNodeRequest
-	155, // 292: kodex.controlplane.v1.ControlPlaneService.ListMissionControlNodeActivity:input_type -> kodex.controlplane.v1.ListMissionControlNodeActivityRequest
-	157, // 293: kodex.controlplane.v1.ControlPlaneService.PreviewMissionControlLaunch:input_type -> kodex.controlplane.v1.PreviewMissionControlLaunchRequest
-	130, // 294: kodex.controlplane.v1.ControlPlaneService.GetMissionControlSnapshot:input_type -> kodex.controlplane.v1.GetMissionControlSnapshotRequest
-	132, // 295: kodex.controlplane.v1.ControlPlaneService.GetMissionControlEntity:input_type -> kodex.controlplane.v1.GetMissionControlEntityRequest
-	133, // 296: kodex.controlplane.v1.ControlPlaneService.ListMissionControlTimeline:input_type -> kodex.controlplane.v1.ListMissionControlTimelineRequest
-	111, // 297: kodex.controlplane.v1.ControlPlaneService.ListMissionControlWarmupProjects:input_type -> kodex.controlplane.v1.ListMissionControlWarmupProjectsRequest
-	113, // 298: kodex.controlplane.v1.ControlPlaneService.RunMissionControlWarmup:input_type -> kodex.controlplane.v1.RunMissionControlWarmupRequest
-	171, // 299: kodex.controlplane.v1.ControlPlaneService.SubmitMissionControlCommand:input_type -> kodex.controlplane.v1.SubmitMissionControlCommandRequest
-	172, // 300: kodex.controlplane.v1.ControlPlaneService.GetMissionControlCommand:input_type -> kodex.controlplane.v1.GetMissionControlCommandRequest
-	163, // 301: kodex.controlplane.v1.ControlPlaneService.ClaimMissionControlPendingCommands:input_type -> kodex.controlplane.v1.ClaimMissionControlPendingCommandsRequest
-	173, // 302: kodex.controlplane.v1.ControlPlaneService.QueueMissionControlCommand:input_type -> kodex.controlplane.v1.QueueMissionControlCommandRequest
-	174, // 303: kodex.controlplane.v1.ControlPlaneService.MarkMissionControlCommandPendingSync:input_type -> kodex.controlplane.v1.MarkMissionControlCommandPendingSyncRequest
-	175, // 304: kodex.controlplane.v1.ControlPlaneService.MarkMissionControlCommandReconciled:input_type -> kodex.controlplane.v1.MarkMissionControlCommandReconciledRequest
-	176, // 305: kodex.controlplane.v1.ControlPlaneService.MarkMissionControlCommandFailed:input_type -> kodex.controlplane.v1.MarkMissionControlCommandFailedRequest
-	177, // 306: kodex.controlplane.v1.ControlPlaneService.SubmitInteractionCallback:input_type -> kodex.controlplane.v1.SubmitInteractionCallbackRequest
-	177, // 307: kodex.controlplane.v1.ControlPlaneService.SubmitAdapterInteractionCallback:input_type -> kodex.controlplane.v1.SubmitInteractionCallbackRequest
-	181, // 308: kodex.controlplane.v1.ControlPlaneService.ListRuntimeDeployTasks:input_type -> kodex.controlplane.v1.ListRuntimeDeployTasksRequest
-	183, // 309: kodex.controlplane.v1.ControlPlaneService.GetRuntimeDeployTask:input_type -> kodex.controlplane.v1.GetRuntimeDeployTaskRequest
-	184, // 310: kodex.controlplane.v1.ControlPlaneService.CancelRuntimeDeployTask:input_type -> kodex.controlplane.v1.CancelRuntimeDeployTaskRequest
-	185, // 311: kodex.controlplane.v1.ControlPlaneService.StopRuntimeDeployTask:input_type -> kodex.controlplane.v1.StopRuntimeDeployTaskRequest
-	188, // 312: kodex.controlplane.v1.ControlPlaneService.ListRuntimeErrors:input_type -> kodex.controlplane.v1.ListRuntimeErrorsRequest
-	190, // 313: kodex.controlplane.v1.ControlPlaneService.MarkRuntimeErrorViewed:input_type -> kodex.controlplane.v1.MarkRuntimeErrorViewedRequest
-	199, // 314: kodex.controlplane.v1.ControlPlaneService.UpsertAgentSession:input_type -> kodex.controlplane.v1.UpsertAgentSessionRequest
-	202, // 315: kodex.controlplane.v1.ControlPlaneService.GetLatestAgentSession:input_type -> kodex.controlplane.v1.GetLatestAgentSessionRequest
-	204, // 316: kodex.controlplane.v1.ControlPlaneService.GetRunInteractionResumePayload:input_type -> kodex.controlplane.v1.GetRunInteractionResumePayloadRequest
-	206, // 317: kodex.controlplane.v1.ControlPlaneService.GetRunGitHubRateLimitResumePayload:input_type -> kodex.controlplane.v1.GetRunGitHubRateLimitResumePayloadRequest
-	208, // 318: kodex.controlplane.v1.ControlPlaneService.LookupRunPullRequest:input_type -> kodex.controlplane.v1.LookupRunPullRequestRequest
-	210, // 319: kodex.controlplane.v1.ControlPlaneService.InsertRunFlowEvent:input_type -> kodex.controlplane.v1.InsertRunFlowEventRequest
-	212, // 320: kodex.controlplane.v1.ControlPlaneService.UpsertRunStatusComment:input_type -> kodex.controlplane.v1.UpsertRunStatusCommentRequest
-	214, // 321: kodex.controlplane.v1.ControlPlaneService.GetCodexAuth:input_type -> kodex.controlplane.v1.GetCodexAuthRequest
-	216, // 322: kodex.controlplane.v1.ControlPlaneService.UpsertCodexAuth:input_type -> kodex.controlplane.v1.UpsertCodexAuthRequest
-	218, // 323: kodex.controlplane.v1.ControlPlaneService.DeleteRunNamespace:input_type -> kodex.controlplane.v1.DeleteRunNamespaceRequest
-	2,   // 324: kodex.controlplane.v1.ControlPlaneService.IngestGitHubWebhook:output_type -> kodex.controlplane.v1.IngestGitHubWebhookResponse
-	4,   // 325: kodex.controlplane.v1.ControlPlaneService.ResolveStaffByEmail:output_type -> kodex.controlplane.v1.ResolveStaffByEmailResponse
-	6,   // 326: kodex.controlplane.v1.ControlPlaneService.AuthorizeOAuthUser:output_type -> kodex.controlplane.v1.AuthorizeOAuthUserResponse
-	9,   // 327: kodex.controlplane.v1.ControlPlaneService.ListProjects:output_type -> kodex.controlplane.v1.ListProjectsResponse
-	7,   // 328: kodex.controlplane.v1.ControlPlaneService.UpsertProject:output_type -> kodex.controlplane.v1.Project
-	7,   // 329: kodex.controlplane.v1.ControlPlaneService.GetProject:output_type -> kodex.controlplane.v1.Project
-	224, // 330: kodex.controlplane.v1.ControlPlaneService.DeleteProject:output_type -> google.protobuf.Empty
-	24,  // 331: kodex.controlplane.v1.ControlPlaneService.ListRuns:output_type -> kodex.controlplane.v1.ListRunsResponse
-	28,  // 332: kodex.controlplane.v1.ControlPlaneService.ListRunWaits:output_type -> kodex.controlplane.v1.ListRunWaitsResponse
-	13,  // 333: kodex.controlplane.v1.ControlPlaneService.GetRun:output_type -> kodex.controlplane.v1.Run
-	32,  // 334: kodex.controlplane.v1.ControlPlaneService.CancelRun:output_type -> kodex.controlplane.v1.RunActionResponse
-	33,  // 335: kodex.controlplane.v1.ControlPlaneService.GetRunLogs:output_type -> kodex.controlplane.v1.RunLogs
-	20,  // 336: kodex.controlplane.v1.ControlPlaneService.ListPendingApprovals:output_type -> kodex.controlplane.v1.ListPendingApprovalsResponse
-	22,  // 337: kodex.controlplane.v1.ControlPlaneService.ResolveApprovalDecision:output_type -> kodex.controlplane.v1.ResolveApprovalDecisionResponse
-	36,  // 338: kodex.controlplane.v1.ControlPlaneService.ListRunEvents:output_type -> kodex.controlplane.v1.ListRunEventsResponse
-	45,  // 339: kodex.controlplane.v1.ControlPlaneService.ListRunLearningFeedback:output_type -> kodex.controlplane.v1.ListRunLearningFeedbackResponse
-	39,  // 340: kodex.controlplane.v1.ControlPlaneService.ListSystemSettings:output_type -> kodex.controlplane.v1.ListSystemSettingsResponse
-	37,  // 341: kodex.controlplane.v1.ControlPlaneService.GetSystemSetting:output_type -> kodex.controlplane.v1.SystemSetting
-	37,  // 342: kodex.controlplane.v1.ControlPlaneService.UpdateSystemSettingBoolean:output_type -> kodex.controlplane.v1.SystemSetting
-	37,  // 343: kodex.controlplane.v1.ControlPlaneService.ResetSystemSetting:output_type -> kodex.controlplane.v1.SystemSetting
-	48,  // 344: kodex.controlplane.v1.ControlPlaneService.ListUsers:output_type -> kodex.controlplane.v1.ListUsersResponse
-	46,  // 345: kodex.controlplane.v1.ControlPlaneService.CreateUser:output_type -> kodex.controlplane.v1.User
-	224, // 346: kodex.controlplane.v1.ControlPlaneService.DeleteUser:output_type -> google.protobuf.Empty
-	53,  // 347: kodex.controlplane.v1.ControlPlaneService.ListProjectMembers:output_type -> kodex.controlplane.v1.ListProjectMembersResponse
-	224, // 348: kodex.controlplane.v1.ControlPlaneService.UpsertProjectMember:output_type -> google.protobuf.Empty
-	224, // 349: kodex.controlplane.v1.ControlPlaneService.DeleteProjectMember:output_type -> google.protobuf.Empty
-	224, // 350: kodex.controlplane.v1.ControlPlaneService.SetProjectMemberLearningModeOverride:output_type -> google.protobuf.Empty
-	59,  // 351: kodex.controlplane.v1.ControlPlaneService.ListProjectRepositories:output_type -> kodex.controlplane.v1.ListProjectRepositoriesResponse
-	57,  // 352: kodex.controlplane.v1.ControlPlaneService.UpsertProjectRepository:output_type -> kodex.controlplane.v1.RepositoryBinding
-	224, // 353: kodex.controlplane.v1.ControlPlaneService.DeleteProjectRepository:output_type -> google.protobuf.Empty
-	224, // 354: kodex.controlplane.v1.ControlPlaneService.UpsertRepositoryBotParams:output_type -> google.protobuf.Empty
-	65,  // 355: kodex.controlplane.v1.ControlPlaneService.RunRepositoryPreflight:output_type -> kodex.controlplane.v1.RunRepositoryPreflightResponse
-	66,  // 356: kodex.controlplane.v1.ControlPlaneService.GetProjectGitHubTokens:output_type -> kodex.controlplane.v1.ProjectGitHubTokens
-	224, // 357: kodex.controlplane.v1.ControlPlaneService.UpsertProjectGitHubTokens:output_type -> google.protobuf.Empty
-	70,  // 358: kodex.controlplane.v1.ControlPlaneService.PreviewNextStepAction:output_type -> kodex.controlplane.v1.NextStepActionResponse
-	70,  // 359: kodex.controlplane.v1.ControlPlaneService.ExecuteNextStepAction:output_type -> kodex.controlplane.v1.NextStepActionResponse
-	78,  // 360: kodex.controlplane.v1.ControlPlaneService.ListDocsetGroups:output_type -> kodex.controlplane.v1.ListDocsetGroupsResponse
-	80,  // 361: kodex.controlplane.v1.ControlPlaneService.ImportDocset:output_type -> kodex.controlplane.v1.ImportDocsetResponse
-	82,  // 362: kodex.controlplane.v1.ControlPlaneService.SyncDocset:output_type -> kodex.controlplane.v1.SyncDocsetResponse
-	84,  // 363: kodex.controlplane.v1.ControlPlaneService.IssueRunMCPToken:output_type -> kodex.controlplane.v1.IssueRunMCPTokenResponse
-	86,  // 364: kodex.controlplane.v1.ControlPlaneService.PrepareRunEnvironment:output_type -> kodex.controlplane.v1.PrepareRunEnvironmentResponse
-	88,  // 365: kodex.controlplane.v1.ControlPlaneService.EvaluateRuntimeReuse:output_type -> kodex.controlplane.v1.EvaluateRuntimeReuseResponse
-	90,  // 366: kodex.controlplane.v1.ControlPlaneService.ClaimNextInteractionDispatch:output_type -> kodex.controlplane.v1.ClaimNextInteractionDispatchResponse
-	92,  // 367: kodex.controlplane.v1.ControlPlaneService.CompleteInteractionDispatch:output_type -> kodex.controlplane.v1.CompleteInteractionDispatchResponse
-	94,  // 368: kodex.controlplane.v1.ControlPlaneService.ExpireNextInteraction:output_type -> kodex.controlplane.v1.ExpireNextInteractionResponse
-	96,  // 369: kodex.controlplane.v1.ControlPlaneService.ProcessNextGitHubRateLimitWait:output_type -> kodex.controlplane.v1.ProcessNextGitHubRateLimitWaitResponse
-	99,  // 370: kodex.controlplane.v1.ControlPlaneService.ReportGitHubRateLimitSignal:output_type -> kodex.controlplane.v1.ReportGitHubRateLimitSignalResponse
-	105, // 371: kodex.controlplane.v1.ControlPlaneService.ReportChangeGovernanceDraftSignal:output_type -> kodex.controlplane.v1.ReportChangeGovernanceDraftSignalResponse
-	107, // 372: kodex.controlplane.v1.ControlPlaneService.PublishChangeGovernanceWaveMap:output_type -> kodex.controlplane.v1.PublishChangeGovernanceWaveMapResponse
-	109, // 373: kodex.controlplane.v1.ControlPlaneService.UpsertChangeGovernanceEvidenceSignal:output_type -> kodex.controlplane.v1.UpsertChangeGovernanceEvidenceSignalResponse
-	144, // 374: kodex.controlplane.v1.ControlPlaneService.GetMissionControlWorkspace:output_type -> kodex.controlplane.v1.GetMissionControlWorkspaceResponse
-	153, // 375: kodex.controlplane.v1.ControlPlaneService.GetMissionControlNode:output_type -> kodex.controlplane.v1.MissionControlNodeDetails
-	156, // 376: kodex.controlplane.v1.ControlPlaneService.ListMissionControlNodeActivity:output_type -> kodex.controlplane.v1.ListMissionControlNodeActivityResponse
-	160, // 377: kodex.controlplane.v1.ControlPlaneService.PreviewMissionControlLaunch:output_type -> kodex.controlplane.v1.MissionControlLaunchPreview
-	131, // 378: kodex.controlplane.v1.ControlPlaneService.GetMissionControlSnapshot:output_type -> kodex.controlplane.v1.GetMissionControlSnapshotResponse
-	127, // 379: kodex.controlplane.v1.ControlPlaneService.GetMissionControlEntity:output_type -> kodex.controlplane.v1.MissionControlEntityDetails
-	134, // 380: kodex.controlplane.v1.ControlPlaneService.ListMissionControlTimeline:output_type -> kodex.controlplane.v1.ListMissionControlTimelineResponse
-	112, // 381: kodex.controlplane.v1.ControlPlaneService.ListMissionControlWarmupProjects:output_type -> kodex.controlplane.v1.ListMissionControlWarmupProjectsResponse
-	114, // 382: kodex.controlplane.v1.ControlPlaneService.RunMissionControlWarmup:output_type -> kodex.controlplane.v1.RunMissionControlWarmupResponse
-	165, // 383: kodex.controlplane.v1.ControlPlaneService.SubmitMissionControlCommand:output_type -> kodex.controlplane.v1.MissionControlCommandState
-	165, // 384: kodex.controlplane.v1.ControlPlaneService.GetMissionControlCommand:output_type -> kodex.controlplane.v1.MissionControlCommandState
-	164, // 385: kodex.controlplane.v1.ControlPlaneService.ClaimMissionControlPendingCommands:output_type -> kodex.controlplane.v1.ClaimMissionControlPendingCommandsResponse
-	165, // 386: kodex.controlplane.v1.ControlPlaneService.QueueMissionControlCommand:output_type -> kodex.controlplane.v1.MissionControlCommandState
-	165, // 387: kodex.controlplane.v1.ControlPlaneService.MarkMissionControlCommandPendingSync:output_type -> kodex.controlplane.v1.MissionControlCommandState
-	165, // 388: kodex.controlplane.v1.ControlPlaneService.MarkMissionControlCommandReconciled:output_type -> kodex.controlplane.v1.MissionControlCommandState
-	165, // 389: kodex.controlplane.v1.ControlPlaneService.MarkMissionControlCommandFailed:output_type -> kodex.controlplane.v1.MissionControlCommandState
-	178, // 390: kodex.controlplane.v1.ControlPlaneService.SubmitInteractionCallback:output_type -> kodex.controlplane.v1.SubmitInteractionCallbackResponse
-	178, // 391: kodex.controlplane.v1.ControlPlaneService.SubmitAdapterInteractionCallback:output_type -> kodex.controlplane.v1.SubmitInteractionCallbackResponse
-	182, // 392: kodex.controlplane.v1.ControlPlaneService.ListRuntimeDeployTasks:output_type -> kodex.controlplane.v1.ListRuntimeDeployTasksResponse
-	180, // 393: kodex.controlplane.v1.ControlPlaneService.GetRuntimeDeployTask:output_type -> kodex.controlplane.v1.RuntimeDeployTask
-	186, // 394: kodex.controlplane.v1.ControlPlaneService.CancelRuntimeDeployTask:output_type -> kodex.controlplane.v1.RuntimeDeployTaskActionResponse
-	186, // 395: kodex.controlplane.v1.ControlPlaneService.StopRuntimeDeployTask:output_type -> kodex.controlplane.v1.RuntimeDeployTaskActionResponse
-	189, // 396: kodex.controlplane.v1.ControlPlaneService.ListRuntimeErrors:output_type -> kodex.controlplane.v1.ListRuntimeErrorsResponse
-	187, // 397: kodex.controlplane.v1.ControlPlaneService.MarkRuntimeErrorViewed:output_type -> kodex.controlplane.v1.RuntimeError
-	200, // 398: kodex.controlplane.v1.ControlPlaneService.UpsertAgentSession:output_type -> kodex.controlplane.v1.UpsertAgentSessionResponse
-	203, // 399: kodex.controlplane.v1.ControlPlaneService.GetLatestAgentSession:output_type -> kodex.controlplane.v1.GetLatestAgentSessionResponse
-	205, // 400: kodex.controlplane.v1.ControlPlaneService.GetRunInteractionResumePayload:output_type -> kodex.controlplane.v1.GetRunInteractionResumePayloadResponse
-	207, // 401: kodex.controlplane.v1.ControlPlaneService.GetRunGitHubRateLimitResumePayload:output_type -> kodex.controlplane.v1.GetRunGitHubRateLimitResumePayloadResponse
-	209, // 402: kodex.controlplane.v1.ControlPlaneService.LookupRunPullRequest:output_type -> kodex.controlplane.v1.LookupRunPullRequestResponse
-	211, // 403: kodex.controlplane.v1.ControlPlaneService.InsertRunFlowEvent:output_type -> kodex.controlplane.v1.InsertRunFlowEventResponse
-	213, // 404: kodex.controlplane.v1.ControlPlaneService.UpsertRunStatusComment:output_type -> kodex.controlplane.v1.UpsertRunStatusCommentResponse
-	215, // 405: kodex.controlplane.v1.ControlPlaneService.GetCodexAuth:output_type -> kodex.controlplane.v1.GetCodexAuthResponse
-	217, // 406: kodex.controlplane.v1.ControlPlaneService.UpsertCodexAuth:output_type -> kodex.controlplane.v1.UpsertCodexAuthResponse
-	219, // 407: kodex.controlplane.v1.ControlPlaneService.DeleteRunNamespace:output_type -> kodex.controlplane.v1.DeleteRunNamespaceResponse
-	324, // [324:408] is the sub-list for method output_type
-	240, // [240:324] is the sub-list for method input_type
-	240, // [240:240] is the sub-list for extension type_name
-	240, // [240:240] is the sub-list for extension extendee
-	0,   // [0:240] is the sub-list for field type_name
+	0,   // 52: kodex.controlplane.v1.GetAccessMembershipGraphRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	49,  // 53: kodex.controlplane.v1.AccessMembershipGraph.organizations:type_name -> kodex.controlplane.v1.Organization
+	50,  // 54: kodex.controlplane.v1.AccessMembershipGraph.groups:type_name -> kodex.controlplane.v1.UserGroup
+	51,  // 55: kodex.controlplane.v1.AccessMembershipGraph.organization_memberships:type_name -> kodex.controlplane.v1.OrganizationMembership
+	52,  // 56: kodex.controlplane.v1.AccessMembershipGraph.user_group_memberships:type_name -> kodex.controlplane.v1.UserGroupMembership
+	0,   // 57: kodex.controlplane.v1.CreateUserRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	0,   // 58: kodex.controlplane.v1.DeleteUserRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	228, // 59: kodex.controlplane.v1.ProjectMember.learning_mode_override:type_name -> google.protobuf.BoolValue
+	0,   // 60: kodex.controlplane.v1.ListProjectMembersRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	57,  // 61: kodex.controlplane.v1.ListProjectMembersResponse.items:type_name -> kodex.controlplane.v1.ProjectMember
+	0,   // 62: kodex.controlplane.v1.UpsertProjectMemberRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	0,   // 63: kodex.controlplane.v1.DeleteProjectMemberRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	0,   // 64: kodex.controlplane.v1.SetProjectMemberLearningModeOverrideRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	228, // 65: kodex.controlplane.v1.SetProjectMemberLearningModeOverrideRequest.enabled:type_name -> google.protobuf.BoolValue
+	0,   // 66: kodex.controlplane.v1.ListProjectRepositoriesRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	63,  // 67: kodex.controlplane.v1.ListProjectRepositoriesResponse.items:type_name -> kodex.controlplane.v1.RepositoryBinding
+	0,   // 68: kodex.controlplane.v1.UpsertProjectRepositoryRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	0,   // 69: kodex.controlplane.v1.DeleteProjectRepositoryRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	0,   // 70: kodex.controlplane.v1.UpsertRepositoryBotParamsRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	0,   // 71: kodex.controlplane.v1.RunRepositoryPreflightRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	70,  // 72: kodex.controlplane.v1.RunRepositoryPreflightResponse.checks:type_name -> kodex.controlplane.v1.PreflightCheckResult
+	226, // 73: kodex.controlplane.v1.RunRepositoryPreflightResponse.finished_at:type_name -> google.protobuf.Timestamp
+	0,   // 74: kodex.controlplane.v1.GetProjectGitHubTokensRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	0,   // 75: kodex.controlplane.v1.UpsertProjectGitHubTokensRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	0,   // 76: kodex.controlplane.v1.NextStepActionRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	0,   // 77: kodex.controlplane.v1.ListConfigEntriesRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	77,  // 78: kodex.controlplane.v1.ListConfigEntriesResponse.items:type_name -> kodex.controlplane.v1.ConfigEntry
+	0,   // 79: kodex.controlplane.v1.UpsertConfigEntryRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	0,   // 80: kodex.controlplane.v1.DeleteConfigEntryRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	0,   // 81: kodex.controlplane.v1.ListDocsetGroupsRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	82,  // 82: kodex.controlplane.v1.ListDocsetGroupsResponse.groups:type_name -> kodex.controlplane.v1.DocsetGroup
+	0,   // 83: kodex.controlplane.v1.ImportDocsetRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	0,   // 84: kodex.controlplane.v1.SyncDocsetRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	226, // 85: kodex.controlplane.v1.IssueRunMCPTokenResponse.expires_at:type_name -> google.protobuf.Timestamp
+	226, // 86: kodex.controlplane.v1.ClaimNextInteractionDispatchResponse.response_deadline_at:type_name -> google.protobuf.Timestamp
+	226, // 87: kodex.controlplane.v1.CompleteInteractionDispatchRequest.next_retry_at:type_name -> google.protobuf.Timestamp
+	226, // 88: kodex.controlplane.v1.CompleteInteractionDispatchRequest.finished_at:type_name -> google.protobuf.Timestamp
+	226, // 89: kodex.controlplane.v1.CompleteInteractionDispatchRequest.callback_token_expires_at:type_name -> google.protobuf.Timestamp
+	226, // 90: kodex.controlplane.v1.ProcessNextGitHubRateLimitWaitResponse.resume_not_before:type_name -> google.protobuf.Timestamp
+	226, // 91: kodex.controlplane.v1.GitHubRateLimitHeaders.rate_limit_reset_at:type_name -> google.protobuf.Timestamp
+	226, // 92: kodex.controlplane.v1.ReportGitHubRateLimitSignalRequest.occurred_at:type_name -> google.protobuf.Timestamp
+	103, // 93: kodex.controlplane.v1.ReportGitHubRateLimitSignalRequest.github_headers:type_name -> kodex.controlplane.v1.GitHubRateLimitHeaders
+	226, // 94: kodex.controlplane.v1.ReportGitHubRateLimitSignalResponse.resume_not_before:type_name -> google.protobuf.Timestamp
+	107, // 95: kodex.controlplane.v1.ChangeGovernanceWaveDraft.verification_targets:type_name -> kodex.controlplane.v1.ChangeGovernanceVerificationTarget
+	227, // 96: kodex.controlplane.v1.ReportChangeGovernanceDraftSignalRequest.pr_number:type_name -> google.protobuf.Int32Value
+	106, // 97: kodex.controlplane.v1.ReportChangeGovernanceDraftSignalRequest.change_scope_hints:type_name -> kodex.controlplane.v1.ChangeGovernanceScopeHint
+	226, // 98: kodex.controlplane.v1.ReportChangeGovernanceDraftSignalRequest.occurred_at:type_name -> google.protobuf.Timestamp
+	108, // 99: kodex.controlplane.v1.PublishChangeGovernanceWaveMapRequest.waves:type_name -> kodex.controlplane.v1.ChangeGovernanceWaveDraft
+	226, // 100: kodex.controlplane.v1.PublishChangeGovernanceWaveMapRequest.published_at:type_name -> google.protobuf.Timestamp
+	109, // 101: kodex.controlplane.v1.UpsertChangeGovernanceEvidenceSignalRequest.artifact_links:type_name -> kodex.controlplane.v1.ChangeGovernanceArtifactLinkSeed
+	226, // 102: kodex.controlplane.v1.UpsertChangeGovernanceEvidenceSignalRequest.occurred_at:type_name -> google.protobuf.Timestamp
+	116, // 103: kodex.controlplane.v1.ListMissionControlWarmupProjectsResponse.items:type_name -> kodex.controlplane.v1.MissionControlWarmupProject
+	122, // 104: kodex.controlplane.v1.MissionControlEntityCard.provider_reference:type_name -> kodex.controlplane.v1.MissionControlProviderReference
+	123, // 105: kodex.controlplane.v1.MissionControlEntityCard.primary_actor:type_name -> kodex.controlplane.v1.MissionControlPrimaryActor
+	226, // 106: kodex.controlplane.v1.MissionControlEntityCard.last_timeline_at:type_name -> google.protobuf.Timestamp
+	226, // 107: kodex.controlplane.v1.MissionControlTimelineEntry.occurred_at:type_name -> google.protobuf.Timestamp
+	226, // 108: kodex.controlplane.v1.MissionControlWorkItemDetailsPayload.last_provider_sync_at:type_name -> google.protobuf.Timestamp
+	226, // 109: kodex.controlplane.v1.MissionControlAgentDetailsPayload.last_heartbeat_at:type_name -> google.protobuf.Timestamp
+	124, // 110: kodex.controlplane.v1.MissionControlEntityDetails.entity:type_name -> kodex.controlplane.v1.MissionControlEntityCard
+	125, // 111: kodex.controlplane.v1.MissionControlEntityDetails.relations:type_name -> kodex.controlplane.v1.MissionControlRelation
+	126, // 112: kodex.controlplane.v1.MissionControlEntityDetails.timeline_preview:type_name -> kodex.controlplane.v1.MissionControlTimelineEntry
+	127, // 113: kodex.controlplane.v1.MissionControlEntityDetails.allowed_actions:type_name -> kodex.controlplane.v1.MissionControlAllowedAction
+	128, // 114: kodex.controlplane.v1.MissionControlEntityDetails.provider_deep_links:type_name -> kodex.controlplane.v1.MissionControlProviderDeepLink
+	129, // 115: kodex.controlplane.v1.MissionControlEntityDetails.work_item:type_name -> kodex.controlplane.v1.MissionControlWorkItemDetailsPayload
+	130, // 116: kodex.controlplane.v1.MissionControlEntityDetails.discussion:type_name -> kodex.controlplane.v1.MissionControlDiscussionDetailsPayload
+	131, // 117: kodex.controlplane.v1.MissionControlEntityDetails.pull_request:type_name -> kodex.controlplane.v1.MissionControlPullRequestDetailsPayload
+	132, // 118: kodex.controlplane.v1.MissionControlEntityDetails.agent:type_name -> kodex.controlplane.v1.MissionControlAgentDetailsPayload
+	226, // 119: kodex.controlplane.v1.MissionControlDashboardSnapshot.generated_at:type_name -> google.protobuf.Timestamp
+	226, // 120: kodex.controlplane.v1.MissionControlDashboardSnapshot.stale_after:type_name -> google.protobuf.Timestamp
+	134, // 121: kodex.controlplane.v1.MissionControlDashboardSnapshot.summary:type_name -> kodex.controlplane.v1.MissionControlSnapshotSummary
+	124, // 122: kodex.controlplane.v1.MissionControlDashboardSnapshot.entities:type_name -> kodex.controlplane.v1.MissionControlEntityCard
+	125, // 123: kodex.controlplane.v1.MissionControlDashboardSnapshot.relations:type_name -> kodex.controlplane.v1.MissionControlRelation
+	0,   // 124: kodex.controlplane.v1.GetMissionControlSnapshotRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	135, // 125: kodex.controlplane.v1.GetMissionControlSnapshotResponse.snapshot:type_name -> kodex.controlplane.v1.MissionControlDashboardSnapshot
+	0,   // 126: kodex.controlplane.v1.GetMissionControlEntityRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	0,   // 127: kodex.controlplane.v1.ListMissionControlTimelineRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	126, // 128: kodex.controlplane.v1.ListMissionControlTimelineResponse.items:type_name -> kodex.controlplane.v1.MissionControlTimelineEntry
+	226, // 129: kodex.controlplane.v1.MissionControlWorkspaceWatermark.observed_at:type_name -> google.protobuf.Timestamp
+	226, // 130: kodex.controlplane.v1.MissionControlWorkspaceWatermark.window_started_at:type_name -> google.protobuf.Timestamp
+	226, // 131: kodex.controlplane.v1.MissionControlWorkspaceWatermark.window_ended_at:type_name -> google.protobuf.Timestamp
+	141, // 132: kodex.controlplane.v1.MissionControlRootGroup.node_refs:type_name -> kodex.controlplane.v1.MissionControlNodeRef
+	226, // 133: kodex.controlplane.v1.MissionControlRootGroup.latest_activity_at:type_name -> google.protobuf.Timestamp
+	122, // 134: kodex.controlplane.v1.MissionControlNode.provider_reference:type_name -> kodex.controlplane.v1.MissionControlProviderReference
+	226, // 135: kodex.controlplane.v1.MissionControlNode.last_activity_at:type_name -> google.protobuf.Timestamp
+	226, // 136: kodex.controlplane.v1.MissionControlWorkspaceSnapshot.generated_at:type_name -> google.protobuf.Timestamp
+	142, // 137: kodex.controlplane.v1.MissionControlWorkspaceSnapshot.effective_filters:type_name -> kodex.controlplane.v1.MissionControlWorkspaceFilters
+	143, // 138: kodex.controlplane.v1.MissionControlWorkspaceSnapshot.summary:type_name -> kodex.controlplane.v1.MissionControlWorkspaceSummary
+	144, // 139: kodex.controlplane.v1.MissionControlWorkspaceSnapshot.workspace_watermarks:type_name -> kodex.controlplane.v1.MissionControlWorkspaceWatermark
+	145, // 140: kodex.controlplane.v1.MissionControlWorkspaceSnapshot.root_groups:type_name -> kodex.controlplane.v1.MissionControlRootGroup
+	146, // 141: kodex.controlplane.v1.MissionControlWorkspaceSnapshot.nodes:type_name -> kodex.controlplane.v1.MissionControlNode
+	147, // 142: kodex.controlplane.v1.MissionControlWorkspaceSnapshot.edges:type_name -> kodex.controlplane.v1.MissionControlEdge
+	0,   // 143: kodex.controlplane.v1.GetMissionControlWorkspaceRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	148, // 144: kodex.controlplane.v1.GetMissionControlWorkspaceResponse.snapshot:type_name -> kodex.controlplane.v1.MissionControlWorkspaceSnapshot
+	226, // 145: kodex.controlplane.v1.MissionControlContinuityGap.detected_at:type_name -> google.protobuf.Timestamp
+	226, // 146: kodex.controlplane.v1.MissionControlContinuityGap.resolved_at:type_name -> google.protobuf.Timestamp
+	152, // 147: kodex.controlplane.v1.MissionControlLaunchSurface.command_template:type_name -> kodex.controlplane.v1.MissionControlStageNextStepTemplate
+	141, // 148: kodex.controlplane.v1.MissionControlDiscussionNodeDetails.formalization_target_refs:type_name -> kodex.controlplane.v1.MissionControlNodeRef
+	141, // 149: kodex.controlplane.v1.MissionControlWorkItemNodeDetails.linked_run_refs:type_name -> kodex.controlplane.v1.MissionControlNodeRef
+	141, // 150: kodex.controlplane.v1.MissionControlWorkItemNodeDetails.linked_follow_up_refs:type_name -> kodex.controlplane.v1.MissionControlNodeRef
+	226, // 151: kodex.controlplane.v1.MissionControlWorkItemNodeDetails.last_provider_sync_at:type_name -> google.protobuf.Timestamp
+	226, // 152: kodex.controlplane.v1.MissionControlRunNodeDetails.started_at:type_name -> google.protobuf.Timestamp
+	226, // 153: kodex.controlplane.v1.MissionControlRunNodeDetails.finished_at:type_name -> google.protobuf.Timestamp
+	141, // 154: kodex.controlplane.v1.MissionControlRunNodeDetails.linked_pull_request_refs:type_name -> kodex.controlplane.v1.MissionControlNodeRef
+	141, // 155: kodex.controlplane.v1.MissionControlRunNodeDetails.produced_issue_refs:type_name -> kodex.controlplane.v1.MissionControlNodeRef
+	141, // 156: kodex.controlplane.v1.MissionControlPullRequestNodeDetails.linked_issue_refs:type_name -> kodex.controlplane.v1.MissionControlNodeRef
+	141, // 157: kodex.controlplane.v1.MissionControlPullRequestNodeDetails.linked_run_ref:type_name -> kodex.controlplane.v1.MissionControlNodeRef
+	226, // 158: kodex.controlplane.v1.MissionControlActivityEntry.occurred_at:type_name -> google.protobuf.Timestamp
+	146, // 159: kodex.controlplane.v1.MissionControlNodeDetails.node:type_name -> kodex.controlplane.v1.MissionControlNode
+	146, // 160: kodex.controlplane.v1.MissionControlNodeDetails.adjacent_nodes:type_name -> kodex.controlplane.v1.MissionControlNode
+	147, // 161: kodex.controlplane.v1.MissionControlNodeDetails.adjacent_edges:type_name -> kodex.controlplane.v1.MissionControlEdge
+	151, // 162: kodex.controlplane.v1.MissionControlNodeDetails.continuity_gaps:type_name -> kodex.controlplane.v1.MissionControlContinuityGap
+	144, // 163: kodex.controlplane.v1.MissionControlNodeDetails.node_watermarks:type_name -> kodex.controlplane.v1.MissionControlWorkspaceWatermark
+	158, // 164: kodex.controlplane.v1.MissionControlNodeDetails.activity_preview:type_name -> kodex.controlplane.v1.MissionControlActivityEntry
+	153, // 165: kodex.controlplane.v1.MissionControlNodeDetails.launch_surfaces:type_name -> kodex.controlplane.v1.MissionControlLaunchSurface
+	128, // 166: kodex.controlplane.v1.MissionControlNodeDetails.provider_deep_links:type_name -> kodex.controlplane.v1.MissionControlProviderDeepLink
+	154, // 167: kodex.controlplane.v1.MissionControlNodeDetails.discussion:type_name -> kodex.controlplane.v1.MissionControlDiscussionNodeDetails
+	155, // 168: kodex.controlplane.v1.MissionControlNodeDetails.work_item:type_name -> kodex.controlplane.v1.MissionControlWorkItemNodeDetails
+	156, // 169: kodex.controlplane.v1.MissionControlNodeDetails.run:type_name -> kodex.controlplane.v1.MissionControlRunNodeDetails
+	157, // 170: kodex.controlplane.v1.MissionControlNodeDetails.pull_request:type_name -> kodex.controlplane.v1.MissionControlPullRequestNodeDetails
+	0,   // 171: kodex.controlplane.v1.GetMissionControlNodeRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	0,   // 172: kodex.controlplane.v1.ListMissionControlNodeActivityRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	158, // 173: kodex.controlplane.v1.ListMissionControlNodeActivityResponse.items:type_name -> kodex.controlplane.v1.MissionControlActivityEntry
+	0,   // 174: kodex.controlplane.v1.PreviewMissionControlLaunchRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	141, // 175: kodex.controlplane.v1.MissionControlLaunchPreviewContinuityEffect.resulting_node_refs:type_name -> kodex.controlplane.v1.MissionControlNodeRef
+	164, // 176: kodex.controlplane.v1.MissionControlLaunchPreview.label_diff:type_name -> kodex.controlplane.v1.MissionControlLaunchPreviewLabelDiff
+	165, // 177: kodex.controlplane.v1.MissionControlLaunchPreview.continuity_effect:type_name -> kodex.controlplane.v1.MissionControlLaunchPreviewContinuityEffect
+	167, // 178: kodex.controlplane.v1.MissionControlPendingCommand.stage_next_step:type_name -> kodex.controlplane.v1.MissionControlStageNextStepPayload
+	226, // 179: kodex.controlplane.v1.MissionControlPendingCommand.requested_at:type_name -> google.protobuf.Timestamp
+	226, // 180: kodex.controlplane.v1.MissionControlPendingCommand.updated_at:type_name -> google.protobuf.Timestamp
+	229, // 181: kodex.controlplane.v1.ClaimMissionControlPendingCommandsRequest.lease_ttl:type_name -> google.protobuf.Duration
+	168, // 182: kodex.controlplane.v1.ClaimMissionControlPendingCommandsResponse.items:type_name -> kodex.controlplane.v1.MissionControlPendingCommand
+	226, // 183: kodex.controlplane.v1.MissionControlCommandState.updated_at:type_name -> google.protobuf.Timestamp
+	226, // 184: kodex.controlplane.v1.MissionControlCommandState.reconciled_at:type_name -> google.protobuf.Timestamp
+	121, // 185: kodex.controlplane.v1.MissionControlCommandState.entity_refs:type_name -> kodex.controlplane.v1.MissionControlEntityRef
+	172, // 186: kodex.controlplane.v1.MissionControlCommandState.approval:type_name -> kodex.controlplane.v1.MissionControlCommandApproval
+	226, // 187: kodex.controlplane.v1.MissionControlCommandApproval.requested_at:type_name -> google.protobuf.Timestamp
+	226, // 188: kodex.controlplane.v1.MissionControlCommandApproval.decided_at:type_name -> google.protobuf.Timestamp
+	121, // 189: kodex.controlplane.v1.MissionControlWorkItemCreatePayload.related_entity_refs:type_name -> kodex.controlplane.v1.MissionControlEntityRef
+	0,   // 190: kodex.controlplane.v1.SubmitMissionControlCommandRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	226, // 191: kodex.controlplane.v1.SubmitMissionControlCommandRequest.requested_at:type_name -> google.protobuf.Timestamp
+	173, // 192: kodex.controlplane.v1.SubmitMissionControlCommandRequest.discussion_create:type_name -> kodex.controlplane.v1.MissionControlDiscussionCreatePayload
+	174, // 193: kodex.controlplane.v1.SubmitMissionControlCommandRequest.work_item_create:type_name -> kodex.controlplane.v1.MissionControlWorkItemCreatePayload
+	175, // 194: kodex.controlplane.v1.SubmitMissionControlCommandRequest.discussion_formalize:type_name -> kodex.controlplane.v1.MissionControlDiscussionFormalizePayload
+	167, // 195: kodex.controlplane.v1.SubmitMissionControlCommandRequest.stage_next_step:type_name -> kodex.controlplane.v1.MissionControlStageNextStepPayload
+	176, // 196: kodex.controlplane.v1.SubmitMissionControlCommandRequest.retry_sync:type_name -> kodex.controlplane.v1.MissionControlRetrySyncPayload
+	0,   // 197: kodex.controlplane.v1.GetMissionControlCommandRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	226, // 198: kodex.controlplane.v1.QueueMissionControlCommandRequest.updated_at:type_name -> google.protobuf.Timestamp
+	226, // 199: kodex.controlplane.v1.MarkMissionControlCommandPendingSyncRequest.updated_at:type_name -> google.protobuf.Timestamp
+	226, // 200: kodex.controlplane.v1.MarkMissionControlCommandReconciledRequest.updated_at:type_name -> google.protobuf.Timestamp
+	226, // 201: kodex.controlplane.v1.MarkMissionControlCommandReconciledRequest.reconciled_at:type_name -> google.protobuf.Timestamp
+	226, // 202: kodex.controlplane.v1.MarkMissionControlCommandFailedRequest.updated_at:type_name -> google.protobuf.Timestamp
+	226, // 203: kodex.controlplane.v1.SubmitInteractionCallbackRequest.occurred_at:type_name -> google.protobuf.Timestamp
+	226, // 204: kodex.controlplane.v1.RuntimeDeployTaskLog.created_at:type_name -> google.protobuf.Timestamp
+	226, // 205: kodex.controlplane.v1.RuntimeDeployTask.lease_until:type_name -> google.protobuf.Timestamp
+	226, // 206: kodex.controlplane.v1.RuntimeDeployTask.cancel_requested_at:type_name -> google.protobuf.Timestamp
+	226, // 207: kodex.controlplane.v1.RuntimeDeployTask.stop_requested_at:type_name -> google.protobuf.Timestamp
+	226, // 208: kodex.controlplane.v1.RuntimeDeployTask.created_at:type_name -> google.protobuf.Timestamp
+	226, // 209: kodex.controlplane.v1.RuntimeDeployTask.updated_at:type_name -> google.protobuf.Timestamp
+	226, // 210: kodex.controlplane.v1.RuntimeDeployTask.started_at:type_name -> google.protobuf.Timestamp
+	226, // 211: kodex.controlplane.v1.RuntimeDeployTask.finished_at:type_name -> google.protobuf.Timestamp
+	185, // 212: kodex.controlplane.v1.RuntimeDeployTask.logs:type_name -> kodex.controlplane.v1.RuntimeDeployTaskLog
+	0,   // 213: kodex.controlplane.v1.ListRuntimeDeployTasksRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	186, // 214: kodex.controlplane.v1.ListRuntimeDeployTasksResponse.items:type_name -> kodex.controlplane.v1.RuntimeDeployTask
+	0,   // 215: kodex.controlplane.v1.GetRuntimeDeployTaskRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	0,   // 216: kodex.controlplane.v1.CancelRuntimeDeployTaskRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	0,   // 217: kodex.controlplane.v1.StopRuntimeDeployTaskRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	226, // 218: kodex.controlplane.v1.RuntimeError.viewed_at:type_name -> google.protobuf.Timestamp
+	226, // 219: kodex.controlplane.v1.RuntimeError.created_at:type_name -> google.protobuf.Timestamp
+	0,   // 220: kodex.controlplane.v1.ListRuntimeErrorsRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	193, // 221: kodex.controlplane.v1.ListRuntimeErrorsResponse.items:type_name -> kodex.controlplane.v1.RuntimeError
+	0,   // 222: kodex.controlplane.v1.MarkRuntimeErrorViewedRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	226, // 223: kodex.controlplane.v1.RegistryImageTag.created_at:type_name -> google.protobuf.Timestamp
+	197, // 224: kodex.controlplane.v1.RegistryImageRepository.tags:type_name -> kodex.controlplane.v1.RegistryImageTag
+	0,   // 225: kodex.controlplane.v1.ListRegistryImagesRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	198, // 226: kodex.controlplane.v1.ListRegistryImagesResponse.items:type_name -> kodex.controlplane.v1.RegistryImageRepository
+	0,   // 227: kodex.controlplane.v1.DeleteRegistryImageTagRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	0,   // 228: kodex.controlplane.v1.CleanupRegistryImagesRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	202, // 229: kodex.controlplane.v1.CleanupRegistryImagesResponse.deleted:type_name -> kodex.controlplane.v1.RegistryImageDeleteResult
+	202, // 230: kodex.controlplane.v1.CleanupRegistryImagesResponse.skipped:type_name -> kodex.controlplane.v1.RegistryImageDeleteResult
+	227, // 231: kodex.controlplane.v1.UpsertAgentSessionRequest.issue_number:type_name -> google.protobuf.Int32Value
+	227, // 232: kodex.controlplane.v1.UpsertAgentSessionRequest.pr_number:type_name -> google.protobuf.Int32Value
+	226, // 233: kodex.controlplane.v1.UpsertAgentSessionRequest.started_at:type_name -> google.protobuf.Timestamp
+	226, // 234: kodex.controlplane.v1.UpsertAgentSessionRequest.finished_at:type_name -> google.protobuf.Timestamp
+	227, // 235: kodex.controlplane.v1.AgentSessionSnapshot.issue_number:type_name -> google.protobuf.Int32Value
+	227, // 236: kodex.controlplane.v1.AgentSessionSnapshot.pr_number:type_name -> google.protobuf.Int32Value
+	226, // 237: kodex.controlplane.v1.AgentSessionSnapshot.started_at:type_name -> google.protobuf.Timestamp
+	226, // 238: kodex.controlplane.v1.AgentSessionSnapshot.finished_at:type_name -> google.protobuf.Timestamp
+	226, // 239: kodex.controlplane.v1.AgentSessionSnapshot.created_at:type_name -> google.protobuf.Timestamp
+	226, // 240: kodex.controlplane.v1.AgentSessionSnapshot.updated_at:type_name -> google.protobuf.Timestamp
+	226, // 241: kodex.controlplane.v1.AgentSessionSnapshot.snapshot_updated_at:type_name -> google.protobuf.Timestamp
+	207, // 242: kodex.controlplane.v1.GetLatestAgentSessionResponse.session:type_name -> kodex.controlplane.v1.AgentSessionSnapshot
+	227, // 243: kodex.controlplane.v1.LookupRunPullRequestRequest.pr_number:type_name -> google.protobuf.Int32Value
+	0,   // 244: kodex.controlplane.v1.DeleteRunNamespaceRequest.principal:type_name -> kodex.controlplane.v1.Principal
+	1,   // 245: kodex.controlplane.v1.ControlPlaneService.IngestGitHubWebhook:input_type -> kodex.controlplane.v1.IngestGitHubWebhookRequest
+	3,   // 246: kodex.controlplane.v1.ControlPlaneService.ResolveStaffByEmail:input_type -> kodex.controlplane.v1.ResolveStaffByEmailRequest
+	5,   // 247: kodex.controlplane.v1.ControlPlaneService.AuthorizeOAuthUser:input_type -> kodex.controlplane.v1.AuthorizeOAuthUserRequest
+	8,   // 248: kodex.controlplane.v1.ControlPlaneService.ListProjects:input_type -> kodex.controlplane.v1.ListProjectsRequest
+	10,  // 249: kodex.controlplane.v1.ControlPlaneService.UpsertProject:input_type -> kodex.controlplane.v1.UpsertProjectRequest
+	11,  // 250: kodex.controlplane.v1.ControlPlaneService.GetProject:input_type -> kodex.controlplane.v1.GetProjectRequest
+	12,  // 251: kodex.controlplane.v1.ControlPlaneService.DeleteProject:input_type -> kodex.controlplane.v1.DeleteProjectRequest
+	23,  // 252: kodex.controlplane.v1.ControlPlaneService.ListRuns:input_type -> kodex.controlplane.v1.ListRunsRequest
+	27,  // 253: kodex.controlplane.v1.ControlPlaneService.ListRunWaits:input_type -> kodex.controlplane.v1.ListRunWaitsRequest
+	29,  // 254: kodex.controlplane.v1.ControlPlaneService.GetRun:input_type -> kodex.controlplane.v1.GetRunRequest
+	31,  // 255: kodex.controlplane.v1.ControlPlaneService.CancelRun:input_type -> kodex.controlplane.v1.CancelRunRequest
+	30,  // 256: kodex.controlplane.v1.ControlPlaneService.GetRunLogs:input_type -> kodex.controlplane.v1.GetRunLogsRequest
+	19,  // 257: kodex.controlplane.v1.ControlPlaneService.ListPendingApprovals:input_type -> kodex.controlplane.v1.ListPendingApprovalsRequest
+	21,  // 258: kodex.controlplane.v1.ControlPlaneService.ResolveApprovalDecision:input_type -> kodex.controlplane.v1.ResolveApprovalDecisionRequest
+	35,  // 259: kodex.controlplane.v1.ControlPlaneService.ListRunEvents:input_type -> kodex.controlplane.v1.ListRunEventsRequest
+	44,  // 260: kodex.controlplane.v1.ControlPlaneService.ListRunLearningFeedback:input_type -> kodex.controlplane.v1.ListRunLearningFeedbackRequest
+	38,  // 261: kodex.controlplane.v1.ControlPlaneService.ListSystemSettings:input_type -> kodex.controlplane.v1.ListSystemSettingsRequest
+	40,  // 262: kodex.controlplane.v1.ControlPlaneService.GetSystemSetting:input_type -> kodex.controlplane.v1.GetSystemSettingRequest
+	41,  // 263: kodex.controlplane.v1.ControlPlaneService.UpdateSystemSettingBoolean:input_type -> kodex.controlplane.v1.UpdateSystemSettingBooleanRequest
+	42,  // 264: kodex.controlplane.v1.ControlPlaneService.ResetSystemSetting:input_type -> kodex.controlplane.v1.ResetSystemSettingRequest
+	47,  // 265: kodex.controlplane.v1.ControlPlaneService.ListUsers:input_type -> kodex.controlplane.v1.ListUsersRequest
+	53,  // 266: kodex.controlplane.v1.ControlPlaneService.GetAccessMembershipGraph:input_type -> kodex.controlplane.v1.GetAccessMembershipGraphRequest
+	55,  // 267: kodex.controlplane.v1.ControlPlaneService.CreateUser:input_type -> kodex.controlplane.v1.CreateUserRequest
+	56,  // 268: kodex.controlplane.v1.ControlPlaneService.DeleteUser:input_type -> kodex.controlplane.v1.DeleteUserRequest
+	58,  // 269: kodex.controlplane.v1.ControlPlaneService.ListProjectMembers:input_type -> kodex.controlplane.v1.ListProjectMembersRequest
+	60,  // 270: kodex.controlplane.v1.ControlPlaneService.UpsertProjectMember:input_type -> kodex.controlplane.v1.UpsertProjectMemberRequest
+	61,  // 271: kodex.controlplane.v1.ControlPlaneService.DeleteProjectMember:input_type -> kodex.controlplane.v1.DeleteProjectMemberRequest
+	62,  // 272: kodex.controlplane.v1.ControlPlaneService.SetProjectMemberLearningModeOverride:input_type -> kodex.controlplane.v1.SetProjectMemberLearningModeOverrideRequest
+	64,  // 273: kodex.controlplane.v1.ControlPlaneService.ListProjectRepositories:input_type -> kodex.controlplane.v1.ListProjectRepositoriesRequest
+	66,  // 274: kodex.controlplane.v1.ControlPlaneService.UpsertProjectRepository:input_type -> kodex.controlplane.v1.UpsertProjectRepositoryRequest
+	67,  // 275: kodex.controlplane.v1.ControlPlaneService.DeleteProjectRepository:input_type -> kodex.controlplane.v1.DeleteProjectRepositoryRequest
+	68,  // 276: kodex.controlplane.v1.ControlPlaneService.UpsertRepositoryBotParams:input_type -> kodex.controlplane.v1.UpsertRepositoryBotParamsRequest
+	69,  // 277: kodex.controlplane.v1.ControlPlaneService.RunRepositoryPreflight:input_type -> kodex.controlplane.v1.RunRepositoryPreflightRequest
+	73,  // 278: kodex.controlplane.v1.ControlPlaneService.GetProjectGitHubTokens:input_type -> kodex.controlplane.v1.GetProjectGitHubTokensRequest
+	74,  // 279: kodex.controlplane.v1.ControlPlaneService.UpsertProjectGitHubTokens:input_type -> kodex.controlplane.v1.UpsertProjectGitHubTokensRequest
+	75,  // 280: kodex.controlplane.v1.ControlPlaneService.PreviewNextStepAction:input_type -> kodex.controlplane.v1.NextStepActionRequest
+	75,  // 281: kodex.controlplane.v1.ControlPlaneService.ExecuteNextStepAction:input_type -> kodex.controlplane.v1.NextStepActionRequest
+	83,  // 282: kodex.controlplane.v1.ControlPlaneService.ListDocsetGroups:input_type -> kodex.controlplane.v1.ListDocsetGroupsRequest
+	85,  // 283: kodex.controlplane.v1.ControlPlaneService.ImportDocset:input_type -> kodex.controlplane.v1.ImportDocsetRequest
+	87,  // 284: kodex.controlplane.v1.ControlPlaneService.SyncDocset:input_type -> kodex.controlplane.v1.SyncDocsetRequest
+	89,  // 285: kodex.controlplane.v1.ControlPlaneService.IssueRunMCPToken:input_type -> kodex.controlplane.v1.IssueRunMCPTokenRequest
+	91,  // 286: kodex.controlplane.v1.ControlPlaneService.PrepareRunEnvironment:input_type -> kodex.controlplane.v1.PrepareRunEnvironmentRequest
+	93,  // 287: kodex.controlplane.v1.ControlPlaneService.EvaluateRuntimeReuse:input_type -> kodex.controlplane.v1.EvaluateRuntimeReuseRequest
+	95,  // 288: kodex.controlplane.v1.ControlPlaneService.ClaimNextInteractionDispatch:input_type -> kodex.controlplane.v1.ClaimNextInteractionDispatchRequest
+	97,  // 289: kodex.controlplane.v1.ControlPlaneService.CompleteInteractionDispatch:input_type -> kodex.controlplane.v1.CompleteInteractionDispatchRequest
+	99,  // 290: kodex.controlplane.v1.ControlPlaneService.ExpireNextInteraction:input_type -> kodex.controlplane.v1.ExpireNextInteractionRequest
+	101, // 291: kodex.controlplane.v1.ControlPlaneService.ProcessNextGitHubRateLimitWait:input_type -> kodex.controlplane.v1.ProcessNextGitHubRateLimitWaitRequest
+	104, // 292: kodex.controlplane.v1.ControlPlaneService.ReportGitHubRateLimitSignal:input_type -> kodex.controlplane.v1.ReportGitHubRateLimitSignalRequest
+	110, // 293: kodex.controlplane.v1.ControlPlaneService.ReportChangeGovernanceDraftSignal:input_type -> kodex.controlplane.v1.ReportChangeGovernanceDraftSignalRequest
+	112, // 294: kodex.controlplane.v1.ControlPlaneService.PublishChangeGovernanceWaveMap:input_type -> kodex.controlplane.v1.PublishChangeGovernanceWaveMapRequest
+	114, // 295: kodex.controlplane.v1.ControlPlaneService.UpsertChangeGovernanceEvidenceSignal:input_type -> kodex.controlplane.v1.UpsertChangeGovernanceEvidenceSignalRequest
+	149, // 296: kodex.controlplane.v1.ControlPlaneService.GetMissionControlWorkspace:input_type -> kodex.controlplane.v1.GetMissionControlWorkspaceRequest
+	160, // 297: kodex.controlplane.v1.ControlPlaneService.GetMissionControlNode:input_type -> kodex.controlplane.v1.GetMissionControlNodeRequest
+	161, // 298: kodex.controlplane.v1.ControlPlaneService.ListMissionControlNodeActivity:input_type -> kodex.controlplane.v1.ListMissionControlNodeActivityRequest
+	163, // 299: kodex.controlplane.v1.ControlPlaneService.PreviewMissionControlLaunch:input_type -> kodex.controlplane.v1.PreviewMissionControlLaunchRequest
+	136, // 300: kodex.controlplane.v1.ControlPlaneService.GetMissionControlSnapshot:input_type -> kodex.controlplane.v1.GetMissionControlSnapshotRequest
+	138, // 301: kodex.controlplane.v1.ControlPlaneService.GetMissionControlEntity:input_type -> kodex.controlplane.v1.GetMissionControlEntityRequest
+	139, // 302: kodex.controlplane.v1.ControlPlaneService.ListMissionControlTimeline:input_type -> kodex.controlplane.v1.ListMissionControlTimelineRequest
+	117, // 303: kodex.controlplane.v1.ControlPlaneService.ListMissionControlWarmupProjects:input_type -> kodex.controlplane.v1.ListMissionControlWarmupProjectsRequest
+	119, // 304: kodex.controlplane.v1.ControlPlaneService.RunMissionControlWarmup:input_type -> kodex.controlplane.v1.RunMissionControlWarmupRequest
+	177, // 305: kodex.controlplane.v1.ControlPlaneService.SubmitMissionControlCommand:input_type -> kodex.controlplane.v1.SubmitMissionControlCommandRequest
+	178, // 306: kodex.controlplane.v1.ControlPlaneService.GetMissionControlCommand:input_type -> kodex.controlplane.v1.GetMissionControlCommandRequest
+	169, // 307: kodex.controlplane.v1.ControlPlaneService.ClaimMissionControlPendingCommands:input_type -> kodex.controlplane.v1.ClaimMissionControlPendingCommandsRequest
+	179, // 308: kodex.controlplane.v1.ControlPlaneService.QueueMissionControlCommand:input_type -> kodex.controlplane.v1.QueueMissionControlCommandRequest
+	180, // 309: kodex.controlplane.v1.ControlPlaneService.MarkMissionControlCommandPendingSync:input_type -> kodex.controlplane.v1.MarkMissionControlCommandPendingSyncRequest
+	181, // 310: kodex.controlplane.v1.ControlPlaneService.MarkMissionControlCommandReconciled:input_type -> kodex.controlplane.v1.MarkMissionControlCommandReconciledRequest
+	182, // 311: kodex.controlplane.v1.ControlPlaneService.MarkMissionControlCommandFailed:input_type -> kodex.controlplane.v1.MarkMissionControlCommandFailedRequest
+	183, // 312: kodex.controlplane.v1.ControlPlaneService.SubmitInteractionCallback:input_type -> kodex.controlplane.v1.SubmitInteractionCallbackRequest
+	183, // 313: kodex.controlplane.v1.ControlPlaneService.SubmitAdapterInteractionCallback:input_type -> kodex.controlplane.v1.SubmitInteractionCallbackRequest
+	187, // 314: kodex.controlplane.v1.ControlPlaneService.ListRuntimeDeployTasks:input_type -> kodex.controlplane.v1.ListRuntimeDeployTasksRequest
+	189, // 315: kodex.controlplane.v1.ControlPlaneService.GetRuntimeDeployTask:input_type -> kodex.controlplane.v1.GetRuntimeDeployTaskRequest
+	190, // 316: kodex.controlplane.v1.ControlPlaneService.CancelRuntimeDeployTask:input_type -> kodex.controlplane.v1.CancelRuntimeDeployTaskRequest
+	191, // 317: kodex.controlplane.v1.ControlPlaneService.StopRuntimeDeployTask:input_type -> kodex.controlplane.v1.StopRuntimeDeployTaskRequest
+	194, // 318: kodex.controlplane.v1.ControlPlaneService.ListRuntimeErrors:input_type -> kodex.controlplane.v1.ListRuntimeErrorsRequest
+	196, // 319: kodex.controlplane.v1.ControlPlaneService.MarkRuntimeErrorViewed:input_type -> kodex.controlplane.v1.MarkRuntimeErrorViewedRequest
+	205, // 320: kodex.controlplane.v1.ControlPlaneService.UpsertAgentSession:input_type -> kodex.controlplane.v1.UpsertAgentSessionRequest
+	208, // 321: kodex.controlplane.v1.ControlPlaneService.GetLatestAgentSession:input_type -> kodex.controlplane.v1.GetLatestAgentSessionRequest
+	210, // 322: kodex.controlplane.v1.ControlPlaneService.GetRunInteractionResumePayload:input_type -> kodex.controlplane.v1.GetRunInteractionResumePayloadRequest
+	212, // 323: kodex.controlplane.v1.ControlPlaneService.GetRunGitHubRateLimitResumePayload:input_type -> kodex.controlplane.v1.GetRunGitHubRateLimitResumePayloadRequest
+	214, // 324: kodex.controlplane.v1.ControlPlaneService.LookupRunPullRequest:input_type -> kodex.controlplane.v1.LookupRunPullRequestRequest
+	216, // 325: kodex.controlplane.v1.ControlPlaneService.InsertRunFlowEvent:input_type -> kodex.controlplane.v1.InsertRunFlowEventRequest
+	218, // 326: kodex.controlplane.v1.ControlPlaneService.UpsertRunStatusComment:input_type -> kodex.controlplane.v1.UpsertRunStatusCommentRequest
+	220, // 327: kodex.controlplane.v1.ControlPlaneService.GetCodexAuth:input_type -> kodex.controlplane.v1.GetCodexAuthRequest
+	222, // 328: kodex.controlplane.v1.ControlPlaneService.UpsertCodexAuth:input_type -> kodex.controlplane.v1.UpsertCodexAuthRequest
+	224, // 329: kodex.controlplane.v1.ControlPlaneService.DeleteRunNamespace:input_type -> kodex.controlplane.v1.DeleteRunNamespaceRequest
+	2,   // 330: kodex.controlplane.v1.ControlPlaneService.IngestGitHubWebhook:output_type -> kodex.controlplane.v1.IngestGitHubWebhookResponse
+	4,   // 331: kodex.controlplane.v1.ControlPlaneService.ResolveStaffByEmail:output_type -> kodex.controlplane.v1.ResolveStaffByEmailResponse
+	6,   // 332: kodex.controlplane.v1.ControlPlaneService.AuthorizeOAuthUser:output_type -> kodex.controlplane.v1.AuthorizeOAuthUserResponse
+	9,   // 333: kodex.controlplane.v1.ControlPlaneService.ListProjects:output_type -> kodex.controlplane.v1.ListProjectsResponse
+	7,   // 334: kodex.controlplane.v1.ControlPlaneService.UpsertProject:output_type -> kodex.controlplane.v1.Project
+	7,   // 335: kodex.controlplane.v1.ControlPlaneService.GetProject:output_type -> kodex.controlplane.v1.Project
+	230, // 336: kodex.controlplane.v1.ControlPlaneService.DeleteProject:output_type -> google.protobuf.Empty
+	24,  // 337: kodex.controlplane.v1.ControlPlaneService.ListRuns:output_type -> kodex.controlplane.v1.ListRunsResponse
+	28,  // 338: kodex.controlplane.v1.ControlPlaneService.ListRunWaits:output_type -> kodex.controlplane.v1.ListRunWaitsResponse
+	13,  // 339: kodex.controlplane.v1.ControlPlaneService.GetRun:output_type -> kodex.controlplane.v1.Run
+	32,  // 340: kodex.controlplane.v1.ControlPlaneService.CancelRun:output_type -> kodex.controlplane.v1.RunActionResponse
+	33,  // 341: kodex.controlplane.v1.ControlPlaneService.GetRunLogs:output_type -> kodex.controlplane.v1.RunLogs
+	20,  // 342: kodex.controlplane.v1.ControlPlaneService.ListPendingApprovals:output_type -> kodex.controlplane.v1.ListPendingApprovalsResponse
+	22,  // 343: kodex.controlplane.v1.ControlPlaneService.ResolveApprovalDecision:output_type -> kodex.controlplane.v1.ResolveApprovalDecisionResponse
+	36,  // 344: kodex.controlplane.v1.ControlPlaneService.ListRunEvents:output_type -> kodex.controlplane.v1.ListRunEventsResponse
+	45,  // 345: kodex.controlplane.v1.ControlPlaneService.ListRunLearningFeedback:output_type -> kodex.controlplane.v1.ListRunLearningFeedbackResponse
+	39,  // 346: kodex.controlplane.v1.ControlPlaneService.ListSystemSettings:output_type -> kodex.controlplane.v1.ListSystemSettingsResponse
+	37,  // 347: kodex.controlplane.v1.ControlPlaneService.GetSystemSetting:output_type -> kodex.controlplane.v1.SystemSetting
+	37,  // 348: kodex.controlplane.v1.ControlPlaneService.UpdateSystemSettingBoolean:output_type -> kodex.controlplane.v1.SystemSetting
+	37,  // 349: kodex.controlplane.v1.ControlPlaneService.ResetSystemSetting:output_type -> kodex.controlplane.v1.SystemSetting
+	48,  // 350: kodex.controlplane.v1.ControlPlaneService.ListUsers:output_type -> kodex.controlplane.v1.ListUsersResponse
+	54,  // 351: kodex.controlplane.v1.ControlPlaneService.GetAccessMembershipGraph:output_type -> kodex.controlplane.v1.AccessMembershipGraph
+	46,  // 352: kodex.controlplane.v1.ControlPlaneService.CreateUser:output_type -> kodex.controlplane.v1.User
+	230, // 353: kodex.controlplane.v1.ControlPlaneService.DeleteUser:output_type -> google.protobuf.Empty
+	59,  // 354: kodex.controlplane.v1.ControlPlaneService.ListProjectMembers:output_type -> kodex.controlplane.v1.ListProjectMembersResponse
+	230, // 355: kodex.controlplane.v1.ControlPlaneService.UpsertProjectMember:output_type -> google.protobuf.Empty
+	230, // 356: kodex.controlplane.v1.ControlPlaneService.DeleteProjectMember:output_type -> google.protobuf.Empty
+	230, // 357: kodex.controlplane.v1.ControlPlaneService.SetProjectMemberLearningModeOverride:output_type -> google.protobuf.Empty
+	65,  // 358: kodex.controlplane.v1.ControlPlaneService.ListProjectRepositories:output_type -> kodex.controlplane.v1.ListProjectRepositoriesResponse
+	63,  // 359: kodex.controlplane.v1.ControlPlaneService.UpsertProjectRepository:output_type -> kodex.controlplane.v1.RepositoryBinding
+	230, // 360: kodex.controlplane.v1.ControlPlaneService.DeleteProjectRepository:output_type -> google.protobuf.Empty
+	230, // 361: kodex.controlplane.v1.ControlPlaneService.UpsertRepositoryBotParams:output_type -> google.protobuf.Empty
+	71,  // 362: kodex.controlplane.v1.ControlPlaneService.RunRepositoryPreflight:output_type -> kodex.controlplane.v1.RunRepositoryPreflightResponse
+	72,  // 363: kodex.controlplane.v1.ControlPlaneService.GetProjectGitHubTokens:output_type -> kodex.controlplane.v1.ProjectGitHubTokens
+	230, // 364: kodex.controlplane.v1.ControlPlaneService.UpsertProjectGitHubTokens:output_type -> google.protobuf.Empty
+	76,  // 365: kodex.controlplane.v1.ControlPlaneService.PreviewNextStepAction:output_type -> kodex.controlplane.v1.NextStepActionResponse
+	76,  // 366: kodex.controlplane.v1.ControlPlaneService.ExecuteNextStepAction:output_type -> kodex.controlplane.v1.NextStepActionResponse
+	84,  // 367: kodex.controlplane.v1.ControlPlaneService.ListDocsetGroups:output_type -> kodex.controlplane.v1.ListDocsetGroupsResponse
+	86,  // 368: kodex.controlplane.v1.ControlPlaneService.ImportDocset:output_type -> kodex.controlplane.v1.ImportDocsetResponse
+	88,  // 369: kodex.controlplane.v1.ControlPlaneService.SyncDocset:output_type -> kodex.controlplane.v1.SyncDocsetResponse
+	90,  // 370: kodex.controlplane.v1.ControlPlaneService.IssueRunMCPToken:output_type -> kodex.controlplane.v1.IssueRunMCPTokenResponse
+	92,  // 371: kodex.controlplane.v1.ControlPlaneService.PrepareRunEnvironment:output_type -> kodex.controlplane.v1.PrepareRunEnvironmentResponse
+	94,  // 372: kodex.controlplane.v1.ControlPlaneService.EvaluateRuntimeReuse:output_type -> kodex.controlplane.v1.EvaluateRuntimeReuseResponse
+	96,  // 373: kodex.controlplane.v1.ControlPlaneService.ClaimNextInteractionDispatch:output_type -> kodex.controlplane.v1.ClaimNextInteractionDispatchResponse
+	98,  // 374: kodex.controlplane.v1.ControlPlaneService.CompleteInteractionDispatch:output_type -> kodex.controlplane.v1.CompleteInteractionDispatchResponse
+	100, // 375: kodex.controlplane.v1.ControlPlaneService.ExpireNextInteraction:output_type -> kodex.controlplane.v1.ExpireNextInteractionResponse
+	102, // 376: kodex.controlplane.v1.ControlPlaneService.ProcessNextGitHubRateLimitWait:output_type -> kodex.controlplane.v1.ProcessNextGitHubRateLimitWaitResponse
+	105, // 377: kodex.controlplane.v1.ControlPlaneService.ReportGitHubRateLimitSignal:output_type -> kodex.controlplane.v1.ReportGitHubRateLimitSignalResponse
+	111, // 378: kodex.controlplane.v1.ControlPlaneService.ReportChangeGovernanceDraftSignal:output_type -> kodex.controlplane.v1.ReportChangeGovernanceDraftSignalResponse
+	113, // 379: kodex.controlplane.v1.ControlPlaneService.PublishChangeGovernanceWaveMap:output_type -> kodex.controlplane.v1.PublishChangeGovernanceWaveMapResponse
+	115, // 380: kodex.controlplane.v1.ControlPlaneService.UpsertChangeGovernanceEvidenceSignal:output_type -> kodex.controlplane.v1.UpsertChangeGovernanceEvidenceSignalResponse
+	150, // 381: kodex.controlplane.v1.ControlPlaneService.GetMissionControlWorkspace:output_type -> kodex.controlplane.v1.GetMissionControlWorkspaceResponse
+	159, // 382: kodex.controlplane.v1.ControlPlaneService.GetMissionControlNode:output_type -> kodex.controlplane.v1.MissionControlNodeDetails
+	162, // 383: kodex.controlplane.v1.ControlPlaneService.ListMissionControlNodeActivity:output_type -> kodex.controlplane.v1.ListMissionControlNodeActivityResponse
+	166, // 384: kodex.controlplane.v1.ControlPlaneService.PreviewMissionControlLaunch:output_type -> kodex.controlplane.v1.MissionControlLaunchPreview
+	137, // 385: kodex.controlplane.v1.ControlPlaneService.GetMissionControlSnapshot:output_type -> kodex.controlplane.v1.GetMissionControlSnapshotResponse
+	133, // 386: kodex.controlplane.v1.ControlPlaneService.GetMissionControlEntity:output_type -> kodex.controlplane.v1.MissionControlEntityDetails
+	140, // 387: kodex.controlplane.v1.ControlPlaneService.ListMissionControlTimeline:output_type -> kodex.controlplane.v1.ListMissionControlTimelineResponse
+	118, // 388: kodex.controlplane.v1.ControlPlaneService.ListMissionControlWarmupProjects:output_type -> kodex.controlplane.v1.ListMissionControlWarmupProjectsResponse
+	120, // 389: kodex.controlplane.v1.ControlPlaneService.RunMissionControlWarmup:output_type -> kodex.controlplane.v1.RunMissionControlWarmupResponse
+	171, // 390: kodex.controlplane.v1.ControlPlaneService.SubmitMissionControlCommand:output_type -> kodex.controlplane.v1.MissionControlCommandState
+	171, // 391: kodex.controlplane.v1.ControlPlaneService.GetMissionControlCommand:output_type -> kodex.controlplane.v1.MissionControlCommandState
+	170, // 392: kodex.controlplane.v1.ControlPlaneService.ClaimMissionControlPendingCommands:output_type -> kodex.controlplane.v1.ClaimMissionControlPendingCommandsResponse
+	171, // 393: kodex.controlplane.v1.ControlPlaneService.QueueMissionControlCommand:output_type -> kodex.controlplane.v1.MissionControlCommandState
+	171, // 394: kodex.controlplane.v1.ControlPlaneService.MarkMissionControlCommandPendingSync:output_type -> kodex.controlplane.v1.MissionControlCommandState
+	171, // 395: kodex.controlplane.v1.ControlPlaneService.MarkMissionControlCommandReconciled:output_type -> kodex.controlplane.v1.MissionControlCommandState
+	171, // 396: kodex.controlplane.v1.ControlPlaneService.MarkMissionControlCommandFailed:output_type -> kodex.controlplane.v1.MissionControlCommandState
+	184, // 397: kodex.controlplane.v1.ControlPlaneService.SubmitInteractionCallback:output_type -> kodex.controlplane.v1.SubmitInteractionCallbackResponse
+	184, // 398: kodex.controlplane.v1.ControlPlaneService.SubmitAdapterInteractionCallback:output_type -> kodex.controlplane.v1.SubmitInteractionCallbackResponse
+	188, // 399: kodex.controlplane.v1.ControlPlaneService.ListRuntimeDeployTasks:output_type -> kodex.controlplane.v1.ListRuntimeDeployTasksResponse
+	186, // 400: kodex.controlplane.v1.ControlPlaneService.GetRuntimeDeployTask:output_type -> kodex.controlplane.v1.RuntimeDeployTask
+	192, // 401: kodex.controlplane.v1.ControlPlaneService.CancelRuntimeDeployTask:output_type -> kodex.controlplane.v1.RuntimeDeployTaskActionResponse
+	192, // 402: kodex.controlplane.v1.ControlPlaneService.StopRuntimeDeployTask:output_type -> kodex.controlplane.v1.RuntimeDeployTaskActionResponse
+	195, // 403: kodex.controlplane.v1.ControlPlaneService.ListRuntimeErrors:output_type -> kodex.controlplane.v1.ListRuntimeErrorsResponse
+	193, // 404: kodex.controlplane.v1.ControlPlaneService.MarkRuntimeErrorViewed:output_type -> kodex.controlplane.v1.RuntimeError
+	206, // 405: kodex.controlplane.v1.ControlPlaneService.UpsertAgentSession:output_type -> kodex.controlplane.v1.UpsertAgentSessionResponse
+	209, // 406: kodex.controlplane.v1.ControlPlaneService.GetLatestAgentSession:output_type -> kodex.controlplane.v1.GetLatestAgentSessionResponse
+	211, // 407: kodex.controlplane.v1.ControlPlaneService.GetRunInteractionResumePayload:output_type -> kodex.controlplane.v1.GetRunInteractionResumePayloadResponse
+	213, // 408: kodex.controlplane.v1.ControlPlaneService.GetRunGitHubRateLimitResumePayload:output_type -> kodex.controlplane.v1.GetRunGitHubRateLimitResumePayloadResponse
+	215, // 409: kodex.controlplane.v1.ControlPlaneService.LookupRunPullRequest:output_type -> kodex.controlplane.v1.LookupRunPullRequestResponse
+	217, // 410: kodex.controlplane.v1.ControlPlaneService.InsertRunFlowEvent:output_type -> kodex.controlplane.v1.InsertRunFlowEventResponse
+	219, // 411: kodex.controlplane.v1.ControlPlaneService.UpsertRunStatusComment:output_type -> kodex.controlplane.v1.UpsertRunStatusCommentResponse
+	221, // 412: kodex.controlplane.v1.ControlPlaneService.GetCodexAuth:output_type -> kodex.controlplane.v1.GetCodexAuthResponse
+	223, // 413: kodex.controlplane.v1.ControlPlaneService.UpsertCodexAuth:output_type -> kodex.controlplane.v1.UpsertCodexAuthResponse
+	225, // 414: kodex.controlplane.v1.ControlPlaneService.DeleteRunNamespace:output_type -> kodex.controlplane.v1.DeleteRunNamespaceResponse
+	330, // [330:415] is the sub-list for method output_type
+	245, // [245:330] is the sub-list for method input_type
+	245, // [245:245] is the sub-list for extension type_name
+	245, // [245:245] is the sub-list for extension extendee
+	0,   // [0:245] is the sub-list for field type_name
 }
 
 func init() { file_kodex_controlplane_v1_controlplane_proto_init() }
@@ -20456,97 +20882,98 @@ func file_kodex_controlplane_v1_controlplane_proto_init() {
 	file_kodex_controlplane_v1_controlplane_proto_msgTypes[37].OneofWrappers = []any{}
 	file_kodex_controlplane_v1_controlplane_proto_msgTypes[43].OneofWrappers = []any{}
 	file_kodex_controlplane_v1_controlplane_proto_msgTypes[46].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[54].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[57].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[50].OneofWrappers = []any{}
 	file_kodex_controlplane_v1_controlplane_proto_msgTypes[60].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[62].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[64].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[63].OneofWrappers = []any{}
 	file_kodex_controlplane_v1_controlplane_proto_msgTypes[66].OneofWrappers = []any{}
 	file_kodex_controlplane_v1_controlplane_proto_msgTypes[68].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[69].OneofWrappers = []any{}
 	file_kodex_controlplane_v1_controlplane_proto_msgTypes[70].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[71].OneofWrappers = []any{}
 	file_kodex_controlplane_v1_controlplane_proto_msgTypes[72].OneofWrappers = []any{}
 	file_kodex_controlplane_v1_controlplane_proto_msgTypes[74].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[91].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[75].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[76].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[77].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[78].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[80].OneofWrappers = []any{}
 	file_kodex_controlplane_v1_controlplane_proto_msgTypes[97].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[98].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[103].OneofWrappers = []any{}
 	file_kodex_controlplane_v1_controlplane_proto_msgTypes[104].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[120].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[121].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[123].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[124].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[125].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[110].OneofWrappers = []any{}
 	file_kodex_controlplane_v1_controlplane_proto_msgTypes[126].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[127].OneofWrappers = []any{
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[127].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[129].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[130].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[131].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[132].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[133].OneofWrappers = []any{
 		(*MissionControlEntityDetails_WorkItem)(nil),
 		(*MissionControlEntityDetails_Discussion)(nil),
 		(*MissionControlEntityDetails_PullRequest)(nil),
 		(*MissionControlEntityDetails_Agent)(nil),
 	}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[129].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[130].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[133].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[134].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[135].OneofWrappers = []any{}
 	file_kodex_controlplane_v1_controlplane_proto_msgTypes[136].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[139].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[140].OneofWrappers = []any{}
 	file_kodex_controlplane_v1_controlplane_proto_msgTypes[142].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[143].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[145].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[146].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[147].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[148].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[149].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[151].OneofWrappers = []any{}
 	file_kodex_controlplane_v1_controlplane_proto_msgTypes[152].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[153].OneofWrappers = []any{
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[153].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[158].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[159].OneofWrappers = []any{
 		(*MissionControlNodeDetails_Discussion)(nil),
 		(*MissionControlNodeDetails_WorkItem)(nil),
 		(*MissionControlNodeDetails_Run)(nil),
 		(*MissionControlNodeDetails_PullRequest)(nil),
 	}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[155].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[156].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[160].OneofWrappers = []any{}
 	file_kodex_controlplane_v1_controlplane_proto_msgTypes[161].OneofWrappers = []any{}
 	file_kodex_controlplane_v1_controlplane_proto_msgTypes[162].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[165].OneofWrappers = []any{}
 	file_kodex_controlplane_v1_controlplane_proto_msgTypes[166].OneofWrappers = []any{}
 	file_kodex_controlplane_v1_controlplane_proto_msgTypes[167].OneofWrappers = []any{}
 	file_kodex_controlplane_v1_controlplane_proto_msgTypes[168].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[169].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[170].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[171].OneofWrappers = []any{
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[171].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[172].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[173].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[174].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[175].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[176].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[177].OneofWrappers = []any{
 		(*SubmitMissionControlCommandRequest_DiscussionCreate)(nil),
 		(*SubmitMissionControlCommandRequest_WorkItemCreate)(nil),
 		(*SubmitMissionControlCommandRequest_DiscussionFormalize)(nil),
 		(*SubmitMissionControlCommandRequest_StageNextStep)(nil),
 		(*SubmitMissionControlCommandRequest_RetrySync)(nil),
 	}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[173].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[174].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[175].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[176].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[177].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[179].OneofWrappers = []any{}
 	file_kodex_controlplane_v1_controlplane_proto_msgTypes[180].OneofWrappers = []any{}
 	file_kodex_controlplane_v1_controlplane_proto_msgTypes[181].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[184].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[185].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[182].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[183].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[186].OneofWrappers = []any{}
 	file_kodex_controlplane_v1_controlplane_proto_msgTypes[187].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[188].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[190].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[191].OneofWrappers = []any{}
 	file_kodex_controlplane_v1_controlplane_proto_msgTypes[193].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[197].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[194].OneofWrappers = []any{}
 	file_kodex_controlplane_v1_controlplane_proto_msgTypes[199].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[200].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[201].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[208].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[209].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[212].OneofWrappers = []any{}
-	file_kodex_controlplane_v1_controlplane_proto_msgTypes[213].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[203].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[205].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[206].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[207].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[214].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[215].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[218].OneofWrappers = []any{}
 	file_kodex_controlplane_v1_controlplane_proto_msgTypes[219].OneofWrappers = []any{}
+	file_kodex_controlplane_v1_controlplane_proto_msgTypes[225].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kodex_controlplane_v1_controlplane_proto_rawDesc), len(file_kodex_controlplane_v1_controlplane_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   220,
+			NumMessages:   226,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

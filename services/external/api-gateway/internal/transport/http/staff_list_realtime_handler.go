@@ -119,7 +119,9 @@ func streamRealtimeSnapshots[Snapshot any](
 	if err != nil {
 		return nil
 	}
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	conn.SetReadLimit(64 * 1024)
 	_ = conn.SetReadDeadline(time.Now().Add(realtimePongTimeout))
