@@ -14,5 +14,5 @@
 - модель данных и синхронизация multi-pod держатся на PostgreSQL (`JSONB` + `pgvector`).
 - env/secrets/CI variable names для платформы используют префикс `KODEX_`
   (кроме значений, требуемых внешними runtime-контрактами).
-- weekly sprint и doc-governance выполняются по
-  `docs/delivery/development_process_requirements.md`.
+- wave-планирование и doc-governance на время reset-итерации выполняются по
+  `refactoring/task.md`, `refactoring/02-doc-governance.md` и `refactoring/24-pre-wave7-documentation-rebuild-plan.md`.

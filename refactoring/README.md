@@ -22,7 +22,8 @@ approvals:
 - Главный документ программы: `refactoring/task.md`.
 - Документы в `refactoring/*.md`, кроме исторических справочных пакетов, являются рабочим источником правды для новой версии платформы.
 - `refactoring/control-plane-refactor-agent-pack/**` используется только как справочный пакет по дисциплине декомпозиции, а не как целевая модель платформы.
-- Старые документы из `docs/**` считаются действующими только до момента, когда соответствующий домен будет переписан и явно заменён новой каноникой.
+- Старые документы, delivery-пакеты, сервисы, deploy, контракты и инструменты перенесены в `deprecated/**`.
+- Новая реализация волн `7+` пишется только с нуля в новых сервисах и новых каталогах целевой архитектуры; материалы из `deprecated/**` остаются только справочным материалом до удаления.
 
 ## Порядок приоритета внутри программы
 1. `refactoring/task.md`
@@ -50,8 +51,9 @@ approvals:
    - `refactoring/21-runtime-deploy-and-bootstrap.md`
    - `refactoring/22-first-deployment-and-wave7-gate.md`
    - `refactoring/23-backlog-checkpoint-before-wave7.md`
+   - `refactoring/24-pre-wave7-documentation-rebuild-plan.md`
 3. `docs/design-guidelines/**` как инженерные ограничения реализации
-4. Исторические документы из `docs/**` и `refactoring/control-plane-refactor-agent-pack/**` как справочный материал
+4. Исторические материалы из `deprecated/**` и `refactoring/control-plane-refactor-agent-pack/**` как справочный материал
 
 ## Цели программы
 - Переосмыслить платформу сверху вниз: от бизнес-модели и пользовательских сценариев до сервисных границ и реализации.
@@ -96,11 +98,12 @@ approvals:
 
 ## Состояние исторических справочных материалов
 - `refactoring/control-plane-refactor-agent-pack/**` оставляем в репозитории как исторический пакет:
-  - он полезен по темам `ownership`, `service split`, `database-per-service`, `legacy removal`;
+  - он полезен по темам `ownership`, `service split`, `database-per-service`, удаление устаревшего кода;
   - его список сервисов, приоритеты и старая целевая модель не считаются источником правды для новой программы.
 
 ## Следующие артефакты
 - После завершения backlog checkpoint следующими обязательными артефактами должны стать:
-  - первый кодовый пакет wave 7 `Access and accounts`;
+  - пересборка минимальной новой `docs/**` по `refactoring/24-pre-wave7-documentation-rebuild-plan.md`;
+  - затем первый кодовый пакет wave 7 `Access and accounts`;
   - реализационные документы и PR по очереди `#599`-`#602`;
   - следующий backlog pass уже по итогам wave 7, а не вместо неё.

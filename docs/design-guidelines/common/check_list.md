@@ -11,7 +11,7 @@
   - frontend: `docs/design-guidelines/vue/frontend_architecture.md`, `docs/design-guidelines/vue/frontend_code_rules.md`, `docs/design-guidelines/vue/frontend_data_and_state.md`;
   - общие принципы: `docs/design-guidelines/common/design_principles.md`.
 - Контракты транспорта не “вшиты в код строками” и имеют источник правды:
-  - gRPC: `proto/` (версионирование/совместимость)
+  - gRPC: целевой `proto/` после его повторного создания (версионирование/совместимость)
   - HTTP: OpenAPI YAML
   - async/webhook payloads: AsyncAPI YAML (если используются)
 - Модели/типы/DTO размещены по слоям, а не ad-hoc в service/handler/component файлах.
@@ -19,28 +19,23 @@
 - Helper-код размещён по уровню переиспользования:
   - локальный файл (только одно место использования);
   - пакет/модуль (`*_helpers.*`, `lib/*`);
-  - `libs/*` (если используется в нескольких сервисах/приложениях).
+  - целевой `libs/*` (если используется в нескольких сервисах/приложениях и каталог уже заново создан).
 - В production-коде нет анонимных структур/объектов для контрактов/персистентных payload-моделей.
 - Секреты не хардкодятся и не коммитятся; в логах нет секретов/PII.
 - Имена platform env/secrets/CI variables унифицированы с префиксом `KODEX_`;
   имена без префикса `KODEX_` не добавляются.
-- Kubernetes манифесты не “вшиты” heredoc’ами в bash: шаблоны лежат в `deploy/base/**`,
-  а рендер/применение выполняются Go-рантаймом (`cmd/codex-bootstrap`, `runtime-deploy`).
+- Kubernetes манифесты не “вшиты” heredoc’ами в bash: шаблоны лежат в целевом deploy-каталоге,
+  а рендер/применение выполняются Go-рантаймом новой архитектуры.
 - Для runtime-токенов дефолтные TTL не меньше времени жизни соответствующих контейнеров;
   для MCP baseline TTL не ниже `24h`.
 - Для multi-service deploy у каждого deployable-сервиса есть собственные image vars/repositories
   (шаблон нейминга: `KODEX_<SERVICE>_IMAGE` и `KODEX_<SERVICE>_INTERNAL_IMAGE_REPOSITORY`).
-- При изменении состава deployable-сервисов синхронно обновлены:
-  runtime deploy и build orchestration (`services/internal/control-plane/internal/domain/runtimedeploy/service_build.go`,
-  `services/internal/control-plane/internal/domain/runtimedeploy/service_reconcile.go`,
-  `deploy/base/kaniko/kaniko-build-job.yaml.tpl`, `deploy/base/kaniko/mirror-image-job.yaml.tpl`,
-  `services/internal/control-plane/cmd/runtime-deploy/main.go`),
-  bootstrap sync (`bootstrap/host/config.env.example`, `bootstrap/host/bootstrap_remote_production.sh`,
-  `cmd/codex-bootstrap/internal/cli/github_sync.go`, `cmd/codex-bootstrap/internal/cli/sync_secrets.go`).
+- При изменении состава deployable-сервисов синхронно обновлены runtime deploy, build orchestration, bootstrap sync и документация новой архитектуры.
 - Порядок выкладки production задан явно и соблюдён:
   stateful dependencies -> migrations -> internal domain services -> edge services -> frontend;
   ожидание зависимостей выполнено через `initContainers` в Kubernetes-манифестах.
-- Вынос общего кода в `libs/*` оправдан (>= 2 потребителя); нет “god-lib”.
+- Вынос общего кода в целевой `libs/*` оправдан (>= 2 потребителя); нет “god-lib”.
+- Новый production-код не размещён внутри `deprecated/**`.
 - Если добавлена/обновлена внешняя зависимость, обновлён
   `docs/design-guidelines/common/external_dependencies_catalog.md`.
 - Для русскоязычных документов, PR и комментариев проверено отсутствие лишней смеси русского и английского; английские термины оставлены только там, где они действительно нужны как точные технические идентификаторы.

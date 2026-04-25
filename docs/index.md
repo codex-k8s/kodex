@@ -1,51 +1,31 @@
----
-doc_id: IDX-CK8S-DOCS-0001
-type: docs-index
-title: "kodex Documentation Index"
-status: in-review
-owner_role: KM
-created_at: 2026-03-11
-updated_at: 2026-03-12
-related_issues: [318, 320, 327]
-related_prs: []
-approvals:
-  required: ["Owner"]
-  status: pending
-  request_id: "owner-2026-03-11-docs-index"
----
+# Индекс документации kodex
 
-# Documentation Index
+## Текущее состояние
 
-## TL;DR
-- `docs/index.md` — канонический корневой навигатор по проектной документации.
-- Source-of-truth документы остаются в доменах `product`, `architecture`, `delivery`, `ops`.
-- Инициативные и handover-пакеты размещаются во вложенных доменных подпапках, а `docs/templates/` используется только как каталог шаблонов.
+Репозиторий находится в reset-итерации перед кодовой wave 7.
 
-## Доменные каталоги
+Активная проектная каноника временно находится в `refactoring/**`.
+Новые доменные каталоги `docs/product`, `docs/architecture`, `docs/delivery`, `docs/ops` и `docs/research` будут созданы заново по шаблонам из `docs/templates/**`.
 
-| Каталог | Назначение | Канонический индекс |
-|---|---|---|
-| `docs/product/` | Требования, ограничения, роли, label/stage policy | `docs/product/README.md` |
-| `docs/architecture/` | C4, ADR, API/data model, prompt/runtime policy, инициативные архитектурные пакеты | `docs/architecture/README.md` |
-| `docs/delivery/` | Delivery plan, sprint/epic docs, master traceability registries, traceability history packages, process requirements, migration-map | `docs/delivery/README.md` |
-| `docs/ops/` | Production runbook и эксплуатационные handover-артефакты | `docs/ops/README.md` |
-| `docs/templates/` | Канонические шаблоны документов по ролям/stage | `docs/templates/index.md` |
+## Активные каталоги
 
-## Быстрый маршрут
-- Если нужен продуктовый source of truth: `docs/product/requirements_machine_driven.md`, `docs/product/constraints.md`, `docs/product/stage_process_model.md`.
-- Если нужен архитектурный baseline: `docs/architecture/c4_context.md`, `docs/architecture/c4_container.md`, `docs/architecture/api_contract.md`, `docs/architecture/data_model.md`.
-- Если нужен delivery/process baseline: `docs/delivery/development_process_requirements.md`, `docs/delivery/delivery_plan.md`, `docs/delivery/issue_map.md`, `docs/delivery/requirements_traceability.md`.
-- Если нужен historical traceability delta по спринтам: `docs/delivery/traceability/README.md`.
-- Если нужен ops baseline: `docs/ops/production_runbook.md`.
-- Если нужен шаблон артефакта: `docs/templates/index.md`.
+| Каталог | Назначение |
+|---|---|
+| `docs/design-guidelines/` | Инженерные требования к проектированию, Go, Vue и общим правилам кода. |
+| `docs/templates/` | Шаблоны для новой продуктовой, архитектурной, delivery и ops документации. |
+| `docs/media/` | Медиа-ресурсы активной документации. |
+| `refactoring/` | Рабочая каноника программы рефакторинга до переноса в новые `docs/**`. |
+| `deprecated/` | Устаревшие документы, код и инфраструктурные каталоги, оставленные только как справка. |
 
-## Специализированные каталоги
-- Архитектурные initiative/stage-specific пакеты хранятся в `docs/architecture/initiatives/`.
-- Эксплуатационные handover-пакеты хранятся в `docs/ops/handovers/`.
-- Delivery day-эпики и sprint планы хранятся в `docs/delivery/epics/` и `docs/delivery/sprints/`.
-- Delivery historical evidence хранится в `docs/delivery/traceability/`.
+## Что считать источником правды
 
-## Governance
-- Перенос документов выполняется только с migration-map: `docs/delivery/documentation_ia_migration_map.md`.
-- При изменении doc-path обязательно синхронизируются `services.yaml`, traceability-документы и открытые GitHub issues.
-- Branch-specific blob links для документов не считаются канонической навигацией и должны быть заменены на repo-local path refs или стабильные issue/PR ссылки.
+1. `refactoring/task.md` — главный мандат программы.
+2. `refactoring/README.md` — индекс и порядок волн.
+3. `refactoring/24-pre-wave7-documentation-rebuild-plan.md` — порядок пересборки документации перед кодовой wave 7.
+4. `docs/templates/index.md` — каталог шаблонов для новых документов.
+
+## Что не делать
+
+- Не восстанавливать старые `docs/**` переносом из `deprecated/**`.
+- Не чинить ссылки внутри `deprecated/**`, если нет отдельной задачи.
+- Не начинать новую кодовую реализацию поверх старых `cmd`, `deploy`, `libs`, `proto`, `services` и `tools` из `deprecated/**`.

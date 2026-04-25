@@ -11,8 +11,8 @@
 - `docs/design-guidelines/common/external_dependencies_catalog.md` — согласованный список внешних библиотек и инструментов.
 
 Специфика `kodex`:
-- основной frontend приложения живет в `services/staff/web-console`;
+- целевой frontend приложения будет заново создан в каталоге, согласованном в новой архитектуре;
 - вход в UI защищен GitHub OAuth;
 - пользовательские настройки и права приходят из backend API (PostgreSQL как source of truth).
-- Планирование и закрытие daily задач в спринте — по
-  `docs/delivery/development_process_requirements.md`.
+- Wave-планирование и doc-governance на время reset-итерации — по
+  `refactoring/task.md`, `refactoring/02-doc-governance.md` и `refactoring/24-pre-wave7-documentation-rebuild-plan.md`.

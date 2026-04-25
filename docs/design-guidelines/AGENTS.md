@@ -20,5 +20,7 @@
 - встроенные MCP сервисные ручки реализуются в Go внутри платформы;
 - интеграции с репозиториями проектируются через интерфейсы провайдеров.
 
-Процесс разработки и ведения документации:
-- `docs/delivery/development_process_requirements.md`
+Процесс разработки и ведения документации на время reset-итерации:
+- `refactoring/task.md`
+- `refactoring/02-doc-governance.md`
+- `refactoring/24-pre-wave7-documentation-rebuild-plan.md`
