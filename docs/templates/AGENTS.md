@@ -10,6 +10,6 @@
 - Новые шаблоны и изменения существующих шаблонов вносятся через отдельную ветку и PR.
 - Внешний исходный репозиторий шаблонов: `github.com/codex-k8s/kodex-doc-templates-ru`.
 - Основной репозиторий платформы: `github.com/codex-k8s/kodex`.
-- Внешний публичный источник шаблонов: `github.com/codex-k8s/kodex-doc-templates-ru`, локальный submodule `external-docs/templates`.
-- Если меняется локальная копия в `docs/templates/**`, нужно проверить, требуется ли синхронизация с `external-docs/templates`.
+- Внешний публичный источник шаблонов: `github.com/codex-k8s/kodex-doc-templates-ru`, локальный submodule `docs/sources/templates`.
+- Если меняется локальная копия в `docs/templates/**`, нужно проверить, требуется ли синхронизация с `docs/sources/templates`.
 - Если меняется внешний репозиторий шаблонов, в `kodex` обновляется только gitlink и при необходимости локальная копия шаблонов.

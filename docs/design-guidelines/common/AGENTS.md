@@ -16,4 +16,4 @@
   (кроме значений, требуемых внешними runtime-контрактами).
 - проектное планирование и документационная каноника задаются корневым `AGENTS.md` и актуальной проектной документацией, а не этим техническим гайдом.
 
-Внешний источник: `github.com/codex-k8s/kodex-guidelines-common-ru`, необязательный submodule `external-docs/guidelines/common`.
+Внешний источник: `github.com/codex-k8s/kodex-guidelines-common-ru`, необязательный submodule `docs/sources/guidelines/common`.

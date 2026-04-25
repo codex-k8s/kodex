@@ -1,35 +1,35 @@
 [submodule "kodex-package-store"]
-	path = external-docs/private/package-store
+	path = packages/package-store
 	url = https://github.com/codex-k8s/kodex-package-store.git
 	branch = main
 	update = none
 	ignore = all
 [submodule "kodex-platform-site"]
-	path = external-docs/private/platform-site
+	path = packages/platform-site
 	url = https://github.com/codex-k8s/kodex-platform-site.git
 	branch = main
 	update = none
 	ignore = all
 [submodule "kodex-guidelines-common-ru"]
-	path = external-docs/guidelines/common
+	path = docs/sources/guidelines/common
 	url = https://github.com/codex-k8s/kodex-guidelines-common-ru.git
 	branch = main
 	update = none
 	ignore = all
 [submodule "kodex-guidelines-go-ru"]
-	path = external-docs/guidelines/go
+	path = docs/sources/guidelines/go
 	url = https://github.com/codex-k8s/kodex-guidelines-go-ru.git
 	branch = main
 	update = none
 	ignore = all
 [submodule "kodex-guidelines-vue-ru"]
-	path = external-docs/guidelines/vue
+	path = docs/sources/guidelines/vue
 	url = https://github.com/codex-k8s/kodex-guidelines-vue-ru.git
 	branch = main
 	update = none
 	ignore = all
 [submodule "kodex-doc-templates-ru"]
-	path = external-docs/templates
+	path = docs/sources/templates
 	url = https://github.com/codex-k8s/kodex-doc-templates-ru.git
 	branch = main
 	update = none

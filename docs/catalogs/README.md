@@ -19,6 +19,7 @@
 
 ## Внешние источники
 
-- `github.com/codex-k8s/kodex-package-store` — приватный пакет авторского магазина пакетов, необязательный submodule `external-docs/private/package-store`.
-- `github.com/codex-k8s/kodex-platform-site` — приватный пакет сайта и пользовательской документации, необязательный submodule `external-docs/private/platform-site`.
-- Правила работы с submodule описаны в `external-docs/AGENTS.md`.
+- `github.com/codex-k8s/kodex-package-store` — приватный пакет авторского магазина пакетов, необязательный submodule `packages/package-store`.
+- `github.com/codex-k8s/kodex-platform-site` — приватный пакет сайта и пользовательской документации, необязательный submodule `packages/platform-site`.
+- Правила работы с документационными submodule описаны в `docs/sources/AGENTS.md`.
+- Правила работы с пакетными submodule описаны в `packages/AGENTS.md`.

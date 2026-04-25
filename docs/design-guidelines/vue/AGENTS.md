@@ -16,4 +16,4 @@
 - пользовательские настройки и права приходят из backend API (PostgreSQL как source of truth).
 - Проектное планирование и документационная каноника задаются корневым `AGENTS.md` и актуальной проектной документацией, а не этим техническим гайдом.
 
-Внешний источник: `github.com/codex-k8s/kodex-guidelines-vue-ru`, необязательный submodule `external-docs/guidelines/vue`.
+Внешний источник: `github.com/codex-k8s/kodex-guidelines-vue-ru`, необязательный submodule `docs/sources/guidelines/vue`.
