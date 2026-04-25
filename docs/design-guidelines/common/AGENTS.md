@@ -8,10 +8,13 @@
 - `docs/design-guidelines/common/libraries_reusable_code_requirements.md` — общие правила выноса кода в `libs/*`.
 - `docs/design-guidelines/common/external_dependencies_catalog.md` — единый каталог внешних библиотек и инструментов.
 
-Дополнительно для `kodex`:
+Проектный overlay `kodex`:
 - процессы выполняются по webhook-событиям, а не через GitHub Actions workflows;
 - Kubernetes и repository-провайдеры подключаются только через интерфейсы и адаптеры;
 - модель данных и синхронизация multi-pod держатся на PostgreSQL (`JSONB` + `pgvector`).
 - env/secrets/CI variable names для платформы используют префикс `KODEX_`
   (кроме значений, требуемых внешними runtime-контрактами).
 - проектное планирование и документационная каноника задаются корневым `AGENTS.md` и актуальной проектной документацией, а не этим техническим гайдом.
+
+Внешний источник: `github.com/codex-k8s/kodex-guidelines-common-ru`, source submodule `docs/external/guidelines/common`.
+Если внешний источник импортирован в проект, его правила обязательны. Этот каталог задаёт `kodex`-специфичный overlay и имеет приоритет при конфликте с внешним baseline.

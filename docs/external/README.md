@@ -1,0 +1,48 @@
+# Репозитории-источники документации
+
+## Назначение
+
+`docs/external/**` хранит source submodule-ссылки на внешние репозитории руководящей документации. Содержимое этих репозиториев не копируется в активную канонику `docs/**`, но остаётся доступным рядом с ней как подключённый источник.
+
+Внешние пакеты документации считаются reusable baseline. Проектный overlay в `docs/design-guidelines/**` может дополнять или переопределять их требования для `kodex`, если эти требования не подходят для общего пакета.
+
+`docs/**` остаётся единственным корневым деревом активной документации в репозитории `kodex`. Каталог `docs/external/**` нужен только как соседний источник внешних репозиториев документации внутри того же дерева `docs`, чтобы не плодить вторую верхнеуровневую папку наподобие `external-docs`.
+
+Штатный рабочий контур предполагает checkout всех документационных submodule из `.gitmodules`. Если источник недоступен, платформа должна показать проблему доступа.
+
+Если внешний источник импортирован в проект, его правила обязательны. При конфликте проектный overlay имеет приоритет.
+
+## Подключённые источники
+
+| Путь | Репозиторий | Доступ | Назначение |
+|---|---|---|---|
+| `docs/external/guidelines/common` | `github.com/codex-k8s/kodex-guidelines-common-ru` | публичный | Общие инженерные правила. |
+| `docs/external/guidelines/go` | `github.com/codex-k8s/kodex-guidelines-go-backend-ru` | публичный | Инженерные правила для Go backend. |
+| `docs/external/guidelines/vue` | `github.com/codex-k8s/kodex-guidelines-vue-frontend-ru` | публичный | Инженерные правила для Vue и TypeScript frontend. |
+
+## Как подключать вручную
+
+Submodule помечены как `update = none`, чтобы агент явно выбирал нужные источники.
+
+Для конкретного источника используйте явный путь:
+
+```bash
+git -c submodule.kodex-guidelines-common-ru.update=checkout submodule update --init docs/external/guidelines/common
+git -c submodule.kodex-guidelines-go-backend-ru.update=checkout submodule update --init docs/external/guidelines/go
+git -c submodule.kodex-guidelines-vue-frontend-ru.update=checkout submodule update --init docs/external/guidelines/vue
+```
+
+Для публичных документационных submodule достаточно обычного доступа к GitHub.
+
+## Как обновлять ссылку
+
+1. Внести изменения в целевом внешнем репозитории в отдельной ветке.
+2. Создать и смержить PR в этом внешнем репозитории.
+3. В `kodex` обновить gitlink:
+
+```bash
+git -C docs/external/guidelines/common pull --ff-only
+git add docs/external/guidelines/common
+```
+
+4. В том же PR обновить документацию `kodex`, если изменилась каноника или инструкции.

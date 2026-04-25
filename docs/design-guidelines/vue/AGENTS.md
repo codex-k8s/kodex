@@ -10,8 +10,11 @@
 - `docs/design-guidelines/vue/libraries.md` — что выносить в `libs/{vue,ts,js}` и как.
 - `docs/design-guidelines/common/external_dependencies_catalog.md` — согласованный список внешних библиотек и инструментов.
 
-Специфика `kodex`:
+Проектный overlay `kodex`:
 - целевой frontend приложения будет заново создан в каталоге, согласованном в новой архитектуре;
 - вход в UI защищен GitHub OAuth;
 - пользовательские настройки и права приходят из backend API (PostgreSQL как source of truth).
 - Проектное планирование и документационная каноника задаются корневым `AGENTS.md` и актуальной проектной документацией, а не этим техническим гайдом.
+
+Внешний источник: `github.com/codex-k8s/kodex-guidelines-vue-frontend-ru`, source submodule `docs/external/guidelines/vue`.
+Если внешний источник импортирован в проект, его правила обязательны. Этот каталог задаёт `kodex`-специфичный overlay и имеет приоритет при конфликте с внешним Vue baseline.

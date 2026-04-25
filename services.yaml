@@ -21,8 +21,39 @@ spec:
     - docs/design-guidelines
     - docs/templates
     - refactoring
+  repositorySources:
+    sourceOfTruth:
+      gitSubmodules: .gitmodules
+      packageRuntimeMetadata: platform-db
+      packageBootstrapMetadata: package-manifest-json
+    paths:
+      guidancePackages: docs/external/guidelines
+      documentTemplates: docs/templates
+      packages: packages
+    policies:
+      workspaceSources:
+        initAllGitSubmodules: true
+        unavailableSourcesMustBeReported: true
+      privateSubmodules:
+        accessCheckedByPlatform: true
+      changeManagement:
+        mode: pull-request-only
+      packageDelivery:
+        checkoutRoot: packages
+        sourceSubmodulesDeclaredInGitmodules: true
+        installedPackageMetadataStoredInDb: true
+        prefillMetadataFromPackageManifestJson: true
+        installedPackagesUsePinnedGitRefs: true
+        allowPinnedGitRefs: true
+        allowedRefs:
+          - tag
+          - commit
+        downstreamRepositoryCleanupWorkflow: true
   deployableServices: []
   notes:
     - New deployable services must be added only after the corresponding wave documentation is accepted.
     - Do not restore old services, versions, environments or runtime settings from deprecated/services.yaml mechanically.
     - The final inventory schema is defined by the new architecture, not by the archived pre-refactor file.
+    - Source submodule list is defined by .gitmodules; this draft keeps only policy and path conventions.
+    - Package metadata is stored in the platform database and can be prefilled from package JSON manifests.
+    - Downstream repositories must remove store, site and optional packages that are not intended for the target installation.
