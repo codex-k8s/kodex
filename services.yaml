@@ -25,22 +25,22 @@ spec:
     submodules:
       documentation:
         - id: guidelines-common
-          repo: github.com/codex-k8s/kodex-guidelines-common
+          repo: github.com/codex-k8s/kodex-guidelines-common-ru
           path: external-docs/guidelines/common
           visibility: public
           role: common-guidelines
         - id: guidelines-go
-          repo: github.com/codex-k8s/kodex-guidelines-go
+          repo: github.com/codex-k8s/kodex-guidelines-go-ru
           path: external-docs/guidelines/go
           visibility: public
           role: go-guidelines
         - id: guidelines-vue
-          repo: github.com/codex-k8s/kodex-guidelines-vue
+          repo: github.com/codex-k8s/kodex-guidelines-vue-ru
           path: external-docs/guidelines/vue
           visibility: public
           role: vue-guidelines
         - id: doc-templates
-          repo: github.com/codex-k8s/kodex-doc-templates
+          repo: github.com/codex-k8s/kodex-doc-templates-ru
           path: external-docs/templates
           visibility: public
           role: documentation-templates

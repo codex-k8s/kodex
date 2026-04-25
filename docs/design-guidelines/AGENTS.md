@@ -27,8 +27,8 @@
 
 Публичные репозитории руководящих гайдов:
 
-- `github.com/codex-k8s/kodex-guidelines-common` — необязательный submodule `external-docs/guidelines/common`;
-- `github.com/codex-k8s/kodex-guidelines-go` — необязательный submodule `external-docs/guidelines/go`;
-- `github.com/codex-k8s/kodex-guidelines-vue` — необязательный submodule `external-docs/guidelines/vue`.
+- `github.com/codex-k8s/kodex-guidelines-common-ru` — необязательный submodule `external-docs/guidelines/common`;
+- `github.com/codex-k8s/kodex-guidelines-go-ru` — необязательный submodule `external-docs/guidelines/go`;
+- `github.com/codex-k8s/kodex-guidelines-vue-ru` — необязательный submodule `external-docs/guidelines/vue`.
 
 Пока штатный импорт руководящих пакетов не реализован, активная копия для агентов остаётся в `docs/design-guidelines/**`. Если меняется гайд, нужно проверить синхронизацию с соответствующим публичным репозиторием.

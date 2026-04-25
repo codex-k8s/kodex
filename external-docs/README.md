@@ -12,10 +12,10 @@
 |---|---|---|---|
 | `external-docs/private/package-store` | `github.com/codex-k8s/kodex-package-store` | приватный | Пакет авторского магазина пакетов `kodex`. |
 | `external-docs/private/platform-site` | `github.com/codex-k8s/kodex-platform-site` | приватный | Пакет сайта и пользовательской документации платформы. |
-| `external-docs/guidelines/common` | `github.com/codex-k8s/kodex-guidelines-common` | публичный | Общие инженерные правила. |
-| `external-docs/guidelines/go` | `github.com/codex-k8s/kodex-guidelines-go` | публичный | Инженерные правила для Go backend. |
-| `external-docs/guidelines/vue` | `github.com/codex-k8s/kodex-guidelines-vue` | публичный | Инженерные правила для Vue и TypeScript frontend. |
-| `external-docs/templates` | `github.com/codex-k8s/kodex-doc-templates` | публичный | Шаблоны документации. |
+| `external-docs/guidelines/common` | `github.com/codex-k8s/kodex-guidelines-common-ru` | публичный | Общие инженерные правила. |
+| `external-docs/guidelines/go` | `github.com/codex-k8s/kodex-guidelines-go-ru` | публичный | Инженерные правила для Go backend. |
+| `external-docs/guidelines/vue` | `github.com/codex-k8s/kodex-guidelines-vue-ru` | публичный | Инженерные правила для Vue и TypeScript frontend. |
+| `external-docs/templates` | `github.com/codex-k8s/kodex-doc-templates-ru` | публичный | Шаблоны документации. |
 
 ## Что держать как submodule, а что нет
 
@@ -34,8 +34,8 @@ Submodule помечены как `update = none`, чтобы случайная
 ```bash
 git -c submodule.kodex-package-store.update=checkout submodule update --init external-docs/private/package-store
 git -c submodule.kodex-platform-site.update=checkout submodule update --init external-docs/private/platform-site
-git -c submodule.kodex-guidelines-common.update=checkout submodule update --init external-docs/guidelines/common
-git -c submodule.kodex-doc-templates.update=checkout submodule update --init external-docs/templates
+git -c submodule.kodex-guidelines-common-ru.update=checkout submodule update --init external-docs/guidelines/common
+git -c submodule.kodex-doc-templates-ru.update=checkout submodule update --init external-docs/templates
 ```
 
 Для приватных submodule перед командой нужен доступ к GitHub и токен с правами чтения соответствующего репозитория.

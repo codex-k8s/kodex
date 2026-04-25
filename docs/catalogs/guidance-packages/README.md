@@ -8,10 +8,10 @@
 
 ## Первые репозитории-источники
 
-- `github.com/codex-k8s/kodex-guidelines-common` — общие инженерные правила, необязательный submodule `external-docs/guidelines/common`.
-- `github.com/codex-k8s/kodex-guidelines-go` — правила для Go backend, необязательный submodule `external-docs/guidelines/go`.
-- `github.com/codex-k8s/kodex-guidelines-vue` — правила для Vue и TypeScript frontend, необязательный submodule `external-docs/guidelines/vue`.
+- `github.com/codex-k8s/kodex-guidelines-common-ru` — общие инженерные правила, необязательный submodule `external-docs/guidelines/common`.
+- `github.com/codex-k8s/kodex-guidelines-go-ru` — правила для Go backend, необязательный submodule `external-docs/guidelines/go`.
+- `github.com/codex-k8s/kodex-guidelines-vue-ru` — правила для Vue и TypeScript frontend, необязательный submodule `external-docs/guidelines/vue`.
 
 До внедрения штатного импорта руководящих пакетов активная локальная копия для агентов остаётся в `docs/design-guidelines/**`. Изменения в локальной копии и публичных репозиториях нужно синхронизировать явно.
 
-Шаблоны документации вынесены отдельно и не считаются пакетом руководящей документации: публичный источник шаблонов — `github.com/codex-k8s/kodex-doc-templates`, локальный submodule — `external-docs/templates`.
+Шаблоны документации вынесены отдельно и не считаются пакетом руководящей документации: публичный источник шаблонов — `github.com/codex-k8s/kodex-doc-templates-ru`, локальный submodule — `external-docs/templates`.
