@@ -26,22 +26,22 @@ spec:
       documentation:
         - id: guidelines-common
           repo: github.com/codex-k8s/kodex-guidelines-common-ru
-          path: docs/sources/guidelines/common
+          path: docs/external/guidelines/common
           visibility: public
           role: common-guidelines
         - id: guidelines-go
           repo: github.com/codex-k8s/kodex-guidelines-go-ru
-          path: docs/sources/guidelines/go
+          path: docs/external/guidelines/go
           visibility: public
           role: go-guidelines
         - id: guidelines-vue
           repo: github.com/codex-k8s/kodex-guidelines-vue-ru
-          path: docs/sources/guidelines/vue
+          path: docs/external/guidelines/vue
           visibility: public
           role: vue-guidelines
         - id: doc-templates
           repo: github.com/codex-k8s/kodex-doc-templates-ru
-          path: docs/sources/templates
+          path: docs/external/templates
           visibility: public
           role: documentation-templates
       packages:

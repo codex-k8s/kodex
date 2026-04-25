@@ -11,25 +11,25 @@
 	update = none
 	ignore = all
 [submodule "kodex-guidelines-common-ru"]
-	path = docs/sources/guidelines/common
+	path = docs/external/guidelines/common
 	url = https://github.com/codex-k8s/kodex-guidelines-common-ru.git
 	branch = main
 	update = none
 	ignore = all
 [submodule "kodex-guidelines-go-ru"]
-	path = docs/sources/guidelines/go
+	path = docs/external/guidelines/go
 	url = https://github.com/codex-k8s/kodex-guidelines-go-ru.git
 	branch = main
 	update = none
 	ignore = all
 [submodule "kodex-guidelines-vue-ru"]
-	path = docs/sources/guidelines/vue
+	path = docs/external/guidelines/vue
 	url = https://github.com/codex-k8s/kodex-guidelines-vue-ru.git
 	branch = main
 	update = none
 	ignore = all
 [submodule "kodex-doc-templates-ru"]
-	path = docs/sources/templates
+	path = docs/external/templates
 	url = https://github.com/codex-k8s/kodex-doc-templates-ru.git
 	branch = main
 	update = none
