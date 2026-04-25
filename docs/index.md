@@ -30,10 +30,11 @@ updated_at: 2026-04-25
 ## Основной маршрут чтения
 
 1. Начать с `refactoring/task.md` и `refactoring/README.md`.
-2. Для структуры документации читать `docs/index.md`, `docs/platform/README.md`, `docs/domains/README.md`, `docs/delivery/README.md`.
-3. Для конкретного домена переходить в `docs/domains/<domain>/README.md`.
-4. Для связи с GitHub Issue и PR использовать `docs/delivery/issue-map/`, а не один общий большой файл.
-5. Для новых документов брать шаблоны из `docs/templates/index.md`.
+2. Для сквозного продуктового каркаса читать `docs/platform/product/brief.md`, `docs/platform/product/constraints.md`, `docs/platform/product/product_model.md`, `docs/platform/product/glossary.md` и `docs/platform/product/requirements.md`.
+3. Для структуры документации читать `docs/index.md`, `docs/platform/README.md`, `docs/domains/README.md`, `docs/delivery/README.md`.
+4. Для конкретного домена переходить в `docs/domains/<domain>/README.md`.
+5. Для связи с GitHub Issue и PR использовать `docs/delivery/issue-map/`, а не один общий большой файл.
+6. Для новых документов брать шаблоны из `docs/templates/index.md`.
 
 ## Правила развития
 

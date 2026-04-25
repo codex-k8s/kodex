@@ -31,4 +31,5 @@ updated_at: 2026-04-25
 | Волна | Файл |
 |---|---|
 | Wave 6.1 — информационная архитектура документации | `waves/wave-006-1-docs-information-architecture.md` |
+| Wave 6.2 — сквозной продуктовый каркас платформы | `waves/wave-006-2-platform-product-frame.md` |
 | Wave 7 — доступ, организации, группы и внешние аккаунты | `waves/wave-007-access-and-accounts.md` |
