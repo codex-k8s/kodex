@@ -6,6 +6,7 @@
 
 | Старый путь | Новый путь | Статус |
 |---|---|---|
+| `services.yaml` | `deprecated/services.yaml` | Старый полный инвентарь сервисов, версий, окружений и runtime-настроек. |
 | `cmd/` | `deprecated/cmd/` | Устаревший код. |
 | `deploy/` | `deprecated/deploy/` | Устаревшие Kubernetes-шаблоны и deploy-материалы. |
 | `libs/` | `deprecated/libs/` | Устаревшие общие библиотеки. |
