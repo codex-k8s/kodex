@@ -24,7 +24,7 @@ approvals:
 ## Контекст и входные артефакты
 - Delivery-цепочка: `#541 (intake) -> #554 (vision) -> #557 (prd) -> #559 (arch)`.
 - Source of truth:
-  - `docs/delivery/epics/s17/prd-s17-day3-unified-user-interaction-waits-and-owner-feedback-inbox.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s17/prd-s17-day3-unified-user-interaction-waits-and-owner-feedback-inbox.md`
   - `docs/product/requirements_machine_driven.md`
   - `docs/product/agents_operating_model.md`
   - `docs/product/labels_and_trigger_policy.md`

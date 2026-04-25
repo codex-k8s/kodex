@@ -32,11 +32,14 @@
 - Для выбора/обновления внешних библиотек читать `docs/design-guidelines/common/external_dependencies_catalog.md`. Каждую новую библиотеку подбирать с использованием Context7 и уточнять последнюю стабильную версию, а также добавлять в `docs/design-guidelines/common/external_dependencies_catalog.md`.
 - Для планирования и ведения спринта/документации выполнять требования `docs/delivery/development_process_requirements.md`.
 - При наличии активной программы рефакторинга в `refactoring/**` её канонические документы имеют приоритет над историческими документами из `docs/**` для соответствующей ветки и PR.
+- Пока активна программа рефакторинга, новую реализацию писать только с нуля в новых сервисах и новых каталогах целевой архитектуры; устаревший код не дорабатывать как базу новой версии.
+- Старые sprint/epic пакеты и product baselines до рефакторинга из `docs/deprecated/pre-refactor/**` являются только историческим архивом и не читаются как активная каноника без отдельной причины.
 - Если запрос пользователя противоречит гайдам, приостановить правки и предложить варианты решения.
 - Если контекст сессии был сжат/потерян (например, `context compacted`) или есть сомнение, что требования/архитектура актуальны:
   - перечитать `AGENTS.md` и `docs/design-guidelines/AGENTS.md`;
   - перечитать релевантные гайды по области изменения (`docs/design-guidelines/{go,vue,common}/`);
-  - сверить задачу с `docs/product/requirements_machine_driven.md`, `docs/product/agents_operating_model.md`, `docs/product/labels_and_trigger_policy.md`, `docs/product/stage_process_model.md`, спринтом и эпиком.
+  - сверить задачу с `refactoring/task.md`, `refactoring/README.md`, релевантными документами `refactoring/*.md` и переходными документами `docs/product/*.md`;
+  - старые материалы из `docs/deprecated/pre-refactor/**` читать только как историческую справку, если нужно понять происхождение решения.
   - только после этого планировать и править код.
 - Не редактировать сами гайды без явной задачи на изменение стандартов.
 - При исправлении замечаний по PR, если для предотвращения подобных замечаний в будущем требуется изменение гайдов, внести изменения в гайды в рамках текущего PR.
@@ -67,10 +70,10 @@
 
 | Тип задачи | Обязательные документы                                                                                                                                                                                                                                                                        |
 |---|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Продуктовые требования/лейблы/этапы | `docs/product/requirements_machine_driven.md`, `docs/product/agents_operating_model.md`, `docs/product/labels_and_trigger_policy.md`, `docs/product/stage_process_model.md`                                                                                                                   |
+| Продуктовые требования/лейблы/этапы | `refactoring/task.md`, `refactoring/06-product-model.md`, `refactoring/08-provider-native-work-model.md`, `refactoring/17-console-and-ux-model.md`, `refactoring/19-flow-role-prompt-and-settings-ux.md`, переходные документы `docs/product/*.md` |
 | Архитектура и модель данных | `docs/architecture/c4_context.md`, `docs/architecture/c4_container.md`, `docs/architecture/api_contract.md`, `docs/architecture/data_model.md`, `docs/architecture/agent_runtime_rbac.md`, `docs/architecture/mcp_approval_and_audit_flow.md`, `docs/architecture/prompt_templates_policy.md` |
-| Delivery/sprint/epics | `docs/delivery/development_process_requirements.md`, `docs/delivery/delivery_plan.md`, `docs/delivery/sprints/**/*.md`, `docs/delivery/epics/**/*.md`                                                                                                                                    |
-| Трассируемость | `docs/delivery/requirements_traceability.md`, `docs/delivery/issue_map.md`, `docs/delivery/sprints/**/*.md`, `docs/delivery/epics/**/*.md`                                                                                                                                                    |
+| Delivery/waves | `docs/delivery/development_process_requirements.md`, `docs/delivery/delivery_plan.md`, `refactoring/README.md`, `refactoring/23-backlog-checkpoint-before-wave7.md`; старые sprint/epic только как историческая справка в `docs/deprecated/pre-refactor/delivery/**` |
+| Трассируемость | `docs/delivery/requirements_traceability.md`, `docs/delivery/issue_map.md`, `refactoring/23-backlog-checkpoint-before-wave7.md`; старые sprint/epic только как историческая справка в `docs/deprecated/pre-refactor/delivery/**` |
 | Ops и production проверки | `.local/agents-temp-dev-rules.md` (для локального агента), `docs/ops/production_runbook.md`                                                                                                                                                                                                   |
 
 - Уточнение для agent-run pod: файл `.local/agents-temp-dev-rules.md` отсутствует в runtime-контейнере твоего Kubernetes-окружения. Используй `AGENTS.md`, `docs/design-guidelines/**` и релевантные `docs/product/**`, `docs/architecture/**`, `docs/delivery/**` как источник правил.
@@ -167,8 +170,8 @@
 - Хранилище сервиса: PostgreSQL (`JSONB` + `pgvector`) как единая точка синхронизации между pod'ами.
 - MCP служебные ручки: встроенные Go-реализации в `kodex`; `github.com/codex-k8s/yaml-mcp-server` остаётся расширяемым пользовательским слоем.
 - Апрувы и внешние каналы взаимодействия проектировать через расширяемый платформенный контракт без вендорной привязки в core; конкретные адаптеры и механизм расширения выбираются отдельным design-решением.
-- Операционная продуктовая модель агентов/лейблов/этапов:
-  `docs/product/agents_operating_model.md`, `docs/product/labels_and_trigger_policy.md`, `docs/product/stage_process_model.md`.
+- Операционная продуктовая модель агентов, flow и этапов:
+  `refactoring/06-product-model.md`, `refactoring/08-provider-native-work-model.md`, `refactoring/19-flow-role-prompt-and-settings-ux.md`; `docs/product/*.md` выступают переходными документами.
 - Процесс разработки и doc-governance: `docs/delivery/development_process_requirements.md`.
 - Справка по внешним библиотекам - через Context7.
 

@@ -43,7 +43,7 @@ approvals:
   - `docs/architecture/initiatives/s13_quality_governance_system/architecture.md`
   - `docs/architecture/adr/ADR-0015-quality-governance-control-plane-owned-change-governance-aggregate.md`
   - `docs/architecture/alternatives/ALT-0007-quality-governance-boundaries.md`
-  - `docs/delivery/epics/s13/prd-s13-day3-quality-governance-system.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s13/prd-s13-day3-quality-governance-system.md`
 - Неподвижные guardrails:
   - explicit `risk tier` обязателен для каждого change package;
   - `evidence completeness`, `verification minimum`, `waiver discipline` и `release readiness` остаются раздельными constructs;

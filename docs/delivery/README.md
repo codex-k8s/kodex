@@ -17,7 +17,9 @@ approvals:
 # Delivery Documentation
 
 ## TL;DR
-- `docs/delivery/` хранит process requirements, delivery plan, sprint/epic execution и traceability.
+- `docs/delivery/` хранит process requirements, delivery plan и traceability.
+- Старые sprint/epic execution документы перенесены в `docs/deprecated/pre-refactor/delivery/**` и больше не являются рабочей каноникой.
+- Текущая программа рефакторинга ведётся через документы волн в `refactoring/**`.
 - Root traceability разделена по уровням: `issue_map.md` = master-index, `requirements_traceability.md` = стабильная FR/NFR-матрица, `traceability/*.md` = historical evidence.
 - Здесь же лежит migration-map для рефакторинга docs IA.
 
@@ -31,13 +33,16 @@ approvals:
 - `docs/delivery/documentation_ia_migration_map.md`
 
 ## Индексы и каталоги
-- `docs/delivery/sprints/README.md`
-- `docs/delivery/epics/README.md`
+- `docs/delivery/sprints/README.md` — переходный указатель на архив старых спринтов.
+- `docs/delivery/epics/README.md` — переходный указатель на архив старых эпиков.
+- `docs/deprecated/pre-refactor/delivery/sprints/README.md`
+- `docs/deprecated/pre-refactor/delivery/epics/README.md`
 - `docs/delivery/traceability/README.md`
-- `docs/delivery/sprints/`
-- `docs/delivery/epics/`
+- `docs/deprecated/pre-refactor/delivery/sprints/`
+- `docs/deprecated/pre-refactor/delivery/epics/`
 - `docs/delivery/traceability/`
 
 ## Правила
-- Любой перенос документов синхронно отражается в `issue_map`, `requirements_traceability`, `traceability/README.md`, relevant sprint/epic index и `services.yaml`.
+- Любой перенос документов синхронно отражается в `issue_map`, `requirements_traceability`, `traceability/README.md`, релевантном индексе и `services.yaml`.
 - Delivery docs отвечают за sequencing, quality-gates и traceability, но не дублируют product/architecture source of truth.
+- Для волны 7+ не создавать новые документы в `docs/delivery/sprints/**` и `docs/delivery/epics/**`.

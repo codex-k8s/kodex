@@ -34,11 +34,11 @@ approvals:
 ## Связанные source-of-truth документы
 - `docs/architecture/adr/ADR-0015-quality-governance-control-plane-owned-change-governance-aggregate.md`
 - `docs/architecture/alternatives/ALT-0007-quality-governance-boundaries.md`
-- `docs/delivery/epics/s13/epic-s13-day4-quality-governance-arch.md`
-- `docs/delivery/epics/s13/epic-s13-day5-quality-governance-design.md`
-- `docs/delivery/epics/s13/epic-s13-day3-quality-governance-prd.md`
-- `docs/delivery/epics/s13/prd-s13-day3-quality-governance-system.md`
-- `docs/delivery/sprints/s13/sprint_s13_quality_governance_system.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s13/epic-s13-day4-quality-governance-arch.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s13/epic-s13-day5-quality-governance-design.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s13/epic-s13-day3-quality-governance-prd.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s13/prd-s13-day3-quality-governance-system.md`
+- `docs/deprecated/pre-refactor/delivery/sprints/s13/sprint_s13_quality_governance_system.md`
 - `docs/delivery/traceability/s13_quality_governance_system_history.md`
 
 ## Continuity after `run:design`

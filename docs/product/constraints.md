@@ -20,9 +20,11 @@ approvals:
 
 ## TL;DR
 Критические ограничения: Kubernetes-only, webhook-driven продуктовые процессы, PostgreSQL (`JSONB` + `pgvector`), GitHub OAuth без self-signup, production bootstrap по SSH root на Ubuntu 24.04.
+На время программы рефакторинга приоритет по целевой модели у `refactoring/task.md` и `refactoring/06-product-model.md`.
 
 ## Source of truth
-- Канонический список требований и решений Owner: `docs/product/requirements_machine_driven.md`.
+- Канонический список требований и решений Owner для новой версии: `refactoring/task.md`.
+- Переходный указатель старого пути требований: `docs/product/requirements_machine_driven.md`.
 - Этот документ фиксирует ограничения и NFR-проекцию для реализации baseline требований.
 - Процесс delivery и doc-governance: `docs/delivery/development_process_requirements.md`.
 

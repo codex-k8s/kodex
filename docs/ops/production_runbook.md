@@ -176,7 +176,7 @@ kubectl -n "$ns" get events --sort-by=.lastTimestamp | tail -n 120
 Операционный handover для Sprint S6:
 - `docs/ops/handovers/s6/postdeploy_ops_handover.md`;
 - `docs/ops/handovers/s6/operational_baseline.md`;
-- `docs/delivery/epics/s6/epic-s6-day10-postdeploy-review.md`.
+- `docs/deprecated/pre-refactor/delivery/epics/s6/epic-s6-day10-postdeploy-review.md`.
 
 ## Ops baseline checklist (S6 Day11)
 

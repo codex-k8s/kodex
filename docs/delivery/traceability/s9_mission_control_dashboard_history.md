@@ -38,8 +38,8 @@ approvals:
 
 ## Актуализация по Issue #337 (`run:prd`, 2026-03-12)
 - Подготовлен PRD package:
-  - `docs/delivery/epics/s9/epic-s9-day3-mission-control-dashboard-prd.md`;
-  - `docs/delivery/epics/s9/prd-s9-day3-mission-control-dashboard.md`.
+  - `docs/deprecated/pre-refactor/delivery/epics/s9/epic-s9-day3-mission-control-dashboard-prd.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s9/prd-s9-day3-mission-control-dashboard.md`.
 - Зафиксированы:
   - user stories `S9-US-01..S9-US-05`;
   - product waves `Wave 1 -> Wave 2 -> Wave 3`;
@@ -51,7 +51,7 @@ approvals:
 
 ## Актуализация по Issue #340 (`run:arch`, 2026-03-12)
 - Подготовлен architecture package:
-  - `docs/delivery/epics/s9/epic-s9-day4-mission-control-dashboard-arch.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s9/epic-s9-day4-mission-control-dashboard-arch.md`;
   - `docs/architecture/initiatives/s9_mission_control_dashboard/architecture.md`;
   - `docs/architecture/initiatives/s9_mission_control_dashboard/c4_context.md`;
   - `docs/architecture/initiatives/s9_mission_control_dashboard/c4_container.md`;
@@ -68,7 +68,7 @@ approvals:
 
 ## Актуализация по Issue #351 (`run:design`, 2026-03-12)
 - Подготовлен Day5 design package:
-  - `docs/delivery/epics/s9/epic-s9-day5-mission-control-dashboard-design.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s9/epic-s9-day5-mission-control-dashboard-design.md`;
   - `docs/architecture/initiatives/s9_mission_control_dashboard/design_doc.md`;
   - `docs/architecture/initiatives/s9_mission_control_dashboard/api_contract.md`;
   - `docs/architecture/initiatives/s9_mission_control_dashboard/data_model.md`;
@@ -83,7 +83,7 @@ approvals:
 
 ## Актуализация по Issue #363 (`run:plan`, 2026-03-12)
 - Подготовлен Day6 plan package:
-  - `docs/delivery/epics/s9/epic-s9-day6-mission-control-dashboard-plan.md`.
+  - `docs/deprecated/pre-refactor/delivery/epics/s9/epic-s9-day6-mission-control-dashboard-plan.md`.
 - Зафиксированы:
   - execution streams `S9-E01..S9-E07` с явным split `schema foundation -> domain -> worker warmup/reconcile -> core transport -> UI -> observability -> conditional voice transport`;
   - handover issues `#369..#375` без trigger-лейблов и с owner-managed wave sequencing;

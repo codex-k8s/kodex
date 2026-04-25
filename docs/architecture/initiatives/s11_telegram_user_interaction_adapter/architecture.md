@@ -26,7 +26,7 @@ approvals:
 ## Контекст и входные артефакты
 - Delivery-цепочка: `#361 (intake) -> #447 (vision) -> #448 (prd) -> #452 (arch)`.
 - Source of truth:
-  - `docs/delivery/epics/s11/prd-s11-day3-telegram-user-interaction-adapter.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s11/prd-s11-day3-telegram-user-interaction-adapter.md`
   - `docs/product/requirements_machine_driven.md`
   - `docs/product/agents_operating_model.md`
   - `docs/product/labels_and_trigger_policy.md`

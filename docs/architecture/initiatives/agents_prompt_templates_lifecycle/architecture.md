@@ -135,7 +135,7 @@ Rel(worker, db, "Reads/Writes", "SQL")
 - `docs/architecture/initiatives/agents_prompt_templates_lifecycle/api_contract.md`
 - `docs/architecture/initiatives/agents_prompt_templates_lifecycle/data_model.md`
 - `docs/architecture/initiatives/agents_prompt_templates_lifecycle/migrations_policy.md`
-- `docs/delivery/epics/s6/epic-s6-day5-agents-prompts-design.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s6/epic-s6-day5-agents-prompts-design.md`
 - Continuity: создана follow-up issue `#197` для stage `run:plan`.
 
 ## Migration и runtime impact
@@ -159,7 +159,7 @@ Rel(worker, db, "Reads/Writes", "SQL")
 - `docs/architecture/prompt_templates_policy.md`
 - `docs/architecture/api_contract.md`
 - `docs/product/requirements_machine_driven.md`
-- `docs/delivery/epics/s6/epic-s6-day4-agents-prompts-arch.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s6/epic-s6-day4-agents-prompts-arch.md`
 - `GitHub issue #187` (PRD stage source)
 - `GitHub PR #190` (merged PRD package in `main`)
 - `GitHub issue #195` (follow-up stage `run:design`)

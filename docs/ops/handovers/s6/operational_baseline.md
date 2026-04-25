@@ -121,7 +121,7 @@ approvals:
 - Prometheus alerting (`for`, `keep_firing_for`, anti-flapping): `/prometheus/docs`, `/websites/prometheus_io`.
 
 ## Связанные документы
-- `docs/delivery/epics/s6/epic-s6-day11-ops-operational-closeout.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s6/epic-s6-day11-ops-operational-closeout.md`
 - `docs/ops/handovers/s6/postdeploy_ops_handover.md`
 - `docs/ops/production_runbook.md`
 - `docs/templates/runbook.md`

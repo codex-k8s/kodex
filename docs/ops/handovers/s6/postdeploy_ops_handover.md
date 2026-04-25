@@ -123,8 +123,8 @@ approvals:
 - Prometheus alerting guidance (`for`, `keep_firing_for`, user-impact paging): `/prometheus/docs`, `/websites/prometheus_io`.
 
 ## Связанные документы
-- `docs/delivery/epics/s6/epic-s6-day10-postdeploy-review.md`
-- `docs/delivery/epics/s6/epic-s6-day11-ops-operational-closeout.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s6/epic-s6-day10-postdeploy-review.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s6/epic-s6-day11-ops-operational-closeout.md`
 - `docs/ops/handovers/s6/operational_baseline.md`
 - `docs/ops/production_runbook.md`
 - `docs/templates/runbook.md`

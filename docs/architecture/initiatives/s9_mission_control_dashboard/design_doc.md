@@ -44,8 +44,8 @@ approvals:
   - `docs/architecture/adr/ADR-0011-mission-control-dashboard-active-set-projection-and-command-reconciliation.md`
   - `docs/architecture/alternatives/ALT-0003-mission-control-dashboard-projection-and-realtime-trade-offs.md`
 - Product baseline:
-  - `docs/delivery/epics/s9/prd-s9-day3-mission-control-dashboard.md`
-  - `docs/delivery/sprints/s9/sprint_s9_mission_control_dashboard_control_plane.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s9/prd-s9-day3-mission-control-dashboard.md`
+  - `docs/deprecated/pre-refactor/delivery/sprints/s9/sprint_s9_mission_control_dashboard_control_plane.md`
 - Service boundaries, которые не меняются:
   - `services/staff/web-console` не владеет projection policy, dedupe или reconciliation state.
   - `services/external/api-gateway` остаётся thin-edge: auth, validation, transport mapping, realtime transport termination.

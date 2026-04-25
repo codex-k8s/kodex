@@ -44,8 +44,8 @@ approvals:
   - `docs/architecture/adr/ADR-0016-mission-control-graph-workspace-hybrid-truth-and-continuity-ownership.md`
   - `docs/architecture/alternatives/ALT-0008-mission-control-graph-workspace-hybrid-truth-boundaries.md`
 - Product baseline:
-  - `docs/delivery/epics/s16/prd-s16-day3-mission-control-graph-workspace.md`
-  - `docs/delivery/sprints/s16/sprint_s16_mission_control_graph_workspace.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s16/prd-s16-day3-mission-control-graph-workspace.md`
+  - `docs/deprecated/pre-refactor/delivery/sprints/s16/sprint_s16_mission_control_graph_workspace.md`
 - Existing implementation baseline to evolve:
   - Sprint S9 Mission Control dashboard already owns projection/timeline/command runtime and rollout order `migrations -> control-plane -> worker -> api-gateway -> web-console`.
   - `mission_control_commands` and `stage.next_step.execute` already express platform-safe mutation path and must not be duplicated.

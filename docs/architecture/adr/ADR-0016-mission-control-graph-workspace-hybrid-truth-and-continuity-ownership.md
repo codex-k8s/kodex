@@ -45,7 +45,7 @@ approvals:
   - issue `#480` остаётся bounded provider foundation, а не full-history warehouse;
   - voice/STT, dashboard orchestrator agent, отдельная `agent` node taxonomy, full-history/archive и richer provider enrichment остаются deferred.
 - Связанные требования:
-  - `docs/delivery/epics/s16/prd-s16-day3-mission-control-graph-workspace.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s16/prd-s16-day3-mission-control-graph-workspace.md`
   - `FR-002`, `FR-003`, `FR-004`, `FR-009`, `FR-012`, `FR-026`, `FR-027`
   - `NFR-010`, `NFR-018`
 - Что ломается без решения:
@@ -157,7 +157,7 @@ approvals:
 
 ## Ссылки
 - PRD:
-  - `docs/delivery/epics/s16/prd-s16-day3-mission-control-graph-workspace.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s16/prd-s16-day3-mission-control-graph-workspace.md`
 - Architecture:
   - `docs/architecture/initiatives/s16_mission_control_graph_workspace/architecture.md`
 - Alternatives:

@@ -35,11 +35,11 @@ approvals:
 ## Связанные документы и historical refs
 - `docs/architecture/adr/ADR-0016-mission-control-graph-workspace-hybrid-truth-and-continuity-ownership.md`
 - `docs/architecture/alternatives/ALT-0008-mission-control-graph-workspace-hybrid-truth-boundaries.md`
-- `docs/delivery/epics/s16/epic-s16-day4-mission-control-graph-workspace-arch.md`
-- `docs/delivery/epics/s16/epic-s16-day5-mission-control-graph-workspace-design.md`
-- `docs/delivery/epics/s16/epic-s16-day3-mission-control-graph-workspace-prd.md`
-- `docs/delivery/epics/s16/prd-s16-day3-mission-control-graph-workspace.md`
-- `docs/delivery/sprints/s16/sprint_s16_mission_control_graph_workspace.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s16/epic-s16-day4-mission-control-graph-workspace-arch.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s16/epic-s16-day5-mission-control-graph-workspace-design.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s16/epic-s16-day3-mission-control-graph-workspace-prd.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s16/prd-s16-day3-mission-control-graph-workspace.md`
+- `docs/deprecated/pre-refactor/delivery/sprints/s16/sprint_s16_mission_control_graph_workspace.md`
 - `docs/delivery/traceability/s16_mission_control_graph_workspace_history.md`
 - `docs/architecture/initiatives/s9_mission_control_dashboard/README.md`
 - `docs/architecture/initiatives/s16_mission_control_graph_workspace/ui_smoke_criteria.md`

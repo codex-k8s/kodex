@@ -47,7 +47,7 @@ approvals:
 - Root FR/NFR matrix не менялась: vision stage уточнил product baseline и traceability, но не добавлял новые канонические FR/NFR в `docs/product/requirements_machine_driven.md`.
 
 ## Актуализация по Issue #448 (`run:prd`, 2026-03-14)
-- PRD stage выполнен в Issue `#448`; подготовлены `docs/delivery/epics/s11/epic-s11-day3-telegram-user-interaction-adapter-prd.md` и `docs/delivery/epics/s11/prd-s11-day3-telegram-user-interaction-adapter.md`.
+- PRD stage выполнен в Issue `#448`; подготовлены `docs/deprecated/pre-refactor/delivery/epics/s11/epic-s11-day3-telegram-user-interaction-adapter-prd.md` и `docs/deprecated/pre-refactor/delivery/epics/s11/prd-s11-day3-telegram-user-interaction-adapter.md`.
 - PRD package зафиксировал:
   - user stories, FR/AC/NFR и wave priorities для `user.notify`, `user.decision.request`, inline callbacks и optional free-text;
   - product guardrails по callback acknowledgement, duplicate/replay/expired handling, webhook authenticity expectations и fallback clarity;
@@ -59,7 +59,7 @@ approvals:
 
 ## Актуализация по Issue #452 (`run:arch`, 2026-03-14)
 - Architecture stage выполнен в Issue `#452`; подготовлены:
-  - `docs/delivery/epics/s11/epic-s11-day4-telegram-user-interaction-adapter-arch.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s11/epic-s11-day4-telegram-user-interaction-adapter-arch.md`;
   - `docs/architecture/initiatives/s11_telegram_user_interaction_adapter/README.md`;
   - `docs/architecture/initiatives/s11_telegram_user_interaction_adapter/architecture.md`;
   - `docs/architecture/initiatives/s11_telegram_user_interaction_adapter/c4_context.md`;
@@ -78,7 +78,7 @@ approvals:
 
 ## Актуализация по Issue #454 (`run:design`, 2026-03-14)
 - Design stage выполнен в Issue `#454`; подготовлены:
-  - `docs/delivery/epics/s11/epic-s11-day5-telegram-user-interaction-adapter-design.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s11/epic-s11-day5-telegram-user-interaction-adapter-design.md`;
   - `docs/architecture/initiatives/s11_telegram_user_interaction_adapter/design_doc.md`;
   - `docs/architecture/initiatives/s11_telegram_user_interaction_adapter/api_contract.md`;
   - `docs/architecture/initiatives/s11_telegram_user_interaction_adapter/data_model.md`;
@@ -96,9 +96,9 @@ approvals:
 
 ## Актуализация по Issue #456 (`run:plan`, 2026-03-14)
 - Plan stage выполнен в Issue `#456`; подготовлены:
-  - `docs/delivery/epics/s11/epic-s11-day6-telegram-user-interaction-adapter-plan.md`;
-  - обновления `docs/delivery/sprints/s11/sprint_s11_telegram_user_interaction_adapter.md`;
-  - обновления `docs/delivery/epics/s11/epic_s11.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s11/epic-s11-day6-telegram-user-interaction-adapter-plan.md`;
+  - обновления `docs/deprecated/pre-refactor/delivery/sprints/s11/sprint_s11_telegram_user_interaction_adapter.md`;
+  - обновления `docs/deprecated/pre-refactor/delivery/epics/s11/epic_s11.md`;
   - updates в `docs/delivery/delivery_plan.md`, `docs/delivery/issue_map.md`, `docs/delivery/requirements_traceability.md`.
 - Plan package зафиксировал:
   - execution waves `S11-E01..S11-E06` по schema foundation, `control-plane` domain/use-case, `worker` continuation, thin-edge `api-gateway`, Telegram adapter contour и observability/evidence gate;

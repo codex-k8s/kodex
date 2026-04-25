@@ -35,7 +35,7 @@ approvals:
   - `api-gateway` и `web-console` должны остаться thin adapters;
   - product contract обязан сохранять два user-facing contour и hard-failure separation.
 - Связанные требования:
-  - `docs/delivery/epics/s12/prd-s12-day3-github-api-rate-limit-resilience.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s12/prd-s12-day3-github-api-rate-limit-resilience.md`
   - `FR-003`, `FR-012`, `FR-026`, `FR-028`, `FR-032`, `FR-033`
   - `NFR-010`, `NFR-012`, `NFR-018`
 - Что ломается без решения:
@@ -148,7 +148,7 @@ approvals:
 
 ## Ссылки
 - PRD:
-  - `docs/delivery/epics/s12/prd-s12-day3-github-api-rate-limit-resilience.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s12/prd-s12-day3-github-api-rate-limit-resilience.md`
 - Architecture:
   - `docs/architecture/initiatives/s12_github_api_rate_limit_resilience/architecture.md`
 - Alternatives:

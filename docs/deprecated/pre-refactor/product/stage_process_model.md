@@ -1,0 +1,170 @@
+---
+doc_id: STG-CK8S-0001
+type: process-model
+title: "kodex — Stage Process Model"
+status: active
+owner_role: EM
+created_at: 2026-02-11
+updated_at: 2026-03-13
+related_issues: [1, 19, 90, 95, 154, 155, 175, 212, 341]
+related_prs: []
+approvals:
+  required: ["Owner"]
+  status: approved
+  request_id: "owner-2026-02-19-full-docset"
+  approved_by: "ai-da-stas"
+  approved_at: 2026-02-19
+---
+
+# Stage Process Model
+
+## TL;DR
+- Целевая модель: `intake -> vision -> prd -> arch -> design -> plan -> dev -> qa -> release -> postdeploy -> ops`.
+- Для каждого этапа есть `run:*` и `run:*:revise` петля.
+- Переход между этапами требует формального подтверждения артефактов и фиксируется в audit.
+- Late delivery stages используют stage-aware runtime semantics: `dev -> qa -> release` продолжают candidate environment до merge, а `postdeploy -> ops` переключаются на production read-only runtime.
+- Дополнительный служебный цикл `run:self-improve` работает поверх stage-контура и улучшает docs/prompts/tools по итогам запусков.
+- Операционная видимость стадий/апрувов/логов предоставляется через staff web-console (разделы `Operations` и `Approvals`).
+
+## Source of truth
+- `docs/product/labels_and_trigger_policy.md`
+- `docs/product/agents_operating_model.md`
+- `docs/delivery/development_process_requirements.md`
+
+## Этапы и обязательные артефакты
+
+| Stage | Trigger labels | Основные артефакты | Основные роли |
+|---|---|---|---|
+| Intake | `run:intake`, `run:intake:revise` | problem, personas, scope, constraints, brief, traceability bundle | `pm`, `km` |
+| Vision | `run:vision`, `run:vision:revise` | charter, success metrics, risk register | `pm`, `em` |
+| PRD | `run:prd`, `run:prd:revise` | PRD, acceptance criteria, NFR draft | `pm`, `sa` |
+| Architecture | `run:arch`, `run:arch:revise` | C4, ADR backlog/ADR, alternatives | `sa` |
+| Design | `run:design`, `run:design:revise` | markdown design doc package (design/API/data model/migration policy notes) | `sa`, `qa` |
+| Plan | `run:plan`, `run:plan:revise` | delivery plan, epics/stories, DoD | `em`, `km` |
+| Development | `run:dev`, `run:dev:revise` | code changes, PR, docs updates | `dev`, `reviewer` |
+| Doc Audit | `run:doc-audit`, `run:doc-audit:revise` | audit bundle по code/docs/checklists и remediation notes | `km` |
+| QA | `run:qa`, `run:qa:revise` | markdown test strategy/plan/matrix + regression evidence | `qa` |
+| Release | `run:release`, `run:release:revise` | release plan/notes, rollback plan | `em`, `sre` |
+| Postdeploy | `run:postdeploy`, `run:postdeploy:revise` | postdeploy review, postmortem | `qa`, `sre` |
+| Ops | `run:ops`, `run:ops:revise` | markdown SLO/alerts/runbook improvements | `sre`, `km` |
+| AI Repair | `run:ai-repair` | emergency infra recovery, stabilization fix, incident handover | `sre` |
+| Self-Improve | `run:self-improve`, `run:self-improve:revise` | run/session diagnosis (MCP), PR with prompt/instruction updates and/or agent-runner Dockerfile changes | `km`, `dev`, `reviewer` |
+
+## Петли ревизии и переосмысления
+
+- На каждом этапе доступны:
+  - `run:<stage>:revise` для доработки артефактов;
+  - `run:rethink` для возврата на более ранний этап.
+- После `run:rethink` предыдущие версии артефактов маркируются как `state:superseded`.
+
+### Review-driven revise automation (implemented, Issue #95)
+- При `pull_request_review` с `review.state=changes_requested` платформа автоматически запускает `run:<stage>:revise` при успешном stage-resolve.
+- Resolver stage детерминирован и идёт по цепочке:
+  1. stage label на PR (если ровно один);
+  2. stage label на Issue (если ровно один);
+  3. последний run context по связке `(repo, issue, pr)`;
+  4. последний stage transition в `flow_events` по Issue.
+- При конфликте stage labels или отсутствии резолва:
+  - revise-run не стартует;
+  - выставляется `need:input`;
+  - публикуется service-comment с remediation.
+- Коммуникация в review gate становится stage-aware и публикуется как матрица следующих шагов:
+  - `revise` для текущего stage;
+  - переходы по full / shortened / very-short flow, когда они допустимы;
+  - reviewer, rethink, doc-audit, self-improve и специальные remediation-переходы для спецстадий.
+- Для `design` дополнительно публикуется fast-track `run:dev` вместе с `run:plan`.
+- Реализованный UX: next-step action-link открывает `/` staff web-console, frontend выполняет preview через staff API и подтверждает transition через модалку, после чего backend применяет label change на Issue/PR.
+
+## Preset stage trajectories (baseline confirmed, Issues #154/#155)
+
+Цель: убрать ручной “памятный” выбор следующего stage и стандартизовать разные типы задач без разрыва traceability.
+
+| Профиль | Обязательная траектория | Когда применять | Эскалация в full pipeline |
+|---|---|---|---|
+| `quick-fix` | `intake -> plan -> dev -> qa -> release -> postdeploy -> ops` | точечные исправления в пределах одного сервиса без изменения контрактов/данных | при любом триггере риска (`cross-service impact`, новая интеграция, миграция БД, RBAC/policy изменение) обязателен переход в `feature` или сразу в `new-service` |
+| `feature` | `intake -> prd -> design -> plan -> dev -> qa -> release -> postdeploy -> ops` | функциональные доработки существующих сервисов с предсказуемым impact | при изменении архитектурных границ или NFR добавляется `arch`; при изменении продуктовой стратегии/метрик добавляется `vision` |
+| `new-service` | `intake -> vision -> prd -> arch -> design -> plan -> dev -> qa -> release -> postdeploy -> ops` | новые сервисы/крупные инициативы с изменением системного контура | сокращение этапов не допускается без явного owner-решения в audit trail |
+
+Правила применения:
+- launch profile выбирается явно и фиксируется в service-message и traceability артефактах;
+- допустимы только forward-переходы профилей: `quick-fix -> feature -> new-service`; обратный переход требует явного owner-решения;
+- пропуск этапа возможен только при наличии правила в профиле или через явное owner-решение с записью в аудит;
+- при ambiguity по профилю выставляется `need:input`, запуск следующего stage блокируется.
+
+## Late delivery runtime semantics
+
+- `run:dev` в `full-env` создаёт candidate runtime для текущей Issue/PR или продолжает уже существующий candidate lineage, если он найден.
+- `run:qa` и `run:release` продолжают тот же candidate runtime identity (`namespace + build_ref`) до release decision / merge.
+- Для issue-triggered `run:qa` и `run:release` наличие candidate PR/head lineage обязательно; при отсутствии lineage платформа не делает fallback на default branch, а публикует диагностику и выставляет `need:input`.
+- `run:postdeploy` и `run:ops` после merge таргетят `target_env=production`, передают production namespace в runtime payload и используют access profile `production-readonly`.
+- Service-comment, prompt context и runtime metadata обязаны явно показывать effective `target_env`, `build_ref` и access profile поздних delivery-стадий.
+
+## Вход/выход этапа
+
+Общие правила входа:
+- есть обязательные входные артефакты предыдущего этапа;
+- нет блокеров `state:blocked`;
+- отсутствует незакрытый `need:input`.
+
+Общие правила выхода:
+- артефакты этапа обновлены и связаны с Issue/PR в traceability документах (`issue_map`, sprint/epic docs);
+- статус этапа отражён через `state:*` лейблы;
+- события перехода записаны в аудит.
+
+### Политика scope изменений
+- Для `run:intake|vision|prd|arch|design|plan|doc-audit|qa|release|postdeploy|ops|rethink` разрешены только изменения markdown-документации (`*.md`).
+- `run:dev|run:dev:revise` остаются единственными trigger-этапами для кодовых изменений.
+- Для роли `reviewer` repository-write запрещён: только комментарии в существующем PR.
+- Для `run:self-improve` разрешены только изменения:
+  - prompt files (`services/jobs/agent-runner/internal/runner/promptseeds/**`, `services/jobs/agent-runner/internal/runner/templates/prompt_envelope.tmpl`, `services/jobs/agent-runner/internal/runner/templates/prompt_blocks/*.tmpl`);
+  - markdown-инструкции/документация (`*.md`);
+  - `services/jobs/agent-runner/Dockerfile`.
+
+### Правило review gate для всех этапов
+- Для всех `run:*` выход этапа проходит через review gate перед финальным review Owner:
+  - pre-review от `reviewer` (для технических артефактов) и/или профильной роли через `need:*`;
+  - финальное решение Owner по принятию артефактов.
+- Для ручного запуска pre-review на существующем PR допускается trigger через label `need:reviewer` на PR (`pull_request:labeled`).
+- Постановка `state:in-review` выполняется так:
+  - на PR и на Issue, если run завершился артефактами в PR;
+  - только на Issue, если run завершился без PR.
+
+## Паузы и таймауты в stage execution
+
+- Разрешены paused состояния:
+  - `waiting_owner_review`;
+  - `waiting_mcp`.
+- Для `waiting_mcp` timeout-kill не применяется до завершения ожидания.
+- Для длительных пауз run должен оставаться resumable за счёт сохранения `codex-cli` session snapshot.
+
+## Текущий активный контур (S3 Day1)
+
+На текущем этапе реализации активирован полный trigger-контур:
+- `run:intake..run:ops`;
+- `run:ai-repair` (аварийный инфраструктурный контур);
+- `run:<stage>:revise`;
+- `run:rethink`, `run:self-improve`.
+
+Ограничение текущего этапа:
+- для части стадий пока активирован базовый orchestration path (routing/audit/policy),
+  а специализированная бизнес-логика стадий дорабатывается следующими S3 эпиками.
+- для prompt-body используется минимальная stage-matrix seed-шаблонов в `services/jobs/agent-runner/internal/runner/promptseeds/`
+  (по схеме `<stage>-work.md` и `<stage>-revise.md` для revise-loop стадий).
+
+## План активации контуров
+
+- S2 baseline: `run:dev` и `run:dev:revise` (completed).
+- S2 Day6: approval/audit hardening (completed).
+- S2 Day7: regression gate под полный MVP (completed).
+- S3 Day1: активация полного stage-flow (`run:intake..run:ops`) и trigger path для `run:self-improve` (completed).
+- Day21: добавлен trigger `run:ai-repair` для аварийного восстановления инфраструктуры (production pod-path, fallback image strategy, main-direct recovery режим).
+- S3 Day2+ : поэтапное насыщение stage-specific логики и observability.
+
+## Конфигурационные labels для исполнения stage
+
+- Помимо trigger/status labels используются конфигурационные labels:
+  - `[ai-model-*]` — выбор модели;
+  - `[ai-reasoning-*]` — выбор уровня рассуждений.
+- Базовый профиль без override: `gpt-5.4` + `high`.
+- Эти labels не запускают stage сами по себе, но влияют на effective runtime profile.
+- Для `run:dev:revise` профиль model/reasoning перечитывается перед каждым запуском.

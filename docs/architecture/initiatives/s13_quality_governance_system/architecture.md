@@ -24,7 +24,7 @@ approvals:
 ## Контекст и входные артефакты
 - Delivery-цепочка: `#469 (intake) -> #471 (vision) -> #476 (prd) -> #484 (arch)`.
 - Source of truth:
-  - `docs/delivery/epics/s13/prd-s13-day3-quality-governance-system.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s13/prd-s13-day3-quality-governance-system.md`
   - `docs/product/requirements_machine_driven.md`
   - `docs/product/agents_operating_model.md`
   - `docs/product/labels_and_trigger_policy.md`

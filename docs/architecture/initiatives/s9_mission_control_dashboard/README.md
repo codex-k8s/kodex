@@ -38,5 +38,5 @@ approvals:
 - `docs/architecture/data_model.md`
 - `docs/architecture/adr/ADR-0011-mission-control-dashboard-active-set-projection-and-command-reconciliation.md`
 - `docs/architecture/alternatives/ALT-0003-mission-control-dashboard-projection-and-realtime-trade-offs.md`
-- `docs/delivery/epics/s9/epic-s9-day4-mission-control-dashboard-arch.md`
-- `docs/delivery/epics/s9/epic-s9-day5-mission-control-dashboard-design.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s9/epic-s9-day4-mission-control-dashboard-arch.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s9/epic-s9-day5-mission-control-dashboard-design.md`

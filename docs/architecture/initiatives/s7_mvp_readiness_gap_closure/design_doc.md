@@ -41,7 +41,7 @@ approvals:
   - `docs/architecture/initiatives/s7_mvp_readiness_gap_closure/architecture.md`
   - `docs/architecture/adr/ADR-0010-s7-mvp-readiness-stream-boundaries-and-parity-gate.md`
 - Stream decomposition baseline:
-  - `docs/delivery/epics/s7/prd-s7-day3-mvp-readiness-gap-closure.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s7/prd-s7-day3-mvp-readiness-gap-closure.md`
 - Design constraints:
   - markdown-only scope на `run:design`;
   - strict thin-edge rule для `services/external/*` и `services/staff/*`;

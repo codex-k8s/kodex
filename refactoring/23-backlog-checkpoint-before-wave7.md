@@ -76,16 +76,16 @@ Wave 7 считается открытой в backlog только после п
 
 ## 5. Какие `docs/**` теперь считаются историческими справочными материалами для новых доменов
 Для новых волн они больше не считаются source of truth, а используются только как исторический материал:
-- `docs/delivery/sprints/s7/**`;
-- `docs/delivery/sprints/s9/**`;
-- `docs/delivery/sprints/s13/**`;
-- `docs/delivery/sprints/s17/**`;
-- `docs/delivery/sprints/s18/**`;
-- `docs/delivery/epics/s7/**`;
-- `docs/delivery/epics/s9/**`;
-- `docs/delivery/epics/s13/**`;
-- `docs/delivery/epics/s17/**`;
-- `docs/delivery/epics/s18/**`;
+- `docs/deprecated/pre-refactor/delivery/sprints/s7/**`;
+- `docs/deprecated/pre-refactor/delivery/sprints/s9/**`;
+- `docs/deprecated/pre-refactor/delivery/sprints/s13/**`;
+- `docs/deprecated/pre-refactor/delivery/sprints/s17/**`;
+- `docs/deprecated/pre-refactor/delivery/sprints/s18/**`;
+- `docs/deprecated/pre-refactor/delivery/epics/s7/**`;
+- `docs/deprecated/pre-refactor/delivery/epics/s9/**`;
+- `docs/deprecated/pre-refactor/delivery/epics/s13/**`;
+- `docs/deprecated/pre-refactor/delivery/epics/s17/**`;
+- `docs/deprecated/pre-refactor/delivery/epics/s18/**`;
 - `docs/architecture/initiatives/s17_unified_owner_feedback_loop/**`;
 - `docs/architecture/initiatives/s18_mission_control_frontend_first_canvas/**`.
 

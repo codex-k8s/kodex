@@ -208,7 +208,7 @@ sum by (interaction_kind, request_status) (
 - `docs/architecture/initiatives/s10_mcp_user_interactions/design_doc.md`
 - `docs/architecture/initiatives/s10_mcp_user_interactions/api_contract.md`
 - `docs/architecture/initiatives/s10_mcp_user_interactions/migrations_policy.md`
-- `docs/delivery/epics/s10/epic-s10-day6-mcp-user-interactions-plan.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s10/epic-s10-day6-mcp-user-interactions-plan.md`
 - `docs/templates/release_plan.md`
 - `docs/templates/rollback_plan.md`
 - `docs/templates/release_notes.md`

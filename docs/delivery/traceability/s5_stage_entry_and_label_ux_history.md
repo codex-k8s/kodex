@@ -27,7 +27,7 @@ approvals:
 - Реестр `BLK-155-*`, `RSK-155-*`, `OD-155-*` синхронизирован между `sprint_s5`, `epic_s5` и Day1 epic; `BLK-155-01..02` закрыты, `OD-155-01..03` утверждены (2026-02-25).
 
 ## Актуализация по Issue #170 (`run:plan`, 2026-02-25)
-- Добавлен Day2 execution-артефакт `docs/delivery/epics/s5/epic-s5-day2-launch-profiles-dev-execution.md` для single-epic реализации FR-053/FR-054.
+- Добавлен Day2 execution-артефакт `docs/deprecated/pre-refactor/delivery/epics/s5/epic-s5-day2-launch-profiles-dev-execution.md` для single-epic реализации FR-053/FR-054.
 - Зафиксированы quality-gates QG-D2-01..QG-D2-05 и DoD-пакет для handover в `run:dev`.
 - Создана implementation issue `#171`; связь `#170 -> #171 -> FR-053/FR-054` синхронизирована в `issue_map` и Sprint S5 docs.
 

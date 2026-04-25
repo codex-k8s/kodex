@@ -25,9 +25,9 @@ approvals:
 
 ## Актуализация по Issue #469 (`run:intake`, 2026-03-14)
 - Подготовлен intake package:
-  - `docs/delivery/sprints/s13/sprint_s13_quality_governance_system.md`;
-  - `docs/delivery/epics/s13/epic_s13.md`;
-  - `docs/delivery/epics/s13/epic-s13-day1-quality-governance-intake.md`.
+  - `docs/deprecated/pre-refactor/delivery/sprints/s13/sprint_s13_quality_governance_system.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s13/epic_s13.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s13/epic-s13-day1-quality-governance-intake.md`.
 - Зафиксированы:
   - `Quality Governance System` как отдельная cross-cutting initiative для agent-scale delivery, а не как локальная доработка reviewer-guidelines;
   - draft quality stack: quality metrics baseline, risk tiers `low / medium / high / critical`, список high/critical changes, evidence taxonomy, verification minimum и review contract;
@@ -40,7 +40,7 @@ approvals:
 
 ## Актуализация по Issue #471 (`run:vision`, 2026-03-14)
 - Подготовлен vision package:
-  - `docs/delivery/epics/s13/epic-s13-day2-quality-governance-vision.md`.
+  - `docs/deprecated/pre-refactor/delivery/epics/s13/epic-s13-day2-quality-governance-vision.md`.
 - Зафиксированы:
   - mission и quality north star для `Quality Governance System` как proportional change governance capability;
   - persona outcomes для owner/reviewer, delivery roles и platform operator;
@@ -53,8 +53,8 @@ approvals:
 
 ## Актуализация по Issue #476 (`run:prd`, 2026-03-15)
 - Подготовлен PRD package:
-  - `docs/delivery/epics/s13/epic-s13-day3-quality-governance-prd.md`;
-  - `docs/delivery/epics/s13/prd-s13-day3-quality-governance-system.md`.
+  - `docs/deprecated/pre-refactor/delivery/epics/s13/epic-s13-day3-quality-governance-prd.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s13/prd-s13-day3-quality-governance-system.md`.
 - Зафиксированы:
   - explicit risk tiering, mandatory evidence package, verification minimum и review/waiver discipline как отдельные product constructs;
   - proportional low-risk path, запрет silent waivers для `high/critical` и governance-gap feedback loop;
@@ -74,7 +74,7 @@ approvals:
   - `docs/architecture/initiatives/s13_quality_governance_system/c4_container.md`;
   - `docs/architecture/adr/ADR-0015-quality-governance-control-plane-owned-change-governance-aggregate.md`;
   - `docs/architecture/alternatives/ALT-0007-quality-governance-boundaries.md`;
-  - `docs/delivery/epics/s13/epic-s13-day4-quality-governance-arch.md`.
+  - `docs/deprecated/pre-refactor/delivery/epics/s13/epic-s13-day4-quality-governance-arch.md`.
 - Зафиксированы:
   - `control-plane` как owner canonical change-governance aggregate, publication gate, waiver/residual-risk decisions и typed decision surface;
   - `worker` как owner asynchronous sweeps, governance-gap reconciliation и late reclassification под policy `control-plane`;
@@ -92,7 +92,7 @@ approvals:
   - `docs/architecture/initiatives/s13_quality_governance_system/api_contract.md`;
   - `docs/architecture/initiatives/s13_quality_governance_system/data_model.md`;
   - `docs/architecture/initiatives/s13_quality_governance_system/migrations_policy.md`;
-  - `docs/delivery/epics/s13/epic-s13-day5-quality-governance-design.md`.
+  - `docs/deprecated/pre-refactor/delivery/epics/s13/epic-s13-day5-quality-governance-design.md`.
 - Зафиксированы:
   - hidden `internal working draft` как internal-only ledger без raw draft leakage в owner/reviewer/operator surfaces;
   - `semantic wave map` как первая publishable единица и обязательный bridge между внутренним draft и review stream;
@@ -106,9 +106,9 @@ approvals:
 
 ## Актуализация по Issue #512 (`run:plan`, 2026-03-16)
 - Подготовлен plan package:
-  - `docs/delivery/epics/s13/epic-s13-day6-quality-governance-plan.md`;
-  - `docs/delivery/sprints/s13/sprint_s13_quality_governance_system.md`;
-  - `docs/delivery/epics/s13/epic_s13.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s13/epic-s13-day6-quality-governance-plan.md`;
+  - `docs/deprecated/pre-refactor/delivery/sprints/s13/sprint_s13_quality_governance_system.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s13/epic_s13.md`;
   - `docs/delivery/delivery_plan.md`;
   - `docs/delivery/issue_map.md`.
 - Зафиксированы:

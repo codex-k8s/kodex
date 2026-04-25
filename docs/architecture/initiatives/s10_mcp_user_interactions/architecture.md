@@ -26,7 +26,7 @@ approvals:
 ## Контекст и входные артефакты
 - Delivery-цепочка: `#360 (intake) -> #378 (vision) -> #383 (prd) -> #385 (arch)`.
 - Source of truth:
-  - `docs/delivery/epics/s10/prd-s10-day3-mcp-user-interactions.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s10/prd-s10-day3-mcp-user-interactions.md`
   - `docs/product/requirements_machine_driven.md`
   - `docs/product/agents_operating_model.md`
   - `docs/product/labels_and_trigger_policy.md`

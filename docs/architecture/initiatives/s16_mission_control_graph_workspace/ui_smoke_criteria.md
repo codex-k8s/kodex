@@ -142,5 +142,5 @@ approvals:
 - `docs/architecture/initiatives/s16_mission_control_graph_workspace/design_doc.md`
 - `docs/architecture/initiatives/s16_mission_control_graph_workspace/api_contract.md`
 - `docs/architecture/initiatives/s16_mission_control_graph_workspace/ui_smoke_criteria.md`
-- `docs/delivery/epics/s16/epic-s16-day6-mission-control-graph-workspace-plan.md`
-- `docs/delivery/sprints/s16/sprint_s16_mission_control_graph_workspace.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s16/epic-s16-day6-mission-control-graph-workspace-plan.md`
+- `docs/deprecated/pre-refactor/delivery/sprints/s16/sprint_s16_mission_control_graph_workspace.md`

@@ -23,9 +23,9 @@ approvals:
 
 ## Актуализация по Issue #562 (`run:intake`, 2026-03-26)
 - Подготовлен intake package:
-  - `docs/delivery/sprints/s18/sprint_s18_mission_control_frontend_first_canvas_fake_data.md`;
-  - `docs/delivery/epics/s18/epic_s18.md`;
-  - `docs/delivery/epics/s18/epic-s18-day1-mission-control-frontend-first-canvas-intake.md`.
+  - `docs/deprecated/pre-refactor/delivery/sprints/s18/sprint_s18_mission_control_frontend_first_canvas_fake_data.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s18/epic_s18.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s18/epic-s18-day1-mission-control-frontend-first-canvas-intake.md`.
 - Зафиксированы:
   - Sprint S18 как отдельный frontend-first Mission Control reset-stream после doc-reset `#561`;
   - рекомендованный sequencing: сначала isolated fake-data UX sprint, затем отдельный backend rebuild `#563` после owner approval;
@@ -39,8 +39,8 @@ approvals:
 
 ## Актуализация по Issue #565 (`run:vision`, 2026-03-26)
 - Подготовлен vision package:
-  - `docs/delivery/epics/s18/epic-s18-day2-mission-control-frontend-first-canvas-vision.md`;
-  - обновлены `docs/delivery/sprints/s18/sprint_s18_mission_control_frontend_first_canvas_fake_data.md` и `docs/delivery/epics/s18/epic_s18.md`.
+  - `docs/deprecated/pre-refactor/delivery/epics/s18/epic-s18-day2-mission-control-frontend-first-canvas-vision.md`;
+  - обновлены `docs/deprecated/pre-refactor/delivery/sprints/s18/sprint_s18_mission_control_frontend_first_canvas_fake_data.md` и `docs/deprecated/pre-refactor/delivery/epics/s18/epic_s18.md`.
 - Зафиксированы:
   - Mission Control как owner-approved canvas-first workspace на fake data, где сначала утверждается UX свободного canvas для 2-3 инициатив, а backend rebuild `#563` стартует только после этого;
   - mission, north star, persona outcomes, KPI/guardrails и wave boundaries для frontend-first Sprint S18;
@@ -54,9 +54,9 @@ approvals:
 
 ## Актуализация по Issue #567 (`run:prd`, 2026-03-27)
 - Подготовлен PRD package:
-  - `docs/delivery/epics/s18/epic-s18-day3-mission-control-frontend-first-canvas-prd.md`;
-  - `docs/delivery/epics/s18/prd-s18-day3-mission-control-frontend-first-canvas.md`;
-  - обновлены `docs/delivery/sprints/s18/sprint_s18_mission_control_frontend_first_canvas_fake_data.md` и `docs/delivery/epics/s18/epic_s18.md`.
+  - `docs/deprecated/pre-refactor/delivery/epics/s18/epic-s18-day3-mission-control-frontend-first-canvas-prd.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s18/prd-s18-day3-mission-control-frontend-first-canvas.md`;
+  - обновлены `docs/deprecated/pre-refactor/delivery/sprints/s18/sprint_s18_mission_control_frontend_first_canvas_fake_data.md` и `docs/deprecated/pre-refactor/delivery/epics/s18/epic_s18.md`.
 - Зафиксированы:
   - product contract Sprint S18 для owner/product lead path, operator path и workflow policy preview path на fake data;
   - user stories, FR/AC/NFR, scenario matrix, edge cases и expected evidence для fullscreen canvas, taxonomy `Issue` / `PR` / `Run`, compact nodes, explicit relations, drawer, toolbar и workflow UX;
@@ -69,14 +69,14 @@ approvals:
 
 ## Актуализация по Issue #571 (`run:arch`, 2026-03-27)
 - Подготовлен architecture package:
-  - `docs/delivery/epics/s18/epic-s18-day4-mission-control-frontend-first-canvas-arch.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s18/epic-s18-day4-mission-control-frontend-first-canvas-arch.md`;
   - `docs/architecture/initiatives/s18_mission_control_frontend_first_canvas/README.md`;
   - `docs/architecture/initiatives/s18_mission_control_frontend_first_canvas/architecture.md`;
   - `docs/architecture/initiatives/s18_mission_control_frontend_first_canvas/c4_context.md`;
   - `docs/architecture/initiatives/s18_mission_control_frontend_first_canvas/c4_container.md`;
   - `docs/architecture/adr/ADR-0018-mission-control-frontend-first-prototype-and-backend-handover-boundary.md`;
   - `docs/architecture/alternatives/ALT-0010-mission-control-frontend-first-prototype-boundaries.md`;
-  - обновлены `docs/architecture/README.md`, `docs/architecture/initiatives/README.md`, `docs/delivery/sprints/s18/sprint_s18_mission_control_frontend_first_canvas_fake_data.md`, `docs/delivery/epics/s18/epic_s18.md`, `docs/delivery/delivery_plan.md`, `docs/delivery/issue_map.md`.
+  - обновлены `docs/architecture/README.md`, `docs/architecture/initiatives/README.md`, `docs/deprecated/pre-refactor/delivery/sprints/s18/sprint_s18_mission_control_frontend_first_canvas_fake_data.md`, `docs/deprecated/pre-refactor/delivery/epics/s18/epic_s18.md`, `docs/delivery/delivery_plan.md`, `docs/delivery/issue_map.md`.
 - Зафиксированы:
   - `web-console` как единственный owner isolated fake-data prototype, canvas/view-state и workflow preview UX для Sprint S18;
   - явная граница между текущим prototype и future backend rebuild `#563`, без hidden prerequisite на `api-gateway`, `control-plane`, `worker` или `PostgreSQL`;
@@ -89,13 +89,13 @@ approvals:
 
 ## Актуализация по Issue #573 (`run:design`, 2026-04-01)
 - Подготовлен design package:
-  - `docs/delivery/epics/s18/epic-s18-day5-mission-control-frontend-first-canvas-design.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s18/epic-s18-day5-mission-control-frontend-first-canvas-design.md`;
   - `docs/architecture/initiatives/s18_mission_control_frontend_first_canvas/README.md`;
   - `docs/architecture/initiatives/s18_mission_control_frontend_first_canvas/design_doc.md`;
   - `docs/architecture/initiatives/s18_mission_control_frontend_first_canvas/api_contract.md`;
   - `docs/architecture/initiatives/s18_mission_control_frontend_first_canvas/data_model.md`;
   - `docs/architecture/initiatives/s18_mission_control_frontend_first_canvas/migrations_policy.md`;
-  - обновлены `docs/delivery/sprints/s18/sprint_s18_mission_control_frontend_first_canvas_fake_data.md`, `docs/delivery/epics/s18/epic_s18.md`, `docs/delivery/delivery_plan.md`, `docs/delivery/issue_map.md`.
+  - обновлены `docs/deprecated/pre-refactor/delivery/sprints/s18/sprint_s18_mission_control_frontend_first_canvas_fake_data.md`, `docs/deprecated/pre-refactor/delivery/epics/s18/epic_s18.md`, `docs/delivery/delivery_plan.md`, `docs/delivery/issue_map.md`.
 - Зафиксированы:
   - frontend-only implementation contract для Sprint S18: route `MissionControlPage.vue` сохраняется, но data/state path должен идти через explicit prototype source/store, а не через current API/realtime branch;
   - feature-local fake-data data model для scenario/initiative/node/relation/drawer/workflow preset/ui-state, без объявления временного backend source of truth;
@@ -108,8 +108,8 @@ approvals:
 
 ## Актуализация по Issue #579 (`run:plan`, 2026-04-01)
 - Подготовлен plan package:
-  - `docs/delivery/epics/s18/epic-s18-day6-mission-control-frontend-first-canvas-plan.md`;
-  - обновлены `docs/delivery/sprints/s18/sprint_s18_mission_control_frontend_first_canvas_fake_data.md`, `docs/delivery/epics/s18/epic_s18.md`, `docs/delivery/delivery_plan.md`, `docs/delivery/issue_map.md`, `docs/delivery/epics/README.md`, `docs/delivery/sprints/README.md`.
+  - `docs/deprecated/pre-refactor/delivery/epics/s18/epic-s18-day6-mission-control-frontend-first-canvas-plan.md`;
+  - обновлены `docs/deprecated/pre-refactor/delivery/sprints/s18/sprint_s18_mission_control_frontend_first_canvas_fake_data.md`, `docs/deprecated/pre-refactor/delivery/epics/s18/epic_s18.md`, `docs/delivery/delivery_plan.md`, `docs/delivery/issue_map.md`, `docs/deprecated/pre-refactor/delivery/epics/README.md`, `docs/deprecated/pre-refactor/delivery/sprints/README.md`.
 - Зафиксированы:
   - execution package Sprint S18 для перехода в `run:dev` без разрыва continuity и без reopening Day1-Day5 baseline;
   - одна owner-managed implementation issue `#581`, внутри которой зафиксированы waves `route shell + prototype source -> canvas/drawer composition -> workflow preview/prompt-source evidence -> acceptance/demo evidence`;

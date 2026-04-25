@@ -186,5 +186,5 @@ ORDER BY started_at DESC;
 - `docs/architecture/initiatives/s12_github_api_rate_limit_resilience/api_contract.md`
 - `docs/architecture/initiatives/s12_github_api_rate_limit_resilience/data_model.md`
 - `docs/architecture/initiatives/s12_github_api_rate_limit_resilience/migrations_policy.md`
-- `docs/delivery/epics/s12/epic-s12-day6-github-api-rate-limit-plan.md`
-- `docs/delivery/sprints/s12/sprint_s12_github_api_rate_limit_resilience.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s12/epic-s12-day6-github-api-rate-limit-plan.md`
+- `docs/deprecated/pre-refactor/delivery/sprints/s12/sprint_s12_github_api_rate_limit_resilience.md`

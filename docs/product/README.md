@@ -17,17 +17,29 @@ approvals:
 # Product Documentation
 
 ## TL;DR
-- `docs/product/` хранит продуктовый source of truth для модели платформы.
+- На время программы рефакторинга продуктовый source of truth по новой версии находится в `refactoring/**`.
+- `docs/product/` хранит краткий продуктовый контекст, ограничения и переходные указатели со старых baseline-путей на новую канонику.
+- Старые product baseline документы перенесены в `docs/deprecated/pre-refactor/product/`.
 - Здесь не размещаются delivery-планы, sprint day-эпики и runbooks.
 
 ## Канонические документы
-- `docs/product/requirements_machine_driven.md` — полный baseline требований.
+- `refactoring/task.md` — главный приоритетный документ программы рефакторинга.
+- `refactoring/README.md` — навигация по целевой модели и волнам.
 - `docs/product/brief.md` — краткая формулировка продукта и ценности.
 - `docs/product/constraints.md` — продуктовые и эксплуатационные ограничения.
-- `docs/product/agents_operating_model.md` — роли агентов и operating model.
-- `docs/product/labels_and_trigger_policy.md` — правила лейблов и trigger flow.
-- `docs/product/stage_process_model.md` — stage model и порядок прохождения этапов.
+- `docs/product/requirements_machine_driven.md` — переходный указатель на новую канонику требований.
+- `docs/product/agents_operating_model.md` — переходный указатель на новую модель агентов.
+- `docs/product/labels_and_trigger_policy.md` — переходный указатель на новую политику запуска.
+- `docs/product/stage_process_model.md` — переходный указатель на новую модель flow/stage/role.
+
+## Архив
+- `docs/deprecated/pre-refactor/product/README.md`
+- `docs/deprecated/pre-refactor/product/requirements_machine_driven.md`
+- `docs/deprecated/pre-refactor/product/agents_operating_model.md`
+- `docs/deprecated/pre-refactor/product/labels_and_trigger_policy.md`
+- `docs/deprecated/pre-refactor/product/stage_process_model.md`
 
 ## Правила
 - Product docs описывают цели, ограничения и policy, но не дублируют sprint execution.
 - Если документ начинает описывать delivery sequencing или реализацию сервиса, ссылка должна вести в `docs/delivery/` или `docs/architecture/`.
+- Документы из `docs/deprecated/pre-refactor/product/**` нельзя использовать как основание для новой кодовой реализации без явного решения в `refactoring/**`.

@@ -24,9 +24,9 @@ approvals:
 ## Контекст и входные артефакты
 - Delivery-цепочка: `#492 (intake) -> #496 (vision) -> #510 (prd) -> #516 (arch)`.
 - Source of truth:
-  - `docs/delivery/epics/s16/prd-s16-day3-mission-control-graph-workspace.md`
-  - `docs/delivery/epics/s16/epic-s16-day3-mission-control-graph-workspace-prd.md`
-  - `docs/delivery/sprints/s16/sprint_s16_mission_control_graph_workspace.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s16/prd-s16-day3-mission-control-graph-workspace.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s16/epic-s16-day3-mission-control-graph-workspace-prd.md`
+  - `docs/deprecated/pre-refactor/delivery/sprints/s16/sprint_s16_mission_control_graph_workspace.md`
   - `docs/delivery/traceability/s16_mission_control_graph_workspace_history.md`
   - `docs/product/requirements_machine_driven.md`
   - `docs/product/agents_operating_model.md`

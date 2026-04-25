@@ -34,7 +34,7 @@ approvals:
   - built-in server `kodex` нельзя заменять новым runtime server block;
   - `api-gateway` и adapters обязаны остаться thin transport layers без business-state ownership.
 - Связанные требования:
-  - PRD `docs/delivery/epics/s10/prd-s10-day3-mcp-user-interactions.md`;
+  - PRD `docs/deprecated/pre-refactor/delivery/epics/s10/prd-s10-day3-mcp-user-interactions.md`;
   - `FR-003`, `FR-004`, `FR-006`, `FR-025`, `FR-028`;
   - `NFR-010`, `NFR-012`, `NFR-016`, `NFR-018`.
 - Что ломается без решения:
@@ -143,7 +143,7 @@ approvals:
 
 ## Ссылки
 - PRD:
-  - `docs/delivery/epics/s10/prd-s10-day3-mcp-user-interactions.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s10/prd-s10-day3-mcp-user-interactions.md`
 - Architecture:
   - `docs/architecture/initiatives/s10_mcp_user_interactions/architecture.md`
 - Alternatives:

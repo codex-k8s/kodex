@@ -19,6 +19,7 @@ approvals:
 # Brief: kodex platform bootstrap
 
 ## TL;DR (1 абзац)
+- **Актуальный статус:** документ сохранён как краткий продуктовый контекст старой версии; для программы рефакторинга приоритет у `refactoring/task.md` и `refactoring/06-product-model.md`.
 - **Проблема:** текущая связка `codexctl` + `github.com/codex-k8s/yaml-mcp-server` + ручные практики разнесена по репозиториям и не даёт единого control-plane.
 - **Для кого:** Owner и команда, управляющие несколькими проектами и агентами в Kubernetes.
 - **Предлагаемое решение:** единый сервис `kodex` (Go + Vue3), webhook-driven, с хранением состояния и знаний в PostgreSQL (`JSONB` + `pgvector`).
@@ -27,7 +28,7 @@ approvals:
 - **Что считаем успехом (расширено):** кроме базового dogfooding, в MVP работают full stage labels, MCP control tools (secret/db/feedback), staff debug observability и `run:self-improve`.
 - **Дополнительная ценность:** при включённом learning mode платформа объясняет важные инженерные решения и компромиссы, чтобы пользователи учились паттернам, а не только получали код.
 - **Что НЕ делаем:** поддержку не-Kubernetes оркестраторов и self-signup пользователей.
-- **Source of truth требований:** `docs/product/requirements_machine_driven.md`.
+- **Источник требований на время рефакторинга:** `refactoring/task.md`; переходный указатель: `docs/product/requirements_machine_driven.md`.
 
 ## Контекст
 - Предыстория: в `project-example` и `codexctl` собран рабочий базис, но он распределён по отдельным компонентам.
@@ -143,10 +144,11 @@ approvals:
 - [ ] Отклонить/заморозить инициативу
 
 ## Ссылки
-- Канонические требования: `docs/product/requirements_machine_driven.md`
-- Операционная модель агентов: `docs/product/agents_operating_model.md`
-- Политика лейблов: `docs/product/labels_and_trigger_policy.md`
-- Stage-модель процесса: `docs/product/stage_process_model.md`
+- Канонические требования на время рефакторинга: `refactoring/task.md`
+- Переходный указатель требований: `docs/product/requirements_machine_driven.md`
+- Переходный указатель модели агентов: `docs/product/agents_operating_model.md`
+- Переходный указатель политики запуска: `docs/product/labels_and_trigger_policy.md`
+- Переходный указатель этапной модели: `docs/product/stage_process_model.md`
 - Процесс разработки и документации: `docs/delivery/development_process_requirements.md`
 - Issue: #1
 - Трассируемость Issue/PR ↔ документы: `docs/delivery/issue_map.md`

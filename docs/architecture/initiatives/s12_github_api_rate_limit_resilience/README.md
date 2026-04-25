@@ -42,11 +42,11 @@ approvals:
 - `docs/architecture/mcp_approval_and_audit_flow.md`
 - `docs/architecture/adr/ADR-0013-github-rate-limit-controlled-wait-ownership.md`
 - `docs/architecture/alternatives/ALT-0005-github-rate-limit-wait-state-boundaries.md`
-- `docs/delivery/epics/s12/epic-s12-day4-github-api-rate-limit-arch.md`
-- `docs/delivery/epics/s12/epic-s12-day5-github-api-rate-limit-design.md`
-- `docs/delivery/epics/s12/epic-s12-day3-github-api-rate-limit-prd.md`
-- `docs/delivery/epics/s12/prd-s12-day3-github-api-rate-limit-resilience.md`
-- `docs/delivery/epics/s12/epic-s12-day6-github-api-rate-limit-plan.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s12/epic-s12-day4-github-api-rate-limit-arch.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s12/epic-s12-day5-github-api-rate-limit-design.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s12/epic-s12-day3-github-api-rate-limit-prd.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s12/prd-s12-day3-github-api-rate-limit-resilience.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s12/epic-s12-day6-github-api-rate-limit-plan.md`
 
 ## Continuity after `run:plan`
 - Документный контур `intake -> vision -> prd -> arch -> design -> plan` согласован и завершён.

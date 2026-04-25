@@ -26,9 +26,9 @@ approvals:
 - `S9-E06` выведен из активного execution backlog Sprint S9 и отмечен как historical superseded artifact.
 - Каноническая актуализация зафиксирована в:
   - `docs/delivery/delivery_plan.md`
-  - `docs/delivery/epics/s9/epic_s9.md`
-  - `docs/delivery/epics/s9/epic-s9-day6-mission-control-dashboard-plan.md`
-  - `docs/delivery/sprints/s9/sprint_s9_mission_control_dashboard_control_plane.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s9/epic_s9.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s9/epic-s9-day6-mission-control-dashboard-plan.md`
+  - `docs/deprecated/pre-refactor/delivery/sprints/s9/sprint_s9_mission_control_dashboard_control_plane.md`
   - `docs/delivery/issue_map.md`
   - `docs/delivery/traceability/s9_mission_control_dashboard_history.md`
 - `docs/architecture/initiatives/s9_mission_control_dashboard/{design_doc.md,api_contract.md,migrations_policy.md}` и `docs/ops/production_runbook.md` не должны трактоваться как подтверждение этой волны.

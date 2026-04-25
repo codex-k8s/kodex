@@ -47,8 +47,8 @@ approvals:
   - `docs/architecture/adr/ADR-0013-github-rate-limit-controlled-wait-ownership.md`
   - `docs/architecture/alternatives/ALT-0005-github-rate-limit-wait-state-boundaries.md`
 - Product baseline:
-  - `docs/delivery/epics/s12/prd-s12-day3-github-api-rate-limit-resilience.md`
-  - `docs/delivery/sprints/s12/sprint_s12_github_api_rate_limit_resilience.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s12/prd-s12-day3-github-api-rate-limit-resilience.md`
+  - `docs/deprecated/pre-refactor/delivery/sprints/s12/sprint_s12_github_api_rate_limit_resilience.md`
 - GitHub Docs baseline (проверено 2026-03-13 через Context7 `/github/docs`):
   - primary limit даёт deterministic `x-ratelimit-reset` / `x-ratelimit-remaining`;
   - secondary limit может приходить как `403` или `429`, с `Retry-After` либо без него;

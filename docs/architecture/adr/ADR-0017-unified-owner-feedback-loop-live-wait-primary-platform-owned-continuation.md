@@ -35,7 +35,7 @@ approvals:
   - `api-gateway` и `staff web-console` должны оставаться thin surfaces;
   - `run:self-improve` не входит в owner-facing wait contract.
 - Связанные требования:
-  - `docs/delivery/epics/s17/prd-s17-day3-unified-user-interaction-waits-and-owner-feedback-inbox.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s17/prd-s17-day3-unified-user-interaction-waits-and-owner-feedback-inbox.md`
   - `FR-012`, `FR-039`, `FR-040`, `FR-041`, `FR-043`
   - `NFR-012`, `NFR-013`, `NFR-015`, `NFR-016`, `NFR-018`
 - Что ломается без решения:
@@ -143,7 +143,7 @@ approvals:
 
 ## Ссылки
 - PRD:
-  - `docs/delivery/epics/s17/prd-s17-day3-unified-user-interaction-waits-and-owner-feedback-inbox.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s17/prd-s17-day3-unified-user-interaction-waits-and-owner-feedback-inbox.md`
 - Architecture:
   - `docs/architecture/initiatives/s17_unified_owner_feedback_loop/architecture.md`
 - Alternatives:

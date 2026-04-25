@@ -43,10 +43,10 @@ approvals:
 - `docs/architecture/initiatives/s10_mcp_user_interactions/migrations_policy.md`
 - `docs/architecture/adr/ADR-0014-telegram-user-interaction-adapter-platform-owned-lifecycle.md`
 - `docs/architecture/alternatives/ALT-0006-telegram-user-interaction-adapter-boundaries.md`
-- `docs/delivery/epics/s11/epic-s11-day4-telegram-user-interaction-adapter-arch.md`
-- `docs/delivery/epics/s11/epic-s11-day5-telegram-user-interaction-adapter-design.md`
-- `docs/delivery/epics/s11/epic-s11-day3-telegram-user-interaction-adapter-prd.md`
-- `docs/delivery/epics/s11/prd-s11-day3-telegram-user-interaction-adapter.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s11/epic-s11-day4-telegram-user-interaction-adapter-arch.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s11/epic-s11-day5-telegram-user-interaction-adapter-design.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s11/epic-s11-day3-telegram-user-interaction-adapter-prd.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s11/prd-s11-day3-telegram-user-interaction-adapter.md`
 
 ## Continuity after `run:plan`
 - Документный контур `intake -> vision -> prd -> arch -> design -> plan` для Sprint S11 согласован и завершён.

@@ -34,7 +34,7 @@ approvals:
 
 ## Актуализация по Issue #378 (`run:vision`, 2026-03-12)
 - Подготовлен vision package:
-  - `docs/delivery/epics/s10/epic-s10-day2-mcp-user-interactions-vision.md`.
+  - `docs/deprecated/pre-refactor/delivery/epics/s10/epic-s10-day2-mcp-user-interactions-vision.md`.
 - Зафиксированы:
   - mission и north star для built-in MCP user interactions как отдельной channel-neutral capability платформы;
   - persona outcomes для owner/product lead, end user и platform operator;
@@ -46,8 +46,8 @@ approvals:
 
 ## Актуализация по Issue #383 (`run:prd`, 2026-03-12)
 - Подготовлен PRD package:
-  - `docs/delivery/epics/s10/epic-s10-day3-mcp-user-interactions-prd.md`;
-  - `docs/delivery/epics/s10/prd-s10-day3-mcp-user-interactions.md`.
+  - `docs/deprecated/pre-refactor/delivery/epics/s10/epic-s10-day3-mcp-user-interactions-prd.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s10/prd-s10-day3-mcp-user-interactions.md`.
 - Зафиксированы:
   - user stories, FR/AC/NFR и wave priorities для `user.notify`, `user.decision.request`, typed response semantics и adapter-neutral contract;
   - explicit edge cases для stale/duplicate/invalid responses, fallback-to-comments и separation from approval flow;
@@ -58,7 +58,7 @@ approvals:
 
 ## Актуализация по Issue #385 (`run:arch`, 2026-03-12)
 - Подготовлен architecture package:
-  - `docs/delivery/epics/s10/epic-s10-day4-mcp-user-interactions-arch.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s10/epic-s10-day4-mcp-user-interactions-arch.md`;
   - `docs/architecture/initiatives/s10_mcp_user_interactions/README.md`;
   - `docs/architecture/initiatives/s10_mcp_user_interactions/architecture.md`;
   - `docs/architecture/initiatives/s10_mcp_user_interactions/c4_context.md`;
@@ -75,7 +75,7 @@ approvals:
 
 ## Актуализация по Issue #387 (`run:design`, 2026-03-12)
 - Подготовлен design package:
-  - `docs/delivery/epics/s10/epic-s10-day5-mcp-user-interactions-design.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s10/epic-s10-day5-mcp-user-interactions-design.md`;
   - `docs/architecture/initiatives/s10_mcp_user_interactions/design_doc.md`;
   - `docs/architecture/initiatives/s10_mcp_user_interactions/api_contract.md`;
   - `docs/architecture/initiatives/s10_mcp_user_interactions/data_model.md`;
@@ -91,7 +91,7 @@ approvals:
 
 ## Актуализация по Issue #389 (`run:plan`, 2026-03-13)
 - Подготовлен plan package:
-  - `docs/delivery/epics/s10/epic-s10-day6-mcp-user-interactions-plan.md`.
+  - `docs/deprecated/pre-refactor/delivery/epics/s10/epic-s10-day6-mcp-user-interactions-plan.md`.
 - Зафиксированы:
   - execution waves `#391..#395` для `control-plane` foundation, worker dispatch/retry/expiry, contract-first callback ingress, deterministic resume path в `agent-runner` и observability/evidence gate;
   - sequencing `#391 -> #392 -> #393/#394 -> #395` с сохранением rollout order `migrations -> control-plane -> worker -> api-gateway` и отдельным resume gate;

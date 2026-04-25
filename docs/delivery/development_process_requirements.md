@@ -19,7 +19,9 @@ approvals:
 # Development and Documentation Process Requirements
 
 ## TL;DR
-- Этот документ задаёт обязательный weekly-процесс: планирование спринта, ежедневное выполнение, ежедневный deploy на production, закрытие спринта.
+- Этот документ задаёт общие требования к процессу разработки, документации, PR, traceability и согласованиям.
+- Старый weekly/sprint процесс сохранён как историческая справка; для программы рефакторинга действует модель волн из `refactoring/**`.
+- Новая кодовая реализация волн 7+ пишется с нуля в новых сервисах и каталогах целевой архитектуры; устаревший код не дорабатывается как база новой версии.
 - Требования обязательны для разработки и для ведения документации.
 - Любое отклонение от процесса фиксируется явно и согласуется с Owner.
 - Для Issue/PR действует единый стандарт заголовков и содержимого, зависящий от stage и роли агента.
@@ -29,16 +31,15 @@ approvals:
 
 ## Нормативные ссылки (source of truth)
 - `AGENTS.md`
+- `refactoring/task.md`
+- `refactoring/README.md`
+- `refactoring/24-implementation-waves-after-wave6.md`
 - `docs/product/requirements_machine_driven.md`
 - `docs/product/constraints.md`
 - `docs/product/agents_operating_model.md`
 - `docs/product/labels_and_trigger_policy.md`
 - `docs/product/stage_process_model.md`
 - `docs/delivery/delivery_plan.md`
-- `docs/delivery/sprints/s1/sprint_s1_mvp_vertical_slice.md`
-- `docs/delivery/sprints/s2/sprint_s2_dogfooding.md`
-- `docs/delivery/sprints/README.md`
-- `docs/delivery/epics/README.md`
 - `docs/delivery/e2e_mvp_master_plan.md`
 - `docs/delivery/issue_map.md`
 - `docs/delivery/requirements_traceability.md`
@@ -46,10 +47,22 @@ approvals:
 - `docs/design-guidelines/**`
 - `docs/templates/**`
 
+Исторические ссылки для анализа старой модели:
+- `docs/deprecated/pre-refactor/README.md`
+- `docs/deprecated/pre-refactor/delivery/sprints/README.md`
+- `docs/deprecated/pre-refactor/delivery/epics/README.md`
+- `docs/deprecated/pre-refactor/product/README.md`
+
+## Override для программы рефакторинга
+- `refactoring/task.md` имеет приоритет над старыми product/delivery документами, если они описывают разные модели.
+- Старые product baseline документы в `docs/deprecated/pre-refactor/product/**` и старые sprint/epic документы в `docs/deprecated/pre-refactor/delivery/**` читаются только как историческая справка.
+- При старте кодовых волн 7+ агент не должен чинить старый сервис как базу новой версии, если задача требует новой архитектуры; вместо этого создаётся новый сервис/модуль в целевой структуре, а устаревшее выводится из активного пути.
+- Документ, который выходит в PR на согласование, публикуется сразу в финальном целевом состоянии; merge PR считается фактом согласования.
+
 ## Базовые принципы процесса
-- Weekly sprint cadence: каждая неделя начинается формальным kickoff и завершается formal close.
-- Trunk-based delivery: маленькие инкременты, ежедневные merge в `main`.
-- CI/CD discipline: merge только после green pipeline и обязательного deploy в production.
+- Cadence задаётся активной программой работ: для рефакторинга это волны и GitHub Issues, а не старые weekly sprint документы.
+- Trunk-based delivery: маленькие инкременты, регулярные merge в `main`.
+- CI/CD discipline: merge только после релевантных проверок; production deploy обязателен только для волн, где он входит в scope.
 - Docs-as-code: изменения кода и документации синхронны в одном рабочем цикле.
 - Traceability by default: каждое решение привязано к требованиям и артефактам.
 - Security by default: секреты не хранятся в репозитории, префикс переменных платформы `KODEX_`.
@@ -64,7 +77,7 @@ approvals:
 |---|---|---|
 | Owner | Утверждает scope, приоритеты, критические решения, go/no-go | Апрувы в frontmatter, решения по рискам |
 | PM | Поддерживает продуктовые требования и ограничения | `docs/product/requirements_machine_driven.md`, `docs/product/brief.md`, `docs/product/constraints.md` |
-| EM | Ведёт спринт-план, эпики, daily delivery gate | `docs/delivery/sprints/s*/sprint_s*.md`, `docs/delivery/epics/s*/epic_s*.md`, `docs/delivery/epics/s*/epic-s*-day*.md` |
+| EM | Ведёт delivery sequencing, wave-план, quality gates и backlog checkpoint | `refactoring/24-implementation-waves-after-wave6.md`, `refactoring/23-backlog-checkpoint-before-wave7.md`, `docs/delivery/delivery_plan.md` |
 | SA | Архитектурная и data-model консистентность | `docs/architecture/*.md`, миграционная стратегия |
 | Dev | Реализация задач и технические проверки | код, тесты, миграции, изменения API/контрактов |
 | Reviewer | Предварительное ревью PR до Owner | inline findings в PR + summary для Owner |
@@ -77,20 +90,25 @@ approvals:
 - Техническое ревью, QA и эксплуатационные проверки распределяются по risk-gates между `reviewer`, `QA`, `SRE` и другими профильными участниками процесса.
 - Для high-risk изменений обязательный human approval сохраняется, но он должен быть основан на риск-классе и evidence package, а не на привычке проверять весь код вручную.
 
-## Нейминг артефактов (обязателен)
+## Нейминг артефактов
 
 Цель: чтобы ссылки в документации были стабильными и чтобы каждый спринт имел однозначные файлы.
 
-Правила:
+Для новых волн рефакторинга:
+- основная декомпозиция ведётся в `refactoring/**` и GitHub Issues текущей волны;
+- новые sprint/day epic документы в `docs/delivery/sprints/**` и `docs/delivery/epics/**` не создаются;
+- если нужен перенос старой ссылки, используйте переходные файлы `docs/delivery/sprints/README.md` и `docs/delivery/epics/README.md`.
+
+Исторические правила старой модели:
 - Sprint plan файл:
-  - `docs/delivery/sprints/s<номер>/sprint_s<номер>_<краткое-имя>.md`
-  - пример: `docs/delivery/sprints/s2/sprint_s2_dogfooding.md`
+  - `docs/deprecated/pre-refactor/delivery/sprints/s<номер>/sprint_s<номер>_<краткое-имя>.md`
+  - пример: `docs/deprecated/pre-refactor/delivery/sprints/s2/sprint_s2_dogfooding.md`
 - Epic catalog файл:
-  - `docs/delivery/epics/s<номер>/epic_s<номер>.md`
-  - пример: `docs/delivery/epics/s2/epic_s2.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s<номер>/epic_s<номер>.md`
+  - пример: `docs/deprecated/pre-refactor/delivery/epics/s2/epic_s2.md`
 - Daily epic docs:
-  - `docs/delivery/epics/s<номер>/epic-s<номер>-day<день>-<краткое-имя>.md`
-  - пример: `docs/delivery/epics/s2/epic-s2-day0-control-plane-extraction.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s<номер>/epic-s<номер>-day<день>-<краткое-имя>.md`
+  - пример: `docs/deprecated/pre-refactor/delivery/epics/s2/epic-s2-day0-control-plane-extraction.md`
 
 ## Стандарт заголовков и содержимого Issue/PR (обязателен)
 
@@ -194,7 +212,7 @@ approvals:
   - убрать временные решения и скрытые швы по мере продвижения.
 - Для production-ориентированных PR приоритетны:
   - ясный доменный scope;
-  - понятный список удаляемого legacy;
+  - понятный список удаляемого устаревшего кода;
   - ограниченный объём diff, который реально можно проверить.
 
 ### PR body: role-specific детализация
@@ -286,7 +304,7 @@ approvals:
 |---|---|---|
 | `docs/product/` | продуктовые требования, роли, labels/stage policy, charter/brief/constraints | delivery-планы, day-эпики, runbooks |
 | `docs/architecture/` | C4, ADR, API/data model, RBAC/prompt policy, design alternatives | спринт-план и release backlog |
-| `docs/delivery/` | delivery plan, sprint/epic документы, issue map, requirements traceability, traceability history packages, process requirements | дублирование product source-of-truth и архитектурных контрактов |
+| `docs/delivery/` | delivery plan, переходные указатели, issue map, requirements traceability, traceability history packages, process requirements | новые sprint/day epic документы для программы рефакторинга, дублирование product source-of-truth и архитектурных контрактов |
 | `docs/ops/` | production runbooks и эксплуатационные инструкции | stage-планирование и product scope |
 | `docs/templates/` | канонические markdown-шаблоны документов | фактические артефакты этапов вместо шаблонов |
 
@@ -298,7 +316,7 @@ approvals:
 - Инициативные/stage-specific пакеты и handover-наборы размещаются в специализированных подпапках, а не на корне домена:
   - для архитектурных инициатив использовать `docs/architecture/initiatives/<slug>/`;
   - для эксплуатационных handover-пакетов использовать `docs/ops/handovers/<slug>/`;
-  - для delivery уже закреплены специализированные подпапки `docs/delivery/sprints/`, `docs/delivery/epics/` и `docs/delivery/traceability/`.
+  - для старого delivery архива используются `docs/deprecated/pre-refactor/delivery/sprints/`, `docs/deprecated/pre-refactor/delivery/epics/` и `docs/delivery/traceability/`.
 - Delivery traceability делится по уровням абстракции:
   - `docs/delivery/issue_map.md` = current-state master-index по связям issue/pr/doc/status;
   - `docs/delivery/requirements_traceability.md` = стабильная FR/NFR-матрица текущего состояния;
@@ -314,7 +332,7 @@ approvals:
   - `docs/delivery/requirements_traceability.md`;
   - `docs/delivery/traceability/README.md` и релевантный `docs/delivery/traceability/s<номер>_*.md` (если меняется historical evidence);
   - открытые GitHub issues/PR, где использовались старые doc-path или branch-specific blob links.
-- Любой новый документ сразу добавляется в релевантный индекс (`delivery/sprints/README.md`, `delivery/epics/README.md`, `issue_map`, `requirements_traceability`, `traceability/README.md`).
+- Любой новый документ сразу добавляется в релевантный активный индекс (`issue_map`, `requirements_traceability`, `traceability/README.md`, `refactoring/README.md` или профильный документ волны).
 
 ## Ролевая матрица шаблонов документов (обязательна)
 
@@ -343,8 +361,8 @@ approvals:
 - Провести DoR-check.
 
 Обязательные артефакты:
-- Sprint plan: `docs/delivery/sprints/s<номер>/sprint_s<номер>_<краткое-имя>.md` (актуальный sprint-file недели).
-- Epic catalog: `docs/delivery/epics/s<номер>/epic_s<номер>.md` и daily epic docs в `docs/delivery/epics/s<номер>/`.
+- Sprint plan: `docs/deprecated/pre-refactor/delivery/sprints/s<номер>/sprint_s<номер>_<краткое-имя>.md` (актуальный sprint-file недели).
+- Epic catalog: `docs/deprecated/pre-refactor/delivery/epics/s<номер>/epic_s<номер>.md` и daily epic docs в `docs/deprecated/pre-refactor/delivery/epics/s<номер>/`.
 - `docs/delivery/issue_map.md` и `docs/delivery/requirements_traceability.md`.
 
 ### 2. Daily Execution (каждый рабочий день спринта)

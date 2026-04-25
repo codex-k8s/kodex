@@ -36,7 +36,7 @@ approvals:
 
 ## Актуализация по Issue #413 (`run:vision`, 2026-03-13)
 - Подготовлен vision package:
-  - `docs/delivery/epics/s12/epic-s12-day2-github-api-rate-limit-vision.md`.
+  - `docs/deprecated/pre-refactor/delivery/epics/s12/epic-s12-day2-github-api-rate-limit-vision.md`.
 - Зафиксированы:
   - mission и north star для GitHub-first controlled wait capability;
   - persona outcomes для owner/reviewer, operator и agent path;
@@ -47,8 +47,8 @@ approvals:
 
 ## Актуализация по Issue #416 (`run:prd`, 2026-03-13)
 - Подготовлен PRD package:
-  - `docs/delivery/epics/s12/epic-s12-day3-github-api-rate-limit-prd.md`;
-  - `docs/delivery/epics/s12/prd-s12-day3-github-api-rate-limit-resilience.md`.
+  - `docs/deprecated/pre-refactor/delivery/epics/s12/epic-s12-day3-github-api-rate-limit-prd.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s12/prd-s12-day3-github-api-rate-limit-resilience.md`.
 - Зафиксированы:
   - user stories, FR/AC/NFR и wave priorities для controlled wait-state, contour attribution, transparency surfaces и safe resume/manual-intervention path;
   - explicit edge cases для hard-failure separation, dual-contour wait, secondary-limit ambiguity и запрета infinite local retries;
@@ -61,7 +61,7 @@ approvals:
 
 ## Актуализация по Issue #418 (`run:arch`, 2026-03-13)
 - Подготовлен architecture package:
-  - `docs/delivery/epics/s12/epic-s12-day4-github-api-rate-limit-arch.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s12/epic-s12-day4-github-api-rate-limit-arch.md`;
   - `docs/architecture/initiatives/s12_github_api_rate_limit_resilience/README.md`;
   - `docs/architecture/initiatives/s12_github_api_rate_limit_resilience/architecture.md`;
   - `docs/architecture/initiatives/s12_github_api_rate_limit_resilience/c4_context.md`;
@@ -81,7 +81,7 @@ approvals:
 
 ## Актуализация по Issue #420 (`run:design`, 2026-03-13)
 - Подготовлен design package:
-  - `docs/delivery/epics/s12/epic-s12-day5-github-api-rate-limit-design.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s12/epic-s12-day5-github-api-rate-limit-design.md`;
   - `docs/architecture/initiatives/s12_github_api_rate_limit_resilience/README.md`;
   - `docs/architecture/initiatives/s12_github_api_rate_limit_resilience/design_doc.md`;
   - `docs/architecture/initiatives/s12_github_api_rate_limit_resilience/api_contract.md`;
@@ -100,9 +100,9 @@ approvals:
 
 ## Актуализация по Issue #423 (`run:plan`, 2026-03-13)
 - Подготовлен plan package:
-  - `docs/delivery/epics/s12/epic-s12-day6-github-api-rate-limit-plan.md`;
-  - `docs/delivery/sprints/s12/sprint_s12_github_api_rate_limit_resilience.md`;
-  - `docs/delivery/epics/s12/epic_s12.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s12/epic-s12-day6-github-api-rate-limit-plan.md`;
+  - `docs/deprecated/pre-refactor/delivery/sprints/s12/sprint_s12_github_api_rate_limit_resilience.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s12/epic_s12.md`;
   - `docs/delivery/delivery_plan.md`;
   - `docs/delivery/issue_map.md`.
 - Зафиксированы:
@@ -111,7 +111,7 @@ approvals:
   - quality gates, DoR/DoD, blockers, risks и owner decisions для handover в `run:dev`;
   - обязательный gate `#431` перед handover в `run:qa`;
   - frontmatter для sprint package, epic catalog, day6 plan epic и traceability history нормализован в завершённое состояние, чтобы document contour `intake -> vision -> prd -> arch -> design -> plan` не выглядел как продолжающийся implementation stage;
-  - канонический Day6 epic для Issue `#423` закреплён как `docs/delivery/epics/s12/epic-s12-day6-github-api-rate-limit-plan.md`; конкурирующий дубль `docs/delivery/epics/s12/epic-s12-day6-github-api-rate-limit-resilience-plan.md` удалён в revise-итерации, чтобы сохранить единый source of truth;
+  - канонический Day6 epic для Issue `#423` закреплён как `docs/deprecated/pre-refactor/delivery/epics/s12/epic-s12-day6-github-api-rate-limit-plan.md`; конкурирующий дубль `docs/deprecated/pre-refactor/delivery/epics/s12/epic-s12-day6-github-api-rate-limit-resilience-plan.md` удалён в revise-итерации, чтобы сохранить единый source of truth;
   - факт, что документный контур `intake -> vision -> prd -> arch -> design -> plan` согласован и завершён, а дальнейший handover остаётся owner-managed.
 - Для continuity созданы follow-up issues `#425`, `#426`, `#427`, `#428`, `#429`, `#430`, `#431` без trigger-лейблов.
 - Внешний baseline дополнительно сверен:

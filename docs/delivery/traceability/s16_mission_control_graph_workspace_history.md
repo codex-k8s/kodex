@@ -24,7 +24,7 @@ approvals:
 
 ## Актуализация по Issue #561 (`run:rethink`, 2026-03-25)
 - Выполнен doc-reset Mission Control:
-  - обновлены `docs/delivery/delivery_plan.md`, `docs/delivery/issue_map.md`, `docs/delivery/sprints/README.md`, `docs/delivery/epics/README.md`;
+  - обновлены `docs/delivery/delivery_plan.md`, `docs/delivery/issue_map.md`, `docs/deprecated/pre-refactor/delivery/sprints/README.md`, `docs/deprecated/pre-refactor/delivery/epics/README.md`;
   - Sprint S16 и `docs/architecture/initiatives/s16_mission_control_graph_workspace/*` переведены в `status: superseded`;
   - Day1-Day6 и execution handover `#542..#547` зафиксированы только как historical evidence.
 - Явно зафиксирован новый agreed baseline из discussion `#480`:
@@ -43,9 +43,9 @@ approvals:
 
 ## Актуализация по Issue #492 (`run:intake`, 2026-03-15)
 - Подготовлен intake package:
-  - `docs/delivery/sprints/s16/sprint_s16_mission_control_graph_workspace.md`;
-  - `docs/delivery/epics/s16/epic_s16.md`;
-  - `docs/delivery/epics/s16/epic-s16-day1-mission-control-graph-workspace-intake.md`.
+  - `docs/deprecated/pre-refactor/delivery/sprints/s16/sprint_s16_mission_control_graph_workspace.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s16/epic_s16.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s16/epic-s16-day1-mission-control-graph-workspace-intake.md`.
 - Зафиксированы:
   - Sprint S16 как полный redesign Mission Control в graph workspace/control plane, а не как incremental tuning Sprint S9 dashboard;
   - поглощение issue `#480` как mandatory foundation layer для persisted provider mirror, bounded reconcile и coverage contract `all open Issues/PR + bounded recent closed history`;
@@ -60,8 +60,8 @@ approvals:
 
 ## Актуализация по Issue #496 (`run:vision`, 2026-03-15)
 - Подготовлен vision package:
-  - `docs/delivery/epics/s16/epic-s16-day2-mission-control-graph-workspace-vision.md`;
-  - обновлены `docs/delivery/sprints/s16/sprint_s16_mission_control_graph_workspace.md`, `docs/delivery/epics/s16/epic_s16.md`, `docs/delivery/delivery_plan.md` и `docs/delivery/issue_map.md`.
+  - `docs/deprecated/pre-refactor/delivery/epics/s16/epic-s16-day2-mission-control-graph-workspace-vision.md`;
+  - обновлены `docs/deprecated/pre-refactor/delivery/sprints/s16/sprint_s16_mission_control_graph_workspace.md`, `docs/deprecated/pre-refactor/delivery/epics/s16/epic_s16.md`, `docs/delivery/delivery_plan.md` и `docs/delivery/issue_map.md`.
 - Зафиксированы:
   - Mission Control как primary multi-root graph workspace/control plane для continuity `discussion/work_item -> run -> pull_request/follow-up issue -> next run`;
   - mission, north star, persona outcomes, KPI/guardrails и wave boundaries без reopening Day1 baseline;
@@ -76,9 +76,9 @@ approvals:
 
 ## Актуализация по Issue #510 (`run:prd`, 2026-03-16)
 - Подготовлен PRD package:
-  - `docs/delivery/epics/s16/epic-s16-day3-mission-control-graph-workspace-prd.md`;
-  - `docs/delivery/epics/s16/prd-s16-day3-mission-control-graph-workspace.md`;
-  - обновлены `docs/delivery/sprints/s16/sprint_s16_mission_control_graph_workspace.md`, `docs/delivery/epics/s16/epic_s16.md`, `docs/delivery/delivery_plan.md`, `docs/delivery/issue_map.md` и `docs/delivery/sprints/README.md`.
+  - `docs/deprecated/pre-refactor/delivery/epics/s16/epic-s16-day3-mission-control-graph-workspace-prd.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s16/prd-s16-day3-mission-control-graph-workspace.md`;
+  - обновлены `docs/deprecated/pre-refactor/delivery/sprints/s16/sprint_s16_mission_control_graph_workspace.md`, `docs/deprecated/pre-refactor/delivery/epics/s16/epic_s16.md`, `docs/delivery/delivery_plan.md`, `docs/delivery/issue_map.md` и `docs/deprecated/pre-refactor/delivery/sprints/README.md`.
 - Зафиксированы:
   - user stories, FR/AC/NFR, scenario matrix и expected evidence для fullscreen graph workspace, filtered multi-root continuity, inventory-backed foundation, typed metadata/watermarks, platform-canonical launch params и platform-safe inline actions;
   - locked baseline по issue `#480`, exact Wave 1 filters `open_only`, `assigned_to_me_or_unassigned`, `active-state presets`, secondary/dimmed semantics только для graph integrity и Wave 1 nodes `discussion`, `work_item`, `run`, `pull_request`;
@@ -96,7 +96,7 @@ approvals:
   - `docs/architecture/initiatives/s16_mission_control_graph_workspace/c4_container.md`;
   - `docs/architecture/adr/ADR-0016-mission-control-graph-workspace-hybrid-truth-and-continuity-ownership.md`;
   - `docs/architecture/alternatives/ALT-0008-mission-control-graph-workspace-hybrid-truth-boundaries.md`;
-  - `docs/delivery/epics/s16/epic-s16-day4-mission-control-graph-workspace-arch.md`.
+  - `docs/deprecated/pre-refactor/delivery/epics/s16/epic-s16-day4-mission-control-graph-workspace-arch.md`.
 - Зафиксированы:
   - `control-plane` как canonical owner graph truth, continuity state, typed metadata/watermarks, launch surfaces и hybrid truth merge policy;
   - `worker` как owner bounded provider inventory freshness, recent-closed-history backfill, enrichment/reconcile execution и lifecycle tasks без ownership graph semantics;
@@ -114,7 +114,7 @@ approvals:
   - `docs/architecture/initiatives/s16_mission_control_graph_workspace/api_contract.md`;
   - `docs/architecture/initiatives/s16_mission_control_graph_workspace/data_model.md`;
   - `docs/architecture/initiatives/s16_mission_control_graph_workspace/migrations_policy.md`;
-  - `docs/delivery/epics/s16/epic-s16-day5-mission-control-graph-workspace-design.md`.
+  - `docs/deprecated/pre-refactor/delivery/epics/s16/epic-s16-day5-mission-control-graph-workspace-design.md`.
 - Зафиксированы:
   - graph-first interaction model поверх Day4 ownership split без нового deployable сервиса;
   - typed transport baseline `workspace -> node details -> activity -> launch preview -> existing command ledger`, где Sprint S9 dashboard contract переводится в superseded state без отдельного parallel namespace;
@@ -128,13 +128,13 @@ approvals:
 
 ## Актуализация по Issue #537 (`run:plan`, 2026-03-16)
 - Подготовлен plan package:
-  - `docs/delivery/epics/s16/epic-s16-day6-mission-control-graph-workspace-plan.md`;
-  - `docs/delivery/sprints/s16/sprint_s16_mission_control_graph_workspace.md`;
-  - `docs/delivery/epics/s16/epic_s16.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s16/epic-s16-day6-mission-control-graph-workspace-plan.md`;
+  - `docs/deprecated/pre-refactor/delivery/sprints/s16/sprint_s16_mission_control_graph_workspace.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s16/epic_s16.md`;
   - `docs/delivery/delivery_plan.md`;
   - `docs/delivery/issue_map.md`;
-  - `docs/delivery/sprints/README.md`;
-  - `docs/delivery/epics/README.md`.
+  - `docs/deprecated/pre-refactor/delivery/sprints/README.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/README.md`.
 - Зафиксированы:
   - execution package `S16-E01..S16-E06` с waves `schema/backfill foundation -> control-plane graph truth -> worker reconcile/freshness -> transport/preview -> web-console graph workspace -> readiness gate`;
   - owner-managed handover issues `#542`, `#543`, `#544`, `#545`, `#546`, `#547` без trigger-лейблов для перехода в `run:dev`;

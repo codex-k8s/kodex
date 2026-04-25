@@ -34,7 +34,7 @@ approvals:
   - approval flow и interaction flow нельзя смешивать;
   - `api-gateway` должен остаться thin-edge.
 - Связанные требования:
-  - PRD `docs/delivery/epics/s11/prd-s11-day3-telegram-user-interaction-adapter.md`;
+  - PRD `docs/deprecated/pre-refactor/delivery/epics/s11/prd-s11-day3-telegram-user-interaction-adapter.md`;
   - `FR-003`, `FR-025`, `FR-039`;
   - `NFR-010`, `NFR-016`, `NFR-018`.
 - Что ломается без решения:
@@ -141,7 +141,7 @@ approvals:
 
 ## Ссылки
 - PRD:
-  - `docs/delivery/epics/s11/prd-s11-day3-telegram-user-interaction-adapter.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s11/prd-s11-day3-telegram-user-interaction-adapter.md`
 - Architecture:
   - `docs/architecture/initiatives/s11_telegram_user_interaction_adapter/architecture.md`
 - Alternatives:

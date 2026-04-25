@@ -141,7 +141,7 @@ approvals:
 
 ## Ссылки
 - PRD:
-  - `docs/delivery/epics/s9/prd-s9-day3-mission-control-dashboard.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s9/prd-s9-day3-mission-control-dashboard.md`
 - Architecture:
   - `docs/architecture/initiatives/s9_mission_control_dashboard/architecture.md`
 - Alternatives:
@@ -149,4 +149,4 @@ approvals:
 - Related baseline:
   - `docs/architecture/api_contract.md`
   - `docs/architecture/data_model.md`
-  - `docs/delivery/epics/s3/epic-s3-day19.5-realtime-event-bus-and-websocket-backplane.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s3/epic-s3-day19.5-realtime-event-bus-and-websocket-backplane.md`

@@ -25,15 +25,15 @@ approvals:
 ## Контекст и входные артефакты
 - Delivery-цепочка: `#333 (intake) -> #335 (vision) -> #337 (prd) -> #340 (arch)`.
 - Source of truth:
-  - `docs/delivery/epics/s9/prd-s9-day3-mission-control-dashboard.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s9/prd-s9-day3-mission-control-dashboard.md`
   - `docs/product/requirements_machine_driven.md`
   - `docs/product/agents_operating_model.md`
   - `docs/product/labels_and_trigger_policy.md`
   - `docs/product/stage_process_model.md`
   - `docs/architecture/api_contract.md`
   - `docs/architecture/data_model.md`
-  - `docs/delivery/epics/s3/epic-s3-day19.5-realtime-event-bus-and-websocket-backplane.md`
-  - `docs/delivery/epics/s3/epic-s3-day19.6-staff-realtime-subscriptions-and-ui.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s3/epic-s3-day19.5-realtime-event-bus-and-websocket-backplane.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s3/epic-s3-day19.6-staff-realtime-subscriptions-and-ui.md`
 
 ## Цели архитектурного этапа
 - Превратить product contract Day3 в проверяемые сервисные границы и ownership split без premature implementation lock-in.

@@ -46,7 +46,7 @@ approvals:
   - `docs/architecture/adr/ADR-0012-built-in-mcp-user-interactions-control-plane-owned-lifecycle.md`
   - `docs/architecture/alternatives/ALT-0004-built-in-mcp-user-interactions-lifecycle-boundaries.md`
 - Source product contract:
-  - `docs/delivery/epics/s10/prd-s10-day3-mcp-user-interactions.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s10/prd-s10-day3-mcp-user-interactions.md`
 - Baseline runtime reuse:
   - run/session pause-resume уже использует `agent_runs`, `agent_sessions.codex_cli_session_json` и `codex exec resume`;
   - coarse runtime status `waiting_mcp` уже существует и не требует нового wait engine;

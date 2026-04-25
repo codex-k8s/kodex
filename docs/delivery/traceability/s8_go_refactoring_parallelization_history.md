@@ -23,9 +23,9 @@ approvals:
 
 ## Актуализация по Issue #223 (`run:plan`, 2026-02-27)
 - Для FR-002/FR-004/FR-033 и NFR-002/NFR-010/NFR-018 добавлен execution-governance пакет Sprint S8 Day1:
-  `docs/delivery/epics/s8/epic-s8-day1-go-refactoring-plan.md`,
-  `docs/delivery/epics/s8/epic_s8.md`,
-  `docs/delivery/sprints/s8/sprint_s8_go_refactoring_parallelization.md`,
+  `docs/deprecated/pre-refactor/delivery/epics/s8/epic-s8-day1-go-refactoring-plan.md`,
+  `docs/deprecated/pre-refactor/delivery/epics/s8/epic_s8.md`,
+  `docs/deprecated/pre-refactor/delivery/sprints/s8/sprint_s8_go_refactoring_parallelization.md`,
   `docs/delivery/delivery_plan.md`.
 - Выполнен plan-аудит Go-кода по сервисам и библиотекам (oversized files, duplicate hotspots, database access alignment).
 - Создан параллельный implementation backlog `#225..#230`:
@@ -101,7 +101,7 @@ approvals:
 - `tools/lint/dupl-baseline.txt` синхронизирован с текущим кодом:
   baseline сокращён с `62` до `43` строк, удалены устаревшие записи и зафиксированы только актуальные residual duplicates.
 - Подготовлен consolidated отчёт:
-  `docs/delivery/epics/s8/epic-s8-e06-go-hygiene-closure-report.md`
+  `docs/deprecated/pre-refactor/delivery/epics/s8/epic-s8-e06-go-hygiene-closure-report.md`
   (self-check по `common/go` чек-листам, residual debt backlog с приоритетами и owner-decision предложениями).
 - Проверки по изменённому scope:
   `make dupl-go`, `make lint-go`, `go test ./services/internal/control-plane/...`,
@@ -110,9 +110,9 @@ approvals:
 
 ## Актуализация по Issue #281 (`run:dev`, planned 2026-03-06)
 - Для FR-020/FR-033/FR-049/FR-050 и NFR-010/NFR-018 добавлен execution backlog Sprint S8 Day2:
-  `docs/delivery/epics/s8/epic-s8-day2-empty-repository-initialization.md`,
-  `docs/delivery/epics/s8/epic_s8.md`,
-  `docs/delivery/sprints/s8/sprint_s8_go_refactoring_parallelization.md`,
+  `docs/deprecated/pre-refactor/delivery/epics/s8/epic-s8-day2-empty-repository-initialization.md`,
+  `docs/deprecated/pre-refactor/delivery/epics/s8/epic_s8.md`,
+  `docs/deprecated/pre-refactor/delivery/sprints/s8/sprint_s8_go_refactoring_parallelization.md`,
   `docs/delivery/delivery_plan.md`,
   `docs/delivery/issue_map.md`.
 - Зафиксирован отдельный onboarding path для пустого GitHub-репозитория:
@@ -129,9 +129,9 @@ approvals:
 
 ## Актуализация по Issue #282 (`run:dev`, planned 2026-03-06)
 - Для FR-002/FR-020/FR-033/FR-049/FR-050 и NFR-010/NFR-018 добавлен execution backlog Sprint S8 Day3:
-  `docs/delivery/epics/s8/epic-s8-day3-existing-repository-adoption.md`,
-  `docs/delivery/epics/s8/epic_s8.md`,
-  `docs/delivery/sprints/s8/sprint_s8_go_refactoring_parallelization.md`,
+  `docs/deprecated/pre-refactor/delivery/epics/s8/epic-s8-day3-existing-repository-adoption.md`,
+  `docs/deprecated/pre-refactor/delivery/epics/s8/epic_s8.md`,
+  `docs/deprecated/pre-refactor/delivery/sprints/s8/sprint_s8_go_refactoring_parallelization.md`,
   `docs/delivery/delivery_plan.md`,
   `docs/delivery/issue_map.md`.
 - Зафиксирован целевой adoption path для существующего репозитория с кодом:
@@ -149,9 +149,9 @@ approvals:
 
 ## Актуализация по Issue #320 (`run:plan`, 2026-03-11)
 - Для FR-033/FR-049/FR-050 и NFR-010/NFR-018 добавлен plan-package Sprint S8 Day4:
-  `docs/delivery/epics/s8/epic-s8-day4-documentation-ia-refactor-plan.md`,
-  `docs/delivery/epics/s8/epic_s8.md`,
-  `docs/delivery/sprints/s8/sprint_s8_go_refactoring_parallelization.md`,
+  `docs/deprecated/pre-refactor/delivery/epics/s8/epic-s8-day4-documentation-ia-refactor-plan.md`,
+  `docs/deprecated/pre-refactor/delivery/epics/s8/epic_s8.md`,
+  `docs/deprecated/pre-refactor/delivery/sprints/s8/sprint_s8_go_refactoring_parallelization.md`,
   `docs/delivery/delivery_plan.md`,
   `docs/delivery/issue_map.md`.
 - План закрепляет единый execution backlog item для documentation governance без полного re-root `docs/`:

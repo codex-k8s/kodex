@@ -109,7 +109,7 @@ PRD по Issue #187 требует:
 - `docs/architecture/initiatives/agents_prompt_templates_lifecycle/architecture.md`
 - `docs/architecture/prompt_templates_policy.md`
 - `docs/architecture/data_model.md`
-- `docs/delivery/epics/s6/epic-s6-day4-agents-prompts-arch.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s6/epic-s6-day4-agents-prompts-arch.md`
 - `GitHub issue #187` (PRD stage source)
 - `GitHub PR #190` (merged PRD package in `main`)
 - `GitHub issue #195` (follow-up stage `run:design`)

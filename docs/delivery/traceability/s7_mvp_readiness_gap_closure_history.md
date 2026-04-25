@@ -23,9 +23,9 @@ approvals:
 
 ## Актуализация по Issue #212 (`run:intake`, 2026-02-27)
 - Для FR-026/FR-028/FR-033/FR-036/FR-040/FR-043/FR-045 и NFR-010/NFR-013/NFR-017/NFR-018 добавлен Sprint S7 intake traceability пакет:
-  `docs/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`,
-  `docs/delivery/epics/s7/epic_s7.md`,
-  `docs/delivery/epics/s7/epic-s7-day1-mvp-readiness-intake.md`,
+  `docs/deprecated/pre-refactor/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`,
+  `docs/deprecated/pre-refactor/delivery/epics/s7/epic_s7.md`,
+  `docs/deprecated/pre-refactor/delivery/epics/s7/epic-s7-day1-mvp-readiness-intake.md`,
   `docs/delivery/development_process_requirements.md`,
   `docs/product/labels_and_trigger_policy.md`,
   `docs/product/stage_process_model.md`.
@@ -45,9 +45,9 @@ approvals:
 
 ## Актуализация по Issue #218 (`run:vision`, 2026-02-27)
 - Для FR-026/FR-028/FR-033/FR-045/FR-052/FR-053/FR-054 и NFR-010/NFR-018 добавлен vision traceability пакет Sprint S7:
-  `docs/delivery/epics/s7/epic-s7-day2-mvp-readiness-vision.md`,
-  `docs/delivery/epics/s7/epic_s7.md`,
-  `docs/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`,
+  `docs/deprecated/pre-refactor/delivery/epics/s7/epic-s7-day2-mvp-readiness-vision.md`,
+  `docs/deprecated/pre-refactor/delivery/epics/s7/epic_s7.md`,
+  `docs/deprecated/pre-refactor/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`,
   `docs/delivery/delivery_plan.md`,
   `docs/delivery/issue_map.md`.
 - Vision-stage формализовал measurable KPI для всех execution-потоков `S7-E01..S7-E18` и зафиксировал baseline по каждому потоку:
@@ -60,10 +60,10 @@ approvals:
 
 ## Актуализация по Issue #220 (`run:prd`, 2026-02-27)
 - Для FR-026/FR-028/FR-033/FR-045/FR-052/FR-053/FR-054 и NFR-010/NFR-018 добавлен PRD traceability пакет Sprint S7:
-  `docs/delivery/epics/s7/epic-s7-day3-mvp-readiness-prd.md`,
-  `docs/delivery/epics/s7/prd-s7-day3-mvp-readiness-gap-closure.md`,
-  `docs/delivery/epics/s7/epic_s7.md`,
-  `docs/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`,
+  `docs/deprecated/pre-refactor/delivery/epics/s7/epic-s7-day3-mvp-readiness-prd.md`,
+  `docs/deprecated/pre-refactor/delivery/epics/s7/prd-s7-day3-mvp-readiness-gap-closure.md`,
+  `docs/deprecated/pre-refactor/delivery/epics/s7/epic_s7.md`,
+  `docs/deprecated/pre-refactor/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`,
   `docs/delivery/delivery_plan.md`,
   `docs/delivery/issue_map.md`.
 - PRD-stage формализовал stream-level execution contract для `S7-E01..S7-E18`:
@@ -77,14 +77,14 @@ approvals:
 
 ## Актуализация по Issue #222 (`run:arch`, 2026-03-02)
 - Для FR-026/FR-028/FR-033/FR-053/FR-054 и NFR-010/NFR-018 добавлен architecture traceability пакет Sprint S7:
-  `docs/delivery/epics/s7/epic-s7-day4-mvp-readiness-arch.md`,
+  `docs/deprecated/pre-refactor/delivery/epics/s7/epic-s7-day4-mvp-readiness-arch.md`,
   `docs/architecture/initiatives/s7_mvp_readiness_gap_closure/architecture.md`,
   `docs/architecture/initiatives/s7_mvp_readiness_gap_closure/c4_context.md`,
   `docs/architecture/initiatives/s7_mvp_readiness_gap_closure/c4_container.md`,
   `docs/architecture/adr/ADR-0010-s7-mvp-readiness-stream-boundaries-and-parity-gate.md`,
   `docs/architecture/alternatives/ALT-0002-s7-mvp-readiness-stream-architecture.md`,
-  `docs/delivery/epics/s7/epic_s7.md`,
-  `docs/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`,
+  `docs/deprecated/pre-refactor/delivery/epics/s7/epic_s7.md`,
+  `docs/deprecated/pre-refactor/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`,
   `docs/delivery/delivery_plan.md`,
   `docs/delivery/issue_map.md`.
 - На architecture-stage зафиксированы:
@@ -98,13 +98,13 @@ approvals:
 
 ## Актуализация по Issue #238 (`run:design`, 2026-03-02)
 - Для FR-026/FR-028/FR-033/FR-053/FR-054 и NFR-010/NFR-018 добавлен design traceability пакет Sprint S7:
-  `docs/delivery/epics/s7/epic-s7-day5-mvp-readiness-design.md`,
+  `docs/deprecated/pre-refactor/delivery/epics/s7/epic-s7-day5-mvp-readiness-design.md`,
   `docs/architecture/initiatives/s7_mvp_readiness_gap_closure/design_doc.md`,
   `docs/architecture/initiatives/s7_mvp_readiness_gap_closure/api_contract.md`,
   `docs/architecture/initiatives/s7_mvp_readiness_gap_closure/data_model.md`,
   `docs/architecture/initiatives/s7_mvp_readiness_gap_closure/migrations_policy.md`,
-  `docs/delivery/epics/s7/epic_s7.md`,
-  `docs/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`,
+  `docs/deprecated/pre-refactor/delivery/epics/s7/epic_s7.md`,
+  `docs/deprecated/pre-refactor/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`,
   `docs/delivery/delivery_plan.md`,
   `docs/delivery/issue_map.md`.
 - На design-stage зафиксированы typed contract decisions для потоков:
@@ -120,9 +120,9 @@ approvals:
 
 ## Актуализация по Issue #241 (`run:plan`, 2026-03-02)
 - Для FR-026/FR-028/FR-033/FR-053/FR-054 и NFR-010/NFR-018 добавлен plan traceability пакет Sprint S7:
-  `docs/delivery/epics/s7/epic-s7-day6-mvp-readiness-plan.md`,
-  `docs/delivery/epics/s7/epic_s7.md`,
-  `docs/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`,
+  `docs/deprecated/pre-refactor/delivery/epics/s7/epic-s7-day6-mvp-readiness-plan.md`,
+  `docs/deprecated/pre-refactor/delivery/epics/s7/epic_s7.md`,
+  `docs/deprecated/pre-refactor/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`,
   `docs/delivery/delivery_plan.md`,
   `docs/delivery/issue_map.md`.
 - На plan-stage сформирован execution package для `S7-E01..S7-E18` с wave-sequencing и quality-gates перед `run:dev`.
@@ -155,7 +155,7 @@ approvals:
   страницы `pages/governance/*`, `pages/admin/*`, `pages/configuration/{DocsKnowledgePage,McpToolsPage}.vue`,
   UI-контур `config-entries` (страница + feature-слой) и platform-tokens scaffold в `System settings`.
 - Актуализирована Sprint S7 traceability:
-  `docs/delivery/issue_map.md`, `docs/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`, `docs/delivery/epics/s7/epic_s7.md`.
+  `docs/delivery/issue_map.md`, `docs/deprecated/pre-refactor/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`, `docs/deprecated/pre-refactor/delivery/epics/s7/epic_s7.md`.
 - По owner request оформлен follow-up issue `#274` (`S7-E19`) на backend cleanup Agents/Configs/Secrets,
   синхронизированы sprint/epic/plan документы.
 - Проверки по scope:
@@ -174,7 +174,7 @@ approvals:
 - Удалён связанный неиспользуемый компонент `services/staff/web-console/src/shared/ui/AdminClusterContextBar.vue`,
   очищены i18n-ключи глобального фильтра в `services/staff/web-console/src/i18n/messages/{en,ru}.ts`.
 - Актуализирована Sprint S7 traceability:
-  `docs/delivery/issue_map.md`, `docs/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`, `docs/delivery/epics/s7/epic_s7.md`;
+  `docs/delivery/issue_map.md`, `docs/deprecated/pre-refactor/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`, `docs/deprecated/pre-refactor/delivery/epics/s7/epic_s7.md`;
   remaining backlog нормализован как `#246..#260` + post-plan `#274`.
 - Проверки по scope:
   cleanup-поиск `rg -n` по `Global filter`/`uiContext.env`/`uiContext.namespace`,
@@ -188,7 +188,7 @@ approvals:
   `/:pathMatch(.*)* -> projects`; stale URL `/runtime-deploy/images*` попадает в него
   после cleanup `#244`, поэтому удалённый раздел не возвращается в MVP navigation.
 - Нормализована Sprint S7 traceability:
-  `docs/delivery/issue_map.md`, `docs/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`, `docs/delivery/epics/s7/epic_s7.md`;
+  `docs/delivery/issue_map.md`, `docs/deprecated/pre-refactor/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`, `docs/deprecated/pre-refactor/delivery/epics/s7/epic_s7.md`;
   remaining backlog нормализован как `#247..#260` + post-plan `#274`.
 - Через Context7 (`/vuejs/router`) подтверждён актуальный синтаксис Vue Router 4 для catch-all path
   `:pathMatch(.*)*`, которым закрываются удалённые пути без отдельного route record.
@@ -234,7 +234,7 @@ approvals:
   пользовательские подписи нормализованы как `trigger kind` / `вид триггера`,
   чтобы в MVP UI не оставался термин `run type`.
 - Актуализирована Sprint S7 traceability:
-  `docs/delivery/issue_map.md`, `docs/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`, `docs/delivery/epics/s7/epic_s7.md`;
+  `docs/delivery/issue_map.md`, `docs/deprecated/pre-refactor/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`, `docs/deprecated/pre-refactor/delivery/epics/s7/epic_s7.md`;
   remaining backlog нормализован как `#252..#256`, `#258..#260`.
 - Проверки по scope:
   cleanup-поиск `rg -n "Run type|Тип запуска" services/staff/web-console/src`,
@@ -260,8 +260,8 @@ approvals:
   и обработка `failed_precondition` для операторского сценария.
 - Актуализированы traceability документы Sprint S7:
   `docs/delivery/issue_map.md`,
-  `docs/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`,
-  `docs/delivery/epics/s7/epic_s7.md`;
+  `docs/deprecated/pre-refactor/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`,
+  `docs/deprecated/pre-refactor/delivery/epics/s7/epic_s7.md`;
   remaining backlog нормализован как `#254..#256`, `#258..#260`.
 - Проверки по scope:
   `make gen-proto-go`,
@@ -319,8 +319,8 @@ approvals:
 - Актуализированы traceability документы Sprint S7:
   `docs/delivery/issue_map.md`,
   `docs/delivery/delivery_plan.md`,
-  `docs/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`,
-  `docs/delivery/epics/s7/epic_s7.md`;
+  `docs/deprecated/pre-refactor/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`,
+  `docs/deprecated/pre-refactor/delivery/epics/s7/epic_s7.md`;
   remaining backlog нормализован как `#254`, `#258..#260`.
 - Проверки по scope:
   `kubectl config view --minify -o jsonpath='{..namespace}'`,
@@ -347,8 +347,8 @@ approvals:
   - выбора canonical comment при duplicate terminal comments.
 - Актуализирована Sprint S7 traceability:
   `docs/delivery/issue_map.md`,
-  `docs/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`,
-  `docs/delivery/epics/s7/epic_s7.md`;
+  `docs/deprecated/pre-refactor/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`,
+  `docs/deprecated/pre-refactor/delivery/epics/s7/epic_s7.md`;
   remaining backlog нормализован как `#254`, `#255`, `#259..#260`.
 - Проверки по scope:
   `go test ./services/internal/control-plane/internal/domain/runstatus/...`.
@@ -370,8 +370,8 @@ approvals:
 - Актуализированы traceability документы Sprint S7:
   `docs/delivery/issue_map.md`,
   `docs/delivery/delivery_plan.md`,
-  `docs/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`,
-  `docs/delivery/epics/s7/epic_s7.md`;
+  `docs/deprecated/pre-refactor/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`,
+  `docs/deprecated/pre-refactor/delivery/epics/s7/epic_s7.md`;
   remaining backlog нормализован как `#254`, `#255`, `#260`.
 - Проверки по scope:
   `make gen-proto-go`,
@@ -406,8 +406,8 @@ approvals:
   `docs/delivery/issue_map.md`,
   `docs/delivery/delivery_plan.md`,
   `docs/delivery/development_process_requirements.md`,
-  `docs/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`,
-  `docs/delivery/epics/s7/epic_s7.md`;
+  `docs/deprecated/pre-refactor/delivery/sprints/s7/sprint_s7_mvp_readiness_gap_closure.md`,
+  `docs/deprecated/pre-refactor/delivery/epics/s7/epic_s7.md`;
   remaining standalone backlog нормализован как `#254`.
 - Проверки по scope:
   `go test ./services/jobs/agent-runner/internal/runner/...`,

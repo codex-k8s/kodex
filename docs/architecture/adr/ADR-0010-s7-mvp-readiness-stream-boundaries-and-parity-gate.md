@@ -125,7 +125,7 @@ approvals:
 
 ## Ссылки
 - PRD:
-  - `docs/delivery/epics/s7/prd-s7-day3-mvp-readiness-gap-closure.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s7/prd-s7-day3-mvp-readiness-gap-closure.md`
 - Design doc:
   - `docs/architecture/initiatives/s7_mvp_readiness_gap_closure/architecture.md`
 - Alternatives:

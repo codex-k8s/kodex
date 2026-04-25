@@ -23,9 +23,9 @@ approvals:
 
 ## Актуализация по Issue #541 (`run:intake`, 2026-03-20)
 - Подготовлен intake package:
-  - `docs/delivery/sprints/s17/sprint_s17_unified_user_interaction_waits_and_owner_feedback_inbox.md`;
-  - `docs/delivery/epics/s17/epic_s17.md`;
-  - `docs/delivery/epics/s17/epic-s17-day1-unified-user-interaction-waits-and-owner-feedback-inbox-intake.md`.
+  - `docs/deprecated/pre-refactor/delivery/sprints/s17/sprint_s17_unified_user_interaction_waits_and_owner_feedback_inbox.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s17/epic_s17.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s17/epic-s17-day1-unified-user-interaction-waits-and-owner-feedback-inbox-intake.md`.
 - Зафиксированы:
   - Sprint S17 как отдельная cross-cutting initiative по unified long-lived human-wait contract, deterministic continuation semantics и owner-facing inbox;
   - hybrid execution baseline: same live pod / same `codex` session до user response как happy-path, snapshot-resume только как recovery fallback;
@@ -40,8 +40,8 @@ approvals:
 
 ## Актуализация по Issue #554 (`run:vision`, 2026-03-25)
 - Подготовлен vision package:
-  - `docs/delivery/epics/s17/epic-s17-day2-unified-user-interaction-waits-and-owner-feedback-inbox-vision.md`;
-  - обновлены `docs/delivery/sprints/s17/sprint_s17_unified_user_interaction_waits_and_owner_feedback_inbox.md` и `docs/delivery/epics/s17/epic_s17.md`.
+  - `docs/deprecated/pre-refactor/delivery/epics/s17/epic-s17-day2-unified-user-interaction-waits-and-owner-feedback-inbox-vision.md`;
+  - обновлены `docs/deprecated/pre-refactor/delivery/sprints/s17/sprint_s17_unified_user_interaction_waits_and_owner_feedback_inbox.md` и `docs/deprecated/pre-refactor/delivery/epics/s17/epic_s17.md`.
 - Зафиксированы:
   - unified owner feedback loop как platform capability, где owner отвечает в Telegram или staff-console, а агент продолжает ту же задачу без GitHub-comment detour и без channel drift;
   - mission, north star, persona outcomes, KPI/guardrails и wave boundaries для owner/product lead path, same-session runtime path и staff/operator fallback path;
@@ -54,9 +54,9 @@ approvals:
 
 ## Актуализация по Issue #557 (`run:prd`, 2026-03-25)
 - Подготовлен PRD package:
-  - `docs/delivery/epics/s17/epic-s17-day3-unified-user-interaction-waits-and-owner-feedback-inbox-prd.md`;
-  - `docs/delivery/epics/s17/prd-s17-day3-unified-user-interaction-waits-and-owner-feedback-inbox.md`;
-  - обновлены `docs/delivery/sprints/s17/sprint_s17_unified_user_interaction_waits_and_owner_feedback_inbox.md` и `docs/delivery/epics/s17/epic_s17.md`.
+  - `docs/deprecated/pre-refactor/delivery/epics/s17/epic-s17-day3-unified-user-interaction-waits-and-owner-feedback-inbox-prd.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s17/prd-s17-day3-unified-user-interaction-waits-and-owner-feedback-inbox.md`;
+  - обновлены `docs/deprecated/pre-refactor/delivery/sprints/s17/sprint_s17_unified_user_interaction_waits_and_owner_feedback_inbox.md` и `docs/deprecated/pre-refactor/delivery/epics/s17/epic_s17.md`.
 - Зафиксированы:
   - unified owner feedback loop как product contract для owner inbox, same-session continuation, delivery-before-wait lifecycle и dual-channel semantics;
   - user stories, FR/AC/NFR, scenario matrix и expected evidence для owner/product lead path, live runtime path и staff/operator fallback;
@@ -69,14 +69,14 @@ approvals:
 
 ## Актуализация по Issue #559 (`run:arch`, 2026-03-26)
 - Подготовлен architecture package:
-  - `docs/delivery/epics/s17/epic-s17-day4-unified-user-interaction-waits-and-owner-feedback-inbox-arch.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s17/epic-s17-day4-unified-user-interaction-waits-and-owner-feedback-inbox-arch.md`;
   - `docs/architecture/initiatives/s17_unified_owner_feedback_loop/README.md`;
   - `docs/architecture/initiatives/s17_unified_owner_feedback_loop/architecture.md`;
   - `docs/architecture/initiatives/s17_unified_owner_feedback_loop/c4_context.md`;
   - `docs/architecture/initiatives/s17_unified_owner_feedback_loop/c4_container.md`;
   - `docs/architecture/adr/ADR-0017-unified-owner-feedback-loop-live-wait-primary-platform-owned-continuation.md`;
   - `docs/architecture/alternatives/ALT-0009-unified-owner-feedback-loop-live-wait-and-channel-ownership.md`;
-  - обновлены `docs/architecture/README.md`, `docs/delivery/sprints/s17/sprint_s17_unified_user_interaction_waits_and_owner_feedback_inbox.md`, `docs/delivery/epics/s17/epic_s17.md` и `docs/delivery/delivery_plan.md`.
+  - обновлены `docs/architecture/README.md`, `docs/deprecated/pre-refactor/delivery/sprints/s17/sprint_s17_unified_user_interaction_waits_and_owner_feedback_inbox.md`, `docs/deprecated/pre-refactor/delivery/epics/s17/epic_s17.md` и `docs/delivery/delivery_plan.md`.
 - Зафиксированы:
   - `control-plane` как единственный owner feedback request truth, accepted-response winner, wait/deadline policy и continuation classification;
   - `worker` как owner dispatch/retry/reconcile и runtime lease keepalive для long-lived waits, при этом `agent-runner` остаётся owner only for live same-session execution and recovery snapshot capture;
@@ -89,13 +89,13 @@ approvals:
 
 ## Актуализация по Issue #568 (`run:design`, 2026-03-27)
 - Подготовлен design package:
-  - `docs/delivery/epics/s17/epic-s17-day5-unified-user-interaction-waits-and-owner-feedback-inbox-design.md`;
+  - `docs/deprecated/pre-refactor/delivery/epics/s17/epic-s17-day5-unified-user-interaction-waits-and-owner-feedback-inbox-design.md`;
   - `docs/architecture/initiatives/s17_unified_owner_feedback_loop/README.md`;
   - `docs/architecture/initiatives/s17_unified_owner_feedback_loop/design_doc.md`;
   - `docs/architecture/initiatives/s17_unified_owner_feedback_loop/api_contract.md`;
   - `docs/architecture/initiatives/s17_unified_owner_feedback_loop/data_model.md`;
   - `docs/architecture/initiatives/s17_unified_owner_feedback_loop/migrations_policy.md`;
-  - обновлены `docs/delivery/sprints/s17/sprint_s17_unified_user_interaction_waits_and_owner_feedback_inbox.md`, `docs/delivery/epics/s17/epic_s17.md`, `docs/delivery/delivery_plan.md` и `docs/delivery/issue_map.md`.
+  - обновлены `docs/deprecated/pre-refactor/delivery/sprints/s17/sprint_s17_unified_user_interaction_waits_and_owner_feedback_inbox.md`, `docs/deprecated/pre-refactor/delivery/epics/s17/epic_s17.md`, `docs/delivery/delivery_plan.md` и `docs/delivery/issue_map.md`.
 - Зафиксированы:
   - built-in wait entrypoint остаётся на `user.decision.request`, а control tool `owner.feedback.request` не переиспользуется для ordinary owner responses;
   - persisted owner-feedback truth materializes как additive overlay поверх Sprint S10/S11 interaction foundation: `interaction_requests` extensions + `owner_feedback_wait_links` + `owner_feedback_channel_projections` + `owner_feedback_response_bindings`;
@@ -107,8 +107,8 @@ approvals:
 
 ## Актуализация по Issue #575 (`run:plan`, 2026-04-01)
 - Подготовлен plan package:
-  - `docs/delivery/epics/s17/epic-s17-day6-unified-user-interaction-waits-and-owner-feedback-inbox-plan.md`;
-  - обновлены `docs/delivery/sprints/s17/sprint_s17_unified_user_interaction_waits_and_owner_feedback_inbox.md`, `docs/delivery/epics/s17/epic_s17.md`, `docs/delivery/delivery_plan.md`, `docs/delivery/issue_map.md`, `docs/delivery/requirements_traceability.md`, `docs/delivery/epics/README.md`, `docs/delivery/sprints/README.md` и `docs/delivery/traceability/README.md`.
+  - `docs/deprecated/pre-refactor/delivery/epics/s17/epic-s17-day6-unified-user-interaction-waits-and-owner-feedback-inbox-plan.md`;
+  - обновлены `docs/deprecated/pre-refactor/delivery/sprints/s17/sprint_s17_unified_user_interaction_waits_and_owner_feedback_inbox.md`, `docs/deprecated/pre-refactor/delivery/epics/s17/epic_s17.md`, `docs/delivery/delivery_plan.md`, `docs/delivery/issue_map.md`, `docs/delivery/requirements_traceability.md`, `docs/deprecated/pre-refactor/delivery/epics/README.md`, `docs/deprecated/pre-refactor/delivery/sprints/README.md` и `docs/delivery/traceability/README.md`.
 - Зафиксированы:
   - execution package `S17-E01..S17-E07` для schema ownership, domain/use-case, worker visibility, `api-gateway`, `telegram-interaction-adapter`, `staff web-console` и observability/evidence gate;
   - prerequisite gate на закрытых Sprint S10/S11 foundation issues `#391..#395` и `#458`;

@@ -29,9 +29,9 @@ approvals:
   - source discussion `#480` остаётся историческим драйвером gap между Mission Control и owner expectations;
   - backend rebuild вынесен в отдельный follow-up `#563`.
 - Source of truth для текущего stage:
-  - `docs/delivery/epics/s18/epic-s18-day3-mission-control-frontend-first-canvas-prd.md`
-  - `docs/delivery/epics/s18/prd-s18-day3-mission-control-frontend-first-canvas.md`
-  - `docs/delivery/sprints/s18/sprint_s18_mission_control_frontend_first_canvas_fake_data.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s18/epic-s18-day3-mission-control-frontend-first-canvas-prd.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s18/prd-s18-day3-mission-control-frontend-first-canvas.md`
+  - `docs/deprecated/pre-refactor/delivery/sprints/s18/sprint_s18_mission_control_frontend_first_canvas_fake_data.md`
   - `docs/delivery/traceability/s18_mission_control_frontend_first_canvas_history.md`
   - `docs/product/requirements_machine_driven.md`
   - `docs/product/agents_operating_model.md`

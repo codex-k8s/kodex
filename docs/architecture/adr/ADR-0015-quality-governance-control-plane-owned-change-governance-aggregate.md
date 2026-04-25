@@ -34,7 +34,7 @@ approvals:
   - `high/critical` changes не допускают silent waivers;
   - не вводим новый runtime service до design-stage.
 - Связанные требования:
-  - `docs/delivery/epics/s13/prd-s13-day3-quality-governance-system.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s13/prd-s13-day3-quality-governance-system.md`
   - `FR-026`, `FR-028`, `FR-033`, `FR-053`, `FR-054`
   - `NFR-010`, `NFR-018`
 - Что ломается без решения:
@@ -145,7 +145,7 @@ approvals:
 
 ## Ссылки
 - PRD:
-  - `docs/delivery/epics/s13/prd-s13-day3-quality-governance-system.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s13/prd-s13-day3-quality-governance-system.md`
 - Architecture:
   - `docs/architecture/initiatives/s13_quality_governance_system/architecture.md`
 - Alternatives:

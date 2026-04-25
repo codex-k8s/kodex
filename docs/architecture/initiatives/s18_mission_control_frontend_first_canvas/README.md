@@ -35,11 +35,11 @@ approvals:
 - `docs/architecture/alternatives/ALT-0010-mission-control-frontend-first-prototype-boundaries.md`
 
 ## Связанные source-of-truth документы
-- `docs/delivery/epics/s18/epic-s18-day4-mission-control-frontend-first-canvas-arch.md`
-- `docs/delivery/epics/s18/epic-s18-day5-mission-control-frontend-first-canvas-design.md`
-- `docs/delivery/epics/s18/epic-s18-day3-mission-control-frontend-first-canvas-prd.md`
-- `docs/delivery/epics/s18/prd-s18-day3-mission-control-frontend-first-canvas.md`
-- `docs/delivery/sprints/s18/sprint_s18_mission_control_frontend_first_canvas_fake_data.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s18/epic-s18-day4-mission-control-frontend-first-canvas-arch.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s18/epic-s18-day5-mission-control-frontend-first-canvas-design.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s18/epic-s18-day3-mission-control-frontend-first-canvas-prd.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s18/prd-s18-day3-mission-control-frontend-first-canvas.md`
+- `docs/deprecated/pre-refactor/delivery/sprints/s18/sprint_s18_mission_control_frontend_first_canvas_fake_data.md`
 - `docs/delivery/traceability/s18_mission_control_frontend_first_canvas_history.md`
 - `docs/product/requirements_machine_driven.md`
 - `docs/product/agents_operating_model.md`

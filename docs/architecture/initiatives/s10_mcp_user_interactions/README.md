@@ -39,6 +39,6 @@ approvals:
 - `docs/architecture/mcp_approval_and_audit_flow.md`
 - `docs/architecture/adr/ADR-0012-built-in-mcp-user-interactions-control-plane-owned-lifecycle.md`
 - `docs/architecture/alternatives/ALT-0004-built-in-mcp-user-interactions-lifecycle-boundaries.md`
-- `docs/delivery/epics/s10/epic-s10-day4-mcp-user-interactions-arch.md`
-- `docs/delivery/epics/s10/epic-s10-day5-mcp-user-interactions-design.md`
-- `docs/delivery/epics/s10/prd-s10-day3-mcp-user-interactions.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s10/epic-s10-day4-mcp-user-interactions-arch.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s10/epic-s10-day5-mcp-user-interactions-design.md`
+- `docs/deprecated/pre-refactor/delivery/epics/s10/prd-s10-day3-mcp-user-interactions.md`

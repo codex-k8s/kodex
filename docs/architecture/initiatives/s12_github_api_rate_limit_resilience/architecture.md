@@ -27,7 +27,7 @@ approvals:
 ## Контекст и входные артефакты
 - Delivery-цепочка: `#366 (intake) -> #413 (vision) -> #416 (prd) -> #418 (arch)`.
 - Source of truth:
-  - `docs/delivery/epics/s12/prd-s12-day3-github-api-rate-limit-resilience.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s12/prd-s12-day3-github-api-rate-limit-resilience.md`
   - `docs/product/requirements_machine_driven.md`
   - `docs/product/agents_operating_model.md`
   - `docs/product/labels_and_trigger_policy.md`

@@ -42,8 +42,8 @@ approvals:
   - `docs/architecture/adr/ADR-0018-mission-control-frontend-first-prototype-and-backend-handover-boundary.md`
   - `docs/architecture/alternatives/ALT-0010-mission-control-frontend-first-prototype-boundaries.md`
 - Product baseline:
-  - `docs/delivery/epics/s18/prd-s18-day3-mission-control-frontend-first-canvas.md`
-  - `docs/delivery/sprints/s18/sprint_s18_mission_control_frontend_first_canvas_fake_data.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s18/prd-s18-day3-mission-control-frontend-first-canvas.md`
+  - `docs/deprecated/pre-refactor/delivery/sprints/s18/sprint_s18_mission_control_frontend_first_canvas_fake_data.md`
 - Current implementation surface to avoid extending in Sprint S18:
   - `services/staff/web-console/src/pages/operations/MissionControlPage.vue`
   - `services/staff/web-console/src/features/mission-control/api.ts`

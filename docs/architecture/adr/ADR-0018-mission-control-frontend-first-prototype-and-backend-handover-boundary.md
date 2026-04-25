@@ -34,7 +34,7 @@ approvals:
   - repo-seed prompts остаются source of truth;
   - DB prompt editor, live provider mutation path и backend rebuild `#563` не входят в Sprint S18 scope.
 - Связанные требования:
-  - `docs/delivery/epics/s18/prd-s18-day3-mission-control-frontend-first-canvas.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s18/prd-s18-day3-mission-control-frontend-first-canvas.md`
   - `FR-009`, `FR-026`, `FR-027`
   - `NFR-014`, `NFR-018`
 - Что ломается без решения:
@@ -144,7 +144,7 @@ approvals:
 
 ## Ссылки
 - PRD:
-  - `docs/delivery/epics/s18/prd-s18-day3-mission-control-frontend-first-canvas.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s18/prd-s18-day3-mission-control-frontend-first-canvas.md`
 - Architecture:
   - `docs/architecture/initiatives/s18_mission_control_frontend_first_canvas/architecture.md`
 - Alternatives:

@@ -27,7 +27,7 @@ approvals:
   - `docs/product/requirements_machine_driven.md`
   - `docs/product/labels_and_trigger_policy.md`
   - `docs/product/stage_process_model.md`
-  - `docs/delivery/epics/s7/prd-s7-day3-mvp-readiness-gap-closure.md`
+  - `docs/deprecated/pre-refactor/delivery/epics/s7/prd-s7-day3-mvp-readiness-gap-closure.md`
   - `docs/delivery/development_process_requirements.md`
 
 ## Цели архитектурного этапа
