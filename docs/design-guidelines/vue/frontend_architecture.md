@@ -2,8 +2,8 @@
 
 ## Где живёт фронтенд
 
-- Целевая консоль `kodex` размещается в новом frontend-сервисе, согласованном в `refactoring/09-target-architecture.md` и `refactoring/10-service-boundaries.md`.
-- Старый frontend перенесён в `deprecated/services/staff/web-console` и не используется как база новой реализации.
+- Frontend-приложение размещается в целевом frontend-сервисе, определённом актуальной архитектурной документацией проекта.
+- Устаревшие frontend-каталоги не используются как база новой реализации.
 - Дополнительные публичные страницы (если появятся) размещаются в целевой зоне `services/external/*`.
 - Dev-only frontend размещается в целевой зоне `services/dev/*` и не деплоится в production.
 

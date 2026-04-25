@@ -14,5 +14,4 @@
 - целевой frontend приложения будет заново создан в каталоге, согласованном в новой архитектуре;
 - вход в UI защищен GitHub OAuth;
 - пользовательские настройки и права приходят из backend API (PostgreSQL как source of truth).
-- Wave-планирование и doc-governance на время reset-итерации — по
-  `refactoring/task.md`, `refactoring/02-doc-governance.md` и `refactoring/24-pre-wave7-documentation-rebuild-plan.md`.
+- Проектное планирование и документационная каноника задаются корневым `AGENTS.md` и актуальной проектной документацией, а не этим техническим гайдом.

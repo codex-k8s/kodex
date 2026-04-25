@@ -84,17 +84,23 @@ approvals:
 6. Волна 5: UX и frontend-консоль
 7. Волна 5.1: расширение платформенного основания перед runtime-волной
 8. Волна 6: runtime/deploy/bootstrap
-9. Волна 7: Access and accounts — доступ, организации, группы и внешние аккаунты
-10. Волна 8: Projects and repositories — проекты, репозитории, релизные политики и источники проектной документации
-11. Волна 9: Package platform — пакеты, каталоги, установка, версии и пакеты руководящей документации
-12. Волна 10: Provider-native work items — `Issue`, `PR/MR`, комментарии, relationships, ветки и теги
-13. Волна 11: Agent orchestration — `agent-manager`, flow, stage, role, шаблоны промптов и automation rules
-14. Волна 12: Runtime and fleet — слоты, `run`, `job`, runtime manager, fleet manager, серверы и кластеры
-15. Волна 13: Interaction hub — платформенный MCP, согласования, уведомления, внешняя обратная связь и каналы взаимодействия
-16. Волна 14: Console and operations UX — реализация утверждённых операторских экранов и рабочих пространств
-17. Волна 15: Risk and release governance — risk gates, release lines, branch rules и автоматизация по триггерам
-18. Волна 16: Billing and cost accounting — затраты, распределение расходов, счета и коммерческий контур
-19. Волна 17: Knowledge lifecycle — руководящая и проектная документация, самоулучшение и жизненный цикл знаний
+9. Волна 6.1: информационная архитектура новой `docs/**`, доменные пакеты и раздельная карта Issue
+10. Волна 6.2: сквозной продуктовый каркас платформы
+11. Волна 6.3: сквозной архитектурный каркас платформы
+12. Волна 6.4: пакет домена доступа перед кодовой wave 7
+13. Волна 6.5: delivery, трассируемость и acceptance
+14. Волна 6.6: ops и первый deploy gate
+15. Волна 7: Access and accounts — доступ, организации, группы и внешние аккаунты
+16. Волна 8: Projects and repositories — проекты, репозитории, релизные политики и источники проектной документации
+17. Волна 9: Package platform — пакеты, каталоги, установка, версии и пакеты руководящей документации
+18. Волна 10: Provider-native work items — `Issue`, `PR/MR`, комментарии, relationships, ветки и теги
+19. Волна 11: Agent orchestration — `agent-manager`, flow, stage, role, шаблоны промптов и automation rules
+20. Волна 12: Runtime and fleet — слоты, `run`, `job`, runtime manager, fleet manager, серверы и кластеры
+21. Волна 13: Interaction hub — платформенный MCP, согласования, уведомления, внешняя обратная связь и каналы взаимодействия
+22. Волна 14: Console and operations UX — реализация утверждённых операторских экранов и рабочих пространств
+23. Волна 15: Risk and release governance — risk gates, release lines, branch rules и автоматизация по триггерам
+24. Волна 16: Billing and cost accounting — затраты, распределение расходов, счета и коммерческий контур
+25. Волна 17: Knowledge lifecycle — руководящая и проектная документация, самоулучшение и жизненный цикл знаний
 
 ## Состояние исторических справочных материалов
 - `refactoring/control-plane-refactor-agent-pack/**` оставляем в репозитории как исторический пакет:
@@ -102,8 +108,9 @@ approvals:
   - его список сервисов, приоритеты и старая целевая модель не считаются источником правды для новой программы.
 
 ## Следующие артефакты
-- После завершения backlog checkpoint следующими обязательными артефактами должны стать:
-  - пересборка минимальной новой `docs/**` по `refactoring/24-pre-wave7-documentation-rebuild-plan.md`;
+- После backlog checkpoint обязательный порядок такой:
+  - wave 6.1: структура `docs/platform/**`, `docs/domains/**`, `docs/catalogs/**`, `docs/delivery/**` и раздельная карта Issue;
+  - wave 6.2-6.6: наполнение новой документации от сквозного уровня к домену доступа и первому deploy gate;
   - затем первый кодовый пакет wave 7 `Access and accounts`;
   - реализационные документы и PR по очереди `#599`-`#602`;
   - следующий backlog pass уже по итогам wave 7, а не вместо неё.

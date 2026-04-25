@@ -18,10 +18,11 @@ approvals:
 
 ## TL;DR
 - Перед кодовой wave 7 нужно заново собрать минимальную каноническую документацию в `docs/**`.
-- Старые `docs/product`, `docs/architecture`, `docs/delivery`, `docs/ops` и `docs/research` уже выведены в `deprecated/docs/**`.
+- Старые `docs/product`, `docs/architecture`, `docs/delivery`, `docs/ops` и `docs/research` уже выведены в `deprecated/docs/**` и не восстанавливаются как активная структура.
 - Старые `cmd`, `deploy`, `libs`, `proto`, `services`, `tools` и полный `services.yaml` уже выведены в `deprecated/**` и не являются базой новой реализации.
-- Корневой `services.yaml` до wave 7 остаётся минимальным draft-placeholder без старых сервисов, версий, окружений и runtime-настроек.
+- Корневой `services.yaml` до wave 7 остаётся минимальным черновиком без старых сервисов, версий, окружений и runtime-настроек.
 - Новые документы создаются по шаблонам `docs/templates/**`, а не правятся поверх старых файлов.
+- Выбранная структура wave 6.1: `docs/platform/**` для сквозной платформенной каноники, `docs/domains/**` для доменных пакетов, `docs/catalogs/**` для каталогов расширений и пакетов, `docs/delivery/**` для управления поставкой.
 - Цель — войти в wave 7 с понятной моделью доступа, организаций, групп, пользователей и внешних аккаунтов, а также с общей картой новой платформы.
 
 ## Что уже считается источником правды
@@ -39,31 +40,70 @@ approvals:
 
 ## Порядок разработки новой `docs/**`
 
-### 1. Корневая структура и индексы
+### 1. Wave 6.1: корневая структура и индексы
 Создать:
-- `docs/product/README.md`;
-- `docs/architecture/README.md`;
+- `docs/index.md`;
+- `docs/platform/README.md`;
+- `docs/platform/product/README.md`;
+- `docs/platform/architecture/README.md`;
+- `docs/platform/delivery/README.md`;
+- `docs/platform/ops/README.md`;
+- `docs/domains/README.md`;
+- `docs/catalogs/README.md`;
+- `docs/catalogs/plugins/README.md`;
+- `docs/catalogs/guidance-packages/README.md`;
+- `docs/catalogs/prompt-roles/README.md`;
 - `docs/delivery/README.md`;
-- `docs/ops/README.md`;
-- при необходимости `docs/research/README.md`.
+- `docs/delivery/waves/README.md`;
+- `docs/research/README.md`.
 
 Результат:
-- активные каталоги снова существуют;
-- каждый каталог объясняет, что в нём каноника, а что ещё не создано;
-- `docs/index.md` обновлён под новую структуру.
+- активные каталоги снова существуют, но не повторяют старую плоскую структуру;
+- каждый каталог объясняет, что в нём каноника, а что ещё будет создано позже;
+- `docs/index.md` становится корневой картой новой документации.
 
 Шаблоны:
 - `docs/templates/index.md`;
 - `docs/templates/docset_issue.md`;
 - `docs/templates/docset_pr.md`.
 
-### 2. Продуктовый каркас
+### 2. Wave 6.1: доменные пакеты и раздельная карта Issue
+Создать доменные индексы:
+- `docs/domains/access-and-accounts/README.md`;
+- `docs/domains/projects-and-repositories/README.md`;
+- `docs/domains/provider-native-work-items/README.md`;
+- `docs/domains/package-platform/README.md`;
+- `docs/domains/agent-orchestration/README.md`;
+- `docs/domains/runtime-and-fleet/README.md`;
+- `docs/domains/interaction-hub/README.md`;
+- `docs/domains/console-and-operations-ux/README.md`;
+- `docs/domains/risk-and-release-governance/README.md`;
+- `docs/domains/billing-and-cost-accounting/README.md`;
+- `docs/domains/knowledge-lifecycle/README.md`.
+
+Создать карту связей:
+- `docs/delivery/issue-map/README.md`;
+- `docs/delivery/issue-map/index.md`;
+- `docs/delivery/issue-map/domains/*.md`;
+- `docs/delivery/issue-map/waves/*.md`.
+
+Результат:
+- больше нет одного быстрорастущего `issue_map.md`;
+- доменные агенты правят разные файлы и реже конфликтуют при merge;
+- волновой файл фиксирует временную картину поставки, доменный файл — долгоживущую связь `Issue/PR ↔ документы`.
+
+Шаблоны:
+- `docs/templates/issue_map.md`;
+- `docs/templates/delivery_plan.md`;
+- `docs/templates/definition_of_done.md`.
+
+### 3. Wave 6.2: сквозной продуктовый каркас платформы
 Создать минимальный продуктовый пакет:
-- `docs/product/brief.md`;
-- `docs/product/constraints.md`;
-- `docs/product/product_model.md`;
-- `docs/product/glossary.md`;
-- `docs/product/requirements.md`.
+- `docs/platform/product/brief.md`;
+- `docs/platform/product/constraints.md`;
+- `docs/platform/product/product_model.md`;
+- `docs/platform/product/glossary.md`;
+- `docs/platform/product/requirements.md`.
 
 Что обязательно зафиксировать:
 - provider-first рабочая модель;
@@ -79,15 +119,15 @@ approvals:
 - `docs/templates/nfr.md`;
 - `docs/templates/personas.md`.
 
-### 3. Архитектурный каркас платформы
+### 4. Wave 6.3: сквозной архитектурный каркас платформы
 Создать минимальный архитектурный пакет:
-- `docs/architecture/c4_context.md`;
-- `docs/architecture/c4_container.md`;
-- `docs/architecture/domain_map.md`;
-- `docs/architecture/service_boundaries.md`;
-- `docs/architecture/data_model.md`;
-- `docs/architecture/provider_integration_model.md`;
-- `docs/architecture/mcp_and_interaction_model.md`.
+- `docs/platform/architecture/c4_context.md`;
+- `docs/platform/architecture/c4_container.md`;
+- `docs/platform/architecture/domain_map.md`;
+- `docs/platform/architecture/service_boundaries.md`;
+- `docs/platform/architecture/data_model.md`;
+- `docs/platform/architecture/provider_integration_model.md`;
+- `docs/platform/architecture/mcp_and_interaction_model.md`.
 
 Что обязательно зафиксировать:
 - новые сервисные границы без доработки старого control-plane как базы;
@@ -103,17 +143,18 @@ approvals:
 - `docs/templates/alternatives.md`;
 - `docs/templates/data_model.md`.
 
-### 4. Wave 7 access package
+### 5. Wave 6.4: пакет домена доступа перед кодовой wave 7
 До кода wave 7 создать отдельный пакет для домена доступа:
-- `docs/product/access_and_accounts_requirements.md`;
-- `docs/architecture/access_and_accounts_design.md`;
-- `docs/architecture/access_and_accounts_data_model.md`;
-- `docs/architecture/access_and_accounts_api_contract.md`;
-- `docs/delivery/waves/wave7_access_and_accounts.md`.
+- `docs/domains/access-and-accounts/product/requirements.md`;
+- `docs/domains/access-and-accounts/architecture/design.md`;
+- `docs/domains/access-and-accounts/architecture/data_model.md`;
+- `docs/domains/access-and-accounts/architecture/api_contract.md`;
+- `docs/domains/access-and-accounts/delivery/wave7_access_and_accounts.md`;
+- `docs/delivery/waves/wave-007-access-and-accounts.md`;
 
 Что обязательно зафиксировать:
 - owner-организация, клиентские организации, организации внешних исполнителей и будущие SaaS-организации;
-- пользователи, membership, группы и наследование прав;
+- пользователи, членство, группы и наследование прав;
 - внешние аккаунты и интеграции как отдельный домен;
 - связь аккаунтов с организациями, проектами, ролями и политиками;
 - audit и acceptance rules для изменений доступа.
@@ -125,11 +166,10 @@ approvals:
 - `docs/templates/data_model.md`;
 - `docs/templates/delivery_plan.md`.
 
-### 5. Delivery, traceability и acceptance
+### 6. Wave 6.5: delivery, трассируемость и acceptance
 Создать:
-- `docs/delivery/development_process.md`;
-- `docs/delivery/delivery_plan.md`;
-- `docs/delivery/issue_map.md`;
+- `docs/platform/delivery/development_process.md`;
+- `docs/platform/delivery/delivery_plan.md`;
 - `docs/delivery/requirements_traceability.md`;
 - `docs/delivery/waves/README.md`.
 
@@ -145,13 +185,13 @@ approvals:
 - `docs/templates/definition_of_done.md`;
 - `docs/templates/issue_map.md`.
 
-### 6. Ops и первый deploy gate
+### 7. Wave 6.6: ops и первый deploy gate
 Создать:
-- `docs/ops/production_runbook.md`;
-- `docs/ops/bootstrap_runbook.md`;
-- `docs/ops/monitoring.md`;
-- `docs/ops/alerts.md`;
-- `docs/ops/backup_and_cleanup.md`.
+- `docs/platform/ops/production_runbook.md`;
+- `docs/platform/ops/bootstrap_runbook.md`;
+- `docs/platform/ops/monitoring.md`;
+- `docs/platform/ops/alerts.md`;
+- `docs/platform/ops/backup_and_cleanup.md`.
 
 Что обязательно зафиксировать:
 - первый deploy новой версии начинается только после готовности минимального вертикального среза;
@@ -167,18 +207,18 @@ approvals:
 - `docs/templates/rollback_plan.md`.
 
 ## Что не делать
-- Не восстанавливать старые `docs/product`, `docs/architecture`, `docs/delivery`, `docs/ops`, `docs/research` переносом файлов из архива.
+- Не восстанавливать старые `docs/product`, `docs/architecture`, `docs/ops`, `docs/research` и единый `docs/delivery/issue_map.md` переносом файлов из архива.
 - Не создавать sprint/day-epic структуру заново.
 - Не ссылаться на архив как на активную канонику.
 - Не писать новую реализацию поверх старых каталогов из `deprecated/**`.
-- Не начинать кодовую wave 7 до согласования минимального access package.
+- Не начинать кодовую wave 7 до согласования минимального пакета домена доступа.
 
 ## Gate перед кодовой wave 7
 Кодовая wave 7 может стартовать, когда:
-1. создан новый `docs/index.md` и индексы доменов;
-2. создан минимальный product package;
-3. создан минимальный architecture package;
-4. создан wave 7 access package;
-5. создан delivery/traceability package под wave-модель;
-6. создан минимальный ops package для первого deploy gate;
+1. создан новый `docs/index.md` и индексы `docs/platform/**`, `docs/domains/**`, `docs/catalogs/**`;
+2. создан минимальный сквозной продуктовый пакет в `docs/platform/product/**`;
+3. создан минимальный сквозной архитектурный пакет в `docs/platform/architecture/**`;
+4. создан пакет домена доступа в `docs/domains/access-and-accounts/**`;
+5. создан пакет поставки и трассируемости под wave-модель и раздельную карту `docs/delivery/issue-map/**`;
+6. создан минимальный ops-пакет в `docs/platform/ops/**` для первого deploy gate;
 7. `AGENTS.md` и `docs/design-guidelines/**` больше не указывают на архивные документы как на активные.

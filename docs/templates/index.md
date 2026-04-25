@@ -28,7 +28,9 @@ approvals:
 - SRE: `release_plan.md`, `release_notes.md`, `rollback_plan.md`, `runbook.md`, `monitoring.md`, `alerts.md`, `slo.md`, `incident_playbook.md`, `incident_postmortem.md`
 
 ## Правила применения
-- Шаблон остаётся шаблоном: фактический документ создаётся в новом доменном каталоге (`docs/product`, `docs/architecture`, `docs/delivery`, `docs/ops`, `docs/research`) только после того, как этот каталог заново введён в активную структуру.
+- Шаблон остаётся шаблоном: фактический документ создаётся в активной структуре `docs/platform/**`, `docs/domains/**`, `docs/catalogs/**`, `docs/delivery/**` или `docs/research/**`.
+- Сквозные документы платформы создаются в `docs/platform/**`; документы конкретного домена — внутри соответствующего `docs/domains/<domain>/**`; каталоги плагинов, пакетов руководящей документации, ролей и шаблонов промптов — в `docs/catalogs/**`.
+- Шаблон `issue_map.md` применяется только к доменным и волновым картам внутри `docs/delivery/issue-map/**`, а не к одному общему файлу на весь проект.
 - Если template-path меняется, в том же PR синхронизируются актуальные контракты ролей, flow и шаблонов промптов.
 - Индексы проектов, handover-пакеты и исторические sprint artifacts не хранятся в `docs/templates/`.
 
