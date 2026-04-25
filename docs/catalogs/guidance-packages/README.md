@@ -2,19 +2,19 @@
 
 ## Назначение
 
-Раздел описывает будущий каталог пакетов руководящей документации для агентов. Такие пакеты могут жить в отдельных репозиториях и попадать в рабочий контур агента как локальная копия.
+Раздел описывает будущий каталог пакетов руководящей документации для агентов. Такие пакеты могут жить в отдельных репозиториях и попадать в рабочий контур агента как локально доступный источник.
 
 Проектная документация конкретного продукта не становится пакетом руководящей документации только потому, что агенту нужно её читать.
 
 ## Первые репозитории-источники
 
-- `github.com/codex-k8s/kodex-guidelines-common-ru` — общие инженерные правила, необязательный submodule `docs/external/guidelines/common`.
-- `github.com/codex-k8s/kodex-guidelines-go-backend-ru` — правила для Go backend, необязательный submodule `docs/external/guidelines/go`.
-- `github.com/codex-k8s/kodex-guidelines-vue-frontend-ru` — правила для Vue и TypeScript frontend, необязательный submodule `docs/external/guidelines/vue`.
+- `github.com/codex-k8s/kodex-guidelines-common-ru` — общие инженерные правила, source submodule `docs/external/guidelines/common`.
+- `github.com/codex-k8s/kodex-guidelines-go-backend-ru` — правила для Go backend, source submodule `docs/external/guidelines/go`.
+- `github.com/codex-k8s/kodex-guidelines-vue-frontend-ru` — правила для Vue и TypeScript frontend, source submodule `docs/external/guidelines/vue`.
 
-До внедрения штатного импорта руководящих пакетов активная локальная копия для агентов остаётся в `docs/design-guidelines/**`. Изменения в локальной копии и публичных репозиториях нужно синхронизировать явно.
+`docs/design-guidelines/**` содержит проектный overlay поверх подключённых руководящих пакетов. Универсальные изменения вносятся в соответствующий внешний репозиторий, затем в `kodex` обновляется gitlink.
 
-Шаблоны документации вынесены отдельно и не считаются пакетом руководящей документации: публичный источник шаблонов — `github.com/codex-k8s/kodex-doc-templates-ru`, локальный submodule — `docs/external/templates`.
+Шаблоны документации вынесены отдельно и не считаются пакетом руководящей документации: публичный источник шаблонов — `github.com/codex-k8s/kodex-doc-templates-ru`, source submodule — `docs/templates`.
 
 ## Именование
 

@@ -2,13 +2,13 @@
 
 ## Назначение
 
-`docs/external/**` хранит source submodule-ссылки на внешние репозитории документации. Содержимое этих репозиториев не копируется в активную канонику `docs/**`, но остаётся доступным рядом с ней как подключённый источник.
+`docs/external/**` хранит source submodule-ссылки на внешние репозитории руководящей документации. Содержимое этих репозиториев не копируется в активную канонику `docs/**`, но остаётся доступным рядом с ней как подключённый источник.
 
 Внешние пакеты документации считаются reusable baseline. Проектный overlay в `docs/design-guidelines/**` может дополнять или переопределять их требования для `kodex`, если эти требования не подходят для общего пакета.
 
 `docs/**` остаётся единственным корневым деревом активной документации в репозитории `kodex`. Каталог `docs/external/**` нужен только как соседний источник внешних репозиториев документации внутри того же дерева `docs`, чтобы не плодить вторую верхнеуровневую папку наподобие `external-docs`.
 
-Обычный `git clone` основного репозитория работает без инициализации этих submodule.
+Если источник объявлен в `.gitmodules` или `services.yaml` и нужен задаче, он инициализируется как часть рабочего пространства.
 
 Если внешний источник импортирован в проект, его правила обязательны. При конфликте проектный overlay имеет приоритет.
 
@@ -19,11 +19,10 @@
 | `docs/external/guidelines/common` | `github.com/codex-k8s/kodex-guidelines-common-ru` | публичный | Общие инженерные правила. |
 | `docs/external/guidelines/go` | `github.com/codex-k8s/kodex-guidelines-go-backend-ru` | публичный | Инженерные правила для Go backend. |
 | `docs/external/guidelines/vue` | `github.com/codex-k8s/kodex-guidelines-vue-frontend-ru` | публичный | Инженерные правила для Vue и TypeScript frontend. |
-| `docs/external/templates` | `github.com/codex-k8s/kodex-doc-templates-ru` | публичный | Шаблоны документации. |
 
 ## Как подключать вручную
 
-Submodule помечены как `update = none`, чтобы случайная инициализация не тянула лишние источники.
+Submodule помечены как `update = none`, чтобы агент явно выбирал нужные источники.
 
 Для конкретного источника используйте явный путь:
 
@@ -31,7 +30,6 @@ Submodule помечены как `update = none`, чтобы случайная
 git -c submodule.kodex-guidelines-common-ru.update=checkout submodule update --init docs/external/guidelines/common
 git -c submodule.kodex-guidelines-go-backend-ru.update=checkout submodule update --init docs/external/guidelines/go
 git -c submodule.kodex-guidelines-vue-frontend-ru.update=checkout submodule update --init docs/external/guidelines/vue
-git -c submodule.kodex-doc-templates-ru.update=checkout submodule update --init docs/external/templates
 ```
 
 Для публичных документационных submodule достаточно обычного доступа к GitHub.

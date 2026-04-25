@@ -39,4 +39,4 @@
 - `github.com/codex-k8s/kodex-guidelines-go-backend-ru` — source submodule `docs/external/guidelines/go`;
 - `github.com/codex-k8s/kodex-guidelines-vue-frontend-ru` — source submodule `docs/external/guidelines/vue`.
 
-Пока штатный импорт руководящих пакетов не реализован, `docs/external/guidelines/**` выступает подключённым baseline, а `docs/design-guidelines/**` — проектным overlay. Если меняется универсальное правило, нужно обновить соответствующий внешний пакет и затем gitlink.
+`docs/external/guidelines/**` содержит подключённый baseline руководящих правил, а `docs/design-guidelines/**` — проектный overlay. Если меняется универсальное правило, нужно обновить соответствующий внешний пакет и затем gitlink.

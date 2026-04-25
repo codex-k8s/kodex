@@ -41,7 +41,7 @@ spec:
           role: vue-guidelines
         - id: doc-templates
           repo: github.com/codex-k8s/kodex-doc-templates-ru
-          path: docs/external/templates
+          path: docs/templates
           visibility: public
           role: documentation-templates
       packages:
@@ -56,25 +56,27 @@ spec:
           visibility: private
           role: platform-owned-package-source
     policies:
-      ordinaryClone:
-        initSubmodules: false
+      workspaceSources:
+        initDeclaredSubmodulesWhenNeeded: true
+        unavailableSourcesMustBeReported: true
       privateSubmodules:
-        ownerPrefix: github.com/codex-k8s/
-        skipWhenRepositorySlugOutsideOwnerPrefix: true
+        accessCheckedByPlatform: true
       changeManagement:
         mode: pull-request-only
       packageDelivery:
-        platformOwnedSourceReposMayUseSubmodules: true
-        thirdPartyAndCustomerPackagesUseSubmodules: false
-        useSubmodulesForInstalledPackages: false
+        checkoutRoot: packages
+        packagesDeclaredInServicesYaml: true
+        installedPackagesUsePinnedGitRefs: true
         allowPinnedGitRefs: true
         allowedRefs:
           - tag
           - commit
         paidPackagesDistribution: platform-proxy-only
+        downstreamRepositoryCleanupWorkflow: true
   deployableServices: []
   notes:
     - New deployable services must be added only after the corresponding wave documentation is accepted.
     - Do not restore old services, versions, environments or runtime settings from deprecated/services.yaml mechanically.
     - The final inventory schema is defined by the new architecture, not by the archived pre-refactor file.
-    - Submodules are for platform-owned source repositories and public guidance packages, not for the default installation path of user packages.
+    - Packages declared for the project are checked out under packages/ after access and availability checks.
+    - Downstream repositories must remove store, site and optional packages that are not intended for the target installation.
