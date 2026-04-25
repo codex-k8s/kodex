@@ -23,5 +23,5 @@
 - Состояние процессов и синхронизация pod'ов — через PostgreSQL (`JSONB` + `pgvector`).
 - Проектное планирование и документационная каноника задаются корневым `AGENTS.md` и актуальной проектной документацией, а не этим техническим гайдом.
 
-Внешний источник: `github.com/codex-k8s/kodex-guidelines-go-ru`, необязательный submodule `docs/external/guidelines/go`.
+Внешний источник: `github.com/codex-k8s/kodex-guidelines-go-backend-ru`, необязательный submodule `docs/external/guidelines/go`.
 Внешний пакет задаёт reusable backend baseline для Go + DDD + PostgreSQL + goose + OpenAPI/AsyncAPI + gRPC + Kubernetes; `kodex`-специфичные требования держать только здесь.

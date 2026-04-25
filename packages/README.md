@@ -18,7 +18,7 @@
 | Путь | Репозиторий | Доступ | Назначение |
 |---|---|---|---|
 | `packages/package-store` | `github.com/codex-k8s/kodex-package-store` | приватный | Пакет авторского магазина пакетов `kodex`. |
-| `packages/platform-site` | `github.com/codex-k8s/kodex-platform-site` | приватный | Пакет сайта и пользовательской документации платформы. |
+| `packages/platform-site` | `github.com/codex-k8s/kodex-package-platform-site` | приватный | Пакет сайта и пользовательской документации платформы. |
 
 ## Что держать как submodule, а что нет
 
@@ -31,7 +31,7 @@
 
 ```bash
 git -c submodule.kodex-package-store.update=checkout submodule update --init packages/package-store
-git -c submodule.kodex-platform-site.update=checkout submodule update --init packages/platform-site
+git -c submodule.kodex-package-platform-site.update=checkout submodule update --init packages/platform-site
 ```
 
 Для приватных `submodule` перед командой нужен доступ к GitHub и токен с правами чтения соответствующего репозитория. Если slug текущего репозитория не начинается с `github.com/codex-k8s`, не предполагать доступ к `packages/**`.

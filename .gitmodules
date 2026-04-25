@@ -4,9 +4,9 @@
 	branch = main
 	update = none
 	ignore = all
-[submodule "kodex-platform-site"]
+[submodule "kodex-package-platform-site"]
 	path = packages/platform-site
-	url = https://github.com/codex-k8s/kodex-platform-site.git
+	url = https://github.com/codex-k8s/kodex-package-platform-site.git
 	branch = main
 	update = none
 	ignore = all
@@ -16,15 +16,15 @@
 	branch = main
 	update = none
 	ignore = all
-[submodule "kodex-guidelines-go-ru"]
+[submodule "kodex-guidelines-go-backend-ru"]
 	path = docs/external/guidelines/go
-	url = https://github.com/codex-k8s/kodex-guidelines-go-ru.git
+	url = https://github.com/codex-k8s/kodex-guidelines-go-backend-ru.git
 	branch = main
 	update = none
 	ignore = all
-[submodule "kodex-guidelines-vue-ru"]
+[submodule "kodex-guidelines-vue-frontend-ru"]
 	path = docs/external/guidelines/vue
-	url = https://github.com/codex-k8s/kodex-guidelines-vue-ru.git
+	url = https://github.com/codex-k8s/kodex-guidelines-vue-frontend-ru.git
 	branch = main
 	update = none
 	ignore = all

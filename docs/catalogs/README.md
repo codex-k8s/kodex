@@ -20,6 +20,12 @@
 ## Внешние источники
 
 - `github.com/codex-k8s/kodex-package-store` — приватный пакет авторского магазина пакетов, необязательный submodule `packages/package-store`.
-- `github.com/codex-k8s/kodex-platform-site` — приватный пакет сайта и пользовательской документации, необязательный submodule `packages/platform-site`.
+- `github.com/codex-k8s/kodex-package-platform-site` — приватный пакет сайта и пользовательской документации, необязательный submodule `packages/platform-site`.
 - Правила работы с документационными submodule описаны в `docs/external/AGENTS.md`.
 - Правила работы с пакетными submodule описаны в `packages/AGENTS.md`.
+
+## Правило именования
+
+- Пакеты руководящей документации именуются по схеме `kodex-guidelines-<subject>-ru`.
+- Шаблоны документации именуются по схеме `kodex-doc-templates-ru`.
+- Platform-owned package repos именуются по схеме `kodex-package-<name>`.

@@ -15,8 +15,8 @@
 | Путь | Репозиторий | Доступ | Назначение |
 |---|---|---|---|
 | `docs/external/guidelines/common` | `github.com/codex-k8s/kodex-guidelines-common-ru` | публичный | Общие инженерные правила. |
-| `docs/external/guidelines/go` | `github.com/codex-k8s/kodex-guidelines-go-ru` | публичный | Инженерные правила для Go backend. |
-| `docs/external/guidelines/vue` | `github.com/codex-k8s/kodex-guidelines-vue-ru` | публичный | Инженерные правила для Vue и TypeScript frontend. |
+| `docs/external/guidelines/go` | `github.com/codex-k8s/kodex-guidelines-go-backend-ru` | публичный | Инженерные правила для Go backend. |
+| `docs/external/guidelines/vue` | `github.com/codex-k8s/kodex-guidelines-vue-frontend-ru` | публичный | Инженерные правила для Vue и TypeScript frontend. |
 | `docs/external/templates` | `github.com/codex-k8s/kodex-doc-templates-ru` | публичный | Шаблоны документации. |
 
 ## Как подключать вручную
@@ -27,8 +27,8 @@ Submodule помечены как `update = none`, чтобы случайная
 
 ```bash
 git -c submodule.kodex-guidelines-common-ru.update=checkout submodule update --init docs/external/guidelines/common
-git -c submodule.kodex-guidelines-go-ru.update=checkout submodule update --init docs/external/guidelines/go
-git -c submodule.kodex-guidelines-vue-ru.update=checkout submodule update --init docs/external/guidelines/vue
+git -c submodule.kodex-guidelines-go-backend-ru.update=checkout submodule update --init docs/external/guidelines/go
+git -c submodule.kodex-guidelines-vue-frontend-ru.update=checkout submodule update --init docs/external/guidelines/vue
 git -c submodule.kodex-doc-templates-ru.update=checkout submodule update --init docs/external/templates
 ```
 

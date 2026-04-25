@@ -30,12 +30,12 @@ spec:
           visibility: public
           role: common-guidelines
         - id: guidelines-go
-          repo: github.com/codex-k8s/kodex-guidelines-go-ru
+          repo: github.com/codex-k8s/kodex-guidelines-go-backend-ru
           path: docs/external/guidelines/go
           visibility: public
           role: go-guidelines
         - id: guidelines-vue
-          repo: github.com/codex-k8s/kodex-guidelines-vue-ru
+          repo: github.com/codex-k8s/kodex-guidelines-vue-frontend-ru
           path: docs/external/guidelines/vue
           visibility: public
           role: vue-guidelines
@@ -51,7 +51,7 @@ spec:
           visibility: private
           role: platform-owned-package-source
         - id: platform-site-source
-          repo: github.com/codex-k8s/kodex-platform-site
+          repo: github.com/codex-k8s/kodex-package-platform-site
           path: packages/platform-site
           visibility: private
           role: platform-owned-package-source
