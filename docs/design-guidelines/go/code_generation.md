@@ -8,8 +8,8 @@
 - Сгенерированное руками не правим.
 - Изменение перечня сервисов/приложений, участвующих в codegen, должно синхронно обновлять:
   - цели `gen-openapi-*` в `Makefile`;
-  - конфиги codegen в `tools/codegen/**`;
-  - CI-проверку `deploy/base/kodex/codegen-check-job.yaml.tpl`.
+  - конфиги codegen в целевом `tools/codegen/**`;
+  - CI/job-проверку codegen в целевом deploy-контуре.
 - Источник правды транспорта:
   - REST: `api/server/api.yaml` (OpenAPI YAML)
   - gRPC: `proto/**/*.proto`
@@ -28,9 +28,7 @@
 make gen-openapi-go SVC=services/<zone>/<service>
 ```
 
-Текущий backend-coverage в репозитории:
-- `services/external/api-gateway`
-- `services/external/telegram-interaction-adapter`
+Текущий backend-coverage определяется новой архитектурой. Старые сервисы из `deprecated/services/**` не считаются активным покрытием.
 
 Обязательный make-блок:
 - `gen-openapi-go` — генерация Go transport-артефактов;
@@ -80,7 +78,7 @@ make gen-openapi-ts APP=services/<zone>/<app> SPEC=services/<zone>/<service>/api
 
 ## Проверка консистентности generated-кода в CI
 
-- Обязательная проверка: `deploy/base/kodex/codegen-check-job.yaml.tpl`.
+- Обязательная проверка размещается в целевом deploy-контуре новой архитектуры.
 - Codegen-check job должен выполнять:
   - установку зависимостей frontend;
   - `make gen-openapi`;

@@ -1,8 +1,10 @@
 # Архитектура проекта
 
-Цель: предсказуемое развитие `kodex` как централизованного control-plane сервиса для агентных процессов в Kubernetes.
+Цель: предсказуемое развитие `kodex` как платформы управления агентами, задачами, runtime и delivery-процессами в Kubernetes.
 
-База: DDD (bounded contexts) + Clean Architecture (зависимости “снаружи внутрь”) + единый инвентарь деплоя (`services.yaml`) + единый каркас директорий.
+База: DDD (bounded contexts) + Clean Architecture (зависимости “снаружи внутрь”) + явный инвентарь деплоя + единый каркас директорий.
+
+Важно для reset-итерации перед wave 7: старые `services`, `deploy`, `proto`, `libs`, `cmd` и `tools` перенесены в `deprecated/**`. Ниже описана целевая структура, которую нужно создавать заново, а не восстанавливать переносом из архива.
 
 ## Архитектурные ограничения kodex
 
@@ -15,14 +17,14 @@
 
 ## Структура репозитория
 
-Верхний уровень:
-- `services.yaml` — инвентарь деплоя и окружений.
-- `services/` — сервисы по зонам (`internal|external|staff|jobs|dev`).
-- `libs/` — переиспользуемый код (`go|ts|vue`).
-- `proto/` — gRPC контракты (single source of truth для внутреннего sync API).
-- `deploy/` — Kubernetes манифесты и overlays.
+Целевой верхний уровень:
+- `services.yaml` или его новая согласованная замена — инвентарь деплоя и окружений.
+- `services/` — сервисы по зонам (`internal|external|staff|jobs|dev`), создаются заново.
+- `libs/` — переиспользуемый код (`go|ts|vue`), создаётся только при наличии реального переиспользования.
+- `proto/` — gRPC контракты, создаётся заново при появлении внутренних gRPC API.
+- `deploy/` — Kubernetes манифесты и overlays, создаются заново.
   - Манифесты и шаблоны YAML (`*.yaml.tpl`) живут в `deploy/base/**`.
-  - Рендер и применение выполняются Go-компонентами (`cmd/codex-bootstrap`, `runtime-deploy`); shell-скрипты
+  - Рендер и применение выполняются Go-компонентами новой архитектуры; shell-скрипты
     не являются основным механизмом deploy/sync.
   - Для production порядок выкладки задаётся по слоям:
     `stateful dependencies -> migrations -> internal domain services -> edge services -> frontend`.
@@ -32,37 +34,23 @@
     `KODEX_<SERVICE>_INTERNAL_IMAGE_REPOSITORY`).
 - `bootstrap/` — скрипты bootstrap (готовый кластер или установка k3s).
 - `docs/` — документация и решения.
-- `tools/` — утилиты и генерация.
+- `tools/` — утилиты и генерация, создаются заново при необходимости.
 
 ### Изменение состава deployable-сервисов (обязательно синхронно)
 
 Если в монорепо добавляется/удаляется deployable-сервис, либо меняются его docker context / Dockerfile / image repository:
-- обновлять сборку/зеркалирование образов в runtime deploy:
-  `services/internal/control-plane/internal/domain/runtimedeploy/service_build.go`,
-  `services/internal/control-plane/internal/domain/runtimedeploy/service_reconcile.go`,
-  `deploy/base/kaniko/kaniko-build-job.yaml.tpl`,
-  `deploy/base/kaniko/mirror-image-job.yaml.tpl`;
-- обновлять production deploy env/vars и манифесты:
-  `services/internal/control-plane/cmd/runtime-deploy/main.go`,
-  `deploy/base/kodex/codegen-check-job.yaml.tpl`,
-  `services.yaml`;
+- обновлять сборку/зеркалирование образов в runtime/deploy контуре новой архитектуры;
+- обновлять production deploy env/vars, манифесты и инвентарь сервисов;
 - обновлять bootstrap-синхронизацию GitHub vars/secrets и секретов Kubernetes:
   `bootstrap/host/config.env.example`,
-  `bootstrap/host/bootstrap_remote_production.sh`,
-  `cmd/codex-bootstrap/internal/cli/github_sync.go`,
-  `cmd/codex-bootstrap/internal/cli/sync_secrets.go`,
-  `cmd/codex-bootstrap/internal/cli/cleanup.go`;
+  `bootstrap/host/bootstrap_remote_production.sh` или новые согласованные bootstrap-компоненты;
 - обновлять deploy manifests сервиса в `deploy/base/<service>/*.yaml.tpl`
   и Dockerfile сервиса в `services/<zone>/<service>/Dockerfile`.
 - если меняется набор инструментов для agent-runner (dogfooding), обновлять
-  `services/jobs/agent-runner/scripts/bootstrap_tools.sh` и документировать изменения в релевантном эпике/операционном runbook.
+  целевой runtime/toolchain bootstrap и документировать изменения в новой delivery/ops документации.
 
-Рекомендуемое ядро сервиса:
-- `services/internal/control-plane` — доменная логика платформы (проекты, репозитории, агенты, слоты, webhook orchestration, audit).
-- `services/external/api-gateway` — внешний API для webhook/публичных интеграций.
-- `services/staff/web-console` — UI (Vue3) для админов/пользователей платформы.
-- `services/jobs/worker` — фоновые jobs/reconciliation/ротация токенов/индексация.
-- `services/dev/webhook-simulator` — dev-only утилиты.
+Целевое ядро сервисов определяется в `refactoring/09-target-architecture.md` и `refactoring/10-service-boundaries.md`.
+Старый `control-plane` не является базой новой реализации.
 
 ## Зоны сервисов: internal / external / staff / jobs / dev
 

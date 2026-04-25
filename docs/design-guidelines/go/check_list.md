@@ -40,8 +40,8 @@
   - `internal/domain/mcp/tool_policy.go`,
   - `internal/transport/mcp/tools.go`,
   - интерфейсом `domainService` в `internal/transport/mcp/handler.go`.
-- Изменения policy/tool scope сопровождаются синхронным обновлением проектной документации
-  (`docs/architecture/mcp_approval_and_audit_flow.md`, `docs/architecture/agent_runtime_rbac.md`, профильные эпики).
+- Изменения policy/tool scope сопровождаются синхронным обновлением проектной документации.
+  До пересборки `docs/architecture/**` источником правды является `refactoring/**`; старые MCP-документы в `deprecated/docs/architecture/**` используются только как справка.
 
 ## Безопасность
 - Секреты платформы читаются из env; не хардкодятся и не логируются.

@@ -5,7 +5,7 @@ title: "Template Catalog Index"
 status: active
 owner_role: KM
 created_at: 2026-03-11
-updated_at: 2026-03-11
+updated_at: 2026-04-25
 related_issues: [320]
 related_prs: []
 approvals:
@@ -28,13 +28,11 @@ approvals:
 - SRE: `release_plan.md`, `release_notes.md`, `rollback_plan.md`, `runbook.md`, `monitoring.md`, `alerts.md`, `slo.md`, `incident_playbook.md`, `incident_postmortem.md`
 
 ## Правила применения
-- Шаблон остаётся шаблоном: фактический документ создаётся в доменном каталоге (`docs/product`, `docs/architecture`, `docs/delivery`, `docs/ops`).
-- Если template-path меняется, в том же PR синхронизируются `services.yaml/spec.roleDocTemplates` и role-aware prompt contracts.
-- Project indexes, handover-пакеты и sprint artifacts не хранятся в `docs/templates/`.
+- Шаблон остаётся шаблоном: фактический документ создаётся в новом доменном каталоге (`docs/product`, `docs/architecture`, `docs/delivery`, `docs/ops`, `docs/research`) только после того, как этот каталог заново введён в активную структуру.
+- Если template-path меняется, в том же PR синхронизируются актуальные контракты ролей, flow и шаблонов промптов.
+- Индексы проектов, handover-пакеты и исторические sprint artifacts не хранятся в `docs/templates/`.
 
 ## Смежные индексы
 - Корневой индекс: `docs/index.md`
-- Product index: `docs/product/README.md`
-- Architecture index: `docs/architecture/README.md`
-- Delivery index: `docs/delivery/README.md`
-- Ops index: `docs/ops/README.md`
+- План пересборки документации: `refactoring/24-pre-wave7-documentation-rebuild-plan.md`
+- Архив старых материалов: `deprecated/README.md`

@@ -76,18 +76,18 @@ Wave 7 считается открытой в backlog только после п
 
 ## 5. Какие `docs/**` теперь считаются историческими справочными материалами для новых доменов
 Для новых волн они больше не считаются source of truth, а используются только как исторический материал:
-- `docs/delivery/sprints/s7/**`;
-- `docs/delivery/sprints/s9/**`;
-- `docs/delivery/sprints/s13/**`;
-- `docs/delivery/sprints/s17/**`;
-- `docs/delivery/sprints/s18/**`;
-- `docs/delivery/epics/s7/**`;
-- `docs/delivery/epics/s9/**`;
-- `docs/delivery/epics/s13/**`;
-- `docs/delivery/epics/s17/**`;
-- `docs/delivery/epics/s18/**`;
-- `docs/architecture/initiatives/s17_unified_owner_feedback_loop/**`;
-- `docs/architecture/initiatives/s18_mission_control_frontend_first_canvas/**`.
+- `deprecated/docs/delivery/sprints/s7/**`;
+- `deprecated/docs/delivery/sprints/s9/**`;
+- `deprecated/docs/delivery/sprints/s13/**`;
+- `deprecated/docs/delivery/sprints/s17/**`;
+- `deprecated/docs/delivery/sprints/s18/**`;
+- `deprecated/docs/delivery/epics/s7/**`;
+- `deprecated/docs/delivery/epics/s9/**`;
+- `deprecated/docs/delivery/epics/s13/**`;
+- `deprecated/docs/delivery/epics/s17/**`;
+- `deprecated/docs/delivery/epics/s18/**`;
+- `deprecated/docs/architecture/initiatives/s17_unified_owner_feedback_loop/**`;
+- `deprecated/docs/architecture/initiatives/s18_mission_control_frontend_first_canvas/**`.
 
 Это не означает, что их нужно немедленно удалять. Это означает, что waves `7-17` не могут ссылаться на них как на канонику вместо `refactoring/**`.
 

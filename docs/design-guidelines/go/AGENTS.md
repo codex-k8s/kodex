@@ -21,5 +21,5 @@
 - Репозитории (GitHub/GitLab) только через provider-интерфейсы.
 - Оркестрация процессов event/webhook-driven, без workflow-first зависимостей.
 - Состояние процессов и синхронизация pod'ов — через PostgreSQL (`JSONB` + `pgvector`).
-- Планирование и закрытие daily задач в спринте — по
-  `docs/delivery/development_process_requirements.md`.
+- Wave-планирование и doc-governance на время reset-итерации — по
+  `refactoring/task.md`, `refactoring/02-doc-governance.md` и `refactoring/24-pre-wave7-documentation-rebuild-plan.md`.

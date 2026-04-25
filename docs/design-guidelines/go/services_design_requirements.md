@@ -9,15 +9,13 @@
 - Имя отражает домен/роль, а не технологию.
 
 Размещение:
-- `services/<zone>/<service-name>/`, где `<zone>` ∈ `internal|external|staff|jobs|dev`.
+- целевой путь `services/<zone>/<service-name>/`, где `<zone>` ∈ `internal|external|staff|jobs|dev`.
+- В reset-итерации старый `services/**` перенесён в `deprecated/services/**`; новый код не пишется поверх архива.
 
-## Рекомендуемое ядро kodex
+## Целевое ядро kodex
 
-- `services/internal/control-plane` — домен платформы (проекты, репозитории, агенты, слоты, webhook orchestration, аудит).
-- `services/external/api-gateway` — webhook/API входы.
-- `services/staff/web-console` — frontend (Vue3).
-- `services/jobs/worker` — фоновые задачи и reconciliation.
-- `services/dev/webhook-simulator` — dev-only инструменты.
+Состав сервисов определяется в `refactoring/09-target-architecture.md` и `refactoring/10-service-boundaries.md`.
+Старый `control-plane` не является базой новой реализации.
 
 ## Выбор протокола
 

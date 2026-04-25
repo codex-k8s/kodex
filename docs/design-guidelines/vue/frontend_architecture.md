@@ -2,9 +2,10 @@
 
 ## Где живёт фронтенд
 
-- Основная консоль `kodex` размещается в `services/staff/web-console`.
-- Дополнительные публичные страницы (если появятся) размещаются в `services/external/*`.
-- Dev-only frontend размещается в `services/dev/*` и не деплоится в production.
+- Целевая консоль `kodex` размещается в новом frontend-сервисе, согласованном в `refactoring/09-target-architecture.md` и `refactoring/10-service-boundaries.md`.
+- Старый frontend перенесён в `deprecated/services/staff/web-console` и не используется как база новой реализации.
+- Дополнительные публичные страницы (если появятся) размещаются в целевой зоне `services/external/*`.
+- Dev-only frontend размещается в целевой зоне `services/dev/*` и не деплоится в production.
 
 ## Container и deploy требования
 
@@ -13,7 +14,7 @@
   - `dev` — для production/dev (например, Vite dev server);
   - `prod` — для production runtime со статическим бандлом (например, `nginx`).
 - Для каждого frontend-сервиса обязателен отдельный Kubernetes manifest-шаблон
-  в `deploy/base/<service>/*.yaml.tpl`.
+  в целевом deploy-каталоге сервиса.
 
 ## Технологический стек
 
@@ -35,7 +36,7 @@
 
 ## Рекомендуемая структура приложения
 
-Внутри `services/staff/web-console/`:
+Внутри целевого frontend-сервиса:
 - `index.html`, `package.json`, `vite.config.ts`.
 - `public/` — статические файлы.
 - `src/`:

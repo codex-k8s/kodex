@@ -1,220 +1,67 @@
-# Инструкции для ИИ-агентов (обязательно)
+# Инструкции для ИИ-агентов
 
-Этот файл задает обязательные правила работы с репозиторием `kodex` а также ссылается на обязательные требования в смежных документах проекта.
+## Базовые правила
 
-## Главные **требования**
+- Ответы пользователю и оформление PR писать на русском языке.
+- Тексты commit message писать на английском языке.
+- Перед началом работы читать этот файл и проверять текущую ветку.
+- Прямой push в `main` и работа над задачами в `main` запрещены.
+- Если текущая ветка `main`, сначала обновить её от `origin/main`, затем создать рабочую ветку.
+- Если текущая ветка не `main`, продолжать работу в ней, если пользователь не попросил новую ветку.
+- При противоречии между запросом пользователя и правилами остановиться и дать варианты решения.
+- Для актуальной информации по библиотекам использовать Context7 MCP.
 
-- Ответы пользователю и оформление PR на русском языке, тексты коммитов на английском языке.
-- Документацию и PR писать по-русски там, где мысль можно выразить без потери точности; английский оставлять только для имён файлов, каталогов, API, протоколов, env, model ids и code identifiers.
-- Перед изменениями читать `docs/design-guidelines/AGENTS.md` и файлы, на которые он ссылается с учетом контекста текущей задачи. Если я пишу тебе про "гайды", то это именно `docs/design-guidelines/AGENTS.md` и связанные с ним документы и тебе обязательно надо найти релевантные разделы в этих документах, которые относятся к твоей задаче или замечанию, и прочитать их. 
-- Для быстрой навигации по структуре репозитория и сервисов обязательно использовать:
-  - `README.md` (корневая карта репозитория);
-  - `services/dev/webhook-simulator/README.md`;
-  - `services/external/api-gateway/README.md`;
-  - `services/internal/control-plane/README.md`;
-  - `services/jobs/agent-runner/README.md`;
-  - `services/jobs/worker/README.md`;
-  - `services/staff/web-console/README.md`.
-- Если ты запущен локально на машине разработчика (а не в спец. окружении kubernetes), то читай правила подключения к кластеру и работы с гитхабом в `.local/agents-temp-dev-rules.md`. Править `.local/agents-temp-dev-rules.md` строго запрещено, если не стоит явная задача на изменение временных правил.
-- Прямой push в `main` и работа над задачами в `main` запрещены: работаем только в отдельной ветке.
-- Перед началом задачи обязательно проверяй текущую ветку:
-  - если текущая ветка отличается от `main`, продолжаем работу в этой ветке;
-  - если текущая ветка `main`, сначала обновляем локальный `main` от `origin/main`, затем создаём новую рабочую ветку и работаем в ней.
-- Для большой задачи до открытия PR допускается несколько коммитов.
-- При устранении замечаний в открытом PR каждая итерация должна содержать ровно один commit.
-- После завершения работ агент обязан создать PR и явно сообщить пользователю, как принять результат (review/approve/merge).
-- Для любых GitHub PR-операций (`gh pr *`, комментарии, review, push в PR-ветки) в первую очередь использовать `KODEX_GIT_BOT_TOKEN`.
-- При локальной работе токен для PR/комментариев брать из `bootstrap/host/config.env` (`KODEX_GIT_BOT_TOKEN`) и экспортировать в окружение перед вызовами `gh`.
-- `KODEX_GITHUB_PAT` допускается только как fallback для чтения или технического обхода, если операция не проходит бот-токеном и это отдельно зафиксировано в рабочем контексте задачи.
-- Для Go-изменений обязательно исполнять требования из `docs/design-guidelines/go/**.md`, как до правок, так и перед подготовкой PR.
-- Для frontend-изменений обязательно исполнять требования из `docs/design-guidelines/vue/**.md`.
-- Для любых изменений читать `docs/design-guidelines/common/**.md`, который содержит общие требования проектирования для всех частей системы и языков программирования.
-- Для выбора/обновления внешних библиотек читать `docs/design-guidelines/common/external_dependencies_catalog.md`. Каждую новую библиотеку подбирать с использованием Context7 и уточнять последнюю стабильную версию, а также добавлять в `docs/design-guidelines/common/external_dependencies_catalog.md`.
-- Для планирования и ведения спринта/документации выполнять требования `docs/delivery/development_process_requirements.md`.
-- При наличии активной программы рефакторинга в `refactoring/**` её канонические документы имеют приоритет над историческими документами из `docs/**` для соответствующей ветки и PR.
-- Если запрос пользователя противоречит гайдам, приостановить правки и предложить варианты решения.
-- Если контекст сессии был сжат/потерян (например, `context compacted`) или есть сомнение, что требования/архитектура актуальны:
-  - перечитать `AGENTS.md` и `docs/design-guidelines/AGENTS.md`;
-  - перечитать релевантные гайды по области изменения (`docs/design-guidelines/{go,vue,common}/`);
-  - сверить задачу с `docs/product/requirements_machine_driven.md`, `docs/product/agents_operating_model.md`, `docs/product/labels_and_trigger_policy.md`, `docs/product/stage_process_model.md`, спринтом и эпиком.
-  - только после этого планировать и править код.
-- Не редактировать сами гайды без явной задачи на изменение стандартов.
-- При исправлении замечаний по PR, если для предотвращения подобных замечаний в будущем требуется изменение гайдов, внести изменения в гайды в рамках текущего PR.
-- При разработке и доработке проектной документации (бизнес-документов), сверять ее с `docs/research/src_idea-machine_driven_company_requirements.md`. `docs/research/src_idea-machine_driven_company_requirements.md` - это документ, перенесенный из изначального репозитория
-`github.com/codex-k8s/codexctl` (`../codexctl`), которая в части бизнес-идеи остается действующей, за исключением подходов к реализации (там все планировалось делать через консольную утилиту, воркфлоу и лейблы, а тут полноценный сервис управления агентами, задачами и т.д.).
-- Документ, который публикуется в PR на согласование, должен отражать целевое финальное состояние; merge PR считается фактом согласования и не требует отдельного "переключения статуса" документа после merge.
-- Если устраняешь замечания PR, то сначала получи все не скрытые и не отмеченные как resolved комментарии, затем отработай каждый и ответь на каждый комментарий в PR.
-- Перед пушем в PR, убедись что каждое замечание отработано и помечено как resolved, а также что в PR нет неотвеченных комментариев.
-- Перед пушем в PR обязательно выполнить self-check по чек-листам и явно свериться с ними:
-  - `docs/design-guidelines/common/check_list.md`;
-  - `docs/design-guidelines/go/check_list.md` (если затронут Go-код);
-  - `docs/design-guidelines/vue/check_list.md` (если затронут Vue-код).
-- Без этой проверки пуш в PR считается нарушением процесса.
-- Перед началом написания кода обязательно перечитать профильные гайды по размещению кода:
-  - backend: `docs/design-guidelines/go/services_design_requirements.md`;
-  - frontend: `docs/design-guidelines/vue/frontend_architecture.md`, `docs/design-guidelines/vue/frontend_code_rules.md`, `docs/design-guidelines/vue/frontend_data_and_state.md`;
-  - общие принципы: `docs/design-guidelines/common/design_principles.md`.
-- Перед пушем обязательно повторно свериться с чек-листами и убедиться, что правила размещения кода соблюдены:
-  - модели/типы;
-  - константы и type-alias/enum;
-  - helper-код и его уровень (локальный файл / пакет-модуль / `libs/*`).
-- Если в комментарии содержится замечание в вопросительной форме, сначала проверь, нужны ли правки. Если правки не нужны, дай объективный ответ с обоснованием и попроси пометить комментарий как resolved. Если правки нужны, внеси их, ответь на комментарий и после этого пометь его как resolved.
-- Проект в начальной стадии разработки и нигде еще не используется. Сохранять обратную совместимость не нужно, легаси тоже поддерживать не нужно.
+## Текущая каноника
 
-## Матрица чтения проектной документации (обязательна)
+- Главный документ программы: `refactoring/task.md`.
+- Индекс программы: `refactoring/README.md`.
+- До кодовой wave 7 источник правды по продукту, архитектуре, delivery и ops находится в `refactoring/**`.
+- Новые документы в `docs/product`, `docs/architecture`, `docs/delivery`, `docs/ops` и `docs/research` создаются с нуля по `docs/templates/**`.
+- Старые документы, код и инфраструктурные каталоги перенесены в `deprecated/**`.
+- Всё внутри `deprecated/**` было в корне репозитория до reset-итерации, устарело и оставлено только как временный справочный материал для владельца. Агент не должен использовать `deprecated/**` как основу новой реализации, за исключением случаев когда пользователь дает ссылку на материалы там как на референсы.
+- Новая реализация пишется с нуля в новых сервисах и новых каталогах целевой архитектуры. Устаревший код из `deprecated/**` не дорабатывается.
 
-Перед началом работ по типу задачи читать минимум указанный набор:
+## Что читать перед задачей
 
-| Тип задачи | Обязательные документы                                                                                                                                                                                                                                                                        |
-|---|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Продуктовые требования/лейблы/этапы | `docs/product/requirements_machine_driven.md`, `docs/product/agents_operating_model.md`, `docs/product/labels_and_trigger_policy.md`, `docs/product/stage_process_model.md`                                                                                                                   |
-| Архитектура и модель данных | `docs/architecture/c4_context.md`, `docs/architecture/c4_container.md`, `docs/architecture/api_contract.md`, `docs/architecture/data_model.md`, `docs/architecture/agent_runtime_rbac.md`, `docs/architecture/mcp_approval_and_audit_flow.md`, `docs/architecture/prompt_templates_policy.md` |
-| Delivery/sprint/epics | `docs/delivery/development_process_requirements.md`, `docs/delivery/delivery_plan.md`, `docs/delivery/sprints/**/*.md`, `docs/delivery/epics/**/*.md`                                                                                                                                    |
-| Трассируемость | `docs/delivery/requirements_traceability.md`, `docs/delivery/issue_map.md`, `docs/delivery/sprints/**/*.md`, `docs/delivery/epics/**/*.md`                                                                                                                                                    |
-| Ops и production проверки | `.local/agents-temp-dev-rules.md` (для локального агента), `docs/ops/production_runbook.md`                                                                                                                                                                                                   |
+- Для любой задачи по программе рефакторинга читать:
+  - `refactoring/task.md`;
+  - `refactoring/README.md`;
+  - релевантные документы `refactoring/*.md`;
+  - `docs/templates/index.md`, если создаются новые документы.
+- Для изменения инженерных стандартов или кода читать:
+  - `docs/design-guidelines/AGENTS.md`;
+  - релевантные файлы из `docs/design-guidelines/common/**`;
+  - `docs/design-guidelines/go/**`, если затронут Go;
+  - `docs/design-guidelines/vue/**`, если затронут frontend.
+- При локальной работе читать `.local/agents-temp-dev-rules.md`, если нужен GitHub, локальный запуск или доступ к окружению. Править этот файл нельзя без явной задачи.
 
-- Уточнение для agent-run pod: файл `.local/agents-temp-dev-rules.md` отсутствует в runtime-контейнере твоего Kubernetes-окружения. Используй `AGENTS.md`, `docs/design-guidelines/**` и релевантные `docs/product/**`, `docs/architecture/**`, `docs/delivery/**` как источник правил.
+## GitHub и PR
 
-## Архитектурные границы (обязательны)
+- Для GitHub PR-операций в первую очередь использовать `KODEX_GIT_BOT_TOKEN` из `bootstrap/host/config.env`.
+- `KODEX_GITHUB_PAT` использовать только как fallback для чтения или технического обхода, если бот-токен не подходит.
+- После завершения работы создать или обновить PR и явно сообщить пользователю, как принять результат.
+- При устранении замечаний PR получить все незакрытые комментарии, отработать каждый и ответить на каждый от имени бота.
+- В открытом PR каждая итерация исправлений должна быть одним commit.
 
-- `services/external/*` = thin-edge:
-  - HTTP ingress (webhooks/public endpoints), валидация, authn/authz, rate limiting, аудит, маршрутизация;
-  - без доменной логики (use-cases) и без прямых postgres-репозиториев.
-- `services/internal/*` = доменная логика и владельцы БД:
-  - доменные модели/use-cases, репозитории, интеграции через интерфейсы/адаптеры;
-  - внутреннее service-to-service взаимодействие через gRPC по контрактам в `proto/`.
-- `services/jobs/*` = фоновые процессы и reconciliation (идемпотентно, состояние в БД).
+## Документация
 
-## Транспортные контракты и модели (обязательны)
+- Документы писать по-русски там, где смысл не теряет точность.
+- Английский оставлять для имён файлов, каталогов, API, протоколов, env, model id и code identifiers.
+- Документ в PR должен отражать целевое состояние. Merge PR считается фактом согласования.
+- Старые ссылки внутри `deprecated/**` не чинить, если пользователь не просит отдельно.
+- Для новых документов использовать шаблоны из `docs/templates/**` и сразу добавлять документы в соответствующий индекс.
 
-- При изменениях transport-слоя, DTO/кастеров и доменных моделей обязательно читать:
-  - `docs/design-guidelines/go/services_design_requirements.md` (backend);
-  - `docs/design-guidelines/vue/frontend_architecture.md` (frontend).
-- В `transport/http|grpc` запрещены `map[string]any`/`[]any`/`any` как контракт ответа.
-- Handlers возвращают только typed DTO-модели; маппинг transport <-> domain/proto выполняется через явные кастеры.
-- Для `services/external/*` и `services/staff/*` действует contract-first OpenAPI:
-  - любое изменение HTTP endpoint/DTO сначала в `api/server/api.yaml`;
-  - затем регенерация backend/frontend codegen-артефактов;
-  - merge запрещён, если маршруты/DTO в коде расходятся со спецификацией.
-  - при любом изменении codegen-охвата (новый сервис/app или изменение путей/целей генерации) обязательно синхронно обновлять:
-    - `Makefile` (`gen-openapi-*`);
-    - `tools/codegen/**`;
-    - `deploy/base/kodex/codegen-check-job.yaml.tpl`;
-    - `docs/design-guidelines/go/code_generation.md`.
-- Для HTTP DTO размещать модели и кастеры в `internal/transport/http/{models,casters}` (или эквивалентно по протоколу в рамках сервиса).
-- Доменные типы размещать в `internal/domain/types/{entity,value,enum,query,mixin}`; не объявлять доменные модели ad-hoc в больших service/handler файлах.
-- Маппинг ошибок выполняется только на границе транспорта (HTTP error handler / gRPC interceptor); в handlers запрещены локальные “переводы” ошибок между слоями.
-- `context.Background()` создаётся только в composition root (`internal/app/*`); в transport/domain/repository-слоях использовать только прокинутый контекст.
+## Проверки перед push
 
-## Размещение кода (Go + TS/Vue) — обязательно
-
-- Запрещено оставлять ad-hoc модели/типы, если они описывают доменную сущность, контракт транспорта или переиспользуемый payload.
-- Размещение моделей и типов:
-  - Go domain-модели: `internal/domain/types/{entity,value,enum,query,mixin}`;
-  - Go transport DTO: `internal/transport/<proto>/models` + `casters`;
-  - TS/Vue API DTO: `src/shared/api/generated/**` и/или `src/shared/api/*`;
-  - TS/Vue feature/view types: `src/features/*/types.ts` и `src/shared/types/*`.
-- Размещение констант:
-  - повторяющиеся строковые/числовые литералы выносятся в константы;
-  - для закрытых наборов значений использовать type-alias/enum (Go/TS).
-- Размещение helper-кода:
-  - helper остаётся локальным в файле только если используется в одном месте и не выражает самостоятельную модель/контракт;
-  - если helper используется в нескольких файлах пакета/модуля — вынести в `*_helpers.*`/`lib/*`;
-  - если код переиспользуется между сервисами/приложениями — вынести в `libs/*` по правилам common/vue/go гайдов.
-- Для больших `service.go`/`handler.go` обязательно выносить вспомогательные модели/типы/no-op реализации в отдельные файлы пакета (`*_types.go`, `*_helpers.go`, `*_noop.go`), чтобы не смешивать use-case и вспомогательные структуры.
-
-## Образы сервисов (обязательны)
-
-- В монорепо у каждого Go-сервиса собственный Dockerfile в `services/<zone>/<service>/Dockerfile`.
-- У каждого frontend-сервиса обязателен `services/<zone>/<service>/Dockerfile` с минимум двумя target:
-  - `dev` (локальный/slot runtime);
-  - `prod` (runtime на веб-сервере, например `nginx`, со статическим бандлом).
-- Для каждого frontend-сервиса обязателен отдельный манифест в `deploy/base/<service>/*.yaml.tpl`.
-- Раздутый “общий” Dockerfile для нескольких сервисов не используется как основной путь сборки/deploy.
-- Для production/CI обязательны раздельные image vars и image repositories на каждый deployable-сервис:
-  - шаблон: `KODEX_<SERVICE>_IMAGE`;
-  - шаблон: `KODEX_<SERVICE>_INTERNAL_IMAGE_REPOSITORY`.
-- Версии образов задаются в `services.yaml` (`spec.versions`).
-  При изменениях кода сервисов или общих библиотек необходимо обновлять соответствующую версию,
-  иначе build/deploy пропустит пересборку и будет использовать уже существующий тег.
-
-## Порядок выкладки production (обязателен)
-
-- Применяется последовательность:
-  `stateful dependencies -> migrations -> internal domain services -> edge services -> frontend`.
-- Ожидание готовности зависимостей выполняется через `initContainers` в манифестах сервисов, а не через retry-циклы старта в Go-коде.
-
-## Миграции и schema governance (обязательны)
-
-- Миграции БД хранятся *внутри держателя схемы*:
-  `services/<zone>/<db-owner-service>/cmd/cli/migrations/*.sql` (goose) согласно `docs/design-guidelines/go/*`.
-- Shared DB без владельца запрещён: если БД общая, должен быть один сервис-владелец схемы и миграций.
-
-## Внешние зависимости (обязательны)
-
-- Любая новая внешняя зависимость (Go/TS) должна быть добавлена в
-  `docs/design-guidelines/common/external_dependencies_catalog.md` вместе с обоснованием.
-- Самописные “велосипеды” для типовых задач (например, форматирование дат) не добавлять, если есть утверждённая библиотека.
-
-## Что считать источником правды
-
-- Архитектурный стандарт: `docs/design-guidelines/**`.
-- Целевая структура репозитория: `services/external|staff|internal|jobs|dev` + `libs` + `deploy` + `bootstrap` + `proto`.
-- Оркестрация инфраструктуры: Kubernetes API через Go SDK (`client-go`), без shell-first подхода как основы.
-- Интеграция с репозиториями: через интерфейсы провайдеров (`RepositoryProvider`),
-  с текущей реализацией GitHub и заделом под GitLab.
-- Модель процессов: webhook-driven, без GitHub Actions workflow как основного механизма выполнения.
-- Хранилище сервиса: PostgreSQL (`JSONB` + `pgvector`) как единая точка синхронизации между pod'ами.
-- MCP служебные ручки: встроенные Go-реализации в `kodex`; `github.com/codex-k8s/yaml-mcp-server` остаётся расширяемым пользовательским слоем.
-- Апрувы и внешние каналы взаимодействия проектировать через расширяемый платформенный контракт без вендорной привязки в core; конкретные адаптеры и механизм расширения выбираются отдельным design-решением.
-- Операционная продуктовая модель агентов/лейблов/этапов:
-  `docs/product/agents_operating_model.md`, `docs/product/labels_and_trigger_policy.md`, `docs/product/stage_process_model.md`.
-- Процесс разработки и doc-governance: `docs/delivery/development_process_requirements.md`.
-- Справка по внешним библиотекам - через Context7.
+- Для документационных изменений выполнить self-check по `docs/design-guidelines/common/check_list.md` в применимой части.
+- Для Go-изменений дополнительно выполнить `docs/design-guidelines/go/check_list.md`.
+- Для frontend-изменений дополнительно выполнить `docs/design-guidelines/vue/check_list.md`.
+- Если проверки не запускались, явно написать причину в финальном сообщении.
 
 ## Неподвижные ограничения продукта
 
 - Поддерживается только Kubernetes.
-- Регистрация пользователей отключена: вход через GitHub OAuth с матчингом по email,
-  разрешённым администратором.
-- Пользовательские настройки, шаблоны инструкций, сессии агентов, журналы действий,
-  состояние слотов и рантаймов — в БД.
-- Поддерживается learning mode: для задач пользователя добавляются explain-инструкции
-  (почему/зачем/компромиссы), а после PR могут публиковаться образовательные комментарии.
-- Секреты платформы и настройки деплоя `kodex` берутся из env.
-- Имена env/secrets/CI variables для платформы используют префикс `KODEX_`
-  (исключения допускаются только для внешних контрактов, например `POSTGRES_*` внутри контейнера PostgreSQL).
-- Токены доступа к repo хранятся в БД в зашифрованном виде.
-
-## Обязательные шаги перед PR
-
-- Пройти `docs/design-guidelines/common/check_list.md`.
-- Если затронут Go-код, пройти `docs/design-guidelines/go/check_list.md`.
-- Если затронут Vue-код, пройти `docs/design-guidelines/vue/check_list.md`.
-- Обновить документацию, если меняется поведение API, webhook-процессы,
-  модель данных, RBAC, формат `services.yaml` или MCP-контракты.
-
-### Delivery в production (важно)
-
-- GitHub Actions workflows для build/deploy удалены.
-- Сборка/деплой выполняются внутри Kubernetes через control-plane и служебные job.
-- Проверка статуса выполняется через Kubernetes объекты, а не через `gh run`.
-
-### Как правильно проверять статус
-
-```bash
-source bootstrap/host/config.env
-
-1. Статус pod/deploy/job в production namespace:
-
-kubectl -n "$KODEX_PRODUCTION_NAMESPACE" get pods,deploy,job -o wide
-
-2. Логи основного control-plane и worker:
-
-kubectl -n "$KODEX_PRODUCTION_NAMESPACE" logs deploy/kodex-control-plane --tail=200
-kubectl -n "$KODEX_PRODUCTION_NAMESPACE" logs deploy/kodex-worker --tail=200
-
-3. Логи конкретной build/deploy job:
-
-kubectl -n "$KODEX_PRODUCTION_NAMESPACE" logs job/<job_name> --all-containers=true --tail=200
-```
+- Регистрация пользователей отключена: вход через GitHub OAuth с матчингом по email, разрешённым администратором.
+- Рабочая модель строится вокруг provider-native сущностей: `Issue`, `PR/MR`, комментарии, ветки, теги и связи.
+- Инициатива является `Issue` со своим типом, а не отдельной проектной сущностью.
+- Платформа должна иметь задел под организации, группы пользователей, внешние аккаунты, плагины, пакеты руководящей документации, серверы/кластеры, биллинг, release policy и автоматизацию по расписанию/триггерам.
