@@ -16,7 +16,7 @@
 - `docs/design-guidelines/go/libraries.md` — что выносить в `libs/go/*` и как.
 - `docs/design-guidelines/common/external_dependencies_catalog.md` — согласованный список внешних библиотек и инструментов.
 
-Специфика `kodex`:
+Проектный overlay `kodex`:
 - Kubernetes интеграция только через `client-go` и адаптеры.
 - Репозитории (GitHub/GitLab) только через provider-интерфейсы.
 - Оркестрация процессов event/webhook-driven, без workflow-first зависимостей.
@@ -24,3 +24,4 @@
 - Проектное планирование и документационная каноника задаются корневым `AGENTS.md` и актуальной проектной документацией, а не этим техническим гайдом.
 
 Внешний источник: `github.com/codex-k8s/kodex-guidelines-go-ru`, необязательный submodule `docs/external/guidelines/go`.
+Внешний пакет задаёт reusable backend baseline для Go + DDD + PostgreSQL + goose + OpenAPI/AsyncAPI + gRPC + Kubernetes; `kodex`-специфичные требования держать только здесь.
