@@ -19,8 +19,8 @@ approvals:
 ## TL;DR
 - `docs/templates/` содержит только канонические шаблоны документов.
 - Для навигации по фактической проектной документации используется `docs/index.md`, а не этот каталог.
-- Внешний публичный источник шаблонов: `github.com/codex-k8s/kodex-doc-templates-ru`, локальный submodule `docs/external/templates`.
-- Изменения в локальной копии и внешнем репозитории шаблонов синхронизируются через PR в соответствующих репозиториях.
+- Внешний публичный источник шаблонов: `github.com/codex-k8s/kodex-doc-templates-ru`, source submodule `docs/external/templates`.
+- Универсальные изменения шаблонов вносятся во внешний репозиторий шаблонов; проектные варианты подключаются отдельным репозиторием через `services.yaml`.
 
 ## Шаблоны по ролям
 - PM: `problem.md`, `brief.md`, `scope_mvp.md`, `constraints.md`, `project_charter.md`, `success_metrics.md`, `prd.md`, `nfr.md`, `user_story.md`

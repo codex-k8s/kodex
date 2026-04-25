@@ -16,5 +16,5 @@
 - пользовательские настройки и права приходят из backend API (PostgreSQL как source of truth).
 - Проектное планирование и документационная каноника задаются корневым `AGENTS.md` и актуальной проектной документацией, а не этим техническим гайдом.
 
-Внешний источник: `github.com/codex-k8s/kodex-guidelines-vue-frontend-ru`, необязательный submodule `docs/external/guidelines/vue`.
-Внешний пакет должен оставаться reusable для Vue 3 + TypeScript frontend; `kodex`-специфичные требования фиксировать только в локальной копии этого каталога.
+Внешний источник: `github.com/codex-k8s/kodex-guidelines-vue-frontend-ru`, source submodule `docs/external/guidelines/vue`.
+Если внешний источник импортирован в проект, его правила обязательны. Этот каталог задаёт `kodex`-специфичный overlay и имеет приоритет при конфликте с внешним Vue baseline.

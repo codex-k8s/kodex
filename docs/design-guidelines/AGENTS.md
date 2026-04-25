@@ -26,16 +26,17 @@
 ## Связь с внешними пакетами
 
 - Публичные пакеты в `docs/external/**` являются переиспользуемым baseline, а не полной текстовой копией локальной проектной каноники.
-- Локальные документы в `docs/design-guidelines/**` могут содержать `kodex`-специфичный overlay поверх внешнего пакета.
-- Если правило относится только к `kodex`, его нужно фиксировать в локальной копии проекта, а не протаскивать обратно во внешний пакет.
+- Локальные документы в `docs/design-guidelines/**` содержат `kodex`-специфичный overlay поверх внешнего пакета.
+- Если внешний источник импортирован в проект, его правила обязательны; при конфликте проектный overlay имеет приоритет.
+- Если правило относится только к `kodex`, его нужно фиксировать в проектном overlay, а не протаскивать обратно во внешний пакет.
 - Если правило универсально и не зависит от конкретного проекта, его можно поднимать во внешний пакет и затем обновлять gitlink.
 
 ## Внешние источники
 
 Публичные репозитории руководящих гайдов:
 
-- `github.com/codex-k8s/kodex-guidelines-common-ru` — необязательный submodule `docs/external/guidelines/common`;
-- `github.com/codex-k8s/kodex-guidelines-go-backend-ru` — необязательный submodule `docs/external/guidelines/go`;
-- `github.com/codex-k8s/kodex-guidelines-vue-frontend-ru` — необязательный submodule `docs/external/guidelines/vue`.
+- `github.com/codex-k8s/kodex-guidelines-common-ru` — source submodule `docs/external/guidelines/common`;
+- `github.com/codex-k8s/kodex-guidelines-go-backend-ru` — source submodule `docs/external/guidelines/go`;
+- `github.com/codex-k8s/kodex-guidelines-vue-frontend-ru` — source submodule `docs/external/guidelines/vue`.
 
-Пока штатный импорт руководящих пакетов не реализован, активная копия для агентов остаётся в `docs/design-guidelines/**`. Если меняется гайд, нужно проверить синхронизацию с соответствующим публичным репозиторием.
+Пока штатный импорт руководящих пакетов не реализован, `docs/external/guidelines/**` выступает подключённым baseline, а `docs/design-guidelines/**` — проектным overlay. Если меняется универсальное правило, нужно обновить соответствующий внешний пакет и затем gitlink.
