@@ -22,42 +22,17 @@ spec:
     - docs/templates
     - refactoring
   repositorySources:
-    submodules:
-      documentation:
-        - id: guidelines-common
-          repo: github.com/codex-k8s/kodex-guidelines-common-ru
-          path: docs/external/guidelines/common
-          visibility: public
-          role: common-guidelines
-        - id: guidelines-go
-          repo: github.com/codex-k8s/kodex-guidelines-go-backend-ru
-          path: docs/external/guidelines/go
-          visibility: public
-          role: go-guidelines
-        - id: guidelines-vue
-          repo: github.com/codex-k8s/kodex-guidelines-vue-frontend-ru
-          path: docs/external/guidelines/vue
-          visibility: public
-          role: vue-guidelines
-        - id: doc-templates
-          repo: github.com/codex-k8s/kodex-doc-templates-ru
-          path: docs/templates
-          visibility: public
-          role: documentation-templates
-      packages:
-        - id: package-store-source
-          repo: github.com/codex-k8s/kodex-package-store
-          path: packages/package-store
-          visibility: private
-          role: platform-owned-package-source
-        - id: platform-site-source
-          repo: github.com/codex-k8s/kodex-package-platform-site
-          path: packages/platform-site
-          visibility: private
-          role: platform-owned-package-source
+    sourceOfTruth:
+      gitSubmodules: .gitmodules
+      packageRuntimeMetadata: platform-db
+      packageBootstrapMetadata: package-manifest-json
+    paths:
+      guidancePackages: docs/external/guidelines
+      documentTemplates: docs/templates
+      packages: packages
     policies:
       workspaceSources:
-        initDeclaredSubmodulesWhenNeeded: true
+        initAllGitSubmodules: true
         unavailableSourcesMustBeReported: true
       privateSubmodules:
         accessCheckedByPlatform: true
@@ -65,18 +40,20 @@ spec:
         mode: pull-request-only
       packageDelivery:
         checkoutRoot: packages
-        packagesDeclaredInServicesYaml: true
+        sourceSubmodulesDeclaredInGitmodules: true
+        installedPackageMetadataStoredInDb: true
+        prefillMetadataFromPackageManifestJson: true
         installedPackagesUsePinnedGitRefs: true
         allowPinnedGitRefs: true
         allowedRefs:
           - tag
           - commit
-        paidPackagesDistribution: platform-proxy-only
         downstreamRepositoryCleanupWorkflow: true
   deployableServices: []
   notes:
     - New deployable services must be added only after the corresponding wave documentation is accepted.
     - Do not restore old services, versions, environments or runtime settings from deprecated/services.yaml mechanically.
     - The final inventory schema is defined by the new architecture, not by the archived pre-refactor file.
-    - Packages declared for the project are checked out under packages/ after access and availability checks.
+    - Source submodule list is defined by .gitmodules; this draft keeps only policy and path conventions.
+    - Package metadata is stored in the platform database and can be prefilled from package JSON manifests.
     - Downstream repositories must remove store, site and optional packages that are not intended for the target installation.
