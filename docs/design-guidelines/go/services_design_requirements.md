@@ -97,9 +97,9 @@
 
 ## Доменные контексты (минимум)
 
-В `internal/control-plane/internal/domain/` должны быть отдельные bounded contexts:
+В новом сервисе-владельце доменной логики должны быть отдельные доменные контексты (`bounded contexts`). До создания wave 7 сервисов не использовать старый путь из `deprecated/services/**` как целевую структуру.
 - `users` (OAuth-сессии, доступы)
-- `projects` (проекты и membership)
+- `projects` (проекты и членство)
 - `repositories` (repo bindings и токены)
 - `webhooks` (ingest/validation/event mapping)
 - `agents` (шаблоны инструкций, профили агентов)
