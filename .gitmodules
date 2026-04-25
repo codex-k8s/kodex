@@ -28,3 +28,9 @@
 	branch = main
 	update = none
 	ignore = all
+[submodule "kodex-doc-templates"]
+	path = external-docs/templates
+	url = https://github.com/codex-k8s/kodex-doc-templates.git
+	branch = main
+	update = none
+	ignore = all

@@ -19,6 +19,8 @@ approvals:
 ## TL;DR
 - `docs/templates/` содержит только канонические шаблоны документов.
 - Для навигации по фактической проектной документации используется `docs/index.md`, а не этот каталог.
+- Внешний публичный источник шаблонов: `github.com/codex-k8s/kodex-doc-templates`, локальный submodule `external-docs/templates`.
+- Изменения в локальной копии и внешнем репозитории шаблонов синхронизируются через PR в соответствующих репозиториях.
 
 ## Шаблоны по ролям
 - PM: `problem.md`, `brief.md`, `scope_mvp.md`, `constraints.md`, `project_charter.md`, `success_metrics.md`, `prd.md`, `nfr.md`, `user_story.md`
@@ -37,4 +39,6 @@ approvals:
 ## Смежные индексы
 - Корневой индекс: `docs/index.md`
 - План пересборки документации: `refactoring/24-pre-wave7-documentation-rebuild-plan.md`
+- Локальные инструкции: `docs/templates/AGENTS.md`
+- Исходный публичный репозиторий шаблонов: `github.com/codex-k8s/kodex-doc-templates`
 - Архив старых материалов: `deprecated/README.md`

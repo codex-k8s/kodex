@@ -13,3 +13,5 @@
 - `github.com/codex-k8s/kodex-guidelines-vue` — правила для Vue и TypeScript frontend, необязательный submodule `external-docs/guidelines/vue`.
 
 До внедрения штатного импорта руководящих пакетов активная локальная копия для агентов остаётся в `docs/design-guidelines/**`. Изменения в локальной копии и публичных репозиториях нужно синхронизировать явно.
+
+Шаблоны документации вынесены отдельно и не считаются пакетом руководящей документации: публичный источник шаблонов — `github.com/codex-k8s/kodex-doc-templates`, локальный submodule — `external-docs/templates`.

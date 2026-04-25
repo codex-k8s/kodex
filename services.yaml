@@ -21,8 +21,60 @@ spec:
     - docs/design-guidelines
     - docs/templates
     - refactoring
+  repositorySources:
+    submodules:
+      documentation:
+        - id: guidelines-common
+          repo: github.com/codex-k8s/kodex-guidelines-common
+          path: external-docs/guidelines/common
+          visibility: public
+          role: common-guidelines
+        - id: guidelines-go
+          repo: github.com/codex-k8s/kodex-guidelines-go
+          path: external-docs/guidelines/go
+          visibility: public
+          role: go-guidelines
+        - id: guidelines-vue
+          repo: github.com/codex-k8s/kodex-guidelines-vue
+          path: external-docs/guidelines/vue
+          visibility: public
+          role: vue-guidelines
+        - id: doc-templates
+          repo: github.com/codex-k8s/kodex-doc-templates
+          path: external-docs/templates
+          visibility: public
+          role: documentation-templates
+      packages:
+        - id: package-store-source
+          repo: github.com/codex-k8s/kodex-package-store
+          path: external-docs/private/package-store
+          visibility: private
+          role: platform-owned-package-source
+        - id: platform-site-source
+          repo: github.com/codex-k8s/kodex-platform-site
+          path: external-docs/private/platform-site
+          visibility: private
+          role: platform-owned-package-source
+    policies:
+      ordinaryClone:
+        initSubmodules: false
+      privateSubmodules:
+        ownerPrefix: github.com/codex-k8s/
+        skipWhenRepositorySlugOutsideOwnerPrefix: true
+      changeManagement:
+        mode: pull-request-only
+      packageDelivery:
+        platformOwnedSourceReposMayUseSubmodules: true
+        thirdPartyAndCustomerPackagesUseSubmodules: false
+        useSubmodulesForInstalledPackages: false
+        allowPinnedGitRefs: true
+        allowedRefs:
+          - tag
+          - commit
+        paidPackagesDistribution: platform-proxy-only
   deployableServices: []
   notes:
     - New deployable services must be added only after the corresponding wave documentation is accepted.
     - Do not restore old services, versions, environments or runtime settings from deprecated/services.yaml mechanically.
     - The final inventory schema is defined by the new architecture, not by the archived pre-refactor file.
+    - Submodules are for platform-owned source repositories and public guidance packages, not for the default installation path of user packages.
