@@ -26,6 +26,7 @@
 
 ## Правило именования
 
-- Пакеты руководящей документации именуются по схеме `kodex-guidelines-<subject>-ru`.
-- Шаблоны документации именуются по схеме `kodex-doc-templates-ru`.
+- Пакеты руководящей документации именуются по схеме `kodex-guidelines-<subject>-<locale>`.
+- Шаблоны документации именуются по схеме `kodex-doc-templates-<locale>`.
+- Для документационных пакетов суффикс локали в конце slug обязателен. Примеры: `-ru`, `-en`.
 - Platform-owned package repos именуются по схеме `kodex-package-<name>`.
