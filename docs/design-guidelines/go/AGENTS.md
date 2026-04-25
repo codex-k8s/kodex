@@ -22,3 +22,5 @@
 - Оркестрация процессов event/webhook-driven, без workflow-first зависимостей.
 - Состояние процессов и синхронизация pod'ов — через PostgreSQL (`JSONB` + `pgvector`).
 - Проектное планирование и документационная каноника задаются корневым `AGENTS.md` и актуальной проектной документацией, а не этим техническим гайдом.
+
+Внешний источник: `github.com/codex-k8s/kodex-guidelines-go`, необязательный submodule `external-docs/guidelines/go`.

@@ -15,3 +15,5 @@
 - env/secrets/CI variable names для платформы используют префикс `KODEX_`
   (кроме значений, требуемых внешними runtime-контрактами).
 - проектное планирование и документационная каноника задаются корневым `AGENTS.md` и актуальной проектной документацией, а не этим техническим гайдом.
+
+Внешний источник: `github.com/codex-k8s/kodex-guidelines-common`, необязательный submodule `external-docs/guidelines/common`.

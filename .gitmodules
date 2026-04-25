@@ -1,0 +1,30 @@
+[submodule "kodex-package-store"]
+	path = external-docs/private/package-store
+	url = https://github.com/codex-k8s/kodex-package-store.git
+	branch = main
+	update = none
+	ignore = all
+[submodule "kodex-platform-site"]
+	path = external-docs/private/platform-site
+	url = https://github.com/codex-k8s/kodex-platform-site.git
+	branch = main
+	update = none
+	ignore = all
+[submodule "kodex-guidelines-common"]
+	path = external-docs/guidelines/common
+	url = https://github.com/codex-k8s/kodex-guidelines-common.git
+	branch = main
+	update = none
+	ignore = all
+[submodule "kodex-guidelines-go"]
+	path = external-docs/guidelines/go
+	url = https://github.com/codex-k8s/kodex-guidelines-go.git
+	branch = main
+	update = none
+	ignore = all
+[submodule "kodex-guidelines-vue"]
+	path = external-docs/guidelines/vue
+	url = https://github.com/codex-k8s/kodex-guidelines-vue.git
+	branch = main
+	update = none
+	ignore = all
