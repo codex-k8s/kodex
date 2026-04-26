@@ -83,8 +83,8 @@ approvals:
 Владеет:
 - provider accounts и их операционным состоянием;
 - normalized provider events;
-- mirrors/enrichment по `Issue/PR/MR/comments/mentions/relationships`;
-- rate limits и provider constraints;
+- зеркальными проекциями, состоянием дозаполнения и платформенными метаданными по `Issue/PR/MR/comments/mentions/relationships`;
+- лимитами провайдера и provider constraints;
 - выполнением операций в GitHub/GitLab через интерфейсы провайдера.
 
 Не владеет:
