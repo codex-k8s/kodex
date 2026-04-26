@@ -16,7 +16,7 @@ approvals:
 
 # План пересборки документации перед wave 7
 
-## TL;DR
+## Кратко
 - Перед кодовой wave 7 нужно заново собрать минимальную каноническую документацию в `docs/**`.
 - Старые `docs/product`, `docs/architecture`, `docs/delivery`, `docs/ops` и `docs/research` уже выведены в `deprecated/docs/**` и не восстанавливаются как активная структура.
 - Старые `cmd`, `deploy`, `libs`, `proto`, `services`, `tools` и полный `services.yaml` уже выведены в `deprecated/**` и не являются базой новой реализации.

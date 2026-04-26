@@ -10,7 +10,7 @@ updated_at: 2026-04-25
 
 # Карта Issue — биллинг и учёт затрат
 
-## TL;DR
+## Кратко
 
 Долгоживущая карта домена `billing-and-cost-accounting`.
 

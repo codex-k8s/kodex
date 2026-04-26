@@ -18,7 +18,7 @@ approvals:
 
 # Каноника runtime, deploy и bootstrap в wave 6
 
-## TL;DR
+## Кратко
 - Wave 6 фиксирует не реализацию конкретных Kubernetes-манифестов, а канонический рабочий контур новой платформы.
 - `runtime-manager` остаётся владельцем слотов, platform `job`, prewarm/reuse, build/deploy/mirror/cleanup и технического статуса среды.
 - `worker` и `agent-runner` являются исполнителями runtime-решений, но не владельцами runtime-истины.

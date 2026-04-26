@@ -18,7 +18,7 @@ approvals:
 
 # Безопасность релиза, наблюдаемость и уведомления в четвёртой волне
 
-## TL;DR
+## Кратко
 - Успешный deploy `job` ещё не означает, что релиз завершён безопасно.
 - Канонический цикл релиза: `release -> deploy -> postdeploy -> ops -> stable or rollback`.
 - Build/deploy `job`, housekeeping `job` и сигналы среды должны быть наблюдаемы в одном governance-контуре.
