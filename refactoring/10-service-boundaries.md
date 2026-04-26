@@ -82,8 +82,9 @@ approvals:
 ### 2.3. `provider-hub`
 Владеет:
 - provider accounts и их операционным состоянием;
-- normalized provider events;
+- webhook inbox, normalized provider events, дедупликацией и повторами обработки;
 - зеркальными проекциями, состоянием дозаполнения и платформенными метаданными по `Issue/PR/MR/comments/mentions/relationships`;
+- `sync_cursor`, incremental reconciliation, `drift_status` и приоритетами синхронизации;
 - лимитами провайдера и provider constraints;
 - выполнением операций в GitHub/GitLab через интерфейсы провайдера.
 
@@ -92,6 +93,11 @@ approvals:
 - выбором роли агента;
 - slot/build/deploy jobs;
 - операторскими проекциями как источником истины.
+
+Обязательное правило:
+- webhook является быстрым путём, но не единственной гарантией актуальности;
+- потерянные webhook восстанавливаются через incremental reconciliation;
+- ручной refresh не является штатным пользовательским сценарием и допустим только как админская постановка reconciliation job в очередь.
 
 ### 2.4. `package-hub`
 Владеет:
