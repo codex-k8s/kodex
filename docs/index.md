@@ -5,7 +5,7 @@ title: kodex — индекс документации
 status: active
 owner_role: KM
 created_at: 2026-04-25
-updated_at: 2026-04-25
+updated_at: 2026-04-26
 ---
 
 # Индекс документации kodex
@@ -31,10 +31,11 @@ updated_at: 2026-04-25
 
 1. Начать с `refactoring/task.md` и `refactoring/README.md`.
 2. Для сквозного продуктового каркаса читать `docs/platform/product/brief.md`, `docs/platform/product/constraints.md`, `docs/platform/product/product_model.md`, `docs/platform/product/glossary.md` и `docs/platform/product/requirements.md`.
-3. Для структуры документации читать `docs/index.md`, `docs/platform/README.md`, `docs/domains/README.md`, `docs/delivery/README.md`.
-4. Для конкретного домена переходить в `docs/domains/<domain>/README.md`.
-5. Для связи с GitHub Issue и PR использовать `docs/delivery/issue-map/`, а не один общий большой файл.
-6. Для новых документов брать шаблоны из `docs/templates/index.md`.
+3. Для сквозной архитектуры читать `docs/platform/architecture/c4_context.md`, `docs/platform/architecture/c4_container.md`, `docs/platform/architecture/domain_map.md`, `docs/platform/architecture/service_boundaries.md`, `docs/platform/architecture/data_model.md`, `docs/platform/architecture/provider_integration_model.md` и `docs/platform/architecture/mcp_and_interaction_model.md`.
+4. Для структуры документации читать `docs/index.md`, `docs/platform/README.md`, `docs/domains/README.md`, `docs/delivery/README.md`.
+5. Для конкретного домена переходить в `docs/domains/<domain>/README.md`.
+6. Для связи с GitHub Issue и PR использовать `docs/delivery/issue-map/`, а не один общий большой файл.
+7. Для новых документов брать шаблоны из `docs/templates/index.md`.
 
 ## Правила развития
 

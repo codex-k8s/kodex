@@ -10,4 +10,5 @@
 |---|---|---|
 | `wave-006-1-docs-information-architecture.md` | Информационная архитектура `docs/**` и разбиение карты Issue. | active |
 | `wave-006-2-platform-product-frame.md` | Сквозной продуктовый каркас платформы. | active |
+| `wave-006-3-platform-architecture-frame.md` | Сквозной архитектурный каркас платформы. | active |
 | `wave-007-access-and-accounts.md` | Первый кодовый домен: доступ, организации, группы и внешние аккаунты. | planned |
