@@ -19,7 +19,7 @@ updated_at: 2026-04-26
 | Рабочие сущности провайдера | `domains/provider-native-work-items.md` |
 | Пакетная платформа | `domains/package-platform.md` |
 | Оркестрация агентов | `domains/agent-orchestration.md` |
-| Runtime и контур серверов и кластеров | `domains/runtime-and-fleet.md` |
+| Среда исполнения и контур серверов и кластеров | `domains/runtime-and-fleet.md` |
 | Центр взаимодействий | `domains/interaction-hub.md` |
 | Консоль и операционные интерфейсы | `domains/console-and-operations-ux.md` |
 | Риски и релизы | `domains/risk-and-release-governance.md` |
@@ -30,7 +30,7 @@ updated_at: 2026-04-26
 
 | Волна | Файл |
 |---|---|
-| Wave 6.1 — информационная архитектура документации | `waves/wave-006-1-docs-information-architecture.md` |
-| Wave 6.2 — сквозной продуктовый каркас платформы | `waves/wave-006-2-platform-product-frame.md` |
-| Wave 6.3 — сквозной архитектурный каркас платформы | `waves/wave-006-3-platform-architecture-frame.md` |
-| Wave 7 — доступ, организации, группы и внешние аккаунты | `waves/wave-007-access-and-accounts.md` |
+| Волна 6.1 — информационная архитектура документации | `waves/wave-006-1-docs-information-architecture.md` |
+| Волна 6.2 — сквозной продуктовый каркас платформы | `waves/wave-006-2-platform-product-frame.md` |
+| Волна 6.3 — сквозной архитектурный каркас платформы | `waves/wave-006-3-platform-architecture-frame.md` |
+| Волна 7 — доступ, организации, группы и внешние аккаунты | `waves/wave-007-access-and-accounts.md` |

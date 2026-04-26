@@ -18,161 +18,161 @@ approvals:
 
 # C4 Container: kodex
 
-## TL;DR
+## Кратко
 
-Целевая платформа строится как набор owner-сервисов с database-per-service моделью. Edge-компоненты остаются тонкими, executors не владеют доменной правдой, а operator UI получает агрегированную картину через read-проекции.
+Целевая платформа строится как набор сервисов-владельцев с моделью «БД на сервис». Пограничные компоненты остаются тонкими, исполнители не владеют доменной правдой, а операторский интерфейс получает агрегированную картину через проекции чтения.
 
 ## Контейнерные зоны
 
 | Зона | Контейнеры | Ответственность |
 |---|---|---|
-| Edge и UI | `web-console`, `api-gateway`, `platform-mcp-server` | Пользовательский UI, входящие HTTP/webhook/MCP запросы, авторизация и маршрутизация. |
-| Owner-сервисы | `access-manager`, `project-catalog`, `provider-hub`, `package-hub`, `agent-manager`, `fleet-manager`, `runtime-manager`, `billing-hub`, `interaction-hub`, `operations-hub` | Каноническое доменное состояние и бизнес-правила. |
-| Исполнители | `worker`, `agent-runner` | Фоновые задачи, reconciliation и агентные сессии без владения доменной истиной. |
-| Хранилища | PostgreSQL, Vault, object storage | Платформенное состояние, секреты, временные медиа. |
-| Runtime | Kubernetes, container registry | Slots, jobs, plugin workloads, project workloads и образы. |
+| Пограничный слой и интерфейс | `web-console`, `api-gateway`, `platform-mcp-server` | Пользовательский интерфейс, входящие HTTP/webhook/MCP запросы, авторизация и маршрутизация. |
+| Сервисы-владельцы | `access-manager`, `project-catalog`, `provider-hub`, `package-hub`, `agent-manager`, `fleet-manager`, `runtime-manager`, `billing-hub`, `interaction-hub`, `operations-hub` | Каноническое доменное состояние и бизнес-правила. |
+| Исполнители | `worker`, `agent-runner` | Фоновые задачи, сверка и агентные сессии без владения доменной истиной. |
+| Хранилища | PostgreSQL, Vault, объектное хранилище | Платформенное состояние, секреты, временные медиа. |
+| Среда исполнения | Kubernetes, реестр контейнерных образов | Слоты, задания, нагрузки плагинов, проектные нагрузки и образы. |
 
 ## Диаграмма
 
 ```mermaid
 C4Container
-title kodex - Container Diagram
+title kodex - контейнерная диаграмма
 
-Person(user, "Пользователь", "UI, голос, задачи и комментарии")
-Person(owner, "Owner", "Решения по gates и релизам")
+Person(user, "Пользователь", "Пользовательский интерфейс, голос, задачи и комментарии")
+Person(owner, "Владелец", "Решения по контрольным точкам и релизам")
 Person(operator, "Оператор", "Наблюдение и управление")
 
-System_Ext(provider, "GitHub/GitLab", "Provider-native artifacts")
-System_Ext(k8s, "Kubernetes", "Runtime and workloads")
-System_Ext(registry, "Container registry", "Images")
-System_Ext(vault, "Vault", "Secrets")
-System_Ext(idp, "SSO/OIDC IdP", "Identity")
-System_Ext(models, "Model providers", "LLM APIs")
-System_Ext(channels, "External channels", "Notifications and feedback")
+System_Ext(provider, "GitHub/GitLab", "Нативные артефакты провайдера")
+System_Ext(k8s, "Kubernetes", "Среды исполнения и нагрузки")
+System_Ext(registry, "Реестр контейнерных образов", "Образы")
+System_Ext(vault, "Vault", "Секреты")
+System_Ext(idp, "SSO/OIDC IdP", "Идентификация")
+System_Ext(models, "Поставщики моделей", "API моделей")
+System_Ext(channels, "Внешние каналы", "Уведомления и обратная связь")
 
 System_Boundary(kodex, "kodex") {
   Container(web, "web-console", "Vue, PrimeVue", "Операторская и пользовательская консоль")
-  Container(api, "api-gateway", "Go", "HTTP ingress, auth, routing, webhook edge")
+  Container(api, "api-gateway", "Go", "HTTP-вход, авторизация, маршрутизация, пограничная обработка webhook")
   Container(mcp, "platform-mcp-server", "Go, MCP", "Инструментальная поверхность платформы")
 
   Container(access, "access-manager", "Go", "Пользователи, организации, группы, права")
-  Container(projects, "project-catalog", "Go", "Проекты, репозитории, services.yaml, release policy")
-  Container(providerHub, "provider-hub", "Go", "Provider mirror, webhooks, limits, external operations")
+  Container(projects, "project-catalog", "Go", "Проекты, репозитории, services.yaml, релизные политики")
+  Container(providerHub, "provider-hub", "Go", "Зеркало провайдера, webhook, лимиты, внешние операции")
   Container(packageHub, "package-hub", "Go", "Пакеты, магазины, установка, версии")
-  Container(agent, "agent-manager", "Go + LLM", "Flow, роли, prompts, runs, acceptance")
-  Container(fleet, "fleet-manager", "Go", "Серверы, кластеры, placement")
-  Container(runtime, "runtime-manager", "Go", "Slots, jobs, build, deploy, cleanup")
-  Container(billing, "billing-hub", "Go", "Cost records, billing accounts, invoices")
-  Container(interaction, "interaction-hub", "Go", "Dialogs, approvals, notifications, channels")
-  Container(operations, "operations-hub", "Go", "Read-проекции, operator timelines, queues")
+  Container(agent, "agent-manager", "Go + LLM", "Процессы, роли, промпты, агентные запуски, приёмка")
+  Container(fleet, "fleet-manager", "Go", "Серверы, кластеры, размещение")
+  Container(runtime, "runtime-manager", "Go", "Слоты, задания, сборка, выкладка, очистка")
+  Container(billing, "billing-hub", "Go", "Записи затрат, биллинговые аккаунты, счета")
+  Container(interaction, "interaction-hub", "Go", "Диалоги, согласования, уведомления, каналы")
+  Container(operations, "operations-hub", "Go", "Проекции чтения, операторские ленты, очереди")
 
-  Container(worker, "worker", "Go", "Background jobs and reconciliation executor")
-  Container(runner, "agent-runner", "Containerized agent", "Role-agent execution inside slot")
+  Container(worker, "worker", "Go", "Исполнитель фоновых задач и сверки")
+  Container(runner, "agent-runner", "Контейнерный агент", "Исполнение ролевого агента внутри слота")
 
-  ContainerDb(pg, "PostgreSQL cluster", "PostgreSQL", "Database-per-service storage")
-  ContainerDb(obj, "Object storage", "S3-compatible", "Temporary voice/media attachments")
+  ContainerDb(pg, "PostgreSQL-кластер", "PostgreSQL", "Хранилище по модели БД на сервис")
+  ContainerDb(obj, "Объектное хранилище", "S3-compatible", "Временные голосовые и медиа-вложения")
 }
 
 Rel(user, web, "Работает", "HTTPS")
 Rel(owner, web, "Принимает решения", "HTTPS")
 Rel(operator, web, "Наблюдает", "HTTPS")
-Rel(web, api, "Calls", "HTTPS")
+Rel(web, api, "Вызывает", "HTTPS")
 Rel(api, idp, "OIDC auth", "HTTPS")
-Rel(api, access, "Commands and reads", "HTTP/gRPC")
-Rel(api, projects, "Project commands and reads", "HTTP/gRPC")
-Rel(api, agent, "Run and flow commands", "HTTP/gRPC")
-Rel(api, interaction, "Dialog and approval commands", "HTTP/gRPC")
-Rel(api, operations, "UI projections", "HTTP/gRPC")
-Rel(api, providerHub, "Webhook routing", "HTTP/gRPC")
-Rel(agent, mcp, "Uses platform tools", "MCP")
-Rel(runner, mcp, "Uses platform tools", "MCP")
-Rel(mcp, access, "Routes access tools", "gRPC")
-Rel(mcp, projects, "Routes project tools", "gRPC")
-Rel(mcp, providerHub, "Routes provider tools", "gRPC")
-Rel(mcp, packageHub, "Routes package tools", "gRPC")
-Rel(mcp, agent, "Routes run/session tools for external callers", "gRPC")
-Rel(mcp, fleet, "Routes fleet tools", "gRPC")
-Rel(mcp, runtime, "Routes runtime tools", "gRPC")
-Rel(mcp, billing, "Routes billing tools", "gRPC")
-Rel(mcp, interaction, "Routes feedback and approval tools", "gRPC")
-Rel(mcp, operations, "Routes operator read tools", "gRPC")
-Rel(projects, access, "Checks organization and membership context", "gRPC")
-Rel(providerHub, access, "Checks account scope", "gRPC")
-Rel(packageHub, access, "Checks install permissions", "gRPC")
-Rel(agent, projects, "Gets workspace, flow scope and policy", "gRPC")
-Rel(agent, providerHub, "Reads provider state and sends refresh signals", "gRPC")
-Rel(agent, runtime, "Requests slots and runtime jobs", "gRPC")
-Rel(agent, interaction, "Requests feedback, approvals and notifications", "gRPC")
-Rel(runtime, fleet, "Gets placement and cluster scope", "gRPC")
-Rel(runtime, projects, "Reads repository and deployment policy", "gRPC")
-Rel(packageHub, providerHub, "Reads package source repositories", "gRPC")
-Rel(billing, runtime, "Consumes runtime usage records", "gRPC/events")
-Rel(billing, packageHub, "Consumes package usage and price metadata", "gRPC/events")
-Rel(operations, access, "Builds access-related read projections", "gRPC/events")
-Rel(operations, projects, "Builds project read projections", "gRPC/events")
-Rel(operations, providerHub, "Builds provider read projections", "gRPC/events")
-Rel(operations, agent, "Builds run read projections", "gRPC/events")
-Rel(operations, runtime, "Builds slot and job read projections", "gRPC/events")
-Rel(operations, interaction, "Builds approval and notification projections", "gRPC/events")
-Rel(access, pg, "Own DB", "SQL")
-Rel(projects, pg, "Own DB", "SQL")
-Rel(providerHub, pg, "Own DB", "SQL")
-Rel(packageHub, pg, "Own DB", "SQL")
-Rel(agent, pg, "Own DB", "SQL")
-Rel(fleet, pg, "Own DB", "SQL")
-Rel(runtime, pg, "Own DB", "SQL")
-Rel(billing, pg, "Own DB", "SQL")
-Rel(interaction, pg, "Own DB", "SQL")
-Rel(operations, pg, "Own read DB", "SQL")
-Rel(providerHub, provider, "Webhook, API, CLI-backed operations", "HTTPS")
-Rel(runtime, k8s, "Orchestrates slots and jobs", "Kubernetes API")
-Rel(runtime, registry, "Publishes and deploys images", "OCI")
-Rel(access, vault, "Reads platform secrets", "Vault API")
-Rel(interaction, channels, "Delivers notifications", "Plugin contracts")
-Rel(agent, models, "Uses models", "Provider API")
-Rel(worker, access, "Executes assigned background work", "gRPC")
-Rel(worker, providerHub, "Reconciliation", "gRPC")
-Rel(worker, runtime, "Platform jobs", "gRPC")
-Rel(runner, provider, "Issue/PR/comment work", "gh/API")
-Rel(interaction, obj, "Stores media refs", "S3 API")
+Rel(api, access, "Команды и чтение доступа", "HTTP/gRPC")
+Rel(api, projects, "Команды и чтение проектов", "HTTP/gRPC")
+Rel(api, agent, "Команды запусков и процессов", "HTTP/gRPC")
+Rel(api, interaction, "Команды диалогов и согласований", "HTTP/gRPC")
+Rel(api, operations, "Проекции для пользовательского интерфейса", "HTTP/gRPC")
+Rel(api, providerHub, "Маршрутизация webhook", "HTTP/gRPC")
+Rel(agent, mcp, "Использует инструменты платформы", "MCP")
+Rel(runner, mcp, "Использует инструменты платформы", "MCP")
+Rel(mcp, access, "Маршрутизирует инструменты доступа", "gRPC")
+Rel(mcp, projects, "Маршрутизирует инструменты проектов", "gRPC")
+Rel(mcp, providerHub, "Маршрутизирует инструменты провайдера", "gRPC")
+Rel(mcp, packageHub, "Маршрутизирует инструменты пакетов", "gRPC")
+Rel(mcp, agent, "Маршрутизирует инструменты запусков и сессий для внешних вызывающих сторон", "gRPC")
+Rel(mcp, fleet, "Маршрутизирует инструменты серверов и кластеров", "gRPC")
+Rel(mcp, runtime, "Маршрутизирует инструменты среды исполнения", "gRPC")
+Rel(mcp, billing, "Маршрутизирует инструменты биллинга", "gRPC")
+Rel(mcp, interaction, "Маршрутизирует инструменты обратной связи и согласований", "gRPC")
+Rel(mcp, operations, "Маршрутизирует инструменты операторского чтения", "gRPC")
+Rel(projects, access, "Проверяет организацию и членство", "gRPC")
+Rel(providerHub, access, "Проверяет область действия аккаунта", "gRPC")
+Rel(packageHub, access, "Проверяет права установки", "gRPC")
+Rel(agent, projects, "Получает рабочее пространство, область процесса и политику", "gRPC")
+Rel(agent, providerHub, "Читает состояние провайдера и отправляет сигналы обновления", "gRPC")
+Rel(agent, runtime, "Запрашивает слоты и задания среды исполнения", "gRPC")
+Rel(agent, interaction, "Запрашивает обратную связь, согласования и уведомления", "gRPC")
+Rel(runtime, fleet, "Получает правила размещения и контур кластера", "gRPC")
+Rel(runtime, projects, "Читает политику репозитория и выкладки", "gRPC")
+Rel(packageHub, providerHub, "Читает репозитории-источники пакетов", "gRPC")
+Rel(billing, runtime, "Потребляет записи использования среды исполнения", "gRPC/events")
+Rel(billing, packageHub, "Потребляет использование пакетов и ценовые данные", "gRPC/events")
+Rel(operations, access, "Строит проекции доступа", "gRPC/events")
+Rel(operations, projects, "Строит проекции проектов", "gRPC/events")
+Rel(operations, providerHub, "Строит проекции провайдера", "gRPC/events")
+Rel(operations, agent, "Строит проекции агентных запусков", "gRPC/events")
+Rel(operations, runtime, "Строит проекции слотов и заданий", "gRPC/events")
+Rel(operations, interaction, "Строит проекции согласований и уведомлений", "gRPC/events")
+Rel(access, pg, "Своя БД", "SQL")
+Rel(projects, pg, "Своя БД", "SQL")
+Rel(providerHub, pg, "Своя БД", "SQL")
+Rel(packageHub, pg, "Своя БД", "SQL")
+Rel(agent, pg, "Своя БД", "SQL")
+Rel(fleet, pg, "Своя БД", "SQL")
+Rel(runtime, pg, "Своя БД", "SQL")
+Rel(billing, pg, "Своя БД", "SQL")
+Rel(interaction, pg, "Своя БД", "SQL")
+Rel(operations, pg, "Своя БД проекций чтения", "SQL")
+Rel(providerHub, provider, "Webhook, API и операции через CLI", "HTTPS")
+Rel(runtime, k8s, "Управляет слотами и заданиями", "Kubernetes API")
+Rel(runtime, registry, "Публикует и выкладывает образы", "OCI")
+Rel(access, vault, "Читает секреты платформы", "Vault API")
+Rel(interaction, channels, "Доставляет уведомления", "Контракты плагинов")
+Rel(agent, models, "Использует модели", "API провайдера")
+Rel(worker, access, "Исполняет назначенную фоновую работу", "gRPC")
+Rel(worker, providerHub, "Сверка", "gRPC")
+Rel(worker, runtime, "Платформенные задания", "gRPC")
+Rel(runner, provider, "Работает с Issue, PR и комментариями", "gh/API")
+Rel(interaction, obj, "Хранит ссылки на медиа", "S3 API")
 ```
 
-## Owner-сервисы
+## Сервисы-владельцы
 
 | Сервис | Каноническая ответственность |
 |---|---|
-| `access-manager` | Пользователи, организации, группы, allowlist, SSO principal resolution, права, административный аудит. |
-| `project-catalog` | Проекты, репозитории, project policy, `services.yaml`, источники проектной документации, branch rules, release policy, placement policy. |
-| `provider-hub` | Provider accounts, webhooks, зеркальные проекции, synchronization, rate limits, provider operations. |
-| `package-hub` | Каталог пакетов, установленные и доступные пакеты, источники магазинов, версии, verification, секреты пакетов. |
-| `agent-manager` | Flow, stage, role, prompt templates, runs, sessions, automation rules, acceptance machine. |
-| `fleet-manager` | Серверы, Kubernetes-кластеры, health, connectivity, placement. |
-| `runtime-manager` | Slots, platform jobs, build/deploy/mirror/cleanup, runtime status. |
-| `billing-hub` | Billing accounts, cost records, распределение затрат, основа invoice. |
-| `interaction-hub` | Dialog threads, approvals, notifications, subscriptions, delivery attempts, external channel callbacks. |
-| `operations-hub` | Read-модели для UI, timelines, очереди, блокировки, агрегированные статусы. |
+| `access-manager` | Пользователи, организации, группы, allowlist, разрешение SSO-principal, права, административный аудит. |
+| `project-catalog` | Проекты, репозитории, проектная политика, `services.yaml`, источники проектной документации, правила веток, релизные политики, политика размещения. |
+| `provider-hub` | Аккаунты провайдера, webhook, зеркальные проекции, синхронизация, лимиты, операции провайдера. |
+| `package-hub` | Каталог пакетов, установленные и доступные пакеты, источники магазинов, версии, верификация, секреты пакетов. |
+| `agent-manager` | Процессы, этапы, роли, шаблоны промптов, агентные запуски, сессии, правила автоматизации, машина приёмки. |
+| `fleet-manager` | Серверы, Kubernetes-кластеры, здоровье, связность, размещение. |
+| `runtime-manager` | Слоты, платформенные задания, сборка, выкладка, зеркалирование, очистка, статус среды исполнения. |
+| `billing-hub` | Биллинговые аккаунты, записи затрат, распределение затрат, основа счёта. |
+| `interaction-hub` | Диалоговые ветки, согласования, уведомления, подписки, попытки доставки, обратные вызовы внешних каналов. |
+| `operations-hub` | Модели чтения для пользовательского интерфейса, ленты событий, очереди, блокировки, агрегированные статусы. |
 
-## Тонкие edge-компоненты
+## Тонкие пограничные компоненты
 
-- `web-console` не принимает доменных решений и не собирает состояние напрямую из БД нескольких owner-сервисов.
-- `api-gateway` отвечает за HTTP ingress, auth, routing, webhook edge и edge rate limiting, но не хранит доменную правду.
-- `platform-mcp-server` даёт инструментальную поверхность для agent-manager, slot-агентов и внешних интеграций. Agent-manager и agent-runner обращаются к нему как клиенты MCP, а сам `platform-mcp-server` маршрутизирует разрешённые инструменты во все owner-сервисы по gRPC. Он не становится владельцем run, jobs, provider state или проектов.
+- `web-console` не принимает доменных решений и не собирает состояние напрямую из БД нескольких сервисов-владельцев.
+- `api-gateway` отвечает за входящий HTTP-трафик, авторизацию, маршрутизацию, пограничную обработку webhook и ограничение частоты запросов на границе, но не хранит доменную правду.
+- `platform-mcp-server` даёт инструментальную поверхность для agent-manager, агентов в слотах и внешних интеграций. Agent-manager и agent-runner обращаются к нему как клиенты MCP, а сам `platform-mcp-server` маршрутизирует разрешённые инструменты во все сервисы-владельцы по gRPC. Он не становится владельцем агентных запусков, заданий, состояния провайдера или проектов.
 
 ## Исполнители
 
-- `worker` исполняет background work, retries и reconciliation по поручению owner-сервисов.
-- `agent-runner` исполняет ролевую агентную работу в slot и возвращает результат через provider-native артефакты и платформенные контракты.
+- `worker` исполняет фоновую работу, повторы и сверку по поручению сервисов-владельцев.
+- `agent-runner` исполняет ролевую агентную работу в слоте и возвращает результат через нативные артефакты провайдера и платформенные контракты.
 - Исполнители не ходят напрямую в чужие БД и не вводят собственные канонические статусы.
 
 ## Хранилища
 
-- PostgreSQL используется как общий инфраструктурный кластер, но данные разделены по owner-сервисам.
-- Таблицы разных owner-сервисов не связываются через `FOREIGN KEY`, cross-database join или каскадные операции.
+- PostgreSQL используется как общий инфраструктурный кластер, но данные разделены по сервисам-владельцам.
+- Таблицы разных сервисов-владельцев не связываются через `FOREIGN KEY`, межбазовый join или каскадные операции.
 - Vault хранит секреты платформы и её зависимостей; проекты могут использовать свои хранилища секретов.
-- Полные technical logs остаются в runtime/logging-контуре, а PostgreSQL хранит только краткие хвосты и диагностические выдержки.
+- Полные технические логи остаются в контуре среды исполнения и логирования, а PostgreSQL хранит только краткие хвосты и диагностические выдержки.
 
 ## Апрув
 
 - request_id: `owner-2026-04-26-platform-architecture-frame`
 - Решение: approved
-- Комментарий: C4 container входит в сквозной архитектурный каркас платформы.
+- Комментарий: C4-контейнеры входят в сквозной архитектурный каркас платформы.

@@ -26,10 +26,10 @@
 | `product/requirements.md` | Сквозные продуктовые требования. |
 | `architecture/c4_context.md` | C4-контекст платформы. |
 | `architecture/c4_container.md` | C4-контейнеры и целевая сервисная карта. |
-| `architecture/domain_map.md` | Архитектурная карта доменов и owner-сервисов. |
-| `architecture/service_boundaries.md` | Границы owner-сервисов, edge и исполнителей. |
+| `architecture/domain_map.md` | Архитектурная карта доменов и сервисов-владельцев. |
+| `architecture/service_boundaries.md` | Границы сервисов-владельцев, пограничного слоя и исполнителей. |
 | `architecture/data_model.md` | Сквозная модель данных и владение состоянием. |
-| `architecture/provider_integration_model.md` | Модель provider-интеграции и синхронизации. |
+| `architecture/provider_integration_model.md` | Модель интеграции с провайдерами и синхронизации. |
 | `architecture/mcp_and_interaction_model.md` | Платформенный MCP и модель взаимодействий. |
 
 ## Что сюда попадёт позже
