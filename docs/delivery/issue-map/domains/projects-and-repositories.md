@@ -10,7 +10,7 @@ updated_at: 2026-04-25
 
 # Карта Issue — проекты и репозитории
 
-## Кратко
+## TL;DR
 
 Долгоживущая карта домена `projects-and-repositories`.
 

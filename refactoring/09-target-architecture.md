@@ -18,7 +18,7 @@ approvals:
 
 # Целевая архитектура новой платформы
 
-## Кратко
+## TL;DR
 - Новая архитектура строится вокруг набора доменных сервисов-владельцев, а не вокруг одного `control-plane`.
 - `api-gateway` и `web-console` остаются thin-edge и интерфейсным слоем, без владения доменной логикой и каноническим состоянием.
 - Канонический первый набор сервисов-владельцев: `access-manager`, `project-catalog`, `provider-hub`, `package-hub`, `agent-manager`, `fleet-manager`, `runtime-manager`, `billing-hub`, `interaction-hub`, `operations-hub`.
