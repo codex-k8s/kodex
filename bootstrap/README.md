@@ -89,14 +89,12 @@ go run ./cmd/codex-bootstrap bootstrap \
   - `KODEX_PRODUCTION_<NAME>` для production runtime secret.
   Пустая строка означает "не перезаписывать существующее значение".
 - Для bootstrap нужен `KODEX_GITHUB_PAT` (fine-grained) с правами, достаточными для работы с репозиторием и `administration` (webhooks/labels).
-  GitHub secrets/variables платформа больше не синхронизирует и не использует как runtime source of truth.
+  GitHub secrets/variables платформа больше не синхронизирует и не использует как runtime-источник истины.
 - Для PR-flow (создание/обновление PR, комментарии, review, push в рабочие ветки) использовать только `KODEX_GIT_BOT_TOKEN`.
   При локальных ручных операциях `gh` токен берётся из `bootstrap/host/config.env` (`KODEX_GIT_BOT_TOKEN`).
-- Для staff UI и staff API требуется GitHub OAuth App:
-  - создать на `https://github.com/settings/applications/new`;
-  - `Homepage URL`: `https://<KODEX_PRODUCTION_DOMAIN>`;
-  - `Authorization callback URL` (production/dev через `oauth2-proxy`): `https://<KODEX_PRODUCTION_DOMAIN>/oauth2/callback`;
-  - заполнить `KODEX_GITHUB_OAUTH_CLIENT_ID` и `KODEX_GITHUB_OAUTH_CLIENT_SECRET` в `bootstrap/host/config.env`.
+- Для staff UI и staff API требуется платформенный SSO/OIDC-контур. Базовый вариант — Keycloak; GitHub/GitLab подключаются в нём как внешние поставщики идентичности.
+  - callback платформенного SSO/gateway: `https://<KODEX_PRODUCTION_DOMAIN>/oauth2/callback`;
+  - слоты используют общий SSO/gateway и не требуют отдельного OAuth-приложения у GitHub/GitLab на каждый slot;
 - `KODEX_PUBLIC_BASE_URL` должен совпадать с публичным URL (обычно `https://<KODEX_PRODUCTION_DOMAIN>`).
 - `KODEX_BOOTSTRAP_OWNER_EMAIL` задаёт единственный email, которому разрешён первый вход (platform admin). Self-signup запрещён.
 - `KODEX_BOOTSTRAP_ALLOWED_EMAILS` (опционально) — дополнительные staff email'ы (через запятую),

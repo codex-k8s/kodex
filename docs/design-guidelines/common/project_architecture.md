@@ -66,7 +66,7 @@
 
 ### `services/staff/`
 - Внутренняя консоль (Vue3).
-- Доступ через GitHub OAuth и внутреннюю матрицу прав проекта.
+- Доступ через платформенный SSO/OIDC-контур и внутреннюю матрицу прав проекта.
 - Для каждого frontend-сервиса обязателен собственный Dockerfile с target `dev` и `prod`,
   а также отдельный deploy manifest в `deploy/base/<service>/*.yaml.tpl`.
 
