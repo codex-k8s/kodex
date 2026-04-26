@@ -8,7 +8,8 @@
 
 | Волна | Назначение | Статус |
 |---|---|---|
-| `wave-006-1-docs-information-architecture.md` | Информационная архитектура `docs/**` и разбиение карты Issue. | активна |
-| `wave-006-2-platform-product-frame.md` | Сквозной продуктовый каркас платформы. | активна |
-| `wave-006-3-platform-architecture-frame.md` | Сквозной архитектурный каркас платформы. | активна |
+| `wave-006-1-docs-information-architecture.md` | Информационная архитектура `docs/**` и разбиение карты Issue. | принята |
+| `wave-006-2-platform-product-frame.md` | Сквозной продуктовый каркас платформы. | принята |
+| `wave-006-3-platform-architecture-frame.md` | Сквозной архитектурный каркас платформы. | принята |
+| `wave-006-4-access-domain-docs.md` | Пакет домена доступа перед реализацией `access-manager`. | принята |
 | `wave-007-access-and-accounts.md` | Первый кодовый домен: доступ, организации, группы и внешние аккаунты. | запланирована |
