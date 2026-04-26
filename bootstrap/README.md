@@ -95,7 +95,6 @@ go run ./cmd/codex-bootstrap bootstrap \
 - Для staff UI и staff API требуется платформенный SSO/OIDC-контур. Базовый вариант — Keycloak; GitHub/GitLab подключаются в нём как внешние поставщики идентичности.
   - callback платформенного SSO/gateway: `https://<KODEX_PRODUCTION_DOMAIN>/oauth2/callback`;
   - слоты используют общий SSO/gateway и не требуют отдельного OAuth-приложения у GitHub/GitLab на каждый slot;
-  - legacy-переменные `KODEX_GITHUB_OAUTH_CLIENT_ID` и `KODEX_GITHUB_OAUTH_CLIENT_SECRET` остаются только как временная совместимость bootstrap-конфига до переименования SSO-переменных.
 - `KODEX_PUBLIC_BASE_URL` должен совпадать с публичным URL (обычно `https://<KODEX_PRODUCTION_DOMAIN>`).
 - `KODEX_BOOTSTRAP_OWNER_EMAIL` задаёт единственный email, которому разрешён первый вход (platform admin). Self-signup запрещён.
 - `KODEX_BOOTSTRAP_ALLOWED_EMAILS` (опционально) — дополнительные staff email'ы (через запятую),

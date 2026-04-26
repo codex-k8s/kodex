@@ -6,7 +6,7 @@ status: active
 owner_role: PM
 created_at: 2026-04-26
 updated_at: 2026-04-26
-related_issues: []
+related_issues: [599, 600, 601, 602]
 related_prs: []
 related_docsets:
   - docs/platform/product/product_model.md
