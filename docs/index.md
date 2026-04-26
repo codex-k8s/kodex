@@ -5,7 +5,7 @@ title: kodex — индекс документации
 status: active
 owner_role: KM
 created_at: 2026-04-25
-updated_at: 2026-04-25
+updated_at: 2026-04-26
 ---
 
 # Индекс документации kodex
@@ -31,15 +31,16 @@ updated_at: 2026-04-25
 
 1. Начать с `refactoring/task.md` и `refactoring/README.md`.
 2. Для сквозного продуктового каркаса читать `docs/platform/product/brief.md`, `docs/platform/product/constraints.md`, `docs/platform/product/product_model.md`, `docs/platform/product/glossary.md` и `docs/platform/product/requirements.md`.
-3. Для структуры документации читать `docs/index.md`, `docs/platform/README.md`, `docs/domains/README.md`, `docs/delivery/README.md`.
-4. Для конкретного домена переходить в `docs/domains/<domain>/README.md`.
-5. Для связи с GitHub Issue и PR использовать `docs/delivery/issue-map/`, а не один общий большой файл.
-6. Для новых документов брать шаблоны из `docs/templates/index.md`.
+3. Для сквозной архитектуры читать `docs/platform/architecture/c4_context.md`, `docs/platform/architecture/c4_container.md`, `docs/platform/architecture/domain_map.md`, `docs/platform/architecture/service_boundaries.md`, `docs/platform/architecture/data_model.md`, `docs/platform/architecture/provider_integration_model.md` и `docs/platform/architecture/mcp_and_interaction_model.md`.
+4. Для структуры документации читать `docs/index.md`, `docs/platform/README.md`, `docs/domains/README.md`, `docs/delivery/README.md`.
+5. Для конкретного домена переходить в `docs/domains/<domain>/README.md`.
+6. Для связи с GitHub Issue и PR использовать `docs/delivery/issue-map/`, а не один общий большой файл.
+7. Для новых документов брать шаблоны из `docs/templates/index.md`.
 
 ## Правила развития
 
 - Новые домены добавляются в `docs/domains/` как отдельные пакеты.
-- Каждый домен хранит свои продуктовые, архитектурные, delivery и ops документы внутри своего каталога.
+- Каждый домен хранит свои продуктовые, архитектурные документы, документы поставки и эксплуатации внутри своего каталога.
 - Сквозные решения, которые затрагивают всю платформу, живут в `docs/platform/`.
 - Каталоги плагинов, пакетов руководящей документации и ролей не смешиваются с доменными документами.
 - Карта Issue разбита по доменам и отдельным рабочим срезам, чтобы параллельные агенты не конфликтовали в одном файле.
@@ -47,7 +48,7 @@ updated_at: 2026-04-25
 
 ## Внешние источники
 
-Внешние репозитории руководящей документации подключены как source submodule в `docs/external/**`, шаблоны — в `docs/templates/**`, а пакеты — в `packages/**`.
+Внешние репозитории руководящей документации подключены как исходные `submodule` в `docs/external/**`, шаблоны — в `docs/templates/**`, а пакеты — в `packages/**`.
 Штатный рабочий контур предполагает checkout всех submodule из `.gitmodules`. Если источник недоступен, платформа должна показать проблему доступа.
 Правила работы описаны в `docs/external/AGENTS.md` и `packages/AGENTS.md`.
 
