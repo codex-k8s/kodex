@@ -4,7 +4,7 @@
 
 ## Контракт (AsyncAPI)
 
-- Контракт WebSocket сообщений описывается в AsyncAPI YAML: `api/server/asyncapi.yaml`.
+- Контракт WebSocket сообщений описывается в AsyncAPI YAML: `specs/asyncapi/<service-name>.v<major>.yaml`.
 - В AsyncAPI фиксируем каналы, типы сообщений, payload schemas, версии и correlation поля.
 
 ## Типы сообщений

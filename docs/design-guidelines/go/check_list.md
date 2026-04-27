@@ -18,8 +18,8 @@
 - Функции/методы оформлены с компактными сигнатурами (предпочтительно в одну строку); при большом числе аргументов используется `Config/Params/Input` структура.
 - Интеграция с Kubernetes идёт через интерфейс/адаптер; прямой shell-first сценарий не является основным путём.
 - Интеграция с репозиториями идёт через provider-интерфейсы (без GitHub-specific логики в домене).
-- HTTP (если есть): OpenAPI в `api/server/api.yaml`; validation/codegen выполнены.
-- Async/webhook payload contracts (если есть): описаны в `api/server/asyncapi.yaml`.
+- HTTP (если есть): OpenAPI в `specs/openapi/<service-name>.v<major>.yaml`; validation/codegen выполнены.
+- Async/webhook payload contracts (если есть): описаны в `specs/asyncapi/<service-name>.v<major>.yaml`.
 - Если менялись контракты (OpenAPI/proto/AsyncAPI): выполнена регенерация через `make`, и изменения в `**/generated/**` закоммичены.
 
 ## Webhook и процессы

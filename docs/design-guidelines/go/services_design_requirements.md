@@ -62,8 +62,8 @@
 - `cmd/cli/migrations/*.sql` — миграции БД (goose) для этого сервиса, если он держатель схемы.
   - В монорепо это означает путь:
     `services/<zone>/<service-name>/cmd/cli/migrations/*.sql`.
-- `api/server/api.yaml` — OpenAPI.
-- `api/server/asyncapi.yaml` — async/webhook/event контракты (если используются).
+- `specs/openapi/<service-name>.v<major>.yaml` — OpenAPI.
+- `specs/asyncapi/<service-name>.v<major>.yaml` — async/webhook/event контракты (если используются).
 - `internal/transport/*/generated/**` — только сгенерированный код.
 
 ## Требования к transport DTO и кастерам
