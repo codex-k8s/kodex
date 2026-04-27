@@ -38,6 +38,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CheckAccessResponse'
+  /v1/access/explanations/{auditId}:
+    get:
+      operationId: explainAccess
+      summary: Explain a previously audited access decision
+      parameters:
+        - name: auditId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Access decision explanation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExplainAccessResponse'
   /v1/external-accounts/{externalAccountId}/usage:resolve:
     post:
       operationId: resolveExternalAccountUsage
@@ -210,6 +228,26 @@ components:
           items:
             $ref: '#/components/schemas/MatchedRule'
       required: [decision, reasonCode, policyVersion, matchedRules]
+    ExplainAccessResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        auditId:
+          type: string
+          format: uuid
+        decision:
+          type: string
+          enum: [allow, deny, pending]
+        reasonCode:
+          type: string
+        policyVersion:
+          type: integer
+          format: int64
+        matchedRules:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatchedRule'
+      required: [auditId, decision, reasonCode, policyVersion, matchedRules]
     ResolveExternalAccountUsageRequest:
       type: object
       additionalProperties: false

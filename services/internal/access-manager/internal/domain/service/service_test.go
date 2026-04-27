@@ -140,6 +140,104 @@ func TestCheckAccessExplicitDenyWins(t *testing.T) {
 	}
 }
 
+func TestCheckAccessResolvesTransitiveMembershipGraph(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+
+	user := store.seedUser(enum.UserStatusActive)
+	org, err := svc.CreateOrganization(ctx, CreateOrganizationInput{
+		Kind: enum.OrganizationKindClient, Slug: "client", DisplayName: "Клиент",
+	})
+	if err != nil {
+		t.Fatalf("create organization: %v", err)
+	}
+	group, err := svc.CreateGroup(ctx, CreateGroupInput{
+		ScopeType: enum.GroupScopeOrganization, ScopeID: &org.ID, Slug: "dev", DisplayName: "Разработчики",
+	})
+	if err != nil {
+		t.Fatalf("create group: %v", err)
+	}
+	_, err = svc.SetMembership(ctx, SetMembershipInput{
+		SubjectType: enum.MembershipSubjectUser, SubjectID: user.ID,
+		TargetType: enum.MembershipTargetGroup, TargetID: group.ID,
+	})
+	if err != nil {
+		t.Fatalf("set user group membership: %v", err)
+	}
+	_, err = svc.SetMembership(ctx, SetMembershipInput{
+		SubjectType: enum.MembershipSubjectGroup, SubjectID: group.ID,
+		TargetType: enum.MembershipTargetOrganization, TargetID: org.ID,
+	})
+	if err != nil {
+		t.Fatalf("set group organization membership: %v", err)
+	}
+	action, err := svc.PutAccessAction(ctx, PutAccessActionInput{
+		Key: "project.read", DisplayName: "Чтение проекта", ResourceType: "project",
+	})
+	if err != nil {
+		t.Fatalf("put action: %v", err)
+	}
+	_, err = svc.PutAccessRule(ctx, PutAccessRuleInput{
+		Effect: enum.AccessEffectAllow, SubjectType: enum.AccessSubjectOrganization, SubjectID: org.ID.String(),
+		ActionKey: action.Key, ResourceType: "project", ResourceID: "project-1", ScopeType: "project", ScopeID: "project-1",
+	})
+	if err != nil {
+		t.Fatalf("put rule: %v", err)
+	}
+
+	result, err := svc.CheckAccess(ctx, CheckAccessInput{
+		Subject:   value.SubjectRef{Type: string(enum.AccessSubjectUser), ID: user.ID.String()},
+		ActionKey: action.Key, Resource: value.ResourceRef{Type: "project", ID: "project-1"},
+		Scope: value.ScopeRef{Type: "project", ID: "project-1"},
+	})
+	if err != nil {
+		t.Fatalf("check access: %v", err)
+	}
+	if result.Decision != enum.AccessDecisionAllow {
+		t.Fatalf("decision = %s, want %s", result.Decision, enum.AccessDecisionAllow)
+	}
+}
+
+func TestSetMembershipUpdatesExistingIdentityAndVersion(t *testing.T) {
+	ctx := context.Background()
+	svc := New(newMemoryRepository(), fixedClock{}, newSequenceIDs())
+	subjectID := uuid.New()
+	targetID := uuid.New()
+
+	created, err := svc.SetMembership(ctx, SetMembershipInput{
+		SubjectType: enum.MembershipSubjectUser, SubjectID: subjectID,
+		TargetType: enum.MembershipTargetGroup, TargetID: targetID,
+	})
+	if err != nil {
+		t.Fatalf("create membership: %v", err)
+	}
+	updated, err := svc.SetMembership(ctx, SetMembershipInput{
+		SubjectType: enum.MembershipSubjectUser, SubjectID: subjectID,
+		TargetType: enum.MembershipTargetGroup, TargetID: targetID,
+		RoleHint: "owner",
+	})
+	if err != nil {
+		t.Fatalf("update membership: %v", err)
+	}
+	if updated.ID != created.ID {
+		t.Fatalf("membership ID changed: %s != %s", updated.ID, created.ID)
+	}
+	if updated.Version != created.Version+1 {
+		t.Fatalf("version = %d, want %d", updated.Version, created.Version+1)
+	}
+	_, err = svc.SetMembership(ctx, SetMembershipInput{
+		SubjectType: enum.MembershipSubjectUser, SubjectID: subjectID,
+		TargetType: enum.MembershipTargetGroup, TargetID: targetID,
+		Meta: value.CommandMeta{
+			ExpectedVersion: ptrInt64(created.Version),
+		},
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("err = %v, want %v", err, errs.ErrConflict)
+	}
+}
+
 func TestResolveExternalAccountUsageRequiresAllowedActionAndSecret(t *testing.T) {
 	ctx := context.Background()
 	store := newMemoryRepository()
@@ -158,6 +256,12 @@ func TestResolveExternalAccountUsageRequiresAllowedActionAndSecret(t *testing.T)
 	})
 	if err != nil {
 		t.Fatalf("register account: %v", err)
+	}
+	_, err = svc.PutAccessAction(ctx, PutAccessActionInput{
+		Key: "provider.issue.write", DisplayName: "Запись Issue", ResourceType: "provider_issue",
+	})
+	if err != nil {
+		t.Fatalf("put access action: %v", err)
 	}
 	_, err = svc.BindExternalAccount(ctx, BindExternalAccountInput{
 		ExternalAccountID: account.ID, UsageScopeType: enum.ExternalAccountScopeProject, UsageScopeID: "project-1",
@@ -191,6 +295,31 @@ func TestBindExternalAccountRejectsBlankAllowedActions(t *testing.T) {
 	})
 	if !errors.Is(err, errs.ErrInvalidArgument) {
 		t.Fatalf("err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+}
+
+func TestBindExternalAccountRequiresCatalogAction(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	provider, err := svc.PutExternalProvider(ctx, PutExternalProviderInput{
+		Slug: "github", ProviderKind: enum.ExternalProviderRepository, DisplayName: "GitHub",
+	})
+	if err != nil {
+		t.Fatalf("put provider: %v", err)
+	}
+	account, err := svc.RegisterExternalAccount(ctx, RegisterExternalAccountInput{
+		ExternalProviderID: provider.ID, AccountType: enum.ExternalAccountBot, DisplayName: "kodex-agent",
+	})
+	if err != nil {
+		t.Fatalf("register account: %v", err)
+	}
+	_, err = svc.BindExternalAccount(ctx, BindExternalAccountInput{
+		ExternalAccountID: account.ID, UsageScopeType: enum.ExternalAccountScopeProject, UsageScopeID: "project-1",
+		AllowedActionKeys: []string{"provider.issue.write"},
+	})
+	if !errors.Is(err, errs.ErrNotFound) {
+		t.Fatalf("err = %v, want %v", err, errs.ErrNotFound)
 	}
 }
 
@@ -331,9 +460,25 @@ func (r *memoryRepository) GetGroup(_ context.Context, id uuid.UUID) (entity.Gro
 }
 
 func (r *memoryRepository) SetMembership(_ context.Context, membership entity.Membership, event entity.OutboxEvent) error {
+	for id, existing := range r.memberships {
+		if sameMembershipIdentity(existing, membership) && id != membership.ID {
+			delete(r.memberships, id)
+			break
+		}
+	}
 	r.memberships[membership.ID] = membership
 	r.events = append(r.events, event)
 	return nil
+}
+
+func (r *memoryRepository) FindMembership(_ context.Context, identity query.MembershipIdentity) (entity.Membership, error) {
+	for _, membership := range r.memberships {
+		if membership.SubjectType == identity.SubjectType && membership.SubjectID == identity.SubjectID &&
+			membership.TargetType == identity.TargetType && membership.TargetID == identity.TargetID {
+			return membership, nil
+		}
+	}
+	return entity.Membership{}, errs.ErrNotFound
 }
 
 func (r *memoryRepository) ListMemberships(_ context.Context, filter query.MembershipGraphFilter) ([]entity.Membership, error) {
@@ -476,6 +621,14 @@ func identityKey(provider enum.IdentityProvider, subject string) string {
 
 func allowlistKey(matchType enum.AllowlistMatchType, value string) string {
 	return string(matchType) + ":" + value
+}
+
+func sameMembershipIdentity(a entity.Membership, b entity.Membership) bool {
+	return a.SubjectType == b.SubjectType && a.SubjectID == b.SubjectID && a.TargetType == b.TargetType && a.TargetID == b.TargetID
+}
+
+func ptrInt64(value int64) *int64 {
+	return &value
 }
 
 func TestBootstrapDeniedWithoutAllowlist(t *testing.T) {

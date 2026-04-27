@@ -155,6 +155,36 @@ func (s *Service) SetMembership(ctx context.Context, input SetMembershipInput) (
 		return entity.Membership{}, errs.ErrInvalidArgument
 	}
 	now := s.now(input.Meta)
+	status := defaultMembershipStatus(input.Status)
+	source := defaultMembershipSource(input.Source)
+	existing, err := s.repository.FindMembership(ctx, query.MembershipIdentity{
+		SubjectType: input.SubjectType, SubjectID: input.SubjectID, TargetType: input.TargetType, TargetID: input.TargetID,
+	})
+	if err != nil && !errors.Is(err, errs.ErrNotFound) {
+		return entity.Membership{}, err
+	}
+	if err == nil {
+		if input.Meta.ExpectedVersion != nil && *input.Meta.ExpectedVersion != existing.Version {
+			return entity.Membership{}, errs.ErrConflict
+		}
+		membership := existing
+		membership.RoleHint = strings.TrimSpace(input.RoleHint)
+		membership.Status = status
+		membership.Source = source
+		membership.Version++
+		membership.UpdatedAt = now
+		eventType := "access.membership.updated"
+		if membership.Status == enum.MembershipStatusDisabled {
+			eventType = "access.membership.disabled"
+		}
+		if err := s.repository.SetMembership(ctx, membership, s.membershipEvent(eventType, membership, now, input.Meta.Reason)); err != nil {
+			return entity.Membership{}, err
+		}
+		return membership, nil
+	}
+	if status == enum.MembershipStatusDisabled {
+		return entity.Membership{}, errs.ErrNotFound
+	}
 	membership := entity.Membership{
 		Base: entity.Base{
 			ID:        s.ids.New(),
@@ -167,19 +197,11 @@ func (s *Service) SetMembership(ctx context.Context, input SetMembershipInput) (
 		TargetType:  input.TargetType,
 		TargetID:    input.TargetID,
 		RoleHint:    strings.TrimSpace(input.RoleHint),
-		Status:      defaultMembershipStatus(input.Status),
-		Source:      defaultMembershipSource(input.Source),
+		Status:      status,
+		Source:      source,
 	}
 
-	err := s.repository.SetMembership(ctx, membership, s.event("access.membership.created", "membership", membership.ID, value.AccessEventPayload{
-		MembershipID: membership.ID.String(),
-		SubjectType:  string(membership.SubjectType),
-		SubjectID:    membership.SubjectID.String(),
-		TargetType:   string(membership.TargetType),
-		TargetID:     membership.TargetID.String(),
-		Version:      membership.Version,
-	}, now))
-	if err != nil {
+	if err := s.repository.SetMembership(ctx, membership, s.membershipEvent("access.membership.created", membership, now, input.Meta.Reason)); err != nil {
 		return entity.Membership{}, err
 	}
 	return membership, nil
@@ -342,6 +364,15 @@ func (s *Service) BindExternalAccount(ctx context.Context, input BindExternalAcc
 	if input.ExternalAccountID == uuid.Nil || strings.TrimSpace(input.UsageScopeID) == "" || len(allowedActionKeys) == 0 {
 		return entity.ExternalAccountBinding{}, errs.ErrInvalidArgument
 	}
+	for _, actionKey := range allowedActionKeys {
+		action, err := s.repository.GetAccessActionByKey(ctx, actionKey)
+		if err != nil {
+			return entity.ExternalAccountBinding{}, err
+		}
+		if action.Status != enum.AccessActionStatusActive {
+			return entity.ExternalAccountBinding{}, errs.ErrPreconditionFailed
+		}
+	}
 	if _, err := s.repository.GetExternalAccount(ctx, input.ExternalAccountID); err != nil {
 		return entity.ExternalAccountBinding{}, err
 	}
@@ -497,32 +528,49 @@ func (s *Service) findAllowlistEntry(ctx context.Context, email string) (entity.
 
 func (s *Service) resolveSubjects(ctx context.Context, subject value.SubjectRef) ([]value.SubjectRef, string, error) {
 	subjects := []value.SubjectRef{subject}
-	if subject.Type != string(enum.AccessSubjectUser) {
+	if subject.Type != string(enum.AccessSubjectUser) && subject.Type != string(enum.AccessSubjectExternalAccount) {
 		return subjects, "", nil
 	}
-	userID, err := uuid.Parse(subject.ID)
-	if err != nil {
-		return nil, "", errs.ErrInvalidArgument
+	if subject.Type == string(enum.AccessSubjectUser) {
+		userID, err := uuid.Parse(subject.ID)
+		if err != nil {
+			return nil, "", errs.ErrInvalidArgument
+		}
+		user, err := s.repository.GetUser(ctx, userID)
+		if err != nil {
+			return nil, "", err
+		}
+		if user.Status == enum.UserStatusBlocked || user.Status == enum.UserStatusDisabled {
+			return subjects, reasonSubjectBlocked, nil
+		}
 	}
-	user, err := s.repository.GetUser(ctx, userID)
-	if err != nil {
-		return nil, "", err
-	}
-	if user.Status == enum.UserStatusBlocked || user.Status == enum.UserStatusDisabled {
-		return subjects, reasonSubjectBlocked, nil
-	}
-	memberships, err := s.repository.ListMemberships(ctx, query.MembershipGraphFilter{
-		Subject: value.SubjectRef{Type: string(enum.MembershipSubjectUser), ID: subject.ID}, Status: enum.MembershipStatusActive,
-	})
-	if err != nil {
-		return nil, "", err
-	}
-	for _, membership := range memberships {
-		switch membership.TargetType {
-		case enum.MembershipTargetOrganization:
-			subjects = append(subjects, value.SubjectRef{Type: string(enum.AccessSubjectOrganization), ID: membership.TargetID.String()})
-		case enum.MembershipTargetGroup:
-			subjects = append(subjects, value.SubjectRef{Type: string(enum.AccessSubjectGroup), ID: membership.TargetID.String()})
+	seen := map[string]struct{}{subject.Type + ":" + subject.ID: {}}
+	queue := []value.SubjectRef{{Type: subject.Type, ID: subject.ID}}
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		currentMembershipType, ok := accessSubjectToMembershipSubject(current.Type)
+		if !ok {
+			continue
+		}
+		memberships, err := s.repository.ListMemberships(ctx, query.MembershipGraphFilter{
+			Subject: value.SubjectRef{Type: string(currentMembershipType), ID: current.ID}, Status: enum.MembershipStatusActive,
+		})
+		if err != nil {
+			return nil, "", err
+		}
+		for _, membership := range memberships {
+			target := membershipTargetToAccessSubject(membership)
+			if target.ID == "" {
+				continue
+			}
+			subjects, queue = appendResolvedSubject(subjects, queue, seen, target)
+			if target.Type == string(enum.AccessSubjectGroup) {
+				subjects, queue, err = s.appendParentGroups(ctx, subjects, queue, seen, membership.TargetID)
+				if err != nil {
+					return nil, "", err
+				}
+			}
 		}
 	}
 	return subjects, "", nil
@@ -568,6 +616,18 @@ func (s *Service) event(eventType string, aggregateType string, aggregateID uuid
 		ID: eventID, EventType: eventType, SchemaVersion: schemaVersionAccessEventV1,
 		AggregateType: aggregateType, AggregateID: aggregateID, Payload: raw, OccurredAt: occurredAt,
 	}
+}
+
+func (s *Service) membershipEvent(eventType string, membership entity.Membership, occurredAt time.Time, reasonCode string) entity.OutboxEvent {
+	return s.event(eventType, "membership", membership.ID, value.AccessEventPayload{
+		MembershipID: membership.ID.String(),
+		SubjectType:  string(membership.SubjectType),
+		SubjectID:    membership.SubjectID.String(),
+		TargetType:   string(membership.TargetType),
+		TargetID:     membership.TargetID.String(),
+		ReasonCode:   strings.TrimSpace(reasonCode),
+		Version:      membership.Version,
+	}, occurredAt)
 }
 
 func (s *Service) createdEvent(
@@ -706,6 +766,72 @@ func decisionByUserStatus(status enum.UserStatus) enum.AccessDecision {
 		return enum.AccessDecisionPending
 	default:
 		return enum.AccessDecisionDeny
+	}
+}
+
+func accessSubjectToMembershipSubject(subjectType string) (enum.MembershipSubjectType, bool) {
+	switch subjectType {
+	case string(enum.AccessSubjectUser):
+		return enum.MembershipSubjectUser, true
+	case string(enum.AccessSubjectGroup):
+		return enum.MembershipSubjectGroup, true
+	case string(enum.AccessSubjectExternalAccount):
+		return enum.MembershipSubjectExternalAccount, true
+	default:
+		return "", false
+	}
+}
+
+func membershipTargetToAccessSubject(membership entity.Membership) value.SubjectRef {
+	switch membership.TargetType {
+	case enum.MembershipTargetOrganization:
+		return value.SubjectRef{Type: string(enum.AccessSubjectOrganization), ID: membership.TargetID.String()}
+	case enum.MembershipTargetGroup:
+		return value.SubjectRef{Type: string(enum.AccessSubjectGroup), ID: membership.TargetID.String()}
+	default:
+		return value.SubjectRef{}
+	}
+}
+
+func appendResolvedSubject(
+	subjects []value.SubjectRef,
+	queue []value.SubjectRef,
+	seen map[string]struct{},
+	subject value.SubjectRef,
+) ([]value.SubjectRef, []value.SubjectRef) {
+	key := subject.Type + ":" + subject.ID
+	if _, ok := seen[key]; ok {
+		return subjects, queue
+	}
+	seen[key] = struct{}{}
+	subjects = append(subjects, subject)
+	if subject.Type == string(enum.AccessSubjectGroup) {
+		queue = append(queue, subject)
+	}
+	return subjects, queue
+}
+
+func (s *Service) appendParentGroups(
+	ctx context.Context,
+	subjects []value.SubjectRef,
+	queue []value.SubjectRef,
+	seen map[string]struct{},
+	groupID uuid.UUID,
+) ([]value.SubjectRef, []value.SubjectRef, error) {
+	for {
+		group, err := s.repository.GetGroup(ctx, groupID)
+		if err != nil {
+			return nil, nil, err
+		}
+		if group.ParentGroupID == nil {
+			return subjects, queue, nil
+		}
+		parent := value.SubjectRef{Type: string(enum.AccessSubjectGroup), ID: group.ParentGroupID.String()}
+		if _, ok := seen[parent.Type+":"+parent.ID]; ok {
+			return subjects, queue, nil
+		}
+		subjects, queue = appendResolvedSubject(subjects, queue, seen, parent)
+		groupID = *group.ParentGroupID
 	}
 }
 

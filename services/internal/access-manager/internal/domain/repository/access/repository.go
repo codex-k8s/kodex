@@ -23,6 +23,7 @@ type Repository interface {
 	FindAllowlistEntry(ctx context.Context, matchType enum.AllowlistMatchType, value string) (entity.AllowlistEntry, error)
 	CreateGroup(ctx context.Context, group entity.Group, event entity.OutboxEvent) error
 	GetGroup(ctx context.Context, id uuid.UUID) (entity.Group, error)
+	FindMembership(ctx context.Context, identity query.MembershipIdentity) (entity.Membership, error)
 	SetMembership(ctx context.Context, membership entity.Membership, event entity.OutboxEvent) error
 	ListMemberships(ctx context.Context, filter query.MembershipGraphFilter) ([]entity.Membership, error)
 	PutExternalProvider(ctx context.Context, provider entity.ExternalProvider, event entity.OutboxEvent) error

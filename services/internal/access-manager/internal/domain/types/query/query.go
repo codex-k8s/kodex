@@ -12,6 +12,13 @@ type MembershipGraphFilter struct {
 	Status  enum.MembershipStatus
 }
 
+type MembershipIdentity struct {
+	SubjectType enum.MembershipSubjectType
+	SubjectID   uuid.UUID
+	TargetType  enum.MembershipTargetType
+	TargetID    uuid.UUID
+}
+
 type AccessRuleFilter struct {
 	Subjects     []value.SubjectRef
 	ActionKey    string
