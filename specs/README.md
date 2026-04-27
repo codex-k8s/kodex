@@ -22,4 +22,4 @@
 
 | Сервис | OpenAPI | AsyncAPI | gRPC |
 |---|---|---|---|
-| `access-manager` | `openapi/access-manager.v1.yaml` | `asyncapi/access-manager.v1.yaml` | `../proto/kodex/access_accounts/v1/access_manager.proto` |
+| `access-manager` | `openapi/access-manager.v1.yaml` стабильный `v1` | `asyncapi/access-manager.v1.yaml` стабильный `v1` | `../proto/kodex/access_accounts/v1/access_manager.proto` стабильный `v1` |

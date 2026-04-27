@@ -2,7 +2,8 @@ openapi: 3.1.0
 info:
   title: kodex access-manager API
   version: 1.0.0
-  description: HTTP contract for staff and operator access-management reads and commands.
+  description: Stable v1 HTTP contract for staff and operator access-management reads and commands.
+x-kodex-contract-status: stable-v1
 paths:
   /v1/access/bootstrap-user:
     post:
@@ -21,6 +22,404 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BootstrapUserFromIdentityResponse'
+        '400': {$ref: '#/components/responses/InvalidArgument'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/PermissionDenied'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/AlreadyExists'}
+        '412': {$ref: '#/components/responses/FailedPrecondition'}
+        '429': {$ref: '#/components/responses/ResourceExhausted'}
+  /v1/users/{userId}/status:
+    patch:
+      operationId: setUserStatus
+      summary: Change user lifecycle status
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetUserStatusRequest'
+      responses:
+        '200':
+          description: User state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400': {$ref: '#/components/responses/InvalidArgument'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/PermissionDenied'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Aborted'}
+        '412': {$ref: '#/components/responses/FailedPrecondition'}
+  /v1/organizations:
+    post:
+      operationId: createOrganization
+      summary: Create organization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrganizationRequest'
+      responses:
+        '200':
+          description: Organization state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationResponse'
+        '400': {$ref: '#/components/responses/InvalidArgument'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/PermissionDenied'}
+        '409': {$ref: '#/components/responses/AlreadyExists'}
+        '412': {$ref: '#/components/responses/FailedPrecondition'}
+  /v1/organizations/{organizationId}:
+    patch:
+      operationId: updateOrganization
+      summary: Update safe organization fields
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrganizationRequest'
+      responses:
+        '200':
+          description: Organization state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationResponse'
+        '400': {$ref: '#/components/responses/InvalidArgument'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/PermissionDenied'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Aborted'}
+        '412': {$ref: '#/components/responses/FailedPrecondition'}
+  /v1/organizations/{organizationId}:suspend:
+    post:
+      operationId: suspendOrganization
+      summary: Suspend non-owner organization
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      requestBody:
+        $ref: '#/components/requestBodies/CommandOnly'
+      responses:
+        '200': {$ref: '#/components/responses/OrganizationState'}
+        '400': {$ref: '#/components/responses/InvalidArgument'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/PermissionDenied'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Aborted'}
+        '412': {$ref: '#/components/responses/FailedPrecondition'}
+  /v1/organizations/{organizationId}:archive:
+    post:
+      operationId: archiveOrganization
+      summary: Archive organization
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      requestBody:
+        $ref: '#/components/requestBodies/CommandOnly'
+      responses:
+        '200': {$ref: '#/components/responses/OrganizationState'}
+        '400': {$ref: '#/components/responses/InvalidArgument'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/PermissionDenied'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Aborted'}
+        '412': {$ref: '#/components/responses/FailedPrecondition'}
+  /v1/groups:
+    post:
+      operationId: createGroup
+      summary: Create global or organization-scoped group
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGroupRequest'
+      responses:
+        '200': {$ref: '#/components/responses/GroupState'}
+        '400': {$ref: '#/components/responses/InvalidArgument'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/PermissionDenied'}
+        '409': {$ref: '#/components/responses/AlreadyExists'}
+        '412': {$ref: '#/components/responses/FailedPrecondition'}
+  /v1/groups/{groupId}:
+    patch:
+      operationId: updateGroup
+      summary: Update group fields or hierarchy
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateGroupRequest'
+      responses:
+        '200': {$ref: '#/components/responses/GroupState'}
+        '400': {$ref: '#/components/responses/InvalidArgument'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/PermissionDenied'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Aborted'}
+        '412': {$ref: '#/components/responses/FailedPrecondition'}
+  /v1/groups/{groupId}:disable:
+    post:
+      operationId: disableGroup
+      summary: Disable group without deleting history
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      requestBody:
+        $ref: '#/components/requestBodies/CommandOnly'
+      responses:
+        '200': {$ref: '#/components/responses/GroupState'}
+        '400': {$ref: '#/components/responses/InvalidArgument'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/PermissionDenied'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Aborted'}
+        '412': {$ref: '#/components/responses/FailedPrecondition'}
+  /v1/memberships:
+    put:
+      operationId: setMembership
+      summary: Create, update or disable membership
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetMembershipRequest'
+      responses:
+        '200': {$ref: '#/components/responses/MembershipState'}
+        '400': {$ref: '#/components/responses/InvalidArgument'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/PermissionDenied'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Aborted'}
+        '412': {$ref: '#/components/responses/FailedPrecondition'}
+  /v1/allowlist-entries:
+    put:
+      operationId: putAllowlistEntry
+      summary: Create or update allowlist entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PutAllowlistEntryRequest'
+      responses:
+        '200': {$ref: '#/components/responses/AllowlistEntryState'}
+        '400': {$ref: '#/components/responses/InvalidArgument'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/PermissionDenied'}
+        '409': {$ref: '#/components/responses/AlreadyExists'}
+        '412': {$ref: '#/components/responses/FailedPrecondition'}
+  /v1/allowlist-entries/{allowlistEntryId}:disable:
+    post:
+      operationId: disableAllowlistEntry
+      summary: Disable allowlist entry
+      parameters:
+        - $ref: '#/components/parameters/AllowlistEntryId'
+      requestBody:
+        $ref: '#/components/requestBodies/CommandOnly'
+      responses:
+        '200': {$ref: '#/components/responses/AllowlistEntryState'}
+        '400': {$ref: '#/components/responses/InvalidArgument'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/PermissionDenied'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Aborted'}
+        '412': {$ref: '#/components/responses/FailedPrecondition'}
+  /v1/external-providers:
+    post:
+      operationId: registerExternalProvider
+      summary: Register external account provider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterExternalProviderRequest'
+      responses:
+        '200': {$ref: '#/components/responses/ExternalProviderState'}
+        '400': {$ref: '#/components/responses/InvalidArgument'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/PermissionDenied'}
+        '409': {$ref: '#/components/responses/AlreadyExists'}
+  /v1/external-providers/{externalProviderId}:
+    patch:
+      operationId: updateExternalProvider
+      summary: Update external provider
+      parameters:
+        - $ref: '#/components/parameters/ExternalProviderId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateExternalProviderRequest'
+      responses:
+        '200': {$ref: '#/components/responses/ExternalProviderState'}
+        '400': {$ref: '#/components/responses/InvalidArgument'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/PermissionDenied'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Aborted'}
+        '412': {$ref: '#/components/responses/FailedPrecondition'}
+  /v1/external-accounts:
+    post:
+      operationId: registerExternalAccount
+      summary: Register external account as policy subject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterExternalAccountRequest'
+      responses:
+        '200': {$ref: '#/components/responses/ExternalAccountState'}
+        '400': {$ref: '#/components/responses/InvalidArgument'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/PermissionDenied'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/AlreadyExists'}
+        '412': {$ref: '#/components/responses/FailedPrecondition'}
+  /v1/external-accounts/{externalAccountId}/status:
+    patch:
+      operationId: updateExternalAccountStatus
+      summary: Update external account status
+      parameters:
+        - $ref: '#/components/parameters/ExternalAccountId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateExternalAccountStatusRequest'
+      responses:
+        '200': {$ref: '#/components/responses/ExternalAccountState'}
+        '400': {$ref: '#/components/responses/InvalidArgument'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/PermissionDenied'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Aborted'}
+        '412': {$ref: '#/components/responses/FailedPrecondition'}
+  /v1/external-account-bindings:
+    put:
+      operationId: bindExternalAccount
+      summary: Bind external account to usage scope
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BindExternalAccountRequest'
+      responses:
+        '200': {$ref: '#/components/responses/ExternalAccountBindingState'}
+        '400': {$ref: '#/components/responses/InvalidArgument'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/PermissionDenied'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Aborted'}
+        '412': {$ref: '#/components/responses/FailedPrecondition'}
+  /v1/external-account-bindings/{externalAccountBindingId}:disable:
+    post:
+      operationId: disableExternalAccountBinding
+      summary: Disable external account binding
+      parameters:
+        - $ref: '#/components/parameters/ExternalAccountBindingId'
+      requestBody:
+        $ref: '#/components/requestBodies/CommandOnly'
+      responses:
+        '200': {$ref: '#/components/responses/ExternalAccountBindingState'}
+        '400': {$ref: '#/components/responses/InvalidArgument'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/PermissionDenied'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Aborted'}
+        '412': {$ref: '#/components/responses/FailedPrecondition'}
+  /v1/access-actions:
+    put:
+      operationId: putAccessAction
+      summary: Create or update access action catalog item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PutAccessActionRequest'
+      responses:
+        '200': {$ref: '#/components/responses/AccessActionState'}
+        '400': {$ref: '#/components/responses/InvalidArgument'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/PermissionDenied'}
+        '409': {$ref: '#/components/responses/AlreadyExists'}
+  /v1/access-rules:
+    put:
+      operationId: putAccessRule
+      summary: Create or update access rule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PutAccessRuleRequest'
+      responses:
+        '200': {$ref: '#/components/responses/AccessRuleState'}
+        '400': {$ref: '#/components/responses/InvalidArgument'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/PermissionDenied'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Aborted'}
+        '412': {$ref: '#/components/responses/FailedPrecondition'}
+  /v1/access-rules/{accessRuleId}:disable:
+    post:
+      operationId: disableAccessRule
+      summary: Disable access rule
+      parameters:
+        - $ref: '#/components/parameters/AccessRuleId'
+      requestBody:
+        $ref: '#/components/requestBodies/CommandOnly'
+      responses:
+        '200': {$ref: '#/components/responses/AccessRuleState'}
+        '400': {$ref: '#/components/responses/InvalidArgument'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/PermissionDenied'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Aborted'}
+        '412': {$ref: '#/components/responses/FailedPrecondition'}
+  /v1/external-accounts/{externalAccountId}/usage:resolve:
+    post:
+      operationId: resolveExternalAccountUsage
+      summary: Resolve whether an external account may be used for an action
+      parameters:
+        - $ref: '#/components/parameters/ExternalAccountId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveExternalAccountUsageRequest'
+      responses:
+        '200':
+          description: Allowed account usage with secret reference metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResolveExternalAccountUsageResponse'
+        '400': {$ref: '#/components/responses/InvalidArgument'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/PermissionDenied'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '412': {$ref: '#/components/responses/FailedPrecondition'}
+        '429': {$ref: '#/components/responses/ResourceExhausted'}
   /v1/access/check:
     post:
       operationId: checkAccess
@@ -38,6 +437,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CheckAccessResponse'
+        '400': {$ref: '#/components/responses/InvalidArgument'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/PermissionDenied'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '412': {$ref: '#/components/responses/FailedPrecondition'}
+        '429': {$ref: '#/components/responses/ResourceExhausted'}
   /v1/access/explanations/{auditId}:
     get:
       operationId: explainAccess
@@ -56,226 +461,607 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ExplainAccessResponse'
-  /v1/external-accounts/{externalAccountId}/usage:resolve:
-    post:
-      operationId: resolveExternalAccountUsage
-      summary: Resolve whether an external account may be used for an action
+        '400': {$ref: '#/components/responses/InvalidArgument'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/PermissionDenied'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /v1/membership-graph:
+    get:
+      operationId: listMembershipGraph
+      summary: List membership graph for operator UI
       parameters:
-        - name: externalAccountId
-          in: path
+        - name: subjectType
+          in: query
           required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ResolveExternalAccountUsageRequest'
+          schema: {type: string}
+        - name: subjectId
+          in: query
+          required: true
+          schema: {type: string}
+        - name: includeInactive
+          in: query
+          required: false
+          schema: {type: boolean}
       responses:
         '200':
-          description: Allowed account usage with secret reference metadata
+          description: Membership graph
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ResolveExternalAccountUsageResponse'
+                $ref: '#/components/schemas/ListMembershipGraphResponse'
+        '400': {$ref: '#/components/responses/InvalidArgument'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/PermissionDenied'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /v1/pending-access:
+    get:
+      operationId: listPendingAccess
+      summary: List pending or blocked access items
+      parameters:
+        - name: scopeType
+          in: query
+          required: false
+          schema: {type: string}
+        - name: scopeId
+          in: query
+          required: false
+          schema: {type: string}
+        - name: limit
+          in: query
+          required: false
+          schema: {type: integer, minimum: 1, maximum: 200}
+        - name: cursor
+          in: query
+          required: false
+          schema: {type: string}
+      responses:
+        '200':
+          description: Pending or blocked access items
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListPendingAccessResponse'
+        '400': {$ref: '#/components/responses/InvalidArgument'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/PermissionDenied'}
+        '429': {$ref: '#/components/responses/ResourceExhausted'}
 components:
+  parameters:
+    UserId: {name: userId, in: path, required: true, schema: {type: string, format: uuid}}
+    OrganizationId: {name: organizationId, in: path, required: true, schema: {type: string, format: uuid}}
+    GroupId: {name: groupId, in: path, required: true, schema: {type: string, format: uuid}}
+    AllowlistEntryId: {name: allowlistEntryId, in: path, required: true, schema: {type: string, format: uuid}}
+    ExternalProviderId: {name: externalProviderId, in: path, required: true, schema: {type: string, format: uuid}}
+    ExternalAccountId: {name: externalAccountId, in: path, required: true, schema: {type: string, format: uuid}}
+    ExternalAccountBindingId: {name: externalAccountBindingId, in: path, required: true, schema: {type: string, format: uuid}}
+    AccessRuleId: {name: accessRuleId, in: path, required: true, schema: {type: string, format: uuid}}
+  requestBodies:
+    CommandOnly:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              meta: {$ref: '#/components/schemas/CommandMeta'}
+            required: [meta]
+  responses:
+    OrganizationState: {description: Organization state, content: {application/json: {schema: {$ref: '#/components/schemas/OrganizationResponse'}}}}
+    GroupState: {description: Group state, content: {application/json: {schema: {$ref: '#/components/schemas/GroupResponse'}}}}
+    MembershipState: {description: Membership state, content: {application/json: {schema: {$ref: '#/components/schemas/MembershipResponse'}}}}
+    AllowlistEntryState: {description: Allowlist entry state, content: {application/json: {schema: {$ref: '#/components/schemas/AllowlistEntryResponse'}}}}
+    ExternalProviderState: {description: External provider state, content: {application/json: {schema: {$ref: '#/components/schemas/ExternalProviderResponse'}}}}
+    ExternalAccountState: {description: External account state, content: {application/json: {schema: {$ref: '#/components/schemas/ExternalAccountResponse'}}}}
+    ExternalAccountBindingState: {description: External account binding state, content: {application/json: {schema: {$ref: '#/components/schemas/ExternalAccountBindingResponse'}}}}
+    AccessActionState: {description: Access action state, content: {application/json: {schema: {$ref: '#/components/schemas/AccessActionResponse'}}}}
+    AccessRuleState: {description: Access rule state, content: {application/json: {schema: {$ref: '#/components/schemas/AccessRuleResponse'}}}}
+    InvalidArgument: {description: Invalid command or query argument, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Unauthenticated: {description: Caller is not authenticated, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    PermissionDenied: {description: Caller has no permission for the action, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    NotFound: {description: Entity was not found or is not visible to caller, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    AlreadyExists: {description: Entity already exists in the same scope, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Aborted: {description: Aggregate version conflict, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    FailedPrecondition: {description: Domain invariant or lifecycle state blocks the operation, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    ResourceExhausted: {description: Policy limit or temporary quota was reached, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
   schemas:
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          enum: [UNAUTHENTICATED, PERMISSION_DENIED, FAILED_PRECONDITION, ALREADY_EXISTS, NOT_FOUND, ABORTED, RESOURCE_EXHAUSTED, INVALID_ARGUMENT]
+        message: {type: string}
+        reasonCode: {type: string}
+        requestId: {type: string}
+        details:
+          type: array
+          items: {type: string}
+      required: [code, message, requestId]
     Actor:
       type: object
       additionalProperties: false
       properties:
-        type:
-          type: string
-        id:
-          type: string
+        type: {type: string}
+        id: {type: string}
       required: [type, id]
-    CommandMeta:
+    RequestContext:
       type: object
       additionalProperties: false
       properties:
-        commandId:
-          type: string
-          format: uuid
-        idempotencyKey:
-          type: string
-        expectedVersion:
-          type: integer
-          format: int64
-        actor:
-          $ref: '#/components/schemas/Actor'
-        reason:
-          type: string
-        requestId:
-          type: string
-      required: [actor]
+        source: {type: string}
+        traceId: {type: string}
+        sessionId: {type: string}
+        clientIpHash: {type: string}
+      required: [source]
+    CommandMeta:
+      type: object
+      additionalProperties: false
+      oneOf:
+        - required: [commandId]
+        - required: [idempotencyKey]
+      properties:
+        commandId: {type: string, format: uuid}
+        idempotencyKey: {type: string}
+        expectedVersion: {type: integer, format: int64}
+        actor: {$ref: '#/components/schemas/Actor'}
+        reason: {type: string}
+        requestId: {type: string}
+        requestContext: {$ref: '#/components/schemas/RequestContext'}
+      required: [actor, requestContext]
     SubjectRef:
       type: object
       additionalProperties: false
       properties:
-        type:
-          type: string
-        id:
-          type: string
+        type: {type: string}
+        id: {type: string}
       required: [type, id]
     ResourceRef:
       type: object
       additionalProperties: false
       properties:
-        type:
-          type: string
-        id:
-          type: string
+        type: {type: string}
+        id: {type: string}
       required: [type, id]
     ScopeRef:
       type: object
       additionalProperties: false
       properties:
-        type:
-          type: string
-        id:
-          type: string
+        type: {type: string}
+        id: {type: string}
       required: [type, id]
     BootstrapUserFromIdentityRequest:
       type: object
       additionalProperties: false
       properties:
-        provider:
-          type: string
-        subject:
-          type: string
-        email:
-          type: string
-          format: email
-        displayName:
-          type: string
-        locale:
-          type: string
-        meta:
-          $ref: '#/components/schemas/CommandMeta'
+        provider: {type: string, enum: [keycloak, github, gitlab, google]}
+        subject: {type: string}
+        email: {type: string, format: email}
+        displayName: {type: string}
+        locale: {type: string}
+        meta: {$ref: '#/components/schemas/CommandMeta'}
       required: [provider, subject, email, meta]
     BootstrapUserFromIdentityResponse:
       type: object
       additionalProperties: false
       properties:
-        userId:
-          type: string
-          format: uuid
-        status:
-          type: string
-        decision:
-          type: string
-          enum: [allow, deny, pending]
-        reasonCode:
-          type: string
-        organizationId:
-          type: string
-          format: uuid
+        userId: {type: string, format: uuid}
+        status: {$ref: '#/components/schemas/UserStatus'}
+        decision: {$ref: '#/components/schemas/AccessDecision'}
+        reasonCode: {type: string}
+        organizationId: {type: string, format: uuid}
       required: [userId, status, decision, reasonCode]
-    CheckAccessRequest:
+    SetUserStatusRequest:
       type: object
       additionalProperties: false
       properties:
-        subject:
-          $ref: '#/components/schemas/SubjectRef'
-        actionKey:
-          type: string
-        resource:
-          $ref: '#/components/schemas/ResourceRef'
-        scope:
-          $ref: '#/components/schemas/ScopeRef'
-        audit:
-          type: boolean
-        meta:
-          $ref: '#/components/schemas/CommandMeta'
-      required: [subject, actionKey, resource, scope]
-    MatchedRule:
+        status: {$ref: '#/components/schemas/UserStatus'}
+        meta: {$ref: '#/components/schemas/CommandMeta'}
+      required: [status, meta]
+    UserResponse:
       type: object
       additionalProperties: false
       properties:
-        ruleId:
-          type: string
-          format: uuid
-        effect:
-          type: string
-          enum: [allow, deny]
-        subject:
-          $ref: '#/components/schemas/SubjectRef'
-        actionKey:
-          type: string
-        scope:
-          $ref: '#/components/schemas/ScopeRef'
-        priority:
-          type: integer
-        reasonCode:
-          type: string
-      required: [ruleId, effect, subject, actionKey, priority, reasonCode]
-    CheckAccessResponse:
+        userId: {type: string, format: uuid}
+        primaryEmail: {type: string, format: email}
+        displayName: {type: string}
+        status: {$ref: '#/components/schemas/UserStatus'}
+        locale: {type: string}
+        version: {type: integer, format: int64}
+      required: [userId, status, version]
+    CreateOrganizationRequest:
       type: object
       additionalProperties: false
       properties:
-        decision:
-          type: string
-          enum: [allow, deny, pending]
-        reasonCode:
-          type: string
-        policyVersion:
-          type: integer
-          format: int64
-        matchedRules:
+        kind: {$ref: '#/components/schemas/OrganizationKind'}
+        slug: {type: string}
+        displayName: {type: string}
+        imageAssetRef: {type: string}
+        status: {$ref: '#/components/schemas/OrganizationStatus'}
+        parentOrganizationId: {type: string, format: uuid}
+        meta: {$ref: '#/components/schemas/CommandMeta'}
+      required: [kind, slug, displayName, meta]
+    UpdateOrganizationRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        slug: {type: string}
+        displayName: {type: string}
+        imageAssetRef: {type: string}
+        parentOrganizationId: {type: string, format: uuid}
+        meta: {$ref: '#/components/schemas/CommandMeta'}
+      required: [meta]
+    OrganizationResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        organizationId: {type: string, format: uuid}
+        kind: {$ref: '#/components/schemas/OrganizationKind'}
+        slug: {type: string}
+        displayName: {type: string}
+        imageAssetRef: {type: string}
+        status: {$ref: '#/components/schemas/OrganizationStatus'}
+        parentOrganizationId: {type: string, format: uuid}
+        version: {type: integer, format: int64}
+      required: [organizationId, kind, slug, displayName, status, version]
+    CreateGroupRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        scopeType: {$ref: '#/components/schemas/GroupScopeType'}
+        scopeId: {type: string, format: uuid}
+        slug: {type: string}
+        displayName: {type: string}
+        parentGroupId: {type: string, format: uuid}
+        imageAssetRef: {type: string}
+        meta: {$ref: '#/components/schemas/CommandMeta'}
+      required: [scopeType, slug, displayName, meta]
+    UpdateGroupRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        slug: {type: string}
+        displayName: {type: string}
+        parentGroupId: {type: string, format: uuid}
+        imageAssetRef: {type: string}
+        meta: {$ref: '#/components/schemas/CommandMeta'}
+      required: [meta]
+    GroupResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        groupId: {type: string, format: uuid}
+        scopeType: {$ref: '#/components/schemas/GroupScopeType'}
+        scopeId: {type: string, format: uuid}
+        slug: {type: string}
+        displayName: {type: string}
+        parentGroupId: {type: string, format: uuid}
+        imageAssetRef: {type: string}
+        status: {$ref: '#/components/schemas/GroupStatus'}
+        version: {type: integer, format: int64}
+      required: [groupId, scopeType, slug, displayName, status, version]
+    SetMembershipRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        subjectType: {$ref: '#/components/schemas/MembershipSubjectType'}
+        subjectId: {type: string, format: uuid}
+        targetType: {$ref: '#/components/schemas/MembershipTargetType'}
+        targetId: {type: string, format: uuid}
+        roleHint: {type: string}
+        status: {$ref: '#/components/schemas/MembershipStatus'}
+        source: {$ref: '#/components/schemas/MembershipSource'}
+        meta: {$ref: '#/components/schemas/CommandMeta'}
+      required: [subjectType, subjectId, targetType, targetId, meta]
+    MembershipResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        membershipId: {type: string, format: uuid}
+        subjectType: {$ref: '#/components/schemas/MembershipSubjectType'}
+        subjectId: {type: string, format: uuid}
+        targetType: {$ref: '#/components/schemas/MembershipTargetType'}
+        targetId: {type: string, format: uuid}
+        roleHint: {type: string}
+        status: {$ref: '#/components/schemas/MembershipStatus'}
+        source: {$ref: '#/components/schemas/MembershipSource'}
+        version: {type: integer, format: int64}
+      required: [membershipId, subjectType, subjectId, targetType, targetId, status, source, version]
+    PutAllowlistEntryRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        matchType: {$ref: '#/components/schemas/AllowlistMatchType'}
+        value: {type: string}
+        organizationId: {type: string, format: uuid}
+        defaultStatus: {$ref: '#/components/schemas/UserStatus'}
+        status: {$ref: '#/components/schemas/AllowlistStatus'}
+        meta: {$ref: '#/components/schemas/CommandMeta'}
+      required: [matchType, value, defaultStatus, meta]
+    AllowlistEntryResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        allowlistEntryId: {type: string, format: uuid}
+        matchType: {$ref: '#/components/schemas/AllowlistMatchType'}
+        value: {type: string}
+        organizationId: {type: string, format: uuid}
+        defaultStatus: {$ref: '#/components/schemas/UserStatus'}
+        status: {$ref: '#/components/schemas/AllowlistStatus'}
+      required: [allowlistEntryId, matchType, value, defaultStatus, status]
+    RegisterExternalProviderRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        slug: {type: string}
+        providerKind: {$ref: '#/components/schemas/ExternalProviderKind'}
+        displayName: {type: string}
+        iconAssetRef: {type: string}
+        status: {$ref: '#/components/schemas/ExternalProviderStatus'}
+        meta: {$ref: '#/components/schemas/CommandMeta'}
+      required: [slug, providerKind, displayName, meta]
+    UpdateExternalProviderRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        slug: {type: string}
+        providerKind: {$ref: '#/components/schemas/ExternalProviderKind'}
+        displayName: {type: string}
+        iconAssetRef: {type: string}
+        status: {$ref: '#/components/schemas/ExternalProviderStatus'}
+        meta: {$ref: '#/components/schemas/CommandMeta'}
+      required: [meta]
+    ExternalProviderResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        externalProviderId: {type: string, format: uuid}
+        slug: {type: string}
+        providerKind: {$ref: '#/components/schemas/ExternalProviderKind'}
+        displayName: {type: string}
+        iconAssetRef: {type: string}
+        status: {$ref: '#/components/schemas/ExternalProviderStatus'}
+        version: {type: integer, format: int64}
+      required: [externalProviderId, slug, providerKind, displayName, status, version]
+    RegisterExternalAccountRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        externalProviderId: {type: string, format: uuid}
+        accountType: {$ref: '#/components/schemas/ExternalAccountType'}
+        displayName: {type: string}
+        imageAssetRef: {type: string}
+        ownerScopeType: {$ref: '#/components/schemas/ExternalAccountScopeType'}
+        ownerScopeId: {type: string}
+        status: {$ref: '#/components/schemas/ExternalAccountStatus'}
+        secretBindingRefId: {type: string, format: uuid}
+        meta: {$ref: '#/components/schemas/CommandMeta'}
+      required: [externalProviderId, accountType, displayName, ownerScopeType, meta]
+    UpdateExternalAccountStatusRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        status: {$ref: '#/components/schemas/ExternalAccountStatus'}
+        meta: {$ref: '#/components/schemas/CommandMeta'}
+      required: [status, meta]
+    ExternalAccountResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        externalAccountId: {type: string, format: uuid}
+        externalProviderId: {type: string, format: uuid}
+        accountType: {$ref: '#/components/schemas/ExternalAccountType'}
+        displayName: {type: string}
+        imageAssetRef: {type: string}
+        ownerScopeType: {$ref: '#/components/schemas/ExternalAccountScopeType'}
+        ownerScopeId: {type: string}
+        status: {$ref: '#/components/schemas/ExternalAccountStatus'}
+        secretBindingRefId: {type: string, format: uuid}
+        version: {type: integer, format: int64}
+      required: [externalAccountId, externalProviderId, accountType, displayName, ownerScopeType, status, version]
+    BindExternalAccountRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        externalAccountId: {type: string, format: uuid}
+        usageScopeType: {$ref: '#/components/schemas/ExternalAccountScopeType'}
+        usageScopeId: {type: string}
+        allowedActionKeys:
           type: array
-          items:
-            $ref: '#/components/schemas/MatchedRule'
-      required: [decision, reasonCode, policyVersion, matchedRules]
-    ExplainAccessResponse:
+          items: {type: string}
+        status: {$ref: '#/components/schemas/ExternalAccountBindingStatus'}
+        meta: {$ref: '#/components/schemas/CommandMeta'}
+      required: [externalAccountId, usageScopeType, usageScopeId, allowedActionKeys, meta]
+    ExternalAccountBindingResponse:
       type: object
       additionalProperties: false
       properties:
-        auditId:
-          type: string
-          format: uuid
-        decision:
-          type: string
-          enum: [allow, deny, pending]
-        reasonCode:
-          type: string
-        policyVersion:
-          type: integer
-          format: int64
-        matchedRules:
+        externalAccountBindingId: {type: string, format: uuid}
+        externalAccountId: {type: string, format: uuid}
+        usageScopeType: {$ref: '#/components/schemas/ExternalAccountScopeType'}
+        usageScopeId: {type: string}
+        allowedActionKeys:
           type: array
-          items:
-            $ref: '#/components/schemas/MatchedRule'
-      required: [auditId, decision, reasonCode, policyVersion, matchedRules]
+          items: {type: string}
+        status: {$ref: '#/components/schemas/ExternalAccountBindingStatus'}
+      required: [externalAccountBindingId, externalAccountId, usageScopeType, usageScopeId, allowedActionKeys, status]
+    PutAccessActionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        key: {type: string}
+        displayName: {type: string}
+        description: {type: string}
+        resourceType: {type: string}
+        status: {$ref: '#/components/schemas/AccessActionStatus'}
+        meta: {$ref: '#/components/schemas/CommandMeta'}
+      required: [key, displayName, resourceType, meta]
+    AccessActionResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        accessActionId: {type: string, format: uuid}
+        key: {type: string}
+        displayName: {type: string}
+        description: {type: string}
+        resourceType: {type: string}
+        status: {$ref: '#/components/schemas/AccessActionStatus'}
+        version: {type: integer, format: int64}
+      required: [accessActionId, key, displayName, resourceType, status, version]
+    PutAccessRuleRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        effect: {$ref: '#/components/schemas/AccessEffect'}
+        subjectType: {type: string}
+        subjectId: {type: string}
+        actionKey: {type: string}
+        resourceType: {type: string}
+        resourceId: {type: string}
+        scopeType: {type: string}
+        scopeId: {type: string}
+        priority: {type: integer}
+        status: {$ref: '#/components/schemas/AccessRuleStatus'}
+        meta: {$ref: '#/components/schemas/CommandMeta'}
+      required: [effect, subjectType, subjectId, actionKey, resourceType, scopeType, scopeId, meta]
+    AccessRuleResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        accessRuleId: {type: string, format: uuid}
+        effect: {$ref: '#/components/schemas/AccessEffect'}
+        subjectType: {type: string}
+        subjectId: {type: string}
+        actionKey: {type: string}
+        resourceType: {type: string}
+        resourceId: {type: string}
+        scopeType: {type: string}
+        scopeId: {type: string}
+        priority: {type: integer}
+        status: {$ref: '#/components/schemas/AccessRuleStatus'}
+        version: {type: integer, format: int64}
+      required: [accessRuleId, effect, subjectType, subjectId, actionKey, resourceType, scopeType, scopeId, status, version]
     ResolveExternalAccountUsageRequest:
       type: object
       additionalProperties: false
       properties:
-        actionKey:
-          type: string
-        usageScope:
-          $ref: '#/components/schemas/ScopeRef'
+        actionKey: {type: string}
+        usageScope: {$ref: '#/components/schemas/ScopeRef'}
       required: [actionKey, usageScope]
     ResolveExternalAccountUsageResponse:
       type: object
       additionalProperties: false
       properties:
-        externalAccountId:
-          type: string
-          format: uuid
-        providerId:
-          type: string
-          format: uuid
-        secretRefId:
-          type: string
-          format: uuid
-        secretStoreType:
-          type: string
-        secretStoreRef:
-          type: string
+        externalAccountId: {type: string, format: uuid}
+        providerId: {type: string, format: uuid}
+        secretRefId: {type: string, format: uuid}
+        secretStoreType: {type: string}
+        secretStoreRef: {type: string}
         allowedActionKeys:
           type: array
-          items:
-            type: string
+          items: {type: string}
       required: [externalAccountId, providerId, secretRefId, secretStoreType, secretStoreRef, allowedActionKeys]
+    CheckAccessRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        subject: {$ref: '#/components/schemas/SubjectRef'}
+        actionKey: {type: string}
+        resource: {$ref: '#/components/schemas/ResourceRef'}
+        scope: {$ref: '#/components/schemas/ScopeRef'}
+        audit: {type: boolean}
+        meta: {$ref: '#/components/schemas/CommandMeta'}
+      required: [subject, actionKey, resource, scope]
+    MatchedRule:
+      type: object
+      additionalProperties: false
+      properties:
+        ruleId: {type: string, format: uuid}
+        effect: {$ref: '#/components/schemas/AccessEffect'}
+        subject: {$ref: '#/components/schemas/SubjectRef'}
+        actionKey: {type: string}
+        scope: {$ref: '#/components/schemas/ScopeRef'}
+        priority: {type: integer}
+        reasonCode: {type: string}
+      required: [ruleId, effect, subject, actionKey, priority, reasonCode]
+    CheckAccessResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        decision: {$ref: '#/components/schemas/AccessDecision'}
+        reasonCode: {type: string}
+        policyVersion: {type: integer, format: int64}
+        matchedRules:
+          type: array
+          items: {$ref: '#/components/schemas/MatchedRule'}
+      required: [decision, reasonCode, policyVersion, matchedRules]
+    ExplainAccessResponse:
+      allOf:
+        - type: object
+          additionalProperties: false
+          properties:
+            auditId: {type: string, format: uuid}
+          required: [auditId]
+        - $ref: '#/components/schemas/CheckAccessResponse'
+    MembershipEdge:
+      type: object
+      additionalProperties: false
+      properties:
+        membershipId: {type: string, format: uuid}
+        subject: {$ref: '#/components/schemas/SubjectRef'}
+        target: {$ref: '#/components/schemas/SubjectRef'}
+        status: {$ref: '#/components/schemas/MembershipStatus'}
+        source: {$ref: '#/components/schemas/MembershipSource'}
+        version: {type: integer, format: int64}
+      required: [membershipId, subject, target, status, source, version]
+    ListMembershipGraphResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        root: {$ref: '#/components/schemas/SubjectRef'}
+        edges:
+          type: array
+          items: {$ref: '#/components/schemas/MembershipEdge'}
+      required: [root, edges]
+    PendingAccessItem:
+      type: object
+      additionalProperties: false
+      properties:
+        itemId: {type: string}
+        itemType: {type: string}
+        subject: {$ref: '#/components/schemas/SubjectRef'}
+        status: {type: string}
+        reasonCode: {type: string}
+        createdAt: {type: string, format: date-time}
+      required: [itemId, itemType, subject, status, reasonCode, createdAt]
+    ListPendingAccessResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/PendingAccessItem'}
+        nextCursor: {type: string}
+      required: [items]
+    AccessDecision: {type: string, enum: [allow, deny, pending]}
+    AccessEffect: {type: string, enum: [allow, deny]}
+    OrganizationKind: {type: string, enum: [owner, client, contractor, saas, saas_client, saas_contractor]}
+    OrganizationStatus: {type: string, enum: [active, pending, suspended, archived]}
+    UserStatus: {type: string, enum: [active, pending, blocked, disabled]}
+    GroupScopeType: {type: string, enum: [global, organization]}
+    GroupStatus: {type: string, enum: [active, disabled, archived]}
+    MembershipSubjectType: {type: string, enum: [user, group, external_account]}
+    MembershipTargetType: {type: string, enum: [organization, group]}
+    MembershipStatus: {type: string, enum: [active, pending, blocked, disabled]}
+    MembershipSource: {type: string, enum: [manual, bootstrap, sync, system]}
+    AllowlistMatchType: {type: string, enum: [email, domain]}
+    AllowlistStatus: {type: string, enum: [active, disabled]}
+    ExternalProviderKind: {type: string, enum: [repository, identity, model, messaging, payments, other]}
+    ExternalProviderStatus: {type: string, enum: [active, disabled]}
+    ExternalAccountType: {type: string, enum: [user, bot, service, integration]}
+    ExternalAccountStatus: {type: string, enum: [active, pending, needs_reauth, limited, blocked, disabled]}
+    ExternalAccountScopeType: {type: string, enum: [global, organization, project, repository, user, group, agent, agent_role, flow, stage, package]}
+    ExternalAccountBindingStatus: {type: string, enum: [active, disabled]}
+    AccessActionStatus: {type: string, enum: [active, disabled]}
+    AccessRuleStatus: {type: string, enum: [active, disabled]}

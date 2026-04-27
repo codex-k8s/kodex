@@ -19,20 +19,94 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AccessManagerService_BootstrapUserFromIdentity_FullMethodName   = "/kodex.access_accounts.v1.AccessManagerService/BootstrapUserFromIdentity"
-	AccessManagerService_CheckAccess_FullMethodName                 = "/kodex.access_accounts.v1.AccessManagerService/CheckAccess"
-	AccessManagerService_ExplainAccess_FullMethodName               = "/kodex.access_accounts.v1.AccessManagerService/ExplainAccess"
-	AccessManagerService_ResolveExternalAccountUsage_FullMethodName = "/kodex.access_accounts.v1.AccessManagerService/ResolveExternalAccountUsage"
+	AccessManagerService_BootstrapUserFromIdentity_FullMethodName     = "/kodex.access_accounts.v1.AccessManagerService/BootstrapUserFromIdentity"
+	AccessManagerService_SetUserStatus_FullMethodName                 = "/kodex.access_accounts.v1.AccessManagerService/SetUserStatus"
+	AccessManagerService_CreateOrganization_FullMethodName            = "/kodex.access_accounts.v1.AccessManagerService/CreateOrganization"
+	AccessManagerService_UpdateOrganization_FullMethodName            = "/kodex.access_accounts.v1.AccessManagerService/UpdateOrganization"
+	AccessManagerService_SuspendOrganization_FullMethodName           = "/kodex.access_accounts.v1.AccessManagerService/SuspendOrganization"
+	AccessManagerService_ArchiveOrganization_FullMethodName           = "/kodex.access_accounts.v1.AccessManagerService/ArchiveOrganization"
+	AccessManagerService_CreateGroup_FullMethodName                   = "/kodex.access_accounts.v1.AccessManagerService/CreateGroup"
+	AccessManagerService_UpdateGroup_FullMethodName                   = "/kodex.access_accounts.v1.AccessManagerService/UpdateGroup"
+	AccessManagerService_DisableGroup_FullMethodName                  = "/kodex.access_accounts.v1.AccessManagerService/DisableGroup"
+	AccessManagerService_SetMembership_FullMethodName                 = "/kodex.access_accounts.v1.AccessManagerService/SetMembership"
+	AccessManagerService_PutAllowlistEntry_FullMethodName             = "/kodex.access_accounts.v1.AccessManagerService/PutAllowlistEntry"
+	AccessManagerService_DisableAllowlistEntry_FullMethodName         = "/kodex.access_accounts.v1.AccessManagerService/DisableAllowlistEntry"
+	AccessManagerService_RegisterExternalProvider_FullMethodName      = "/kodex.access_accounts.v1.AccessManagerService/RegisterExternalProvider"
+	AccessManagerService_UpdateExternalProvider_FullMethodName        = "/kodex.access_accounts.v1.AccessManagerService/UpdateExternalProvider"
+	AccessManagerService_RegisterExternalAccount_FullMethodName       = "/kodex.access_accounts.v1.AccessManagerService/RegisterExternalAccount"
+	AccessManagerService_UpdateExternalAccountStatus_FullMethodName   = "/kodex.access_accounts.v1.AccessManagerService/UpdateExternalAccountStatus"
+	AccessManagerService_BindExternalAccount_FullMethodName           = "/kodex.access_accounts.v1.AccessManagerService/BindExternalAccount"
+	AccessManagerService_DisableExternalAccountBinding_FullMethodName = "/kodex.access_accounts.v1.AccessManagerService/DisableExternalAccountBinding"
+	AccessManagerService_PutAccessAction_FullMethodName               = "/kodex.access_accounts.v1.AccessManagerService/PutAccessAction"
+	AccessManagerService_PutAccessRule_FullMethodName                 = "/kodex.access_accounts.v1.AccessManagerService/PutAccessRule"
+	AccessManagerService_DisableAccessRule_FullMethodName             = "/kodex.access_accounts.v1.AccessManagerService/DisableAccessRule"
+	AccessManagerService_ResolveExternalAccountUsage_FullMethodName   = "/kodex.access_accounts.v1.AccessManagerService/ResolveExternalAccountUsage"
+	AccessManagerService_CheckAccess_FullMethodName                   = "/kodex.access_accounts.v1.AccessManagerService/CheckAccess"
+	AccessManagerService_ExplainAccess_FullMethodName                 = "/kodex.access_accounts.v1.AccessManagerService/ExplainAccess"
+	AccessManagerService_ListMembershipGraph_FullMethodName           = "/kodex.access_accounts.v1.AccessManagerService/ListMembershipGraph"
+	AccessManagerService_ListPendingAccess_FullMethodName             = "/kodex.access_accounts.v1.AccessManagerService/ListPendingAccess"
 )
 
 // AccessManagerServiceClient is the client API for AccessManagerService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// AccessManagerService is the stable v1 inter-service contract for the access
+// and accounts domain. It covers the command and read surface agreed in
+// docs/domains/access-and-accounts/architecture/api_contract.md.
 type AccessManagerServiceClient interface {
+	// BootstrapUserFromIdentity creates or resolves a platform user after SSO/OIDC.
 	BootstrapUserFromIdentity(ctx context.Context, in *BootstrapUserFromIdentityRequest, opts ...grpc.CallOption) (*BootstrapUserFromIdentityResponse, error)
-	CheckAccess(ctx context.Context, in *CheckAccessRequest, opts ...grpc.CallOption) (*CheckAccessResponse, error)
-	ExplainAccess(ctx context.Context, in *ExplainAccessRequest, opts ...grpc.CallOption) (*ExplainAccessResponse, error)
+	// SetUserStatus changes the lifecycle status of an existing user.
+	SetUserStatus(ctx context.Context, in *SetUserStatusRequest, opts ...grpc.CallOption) (*UserResponse, error)
+	// CreateOrganization creates an owner, client, contractor or SaaS organization.
+	CreateOrganization(ctx context.Context, in *CreateOrganizationRequest, opts ...grpc.CallOption) (*OrganizationResponse, error)
+	// UpdateOrganization changes safe organization fields.
+	UpdateOrganization(ctx context.Context, in *UpdateOrganizationRequest, opts ...grpc.CallOption) (*OrganizationResponse, error)
+	// SuspendOrganization suspends a non-owner organization.
+	SuspendOrganization(ctx context.Context, in *SuspendOrganizationRequest, opts ...grpc.CallOption) (*OrganizationResponse, error)
+	// ArchiveOrganization archives an organization without deleting history.
+	ArchiveOrganization(ctx context.Context, in *ArchiveOrganizationRequest, opts ...grpc.CallOption) (*OrganizationResponse, error)
+	// CreateGroup creates a global or organization-scoped group.
+	CreateGroup(ctx context.Context, in *CreateGroupRequest, opts ...grpc.CallOption) (*GroupResponse, error)
+	// UpdateGroup changes safe group fields or parent group.
+	UpdateGroup(ctx context.Context, in *UpdateGroupRequest, opts ...grpc.CallOption) (*GroupResponse, error)
+	// DisableGroup disables a group without deleting history.
+	DisableGroup(ctx context.Context, in *DisableGroupRequest, opts ...grpc.CallOption) (*GroupResponse, error)
+	// SetMembership creates, updates or disables subject membership.
+	SetMembership(ctx context.Context, in *SetMembershipRequest, opts ...grpc.CallOption) (*MembershipResponse, error)
+	// PutAllowlistEntry creates or updates an allowlist entry.
+	PutAllowlistEntry(ctx context.Context, in *PutAllowlistEntryRequest, opts ...grpc.CallOption) (*AllowlistEntryResponse, error)
+	// DisableAllowlistEntry disables an allowlist entry without deleting history.
+	DisableAllowlistEntry(ctx context.Context, in *DisableAllowlistEntryRequest, opts ...grpc.CallOption) (*AllowlistEntryResponse, error)
+	// RegisterExternalProvider creates an external-account provider.
+	RegisterExternalProvider(ctx context.Context, in *RegisterExternalProviderRequest, opts ...grpc.CallOption) (*ExternalProviderResponse, error)
+	// UpdateExternalProvider changes provider metadata or status.
+	UpdateExternalProvider(ctx context.Context, in *UpdateExternalProviderRequest, opts ...grpc.CallOption) (*ExternalProviderResponse, error)
+	// RegisterExternalAccount creates an external account as a policy subject.
+	RegisterExternalAccount(ctx context.Context, in *RegisterExternalAccountRequest, opts ...grpc.CallOption) (*ExternalAccountResponse, error)
+	// UpdateExternalAccountStatus changes external-account lifecycle status.
+	UpdateExternalAccountStatus(ctx context.Context, in *UpdateExternalAccountStatusRequest, opts ...grpc.CallOption) (*ExternalAccountResponse, error)
+	// BindExternalAccount allows an external account to be used in a scope.
+	BindExternalAccount(ctx context.Context, in *BindExternalAccountRequest, opts ...grpc.CallOption) (*ExternalAccountBindingResponse, error)
+	// DisableExternalAccountBinding disables an account binding without deleting history.
+	DisableExternalAccountBinding(ctx context.Context, in *DisableExternalAccountBindingRequest, opts ...grpc.CallOption) (*ExternalAccountBindingResponse, error)
+	// PutAccessAction creates or updates an action from the access-action catalog.
+	PutAccessAction(ctx context.Context, in *PutAccessActionRequest, opts ...grpc.CallOption) (*AccessActionResponse, error)
+	// PutAccessRule creates or updates an access rule.
+	PutAccessRule(ctx context.Context, in *PutAccessRuleRequest, opts ...grpc.CallOption) (*AccessRuleResponse, error)
+	// DisableAccessRule disables an access rule without deleting history.
+	DisableAccessRule(ctx context.Context, in *DisableAccessRuleRequest, opts ...grpc.CallOption) (*AccessRuleResponse, error)
+	// ResolveExternalAccountUsage checks whether an external account can be used.
 	ResolveExternalAccountUsage(ctx context.Context, in *ResolveExternalAccountUsageRequest, opts ...grpc.CallOption) (*ResolveExternalAccountUsageResponse, error)
+	// CheckAccess resolves effective access for a subject, action and resource.
+	CheckAccess(ctx context.Context, in *CheckAccessRequest, opts ...grpc.CallOption) (*CheckAccessResponse, error)
+	// ExplainAccess returns a previously audited access decision explanation.
+	ExplainAccess(ctx context.Context, in *ExplainAccessRequest, opts ...grpc.CallOption) (*ExplainAccessResponse, error)
+	// ListMembershipGraph returns effective membership graph for operator UI.
+	ListMembershipGraph(ctx context.Context, in *ListMembershipGraphRequest, opts ...grpc.CallOption) (*ListMembershipGraphResponse, error)
+	// ListPendingAccess returns pending or blocked access items for operator UI.
+	ListPendingAccess(ctx context.Context, in *ListPendingAccessRequest, opts ...grpc.CallOption) (*ListPendingAccessResponse, error)
 }
 
 type accessManagerServiceClient struct {
@@ -47,6 +121,216 @@ func (c *accessManagerServiceClient) BootstrapUserFromIdentity(ctx context.Conte
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(BootstrapUserFromIdentityResponse)
 	err := c.cc.Invoke(ctx, AccessManagerService_BootstrapUserFromIdentity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *accessManagerServiceClient) SetUserStatus(ctx context.Context, in *SetUserStatusRequest, opts ...grpc.CallOption) (*UserResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UserResponse)
+	err := c.cc.Invoke(ctx, AccessManagerService_SetUserStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *accessManagerServiceClient) CreateOrganization(ctx context.Context, in *CreateOrganizationRequest, opts ...grpc.CallOption) (*OrganizationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(OrganizationResponse)
+	err := c.cc.Invoke(ctx, AccessManagerService_CreateOrganization_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *accessManagerServiceClient) UpdateOrganization(ctx context.Context, in *UpdateOrganizationRequest, opts ...grpc.CallOption) (*OrganizationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(OrganizationResponse)
+	err := c.cc.Invoke(ctx, AccessManagerService_UpdateOrganization_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *accessManagerServiceClient) SuspendOrganization(ctx context.Context, in *SuspendOrganizationRequest, opts ...grpc.CallOption) (*OrganizationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(OrganizationResponse)
+	err := c.cc.Invoke(ctx, AccessManagerService_SuspendOrganization_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *accessManagerServiceClient) ArchiveOrganization(ctx context.Context, in *ArchiveOrganizationRequest, opts ...grpc.CallOption) (*OrganizationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(OrganizationResponse)
+	err := c.cc.Invoke(ctx, AccessManagerService_ArchiveOrganization_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *accessManagerServiceClient) CreateGroup(ctx context.Context, in *CreateGroupRequest, opts ...grpc.CallOption) (*GroupResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GroupResponse)
+	err := c.cc.Invoke(ctx, AccessManagerService_CreateGroup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *accessManagerServiceClient) UpdateGroup(ctx context.Context, in *UpdateGroupRequest, opts ...grpc.CallOption) (*GroupResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GroupResponse)
+	err := c.cc.Invoke(ctx, AccessManagerService_UpdateGroup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *accessManagerServiceClient) DisableGroup(ctx context.Context, in *DisableGroupRequest, opts ...grpc.CallOption) (*GroupResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GroupResponse)
+	err := c.cc.Invoke(ctx, AccessManagerService_DisableGroup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *accessManagerServiceClient) SetMembership(ctx context.Context, in *SetMembershipRequest, opts ...grpc.CallOption) (*MembershipResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MembershipResponse)
+	err := c.cc.Invoke(ctx, AccessManagerService_SetMembership_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *accessManagerServiceClient) PutAllowlistEntry(ctx context.Context, in *PutAllowlistEntryRequest, opts ...grpc.CallOption) (*AllowlistEntryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AllowlistEntryResponse)
+	err := c.cc.Invoke(ctx, AccessManagerService_PutAllowlistEntry_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *accessManagerServiceClient) DisableAllowlistEntry(ctx context.Context, in *DisableAllowlistEntryRequest, opts ...grpc.CallOption) (*AllowlistEntryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AllowlistEntryResponse)
+	err := c.cc.Invoke(ctx, AccessManagerService_DisableAllowlistEntry_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *accessManagerServiceClient) RegisterExternalProvider(ctx context.Context, in *RegisterExternalProviderRequest, opts ...grpc.CallOption) (*ExternalProviderResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExternalProviderResponse)
+	err := c.cc.Invoke(ctx, AccessManagerService_RegisterExternalProvider_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *accessManagerServiceClient) UpdateExternalProvider(ctx context.Context, in *UpdateExternalProviderRequest, opts ...grpc.CallOption) (*ExternalProviderResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExternalProviderResponse)
+	err := c.cc.Invoke(ctx, AccessManagerService_UpdateExternalProvider_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *accessManagerServiceClient) RegisterExternalAccount(ctx context.Context, in *RegisterExternalAccountRequest, opts ...grpc.CallOption) (*ExternalAccountResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExternalAccountResponse)
+	err := c.cc.Invoke(ctx, AccessManagerService_RegisterExternalAccount_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *accessManagerServiceClient) UpdateExternalAccountStatus(ctx context.Context, in *UpdateExternalAccountStatusRequest, opts ...grpc.CallOption) (*ExternalAccountResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExternalAccountResponse)
+	err := c.cc.Invoke(ctx, AccessManagerService_UpdateExternalAccountStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *accessManagerServiceClient) BindExternalAccount(ctx context.Context, in *BindExternalAccountRequest, opts ...grpc.CallOption) (*ExternalAccountBindingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExternalAccountBindingResponse)
+	err := c.cc.Invoke(ctx, AccessManagerService_BindExternalAccount_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *accessManagerServiceClient) DisableExternalAccountBinding(ctx context.Context, in *DisableExternalAccountBindingRequest, opts ...grpc.CallOption) (*ExternalAccountBindingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExternalAccountBindingResponse)
+	err := c.cc.Invoke(ctx, AccessManagerService_DisableExternalAccountBinding_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *accessManagerServiceClient) PutAccessAction(ctx context.Context, in *PutAccessActionRequest, opts ...grpc.CallOption) (*AccessActionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AccessActionResponse)
+	err := c.cc.Invoke(ctx, AccessManagerService_PutAccessAction_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *accessManagerServiceClient) PutAccessRule(ctx context.Context, in *PutAccessRuleRequest, opts ...grpc.CallOption) (*AccessRuleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AccessRuleResponse)
+	err := c.cc.Invoke(ctx, AccessManagerService_PutAccessRule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *accessManagerServiceClient) DisableAccessRule(ctx context.Context, in *DisableAccessRuleRequest, opts ...grpc.CallOption) (*AccessRuleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AccessRuleResponse)
+	err := c.cc.Invoke(ctx, AccessManagerService_DisableAccessRule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *accessManagerServiceClient) ResolveExternalAccountUsage(ctx context.Context, in *ResolveExternalAccountUsageRequest, opts ...grpc.CallOption) (*ResolveExternalAccountUsageResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveExternalAccountUsageResponse)
+	err := c.cc.Invoke(ctx, AccessManagerService_ResolveExternalAccountUsage_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -73,10 +357,20 @@ func (c *accessManagerServiceClient) ExplainAccess(ctx context.Context, in *Expl
 	return out, nil
 }
 
-func (c *accessManagerServiceClient) ResolveExternalAccountUsage(ctx context.Context, in *ResolveExternalAccountUsageRequest, opts ...grpc.CallOption) (*ResolveExternalAccountUsageResponse, error) {
+func (c *accessManagerServiceClient) ListMembershipGraph(ctx context.Context, in *ListMembershipGraphRequest, opts ...grpc.CallOption) (*ListMembershipGraphResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ResolveExternalAccountUsageResponse)
-	err := c.cc.Invoke(ctx, AccessManagerService_ResolveExternalAccountUsage_FullMethodName, in, out, cOpts...)
+	out := new(ListMembershipGraphResponse)
+	err := c.cc.Invoke(ctx, AccessManagerService_ListMembershipGraph_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *accessManagerServiceClient) ListPendingAccess(ctx context.Context, in *ListPendingAccessRequest, opts ...grpc.CallOption) (*ListPendingAccessResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPendingAccessResponse)
+	err := c.cc.Invoke(ctx, AccessManagerService_ListPendingAccess_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -86,11 +380,63 @@ func (c *accessManagerServiceClient) ResolveExternalAccountUsage(ctx context.Con
 // AccessManagerServiceServer is the server API for AccessManagerService service.
 // All implementations must embed UnimplementedAccessManagerServiceServer
 // for forward compatibility.
+//
+// AccessManagerService is the stable v1 inter-service contract for the access
+// and accounts domain. It covers the command and read surface agreed in
+// docs/domains/access-and-accounts/architecture/api_contract.md.
 type AccessManagerServiceServer interface {
+	// BootstrapUserFromIdentity creates or resolves a platform user after SSO/OIDC.
 	BootstrapUserFromIdentity(context.Context, *BootstrapUserFromIdentityRequest) (*BootstrapUserFromIdentityResponse, error)
-	CheckAccess(context.Context, *CheckAccessRequest) (*CheckAccessResponse, error)
-	ExplainAccess(context.Context, *ExplainAccessRequest) (*ExplainAccessResponse, error)
+	// SetUserStatus changes the lifecycle status of an existing user.
+	SetUserStatus(context.Context, *SetUserStatusRequest) (*UserResponse, error)
+	// CreateOrganization creates an owner, client, contractor or SaaS organization.
+	CreateOrganization(context.Context, *CreateOrganizationRequest) (*OrganizationResponse, error)
+	// UpdateOrganization changes safe organization fields.
+	UpdateOrganization(context.Context, *UpdateOrganizationRequest) (*OrganizationResponse, error)
+	// SuspendOrganization suspends a non-owner organization.
+	SuspendOrganization(context.Context, *SuspendOrganizationRequest) (*OrganizationResponse, error)
+	// ArchiveOrganization archives an organization without deleting history.
+	ArchiveOrganization(context.Context, *ArchiveOrganizationRequest) (*OrganizationResponse, error)
+	// CreateGroup creates a global or organization-scoped group.
+	CreateGroup(context.Context, *CreateGroupRequest) (*GroupResponse, error)
+	// UpdateGroup changes safe group fields or parent group.
+	UpdateGroup(context.Context, *UpdateGroupRequest) (*GroupResponse, error)
+	// DisableGroup disables a group without deleting history.
+	DisableGroup(context.Context, *DisableGroupRequest) (*GroupResponse, error)
+	// SetMembership creates, updates or disables subject membership.
+	SetMembership(context.Context, *SetMembershipRequest) (*MembershipResponse, error)
+	// PutAllowlistEntry creates or updates an allowlist entry.
+	PutAllowlistEntry(context.Context, *PutAllowlistEntryRequest) (*AllowlistEntryResponse, error)
+	// DisableAllowlistEntry disables an allowlist entry without deleting history.
+	DisableAllowlistEntry(context.Context, *DisableAllowlistEntryRequest) (*AllowlistEntryResponse, error)
+	// RegisterExternalProvider creates an external-account provider.
+	RegisterExternalProvider(context.Context, *RegisterExternalProviderRequest) (*ExternalProviderResponse, error)
+	// UpdateExternalProvider changes provider metadata or status.
+	UpdateExternalProvider(context.Context, *UpdateExternalProviderRequest) (*ExternalProviderResponse, error)
+	// RegisterExternalAccount creates an external account as a policy subject.
+	RegisterExternalAccount(context.Context, *RegisterExternalAccountRequest) (*ExternalAccountResponse, error)
+	// UpdateExternalAccountStatus changes external-account lifecycle status.
+	UpdateExternalAccountStatus(context.Context, *UpdateExternalAccountStatusRequest) (*ExternalAccountResponse, error)
+	// BindExternalAccount allows an external account to be used in a scope.
+	BindExternalAccount(context.Context, *BindExternalAccountRequest) (*ExternalAccountBindingResponse, error)
+	// DisableExternalAccountBinding disables an account binding without deleting history.
+	DisableExternalAccountBinding(context.Context, *DisableExternalAccountBindingRequest) (*ExternalAccountBindingResponse, error)
+	// PutAccessAction creates or updates an action from the access-action catalog.
+	PutAccessAction(context.Context, *PutAccessActionRequest) (*AccessActionResponse, error)
+	// PutAccessRule creates or updates an access rule.
+	PutAccessRule(context.Context, *PutAccessRuleRequest) (*AccessRuleResponse, error)
+	// DisableAccessRule disables an access rule without deleting history.
+	DisableAccessRule(context.Context, *DisableAccessRuleRequest) (*AccessRuleResponse, error)
+	// ResolveExternalAccountUsage checks whether an external account can be used.
 	ResolveExternalAccountUsage(context.Context, *ResolveExternalAccountUsageRequest) (*ResolveExternalAccountUsageResponse, error)
+	// CheckAccess resolves effective access for a subject, action and resource.
+	CheckAccess(context.Context, *CheckAccessRequest) (*CheckAccessResponse, error)
+	// ExplainAccess returns a previously audited access decision explanation.
+	ExplainAccess(context.Context, *ExplainAccessRequest) (*ExplainAccessResponse, error)
+	// ListMembershipGraph returns effective membership graph for operator UI.
+	ListMembershipGraph(context.Context, *ListMembershipGraphRequest) (*ListMembershipGraphResponse, error)
+	// ListPendingAccess returns pending or blocked access items for operator UI.
+	ListPendingAccess(context.Context, *ListPendingAccessRequest) (*ListPendingAccessResponse, error)
 	mustEmbedUnimplementedAccessManagerServiceServer()
 }
 
@@ -104,14 +450,80 @@ type UnimplementedAccessManagerServiceServer struct{}
 func (UnimplementedAccessManagerServiceServer) BootstrapUserFromIdentity(context.Context, *BootstrapUserFromIdentityRequest) (*BootstrapUserFromIdentityResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BootstrapUserFromIdentity not implemented")
 }
+func (UnimplementedAccessManagerServiceServer) SetUserStatus(context.Context, *SetUserStatusRequest) (*UserResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetUserStatus not implemented")
+}
+func (UnimplementedAccessManagerServiceServer) CreateOrganization(context.Context, *CreateOrganizationRequest) (*OrganizationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateOrganization not implemented")
+}
+func (UnimplementedAccessManagerServiceServer) UpdateOrganization(context.Context, *UpdateOrganizationRequest) (*OrganizationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateOrganization not implemented")
+}
+func (UnimplementedAccessManagerServiceServer) SuspendOrganization(context.Context, *SuspendOrganizationRequest) (*OrganizationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SuspendOrganization not implemented")
+}
+func (UnimplementedAccessManagerServiceServer) ArchiveOrganization(context.Context, *ArchiveOrganizationRequest) (*OrganizationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ArchiveOrganization not implemented")
+}
+func (UnimplementedAccessManagerServiceServer) CreateGroup(context.Context, *CreateGroupRequest) (*GroupResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateGroup not implemented")
+}
+func (UnimplementedAccessManagerServiceServer) UpdateGroup(context.Context, *UpdateGroupRequest) (*GroupResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateGroup not implemented")
+}
+func (UnimplementedAccessManagerServiceServer) DisableGroup(context.Context, *DisableGroupRequest) (*GroupResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DisableGroup not implemented")
+}
+func (UnimplementedAccessManagerServiceServer) SetMembership(context.Context, *SetMembershipRequest) (*MembershipResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetMembership not implemented")
+}
+func (UnimplementedAccessManagerServiceServer) PutAllowlistEntry(context.Context, *PutAllowlistEntryRequest) (*AllowlistEntryResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PutAllowlistEntry not implemented")
+}
+func (UnimplementedAccessManagerServiceServer) DisableAllowlistEntry(context.Context, *DisableAllowlistEntryRequest) (*AllowlistEntryResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DisableAllowlistEntry not implemented")
+}
+func (UnimplementedAccessManagerServiceServer) RegisterExternalProvider(context.Context, *RegisterExternalProviderRequest) (*ExternalProviderResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RegisterExternalProvider not implemented")
+}
+func (UnimplementedAccessManagerServiceServer) UpdateExternalProvider(context.Context, *UpdateExternalProviderRequest) (*ExternalProviderResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateExternalProvider not implemented")
+}
+func (UnimplementedAccessManagerServiceServer) RegisterExternalAccount(context.Context, *RegisterExternalAccountRequest) (*ExternalAccountResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RegisterExternalAccount not implemented")
+}
+func (UnimplementedAccessManagerServiceServer) UpdateExternalAccountStatus(context.Context, *UpdateExternalAccountStatusRequest) (*ExternalAccountResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateExternalAccountStatus not implemented")
+}
+func (UnimplementedAccessManagerServiceServer) BindExternalAccount(context.Context, *BindExternalAccountRequest) (*ExternalAccountBindingResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BindExternalAccount not implemented")
+}
+func (UnimplementedAccessManagerServiceServer) DisableExternalAccountBinding(context.Context, *DisableExternalAccountBindingRequest) (*ExternalAccountBindingResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DisableExternalAccountBinding not implemented")
+}
+func (UnimplementedAccessManagerServiceServer) PutAccessAction(context.Context, *PutAccessActionRequest) (*AccessActionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PutAccessAction not implemented")
+}
+func (UnimplementedAccessManagerServiceServer) PutAccessRule(context.Context, *PutAccessRuleRequest) (*AccessRuleResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PutAccessRule not implemented")
+}
+func (UnimplementedAccessManagerServiceServer) DisableAccessRule(context.Context, *DisableAccessRuleRequest) (*AccessRuleResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DisableAccessRule not implemented")
+}
+func (UnimplementedAccessManagerServiceServer) ResolveExternalAccountUsage(context.Context, *ResolveExternalAccountUsageRequest) (*ResolveExternalAccountUsageResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ResolveExternalAccountUsage not implemented")
+}
 func (UnimplementedAccessManagerServiceServer) CheckAccess(context.Context, *CheckAccessRequest) (*CheckAccessResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CheckAccess not implemented")
 }
 func (UnimplementedAccessManagerServiceServer) ExplainAccess(context.Context, *ExplainAccessRequest) (*ExplainAccessResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ExplainAccess not implemented")
 }
-func (UnimplementedAccessManagerServiceServer) ResolveExternalAccountUsage(context.Context, *ResolveExternalAccountUsageRequest) (*ResolveExternalAccountUsageResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ResolveExternalAccountUsage not implemented")
+func (UnimplementedAccessManagerServiceServer) ListMembershipGraph(context.Context, *ListMembershipGraphRequest) (*ListMembershipGraphResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListMembershipGraph not implemented")
+}
+func (UnimplementedAccessManagerServiceServer) ListPendingAccess(context.Context, *ListPendingAccessRequest) (*ListPendingAccessResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListPendingAccess not implemented")
 }
 func (UnimplementedAccessManagerServiceServer) mustEmbedUnimplementedAccessManagerServiceServer() {}
 func (UnimplementedAccessManagerServiceServer) testEmbeddedByValue()                              {}
@@ -152,6 +564,384 @@ func _AccessManagerService_BootstrapUserFromIdentity_Handler(srv interface{}, ct
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AccessManagerService_SetUserStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetUserStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccessManagerServiceServer).SetUserStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AccessManagerService_SetUserStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccessManagerServiceServer).SetUserStatus(ctx, req.(*SetUserStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AccessManagerService_CreateOrganization_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateOrganizationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccessManagerServiceServer).CreateOrganization(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AccessManagerService_CreateOrganization_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccessManagerServiceServer).CreateOrganization(ctx, req.(*CreateOrganizationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AccessManagerService_UpdateOrganization_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateOrganizationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccessManagerServiceServer).UpdateOrganization(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AccessManagerService_UpdateOrganization_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccessManagerServiceServer).UpdateOrganization(ctx, req.(*UpdateOrganizationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AccessManagerService_SuspendOrganization_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SuspendOrganizationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccessManagerServiceServer).SuspendOrganization(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AccessManagerService_SuspendOrganization_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccessManagerServiceServer).SuspendOrganization(ctx, req.(*SuspendOrganizationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AccessManagerService_ArchiveOrganization_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ArchiveOrganizationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccessManagerServiceServer).ArchiveOrganization(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AccessManagerService_ArchiveOrganization_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccessManagerServiceServer).ArchiveOrganization(ctx, req.(*ArchiveOrganizationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AccessManagerService_CreateGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateGroupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccessManagerServiceServer).CreateGroup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AccessManagerService_CreateGroup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccessManagerServiceServer).CreateGroup(ctx, req.(*CreateGroupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AccessManagerService_UpdateGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateGroupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccessManagerServiceServer).UpdateGroup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AccessManagerService_UpdateGroup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccessManagerServiceServer).UpdateGroup(ctx, req.(*UpdateGroupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AccessManagerService_DisableGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DisableGroupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccessManagerServiceServer).DisableGroup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AccessManagerService_DisableGroup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccessManagerServiceServer).DisableGroup(ctx, req.(*DisableGroupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AccessManagerService_SetMembership_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetMembershipRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccessManagerServiceServer).SetMembership(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AccessManagerService_SetMembership_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccessManagerServiceServer).SetMembership(ctx, req.(*SetMembershipRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AccessManagerService_PutAllowlistEntry_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PutAllowlistEntryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccessManagerServiceServer).PutAllowlistEntry(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AccessManagerService_PutAllowlistEntry_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccessManagerServiceServer).PutAllowlistEntry(ctx, req.(*PutAllowlistEntryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AccessManagerService_DisableAllowlistEntry_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DisableAllowlistEntryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccessManagerServiceServer).DisableAllowlistEntry(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AccessManagerService_DisableAllowlistEntry_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccessManagerServiceServer).DisableAllowlistEntry(ctx, req.(*DisableAllowlistEntryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AccessManagerService_RegisterExternalProvider_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RegisterExternalProviderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccessManagerServiceServer).RegisterExternalProvider(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AccessManagerService_RegisterExternalProvider_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccessManagerServiceServer).RegisterExternalProvider(ctx, req.(*RegisterExternalProviderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AccessManagerService_UpdateExternalProvider_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateExternalProviderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccessManagerServiceServer).UpdateExternalProvider(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AccessManagerService_UpdateExternalProvider_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccessManagerServiceServer).UpdateExternalProvider(ctx, req.(*UpdateExternalProviderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AccessManagerService_RegisterExternalAccount_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RegisterExternalAccountRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccessManagerServiceServer).RegisterExternalAccount(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AccessManagerService_RegisterExternalAccount_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccessManagerServiceServer).RegisterExternalAccount(ctx, req.(*RegisterExternalAccountRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AccessManagerService_UpdateExternalAccountStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateExternalAccountStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccessManagerServiceServer).UpdateExternalAccountStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AccessManagerService_UpdateExternalAccountStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccessManagerServiceServer).UpdateExternalAccountStatus(ctx, req.(*UpdateExternalAccountStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AccessManagerService_BindExternalAccount_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BindExternalAccountRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccessManagerServiceServer).BindExternalAccount(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AccessManagerService_BindExternalAccount_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccessManagerServiceServer).BindExternalAccount(ctx, req.(*BindExternalAccountRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AccessManagerService_DisableExternalAccountBinding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DisableExternalAccountBindingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccessManagerServiceServer).DisableExternalAccountBinding(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AccessManagerService_DisableExternalAccountBinding_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccessManagerServiceServer).DisableExternalAccountBinding(ctx, req.(*DisableExternalAccountBindingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AccessManagerService_PutAccessAction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PutAccessActionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccessManagerServiceServer).PutAccessAction(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AccessManagerService_PutAccessAction_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccessManagerServiceServer).PutAccessAction(ctx, req.(*PutAccessActionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AccessManagerService_PutAccessRule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PutAccessRuleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccessManagerServiceServer).PutAccessRule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AccessManagerService_PutAccessRule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccessManagerServiceServer).PutAccessRule(ctx, req.(*PutAccessRuleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AccessManagerService_DisableAccessRule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DisableAccessRuleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccessManagerServiceServer).DisableAccessRule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AccessManagerService_DisableAccessRule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccessManagerServiceServer).DisableAccessRule(ctx, req.(*DisableAccessRuleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AccessManagerService_ResolveExternalAccountUsage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveExternalAccountUsageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccessManagerServiceServer).ResolveExternalAccountUsage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AccessManagerService_ResolveExternalAccountUsage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccessManagerServiceServer).ResolveExternalAccountUsage(ctx, req.(*ResolveExternalAccountUsageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AccessManagerService_CheckAccess_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CheckAccessRequest)
 	if err := dec(in); err != nil {
@@ -188,20 +978,38 @@ func _AccessManagerService_ExplainAccess_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
-func _AccessManagerService_ResolveExternalAccountUsage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ResolveExternalAccountUsageRequest)
+func _AccessManagerService_ListMembershipGraph_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListMembershipGraphRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AccessManagerServiceServer).ResolveExternalAccountUsage(ctx, in)
+		return srv.(AccessManagerServiceServer).ListMembershipGraph(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: AccessManagerService_ResolveExternalAccountUsage_FullMethodName,
+		FullMethod: AccessManagerService_ListMembershipGraph_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AccessManagerServiceServer).ResolveExternalAccountUsage(ctx, req.(*ResolveExternalAccountUsageRequest))
+		return srv.(AccessManagerServiceServer).ListMembershipGraph(ctx, req.(*ListMembershipGraphRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AccessManagerService_ListPendingAccess_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPendingAccessRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccessManagerServiceServer).ListPendingAccess(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AccessManagerService_ListPendingAccess_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccessManagerServiceServer).ListPendingAccess(ctx, req.(*ListPendingAccessRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -218,6 +1026,90 @@ var AccessManagerService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _AccessManagerService_BootstrapUserFromIdentity_Handler,
 		},
 		{
+			MethodName: "SetUserStatus",
+			Handler:    _AccessManagerService_SetUserStatus_Handler,
+		},
+		{
+			MethodName: "CreateOrganization",
+			Handler:    _AccessManagerService_CreateOrganization_Handler,
+		},
+		{
+			MethodName: "UpdateOrganization",
+			Handler:    _AccessManagerService_UpdateOrganization_Handler,
+		},
+		{
+			MethodName: "SuspendOrganization",
+			Handler:    _AccessManagerService_SuspendOrganization_Handler,
+		},
+		{
+			MethodName: "ArchiveOrganization",
+			Handler:    _AccessManagerService_ArchiveOrganization_Handler,
+		},
+		{
+			MethodName: "CreateGroup",
+			Handler:    _AccessManagerService_CreateGroup_Handler,
+		},
+		{
+			MethodName: "UpdateGroup",
+			Handler:    _AccessManagerService_UpdateGroup_Handler,
+		},
+		{
+			MethodName: "DisableGroup",
+			Handler:    _AccessManagerService_DisableGroup_Handler,
+		},
+		{
+			MethodName: "SetMembership",
+			Handler:    _AccessManagerService_SetMembership_Handler,
+		},
+		{
+			MethodName: "PutAllowlistEntry",
+			Handler:    _AccessManagerService_PutAllowlistEntry_Handler,
+		},
+		{
+			MethodName: "DisableAllowlistEntry",
+			Handler:    _AccessManagerService_DisableAllowlistEntry_Handler,
+		},
+		{
+			MethodName: "RegisterExternalProvider",
+			Handler:    _AccessManagerService_RegisterExternalProvider_Handler,
+		},
+		{
+			MethodName: "UpdateExternalProvider",
+			Handler:    _AccessManagerService_UpdateExternalProvider_Handler,
+		},
+		{
+			MethodName: "RegisterExternalAccount",
+			Handler:    _AccessManagerService_RegisterExternalAccount_Handler,
+		},
+		{
+			MethodName: "UpdateExternalAccountStatus",
+			Handler:    _AccessManagerService_UpdateExternalAccountStatus_Handler,
+		},
+		{
+			MethodName: "BindExternalAccount",
+			Handler:    _AccessManagerService_BindExternalAccount_Handler,
+		},
+		{
+			MethodName: "DisableExternalAccountBinding",
+			Handler:    _AccessManagerService_DisableExternalAccountBinding_Handler,
+		},
+		{
+			MethodName: "PutAccessAction",
+			Handler:    _AccessManagerService_PutAccessAction_Handler,
+		},
+		{
+			MethodName: "PutAccessRule",
+			Handler:    _AccessManagerService_PutAccessRule_Handler,
+		},
+		{
+			MethodName: "DisableAccessRule",
+			Handler:    _AccessManagerService_DisableAccessRule_Handler,
+		},
+		{
+			MethodName: "ResolveExternalAccountUsage",
+			Handler:    _AccessManagerService_ResolveExternalAccountUsage_Handler,
+		},
+		{
 			MethodName: "CheckAccess",
 			Handler:    _AccessManagerService_CheckAccess_Handler,
 		},
@@ -226,8 +1118,12 @@ var AccessManagerService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _AccessManagerService_ExplainAccess_Handler,
 		},
 		{
-			MethodName: "ResolveExternalAccountUsage",
-			Handler:    _AccessManagerService_ResolveExternalAccountUsage_Handler,
+			MethodName: "ListMembershipGraph",
+			Handler:    _AccessManagerService_ListMembershipGraph_Handler,
+		},
+		{
+			MethodName: "ListPendingAccess",
+			Handler:    _AccessManagerService_ListPendingAccess_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

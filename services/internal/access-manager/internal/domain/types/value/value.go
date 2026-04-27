@@ -59,6 +59,8 @@ type AccessEventPayload struct {
 	OrganizationID           string `json:"organization_id,omitempty"`
 	Kind                     string `json:"kind,omitempty"`
 	Status                   string `json:"status,omitempty"`
+	OldStatus                string `json:"old_status,omitempty"`
+	NewStatus                string `json:"new_status,omitempty"`
 	Version                  int64  `json:"version,omitempty"`
 	GroupID                  string `json:"group_id,omitempty"`
 	ScopeType                string `json:"scope_type,omitempty"`
@@ -72,10 +74,13 @@ type AccessEventPayload struct {
 	MatchType                string `json:"match_type,omitempty"`
 	UserID                   string `json:"user_id,omitempty"`
 	IdentityID               string `json:"identity_id,omitempty"`
+	IdentityProvider         string `json:"identity_provider,omitempty"`
 	ExternalProviderID       string `json:"external_provider_id,omitempty"`
 	Slug                     string `json:"slug,omitempty"`
 	ExternalAccountID        string `json:"external_account_id,omitempty"`
 	AccountType              string `json:"account_type,omitempty"`
+	SecretBindingRefID       string `json:"secret_binding_ref_id,omitempty"`
+	StoreType                string `json:"store_type,omitempty"`
 	ExternalAccountBindingID string `json:"external_account_binding_id,omitempty"`
 	UsageScopeType           string `json:"usage_scope_type,omitempty"`
 	UsageScopeID             string `json:"usage_scope_id,omitempty"`

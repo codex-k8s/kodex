@@ -2,7 +2,8 @@ asyncapi: 3.0.0
 info:
   title: kodex access-manager events
   version: 1.0.0
-  description: Domain events published by access-manager through the platform outbox.
+  description: Stable v1 event contract published by access-manager through the platform outbox.
+x-kodex-contract-status: stable-v1
 channels:
   accessEvents:
     address: access.events
@@ -20,92 +21,294 @@ components:
   messages:
     AccessEvent:
       name: AccessEvent
-      title: Access domain event
+      title: Access domain event envelope
       payload:
-        $ref: '#/components/schemas/AccessEventPayload'
+        $ref: '#/components/schemas/AccessEventEnvelope'
   schemas:
-    AccessEventPayload:
+    AccessEventEnvelope:
       type: object
       additionalProperties: false
       properties:
         event_id:
           type: string
           format: uuid
+        event_type:
+          $ref: '#/components/schemas/AccessEventType'
+        schema_version:
+          type: integer
+          minimum: 1
+        aggregate_type:
+          type: string
+        aggregate_id:
+          type: string
+          format: uuid
         occurred_at:
           type: string
           format: date-time
-        organization_id:
-          type: string
-          format: uuid
-        kind:
-          type: string
-        status:
-          type: string
-        user_id:
-          type: string
-          format: uuid
-        group_id:
-          type: string
-          format: uuid
-        membership_id:
-          type: string
-          format: uuid
-        subject_type:
-          type: string
-        subject_id:
-          type: string
-        target_type:
-          type: string
-        target_id:
-          type: string
-        allowlist_entry_id:
-          type: string
-          format: uuid
-        match_type:
-          type: string
-        identity_id:
-          type: string
-          format: uuid
-        external_provider_id:
-          type: string
-          format: uuid
-        slug:
-          type: string
-        external_account_id:
-          type: string
-          format: uuid
-        account_type:
-          type: string
-        external_account_binding_id:
-          type: string
-          format: uuid
-        scope_type:
-          type: string
-        scope_id:
-          type: string
-        usage_scope_type:
-          type: string
-        usage_scope_id:
-          type: string
-        access_action_id:
-          type: string
-          format: uuid
-        access_rule_id:
-          type: string
-          format: uuid
-        effect:
-          type: string
-        access_decision_audit_id:
-          type: string
-          format: uuid
-        action_key:
-          type: string
-        decision:
-          type: string
-          enum: [allow, deny, pending]
-        reason_code:
-          type: string
-        version:
-          type: integer
-          format: int64
-      required: [event_id, occurred_at]
+        payload:
+          oneOf:
+            - $ref: '#/components/schemas/OrganizationCreatedPayload'
+            - $ref: '#/components/schemas/OrganizationUpdatedPayload'
+            - $ref: '#/components/schemas/OrganizationSuspendedPayload'
+            - $ref: '#/components/schemas/OrganizationArchivedPayload'
+            - $ref: '#/components/schemas/UserCreatedPayload'
+            - $ref: '#/components/schemas/UserUpdatedPayload'
+            - $ref: '#/components/schemas/UserIdentityLinkedPayload'
+            - $ref: '#/components/schemas/UserStatusChangedPayload'
+            - $ref: '#/components/schemas/AllowlistEntryCreatedPayload'
+            - $ref: '#/components/schemas/AllowlistEntryUpdatedPayload'
+            - $ref: '#/components/schemas/AllowlistEntryDisabledPayload'
+            - $ref: '#/components/schemas/GroupCreatedPayload'
+            - $ref: '#/components/schemas/GroupUpdatedPayload'
+            - $ref: '#/components/schemas/GroupDisabledPayload'
+            - $ref: '#/components/schemas/MembershipCreatedPayload'
+            - $ref: '#/components/schemas/MembershipUpdatedPayload'
+            - $ref: '#/components/schemas/MembershipDisabledPayload'
+            - $ref: '#/components/schemas/ExternalProviderCreatedPayload'
+            - $ref: '#/components/schemas/ExternalProviderUpdatedPayload'
+            - $ref: '#/components/schemas/ExternalProviderDisabledPayload'
+            - $ref: '#/components/schemas/ExternalAccountCreatedPayload'
+            - $ref: '#/components/schemas/ExternalAccountUpdatedPayload'
+            - $ref: '#/components/schemas/ExternalAccountStatusChangedPayload'
+            - $ref: '#/components/schemas/ExternalAccountSecretRefChangedPayload'
+            - $ref: '#/components/schemas/ExternalAccountBindingCreatedPayload'
+            - $ref: '#/components/schemas/ExternalAccountBindingUpdatedPayload'
+            - $ref: '#/components/schemas/ExternalAccountBindingDisabledPayload'
+            - $ref: '#/components/schemas/SecretBindingRefCreatedPayload'
+            - $ref: '#/components/schemas/SecretBindingRefRotatedPayload'
+            - $ref: '#/components/schemas/SecretBindingRefDisabledPayload'
+            - $ref: '#/components/schemas/AccessActionCreatedPayload'
+            - $ref: '#/components/schemas/AccessActionUpdatedPayload'
+            - $ref: '#/components/schemas/AccessActionDisabledPayload'
+            - $ref: '#/components/schemas/AccessRuleCreatedPayload'
+            - $ref: '#/components/schemas/AccessRuleUpdatedPayload'
+            - $ref: '#/components/schemas/AccessRuleDisabledPayload'
+            - $ref: '#/components/schemas/AccessDecisionRecordedPayload'
+      required: [event_id, event_type, schema_version, aggregate_type, aggregate_id, occurred_at, payload]
+    AccessEventType:
+      type: string
+      enum:
+        - access.organization.created
+        - access.organization.updated
+        - access.organization.suspended
+        - access.organization.archived
+        - access.user.created
+        - access.user.updated
+        - access.user.identity_linked
+        - access.user.status_changed
+        - access.allowlist_entry.created
+        - access.allowlist_entry.updated
+        - access.allowlist_entry.disabled
+        - access.group.created
+        - access.group.updated
+        - access.group.disabled
+        - access.membership.created
+        - access.membership.updated
+        - access.membership.disabled
+        - access.external_provider.created
+        - access.external_provider.updated
+        - access.external_provider.disabled
+        - access.external_account.created
+        - access.external_account.updated
+        - access.external_account.status_changed
+        - access.external_account.secret_ref_changed
+        - access.external_account_binding.created
+        - access.external_account_binding.updated
+        - access.external_account_binding.disabled
+        - access.secret_binding_ref.created
+        - access.secret_binding_ref.rotated
+        - access.secret_binding_ref.disabled
+        - access.access_action.created
+        - access.access_action.updated
+        - access.access_action.disabled
+        - access.access_rule.created
+        - access.access_rule.updated
+        - access.access_rule.disabled
+        - access.access_decision.recorded
+    AccessEventPayload:
+      type: object
+      additionalProperties: false
+      properties:
+        organization_id: {type: string, format: uuid}
+        kind: {type: string}
+        status: {type: string}
+        old_status: {type: string}
+        new_status: {type: string}
+        user_id: {type: string, format: uuid}
+        identity_id: {type: string, format: uuid}
+        identity_provider: {type: string}
+        group_id: {type: string, format: uuid}
+        scope_type: {type: string}
+        scope_id: {type: string}
+        membership_id: {type: string, format: uuid}
+        subject_type: {type: string}
+        subject_id: {type: string}
+        target_type: {type: string}
+        target_id: {type: string}
+        allowlist_entry_id: {type: string, format: uuid}
+        match_type: {type: string}
+        external_provider_id: {type: string, format: uuid}
+        slug: {type: string}
+        external_account_id: {type: string, format: uuid}
+        account_type: {type: string}
+        secret_binding_ref_id: {type: string, format: uuid}
+        store_type: {type: string}
+        external_account_binding_id: {type: string, format: uuid}
+        usage_scope_type: {type: string}
+        usage_scope_id: {type: string}
+        access_action_id: {type: string, format: uuid}
+        action_key: {type: string}
+        access_rule_id: {type: string, format: uuid}
+        effect: {type: string, enum: [allow, deny]}
+        access_decision_audit_id: {type: string, format: uuid}
+        decision: {type: string, enum: [allow, deny, pending]}
+        reason_code: {type: string}
+        version: {type: integer, format: int64}
+    OrganizationCreatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [organization_id, kind, status, version]
+    OrganizationUpdatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [organization_id, version]
+    OrganizationSuspendedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [organization_id, reason_code, version]
+    OrganizationArchivedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [organization_id, reason_code, version]
+    UserCreatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [user_id, status, version]
+    UserUpdatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [user_id, version]
+    UserIdentityLinkedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [user_id, identity_id, identity_provider, version]
+    UserStatusChangedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [user_id, old_status, new_status, reason_code, version]
+    AllowlistEntryCreatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [allowlist_entry_id, match_type, version]
+    AllowlistEntryUpdatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [allowlist_entry_id, version]
+    AllowlistEntryDisabledPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [allowlist_entry_id, reason_code, version]
+    GroupCreatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [group_id, scope_type, version]
+    GroupUpdatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [group_id, version]
+    GroupDisabledPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [group_id, reason_code, version]
+    MembershipCreatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [membership_id, subject_type, subject_id, target_type, target_id, version]
+    MembershipUpdatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [membership_id, version]
+    MembershipDisabledPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [membership_id, reason_code, version]
+    ExternalProviderCreatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [external_provider_id, slug, version]
+    ExternalProviderUpdatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [external_provider_id, version]
+    ExternalProviderDisabledPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [external_provider_id, reason_code, version]
+    ExternalAccountCreatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [external_account_id, external_provider_id, account_type, version]
+    ExternalAccountUpdatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [external_account_id, version]
+    ExternalAccountStatusChangedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [external_account_id, old_status, new_status, reason_code, version]
+    ExternalAccountSecretRefChangedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [external_account_id, secret_binding_ref_id, version]
+    ExternalAccountBindingCreatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [external_account_binding_id, external_account_id, usage_scope_type, usage_scope_id, version]
+    ExternalAccountBindingUpdatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [external_account_binding_id, version]
+    ExternalAccountBindingDisabledPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [external_account_binding_id, reason_code, version]
+    SecretBindingRefCreatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [secret_binding_ref_id, store_type, version]
+    SecretBindingRefRotatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [secret_binding_ref_id, version]
+    SecretBindingRefDisabledPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [secret_binding_ref_id, reason_code, version]
+    AccessActionCreatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [access_action_id, action_key, version]
+    AccessActionUpdatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [access_action_id, version]
+    AccessActionDisabledPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [access_action_id, reason_code, version]
+    AccessRuleCreatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [access_rule_id, effect, action_key, scope_type, scope_id, version]
+    AccessRuleUpdatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [access_rule_id, version]
+    AccessRuleDisabledPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [access_rule_id, reason_code, version]
+    AccessDecisionRecordedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AccessEventPayload'
+        - required: [access_decision_audit_id, subject_type, subject_id, action_key, decision, reason_code]

@@ -21,16 +21,1177 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// AccessDecision is the closed set of access decision results.
+type AccessDecision int32
+
+const (
+	AccessDecision_ACCESS_DECISION_UNSPECIFIED AccessDecision = 0
+	AccessDecision_ACCESS_DECISION_ALLOW       AccessDecision = 1
+	AccessDecision_ACCESS_DECISION_DENY        AccessDecision = 2
+	AccessDecision_ACCESS_DECISION_PENDING     AccessDecision = 3
+)
+
+// Enum value maps for AccessDecision.
+var (
+	AccessDecision_name = map[int32]string{
+		0: "ACCESS_DECISION_UNSPECIFIED",
+		1: "ACCESS_DECISION_ALLOW",
+		2: "ACCESS_DECISION_DENY",
+		3: "ACCESS_DECISION_PENDING",
+	}
+	AccessDecision_value = map[string]int32{
+		"ACCESS_DECISION_UNSPECIFIED": 0,
+		"ACCESS_DECISION_ALLOW":       1,
+		"ACCESS_DECISION_DENY":        2,
+		"ACCESS_DECISION_PENDING":     3,
+	}
+)
+
+func (x AccessDecision) Enum() *AccessDecision {
+	p := new(AccessDecision)
+	*p = x
+	return p
+}
+
+func (x AccessDecision) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AccessDecision) Descriptor() protoreflect.EnumDescriptor {
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[0].Descriptor()
+}
+
+func (AccessDecision) Type() protoreflect.EnumType {
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[0]
+}
+
+func (x AccessDecision) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AccessDecision.Descriptor instead.
+func (AccessDecision) EnumDescriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{0}
+}
+
+// AccessEffect is the closed set of access rule effects.
+type AccessEffect int32
+
+const (
+	AccessEffect_ACCESS_EFFECT_UNSPECIFIED AccessEffect = 0
+	AccessEffect_ACCESS_EFFECT_ALLOW       AccessEffect = 1
+	AccessEffect_ACCESS_EFFECT_DENY        AccessEffect = 2
+)
+
+// Enum value maps for AccessEffect.
+var (
+	AccessEffect_name = map[int32]string{
+		0: "ACCESS_EFFECT_UNSPECIFIED",
+		1: "ACCESS_EFFECT_ALLOW",
+		2: "ACCESS_EFFECT_DENY",
+	}
+	AccessEffect_value = map[string]int32{
+		"ACCESS_EFFECT_UNSPECIFIED": 0,
+		"ACCESS_EFFECT_ALLOW":       1,
+		"ACCESS_EFFECT_DENY":        2,
+	}
+)
+
+func (x AccessEffect) Enum() *AccessEffect {
+	p := new(AccessEffect)
+	*p = x
+	return p
+}
+
+func (x AccessEffect) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AccessEffect) Descriptor() protoreflect.EnumDescriptor {
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[1].Descriptor()
+}
+
+func (AccessEffect) Type() protoreflect.EnumType {
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[1]
+}
+
+func (x AccessEffect) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AccessEffect.Descriptor instead.
+func (AccessEffect) EnumDescriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{1}
+}
+
+// OrganizationKind is the closed set of organization kinds.
+type OrganizationKind int32
+
+const (
+	OrganizationKind_ORGANIZATION_KIND_UNSPECIFIED     OrganizationKind = 0
+	OrganizationKind_ORGANIZATION_KIND_OWNER           OrganizationKind = 1
+	OrganizationKind_ORGANIZATION_KIND_CLIENT          OrganizationKind = 2
+	OrganizationKind_ORGANIZATION_KIND_CONTRACTOR      OrganizationKind = 3
+	OrganizationKind_ORGANIZATION_KIND_SAAS            OrganizationKind = 4
+	OrganizationKind_ORGANIZATION_KIND_SAAS_CLIENT     OrganizationKind = 5
+	OrganizationKind_ORGANIZATION_KIND_SAAS_CONTRACTOR OrganizationKind = 6
+)
+
+// Enum value maps for OrganizationKind.
+var (
+	OrganizationKind_name = map[int32]string{
+		0: "ORGANIZATION_KIND_UNSPECIFIED",
+		1: "ORGANIZATION_KIND_OWNER",
+		2: "ORGANIZATION_KIND_CLIENT",
+		3: "ORGANIZATION_KIND_CONTRACTOR",
+		4: "ORGANIZATION_KIND_SAAS",
+		5: "ORGANIZATION_KIND_SAAS_CLIENT",
+		6: "ORGANIZATION_KIND_SAAS_CONTRACTOR",
+	}
+	OrganizationKind_value = map[string]int32{
+		"ORGANIZATION_KIND_UNSPECIFIED":     0,
+		"ORGANIZATION_KIND_OWNER":           1,
+		"ORGANIZATION_KIND_CLIENT":          2,
+		"ORGANIZATION_KIND_CONTRACTOR":      3,
+		"ORGANIZATION_KIND_SAAS":            4,
+		"ORGANIZATION_KIND_SAAS_CLIENT":     5,
+		"ORGANIZATION_KIND_SAAS_CONTRACTOR": 6,
+	}
+)
+
+func (x OrganizationKind) Enum() *OrganizationKind {
+	p := new(OrganizationKind)
+	*p = x
+	return p
+}
+
+func (x OrganizationKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (OrganizationKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[2].Descriptor()
+}
+
+func (OrganizationKind) Type() protoreflect.EnumType {
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[2]
+}
+
+func (x OrganizationKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use OrganizationKind.Descriptor instead.
+func (OrganizationKind) EnumDescriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{2}
+}
+
+// OrganizationStatus is the closed set of organization lifecycle statuses.
+type OrganizationStatus int32
+
+const (
+	OrganizationStatus_ORGANIZATION_STATUS_UNSPECIFIED OrganizationStatus = 0
+	OrganizationStatus_ORGANIZATION_STATUS_ACTIVE      OrganizationStatus = 1
+	OrganizationStatus_ORGANIZATION_STATUS_PENDING     OrganizationStatus = 2
+	OrganizationStatus_ORGANIZATION_STATUS_SUSPENDED   OrganizationStatus = 3
+	OrganizationStatus_ORGANIZATION_STATUS_ARCHIVED    OrganizationStatus = 4
+)
+
+// Enum value maps for OrganizationStatus.
+var (
+	OrganizationStatus_name = map[int32]string{
+		0: "ORGANIZATION_STATUS_UNSPECIFIED",
+		1: "ORGANIZATION_STATUS_ACTIVE",
+		2: "ORGANIZATION_STATUS_PENDING",
+		3: "ORGANIZATION_STATUS_SUSPENDED",
+		4: "ORGANIZATION_STATUS_ARCHIVED",
+	}
+	OrganizationStatus_value = map[string]int32{
+		"ORGANIZATION_STATUS_UNSPECIFIED": 0,
+		"ORGANIZATION_STATUS_ACTIVE":      1,
+		"ORGANIZATION_STATUS_PENDING":     2,
+		"ORGANIZATION_STATUS_SUSPENDED":   3,
+		"ORGANIZATION_STATUS_ARCHIVED":    4,
+	}
+)
+
+func (x OrganizationStatus) Enum() *OrganizationStatus {
+	p := new(OrganizationStatus)
+	*p = x
+	return p
+}
+
+func (x OrganizationStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (OrganizationStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[3].Descriptor()
+}
+
+func (OrganizationStatus) Type() protoreflect.EnumType {
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[3]
+}
+
+func (x OrganizationStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use OrganizationStatus.Descriptor instead.
+func (OrganizationStatus) EnumDescriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{3}
+}
+
+// UserStatus is the closed set of user lifecycle statuses.
+type UserStatus int32
+
+const (
+	UserStatus_USER_STATUS_UNSPECIFIED UserStatus = 0
+	UserStatus_USER_STATUS_ACTIVE      UserStatus = 1
+	UserStatus_USER_STATUS_PENDING     UserStatus = 2
+	UserStatus_USER_STATUS_BLOCKED     UserStatus = 3
+	UserStatus_USER_STATUS_DISABLED    UserStatus = 4
+)
+
+// Enum value maps for UserStatus.
+var (
+	UserStatus_name = map[int32]string{
+		0: "USER_STATUS_UNSPECIFIED",
+		1: "USER_STATUS_ACTIVE",
+		2: "USER_STATUS_PENDING",
+		3: "USER_STATUS_BLOCKED",
+		4: "USER_STATUS_DISABLED",
+	}
+	UserStatus_value = map[string]int32{
+		"USER_STATUS_UNSPECIFIED": 0,
+		"USER_STATUS_ACTIVE":      1,
+		"USER_STATUS_PENDING":     2,
+		"USER_STATUS_BLOCKED":     3,
+		"USER_STATUS_DISABLED":    4,
+	}
+)
+
+func (x UserStatus) Enum() *UserStatus {
+	p := new(UserStatus)
+	*p = x
+	return p
+}
+
+func (x UserStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (UserStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[4].Descriptor()
+}
+
+func (UserStatus) Type() protoreflect.EnumType {
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[4]
+}
+
+func (x UserStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use UserStatus.Descriptor instead.
+func (UserStatus) EnumDescriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{4}
+}
+
+// GroupScopeType is the closed set of group scopes.
+type GroupScopeType int32
+
+const (
+	GroupScopeType_GROUP_SCOPE_TYPE_UNSPECIFIED  GroupScopeType = 0
+	GroupScopeType_GROUP_SCOPE_TYPE_GLOBAL       GroupScopeType = 1
+	GroupScopeType_GROUP_SCOPE_TYPE_ORGANIZATION GroupScopeType = 2
+)
+
+// Enum value maps for GroupScopeType.
+var (
+	GroupScopeType_name = map[int32]string{
+		0: "GROUP_SCOPE_TYPE_UNSPECIFIED",
+		1: "GROUP_SCOPE_TYPE_GLOBAL",
+		2: "GROUP_SCOPE_TYPE_ORGANIZATION",
+	}
+	GroupScopeType_value = map[string]int32{
+		"GROUP_SCOPE_TYPE_UNSPECIFIED":  0,
+		"GROUP_SCOPE_TYPE_GLOBAL":       1,
+		"GROUP_SCOPE_TYPE_ORGANIZATION": 2,
+	}
+)
+
+func (x GroupScopeType) Enum() *GroupScopeType {
+	p := new(GroupScopeType)
+	*p = x
+	return p
+}
+
+func (x GroupScopeType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (GroupScopeType) Descriptor() protoreflect.EnumDescriptor {
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[5].Descriptor()
+}
+
+func (GroupScopeType) Type() protoreflect.EnumType {
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[5]
+}
+
+func (x GroupScopeType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use GroupScopeType.Descriptor instead.
+func (GroupScopeType) EnumDescriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{5}
+}
+
+// GroupStatus is the closed set of group lifecycle statuses.
+type GroupStatus int32
+
+const (
+	GroupStatus_GROUP_STATUS_UNSPECIFIED GroupStatus = 0
+	GroupStatus_GROUP_STATUS_ACTIVE      GroupStatus = 1
+	GroupStatus_GROUP_STATUS_DISABLED    GroupStatus = 2
+	GroupStatus_GROUP_STATUS_ARCHIVED    GroupStatus = 3
+)
+
+// Enum value maps for GroupStatus.
+var (
+	GroupStatus_name = map[int32]string{
+		0: "GROUP_STATUS_UNSPECIFIED",
+		1: "GROUP_STATUS_ACTIVE",
+		2: "GROUP_STATUS_DISABLED",
+		3: "GROUP_STATUS_ARCHIVED",
+	}
+	GroupStatus_value = map[string]int32{
+		"GROUP_STATUS_UNSPECIFIED": 0,
+		"GROUP_STATUS_ACTIVE":      1,
+		"GROUP_STATUS_DISABLED":    2,
+		"GROUP_STATUS_ARCHIVED":    3,
+	}
+)
+
+func (x GroupStatus) Enum() *GroupStatus {
+	p := new(GroupStatus)
+	*p = x
+	return p
+}
+
+func (x GroupStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (GroupStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[6].Descriptor()
+}
+
+func (GroupStatus) Type() protoreflect.EnumType {
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[6]
+}
+
+func (x GroupStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use GroupStatus.Descriptor instead.
+func (GroupStatus) EnumDescriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{6}
+}
+
+// MembershipSubjectType is the closed set of membership subject types.
+type MembershipSubjectType int32
+
+const (
+	MembershipSubjectType_MEMBERSHIP_SUBJECT_TYPE_UNSPECIFIED      MembershipSubjectType = 0
+	MembershipSubjectType_MEMBERSHIP_SUBJECT_TYPE_USER             MembershipSubjectType = 1
+	MembershipSubjectType_MEMBERSHIP_SUBJECT_TYPE_GROUP            MembershipSubjectType = 2
+	MembershipSubjectType_MEMBERSHIP_SUBJECT_TYPE_EXTERNAL_ACCOUNT MembershipSubjectType = 3
+)
+
+// Enum value maps for MembershipSubjectType.
+var (
+	MembershipSubjectType_name = map[int32]string{
+		0: "MEMBERSHIP_SUBJECT_TYPE_UNSPECIFIED",
+		1: "MEMBERSHIP_SUBJECT_TYPE_USER",
+		2: "MEMBERSHIP_SUBJECT_TYPE_GROUP",
+		3: "MEMBERSHIP_SUBJECT_TYPE_EXTERNAL_ACCOUNT",
+	}
+	MembershipSubjectType_value = map[string]int32{
+		"MEMBERSHIP_SUBJECT_TYPE_UNSPECIFIED":      0,
+		"MEMBERSHIP_SUBJECT_TYPE_USER":             1,
+		"MEMBERSHIP_SUBJECT_TYPE_GROUP":            2,
+		"MEMBERSHIP_SUBJECT_TYPE_EXTERNAL_ACCOUNT": 3,
+	}
+)
+
+func (x MembershipSubjectType) Enum() *MembershipSubjectType {
+	p := new(MembershipSubjectType)
+	*p = x
+	return p
+}
+
+func (x MembershipSubjectType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (MembershipSubjectType) Descriptor() protoreflect.EnumDescriptor {
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[7].Descriptor()
+}
+
+func (MembershipSubjectType) Type() protoreflect.EnumType {
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[7]
+}
+
+func (x MembershipSubjectType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use MembershipSubjectType.Descriptor instead.
+func (MembershipSubjectType) EnumDescriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{7}
+}
+
+// MembershipTargetType is the closed set of membership target types.
+type MembershipTargetType int32
+
+const (
+	MembershipTargetType_MEMBERSHIP_TARGET_TYPE_UNSPECIFIED  MembershipTargetType = 0
+	MembershipTargetType_MEMBERSHIP_TARGET_TYPE_ORGANIZATION MembershipTargetType = 1
+	MembershipTargetType_MEMBERSHIP_TARGET_TYPE_GROUP        MembershipTargetType = 2
+)
+
+// Enum value maps for MembershipTargetType.
+var (
+	MembershipTargetType_name = map[int32]string{
+		0: "MEMBERSHIP_TARGET_TYPE_UNSPECIFIED",
+		1: "MEMBERSHIP_TARGET_TYPE_ORGANIZATION",
+		2: "MEMBERSHIP_TARGET_TYPE_GROUP",
+	}
+	MembershipTargetType_value = map[string]int32{
+		"MEMBERSHIP_TARGET_TYPE_UNSPECIFIED":  0,
+		"MEMBERSHIP_TARGET_TYPE_ORGANIZATION": 1,
+		"MEMBERSHIP_TARGET_TYPE_GROUP":        2,
+	}
+)
+
+func (x MembershipTargetType) Enum() *MembershipTargetType {
+	p := new(MembershipTargetType)
+	*p = x
+	return p
+}
+
+func (x MembershipTargetType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (MembershipTargetType) Descriptor() protoreflect.EnumDescriptor {
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[8].Descriptor()
+}
+
+func (MembershipTargetType) Type() protoreflect.EnumType {
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[8]
+}
+
+func (x MembershipTargetType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use MembershipTargetType.Descriptor instead.
+func (MembershipTargetType) EnumDescriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{8}
+}
+
+// MembershipStatus is the closed set of membership statuses.
+type MembershipStatus int32
+
+const (
+	MembershipStatus_MEMBERSHIP_STATUS_UNSPECIFIED MembershipStatus = 0
+	MembershipStatus_MEMBERSHIP_STATUS_ACTIVE      MembershipStatus = 1
+	MembershipStatus_MEMBERSHIP_STATUS_PENDING     MembershipStatus = 2
+	MembershipStatus_MEMBERSHIP_STATUS_BLOCKED     MembershipStatus = 3
+	MembershipStatus_MEMBERSHIP_STATUS_DISABLED    MembershipStatus = 4
+)
+
+// Enum value maps for MembershipStatus.
+var (
+	MembershipStatus_name = map[int32]string{
+		0: "MEMBERSHIP_STATUS_UNSPECIFIED",
+		1: "MEMBERSHIP_STATUS_ACTIVE",
+		2: "MEMBERSHIP_STATUS_PENDING",
+		3: "MEMBERSHIP_STATUS_BLOCKED",
+		4: "MEMBERSHIP_STATUS_DISABLED",
+	}
+	MembershipStatus_value = map[string]int32{
+		"MEMBERSHIP_STATUS_UNSPECIFIED": 0,
+		"MEMBERSHIP_STATUS_ACTIVE":      1,
+		"MEMBERSHIP_STATUS_PENDING":     2,
+		"MEMBERSHIP_STATUS_BLOCKED":     3,
+		"MEMBERSHIP_STATUS_DISABLED":    4,
+	}
+)
+
+func (x MembershipStatus) Enum() *MembershipStatus {
+	p := new(MembershipStatus)
+	*p = x
+	return p
+}
+
+func (x MembershipStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (MembershipStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[9].Descriptor()
+}
+
+func (MembershipStatus) Type() protoreflect.EnumType {
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[9]
+}
+
+func (x MembershipStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use MembershipStatus.Descriptor instead.
+func (MembershipStatus) EnumDescriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{9}
+}
+
+// MembershipSource is the closed set of membership source types.
+type MembershipSource int32
+
+const (
+	MembershipSource_MEMBERSHIP_SOURCE_UNSPECIFIED MembershipSource = 0
+	MembershipSource_MEMBERSHIP_SOURCE_MANUAL      MembershipSource = 1
+	MembershipSource_MEMBERSHIP_SOURCE_BOOTSTRAP   MembershipSource = 2
+	MembershipSource_MEMBERSHIP_SOURCE_SYNC        MembershipSource = 3
+	MembershipSource_MEMBERSHIP_SOURCE_SYSTEM      MembershipSource = 4
+)
+
+// Enum value maps for MembershipSource.
+var (
+	MembershipSource_name = map[int32]string{
+		0: "MEMBERSHIP_SOURCE_UNSPECIFIED",
+		1: "MEMBERSHIP_SOURCE_MANUAL",
+		2: "MEMBERSHIP_SOURCE_BOOTSTRAP",
+		3: "MEMBERSHIP_SOURCE_SYNC",
+		4: "MEMBERSHIP_SOURCE_SYSTEM",
+	}
+	MembershipSource_value = map[string]int32{
+		"MEMBERSHIP_SOURCE_UNSPECIFIED": 0,
+		"MEMBERSHIP_SOURCE_MANUAL":      1,
+		"MEMBERSHIP_SOURCE_BOOTSTRAP":   2,
+		"MEMBERSHIP_SOURCE_SYNC":        3,
+		"MEMBERSHIP_SOURCE_SYSTEM":      4,
+	}
+)
+
+func (x MembershipSource) Enum() *MembershipSource {
+	p := new(MembershipSource)
+	*p = x
+	return p
+}
+
+func (x MembershipSource) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (MembershipSource) Descriptor() protoreflect.EnumDescriptor {
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[10].Descriptor()
+}
+
+func (MembershipSource) Type() protoreflect.EnumType {
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[10]
+}
+
+func (x MembershipSource) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use MembershipSource.Descriptor instead.
+func (MembershipSource) EnumDescriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{10}
+}
+
+// AllowlistMatchType is the closed set of allowlist matching modes.
+type AllowlistMatchType int32
+
+const (
+	AllowlistMatchType_ALLOWLIST_MATCH_TYPE_UNSPECIFIED AllowlistMatchType = 0
+	AllowlistMatchType_ALLOWLIST_MATCH_TYPE_EMAIL       AllowlistMatchType = 1
+	AllowlistMatchType_ALLOWLIST_MATCH_TYPE_DOMAIN      AllowlistMatchType = 2
+)
+
+// Enum value maps for AllowlistMatchType.
+var (
+	AllowlistMatchType_name = map[int32]string{
+		0: "ALLOWLIST_MATCH_TYPE_UNSPECIFIED",
+		1: "ALLOWLIST_MATCH_TYPE_EMAIL",
+		2: "ALLOWLIST_MATCH_TYPE_DOMAIN",
+	}
+	AllowlistMatchType_value = map[string]int32{
+		"ALLOWLIST_MATCH_TYPE_UNSPECIFIED": 0,
+		"ALLOWLIST_MATCH_TYPE_EMAIL":       1,
+		"ALLOWLIST_MATCH_TYPE_DOMAIN":      2,
+	}
+)
+
+func (x AllowlistMatchType) Enum() *AllowlistMatchType {
+	p := new(AllowlistMatchType)
+	*p = x
+	return p
+}
+
+func (x AllowlistMatchType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AllowlistMatchType) Descriptor() protoreflect.EnumDescriptor {
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[11].Descriptor()
+}
+
+func (AllowlistMatchType) Type() protoreflect.EnumType {
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[11]
+}
+
+func (x AllowlistMatchType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AllowlistMatchType.Descriptor instead.
+func (AllowlistMatchType) EnumDescriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{11}
+}
+
+// AllowlistStatus is the closed set of allowlist entry statuses.
+type AllowlistStatus int32
+
+const (
+	AllowlistStatus_ALLOWLIST_STATUS_UNSPECIFIED AllowlistStatus = 0
+	AllowlistStatus_ALLOWLIST_STATUS_ACTIVE      AllowlistStatus = 1
+	AllowlistStatus_ALLOWLIST_STATUS_DISABLED    AllowlistStatus = 2
+)
+
+// Enum value maps for AllowlistStatus.
+var (
+	AllowlistStatus_name = map[int32]string{
+		0: "ALLOWLIST_STATUS_UNSPECIFIED",
+		1: "ALLOWLIST_STATUS_ACTIVE",
+		2: "ALLOWLIST_STATUS_DISABLED",
+	}
+	AllowlistStatus_value = map[string]int32{
+		"ALLOWLIST_STATUS_UNSPECIFIED": 0,
+		"ALLOWLIST_STATUS_ACTIVE":      1,
+		"ALLOWLIST_STATUS_DISABLED":    2,
+	}
+)
+
+func (x AllowlistStatus) Enum() *AllowlistStatus {
+	p := new(AllowlistStatus)
+	*p = x
+	return p
+}
+
+func (x AllowlistStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AllowlistStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[12].Descriptor()
+}
+
+func (AllowlistStatus) Type() protoreflect.EnumType {
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[12]
+}
+
+func (x AllowlistStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AllowlistStatus.Descriptor instead.
+func (AllowlistStatus) EnumDescriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{12}
+}
+
+// ExternalProviderKind is the closed set of external provider kinds.
+type ExternalProviderKind int32
+
+const (
+	ExternalProviderKind_EXTERNAL_PROVIDER_KIND_UNSPECIFIED ExternalProviderKind = 0
+	ExternalProviderKind_EXTERNAL_PROVIDER_KIND_REPOSITORY  ExternalProviderKind = 1
+	ExternalProviderKind_EXTERNAL_PROVIDER_KIND_IDENTITY    ExternalProviderKind = 2
+	ExternalProviderKind_EXTERNAL_PROVIDER_KIND_MODEL       ExternalProviderKind = 3
+	ExternalProviderKind_EXTERNAL_PROVIDER_KIND_MESSAGING   ExternalProviderKind = 4
+	ExternalProviderKind_EXTERNAL_PROVIDER_KIND_PAYMENTS    ExternalProviderKind = 5
+	ExternalProviderKind_EXTERNAL_PROVIDER_KIND_OTHER       ExternalProviderKind = 6
+)
+
+// Enum value maps for ExternalProviderKind.
+var (
+	ExternalProviderKind_name = map[int32]string{
+		0: "EXTERNAL_PROVIDER_KIND_UNSPECIFIED",
+		1: "EXTERNAL_PROVIDER_KIND_REPOSITORY",
+		2: "EXTERNAL_PROVIDER_KIND_IDENTITY",
+		3: "EXTERNAL_PROVIDER_KIND_MODEL",
+		4: "EXTERNAL_PROVIDER_KIND_MESSAGING",
+		5: "EXTERNAL_PROVIDER_KIND_PAYMENTS",
+		6: "EXTERNAL_PROVIDER_KIND_OTHER",
+	}
+	ExternalProviderKind_value = map[string]int32{
+		"EXTERNAL_PROVIDER_KIND_UNSPECIFIED": 0,
+		"EXTERNAL_PROVIDER_KIND_REPOSITORY":  1,
+		"EXTERNAL_PROVIDER_KIND_IDENTITY":    2,
+		"EXTERNAL_PROVIDER_KIND_MODEL":       3,
+		"EXTERNAL_PROVIDER_KIND_MESSAGING":   4,
+		"EXTERNAL_PROVIDER_KIND_PAYMENTS":    5,
+		"EXTERNAL_PROVIDER_KIND_OTHER":       6,
+	}
+)
+
+func (x ExternalProviderKind) Enum() *ExternalProviderKind {
+	p := new(ExternalProviderKind)
+	*p = x
+	return p
+}
+
+func (x ExternalProviderKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ExternalProviderKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[13].Descriptor()
+}
+
+func (ExternalProviderKind) Type() protoreflect.EnumType {
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[13]
+}
+
+func (x ExternalProviderKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ExternalProviderKind.Descriptor instead.
+func (ExternalProviderKind) EnumDescriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{13}
+}
+
+// ExternalProviderStatus is the closed set of provider statuses.
+type ExternalProviderStatus int32
+
+const (
+	ExternalProviderStatus_EXTERNAL_PROVIDER_STATUS_UNSPECIFIED ExternalProviderStatus = 0
+	ExternalProviderStatus_EXTERNAL_PROVIDER_STATUS_ACTIVE      ExternalProviderStatus = 1
+	ExternalProviderStatus_EXTERNAL_PROVIDER_STATUS_DISABLED    ExternalProviderStatus = 2
+)
+
+// Enum value maps for ExternalProviderStatus.
+var (
+	ExternalProviderStatus_name = map[int32]string{
+		0: "EXTERNAL_PROVIDER_STATUS_UNSPECIFIED",
+		1: "EXTERNAL_PROVIDER_STATUS_ACTIVE",
+		2: "EXTERNAL_PROVIDER_STATUS_DISABLED",
+	}
+	ExternalProviderStatus_value = map[string]int32{
+		"EXTERNAL_PROVIDER_STATUS_UNSPECIFIED": 0,
+		"EXTERNAL_PROVIDER_STATUS_ACTIVE":      1,
+		"EXTERNAL_PROVIDER_STATUS_DISABLED":    2,
+	}
+)
+
+func (x ExternalProviderStatus) Enum() *ExternalProviderStatus {
+	p := new(ExternalProviderStatus)
+	*p = x
+	return p
+}
+
+func (x ExternalProviderStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ExternalProviderStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[14].Descriptor()
+}
+
+func (ExternalProviderStatus) Type() protoreflect.EnumType {
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[14]
+}
+
+func (x ExternalProviderStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ExternalProviderStatus.Descriptor instead.
+func (ExternalProviderStatus) EnumDescriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{14}
+}
+
+// ExternalAccountType is the closed set of external account types.
+type ExternalAccountType int32
+
+const (
+	ExternalAccountType_EXTERNAL_ACCOUNT_TYPE_UNSPECIFIED ExternalAccountType = 0
+	ExternalAccountType_EXTERNAL_ACCOUNT_TYPE_USER        ExternalAccountType = 1
+	ExternalAccountType_EXTERNAL_ACCOUNT_TYPE_BOT         ExternalAccountType = 2
+	ExternalAccountType_EXTERNAL_ACCOUNT_TYPE_SERVICE     ExternalAccountType = 3
+	ExternalAccountType_EXTERNAL_ACCOUNT_TYPE_INTEGRATION ExternalAccountType = 4
+)
+
+// Enum value maps for ExternalAccountType.
+var (
+	ExternalAccountType_name = map[int32]string{
+		0: "EXTERNAL_ACCOUNT_TYPE_UNSPECIFIED",
+		1: "EXTERNAL_ACCOUNT_TYPE_USER",
+		2: "EXTERNAL_ACCOUNT_TYPE_BOT",
+		3: "EXTERNAL_ACCOUNT_TYPE_SERVICE",
+		4: "EXTERNAL_ACCOUNT_TYPE_INTEGRATION",
+	}
+	ExternalAccountType_value = map[string]int32{
+		"EXTERNAL_ACCOUNT_TYPE_UNSPECIFIED": 0,
+		"EXTERNAL_ACCOUNT_TYPE_USER":        1,
+		"EXTERNAL_ACCOUNT_TYPE_BOT":         2,
+		"EXTERNAL_ACCOUNT_TYPE_SERVICE":     3,
+		"EXTERNAL_ACCOUNT_TYPE_INTEGRATION": 4,
+	}
+)
+
+func (x ExternalAccountType) Enum() *ExternalAccountType {
+	p := new(ExternalAccountType)
+	*p = x
+	return p
+}
+
+func (x ExternalAccountType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ExternalAccountType) Descriptor() protoreflect.EnumDescriptor {
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[15].Descriptor()
+}
+
+func (ExternalAccountType) Type() protoreflect.EnumType {
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[15]
+}
+
+func (x ExternalAccountType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ExternalAccountType.Descriptor instead.
+func (ExternalAccountType) EnumDescriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{15}
+}
+
+// ExternalAccountStatus is the closed set of external account statuses.
+type ExternalAccountStatus int32
+
+const (
+	ExternalAccountStatus_EXTERNAL_ACCOUNT_STATUS_UNSPECIFIED  ExternalAccountStatus = 0
+	ExternalAccountStatus_EXTERNAL_ACCOUNT_STATUS_ACTIVE       ExternalAccountStatus = 1
+	ExternalAccountStatus_EXTERNAL_ACCOUNT_STATUS_PENDING      ExternalAccountStatus = 2
+	ExternalAccountStatus_EXTERNAL_ACCOUNT_STATUS_NEEDS_REAUTH ExternalAccountStatus = 3
+	ExternalAccountStatus_EXTERNAL_ACCOUNT_STATUS_LIMITED      ExternalAccountStatus = 4
+	ExternalAccountStatus_EXTERNAL_ACCOUNT_STATUS_BLOCKED      ExternalAccountStatus = 5
+	ExternalAccountStatus_EXTERNAL_ACCOUNT_STATUS_DISABLED     ExternalAccountStatus = 6
+)
+
+// Enum value maps for ExternalAccountStatus.
+var (
+	ExternalAccountStatus_name = map[int32]string{
+		0: "EXTERNAL_ACCOUNT_STATUS_UNSPECIFIED",
+		1: "EXTERNAL_ACCOUNT_STATUS_ACTIVE",
+		2: "EXTERNAL_ACCOUNT_STATUS_PENDING",
+		3: "EXTERNAL_ACCOUNT_STATUS_NEEDS_REAUTH",
+		4: "EXTERNAL_ACCOUNT_STATUS_LIMITED",
+		5: "EXTERNAL_ACCOUNT_STATUS_BLOCKED",
+		6: "EXTERNAL_ACCOUNT_STATUS_DISABLED",
+	}
+	ExternalAccountStatus_value = map[string]int32{
+		"EXTERNAL_ACCOUNT_STATUS_UNSPECIFIED":  0,
+		"EXTERNAL_ACCOUNT_STATUS_ACTIVE":       1,
+		"EXTERNAL_ACCOUNT_STATUS_PENDING":      2,
+		"EXTERNAL_ACCOUNT_STATUS_NEEDS_REAUTH": 3,
+		"EXTERNAL_ACCOUNT_STATUS_LIMITED":      4,
+		"EXTERNAL_ACCOUNT_STATUS_BLOCKED":      5,
+		"EXTERNAL_ACCOUNT_STATUS_DISABLED":     6,
+	}
+)
+
+func (x ExternalAccountStatus) Enum() *ExternalAccountStatus {
+	p := new(ExternalAccountStatus)
+	*p = x
+	return p
+}
+
+func (x ExternalAccountStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ExternalAccountStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[16].Descriptor()
+}
+
+func (ExternalAccountStatus) Type() protoreflect.EnumType {
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[16]
+}
+
+func (x ExternalAccountStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ExternalAccountStatus.Descriptor instead.
+func (ExternalAccountStatus) EnumDescriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{16}
+}
+
+// ExternalAccountScopeType is the closed set of external account usage scopes.
+type ExternalAccountScopeType int32
+
+const (
+	ExternalAccountScopeType_EXTERNAL_ACCOUNT_SCOPE_TYPE_UNSPECIFIED  ExternalAccountScopeType = 0
+	ExternalAccountScopeType_EXTERNAL_ACCOUNT_SCOPE_TYPE_GLOBAL       ExternalAccountScopeType = 1
+	ExternalAccountScopeType_EXTERNAL_ACCOUNT_SCOPE_TYPE_ORGANIZATION ExternalAccountScopeType = 2
+	ExternalAccountScopeType_EXTERNAL_ACCOUNT_SCOPE_TYPE_PROJECT      ExternalAccountScopeType = 3
+	ExternalAccountScopeType_EXTERNAL_ACCOUNT_SCOPE_TYPE_REPOSITORY   ExternalAccountScopeType = 4
+	ExternalAccountScopeType_EXTERNAL_ACCOUNT_SCOPE_TYPE_USER         ExternalAccountScopeType = 5
+	ExternalAccountScopeType_EXTERNAL_ACCOUNT_SCOPE_TYPE_GROUP        ExternalAccountScopeType = 6
+	ExternalAccountScopeType_EXTERNAL_ACCOUNT_SCOPE_TYPE_AGENT        ExternalAccountScopeType = 7
+	ExternalAccountScopeType_EXTERNAL_ACCOUNT_SCOPE_TYPE_AGENT_ROLE   ExternalAccountScopeType = 8
+	ExternalAccountScopeType_EXTERNAL_ACCOUNT_SCOPE_TYPE_FLOW         ExternalAccountScopeType = 9
+	ExternalAccountScopeType_EXTERNAL_ACCOUNT_SCOPE_TYPE_STAGE        ExternalAccountScopeType = 10
+	ExternalAccountScopeType_EXTERNAL_ACCOUNT_SCOPE_TYPE_PACKAGE      ExternalAccountScopeType = 11
+)
+
+// Enum value maps for ExternalAccountScopeType.
+var (
+	ExternalAccountScopeType_name = map[int32]string{
+		0:  "EXTERNAL_ACCOUNT_SCOPE_TYPE_UNSPECIFIED",
+		1:  "EXTERNAL_ACCOUNT_SCOPE_TYPE_GLOBAL",
+		2:  "EXTERNAL_ACCOUNT_SCOPE_TYPE_ORGANIZATION",
+		3:  "EXTERNAL_ACCOUNT_SCOPE_TYPE_PROJECT",
+		4:  "EXTERNAL_ACCOUNT_SCOPE_TYPE_REPOSITORY",
+		5:  "EXTERNAL_ACCOUNT_SCOPE_TYPE_USER",
+		6:  "EXTERNAL_ACCOUNT_SCOPE_TYPE_GROUP",
+		7:  "EXTERNAL_ACCOUNT_SCOPE_TYPE_AGENT",
+		8:  "EXTERNAL_ACCOUNT_SCOPE_TYPE_AGENT_ROLE",
+		9:  "EXTERNAL_ACCOUNT_SCOPE_TYPE_FLOW",
+		10: "EXTERNAL_ACCOUNT_SCOPE_TYPE_STAGE",
+		11: "EXTERNAL_ACCOUNT_SCOPE_TYPE_PACKAGE",
+	}
+	ExternalAccountScopeType_value = map[string]int32{
+		"EXTERNAL_ACCOUNT_SCOPE_TYPE_UNSPECIFIED":  0,
+		"EXTERNAL_ACCOUNT_SCOPE_TYPE_GLOBAL":       1,
+		"EXTERNAL_ACCOUNT_SCOPE_TYPE_ORGANIZATION": 2,
+		"EXTERNAL_ACCOUNT_SCOPE_TYPE_PROJECT":      3,
+		"EXTERNAL_ACCOUNT_SCOPE_TYPE_REPOSITORY":   4,
+		"EXTERNAL_ACCOUNT_SCOPE_TYPE_USER":         5,
+		"EXTERNAL_ACCOUNT_SCOPE_TYPE_GROUP":        6,
+		"EXTERNAL_ACCOUNT_SCOPE_TYPE_AGENT":        7,
+		"EXTERNAL_ACCOUNT_SCOPE_TYPE_AGENT_ROLE":   8,
+		"EXTERNAL_ACCOUNT_SCOPE_TYPE_FLOW":         9,
+		"EXTERNAL_ACCOUNT_SCOPE_TYPE_STAGE":        10,
+		"EXTERNAL_ACCOUNT_SCOPE_TYPE_PACKAGE":      11,
+	}
+)
+
+func (x ExternalAccountScopeType) Enum() *ExternalAccountScopeType {
+	p := new(ExternalAccountScopeType)
+	*p = x
+	return p
+}
+
+func (x ExternalAccountScopeType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ExternalAccountScopeType) Descriptor() protoreflect.EnumDescriptor {
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[17].Descriptor()
+}
+
+func (ExternalAccountScopeType) Type() protoreflect.EnumType {
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[17]
+}
+
+func (x ExternalAccountScopeType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ExternalAccountScopeType.Descriptor instead.
+func (ExternalAccountScopeType) EnumDescriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{17}
+}
+
+// ExternalAccountBindingStatus is the closed set of account binding statuses.
+type ExternalAccountBindingStatus int32
+
+const (
+	ExternalAccountBindingStatus_EXTERNAL_ACCOUNT_BINDING_STATUS_UNSPECIFIED ExternalAccountBindingStatus = 0
+	ExternalAccountBindingStatus_EXTERNAL_ACCOUNT_BINDING_STATUS_ACTIVE      ExternalAccountBindingStatus = 1
+	ExternalAccountBindingStatus_EXTERNAL_ACCOUNT_BINDING_STATUS_DISABLED    ExternalAccountBindingStatus = 2
+)
+
+// Enum value maps for ExternalAccountBindingStatus.
+var (
+	ExternalAccountBindingStatus_name = map[int32]string{
+		0: "EXTERNAL_ACCOUNT_BINDING_STATUS_UNSPECIFIED",
+		1: "EXTERNAL_ACCOUNT_BINDING_STATUS_ACTIVE",
+		2: "EXTERNAL_ACCOUNT_BINDING_STATUS_DISABLED",
+	}
+	ExternalAccountBindingStatus_value = map[string]int32{
+		"EXTERNAL_ACCOUNT_BINDING_STATUS_UNSPECIFIED": 0,
+		"EXTERNAL_ACCOUNT_BINDING_STATUS_ACTIVE":      1,
+		"EXTERNAL_ACCOUNT_BINDING_STATUS_DISABLED":    2,
+	}
+)
+
+func (x ExternalAccountBindingStatus) Enum() *ExternalAccountBindingStatus {
+	p := new(ExternalAccountBindingStatus)
+	*p = x
+	return p
+}
+
+func (x ExternalAccountBindingStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ExternalAccountBindingStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[18].Descriptor()
+}
+
+func (ExternalAccountBindingStatus) Type() protoreflect.EnumType {
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[18]
+}
+
+func (x ExternalAccountBindingStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ExternalAccountBindingStatus.Descriptor instead.
+func (ExternalAccountBindingStatus) EnumDescriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{18}
+}
+
+// AccessActionStatus is the closed set of access action statuses.
+type AccessActionStatus int32
+
+const (
+	AccessActionStatus_ACCESS_ACTION_STATUS_UNSPECIFIED AccessActionStatus = 0
+	AccessActionStatus_ACCESS_ACTION_STATUS_ACTIVE      AccessActionStatus = 1
+	AccessActionStatus_ACCESS_ACTION_STATUS_DISABLED    AccessActionStatus = 2
+)
+
+// Enum value maps for AccessActionStatus.
+var (
+	AccessActionStatus_name = map[int32]string{
+		0: "ACCESS_ACTION_STATUS_UNSPECIFIED",
+		1: "ACCESS_ACTION_STATUS_ACTIVE",
+		2: "ACCESS_ACTION_STATUS_DISABLED",
+	}
+	AccessActionStatus_value = map[string]int32{
+		"ACCESS_ACTION_STATUS_UNSPECIFIED": 0,
+		"ACCESS_ACTION_STATUS_ACTIVE":      1,
+		"ACCESS_ACTION_STATUS_DISABLED":    2,
+	}
+)
+
+func (x AccessActionStatus) Enum() *AccessActionStatus {
+	p := new(AccessActionStatus)
+	*p = x
+	return p
+}
+
+func (x AccessActionStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AccessActionStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[19].Descriptor()
+}
+
+func (AccessActionStatus) Type() protoreflect.EnumType {
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[19]
+}
+
+func (x AccessActionStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AccessActionStatus.Descriptor instead.
+func (AccessActionStatus) EnumDescriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{19}
+}
+
+// AccessRuleStatus is the closed set of access rule statuses.
+type AccessRuleStatus int32
+
+const (
+	AccessRuleStatus_ACCESS_RULE_STATUS_UNSPECIFIED AccessRuleStatus = 0
+	AccessRuleStatus_ACCESS_RULE_STATUS_ACTIVE      AccessRuleStatus = 1
+	AccessRuleStatus_ACCESS_RULE_STATUS_DISABLED    AccessRuleStatus = 2
+)
+
+// Enum value maps for AccessRuleStatus.
+var (
+	AccessRuleStatus_name = map[int32]string{
+		0: "ACCESS_RULE_STATUS_UNSPECIFIED",
+		1: "ACCESS_RULE_STATUS_ACTIVE",
+		2: "ACCESS_RULE_STATUS_DISABLED",
+	}
+	AccessRuleStatus_value = map[string]int32{
+		"ACCESS_RULE_STATUS_UNSPECIFIED": 0,
+		"ACCESS_RULE_STATUS_ACTIVE":      1,
+		"ACCESS_RULE_STATUS_DISABLED":    2,
+	}
+)
+
+func (x AccessRuleStatus) Enum() *AccessRuleStatus {
+	p := new(AccessRuleStatus)
+	*p = x
+	return p
+}
+
+func (x AccessRuleStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AccessRuleStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[20].Descriptor()
+}
+
+func (AccessRuleStatus) Type() protoreflect.EnumType {
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[20]
+}
+
+func (x AccessRuleStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AccessRuleStatus.Descriptor instead.
+func (AccessRuleStatus) EnumDescriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{20}
+}
+
+// CommandMeta is required for every mutating command.
 type CommandMeta struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	CommandId       string                 `protobuf:"bytes,1,opt,name=command_id,json=commandId,proto3" json:"command_id,omitempty"`
-	IdempotencyKey  string                 `protobuf:"bytes,2,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
-	ExpectedVersion int64                  `protobuf:"varint,3,opt,name=expected_version,json=expectedVersion,proto3" json:"expected_version,omitempty"`
-	Actor           *Actor                 `protobuf:"bytes,4,opt,name=actor,proto3" json:"actor,omitempty"`
-	Reason          string                 `protobuf:"bytes,5,opt,name=reason,proto3" json:"reason,omitempty"`
-	RequestId       string                 `protobuf:"bytes,6,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// command_id is a unique command identifier. Either command_id or idempotency_key is required.
+	CommandId string `protobuf:"bytes,1,opt,name=command_id,json=commandId,proto3" json:"command_id,omitempty"`
+	// idempotency_key is an idempotency key scoped by operation and actor.
+	IdempotencyKey string `protobuf:"bytes,2,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	// expected_version is present only for existing aggregate mutations.
+	ExpectedVersion *int64 `protobuf:"varint,3,opt,name=expected_version,json=expectedVersion,proto3,oneof" json:"expected_version,omitempty"`
+	// actor is the authenticated caller.
+	Actor *Actor `protobuf:"bytes,4,opt,name=actor,proto3" json:"actor,omitempty"`
+	// reason is a machine or operator reason for audit and domain events.
+	Reason string `protobuf:"bytes,5,opt,name=reason,proto3" json:"reason,omitempty"`
+	// request_id links the command to logs, traces and audit.
+	RequestId string `protobuf:"bytes,6,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	// request_context carries safe request metadata; no tokens, secrets, email or names.
+	RequestContext *RequestContext `protobuf:"bytes,7,opt,name=request_context,json=requestContext,proto3" json:"request_context,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *CommandMeta) Reset() {
@@ -78,8 +1239,8 @@ func (x *CommandMeta) GetIdempotencyKey() string {
 }
 
 func (x *CommandMeta) GetExpectedVersion() int64 {
-	if x != nil {
-		return x.ExpectedVersion
+	if x != nil && x.ExpectedVersion != nil {
+		return *x.ExpectedVersion
 	}
 	return 0
 }
@@ -105,17 +1266,100 @@ func (x *CommandMeta) GetRequestId() string {
 	return ""
 }
 
+func (x *CommandMeta) GetRequestContext() *RequestContext {
+	if x != nil {
+		return x.RequestContext
+	}
+	return nil
+}
+
+// RequestContext is safe request metadata used for audit and diagnostics.
+type RequestContext struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// source identifies caller surface, for example api-gateway, platform-mcp-server or service.
+	Source string `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
+	// trace_id links platform traces.
+	TraceId string `protobuf:"bytes,2,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
+	// session_id links a user session when available.
+	SessionId string `protobuf:"bytes,3,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	// client_ip_hash is an optional hashed client address.
+	ClientIpHash  string `protobuf:"bytes,4,opt,name=client_ip_hash,json=clientIpHash,proto3" json:"client_ip_hash,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RequestContext) Reset() {
+	*x = RequestContext{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RequestContext) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RequestContext) ProtoMessage() {}
+
+func (x *RequestContext) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RequestContext.ProtoReflect.Descriptor instead.
+func (*RequestContext) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *RequestContext) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *RequestContext) GetTraceId() string {
+	if x != nil {
+		return x.TraceId
+	}
+	return ""
+}
+
+func (x *RequestContext) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *RequestContext) GetClientIpHash() string {
+	if x != nil {
+		return x.ClientIpHash
+	}
+	return ""
+}
+
+// Actor identifies a user, service, agent or external account.
 type Actor struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Type          string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
-	Id            string                 `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// type is a subject type such as user, service, agent or external_account.
+	Type string `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
+	// id is the subject identifier in its owner domain.
+	Id            string `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Actor) Reset() {
 	*x = Actor{}
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[1]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -127,7 +1371,7 @@ func (x *Actor) String() string {
 func (*Actor) ProtoMessage() {}
 
 func (x *Actor) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[1]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -140,7 +1384,7 @@ func (x *Actor) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Actor.ProtoReflect.Descriptor instead.
 func (*Actor) Descriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{1}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *Actor) GetType() string {
@@ -157,17 +1401,20 @@ func (x *Actor) GetId() string {
 	return ""
 }
 
+// SubjectRef references an access subject.
 type SubjectRef struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Type          string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
-	Id            string                 `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// type is one of user, group, organization, external_account, agent, agent_role, flow or package.
+	Type string `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
+	// id is the subject identifier.
+	Id            string `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SubjectRef) Reset() {
 	*x = SubjectRef{}
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[2]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -179,7 +1426,7 @@ func (x *SubjectRef) String() string {
 func (*SubjectRef) ProtoMessage() {}
 
 func (x *SubjectRef) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[2]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -192,7 +1439,7 @@ func (x *SubjectRef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubjectRef.ProtoReflect.Descriptor instead.
 func (*SubjectRef) Descriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{2}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *SubjectRef) GetType() string {
@@ -209,17 +1456,20 @@ func (x *SubjectRef) GetId() string {
 	return ""
 }
 
+// ResourceRef references a protected resource.
 type ResourceRef struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Type          string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
-	Id            string                 `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// type is a resource type from the access-action catalog.
+	Type string `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
+	// id is the resource identifier in its owner domain.
+	Id            string `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ResourceRef) Reset() {
 	*x = ResourceRef{}
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[3]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -231,7 +1481,7 @@ func (x *ResourceRef) String() string {
 func (*ResourceRef) ProtoMessage() {}
 
 func (x *ResourceRef) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[3]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -244,7 +1494,7 @@ func (x *ResourceRef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResourceRef.ProtoReflect.Descriptor instead.
 func (*ResourceRef) Descriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{3}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ResourceRef) GetType() string {
@@ -261,17 +1511,20 @@ func (x *ResourceRef) GetId() string {
 	return ""
 }
 
+// ScopeRef references the scope where a rule or account binding applies.
 type ScopeRef struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Type          string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
-	Id            string                 `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// type is a scope type such as global, organization, project, repository, user, group, agent, agent_role, flow, stage or package.
+	Type string `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
+	// id is the scope identifier; global scope uses an empty id.
+	Id            string `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ScopeRef) Reset() {
 	*x = ScopeRef{}
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[4]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -283,7 +1536,7 @@ func (x *ScopeRef) String() string {
 func (*ScopeRef) ProtoMessage() {}
 
 func (x *ScopeRef) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[4]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -296,7 +1549,7 @@ func (x *ScopeRef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScopeRef.ProtoReflect.Descriptor instead.
 func (*ScopeRef) Descriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{4}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ScopeRef) GetType() string {
@@ -313,21 +1566,28 @@ func (x *ScopeRef) GetId() string {
 	return ""
 }
 
+// BootstrapUserFromIdentityRequest creates or resolves a user from SSO/OIDC identity.
 type BootstrapUserFromIdentityRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Provider      string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
-	Subject       string                 `protobuf:"bytes,2,opt,name=subject,proto3" json:"subject,omitempty"`
-	Email         string                 `protobuf:"bytes,3,opt,name=email,proto3" json:"email,omitempty"`
-	DisplayName   string                 `protobuf:"bytes,4,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
-	Locale        string                 `protobuf:"bytes,5,opt,name=locale,proto3" json:"locale,omitempty"`
-	Meta          *CommandMeta           `protobuf:"bytes,6,opt,name=meta,proto3" json:"meta,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// provider is an identity provider key such as keycloak, github, gitlab or google.
+	Provider string `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
+	// subject is provider-native stable identity subject.
+	Subject string `protobuf:"bytes,2,opt,name=subject,proto3" json:"subject,omitempty"`
+	// email is the email matched against allowlist.
+	Email string `protobuf:"bytes,3,opt,name=email,proto3" json:"email,omitempty"`
+	// display_name is optional UI display text.
+	DisplayName string `protobuf:"bytes,4,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	// locale is the user's preferred locale.
+	Locale string `protobuf:"bytes,5,opt,name=locale,proto3" json:"locale,omitempty"`
+	// meta carries idempotency, actor and request context.
+	Meta          *CommandMeta `protobuf:"bytes,6,opt,name=meta,proto3" json:"meta,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *BootstrapUserFromIdentityRequest) Reset() {
 	*x = BootstrapUserFromIdentityRequest{}
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[5]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -339,7 +1599,7 @@ func (x *BootstrapUserFromIdentityRequest) String() string {
 func (*BootstrapUserFromIdentityRequest) ProtoMessage() {}
 
 func (x *BootstrapUserFromIdentityRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[5]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -352,7 +1612,7 @@ func (x *BootstrapUserFromIdentityRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BootstrapUserFromIdentityRequest.ProtoReflect.Descriptor instead.
 func (*BootstrapUserFromIdentityRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{5}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *BootstrapUserFromIdentityRequest) GetProvider() string {
@@ -397,20 +1657,26 @@ func (x *BootstrapUserFromIdentityRequest) GetMeta() *CommandMeta {
 	return nil
 }
 
+// BootstrapUserFromIdentityResponse returns user bootstrap decision.
 type BootstrapUserFromIdentityResponse struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	UserId         string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	Status         string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
-	Decision       string                 `protobuf:"bytes,3,opt,name=decision,proto3" json:"decision,omitempty"`
-	ReasonCode     string                 `protobuf:"bytes,4,opt,name=reason_code,json=reasonCode,proto3" json:"reason_code,omitempty"`
-	OrganizationId string                 `protobuf:"bytes,5,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// user_id is the platform user identifier.
+	UserId string `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	// status is the resulting user status.
+	Status UserStatus `protobuf:"varint,2,opt,name=status,proto3,enum=kodex.access_accounts.v1.UserStatus" json:"status,omitempty"`
+	// decision is allow, deny or pending.
+	Decision AccessDecision `protobuf:"varint,3,opt,name=decision,proto3,enum=kodex.access_accounts.v1.AccessDecision" json:"decision,omitempty"`
+	// reason_code is a machine-readable reason.
+	ReasonCode string `protobuf:"bytes,4,opt,name=reason_code,json=reasonCode,proto3" json:"reason_code,omitempty"`
+	// organization_id is set when allowlist binds the user to organization.
+	OrganizationId string `protobuf:"bytes,5,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
 
 func (x *BootstrapUserFromIdentityResponse) Reset() {
 	*x = BootstrapUserFromIdentityResponse{}
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[6]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -422,7 +1688,7 @@ func (x *BootstrapUserFromIdentityResponse) String() string {
 func (*BootstrapUserFromIdentityResponse) ProtoMessage() {}
 
 func (x *BootstrapUserFromIdentityResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[6]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -435,7 +1701,7 @@ func (x *BootstrapUserFromIdentityResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use BootstrapUserFromIdentityResponse.ProtoReflect.Descriptor instead.
 func (*BootstrapUserFromIdentityResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{6}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *BootstrapUserFromIdentityResponse) GetUserId() string {
@@ -445,18 +1711,18 @@ func (x *BootstrapUserFromIdentityResponse) GetUserId() string {
 	return ""
 }
 
-func (x *BootstrapUserFromIdentityResponse) GetStatus() string {
+func (x *BootstrapUserFromIdentityResponse) GetStatus() UserStatus {
 	if x != nil {
 		return x.Status
 	}
-	return ""
+	return UserStatus_USER_STATUS_UNSPECIFIED
 }
 
-func (x *BootstrapUserFromIdentityResponse) GetDecision() string {
+func (x *BootstrapUserFromIdentityResponse) GetDecision() AccessDecision {
 	if x != nil {
 		return x.Decision
 	}
-	return ""
+	return AccessDecision_ACCESS_DECISION_UNSPECIFIED
 }
 
 func (x *BootstrapUserFromIdentityResponse) GetReasonCode() string {
@@ -473,21 +1739,2785 @@ func (x *BootstrapUserFromIdentityResponse) GetOrganizationId() string {
 	return ""
 }
 
+// SetUserStatusRequest changes user lifecycle status.
+type SetUserStatusRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// user_id is the user aggregate id.
+	UserId string `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	// status is the target user status.
+	Status UserStatus `protobuf:"varint,2,opt,name=status,proto3,enum=kodex.access_accounts.v1.UserStatus" json:"status,omitempty"`
+	// meta carries idempotency, expected version and audit context.
+	Meta          *CommandMeta `protobuf:"bytes,3,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetUserStatusRequest) Reset() {
+	*x = SetUserStatusRequest{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetUserStatusRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetUserStatusRequest) ProtoMessage() {}
+
+func (x *SetUserStatusRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetUserStatusRequest.ProtoReflect.Descriptor instead.
+func (*SetUserStatusRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *SetUserStatusRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *SetUserStatusRequest) GetStatus() UserStatus {
+	if x != nil {
+		return x.Status
+	}
+	return UserStatus_USER_STATUS_UNSPECIFIED
+}
+
+func (x *SetUserStatusRequest) GetMeta() *CommandMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+// UserResponse returns user identity and lifecycle status.
+type UserResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// user_id is the user aggregate id.
+	UserId string `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	// primary_email is returned only on staff/admin surfaces.
+	PrimaryEmail string `protobuf:"bytes,2,opt,name=primary_email,json=primaryEmail,proto3" json:"primary_email,omitempty"`
+	// display_name is optional UI display text.
+	DisplayName string `protobuf:"bytes,3,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	// status is the user lifecycle status.
+	Status UserStatus `protobuf:"varint,4,opt,name=status,proto3,enum=kodex.access_accounts.v1.UserStatus" json:"status,omitempty"`
+	// locale is the preferred locale.
+	Locale string `protobuf:"bytes,5,opt,name=locale,proto3" json:"locale,omitempty"`
+	// version is the aggregate version.
+	Version       int64 `protobuf:"varint,6,opt,name=version,proto3" json:"version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UserResponse) Reset() {
+	*x = UserResponse{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UserResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserResponse) ProtoMessage() {}
+
+func (x *UserResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserResponse.ProtoReflect.Descriptor instead.
+func (*UserResponse) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *UserResponse) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *UserResponse) GetPrimaryEmail() string {
+	if x != nil {
+		return x.PrimaryEmail
+	}
+	return ""
+}
+
+func (x *UserResponse) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *UserResponse) GetStatus() UserStatus {
+	if x != nil {
+		return x.Status
+	}
+	return UserStatus_USER_STATUS_UNSPECIFIED
+}
+
+func (x *UserResponse) GetLocale() string {
+	if x != nil {
+		return x.Locale
+	}
+	return ""
+}
+
+func (x *UserResponse) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+// CreateOrganizationRequest creates an organization.
+type CreateOrganizationRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// kind is the organization kind.
+	Kind OrganizationKind `protobuf:"varint,1,opt,name=kind,proto3,enum=kodex.access_accounts.v1.OrganizationKind" json:"kind,omitempty"`
+	// slug is unique organization slug.
+	Slug string `protobuf:"bytes,2,opt,name=slug,proto3" json:"slug,omitempty"`
+	// display_name is safe display text.
+	DisplayName string `protobuf:"bytes,3,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	// image_asset_ref is an optional asset reference.
+	ImageAssetRef string `protobuf:"bytes,4,opt,name=image_asset_ref,json=imageAssetRef,proto3" json:"image_asset_ref,omitempty"`
+	// status is optional target status; server defaults to active.
+	Status OrganizationStatus `protobuf:"varint,5,opt,name=status,proto3,enum=kodex.access_accounts.v1.OrganizationStatus" json:"status,omitempty"`
+	// parent_organization_id is optional parent organization.
+	ParentOrganizationId string `protobuf:"bytes,6,opt,name=parent_organization_id,json=parentOrganizationId,proto3" json:"parent_organization_id,omitempty"`
+	// meta carries idempotency and audit context.
+	Meta          *CommandMeta `protobuf:"bytes,7,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateOrganizationRequest) Reset() {
+	*x = CreateOrganizationRequest{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateOrganizationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateOrganizationRequest) ProtoMessage() {}
+
+func (x *CreateOrganizationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateOrganizationRequest.ProtoReflect.Descriptor instead.
+func (*CreateOrganizationRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *CreateOrganizationRequest) GetKind() OrganizationKind {
+	if x != nil {
+		return x.Kind
+	}
+	return OrganizationKind_ORGANIZATION_KIND_UNSPECIFIED
+}
+
+func (x *CreateOrganizationRequest) GetSlug() string {
+	if x != nil {
+		return x.Slug
+	}
+	return ""
+}
+
+func (x *CreateOrganizationRequest) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *CreateOrganizationRequest) GetImageAssetRef() string {
+	if x != nil {
+		return x.ImageAssetRef
+	}
+	return ""
+}
+
+func (x *CreateOrganizationRequest) GetStatus() OrganizationStatus {
+	if x != nil {
+		return x.Status
+	}
+	return OrganizationStatus_ORGANIZATION_STATUS_UNSPECIFIED
+}
+
+func (x *CreateOrganizationRequest) GetParentOrganizationId() string {
+	if x != nil {
+		return x.ParentOrganizationId
+	}
+	return ""
+}
+
+func (x *CreateOrganizationRequest) GetMeta() *CommandMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+// UpdateOrganizationRequest changes safe organization fields.
+type UpdateOrganizationRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// organization_id is the organization aggregate id.
+	OrganizationId string `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	// slug is optional new slug.
+	Slug string `protobuf:"bytes,2,opt,name=slug,proto3" json:"slug,omitempty"`
+	// display_name is optional new display name.
+	DisplayName string `protobuf:"bytes,3,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	// image_asset_ref is optional new asset reference.
+	ImageAssetRef string `protobuf:"bytes,4,opt,name=image_asset_ref,json=imageAssetRef,proto3" json:"image_asset_ref,omitempty"`
+	// parent_organization_id is optional new parent organization.
+	ParentOrganizationId string `protobuf:"bytes,5,opt,name=parent_organization_id,json=parentOrganizationId,proto3" json:"parent_organization_id,omitempty"`
+	// meta carries idempotency, expected version and audit context.
+	Meta          *CommandMeta `protobuf:"bytes,6,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateOrganizationRequest) Reset() {
+	*x = UpdateOrganizationRequest{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateOrganizationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateOrganizationRequest) ProtoMessage() {}
+
+func (x *UpdateOrganizationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateOrganizationRequest.ProtoReflect.Descriptor instead.
+func (*UpdateOrganizationRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *UpdateOrganizationRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *UpdateOrganizationRequest) GetSlug() string {
+	if x != nil {
+		return x.Slug
+	}
+	return ""
+}
+
+func (x *UpdateOrganizationRequest) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *UpdateOrganizationRequest) GetImageAssetRef() string {
+	if x != nil {
+		return x.ImageAssetRef
+	}
+	return ""
+}
+
+func (x *UpdateOrganizationRequest) GetParentOrganizationId() string {
+	if x != nil {
+		return x.ParentOrganizationId
+	}
+	return ""
+}
+
+func (x *UpdateOrganizationRequest) GetMeta() *CommandMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+// SuspendOrganizationRequest suspends a non-owner organization.
+type SuspendOrganizationRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// organization_id is the organization aggregate id.
+	OrganizationId string `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	// meta carries idempotency, expected version and reason.
+	Meta          *CommandMeta `protobuf:"bytes,2,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SuspendOrganizationRequest) Reset() {
+	*x = SuspendOrganizationRequest{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SuspendOrganizationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SuspendOrganizationRequest) ProtoMessage() {}
+
+func (x *SuspendOrganizationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SuspendOrganizationRequest.ProtoReflect.Descriptor instead.
+func (*SuspendOrganizationRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *SuspendOrganizationRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *SuspendOrganizationRequest) GetMeta() *CommandMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+// ArchiveOrganizationRequest archives an organization.
+type ArchiveOrganizationRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// organization_id is the organization aggregate id.
+	OrganizationId string `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	// meta carries idempotency, expected version and reason.
+	Meta          *CommandMeta `protobuf:"bytes,2,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ArchiveOrganizationRequest) Reset() {
+	*x = ArchiveOrganizationRequest{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ArchiveOrganizationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ArchiveOrganizationRequest) ProtoMessage() {}
+
+func (x *ArchiveOrganizationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ArchiveOrganizationRequest.ProtoReflect.Descriptor instead.
+func (*ArchiveOrganizationRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ArchiveOrganizationRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *ArchiveOrganizationRequest) GetMeta() *CommandMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+// OrganizationResponse returns organization state.
+type OrganizationResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// organization_id is the organization aggregate id.
+	OrganizationId string `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	// kind is the organization kind.
+	Kind OrganizationKind `protobuf:"varint,2,opt,name=kind,proto3,enum=kodex.access_accounts.v1.OrganizationKind" json:"kind,omitempty"`
+	// slug is unique organization slug.
+	Slug string `protobuf:"bytes,3,opt,name=slug,proto3" json:"slug,omitempty"`
+	// display_name is safe display text.
+	DisplayName string `protobuf:"bytes,4,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	// image_asset_ref is optional asset reference.
+	ImageAssetRef string `protobuf:"bytes,5,opt,name=image_asset_ref,json=imageAssetRef,proto3" json:"image_asset_ref,omitempty"`
+	// status is lifecycle status.
+	Status OrganizationStatus `protobuf:"varint,6,opt,name=status,proto3,enum=kodex.access_accounts.v1.OrganizationStatus" json:"status,omitempty"`
+	// parent_organization_id is optional parent organization.
+	ParentOrganizationId string `protobuf:"bytes,7,opt,name=parent_organization_id,json=parentOrganizationId,proto3" json:"parent_organization_id,omitempty"`
+	// version is the aggregate version.
+	Version       int64 `protobuf:"varint,8,opt,name=version,proto3" json:"version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OrganizationResponse) Reset() {
+	*x = OrganizationResponse{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OrganizationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OrganizationResponse) ProtoMessage() {}
+
+func (x *OrganizationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OrganizationResponse.ProtoReflect.Descriptor instead.
+func (*OrganizationResponse) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *OrganizationResponse) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *OrganizationResponse) GetKind() OrganizationKind {
+	if x != nil {
+		return x.Kind
+	}
+	return OrganizationKind_ORGANIZATION_KIND_UNSPECIFIED
+}
+
+func (x *OrganizationResponse) GetSlug() string {
+	if x != nil {
+		return x.Slug
+	}
+	return ""
+}
+
+func (x *OrganizationResponse) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *OrganizationResponse) GetImageAssetRef() string {
+	if x != nil {
+		return x.ImageAssetRef
+	}
+	return ""
+}
+
+func (x *OrganizationResponse) GetStatus() OrganizationStatus {
+	if x != nil {
+		return x.Status
+	}
+	return OrganizationStatus_ORGANIZATION_STATUS_UNSPECIFIED
+}
+
+func (x *OrganizationResponse) GetParentOrganizationId() string {
+	if x != nil {
+		return x.ParentOrganizationId
+	}
+	return ""
+}
+
+func (x *OrganizationResponse) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+// CreateGroupRequest creates a global or organization-scoped group.
+type CreateGroupRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// scope_type is global or organization.
+	ScopeType GroupScopeType `protobuf:"varint,1,opt,name=scope_type,json=scopeType,proto3,enum=kodex.access_accounts.v1.GroupScopeType" json:"scope_type,omitempty"`
+	// scope_id is required for organization-scoped groups.
+	ScopeId string `protobuf:"bytes,2,opt,name=scope_id,json=scopeId,proto3" json:"scope_id,omitempty"`
+	// slug is unique in scope.
+	Slug string `protobuf:"bytes,3,opt,name=slug,proto3" json:"slug,omitempty"`
+	// display_name is safe display text.
+	DisplayName string `protobuf:"bytes,4,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	// parent_group_id is optional parent group.
+	ParentGroupId string `protobuf:"bytes,5,opt,name=parent_group_id,json=parentGroupId,proto3" json:"parent_group_id,omitempty"`
+	// image_asset_ref is optional asset reference.
+	ImageAssetRef string `protobuf:"bytes,6,opt,name=image_asset_ref,json=imageAssetRef,proto3" json:"image_asset_ref,omitempty"`
+	// meta carries idempotency and audit context.
+	Meta          *CommandMeta `protobuf:"bytes,7,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateGroupRequest) Reset() {
+	*x = CreateGroupRequest{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateGroupRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateGroupRequest) ProtoMessage() {}
+
+func (x *CreateGroupRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateGroupRequest.ProtoReflect.Descriptor instead.
+func (*CreateGroupRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *CreateGroupRequest) GetScopeType() GroupScopeType {
+	if x != nil {
+		return x.ScopeType
+	}
+	return GroupScopeType_GROUP_SCOPE_TYPE_UNSPECIFIED
+}
+
+func (x *CreateGroupRequest) GetScopeId() string {
+	if x != nil {
+		return x.ScopeId
+	}
+	return ""
+}
+
+func (x *CreateGroupRequest) GetSlug() string {
+	if x != nil {
+		return x.Slug
+	}
+	return ""
+}
+
+func (x *CreateGroupRequest) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *CreateGroupRequest) GetParentGroupId() string {
+	if x != nil {
+		return x.ParentGroupId
+	}
+	return ""
+}
+
+func (x *CreateGroupRequest) GetImageAssetRef() string {
+	if x != nil {
+		return x.ImageAssetRef
+	}
+	return ""
+}
+
+func (x *CreateGroupRequest) GetMeta() *CommandMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+// UpdateGroupRequest changes safe group fields or hierarchy.
+type UpdateGroupRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// group_id is the group aggregate id.
+	GroupId string `protobuf:"bytes,1,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
+	// slug is optional new slug.
+	Slug string `protobuf:"bytes,2,opt,name=slug,proto3" json:"slug,omitempty"`
+	// display_name is optional new display name.
+	DisplayName string `protobuf:"bytes,3,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	// parent_group_id is optional new parent group.
+	ParentGroupId string `protobuf:"bytes,4,opt,name=parent_group_id,json=parentGroupId,proto3" json:"parent_group_id,omitempty"`
+	// image_asset_ref is optional new asset reference.
+	ImageAssetRef string `protobuf:"bytes,5,opt,name=image_asset_ref,json=imageAssetRef,proto3" json:"image_asset_ref,omitempty"`
+	// meta carries idempotency, expected version and audit context.
+	Meta          *CommandMeta `protobuf:"bytes,6,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateGroupRequest) Reset() {
+	*x = UpdateGroupRequest{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateGroupRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateGroupRequest) ProtoMessage() {}
+
+func (x *UpdateGroupRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateGroupRequest.ProtoReflect.Descriptor instead.
+func (*UpdateGroupRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *UpdateGroupRequest) GetGroupId() string {
+	if x != nil {
+		return x.GroupId
+	}
+	return ""
+}
+
+func (x *UpdateGroupRequest) GetSlug() string {
+	if x != nil {
+		return x.Slug
+	}
+	return ""
+}
+
+func (x *UpdateGroupRequest) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *UpdateGroupRequest) GetParentGroupId() string {
+	if x != nil {
+		return x.ParentGroupId
+	}
+	return ""
+}
+
+func (x *UpdateGroupRequest) GetImageAssetRef() string {
+	if x != nil {
+		return x.ImageAssetRef
+	}
+	return ""
+}
+
+func (x *UpdateGroupRequest) GetMeta() *CommandMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+// DisableGroupRequest disables a group.
+type DisableGroupRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// group_id is the group aggregate id.
+	GroupId string `protobuf:"bytes,1,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
+	// meta carries idempotency, expected version and reason.
+	Meta          *CommandMeta `protobuf:"bytes,2,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DisableGroupRequest) Reset() {
+	*x = DisableGroupRequest{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DisableGroupRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DisableGroupRequest) ProtoMessage() {}
+
+func (x *DisableGroupRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DisableGroupRequest.ProtoReflect.Descriptor instead.
+func (*DisableGroupRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *DisableGroupRequest) GetGroupId() string {
+	if x != nil {
+		return x.GroupId
+	}
+	return ""
+}
+
+func (x *DisableGroupRequest) GetMeta() *CommandMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+// GroupResponse returns group state.
+type GroupResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// group_id is the group aggregate id.
+	GroupId string `protobuf:"bytes,1,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
+	// scope_type is global or organization.
+	ScopeType GroupScopeType `protobuf:"varint,2,opt,name=scope_type,json=scopeType,proto3,enum=kodex.access_accounts.v1.GroupScopeType" json:"scope_type,omitempty"`
+	// scope_id is set for organization-scoped groups.
+	ScopeId string `protobuf:"bytes,3,opt,name=scope_id,json=scopeId,proto3" json:"scope_id,omitempty"`
+	// slug is unique in scope.
+	Slug string `protobuf:"bytes,4,opt,name=slug,proto3" json:"slug,omitempty"`
+	// display_name is safe display text.
+	DisplayName string `protobuf:"bytes,5,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	// parent_group_id is optional parent group.
+	ParentGroupId string `protobuf:"bytes,6,opt,name=parent_group_id,json=parentGroupId,proto3" json:"parent_group_id,omitempty"`
+	// image_asset_ref is optional asset reference.
+	ImageAssetRef string `protobuf:"bytes,7,opt,name=image_asset_ref,json=imageAssetRef,proto3" json:"image_asset_ref,omitempty"`
+	// status is lifecycle status.
+	Status GroupStatus `protobuf:"varint,8,opt,name=status,proto3,enum=kodex.access_accounts.v1.GroupStatus" json:"status,omitempty"`
+	// version is the aggregate version.
+	Version       int64 `protobuf:"varint,9,opt,name=version,proto3" json:"version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GroupResponse) Reset() {
+	*x = GroupResponse{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GroupResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GroupResponse) ProtoMessage() {}
+
+func (x *GroupResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GroupResponse.ProtoReflect.Descriptor instead.
+func (*GroupResponse) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *GroupResponse) GetGroupId() string {
+	if x != nil {
+		return x.GroupId
+	}
+	return ""
+}
+
+func (x *GroupResponse) GetScopeType() GroupScopeType {
+	if x != nil {
+		return x.ScopeType
+	}
+	return GroupScopeType_GROUP_SCOPE_TYPE_UNSPECIFIED
+}
+
+func (x *GroupResponse) GetScopeId() string {
+	if x != nil {
+		return x.ScopeId
+	}
+	return ""
+}
+
+func (x *GroupResponse) GetSlug() string {
+	if x != nil {
+		return x.Slug
+	}
+	return ""
+}
+
+func (x *GroupResponse) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *GroupResponse) GetParentGroupId() string {
+	if x != nil {
+		return x.ParentGroupId
+	}
+	return ""
+}
+
+func (x *GroupResponse) GetImageAssetRef() string {
+	if x != nil {
+		return x.ImageAssetRef
+	}
+	return ""
+}
+
+func (x *GroupResponse) GetStatus() GroupStatus {
+	if x != nil {
+		return x.Status
+	}
+	return GroupStatus_GROUP_STATUS_UNSPECIFIED
+}
+
+func (x *GroupResponse) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+// SetMembershipRequest creates, updates or disables membership.
+type SetMembershipRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// subject_type is user, group or external_account.
+	SubjectType MembershipSubjectType `protobuf:"varint,1,opt,name=subject_type,json=subjectType,proto3,enum=kodex.access_accounts.v1.MembershipSubjectType" json:"subject_type,omitempty"`
+	// subject_id is the subject identifier.
+	SubjectId string `protobuf:"bytes,2,opt,name=subject_id,json=subjectId,proto3" json:"subject_id,omitempty"`
+	// target_type is organization or group.
+	TargetType MembershipTargetType `protobuf:"varint,3,opt,name=target_type,json=targetType,proto3,enum=kodex.access_accounts.v1.MembershipTargetType" json:"target_type,omitempty"`
+	// target_id is the target identifier.
+	TargetId string `protobuf:"bytes,4,opt,name=target_id,json=targetId,proto3" json:"target_id,omitempty"`
+	// role_hint is optional operator hint, not a permission source.
+	RoleHint string `protobuf:"bytes,5,opt,name=role_hint,json=roleHint,proto3" json:"role_hint,omitempty"`
+	// status is target membership status.
+	Status MembershipStatus `protobuf:"varint,6,opt,name=status,proto3,enum=kodex.access_accounts.v1.MembershipStatus" json:"status,omitempty"`
+	// source records why membership exists.
+	Source MembershipSource `protobuf:"varint,7,opt,name=source,proto3,enum=kodex.access_accounts.v1.MembershipSource" json:"source,omitempty"`
+	// meta carries idempotency, optional expected version and reason.
+	Meta          *CommandMeta `protobuf:"bytes,8,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetMembershipRequest) Reset() {
+	*x = SetMembershipRequest{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetMembershipRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetMembershipRequest) ProtoMessage() {}
+
+func (x *SetMembershipRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetMembershipRequest.ProtoReflect.Descriptor instead.
+func (*SetMembershipRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *SetMembershipRequest) GetSubjectType() MembershipSubjectType {
+	if x != nil {
+		return x.SubjectType
+	}
+	return MembershipSubjectType_MEMBERSHIP_SUBJECT_TYPE_UNSPECIFIED
+}
+
+func (x *SetMembershipRequest) GetSubjectId() string {
+	if x != nil {
+		return x.SubjectId
+	}
+	return ""
+}
+
+func (x *SetMembershipRequest) GetTargetType() MembershipTargetType {
+	if x != nil {
+		return x.TargetType
+	}
+	return MembershipTargetType_MEMBERSHIP_TARGET_TYPE_UNSPECIFIED
+}
+
+func (x *SetMembershipRequest) GetTargetId() string {
+	if x != nil {
+		return x.TargetId
+	}
+	return ""
+}
+
+func (x *SetMembershipRequest) GetRoleHint() string {
+	if x != nil {
+		return x.RoleHint
+	}
+	return ""
+}
+
+func (x *SetMembershipRequest) GetStatus() MembershipStatus {
+	if x != nil {
+		return x.Status
+	}
+	return MembershipStatus_MEMBERSHIP_STATUS_UNSPECIFIED
+}
+
+func (x *SetMembershipRequest) GetSource() MembershipSource {
+	if x != nil {
+		return x.Source
+	}
+	return MembershipSource_MEMBERSHIP_SOURCE_UNSPECIFIED
+}
+
+func (x *SetMembershipRequest) GetMeta() *CommandMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+// MembershipResponse returns membership state.
+type MembershipResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// membership_id is the membership aggregate id.
+	MembershipId string `protobuf:"bytes,1,opt,name=membership_id,json=membershipId,proto3" json:"membership_id,omitempty"`
+	// subject_type is user, group or external_account.
+	SubjectType MembershipSubjectType `protobuf:"varint,2,opt,name=subject_type,json=subjectType,proto3,enum=kodex.access_accounts.v1.MembershipSubjectType" json:"subject_type,omitempty"`
+	// subject_id is the subject identifier.
+	SubjectId string `protobuf:"bytes,3,opt,name=subject_id,json=subjectId,proto3" json:"subject_id,omitempty"`
+	// target_type is organization or group.
+	TargetType MembershipTargetType `protobuf:"varint,4,opt,name=target_type,json=targetType,proto3,enum=kodex.access_accounts.v1.MembershipTargetType" json:"target_type,omitempty"`
+	// target_id is the target identifier.
+	TargetId string `protobuf:"bytes,5,opt,name=target_id,json=targetId,proto3" json:"target_id,omitempty"`
+	// role_hint is optional operator hint.
+	RoleHint string `protobuf:"bytes,6,opt,name=role_hint,json=roleHint,proto3" json:"role_hint,omitempty"`
+	// status is membership status.
+	Status MembershipStatus `protobuf:"varint,7,opt,name=status,proto3,enum=kodex.access_accounts.v1.MembershipStatus" json:"status,omitempty"`
+	// source records why membership exists.
+	Source MembershipSource `protobuf:"varint,8,opt,name=source,proto3,enum=kodex.access_accounts.v1.MembershipSource" json:"source,omitempty"`
+	// version is the aggregate version.
+	Version       int64 `protobuf:"varint,9,opt,name=version,proto3" json:"version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MembershipResponse) Reset() {
+	*x = MembershipResponse{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MembershipResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MembershipResponse) ProtoMessage() {}
+
+func (x *MembershipResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MembershipResponse.ProtoReflect.Descriptor instead.
+func (*MembershipResponse) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *MembershipResponse) GetMembershipId() string {
+	if x != nil {
+		return x.MembershipId
+	}
+	return ""
+}
+
+func (x *MembershipResponse) GetSubjectType() MembershipSubjectType {
+	if x != nil {
+		return x.SubjectType
+	}
+	return MembershipSubjectType_MEMBERSHIP_SUBJECT_TYPE_UNSPECIFIED
+}
+
+func (x *MembershipResponse) GetSubjectId() string {
+	if x != nil {
+		return x.SubjectId
+	}
+	return ""
+}
+
+func (x *MembershipResponse) GetTargetType() MembershipTargetType {
+	if x != nil {
+		return x.TargetType
+	}
+	return MembershipTargetType_MEMBERSHIP_TARGET_TYPE_UNSPECIFIED
+}
+
+func (x *MembershipResponse) GetTargetId() string {
+	if x != nil {
+		return x.TargetId
+	}
+	return ""
+}
+
+func (x *MembershipResponse) GetRoleHint() string {
+	if x != nil {
+		return x.RoleHint
+	}
+	return ""
+}
+
+func (x *MembershipResponse) GetStatus() MembershipStatus {
+	if x != nil {
+		return x.Status
+	}
+	return MembershipStatus_MEMBERSHIP_STATUS_UNSPECIFIED
+}
+
+func (x *MembershipResponse) GetSource() MembershipSource {
+	if x != nil {
+		return x.Source
+	}
+	return MembershipSource_MEMBERSHIP_SOURCE_UNSPECIFIED
+}
+
+func (x *MembershipResponse) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+// PutAllowlistEntryRequest creates or updates an allowlist entry.
+type PutAllowlistEntryRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// match_type is email or domain.
+	MatchType AllowlistMatchType `protobuf:"varint,1,opt,name=match_type,json=matchType,proto3,enum=kodex.access_accounts.v1.AllowlistMatchType" json:"match_type,omitempty"`
+	// value is normalized by server.
+	Value string `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	// organization_id optionally binds matching users to organization.
+	OrganizationId string `protobuf:"bytes,3,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	// default_status is the user status assigned during bootstrap.
+	DefaultStatus UserStatus `protobuf:"varint,4,opt,name=default_status,json=defaultStatus,proto3,enum=kodex.access_accounts.v1.UserStatus" json:"default_status,omitempty"`
+	// status is the allowlist entry status.
+	Status AllowlistStatus `protobuf:"varint,5,opt,name=status,proto3,enum=kodex.access_accounts.v1.AllowlistStatus" json:"status,omitempty"`
+	// meta carries idempotency, optional expected version and audit context.
+	Meta          *CommandMeta `protobuf:"bytes,6,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PutAllowlistEntryRequest) Reset() {
+	*x = PutAllowlistEntryRequest{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PutAllowlistEntryRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PutAllowlistEntryRequest) ProtoMessage() {}
+
+func (x *PutAllowlistEntryRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PutAllowlistEntryRequest.ProtoReflect.Descriptor instead.
+func (*PutAllowlistEntryRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *PutAllowlistEntryRequest) GetMatchType() AllowlistMatchType {
+	if x != nil {
+		return x.MatchType
+	}
+	return AllowlistMatchType_ALLOWLIST_MATCH_TYPE_UNSPECIFIED
+}
+
+func (x *PutAllowlistEntryRequest) GetValue() string {
+	if x != nil {
+		return x.Value
+	}
+	return ""
+}
+
+func (x *PutAllowlistEntryRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *PutAllowlistEntryRequest) GetDefaultStatus() UserStatus {
+	if x != nil {
+		return x.DefaultStatus
+	}
+	return UserStatus_USER_STATUS_UNSPECIFIED
+}
+
+func (x *PutAllowlistEntryRequest) GetStatus() AllowlistStatus {
+	if x != nil {
+		return x.Status
+	}
+	return AllowlistStatus_ALLOWLIST_STATUS_UNSPECIFIED
+}
+
+func (x *PutAllowlistEntryRequest) GetMeta() *CommandMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+// DisableAllowlistEntryRequest disables an allowlist entry.
+type DisableAllowlistEntryRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// allowlist_entry_id is the allowlist aggregate id.
+	AllowlistEntryId string `protobuf:"bytes,1,opt,name=allowlist_entry_id,json=allowlistEntryId,proto3" json:"allowlist_entry_id,omitempty"`
+	// meta carries idempotency, expected version and reason.
+	Meta          *CommandMeta `protobuf:"bytes,2,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DisableAllowlistEntryRequest) Reset() {
+	*x = DisableAllowlistEntryRequest{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DisableAllowlistEntryRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DisableAllowlistEntryRequest) ProtoMessage() {}
+
+func (x *DisableAllowlistEntryRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DisableAllowlistEntryRequest.ProtoReflect.Descriptor instead.
+func (*DisableAllowlistEntryRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *DisableAllowlistEntryRequest) GetAllowlistEntryId() string {
+	if x != nil {
+		return x.AllowlistEntryId
+	}
+	return ""
+}
+
+func (x *DisableAllowlistEntryRequest) GetMeta() *CommandMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+// AllowlistEntryResponse returns allowlist entry state.
+type AllowlistEntryResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// allowlist_entry_id is the allowlist aggregate id.
+	AllowlistEntryId string `protobuf:"bytes,1,opt,name=allowlist_entry_id,json=allowlistEntryId,proto3" json:"allowlist_entry_id,omitempty"`
+	// match_type is email or domain.
+	MatchType AllowlistMatchType `protobuf:"varint,2,opt,name=match_type,json=matchType,proto3,enum=kodex.access_accounts.v1.AllowlistMatchType" json:"match_type,omitempty"`
+	// value is normalized match value.
+	Value string `protobuf:"bytes,3,opt,name=value,proto3" json:"value,omitempty"`
+	// organization_id optionally binds matching users to organization.
+	OrganizationId string `protobuf:"bytes,4,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	// default_status is the bootstrap status for matched users.
+	DefaultStatus UserStatus `protobuf:"varint,5,opt,name=default_status,json=defaultStatus,proto3,enum=kodex.access_accounts.v1.UserStatus" json:"default_status,omitempty"`
+	// status is allowlist entry status.
+	Status        AllowlistStatus `protobuf:"varint,6,opt,name=status,proto3,enum=kodex.access_accounts.v1.AllowlistStatus" json:"status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AllowlistEntryResponse) Reset() {
+	*x = AllowlistEntryResponse{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AllowlistEntryResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AllowlistEntryResponse) ProtoMessage() {}
+
+func (x *AllowlistEntryResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AllowlistEntryResponse.ProtoReflect.Descriptor instead.
+func (*AllowlistEntryResponse) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *AllowlistEntryResponse) GetAllowlistEntryId() string {
+	if x != nil {
+		return x.AllowlistEntryId
+	}
+	return ""
+}
+
+func (x *AllowlistEntryResponse) GetMatchType() AllowlistMatchType {
+	if x != nil {
+		return x.MatchType
+	}
+	return AllowlistMatchType_ALLOWLIST_MATCH_TYPE_UNSPECIFIED
+}
+
+func (x *AllowlistEntryResponse) GetValue() string {
+	if x != nil {
+		return x.Value
+	}
+	return ""
+}
+
+func (x *AllowlistEntryResponse) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *AllowlistEntryResponse) GetDefaultStatus() UserStatus {
+	if x != nil {
+		return x.DefaultStatus
+	}
+	return UserStatus_USER_STATUS_UNSPECIFIED
+}
+
+func (x *AllowlistEntryResponse) GetStatus() AllowlistStatus {
+	if x != nil {
+		return x.Status
+	}
+	return AllowlistStatus_ALLOWLIST_STATUS_UNSPECIFIED
+}
+
+// RegisterExternalProviderRequest creates an external provider.
+type RegisterExternalProviderRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// slug is unique provider slug.
+	Slug string `protobuf:"bytes,1,opt,name=slug,proto3" json:"slug,omitempty"`
+	// provider_kind is the provider category.
+	ProviderKind ExternalProviderKind `protobuf:"varint,2,opt,name=provider_kind,json=providerKind,proto3,enum=kodex.access_accounts.v1.ExternalProviderKind" json:"provider_kind,omitempty"`
+	// display_name is safe display text.
+	DisplayName string `protobuf:"bytes,3,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	// icon_asset_ref is optional asset reference.
+	IconAssetRef string `protobuf:"bytes,4,opt,name=icon_asset_ref,json=iconAssetRef,proto3" json:"icon_asset_ref,omitempty"`
+	// status is provider status.
+	Status ExternalProviderStatus `protobuf:"varint,5,opt,name=status,proto3,enum=kodex.access_accounts.v1.ExternalProviderStatus" json:"status,omitempty"`
+	// meta carries idempotency and audit context.
+	Meta          *CommandMeta `protobuf:"bytes,6,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RegisterExternalProviderRequest) Reset() {
+	*x = RegisterExternalProviderRequest{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RegisterExternalProviderRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RegisterExternalProviderRequest) ProtoMessage() {}
+
+func (x *RegisterExternalProviderRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RegisterExternalProviderRequest.ProtoReflect.Descriptor instead.
+func (*RegisterExternalProviderRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *RegisterExternalProviderRequest) GetSlug() string {
+	if x != nil {
+		return x.Slug
+	}
+	return ""
+}
+
+func (x *RegisterExternalProviderRequest) GetProviderKind() ExternalProviderKind {
+	if x != nil {
+		return x.ProviderKind
+	}
+	return ExternalProviderKind_EXTERNAL_PROVIDER_KIND_UNSPECIFIED
+}
+
+func (x *RegisterExternalProviderRequest) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *RegisterExternalProviderRequest) GetIconAssetRef() string {
+	if x != nil {
+		return x.IconAssetRef
+	}
+	return ""
+}
+
+func (x *RegisterExternalProviderRequest) GetStatus() ExternalProviderStatus {
+	if x != nil {
+		return x.Status
+	}
+	return ExternalProviderStatus_EXTERNAL_PROVIDER_STATUS_UNSPECIFIED
+}
+
+func (x *RegisterExternalProviderRequest) GetMeta() *CommandMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+// UpdateExternalProviderRequest changes provider metadata.
+type UpdateExternalProviderRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// external_provider_id is the provider aggregate id.
+	ExternalProviderId string `protobuf:"bytes,1,opt,name=external_provider_id,json=externalProviderId,proto3" json:"external_provider_id,omitempty"`
+	// slug is optional new slug.
+	Slug string `protobuf:"bytes,2,opt,name=slug,proto3" json:"slug,omitempty"`
+	// provider_kind is optional new provider kind.
+	ProviderKind ExternalProviderKind `protobuf:"varint,3,opt,name=provider_kind,json=providerKind,proto3,enum=kodex.access_accounts.v1.ExternalProviderKind" json:"provider_kind,omitempty"`
+	// display_name is optional display text.
+	DisplayName string `protobuf:"bytes,4,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	// icon_asset_ref is optional asset reference.
+	IconAssetRef string `protobuf:"bytes,5,opt,name=icon_asset_ref,json=iconAssetRef,proto3" json:"icon_asset_ref,omitempty"`
+	// status is optional provider status.
+	Status ExternalProviderStatus `protobuf:"varint,6,opt,name=status,proto3,enum=kodex.access_accounts.v1.ExternalProviderStatus" json:"status,omitempty"`
+	// meta carries idempotency, expected version and audit context.
+	Meta          *CommandMeta `protobuf:"bytes,7,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateExternalProviderRequest) Reset() {
+	*x = UpdateExternalProviderRequest{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateExternalProviderRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateExternalProviderRequest) ProtoMessage() {}
+
+func (x *UpdateExternalProviderRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateExternalProviderRequest.ProtoReflect.Descriptor instead.
+func (*UpdateExternalProviderRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *UpdateExternalProviderRequest) GetExternalProviderId() string {
+	if x != nil {
+		return x.ExternalProviderId
+	}
+	return ""
+}
+
+func (x *UpdateExternalProviderRequest) GetSlug() string {
+	if x != nil {
+		return x.Slug
+	}
+	return ""
+}
+
+func (x *UpdateExternalProviderRequest) GetProviderKind() ExternalProviderKind {
+	if x != nil {
+		return x.ProviderKind
+	}
+	return ExternalProviderKind_EXTERNAL_PROVIDER_KIND_UNSPECIFIED
+}
+
+func (x *UpdateExternalProviderRequest) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *UpdateExternalProviderRequest) GetIconAssetRef() string {
+	if x != nil {
+		return x.IconAssetRef
+	}
+	return ""
+}
+
+func (x *UpdateExternalProviderRequest) GetStatus() ExternalProviderStatus {
+	if x != nil {
+		return x.Status
+	}
+	return ExternalProviderStatus_EXTERNAL_PROVIDER_STATUS_UNSPECIFIED
+}
+
+func (x *UpdateExternalProviderRequest) GetMeta() *CommandMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+// ExternalProviderResponse returns provider state.
+type ExternalProviderResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// external_provider_id is the provider aggregate id.
+	ExternalProviderId string `protobuf:"bytes,1,opt,name=external_provider_id,json=externalProviderId,proto3" json:"external_provider_id,omitempty"`
+	// slug is unique provider slug.
+	Slug string `protobuf:"bytes,2,opt,name=slug,proto3" json:"slug,omitempty"`
+	// provider_kind is the provider category.
+	ProviderKind ExternalProviderKind `protobuf:"varint,3,opt,name=provider_kind,json=providerKind,proto3,enum=kodex.access_accounts.v1.ExternalProviderKind" json:"provider_kind,omitempty"`
+	// display_name is safe display text.
+	DisplayName string `protobuf:"bytes,4,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	// icon_asset_ref is optional asset reference.
+	IconAssetRef string `protobuf:"bytes,5,opt,name=icon_asset_ref,json=iconAssetRef,proto3" json:"icon_asset_ref,omitempty"`
+	// status is provider status.
+	Status ExternalProviderStatus `protobuf:"varint,6,opt,name=status,proto3,enum=kodex.access_accounts.v1.ExternalProviderStatus" json:"status,omitempty"`
+	// version is aggregate version.
+	Version       int64 `protobuf:"varint,7,opt,name=version,proto3" json:"version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExternalProviderResponse) Reset() {
+	*x = ExternalProviderResponse{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExternalProviderResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExternalProviderResponse) ProtoMessage() {}
+
+func (x *ExternalProviderResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExternalProviderResponse.ProtoReflect.Descriptor instead.
+func (*ExternalProviderResponse) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *ExternalProviderResponse) GetExternalProviderId() string {
+	if x != nil {
+		return x.ExternalProviderId
+	}
+	return ""
+}
+
+func (x *ExternalProviderResponse) GetSlug() string {
+	if x != nil {
+		return x.Slug
+	}
+	return ""
+}
+
+func (x *ExternalProviderResponse) GetProviderKind() ExternalProviderKind {
+	if x != nil {
+		return x.ProviderKind
+	}
+	return ExternalProviderKind_EXTERNAL_PROVIDER_KIND_UNSPECIFIED
+}
+
+func (x *ExternalProviderResponse) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *ExternalProviderResponse) GetIconAssetRef() string {
+	if x != nil {
+		return x.IconAssetRef
+	}
+	return ""
+}
+
+func (x *ExternalProviderResponse) GetStatus() ExternalProviderStatus {
+	if x != nil {
+		return x.Status
+	}
+	return ExternalProviderStatus_EXTERNAL_PROVIDER_STATUS_UNSPECIFIED
+}
+
+func (x *ExternalProviderResponse) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+// RegisterExternalAccountRequest creates an external account as a policy subject.
+type RegisterExternalAccountRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// external_provider_id is provider id.
+	ExternalProviderId string `protobuf:"bytes,1,opt,name=external_provider_id,json=externalProviderId,proto3" json:"external_provider_id,omitempty"`
+	// account_type is user, bot, service or integration.
+	AccountType ExternalAccountType `protobuf:"varint,2,opt,name=account_type,json=accountType,proto3,enum=kodex.access_accounts.v1.ExternalAccountType" json:"account_type,omitempty"`
+	// display_name is safe display text.
+	DisplayName string `protobuf:"bytes,3,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	// image_asset_ref is optional asset reference.
+	ImageAssetRef string `protobuf:"bytes,4,opt,name=image_asset_ref,json=imageAssetRef,proto3" json:"image_asset_ref,omitempty"`
+	// owner_scope_type is account owner scope.
+	OwnerScopeType ExternalAccountScopeType `protobuf:"varint,5,opt,name=owner_scope_type,json=ownerScopeType,proto3,enum=kodex.access_accounts.v1.ExternalAccountScopeType" json:"owner_scope_type,omitempty"`
+	// owner_scope_id is account owner scope id.
+	OwnerScopeId string `protobuf:"bytes,6,opt,name=owner_scope_id,json=ownerScopeId,proto3" json:"owner_scope_id,omitempty"`
+	// status is account lifecycle status.
+	Status ExternalAccountStatus `protobuf:"varint,7,opt,name=status,proto3,enum=kodex.access_accounts.v1.ExternalAccountStatus" json:"status,omitempty"`
+	// secret_binding_ref_id references secret metadata; the value is never returned.
+	SecretBindingRefId string `protobuf:"bytes,8,opt,name=secret_binding_ref_id,json=secretBindingRefId,proto3" json:"secret_binding_ref_id,omitempty"`
+	// meta carries idempotency and audit context.
+	Meta          *CommandMeta `protobuf:"bytes,9,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RegisterExternalAccountRequest) Reset() {
+	*x = RegisterExternalAccountRequest{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RegisterExternalAccountRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RegisterExternalAccountRequest) ProtoMessage() {}
+
+func (x *RegisterExternalAccountRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RegisterExternalAccountRequest.ProtoReflect.Descriptor instead.
+func (*RegisterExternalAccountRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *RegisterExternalAccountRequest) GetExternalProviderId() string {
+	if x != nil {
+		return x.ExternalProviderId
+	}
+	return ""
+}
+
+func (x *RegisterExternalAccountRequest) GetAccountType() ExternalAccountType {
+	if x != nil {
+		return x.AccountType
+	}
+	return ExternalAccountType_EXTERNAL_ACCOUNT_TYPE_UNSPECIFIED
+}
+
+func (x *RegisterExternalAccountRequest) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *RegisterExternalAccountRequest) GetImageAssetRef() string {
+	if x != nil {
+		return x.ImageAssetRef
+	}
+	return ""
+}
+
+func (x *RegisterExternalAccountRequest) GetOwnerScopeType() ExternalAccountScopeType {
+	if x != nil {
+		return x.OwnerScopeType
+	}
+	return ExternalAccountScopeType_EXTERNAL_ACCOUNT_SCOPE_TYPE_UNSPECIFIED
+}
+
+func (x *RegisterExternalAccountRequest) GetOwnerScopeId() string {
+	if x != nil {
+		return x.OwnerScopeId
+	}
+	return ""
+}
+
+func (x *RegisterExternalAccountRequest) GetStatus() ExternalAccountStatus {
+	if x != nil {
+		return x.Status
+	}
+	return ExternalAccountStatus_EXTERNAL_ACCOUNT_STATUS_UNSPECIFIED
+}
+
+func (x *RegisterExternalAccountRequest) GetSecretBindingRefId() string {
+	if x != nil {
+		return x.SecretBindingRefId
+	}
+	return ""
+}
+
+func (x *RegisterExternalAccountRequest) GetMeta() *CommandMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+// UpdateExternalAccountStatusRequest changes account lifecycle status.
+type UpdateExternalAccountStatusRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// external_account_id is account aggregate id.
+	ExternalAccountId string `protobuf:"bytes,1,opt,name=external_account_id,json=externalAccountId,proto3" json:"external_account_id,omitempty"`
+	// status is target lifecycle status.
+	Status ExternalAccountStatus `protobuf:"varint,2,opt,name=status,proto3,enum=kodex.access_accounts.v1.ExternalAccountStatus" json:"status,omitempty"`
+	// meta carries idempotency, expected version and reason.
+	Meta          *CommandMeta `protobuf:"bytes,3,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateExternalAccountStatusRequest) Reset() {
+	*x = UpdateExternalAccountStatusRequest{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateExternalAccountStatusRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateExternalAccountStatusRequest) ProtoMessage() {}
+
+func (x *UpdateExternalAccountStatusRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateExternalAccountStatusRequest.ProtoReflect.Descriptor instead.
+func (*UpdateExternalAccountStatusRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *UpdateExternalAccountStatusRequest) GetExternalAccountId() string {
+	if x != nil {
+		return x.ExternalAccountId
+	}
+	return ""
+}
+
+func (x *UpdateExternalAccountStatusRequest) GetStatus() ExternalAccountStatus {
+	if x != nil {
+		return x.Status
+	}
+	return ExternalAccountStatus_EXTERNAL_ACCOUNT_STATUS_UNSPECIFIED
+}
+
+func (x *UpdateExternalAccountStatusRequest) GetMeta() *CommandMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+// ExternalAccountResponse returns external account state without secret value.
+type ExternalAccountResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// external_account_id is account aggregate id.
+	ExternalAccountId string `protobuf:"bytes,1,opt,name=external_account_id,json=externalAccountId,proto3" json:"external_account_id,omitempty"`
+	// external_provider_id is provider id.
+	ExternalProviderId string `protobuf:"bytes,2,opt,name=external_provider_id,json=externalProviderId,proto3" json:"external_provider_id,omitempty"`
+	// account_type is user, bot, service or integration.
+	AccountType ExternalAccountType `protobuf:"varint,3,opt,name=account_type,json=accountType,proto3,enum=kodex.access_accounts.v1.ExternalAccountType" json:"account_type,omitempty"`
+	// display_name is safe display text.
+	DisplayName string `protobuf:"bytes,4,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	// image_asset_ref is optional asset reference.
+	ImageAssetRef string `protobuf:"bytes,5,opt,name=image_asset_ref,json=imageAssetRef,proto3" json:"image_asset_ref,omitempty"`
+	// owner_scope_type is account owner scope.
+	OwnerScopeType ExternalAccountScopeType `protobuf:"varint,6,opt,name=owner_scope_type,json=ownerScopeType,proto3,enum=kodex.access_accounts.v1.ExternalAccountScopeType" json:"owner_scope_type,omitempty"`
+	// owner_scope_id is account owner scope id.
+	OwnerScopeId string `protobuf:"bytes,7,opt,name=owner_scope_id,json=ownerScopeId,proto3" json:"owner_scope_id,omitempty"`
+	// status is account status.
+	Status ExternalAccountStatus `protobuf:"varint,8,opt,name=status,proto3,enum=kodex.access_accounts.v1.ExternalAccountStatus" json:"status,omitempty"`
+	// secret_binding_ref_id references secret metadata.
+	SecretBindingRefId string `protobuf:"bytes,9,opt,name=secret_binding_ref_id,json=secretBindingRefId,proto3" json:"secret_binding_ref_id,omitempty"`
+	// version is aggregate version.
+	Version       int64 `protobuf:"varint,10,opt,name=version,proto3" json:"version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExternalAccountResponse) Reset() {
+	*x = ExternalAccountResponse{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExternalAccountResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExternalAccountResponse) ProtoMessage() {}
+
+func (x *ExternalAccountResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExternalAccountResponse.ProtoReflect.Descriptor instead.
+func (*ExternalAccountResponse) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *ExternalAccountResponse) GetExternalAccountId() string {
+	if x != nil {
+		return x.ExternalAccountId
+	}
+	return ""
+}
+
+func (x *ExternalAccountResponse) GetExternalProviderId() string {
+	if x != nil {
+		return x.ExternalProviderId
+	}
+	return ""
+}
+
+func (x *ExternalAccountResponse) GetAccountType() ExternalAccountType {
+	if x != nil {
+		return x.AccountType
+	}
+	return ExternalAccountType_EXTERNAL_ACCOUNT_TYPE_UNSPECIFIED
+}
+
+func (x *ExternalAccountResponse) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *ExternalAccountResponse) GetImageAssetRef() string {
+	if x != nil {
+		return x.ImageAssetRef
+	}
+	return ""
+}
+
+func (x *ExternalAccountResponse) GetOwnerScopeType() ExternalAccountScopeType {
+	if x != nil {
+		return x.OwnerScopeType
+	}
+	return ExternalAccountScopeType_EXTERNAL_ACCOUNT_SCOPE_TYPE_UNSPECIFIED
+}
+
+func (x *ExternalAccountResponse) GetOwnerScopeId() string {
+	if x != nil {
+		return x.OwnerScopeId
+	}
+	return ""
+}
+
+func (x *ExternalAccountResponse) GetStatus() ExternalAccountStatus {
+	if x != nil {
+		return x.Status
+	}
+	return ExternalAccountStatus_EXTERNAL_ACCOUNT_STATUS_UNSPECIFIED
+}
+
+func (x *ExternalAccountResponse) GetSecretBindingRefId() string {
+	if x != nil {
+		return x.SecretBindingRefId
+	}
+	return ""
+}
+
+func (x *ExternalAccountResponse) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+// BindExternalAccountRequest allows an account to be used in a scope.
+type BindExternalAccountRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// external_account_id is account aggregate id.
+	ExternalAccountId string `protobuf:"bytes,1,opt,name=external_account_id,json=externalAccountId,proto3" json:"external_account_id,omitempty"`
+	// usage_scope_type is scope type where account may be used.
+	UsageScopeType ExternalAccountScopeType `protobuf:"varint,2,opt,name=usage_scope_type,json=usageScopeType,proto3,enum=kodex.access_accounts.v1.ExternalAccountScopeType" json:"usage_scope_type,omitempty"`
+	// usage_scope_id is scope identifier.
+	UsageScopeId string `protobuf:"bytes,3,opt,name=usage_scope_id,json=usageScopeId,proto3" json:"usage_scope_id,omitempty"`
+	// allowed_action_keys are access-action catalog keys allowed for this binding.
+	AllowedActionKeys []string `protobuf:"bytes,4,rep,name=allowed_action_keys,json=allowedActionKeys,proto3" json:"allowed_action_keys,omitempty"`
+	// status is binding status.
+	Status ExternalAccountBindingStatus `protobuf:"varint,5,opt,name=status,proto3,enum=kodex.access_accounts.v1.ExternalAccountBindingStatus" json:"status,omitempty"`
+	// meta carries idempotency, optional expected version and audit context.
+	Meta          *CommandMeta `protobuf:"bytes,6,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BindExternalAccountRequest) Reset() {
+	*x = BindExternalAccountRequest{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BindExternalAccountRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BindExternalAccountRequest) ProtoMessage() {}
+
+func (x *BindExternalAccountRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BindExternalAccountRequest.ProtoReflect.Descriptor instead.
+func (*BindExternalAccountRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *BindExternalAccountRequest) GetExternalAccountId() string {
+	if x != nil {
+		return x.ExternalAccountId
+	}
+	return ""
+}
+
+func (x *BindExternalAccountRequest) GetUsageScopeType() ExternalAccountScopeType {
+	if x != nil {
+		return x.UsageScopeType
+	}
+	return ExternalAccountScopeType_EXTERNAL_ACCOUNT_SCOPE_TYPE_UNSPECIFIED
+}
+
+func (x *BindExternalAccountRequest) GetUsageScopeId() string {
+	if x != nil {
+		return x.UsageScopeId
+	}
+	return ""
+}
+
+func (x *BindExternalAccountRequest) GetAllowedActionKeys() []string {
+	if x != nil {
+		return x.AllowedActionKeys
+	}
+	return nil
+}
+
+func (x *BindExternalAccountRequest) GetStatus() ExternalAccountBindingStatus {
+	if x != nil {
+		return x.Status
+	}
+	return ExternalAccountBindingStatus_EXTERNAL_ACCOUNT_BINDING_STATUS_UNSPECIFIED
+}
+
+func (x *BindExternalAccountRequest) GetMeta() *CommandMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+// DisableExternalAccountBindingRequest disables an account binding.
+type DisableExternalAccountBindingRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// external_account_binding_id is binding aggregate id.
+	ExternalAccountBindingId string `protobuf:"bytes,1,opt,name=external_account_binding_id,json=externalAccountBindingId,proto3" json:"external_account_binding_id,omitempty"`
+	// meta carries idempotency, expected version and reason.
+	Meta          *CommandMeta `protobuf:"bytes,2,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DisableExternalAccountBindingRequest) Reset() {
+	*x = DisableExternalAccountBindingRequest{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DisableExternalAccountBindingRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DisableExternalAccountBindingRequest) ProtoMessage() {}
+
+func (x *DisableExternalAccountBindingRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DisableExternalAccountBindingRequest.ProtoReflect.Descriptor instead.
+func (*DisableExternalAccountBindingRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *DisableExternalAccountBindingRequest) GetExternalAccountBindingId() string {
+	if x != nil {
+		return x.ExternalAccountBindingId
+	}
+	return ""
+}
+
+func (x *DisableExternalAccountBindingRequest) GetMeta() *CommandMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+// ExternalAccountBindingResponse returns account binding state.
+type ExternalAccountBindingResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// external_account_binding_id is binding aggregate id.
+	ExternalAccountBindingId string `protobuf:"bytes,1,opt,name=external_account_binding_id,json=externalAccountBindingId,proto3" json:"external_account_binding_id,omitempty"`
+	// external_account_id is account aggregate id.
+	ExternalAccountId string `protobuf:"bytes,2,opt,name=external_account_id,json=externalAccountId,proto3" json:"external_account_id,omitempty"`
+	// usage_scope_type is scope type where account may be used.
+	UsageScopeType ExternalAccountScopeType `protobuf:"varint,3,opt,name=usage_scope_type,json=usageScopeType,proto3,enum=kodex.access_accounts.v1.ExternalAccountScopeType" json:"usage_scope_type,omitempty"`
+	// usage_scope_id is scope identifier.
+	UsageScopeId string `protobuf:"bytes,4,opt,name=usage_scope_id,json=usageScopeId,proto3" json:"usage_scope_id,omitempty"`
+	// allowed_action_keys are access-action catalog keys.
+	AllowedActionKeys []string `protobuf:"bytes,5,rep,name=allowed_action_keys,json=allowedActionKeys,proto3" json:"allowed_action_keys,omitempty"`
+	// status is binding status.
+	Status        ExternalAccountBindingStatus `protobuf:"varint,6,opt,name=status,proto3,enum=kodex.access_accounts.v1.ExternalAccountBindingStatus" json:"status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExternalAccountBindingResponse) Reset() {
+	*x = ExternalAccountBindingResponse{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExternalAccountBindingResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExternalAccountBindingResponse) ProtoMessage() {}
+
+func (x *ExternalAccountBindingResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExternalAccountBindingResponse.ProtoReflect.Descriptor instead.
+func (*ExternalAccountBindingResponse) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *ExternalAccountBindingResponse) GetExternalAccountBindingId() string {
+	if x != nil {
+		return x.ExternalAccountBindingId
+	}
+	return ""
+}
+
+func (x *ExternalAccountBindingResponse) GetExternalAccountId() string {
+	if x != nil {
+		return x.ExternalAccountId
+	}
+	return ""
+}
+
+func (x *ExternalAccountBindingResponse) GetUsageScopeType() ExternalAccountScopeType {
+	if x != nil {
+		return x.UsageScopeType
+	}
+	return ExternalAccountScopeType_EXTERNAL_ACCOUNT_SCOPE_TYPE_UNSPECIFIED
+}
+
+func (x *ExternalAccountBindingResponse) GetUsageScopeId() string {
+	if x != nil {
+		return x.UsageScopeId
+	}
+	return ""
+}
+
+func (x *ExternalAccountBindingResponse) GetAllowedActionKeys() []string {
+	if x != nil {
+		return x.AllowedActionKeys
+	}
+	return nil
+}
+
+func (x *ExternalAccountBindingResponse) GetStatus() ExternalAccountBindingStatus {
+	if x != nil {
+		return x.Status
+	}
+	return ExternalAccountBindingStatus_EXTERNAL_ACCOUNT_BINDING_STATUS_UNSPECIFIED
+}
+
+// PutAccessActionRequest creates or updates an access action.
+type PutAccessActionRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// key is stable action key, for example provider.issue.write.
+	Key string `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	// display_name is safe display text.
+	DisplayName string `protobuf:"bytes,2,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	// description is safe operator description.
+	Description string `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	// resource_type is protected resource type.
+	ResourceType string `protobuf:"bytes,4,opt,name=resource_type,json=resourceType,proto3" json:"resource_type,omitempty"`
+	// status is action status.
+	Status AccessActionStatus `protobuf:"varint,5,opt,name=status,proto3,enum=kodex.access_accounts.v1.AccessActionStatus" json:"status,omitempty"`
+	// meta carries idempotency, optional expected version and audit context.
+	Meta          *CommandMeta `protobuf:"bytes,6,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PutAccessActionRequest) Reset() {
+	*x = PutAccessActionRequest{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PutAccessActionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PutAccessActionRequest) ProtoMessage() {}
+
+func (x *PutAccessActionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PutAccessActionRequest.ProtoReflect.Descriptor instead.
+func (*PutAccessActionRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *PutAccessActionRequest) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *PutAccessActionRequest) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *PutAccessActionRequest) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *PutAccessActionRequest) GetResourceType() string {
+	if x != nil {
+		return x.ResourceType
+	}
+	return ""
+}
+
+func (x *PutAccessActionRequest) GetStatus() AccessActionStatus {
+	if x != nil {
+		return x.Status
+	}
+	return AccessActionStatus_ACCESS_ACTION_STATUS_UNSPECIFIED
+}
+
+func (x *PutAccessActionRequest) GetMeta() *CommandMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+// AccessActionResponse returns access action state.
+type AccessActionResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// access_action_id is action aggregate id.
+	AccessActionId string `protobuf:"bytes,1,opt,name=access_action_id,json=accessActionId,proto3" json:"access_action_id,omitempty"`
+	// key is stable action key.
+	Key string `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
+	// display_name is safe display text.
+	DisplayName string `protobuf:"bytes,3,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	// description is safe operator description.
+	Description string `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
+	// resource_type is protected resource type.
+	ResourceType string `protobuf:"bytes,5,opt,name=resource_type,json=resourceType,proto3" json:"resource_type,omitempty"`
+	// status is action status.
+	Status AccessActionStatus `protobuf:"varint,6,opt,name=status,proto3,enum=kodex.access_accounts.v1.AccessActionStatus" json:"status,omitempty"`
+	// version is aggregate version.
+	Version       int64 `protobuf:"varint,7,opt,name=version,proto3" json:"version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AccessActionResponse) Reset() {
+	*x = AccessActionResponse{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AccessActionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AccessActionResponse) ProtoMessage() {}
+
+func (x *AccessActionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AccessActionResponse.ProtoReflect.Descriptor instead.
+func (*AccessActionResponse) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *AccessActionResponse) GetAccessActionId() string {
+	if x != nil {
+		return x.AccessActionId
+	}
+	return ""
+}
+
+func (x *AccessActionResponse) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *AccessActionResponse) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *AccessActionResponse) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *AccessActionResponse) GetResourceType() string {
+	if x != nil {
+		return x.ResourceType
+	}
+	return ""
+}
+
+func (x *AccessActionResponse) GetStatus() AccessActionStatus {
+	if x != nil {
+		return x.Status
+	}
+	return AccessActionStatus_ACCESS_ACTION_STATUS_UNSPECIFIED
+}
+
+func (x *AccessActionResponse) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+// PutAccessRuleRequest creates or updates an access rule.
+type PutAccessRuleRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// effect is allow or deny.
+	Effect AccessEffect `protobuf:"varint,1,opt,name=effect,proto3,enum=kodex.access_accounts.v1.AccessEffect" json:"effect,omitempty"`
+	// subject_type is the rule subject type.
+	SubjectType string `protobuf:"bytes,2,opt,name=subject_type,json=subjectType,proto3" json:"subject_type,omitempty"`
+	// subject_id is the rule subject id.
+	SubjectId string `protobuf:"bytes,3,opt,name=subject_id,json=subjectId,proto3" json:"subject_id,omitempty"`
+	// action_key is an access-action catalog key.
+	ActionKey string `protobuf:"bytes,4,opt,name=action_key,json=actionKey,proto3" json:"action_key,omitempty"`
+	// resource_type is protected resource type.
+	ResourceType string `protobuf:"bytes,5,opt,name=resource_type,json=resourceType,proto3" json:"resource_type,omitempty"`
+	// resource_id optionally narrows the resource.
+	ResourceId string `protobuf:"bytes,6,opt,name=resource_id,json=resourceId,proto3" json:"resource_id,omitempty"`
+	// scope_type is scope type.
+	ScopeType string `protobuf:"bytes,7,opt,name=scope_type,json=scopeType,proto3" json:"scope_type,omitempty"`
+	// scope_id is scope id.
+	ScopeId string `protobuf:"bytes,8,opt,name=scope_id,json=scopeId,proto3" json:"scope_id,omitempty"`
+	// priority orders matching rules.
+	Priority int32 `protobuf:"varint,9,opt,name=priority,proto3" json:"priority,omitempty"`
+	// status is rule status.
+	Status AccessRuleStatus `protobuf:"varint,10,opt,name=status,proto3,enum=kodex.access_accounts.v1.AccessRuleStatus" json:"status,omitempty"`
+	// meta carries idempotency, optional expected version and audit context.
+	Meta          *CommandMeta `protobuf:"bytes,11,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PutAccessRuleRequest) Reset() {
+	*x = PutAccessRuleRequest{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PutAccessRuleRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PutAccessRuleRequest) ProtoMessage() {}
+
+func (x *PutAccessRuleRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PutAccessRuleRequest.ProtoReflect.Descriptor instead.
+func (*PutAccessRuleRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *PutAccessRuleRequest) GetEffect() AccessEffect {
+	if x != nil {
+		return x.Effect
+	}
+	return AccessEffect_ACCESS_EFFECT_UNSPECIFIED
+}
+
+func (x *PutAccessRuleRequest) GetSubjectType() string {
+	if x != nil {
+		return x.SubjectType
+	}
+	return ""
+}
+
+func (x *PutAccessRuleRequest) GetSubjectId() string {
+	if x != nil {
+		return x.SubjectId
+	}
+	return ""
+}
+
+func (x *PutAccessRuleRequest) GetActionKey() string {
+	if x != nil {
+		return x.ActionKey
+	}
+	return ""
+}
+
+func (x *PutAccessRuleRequest) GetResourceType() string {
+	if x != nil {
+		return x.ResourceType
+	}
+	return ""
+}
+
+func (x *PutAccessRuleRequest) GetResourceId() string {
+	if x != nil {
+		return x.ResourceId
+	}
+	return ""
+}
+
+func (x *PutAccessRuleRequest) GetScopeType() string {
+	if x != nil {
+		return x.ScopeType
+	}
+	return ""
+}
+
+func (x *PutAccessRuleRequest) GetScopeId() string {
+	if x != nil {
+		return x.ScopeId
+	}
+	return ""
+}
+
+func (x *PutAccessRuleRequest) GetPriority() int32 {
+	if x != nil {
+		return x.Priority
+	}
+	return 0
+}
+
+func (x *PutAccessRuleRequest) GetStatus() AccessRuleStatus {
+	if x != nil {
+		return x.Status
+	}
+	return AccessRuleStatus_ACCESS_RULE_STATUS_UNSPECIFIED
+}
+
+func (x *PutAccessRuleRequest) GetMeta() *CommandMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+// DisableAccessRuleRequest disables an access rule.
+type DisableAccessRuleRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// access_rule_id is rule aggregate id.
+	AccessRuleId string `protobuf:"bytes,1,opt,name=access_rule_id,json=accessRuleId,proto3" json:"access_rule_id,omitempty"`
+	// meta carries idempotency, expected version and reason.
+	Meta          *CommandMeta `protobuf:"bytes,2,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DisableAccessRuleRequest) Reset() {
+	*x = DisableAccessRuleRequest{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DisableAccessRuleRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DisableAccessRuleRequest) ProtoMessage() {}
+
+func (x *DisableAccessRuleRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DisableAccessRuleRequest.ProtoReflect.Descriptor instead.
+func (*DisableAccessRuleRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *DisableAccessRuleRequest) GetAccessRuleId() string {
+	if x != nil {
+		return x.AccessRuleId
+	}
+	return ""
+}
+
+func (x *DisableAccessRuleRequest) GetMeta() *CommandMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+// AccessRuleResponse returns access rule state.
+type AccessRuleResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// access_rule_id is rule aggregate id.
+	AccessRuleId string `protobuf:"bytes,1,opt,name=access_rule_id,json=accessRuleId,proto3" json:"access_rule_id,omitempty"`
+	// effect is allow or deny.
+	Effect AccessEffect `protobuf:"varint,2,opt,name=effect,proto3,enum=kodex.access_accounts.v1.AccessEffect" json:"effect,omitempty"`
+	// subject_type is the rule subject type.
+	SubjectType string `protobuf:"bytes,3,opt,name=subject_type,json=subjectType,proto3" json:"subject_type,omitempty"`
+	// subject_id is the rule subject id.
+	SubjectId string `protobuf:"bytes,4,opt,name=subject_id,json=subjectId,proto3" json:"subject_id,omitempty"`
+	// action_key is access-action catalog key.
+	ActionKey string `protobuf:"bytes,5,opt,name=action_key,json=actionKey,proto3" json:"action_key,omitempty"`
+	// resource_type is protected resource type.
+	ResourceType string `protobuf:"bytes,6,opt,name=resource_type,json=resourceType,proto3" json:"resource_type,omitempty"`
+	// resource_id optionally narrows the resource.
+	ResourceId string `protobuf:"bytes,7,opt,name=resource_id,json=resourceId,proto3" json:"resource_id,omitempty"`
+	// scope_type is scope type.
+	ScopeType string `protobuf:"bytes,8,opt,name=scope_type,json=scopeType,proto3" json:"scope_type,omitempty"`
+	// scope_id is scope id.
+	ScopeId string `protobuf:"bytes,9,opt,name=scope_id,json=scopeId,proto3" json:"scope_id,omitempty"`
+	// priority orders matching rules.
+	Priority int32 `protobuf:"varint,10,opt,name=priority,proto3" json:"priority,omitempty"`
+	// status is rule status.
+	Status AccessRuleStatus `protobuf:"varint,11,opt,name=status,proto3,enum=kodex.access_accounts.v1.AccessRuleStatus" json:"status,omitempty"`
+	// version is aggregate version.
+	Version       int64 `protobuf:"varint,12,opt,name=version,proto3" json:"version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AccessRuleResponse) Reset() {
+	*x = AccessRuleResponse{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AccessRuleResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AccessRuleResponse) ProtoMessage() {}
+
+func (x *AccessRuleResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AccessRuleResponse.ProtoReflect.Descriptor instead.
+func (*AccessRuleResponse) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *AccessRuleResponse) GetAccessRuleId() string {
+	if x != nil {
+		return x.AccessRuleId
+	}
+	return ""
+}
+
+func (x *AccessRuleResponse) GetEffect() AccessEffect {
+	if x != nil {
+		return x.Effect
+	}
+	return AccessEffect_ACCESS_EFFECT_UNSPECIFIED
+}
+
+func (x *AccessRuleResponse) GetSubjectType() string {
+	if x != nil {
+		return x.SubjectType
+	}
+	return ""
+}
+
+func (x *AccessRuleResponse) GetSubjectId() string {
+	if x != nil {
+		return x.SubjectId
+	}
+	return ""
+}
+
+func (x *AccessRuleResponse) GetActionKey() string {
+	if x != nil {
+		return x.ActionKey
+	}
+	return ""
+}
+
+func (x *AccessRuleResponse) GetResourceType() string {
+	if x != nil {
+		return x.ResourceType
+	}
+	return ""
+}
+
+func (x *AccessRuleResponse) GetResourceId() string {
+	if x != nil {
+		return x.ResourceId
+	}
+	return ""
+}
+
+func (x *AccessRuleResponse) GetScopeType() string {
+	if x != nil {
+		return x.ScopeType
+	}
+	return ""
+}
+
+func (x *AccessRuleResponse) GetScopeId() string {
+	if x != nil {
+		return x.ScopeId
+	}
+	return ""
+}
+
+func (x *AccessRuleResponse) GetPriority() int32 {
+	if x != nil {
+		return x.Priority
+	}
+	return 0
+}
+
+func (x *AccessRuleResponse) GetStatus() AccessRuleStatus {
+	if x != nil {
+		return x.Status
+	}
+	return AccessRuleStatus_ACCESS_RULE_STATUS_UNSPECIFIED
+}
+
+func (x *AccessRuleResponse) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+// CheckAccessRequest asks access-manager to resolve effective access.
 type CheckAccessRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Subject       *SubjectRef            `protobuf:"bytes,1,opt,name=subject,proto3" json:"subject,omitempty"`
-	ActionKey     string                 `protobuf:"bytes,2,opt,name=action_key,json=actionKey,proto3" json:"action_key,omitempty"`
-	Resource      *ResourceRef           `protobuf:"bytes,3,opt,name=resource,proto3" json:"resource,omitempty"`
-	Scope         *ScopeRef              `protobuf:"bytes,4,opt,name=scope,proto3" json:"scope,omitempty"`
-	Audit         bool                   `protobuf:"varint,5,opt,name=audit,proto3" json:"audit,omitempty"`
-	Meta          *CommandMeta           `protobuf:"bytes,6,opt,name=meta,proto3" json:"meta,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// subject is the access subject.
+	Subject *SubjectRef `protobuf:"bytes,1,opt,name=subject,proto3" json:"subject,omitempty"`
+	// action_key is an access-action catalog key.
+	ActionKey string `protobuf:"bytes,2,opt,name=action_key,json=actionKey,proto3" json:"action_key,omitempty"`
+	// resource is the protected resource.
+	Resource *ResourceRef `protobuf:"bytes,3,opt,name=resource,proto3" json:"resource,omitempty"`
+	// scope is the scope where the access is checked.
+	Scope *ScopeRef `protobuf:"bytes,4,opt,name=scope,proto3" json:"scope,omitempty"`
+	// audit forces audit record creation when policy requires it.
+	Audit bool `protobuf:"varint,5,opt,name=audit,proto3" json:"audit,omitempty"`
+	// meta carries caller context for audit; idempotency is optional for reads.
+	Meta          *CommandMeta `protobuf:"bytes,6,opt,name=meta,proto3" json:"meta,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CheckAccessRequest) Reset() {
 	*x = CheckAccessRequest{}
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[7]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -499,7 +4529,7 @@ func (x *CheckAccessRequest) String() string {
 func (*CheckAccessRequest) ProtoMessage() {}
 
 func (x *CheckAccessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[7]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -512,7 +4542,7 @@ func (x *CheckAccessRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckAccessRequest.ProtoReflect.Descriptor instead.
 func (*CheckAccessRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{7}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *CheckAccessRequest) GetSubject() *SubjectRef {
@@ -557,19 +4587,24 @@ func (x *CheckAccessRequest) GetMeta() *CommandMeta {
 	return nil
 }
 
+// CheckAccessResponse returns access decision and matched rules.
 type CheckAccessResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Decision      string                 `protobuf:"bytes,1,opt,name=decision,proto3" json:"decision,omitempty"`
-	ReasonCode    string                 `protobuf:"bytes,2,opt,name=reason_code,json=reasonCode,proto3" json:"reason_code,omitempty"`
-	PolicyVersion int64                  `protobuf:"varint,3,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`
-	MatchedRules  []*MatchedRule         `protobuf:"bytes,4,rep,name=matched_rules,json=matchedRules,proto3" json:"matched_rules,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// decision is allow, deny or pending.
+	Decision AccessDecision `protobuf:"varint,1,opt,name=decision,proto3,enum=kodex.access_accounts.v1.AccessDecision" json:"decision,omitempty"`
+	// reason_code is a machine-readable reason.
+	ReasonCode string `protobuf:"bytes,2,opt,name=reason_code,json=reasonCode,proto3" json:"reason_code,omitempty"`
+	// policy_version is the highest matched policy version.
+	PolicyVersion int64 `protobuf:"varint,3,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`
+	// matched_rules explains rules used for the decision.
+	MatchedRules  []*MatchedRule `protobuf:"bytes,4,rep,name=matched_rules,json=matchedRules,proto3" json:"matched_rules,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CheckAccessResponse) Reset() {
 	*x = CheckAccessResponse{}
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[8]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -581,7 +4616,7 @@ func (x *CheckAccessResponse) String() string {
 func (*CheckAccessResponse) ProtoMessage() {}
 
 func (x *CheckAccessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[8]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -594,14 +4629,14 @@ func (x *CheckAccessResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckAccessResponse.ProtoReflect.Descriptor instead.
 func (*CheckAccessResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{8}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{39}
 }
 
-func (x *CheckAccessResponse) GetDecision() string {
+func (x *CheckAccessResponse) GetDecision() AccessDecision {
 	if x != nil {
 		return x.Decision
 	}
-	return ""
+	return AccessDecision_ACCESS_DECISION_UNSPECIFIED
 }
 
 func (x *CheckAccessResponse) GetReasonCode() string {
@@ -625,22 +4660,30 @@ func (x *CheckAccessResponse) GetMatchedRules() []*MatchedRule {
 	return nil
 }
 
+// MatchedRule explains a rule matched during access evaluation.
 type MatchedRule struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RuleId        string                 `protobuf:"bytes,1,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
-	Effect        string                 `protobuf:"bytes,2,opt,name=effect,proto3" json:"effect,omitempty"`
-	Subject       *SubjectRef            `protobuf:"bytes,3,opt,name=subject,proto3" json:"subject,omitempty"`
-	ActionKey     string                 `protobuf:"bytes,4,opt,name=action_key,json=actionKey,proto3" json:"action_key,omitempty"`
-	Scope         *ScopeRef              `protobuf:"bytes,5,opt,name=scope,proto3" json:"scope,omitempty"`
-	Priority      int32                  `protobuf:"varint,6,opt,name=priority,proto3" json:"priority,omitempty"`
-	ReasonCode    string                 `protobuf:"bytes,7,opt,name=reason_code,json=reasonCode,proto3" json:"reason_code,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// rule_id is matched rule id.
+	RuleId string `protobuf:"bytes,1,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
+	// effect is allow or deny.
+	Effect AccessEffect `protobuf:"varint,2,opt,name=effect,proto3,enum=kodex.access_accounts.v1.AccessEffect" json:"effect,omitempty"`
+	// subject is the matched subject.
+	Subject *SubjectRef `protobuf:"bytes,3,opt,name=subject,proto3" json:"subject,omitempty"`
+	// action_key is matched action key.
+	ActionKey string `protobuf:"bytes,4,opt,name=action_key,json=actionKey,proto3" json:"action_key,omitempty"`
+	// scope is matched scope.
+	Scope *ScopeRef `protobuf:"bytes,5,opt,name=scope,proto3" json:"scope,omitempty"`
+	// priority is rule priority.
+	Priority int32 `protobuf:"varint,6,opt,name=priority,proto3" json:"priority,omitempty"`
+	// reason_code is a machine-readable explanation reason.
+	ReasonCode    string `protobuf:"bytes,7,opt,name=reason_code,json=reasonCode,proto3" json:"reason_code,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *MatchedRule) Reset() {
 	*x = MatchedRule{}
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[9]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -652,7 +4695,7 @@ func (x *MatchedRule) String() string {
 func (*MatchedRule) ProtoMessage() {}
 
 func (x *MatchedRule) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[9]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -665,7 +4708,7 @@ func (x *MatchedRule) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchedRule.ProtoReflect.Descriptor instead.
 func (*MatchedRule) Descriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{9}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *MatchedRule) GetRuleId() string {
@@ -675,11 +4718,11 @@ func (x *MatchedRule) GetRuleId() string {
 	return ""
 }
 
-func (x *MatchedRule) GetEffect() string {
+func (x *MatchedRule) GetEffect() AccessEffect {
 	if x != nil {
 		return x.Effect
 	}
-	return ""
+	return AccessEffect_ACCESS_EFFECT_UNSPECIFIED
 }
 
 func (x *MatchedRule) GetSubject() *SubjectRef {
@@ -717,16 +4760,18 @@ func (x *MatchedRule) GetReasonCode() string {
 	return ""
 }
 
+// ExplainAccessRequest fetches a previously audited access decision.
 type ExplainAccessRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	AuditId       string                 `protobuf:"bytes,1,opt,name=audit_id,json=auditId,proto3" json:"audit_id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// audit_id is access decision audit id.
+	AuditId       string `protobuf:"bytes,1,opt,name=audit_id,json=auditId,proto3" json:"audit_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ExplainAccessRequest) Reset() {
 	*x = ExplainAccessRequest{}
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[10]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -738,7 +4783,7 @@ func (x *ExplainAccessRequest) String() string {
 func (*ExplainAccessRequest) ProtoMessage() {}
 
 func (x *ExplainAccessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[10]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -751,7 +4796,7 @@ func (x *ExplainAccessRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExplainAccessRequest.ProtoReflect.Descriptor instead.
 func (*ExplainAccessRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{10}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *ExplainAccessRequest) GetAuditId() string {
@@ -761,20 +4806,26 @@ func (x *ExplainAccessRequest) GetAuditId() string {
 	return ""
 }
 
+// ExplainAccessResponse explains a previously audited access decision.
 type ExplainAccessResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	AuditId       string                 `protobuf:"bytes,1,opt,name=audit_id,json=auditId,proto3" json:"audit_id,omitempty"`
-	Decision      string                 `protobuf:"bytes,2,opt,name=decision,proto3" json:"decision,omitempty"`
-	ReasonCode    string                 `protobuf:"bytes,3,opt,name=reason_code,json=reasonCode,proto3" json:"reason_code,omitempty"`
-	PolicyVersion int64                  `protobuf:"varint,4,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`
-	MatchedRules  []*MatchedRule         `protobuf:"bytes,5,rep,name=matched_rules,json=matchedRules,proto3" json:"matched_rules,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// audit_id is access decision audit id.
+	AuditId string `protobuf:"bytes,1,opt,name=audit_id,json=auditId,proto3" json:"audit_id,omitempty"`
+	// decision is allow, deny or pending.
+	Decision AccessDecision `protobuf:"varint,2,opt,name=decision,proto3,enum=kodex.access_accounts.v1.AccessDecision" json:"decision,omitempty"`
+	// reason_code is a machine-readable reason.
+	ReasonCode string `protobuf:"bytes,3,opt,name=reason_code,json=reasonCode,proto3" json:"reason_code,omitempty"`
+	// policy_version is the evaluated policy version.
+	PolicyVersion int64 `protobuf:"varint,4,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`
+	// matched_rules explains rules used for the decision.
+	MatchedRules  []*MatchedRule `protobuf:"bytes,5,rep,name=matched_rules,json=matchedRules,proto3" json:"matched_rules,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ExplainAccessResponse) Reset() {
 	*x = ExplainAccessResponse{}
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[11]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -786,7 +4837,7 @@ func (x *ExplainAccessResponse) String() string {
 func (*ExplainAccessResponse) ProtoMessage() {}
 
 func (x *ExplainAccessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[11]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -799,7 +4850,7 @@ func (x *ExplainAccessResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExplainAccessResponse.ProtoReflect.Descriptor instead.
 func (*ExplainAccessResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{11}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *ExplainAccessResponse) GetAuditId() string {
@@ -809,11 +4860,11 @@ func (x *ExplainAccessResponse) GetAuditId() string {
 	return ""
 }
 
-func (x *ExplainAccessResponse) GetDecision() string {
+func (x *ExplainAccessResponse) GetDecision() AccessDecision {
 	if x != nil {
 		return x.Decision
 	}
-	return ""
+	return AccessDecision_ACCESS_DECISION_UNSPECIFIED
 }
 
 func (x *ExplainAccessResponse) GetReasonCode() string {
@@ -837,18 +4888,22 @@ func (x *ExplainAccessResponse) GetMatchedRules() []*MatchedRule {
 	return nil
 }
 
+// ResolveExternalAccountUsageRequest checks whether an account can be used.
 type ResolveExternalAccountUsageRequest struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	ExternalAccountId string                 `protobuf:"bytes,1,opt,name=external_account_id,json=externalAccountId,proto3" json:"external_account_id,omitempty"`
-	ActionKey         string                 `protobuf:"bytes,2,opt,name=action_key,json=actionKey,proto3" json:"action_key,omitempty"`
-	UsageScope        *ScopeRef              `protobuf:"bytes,3,opt,name=usage_scope,json=usageScope,proto3" json:"usage_scope,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// external_account_id is account aggregate id.
+	ExternalAccountId string `protobuf:"bytes,1,opt,name=external_account_id,json=externalAccountId,proto3" json:"external_account_id,omitempty"`
+	// action_key is an access-action catalog key.
+	ActionKey string `protobuf:"bytes,2,opt,name=action_key,json=actionKey,proto3" json:"action_key,omitempty"`
+	// usage_scope is the requested usage scope.
+	UsageScope    *ScopeRef `protobuf:"bytes,3,opt,name=usage_scope,json=usageScope,proto3" json:"usage_scope,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ResolveExternalAccountUsageRequest) Reset() {
 	*x = ResolveExternalAccountUsageRequest{}
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[12]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -860,7 +4915,7 @@ func (x *ResolveExternalAccountUsageRequest) String() string {
 func (*ResolveExternalAccountUsageRequest) ProtoMessage() {}
 
 func (x *ResolveExternalAccountUsageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[12]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -873,7 +4928,7 @@ func (x *ResolveExternalAccountUsageRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use ResolveExternalAccountUsageRequest.ProtoReflect.Descriptor instead.
 func (*ResolveExternalAccountUsageRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{12}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *ResolveExternalAccountUsageRequest) GetExternalAccountId() string {
@@ -897,21 +4952,28 @@ func (x *ResolveExternalAccountUsageRequest) GetUsageScope() *ScopeRef {
 	return nil
 }
 
+// ResolveExternalAccountUsageResponse returns allowed account usage and secret metadata.
 type ResolveExternalAccountUsageResponse struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	ExternalAccountId string                 `protobuf:"bytes,1,opt,name=external_account_id,json=externalAccountId,proto3" json:"external_account_id,omitempty"`
-	ProviderId        string                 `protobuf:"bytes,2,opt,name=provider_id,json=providerId,proto3" json:"provider_id,omitempty"`
-	SecretRefId       string                 `protobuf:"bytes,3,opt,name=secret_ref_id,json=secretRefId,proto3" json:"secret_ref_id,omitempty"`
-	SecretStoreType   string                 `protobuf:"bytes,4,opt,name=secret_store_type,json=secretStoreType,proto3" json:"secret_store_type,omitempty"`
-	SecretStoreRef    string                 `protobuf:"bytes,5,opt,name=secret_store_ref,json=secretStoreRef,proto3" json:"secret_store_ref,omitempty"`
-	AllowedActionKeys []string               `protobuf:"bytes,6,rep,name=allowed_action_keys,json=allowedActionKeys,proto3" json:"allowed_action_keys,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// external_account_id is account aggregate id.
+	ExternalAccountId string `protobuf:"bytes,1,opt,name=external_account_id,json=externalAccountId,proto3" json:"external_account_id,omitempty"`
+	// provider_id is external provider id.
+	ProviderId string `protobuf:"bytes,2,opt,name=provider_id,json=providerId,proto3" json:"provider_id,omitempty"`
+	// secret_ref_id references secret metadata.
+	SecretRefId string `protobuf:"bytes,3,opt,name=secret_ref_id,json=secretRefId,proto3" json:"secret_ref_id,omitempty"`
+	// secret_store_type is vault or kubernetes_secret.
+	SecretStoreType string `protobuf:"bytes,4,opt,name=secret_store_type,json=secretStoreType,proto3" json:"secret_store_type,omitempty"`
+	// secret_store_ref is a pointer to secret location, never the secret value.
+	SecretStoreRef string `protobuf:"bytes,5,opt,name=secret_store_ref,json=secretStoreRef,proto3" json:"secret_store_ref,omitempty"`
+	// allowed_action_keys are actions allowed for this binding.
+	AllowedActionKeys []string `protobuf:"bytes,6,rep,name=allowed_action_keys,json=allowedActionKeys,proto3" json:"allowed_action_keys,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
 
 func (x *ResolveExternalAccountUsageResponse) Reset() {
 	*x = ResolveExternalAccountUsageResponse{}
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[13]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -923,7 +4985,7 @@ func (x *ResolveExternalAccountUsageResponse) String() string {
 func (*ResolveExternalAccountUsageResponse) ProtoMessage() {}
 
 func (x *ResolveExternalAccountUsageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[13]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -936,7 +4998,7 @@ func (x *ResolveExternalAccountUsageResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use ResolveExternalAccountUsageResponse.ProtoReflect.Descriptor instead.
 func (*ResolveExternalAccountUsageResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{13}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *ResolveExternalAccountUsageResponse) GetExternalAccountId() string {
@@ -981,20 +5043,439 @@ func (x *ResolveExternalAccountUsageResponse) GetAllowedActionKeys() []string {
 	return nil
 }
 
+// ListMembershipGraphRequest returns graph membership around a subject.
+type ListMembershipGraphRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// subject is the root graph subject.
+	Subject *SubjectRef `protobuf:"bytes,1,opt,name=subject,proto3" json:"subject,omitempty"`
+	// include_inactive includes pending, blocked or disabled memberships.
+	IncludeInactive bool `protobuf:"varint,2,opt,name=include_inactive,json=includeInactive,proto3" json:"include_inactive,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ListMembershipGraphRequest) Reset() {
+	*x = ListMembershipGraphRequest{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListMembershipGraphRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListMembershipGraphRequest) ProtoMessage() {}
+
+func (x *ListMembershipGraphRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListMembershipGraphRequest.ProtoReflect.Descriptor instead.
+func (*ListMembershipGraphRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *ListMembershipGraphRequest) GetSubject() *SubjectRef {
+	if x != nil {
+		return x.Subject
+	}
+	return nil
+}
+
+func (x *ListMembershipGraphRequest) GetIncludeInactive() bool {
+	if x != nil {
+		return x.IncludeInactive
+	}
+	return false
+}
+
+// MembershipEdge is one membership edge in the graph.
+type MembershipEdge struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// membership_id is membership aggregate id.
+	MembershipId string `protobuf:"bytes,1,opt,name=membership_id,json=membershipId,proto3" json:"membership_id,omitempty"`
+	// subject is edge source.
+	Subject *SubjectRef `protobuf:"bytes,2,opt,name=subject,proto3" json:"subject,omitempty"`
+	// target is edge target.
+	Target *SubjectRef `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	// status is membership status.
+	Status MembershipStatus `protobuf:"varint,4,opt,name=status,proto3,enum=kodex.access_accounts.v1.MembershipStatus" json:"status,omitempty"`
+	// source records why membership exists.
+	Source MembershipSource `protobuf:"varint,5,opt,name=source,proto3,enum=kodex.access_accounts.v1.MembershipSource" json:"source,omitempty"`
+	// version is aggregate version.
+	Version       int64 `protobuf:"varint,6,opt,name=version,proto3" json:"version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MembershipEdge) Reset() {
+	*x = MembershipEdge{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MembershipEdge) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MembershipEdge) ProtoMessage() {}
+
+func (x *MembershipEdge) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MembershipEdge.ProtoReflect.Descriptor instead.
+func (*MembershipEdge) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{46}
+}
+
+func (x *MembershipEdge) GetMembershipId() string {
+	if x != nil {
+		return x.MembershipId
+	}
+	return ""
+}
+
+func (x *MembershipEdge) GetSubject() *SubjectRef {
+	if x != nil {
+		return x.Subject
+	}
+	return nil
+}
+
+func (x *MembershipEdge) GetTarget() *SubjectRef {
+	if x != nil {
+		return x.Target
+	}
+	return nil
+}
+
+func (x *MembershipEdge) GetStatus() MembershipStatus {
+	if x != nil {
+		return x.Status
+	}
+	return MembershipStatus_MEMBERSHIP_STATUS_UNSPECIFIED
+}
+
+func (x *MembershipEdge) GetSource() MembershipSource {
+	if x != nil {
+		return x.Source
+	}
+	return MembershipSource_MEMBERSHIP_SOURCE_UNSPECIFIED
+}
+
+func (x *MembershipEdge) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+// ListMembershipGraphResponse returns membership graph edges.
+type ListMembershipGraphResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// root is the requested graph subject.
+	Root *SubjectRef `protobuf:"bytes,1,opt,name=root,proto3" json:"root,omitempty"`
+	// edges are membership graph edges.
+	Edges         []*MembershipEdge `protobuf:"bytes,2,rep,name=edges,proto3" json:"edges,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListMembershipGraphResponse) Reset() {
+	*x = ListMembershipGraphResponse{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListMembershipGraphResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListMembershipGraphResponse) ProtoMessage() {}
+
+func (x *ListMembershipGraphResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListMembershipGraphResponse.ProtoReflect.Descriptor instead.
+func (*ListMembershipGraphResponse) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *ListMembershipGraphResponse) GetRoot() *SubjectRef {
+	if x != nil {
+		return x.Root
+	}
+	return nil
+}
+
+func (x *ListMembershipGraphResponse) GetEdges() []*MembershipEdge {
+	if x != nil {
+		return x.Edges
+	}
+	return nil
+}
+
+// ListPendingAccessRequest lists pending or blocked access items.
+type ListPendingAccessRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// scope optionally narrows the result.
+	Scope *ScopeRef `protobuf:"bytes,1,opt,name=scope,proto3" json:"scope,omitempty"`
+	// limit limits returned items.
+	Limit int32 `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
+	// cursor continues a previous list call.
+	Cursor        string `protobuf:"bytes,3,opt,name=cursor,proto3" json:"cursor,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPendingAccessRequest) Reset() {
+	*x = ListPendingAccessRequest{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPendingAccessRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPendingAccessRequest) ProtoMessage() {}
+
+func (x *ListPendingAccessRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPendingAccessRequest.ProtoReflect.Descriptor instead.
+func (*ListPendingAccessRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{48}
+}
+
+func (x *ListPendingAccessRequest) GetScope() *ScopeRef {
+	if x != nil {
+		return x.Scope
+	}
+	return nil
+}
+
+func (x *ListPendingAccessRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *ListPendingAccessRequest) GetCursor() string {
+	if x != nil {
+		return x.Cursor
+	}
+	return ""
+}
+
+// PendingAccessItem is an operator-visible pending or blocked access item.
+type PendingAccessItem struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// item_id is stable item id.
+	ItemId string `protobuf:"bytes,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	// item_type is user, membership, external_account or access_decision.
+	ItemType string `protobuf:"bytes,2,opt,name=item_type,json=itemType,proto3" json:"item_type,omitempty"`
+	// subject is the affected subject.
+	Subject *SubjectRef `protobuf:"bytes,3,opt,name=subject,proto3" json:"subject,omitempty"`
+	// status is machine-readable pending or blocked status.
+	Status string `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	// reason_code is machine-readable reason.
+	ReasonCode string `protobuf:"bytes,5,opt,name=reason_code,json=reasonCode,proto3" json:"reason_code,omitempty"`
+	// created_at is RFC3339 timestamp.
+	CreatedAt     string `protobuf:"bytes,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PendingAccessItem) Reset() {
+	*x = PendingAccessItem{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PendingAccessItem) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PendingAccessItem) ProtoMessage() {}
+
+func (x *PendingAccessItem) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PendingAccessItem.ProtoReflect.Descriptor instead.
+func (*PendingAccessItem) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{49}
+}
+
+func (x *PendingAccessItem) GetItemId() string {
+	if x != nil {
+		return x.ItemId
+	}
+	return ""
+}
+
+func (x *PendingAccessItem) GetItemType() string {
+	if x != nil {
+		return x.ItemType
+	}
+	return ""
+}
+
+func (x *PendingAccessItem) GetSubject() *SubjectRef {
+	if x != nil {
+		return x.Subject
+	}
+	return nil
+}
+
+func (x *PendingAccessItem) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *PendingAccessItem) GetReasonCode() string {
+	if x != nil {
+		return x.ReasonCode
+	}
+	return ""
+}
+
+func (x *PendingAccessItem) GetCreatedAt() string {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return ""
+}
+
+// ListPendingAccessResponse returns pending or blocked access items.
+type ListPendingAccessResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// items are pending or blocked access items.
+	Items []*PendingAccessItem `protobuf:"bytes,1,rep,name=items,proto3" json:"items,omitempty"`
+	// next_cursor continues listing.
+	NextCursor    string `protobuf:"bytes,2,opt,name=next_cursor,json=nextCursor,proto3" json:"next_cursor,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPendingAccessResponse) Reset() {
+	*x = ListPendingAccessResponse{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[50]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPendingAccessResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPendingAccessResponse) ProtoMessage() {}
+
+func (x *ListPendingAccessResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[50]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPendingAccessResponse.ProtoReflect.Descriptor instead.
+func (*ListPendingAccessResponse) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{50}
+}
+
+func (x *ListPendingAccessResponse) GetItems() []*PendingAccessItem {
+	if x != nil {
+		return x.Items
+	}
+	return nil
+}
+
+func (x *ListPendingAccessResponse) GetNextCursor() string {
+	if x != nil {
+		return x.NextCursor
+	}
+	return ""
+}
+
 var File_kodex_access_accounts_v1_access_manager_proto protoreflect.FileDescriptor
 
 const file_kodex_access_accounts_v1_access_manager_proto_rawDesc = "" +
 	"\n" +
-	"-kodex/access_accounts/v1/access_manager.proto\x12\x18kodex.access_accounts.v1\"\xee\x01\n" +
+	"-kodex/access_accounts/v1/access_manager.proto\x12\x18kodex.access_accounts.v1\"\xdb\x02\n" +
 	"\vCommandMeta\x12\x1d\n" +
 	"\n" +
 	"command_id\x18\x01 \x01(\tR\tcommandId\x12'\n" +
-	"\x0fidempotency_key\x18\x02 \x01(\tR\x0eidempotencyKey\x12)\n" +
-	"\x10expected_version\x18\x03 \x01(\x03R\x0fexpectedVersion\x125\n" +
+	"\x0fidempotency_key\x18\x02 \x01(\tR\x0eidempotencyKey\x12.\n" +
+	"\x10expected_version\x18\x03 \x01(\x03H\x00R\x0fexpectedVersion\x88\x01\x01\x125\n" +
 	"\x05actor\x18\x04 \x01(\v2\x1f.kodex.access_accounts.v1.ActorR\x05actor\x12\x16\n" +
 	"\x06reason\x18\x05 \x01(\tR\x06reason\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x06 \x01(\tR\trequestId\"+\n" +
+	"request_id\x18\x06 \x01(\tR\trequestId\x12Q\n" +
+	"\x0frequest_context\x18\a \x01(\v2(.kodex.access_accounts.v1.RequestContextR\x0erequestContextB\x13\n" +
+	"\x11_expected_version\"\x88\x01\n" +
+	"\x0eRequestContext\x12\x16\n" +
+	"\x06source\x18\x01 \x01(\tR\x06source\x12\x19\n" +
+	"\btrace_id\x18\x02 \x01(\tR\atraceId\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x03 \x01(\tR\tsessionId\x12$\n" +
+	"\x0eclient_ip_hash\x18\x04 \x01(\tR\fclientIpHash\"+\n" +
 	"\x05Actor\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\tR\x02id\"0\n" +
@@ -1014,14 +5495,246 @@ const file_kodex_access_accounts_v1_access_manager_proto_rawDesc = "" +
 	"\x05email\x18\x03 \x01(\tR\x05email\x12!\n" +
 	"\fdisplay_name\x18\x04 \x01(\tR\vdisplayName\x12\x16\n" +
 	"\x06locale\x18\x05 \x01(\tR\x06locale\x129\n" +
-	"\x04meta\x18\x06 \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\xba\x01\n" +
+	"\x04meta\x18\x06 \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\x8a\x02\n" +
 	"!BootstrapUserFromIdentityResponse\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x16\n" +
-	"\x06status\x18\x02 \x01(\tR\x06status\x12\x1a\n" +
-	"\bdecision\x18\x03 \x01(\tR\bdecision\x12\x1f\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12<\n" +
+	"\x06status\x18\x02 \x01(\x0e2$.kodex.access_accounts.v1.UserStatusR\x06status\x12D\n" +
+	"\bdecision\x18\x03 \x01(\x0e2(.kodex.access_accounts.v1.AccessDecisionR\bdecision\x12\x1f\n" +
 	"\vreason_code\x18\x04 \x01(\tR\n" +
 	"reasonCode\x12'\n" +
-	"\x0forganization_id\x18\x05 \x01(\tR\x0eorganizationId\"\xc1\x02\n" +
+	"\x0forganization_id\x18\x05 \x01(\tR\x0eorganizationId\"\xa8\x01\n" +
+	"\x14SetUserStatusRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12<\n" +
+	"\x06status\x18\x02 \x01(\x0e2$.kodex.access_accounts.v1.UserStatusR\x06status\x129\n" +
+	"\x04meta\x18\x03 \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\xdf\x01\n" +
+	"\fUserResponse\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12#\n" +
+	"\rprimary_email\x18\x02 \x01(\tR\fprimaryEmail\x12!\n" +
+	"\fdisplay_name\x18\x03 \x01(\tR\vdisplayName\x12<\n" +
+	"\x06status\x18\x04 \x01(\x0e2$.kodex.access_accounts.v1.UserStatusR\x06status\x12\x16\n" +
+	"\x06locale\x18\x05 \x01(\tR\x06locale\x12\x18\n" +
+	"\aversion\x18\x06 \x01(\x03R\aversion\"\xf1\x02\n" +
+	"\x19CreateOrganizationRequest\x12>\n" +
+	"\x04kind\x18\x01 \x01(\x0e2*.kodex.access_accounts.v1.OrganizationKindR\x04kind\x12\x12\n" +
+	"\x04slug\x18\x02 \x01(\tR\x04slug\x12!\n" +
+	"\fdisplay_name\x18\x03 \x01(\tR\vdisplayName\x12&\n" +
+	"\x0fimage_asset_ref\x18\x04 \x01(\tR\rimageAssetRef\x12D\n" +
+	"\x06status\x18\x05 \x01(\x0e2,.kodex.access_accounts.v1.OrganizationStatusR\x06status\x124\n" +
+	"\x16parent_organization_id\x18\x06 \x01(\tR\x14parentOrganizationId\x129\n" +
+	"\x04meta\x18\a \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\x94\x02\n" +
+	"\x19UpdateOrganizationRequest\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12\x12\n" +
+	"\x04slug\x18\x02 \x01(\tR\x04slug\x12!\n" +
+	"\fdisplay_name\x18\x03 \x01(\tR\vdisplayName\x12&\n" +
+	"\x0fimage_asset_ref\x18\x04 \x01(\tR\rimageAssetRef\x124\n" +
+	"\x16parent_organization_id\x18\x05 \x01(\tR\x14parentOrganizationId\x129\n" +
+	"\x04meta\x18\x06 \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\x80\x01\n" +
+	"\x1aSuspendOrganizationRequest\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x129\n" +
+	"\x04meta\x18\x02 \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\x80\x01\n" +
+	"\x1aArchiveOrganizationRequest\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x129\n" +
+	"\x04meta\x18\x02 \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\xf4\x02\n" +
+	"\x14OrganizationResponse\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12>\n" +
+	"\x04kind\x18\x02 \x01(\x0e2*.kodex.access_accounts.v1.OrganizationKindR\x04kind\x12\x12\n" +
+	"\x04slug\x18\x03 \x01(\tR\x04slug\x12!\n" +
+	"\fdisplay_name\x18\x04 \x01(\tR\vdisplayName\x12&\n" +
+	"\x0fimage_asset_ref\x18\x05 \x01(\tR\rimageAssetRef\x12D\n" +
+	"\x06status\x18\x06 \x01(\x0e2,.kodex.access_accounts.v1.OrganizationStatusR\x06status\x124\n" +
+	"\x16parent_organization_id\x18\a \x01(\tR\x14parentOrganizationId\x12\x18\n" +
+	"\aversion\x18\b \x01(\x03R\aversion\"\xba\x02\n" +
+	"\x12CreateGroupRequest\x12G\n" +
+	"\n" +
+	"scope_type\x18\x01 \x01(\x0e2(.kodex.access_accounts.v1.GroupScopeTypeR\tscopeType\x12\x19\n" +
+	"\bscope_id\x18\x02 \x01(\tR\ascopeId\x12\x12\n" +
+	"\x04slug\x18\x03 \x01(\tR\x04slug\x12!\n" +
+	"\fdisplay_name\x18\x04 \x01(\tR\vdisplayName\x12&\n" +
+	"\x0fparent_group_id\x18\x05 \x01(\tR\rparentGroupId\x12&\n" +
+	"\x0fimage_asset_ref\x18\x06 \x01(\tR\rimageAssetRef\x129\n" +
+	"\x04meta\x18\a \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\xf1\x01\n" +
+	"\x12UpdateGroupRequest\x12\x19\n" +
+	"\bgroup_id\x18\x01 \x01(\tR\agroupId\x12\x12\n" +
+	"\x04slug\x18\x02 \x01(\tR\x04slug\x12!\n" +
+	"\fdisplay_name\x18\x03 \x01(\tR\vdisplayName\x12&\n" +
+	"\x0fparent_group_id\x18\x04 \x01(\tR\rparentGroupId\x12&\n" +
+	"\x0fimage_asset_ref\x18\x05 \x01(\tR\rimageAssetRef\x129\n" +
+	"\x04meta\x18\x06 \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"k\n" +
+	"\x13DisableGroupRequest\x12\x19\n" +
+	"\bgroup_id\x18\x01 \x01(\tR\agroupId\x129\n" +
+	"\x04meta\x18\x02 \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\xee\x02\n" +
+	"\rGroupResponse\x12\x19\n" +
+	"\bgroup_id\x18\x01 \x01(\tR\agroupId\x12G\n" +
+	"\n" +
+	"scope_type\x18\x02 \x01(\x0e2(.kodex.access_accounts.v1.GroupScopeTypeR\tscopeType\x12\x19\n" +
+	"\bscope_id\x18\x03 \x01(\tR\ascopeId\x12\x12\n" +
+	"\x04slug\x18\x04 \x01(\tR\x04slug\x12!\n" +
+	"\fdisplay_name\x18\x05 \x01(\tR\vdisplayName\x12&\n" +
+	"\x0fparent_group_id\x18\x06 \x01(\tR\rparentGroupId\x12&\n" +
+	"\x0fimage_asset_ref\x18\a \x01(\tR\rimageAssetRef\x12=\n" +
+	"\x06status\x18\b \x01(\x0e2%.kodex.access_accounts.v1.GroupStatusR\x06status\x12\x18\n" +
+	"\aversion\x18\t \x01(\x03R\aversion\"\xd7\x03\n" +
+	"\x14SetMembershipRequest\x12R\n" +
+	"\fsubject_type\x18\x01 \x01(\x0e2/.kodex.access_accounts.v1.MembershipSubjectTypeR\vsubjectType\x12\x1d\n" +
+	"\n" +
+	"subject_id\x18\x02 \x01(\tR\tsubjectId\x12O\n" +
+	"\vtarget_type\x18\x03 \x01(\x0e2..kodex.access_accounts.v1.MembershipTargetTypeR\n" +
+	"targetType\x12\x1b\n" +
+	"\ttarget_id\x18\x04 \x01(\tR\btargetId\x12\x1b\n" +
+	"\trole_hint\x18\x05 \x01(\tR\broleHint\x12B\n" +
+	"\x06status\x18\x06 \x01(\x0e2*.kodex.access_accounts.v1.MembershipStatusR\x06status\x12B\n" +
+	"\x06source\x18\a \x01(\x0e2*.kodex.access_accounts.v1.MembershipSourceR\x06source\x129\n" +
+	"\x04meta\x18\b \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\xd9\x03\n" +
+	"\x12MembershipResponse\x12#\n" +
+	"\rmembership_id\x18\x01 \x01(\tR\fmembershipId\x12R\n" +
+	"\fsubject_type\x18\x02 \x01(\x0e2/.kodex.access_accounts.v1.MembershipSubjectTypeR\vsubjectType\x12\x1d\n" +
+	"\n" +
+	"subject_id\x18\x03 \x01(\tR\tsubjectId\x12O\n" +
+	"\vtarget_type\x18\x04 \x01(\x0e2..kodex.access_accounts.v1.MembershipTargetTypeR\n" +
+	"targetType\x12\x1b\n" +
+	"\ttarget_id\x18\x05 \x01(\tR\btargetId\x12\x1b\n" +
+	"\trole_hint\x18\x06 \x01(\tR\broleHint\x12B\n" +
+	"\x06status\x18\a \x01(\x0e2*.kodex.access_accounts.v1.MembershipStatusR\x06status\x12B\n" +
+	"\x06source\x18\b \x01(\x0e2*.kodex.access_accounts.v1.MembershipSourceR\x06source\x12\x18\n" +
+	"\aversion\x18\t \x01(\x03R\aversion\"\xf1\x02\n" +
+	"\x18PutAllowlistEntryRequest\x12K\n" +
+	"\n" +
+	"match_type\x18\x01 \x01(\x0e2,.kodex.access_accounts.v1.AllowlistMatchTypeR\tmatchType\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value\x12'\n" +
+	"\x0forganization_id\x18\x03 \x01(\tR\x0eorganizationId\x12K\n" +
+	"\x0edefault_status\x18\x04 \x01(\x0e2$.kodex.access_accounts.v1.UserStatusR\rdefaultStatus\x12A\n" +
+	"\x06status\x18\x05 \x01(\x0e2).kodex.access_accounts.v1.AllowlistStatusR\x06status\x129\n" +
+	"\x04meta\x18\x06 \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\x87\x01\n" +
+	"\x1cDisableAllowlistEntryRequest\x12,\n" +
+	"\x12allowlist_entry_id\x18\x01 \x01(\tR\x10allowlistEntryId\x129\n" +
+	"\x04meta\x18\x02 \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\xe2\x02\n" +
+	"\x16AllowlistEntryResponse\x12,\n" +
+	"\x12allowlist_entry_id\x18\x01 \x01(\tR\x10allowlistEntryId\x12K\n" +
+	"\n" +
+	"match_type\x18\x02 \x01(\x0e2,.kodex.access_accounts.v1.AllowlistMatchTypeR\tmatchType\x12\x14\n" +
+	"\x05value\x18\x03 \x01(\tR\x05value\x12'\n" +
+	"\x0forganization_id\x18\x04 \x01(\tR\x0eorganizationId\x12K\n" +
+	"\x0edefault_status\x18\x05 \x01(\x0e2$.kodex.access_accounts.v1.UserStatusR\rdefaultStatus\x12A\n" +
+	"\x06status\x18\x06 \x01(\x0e2).kodex.access_accounts.v1.AllowlistStatusR\x06status\"\xd8\x02\n" +
+	"\x1fRegisterExternalProviderRequest\x12\x12\n" +
+	"\x04slug\x18\x01 \x01(\tR\x04slug\x12S\n" +
+	"\rprovider_kind\x18\x02 \x01(\x0e2..kodex.access_accounts.v1.ExternalProviderKindR\fproviderKind\x12!\n" +
+	"\fdisplay_name\x18\x03 \x01(\tR\vdisplayName\x12$\n" +
+	"\x0eicon_asset_ref\x18\x04 \x01(\tR\ficonAssetRef\x12H\n" +
+	"\x06status\x18\x05 \x01(\x0e20.kodex.access_accounts.v1.ExternalProviderStatusR\x06status\x129\n" +
+	"\x04meta\x18\x06 \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\x88\x03\n" +
+	"\x1dUpdateExternalProviderRequest\x120\n" +
+	"\x14external_provider_id\x18\x01 \x01(\tR\x12externalProviderId\x12\x12\n" +
+	"\x04slug\x18\x02 \x01(\tR\x04slug\x12S\n" +
+	"\rprovider_kind\x18\x03 \x01(\x0e2..kodex.access_accounts.v1.ExternalProviderKindR\fproviderKind\x12!\n" +
+	"\fdisplay_name\x18\x04 \x01(\tR\vdisplayName\x12$\n" +
+	"\x0eicon_asset_ref\x18\x05 \x01(\tR\ficonAssetRef\x12H\n" +
+	"\x06status\x18\x06 \x01(\x0e20.kodex.access_accounts.v1.ExternalProviderStatusR\x06status\x129\n" +
+	"\x04meta\x18\a \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\xe2\x02\n" +
+	"\x18ExternalProviderResponse\x120\n" +
+	"\x14external_provider_id\x18\x01 \x01(\tR\x12externalProviderId\x12\x12\n" +
+	"\x04slug\x18\x02 \x01(\tR\x04slug\x12S\n" +
+	"\rprovider_kind\x18\x03 \x01(\x0e2..kodex.access_accounts.v1.ExternalProviderKindR\fproviderKind\x12!\n" +
+	"\fdisplay_name\x18\x04 \x01(\tR\vdisplayName\x12$\n" +
+	"\x0eicon_asset_ref\x18\x05 \x01(\tR\ficonAssetRef\x12H\n" +
+	"\x06status\x18\x06 \x01(\x0e20.kodex.access_accounts.v1.ExternalProviderStatusR\x06status\x12\x18\n" +
+	"\aversion\x18\a \x01(\x03R\aversion\"\xaa\x04\n" +
+	"\x1eRegisterExternalAccountRequest\x120\n" +
+	"\x14external_provider_id\x18\x01 \x01(\tR\x12externalProviderId\x12P\n" +
+	"\faccount_type\x18\x02 \x01(\x0e2-.kodex.access_accounts.v1.ExternalAccountTypeR\vaccountType\x12!\n" +
+	"\fdisplay_name\x18\x03 \x01(\tR\vdisplayName\x12&\n" +
+	"\x0fimage_asset_ref\x18\x04 \x01(\tR\rimageAssetRef\x12\\\n" +
+	"\x10owner_scope_type\x18\x05 \x01(\x0e22.kodex.access_accounts.v1.ExternalAccountScopeTypeR\x0eownerScopeType\x12$\n" +
+	"\x0eowner_scope_id\x18\x06 \x01(\tR\fownerScopeId\x12G\n" +
+	"\x06status\x18\a \x01(\x0e2/.kodex.access_accounts.v1.ExternalAccountStatusR\x06status\x121\n" +
+	"\x15secret_binding_ref_id\x18\b \x01(\tR\x12secretBindingRefId\x129\n" +
+	"\x04meta\x18\t \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\xd8\x01\n" +
+	"\"UpdateExternalAccountStatusRequest\x12.\n" +
+	"\x13external_account_id\x18\x01 \x01(\tR\x11externalAccountId\x12G\n" +
+	"\x06status\x18\x02 \x01(\x0e2/.kodex.access_accounts.v1.ExternalAccountStatusR\x06status\x129\n" +
+	"\x04meta\x18\x03 \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\xb2\x04\n" +
+	"\x17ExternalAccountResponse\x12.\n" +
+	"\x13external_account_id\x18\x01 \x01(\tR\x11externalAccountId\x120\n" +
+	"\x14external_provider_id\x18\x02 \x01(\tR\x12externalProviderId\x12P\n" +
+	"\faccount_type\x18\x03 \x01(\x0e2-.kodex.access_accounts.v1.ExternalAccountTypeR\vaccountType\x12!\n" +
+	"\fdisplay_name\x18\x04 \x01(\tR\vdisplayName\x12&\n" +
+	"\x0fimage_asset_ref\x18\x05 \x01(\tR\rimageAssetRef\x12\\\n" +
+	"\x10owner_scope_type\x18\x06 \x01(\x0e22.kodex.access_accounts.v1.ExternalAccountScopeTypeR\x0eownerScopeType\x12$\n" +
+	"\x0eowner_scope_id\x18\a \x01(\tR\fownerScopeId\x12G\n" +
+	"\x06status\x18\b \x01(\x0e2/.kodex.access_accounts.v1.ExternalAccountStatusR\x06status\x121\n" +
+	"\x15secret_binding_ref_id\x18\t \x01(\tR\x12secretBindingRefId\x12\x18\n" +
+	"\aversion\x18\n" +
+	" \x01(\x03R\aversion\"\x8b\x03\n" +
+	"\x1aBindExternalAccountRequest\x12.\n" +
+	"\x13external_account_id\x18\x01 \x01(\tR\x11externalAccountId\x12\\\n" +
+	"\x10usage_scope_type\x18\x02 \x01(\x0e22.kodex.access_accounts.v1.ExternalAccountScopeTypeR\x0eusageScopeType\x12$\n" +
+	"\x0eusage_scope_id\x18\x03 \x01(\tR\fusageScopeId\x12.\n" +
+	"\x13allowed_action_keys\x18\x04 \x03(\tR\x11allowedActionKeys\x12N\n" +
+	"\x06status\x18\x05 \x01(\x0e26.kodex.access_accounts.v1.ExternalAccountBindingStatusR\x06status\x129\n" +
+	"\x04meta\x18\x06 \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\xa0\x01\n" +
+	"$DisableExternalAccountBindingRequest\x12=\n" +
+	"\x1bexternal_account_binding_id\x18\x01 \x01(\tR\x18externalAccountBindingId\x129\n" +
+	"\x04meta\x18\x02 \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\x93\x03\n" +
+	"\x1eExternalAccountBindingResponse\x12=\n" +
+	"\x1bexternal_account_binding_id\x18\x01 \x01(\tR\x18externalAccountBindingId\x12.\n" +
+	"\x13external_account_id\x18\x02 \x01(\tR\x11externalAccountId\x12\\\n" +
+	"\x10usage_scope_type\x18\x03 \x01(\x0e22.kodex.access_accounts.v1.ExternalAccountScopeTypeR\x0eusageScopeType\x12$\n" +
+	"\x0eusage_scope_id\x18\x04 \x01(\tR\fusageScopeId\x12.\n" +
+	"\x13allowed_action_keys\x18\x05 \x03(\tR\x11allowedActionKeys\x12N\n" +
+	"\x06status\x18\x06 \x01(\x0e26.kodex.access_accounts.v1.ExternalAccountBindingStatusR\x06status\"\x95\x02\n" +
+	"\x16PutAccessActionRequest\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12!\n" +
+	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12 \n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\x12#\n" +
+	"\rresource_type\x18\x04 \x01(\tR\fresourceType\x12D\n" +
+	"\x06status\x18\x05 \x01(\x0e2,.kodex.access_accounts.v1.AccessActionStatusR\x06status\x129\n" +
+	"\x04meta\x18\x06 \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\x9c\x02\n" +
+	"\x14AccessActionResponse\x12(\n" +
+	"\x10access_action_id\x18\x01 \x01(\tR\x0eaccessActionId\x12\x10\n" +
+	"\x03key\x18\x02 \x01(\tR\x03key\x12!\n" +
+	"\fdisplay_name\x18\x03 \x01(\tR\vdisplayName\x12 \n" +
+	"\vdescription\x18\x04 \x01(\tR\vdescription\x12#\n" +
+	"\rresource_type\x18\x05 \x01(\tR\fresourceType\x12D\n" +
+	"\x06status\x18\x06 \x01(\x0e2,.kodex.access_accounts.v1.AccessActionStatusR\x06status\x12\x18\n" +
+	"\aversion\x18\a \x01(\x03R\aversion\"\xd2\x03\n" +
+	"\x14PutAccessRuleRequest\x12>\n" +
+	"\x06effect\x18\x01 \x01(\x0e2&.kodex.access_accounts.v1.AccessEffectR\x06effect\x12!\n" +
+	"\fsubject_type\x18\x02 \x01(\tR\vsubjectType\x12\x1d\n" +
+	"\n" +
+	"subject_id\x18\x03 \x01(\tR\tsubjectId\x12\x1d\n" +
+	"\n" +
+	"action_key\x18\x04 \x01(\tR\tactionKey\x12#\n" +
+	"\rresource_type\x18\x05 \x01(\tR\fresourceType\x12\x1f\n" +
+	"\vresource_id\x18\x06 \x01(\tR\n" +
+	"resourceId\x12\x1d\n" +
+	"\n" +
+	"scope_type\x18\a \x01(\tR\tscopeType\x12\x19\n" +
+	"\bscope_id\x18\b \x01(\tR\ascopeId\x12\x1a\n" +
+	"\bpriority\x18\t \x01(\x05R\bpriority\x12B\n" +
+	"\x06status\x18\n" +
+	" \x01(\x0e2*.kodex.access_accounts.v1.AccessRuleStatusR\x06status\x129\n" +
+	"\x04meta\x18\v \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"{\n" +
+	"\x18DisableAccessRuleRequest\x12$\n" +
+	"\x0eaccess_rule_id\x18\x01 \x01(\tR\faccessRuleId\x129\n" +
+	"\x04meta\x18\x02 \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\xd5\x03\n" +
+	"\x12AccessRuleResponse\x12$\n" +
+	"\x0eaccess_rule_id\x18\x01 \x01(\tR\faccessRuleId\x12>\n" +
+	"\x06effect\x18\x02 \x01(\x0e2&.kodex.access_accounts.v1.AccessEffectR\x06effect\x12!\n" +
+	"\fsubject_type\x18\x03 \x01(\tR\vsubjectType\x12\x1d\n" +
+	"\n" +
+	"subject_id\x18\x04 \x01(\tR\tsubjectId\x12\x1d\n" +
+	"\n" +
+	"action_key\x18\x05 \x01(\tR\tactionKey\x12#\n" +
+	"\rresource_type\x18\x06 \x01(\tR\fresourceType\x12\x1f\n" +
+	"\vresource_id\x18\a \x01(\tR\n" +
+	"resourceId\x12\x1d\n" +
+	"\n" +
+	"scope_type\x18\b \x01(\tR\tscopeType\x12\x19\n" +
+	"\bscope_id\x18\t \x01(\tR\ascopeId\x12\x1a\n" +
+	"\bpriority\x18\n" +
+	" \x01(\x05R\bpriority\x12B\n" +
+	"\x06status\x18\v \x01(\x0e2*.kodex.access_accounts.v1.AccessRuleStatusR\x06status\x12\x18\n" +
+	"\aversion\x18\f \x01(\x03R\aversion\"\xc1\x02\n" +
 	"\x12CheckAccessRequest\x12>\n" +
 	"\asubject\x18\x01 \x01(\v2$.kodex.access_accounts.v1.SubjectRefR\asubject\x12\x1d\n" +
 	"\n" +
@@ -1029,16 +5742,16 @@ const file_kodex_access_accounts_v1_access_manager_proto_rawDesc = "" +
 	"\bresource\x18\x03 \x01(\v2%.kodex.access_accounts.v1.ResourceRefR\bresource\x128\n" +
 	"\x05scope\x18\x04 \x01(\v2\".kodex.access_accounts.v1.ScopeRefR\x05scope\x12\x14\n" +
 	"\x05audit\x18\x05 \x01(\bR\x05audit\x129\n" +
-	"\x04meta\x18\x06 \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\xc5\x01\n" +
-	"\x13CheckAccessResponse\x12\x1a\n" +
-	"\bdecision\x18\x01 \x01(\tR\bdecision\x12\x1f\n" +
+	"\x04meta\x18\x06 \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\xef\x01\n" +
+	"\x13CheckAccessResponse\x12D\n" +
+	"\bdecision\x18\x01 \x01(\x0e2(.kodex.access_accounts.v1.AccessDecisionR\bdecision\x12\x1f\n" +
 	"\vreason_code\x18\x02 \x01(\tR\n" +
 	"reasonCode\x12%\n" +
 	"\x0epolicy_version\x18\x03 \x01(\x03R\rpolicyVersion\x12J\n" +
-	"\rmatched_rules\x18\x04 \x03(\v2%.kodex.access_accounts.v1.MatchedRuleR\fmatchedRules\"\x94\x02\n" +
+	"\rmatched_rules\x18\x04 \x03(\v2%.kodex.access_accounts.v1.MatchedRuleR\fmatchedRules\"\xbc\x02\n" +
 	"\vMatchedRule\x12\x17\n" +
-	"\arule_id\x18\x01 \x01(\tR\x06ruleId\x12\x16\n" +
-	"\x06effect\x18\x02 \x01(\tR\x06effect\x12>\n" +
+	"\arule_id\x18\x01 \x01(\tR\x06ruleId\x12>\n" +
+	"\x06effect\x18\x02 \x01(\x0e2&.kodex.access_accounts.v1.AccessEffectR\x06effect\x12>\n" +
 	"\asubject\x18\x03 \x01(\v2$.kodex.access_accounts.v1.SubjectRefR\asubject\x12\x1d\n" +
 	"\n" +
 	"action_key\x18\x04 \x01(\tR\tactionKey\x128\n" +
@@ -1047,10 +5760,10 @@ const file_kodex_access_accounts_v1_access_manager_proto_rawDesc = "" +
 	"\vreason_code\x18\a \x01(\tR\n" +
 	"reasonCode\"1\n" +
 	"\x14ExplainAccessRequest\x12\x19\n" +
-	"\baudit_id\x18\x01 \x01(\tR\aauditId\"\xe2\x01\n" +
+	"\baudit_id\x18\x01 \x01(\tR\aauditId\"\x8c\x02\n" +
 	"\x15ExplainAccessResponse\x12\x19\n" +
-	"\baudit_id\x18\x01 \x01(\tR\aauditId\x12\x1a\n" +
-	"\bdecision\x18\x02 \x01(\tR\bdecision\x12\x1f\n" +
+	"\baudit_id\x18\x01 \x01(\tR\aauditId\x12D\n" +
+	"\bdecision\x18\x02 \x01(\x0e2(.kodex.access_accounts.v1.AccessDecisionR\bdecision\x12\x1f\n" +
 	"\vreason_code\x18\x03 \x01(\tR\n" +
 	"reasonCode\x12%\n" +
 	"\x0epolicy_version\x18\x04 \x01(\x03R\rpolicyVersion\x12J\n" +
@@ -1068,12 +5781,184 @@ const file_kodex_access_accounts_v1_access_manager_proto_rawDesc = "" +
 	"\rsecret_ref_id\x18\x03 \x01(\tR\vsecretRefId\x12*\n" +
 	"\x11secret_store_type\x18\x04 \x01(\tR\x0fsecretStoreType\x12(\n" +
 	"\x10secret_store_ref\x18\x05 \x01(\tR\x0esecretStoreRef\x12.\n" +
-	"\x13allowed_action_keys\x18\x06 \x03(\tR\x11allowedActionKeys2\xa8\x04\n" +
+	"\x13allowed_action_keys\x18\x06 \x03(\tR\x11allowedActionKeys\"\x87\x01\n" +
+	"\x1aListMembershipGraphRequest\x12>\n" +
+	"\asubject\x18\x01 \x01(\v2$.kodex.access_accounts.v1.SubjectRefR\asubject\x12)\n" +
+	"\x10include_inactive\x18\x02 \x01(\bR\x0fincludeInactive\"\xd5\x02\n" +
+	"\x0eMembershipEdge\x12#\n" +
+	"\rmembership_id\x18\x01 \x01(\tR\fmembershipId\x12>\n" +
+	"\asubject\x18\x02 \x01(\v2$.kodex.access_accounts.v1.SubjectRefR\asubject\x12<\n" +
+	"\x06target\x18\x03 \x01(\v2$.kodex.access_accounts.v1.SubjectRefR\x06target\x12B\n" +
+	"\x06status\x18\x04 \x01(\x0e2*.kodex.access_accounts.v1.MembershipStatusR\x06status\x12B\n" +
+	"\x06source\x18\x05 \x01(\x0e2*.kodex.access_accounts.v1.MembershipSourceR\x06source\x12\x18\n" +
+	"\aversion\x18\x06 \x01(\x03R\aversion\"\x97\x01\n" +
+	"\x1bListMembershipGraphResponse\x128\n" +
+	"\x04root\x18\x01 \x01(\v2$.kodex.access_accounts.v1.SubjectRefR\x04root\x12>\n" +
+	"\x05edges\x18\x02 \x03(\v2(.kodex.access_accounts.v1.MembershipEdgeR\x05edges\"\x82\x01\n" +
+	"\x18ListPendingAccessRequest\x128\n" +
+	"\x05scope\x18\x01 \x01(\v2\".kodex.access_accounts.v1.ScopeRefR\x05scope\x12\x14\n" +
+	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n" +
+	"\x06cursor\x18\x03 \x01(\tR\x06cursor\"\xe1\x01\n" +
+	"\x11PendingAccessItem\x12\x17\n" +
+	"\aitem_id\x18\x01 \x01(\tR\x06itemId\x12\x1b\n" +
+	"\titem_type\x18\x02 \x01(\tR\bitemType\x12>\n" +
+	"\asubject\x18\x03 \x01(\v2$.kodex.access_accounts.v1.SubjectRefR\asubject\x12\x16\n" +
+	"\x06status\x18\x04 \x01(\tR\x06status\x12\x1f\n" +
+	"\vreason_code\x18\x05 \x01(\tR\n" +
+	"reasonCode\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x06 \x01(\tR\tcreatedAt\"\x7f\n" +
+	"\x19ListPendingAccessResponse\x12A\n" +
+	"\x05items\x18\x01 \x03(\v2+.kodex.access_accounts.v1.PendingAccessItemR\x05items\x12\x1f\n" +
+	"\vnext_cursor\x18\x02 \x01(\tR\n" +
+	"nextCursor*\x83\x01\n" +
+	"\x0eAccessDecision\x12\x1f\n" +
+	"\x1bACCESS_DECISION_UNSPECIFIED\x10\x00\x12\x19\n" +
+	"\x15ACCESS_DECISION_ALLOW\x10\x01\x12\x18\n" +
+	"\x14ACCESS_DECISION_DENY\x10\x02\x12\x1b\n" +
+	"\x17ACCESS_DECISION_PENDING\x10\x03*^\n" +
+	"\fAccessEffect\x12\x1d\n" +
+	"\x19ACCESS_EFFECT_UNSPECIFIED\x10\x00\x12\x17\n" +
+	"\x13ACCESS_EFFECT_ALLOW\x10\x01\x12\x16\n" +
+	"\x12ACCESS_EFFECT_DENY\x10\x02*\xf8\x01\n" +
+	"\x10OrganizationKind\x12!\n" +
+	"\x1dORGANIZATION_KIND_UNSPECIFIED\x10\x00\x12\x1b\n" +
+	"\x17ORGANIZATION_KIND_OWNER\x10\x01\x12\x1c\n" +
+	"\x18ORGANIZATION_KIND_CLIENT\x10\x02\x12 \n" +
+	"\x1cORGANIZATION_KIND_CONTRACTOR\x10\x03\x12\x1a\n" +
+	"\x16ORGANIZATION_KIND_SAAS\x10\x04\x12!\n" +
+	"\x1dORGANIZATION_KIND_SAAS_CLIENT\x10\x05\x12%\n" +
+	"!ORGANIZATION_KIND_SAAS_CONTRACTOR\x10\x06*\xbf\x01\n" +
+	"\x12OrganizationStatus\x12#\n" +
+	"\x1fORGANIZATION_STATUS_UNSPECIFIED\x10\x00\x12\x1e\n" +
+	"\x1aORGANIZATION_STATUS_ACTIVE\x10\x01\x12\x1f\n" +
+	"\x1bORGANIZATION_STATUS_PENDING\x10\x02\x12!\n" +
+	"\x1dORGANIZATION_STATUS_SUSPENDED\x10\x03\x12 \n" +
+	"\x1cORGANIZATION_STATUS_ARCHIVED\x10\x04*\x8d\x01\n" +
+	"\n" +
+	"UserStatus\x12\x1b\n" +
+	"\x17USER_STATUS_UNSPECIFIED\x10\x00\x12\x16\n" +
+	"\x12USER_STATUS_ACTIVE\x10\x01\x12\x17\n" +
+	"\x13USER_STATUS_PENDING\x10\x02\x12\x17\n" +
+	"\x13USER_STATUS_BLOCKED\x10\x03\x12\x18\n" +
+	"\x14USER_STATUS_DISABLED\x10\x04*r\n" +
+	"\x0eGroupScopeType\x12 \n" +
+	"\x1cGROUP_SCOPE_TYPE_UNSPECIFIED\x10\x00\x12\x1b\n" +
+	"\x17GROUP_SCOPE_TYPE_GLOBAL\x10\x01\x12!\n" +
+	"\x1dGROUP_SCOPE_TYPE_ORGANIZATION\x10\x02*z\n" +
+	"\vGroupStatus\x12\x1c\n" +
+	"\x18GROUP_STATUS_UNSPECIFIED\x10\x00\x12\x17\n" +
+	"\x13GROUP_STATUS_ACTIVE\x10\x01\x12\x19\n" +
+	"\x15GROUP_STATUS_DISABLED\x10\x02\x12\x19\n" +
+	"\x15GROUP_STATUS_ARCHIVED\x10\x03*\xb3\x01\n" +
+	"\x15MembershipSubjectType\x12'\n" +
+	"#MEMBERSHIP_SUBJECT_TYPE_UNSPECIFIED\x10\x00\x12 \n" +
+	"\x1cMEMBERSHIP_SUBJECT_TYPE_USER\x10\x01\x12!\n" +
+	"\x1dMEMBERSHIP_SUBJECT_TYPE_GROUP\x10\x02\x12,\n" +
+	"(MEMBERSHIP_SUBJECT_TYPE_EXTERNAL_ACCOUNT\x10\x03*\x89\x01\n" +
+	"\x14MembershipTargetType\x12&\n" +
+	"\"MEMBERSHIP_TARGET_TYPE_UNSPECIFIED\x10\x00\x12'\n" +
+	"#MEMBERSHIP_TARGET_TYPE_ORGANIZATION\x10\x01\x12 \n" +
+	"\x1cMEMBERSHIP_TARGET_TYPE_GROUP\x10\x02*\xb1\x01\n" +
+	"\x10MembershipStatus\x12!\n" +
+	"\x1dMEMBERSHIP_STATUS_UNSPECIFIED\x10\x00\x12\x1c\n" +
+	"\x18MEMBERSHIP_STATUS_ACTIVE\x10\x01\x12\x1d\n" +
+	"\x19MEMBERSHIP_STATUS_PENDING\x10\x02\x12\x1d\n" +
+	"\x19MEMBERSHIP_STATUS_BLOCKED\x10\x03\x12\x1e\n" +
+	"\x1aMEMBERSHIP_STATUS_DISABLED\x10\x04*\xae\x01\n" +
+	"\x10MembershipSource\x12!\n" +
+	"\x1dMEMBERSHIP_SOURCE_UNSPECIFIED\x10\x00\x12\x1c\n" +
+	"\x18MEMBERSHIP_SOURCE_MANUAL\x10\x01\x12\x1f\n" +
+	"\x1bMEMBERSHIP_SOURCE_BOOTSTRAP\x10\x02\x12\x1a\n" +
+	"\x16MEMBERSHIP_SOURCE_SYNC\x10\x03\x12\x1c\n" +
+	"\x18MEMBERSHIP_SOURCE_SYSTEM\x10\x04*{\n" +
+	"\x12AllowlistMatchType\x12$\n" +
+	" ALLOWLIST_MATCH_TYPE_UNSPECIFIED\x10\x00\x12\x1e\n" +
+	"\x1aALLOWLIST_MATCH_TYPE_EMAIL\x10\x01\x12\x1f\n" +
+	"\x1bALLOWLIST_MATCH_TYPE_DOMAIN\x10\x02*o\n" +
+	"\x0fAllowlistStatus\x12 \n" +
+	"\x1cALLOWLIST_STATUS_UNSPECIFIED\x10\x00\x12\x1b\n" +
+	"\x17ALLOWLIST_STATUS_ACTIVE\x10\x01\x12\x1d\n" +
+	"\x19ALLOWLIST_STATUS_DISABLED\x10\x02*\x99\x02\n" +
+	"\x14ExternalProviderKind\x12&\n" +
+	"\"EXTERNAL_PROVIDER_KIND_UNSPECIFIED\x10\x00\x12%\n" +
+	"!EXTERNAL_PROVIDER_KIND_REPOSITORY\x10\x01\x12#\n" +
+	"\x1fEXTERNAL_PROVIDER_KIND_IDENTITY\x10\x02\x12 \n" +
+	"\x1cEXTERNAL_PROVIDER_KIND_MODEL\x10\x03\x12$\n" +
+	" EXTERNAL_PROVIDER_KIND_MESSAGING\x10\x04\x12#\n" +
+	"\x1fEXTERNAL_PROVIDER_KIND_PAYMENTS\x10\x05\x12 \n" +
+	"\x1cEXTERNAL_PROVIDER_KIND_OTHER\x10\x06*\x8e\x01\n" +
+	"\x16ExternalProviderStatus\x12(\n" +
+	"$EXTERNAL_PROVIDER_STATUS_UNSPECIFIED\x10\x00\x12#\n" +
+	"\x1fEXTERNAL_PROVIDER_STATUS_ACTIVE\x10\x01\x12%\n" +
+	"!EXTERNAL_PROVIDER_STATUS_DISABLED\x10\x02*\xc5\x01\n" +
+	"\x13ExternalAccountType\x12%\n" +
+	"!EXTERNAL_ACCOUNT_TYPE_UNSPECIFIED\x10\x00\x12\x1e\n" +
+	"\x1aEXTERNAL_ACCOUNT_TYPE_USER\x10\x01\x12\x1d\n" +
+	"\x19EXTERNAL_ACCOUNT_TYPE_BOT\x10\x02\x12!\n" +
+	"\x1dEXTERNAL_ACCOUNT_TYPE_SERVICE\x10\x03\x12%\n" +
+	"!EXTERNAL_ACCOUNT_TYPE_INTEGRATION\x10\x04*\xa3\x02\n" +
+	"\x15ExternalAccountStatus\x12'\n" +
+	"#EXTERNAL_ACCOUNT_STATUS_UNSPECIFIED\x10\x00\x12\"\n" +
+	"\x1eEXTERNAL_ACCOUNT_STATUS_ACTIVE\x10\x01\x12#\n" +
+	"\x1fEXTERNAL_ACCOUNT_STATUS_PENDING\x10\x02\x12(\n" +
+	"$EXTERNAL_ACCOUNT_STATUS_NEEDS_REAUTH\x10\x03\x12#\n" +
+	"\x1fEXTERNAL_ACCOUNT_STATUS_LIMITED\x10\x04\x12#\n" +
+	"\x1fEXTERNAL_ACCOUNT_STATUS_BLOCKED\x10\x05\x12$\n" +
+	" EXTERNAL_ACCOUNT_STATUS_DISABLED\x10\x06*\x88\x04\n" +
+	"\x18ExternalAccountScopeType\x12+\n" +
+	"'EXTERNAL_ACCOUNT_SCOPE_TYPE_UNSPECIFIED\x10\x00\x12&\n" +
+	"\"EXTERNAL_ACCOUNT_SCOPE_TYPE_GLOBAL\x10\x01\x12,\n" +
+	"(EXTERNAL_ACCOUNT_SCOPE_TYPE_ORGANIZATION\x10\x02\x12'\n" +
+	"#EXTERNAL_ACCOUNT_SCOPE_TYPE_PROJECT\x10\x03\x12*\n" +
+	"&EXTERNAL_ACCOUNT_SCOPE_TYPE_REPOSITORY\x10\x04\x12$\n" +
+	" EXTERNAL_ACCOUNT_SCOPE_TYPE_USER\x10\x05\x12%\n" +
+	"!EXTERNAL_ACCOUNT_SCOPE_TYPE_GROUP\x10\x06\x12%\n" +
+	"!EXTERNAL_ACCOUNT_SCOPE_TYPE_AGENT\x10\a\x12*\n" +
+	"&EXTERNAL_ACCOUNT_SCOPE_TYPE_AGENT_ROLE\x10\b\x12$\n" +
+	" EXTERNAL_ACCOUNT_SCOPE_TYPE_FLOW\x10\t\x12%\n" +
+	"!EXTERNAL_ACCOUNT_SCOPE_TYPE_STAGE\x10\n" +
+	"\x12'\n" +
+	"#EXTERNAL_ACCOUNT_SCOPE_TYPE_PACKAGE\x10\v*\xa9\x01\n" +
+	"\x1cExternalAccountBindingStatus\x12/\n" +
+	"+EXTERNAL_ACCOUNT_BINDING_STATUS_UNSPECIFIED\x10\x00\x12*\n" +
+	"&EXTERNAL_ACCOUNT_BINDING_STATUS_ACTIVE\x10\x01\x12,\n" +
+	"(EXTERNAL_ACCOUNT_BINDING_STATUS_DISABLED\x10\x02*~\n" +
+	"\x12AccessActionStatus\x12$\n" +
+	" ACCESS_ACTION_STATUS_UNSPECIFIED\x10\x00\x12\x1f\n" +
+	"\x1bACCESS_ACTION_STATUS_ACTIVE\x10\x01\x12!\n" +
+	"\x1dACCESS_ACTION_STATUS_DISABLED\x10\x02*v\n" +
+	"\x10AccessRuleStatus\x12\"\n" +
+	"\x1eACCESS_RULE_STATUS_UNSPECIFIED\x10\x00\x12\x1d\n" +
+	"\x19ACCESS_RULE_STATUS_ACTIVE\x10\x01\x12\x1f\n" +
+	"\x1bACCESS_RULE_STATUS_DISABLED\x10\x022\xd3\x19\n" +
 	"\x14AccessManagerService\x12\x94\x01\n" +
-	"\x19BootstrapUserFromIdentity\x12:.kodex.access_accounts.v1.BootstrapUserFromIdentityRequest\x1a;.kodex.access_accounts.v1.BootstrapUserFromIdentityResponse\x12j\n" +
+	"\x19BootstrapUserFromIdentity\x12:.kodex.access_accounts.v1.BootstrapUserFromIdentityRequest\x1a;.kodex.access_accounts.v1.BootstrapUserFromIdentityResponse\x12g\n" +
+	"\rSetUserStatus\x12..kodex.access_accounts.v1.SetUserStatusRequest\x1a&.kodex.access_accounts.v1.UserResponse\x12y\n" +
+	"\x12CreateOrganization\x123.kodex.access_accounts.v1.CreateOrganizationRequest\x1a..kodex.access_accounts.v1.OrganizationResponse\x12y\n" +
+	"\x12UpdateOrganization\x123.kodex.access_accounts.v1.UpdateOrganizationRequest\x1a..kodex.access_accounts.v1.OrganizationResponse\x12{\n" +
+	"\x13SuspendOrganization\x124.kodex.access_accounts.v1.SuspendOrganizationRequest\x1a..kodex.access_accounts.v1.OrganizationResponse\x12{\n" +
+	"\x13ArchiveOrganization\x124.kodex.access_accounts.v1.ArchiveOrganizationRequest\x1a..kodex.access_accounts.v1.OrganizationResponse\x12d\n" +
+	"\vCreateGroup\x12,.kodex.access_accounts.v1.CreateGroupRequest\x1a'.kodex.access_accounts.v1.GroupResponse\x12d\n" +
+	"\vUpdateGroup\x12,.kodex.access_accounts.v1.UpdateGroupRequest\x1a'.kodex.access_accounts.v1.GroupResponse\x12f\n" +
+	"\fDisableGroup\x12-.kodex.access_accounts.v1.DisableGroupRequest\x1a'.kodex.access_accounts.v1.GroupResponse\x12m\n" +
+	"\rSetMembership\x12..kodex.access_accounts.v1.SetMembershipRequest\x1a,.kodex.access_accounts.v1.MembershipResponse\x12y\n" +
+	"\x11PutAllowlistEntry\x122.kodex.access_accounts.v1.PutAllowlistEntryRequest\x1a0.kodex.access_accounts.v1.AllowlistEntryResponse\x12\x81\x01\n" +
+	"\x15DisableAllowlistEntry\x126.kodex.access_accounts.v1.DisableAllowlistEntryRequest\x1a0.kodex.access_accounts.v1.AllowlistEntryResponse\x12\x89\x01\n" +
+	"\x18RegisterExternalProvider\x129.kodex.access_accounts.v1.RegisterExternalProviderRequest\x1a2.kodex.access_accounts.v1.ExternalProviderResponse\x12\x85\x01\n" +
+	"\x16UpdateExternalProvider\x127.kodex.access_accounts.v1.UpdateExternalProviderRequest\x1a2.kodex.access_accounts.v1.ExternalProviderResponse\x12\x86\x01\n" +
+	"\x17RegisterExternalAccount\x128.kodex.access_accounts.v1.RegisterExternalAccountRequest\x1a1.kodex.access_accounts.v1.ExternalAccountResponse\x12\x8e\x01\n" +
+	"\x1bUpdateExternalAccountStatus\x12<.kodex.access_accounts.v1.UpdateExternalAccountStatusRequest\x1a1.kodex.access_accounts.v1.ExternalAccountResponse\x12\x85\x01\n" +
+	"\x13BindExternalAccount\x124.kodex.access_accounts.v1.BindExternalAccountRequest\x1a8.kodex.access_accounts.v1.ExternalAccountBindingResponse\x12\x99\x01\n" +
+	"\x1dDisableExternalAccountBinding\x12>.kodex.access_accounts.v1.DisableExternalAccountBindingRequest\x1a8.kodex.access_accounts.v1.ExternalAccountBindingResponse\x12s\n" +
+	"\x0fPutAccessAction\x120.kodex.access_accounts.v1.PutAccessActionRequest\x1a..kodex.access_accounts.v1.AccessActionResponse\x12m\n" +
+	"\rPutAccessRule\x12..kodex.access_accounts.v1.PutAccessRuleRequest\x1a,.kodex.access_accounts.v1.AccessRuleResponse\x12u\n" +
+	"\x11DisableAccessRule\x122.kodex.access_accounts.v1.DisableAccessRuleRequest\x1a,.kodex.access_accounts.v1.AccessRuleResponse\x12\x9a\x01\n" +
+	"\x1bResolveExternalAccountUsage\x12<.kodex.access_accounts.v1.ResolveExternalAccountUsageRequest\x1a=.kodex.access_accounts.v1.ResolveExternalAccountUsageResponse\x12j\n" +
 	"\vCheckAccess\x12,.kodex.access_accounts.v1.CheckAccessRequest\x1a-.kodex.access_accounts.v1.CheckAccessResponse\x12p\n" +
-	"\rExplainAccess\x12..kodex.access_accounts.v1.ExplainAccessRequest\x1a/.kodex.access_accounts.v1.ExplainAccessResponse\x12\x9a\x01\n" +
-	"\x1bResolveExternalAccountUsage\x12<.kodex.access_accounts.v1.ResolveExternalAccountUsageRequest\x1a=.kodex.access_accounts.v1.ResolveExternalAccountUsageResponseBSZQgithub.com/codex-k8s/kodex/proto/gen/go/kodex/access_accounts/v1;accessaccountsv1b\x06proto3"
+	"\rExplainAccess\x12..kodex.access_accounts.v1.ExplainAccessRequest\x1a/.kodex.access_accounts.v1.ExplainAccessResponse\x12\x82\x01\n" +
+	"\x13ListMembershipGraph\x124.kodex.access_accounts.v1.ListMembershipGraphRequest\x1a5.kodex.access_accounts.v1.ListMembershipGraphResponse\x12|\n" +
+	"\x11ListPendingAccess\x122.kodex.access_accounts.v1.ListPendingAccessRequest\x1a3.kodex.access_accounts.v1.ListPendingAccessResponseBSZQgithub.com/codex-k8s/kodex/proto/gen/go/kodex/access_accounts/v1;accessaccountsv1b\x06proto3"
 
 var (
 	file_kodex_access_accounts_v1_access_manager_proto_rawDescOnce sync.Once
@@ -1087,48 +5972,233 @@ func file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP() []byte {
 	return file_kodex_access_accounts_v1_access_manager_proto_rawDescData
 }
 
-var file_kodex_access_accounts_v1_access_manager_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_kodex_access_accounts_v1_access_manager_proto_enumTypes = make([]protoimpl.EnumInfo, 21)
+var file_kodex_access_accounts_v1_access_manager_proto_msgTypes = make([]protoimpl.MessageInfo, 51)
 var file_kodex_access_accounts_v1_access_manager_proto_goTypes = []any{
-	(*CommandMeta)(nil),                         // 0: kodex.access_accounts.v1.CommandMeta
-	(*Actor)(nil),                               // 1: kodex.access_accounts.v1.Actor
-	(*SubjectRef)(nil),                          // 2: kodex.access_accounts.v1.SubjectRef
-	(*ResourceRef)(nil),                         // 3: kodex.access_accounts.v1.ResourceRef
-	(*ScopeRef)(nil),                            // 4: kodex.access_accounts.v1.ScopeRef
-	(*BootstrapUserFromIdentityRequest)(nil),    // 5: kodex.access_accounts.v1.BootstrapUserFromIdentityRequest
-	(*BootstrapUserFromIdentityResponse)(nil),   // 6: kodex.access_accounts.v1.BootstrapUserFromIdentityResponse
-	(*CheckAccessRequest)(nil),                  // 7: kodex.access_accounts.v1.CheckAccessRequest
-	(*CheckAccessResponse)(nil),                 // 8: kodex.access_accounts.v1.CheckAccessResponse
-	(*MatchedRule)(nil),                         // 9: kodex.access_accounts.v1.MatchedRule
-	(*ExplainAccessRequest)(nil),                // 10: kodex.access_accounts.v1.ExplainAccessRequest
-	(*ExplainAccessResponse)(nil),               // 11: kodex.access_accounts.v1.ExplainAccessResponse
-	(*ResolveExternalAccountUsageRequest)(nil),  // 12: kodex.access_accounts.v1.ResolveExternalAccountUsageRequest
-	(*ResolveExternalAccountUsageResponse)(nil), // 13: kodex.access_accounts.v1.ResolveExternalAccountUsageResponse
+	(AccessDecision)(0),                          // 0: kodex.access_accounts.v1.AccessDecision
+	(AccessEffect)(0),                            // 1: kodex.access_accounts.v1.AccessEffect
+	(OrganizationKind)(0),                        // 2: kodex.access_accounts.v1.OrganizationKind
+	(OrganizationStatus)(0),                      // 3: kodex.access_accounts.v1.OrganizationStatus
+	(UserStatus)(0),                              // 4: kodex.access_accounts.v1.UserStatus
+	(GroupScopeType)(0),                          // 5: kodex.access_accounts.v1.GroupScopeType
+	(GroupStatus)(0),                             // 6: kodex.access_accounts.v1.GroupStatus
+	(MembershipSubjectType)(0),                   // 7: kodex.access_accounts.v1.MembershipSubjectType
+	(MembershipTargetType)(0),                    // 8: kodex.access_accounts.v1.MembershipTargetType
+	(MembershipStatus)(0),                        // 9: kodex.access_accounts.v1.MembershipStatus
+	(MembershipSource)(0),                        // 10: kodex.access_accounts.v1.MembershipSource
+	(AllowlistMatchType)(0),                      // 11: kodex.access_accounts.v1.AllowlistMatchType
+	(AllowlistStatus)(0),                         // 12: kodex.access_accounts.v1.AllowlistStatus
+	(ExternalProviderKind)(0),                    // 13: kodex.access_accounts.v1.ExternalProviderKind
+	(ExternalProviderStatus)(0),                  // 14: kodex.access_accounts.v1.ExternalProviderStatus
+	(ExternalAccountType)(0),                     // 15: kodex.access_accounts.v1.ExternalAccountType
+	(ExternalAccountStatus)(0),                   // 16: kodex.access_accounts.v1.ExternalAccountStatus
+	(ExternalAccountScopeType)(0),                // 17: kodex.access_accounts.v1.ExternalAccountScopeType
+	(ExternalAccountBindingStatus)(0),            // 18: kodex.access_accounts.v1.ExternalAccountBindingStatus
+	(AccessActionStatus)(0),                      // 19: kodex.access_accounts.v1.AccessActionStatus
+	(AccessRuleStatus)(0),                        // 20: kodex.access_accounts.v1.AccessRuleStatus
+	(*CommandMeta)(nil),                          // 21: kodex.access_accounts.v1.CommandMeta
+	(*RequestContext)(nil),                       // 22: kodex.access_accounts.v1.RequestContext
+	(*Actor)(nil),                                // 23: kodex.access_accounts.v1.Actor
+	(*SubjectRef)(nil),                           // 24: kodex.access_accounts.v1.SubjectRef
+	(*ResourceRef)(nil),                          // 25: kodex.access_accounts.v1.ResourceRef
+	(*ScopeRef)(nil),                             // 26: kodex.access_accounts.v1.ScopeRef
+	(*BootstrapUserFromIdentityRequest)(nil),     // 27: kodex.access_accounts.v1.BootstrapUserFromIdentityRequest
+	(*BootstrapUserFromIdentityResponse)(nil),    // 28: kodex.access_accounts.v1.BootstrapUserFromIdentityResponse
+	(*SetUserStatusRequest)(nil),                 // 29: kodex.access_accounts.v1.SetUserStatusRequest
+	(*UserResponse)(nil),                         // 30: kodex.access_accounts.v1.UserResponse
+	(*CreateOrganizationRequest)(nil),            // 31: kodex.access_accounts.v1.CreateOrganizationRequest
+	(*UpdateOrganizationRequest)(nil),            // 32: kodex.access_accounts.v1.UpdateOrganizationRequest
+	(*SuspendOrganizationRequest)(nil),           // 33: kodex.access_accounts.v1.SuspendOrganizationRequest
+	(*ArchiveOrganizationRequest)(nil),           // 34: kodex.access_accounts.v1.ArchiveOrganizationRequest
+	(*OrganizationResponse)(nil),                 // 35: kodex.access_accounts.v1.OrganizationResponse
+	(*CreateGroupRequest)(nil),                   // 36: kodex.access_accounts.v1.CreateGroupRequest
+	(*UpdateGroupRequest)(nil),                   // 37: kodex.access_accounts.v1.UpdateGroupRequest
+	(*DisableGroupRequest)(nil),                  // 38: kodex.access_accounts.v1.DisableGroupRequest
+	(*GroupResponse)(nil),                        // 39: kodex.access_accounts.v1.GroupResponse
+	(*SetMembershipRequest)(nil),                 // 40: kodex.access_accounts.v1.SetMembershipRequest
+	(*MembershipResponse)(nil),                   // 41: kodex.access_accounts.v1.MembershipResponse
+	(*PutAllowlistEntryRequest)(nil),             // 42: kodex.access_accounts.v1.PutAllowlistEntryRequest
+	(*DisableAllowlistEntryRequest)(nil),         // 43: kodex.access_accounts.v1.DisableAllowlistEntryRequest
+	(*AllowlistEntryResponse)(nil),               // 44: kodex.access_accounts.v1.AllowlistEntryResponse
+	(*RegisterExternalProviderRequest)(nil),      // 45: kodex.access_accounts.v1.RegisterExternalProviderRequest
+	(*UpdateExternalProviderRequest)(nil),        // 46: kodex.access_accounts.v1.UpdateExternalProviderRequest
+	(*ExternalProviderResponse)(nil),             // 47: kodex.access_accounts.v1.ExternalProviderResponse
+	(*RegisterExternalAccountRequest)(nil),       // 48: kodex.access_accounts.v1.RegisterExternalAccountRequest
+	(*UpdateExternalAccountStatusRequest)(nil),   // 49: kodex.access_accounts.v1.UpdateExternalAccountStatusRequest
+	(*ExternalAccountResponse)(nil),              // 50: kodex.access_accounts.v1.ExternalAccountResponse
+	(*BindExternalAccountRequest)(nil),           // 51: kodex.access_accounts.v1.BindExternalAccountRequest
+	(*DisableExternalAccountBindingRequest)(nil), // 52: kodex.access_accounts.v1.DisableExternalAccountBindingRequest
+	(*ExternalAccountBindingResponse)(nil),       // 53: kodex.access_accounts.v1.ExternalAccountBindingResponse
+	(*PutAccessActionRequest)(nil),               // 54: kodex.access_accounts.v1.PutAccessActionRequest
+	(*AccessActionResponse)(nil),                 // 55: kodex.access_accounts.v1.AccessActionResponse
+	(*PutAccessRuleRequest)(nil),                 // 56: kodex.access_accounts.v1.PutAccessRuleRequest
+	(*DisableAccessRuleRequest)(nil),             // 57: kodex.access_accounts.v1.DisableAccessRuleRequest
+	(*AccessRuleResponse)(nil),                   // 58: kodex.access_accounts.v1.AccessRuleResponse
+	(*CheckAccessRequest)(nil),                   // 59: kodex.access_accounts.v1.CheckAccessRequest
+	(*CheckAccessResponse)(nil),                  // 60: kodex.access_accounts.v1.CheckAccessResponse
+	(*MatchedRule)(nil),                          // 61: kodex.access_accounts.v1.MatchedRule
+	(*ExplainAccessRequest)(nil),                 // 62: kodex.access_accounts.v1.ExplainAccessRequest
+	(*ExplainAccessResponse)(nil),                // 63: kodex.access_accounts.v1.ExplainAccessResponse
+	(*ResolveExternalAccountUsageRequest)(nil),   // 64: kodex.access_accounts.v1.ResolveExternalAccountUsageRequest
+	(*ResolveExternalAccountUsageResponse)(nil),  // 65: kodex.access_accounts.v1.ResolveExternalAccountUsageResponse
+	(*ListMembershipGraphRequest)(nil),           // 66: kodex.access_accounts.v1.ListMembershipGraphRequest
+	(*MembershipEdge)(nil),                       // 67: kodex.access_accounts.v1.MembershipEdge
+	(*ListMembershipGraphResponse)(nil),          // 68: kodex.access_accounts.v1.ListMembershipGraphResponse
+	(*ListPendingAccessRequest)(nil),             // 69: kodex.access_accounts.v1.ListPendingAccessRequest
+	(*PendingAccessItem)(nil),                    // 70: kodex.access_accounts.v1.PendingAccessItem
+	(*ListPendingAccessResponse)(nil),            // 71: kodex.access_accounts.v1.ListPendingAccessResponse
 }
 var file_kodex_access_accounts_v1_access_manager_proto_depIdxs = []int32{
-	1,  // 0: kodex.access_accounts.v1.CommandMeta.actor:type_name -> kodex.access_accounts.v1.Actor
-	0,  // 1: kodex.access_accounts.v1.BootstrapUserFromIdentityRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
-	2,  // 2: kodex.access_accounts.v1.CheckAccessRequest.subject:type_name -> kodex.access_accounts.v1.SubjectRef
-	3,  // 3: kodex.access_accounts.v1.CheckAccessRequest.resource:type_name -> kodex.access_accounts.v1.ResourceRef
-	4,  // 4: kodex.access_accounts.v1.CheckAccessRequest.scope:type_name -> kodex.access_accounts.v1.ScopeRef
-	0,  // 5: kodex.access_accounts.v1.CheckAccessRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
-	9,  // 6: kodex.access_accounts.v1.CheckAccessResponse.matched_rules:type_name -> kodex.access_accounts.v1.MatchedRule
-	2,  // 7: kodex.access_accounts.v1.MatchedRule.subject:type_name -> kodex.access_accounts.v1.SubjectRef
-	4,  // 8: kodex.access_accounts.v1.MatchedRule.scope:type_name -> kodex.access_accounts.v1.ScopeRef
-	9,  // 9: kodex.access_accounts.v1.ExplainAccessResponse.matched_rules:type_name -> kodex.access_accounts.v1.MatchedRule
-	4,  // 10: kodex.access_accounts.v1.ResolveExternalAccountUsageRequest.usage_scope:type_name -> kodex.access_accounts.v1.ScopeRef
-	5,  // 11: kodex.access_accounts.v1.AccessManagerService.BootstrapUserFromIdentity:input_type -> kodex.access_accounts.v1.BootstrapUserFromIdentityRequest
-	7,  // 12: kodex.access_accounts.v1.AccessManagerService.CheckAccess:input_type -> kodex.access_accounts.v1.CheckAccessRequest
-	10, // 13: kodex.access_accounts.v1.AccessManagerService.ExplainAccess:input_type -> kodex.access_accounts.v1.ExplainAccessRequest
-	12, // 14: kodex.access_accounts.v1.AccessManagerService.ResolveExternalAccountUsage:input_type -> kodex.access_accounts.v1.ResolveExternalAccountUsageRequest
-	6,  // 15: kodex.access_accounts.v1.AccessManagerService.BootstrapUserFromIdentity:output_type -> kodex.access_accounts.v1.BootstrapUserFromIdentityResponse
-	8,  // 16: kodex.access_accounts.v1.AccessManagerService.CheckAccess:output_type -> kodex.access_accounts.v1.CheckAccessResponse
-	11, // 17: kodex.access_accounts.v1.AccessManagerService.ExplainAccess:output_type -> kodex.access_accounts.v1.ExplainAccessResponse
-	13, // 18: kodex.access_accounts.v1.AccessManagerService.ResolveExternalAccountUsage:output_type -> kodex.access_accounts.v1.ResolveExternalAccountUsageResponse
-	15, // [15:19] is the sub-list for method output_type
-	11, // [11:15] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	23,  // 0: kodex.access_accounts.v1.CommandMeta.actor:type_name -> kodex.access_accounts.v1.Actor
+	22,  // 1: kodex.access_accounts.v1.CommandMeta.request_context:type_name -> kodex.access_accounts.v1.RequestContext
+	21,  // 2: kodex.access_accounts.v1.BootstrapUserFromIdentityRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	4,   // 3: kodex.access_accounts.v1.BootstrapUserFromIdentityResponse.status:type_name -> kodex.access_accounts.v1.UserStatus
+	0,   // 4: kodex.access_accounts.v1.BootstrapUserFromIdentityResponse.decision:type_name -> kodex.access_accounts.v1.AccessDecision
+	4,   // 5: kodex.access_accounts.v1.SetUserStatusRequest.status:type_name -> kodex.access_accounts.v1.UserStatus
+	21,  // 6: kodex.access_accounts.v1.SetUserStatusRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	4,   // 7: kodex.access_accounts.v1.UserResponse.status:type_name -> kodex.access_accounts.v1.UserStatus
+	2,   // 8: kodex.access_accounts.v1.CreateOrganizationRequest.kind:type_name -> kodex.access_accounts.v1.OrganizationKind
+	3,   // 9: kodex.access_accounts.v1.CreateOrganizationRequest.status:type_name -> kodex.access_accounts.v1.OrganizationStatus
+	21,  // 10: kodex.access_accounts.v1.CreateOrganizationRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	21,  // 11: kodex.access_accounts.v1.UpdateOrganizationRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	21,  // 12: kodex.access_accounts.v1.SuspendOrganizationRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	21,  // 13: kodex.access_accounts.v1.ArchiveOrganizationRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	2,   // 14: kodex.access_accounts.v1.OrganizationResponse.kind:type_name -> kodex.access_accounts.v1.OrganizationKind
+	3,   // 15: kodex.access_accounts.v1.OrganizationResponse.status:type_name -> kodex.access_accounts.v1.OrganizationStatus
+	5,   // 16: kodex.access_accounts.v1.CreateGroupRequest.scope_type:type_name -> kodex.access_accounts.v1.GroupScopeType
+	21,  // 17: kodex.access_accounts.v1.CreateGroupRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	21,  // 18: kodex.access_accounts.v1.UpdateGroupRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	21,  // 19: kodex.access_accounts.v1.DisableGroupRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	5,   // 20: kodex.access_accounts.v1.GroupResponse.scope_type:type_name -> kodex.access_accounts.v1.GroupScopeType
+	6,   // 21: kodex.access_accounts.v1.GroupResponse.status:type_name -> kodex.access_accounts.v1.GroupStatus
+	7,   // 22: kodex.access_accounts.v1.SetMembershipRequest.subject_type:type_name -> kodex.access_accounts.v1.MembershipSubjectType
+	8,   // 23: kodex.access_accounts.v1.SetMembershipRequest.target_type:type_name -> kodex.access_accounts.v1.MembershipTargetType
+	9,   // 24: kodex.access_accounts.v1.SetMembershipRequest.status:type_name -> kodex.access_accounts.v1.MembershipStatus
+	10,  // 25: kodex.access_accounts.v1.SetMembershipRequest.source:type_name -> kodex.access_accounts.v1.MembershipSource
+	21,  // 26: kodex.access_accounts.v1.SetMembershipRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	7,   // 27: kodex.access_accounts.v1.MembershipResponse.subject_type:type_name -> kodex.access_accounts.v1.MembershipSubjectType
+	8,   // 28: kodex.access_accounts.v1.MembershipResponse.target_type:type_name -> kodex.access_accounts.v1.MembershipTargetType
+	9,   // 29: kodex.access_accounts.v1.MembershipResponse.status:type_name -> kodex.access_accounts.v1.MembershipStatus
+	10,  // 30: kodex.access_accounts.v1.MembershipResponse.source:type_name -> kodex.access_accounts.v1.MembershipSource
+	11,  // 31: kodex.access_accounts.v1.PutAllowlistEntryRequest.match_type:type_name -> kodex.access_accounts.v1.AllowlistMatchType
+	4,   // 32: kodex.access_accounts.v1.PutAllowlistEntryRequest.default_status:type_name -> kodex.access_accounts.v1.UserStatus
+	12,  // 33: kodex.access_accounts.v1.PutAllowlistEntryRequest.status:type_name -> kodex.access_accounts.v1.AllowlistStatus
+	21,  // 34: kodex.access_accounts.v1.PutAllowlistEntryRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	21,  // 35: kodex.access_accounts.v1.DisableAllowlistEntryRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	11,  // 36: kodex.access_accounts.v1.AllowlistEntryResponse.match_type:type_name -> kodex.access_accounts.v1.AllowlistMatchType
+	4,   // 37: kodex.access_accounts.v1.AllowlistEntryResponse.default_status:type_name -> kodex.access_accounts.v1.UserStatus
+	12,  // 38: kodex.access_accounts.v1.AllowlistEntryResponse.status:type_name -> kodex.access_accounts.v1.AllowlistStatus
+	13,  // 39: kodex.access_accounts.v1.RegisterExternalProviderRequest.provider_kind:type_name -> kodex.access_accounts.v1.ExternalProviderKind
+	14,  // 40: kodex.access_accounts.v1.RegisterExternalProviderRequest.status:type_name -> kodex.access_accounts.v1.ExternalProviderStatus
+	21,  // 41: kodex.access_accounts.v1.RegisterExternalProviderRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	13,  // 42: kodex.access_accounts.v1.UpdateExternalProviderRequest.provider_kind:type_name -> kodex.access_accounts.v1.ExternalProviderKind
+	14,  // 43: kodex.access_accounts.v1.UpdateExternalProviderRequest.status:type_name -> kodex.access_accounts.v1.ExternalProviderStatus
+	21,  // 44: kodex.access_accounts.v1.UpdateExternalProviderRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	13,  // 45: kodex.access_accounts.v1.ExternalProviderResponse.provider_kind:type_name -> kodex.access_accounts.v1.ExternalProviderKind
+	14,  // 46: kodex.access_accounts.v1.ExternalProviderResponse.status:type_name -> kodex.access_accounts.v1.ExternalProviderStatus
+	15,  // 47: kodex.access_accounts.v1.RegisterExternalAccountRequest.account_type:type_name -> kodex.access_accounts.v1.ExternalAccountType
+	17,  // 48: kodex.access_accounts.v1.RegisterExternalAccountRequest.owner_scope_type:type_name -> kodex.access_accounts.v1.ExternalAccountScopeType
+	16,  // 49: kodex.access_accounts.v1.RegisterExternalAccountRequest.status:type_name -> kodex.access_accounts.v1.ExternalAccountStatus
+	21,  // 50: kodex.access_accounts.v1.RegisterExternalAccountRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	16,  // 51: kodex.access_accounts.v1.UpdateExternalAccountStatusRequest.status:type_name -> kodex.access_accounts.v1.ExternalAccountStatus
+	21,  // 52: kodex.access_accounts.v1.UpdateExternalAccountStatusRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	15,  // 53: kodex.access_accounts.v1.ExternalAccountResponse.account_type:type_name -> kodex.access_accounts.v1.ExternalAccountType
+	17,  // 54: kodex.access_accounts.v1.ExternalAccountResponse.owner_scope_type:type_name -> kodex.access_accounts.v1.ExternalAccountScopeType
+	16,  // 55: kodex.access_accounts.v1.ExternalAccountResponse.status:type_name -> kodex.access_accounts.v1.ExternalAccountStatus
+	17,  // 56: kodex.access_accounts.v1.BindExternalAccountRequest.usage_scope_type:type_name -> kodex.access_accounts.v1.ExternalAccountScopeType
+	18,  // 57: kodex.access_accounts.v1.BindExternalAccountRequest.status:type_name -> kodex.access_accounts.v1.ExternalAccountBindingStatus
+	21,  // 58: kodex.access_accounts.v1.BindExternalAccountRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	21,  // 59: kodex.access_accounts.v1.DisableExternalAccountBindingRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	17,  // 60: kodex.access_accounts.v1.ExternalAccountBindingResponse.usage_scope_type:type_name -> kodex.access_accounts.v1.ExternalAccountScopeType
+	18,  // 61: kodex.access_accounts.v1.ExternalAccountBindingResponse.status:type_name -> kodex.access_accounts.v1.ExternalAccountBindingStatus
+	19,  // 62: kodex.access_accounts.v1.PutAccessActionRequest.status:type_name -> kodex.access_accounts.v1.AccessActionStatus
+	21,  // 63: kodex.access_accounts.v1.PutAccessActionRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	19,  // 64: kodex.access_accounts.v1.AccessActionResponse.status:type_name -> kodex.access_accounts.v1.AccessActionStatus
+	1,   // 65: kodex.access_accounts.v1.PutAccessRuleRequest.effect:type_name -> kodex.access_accounts.v1.AccessEffect
+	20,  // 66: kodex.access_accounts.v1.PutAccessRuleRequest.status:type_name -> kodex.access_accounts.v1.AccessRuleStatus
+	21,  // 67: kodex.access_accounts.v1.PutAccessRuleRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	21,  // 68: kodex.access_accounts.v1.DisableAccessRuleRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	1,   // 69: kodex.access_accounts.v1.AccessRuleResponse.effect:type_name -> kodex.access_accounts.v1.AccessEffect
+	20,  // 70: kodex.access_accounts.v1.AccessRuleResponse.status:type_name -> kodex.access_accounts.v1.AccessRuleStatus
+	24,  // 71: kodex.access_accounts.v1.CheckAccessRequest.subject:type_name -> kodex.access_accounts.v1.SubjectRef
+	25,  // 72: kodex.access_accounts.v1.CheckAccessRequest.resource:type_name -> kodex.access_accounts.v1.ResourceRef
+	26,  // 73: kodex.access_accounts.v1.CheckAccessRequest.scope:type_name -> kodex.access_accounts.v1.ScopeRef
+	21,  // 74: kodex.access_accounts.v1.CheckAccessRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	0,   // 75: kodex.access_accounts.v1.CheckAccessResponse.decision:type_name -> kodex.access_accounts.v1.AccessDecision
+	61,  // 76: kodex.access_accounts.v1.CheckAccessResponse.matched_rules:type_name -> kodex.access_accounts.v1.MatchedRule
+	1,   // 77: kodex.access_accounts.v1.MatchedRule.effect:type_name -> kodex.access_accounts.v1.AccessEffect
+	24,  // 78: kodex.access_accounts.v1.MatchedRule.subject:type_name -> kodex.access_accounts.v1.SubjectRef
+	26,  // 79: kodex.access_accounts.v1.MatchedRule.scope:type_name -> kodex.access_accounts.v1.ScopeRef
+	0,   // 80: kodex.access_accounts.v1.ExplainAccessResponse.decision:type_name -> kodex.access_accounts.v1.AccessDecision
+	61,  // 81: kodex.access_accounts.v1.ExplainAccessResponse.matched_rules:type_name -> kodex.access_accounts.v1.MatchedRule
+	26,  // 82: kodex.access_accounts.v1.ResolveExternalAccountUsageRequest.usage_scope:type_name -> kodex.access_accounts.v1.ScopeRef
+	24,  // 83: kodex.access_accounts.v1.ListMembershipGraphRequest.subject:type_name -> kodex.access_accounts.v1.SubjectRef
+	24,  // 84: kodex.access_accounts.v1.MembershipEdge.subject:type_name -> kodex.access_accounts.v1.SubjectRef
+	24,  // 85: kodex.access_accounts.v1.MembershipEdge.target:type_name -> kodex.access_accounts.v1.SubjectRef
+	9,   // 86: kodex.access_accounts.v1.MembershipEdge.status:type_name -> kodex.access_accounts.v1.MembershipStatus
+	10,  // 87: kodex.access_accounts.v1.MembershipEdge.source:type_name -> kodex.access_accounts.v1.MembershipSource
+	24,  // 88: kodex.access_accounts.v1.ListMembershipGraphResponse.root:type_name -> kodex.access_accounts.v1.SubjectRef
+	67,  // 89: kodex.access_accounts.v1.ListMembershipGraphResponse.edges:type_name -> kodex.access_accounts.v1.MembershipEdge
+	26,  // 90: kodex.access_accounts.v1.ListPendingAccessRequest.scope:type_name -> kodex.access_accounts.v1.ScopeRef
+	24,  // 91: kodex.access_accounts.v1.PendingAccessItem.subject:type_name -> kodex.access_accounts.v1.SubjectRef
+	70,  // 92: kodex.access_accounts.v1.ListPendingAccessResponse.items:type_name -> kodex.access_accounts.v1.PendingAccessItem
+	27,  // 93: kodex.access_accounts.v1.AccessManagerService.BootstrapUserFromIdentity:input_type -> kodex.access_accounts.v1.BootstrapUserFromIdentityRequest
+	29,  // 94: kodex.access_accounts.v1.AccessManagerService.SetUserStatus:input_type -> kodex.access_accounts.v1.SetUserStatusRequest
+	31,  // 95: kodex.access_accounts.v1.AccessManagerService.CreateOrganization:input_type -> kodex.access_accounts.v1.CreateOrganizationRequest
+	32,  // 96: kodex.access_accounts.v1.AccessManagerService.UpdateOrganization:input_type -> kodex.access_accounts.v1.UpdateOrganizationRequest
+	33,  // 97: kodex.access_accounts.v1.AccessManagerService.SuspendOrganization:input_type -> kodex.access_accounts.v1.SuspendOrganizationRequest
+	34,  // 98: kodex.access_accounts.v1.AccessManagerService.ArchiveOrganization:input_type -> kodex.access_accounts.v1.ArchiveOrganizationRequest
+	36,  // 99: kodex.access_accounts.v1.AccessManagerService.CreateGroup:input_type -> kodex.access_accounts.v1.CreateGroupRequest
+	37,  // 100: kodex.access_accounts.v1.AccessManagerService.UpdateGroup:input_type -> kodex.access_accounts.v1.UpdateGroupRequest
+	38,  // 101: kodex.access_accounts.v1.AccessManagerService.DisableGroup:input_type -> kodex.access_accounts.v1.DisableGroupRequest
+	40,  // 102: kodex.access_accounts.v1.AccessManagerService.SetMembership:input_type -> kodex.access_accounts.v1.SetMembershipRequest
+	42,  // 103: kodex.access_accounts.v1.AccessManagerService.PutAllowlistEntry:input_type -> kodex.access_accounts.v1.PutAllowlistEntryRequest
+	43,  // 104: kodex.access_accounts.v1.AccessManagerService.DisableAllowlistEntry:input_type -> kodex.access_accounts.v1.DisableAllowlistEntryRequest
+	45,  // 105: kodex.access_accounts.v1.AccessManagerService.RegisterExternalProvider:input_type -> kodex.access_accounts.v1.RegisterExternalProviderRequest
+	46,  // 106: kodex.access_accounts.v1.AccessManagerService.UpdateExternalProvider:input_type -> kodex.access_accounts.v1.UpdateExternalProviderRequest
+	48,  // 107: kodex.access_accounts.v1.AccessManagerService.RegisterExternalAccount:input_type -> kodex.access_accounts.v1.RegisterExternalAccountRequest
+	49,  // 108: kodex.access_accounts.v1.AccessManagerService.UpdateExternalAccountStatus:input_type -> kodex.access_accounts.v1.UpdateExternalAccountStatusRequest
+	51,  // 109: kodex.access_accounts.v1.AccessManagerService.BindExternalAccount:input_type -> kodex.access_accounts.v1.BindExternalAccountRequest
+	52,  // 110: kodex.access_accounts.v1.AccessManagerService.DisableExternalAccountBinding:input_type -> kodex.access_accounts.v1.DisableExternalAccountBindingRequest
+	54,  // 111: kodex.access_accounts.v1.AccessManagerService.PutAccessAction:input_type -> kodex.access_accounts.v1.PutAccessActionRequest
+	56,  // 112: kodex.access_accounts.v1.AccessManagerService.PutAccessRule:input_type -> kodex.access_accounts.v1.PutAccessRuleRequest
+	57,  // 113: kodex.access_accounts.v1.AccessManagerService.DisableAccessRule:input_type -> kodex.access_accounts.v1.DisableAccessRuleRequest
+	64,  // 114: kodex.access_accounts.v1.AccessManagerService.ResolveExternalAccountUsage:input_type -> kodex.access_accounts.v1.ResolveExternalAccountUsageRequest
+	59,  // 115: kodex.access_accounts.v1.AccessManagerService.CheckAccess:input_type -> kodex.access_accounts.v1.CheckAccessRequest
+	62,  // 116: kodex.access_accounts.v1.AccessManagerService.ExplainAccess:input_type -> kodex.access_accounts.v1.ExplainAccessRequest
+	66,  // 117: kodex.access_accounts.v1.AccessManagerService.ListMembershipGraph:input_type -> kodex.access_accounts.v1.ListMembershipGraphRequest
+	69,  // 118: kodex.access_accounts.v1.AccessManagerService.ListPendingAccess:input_type -> kodex.access_accounts.v1.ListPendingAccessRequest
+	28,  // 119: kodex.access_accounts.v1.AccessManagerService.BootstrapUserFromIdentity:output_type -> kodex.access_accounts.v1.BootstrapUserFromIdentityResponse
+	30,  // 120: kodex.access_accounts.v1.AccessManagerService.SetUserStatus:output_type -> kodex.access_accounts.v1.UserResponse
+	35,  // 121: kodex.access_accounts.v1.AccessManagerService.CreateOrganization:output_type -> kodex.access_accounts.v1.OrganizationResponse
+	35,  // 122: kodex.access_accounts.v1.AccessManagerService.UpdateOrganization:output_type -> kodex.access_accounts.v1.OrganizationResponse
+	35,  // 123: kodex.access_accounts.v1.AccessManagerService.SuspendOrganization:output_type -> kodex.access_accounts.v1.OrganizationResponse
+	35,  // 124: kodex.access_accounts.v1.AccessManagerService.ArchiveOrganization:output_type -> kodex.access_accounts.v1.OrganizationResponse
+	39,  // 125: kodex.access_accounts.v1.AccessManagerService.CreateGroup:output_type -> kodex.access_accounts.v1.GroupResponse
+	39,  // 126: kodex.access_accounts.v1.AccessManagerService.UpdateGroup:output_type -> kodex.access_accounts.v1.GroupResponse
+	39,  // 127: kodex.access_accounts.v1.AccessManagerService.DisableGroup:output_type -> kodex.access_accounts.v1.GroupResponse
+	41,  // 128: kodex.access_accounts.v1.AccessManagerService.SetMembership:output_type -> kodex.access_accounts.v1.MembershipResponse
+	44,  // 129: kodex.access_accounts.v1.AccessManagerService.PutAllowlistEntry:output_type -> kodex.access_accounts.v1.AllowlistEntryResponse
+	44,  // 130: kodex.access_accounts.v1.AccessManagerService.DisableAllowlistEntry:output_type -> kodex.access_accounts.v1.AllowlistEntryResponse
+	47,  // 131: kodex.access_accounts.v1.AccessManagerService.RegisterExternalProvider:output_type -> kodex.access_accounts.v1.ExternalProviderResponse
+	47,  // 132: kodex.access_accounts.v1.AccessManagerService.UpdateExternalProvider:output_type -> kodex.access_accounts.v1.ExternalProviderResponse
+	50,  // 133: kodex.access_accounts.v1.AccessManagerService.RegisterExternalAccount:output_type -> kodex.access_accounts.v1.ExternalAccountResponse
+	50,  // 134: kodex.access_accounts.v1.AccessManagerService.UpdateExternalAccountStatus:output_type -> kodex.access_accounts.v1.ExternalAccountResponse
+	53,  // 135: kodex.access_accounts.v1.AccessManagerService.BindExternalAccount:output_type -> kodex.access_accounts.v1.ExternalAccountBindingResponse
+	53,  // 136: kodex.access_accounts.v1.AccessManagerService.DisableExternalAccountBinding:output_type -> kodex.access_accounts.v1.ExternalAccountBindingResponse
+	55,  // 137: kodex.access_accounts.v1.AccessManagerService.PutAccessAction:output_type -> kodex.access_accounts.v1.AccessActionResponse
+	58,  // 138: kodex.access_accounts.v1.AccessManagerService.PutAccessRule:output_type -> kodex.access_accounts.v1.AccessRuleResponse
+	58,  // 139: kodex.access_accounts.v1.AccessManagerService.DisableAccessRule:output_type -> kodex.access_accounts.v1.AccessRuleResponse
+	65,  // 140: kodex.access_accounts.v1.AccessManagerService.ResolveExternalAccountUsage:output_type -> kodex.access_accounts.v1.ResolveExternalAccountUsageResponse
+	60,  // 141: kodex.access_accounts.v1.AccessManagerService.CheckAccess:output_type -> kodex.access_accounts.v1.CheckAccessResponse
+	63,  // 142: kodex.access_accounts.v1.AccessManagerService.ExplainAccess:output_type -> kodex.access_accounts.v1.ExplainAccessResponse
+	68,  // 143: kodex.access_accounts.v1.AccessManagerService.ListMembershipGraph:output_type -> kodex.access_accounts.v1.ListMembershipGraphResponse
+	71,  // 144: kodex.access_accounts.v1.AccessManagerService.ListPendingAccess:output_type -> kodex.access_accounts.v1.ListPendingAccessResponse
+	119, // [119:145] is the sub-list for method output_type
+	93,  // [93:119] is the sub-list for method input_type
+	93,  // [93:93] is the sub-list for extension type_name
+	93,  // [93:93] is the sub-list for extension extendee
+	0,   // [0:93] is the sub-list for field type_name
 }
 
 func init() { file_kodex_access_accounts_v1_access_manager_proto_init() }
@@ -1136,18 +6206,20 @@ func file_kodex_access_accounts_v1_access_manager_proto_init() {
 	if File_kodex_access_accounts_v1_access_manager_proto != nil {
 		return
 	}
+	file_kodex_access_accounts_v1_access_manager_proto_msgTypes[0].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kodex_access_accounts_v1_access_manager_proto_rawDesc), len(file_kodex_access_accounts_v1_access_manager_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   14,
+			NumEnums:      21,
+			NumMessages:   51,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_kodex_access_accounts_v1_access_manager_proto_goTypes,
 		DependencyIndexes: file_kodex_access_accounts_v1_access_manager_proto_depIdxs,
+		EnumInfos:         file_kodex_access_accounts_v1_access_manager_proto_enumTypes,
 		MessageInfos:      file_kodex_access_accounts_v1_access_manager_proto_msgTypes,
 	}.Build()
 	File_kodex_access_accounts_v1_access_manager_proto = out.File

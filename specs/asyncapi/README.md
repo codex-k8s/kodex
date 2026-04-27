@@ -4,4 +4,4 @@
 
 | Файл | Сервис | Назначение |
 |---|---|---|
-| `access-manager.v1.yaml` | `access-manager` | Контракт доменных событий `access.*`, публикуемых через outbox. |
+| `access-manager.v1.yaml` | `access-manager` | Стабильный контракт `v1` доменных событий `access.*`, публикуемых через конверт outbox. |
