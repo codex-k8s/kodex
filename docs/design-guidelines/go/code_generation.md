@@ -11,9 +11,9 @@
   - конфиги codegen в целевом `tools/codegen/**`;
   - CI/job-проверку codegen в целевом deploy-контуре.
 - Источник правды транспорта:
-  - REST: `api/server/api.yaml` (OpenAPI YAML)
+  - REST: `specs/openapi/<service-name>.v<major>.yaml` (OpenAPI YAML)
   - gRPC: `proto/**/*.proto`
-  - async/webhook: `api/server/asyncapi.yaml` (если используется)
+  - async/webhook: `specs/asyncapi/<service-name>.v<major>.yaml` (если используется)
 
 ## OpenAPI (REST) -> Go
 
@@ -53,7 +53,7 @@ make gen-proto-go SVC=services/<zone>/<service>
 ## AsyncAPI (webhook/event payloads)
 
 Контракт:
-- `api/server/asyncapi.yaml`
+- `specs/asyncapi/<service-name>.v<major>.yaml`
 
 Применение в `kodex`:
 - описание webhook payloads и внутренних async-событий,
@@ -74,7 +74,7 @@ make validate-asyncapi SVC=services/<zone>/<service>
 
 Запуск:
 ```bash
-make gen-openapi-ts APP=services/<zone>/<app> SPEC=services/<zone>/<service>/api/server/api.yaml
+make gen-openapi-ts APP=services/<zone>/<app> SPEC=specs/openapi/<service-name>.v<major>.yaml
 ```
 
 ## Проверка консистентности generated-кода в CI

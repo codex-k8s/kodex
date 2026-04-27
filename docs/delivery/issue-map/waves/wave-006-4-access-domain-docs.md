@@ -1,18 +1,18 @@
 ---
-doc_id: MAP-CK8S-WAVE-007
+doc_id: MAP-CK8S-WAVE-006-4
 type: issue-map
-title: kodex — карта Issue волны 7
+title: kodex — карта Issue волны 6.4
 status: active
 owner_role: KM
-created_at: 2026-04-25
+created_at: 2026-04-26
 updated_at: 2026-04-26
 ---
 
-# Карта Issue — волна 7
+# Карта Issue — волна 6.4
 
 ## TL;DR
 
-Волновая карта первого кодового домена: доступ, организации, группы и внешние аккаунты.
+Волна 6.4 связывает Issues домена доступа с документами, которые должны быть готовы до реализации `access-manager`.
 
 ## Матрица
 

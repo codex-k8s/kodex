@@ -47,7 +47,7 @@
 
 ## WebSocket (если используется)
 Контракт:
-- Формат сообщений и каналы описываются в AsyncAPI YAML: `api/server/asyncapi.yaml`.
+- Формат сообщений и каналы описываются в AsyncAPI YAML: `specs/asyncapi/<service-name>.v<major>.yaml`.
 
 Правила клиента:
 - Один WS client на приложение (в `src/shared/ws/*`), а не “подключение в каждом компоненте”.

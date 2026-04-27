@@ -9,12 +9,12 @@
 - Swagger UI (отдача спеки/доков): `github.com/swaggest/swgui/v5emb`
 
 ## Где хранится OpenAPI
-- Спека сервиса: `api/server/api.yaml` (для `services/external/*` и `services/staff/*`).
-- (Опционально) JSON schema/примеры можно держать рядом в `api/server/*`, но источником правды остаётся OpenAPI YAML.
+- Спека сервиса: `specs/openapi/<service-name>.v<major>.yaml` (для HTTP API сервисов).
+- JSON schema/примеры можно держать рядом в `specs/openapi/**`, но источником правды остаётся OpenAPI YAML.
 
 ## Как используем `kin-openapi`
 Флоу (по смыслу):
-1) На старте загружаем `api/server/api.yaml` (разрешая external refs при необходимости) и валидируем документ.
+1) На старте загружаем соответствующую спецификацию из `specs/openapi/**` (разрешая external refs при необходимости) и валидируем документ.
 2) На входе запроса валидируем request по операции:
    - `openapi3.Loader` -> `doc.Validate(ctx)` -> `router.FindRoute(req)` -> `openapi3filter.ValidateRequest(...)`.
 3) На выходе (опционально, минимум в dev/stage) валидируем response:
@@ -40,5 +40,5 @@ make gen-openapi-go SVC=services/<zone>/<service>
 
 ## Swagger UI
 Правило:
-- В `external|staff` сервисах отдаём Swagger UI, который показывает `api/server/api.yaml` (и статически, и/или через эндпоинт).
+- В `external|staff` сервисах отдаём Swagger UI, который показывает актуальную спецификацию из `specs/openapi/**` (и статически, и/или через эндпоинт).
 - В prod это включается осознанно (по политике безопасности продукта), в dev/stage — обычно включено.

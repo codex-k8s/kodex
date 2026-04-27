@@ -4,7 +4,7 @@
 
 ## Разделение “домен vs транспорт”
 - Доменные модели живут в `internal/domain/types/*`.
-- Транспортные DTO живут в `proto/` (gRPC) и в `api/server/api.yaml` (HTTP/OpenAPI).
+- Транспортные DTO живут в `proto/` (gRPC) и в `specs/openapi/**` (HTTP/OpenAPI).
 - Маппинг делается на границе через `internal/domain/casters/*` (transport <-> domain).
 
 ## Правила `.proto`
