@@ -1,0 +1,243 @@
+openapi: 3.1.0
+info:
+  title: kodex access-manager API
+  version: 1.0.0
+  description: HTTP contract for staff and operator access-management reads and commands.
+paths:
+  /v1/access/bootstrap-user:
+    post:
+      operationId: bootstrapUserFromIdentity
+      summary: Bootstrap platform user from SSO/OIDC identity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BootstrapUserFromIdentityRequest'
+      responses:
+        '200':
+          description: Bootstrap result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BootstrapUserFromIdentityResponse'
+  /v1/access/check:
+    post:
+      operationId: checkAccess
+      summary: Resolve effective access for a subject, action and resource
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckAccessRequest'
+      responses:
+        '200':
+          description: Access decision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckAccessResponse'
+  /v1/external-accounts/{externalAccountId}/usage:resolve:
+    post:
+      operationId: resolveExternalAccountUsage
+      summary: Resolve whether an external account may be used for an action
+      parameters:
+        - name: externalAccountId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveExternalAccountUsageRequest'
+      responses:
+        '200':
+          description: Allowed account usage with secret reference metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResolveExternalAccountUsageResponse'
+components:
+  schemas:
+    Actor:
+      type: object
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+        id:
+          type: string
+      required: [type, id]
+    CommandMeta:
+      type: object
+      additionalProperties: false
+      properties:
+        commandId:
+          type: string
+          format: uuid
+        idempotencyKey:
+          type: string
+        expectedVersion:
+          type: integer
+          format: int64
+        actor:
+          $ref: '#/components/schemas/Actor'
+        reason:
+          type: string
+        requestId:
+          type: string
+      required: [actor]
+    SubjectRef:
+      type: object
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+        id:
+          type: string
+      required: [type, id]
+    ResourceRef:
+      type: object
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+        id:
+          type: string
+      required: [type, id]
+    ScopeRef:
+      type: object
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+        id:
+          type: string
+      required: [type, id]
+    BootstrapUserFromIdentityRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        provider:
+          type: string
+        subject:
+          type: string
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+        locale:
+          type: string
+        meta:
+          $ref: '#/components/schemas/CommandMeta'
+      required: [provider, subject, email, meta]
+    BootstrapUserFromIdentityResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        userId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        decision:
+          type: string
+          enum: [allow, deny, pending]
+        reasonCode:
+          type: string
+        organizationId:
+          type: string
+          format: uuid
+      required: [userId, status, decision, reasonCode]
+    CheckAccessRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        subject:
+          $ref: '#/components/schemas/SubjectRef'
+        actionKey:
+          type: string
+        resource:
+          $ref: '#/components/schemas/ResourceRef'
+        scope:
+          $ref: '#/components/schemas/ScopeRef'
+        audit:
+          type: boolean
+        meta:
+          $ref: '#/components/schemas/CommandMeta'
+      required: [subject, actionKey, resource, scope]
+    MatchedRule:
+      type: object
+      additionalProperties: false
+      properties:
+        ruleId:
+          type: string
+          format: uuid
+        effect:
+          type: string
+          enum: [allow, deny]
+        subject:
+          $ref: '#/components/schemas/SubjectRef'
+        actionKey:
+          type: string
+        scope:
+          $ref: '#/components/schemas/ScopeRef'
+        priority:
+          type: integer
+        reasonCode:
+          type: string
+      required: [ruleId, effect, subject, actionKey, priority, reasonCode]
+    CheckAccessResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        decision:
+          type: string
+          enum: [allow, deny, pending]
+        reasonCode:
+          type: string
+        policyVersion:
+          type: integer
+          format: int64
+        matchedRules:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatchedRule'
+      required: [decision, reasonCode, policyVersion, matchedRules]
+    ResolveExternalAccountUsageRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        actionKey:
+          type: string
+        usageScope:
+          $ref: '#/components/schemas/ScopeRef'
+      required: [actionKey, usageScope]
+    ResolveExternalAccountUsageResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        externalAccountId:
+          type: string
+          format: uuid
+        providerId:
+          type: string
+          format: uuid
+        secretRefId:
+          type: string
+          format: uuid
+        secretStoreType:
+          type: string
+        secretStoreRef:
+          type: string
+        allowedActionKeys:
+          type: array
+          items:
+            type: string
+      required: [externalAccountId, providerId, secretRefId, secretStoreType, secretStoreRef, allowedActionKeys]

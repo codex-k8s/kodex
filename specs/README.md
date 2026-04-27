@@ -17,3 +17,9 @@
 - Для домена доступа целевые файлы: `openapi/access-manager.v1.yaml` и `asyncapi/access-manager.v1.yaml`.
 - gRPC-контракты остаются в `proto/kodex/<domain_or_service>/v<major>/**`.
 - Сгенерированный код не является источником истины и не правится руками.
+
+## Активные спецификации
+
+| Сервис | OpenAPI | AsyncAPI | gRPC |
+|---|---|---|---|
+| `access-manager` | `openapi/access-manager.v1.yaml` | `asyncapi/access-manager.v1.yaml` | `../proto/kodex/access_accounts/v1/access_manager.proto` |

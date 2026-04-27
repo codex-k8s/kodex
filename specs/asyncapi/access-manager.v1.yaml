@@ -1,0 +1,77 @@
+asyncapi: 3.0.0
+info:
+  title: kodex access-manager events
+  version: 1.0.0
+  description: Domain events published by access-manager through the platform outbox.
+channels:
+  accessEvents:
+    address: access.events
+    messages:
+      accessEvent:
+        $ref: '#/components/messages/AccessEvent'
+operations:
+  publishAccessEvent:
+    action: send
+    channel:
+      $ref: '#/channels/accessEvents'
+    messages:
+      - $ref: '#/components/messages/AccessEvent'
+components:
+  messages:
+    AccessEvent:
+      name: AccessEvent
+      title: Access domain event
+      payload:
+        $ref: '#/components/schemas/AccessEventPayload'
+  schemas:
+    AccessEventPayload:
+      type: object
+      additionalProperties: false
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        occurred_at:
+          type: string
+          format: date-time
+        organization_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        group_id:
+          type: string
+          format: uuid
+        membership_id:
+          type: string
+          format: uuid
+        external_provider_id:
+          type: string
+          format: uuid
+        external_account_id:
+          type: string
+          format: uuid
+        external_account_binding_id:
+          type: string
+          format: uuid
+        access_action_id:
+          type: string
+          format: uuid
+        access_rule_id:
+          type: string
+          format: uuid
+        access_decision_audit_id:
+          type: string
+          format: uuid
+        action_key:
+          type: string
+        decision:
+          type: string
+          enum: [allow, deny, pending]
+        reason_code:
+          type: string
+        version:
+          type: integer
+          format: int64
+      required: [event_id, occurred_at]

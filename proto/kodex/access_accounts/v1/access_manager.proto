@@ -1,0 +1,111 @@
+syntax = "proto3";
+
+package kodex.access_accounts.v1;
+
+option go_package = "github.com/codex-k8s/kodex/proto/gen/go/kodex/access_accounts/v1;accessaccountsv1";
+
+service AccessManagerService {
+  rpc BootstrapUserFromIdentity(BootstrapUserFromIdentityRequest) returns (BootstrapUserFromIdentityResponse);
+  rpc CheckAccess(CheckAccessRequest) returns (CheckAccessResponse);
+  rpc ExplainAccess(ExplainAccessRequest) returns (ExplainAccessResponse);
+  rpc ResolveExternalAccountUsage(ResolveExternalAccountUsageRequest) returns (ResolveExternalAccountUsageResponse);
+}
+
+message CommandMeta {
+  string command_id = 1;
+  string idempotency_key = 2;
+  int64 expected_version = 3;
+  Actor actor = 4;
+  string reason = 5;
+  string request_id = 6;
+}
+
+message Actor {
+  string type = 1;
+  string id = 2;
+}
+
+message SubjectRef {
+  string type = 1;
+  string id = 2;
+}
+
+message ResourceRef {
+  string type = 1;
+  string id = 2;
+}
+
+message ScopeRef {
+  string type = 1;
+  string id = 2;
+}
+
+message BootstrapUserFromIdentityRequest {
+  string provider = 1;
+  string subject = 2;
+  string email = 3;
+  string display_name = 4;
+  string locale = 5;
+  CommandMeta meta = 6;
+}
+
+message BootstrapUserFromIdentityResponse {
+  string user_id = 1;
+  string status = 2;
+  string decision = 3;
+  string reason_code = 4;
+  string organization_id = 5;
+}
+
+message CheckAccessRequest {
+  SubjectRef subject = 1;
+  string action_key = 2;
+  ResourceRef resource = 3;
+  ScopeRef scope = 4;
+  bool audit = 5;
+  CommandMeta meta = 6;
+}
+
+message CheckAccessResponse {
+  string decision = 1;
+  string reason_code = 2;
+  int64 policy_version = 3;
+  repeated MatchedRule matched_rules = 4;
+}
+
+message MatchedRule {
+  string rule_id = 1;
+  string effect = 2;
+  SubjectRef subject = 3;
+  string action_key = 4;
+  ScopeRef scope = 5;
+  int32 priority = 6;
+  string reason_code = 7;
+}
+
+message ExplainAccessRequest {
+  string audit_id = 1;
+}
+
+message ExplainAccessResponse {
+  string audit_id = 1;
+  string decision = 2;
+  string reason_code = 3;
+  int64 policy_version = 4;
+  repeated MatchedRule matched_rules = 5;
+}
+
+message ResolveExternalAccountUsageRequest {
+  string external_account_id = 1;
+  string action_key = 2;
+  ScopeRef usage_scope = 3;
+}
+
+message ResolveExternalAccountUsageResponse {
+  string external_account_id = 1;
+  string provider_id = 2;
+  string secret_ref_id = 3;
+  string secret_store_type = 4;
+  string secret_store_ref = 5;
+  repeated string allowed_action_keys = 6;
+}

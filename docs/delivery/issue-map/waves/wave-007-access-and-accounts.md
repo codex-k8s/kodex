@@ -5,7 +5,7 @@ title: kodex — карта Issue волны 7
 status: active
 owner_role: KM
 created_at: 2026-04-25
-updated_at: 2026-04-26
+updated_at: 2026-04-27
 ---
 
 # Карта Issue — волна 7
@@ -18,7 +18,7 @@ updated_at: 2026-04-26
 
 | Issue/PR | Документы | Домен | Статус | Примечание |
 |---|---|---|---|---|
-| #599 | `docs/domains/access-and-accounts/product/requirements.md`, `docs/domains/access-and-accounts/architecture/design.md`, `docs/domains/access-and-accounts/architecture/data_model.md` | access-and-accounts | готово к реализации | Организации, группы и граф членства. |
-| #600 | `docs/domains/access-and-accounts/product/requirements.md`, `docs/domains/access-and-accounts/architecture/data_model.md`, `docs/domains/access-and-accounts/architecture/api_contract.md` | access-and-accounts | готово к реализации | Вход пользователя, allowlist и жизненный цикл пользователя. |
-| #601 | `docs/domains/access-and-accounts/product/requirements.md`, `docs/domains/access-and-accounts/architecture/design.md`, `docs/domains/access-and-accounts/architecture/data_model.md`, `docs/domains/access-and-accounts/architecture/api_contract.md` | access-and-accounts | готово к реализации | Внешние аккаунты и политика использования. |
-| #602 | `docs/domains/access-and-accounts/product/requirements.md`, `docs/domains/access-and-accounts/architecture/design.md`, `docs/domains/access-and-accounts/architecture/data_model.md`, `docs/domains/access-and-accounts/architecture/api_contract.md` | access-and-accounts | готово к реализации | Вычисление прав доступа и аудит решений. |
+| #599 | `docs/domains/access-and-accounts/product/requirements.md`, `docs/domains/access-and-accounts/architecture/design.md`, `docs/domains/access-and-accounts/architecture/data_model.md`, `services/internal/access-manager/**` | access-and-accounts | реализация начата | Базовая модель организаций, групп и членства добавлена в новый сервис. |
+| #600 | `docs/domains/access-and-accounts/product/requirements.md`, `docs/domains/access-and-accounts/architecture/data_model.md`, `docs/domains/access-and-accounts/architecture/api_contract.md`, `services/internal/access-manager/**` | access-and-accounts | реализация начата | Добавлена доменная первичная инициализация пользователя по allowlist. |
+| #601 | `docs/domains/access-and-accounts/product/requirements.md`, `docs/domains/access-and-accounts/architecture/design.md`, `docs/domains/access-and-accounts/architecture/data_model.md`, `docs/domains/access-and-accounts/architecture/api_contract.md`, `services/internal/access-manager/**` | access-and-accounts | реализация начата | Добавлен базовый контур внешних аккаунтов и ссылок на секреты. |
+| #602 | `docs/domains/access-and-accounts/product/requirements.md`, `docs/domains/access-and-accounts/architecture/design.md`, `docs/domains/access-and-accounts/architecture/data_model.md`, `docs/domains/access-and-accounts/architecture/api_contract.md`, `services/internal/access-manager/**` | access-and-accounts | реализация начата | Добавлен базовый контур вычисления доступа, явного запрета и аудита. |
