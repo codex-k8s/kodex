@@ -3055,7 +3055,9 @@ type AllowlistEntryResponse struct {
 	// default_status is the bootstrap status for matched users.
 	DefaultStatus UserStatus `protobuf:"varint,5,opt,name=default_status,json=defaultStatus,proto3,enum=kodex.access_accounts.v1.UserStatus" json:"default_status,omitempty"`
 	// status is allowlist entry status.
-	Status        AllowlistStatus `protobuf:"varint,6,opt,name=status,proto3,enum=kodex.access_accounts.v1.AllowlistStatus" json:"status,omitempty"`
+	Status AllowlistStatus `protobuf:"varint,6,opt,name=status,proto3,enum=kodex.access_accounts.v1.AllowlistStatus" json:"status,omitempty"`
+	// version is aggregate version.
+	Version       int64 `protobuf:"varint,7,opt,name=version,proto3" json:"version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3130,6 +3132,13 @@ func (x *AllowlistEntryResponse) GetStatus() AllowlistStatus {
 		return x.Status
 	}
 	return AllowlistStatus_ALLOWLIST_STATUS_UNSPECIFIED
+}
+
+func (x *AllowlistEntryResponse) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
 }
 
 // RegisterExternalProviderRequest creates an external provider.
@@ -3892,7 +3901,9 @@ type ExternalAccountBindingResponse struct {
 	// allowed_action_keys are access-action catalog keys.
 	AllowedActionKeys []string `protobuf:"bytes,5,rep,name=allowed_action_keys,json=allowedActionKeys,proto3" json:"allowed_action_keys,omitempty"`
 	// status is binding status.
-	Status        ExternalAccountBindingStatus `protobuf:"varint,6,opt,name=status,proto3,enum=kodex.access_accounts.v1.ExternalAccountBindingStatus" json:"status,omitempty"`
+	Status ExternalAccountBindingStatus `protobuf:"varint,6,opt,name=status,proto3,enum=kodex.access_accounts.v1.ExternalAccountBindingStatus" json:"status,omitempty"`
+	// version is aggregate version.
+	Version       int64 `protobuf:"varint,7,opt,name=version,proto3" json:"version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3967,6 +3978,13 @@ func (x *ExternalAccountBindingResponse) GetStatus() ExternalAccountBindingStatu
 		return x.Status
 	}
 	return ExternalAccountBindingStatus_EXTERNAL_ACCOUNT_BINDING_STATUS_UNSPECIFIED
+}
+
+func (x *ExternalAccountBindingResponse) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
 }
 
 // PutAccessActionRequest creates or updates an access action.
@@ -5607,7 +5625,7 @@ const file_kodex_access_accounts_v1_access_manager_proto_rawDesc = "" +
 	"\x04meta\x18\x06 \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\x87\x01\n" +
 	"\x1cDisableAllowlistEntryRequest\x12,\n" +
 	"\x12allowlist_entry_id\x18\x01 \x01(\tR\x10allowlistEntryId\x129\n" +
-	"\x04meta\x18\x02 \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\xe2\x02\n" +
+	"\x04meta\x18\x02 \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\xfc\x02\n" +
 	"\x16AllowlistEntryResponse\x12,\n" +
 	"\x12allowlist_entry_id\x18\x01 \x01(\tR\x10allowlistEntryId\x12K\n" +
 	"\n" +
@@ -5615,7 +5633,8 @@ const file_kodex_access_accounts_v1_access_manager_proto_rawDesc = "" +
 	"\x05value\x18\x03 \x01(\tR\x05value\x12'\n" +
 	"\x0forganization_id\x18\x04 \x01(\tR\x0eorganizationId\x12K\n" +
 	"\x0edefault_status\x18\x05 \x01(\x0e2$.kodex.access_accounts.v1.UserStatusR\rdefaultStatus\x12A\n" +
-	"\x06status\x18\x06 \x01(\x0e2).kodex.access_accounts.v1.AllowlistStatusR\x06status\"\xd8\x02\n" +
+	"\x06status\x18\x06 \x01(\x0e2).kodex.access_accounts.v1.AllowlistStatusR\x06status\x12\x18\n" +
+	"\aversion\x18\a \x01(\x03R\aversion\"\xd8\x02\n" +
 	"\x1fRegisterExternalProviderRequest\x12\x12\n" +
 	"\x04slug\x18\x01 \x01(\tR\x04slug\x12S\n" +
 	"\rprovider_kind\x18\x02 \x01(\x0e2..kodex.access_accounts.v1.ExternalProviderKindR\fproviderKind\x12!\n" +
@@ -5674,14 +5693,15 @@ const file_kodex_access_accounts_v1_access_manager_proto_rawDesc = "" +
 	"\x04meta\x18\x06 \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\xa0\x01\n" +
 	"$DisableExternalAccountBindingRequest\x12=\n" +
 	"\x1bexternal_account_binding_id\x18\x01 \x01(\tR\x18externalAccountBindingId\x129\n" +
-	"\x04meta\x18\x02 \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\x93\x03\n" +
+	"\x04meta\x18\x02 \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\xad\x03\n" +
 	"\x1eExternalAccountBindingResponse\x12=\n" +
 	"\x1bexternal_account_binding_id\x18\x01 \x01(\tR\x18externalAccountBindingId\x12.\n" +
 	"\x13external_account_id\x18\x02 \x01(\tR\x11externalAccountId\x12\\\n" +
 	"\x10usage_scope_type\x18\x03 \x01(\x0e22.kodex.access_accounts.v1.ExternalAccountScopeTypeR\x0eusageScopeType\x12$\n" +
 	"\x0eusage_scope_id\x18\x04 \x01(\tR\fusageScopeId\x12.\n" +
 	"\x13allowed_action_keys\x18\x05 \x03(\tR\x11allowedActionKeys\x12N\n" +
-	"\x06status\x18\x06 \x01(\x0e26.kodex.access_accounts.v1.ExternalAccountBindingStatusR\x06status\"\x95\x02\n" +
+	"\x06status\x18\x06 \x01(\x0e26.kodex.access_accounts.v1.ExternalAccountBindingStatusR\x06status\x12\x18\n" +
+	"\aversion\x18\a \x01(\x03R\aversion\"\x95\x02\n" +
 	"\x16PutAccessActionRequest\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12!\n" +
 	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12 \n" +

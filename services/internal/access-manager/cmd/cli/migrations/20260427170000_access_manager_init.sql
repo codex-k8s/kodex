@@ -49,6 +49,7 @@ CREATE TABLE access_allowlist_entries (
     organization_id uuid REFERENCES access_organizations(id),
     default_status text NOT NULL,
     status text NOT NULL,
+    version bigint NOT NULL,
     created_at timestamptz NOT NULL,
     updated_at timestamptz NOT NULL,
     UNIQUE (match_type, value),
@@ -152,6 +153,7 @@ CREATE TABLE access_secret_binding_refs (
     store_ref text NOT NULL,
     value_fingerprint text NOT NULL DEFAULT '',
     rotated_at timestamptz,
+    version bigint NOT NULL,
     created_at timestamptz NOT NULL,
     updated_at timestamptz NOT NULL,
     CONSTRAINT access_secret_binding_refs_store_type_check CHECK (store_type IN ('vault', 'kubernetes_secret'))
@@ -184,6 +186,7 @@ CREATE TABLE access_external_account_bindings (
     usage_scope_id text NOT NULL,
     allowed_action_keys text[] NOT NULL,
     status text NOT NULL,
+    version bigint NOT NULL,
     created_at timestamptz NOT NULL,
     updated_at timestamptz NOT NULL,
     UNIQUE (external_account_id, usage_scope_type, usage_scope_id),

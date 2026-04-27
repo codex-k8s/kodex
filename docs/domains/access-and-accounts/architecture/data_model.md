@@ -93,6 +93,7 @@ approvals:
 | `organization_id` | UUID | yes | Организация первичного допуска. |
 | `default_status` | enum | no | `active` или `pending`. |
 | `status` | enum | no | `active`, `disabled`. |
+| `version` | int64 | no | Конкурентные изменения. |
 
 ### `Group`
 
@@ -198,6 +199,7 @@ approvals:
 | `usage_scope_id` | string | no | Внешний идентификатор области использования. |
 | `allowed_action_keys` | string[] | no | Допустимые действия из каталога `AccessAction`. |
 | `status` | enum | no | `active`, `disabled`. |
+| `version` | int64 | no | Конкурентные изменения. |
 
 ### `SecretBindingRef`
 
@@ -208,6 +210,7 @@ approvals:
 | `store_ref` | string | no | Путь или имя секрета без значения. |
 | `value_fingerprint` | string | yes | Нераскрывающий отпечаток для диагностики ротации. |
 | `rotated_at` | timestamp | yes | Последняя известная ротация. |
+| `version` | int64 | no | Конкурентные изменения. |
 
 `owner_scope_type` показывает, кто владеет внешним аккаунтом и отвечает за его секрет. `ExternalAccountBinding` показывает, кому разрешено использовать аккаунт. Это позволяет завести личный аккаунт пользователя, аккаунт отдельного агента, аккаунт группы, аккаунт роли или аккаунт конкретного flow без изменения структуры таблиц.
 

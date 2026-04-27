@@ -45,14 +45,12 @@ type UserIdentity struct {
 }
 
 type AllowlistEntry struct {
-	ID             uuid.UUID
+	Base
 	MatchType      enum.AllowlistMatchType
 	Value          string
 	OrganizationID *uuid.UUID
 	DefaultStatus  enum.UserStatus
 	Status         enum.AllowlistStatus
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
 }
 
 type Group struct {
@@ -122,24 +120,20 @@ type ExternalAccount struct {
 }
 
 type ExternalAccountBinding struct {
-	ID                uuid.UUID
+	Base
 	ExternalAccountID uuid.UUID
 	UsageScopeType    enum.ExternalAccountScopeType
 	UsageScopeID      string
 	AllowedActionKeys []string
 	Status            enum.ExternalAccountBindingStatus
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
 }
 
 type SecretBindingRef struct {
-	ID               uuid.UUID
+	Base
 	StoreType        enum.SecretStoreType
 	StoreRef         string
 	ValueFingerprint string
 	RotatedAt        *time.Time
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
 }
 
 type AccessDecisionAudit struct {

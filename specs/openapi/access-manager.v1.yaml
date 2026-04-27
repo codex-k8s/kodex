@@ -789,7 +789,8 @@ components:
         organizationId: {type: string, format: uuid}
         defaultStatus: {$ref: '#/components/schemas/UserStatus'}
         status: {$ref: '#/components/schemas/AllowlistStatus'}
-      required: [allowlistEntryId, matchType, value, defaultStatus, status]
+        version: {type: integer, format: int64}
+      required: [allowlistEntryId, matchType, value, defaultStatus, status, version]
     RegisterExternalProviderRequest:
       type: object
       additionalProperties: false
@@ -885,7 +886,8 @@ components:
           type: array
           items: {type: string}
         status: {$ref: '#/components/schemas/ExternalAccountBindingStatus'}
-      required: [externalAccountBindingId, externalAccountId, usageScopeType, usageScopeId, allowedActionKeys, status]
+        version: {type: integer, format: int64}
+      required: [externalAccountBindingId, externalAccountId, usageScopeType, usageScopeId, allowedActionKeys, status, version]
     PutAccessActionRequest:
       type: object
       additionalProperties: false

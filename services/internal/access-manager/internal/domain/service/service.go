@@ -220,19 +220,18 @@ func (s *Service) PutAllowlistEntry(ctx context.Context, input PutAllowlistEntry
 	}
 	now := s.now(input.Meta)
 	entry := entity.AllowlistEntry{
-		ID:             s.ids.New(),
+		Base:           entity.Base{ID: s.ids.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
 		MatchType:      input.MatchType,
 		Value:          normalized,
 		OrganizationID: input.OrganizationID,
 		DefaultStatus:  defaultUserStatus(input.DefaultStatus),
 		Status:         defaultAllowlistStatus(input.Status),
-		CreatedAt:      now,
-		UpdatedAt:      now,
 	}
 	err := s.repository.PutAllowlistEntry(ctx, entry, s.event("access.allowlist_entry.created", "allowlist_entry", entry.ID, value.AccessEventPayload{
 		AllowlistEntryID: entry.ID.String(),
 		MatchType:        string(entry.MatchType),
 		OrganizationID:   uuidPtrString(entry.OrganizationID),
+		Version:          entry.Version,
 	}, now))
 	if err != nil {
 		return entity.AllowlistEntry{}, err
@@ -378,9 +377,10 @@ func (s *Service) BindExternalAccount(ctx context.Context, input BindExternalAcc
 	}
 	now := s.now(input.Meta)
 	binding := entity.ExternalAccountBinding{
-		ID: s.ids.New(), ExternalAccountID: input.ExternalAccountID, UsageScopeType: input.UsageScopeType,
+		Base:              entity.Base{ID: s.ids.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		ExternalAccountID: input.ExternalAccountID, UsageScopeType: input.UsageScopeType,
 		UsageScopeID: strings.TrimSpace(input.UsageScopeID), AllowedActionKeys: allowedActionKeys,
-		Status: defaultExternalAccountBindingStatus(input.Status), CreatedAt: now, UpdatedAt: now,
+		Status: defaultExternalAccountBindingStatus(input.Status),
 	}
 	if err := s.repository.BindExternalAccount(ctx, binding, s.createdEvent(
 		"access.external_account_binding.created", "external_account_binding", binding.ID, now,
@@ -388,6 +388,7 @@ func (s *Service) BindExternalAccount(ctx context.Context, input BindExternalAcc
 		payloadString(accessPayloadExternalAccountID, binding.ExternalAccountID.String()),
 		payloadString(accessPayloadUsageScopeType, string(binding.UsageScopeType)),
 		payloadString(accessPayloadUsageScopeID, binding.UsageScopeID),
+		payloadVersion(binding.Version),
 	)); err != nil {
 		return entity.ExternalAccountBinding{}, err
 	}

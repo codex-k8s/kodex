@@ -610,7 +610,11 @@ func (r *memoryRepository) seedUser(status enum.UserStatus) entity.User {
 
 func (r *memoryRepository) seedSecret(storeType enum.SecretStoreType, storeRef string) entity.SecretBindingRef {
 	now := fixedClock{}.Now()
-	secret := entity.SecretBindingRef{ID: r.ids.New(), StoreType: storeType, StoreRef: storeRef, CreatedAt: now, UpdatedAt: now}
+	secret := entity.SecretBindingRef{
+		Base:      entity.Base{ID: r.ids.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		StoreType: storeType,
+		StoreRef:  storeRef,
+	}
 	r.secrets[secret.ID] = secret
 	return secret
 }

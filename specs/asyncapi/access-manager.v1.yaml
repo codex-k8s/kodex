@@ -16,7 +16,7 @@ operations:
     channel:
       $ref: '#/channels/accessEvents'
     messages:
-      - $ref: '#/components/messages/AccessEvent'
+      - $ref: '#/channels/accessEvents/messages/accessEvent'
 components:
   messages:
     AccessEvent:
@@ -597,7 +597,7 @@ components:
     AccessRuleCreatedPayload:
       allOf:
         - $ref: '#/components/schemas/AccessEventPayload'
-        - required: [access_rule_id, effect, action_key, scope_type, scope_id, version]
+        - required: [access_rule_id, effect, action_key, scope_type, version]
     AccessRuleUpdatedPayload:
       allOf:
         - $ref: '#/components/schemas/AccessEventPayload'

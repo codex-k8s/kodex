@@ -575,6 +575,8 @@ message AllowlistEntryResponse {
   UserStatus default_status = 5;
   // status is allowlist entry status.
   AllowlistStatus status = 6;
+  // version is aggregate version.
+  int64 version = 7;
 }
 
 // RegisterExternalProviderRequest creates an external provider.
@@ -723,6 +725,8 @@ message ExternalAccountBindingResponse {
   repeated string allowed_action_keys = 5;
   // status is binding status.
   ExternalAccountBindingStatus status = 6;
+  // version is aggregate version.
+  int64 version = 7;
 }
 
 // PutAccessActionRequest creates or updates an access action.

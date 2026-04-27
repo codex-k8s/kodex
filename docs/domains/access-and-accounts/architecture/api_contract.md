@@ -110,10 +110,10 @@ approvals:
 | `access.user.updated` | `event_id`, `user_id`, `version`, `occurred_at`. |
 | `access.user.identity_linked` | `event_id`, `user_id`, `identity_id`, `identity_provider`, `version`, `occurred_at`. |
 | `access.user.status_changed` | `event_id`, `user_id`, `old_status`, `new_status`, `reason_code`, `version`, `occurred_at`. |
-| `access.allowlist_entry.created` | `event_id`, `allowlist_entry_id`, `match_type`, `organization_id`, `version`, `occurred_at`. |
+| `access.allowlist_entry.created` | `event_id`, `allowlist_entry_id`, `match_type`, `version`, `occurred_at`. |
 | `access.allowlist_entry.updated` | `event_id`, `allowlist_entry_id`, `version`, `occurred_at`. |
 | `access.allowlist_entry.disabled` | `event_id`, `allowlist_entry_id`, `reason_code`, `version`, `occurred_at`. |
-| `access.group.created` | `event_id`, `group_id`, `scope_type`, `scope_id`, `version`, `occurred_at`. |
+| `access.group.created` | `event_id`, `group_id`, `scope_type`, `version`, `occurred_at`. |
 | `access.group.updated` | `event_id`, `group_id`, `version`, `occurred_at`. |
 | `access.group.disabled` | `event_id`, `group_id`, `reason_code`, `version`, `occurred_at`. |
 | `access.membership.created` | `event_id`, `membership_id`, `subject_type`, `subject_id`, `target_type`, `target_id`, `version`, `occurred_at`. |
@@ -135,7 +135,7 @@ approvals:
 | `access.access_action.created` | `event_id`, `access_action_id`, `action_key`, `version`, `occurred_at`. |
 | `access.access_action.updated` | `event_id`, `access_action_id`, `version`, `occurred_at`. |
 | `access.access_action.disabled` | `event_id`, `access_action_id`, `reason_code`, `version`, `occurred_at`. |
-| `access.access_rule.created` | `event_id`, `access_rule_id`, `effect`, `action_key`, `scope_type`, `scope_id`, `version`, `occurred_at`. |
+| `access.access_rule.created` | `event_id`, `access_rule_id`, `effect`, `action_key`, `scope_type`, `version`, `occurred_at`. |
 | `access.access_rule.updated` | `event_id`, `access_rule_id`, `version`, `occurred_at`. |
 | `access.access_rule.disabled` | `event_id`, `access_rule_id`, `reason_code`, `version`, `occurred_at`. |
 | `access.access_decision.recorded` | `event_id`, `access_decision_audit_id`, `subject_type`, `subject_id`, `action_key`, `decision`, `reason_code`, `occurred_at`. |
