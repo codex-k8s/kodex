@@ -64,12 +64,13 @@ func (s *Service) CreateOrganization(ctx context.Context, input CreateOrganizati
 	if strings.TrimSpace(input.Slug) == "" || strings.TrimSpace(input.DisplayName) == "" {
 		return entity.Organization{}, errs.ErrInvalidArgument
 	}
+	status := defaultOrganizationStatus(input.Status)
 	if input.Kind == enum.OrganizationKindOwner {
 		count, err := s.repository.CountActiveOwnerOrganizations(ctx)
 		if err != nil {
 			return entity.Organization{}, err
 		}
-		if count > 0 && input.Status == enum.OrganizationStatusActive {
+		if count > 0 && status == enum.OrganizationStatusActive {
 			return entity.Organization{}, errs.ErrAlreadyExists
 		}
 	}
@@ -86,7 +87,7 @@ func (s *Service) CreateOrganization(ctx context.Context, input CreateOrganizati
 		Slug:                 helpers.NormalizeSlug(input.Slug),
 		DisplayName:          strings.TrimSpace(input.DisplayName),
 		ImageAssetRef:        strings.TrimSpace(input.ImageAssetRef),
-		Status:               defaultOrganizationStatus(input.Status),
+		Status:               status,
 		ParentOrganizationID: input.ParentOrganizationID,
 	}
 
@@ -186,8 +187,11 @@ func (s *Service) SetMembership(ctx context.Context, input SetMembershipInput) (
 
 func (s *Service) PutAllowlistEntry(ctx context.Context, input PutAllowlistEntryInput) (entity.AllowlistEntry, error) {
 	normalized := strings.TrimSpace(input.Value)
-	if input.MatchType == enum.AllowlistMatchEmail {
+	switch input.MatchType {
+	case enum.AllowlistMatchEmail:
 		normalized = helpers.NormalizeEmail(normalized)
+	case enum.AllowlistMatchDomain:
+		normalized = helpers.NormalizeDomain(normalized)
 	}
 	if normalized == "" {
 		return entity.AllowlistEntry{}, errs.ErrInvalidArgument
@@ -231,6 +235,14 @@ func (s *Service) BootstrapUserFromIdentity(ctx context.Context, input Bootstrap
 	if err != nil {
 		return BootstrapUserFromIdentityResult{}, err
 	}
+	var organization *entity.Organization
+	if entry.OrganizationID != nil {
+		org, orgErr := s.repository.GetOrganization(ctx, *entry.OrganizationID)
+		if orgErr != nil {
+			return BootstrapUserFromIdentityResult{}, orgErr
+		}
+		organization = &org
+	}
 	now := s.now(input.Meta)
 	status := enum.UserStatusPending
 	if entry.Status == enum.AllowlistStatusActive {
@@ -266,15 +278,6 @@ func (s *Service) BootstrapUserFromIdentity(ctx context.Context, input Bootstrap
 	}, now))
 	if err != nil {
 		return BootstrapUserFromIdentityResult{}, err
-	}
-
-	var organization *entity.Organization
-	if entry.OrganizationID != nil {
-		org, orgErr := s.repository.GetOrganization(ctx, *entry.OrganizationID)
-		if orgErr != nil {
-			return BootstrapUserFromIdentityResult{}, orgErr
-		}
-		organization = &org
 	}
 
 	return BootstrapUserFromIdentityResult{
@@ -335,7 +338,8 @@ func (s *Service) RegisterExternalAccount(ctx context.Context, input RegisterExt
 }
 
 func (s *Service) BindExternalAccount(ctx context.Context, input BindExternalAccountInput) (entity.ExternalAccountBinding, error) {
-	if input.ExternalAccountID == uuid.Nil || input.UsageScopeID == "" || len(input.AllowedActionKeys) == 0 {
+	allowedActionKeys := sortedUnique(input.AllowedActionKeys)
+	if input.ExternalAccountID == uuid.Nil || strings.TrimSpace(input.UsageScopeID) == "" || len(allowedActionKeys) == 0 {
 		return entity.ExternalAccountBinding{}, errs.ErrInvalidArgument
 	}
 	if _, err := s.repository.GetExternalAccount(ctx, input.ExternalAccountID); err != nil {
@@ -344,7 +348,7 @@ func (s *Service) BindExternalAccount(ctx context.Context, input BindExternalAcc
 	now := s.now(input.Meta)
 	binding := entity.ExternalAccountBinding{
 		ID: s.ids.New(), ExternalAccountID: input.ExternalAccountID, UsageScopeType: input.UsageScopeType,
-		UsageScopeID: input.UsageScopeID, AllowedActionKeys: sortedUnique(input.AllowedActionKeys),
+		UsageScopeID: strings.TrimSpace(input.UsageScopeID), AllowedActionKeys: allowedActionKeys,
 		Status: defaultExternalAccountBindingStatus(input.Status), CreatedAt: now, UpdatedAt: now,
 	}
 	if err := s.repository.BindExternalAccount(ctx, binding, s.createdEvent(

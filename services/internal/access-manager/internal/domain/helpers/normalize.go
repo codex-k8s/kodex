@@ -11,7 +11,11 @@ func EmailDomain(email string) string {
 	if len(parts) != 2 {
 		return ""
 	}
-	return parts[1]
+	return NormalizeDomain(parts[1])
+}
+
+func NormalizeDomain(domain string) string {
+	return strings.ToLower(strings.TrimSpace(domain))
 }
 
 func NormalizeSlug(slug string) string {

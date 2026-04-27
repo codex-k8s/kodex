@@ -37,6 +37,10 @@ components:
         organization_id:
           type: string
           format: uuid
+        kind:
+          type: string
+        status:
+          type: string
         user_id:
           type: string
           format: uuid
@@ -46,21 +50,51 @@ components:
         membership_id:
           type: string
           format: uuid
+        subject_type:
+          type: string
+        subject_id:
+          type: string
+        target_type:
+          type: string
+        target_id:
+          type: string
+        allowlist_entry_id:
+          type: string
+          format: uuid
+        match_type:
+          type: string
+        identity_id:
+          type: string
+          format: uuid
         external_provider_id:
           type: string
           format: uuid
+        slug:
+          type: string
         external_account_id:
           type: string
           format: uuid
+        account_type:
+          type: string
         external_account_binding_id:
           type: string
           format: uuid
+        scope_type:
+          type: string
+        scope_id:
+          type: string
+        usage_scope_type:
+          type: string
+        usage_scope_id:
+          type: string
         access_action_id:
           type: string
           format: uuid
         access_rule_id:
           type: string
           format: uuid
+        effect:
+          type: string
         access_decision_audit_id:
           type: string
           format: uuid

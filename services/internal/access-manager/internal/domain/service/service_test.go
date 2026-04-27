@@ -27,7 +27,7 @@ func TestBootstrapUserFromIdentityUsesAllowlistDomain(t *testing.T) {
 		t.Fatalf("create organization: %v", err)
 	}
 	_, err = svc.PutAllowlistEntry(ctx, PutAllowlistEntryInput{
-		MatchType: enum.AllowlistMatchDomain, Value: "example.com", OrganizationID: &org.ID, DefaultStatus: enum.UserStatusActive,
+		MatchType: enum.AllowlistMatchDomain, Value: "Example.com", OrganizationID: &org.ID, DefaultStatus: enum.UserStatusActive,
 	})
 	if err != nil {
 		t.Fatalf("put allowlist: %v", err)
@@ -47,6 +47,48 @@ func TestBootstrapUserFromIdentityUsesAllowlistDomain(t *testing.T) {
 	}
 	if result.Organization == nil || result.Organization.ID != org.ID {
 		t.Fatalf("organization was not resolved")
+	}
+}
+
+func TestCreateOrganizationTreatsEmptyStatusAsActiveForOwnerGuard(t *testing.T) {
+	ctx := context.Background()
+	svc := New(newMemoryRepository(), fixedClock{}, newSequenceIDs())
+
+	_, err := svc.CreateOrganization(ctx, CreateOrganizationInput{
+		Kind: enum.OrganizationKindOwner, Slug: "kodex", DisplayName: "Платформа KODEX",
+	})
+	if err != nil {
+		t.Fatalf("create first owner: %v", err)
+	}
+	_, err = svc.CreateOrganization(ctx, CreateOrganizationInput{
+		Kind: enum.OrganizationKindOwner, Slug: "kodex-2", DisplayName: "Платформа KODEX 2",
+	})
+	if !errors.Is(err, errs.ErrAlreadyExists) {
+		t.Fatalf("err = %v, want %v", err, errs.ErrAlreadyExists)
+	}
+}
+
+func TestBootstrapUserFromIdentityResolvesOrganizationBeforeCreateUser(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	missingOrganizationID := uuid.New()
+
+	_, err := svc.PutAllowlistEntry(ctx, PutAllowlistEntryInput{
+		MatchType: enum.AllowlistMatchDomain, Value: "example.com", OrganizationID: &missingOrganizationID,
+		DefaultStatus: enum.UserStatusActive,
+	})
+	if err != nil {
+		t.Fatalf("put allowlist: %v", err)
+	}
+	_, err = svc.BootstrapUserFromIdentity(ctx, BootstrapUserFromIdentityInput{
+		Provider: enum.IdentityProviderGitHub, Subject: "42", Email: "owner@example.com",
+	})
+	if !errors.Is(err, errs.ErrNotFound) {
+		t.Fatalf("err = %v, want %v", err, errs.ErrNotFound)
+	}
+	if len(store.users) != 0 {
+		t.Fatalf("users were created after failed organization lookup")
 	}
 }
 
@@ -134,6 +176,21 @@ func TestResolveExternalAccountUsageRequiresAllowedActionAndSecret(t *testing.T)
 	}
 	if result.SecretRef.StoreRef != secret.StoreRef {
 		t.Fatalf("secret ref = %s, want %s", result.SecretRef.StoreRef, secret.StoreRef)
+	}
+}
+
+func TestBindExternalAccountRejectsBlankAllowedActions(t *testing.T) {
+	svc := New(newMemoryRepository(), fixedClock{}, newSequenceIDs())
+	_, err := svc.BindExternalAccount(context.Background(), BindExternalAccountInput{
+		ExternalAccountID: uuid.New(),
+		UsageScopeType:    enum.ExternalAccountScopeProject,
+		UsageScopeID:      "project-1",
+		AllowedActionKeys: []string{
+			"   ",
+		},
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("err = %v, want %v", err, errs.ErrInvalidArgument)
 	}
 }
 
