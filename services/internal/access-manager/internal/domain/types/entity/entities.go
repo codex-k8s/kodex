@@ -1,3 +1,4 @@
+// Package entity contains persisted aggregate models owned by access-manager.
 package entity
 
 import (
@@ -9,6 +10,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/value"
 )
 
+// Base stores common aggregate metadata used for optimistic concurrency.
 type Base struct {
 	ID        uuid.UUID
 	Version   int64
@@ -16,6 +18,7 @@ type Base struct {
 	UpdatedAt time.Time
 }
 
+// Organization represents a platform tenant, owner, client or contractor scope.
 type Organization struct {
 	Base
 	Kind                 enum.OrganizationKind
@@ -26,6 +29,7 @@ type Organization struct {
 	ParentOrganizationID *uuid.UUID
 }
 
+// User represents a human platform principal admitted through SSO and allowlist.
 type User struct {
 	Base
 	PrimaryEmail   string
@@ -35,6 +39,7 @@ type User struct {
 	Locale         string
 }
 
+// UserIdentity links a user profile to an external identity provider subject.
 type UserIdentity struct {
 	ID           uuid.UUID
 	UserID       uuid.UUID
@@ -44,6 +49,7 @@ type UserIdentity struct {
 	LastLoginAt  *time.Time
 }
 
+// AllowlistEntry defines primary admission rules for first user login.
 type AllowlistEntry struct {
 	Base
 	MatchType      enum.AllowlistMatchType
@@ -53,6 +59,7 @@ type AllowlistEntry struct {
 	Status         enum.AllowlistStatus
 }
 
+// Group groups users or accounts inside global or organization scope.
 type Group struct {
 	Base
 	ScopeType     enum.GroupScopeType
@@ -64,6 +71,7 @@ type Group struct {
 	Status        enum.GroupStatus
 }
 
+// Membership connects a subject to a group or organization target.
 type Membership struct {
 	Base
 	SubjectType enum.MembershipSubjectType
@@ -75,6 +83,7 @@ type Membership struct {
 	Source      enum.MembershipSource
 }
 
+// AccessAction describes a catalog action that can be referenced by rules.
 type AccessAction struct {
 	Base
 	Key          string
@@ -84,6 +93,7 @@ type AccessAction struct {
 	Status       enum.AccessActionStatus
 }
 
+// AccessRule grants or denies an action to a subject in a concrete scope.
 type AccessRule struct {
 	Base
 	Effect       enum.AccessEffect
@@ -98,6 +108,7 @@ type AccessRule struct {
 	Status       enum.AccessRuleStatus
 }
 
+// ExternalProvider describes a provider that owns external accounts.
 type ExternalProvider struct {
 	Base
 	Slug         string
@@ -107,6 +118,7 @@ type ExternalProvider struct {
 	Status       enum.ExternalProviderStatus
 }
 
+// ExternalAccount represents a provider account usable by people, services or agents.
 type ExternalAccount struct {
 	Base
 	ExternalProviderID uuid.UUID
@@ -119,6 +131,7 @@ type ExternalAccount struct {
 	SecretBindingRefID *uuid.UUID
 }
 
+// ExternalAccountBinding permits an external account to be used in a target scope.
 type ExternalAccountBinding struct {
 	Base
 	ExternalAccountID uuid.UUID
@@ -128,6 +141,7 @@ type ExternalAccountBinding struct {
 	Status            enum.ExternalAccountBindingStatus
 }
 
+// SecretBindingRef stores a reference to a secret in the canonical secret store.
 type SecretBindingRef struct {
 	Base
 	StoreType        enum.SecretStoreType
@@ -136,6 +150,7 @@ type SecretBindingRef struct {
 	RotatedAt        *time.Time
 }
 
+// AccessDecisionAudit records auditable access decisions and their explanation.
 type AccessDecisionAudit struct {
 	ID            uuid.UUID
 	Subject       value.SubjectRef
@@ -148,6 +163,7 @@ type AccessDecisionAudit struct {
 	CreatedAt     time.Time
 }
 
+// OutboxEvent stores a domain event until it is published to consumers.
 type OutboxEvent struct {
 	ID            uuid.UUID
 	EventType     string

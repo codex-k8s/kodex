@@ -2,11 +2,13 @@ package app
 
 import "os"
 
+// Config contains process-level access-manager server configuration.
 type Config struct {
 	HTTPAddr string
 	GRPCAddr string
 }
 
+// LoadConfigFromEnv reads process configuration from environment variables.
 func LoadConfigFromEnv() Config {
 	return Config{
 		HTTPAddr: envOrDefault("KODEX_ACCESS_MANAGER_HTTP_ADDR", ":8080"),

@@ -4,7 +4,7 @@
 
 ## Общие правила
 
-- Любой сгенерированный код живет только в `**/generated/**`.
+- Сгенерированный код хранится только в заранее закреплённых каталогах кодогенерации. Для protobuf/gRPC канонический каталог — `proto/gen/go/**`; для транспортного слоя и frontend используются профильные `**/generated/**`.
 - Сгенерированное руками не правим.
 - Изменение перечня сервисов/приложений, участвующих в codegen, должно синхронно обновлять:
   - цели `gen-openapi-*` в `Makefile`;
@@ -47,11 +47,11 @@ make gen-openapi-go SVC=services/<zone>/<service>
 - `google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest`
 
 Выход:
-- `internal/transport/grpc/generated/**`
+- `proto/gen/go/**`
 
 Запуск:
 ```bash
-make gen-proto-go SVC=services/<zone>/<service>
+make gen-proto-go
 ```
 
 ## AsyncAPI (webhook/event payloads)
@@ -65,7 +65,7 @@ make gen-proto-go SVC=services/<zone>/<service>
 
 Валидация:
 ```bash
-make validate-asyncapi SVC=services/<zone>/<service>
+make validate-asyncapi SVC=<service-name>
 ```
 
 ## Frontend codegen по OpenAPI (TypeScript + Axios)

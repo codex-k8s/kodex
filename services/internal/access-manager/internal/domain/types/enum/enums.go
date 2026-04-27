@@ -1,5 +1,7 @@
+// Package enum contains closed domain vocabularies for access-manager.
 package enum
 
+// OrganizationKind classifies how an organization participates in the platform.
 type OrganizationKind string
 
 const (
@@ -11,6 +13,7 @@ const (
 	OrganizationKindSaaSContractor OrganizationKind = "saas_contractor"
 )
 
+// OrganizationStatus describes the lifecycle state of an organization.
 type OrganizationStatus string
 
 const (
@@ -20,6 +23,7 @@ const (
 	OrganizationStatusArchived  OrganizationStatus = "archived"
 )
 
+// UserStatus describes admission and access state for a human user.
 type UserStatus string
 
 const (
@@ -29,6 +33,7 @@ const (
 	UserStatusDisabled UserStatus = "disabled"
 )
 
+// IdentityProvider identifies an external identity source.
 type IdentityProvider string
 
 const (
@@ -38,6 +43,7 @@ const (
 	IdentityProviderGoogle   IdentityProvider = "google"
 )
 
+// AllowlistMatchType defines how an allowlist entry matches a login email.
 type AllowlistMatchType string
 
 const (
@@ -45,6 +51,7 @@ const (
 	AllowlistMatchDomain AllowlistMatchType = "domain"
 )
 
+// AllowlistStatus controls whether an allowlist entry may admit users.
 type AllowlistStatus string
 
 const (
@@ -52,6 +59,7 @@ const (
 	AllowlistStatusDisabled AllowlistStatus = "disabled"
 )
 
+// GroupScopeType defines where a group slug is unique.
 type GroupScopeType string
 
 const (
@@ -59,6 +67,7 @@ const (
 	GroupScopeOrganization GroupScopeType = "organization"
 )
 
+// GroupStatus describes whether a group can participate in membership checks.
 type GroupStatus string
 
 const (
@@ -67,6 +76,7 @@ const (
 	GroupStatusArchived GroupStatus = "archived"
 )
 
+// MembershipSubjectType identifies a subject that can be added to membership.
 type MembershipSubjectType string
 
 const (
@@ -75,6 +85,7 @@ const (
 	MembershipSubjectExternalAccount MembershipSubjectType = "external_account"
 )
 
+// MembershipTargetType identifies a membership target.
 type MembershipTargetType string
 
 const (
@@ -82,6 +93,7 @@ const (
 	MembershipTargetGroup        MembershipTargetType = "group"
 )
 
+// MembershipStatus describes whether a membership is effective.
 type MembershipStatus string
 
 const (
@@ -91,6 +103,7 @@ const (
 	MembershipStatusDisabled MembershipStatus = "disabled"
 )
 
+// MembershipSource records how a membership was created or synchronized.
 type MembershipSource string
 
 const (
@@ -100,6 +113,7 @@ const (
 	MembershipSourceSystem    MembershipSource = "system"
 )
 
+// AccessActionStatus controls whether a catalog action may be used by rules.
 type AccessActionStatus string
 
 const (
@@ -107,6 +121,7 @@ const (
 	AccessActionStatusDisabled AccessActionStatus = "disabled"
 )
 
+// AccessEffect defines whether a rule allows or denies access.
 type AccessEffect string
 
 const (
@@ -114,6 +129,7 @@ const (
 	AccessEffectDeny  AccessEffect = "deny"
 )
 
+// AccessSubjectType identifies subjects that can receive access rules.
 type AccessSubjectType string
 
 const (
@@ -127,6 +143,7 @@ const (
 	AccessSubjectPackage         AccessSubjectType = "package"
 )
 
+// AccessRuleStatus controls whether a rule participates in access checks.
 type AccessRuleStatus string
 
 const (
@@ -134,6 +151,7 @@ const (
 	AccessRuleStatusDisabled AccessRuleStatus = "disabled"
 )
 
+// AccessDecision is the result of an access check.
 type AccessDecision string
 
 const (
@@ -142,6 +160,7 @@ const (
 	AccessDecisionPending AccessDecision = "pending"
 )
 
+// ExternalProviderKind classifies external account providers.
 type ExternalProviderKind string
 
 const (
@@ -153,6 +172,7 @@ const (
 	ExternalProviderOther      ExternalProviderKind = "other"
 )
 
+// ExternalProviderStatus controls whether provider accounts can be managed.
 type ExternalProviderStatus string
 
 const (
@@ -160,6 +180,7 @@ const (
 	ExternalProviderStatusDisabled ExternalProviderStatus = "disabled"
 )
 
+// ExternalAccountType classifies a provider account principal.
 type ExternalAccountType string
 
 const (
@@ -169,6 +190,7 @@ const (
 	ExternalAccountIntegration ExternalAccountType = "integration"
 )
 
+// ExternalAccountStatus describes whether an external account can be used.
 type ExternalAccountStatus string
 
 const (
@@ -180,6 +202,7 @@ const (
 	ExternalAccountStatusDisabled    ExternalAccountStatus = "disabled"
 )
 
+// ExternalAccountScopeType identifies account ownership or usage scope.
 type ExternalAccountScopeType string
 
 const (
@@ -196,6 +219,7 @@ const (
 	ExternalAccountScopePackage      ExternalAccountScopeType = "package"
 )
 
+// ExternalAccountBindingStatus controls whether an account binding is effective.
 type ExternalAccountBindingStatus string
 
 const (
@@ -203,6 +227,7 @@ const (
 	ExternalAccountBindingStatusDisabled ExternalAccountBindingStatus = "disabled"
 )
 
+// SecretStoreType identifies the secret backend referenced by a binding.
 type SecretStoreType string
 
 const (

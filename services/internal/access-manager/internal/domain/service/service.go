@@ -2,12 +2,10 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"slices"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -21,56 +19,44 @@ import (
 )
 
 const (
-	reasonAllowlistEmail       = "allowlist_email"
-	reasonAllowlistDomain      = "allowlist_domain"
-	reasonAllowlistMiss        = "allowlist_miss"
-	reasonExplicitAllow        = "explicit_allow"
-	reasonExplicitDeny         = "explicit_deny"
-	reasonNoMatchingRule       = "no_matching_rule"
-	reasonSubjectBlocked       = "subject_blocked"
-	schemaVersionAccessEventV1 = 1
+	reasonAllowlistEmail    = "allowlist_email"
+	reasonAllowlistDomain   = "allowlist_domain"
+	reasonAllowlistDisabled = "allowlist_disabled"
+	reasonAllowlistMiss     = "allowlist_miss"
+	reasonIdentityLinked    = "identity_linked"
+	reasonExplicitAllow     = "explicit_allow"
+	reasonExplicitDeny      = "explicit_deny"
+	reasonNoMatchingRule    = "no_matching_rule"
+	reasonSubjectBlocked    = "subject_blocked"
 )
 
-type accessPayloadStringField uint8
-
-const (
-	accessPayloadOrganizationID accessPayloadStringField = iota + 1
-	accessPayloadKind
-	accessPayloadStatus
-	accessPayloadGroupID
-	accessPayloadScopeType
-	accessPayloadScopeID
-	accessPayloadExternalAccountID
-	accessPayloadExternalProviderID
-	accessPayloadAccountType
-	accessPayloadExternalAccountBindingID
-	accessPayloadUsageScopeType
-	accessPayloadUsageScopeID
-)
-
-type accessEventPayloadOption func(*value.AccessEventPayload)
-
+// Service coordinates access-manager domain commands and reads.
 type Service struct {
 	repository accessrepo.Repository
 	clock      accessrepo.Clock
 	ids        accessrepo.IDGenerator
 }
 
+// New creates a domain service with injected persistence, clock and id generator.
 func New(repository accessrepo.Repository, clock accessrepo.Clock, ids accessrepo.IDGenerator) *Service {
 	return &Service{repository: repository, clock: clock, ids: ids}
 }
 
+// CreateOrganization creates a tenant organization and enforces owner invariants.
 func (s *Service) CreateOrganization(ctx context.Context, input CreateOrganizationInput) (entity.Organization, error) {
 	if strings.TrimSpace(input.Slug) == "" || strings.TrimSpace(input.DisplayName) == "" {
 		return entity.Organization{}, errs.ErrInvalidArgument
 	}
 	status := defaultOrganizationStatus(input.Status)
 	if input.Kind == enum.OrganizationKindOwner {
+		if status != enum.OrganizationStatusActive {
+			return entity.Organization{}, errs.ErrPreconditionFailed
+		}
 		count, err := s.repository.CountActiveOwnerOrganizations(ctx)
 		if err != nil {
 			return entity.Organization{}, err
 		}
-		if count > 0 && status == enum.OrganizationStatusActive {
+		if count > 0 {
 			return entity.Organization{}, errs.ErrAlreadyExists
 		}
 	}
@@ -103,11 +89,21 @@ func (s *Service) CreateOrganization(ctx context.Context, input CreateOrganizati
 	return organization, nil
 }
 
+// CreateGroup creates a global or organization-scoped group.
 func (s *Service) CreateGroup(ctx context.Context, input CreateGroupInput) (entity.Group, error) {
 	if strings.TrimSpace(input.Slug) == "" || strings.TrimSpace(input.DisplayName) == "" {
 		return entity.Group{}, errs.ErrInvalidArgument
 	}
-	if input.ScopeType == enum.GroupScopeOrganization && input.ScopeID == nil {
+	switch input.ScopeType {
+	case enum.GroupScopeGlobal:
+		if input.ScopeID != nil {
+			return entity.Group{}, errs.ErrInvalidArgument
+		}
+	case enum.GroupScopeOrganization:
+		if input.ScopeID == nil {
+			return entity.Group{}, errs.ErrInvalidArgument
+		}
+	default:
 		return entity.Group{}, errs.ErrInvalidArgument
 	}
 	if input.ParentGroupID != nil {
@@ -150,9 +146,13 @@ func (s *Service) CreateGroup(ctx context.Context, input CreateGroupInput) (enti
 	return group, nil
 }
 
+// SetMembership creates or updates a membership edge between domain entities.
 func (s *Service) SetMembership(ctx context.Context, input SetMembershipInput) (entity.Membership, error) {
 	if input.SubjectID == uuid.Nil || input.TargetID == uuid.Nil {
 		return entity.Membership{}, errs.ErrInvalidArgument
+	}
+	if err := s.validateMembershipEndpoint(ctx, input.SubjectType, input.SubjectID, input.TargetType, input.TargetID); err != nil {
+		return entity.Membership{}, err
 	}
 	now := s.now(input.Meta)
 	status := defaultMembershipStatus(input.Status)
@@ -207,6 +207,7 @@ func (s *Service) SetMembership(ctx context.Context, input SetMembershipInput) (
 	return membership, nil
 }
 
+// PutAllowlistEntry creates or replaces a primary admission rule.
 func (s *Service) PutAllowlistEntry(ctx context.Context, input PutAllowlistEntryInput) (entity.AllowlistEntry, error) {
 	normalized := strings.TrimSpace(input.Value)
 	switch input.MatchType {
@@ -214,9 +215,15 @@ func (s *Service) PutAllowlistEntry(ctx context.Context, input PutAllowlistEntry
 		normalized = helpers.NormalizeEmail(normalized)
 	case enum.AllowlistMatchDomain:
 		normalized = helpers.NormalizeDomain(normalized)
+	default:
+		return entity.AllowlistEntry{}, errs.ErrInvalidArgument
 	}
 	if normalized == "" {
 		return entity.AllowlistEntry{}, errs.ErrInvalidArgument
+	}
+	defaultStatus, err := defaultAllowlistDefaultStatus(input.DefaultStatus)
+	if err != nil {
+		return entity.AllowlistEntry{}, err
 	}
 	now := s.now(input.Meta)
 	entry := entity.AllowlistEntry{
@@ -224,10 +231,10 @@ func (s *Service) PutAllowlistEntry(ctx context.Context, input PutAllowlistEntry
 		MatchType:      input.MatchType,
 		Value:          normalized,
 		OrganizationID: input.OrganizationID,
-		DefaultStatus:  defaultUserStatus(input.DefaultStatus),
+		DefaultStatus:  defaultStatus,
 		Status:         defaultAllowlistStatus(input.Status),
 	}
-	err := s.repository.PutAllowlistEntry(ctx, entry, s.event("access.allowlist_entry.created", "allowlist_entry", entry.ID, value.AccessEventPayload{
+	err = s.repository.PutAllowlistEntry(ctx, entry, s.event("access.allowlist_entry.created", "allowlist_entry", entry.ID, value.AccessEventPayload{
 		AllowlistEntryID: entry.ID.String(),
 		MatchType:        string(entry.MatchType),
 		OrganizationID:   uuidPtrString(entry.OrganizationID),
@@ -239,8 +246,10 @@ func (s *Service) PutAllowlistEntry(ctx context.Context, input PutAllowlistEntry
 	return entry, nil
 }
 
+// BootstrapUserFromIdentity admits or links a user after external identity login.
 func (s *Service) BootstrapUserFromIdentity(ctx context.Context, input BootstrapUserFromIdentityInput) (BootstrapUserFromIdentityResult, error) {
-	if strings.TrimSpace(input.Subject) == "" || helpers.NormalizeEmail(input.Email) == "" {
+	normalizedEmail := helpers.NormalizeEmail(input.Email)
+	if strings.TrimSpace(input.Subject) == "" || normalizedEmail == "" {
 		return BootstrapUserFromIdentityResult{}, errs.ErrInvalidArgument
 	}
 
@@ -265,6 +274,35 @@ func (s *Service) BootstrapUserFromIdentity(ctx context.Context, input Bootstrap
 		organization = &org
 	}
 	now := s.now(input.Meta)
+	existingByEmail, err := s.repository.GetUserByEmail(ctx, normalizedEmail)
+	if err == nil {
+		identity := entity.UserIdentity{
+			ID:           s.ids.New(),
+			UserID:       existingByEmail.ID,
+			Provider:     input.Provider,
+			Subject:      strings.TrimSpace(input.Subject),
+			EmailAtLogin: normalizedEmail,
+			LastLoginAt:  &now,
+		}
+		err = s.repository.LinkUserIdentity(ctx, identity, s.event("access.user.identity_linked", "user", existingByEmail.ID, value.AccessEventPayload{
+			UserID:           existingByEmail.ID.String(),
+			IdentityID:       identity.ID.String(),
+			IdentityProvider: string(identity.Provider),
+			Version:          existingByEmail.Version,
+		}, now))
+		if err != nil {
+			return BootstrapUserFromIdentityResult{}, err
+		}
+		return BootstrapUserFromIdentityResult{
+			User:         existingByEmail,
+			Decision:     decisionByUserStatus(existingByEmail.Status),
+			ReasonCode:   reasonIdentityLinked,
+			Organization: organization,
+		}, nil
+	}
+	if !errors.Is(err, errs.ErrNotFound) {
+		return BootstrapUserFromIdentityResult{}, err
+	}
 	status := enum.UserStatusPending
 	if entry.Status == enum.AllowlistStatusActive {
 		status = entry.DefaultStatus
@@ -277,7 +315,7 @@ func (s *Service) BootstrapUserFromIdentity(ctx context.Context, input Bootstrap
 			CreatedAt: now,
 			UpdatedAt: now,
 		},
-		PrimaryEmail: helpers.NormalizeEmail(input.Email),
+		PrimaryEmail: normalizedEmail,
 		DisplayName:  strings.TrimSpace(input.DisplayName),
 		Status:       status,
 		Locale:       strings.TrimSpace(input.Locale),
@@ -309,6 +347,7 @@ func (s *Service) BootstrapUserFromIdentity(ctx context.Context, input Bootstrap
 	}, nil
 }
 
+// PutExternalProvider creates or replaces an external provider catalog entry.
 func (s *Service) PutExternalProvider(ctx context.Context, input PutExternalProviderInput) (entity.ExternalProvider, error) {
 	if strings.TrimSpace(input.Slug) == "" || strings.TrimSpace(input.DisplayName) == "" {
 		return entity.ExternalProvider{}, errs.ErrInvalidArgument
@@ -331,6 +370,7 @@ func (s *Service) PutExternalProvider(ctx context.Context, input PutExternalProv
 	return provider, nil
 }
 
+// RegisterExternalAccount creates an external account principal.
 func (s *Service) RegisterExternalAccount(ctx context.Context, input RegisterExternalAccountInput) (entity.ExternalAccount, error) {
 	if input.ExternalProviderID == uuid.Nil || strings.TrimSpace(input.DisplayName) == "" {
 		return entity.ExternalAccount{}, errs.ErrInvalidArgument
@@ -358,6 +398,7 @@ func (s *Service) RegisterExternalAccount(ctx context.Context, input RegisterExt
 	return account, nil
 }
 
+// BindExternalAccount permits an account to be used for selected actions in a scope.
 func (s *Service) BindExternalAccount(ctx context.Context, input BindExternalAccountInput) (entity.ExternalAccountBinding, error) {
 	allowedActionKeys := sortedUnique(input.AllowedActionKeys)
 	if input.ExternalAccountID == uuid.Nil || strings.TrimSpace(input.UsageScopeID) == "" || len(allowedActionKeys) == 0 {
@@ -395,6 +436,7 @@ func (s *Service) BindExternalAccount(ctx context.Context, input BindExternalAcc
 	return binding, nil
 }
 
+// PutAccessAction creates or replaces an access action catalog entry.
 func (s *Service) PutAccessAction(ctx context.Context, input PutAccessActionInput) (entity.AccessAction, error) {
 	if strings.TrimSpace(input.Key) == "" || strings.TrimSpace(input.ResourceType) == "" {
 		return entity.AccessAction{}, errs.ErrInvalidArgument
@@ -417,12 +459,20 @@ func (s *Service) PutAccessAction(ctx context.Context, input PutAccessActionInpu
 	return action, nil
 }
 
+// PutAccessRule creates or replaces a policy rule for an active action.
 func (s *Service) PutAccessRule(ctx context.Context, input PutAccessRuleInput) (entity.AccessRule, error) {
 	if input.SubjectID == "" || input.ActionKey == "" || input.ResourceType == "" {
 		return entity.AccessRule{}, errs.ErrInvalidArgument
 	}
-	if _, err := s.repository.GetAccessActionByKey(ctx, input.ActionKey); err != nil {
+	if err := validateAccessRuleScope(input.ScopeType, input.ScopeID); err != nil {
 		return entity.AccessRule{}, err
+	}
+	action, err := s.repository.GetAccessActionByKey(ctx, input.ActionKey)
+	if err != nil {
+		return entity.AccessRule{}, err
+	}
+	if action.Status != enum.AccessActionStatusActive {
+		return entity.AccessRule{}, errs.ErrPreconditionFailed
 	}
 	now := s.now(input.Meta)
 	rule := entity.AccessRule{
@@ -432,7 +482,7 @@ func (s *Service) PutAccessRule(ctx context.Context, input PutAccessRuleInput) (
 		ScopeType: input.ScopeType, ScopeID: input.ScopeID, Priority: input.Priority,
 		Status: defaultAccessRuleStatus(input.Status),
 	}
-	err := s.repository.PutAccessRule(ctx, rule, s.event("access.access_rule.created", "access_rule", rule.ID, value.AccessEventPayload{
+	err = s.repository.PutAccessRule(ctx, rule, s.event("access.access_rule.created", "access_rule", rule.ID, value.AccessEventPayload{
 		AccessRuleID: rule.ID.String(),
 		Effect:       string(rule.Effect),
 		ActionKey:    rule.ActionKey,
@@ -446,6 +496,7 @@ func (s *Service) PutAccessRule(ctx context.Context, input PutAccessRuleInput) (
 	return rule, nil
 }
 
+// CheckAccess evaluates access rules for a subject, resource and scope.
 func (s *Service) CheckAccess(ctx context.Context, input CheckAccessInput) (CheckAccessResult, error) {
 	subjects, reasonCode, err := s.resolveSubjects(ctx, input.Subject)
 	if err != nil {
@@ -481,6 +532,7 @@ func (s *Service) CheckAccess(ctx context.Context, input CheckAccessInput) (Chec
 	return s.recordDecision(ctx, input, enum.AccessDecisionDeny, reasonNoMatchingRule, nil)
 }
 
+// ResolveExternalAccountUsage returns account and secret references for allowed usage.
 func (s *Service) ResolveExternalAccountUsage(ctx context.Context, input ResolveExternalAccountUsageInput) (ResolveExternalAccountUsageResult, error) {
 	account, err := s.repository.GetExternalAccount(ctx, input.ExternalAccountID)
 	if err != nil {
@@ -503,388 +555,4 @@ func (s *Service) ResolveExternalAccountUsage(ctx context.Context, input Resolve
 		return ResolveExternalAccountUsageResult{}, err
 	}
 	return ResolveExternalAccountUsageResult{ExternalAccount: account, SecretRef: secret, AllowedActions: binding.AllowedActionKeys}, nil
-}
-
-func (s *Service) findAllowlistEntry(ctx context.Context, email string) (entity.AllowlistEntry, string, error) {
-	normalized := helpers.NormalizeEmail(email)
-	entry, err := s.repository.FindAllowlistEntry(ctx, enum.AllowlistMatchEmail, normalized)
-	if err == nil {
-		return entry, reasonAllowlistEmail, nil
-	}
-	if !errors.Is(err, errs.ErrNotFound) {
-		return entity.AllowlistEntry{}, "", err
-	}
-	domain := helpers.EmailDomain(normalized)
-	if domain != "" {
-		entry, err = s.repository.FindAllowlistEntry(ctx, enum.AllowlistMatchDomain, domain)
-		if err == nil {
-			return entry, reasonAllowlistDomain, nil
-		}
-		if !errors.Is(err, errs.ErrNotFound) {
-			return entity.AllowlistEntry{}, "", err
-		}
-	}
-	return entity.AllowlistEntry{}, reasonAllowlistMiss, errs.ErrUnauthorizedSubject
-}
-
-func (s *Service) resolveSubjects(ctx context.Context, subject value.SubjectRef) ([]value.SubjectRef, string, error) {
-	subjects := []value.SubjectRef{subject}
-	if subject.Type != string(enum.AccessSubjectUser) && subject.Type != string(enum.AccessSubjectExternalAccount) {
-		return subjects, "", nil
-	}
-	if subject.Type == string(enum.AccessSubjectUser) {
-		userID, err := uuid.Parse(subject.ID)
-		if err != nil {
-			return nil, "", errs.ErrInvalidArgument
-		}
-		user, err := s.repository.GetUser(ctx, userID)
-		if err != nil {
-			return nil, "", err
-		}
-		if user.Status == enum.UserStatusBlocked || user.Status == enum.UserStatusDisabled {
-			return subjects, reasonSubjectBlocked, nil
-		}
-	}
-	seen := map[string]struct{}{subject.Type + ":" + subject.ID: {}}
-	queue := []value.SubjectRef{{Type: subject.Type, ID: subject.ID}}
-	for len(queue) > 0 {
-		current := queue[0]
-		queue = queue[1:]
-		currentMembershipType, ok := accessSubjectToMembershipSubject(current.Type)
-		if !ok {
-			continue
-		}
-		memberships, err := s.repository.ListMemberships(ctx, query.MembershipGraphFilter{
-			Subject: value.SubjectRef{Type: string(currentMembershipType), ID: current.ID}, Status: enum.MembershipStatusActive,
-		})
-		if err != nil {
-			return nil, "", err
-		}
-		for _, membership := range memberships {
-			target := membershipTargetToAccessSubject(membership)
-			if target.ID == "" {
-				continue
-			}
-			subjects, queue = appendResolvedSubject(subjects, queue, seen, target)
-			if target.Type == string(enum.AccessSubjectGroup) {
-				subjects, queue, err = s.appendParentGroups(ctx, subjects, queue, seen, membership.TargetID)
-				if err != nil {
-					return nil, "", err
-				}
-			}
-		}
-	}
-	return subjects, "", nil
-}
-
-func (s *Service) recordDecision(ctx context.Context, input CheckAccessInput, decision enum.AccessDecision, reasonCode string, rules []entity.AccessRule) (CheckAccessResult, error) {
-	explanation := value.DecisionExplanation{
-		Decision: string(decision), ReasonCode: reasonCode, PolicyVersion: policyVersion(rules),
-		MatchedRules: ruleExplanations(rules, reasonCode),
-	}
-	if input.Audit {
-		now := s.now(input.Meta)
-		audit := entity.AccessDecisionAudit{
-			ID: s.ids.New(), Subject: input.Subject, ActionKey: input.ActionKey, Resource: input.Resource,
-			Decision: decision, ReasonCode: reasonCode, PolicyVersion: explanation.PolicyVersion,
-			Explanation: explanation, CreatedAt: now,
-		}
-		var event *entity.OutboxEvent
-		if decision == enum.AccessDecisionDeny {
-			evt := s.event("access.access_decision.recorded", "access_decision_audit", audit.ID, value.AccessEventPayload{
-				AccessDecisionAuditID: audit.ID.String(),
-				SubjectType:           audit.Subject.Type,
-				SubjectID:             audit.Subject.ID,
-				ActionKey:             audit.ActionKey,
-				Decision:              string(audit.Decision),
-				ReasonCode:            audit.ReasonCode,
-			}, now)
-			event = &evt
-		}
-		if err := s.repository.RecordAccessDecision(ctx, audit, event); err != nil {
-			return CheckAccessResult{}, err
-		}
-	}
-	return CheckAccessResult{Decision: decision, ReasonCode: reasonCode, Explanation: explanation}, nil
-}
-
-func (s *Service) event(eventType string, aggregateType string, aggregateID uuid.UUID, payload value.AccessEventPayload, occurredAt time.Time) entity.OutboxEvent {
-	eventID := s.ids.New()
-	raw, _ := json.Marshal(payload)
-	return entity.OutboxEvent{
-		ID: eventID, EventType: eventType, SchemaVersion: schemaVersionAccessEventV1,
-		AggregateType: aggregateType, AggregateID: aggregateID, Payload: raw, OccurredAt: occurredAt,
-	}
-}
-
-func (s *Service) membershipEvent(eventType string, membership entity.Membership, occurredAt time.Time, reasonCode string) entity.OutboxEvent {
-	return s.event(eventType, "membership", membership.ID, value.AccessEventPayload{
-		MembershipID: membership.ID.String(),
-		SubjectType:  string(membership.SubjectType),
-		SubjectID:    membership.SubjectID.String(),
-		TargetType:   string(membership.TargetType),
-		TargetID:     membership.TargetID.String(),
-		ReasonCode:   strings.TrimSpace(reasonCode),
-		Version:      membership.Version,
-	}, occurredAt)
-}
-
-func (s *Service) createdEvent(
-	eventType string,
-	aggregateType string,
-	aggregateID uuid.UUID,
-	occurredAt time.Time,
-	options ...accessEventPayloadOption,
-) entity.OutboxEvent {
-	payload := value.AccessEventPayload{}
-	for _, option := range options {
-		option(&payload)
-	}
-	return s.event(eventType, aggregateType, aggregateID, payload, occurredAt)
-}
-
-func payloadString(field accessPayloadStringField, text string) accessEventPayloadOption {
-	return func(payload *value.AccessEventPayload) {
-		switch field {
-		case accessPayloadOrganizationID:
-			payload.OrganizationID = text
-		case accessPayloadKind:
-			payload.Kind = text
-		case accessPayloadStatus:
-			payload.Status = text
-		case accessPayloadGroupID:
-			payload.GroupID = text
-		case accessPayloadScopeType:
-			payload.ScopeType = text
-		case accessPayloadScopeID:
-			payload.ScopeID = text
-		case accessPayloadExternalAccountID:
-			payload.ExternalAccountID = text
-		case accessPayloadExternalProviderID:
-			payload.ExternalProviderID = text
-		case accessPayloadAccountType:
-			payload.AccountType = text
-		case accessPayloadExternalAccountBindingID:
-			payload.ExternalAccountBindingID = text
-		case accessPayloadUsageScopeType:
-			payload.UsageScopeType = text
-		case accessPayloadUsageScopeID:
-			payload.UsageScopeID = text
-		}
-	}
-}
-
-func payloadVersion(version int64) accessEventPayloadOption {
-	return func(payload *value.AccessEventPayload) {
-		payload.Version = version
-	}
-}
-
-func (s *Service) now(meta value.CommandMeta) time.Time {
-	if !meta.OccurredAt.IsZero() {
-		return meta.OccurredAt.UTC()
-	}
-	return s.clock.Now().UTC()
-}
-
-func defaultOrganizationStatus(status enum.OrganizationStatus) enum.OrganizationStatus {
-	if status == "" {
-		return enum.OrganizationStatusActive
-	}
-	return status
-}
-
-func defaultUserStatus(status enum.UserStatus) enum.UserStatus {
-	if status == "" {
-		return enum.UserStatusPending
-	}
-	return status
-}
-
-func defaultMembershipStatus(status enum.MembershipStatus) enum.MembershipStatus {
-	if status == "" {
-		return enum.MembershipStatusActive
-	}
-	return status
-}
-
-func defaultMembershipSource(source enum.MembershipSource) enum.MembershipSource {
-	if source == "" {
-		return enum.MembershipSourceManual
-	}
-	return source
-}
-
-func defaultAllowlistStatus(status enum.AllowlistStatus) enum.AllowlistStatus {
-	if status == "" {
-		return enum.AllowlistStatusActive
-	}
-	return status
-}
-
-func defaultExternalProviderStatus(status enum.ExternalProviderStatus) enum.ExternalProviderStatus {
-	if status == "" {
-		return enum.ExternalProviderStatusActive
-	}
-	return status
-}
-
-func defaultExternalAccountStatus(status enum.ExternalAccountStatus) enum.ExternalAccountStatus {
-	if status == "" {
-		return enum.ExternalAccountStatusPending
-	}
-	return status
-}
-
-func defaultExternalAccountBindingStatus(status enum.ExternalAccountBindingStatus) enum.ExternalAccountBindingStatus {
-	if status == "" {
-		return enum.ExternalAccountBindingStatusActive
-	}
-	return status
-}
-
-func defaultAccessActionStatus(status enum.AccessActionStatus) enum.AccessActionStatus {
-	if status == "" {
-		return enum.AccessActionStatusActive
-	}
-	return status
-}
-
-func defaultAccessRuleStatus(status enum.AccessRuleStatus) enum.AccessRuleStatus {
-	if status == "" {
-		return enum.AccessRuleStatusActive
-	}
-	return status
-}
-
-func decisionByUserStatus(status enum.UserStatus) enum.AccessDecision {
-	switch status {
-	case enum.UserStatusActive:
-		return enum.AccessDecisionAllow
-	case enum.UserStatusPending:
-		return enum.AccessDecisionPending
-	default:
-		return enum.AccessDecisionDeny
-	}
-}
-
-func accessSubjectToMembershipSubject(subjectType string) (enum.MembershipSubjectType, bool) {
-	switch subjectType {
-	case string(enum.AccessSubjectUser):
-		return enum.MembershipSubjectUser, true
-	case string(enum.AccessSubjectGroup):
-		return enum.MembershipSubjectGroup, true
-	case string(enum.AccessSubjectExternalAccount):
-		return enum.MembershipSubjectExternalAccount, true
-	default:
-		return "", false
-	}
-}
-
-func membershipTargetToAccessSubject(membership entity.Membership) value.SubjectRef {
-	switch membership.TargetType {
-	case enum.MembershipTargetOrganization:
-		return value.SubjectRef{Type: string(enum.AccessSubjectOrganization), ID: membership.TargetID.String()}
-	case enum.MembershipTargetGroup:
-		return value.SubjectRef{Type: string(enum.AccessSubjectGroup), ID: membership.TargetID.String()}
-	default:
-		return value.SubjectRef{}
-	}
-}
-
-func appendResolvedSubject(
-	subjects []value.SubjectRef,
-	queue []value.SubjectRef,
-	seen map[string]struct{},
-	subject value.SubjectRef,
-) ([]value.SubjectRef, []value.SubjectRef) {
-	key := subject.Type + ":" + subject.ID
-	if _, ok := seen[key]; ok {
-		return subjects, queue
-	}
-	seen[key] = struct{}{}
-	subjects = append(subjects, subject)
-	if subject.Type == string(enum.AccessSubjectGroup) {
-		queue = append(queue, subject)
-	}
-	return subjects, queue
-}
-
-func (s *Service) appendParentGroups(
-	ctx context.Context,
-	subjects []value.SubjectRef,
-	queue []value.SubjectRef,
-	seen map[string]struct{},
-	groupID uuid.UUID,
-) ([]value.SubjectRef, []value.SubjectRef, error) {
-	for {
-		group, err := s.repository.GetGroup(ctx, groupID)
-		if err != nil {
-			return nil, nil, err
-		}
-		if group.ParentGroupID == nil {
-			return subjects, queue, nil
-		}
-		parent := value.SubjectRef{Type: string(enum.AccessSubjectGroup), ID: group.ParentGroupID.String()}
-		if _, ok := seen[parent.Type+":"+parent.ID]; ok {
-			return subjects, queue, nil
-		}
-		subjects, queue = appendResolvedSubject(subjects, queue, seen, parent)
-		groupID = *group.ParentGroupID
-	}
-}
-
-func sameUUIDPtr(a *uuid.UUID, b *uuid.UUID) bool {
-	if a == nil || b == nil {
-		return a == b
-	}
-	return *a == *b
-}
-
-func uuidPtrString(id *uuid.UUID) string {
-	if id == nil {
-		return ""
-	}
-	return id.String()
-}
-
-func sortedUnique(items []string) []string {
-	seen := make(map[string]struct{}, len(items))
-	result := make([]string, 0, len(items))
-	for _, item := range items {
-		trimmed := strings.TrimSpace(item)
-		if trimmed == "" {
-			continue
-		}
-		if _, ok := seen[trimmed]; ok {
-			continue
-		}
-		seen[trimmed] = struct{}{}
-		result = append(result, trimmed)
-	}
-	sort.Strings(result)
-	return result
-}
-
-func policyVersion(rules []entity.AccessRule) int64 {
-	var version int64
-	for _, rule := range rules {
-		if rule.Version > version {
-			version = rule.Version
-		}
-	}
-	return version
-}
-
-func ruleExplanations(rules []entity.AccessRule, reasonCode string) []value.RuleExplanation {
-	explanations := make([]value.RuleExplanation, 0, len(rules))
-	for _, rule := range rules {
-		explanations = append(explanations, value.RuleExplanation{
-			RuleID: rule.ID, Effect: string(rule.Effect),
-			Subject:   value.SubjectRef{Type: string(rule.SubjectType), ID: rule.SubjectID},
-			ActionKey: rule.ActionKey, Scope: value.ScopeRef{Type: rule.ScopeType, ID: rule.ScopeID},
-			Priority: rule.Priority, ReasonCode: reasonCode,
-		})
-	}
-	return explanations
 }

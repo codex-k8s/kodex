@@ -1,3 +1,4 @@
+// Package value contains immutable value objects used by access-manager.
 package value
 
 import (
@@ -6,11 +7,13 @@ import (
 	"github.com/google/uuid"
 )
 
+// Actor identifies the principal that initiated a command.
 type Actor struct {
 	Type string
 	ID   string
 }
 
+// CommandMeta carries idempotency, concurrency and audit metadata.
 type CommandMeta struct {
 	CommandID       uuid.UUID
 	IdempotencyKey  string
@@ -21,21 +24,25 @@ type CommandMeta struct {
 	OccurredAt      time.Time
 }
 
+// SubjectRef references a subject without importing its aggregate model.
 type SubjectRef struct {
 	Type string
 	ID   string
 }
 
+// ResourceRef references a protected resource in access checks.
 type ResourceRef struct {
 	Type string
 	ID   string
 }
 
+// ScopeRef references the scope where a policy is evaluated.
 type ScopeRef struct {
 	Type string
 	ID   string
 }
 
+// RuleExplanation describes one rule that affected an access decision.
 type RuleExplanation struct {
 	RuleID     uuid.UUID
 	Effect     string
@@ -46,6 +53,7 @@ type RuleExplanation struct {
 	ReasonCode string
 }
 
+// DecisionExplanation is the machine-readable explanation for an access decision.
 type DecisionExplanation struct {
 	Decision      string
 	ReasonCode    string
@@ -53,6 +61,7 @@ type DecisionExplanation struct {
 	MatchedRules  []RuleExplanation
 }
 
+// AccessEventPayload is the common typed payload envelope for access events.
 type AccessEventPayload struct {
 	OrganizationID           string `json:"organization_id,omitempty"`
 	Kind                     string `json:"kind,omitempty"`

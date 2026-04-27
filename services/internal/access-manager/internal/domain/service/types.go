@@ -1,3 +1,4 @@
+// Package service implements access-manager domain use cases.
 package service
 
 import (
@@ -8,6 +9,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/value"
 )
 
+// CreateOrganizationInput contains fields required to create an organization.
 type CreateOrganizationInput struct {
 	Kind                 enum.OrganizationKind
 	Slug                 string
@@ -18,6 +20,7 @@ type CreateOrganizationInput struct {
 	Meta                 value.CommandMeta
 }
 
+// CreateGroupInput contains fields required to create a group.
 type CreateGroupInput struct {
 	ScopeType     enum.GroupScopeType
 	ScopeID       *uuid.UUID
@@ -28,6 +31,7 @@ type CreateGroupInput struct {
 	Meta          value.CommandMeta
 }
 
+// SetMembershipInput creates or updates a membership edge.
 type SetMembershipInput struct {
 	SubjectType enum.MembershipSubjectType
 	SubjectID   uuid.UUID
@@ -39,6 +43,7 @@ type SetMembershipInput struct {
 	Meta        value.CommandMeta
 }
 
+// PutAllowlistEntryInput creates or replaces an allowlist entry.
 type PutAllowlistEntryInput struct {
 	MatchType      enum.AllowlistMatchType
 	Value          string
@@ -48,6 +53,7 @@ type PutAllowlistEntryInput struct {
 	Meta           value.CommandMeta
 }
 
+// BootstrapUserFromIdentityInput carries SSO identity data after provider login.
 type BootstrapUserFromIdentityInput struct {
 	Provider    enum.IdentityProvider
 	Subject     string
@@ -57,6 +63,7 @@ type BootstrapUserFromIdentityInput struct {
 	Meta        value.CommandMeta
 }
 
+// BootstrapUserFromIdentityResult returns the admitted or linked user state.
 type BootstrapUserFromIdentityResult struct {
 	User         entity.User
 	Decision     enum.AccessDecision
@@ -64,6 +71,7 @@ type BootstrapUserFromIdentityResult struct {
 	Organization *entity.Organization
 }
 
+// PutExternalProviderInput creates or updates an external provider.
 type PutExternalProviderInput struct {
 	Slug         string
 	ProviderKind enum.ExternalProviderKind
@@ -73,6 +81,7 @@ type PutExternalProviderInput struct {
 	Meta         value.CommandMeta
 }
 
+// RegisterExternalAccountInput creates an external account catalog entry.
 type RegisterExternalAccountInput struct {
 	ExternalProviderID uuid.UUID
 	AccountType        enum.ExternalAccountType
@@ -85,6 +94,7 @@ type RegisterExternalAccountInput struct {
 	Meta               value.CommandMeta
 }
 
+// BindExternalAccountInput permits account usage in a concrete scope.
 type BindExternalAccountInput struct {
 	ExternalAccountID uuid.UUID
 	UsageScopeType    enum.ExternalAccountScopeType
@@ -94,6 +104,7 @@ type BindExternalAccountInput struct {
 	Meta              value.CommandMeta
 }
 
+// PutAccessActionInput creates or updates an action catalog entry.
 type PutAccessActionInput struct {
 	Key          string
 	DisplayName  string
@@ -103,6 +114,7 @@ type PutAccessActionInput struct {
 	Meta         value.CommandMeta
 }
 
+// PutAccessRuleInput creates or updates a policy rule.
 type PutAccessRuleInput struct {
 	Effect       enum.AccessEffect
 	SubjectType  enum.AccessSubjectType
@@ -117,6 +129,7 @@ type PutAccessRuleInput struct {
 	Meta         value.CommandMeta
 }
 
+// CheckAccessInput describes a policy decision request.
 type CheckAccessInput struct {
 	Subject   value.SubjectRef
 	ActionKey string
@@ -126,18 +139,21 @@ type CheckAccessInput struct {
 	Meta      value.CommandMeta
 }
 
+// CheckAccessResult returns the policy decision and explanation.
 type CheckAccessResult struct {
 	Decision    enum.AccessDecision
 	ReasonCode  string
 	Explanation value.DecisionExplanation
 }
 
+// ResolveExternalAccountUsageInput asks whether an account can be used.
 type ResolveExternalAccountUsageInput struct {
 	ExternalAccountID uuid.UUID
 	ActionKey         string
 	UsageScope        value.ScopeRef
 }
 
+// ResolveExternalAccountUsageResult returns the permitted account and secret ref.
 type ResolveExternalAccountUsageResult struct {
 	ExternalAccount entity.ExternalAccount
 	SecretRef       entity.SecretBindingRef

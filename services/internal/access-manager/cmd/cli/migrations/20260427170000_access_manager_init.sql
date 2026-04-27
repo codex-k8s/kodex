@@ -12,7 +12,7 @@ CREATE TABLE access_organizations (
     updated_at timestamptz NOT NULL,
     CONSTRAINT access_organizations_kind_check CHECK (kind IN ('owner', 'client', 'contractor', 'saas', 'saas_client', 'saas_contractor')),
     CONSTRAINT access_organizations_status_check CHECK (status IN ('active', 'pending', 'suspended', 'archived')),
-    CONSTRAINT access_organizations_owner_not_suspended CHECK (kind <> 'owner' OR status IN ('active', 'pending'))
+    CONSTRAINT access_organizations_owner_active_check CHECK (kind <> 'owner' OR status = 'active')
 );
 
 CREATE UNIQUE INDEX access_organizations_one_active_owner_idx
@@ -70,11 +70,18 @@ CREATE TABLE access_groups (
     version bigint NOT NULL,
     created_at timestamptz NOT NULL,
     updated_at timestamptz NOT NULL,
-    UNIQUE (scope_type, scope_id, slug),
     CONSTRAINT access_groups_scope_type_check CHECK (scope_type IN ('global', 'organization')),
     CONSTRAINT access_groups_status_check CHECK (status IN ('active', 'disabled', 'archived')),
     CONSTRAINT access_groups_scope_id_required_check CHECK ((scope_type = 'global' AND scope_id IS NULL) OR (scope_type = 'organization' AND scope_id IS NOT NULL))
 );
+
+CREATE UNIQUE INDEX access_groups_global_slug_unique_idx
+    ON access_groups (slug)
+    WHERE scope_type = 'global';
+
+CREATE UNIQUE INDEX access_groups_organization_slug_unique_idx
+    ON access_groups (scope_id, slug)
+    WHERE scope_type = 'organization';
 
 CREATE TABLE access_memberships (
     id uuid PRIMARY KEY,
@@ -127,7 +134,9 @@ CREATE TABLE access_rules (
     created_at timestamptz NOT NULL,
     updated_at timestamptz NOT NULL,
     CONSTRAINT access_rules_effect_check CHECK (effect IN ('allow', 'deny')),
-    CONSTRAINT access_rules_status_check CHECK (status IN ('active', 'disabled'))
+    CONSTRAINT access_rules_status_check CHECK (status IN ('active', 'disabled')),
+    CONSTRAINT access_rules_scope_type_check CHECK (scope_type IN ('global', 'organization', 'project', 'repository')),
+    CONSTRAINT access_rules_scope_id_check CHECK ((scope_type = 'global' AND scope_id = '') OR (scope_type <> 'global' AND scope_id <> ''))
 );
 
 CREATE INDEX access_rules_subject_idx ON access_rules (subject_type, subject_id, action_key, resource_type, status);

@@ -1,4 +1,4 @@
-.PHONY: help lint lint-go dupl-go test-go test-go-migrations fmt-go gen-openapi-go gen-openapi-ts gen-openapi gen-proto-go
+.PHONY: help lint lint-go dupl-go test-go test-go-migrations fmt-go gen-openapi-go gen-openapi-ts gen-openapi gen-proto-go validate-asyncapi
 
 help:
 	@echo "Targets:"
@@ -11,6 +11,7 @@ help:
 	@echo "  make gen-openapi-ts [APP=services/staff/web-console] - generate TS API client from OpenAPI"
 	@echo "  make gen-openapi - run Go+TS OpenAPI generators for default services"
 	@echo "  make gen-proto-go - generate Go gRPC contracts from active proto/**/*.proto"
+	@echo "  make validate-asyncapi [SVC=access-manager|SPEC=specs/asyncapi/access-manager.v1.yaml] - validate AsyncAPI contract"
 	@echo "  make lint      - run all linters"
 
 lint: lint-go dupl-go
@@ -116,3 +117,12 @@ gen-proto-go:
 		--go_out=proto/gen/go --go_opt=paths=source_relative \
 		--go-grpc_out=proto/gen/go --go-grpc_opt=paths=source_relative \
 		$$protos
+
+validate-asyncapi:
+	@spec="$${SPEC:-}"; \
+	if [ -z "$$spec" ]; then \
+		svc="$${SVC:-access-manager}"; \
+		spec="specs/asyncapi/$$svc.v1.yaml"; \
+	fi; \
+	test -f "$$spec"; \
+	npx --yes @asyncapi/cli validate "$$spec"

@@ -1,3 +1,4 @@
+// Package app contains access-manager process composition and lifecycle.
 package app
 
 import (
@@ -12,6 +13,7 @@ import (
 	"google.golang.org/grpc"
 )
 
+// Run starts access-manager process servers and shuts them down with context.
 func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
