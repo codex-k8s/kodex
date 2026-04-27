@@ -609,8 +609,6 @@ func (s *Service) recordDecision(ctx context.Context, input CheckAccessInput, de
 
 func (s *Service) event(eventType string, aggregateType string, aggregateID uuid.UUID, payload value.AccessEventPayload, occurredAt time.Time) entity.OutboxEvent {
 	eventID := s.ids.New()
-	payload.EventID = eventID.String()
-	payload.OccurredAt = occurredAt.UTC().Format(time.RFC3339Nano)
 	raw, _ := json.Marshal(payload)
 	return entity.OutboxEvent{
 		ID: eventID, EventType: eventType, SchemaVersion: schemaVersionAccessEventV1,

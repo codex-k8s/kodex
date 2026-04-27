@@ -997,13 +997,17 @@ components:
           items: {$ref: '#/components/schemas/MatchedRule'}
       required: [decision, reasonCode, policyVersion, matchedRules]
     ExplainAccessResponse:
-      allOf:
-        - type: object
-          additionalProperties: false
-          properties:
-            auditId: {type: string, format: uuid}
-          required: [auditId]
-        - $ref: '#/components/schemas/CheckAccessResponse'
+      type: object
+      additionalProperties: false
+      properties:
+        auditId: {type: string, format: uuid}
+        decision: {$ref: '#/components/schemas/AccessDecision'}
+        reasonCode: {type: string}
+        policyVersion: {type: integer, format: int64}
+        matchedRules:
+          type: array
+          items: {$ref: '#/components/schemas/MatchedRule'}
+      required: [auditId, decision, reasonCode, policyVersion, matchedRules]
     MembershipEdge:
       type: object
       additionalProperties: false

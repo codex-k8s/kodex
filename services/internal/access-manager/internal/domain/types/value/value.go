@@ -54,8 +54,6 @@ type DecisionExplanation struct {
 }
 
 type AccessEventPayload struct {
-	EventID                  string `json:"event_id"`
-	OccurredAt               string `json:"occurred_at"`
 	OrganizationID           string `json:"organization_id,omitempty"`
 	Kind                     string `json:"kind,omitempty"`
 	Status                   string `json:"status,omitempty"`
