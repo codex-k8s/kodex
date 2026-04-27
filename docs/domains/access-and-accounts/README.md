@@ -40,6 +40,7 @@
 - OpenAPI: `specs/openapi/access-manager.v1.yaml`.
 - AsyncAPI: `specs/asyncapi/access-manager.v1.yaml`.
 - Миграции: `services/internal/access-manager/cmd/cli/migrations`.
+- Статус контрактов и бэклог реализации: `delivery/wave7_access_and_accounts.md`.
 
 ## Карта Issue
 
