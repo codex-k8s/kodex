@@ -63,7 +63,13 @@ test-go:
 	go test $$packages
 
 test-go-migrations:
-	@packages="$$(go list ./services/... 2>/dev/null | grep '/cmd/cli/migrations' || true)"; \
+	@migration_files="$$(find services -path '*/cmd/cli/migrations/*.sql' -not -path '*/deprecated/*' -print 2>/dev/null | sort)"; \
+	packages="$$(go list ./services/... 2>/dev/null | grep '/cmd/cli/migrations' || true)"; \
+	if [ -n "$$migration_files" ] && [ -z "$$packages" ]; then \
+		echo "test-go-migrations: active SQL migrations exist, but no migration guard packages were found"; \
+		printf '%s\n' "$$migration_files"; \
+		exit 1; \
+	fi; \
 	if [ -z "$$packages" ]; then \
 		echo "test-go-migrations: no active migration packages"; \
 		exit 0; \

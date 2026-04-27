@@ -4,6 +4,13 @@ info:
   version: 1.0.0
   description: Stable v1 HTTP contract for staff and operator access-management reads and commands.
 x-kodex-contract-status: stable-v1
+servers:
+  - url: /api/access-manager
+    description: API Gateway route for access-manager HTTP contract.
+security:
+  - kodexUserSession: []
+  - kodexServiceToken: []
+  - kodexMcpToken: []
 paths:
   /v1/access/bootstrap-user:
     post:
@@ -526,6 +533,22 @@ paths:
         '403': {$ref: '#/components/responses/PermissionDenied'}
         '429': {$ref: '#/components/responses/ResourceExhausted'}
 components:
+  securitySchemes:
+    kodexUserSession:
+      type: apiKey
+      in: cookie
+      name: kodex_session
+      description: Browser user session validated by api-gateway through the platform SSO/OIDC contour.
+    kodexServiceToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Service identity token validated by api-gateway for platform-to-platform calls.
+    kodexMcpToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: MCP caller token validated by api-gateway before forwarding operator tools to access-manager.
   parameters:
     UserId: {name: userId, in: path, required: true, schema: {type: string, format: uuid}}
     OrganizationId: {name: organizationId, in: path, required: true, schema: {type: string, format: uuid}}
