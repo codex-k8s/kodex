@@ -19,18 +19,12 @@ func (s *Service) resolveSubjects(ctx context.Context, subject value.SubjectRef)
 	if subject.Type != string(enum.AccessSubjectUser) && subject.Type != string(enum.AccessSubjectExternalAccount) {
 		return subjects, "", nil
 	}
-	if subject.Type == string(enum.AccessSubjectUser) {
-		userID, err := uuid.Parse(subject.ID)
-		if err != nil {
-			return nil, "", errs.ErrInvalidArgument
-		}
-		user, err := s.repository.GetUser(ctx, userID)
-		if err != nil {
-			return nil, "", err
-		}
-		if user.Status == enum.UserStatusBlocked || user.Status == enum.UserStatusDisabled {
-			return subjects, reasonSubjectBlocked, nil
-		}
+	blocked, err := s.isBlockedAccessSubject(ctx, subject)
+	if err != nil {
+		return nil, "", err
+	}
+	if blocked {
+		return subjects, reasonSubjectBlocked, nil
 	}
 	seen := map[string]struct{}{subject.Type + ":" + subject.ID: {}}
 	queue := []value.SubjectRef{{Type: subject.Type, ID: subject.ID}}
@@ -62,6 +56,29 @@ func (s *Service) resolveSubjects(ctx context.Context, subject value.SubjectRef)
 		}
 	}
 	return subjects, "", nil
+}
+
+func (s *Service) isBlockedAccessSubject(ctx context.Context, subject value.SubjectRef) (bool, error) {
+	subjectID, err := uuid.Parse(subject.ID)
+	if err != nil {
+		return false, errs.ErrInvalidArgument
+	}
+	switch subject.Type {
+	case string(enum.AccessSubjectUser):
+		user, err := s.repository.GetUser(ctx, subjectID)
+		if err != nil {
+			return false, err
+		}
+		return user.Status == enum.UserStatusBlocked || user.Status == enum.UserStatusDisabled, nil
+	case string(enum.AccessSubjectExternalAccount):
+		account, err := s.repository.GetExternalAccount(ctx, subjectID)
+		if err != nil {
+			return false, err
+		}
+		return account.Status == enum.ExternalAccountStatusBlocked || account.Status == enum.ExternalAccountStatusDisabled, nil
+	default:
+		return false, nil
+	}
 }
 
 func (s *Service) validateMembershipEndpoint(

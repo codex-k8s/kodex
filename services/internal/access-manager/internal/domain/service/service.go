@@ -303,11 +303,6 @@ func (s *Service) BootstrapUserFromIdentity(ctx context.Context, input Bootstrap
 	if !errors.Is(err, errs.ErrNotFound) {
 		return BootstrapUserFromIdentityResult{}, err
 	}
-	status := enum.UserStatusPending
-	if entry.Status == enum.AllowlistStatusActive {
-		status = entry.DefaultStatus
-	}
-
 	user := entity.User{
 		Base: entity.Base{
 			ID:        s.ids.New(),
@@ -317,7 +312,7 @@ func (s *Service) BootstrapUserFromIdentity(ctx context.Context, input Bootstrap
 		},
 		PrimaryEmail: normalizedEmail,
 		DisplayName:  strings.TrimSpace(input.DisplayName),
-		Status:       status,
+		Status:       entry.DefaultStatus,
 		Locale:       strings.TrimSpace(input.Locale),
 	}
 	identity := entity.UserIdentity{
@@ -498,6 +493,10 @@ func (s *Service) PutAccessRule(ctx context.Context, input PutAccessRuleInput) (
 
 // CheckAccess evaluates access rules for a subject, resource and scope.
 func (s *Service) CheckAccess(ctx context.Context, input CheckAccessInput) (CheckAccessResult, error) {
+	if strings.TrimSpace(input.Subject.Type) == "" || strings.TrimSpace(input.Subject.ID) == "" ||
+		strings.TrimSpace(input.ActionKey) == "" || strings.TrimSpace(input.Resource.Type) == "" {
+		return CheckAccessResult{}, errs.ErrInvalidArgument
+	}
 	subjects, reasonCode, err := s.resolveSubjects(ctx, input.Subject)
 	if err != nil {
 		return CheckAccessResult{}, err
