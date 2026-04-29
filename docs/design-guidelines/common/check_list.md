@@ -34,6 +34,10 @@
   для MCP baseline TTL не ниже `24h`.
 - Для multi-service deploy у каждого deployable-сервиса есть собственные image vars/repositories
   (шаблон нейминга: `KODEX_<SERVICE>_IMAGE` и `KODEX_<SERVICE>_INTERNAL_IMAGE_REPOSITORY`).
+- Dockerfile deployable-сервиса содержит обязательные стадии `build`, `dev`, `prod`;
+  стадия `dev` поддерживает hot reload, а стадия `prod` не зависит от исходников и инструментов разработки.
+- Dockerfile получает все нужные входы сборки и генерации: профильные `libs/**`, `proto/**`,
+  `specs/openapi/**`, `specs/asyncapi/**` и lock-файлы пакетного менеджера, если сервис их использует.
 - При изменении состава deployable-сервисов синхронно обновлены runtime deploy, build orchestration, bootstrap sync и документация новой архитектуры.
 - Порядок выкладки production задан явно и соблюдён:
   stateful dependencies -> migrations -> internal domain services -> edge services -> frontend;

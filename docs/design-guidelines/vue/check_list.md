@@ -3,6 +3,8 @@
 ## Стек и размещение
 - Используется стек: Vue 3 + TypeScript + Pinia + Axios + Vite + `vue-router` + `vue-i18n` + `vue3-cookies`.
 - Приложение лежит в правильной зоне: `services/staff/*` (основной случай), `services/external/*` или `services/dev/*`.
+- Dockerfile frontend-сервиса следует общим правилам deployable-сервисов; `dev` запускает Vite hot reload,
+  а `prod` отдаёт готовый статический bundle без инструментов разработки.
 - Перед написанием кода перечитаны:
   - `docs/design-guidelines/vue/frontend_architecture.md`
   - `docs/design-guidelines/vue/frontend_code_rules.md`

@@ -7,12 +7,18 @@
 - Дополнительные публичные страницы (если появятся) размещаются в целевой зоне `services/external/*`.
 - Dev-only frontend размещается в целевой зоне `services/dev/*` и не деплоится в production.
 
-## Container и deploy требования
+## Контейнер и deploy требования
 
 - Каждый frontend-сервис обязан иметь `Dockerfile` в корне сервиса.
-- В Dockerfile обязательно поддерживаются target:
-  - `dev` — для production/dev (например, Vite dev server);
-  - `prod` — для production runtime со статическим бандлом (например, `nginx`).
+- Dockerfile следует общим правилам
+  `docs/design-guidelines/common/project_architecture.md`: зеркалированные базовые образы,
+  отдельные стадии `build`, `dev`, `prod`, воспроизводимая сборка и production runtime без исходников.
+- Стадия `dev` запускает Vite dev server с hot reload для dev-слотов и локальной разработки.
+- Стадия `build` получает `package-lock.json`/аналогичный lock-файл, исходники frontend-сервиса,
+  `libs/{ts,vue}/**`, `specs/openapi/**` и `specs/asyncapi/**`, если сервис использует общие UI/TS-библиотеки
+  или генерирует API-клиенты.
+- Стадия `prod` отдаёт собранный статический bundle через выбранный runtime, например `nginx`,
+  без инструментов разработки и без зависимости от рабочего каталога.
 - Для каждого frontend-сервиса обязателен отдельный Kubernetes manifest-шаблон
   в целевом deploy-каталоге сервиса.
 
