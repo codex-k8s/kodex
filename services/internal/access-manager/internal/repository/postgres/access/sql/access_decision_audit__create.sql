@@ -4,5 +4,5 @@ INSERT INTO access_decision_audit (
     decision, reason_code, policy_version, explanation, created_at
 ) VALUES (
     @id, @subject_type, @subject_id, @action_key, @resource_type, @resource_id,
-    @decision, @reason_code, @policy_version, @explanation, @created_at
+    @decision, @reason_code, @policy_version, @explanation::jsonb, @created_at
 );
