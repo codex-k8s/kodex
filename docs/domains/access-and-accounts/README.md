@@ -33,6 +33,15 @@
 - API-контракт: `architecture/api_contract.md`.
 - План поставки реализации: `delivery/wave7_access_and_accounts.md`.
 
+## Реализация
+
+- Сервис-владелец: `services/internal/access-manager`.
+- gRPC-контракт: `proto/kodex/access_accounts/v1/access_manager.proto`.
+- HTTP-контракт: через gateway-спецификации после появления соответствующего gateway-среза.
+- AsyncAPI: `specs/asyncapi/access-manager.v1.yaml`.
+- Миграции: `services/internal/access-manager/cmd/cli/migrations`.
+- Статус контрактов и бэклог реализации: `delivery/wave7_access_and_accounts.md`.
+
 ## Карта Issue
 
 - Доменная карта: `docs/delivery/issue-map/domains/access-and-accounts.md`.

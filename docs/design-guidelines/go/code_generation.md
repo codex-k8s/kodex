@@ -4,16 +4,20 @@
 
 ## Общие правила
 
-- Любой сгенерированный код живет только в `**/generated/**`.
+- Сгенерированный код хранится только в заранее закреплённых каталогах кодогенерации. Для protobuf/gRPC канонический каталог — `proto/gen/go/**`; для транспортного слоя и frontend используются профильные `**/generated/**`.
 - Сгенерированное руками не правим.
 - Изменение перечня сервисов/приложений, участвующих в codegen, должно синхронно обновлять:
   - цели `gen-openapi-*` в `Makefile`;
   - конфиги codegen в целевом `tools/codegen/**`;
   - CI/job-проверку codegen в целевом deploy-контуре.
 - Источник правды транспорта:
-  - REST: `specs/openapi/<service-name>.v<major>.yaml` (OpenAPI YAML)
+  - REST: `specs/openapi/<gateway-surface>.v<major>.yaml` (OpenAPI YAML только для gateway-поверхностей)
   - gRPC: `proto/**/*.proto`
   - async/webhook: `specs/asyncapi/<service-name>.v<major>.yaml` (если используется)
+- Контракт и реализация:
+  - стабильные контракты `v1` создаются на весь согласованный объём выбранной транспортной поверхности, а не только на уже написанные обработчики;
+  - если обработчики, репозиторные методы или доставщики событий будут реализованы позже, это фиксируется в документе поставки и карте связей;
+  - кодогенерация выполняется по контракту, а не по текущему неполному набору обработчиков, чтобы клиенты и серверные адаптеры не расходились с принятой архитектурой.
 
 ## OpenAPI (REST) -> Go
 
@@ -27,6 +31,8 @@
 ```bash
 make gen-openapi-go SVC=services/<zone>/<service>
 ```
+
+OpenAPI кодогенерируется только для gateway-сервисов. Внутренние доменные сервисы используют gRPC/proto и не заводят прямой OpenAPI для бизнес-ручек.
 
 Текущий охват backend-кодогенерации определяется актуальной архитектурной документацией проекта и активным инвентарём сервисов.
 Устаревшие сервисы не включаются в активное покрытие кодогенерации.
@@ -43,11 +49,11 @@ make gen-openapi-go SVC=services/<zone>/<service>
 - `google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest`
 
 Выход:
-- `internal/transport/grpc/generated/**`
+- `proto/gen/go/**`
 
 Запуск:
 ```bash
-make gen-proto-go SVC=services/<zone>/<service>
+make gen-proto-go
 ```
 
 ## AsyncAPI (webhook/event payloads)
@@ -61,7 +67,7 @@ make gen-proto-go SVC=services/<zone>/<service>
 
 Валидация:
 ```bash
-make validate-asyncapi SVC=services/<zone>/<service>
+make validate-asyncapi SVC=<service-name>
 ```
 
 ## Frontend codegen по OpenAPI (TypeScript + Axios)
@@ -74,7 +80,7 @@ make validate-asyncapi SVC=services/<zone>/<service>
 
 Запуск:
 ```bash
-make gen-openapi-ts APP=services/<zone>/<app> SPEC=specs/openapi/<service-name>.v<major>.yaml
+make gen-openapi-ts APP=services/<zone>/<app> SPEC=specs/openapi/<gateway-surface>.v<major>.yaml
 ```
 
 ## Проверка консистентности generated-кода в CI

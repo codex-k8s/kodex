@@ -20,6 +20,9 @@ spec:
     - docs/index.md
     - docs/design-guidelines
     - docs/templates
+    - proto
+    - services
+    - specs
     - refactoring
   repositorySources:
     sourceOfTruth:
@@ -49,7 +52,19 @@ spec:
           - tag
           - commit
         downstreamRepositoryCleanupWorkflow: true
-  deployableServices: []
+  deployableServices:
+    - name: access-manager
+      status: foundation
+      zone: internal
+      path: services/internal/access-manager
+      dockerfile: services/internal/access-manager/Dockerfile
+      ownerDomain: access-and-accounts
+      apiContracts:
+        grpc: proto/kodex/access_accounts/v1/access_manager.proto
+        asyncapi: specs/asyncapi/access-manager.v1.yaml
+      database:
+        owner: access-manager
+        migrations: services/internal/access-manager/cmd/cli/migrations
   notes:
     - New deployable services must be added only after the corresponding wave documentation is accepted.
     - Do not restore old services, versions, environments or runtime settings from deprecated/services.yaml mechanically.

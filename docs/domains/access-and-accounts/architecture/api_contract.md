@@ -20,19 +20,25 @@ approvals:
 
 ## TL;DR
 
-- Тип API: gRPC для межсервисных команд и чтений, HTTP через `api-gateway` для пользовательского интерфейса, доменные события через outbox.
-- Аутентификация: сервисная идентичность внутри платформы, пользовательская сессия через `api-gateway`, MCP-вызовы через `platform-mcp-server`.
-- Версионирование: контракты версионируются по proto/OpenAPI/AsyncAPI после создания целевых спецификаций; события имеют `schema_version`.
+- Тип API: gRPC для межсервисных команд и чтений, HTTP только через gateway-слой для пользовательского интерфейса и внешних интеграций, доменные события через outbox.
+- Аутентификация: сервисная идентичность внутри платформы, пользовательская сессия через соответствующий gateway, MCP-вызовы через `platform-mcp-server`.
+- Версионирование: внутренний контракт версионируется через proto и AsyncAPI; HTTP версионируется в gateway-спецификациях после появления соответствующей поверхности; события имеют `schema_version`.
 - Основные операции: создание или связывание пользователя, управление организациями и группами, членство, внешние аккаунты, проверка доступа и объяснение аудита.
 
 ## Источники спецификаций
 
-До создания целевых спецификаций этот документ является контрактным обзором. При реализации нужно создать:
-- gRPC proto: будущий `proto/kodex/access_accounts/v1/access_manager.proto`;
-- OpenAPI для пользовательского интерфейса и внешних HTTP-контрактов: будущий `specs/openapi/access-manager.v1.yaml`;
-- AsyncAPI для событий: будущий `specs/asyncapi/access-manager.v1.yaml`.
+Машинно-проверяемые спецификации access-manager созданы сразу как стабильный внутренний контракт `v1`:
+- gRPC proto: `proto/kodex/access_accounts/v1/access_manager.proto`;
+- AsyncAPI для событий: `specs/asyncapi/access-manager.v1.yaml`.
 
-Каталог `docs/**` хранит описание решений, но не должен становиться местом хранения машинно-проверяемых API-спецификаций. Спецификации в `specs/**` являются источником истины для проверки, генерации и клиентского кода.
+Каталог `docs/**` хранит описание решений, а `proto/**` и `specs/**` являются источником истины для транспорта, проверки, генерации и клиентского кода. OpenAPI создаётся только для gateway-сервисов по направлениям доступа: внешний пользовательский контур, staff/admin контур и интеграционный контур. Если документация описывает обязательный API-путь, стабильный транспортный контракт `v1` должен покрывать его полностью; частичные предварительные контракты допустимы только с явным суффиксом версии и отдельным статусом.
+
+## Версионный статус
+
+| Контракт | Файл | Статус | Объём |
+|---|---|---|---|
+| gRPC | `proto/kodex/access_accounts/v1/access_manager.proto` | стабильный `v1` | Все команды и чтения из раздела ниже. |
+| События | `specs/asyncapi/access-manager.v1.yaml` | стабильный `v1` | Все доменные события из таблицы минимальных тел. |
 
 ## Команды и чтения
 
@@ -102,10 +108,10 @@ approvals:
 | `access.user.updated` | `event_id`, `user_id`, `version`, `occurred_at`. |
 | `access.user.identity_linked` | `event_id`, `user_id`, `identity_id`, `identity_provider`, `version`, `occurred_at`. |
 | `access.user.status_changed` | `event_id`, `user_id`, `old_status`, `new_status`, `reason_code`, `version`, `occurred_at`. |
-| `access.allowlist_entry.created` | `event_id`, `allowlist_entry_id`, `match_type`, `organization_id`, `version`, `occurred_at`. |
+| `access.allowlist_entry.created` | `event_id`, `allowlist_entry_id`, `match_type`, `version`, `occurred_at`. |
 | `access.allowlist_entry.updated` | `event_id`, `allowlist_entry_id`, `version`, `occurred_at`. |
 | `access.allowlist_entry.disabled` | `event_id`, `allowlist_entry_id`, `reason_code`, `version`, `occurred_at`. |
-| `access.group.created` | `event_id`, `group_id`, `scope_type`, `scope_id`, `version`, `occurred_at`. |
+| `access.group.created` | `event_id`, `group_id`, `scope_type`, `version`, `occurred_at`. |
 | `access.group.updated` | `event_id`, `group_id`, `version`, `occurred_at`. |
 | `access.group.disabled` | `event_id`, `group_id`, `reason_code`, `version`, `occurred_at`. |
 | `access.membership.created` | `event_id`, `membership_id`, `subject_type`, `subject_id`, `target_type`, `target_id`, `version`, `occurred_at`. |
@@ -127,7 +133,7 @@ approvals:
 | `access.access_action.created` | `event_id`, `access_action_id`, `action_key`, `version`, `occurred_at`. |
 | `access.access_action.updated` | `event_id`, `access_action_id`, `version`, `occurred_at`. |
 | `access.access_action.disabled` | `event_id`, `access_action_id`, `reason_code`, `version`, `occurred_at`. |
-| `access.access_rule.created` | `event_id`, `access_rule_id`, `effect`, `action_key`, `scope_type`, `scope_id`, `version`, `occurred_at`. |
+| `access.access_rule.created` | `event_id`, `access_rule_id`, `effect`, `action_key`, `scope_type`, `version`, `occurred_at`. |
 | `access.access_rule.updated` | `event_id`, `access_rule_id`, `version`, `occurred_at`. |
 | `access.access_rule.disabled` | `event_id`, `access_rule_id`, `reason_code`, `version`, `occurred_at`. |
 | `access.access_decision.recorded` | `event_id`, `access_decision_audit_id`, `subject_type`, `subject_id`, `action_key`, `decision`, `reason_code`, `occurred_at`. |
@@ -138,7 +144,7 @@ approvals:
 
 - Логи: `request_id`, `command_id`, `actor_id`, `operation`, `aggregate_id`, `decision`, без секретов, персональных данных, токенов, email, имён и лишнего тела запроса.
 - Метрики: задержка операций, конфликты, запрещённые решения, пользователи в ожидании, заблокированные пользователи, статусы внешних аккаунтов.
-- Трейсы: `api-gateway -> access-manager`, `platform-mcp-server -> access-manager`, `provider-hub -> access-manager`.
+- Трейсы: `external-gateway|staff-gateway|integration-gateway -> access-manager`, `platform-mcp-server -> access-manager`, `provider-hub -> access-manager`.
 - Аудит: отдельная доменная запись `AccessDecisionAudit` для решений доступа и административных изменений.
 
 ## Апрув

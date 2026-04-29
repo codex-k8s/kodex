@@ -1,0 +1,984 @@
+syntax = "proto3";
+
+package kodex.access_accounts.v1;
+
+option go_package = "github.com/codex-k8s/kodex/proto/gen/go/kodex/access_accounts/v1;accessaccountsv1";
+
+// AccessManagerService is the stable v1 inter-service contract for the access
+// and accounts domain. It covers the command and read surface agreed in
+// docs/domains/access-and-accounts/architecture/api_contract.md.
+service AccessManagerService {
+  // BootstrapUserFromIdentity creates or resolves a platform user after SSO/OIDC.
+  rpc BootstrapUserFromIdentity(BootstrapUserFromIdentityRequest) returns (BootstrapUserFromIdentityResponse);
+  // SetUserStatus changes the lifecycle status of an existing user.
+  rpc SetUserStatus(SetUserStatusRequest) returns (UserResponse);
+  // CreateOrganization creates an owner, client, contractor or SaaS organization.
+  rpc CreateOrganization(CreateOrganizationRequest) returns (OrganizationResponse);
+  // UpdateOrganization changes safe organization fields.
+  rpc UpdateOrganization(UpdateOrganizationRequest) returns (OrganizationResponse);
+  // SuspendOrganization suspends a non-owner organization.
+  rpc SuspendOrganization(SuspendOrganizationRequest) returns (OrganizationResponse);
+  // ArchiveOrganization archives an organization without deleting history.
+  rpc ArchiveOrganization(ArchiveOrganizationRequest) returns (OrganizationResponse);
+  // CreateGroup creates a global or organization-scoped group.
+  rpc CreateGroup(CreateGroupRequest) returns (GroupResponse);
+  // UpdateGroup changes safe group fields or parent group.
+  rpc UpdateGroup(UpdateGroupRequest) returns (GroupResponse);
+  // DisableGroup disables a group without deleting history.
+  rpc DisableGroup(DisableGroupRequest) returns (GroupResponse);
+  // SetMembership creates, updates or disables subject membership.
+  rpc SetMembership(SetMembershipRequest) returns (MembershipResponse);
+  // PutAllowlistEntry creates or updates an allowlist entry.
+  rpc PutAllowlistEntry(PutAllowlistEntryRequest) returns (AllowlistEntryResponse);
+  // DisableAllowlistEntry disables an allowlist entry without deleting history.
+  rpc DisableAllowlistEntry(DisableAllowlistEntryRequest) returns (AllowlistEntryResponse);
+  // RegisterExternalProvider creates an external-account provider.
+  rpc RegisterExternalProvider(RegisterExternalProviderRequest) returns (ExternalProviderResponse);
+  // UpdateExternalProvider changes provider metadata or status.
+  rpc UpdateExternalProvider(UpdateExternalProviderRequest) returns (ExternalProviderResponse);
+  // RegisterExternalAccount creates an external account as a policy subject.
+  rpc RegisterExternalAccount(RegisterExternalAccountRequest) returns (ExternalAccountResponse);
+  // UpdateExternalAccountStatus changes external-account lifecycle status.
+  rpc UpdateExternalAccountStatus(UpdateExternalAccountStatusRequest) returns (ExternalAccountResponse);
+  // BindExternalAccount allows an external account to be used in a scope.
+  rpc BindExternalAccount(BindExternalAccountRequest) returns (ExternalAccountBindingResponse);
+  // DisableExternalAccountBinding disables an account binding without deleting history.
+  rpc DisableExternalAccountBinding(DisableExternalAccountBindingRequest) returns (ExternalAccountBindingResponse);
+  // PutAccessAction creates or updates an action from the access-action catalog.
+  rpc PutAccessAction(PutAccessActionRequest) returns (AccessActionResponse);
+  // PutAccessRule creates or updates an access rule.
+  rpc PutAccessRule(PutAccessRuleRequest) returns (AccessRuleResponse);
+  // DisableAccessRule disables an access rule without deleting history.
+  rpc DisableAccessRule(DisableAccessRuleRequest) returns (AccessRuleResponse);
+  // ResolveExternalAccountUsage checks whether an external account can be used.
+  rpc ResolveExternalAccountUsage(ResolveExternalAccountUsageRequest) returns (ResolveExternalAccountUsageResponse);
+  // CheckAccess resolves effective access for a subject, action and resource.
+  rpc CheckAccess(CheckAccessRequest) returns (CheckAccessResponse);
+  // ExplainAccess returns a previously audited access decision explanation.
+  rpc ExplainAccess(ExplainAccessRequest) returns (ExplainAccessResponse);
+  // ListMembershipGraph returns effective membership graph for operator UI.
+  rpc ListMembershipGraph(ListMembershipGraphRequest) returns (ListMembershipGraphResponse);
+  // ListPendingAccess returns pending or blocked access items for operator UI.
+  rpc ListPendingAccess(ListPendingAccessRequest) returns (ListPendingAccessResponse);
+}
+
+// CommandMeta is required for every mutating command.
+message CommandMeta {
+  // command_id is a unique command identifier. Either command_id or idempotency_key is required.
+  string command_id = 1;
+  // idempotency_key is an idempotency key scoped by operation and actor.
+  string idempotency_key = 2;
+  // expected_version is present only for existing aggregate mutations.
+  optional int64 expected_version = 3;
+  // actor is the authenticated caller.
+  Actor actor = 4;
+  // reason is a machine or operator reason for audit and domain events.
+  string reason = 5;
+  // request_id links the command to logs, traces and audit.
+  string request_id = 6;
+  // request_context carries safe request metadata; no tokens, secrets, email or names.
+  RequestContext request_context = 7;
+}
+
+// RequestContext is safe request metadata used for audit and diagnostics.
+message RequestContext {
+  // source identifies caller surface, for example api-gateway, platform-mcp-server or service.
+  string source = 1;
+  // trace_id links platform traces.
+  string trace_id = 2;
+  // session_id links a user session when available.
+  string session_id = 3;
+  // client_ip_hash is an optional hashed client address.
+  string client_ip_hash = 4;
+}
+
+// Actor identifies a user, service, agent or external account.
+message Actor {
+  // type is a subject type such as user, service, agent or external_account.
+  string type = 1;
+  // id is the subject identifier in its owner domain.
+  string id = 2;
+}
+
+// SubjectRef references an access subject.
+message SubjectRef {
+  // type is one of user, group, organization, external_account, agent, agent_role, flow or package.
+  string type = 1;
+  // id is the subject identifier.
+  string id = 2;
+}
+
+// ResourceRef references a protected resource.
+message ResourceRef {
+  // type is a resource type from the access-action catalog.
+  string type = 1;
+  // id is the resource identifier in its owner domain.
+  string id = 2;
+}
+
+// ScopeRef references the scope where a rule or account binding applies.
+message ScopeRef {
+  // type is a scope type such as global, organization, project, repository, user, group, agent, agent_role, flow, stage or package.
+  string type = 1;
+  // id is the scope identifier; global scope uses an empty id.
+  string id = 2;
+}
+
+// AccessDecision is the closed set of access decision results.
+enum AccessDecision {
+  ACCESS_DECISION_UNSPECIFIED = 0;
+  ACCESS_DECISION_ALLOW = 1;
+  ACCESS_DECISION_DENY = 2;
+  ACCESS_DECISION_PENDING = 3;
+}
+
+// AccessEffect is the closed set of access rule effects.
+enum AccessEffect {
+  ACCESS_EFFECT_UNSPECIFIED = 0;
+  ACCESS_EFFECT_ALLOW = 1;
+  ACCESS_EFFECT_DENY = 2;
+}
+
+// OrganizationKind is the closed set of organization kinds.
+enum OrganizationKind {
+  ORGANIZATION_KIND_UNSPECIFIED = 0;
+  ORGANIZATION_KIND_OWNER = 1;
+  ORGANIZATION_KIND_CLIENT = 2;
+  ORGANIZATION_KIND_CONTRACTOR = 3;
+  ORGANIZATION_KIND_SAAS = 4;
+  ORGANIZATION_KIND_SAAS_CLIENT = 5;
+  ORGANIZATION_KIND_SAAS_CONTRACTOR = 6;
+}
+
+// OrganizationStatus is the closed set of organization lifecycle statuses.
+enum OrganizationStatus {
+  ORGANIZATION_STATUS_UNSPECIFIED = 0;
+  ORGANIZATION_STATUS_ACTIVE = 1;
+  ORGANIZATION_STATUS_PENDING = 2;
+  ORGANIZATION_STATUS_SUSPENDED = 3;
+  ORGANIZATION_STATUS_ARCHIVED = 4;
+}
+
+// UserStatus is the closed set of user lifecycle statuses.
+enum UserStatus {
+  USER_STATUS_UNSPECIFIED = 0;
+  USER_STATUS_ACTIVE = 1;
+  USER_STATUS_PENDING = 2;
+  USER_STATUS_BLOCKED = 3;
+  USER_STATUS_DISABLED = 4;
+}
+
+// GroupScopeType is the closed set of group scopes.
+enum GroupScopeType {
+  GROUP_SCOPE_TYPE_UNSPECIFIED = 0;
+  GROUP_SCOPE_TYPE_GLOBAL = 1;
+  GROUP_SCOPE_TYPE_ORGANIZATION = 2;
+}
+
+// GroupStatus is the closed set of group lifecycle statuses.
+enum GroupStatus {
+  GROUP_STATUS_UNSPECIFIED = 0;
+  GROUP_STATUS_ACTIVE = 1;
+  GROUP_STATUS_DISABLED = 2;
+  GROUP_STATUS_ARCHIVED = 3;
+}
+
+// MembershipSubjectType is the closed set of membership subject types.
+enum MembershipSubjectType {
+  MEMBERSHIP_SUBJECT_TYPE_UNSPECIFIED = 0;
+  MEMBERSHIP_SUBJECT_TYPE_USER = 1;
+  MEMBERSHIP_SUBJECT_TYPE_GROUP = 2;
+  MEMBERSHIP_SUBJECT_TYPE_EXTERNAL_ACCOUNT = 3;
+}
+
+// MembershipTargetType is the closed set of membership target types.
+enum MembershipTargetType {
+  MEMBERSHIP_TARGET_TYPE_UNSPECIFIED = 0;
+  MEMBERSHIP_TARGET_TYPE_ORGANIZATION = 1;
+  MEMBERSHIP_TARGET_TYPE_GROUP = 2;
+}
+
+// MembershipStatus is the closed set of membership statuses.
+enum MembershipStatus {
+  MEMBERSHIP_STATUS_UNSPECIFIED = 0;
+  MEMBERSHIP_STATUS_ACTIVE = 1;
+  MEMBERSHIP_STATUS_PENDING = 2;
+  MEMBERSHIP_STATUS_BLOCKED = 3;
+  MEMBERSHIP_STATUS_DISABLED = 4;
+}
+
+// MembershipSource is the closed set of membership source types.
+enum MembershipSource {
+  MEMBERSHIP_SOURCE_UNSPECIFIED = 0;
+  MEMBERSHIP_SOURCE_MANUAL = 1;
+  MEMBERSHIP_SOURCE_BOOTSTRAP = 2;
+  MEMBERSHIP_SOURCE_SYNC = 3;
+  MEMBERSHIP_SOURCE_SYSTEM = 4;
+}
+
+// AllowlistMatchType is the closed set of allowlist matching modes.
+enum AllowlistMatchType {
+  ALLOWLIST_MATCH_TYPE_UNSPECIFIED = 0;
+  ALLOWLIST_MATCH_TYPE_EMAIL = 1;
+  ALLOWLIST_MATCH_TYPE_DOMAIN = 2;
+}
+
+// AllowlistStatus is the closed set of allowlist entry statuses.
+enum AllowlistStatus {
+  ALLOWLIST_STATUS_UNSPECIFIED = 0;
+  ALLOWLIST_STATUS_ACTIVE = 1;
+  ALLOWLIST_STATUS_DISABLED = 2;
+}
+
+// ExternalProviderKind is the closed set of external provider kinds.
+enum ExternalProviderKind {
+  EXTERNAL_PROVIDER_KIND_UNSPECIFIED = 0;
+  EXTERNAL_PROVIDER_KIND_REPOSITORY = 1;
+  EXTERNAL_PROVIDER_KIND_IDENTITY = 2;
+  EXTERNAL_PROVIDER_KIND_MODEL = 3;
+  EXTERNAL_PROVIDER_KIND_MESSAGING = 4;
+  EXTERNAL_PROVIDER_KIND_PAYMENTS = 5;
+  EXTERNAL_PROVIDER_KIND_OTHER = 6;
+}
+
+// ExternalProviderStatus is the closed set of provider statuses.
+enum ExternalProviderStatus {
+  EXTERNAL_PROVIDER_STATUS_UNSPECIFIED = 0;
+  EXTERNAL_PROVIDER_STATUS_ACTIVE = 1;
+  EXTERNAL_PROVIDER_STATUS_DISABLED = 2;
+}
+
+// ExternalAccountType is the closed set of external account types.
+enum ExternalAccountType {
+  EXTERNAL_ACCOUNT_TYPE_UNSPECIFIED = 0;
+  EXTERNAL_ACCOUNT_TYPE_USER = 1;
+  EXTERNAL_ACCOUNT_TYPE_BOT = 2;
+  EXTERNAL_ACCOUNT_TYPE_SERVICE = 3;
+  EXTERNAL_ACCOUNT_TYPE_INTEGRATION = 4;
+}
+
+// ExternalAccountStatus is the closed set of external account statuses.
+enum ExternalAccountStatus {
+  EXTERNAL_ACCOUNT_STATUS_UNSPECIFIED = 0;
+  EXTERNAL_ACCOUNT_STATUS_ACTIVE = 1;
+  EXTERNAL_ACCOUNT_STATUS_PENDING = 2;
+  EXTERNAL_ACCOUNT_STATUS_NEEDS_REAUTH = 3;
+  EXTERNAL_ACCOUNT_STATUS_LIMITED = 4;
+  EXTERNAL_ACCOUNT_STATUS_BLOCKED = 5;
+  EXTERNAL_ACCOUNT_STATUS_DISABLED = 6;
+}
+
+// ExternalAccountScopeType is the closed set of external account usage scopes.
+enum ExternalAccountScopeType {
+  EXTERNAL_ACCOUNT_SCOPE_TYPE_UNSPECIFIED = 0;
+  EXTERNAL_ACCOUNT_SCOPE_TYPE_GLOBAL = 1;
+  EXTERNAL_ACCOUNT_SCOPE_TYPE_ORGANIZATION = 2;
+  EXTERNAL_ACCOUNT_SCOPE_TYPE_PROJECT = 3;
+  EXTERNAL_ACCOUNT_SCOPE_TYPE_REPOSITORY = 4;
+  EXTERNAL_ACCOUNT_SCOPE_TYPE_USER = 5;
+  EXTERNAL_ACCOUNT_SCOPE_TYPE_GROUP = 6;
+  EXTERNAL_ACCOUNT_SCOPE_TYPE_AGENT = 7;
+  EXTERNAL_ACCOUNT_SCOPE_TYPE_AGENT_ROLE = 8;
+  EXTERNAL_ACCOUNT_SCOPE_TYPE_FLOW = 9;
+  EXTERNAL_ACCOUNT_SCOPE_TYPE_STAGE = 10;
+  EXTERNAL_ACCOUNT_SCOPE_TYPE_PACKAGE = 11;
+}
+
+// ExternalAccountBindingStatus is the closed set of account binding statuses.
+enum ExternalAccountBindingStatus {
+  EXTERNAL_ACCOUNT_BINDING_STATUS_UNSPECIFIED = 0;
+  EXTERNAL_ACCOUNT_BINDING_STATUS_ACTIVE = 1;
+  EXTERNAL_ACCOUNT_BINDING_STATUS_DISABLED = 2;
+}
+
+// AccessActionStatus is the closed set of access action statuses.
+enum AccessActionStatus {
+  ACCESS_ACTION_STATUS_UNSPECIFIED = 0;
+  ACCESS_ACTION_STATUS_ACTIVE = 1;
+  ACCESS_ACTION_STATUS_DISABLED = 2;
+}
+
+// AccessRuleStatus is the closed set of access rule statuses.
+enum AccessRuleStatus {
+  ACCESS_RULE_STATUS_UNSPECIFIED = 0;
+  ACCESS_RULE_STATUS_ACTIVE = 1;
+  ACCESS_RULE_STATUS_DISABLED = 2;
+}
+
+// BootstrapUserFromIdentityRequest creates or resolves a user from SSO/OIDC identity.
+message BootstrapUserFromIdentityRequest {
+  // provider is an identity provider key such as keycloak, github, gitlab or google.
+  string provider = 1;
+  // subject is provider-native stable identity subject.
+  string subject = 2;
+  // email is the email matched against allowlist.
+  string email = 3;
+  // display_name is optional UI display text.
+  string display_name = 4;
+  // locale is the user's preferred locale.
+  string locale = 5;
+  // meta carries idempotency, actor and request context.
+  CommandMeta meta = 6;
+}
+
+// BootstrapUserFromIdentityResponse returns user bootstrap decision.
+message BootstrapUserFromIdentityResponse {
+  // user_id is the platform user identifier.
+  string user_id = 1;
+  // status is the resulting user status.
+  UserStatus status = 2;
+  // decision is allow, deny or pending.
+  AccessDecision decision = 3;
+  // reason_code is a machine-readable reason.
+  string reason_code = 4;
+  // organization_id is set when allowlist binds the user to organization.
+  string organization_id = 5;
+}
+
+// SetUserStatusRequest changes user lifecycle status.
+message SetUserStatusRequest {
+  // user_id is the user aggregate id.
+  string user_id = 1;
+  // status is the target user status.
+  UserStatus status = 2;
+  // meta carries idempotency, expected version and audit context.
+  CommandMeta meta = 3;
+}
+
+// UserResponse returns user identity and lifecycle status.
+message UserResponse {
+  // user_id is the user aggregate id.
+  string user_id = 1;
+  // primary_email is returned only on staff/admin surfaces.
+  string primary_email = 2;
+  // display_name is optional UI display text.
+  string display_name = 3;
+  // status is the user lifecycle status.
+  UserStatus status = 4;
+  // locale is the preferred locale.
+  string locale = 5;
+  // version is the aggregate version.
+  int64 version = 6;
+}
+
+// CreateOrganizationRequest creates an organization.
+message CreateOrganizationRequest {
+  // kind is the organization kind.
+  OrganizationKind kind = 1;
+  // slug is unique organization slug.
+  string slug = 2;
+  // display_name is safe display text.
+  string display_name = 3;
+  // image_asset_ref is an optional asset reference.
+  string image_asset_ref = 4;
+  // status is optional target status; server defaults to active.
+  OrganizationStatus status = 5;
+  // parent_organization_id is optional parent organization.
+  string parent_organization_id = 6;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 7;
+}
+
+// UpdateOrganizationRequest changes safe organization fields.
+message UpdateOrganizationRequest {
+  // organization_id is the organization aggregate id.
+  string organization_id = 1;
+  // slug is optional new slug.
+  string slug = 2;
+  // display_name is optional new display name.
+  string display_name = 3;
+  // image_asset_ref is optional new asset reference.
+  string image_asset_ref = 4;
+  // parent_organization_id is optional new parent organization.
+  string parent_organization_id = 5;
+  // meta carries idempotency, expected version and audit context.
+  CommandMeta meta = 6;
+}
+
+// SuspendOrganizationRequest suspends a non-owner organization.
+message SuspendOrganizationRequest {
+  // organization_id is the organization aggregate id.
+  string organization_id = 1;
+  // meta carries idempotency, expected version and reason.
+  CommandMeta meta = 2;
+}
+
+// ArchiveOrganizationRequest archives an organization.
+message ArchiveOrganizationRequest {
+  // organization_id is the organization aggregate id.
+  string organization_id = 1;
+  // meta carries idempotency, expected version and reason.
+  CommandMeta meta = 2;
+}
+
+// OrganizationResponse returns organization state.
+message OrganizationResponse {
+  // organization_id is the organization aggregate id.
+  string organization_id = 1;
+  // kind is the organization kind.
+  OrganizationKind kind = 2;
+  // slug is unique organization slug.
+  string slug = 3;
+  // display_name is safe display text.
+  string display_name = 4;
+  // image_asset_ref is optional asset reference.
+  string image_asset_ref = 5;
+  // status is lifecycle status.
+  OrganizationStatus status = 6;
+  // parent_organization_id is optional parent organization.
+  string parent_organization_id = 7;
+  // version is the aggregate version.
+  int64 version = 8;
+}
+
+// CreateGroupRequest creates a global or organization-scoped group.
+message CreateGroupRequest {
+  // scope_type is global or organization.
+  GroupScopeType scope_type = 1;
+  // scope_id is required for organization-scoped groups.
+  string scope_id = 2;
+  // slug is unique in scope.
+  string slug = 3;
+  // display_name is safe display text.
+  string display_name = 4;
+  // parent_group_id is optional parent group.
+  string parent_group_id = 5;
+  // image_asset_ref is optional asset reference.
+  string image_asset_ref = 6;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 7;
+}
+
+// UpdateGroupRequest changes safe group fields or hierarchy.
+message UpdateGroupRequest {
+  // group_id is the group aggregate id.
+  string group_id = 1;
+  // slug is optional new slug.
+  string slug = 2;
+  // display_name is optional new display name.
+  string display_name = 3;
+  // parent_group_id is optional new parent group.
+  string parent_group_id = 4;
+  // image_asset_ref is optional new asset reference.
+  string image_asset_ref = 5;
+  // meta carries idempotency, expected version and audit context.
+  CommandMeta meta = 6;
+}
+
+// DisableGroupRequest disables a group.
+message DisableGroupRequest {
+  // group_id is the group aggregate id.
+  string group_id = 1;
+  // meta carries idempotency, expected version and reason.
+  CommandMeta meta = 2;
+}
+
+// GroupResponse returns group state.
+message GroupResponse {
+  // group_id is the group aggregate id.
+  string group_id = 1;
+  // scope_type is global or organization.
+  GroupScopeType scope_type = 2;
+  // scope_id is set for organization-scoped groups.
+  string scope_id = 3;
+  // slug is unique in scope.
+  string slug = 4;
+  // display_name is safe display text.
+  string display_name = 5;
+  // parent_group_id is optional parent group.
+  string parent_group_id = 6;
+  // image_asset_ref is optional asset reference.
+  string image_asset_ref = 7;
+  // status is lifecycle status.
+  GroupStatus status = 8;
+  // version is the aggregate version.
+  int64 version = 9;
+}
+
+// SetMembershipRequest creates, updates or disables membership.
+message SetMembershipRequest {
+  // subject_type is user, group or external_account.
+  MembershipSubjectType subject_type = 1;
+  // subject_id is the subject identifier.
+  string subject_id = 2;
+  // target_type is organization or group.
+  MembershipTargetType target_type = 3;
+  // target_id is the target identifier.
+  string target_id = 4;
+  // role_hint is optional operator hint, not a permission source.
+  string role_hint = 5;
+  // status is target membership status.
+  MembershipStatus status = 6;
+  // source records why membership exists.
+  MembershipSource source = 7;
+  // meta carries idempotency, optional expected version and reason.
+  CommandMeta meta = 8;
+}
+
+// MembershipResponse returns membership state.
+message MembershipResponse {
+  // membership_id is the membership aggregate id.
+  string membership_id = 1;
+  // subject_type is user, group or external_account.
+  MembershipSubjectType subject_type = 2;
+  // subject_id is the subject identifier.
+  string subject_id = 3;
+  // target_type is organization or group.
+  MembershipTargetType target_type = 4;
+  // target_id is the target identifier.
+  string target_id = 5;
+  // role_hint is optional operator hint.
+  string role_hint = 6;
+  // status is membership status.
+  MembershipStatus status = 7;
+  // source records why membership exists.
+  MembershipSource source = 8;
+  // version is the aggregate version.
+  int64 version = 9;
+}
+
+// PutAllowlistEntryRequest creates or updates an allowlist entry.
+message PutAllowlistEntryRequest {
+  // match_type is email or domain.
+  AllowlistMatchType match_type = 1;
+  // value is normalized by server.
+  string value = 2;
+  // organization_id optionally binds matching users to organization.
+  string organization_id = 3;
+  // default_status is the user status assigned during bootstrap.
+  UserStatus default_status = 4;
+  // status is the allowlist entry status.
+  AllowlistStatus status = 5;
+  // meta carries idempotency, optional expected version and audit context.
+  CommandMeta meta = 6;
+}
+
+// DisableAllowlistEntryRequest disables an allowlist entry.
+message DisableAllowlistEntryRequest {
+  // allowlist_entry_id is the allowlist aggregate id.
+  string allowlist_entry_id = 1;
+  // meta carries idempotency, expected version and reason.
+  CommandMeta meta = 2;
+}
+
+// AllowlistEntryResponse returns allowlist entry state.
+message AllowlistEntryResponse {
+  // allowlist_entry_id is the allowlist aggregate id.
+  string allowlist_entry_id = 1;
+  // match_type is email or domain.
+  AllowlistMatchType match_type = 2;
+  // value is normalized match value.
+  string value = 3;
+  // organization_id optionally binds matching users to organization.
+  string organization_id = 4;
+  // default_status is the bootstrap status for matched users.
+  UserStatus default_status = 5;
+  // status is allowlist entry status.
+  AllowlistStatus status = 6;
+  // version is aggregate version.
+  int64 version = 7;
+}
+
+// RegisterExternalProviderRequest creates an external provider.
+message RegisterExternalProviderRequest {
+  // slug is unique provider slug.
+  string slug = 1;
+  // provider_kind is the provider category.
+  ExternalProviderKind provider_kind = 2;
+  // display_name is safe display text.
+  string display_name = 3;
+  // icon_asset_ref is optional asset reference.
+  string icon_asset_ref = 4;
+  // status is provider status.
+  ExternalProviderStatus status = 5;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 6;
+}
+
+// UpdateExternalProviderRequest changes provider metadata.
+message UpdateExternalProviderRequest {
+  // external_provider_id is the provider aggregate id.
+  string external_provider_id = 1;
+  // slug is optional new slug.
+  string slug = 2;
+  // provider_kind is optional new provider kind.
+  ExternalProviderKind provider_kind = 3;
+  // display_name is optional display text.
+  string display_name = 4;
+  // icon_asset_ref is optional asset reference.
+  string icon_asset_ref = 5;
+  // status is optional provider status.
+  ExternalProviderStatus status = 6;
+  // meta carries idempotency, expected version and audit context.
+  CommandMeta meta = 7;
+}
+
+// ExternalProviderResponse returns provider state.
+message ExternalProviderResponse {
+  // external_provider_id is the provider aggregate id.
+  string external_provider_id = 1;
+  // slug is unique provider slug.
+  string slug = 2;
+  // provider_kind is the provider category.
+  ExternalProviderKind provider_kind = 3;
+  // display_name is safe display text.
+  string display_name = 4;
+  // icon_asset_ref is optional asset reference.
+  string icon_asset_ref = 5;
+  // status is provider status.
+  ExternalProviderStatus status = 6;
+  // version is aggregate version.
+  int64 version = 7;
+}
+
+// RegisterExternalAccountRequest creates an external account as a policy subject.
+message RegisterExternalAccountRequest {
+  // external_provider_id is provider id.
+  string external_provider_id = 1;
+  // account_type is user, bot, service or integration.
+  ExternalAccountType account_type = 2;
+  // display_name is safe display text.
+  string display_name = 3;
+  // image_asset_ref is optional asset reference.
+  string image_asset_ref = 4;
+  // owner_scope_type is account owner scope.
+  ExternalAccountScopeType owner_scope_type = 5;
+  // owner_scope_id is account owner scope id.
+  string owner_scope_id = 6;
+  // status is account lifecycle status.
+  ExternalAccountStatus status = 7;
+  // secret_binding_ref_id references secret metadata; the value is never returned.
+  string secret_binding_ref_id = 8;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 9;
+}
+
+// UpdateExternalAccountStatusRequest changes account lifecycle status.
+message UpdateExternalAccountStatusRequest {
+  // external_account_id is account aggregate id.
+  string external_account_id = 1;
+  // status is target lifecycle status.
+  ExternalAccountStatus status = 2;
+  // meta carries idempotency, expected version and reason.
+  CommandMeta meta = 3;
+}
+
+// ExternalAccountResponse returns external account state without secret value.
+message ExternalAccountResponse {
+  // external_account_id is account aggregate id.
+  string external_account_id = 1;
+  // external_provider_id is provider id.
+  string external_provider_id = 2;
+  // account_type is user, bot, service or integration.
+  ExternalAccountType account_type = 3;
+  // display_name is safe display text.
+  string display_name = 4;
+  // image_asset_ref is optional asset reference.
+  string image_asset_ref = 5;
+  // owner_scope_type is account owner scope.
+  ExternalAccountScopeType owner_scope_type = 6;
+  // owner_scope_id is account owner scope id.
+  string owner_scope_id = 7;
+  // status is account status.
+  ExternalAccountStatus status = 8;
+  // secret_binding_ref_id references secret metadata.
+  string secret_binding_ref_id = 9;
+  // version is aggregate version.
+  int64 version = 10;
+}
+
+// BindExternalAccountRequest allows an account to be used in a scope.
+message BindExternalAccountRequest {
+  // external_account_id is account aggregate id.
+  string external_account_id = 1;
+  // usage_scope_type is scope type where account may be used.
+  ExternalAccountScopeType usage_scope_type = 2;
+  // usage_scope_id is scope identifier.
+  string usage_scope_id = 3;
+  // allowed_action_keys are access-action catalog keys allowed for this binding.
+  repeated string allowed_action_keys = 4;
+  // status is binding status.
+  ExternalAccountBindingStatus status = 5;
+  // meta carries idempotency, optional expected version and audit context.
+  CommandMeta meta = 6;
+}
+
+// DisableExternalAccountBindingRequest disables an account binding.
+message DisableExternalAccountBindingRequest {
+  // external_account_binding_id is binding aggregate id.
+  string external_account_binding_id = 1;
+  // meta carries idempotency, expected version and reason.
+  CommandMeta meta = 2;
+}
+
+// ExternalAccountBindingResponse returns account binding state.
+message ExternalAccountBindingResponse {
+  // external_account_binding_id is binding aggregate id.
+  string external_account_binding_id = 1;
+  // external_account_id is account aggregate id.
+  string external_account_id = 2;
+  // usage_scope_type is scope type where account may be used.
+  ExternalAccountScopeType usage_scope_type = 3;
+  // usage_scope_id is scope identifier.
+  string usage_scope_id = 4;
+  // allowed_action_keys are access-action catalog keys.
+  repeated string allowed_action_keys = 5;
+  // status is binding status.
+  ExternalAccountBindingStatus status = 6;
+  // version is aggregate version.
+  int64 version = 7;
+}
+
+// PutAccessActionRequest creates or updates an access action.
+message PutAccessActionRequest {
+  // key is stable action key, for example provider.issue.write.
+  string key = 1;
+  // display_name is safe display text.
+  string display_name = 2;
+  // description is safe operator description.
+  string description = 3;
+  // resource_type is protected resource type.
+  string resource_type = 4;
+  // status is action status.
+  AccessActionStatus status = 5;
+  // meta carries idempotency, optional expected version and audit context.
+  CommandMeta meta = 6;
+}
+
+// AccessActionResponse returns access action state.
+message AccessActionResponse {
+  // access_action_id is action aggregate id.
+  string access_action_id = 1;
+  // key is stable action key.
+  string key = 2;
+  // display_name is safe display text.
+  string display_name = 3;
+  // description is safe operator description.
+  string description = 4;
+  // resource_type is protected resource type.
+  string resource_type = 5;
+  // status is action status.
+  AccessActionStatus status = 6;
+  // version is aggregate version.
+  int64 version = 7;
+}
+
+// PutAccessRuleRequest creates or updates an access rule.
+message PutAccessRuleRequest {
+  // effect is allow or deny.
+  AccessEffect effect = 1;
+  // subject_type is the rule subject type.
+  string subject_type = 2;
+  // subject_id is the rule subject id.
+  string subject_id = 3;
+  // action_key is an access-action catalog key.
+  string action_key = 4;
+  // resource_type is protected resource type.
+  string resource_type = 5;
+  // resource_id optionally narrows the resource.
+  string resource_id = 6;
+  // scope_type is scope type.
+  string scope_type = 7;
+  // scope_id is scope id.
+  string scope_id = 8;
+  // priority orders matching rules.
+  int32 priority = 9;
+  // status is rule status.
+  AccessRuleStatus status = 10;
+  // meta carries idempotency, optional expected version and audit context.
+  CommandMeta meta = 11;
+}
+
+// DisableAccessRuleRequest disables an access rule.
+message DisableAccessRuleRequest {
+  // access_rule_id is rule aggregate id.
+  string access_rule_id = 1;
+  // meta carries idempotency, expected version and reason.
+  CommandMeta meta = 2;
+}
+
+// AccessRuleResponse returns access rule state.
+message AccessRuleResponse {
+  // access_rule_id is rule aggregate id.
+  string access_rule_id = 1;
+  // effect is allow or deny.
+  AccessEffect effect = 2;
+  // subject_type is the rule subject type.
+  string subject_type = 3;
+  // subject_id is the rule subject id.
+  string subject_id = 4;
+  // action_key is access-action catalog key.
+  string action_key = 5;
+  // resource_type is protected resource type.
+  string resource_type = 6;
+  // resource_id optionally narrows the resource.
+  string resource_id = 7;
+  // scope_type is scope type.
+  string scope_type = 8;
+  // scope_id is scope id.
+  string scope_id = 9;
+  // priority orders matching rules.
+  int32 priority = 10;
+  // status is rule status.
+  AccessRuleStatus status = 11;
+  // version is aggregate version.
+  int64 version = 12;
+}
+
+// CheckAccessRequest asks access-manager to resolve effective access.
+message CheckAccessRequest {
+  // subject is the access subject.
+  SubjectRef subject = 1;
+  // action_key is an access-action catalog key.
+  string action_key = 2;
+  // resource is the protected resource.
+  ResourceRef resource = 3;
+  // scope is the scope where the access is checked.
+  ScopeRef scope = 4;
+  // audit forces audit record creation when policy requires it.
+  bool audit = 5;
+  // meta carries caller context for audit; idempotency is optional for reads.
+  CommandMeta meta = 6;
+}
+
+// CheckAccessResponse returns access decision and matched rules.
+message CheckAccessResponse {
+  // decision is allow, deny or pending.
+  AccessDecision decision = 1;
+  // reason_code is a machine-readable reason.
+  string reason_code = 2;
+  // policy_version is the highest matched policy version.
+  int64 policy_version = 3;
+  // matched_rules explains rules used for the decision.
+  repeated MatchedRule matched_rules = 4;
+}
+
+// MatchedRule explains a rule matched during access evaluation.
+message MatchedRule {
+  // rule_id is matched rule id.
+  string rule_id = 1;
+  // effect is allow or deny.
+  AccessEffect effect = 2;
+  // subject is the matched subject.
+  SubjectRef subject = 3;
+  // action_key is matched action key.
+  string action_key = 4;
+  // scope is matched scope.
+  ScopeRef scope = 5;
+  // priority is rule priority.
+  int32 priority = 6;
+  // reason_code is a machine-readable explanation reason.
+  string reason_code = 7;
+}
+
+// ExplainAccessRequest fetches a previously audited access decision.
+message ExplainAccessRequest {
+  // audit_id is access decision audit id.
+  string audit_id = 1;
+}
+
+// ExplainAccessResponse explains a previously audited access decision.
+message ExplainAccessResponse {
+  // audit_id is access decision audit id.
+  string audit_id = 1;
+  // decision is allow, deny or pending.
+  AccessDecision decision = 2;
+  // reason_code is a machine-readable reason.
+  string reason_code = 3;
+  // policy_version is the evaluated policy version.
+  int64 policy_version = 4;
+  // matched_rules explains rules used for the decision.
+  repeated MatchedRule matched_rules = 5;
+}
+
+// ResolveExternalAccountUsageRequest checks whether an account can be used.
+message ResolveExternalAccountUsageRequest {
+  // external_account_id is account aggregate id.
+  string external_account_id = 1;
+  // action_key is an access-action catalog key.
+  string action_key = 2;
+  // usage_scope is the requested usage scope.
+  ScopeRef usage_scope = 3;
+}
+
+// ResolveExternalAccountUsageResponse returns allowed account usage and secret metadata.
+message ResolveExternalAccountUsageResponse {
+  // external_account_id is account aggregate id.
+  string external_account_id = 1;
+  // provider_id is external provider id.
+  string provider_id = 2;
+  // secret_ref_id references secret metadata.
+  string secret_ref_id = 3;
+  // secret_store_type is vault or kubernetes_secret.
+  string secret_store_type = 4;
+  // secret_store_ref is a pointer to secret location, never the secret value.
+  string secret_store_ref = 5;
+  // allowed_action_keys are actions allowed for this binding.
+  repeated string allowed_action_keys = 6;
+}
+
+// ListMembershipGraphRequest returns graph membership around a subject.
+message ListMembershipGraphRequest {
+  // subject is the root graph subject.
+  SubjectRef subject = 1;
+  // include_inactive includes pending, blocked or disabled memberships.
+  bool include_inactive = 2;
+}
+
+// MembershipEdge is one membership edge in the graph.
+message MembershipEdge {
+  // membership_id is membership aggregate id.
+  string membership_id = 1;
+  // subject is edge source.
+  SubjectRef subject = 2;
+  // target is edge target.
+  SubjectRef target = 3;
+  // status is membership status.
+  MembershipStatus status = 4;
+  // source records why membership exists.
+  MembershipSource source = 5;
+  // version is aggregate version.
+  int64 version = 6;
+}
+
+// ListMembershipGraphResponse returns membership graph edges.
+message ListMembershipGraphResponse {
+  // root is the requested graph subject.
+  SubjectRef root = 1;
+  // edges are membership graph edges.
+  repeated MembershipEdge edges = 2;
+}
+
+// ListPendingAccessRequest lists pending or blocked access items.
+message ListPendingAccessRequest {
+  // scope optionally narrows the result.
+  ScopeRef scope = 1;
+  // limit limits returned items.
+  int32 limit = 2;
+  // cursor continues a previous list call.
+  string cursor = 3;
+}
+
+// PendingAccessItem is an operator-visible pending or blocked access item.
+message PendingAccessItem {
+  // item_id is stable item id.
+  string item_id = 1;
+  // item_type is user, membership, external_account or access_decision.
+  string item_type = 2;
+  // subject is the affected subject.
+  SubjectRef subject = 3;
+  // status is machine-readable pending or blocked status.
+  string status = 4;
+  // reason_code is machine-readable reason.
+  string reason_code = 5;
+  // created_at is RFC3339 timestamp.
+  string created_at = 6;
+}
+
+// ListPendingAccessResponse returns pending or blocked access items.
+message ListPendingAccessResponse {
+  // items are pending or blocked access items.
+  repeated PendingAccessItem items = 1;
+  // next_cursor continues listing.
+  string next_cursor = 2;
+}

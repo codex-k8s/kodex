@@ -19,7 +19,7 @@
 | Dependency | Version | Scope | Why |
 |---|---|---|---|
 | `github.com/labstack/echo/v5` | `v5.0.3` | HTTP transport | единый REST стек для gateway/staff API |
-| `github.com/getkin/kin-openapi` | `v0.133.0` | OpenAPI validation | загрузка/валидация OpenAPI и runtime request-validation в `api-gateway` |
+| `github.com/getkin/kin-openapi` | `v0.133.0` | OpenAPI validation | загрузка/валидация OpenAPI и runtime request-validation в gateway-сервисах |
 | `github.com/oapi-codegen/runtime` | `v1.1.2` | OpenAPI generated transport runtime | типы/утилиты для сгенерированного OpenAPI Go-кода |
 | `github.com/prometheus/client_golang` | `v1.23.2` | Observability | `/metrics` и базовые метрики сервиса |
 | `github.com/jackc/pgx/v5` | `v5.8.0` | PostgreSQL driver | доступ к PostgreSQL |
@@ -32,10 +32,10 @@
 | `k8s.io/apimachinery` | `v0.35.0` | Kubernetes API machinery | ошибки API, meta types, утилиты client-go |
 | `github.com/google/go-github/v82` | `v82.0.0` | Repository provider (GitHub) | настройка вебхуков и валидация доступа к репозиториям через GitHub API v3 |
 | `github.com/google/go-querystring` | `v1.2.0` | Dependency of go-github | сериализация query params для GitHub API клиента |
-| `google.golang.org/grpc` | `v1.78.0` | Internal transport | внутреннее service-to-service взаимодействие (`api-gateway` -> `control-plane`) |
+| `google.golang.org/grpc` | `v1.78.0` | Internal transport | внутреннее service-to-service взаимодействие (`gateway` -> внутренний сервис и service-to-service) |
 | `google.golang.org/protobuf` | `v1.36.10` | Internal contracts | protobuf runtime для gRPC контрактов и сгенерированного кода в `proto/gen/go/**` |
 | `google.golang.org/genproto/googleapis/rpc` | `v0.0.0-20251029180050-ab9386a59fda` | gRPC error details | типизированные `errdetails` для conflict/status metadata во внутренних gRPC callback-ах |
-| `github.com/modelcontextprotocol/go-sdk` | `v1.3.0` | MCP transport | встроенный StreamableHTTP MCP transport/auth/resource/tool runtime для `control-plane` |
+| `github.com/modelcontextprotocol/go-sdk` | `v1.3.0` | MCP transport | встроенный StreamableHTTP MCP transport/auth/resource/tool runtime для платформенного MCP-сервера |
 | `github.com/openai/openai-go/v3` | `v3.28.0` | Sprint S11 Telegram adapter voice STT | официальный OpenAI Go SDK для speech-to-text в `telegram-interaction-adapter`; используется для voice reply transcription после `ffmpeg` normalization |
 
 ## Backend (Go) — planned baselines

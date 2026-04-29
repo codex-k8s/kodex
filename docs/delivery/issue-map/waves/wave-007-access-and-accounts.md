@@ -5,7 +5,7 @@ title: kodex — карта Issue волны 7
 status: active
 owner_role: KM
 created_at: 2026-04-25
-updated_at: 2026-04-26
+updated_at: 2026-04-27
 ---
 
 # Карта Issue — волна 7
@@ -18,7 +18,7 @@ updated_at: 2026-04-26
 
 | Issue/PR | Документы | Домен | Статус | Примечание |
 |---|---|---|---|---|
-| #599 | `docs/domains/access-and-accounts/product/requirements.md`, `docs/domains/access-and-accounts/architecture/design.md`, `docs/domains/access-and-accounts/architecture/data_model.md` | access-and-accounts | готово к реализации | Организации, группы и граф членства. |
-| #600 | `docs/domains/access-and-accounts/product/requirements.md`, `docs/domains/access-and-accounts/architecture/data_model.md`, `docs/domains/access-and-accounts/architecture/api_contract.md` | access-and-accounts | готово к реализации | Вход пользователя, allowlist и жизненный цикл пользователя. |
-| #601 | `docs/domains/access-and-accounts/product/requirements.md`, `docs/domains/access-and-accounts/architecture/design.md`, `docs/domains/access-and-accounts/architecture/data_model.md`, `docs/domains/access-and-accounts/architecture/api_contract.md` | access-and-accounts | готово к реализации | Внешние аккаунты и политика использования. |
-| #602 | `docs/domains/access-and-accounts/product/requirements.md`, `docs/domains/access-and-accounts/architecture/design.md`, `docs/domains/access-and-accounts/architecture/data_model.md`, `docs/domains/access-and-accounts/architecture/api_contract.md` | access-and-accounts | готово к реализации | Вычисление прав доступа и аудит решений. |
+| #599 | `docs/domains/access-and-accounts/product/requirements.md`, `docs/domains/access-and-accounts/architecture/design.md`, `docs/domains/access-and-accounts/architecture/data_model.md`, `proto/kodex/access_accounts/v1/access_manager.proto`, `services/internal/access-manager/**` | access-and-accounts | контракт готов, реализация начата | Базовая модель организаций, групп и членства добавлена в новый сервис; транспортные обработчики и полный репозиторий остаются в бэклоге задачи. |
+| #600 | `docs/domains/access-and-accounts/product/requirements.md`, `docs/domains/access-and-accounts/architecture/data_model.md`, `docs/domains/access-and-accounts/architecture/api_contract.md`, `proto/kodex/access_accounts/v1/access_manager.proto`, `services/internal/access-manager/**` | access-and-accounts | контракт готов, реализация начата | Добавлена доменная первичная инициализация пользователя по allowlist; gRPC путь входа остаётся в бэклоге задачи, HTTP будет принадлежать gateway-срезу. |
+| #601 | `docs/domains/access-and-accounts/product/requirements.md`, `docs/domains/access-and-accounts/architecture/design.md`, `docs/domains/access-and-accounts/architecture/data_model.md`, `docs/domains/access-and-accounts/architecture/api_contract.md`, `proto/kodex/access_accounts/v1/access_manager.proto`, `services/internal/access-manager/**` | access-and-accounts | контракт готов, реализация начата | Добавлен базовый контур внешних аккаунтов и ссылок на секреты; полный жизненный цикл и транспорт остаются в бэклоге задачи. |
+| #602 | `docs/domains/access-and-accounts/product/requirements.md`, `docs/domains/access-and-accounts/architecture/design.md`, `docs/domains/access-and-accounts/architecture/data_model.md`, `docs/domains/access-and-accounts/architecture/api_contract.md`, `specs/asyncapi/access-manager.v1.yaml`, `services/internal/access-manager/**` | access-and-accounts | контракт готов, реализация начата | Добавлен базовый контур вычисления доступа, явного запрета и аудита; `ExplainAccess`, списки и доставка событий остаются в бэклоге задачи. |
