@@ -11,11 +11,11 @@
   - конфиги codegen в целевом `tools/codegen/**`;
   - CI/job-проверку codegen в целевом deploy-контуре.
 - Источник правды транспорта:
-  - REST: `specs/openapi/<service-name>.v<major>.yaml` (OpenAPI YAML)
+  - REST: `specs/openapi/<gateway-surface>.v<major>.yaml` (OpenAPI YAML только для gateway-поверхностей)
   - gRPC: `proto/**/*.proto`
   - async/webhook: `specs/asyncapi/<service-name>.v<major>.yaml` (если используется)
 - Контракт и реализация:
-  - стабильные контракты `v1` создаются на весь согласованный объём доменного API, а не только на уже написанные обработчики;
+  - стабильные контракты `v1` создаются на весь согласованный объём выбранной транспортной поверхности, а не только на уже написанные обработчики;
   - если обработчики, репозиторные методы или доставщики событий будут реализованы позже, это фиксируется в документе поставки и карте связей;
   - кодогенерация выполняется по контракту, а не по текущему неполному набору обработчиков, чтобы клиенты и серверные адаптеры не расходились с принятой архитектурой.
 
@@ -31,6 +31,8 @@
 ```bash
 make gen-openapi-go SVC=services/<zone>/<service>
 ```
+
+OpenAPI кодогенерируется только для gateway-сервисов. Внутренние доменные сервисы используют gRPC/proto и не заводят прямой OpenAPI для бизнес-ручек.
 
 Текущий охват backend-кодогенерации определяется актуальной архитектурной документацией проекта и активным инвентарём сервисов.
 Устаревшие сервисы не включаются в активное покрытие кодогенерации.
@@ -78,7 +80,7 @@ make validate-asyncapi SVC=<service-name>
 
 Запуск:
 ```bash
-make gen-openapi-ts APP=services/<zone>/<app> SPEC=specs/openapi/<service-name>.v<major>.yaml
+make gen-openapi-ts APP=services/<zone>/<app> SPEC=specs/openapi/<gateway-surface>.v<major>.yaml
 ```
 
 ## Проверка консистентности generated-кода в CI

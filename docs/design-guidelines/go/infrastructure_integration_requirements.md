@@ -60,6 +60,9 @@
 ## CI/CD, образы и окружения
 
 - Каждый Go сервис имеет Dockerfile и воспроизводимую сборку.
+- Dockerfile Go-сервиса использует зеркалированные базовые образы из инфраструктурного реестра и содержит отдельные стадии `build`, `dev`, `prod`.
+- Стадия `dev` содержит `CompileDaemon`, исходники сервиса, `proto/`, `libs/go/`, `GOCACHE=/tmp/.cache/go-build` и поддерживает hot reload для dev-слотов.
+- Стадия `prod` запускает готовый бинарник без hot reload и без зависимости от исходников.
 - `services.yaml` — единый инвентарь deploy-конфигурации в рамках репозитория.
 - `services.yaml/spec.versions` задаётся только объектным форматом:
   - `service: { value: "0.1.0", bumpOn: ["services/<zone>/<service>", ...] }`.

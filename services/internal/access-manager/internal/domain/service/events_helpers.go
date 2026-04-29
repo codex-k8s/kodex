@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
@@ -32,17 +33,20 @@ const (
 
 type accessEventPayloadOption func(*value.AccessEventPayload)
 
-func (s *Service) event(eventType string, aggregateType string, aggregateID uuid.UUID, payload value.AccessEventPayload, occurredAt time.Time) entity.OutboxEvent {
+func (s *Service) event(eventType string, aggregateType string, aggregateID uuid.UUID, payload value.AccessEventPayload, occurredAt time.Time) (entity.OutboxEvent, error) {
 	eventID := s.ids.New()
-	raw, _ := json.Marshal(payload)
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return entity.OutboxEvent{}, fmt.Errorf("marshal access event payload %s: %w", eventType, err)
+	}
 	return entity.OutboxEvent{
 		ID: eventID, EventType: eventType, SchemaVersion: schemaVersionAccessEventV1,
 		AggregateType: aggregateType, AggregateID: aggregateID, Payload: raw, OccurredAt: occurredAt,
-	}
+	}, nil
 }
 
-func (s *Service) membershipEvent(eventType string, membership entity.Membership, occurredAt time.Time, reasonCode string) entity.OutboxEvent {
-	return s.event(eventType, "membership", membership.ID, value.AccessEventPayload{
+func (s *Service) membershipEvent(eventType string, membership entity.Membership, occurredAt time.Time, reasonCode string) (entity.OutboxEvent, error) {
+	return s.event(eventType, accessAggregateMembership, membership.ID, value.AccessEventPayload{
 		MembershipID: membership.ID.String(),
 		SubjectType:  string(membership.SubjectType),
 		SubjectID:    membership.SubjectID.String(),
@@ -59,7 +63,7 @@ func (s *Service) createdEvent(
 	aggregateID uuid.UUID,
 	occurredAt time.Time,
 	options ...accessEventPayloadOption,
-) entity.OutboxEvent {
+) (entity.OutboxEvent, error) {
 	payload := value.AccessEventPayload{}
 	for _, option := range options {
 		option(&payload)

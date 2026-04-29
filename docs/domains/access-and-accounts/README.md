@@ -37,7 +37,7 @@
 
 - Сервис-владелец: `services/internal/access-manager`.
 - gRPC-контракт: `proto/kodex/access_accounts/v1/access_manager.proto`.
-- OpenAPI: `specs/openapi/access-manager.v1.yaml`.
+- HTTP-контракт: через gateway-спецификации после появления соответствующего gateway-среза.
 - AsyncAPI: `specs/asyncapi/access-manager.v1.yaml`.
 - Миграции: `services/internal/access-manager/cmd/cli/migrations`.
 - Статус контрактов и бэклог реализации: `delivery/wave7_access_and_accounts.md`.

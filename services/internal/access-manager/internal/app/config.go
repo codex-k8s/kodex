@@ -1,24 +1,22 @@
 package app
 
-import "os"
+import (
+	"fmt"
+
+	"github.com/caarlos0/env/v11"
+)
 
 // Config contains process-level access-manager server configuration.
 type Config struct {
-	HTTPAddr string
-	GRPCAddr string
+	HTTPAddr string `env:"KODEX_ACCESS_MANAGER_HTTP_ADDR" envDefault:":8080"`
+	GRPCAddr string `env:"KODEX_ACCESS_MANAGER_GRPC_ADDR" envDefault:":9090"`
 }
 
-// LoadConfigFromEnv reads process configuration from environment variables.
-func LoadConfigFromEnv() Config {
-	return Config{
-		HTTPAddr: envOrDefault("KODEX_ACCESS_MANAGER_HTTP_ADDR", ":8080"),
-		GRPCAddr: envOrDefault("KODEX_ACCESS_MANAGER_GRPC_ADDR", ":9090"),
+// LoadConfig reads process configuration from environment variables.
+func LoadConfig() (Config, error) {
+	cfg, err := env.ParseAs[Config]()
+	if err != nil {
+		return Config{}, fmt.Errorf("parse access-manager config from environment: %w", err)
 	}
-}
-
-func envOrDefault(key string, fallback string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return fallback
+	return cfg, nil
 }

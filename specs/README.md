@@ -8,13 +8,13 @@
 
 | Раздел | Назначение |
 |---|---|
-| `openapi/` | HTTP/OpenAPI контракты сервисов и пограничных API. |
+| `openapi/` | HTTP/OpenAPI контракты пограничных gateway API. Внутренние сервисы не публикуют прямые OpenAPI-контракты. |
 | `asyncapi/` | AsyncAPI контракты событий, webhook и асинхронных сообщений. |
 
 ## Правила именования
 
-- Имя файла строится по сервису-владельцу и версии: `<service-name>.v<major>.yaml`.
-- Для домена доступа целевые файлы: `openapi/access-manager.v1.yaml` и `asyncapi/access-manager.v1.yaml`.
+- Имя файла строится по gateway-поверхности или сервису-владельцу событий и версии: `<surface-or-service>.v<major>.yaml`.
+- Для домена доступа целевые файлы текущего среза: `asyncapi/access-manager.v1.yaml` и gRPC proto; HTTP-контракты появятся в OpenAPI-спецификациях соответствующих gateway.
 - gRPC-контракты остаются в `proto/kodex/<domain_or_service>/v<major>/**`.
 - Сгенерированный код не является источником истины и не правится руками.
 
@@ -30,4 +30,4 @@
 
 | Сервис | OpenAPI | AsyncAPI | gRPC |
 |---|---|---|---|
-| `access-manager` | `openapi/access-manager.v1.yaml` стабильный `v1` | `asyncapi/access-manager.v1.yaml` стабильный `v1` | `../proto/kodex/access_accounts/v1/access_manager.proto` стабильный `v1` |
+| `access-manager` | нет прямого OpenAPI; HTTP принадлежит gateway-спецификациям | `asyncapi/access-manager.v1.yaml` стабильный `v1` | `../proto/kodex/access_accounts/v1/access_manager.proto` стабильный `v1` |

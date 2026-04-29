@@ -23,8 +23,9 @@
 - Используется для service-to-service взаимодействия внутри платформы.
 
 ### HTTP/REST (внешний и staff API)
-- Публичные/внутренние API для webhook и UI.
-- OpenAPI YAML обязателен для `external|staff`.
+- HTTP API для webhook, пользовательского интерфейса и внешних интеграций держится только на gateway-слое.
+- Внутренние доменные сервисы не публикуют бизнес-ручки наружу напрямую; для них допустимы только служебные `/health/*` и `/metrics` без отдельного OpenAPI.
+- OpenAPI YAML обязателен для `external|staff` gateway-сервисов и делится по осмысленным поверхностям, а не одним большим файлом на всю платформу.
 
 ### WebSocket (опционально)
 - Только где есть реальный realtime use-case в staff UI.
@@ -53,6 +54,7 @@
 - `internal/domain/repository/<model>/repository.go` — интерфейсы репозиториев.
 - `internal/repository/postgres/<model>/repository.go` — реализации репозиториев.
 - `internal/repository/postgres/<model>/sql/*.sql` — SQL (через `//go:embed`).
+  - каждый named query хранится в отдельном `.sql` файле;
   - запросы именуются комментариями в стиле
     `-- name: <model>__<operation> :one|:many|:exec`
     для стабильной привязки SQL к коду;
@@ -62,9 +64,16 @@
 - `cmd/cli/migrations/*.sql` — миграции БД (goose) для этого сервиса, если он держатель схемы.
   - В монорепо это означает путь:
     `services/<zone>/<service-name>/cmd/cli/migrations/*.sql`.
-- `specs/openapi/<service-name>.v<major>.yaml` — OpenAPI.
+- `specs/openapi/<gateway-surface>.v<major>.yaml` — OpenAPI только для gateway-сервисов.
 - `specs/asyncapi/<service-name>.v<major>.yaml` — async/webhook/event контракты (если используются).
 - `internal/transport/*/generated/**` — только сгенерированный код.
+
+## Конфигурация процесса
+
+- Runtime config читается через `github.com/caarlos0/env/v11`.
+- У сервиса должна быть явная `Config`-структура с тегами `env` и `envDefault`/`required`, если значение обязательно.
+- Ручные helper-функции поверх `os.Getenv` для обычного чтения env не добавлять.
+- Ошибку парсинга конфигурации возвращать из `LoadConfig` и логировать только в entrypoint/composition root.
 
 ## Требования к transport DTO и кастерам
 
@@ -84,7 +93,7 @@
 
 - Повторяющиеся доменные строковые значения выносить в константы.
 - Для закрытых наборов строк использовать typed aliases (`type ... string`) и константы поверх них.
-- В production-коде запрещено размножать одинаковые литералы статусов/типов событий в разных пакетах.
+- В production-коде запрещено размножать одинаковые литералы статусов, типов событий, типов агрегатов, scope/action ключей и других доменных идентификаторов.
 
 ## Пользовательские тексты и локализация
 

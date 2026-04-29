@@ -296,23 +296,140 @@ func TestCheckAccessResolvesTransitiveMembershipGraph(t *testing.T) {
 	}
 }
 
-func TestCheckAccessDeniesBlockedExternalAccountSubject(t *testing.T) {
+func TestCheckAccessDeniesNonActiveExternalAccountSubject(t *testing.T) {
+	statuses := []enum.ExternalAccountStatus{
+		enum.ExternalAccountStatusPending,
+		enum.ExternalAccountStatusNeedsReauth,
+		enum.ExternalAccountStatusLimited,
+		enum.ExternalAccountStatusBlocked,
+		enum.ExternalAccountStatusDisabled,
+	}
+	for _, status := range statuses {
+		t.Run(string(status), func(t *testing.T) {
+			ctx := context.Background()
+			store := newMemoryRepository()
+			svc := New(store, fixedClock{}, newSequenceIDs())
+
+			provider, err := svc.PutExternalProvider(ctx, PutExternalProviderInput{
+				Slug: "github", ProviderKind: enum.ExternalProviderRepository, DisplayName: "GitHub",
+			})
+			if err != nil {
+				t.Fatalf("put provider: %v", err)
+			}
+			account, err := svc.RegisterExternalAccount(ctx, RegisterExternalAccountInput{
+				ExternalProviderID: provider.ID, AccountType: enum.ExternalAccountBot, DisplayName: "bot",
+				Status: status,
+			})
+			if err != nil {
+				t.Fatalf("register account: %v", err)
+			}
+			action, err := svc.PutAccessAction(ctx, PutAccessActionInput{
+				Key: "project.read", DisplayName: "Чтение проекта", ResourceType: "project",
+			})
+			if err != nil {
+				t.Fatalf("put action: %v", err)
+			}
+			_, err = svc.PutAccessRule(ctx, PutAccessRuleInput{
+				Effect: enum.AccessEffectAllow, SubjectType: enum.AccessSubjectExternalAccount, SubjectID: account.ID.String(),
+				ActionKey: action.Key, ResourceType: "project", ResourceID: "project-1", ScopeType: "global",
+			})
+			if err != nil {
+				t.Fatalf("put rule: %v", err)
+			}
+
+			result, err := svc.CheckAccess(ctx, CheckAccessInput{
+				Subject:   value.SubjectRef{Type: string(enum.AccessSubjectExternalAccount), ID: account.ID.String()},
+				ActionKey: action.Key, Resource: value.ResourceRef{Type: "project", ID: "project-1"},
+				Scope: value.ScopeRef{Type: "project", ID: "project-1"},
+			})
+			if err != nil {
+				t.Fatalf("check access: %v", err)
+			}
+			if result.Decision != enum.AccessDecisionDeny || result.ReasonCode != reasonSubjectBlocked {
+				t.Fatalf("decision/reason = %s/%s, want %s/%s", result.Decision, result.ReasonCode, enum.AccessDecisionDeny, reasonSubjectBlocked)
+			}
+		})
+	}
+}
+
+func TestCheckAccessSkipsInactiveMembershipTarget(t *testing.T) {
 	ctx := context.Background()
 	store := newMemoryRepository()
 	svc := New(store, fixedClock{}, newSequenceIDs())
 
-	provider, err := svc.PutExternalProvider(ctx, PutExternalProviderInput{
-		Slug: "github", ProviderKind: enum.ExternalProviderRepository, DisplayName: "GitHub",
+	user := store.seedUser(enum.UserStatusActive)
+	org, err := svc.CreateOrganization(ctx, CreateOrganizationInput{
+		Kind: enum.OrganizationKindClient, Slug: "client", DisplayName: "Клиент",
 	})
 	if err != nil {
-		t.Fatalf("put provider: %v", err)
+		t.Fatalf("create organization: %v", err)
 	}
-	account, err := svc.RegisterExternalAccount(ctx, RegisterExternalAccountInput{
-		ExternalProviderID: provider.ID, AccountType: enum.ExternalAccountBot, DisplayName: "blocked-bot",
-		Status: enum.ExternalAccountStatusBlocked,
+	group, err := svc.CreateGroup(ctx, CreateGroupInput{
+		ScopeType: enum.GroupScopeOrganization, ScopeID: &org.ID, Slug: "ops", DisplayName: "Операторы",
 	})
 	if err != nil {
-		t.Fatalf("register account: %v", err)
+		t.Fatalf("create group: %v", err)
+	}
+	_, err = svc.SetMembership(ctx, SetMembershipInput{
+		SubjectType: enum.MembershipSubjectUser, SubjectID: user.ID,
+		TargetType: enum.MembershipTargetGroup, TargetID: group.ID,
+	})
+	if err != nil {
+		t.Fatalf("set membership: %v", err)
+	}
+	group.Status = enum.GroupStatusDisabled
+	store.groups[group.ID] = group
+
+	action, err := svc.PutAccessAction(ctx, PutAccessActionInput{
+		Key: "project.read", DisplayName: "Чтение проекта", ResourceType: "project",
+	})
+	if err != nil {
+		t.Fatalf("put action: %v", err)
+	}
+	_, err = svc.PutAccessRule(ctx, PutAccessRuleInput{
+		Effect: enum.AccessEffectAllow, SubjectType: enum.AccessSubjectGroup, SubjectID: group.ID.String(),
+		ActionKey: action.Key, ResourceType: "project", ResourceID: "project-1", ScopeType: "global",
+	})
+	if err != nil {
+		t.Fatalf("put rule: %v", err)
+	}
+
+	result, err := svc.CheckAccess(ctx, CheckAccessInput{
+		Subject:   value.SubjectRef{Type: string(enum.AccessSubjectUser), ID: user.ID.String()},
+		ActionKey: action.Key, Resource: value.ResourceRef{Type: "project", ID: "project-1"},
+		Scope: value.ScopeRef{Type: "project", ID: "project-1"},
+	})
+	if err != nil {
+		t.Fatalf("check access: %v", err)
+	}
+	if result.Decision != enum.AccessDecisionDeny || result.ReasonCode != reasonNoMatchingRule {
+		t.Fatalf("decision/reason = %s/%s, want %s/%s", result.Decision, result.ReasonCode, enum.AccessDecisionDeny, reasonNoMatchingRule)
+	}
+}
+
+func TestCheckAccessResolvesRootGroupParents(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+
+	org, err := svc.CreateOrganization(ctx, CreateOrganizationInput{
+		Kind: enum.OrganizationKindClient, Slug: "client", DisplayName: "Клиент",
+	})
+	if err != nil {
+		t.Fatalf("create organization: %v", err)
+	}
+	parent, err := svc.CreateGroup(ctx, CreateGroupInput{
+		ScopeType: enum.GroupScopeOrganization, ScopeID: &org.ID, Slug: "owners", DisplayName: "Владельцы",
+	})
+	if err != nil {
+		t.Fatalf("create parent group: %v", err)
+	}
+	child, err := svc.CreateGroup(ctx, CreateGroupInput{
+		ScopeType: enum.GroupScopeOrganization, ScopeID: &org.ID, Slug: "reviewers", DisplayName: "Ревьюеры",
+		ParentGroupID: &parent.ID,
+	})
+	if err != nil {
+		t.Fatalf("create child group: %v", err)
 	}
 	action, err := svc.PutAccessAction(ctx, PutAccessActionInput{
 		Key: "project.read", DisplayName: "Чтение проекта", ResourceType: "project",
@@ -321,7 +438,7 @@ func TestCheckAccessDeniesBlockedExternalAccountSubject(t *testing.T) {
 		t.Fatalf("put action: %v", err)
 	}
 	_, err = svc.PutAccessRule(ctx, PutAccessRuleInput{
-		Effect: enum.AccessEffectAllow, SubjectType: enum.AccessSubjectExternalAccount, SubjectID: account.ID.String(),
+		Effect: enum.AccessEffectAllow, SubjectType: enum.AccessSubjectGroup, SubjectID: parent.ID.String(),
 		ActionKey: action.Key, ResourceType: "project", ResourceID: "project-1", ScopeType: "global",
 	})
 	if err != nil {
@@ -329,15 +446,15 @@ func TestCheckAccessDeniesBlockedExternalAccountSubject(t *testing.T) {
 	}
 
 	result, err := svc.CheckAccess(ctx, CheckAccessInput{
-		Subject:   value.SubjectRef{Type: string(enum.AccessSubjectExternalAccount), ID: account.ID.String()},
+		Subject:   value.SubjectRef{Type: string(enum.AccessSubjectGroup), ID: child.ID.String()},
 		ActionKey: action.Key, Resource: value.ResourceRef{Type: "project", ID: "project-1"},
 		Scope: value.ScopeRef{Type: "project", ID: "project-1"},
 	})
 	if err != nil {
 		t.Fatalf("check access: %v", err)
 	}
-	if result.Decision != enum.AccessDecisionDeny || result.ReasonCode != reasonSubjectBlocked {
-		t.Fatalf("decision/reason = %s/%s, want %s/%s", result.Decision, result.ReasonCode, enum.AccessDecisionDeny, reasonSubjectBlocked)
+	if result.Decision != enum.AccessDecisionAllow {
+		t.Fatalf("decision = %s, want %s", result.Decision, enum.AccessDecisionAllow)
 	}
 }
 

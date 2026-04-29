@@ -4,12 +4,12 @@ import "github.com/codex-k8s/kodex/services/internal/access-manager/internal/dom
 
 func validateAccessRuleScope(scopeType string, scopeID string) error {
 	switch scopeType {
-	case "global":
+	case accessRuleScopeGlobal:
 		if scopeID != "" {
 			return errs.ErrInvalidArgument
 		}
 		return nil
-	case "organization", "project", "repository":
+	case accessRuleScopeOrganization, accessRuleScopeProject, accessRuleScopeRepository:
 		if scopeID == "" {
 			return errs.ErrInvalidArgument
 		}

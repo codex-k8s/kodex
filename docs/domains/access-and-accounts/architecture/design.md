@@ -69,7 +69,7 @@ approvals:
 sequenceDiagram
   participant U as Пользователь
   participant UI as web-console
-  participant API as api-gateway
+  participant API as gateway входа
   participant IDP as SSO/OIDC
   participant A as access-manager
   participant DB as access DB

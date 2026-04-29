@@ -14,6 +14,6 @@
 - gRPC методы (handlers) тонкие: принимают request, маппят в домен, вызывают доменный use-case/service, возвращают `error`.
 - Маппинг доменных ошибок -> `codes.*` и recovery — в interceptors (см. `docs/design-guidelines/go/error_handling.md`).
 
-## Codegen и dev-гейтвей
-Генерация кода и dev-инфраструктуры (grpc-gateway + OpenAPI) описаны в:
+## Codegen
+Генерация кода и связанные OpenAPI-правила для gateway-слоя описаны в:
 - `docs/design-guidelines/go/code_generation.md`

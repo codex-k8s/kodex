@@ -15,7 +15,12 @@ func main() {
 	defer stop()
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	if err := app.Run(ctx, app.LoadConfigFromEnv(), logger); err != nil {
+	cfg, err := app.LoadConfig()
+	if err != nil {
+		logger.Error("access-manager config failed", "error", err)
+		os.Exit(1)
+	}
+	if err := app.Run(ctx, cfg, logger); err != nil {
 		logger.Error("access-manager stopped", "error", err)
 		os.Exit(1)
 	}

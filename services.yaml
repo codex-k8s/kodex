@@ -61,7 +61,6 @@ spec:
       ownerDomain: access-and-accounts
       apiContracts:
         grpc: proto/kodex/access_accounts/v1/access_manager.proto
-        openapi: specs/openapi/access-manager.v1.yaml
         asyncapi: specs/asyncapi/access-manager.v1.yaml
       database:
         owner: access-manager

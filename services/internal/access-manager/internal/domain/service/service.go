@@ -18,18 +18,6 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/value"
 )
 
-const (
-	reasonAllowlistEmail    = "allowlist_email"
-	reasonAllowlistDomain   = "allowlist_domain"
-	reasonAllowlistDisabled = "allowlist_disabled"
-	reasonAllowlistMiss     = "allowlist_miss"
-	reasonIdentityLinked    = "identity_linked"
-	reasonExplicitAllow     = "explicit_allow"
-	reasonExplicitDeny      = "explicit_deny"
-	reasonNoMatchingRule    = "no_matching_rule"
-	reasonSubjectBlocked    = "subject_blocked"
-)
-
 // Service coordinates access-manager domain commands and reads.
 type Service struct {
 	repository accessrepo.Repository
@@ -77,13 +65,17 @@ func (s *Service) CreateOrganization(ctx context.Context, input CreateOrganizati
 		ParentOrganizationID: input.ParentOrganizationID,
 	}
 
-	if err := s.repository.CreateOrganization(ctx, organization, s.createdEvent(
-		"access.organization.created", "organization", organization.ID, now,
+	event, err := s.createdEvent(
+		accessEventOrganizationCreated, accessAggregateOrganization, organization.ID, now,
 		payloadString(accessPayloadOrganizationID, organization.ID.String()),
 		payloadString(accessPayloadKind, string(organization.Kind)),
 		payloadString(accessPayloadStatus, string(organization.Status)),
 		payloadVersion(organization.Version),
-	)); err != nil {
+	)
+	if err != nil {
+		return entity.Organization{}, err
+	}
+	if err := s.repository.CreateOrganization(ctx, organization, event); err != nil {
 		return entity.Organization{}, err
 	}
 	return organization, nil
@@ -139,7 +131,10 @@ func (s *Service) CreateGroup(ctx context.Context, input CreateGroupInput) (enti
 		payloadString(accessPayloadScopeID, uuidPtrString(group.ScopeID)),
 		payloadVersion(group.Version),
 	}
-	groupCreatedEvent := s.createdEvent("access.group.created", "group", group.ID, now, groupCreatedPayload...)
+	groupCreatedEvent, err := s.createdEvent(accessEventGroupCreated, accessAggregateGroup, group.ID, now, groupCreatedPayload...)
+	if err != nil {
+		return entity.Group{}, err
+	}
 	if err := s.repository.CreateGroup(ctx, group, groupCreatedEvent); err != nil {
 		return entity.Group{}, err
 	}
@@ -173,11 +168,15 @@ func (s *Service) SetMembership(ctx context.Context, input SetMembershipInput) (
 		membership.Source = source
 		membership.Version++
 		membership.UpdatedAt = now
-		eventType := "access.membership.updated"
+		eventType := accessEventMembershipUpdated
 		if membership.Status == enum.MembershipStatusDisabled {
-			eventType = "access.membership.disabled"
+			eventType = accessEventMembershipDisabled
 		}
-		if err := s.repository.SetMembership(ctx, membership, s.membershipEvent(eventType, membership, now, input.Meta.Reason)); err != nil {
+		event, err := s.membershipEvent(eventType, membership, now, input.Meta.Reason)
+		if err != nil {
+			return entity.Membership{}, err
+		}
+		if err := s.repository.SetMembership(ctx, membership, event); err != nil {
 			return entity.Membership{}, err
 		}
 		return membership, nil
@@ -201,7 +200,11 @@ func (s *Service) SetMembership(ctx context.Context, input SetMembershipInput) (
 		Source:      source,
 	}
 
-	if err := s.repository.SetMembership(ctx, membership, s.membershipEvent("access.membership.created", membership, now, input.Meta.Reason)); err != nil {
+	event, err := s.membershipEvent(accessEventMembershipCreated, membership, now, input.Meta.Reason)
+	if err != nil {
+		return entity.Membership{}, err
+	}
+	if err := s.repository.SetMembership(ctx, membership, event); err != nil {
 		return entity.Membership{}, err
 	}
 	return membership, nil
@@ -234,12 +237,16 @@ func (s *Service) PutAllowlistEntry(ctx context.Context, input PutAllowlistEntry
 		DefaultStatus:  defaultStatus,
 		Status:         defaultAllowlistStatus(input.Status),
 	}
-	err = s.repository.PutAllowlistEntry(ctx, entry, s.event("access.allowlist_entry.created", "allowlist_entry", entry.ID, value.AccessEventPayload{
+	event, err := s.event(accessEventAllowlistEntryCreated, accessAggregateAllowlistEntry, entry.ID, value.AccessEventPayload{
 		AllowlistEntryID: entry.ID.String(),
 		MatchType:        string(entry.MatchType),
 		OrganizationID:   uuidPtrString(entry.OrganizationID),
 		Version:          entry.Version,
-	}, now))
+	}, now)
+	if err != nil {
+		return entity.AllowlistEntry{}, err
+	}
+	err = s.repository.PutAllowlistEntry(ctx, entry, event)
 	if err != nil {
 		return entity.AllowlistEntry{}, err
 	}
@@ -255,7 +262,7 @@ func (s *Service) BootstrapUserFromIdentity(ctx context.Context, input Bootstrap
 
 	existing, err := s.repository.GetUserByIdentity(ctx, input.Provider, input.Subject)
 	if err == nil {
-		return BootstrapUserFromIdentityResult{User: existing, Decision: decisionByUserStatus(existing.Status), ReasonCode: "identity_found"}, nil
+		return BootstrapUserFromIdentityResult{User: existing, Decision: decisionByUserStatus(existing.Status), ReasonCode: reasonIdentityFound}, nil
 	}
 	if !errors.Is(err, errs.ErrNotFound) {
 		return BootstrapUserFromIdentityResult{}, err
@@ -284,12 +291,16 @@ func (s *Service) BootstrapUserFromIdentity(ctx context.Context, input Bootstrap
 			EmailAtLogin: normalizedEmail,
 			LastLoginAt:  &now,
 		}
-		err = s.repository.LinkUserIdentity(ctx, identity, s.event("access.user.identity_linked", "user", existingByEmail.ID, value.AccessEventPayload{
+		event, err := s.event(accessEventUserIdentityLinked, accessAggregateUser, existingByEmail.ID, value.AccessEventPayload{
 			UserID:           existingByEmail.ID.String(),
 			IdentityID:       identity.ID.String(),
 			IdentityProvider: string(identity.Provider),
 			Version:          existingByEmail.Version,
-		}, now))
+		}, now)
+		if err != nil {
+			return BootstrapUserFromIdentityResult{}, err
+		}
+		err = s.repository.LinkUserIdentity(ctx, identity, event)
 		if err != nil {
 			return BootstrapUserFromIdentityResult{}, err
 		}
@@ -324,12 +335,16 @@ func (s *Service) BootstrapUserFromIdentity(ctx context.Context, input Bootstrap
 		LastLoginAt:  &now,
 	}
 
-	err = s.repository.CreateUser(ctx, user, identity, s.event("access.user.created", "user", user.ID, value.AccessEventPayload{
+	event, err := s.event(accessEventUserCreated, accessAggregateUser, user.ID, value.AccessEventPayload{
 		UserID:     user.ID.String(),
 		Status:     string(user.Status),
 		Version:    user.Version,
 		IdentityID: identity.ID.String(),
-	}, now))
+	}, now)
+	if err != nil {
+		return BootstrapUserFromIdentityResult{}, err
+	}
+	err = s.repository.CreateUser(ctx, user, identity, event)
 	if err != nil {
 		return BootstrapUserFromIdentityResult{}, err
 	}
@@ -354,11 +369,15 @@ func (s *Service) PutExternalProvider(ctx context.Context, input PutExternalProv
 		DisplayName: strings.TrimSpace(input.DisplayName), IconAssetRef: strings.TrimSpace(input.IconAssetRef),
 		Status: defaultExternalProviderStatus(input.Status),
 	}
-	err := s.repository.PutExternalProvider(ctx, provider, s.event("access.external_provider.created", "external_provider", provider.ID, value.AccessEventPayload{
+	event, err := s.event(accessEventExternalProviderCreated, accessAggregateExternalProvider, provider.ID, value.AccessEventPayload{
 		ExternalProviderID: provider.ID.String(),
 		Slug:               provider.Slug,
 		Version:            provider.Version,
-	}, now))
+	}, now)
+	if err != nil {
+		return entity.ExternalProvider{}, err
+	}
+	err = s.repository.PutExternalProvider(ctx, provider, event)
 	if err != nil {
 		return entity.ExternalProvider{}, err
 	}
@@ -381,13 +400,17 @@ func (s *Service) RegisterExternalAccount(ctx context.Context, input RegisterExt
 		OwnerScopeType: input.OwnerScopeType, OwnerScopeID: strings.TrimSpace(input.OwnerScopeID),
 		Status: defaultExternalAccountStatus(input.Status), SecretBindingRefID: input.SecretBindingRefID,
 	}
-	if err := s.repository.RegisterExternalAccount(ctx, account, s.createdEvent(
-		"access.external_account.created", "external_account", account.ID, now,
+	event, err := s.createdEvent(
+		accessEventExternalAccountCreated, accessAggregateExternalAccount, account.ID, now,
 		payloadString(accessPayloadExternalAccountID, account.ID.String()),
 		payloadString(accessPayloadExternalProviderID, account.ExternalProviderID.String()),
 		payloadString(accessPayloadAccountType, string(account.AccountType)),
 		payloadVersion(account.Version),
-	)); err != nil {
+	)
+	if err != nil {
+		return entity.ExternalAccount{}, err
+	}
+	if err := s.repository.RegisterExternalAccount(ctx, account, event); err != nil {
 		return entity.ExternalAccount{}, err
 	}
 	return account, nil
@@ -418,14 +441,18 @@ func (s *Service) BindExternalAccount(ctx context.Context, input BindExternalAcc
 		UsageScopeID: strings.TrimSpace(input.UsageScopeID), AllowedActionKeys: allowedActionKeys,
 		Status: defaultExternalAccountBindingStatus(input.Status),
 	}
-	if err := s.repository.BindExternalAccount(ctx, binding, s.createdEvent(
-		"access.external_account_binding.created", "external_account_binding", binding.ID, now,
+	event, err := s.createdEvent(
+		accessEventExternalAccountBindingCreated, accessAggregateExternalAccountBinding, binding.ID, now,
 		payloadString(accessPayloadExternalAccountBindingID, binding.ID.String()),
 		payloadString(accessPayloadExternalAccountID, binding.ExternalAccountID.String()),
 		payloadString(accessPayloadUsageScopeType, string(binding.UsageScopeType)),
 		payloadString(accessPayloadUsageScopeID, binding.UsageScopeID),
 		payloadVersion(binding.Version),
-	)); err != nil {
+	)
+	if err != nil {
+		return entity.ExternalAccountBinding{}, err
+	}
+	if err := s.repository.BindExternalAccount(ctx, binding, event); err != nil {
 		return entity.ExternalAccountBinding{}, err
 	}
 	return binding, nil
@@ -443,11 +470,15 @@ func (s *Service) PutAccessAction(ctx context.Context, input PutAccessActionInpu
 		Description: strings.TrimSpace(input.Description), ResourceType: strings.TrimSpace(input.ResourceType),
 		Status: defaultAccessActionStatus(input.Status),
 	}
-	err := s.repository.PutAccessAction(ctx, action, s.event("access.access_action.created", "access_action", action.ID, value.AccessEventPayload{
+	event, err := s.event(accessEventAccessActionCreated, accessAggregateAccessAction, action.ID, value.AccessEventPayload{
 		AccessActionID: action.ID.String(),
 		ActionKey:      action.Key,
 		Version:        action.Version,
-	}, now))
+	}, now)
+	if err != nil {
+		return entity.AccessAction{}, err
+	}
+	err = s.repository.PutAccessAction(ctx, action, event)
 	if err != nil {
 		return entity.AccessAction{}, err
 	}
@@ -477,14 +508,18 @@ func (s *Service) PutAccessRule(ctx context.Context, input PutAccessRuleInput) (
 		ScopeType: input.ScopeType, ScopeID: input.ScopeID, Priority: input.Priority,
 		Status: defaultAccessRuleStatus(input.Status),
 	}
-	err = s.repository.PutAccessRule(ctx, rule, s.event("access.access_rule.created", "access_rule", rule.ID, value.AccessEventPayload{
+	event, err := s.event(accessEventAccessRuleCreated, accessAggregateAccessRule, rule.ID, value.AccessEventPayload{
 		AccessRuleID: rule.ID.String(),
 		Effect:       string(rule.Effect),
 		ActionKey:    rule.ActionKey,
 		ScopeType:    rule.ScopeType,
 		ScopeID:      rule.ScopeID,
 		Version:      rule.Version,
-	}, now))
+	}, now)
+	if err != nil {
+		return entity.AccessRule{}, err
+	}
+	err = s.repository.PutAccessRule(ctx, rule, event)
 	if err != nil {
 		return entity.AccessRule{}, err
 	}

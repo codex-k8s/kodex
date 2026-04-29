@@ -22,7 +22,7 @@ func (s *Service) recordDecision(ctx context.Context, input CheckAccessInput, de
 		}
 		var event *entity.OutboxEvent
 		if decision == enum.AccessDecisionDeny {
-			evt := s.event("access.access_decision.recorded", "access_decision_audit", audit.ID, value.AccessEventPayload{
+			evt, err := s.event(accessEventAccessDecisionRecorded, accessAggregateAccessDecisionAudit, audit.ID, value.AccessEventPayload{
 				AccessDecisionAuditID: audit.ID.String(),
 				SubjectType:           audit.Subject.Type,
 				SubjectID:             audit.Subject.ID,
@@ -30,6 +30,9 @@ func (s *Service) recordDecision(ctx context.Context, input CheckAccessInput, de
 				Decision:              string(audit.Decision),
 				ReasonCode:            audit.ReasonCode,
 			}, now)
+			if err != nil {
+				return CheckAccessResult{}, err
+			}
 			event = &evt
 		}
 		if err := s.repository.RecordAccessDecision(ctx, audit, event); err != nil {

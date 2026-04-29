@@ -16,15 +16,15 @@ import (
 
 func (s *Service) resolveSubjects(ctx context.Context, subject value.SubjectRef) ([]value.SubjectRef, string, error) {
 	subjects := []value.SubjectRef{subject}
-	if subject.Type != string(enum.AccessSubjectUser) && subject.Type != string(enum.AccessSubjectExternalAccount) {
-		return subjects, "", nil
-	}
 	blocked, err := s.isBlockedAccessSubject(ctx, subject)
 	if err != nil {
 		return nil, "", err
 	}
 	if blocked {
 		return subjects, reasonSubjectBlocked, nil
+	}
+	if _, ok := accessSubjectToMembershipSubject(subject.Type); !ok {
+		return subjects, "", nil
 	}
 	seen := map[string]struct{}{subject.Type + ":" + subject.ID: {}}
 	queue := []value.SubjectRef{{Type: subject.Type, ID: subject.ID}}
@@ -35,6 +35,16 @@ func (s *Service) resolveSubjects(ctx context.Context, subject value.SubjectRef)
 		if !ok {
 			continue
 		}
+		if current.Type == string(enum.AccessSubjectGroup) {
+			currentGroupID, err := uuid.Parse(current.ID)
+			if err != nil {
+				return nil, "", errs.ErrInvalidArgument
+			}
+			subjects, queue, err = s.appendParentGroups(ctx, subjects, queue, seen, currentGroupID)
+			if err != nil {
+				return nil, "", err
+			}
+		}
 		memberships, err := s.repository.ListMemberships(ctx, query.MembershipGraphFilter{
 			Subject: value.SubjectRef{Type: string(currentMembershipType), ID: current.ID}, Status: enum.MembershipStatusActive,
 		})
@@ -42,8 +52,11 @@ func (s *Service) resolveSubjects(ctx context.Context, subject value.SubjectRef)
 			return nil, "", err
 		}
 		for _, membership := range memberships {
-			target := membershipTargetToAccessSubject(membership)
-			if target.ID == "" {
+			target, effective, err := s.effectiveMembershipTarget(ctx, membership)
+			if err != nil {
+				return nil, "", err
+			}
+			if !effective {
 				continue
 			}
 			subjects, queue = appendResolvedSubject(subjects, queue, seen, target)
@@ -59,9 +72,9 @@ func (s *Service) resolveSubjects(ctx context.Context, subject value.SubjectRef)
 }
 
 func (s *Service) isBlockedAccessSubject(ctx context.Context, subject value.SubjectRef) (bool, error) {
-	subjectID, err := uuid.Parse(subject.ID)
-	if err != nil {
-		return false, errs.ErrInvalidArgument
+	subjectID, parsed, err := parseStoredAccessSubjectID(subject)
+	if err != nil || !parsed {
+		return false, err
 	}
 	switch subject.Type {
 	case string(enum.AccessSubjectUser):
@@ -75,9 +88,37 @@ func (s *Service) isBlockedAccessSubject(ctx context.Context, subject value.Subj
 		if err != nil {
 			return false, err
 		}
-		return account.Status == enum.ExternalAccountStatusBlocked || account.Status == enum.ExternalAccountStatusDisabled, nil
+		return account.Status != enum.ExternalAccountStatusActive, nil
+	case string(enum.AccessSubjectGroup):
+		group, err := s.repository.GetGroup(ctx, subjectID)
+		if err != nil {
+			return false, err
+		}
+		return group.Status != enum.GroupStatusActive, nil
+	case string(enum.AccessSubjectOrganization):
+		organization, err := s.repository.GetOrganization(ctx, subjectID)
+		if err != nil {
+			return false, err
+		}
+		return organization.Status != enum.OrganizationStatusActive, nil
 	default:
 		return false, nil
+	}
+}
+
+func parseStoredAccessSubjectID(subject value.SubjectRef) (uuid.UUID, bool, error) {
+	switch subject.Type {
+	case string(enum.AccessSubjectUser),
+		string(enum.AccessSubjectExternalAccount),
+		string(enum.AccessSubjectGroup),
+		string(enum.AccessSubjectOrganization):
+		subjectID, err := uuid.Parse(subject.ID)
+		if err != nil {
+			return uuid.Nil, false, errs.ErrInvalidArgument
+		}
+		return subjectID, true, nil
+	default:
+		return uuid.Nil, false, nil
 	}
 }
 
@@ -166,15 +207,30 @@ func accessSubjectToMembershipSubject(subjectType string) (enum.MembershipSubjec
 	}
 }
 
-func membershipTargetToAccessSubject(membership entity.Membership) value.SubjectRef {
+func (s *Service) effectiveMembershipTarget(ctx context.Context, membership entity.Membership) (value.SubjectRef, bool, error) {
 	switch membership.TargetType {
 	case enum.MembershipTargetOrganization:
-		return value.SubjectRef{Type: string(enum.AccessSubjectOrganization), ID: membership.TargetID.String()}
+		organization, err := s.repository.GetOrganization(ctx, membership.TargetID)
+		if err != nil {
+			return value.SubjectRef{}, false, err
+		}
+		return effectiveSubjectRef(string(enum.AccessSubjectOrganization), organization.ID, organization.Status == enum.OrganizationStatusActive)
 	case enum.MembershipTargetGroup:
-		return value.SubjectRef{Type: string(enum.AccessSubjectGroup), ID: membership.TargetID.String()}
+		group, err := s.repository.GetGroup(ctx, membership.TargetID)
+		if err != nil {
+			return value.SubjectRef{}, false, err
+		}
+		return effectiveSubjectRef(string(enum.AccessSubjectGroup), group.ID, group.Status == enum.GroupStatusActive)
 	default:
-		return value.SubjectRef{}
+		return value.SubjectRef{}, false, nil
 	}
+}
+
+func effectiveSubjectRef(subjectType string, id uuid.UUID, active bool) (value.SubjectRef, bool, error) {
+	if !active {
+		return value.SubjectRef{}, false, nil
+	}
+	return value.SubjectRef{Type: subjectType, ID: id.String()}, true, nil
 }
 
 func appendResolvedSubject(
@@ -207,15 +263,25 @@ func (s *Service) appendParentGroups(
 		if err != nil {
 			return nil, nil, err
 		}
+		if group.Status != enum.GroupStatusActive {
+			return subjects, queue, nil
+		}
 		if group.ParentGroupID == nil {
 			return subjects, queue, nil
 		}
-		parent := value.SubjectRef{Type: string(enum.AccessSubjectGroup), ID: group.ParentGroupID.String()}
+		parentGroup, err := s.repository.GetGroup(ctx, *group.ParentGroupID)
+		if err != nil {
+			return nil, nil, err
+		}
+		if parentGroup.Status != enum.GroupStatusActive {
+			return subjects, queue, nil
+		}
+		parent := value.SubjectRef{Type: string(enum.AccessSubjectGroup), ID: parentGroup.ID.String()}
 		if _, ok := seen[parent.Type+":"+parent.ID]; ok {
 			return subjects, queue, nil
 		}
 		subjects, queue = appendResolvedSubject(subjects, queue, seen, parent)
-		groupID = *group.ParentGroupID
+		groupID = parentGroup.ID
 	}
 }
 

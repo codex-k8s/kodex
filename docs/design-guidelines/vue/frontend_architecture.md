@@ -30,7 +30,7 @@
 ## Границы ответственности
 
 - Frontend не реализует backend бизнес-логику.
-- Контракт с backend: HTTP/OpenAPI (`specs/openapi/<service-name>.v<major>.yaml`) и стабильный формат ошибок.
+- Контракт с backend: HTTP/OpenAPI gateway-поверхности (`specs/openapi/<gateway-surface>.v<major>.yaml`) и стабильный формат ошибок.
 - Контракт async сообщений (если есть): AsyncAPI (`specs/asyncapi/<service-name>.v<major>.yaml`).
 - OAuth state и permissions приходят из backend; frontend не хранит доверенные полномочия локально как источник истины.
 
