@@ -170,6 +170,38 @@ func TestPutAllowlistEntryRejectsBlockedDefaultStatus(t *testing.T) {
 	}
 }
 
+func TestPutAllowlistEntryKeepsIdentityOnRepeat(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+
+	created, err := svc.PutAllowlistEntry(ctx, PutAllowlistEntryInput{
+		MatchType: enum.AllowlistMatchEmail, Value: "Owner@Example.com", DefaultStatus: enum.UserStatusActive,
+	})
+	if err != nil {
+		t.Fatalf("create allowlist: %v", err)
+	}
+	repeated, err := svc.PutAllowlistEntry(ctx, PutAllowlistEntryInput{
+		MatchType: enum.AllowlistMatchEmail, Value: "owner@example.com", DefaultStatus: enum.UserStatusActive,
+	})
+	if err != nil {
+		t.Fatalf("repeat allowlist: %v", err)
+	}
+	if repeated.ID != created.ID || repeated.Version != created.Version {
+		t.Fatalf("repeat changed identity/version: id %s/%s version %d/%d", repeated.ID, created.ID, repeated.Version, created.Version)
+	}
+	updated, err := svc.PutAllowlistEntry(ctx, PutAllowlistEntryInput{
+		MatchType: enum.AllowlistMatchEmail, Value: "owner@example.com", DefaultStatus: enum.UserStatusPending,
+		Meta: value.CommandMeta{ExpectedVersion: ptrInt64(created.Version)},
+	})
+	if err != nil {
+		t.Fatalf("update allowlist: %v", err)
+	}
+	if updated.ID != created.ID || updated.Version != created.Version+1 {
+		t.Fatalf("update identity/version = %s/%d, want %s/%d", updated.ID, updated.Version, created.ID, created.Version+1)
+	}
+}
+
 func TestCheckAccessExplicitDenyWins(t *testing.T) {
 	ctx := context.Background()
 	store := newMemoryRepository()
@@ -616,6 +648,50 @@ func TestBindExternalAccountRequiresCatalogAction(t *testing.T) {
 	}
 }
 
+func TestBindExternalAccountKeepsIdentityOnUpdate(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	provider, err := svc.PutExternalProvider(ctx, PutExternalProviderInput{
+		Slug: "github", ProviderKind: enum.ExternalProviderRepository, DisplayName: "GitHub",
+	})
+	if err != nil {
+		t.Fatalf("put provider: %v", err)
+	}
+	account, err := svc.RegisterExternalAccount(ctx, RegisterExternalAccountInput{
+		ExternalProviderID: provider.ID, AccountType: enum.ExternalAccountBot, DisplayName: "kodex-agent",
+	})
+	if err != nil {
+		t.Fatalf("register account: %v", err)
+	}
+	_, err = svc.PutAccessAction(ctx, PutAccessActionInput{Key: "provider.issue.write", DisplayName: "Запись Issue", ResourceType: "provider_issue"})
+	if err != nil {
+		t.Fatalf("put first action: %v", err)
+	}
+	_, err = svc.PutAccessAction(ctx, PutAccessActionInput{Key: "provider.pr.write", DisplayName: "Запись PR", ResourceType: "provider_pr"})
+	if err != nil {
+		t.Fatalf("put second action: %v", err)
+	}
+	created, err := svc.BindExternalAccount(ctx, BindExternalAccountInput{
+		ExternalAccountID: account.ID, UsageScopeType: enum.ExternalAccountScopeProject, UsageScopeID: "project-1",
+		AllowedActionKeys: []string{"provider.issue.write"},
+	})
+	if err != nil {
+		t.Fatalf("bind account: %v", err)
+	}
+	updated, err := svc.BindExternalAccount(ctx, BindExternalAccountInput{
+		ExternalAccountID: account.ID, UsageScopeType: enum.ExternalAccountScopeProject, UsageScopeID: "project-1",
+		AllowedActionKeys: []string{"provider.issue.write", "provider.pr.write"},
+		Meta:              value.CommandMeta{ExpectedVersion: ptrInt64(created.Version)},
+	})
+	if err != nil {
+		t.Fatalf("update binding: %v", err)
+	}
+	if updated.ID != created.ID || updated.Version != created.Version+1 {
+		t.Fatalf("update identity/version = %s/%d, want %s/%d", updated.ID, updated.Version, created.ID, created.Version+1)
+	}
+}
+
 func TestPutAccessRuleRequiresActiveCatalogAction(t *testing.T) {
 	ctx := context.Background()
 	store := newMemoryRepository()
@@ -634,6 +710,73 @@ func TestPutAccessRuleRequiresActiveCatalogAction(t *testing.T) {
 	})
 	if !errors.Is(err, errs.ErrPreconditionFailed) {
 		t.Fatalf("err = %v, want %v", err, errs.ErrPreconditionFailed)
+	}
+}
+
+func TestRegisterExternalAccountRejectsInvalidOwnerScope(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	provider, err := svc.PutExternalProvider(ctx, PutExternalProviderInput{
+		Slug: "github", ProviderKind: enum.ExternalProviderRepository, DisplayName: "GitHub",
+	})
+	if err != nil {
+		t.Fatalf("put provider: %v", err)
+	}
+	_, err = svc.RegisterExternalAccount(ctx, RegisterExternalAccountInput{
+		ExternalProviderID: provider.ID, AccountType: enum.ExternalAccountBot, DisplayName: "bad",
+		OwnerScopeType: enum.ExternalAccountScopeStage, OwnerScopeID: "stage-1",
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+	_, err = svc.RegisterExternalAccount(ctx, RegisterExternalAccountInput{
+		ExternalProviderID: provider.ID, AccountType: enum.ExternalAccountBot, DisplayName: "bad",
+		OwnerScopeType: enum.ExternalAccountScopeProject,
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("missing scope id err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+}
+
+func TestPutAccessRuleKeepsIdentityOnUpdate(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	user := store.seedUser(enum.UserStatusActive)
+	action, err := svc.PutAccessAction(ctx, PutAccessActionInput{
+		Key: "project.read", DisplayName: "Чтение проекта", ResourceType: "project",
+	})
+	if err != nil {
+		t.Fatalf("put action: %v", err)
+	}
+	created, err := svc.PutAccessRule(ctx, PutAccessRuleInput{
+		Effect: enum.AccessEffectAllow, SubjectType: enum.AccessSubjectUser, SubjectID: user.ID.String(),
+		ActionKey: action.Key, ResourceType: "project", ScopeType: "global",
+	})
+	if err != nil {
+		t.Fatalf("put rule: %v", err)
+	}
+	repeated, err := svc.PutAccessRule(ctx, PutAccessRuleInput{
+		Effect: enum.AccessEffectAllow, SubjectType: enum.AccessSubjectUser, SubjectID: user.ID.String(),
+		ActionKey: action.Key, ResourceType: "project", ScopeType: "global",
+	})
+	if err != nil {
+		t.Fatalf("repeat rule: %v", err)
+	}
+	if repeated.ID != created.ID || repeated.Version != created.Version {
+		t.Fatalf("repeat changed identity/version: id %s/%s version %d/%d", repeated.ID, created.ID, repeated.Version, created.Version)
+	}
+	updated, err := svc.PutAccessRule(ctx, PutAccessRuleInput{
+		Effect: enum.AccessEffectAllow, SubjectType: enum.AccessSubjectUser, SubjectID: user.ID.String(),
+		ActionKey: action.Key, ResourceType: "project", ScopeType: "global", Priority: 50,
+		Meta: value.CommandMeta{ExpectedVersion: ptrInt64(created.Version)},
+	})
+	if err != nil {
+		t.Fatalf("update rule: %v", err)
+	}
+	if updated.ID != created.ID || updated.Version != created.Version+1 {
+		t.Fatalf("update identity/version = %s/%d, want %s/%d", updated.ID, updated.Version, created.ID, created.Version+1)
 	}
 }
 
@@ -860,6 +1003,15 @@ func (r *memoryRepository) GetExternalProvider(_ context.Context, id uuid.UUID) 
 	return provider, nil
 }
 
+func (r *memoryRepository) GetExternalProviderBySlug(_ context.Context, slug string) (entity.ExternalProvider, error) {
+	for _, provider := range r.providers {
+		if provider.Slug == slug {
+			return provider, nil
+		}
+	}
+	return entity.ExternalProvider{}, errs.ErrNotFound
+}
+
 func (r *memoryRepository) RegisterExternalAccount(_ context.Context, account entity.ExternalAccount, event entity.OutboxEvent) error {
 	r.accounts[account.ID] = account
 	r.events = append(r.events, event)
@@ -875,6 +1027,12 @@ func (r *memoryRepository) GetExternalAccount(_ context.Context, id uuid.UUID) (
 }
 
 func (r *memoryRepository) BindExternalAccount(_ context.Context, binding entity.ExternalAccountBinding, event entity.OutboxEvent) error {
+	for id, existing := range r.bindings {
+		if sameExternalAccountBindingIdentity(existing, binding) && id != binding.ID {
+			delete(r.bindings, id)
+			break
+		}
+	}
 	r.bindings[binding.ID] = binding
 	r.events = append(r.events, event)
 	return nil
@@ -883,6 +1041,17 @@ func (r *memoryRepository) BindExternalAccount(_ context.Context, binding entity
 func (r *memoryRepository) FindExternalAccountBinding(_ context.Context, filter query.ExternalAccountUsageFilter) (entity.ExternalAccountBinding, error) {
 	for _, binding := range r.bindings {
 		if binding.ExternalAccountID == filter.ExternalAccountID && string(binding.UsageScopeType) == filter.UsageScope.Type && binding.UsageScopeID == filter.UsageScope.ID {
+			return binding, nil
+		}
+	}
+	return entity.ExternalAccountBinding{}, errs.ErrNotFound
+}
+
+func (r *memoryRepository) FindExternalAccountBindingByIdentity(_ context.Context, identity query.ExternalAccountBindingIdentity) (entity.ExternalAccountBinding, error) {
+	for _, binding := range r.bindings {
+		if binding.ExternalAccountID == identity.ExternalAccountID &&
+			string(binding.UsageScopeType) == identity.UsageScope.Type &&
+			binding.UsageScopeID == identity.UsageScope.ID {
 			return binding, nil
 		}
 	}
@@ -918,9 +1087,31 @@ func (r *memoryRepository) GetAccessActionByKey(_ context.Context, key string) (
 }
 
 func (r *memoryRepository) PutAccessRule(_ context.Context, rule entity.AccessRule, event entity.OutboxEvent) error {
+	for id, existing := range r.rules {
+		if sameAccessRuleIdentity(existing, rule) && id != rule.ID {
+			delete(r.rules, id)
+			break
+		}
+	}
 	r.rules[rule.ID] = rule
 	r.events = append(r.events, event)
 	return nil
+}
+
+func (r *memoryRepository) FindAccessRule(_ context.Context, identity query.AccessRuleIdentity) (entity.AccessRule, error) {
+	for _, rule := range r.rules {
+		if rule.Effect == identity.Effect &&
+			rule.SubjectType == identity.SubjectType &&
+			rule.SubjectID == identity.SubjectID &&
+			rule.ActionKey == identity.ActionKey &&
+			rule.ResourceType == identity.ResourceType &&
+			rule.ResourceID == identity.ResourceID &&
+			rule.ScopeType == identity.ScopeType &&
+			rule.ScopeID == identity.ScopeID {
+			return rule, nil
+		}
+	}
+	return entity.AccessRule{}, errs.ErrNotFound
 }
 
 func (r *memoryRepository) ListAccessRules(_ context.Context, filter query.AccessRuleFilter) ([]entity.AccessRule, error) {
@@ -986,6 +1177,21 @@ func allowlistKey(matchType enum.AllowlistMatchType, value string) string {
 
 func sameMembershipIdentity(a entity.Membership, b entity.Membership) bool {
 	return a.SubjectType == b.SubjectType && a.SubjectID == b.SubjectID && a.TargetType == b.TargetType && a.TargetID == b.TargetID
+}
+
+func sameExternalAccountBindingIdentity(a entity.ExternalAccountBinding, b entity.ExternalAccountBinding) bool {
+	return a.ExternalAccountID == b.ExternalAccountID && a.UsageScopeType == b.UsageScopeType && a.UsageScopeID == b.UsageScopeID
+}
+
+func sameAccessRuleIdentity(a entity.AccessRule, b entity.AccessRule) bool {
+	return a.Effect == b.Effect &&
+		a.SubjectType == b.SubjectType &&
+		a.SubjectID == b.SubjectID &&
+		a.ActionKey == b.ActionKey &&
+		a.ResourceType == b.ResourceType &&
+		a.ResourceID == b.ResourceID &&
+		a.ScopeType == b.ScopeType &&
+		a.ScopeID == b.ScopeID
 }
 
 func ptrInt64(value int64) *int64 {

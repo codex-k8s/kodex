@@ -30,13 +30,13 @@ func wrapError(operation string, err error) error {
 	if errors.As(err, &pgErr) {
 		switch pgErr.Code {
 		case postgresUniqueViolation:
-			return fmt.Errorf("%s: %w", operation, errs.ErrAlreadyExists)
+			return fmt.Errorf("%s: %w", operation, errors.Join(errs.ErrAlreadyExists, err))
 		case postgresForeignKeyViolation:
-			return fmt.Errorf("%s: %w", operation, errs.ErrPreconditionFailed)
+			return fmt.Errorf("%s: %w", operation, errors.Join(errs.ErrPreconditionFailed, err))
 		case postgresCheckViolation:
-			return fmt.Errorf("%s: %w", operation, errs.ErrInvalidArgument)
+			return fmt.Errorf("%s: %w", operation, errors.Join(errs.ErrInvalidArgument, err))
 		case postgresSerialization, postgresDeadlock:
-			return fmt.Errorf("%s: %w", operation, errs.ErrConflict)
+			return fmt.Errorf("%s: %w", operation, errors.Join(errs.ErrConflict, err))
 		}
 	}
 

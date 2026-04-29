@@ -17,14 +17,18 @@ help:
 lint: lint-go dupl-go
 
 lint-go:
-	@packages="$$(for root in services libs cmd; do \
+	@packages="$$(for root in services cmd; do \
 		if [ -d "$$root" ]; then printf './%s/... ' "$$root"; fi; \
 	done)"; \
 	if [ -z "$$packages" ]; then \
 		echo "lint-go: no active Go packages"; \
-		exit 0; \
+	else \
+		golangci-lint run $$packages; \
 	fi; \
-	golangci-lint run $$packages
+	for module in $$(find libs -name go.mod -not -path '*/vendor/*' -exec dirname {} \; 2>/dev/null | sort); do \
+		echo "lint-go: $$module"; \
+		(cd "$$module" && golangci-lint run ./...); \
+	done
 
 dupl-go:
 	@tmp="$$(mktemp)"; \
@@ -53,14 +57,18 @@ dupl-go:
 	rm -f "$$tmp" "$$filtered" "$$candidates"
 
 test-go:
-	@packages="$$(for root in services libs cmd proto/gen/go; do \
+	@packages="$$(for root in services cmd proto/gen/go; do \
 		if [ -d "$$root" ]; then go list ./$$root/...; fi; \
 	done)"; \
 	if [ -z "$$packages" ]; then \
 		echo "test-go: no active Go packages"; \
-		exit 0; \
+	else \
+		go test $$packages; \
 	fi; \
-	go test $$packages
+	for module in $$(find libs -name go.mod -not -path '*/vendor/*' -exec dirname {} \; 2>/dev/null | sort); do \
+		echo "test-go: $$module"; \
+		(cd "$$module" && go test ./...); \
+	done
 
 test-go-migrations:
 	@migration_files="$$(find services -path '*/cmd/cli/migrations/*.sql' -not -path '*/deprecated/*' -print 2>/dev/null | sort)"; \

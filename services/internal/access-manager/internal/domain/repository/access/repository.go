@@ -48,6 +48,8 @@ type Repository interface {
 	PutExternalProvider(ctx context.Context, provider entity.ExternalProvider, event entity.OutboxEvent) error
 	// GetExternalProvider returns an external provider by id.
 	GetExternalProvider(ctx context.Context, id uuid.UUID) (entity.ExternalProvider, error)
+	// GetExternalProviderBySlug returns an external provider by stable slug.
+	GetExternalProviderBySlug(ctx context.Context, slug string) (entity.ExternalProvider, error)
 	// RegisterExternalAccount stores an external account and its outbox event.
 	RegisterExternalAccount(ctx context.Context, account entity.ExternalAccount, event entity.OutboxEvent) error
 	// GetExternalAccount returns an external account by id.
@@ -56,6 +58,8 @@ type Repository interface {
 	BindExternalAccount(ctx context.Context, binding entity.ExternalAccountBinding, event entity.OutboxEvent) error
 	// FindExternalAccountBinding returns a binding for requested account usage.
 	FindExternalAccountBinding(ctx context.Context, filter query.ExternalAccountUsageFilter) (entity.ExternalAccountBinding, error)
+	// FindExternalAccountBindingByIdentity returns a binding by account and usage scope.
+	FindExternalAccountBindingByIdentity(ctx context.Context, identity query.ExternalAccountBindingIdentity) (entity.ExternalAccountBinding, error)
 	// PutSecretBindingRef upserts a secret reference and its outbox event.
 	PutSecretBindingRef(ctx context.Context, secret entity.SecretBindingRef, event entity.OutboxEvent) error
 	// GetSecretBindingRef returns a secret reference by id.
@@ -66,6 +70,8 @@ type Repository interface {
 	GetAccessActionByKey(ctx context.Context, key string) (entity.AccessAction, error)
 	// PutAccessRule upserts a policy rule and its outbox event.
 	PutAccessRule(ctx context.Context, rule entity.AccessRule, event entity.OutboxEvent) error
+	// FindAccessRule returns a policy rule by stable business identity.
+	FindAccessRule(ctx context.Context, identity query.AccessRuleIdentity) (entity.AccessRule, error)
 	// ListAccessRules returns policy rules applicable to a check.
 	ListAccessRules(ctx context.Context, filter query.AccessRuleFilter) ([]entity.AccessRule, error)
 	// RecordAccessDecision stores an audit record and optional outbox event.

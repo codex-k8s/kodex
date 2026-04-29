@@ -31,9 +31,27 @@ type AccessRuleFilter struct {
 	Scope        value.ScopeRef
 }
 
+// AccessRuleIdentity is the stable business identity of one policy rule.
+type AccessRuleIdentity struct {
+	Effect       enum.AccessEffect
+	SubjectType  enum.AccessSubjectType
+	SubjectID    string
+	ActionKey    string
+	ResourceType string
+	ResourceID   string
+	ScopeType    string
+	ScopeID      string
+}
+
 // ExternalAccountUsageFilter selects an account binding for a requested usage.
 type ExternalAccountUsageFilter struct {
 	ExternalAccountID uuid.UUID
 	ActionKey         string
+	UsageScope        value.ScopeRef
+}
+
+// ExternalAccountBindingIdentity is the stable business identity of account usage binding.
+type ExternalAccountBindingIdentity struct {
+	ExternalAccountID uuid.UUID
 	UsageScope        value.ScopeRef
 }

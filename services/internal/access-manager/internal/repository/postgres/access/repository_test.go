@@ -1,17 +1,25 @@
 package access
 
 import (
+	"context"
 	"errors"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/errs"
+	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/enum"
 )
 
 var sqlHeaderPattern = regexp.MustCompile(`^-- name: ([a-z0-9_]+__[a-z0-9_]+) :(one|many|exec)$`)
@@ -84,6 +92,227 @@ func TestWrapErrorMapsPostgresErrors(t *testing.T) {
 			if got := wrapError("test operation", tc.err); !errors.Is(got, tc.want) {
 				t.Fatalf("wrapError() = %v, want %v", got, tc.want)
 			}
+			var pgErr *pgconn.PgError
+			if errors.As(tc.err, &pgErr) && !errors.As(wrapError("test operation", tc.err), &pgErr) {
+				t.Fatalf("wrapError() lost postgres cause")
+			}
 		})
+	}
+}
+
+func TestRepositoryIntegrationMutationReadAndOutbox(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openIntegrationPool(t, ctx)
+	repository := NewRepository(pool)
+	now := time.Date(2026, 4, 30, 12, 0, 0, 0, time.UTC)
+	organization := entity.Organization{
+		Base:        entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		Kind:        enum.OrganizationKindOwner,
+		Slug:        "kodex",
+		DisplayName: "KODEX",
+		Status:      enum.OrganizationStatusActive,
+	}
+
+	if err := repository.CreateOrganization(ctx, organization, testEvent("access.organization.created", "organization", organization.ID, now)); err != nil {
+		t.Fatalf("create organization: %v", err)
+	}
+	stored, err := repository.GetOrganization(ctx, organization.ID)
+	if err != nil {
+		t.Fatalf("get organization: %v", err)
+	}
+	if stored.ID != organization.ID || stored.Slug != organization.Slug {
+		t.Fatalf("stored organization = %#v, want %#v", stored, organization)
+	}
+	if got := countTableRows(t, ctx, pool, "access_outbox_events"); got != 1 {
+		t.Fatalf("outbox events = %d, want 1", got)
+	}
+}
+
+func TestRepositoryIntegrationUpsertKeepsStableAggregate(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openIntegrationPool(t, ctx)
+	repository := NewRepository(pool)
+	now := time.Date(2026, 4, 30, 12, 0, 0, 0, time.UTC)
+	entry := entity.AllowlistEntry{
+		Base:          entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		MatchType:     enum.AllowlistMatchEmail,
+		Value:         "owner@example.com",
+		DefaultStatus: enum.UserStatusActive,
+		Status:        enum.AllowlistStatusActive,
+	}
+	if err := repository.PutAllowlistEntry(ctx, entry, testEvent("access.allowlist_entry.created", "allowlist_entry", entry.ID, now)); err != nil {
+		t.Fatalf("put allowlist entry: %v", err)
+	}
+
+	updated := entry
+	updated.Version = 2
+	updated.UpdatedAt = now.Add(time.Minute)
+	updated.DefaultStatus = enum.UserStatusPending
+	if err := repository.PutAllowlistEntry(ctx, updated, testEvent("access.allowlist_entry.updated", "allowlist_entry", entry.ID, updated.UpdatedAt)); err != nil {
+		t.Fatalf("update allowlist entry: %v", err)
+	}
+	stored, err := repository.FindAllowlistEntry(ctx, entry.MatchType, entry.Value)
+	if err != nil {
+		t.Fatalf("find allowlist entry: %v", err)
+	}
+	if stored.ID != entry.ID || !stored.CreatedAt.Equal(entry.CreatedAt) || stored.Version != 2 {
+		t.Fatalf("stored allowlist identity/version = %s/%s/%d, want %s/%s/2", stored.ID, stored.CreatedAt, stored.Version, entry.ID, entry.CreatedAt)
+	}
+
+	conflicting := updated
+	conflicting.ID = uuid.New()
+	conflicting.Version = 3
+	err = repository.PutAllowlistEntry(ctx, conflicting, testEvent("access.allowlist_entry.updated", "allowlist_entry", conflicting.ID, updated.UpdatedAt))
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("conflict err = %v, want %v", err, errs.ErrConflict)
+	}
+}
+
+func TestRepositoryIntegrationAccessRuleIdentityIsUnique(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openIntegrationPool(t, ctx)
+	repository := NewRepository(pool)
+	now := time.Date(2026, 4, 30, 12, 0, 0, 0, time.UTC)
+	action := entity.AccessAction{
+		Base:         entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		Key:          "project.read",
+		DisplayName:  "Project read",
+		ResourceType: "project",
+		Status:       enum.AccessActionStatusActive,
+	}
+	if err := repository.PutAccessAction(ctx, action, testEvent("access.access_action.created", "access_action", action.ID, now)); err != nil {
+		t.Fatalf("put action: %v", err)
+	}
+
+	rule := entity.AccessRule{
+		Base:         entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		Effect:       enum.AccessEffectAllow,
+		SubjectType:  enum.AccessSubjectUser,
+		SubjectID:    uuid.NewString(),
+		ActionKey:    action.Key,
+		ResourceType: "project",
+		ScopeType:    "global",
+		Status:       enum.AccessRuleStatusActive,
+	}
+	if err := repository.PutAccessRule(ctx, rule, testEvent("access.access_rule.created", "access_rule", rule.ID, now)); err != nil {
+		t.Fatalf("put rule: %v", err)
+	}
+	updated := rule
+	updated.Version = 2
+	updated.Priority = 10
+	updated.UpdatedAt = now.Add(time.Minute)
+	if err := repository.PutAccessRule(ctx, updated, testEvent("access.access_rule.updated", "access_rule", rule.ID, updated.UpdatedAt)); err != nil {
+		t.Fatalf("update rule: %v", err)
+	}
+	if got := countTableRows(t, ctx, pool, "access_rules"); got != 1 {
+		t.Fatalf("access rules = %d, want 1", got)
+	}
+}
+
+func openIntegrationPool(t *testing.T, ctx context.Context) *pgxpool.Pool {
+	t.Helper()
+
+	dsn := os.Getenv("KODEX_ACCESS_MANAGER_TEST_DATABASE_DSN")
+	if strings.TrimSpace(dsn) == "" {
+		t.Skip("set KODEX_ACCESS_MANAGER_TEST_DATABASE_DSN to run PostgreSQL repository integration tests")
+	}
+	adminPool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open admin pool: %v", err)
+	}
+	t.Cleanup(adminPool.Close)
+
+	schema := "access_repo_test_" + strings.ReplaceAll(uuid.NewString(), "-", "_")
+	quotedSchema := pgx.Identifier{schema}.Sanitize()
+	if _, err := adminPool.Exec(ctx, "CREATE SCHEMA "+quotedSchema); err != nil {
+		t.Fatalf("create test schema: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = adminPool.Exec(context.Background(), "DROP SCHEMA IF EXISTS "+quotedSchema+" CASCADE")
+	})
+
+	cfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		t.Fatalf("parse pool config: %v", err)
+	}
+	cfg.ConnConfig.RuntimeParams["search_path"] = schema
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		t.Fatalf("open test pool: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrations(t, ctx, pool)
+	return pool
+}
+
+func applyMigrations(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+
+	files, err := filepath.Glob("../../../../cmd/cli/migrations/*.sql")
+	if err != nil {
+		t.Fatalf("glob migrations: %v", err)
+	}
+	sort.Strings(files)
+	for _, file := range files {
+		content, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("read migration %s: %v", file, err)
+		}
+		for _, statement := range splitSQLStatements(upMigrationSQL(t, string(content), file)) {
+			if _, err := pool.Exec(ctx, statement); err != nil {
+				t.Fatalf("apply migration %s statement %q: %v", file, statement, err)
+			}
+		}
+	}
+}
+
+func upMigrationSQL(t *testing.T, content string, file string) string {
+	t.Helper()
+
+	upIndex := strings.Index(content, "-- +goose Up")
+	downIndex := strings.Index(content, "-- +goose Down")
+	if upIndex < 0 || downIndex < 0 || downIndex < upIndex {
+		t.Fatalf("invalid goose migration markers in %s", file)
+	}
+	return content[upIndex+len("-- +goose Up") : downIndex]
+}
+
+func splitSQLStatements(content string) []string {
+	parts := strings.Split(content, ";")
+	statements := make([]string, 0, len(parts))
+	for _, part := range parts {
+		statement := strings.TrimSpace(part)
+		if statement != "" {
+			statements = append(statements, statement)
+		}
+	}
+	return statements
+}
+
+func countTableRows(t *testing.T, ctx context.Context, pool *pgxpool.Pool, table string) int {
+	t.Helper()
+
+	var count int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM "+pgx.Identifier{table}.Sanitize()).Scan(&count); err != nil {
+		t.Fatalf("count %s: %v", table, err)
+	}
+	return count
+}
+
+func testEvent(eventType string, aggregateType string, aggregateID uuid.UUID, occurredAt time.Time) entity.OutboxEvent {
+	return entity.OutboxEvent{
+		ID:            uuid.New(),
+		EventType:     eventType,
+		SchemaVersion: 1,
+		AggregateType: aggregateType,
+		AggregateID:   aggregateID,
+		Payload:       []byte(`{}`),
+		OccurredAt:    occurredAt,
 	}
 }

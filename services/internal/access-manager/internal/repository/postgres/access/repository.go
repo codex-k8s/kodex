@@ -88,7 +88,7 @@ func (r *Repository) LinkUserIdentity(ctx context.Context, identity entity.UserI
 }
 
 func (r *Repository) PutAllowlistEntry(ctx context.Context, entry entity.AllowlistEntry, event entity.OutboxEvent) error {
-	return r.mutateWithOutbox(ctx, "put allowlist entry", event, mutation{query: queryAllowlistEntryUpsert, args: allowlistEntryArgs(entry)})
+	return r.mutateWithOutbox(ctx, "put allowlist entry", event, mutation{query: queryAllowlistEntryUpsert, args: allowlistEntryArgs(entry), requireAffected: true})
 }
 
 func (r *Repository) FindAllowlistEntry(ctx context.Context, matchType enum.AllowlistMatchType, value string) (entity.AllowlistEntry, error) {
@@ -113,7 +113,7 @@ func (r *Repository) FindMembership(ctx context.Context, identity query.Membersh
 }
 
 func (r *Repository) SetMembership(ctx context.Context, membership entity.Membership, event entity.OutboxEvent) error {
-	return r.mutateWithOutbox(ctx, "set membership", event, mutation{query: queryMembershipUpsert, args: membershipArgs(membership)})
+	return r.mutateWithOutbox(ctx, "set membership", event, mutation{query: queryMembershipUpsert, args: membershipArgs(membership), requireAffected: true})
 }
 
 func (r *Repository) ListMemberships(ctx context.Context, filter query.MembershipGraphFilter) ([]entity.Membership, error) {
@@ -134,11 +134,15 @@ func (r *Repository) ListMemberships(ctx context.Context, filter query.Membershi
 }
 
 func (r *Repository) PutExternalProvider(ctx context.Context, provider entity.ExternalProvider, event entity.OutboxEvent) error {
-	return r.mutateWithOutbox(ctx, "put external provider", event, mutation{query: queryExternalProviderCreate, args: externalProviderArgs(provider)})
+	return r.mutateWithOutbox(ctx, "put external provider", event, mutation{query: queryExternalProviderUpsert, args: externalProviderArgs(provider), requireAffected: true})
 }
 
 func (r *Repository) GetExternalProvider(ctx context.Context, id uuid.UUID) (entity.ExternalProvider, error) {
 	return queryOne(ctx, r.db, "get external provider", queryExternalProviderGetByID, pgx.NamedArgs{"id": id}, scanExternalProvider)
+}
+
+func (r *Repository) GetExternalProviderBySlug(ctx context.Context, slug string) (entity.ExternalProvider, error) {
+	return queryOne(ctx, r.db, "get external provider by slug", queryExternalProviderGetBySlug, pgx.NamedArgs{"slug": slug}, scanExternalProvider)
 }
 
 func (r *Repository) RegisterExternalAccount(ctx context.Context, account entity.ExternalAccount, event entity.OutboxEvent) error {
@@ -150,7 +154,7 @@ func (r *Repository) GetExternalAccount(ctx context.Context, id uuid.UUID) (enti
 }
 
 func (r *Repository) BindExternalAccount(ctx context.Context, binding entity.ExternalAccountBinding, event entity.OutboxEvent) error {
-	return r.mutateWithOutbox(ctx, "bind external account", event, mutation{query: queryExternalAccountBindingUpsert, args: externalAccountBindingArgs(binding)})
+	return r.mutateWithOutbox(ctx, "bind external account", event, mutation{query: queryExternalAccountBindingUpsert, args: externalAccountBindingArgs(binding), requireAffected: true})
 }
 
 func (r *Repository) FindExternalAccountBinding(ctx context.Context, filter query.ExternalAccountUsageFilter) (entity.ExternalAccountBinding, error) {
@@ -162,8 +166,16 @@ func (r *Repository) FindExternalAccountBinding(ctx context.Context, filter quer
 	}, scanExternalAccountBinding)
 }
 
+func (r *Repository) FindExternalAccountBindingByIdentity(ctx context.Context, identity query.ExternalAccountBindingIdentity) (entity.ExternalAccountBinding, error) {
+	return queryOne(ctx, r.db, "find external account binding by identity", queryExternalAccountBindingFindByIdentity, pgx.NamedArgs{
+		"external_account_id": identity.ExternalAccountID,
+		"usage_scope_type":    identity.UsageScope.Type,
+		"usage_scope_id":      identity.UsageScope.ID,
+	}, scanExternalAccountBinding)
+}
+
 func (r *Repository) PutSecretBindingRef(ctx context.Context, secret entity.SecretBindingRef, event entity.OutboxEvent) error {
-	return r.mutateWithOutbox(ctx, "put secret binding ref", event, mutation{query: querySecretBindingRefInsert, args: secretBindingRefArgs(secret)})
+	return r.mutateWithOutbox(ctx, "put secret binding ref", event, mutation{query: querySecretBindingRefUpsert, args: secretBindingRefArgs(secret), requireAffected: true})
 }
 
 func (r *Repository) GetSecretBindingRef(ctx context.Context, id uuid.UUID) (entity.SecretBindingRef, error) {
@@ -171,7 +183,7 @@ func (r *Repository) GetSecretBindingRef(ctx context.Context, id uuid.UUID) (ent
 }
 
 func (r *Repository) PutAccessAction(ctx context.Context, action entity.AccessAction, event entity.OutboxEvent) error {
-	return r.mutateWithOutbox(ctx, "put access action", event, mutation{query: queryAccessActionUpsert, args: accessActionArgs(action)})
+	return r.mutateWithOutbox(ctx, "put access action", event, mutation{query: queryAccessActionUpsert, args: accessActionArgs(action), requireAffected: true})
 }
 
 func (r *Repository) GetAccessActionByKey(ctx context.Context, key string) (entity.AccessAction, error) {
@@ -179,7 +191,20 @@ func (r *Repository) GetAccessActionByKey(ctx context.Context, key string) (enti
 }
 
 func (r *Repository) PutAccessRule(ctx context.Context, rule entity.AccessRule, event entity.OutboxEvent) error {
-	return r.mutateWithOutbox(ctx, "put access rule", event, mutation{query: queryAccessRuleInsert, args: accessRuleArgs(rule)})
+	return r.mutateWithOutbox(ctx, "put access rule", event, mutation{query: queryAccessRuleUpsert, args: accessRuleArgs(rule), requireAffected: true})
+}
+
+func (r *Repository) FindAccessRule(ctx context.Context, identity query.AccessRuleIdentity) (entity.AccessRule, error) {
+	return queryOne(ctx, r.db, "find access rule", queryAccessRuleFindByIdentity, pgx.NamedArgs{
+		"effect":        string(identity.Effect),
+		"subject_type":  string(identity.SubjectType),
+		"subject_id":    identity.SubjectID,
+		"action_key":    identity.ActionKey,
+		"resource_type": identity.ResourceType,
+		"resource_id":   identity.ResourceID,
+		"scope_type":    identity.ScopeType,
+		"scope_id":      identity.ScopeID,
+	}, scanAccessRule)
 }
 
 func (r *Repository) ListAccessRules(ctx context.Context, filter query.AccessRuleFilter) ([]entity.AccessRule, error) {
@@ -246,15 +271,20 @@ func (r *Repository) withTx(ctx context.Context, operation string, fn func(tx pg
 }
 
 type mutation struct {
-	query string
-	args  pgx.NamedArgs
+	query           string
+	args            pgx.NamedArgs
+	requireAffected bool
 }
 
 func (r *Repository) mutateWithOutbox(ctx context.Context, operation string, event entity.OutboxEvent, mutations ...mutation) error {
 	return r.withTx(ctx, operation, func(tx pgx.Tx) error {
 		for _, item := range mutations {
-			if _, err := tx.Exec(ctx, item.query, item.args); err != nil {
+			tag, err := tx.Exec(ctx, item.query, item.args)
+			if err != nil {
 				return err
+			}
+			if item.requireAffected && tag.RowsAffected() == 0 {
+				return errs.ErrConflict
 			}
 		}
 		return insertOutboxEvent(ctx, tx, event)

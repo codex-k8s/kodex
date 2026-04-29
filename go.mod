@@ -6,6 +6,7 @@ toolchain go1.25.8
 
 require (
 	github.com/caarlos0/env/v11 v11.3.1
+	github.com/codex-k8s/kodex/libs/go/postgres v0.0.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/prometheus/client_golang v1.23.2
@@ -33,3 +34,5 @@ require (
 	golang.org/x/text v0.33.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251029180050-ab9386a59fda // indirect
 )
+
+replace github.com/codex-k8s/kodex/libs/go/postgres => ./libs/go/postgres
