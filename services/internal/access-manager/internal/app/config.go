@@ -20,6 +20,10 @@ type Config struct {
 	DatabaseMaxConnIdleTime   time.Duration `env:"KODEX_ACCESS_MANAGER_DATABASE_MAX_CONN_IDLE_TIME" envDefault:"15m"`
 	DatabaseHealthCheckPeriod time.Duration `env:"KODEX_ACCESS_MANAGER_DATABASE_HEALTH_CHECK_PERIOD" envDefault:"30s"`
 	DatabasePingTimeout       time.Duration `env:"KODEX_ACCESS_MANAGER_DATABASE_PING_TIMEOUT" envDefault:"5s"`
+	DatabaseRetryMaxAttempts  int           `env:"KODEX_ACCESS_MANAGER_DATABASE_CONNECT_RETRY_MAX_ATTEMPTS" envDefault:"6"`
+	DatabaseRetryInitialDelay time.Duration `env:"KODEX_ACCESS_MANAGER_DATABASE_CONNECT_RETRY_INITIAL_DELAY" envDefault:"500ms"`
+	DatabaseRetryMaxDelay     time.Duration `env:"KODEX_ACCESS_MANAGER_DATABASE_CONNECT_RETRY_MAX_DELAY" envDefault:"5s"`
+	DatabaseRetryJitterRatio  float64       `env:"KODEX_ACCESS_MANAGER_DATABASE_CONNECT_RETRY_JITTER_RATIO" envDefault:"0.2"`
 }
 
 // LoadConfig reads process configuration from environment variables.
@@ -34,12 +38,16 @@ func LoadConfig() (Config, error) {
 // DatabasePoolSettings converts service config to the shared pgxpool contract.
 func (cfg Config) DatabasePoolSettings() postgreslib.PoolSettings {
 	return postgreslib.PoolSettings{
-		DSN:               cfg.DatabaseDSN,
-		MaxConns:          cfg.DatabaseMaxConns,
-		MinConns:          cfg.DatabaseMinConns,
-		MaxConnLifetime:   cfg.DatabaseMaxConnLifetime,
-		MaxConnIdleTime:   cfg.DatabaseMaxConnIdleTime,
-		HealthCheckPeriod: cfg.DatabaseHealthCheckPeriod,
-		PingTimeout:       cfg.DatabasePingTimeout,
+		DSN:                      cfg.DatabaseDSN,
+		MaxConns:                 cfg.DatabaseMaxConns,
+		MinConns:                 cfg.DatabaseMinConns,
+		MaxConnLifetime:          cfg.DatabaseMaxConnLifetime,
+		MaxConnIdleTime:          cfg.DatabaseMaxConnIdleTime,
+		HealthCheckPeriod:        cfg.DatabaseHealthCheckPeriod,
+		PingTimeout:              cfg.DatabasePingTimeout,
+		ConnectRetryMaxAttempts:  cfg.DatabaseRetryMaxAttempts,
+		ConnectRetryInitialDelay: cfg.DatabaseRetryInitialDelay,
+		ConnectRetryMaxDelay:     cfg.DatabaseRetryMaxDelay,
+		ConnectRetryJitterRatio:  cfg.DatabaseRetryJitterRatio,
 	}
 }

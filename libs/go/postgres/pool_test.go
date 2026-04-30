@@ -53,3 +53,87 @@ func TestParsePoolConfigRejectsMinGreaterThanMax(t *testing.T) {
 		t.Fatal("expected error for invalid pool bounds")
 	}
 }
+
+func TestNormalizeConnectRetryAppliesDefaults(t *testing.T) {
+	t.Parallel()
+
+	retry, err := normalizeConnectRetry(PoolSettings{})
+	if err != nil {
+		t.Fatalf("normalize connect retry: %v", err)
+	}
+	if retry.maxAttempts != defaultConnectRetryMaxAttempts {
+		t.Fatalf("unexpected max attempts: %d", retry.maxAttempts)
+	}
+	if retry.initialDelay != defaultConnectRetryInitialDelay {
+		t.Fatalf("unexpected initial delay: %s", retry.initialDelay)
+	}
+	if retry.maxDelay != defaultConnectRetryMaxDelay {
+		t.Fatalf("unexpected max delay: %s", retry.maxDelay)
+	}
+	if retry.jitterRatio != defaultConnectRetryJitterRatio {
+		t.Fatalf("unexpected jitter ratio: %f", retry.jitterRatio)
+	}
+	if retry.pingTimeout != defaultPingTimeout {
+		t.Fatalf("unexpected ping timeout: %s", retry.pingTimeout)
+	}
+}
+
+func TestNormalizeConnectRetryRejectsInvalidSettings(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]PoolSettings{
+		"attempts": {
+			ConnectRetryMaxAttempts: -1,
+		},
+		"initial delay": {
+			ConnectRetryInitialDelay: -time.Second,
+		},
+		"max delay": {
+			ConnectRetryMaxDelay: -time.Second,
+		},
+		"delay order": {
+			ConnectRetryInitialDelay: 2 * time.Second,
+			ConnectRetryMaxDelay:     time.Second,
+		},
+		"jitter": {
+			ConnectRetryJitterRatio: 1.1,
+		},
+		"ping timeout": {
+			PingTimeout: -time.Second,
+		},
+	}
+	for name, settings := range cases {
+		name := name
+		settings := settings
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			if _, err := normalizeConnectRetry(settings); err == nil {
+				t.Fatal("expected invalid retry settings error")
+			}
+		})
+	}
+}
+
+func TestConnectRetryDelayUsesBackoffCapAndJitter(t *testing.T) {
+	t.Parallel()
+
+	settings := connectRetrySettings{
+		initialDelay: time.Second,
+		maxDelay:     3 * time.Second,
+		jitterRatio:  0.25,
+	}
+
+	if delay := connectRetryDelay(settings, 1, 0); delay != time.Second {
+		t.Fatalf("attempt 1 delay = %s, want 1s", delay)
+	}
+	if delay := connectRetryDelay(settings, 2, 0); delay != 2*time.Second {
+		t.Fatalf("attempt 2 delay = %s, want 2s", delay)
+	}
+	if delay := connectRetryDelay(settings, 3, 0); delay != 3*time.Second {
+		t.Fatalf("attempt 3 delay = %s, want capped 3s", delay)
+	}
+	if delay := connectRetryDelay(settings, 3, 1); delay != 3750*time.Millisecond {
+		t.Fatalf("attempt 3 delay with jitter = %s, want 3.75s", delay)
+	}
+}
