@@ -62,6 +62,10 @@ approvals:
 | 7.7 | Operational hardening | Полная корреляция логов, tracing, расширенные метрики, Docker/deploy manifest и smoke-путь сервиса. |
 | 7.8 | Delivery cleanup | Обновление delivery-карт, статусов #599-#602 и явное закрытие или перенос оставшегося бэклога. |
 
+## Бэклог перед следующим сервисом
+
+Перед созданием следующего доменного сервиса вынести общий gRPC runtime из `access-manager` в `libs/go/**`: сборку сервера, recovery, лимиты активных RPC, deadline, keepalive, max message size, базовые метрики и расширяемый auth hook. Доменные cast, обработчики и маппинг ошибок остаются в сервисах.
+
 ## Критерии начала
 
 - Принят пакет доменной документации `access-and-accounts`.
