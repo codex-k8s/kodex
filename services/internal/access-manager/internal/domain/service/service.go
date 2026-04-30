@@ -36,6 +36,13 @@ func (s *Service) CreateOrganization(ctx context.Context, input CreateOrganizati
 		return entity.Organization{}, errs.ErrInvalidArgument
 	}
 	status := defaultOrganizationStatus(input.Status)
+	applied, ok, err := s.findCommandResult(ctx, input.Meta, accessOperationCreateOrganization, accessAggregateOrganization)
+	if err != nil {
+		return entity.Organization{}, err
+	}
+	if ok {
+		return s.repository.GetOrganization(ctx, applied.AggregateID)
+	}
 	if input.Kind == enum.OrganizationKindOwner {
 		if status != enum.OrganizationStatusActive {
 			return entity.Organization{}, errs.ErrPreconditionFailed
@@ -75,7 +82,11 @@ func (s *Service) CreateOrganization(ctx context.Context, input CreateOrganizati
 	if err != nil {
 		return entity.Organization{}, err
 	}
-	if err := s.repository.CreateOrganization(ctx, organization, event); err != nil {
+	result, err := commandResult(input.Meta, accessOperationCreateOrganization, accessAggregateOrganization, organization.ID, now)
+	if err != nil {
+		return entity.Organization{}, err
+	}
+	if err := s.repository.CreateOrganization(ctx, organization, event, result); err != nil {
 		return entity.Organization{}, err
 	}
 	return organization, nil
@@ -97,6 +108,13 @@ func (s *Service) CreateGroup(ctx context.Context, input CreateGroupInput) (enti
 		}
 	default:
 		return entity.Group{}, errs.ErrInvalidArgument
+	}
+	applied, ok, err := s.findCommandResult(ctx, input.Meta, accessOperationCreateGroup, accessAggregateGroup)
+	if err != nil {
+		return entity.Group{}, err
+	}
+	if ok {
+		return s.repository.GetGroup(ctx, applied.AggregateID)
 	}
 	if input.ParentGroupID != nil {
 		parent, err := s.repository.GetGroup(ctx, *input.ParentGroupID)
@@ -135,7 +153,11 @@ func (s *Service) CreateGroup(ctx context.Context, input CreateGroupInput) (enti
 	if err != nil {
 		return entity.Group{}, err
 	}
-	if err := s.repository.CreateGroup(ctx, group, groupCreatedEvent); err != nil {
+	result, err := commandResult(input.Meta, accessOperationCreateGroup, accessAggregateGroup, group.ID, now)
+	if err != nil {
+		return entity.Group{}, err
+	}
+	if err := s.repository.CreateGroup(ctx, group, groupCreatedEvent, result); err != nil {
 		return entity.Group{}, err
 	}
 	return group, nil
@@ -210,7 +232,7 @@ func (s *Service) SetMembership(ctx context.Context, input SetMembershipInput) (
 	return membership, nil
 }
 
-// PutAllowlistEntry creates or replaces a primary admission rule.
+// PutAllowlistEntry creates or updates a primary admission rule.
 func (s *Service) PutAllowlistEntry(ctx context.Context, input PutAllowlistEntryInput) (entity.AllowlistEntry, error) {
 	normalized := strings.TrimSpace(input.Value)
 	switch input.MatchType {
@@ -237,7 +259,22 @@ func (s *Service) PutAllowlistEntry(ctx context.Context, input PutAllowlistEntry
 		DefaultStatus:  defaultStatus,
 		Status:         defaultAllowlistStatus(input.Status),
 	}
-	event, err := s.event(accessEventAllowlistEntryCreated, accessAggregateAllowlistEntry, entry.ID, value.AccessEventPayload{
+	eventType := accessEventAllowlistEntryCreated
+	existing, err := s.repository.FindAllowlistEntry(ctx, entry.MatchType, entry.Value)
+	if err != nil && !errors.Is(err, errs.ErrNotFound) {
+		return entity.AllowlistEntry{}, err
+	}
+	if err == nil {
+		if sameAllowlistEntryState(existing, entry) {
+			return existing, nil
+		}
+		if err := ensureExpectedVersion(input.Meta, existing.Version); err != nil {
+			return entity.AllowlistEntry{}, err
+		}
+		entry.Base = updateBase(existing.Base, now)
+		eventType = accessEventAllowlistEntryUpdated
+	}
+	event, err := s.event(eventType, accessAggregateAllowlistEntry, entry.ID, value.AccessEventPayload{
 		AllowlistEntryID: entry.ID.String(),
 		MatchType:        string(entry.MatchType),
 		OrganizationID:   uuidPtrString(entry.OrganizationID),
@@ -357,7 +394,7 @@ func (s *Service) BootstrapUserFromIdentity(ctx context.Context, input Bootstrap
 	}, nil
 }
 
-// PutExternalProvider creates or replaces an external provider catalog entry.
+// PutExternalProvider creates or updates an external provider catalog entry.
 func (s *Service) PutExternalProvider(ctx context.Context, input PutExternalProviderInput) (entity.ExternalProvider, error) {
 	if strings.TrimSpace(input.Slug) == "" || strings.TrimSpace(input.DisplayName) == "" {
 		return entity.ExternalProvider{}, errs.ErrInvalidArgument
@@ -369,7 +406,22 @@ func (s *Service) PutExternalProvider(ctx context.Context, input PutExternalProv
 		DisplayName: strings.TrimSpace(input.DisplayName), IconAssetRef: strings.TrimSpace(input.IconAssetRef),
 		Status: defaultExternalProviderStatus(input.Status),
 	}
-	event, err := s.event(accessEventExternalProviderCreated, accessAggregateExternalProvider, provider.ID, value.AccessEventPayload{
+	eventType := accessEventExternalProviderCreated
+	existing, err := s.repository.GetExternalProviderBySlug(ctx, provider.Slug)
+	if err != nil && !errors.Is(err, errs.ErrNotFound) {
+		return entity.ExternalProvider{}, err
+	}
+	if err == nil {
+		if sameExternalProviderState(existing, provider) {
+			return existing, nil
+		}
+		if err := ensureExpectedVersion(input.Meta, existing.Version); err != nil {
+			return entity.ExternalProvider{}, err
+		}
+		provider.Base = updateBase(existing.Base, now)
+		eventType = accessEventExternalProviderUpdated
+	}
+	event, err := s.event(eventType, accessAggregateExternalProvider, provider.ID, value.AccessEventPayload{
 		ExternalProviderID: provider.ID.String(),
 		Slug:               provider.Slug,
 		Version:            provider.Version,
@@ -389,7 +441,18 @@ func (s *Service) RegisterExternalAccount(ctx context.Context, input RegisterExt
 	if input.ExternalProviderID == uuid.Nil || strings.TrimSpace(input.DisplayName) == "" {
 		return entity.ExternalAccount{}, errs.ErrInvalidArgument
 	}
+	applied, ok, err := s.findCommandResult(ctx, input.Meta, accessOperationRegisterExternalAccount, accessAggregateExternalAccount)
+	if err != nil {
+		return entity.ExternalAccount{}, err
+	}
+	if ok {
+		return s.repository.GetExternalAccount(ctx, applied.AggregateID)
+	}
 	if _, err := s.repository.GetExternalProvider(ctx, input.ExternalProviderID); err != nil {
+		return entity.ExternalAccount{}, err
+	}
+	ownerScopeType, ownerScopeID, err := normalizeExternalAccountOwnerScope(input.OwnerScopeType, input.OwnerScopeID)
+	if err != nil {
 		return entity.ExternalAccount{}, err
 	}
 	now := s.now(input.Meta)
@@ -397,7 +460,7 @@ func (s *Service) RegisterExternalAccount(ctx context.Context, input RegisterExt
 		Base:               entity.Base{ID: s.ids.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
 		ExternalProviderID: input.ExternalProviderID, AccountType: input.AccountType,
 		DisplayName: strings.TrimSpace(input.DisplayName), ImageAssetRef: strings.TrimSpace(input.ImageAssetRef),
-		OwnerScopeType: input.OwnerScopeType, OwnerScopeID: strings.TrimSpace(input.OwnerScopeID),
+		OwnerScopeType: ownerScopeType, OwnerScopeID: ownerScopeID,
 		Status: defaultExternalAccountStatus(input.Status), SecretBindingRefID: input.SecretBindingRefID,
 	}
 	event, err := s.createdEvent(
@@ -410,7 +473,11 @@ func (s *Service) RegisterExternalAccount(ctx context.Context, input RegisterExt
 	if err != nil {
 		return entity.ExternalAccount{}, err
 	}
-	if err := s.repository.RegisterExternalAccount(ctx, account, event); err != nil {
+	result, err := commandResult(input.Meta, accessOperationRegisterExternalAccount, accessAggregateExternalAccount, account.ID, now)
+	if err != nil {
+		return entity.ExternalAccount{}, err
+	}
+	if err := s.repository.RegisterExternalAccount(ctx, account, event, result); err != nil {
 		return entity.ExternalAccount{}, err
 	}
 	return account, nil
@@ -419,8 +486,12 @@ func (s *Service) RegisterExternalAccount(ctx context.Context, input RegisterExt
 // BindExternalAccount permits an account to be used for selected actions in a scope.
 func (s *Service) BindExternalAccount(ctx context.Context, input BindExternalAccountInput) (entity.ExternalAccountBinding, error) {
 	allowedActionKeys := sortedUnique(input.AllowedActionKeys)
-	if input.ExternalAccountID == uuid.Nil || strings.TrimSpace(input.UsageScopeID) == "" || len(allowedActionKeys) == 0 {
+	usageScopeID := strings.TrimSpace(input.UsageScopeID)
+	if input.ExternalAccountID == uuid.Nil || len(allowedActionKeys) == 0 {
 		return entity.ExternalAccountBinding{}, errs.ErrInvalidArgument
+	}
+	if err := validateExternalAccountUsageScope(input.UsageScopeType, usageScopeID); err != nil {
+		return entity.ExternalAccountBinding{}, err
 	}
 	for _, actionKey := range allowedActionKeys {
 		action, err := s.repository.GetAccessActionByKey(ctx, actionKey)
@@ -438,11 +509,29 @@ func (s *Service) BindExternalAccount(ctx context.Context, input BindExternalAcc
 	binding := entity.ExternalAccountBinding{
 		Base:              entity.Base{ID: s.ids.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
 		ExternalAccountID: input.ExternalAccountID, UsageScopeType: input.UsageScopeType,
-		UsageScopeID: strings.TrimSpace(input.UsageScopeID), AllowedActionKeys: allowedActionKeys,
+		UsageScopeID: usageScopeID, AllowedActionKeys: allowedActionKeys,
 		Status: defaultExternalAccountBindingStatus(input.Status),
 	}
+	eventType := accessEventExternalAccountBindingCreated
+	existing, err := s.repository.FindExternalAccountBindingByIdentity(ctx, query.ExternalAccountBindingIdentity{
+		ExternalAccountID: binding.ExternalAccountID,
+		UsageScope:        value.ScopeRef{Type: string(binding.UsageScopeType), ID: binding.UsageScopeID},
+	})
+	if err != nil && !errors.Is(err, errs.ErrNotFound) {
+		return entity.ExternalAccountBinding{}, err
+	}
+	if err == nil {
+		if sameExternalAccountBindingState(existing, binding) {
+			return existing, nil
+		}
+		if err := ensureExpectedVersion(input.Meta, existing.Version); err != nil {
+			return entity.ExternalAccountBinding{}, err
+		}
+		binding.Base = updateBase(existing.Base, now)
+		eventType = accessEventExternalAccountBindingUpdated
+	}
 	event, err := s.createdEvent(
-		accessEventExternalAccountBindingCreated, accessAggregateExternalAccountBinding, binding.ID, now,
+		eventType, accessAggregateExternalAccountBinding, binding.ID, now,
 		payloadString(accessPayloadExternalAccountBindingID, binding.ID.String()),
 		payloadString(accessPayloadExternalAccountID, binding.ExternalAccountID.String()),
 		payloadString(accessPayloadUsageScopeType, string(binding.UsageScopeType)),
@@ -458,7 +547,7 @@ func (s *Service) BindExternalAccount(ctx context.Context, input BindExternalAcc
 	return binding, nil
 }
 
-// PutAccessAction creates or replaces an access action catalog entry.
+// PutAccessAction creates or updates an access action catalog entry.
 func (s *Service) PutAccessAction(ctx context.Context, input PutAccessActionInput) (entity.AccessAction, error) {
 	if strings.TrimSpace(input.Key) == "" || strings.TrimSpace(input.ResourceType) == "" {
 		return entity.AccessAction{}, errs.ErrInvalidArgument
@@ -470,7 +559,22 @@ func (s *Service) PutAccessAction(ctx context.Context, input PutAccessActionInpu
 		Description: strings.TrimSpace(input.Description), ResourceType: strings.TrimSpace(input.ResourceType),
 		Status: defaultAccessActionStatus(input.Status),
 	}
-	event, err := s.event(accessEventAccessActionCreated, accessAggregateAccessAction, action.ID, value.AccessEventPayload{
+	eventType := accessEventAccessActionCreated
+	existing, err := s.repository.GetAccessActionByKey(ctx, action.Key)
+	if err != nil && !errors.Is(err, errs.ErrNotFound) {
+		return entity.AccessAction{}, err
+	}
+	if err == nil {
+		if sameAccessActionState(existing, action) {
+			return existing, nil
+		}
+		if err := ensureExpectedVersion(input.Meta, existing.Version); err != nil {
+			return entity.AccessAction{}, err
+		}
+		action.Base = updateBase(existing.Base, now)
+		eventType = accessEventAccessActionUpdated
+	}
+	event, err := s.event(eventType, accessAggregateAccessAction, action.ID, value.AccessEventPayload{
 		AccessActionID: action.ID.String(),
 		ActionKey:      action.Key,
 		Version:        action.Version,
@@ -485,7 +589,7 @@ func (s *Service) PutAccessAction(ctx context.Context, input PutAccessActionInpu
 	return action, nil
 }
 
-// PutAccessRule creates or replaces a policy rule for an active action.
+// PutAccessRule creates or updates a policy rule for an active action.
 func (s *Service) PutAccessRule(ctx context.Context, input PutAccessRuleInput) (entity.AccessRule, error) {
 	if input.SubjectID == "" || input.ActionKey == "" || input.ResourceType == "" {
 		return entity.AccessRule{}, errs.ErrInvalidArgument
@@ -508,7 +612,31 @@ func (s *Service) PutAccessRule(ctx context.Context, input PutAccessRuleInput) (
 		ScopeType: input.ScopeType, ScopeID: input.ScopeID, Priority: input.Priority,
 		Status: defaultAccessRuleStatus(input.Status),
 	}
-	event, err := s.event(accessEventAccessRuleCreated, accessAggregateAccessRule, rule.ID, value.AccessEventPayload{
+	eventType := accessEventAccessRuleCreated
+	existing, err := s.repository.FindAccessRule(ctx, query.AccessRuleIdentity{
+		Effect:       rule.Effect,
+		SubjectType:  rule.SubjectType,
+		SubjectID:    rule.SubjectID,
+		ActionKey:    rule.ActionKey,
+		ResourceType: rule.ResourceType,
+		ResourceID:   rule.ResourceID,
+		ScopeType:    rule.ScopeType,
+		ScopeID:      rule.ScopeID,
+	})
+	if err != nil && !errors.Is(err, errs.ErrNotFound) {
+		return entity.AccessRule{}, err
+	}
+	if err == nil {
+		if sameAccessRuleState(existing, rule) {
+			return existing, nil
+		}
+		if err := ensureExpectedVersion(input.Meta, existing.Version); err != nil {
+			return entity.AccessRule{}, err
+		}
+		rule.Base = updateBase(existing.Base, now)
+		eventType = accessEventAccessRuleUpdated
+	}
+	event, err := s.event(eventType, accessAggregateAccessRule, rule.ID, value.AccessEventPayload{
 		AccessRuleID: rule.ID.String(),
 		Effect:       string(rule.Effect),
 		ActionKey:    rule.ActionKey,

@@ -5,7 +5,7 @@ title: kodex — модель данных домена доступа и акк
 status: active
 owner_role: SA
 created_at: 2026-04-26
-updated_at: 2026-04-27
+updated_at: 2026-04-30
 related_issues: [599, 600, 601, 602]
 related_prs: []
 approvals:
@@ -20,14 +20,14 @@ approvals:
 
 ## TL;DR
 
-- Ключевые сущности: `Organization`, `User`, `UserIdentity`, `AllowlistEntry`, `Group`, `Membership`, `AccessAction`, `AccessRule`, `AccessDecisionAudit`, `ExternalProvider`, `ExternalAccount`, `ExternalAccountBinding`, `SecretBindingRef`.
+- Ключевые сущности: `Organization`, `User`, `UserIdentity`, `AllowlistEntry`, `Group`, `Membership`, `AccessAction`, `AccessRule`, `AccessDecisionAudit`, `ExternalProvider`, `ExternalAccount`, `ExternalAccountBinding`, `SecretBindingRef`, `CommandResult`.
 - Основные связи: пользователь входит в организации и группы через типизированное членство, правила доступа действуют по области применения, внешний аккаунт связан с организацией, проектом, репозиторием или ролью через привязку политики.
 - Риски миграций: нельзя зашить единственную организацию, хранить сырые секреты, смешать зеркало провайдера с политикой аккаунта и потерять объяснимость явного запрета.
 
 ## Общие инварианты
 
 - Каждый агрегат имеет `id`, `version`, `created_at`, `updated_at`.
-- Команды изменения используют ожидаемую версию или идемпотентный ключ.
+- Команды изменения используют ожидаемую версию или идемпотентный ключ; команды создания без естественного бизнес-ключа сохраняют результат в `CommandResult`.
 - Сырые секреты не хранятся в PostgreSQL.
 - Email хранится нормализованно для поиска и в маскированном виде для аудита там, где полный email не нужен.
 - Связи на проекты, репозитории, роли и другие домены хранятся как внешние идентификаторы без `FOREIGN KEY` в чужие БД.
@@ -239,6 +239,24 @@ approvals:
 | `explanation` | jsonb | no | Объяснение без секретов и чувствительных данных. |
 | `created_at` | timestamp | no | Время решения. |
 
+### `CommandResult`
+
+| Поле | Тип | Может быть пустым | Примечание |
+|---|---|---:|---|
+| `key` | string | no | Внутренний ключ результата команды. |
+| `command_id` | UUID | yes | Стабильный идентификатор команды, если его передал вызывающий контур. |
+| `idempotency_key` | string | yes | Идемпотентный ключ, если `command_id` не передан. |
+| `operation` | string | no | Канонический путь операции, например `domain.Service.CreateOrganization`. |
+| `aggregate_type` | string | no | Тип созданного агрегата. |
+| `aggregate_id` | UUID | no | Идентификатор созданного агрегата. |
+| `created_at` | timestamp | no | Время фиксации команды. |
+
+Инварианты:
+- запись создаётся в одной транзакции с агрегатом и outbox-событием;
+- повтор той же команды возвращает уже созданный агрегат и не создаёт второе бизнес-изменение;
+- если один и тот же `command_id` или `idempotency_key` используется для другой операции, сервис возвращает конфликт;
+- таблица не заменяет естественные бизнес-ключи для команд обновления или создания по бизнес-ключу, а закрывает команды создания без устойчивого provider-native идентификатора.
+
 ## Связи
 
 - `User` 1:N `UserIdentity`.
@@ -251,6 +269,7 @@ approvals:
 - `AccessAction` 1:N `AccessRule`.
 - `AccessRule` ссылается на субъекты и ресурсы через типизированные идентификаторы.
 - `AccessDecisionAudit` не является источником прав, а только следом решения.
+- `CommandResult` ссылается на созданный агрегат по типу и идентификатору без межтабличного `FOREIGN KEY`, потому что хранит обобщённый результат разных команд создания.
 
 ## Индексы и запросы
 
@@ -258,6 +277,7 @@ approvals:
 |---|---|
 | Создание или связывание профиля по email и subject провайдера | `UserIdentity(provider, subject)`, `AllowlistEntry(match_type, value)`, `User(primary_email)`. |
 | Граф членства пользователя | `Membership(subject_type, subject_id, status)`, `Membership(target_type, target_id, status)`. |
+| Повтор команды после сетевой ошибки | `CommandResult(command_id)`, `CommandResult(idempotency_key)`. |
 | Проверка доступа | `AccessRule(subject_type, subject_id, action_key, resource_type, status)`, `AccessRule(scope_type, scope_id, action_key, status)`. |
 | Внешние аккаунты по области | `ExternalAccount(owner_scope_type, owner_scope_id, status)`, `ExternalAccountBinding(usage_scope_type, usage_scope_id, status)`. |
 | Внешние аккаунты по поставщику | `ExternalProvider(slug, status)`, `ExternalAccount(external_provider_id, status)`. |

@@ -9,15 +9,31 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
+
+	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
+	accessservice "github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/service"
+	accesspostgres "github.com/codex-k8s/kodex/services/internal/access-manager/internal/repository/postgres/access"
 )
 
 // Run starts access-manager process servers and shuts them down with context.
 func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
+	dbPool, err := postgreslib.OpenPool(ctx, cfg.DatabasePoolSettings())
+	if err != nil {
+		return err
+	}
+	defer dbPool.Close()
+
+	components := processComponents{
+		DBPool:        dbPool,
+		AccessService: composeAccessService(dbPool),
+	}
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           healthMux(),
+		Handler:           healthMux(components),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	grpcServer := grpc.NewServer()
@@ -54,14 +70,46 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	}
 }
 
-func healthMux() *http.ServeMux {
+type processComponents struct {
+	DBPool        *pgxpool.Pool
+	AccessService *accessservice.Service
+}
+
+func composeAccessService(dbPool *pgxpool.Pool) *accessservice.Service {
+	repository := accesspostgres.NewRepository(dbPool)
+	return accessservice.New(repository, systemClock{}, uuidGenerator{})
+}
+
+func healthMux(components processComponents) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health/livez", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
-	mux.HandleFunc("/health/readyz", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/health/readyz", func(w http.ResponseWriter, r *http.Request) {
+		if components.AccessService == nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		readyCtx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		if err := components.DBPool.Ping(readyCtx); err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.Handle("/metrics", promhttp.Handler())
 	return mux
+}
+
+type systemClock struct{}
+
+func (systemClock) Now() time.Time {
+	return time.Now().UTC()
+}
+
+type uuidGenerator struct{}
+
+func (uuidGenerator) New() uuid.UUID {
+	return uuid.New()
 }

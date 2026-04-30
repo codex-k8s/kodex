@@ -1,10 +1,11 @@
-.PHONY: help lint lint-go dupl-go test-go test-go-migrations fmt-go gen-openapi-go gen-openapi-ts gen-openapi gen-proto-go validate-asyncapi
+.PHONY: help lint lint-go dupl-go test-go test-go-postgres test-go-migrations fmt-go gen-openapi-go gen-openapi-ts gen-openapi gen-proto-go validate-asyncapi
 
 help:
 	@echo "Targets:"
 	@echo "  make lint-go   - golangci-lint for active Go packages, excluding deprecated/**"
 	@echo "  make dupl-go   - fail on duplicated Go code (dupl -t 50)"
 	@echo "  make test-go   - go test for active Go packages, excluding deprecated/**"
+	@echo "  make test-go-postgres - run mandatory PostgreSQL repository integration tests"
 	@echo "  make test-go-migrations - run migration guard tests for active service goose files"
 	@echo "  make fmt-go    - gofmt -w on tracked .go files"
 	@echo "  make gen-openapi-go [SVC=services/external/api-gateway] - generate Go transport code from OpenAPI"
@@ -17,14 +18,18 @@ help:
 lint: lint-go dupl-go
 
 lint-go:
-	@packages="$$(for root in services libs cmd; do \
+	@packages="$$(for root in services cmd; do \
 		if [ -d "$$root" ]; then printf './%s/... ' "$$root"; fi; \
 	done)"; \
 	if [ -z "$$packages" ]; then \
 		echo "lint-go: no active Go packages"; \
-		exit 0; \
+	else \
+		golangci-lint run $$packages; \
 	fi; \
-	golangci-lint run $$packages
+	for module in $$(find libs -name go.mod -not -path '*/vendor/*' -exec dirname {} \; 2>/dev/null | sort); do \
+		echo "lint-go: $$module"; \
+		(cd "$$module" && golangci-lint run ./...); \
+	done
 
 dupl-go:
 	@tmp="$$(mktemp)"; \
@@ -53,14 +58,22 @@ dupl-go:
 	rm -f "$$tmp" "$$filtered" "$$candidates"
 
 test-go:
-	@packages="$$(for root in services libs cmd proto/gen/go; do \
+	@packages="$$(for root in services cmd proto/gen/go; do \
 		if [ -d "$$root" ]; then go list ./$$root/...; fi; \
 	done)"; \
 	if [ -z "$$packages" ]; then \
 		echo "test-go: no active Go packages"; \
-		exit 0; \
+	else \
+		go test $$packages; \
 	fi; \
-	go test $$packages
+	for module in $$(find libs -name go.mod -not -path '*/vendor/*' -exec dirname {} \; 2>/dev/null | sort); do \
+		echo "test-go: $$module"; \
+		(cd "$$module" && go test ./...); \
+	done
+	@$(MAKE) test-go-postgres
+
+test-go-postgres:
+	@./scripts/test-go-postgres.sh
 
 test-go-migrations:
 	@migration_files="$$(find services -path '*/cmd/cli/migrations/*.sql' -not -path '*/deprecated/*' -print 2>/dev/null | sort)"; \
