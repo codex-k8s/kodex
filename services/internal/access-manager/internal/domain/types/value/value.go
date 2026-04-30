@@ -13,6 +13,14 @@ type Actor struct {
 	ID   string
 }
 
+// RequestContext stores safe request metadata for audit and diagnostics.
+type RequestContext struct {
+	Source       string
+	TraceID      string
+	SessionID    string
+	ClientIPHash string
+}
+
 // CommandMeta carries idempotency, concurrency and audit metadata.
 type CommandMeta struct {
 	CommandID       uuid.UUID
@@ -21,6 +29,7 @@ type CommandMeta struct {
 	Actor           Actor
 	Reason          string
 	RequestID       string
+	RequestContext  RequestContext
 	OccurredAt      time.Time
 }
 

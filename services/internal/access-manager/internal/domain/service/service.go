@@ -415,6 +415,9 @@ func (s *Service) PutExternalProvider(ctx context.Context, input PutExternalProv
 		if sameExternalProviderState(existing, provider) {
 			return existing, nil
 		}
+		if input.CreateOnly {
+			return entity.ExternalProvider{}, errs.ErrAlreadyExists
+		}
 		if err := ensureExpectedVersion(input.Meta, existing.Version); err != nil {
 			return entity.ExternalProvider{}, err
 		}
@@ -488,6 +491,9 @@ func (s *Service) BindExternalAccount(ctx context.Context, input BindExternalAcc
 	allowedActionKeys := sortedUnique(input.AllowedActionKeys)
 	usageScopeID := strings.TrimSpace(input.UsageScopeID)
 	if input.ExternalAccountID == uuid.Nil || len(allowedActionKeys) == 0 {
+		return entity.ExternalAccountBinding{}, errs.ErrInvalidArgument
+	}
+	if input.Status == enum.ExternalAccountBindingStatusDisabled {
 		return entity.ExternalAccountBinding{}, errs.ErrInvalidArgument
 	}
 	if err := validateExternalAccountUsageScope(input.UsageScopeType, usageScopeID); err != nil {
@@ -592,6 +598,9 @@ func (s *Service) PutAccessAction(ctx context.Context, input PutAccessActionInpu
 // PutAccessRule creates or updates a policy rule for an active action.
 func (s *Service) PutAccessRule(ctx context.Context, input PutAccessRuleInput) (entity.AccessRule, error) {
 	if input.SubjectID == "" || input.ActionKey == "" || input.ResourceType == "" {
+		return entity.AccessRule{}, errs.ErrInvalidArgument
+	}
+	if input.Status == enum.AccessRuleStatusDisabled {
 		return entity.AccessRule{}, errs.ErrInvalidArgument
 	}
 	if err := validateAccessRuleScope(input.ScopeType, input.ScopeID); err != nil {
