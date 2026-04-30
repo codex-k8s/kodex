@@ -147,6 +147,16 @@ type CheckAccessResult struct {
 	Explanation value.DecisionExplanation
 }
 
+// ExplainAccessInput identifies a previously audited access decision.
+type ExplainAccessInput struct {
+	AuditID uuid.UUID
+}
+
+// ExplainAccessResult returns the stored access decision explanation.
+type ExplainAccessResult struct {
+	Audit entity.AccessDecisionAudit
+}
+
 // ResolveExternalAccountUsageInput asks whether an account can be used.
 type ResolveExternalAccountUsageInput struct {
 	ExternalAccountID uuid.UUID

@@ -16,12 +16,12 @@ import (
 
 func (s *Service) resolveSubjects(ctx context.Context, subject value.SubjectRef) ([]value.SubjectRef, string, error) {
 	subjects := []value.SubjectRef{subject}
-	blocked, err := s.isBlockedAccessSubject(ctx, subject)
+	reasonCode, err := s.accessSubjectStopReason(ctx, subject)
 	if err != nil {
 		return nil, "", err
 	}
-	if blocked {
-		return subjects, reasonSubjectBlocked, nil
+	if reasonCode != "" {
+		return subjects, reasonCode, nil
 	}
 	if _, ok := accessSubjectToMembershipSubject(subject.Type); !ok {
 		return subjects, "", nil
@@ -71,38 +71,53 @@ func (s *Service) resolveSubjects(ctx context.Context, subject value.SubjectRef)
 	return subjects, "", nil
 }
 
-func (s *Service) isBlockedAccessSubject(ctx context.Context, subject value.SubjectRef) (bool, error) {
+func (s *Service) accessSubjectStopReason(ctx context.Context, subject value.SubjectRef) (string, error) {
 	subjectID, parsed, err := parseStoredAccessSubjectID(subject)
 	if err != nil || !parsed {
-		return false, err
+		return "", err
 	}
 	switch subject.Type {
 	case string(enum.AccessSubjectUser):
 		user, err := s.repository.GetUser(ctx, subjectID)
 		if err != nil {
-			return false, err
+			return "", err
 		}
-		return user.Status == enum.UserStatusBlocked || user.Status == enum.UserStatusDisabled, nil
+		if user.Status == enum.UserStatusPending {
+			return reasonSubjectPending, nil
+		}
+		if user.Status == enum.UserStatusBlocked || user.Status == enum.UserStatusDisabled {
+			return reasonSubjectBlocked, nil
+		}
+		return "", nil
 	case string(enum.AccessSubjectExternalAccount):
 		account, err := s.repository.GetExternalAccount(ctx, subjectID)
 		if err != nil {
-			return false, err
+			return "", err
 		}
-		return account.Status != enum.ExternalAccountStatusActive, nil
+		if account.Status != enum.ExternalAccountStatusActive {
+			return reasonSubjectBlocked, nil
+		}
+		return "", nil
 	case string(enum.AccessSubjectGroup):
 		group, err := s.repository.GetGroup(ctx, subjectID)
 		if err != nil {
-			return false, err
+			return "", err
 		}
-		return group.Status != enum.GroupStatusActive, nil
+		if group.Status != enum.GroupStatusActive {
+			return reasonSubjectBlocked, nil
+		}
+		return "", nil
 	case string(enum.AccessSubjectOrganization):
 		organization, err := s.repository.GetOrganization(ctx, subjectID)
 		if err != nil {
-			return false, err
+			return "", err
 		}
-		return organization.Status != enum.OrganizationStatusActive, nil
+		if organization.Status != enum.OrganizationStatusActive {
+			return reasonSubjectBlocked, nil
+		}
+		return "", nil
 	default:
-		return false, nil
+		return "", nil
 	}
 }
 

@@ -1,6 +1,7 @@
 package access
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/enum"
+	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/value"
 )
 
 type rowScanner interface {
@@ -261,6 +263,35 @@ func scanAccessRule(row rowScanner) (entity.AccessRule, error) {
 	rule.SubjectType = enum.AccessSubjectType(subjectType)
 	rule.Status = enum.AccessRuleStatus(status)
 	return rule, err
+}
+
+func scanAccessDecisionAudit(row rowScanner) (entity.AccessDecisionAudit, error) {
+	var audit entity.AccessDecisionAudit
+	var subjectType, subjectID, resourceType, resourceID, decision string
+	var explanation []byte
+	err := row.Scan(
+		&audit.ID,
+		&subjectType,
+		&subjectID,
+		&audit.ActionKey,
+		&resourceType,
+		&resourceID,
+		&decision,
+		&audit.ReasonCode,
+		&audit.PolicyVersion,
+		&explanation,
+		&audit.CreatedAt,
+	)
+	if err != nil {
+		return entity.AccessDecisionAudit{}, err
+	}
+	audit.Subject = value.SubjectRef{Type: subjectType, ID: subjectID}
+	audit.Resource = value.ResourceRef{Type: resourceType, ID: resourceID}
+	audit.Decision = enum.AccessDecision(decision)
+	if err := json.Unmarshal(explanation, &audit.Explanation); err != nil {
+		return entity.AccessDecisionAudit{}, err
+	}
+	return audit, nil
 }
 
 func uuidPtrFromPG(value pgtype.UUID) *uuid.UUID {

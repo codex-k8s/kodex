@@ -597,6 +597,12 @@ func (s *Service) PutAccessAction(ctx context.Context, input PutAccessActionInpu
 
 // PutAccessRule creates or updates a policy rule for an active action.
 func (s *Service) PutAccessRule(ctx context.Context, input PutAccessRuleInput) (entity.AccessRule, error) {
+	input.SubjectID = strings.TrimSpace(input.SubjectID)
+	input.ActionKey = strings.TrimSpace(input.ActionKey)
+	input.ResourceType = strings.TrimSpace(input.ResourceType)
+	input.ResourceID = strings.TrimSpace(input.ResourceID)
+	input.ScopeType = strings.TrimSpace(input.ScopeType)
+	input.ScopeID = strings.TrimSpace(input.ScopeID)
 	if input.SubjectID == "" || input.ActionKey == "" || input.ResourceType == "" {
 		return entity.AccessRule{}, errs.ErrInvalidArgument
 	}
@@ -611,6 +617,9 @@ func (s *Service) PutAccessRule(ctx context.Context, input PutAccessRuleInput) (
 		return entity.AccessRule{}, err
 	}
 	if action.Status != enum.AccessActionStatusActive {
+		return entity.AccessRule{}, errs.ErrPreconditionFailed
+	}
+	if action.ResourceType != input.ResourceType {
 		return entity.AccessRule{}, errs.ErrPreconditionFailed
 	}
 	now := s.now(input.Meta)
@@ -665,9 +674,23 @@ func (s *Service) PutAccessRule(ctx context.Context, input PutAccessRuleInput) (
 
 // CheckAccess evaluates access rules for a subject, resource and scope.
 func (s *Service) CheckAccess(ctx context.Context, input CheckAccessInput) (CheckAccessResult, error) {
+	input = normalizeCheckAccessInput(input)
 	if strings.TrimSpace(input.Subject.Type) == "" || strings.TrimSpace(input.Subject.ID) == "" ||
 		strings.TrimSpace(input.ActionKey) == "" || strings.TrimSpace(input.Resource.Type) == "" {
 		return CheckAccessResult{}, errs.ErrInvalidArgument
+	}
+	action, err := s.repository.GetAccessActionByKey(ctx, input.ActionKey)
+	if err != nil {
+		if errors.Is(err, errs.ErrNotFound) {
+			return s.recordDecision(ctx, input, enum.AccessDecisionDeny, reasonActionNotFound, nil)
+		}
+		return CheckAccessResult{}, err
+	}
+	if action.Status != enum.AccessActionStatusActive {
+		return s.recordDecision(ctx, input, enum.AccessDecisionDeny, reasonActionDisabled, nil)
+	}
+	if action.ResourceType != input.Resource.Type {
+		return s.recordDecision(ctx, input, enum.AccessDecisionDeny, reasonResourceTypeMismatch, nil)
 	}
 	subjects, reasonCode, err := s.resolveSubjects(ctx, input.Subject)
 	if err != nil {
@@ -675,6 +698,9 @@ func (s *Service) CheckAccess(ctx context.Context, input CheckAccessInput) (Chec
 	}
 	if reasonCode == reasonSubjectBlocked {
 		return s.recordDecision(ctx, input, enum.AccessDecisionDeny, reasonSubjectBlocked, nil)
+	}
+	if reasonCode == reasonSubjectPending {
+		return s.recordDecision(ctx, input, enum.AccessDecisionPending, reasonSubjectPending, nil)
 	}
 
 	rules, err := s.repository.ListAccessRules(ctx, query.AccessRuleFilter{
@@ -703,6 +729,18 @@ func (s *Service) CheckAccess(ctx context.Context, input CheckAccessInput) (Chec
 	return s.recordDecision(ctx, input, enum.AccessDecisionDeny, reasonNoMatchingRule, nil)
 }
 
+// ExplainAccess returns a previously audited access decision explanation.
+func (s *Service) ExplainAccess(ctx context.Context, input ExplainAccessInput) (ExplainAccessResult, error) {
+	if input.AuditID == uuid.Nil {
+		return ExplainAccessResult{}, errs.ErrInvalidArgument
+	}
+	audit, err := s.repository.GetAccessDecisionAudit(ctx, input.AuditID)
+	if err != nil {
+		return ExplainAccessResult{}, err
+	}
+	return ExplainAccessResult{Audit: audit}, nil
+}
+
 // ResolveExternalAccountUsage returns account and secret references for allowed usage.
 func (s *Service) ResolveExternalAccountUsage(ctx context.Context, input ResolveExternalAccountUsageInput) (ResolveExternalAccountUsageResult, error) {
 	account, err := s.repository.GetExternalAccount(ctx, input.ExternalAccountID)
@@ -726,4 +764,15 @@ func (s *Service) ResolveExternalAccountUsage(ctx context.Context, input Resolve
 		return ResolveExternalAccountUsageResult{}, err
 	}
 	return ResolveExternalAccountUsageResult{ExternalAccount: account, SecretRef: secret, AllowedActions: binding.AllowedActionKeys}, nil
+}
+
+func normalizeCheckAccessInput(input CheckAccessInput) CheckAccessInput {
+	input.Subject.Type = strings.TrimSpace(input.Subject.Type)
+	input.Subject.ID = strings.TrimSpace(input.Subject.ID)
+	input.ActionKey = strings.TrimSpace(input.ActionKey)
+	input.Resource.Type = strings.TrimSpace(input.Resource.Type)
+	input.Resource.ID = strings.TrimSpace(input.Resource.ID)
+	input.Scope.Type = strings.TrimSpace(input.Scope.Type)
+	input.Scope.ID = strings.TrimSpace(input.Scope.ID)
+	return input
 }

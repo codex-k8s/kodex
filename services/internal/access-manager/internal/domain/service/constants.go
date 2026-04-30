@@ -1,16 +1,20 @@
 package service
 
 const (
-	reasonAllowlistEmail    = "allowlist_email"
-	reasonAllowlistDomain   = "allowlist_domain"
-	reasonAllowlistDisabled = "allowlist_disabled"
-	reasonAllowlistMiss     = "allowlist_miss"
-	reasonIdentityFound     = "identity_found"
-	reasonIdentityLinked    = "identity_linked"
-	reasonExplicitAllow     = "explicit_allow"
-	reasonExplicitDeny      = "explicit_deny"
-	reasonNoMatchingRule    = "no_matching_rule"
-	reasonSubjectBlocked    = "subject_blocked"
+	reasonAllowlistEmail       = "allowlist_email"
+	reasonAllowlistDomain      = "allowlist_domain"
+	reasonAllowlistDisabled    = "allowlist_disabled"
+	reasonAllowlistMiss        = "allowlist_miss"
+	reasonIdentityFound        = "identity_found"
+	reasonIdentityLinked       = "identity_linked"
+	reasonExplicitAllow        = "explicit_allow"
+	reasonExplicitDeny         = "explicit_deny"
+	reasonNoMatchingRule       = "no_matching_rule"
+	reasonActionNotFound       = "action_not_found"
+	reasonActionDisabled       = "action_disabled"
+	reasonResourceTypeMismatch = "resource_type_mismatch"
+	reasonSubjectPending       = "subject_pending"
+	reasonSubjectBlocked       = "subject_blocked"
 )
 
 const (

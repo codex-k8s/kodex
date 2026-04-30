@@ -329,6 +329,15 @@ func CheckAccessInput(request *accessaccountsv1.CheckAccessRequest) (accessservi
 	}, nil
 }
 
+// ExplainAccessInput maps a gRPC request to the domain read input.
+func ExplainAccessInput(request *accessaccountsv1.ExplainAccessRequest) (accessservice.ExplainAccessInput, error) {
+	auditID, err := requiredUUID(request.GetAuditId())
+	if err != nil {
+		return accessservice.ExplainAccessInput{}, err
+	}
+	return accessservice.ExplainAccessInput{AuditID: auditID}, nil
+}
+
 // ResolveExternalAccountUsageInput maps a gRPC request to the domain read input.
 func ResolveExternalAccountUsageInput(request *accessaccountsv1.ResolveExternalAccountUsageRequest) (accessservice.ResolveExternalAccountUsageInput, error) {
 	accountID, err := requiredUUID(request.GetExternalAccountId())

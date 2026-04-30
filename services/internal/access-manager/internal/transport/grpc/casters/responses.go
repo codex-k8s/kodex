@@ -163,6 +163,18 @@ func CheckAccessResponse(result service.CheckAccessResult) *accessaccountsv1.Che
 	}
 }
 
+// ExplainAccessResponse maps a stored access decision explanation to gRPC.
+func ExplainAccessResponse(result service.ExplainAccessResult) *accessaccountsv1.ExplainAccessResponse {
+	audit := result.Audit
+	return &accessaccountsv1.ExplainAccessResponse{
+		AuditId:       uuidString(audit.ID),
+		Decision:      AccessDecisionToProto(audit.Decision),
+		ReasonCode:    audit.ReasonCode,
+		PolicyVersion: audit.PolicyVersion,
+		MatchedRules:  MatchedRulesToProto(audit.Explanation.MatchedRules),
+	}
+}
+
 // ResolveExternalAccountUsageResponse maps a domain account usage result to gRPC.
 func ResolveExternalAccountUsageResponse(result service.ResolveExternalAccountUsageResult) *accessaccountsv1.ResolveExternalAccountUsageResponse {
 	return &accessaccountsv1.ResolveExternalAccountUsageResponse{

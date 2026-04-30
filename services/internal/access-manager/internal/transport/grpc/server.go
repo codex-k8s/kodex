@@ -22,6 +22,7 @@ type accessService interface {
 	PutAccessAction(context.Context, accessservice.PutAccessActionInput) (entity.AccessAction, error)
 	PutAccessRule(context.Context, accessservice.PutAccessRuleInput) (entity.AccessRule, error)
 	CheckAccess(context.Context, accessservice.CheckAccessInput) (accessservice.CheckAccessResult, error)
+	ExplainAccess(context.Context, accessservice.ExplainAccessInput) (accessservice.ExplainAccessResult, error)
 	ResolveExternalAccountUsage(context.Context, accessservice.ResolveExternalAccountUsageInput) (accessservice.ResolveExternalAccountUsageResult, error)
 }
 
@@ -102,6 +103,11 @@ func (s *Server) ResolveExternalAccountUsage(ctx context.Context, request *acces
 // CheckAccess resolves effective access for a subject, action and resource.
 func (s *Server) CheckAccess(ctx context.Context, request *accessaccountsv1.CheckAccessRequest) (*accessaccountsv1.CheckAccessResponse, error) {
 	return handleUnary(ctx, request, grpccasters.CheckAccessInput, s.service.CheckAccess, grpccasters.CheckAccessResponse)
+}
+
+// ExplainAccess returns a previously audited access decision explanation.
+func (s *Server) ExplainAccess(ctx context.Context, request *accessaccountsv1.ExplainAccessRequest) (*accessaccountsv1.ExplainAccessResponse, error) {
+	return handleUnary(ctx, request, grpccasters.ExplainAccessInput, s.service.ExplainAccess, grpccasters.ExplainAccessResponse)
 }
 
 func handleUnary[Request any, Input any, Output any, Response any](

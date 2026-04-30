@@ -75,6 +75,7 @@ const (
 	operationFindAccessRule                       = "domain.Repository.FindAccessRule"
 	operationListAccessRules                      = "domain.Repository.ListAccessRules"
 	operationRecordAccessDecision                 = "domain.Repository.RecordAccessDecision"
+	operationGetAccessDecisionAudit               = "domain.Repository.GetAccessDecisionAudit"
 )
 
 // NewRepository creates a PostgreSQL-backed access repository.
@@ -294,6 +295,10 @@ func (r *Repository) RecordAccessDecision(ctx context.Context, audit entity.Acce
 		}
 		return nil
 	})
+}
+
+func (r *Repository) GetAccessDecisionAudit(ctx context.Context, id uuid.UUID) (entity.AccessDecisionAudit, error) {
+	return queryOne(ctx, r.db, operationGetAccessDecisionAudit, queryAccessDecisionAuditGetByID, pgx.NamedArgs{"id": id}, scanAccessDecisionAudit)
 }
 
 func (r *Repository) withTx(ctx context.Context, operation string, fn func(tx pgx.Tx) error) error {
