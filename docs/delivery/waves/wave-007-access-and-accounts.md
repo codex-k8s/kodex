@@ -55,6 +55,7 @@ approvals:
 |---|---|---|
 | 7.1 | PostgreSQL repository | Полный repository-слой для уже согласованных доменных операций без подключения транспорта и новых пользовательских сценариев. |
 | 7.2 | gRPC transport | Регистрация `AccessManagerService`, обработчики для реализованных доменных сценариев, cast `proto <-> domain`, граница проверки вызывающей стороны, конфигурируемые лимиты, базовые метрики и единая граница ошибок. |
+| 7.2.1 | Общий gRPC runtime | Общий `libs/go/grpcserver` для сборки gRPC-сервера, recovery, лимитов, deadline, keepalive, max message size, базовых метрик и расширяемого auth hook. |
 | 7.3 | Access checks | Полные `CheckAccess`, `ExplainAccess`, аудит решения доступа и тесты пограничных случаев. |
 | 7.4 | Identity bootstrap | `BootstrapUserFromIdentity`, allowlist-path, статусы пользователя и тесты сценариев входа. |
 | 7.5 | External accounts | Жизненный цикл поставщиков и внешних аккаунтов, проверка ссылок на секреты, `ResolveExternalAccountUsage`. |
@@ -62,9 +63,9 @@ approvals:
 | 7.7 | Operational hardening | Полная корреляция логов, tracing, расширенные метрики, Docker/deploy manifest и smoke-путь сервиса. |
 | 7.8 | Delivery cleanup | Обновление delivery-карт, статусов #599-#602 и явное закрытие или перенос оставшегося бэклога. |
 
-## Бэклог перед следующим сервисом
+## Инфраструктурный бэклог перед следующим сервисом
 
-Перед созданием следующего доменного сервиса вынести общий gRPC runtime из `access-manager` в `libs/go/**`: сборку сервера, recovery, лимиты активных RPC, deadline, keepalive, max message size, базовые метрики и расширяемый auth hook. Доменные cast, обработчики и маппинг ошибок остаются в сервисах.
+Общий gRPC runtime вынесен из `access-manager` в `libs/go/grpcserver` до появления следующего доменного сервиса. В общий пакет входят сборка `grpc.Server`, recovery, лимиты активных RPC, deadline, keepalive, max message size, базовые метрики и расширяемый auth hook. Доменные cast, обработчики и маппинг ошибок остаются в сервисах.
 
 ## Критерии начала
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"runtime/debug"
 
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/errs"
 	grpcruntime "google.golang.org/grpc"
@@ -13,20 +12,6 @@ import (
 )
 
 const logKeyMethod = "method"
-
-// UnaryRecoveryInterceptor converts panics into safe gRPC internal errors.
-func UnaryRecoveryInterceptor(logger *slog.Logger) grpcruntime.UnaryServerInterceptor {
-	logger = defaultLogger(logger)
-	return func(ctx context.Context, req any, info *grpcruntime.UnaryServerInfo, handler grpcruntime.UnaryHandler) (response any, err error) {
-		defer func() {
-			if recovered := recover(); recovered != nil {
-				logger.ErrorContext(ctx, "access-manager grpc panic recovered", logKeyMethod, info.FullMethod, "panic", recovered, "stack", string(debug.Stack()))
-				err = status.Error(codes.Internal, "internal error")
-			}
-		}()
-		return handler(ctx, req)
-	}
-}
 
 // UnaryErrorInterceptor maps domain errors to the public gRPC error boundary.
 func UnaryErrorInterceptor(logger *slog.Logger) grpcruntime.UnaryServerInterceptor {
