@@ -335,7 +335,11 @@ func ExplainAccessInput(request *accessaccountsv1.ExplainAccessRequest) (accesss
 	if err != nil {
 		return accessservice.ExplainAccessInput{}, err
 	}
-	return accessservice.ExplainAccessInput{AuditID: auditID}, nil
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return accessservice.ExplainAccessInput{}, err
+	}
+	return accessservice.ExplainAccessInput{AuditID: auditID, Scope: ScopeRefFromProto(request.GetScope()), Meta: meta}, nil
 }
 
 // ResolveExternalAccountUsageInput maps a gRPC request to the domain read input.

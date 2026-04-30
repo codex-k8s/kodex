@@ -734,6 +734,23 @@ func (s *Service) ExplainAccess(ctx context.Context, input ExplainAccessInput) (
 	if input.AuditID == uuid.Nil {
 		return ExplainAccessResult{}, errs.ErrInvalidArgument
 	}
+	actor := input.Meta.Actor
+	if strings.TrimSpace(actor.Type) == "" || strings.TrimSpace(actor.ID) == "" {
+		return ExplainAccessResult{}, errs.ErrInvalidArgument
+	}
+	decision, err := s.CheckAccess(ctx, CheckAccessInput{
+		Subject:   value.SubjectRef(actor),
+		ActionKey: accessActionExplainAccess,
+		Resource:  value.ResourceRef{Type: accessResourceAccessDecisionAudit, ID: input.AuditID.String()},
+		Scope:     input.Scope,
+		Meta:      input.Meta,
+	})
+	if err != nil {
+		return ExplainAccessResult{}, err
+	}
+	if decision.Decision != enum.AccessDecisionAllow {
+		return ExplainAccessResult{}, errs.ErrForbidden
+	}
 	audit, err := s.repository.GetAccessDecisionAudit(ctx, input.AuditID)
 	if err != nil {
 		return ExplainAccessResult{}, err

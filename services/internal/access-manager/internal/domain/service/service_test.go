@@ -1011,6 +1011,7 @@ func TestCheckAccessAuditsAllowAndExplainAccessReadsDecision(t *testing.T) {
 		Subject:   value.SubjectRef{Type: string(enum.AccessSubjectUser), ID: user.ID.String()},
 		ActionKey: action.Key, Resource: value.ResourceRef{Type: "project", ID: "project-1"},
 		Scope: value.ScopeRef{Type: "project", ID: "project-1"},
+		Meta:  value.CommandMeta{RequestContext: value.RequestContext{Source: "staff-gateway", TraceID: "trace-1"}},
 	})
 	if err != nil {
 		t.Fatalf("check access: %v", err)
@@ -1024,7 +1025,31 @@ func TestCheckAccessAuditsAllowAndExplainAccessReadsDecision(t *testing.T) {
 	if len(store.audits) != 1 {
 		t.Fatalf("audit count = %d, want 1", len(store.audits))
 	}
-	explained, err := svc.ExplainAccess(ctx, ExplainAccessInput{AuditID: store.audits[0].ID})
+	auditID := store.audits[0].ID
+	if store.audits[0].Scope != (value.ScopeRef{Type: "project", ID: "project-1"}) {
+		t.Fatalf("audit scope = %+v, want project/project-1", store.audits[0].Scope)
+	}
+	if store.audits[0].RequestContext.TraceID != "trace-1" {
+		t.Fatalf("audit request trace = %q, want trace-1", store.audits[0].RequestContext.TraceID)
+	}
+	_, err = svc.PutAccessAction(ctx, PutAccessActionInput{
+		Key: accessActionExplainAccess, DisplayName: "Чтение объяснения доступа", ResourceType: accessResourceAccessDecisionAudit,
+	})
+	if err != nil {
+		t.Fatalf("put explain action: %v", err)
+	}
+	_, err = svc.PutAccessRule(ctx, PutAccessRuleInput{
+		Effect: enum.AccessEffectAllow, SubjectType: enum.AccessSubjectUser, SubjectID: user.ID.String(),
+		ActionKey: accessActionExplainAccess, ResourceType: accessResourceAccessDecisionAudit, ScopeType: "global",
+	})
+	if err != nil {
+		t.Fatalf("put explain rule: %v", err)
+	}
+	explained, err := svc.ExplainAccess(ctx, ExplainAccessInput{
+		AuditID: auditID,
+		Scope:   value.ScopeRef{Type: "global"},
+		Meta:    value.CommandMeta{Actor: value.Actor{Type: string(enum.AccessSubjectUser), ID: user.ID.String()}},
+	})
 	if err != nil {
 		t.Fatalf("explain access: %v", err)
 	}
@@ -1041,6 +1066,25 @@ func TestExplainAccessRejectsEmptyAuditID(t *testing.T) {
 	_, err := svc.ExplainAccess(context.Background(), ExplainAccessInput{})
 	if !errors.Is(err, errs.ErrInvalidArgument) {
 		t.Fatalf("err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+}
+
+func TestExplainAccessRequiresAuthorizedActor(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	user := store.seedUser(enum.UserStatusActive)
+
+	_, err := svc.ExplainAccess(ctx, ExplainAccessInput{
+		AuditID: uuid.New(),
+		Scope:   value.ScopeRef{Type: "global"},
+		Meta:    value.CommandMeta{Actor: value.Actor{Type: string(enum.AccessSubjectUser), ID: user.ID.String()}},
+	})
+	if !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("err = %v, want %v", err, errs.ErrForbidden)
+	}
+	if len(store.audits) != 1 || store.audits[0].ActionKey != accessActionExplainAccess {
+		t.Fatalf("authorization audit = %+v, want explain access decision", store.audits)
 	}
 }
 

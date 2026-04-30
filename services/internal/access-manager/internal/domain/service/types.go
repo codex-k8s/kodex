@@ -150,6 +150,8 @@ type CheckAccessResult struct {
 // ExplainAccessInput identifies a previously audited access decision.
 type ExplainAccessInput struct {
 	AuditID uuid.UUID
+	Scope   value.ScopeRef
+	Meta    value.CommandMeta
 }
 
 // ExplainAccessResult returns the stored access decision explanation.

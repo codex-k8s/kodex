@@ -97,12 +97,21 @@ func TestExplainAccessMapsRequestAndResponse(t *testing.T) {
 			if input.AuditID != auditID {
 				t.Fatalf("AuditID = %s, want %s", input.AuditID, auditID)
 			}
+			if input.Scope.Type != "global" || input.Meta.Actor.ID != "operator-1" {
+				t.Fatalf("unexpected explain input: %+v", input)
+			}
 			return accessservice.ExplainAccessResult{
 				Audit: entity.AccessDecisionAudit{
-					ID:            auditID,
-					Decision:      enum.AccessDecisionAllow,
-					ReasonCode:    "explicit_allow",
-					PolicyVersion: 7,
+					ID:             auditID,
+					Subject:        value.SubjectRef{Type: "user", ID: "user-1"},
+					ActionKey:      "project.read",
+					Resource:       value.ResourceRef{Type: "project", ID: "project-1"},
+					Scope:          value.ScopeRef{Type: "project", ID: "project-1"},
+					RequestContext: value.RequestContext{Source: "staff-gateway", TraceID: "trace-1"},
+					Decision:       enum.AccessDecisionAllow,
+					ReasonCode:     "explicit_allow",
+					PolicyVersion:  7,
+					CreatedAt:      time.Date(2026, 4, 30, 12, 0, 0, 0, time.UTC),
 					Explanation: value.DecisionExplanation{
 						MatchedRules: []value.RuleExplanation{{
 							RuleID:     ruleID,
@@ -119,7 +128,11 @@ func TestExplainAccessMapsRequestAndResponse(t *testing.T) {
 		},
 	}
 
-	response, err := NewServer(service).ExplainAccess(context.Background(), &accessaccountsv1.ExplainAccessRequest{AuditId: auditID.String()})
+	response, err := NewServer(service).ExplainAccess(context.Background(), &accessaccountsv1.ExplainAccessRequest{
+		AuditId: auditID.String(),
+		Scope:   &accessaccountsv1.ScopeRef{Type: "global"},
+		Meta:    &accessaccountsv1.CommandMeta{Actor: &accessaccountsv1.Actor{Type: "user", Id: "operator-1"}},
+	})
 	if err != nil {
 		t.Fatalf("ExplainAccess(): %v", err)
 	}
@@ -128,6 +141,11 @@ func TestExplainAccessMapsRequestAndResponse(t *testing.T) {
 	}
 	if response.GetPolicyVersion() != 7 || len(response.GetMatchedRules()) != 1 || response.GetMatchedRules()[0].GetRuleId() != ruleID.String() {
 		t.Fatalf("matched rules = %+v, want rule %s", response.GetMatchedRules(), ruleID)
+	}
+	if response.GetSubject().GetId() != "user-1" || response.GetActionKey() != "project.read" ||
+		response.GetResource().GetId() != "project-1" || response.GetScope().GetType() != "project" ||
+		response.GetRequestContext().GetTraceId() != "trace-1" || response.GetCreatedAt() == "" {
+		t.Fatalf("incomplete audit response: %+v", response)
 	}
 }
 

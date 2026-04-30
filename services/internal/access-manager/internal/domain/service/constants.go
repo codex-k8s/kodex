@@ -55,4 +55,6 @@ const (
 	accessRuleScopeOrganization              = "organization"
 	accessRuleScopeProject                   = "project"
 	accessRuleScopeRepository                = "repository"
+	accessActionExplainAccess                = "access.audit.explain"
+	accessResourceAccessDecisionAudit        = "access_decision_audit"
 )

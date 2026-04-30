@@ -1,6 +1,8 @@
 package casters
 
 import (
+	"time"
+
 	accessaccountsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/access_accounts/v1"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/service"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/entity"
@@ -167,11 +169,17 @@ func CheckAccessResponse(result service.CheckAccessResult) *accessaccountsv1.Che
 func ExplainAccessResponse(result service.ExplainAccessResult) *accessaccountsv1.ExplainAccessResponse {
 	audit := result.Audit
 	return &accessaccountsv1.ExplainAccessResponse{
-		AuditId:       uuidString(audit.ID),
-		Decision:      AccessDecisionToProto(audit.Decision),
-		ReasonCode:    audit.ReasonCode,
-		PolicyVersion: audit.PolicyVersion,
-		MatchedRules:  MatchedRulesToProto(audit.Explanation.MatchedRules),
+		AuditId:        uuidString(audit.ID),
+		Decision:       AccessDecisionToProto(audit.Decision),
+		ReasonCode:     audit.ReasonCode,
+		PolicyVersion:  audit.PolicyVersion,
+		MatchedRules:   MatchedRulesToProto(audit.Explanation.MatchedRules),
+		Subject:        SubjectRefToProto(audit.Subject),
+		ActionKey:      audit.ActionKey,
+		Resource:       ResourceRefToProto(audit.Resource),
+		Scope:          ScopeRefToProto(audit.Scope),
+		RequestContext: RequestContextToProto(audit.RequestContext),
+		CreatedAt:      audit.CreatedAt.Format(time.RFC3339Nano),
 	}
 }
 

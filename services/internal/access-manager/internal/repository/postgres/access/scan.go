@@ -267,8 +267,8 @@ func scanAccessRule(row rowScanner) (entity.AccessRule, error) {
 
 func scanAccessDecisionAudit(row rowScanner) (entity.AccessDecisionAudit, error) {
 	var audit entity.AccessDecisionAudit
-	var subjectType, subjectID, resourceType, resourceID, decision string
-	var explanation []byte
+	var subjectType, subjectID, resourceType, resourceID, scopeType, scopeID, decision string
+	var requestContext, explanation []byte
 	err := row.Scan(
 		&audit.ID,
 		&subjectType,
@@ -276,6 +276,9 @@ func scanAccessDecisionAudit(row rowScanner) (entity.AccessDecisionAudit, error)
 		&audit.ActionKey,
 		&resourceType,
 		&resourceID,
+		&scopeType,
+		&scopeID,
+		&requestContext,
 		&decision,
 		&audit.ReasonCode,
 		&audit.PolicyVersion,
@@ -287,7 +290,11 @@ func scanAccessDecisionAudit(row rowScanner) (entity.AccessDecisionAudit, error)
 	}
 	audit.Subject = value.SubjectRef{Type: subjectType, ID: subjectID}
 	audit.Resource = value.ResourceRef{Type: resourceType, ID: resourceID}
+	audit.Scope = value.ScopeRef{Type: scopeType, ID: scopeID}
 	audit.Decision = enum.AccessDecision(decision)
+	if err := json.Unmarshal(requestContext, &audit.RequestContext); err != nil {
+		return entity.AccessDecisionAudit{}, err
+	}
 	if err := json.Unmarshal(explanation, &audit.Explanation); err != nil {
 		return entity.AccessDecisionAudit{}, err
 	}

@@ -254,10 +254,17 @@ func TestRepositoryIntegrationAccessDecisionAuditRoundTrip(t *testing.T) {
 	now := time.Date(2026, 4, 30, 12, 0, 0, 0, time.UTC)
 	ruleID := uuid.New()
 	audit := entity.AccessDecisionAudit{
-		ID:            uuid.New(),
-		Subject:       value.SubjectRef{Type: "user", ID: uuid.NewString()},
-		ActionKey:     "project.read",
-		Resource:      value.ResourceRef{Type: "project", ID: "project-1"},
+		ID:        uuid.New(),
+		Subject:   value.SubjectRef{Type: "user", ID: uuid.NewString()},
+		ActionKey: "project.read",
+		Resource:  value.ResourceRef{Type: "project", ID: "project-1"},
+		Scope:     value.ScopeRef{Type: "project", ID: "project-1"},
+		RequestContext: value.RequestContext{
+			Source:       "staff-gateway",
+			TraceID:      "trace-1",
+			SessionID:    "session-1",
+			ClientIPHash: "hash-1",
+		},
 		Decision:      enum.AccessDecisionAllow,
 		ReasonCode:    "explicit_allow",
 		PolicyVersion: 2,
@@ -286,6 +293,9 @@ func TestRepositoryIntegrationAccessDecisionAuditRoundTrip(t *testing.T) {
 	}
 	if stored.ID != audit.ID || stored.Decision != audit.Decision || stored.ReasonCode != audit.ReasonCode {
 		t.Fatalf("stored audit = %#v, want %#v", stored, audit)
+	}
+	if stored.Scope != audit.Scope || stored.RequestContext.TraceID != audit.RequestContext.TraceID {
+		t.Fatalf("stored context = %+v/%+v, want %+v/%+v", stored.Scope, stored.RequestContext, audit.Scope, audit.RequestContext)
 	}
 	if len(stored.Explanation.MatchedRules) != 1 || stored.Explanation.MatchedRules[0].RuleID != ruleID {
 		t.Fatalf("stored explanation = %+v, want rule %s", stored.Explanation, ruleID)

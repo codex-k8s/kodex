@@ -283,11 +283,15 @@ func (r *Repository) ListAccessRules(ctx context.Context, filter query.AccessRul
 
 func (r *Repository) RecordAccessDecision(ctx context.Context, audit entity.AccessDecisionAudit, event *entity.OutboxEvent) error {
 	return r.withTx(ctx, operationRecordAccessDecision, func(tx pgx.Tx) error {
+		requestContext, err := json.Marshal(audit.RequestContext)
+		if err != nil {
+			return err
+		}
 		payload, err := json.Marshal(audit.Explanation)
 		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, queryAccessDecisionAuditCreate, accessDecisionAuditArgs(audit, payload)); err != nil {
+		if _, err := tx.Exec(ctx, queryAccessDecisionAuditCreate, accessDecisionAuditArgs(audit, requestContext, payload)); err != nil {
 			return err
 		}
 		if event != nil {
