@@ -54,7 +54,7 @@ approvals:
 | Срез | Область | Результат |
 |---|---|---|
 | 7.1 | PostgreSQL repository | Полный repository-слой для уже согласованных доменных операций без подключения транспорта и новых пользовательских сценариев. |
-| 7.2 | gRPC transport | Регистрация `AccessManagerService`, обработчики, cast `proto <-> domain`, единая граница ошибок и interceptors. |
+| 7.2 | gRPC transport | Регистрация `AccessManagerService`, обработчики для реализованных доменных сценариев, cast `proto <-> domain`, единая граница ошибок и interceptors. |
 | 7.3 | Access checks | Полные `CheckAccess`, `ExplainAccess`, аудит решения доступа и тесты пограничных случаев. |
 | 7.4 | Identity bootstrap | `BootstrapUserFromIdentity`, allowlist-path, статусы пользователя и тесты сценариев входа. |
 | 7.5 | External accounts | Жизненный цикл поставщиков и внешних аккаунтов, проверка ссылок на секреты, `ResolveExternalAccountUsage`. |

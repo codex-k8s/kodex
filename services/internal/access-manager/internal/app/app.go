@@ -17,6 +17,7 @@ import (
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	accessservice "github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/service"
 	accesspostgres "github.com/codex-k8s/kodex/services/internal/access-manager/internal/repository/postgres/access"
+	accessgrpc "github.com/codex-k8s/kodex/services/internal/access-manager/internal/transport/grpc"
 )
 
 // Run starts access-manager process servers and shuts them down with context.
@@ -36,7 +37,13 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		Handler:           healthMux(components),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(
+		grpc.ChainUnaryInterceptor(
+			accessgrpc.UnaryRecoveryInterceptor(logger),
+			accessgrpc.UnaryErrorInterceptor(logger),
+		),
+	)
+	accessgrpc.RegisterAccessManagerService(grpcServer, components.AccessService)
 
 	errCh := make(chan error, 2)
 	go func() {
