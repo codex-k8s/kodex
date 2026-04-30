@@ -246,7 +246,7 @@ approvals:
 | `key` | string | no | Внутренний ключ результата команды. |
 | `command_id` | UUID | yes | Стабильный идентификатор команды, если его передал вызывающий контур. |
 | `idempotency_key` | string | yes | Идемпотентный ключ, если `command_id` не передан. |
-| `operation` | string | no | Каноническое имя операции, например `CreateOrganization`. |
+| `operation` | string | no | Канонический путь операции, например `domain.Service.CreateOrganization`. |
 | `aggregate_type` | string | no | Тип созданного агрегата. |
 | `aggregate_id` | UUID | no | Идентификатор созданного агрегата. |
 | `created_at` | timestamp | no | Время фиксации команды. |

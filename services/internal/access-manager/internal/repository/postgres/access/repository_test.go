@@ -25,6 +25,8 @@ import (
 
 var sqlHeaderPattern = regexp.MustCompile(`^-- name: ([a-z0-9_]+__[a-z0-9_]+) :(one|many|exec)$`)
 
+const testServiceCreateOrganizationOperation = "domain.Service.CreateOrganization"
+
 func TestSQLFilesHaveNamedHeaders(t *testing.T) {
 	t.Parallel()
 
@@ -121,7 +123,7 @@ func TestRepositoryIntegrationMutationReadAndOutbox(t *testing.T) {
 		ctx,
 		organization,
 		testEvent("access.organization.created", "organization", organization.ID, now),
-		testCommandResult(commandID, "CreateOrganization", "organization", organization.ID, now),
+		testCommandResult(commandID, testServiceCreateOrganizationOperation, "organization", organization.ID, now),
 	); err != nil {
 		t.Fatalf("create organization: %v", err)
 	}
@@ -139,8 +141,8 @@ func TestRepositoryIntegrationMutationReadAndOutbox(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get command result: %v", err)
 	}
-	if result.AggregateID != organization.ID || result.Operation != "CreateOrganization" {
-		t.Fatalf("command result = %#v, want aggregate %s operation CreateOrganization", result, organization.ID)
+	if result.AggregateID != organization.ID || result.Operation != testServiceCreateOrganizationOperation {
+		t.Fatalf("command result = %#v, want aggregate %s operation %s", result, organization.ID, testServiceCreateOrganizationOperation)
 	}
 	conflictingOrganization := organization
 	conflictingOrganization.ID = uuid.New()
@@ -150,7 +152,7 @@ func TestRepositoryIntegrationMutationReadAndOutbox(t *testing.T) {
 		ctx,
 		conflictingOrganization,
 		testEvent("access.organization.created", "organization", conflictingOrganization.ID, now),
-		testCommandResult(commandID, "CreateOrganization", "organization", conflictingOrganization.ID, now),
+		testCommandResult(commandID, testServiceCreateOrganizationOperation, "organization", conflictingOrganization.ID, now),
 	)
 	if !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("duplicate command err = %v, want %v", err, errs.ErrConflict)

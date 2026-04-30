@@ -42,35 +42,70 @@ type Repository struct {
 	db database
 }
 
+const (
+	operationGetCommandResult                     = "domain.Repository.GetCommandResult"
+	operationCreateOrganization                   = "domain.Repository.CreateOrganization"
+	operationGetOrganization                      = "domain.Repository.GetOrganization"
+	operationCountActiveOwnerOrganizations        = "domain.Repository.CountActiveOwnerOrganizations"
+	operationCreateUser                           = "domain.Repository.CreateUser"
+	operationGetUser                              = "domain.Repository.GetUser"
+	operationGetUserByEmail                       = "domain.Repository.GetUserByEmail"
+	operationGetUserByIdentity                    = "domain.Repository.GetUserByIdentity"
+	operationLinkUserIdentity                     = "domain.Repository.LinkUserIdentity"
+	operationPutAllowlistEntry                    = "domain.Repository.PutAllowlistEntry"
+	operationFindAllowlistEntry                   = "domain.Repository.FindAllowlistEntry"
+	operationCreateGroup                          = "domain.Repository.CreateGroup"
+	operationGetGroup                             = "domain.Repository.GetGroup"
+	operationFindMembership                       = "domain.Repository.FindMembership"
+	operationSetMembership                        = "domain.Repository.SetMembership"
+	operationListMemberships                      = "domain.Repository.ListMemberships"
+	operationPutExternalProvider                  = "domain.Repository.PutExternalProvider"
+	operationGetExternalProvider                  = "domain.Repository.GetExternalProvider"
+	operationGetExternalProviderBySlug            = "domain.Repository.GetExternalProviderBySlug"
+	operationRegisterExternalAccount              = "domain.Repository.RegisterExternalAccount"
+	operationGetExternalAccount                   = "domain.Repository.GetExternalAccount"
+	operationBindExternalAccount                  = "domain.Repository.BindExternalAccount"
+	operationFindExternalAccountBinding           = "domain.Repository.FindExternalAccountBinding"
+	operationFindExternalAccountBindingByIdentity = "domain.Repository.FindExternalAccountBindingByIdentity"
+	operationPutSecretBindingRef                  = "domain.Repository.PutSecretBindingRef"
+	operationGetSecretBindingRef                  = "domain.Repository.GetSecretBindingRef"
+	operationPutAccessAction                      = "domain.Repository.PutAccessAction"
+	operationGetAccessActionByKey                 = "domain.Repository.GetAccessActionByKey"
+	operationPutAccessRule                        = "domain.Repository.PutAccessRule"
+	operationFindAccessRule                       = "domain.Repository.FindAccessRule"
+	operationListAccessRules                      = "domain.Repository.ListAccessRules"
+	operationRecordAccessDecision                 = "domain.Repository.RecordAccessDecision"
+)
+
 // NewRepository creates a PostgreSQL-backed access repository.
 func NewRepository(db *pgxpool.Pool) *Repository {
 	return &Repository{db: db}
 }
 
 func (r *Repository) GetCommandResult(ctx context.Context, identity query.CommandIdentity) (entity.CommandResult, error) {
-	return queryOne(ctx, r.db, "get command result", queryCommandResultGet, commandIdentityArgs(identity), scanCommandResult)
+	return queryOne(ctx, r.db, operationGetCommandResult, queryCommandResultGet, commandIdentityArgs(identity), scanCommandResult)
 }
 
 func (r *Repository) CreateOrganization(ctx context.Context, organization entity.Organization, event entity.OutboxEvent, result entity.CommandResult) error {
 	create := mutation{query: queryOrganizationCreate}
 	create.args = organizationArgs(organization)
-	return r.createWithCommandResult(ctx, "create organization", event, create, result)
+	return r.createWithCommandResult(ctx, operationCreateOrganization, event, create, result)
 }
 
 func (r *Repository) GetOrganization(ctx context.Context, id uuid.UUID) (entity.Organization, error) {
-	return queryOne(ctx, r.db, "get organization", queryOrganizationGetByID, pgx.NamedArgs{"id": id}, scanOrganization)
+	return queryOne(ctx, r.db, operationGetOrganization, queryOrganizationGetByID, pgx.NamedArgs{"id": id}, scanOrganization)
 }
 
 func (r *Repository) CountActiveOwnerOrganizations(ctx context.Context) (int, error) {
 	var count int64
 	err := r.db.QueryRow(ctx, queryOrganizationCountActiveOwner).Scan(&count)
-	return int(count), wrapError("count active owner organizations", err)
+	return int(count), wrapError(operationCountActiveOwnerOrganizations, err)
 }
 
 func (r *Repository) CreateUser(ctx context.Context, user entity.User, identity entity.UserIdentity, event entity.OutboxEvent) error {
 	return r.mutateWithOutbox(
 		ctx,
-		"create user",
+		operationCreateUser,
 		event,
 		mutation{query: queryUserCreate, args: userArgs(user)},
 		mutation{query: queryUserIdentityCreate, args: userIdentityArgs(identity)},
@@ -78,41 +113,41 @@ func (r *Repository) CreateUser(ctx context.Context, user entity.User, identity 
 }
 
 func (r *Repository) GetUser(ctx context.Context, id uuid.UUID) (entity.User, error) {
-	return queryOne(ctx, r.db, "get user", queryUserGetByID, pgx.NamedArgs{"id": id}, scanUser)
+	return queryOne(ctx, r.db, operationGetUser, queryUserGetByID, pgx.NamedArgs{"id": id}, scanUser)
 }
 
 func (r *Repository) GetUserByEmail(ctx context.Context, email string) (entity.User, error) {
-	return queryOne(ctx, r.db, "get user by email", queryUserGetByEmail, pgx.NamedArgs{"primary_email": email}, scanUser)
+	return queryOne(ctx, r.db, operationGetUserByEmail, queryUserGetByEmail, pgx.NamedArgs{"primary_email": email}, scanUser)
 }
 
 func (r *Repository) GetUserByIdentity(ctx context.Context, provider enum.IdentityProvider, subject string) (entity.User, error) {
-	return queryOne(ctx, r.db, "get user by identity", queryUserGetByIdentity, userIdentityLookupArgs(string(provider), subject), scanUser)
+	return queryOne(ctx, r.db, operationGetUserByIdentity, queryUserGetByIdentity, userIdentityLookupArgs(string(provider), subject), scanUser)
 }
 
 func (r *Repository) LinkUserIdentity(ctx context.Context, identity entity.UserIdentity, event entity.OutboxEvent) error {
-	return r.mutateWithOutbox(ctx, "link user identity", event, mutation{query: queryUserIdentityCreate, args: userIdentityArgs(identity)})
+	return r.mutateWithOutbox(ctx, operationLinkUserIdentity, event, mutation{query: queryUserIdentityCreate, args: userIdentityArgs(identity)})
 }
 
 func (r *Repository) PutAllowlistEntry(ctx context.Context, entry entity.AllowlistEntry, event entity.OutboxEvent) error {
-	return r.mutateWithOutbox(ctx, "put allowlist entry", event, mutation{query: queryAllowlistEntryUpsert, args: allowlistEntryArgs(entry), requireAffected: true})
+	return r.mutateWithOutbox(ctx, operationPutAllowlistEntry, event, mutation{query: queryAllowlistEntryUpsert, args: allowlistEntryArgs(entry), requireAffected: true})
 }
 
 func (r *Repository) FindAllowlistEntry(ctx context.Context, matchType enum.AllowlistMatchType, value string) (entity.AllowlistEntry, error) {
-	return queryOne(ctx, r.db, "find allowlist entry", queryAllowlistEntryFind, allowlistLookupArgs(string(matchType), value), scanAllowlistEntry)
+	return queryOne(ctx, r.db, operationFindAllowlistEntry, queryAllowlistEntryFind, allowlistLookupArgs(string(matchType), value), scanAllowlistEntry)
 }
 
 func (r *Repository) CreateGroup(ctx context.Context, group entity.Group, event entity.OutboxEvent, result entity.CommandResult) error {
 	create := mutation{args: groupArgs(group)}
 	create.query = queryGroupCreate
-	return r.createWithCommandResult(ctx, "create group", event, create, result)
+	return r.createWithCommandResult(ctx, operationCreateGroup, event, create, result)
 }
 
 func (r *Repository) GetGroup(ctx context.Context, id uuid.UUID) (entity.Group, error) {
-	return queryOne(ctx, r.db, "get group", queryGroupGetByID, pgx.NamedArgs{"id": id}, scanGroup)
+	return queryOne(ctx, r.db, operationGetGroup, queryGroupGetByID, pgx.NamedArgs{"id": id}, scanGroup)
 }
 
 func (r *Repository) FindMembership(ctx context.Context, identity query.MembershipIdentity) (entity.Membership, error) {
-	return queryOne(ctx, r.db, "find membership", queryMembershipFindByIdentity, pgx.NamedArgs{
+	return queryOne(ctx, r.db, operationFindMembership, queryMembershipFindByIdentity, pgx.NamedArgs{
 		"subject_type": string(identity.SubjectType),
 		"subject_id":   identity.SubjectID,
 		"target_type":  string(identity.TargetType),
@@ -121,13 +156,13 @@ func (r *Repository) FindMembership(ctx context.Context, identity query.Membersh
 }
 
 func (r *Repository) SetMembership(ctx context.Context, membership entity.Membership, event entity.OutboxEvent) error {
-	return r.mutateWithOutbox(ctx, "set membership", event, mutation{query: queryMembershipUpsert, args: membershipArgs(membership), requireAffected: true})
+	return r.mutateWithOutbox(ctx, operationSetMembership, event, mutation{query: queryMembershipUpsert, args: membershipArgs(membership), requireAffected: true})
 }
 
 func (r *Repository) ListMemberships(ctx context.Context, filter query.MembershipGraphFilter) ([]entity.Membership, error) {
 	subjectID, err := uuid.Parse(filter.Subject.ID)
 	if err != nil {
-		return nil, wrapError("list memberships", errs.ErrInvalidArgument)
+		return nil, wrapError(operationListMemberships, errs.ErrInvalidArgument)
 	}
 	rows, err := r.db.Query(ctx, queryMembershipListBySubject, pgx.NamedArgs{
 		"subject_type": filter.Subject.Type,
@@ -135,22 +170,22 @@ func (r *Repository) ListMemberships(ctx context.Context, filter query.Membershi
 		"status":       string(filter.Status),
 	})
 	if err != nil {
-		return nil, wrapError("list memberships", err)
+		return nil, wrapError(operationListMemberships, err)
 	}
 	memberships, err := scanRows(rows, scanMembership)
-	return memberships, wrapError("list memberships", err)
+	return memberships, wrapError(operationListMemberships, err)
 }
 
 func (r *Repository) PutExternalProvider(ctx context.Context, provider entity.ExternalProvider, event entity.OutboxEvent) error {
-	return r.mutateWithOutbox(ctx, "put external provider", event, mutation{query: queryExternalProviderUpsert, args: externalProviderArgs(provider), requireAffected: true})
+	return r.mutateWithOutbox(ctx, operationPutExternalProvider, event, mutation{query: queryExternalProviderUpsert, args: externalProviderArgs(provider), requireAffected: true})
 }
 
 func (r *Repository) GetExternalProvider(ctx context.Context, id uuid.UUID) (entity.ExternalProvider, error) {
-	return queryOne(ctx, r.db, "get external provider", queryExternalProviderGetByID, pgx.NamedArgs{"id": id}, scanExternalProvider)
+	return queryOne(ctx, r.db, operationGetExternalProvider, queryExternalProviderGetByID, pgx.NamedArgs{"id": id}, scanExternalProvider)
 }
 
 func (r *Repository) GetExternalProviderBySlug(ctx context.Context, slug string) (entity.ExternalProvider, error) {
-	return queryOne(ctx, r.db, "get external provider by slug", queryExternalProviderGetBySlug, pgx.NamedArgs{"slug": slug}, scanExternalProvider)
+	return queryOne(ctx, r.db, operationGetExternalProviderBySlug, queryExternalProviderGetBySlug, pgx.NamedArgs{"slug": slug}, scanExternalProvider)
 }
 
 func (r *Repository) RegisterExternalAccount(ctx context.Context, account entity.ExternalAccount, event entity.OutboxEvent, result entity.CommandResult) error {
@@ -158,19 +193,19 @@ func (r *Repository) RegisterExternalAccount(ctx context.Context, account entity
 		query: queryExternalAccountCreate,
 		args:  externalAccountArgs(account),
 	}
-	return r.createWithCommandResult(ctx, "register external account", event, create, result)
+	return r.createWithCommandResult(ctx, operationRegisterExternalAccount, event, create, result)
 }
 
 func (r *Repository) GetExternalAccount(ctx context.Context, id uuid.UUID) (entity.ExternalAccount, error) {
-	return queryOne(ctx, r.db, "get external account", queryExternalAccountGetByID, pgx.NamedArgs{"id": id}, scanExternalAccount)
+	return queryOne(ctx, r.db, operationGetExternalAccount, queryExternalAccountGetByID, pgx.NamedArgs{"id": id}, scanExternalAccount)
 }
 
 func (r *Repository) BindExternalAccount(ctx context.Context, binding entity.ExternalAccountBinding, event entity.OutboxEvent) error {
-	return r.mutateWithOutbox(ctx, "bind external account", event, mutation{query: queryExternalAccountBindingUpsert, args: externalAccountBindingArgs(binding), requireAffected: true})
+	return r.mutateWithOutbox(ctx, operationBindExternalAccount, event, mutation{query: queryExternalAccountBindingUpsert, args: externalAccountBindingArgs(binding), requireAffected: true})
 }
 
 func (r *Repository) FindExternalAccountBinding(ctx context.Context, filter query.ExternalAccountUsageFilter) (entity.ExternalAccountBinding, error) {
-	return queryOne(ctx, r.db, "find external account binding", queryExternalAccountBindingFindForUsage, pgx.NamedArgs{
+	return queryOne(ctx, r.db, operationFindExternalAccountBinding, queryExternalAccountBindingFindForUsage, pgx.NamedArgs{
 		"external_account_id": filter.ExternalAccountID,
 		"usage_scope_type":    filter.UsageScope.Type,
 		"usage_scope_id":      filter.UsageScope.ID,
@@ -179,7 +214,7 @@ func (r *Repository) FindExternalAccountBinding(ctx context.Context, filter quer
 }
 
 func (r *Repository) FindExternalAccountBindingByIdentity(ctx context.Context, identity query.ExternalAccountBindingIdentity) (entity.ExternalAccountBinding, error) {
-	return queryOne(ctx, r.db, "find external account binding by identity", queryExternalAccountBindingFindByIdentity, pgx.NamedArgs{
+	return queryOne(ctx, r.db, operationFindExternalAccountBindingByIdentity, queryExternalAccountBindingFindByIdentity, pgx.NamedArgs{
 		"external_account_id": identity.ExternalAccountID,
 		"usage_scope_type":    identity.UsageScope.Type,
 		"usage_scope_id":      identity.UsageScope.ID,
@@ -187,27 +222,27 @@ func (r *Repository) FindExternalAccountBindingByIdentity(ctx context.Context, i
 }
 
 func (r *Repository) PutSecretBindingRef(ctx context.Context, secret entity.SecretBindingRef, event entity.OutboxEvent) error {
-	return r.mutateWithOutbox(ctx, "put secret binding ref", event, mutation{query: querySecretBindingRefUpsert, args: secretBindingRefArgs(secret), requireAffected: true})
+	return r.mutateWithOutbox(ctx, operationPutSecretBindingRef, event, mutation{query: querySecretBindingRefUpsert, args: secretBindingRefArgs(secret), requireAffected: true})
 }
 
 func (r *Repository) GetSecretBindingRef(ctx context.Context, id uuid.UUID) (entity.SecretBindingRef, error) {
-	return queryOne(ctx, r.db, "get secret binding ref", querySecretBindingRefGetByID, pgx.NamedArgs{"id": id}, scanSecretBindingRef)
+	return queryOne(ctx, r.db, operationGetSecretBindingRef, querySecretBindingRefGetByID, pgx.NamedArgs{"id": id}, scanSecretBindingRef)
 }
 
 func (r *Repository) PutAccessAction(ctx context.Context, action entity.AccessAction, event entity.OutboxEvent) error {
-	return r.mutateWithOutbox(ctx, "put access action", event, mutation{query: queryAccessActionUpsert, args: accessActionArgs(action), requireAffected: true})
+	return r.mutateWithOutbox(ctx, operationPutAccessAction, event, mutation{query: queryAccessActionUpsert, args: accessActionArgs(action), requireAffected: true})
 }
 
 func (r *Repository) GetAccessActionByKey(ctx context.Context, key string) (entity.AccessAction, error) {
-	return queryOne(ctx, r.db, "get access action by key", queryAccessActionGetByKey, pgx.NamedArgs{"key": key}, scanAccessAction)
+	return queryOne(ctx, r.db, operationGetAccessActionByKey, queryAccessActionGetByKey, pgx.NamedArgs{"key": key}, scanAccessAction)
 }
 
 func (r *Repository) PutAccessRule(ctx context.Context, rule entity.AccessRule, event entity.OutboxEvent) error {
-	return r.mutateWithOutbox(ctx, "put access rule", event, mutation{query: queryAccessRuleUpsert, args: accessRuleArgs(rule), requireAffected: true})
+	return r.mutateWithOutbox(ctx, operationPutAccessRule, event, mutation{query: queryAccessRuleUpsert, args: accessRuleArgs(rule), requireAffected: true})
 }
 
 func (r *Repository) FindAccessRule(ctx context.Context, identity query.AccessRuleIdentity) (entity.AccessRule, error) {
-	return queryOne(ctx, r.db, "find access rule", queryAccessRuleFindByIdentity, pgx.NamedArgs{
+	return queryOne(ctx, r.db, operationFindAccessRule, queryAccessRuleFindByIdentity, pgx.NamedArgs{
 		"effect":        string(identity.Effect),
 		"subject_type":  string(identity.SubjectType),
 		"subject_id":    identity.SubjectID,
@@ -239,14 +274,14 @@ func (r *Repository) ListAccessRules(ctx context.Context, filter query.AccessRul
 		"scope_id":      filter.Scope.ID,
 	})
 	if err != nil {
-		return nil, wrapError("list access rules", err)
+		return nil, wrapError(operationListAccessRules, err)
 	}
 	rules, err := scanRows(rows, scanAccessRule)
-	return rules, wrapError("list access rules", err)
+	return rules, wrapError(operationListAccessRules, err)
 }
 
 func (r *Repository) RecordAccessDecision(ctx context.Context, audit entity.AccessDecisionAudit, event *entity.OutboxEvent) error {
-	return r.withTx(ctx, "record access decision", func(tx pgx.Tx) error {
+	return r.withTx(ctx, operationRecordAccessDecision, func(tx pgx.Tx) error {
 		payload, err := json.Marshal(audit.Explanation)
 		if err != nil {
 			return err

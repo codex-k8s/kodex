@@ -55,31 +55,22 @@ func userIdentityLookupArgs(provider string, subject string) pgx.NamedArgs {
 }
 
 func commandIdentityArgs(identity query.CommandIdentity) pgx.NamedArgs {
-	args := pgx.NamedArgs{
-		"command_id":      nil,
-		"idempotency_key": identity.IdempotencyKey,
+	return pgx.NamedArgs{
+		"command_id":      nullableCommandID(identity.CommandID),
+		"idempotency_key": commandLookupIdempotencyKey(identity),
 	}
-	if identity.CommandID != uuid.Nil {
-		args["command_id"] = identity.CommandID
-		args["idempotency_key"] = ""
-	}
-	return args
 }
 
 func commandResultArgs(result entity.CommandResult) pgx.NamedArgs {
-	args := pgx.NamedArgs{
+	return pgx.NamedArgs{
 		"key":             result.Key,
-		"command_id":      nil,
+		"command_id":      nullableCommandID(result.CommandID),
 		"idempotency_key": result.IdempotencyKey,
 		"operation":       result.Operation,
 		"aggregate_type":  result.AggregateType,
 		"aggregate_id":    result.AggregateID,
 		"created_at":      result.CreatedAt,
 	}
-	if result.CommandID != uuid.Nil {
-		args["command_id"] = result.CommandID
-	}
-	return args
 }
 
 func allowlistEntryArgs(entry entity.AllowlistEntry) pgx.NamedArgs {
@@ -133,18 +124,17 @@ func membershipArgs(membership entity.Membership) pgx.NamedArgs {
 }
 
 func externalProviderArgs(provider entity.ExternalProvider) pgx.NamedArgs {
-	args := pgx.NamedArgs{
-		"id":         provider.ID,
-		"slug":       provider.Slug,
-		"version":    provider.Version,
-		"created_at": provider.CreatedAt,
-		"updated_at": provider.UpdatedAt,
+	return pgx.NamedArgs{
+		"id":             provider.ID,
+		"slug":           provider.Slug,
+		"provider_kind":  string(provider.ProviderKind),
+		"display_name":   provider.DisplayName,
+		"icon_asset_ref": provider.IconAssetRef,
+		"status":         string(provider.Status),
+		"version":        provider.Version,
+		"created_at":     provider.CreatedAt,
+		"updated_at":     provider.UpdatedAt,
 	}
-	args["provider_kind"] = string(provider.ProviderKind)
-	args["display_name"] = provider.DisplayName
-	args["status"] = string(provider.Status)
-	args["icon_asset_ref"] = provider.IconAssetRef
-	return args
 }
 
 func externalAccountArgs(account entity.ExternalAccount) pgx.NamedArgs {
@@ -165,13 +155,13 @@ func externalAccountArgs(account entity.ExternalAccount) pgx.NamedArgs {
 }
 
 func externalAccountBindingArgs(binding entity.ExternalAccountBinding) pgx.NamedArgs {
-	args := baseArgs(binding.Base)
-	args["external_account_id"] = binding.ExternalAccountID
-	args["usage_scope_type"] = string(binding.UsageScopeType)
-	args["usage_scope_id"] = binding.UsageScopeID
-	args["allowed_action_keys"] = binding.AllowedActionKeys
-	args["status"] = string(binding.Status)
-	return args
+	return withBaseArgs(binding.Base, pgx.NamedArgs{
+		"external_account_id": binding.ExternalAccountID,
+		"usage_scope_type":    string(binding.UsageScopeType),
+		"usage_scope_id":      binding.UsageScopeID,
+		"allowed_action_keys": binding.AllowedActionKeys,
+		"status":              string(binding.Status),
+	})
 }
 
 func secretBindingRefArgs(secret entity.SecretBindingRef) pgx.NamedArgs {
@@ -256,18 +246,31 @@ func nullableUUID(id *uuid.UUID) any {
 	return *id
 }
 
-func baseArgs(base entity.Base) pgx.NamedArgs {
-	return pgx.NamedArgs{
-		"id":         base.ID,
-		"version":    base.Version,
-		"created_at": base.CreatedAt,
-		"updated_at": base.UpdatedAt,
-	}
-}
-
 func nullableTime(value *time.Time) any {
 	if value == nil {
 		return nil
 	}
 	return *value
+}
+
+func withBaseArgs(base entity.Base, args pgx.NamedArgs) pgx.NamedArgs {
+	args["id"] = base.ID
+	args["version"] = base.Version
+	args["created_at"] = base.CreatedAt
+	args["updated_at"] = base.UpdatedAt
+	return args
+}
+
+func nullableCommandID(id uuid.UUID) any {
+	if id == uuid.Nil {
+		return nil
+	}
+	return id
+}
+
+func commandLookupIdempotencyKey(identity query.CommandIdentity) string {
+	if identity.CommandID != uuid.Nil {
+		return ""
+	}
+	return identity.IdempotencyKey
 }
