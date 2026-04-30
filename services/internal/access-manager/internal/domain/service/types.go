@@ -78,6 +78,7 @@ type PutExternalProviderInput struct {
 	DisplayName  string
 	IconAssetRef string
 	Status       enum.ExternalProviderStatus
+	CreateOnly   bool
 	Meta         value.CommandMeta
 }
 

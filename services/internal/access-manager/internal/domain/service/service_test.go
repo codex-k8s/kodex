@@ -274,7 +274,7 @@ func TestCheckAccessExplicitDenyWins(t *testing.T) {
 	result, err := svc.CheckAccess(ctx, CheckAccessInput{
 		Subject:   value.SubjectRef{Type: string(enum.AccessSubjectUser), ID: user.ID.String()},
 		ActionKey: action.Key, Resource: value.ResourceRef{Type: "project", ID: "project-1"},
-		Scope: value.ScopeRef{Type: "project", ID: "project-1"}, Audit: true,
+		Scope: value.ScopeRef{Type: "project", ID: "project-1"},
 	})
 	if err != nil {
 		t.Fatalf("check access: %v", err)
@@ -287,6 +287,25 @@ func TestCheckAccessExplicitDenyWins(t *testing.T) {
 	}
 	if len(store.audits) != 1 {
 		t.Fatalf("audit count = %d, want 1", len(store.audits))
+	}
+}
+
+func TestPutExternalProviderCreateOnlyRejectsMutation(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+
+	_, err := svc.PutExternalProvider(ctx, PutExternalProviderInput{
+		Slug: "github", ProviderKind: enum.ExternalProviderRepository, DisplayName: "GitHub", CreateOnly: true,
+	})
+	if err != nil {
+		t.Fatalf("put provider: %v", err)
+	}
+	_, err = svc.PutExternalProvider(ctx, PutExternalProviderInput{
+		Slug: "github", ProviderKind: enum.ExternalProviderRepository, DisplayName: "GitHub Enterprise", CreateOnly: true,
+	})
+	if !errors.Is(err, errs.ErrAlreadyExists) {
+		t.Fatalf("err = %v, want %v", err, errs.ErrAlreadyExists)
 	}
 }
 
@@ -743,6 +762,36 @@ func TestBindExternalAccountKeepsIdentityOnUpdate(t *testing.T) {
 	}
 }
 
+func TestBindExternalAccountRejectsDisabledStatus(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	provider, err := svc.PutExternalProvider(ctx, PutExternalProviderInput{
+		Slug: "github", ProviderKind: enum.ExternalProviderRepository, DisplayName: "GitHub",
+	})
+	if err != nil {
+		t.Fatalf("put provider: %v", err)
+	}
+	account, err := svc.RegisterExternalAccount(ctx, RegisterExternalAccountInput{
+		ExternalProviderID: provider.ID, AccountType: enum.ExternalAccountBot, DisplayName: "kodex-agent",
+		Meta: commandMeta("register-github-bot-for-disabled-binding"),
+	})
+	if err != nil {
+		t.Fatalf("register account: %v", err)
+	}
+	_, err = svc.PutAccessAction(ctx, PutAccessActionInput{Key: "provider.issue.write", DisplayName: "Запись Issue", ResourceType: "provider_issue"})
+	if err != nil {
+		t.Fatalf("put action: %v", err)
+	}
+	_, err = svc.BindExternalAccount(ctx, BindExternalAccountInput{
+		ExternalAccountID: account.ID, UsageScopeType: enum.ExternalAccountScopeProject, UsageScopeID: "project-1",
+		AllowedActionKeys: []string{"provider.issue.write"}, Status: enum.ExternalAccountBindingStatusDisabled,
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+}
+
 func TestRegisterExternalAccountReplaysCommandResult(t *testing.T) {
 	ctx := context.Background()
 	store := newMemoryRepository()
@@ -862,6 +911,26 @@ func TestPutAccessRuleKeepsIdentityOnUpdate(t *testing.T) {
 	}
 	if updated.ID != created.ID || updated.Version != created.Version+1 {
 		t.Fatalf("update identity/version = %s/%d, want %s/%d", updated.ID, updated.Version, created.ID, created.Version+1)
+	}
+}
+
+func TestPutAccessRuleRejectsDisabledStatus(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	user := store.seedUser(enum.UserStatusActive)
+	action, err := svc.PutAccessAction(ctx, PutAccessActionInput{
+		Key: "project.read", DisplayName: "Чтение проекта", ResourceType: "project",
+	})
+	if err != nil {
+		t.Fatalf("put action: %v", err)
+	}
+	_, err = svc.PutAccessRule(ctx, PutAccessRuleInput{
+		Effect: enum.AccessEffectAllow, SubjectType: enum.AccessSubjectUser, SubjectID: user.ID.String(),
+		ActionKey: action.Key, ResourceType: "project", ScopeType: "global", Status: enum.AccessRuleStatusDisabled,
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("err = %v, want %v", err, errs.ErrInvalidArgument)
 	}
 }
 

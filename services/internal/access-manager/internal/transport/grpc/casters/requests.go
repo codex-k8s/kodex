@@ -184,6 +184,7 @@ func PutExternalProviderInput(request *accessaccountsv1.RegisterExternalProvider
 		DisplayName:  strings.TrimSpace(request.GetDisplayName()),
 		IconAssetRef: strings.TrimSpace(request.GetIconAssetRef()),
 		Status:       status,
+		CreateOnly:   true,
 		Meta:         meta,
 	}, nil
 }
@@ -323,7 +324,7 @@ func CheckAccessInput(request *accessaccountsv1.CheckAccessRequest) (accessservi
 		ActionKey: strings.TrimSpace(request.GetActionKey()),
 		Resource:  ResourceRefFromProto(request.GetResource()),
 		Scope:     ScopeRefFromProto(request.GetScope()),
-		Audit:     request.GetAudit(),
+		Audit:     true,
 		Meta:      meta,
 	}, nil
 }
