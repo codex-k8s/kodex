@@ -14,8 +14,10 @@ import (
 
 // Repository is the domain persistence contract for access-manager use cases.
 type Repository interface {
+	// GetCommandResult returns a previously applied idempotent command result.
+	GetCommandResult(ctx context.Context, identity query.CommandIdentity) (entity.CommandResult, error)
 	// CreateOrganization stores an organization and its outbox event atomically.
-	CreateOrganization(ctx context.Context, organization entity.Organization, event entity.OutboxEvent) error
+	CreateOrganization(ctx context.Context, organization entity.Organization, event entity.OutboxEvent, result entity.CommandResult) error
 	// GetOrganization returns an organization by id.
 	GetOrganization(ctx context.Context, id uuid.UUID) (entity.Organization, error)
 	// CountActiveOwnerOrganizations returns active owner organization count.
@@ -35,7 +37,7 @@ type Repository interface {
 	// FindAllowlistEntry returns an allowlist entry by match key.
 	FindAllowlistEntry(ctx context.Context, matchType enum.AllowlistMatchType, value string) (entity.AllowlistEntry, error)
 	// CreateGroup stores a group and its outbox event atomically.
-	CreateGroup(ctx context.Context, group entity.Group, event entity.OutboxEvent) error
+	CreateGroup(ctx context.Context, group entity.Group, event entity.OutboxEvent, result entity.CommandResult) error
 	// GetGroup returns a group by id.
 	GetGroup(ctx context.Context, id uuid.UUID) (entity.Group, error)
 	// FindMembership returns a membership by natural identity.
@@ -51,7 +53,7 @@ type Repository interface {
 	// GetExternalProviderBySlug returns an external provider by stable slug.
 	GetExternalProviderBySlug(ctx context.Context, slug string) (entity.ExternalProvider, error)
 	// RegisterExternalAccount stores an external account and its outbox event.
-	RegisterExternalAccount(ctx context.Context, account entity.ExternalAccount, event entity.OutboxEvent) error
+	RegisterExternalAccount(ctx context.Context, account entity.ExternalAccount, event entity.OutboxEvent, result entity.CommandResult) error
 	// GetExternalAccount returns an external account by id.
 	GetExternalAccount(ctx context.Context, id uuid.UUID) (entity.ExternalAccount, error)
 	// BindExternalAccount stores an account binding and its outbox event.

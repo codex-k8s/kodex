@@ -8,6 +8,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/value"
 )
 
+// CommandIdentity identifies one idempotent mutation command.
+type CommandIdentity struct {
+	CommandID      uuid.UUID
+	IdempotencyKey string
+}
+
 // MembershipGraphFilter selects active memberships for subject graph expansion.
 type MembershipGraphFilter struct {
 	Subject value.SubjectRef

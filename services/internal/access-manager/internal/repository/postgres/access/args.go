@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/query"
 )
 
 func organizationArgs(organization entity.Organization) pgx.NamedArgs {
@@ -51,6 +52,34 @@ func userIdentityArgs(identity entity.UserIdentity) pgx.NamedArgs {
 
 func userIdentityLookupArgs(provider string, subject string) pgx.NamedArgs {
 	return pgx.NamedArgs{"provider": provider, "subject": subject}
+}
+
+func commandIdentityArgs(identity query.CommandIdentity) pgx.NamedArgs {
+	args := pgx.NamedArgs{
+		"command_id":      nil,
+		"idempotency_key": identity.IdempotencyKey,
+	}
+	if identity.CommandID != uuid.Nil {
+		args["command_id"] = identity.CommandID
+		args["idempotency_key"] = ""
+	}
+	return args
+}
+
+func commandResultArgs(result entity.CommandResult) pgx.NamedArgs {
+	args := pgx.NamedArgs{
+		"key":             result.Key,
+		"command_id":      nil,
+		"idempotency_key": result.IdempotencyKey,
+		"operation":       result.Operation,
+		"aggregate_type":  result.AggregateType,
+		"aggregate_id":    result.AggregateID,
+		"created_at":      result.CreatedAt,
+	}
+	if result.CommandID != uuid.Nil {
+		args["command_id"] = result.CommandID
+	}
+	return args
 }
 
 func allowlistEntryArgs(entry entity.AllowlistEntry) pgx.NamedArgs {

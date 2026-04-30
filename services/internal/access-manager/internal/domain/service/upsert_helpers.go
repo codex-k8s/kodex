@@ -5,9 +5,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/enum"
+	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/value"
 )
 
@@ -25,6 +28,33 @@ func ensureExpectedVersion(meta value.CommandMeta, current int64) error {
 		return errs.ErrConflict
 	}
 	return nil
+}
+
+func commandIdentity(meta value.CommandMeta) (query.CommandIdentity, error) {
+	if meta.CommandID == uuid.Nil && strings.TrimSpace(meta.IdempotencyKey) == "" {
+		return query.CommandIdentity{}, errs.ErrInvalidArgument
+	}
+	return query.CommandIdentity{CommandID: meta.CommandID, IdempotencyKey: strings.TrimSpace(meta.IdempotencyKey)}, nil
+}
+
+func commandResult(meta value.CommandMeta, operation string, aggregateType string, aggregateID uuid.UUID, now time.Time) (entity.CommandResult, error) {
+	identity, err := commandIdentity(meta)
+	if err != nil {
+		return entity.CommandResult{}, err
+	}
+	key := identity.CommandID.String()
+	if identity.CommandID == uuid.Nil {
+		key = identity.IdempotencyKey
+	}
+	return entity.CommandResult{
+		Key:            operation + ":" + key,
+		CommandID:      identity.CommandID,
+		IdempotencyKey: identity.IdempotencyKey,
+		Operation:      operation,
+		AggregateType:  aggregateType,
+		AggregateID:    aggregateID,
+		CreatedAt:      now,
+	}, nil
 }
 
 func sameAllowlistEntryState(a entity.AllowlistEntry, b entity.AllowlistEntry) bool {

@@ -47,8 +47,14 @@ func NewRepository(db *pgxpool.Pool) *Repository {
 	return &Repository{db: db}
 }
 
-func (r *Repository) CreateOrganization(ctx context.Context, organization entity.Organization, event entity.OutboxEvent) error {
-	return r.mutateWithOutbox(ctx, "create organization", event, mutation{query: queryOrganizationCreate, args: organizationArgs(organization)})
+func (r *Repository) GetCommandResult(ctx context.Context, identity query.CommandIdentity) (entity.CommandResult, error) {
+	return queryOne(ctx, r.db, "get command result", queryCommandResultGet, commandIdentityArgs(identity), scanCommandResult)
+}
+
+func (r *Repository) CreateOrganization(ctx context.Context, organization entity.Organization, event entity.OutboxEvent, result entity.CommandResult) error {
+	create := mutation{query: queryOrganizationCreate}
+	create.args = organizationArgs(organization)
+	return r.createWithCommandResult(ctx, "create organization", event, create, result)
 }
 
 func (r *Repository) GetOrganization(ctx context.Context, id uuid.UUID) (entity.Organization, error) {
@@ -95,8 +101,10 @@ func (r *Repository) FindAllowlistEntry(ctx context.Context, matchType enum.Allo
 	return queryOne(ctx, r.db, "find allowlist entry", queryAllowlistEntryFind, allowlistLookupArgs(string(matchType), value), scanAllowlistEntry)
 }
 
-func (r *Repository) CreateGroup(ctx context.Context, group entity.Group, event entity.OutboxEvent) error {
-	return r.mutateWithOutbox(ctx, "create group", event, mutation{query: queryGroupCreate, args: groupArgs(group)})
+func (r *Repository) CreateGroup(ctx context.Context, group entity.Group, event entity.OutboxEvent, result entity.CommandResult) error {
+	create := mutation{args: groupArgs(group)}
+	create.query = queryGroupCreate
+	return r.createWithCommandResult(ctx, "create group", event, create, result)
 }
 
 func (r *Repository) GetGroup(ctx context.Context, id uuid.UUID) (entity.Group, error) {
@@ -145,8 +153,12 @@ func (r *Repository) GetExternalProviderBySlug(ctx context.Context, slug string)
 	return queryOne(ctx, r.db, "get external provider by slug", queryExternalProviderGetBySlug, pgx.NamedArgs{"slug": slug}, scanExternalProvider)
 }
 
-func (r *Repository) RegisterExternalAccount(ctx context.Context, account entity.ExternalAccount, event entity.OutboxEvent) error {
-	return r.mutateWithOutbox(ctx, "register external account", event, mutation{query: queryExternalAccountCreate, args: externalAccountArgs(account)})
+func (r *Repository) RegisterExternalAccount(ctx context.Context, account entity.ExternalAccount, event entity.OutboxEvent, result entity.CommandResult) error {
+	create := mutation{
+		query: queryExternalAccountCreate,
+		args:  externalAccountArgs(account),
+	}
+	return r.createWithCommandResult(ctx, "register external account", event, create, result)
 }
 
 func (r *Repository) GetExternalAccount(ctx context.Context, id uuid.UUID) (entity.ExternalAccount, error) {
@@ -289,6 +301,14 @@ func (r *Repository) mutateWithOutbox(ctx context.Context, operation string, eve
 		}
 		return insertOutboxEvent(ctx, tx, event)
 	})
+}
+
+func (r *Repository) createWithCommandResult(ctx context.Context, operation string, event entity.OutboxEvent, create mutation, result entity.CommandResult) error {
+	return r.mutateWithOutbox(ctx, operation, event, create, commandResultMutation(result))
+}
+
+func commandResultMutation(result entity.CommandResult) mutation {
+	return mutation{query: queryCommandResultCreate, args: commandResultArgs(result), requireAffected: true}
 }
 
 func insertOutboxEvent(ctx context.Context, db execer, event entity.OutboxEvent) error {

@@ -1,10 +1,11 @@
-.PHONY: help lint lint-go dupl-go test-go test-go-migrations fmt-go gen-openapi-go gen-openapi-ts gen-openapi gen-proto-go validate-asyncapi
+.PHONY: help lint lint-go dupl-go test-go test-go-postgres test-go-migrations fmt-go gen-openapi-go gen-openapi-ts gen-openapi gen-proto-go validate-asyncapi
 
 help:
 	@echo "Targets:"
 	@echo "  make lint-go   - golangci-lint for active Go packages, excluding deprecated/**"
 	@echo "  make dupl-go   - fail on duplicated Go code (dupl -t 50)"
 	@echo "  make test-go   - go test for active Go packages, excluding deprecated/**"
+	@echo "  make test-go-postgres - run mandatory PostgreSQL repository integration tests"
 	@echo "  make test-go-migrations - run migration guard tests for active service goose files"
 	@echo "  make fmt-go    - gofmt -w on tracked .go files"
 	@echo "  make gen-openapi-go [SVC=services/external/api-gateway] - generate Go transport code from OpenAPI"
@@ -69,6 +70,10 @@ test-go:
 		echo "test-go: $$module"; \
 		(cd "$$module" && go test ./...); \
 	done
+	@$(MAKE) test-go-postgres
+
+test-go-postgres:
+	@./scripts/test-go-postgres.sh
 
 test-go-migrations:
 	@migration_files="$$(find services -path '*/cmd/cli/migrations/*.sql' -not -path '*/deprecated/*' -print 2>/dev/null | sort)"; \

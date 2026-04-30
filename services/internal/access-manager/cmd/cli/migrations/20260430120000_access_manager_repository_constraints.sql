@@ -1,4 +1,25 @@
 -- +goose Up
+CREATE TABLE access_command_results (
+    key text PRIMARY KEY,
+    command_id uuid,
+    idempotency_key text NOT NULL DEFAULT '',
+    operation text NOT NULL,
+    aggregate_type text NOT NULL,
+    aggregate_id uuid NOT NULL,
+    created_at timestamptz NOT NULL,
+    CONSTRAINT access_command_results_identity_check CHECK (
+        command_id IS NOT NULL OR idempotency_key <> ''
+    )
+);
+
+CREATE UNIQUE INDEX access_command_results_command_id_unique_idx
+    ON access_command_results (command_id)
+    WHERE command_id IS NOT NULL;
+
+CREATE UNIQUE INDEX access_command_results_idempotency_key_unique_idx
+    ON access_command_results (idempotency_key)
+    WHERE idempotency_key <> '';
+
 ALTER TABLE access_external_accounts
     ADD CONSTRAINT access_external_accounts_owner_scope_type_check
     CHECK (owner_scope_type IN (
@@ -47,3 +68,5 @@ ALTER TABLE access_external_accounts
 
 ALTER TABLE access_external_accounts
     DROP CONSTRAINT IF EXISTS access_external_accounts_owner_scope_type_check;
+
+DROP TABLE IF EXISTS access_command_results;

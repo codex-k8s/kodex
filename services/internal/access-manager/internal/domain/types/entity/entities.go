@@ -163,6 +163,17 @@ type AccessDecisionAudit struct {
 	CreatedAt     time.Time
 }
 
+// CommandResult stores the aggregate produced by an idempotent mutation command.
+type CommandResult struct {
+	Key            string
+	CommandID      uuid.UUID
+	IdempotencyKey string
+	Operation      string
+	AggregateType  string
+	AggregateID    uuid.UUID
+	CreatedAt      time.Time
+}
+
 // OutboxEvent stores a domain event until it is published to consumers.
 type OutboxEvent struct {
 	ID            uuid.UUID

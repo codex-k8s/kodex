@@ -36,6 +36,13 @@ func (s *Service) CreateOrganization(ctx context.Context, input CreateOrganizati
 		return entity.Organization{}, errs.ErrInvalidArgument
 	}
 	status := defaultOrganizationStatus(input.Status)
+	applied, ok, err := s.findCommandResult(ctx, input.Meta, accessOperationCreateOrganization, accessAggregateOrganization)
+	if err != nil {
+		return entity.Organization{}, err
+	}
+	if ok {
+		return s.repository.GetOrganization(ctx, applied.AggregateID)
+	}
 	if input.Kind == enum.OrganizationKindOwner {
 		if status != enum.OrganizationStatusActive {
 			return entity.Organization{}, errs.ErrPreconditionFailed
@@ -75,7 +82,11 @@ func (s *Service) CreateOrganization(ctx context.Context, input CreateOrganizati
 	if err != nil {
 		return entity.Organization{}, err
 	}
-	if err := s.repository.CreateOrganization(ctx, organization, event); err != nil {
+	result, err := commandResult(input.Meta, accessOperationCreateOrganization, accessAggregateOrganization, organization.ID, now)
+	if err != nil {
+		return entity.Organization{}, err
+	}
+	if err := s.repository.CreateOrganization(ctx, organization, event, result); err != nil {
 		return entity.Organization{}, err
 	}
 	return organization, nil
@@ -97,6 +108,13 @@ func (s *Service) CreateGroup(ctx context.Context, input CreateGroupInput) (enti
 		}
 	default:
 		return entity.Group{}, errs.ErrInvalidArgument
+	}
+	applied, ok, err := s.findCommandResult(ctx, input.Meta, accessOperationCreateGroup, accessAggregateGroup)
+	if err != nil {
+		return entity.Group{}, err
+	}
+	if ok {
+		return s.repository.GetGroup(ctx, applied.AggregateID)
 	}
 	if input.ParentGroupID != nil {
 		parent, err := s.repository.GetGroup(ctx, *input.ParentGroupID)
@@ -135,7 +153,11 @@ func (s *Service) CreateGroup(ctx context.Context, input CreateGroupInput) (enti
 	if err != nil {
 		return entity.Group{}, err
 	}
-	if err := s.repository.CreateGroup(ctx, group, groupCreatedEvent); err != nil {
+	result, err := commandResult(input.Meta, accessOperationCreateGroup, accessAggregateGroup, group.ID, now)
+	if err != nil {
+		return entity.Group{}, err
+	}
+	if err := s.repository.CreateGroup(ctx, group, groupCreatedEvent, result); err != nil {
 		return entity.Group{}, err
 	}
 	return group, nil
@@ -419,6 +441,13 @@ func (s *Service) RegisterExternalAccount(ctx context.Context, input RegisterExt
 	if input.ExternalProviderID == uuid.Nil || strings.TrimSpace(input.DisplayName) == "" {
 		return entity.ExternalAccount{}, errs.ErrInvalidArgument
 	}
+	applied, ok, err := s.findCommandResult(ctx, input.Meta, accessOperationRegisterExternalAccount, accessAggregateExternalAccount)
+	if err != nil {
+		return entity.ExternalAccount{}, err
+	}
+	if ok {
+		return s.repository.GetExternalAccount(ctx, applied.AggregateID)
+	}
 	if _, err := s.repository.GetExternalProvider(ctx, input.ExternalProviderID); err != nil {
 		return entity.ExternalAccount{}, err
 	}
@@ -444,7 +473,11 @@ func (s *Service) RegisterExternalAccount(ctx context.Context, input RegisterExt
 	if err != nil {
 		return entity.ExternalAccount{}, err
 	}
-	if err := s.repository.RegisterExternalAccount(ctx, account, event); err != nil {
+	result, err := commandResult(input.Meta, accessOperationRegisterExternalAccount, accessAggregateExternalAccount, account.ID, now)
+	if err != nil {
+		return entity.ExternalAccount{}, err
+	}
+	if err := s.repository.RegisterExternalAccount(ctx, account, event, result); err != nil {
 		return entity.ExternalAccount{}, err
 	}
 	return account, nil

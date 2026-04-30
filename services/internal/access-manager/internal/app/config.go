@@ -13,7 +13,7 @@ import (
 type Config struct {
 	HTTPAddr                  string        `env:"KODEX_ACCESS_MANAGER_HTTP_ADDR" envDefault:":8080"`
 	GRPCAddr                  string        `env:"KODEX_ACCESS_MANAGER_GRPC_ADDR" envDefault:":9090"`
-	DatabaseDSN               string        `env:"KODEX_ACCESS_MANAGER_DATABASE_DSN" envDefault:"postgres://kodex:kodex@postgres:5432/kodex_access_manager?sslmode=disable"`
+	DatabaseDSN               string        `env:"KODEX_ACCESS_MANAGER_DATABASE_DSN,required,notEmpty"`
 	DatabaseMaxConns          int32         `env:"KODEX_ACCESS_MANAGER_DATABASE_MAX_CONNS" envDefault:"8"`
 	DatabaseMinConns          int32         `env:"KODEX_ACCESS_MANAGER_DATABASE_MIN_CONNS" envDefault:"1"`
 	DatabaseMaxConnLifetime   time.Duration `env:"KODEX_ACCESS_MANAGER_DATABASE_MAX_CONN_LIFETIME" envDefault:"1h"`

@@ -55,6 +55,24 @@ func scanUser(row rowScanner) (entity.User, error) {
 	return user, err
 }
 
+func scanCommandResult(row rowScanner) (entity.CommandResult, error) {
+	var result entity.CommandResult
+	var commandID pgtype.UUID
+	err := row.Scan(
+		&result.Key,
+		&commandID,
+		&result.IdempotencyKey,
+		&result.Operation,
+		&result.AggregateType,
+		&result.AggregateID,
+		&result.CreatedAt,
+	)
+	if id := uuidPtrFromPG(commandID); id != nil {
+		result.CommandID = *id
+	}
+	return result, err
+}
+
 func scanAllowlistEntry(row rowScanner) (entity.AllowlistEntry, error) {
 	var entry entity.AllowlistEntry
 	var matchType, defaultStatus, status string

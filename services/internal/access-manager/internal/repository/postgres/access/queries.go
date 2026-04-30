@@ -11,6 +11,8 @@ var (
 	queryAccessRuleUpsert                     = mustLoadQuery("access_rule__upsert")
 	queryAllowlistEntryFind                   = mustLoadQuery("allowlist_entry__find")
 	queryAllowlistEntryUpsert                 = mustLoadQuery("allowlist_entry__upsert")
+	queryCommandResultCreate                  = mustLoadQuery("command_result__create")
+	queryCommandResultGet                     = mustLoadQuery("command_result__get")
 	queryExternalAccountBindingFindByIdentity = mustLoadQuery("external_account_binding__find_by_identity")
 	queryExternalAccountBindingFindForUsage   = mustLoadQuery("external_account_binding__find_for_usage")
 	queryExternalAccountBindingUpsert         = mustLoadQuery("external_account_binding__upsert")
