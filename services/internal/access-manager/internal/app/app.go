@@ -11,8 +11,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	accessservice "github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/service"
@@ -22,6 +24,9 @@ import (
 
 // Run starts access-manager process servers and shuts them down with context.
 func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
+	if err := cfg.Validate(); err != nil {
+		return err
+	}
 	dbPool, err := postgreslib.OpenPool(ctx, cfg.DatabasePoolSettings())
 	if err != nil {
 		return err
@@ -37,9 +42,28 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		Handler:           healthMux(components),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
+	grpcMetrics, err := accessgrpc.NewServerMetrics(prometheus.DefaultRegisterer)
+	if err != nil {
+		return err
+	}
 	grpcServer := grpc.NewServer(
+		grpc.MaxConcurrentStreams(cfg.GRPCMaxConcurrentStreams),
+		grpc.MaxRecvMsgSize(cfg.GRPCMaxRecvMessageBytes),
+		grpc.MaxSendMsgSize(cfg.GRPCMaxSendMessageBytes),
+		grpc.KeepaliveParams(keepalive.ServerParameters{
+			Time:    cfg.GRPCKeepaliveTime,
+			Timeout: cfg.GRPCKeepaliveTimeout,
+		}),
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+			MinTime:             cfg.GRPCKeepaliveMinTime,
+			PermitWithoutStream: cfg.GRPCPermitWithoutStream,
+		}),
 		grpc.ChainUnaryInterceptor(
 			accessgrpc.UnaryRecoveryInterceptor(logger),
+			accessgrpc.UnaryMetricsInterceptor(grpcMetrics),
+			accessgrpc.UnaryCallerAuthInterceptor(cfg.GRPCAuthRequired, cfg.GRPCAuthToken),
+			accessgrpc.UnaryInFlightLimitInterceptor(cfg.GRPCMaxInFlight, grpcMetrics),
+			accessgrpc.UnaryDeadlineInterceptor(cfg.GRPCUnaryTimeout),
 			accessgrpc.UnaryErrorInterceptor(logger),
 		),
 	)

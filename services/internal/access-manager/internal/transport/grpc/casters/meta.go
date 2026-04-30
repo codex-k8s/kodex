@@ -33,9 +33,22 @@ func CommandMetaFromProto(meta *accessaccountsv1.CommandMeta) (value.CommandMeta
 			Type: strings.TrimSpace(actor.GetType()),
 			ID:   strings.TrimSpace(actor.GetId()),
 		},
-		Reason:    strings.TrimSpace(meta.GetReason()),
-		RequestID: strings.TrimSpace(meta.GetRequestId()),
+		Reason:         strings.TrimSpace(meta.GetReason()),
+		RequestID:      strings.TrimSpace(meta.GetRequestId()),
+		RequestContext: requestContextFromProto(meta.GetRequestContext()),
 	}, nil
+}
+
+func requestContextFromProto(context *accessaccountsv1.RequestContext) value.RequestContext {
+	if context == nil {
+		return value.RequestContext{}
+	}
+	return value.RequestContext{
+		Source:       strings.TrimSpace(context.GetSource()),
+		TraceID:      strings.TrimSpace(context.GetTraceId()),
+		SessionID:    strings.TrimSpace(context.GetSessionId()),
+		ClientIPHash: strings.TrimSpace(context.GetClientIpHash()),
+	}
 }
 
 // SubjectRefFromProto maps a gRPC subject reference to the domain value object.

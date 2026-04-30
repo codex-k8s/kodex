@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/caarlos0/env/v11"
@@ -13,6 +14,17 @@ import (
 type Config struct {
 	HTTPAddr                  string        `env:"KODEX_ACCESS_MANAGER_HTTP_ADDR" envDefault:":8080"`
 	GRPCAddr                  string        `env:"KODEX_ACCESS_MANAGER_GRPC_ADDR" envDefault:":9090"`
+	GRPCAuthRequired          bool          `env:"KODEX_ACCESS_MANAGER_GRPC_AUTH_REQUIRED" envDefault:"true"`
+	GRPCAuthToken             string        `env:"KODEX_ACCESS_MANAGER_GRPC_AUTH_TOKEN"`
+	GRPCMaxInFlight           int           `env:"KODEX_ACCESS_MANAGER_GRPC_MAX_IN_FLIGHT" envDefault:"128"`
+	GRPCMaxConcurrentStreams  uint32        `env:"KODEX_ACCESS_MANAGER_GRPC_MAX_CONCURRENT_STREAMS" envDefault:"128"`
+	GRPCUnaryTimeout          time.Duration `env:"KODEX_ACCESS_MANAGER_GRPC_UNARY_TIMEOUT" envDefault:"30s"`
+	GRPCKeepaliveTime         time.Duration `env:"KODEX_ACCESS_MANAGER_GRPC_KEEPALIVE_TIME" envDefault:"2m"`
+	GRPCKeepaliveTimeout      time.Duration `env:"KODEX_ACCESS_MANAGER_GRPC_KEEPALIVE_TIMEOUT" envDefault:"20s"`
+	GRPCKeepaliveMinTime      time.Duration `env:"KODEX_ACCESS_MANAGER_GRPC_KEEPALIVE_MIN_TIME" envDefault:"30s"`
+	GRPCPermitWithoutStream   bool          `env:"KODEX_ACCESS_MANAGER_GRPC_PERMIT_WITHOUT_STREAM" envDefault:"false"`
+	GRPCMaxRecvMessageBytes   int           `env:"KODEX_ACCESS_MANAGER_GRPC_MAX_RECV_MESSAGE_BYTES" envDefault:"4194304"`
+	GRPCMaxSendMessageBytes   int           `env:"KODEX_ACCESS_MANAGER_GRPC_MAX_SEND_MESSAGE_BYTES" envDefault:"4194304"`
 	DatabaseDSN               string        `env:"KODEX_ACCESS_MANAGER_DATABASE_DSN,required,notEmpty"`
 	DatabaseMaxConns          int32         `env:"KODEX_ACCESS_MANAGER_DATABASE_MAX_CONNS" envDefault:"8"`
 	DatabaseMinConns          int32         `env:"KODEX_ACCESS_MANAGER_DATABASE_MIN_CONNS" envDefault:"1"`
@@ -32,7 +44,42 @@ func LoadConfig() (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("parse access-manager config from environment: %w", err)
 	}
+	if err := cfg.Validate(); err != nil {
+		return Config{}, err
+	}
 	return cfg, nil
+}
+
+// Validate checks configuration invariants that protect runtime boundaries.
+func (cfg Config) Validate() error {
+	if cfg.GRPCAuthRequired && strings.TrimSpace(cfg.GRPCAuthToken) == "" {
+		return fmt.Errorf("KODEX_ACCESS_MANAGER_GRPC_AUTH_TOKEN is required when gRPC auth is enabled")
+	}
+	if cfg.GRPCMaxInFlight < 1 {
+		return fmt.Errorf("KODEX_ACCESS_MANAGER_GRPC_MAX_IN_FLIGHT must be greater than zero")
+	}
+	if cfg.GRPCMaxConcurrentStreams < 1 {
+		return fmt.Errorf("KODEX_ACCESS_MANAGER_GRPC_MAX_CONCURRENT_STREAMS must be greater than zero")
+	}
+	if cfg.GRPCUnaryTimeout <= 0 {
+		return fmt.Errorf("KODEX_ACCESS_MANAGER_GRPC_UNARY_TIMEOUT must be positive")
+	}
+	if cfg.GRPCKeepaliveTime <= 0 {
+		return fmt.Errorf("KODEX_ACCESS_MANAGER_GRPC_KEEPALIVE_TIME must be positive")
+	}
+	if cfg.GRPCKeepaliveTimeout <= 0 {
+		return fmt.Errorf("KODEX_ACCESS_MANAGER_GRPC_KEEPALIVE_TIMEOUT must be positive")
+	}
+	if cfg.GRPCKeepaliveMinTime <= 0 {
+		return fmt.Errorf("KODEX_ACCESS_MANAGER_GRPC_KEEPALIVE_MIN_TIME must be positive")
+	}
+	if cfg.GRPCMaxRecvMessageBytes < 1 {
+		return fmt.Errorf("KODEX_ACCESS_MANAGER_GRPC_MAX_RECV_MESSAGE_BYTES must be greater than zero")
+	}
+	if cfg.GRPCMaxSendMessageBytes < 1 {
+		return fmt.Errorf("KODEX_ACCESS_MANAGER_GRPC_MAX_SEND_MESSAGE_BYTES must be greater than zero")
+	}
+	return nil
 }
 
 // DatabasePoolSettings converts service config to the shared pgxpool contract.

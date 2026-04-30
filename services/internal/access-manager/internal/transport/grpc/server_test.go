@@ -32,6 +32,9 @@ func TestCreateOrganizationMapsRequestAndResponse(t *testing.T) {
 			if input.Meta.IdempotencyKey != "org-client-team" || input.Meta.Actor.ID != "operator-1" {
 				t.Fatalf("unexpected meta: %+v", input.Meta)
 			}
+			if input.Meta.RequestContext.Source != "staff-gateway" || input.Meta.RequestContext.TraceID != "trace-1" {
+				t.Fatalf("unexpected request context: %+v", input.Meta.RequestContext)
+			}
 			return entity.Organization{
 				Base:        entity.Base{ID: organizationID, Version: 3},
 				Kind:        input.Kind,
@@ -49,6 +52,7 @@ func TestCreateOrganizationMapsRequestAndResponse(t *testing.T) {
 		Meta: &accessaccountsv1.CommandMeta{
 			IdempotencyKey: "org-client-team",
 			Actor:          &accessaccountsv1.Actor{Type: "user", Id: "operator-1"},
+			RequestContext: &accessaccountsv1.RequestContext{Source: "staff-gateway", TraceId: "trace-1"},
 		},
 	})
 	if err != nil {
