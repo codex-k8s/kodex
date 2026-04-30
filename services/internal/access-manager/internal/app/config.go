@@ -7,6 +7,7 @@ import (
 
 	"github.com/caarlos0/env/v11"
 
+	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 )
 
@@ -96,5 +97,21 @@ func (cfg Config) DatabasePoolSettings() postgreslib.PoolSettings {
 		ConnectRetryInitialDelay: cfg.DatabaseRetryInitialDelay,
 		ConnectRetryMaxDelay:     cfg.DatabaseRetryMaxDelay,
 		ConnectRetryJitterRatio:  cfg.DatabaseRetryJitterRatio,
+	}
+}
+
+// GRPCServerConfig converts service env config to the shared gRPC runtime contract.
+func (cfg Config) GRPCServerConfig() grpcserver.Config {
+	return grpcserver.Config{
+		MaxInFlight:          cfg.GRPCMaxInFlight,
+		MaxConcurrentStreams: cfg.GRPCMaxConcurrentStreams,
+		UnaryTimeout:         cfg.GRPCUnaryTimeout,
+		KeepaliveTime:        cfg.GRPCKeepaliveTime,
+		KeepaliveTimeout:     cfg.GRPCKeepaliveTimeout,
+		KeepaliveMinTime:     cfg.GRPCKeepaliveMinTime,
+		PermitWithoutStream:  cfg.GRPCPermitWithoutStream,
+		MaxRecvMessageBytes:  cfg.GRPCMaxRecvMessageBytes,
+		MaxSendMessageBytes:  cfg.GRPCMaxSendMessageBytes,
+		AuthRequired:         cfg.GRPCAuthRequired,
 	}
 }

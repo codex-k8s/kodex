@@ -42,17 +42,6 @@ func TestUnaryErrorInterceptorMapsDomainErrors(t *testing.T) {
 	}
 }
 
-func TestUnaryRecoveryInterceptorMapsPanic(t *testing.T) {
-	t.Parallel()
-
-	_, err := UnaryRecoveryInterceptor(discardLogger())(context.Background(), nil, unaryInfo(), func(context.Context, any) (any, error) {
-		panic("boom")
-	})
-	if status.Code(err) != codes.Internal {
-		t.Fatalf("code = %s, want internal", status.Code(err))
-	}
-}
-
 func unaryInfo() *grpcruntime.UnaryServerInfo {
 	return &grpcruntime.UnaryServerInfo{FullMethod: "/kodex.access_accounts.v1.AccessManagerService/Test"}
 }

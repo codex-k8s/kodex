@@ -11,11 +11,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/keepalive"
 
+	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	accessservice "github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/service"
 	accesspostgres "github.com/codex-k8s/kodex/services/internal/access-manager/internal/repository/postgres/access"
@@ -42,31 +40,24 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		Handler:           healthMux(components),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
-	grpcMetrics, err := accessgrpc.NewServerMetrics(prometheus.DefaultRegisterer)
+	grpcMetrics, err := grpcserver.NewMetrics(nil, grpcserver.MetricsConfig{
+		Subsystem:   "access_manager_grpc",
+		ServiceName: "access-manager",
+	})
 	if err != nil {
 		return err
 	}
-	grpcServer := grpc.NewServer(
-		grpc.MaxConcurrentStreams(cfg.GRPCMaxConcurrentStreams),
-		grpc.MaxRecvMsgSize(cfg.GRPCMaxRecvMessageBytes),
-		grpc.MaxSendMsgSize(cfg.GRPCMaxSendMessageBytes),
-		grpc.KeepaliveParams(keepalive.ServerParameters{
-			Time:    cfg.GRPCKeepaliveTime,
-			Timeout: cfg.GRPCKeepaliveTimeout,
-		}),
-		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
-			MinTime:             cfg.GRPCKeepaliveMinTime,
-			PermitWithoutStream: cfg.GRPCPermitWithoutStream,
-		}),
-		grpc.ChainUnaryInterceptor(
-			accessgrpc.UnaryRecoveryInterceptor(logger),
-			accessgrpc.UnaryMetricsInterceptor(grpcMetrics),
-			accessgrpc.UnaryCallerAuthInterceptor(cfg.GRPCAuthRequired, cfg.GRPCAuthToken),
-			accessgrpc.UnaryInFlightLimitInterceptor(cfg.GRPCMaxInFlight, grpcMetrics),
-			accessgrpc.UnaryDeadlineInterceptor(cfg.GRPCUnaryTimeout),
+	grpcServer, err := grpcserver.NewServer(cfg.GRPCServerConfig(), grpcserver.Dependencies{
+		Logger:        logger,
+		Metrics:       grpcMetrics,
+		Authenticator: grpcserver.NewSharedTokenAuthenticator(cfg.GRPCAuthToken),
+		UnaryInterceptors: []grpcserver.UnaryInterceptor{
 			accessgrpc.UnaryErrorInterceptor(logger),
-		),
-	)
+		},
+	})
+	if err != nil {
+		return err
+	}
 	accessgrpc.RegisterAccessManagerService(grpcServer, components.AccessService)
 
 	errCh := make(chan error, 2)
