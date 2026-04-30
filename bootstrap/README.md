@@ -105,6 +105,8 @@ go run ./cmd/codex-bootstrap bootstrap \
 - `KODEX_GITHUB_WEBHOOK_SECRET` используется для валидации `X-Hub-Signature-256`; если переменная пуста, bootstrap генерирует значение автоматически.
 - `KODEX_GITHUB_WEBHOOK_URL` (опционально) позволяет переопределить URL webhook; по умолчанию используется `https://<KODEX_PRODUCTION_DOMAIN>/api/v1/webhooks/github`.
 - `KODEX_GITHUB_WEBHOOK_EVENTS` задаёт список событий webhook (comma-separated).
+- `KODEX_ACCESS_MANAGER_GRPC_AUTH_TOKEN` — shared token для внутренней gRPC-границы `access-manager`; если переменная пуста, bootstrap генерирует значение автоматически.
+- `KODEX_ACCESS_MANAGER_GRPC_*` параметры лимитов, keepalive, deadline и размера сообщений сохраняются в runtime secret вместе с остальными platform `KODEX_*` значениями.
 - `KODEX_PLATFORM_DEPLOYMENT_REPLICAS` управляет replicas для platform `Deployment`-объектов (кроме PostgreSQL); для `production` по умолчанию `2`.
 - Worker-параметры (`KODEX_WORKER_*`) сохраняются в Kubernetes runtime secret и применяются при deploy.
 - `KODEX_LEARNING_MODE_DEFAULT` задаёт default для новых проектов (`true` в шаблоне; пустое значение = выключено).
