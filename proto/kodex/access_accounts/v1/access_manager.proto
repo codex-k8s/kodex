@@ -875,6 +875,10 @@ message MatchedRule {
 message ExplainAccessRequest {
   // audit_id is access decision audit id.
   string audit_id = 1;
+  // scope is the scope where audit explanation access is checked.
+  ScopeRef scope = 2;
+  // meta carries caller identity and request context for read authorization audit.
+  CommandMeta meta = 3;
 }
 
 // ExplainAccessResponse explains a previously audited access decision.
@@ -889,6 +893,18 @@ message ExplainAccessResponse {
   int64 policy_version = 4;
   // matched_rules explains rules used for the decision.
   repeated MatchedRule matched_rules = 5;
+  // subject is the checked access subject.
+  SubjectRef subject = 6;
+  // action_key is the checked access-action key.
+  string action_key = 7;
+  // resource is the protected resource from the original decision.
+  ResourceRef resource = 8;
+  // scope is the scope from the original decision.
+  ScopeRef scope = 9;
+  // request_context is safe request metadata from the original decision.
+  RequestContext request_context = 10;
+  // created_at is RFC3339 timestamp of the original decision.
+  string created_at = 11;
 }
 
 // ResolveExternalAccountUsageRequest checks whether an account can be used.

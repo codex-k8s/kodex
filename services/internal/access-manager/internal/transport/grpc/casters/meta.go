@@ -74,9 +74,24 @@ func SubjectRefToProto(ref value.SubjectRef) *accessaccountsv1.SubjectRef {
 	return &accessaccountsv1.SubjectRef{Type: ref.Type, Id: ref.ID}
 }
 
+// ResourceRefToProto maps a domain resource reference to gRPC.
+func ResourceRefToProto(ref value.ResourceRef) *accessaccountsv1.ResourceRef {
+	return &accessaccountsv1.ResourceRef{Type: ref.Type, Id: ref.ID}
+}
+
 // ScopeRefToProto maps a domain scope reference to gRPC.
 func ScopeRefToProto(ref value.ScopeRef) *accessaccountsv1.ScopeRef {
 	return &accessaccountsv1.ScopeRef{Type: ref.Type, Id: ref.ID}
+}
+
+// RequestContextToProto maps safe domain request context to gRPC.
+func RequestContextToProto(context value.RequestContext) *accessaccountsv1.RequestContext {
+	return &accessaccountsv1.RequestContext{
+		Source:       context.Source,
+		TraceId:      context.TraceID,
+		SessionId:    context.SessionID,
+		ClientIpHash: context.ClientIPHash,
+	}
 }
 
 func typeID(ref interface {

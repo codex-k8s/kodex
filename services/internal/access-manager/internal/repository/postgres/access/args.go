@@ -210,19 +210,22 @@ func accessRuleArgs(rule entity.AccessRule) pgx.NamedArgs {
 	}
 }
 
-func accessDecisionAuditArgs(audit entity.AccessDecisionAudit, explanation []byte) pgx.NamedArgs {
+func accessDecisionAuditArgs(audit entity.AccessDecisionAudit, requestContext []byte, explanation []byte) pgx.NamedArgs {
 	return pgx.NamedArgs{
-		"id":             audit.ID,
-		"subject_type":   audit.Subject.Type,
-		"subject_id":     audit.Subject.ID,
-		"action_key":     audit.ActionKey,
-		"resource_type":  audit.Resource.Type,
-		"resource_id":    audit.Resource.ID,
-		"decision":       string(audit.Decision),
-		"reason_code":    audit.ReasonCode,
-		"policy_version": audit.PolicyVersion,
-		"explanation":    string(explanation),
-		"created_at":     audit.CreatedAt,
+		"id":              audit.ID,
+		"subject_type":    audit.Subject.Type,
+		"subject_id":      audit.Subject.ID,
+		"action_key":      audit.ActionKey,
+		"resource_type":   audit.Resource.Type,
+		"resource_id":     audit.Resource.ID,
+		"scope_type":      audit.Scope.Type,
+		"scope_id":        audit.Scope.ID,
+		"request_context": string(requestContext),
+		"decision":        string(audit.Decision),
+		"reason_code":     audit.ReasonCode,
+		"policy_version":  audit.PolicyVersion,
+		"explanation":     string(explanation),
+		"created_at":      audit.CreatedAt,
 	}
 }
 

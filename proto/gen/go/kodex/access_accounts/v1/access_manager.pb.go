@@ -4782,7 +4782,11 @@ func (x *MatchedRule) GetReasonCode() string {
 type ExplainAccessRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// audit_id is access decision audit id.
-	AuditId       string `protobuf:"bytes,1,opt,name=audit_id,json=auditId,proto3" json:"audit_id,omitempty"`
+	AuditId string `protobuf:"bytes,1,opt,name=audit_id,json=auditId,proto3" json:"audit_id,omitempty"`
+	// scope is the scope where audit explanation access is checked.
+	Scope *ScopeRef `protobuf:"bytes,2,opt,name=scope,proto3" json:"scope,omitempty"`
+	// meta carries caller identity and request context for read authorization audit.
+	Meta          *CommandMeta `protobuf:"bytes,3,opt,name=meta,proto3" json:"meta,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4824,6 +4828,20 @@ func (x *ExplainAccessRequest) GetAuditId() string {
 	return ""
 }
 
+func (x *ExplainAccessRequest) GetScope() *ScopeRef {
+	if x != nil {
+		return x.Scope
+	}
+	return nil
+}
+
+func (x *ExplainAccessRequest) GetMeta() *CommandMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
 // ExplainAccessResponse explains a previously audited access decision.
 type ExplainAccessResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -4836,7 +4854,19 @@ type ExplainAccessResponse struct {
 	// policy_version is the evaluated policy version.
 	PolicyVersion int64 `protobuf:"varint,4,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`
 	// matched_rules explains rules used for the decision.
-	MatchedRules  []*MatchedRule `protobuf:"bytes,5,rep,name=matched_rules,json=matchedRules,proto3" json:"matched_rules,omitempty"`
+	MatchedRules []*MatchedRule `protobuf:"bytes,5,rep,name=matched_rules,json=matchedRules,proto3" json:"matched_rules,omitempty"`
+	// subject is the checked access subject.
+	Subject *SubjectRef `protobuf:"bytes,6,opt,name=subject,proto3" json:"subject,omitempty"`
+	// action_key is the checked access-action key.
+	ActionKey string `protobuf:"bytes,7,opt,name=action_key,json=actionKey,proto3" json:"action_key,omitempty"`
+	// resource is the protected resource from the original decision.
+	Resource *ResourceRef `protobuf:"bytes,8,opt,name=resource,proto3" json:"resource,omitempty"`
+	// scope is the scope from the original decision.
+	Scope *ScopeRef `protobuf:"bytes,9,opt,name=scope,proto3" json:"scope,omitempty"`
+	// request_context is safe request metadata from the original decision.
+	RequestContext *RequestContext `protobuf:"bytes,10,opt,name=request_context,json=requestContext,proto3" json:"request_context,omitempty"`
+	// created_at is RFC3339 timestamp of the original decision.
+	CreatedAt     string `protobuf:"bytes,11,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4904,6 +4934,48 @@ func (x *ExplainAccessResponse) GetMatchedRules() []*MatchedRule {
 		return x.MatchedRules
 	}
 	return nil
+}
+
+func (x *ExplainAccessResponse) GetSubject() *SubjectRef {
+	if x != nil {
+		return x.Subject
+	}
+	return nil
+}
+
+func (x *ExplainAccessResponse) GetActionKey() string {
+	if x != nil {
+		return x.ActionKey
+	}
+	return ""
+}
+
+func (x *ExplainAccessResponse) GetResource() *ResourceRef {
+	if x != nil {
+		return x.Resource
+	}
+	return nil
+}
+
+func (x *ExplainAccessResponse) GetScope() *ScopeRef {
+	if x != nil {
+		return x.Scope
+	}
+	return nil
+}
+
+func (x *ExplainAccessResponse) GetRequestContext() *RequestContext {
+	if x != nil {
+		return x.RequestContext
+	}
+	return nil
+}
+
+func (x *ExplainAccessResponse) GetCreatedAt() string {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return ""
 }
 
 // ResolveExternalAccountUsageRequest checks whether an account can be used.
@@ -5778,16 +5850,27 @@ const file_kodex_access_accounts_v1_access_manager_proto_rawDesc = "" +
 	"\x05scope\x18\x05 \x01(\v2\".kodex.access_accounts.v1.ScopeRefR\x05scope\x12\x1a\n" +
 	"\bpriority\x18\x06 \x01(\x05R\bpriority\x12\x1f\n" +
 	"\vreason_code\x18\a \x01(\tR\n" +
-	"reasonCode\"1\n" +
+	"reasonCode\"\xa6\x01\n" +
 	"\x14ExplainAccessRequest\x12\x19\n" +
-	"\baudit_id\x18\x01 \x01(\tR\aauditId\"\x8c\x02\n" +
+	"\baudit_id\x18\x01 \x01(\tR\aauditId\x128\n" +
+	"\x05scope\x18\x02 \x01(\v2\".kodex.access_accounts.v1.ScopeRefR\x05scope\x129\n" +
+	"\x04meta\x18\x03 \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\xda\x04\n" +
 	"\x15ExplainAccessResponse\x12\x19\n" +
 	"\baudit_id\x18\x01 \x01(\tR\aauditId\x12D\n" +
 	"\bdecision\x18\x02 \x01(\x0e2(.kodex.access_accounts.v1.AccessDecisionR\bdecision\x12\x1f\n" +
 	"\vreason_code\x18\x03 \x01(\tR\n" +
 	"reasonCode\x12%\n" +
 	"\x0epolicy_version\x18\x04 \x01(\x03R\rpolicyVersion\x12J\n" +
-	"\rmatched_rules\x18\x05 \x03(\v2%.kodex.access_accounts.v1.MatchedRuleR\fmatchedRules\"\xb8\x01\n" +
+	"\rmatched_rules\x18\x05 \x03(\v2%.kodex.access_accounts.v1.MatchedRuleR\fmatchedRules\x12>\n" +
+	"\asubject\x18\x06 \x01(\v2$.kodex.access_accounts.v1.SubjectRefR\asubject\x12\x1d\n" +
+	"\n" +
+	"action_key\x18\a \x01(\tR\tactionKey\x12A\n" +
+	"\bresource\x18\b \x01(\v2%.kodex.access_accounts.v1.ResourceRefR\bresource\x128\n" +
+	"\x05scope\x18\t \x01(\v2\".kodex.access_accounts.v1.ScopeRefR\x05scope\x12Q\n" +
+	"\x0frequest_context\x18\n" +
+	" \x01(\v2(.kodex.access_accounts.v1.RequestContextR\x0erequestContext\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\v \x01(\tR\tcreatedAt\"\xb8\x01\n" +
 	"\"ResolveExternalAccountUsageRequest\x12.\n" +
 	"\x13external_account_id\x18\x01 \x01(\tR\x11externalAccountId\x12\x1d\n" +
 	"\n" +
@@ -6149,76 +6232,82 @@ var file_kodex_access_accounts_v1_access_manager_proto_depIdxs = []int32{
 	1,   // 77: kodex.access_accounts.v1.MatchedRule.effect:type_name -> kodex.access_accounts.v1.AccessEffect
 	24,  // 78: kodex.access_accounts.v1.MatchedRule.subject:type_name -> kodex.access_accounts.v1.SubjectRef
 	26,  // 79: kodex.access_accounts.v1.MatchedRule.scope:type_name -> kodex.access_accounts.v1.ScopeRef
-	0,   // 80: kodex.access_accounts.v1.ExplainAccessResponse.decision:type_name -> kodex.access_accounts.v1.AccessDecision
-	61,  // 81: kodex.access_accounts.v1.ExplainAccessResponse.matched_rules:type_name -> kodex.access_accounts.v1.MatchedRule
-	26,  // 82: kodex.access_accounts.v1.ResolveExternalAccountUsageRequest.usage_scope:type_name -> kodex.access_accounts.v1.ScopeRef
-	24,  // 83: kodex.access_accounts.v1.ListMembershipGraphRequest.subject:type_name -> kodex.access_accounts.v1.SubjectRef
-	24,  // 84: kodex.access_accounts.v1.MembershipEdge.subject:type_name -> kodex.access_accounts.v1.SubjectRef
-	24,  // 85: kodex.access_accounts.v1.MembershipEdge.target:type_name -> kodex.access_accounts.v1.SubjectRef
-	9,   // 86: kodex.access_accounts.v1.MembershipEdge.status:type_name -> kodex.access_accounts.v1.MembershipStatus
-	10,  // 87: kodex.access_accounts.v1.MembershipEdge.source:type_name -> kodex.access_accounts.v1.MembershipSource
-	24,  // 88: kodex.access_accounts.v1.ListMembershipGraphResponse.root:type_name -> kodex.access_accounts.v1.SubjectRef
-	67,  // 89: kodex.access_accounts.v1.ListMembershipGraphResponse.edges:type_name -> kodex.access_accounts.v1.MembershipEdge
-	26,  // 90: kodex.access_accounts.v1.ListPendingAccessRequest.scope:type_name -> kodex.access_accounts.v1.ScopeRef
-	24,  // 91: kodex.access_accounts.v1.PendingAccessItem.subject:type_name -> kodex.access_accounts.v1.SubjectRef
-	70,  // 92: kodex.access_accounts.v1.ListPendingAccessResponse.items:type_name -> kodex.access_accounts.v1.PendingAccessItem
-	27,  // 93: kodex.access_accounts.v1.AccessManagerService.BootstrapUserFromIdentity:input_type -> kodex.access_accounts.v1.BootstrapUserFromIdentityRequest
-	29,  // 94: kodex.access_accounts.v1.AccessManagerService.SetUserStatus:input_type -> kodex.access_accounts.v1.SetUserStatusRequest
-	31,  // 95: kodex.access_accounts.v1.AccessManagerService.CreateOrganization:input_type -> kodex.access_accounts.v1.CreateOrganizationRequest
-	32,  // 96: kodex.access_accounts.v1.AccessManagerService.UpdateOrganization:input_type -> kodex.access_accounts.v1.UpdateOrganizationRequest
-	33,  // 97: kodex.access_accounts.v1.AccessManagerService.SuspendOrganization:input_type -> kodex.access_accounts.v1.SuspendOrganizationRequest
-	34,  // 98: kodex.access_accounts.v1.AccessManagerService.ArchiveOrganization:input_type -> kodex.access_accounts.v1.ArchiveOrganizationRequest
-	36,  // 99: kodex.access_accounts.v1.AccessManagerService.CreateGroup:input_type -> kodex.access_accounts.v1.CreateGroupRequest
-	37,  // 100: kodex.access_accounts.v1.AccessManagerService.UpdateGroup:input_type -> kodex.access_accounts.v1.UpdateGroupRequest
-	38,  // 101: kodex.access_accounts.v1.AccessManagerService.DisableGroup:input_type -> kodex.access_accounts.v1.DisableGroupRequest
-	40,  // 102: kodex.access_accounts.v1.AccessManagerService.SetMembership:input_type -> kodex.access_accounts.v1.SetMembershipRequest
-	42,  // 103: kodex.access_accounts.v1.AccessManagerService.PutAllowlistEntry:input_type -> kodex.access_accounts.v1.PutAllowlistEntryRequest
-	43,  // 104: kodex.access_accounts.v1.AccessManagerService.DisableAllowlistEntry:input_type -> kodex.access_accounts.v1.DisableAllowlistEntryRequest
-	45,  // 105: kodex.access_accounts.v1.AccessManagerService.RegisterExternalProvider:input_type -> kodex.access_accounts.v1.RegisterExternalProviderRequest
-	46,  // 106: kodex.access_accounts.v1.AccessManagerService.UpdateExternalProvider:input_type -> kodex.access_accounts.v1.UpdateExternalProviderRequest
-	48,  // 107: kodex.access_accounts.v1.AccessManagerService.RegisterExternalAccount:input_type -> kodex.access_accounts.v1.RegisterExternalAccountRequest
-	49,  // 108: kodex.access_accounts.v1.AccessManagerService.UpdateExternalAccountStatus:input_type -> kodex.access_accounts.v1.UpdateExternalAccountStatusRequest
-	51,  // 109: kodex.access_accounts.v1.AccessManagerService.BindExternalAccount:input_type -> kodex.access_accounts.v1.BindExternalAccountRequest
-	52,  // 110: kodex.access_accounts.v1.AccessManagerService.DisableExternalAccountBinding:input_type -> kodex.access_accounts.v1.DisableExternalAccountBindingRequest
-	54,  // 111: kodex.access_accounts.v1.AccessManagerService.PutAccessAction:input_type -> kodex.access_accounts.v1.PutAccessActionRequest
-	56,  // 112: kodex.access_accounts.v1.AccessManagerService.PutAccessRule:input_type -> kodex.access_accounts.v1.PutAccessRuleRequest
-	57,  // 113: kodex.access_accounts.v1.AccessManagerService.DisableAccessRule:input_type -> kodex.access_accounts.v1.DisableAccessRuleRequest
-	64,  // 114: kodex.access_accounts.v1.AccessManagerService.ResolveExternalAccountUsage:input_type -> kodex.access_accounts.v1.ResolveExternalAccountUsageRequest
-	59,  // 115: kodex.access_accounts.v1.AccessManagerService.CheckAccess:input_type -> kodex.access_accounts.v1.CheckAccessRequest
-	62,  // 116: kodex.access_accounts.v1.AccessManagerService.ExplainAccess:input_type -> kodex.access_accounts.v1.ExplainAccessRequest
-	66,  // 117: kodex.access_accounts.v1.AccessManagerService.ListMembershipGraph:input_type -> kodex.access_accounts.v1.ListMembershipGraphRequest
-	69,  // 118: kodex.access_accounts.v1.AccessManagerService.ListPendingAccess:input_type -> kodex.access_accounts.v1.ListPendingAccessRequest
-	28,  // 119: kodex.access_accounts.v1.AccessManagerService.BootstrapUserFromIdentity:output_type -> kodex.access_accounts.v1.BootstrapUserFromIdentityResponse
-	30,  // 120: kodex.access_accounts.v1.AccessManagerService.SetUserStatus:output_type -> kodex.access_accounts.v1.UserResponse
-	35,  // 121: kodex.access_accounts.v1.AccessManagerService.CreateOrganization:output_type -> kodex.access_accounts.v1.OrganizationResponse
-	35,  // 122: kodex.access_accounts.v1.AccessManagerService.UpdateOrganization:output_type -> kodex.access_accounts.v1.OrganizationResponse
-	35,  // 123: kodex.access_accounts.v1.AccessManagerService.SuspendOrganization:output_type -> kodex.access_accounts.v1.OrganizationResponse
-	35,  // 124: kodex.access_accounts.v1.AccessManagerService.ArchiveOrganization:output_type -> kodex.access_accounts.v1.OrganizationResponse
-	39,  // 125: kodex.access_accounts.v1.AccessManagerService.CreateGroup:output_type -> kodex.access_accounts.v1.GroupResponse
-	39,  // 126: kodex.access_accounts.v1.AccessManagerService.UpdateGroup:output_type -> kodex.access_accounts.v1.GroupResponse
-	39,  // 127: kodex.access_accounts.v1.AccessManagerService.DisableGroup:output_type -> kodex.access_accounts.v1.GroupResponse
-	41,  // 128: kodex.access_accounts.v1.AccessManagerService.SetMembership:output_type -> kodex.access_accounts.v1.MembershipResponse
-	44,  // 129: kodex.access_accounts.v1.AccessManagerService.PutAllowlistEntry:output_type -> kodex.access_accounts.v1.AllowlistEntryResponse
-	44,  // 130: kodex.access_accounts.v1.AccessManagerService.DisableAllowlistEntry:output_type -> kodex.access_accounts.v1.AllowlistEntryResponse
-	47,  // 131: kodex.access_accounts.v1.AccessManagerService.RegisterExternalProvider:output_type -> kodex.access_accounts.v1.ExternalProviderResponse
-	47,  // 132: kodex.access_accounts.v1.AccessManagerService.UpdateExternalProvider:output_type -> kodex.access_accounts.v1.ExternalProviderResponse
-	50,  // 133: kodex.access_accounts.v1.AccessManagerService.RegisterExternalAccount:output_type -> kodex.access_accounts.v1.ExternalAccountResponse
-	50,  // 134: kodex.access_accounts.v1.AccessManagerService.UpdateExternalAccountStatus:output_type -> kodex.access_accounts.v1.ExternalAccountResponse
-	53,  // 135: kodex.access_accounts.v1.AccessManagerService.BindExternalAccount:output_type -> kodex.access_accounts.v1.ExternalAccountBindingResponse
-	53,  // 136: kodex.access_accounts.v1.AccessManagerService.DisableExternalAccountBinding:output_type -> kodex.access_accounts.v1.ExternalAccountBindingResponse
-	55,  // 137: kodex.access_accounts.v1.AccessManagerService.PutAccessAction:output_type -> kodex.access_accounts.v1.AccessActionResponse
-	58,  // 138: kodex.access_accounts.v1.AccessManagerService.PutAccessRule:output_type -> kodex.access_accounts.v1.AccessRuleResponse
-	58,  // 139: kodex.access_accounts.v1.AccessManagerService.DisableAccessRule:output_type -> kodex.access_accounts.v1.AccessRuleResponse
-	65,  // 140: kodex.access_accounts.v1.AccessManagerService.ResolveExternalAccountUsage:output_type -> kodex.access_accounts.v1.ResolveExternalAccountUsageResponse
-	60,  // 141: kodex.access_accounts.v1.AccessManagerService.CheckAccess:output_type -> kodex.access_accounts.v1.CheckAccessResponse
-	63,  // 142: kodex.access_accounts.v1.AccessManagerService.ExplainAccess:output_type -> kodex.access_accounts.v1.ExplainAccessResponse
-	68,  // 143: kodex.access_accounts.v1.AccessManagerService.ListMembershipGraph:output_type -> kodex.access_accounts.v1.ListMembershipGraphResponse
-	71,  // 144: kodex.access_accounts.v1.AccessManagerService.ListPendingAccess:output_type -> kodex.access_accounts.v1.ListPendingAccessResponse
-	119, // [119:145] is the sub-list for method output_type
-	93,  // [93:119] is the sub-list for method input_type
-	93,  // [93:93] is the sub-list for extension type_name
-	93,  // [93:93] is the sub-list for extension extendee
-	0,   // [0:93] is the sub-list for field type_name
+	26,  // 80: kodex.access_accounts.v1.ExplainAccessRequest.scope:type_name -> kodex.access_accounts.v1.ScopeRef
+	21,  // 81: kodex.access_accounts.v1.ExplainAccessRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	0,   // 82: kodex.access_accounts.v1.ExplainAccessResponse.decision:type_name -> kodex.access_accounts.v1.AccessDecision
+	61,  // 83: kodex.access_accounts.v1.ExplainAccessResponse.matched_rules:type_name -> kodex.access_accounts.v1.MatchedRule
+	24,  // 84: kodex.access_accounts.v1.ExplainAccessResponse.subject:type_name -> kodex.access_accounts.v1.SubjectRef
+	25,  // 85: kodex.access_accounts.v1.ExplainAccessResponse.resource:type_name -> kodex.access_accounts.v1.ResourceRef
+	26,  // 86: kodex.access_accounts.v1.ExplainAccessResponse.scope:type_name -> kodex.access_accounts.v1.ScopeRef
+	22,  // 87: kodex.access_accounts.v1.ExplainAccessResponse.request_context:type_name -> kodex.access_accounts.v1.RequestContext
+	26,  // 88: kodex.access_accounts.v1.ResolveExternalAccountUsageRequest.usage_scope:type_name -> kodex.access_accounts.v1.ScopeRef
+	24,  // 89: kodex.access_accounts.v1.ListMembershipGraphRequest.subject:type_name -> kodex.access_accounts.v1.SubjectRef
+	24,  // 90: kodex.access_accounts.v1.MembershipEdge.subject:type_name -> kodex.access_accounts.v1.SubjectRef
+	24,  // 91: kodex.access_accounts.v1.MembershipEdge.target:type_name -> kodex.access_accounts.v1.SubjectRef
+	9,   // 92: kodex.access_accounts.v1.MembershipEdge.status:type_name -> kodex.access_accounts.v1.MembershipStatus
+	10,  // 93: kodex.access_accounts.v1.MembershipEdge.source:type_name -> kodex.access_accounts.v1.MembershipSource
+	24,  // 94: kodex.access_accounts.v1.ListMembershipGraphResponse.root:type_name -> kodex.access_accounts.v1.SubjectRef
+	67,  // 95: kodex.access_accounts.v1.ListMembershipGraphResponse.edges:type_name -> kodex.access_accounts.v1.MembershipEdge
+	26,  // 96: kodex.access_accounts.v1.ListPendingAccessRequest.scope:type_name -> kodex.access_accounts.v1.ScopeRef
+	24,  // 97: kodex.access_accounts.v1.PendingAccessItem.subject:type_name -> kodex.access_accounts.v1.SubjectRef
+	70,  // 98: kodex.access_accounts.v1.ListPendingAccessResponse.items:type_name -> kodex.access_accounts.v1.PendingAccessItem
+	27,  // 99: kodex.access_accounts.v1.AccessManagerService.BootstrapUserFromIdentity:input_type -> kodex.access_accounts.v1.BootstrapUserFromIdentityRequest
+	29,  // 100: kodex.access_accounts.v1.AccessManagerService.SetUserStatus:input_type -> kodex.access_accounts.v1.SetUserStatusRequest
+	31,  // 101: kodex.access_accounts.v1.AccessManagerService.CreateOrganization:input_type -> kodex.access_accounts.v1.CreateOrganizationRequest
+	32,  // 102: kodex.access_accounts.v1.AccessManagerService.UpdateOrganization:input_type -> kodex.access_accounts.v1.UpdateOrganizationRequest
+	33,  // 103: kodex.access_accounts.v1.AccessManagerService.SuspendOrganization:input_type -> kodex.access_accounts.v1.SuspendOrganizationRequest
+	34,  // 104: kodex.access_accounts.v1.AccessManagerService.ArchiveOrganization:input_type -> kodex.access_accounts.v1.ArchiveOrganizationRequest
+	36,  // 105: kodex.access_accounts.v1.AccessManagerService.CreateGroup:input_type -> kodex.access_accounts.v1.CreateGroupRequest
+	37,  // 106: kodex.access_accounts.v1.AccessManagerService.UpdateGroup:input_type -> kodex.access_accounts.v1.UpdateGroupRequest
+	38,  // 107: kodex.access_accounts.v1.AccessManagerService.DisableGroup:input_type -> kodex.access_accounts.v1.DisableGroupRequest
+	40,  // 108: kodex.access_accounts.v1.AccessManagerService.SetMembership:input_type -> kodex.access_accounts.v1.SetMembershipRequest
+	42,  // 109: kodex.access_accounts.v1.AccessManagerService.PutAllowlistEntry:input_type -> kodex.access_accounts.v1.PutAllowlistEntryRequest
+	43,  // 110: kodex.access_accounts.v1.AccessManagerService.DisableAllowlistEntry:input_type -> kodex.access_accounts.v1.DisableAllowlistEntryRequest
+	45,  // 111: kodex.access_accounts.v1.AccessManagerService.RegisterExternalProvider:input_type -> kodex.access_accounts.v1.RegisterExternalProviderRequest
+	46,  // 112: kodex.access_accounts.v1.AccessManagerService.UpdateExternalProvider:input_type -> kodex.access_accounts.v1.UpdateExternalProviderRequest
+	48,  // 113: kodex.access_accounts.v1.AccessManagerService.RegisterExternalAccount:input_type -> kodex.access_accounts.v1.RegisterExternalAccountRequest
+	49,  // 114: kodex.access_accounts.v1.AccessManagerService.UpdateExternalAccountStatus:input_type -> kodex.access_accounts.v1.UpdateExternalAccountStatusRequest
+	51,  // 115: kodex.access_accounts.v1.AccessManagerService.BindExternalAccount:input_type -> kodex.access_accounts.v1.BindExternalAccountRequest
+	52,  // 116: kodex.access_accounts.v1.AccessManagerService.DisableExternalAccountBinding:input_type -> kodex.access_accounts.v1.DisableExternalAccountBindingRequest
+	54,  // 117: kodex.access_accounts.v1.AccessManagerService.PutAccessAction:input_type -> kodex.access_accounts.v1.PutAccessActionRequest
+	56,  // 118: kodex.access_accounts.v1.AccessManagerService.PutAccessRule:input_type -> kodex.access_accounts.v1.PutAccessRuleRequest
+	57,  // 119: kodex.access_accounts.v1.AccessManagerService.DisableAccessRule:input_type -> kodex.access_accounts.v1.DisableAccessRuleRequest
+	64,  // 120: kodex.access_accounts.v1.AccessManagerService.ResolveExternalAccountUsage:input_type -> kodex.access_accounts.v1.ResolveExternalAccountUsageRequest
+	59,  // 121: kodex.access_accounts.v1.AccessManagerService.CheckAccess:input_type -> kodex.access_accounts.v1.CheckAccessRequest
+	62,  // 122: kodex.access_accounts.v1.AccessManagerService.ExplainAccess:input_type -> kodex.access_accounts.v1.ExplainAccessRequest
+	66,  // 123: kodex.access_accounts.v1.AccessManagerService.ListMembershipGraph:input_type -> kodex.access_accounts.v1.ListMembershipGraphRequest
+	69,  // 124: kodex.access_accounts.v1.AccessManagerService.ListPendingAccess:input_type -> kodex.access_accounts.v1.ListPendingAccessRequest
+	28,  // 125: kodex.access_accounts.v1.AccessManagerService.BootstrapUserFromIdentity:output_type -> kodex.access_accounts.v1.BootstrapUserFromIdentityResponse
+	30,  // 126: kodex.access_accounts.v1.AccessManagerService.SetUserStatus:output_type -> kodex.access_accounts.v1.UserResponse
+	35,  // 127: kodex.access_accounts.v1.AccessManagerService.CreateOrganization:output_type -> kodex.access_accounts.v1.OrganizationResponse
+	35,  // 128: kodex.access_accounts.v1.AccessManagerService.UpdateOrganization:output_type -> kodex.access_accounts.v1.OrganizationResponse
+	35,  // 129: kodex.access_accounts.v1.AccessManagerService.SuspendOrganization:output_type -> kodex.access_accounts.v1.OrganizationResponse
+	35,  // 130: kodex.access_accounts.v1.AccessManagerService.ArchiveOrganization:output_type -> kodex.access_accounts.v1.OrganizationResponse
+	39,  // 131: kodex.access_accounts.v1.AccessManagerService.CreateGroup:output_type -> kodex.access_accounts.v1.GroupResponse
+	39,  // 132: kodex.access_accounts.v1.AccessManagerService.UpdateGroup:output_type -> kodex.access_accounts.v1.GroupResponse
+	39,  // 133: kodex.access_accounts.v1.AccessManagerService.DisableGroup:output_type -> kodex.access_accounts.v1.GroupResponse
+	41,  // 134: kodex.access_accounts.v1.AccessManagerService.SetMembership:output_type -> kodex.access_accounts.v1.MembershipResponse
+	44,  // 135: kodex.access_accounts.v1.AccessManagerService.PutAllowlistEntry:output_type -> kodex.access_accounts.v1.AllowlistEntryResponse
+	44,  // 136: kodex.access_accounts.v1.AccessManagerService.DisableAllowlistEntry:output_type -> kodex.access_accounts.v1.AllowlistEntryResponse
+	47,  // 137: kodex.access_accounts.v1.AccessManagerService.RegisterExternalProvider:output_type -> kodex.access_accounts.v1.ExternalProviderResponse
+	47,  // 138: kodex.access_accounts.v1.AccessManagerService.UpdateExternalProvider:output_type -> kodex.access_accounts.v1.ExternalProviderResponse
+	50,  // 139: kodex.access_accounts.v1.AccessManagerService.RegisterExternalAccount:output_type -> kodex.access_accounts.v1.ExternalAccountResponse
+	50,  // 140: kodex.access_accounts.v1.AccessManagerService.UpdateExternalAccountStatus:output_type -> kodex.access_accounts.v1.ExternalAccountResponse
+	53,  // 141: kodex.access_accounts.v1.AccessManagerService.BindExternalAccount:output_type -> kodex.access_accounts.v1.ExternalAccountBindingResponse
+	53,  // 142: kodex.access_accounts.v1.AccessManagerService.DisableExternalAccountBinding:output_type -> kodex.access_accounts.v1.ExternalAccountBindingResponse
+	55,  // 143: kodex.access_accounts.v1.AccessManagerService.PutAccessAction:output_type -> kodex.access_accounts.v1.AccessActionResponse
+	58,  // 144: kodex.access_accounts.v1.AccessManagerService.PutAccessRule:output_type -> kodex.access_accounts.v1.AccessRuleResponse
+	58,  // 145: kodex.access_accounts.v1.AccessManagerService.DisableAccessRule:output_type -> kodex.access_accounts.v1.AccessRuleResponse
+	65,  // 146: kodex.access_accounts.v1.AccessManagerService.ResolveExternalAccountUsage:output_type -> kodex.access_accounts.v1.ResolveExternalAccountUsageResponse
+	60,  // 147: kodex.access_accounts.v1.AccessManagerService.CheckAccess:output_type -> kodex.access_accounts.v1.CheckAccessResponse
+	63,  // 148: kodex.access_accounts.v1.AccessManagerService.ExplainAccess:output_type -> kodex.access_accounts.v1.ExplainAccessResponse
+	68,  // 149: kodex.access_accounts.v1.AccessManagerService.ListMembershipGraph:output_type -> kodex.access_accounts.v1.ListMembershipGraphResponse
+	71,  // 150: kodex.access_accounts.v1.AccessManagerService.ListPendingAccess:output_type -> kodex.access_accounts.v1.ListPendingAccessResponse
+	125, // [125:151] is the sub-list for method output_type
+	99,  // [99:125] is the sub-list for method input_type
+	99,  // [99:99] is the sub-list for extension type_name
+	99,  // [99:99] is the sub-list for extension extendee
+	0,   // [0:99] is the sub-list for field type_name
 }
 
 func init() { file_kodex_access_accounts_v1_access_manager_proto_init() }

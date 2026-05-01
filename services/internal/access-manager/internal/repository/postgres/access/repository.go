@@ -75,6 +75,7 @@ const (
 	operationFindAccessRule                       = "domain.Repository.FindAccessRule"
 	operationListAccessRules                      = "domain.Repository.ListAccessRules"
 	operationRecordAccessDecision                 = "domain.Repository.RecordAccessDecision"
+	operationGetAccessDecisionAudit               = "domain.Repository.GetAccessDecisionAudit"
 )
 
 // NewRepository creates a PostgreSQL-backed access repository.
@@ -282,11 +283,15 @@ func (r *Repository) ListAccessRules(ctx context.Context, filter query.AccessRul
 
 func (r *Repository) RecordAccessDecision(ctx context.Context, audit entity.AccessDecisionAudit, event *entity.OutboxEvent) error {
 	return r.withTx(ctx, operationRecordAccessDecision, func(tx pgx.Tx) error {
+		requestContext, err := json.Marshal(audit.RequestContext)
+		if err != nil {
+			return err
+		}
 		payload, err := json.Marshal(audit.Explanation)
 		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, queryAccessDecisionAuditCreate, accessDecisionAuditArgs(audit, payload)); err != nil {
+		if _, err := tx.Exec(ctx, queryAccessDecisionAuditCreate, accessDecisionAuditArgs(audit, requestContext, payload)); err != nil {
 			return err
 		}
 		if event != nil {
@@ -294,6 +299,10 @@ func (r *Repository) RecordAccessDecision(ctx context.Context, audit entity.Acce
 		}
 		return nil
 	})
+}
+
+func (r *Repository) GetAccessDecisionAudit(ctx context.Context, id uuid.UUID) (entity.AccessDecisionAudit, error) {
+	return queryOne(ctx, r.db, operationGetAccessDecisionAudit, queryAccessDecisionAuditGetByID, pgx.NamedArgs{"id": id}, scanAccessDecisionAudit)
 }
 
 func (r *Repository) withTx(ctx context.Context, operation string, fn func(tx pgx.Tx) error) error {

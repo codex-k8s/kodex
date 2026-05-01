@@ -78,6 +78,8 @@ type Repository interface {
 	ListAccessRules(ctx context.Context, filter query.AccessRuleFilter) ([]entity.AccessRule, error)
 	// RecordAccessDecision stores an audit record and optional outbox event.
 	RecordAccessDecision(ctx context.Context, audit entity.AccessDecisionAudit, event *entity.OutboxEvent) error
+	// GetAccessDecisionAudit returns a stored access decision explanation.
+	GetAccessDecisionAudit(ctx context.Context, id uuid.UUID) (entity.AccessDecisionAudit, error)
 }
 
 // Clock provides deterministic time for domain commands and tests.

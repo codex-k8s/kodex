@@ -21,6 +21,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/value"
 )
 
 var sqlHeaderPattern = regexp.MustCompile(`^-- name: ([a-z0-9_]+__[a-z0-9_]+) :(one|many|exec)$`)
@@ -241,6 +242,63 @@ func TestRepositoryIntegrationAccessRuleIdentityIsUnique(t *testing.T) {
 	}
 	if got := countTableRows(t, ctx, pool, "access_rules"); got != 1 {
 		t.Fatalf("access rules = %d, want 1", got)
+	}
+}
+
+func TestRepositoryIntegrationAccessDecisionAuditRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openIntegrationPool(t, ctx)
+	repository := NewRepository(pool)
+	now := time.Date(2026, 4, 30, 12, 0, 0, 0, time.UTC)
+	ruleID := uuid.New()
+	audit := entity.AccessDecisionAudit{
+		ID:        uuid.New(),
+		Subject:   value.SubjectRef{Type: "user", ID: uuid.NewString()},
+		ActionKey: "project.read",
+		Resource:  value.ResourceRef{Type: "project", ID: "project-1"},
+		Scope:     value.ScopeRef{Type: "project", ID: "project-1"},
+		RequestContext: value.RequestContext{
+			Source:       "staff-gateway",
+			TraceID:      "trace-1",
+			SessionID:    "session-1",
+			ClientIPHash: "hash-1",
+		},
+		Decision:      enum.AccessDecisionAllow,
+		ReasonCode:    "explicit_allow",
+		PolicyVersion: 2,
+		Explanation: value.DecisionExplanation{
+			Decision:      string(enum.AccessDecisionAllow),
+			ReasonCode:    "explicit_allow",
+			PolicyVersion: 2,
+			MatchedRules: []value.RuleExplanation{{
+				RuleID:     ruleID,
+				Effect:     string(enum.AccessEffectAllow),
+				Subject:    value.SubjectRef{Type: "user", ID: "user-1"},
+				ActionKey:  "project.read",
+				Scope:      value.ScopeRef{Type: "project", ID: "project-1"},
+				Priority:   10,
+				ReasonCode: "explicit_allow",
+			}},
+		},
+		CreatedAt: now,
+	}
+	if err := repository.RecordAccessDecision(ctx, audit, nil); err != nil {
+		t.Fatalf("record audit: %v", err)
+	}
+	stored, err := repository.GetAccessDecisionAudit(ctx, audit.ID)
+	if err != nil {
+		t.Fatalf("get audit: %v", err)
+	}
+	if stored.ID != audit.ID || stored.Decision != audit.Decision || stored.ReasonCode != audit.ReasonCode {
+		t.Fatalf("stored audit = %#v, want %#v", stored, audit)
+	}
+	if stored.Scope != audit.Scope || stored.RequestContext.TraceID != audit.RequestContext.TraceID {
+		t.Fatalf("stored context = %+v/%+v, want %+v/%+v", stored.Scope, stored.RequestContext, audit.Scope, audit.RequestContext)
+	}
+	if len(stored.Explanation.MatchedRules) != 1 || stored.Explanation.MatchedRules[0].RuleID != ruleID {
+		t.Fatalf("stored explanation = %+v, want rule %s", stored.Explanation, ruleID)
 	}
 }
 

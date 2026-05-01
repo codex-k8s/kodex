@@ -70,7 +70,7 @@ approvals:
 Инварианты:
 - самостоятельная регистрация запрещена;
 - пользователь может иметь несколько внешних идентичностей;
-- пользователи в состояниях `blocked` и `disabled` не проходят `CheckAccess`.
+- пользователи в состоянии `pending` получают решение `pending`, а в состояниях `blocked` и `disabled` не проходят `CheckAccess`.
 
 ### `UserIdentity`
 
@@ -233,6 +233,9 @@ approvals:
 | `action_key` | string | no | Ключ действия из каталога `AccessAction`. |
 | `resource_type` | string | no | Тип ресурса. |
 | `resource_id` | string | yes | Идентификатор ресурса. |
+| `scope_type` | string | no | Область, где вычислялась политика. |
+| `scope_id` | string | yes | Идентификатор области; глобальная область использует пустое значение. |
+| `request_context` | jsonb | no | Безопасный контекст запроса: источник, trace, session и хеш IP без токенов, email, имён и секретов. |
 | `decision` | enum | no | `allow`, `deny`, `pending`. |
 | `reason_code` | string | no | Машинно читаемая причина. |
 | `policy_version` | int64 | no | Версия политики. |

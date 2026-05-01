@@ -845,6 +845,27 @@ func TestPutAccessRuleRequiresActiveCatalogAction(t *testing.T) {
 	}
 }
 
+func TestPutAccessRuleRequiresCatalogResourceType(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	user := store.seedUser(enum.UserStatusActive)
+
+	_, err := svc.PutAccessAction(ctx, PutAccessActionInput{
+		Key: "project.read", DisplayName: "Чтение проекта", ResourceType: "project",
+	})
+	if err != nil {
+		t.Fatalf("put action: %v", err)
+	}
+	_, err = svc.PutAccessRule(ctx, PutAccessRuleInput{
+		Effect: enum.AccessEffectAllow, SubjectType: enum.AccessSubjectUser, SubjectID: user.ID.String(),
+		ActionKey: "project.read", ResourceType: "repository", ScopeType: "global",
+	})
+	if !errors.Is(err, errs.ErrPreconditionFailed) {
+		t.Fatalf("err = %v, want %v", err, errs.ErrPreconditionFailed)
+	}
+}
+
 func TestRegisterExternalAccountRejectsInvalidOwnerScope(t *testing.T) {
 	ctx := context.Background()
 	store := newMemoryRepository()
@@ -963,6 +984,179 @@ func TestCheckAccessUsesGlobalScopeRule(t *testing.T) {
 	}
 	if result.Decision != enum.AccessDecisionAllow {
 		t.Fatalf("decision = %s, want %s", result.Decision, enum.AccessDecisionAllow)
+	}
+}
+
+func TestCheckAccessAuditsAllowAndExplainAccessReadsDecision(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	user := store.seedUser(enum.UserStatusActive)
+	action, err := svc.PutAccessAction(ctx, PutAccessActionInput{
+		Key: "project.read", DisplayName: "Чтение проекта", ResourceType: "project",
+	})
+	if err != nil {
+		t.Fatalf("put action: %v", err)
+	}
+	rule, err := svc.PutAccessRule(ctx, PutAccessRuleInput{
+		Effect: enum.AccessEffectAllow, SubjectType: enum.AccessSubjectUser, SubjectID: user.ID.String(),
+		ActionKey: action.Key, ResourceType: "project", ResourceID: "project-1", ScopeType: "project", ScopeID: "project-1",
+		Priority: 5,
+	})
+	if err != nil {
+		t.Fatalf("put rule: %v", err)
+	}
+
+	result, err := svc.CheckAccess(ctx, CheckAccessInput{
+		Subject:   value.SubjectRef{Type: string(enum.AccessSubjectUser), ID: user.ID.String()},
+		ActionKey: action.Key, Resource: value.ResourceRef{Type: "project", ID: "project-1"},
+		Scope: value.ScopeRef{Type: "project", ID: "project-1"},
+		Meta:  value.CommandMeta{RequestContext: value.RequestContext{Source: "staff-gateway", TraceID: "trace-1"}},
+	})
+	if err != nil {
+		t.Fatalf("check access: %v", err)
+	}
+	if result.Decision != enum.AccessDecisionAllow || result.ReasonCode != reasonExplicitAllow {
+		t.Fatalf("decision/reason = %s/%s, want %s/%s", result.Decision, result.ReasonCode, enum.AccessDecisionAllow, reasonExplicitAllow)
+	}
+	if result.Explanation.PolicyVersion != rule.Version || len(result.Explanation.MatchedRules) != 1 {
+		t.Fatalf("explanation = %+v, want policy version %d and one rule", result.Explanation, rule.Version)
+	}
+	if len(store.audits) != 1 {
+		t.Fatalf("audit count = %d, want 1", len(store.audits))
+	}
+	auditID := store.audits[0].ID
+	if store.audits[0].Scope != (value.ScopeRef{Type: "project", ID: "project-1"}) {
+		t.Fatalf("audit scope = %+v, want project/project-1", store.audits[0].Scope)
+	}
+	if store.audits[0].RequestContext.TraceID != "trace-1" {
+		t.Fatalf("audit request trace = %q, want trace-1", store.audits[0].RequestContext.TraceID)
+	}
+	_, err = svc.PutAccessAction(ctx, PutAccessActionInput{
+		Key: accessActionExplainAccess, DisplayName: "Чтение объяснения доступа", ResourceType: accessResourceAccessDecisionAudit,
+	})
+	if err != nil {
+		t.Fatalf("put explain action: %v", err)
+	}
+	_, err = svc.PutAccessRule(ctx, PutAccessRuleInput{
+		Effect: enum.AccessEffectAllow, SubjectType: enum.AccessSubjectUser, SubjectID: user.ID.String(),
+		ActionKey: accessActionExplainAccess, ResourceType: accessResourceAccessDecisionAudit, ScopeType: "global",
+	})
+	if err != nil {
+		t.Fatalf("put explain rule: %v", err)
+	}
+	explained, err := svc.ExplainAccess(ctx, ExplainAccessInput{
+		AuditID: auditID,
+		Scope:   value.ScopeRef{Type: "global"},
+		Meta:    value.CommandMeta{Actor: value.Actor{Type: string(enum.AccessSubjectUser), ID: user.ID.String()}},
+	})
+	if err != nil {
+		t.Fatalf("explain access: %v", err)
+	}
+	if explained.Audit.Decision != result.Decision || explained.Audit.ReasonCode != result.ReasonCode {
+		t.Fatalf("explained audit = %s/%s, want %s/%s", explained.Audit.Decision, explained.Audit.ReasonCode, result.Decision, result.ReasonCode)
+	}
+	if len(explained.Audit.Explanation.MatchedRules) != 1 || explained.Audit.Explanation.MatchedRules[0].RuleID != rule.ID {
+		t.Fatalf("explained matched rules = %+v, want rule %s", explained.Audit.Explanation.MatchedRules, rule.ID)
+	}
+}
+
+func TestExplainAccessRejectsEmptyAuditID(t *testing.T) {
+	svc := New(newMemoryRepository(), fixedClock{}, newSequenceIDs())
+	_, err := svc.ExplainAccess(context.Background(), ExplainAccessInput{})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+}
+
+func TestExplainAccessRequiresAuthorizedActor(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	user := store.seedUser(enum.UserStatusActive)
+
+	_, err := svc.ExplainAccess(ctx, ExplainAccessInput{
+		AuditID: uuid.New(),
+		Scope:   value.ScopeRef{Type: "global"},
+		Meta:    value.CommandMeta{Actor: value.Actor{Type: string(enum.AccessSubjectUser), ID: user.ID.String()}},
+	})
+	if !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("err = %v, want %v", err, errs.ErrForbidden)
+	}
+	if len(store.audits) != 1 || store.audits[0].ActionKey != accessActionExplainAccess {
+		t.Fatalf("authorization audit = %+v, want explain access decision", store.audits)
+	}
+}
+
+func TestCheckAccessDeniesInvalidActionState(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+
+	_, err := svc.PutAccessAction(ctx, PutAccessActionInput{
+		Key: "project.disabled", DisplayName: "Отключённое действие", ResourceType: "project",
+		Status: enum.AccessActionStatusDisabled,
+	})
+	if err != nil {
+		t.Fatalf("put disabled action: %v", err)
+	}
+	_, err = svc.PutAccessAction(ctx, PutAccessActionInput{
+		Key: "project.read", DisplayName: "Чтение проекта", ResourceType: "project",
+	})
+	if err != nil {
+		t.Fatalf("put action: %v", err)
+	}
+
+	cases := []struct {
+		name         string
+		actionKey    string
+		resourceType string
+		wantReason   string
+	}{
+		{name: "missing action", actionKey: "project.missing", resourceType: "project", wantReason: reasonActionNotFound},
+		{name: "disabled action", actionKey: "project.disabled", resourceType: "project", wantReason: reasonActionDisabled},
+		{name: "resource mismatch", actionKey: "project.read", resourceType: "repository", wantReason: reasonResourceTypeMismatch},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := svc.CheckAccess(ctx, CheckAccessInput{
+				Subject:   value.SubjectRef{Type: string(enum.AccessSubjectAgent), ID: "agent-1"},
+				ActionKey: tc.actionKey,
+				Resource:  value.ResourceRef{Type: tc.resourceType, ID: "resource-1"},
+				Scope:     value.ScopeRef{Type: "project", ID: "project-1"},
+			})
+			if err != nil {
+				t.Fatalf("check access: %v", err)
+			}
+			if result.Decision != enum.AccessDecisionDeny || result.ReasonCode != tc.wantReason {
+				t.Fatalf("decision/reason = %s/%s, want %s/%s", result.Decision, result.ReasonCode, enum.AccessDecisionDeny, tc.wantReason)
+			}
+		})
+	}
+}
+
+func TestCheckAccessReturnsPendingForPendingUser(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	user := store.seedUser(enum.UserStatusPending)
+	action, err := svc.PutAccessAction(ctx, PutAccessActionInput{
+		Key: "project.read", DisplayName: "Чтение проекта", ResourceType: "project",
+	})
+	if err != nil {
+		t.Fatalf("put action: %v", err)
+	}
+
+	result, err := svc.CheckAccess(ctx, CheckAccessInput{
+		Subject:   value.SubjectRef{Type: string(enum.AccessSubjectUser), ID: user.ID.String()},
+		ActionKey: action.Key, Resource: value.ResourceRef{Type: "project", ID: "project-1"},
+		Scope: value.ScopeRef{Type: "project", ID: "project-1"},
+	})
+	if err != nil {
+		t.Fatalf("check access: %v", err)
+	}
+	if result.Decision != enum.AccessDecisionPending || result.ReasonCode != reasonSubjectPending {
+		t.Fatalf("decision/reason = %s/%s, want %s/%s", result.Decision, result.ReasonCode, enum.AccessDecisionPending, reasonSubjectPending)
 	}
 }
 
@@ -1320,6 +1514,15 @@ func (r *memoryRepository) RecordAccessDecision(_ context.Context, audit entity.
 		r.events = append(r.events, *event)
 	}
 	return nil
+}
+
+func (r *memoryRepository) GetAccessDecisionAudit(_ context.Context, id uuid.UUID) (entity.AccessDecisionAudit, error) {
+	for _, audit := range r.audits {
+		if audit.ID == id {
+			return audit, nil
+		}
+	}
+	return entity.AccessDecisionAudit{}, errs.ErrNotFound
 }
 
 func (r *memoryRepository) seedUser(status enum.UserStatus) entity.User {

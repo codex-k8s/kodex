@@ -16,6 +16,7 @@ func (s *Service) recordDecision(ctx context.Context, input CheckAccessInput, de
 	now := s.now(input.Meta)
 	audit := entity.AccessDecisionAudit{
 		ID: s.ids.New(), Subject: input.Subject, ActionKey: input.ActionKey, Resource: input.Resource,
+		Scope: input.Scope, RequestContext: input.Meta.RequestContext,
 		Decision: decision, ReasonCode: reasonCode, PolicyVersion: explanation.PolicyVersion,
 		Explanation: explanation, CreatedAt: now,
 	}

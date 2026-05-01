@@ -152,15 +152,17 @@ type SecretBindingRef struct {
 
 // AccessDecisionAudit records auditable access decisions and their explanation.
 type AccessDecisionAudit struct {
-	ID            uuid.UUID
-	Subject       value.SubjectRef
-	ActionKey     string
-	Resource      value.ResourceRef
-	Decision      enum.AccessDecision
-	ReasonCode    string
-	PolicyVersion int64
-	Explanation   value.DecisionExplanation
-	CreatedAt     time.Time
+	ID             uuid.UUID
+	Subject        value.SubjectRef
+	ActionKey      string
+	Resource       value.ResourceRef
+	Scope          value.ScopeRef
+	RequestContext value.RequestContext
+	Decision       enum.AccessDecision
+	ReasonCode     string
+	PolicyVersion  int64
+	Explanation    value.DecisionExplanation
+	CreatedAt      time.Time
 }
 
 // CommandResult stores the aggregate produced by an idempotent mutation command.

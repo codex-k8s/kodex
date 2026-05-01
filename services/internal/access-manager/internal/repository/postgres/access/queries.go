@@ -6,6 +6,7 @@ var (
 	queryAccessActionGetByKey                 = mustLoadQuery("access_action__get_by_key")
 	queryAccessActionUpsert                   = mustLoadQuery("access_action__upsert")
 	queryAccessDecisionAuditCreate            = mustLoadQuery("access_decision_audit__create")
+	queryAccessDecisionAuditGetByID           = mustLoadQuery("access_decision_audit__get_by_id")
 	queryAccessRuleFindByIdentity             = mustLoadQuery("access_rule__find_by_identity")
 	queryAccessRuleListForCheck               = mustLoadQuery("access_rule__list_for_check")
 	queryAccessRuleUpsert                     = mustLoadQuery("access_rule__upsert")

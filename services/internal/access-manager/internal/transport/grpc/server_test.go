@@ -87,12 +87,75 @@ func TestUnimplementedBacklogMethodReturnsUnimplemented(t *testing.T) {
 	}
 }
 
+func TestExplainAccessMapsRequestAndResponse(t *testing.T) {
+	t.Parallel()
+
+	auditID := uuid.MustParse("33333333-3333-4333-8333-333333333333")
+	ruleID := uuid.MustParse("44444444-4444-4444-8444-444444444444")
+	service := &fakeAccessService{
+		explainAccess: func(_ context.Context, input accessservice.ExplainAccessInput) (accessservice.ExplainAccessResult, error) {
+			if input.AuditID != auditID {
+				t.Fatalf("AuditID = %s, want %s", input.AuditID, auditID)
+			}
+			if input.Scope.Type != "global" || input.Meta.Actor.ID != "operator-1" {
+				t.Fatalf("unexpected explain input: %+v", input)
+			}
+			return accessservice.ExplainAccessResult{
+				Audit: entity.AccessDecisionAudit{
+					ID:             auditID,
+					Subject:        value.SubjectRef{Type: "user", ID: "user-1"},
+					ActionKey:      "project.read",
+					Resource:       value.ResourceRef{Type: "project", ID: "project-1"},
+					Scope:          value.ScopeRef{Type: "project", ID: "project-1"},
+					RequestContext: value.RequestContext{Source: "staff-gateway", TraceID: "trace-1"},
+					Decision:       enum.AccessDecisionAllow,
+					ReasonCode:     "explicit_allow",
+					PolicyVersion:  7,
+					CreatedAt:      time.Date(2026, 4, 30, 12, 0, 0, 0, time.UTC),
+					Explanation: value.DecisionExplanation{
+						MatchedRules: []value.RuleExplanation{{
+							RuleID:     ruleID,
+							Effect:     string(enum.AccessEffectAllow),
+							Subject:    value.SubjectRef{Type: "user", ID: "user-1"},
+							ActionKey:  "project.read",
+							Scope:      value.ScopeRef{Type: "project", ID: "project-1"},
+							Priority:   5,
+							ReasonCode: "explicit_allow",
+						}},
+					},
+				},
+			}, nil
+		},
+	}
+
+	response, err := NewServer(service).ExplainAccess(context.Background(), &accessaccountsv1.ExplainAccessRequest{
+		AuditId: auditID.String(),
+		Scope:   &accessaccountsv1.ScopeRef{Type: "global"},
+		Meta:    &accessaccountsv1.CommandMeta{Actor: &accessaccountsv1.Actor{Type: "user", Id: "operator-1"}},
+	})
+	if err != nil {
+		t.Fatalf("ExplainAccess(): %v", err)
+	}
+	if response.GetAuditId() != auditID.String() || response.GetDecision() != accessaccountsv1.AccessDecision_ACCESS_DECISION_ALLOW {
+		t.Fatalf("response = %+v, want audit %s allow", response, auditID)
+	}
+	if response.GetPolicyVersion() != 7 || len(response.GetMatchedRules()) != 1 || response.GetMatchedRules()[0].GetRuleId() != ruleID.String() {
+		t.Fatalf("matched rules = %+v, want rule %s", response.GetMatchedRules(), ruleID)
+	}
+	if response.GetSubject().GetId() != "user-1" || response.GetActionKey() != "project.read" ||
+		response.GetResource().GetId() != "project-1" || response.GetScope().GetType() != "project" ||
+		response.GetRequestContext().GetTraceId() != "trace-1" || response.GetCreatedAt() == "" {
+		t.Fatalf("incomplete audit response: %+v", response)
+	}
+}
+
 func errorsIsInvalidArgument(err error) bool {
 	return err == errs.ErrInvalidArgument
 }
 
 type fakeAccessService struct {
 	createOrganization func(context.Context, accessservice.CreateOrganizationInput) (entity.Organization, error)
+	explainAccess      func(context.Context, accessservice.ExplainAccessInput) (accessservice.ExplainAccessResult, error)
 }
 
 func (f *fakeAccessService) BootstrapUserFromIdentity(context.Context, accessservice.BootstrapUserFromIdentityInput) (accessservice.BootstrapUserFromIdentityResult, error) {
@@ -144,6 +207,13 @@ func (f *fakeAccessService) CheckAccess(context.Context, accessservice.CheckAcce
 		ReasonCode:  "test",
 		Explanation: value.DecisionExplanation{Decision: string(enum.AccessDecisionDeny), ReasonCode: "test", PolicyVersion: 1},
 	}, nil
+}
+
+func (f *fakeAccessService) ExplainAccess(ctx context.Context, input accessservice.ExplainAccessInput) (accessservice.ExplainAccessResult, error) {
+	if f.explainAccess != nil {
+		return f.explainAccess(ctx, input)
+	}
+	return accessservice.ExplainAccessResult{}, errs.ErrNotFound
 }
 
 func (f *fakeAccessService) ResolveExternalAccountUsage(context.Context, accessservice.ResolveExternalAccountUsageInput) (accessservice.ResolveExternalAccountUsageResult, error) {
