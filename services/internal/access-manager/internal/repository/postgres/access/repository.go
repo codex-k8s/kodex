@@ -49,11 +49,14 @@ const (
 	operationCountActiveOwnerOrganizations        = "domain.Repository.CountActiveOwnerOrganizations"
 	operationCreateUser                           = "domain.Repository.CreateUser"
 	operationGetUser                              = "domain.Repository.GetUser"
+	operationUpdateUser                           = "domain.Repository.UpdateUser"
 	operationGetUserByEmail                       = "domain.Repository.GetUserByEmail"
 	operationGetUserByIdentity                    = "domain.Repository.GetUserByIdentity"
 	operationLinkUserIdentity                     = "domain.Repository.LinkUserIdentity"
 	operationPutAllowlistEntry                    = "domain.Repository.PutAllowlistEntry"
+	operationUpdateAllowlistEntry                 = "domain.Repository.UpdateAllowlistEntry"
 	operationFindAllowlistEntry                   = "domain.Repository.FindAllowlistEntry"
+	operationGetAllowlistEntry                    = "domain.Repository.GetAllowlistEntry"
 	operationCreateGroup                          = "domain.Repository.CreateGroup"
 	operationGetGroup                             = "domain.Repository.GetGroup"
 	operationFindMembership                       = "domain.Repository.FindMembership"
@@ -76,6 +79,7 @@ const (
 	operationListAccessRules                      = "domain.Repository.ListAccessRules"
 	operationRecordAccessDecision                 = "domain.Repository.RecordAccessDecision"
 	operationGetAccessDecisionAudit               = "domain.Repository.GetAccessDecisionAudit"
+	operationListPendingAccess                    = "domain.Repository.ListPendingAccess"
 )
 
 // NewRepository creates a PostgreSQL-backed access repository.
@@ -117,6 +121,10 @@ func (r *Repository) GetUser(ctx context.Context, id uuid.UUID) (entity.User, er
 	return queryOne(ctx, r.db, operationGetUser, queryUserGetByID, pgx.NamedArgs{"id": id}, scanUser)
 }
 
+func (r *Repository) UpdateUser(ctx context.Context, user entity.User, previousVersion int64, event entity.OutboxEvent, result *entity.CommandResult) error {
+	return r.updateWithCommandResult(ctx, operationUpdateUser, queryUserUpdate, userUpdateArgs(user, previousVersion), event, result)
+}
+
 func (r *Repository) GetUserByEmail(ctx context.Context, email string) (entity.User, error) {
 	return queryOne(ctx, r.db, operationGetUserByEmail, queryUserGetByEmail, pgx.NamedArgs{"primary_email": email}, scanUser)
 }
@@ -133,8 +141,17 @@ func (r *Repository) PutAllowlistEntry(ctx context.Context, entry entity.Allowli
 	return r.mutateWithOutbox(ctx, operationPutAllowlistEntry, event, mutation{query: queryAllowlistEntryUpsert, args: allowlistEntryArgs(entry), requireAffected: true})
 }
 
+func (r *Repository) UpdateAllowlistEntry(ctx context.Context, entry entity.AllowlistEntry, previousVersion int64, event entity.OutboxEvent, result *entity.CommandResult) error {
+	args := allowlistEntryUpdateArgs(entry, previousVersion)
+	return r.updateWithCommandResult(ctx, operationUpdateAllowlistEntry, queryAllowlistEntryUpdate, args, event, result)
+}
+
 func (r *Repository) FindAllowlistEntry(ctx context.Context, matchType enum.AllowlistMatchType, value string) (entity.AllowlistEntry, error) {
 	return queryOne(ctx, r.db, operationFindAllowlistEntry, queryAllowlistEntryFind, allowlistLookupArgs(string(matchType), value), scanAllowlistEntry)
+}
+
+func (r *Repository) GetAllowlistEntry(ctx context.Context, id uuid.UUID) (entity.AllowlistEntry, error) {
+	return queryOne(ctx, r.db, operationGetAllowlistEntry, queryAllowlistEntryGetByID, pgx.NamedArgs{"id": id}, scanAllowlistEntry)
 }
 
 func (r *Repository) CreateGroup(ctx context.Context, group entity.Group, event entity.OutboxEvent, result entity.CommandResult) error {
@@ -305,6 +322,20 @@ func (r *Repository) GetAccessDecisionAudit(ctx context.Context, id uuid.UUID) (
 	return queryOne(ctx, r.db, operationGetAccessDecisionAudit, queryAccessDecisionAuditGetByID, pgx.NamedArgs{"id": id}, scanAccessDecisionAudit)
 }
 
+func (r *Repository) ListPendingAccess(ctx context.Context, filter query.PendingAccessFilter) ([]entity.PendingAccessItem, error) {
+	rows, err := r.db.Query(ctx, queryPendingAccessList, pgx.NamedArgs{
+		"scope_type": filter.Scope.Type,
+		"scope_id":   filter.Scope.ID,
+		"limit":      filter.Limit,
+		"offset":     filter.Offset,
+	})
+	if err != nil {
+		return nil, wrapError(operationListPendingAccess, err)
+	}
+	items, err := scanRows(rows, scanPendingAccessItem)
+	return items, wrapError(operationListPendingAccess, err)
+}
+
 func (r *Repository) withTx(ctx context.Context, operation string, fn func(tx pgx.Tx) error) error {
 	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
@@ -351,8 +382,21 @@ func (r *Repository) createWithCommandResult(ctx context.Context, operation stri
 	return r.mutateWithOutbox(ctx, operation, event, create, commandResultMutation(result))
 }
 
+func (r *Repository) updateWithCommandResult(ctx context.Context, operation string, queryText string, args pgx.NamedArgs, event entity.OutboxEvent, result *entity.CommandResult) error {
+	mutations := []mutation{{query: queryText, args: args, requireAffected: true}}
+	mutations = appendOptionalCommandResult(mutations, result)
+	return r.mutateWithOutbox(ctx, operation, event, mutations...)
+}
+
 func commandResultMutation(result entity.CommandResult) mutation {
 	return mutation{query: queryCommandResultCreate, args: commandResultArgs(result), requireAffected: true}
+}
+
+func appendOptionalCommandResult(mutations []mutation, result *entity.CommandResult) []mutation {
+	if result == nil {
+		return mutations
+	}
+	return append(mutations, commandResultMutation(*result))
 }
 
 func insertOutboxEvent(ctx context.Context, db execer, event entity.OutboxEvent) error {

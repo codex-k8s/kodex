@@ -24,6 +24,23 @@ func BootstrapUserFromIdentityInput(request *accessaccountsv1.BootstrapUserFromI
 	}, nil
 }
 
+// SetUserStatusInput maps a gRPC request to the domain command input.
+func SetUserStatusInput(request *accessaccountsv1.SetUserStatusRequest) (accessservice.SetUserStatusInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return accessservice.SetUserStatusInput{}, err
+	}
+	userID, err := requiredUUID(request.GetUserId())
+	if err != nil {
+		return accessservice.SetUserStatusInput{}, err
+	}
+	status, err := requiredEnum(request.GetStatus(), userStatusFromProto)
+	if err != nil {
+		return accessservice.SetUserStatusInput{}, err
+	}
+	return accessservice.SetUserStatusInput{UserID: userID, Status: status, Meta: meta}, nil
+}
+
 // CreateOrganizationInput maps a gRPC request to the domain command input.
 func CreateOrganizationInput(request *accessaccountsv1.CreateOrganizationRequest) (accessservice.CreateOrganizationInput, error) {
 	meta, err := CommandMetaFromProto(request.GetMeta())
@@ -158,6 +175,19 @@ func PutAllowlistEntryInput(request *accessaccountsv1.PutAllowlistEntryRequest) 
 		Status:         status,
 		Meta:           meta,
 	}, nil
+}
+
+// DisableAllowlistEntryInput maps a gRPC request to the domain command input.
+func DisableAllowlistEntryInput(request *accessaccountsv1.DisableAllowlistEntryRequest) (accessservice.DisableAllowlistEntryInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return accessservice.DisableAllowlistEntryInput{}, err
+	}
+	allowlistEntryID, err := requiredUUID(request.GetAllowlistEntryId())
+	if err != nil {
+		return accessservice.DisableAllowlistEntryInput{}, err
+	}
+	return accessservice.DisableAllowlistEntryInput{AllowlistEntryID: allowlistEntryID, Meta: meta}, nil
 }
 
 // PutExternalProviderInput maps a gRPC request to the domain command input.
@@ -352,6 +382,20 @@ func ResolveExternalAccountUsageInput(request *accessaccountsv1.ResolveExternalA
 		ExternalAccountID: accountID,
 		ActionKey:         strings.TrimSpace(request.GetActionKey()),
 		UsageScope:        ScopeRefFromProto(request.GetUsageScope()),
+	}, nil
+}
+
+// ListPendingAccessInput maps a gRPC request to the domain read input.
+func ListPendingAccessInput(request *accessaccountsv1.ListPendingAccessRequest) (accessservice.ListPendingAccessInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return accessservice.ListPendingAccessInput{}, err
+	}
+	return accessservice.ListPendingAccessInput{
+		Scope:  ScopeRefFromProto(request.GetScope()),
+		Limit:  int(request.GetLimit()),
+		Cursor: strings.TrimSpace(request.GetCursor()),
+		Meta:   meta,
 	}, nil
 }
 

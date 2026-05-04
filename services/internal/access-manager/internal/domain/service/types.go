@@ -53,6 +53,19 @@ type PutAllowlistEntryInput struct {
 	Meta           value.CommandMeta
 }
 
+// SetUserStatusInput changes the lifecycle status of an existing user.
+type SetUserStatusInput struct {
+	UserID uuid.UUID
+	Status enum.UserStatus
+	Meta   value.CommandMeta
+}
+
+// DisableAllowlistEntryInput disables an allowlist entry without deleting history.
+type DisableAllowlistEntryInput struct {
+	AllowlistEntryID uuid.UUID
+	Meta             value.CommandMeta
+}
+
 // BootstrapUserFromIdentityInput carries SSO identity data after provider login.
 type BootstrapUserFromIdentityInput struct {
 	Provider    enum.IdentityProvider
@@ -171,4 +184,18 @@ type ResolveExternalAccountUsageResult struct {
 	ExternalAccount entity.ExternalAccount
 	SecretRef       entity.SecretBindingRef
 	AllowedActions  []string
+}
+
+// ListPendingAccessInput selects operator-visible access items that need attention.
+type ListPendingAccessInput struct {
+	Scope  value.ScopeRef
+	Limit  int
+	Cursor string
+	Meta   value.CommandMeta
+}
+
+// ListPendingAccessResult returns a page of pending or blocked access items.
+type ListPendingAccessResult struct {
+	Items      []entity.PendingAccessItem
+	NextCursor string
 }

@@ -59,6 +59,16 @@ type AllowlistEntry struct {
 	Status         enum.AllowlistStatus
 }
 
+// PendingAccessItem is an operator-visible access item that needs attention.
+type PendingAccessItem struct {
+	ItemID     string
+	ItemType   string
+	Subject    value.SubjectRef
+	Status     string
+	ReasonCode string
+	CreatedAt  time.Time
+}
+
 // Group groups users or accounts inside global or organization scope.
 type Group struct {
 	Base

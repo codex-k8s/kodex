@@ -242,6 +242,220 @@ func TestPutAllowlistEntryKeepsIdentityOnRepeat(t *testing.T) {
 	}
 }
 
+func TestSetUserStatusUpdatesStatusAndRecordsEvent(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	user := store.seedUser(enum.UserStatusPending)
+	meta := store.seedOperatorMeta("set-user-status", accessActionSetUserStatus, accessResourceUser)
+	meta.ExpectedVersion = ptrInt64(user.Version)
+	meta.Reason = "owner_approved"
+
+	updated, err := svc.SetUserStatus(ctx, SetUserStatusInput{
+		UserID: user.ID,
+		Status: enum.UserStatusActive,
+		Meta:   meta,
+	})
+	if err != nil {
+		t.Fatalf("set user status: %v", err)
+	}
+	if updated.Status != enum.UserStatusActive || updated.Version != user.Version+1 {
+		t.Fatalf("updated user = %+v, want active version %d", updated, user.Version+1)
+	}
+	if got := store.users[user.ID].Status; got != enum.UserStatusActive {
+		t.Fatalf("stored status = %s, want active", got)
+	}
+	if len(store.events) != 1 || store.events[0].EventType != accessEventUserStatusChanged {
+		t.Fatalf("events = %+v, want one user status event", store.events)
+	}
+}
+
+func TestSetUserStatusRejectsStaleExpectedVersion(t *testing.T) {
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	user := store.seedUser(enum.UserStatusPending)
+	meta := store.seedOperatorMeta("set-user-status-stale", accessActionSetUserStatus, accessResourceUser)
+	meta.ExpectedVersion = ptrInt64(user.Version + 1)
+
+	_, err := svc.SetUserStatus(context.Background(), SetUserStatusInput{
+		UserID: user.ID,
+		Status: enum.UserStatusActive,
+		Meta:   meta,
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("err = %v, want %v", err, errs.ErrConflict)
+	}
+}
+
+func TestSetUserStatusRequiresAuthorizedActor(t *testing.T) {
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	target := store.seedUser(enum.UserStatusPending)
+	actor := store.seedUser(enum.UserStatusActive)
+	meta := commandMeta("set-user-status-forbidden")
+	meta.Actor = value.Actor{Type: string(enum.AccessSubjectUser), ID: actor.ID.String()}
+	meta.ExpectedVersion = ptrInt64(target.Version)
+
+	_, err := svc.SetUserStatus(context.Background(), SetUserStatusInput{
+		UserID: target.ID,
+		Status: enum.UserStatusActive,
+		Meta:   meta,
+	})
+	if !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("err = %v, want %v", err, errs.ErrForbidden)
+	}
+}
+
+func TestSetUserStatusSameTargetWithStaleVersionConflicts(t *testing.T) {
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	user := store.seedUser(enum.UserStatusActive)
+	meta := store.seedOperatorMeta("set-user-status-noop-stale", accessActionSetUserStatus, accessResourceUser)
+	meta.ExpectedVersion = ptrInt64(user.Version - 1)
+
+	_, err := svc.SetUserStatus(context.Background(), SetUserStatusInput{
+		UserID: user.ID,
+		Status: enum.UserStatusActive,
+		Meta:   meta,
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("err = %v, want %v", err, errs.ErrConflict)
+	}
+	if store.users[user.ID].Version != user.Version || len(store.events) != 0 {
+		t.Fatalf("stale noop changed state/events: user=%+v events=%+v", store.users[user.ID], store.events)
+	}
+}
+
+func TestSetUserStatusReplaysCommandResult(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	user := store.seedUser(enum.UserStatusPending)
+	meta := store.seedOperatorMeta("set-user-status-replay", accessActionSetUserStatus, accessResourceUser)
+	meta.ExpectedVersion = ptrInt64(user.Version)
+
+	updated, err := svc.SetUserStatus(ctx, SetUserStatusInput{UserID: user.ID, Status: enum.UserStatusActive, Meta: meta})
+	if err != nil {
+		t.Fatalf("set user status: %v", err)
+	}
+	replayed, err := svc.SetUserStatus(ctx, SetUserStatusInput{UserID: user.ID, Status: enum.UserStatusBlocked, Meta: meta})
+	if err != nil {
+		t.Fatalf("replay user status command: %v", err)
+	}
+	if replayed.ID != updated.ID || replayed.Status != updated.Status || len(store.events) != 1 {
+		t.Fatalf("replay = %+v events=%+v, want original updated user and one mutation event", replayed, store.events)
+	}
+}
+
+func TestDisableAllowlistEntryUpdatesStatusAndKeepsIdentity(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	entry, err := svc.PutAllowlistEntry(ctx, PutAllowlistEntryInput{
+		MatchType: enum.AllowlistMatchEmail, Value: "owner@example.com", DefaultStatus: enum.UserStatusActive,
+	})
+	if err != nil {
+		t.Fatalf("put allowlist entry: %v", err)
+	}
+	meta := store.seedOperatorMeta("disable-allowlist", accessActionDisableAllowlistEntry, accessResourceAllowlistEntry)
+	meta.ExpectedVersion = ptrInt64(entry.Version)
+
+	disabled, err := svc.DisableAllowlistEntry(ctx, DisableAllowlistEntryInput{
+		AllowlistEntryID: entry.ID,
+		Meta:             meta,
+	})
+	if err != nil {
+		t.Fatalf("disable allowlist entry: %v", err)
+	}
+	if disabled.ID != entry.ID || disabled.Status != enum.AllowlistStatusDisabled || disabled.Version != entry.Version+1 {
+		t.Fatalf("disabled entry = %+v, want same id disabled version %d", disabled, entry.Version+1)
+	}
+	if got := store.allowlist[allowlistKey(entry.MatchType, entry.Value)].Status; got != enum.AllowlistStatusDisabled {
+		t.Fatalf("stored status = %s, want disabled", got)
+	}
+	if len(store.events) != 2 || store.events[1].EventType != accessEventAllowlistEntryDisabled {
+		t.Fatalf("events = %+v, want disabled event after create", store.events)
+	}
+}
+
+func TestDisableAllowlistEntrySameTargetWithStaleVersionConflicts(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	entry, err := svc.PutAllowlistEntry(ctx, PutAllowlistEntryInput{
+		MatchType: enum.AllowlistMatchEmail, Value: "owner@example.com", DefaultStatus: enum.UserStatusActive,
+	})
+	if err != nil {
+		t.Fatalf("put allowlist entry: %v", err)
+	}
+	meta := store.seedOperatorMeta("disable-allowlist", accessActionDisableAllowlistEntry, accessResourceAllowlistEntry)
+	meta.ExpectedVersion = ptrInt64(entry.Version)
+	if _, err := svc.DisableAllowlistEntry(ctx, DisableAllowlistEntryInput{AllowlistEntryID: entry.ID, Meta: meta}); err != nil {
+		t.Fatalf("disable allowlist entry: %v", err)
+	}
+	staleMeta := store.seedOperatorMeta("disable-allowlist-stale", accessActionDisableAllowlistEntry, accessResourceAllowlistEntry)
+	staleMeta.ExpectedVersion = ptrInt64(entry.Version)
+
+	_, err = svc.DisableAllowlistEntry(ctx, DisableAllowlistEntryInput{AllowlistEntryID: entry.ID, Meta: staleMeta})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("err = %v, want %v", err, errs.ErrConflict)
+	}
+}
+
+func TestListPendingAccessReturnsOperatorItems(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	user := store.seedUser(enum.UserStatusPending)
+	blocked := store.seedUser(enum.UserStatusBlocked)
+	active := store.seedUser(enum.UserStatusActive)
+	meta := store.seedOperatorMeta("list-pending-access", accessActionListPendingAccess, accessResourcePendingAccess)
+
+	result, err := svc.ListPendingAccess(ctx, ListPendingAccessInput{Limit: 10, Meta: meta})
+	if err != nil {
+		t.Fatalf("list pending access: %v", err)
+	}
+	seen := make(map[string]string, len(result.Items))
+	for _, item := range result.Items {
+		seen[item.Subject.ID] = item.Status
+	}
+	if seen[user.ID.String()] != string(enum.UserStatusPending) || seen[blocked.ID.String()] != string(enum.UserStatusBlocked) {
+		t.Fatalf("items = %+v, want pending and blocked users", result.Items)
+	}
+	if _, ok := seen[active.ID.String()]; ok {
+		t.Fatalf("active user appeared in pending access items: %+v", result.Items)
+	}
+}
+
+func TestListPendingAccessMapsExternalAccountReasonsToContractStatus(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	now := fixedClock{}.Now()
+	account := entity.ExternalAccount{
+		Base:           entity.Base{ID: store.ids.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		AccountType:    enum.ExternalAccountBot,
+		DisplayName:    "github-bot",
+		OwnerScopeType: enum.ExternalAccountScopeGlobal,
+		Status:         enum.ExternalAccountStatusNeedsReauth,
+	}
+	store.accounts[account.ID] = account
+	meta := store.seedOperatorMeta("list-pending-external", accessActionListPendingAccess, accessResourcePendingAccess)
+
+	result, err := svc.ListPendingAccess(ctx, ListPendingAccessInput{Limit: 10, Meta: meta})
+	if err != nil {
+		t.Fatalf("list pending access: %v", err)
+	}
+	seen := make(map[string]entity.PendingAccessItem, len(result.Items))
+	for _, item := range result.Items {
+		seen[item.ItemID] = item
+	}
+	item, ok := seen[account.ID.String()]
+	if !ok || item.Status != string(enum.UserStatusPending) || item.ReasonCode != "external_account_needs_reauth" {
+		t.Fatalf("external pending item = %+v, want pending with needs_reauth reason", item)
+	}
+}
+
 func TestCheckAccessExplicitDenyWins(t *testing.T) {
 	ctx := context.Background()
 	store := newMemoryRepository()
@@ -1274,6 +1488,22 @@ func (r *memoryRepository) GetUser(_ context.Context, id uuid.UUID) (entity.User
 	return user, nil
 }
 
+func (r *memoryRepository) UpdateUser(_ context.Context, user entity.User, previousVersion int64, event entity.OutboxEvent, result *entity.CommandResult) error {
+	existing, ok := r.users[user.ID]
+	if !ok {
+		return errs.ErrNotFound
+	}
+	if existing.Version != previousVersion {
+		return errs.ErrConflict
+	}
+	r.users[user.ID] = user
+	if result != nil {
+		r.commands[result.Key] = *result
+	}
+	r.events = append(r.events, event)
+	return nil
+}
+
 func (r *memoryRepository) GetUserByEmail(_ context.Context, email string) (entity.User, error) {
 	for _, user := range r.users {
 		if user.PrimaryEmail == email {
@@ -1303,12 +1533,37 @@ func (r *memoryRepository) PutAllowlistEntry(_ context.Context, entry entity.All
 	return nil
 }
 
+func (r *memoryRepository) UpdateAllowlistEntry(_ context.Context, entry entity.AllowlistEntry, previousVersion int64, event entity.OutboxEvent, result *entity.CommandResult) error {
+	existing, ok := r.allowlist[allowlistKey(entry.MatchType, entry.Value)]
+	if !ok {
+		return errs.ErrNotFound
+	}
+	if existing.ID != entry.ID || existing.Version != previousVersion {
+		return errs.ErrConflict
+	}
+	r.allowlist[allowlistKey(entry.MatchType, entry.Value)] = entry
+	if result != nil {
+		r.commands[result.Key] = *result
+	}
+	r.events = append(r.events, event)
+	return nil
+}
+
 func (r *memoryRepository) FindAllowlistEntry(_ context.Context, matchType enum.AllowlistMatchType, v string) (entity.AllowlistEntry, error) {
 	entry, ok := r.allowlist[allowlistKey(matchType, v)]
 	if !ok {
 		return entity.AllowlistEntry{}, errs.ErrNotFound
 	}
 	return entry, nil
+}
+
+func (r *memoryRepository) GetAllowlistEntry(_ context.Context, id uuid.UUID) (entity.AllowlistEntry, error) {
+	for _, entry := range r.allowlist {
+		if entry.ID == id {
+			return entry, nil
+		}
+	}
+	return entity.AllowlistEntry{}, errs.ErrNotFound
 }
 
 func (r *memoryRepository) CreateGroup(_ context.Context, group entity.Group, event entity.OutboxEvent, result entity.CommandResult) error {
@@ -1525,6 +1780,66 @@ func (r *memoryRepository) GetAccessDecisionAudit(_ context.Context, id uuid.UUI
 	return entity.AccessDecisionAudit{}, errs.ErrNotFound
 }
 
+func (r *memoryRepository) ListPendingAccess(_ context.Context, filter query.PendingAccessFilter) ([]entity.PendingAccessItem, error) {
+	var items []entity.PendingAccessItem
+	for _, user := range r.users {
+		if user.Status != enum.UserStatusPending && user.Status != enum.UserStatusBlocked {
+			continue
+		}
+		if filter.Scope.Type != "" && filter.Scope.Type != accessRuleScopeGlobal {
+			continue
+		}
+		items = append(items, entity.PendingAccessItem{
+			ItemID: user.ID.String(), ItemType: "user",
+			Subject: value.SubjectRef{Type: string(enum.AccessSubjectUser), ID: user.ID.String()},
+			Status:  string(user.Status), ReasonCode: "user_" + string(user.Status), CreatedAt: user.CreatedAt,
+		})
+	}
+	for _, membership := range r.memberships {
+		if membership.Status != enum.MembershipStatusPending && membership.Status != enum.MembershipStatusBlocked {
+			continue
+		}
+		if filter.Scope.Type != "" && filter.Scope.Type != accessRuleScopeGlobal &&
+			(string(membership.TargetType) != filter.Scope.Type || membership.TargetID.String() != filter.Scope.ID) {
+			continue
+		}
+		items = append(items, entity.PendingAccessItem{
+			ItemID: membership.ID.String(), ItemType: "membership",
+			Subject: value.SubjectRef{Type: string(membership.SubjectType), ID: membership.SubjectID.String()},
+			Status:  string(membership.Status), ReasonCode: "membership_" + string(membership.Status), CreatedAt: membership.CreatedAt,
+		})
+	}
+	for _, account := range r.accounts {
+		if account.Status != enum.ExternalAccountStatusPending &&
+			account.Status != enum.ExternalAccountStatusNeedsReauth &&
+			account.Status != enum.ExternalAccountStatusLimited &&
+			account.Status != enum.ExternalAccountStatusBlocked {
+			continue
+		}
+		if filter.Scope.Type != "" && filter.Scope.Type != accessRuleScopeGlobal &&
+			(string(account.OwnerScopeType) != filter.Scope.Type || account.OwnerScopeID != filter.Scope.ID) {
+			continue
+		}
+		status := string(enum.UserStatusPending)
+		if account.Status == enum.ExternalAccountStatusBlocked {
+			status = string(enum.UserStatusBlocked)
+		}
+		items = append(items, entity.PendingAccessItem{
+			ItemID: account.ID.String(), ItemType: "external_account",
+			Subject: value.SubjectRef{Type: string(enum.AccessSubjectExternalAccount), ID: account.ID.String()},
+			Status:  status, ReasonCode: "external_account_" + string(account.Status), CreatedAt: account.CreatedAt,
+		})
+	}
+	if filter.Offset >= len(items) {
+		return nil, nil
+	}
+	end := filter.Offset + filter.Limit
+	if end > len(items) {
+		end = len(items)
+	}
+	return items[filter.Offset:end], nil
+}
+
 func (r *memoryRepository) seedUser(status enum.UserStatus) entity.User {
 	now := fixedClock{}.Now()
 	user := entity.User{
@@ -1544,6 +1859,33 @@ func (r *memoryRepository) seedSecret(storeType enum.SecretStoreType, storeRef s
 	}
 	r.secrets[secret.ID] = secret
 	return secret
+}
+
+func (r *memoryRepository) seedOperatorMeta(key string, actionKey string, resourceType string) value.CommandMeta {
+	now := fixedClock{}.Now()
+	actor := r.seedUser(enum.UserStatusActive)
+	action := entity.AccessAction{
+		Base:         entity.Base{ID: r.ids.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		Key:          actionKey,
+		DisplayName:  actionKey,
+		ResourceType: resourceType,
+		Status:       enum.AccessActionStatusActive,
+	}
+	rule := entity.AccessRule{
+		Base:         entity.Base{ID: r.ids.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		Effect:       enum.AccessEffectAllow,
+		SubjectType:  enum.AccessSubjectUser,
+		SubjectID:    actor.ID.String(),
+		ActionKey:    actionKey,
+		ResourceType: resourceType,
+		ScopeType:    accessRuleScopeGlobal,
+		Status:       enum.AccessRuleStatusActive,
+	}
+	r.actions[action.Key] = action
+	r.rules[rule.ID] = rule
+	meta := commandMeta(key)
+	meta.Actor = value.Actor{Type: string(enum.AccessSubjectUser), ID: actor.ID.String()}
+	return meta
 }
 
 func identityKey(provider enum.IdentityProvider, subject string) string {

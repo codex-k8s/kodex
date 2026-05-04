@@ -57,7 +57,7 @@ approvals:
 | 7.2 | gRPC transport | Регистрация `AccessManagerService`, обработчики для реализованных доменных сценариев, cast `proto <-> domain`, граница проверки вызывающей стороны, конфигурируемые лимиты, базовые метрики и единая граница ошибок. |
 | 7.2.1 | Общий gRPC runtime | Общий `libs/go/grpcserver` для сборки gRPC-сервера, recovery, лимитов, deadline, keepalive, max message size, базовых метрик и расширяемого auth hook. |
 | 7.3 | Access checks | Полные `CheckAccess`, `ExplainAccess`, аудит решения доступа и тесты пограничных случаев. |
-| 7.4 | Identity bootstrap | `BootstrapUserFromIdentity`, allowlist-path, статусы пользователя и тесты сценариев входа. |
+| 7.4 | Вход и операторский жизненный цикл | `BootstrapUserFromIdentity`, путь allowlist, `SetUserStatus`, `DisableAllowlistEntry`, `ListPendingAccess` и тесты сценариев входа. |
 | 7.5 | External accounts | Жизненный цикл поставщиков и внешних аккаунтов, проверка ссылок на секреты, `ResolveExternalAccountUsage`. |
 | 7.6 | Outbox/events | Доставка outbox-событий, idempotency skeleton для будущих потребителей и сверка AsyncAPI. |
 | 7.7 | Operational hardening | Полная корреляция логов, tracing, расширенные метрики, Docker/deploy manifest и smoke-путь сервиса. |

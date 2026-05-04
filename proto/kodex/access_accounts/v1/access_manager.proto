@@ -973,6 +973,8 @@ message ListPendingAccessRequest {
   int32 limit = 2;
   // cursor continues a previous list call.
   string cursor = 3;
+  // meta carries actor and audit context for the operator read.
+  CommandMeta meta = 4;
 }
 
 // PendingAccessItem is an operator-visible pending or blocked access item.

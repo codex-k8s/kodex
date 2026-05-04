@@ -25,6 +25,18 @@ func BootstrapUserFromIdentityResponse(result service.BootstrapUserFromIdentityR
 	}
 }
 
+// UserResponse maps a domain user to gRPC.
+func UserResponse(user entity.User) *accessaccountsv1.UserResponse {
+	return &accessaccountsv1.UserResponse{
+		UserId:       uuidString(user.ID),
+		PrimaryEmail: user.PrimaryEmail,
+		DisplayName:  user.DisplayName,
+		Status:       UserStatusToProto(user.Status),
+		Locale:       user.Locale,
+		Version:      user.Version,
+	}
+}
+
 // OrganizationResponse maps a domain organization to gRPC.
 func OrganizationResponse(organization entity.Organization) *accessaccountsv1.OrganizationResponse {
 	return &accessaccountsv1.OrganizationResponse{
@@ -193,6 +205,22 @@ func ResolveExternalAccountUsageResponse(result service.ResolveExternalAccountUs
 		SecretStoreRef:    result.SecretRef.StoreRef,
 		AllowedActionKeys: result.AllowedActions,
 	}
+}
+
+// ListPendingAccessResponse maps pending access items to gRPC.
+func ListPendingAccessResponse(result service.ListPendingAccessResult) *accessaccountsv1.ListPendingAccessResponse {
+	items := make([]*accessaccountsv1.PendingAccessItem, 0, len(result.Items))
+	for _, item := range result.Items {
+		items = append(items, &accessaccountsv1.PendingAccessItem{
+			ItemId:     item.ItemID,
+			ItemType:   item.ItemType,
+			Subject:    SubjectRefToProto(item.Subject),
+			Status:     item.Status,
+			ReasonCode: item.ReasonCode,
+			CreatedAt:  item.CreatedAt.Format(time.RFC3339Nano),
+		})
+	}
+	return &accessaccountsv1.ListPendingAccessResponse{Items: items, NextCursor: result.NextCursor}
 }
 
 // MatchedRulesToProto maps access decision explanation rules to gRPC.

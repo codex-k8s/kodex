@@ -12,10 +12,12 @@ import (
 
 type accessService interface {
 	BootstrapUserFromIdentity(context.Context, accessservice.BootstrapUserFromIdentityInput) (accessservice.BootstrapUserFromIdentityResult, error)
+	SetUserStatus(context.Context, accessservice.SetUserStatusInput) (entity.User, error)
 	CreateOrganization(context.Context, accessservice.CreateOrganizationInput) (entity.Organization, error)
 	CreateGroup(context.Context, accessservice.CreateGroupInput) (entity.Group, error)
 	SetMembership(context.Context, accessservice.SetMembershipInput) (entity.Membership, error)
 	PutAllowlistEntry(context.Context, accessservice.PutAllowlistEntryInput) (entity.AllowlistEntry, error)
+	DisableAllowlistEntry(context.Context, accessservice.DisableAllowlistEntryInput) (entity.AllowlistEntry, error)
 	PutExternalProvider(context.Context, accessservice.PutExternalProviderInput) (entity.ExternalProvider, error)
 	RegisterExternalAccount(context.Context, accessservice.RegisterExternalAccountInput) (entity.ExternalAccount, error)
 	BindExternalAccount(context.Context, accessservice.BindExternalAccountInput) (entity.ExternalAccountBinding, error)
@@ -23,6 +25,7 @@ type accessService interface {
 	PutAccessRule(context.Context, accessservice.PutAccessRuleInput) (entity.AccessRule, error)
 	CheckAccess(context.Context, accessservice.CheckAccessInput) (accessservice.CheckAccessResult, error)
 	ExplainAccess(context.Context, accessservice.ExplainAccessInput) (accessservice.ExplainAccessResult, error)
+	ListPendingAccess(context.Context, accessservice.ListPendingAccessInput) (accessservice.ListPendingAccessResult, error)
 	ResolveExternalAccountUsage(context.Context, accessservice.ResolveExternalAccountUsageInput) (accessservice.ResolveExternalAccountUsageResult, error)
 }
 
@@ -50,6 +53,11 @@ func (s *Server) BootstrapUserFromIdentity(ctx context.Context, request *accessa
 	return handleUnary(ctx, request, grpccasters.BootstrapUserFromIdentityInput, s.service.BootstrapUserFromIdentity, grpccasters.BootstrapUserFromIdentityResponse)
 }
 
+// SetUserStatus changes the lifecycle status of an existing user.
+func (s *Server) SetUserStatus(ctx context.Context, request *accessaccountsv1.SetUserStatusRequest) (*accessaccountsv1.UserResponse, error) {
+	return handleUnary(ctx, request, grpccasters.SetUserStatusInput, s.service.SetUserStatus, grpccasters.UserResponse)
+}
+
 // CreateOrganization creates an owner, client, contractor or SaaS organization.
 func (s *Server) CreateOrganization(ctx context.Context, request *accessaccountsv1.CreateOrganizationRequest) (*accessaccountsv1.OrganizationResponse, error) {
 	return handleUnary(ctx, request, grpccasters.CreateOrganizationInput, s.service.CreateOrganization, grpccasters.OrganizationResponse)
@@ -68,6 +76,11 @@ func (s *Server) SetMembership(ctx context.Context, request *accessaccountsv1.Se
 // PutAllowlistEntry creates or updates an allowlist entry.
 func (s *Server) PutAllowlistEntry(ctx context.Context, request *accessaccountsv1.PutAllowlistEntryRequest) (*accessaccountsv1.AllowlistEntryResponse, error) {
 	return handleUnary(ctx, request, grpccasters.PutAllowlistEntryInput, s.service.PutAllowlistEntry, grpccasters.AllowlistEntryResponse)
+}
+
+// DisableAllowlistEntry disables an allowlist entry without deleting history.
+func (s *Server) DisableAllowlistEntry(ctx context.Context, request *accessaccountsv1.DisableAllowlistEntryRequest) (*accessaccountsv1.AllowlistEntryResponse, error) {
+	return handleUnary(ctx, request, grpccasters.DisableAllowlistEntryInput, s.service.DisableAllowlistEntry, grpccasters.AllowlistEntryResponse)
 }
 
 // RegisterExternalProvider creates an external-account provider.
@@ -108,6 +121,11 @@ func (s *Server) CheckAccess(ctx context.Context, request *accessaccountsv1.Chec
 // ExplainAccess returns a previously audited access decision explanation.
 func (s *Server) ExplainAccess(ctx context.Context, request *accessaccountsv1.ExplainAccessRequest) (*accessaccountsv1.ExplainAccessResponse, error) {
 	return handleUnary(ctx, request, grpccasters.ExplainAccessInput, s.service.ExplainAccess, grpccasters.ExplainAccessResponse)
+}
+
+// ListPendingAccess returns pending or blocked access items for operator UI.
+func (s *Server) ListPendingAccess(ctx context.Context, request *accessaccountsv1.ListPendingAccessRequest) (*accessaccountsv1.ListPendingAccessResponse, error) {
+	return handleUnary(ctx, request, grpccasters.ListPendingAccessInput, s.service.ListPendingAccess, grpccasters.ListPendingAccessResponse)
 }
 
 func handleUnary[Request any, Input any, Output any, Response any](
