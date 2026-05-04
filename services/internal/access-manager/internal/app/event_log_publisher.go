@@ -43,8 +43,8 @@ func (p postgresEventLogPublisher) Publish(ctx context.Context, event entity.Out
 	if err == nil {
 		return nil
 	}
-	if errors.Is(err, eventlog.ErrInvalidEvent) {
-		return fmt.Errorf("%w: %v", errOutboxPermanentPublish, err)
+	if errors.Is(err, eventlog.ErrInvalidEvent) || errors.Is(err, eventlog.ErrEventConflict) {
+		return fmt.Errorf("%w: %w", errOutboxPermanentPublish, err)
 	}
 	return err
 }

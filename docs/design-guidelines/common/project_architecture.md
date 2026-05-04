@@ -24,6 +24,9 @@
 - `proto/` — gRPC контракты, создаётся заново при появлении внутренних gRPC API.
 - `deploy/` — Kubernetes манифесты и overlays, создаются заново.
   - Манифесты и шаблоны YAML (`*.yaml.tpl`) живут в `deploy/base/**`.
+  - Сложные shell-скрипты не встраиваются в YAML-шаблоны. Скрипт хранится отдельным файлом рядом
+    с манифестом, а Kubernetes `ConfigMap` для него создаётся deploy-рендерером или
+    `kustomize`-слоем из этого файла.
   - Рендер и применение выполняются Go-компонентами новой архитектуры; shell-скрипты
     не являются основным механизмом deploy/sync.
   - Для production порядок выкладки задаётся по слоям:
@@ -44,10 +47,23 @@
 - обновлять bootstrap-синхронизацию GitHub vars/secrets и секретов Kubernetes:
   `bootstrap/host/config.env.example`,
   `bootstrap/host/bootstrap_remote_production.sh` или новые согласованные bootstrap-компоненты;
-- обновлять deploy manifests сервиса в `deploy/base/<service>/*.yaml.tpl`
+- обновлять манифесты выкладки сервиса в `deploy/base/<service>/*.yaml.tpl`
   и Dockerfile сервиса в `services/<zone>/<service>/Dockerfile`.
 - если меняется набор инструментов для agent-runner (dogfooding), обновлять
   целевой runtime/toolchain bootstrap и документировать изменения в новой delivery/ops документации.
+
+### Изменение состава PostgreSQL-БД и миграций
+
+Если добавляется, переименовывается или удаляется БД платформенного сервиса:
+- обновлять `services.yaml`: владелец БД, путь миграций, манифесты выкладки и порядок зависимостей;
+- обновлять `deploy/base/postgres/secrets.yaml.tpl`, если меняются runtime DSN или секреты подключения;
+- обновлять `deploy/base/postgres/bootstrap-databases.sh`, если меняется набор создаваемых БД;
+- обновлять `deploy/base/postgres/postgres.yaml.tpl`, если меняется Job подготовки БД или его env;
+- обновлять `deploy/base/<db-owner>/migrations.yaml.tpl`, если у владельца схемы есть отдельное
+  Kubernetes-задание миграций;
+- обновлять `bootstrap/host/config.env.example` и `bootstrap/host/bootstrap_remote_production.sh`,
+  чтобы env, DSN и image-переменные попали в runtime-секрет синхронно с кодом;
+- обновлять delivery/architecture документы, где описаны владелец БД, миграции и порядок выкладки.
 
 Целевое ядро сервисов определяется актуальной архитектурной документацией проекта.
 Устаревшие сервисы не являются базой новой реализации.

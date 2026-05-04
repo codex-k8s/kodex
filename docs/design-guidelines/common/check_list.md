@@ -42,6 +42,11 @@
 - Порядок выкладки production задан явно и соблюдён:
   stateful dependencies -> migrations -> internal domain services -> edge services -> frontend;
   ожидание зависимостей выполнено через `initContainers` в Kubernetes-манифестах.
+- Если менялся набор PostgreSQL-БД, миграций или runtime DSN, синхронно обновлены:
+  `services.yaml`, `deploy/base/postgres/secrets.yaml.tpl`,
+  `deploy/base/postgres/bootstrap-databases.sh`, `deploy/base/postgres/postgres.yaml.tpl`,
+  профильный `deploy/base/<db-owner>/migrations.yaml.tpl`, `bootstrap/host/config.env.example`,
+  `bootstrap/host/bootstrap_remote_production.sh` и соответствующая архитектурная документация.
 - Вынос общего кода в целевой `libs/*` оправдан (>= 2 потребителя); нет “god-lib”.
 - Новый production-код не размещён внутри устаревших или архивных каталогов.
 - Если добавлена/обновлена внешняя зависимость, обновлён

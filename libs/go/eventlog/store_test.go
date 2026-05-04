@@ -99,6 +99,11 @@ func TestPostgresIntegrationAppendClaimAdvanceAndFanOut(t *testing.T) {
 	if err := store.Append(ctx, AppendParams{Event: first, RecordedAt: now.Add(time.Second)}); err != nil {
 		t.Fatalf("append duplicate event: %v", err)
 	}
+	conflictingFirst := first
+	conflictingFirst.Payload = []byte(`{"user_id":"changed"}`)
+	if err := store.Append(ctx, AppendParams{Event: conflictingFirst, RecordedAt: now.Add(2 * time.Second)}); !errors.Is(err, ErrEventConflict) {
+		t.Fatalf("append conflicting duplicate event err = %v, want %v", err, ErrEventConflict)
+	}
 	if err := store.Append(ctx, AppendParams{Event: second, RecordedAt: now.Add(2 * time.Second)}); err != nil {
 		t.Fatalf("append second event: %v", err)
 	}

@@ -60,7 +60,7 @@ approvals:
 | 7.4 | Вход и операторский жизненный цикл | `BootstrapUserFromIdentity`, путь allowlist, `SetUserStatus`, `DisableAllowlistEntry`, `ListPendingAccess` и тесты сценариев входа. |
 | 7.5 | External accounts | Жизненный цикл поставщиков и внешних аккаунтов, проверка ссылок на секреты, `ResolveExternalAccountUsage`. |
 | 7.6 | Outbox-события | Доставка outbox-событий, идемпотентный каркас для будущих потребителей и сверка AsyncAPI. |
-| 7.6.1 | PostgreSQL-журнал событий | Отдельный контур `platform-event-log`, миграции общего журнала, штатный канал публикации из сервисного outbox, веерная доставка для нескольких потребителей, checkpoint API и базовый PostgreSQL manifest. |
+| 7.6.1 | PostgreSQL-журнал событий | Отдельный контур `platform-event-log`, миграции общего журнала, штатный канал публикации из сервисного outbox, веерная доставка для нескольких потребителей, checkpoint API, базовые PostgreSQL-манифесты, runtime-секрет и production-задание миграций. |
 | 7.7 | Operational hardening | Полная корреляция логов, tracing, расширенные метрики, Docker/deploy manifest и smoke-путь сервиса. |
 | 7.8 | Delivery cleanup | Обновление delivery-карт, статусов #599-#602 и явное закрытие или перенос оставшегося бэклога. |
 

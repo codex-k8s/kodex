@@ -126,8 +126,27 @@ func TestPostgresEventLogPublisherMapsInvalidEventToPermanentFailure(t *testing.
 	appender := &fakeEventLogAppender{err: eventlog.ErrInvalidEvent}
 	publisher := postgresEventLogPublisher{sourceService: "access-manager", eventLog: appender}
 
-	if err := publisher.Publish(context.Background(), testOutboxEvent(1)); !errors.Is(err, errOutboxPermanentPublish) {
+	err := publisher.Publish(context.Background(), testOutboxEvent(1))
+	if !errors.Is(err, errOutboxPermanentPublish) {
 		t.Fatalf("Publish() err = %v, want permanent failure", err)
+	}
+	if !errors.Is(err, eventlog.ErrInvalidEvent) {
+		t.Fatalf("Publish() err = %v, want invalid event cause", err)
+	}
+}
+
+func TestPostgresEventLogPublisherMapsEventConflictToPermanentFailure(t *testing.T) {
+	t.Parallel()
+
+	appender := &fakeEventLogAppender{err: eventlog.ErrEventConflict}
+	publisher := postgresEventLogPublisher{sourceService: "access-manager", eventLog: appender}
+
+	err := publisher.Publish(context.Background(), testOutboxEvent(1))
+	if !errors.Is(err, errOutboxPermanentPublish) {
+		t.Fatalf("Publish() err = %v, want permanent failure", err)
+	}
+	if !errors.Is(err, eventlog.ErrEventConflict) {
+		t.Fatalf("Publish() err = %v, want event conflict cause", err)
 	}
 }
 

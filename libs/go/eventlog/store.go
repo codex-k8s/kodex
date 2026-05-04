@@ -39,13 +39,19 @@ func NewStore(db *pgxpool.Pool) *Store {
 	return &Store{db: db}
 }
 
-// Append writes an event once. Repeating the same event id is treated as already delivered.
+// Append writes an event once. Repeating the same immutable event id/content is treated as already delivered.
 func (s *Store) Append(ctx context.Context, params AppendParams) error {
 	if err := validateAppend(params); err != nil {
 		return err
 	}
-	_, err := s.db.Exec(ctx, queryEventLogAppend, appendArgs(params))
-	return err
+	tag, err := s.db.Exec(ctx, queryEventLogAppend, appendArgs(params))
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrEventConflict
+	}
+	return nil
 }
 
 // Claim leases the next event batch for a consumer. Different consumers see the same event stream independently.
