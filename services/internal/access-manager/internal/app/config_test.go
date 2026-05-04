@@ -15,6 +15,7 @@ func TestLoadConfigRequiresDatabaseDSN(t *testing.T) {
 
 func TestLoadConfigAcceptsDatabaseDSNFromEnvironment(t *testing.T) {
 	t.Setenv("KODEX_ACCESS_MANAGER_DATABASE_DSN", "postgres://postgres:5432/kodex_access_manager?sslmode=disable")
+	t.Setenv("KODEX_ACCESS_MANAGER_EVENT_LOG_DATABASE_DSN", "postgres://postgres:5432/kodex_platform_event_log?sslmode=disable")
 	t.Setenv("KODEX_ACCESS_MANAGER_GRPC_AUTH_TOKEN", "test-token")
 
 	cfg, err := LoadConfig()
@@ -53,6 +54,26 @@ func TestDatabasePoolSettingsIncludesRetryConfig(t *testing.T) {
 	}
 	if settings.ConnectRetryJitterRatio != cfg.DatabaseRetryJitterRatio {
 		t.Fatalf("ConnectRetryJitterRatio = %f, want %f", settings.ConnectRetryJitterRatio, cfg.DatabaseRetryJitterRatio)
+	}
+}
+
+func TestEventLogDatabasePoolSettingsUsesSeparateDSNAndBounds(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+
+	settings := cfg.EventLogDatabasePoolSettings()
+	if settings.DSN != cfg.EventLogDatabaseDSN {
+		t.Fatalf("event log DSN = %q, want %q", settings.DSN, cfg.EventLogDatabaseDSN)
+	}
+	if settings.MaxConns != cfg.EventLogDatabaseMaxConns {
+		t.Fatalf("event log MaxConns = %d, want %d", settings.MaxConns, cfg.EventLogDatabaseMaxConns)
+	}
+	if settings.MinConns != cfg.EventLogDatabaseMinConns {
+		t.Fatalf("event log MinConns = %d, want %d", settings.MinConns, cfg.EventLogDatabaseMinConns)
+	}
+	if settings.DSN == cfg.DatabaseDSN {
+		t.Fatal("event log DSN must not reuse access-manager database DSN")
 	}
 }
 
@@ -111,6 +132,7 @@ func TestValidateAllowsExplicitLossyDiagnosticPublisher(t *testing.T) {
 	cfg.OutboxDispatchEnabled = true
 	cfg.OutboxPublisherKind = outboxPublisherKindDiagnosticLogLossy
 	cfg.OutboxAllowLossyPublisher = true
+	cfg.EventLogDatabaseDSN = ""
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("Validate(): %v", err)
 	}
@@ -123,6 +145,16 @@ func TestValidateRejectsPostgresEventLogWithoutSource(t *testing.T) {
 	cfg.OutboxEventLogSource = ""
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() err = nil, want event log source error")
+	}
+}
+
+func TestValidateRejectsPostgresEventLogWithoutDatabase(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.EventLogDatabaseDSN = ""
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() err = nil, want event log database error")
 	}
 }
 
@@ -151,6 +183,9 @@ func validConfig() Config {
 		DatabaseRetryInitialDelay: 500 * time.Millisecond,
 		DatabaseRetryMaxDelay:     5 * time.Second,
 		DatabaseRetryJitterRatio:  0.2,
+		EventLogDatabaseDSN:       "postgres://postgres:5432/kodex_platform_event_log?sslmode=disable",
+		EventLogDatabaseMaxConns:  4,
+		EventLogDatabaseMinConns:  0,
 		OutboxDispatchEnabled:     true,
 		OutboxPublisherKind:       outboxPublisherKindPostgresEventLog,
 		OutboxEventLogSource:      "access-manager",

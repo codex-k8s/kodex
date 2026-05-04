@@ -20,6 +20,7 @@ spec:
     - docs/index.md
     - docs/design-guidelines
     - docs/templates
+    - deploy
     - proto
     - services
     - specs
@@ -65,6 +66,20 @@ spec:
       database:
         owner: access-manager
         migrations: services/internal/access-manager/cmd/cli/migrations
+  platformDataStores:
+    - name: platform-event-log
+      status: foundation
+      owner: platform-event-log
+      databaseName: kodex_platform_event_log
+      migrations: services/internal/platform-event-log/cmd/cli/migrations
+      clientLibrary: libs/go/eventlog
+      purpose: shared-domain-event-log
+  deployManifests:
+    - name: postgres
+      path: deploy/base/postgres/postgres.yaml.tpl
+      createsDatabases:
+        - kodex_access_manager
+        - kodex_platform_event_log
   notes:
     - New deployable services must be added only after the corresponding wave documentation is accepted.
     - Do not restore old services, versions, environments or runtime settings from deprecated/services.yaml mechanically.
