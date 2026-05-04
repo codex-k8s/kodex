@@ -30,21 +30,21 @@ func (s *Service) SetUserStatus(ctx context.Context, input SetUserStatusInput) (
 	if _, err := commandIdentity(input.Meta); err != nil {
 		return entity.User{}, err
 	}
-	if err := s.requireAllowed(ctx, input.Meta, accessActionSetUserStatus, value.ResourceRef{
-		Type: accessResourceUser,
-		ID:   input.UserID.String(),
-	}, value.ScopeRef{}); err != nil {
-		return entity.User{}, err
-	}
-	applied, ok, err := s.findCommandResult(ctx, input.Meta, accessOperationSetUserStatus, accessAggregateUser)
+	replayed, ok, err := loadAppliedCommand(ctx, s, input.Meta, accessOperationSetUserStatus, accessAggregateUser, s.repository.GetUser)
 	if err != nil {
 		return entity.User{}, err
 	}
 	if ok {
-		return s.repository.GetUser(ctx, applied.AggregateID)
+		if err := s.requireAllowedForUserStatus(ctx, input.Meta, replayed); err != nil {
+			return entity.User{}, err
+		}
+		return replayed, nil
 	}
 	existing, err := s.repository.GetUser(ctx, input.UserID)
 	if err != nil {
+		return entity.User{}, err
+	}
+	if err := s.requireAllowedForUserStatus(ctx, input.Meta, existing); err != nil {
 		return entity.User{}, err
 	}
 	if err := ensureExpectedVersion(input.Meta, existing.Version); err != nil {
@@ -93,21 +93,21 @@ func (s *Service) DisableAllowlistEntry(ctx context.Context, input DisableAllowl
 	if _, err := commandIdentity(input.Meta); err != nil {
 		return entity.AllowlistEntry{}, err
 	}
-	if err := s.requireAllowed(ctx, input.Meta, accessActionDisableAllowlistEntry, value.ResourceRef{
-		Type: accessResourceAllowlistEntry,
-		ID:   input.AllowlistEntryID.String(),
-	}, value.ScopeRef{}); err != nil {
-		return entity.AllowlistEntry{}, err
-	}
-	applied, ok, err := s.findCommandResult(ctx, input.Meta, accessOperationDisableAllowlistEntry, accessAggregateAllowlistEntry)
+	replayed, ok, err := loadAppliedCommand(ctx, s, input.Meta, accessOperationDisableAllowlistEntry, accessAggregateAllowlistEntry, s.repository.GetAllowlistEntry)
 	if err != nil {
 		return entity.AllowlistEntry{}, err
 	}
 	if ok {
-		return s.repository.GetAllowlistEntry(ctx, applied.AggregateID)
+		if err := s.requireAllowedForAllowlistEntry(ctx, input.Meta, replayed); err != nil {
+			return entity.AllowlistEntry{}, err
+		}
+		return replayed, nil
 	}
 	existing, err := s.repository.GetAllowlistEntry(ctx, input.AllowlistEntryID)
 	if err != nil {
+		return entity.AllowlistEntry{}, err
+	}
+	if err := s.requireAllowedForAllowlistEntry(ctx, input.Meta, existing); err != nil {
 		return entity.AllowlistEntry{}, err
 	}
 	if err := ensureExpectedVersion(input.Meta, existing.Version); err != nil {
@@ -175,6 +175,51 @@ func (s *Service) ListPendingAccess(ctx context.Context, input ListPendingAccess
 		nextCursor = strconv.Itoa(offset + limit)
 	}
 	return ListPendingAccessResult{Items: items, NextCursor: nextCursor}, nil
+}
+
+func loadAppliedCommand[T any](
+	ctx context.Context,
+	service *Service,
+	meta value.CommandMeta,
+	operation string,
+	aggregateType string,
+	load func(context.Context, uuid.UUID) (T, error),
+) (T, bool, error) {
+	var zero T
+	applied, ok, err := service.findCommandResult(ctx, meta, operation, aggregateType)
+	if err != nil || !ok {
+		return zero, ok, err
+	}
+	value, err := load(ctx, applied.AggregateID)
+	if err != nil {
+		return zero, false, err
+	}
+	return value, true, nil
+}
+
+func (s *Service) requireAllowedForUserStatus(ctx context.Context, meta value.CommandMeta, user entity.User) error {
+	scopes, err := s.repository.ListUserAccessScopes(ctx, user.ID)
+	if err != nil {
+		return err
+	}
+	return s.requireAllowedInAnyScope(ctx, meta, accessActionSetUserStatus, value.ResourceRef{
+		Type: accessResourceUser,
+		ID:   user.ID.String(),
+	}, scopes)
+}
+
+func (s *Service) requireAllowedForAllowlistEntry(ctx context.Context, meta value.CommandMeta, entry entity.AllowlistEntry) error {
+	return s.requireAllowed(ctx, meta, accessActionDisableAllowlistEntry, value.ResourceRef{
+		Type: accessResourceAllowlistEntry,
+		ID:   entry.ID.String(),
+	}, allowlistEntryAccessScope(entry))
+}
+
+func allowlistEntryAccessScope(entry entity.AllowlistEntry) value.ScopeRef {
+	if entry.OrganizationID == nil {
+		return value.ScopeRef{Type: accessRuleScopeGlobal}
+	}
+	return value.ScopeRef{Type: accessRuleScopeOrganization, ID: entry.OrganizationID.String()}
 }
 
 func validUserStatus(status enum.UserStatus) bool {

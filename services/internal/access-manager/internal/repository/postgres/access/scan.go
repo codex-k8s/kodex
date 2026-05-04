@@ -113,6 +113,12 @@ func scanPendingAccessItem(row rowScanner) (entity.PendingAccessItem, error) {
 	return item, err
 }
 
+func scanScopeRef(row rowScanner) (value.ScopeRef, error) {
+	var scope value.ScopeRef
+	err := row.Scan(&scope.Type, &scope.ID)
+	return scope, err
+}
+
 func scanGroup(row rowScanner) (entity.Group, error) {
 	var group entity.Group
 	var scopeType, status string
