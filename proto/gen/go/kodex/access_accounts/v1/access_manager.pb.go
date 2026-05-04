@@ -3238,13 +3238,13 @@ type UpdateExternalProviderRequest struct {
 	// external_provider_id is the provider aggregate id.
 	ExternalProviderId string `protobuf:"bytes,1,opt,name=external_provider_id,json=externalProviderId,proto3" json:"external_provider_id,omitempty"`
 	// slug is optional new slug.
-	Slug string `protobuf:"bytes,2,opt,name=slug,proto3" json:"slug,omitempty"`
+	Slug *string `protobuf:"bytes,2,opt,name=slug,proto3,oneof" json:"slug,omitempty"`
 	// provider_kind is optional new provider kind.
 	ProviderKind ExternalProviderKind `protobuf:"varint,3,opt,name=provider_kind,json=providerKind,proto3,enum=kodex.access_accounts.v1.ExternalProviderKind" json:"provider_kind,omitempty"`
 	// display_name is optional display text.
-	DisplayName string `protobuf:"bytes,4,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
-	// icon_asset_ref is optional asset reference.
-	IconAssetRef string `protobuf:"bytes,5,opt,name=icon_asset_ref,json=iconAssetRef,proto3" json:"icon_asset_ref,omitempty"`
+	DisplayName *string `protobuf:"bytes,4,opt,name=display_name,json=displayName,proto3,oneof" json:"display_name,omitempty"`
+	// icon_asset_ref is optional asset reference; present empty value clears it.
+	IconAssetRef *string `protobuf:"bytes,5,opt,name=icon_asset_ref,json=iconAssetRef,proto3,oneof" json:"icon_asset_ref,omitempty"`
 	// status is optional provider status.
 	Status ExternalProviderStatus `protobuf:"varint,6,opt,name=status,proto3,enum=kodex.access_accounts.v1.ExternalProviderStatus" json:"status,omitempty"`
 	// meta carries idempotency, expected version and audit context.
@@ -3291,8 +3291,8 @@ func (x *UpdateExternalProviderRequest) GetExternalProviderId() string {
 }
 
 func (x *UpdateExternalProviderRequest) GetSlug() string {
-	if x != nil {
-		return x.Slug
+	if x != nil && x.Slug != nil {
+		return *x.Slug
 	}
 	return ""
 }
@@ -3305,15 +3305,15 @@ func (x *UpdateExternalProviderRequest) GetProviderKind() ExternalProviderKind {
 }
 
 func (x *UpdateExternalProviderRequest) GetDisplayName() string {
-	if x != nil {
-		return x.DisplayName
+	if x != nil && x.DisplayName != nil {
+		return *x.DisplayName
 	}
 	return ""
 }
 
 func (x *UpdateExternalProviderRequest) GetIconAssetRef() string {
-	if x != nil {
-		return x.IconAssetRef
+	if x != nil && x.IconAssetRef != nil {
+		return *x.IconAssetRef
 	}
 	return ""
 }
@@ -5412,7 +5412,7 @@ type PendingAccessItem struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// item_id is stable item id.
 	ItemId string `protobuf:"bytes,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
-	// item_type is user, membership, external_account or access_decision.
+	// item_type is user, membership or external_account.
 	ItemType string `protobuf:"bytes,2,opt,name=item_type,json=itemType,proto3" json:"item_type,omitempty"`
 	// subject is the affected subject.
 	Subject *SubjectRef `protobuf:"bytes,3,opt,name=subject,proto3" json:"subject,omitempty"`
@@ -5722,15 +5722,18 @@ const file_kodex_access_accounts_v1_access_manager_proto_rawDesc = "" +
 	"\fdisplay_name\x18\x03 \x01(\tR\vdisplayName\x12$\n" +
 	"\x0eicon_asset_ref\x18\x04 \x01(\tR\ficonAssetRef\x12H\n" +
 	"\x06status\x18\x05 \x01(\x0e20.kodex.access_accounts.v1.ExternalProviderStatusR\x06status\x129\n" +
-	"\x04meta\x18\x06 \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\x88\x03\n" +
+	"\x04meta\x18\x06 \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\xc4\x03\n" +
 	"\x1dUpdateExternalProviderRequest\x120\n" +
-	"\x14external_provider_id\x18\x01 \x01(\tR\x12externalProviderId\x12\x12\n" +
-	"\x04slug\x18\x02 \x01(\tR\x04slug\x12S\n" +
-	"\rprovider_kind\x18\x03 \x01(\x0e2..kodex.access_accounts.v1.ExternalProviderKindR\fproviderKind\x12!\n" +
-	"\fdisplay_name\x18\x04 \x01(\tR\vdisplayName\x12$\n" +
-	"\x0eicon_asset_ref\x18\x05 \x01(\tR\ficonAssetRef\x12H\n" +
+	"\x14external_provider_id\x18\x01 \x01(\tR\x12externalProviderId\x12\x17\n" +
+	"\x04slug\x18\x02 \x01(\tH\x00R\x04slug\x88\x01\x01\x12S\n" +
+	"\rprovider_kind\x18\x03 \x01(\x0e2..kodex.access_accounts.v1.ExternalProviderKindR\fproviderKind\x12&\n" +
+	"\fdisplay_name\x18\x04 \x01(\tH\x01R\vdisplayName\x88\x01\x01\x12)\n" +
+	"\x0eicon_asset_ref\x18\x05 \x01(\tH\x02R\ficonAssetRef\x88\x01\x01\x12H\n" +
 	"\x06status\x18\x06 \x01(\x0e20.kodex.access_accounts.v1.ExternalProviderStatusR\x06status\x129\n" +
-	"\x04meta\x18\a \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\xe2\x02\n" +
+	"\x04meta\x18\a \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04metaB\a\n" +
+	"\x05_slugB\x0f\n" +
+	"\r_display_nameB\x11\n" +
+	"\x0f_icon_asset_ref\"\xe2\x02\n" +
 	"\x18ExternalProviderResponse\x120\n" +
 	"\x14external_provider_id\x18\x01 \x01(\tR\x12externalProviderId\x12\x12\n" +
 	"\x04slug\x18\x02 \x01(\tR\x04slug\x12S\n" +
@@ -6327,6 +6330,7 @@ func file_kodex_access_accounts_v1_access_manager_proto_init() {
 		return
 	}
 	file_kodex_access_accounts_v1_access_manager_proto_msgTypes[0].OneofWrappers = []any{}
+	file_kodex_access_accounts_v1_access_manager_proto_msgTypes[25].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

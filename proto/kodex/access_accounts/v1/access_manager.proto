@@ -600,13 +600,13 @@ message UpdateExternalProviderRequest {
   // external_provider_id is the provider aggregate id.
   string external_provider_id = 1;
   // slug is optional new slug.
-  string slug = 2;
+  optional string slug = 2;
   // provider_kind is optional new provider kind.
   ExternalProviderKind provider_kind = 3;
   // display_name is optional display text.
-  string display_name = 4;
-  // icon_asset_ref is optional asset reference.
-  string icon_asset_ref = 5;
+  optional string display_name = 4;
+  // icon_asset_ref is optional asset reference; present empty value clears it.
+  optional string icon_asset_ref = 5;
   // status is optional provider status.
   ExternalProviderStatus status = 6;
   // meta carries idempotency, expected version and audit context.
@@ -981,7 +981,7 @@ message ListPendingAccessRequest {
 message PendingAccessItem {
   // item_id is stable item id.
   string item_id = 1;
-  // item_type is user, membership, external_account or access_decision.
+  // item_type is user, membership or external_account.
   string item_type = 2;
   // subject is the affected subject.
   SubjectRef subject = 3;

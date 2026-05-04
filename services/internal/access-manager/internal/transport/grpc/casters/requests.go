@@ -3,9 +3,12 @@ package casters
 import (
 	"strings"
 
+	"github.com/google/uuid"
+
 	accessaccountsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/access_accounts/v1"
 	accessservice "github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/service"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/enum"
+	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/value"
 )
 
 // BootstrapUserFromIdentityInput maps a gRPC request to the domain command input.
@@ -26,19 +29,7 @@ func BootstrapUserFromIdentityInput(request *accessaccountsv1.BootstrapUserFromI
 
 // SetUserStatusInput maps a gRPC request to the domain command input.
 func SetUserStatusInput(request *accessaccountsv1.SetUserStatusRequest) (accessservice.SetUserStatusInput, error) {
-	meta, err := CommandMetaFromProto(request.GetMeta())
-	if err != nil {
-		return accessservice.SetUserStatusInput{}, err
-	}
-	userID, err := requiredUUID(request.GetUserId())
-	if err != nil {
-		return accessservice.SetUserStatusInput{}, err
-	}
-	status, err := requiredEnum(request.GetStatus(), userStatusFromProto)
-	if err != nil {
-		return accessservice.SetUserStatusInput{}, err
-	}
-	return accessservice.SetUserStatusInput{UserID: userID, Status: status, Meta: meta}, nil
+	return commandInputWithIDAndStatus(request.GetMeta(), request.GetUserId(), request.GetStatus(), userStatusFromProto, setUserStatusInput)
 }
 
 // CreateOrganizationInput maps a gRPC request to the domain command input.
@@ -179,15 +170,7 @@ func PutAllowlistEntryInput(request *accessaccountsv1.PutAllowlistEntryRequest) 
 
 // DisableAllowlistEntryInput maps a gRPC request to the domain command input.
 func DisableAllowlistEntryInput(request *accessaccountsv1.DisableAllowlistEntryRequest) (accessservice.DisableAllowlistEntryInput, error) {
-	meta, err := CommandMetaFromProto(request.GetMeta())
-	if err != nil {
-		return accessservice.DisableAllowlistEntryInput{}, err
-	}
-	allowlistEntryID, err := requiredUUID(request.GetAllowlistEntryId())
-	if err != nil {
-		return accessservice.DisableAllowlistEntryInput{}, err
-	}
-	return accessservice.DisableAllowlistEntryInput{AllowlistEntryID: allowlistEntryID, Meta: meta}, nil
+	return commandInputWithID(request.GetMeta(), request.GetAllowlistEntryId(), disableAllowlistEntryInput)
 }
 
 // PutExternalProviderInput maps a gRPC request to the domain command input.
@@ -216,6 +199,44 @@ func PutExternalProviderInput(request *accessaccountsv1.RegisterExternalProvider
 		Status:       status,
 		CreateOnly:   true,
 		Meta:         meta,
+	}, nil
+}
+
+// UpdateExternalProviderInput maps a gRPC request to the domain command input.
+func UpdateExternalProviderInput(request *accessaccountsv1.UpdateExternalProviderRequest) (accessservice.UpdateExternalProviderInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return accessservice.UpdateExternalProviderInput{}, err
+	}
+	providerID, err := requiredUUID(request.GetExternalProviderId())
+	if err != nil {
+		return accessservice.UpdateExternalProviderInput{}, err
+	}
+	providerKind, err := optionalEnum(
+		request.GetProviderKind(),
+		accessaccountsv1.ExternalProviderKind_EXTERNAL_PROVIDER_KIND_UNSPECIFIED,
+		externalProviderKindFromProto,
+	)
+	if err != nil {
+		return accessservice.UpdateExternalProviderInput{}, err
+	}
+	status, err := optionalEnum(
+		request.GetStatus(),
+		accessaccountsv1.ExternalProviderStatus_EXTERNAL_PROVIDER_STATUS_UNSPECIFIED,
+		externalProviderStatusFromProto,
+	)
+	if err != nil {
+		return accessservice.UpdateExternalProviderInput{}, err
+	}
+	slug, displayName, iconAssetRef := updateExternalProviderStringFields(request)
+	return accessservice.UpdateExternalProviderInput{
+		ExternalProviderID: providerID,
+		Slug:               slug,
+		ProviderKind:       providerKind,
+		DisplayName:        displayName,
+		IconAssetRef:       iconAssetRef,
+		Status:             status,
+		Meta:               meta,
 	}, nil
 }
 
@@ -262,6 +283,11 @@ func RegisterExternalAccountInput(request *accessaccountsv1.RegisterExternalAcco
 	}, nil
 }
 
+// UpdateExternalAccountStatusInput maps a gRPC request to the domain command input.
+func UpdateExternalAccountStatusInput(request *accessaccountsv1.UpdateExternalAccountStatusRequest) (accessservice.UpdateExternalAccountStatusInput, error) {
+	return commandInputWithIDAndStatus(request.GetMeta(), request.GetExternalAccountId(), request.GetStatus(), externalAccountStatusFromProto, updateExternalAccountStatusInput)
+}
+
 // BindExternalAccountInput maps a gRPC request to the domain command input.
 func BindExternalAccountInput(request *accessaccountsv1.BindExternalAccountRequest) (accessservice.BindExternalAccountInput, error) {
 	meta, err := CommandMetaFromProto(request.GetMeta())
@@ -292,6 +318,11 @@ func BindExternalAccountInput(request *accessaccountsv1.BindExternalAccountReque
 		Status:            status,
 		Meta:              meta,
 	}, nil
+}
+
+// DisableExternalAccountBindingInput maps a gRPC request to the domain command input.
+func DisableExternalAccountBindingInput(request *accessaccountsv1.DisableExternalAccountBindingRequest) (accessservice.DisableExternalAccountBindingInput, error) {
+	return commandInputWithID(request.GetMeta(), request.GetExternalAccountBindingId(), disableExternalAccountBindingInput)
 }
 
 // PutAccessActionInput maps a gRPC request to the domain command input.
@@ -408,4 +439,80 @@ func trimStrings(values []string) []string {
 		}
 	}
 	return result
+}
+
+func optionalTrimmedString(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*value)
+	return &trimmed
+}
+
+func updateExternalProviderStringFields(request *accessaccountsv1.UpdateExternalProviderRequest) (*string, *string, *string) {
+	if request == nil {
+		return nil, nil, nil
+	}
+	return optionalTrimmedString(request.Slug), optionalTrimmedString(request.DisplayName), optionalTrimmedString(request.IconAssetRef)
+}
+
+func commandMetaRequiredID(metaProto *accessaccountsv1.CommandMeta, rawID string) (value.CommandMeta, uuid.UUID, error) {
+	meta, err := CommandMetaFromProto(metaProto)
+	if err != nil {
+		return value.CommandMeta{}, uuid.Nil, err
+	}
+	id, err := requiredUUID(rawID)
+	if err != nil {
+		return value.CommandMeta{}, uuid.Nil, err
+	}
+	return meta, id, nil
+}
+
+func commandInputWithID[T any](
+	metaProto *accessaccountsv1.CommandMeta,
+	rawID string,
+	build func(value.CommandMeta, uuid.UUID) T,
+) (T, error) {
+	meta, id, err := commandMetaRequiredID(metaProto, rawID)
+	if err != nil {
+		var zero T
+		return zero, err
+	}
+	return build(meta, id), nil
+}
+
+func commandInputWithIDAndStatus[P comparable, D ~string, T any](
+	metaProto *accessaccountsv1.CommandMeta,
+	rawID string,
+	rawStatus P,
+	values enumMap[P, D],
+	build func(value.CommandMeta, uuid.UUID, D) T,
+) (T, error) {
+	meta, id, err := commandMetaRequiredID(metaProto, rawID)
+	if err != nil {
+		var zero T
+		return zero, err
+	}
+	status, err := requiredEnum(rawStatus, values)
+	if err != nil {
+		var zero T
+		return zero, err
+	}
+	return build(meta, id, status), nil
+}
+
+func setUserStatusInput(meta value.CommandMeta, userID uuid.UUID, status enum.UserStatus) accessservice.SetUserStatusInput {
+	return accessservice.SetUserStatusInput{UserID: userID, Status: status, Meta: meta}
+}
+
+func disableAllowlistEntryInput(meta value.CommandMeta, allowlistEntryID uuid.UUID) accessservice.DisableAllowlistEntryInput {
+	return accessservice.DisableAllowlistEntryInput{AllowlistEntryID: allowlistEntryID, Meta: meta}
+}
+
+func updateExternalAccountStatusInput(meta value.CommandMeta, accountID uuid.UUID, status enum.ExternalAccountStatus) accessservice.UpdateExternalAccountStatusInput {
+	return accessservice.UpdateExternalAccountStatusInput{ExternalAccountID: accountID, Status: status, Meta: meta}
+}
+
+func disableExternalAccountBindingInput(meta value.CommandMeta, bindingID uuid.UUID) accessservice.DisableExternalAccountBindingInput {
+	return accessservice.DisableExternalAccountBindingInput{ExternalAccountBindingID: bindingID, Meta: meta}
 }

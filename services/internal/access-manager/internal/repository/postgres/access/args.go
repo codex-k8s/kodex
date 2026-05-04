@@ -149,6 +149,12 @@ func externalProviderArgs(provider entity.ExternalProvider) pgx.NamedArgs {
 	}
 }
 
+func externalProviderUpdateArgs(provider entity.ExternalProvider, previousVersion int64) pgx.NamedArgs {
+	args := externalProviderArgs(provider)
+	args["previous_version"] = previousVersion
+	return args
+}
+
 func externalAccountArgs(account entity.ExternalAccount) pgx.NamedArgs {
 	return pgx.NamedArgs{
 		"id":                    account.ID,
@@ -166,6 +172,12 @@ func externalAccountArgs(account entity.ExternalAccount) pgx.NamedArgs {
 	}
 }
 
+func externalAccountUpdateArgs(account entity.ExternalAccount, previousVersion int64) pgx.NamedArgs {
+	args := externalAccountArgs(account)
+	args["previous_version"] = previousVersion
+	return args
+}
+
 func externalAccountBindingArgs(binding entity.ExternalAccountBinding) pgx.NamedArgs {
 	return withBaseArgs(binding.Base, pgx.NamedArgs{
 		"external_account_id": binding.ExternalAccountID,
@@ -174,6 +186,12 @@ func externalAccountBindingArgs(binding entity.ExternalAccountBinding) pgx.Named
 		"allowed_action_keys": binding.AllowedActionKeys,
 		"status":              string(binding.Status),
 	})
+}
+
+func externalAccountBindingUpdateArgs(binding entity.ExternalAccountBinding, previousVersion int64) pgx.NamedArgs {
+	args := externalAccountBindingArgs(binding)
+	args["previous_version"] = previousVersion
+	return args
 }
 
 func secretBindingRefArgs(secret entity.SecretBindingRef) pgx.NamedArgs {

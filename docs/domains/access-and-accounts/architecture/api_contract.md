@@ -77,6 +77,8 @@ approvals:
 
 `SetUserStatus`, `DisableAllowlistEntry` и `ListPendingAccess` перед выполнением проверяют право вызывающей стороны через `CheckAccess`. Операторский список `ListPendingAccess` не является командой изменения и не требует идемпотентного ключа, но обязан получить `CommandMeta.actor`, чтобы домен мог проверить действие `access.pending_access.list` и не полагался только на сервисный токен транспорта.
 
+`UpdateExternalProvider`, `UpdateExternalAccountStatus` и `DisableExternalAccountBinding` перед изменением проверяют `CommandMeta.actor` через `CheckAccess`, требуют `expected_version`, сохраняют идемпотентный след команды и публикуют доменное событие. Реальные операции провайдера, получение токена по ссылке на секрет и диагностика лимитов остаются в `provider-hub`.
+
 ## Модель команд
 
 Каждая команда изменения должна принимать:

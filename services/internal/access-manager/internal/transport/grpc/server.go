@@ -19,8 +19,11 @@ type accessService interface {
 	PutAllowlistEntry(context.Context, accessservice.PutAllowlistEntryInput) (entity.AllowlistEntry, error)
 	DisableAllowlistEntry(context.Context, accessservice.DisableAllowlistEntryInput) (entity.AllowlistEntry, error)
 	PutExternalProvider(context.Context, accessservice.PutExternalProviderInput) (entity.ExternalProvider, error)
+	UpdateExternalProvider(context.Context, accessservice.UpdateExternalProviderInput) (entity.ExternalProvider, error)
 	RegisterExternalAccount(context.Context, accessservice.RegisterExternalAccountInput) (entity.ExternalAccount, error)
+	UpdateExternalAccountStatus(context.Context, accessservice.UpdateExternalAccountStatusInput) (entity.ExternalAccount, error)
 	BindExternalAccount(context.Context, accessservice.BindExternalAccountInput) (entity.ExternalAccountBinding, error)
+	DisableExternalAccountBinding(context.Context, accessservice.DisableExternalAccountBindingInput) (entity.ExternalAccountBinding, error)
 	PutAccessAction(context.Context, accessservice.PutAccessActionInput) (entity.AccessAction, error)
 	PutAccessRule(context.Context, accessservice.PutAccessRuleInput) (entity.AccessRule, error)
 	CheckAccess(context.Context, accessservice.CheckAccessInput) (accessservice.CheckAccessResult, error)
@@ -88,14 +91,29 @@ func (s *Server) RegisterExternalProvider(ctx context.Context, request *accessac
 	return handleUnary(ctx, request, grpccasters.PutExternalProviderInput, s.service.PutExternalProvider, grpccasters.ExternalProviderResponse)
 }
 
+// UpdateExternalProvider changes provider metadata or status.
+func (s *Server) UpdateExternalProvider(ctx context.Context, request *accessaccountsv1.UpdateExternalProviderRequest) (*accessaccountsv1.ExternalProviderResponse, error) {
+	return handleUnary(ctx, request, grpccasters.UpdateExternalProviderInput, s.service.UpdateExternalProvider, grpccasters.ExternalProviderResponse)
+}
+
 // RegisterExternalAccount creates an external account as a policy subject.
 func (s *Server) RegisterExternalAccount(ctx context.Context, request *accessaccountsv1.RegisterExternalAccountRequest) (*accessaccountsv1.ExternalAccountResponse, error) {
 	return handleUnary(ctx, request, grpccasters.RegisterExternalAccountInput, s.service.RegisterExternalAccount, grpccasters.ExternalAccountResponse)
 }
 
+// UpdateExternalAccountStatus changes external-account lifecycle status.
+func (s *Server) UpdateExternalAccountStatus(ctx context.Context, request *accessaccountsv1.UpdateExternalAccountStatusRequest) (*accessaccountsv1.ExternalAccountResponse, error) {
+	return handleUnary(ctx, request, grpccasters.UpdateExternalAccountStatusInput, s.service.UpdateExternalAccountStatus, grpccasters.ExternalAccountResponse)
+}
+
 // BindExternalAccount allows an external account to be used in a scope.
 func (s *Server) BindExternalAccount(ctx context.Context, request *accessaccountsv1.BindExternalAccountRequest) (*accessaccountsv1.ExternalAccountBindingResponse, error) {
 	return handleUnary(ctx, request, grpccasters.BindExternalAccountInput, s.service.BindExternalAccount, grpccasters.ExternalAccountBindingResponse)
+}
+
+// DisableExternalAccountBinding disables an account binding without deleting history.
+func (s *Server) DisableExternalAccountBinding(ctx context.Context, request *accessaccountsv1.DisableExternalAccountBindingRequest) (*accessaccountsv1.ExternalAccountBindingResponse, error) {
+	return handleUnary(ctx, request, grpccasters.DisableExternalAccountBindingInput, s.service.DisableExternalAccountBinding, grpccasters.ExternalAccountBindingResponse)
 }
 
 // PutAccessAction creates or updates an action from the access-action catalog.

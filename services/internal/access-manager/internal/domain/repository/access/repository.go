@@ -54,16 +54,24 @@ type Repository interface {
 	ListMemberships(ctx context.Context, filter query.MembershipGraphFilter) ([]entity.Membership, error)
 	// PutExternalProvider upserts an external provider and its outbox event.
 	PutExternalProvider(ctx context.Context, provider entity.ExternalProvider, event entity.OutboxEvent) error
+	// UpdateExternalProvider updates an external provider with optimistic concurrency.
+	UpdateExternalProvider(ctx context.Context, provider entity.ExternalProvider, previousVersion int64, event entity.OutboxEvent, result *entity.CommandResult) error
 	// GetExternalProvider returns an external provider by id.
 	GetExternalProvider(ctx context.Context, id uuid.UUID) (entity.ExternalProvider, error)
 	// GetExternalProviderBySlug returns an external provider by stable slug.
 	GetExternalProviderBySlug(ctx context.Context, slug string) (entity.ExternalProvider, error)
 	// RegisterExternalAccount stores an external account and its outbox event.
 	RegisterExternalAccount(ctx context.Context, account entity.ExternalAccount, event entity.OutboxEvent, result entity.CommandResult) error
+	// UpdateExternalAccount updates an external account with optimistic concurrency.
+	UpdateExternalAccount(ctx context.Context, account entity.ExternalAccount, previousVersion int64, event entity.OutboxEvent, result *entity.CommandResult) error
 	// GetExternalAccount returns an external account by id.
 	GetExternalAccount(ctx context.Context, id uuid.UUID) (entity.ExternalAccount, error)
 	// BindExternalAccount stores an account binding and its outbox event.
 	BindExternalAccount(ctx context.Context, binding entity.ExternalAccountBinding, event entity.OutboxEvent) error
+	// GetExternalAccountBinding returns an account binding by id.
+	GetExternalAccountBinding(ctx context.Context, id uuid.UUID) (entity.ExternalAccountBinding, error)
+	// UpdateExternalAccountBinding updates an account binding with optimistic concurrency.
+	UpdateExternalAccountBinding(ctx context.Context, binding entity.ExternalAccountBinding, previousVersion int64, event entity.OutboxEvent, result *entity.CommandResult) error
 	// FindExternalAccountBinding returns a binding for requested account usage.
 	FindExternalAccountBinding(ctx context.Context, filter query.ExternalAccountUsageFilter) (entity.ExternalAccountBinding, error)
 	// FindExternalAccountBindingByIdentity returns a binding by account and usage scope.
