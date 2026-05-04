@@ -5,6 +5,7 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -86,6 +87,10 @@ const (
 	operationRecordAccessDecision                 = "domain.Repository.RecordAccessDecision"
 	operationGetAccessDecisionAudit               = "domain.Repository.GetAccessDecisionAudit"
 	operationListPendingAccess                    = "domain.Repository.ListPendingAccess"
+	operationClaimOutboxEvents                    = "domain.Repository.ClaimOutboxEvents"
+	operationMarkOutboxEventPublished             = "domain.Repository.MarkOutboxEventPublished"
+	operationMarkOutboxEventFailed                = "domain.Repository.MarkOutboxEventFailed"
+	operationMarkOutboxEventPermanentlyFailed     = "domain.Repository.MarkOutboxEventPermanentlyFailed"
 )
 
 // NewRepository creates a PostgreSQL-backed access repository.
@@ -364,6 +369,83 @@ func (r *Repository) ListPendingAccess(ctx context.Context, filter query.Pending
 	}
 	items, err := scanRows(rows, scanPendingAccessItem)
 	return items, wrapError(operationListPendingAccess, err)
+}
+
+func (r *Repository) ClaimOutboxEvents(ctx context.Context, limit int, now time.Time, lockedUntil time.Time) ([]entity.OutboxEvent, error) {
+	if limit < 1 || lockedUntil.Before(now) || lockedUntil.Equal(now) {
+		return nil, wrapError(operationClaimOutboxEvents, errs.ErrInvalidArgument)
+	}
+	rows, err := r.db.Query(ctx, queryOutboxEventClaim, pgx.NamedArgs{
+		"limit":        limit,
+		"now":          now,
+		"locked_until": lockedUntil,
+	})
+	if err != nil {
+		return nil, wrapError(operationClaimOutboxEvents, err)
+	}
+	events, err := scanRows(rows, scanOutboxEvent)
+	return events, wrapError(operationClaimOutboxEvents, err)
+}
+
+func (r *Repository) MarkOutboxEventPublished(ctx context.Context, id uuid.UUID, attemptCount int, publishedAt time.Time) error {
+	if id == uuid.Nil || attemptCount < 1 || publishedAt.IsZero() {
+		return wrapError(operationMarkOutboxEventPublished, errs.ErrInvalidArgument)
+	}
+	_, err := r.db.Exec(ctx, queryOutboxEventMarkPublished, pgx.NamedArgs{
+		"id":            id,
+		"attempt_count": attemptCount,
+		"published_at":  publishedAt,
+	})
+	return wrapError(operationMarkOutboxEventPublished, err)
+}
+
+func (r *Repository) MarkOutboxEventFailed(ctx context.Context, id uuid.UUID, attemptCount int, nextAttemptAt time.Time, lastError string) error {
+	return r.markOutboxEventDeliveryFailure(
+		ctx,
+		operationMarkOutboxEventFailed,
+		queryOutboxEventMarkFailed,
+		id,
+		attemptCount,
+		"next_attempt_at",
+		nextAttemptAt,
+		lastError,
+	)
+}
+
+func (r *Repository) MarkOutboxEventPermanentlyFailed(ctx context.Context, id uuid.UUID, attemptCount int, failedAt time.Time, lastError string) error {
+	return r.markOutboxEventDeliveryFailure(
+		ctx,
+		operationMarkOutboxEventPermanentlyFailed,
+		queryOutboxEventMarkPermanentlyFailed,
+		id,
+		attemptCount,
+		"failed_permanently_at",
+		failedAt,
+		lastError,
+	)
+}
+
+func (r *Repository) markOutboxEventDeliveryFailure(
+	ctx context.Context,
+	operation string,
+	queryText string,
+	id uuid.UUID,
+	attemptCount int,
+	timestampName string,
+	timestampValue time.Time,
+	lastError string,
+) error {
+	if id == uuid.Nil || attemptCount < 1 || timestampValue.IsZero() {
+		return wrapError(operation, errs.ErrInvalidArgument)
+	}
+	args := pgx.NamedArgs{
+		"id":            id,
+		"attempt_count": attemptCount,
+		"last_error":    lastError,
+	}
+	args[timestampName] = timestampValue
+	_, err := r.db.Exec(ctx, queryText, args)
+	return wrapError(operation, err)
 }
 
 func (r *Repository) withTx(ctx context.Context, operation string, fn func(tx pgx.Tx) error) error {

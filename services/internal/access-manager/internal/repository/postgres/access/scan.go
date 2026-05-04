@@ -119,6 +119,33 @@ func scanScopeRef(row rowScanner) (value.ScopeRef, error) {
 	return scope, err
 }
 
+func scanOutboxEvent(row rowScanner) (entity.OutboxEvent, error) {
+	var event entity.OutboxEvent
+	var payload []byte
+	var publishedAt, lockedUntil, failedPermanentlyAt pgtype.Timestamptz
+	err := row.Scan(
+		&event.ID,
+		&event.EventType,
+		&event.SchemaVersion,
+		&event.AggregateType,
+		&event.AggregateID,
+		&payload,
+		&event.OccurredAt,
+		&publishedAt,
+		&event.AttemptCount,
+		&event.NextAttemptAt,
+		&lockedUntil,
+		&failedPermanentlyAt,
+		&event.FailureKind,
+		&event.LastError,
+	)
+	event.Payload = append(event.Payload[:0], payload...)
+	event.PublishedAt = timePtrFromPG(publishedAt)
+	event.LockedUntil = timePtrFromPG(lockedUntil)
+	event.FailedPermanentlyAt = timePtrFromPG(failedPermanentlyAt)
+	return event, err
+}
+
 func scanGroup(row rowScanner) (entity.Group, error) {
 	var group entity.Group
 	var scopeType, status string

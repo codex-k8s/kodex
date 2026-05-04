@@ -188,12 +188,18 @@ type CommandResult struct {
 
 // OutboxEvent stores a domain event until it is published to consumers.
 type OutboxEvent struct {
-	ID            uuid.UUID
-	EventType     string
-	SchemaVersion int
-	AggregateType string
-	AggregateID   uuid.UUID
-	Payload       []byte
-	OccurredAt    time.Time
-	PublishedAt   *time.Time
+	ID                  uuid.UUID
+	EventType           string
+	SchemaVersion       int
+	AggregateType       string
+	AggregateID         uuid.UUID
+	Payload             []byte
+	OccurredAt          time.Time
+	PublishedAt         *time.Time
+	AttemptCount        int
+	NextAttemptAt       time.Time
+	LockedUntil         *time.Time
+	FailedPermanentlyAt *time.Time
+	FailureKind         string
+	LastError           string
 }

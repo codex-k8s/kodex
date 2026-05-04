@@ -31,9 +31,11 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	}
 	defer dbPool.Close()
 
+	accessRepository := accesspostgres.NewRepository(dbPool)
 	components := processComponents{
 		DBPool:        dbPool,
-		AccessService: composeAccessService(dbPool),
+		AccessService: accessservice.New(accessRepository, systemClock{}, uuidGenerator{}),
+		OutboxStore:   accessRepository,
 	}
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
@@ -60,7 +62,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	}
 	accessgrpc.RegisterAccessManagerService(grpcServer, components.AccessService)
 
-	errCh := make(chan error, 2)
+	errCh := make(chan error, 3)
 	go func() {
 		logger.Info("access-manager http server starting", "addr", cfg.HTTPAddr)
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -78,6 +80,24 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 			errCh <- err
 		}
 	}()
+	if cfg.OutboxDispatchEnabled {
+		publisher, err := newOutboxPublisher(cfg, logger)
+		if err != nil {
+			return err
+		}
+		dispatcher := newOutboxDispatcher(
+			components.OutboxStore,
+			publisher,
+			cfg.OutboxDispatcherConfig(),
+			logger,
+		)
+		go func() {
+			logger.Info("access-manager outbox dispatcher starting")
+			if err := dispatcher.Run(ctx); err != nil {
+				errCh <- err
+			}
+		}()
+	}
 
 	select {
 	case <-ctx.Done():
@@ -95,11 +115,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 type processComponents struct {
 	DBPool        *pgxpool.Pool
 	AccessService *accessservice.Service
-}
-
-func composeAccessService(dbPool *pgxpool.Pool) *accessservice.Service {
-	repository := accesspostgres.NewRepository(dbPool)
-	return accessservice.New(repository, systemClock{}, uuidGenerator{})
+	OutboxStore   outboxStore
 }
 
 func healthMux(components processComponents) *http.ServeMux {
