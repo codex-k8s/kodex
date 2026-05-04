@@ -3,8 +3,22 @@ set -euo pipefail
 
 package="${KODEX_POSTGRES_TEST_PACKAGE:-./services/internal/access-manager/internal/repository/postgres/access}"
 
+run_postgres_tests() {
+	local access_dsn="$1"
+	local eventlog_dsn="$2"
+	KODEX_ACCESS_MANAGER_TEST_DATABASE_DSN="${access_dsn}" go test "${package}" -run 'TestRepositoryIntegration' -count=1
+	(
+		cd libs/go/eventlog
+		KODEX_EVENTLOG_TEST_DATABASE_DSN="${eventlog_dsn}" go test ./... -run 'TestPostgresIntegration' -count=1
+	)
+}
+
 if [[ -n "${KODEX_ACCESS_MANAGER_TEST_DATABASE_DSN:-}" ]]; then
-	go test "${package}" -run 'TestRepositoryIntegration' -count=1
+	if [[ -z "${KODEX_EVENTLOG_TEST_DATABASE_DSN:-}" ]]; then
+		echo "test-go-postgres: KODEX_EVENTLOG_TEST_DATABASE_DSN is required when external access-manager DSN is provided" >&2
+		exit 1
+	fi
+	run_postgres_tests "${KODEX_ACCESS_MANAGER_TEST_DATABASE_DSN}" "${KODEX_EVENTLOG_TEST_DATABASE_DSN}"
 	exit 0
 fi
 
@@ -43,6 +57,7 @@ if ! docker exec "${container}" pg_isready -U postgres -d kodex_access_manager_t
 	echo "test-go-postgres: PostgreSQL did not become ready" >&2
 	exit 1
 fi
+docker exec "${container}" createdb -U postgres kodex_platform_event_log_test
 
 port="$(docker port "${container}" 5432/tcp | awk -F: '{print $NF}' | head -n 1)"
 if [[ -z "${port}" ]]; then
@@ -50,5 +65,6 @@ if [[ -z "${port}" ]]; then
 	exit 1
 fi
 
-export KODEX_ACCESS_MANAGER_TEST_DATABASE_DSN="postgres://postgres:${password}@127.0.0.1:${port}/kodex_access_manager_test?sslmode=disable"
-go test "${package}" -run 'TestRepositoryIntegration' -count=1
+run_postgres_tests \
+	"postgres://postgres:${password}@127.0.0.1:${port}/kodex_access_manager_test?sslmode=disable" \
+	"postgres://postgres:${password}@127.0.0.1:${port}/kodex_platform_event_log_test?sslmode=disable"

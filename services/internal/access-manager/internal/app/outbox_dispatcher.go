@@ -16,6 +16,7 @@ import (
 const (
 	outboxPublisherKindDisabled           = "disabled"
 	outboxPublisherKindDiagnosticLogLossy = "diagnostic-log-lossy"
+	outboxPublisherKindPostgresEventLog   = "postgres-event-log"
 )
 
 var errOutboxPermanentPublish = errors.New("permanent outbox publish failure")
@@ -177,8 +178,13 @@ func truncateOutboxFailure(text string, limit int) string {
 	return string(runes[:limit])
 }
 
-func newOutboxPublisher(cfg Config, logger *slog.Logger) (outboxPublisher, error) {
+func newOutboxPublisher(cfg Config, eventLog eventLogAppender, logger *slog.Logger) (outboxPublisher, error) {
 	switch strings.TrimSpace(cfg.OutboxPublisherKind) {
+	case outboxPublisherKindPostgresEventLog:
+		return postgresEventLogPublisher{
+			sourceService: strings.TrimSpace(cfg.OutboxEventLogSource),
+			eventLog:      eventLog,
+		}, nil
 	case outboxPublisherKindDiagnosticLogLossy:
 		if !cfg.OutboxAllowLossyPublisher {
 			return nil, fmt.Errorf("lossy diagnostic outbox publisher is not explicitly allowed")

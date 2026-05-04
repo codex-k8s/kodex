@@ -20,6 +20,7 @@ spec:
     - docs/index.md
     - docs/design-guidelines
     - docs/templates
+    - deploy
     - proto
     - services
     - specs
@@ -65,6 +66,45 @@ spec:
       database:
         owner: access-manager
         migrations: services/internal/access-manager/cmd/cli/migrations
+  platformDataStores:
+    - name: platform-event-log
+      status: foundation
+      owner: platform-event-log
+      databaseName: kodex_platform_event_log
+      migrations: services/internal/platform-event-log/cmd/cli/migrations
+      dockerfile: services/internal/platform-event-log/Dockerfile
+      migrationsImageEnv: KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_IMAGE
+      clientLibrary: libs/go/eventlog
+      purpose: shared-domain-event-log
+  deployManifests:
+    - name: postgres-stack
+      path: deploy/base/postgres/kustomization.yaml.tpl
+      renderMode: kustomize
+      includes:
+        - deploy/base/postgres/secrets.yaml.tpl
+        - deploy/base/postgres/postgres.yaml.tpl
+        - deploy/base/platform-event-log/migrations.yaml.tpl
+        - deploy/base/postgres/bootstrap-databases.sh
+    - name: postgres-secrets
+      path: deploy/base/postgres/secrets.yaml.tpl
+      createsSecrets:
+        - kodex-postgres
+        - kodex-platform-runtime
+    - name: postgres
+      path: deploy/base/postgres/postgres.yaml.tpl
+      createsDatabases:
+        - kodex_access_manager
+        - kodex_platform_event_log
+      scriptSources:
+        - deploy/base/postgres/bootstrap-databases.sh
+      generatedConfigMaps:
+        - kodex-postgres-bootstrap
+    - name: platform-event-log-migrations
+      path: deploy/base/platform-event-log/migrations.yaml.tpl
+      migratesDatabase: kodex_platform_event_log
+      requires:
+        - postgres-secrets
+        - postgres
   notes:
     - New deployable services must be added only after the corresponding wave documentation is accepted.
     - Do not restore old services, versions, environments or runtime settings from deprecated/services.yaml mechanically.

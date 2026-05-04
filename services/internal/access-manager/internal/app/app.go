@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	eventlog "github.com/codex-k8s/kodex/libs/go/eventlog"
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	accessservice "github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/service"
@@ -30,12 +32,20 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		return err
 	}
 	defer dbPool.Close()
+	eventLogPool, err := openOutboxEventLogPool(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	if eventLogPool != nil {
+		defer eventLogPool.Close()
+	}
 
 	accessRepository := accesspostgres.NewRepository(dbPool)
 	components := processComponents{
-		DBPool:        dbPool,
-		AccessService: accessservice.New(accessRepository, systemClock{}, uuidGenerator{}),
-		OutboxStore:   accessRepository,
+		DBPool:         dbPool,
+		EventLogDBPool: eventLogPool,
+		AccessService:  accessservice.New(accessRepository, systemClock{}, uuidGenerator{}),
+		OutboxStore:    accessRepository,
 	}
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
@@ -81,7 +91,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		}
 	}()
 	if cfg.OutboxDispatchEnabled {
-		publisher, err := newOutboxPublisher(cfg, logger)
+		publisher, err := newOutboxPublisher(cfg, outboxEventLogAppender(eventLogPool), logger)
 		if err != nil {
 			return err
 		}
@@ -113,9 +123,28 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 }
 
 type processComponents struct {
-	DBPool        *pgxpool.Pool
-	AccessService *accessservice.Service
-	OutboxStore   outboxStore
+	DBPool         *pgxpool.Pool
+	EventLogDBPool *pgxpool.Pool
+	AccessService  *accessservice.Service
+	OutboxStore    outboxStore
+}
+
+func openOutboxEventLogPool(ctx context.Context, cfg Config) (*pgxpool.Pool, error) {
+	if !cfg.needsEventLogDatabase() {
+		return nil, nil
+	}
+	pool, err := postgreslib.OpenPool(ctx, cfg.EventLogDatabasePoolSettings())
+	if err != nil {
+		return nil, fmt.Errorf("open platform event log database pool: %w", err)
+	}
+	return pool, nil
+}
+
+func outboxEventLogAppender(pool *pgxpool.Pool) eventLogAppender {
+	if pool == nil {
+		return nil
+	}
+	return eventlog.NewStore(pool)
 }
 
 func healthMux(components processComponents) *http.ServeMux {
@@ -133,6 +162,12 @@ func healthMux(components processComponents) *http.ServeMux {
 		if err := components.DBPool.Ping(readyCtx); err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
+		}
+		if components.EventLogDBPool != nil {
+			if err := components.EventLogDBPool.Ping(readyCtx); err != nil {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})

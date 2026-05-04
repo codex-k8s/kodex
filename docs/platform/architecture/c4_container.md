@@ -5,7 +5,7 @@ title: kodex — C4 Container
 status: active
 owner_role: SA
 created_at: 2026-04-26
-updated_at: 2026-04-26
+updated_at: 2026-05-04
 related_issues: [599, 600, 601, 602]
 related_prs: []
 approvals:
@@ -28,6 +28,7 @@ approvals:
 |---|---|---|
 | Пограничный слой и интерфейс | `web-console`, `user-gateway`, `staff-gateway`, `integration-gateway`, `platform-mcp-server` | Пользовательский интерфейс, входящие HTTP/webhook/MCP запросы, авторизация и маршрутизация по направлениям доступа. |
 | Сервисы-владельцы | `access-manager`, `project-catalog`, `provider-hub`, `package-hub`, `agent-manager`, `fleet-manager`, `runtime-manager`, `billing-hub`, `interaction-hub`, `operations-hub` | Каноническое доменное состояние и бизнес-правила. |
+| Инфраструктурные контуры данных | `platform-event-log` | Общий журнал доменных событий и checkpoint потребителей без владения бизнес-доменом. |
 | Исполнители | `worker`, `agent-runner` | Фоновые задачи, сверка и агентные сессии без владения доменной истиной. |
 | Хранилища | PostgreSQL, Vault, объектное хранилище | Платформенное состояние, секреты, временные медиа. |
 | Среда исполнения | Kubernetes, реестр контейнерных образов | Слоты, задания, нагрузки плагинов, проектные нагрузки и образы. |
@@ -67,6 +68,7 @@ System_Boundary(kodex, "kodex") {
   Container(billing, "billing-hub", "Go", "Записи затрат, биллинговые аккаунты, счета")
   Container(interaction, "interaction-hub", "Go", "Диалоги, согласования, уведомления, каналы")
   Container(operations, "operations-hub", "Go", "Проекции чтения, операторские ленты, очереди")
+  Container(platformEvents, "platform-event-log", "Миграции + PostgreSQL", "Общий журнал доменных событий и checkpoint потребителей")
 
   Container(worker, "worker", "Go", "Исполнитель фоновых задач и сверки")
   Container(runner, "agent-runner", "Контейнерный агент", "Исполнение ролевого агента внутри слота")
@@ -120,6 +122,8 @@ Rel(operations, providerHub, "Строит проекции провайдера
 Rel(operations, agent, "Строит проекции агентных запусков", "gRPC/events")
 Rel(operations, runtime, "Строит проекции слотов и заданий", "gRPC/events")
 Rel(operations, interaction, "Строит проекции согласований и уведомлений", "gRPC/events")
+Rel(access, platformEvents, "Публикует outbox-события", "SQL")
+Rel(operations, platformEvents, "Читает события для проекций", "SQL/checkpoint")
 Rel(access, pg, "Своя БД", "SQL")
 Rel(projects, pg, "Своя БД", "SQL")
 Rel(providerHub, pg, "Своя БД", "SQL")
@@ -130,6 +134,7 @@ Rel(runtime, pg, "Своя БД", "SQL")
 Rel(billing, pg, "Своя БД", "SQL")
 Rel(interaction, pg, "Своя БД", "SQL")
 Rel(operations, pg, "Своя БД проекций чтения", "SQL")
+Rel(platformEvents, pg, "Отдельная БД общего журнала", "SQL")
 Rel(providerHub, provider, "API и операции через CLI", "HTTPS")
 Rel(runtime, k8s, "Управляет слотами и заданиями", "Kubernetes API")
 Rel(runtime, registry, "Публикует и выкладывает образы", "OCI")
@@ -159,6 +164,12 @@ Rel(interaction, obj, "Хранит ссылки на медиа", "S3 API")
 | `interaction-hub` | Диалоговые ветки, согласования, уведомления, подписки, попытки доставки, обратные вызовы внешних каналов. |
 | `operations-hub` | Модели чтения для пользовательского интерфейса, ленты событий, очереди, блокировки, агрегированные статусы. |
 
+## Инфраструктурные контуры данных
+
+| Контур | Ответственность |
+|---|---|
+| `platform-event-log` | Отдельная БД и миграции общего журнала доменных событий; сервисы-владельцы подключаются к нему как публикаторы или потребители, но не создают его таблицы в своих БД. |
+
 ## Тонкие пограничные компоненты
 
 - `web-console` не принимает доменных решений и не собирает состояние напрямую из БД нескольких сервисов-владельцев.
@@ -174,6 +185,7 @@ Rel(interaction, obj, "Хранит ссылки на медиа", "S3 API")
 ## Хранилища
 
 - PostgreSQL используется как общий инфраструктурный кластер, но данные разделены по сервисам-владельцам.
+- `platform-event-log` использует отдельную БД внутри PostgreSQL-кластера и владеет только журналом событий и checkpoint потребителей.
 - Таблицы разных сервисов-владельцев не связываются через `FOREIGN KEY`, межбазовый join или каскадные операции.
 - Vault хранит секреты платформы и её зависимостей; проекты могут использовать свои хранилища секретов.
 - Полные технические логи остаются в контуре среды исполнения и логирования, а PostgreSQL хранит только краткие хвосты и диагностические выдержки.
