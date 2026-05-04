@@ -37,8 +37,9 @@ type Config struct {
 	DatabaseRetryInitialDelay time.Duration `env:"KODEX_ACCESS_MANAGER_DATABASE_CONNECT_RETRY_INITIAL_DELAY" envDefault:"500ms"`
 	DatabaseRetryMaxDelay     time.Duration `env:"KODEX_ACCESS_MANAGER_DATABASE_CONNECT_RETRY_MAX_DELAY" envDefault:"5s"`
 	DatabaseRetryJitterRatio  float64       `env:"KODEX_ACCESS_MANAGER_DATABASE_CONNECT_RETRY_JITTER_RATIO" envDefault:"0.2"`
-	OutboxDispatchEnabled     bool          `env:"KODEX_ACCESS_MANAGER_OUTBOX_DISPATCH_ENABLED" envDefault:"false"`
-	OutboxPublisherKind       string        `env:"KODEX_ACCESS_MANAGER_OUTBOX_PUBLISHER_KIND" envDefault:"disabled"`
+	OutboxDispatchEnabled     bool          `env:"KODEX_ACCESS_MANAGER_OUTBOX_DISPATCH_ENABLED" envDefault:"true"`
+	OutboxPublisherKind       string        `env:"KODEX_ACCESS_MANAGER_OUTBOX_PUBLISHER_KIND" envDefault:"postgres-event-log"`
+	OutboxEventLogSource      string        `env:"KODEX_ACCESS_MANAGER_OUTBOX_EVENT_LOG_SOURCE" envDefault:"access-manager"`
 	OutboxAllowLossyPublisher bool          `env:"KODEX_ACCESS_MANAGER_OUTBOX_ALLOW_LOSSY_DIAGNOSTIC_PUBLISHER" envDefault:"false"`
 	OutboxBatchSize           int           `env:"KODEX_ACCESS_MANAGER_OUTBOX_BATCH_SIZE" envDefault:"100"`
 	OutboxPollInterval        time.Duration `env:"KODEX_ACCESS_MANAGER_OUTBOX_POLL_INTERVAL" envDefault:"1s"`
@@ -92,15 +93,18 @@ func (cfg Config) Validate() error {
 		return fmt.Errorf("KODEX_ACCESS_MANAGER_GRPC_MAX_SEND_MESSAGE_BYTES must be greater than zero")
 	}
 	switch strings.TrimSpace(cfg.OutboxPublisherKind) {
-	case outboxPublisherKindDisabled, outboxPublisherKindDiagnosticLogLossy:
+	case outboxPublisherKindDisabled, outboxPublisherKindDiagnosticLogLossy, outboxPublisherKindPostgresEventLog:
 	default:
-		return fmt.Errorf("KODEX_ACCESS_MANAGER_OUTBOX_PUBLISHER_KIND must be disabled or diagnostic-log-lossy")
+		return fmt.Errorf("KODEX_ACCESS_MANAGER_OUTBOX_PUBLISHER_KIND must be disabled, diagnostic-log-lossy or postgres-event-log")
 	}
 	if cfg.OutboxDispatchEnabled && strings.TrimSpace(cfg.OutboxPublisherKind) == outboxPublisherKindDisabled {
 		return fmt.Errorf("KODEX_ACCESS_MANAGER_OUTBOX_PUBLISHER_KIND must be configured when outbox dispatch is enabled")
 	}
 	if strings.TrimSpace(cfg.OutboxPublisherKind) == outboxPublisherKindDiagnosticLogLossy && !cfg.OutboxAllowLossyPublisher {
 		return fmt.Errorf("KODEX_ACCESS_MANAGER_OUTBOX_ALLOW_LOSSY_DIAGNOSTIC_PUBLISHER must be true for diagnostic-log-lossy publisher")
+	}
+	if strings.TrimSpace(cfg.OutboxPublisherKind) == outboxPublisherKindPostgresEventLog && strings.TrimSpace(cfg.OutboxEventLogSource) == "" {
+		return fmt.Errorf("KODEX_ACCESS_MANAGER_OUTBOX_EVENT_LOG_SOURCE must be configured for postgres-event-log publisher")
 	}
 	if cfg.OutboxBatchSize < 1 {
 		return fmt.Errorf("KODEX_ACCESS_MANAGER_OUTBOX_BATCH_SIZE must be greater than zero")

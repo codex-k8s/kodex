@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
+	eventlog "github.com/codex-k8s/kodex/libs/go/eventlog"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/entity"
 )
 
@@ -101,6 +102,35 @@ func TestOutboxDispatcherDoesNotSwallowStoreErrors(t *testing.T) {
 	}
 }
 
+func TestPostgresEventLogPublisherAppendsOutboxEvent(t *testing.T) {
+	t.Parallel()
+
+	event := testOutboxEvent(1)
+	appender := &fakeEventLogAppender{}
+	publisher := postgresEventLogPublisher{sourceService: "access-manager", eventLog: appender}
+
+	if err := publisher.Publish(context.Background(), event); err != nil {
+		t.Fatalf("Publish(): %v", err)
+	}
+	if appender.event.ID != event.ID || appender.event.EventType != event.EventType {
+		t.Fatalf("appended event = %#v, want outbox event %s", appender.event, event.ID)
+	}
+	if appender.event.SourceService != "access-manager" {
+		t.Fatalf("source service = %q, want access-manager", appender.event.SourceService)
+	}
+}
+
+func TestPostgresEventLogPublisherMapsInvalidEventToPermanentFailure(t *testing.T) {
+	t.Parallel()
+
+	appender := &fakeEventLogAppender{err: eventlog.ErrInvalidEvent}
+	publisher := postgresEventLogPublisher{sourceService: "access-manager", eventLog: appender}
+
+	if err := publisher.Publish(context.Background(), testOutboxEvent(1)); !errors.Is(err, errOutboxPermanentPublish) {
+		t.Fatalf("Publish() err = %v, want permanent failure", err)
+	}
+}
+
 func testOutboxDispatcherConfig() outboxDispatcherConfig {
 	return outboxDispatcherConfig{
 		BatchSize:           10,
@@ -182,5 +212,18 @@ func (p *fakeOutboxPublisher) Publish(_ context.Context, event entity.OutboxEven
 		return p.err
 	}
 	p.events = append(p.events, event)
+	return nil
+}
+
+type fakeEventLogAppender struct {
+	event eventlog.Event
+	err   error
+}
+
+func (a *fakeEventLogAppender) Append(_ context.Context, params eventlog.AppendParams) error {
+	if a.err != nil {
+		return a.err
+	}
+	a.event = params.Event
 	return nil
 }

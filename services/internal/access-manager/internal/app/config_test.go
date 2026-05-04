@@ -98,6 +98,7 @@ func TestValidateRejectsEnabledOutboxWithoutPublisher(t *testing.T) {
 
 	cfg := validConfig()
 	cfg.OutboxDispatchEnabled = true
+	cfg.OutboxPublisherKind = outboxPublisherKindDisabled
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() err = nil, want outbox publisher kind error")
 	}
@@ -112,6 +113,16 @@ func TestValidateAllowsExplicitLossyDiagnosticPublisher(t *testing.T) {
 	cfg.OutboxAllowLossyPublisher = true
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("Validate(): %v", err)
+	}
+}
+
+func TestValidateRejectsPostgresEventLogWithoutSource(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.OutboxEventLogSource = ""
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() err = nil, want event log source error")
 	}
 }
 
@@ -140,8 +151,9 @@ func validConfig() Config {
 		DatabaseRetryInitialDelay: 500 * time.Millisecond,
 		DatabaseRetryMaxDelay:     5 * time.Second,
 		DatabaseRetryJitterRatio:  0.2,
-		OutboxDispatchEnabled:     false,
-		OutboxPublisherKind:       outboxPublisherKindDisabled,
+		OutboxDispatchEnabled:     true,
+		OutboxPublisherKind:       outboxPublisherKindPostgresEventLog,
+		OutboxEventLogSource:      "access-manager",
 		OutboxAllowLossyPublisher: false,
 		OutboxBatchSize:           100,
 		OutboxPollInterval:        time.Second,

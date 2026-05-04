@@ -49,3 +49,17 @@ func TestGooseMigrationFiles(t *testing.T) {
 		}
 	}
 }
+
+func TestPlatformEventLogMigrationMatchesSharedLibrary(t *testing.T) {
+	serviceMigration, err := os.ReadFile("20260504130000_platform_event_log.sql")
+	if err != nil {
+		t.Fatalf("read service event log migration: %v", err)
+	}
+	sharedMigration, err := os.ReadFile("../../../../../../libs/go/eventlog/migrations/20260504130000_platform_event_log.sql")
+	if err != nil {
+		t.Fatalf("read shared event log migration: %v", err)
+	}
+	if string(serviceMigration) != string(sharedMigration) {
+		t.Fatal("service event log migration must match libs/go/eventlog migration")
+	}
+}

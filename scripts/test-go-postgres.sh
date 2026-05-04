@@ -3,8 +3,17 @@ set -euo pipefail
 
 package="${KODEX_POSTGRES_TEST_PACKAGE:-./services/internal/access-manager/internal/repository/postgres/access}"
 
+run_postgres_tests() {
+	local dsn="$1"
+	KODEX_ACCESS_MANAGER_TEST_DATABASE_DSN="${dsn}" go test "${package}" -run 'TestRepositoryIntegration' -count=1
+	(
+		cd libs/go/eventlog
+		KODEX_EVENTLOG_TEST_DATABASE_DSN="${dsn}" go test ./... -run 'TestPostgresIntegration' -count=1
+	)
+}
+
 if [[ -n "${KODEX_ACCESS_MANAGER_TEST_DATABASE_DSN:-}" ]]; then
-	go test "${package}" -run 'TestRepositoryIntegration' -count=1
+	run_postgres_tests "${KODEX_ACCESS_MANAGER_TEST_DATABASE_DSN}"
 	exit 0
 fi
 
@@ -50,5 +59,4 @@ if [[ -z "${port}" ]]; then
 	exit 1
 fi
 
-export KODEX_ACCESS_MANAGER_TEST_DATABASE_DSN="postgres://postgres:${password}@127.0.0.1:${port}/kodex_access_manager_test?sslmode=disable"
-go test "${package}" -run 'TestRepositoryIntegration' -count=1
+run_postgres_tests "postgres://postgres:${password}@127.0.0.1:${port}/kodex_access_manager_test?sslmode=disable"

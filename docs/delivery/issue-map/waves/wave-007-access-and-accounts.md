@@ -5,7 +5,7 @@ title: kodex — карта Issue волны 7
 status: active
 owner_role: KM
 created_at: 2026-04-25
-updated_at: 2026-04-30
+updated_at: 2026-05-04
 ---
 
 # Карта Issue — волна 7
@@ -23,3 +23,4 @@ updated_at: 2026-04-30
 | #601 | `docs/domains/access-and-accounts/product/requirements.md`, `docs/domains/access-and-accounts/architecture/design.md`, `docs/domains/access-and-accounts/architecture/data_model.md`, `docs/domains/access-and-accounts/architecture/api_contract.md`, `proto/kodex/access_accounts/v1/access_manager.proto`, `services/internal/access-manager/**` | access-and-accounts | жизненный цикл внешних аккаунтов готов | Поставщики, внешние аккаунты, привязки и ссылки на секреты получили PostgreSQL-репозиторий; gRPC-слой подключает создание поставщика, регистрацию аккаунта, привязку, `ResolveExternalAccountUsage`, обновление поставщика, изменение статуса внешнего аккаунта и отключение привязки. |
 | #602 | `docs/domains/access-and-accounts/product/requirements.md`, `docs/domains/access-and-accounts/architecture/design.md`, `docs/domains/access-and-accounts/architecture/data_model.md`, `docs/domains/access-and-accounts/architecture/api_contract.md`, `specs/asyncapi/access-manager.v1.yaml`, `services/internal/access-manager/**` | access-and-accounts | срез проверки доступа готов | Каталог действий, правила доступа, аудит решений и outbox получили PostgreSQL repository; gRPC-слой подключает `PutAccessAction`, `PutAccessRule`, `CheckAccess` и `ExplainAccess`, а отключение правил, доставка событий и операторские представления аудита остаются в бэклоге. |
 | без отдельного Issue | `docs/delivery/waves/wave-007-access-and-accounts.md`, `docs/domains/access-and-accounts/delivery/wave7_access_and_accounts.md`, `libs/go/grpcserver/**`, `services/internal/access-manager/**` | access-and-accounts | инфраструктурный срез готов | Общий gRPC runtime вынесен в `libs/go/grpcserver`; `access-manager` использует его как первый потребитель, а доменные обработчики и маппинг ошибок остаются в сервисе. |
+| без отдельного Issue | `docs/platform/architecture/data_model.md`, `docs/domains/access-and-accounts/architecture/design.md`, `docs/domains/access-and-accounts/delivery/wave7_access_and_accounts.md`, `libs/go/eventlog/**`, `services/internal/access-manager/**` | access-and-accounts | MVP-доставка событий готова | Добавлен общий PostgreSQL-журнал событий, checkpoint API для потребителей и штатный канал публикации `postgres-event-log` из сервисного outbox. Диагностический канал остаётся только для ручной диагностики. |

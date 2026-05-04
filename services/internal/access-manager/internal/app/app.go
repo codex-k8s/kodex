@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	eventlog "github.com/codex-k8s/kodex/libs/go/eventlog"
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	accessservice "github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/service"
@@ -35,6 +36,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	components := processComponents{
 		DBPool:        dbPool,
 		AccessService: accessservice.New(accessRepository, systemClock{}, uuidGenerator{}),
+		EventLogStore: eventlog.NewStore(dbPool),
 		OutboxStore:   accessRepository,
 	}
 	httpServer := &http.Server{
@@ -81,7 +83,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		}
 	}()
 	if cfg.OutboxDispatchEnabled {
-		publisher, err := newOutboxPublisher(cfg, logger)
+		publisher, err := newOutboxPublisher(cfg, components.EventLogStore, logger)
 		if err != nil {
 			return err
 		}
@@ -115,6 +117,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 type processComponents struct {
 	DBPool        *pgxpool.Pool
 	AccessService *accessservice.Service
+	EventLogStore *eventlog.Store
 	OutboxStore   outboxStore
 }
 

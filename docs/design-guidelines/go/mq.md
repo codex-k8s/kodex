@@ -5,7 +5,7 @@
 ## Текущий статус для kodex
 
 - В MVP `kodex` не использует RabbitMQ как обязательную часть архитектуры.
-- Основной поток событий: webhook -> PostgreSQL (event log/outbox) -> worker jobs.
+- Основной поток событий: webhook -> PostgreSQL-журнал событий и outbox -> worker jobs.
 
 ## Если MQ будет добавлен позже
 
