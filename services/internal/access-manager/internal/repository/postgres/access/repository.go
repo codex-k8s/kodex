@@ -15,6 +15,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/value"
 )
 
 // SQLFiles contains named SQL queries for the access-manager PostgreSQL repository.
@@ -52,6 +53,7 @@ const (
 	operationUpdateUser                           = "domain.Repository.UpdateUser"
 	operationGetUserByEmail                       = "domain.Repository.GetUserByEmail"
 	operationGetUserByIdentity                    = "domain.Repository.GetUserByIdentity"
+	operationListUserAccessScopes                 = "domain.Repository.ListUserAccessScopes"
 	operationLinkUserIdentity                     = "domain.Repository.LinkUserIdentity"
 	operationPutAllowlistEntry                    = "domain.Repository.PutAllowlistEntry"
 	operationUpdateAllowlistEntry                 = "domain.Repository.UpdateAllowlistEntry"
@@ -135,6 +137,15 @@ func (r *Repository) GetUserByEmail(ctx context.Context, email string) (entity.U
 
 func (r *Repository) GetUserByIdentity(ctx context.Context, provider enum.IdentityProvider, subject string) (entity.User, error) {
 	return queryOne(ctx, r.db, operationGetUserByIdentity, queryUserGetByIdentity, userIdentityLookupArgs(string(provider), subject), scanUser)
+}
+
+func (r *Repository) ListUserAccessScopes(ctx context.Context, userID uuid.UUID) ([]value.ScopeRef, error) {
+	rows, err := r.db.Query(ctx, queryUserListAccessScopes, pgx.NamedArgs{"user_id": userID})
+	if err != nil {
+		return nil, wrapError(operationListUserAccessScopes, err)
+	}
+	scopes, err := scanRows(rows, scanScopeRef)
+	return scopes, wrapError(operationListUserAccessScopes, err)
 }
 
 func (r *Repository) LinkUserIdentity(ctx context.Context, identity entity.UserIdentity, event entity.OutboxEvent) error {

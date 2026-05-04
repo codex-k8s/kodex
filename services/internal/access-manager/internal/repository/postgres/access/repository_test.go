@@ -209,6 +209,32 @@ func TestRepositoryIntegrationUserLifecycleAndPendingAccess(t *testing.T) {
 	pool := openIntegrationPool(t, ctx)
 	repository := NewRepository(pool)
 	now := time.Date(2026, 4, 30, 12, 0, 0, 0, time.UTC)
+	organization := entity.Organization{
+		Base:        entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		Kind:        enum.OrganizationKindClient,
+		Slug:        "client-org",
+		DisplayName: "Client Org",
+		Status:      enum.OrganizationStatusActive,
+	}
+	if err := repository.CreateOrganization(
+		ctx,
+		organization,
+		testEvent("access.organization.created", "organization", organization.ID, now),
+		testCommandResult(uuid.New(), testServiceCreateOrganizationOperation, "organization", organization.ID, now),
+	); err != nil {
+		t.Fatalf("create organization: %v", err)
+	}
+	entry := entity.AllowlistEntry{
+		Base:           entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		MatchType:      enum.AllowlistMatchDomain,
+		Value:          "example.com",
+		OrganizationID: &organization.ID,
+		DefaultStatus:  enum.UserStatusPending,
+		Status:         enum.AllowlistStatusActive,
+	}
+	if err := repository.PutAllowlistEntry(ctx, entry, testEvent("access.allowlist_entry.created", "allowlist_entry", entry.ID, now)); err != nil {
+		t.Fatalf("put allowlist entry: %v", err)
+	}
 	user := entity.User{
 		Base:         entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
 		PrimaryEmail: "pending@example.com",
@@ -230,6 +256,21 @@ func TestRepositoryIntegrationUserLifecycleAndPendingAccess(t *testing.T) {
 	}
 	if len(items) != 1 || items[0].ItemID != user.ID.String() || items[0].Status != string(enum.UserStatusPending) {
 		t.Fatalf("pending items = %+v, want pending user %s", items, user.ID)
+	}
+	scopes, err := repository.ListUserAccessScopes(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("list user access scopes: %v", err)
+	}
+	wantScope := value.ScopeRef{Type: "organization", ID: organization.ID.String()}
+	if len(scopes) != 1 || scopes[0] != wantScope {
+		t.Fatalf("user scopes = %+v, want %+v", scopes, wantScope)
+	}
+	items, err = repository.ListPendingAccess(ctx, query.PendingAccessFilter{Scope: wantScope, Limit: 10})
+	if err != nil {
+		t.Fatalf("list scoped pending access: %v", err)
+	}
+	if len(items) != 1 || items[0].ItemID != user.ID.String() {
+		t.Fatalf("scoped pending items = %+v, want user %s", items, user.ID)
 	}
 
 	updated := user
@@ -278,6 +319,60 @@ func TestRepositoryIntegrationUserLifecycleAndPendingAccess(t *testing.T) {
 	}
 	if len(items) != 0 {
 		t.Fatalf("pending items after activation = %+v, want no historical audit rows", items)
+	}
+}
+
+func TestRepositoryIntegrationPendingAccessSortsByUpdateTime(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openIntegrationPool(t, ctx)
+	repository := NewRepository(pool)
+	now := time.Date(2026, 4, 30, 12, 0, 0, 0, time.UTC)
+	first := entity.User{
+		Base:         entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		PrimaryEmail: "first@example.com",
+		Status:       enum.UserStatusPending,
+	}
+	firstIdentity := entity.UserIdentity{
+		ID:           uuid.New(),
+		UserID:       first.ID,
+		Provider:     enum.IdentityProviderKeycloak,
+		Subject:      "kc-first",
+		EmailAtLogin: first.PrimaryEmail,
+	}
+	if err := repository.CreateUser(ctx, first, firstIdentity, testEvent("access.user.created", "user", first.ID, now)); err != nil {
+		t.Fatalf("create first user: %v", err)
+	}
+	second := entity.User{
+		Base:         entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now.Add(time.Minute), UpdatedAt: now.Add(time.Minute)},
+		PrimaryEmail: "second@example.com",
+		Status:       enum.UserStatusPending,
+	}
+	secondIdentity := entity.UserIdentity{
+		ID:           uuid.New(),
+		UserID:       second.ID,
+		Provider:     enum.IdentityProviderKeycloak,
+		Subject:      "kc-second",
+		EmailAtLogin: second.PrimaryEmail,
+	}
+	if err := repository.CreateUser(ctx, second, secondIdentity, testEvent("access.user.created", "user", second.ID, second.CreatedAt)); err != nil {
+		t.Fatalf("create second user: %v", err)
+	}
+	blockedFirst := first
+	blockedFirst.Status = enum.UserStatusBlocked
+	blockedFirst.Version = 2
+	blockedFirst.UpdatedAt = now.Add(2 * time.Minute)
+	if err := repository.UpdateUser(ctx, blockedFirst, first.Version, testEvent("access.user.status_changed", "user", first.ID, blockedFirst.UpdatedAt), nil); err != nil {
+		t.Fatalf("block first user: %v", err)
+	}
+
+	items, err := repository.ListPendingAccess(ctx, query.PendingAccessFilter{Limit: 10})
+	if err != nil {
+		t.Fatalf("list pending access: %v", err)
+	}
+	if len(items) < 2 || items[0].ItemID != first.ID.String() || items[1].ItemID != second.ID.String() {
+		t.Fatalf("pending order = %+v, want recently updated first user before newer created second user", items)
 	}
 }
 

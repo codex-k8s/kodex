@@ -10,6 +10,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/value"
 )
 
 // Repository is the domain persistence contract for access-manager use cases.
@@ -32,6 +33,8 @@ type Repository interface {
 	GetUserByEmail(ctx context.Context, email string) (entity.User, error)
 	// GetUserByIdentity returns a user linked to provider subject.
 	GetUserByIdentity(ctx context.Context, provider enum.IdentityProvider, subject string) (entity.User, error)
+	// ListUserAccessScopes returns organization scopes that can administer a user.
+	ListUserAccessScopes(ctx context.Context, userID uuid.UUID) ([]value.ScopeRef, error)
 	// LinkUserIdentity stores an additional identity link and outbox event atomically.
 	LinkUserIdentity(ctx context.Context, identity entity.UserIdentity, event entity.OutboxEvent) error
 	// PutAllowlistEntry upserts an allowlist entry and its outbox event.

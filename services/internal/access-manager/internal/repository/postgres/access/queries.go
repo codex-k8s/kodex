@@ -44,6 +44,7 @@ var (
 	queryUserGetByEmail                       = mustLoadQuery("user__get_by_email")
 	queryUserGetByID                          = mustLoadQuery("user__get_by_id")
 	queryUserGetByIdentity                    = mustLoadQuery("user__get_by_identity")
+	queryUserListAccessScopes                 = mustLoadQuery("user__list_access_scopes")
 	queryUserUpdate                           = mustLoadQuery("user__update")
 	queryUserIdentityCreate                   = mustLoadQuery("user_identity__create")
 )

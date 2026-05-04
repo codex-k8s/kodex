@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"errors"
+	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -306,6 +308,44 @@ func TestSetUserStatusRequiresAuthorizedActor(t *testing.T) {
 	}
 }
 
+func TestSetUserStatusUsesOrganizationScope(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	now := fixedClock{}.Now()
+	target := store.seedUser(enum.UserStatusPending)
+	organizationID := uuid.New()
+	membershipID := uuid.New()
+	store.memberships[membershipID] = entity.Membership{
+		Base:        entity.Base{ID: membershipID, Version: 1, CreatedAt: now, UpdatedAt: now},
+		SubjectType: enum.MembershipSubjectUser,
+		SubjectID:   target.ID,
+		TargetType:  enum.MembershipTargetOrganization,
+		TargetID:    organizationID,
+		Status:      enum.MembershipStatusActive,
+		Source:      enum.MembershipSourceManual,
+	}
+	scope := value.ScopeRef{Type: accessRuleScopeOrganization, ID: organizationID.String()}
+	meta := store.seedOperatorMetaForScope("set-user-status-org", accessActionSetUserStatus, accessResourceUser, scope)
+	meta.ExpectedVersion = ptrInt64(target.Version)
+
+	updated, err := svc.SetUserStatus(ctx, SetUserStatusInput{
+		UserID: target.ID,
+		Status: enum.UserStatusActive,
+		Meta:   meta,
+	})
+	if err != nil {
+		t.Fatalf("set user status in organization scope: %v", err)
+	}
+	if updated.Status != enum.UserStatusActive {
+		t.Fatalf("status = %s, want active", updated.Status)
+	}
+	gotScope, ok := lastAuditScope(store)
+	if !ok || gotScope != scope {
+		t.Fatalf("last audit scope = %+v, want %+v", gotScope, scope)
+	}
+}
+
 func TestSetUserStatusSameTargetWithStaleVersionConflicts(t *testing.T) {
 	store := newMemoryRepository()
 	svc := New(store, fixedClock{}, newSequenceIDs())
@@ -378,6 +418,40 @@ func TestDisableAllowlistEntryUpdatesStatusAndKeepsIdentity(t *testing.T) {
 	}
 }
 
+func TestDisableAllowlistEntryUsesOrganizationScope(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	organizationID := uuid.New()
+	entry, err := svc.PutAllowlistEntry(ctx, PutAllowlistEntryInput{
+		MatchType:      enum.AllowlistMatchDomain,
+		Value:          "example.com",
+		OrganizationID: &organizationID,
+		DefaultStatus:  enum.UserStatusPending,
+	})
+	if err != nil {
+		t.Fatalf("put allowlist entry: %v", err)
+	}
+	scope := value.ScopeRef{Type: accessRuleScopeOrganization, ID: organizationID.String()}
+	meta := store.seedOperatorMetaForScope("disable-allowlist-org", accessActionDisableAllowlistEntry, accessResourceAllowlistEntry, scope)
+	meta.ExpectedVersion = ptrInt64(entry.Version)
+
+	disabled, err := svc.DisableAllowlistEntry(ctx, DisableAllowlistEntryInput{
+		AllowlistEntryID: entry.ID,
+		Meta:             meta,
+	})
+	if err != nil {
+		t.Fatalf("disable allowlist entry in organization scope: %v", err)
+	}
+	if disabled.Status != enum.AllowlistStatusDisabled {
+		t.Fatalf("status = %s, want disabled", disabled.Status)
+	}
+	gotScope, ok := lastAuditScope(store)
+	if !ok || gotScope != scope {
+		t.Fatalf("last audit scope = %+v, want %+v", gotScope, scope)
+	}
+}
+
 func TestDisableAllowlistEntrySameTargetWithStaleVersionConflicts(t *testing.T) {
 	ctx := context.Background()
 	store := newMemoryRepository()
@@ -424,6 +498,35 @@ func TestListPendingAccessReturnsOperatorItems(t *testing.T) {
 	}
 	if _, ok := seen[active.ID.String()]; ok {
 		t.Fatalf("active user appeared in pending access items: %+v", result.Items)
+	}
+}
+
+func TestListPendingAccessIncludesScopedAllowlistUser(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	organizationID := uuid.New()
+	_, err := svc.PutAllowlistEntry(ctx, PutAllowlistEntryInput{
+		MatchType:      enum.AllowlistMatchDomain,
+		Value:          "example.com",
+		OrganizationID: &organizationID,
+		DefaultStatus:  enum.UserStatusPending,
+	})
+	if err != nil {
+		t.Fatalf("put allowlist: %v", err)
+	}
+	pending := store.seedUser(enum.UserStatusPending)
+	pending.PrimaryEmail = "newcomer@example.com"
+	store.users[pending.ID] = pending
+	scope := value.ScopeRef{Type: accessRuleScopeOrganization, ID: organizationID.String()}
+	meta := store.seedOperatorMetaForScope("list-pending-org", accessActionListPendingAccess, accessResourcePendingAccess, scope)
+
+	result, err := svc.ListPendingAccess(ctx, ListPendingAccessInput{Scope: scope, Limit: 10, Meta: meta})
+	if err != nil {
+		t.Fatalf("list pending access in organization scope: %v", err)
+	}
+	if len(result.Items) != 1 || result.Items[0].ItemID != pending.ID.String() {
+		t.Fatalf("items = %+v, want pending allowlist user %s", result.Items, pending.ID)
 	}
 }
 
@@ -1707,6 +1810,40 @@ func (r *memoryRepository) GetUserByIdentity(_ context.Context, provider enum.Id
 	return r.GetUser(context.Background(), identity.UserID)
 }
 
+func (r *memoryRepository) ListUserAccessScopes(_ context.Context, userID uuid.UUID) ([]value.ScopeRef, error) {
+	user, ok := r.users[userID]
+	if !ok {
+		return nil, errs.ErrNotFound
+	}
+	scopes := make(map[value.ScopeRef]struct{})
+	for _, membership := range r.memberships {
+		if membership.SubjectType == enum.MembershipSubjectUser &&
+			membership.SubjectID == userID &&
+			membership.TargetType == enum.MembershipTargetOrganization &&
+			(membership.Status == enum.MembershipStatusActive ||
+				membership.Status == enum.MembershipStatusPending ||
+				membership.Status == enum.MembershipStatusBlocked) {
+			scopes[value.ScopeRef{Type: accessRuleScopeOrganization, ID: membership.TargetID.String()}] = struct{}{}
+		}
+	}
+	for _, entry := range r.allowlist {
+		if entry.Status == enum.AllowlistStatusActive && entry.OrganizationID != nil && allowlistMatchesEmail(entry, user.PrimaryEmail) {
+			scopes[value.ScopeRef{Type: accessRuleScopeOrganization, ID: entry.OrganizationID.String()}] = struct{}{}
+		}
+	}
+	result := make([]value.ScopeRef, 0, len(scopes))
+	for scope := range scopes {
+		result = append(result, scope)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].Type == result[j].Type {
+			return result[i].ID < result[j].ID
+		}
+		return result[i].Type < result[j].Type
+	})
+	return result, nil
+}
+
 func (r *memoryRepository) LinkUserIdentity(_ context.Context, identity entity.UserIdentity, event entity.OutboxEvent) error {
 	r.identities[identityKey(identity.Provider, identity.Subject)] = identity
 	r.events = append(r.events, event)
@@ -2028,7 +2165,7 @@ func (r *memoryRepository) ListPendingAccess(_ context.Context, filter query.Pen
 		if user.Status != enum.UserStatusPending && user.Status != enum.UserStatusBlocked {
 			continue
 		}
-		if filter.Scope.Type != "" && filter.Scope.Type != accessRuleScopeGlobal {
+		if !r.userVisibleInPendingScope(user, filter.Scope) {
 			continue
 		}
 		items = append(items, entity.PendingAccessItem{
@@ -2072,6 +2209,15 @@ func (r *memoryRepository) ListPendingAccess(_ context.Context, filter query.Pen
 			Status:  status, ReasonCode: "external_account_" + string(account.Status), CreatedAt: account.CreatedAt,
 		})
 	}
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].CreatedAt.Equal(items[j].CreatedAt) {
+			if items[i].ItemType == items[j].ItemType {
+				return items[i].ItemID < items[j].ItemID
+			}
+			return items[i].ItemType < items[j].ItemType
+		}
+		return items[i].CreatedAt.After(items[j].CreatedAt)
+	})
 	if filter.Offset >= len(items) {
 		return nil, nil
 	}
@@ -2080,6 +2226,35 @@ func (r *memoryRepository) ListPendingAccess(_ context.Context, filter query.Pen
 		end = len(items)
 	}
 	return items[filter.Offset:end], nil
+}
+
+func (r *memoryRepository) userVisibleInPendingScope(user entity.User, scope value.ScopeRef) bool {
+	if scope.Type == "" || scope.Type == accessRuleScopeGlobal {
+		return true
+	}
+	if scope.Type != accessRuleScopeOrganization {
+		return false
+	}
+	for _, membership := range r.memberships {
+		if membership.SubjectType == enum.MembershipSubjectUser &&
+			membership.SubjectID == user.ID &&
+			membership.TargetType == enum.MembershipTargetOrganization &&
+			membership.TargetID.String() == scope.ID &&
+			(membership.Status == enum.MembershipStatusActive ||
+				membership.Status == enum.MembershipStatusPending ||
+				membership.Status == enum.MembershipStatusBlocked) {
+			return true
+		}
+	}
+	for _, entry := range r.allowlist {
+		if entry.Status == enum.AllowlistStatusActive &&
+			entry.OrganizationID != nil &&
+			entry.OrganizationID.String() == scope.ID &&
+			allowlistMatchesEmail(entry, user.PrimaryEmail) {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *memoryRepository) seedUser(status enum.UserStatus) entity.User {
@@ -2141,6 +2316,24 @@ func identityKey(provider enum.IdentityProvider, subject string) string {
 
 func allowlistKey(matchType enum.AllowlistMatchType, value string) string {
 	return string(matchType) + ":" + value
+}
+
+func lastAuditScope(store *memoryRepository) (value.ScopeRef, bool) {
+	if len(store.audits) == 0 {
+		return value.ScopeRef{}, false
+	}
+	return store.audits[len(store.audits)-1].Scope, true
+}
+
+func allowlistMatchesEmail(entry entity.AllowlistEntry, email string) bool {
+	switch entry.MatchType {
+	case enum.AllowlistMatchEmail:
+		return entry.Value == email
+	case enum.AllowlistMatchDomain:
+		return strings.HasSuffix(email, "@"+entry.Value)
+	default:
+		return false
+	}
 }
 
 func sameMembershipIdentity(a entity.Membership, b entity.Membership) bool {
