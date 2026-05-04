@@ -191,6 +191,7 @@ type ListPendingAccessInput struct {
 	Scope  value.ScopeRef
 	Limit  int
 	Cursor string
+	Meta   value.CommandMeta
 }
 
 // ListPendingAccessResult returns a page of pending or blocked access items.

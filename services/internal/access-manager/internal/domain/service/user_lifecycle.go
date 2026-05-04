@@ -24,15 +24,34 @@ func (s *Service) SetUserStatus(ctx context.Context, input SetUserStatusInput) (
 	if input.UserID == uuid.Nil || !validUserStatus(input.Status) {
 		return entity.User{}, errs.ErrInvalidArgument
 	}
+	if input.Meta.ExpectedVersion == nil {
+		return entity.User{}, errs.ErrInvalidArgument
+	}
+	if _, err := commandIdentity(input.Meta); err != nil {
+		return entity.User{}, err
+	}
+	if err := s.requireAllowed(ctx, input.Meta, accessActionSetUserStatus, value.ResourceRef{
+		Type: accessResourceUser,
+		ID:   input.UserID.String(),
+	}, value.ScopeRef{}); err != nil {
+		return entity.User{}, err
+	}
+	applied, ok, err := s.findCommandResult(ctx, input.Meta, accessOperationSetUserStatus, accessAggregateUser)
+	if err != nil {
+		return entity.User{}, err
+	}
+	if ok {
+		return s.repository.GetUser(ctx, applied.AggregateID)
+	}
 	existing, err := s.repository.GetUser(ctx, input.UserID)
 	if err != nil {
 		return entity.User{}, err
 	}
-	if existing.Status == input.Status {
-		return existing, nil
-	}
 	if err := ensureExpectedVersion(input.Meta, existing.Version); err != nil {
 		return entity.User{}, err
+	}
+	if existing.Status == input.Status {
+		return existing, nil
 	}
 
 	now := s.now(input.Meta)
@@ -53,7 +72,11 @@ func (s *Service) SetUserStatus(ctx context.Context, input SetUserStatusInput) (
 	if err != nil {
 		return entity.User{}, err
 	}
-	if err := s.repository.UpdateUser(ctx, user, existing.Version, event); err != nil {
+	result, err := commandResult(input.Meta, accessOperationSetUserStatus, accessAggregateUser, user.ID, now)
+	if err != nil {
+		return entity.User{}, err
+	}
+	if err := s.repository.UpdateUser(ctx, user, existing.Version, event, &result); err != nil {
 		return entity.User{}, err
 	}
 	return user, nil
@@ -64,15 +87,34 @@ func (s *Service) DisableAllowlistEntry(ctx context.Context, input DisableAllowl
 	if input.AllowlistEntryID == uuid.Nil {
 		return entity.AllowlistEntry{}, errs.ErrInvalidArgument
 	}
+	if input.Meta.ExpectedVersion == nil {
+		return entity.AllowlistEntry{}, errs.ErrInvalidArgument
+	}
+	if _, err := commandIdentity(input.Meta); err != nil {
+		return entity.AllowlistEntry{}, err
+	}
+	if err := s.requireAllowed(ctx, input.Meta, accessActionDisableAllowlistEntry, value.ResourceRef{
+		Type: accessResourceAllowlistEntry,
+		ID:   input.AllowlistEntryID.String(),
+	}, value.ScopeRef{}); err != nil {
+		return entity.AllowlistEntry{}, err
+	}
+	applied, ok, err := s.findCommandResult(ctx, input.Meta, accessOperationDisableAllowlistEntry, accessAggregateAllowlistEntry)
+	if err != nil {
+		return entity.AllowlistEntry{}, err
+	}
+	if ok {
+		return s.repository.GetAllowlistEntry(ctx, applied.AggregateID)
+	}
 	existing, err := s.repository.GetAllowlistEntry(ctx, input.AllowlistEntryID)
 	if err != nil {
 		return entity.AllowlistEntry{}, err
 	}
-	if existing.Status == enum.AllowlistStatusDisabled {
-		return existing, nil
-	}
 	if err := ensureExpectedVersion(input.Meta, existing.Version); err != nil {
 		return entity.AllowlistEntry{}, err
+	}
+	if existing.Status == enum.AllowlistStatusDisabled {
+		return existing, nil
 	}
 
 	now := s.now(input.Meta)
@@ -94,7 +136,11 @@ func (s *Service) DisableAllowlistEntry(ctx context.Context, input DisableAllowl
 	if err != nil {
 		return entity.AllowlistEntry{}, err
 	}
-	if err := s.repository.PutAllowlistEntry(ctx, entry, event); err != nil {
+	result, err := commandResult(input.Meta, accessOperationDisableAllowlistEntry, accessAggregateAllowlistEntry, entry.ID, now)
+	if err != nil {
+		return entity.AllowlistEntry{}, err
+	}
+	if err := s.repository.UpdateAllowlistEntry(ctx, entry, existing.Version, event, &result); err != nil {
 		return entity.AllowlistEntry{}, err
 	}
 	return entry, nil
@@ -108,6 +154,11 @@ func (s *Service) ListPendingAccess(ctx context.Context, input ListPendingAccess
 	}
 	scope, err := normalizeOptionalScope(input.Scope)
 	if err != nil {
+		return ListPendingAccessResult{}, err
+	}
+	if err := s.requireAllowed(ctx, input.Meta, accessActionListPendingAccess, value.ResourceRef{
+		Type: accessResourcePendingAccess,
+	}, scope); err != nil {
 		return ListPendingAccessResult{}, err
 	}
 	items, err := s.repository.ListPendingAccess(ctx, query.PendingAccessFilter{

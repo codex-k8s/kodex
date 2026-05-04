@@ -236,7 +236,7 @@ func TestRepositoryIntegrationUserLifecycleAndPendingAccess(t *testing.T) {
 	updated.Status = enum.UserStatusActive
 	updated.Version = 2
 	updated.UpdatedAt = now.Add(time.Minute)
-	if err := repository.UpdateUser(ctx, updated, user.Version, testEvent("access.user.status_changed", "user", user.ID, updated.UpdatedAt)); err != nil {
+	if err := repository.UpdateUser(ctx, updated, user.Version, testEvent("access.user.status_changed", "user", user.ID, updated.UpdatedAt), nil); err != nil {
 		t.Fatalf("update user: %v", err)
 	}
 	stored, err := repository.GetUser(ctx, user.ID)
@@ -246,9 +246,38 @@ func TestRepositoryIntegrationUserLifecycleAndPendingAccess(t *testing.T) {
 	if stored.Status != enum.UserStatusActive || stored.Version != 2 {
 		t.Fatalf("stored user = %+v, want active version 2", stored)
 	}
-	err = repository.UpdateUser(ctx, updated, user.Version, testEvent("access.user.status_changed", "user", user.ID, updated.UpdatedAt))
+	err = repository.UpdateUser(ctx, updated, user.Version, testEvent("access.user.status_changed", "user", user.ID, updated.UpdatedAt), nil)
 	if !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("stale update err = %v, want %v", err, errs.ErrConflict)
+	}
+	audit := entity.AccessDecisionAudit{
+		ID:        uuid.New(),
+		Subject:   value.SubjectRef{Type: "user", ID: user.ID.String()},
+		ActionKey: "access.pending_access.list",
+		Resource:  value.ResourceRef{Type: "pending_access"},
+		Scope:     value.ScopeRef{Type: "global"},
+		RequestContext: value.RequestContext{
+			Source: "test",
+		},
+		Decision:      enum.AccessDecisionPending,
+		ReasonCode:    "subject_pending",
+		PolicyVersion: 1,
+		Explanation: value.DecisionExplanation{
+			Decision:      string(enum.AccessDecisionPending),
+			ReasonCode:    "subject_pending",
+			PolicyVersion: 1,
+		},
+		CreatedAt: now.Add(2 * time.Minute),
+	}
+	if err := repository.RecordAccessDecision(ctx, audit, nil); err != nil {
+		t.Fatalf("record audit: %v", err)
+	}
+	items, err = repository.ListPendingAccess(ctx, query.PendingAccessFilter{Limit: 10})
+	if err != nil {
+		t.Fatalf("list pending access after activation: %v", err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("pending items after activation = %+v, want no historical audit rows", items)
 	}
 }
 
@@ -275,6 +304,17 @@ func TestRepositoryIntegrationGetAllowlistEntryByID(t *testing.T) {
 	}
 	if stored.ID != entry.ID || stored.Value != entry.Value {
 		t.Fatalf("stored entry = %+v, want %+v", stored, entry)
+	}
+	disabled := stored
+	disabled.Status = enum.AllowlistStatusDisabled
+	disabled.Version = stored.Version + 1
+	disabled.UpdatedAt = now.Add(time.Minute)
+	if err := repository.UpdateAllowlistEntry(ctx, disabled, stored.Version, testEvent("access.allowlist_entry.disabled", "allowlist_entry", stored.ID, disabled.UpdatedAt), nil); err != nil {
+		t.Fatalf("update allowlist entry: %v", err)
+	}
+	err = repository.UpdateAllowlistEntry(ctx, disabled, stored.Version, testEvent("access.allowlist_entry.disabled", "allowlist_entry", stored.ID, disabled.UpdatedAt), nil)
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("stale allowlist update err = %v, want %v", err, errs.ErrConflict)
 	}
 }
 

@@ -37,7 +37,10 @@ WITH pending_items AS (
         'external_account' AS item_type,
         'external_account' AS subject_type,
         id::text AS subject_id,
-        status,
+        CASE
+            WHEN status = 'blocked' THEN 'blocked'
+            ELSE 'pending'
+        END AS status,
         ('external_account_' || status) AS reason_code,
         created_at
     FROM access_external_accounts
@@ -46,27 +49,6 @@ WITH pending_items AS (
         @scope_type = '' OR
         @scope_type = 'global' OR
         (owner_scope_type = @scope_type AND owner_scope_id = @scope_id)
-      )
-
-    UNION ALL
-
-    SELECT
-        id::text AS item_id,
-        'access_decision' AS item_type,
-        subject_type,
-        subject_id,
-        CASE
-            WHEN decision = 'pending' THEN 'pending'
-            ELSE 'blocked'
-        END AS status,
-        reason_code,
-        created_at
-    FROM access_decision_audit
-    WHERE (decision = 'pending' OR reason_code = 'subject_blocked')
-      AND (
-        @scope_type = '' OR
-        @scope_type = 'global' OR
-        (scope_type = @scope_type AND scope_id = @scope_id)
       )
 )
 SELECT

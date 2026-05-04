@@ -136,6 +136,9 @@ func TestListPendingAccessMapsRequestAndResponse(t *testing.T) {
 			if input.Scope.Type != "organization" || input.Scope.ID != "org-1" || input.Limit != 25 || input.Cursor != "50" {
 				t.Fatalf("unexpected input: %+v", input)
 			}
+			if input.Meta.Actor.ID != "operator-1" {
+				t.Fatalf("unexpected actor: %+v", input.Meta.Actor)
+			}
 			return accessservice.ListPendingAccessResult{
 				Items: []entity.PendingAccessItem{{
 					ItemID:     userID.String(),
@@ -154,6 +157,7 @@ func TestListPendingAccessMapsRequestAndResponse(t *testing.T) {
 		Scope:  &accessaccountsv1.ScopeRef{Type: "organization", Id: "org-1"},
 		Limit:  25,
 		Cursor: "50",
+		Meta:   &accessaccountsv1.CommandMeta{Actor: &accessaccountsv1.Actor{Type: "user", Id: "operator-1"}},
 	})
 	if err != nil {
 		t.Fatalf("ListPendingAccess(): %v", err)

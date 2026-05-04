@@ -387,10 +387,15 @@ func ResolveExternalAccountUsageInput(request *accessaccountsv1.ResolveExternalA
 
 // ListPendingAccessInput maps a gRPC request to the domain read input.
 func ListPendingAccessInput(request *accessaccountsv1.ListPendingAccessRequest) (accessservice.ListPendingAccessInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return accessservice.ListPendingAccessInput{}, err
+	}
 	return accessservice.ListPendingAccessInput{
 		Scope:  ScopeRefFromProto(request.GetScope()),
 		Limit:  int(request.GetLimit()),
 		Cursor: strings.TrimSpace(request.GetCursor()),
+		Meta:   meta,
 	}, nil
 }
 

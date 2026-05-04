@@ -93,6 +93,12 @@ func allowlistEntryArgs(entry entity.AllowlistEntry) pgx.NamedArgs {
 	}
 }
 
+func allowlistEntryUpdateArgs(entry entity.AllowlistEntry, previousVersion int64) pgx.NamedArgs {
+	args := allowlistEntryArgs(entry)
+	args["previous_version"] = previousVersion
+	return args
+}
+
 func allowlistLookupArgs(matchType string, value string) pgx.NamedArgs {
 	return pgx.NamedArgs{"match_type": matchType, "value": value}
 }

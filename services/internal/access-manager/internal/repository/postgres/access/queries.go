@@ -12,6 +12,7 @@ var (
 	queryAccessRuleUpsert                     = mustLoadQuery("access_rule__upsert")
 	queryAllowlistEntryFind                   = mustLoadQuery("allowlist_entry__find")
 	queryAllowlistEntryGetByID                = mustLoadQuery("allowlist_entry__get_by_id")
+	queryAllowlistEntryUpdate                 = mustLoadQuery("allowlist_entry__update")
 	queryAllowlistEntryUpsert                 = mustLoadQuery("allowlist_entry__upsert")
 	queryCommandResultCreate                  = mustLoadQuery("command_result__create")
 	queryCommandResultGet                     = mustLoadQuery("command_result__get")
