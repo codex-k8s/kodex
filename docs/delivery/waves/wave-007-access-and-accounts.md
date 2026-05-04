@@ -5,7 +5,7 @@ title: kodex — волна 7, доступ и аккаунты
 status: active
 owner_role: EM
 created_at: 2026-04-25
-updated_at: 2026-04-27
+updated_at: 2026-05-04
 related_issues: [599, 600, 601, 602, 619]
 related_prs: []
 related_docsets:

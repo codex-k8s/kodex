@@ -5,7 +5,7 @@ title: kodex — сквозная модель данных
 status: active
 owner_role: SA
 created_at: 2026-04-26
-updated_at: 2026-04-27
+updated_at: 2026-05-04
 related_issues: [599, 600, 601, 602]
 related_prs: []
 approvals:
