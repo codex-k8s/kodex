@@ -16,31 +16,21 @@ spec:
     spec:
       restartPolicy: OnFailure
       initContainers:
-        - name: wait-postgres
+        - name: wait-platform-event-log-db
           image: {{ envOr "KODEX_POSTGRES_IMAGE" "pgvector/pgvector:pg16" }}
           imagePullPolicy: IfNotPresent
           command: ["/bin/sh", "-ec"]
           args:
             - |
-              until pg_isready -h postgres -p 5432 -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; do
+              until psql "$KODEX_PLATFORM_EVENT_LOG_DATABASE_DSN" -v ON_ERROR_STOP=1 -tAc 'SELECT 1' >/dev/null 2>&1; do
                 sleep 2
               done
           env:
-            - name: POSTGRES_DB
+            - name: KODEX_PLATFORM_EVENT_LOG_DATABASE_DSN
               valueFrom:
                 secretKeyRef:
-                  name: kodex-postgres
-                  key: KODEX_POSTGRES_DB
-            - name: POSTGRES_USER
-              valueFrom:
-                secretKeyRef:
-                  name: kodex-postgres
-                  key: KODEX_POSTGRES_USER
-            - name: PGPASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: kodex-postgres
-                  key: KODEX_POSTGRES_PASSWORD
+                  name: kodex-platform-runtime
+                  key: KODEX_PLATFORM_EVENT_LOG_DATABASE_DSN
       containers:
         - name: migrations
           image: {{ envOr "KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_IMAGE" "" }}
