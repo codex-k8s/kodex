@@ -37,6 +37,14 @@ type Config struct {
 	DatabaseRetryInitialDelay time.Duration `env:"KODEX_ACCESS_MANAGER_DATABASE_CONNECT_RETRY_INITIAL_DELAY" envDefault:"500ms"`
 	DatabaseRetryMaxDelay     time.Duration `env:"KODEX_ACCESS_MANAGER_DATABASE_CONNECT_RETRY_MAX_DELAY" envDefault:"5s"`
 	DatabaseRetryJitterRatio  float64       `env:"KODEX_ACCESS_MANAGER_DATABASE_CONNECT_RETRY_JITTER_RATIO" envDefault:"0.2"`
+	OutboxDispatchEnabled     bool          `env:"KODEX_ACCESS_MANAGER_OUTBOX_DISPATCH_ENABLED" envDefault:"false"`
+	OutboxBatchSize           int           `env:"KODEX_ACCESS_MANAGER_OUTBOX_BATCH_SIZE" envDefault:"100"`
+	OutboxPollInterval        time.Duration `env:"KODEX_ACCESS_MANAGER_OUTBOX_POLL_INTERVAL" envDefault:"1s"`
+	OutboxLockTTL             time.Duration `env:"KODEX_ACCESS_MANAGER_OUTBOX_LOCK_TTL" envDefault:"30s"`
+	OutboxPublishTimeout      time.Duration `env:"KODEX_ACCESS_MANAGER_OUTBOX_PUBLISH_TIMEOUT" envDefault:"10s"`
+	OutboxRetryInitialDelay   time.Duration `env:"KODEX_ACCESS_MANAGER_OUTBOX_RETRY_INITIAL_DELAY" envDefault:"1s"`
+	OutboxRetryMaxDelay       time.Duration `env:"KODEX_ACCESS_MANAGER_OUTBOX_RETRY_MAX_DELAY" envDefault:"1m"`
+	OutboxFailureMessageLimit int           `env:"KODEX_ACCESS_MANAGER_OUTBOX_FAILURE_MESSAGE_LIMIT" envDefault:"512"`
 }
 
 // LoadConfig reads process configuration from environment variables.
@@ -80,6 +88,27 @@ func (cfg Config) Validate() error {
 	if cfg.GRPCMaxSendMessageBytes < 1 {
 		return fmt.Errorf("KODEX_ACCESS_MANAGER_GRPC_MAX_SEND_MESSAGE_BYTES must be greater than zero")
 	}
+	if cfg.OutboxBatchSize < 1 {
+		return fmt.Errorf("KODEX_ACCESS_MANAGER_OUTBOX_BATCH_SIZE must be greater than zero")
+	}
+	if cfg.OutboxPollInterval <= 0 {
+		return fmt.Errorf("KODEX_ACCESS_MANAGER_OUTBOX_POLL_INTERVAL must be positive")
+	}
+	if cfg.OutboxLockTTL <= 0 {
+		return fmt.Errorf("KODEX_ACCESS_MANAGER_OUTBOX_LOCK_TTL must be positive")
+	}
+	if cfg.OutboxPublishTimeout <= 0 {
+		return fmt.Errorf("KODEX_ACCESS_MANAGER_OUTBOX_PUBLISH_TIMEOUT must be positive")
+	}
+	if cfg.OutboxRetryInitialDelay <= 0 {
+		return fmt.Errorf("KODEX_ACCESS_MANAGER_OUTBOX_RETRY_INITIAL_DELAY must be positive")
+	}
+	if cfg.OutboxRetryMaxDelay < cfg.OutboxRetryInitialDelay {
+		return fmt.Errorf("KODEX_ACCESS_MANAGER_OUTBOX_RETRY_MAX_DELAY must be greater than or equal to initial delay")
+	}
+	if cfg.OutboxFailureMessageLimit < 1 {
+		return fmt.Errorf("KODEX_ACCESS_MANAGER_OUTBOX_FAILURE_MESSAGE_LIMIT must be greater than zero")
+	}
 	return nil
 }
 
@@ -113,5 +142,18 @@ func (cfg Config) GRPCServerConfig() grpcserver.Config {
 		MaxRecvMessageBytes:  cfg.GRPCMaxRecvMessageBytes,
 		MaxSendMessageBytes:  cfg.GRPCMaxSendMessageBytes,
 		AuthRequired:         cfg.GRPCAuthRequired,
+	}
+}
+
+// OutboxDispatcherConfig converts service env config to the outbox delivery worker contract.
+func (cfg Config) OutboxDispatcherConfig() outboxDispatcherConfig {
+	return outboxDispatcherConfig{
+		BatchSize:           cfg.OutboxBatchSize,
+		PollInterval:        cfg.OutboxPollInterval,
+		LockTTL:             cfg.OutboxLockTTL,
+		PublishTimeout:      cfg.OutboxPublishTimeout,
+		RetryInitialDelay:   cfg.OutboxRetryInitialDelay,
+		RetryMaxDelay:       cfg.OutboxRetryMaxDelay,
+		FailureMessageLimit: cfg.OutboxFailureMessageLimit,
 	}
 }

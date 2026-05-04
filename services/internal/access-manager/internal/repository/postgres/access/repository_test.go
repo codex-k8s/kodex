@@ -160,6 +160,99 @@ func TestRepositoryIntegrationMutationReadAndOutbox(t *testing.T) {
 	}
 }
 
+func TestRepositoryIntegrationOutboxClaimRetryAndPublish(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openIntegrationPool(t, ctx)
+	repository := NewRepository(pool)
+	now := time.Date(2026, 5, 4, 12, 0, 0, 0, time.UTC)
+	organization := entity.Organization{
+		Base:        entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		Kind:        enum.OrganizationKindClient,
+		Slug:        "outbox-client",
+		DisplayName: "Outbox Client",
+		Status:      enum.OrganizationStatusActive,
+	}
+
+	if err := repository.CreateOrganization(
+		ctx,
+		organization,
+		testEvent("access.organization.created", "organization", organization.ID, now),
+		testCommandResult(uuid.New(), testServiceCreateOrganizationOperation, "organization", organization.ID, now),
+	); err != nil {
+		t.Fatalf("create organization: %v", err)
+	}
+
+	claimed, err := repository.ClaimOutboxEvents(ctx, 10, now, now.Add(time.Minute))
+	if err != nil {
+		t.Fatalf("claim outbox events: %v", err)
+	}
+	if len(claimed) != 1 {
+		t.Fatalf("claimed events = %d, want 1", len(claimed))
+	}
+	event := claimed[0]
+	if event.AttemptCount != 1 || event.LockedUntil == nil || !event.LockedUntil.Equal(now.Add(time.Minute)) {
+		t.Fatalf("claimed event lock = attempt %d until %v, want attempt 1 until %s", event.AttemptCount, event.LockedUntil, now.Add(time.Minute))
+	}
+	if event.NextAttemptAt.After(now) {
+		t.Fatalf("next attempt = %s, want not after %s", event.NextAttemptAt, now)
+	}
+
+	reclaimed, err := repository.ClaimOutboxEvents(ctx, 10, now.Add(time.Second), now.Add(2*time.Minute))
+	if err != nil {
+		t.Fatalf("claim locked outbox events: %v", err)
+	}
+	if len(reclaimed) != 0 {
+		t.Fatalf("locked events claimed = %d, want 0", len(reclaimed))
+	}
+
+	nextAttemptAt := now.Add(5 * time.Minute)
+	if err := repository.MarkOutboxEventFailed(ctx, event.ID, event.AttemptCount, nextAttemptAt, "temporary failure"); err != nil {
+		t.Fatalf("mark outbox event failed: %v", err)
+	}
+	reclaimed, err = repository.ClaimOutboxEvents(ctx, 10, now.Add(4*time.Minute), now.Add(6*time.Minute))
+	if err != nil {
+		t.Fatalf("claim before retry window: %v", err)
+	}
+	if len(reclaimed) != 0 {
+		t.Fatalf("events claimed before retry window = %d, want 0", len(reclaimed))
+	}
+
+	retried, err := repository.ClaimOutboxEvents(ctx, 10, nextAttemptAt, nextAttemptAt.Add(time.Minute))
+	if err != nil {
+		t.Fatalf("claim retry outbox events: %v", err)
+	}
+	if len(retried) != 1 {
+		t.Fatalf("retried events = %d, want 1", len(retried))
+	}
+	if retried[0].AttemptCount != 2 || retried[0].LastError != "" {
+		t.Fatalf("retried event = attempt %d last error %q, want attempt 2 and empty error", retried[0].AttemptCount, retried[0].LastError)
+	}
+
+	if err := repository.MarkOutboxEventFailed(ctx, event.ID, event.AttemptCount, now.Add(10*time.Minute), "stale attempt"); err != nil {
+		t.Fatalf("mark stale attempt failed: %v", err)
+	}
+	reclaimed, err = repository.ClaimOutboxEvents(ctx, 10, nextAttemptAt.Add(time.Second), nextAttemptAt.Add(2*time.Minute))
+	if err != nil {
+		t.Fatalf("claim after stale mark: %v", err)
+	}
+	if len(reclaimed) != 0 {
+		t.Fatalf("events claimed after stale mark = %d, want 0", len(reclaimed))
+	}
+
+	if err := repository.MarkOutboxEventPublished(ctx, retried[0].ID, retried[0].AttemptCount, nextAttemptAt.Add(time.Second)); err != nil {
+		t.Fatalf("mark outbox event published: %v", err)
+	}
+	reclaimed, err = repository.ClaimOutboxEvents(ctx, 10, nextAttemptAt.Add(2*time.Minute), nextAttemptAt.Add(3*time.Minute))
+	if err != nil {
+		t.Fatalf("claim published outbox events: %v", err)
+	}
+	if len(reclaimed) != 0 {
+		t.Fatalf("published events claimed = %d, want 0", len(reclaimed))
+	}
+}
+
 func TestRepositoryIntegrationUpsertKeepsStableAggregate(t *testing.T) {
 	t.Parallel()
 

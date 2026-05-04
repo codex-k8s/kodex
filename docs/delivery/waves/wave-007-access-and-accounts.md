@@ -59,7 +59,7 @@ approvals:
 | 7.3 | Access checks | Полные `CheckAccess`, `ExplainAccess`, аудит решения доступа и тесты пограничных случаев. |
 | 7.4 | Вход и операторский жизненный цикл | `BootstrapUserFromIdentity`, путь allowlist, `SetUserStatus`, `DisableAllowlistEntry`, `ListPendingAccess` и тесты сценариев входа. |
 | 7.5 | External accounts | Жизненный цикл поставщиков и внешних аккаунтов, проверка ссылок на секреты, `ResolveExternalAccountUsage`. |
-| 7.6 | Outbox/events | Доставка outbox-событий, idempotency skeleton для будущих потребителей и сверка AsyncAPI. |
+| 7.6 | Outbox-события | Доставка outbox-событий, идемпотентный каркас для будущих потребителей и сверка AsyncAPI. |
 | 7.7 | Operational hardening | Полная корреляция логов, tracing, расширенные метрики, Docker/deploy manifest и smoke-путь сервиса. |
 | 7.8 | Delivery cleanup | Обновление delivery-карт, статусов #599-#602 и явное закрытие или перенос оставшегося бэклога. |
 

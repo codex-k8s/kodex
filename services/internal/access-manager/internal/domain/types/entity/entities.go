@@ -196,4 +196,8 @@ type OutboxEvent struct {
 	Payload       []byte
 	OccurredAt    time.Time
 	PublishedAt   *time.Time
+	AttemptCount  int
+	NextAttemptAt time.Time
+	LockedUntil   *time.Time
+	LastError     string
 }

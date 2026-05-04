@@ -56,6 +56,33 @@ func TestDatabasePoolSettingsIncludesRetryConfig(t *testing.T) {
 	}
 }
 
+func TestOutboxDispatcherConfigIncludesRetryConfig(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+
+	outboxCfg := cfg.OutboxDispatcherConfig()
+	if outboxCfg.BatchSize != cfg.OutboxBatchSize {
+		t.Fatalf("BatchSize = %d, want %d", outboxCfg.BatchSize, cfg.OutboxBatchSize)
+	}
+	if outboxCfg.RetryInitialDelay != cfg.OutboxRetryInitialDelay {
+		t.Fatalf("RetryInitialDelay = %s, want %s", outboxCfg.RetryInitialDelay, cfg.OutboxRetryInitialDelay)
+	}
+	if outboxCfg.RetryMaxDelay != cfg.OutboxRetryMaxDelay {
+		t.Fatalf("RetryMaxDelay = %s, want %s", outboxCfg.RetryMaxDelay, cfg.OutboxRetryMaxDelay)
+	}
+}
+
+func TestValidateRejectsInvalidOutboxConfig(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.OutboxRetryMaxDelay = cfg.OutboxRetryInitialDelay - time.Nanosecond
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() err = nil, want outbox retry delay error")
+	}
+}
+
 func validConfig() Config {
 	return Config{
 		HTTPAddr:                  ":8080",
@@ -81,5 +108,13 @@ func validConfig() Config {
 		DatabaseRetryInitialDelay: 500 * time.Millisecond,
 		DatabaseRetryMaxDelay:     5 * time.Second,
 		DatabaseRetryJitterRatio:  0.2,
+		OutboxDispatchEnabled:     false,
+		OutboxBatchSize:           100,
+		OutboxPollInterval:        time.Second,
+		OutboxLockTTL:             30 * time.Second,
+		OutboxPublishTimeout:      10 * time.Second,
+		OutboxRetryInitialDelay:   time.Second,
+		OutboxRetryMaxDelay:       time.Minute,
+		OutboxFailureMessageLimit: 512,
 	}
 }
