@@ -13,10 +13,18 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/entity"
 )
 
+const (
+	outboxPublisherKindDisabled           = "disabled"
+	outboxPublisherKindDiagnosticLogLossy = "diagnostic-log-lossy"
+)
+
+var errOutboxPermanentPublish = errors.New("permanent outbox publish failure")
+
 type outboxStore interface {
 	ClaimOutboxEvents(ctx context.Context, limit int, now time.Time, lockedUntil time.Time) ([]entity.OutboxEvent, error)
 	MarkOutboxEventPublished(ctx context.Context, id uuid.UUID, attemptCount int, publishedAt time.Time) error
 	MarkOutboxEventFailed(ctx context.Context, id uuid.UUID, attemptCount int, nextAttemptAt time.Time, lastError string) error
+	MarkOutboxEventPermanentlyFailed(ctx context.Context, id uuid.UUID, attemptCount int, failedAt time.Time, lastError string) error
 }
 
 type outboxPublisher interface {
@@ -93,8 +101,24 @@ func (d *outboxDispatcher) dispatchEvent(ctx context.Context, event entity.Outbo
 		return err
 	}
 
-	nextAttemptAt := time.Now().UTC().Add(d.retryDelay(event.AttemptCount))
 	lastError := truncateOutboxFailure(err.Error(), d.cfg.FailureMessageLimit)
+	if errors.Is(err, errOutboxPermanentPublish) {
+		failedAt := time.Now().UTC()
+		if markErr := d.store.MarkOutboxEventPermanentlyFailed(ctx, event.ID, event.AttemptCount, failedAt, lastError); markErr != nil {
+			return fmt.Errorf("mark outbox event permanently failed: %w", markErr)
+		}
+		d.logger.Error(
+			"access-manager outbox event publish failed permanently",
+			"event_id", event.ID.String(),
+			"event_type", event.EventType,
+			"attempt_count", event.AttemptCount,
+			"failed_at", failedAt,
+			"error", lastError,
+		)
+		return nil
+	}
+
+	nextAttemptAt := time.Now().UTC().Add(d.retryDelay(event.AttemptCount))
 	if markErr := d.store.MarkOutboxEventFailed(ctx, event.ID, event.AttemptCount, nextAttemptAt, lastError); markErr != nil {
 		return fmt.Errorf("mark outbox event failed: %w", markErr)
 	}
@@ -151,4 +175,18 @@ func truncateOutboxFailure(text string, limit int) string {
 		return text
 	}
 	return string(runes[:limit])
+}
+
+func newOutboxPublisher(cfg Config, logger *slog.Logger) (outboxPublisher, error) {
+	switch strings.TrimSpace(cfg.OutboxPublisherKind) {
+	case outboxPublisherKindDiagnosticLogLossy:
+		if !cfg.OutboxAllowLossyPublisher {
+			return nil, fmt.Errorf("lossy diagnostic outbox publisher is not explicitly allowed")
+		}
+		return loggingOutboxPublisher{logger: logger}, nil
+	case outboxPublisherKindDisabled:
+		return nil, fmt.Errorf("outbox publisher is disabled")
+	default:
+		return nil, fmt.Errorf("unsupported outbox publisher kind %q", cfg.OutboxPublisherKind)
+	}
 }

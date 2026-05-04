@@ -83,6 +83,38 @@ func TestValidateRejectsInvalidOutboxConfig(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsUnsafeOutboxLeaseConfig(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.OutboxPublishTimeout = 26 * time.Second
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() err = nil, want outbox lease safety error")
+	}
+}
+
+func TestValidateRejectsEnabledOutboxWithoutPublisher(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.OutboxDispatchEnabled = true
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() err = nil, want outbox publisher kind error")
+	}
+}
+
+func TestValidateAllowsExplicitLossyDiagnosticPublisher(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.OutboxDispatchEnabled = true
+	cfg.OutboxPublisherKind = outboxPublisherKindDiagnosticLogLossy
+	cfg.OutboxAllowLossyPublisher = true
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate(): %v", err)
+	}
+}
+
 func validConfig() Config {
 	return Config{
 		HTTPAddr:                  ":8080",
@@ -109,10 +141,13 @@ func validConfig() Config {
 		DatabaseRetryMaxDelay:     5 * time.Second,
 		DatabaseRetryJitterRatio:  0.2,
 		OutboxDispatchEnabled:     false,
+		OutboxPublisherKind:       outboxPublisherKindDisabled,
+		OutboxAllowLossyPublisher: false,
 		OutboxBatchSize:           100,
 		OutboxPollInterval:        time.Second,
 		OutboxLockTTL:             30 * time.Second,
 		OutboxPublishTimeout:      10 * time.Second,
+		OutboxLeaseSafetyMargin:   5 * time.Second,
 		OutboxRetryInitialDelay:   time.Second,
 		OutboxRetryMaxDelay:       time.Minute,
 		OutboxFailureMessageLimit: 512,

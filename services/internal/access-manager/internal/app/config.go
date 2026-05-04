@@ -38,10 +38,13 @@ type Config struct {
 	DatabaseRetryMaxDelay     time.Duration `env:"KODEX_ACCESS_MANAGER_DATABASE_CONNECT_RETRY_MAX_DELAY" envDefault:"5s"`
 	DatabaseRetryJitterRatio  float64       `env:"KODEX_ACCESS_MANAGER_DATABASE_CONNECT_RETRY_JITTER_RATIO" envDefault:"0.2"`
 	OutboxDispatchEnabled     bool          `env:"KODEX_ACCESS_MANAGER_OUTBOX_DISPATCH_ENABLED" envDefault:"false"`
+	OutboxPublisherKind       string        `env:"KODEX_ACCESS_MANAGER_OUTBOX_PUBLISHER_KIND" envDefault:"disabled"`
+	OutboxAllowLossyPublisher bool          `env:"KODEX_ACCESS_MANAGER_OUTBOX_ALLOW_LOSSY_DIAGNOSTIC_PUBLISHER" envDefault:"false"`
 	OutboxBatchSize           int           `env:"KODEX_ACCESS_MANAGER_OUTBOX_BATCH_SIZE" envDefault:"100"`
 	OutboxPollInterval        time.Duration `env:"KODEX_ACCESS_MANAGER_OUTBOX_POLL_INTERVAL" envDefault:"1s"`
 	OutboxLockTTL             time.Duration `env:"KODEX_ACCESS_MANAGER_OUTBOX_LOCK_TTL" envDefault:"30s"`
 	OutboxPublishTimeout      time.Duration `env:"KODEX_ACCESS_MANAGER_OUTBOX_PUBLISH_TIMEOUT" envDefault:"10s"`
+	OutboxLeaseSafetyMargin   time.Duration `env:"KODEX_ACCESS_MANAGER_OUTBOX_LEASE_SAFETY_MARGIN" envDefault:"5s"`
 	OutboxRetryInitialDelay   time.Duration `env:"KODEX_ACCESS_MANAGER_OUTBOX_RETRY_INITIAL_DELAY" envDefault:"1s"`
 	OutboxRetryMaxDelay       time.Duration `env:"KODEX_ACCESS_MANAGER_OUTBOX_RETRY_MAX_DELAY" envDefault:"1m"`
 	OutboxFailureMessageLimit int           `env:"KODEX_ACCESS_MANAGER_OUTBOX_FAILURE_MESSAGE_LIMIT" envDefault:"512"`
@@ -88,6 +91,17 @@ func (cfg Config) Validate() error {
 	if cfg.GRPCMaxSendMessageBytes < 1 {
 		return fmt.Errorf("KODEX_ACCESS_MANAGER_GRPC_MAX_SEND_MESSAGE_BYTES must be greater than zero")
 	}
+	switch strings.TrimSpace(cfg.OutboxPublisherKind) {
+	case outboxPublisherKindDisabled, outboxPublisherKindDiagnosticLogLossy:
+	default:
+		return fmt.Errorf("KODEX_ACCESS_MANAGER_OUTBOX_PUBLISHER_KIND must be disabled or diagnostic-log-lossy")
+	}
+	if cfg.OutboxDispatchEnabled && strings.TrimSpace(cfg.OutboxPublisherKind) == outboxPublisherKindDisabled {
+		return fmt.Errorf("KODEX_ACCESS_MANAGER_OUTBOX_PUBLISHER_KIND must be configured when outbox dispatch is enabled")
+	}
+	if strings.TrimSpace(cfg.OutboxPublisherKind) == outboxPublisherKindDiagnosticLogLossy && !cfg.OutboxAllowLossyPublisher {
+		return fmt.Errorf("KODEX_ACCESS_MANAGER_OUTBOX_ALLOW_LOSSY_DIAGNOSTIC_PUBLISHER must be true for diagnostic-log-lossy publisher")
+	}
 	if cfg.OutboxBatchSize < 1 {
 		return fmt.Errorf("KODEX_ACCESS_MANAGER_OUTBOX_BATCH_SIZE must be greater than zero")
 	}
@@ -99,6 +113,12 @@ func (cfg Config) Validate() error {
 	}
 	if cfg.OutboxPublishTimeout <= 0 {
 		return fmt.Errorf("KODEX_ACCESS_MANAGER_OUTBOX_PUBLISH_TIMEOUT must be positive")
+	}
+	if cfg.OutboxLeaseSafetyMargin < 0 {
+		return fmt.Errorf("KODEX_ACCESS_MANAGER_OUTBOX_LEASE_SAFETY_MARGIN must not be negative")
+	}
+	if cfg.OutboxPublishTimeout+cfg.OutboxLeaseSafetyMargin >= cfg.OutboxLockTTL {
+		return fmt.Errorf("KODEX_ACCESS_MANAGER_OUTBOX_PUBLISH_TIMEOUT plus safety margin must be less than KODEX_ACCESS_MANAGER_OUTBOX_LOCK_TTL")
 	}
 	if cfg.OutboxRetryInitialDelay <= 0 {
 		return fmt.Errorf("KODEX_ACCESS_MANAGER_OUTBOX_RETRY_INITIAL_DELAY must be positive")

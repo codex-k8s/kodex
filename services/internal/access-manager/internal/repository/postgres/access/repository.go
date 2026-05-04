@@ -90,6 +90,7 @@ const (
 	operationClaimOutboxEvents                    = "domain.Repository.ClaimOutboxEvents"
 	operationMarkOutboxEventPublished             = "domain.Repository.MarkOutboxEventPublished"
 	operationMarkOutboxEventFailed                = "domain.Repository.MarkOutboxEventFailed"
+	operationMarkOutboxEventPermanentlyFailed     = "domain.Repository.MarkOutboxEventPermanentlyFailed"
 )
 
 // NewRepository creates a PostgreSQL-backed access repository.
@@ -399,16 +400,52 @@ func (r *Repository) MarkOutboxEventPublished(ctx context.Context, id uuid.UUID,
 }
 
 func (r *Repository) MarkOutboxEventFailed(ctx context.Context, id uuid.UUID, attemptCount int, nextAttemptAt time.Time, lastError string) error {
-	if id == uuid.Nil || attemptCount < 1 || nextAttemptAt.IsZero() {
-		return wrapError(operationMarkOutboxEventFailed, errs.ErrInvalidArgument)
+	return r.markOutboxEventDeliveryFailure(
+		ctx,
+		operationMarkOutboxEventFailed,
+		queryOutboxEventMarkFailed,
+		id,
+		attemptCount,
+		"next_attempt_at",
+		nextAttemptAt,
+		lastError,
+	)
+}
+
+func (r *Repository) MarkOutboxEventPermanentlyFailed(ctx context.Context, id uuid.UUID, attemptCount int, failedAt time.Time, lastError string) error {
+	return r.markOutboxEventDeliveryFailure(
+		ctx,
+		operationMarkOutboxEventPermanentlyFailed,
+		queryOutboxEventMarkPermanentlyFailed,
+		id,
+		attemptCount,
+		"failed_permanently_at",
+		failedAt,
+		lastError,
+	)
+}
+
+func (r *Repository) markOutboxEventDeliveryFailure(
+	ctx context.Context,
+	operation string,
+	queryText string,
+	id uuid.UUID,
+	attemptCount int,
+	timestampName string,
+	timestampValue time.Time,
+	lastError string,
+) error {
+	if id == uuid.Nil || attemptCount < 1 || timestampValue.IsZero() {
+		return wrapError(operation, errs.ErrInvalidArgument)
 	}
-	_, err := r.db.Exec(ctx, queryOutboxEventMarkFailed, pgx.NamedArgs{
-		"id":              id,
-		"attempt_count":   attemptCount,
-		"next_attempt_at": nextAttemptAt,
-		"last_error":      lastError,
-	})
-	return wrapError(operationMarkOutboxEventFailed, err)
+	args := pgx.NamedArgs{
+		"id":            id,
+		"attempt_count": attemptCount,
+		"last_error":    lastError,
+	}
+	args[timestampName] = timestampValue
+	_, err := r.db.Exec(ctx, queryText, args)
+	return wrapError(operation, err)
 }
 
 func (r *Repository) withTx(ctx context.Context, operation string, fn func(tx pgx.Tx) error) error {

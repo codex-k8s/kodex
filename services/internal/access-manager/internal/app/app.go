@@ -81,9 +81,13 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		}
 	}()
 	if cfg.OutboxDispatchEnabled {
+		publisher, err := newOutboxPublisher(cfg, logger)
+		if err != nil {
+			return err
+		}
 		dispatcher := newOutboxDispatcher(
 			components.OutboxStore,
-			loggingOutboxPublisher{logger: logger},
+			publisher,
 			cfg.OutboxDispatcherConfig(),
 			logger,
 		)

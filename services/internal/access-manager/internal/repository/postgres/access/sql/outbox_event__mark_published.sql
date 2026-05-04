@@ -3,6 +3,8 @@ UPDATE access_outbox_events
 SET
     published_at = @published_at,
     locked_until = NULL,
+    failed_permanently_at = NULL,
+    failure_kind = '',
     last_error = ''
 WHERE id = @id
   AND attempt_count = @attempt_count

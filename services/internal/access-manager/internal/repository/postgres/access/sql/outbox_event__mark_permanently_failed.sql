@@ -1,9 +1,9 @@
--- name: outbox_event__mark_failed :exec
+-- name: outbox_event__mark_permanently_failed :exec
 UPDATE access_outbox_events
 SET
     locked_until = NULL,
-    next_attempt_at = @next_attempt_at,
-    failure_kind = 'transient',
+    failed_permanently_at = @failed_permanently_at,
+    failure_kind = 'permanent',
     last_error = @last_error
 WHERE id = @id
   AND attempt_count = @attempt_count

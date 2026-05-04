@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"strings"
@@ -65,6 +66,25 @@ func TestOutboxDispatcherSchedulesRetryAfterPublishFailure(t *testing.T) {
 	}
 }
 
+func TestOutboxDispatcherStopsRetryAfterPermanentPublishFailure(t *testing.T) {
+	t.Parallel()
+
+	event := testOutboxEvent(1)
+	store := &fakeOutboxStore{claimed: []entity.OutboxEvent{event}}
+	publisher := &fakeOutboxPublisher{err: fmt.Errorf("%w: invalid schema", errOutboxPermanentPublish)}
+	dispatcher := newOutboxDispatcher(store, publisher, testOutboxDispatcherConfig(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	if err := dispatcher.dispatchOnce(context.Background()); err != nil {
+		t.Fatalf("dispatchOnce(): %v", err)
+	}
+	if store.failedPermanentID != event.ID || store.failedPermanentAttempt != event.AttemptCount {
+		t.Fatalf("permanent failed mark = %s/%d, want %s/%d", store.failedPermanentID, store.failedPermanentAttempt, event.ID, event.AttemptCount)
+	}
+	if store.failedID != uuid.Nil {
+		t.Fatalf("transient failed mark = %s, want empty", store.failedID)
+	}
+}
+
 func TestOutboxDispatcherDoesNotSwallowStoreErrors(t *testing.T) {
 	t.Parallel()
 
@@ -117,6 +137,10 @@ type fakeOutboxStore struct {
 	failedAttempt int
 	nextAttemptAt time.Time
 	lastError     string
+
+	failedPermanentID      uuid.UUID
+	failedPermanentAttempt int
+	failedPermanentAt      time.Time
 }
 
 func (s *fakeOutboxStore) ClaimOutboxEvents(_ context.Context, _ int, _ time.Time, _ time.Time) ([]entity.OutboxEvent, error) {
@@ -136,6 +160,14 @@ func (s *fakeOutboxStore) MarkOutboxEventFailed(_ context.Context, id uuid.UUID,
 	s.failedID = id
 	s.failedAttempt = attemptCount
 	s.nextAttemptAt = nextAttemptAt
+	s.lastError = lastError
+	return nil
+}
+
+func (s *fakeOutboxStore) MarkOutboxEventPermanentlyFailed(_ context.Context, id uuid.UUID, attemptCount int, failedAt time.Time, lastError string) error {
+	s.failedPermanentID = id
+	s.failedPermanentAttempt = attemptCount
+	s.failedPermanentAt = failedAt
 	s.lastError = lastError
 	return nil
 }

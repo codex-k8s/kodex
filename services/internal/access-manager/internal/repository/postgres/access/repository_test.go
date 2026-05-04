@@ -251,6 +251,40 @@ func TestRepositoryIntegrationOutboxClaimRetryAndPublish(t *testing.T) {
 	if len(reclaimed) != 0 {
 		t.Fatalf("published events claimed = %d, want 0", len(reclaimed))
 	}
+
+	entry := entity.AllowlistEntry{
+		Base:          entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		MatchType:     enum.AllowlistMatchEmail,
+		Value:         "permanent-outbox@example.com",
+		DefaultStatus: enum.UserStatusPending,
+		Status:        enum.AllowlistStatusActive,
+	}
+	if err := repository.PutAllowlistEntry(ctx, entry, testEvent("access.allowlist_entry.created", "allowlist_entry", entry.ID, now)); err != nil {
+		t.Fatalf("put allowlist entry: %v", err)
+	}
+	permanentCandidate, err := repository.ClaimOutboxEvents(ctx, 10, nextAttemptAt.Add(3*time.Minute), nextAttemptAt.Add(4*time.Minute))
+	if err != nil {
+		t.Fatalf("claim permanent candidate: %v", err)
+	}
+	if len(permanentCandidate) != 1 {
+		t.Fatalf("permanent candidates = %d, want 1", len(permanentCandidate))
+	}
+	if err := repository.MarkOutboxEventPermanentlyFailed(
+		ctx,
+		permanentCandidate[0].ID,
+		permanentCandidate[0].AttemptCount,
+		nextAttemptAt.Add(3*time.Minute),
+		"invalid schema",
+	); err != nil {
+		t.Fatalf("mark outbox event permanently failed: %v", err)
+	}
+	reclaimed, err = repository.ClaimOutboxEvents(ctx, 10, nextAttemptAt.Add(5*time.Minute), nextAttemptAt.Add(6*time.Minute))
+	if err != nil {
+		t.Fatalf("claim permanently failed outbox events: %v", err)
+	}
+	if len(reclaimed) != 0 {
+		t.Fatalf("permanently failed events claimed = %d, want 0", len(reclaimed))
+	}
 }
 
 func TestRepositoryIntegrationUpsertKeepsStableAggregate(t *testing.T) {
