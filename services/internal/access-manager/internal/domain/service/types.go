@@ -95,6 +95,17 @@ type PutExternalProviderInput struct {
 	Meta         value.CommandMeta
 }
 
+// UpdateExternalProviderInput changes an existing external provider by id.
+type UpdateExternalProviderInput struct {
+	ExternalProviderID uuid.UUID
+	Slug               string
+	ProviderKind       enum.ExternalProviderKind
+	DisplayName        string
+	IconAssetRef       string
+	Status             enum.ExternalProviderStatus
+	Meta               value.CommandMeta
+}
+
 // RegisterExternalAccountInput creates an external account catalog entry.
 type RegisterExternalAccountInput struct {
 	ExternalProviderID uuid.UUID
@@ -108,6 +119,13 @@ type RegisterExternalAccountInput struct {
 	Meta               value.CommandMeta
 }
 
+// UpdateExternalAccountStatusInput changes external-account lifecycle status.
+type UpdateExternalAccountStatusInput struct {
+	ExternalAccountID uuid.UUID
+	Status            enum.ExternalAccountStatus
+	Meta              value.CommandMeta
+}
+
 // BindExternalAccountInput permits account usage in a concrete scope.
 type BindExternalAccountInput struct {
 	ExternalAccountID uuid.UUID
@@ -116,6 +134,12 @@ type BindExternalAccountInput struct {
 	AllowedActionKeys []string
 	Status            enum.ExternalAccountBindingStatus
 	Meta              value.CommandMeta
+}
+
+// DisableExternalAccountBindingInput disables a usage binding without deleting history.
+type DisableExternalAccountBindingInput struct {
+	ExternalAccountBindingID uuid.UUID
+	Meta                     value.CommandMeta
 }
 
 // PutAccessActionInput creates or updates an action catalog entry.

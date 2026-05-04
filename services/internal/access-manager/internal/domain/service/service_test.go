@@ -1006,6 +1006,157 @@ func TestBindExternalAccountRejectsDisabledStatus(t *testing.T) {
 	}
 }
 
+func TestUpdateExternalProviderDisablesProviderAndRecordsEvent(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	provider, err := svc.PutExternalProvider(ctx, PutExternalProviderInput{
+		Slug: "github", ProviderKind: enum.ExternalProviderRepository, DisplayName: "GitHub",
+	})
+	if err != nil {
+		t.Fatalf("put provider: %v", err)
+	}
+	meta := store.seedOperatorMeta("disable-provider", accessActionManageExternalProvider, accessResourceExternalProvider)
+	meta.ExpectedVersion = ptrInt64(provider.Version)
+	meta.Reason = "provider_offboarding"
+
+	disabled, err := svc.UpdateExternalProvider(ctx, UpdateExternalProviderInput{
+		ExternalProviderID: provider.ID,
+		Status:             enum.ExternalProviderStatusDisabled,
+		Meta:               meta,
+	})
+	if err != nil {
+		t.Fatalf("update provider: %v", err)
+	}
+	if disabled.Status != enum.ExternalProviderStatusDisabled || disabled.Version != provider.Version+1 {
+		t.Fatalf("provider = %+v, want disabled version %d", disabled, provider.Version+1)
+	}
+	if last := store.events[len(store.events)-1]; last.EventType != accessEventExternalProviderDisabled {
+		t.Fatalf("last event = %s, want disabled provider event", last.EventType)
+	}
+}
+
+func TestUpdateExternalAccountStatusUpdatesStatusAndReplaysCommand(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	provider, err := svc.PutExternalProvider(ctx, PutExternalProviderInput{
+		Slug: "github", ProviderKind: enum.ExternalProviderRepository, DisplayName: "GitHub",
+	})
+	if err != nil {
+		t.Fatalf("put provider: %v", err)
+	}
+	account, err := svc.RegisterExternalAccount(ctx, RegisterExternalAccountInput{
+		ExternalProviderID: provider.ID, AccountType: enum.ExternalAccountBot, DisplayName: "kodex-agent",
+		Meta: commandMeta("register-account-for-status"),
+	})
+	if err != nil {
+		t.Fatalf("register account: %v", err)
+	}
+	meta := store.seedOperatorMeta("activate-external-account", accessActionManageExternalAccount, accessResourceExternalAccount)
+	meta.ExpectedVersion = ptrInt64(account.Version)
+
+	updated, err := svc.UpdateExternalAccountStatus(ctx, UpdateExternalAccountStatusInput{
+		ExternalAccountID: account.ID,
+		Status:            enum.ExternalAccountStatusActive,
+		Meta:              meta,
+	})
+	if err != nil {
+		t.Fatalf("update account status: %v", err)
+	}
+	replayed, err := svc.UpdateExternalAccountStatus(ctx, UpdateExternalAccountStatusInput{
+		ExternalAccountID: account.ID,
+		Status:            enum.ExternalAccountStatusBlocked,
+		Meta:              meta,
+	})
+	if err != nil {
+		t.Fatalf("replay account status: %v", err)
+	}
+	if replayed.ID != updated.ID || replayed.Status != enum.ExternalAccountStatusActive {
+		t.Fatalf("replay = %+v, want original active account", replayed)
+	}
+	if last := store.events[len(store.events)-1]; last.EventType != accessEventExternalAccountStatusChanged {
+		t.Fatalf("last event = %s, want status changed event", last.EventType)
+	}
+}
+
+func TestUpdateExternalAccountStatusRequiresAuthorizedActor(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	provider, err := svc.PutExternalProvider(ctx, PutExternalProviderInput{
+		Slug: "github", ProviderKind: enum.ExternalProviderRepository, DisplayName: "GitHub",
+	})
+	if err != nil {
+		t.Fatalf("put provider: %v", err)
+	}
+	account, err := svc.RegisterExternalAccount(ctx, RegisterExternalAccountInput{
+		ExternalProviderID: provider.ID, AccountType: enum.ExternalAccountBot, DisplayName: "kodex-agent",
+		Meta: commandMeta("register-account-for-forbidden-status"),
+	})
+	if err != nil {
+		t.Fatalf("register account: %v", err)
+	}
+	actor := store.seedUser(enum.UserStatusActive)
+	meta := commandMeta("activate-external-account-forbidden")
+	meta.Actor = value.Actor{Type: string(enum.AccessSubjectUser), ID: actor.ID.String()}
+	meta.ExpectedVersion = ptrInt64(account.Version)
+
+	_, err = svc.UpdateExternalAccountStatus(ctx, UpdateExternalAccountStatusInput{
+		ExternalAccountID: account.ID,
+		Status:            enum.ExternalAccountStatusActive,
+		Meta:              meta,
+	})
+	if !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("err = %v, want %v", err, errs.ErrForbidden)
+	}
+}
+
+func TestDisableExternalAccountBindingUpdatesStatusAndKeepsIdentity(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	provider, err := svc.PutExternalProvider(ctx, PutExternalProviderInput{
+		Slug: "github", ProviderKind: enum.ExternalProviderRepository, DisplayName: "GitHub",
+	})
+	if err != nil {
+		t.Fatalf("put provider: %v", err)
+	}
+	account, err := svc.RegisterExternalAccount(ctx, RegisterExternalAccountInput{
+		ExternalProviderID: provider.ID, AccountType: enum.ExternalAccountBot, DisplayName: "kodex-agent",
+		Meta: commandMeta("register-account-for-binding-disable"),
+	})
+	if err != nil {
+		t.Fatalf("register account: %v", err)
+	}
+	if _, err := svc.PutAccessAction(ctx, PutAccessActionInput{Key: "provider.issue.write", DisplayName: "Запись Issue", ResourceType: "provider_issue"}); err != nil {
+		t.Fatalf("put action: %v", err)
+	}
+	binding, err := svc.BindExternalAccount(ctx, BindExternalAccountInput{
+		ExternalAccountID: account.ID, UsageScopeType: enum.ExternalAccountScopeProject, UsageScopeID: "project-1",
+		AllowedActionKeys: []string{"provider.issue.write"},
+	})
+	if err != nil {
+		t.Fatalf("bind account: %v", err)
+	}
+	meta := store.seedOperatorMeta("disable-account-binding", accessActionManageExternalAccountBinding, accessResourceExternalAccountBinding)
+	meta.ExpectedVersion = ptrInt64(binding.Version)
+
+	disabled, err := svc.DisableExternalAccountBinding(ctx, DisableExternalAccountBindingInput{
+		ExternalAccountBindingID: binding.ID,
+		Meta:                     meta,
+	})
+	if err != nil {
+		t.Fatalf("disable binding: %v", err)
+	}
+	if disabled.ID != binding.ID || disabled.Status != enum.ExternalAccountBindingStatusDisabled || disabled.Version != binding.Version+1 {
+		t.Fatalf("disabled binding = %+v, want same id disabled version %d", disabled, binding.Version+1)
+	}
+	if last := store.events[len(store.events)-1]; last.EventType != accessEventExternalAccountBindingDisabled {
+		t.Fatalf("last event = %s, want disabled binding event", last.EventType)
+	}
+}
+
 func TestRegisterExternalAccountReplaysCommandResult(t *testing.T) {
 	ctx := context.Background()
 	store := newMemoryRepository()
@@ -1619,6 +1770,22 @@ func (r *memoryRepository) PutExternalProvider(_ context.Context, provider entit
 	return nil
 }
 
+func (r *memoryRepository) UpdateExternalProvider(_ context.Context, provider entity.ExternalProvider, previousVersion int64, event entity.OutboxEvent, result *entity.CommandResult) error {
+	existing, ok := r.providers[provider.ID]
+	if !ok {
+		return errs.ErrNotFound
+	}
+	if existing.Version != previousVersion {
+		return errs.ErrConflict
+	}
+	r.providers[provider.ID] = provider
+	if result != nil {
+		r.commands[result.Key] = *result
+	}
+	r.events = append(r.events, event)
+	return nil
+}
+
 func (r *memoryRepository) GetExternalProvider(_ context.Context, id uuid.UUID) (entity.ExternalProvider, error) {
 	provider, ok := r.providers[id]
 	if !ok {
@@ -1643,6 +1810,22 @@ func (r *memoryRepository) RegisterExternalAccount(_ context.Context, account en
 	return nil
 }
 
+func (r *memoryRepository) UpdateExternalAccount(_ context.Context, account entity.ExternalAccount, previousVersion int64, event entity.OutboxEvent, result *entity.CommandResult) error {
+	existing, ok := r.accounts[account.ID]
+	if !ok {
+		return errs.ErrNotFound
+	}
+	if existing.Version != previousVersion {
+		return errs.ErrConflict
+	}
+	r.accounts[account.ID] = account
+	if result != nil {
+		r.commands[result.Key] = *result
+	}
+	r.events = append(r.events, event)
+	return nil
+}
+
 func (r *memoryRepository) GetExternalAccount(_ context.Context, id uuid.UUID) (entity.ExternalAccount, error) {
 	account, ok := r.accounts[id]
 	if !ok {
@@ -1659,6 +1842,30 @@ func (r *memoryRepository) BindExternalAccount(_ context.Context, binding entity
 		}
 	}
 	r.bindings[binding.ID] = binding
+	r.events = append(r.events, event)
+	return nil
+}
+
+func (r *memoryRepository) GetExternalAccountBinding(_ context.Context, id uuid.UUID) (entity.ExternalAccountBinding, error) {
+	binding, ok := r.bindings[id]
+	if !ok {
+		return entity.ExternalAccountBinding{}, errs.ErrNotFound
+	}
+	return binding, nil
+}
+
+func (r *memoryRepository) UpdateExternalAccountBinding(_ context.Context, binding entity.ExternalAccountBinding, previousVersion int64, event entity.OutboxEvent, result *entity.CommandResult) error {
+	existing, ok := r.bindings[binding.ID]
+	if !ok {
+		return errs.ErrNotFound
+	}
+	if existing.Version != previousVersion {
+		return errs.ErrConflict
+	}
+	r.bindings[binding.ID] = binding
+	if result != nil {
+		r.commands[result.Key] = *result
+	}
 	r.events = append(r.events, event)
 	return nil
 }

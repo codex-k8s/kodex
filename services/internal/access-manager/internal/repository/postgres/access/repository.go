@@ -63,11 +63,15 @@ const (
 	operationSetMembership                        = "domain.Repository.SetMembership"
 	operationListMemberships                      = "domain.Repository.ListMemberships"
 	operationPutExternalProvider                  = "domain.Repository.PutExternalProvider"
+	operationUpdateExternalProvider               = "domain.Repository.UpdateExternalProvider"
 	operationGetExternalProvider                  = "domain.Repository.GetExternalProvider"
 	operationGetExternalProviderBySlug            = "domain.Repository.GetExternalProviderBySlug"
 	operationRegisterExternalAccount              = "domain.Repository.RegisterExternalAccount"
+	operationUpdateExternalAccount                = "domain.Repository.UpdateExternalAccount"
 	operationGetExternalAccount                   = "domain.Repository.GetExternalAccount"
 	operationBindExternalAccount                  = "domain.Repository.BindExternalAccount"
+	operationGetExternalAccountBinding            = "domain.Repository.GetExternalAccountBinding"
+	operationUpdateExternalAccountBinding         = "domain.Repository.UpdateExternalAccountBinding"
 	operationFindExternalAccountBinding           = "domain.Repository.FindExternalAccountBinding"
 	operationFindExternalAccountBindingByIdentity = "domain.Repository.FindExternalAccountBindingByIdentity"
 	operationPutSecretBindingRef                  = "domain.Repository.PutSecretBindingRef"
@@ -122,7 +126,7 @@ func (r *Repository) GetUser(ctx context.Context, id uuid.UUID) (entity.User, er
 }
 
 func (r *Repository) UpdateUser(ctx context.Context, user entity.User, previousVersion int64, event entity.OutboxEvent, result *entity.CommandResult) error {
-	return r.updateWithCommandResult(ctx, operationUpdateUser, queryUserUpdate, userUpdateArgs(user, previousVersion), event, result)
+	return updateAggregateWithCommandResult(ctx, r, operationUpdateUser, queryUserUpdate, user, previousVersion, userUpdateArgs, event, result)
 }
 
 func (r *Repository) GetUserByEmail(ctx context.Context, email string) (entity.User, error) {
@@ -142,8 +146,7 @@ func (r *Repository) PutAllowlistEntry(ctx context.Context, entry entity.Allowli
 }
 
 func (r *Repository) UpdateAllowlistEntry(ctx context.Context, entry entity.AllowlistEntry, previousVersion int64, event entity.OutboxEvent, result *entity.CommandResult) error {
-	args := allowlistEntryUpdateArgs(entry, previousVersion)
-	return r.updateWithCommandResult(ctx, operationUpdateAllowlistEntry, queryAllowlistEntryUpdate, args, event, result)
+	return updateAggregateWithCommandResult(ctx, r, operationUpdateAllowlistEntry, queryAllowlistEntryUpdate, entry, previousVersion, allowlistEntryUpdateArgs, event, result)
 }
 
 func (r *Repository) FindAllowlistEntry(ctx context.Context, matchType enum.AllowlistMatchType, value string) (entity.AllowlistEntry, error) {
@@ -198,6 +201,10 @@ func (r *Repository) PutExternalProvider(ctx context.Context, provider entity.Ex
 	return r.mutateWithOutbox(ctx, operationPutExternalProvider, event, mutation{query: queryExternalProviderUpsert, args: externalProviderArgs(provider), requireAffected: true})
 }
 
+func (r *Repository) UpdateExternalProvider(ctx context.Context, provider entity.ExternalProvider, previousVersion int64, event entity.OutboxEvent, result *entity.CommandResult) error {
+	return updateAggregateWithCommandResult(ctx, r, operationUpdateExternalProvider, queryExternalProviderUpdate, provider, previousVersion, externalProviderUpdateArgs, event, result)
+}
+
 func (r *Repository) GetExternalProvider(ctx context.Context, id uuid.UUID) (entity.ExternalProvider, error) {
 	return queryOne(ctx, r.db, operationGetExternalProvider, queryExternalProviderGetByID, pgx.NamedArgs{"id": id}, scanExternalProvider)
 }
@@ -214,12 +221,24 @@ func (r *Repository) RegisterExternalAccount(ctx context.Context, account entity
 	return r.createWithCommandResult(ctx, operationRegisterExternalAccount, event, create, result)
 }
 
+func (r *Repository) UpdateExternalAccount(ctx context.Context, account entity.ExternalAccount, previousVersion int64, event entity.OutboxEvent, result *entity.CommandResult) error {
+	return updateAggregateWithCommandResult(ctx, r, operationUpdateExternalAccount, queryExternalAccountUpdate, account, previousVersion, externalAccountUpdateArgs, event, result)
+}
+
 func (r *Repository) GetExternalAccount(ctx context.Context, id uuid.UUID) (entity.ExternalAccount, error) {
 	return queryOne(ctx, r.db, operationGetExternalAccount, queryExternalAccountGetByID, pgx.NamedArgs{"id": id}, scanExternalAccount)
 }
 
 func (r *Repository) BindExternalAccount(ctx context.Context, binding entity.ExternalAccountBinding, event entity.OutboxEvent) error {
 	return r.mutateWithOutbox(ctx, operationBindExternalAccount, event, mutation{query: queryExternalAccountBindingUpsert, args: externalAccountBindingArgs(binding), requireAffected: true})
+}
+
+func (r *Repository) GetExternalAccountBinding(ctx context.Context, id uuid.UUID) (entity.ExternalAccountBinding, error) {
+	return queryOne(ctx, r.db, operationGetExternalAccountBinding, queryExternalAccountBindingGetByID, pgx.NamedArgs{"id": id}, scanExternalAccountBinding)
+}
+
+func (r *Repository) UpdateExternalAccountBinding(ctx context.Context, binding entity.ExternalAccountBinding, previousVersion int64, event entity.OutboxEvent, result *entity.CommandResult) error {
+	return updateAggregateWithCommandResult(ctx, r, operationUpdateExternalAccountBinding, queryExternalAccountBindingUpdate, binding, previousVersion, externalAccountBindingUpdateArgs, event, result)
 }
 
 func (r *Repository) FindExternalAccountBinding(ctx context.Context, filter query.ExternalAccountUsageFilter) (entity.ExternalAccountBinding, error) {
@@ -363,6 +382,8 @@ type mutation struct {
 	requireAffected bool
 }
 
+type updateArgsBuilder[T any] func(T, int64) pgx.NamedArgs
+
 func (r *Repository) mutateWithOutbox(ctx context.Context, operation string, event entity.OutboxEvent, mutations ...mutation) error {
 	return r.withTx(ctx, operation, func(tx pgx.Tx) error {
 		for _, item := range mutations {
@@ -386,6 +407,20 @@ func (r *Repository) updateWithCommandResult(ctx context.Context, operation stri
 	mutations := []mutation{{query: queryText, args: args, requireAffected: true}}
 	mutations = appendOptionalCommandResult(mutations, result)
 	return r.mutateWithOutbox(ctx, operation, event, mutations...)
+}
+
+func updateAggregateWithCommandResult[T any](
+	ctx context.Context,
+	repository *Repository,
+	operation string,
+	queryText string,
+	aggregate T,
+	previousVersion int64,
+	args updateArgsBuilder[T],
+	event entity.OutboxEvent,
+	result *entity.CommandResult,
+) error {
+	return repository.updateWithCommandResult(ctx, operation, queryText, args(aggregate, previousVersion), event, result)
 }
 
 func commandResultMutation(result entity.CommandResult) mutation {

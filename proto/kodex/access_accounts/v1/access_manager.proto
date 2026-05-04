@@ -981,7 +981,7 @@ message ListPendingAccessRequest {
 message PendingAccessItem {
   // item_id is stable item id.
   string item_id = 1;
-  // item_type is user, membership, external_account or access_decision.
+  // item_type is user, membership or external_account.
   string item_type = 2;
   // subject is the affected subject.
   SubjectRef subject = 3;

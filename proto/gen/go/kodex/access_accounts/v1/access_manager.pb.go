@@ -5412,7 +5412,7 @@ type PendingAccessItem struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// item_id is stable item id.
 	ItemId string `protobuf:"bytes,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
-	// item_type is user, membership, external_account or access_decision.
+	// item_type is user, membership or external_account.
 	ItemType string `protobuf:"bytes,2,opt,name=item_type,json=itemType,proto3" json:"item_type,omitempty"`
 	// subject is the affected subject.
 	Subject *SubjectRef `protobuf:"bytes,3,opt,name=subject,proto3" json:"subject,omitempty"`

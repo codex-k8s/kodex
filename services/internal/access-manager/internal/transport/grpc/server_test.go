@@ -169,6 +169,133 @@ func TestListPendingAccessMapsRequestAndResponse(t *testing.T) {
 	}
 }
 
+func TestUpdateExternalProviderMapsRequestAndResponse(t *testing.T) {
+	t.Parallel()
+
+	providerID := uuid.MustParse("66666666-6666-4666-8666-666666666666")
+	expectedVersion := int64(3)
+	service := &fakeAccessService{
+		updateExternalProvider: func(_ context.Context, input accessservice.UpdateExternalProviderInput) (entity.ExternalProvider, error) {
+			if input.ExternalProviderID != providerID ||
+				input.ProviderKind != enum.ExternalProviderRepository ||
+				input.DisplayName != "GitHub Enterprise" ||
+				input.Status != enum.ExternalProviderStatusDisabled {
+				t.Fatalf("input = %+v, want disabled GitHub Enterprise provider", input)
+			}
+			if input.Meta.ExpectedVersion == nil || *input.Meta.ExpectedVersion != expectedVersion {
+				t.Fatalf("unexpected meta: %+v", input.Meta)
+			}
+			return entity.ExternalProvider{
+				Base:         entity.Base{ID: providerID, Version: expectedVersion + 1},
+				Slug:         "github-enterprise",
+				ProviderKind: input.ProviderKind,
+				DisplayName:  input.DisplayName,
+				Status:       input.Status,
+			}, nil
+		},
+	}
+
+	response, err := NewServer(service).UpdateExternalProvider(context.Background(), &accessaccountsv1.UpdateExternalProviderRequest{
+		ExternalProviderId: providerID.String(),
+		Slug:               "github-enterprise",
+		ProviderKind:       accessaccountsv1.ExternalProviderKind_EXTERNAL_PROVIDER_KIND_REPOSITORY,
+		DisplayName:        "GitHub Enterprise",
+		Status:             accessaccountsv1.ExternalProviderStatus_EXTERNAL_PROVIDER_STATUS_DISABLED,
+		Meta:               &accessaccountsv1.CommandMeta{ExpectedVersion: &expectedVersion},
+	})
+	if err != nil {
+		t.Fatalf("UpdateExternalProvider(): %v", err)
+	}
+	if response.GetExternalProviderId() != providerID.String() ||
+		response.GetDisplayName() != "GitHub Enterprise" ||
+		response.GetStatus() != accessaccountsv1.ExternalProviderStatus_EXTERNAL_PROVIDER_STATUS_DISABLED ||
+		response.GetVersion() != expectedVersion+1 {
+		t.Fatalf("response = %+v, want disabled provider", response)
+	}
+}
+
+func TestUpdateExternalAccountStatusMapsRequestAndResponse(t *testing.T) {
+	t.Parallel()
+
+	accountID := uuid.MustParse("77777777-7777-4777-8777-777777777777")
+	providerID := uuid.MustParse("88888888-8888-4888-8888-888888888888")
+	expectedVersion := int64(2)
+	service := &fakeAccessService{
+		updateExternalAccountStatus: func(_ context.Context, input accessservice.UpdateExternalAccountStatusInput) (entity.ExternalAccount, error) {
+			if input.ExternalAccountID != accountID || input.Status != enum.ExternalAccountStatusNeedsReauth {
+				t.Fatalf("input = %+v, want account %s needs_reauth", input, accountID)
+			}
+			if input.Meta.ExpectedVersion == nil || *input.Meta.ExpectedVersion != expectedVersion || input.Meta.Actor.ID != "operator-1" {
+				t.Fatalf("unexpected meta: %+v", input.Meta)
+			}
+			return entity.ExternalAccount{
+				Base:               entity.Base{ID: accountID, Version: expectedVersion + 1},
+				ExternalProviderID: providerID,
+				AccountType:        enum.ExternalAccountBot,
+				DisplayName:        "kodex-agent",
+				OwnerScopeType:     enum.ExternalAccountScopeGlobal,
+				Status:             input.Status,
+			}, nil
+		},
+	}
+
+	response, err := NewServer(service).UpdateExternalAccountStatus(context.Background(), &accessaccountsv1.UpdateExternalAccountStatusRequest{
+		ExternalAccountId: accountID.String(),
+		Status:            accessaccountsv1.ExternalAccountStatus_EXTERNAL_ACCOUNT_STATUS_NEEDS_REAUTH,
+		Meta: &accessaccountsv1.CommandMeta{
+			ExpectedVersion: &expectedVersion,
+			Actor:           &accessaccountsv1.Actor{Type: "user", Id: "operator-1"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("UpdateExternalAccountStatus(): %v", err)
+	}
+	if response.GetExternalAccountId() != accountID.String() ||
+		response.GetStatus() != accessaccountsv1.ExternalAccountStatus_EXTERNAL_ACCOUNT_STATUS_NEEDS_REAUTH ||
+		response.GetVersion() != expectedVersion+1 {
+		t.Fatalf("response = %+v, want needs_reauth account", response)
+	}
+}
+
+func TestDisableExternalAccountBindingMapsRequestAndResponse(t *testing.T) {
+	t.Parallel()
+
+	bindingID := uuid.MustParse("99999999-9999-4999-8999-999999999999")
+	accountID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	expectedVersion := int64(5)
+	service := &fakeAccessService{
+		disableExternalAccountBinding: func(_ context.Context, input accessservice.DisableExternalAccountBindingInput) (entity.ExternalAccountBinding, error) {
+			if input.ExternalAccountBindingID != bindingID {
+				t.Fatalf("binding ID = %s, want %s", input.ExternalAccountBindingID, bindingID)
+			}
+			if input.Meta.ExpectedVersion == nil || *input.Meta.ExpectedVersion != expectedVersion {
+				t.Fatalf("unexpected meta: %+v", input.Meta)
+			}
+			return entity.ExternalAccountBinding{
+				Base:              entity.Base{ID: bindingID, Version: expectedVersion + 1},
+				ExternalAccountID: accountID,
+				UsageScopeType:    enum.ExternalAccountScopeProject,
+				UsageScopeID:      "project-1",
+				AllowedActionKeys: []string{"provider.issue.write"},
+				Status:            enum.ExternalAccountBindingStatusDisabled,
+			}, nil
+		},
+	}
+
+	response, err := NewServer(service).DisableExternalAccountBinding(context.Background(), &accessaccountsv1.DisableExternalAccountBindingRequest{
+		ExternalAccountBindingId: bindingID.String(),
+		Meta:                     &accessaccountsv1.CommandMeta{ExpectedVersion: &expectedVersion},
+	})
+	if err != nil {
+		t.Fatalf("DisableExternalAccountBinding(): %v", err)
+	}
+	if response.GetExternalAccountBindingId() != bindingID.String() ||
+		response.GetStatus() != accessaccountsv1.ExternalAccountBindingStatus_EXTERNAL_ACCOUNT_BINDING_STATUS_DISABLED ||
+		response.GetVersion() != expectedVersion+1 {
+		t.Fatalf("response = %+v, want disabled binding", response)
+	}
+}
+
 func TestExplainAccessMapsRequestAndResponse(t *testing.T) {
 	t.Parallel()
 
@@ -236,10 +363,13 @@ func errorsIsInvalidArgument(err error) bool {
 }
 
 type fakeAccessService struct {
-	createOrganization func(context.Context, accessservice.CreateOrganizationInput) (entity.Organization, error)
-	explainAccess      func(context.Context, accessservice.ExplainAccessInput) (accessservice.ExplainAccessResult, error)
-	listPendingAccess  func(context.Context, accessservice.ListPendingAccessInput) (accessservice.ListPendingAccessResult, error)
-	setUserStatus      func(context.Context, accessservice.SetUserStatusInput) (entity.User, error)
+	createOrganization            func(context.Context, accessservice.CreateOrganizationInput) (entity.Organization, error)
+	disableExternalAccountBinding func(context.Context, accessservice.DisableExternalAccountBindingInput) (entity.ExternalAccountBinding, error)
+	explainAccess                 func(context.Context, accessservice.ExplainAccessInput) (accessservice.ExplainAccessResult, error)
+	listPendingAccess             func(context.Context, accessservice.ListPendingAccessInput) (accessservice.ListPendingAccessResult, error)
+	setUserStatus                 func(context.Context, accessservice.SetUserStatusInput) (entity.User, error)
+	updateExternalAccountStatus   func(context.Context, accessservice.UpdateExternalAccountStatusInput) (entity.ExternalAccount, error)
+	updateExternalProvider        func(context.Context, accessservice.UpdateExternalProviderInput) (entity.ExternalProvider, error)
 }
 
 func (f *fakeAccessService) BootstrapUserFromIdentity(context.Context, accessservice.BootstrapUserFromIdentityInput) (accessservice.BootstrapUserFromIdentityResult, error) {
@@ -280,11 +410,32 @@ func (f *fakeAccessService) PutExternalProvider(context.Context, accessservice.P
 	return entity.ExternalProvider{}, errs.ErrNotFound
 }
 
+func (f *fakeAccessService) UpdateExternalProvider(ctx context.Context, input accessservice.UpdateExternalProviderInput) (entity.ExternalProvider, error) {
+	if f.updateExternalProvider != nil {
+		return f.updateExternalProvider(ctx, input)
+	}
+	return entity.ExternalProvider{}, errs.ErrNotFound
+}
+
 func (f *fakeAccessService) RegisterExternalAccount(context.Context, accessservice.RegisterExternalAccountInput) (entity.ExternalAccount, error) {
 	return entity.ExternalAccount{}, errs.ErrNotFound
 }
 
+func (f *fakeAccessService) UpdateExternalAccountStatus(ctx context.Context, input accessservice.UpdateExternalAccountStatusInput) (entity.ExternalAccount, error) {
+	if f.updateExternalAccountStatus != nil {
+		return f.updateExternalAccountStatus(ctx, input)
+	}
+	return entity.ExternalAccount{}, errs.ErrNotFound
+}
+
 func (f *fakeAccessService) BindExternalAccount(context.Context, accessservice.BindExternalAccountInput) (entity.ExternalAccountBinding, error) {
+	return entity.ExternalAccountBinding{}, errs.ErrNotFound
+}
+
+func (f *fakeAccessService) DisableExternalAccountBinding(ctx context.Context, input accessservice.DisableExternalAccountBindingInput) (entity.ExternalAccountBinding, error) {
+	if f.disableExternalAccountBinding != nil {
+		return f.disableExternalAccountBinding(ctx, input)
+	}
 	return entity.ExternalAccountBinding{}, errs.ErrNotFound
 }
 

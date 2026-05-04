@@ -318,6 +318,109 @@ func TestRepositoryIntegrationGetAllowlistEntryByID(t *testing.T) {
 	}
 }
 
+func TestRepositoryIntegrationExternalAccountLifecycle(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openIntegrationPool(t, ctx)
+	repository := NewRepository(pool)
+	now := time.Date(2026, 4, 30, 12, 0, 0, 0, time.UTC)
+	provider := entity.ExternalProvider{
+		Base:         entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		Slug:         "github",
+		ProviderKind: enum.ExternalProviderRepository,
+		DisplayName:  "GitHub",
+		Status:       enum.ExternalProviderStatusActive,
+	}
+	if err := repository.PutExternalProvider(ctx, provider, testEvent("access.external_provider.created", "external_provider", provider.ID, now)); err != nil {
+		t.Fatalf("put provider: %v", err)
+	}
+	disabledProvider := provider
+	disabledProvider.Status = enum.ExternalProviderStatusDisabled
+	disabledProvider.Version = 2
+	disabledProvider.UpdatedAt = now.Add(time.Minute)
+	providerCommandID := uuid.New()
+	providerResult := testCommandResult(providerCommandID, "domain.Service.UpdateExternalProvider", "external_provider", provider.ID, disabledProvider.UpdatedAt)
+	if err := repository.UpdateExternalProvider(ctx, disabledProvider, provider.Version, testEvent("access.external_provider.disabled", "external_provider", provider.ID, disabledProvider.UpdatedAt), &providerResult); err != nil {
+		t.Fatalf("update provider: %v", err)
+	}
+	storedProvider, err := repository.GetExternalProvider(ctx, provider.ID)
+	if err != nil {
+		t.Fatalf("get provider: %v", err)
+	}
+	if storedProvider.Status != enum.ExternalProviderStatusDisabled || storedProvider.Version != 2 {
+		t.Fatalf("stored provider = %+v, want disabled version 2", storedProvider)
+	}
+	if _, err := repository.GetCommandResult(ctx, query.CommandIdentity{CommandID: providerCommandID}); err != nil {
+		t.Fatalf("get provider command result: %v", err)
+	}
+
+	secret := entity.SecretBindingRef{
+		Base:      entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		StoreType: enum.SecretStoreVault,
+		StoreRef:  "kv/kodex/github/bot",
+	}
+	if err := repository.PutSecretBindingRef(ctx, secret, testEvent("access.secret_binding_ref.created", "secret_binding_ref", secret.ID, now)); err != nil {
+		t.Fatalf("put secret ref: %v", err)
+	}
+	account := entity.ExternalAccount{
+		Base:               entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		ExternalProviderID: provider.ID,
+		AccountType:        enum.ExternalAccountBot,
+		DisplayName:        "kodex-agent",
+		OwnerScopeType:     enum.ExternalAccountScopeGlobal,
+		Status:             enum.ExternalAccountStatusPending,
+		SecretBindingRefID: &secret.ID,
+	}
+	if err := repository.RegisterExternalAccount(ctx, account, testEvent("access.external_account.created", "external_account", account.ID, now), testCommandResult(uuid.New(), "domain.Service.RegisterExternalAccount", "external_account", account.ID, now)); err != nil {
+		t.Fatalf("register account: %v", err)
+	}
+	updatedAccount := account
+	updatedAccount.Status = enum.ExternalAccountStatusActive
+	updatedAccount.Version = 2
+	updatedAccount.UpdatedAt = now.Add(2 * time.Minute)
+	if err := repository.UpdateExternalAccount(ctx, updatedAccount, account.Version, testEvent("access.external_account.status_changed", "external_account", account.ID, updatedAccount.UpdatedAt), nil); err != nil {
+		t.Fatalf("update account: %v", err)
+	}
+	storedAccount, err := repository.GetExternalAccount(ctx, account.ID)
+	if err != nil {
+		t.Fatalf("get account: %v", err)
+	}
+	if storedAccount.Status != enum.ExternalAccountStatusActive || storedAccount.Version != 2 {
+		t.Fatalf("stored account = %+v, want active version 2", storedAccount)
+	}
+
+	binding := entity.ExternalAccountBinding{
+		Base:              entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		ExternalAccountID: account.ID,
+		UsageScopeType:    enum.ExternalAccountScopeProject,
+		UsageScopeID:      "project-1",
+		AllowedActionKeys: []string{"provider.issue.write"},
+		Status:            enum.ExternalAccountBindingStatusActive,
+	}
+	if err := repository.BindExternalAccount(ctx, binding, testEvent("access.external_account_binding.created", "external_account_binding", binding.ID, now)); err != nil {
+		t.Fatalf("bind account: %v", err)
+	}
+	disabledBinding := binding
+	disabledBinding.Status = enum.ExternalAccountBindingStatusDisabled
+	disabledBinding.Version = 2
+	disabledBinding.UpdatedAt = now.Add(3 * time.Minute)
+	if err := repository.UpdateExternalAccountBinding(ctx, disabledBinding, binding.Version, testEvent("access.external_account_binding.disabled", "external_account_binding", binding.ID, disabledBinding.UpdatedAt), nil); err != nil {
+		t.Fatalf("update binding: %v", err)
+	}
+	storedBinding, err := repository.GetExternalAccountBinding(ctx, binding.ID)
+	if err != nil {
+		t.Fatalf("get binding: %v", err)
+	}
+	if storedBinding.Status != enum.ExternalAccountBindingStatusDisabled || storedBinding.Version != 2 {
+		t.Fatalf("stored binding = %+v, want disabled version 2", storedBinding)
+	}
+	err = repository.UpdateExternalAccountBinding(ctx, disabledBinding, binding.Version, testEvent("access.external_account_binding.disabled", "external_account_binding", binding.ID, disabledBinding.UpdatedAt), nil)
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("stale binding update err = %v, want %v", err, errs.ErrConflict)
+	}
+}
+
 func TestRepositoryIntegrationAccessRuleIdentityIsUnique(t *testing.T) {
 	t.Parallel()
 
