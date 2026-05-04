@@ -228,12 +228,13 @@ func UpdateExternalProviderInput(request *accessaccountsv1.UpdateExternalProvide
 	if err != nil {
 		return accessservice.UpdateExternalProviderInput{}, err
 	}
+	slug, displayName, iconAssetRef := updateExternalProviderStringFields(request)
 	return accessservice.UpdateExternalProviderInput{
 		ExternalProviderID: providerID,
-		Slug:               strings.TrimSpace(request.GetSlug()),
+		Slug:               slug,
 		ProviderKind:       providerKind,
-		DisplayName:        strings.TrimSpace(request.GetDisplayName()),
-		IconAssetRef:       strings.TrimSpace(request.GetIconAssetRef()),
+		DisplayName:        displayName,
+		IconAssetRef:       iconAssetRef,
 		Status:             status,
 		Meta:               meta,
 	}, nil
@@ -438,6 +439,21 @@ func trimStrings(values []string) []string {
 		}
 	}
 	return result
+}
+
+func optionalTrimmedString(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*value)
+	return &trimmed
+}
+
+func updateExternalProviderStringFields(request *accessaccountsv1.UpdateExternalProviderRequest) (*string, *string, *string) {
+	if request == nil {
+		return nil, nil, nil
+	}
+	return optionalTrimmedString(request.Slug), optionalTrimmedString(request.DisplayName), optionalTrimmedString(request.IconAssetRef)
 }
 
 func commandMetaRequiredID(metaProto *accessaccountsv1.CommandMeta, rawID string) (value.CommandMeta, uuid.UUID, error) {

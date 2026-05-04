@@ -1036,6 +1036,32 @@ func TestUpdateExternalProviderDisablesProviderAndRecordsEvent(t *testing.T) {
 	}
 }
 
+func TestUpdateExternalProviderClearsOptionalIcon(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	provider, err := svc.PutExternalProvider(ctx, PutExternalProviderInput{
+		Slug: "github", ProviderKind: enum.ExternalProviderRepository, DisplayName: "GitHub", IconAssetRef: "icons/github.svg",
+	})
+	if err != nil {
+		t.Fatalf("put provider: %v", err)
+	}
+	meta := store.seedOperatorMeta("clear-provider-icon", accessActionManageExternalProvider, accessResourceExternalProvider)
+	meta.ExpectedVersion = ptrInt64(provider.Version)
+
+	updated, err := svc.UpdateExternalProvider(ctx, UpdateExternalProviderInput{
+		ExternalProviderID: provider.ID,
+		IconAssetRef:       ptrString(""),
+		Meta:               meta,
+	})
+	if err != nil {
+		t.Fatalf("update provider: %v", err)
+	}
+	if updated.IconAssetRef != "" || updated.Version != provider.Version+1 {
+		t.Fatalf("provider = %+v, want cleared icon and incremented version", updated)
+	}
+}
+
 func TestUpdateExternalAccountStatusUpdatesStatusAndReplaysCommand(t *testing.T) {
 	ctx := context.Background()
 	store := newMemoryRepository()
@@ -1048,12 +1074,14 @@ func TestUpdateExternalAccountStatusUpdatesStatusAndReplaysCommand(t *testing.T)
 	}
 	account, err := svc.RegisterExternalAccount(ctx, RegisterExternalAccountInput{
 		ExternalProviderID: provider.ID, AccountType: enum.ExternalAccountBot, DisplayName: "kodex-agent",
+		OwnerScopeType: enum.ExternalAccountScopeProject, OwnerScopeID: "project-1",
 		Meta: commandMeta("register-account-for-status"),
 	})
 	if err != nil {
 		t.Fatalf("register account: %v", err)
 	}
-	meta := store.seedOperatorMeta("activate-external-account", accessActionManageExternalAccount, accessResourceExternalAccount)
+	scope := value.ScopeRef{Type: string(enum.ExternalAccountScopeProject), ID: "project-1"}
+	meta := store.seedOperatorMetaForScope("activate-external-account", accessActionManageExternalAccount, accessResourceExternalAccount, scope)
 	meta.ExpectedVersion = ptrInt64(account.Version)
 
 	updated, err := svc.UpdateExternalAccountStatus(ctx, UpdateExternalAccountStatusInput{
@@ -1074,6 +1102,9 @@ func TestUpdateExternalAccountStatusUpdatesStatusAndReplaysCommand(t *testing.T)
 	}
 	if replayed.ID != updated.ID || replayed.Status != enum.ExternalAccountStatusActive {
 		t.Fatalf("replay = %+v, want original active account", replayed)
+	}
+	if last := store.audits[len(store.audits)-1]; last.Scope != scope {
+		t.Fatalf("audit scope = %+v, want %+v", last.Scope, scope)
 	}
 	if last := store.events[len(store.events)-1]; last.EventType != accessEventExternalAccountStatusChanged {
 		t.Fatalf("last event = %s, want status changed event", last.EventType)
@@ -1139,7 +1170,8 @@ func TestDisableExternalAccountBindingUpdatesStatusAndKeepsIdentity(t *testing.T
 	if err != nil {
 		t.Fatalf("bind account: %v", err)
 	}
-	meta := store.seedOperatorMeta("disable-account-binding", accessActionManageExternalAccountBinding, accessResourceExternalAccountBinding)
+	scope := value.ScopeRef{Type: string(enum.ExternalAccountScopeProject), ID: "project-1"}
+	meta := store.seedOperatorMetaForScope("disable-account-binding", accessActionManageExternalAccountBinding, accessResourceExternalAccountBinding, scope)
 	meta.ExpectedVersion = ptrInt64(binding.Version)
 
 	disabled, err := svc.DisableExternalAccountBinding(ctx, DisableExternalAccountBindingInput{
@@ -1151,6 +1183,9 @@ func TestDisableExternalAccountBindingUpdatesStatusAndKeepsIdentity(t *testing.T
 	}
 	if disabled.ID != binding.ID || disabled.Status != enum.ExternalAccountBindingStatusDisabled || disabled.Version != binding.Version+1 {
 		t.Fatalf("disabled binding = %+v, want same id disabled version %d", disabled, binding.Version+1)
+	}
+	if last := store.audits[len(store.audits)-1]; last.Scope != scope {
+		t.Fatalf("audit scope = %+v, want %+v", last.Scope, scope)
 	}
 	if last := store.events[len(store.events)-1]; last.EventType != accessEventExternalAccountBindingDisabled {
 		t.Fatalf("last event = %s, want disabled binding event", last.EventType)
@@ -2069,6 +2104,10 @@ func (r *memoryRepository) seedSecret(storeType enum.SecretStoreType, storeRef s
 }
 
 func (r *memoryRepository) seedOperatorMeta(key string, actionKey string, resourceType string) value.CommandMeta {
+	return r.seedOperatorMetaForScope(key, actionKey, resourceType, value.ScopeRef{Type: accessRuleScopeGlobal})
+}
+
+func (r *memoryRepository) seedOperatorMetaForScope(key string, actionKey string, resourceType string, scope value.ScopeRef) value.CommandMeta {
 	now := fixedClock{}.Now()
 	actor := r.seedUser(enum.UserStatusActive)
 	action := entity.AccessAction{
@@ -2085,7 +2124,8 @@ func (r *memoryRepository) seedOperatorMeta(key string, actionKey string, resour
 		SubjectID:    actor.ID.String(),
 		ActionKey:    actionKey,
 		ResourceType: resourceType,
-		ScopeType:    accessRuleScopeGlobal,
+		ScopeType:    scope.Type,
+		ScopeID:      scope.ID,
 		Status:       enum.AccessRuleStatusActive,
 	}
 	r.actions[action.Key] = action
@@ -2123,6 +2163,10 @@ func sameAccessRuleIdentity(a entity.AccessRule, b entity.AccessRule) bool {
 }
 
 func ptrInt64(value int64) *int64 {
+	return &value
+}
+
+func ptrString(value string) *string {
 	return &value
 }
 

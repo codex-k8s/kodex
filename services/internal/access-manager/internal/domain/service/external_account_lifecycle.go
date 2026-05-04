@@ -83,21 +83,20 @@ func (s *Service) UpdateExternalAccountStatus(ctx context.Context, input UpdateE
 	if _, err := commandIdentity(input.Meta); err != nil {
 		return entity.ExternalAccount{}, err
 	}
-	if err := s.requireAllowed(ctx, input.Meta, accessActionManageExternalAccount, value.ResourceRef{
-		Type: accessResourceExternalAccount,
-		ID:   input.ExternalAccountID.String(),
-	}, value.ScopeRef{}); err != nil {
-		return entity.ExternalAccount{}, err
-	}
-	applied, ok, err := s.findCommandResult(ctx, input.Meta, accessOperationUpdateExternalAccountStatus, accessAggregateExternalAccount)
+	replayed, ok, err := loadAppliedAggregate(ctx, s, input.Meta, accessOperationUpdateExternalAccountStatus, accessAggregateExternalAccount, s.repository.GetExternalAccount, func(account entity.ExternalAccount) error {
+		return s.requireAllowed(ctx, input.Meta, accessActionManageExternalAccount, externalAccountResource(account), externalAccountOwnerScope(account))
+	})
 	if err != nil {
 		return entity.ExternalAccount{}, err
 	}
 	if ok {
-		return s.repository.GetExternalAccount(ctx, applied.AggregateID)
+		return replayed, nil
 	}
 	existing, err := s.repository.GetExternalAccount(ctx, input.ExternalAccountID)
 	if err != nil {
+		return entity.ExternalAccount{}, err
+	}
+	if err := s.requireAllowed(ctx, input.Meta, accessActionManageExternalAccount, externalAccountResource(existing), externalAccountOwnerScope(existing)); err != nil {
 		return entity.ExternalAccount{}, err
 	}
 	if err := ensureExpectedVersion(input.Meta, existing.Version); err != nil {
@@ -139,21 +138,20 @@ func (s *Service) DisableExternalAccountBinding(ctx context.Context, input Disab
 	if _, err := commandIdentity(input.Meta); err != nil {
 		return entity.ExternalAccountBinding{}, err
 	}
-	if err := s.requireAllowed(ctx, input.Meta, accessActionManageExternalAccountBinding, value.ResourceRef{
-		Type: accessResourceExternalAccountBinding,
-		ID:   input.ExternalAccountBindingID.String(),
-	}, value.ScopeRef{}); err != nil {
-		return entity.ExternalAccountBinding{}, err
-	}
-	applied, ok, err := s.findCommandResult(ctx, input.Meta, accessOperationDisableExternalAccountBinding, accessAggregateExternalAccountBinding)
+	replayed, ok, err := loadAppliedAggregate(ctx, s, input.Meta, accessOperationDisableExternalAccountBinding, accessAggregateExternalAccountBinding, s.repository.GetExternalAccountBinding, func(binding entity.ExternalAccountBinding) error {
+		return s.requireAllowed(ctx, input.Meta, accessActionManageExternalAccountBinding, externalAccountBindingResource(binding), externalAccountBindingUsageScope(binding))
+	})
 	if err != nil {
 		return entity.ExternalAccountBinding{}, err
 	}
 	if ok {
-		return s.repository.GetExternalAccountBinding(ctx, applied.AggregateID)
+		return replayed, nil
 	}
 	existing, err := s.repository.GetExternalAccountBinding(ctx, input.ExternalAccountBindingID)
 	if err != nil {
+		return entity.ExternalAccountBinding{}, err
+	}
+	if err := s.requireAllowed(ctx, input.Meta, accessActionManageExternalAccountBinding, externalAccountBindingResource(existing), externalAccountBindingUsageScope(existing)); err != nil {
 		return entity.ExternalAccountBinding{}, err
 	}
 	if err := ensureExpectedVersion(input.Meta, existing.Version); err != nil {
@@ -188,7 +186,11 @@ func (s *Service) DisableExternalAccountBinding(ctx context.Context, input Disab
 
 func updatedExternalProvider(existing entity.ExternalProvider, input UpdateExternalProviderInput) (entity.ExternalProvider, error) {
 	provider := existing
-	if slug := strings.TrimSpace(input.Slug); slug != "" {
+	if input.Slug != nil {
+		slug := strings.TrimSpace(*input.Slug)
+		if slug == "" {
+			return entity.ExternalProvider{}, errs.ErrInvalidArgument
+		}
 		provider.Slug = helpers.NormalizeSlug(slug)
 	}
 	if input.ProviderKind != "" {
@@ -197,11 +199,15 @@ func updatedExternalProvider(existing entity.ExternalProvider, input UpdateExter
 		}
 		provider.ProviderKind = input.ProviderKind
 	}
-	if displayName := strings.TrimSpace(input.DisplayName); displayName != "" {
+	if input.DisplayName != nil {
+		displayName := strings.TrimSpace(*input.DisplayName)
+		if displayName == "" {
+			return entity.ExternalProvider{}, errs.ErrInvalidArgument
+		}
 		provider.DisplayName = displayName
 	}
-	if input.IconAssetRef != "" {
-		provider.IconAssetRef = strings.TrimSpace(input.IconAssetRef)
+	if input.IconAssetRef != nil {
+		provider.IconAssetRef = strings.TrimSpace(*input.IconAssetRef)
 	}
 	if input.Status != "" {
 		if !validExternalProviderStatus(input.Status) {
@@ -213,6 +219,46 @@ func updatedExternalProvider(existing entity.ExternalProvider, input UpdateExter
 		return entity.ExternalProvider{}, errs.ErrInvalidArgument
 	}
 	return provider, nil
+}
+
+func externalAccountResource(account entity.ExternalAccount) value.ResourceRef {
+	return value.ResourceRef{Type: accessResourceExternalAccount, ID: account.ID.String()}
+}
+
+func externalAccountOwnerScope(account entity.ExternalAccount) value.ScopeRef {
+	return value.ScopeRef{Type: string(account.OwnerScopeType), ID: account.OwnerScopeID}
+}
+
+func externalAccountBindingResource(binding entity.ExternalAccountBinding) value.ResourceRef {
+	return value.ResourceRef{Type: accessResourceExternalAccountBinding, ID: binding.ID.String()}
+}
+
+func externalAccountBindingUsageScope(binding entity.ExternalAccountBinding) value.ScopeRef {
+	return value.ScopeRef{Type: string(binding.UsageScopeType), ID: binding.UsageScopeID}
+}
+
+func loadAppliedAggregate[T any](
+	ctx context.Context,
+	service *Service,
+	meta value.CommandMeta,
+	operation string,
+	aggregateType string,
+	get func(context.Context, uuid.UUID) (T, error),
+	authorize func(T) error,
+) (T, bool, error) {
+	var zero T
+	applied, ok, err := service.findCommandResult(ctx, meta, operation, aggregateType)
+	if err != nil || !ok {
+		return zero, ok, err
+	}
+	aggregate, err := get(ctx, applied.AggregateID)
+	if err != nil {
+		return zero, false, err
+	}
+	if err := authorize(aggregate); err != nil {
+		return zero, false, err
+	}
+	return aggregate, true, nil
 }
 
 func validExternalProviderKind(kind enum.ExternalProviderKind) bool {

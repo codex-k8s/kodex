@@ -178,9 +178,13 @@ func TestUpdateExternalProviderMapsRequestAndResponse(t *testing.T) {
 		updateExternalProvider: func(_ context.Context, input accessservice.UpdateExternalProviderInput) (entity.ExternalProvider, error) {
 			if input.ExternalProviderID != providerID ||
 				input.ProviderKind != enum.ExternalProviderRepository ||
-				input.DisplayName != "GitHub Enterprise" ||
+				input.DisplayName == nil ||
+				*input.DisplayName != "GitHub Enterprise" ||
 				input.Status != enum.ExternalProviderStatusDisabled {
 				t.Fatalf("input = %+v, want disabled GitHub Enterprise provider", input)
+			}
+			if input.Slug == nil || *input.Slug != "github-enterprise" || input.IconAssetRef == nil || *input.IconAssetRef != "" {
+				t.Fatalf("unexpected optional fields: %+v", input)
 			}
 			if input.Meta.ExpectedVersion == nil || *input.Meta.ExpectedVersion != expectedVersion {
 				t.Fatalf("unexpected meta: %+v", input.Meta)
@@ -189,7 +193,7 @@ func TestUpdateExternalProviderMapsRequestAndResponse(t *testing.T) {
 				Base:         entity.Base{ID: providerID, Version: expectedVersion + 1},
 				Slug:         "github-enterprise",
 				ProviderKind: input.ProviderKind,
-				DisplayName:  input.DisplayName,
+				DisplayName:  *input.DisplayName,
 				Status:       input.Status,
 			}, nil
 		},
@@ -197,9 +201,10 @@ func TestUpdateExternalProviderMapsRequestAndResponse(t *testing.T) {
 
 	response, err := NewServer(service).UpdateExternalProvider(context.Background(), &accessaccountsv1.UpdateExternalProviderRequest{
 		ExternalProviderId: providerID.String(),
-		Slug:               "github-enterprise",
+		Slug:               ptrString("github-enterprise"),
 		ProviderKind:       accessaccountsv1.ExternalProviderKind_EXTERNAL_PROVIDER_KIND_REPOSITORY,
-		DisplayName:        "GitHub Enterprise",
+		DisplayName:        ptrString("GitHub Enterprise"),
+		IconAssetRef:       ptrString(""),
 		Status:             accessaccountsv1.ExternalProviderStatus_EXTERNAL_PROVIDER_STATUS_DISABLED,
 		Meta:               &accessaccountsv1.CommandMeta{ExpectedVersion: &expectedVersion},
 	})
@@ -475,4 +480,8 @@ func (f *fakeAccessService) ResolveExternalAccountUsage(context.Context, accesss
 			Base: entity.Base{ID: uuid.New(), CreatedAt: time.Now(), UpdatedAt: time.Now()},
 		},
 	}, nil
+}
+
+func ptrString(value string) *string {
+	return &value
 }

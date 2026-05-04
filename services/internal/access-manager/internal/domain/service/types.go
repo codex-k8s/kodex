@@ -98,10 +98,10 @@ type PutExternalProviderInput struct {
 // UpdateExternalProviderInput changes an existing external provider by id.
 type UpdateExternalProviderInput struct {
 	ExternalProviderID uuid.UUID
-	Slug               string
+	Slug               *string
 	ProviderKind       enum.ExternalProviderKind
-	DisplayName        string
-	IconAssetRef       string
+	DisplayName        *string
+	IconAssetRef       *string
 	Status             enum.ExternalProviderStatus
 	Meta               value.CommandMeta
 }
