@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 
+	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/errs"
 	grpcruntime "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -60,11 +61,12 @@ func errorToStatus(err error) error {
 
 func logBoundaryError(ctx context.Context, logger *slog.Logger, method string, err error) {
 	code := status.Code(err)
+	attrs := append(grpcserver.LogAttrsFromContext(ctx), logKeyMethod, method, "code", code.String())
 	switch code {
 	case codes.Internal, codes.DataLoss, codes.Unknown:
-		logger.ErrorContext(ctx, "access-manager grpc request failed", logKeyMethod, method, "code", code.String())
+		logger.ErrorContext(ctx, "access-manager grpc request failed", attrs...)
 	case codes.DeadlineExceeded, codes.Unavailable, codes.ResourceExhausted:
-		logger.WarnContext(ctx, "access-manager grpc request degraded", logKeyMethod, method, "code", code.String())
+		logger.WarnContext(ctx, "access-manager grpc request degraded", attrs...)
 	default:
 	}
 }
