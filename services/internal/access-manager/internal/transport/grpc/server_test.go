@@ -81,9 +81,87 @@ func TestCreateOrganizationRejectsInvalidTransportEnum(t *testing.T) {
 func TestUnimplementedBacklogMethodReturnsUnimplemented(t *testing.T) {
 	t.Parallel()
 
-	_, err := NewServer(&fakeAccessService{}).SetUserStatus(context.Background(), &accessaccountsv1.SetUserStatusRequest{})
+	_, err := NewServer(&fakeAccessService{}).UpdateOrganization(context.Background(), &accessaccountsv1.UpdateOrganizationRequest{})
 	if status.Code(err) != codes.Unimplemented {
-		t.Fatalf("SetUserStatus() code = %s, want unimplemented", status.Code(err))
+		t.Fatalf("UpdateOrganization() code = %s, want unimplemented", status.Code(err))
+	}
+}
+
+func TestSetUserStatusMapsRequestAndResponse(t *testing.T) {
+	t.Parallel()
+
+	userID := uuid.MustParse("55555555-5555-4555-8555-555555555555")
+	expectedVersion := int64(4)
+	service := &fakeAccessService{
+		setUserStatus: func(_ context.Context, input accessservice.SetUserStatusInput) (entity.User, error) {
+			if input.UserID != userID || input.Status != enum.UserStatusBlocked {
+				t.Fatalf("input = %+v, want user %s blocked", input, userID)
+			}
+			if input.Meta.ExpectedVersion == nil || *input.Meta.ExpectedVersion != expectedVersion || input.Meta.Reason != "risk_block" {
+				t.Fatalf("unexpected meta: %+v", input.Meta)
+			}
+			return entity.User{
+				Base:         entity.Base{ID: userID, Version: expectedVersion + 1},
+				PrimaryEmail: "owner@example.com",
+				DisplayName:  "Owner",
+				Status:       input.Status,
+				Locale:       "ru",
+			}, nil
+		},
+	}
+
+	response, err := NewServer(service).SetUserStatus(context.Background(), &accessaccountsv1.SetUserStatusRequest{
+		UserId: userID.String(),
+		Status: accessaccountsv1.UserStatus_USER_STATUS_BLOCKED,
+		Meta: &accessaccountsv1.CommandMeta{
+			ExpectedVersion: &expectedVersion,
+			Reason:          "risk_block",
+		},
+	})
+	if err != nil {
+		t.Fatalf("SetUserStatus(): %v", err)
+	}
+	if response.GetUserId() != userID.String() || response.GetStatus() != accessaccountsv1.UserStatus_USER_STATUS_BLOCKED ||
+		response.GetVersion() != expectedVersion+1 || response.GetLocale() != "ru" {
+		t.Fatalf("response = %+v, want blocked user", response)
+	}
+}
+
+func TestListPendingAccessMapsRequestAndResponse(t *testing.T) {
+	t.Parallel()
+
+	userID := uuid.MustParse("66666666-6666-4666-8666-666666666666")
+	service := &fakeAccessService{
+		listPendingAccess: func(_ context.Context, input accessservice.ListPendingAccessInput) (accessservice.ListPendingAccessResult, error) {
+			if input.Scope.Type != "organization" || input.Scope.ID != "org-1" || input.Limit != 25 || input.Cursor != "50" {
+				t.Fatalf("unexpected input: %+v", input)
+			}
+			return accessservice.ListPendingAccessResult{
+				Items: []entity.PendingAccessItem{{
+					ItemID:     userID.String(),
+					ItemType:   "user",
+					Subject:    value.SubjectRef{Type: "user", ID: userID.String()},
+					Status:     "pending",
+					ReasonCode: "user_pending",
+					CreatedAt:  time.Date(2026, 5, 1, 10, 0, 0, 0, time.UTC),
+				}},
+				NextCursor: "75",
+			}, nil
+		},
+	}
+
+	response, err := NewServer(service).ListPendingAccess(context.Background(), &accessaccountsv1.ListPendingAccessRequest{
+		Scope:  &accessaccountsv1.ScopeRef{Type: "organization", Id: "org-1"},
+		Limit:  25,
+		Cursor: "50",
+	})
+	if err != nil {
+		t.Fatalf("ListPendingAccess(): %v", err)
+	}
+	if response.GetNextCursor() != "75" || len(response.GetItems()) != 1 ||
+		response.GetItems()[0].GetSubject().GetId() != userID.String() ||
+		response.GetItems()[0].GetCreatedAt() == "" {
+		t.Fatalf("response = %+v, want one pending item with next cursor", response)
 	}
 }
 
@@ -156,10 +234,19 @@ func errorsIsInvalidArgument(err error) bool {
 type fakeAccessService struct {
 	createOrganization func(context.Context, accessservice.CreateOrganizationInput) (entity.Organization, error)
 	explainAccess      func(context.Context, accessservice.ExplainAccessInput) (accessservice.ExplainAccessResult, error)
+	listPendingAccess  func(context.Context, accessservice.ListPendingAccessInput) (accessservice.ListPendingAccessResult, error)
+	setUserStatus      func(context.Context, accessservice.SetUserStatusInput) (entity.User, error)
 }
 
 func (f *fakeAccessService) BootstrapUserFromIdentity(context.Context, accessservice.BootstrapUserFromIdentityInput) (accessservice.BootstrapUserFromIdentityResult, error) {
 	return accessservice.BootstrapUserFromIdentityResult{}, errs.ErrNotFound
+}
+
+func (f *fakeAccessService) SetUserStatus(ctx context.Context, input accessservice.SetUserStatusInput) (entity.User, error) {
+	if f.setUserStatus != nil {
+		return f.setUserStatus(ctx, input)
+	}
+	return entity.User{}, errs.ErrNotFound
 }
 
 func (f *fakeAccessService) CreateOrganization(ctx context.Context, input accessservice.CreateOrganizationInput) (entity.Organization, error) {
@@ -178,6 +265,10 @@ func (f *fakeAccessService) SetMembership(context.Context, accessservice.SetMemb
 }
 
 func (f *fakeAccessService) PutAllowlistEntry(context.Context, accessservice.PutAllowlistEntryInput) (entity.AllowlistEntry, error) {
+	return entity.AllowlistEntry{}, errs.ErrNotFound
+}
+
+func (f *fakeAccessService) DisableAllowlistEntry(context.Context, accessservice.DisableAllowlistEntryInput) (entity.AllowlistEntry, error) {
 	return entity.AllowlistEntry{}, errs.ErrNotFound
 }
 
@@ -214,6 +305,13 @@ func (f *fakeAccessService) ExplainAccess(ctx context.Context, input accessservi
 		return f.explainAccess(ctx, input)
 	}
 	return accessservice.ExplainAccessResult{}, errs.ErrNotFound
+}
+
+func (f *fakeAccessService) ListPendingAccess(ctx context.Context, input accessservice.ListPendingAccessInput) (accessservice.ListPendingAccessResult, error) {
+	if f.listPendingAccess != nil {
+		return f.listPendingAccess(ctx, input)
+	}
+	return accessservice.ListPendingAccessResult{}, errs.ErrNotFound
 }
 
 func (f *fakeAccessService) ResolveExternalAccountUsage(context.Context, accessservice.ResolveExternalAccountUsageInput) (accessservice.ResolveExternalAccountUsageResult, error) {

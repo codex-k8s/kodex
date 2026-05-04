@@ -49,11 +49,13 @@ const (
 	operationCountActiveOwnerOrganizations        = "domain.Repository.CountActiveOwnerOrganizations"
 	operationCreateUser                           = "domain.Repository.CreateUser"
 	operationGetUser                              = "domain.Repository.GetUser"
+	operationUpdateUser                           = "domain.Repository.UpdateUser"
 	operationGetUserByEmail                       = "domain.Repository.GetUserByEmail"
 	operationGetUserByIdentity                    = "domain.Repository.GetUserByIdentity"
 	operationLinkUserIdentity                     = "domain.Repository.LinkUserIdentity"
 	operationPutAllowlistEntry                    = "domain.Repository.PutAllowlistEntry"
 	operationFindAllowlistEntry                   = "domain.Repository.FindAllowlistEntry"
+	operationGetAllowlistEntry                    = "domain.Repository.GetAllowlistEntry"
 	operationCreateGroup                          = "domain.Repository.CreateGroup"
 	operationGetGroup                             = "domain.Repository.GetGroup"
 	operationFindMembership                       = "domain.Repository.FindMembership"
@@ -76,6 +78,7 @@ const (
 	operationListAccessRules                      = "domain.Repository.ListAccessRules"
 	operationRecordAccessDecision                 = "domain.Repository.RecordAccessDecision"
 	operationGetAccessDecisionAudit               = "domain.Repository.GetAccessDecisionAudit"
+	operationListPendingAccess                    = "domain.Repository.ListPendingAccess"
 )
 
 // NewRepository creates a PostgreSQL-backed access repository.
@@ -117,6 +120,15 @@ func (r *Repository) GetUser(ctx context.Context, id uuid.UUID) (entity.User, er
 	return queryOne(ctx, r.db, operationGetUser, queryUserGetByID, pgx.NamedArgs{"id": id}, scanUser)
 }
 
+func (r *Repository) UpdateUser(ctx context.Context, user entity.User, previousVersion int64, event entity.OutboxEvent) error {
+	return r.mutateWithOutbox(
+		ctx,
+		operationUpdateUser,
+		event,
+		mutation{query: queryUserUpdate, args: userUpdateArgs(user, previousVersion), requireAffected: true},
+	)
+}
+
 func (r *Repository) GetUserByEmail(ctx context.Context, email string) (entity.User, error) {
 	return queryOne(ctx, r.db, operationGetUserByEmail, queryUserGetByEmail, pgx.NamedArgs{"primary_email": email}, scanUser)
 }
@@ -135,6 +147,10 @@ func (r *Repository) PutAllowlistEntry(ctx context.Context, entry entity.Allowli
 
 func (r *Repository) FindAllowlistEntry(ctx context.Context, matchType enum.AllowlistMatchType, value string) (entity.AllowlistEntry, error) {
 	return queryOne(ctx, r.db, operationFindAllowlistEntry, queryAllowlistEntryFind, allowlistLookupArgs(string(matchType), value), scanAllowlistEntry)
+}
+
+func (r *Repository) GetAllowlistEntry(ctx context.Context, id uuid.UUID) (entity.AllowlistEntry, error) {
+	return queryOne(ctx, r.db, operationGetAllowlistEntry, queryAllowlistEntryGetByID, pgx.NamedArgs{"id": id}, scanAllowlistEntry)
 }
 
 func (r *Repository) CreateGroup(ctx context.Context, group entity.Group, event entity.OutboxEvent, result entity.CommandResult) error {
@@ -303,6 +319,20 @@ func (r *Repository) RecordAccessDecision(ctx context.Context, audit entity.Acce
 
 func (r *Repository) GetAccessDecisionAudit(ctx context.Context, id uuid.UUID) (entity.AccessDecisionAudit, error) {
 	return queryOne(ctx, r.db, operationGetAccessDecisionAudit, queryAccessDecisionAuditGetByID, pgx.NamedArgs{"id": id}, scanAccessDecisionAudit)
+}
+
+func (r *Repository) ListPendingAccess(ctx context.Context, filter query.PendingAccessFilter) ([]entity.PendingAccessItem, error) {
+	rows, err := r.db.Query(ctx, queryPendingAccessList, pgx.NamedArgs{
+		"scope_type": filter.Scope.Type,
+		"scope_id":   filter.Scope.ID,
+		"limit":      filter.Limit,
+		"offset":     filter.Offset,
+	})
+	if err != nil {
+		return nil, wrapError(operationListPendingAccess, err)
+	}
+	items, err := scanRows(rows, scanPendingAccessItem)
+	return items, wrapError(operationListPendingAccess, err)
 }
 
 func (r *Repository) withTx(ctx context.Context, operation string, fn func(tx pgx.Tx) error) error {

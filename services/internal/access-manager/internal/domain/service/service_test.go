@@ -242,6 +242,120 @@ func TestPutAllowlistEntryKeepsIdentityOnRepeat(t *testing.T) {
 	}
 }
 
+func TestSetUserStatusUpdatesStatusAndRecordsEvent(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	user := store.seedUser(enum.UserStatusPending)
+
+	updated, err := svc.SetUserStatus(ctx, SetUserStatusInput{
+		UserID: user.ID,
+		Status: enum.UserStatusActive,
+		Meta: value.CommandMeta{
+			ExpectedVersion: ptrInt64(user.Version),
+			Reason:          "owner_approved",
+		},
+	})
+	if err != nil {
+		t.Fatalf("set user status: %v", err)
+	}
+	if updated.Status != enum.UserStatusActive || updated.Version != user.Version+1 {
+		t.Fatalf("updated user = %+v, want active version %d", updated, user.Version+1)
+	}
+	if got := store.users[user.ID].Status; got != enum.UserStatusActive {
+		t.Fatalf("stored status = %s, want active", got)
+	}
+	if len(store.events) != 1 || store.events[0].EventType != accessEventUserStatusChanged {
+		t.Fatalf("events = %+v, want one user status event", store.events)
+	}
+}
+
+func TestSetUserStatusRejectsStaleExpectedVersion(t *testing.T) {
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	user := store.seedUser(enum.UserStatusPending)
+
+	_, err := svc.SetUserStatus(context.Background(), SetUserStatusInput{
+		UserID: user.ID,
+		Status: enum.UserStatusActive,
+		Meta:   value.CommandMeta{ExpectedVersion: ptrInt64(user.Version + 1)},
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("err = %v, want %v", err, errs.ErrConflict)
+	}
+}
+
+func TestSetUserStatusRepeatSameTargetIsNoop(t *testing.T) {
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	user := store.seedUser(enum.UserStatusActive)
+
+	repeated, err := svc.SetUserStatus(context.Background(), SetUserStatusInput{
+		UserID: user.ID,
+		Status: enum.UserStatusActive,
+		Meta:   value.CommandMeta{ExpectedVersion: ptrInt64(user.Version - 1)},
+	})
+	if err != nil {
+		t.Fatalf("repeat same status: %v", err)
+	}
+	if repeated.Version != user.Version || len(store.events) != 0 {
+		t.Fatalf("repeat changed state/events: user=%+v events=%+v", repeated, store.events)
+	}
+}
+
+func TestDisableAllowlistEntryUpdatesStatusAndKeepsIdentity(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	entry, err := svc.PutAllowlistEntry(ctx, PutAllowlistEntryInput{
+		MatchType: enum.AllowlistMatchEmail, Value: "owner@example.com", DefaultStatus: enum.UserStatusActive,
+	})
+	if err != nil {
+		t.Fatalf("put allowlist entry: %v", err)
+	}
+
+	disabled, err := svc.DisableAllowlistEntry(ctx, DisableAllowlistEntryInput{
+		AllowlistEntryID: entry.ID,
+		Meta:             value.CommandMeta{ExpectedVersion: ptrInt64(entry.Version)},
+	})
+	if err != nil {
+		t.Fatalf("disable allowlist entry: %v", err)
+	}
+	if disabled.ID != entry.ID || disabled.Status != enum.AllowlistStatusDisabled || disabled.Version != entry.Version+1 {
+		t.Fatalf("disabled entry = %+v, want same id disabled version %d", disabled, entry.Version+1)
+	}
+	if got := store.allowlist[allowlistKey(entry.MatchType, entry.Value)].Status; got != enum.AllowlistStatusDisabled {
+		t.Fatalf("stored status = %s, want disabled", got)
+	}
+	if len(store.events) != 2 || store.events[1].EventType != accessEventAllowlistEntryDisabled {
+		t.Fatalf("events = %+v, want disabled event after create", store.events)
+	}
+}
+
+func TestListPendingAccessReturnsOperatorItems(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	user := store.seedUser(enum.UserStatusPending)
+	blocked := store.seedUser(enum.UserStatusBlocked)
+	active := store.seedUser(enum.UserStatusActive)
+
+	result, err := svc.ListPendingAccess(ctx, ListPendingAccessInput{Limit: 10})
+	if err != nil {
+		t.Fatalf("list pending access: %v", err)
+	}
+	seen := make(map[string]string, len(result.Items))
+	for _, item := range result.Items {
+		seen[item.Subject.ID] = item.Status
+	}
+	if seen[user.ID.String()] != string(enum.UserStatusPending) || seen[blocked.ID.String()] != string(enum.UserStatusBlocked) {
+		t.Fatalf("items = %+v, want pending and blocked users", result.Items)
+	}
+	if _, ok := seen[active.ID.String()]; ok {
+		t.Fatalf("active user appeared in pending access items: %+v", result.Items)
+	}
+}
+
 func TestCheckAccessExplicitDenyWins(t *testing.T) {
 	ctx := context.Background()
 	store := newMemoryRepository()
@@ -1274,6 +1388,19 @@ func (r *memoryRepository) GetUser(_ context.Context, id uuid.UUID) (entity.User
 	return user, nil
 }
 
+func (r *memoryRepository) UpdateUser(_ context.Context, user entity.User, previousVersion int64, event entity.OutboxEvent) error {
+	existing, ok := r.users[user.ID]
+	if !ok {
+		return errs.ErrNotFound
+	}
+	if existing.Version != previousVersion {
+		return errs.ErrConflict
+	}
+	r.users[user.ID] = user
+	r.events = append(r.events, event)
+	return nil
+}
+
 func (r *memoryRepository) GetUserByEmail(_ context.Context, email string) (entity.User, error) {
 	for _, user := range r.users {
 		if user.PrimaryEmail == email {
@@ -1309,6 +1436,15 @@ func (r *memoryRepository) FindAllowlistEntry(_ context.Context, matchType enum.
 		return entity.AllowlistEntry{}, errs.ErrNotFound
 	}
 	return entry, nil
+}
+
+func (r *memoryRepository) GetAllowlistEntry(_ context.Context, id uuid.UUID) (entity.AllowlistEntry, error) {
+	for _, entry := range r.allowlist {
+		if entry.ID == id {
+			return entry, nil
+		}
+	}
+	return entity.AllowlistEntry{}, errs.ErrNotFound
 }
 
 func (r *memoryRepository) CreateGroup(_ context.Context, group entity.Group, event entity.OutboxEvent, result entity.CommandResult) error {
@@ -1523,6 +1659,78 @@ func (r *memoryRepository) GetAccessDecisionAudit(_ context.Context, id uuid.UUI
 		}
 	}
 	return entity.AccessDecisionAudit{}, errs.ErrNotFound
+}
+
+func (r *memoryRepository) ListPendingAccess(_ context.Context, filter query.PendingAccessFilter) ([]entity.PendingAccessItem, error) {
+	var items []entity.PendingAccessItem
+	for _, user := range r.users {
+		if user.Status != enum.UserStatusPending && user.Status != enum.UserStatusBlocked {
+			continue
+		}
+		if filter.Scope.Type != "" && filter.Scope.Type != accessRuleScopeGlobal {
+			continue
+		}
+		items = append(items, entity.PendingAccessItem{
+			ItemID: user.ID.String(), ItemType: "user",
+			Subject: value.SubjectRef{Type: string(enum.AccessSubjectUser), ID: user.ID.String()},
+			Status:  string(user.Status), ReasonCode: "user_" + string(user.Status), CreatedAt: user.CreatedAt,
+		})
+	}
+	for _, membership := range r.memberships {
+		if membership.Status != enum.MembershipStatusPending && membership.Status != enum.MembershipStatusBlocked {
+			continue
+		}
+		if filter.Scope.Type != "" && filter.Scope.Type != accessRuleScopeGlobal &&
+			(string(membership.TargetType) != filter.Scope.Type || membership.TargetID.String() != filter.Scope.ID) {
+			continue
+		}
+		items = append(items, entity.PendingAccessItem{
+			ItemID: membership.ID.String(), ItemType: "membership",
+			Subject: value.SubjectRef{Type: string(membership.SubjectType), ID: membership.SubjectID.String()},
+			Status:  string(membership.Status), ReasonCode: "membership_" + string(membership.Status), CreatedAt: membership.CreatedAt,
+		})
+	}
+	for _, account := range r.accounts {
+		if account.Status != enum.ExternalAccountStatusPending &&
+			account.Status != enum.ExternalAccountStatusNeedsReauth &&
+			account.Status != enum.ExternalAccountStatusLimited &&
+			account.Status != enum.ExternalAccountStatusBlocked {
+			continue
+		}
+		if filter.Scope.Type != "" && filter.Scope.Type != accessRuleScopeGlobal &&
+			(string(account.OwnerScopeType) != filter.Scope.Type || account.OwnerScopeID != filter.Scope.ID) {
+			continue
+		}
+		items = append(items, entity.PendingAccessItem{
+			ItemID: account.ID.String(), ItemType: "external_account",
+			Subject: value.SubjectRef{Type: string(enum.AccessSubjectExternalAccount), ID: account.ID.String()},
+			Status:  string(account.Status), ReasonCode: "external_account_" + string(account.Status), CreatedAt: account.CreatedAt,
+		})
+	}
+	for _, audit := range r.audits {
+		if audit.Decision != enum.AccessDecisionPending && audit.ReasonCode != reasonSubjectBlocked {
+			continue
+		}
+		if filter.Scope.Type != "" && filter.Scope.Type != accessRuleScopeGlobal && audit.Scope != filter.Scope {
+			continue
+		}
+		status := "blocked"
+		if audit.Decision == enum.AccessDecisionPending {
+			status = string(enum.AccessDecisionPending)
+		}
+		items = append(items, entity.PendingAccessItem{
+			ItemID: audit.ID.String(), ItemType: "access_decision", Subject: audit.Subject,
+			Status: status, ReasonCode: audit.ReasonCode, CreatedAt: audit.CreatedAt,
+		})
+	}
+	if filter.Offset >= len(items) {
+		return nil, nil
+	}
+	end := filter.Offset + filter.Limit
+	if end > len(items) {
+		end = len(items)
+	}
+	return items[filter.Offset:end], nil
 }
 
 func (r *memoryRepository) seedUser(status enum.UserStatus) entity.User {

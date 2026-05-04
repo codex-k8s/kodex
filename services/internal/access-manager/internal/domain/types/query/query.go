@@ -61,3 +61,10 @@ type ExternalAccountBindingIdentity struct {
 	ExternalAccountID uuid.UUID
 	UsageScope        value.ScopeRef
 }
+
+// PendingAccessFilter selects operator-visible access items that need attention.
+type PendingAccessFilter struct {
+	Scope  value.ScopeRef
+	Limit  int
+	Offset int
+}

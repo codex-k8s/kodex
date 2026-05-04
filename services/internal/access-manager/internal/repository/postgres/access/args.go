@@ -39,6 +39,12 @@ func userArgs(user entity.User) pgx.NamedArgs {
 	}
 }
 
+func userUpdateArgs(user entity.User, previousVersion int64) pgx.NamedArgs {
+	args := userArgs(user)
+	args["previous_version"] = previousVersion
+	return args
+}
+
 func userIdentityArgs(identity entity.UserIdentity) pgx.NamedArgs {
 	return pgx.NamedArgs{
 		"id":             identity.ID,

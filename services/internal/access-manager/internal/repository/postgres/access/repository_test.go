@@ -202,6 +202,82 @@ func TestRepositoryIntegrationUpsertKeepsStableAggregate(t *testing.T) {
 	}
 }
 
+func TestRepositoryIntegrationUserLifecycleAndPendingAccess(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openIntegrationPool(t, ctx)
+	repository := NewRepository(pool)
+	now := time.Date(2026, 4, 30, 12, 0, 0, 0, time.UTC)
+	user := entity.User{
+		Base:         entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		PrimaryEmail: "pending@example.com",
+		Status:       enum.UserStatusPending,
+	}
+	identity := entity.UserIdentity{
+		ID:           uuid.New(),
+		UserID:       user.ID,
+		Provider:     enum.IdentityProviderKeycloak,
+		Subject:      "kc-pending",
+		EmailAtLogin: user.PrimaryEmail,
+	}
+	if err := repository.CreateUser(ctx, user, identity, testEvent("access.user.created", "user", user.ID, now)); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	items, err := repository.ListPendingAccess(ctx, query.PendingAccessFilter{Limit: 10})
+	if err != nil {
+		t.Fatalf("list pending access: %v", err)
+	}
+	if len(items) != 1 || items[0].ItemID != user.ID.String() || items[0].Status != string(enum.UserStatusPending) {
+		t.Fatalf("pending items = %+v, want pending user %s", items, user.ID)
+	}
+
+	updated := user
+	updated.Status = enum.UserStatusActive
+	updated.Version = 2
+	updated.UpdatedAt = now.Add(time.Minute)
+	if err := repository.UpdateUser(ctx, updated, user.Version, testEvent("access.user.status_changed", "user", user.ID, updated.UpdatedAt)); err != nil {
+		t.Fatalf("update user: %v", err)
+	}
+	stored, err := repository.GetUser(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("get user: %v", err)
+	}
+	if stored.Status != enum.UserStatusActive || stored.Version != 2 {
+		t.Fatalf("stored user = %+v, want active version 2", stored)
+	}
+	err = repository.UpdateUser(ctx, updated, user.Version, testEvent("access.user.status_changed", "user", user.ID, updated.UpdatedAt))
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("stale update err = %v, want %v", err, errs.ErrConflict)
+	}
+}
+
+func TestRepositoryIntegrationGetAllowlistEntryByID(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openIntegrationPool(t, ctx)
+	repository := NewRepository(pool)
+	now := time.Date(2026, 4, 30, 12, 0, 0, 0, time.UTC)
+	entry := entity.AllowlistEntry{
+		Base:          entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		MatchType:     enum.AllowlistMatchEmail,
+		Value:         "owner@example.com",
+		DefaultStatus: enum.UserStatusActive,
+		Status:        enum.AllowlistStatusActive,
+	}
+	if err := repository.PutAllowlistEntry(ctx, entry, testEvent("access.allowlist_entry.created", "allowlist_entry", entry.ID, now)); err != nil {
+		t.Fatalf("put allowlist entry: %v", err)
+	}
+	stored, err := repository.GetAllowlistEntry(ctx, entry.ID)
+	if err != nil {
+		t.Fatalf("get allowlist entry: %v", err)
+	}
+	if stored.ID != entry.ID || stored.Value != entry.Value {
+		t.Fatalf("stored entry = %+v, want %+v", stored, entry)
+	}
+}
+
 func TestRepositoryIntegrationAccessRuleIdentityIsUnique(t *testing.T) {
 	t.Parallel()
 

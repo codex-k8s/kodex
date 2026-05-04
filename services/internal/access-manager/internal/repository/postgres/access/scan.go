@@ -97,6 +97,22 @@ func scanAllowlistEntry(row rowScanner) (entity.AllowlistEntry, error) {
 	return entry, err
 }
 
+func scanPendingAccessItem(row rowScanner) (entity.PendingAccessItem, error) {
+	var item entity.PendingAccessItem
+	var subjectType, subjectID string
+	err := row.Scan(
+		&item.ItemID,
+		&item.ItemType,
+		&subjectType,
+		&subjectID,
+		&item.Status,
+		&item.ReasonCode,
+		&item.CreatedAt,
+	)
+	item.Subject = value.SubjectRef{Type: subjectType, ID: subjectID}
+	return item, err
+}
+
 func scanGroup(row rowScanner) (entity.Group, error) {
 	var group entity.Group
 	var scopeType, status string

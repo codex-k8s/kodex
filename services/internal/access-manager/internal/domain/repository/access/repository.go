@@ -26,6 +26,8 @@ type Repository interface {
 	CreateUser(ctx context.Context, user entity.User, identity entity.UserIdentity, event entity.OutboxEvent) error
 	// GetUser returns a user by id.
 	GetUser(ctx context.Context, id uuid.UUID) (entity.User, error)
+	// UpdateUser updates a user and its outbox event with optimistic concurrency.
+	UpdateUser(ctx context.Context, user entity.User, previousVersion int64, event entity.OutboxEvent) error
 	// GetUserByEmail returns a user by normalized primary email.
 	GetUserByEmail(ctx context.Context, email string) (entity.User, error)
 	// GetUserByIdentity returns a user linked to provider subject.
@@ -36,6 +38,8 @@ type Repository interface {
 	PutAllowlistEntry(ctx context.Context, entry entity.AllowlistEntry, event entity.OutboxEvent) error
 	// FindAllowlistEntry returns an allowlist entry by match key.
 	FindAllowlistEntry(ctx context.Context, matchType enum.AllowlistMatchType, value string) (entity.AllowlistEntry, error)
+	// GetAllowlistEntry returns an allowlist entry by id.
+	GetAllowlistEntry(ctx context.Context, id uuid.UUID) (entity.AllowlistEntry, error)
 	// CreateGroup stores a group and its outbox event atomically.
 	CreateGroup(ctx context.Context, group entity.Group, event entity.OutboxEvent, result entity.CommandResult) error
 	// GetGroup returns a group by id.
@@ -80,6 +84,8 @@ type Repository interface {
 	RecordAccessDecision(ctx context.Context, audit entity.AccessDecisionAudit, event *entity.OutboxEvent) error
 	// GetAccessDecisionAudit returns a stored access decision explanation.
 	GetAccessDecisionAudit(ctx context.Context, id uuid.UUID) (entity.AccessDecisionAudit, error)
+	// ListPendingAccess returns operator-visible pending or blocked access items.
+	ListPendingAccess(ctx context.Context, filter query.PendingAccessFilter) ([]entity.PendingAccessItem, error)
 }
 
 // Clock provides deterministic time for domain commands and tests.
