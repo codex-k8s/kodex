@@ -6,11 +6,11 @@ RUN go install github.com/pressly/goose/v3/cmd/goose@v3.26.0
 
 FROM ${GOLANG_IMAGE} AS prod
 
-RUN addgroup -S app && adduser -S app -G app
+RUN addgroup -S -g 10001 app && adduser -S -D -H -u 10001 -G app app
 
 COPY --from=tools /go/bin/goose /usr/local/bin/goose
 COPY services/internal/platform-event-log/cmd/cli/migrations/ /migrations/
 
-USER app
+USER 10001:10001
 
 ENTRYPOINT ["/usr/local/bin/goose"]

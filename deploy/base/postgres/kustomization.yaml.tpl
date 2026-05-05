@@ -4,7 +4,6 @@ namespace: {{ envOr "KODEX_PRODUCTION_NAMESPACE" "" }}
 resources:
   - secrets.yaml
   - postgres.yaml
-  - ../platform-event-log/migrations.yaml
 configMapGenerator:
   - name: kodex-postgres-bootstrap
     files:

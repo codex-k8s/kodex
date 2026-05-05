@@ -19,7 +19,8 @@ func UnaryRecoveryInterceptor(logger *slog.Logger) UnaryInterceptor {
 	return func(ctx context.Context, req any, info *grpcruntime.UnaryServerInfo, handler grpcruntime.UnaryHandler) (response any, err error) {
 		defer func() {
 			if recovered := recover(); recovered != nil {
-				logger.ErrorContext(ctx, "grpc panic recovered", logKeyMethod, info.FullMethod, "panic", recovered, "stack", string(debug.Stack()))
+				attrs := append(LogAttrsFromContext(ctx), logKeyMethod, info.FullMethod, "panic", recovered, "stack", string(debug.Stack()))
+				logger.ErrorContext(ctx, "grpc panic recovered", attrs...)
 				err = status.Error(codes.Internal, "internal error")
 			}
 		}()

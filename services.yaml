@@ -59,6 +59,10 @@ spec:
       zone: internal
       path: services/internal/access-manager
       dockerfile: services/internal/access-manager/Dockerfile
+      imageEnv: KODEX_ACCESS_MANAGER_IMAGE
+      internalImageRepositoryEnv: KODEX_ACCESS_MANAGER_INTERNAL_IMAGE_REPOSITORY
+      migrationsImageEnv: KODEX_ACCESS_MANAGER_MIGRATIONS_IMAGE
+      migrationsInternalImageRepositoryEnv: KODEX_ACCESS_MANAGER_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY
       ownerDomain: access-and-accounts
       apiContracts:
         grpc: proto/kodex/access_accounts/v1/access_manager.proto
@@ -66,6 +70,14 @@ spec:
       database:
         owner: access-manager
         migrations: services/internal/access-manager/cmd/cli/migrations
+      deploy:
+        serviceManifest: deploy/base/access-manager/access-manager.yaml.tpl
+        migrationsManifest: deploy/base/access-manager/migrations.yaml.tpl
+        kustomization: deploy/base/access-manager/kustomization.yaml.tpl
+        health:
+          livez: /health/livez
+          readyz: /health/readyz
+          metrics: /metrics
   platformDataStores:
     - name: platform-event-log
       status: foundation
@@ -83,7 +95,6 @@ spec:
       includes:
         - deploy/base/postgres/secrets.yaml.tpl
         - deploy/base/postgres/postgres.yaml.tpl
-        - deploy/base/platform-event-log/migrations.yaml.tpl
         - deploy/base/postgres/bootstrap-databases.sh
     - name: postgres-secrets
       path: deploy/base/postgres/secrets.yaml.tpl
@@ -105,6 +116,20 @@ spec:
       requires:
         - postgres-secrets
         - postgres
+    - name: access-manager-migrations
+      path: deploy/base/access-manager/migrations.yaml.tpl
+      migratesDatabase: kodex_access_manager
+      requires:
+        - postgres-secrets
+        - postgres
+        - platform-event-log-migrations
+    - name: access-manager
+      path: deploy/base/access-manager/access-manager.yaml.tpl
+      kustomization: deploy/base/access-manager/kustomization.yaml.tpl
+      deploysService: access-manager
+      requires:
+        - access-manager-migrations
+        - platform-event-log-migrations
   notes:
     - New deployable services must be added only after the corresponding wave documentation is accepted.
     - Do not restore old services, versions, environments or runtime settings from deprecated/services.yaml mechanically.
