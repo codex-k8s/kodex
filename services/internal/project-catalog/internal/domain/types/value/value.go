@@ -75,6 +75,7 @@ type ProjectEventPayload struct {
 	AccessMode        string `json:"access_mode,omitempty"`
 	BranchRulesID     string `json:"branch_rules_id,omitempty"`
 	ReleasePolicyID   string `json:"release_policy_id,omitempty"`
+	ReleaseLineID     string `json:"release_line_id,omitempty"`
 	PlacementPolicyID string `json:"placement_policy_id,omitempty"`
 	Version           int64  `json:"version,omitempty"`
 }
