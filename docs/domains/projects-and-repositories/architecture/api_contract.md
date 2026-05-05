@@ -37,12 +37,12 @@ approvals:
 
 | Операция | Вид | Доступ | Идемпотентность | Примечание |
 |---|---|---|---|---|
-| `CreateProject` | gRPC command | `project.create` | `CommandMeta.command_id` | Создаёт проект. |
-| `UpdateProject` | gRPC command | `project.update` | ожидаемая версия | Обновляет название, описание, статус. |
+| `CreateProject` | gRPC command | `project.create` | `CommandMeta.command_id` | Создаёт проект, включая опциональную ссылку на иконку. |
+| `UpdateProject` | gRPC command | `project.update` | ожидаемая версия | Обновляет название, описание, статус и ссылку на иконку. |
 | `GetProject` | gRPC query | `project.read` | нет | Авторитетное чтение проекта. |
 | `ListProjects` | gRPC query | `project.list` | нет | Пакетное чтение для UI и сервисов. |
 | `AttachRepository` | gRPC command | `repository.attach` | `CommandMeta.command_id` | Привязывает репозиторий к проекту. |
-| `UpdateRepository` | gRPC command | `repository.update` | ожидаемая версия | Обновляет статус и поля политики привязки. |
+| `UpdateRepository` | gRPC command | `repository.update` | ожидаемая версия | Обновляет статус, ссылку на иконку и поля политики привязки. |
 | `GetRepository` | gRPC query | `repository.read` | нет | Авторитетное чтение привязки репозитория. |
 | `ListRepositories` | gRPC query | `repository.list` | нет | Список репозиториев проекта. |
 | `PutServicesPolicy` | gRPC command | `project.policy.update` | ожидаемая версия | Сохраняет проверенную версию политики `services.yaml`. |
@@ -78,10 +78,10 @@ approvals:
 
 | Event | Aggregate | Payload минимум |
 |---|---|---|
-| `project.project.created` | project | `project_id`, `organization_id`, `slug`, `version` |
-| `project.project.updated` | project | `project_id`, `status`, `version` |
-| `project.repository.attached` | repository | `project_id`, `repository_id`, `provider`, `provider_owner`, `provider_name`, `version` |
-| `project.repository.updated` | repository | `repository_id`, `status`, `version` |
+| `project.project.created` | project | `project_id`, `organization_id`, `slug`, `icon_object_uri`, `version` |
+| `project.project.updated` | project | `project_id`, `status`, `icon_object_uri`, `version` |
+| `project.repository.attached` | repository | `project_id`, `repository_id`, `provider`, `provider_owner`, `provider_name`, `icon_object_uri`, `version` |
+| `project.repository.updated` | repository | `repository_id`, `status`, `icon_object_uri`, `version` |
 | `project.services_policy.updated` | services_policy | `project_id`, `policy_id`, `policy_version`, `content_hash` |
 | `project.documentation_source.updated` | documentation_source | `project_id`, `source_id`, `scope_type`, `access_mode` |
 | `project.branch_rules.updated` | branch_rules | `project_id`, `repository_id`, `version` |
