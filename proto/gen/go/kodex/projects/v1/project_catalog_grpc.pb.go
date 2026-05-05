@@ -42,6 +42,9 @@ const (
 	ProjectCatalogService_PutReleasePolicy_FullMethodName         = "/kodex.projects.v1.ProjectCatalogService/PutReleasePolicy"
 	ProjectCatalogService_GetReleasePolicy_FullMethodName         = "/kodex.projects.v1.ProjectCatalogService/GetReleasePolicy"
 	ProjectCatalogService_ListReleasePolicies_FullMethodName      = "/kodex.projects.v1.ProjectCatalogService/ListReleasePolicies"
+	ProjectCatalogService_PutReleaseLine_FullMethodName           = "/kodex.projects.v1.ProjectCatalogService/PutReleaseLine"
+	ProjectCatalogService_GetReleaseLine_FullMethodName           = "/kodex.projects.v1.ProjectCatalogService/GetReleaseLine"
+	ProjectCatalogService_ListReleaseLines_FullMethodName         = "/kodex.projects.v1.ProjectCatalogService/ListReleaseLines"
 	ProjectCatalogService_PutPlacementPolicy_FullMethodName       = "/kodex.projects.v1.ProjectCatalogService/PutPlacementPolicy"
 	ProjectCatalogService_GetPlacementPolicy_FullMethodName       = "/kodex.projects.v1.ProjectCatalogService/GetPlacementPolicy"
 	ProjectCatalogService_ListPlacementPolicies_FullMethodName    = "/kodex.projects.v1.ProjectCatalogService/ListPlacementPolicies"
@@ -101,6 +104,12 @@ type ProjectCatalogServiceClient interface {
 	GetReleasePolicy(ctx context.Context, in *GetReleasePolicyRequest, opts ...grpc.CallOption) (*ReleasePolicyResponse, error)
 	// ListReleasePolicies returns release policies for a project.
 	ListReleasePolicies(ctx context.Context, in *ListReleasePoliciesRequest, opts ...grpc.CallOption) (*ListReleasePoliciesResponse, error)
+	// PutReleaseLine creates or updates a concrete release line.
+	PutReleaseLine(ctx context.Context, in *PutReleaseLineRequest, opts ...grpc.CallOption) (*ReleaseLineResponse, error)
+	// GetReleaseLine returns a concrete release line.
+	GetReleaseLine(ctx context.Context, in *GetReleaseLineRequest, opts ...grpc.CallOption) (*ReleaseLineResponse, error)
+	// ListReleaseLines returns release lines for a project or release policy.
+	ListReleaseLines(ctx context.Context, in *ListReleaseLinesRequest, opts ...grpc.CallOption) (*ListReleaseLinesResponse, error)
 	// PutPlacementPolicy creates or updates placement policy.
 	PutPlacementPolicy(ctx context.Context, in *PutPlacementPolicyRequest, opts ...grpc.CallOption) (*PlacementPolicyResponse, error)
 	// GetPlacementPolicy returns placement policy.
@@ -347,6 +356,36 @@ func (c *projectCatalogServiceClient) ListReleasePolicies(ctx context.Context, i
 	return out, nil
 }
 
+func (c *projectCatalogServiceClient) PutReleaseLine(ctx context.Context, in *PutReleaseLineRequest, opts ...grpc.CallOption) (*ReleaseLineResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReleaseLineResponse)
+	err := c.cc.Invoke(ctx, ProjectCatalogService_PutReleaseLine_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectCatalogServiceClient) GetReleaseLine(ctx context.Context, in *GetReleaseLineRequest, opts ...grpc.CallOption) (*ReleaseLineResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReleaseLineResponse)
+	err := c.cc.Invoke(ctx, ProjectCatalogService_GetReleaseLine_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectCatalogServiceClient) ListReleaseLines(ctx context.Context, in *ListReleaseLinesRequest, opts ...grpc.CallOption) (*ListReleaseLinesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListReleaseLinesResponse)
+	err := c.cc.Invoke(ctx, ProjectCatalogService_ListReleaseLines_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *projectCatalogServiceClient) PutPlacementPolicy(ctx context.Context, in *PutPlacementPolicyRequest, opts ...grpc.CallOption) (*PlacementPolicyResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(PlacementPolicyResponse)
@@ -431,6 +470,12 @@ type ProjectCatalogServiceServer interface {
 	GetReleasePolicy(context.Context, *GetReleasePolicyRequest) (*ReleasePolicyResponse, error)
 	// ListReleasePolicies returns release policies for a project.
 	ListReleasePolicies(context.Context, *ListReleasePoliciesRequest) (*ListReleasePoliciesResponse, error)
+	// PutReleaseLine creates or updates a concrete release line.
+	PutReleaseLine(context.Context, *PutReleaseLineRequest) (*ReleaseLineResponse, error)
+	// GetReleaseLine returns a concrete release line.
+	GetReleaseLine(context.Context, *GetReleaseLineRequest) (*ReleaseLineResponse, error)
+	// ListReleaseLines returns release lines for a project or release policy.
+	ListReleaseLines(context.Context, *ListReleaseLinesRequest) (*ListReleaseLinesResponse, error)
 	// PutPlacementPolicy creates or updates placement policy.
 	PutPlacementPolicy(context.Context, *PutPlacementPolicyRequest) (*PlacementPolicyResponse, error)
 	// GetPlacementPolicy returns placement policy.
@@ -515,6 +560,15 @@ func (UnimplementedProjectCatalogServiceServer) GetReleasePolicy(context.Context
 }
 func (UnimplementedProjectCatalogServiceServer) ListReleasePolicies(context.Context, *ListReleasePoliciesRequest) (*ListReleasePoliciesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListReleasePolicies not implemented")
+}
+func (UnimplementedProjectCatalogServiceServer) PutReleaseLine(context.Context, *PutReleaseLineRequest) (*ReleaseLineResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PutReleaseLine not implemented")
+}
+func (UnimplementedProjectCatalogServiceServer) GetReleaseLine(context.Context, *GetReleaseLineRequest) (*ReleaseLineResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetReleaseLine not implemented")
+}
+func (UnimplementedProjectCatalogServiceServer) ListReleaseLines(context.Context, *ListReleaseLinesRequest) (*ListReleaseLinesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListReleaseLines not implemented")
 }
 func (UnimplementedProjectCatalogServiceServer) PutPlacementPolicy(context.Context, *PutPlacementPolicyRequest) (*PlacementPolicyResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PutPlacementPolicy not implemented")
@@ -960,6 +1014,60 @@ func _ProjectCatalogService_ListReleasePolicies_Handler(srv interface{}, ctx con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProjectCatalogService_PutReleaseLine_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PutReleaseLineRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectCatalogServiceServer).PutReleaseLine(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectCatalogService_PutReleaseLine_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectCatalogServiceServer).PutReleaseLine(ctx, req.(*PutReleaseLineRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectCatalogService_GetReleaseLine_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetReleaseLineRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectCatalogServiceServer).GetReleaseLine(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectCatalogService_GetReleaseLine_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectCatalogServiceServer).GetReleaseLine(ctx, req.(*GetReleaseLineRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectCatalogService_ListReleaseLines_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListReleaseLinesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectCatalogServiceServer).ListReleaseLines(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectCatalogService_ListReleaseLines_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectCatalogServiceServer).ListReleaseLines(ctx, req.(*ListReleaseLinesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ProjectCatalogService_PutPlacementPolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(PutPlacementPolicyRequest)
 	if err := dec(in); err != nil {
@@ -1112,6 +1220,18 @@ var ProjectCatalogService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListReleasePolicies",
 			Handler:    _ProjectCatalogService_ListReleasePolicies_Handler,
+		},
+		{
+			MethodName: "PutReleaseLine",
+			Handler:    _ProjectCatalogService_PutReleaseLine_Handler,
+		},
+		{
+			MethodName: "GetReleaseLine",
+			Handler:    _ProjectCatalogService_GetReleaseLine_Handler,
+		},
+		{
+			MethodName: "ListReleaseLines",
+			Handler:    _ProjectCatalogService_ListReleaseLines_Handler,
 		},
 		{
 			MethodName: "PutPlacementPolicy",

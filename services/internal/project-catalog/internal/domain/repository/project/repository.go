@@ -61,6 +61,12 @@ type Repository interface {
 	GetReleasePolicy(ctx context.Context, id uuid.UUID) (entity.ReleasePolicy, error)
 	// ListReleasePolicies returns release policies matching filter.
 	ListReleasePolicies(ctx context.Context, filter query.ReleasePolicyFilter) ([]entity.ReleasePolicy, query.PageResult, error)
+	// PutReleaseLine stores release line and its outbox event.
+	PutReleaseLine(ctx context.Context, line entity.ReleaseLine, event entity.OutboxEvent, result *entity.CommandResult) error
+	// GetReleaseLine returns release line by id.
+	GetReleaseLine(ctx context.Context, id uuid.UUID) (entity.ReleaseLine, error)
+	// ListReleaseLines returns release lines matching filter.
+	ListReleaseLines(ctx context.Context, filter query.ReleaseLineFilter) ([]entity.ReleaseLine, query.PageResult, error)
 	// PutPlacementPolicy stores placement policy and its outbox event.
 	PutPlacementPolicy(ctx context.Context, policy entity.PlacementPolicy, event entity.OutboxEvent, result *entity.CommandResult) error
 	// GetPlacementPolicy returns placement policy by id.

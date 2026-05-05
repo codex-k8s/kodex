@@ -86,6 +86,14 @@ const (
 	DocumentationAccessWrite DocumentationAccessMode = "write"
 )
 
+// SourceAccessMode controls whether agents may edit a workspace source.
+type SourceAccessMode string
+
+const (
+	SourceAccessRead  SourceAccessMode = "read"
+	SourceAccessWrite SourceAccessMode = "write"
+)
+
 // DocumentationSourceStatus describes documentation source lifecycle.
 type DocumentationSourceStatus string
 

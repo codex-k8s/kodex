@@ -23,7 +23,7 @@ approvals:
 - Тип API: внутренний gRPC `ProjectCatalogService`, доменные события `project.*`.
 - Аутентификация: через gateway, сервисный токен или MCP-границу; команды дополнительно проверяются через `access-manager`.
 - Версионирование: стабильный транспортный `v1`; источники правды — proto и AsyncAPI.
-- Основные операции: проекты, репозитории, политика `services.yaml`, источники документации, правила веток, релизная политика, политика размещения, политика рабочего контура.
+- Основные операции: проекты, репозитории, политика `services.yaml`, источники документации, правила веток, релизная политика, релизные линии, политика размещения, политика рабочего контура.
 
 ## Спецификации
 
@@ -60,6 +60,9 @@ approvals:
 | `PutReleasePolicy` | gRPC command | `project.release_policy.update` | ожидаемая версия | Обновляет релизную политику. |
 | `GetReleasePolicy` | gRPC query | `project.release_policy.read` | нет | Читает конкретную релизную политику. |
 | `ListReleasePolicies` | gRPC query | `project.release_policy.read` | нет | Читает релизные политики проекта. |
+| `PutReleaseLine` | gRPC command | `project.release_line.update` | ожидаемая версия | Обновляет конкретную релизную линию. |
+| `GetReleaseLine` | gRPC query | `project.release_line.read` | нет | Читает конкретную релизную линию. |
+| `ListReleaseLines` | gRPC query | `project.release_line.read` | нет | Читает релизные линии проекта или релизной политики. |
 | `PutPlacementPolicy` | gRPC command | `project.placement_policy.update` | ожидаемая версия | Обновляет допустимые контуры размещения. |
 | `GetPlacementPolicy` | gRPC query | `project.placement_policy.read` | нет | Читает конкретную политику размещения. |
 | `ListPlacementPolicies` | gRPC query | `project.placement_policy.read` | нет | Читает политики размещения проекта, репозитория или сервиса. |
@@ -88,9 +91,10 @@ approvals:
 | `project.policy_override.created` | policy_override | `project_id`, `override_id`, `target_type`, `expires_at` |
 | `project.policy_override.expired` | policy_override | `project_id`, `override_id`, `target_type` |
 | `project.documentation_source.updated` | documentation_source | `project_id`, `source_id`, `scope_type`, `access_mode` |
-| `project.branch_rules.updated` | branch_rules | `project_id`, `repository_id`, `version` |
-| `project.release_policy.updated` | release_policy | `project_id`, `policy_id`, `version` |
-| `project.placement_policy.updated` | placement_policy | `project_id`, `policy_id`, `version` |
+| `project.branch_rules.updated` | branch_rules | `project_id`, `branch_rules_id`, `version` |
+| `project.release_policy.updated` | release_policy | `project_id`, `release_policy_id`, `version` |
+| `project.release_line.updated` | release_line | `project_id`, `release_policy_id`, `release_line_id`, `version` |
+| `project.placement_policy.updated` | placement_policy | `project_id`, `placement_policy_id`, `version` |
 
 ## Состояние реализации
 

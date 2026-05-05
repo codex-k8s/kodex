@@ -231,6 +231,32 @@ type ListReleasePoliciesResult struct {
 	Page            value.PageResult
 }
 
+// PutReleaseLineInput creates or updates a concrete release line.
+type PutReleaseLineInput struct {
+	ReleaseLineID   *uuid.UUID
+	ProjectID       uuid.UUID
+	ReleasePolicyID uuid.UUID
+	Name            string
+	BranchPattern   string
+	Status          enum.ReleasePolicyStatus
+	Meta            value.CommandMeta
+}
+
+// ListReleaseLinesInput selects release lines.
+type ListReleaseLinesInput struct {
+	ProjectID       uuid.UUID
+	ReleasePolicyID *uuid.UUID
+	Statuses        []enum.ReleasePolicyStatus
+	Page            value.PageRequest
+	Meta            value.QueryMeta
+}
+
+// ListReleaseLinesResult returns release lines and paging metadata.
+type ListReleaseLinesResult struct {
+	ReleaseLines []entity.ReleaseLine
+	Page         value.PageResult
+}
+
 // PutPlacementPolicyInput creates or updates placement policy.
 type PutPlacementPolicyInput struct {
 	PlacementPolicyID  *uuid.UUID

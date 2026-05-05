@@ -66,6 +66,14 @@ type ReleasePolicyFilter struct {
 	Page      value.PageRequest
 }
 
+// ReleaseLineFilter selects release lines for a project or release policy.
+type ReleaseLineFilter struct {
+	ProjectID       uuid.UUID
+	ReleasePolicyID *uuid.UUID
+	Statuses        []enum.ReleasePolicyStatus
+	Page            value.PageRequest
+}
+
 // PlacementPolicyFilter selects placement policies for project, repository or service.
 type PlacementPolicyFilter struct {
 	ProjectID    uuid.UUID

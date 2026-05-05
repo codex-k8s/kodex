@@ -46,7 +46,7 @@ approvals:
 | 8.2 | #630 | PostgreSQL-модель, миграции, слой репозитория, outbox и тесты. |
 | 8.3 | #631 | gRPC-операции, проверки доступа, события и транспортные тесты. |
 | 8.4 | #632 | Политика `services.yaml`, управляемая через Git, импорт проверенной проекции, источники документации и политика рабочего контура. |
-| 8.5 | #633 | Правила веток, релизная политика, политика размещения, манифесты deploy и закрытие Wave 8. |
+| 8.5 | #633 | Правила веток, релизная политика, релизные линии, политика размещения, манифесты deploy и закрытие Wave 8. |
 
 ## Состояние контрактов
 
@@ -86,6 +86,9 @@ approvals:
 | `PutReleasePolicy` | Готов в proto. | Отложена до #631/#633. |
 | `GetReleasePolicy` | Готов в proto. | Отложена до #631/#633. |
 | `ListReleasePolicies` | Готов в proto. | Отложена до #631/#633. |
+| `PutReleaseLine` | Готов в proto. | Отложена до #631/#633. |
+| `GetReleaseLine` | Готов в proto. | Отложена до #631/#633. |
+| `ListReleaseLines` | Готов в proto. | Отложена до #631/#633. |
 | `PutPlacementPolicy` | Готов в proto. | Отложена до #631/#633. |
 | `GetPlacementPolicy` | Готов в proto. | Отложена до #631/#633. |
 | `ListPlacementPolicies` | Готов в proto. | Отложена до #631/#633. |
@@ -104,6 +107,7 @@ approvals:
 | `project.documentation_source.updated` | Готово в AsyncAPI. | Отложена до #632. |
 | `project.branch_rules.updated` | Готово в AsyncAPI. | Отложена до #633. |
 | `project.release_policy.updated` | Готово в AsyncAPI. | Отложена до #633. |
+| `project.release_line.updated` | Готово в AsyncAPI. | Отложена до #633. |
 | `project.placement_policy.updated` | Готово в AsyncAPI. | Отложена до #633. |
 
 ## Связь с задачами подключения репозиториев

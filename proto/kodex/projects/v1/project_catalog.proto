@@ -54,6 +54,12 @@ service ProjectCatalogService {
   rpc GetReleasePolicy(GetReleasePolicyRequest) returns (ReleasePolicyResponse);
   // ListReleasePolicies returns release policies for a project.
   rpc ListReleasePolicies(ListReleasePoliciesRequest) returns (ListReleasePoliciesResponse);
+  // PutReleaseLine creates or updates a concrete release line.
+  rpc PutReleaseLine(PutReleaseLineRequest) returns (ReleaseLineResponse);
+  // GetReleaseLine returns a concrete release line.
+  rpc GetReleaseLine(GetReleaseLineRequest) returns (ReleaseLineResponse);
+  // ListReleaseLines returns release lines for a project or release policy.
+  rpc ListReleaseLines(ListReleaseLinesRequest) returns (ListReleaseLinesResponse);
   // PutPlacementPolicy creates or updates placement policy.
   rpc PutPlacementPolicy(PutPlacementPolicyRequest) returns (PlacementPolicyResponse);
   // GetPlacementPolicy returns placement policy.
@@ -198,6 +204,13 @@ enum DocumentationAccessMode {
   DOCUMENTATION_ACCESS_MODE_UNSPECIFIED = 0;
   DOCUMENTATION_ACCESS_MODE_READ = 1;
   DOCUMENTATION_ACCESS_MODE_WRITE = 2;
+}
+
+// SourceAccessMode controls whether a workspace source is editable.
+enum SourceAccessMode {
+  SOURCE_ACCESS_MODE_UNSPECIFIED = 0;
+  SOURCE_ACCESS_MODE_READ = 1;
+  SOURCE_ACCESS_MODE_WRITE = 2;
 }
 
 // DocumentationSourceStatus is the closed set of documentation source statuses.
@@ -530,7 +543,7 @@ message WorkspaceCodeSource {
   // local_path is the target path in workspace.
   string local_path = 6;
   // access_mode controls whether the source is editable.
-  DocumentationAccessMode access_mode = 7;
+  SourceAccessMode access_mode = 7;
 }
 
 // WorkspaceDocumentationSource describes one documentation checkout source.
@@ -546,7 +559,7 @@ message WorkspaceDocumentationSource {
   // local_path is the target path in workspace.
   string local_path = 5;
   // access_mode controls whether the source is editable.
-  DocumentationAccessMode access_mode = 6;
+  SourceAccessMode access_mode = 6;
 }
 
 // CreateProjectRequest creates a project.
@@ -995,6 +1008,60 @@ message ListReleasePoliciesRequest {
 message ListReleasePoliciesResponse {
   // release_policies are returned in stable server-defined order.
   repeated ReleasePolicy release_policies = 1;
+  // page describes continuation state.
+  PageResponse page = 2;
+}
+
+// PutReleaseLineRequest creates or updates a release line.
+message PutReleaseLineRequest {
+  // release_line_id is optional release line aggregate id.
+  string release_line_id = 1;
+  // project_id is the owner project id.
+  string project_id = 2;
+  // release_policy_id is the source release policy id.
+  string release_policy_id = 3;
+  // name is the release line name.
+  string name = 4;
+  // branch_pattern is release branch pattern.
+  string branch_pattern = 5;
+  // status is release line status.
+  ReleasePolicyStatus status = 6;
+  // meta carries idempotency, optional expected version and audit context.
+  CommandMeta meta = 7;
+}
+
+// ReleaseLineResponse returns release line state.
+message ReleaseLineResponse {
+  // release_line is the returned release line.
+  ReleaseLine release_line = 1;
+}
+
+// GetReleaseLineRequest reads release line.
+message GetReleaseLineRequest {
+  // release_line_id is the release line aggregate id.
+  string release_line_id = 1;
+  // meta carries read actor and request context.
+  QueryMeta meta = 2;
+}
+
+// ListReleaseLinesRequest lists release lines.
+message ListReleaseLinesRequest {
+  // project_id is the owner project id.
+  string project_id = 1;
+  // release_policy_id optionally filters lines by release policy.
+  string release_policy_id = 2;
+  // statuses optionally filter line lifecycle.
+  repeated ReleasePolicyStatus statuses = 3;
+  // page limits response size.
+  PageRequest page = 4;
+  // meta carries read actor and request context.
+  QueryMeta meta = 5;
+}
+
+// ListReleaseLinesResponse returns release lines.
+message ListReleaseLinesResponse {
+  // release_lines are returned in stable server-defined order.
+  repeated ReleaseLine release_lines = 1;
   // page describes continuation state.
   PageResponse page = 2;
 }

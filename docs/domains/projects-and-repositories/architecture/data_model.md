@@ -167,7 +167,7 @@ approvals:
 |---|---|---:|---|
 | `id` | uuid | нет | Идентификатор записи. |
 | `command_id` | uuid | нет | Идемпотентный ключ команды. |
-| `aggregate_type` | text | нет | Тип агрегата: `project`, `repository`, `services_policy`, `documentation_source`, `branch_rules`, `release_policy`, `placement_policy`. |
+| `aggregate_type` | text | нет | Тип агрегата: `project`, `repository`, `services_policy`, `documentation_source`, `branch_rules`, `release_policy`, `release_line`, `placement_policy`. |
 | `aggregate_id` | uuid | да | Идентификатор затронутого агрегата, если он известен. |
 | `result_payload` | jsonb | нет | Минимальный ответ для безопасного повтора команды. |
 | `created_at` | timestamptz | нет | Время первого успешного выполнения. |

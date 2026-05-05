@@ -150,7 +150,7 @@ type WorkspaceCodeSource struct {
 	ProviderName  string
 	DefaultBranch string
 	LocalPath     string
-	AccessMode    enum.DocumentationAccessMode
+	AccessMode    enum.SourceAccessMode
 }
 
 // WorkspaceDocumentationSource describes one documentation checkout source.
@@ -160,7 +160,7 @@ type WorkspaceDocumentationSource struct {
 	ScopeType             enum.DocumentationScopeType
 	ScopeID               string
 	LocalPath             string
-	AccessMode            enum.DocumentationAccessMode
+	AccessMode            enum.SourceAccessMode
 }
 
 // WorkspacePolicy is the source set allowed for an agent workspace.
@@ -190,6 +190,7 @@ type CommandResult struct {
 	Operation      string
 	AggregateType  string
 	AggregateID    uuid.UUID
+	ResultPayload  []byte
 	CreatedAt      time.Time
 }
 

@@ -37,6 +37,7 @@ components:
         - $ref: '#/components/schemas/DocumentationSourceUpdatedEvent'
         - $ref: '#/components/schemas/BranchRulesUpdatedEvent'
         - $ref: '#/components/schemas/ReleasePolicyUpdatedEvent'
+        - $ref: '#/components/schemas/ReleaseLineUpdatedEvent'
         - $ref: '#/components/schemas/PlacementPolicyUpdatedEvent'
     ProjectEventEnvelopeBase:
       type: object
@@ -221,6 +222,22 @@ components:
         payload:
           $ref: '#/components/schemas/ReleasePolicyUpdatedPayload'
       required: [event_type, aggregate_type, payload]
+    ReleaseLineUpdatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProjectEventEnvelopeBase'
+        - $ref: '#/components/schemas/ReleaseLineUpdatedEventKind'
+    ReleaseLineUpdatedEventKind:
+      type: object
+      properties:
+        event_type:
+          type: string
+          const: project.release_line.updated
+        aggregate_type:
+          type: string
+          const: release_line
+        payload:
+          $ref: '#/components/schemas/ReleaseLineUpdatedPayload'
+      required: [event_type, aggregate_type, payload]
     PlacementPolicyUpdatedEvent:
       allOf:
         - $ref: '#/components/schemas/ProjectEventEnvelopeBase'
@@ -250,6 +267,7 @@ components:
         - project.documentation_source.updated
         - project.branch_rules.updated
         - project.release_policy.updated
+        - project.release_line.updated
         - project.placement_policy.updated
     ProjectEventPayload:
       type: object
@@ -309,6 +327,9 @@ components:
         release_policy_id:
           type: string
           format: uuid
+        release_line_id:
+          type: string
+          format: uuid
         placement_policy_id:
           type: string
           format: uuid
@@ -355,6 +376,10 @@ components:
       allOf:
         - $ref: '#/components/schemas/ProjectEventPayload'
       required: [project_id, release_policy_id, version]
+    ReleaseLineUpdatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/ProjectEventPayload'
+      required: [project_id, release_policy_id, release_line_id, version]
     PlacementPolicyUpdatedPayload:
       allOf:
         - $ref: '#/components/schemas/ProjectEventPayload'
