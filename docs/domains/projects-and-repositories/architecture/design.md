@@ -1,0 +1,151 @@
+---
+doc_id: DSG-CK8S-PROJ-0001
+type: design-doc
+title: kodex — дизайн домена проектов и репозиториев
+status: active
+owner_role: SA
+created_at: 2026-05-05
+updated_at: 2026-05-05
+related_issues: [628, 629, 630, 631, 632, 633]
+related_prs: []
+related_adrs: []
+approvals:
+  required: ["Owner"]
+  status: approved
+  request_id: "owner-2026-05-05-wave8-project-catalog-kickoff"
+  approved_by: "ai-da-stas"
+  approved_at: 2026-05-05
+---
+
+# Детальный дизайн: домен проектов и репозиториев
+
+## TL;DR
+
+- Что меняем: вводим `project-catalog` как сервис-владелец проектов, репозиториев, проектной политики, `services.yaml`, источников проектной документации, правил веток, релизных политик и политики размещения.
+- Почему: `provider-hub`, `agent-manager`, `runtime-manager` и UI должны получать одну авторитетную проектную картину, а не собирать её из провайдера, файлов и локальных настроек.
+- Основные компоненты: БД `project-catalog`, gRPC API, outbox событий, валидатор политики, путь чтения политики рабочего контура.
+- Риски: смешать проектный каталог с provider-native зеркалом, начать выполнять checkout в этом сервисе, превратить `services.yaml` в единственный источник истины вместо управляемой версии политики.
+
+## Цели
+
+- Зафиксировать границу `project-catalog`.
+- Подготовить кодовые срезы без старой реализации из `deprecated/**`.
+- Дать потребителям авторитетные чтения проектной структуры и политики.
+- Разделить проектную политику, provider-native артефакты и runtime-исполнение.
+
+## Не-цели
+
+- Не реализовывать GitHub/GitLab API и webhook в `project-catalog`.
+- Не хранить рабочие сущности провайдера.
+- Не управлять slot, `run`, `job`, build или deploy.
+- Не делать UI в этом домене.
+
+## Граница сервиса
+
+| Владеет `project-catalog` | Не владеет |
+|---|---|
+| Проекты, репозитории, проектная конфигурация, политика `services.yaml`, источники проектной документации, правила веток, релизные политики, релизная линия, политика размещения. | `Issue`, `PR/MR`, комментарии, webhook, лимиты провайдера, checkout рабочего контура, agent runs, slots, jobs, уведомления, вычисление доступа. |
+
+`services.yaml` остаётся переносимым файлом проекта и способом bootstrap, но после импорта платформа хранит проверенную версию политики в БД `project-catalog`. Изменение файла должно приводить к новой версии политики через команду или reconciliation, а не к неявному чтению файла каждым сервисом.
+
+## Компоненты
+
+| Компонент | Назначение |
+|---|---|
+| `project-catalog` | Сервис-владелец проектного домена. |
+| БД `project-catalog` | Каноническое состояние проектов, репозиториев, политик и версий. |
+| Валидатор политики | Проверяет `services.yaml`, источники документации, правила веток, релизную политику и политику размещения. |
+| Outbox-доставщик | Публикует `project.*` события после фиксации транзакции. |
+| Операторские чтения | Возвращают списки проектов, репозиториев, политик и источников документации для UI и других сервисов. |
+
+## Основные потоки
+
+### Создание проекта
+
+```mermaid
+sequenceDiagram
+  participant UI as web-console
+  participant A as access-manager
+  participant P as project-catalog
+  participant DB as project DB
+  UI->>P: CreateProject(command)
+  P->>A: CheckAccess(project.create)
+  A-->>P: allow
+  P->>DB: insert project + outbox
+  P-->>UI: project
+```
+
+### Подключение репозитория к проекту
+
+```mermaid
+sequenceDiagram
+  participant H as provider-hub
+  participant P as project-catalog
+  participant DB as project DB
+  H->>P: AttachRepository(provider ref, project id)
+  P->>DB: upsert repository binding + outbox
+  P-->>H: repository binding
+```
+
+`provider-hub` отвечает за факт существования репозитория у провайдера и webhook. `project-catalog` отвечает за то, что репозиторий входит в проект, какую политику использует и какие источники документации с ним связаны.
+
+### Подготовка политики рабочего контура
+
+```mermaid
+sequenceDiagram
+  participant AM as agent-manager
+  participant P as project-catalog
+  participant R as runtime-manager
+  AM->>P: GetWorkspacePolicy(project, task context)
+  P-->>AM: code/docs/guidance sources
+  AM->>R: StartRun(workspace policy)
+```
+
+`project-catalog` не делает checkout. Он отдаёт разрешённый состав источников и режимы доступа.
+
+## Междоменные связи
+
+| Домен | Связь |
+|---|---|
+| `access-manager` | Проверяет право на проектные команды и чтения. |
+| `provider-hub` | Синхронизирует provider-native состояние и вызывает проектные команды привязки. |
+| `agent-manager` | Использует проектную политику для выбора flow, контекста и follow-up задач. |
+| `runtime-manager` | Получает политику рабочего контура и исполняет checkout/подготовку слота. |
+| `fleet-manager` | Даёт допустимые серверные и кластерные контуры для политики размещения. |
+| `risk-and-release-governance` | Использует правила веток и релизную политику для релизных решений. |
+
+## События
+
+Минимальные события:
+- `project.project.created`;
+- `project.project.updated`;
+- `project.repository.attached`;
+- `project.repository.updated`;
+- `project.services_policy.updated`;
+- `project.documentation_source.updated`;
+- `project.branch_rules.updated`;
+- `project.release_policy.updated`;
+- `project.placement_policy.updated`.
+
+События публикуются через сервисный outbox и общий `platform-event-log`. Потребители строят свои проекции или запускают свою бизнес-логику, но не меняют каноническое состояние `project-catalog` напрямую.
+
+## Конкурентные изменения
+
+- Все изменяемые агрегаты имеют версию.
+- Команда, основанная на ранее прочитанном состоянии, передаёт ожидаемую версию.
+- Сервис выполняет проверку инвариантов и запись в одной короткой транзакции.
+- При конфликте вызывающая сторона перечитывает актуальное состояние.
+- Долгие операции не держат SQL-блокировки; они оформляются через `runtime-manager` как `run`, `job` или slot state.
+
+## Наблюдаемость
+
+- Логи: команда, агрегат, версия, actor, correlation id, результат.
+- Метрики: количество команд, конфликтов версий, ошибок валидации политики, задержка чтения списков.
+- Трейсы: входящий gRPC, проверка доступа, слой репозитория, публикация outbox.
+- Алерты: рост конфликтов, сбой публикации событий, систематическая невалидность `services.yaml`.
+
+## Апрув
+
+- request_id: `owner-2026-05-05-wave8-project-catalog-kickoff`
+- Решение: approved
+- Комментарий: дизайн домена проектов и репозиториев согласован как целевое состояние стартового среза.
