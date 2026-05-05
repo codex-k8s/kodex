@@ -1,4 +1,4 @@
-# Draft only. This file is not a deployable inventory yet.
+# Draft inventory for the active refactoring architecture.
 # Previous full inventory is archived at deprecated/services.yaml.
 apiVersion: kodex.works/v1alpha1
 kind: ServiceStackDraft
@@ -7,8 +7,10 @@ metadata:
   status: draft
 spec:
   purpose: >
-    Minimal root placeholder after the reset before wave 7. Do not use it for
-    build, deploy, version bumps, runtime profiles or agent workspace assembly.
+    Active minimal inventory after the reset. It records only the services,
+    data stores, versions, images and deploy manifests that already belong to
+    the new architecture. Do not restore old entries from deprecated/services.yaml
+    mechanically.
   sourceOfTruth:
     - refactoring/task.md
     - refactoring/README.md
@@ -53,6 +55,63 @@ spec:
           - tag
           - commit
         downstreamRepositoryCleanupWorkflow: true
+  versions:
+    access-manager:
+      value: "0.1.0"
+      bumpOn:
+        - services/internal/access-manager
+        - libs/go/grpcserver
+        - libs/go/postgres
+        - libs/go/eventlog
+        - proto/kodex/access_accounts/v1
+        - specs/asyncapi/access-manager.v1.yaml
+        - deploy/base/access-manager
+    platform-event-log:
+      value: "0.1.0"
+      bumpOn:
+        - services/internal/platform-event-log
+        - libs/go/eventlog
+        - deploy/base/platform-event-log
+        - deploy/base/postgres
+    golang-alpine:
+      value: "1.25.8-alpine"
+    pgvector:
+      value: "pg16"
+  images:
+    golang-alpine:
+      type: external
+      from: 'golang:{{ index .Versions "golang-alpine" }}'
+      local: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/mirror/golang:{{ index .Versions "golang-alpine" }}'
+    postgres:
+      type: external
+      from: 'pgvector/pgvector:{{ index .Versions "pgvector" }}'
+      local: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/kodex/mirror/pgvector:{{ index .Versions "pgvector" }}'
+    access-manager:
+      type: build
+      repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_ACCESS_MANAGER_INTERNAL_IMAGE_REPOSITORY" "kodex/access-manager" }}'
+      tagTemplate: '{{ index .Versions "access-manager" }}'
+      dockerfile: services/internal/access-manager/Dockerfile
+      target: prod
+      context: .
+      imageEnv: KODEX_ACCESS_MANAGER_IMAGE
+    access-manager-migrations:
+      type: migration-build
+      repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_ACCESS_MANAGER_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY" "kodex/access-manager-migrations" }}'
+      tagTemplate: '{{ index .Versions "access-manager" }}'
+      dockerfile: services/internal/access-manager/Dockerfile
+      target: migrations
+      context: .
+      imageEnv: KODEX_ACCESS_MANAGER_MIGRATIONS_IMAGE
+      migratesDatabase: kodex_access_manager
+    platform-event-log-migrations:
+      type: migration-build
+      repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY" "kodex/platform-event-log-migrations" }}'
+      tagTemplate: '{{ index .Versions "platform-event-log" }}'
+      dockerfile: services/internal/platform-event-log/Dockerfile
+      target: prod
+      context: .
+      imageEnv: KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_IMAGE
+      migratesDatabase: kodex_platform_event_log
   deployableServices:
     - name: access-manager
       status: foundation
@@ -132,6 +191,7 @@ spec:
         - platform-event-log-migrations
   notes:
     - New deployable services must be added only after the corresponding wave documentation is accepted.
+    - Versions and images are centralized in spec.versions and spec.images; build/deploy tooling must not duplicate image tags in scripts.
     - Do not restore old services, versions, environments or runtime settings from deprecated/services.yaml mechanically.
     - The final inventory schema is defined by the new architecture, not by the archived pre-refactor file.
     - Source submodule list is defined by .gitmodules; this draft keeps only policy and path conventions.
