@@ -30,7 +30,7 @@
 - Требования: `product/requirements.md`.
 - Дизайн: `architecture/design.md`.
 - Модель данных: `architecture/data_model.md`.
-- API-контракт: `architecture/api_contract.md`.
+- API-обзор: `architecture/api_contract.md`.
 - План поставки реализации: `delivery/wave8_project_catalog.md`.
 
 ## Реализация

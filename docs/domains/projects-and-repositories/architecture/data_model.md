@@ -20,7 +20,8 @@ approvals:
 
 ## TL;DR
 
-- Ключевые сущности: `Project`, `RepositoryBinding`, `ServicesPolicy`, `DocumentationSource`, `BranchRules`, `ReleasePolicy`, `ReleaseLine`, `PlacementPolicy`.
+- Ключевые сущности: `Project`, `RepositoryBinding`, `ServicesPolicy`, `ServiceDescriptor`, `DocumentationSource`, `BranchRules`, `ReleasePolicy`, `ReleaseLine`, `PlacementPolicy`.
+- Технические агрегаты: `CommandResult`, `OutboxEvent`.
 - Основные связи: проект владеет репозиториями и политикой; репозиторий может иметь свои уточняющие правила; источники документации связываются с проектом, репозиторием или сервисом.
 - Риски миграций: нельзя хранить чужие provider-native сущности как канонические данные; нельзя делать SQL-связи с БД других сервисов.
 
@@ -28,7 +29,7 @@ approvals:
 
 ### Project
 
-| Поле | Тип | Nullable | Notes |
+| Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
 | `id` | uuid | нет | Идентификатор проекта. |
 | `organization_id` | uuid | нет | Внешняя ссылка на организацию из `access-manager`. |
@@ -37,11 +38,11 @@ approvals:
 | `description` | text | да | Описание проекта. |
 | `status` | enum | нет | `active`, `archived`, `disabled`. |
 | `version` | bigint | нет | Оптимистичная конкуренция. |
-| `created_at`, `updated_at` | timestamptz | нет | Технические timestamps. |
+| `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
 
 ### RepositoryBinding
 
-| Поле | Тип | Nullable | Notes |
+| Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
 | `id` | uuid | нет | Идентификатор привязки репозитория. |
 | `project_id` | uuid | нет | Внутренняя ссылка на проект. |
@@ -55,7 +56,7 @@ approvals:
 
 ### ServicesPolicy
 
-| Поле | Тип | Nullable | Notes |
+| Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
 | `id` | uuid | нет | Идентификатор политики. |
 | `project_id` | uuid | нет | Проект-владелец. |
@@ -63,12 +64,31 @@ approvals:
 | `source_path` | text | нет | Путь к файлу политики. |
 | `policy_version` | bigint | нет | Версия проверенного снимка. |
 | `content_hash` | text | нет | Хэш исходного содержимого. |
-| `validated_payload` | jsonb | нет | Типизированное содержимое после валидации; в коде должно иметь именованные структуры. |
+| `validated_payload` | jsonb | нет | Нормализованный снимок исходной политики для аудита и повторной валидации; не является основным контуром чтения для сервисов. |
 | `validation_status` | enum | нет | `valid`, `invalid`, `stale`. |
+
+### ServiceDescriptor
+
+`ServiceDescriptor` — типизированная и индексируемая часть проверенного `services.yaml`. Код не должен каждый раз разбирать `validated_payload` ради рабочих чтений, привязки документации или политики размещения.
+
+| Поле | Тип | Может быть пустым | Примечание |
+|---|---|---:|---|
+| `id` | uuid | нет | Идентификатор сервиса внутри каталога. |
+| `project_id` | uuid | нет | Проект-владелец. |
+| `services_policy_id` | uuid | нет | Проверенная версия политики, из которой получен сервис. |
+| `repository_id` | uuid | да | Репозиторий, где расположен сервис, если сервис привязан к конкретному репозиторию. |
+| `service_key` | text | нет | Стабильный ключ сервиса из `services.yaml`. |
+| `display_name` | text | нет | Человекочитаемое имя сервиса. |
+| `kind` | enum | нет | `backend`, `frontend`, `worker`, `documentation`, `package`, `other`. |
+| `root_path` | text | нет | Корневой путь сервиса в рабочем контуре. |
+| `documentation_scope_id` | text | да | Ключ для связывания с `DocumentationSource.scope_id`. |
+| `depends_on_service_keys` | text[] | нет | Зависимости от других сервисов проекта по ключам. |
+| `status` | enum | нет | `active`, `disabled`, `stale`. |
+| `version` | bigint | нет | Оптимистичная конкуренция для точечных обновлений контура чтения. |
 
 ### DocumentationSource
 
-| Поле | Тип | Nullable | Notes |
+| Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
 | `id` | uuid | нет | Идентификатор источника. |
 | `project_id` | uuid | нет | Проект. |
@@ -81,7 +101,7 @@ approvals:
 
 ### BranchRules
 
-| Поле | Тип | Nullable | Notes |
+| Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
 | `id` | uuid | нет | Идентификатор правил. |
 | `project_id` | uuid | нет | Проект. |
@@ -93,7 +113,7 @@ approvals:
 
 ### ReleasePolicy и ReleaseLine
 
-| Поле | Тип | Nullable | Notes |
+| Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
 | `id` | uuid | нет | Идентификатор политики или линии. |
 | `project_id` | uuid | нет | Проект. |
@@ -106,7 +126,7 @@ approvals:
 
 ### PlacementPolicy
 
-| Поле | Тип | Nullable | Notes |
+| Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
 | `id` | uuid | нет | Идентификатор политики. |
 | `project_id` | uuid | нет | Проект. |
@@ -115,9 +135,40 @@ approvals:
 | `allowed_cluster_refs` | text[] | нет | Внешние ссылки на контуры `fleet-manager`. |
 | `status` | enum | нет | `active`, `disabled`. |
 
+### CommandResult
+
+`CommandResult` хранит идемпотентный след команды в той же БД, где меняется агрегат. Повтор команды с тем же `command_id` возвращает сохранённый результат, а не создаёт второе изменение.
+
+| Поле | Тип | Может быть пустым | Примечание |
+|---|---|---:|---|
+| `id` | uuid | нет | Идентификатор записи. |
+| `command_id` | uuid | нет | Идемпотентный ключ команды. |
+| `aggregate_type` | text | нет | Тип агрегата: `project`, `repository`, `services_policy`, `documentation_source`, `branch_rules`, `release_policy`, `placement_policy`. |
+| `aggregate_id` | uuid | да | Идентификатор затронутого агрегата, если он известен. |
+| `result_payload` | jsonb | нет | Минимальный ответ для безопасного повтора команды. |
+| `created_at` | timestamptz | нет | Время первого успешного выполнения. |
+
+### OutboxEvent
+
+`OutboxEvent` фиксируется в одной транзакции с изменением агрегата. Диспетчер публикует событие в `platform-event-log`, а потребители обрабатывают его через свой inbox/checkpoint.
+
+| Поле | Тип | Может быть пустым | Примечание |
+|---|---|---:|---|
+| `id` | uuid | нет | Идентификатор события. |
+| `aggregate_type` | text | нет | Тип агрегата. |
+| `aggregate_id` | uuid | нет | Идентификатор агрегата. |
+| `event_type` | text | нет | Имя события `project.*`. |
+| `event_version` | int | нет | Версия схемы события. |
+| `payload` | jsonb | нет | Минимальная полезная нагрузка события. |
+| `occurred_at` | timestamptz | нет | Время доменного изменения. |
+| `published_at` | timestamptz | да | Заполняется после успешной публикации. |
+| `publish_attempts` | int | нет | Счётчик попыток публикации. |
+| `last_error` | text | да | Последняя ошибка публикации для диагностики. |
+
 ## Связи
 
-- `Project` владеет `RepositoryBinding`, `ServicesPolicy`, `DocumentationSource`, `BranchRules`, `ReleasePolicy`, `ReleaseLine`, `PlacementPolicy`.
+- `Project` владеет `RepositoryBinding`, `ServicesPolicy`, `ServiceDescriptor`, `DocumentationSource`, `BranchRules`, `ReleasePolicy`, `ReleaseLine`, `PlacementPolicy`.
+- `ServicesPolicy` владеет набором `ServiceDescriptor`, полученным из проверенной версии `services.yaml`.
 - Внутри БД `project-catalog` допустимы обычные внешние ключи между своими таблицами.
 - Ссылки на организации, кластеры, роли, агентные процессы и provider-native сущности хранятся как внешние идентификаторы без SQL-связей с чужими БД.
 
@@ -128,9 +179,13 @@ approvals:
 | Список проектов организации | `(organization_id, status, slug)` |
 | Список репозиториев проекта | `(project_id, status, provider, provider_owner, provider_name)` |
 | Поиск репозитория по provider identity | `(provider, provider_owner, provider_name)` unique для активной привязки |
+| Сервисы проекта | `(project_id, status, service_key)` unique для активного сервиса |
+| Сервисы репозитория | `(repository_id, status, service_key)` |
 | Источники документации для рабочего контура | `(project_id, scope_type, scope_id, status)` |
 | Активные правила веток | `(project_id, repository_id, status)` |
 | Активные релизные политики | `(project_id, status)` |
+| Непубликованные события | `(published_at, occurred_at)` where `published_at is null` |
+| Идемпотентный след команд | `(command_id)` unique |
 
 ## Политика хранения данных
 

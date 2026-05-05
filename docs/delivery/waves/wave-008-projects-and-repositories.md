@@ -37,7 +37,7 @@ approvals:
 | Требования домена | `docs/domains/projects-and-repositories/product/requirements.md` |
 | Дизайн домена | `docs/domains/projects-and-repositories/architecture/design.md` |
 | Модель данных | `docs/domains/projects-and-repositories/architecture/data_model.md` |
-| API-контракт | `docs/domains/projects-and-repositories/architecture/api_contract.md` |
+| API-обзор | `docs/domains/projects-and-repositories/architecture/api_contract.md` |
 | Детальный план поставки | `docs/domains/projects-and-repositories/delivery/wave8_project_catalog.md` |
 
 ## Структура работ
@@ -45,7 +45,7 @@ approvals:
 | Направление | Issue | Результат |
 |---|---|---|
 | Стартовый срез | #628 | Доменный пакет, план поставки и карты связей. |
-| Контракты и каркас | #629 | Каркас сервиса `project-catalog`, proto, AsyncAPI, доменные типы и интерфейсы. |
+| Контракты и каркас | #629 | Proto и AsyncAPI как источники правды, каркас сервиса `project-catalog`, доменные типы и интерфейсы. |
 | PostgreSQL и слой репозитория | #630 | Миграции, слой репозитория, outbox, оптимистичная конкуренция, тесты. |
 | gRPC и события | #631 | Команды, чтения, граница проверки доступа, `project.*` события. |
 | `services.yaml` и документация | #632 | Политика, источники документации, политика рабочего контура. |

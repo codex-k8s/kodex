@@ -1,7 +1,7 @@
 ---
 doc_id: API-CK8S-PROJ-0001
 type: api-contract
-title: kodex — API-контракт project-catalog
+title: kodex — API-обзор project-catalog
 status: active
 owner_role: SA
 created_at: 2026-05-05
@@ -16,13 +16,13 @@ approvals:
   approved_at: 2026-05-05
 ---
 
-# API-контракт: project-catalog
+# API-обзор: project-catalog
 
 ## TL;DR
 
 - Тип API: внутренний gRPC `ProjectCatalogService`, доменные события `project.*`.
 - Аутентификация: через gateway, сервисный токен или MCP-границу; команды дополнительно проверяются через `access-manager`.
-- Версионирование: стабильный `v1` контракт.
+- Версионирование: предварительный целевой `v1`; стабильным контракт становится после появления proto и AsyncAPI как источников правды.
 - Основные операции: проекты, репозитории, политика `services.yaml`, источники документации, правила веток, релизная политика, политика размещения, политика рабочего контура.
 
 ## Спецификации
@@ -31,9 +31,11 @@ approvals:
 - AsyncAPI: `specs/asyncapi/project-catalog.v1.yaml`.
 - Внешний HTTP: через будущий gateway, не напрямую из доменного сервиса.
 
+Этот документ фиксирует целевой обзор операций и событий. Фактическими источниками правды для транспорта будут proto и AsyncAPI; до их появления документ не считается стабильной спецификацией реализации.
+
 ## Операции
 
-| Operation | Contract | Auth | Idempotency | Notes |
+| Операция | Вид | Доступ | Идемпотентность | Примечание |
 |---|---|---|---|---|
 | `CreateProject` | gRPC command | `project.create` | `CommandMeta.command_id` | Создаёт проект. |
 | `UpdateProject` | gRPC command | `project.update` | ожидаемая версия | Обновляет название, описание, статус. |
@@ -41,13 +43,24 @@ approvals:
 | `ListProjects` | gRPC query | `project.list` | нет | Пакетное чтение для UI и сервисов. |
 | `AttachRepository` | gRPC command | `repository.attach` | `CommandMeta.command_id` | Привязывает репозиторий к проекту. |
 | `UpdateRepository` | gRPC command | `repository.update` | ожидаемая версия | Обновляет статус и поля политики привязки. |
+| `GetRepository` | gRPC query | `repository.read` | нет | Авторитетное чтение привязки репозитория. |
 | `ListRepositories` | gRPC query | `repository.list` | нет | Список репозиториев проекта. |
 | `PutServicesPolicy` | gRPC command | `project.policy.update` | ожидаемая версия | Сохраняет проверенную версию политики `services.yaml`. |
+| `GetServicesPolicy` | gRPC query | `project.policy.read` | нет | Читает активную проверенную политику `services.yaml`. |
+| `ListServiceDescriptors` | gRPC query | `project.policy.read` | нет | Читает типизированный список сервисов из активной политики. |
 | `PutDocumentationSource` | gRPC command | `project.docs.update` | ожидаемая версия | Обновляет источник документации. |
+| `GetDocumentationSource` | gRPC query | `project.docs.read` | нет | Читает конкретный источник документации. |
+| `ListDocumentationSources` | gRPC query | `project.docs.read` | нет | Читает источники документации проекта, репозитория или сервиса. |
 | `GetWorkspacePolicy` | gRPC query | `project.workspace.read` | нет | Возвращает разрешённый состав рабочего контура. |
 | `PutBranchRules` | gRPC command | `project.branch_rules.update` | ожидаемая версия | Обновляет правила веток. |
+| `GetBranchRules` | gRPC query | `project.branch_rules.read` | нет | Читает конкретный набор правил веток. |
+| `ListBranchRules` | gRPC query | `project.branch_rules.read` | нет | Читает активные правила веток проекта или репозитория. |
 | `PutReleasePolicy` | gRPC command | `project.release_policy.update` | ожидаемая версия | Обновляет релизную политику. |
+| `GetReleasePolicy` | gRPC query | `project.release_policy.read` | нет | Читает конкретную релизную политику. |
+| `ListReleasePolicies` | gRPC query | `project.release_policy.read` | нет | Читает релизные политики проекта. |
 | `PutPlacementPolicy` | gRPC command | `project.placement_policy.update` | ожидаемая версия | Обновляет допустимые контуры размещения. |
+| `GetPlacementPolicy` | gRPC query | `project.placement_policy.read` | нет | Читает конкретную политику размещения. |
+| `ListPlacementPolicies` | gRPC query | `project.placement_policy.read` | нет | Читает политики размещения проекта, репозитория или сервиса. |
 
 ## Модель ошибок
 
@@ -77,12 +90,12 @@ approvals:
 
 ## Совместимость
 
-- `v1` контракт не удаляет поля без цикла `deprecate -> migrate -> remove`.
-- Если контракт опережает реализацию, документ поставки содержит таблицу реализованных операций и бэклог.
+- Стабильный `v1` контракт не удаляет поля без цикла `deprecate -> migrate -> remove`.
+- Если этот обзор опережает реализацию, документ поставки содержит таблицу реализованных операций и бэклог.
 - gRPC-контракт не импортирует transport DTO в домен; преобразование живёт в transport caster слое.
 
 ## Апрув
 
 - request_id: `owner-2026-05-05-wave8-project-catalog-kickoff`
 - Решение: approved
-- Комментарий: API-контракт `project-catalog` согласован как целевое состояние стартового среза.
+- Комментарий: API-обзор `project-catalog` согласован как целевое состояние стартового среза; стабильные transport-спецификации создаются отдельным срезом.

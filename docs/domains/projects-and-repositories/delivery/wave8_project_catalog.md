@@ -34,7 +34,7 @@ approvals:
 | Требования домена | `docs/domains/projects-and-repositories/product/requirements.md` |
 | Дизайн домена | `docs/domains/projects-and-repositories/architecture/design.md` |
 | Модель данных | `docs/domains/projects-and-repositories/architecture/data_model.md` |
-| API-контракт | `docs/domains/projects-and-repositories/architecture/api_contract.md` |
+| API-обзор | `docs/domains/projects-and-repositories/architecture/api_contract.md` |
 | Волновой план | `docs/delivery/waves/wave-008-projects-and-repositories.md` |
 
 ## Срезы поставки
@@ -47,6 +47,15 @@ approvals:
 | 8.3 | #631 | gRPC-операции, проверки доступа, события и транспортные тесты. |
 | 8.4 | #632 | Политика `services.yaml`, источники документации и политика рабочего контура. |
 | 8.5 | #633 | Правила веток, релизная политика, политика размещения, манифесты deploy и закрытие Wave 8. |
+
+## Состояние контрактов
+
+| Артефакт | Текущий статус | Когда становится источником правды |
+|---|---|---|
+| API-обзор `project-catalog` | Принят как целевая карта операций и событий. | Сейчас используется для планирования следующих срезов. |
+| gRPC proto | В бэклоге следующего среза. | После добавления `proto/kodex/projects/v1/project_catalog.proto`. |
+| AsyncAPI | В бэклоге следующего среза. | После добавления `specs/asyncapi/project-catalog.v1.yaml`. |
+| Таблица реализованных операций | Ведётся с первого кодового PR. | Обновляется в каждом PR, где меняется состав команд, чтений или событий. |
 
 ## Связь с задачами подключения репозиториев
 
@@ -62,6 +71,7 @@ approvals:
 - Принят пакет доменной документации `projects-and-repositories`.
 - Для каждого следующего PR есть отдельный GitHub Issue.
 - PR, который завершает Issue, содержит `Closes #...` в теле PR.
+- Первый контрактный PR создаёт proto и AsyncAPI до реализации операций, чтобы источник правды не оставался только в markdown.
 - Старый код из `deprecated/**` не используется как основа реализации.
 
 ## Критерии завершения Wave 8
