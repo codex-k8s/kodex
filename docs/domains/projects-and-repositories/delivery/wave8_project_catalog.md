@@ -99,16 +99,29 @@ approvals:
 |---|---|---|
 | `project.project.created` | Готово в AsyncAPI. | Отложена до outbox-срезов #630/#631. |
 | `project.project.updated` | Готово в AsyncAPI. | Отложена до outbox-срезов #630/#631. |
+| `project.project.archived` | Готово в AsyncAPI. | Отложена до outbox-срезов #630/#631. |
 | `project.repository.attached` | Готово в AsyncAPI. | Отложена до outbox-срезов #630/#631. |
 | `project.repository.updated` | Готово в AsyncAPI. | Отложена до outbox-срезов #630/#631. |
-| `project.services_policy.updated` | Готово в AsyncAPI. | Отложена до #632. |
+| `project.repository.detached` | Готово в AsyncAPI. | Отложена до outbox-срезов #630/#631. |
+| `project.services_policy.imported` | Готово в AsyncAPI. | Отложена до #632. |
 | `project.policy_override.created` | Готово в AsyncAPI. | Отложена до #632. |
 | `project.policy_override.expired` | Готово в AsyncAPI. | Отложена до #632. |
+| `project.policy_override.cancelled` | Готово в AsyncAPI. | Отложена до #632. |
+| `project.documentation_source.created` | Готово в AsyncAPI. | Отложена до #632. |
 | `project.documentation_source.updated` | Готово в AsyncAPI. | Отложена до #632. |
+| `project.documentation_source.disabled` | Готово в AsyncAPI. | Отложена до #632. |
+| `project.branch_rules.created` | Готово в AsyncAPI. | Отложена до #633. |
 | `project.branch_rules.updated` | Готово в AsyncAPI. | Отложена до #633. |
+| `project.branch_rules.disabled` | Готово в AsyncAPI. | Отложена до #633. |
+| `project.release_policy.created` | Готово в AsyncAPI. | Отложена до #633. |
 | `project.release_policy.updated` | Готово в AsyncAPI. | Отложена до #633. |
+| `project.release_policy.archived` | Готово в AsyncAPI. | Отложена до #633. |
+| `project.release_line.created` | Готово в AsyncAPI. | Отложена до #633. |
 | `project.release_line.updated` | Готово в AsyncAPI. | Отложена до #633. |
+| `project.release_line.archived` | Готово в AsyncAPI. | Отложена до #633. |
+| `project.placement_policy.created` | Готово в AsyncAPI. | Отложена до #633. |
 | `project.placement_policy.updated` | Готово в AsyncAPI. | Отложена до #633. |
+| `project.placement_policy.disabled` | Готово в AsyncAPI. | Отложена до #633. |
 
 ## Связь с задачами подключения репозиториев
 

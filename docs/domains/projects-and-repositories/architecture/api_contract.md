@@ -81,20 +81,35 @@ approvals:
 
 ## События
 
+События фиксируют бизнес-факты жизненного цикла, а не полный CRUD. Физическое удаление не входит в штатный `v1`: вместо `deleted` используются архивирование, отключение, отвязка, истечение срока или отмена.
+
 | Event | Aggregate | Payload минимум |
 |---|---|---|
 | `project.project.created` | project | `project_id`, `organization_id`, `slug`, `icon_object_uri`, `version` |
 | `project.project.updated` | project | `project_id`, `status`, `icon_object_uri`, `version` |
+| `project.project.archived` | project | `project_id`, `status`, `version` |
 | `project.repository.attached` | repository | `project_id`, `repository_id`, `provider`, `provider_owner`, `provider_name`, `icon_object_uri`, `version` |
-| `project.repository.updated` | repository | `repository_id`, `status`, `icon_object_uri`, `version` |
-| `project.services_policy.updated` | services_policy | `project_id`, `policy_id`, `policy_version`, `source_commit_sha`, `source_blob_sha`, `content_hash` |
+| `project.repository.updated` | repository | `project_id`, `repository_id`, `status`, `icon_object_uri`, `version` |
+| `project.repository.detached` | repository | `project_id`, `repository_id`, `status`, `version` |
+| `project.services_policy.imported` | services_policy | `project_id`, `policy_id`, `policy_version`, `source_commit_sha`, `source_blob_sha`, `content_hash` |
 | `project.policy_override.created` | policy_override | `project_id`, `override_id`, `target_type`, `expires_at` |
 | `project.policy_override.expired` | policy_override | `project_id`, `override_id`, `target_type` |
+| `project.policy_override.cancelled` | policy_override | `project_id`, `override_id`, `target_type` |
+| `project.documentation_source.created` | documentation_source | `project_id`, `source_id`, `scope_type`, `access_mode` |
 | `project.documentation_source.updated` | documentation_source | `project_id`, `source_id`, `scope_type`, `access_mode` |
+| `project.documentation_source.disabled` | documentation_source | `project_id`, `source_id`, `status` |
+| `project.branch_rules.created` | branch_rules | `project_id`, `branch_rules_id`, `version` |
 | `project.branch_rules.updated` | branch_rules | `project_id`, `branch_rules_id`, `version` |
+| `project.branch_rules.disabled` | branch_rules | `project_id`, `branch_rules_id`, `status`, `version` |
+| `project.release_policy.created` | release_policy | `project_id`, `release_policy_id`, `version` |
 | `project.release_policy.updated` | release_policy | `project_id`, `release_policy_id`, `version` |
+| `project.release_policy.archived` | release_policy | `project_id`, `release_policy_id`, `status`, `version` |
+| `project.release_line.created` | release_line | `project_id`, `release_policy_id`, `release_line_id`, `version` |
 | `project.release_line.updated` | release_line | `project_id`, `release_policy_id`, `release_line_id`, `version` |
+| `project.release_line.archived` | release_line | `project_id`, `release_policy_id`, `release_line_id`, `status`, `version` |
+| `project.placement_policy.created` | placement_policy | `project_id`, `placement_policy_id`, `version` |
 | `project.placement_policy.updated` | placement_policy | `project_id`, `placement_policy_id`, `version` |
+| `project.placement_policy.disabled` | placement_policy | `project_id`, `placement_policy_id`, `status`, `version` |
 
 ## Состояние реализации
 
