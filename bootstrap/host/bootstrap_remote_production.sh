@@ -633,4 +633,4 @@ ssh -i "$TARGET_ROOT_SSH_KEY" -p "$TARGET_PORT" "${TARGET_ROOT_USER}@${TARGET_HO
   "${REMOTE_RUN_PREFIX}bash '${REMOTE_DIR}/remote/bootstrap_production.sh' '${REMOTE_ENV}'"
 
 log "Bootstrap completed"
-log "Next: render deploy manifests, load service images and run access-manager smoke check"
+log "Next: load service images and run access-manager smoke check with generated bootstrap.env"

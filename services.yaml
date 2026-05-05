@@ -89,18 +89,6 @@ spec:
       clientLibrary: libs/go/eventlog
       purpose: shared-domain-event-log
   deployManifests:
-    - name: base-stack
-      path: deploy/base/kustomization.yaml.tpl
-      renderMode: kustomize
-      includes:
-        - deploy/base/postgres/kustomization.yaml.tpl
-        - deploy/base/postgres/secrets.yaml.tpl
-        - deploy/base/postgres/postgres.yaml.tpl
-        - deploy/base/postgres/bootstrap-databases.sh
-        - deploy/base/platform-event-log/migrations.yaml.tpl
-        - deploy/base/access-manager/kustomization.yaml.tpl
-        - deploy/base/access-manager/migrations.yaml.tpl
-        - deploy/base/access-manager/access-manager.yaml.tpl
     - name: postgres-stack
       path: deploy/base/postgres/kustomization.yaml.tpl
       renderMode: kustomize
@@ -137,6 +125,7 @@ spec:
         - platform-event-log-migrations
     - name: access-manager
       path: deploy/base/access-manager/access-manager.yaml.tpl
+      kustomization: deploy/base/access-manager/kustomization.yaml.tpl
       deploysService: access-manager
       requires:
         - access-manager-migrations
