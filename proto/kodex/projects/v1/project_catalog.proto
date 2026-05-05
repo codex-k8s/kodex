@@ -71,9 +71,9 @@ service ProjectCatalogService {
 // CommandMeta is required for every mutating command.
 message CommandMeta {
   // command_id is a unique command identifier. Either command_id or idempotency_key is required.
-  string command_id = 1;
+  optional string command_id = 1;
   // idempotency_key is an idempotency key scoped by operation and actor.
-  string idempotency_key = 2;
+  optional string idempotency_key = 2;
   // expected_version is present only for existing aggregate mutations.
   optional int64 expected_version = 3;
   // actor is the authenticated caller.
@@ -101,11 +101,11 @@ message RequestContext {
   // source identifies caller surface, for example staff-gateway, platform-mcp-server or service.
   string source = 1;
   // trace_id links platform traces.
-  string trace_id = 2;
+  optional string trace_id = 2;
   // session_id links a user session when available.
-  string session_id = 3;
+  optional string session_id = 3;
   // client_ip_hash is an optional hashed client address.
-  string client_ip_hash = 4;
+  optional string client_ip_hash = 4;
 }
 
 // Actor identifies a user, service, agent or external account.
@@ -121,13 +121,13 @@ message PageRequest {
   // page_size is the maximum item count requested by caller.
   int32 page_size = 1;
   // page_token is an opaque continuation token returned by a previous call.
-  string page_token = 2;
+  optional string page_token = 2;
 }
 
 // PageResponse describes list continuation state.
 message PageResponse {
   // next_page_token is empty when there are no more items.
-  string next_page_token = 1;
+  optional string next_page_token = 1;
 }
 
 // ProjectStatus is the closed set of project lifecycle statuses.
@@ -298,9 +298,9 @@ message Project {
   // display_name is safe display text.
   string display_name = 4;
   // description is optional safe description.
-  string description = 5;
+  optional string description = 5;
   // icon_object_uri is an optional object-store URI for project icon.
-  string icon_object_uri = 6;
+  optional string icon_object_uri = 6;
   // status is project lifecycle status.
   ProjectStatus status = 7;
   // version is the aggregate version.
@@ -326,9 +326,9 @@ message Repository {
   // status is repository binding status.
   RepositoryStatus status = 8;
   // provider_repository_id is optional provider-native id.
-  string provider_repository_id = 9;
+  optional string provider_repository_id = 9;
   // icon_object_uri is an optional object-store URI for repository icon.
-  string icon_object_uri = 10;
+  optional string icon_object_uri = 10;
   // version is the aggregate version.
   int64 version = 11;
 }
@@ -340,15 +340,15 @@ message ServicesPolicy {
   // project_id is the project that owns the policy.
   string project_id = 2;
   // source_repository_id is the repository where source services.yaml was found.
-  string source_repository_id = 3;
+  optional string source_repository_id = 3;
   // source_path is the policy file path.
   string source_path = 4;
   // source_ref is the branch, tag or provider ref used for import.
-  string source_ref = 5;
+  optional string source_ref = 5;
   // source_commit_sha is the commit used for checked projection.
-  string source_commit_sha = 6;
+  optional string source_commit_sha = 6;
   // source_blob_sha is the provider file object hash when available.
-  string source_blob_sha = 7;
+  optional string source_blob_sha = 7;
   // policy_version is the checked policy version.
   int64 policy_version = 8;
   // content_hash is the normalized source content hash.
@@ -372,7 +372,7 @@ message ServiceDescriptor {
   // services_policy_id is the source checked policy id.
   string services_policy_id = 3;
   // repository_id is optional repository binding id.
-  string repository_id = 4;
+  optional string repository_id = 4;
   // service_key is stable service key from services.yaml.
   string service_key = 5;
   // display_name is safe display text.
@@ -382,7 +382,7 @@ message ServiceDescriptor {
   // root_path is the service root in workspace.
   string root_path = 8;
   // documentation_scope_id links service to documentation sources.
-  string documentation_scope_id = 9;
+  optional string documentation_scope_id = 9;
   // depends_on_service_keys lists project service dependencies.
   repeated string depends_on_service_keys = 10;
   // status is service descriptor status.
@@ -398,11 +398,11 @@ message DocumentationSource {
   // project_id is the owner project id.
   string project_id = 2;
   // repository_id is optional repository binding id.
-  string repository_id = 3;
+  optional string repository_id = 3;
   // scope_type classifies where the source applies.
   DocumentationScopeType scope_type = 4;
   // scope_id is optional service, dependency or guidance scope id.
-  string scope_id = 5;
+  optional string scope_id = 5;
   // local_path is target path in workspace.
   string local_path = 6;
   // access_mode controls whether the source is editable.
@@ -420,7 +420,7 @@ message BranchRules {
   // project_id is the owner project id.
   string project_id = 2;
   // repository_id narrows rules to one repository when set.
-  string repository_id = 3;
+  optional string repository_id = 3;
   // pattern is the branch name pattern.
   string pattern = 4;
   // required_checks are provider check names required by policy.
@@ -448,7 +448,7 @@ message ReleasePolicy {
   // rollback_policy is the rollback rule.
   RollbackPolicy rollback_policy = 6;
   // risk_profile_ref references governance risk profile.
-  string risk_profile_ref = 7;
+  optional string risk_profile_ref = 7;
   // status is release policy status.
   ReleasePolicyStatus status = 8;
   // version is the aggregate version.
@@ -480,9 +480,9 @@ message PlacementPolicy {
   // project_id is the owner project id.
   string project_id = 2;
   // repository_id narrows policy to one repository when set.
-  string repository_id = 3;
+  optional string repository_id = 3;
   // service_key narrows policy to one service when set.
-  string service_key = 4;
+  optional string service_key = 4;
   // allowed_cluster_refs contains fleet-manager cluster references.
   repeated string allowed_cluster_refs = 5;
   // status is placement policy status.
@@ -500,7 +500,7 @@ message PolicyOverride {
   // target_type classifies overridden policy area.
   PolicyOverrideTargetType target_type = 3;
   // target_id is optional concrete aggregate id.
-  string target_id = 4;
+  optional string target_id = 4;
   // payload_json is the minimum override payload.
   string payload_json = 5;
   // reason is the operator reason.
@@ -552,11 +552,11 @@ message WorkspaceDocumentationSource {
   // documentation_source_id is the documentation source id.
   string documentation_source_id = 1;
   // repository_id is optional repository binding id.
-  string repository_id = 2;
+  optional string repository_id = 2;
   // scope_type classifies where the source applies.
   DocumentationScopeType scope_type = 3;
   // scope_id is optional service, dependency or guidance scope id.
-  string scope_id = 4;
+  optional string scope_id = 4;
   // local_path is the target path in workspace.
   string local_path = 5;
   // access_mode controls whether the source is editable.
@@ -572,11 +572,11 @@ message CreateProjectRequest {
   // display_name is safe display text.
   string display_name = 3;
   // description is optional safe description.
-  string description = 4;
+  optional string description = 4;
   // icon_object_uri is an optional object-store URI for project icon.
-  string icon_object_uri = 5;
+  optional string icon_object_uri = 5;
   // status is optional target status; server defaults to active.
-  ProjectStatus status = 6;
+  optional ProjectStatus status = 6;
   // meta carries idempotency and audit context.
   CommandMeta meta = 7;
 }
@@ -594,7 +594,7 @@ message UpdateProjectRequest {
   // icon_object_uri is optional icon URI; present empty value clears it.
   optional string icon_object_uri = 5;
   // status is optional target lifecycle status.
-  ProjectStatus status = 6;
+  optional ProjectStatus status = 6;
   // meta carries idempotency, expected version and audit context.
   CommandMeta meta = 7;
 }
@@ -616,7 +616,7 @@ message GetProjectRequest {
 // ListProjectsRequest lists projects by organization and status.
 message ListProjectsRequest {
   // organization_id optionally filters projects by organization.
-  string organization_id = 1;
+  optional string organization_id = 1;
   // statuses optionally filter project lifecycle.
   repeated ProjectStatus statuses = 2;
   // page limits response size.
@@ -648,11 +648,11 @@ message AttachRepositoryRequest {
   // default_branch is the default branch.
   string default_branch = 6;
   // provider_repository_id is optional provider-native id.
-  string provider_repository_id = 7;
+  optional string provider_repository_id = 7;
   // icon_object_uri is an optional object-store URI for repository icon.
-  string icon_object_uri = 8;
+  optional string icon_object_uri = 8;
   // status is optional target status; server defaults to active.
-  RepositoryStatus status = 9;
+  optional RepositoryStatus status = 9;
   // meta carries idempotency and audit context.
   CommandMeta meta = 10;
 }
@@ -664,7 +664,7 @@ message UpdateRepositoryRequest {
   // default_branch is optional new default branch.
   optional string default_branch = 2;
   // status is optional target lifecycle status.
-  RepositoryStatus status = 3;
+  optional RepositoryStatus status = 3;
   // icon_object_uri is optional icon URI; present empty value clears it.
   optional string icon_object_uri = 4;
   // meta carries idempotency, expected version and audit context.
@@ -710,15 +710,15 @@ message ImportServicesPolicyRequest {
   // project_id is the owner project id.
   string project_id = 1;
   // source_repository_id is the repository where source policy was found.
-  string source_repository_id = 2;
+  optional string source_repository_id = 2;
   // source_path is the policy file path.
   string source_path = 3;
   // source_ref is the branch, tag or provider ref used for import.
-  string source_ref = 4;
+  optional string source_ref = 4;
   // source_commit_sha is the commit used for checked projection.
-  string source_commit_sha = 5;
+  optional string source_commit_sha = 5;
   // source_blob_sha is the provider file object hash when available.
-  string source_blob_sha = 6;
+  optional string source_blob_sha = 6;
   // content_hash is the normalized source content hash.
   string content_hash = 7;
   // validated_payload_json is normalized payload for audit and revalidation.
@@ -742,7 +742,7 @@ message GetServicesPolicyRequest {
   // project_id is the owner project id.
   string project_id = 1;
   // services_policy_id optionally selects a concrete policy version.
-  string services_policy_id = 2;
+  optional string services_policy_id = 2;
   // meta carries read actor and request context.
   QueryMeta meta = 3;
 }
@@ -752,7 +752,7 @@ message ListServiceDescriptorsRequest {
   // project_id is the owner project id.
   string project_id = 1;
   // repository_id optionally filters descriptors by repository.
-  string repository_id = 2;
+  optional string repository_id = 2;
   // service_keys optionally selects concrete services.
   repeated string service_keys = 3;
   // statuses optionally filter descriptor lifecycle.
@@ -804,7 +804,7 @@ message CreatePolicyOverrideRequest {
   // target_type classifies overridden policy area.
   PolicyOverrideTargetType target_type = 2;
   // target_id is optional concrete aggregate id.
-  string target_id = 3;
+  optional string target_id = 3;
   // payload_json is the minimum override payload.
   string payload_json = 4;
   // expires_at is the expiration timestamp in RFC3339 format.
@@ -822,15 +822,15 @@ message PolicyOverrideResponse {
 // PutDocumentationSourceRequest creates or updates a documentation source.
 message PutDocumentationSourceRequest {
   // documentation_source_id is optional source aggregate id.
-  string documentation_source_id = 1;
+  optional string documentation_source_id = 1;
   // project_id is the owner project id.
   string project_id = 2;
   // repository_id is optional repository binding id.
-  string repository_id = 3;
+  optional string repository_id = 3;
   // scope_type classifies where the source applies.
   DocumentationScopeType scope_type = 4;
   // scope_id is optional service, dependency or guidance scope id.
-  string scope_id = 5;
+  optional string scope_id = 5;
   // local_path is target path in workspace.
   string local_path = 6;
   // access_mode controls whether the source is editable.
@@ -860,11 +860,11 @@ message ListDocumentationSourcesRequest {
   // project_id is the owner project id.
   string project_id = 1;
   // repository_id optionally filters sources by repository.
-  string repository_id = 2;
+  optional string repository_id = 2;
   // scope_type optionally filters source scope.
-  DocumentationScopeType scope_type = 3;
+  optional DocumentationScopeType scope_type = 3;
   // scope_id optionally filters source scope id.
-  string scope_id = 4;
+  optional string scope_id = 4;
   // statuses optionally filter source lifecycle.
   repeated DocumentationSourceStatus statuses = 5;
   // page limits response size.
@@ -904,11 +904,11 @@ message WorkspacePolicyResponse {
 // PutBranchRulesRequest creates or updates branch rules.
 message PutBranchRulesRequest {
   // branch_rules_id is optional branch rules aggregate id.
-  string branch_rules_id = 1;
+  optional string branch_rules_id = 1;
   // project_id is the owner project id.
   string project_id = 2;
   // repository_id narrows rules to one repository when set.
-  string repository_id = 3;
+  optional string repository_id = 3;
   // pattern is the branch name pattern.
   string pattern = 4;
   // required_checks are provider check names required by policy.
@@ -940,7 +940,7 @@ message ListBranchRulesRequest {
   // project_id is the owner project id.
   string project_id = 1;
   // repository_id optionally filters rules by repository.
-  string repository_id = 2;
+  optional string repository_id = 2;
   // statuses optionally filter rules lifecycle.
   repeated BranchRulesStatus statuses = 3;
   // page limits response size.
@@ -960,7 +960,7 @@ message ListBranchRulesResponse {
 // PutReleasePolicyRequest creates or updates release policy.
 message PutReleasePolicyRequest {
   // release_policy_id is optional release policy aggregate id.
-  string release_policy_id = 1;
+  optional string release_policy_id = 1;
   // project_id is the owner project id.
   string project_id = 2;
   // name is the policy display name.
@@ -972,7 +972,7 @@ message PutReleasePolicyRequest {
   // rollback_policy is the rollback rule.
   RollbackPolicy rollback_policy = 6;
   // risk_profile_ref references governance risk profile.
-  string risk_profile_ref = 7;
+  optional string risk_profile_ref = 7;
   // status is release policy status.
   ReleasePolicyStatus status = 8;
   // meta carries idempotency, optional expected version and audit context.
@@ -1016,7 +1016,7 @@ message ListReleasePoliciesResponse {
 // PutReleaseLineRequest creates or updates a release line.
 message PutReleaseLineRequest {
   // release_line_id is optional release line aggregate id.
-  string release_line_id = 1;
+  optional string release_line_id = 1;
   // project_id is the owner project id.
   string project_id = 2;
   // release_policy_id is the source release policy id.
@@ -1050,7 +1050,7 @@ message ListReleaseLinesRequest {
   // project_id is the owner project id.
   string project_id = 1;
   // release_policy_id optionally filters lines by release policy.
-  string release_policy_id = 2;
+  optional string release_policy_id = 2;
   // statuses optionally filter line lifecycle.
   repeated ReleasePolicyStatus statuses = 3;
   // page limits response size.
@@ -1070,13 +1070,13 @@ message ListReleaseLinesResponse {
 // PutPlacementPolicyRequest creates or updates placement policy.
 message PutPlacementPolicyRequest {
   // placement_policy_id is optional placement policy aggregate id.
-  string placement_policy_id = 1;
+  optional string placement_policy_id = 1;
   // project_id is the owner project id.
   string project_id = 2;
   // repository_id narrows policy to one repository when set.
-  string repository_id = 3;
+  optional string repository_id = 3;
   // service_key narrows policy to one service when set.
-  string service_key = 4;
+  optional string service_key = 4;
   // allowed_cluster_refs contains fleet-manager cluster references.
   repeated string allowed_cluster_refs = 5;
   // status is placement policy status.
@@ -1104,9 +1104,9 @@ message ListPlacementPoliciesRequest {
   // project_id is the owner project id.
   string project_id = 1;
   // repository_id optionally filters policy by repository.
-  string repository_id = 2;
+  optional string repository_id = 2;
   // service_key optionally filters policy by service.
-  string service_key = 3;
+  optional string service_key = 3;
   // statuses optionally filter policy lifecycle.
   repeated PlacementPolicyStatus statuses = 4;
   // page limits response size.

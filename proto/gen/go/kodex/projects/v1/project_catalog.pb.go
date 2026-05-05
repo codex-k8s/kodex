@@ -1047,9 +1047,9 @@ func (PolicyOverrideStatus) EnumDescriptor() ([]byte, []int) {
 type CommandMeta struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// command_id is a unique command identifier. Either command_id or idempotency_key is required.
-	CommandId string `protobuf:"bytes,1,opt,name=command_id,json=commandId,proto3" json:"command_id,omitempty"`
+	CommandId *string `protobuf:"bytes,1,opt,name=command_id,json=commandId,proto3,oneof" json:"command_id,omitempty"`
 	// idempotency_key is an idempotency key scoped by operation and actor.
-	IdempotencyKey string `protobuf:"bytes,2,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	IdempotencyKey *string `protobuf:"bytes,2,opt,name=idempotency_key,json=idempotencyKey,proto3,oneof" json:"idempotency_key,omitempty"`
 	// expected_version is present only for existing aggregate mutations.
 	ExpectedVersion *int64 `protobuf:"varint,3,opt,name=expected_version,json=expectedVersion,proto3,oneof" json:"expected_version,omitempty"`
 	// actor is the authenticated caller.
@@ -1095,15 +1095,15 @@ func (*CommandMeta) Descriptor() ([]byte, []int) {
 }
 
 func (x *CommandMeta) GetCommandId() string {
-	if x != nil {
-		return x.CommandId
+	if x != nil && x.CommandId != nil {
+		return *x.CommandId
 	}
 	return ""
 }
 
 func (x *CommandMeta) GetIdempotencyKey() string {
-	if x != nil {
-		return x.IdempotencyKey
+	if x != nil && x.IdempotencyKey != nil {
+		return *x.IdempotencyKey
 	}
 	return ""
 }
@@ -1213,11 +1213,11 @@ type RequestContext struct {
 	// source identifies caller surface, for example staff-gateway, platform-mcp-server or service.
 	Source string `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
 	// trace_id links platform traces.
-	TraceId string `protobuf:"bytes,2,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
+	TraceId *string `protobuf:"bytes,2,opt,name=trace_id,json=traceId,proto3,oneof" json:"trace_id,omitempty"`
 	// session_id links a user session when available.
-	SessionId string `protobuf:"bytes,3,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	SessionId *string `protobuf:"bytes,3,opt,name=session_id,json=sessionId,proto3,oneof" json:"session_id,omitempty"`
 	// client_ip_hash is an optional hashed client address.
-	ClientIpHash  string `protobuf:"bytes,4,opt,name=client_ip_hash,json=clientIpHash,proto3" json:"client_ip_hash,omitempty"`
+	ClientIpHash  *string `protobuf:"bytes,4,opt,name=client_ip_hash,json=clientIpHash,proto3,oneof" json:"client_ip_hash,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1260,22 +1260,22 @@ func (x *RequestContext) GetSource() string {
 }
 
 func (x *RequestContext) GetTraceId() string {
-	if x != nil {
-		return x.TraceId
+	if x != nil && x.TraceId != nil {
+		return *x.TraceId
 	}
 	return ""
 }
 
 func (x *RequestContext) GetSessionId() string {
-	if x != nil {
-		return x.SessionId
+	if x != nil && x.SessionId != nil {
+		return *x.SessionId
 	}
 	return ""
 }
 
 func (x *RequestContext) GetClientIpHash() string {
-	if x != nil {
-		return x.ClientIpHash
+	if x != nil && x.ClientIpHash != nil {
+		return *x.ClientIpHash
 	}
 	return ""
 }
@@ -1341,7 +1341,7 @@ type PageRequest struct {
 	// page_size is the maximum item count requested by caller.
 	PageSize int32 `protobuf:"varint,1,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
 	// page_token is an opaque continuation token returned by a previous call.
-	PageToken     string `protobuf:"bytes,2,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
+	PageToken     *string `protobuf:"bytes,2,opt,name=page_token,json=pageToken,proto3,oneof" json:"page_token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1384,8 +1384,8 @@ func (x *PageRequest) GetPageSize() int32 {
 }
 
 func (x *PageRequest) GetPageToken() string {
-	if x != nil {
-		return x.PageToken
+	if x != nil && x.PageToken != nil {
+		return *x.PageToken
 	}
 	return ""
 }
@@ -1394,7 +1394,7 @@ func (x *PageRequest) GetPageToken() string {
 type PageResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// next_page_token is empty when there are no more items.
-	NextPageToken string `protobuf:"bytes,1,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"`
+	NextPageToken *string `protobuf:"bytes,1,opt,name=next_page_token,json=nextPageToken,proto3,oneof" json:"next_page_token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1430,8 +1430,8 @@ func (*PageResponse) Descriptor() ([]byte, []int) {
 }
 
 func (x *PageResponse) GetNextPageToken() string {
-	if x != nil {
-		return x.NextPageToken
+	if x != nil && x.NextPageToken != nil {
+		return *x.NextPageToken
 	}
 	return ""
 }
@@ -1448,9 +1448,9 @@ type Project struct {
 	// display_name is safe display text.
 	DisplayName string `protobuf:"bytes,4,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
 	// description is optional safe description.
-	Description string `protobuf:"bytes,5,opt,name=description,proto3" json:"description,omitempty"`
+	Description *string `protobuf:"bytes,5,opt,name=description,proto3,oneof" json:"description,omitempty"`
 	// icon_object_uri is an optional object-store URI for project icon.
-	IconObjectUri string `protobuf:"bytes,6,opt,name=icon_object_uri,json=iconObjectUri,proto3" json:"icon_object_uri,omitempty"`
+	IconObjectUri *string `protobuf:"bytes,6,opt,name=icon_object_uri,json=iconObjectUri,proto3,oneof" json:"icon_object_uri,omitempty"`
 	// status is project lifecycle status.
 	Status ProjectStatus `protobuf:"varint,7,opt,name=status,proto3,enum=kodex.projects.v1.ProjectStatus" json:"status,omitempty"`
 	// version is the aggregate version.
@@ -1518,15 +1518,15 @@ func (x *Project) GetDisplayName() string {
 }
 
 func (x *Project) GetDescription() string {
-	if x != nil {
-		return x.Description
+	if x != nil && x.Description != nil {
+		return *x.Description
 	}
 	return ""
 }
 
 func (x *Project) GetIconObjectUri() string {
-	if x != nil {
-		return x.IconObjectUri
+	if x != nil && x.IconObjectUri != nil {
+		return *x.IconObjectUri
 	}
 	return ""
 }
@@ -1565,9 +1565,9 @@ type Repository struct {
 	// status is repository binding status.
 	Status RepositoryStatus `protobuf:"varint,8,opt,name=status,proto3,enum=kodex.projects.v1.RepositoryStatus" json:"status,omitempty"`
 	// provider_repository_id is optional provider-native id.
-	ProviderRepositoryId string `protobuf:"bytes,9,opt,name=provider_repository_id,json=providerRepositoryId,proto3" json:"provider_repository_id,omitempty"`
+	ProviderRepositoryId *string `protobuf:"bytes,9,opt,name=provider_repository_id,json=providerRepositoryId,proto3,oneof" json:"provider_repository_id,omitempty"`
 	// icon_object_uri is an optional object-store URI for repository icon.
-	IconObjectUri string `protobuf:"bytes,10,opt,name=icon_object_uri,json=iconObjectUri,proto3" json:"icon_object_uri,omitempty"`
+	IconObjectUri *string `protobuf:"bytes,10,opt,name=icon_object_uri,json=iconObjectUri,proto3,oneof" json:"icon_object_uri,omitempty"`
 	// version is the aggregate version.
 	Version       int64 `protobuf:"varint,11,opt,name=version,proto3" json:"version,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -1661,15 +1661,15 @@ func (x *Repository) GetStatus() RepositoryStatus {
 }
 
 func (x *Repository) GetProviderRepositoryId() string {
-	if x != nil {
-		return x.ProviderRepositoryId
+	if x != nil && x.ProviderRepositoryId != nil {
+		return *x.ProviderRepositoryId
 	}
 	return ""
 }
 
 func (x *Repository) GetIconObjectUri() string {
-	if x != nil {
-		return x.IconObjectUri
+	if x != nil && x.IconObjectUri != nil {
+		return *x.IconObjectUri
 	}
 	return ""
 }
@@ -1689,15 +1689,15 @@ type ServicesPolicy struct {
 	// project_id is the project that owns the policy.
 	ProjectId string `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	// source_repository_id is the repository where source services.yaml was found.
-	SourceRepositoryId string `protobuf:"bytes,3,opt,name=source_repository_id,json=sourceRepositoryId,proto3" json:"source_repository_id,omitempty"`
+	SourceRepositoryId *string `protobuf:"bytes,3,opt,name=source_repository_id,json=sourceRepositoryId,proto3,oneof" json:"source_repository_id,omitempty"`
 	// source_path is the policy file path.
 	SourcePath string `protobuf:"bytes,4,opt,name=source_path,json=sourcePath,proto3" json:"source_path,omitempty"`
 	// source_ref is the branch, tag or provider ref used for import.
-	SourceRef string `protobuf:"bytes,5,opt,name=source_ref,json=sourceRef,proto3" json:"source_ref,omitempty"`
+	SourceRef *string `protobuf:"bytes,5,opt,name=source_ref,json=sourceRef,proto3,oneof" json:"source_ref,omitempty"`
 	// source_commit_sha is the commit used for checked projection.
-	SourceCommitSha string `protobuf:"bytes,6,opt,name=source_commit_sha,json=sourceCommitSha,proto3" json:"source_commit_sha,omitempty"`
+	SourceCommitSha *string `protobuf:"bytes,6,opt,name=source_commit_sha,json=sourceCommitSha,proto3,oneof" json:"source_commit_sha,omitempty"`
 	// source_blob_sha is the provider file object hash when available.
-	SourceBlobSha string `protobuf:"bytes,7,opt,name=source_blob_sha,json=sourceBlobSha,proto3" json:"source_blob_sha,omitempty"`
+	SourceBlobSha *string `protobuf:"bytes,7,opt,name=source_blob_sha,json=sourceBlobSha,proto3,oneof" json:"source_blob_sha,omitempty"`
 	// policy_version is the checked policy version.
 	PolicyVersion int64 `protobuf:"varint,8,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`
 	// content_hash is the normalized source content hash.
@@ -1759,8 +1759,8 @@ func (x *ServicesPolicy) GetProjectId() string {
 }
 
 func (x *ServicesPolicy) GetSourceRepositoryId() string {
-	if x != nil {
-		return x.SourceRepositoryId
+	if x != nil && x.SourceRepositoryId != nil {
+		return *x.SourceRepositoryId
 	}
 	return ""
 }
@@ -1773,22 +1773,22 @@ func (x *ServicesPolicy) GetSourcePath() string {
 }
 
 func (x *ServicesPolicy) GetSourceRef() string {
-	if x != nil {
-		return x.SourceRef
+	if x != nil && x.SourceRef != nil {
+		return *x.SourceRef
 	}
 	return ""
 }
 
 func (x *ServicesPolicy) GetSourceCommitSha() string {
-	if x != nil {
-		return x.SourceCommitSha
+	if x != nil && x.SourceCommitSha != nil {
+		return *x.SourceCommitSha
 	}
 	return ""
 }
 
 func (x *ServicesPolicy) GetSourceBlobSha() string {
-	if x != nil {
-		return x.SourceBlobSha
+	if x != nil && x.SourceBlobSha != nil {
+		return *x.SourceBlobSha
 	}
 	return ""
 }
@@ -1845,7 +1845,7 @@ type ServiceDescriptor struct {
 	// services_policy_id is the source checked policy id.
 	ServicesPolicyId string `protobuf:"bytes,3,opt,name=services_policy_id,json=servicesPolicyId,proto3" json:"services_policy_id,omitempty"`
 	// repository_id is optional repository binding id.
-	RepositoryId string `protobuf:"bytes,4,opt,name=repository_id,json=repositoryId,proto3" json:"repository_id,omitempty"`
+	RepositoryId *string `protobuf:"bytes,4,opt,name=repository_id,json=repositoryId,proto3,oneof" json:"repository_id,omitempty"`
 	// service_key is stable service key from services.yaml.
 	ServiceKey string `protobuf:"bytes,5,opt,name=service_key,json=serviceKey,proto3" json:"service_key,omitempty"`
 	// display_name is safe display text.
@@ -1855,7 +1855,7 @@ type ServiceDescriptor struct {
 	// root_path is the service root in workspace.
 	RootPath string `protobuf:"bytes,8,opt,name=root_path,json=rootPath,proto3" json:"root_path,omitempty"`
 	// documentation_scope_id links service to documentation sources.
-	DocumentationScopeId string `protobuf:"bytes,9,opt,name=documentation_scope_id,json=documentationScopeId,proto3" json:"documentation_scope_id,omitempty"`
+	DocumentationScopeId *string `protobuf:"bytes,9,opt,name=documentation_scope_id,json=documentationScopeId,proto3,oneof" json:"documentation_scope_id,omitempty"`
 	// depends_on_service_keys lists project service dependencies.
 	DependsOnServiceKeys []string `protobuf:"bytes,10,rep,name=depends_on_service_keys,json=dependsOnServiceKeys,proto3" json:"depends_on_service_keys,omitempty"`
 	// status is service descriptor status.
@@ -1918,8 +1918,8 @@ func (x *ServiceDescriptor) GetServicesPolicyId() string {
 }
 
 func (x *ServiceDescriptor) GetRepositoryId() string {
-	if x != nil {
-		return x.RepositoryId
+	if x != nil && x.RepositoryId != nil {
+		return *x.RepositoryId
 	}
 	return ""
 }
@@ -1953,8 +1953,8 @@ func (x *ServiceDescriptor) GetRootPath() string {
 }
 
 func (x *ServiceDescriptor) GetDocumentationScopeId() string {
-	if x != nil {
-		return x.DocumentationScopeId
+	if x != nil && x.DocumentationScopeId != nil {
+		return *x.DocumentationScopeId
 	}
 	return ""
 }
@@ -1988,11 +1988,11 @@ type DocumentationSource struct {
 	// project_id is the owner project id.
 	ProjectId string `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	// repository_id is optional repository binding id.
-	RepositoryId string `protobuf:"bytes,3,opt,name=repository_id,json=repositoryId,proto3" json:"repository_id,omitempty"`
+	RepositoryId *string `protobuf:"bytes,3,opt,name=repository_id,json=repositoryId,proto3,oneof" json:"repository_id,omitempty"`
 	// scope_type classifies where the source applies.
 	ScopeType DocumentationScopeType `protobuf:"varint,4,opt,name=scope_type,json=scopeType,proto3,enum=kodex.projects.v1.DocumentationScopeType" json:"scope_type,omitempty"`
 	// scope_id is optional service, dependency or guidance scope id.
-	ScopeId string `protobuf:"bytes,5,opt,name=scope_id,json=scopeId,proto3" json:"scope_id,omitempty"`
+	ScopeId *string `protobuf:"bytes,5,opt,name=scope_id,json=scopeId,proto3,oneof" json:"scope_id,omitempty"`
 	// local_path is target path in workspace.
 	LocalPath string `protobuf:"bytes,6,opt,name=local_path,json=localPath,proto3" json:"local_path,omitempty"`
 	// access_mode controls whether the source is editable.
@@ -2050,8 +2050,8 @@ func (x *DocumentationSource) GetProjectId() string {
 }
 
 func (x *DocumentationSource) GetRepositoryId() string {
-	if x != nil {
-		return x.RepositoryId
+	if x != nil && x.RepositoryId != nil {
+		return *x.RepositoryId
 	}
 	return ""
 }
@@ -2064,8 +2064,8 @@ func (x *DocumentationSource) GetScopeType() DocumentationScopeType {
 }
 
 func (x *DocumentationSource) GetScopeId() string {
-	if x != nil {
-		return x.ScopeId
+	if x != nil && x.ScopeId != nil {
+		return *x.ScopeId
 	}
 	return ""
 }
@@ -2106,7 +2106,7 @@ type BranchRules struct {
 	// project_id is the owner project id.
 	ProjectId string `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	// repository_id narrows rules to one repository when set.
-	RepositoryId string `protobuf:"bytes,3,opt,name=repository_id,json=repositoryId,proto3" json:"repository_id,omitempty"`
+	RepositoryId *string `protobuf:"bytes,3,opt,name=repository_id,json=repositoryId,proto3,oneof" json:"repository_id,omitempty"`
 	// pattern is the branch name pattern.
 	Pattern string `protobuf:"bytes,4,opt,name=pattern,proto3" json:"pattern,omitempty"`
 	// required_checks are provider check names required by policy.
@@ -2166,8 +2166,8 @@ func (x *BranchRules) GetProjectId() string {
 }
 
 func (x *BranchRules) GetRepositoryId() string {
-	if x != nil {
-		return x.RepositoryId
+	if x != nil && x.RepositoryId != nil {
+		return *x.RepositoryId
 	}
 	return ""
 }
@@ -2223,7 +2223,7 @@ type ReleasePolicy struct {
 	// rollback_policy is the rollback rule.
 	RollbackPolicy RollbackPolicy `protobuf:"varint,6,opt,name=rollback_policy,json=rollbackPolicy,proto3,enum=kodex.projects.v1.RollbackPolicy" json:"rollback_policy,omitempty"`
 	// risk_profile_ref references governance risk profile.
-	RiskProfileRef string `protobuf:"bytes,7,opt,name=risk_profile_ref,json=riskProfileRef,proto3" json:"risk_profile_ref,omitempty"`
+	RiskProfileRef *string `protobuf:"bytes,7,opt,name=risk_profile_ref,json=riskProfileRef,proto3,oneof" json:"risk_profile_ref,omitempty"`
 	// status is release policy status.
 	Status ReleasePolicyStatus `protobuf:"varint,8,opt,name=status,proto3,enum=kodex.projects.v1.ReleasePolicyStatus" json:"status,omitempty"`
 	// version is the aggregate version.
@@ -2305,8 +2305,8 @@ func (x *ReleasePolicy) GetRollbackPolicy() RollbackPolicy {
 }
 
 func (x *ReleasePolicy) GetRiskProfileRef() string {
-	if x != nil {
-		return x.RiskProfileRef
+	if x != nil && x.RiskProfileRef != nil {
+		return *x.RiskProfileRef
 	}
 	return ""
 }
@@ -2433,9 +2433,9 @@ type PlacementPolicy struct {
 	// project_id is the owner project id.
 	ProjectId string `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	// repository_id narrows policy to one repository when set.
-	RepositoryId string `protobuf:"bytes,3,opt,name=repository_id,json=repositoryId,proto3" json:"repository_id,omitempty"`
+	RepositoryId *string `protobuf:"bytes,3,opt,name=repository_id,json=repositoryId,proto3,oneof" json:"repository_id,omitempty"`
 	// service_key narrows policy to one service when set.
-	ServiceKey string `protobuf:"bytes,4,opt,name=service_key,json=serviceKey,proto3" json:"service_key,omitempty"`
+	ServiceKey *string `protobuf:"bytes,4,opt,name=service_key,json=serviceKey,proto3,oneof" json:"service_key,omitempty"`
 	// allowed_cluster_refs contains fleet-manager cluster references.
 	AllowedClusterRefs []string `protobuf:"bytes,5,rep,name=allowed_cluster_refs,json=allowedClusterRefs,proto3" json:"allowed_cluster_refs,omitempty"`
 	// status is placement policy status.
@@ -2491,15 +2491,15 @@ func (x *PlacementPolicy) GetProjectId() string {
 }
 
 func (x *PlacementPolicy) GetRepositoryId() string {
-	if x != nil {
-		return x.RepositoryId
+	if x != nil && x.RepositoryId != nil {
+		return *x.RepositoryId
 	}
 	return ""
 }
 
 func (x *PlacementPolicy) GetServiceKey() string {
-	if x != nil {
-		return x.ServiceKey
+	if x != nil && x.ServiceKey != nil {
+		return *x.ServiceKey
 	}
 	return ""
 }
@@ -2535,7 +2535,7 @@ type PolicyOverride struct {
 	// target_type classifies overridden policy area.
 	TargetType PolicyOverrideTargetType `protobuf:"varint,3,opt,name=target_type,json=targetType,proto3,enum=kodex.projects.v1.PolicyOverrideTargetType" json:"target_type,omitempty"`
 	// target_id is optional concrete aggregate id.
-	TargetId string `protobuf:"bytes,4,opt,name=target_id,json=targetId,proto3" json:"target_id,omitempty"`
+	TargetId *string `protobuf:"bytes,4,opt,name=target_id,json=targetId,proto3,oneof" json:"target_id,omitempty"`
 	// payload_json is the minimum override payload.
 	PayloadJson string `protobuf:"bytes,5,opt,name=payload_json,json=payloadJson,proto3" json:"payload_json,omitempty"`
 	// reason is the operator reason.
@@ -2604,8 +2604,8 @@ func (x *PolicyOverride) GetTargetType() PolicyOverrideTargetType {
 }
 
 func (x *PolicyOverride) GetTargetId() string {
-	if x != nil {
-		return x.TargetId
+	if x != nil && x.TargetId != nil {
+		return *x.TargetId
 	}
 	return ""
 }
@@ -2840,11 +2840,11 @@ type WorkspaceDocumentationSource struct {
 	// documentation_source_id is the documentation source id.
 	DocumentationSourceId string `protobuf:"bytes,1,opt,name=documentation_source_id,json=documentationSourceId,proto3" json:"documentation_source_id,omitempty"`
 	// repository_id is optional repository binding id.
-	RepositoryId string `protobuf:"bytes,2,opt,name=repository_id,json=repositoryId,proto3" json:"repository_id,omitempty"`
+	RepositoryId *string `protobuf:"bytes,2,opt,name=repository_id,json=repositoryId,proto3,oneof" json:"repository_id,omitempty"`
 	// scope_type classifies where the source applies.
 	ScopeType DocumentationScopeType `protobuf:"varint,3,opt,name=scope_type,json=scopeType,proto3,enum=kodex.projects.v1.DocumentationScopeType" json:"scope_type,omitempty"`
 	// scope_id is optional service, dependency or guidance scope id.
-	ScopeId string `protobuf:"bytes,4,opt,name=scope_id,json=scopeId,proto3" json:"scope_id,omitempty"`
+	ScopeId *string `protobuf:"bytes,4,opt,name=scope_id,json=scopeId,proto3,oneof" json:"scope_id,omitempty"`
 	// local_path is the target path in workspace.
 	LocalPath string `protobuf:"bytes,5,opt,name=local_path,json=localPath,proto3" json:"local_path,omitempty"`
 	// access_mode controls whether the source is editable.
@@ -2891,8 +2891,8 @@ func (x *WorkspaceDocumentationSource) GetDocumentationSourceId() string {
 }
 
 func (x *WorkspaceDocumentationSource) GetRepositoryId() string {
-	if x != nil {
-		return x.RepositoryId
+	if x != nil && x.RepositoryId != nil {
+		return *x.RepositoryId
 	}
 	return ""
 }
@@ -2905,8 +2905,8 @@ func (x *WorkspaceDocumentationSource) GetScopeType() DocumentationScopeType {
 }
 
 func (x *WorkspaceDocumentationSource) GetScopeId() string {
-	if x != nil {
-		return x.ScopeId
+	if x != nil && x.ScopeId != nil {
+		return *x.ScopeId
 	}
 	return ""
 }
@@ -2935,11 +2935,11 @@ type CreateProjectRequest struct {
 	// display_name is safe display text.
 	DisplayName string `protobuf:"bytes,3,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
 	// description is optional safe description.
-	Description string `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
+	Description *string `protobuf:"bytes,4,opt,name=description,proto3,oneof" json:"description,omitempty"`
 	// icon_object_uri is an optional object-store URI for project icon.
-	IconObjectUri string `protobuf:"bytes,5,opt,name=icon_object_uri,json=iconObjectUri,proto3" json:"icon_object_uri,omitempty"`
+	IconObjectUri *string `protobuf:"bytes,5,opt,name=icon_object_uri,json=iconObjectUri,proto3,oneof" json:"icon_object_uri,omitempty"`
 	// status is optional target status; server defaults to active.
-	Status ProjectStatus `protobuf:"varint,6,opt,name=status,proto3,enum=kodex.projects.v1.ProjectStatus" json:"status,omitempty"`
+	Status *ProjectStatus `protobuf:"varint,6,opt,name=status,proto3,enum=kodex.projects.v1.ProjectStatus,oneof" json:"status,omitempty"`
 	// meta carries idempotency and audit context.
 	Meta          *CommandMeta `protobuf:"bytes,7,opt,name=meta,proto3" json:"meta,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -2998,22 +2998,22 @@ func (x *CreateProjectRequest) GetDisplayName() string {
 }
 
 func (x *CreateProjectRequest) GetDescription() string {
-	if x != nil {
-		return x.Description
+	if x != nil && x.Description != nil {
+		return *x.Description
 	}
 	return ""
 }
 
 func (x *CreateProjectRequest) GetIconObjectUri() string {
-	if x != nil {
-		return x.IconObjectUri
+	if x != nil && x.IconObjectUri != nil {
+		return *x.IconObjectUri
 	}
 	return ""
 }
 
 func (x *CreateProjectRequest) GetStatus() ProjectStatus {
-	if x != nil {
-		return x.Status
+	if x != nil && x.Status != nil {
+		return *x.Status
 	}
 	return ProjectStatus_PROJECT_STATUS_UNSPECIFIED
 }
@@ -3039,7 +3039,7 @@ type UpdateProjectRequest struct {
 	// icon_object_uri is optional icon URI; present empty value clears it.
 	IconObjectUri *string `protobuf:"bytes,5,opt,name=icon_object_uri,json=iconObjectUri,proto3,oneof" json:"icon_object_uri,omitempty"`
 	// status is optional target lifecycle status.
-	Status ProjectStatus `protobuf:"varint,6,opt,name=status,proto3,enum=kodex.projects.v1.ProjectStatus" json:"status,omitempty"`
+	Status *ProjectStatus `protobuf:"varint,6,opt,name=status,proto3,enum=kodex.projects.v1.ProjectStatus,oneof" json:"status,omitempty"`
 	// meta carries idempotency, expected version and audit context.
 	Meta          *CommandMeta `protobuf:"bytes,7,opt,name=meta,proto3" json:"meta,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -3112,8 +3112,8 @@ func (x *UpdateProjectRequest) GetIconObjectUri() string {
 }
 
 func (x *UpdateProjectRequest) GetStatus() ProjectStatus {
-	if x != nil {
-		return x.Status
+	if x != nil && x.Status != nil {
+		return *x.Status
 	}
 	return ProjectStatus_PROJECT_STATUS_UNSPECIFIED
 }
@@ -3230,7 +3230,7 @@ func (x *GetProjectRequest) GetMeta() *QueryMeta {
 type ListProjectsRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// organization_id optionally filters projects by organization.
-	OrganizationId string `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	OrganizationId *string `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3,oneof" json:"organization_id,omitempty"`
 	// statuses optionally filter project lifecycle.
 	Statuses []ProjectStatus `protobuf:"varint,2,rep,packed,name=statuses,proto3,enum=kodex.projects.v1.ProjectStatus" json:"statuses,omitempty"`
 	// page limits response size.
@@ -3272,8 +3272,8 @@ func (*ListProjectsRequest) Descriptor() ([]byte, []int) {
 }
 
 func (x *ListProjectsRequest) GetOrganizationId() string {
-	if x != nil {
-		return x.OrganizationId
+	if x != nil && x.OrganizationId != nil {
+		return *x.OrganizationId
 	}
 	return ""
 }
@@ -3370,11 +3370,11 @@ type AttachRepositoryRequest struct {
 	// default_branch is the default branch.
 	DefaultBranch string `protobuf:"bytes,6,opt,name=default_branch,json=defaultBranch,proto3" json:"default_branch,omitempty"`
 	// provider_repository_id is optional provider-native id.
-	ProviderRepositoryId string `protobuf:"bytes,7,opt,name=provider_repository_id,json=providerRepositoryId,proto3" json:"provider_repository_id,omitempty"`
+	ProviderRepositoryId *string `protobuf:"bytes,7,opt,name=provider_repository_id,json=providerRepositoryId,proto3,oneof" json:"provider_repository_id,omitempty"`
 	// icon_object_uri is an optional object-store URI for repository icon.
-	IconObjectUri string `protobuf:"bytes,8,opt,name=icon_object_uri,json=iconObjectUri,proto3" json:"icon_object_uri,omitempty"`
+	IconObjectUri *string `protobuf:"bytes,8,opt,name=icon_object_uri,json=iconObjectUri,proto3,oneof" json:"icon_object_uri,omitempty"`
 	// status is optional target status; server defaults to active.
-	Status RepositoryStatus `protobuf:"varint,9,opt,name=status,proto3,enum=kodex.projects.v1.RepositoryStatus" json:"status,omitempty"`
+	Status *RepositoryStatus `protobuf:"varint,9,opt,name=status,proto3,enum=kodex.projects.v1.RepositoryStatus,oneof" json:"status,omitempty"`
 	// meta carries idempotency and audit context.
 	Meta          *CommandMeta `protobuf:"bytes,10,opt,name=meta,proto3" json:"meta,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -3454,22 +3454,22 @@ func (x *AttachRepositoryRequest) GetDefaultBranch() string {
 }
 
 func (x *AttachRepositoryRequest) GetProviderRepositoryId() string {
-	if x != nil {
-		return x.ProviderRepositoryId
+	if x != nil && x.ProviderRepositoryId != nil {
+		return *x.ProviderRepositoryId
 	}
 	return ""
 }
 
 func (x *AttachRepositoryRequest) GetIconObjectUri() string {
-	if x != nil {
-		return x.IconObjectUri
+	if x != nil && x.IconObjectUri != nil {
+		return *x.IconObjectUri
 	}
 	return ""
 }
 
 func (x *AttachRepositoryRequest) GetStatus() RepositoryStatus {
-	if x != nil {
-		return x.Status
+	if x != nil && x.Status != nil {
+		return *x.Status
 	}
 	return RepositoryStatus_REPOSITORY_STATUS_UNSPECIFIED
 }
@@ -3489,7 +3489,7 @@ type UpdateRepositoryRequest struct {
 	// default_branch is optional new default branch.
 	DefaultBranch *string `protobuf:"bytes,2,opt,name=default_branch,json=defaultBranch,proto3,oneof" json:"default_branch,omitempty"`
 	// status is optional target lifecycle status.
-	Status RepositoryStatus `protobuf:"varint,3,opt,name=status,proto3,enum=kodex.projects.v1.RepositoryStatus" json:"status,omitempty"`
+	Status *RepositoryStatus `protobuf:"varint,3,opt,name=status,proto3,enum=kodex.projects.v1.RepositoryStatus,oneof" json:"status,omitempty"`
 	// icon_object_uri is optional icon URI; present empty value clears it.
 	IconObjectUri *string `protobuf:"bytes,4,opt,name=icon_object_uri,json=iconObjectUri,proto3,oneof" json:"icon_object_uri,omitempty"`
 	// meta carries idempotency, expected version and audit context.
@@ -3543,8 +3543,8 @@ func (x *UpdateRepositoryRequest) GetDefaultBranch() string {
 }
 
 func (x *UpdateRepositoryRequest) GetStatus() RepositoryStatus {
-	if x != nil {
-		return x.Status
+	if x != nil && x.Status != nil {
+		return *x.Status
 	}
 	return RepositoryStatus_REPOSITORY_STATUS_UNSPECIFIED
 }
@@ -3798,15 +3798,15 @@ type ImportServicesPolicyRequest struct {
 	// project_id is the owner project id.
 	ProjectId string `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	// source_repository_id is the repository where source policy was found.
-	SourceRepositoryId string `protobuf:"bytes,2,opt,name=source_repository_id,json=sourceRepositoryId,proto3" json:"source_repository_id,omitempty"`
+	SourceRepositoryId *string `protobuf:"bytes,2,opt,name=source_repository_id,json=sourceRepositoryId,proto3,oneof" json:"source_repository_id,omitempty"`
 	// source_path is the policy file path.
 	SourcePath string `protobuf:"bytes,3,opt,name=source_path,json=sourcePath,proto3" json:"source_path,omitempty"`
 	// source_ref is the branch, tag or provider ref used for import.
-	SourceRef string `protobuf:"bytes,4,opt,name=source_ref,json=sourceRef,proto3" json:"source_ref,omitempty"`
+	SourceRef *string `protobuf:"bytes,4,opt,name=source_ref,json=sourceRef,proto3,oneof" json:"source_ref,omitempty"`
 	// source_commit_sha is the commit used for checked projection.
-	SourceCommitSha string `protobuf:"bytes,5,opt,name=source_commit_sha,json=sourceCommitSha,proto3" json:"source_commit_sha,omitempty"`
+	SourceCommitSha *string `protobuf:"bytes,5,opt,name=source_commit_sha,json=sourceCommitSha,proto3,oneof" json:"source_commit_sha,omitempty"`
 	// source_blob_sha is the provider file object hash when available.
-	SourceBlobSha string `protobuf:"bytes,6,opt,name=source_blob_sha,json=sourceBlobSha,proto3" json:"source_blob_sha,omitempty"`
+	SourceBlobSha *string `protobuf:"bytes,6,opt,name=source_blob_sha,json=sourceBlobSha,proto3,oneof" json:"source_blob_sha,omitempty"`
 	// content_hash is the normalized source content hash.
 	ContentHash string `protobuf:"bytes,7,opt,name=content_hash,json=contentHash,proto3" json:"content_hash,omitempty"`
 	// validated_payload_json is normalized payload for audit and revalidation.
@@ -3859,8 +3859,8 @@ func (x *ImportServicesPolicyRequest) GetProjectId() string {
 }
 
 func (x *ImportServicesPolicyRequest) GetSourceRepositoryId() string {
-	if x != nil {
-		return x.SourceRepositoryId
+	if x != nil && x.SourceRepositoryId != nil {
+		return *x.SourceRepositoryId
 	}
 	return ""
 }
@@ -3873,22 +3873,22 @@ func (x *ImportServicesPolicyRequest) GetSourcePath() string {
 }
 
 func (x *ImportServicesPolicyRequest) GetSourceRef() string {
-	if x != nil {
-		return x.SourceRef
+	if x != nil && x.SourceRef != nil {
+		return *x.SourceRef
 	}
 	return ""
 }
 
 func (x *ImportServicesPolicyRequest) GetSourceCommitSha() string {
-	if x != nil {
-		return x.SourceCommitSha
+	if x != nil && x.SourceCommitSha != nil {
+		return *x.SourceCommitSha
 	}
 	return ""
 }
 
 func (x *ImportServicesPolicyRequest) GetSourceBlobSha() string {
-	if x != nil {
-		return x.SourceBlobSha
+	if x != nil && x.SourceBlobSha != nil {
+		return *x.SourceBlobSha
 	}
 	return ""
 }
@@ -3980,7 +3980,7 @@ type GetServicesPolicyRequest struct {
 	// project_id is the owner project id.
 	ProjectId string `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	// services_policy_id optionally selects a concrete policy version.
-	ServicesPolicyId string `protobuf:"bytes,2,opt,name=services_policy_id,json=servicesPolicyId,proto3" json:"services_policy_id,omitempty"`
+	ServicesPolicyId *string `protobuf:"bytes,2,opt,name=services_policy_id,json=servicesPolicyId,proto3,oneof" json:"services_policy_id,omitempty"`
 	// meta carries read actor and request context.
 	Meta          *QueryMeta `protobuf:"bytes,3,opt,name=meta,proto3" json:"meta,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -4025,8 +4025,8 @@ func (x *GetServicesPolicyRequest) GetProjectId() string {
 }
 
 func (x *GetServicesPolicyRequest) GetServicesPolicyId() string {
-	if x != nil {
-		return x.ServicesPolicyId
+	if x != nil && x.ServicesPolicyId != nil {
+		return *x.ServicesPolicyId
 	}
 	return ""
 }
@@ -4044,7 +4044,7 @@ type ListServiceDescriptorsRequest struct {
 	// project_id is the owner project id.
 	ProjectId string `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	// repository_id optionally filters descriptors by repository.
-	RepositoryId string `protobuf:"bytes,2,opt,name=repository_id,json=repositoryId,proto3" json:"repository_id,omitempty"`
+	RepositoryId *string `protobuf:"bytes,2,opt,name=repository_id,json=repositoryId,proto3,oneof" json:"repository_id,omitempty"`
 	// service_keys optionally selects concrete services.
 	ServiceKeys []string `protobuf:"bytes,3,rep,name=service_keys,json=serviceKeys,proto3" json:"service_keys,omitempty"`
 	// statuses optionally filter descriptor lifecycle.
@@ -4095,8 +4095,8 @@ func (x *ListServiceDescriptorsRequest) GetProjectId() string {
 }
 
 func (x *ListServiceDescriptorsRequest) GetRepositoryId() string {
-	if x != nil {
-		return x.RepositoryId
+	if x != nil && x.RepositoryId != nil {
+		return *x.RepositoryId
 	}
 	return ""
 }
@@ -4347,7 +4347,7 @@ type CreatePolicyOverrideRequest struct {
 	// target_type classifies overridden policy area.
 	TargetType PolicyOverrideTargetType `protobuf:"varint,2,opt,name=target_type,json=targetType,proto3,enum=kodex.projects.v1.PolicyOverrideTargetType" json:"target_type,omitempty"`
 	// target_id is optional concrete aggregate id.
-	TargetId string `protobuf:"bytes,3,opt,name=target_id,json=targetId,proto3" json:"target_id,omitempty"`
+	TargetId *string `protobuf:"bytes,3,opt,name=target_id,json=targetId,proto3,oneof" json:"target_id,omitempty"`
 	// payload_json is the minimum override payload.
 	PayloadJson string `protobuf:"bytes,4,opt,name=payload_json,json=payloadJson,proto3" json:"payload_json,omitempty"`
 	// expires_at is the expiration timestamp in RFC3339 format.
@@ -4403,8 +4403,8 @@ func (x *CreatePolicyOverrideRequest) GetTargetType() PolicyOverrideTargetType {
 }
 
 func (x *CreatePolicyOverrideRequest) GetTargetId() string {
-	if x != nil {
-		return x.TargetId
+	if x != nil && x.TargetId != nil {
+		return *x.TargetId
 	}
 	return ""
 }
@@ -4480,15 +4480,15 @@ func (x *PolicyOverrideResponse) GetPolicyOverride() *PolicyOverride {
 type PutDocumentationSourceRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// documentation_source_id is optional source aggregate id.
-	DocumentationSourceId string `protobuf:"bytes,1,opt,name=documentation_source_id,json=documentationSourceId,proto3" json:"documentation_source_id,omitempty"`
+	DocumentationSourceId *string `protobuf:"bytes,1,opt,name=documentation_source_id,json=documentationSourceId,proto3,oneof" json:"documentation_source_id,omitempty"`
 	// project_id is the owner project id.
 	ProjectId string `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	// repository_id is optional repository binding id.
-	RepositoryId string `protobuf:"bytes,3,opt,name=repository_id,json=repositoryId,proto3" json:"repository_id,omitempty"`
+	RepositoryId *string `protobuf:"bytes,3,opt,name=repository_id,json=repositoryId,proto3,oneof" json:"repository_id,omitempty"`
 	// scope_type classifies where the source applies.
 	ScopeType DocumentationScopeType `protobuf:"varint,4,opt,name=scope_type,json=scopeType,proto3,enum=kodex.projects.v1.DocumentationScopeType" json:"scope_type,omitempty"`
 	// scope_id is optional service, dependency or guidance scope id.
-	ScopeId string `protobuf:"bytes,5,opt,name=scope_id,json=scopeId,proto3" json:"scope_id,omitempty"`
+	ScopeId *string `protobuf:"bytes,5,opt,name=scope_id,json=scopeId,proto3,oneof" json:"scope_id,omitempty"`
 	// local_path is target path in workspace.
 	LocalPath string `protobuf:"bytes,6,opt,name=local_path,json=localPath,proto3" json:"local_path,omitempty"`
 	// access_mode controls whether the source is editable.
@@ -4532,8 +4532,8 @@ func (*PutDocumentationSourceRequest) Descriptor() ([]byte, []int) {
 }
 
 func (x *PutDocumentationSourceRequest) GetDocumentationSourceId() string {
-	if x != nil {
-		return x.DocumentationSourceId
+	if x != nil && x.DocumentationSourceId != nil {
+		return *x.DocumentationSourceId
 	}
 	return ""
 }
@@ -4546,8 +4546,8 @@ func (x *PutDocumentationSourceRequest) GetProjectId() string {
 }
 
 func (x *PutDocumentationSourceRequest) GetRepositoryId() string {
-	if x != nil {
-		return x.RepositoryId
+	if x != nil && x.RepositoryId != nil {
+		return *x.RepositoryId
 	}
 	return ""
 }
@@ -4560,8 +4560,8 @@ func (x *PutDocumentationSourceRequest) GetScopeType() DocumentationScopeType {
 }
 
 func (x *PutDocumentationSourceRequest) GetScopeId() string {
-	if x != nil {
-		return x.ScopeId
+	if x != nil && x.ScopeId != nil {
+		return *x.ScopeId
 	}
 	return ""
 }
@@ -4701,11 +4701,11 @@ type ListDocumentationSourcesRequest struct {
 	// project_id is the owner project id.
 	ProjectId string `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	// repository_id optionally filters sources by repository.
-	RepositoryId string `protobuf:"bytes,2,opt,name=repository_id,json=repositoryId,proto3" json:"repository_id,omitempty"`
+	RepositoryId *string `protobuf:"bytes,2,opt,name=repository_id,json=repositoryId,proto3,oneof" json:"repository_id,omitempty"`
 	// scope_type optionally filters source scope.
-	ScopeType DocumentationScopeType `protobuf:"varint,3,opt,name=scope_type,json=scopeType,proto3,enum=kodex.projects.v1.DocumentationScopeType" json:"scope_type,omitempty"`
+	ScopeType *DocumentationScopeType `protobuf:"varint,3,opt,name=scope_type,json=scopeType,proto3,enum=kodex.projects.v1.DocumentationScopeType,oneof" json:"scope_type,omitempty"`
 	// scope_id optionally filters source scope id.
-	ScopeId string `protobuf:"bytes,4,opt,name=scope_id,json=scopeId,proto3" json:"scope_id,omitempty"`
+	ScopeId *string `protobuf:"bytes,4,opt,name=scope_id,json=scopeId,proto3,oneof" json:"scope_id,omitempty"`
 	// statuses optionally filter source lifecycle.
 	Statuses []DocumentationSourceStatus `protobuf:"varint,5,rep,packed,name=statuses,proto3,enum=kodex.projects.v1.DocumentationSourceStatus" json:"statuses,omitempty"`
 	// page limits response size.
@@ -4754,22 +4754,22 @@ func (x *ListDocumentationSourcesRequest) GetProjectId() string {
 }
 
 func (x *ListDocumentationSourcesRequest) GetRepositoryId() string {
-	if x != nil {
-		return x.RepositoryId
+	if x != nil && x.RepositoryId != nil {
+		return *x.RepositoryId
 	}
 	return ""
 }
 
 func (x *ListDocumentationSourcesRequest) GetScopeType() DocumentationScopeType {
-	if x != nil {
-		return x.ScopeType
+	if x != nil && x.ScopeType != nil {
+		return *x.ScopeType
 	}
 	return DocumentationScopeType_DOCUMENTATION_SCOPE_TYPE_UNSPECIFIED
 }
 
 func (x *ListDocumentationSourcesRequest) GetScopeId() string {
-	if x != nil {
-		return x.ScopeId
+	if x != nil && x.ScopeId != nil {
+		return *x.ScopeId
 	}
 	return ""
 }
@@ -4982,11 +4982,11 @@ func (x *WorkspacePolicyResponse) GetWorkspacePolicy() *WorkspacePolicy {
 type PutBranchRulesRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// branch_rules_id is optional branch rules aggregate id.
-	BranchRulesId string `protobuf:"bytes,1,opt,name=branch_rules_id,json=branchRulesId,proto3" json:"branch_rules_id,omitempty"`
+	BranchRulesId *string `protobuf:"bytes,1,opt,name=branch_rules_id,json=branchRulesId,proto3,oneof" json:"branch_rules_id,omitempty"`
 	// project_id is the owner project id.
 	ProjectId string `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	// repository_id narrows rules to one repository when set.
-	RepositoryId string `protobuf:"bytes,3,opt,name=repository_id,json=repositoryId,proto3" json:"repository_id,omitempty"`
+	RepositoryId *string `protobuf:"bytes,3,opt,name=repository_id,json=repositoryId,proto3,oneof" json:"repository_id,omitempty"`
 	// pattern is the branch name pattern.
 	Pattern string `protobuf:"bytes,4,opt,name=pattern,proto3" json:"pattern,omitempty"`
 	// required_checks are provider check names required by policy.
@@ -5032,8 +5032,8 @@ func (*PutBranchRulesRequest) Descriptor() ([]byte, []int) {
 }
 
 func (x *PutBranchRulesRequest) GetBranchRulesId() string {
-	if x != nil {
-		return x.BranchRulesId
+	if x != nil && x.BranchRulesId != nil {
+		return *x.BranchRulesId
 	}
 	return ""
 }
@@ -5046,8 +5046,8 @@ func (x *PutBranchRulesRequest) GetProjectId() string {
 }
 
 func (x *PutBranchRulesRequest) GetRepositoryId() string {
-	if x != nil {
-		return x.RepositoryId
+	if x != nil && x.RepositoryId != nil {
+		return *x.RepositoryId
 	}
 	return ""
 }
@@ -5194,7 +5194,7 @@ type ListBranchRulesRequest struct {
 	// project_id is the owner project id.
 	ProjectId string `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	// repository_id optionally filters rules by repository.
-	RepositoryId string `protobuf:"bytes,2,opt,name=repository_id,json=repositoryId,proto3" json:"repository_id,omitempty"`
+	RepositoryId *string `protobuf:"bytes,2,opt,name=repository_id,json=repositoryId,proto3,oneof" json:"repository_id,omitempty"`
 	// statuses optionally filter rules lifecycle.
 	Statuses []BranchRulesStatus `protobuf:"varint,3,rep,packed,name=statuses,proto3,enum=kodex.projects.v1.BranchRulesStatus" json:"statuses,omitempty"`
 	// page limits response size.
@@ -5243,8 +5243,8 @@ func (x *ListBranchRulesRequest) GetProjectId() string {
 }
 
 func (x *ListBranchRulesRequest) GetRepositoryId() string {
-	if x != nil {
-		return x.RepositoryId
+	if x != nil && x.RepositoryId != nil {
+		return *x.RepositoryId
 	}
 	return ""
 }
@@ -5329,7 +5329,7 @@ func (x *ListBranchRulesResponse) GetPage() *PageResponse {
 type PutReleasePolicyRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// release_policy_id is optional release policy aggregate id.
-	ReleasePolicyId string `protobuf:"bytes,1,opt,name=release_policy_id,json=releasePolicyId,proto3" json:"release_policy_id,omitempty"`
+	ReleasePolicyId *string `protobuf:"bytes,1,opt,name=release_policy_id,json=releasePolicyId,proto3,oneof" json:"release_policy_id,omitempty"`
 	// project_id is the owner project id.
 	ProjectId string `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	// name is the policy display name.
@@ -5341,7 +5341,7 @@ type PutReleasePolicyRequest struct {
 	// rollback_policy is the rollback rule.
 	RollbackPolicy RollbackPolicy `protobuf:"varint,6,opt,name=rollback_policy,json=rollbackPolicy,proto3,enum=kodex.projects.v1.RollbackPolicy" json:"rollback_policy,omitempty"`
 	// risk_profile_ref references governance risk profile.
-	RiskProfileRef string `protobuf:"bytes,7,opt,name=risk_profile_ref,json=riskProfileRef,proto3" json:"risk_profile_ref,omitempty"`
+	RiskProfileRef *string `protobuf:"bytes,7,opt,name=risk_profile_ref,json=riskProfileRef,proto3,oneof" json:"risk_profile_ref,omitempty"`
 	// status is release policy status.
 	Status ReleasePolicyStatus `protobuf:"varint,8,opt,name=status,proto3,enum=kodex.projects.v1.ReleasePolicyStatus" json:"status,omitempty"`
 	// meta carries idempotency, optional expected version and audit context.
@@ -5381,8 +5381,8 @@ func (*PutReleasePolicyRequest) Descriptor() ([]byte, []int) {
 }
 
 func (x *PutReleasePolicyRequest) GetReleasePolicyId() string {
-	if x != nil {
-		return x.ReleasePolicyId
+	if x != nil && x.ReleasePolicyId != nil {
+		return *x.ReleasePolicyId
 	}
 	return ""
 }
@@ -5423,8 +5423,8 @@ func (x *PutReleasePolicyRequest) GetRollbackPolicy() RollbackPolicy {
 }
 
 func (x *PutReleasePolicyRequest) GetRiskProfileRef() string {
-	if x != nil {
-		return x.RiskProfileRef
+	if x != nil && x.RiskProfileRef != nil {
+		return *x.RiskProfileRef
 	}
 	return ""
 }
@@ -5676,7 +5676,7 @@ func (x *ListReleasePoliciesResponse) GetPage() *PageResponse {
 type PutReleaseLineRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// release_line_id is optional release line aggregate id.
-	ReleaseLineId string `protobuf:"bytes,1,opt,name=release_line_id,json=releaseLineId,proto3" json:"release_line_id,omitempty"`
+	ReleaseLineId *string `protobuf:"bytes,1,opt,name=release_line_id,json=releaseLineId,proto3,oneof" json:"release_line_id,omitempty"`
 	// project_id is the owner project id.
 	ProjectId string `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	// release_policy_id is the source release policy id.
@@ -5724,8 +5724,8 @@ func (*PutReleaseLineRequest) Descriptor() ([]byte, []int) {
 }
 
 func (x *PutReleaseLineRequest) GetReleaseLineId() string {
-	if x != nil {
-		return x.ReleaseLineId
+	if x != nil && x.ReleaseLineId != nil {
+		return *x.ReleaseLineId
 	}
 	return ""
 }
@@ -5879,7 +5879,7 @@ type ListReleaseLinesRequest struct {
 	// project_id is the owner project id.
 	ProjectId string `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	// release_policy_id optionally filters lines by release policy.
-	ReleasePolicyId string `protobuf:"bytes,2,opt,name=release_policy_id,json=releasePolicyId,proto3" json:"release_policy_id,omitempty"`
+	ReleasePolicyId *string `protobuf:"bytes,2,opt,name=release_policy_id,json=releasePolicyId,proto3,oneof" json:"release_policy_id,omitempty"`
 	// statuses optionally filter line lifecycle.
 	Statuses []ReleasePolicyStatus `protobuf:"varint,3,rep,packed,name=statuses,proto3,enum=kodex.projects.v1.ReleasePolicyStatus" json:"statuses,omitempty"`
 	// page limits response size.
@@ -5928,8 +5928,8 @@ func (x *ListReleaseLinesRequest) GetProjectId() string {
 }
 
 func (x *ListReleaseLinesRequest) GetReleasePolicyId() string {
-	if x != nil {
-		return x.ReleasePolicyId
+	if x != nil && x.ReleasePolicyId != nil {
+		return *x.ReleasePolicyId
 	}
 	return ""
 }
@@ -6014,13 +6014,13 @@ func (x *ListReleaseLinesResponse) GetPage() *PageResponse {
 type PutPlacementPolicyRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// placement_policy_id is optional placement policy aggregate id.
-	PlacementPolicyId string `protobuf:"bytes,1,opt,name=placement_policy_id,json=placementPolicyId,proto3" json:"placement_policy_id,omitempty"`
+	PlacementPolicyId *string `protobuf:"bytes,1,opt,name=placement_policy_id,json=placementPolicyId,proto3,oneof" json:"placement_policy_id,omitempty"`
 	// project_id is the owner project id.
 	ProjectId string `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	// repository_id narrows policy to one repository when set.
-	RepositoryId string `protobuf:"bytes,3,opt,name=repository_id,json=repositoryId,proto3" json:"repository_id,omitempty"`
+	RepositoryId *string `protobuf:"bytes,3,opt,name=repository_id,json=repositoryId,proto3,oneof" json:"repository_id,omitempty"`
 	// service_key narrows policy to one service when set.
-	ServiceKey string `protobuf:"bytes,4,opt,name=service_key,json=serviceKey,proto3" json:"service_key,omitempty"`
+	ServiceKey *string `protobuf:"bytes,4,opt,name=service_key,json=serviceKey,proto3,oneof" json:"service_key,omitempty"`
 	// allowed_cluster_refs contains fleet-manager cluster references.
 	AllowedClusterRefs []string `protobuf:"bytes,5,rep,name=allowed_cluster_refs,json=allowedClusterRefs,proto3" json:"allowed_cluster_refs,omitempty"`
 	// status is placement policy status.
@@ -6062,8 +6062,8 @@ func (*PutPlacementPolicyRequest) Descriptor() ([]byte, []int) {
 }
 
 func (x *PutPlacementPolicyRequest) GetPlacementPolicyId() string {
-	if x != nil {
-		return x.PlacementPolicyId
+	if x != nil && x.PlacementPolicyId != nil {
+		return *x.PlacementPolicyId
 	}
 	return ""
 }
@@ -6076,15 +6076,15 @@ func (x *PutPlacementPolicyRequest) GetProjectId() string {
 }
 
 func (x *PutPlacementPolicyRequest) GetRepositoryId() string {
-	if x != nil {
-		return x.RepositoryId
+	if x != nil && x.RepositoryId != nil {
+		return *x.RepositoryId
 	}
 	return ""
 }
 
 func (x *PutPlacementPolicyRequest) GetServiceKey() string {
-	if x != nil {
-		return x.ServiceKey
+	if x != nil && x.ServiceKey != nil {
+		return *x.ServiceKey
 	}
 	return ""
 }
@@ -6217,9 +6217,9 @@ type ListPlacementPoliciesRequest struct {
 	// project_id is the owner project id.
 	ProjectId string `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	// repository_id optionally filters policy by repository.
-	RepositoryId string `protobuf:"bytes,2,opt,name=repository_id,json=repositoryId,proto3" json:"repository_id,omitempty"`
+	RepositoryId *string `protobuf:"bytes,2,opt,name=repository_id,json=repositoryId,proto3,oneof" json:"repository_id,omitempty"`
 	// service_key optionally filters policy by service.
-	ServiceKey string `protobuf:"bytes,3,opt,name=service_key,json=serviceKey,proto3" json:"service_key,omitempty"`
+	ServiceKey *string `protobuf:"bytes,3,opt,name=service_key,json=serviceKey,proto3,oneof" json:"service_key,omitempty"`
 	// statuses optionally filter policy lifecycle.
 	Statuses []PlacementPolicyStatus `protobuf:"varint,4,rep,packed,name=statuses,proto3,enum=kodex.projects.v1.PlacementPolicyStatus" json:"statuses,omitempty"`
 	// page limits response size.
@@ -6268,15 +6268,15 @@ func (x *ListPlacementPoliciesRequest) GetProjectId() string {
 }
 
 func (x *ListPlacementPoliciesRequest) GetRepositoryId() string {
-	if x != nil {
-		return x.RepositoryId
+	if x != nil && x.RepositoryId != nil {
+		return *x.RepositoryId
 	}
 	return ""
 }
 
 func (x *ListPlacementPoliciesRequest) GetServiceKey() string {
-	if x != nil {
-		return x.ServiceKey
+	if x != nil && x.ServiceKey != nil {
+		return *x.ServiceKey
 	}
 	return ""
 }
@@ -6361,48 +6361,57 @@ var File_kodex_projects_v1_project_catalog_proto protoreflect.FileDescriptor
 
 const file_kodex_projects_v1_project_catalog_proto_rawDesc = "" +
 	"\n" +
-	"'kodex/projects/v1/project_catalog.proto\x12\x11kodex.projects.v1\"\xcd\x02\n" +
-	"\vCommandMeta\x12\x1d\n" +
+	"'kodex/projects/v1/project_catalog.proto\x12\x11kodex.projects.v1\"\xfa\x02\n" +
+	"\vCommandMeta\x12\"\n" +
 	"\n" +
-	"command_id\x18\x01 \x01(\tR\tcommandId\x12'\n" +
-	"\x0fidempotency_key\x18\x02 \x01(\tR\x0eidempotencyKey\x12.\n" +
-	"\x10expected_version\x18\x03 \x01(\x03H\x00R\x0fexpectedVersion\x88\x01\x01\x12.\n" +
+	"command_id\x18\x01 \x01(\tH\x00R\tcommandId\x88\x01\x01\x12,\n" +
+	"\x0fidempotency_key\x18\x02 \x01(\tH\x01R\x0eidempotencyKey\x88\x01\x01\x12.\n" +
+	"\x10expected_version\x18\x03 \x01(\x03H\x02R\x0fexpectedVersion\x88\x01\x01\x12.\n" +
 	"\x05actor\x18\x04 \x01(\v2\x18.kodex.projects.v1.ActorR\x05actor\x12\x16\n" +
 	"\x06reason\x18\x05 \x01(\tR\x06reason\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x06 \x01(\tR\trequestId\x12J\n" +
-	"\x0frequest_context\x18\a \x01(\v2!.kodex.projects.v1.RequestContextR\x0erequestContextB\x13\n" +
+	"\x0frequest_context\x18\a \x01(\v2!.kodex.projects.v1.RequestContextR\x0erequestContextB\r\n" +
+	"\v_command_idB\x12\n" +
+	"\x10_idempotency_keyB\x13\n" +
 	"\x11_expected_version\"\xa6\x01\n" +
 	"\tQueryMeta\x12.\n" +
 	"\x05actor\x18\x01 \x01(\v2\x18.kodex.projects.v1.ActorR\x05actor\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x02 \x01(\tR\trequestId\x12J\n" +
-	"\x0frequest_context\x18\x03 \x01(\v2!.kodex.projects.v1.RequestContextR\x0erequestContext\"\x88\x01\n" +
+	"\x0frequest_context\x18\x03 \x01(\v2!.kodex.projects.v1.RequestContextR\x0erequestContext\"\xc6\x01\n" +
 	"\x0eRequestContext\x12\x16\n" +
-	"\x06source\x18\x01 \x01(\tR\x06source\x12\x19\n" +
-	"\btrace_id\x18\x02 \x01(\tR\atraceId\x12\x1d\n" +
+	"\x06source\x18\x01 \x01(\tR\x06source\x12\x1e\n" +
+	"\btrace_id\x18\x02 \x01(\tH\x00R\atraceId\x88\x01\x01\x12\"\n" +
 	"\n" +
-	"session_id\x18\x03 \x01(\tR\tsessionId\x12$\n" +
-	"\x0eclient_ip_hash\x18\x04 \x01(\tR\fclientIpHash\"+\n" +
+	"session_id\x18\x03 \x01(\tH\x01R\tsessionId\x88\x01\x01\x12)\n" +
+	"\x0eclient_ip_hash\x18\x04 \x01(\tH\x02R\fclientIpHash\x88\x01\x01B\v\n" +
+	"\t_trace_idB\r\n" +
+	"\v_session_idB\x11\n" +
+	"\x0f_client_ip_hash\"+\n" +
 	"\x05Actor\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x0e\n" +
-	"\x02id\x18\x02 \x01(\tR\x02id\"I\n" +
+	"\x02id\x18\x02 \x01(\tR\x02id\"]\n" +
 	"\vPageRequest\x12\x1b\n" +
-	"\tpage_size\x18\x01 \x01(\x05R\bpageSize\x12\x1d\n" +
+	"\tpage_size\x18\x01 \x01(\x05R\bpageSize\x12\"\n" +
 	"\n" +
-	"page_token\x18\x02 \x01(\tR\tpageToken\"6\n" +
-	"\fPageResponse\x12&\n" +
-	"\x0fnext_page_token\x18\x01 \x01(\tR\rnextPageToken\"\xa6\x02\n" +
+	"page_token\x18\x02 \x01(\tH\x00R\tpageToken\x88\x01\x01B\r\n" +
+	"\v_page_token\"O\n" +
+	"\fPageResponse\x12+\n" +
+	"\x0fnext_page_token\x18\x01 \x01(\tH\x00R\rnextPageToken\x88\x01\x01B\x12\n" +
+	"\x10_next_page_token\"\xd4\x02\n" +
 	"\aProject\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12'\n" +
 	"\x0forganization_id\x18\x02 \x01(\tR\x0eorganizationId\x12\x12\n" +
 	"\x04slug\x18\x03 \x01(\tR\x04slug\x12!\n" +
-	"\fdisplay_name\x18\x04 \x01(\tR\vdisplayName\x12 \n" +
-	"\vdescription\x18\x05 \x01(\tR\vdescription\x12&\n" +
-	"\x0ficon_object_uri\x18\x06 \x01(\tR\riconObjectUri\x128\n" +
+	"\fdisplay_name\x18\x04 \x01(\tR\vdisplayName\x12%\n" +
+	"\vdescription\x18\x05 \x01(\tH\x00R\vdescription\x88\x01\x01\x12+\n" +
+	"\x0ficon_object_uri\x18\x06 \x01(\tH\x01R\riconObjectUri\x88\x01\x01\x128\n" +
 	"\x06status\x18\a \x01(\x0e2 .kodex.projects.v1.ProjectStatusR\x06status\x12\x18\n" +
-	"\aversion\x18\b \x01(\x03R\aversion\"\xd4\x03\n" +
+	"\aversion\x18\b \x01(\x03R\aversionB\x0e\n" +
+	"\f_descriptionB\x12\n" +
+	"\x10_icon_object_uri\"\x8d\x04\n" +
 	"\n" +
 	"Repository\x12#\n" +
 	"\rrepository_id\x18\x01 \x01(\tR\frepositoryId\x12\x1d\n" +
@@ -6413,22 +6422,24 @@ const file_kodex_projects_v1_project_catalog_proto_rawDesc = "" +
 	"\rprovider_name\x18\x05 \x01(\tR\fproviderName\x12\x17\n" +
 	"\aweb_url\x18\x06 \x01(\tR\x06webUrl\x12%\n" +
 	"\x0edefault_branch\x18\a \x01(\tR\rdefaultBranch\x12;\n" +
-	"\x06status\x18\b \x01(\x0e2#.kodex.projects.v1.RepositoryStatusR\x06status\x124\n" +
-	"\x16provider_repository_id\x18\t \x01(\tR\x14providerRepositoryId\x12&\n" +
+	"\x06status\x18\b \x01(\x0e2#.kodex.projects.v1.RepositoryStatusR\x06status\x129\n" +
+	"\x16provider_repository_id\x18\t \x01(\tH\x00R\x14providerRepositoryId\x88\x01\x01\x12+\n" +
 	"\x0ficon_object_uri\x18\n" +
-	" \x01(\tR\riconObjectUri\x12\x18\n" +
-	"\aversion\x18\v \x01(\x03R\aversion\"\x84\x05\n" +
+	" \x01(\tH\x01R\riconObjectUri\x88\x01\x01\x12\x18\n" +
+	"\aversion\x18\v \x01(\x03R\aversionB\x19\n" +
+	"\x17_provider_repository_idB\x12\n" +
+	"\x10_icon_object_uri\"\xea\x05\n" +
 	"\x0eServicesPolicy\x12,\n" +
 	"\x12services_policy_id\x18\x01 \x01(\tR\x10servicesPolicyId\x12\x1d\n" +
 	"\n" +
-	"project_id\x18\x02 \x01(\tR\tprojectId\x120\n" +
-	"\x14source_repository_id\x18\x03 \x01(\tR\x12sourceRepositoryId\x12\x1f\n" +
+	"project_id\x18\x02 \x01(\tR\tprojectId\x125\n" +
+	"\x14source_repository_id\x18\x03 \x01(\tH\x00R\x12sourceRepositoryId\x88\x01\x01\x12\x1f\n" +
 	"\vsource_path\x18\x04 \x01(\tR\n" +
-	"sourcePath\x12\x1d\n" +
+	"sourcePath\x12\"\n" +
 	"\n" +
-	"source_ref\x18\x05 \x01(\tR\tsourceRef\x12*\n" +
-	"\x11source_commit_sha\x18\x06 \x01(\tR\x0fsourceCommitSha\x12&\n" +
-	"\x0fsource_blob_sha\x18\a \x01(\tR\rsourceBlobSha\x12%\n" +
+	"source_ref\x18\x05 \x01(\tH\x01R\tsourceRef\x88\x01\x01\x12/\n" +
+	"\x11source_commit_sha\x18\x06 \x01(\tH\x02R\x0fsourceCommitSha\x88\x01\x01\x12+\n" +
+	"\x0fsource_blob_sha\x18\a \x01(\tH\x03R\rsourceBlobSha\x88\x01\x01\x12%\n" +
 	"\x0epolicy_version\x18\b \x01(\x03R\rpolicyVersion\x12!\n" +
 	"\fcontent_hash\x18\t \x01(\tR\vcontentHash\x124\n" +
 	"\x16validated_payload_json\x18\n" +
@@ -6436,47 +6447,56 @@ const file_kodex_projects_v1_project_catalog_proto_rawDesc = "" +
 	"\x11validation_status\x18\v \x01(\x0e21.kodex.projects.v1.ServicesPolicyValidationStatusR\x10validationStatus\x12^\n" +
 	"\x11projection_status\x18\f \x01(\x0e21.kodex.projects.v1.ServicesPolicyProjectionStatusR\x10projectionStatus\x12\x1f\n" +
 	"\vimported_at\x18\r \x01(\tR\n" +
-	"importedAt\"\x8f\x04\n" +
+	"importedAtB\x17\n" +
+	"\x15_source_repository_idB\r\n" +
+	"\v_source_refB\x14\n" +
+	"\x12_source_commit_shaB\x12\n" +
+	"\x10_source_blob_sha\"\xc6\x04\n" +
 	"\x11ServiceDescriptor\x122\n" +
 	"\x15service_descriptor_id\x18\x01 \x01(\tR\x13serviceDescriptorId\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x02 \x01(\tR\tprojectId\x12,\n" +
-	"\x12services_policy_id\x18\x03 \x01(\tR\x10servicesPolicyId\x12#\n" +
-	"\rrepository_id\x18\x04 \x01(\tR\frepositoryId\x12\x1f\n" +
+	"\x12services_policy_id\x18\x03 \x01(\tR\x10servicesPolicyId\x12(\n" +
+	"\rrepository_id\x18\x04 \x01(\tH\x00R\frepositoryId\x88\x01\x01\x12\x1f\n" +
 	"\vservice_key\x18\x05 \x01(\tR\n" +
 	"serviceKey\x12!\n" +
 	"\fdisplay_name\x18\x06 \x01(\tR\vdisplayName\x122\n" +
 	"\x04kind\x18\a \x01(\x0e2\x1e.kodex.projects.v1.ServiceKindR\x04kind\x12\x1b\n" +
-	"\troot_path\x18\b \x01(\tR\brootPath\x124\n" +
-	"\x16documentation_scope_id\x18\t \x01(\tR\x14documentationScopeId\x125\n" +
+	"\troot_path\x18\b \x01(\tR\brootPath\x129\n" +
+	"\x16documentation_scope_id\x18\t \x01(\tH\x01R\x14documentationScopeId\x88\x01\x01\x125\n" +
 	"\x17depends_on_service_keys\x18\n" +
 	" \x03(\tR\x14dependsOnServiceKeys\x128\n" +
 	"\x06status\x18\v \x01(\x0e2 .kodex.projects.v1.ServiceStatusR\x06status\x12\x18\n" +
-	"\aversion\x18\f \x01(\x03R\aversion\"\xc2\x03\n" +
+	"\aversion\x18\f \x01(\x03R\aversionB\x10\n" +
+	"\x0e_repository_idB\x19\n" +
+	"\x17_documentation_scope_id\"\xeb\x03\n" +
 	"\x13DocumentationSource\x126\n" +
 	"\x17documentation_source_id\x18\x01 \x01(\tR\x15documentationSourceId\x12\x1d\n" +
 	"\n" +
-	"project_id\x18\x02 \x01(\tR\tprojectId\x12#\n" +
-	"\rrepository_id\x18\x03 \x01(\tR\frepositoryId\x12H\n" +
+	"project_id\x18\x02 \x01(\tR\tprojectId\x12(\n" +
+	"\rrepository_id\x18\x03 \x01(\tH\x00R\frepositoryId\x88\x01\x01\x12H\n" +
 	"\n" +
-	"scope_type\x18\x04 \x01(\x0e2).kodex.projects.v1.DocumentationScopeTypeR\tscopeType\x12\x19\n" +
-	"\bscope_id\x18\x05 \x01(\tR\ascopeId\x12\x1d\n" +
+	"scope_type\x18\x04 \x01(\x0e2).kodex.projects.v1.DocumentationScopeTypeR\tscopeType\x12\x1e\n" +
+	"\bscope_id\x18\x05 \x01(\tH\x01R\ascopeId\x88\x01\x01\x12\x1d\n" +
 	"\n" +
 	"local_path\x18\x06 \x01(\tR\tlocalPath\x12K\n" +
 	"\vaccess_mode\x18\a \x01(\x0e2*.kodex.projects.v1.DocumentationAccessModeR\n" +
 	"accessMode\x12D\n" +
 	"\x06status\x18\b \x01(\x0e2,.kodex.projects.v1.DocumentationSourceStatusR\x06status\x12\x18\n" +
-	"\aversion\x18\t \x01(\x03R\aversion\"\xd7\x02\n" +
+	"\aversion\x18\t \x01(\x03R\aversionB\x10\n" +
+	"\x0e_repository_idB\v\n" +
+	"\t_scope_id\"\xee\x02\n" +
 	"\vBranchRules\x12&\n" +
 	"\x0fbranch_rules_id\x18\x01 \x01(\tR\rbranchRulesId\x12\x1d\n" +
 	"\n" +
-	"project_id\x18\x02 \x01(\tR\tprojectId\x12#\n" +
-	"\rrepository_id\x18\x03 \x01(\tR\frepositoryId\x12\x18\n" +
+	"project_id\x18\x02 \x01(\tR\tprojectId\x12(\n" +
+	"\rrepository_id\x18\x03 \x01(\tH\x00R\frepositoryId\x88\x01\x01\x12\x18\n" +
 	"\apattern\x18\x04 \x01(\tR\apattern\x12'\n" +
 	"\x0frequired_checks\x18\x05 \x03(\tR\x0erequiredChecks\x12A\n" +
 	"\fmerge_policy\x18\x06 \x01(\x0e2\x1e.kodex.projects.v1.MergePolicyR\vmergePolicy\x12<\n" +
 	"\x06status\x18\a \x01(\x0e2$.kodex.projects.v1.BranchRulesStatusR\x06status\x12\x18\n" +
-	"\aversion\x18\b \x01(\x03R\aversion\"\xb4\x03\n" +
+	"\aversion\x18\b \x01(\x03R\aversionB\x10\n" +
+	"\x0e_repository_id\"\xce\x03\n" +
 	"\rReleasePolicy\x12*\n" +
 	"\x11release_policy_id\x18\x01 \x01(\tR\x0freleasePolicyId\x12\x1d\n" +
 	"\n" +
@@ -6484,10 +6504,11 @@ const file_kodex_projects_v1_project_catalog_proto_rawDesc = "" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12%\n" +
 	"\x0ebranch_pattern\x18\x04 \x01(\tR\rbranchPattern\x12M\n" +
 	"\x10rollout_strategy\x18\x05 \x01(\x0e2\".kodex.projects.v1.RolloutStrategyR\x0frolloutStrategy\x12J\n" +
-	"\x0frollback_policy\x18\x06 \x01(\x0e2!.kodex.projects.v1.RollbackPolicyR\x0erollbackPolicy\x12(\n" +
-	"\x10risk_profile_ref\x18\a \x01(\tR\x0eriskProfileRef\x12>\n" +
+	"\x0frollback_policy\x18\x06 \x01(\x0e2!.kodex.projects.v1.RollbackPolicyR\x0erollbackPolicy\x12-\n" +
+	"\x10risk_profile_ref\x18\a \x01(\tH\x00R\x0eriskProfileRef\x88\x01\x01\x12>\n" +
 	"\x06status\x18\b \x01(\x0e2&.kodex.projects.v1.ReleasePolicyStatusR\x06status\x12\x18\n" +
-	"\aversion\x18\t \x01(\x03R\aversion\"\x95\x02\n" +
+	"\aversion\x18\t \x01(\x03R\aversionB\x13\n" +
+	"\x11_risk_profile_ref\"\x95\x02\n" +
 	"\vReleaseLine\x12&\n" +
 	"\x0frelease_line_id\x18\x01 \x01(\tR\rreleaseLineId\x12\x1d\n" +
 	"\n" +
@@ -6496,24 +6517,26 @@ const file_kodex_projects_v1_project_catalog_proto_rawDesc = "" +
 	"\x04name\x18\x04 \x01(\tR\x04name\x12%\n" +
 	"\x0ebranch_pattern\x18\x05 \x01(\tR\rbranchPattern\x12>\n" +
 	"\x06status\x18\x06 \x01(\x0e2&.kodex.projects.v1.ReleasePolicyStatusR\x06status\x12\x18\n" +
-	"\aversion\x18\a \x01(\x03R\aversion\"\xb4\x02\n" +
+	"\aversion\x18\a \x01(\x03R\aversion\"\xe0\x02\n" +
 	"\x0fPlacementPolicy\x12.\n" +
 	"\x13placement_policy_id\x18\x01 \x01(\tR\x11placementPolicyId\x12\x1d\n" +
 	"\n" +
-	"project_id\x18\x02 \x01(\tR\tprojectId\x12#\n" +
-	"\rrepository_id\x18\x03 \x01(\tR\frepositoryId\x12\x1f\n" +
-	"\vservice_key\x18\x04 \x01(\tR\n" +
-	"serviceKey\x120\n" +
+	"project_id\x18\x02 \x01(\tR\tprojectId\x12(\n" +
+	"\rrepository_id\x18\x03 \x01(\tH\x00R\frepositoryId\x88\x01\x01\x12$\n" +
+	"\vservice_key\x18\x04 \x01(\tH\x01R\n" +
+	"serviceKey\x88\x01\x01\x120\n" +
 	"\x14allowed_cluster_refs\x18\x05 \x03(\tR\x12allowedClusterRefs\x12@\n" +
 	"\x06status\x18\x06 \x01(\x0e2(.kodex.projects.v1.PlacementPolicyStatusR\x06status\x12\x18\n" +
-	"\aversion\x18\a \x01(\x03R\aversion\"\xae\x03\n" +
+	"\aversion\x18\a \x01(\x03R\aversionB\x10\n" +
+	"\x0e_repository_idB\x0e\n" +
+	"\f_service_key\"\xc1\x03\n" +
 	"\x0ePolicyOverride\x12,\n" +
 	"\x12policy_override_id\x18\x01 \x01(\tR\x10policyOverrideId\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x02 \x01(\tR\tprojectId\x12L\n" +
 	"\vtarget_type\x18\x03 \x01(\x0e2+.kodex.projects.v1.PolicyOverrideTargetTypeR\n" +
-	"targetType\x12\x1b\n" +
-	"\ttarget_id\x18\x04 \x01(\tR\btargetId\x12!\n" +
+	"targetType\x12 \n" +
+	"\ttarget_id\x18\x04 \x01(\tH\x00R\btargetId\x88\x01\x01\x12!\n" +
 	"\fpayload_json\x18\x05 \x01(\tR\vpayloadJson\x12\x16\n" +
 	"\x06reason\x18\x06 \x01(\tR\x06reason\x12?\n" +
 	"\x06status\x18\a \x01(\x0e2'.kodex.projects.v1.PolicyOverrideStatusR\x06status\x12\x1d\n" +
@@ -6521,7 +6544,9 @@ const file_kodex_projects_v1_project_catalog_proto_rawDesc = "" +
 	"expires_at\x18\b \x01(\tR\texpiresAt\x12/\n" +
 	"\x14created_by_actor_ref\x18\t \x01(\tR\x11createdByActorRef\x12\x18\n" +
 	"\aversion\x18\n" +
-	" \x01(\x03R\aversion\"\xbc\x02\n" +
+	" \x01(\x03R\aversionB\f\n" +
+	"\n" +
+	"_target_id\"\xbc\x02\n" +
 	"\x0fWorkspacePolicy\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12I\n" +
@@ -6538,52 +6563,59 @@ const file_kodex_projects_v1_project_catalog_proto_rawDesc = "" +
 	"\n" +
 	"local_path\x18\x06 \x01(\tR\tlocalPath\x12D\n" +
 	"\vaccess_mode\x18\a \x01(\x0e2#.kodex.projects.v1.SourceAccessModeR\n" +
-	"accessMode\"\xc5\x02\n" +
+	"accessMode\"\xee\x02\n" +
 	"\x1cWorkspaceDocumentationSource\x126\n" +
-	"\x17documentation_source_id\x18\x01 \x01(\tR\x15documentationSourceId\x12#\n" +
-	"\rrepository_id\x18\x02 \x01(\tR\frepositoryId\x12H\n" +
+	"\x17documentation_source_id\x18\x01 \x01(\tR\x15documentationSourceId\x12(\n" +
+	"\rrepository_id\x18\x02 \x01(\tH\x00R\frepositoryId\x88\x01\x01\x12H\n" +
 	"\n" +
-	"scope_type\x18\x03 \x01(\x0e2).kodex.projects.v1.DocumentationScopeTypeR\tscopeType\x12\x19\n" +
-	"\bscope_id\x18\x04 \x01(\tR\ascopeId\x12\x1d\n" +
+	"scope_type\x18\x03 \x01(\x0e2).kodex.projects.v1.DocumentationScopeTypeR\tscopeType\x12\x1e\n" +
+	"\bscope_id\x18\x04 \x01(\tH\x01R\ascopeId\x88\x01\x01\x12\x1d\n" +
 	"\n" +
 	"local_path\x18\x05 \x01(\tR\tlocalPath\x12D\n" +
 	"\vaccess_mode\x18\x06 \x01(\x0e2#.kodex.projects.v1.SourceAccessModeR\n" +
-	"accessMode\"\xae\x02\n" +
+	"accessModeB\x10\n" +
+	"\x0e_repository_idB\v\n" +
+	"\t_scope_id\"\xec\x02\n" +
 	"\x14CreateProjectRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12\x12\n" +
 	"\x04slug\x18\x02 \x01(\tR\x04slug\x12!\n" +
-	"\fdisplay_name\x18\x03 \x01(\tR\vdisplayName\x12 \n" +
-	"\vdescription\x18\x04 \x01(\tR\vdescription\x12&\n" +
-	"\x0ficon_object_uri\x18\x05 \x01(\tR\riconObjectUri\x128\n" +
-	"\x06status\x18\x06 \x01(\x0e2 .kodex.projects.v1.ProjectStatusR\x06status\x122\n" +
-	"\x04meta\x18\a \x01(\v2\x1e.kodex.projects.v1.CommandMetaR\x04meta\"\xf6\x02\n" +
+	"\fdisplay_name\x18\x03 \x01(\tR\vdisplayName\x12%\n" +
+	"\vdescription\x18\x04 \x01(\tH\x00R\vdescription\x88\x01\x01\x12+\n" +
+	"\x0ficon_object_uri\x18\x05 \x01(\tH\x01R\riconObjectUri\x88\x01\x01\x12=\n" +
+	"\x06status\x18\x06 \x01(\x0e2 .kodex.projects.v1.ProjectStatusH\x02R\x06status\x88\x01\x01\x122\n" +
+	"\x04meta\x18\a \x01(\v2\x1e.kodex.projects.v1.CommandMetaR\x04metaB\x0e\n" +
+	"\f_descriptionB\x12\n" +
+	"\x10_icon_object_uriB\t\n" +
+	"\a_status\"\x86\x03\n" +
 	"\x14UpdateProjectRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x17\n" +
 	"\x04slug\x18\x02 \x01(\tH\x00R\x04slug\x88\x01\x01\x12&\n" +
 	"\fdisplay_name\x18\x03 \x01(\tH\x01R\vdisplayName\x88\x01\x01\x12%\n" +
 	"\vdescription\x18\x04 \x01(\tH\x02R\vdescription\x88\x01\x01\x12+\n" +
-	"\x0ficon_object_uri\x18\x05 \x01(\tH\x03R\riconObjectUri\x88\x01\x01\x128\n" +
-	"\x06status\x18\x06 \x01(\x0e2 .kodex.projects.v1.ProjectStatusR\x06status\x122\n" +
+	"\x0ficon_object_uri\x18\x05 \x01(\tH\x03R\riconObjectUri\x88\x01\x01\x12=\n" +
+	"\x06status\x18\x06 \x01(\x0e2 .kodex.projects.v1.ProjectStatusH\x04R\x06status\x88\x01\x01\x122\n" +
 	"\x04meta\x18\a \x01(\v2\x1e.kodex.projects.v1.CommandMetaR\x04metaB\a\n" +
 	"\x05_slugB\x0f\n" +
 	"\r_display_nameB\x0e\n" +
 	"\f_descriptionB\x12\n" +
-	"\x10_icon_object_uri\"G\n" +
+	"\x10_icon_object_uriB\t\n" +
+	"\a_status\"G\n" +
 	"\x0fProjectResponse\x124\n" +
 	"\aproject\x18\x01 \x01(\v2\x1a.kodex.projects.v1.ProjectR\aproject\"d\n" +
 	"\x11GetProjectRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x120\n" +
-	"\x04meta\x18\x02 \x01(\v2\x1c.kodex.projects.v1.QueryMetaR\x04meta\"\xe2\x01\n" +
-	"\x13ListProjectsRequest\x12'\n" +
-	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12<\n" +
+	"\x04meta\x18\x02 \x01(\v2\x1c.kodex.projects.v1.QueryMetaR\x04meta\"\xfb\x01\n" +
+	"\x13ListProjectsRequest\x12,\n" +
+	"\x0forganization_id\x18\x01 \x01(\tH\x00R\x0eorganizationId\x88\x01\x01\x12<\n" +
 	"\bstatuses\x18\x02 \x03(\x0e2 .kodex.projects.v1.ProjectStatusR\bstatuses\x122\n" +
 	"\x04page\x18\x03 \x01(\v2\x1e.kodex.projects.v1.PageRequestR\x04page\x120\n" +
-	"\x04meta\x18\x04 \x01(\v2\x1c.kodex.projects.v1.QueryMetaR\x04meta\"\x83\x01\n" +
+	"\x04meta\x18\x04 \x01(\v2\x1c.kodex.projects.v1.QueryMetaR\x04metaB\x12\n" +
+	"\x10_organization_id\"\x83\x01\n" +
 	"\x14ListProjectsResponse\x126\n" +
 	"\bprojects\x18\x01 \x03(\v2\x1a.kodex.projects.v1.ProjectR\bprojects\x123\n" +
-	"\x04page\x18\x02 \x01(\v2\x1f.kodex.projects.v1.PageResponseR\x04page\"\xd6\x03\n" +
+	"\x04page\x18\x02 \x01(\v2\x1f.kodex.projects.v1.PageResponseR\x04page\"\x9f\x04\n" +
 	"\x17AttachRepositoryRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12A\n" +
@@ -6591,19 +6623,23 @@ const file_kodex_projects_v1_project_catalog_proto_rawDesc = "" +
 	"\x0eprovider_owner\x18\x03 \x01(\tR\rproviderOwner\x12#\n" +
 	"\rprovider_name\x18\x04 \x01(\tR\fproviderName\x12\x17\n" +
 	"\aweb_url\x18\x05 \x01(\tR\x06webUrl\x12%\n" +
-	"\x0edefault_branch\x18\x06 \x01(\tR\rdefaultBranch\x124\n" +
-	"\x16provider_repository_id\x18\a \x01(\tR\x14providerRepositoryId\x12&\n" +
-	"\x0ficon_object_uri\x18\b \x01(\tR\riconObjectUri\x12;\n" +
-	"\x06status\x18\t \x01(\x0e2#.kodex.projects.v1.RepositoryStatusR\x06status\x122\n" +
+	"\x0edefault_branch\x18\x06 \x01(\tR\rdefaultBranch\x129\n" +
+	"\x16provider_repository_id\x18\a \x01(\tH\x00R\x14providerRepositoryId\x88\x01\x01\x12+\n" +
+	"\x0ficon_object_uri\x18\b \x01(\tH\x01R\riconObjectUri\x88\x01\x01\x12@\n" +
+	"\x06status\x18\t \x01(\x0e2#.kodex.projects.v1.RepositoryStatusH\x02R\x06status\x88\x01\x01\x122\n" +
 	"\x04meta\x18\n" +
-	" \x01(\v2\x1e.kodex.projects.v1.CommandMetaR\x04meta\"\xaf\x02\n" +
+	" \x01(\v2\x1e.kodex.projects.v1.CommandMetaR\x04metaB\x19\n" +
+	"\x17_provider_repository_idB\x12\n" +
+	"\x10_icon_object_uriB\t\n" +
+	"\a_status\"\xbf\x02\n" +
 	"\x17UpdateRepositoryRequest\x12#\n" +
 	"\rrepository_id\x18\x01 \x01(\tR\frepositoryId\x12*\n" +
-	"\x0edefault_branch\x18\x02 \x01(\tH\x00R\rdefaultBranch\x88\x01\x01\x12;\n" +
-	"\x06status\x18\x03 \x01(\x0e2#.kodex.projects.v1.RepositoryStatusR\x06status\x12+\n" +
-	"\x0ficon_object_uri\x18\x04 \x01(\tH\x01R\riconObjectUri\x88\x01\x01\x122\n" +
+	"\x0edefault_branch\x18\x02 \x01(\tH\x00R\rdefaultBranch\x88\x01\x01\x12@\n" +
+	"\x06status\x18\x03 \x01(\x0e2#.kodex.projects.v1.RepositoryStatusH\x01R\x06status\x88\x01\x01\x12+\n" +
+	"\x0ficon_object_uri\x18\x04 \x01(\tH\x02R\riconObjectUri\x88\x01\x01\x122\n" +
 	"\x04meta\x18\x05 \x01(\v2\x1e.kodex.projects.v1.CommandMetaR\x04metaB\x11\n" +
-	"\x0f_default_branchB\x12\n" +
+	"\x0f_default_branchB\t\n" +
+	"\a_statusB\x12\n" +
 	"\x10_icon_object_uri\"S\n" +
 	"\x12RepositoryResponse\x12=\n" +
 	"\n" +
@@ -6620,38 +6656,44 @@ const file_kodex_projects_v1_project_catalog_proto_rawDesc = "" +
 	"\x04meta\x18\x04 \x01(\v2\x1c.kodex.projects.v1.QueryMetaR\x04meta\"\x92\x01\n" +
 	"\x18ListRepositoriesResponse\x12A\n" +
 	"\frepositories\x18\x01 \x03(\v2\x1d.kodex.projects.v1.RepositoryR\frepositories\x123\n" +
-	"\x04page\x18\x02 \x01(\v2\x1f.kodex.projects.v1.PageResponseR\x04page\"\xc6\x04\n" +
+	"\x04page\x18\x02 \x01(\v2\x1f.kodex.projects.v1.PageResponseR\x04page\"\xac\x05\n" +
 	"\x1bImportServicesPolicyRequest\x12\x1d\n" +
 	"\n" +
-	"project_id\x18\x01 \x01(\tR\tprojectId\x120\n" +
-	"\x14source_repository_id\x18\x02 \x01(\tR\x12sourceRepositoryId\x12\x1f\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x125\n" +
+	"\x14source_repository_id\x18\x02 \x01(\tH\x00R\x12sourceRepositoryId\x88\x01\x01\x12\x1f\n" +
 	"\vsource_path\x18\x03 \x01(\tR\n" +
-	"sourcePath\x12\x1d\n" +
+	"sourcePath\x12\"\n" +
 	"\n" +
-	"source_ref\x18\x04 \x01(\tR\tsourceRef\x12*\n" +
-	"\x11source_commit_sha\x18\x05 \x01(\tR\x0fsourceCommitSha\x12&\n" +
-	"\x0fsource_blob_sha\x18\x06 \x01(\tR\rsourceBlobSha\x12!\n" +
+	"source_ref\x18\x04 \x01(\tH\x01R\tsourceRef\x88\x01\x01\x12/\n" +
+	"\x11source_commit_sha\x18\x05 \x01(\tH\x02R\x0fsourceCommitSha\x88\x01\x01\x12+\n" +
+	"\x0fsource_blob_sha\x18\x06 \x01(\tH\x03R\rsourceBlobSha\x88\x01\x01\x12!\n" +
 	"\fcontent_hash\x18\a \x01(\tR\vcontentHash\x124\n" +
 	"\x16validated_payload_json\x18\b \x01(\tR\x14validatedPayloadJson\x12U\n" +
 	"\x13service_descriptors\x18\t \x03(\v2$.kodex.projects.v1.ServiceDescriptorR\x12serviceDescriptors\x12^\n" +
 	"\x11validation_status\x18\n" +
 	" \x01(\x0e21.kodex.projects.v1.ServicesPolicyValidationStatusR\x10validationStatus\x122\n" +
-	"\x04meta\x18\v \x01(\v2\x1e.kodex.projects.v1.CommandMetaR\x04meta\"d\n" +
+	"\x04meta\x18\v \x01(\v2\x1e.kodex.projects.v1.CommandMetaR\x04metaB\x17\n" +
+	"\x15_source_repository_idB\r\n" +
+	"\v_source_refB\x14\n" +
+	"\x12_source_commit_shaB\x12\n" +
+	"\x10_source_blob_sha\"d\n" +
 	"\x16ServicesPolicyResponse\x12J\n" +
-	"\x0fservices_policy\x18\x01 \x01(\v2!.kodex.projects.v1.ServicesPolicyR\x0eservicesPolicy\"\x99\x01\n" +
+	"\x0fservices_policy\x18\x01 \x01(\v2!.kodex.projects.v1.ServicesPolicyR\x0eservicesPolicy\"\xb5\x01\n" +
 	"\x18GetServicesPolicyRequest\x12\x1d\n" +
 	"\n" +
-	"project_id\x18\x01 \x01(\tR\tprojectId\x12,\n" +
-	"\x12services_policy_id\x18\x02 \x01(\tR\x10servicesPolicyId\x120\n" +
-	"\x04meta\x18\x03 \x01(\v2\x1c.kodex.projects.v1.QueryMetaR\x04meta\"\xaa\x02\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x121\n" +
+	"\x12services_policy_id\x18\x02 \x01(\tH\x00R\x10servicesPolicyId\x88\x01\x01\x120\n" +
+	"\x04meta\x18\x03 \x01(\v2\x1c.kodex.projects.v1.QueryMetaR\x04metaB\x15\n" +
+	"\x13_services_policy_id\"\xc1\x02\n" +
 	"\x1dListServiceDescriptorsRequest\x12\x1d\n" +
 	"\n" +
-	"project_id\x18\x01 \x01(\tR\tprojectId\x12#\n" +
-	"\rrepository_id\x18\x02 \x01(\tR\frepositoryId\x12!\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12(\n" +
+	"\rrepository_id\x18\x02 \x01(\tH\x00R\frepositoryId\x88\x01\x01\x12!\n" +
 	"\fservice_keys\x18\x03 \x03(\tR\vserviceKeys\x12<\n" +
 	"\bstatuses\x18\x04 \x03(\x0e2 .kodex.projects.v1.ServiceStatusR\bstatuses\x122\n" +
 	"\x04page\x18\x05 \x01(\v2\x1e.kodex.projects.v1.PageRequestR\x04page\x120\n" +
-	"\x04meta\x18\x06 \x01(\v2\x1c.kodex.projects.v1.QueryMetaR\x04meta\"\xac\x01\n" +
+	"\x04meta\x18\x06 \x01(\v2\x1c.kodex.projects.v1.QueryMetaR\x04metaB\x10\n" +
+	"\x0e_repository_id\"\xac\x01\n" +
 	"\x1eListServiceDescriptorsResponse\x12U\n" +
 	"\x13service_descriptors\x18\x01 \x03(\v2$.kodex.projects.v1.ServiceDescriptorR\x12serviceDescriptors\x123\n" +
 	"\x04page\x18\x02 \x01(\v2\x1f.kodex.projects.v1.PageResponseR\x04page\"\xf0\x01\n" +
@@ -6669,48 +6711,56 @@ const file_kodex_projects_v1_project_catalog_proto_rawDesc = "" +
 	"\n" +
 	"project_id\x18\x02 \x01(\tR\tprojectId\x12#\n" +
 	"\rrepository_id\x18\x03 \x01(\tR\frepositoryId\x12\x16\n" +
-	"\x06status\x18\x04 \x01(\tR\x06status\"\x9d\x02\n" +
+	"\x06status\x18\x04 \x01(\tR\x06status\"\xb0\x02\n" +
 	"\x1bCreatePolicyOverrideRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12L\n" +
 	"\vtarget_type\x18\x02 \x01(\x0e2+.kodex.projects.v1.PolicyOverrideTargetTypeR\n" +
-	"targetType\x12\x1b\n" +
-	"\ttarget_id\x18\x03 \x01(\tR\btargetId\x12!\n" +
+	"targetType\x12 \n" +
+	"\ttarget_id\x18\x03 \x01(\tH\x00R\btargetId\x88\x01\x01\x12!\n" +
 	"\fpayload_json\x18\x04 \x01(\tR\vpayloadJson\x12\x1d\n" +
 	"\n" +
 	"expires_at\x18\x05 \x01(\tR\texpiresAt\x122\n" +
-	"\x04meta\x18\x06 \x01(\v2\x1e.kodex.projects.v1.CommandMetaR\x04meta\"d\n" +
+	"\x04meta\x18\x06 \x01(\v2\x1e.kodex.projects.v1.CommandMetaR\x04metaB\f\n" +
+	"\n" +
+	"_target_id\"d\n" +
 	"\x16PolicyOverrideResponse\x12J\n" +
-	"\x0fpolicy_override\x18\x01 \x01(\v2!.kodex.projects.v1.PolicyOverrideR\x0epolicyOverride\"\xe6\x03\n" +
-	"\x1dPutDocumentationSourceRequest\x126\n" +
-	"\x17documentation_source_id\x18\x01 \x01(\tR\x15documentationSourceId\x12\x1d\n" +
+	"\x0fpolicy_override\x18\x01 \x01(\v2!.kodex.projects.v1.PolicyOverrideR\x0epolicyOverride\"\xb0\x04\n" +
+	"\x1dPutDocumentationSourceRequest\x12;\n" +
+	"\x17documentation_source_id\x18\x01 \x01(\tH\x00R\x15documentationSourceId\x88\x01\x01\x12\x1d\n" +
 	"\n" +
-	"project_id\x18\x02 \x01(\tR\tprojectId\x12#\n" +
-	"\rrepository_id\x18\x03 \x01(\tR\frepositoryId\x12H\n" +
+	"project_id\x18\x02 \x01(\tR\tprojectId\x12(\n" +
+	"\rrepository_id\x18\x03 \x01(\tH\x01R\frepositoryId\x88\x01\x01\x12H\n" +
 	"\n" +
-	"scope_type\x18\x04 \x01(\x0e2).kodex.projects.v1.DocumentationScopeTypeR\tscopeType\x12\x19\n" +
-	"\bscope_id\x18\x05 \x01(\tR\ascopeId\x12\x1d\n" +
+	"scope_type\x18\x04 \x01(\x0e2).kodex.projects.v1.DocumentationScopeTypeR\tscopeType\x12\x1e\n" +
+	"\bscope_id\x18\x05 \x01(\tH\x02R\ascopeId\x88\x01\x01\x12\x1d\n" +
 	"\n" +
 	"local_path\x18\x06 \x01(\tR\tlocalPath\x12K\n" +
 	"\vaccess_mode\x18\a \x01(\x0e2*.kodex.projects.v1.DocumentationAccessModeR\n" +
 	"accessMode\x12D\n" +
 	"\x06status\x18\b \x01(\x0e2,.kodex.projects.v1.DocumentationSourceStatusR\x06status\x122\n" +
-	"\x04meta\x18\t \x01(\v2\x1e.kodex.projects.v1.CommandMetaR\x04meta\"x\n" +
+	"\x04meta\x18\t \x01(\v2\x1e.kodex.projects.v1.CommandMetaR\x04metaB\x1a\n" +
+	"\x18_documentation_source_idB\x10\n" +
+	"\x0e_repository_idB\v\n" +
+	"\t_scope_id\"x\n" +
 	"\x1bDocumentationSourceResponse\x12Y\n" +
 	"\x14documentation_source\x18\x01 \x01(\v2&.kodex.projects.v1.DocumentationSourceR\x13documentationSource\"\x89\x01\n" +
 	"\x1dGetDocumentationSourceRequest\x126\n" +
 	"\x17documentation_source_id\x18\x01 \x01(\tR\x15documentationSourceId\x120\n" +
-	"\x04meta\x18\x02 \x01(\v2\x1c.kodex.projects.v1.QueryMetaR\x04meta\"\xfa\x02\n" +
+	"\x04meta\x18\x02 \x01(\v2\x1c.kodex.projects.v1.QueryMetaR\x04meta\"\xb7\x03\n" +
 	"\x1fListDocumentationSourcesRequest\x12\x1d\n" +
 	"\n" +
-	"project_id\x18\x01 \x01(\tR\tprojectId\x12#\n" +
-	"\rrepository_id\x18\x02 \x01(\tR\frepositoryId\x12H\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12(\n" +
+	"\rrepository_id\x18\x02 \x01(\tH\x00R\frepositoryId\x88\x01\x01\x12M\n" +
 	"\n" +
-	"scope_type\x18\x03 \x01(\x0e2).kodex.projects.v1.DocumentationScopeTypeR\tscopeType\x12\x19\n" +
-	"\bscope_id\x18\x04 \x01(\tR\ascopeId\x12H\n" +
+	"scope_type\x18\x03 \x01(\x0e2).kodex.projects.v1.DocumentationScopeTypeH\x01R\tscopeType\x88\x01\x01\x12\x1e\n" +
+	"\bscope_id\x18\x04 \x01(\tH\x02R\ascopeId\x88\x01\x01\x12H\n" +
 	"\bstatuses\x18\x05 \x03(\x0e2,.kodex.projects.v1.DocumentationSourceStatusR\bstatuses\x122\n" +
 	"\x04page\x18\x06 \x01(\v2\x1e.kodex.projects.v1.PageRequestR\x04page\x120\n" +
-	"\x04meta\x18\a \x01(\v2\x1c.kodex.projects.v1.QueryMetaR\x04meta\"\xb4\x01\n" +
+	"\x04meta\x18\a \x01(\v2\x1c.kodex.projects.v1.QueryMetaR\x04metaB\x10\n" +
+	"\x0e_repository_idB\r\n" +
+	"\v_scope_typeB\v\n" +
+	"\t_scope_id\"\xb4\x01\n" +
 	" ListDocumentationSourcesResponse\x12[\n" +
 	"\x15documentation_sources\x18\x01 \x03(\v2&.kodex.projects.v1.DocumentationSourceR\x14documentationSources\x123\n" +
 	"\x04page\x18\x02 \x01(\v2\x1f.kodex.projects.v1.PageResponseR\x04page\"\xf2\x01\n" +
@@ -6722,43 +6772,48 @@ const file_kodex_projects_v1_project_catalog_proto_rawDesc = "" +
 	"\x19include_guidance_packages\x18\x04 \x01(\bR\x17includeGuidancePackages\x120\n" +
 	"\x04meta\x18\x05 \x01(\v2\x1c.kodex.projects.v1.QueryMetaR\x04meta\"h\n" +
 	"\x17WorkspacePolicyResponse\x12M\n" +
-	"\x10workspace_policy\x18\x01 \x01(\v2\".kodex.projects.v1.WorkspacePolicyR\x0fworkspacePolicy\"\xfb\x02\n" +
-	"\x15PutBranchRulesRequest\x12&\n" +
-	"\x0fbranch_rules_id\x18\x01 \x01(\tR\rbranchRulesId\x12\x1d\n" +
+	"\x10workspace_policy\x18\x01 \x01(\v2\".kodex.projects.v1.WorkspacePolicyR\x0fworkspacePolicy\"\xab\x03\n" +
+	"\x15PutBranchRulesRequest\x12+\n" +
+	"\x0fbranch_rules_id\x18\x01 \x01(\tH\x00R\rbranchRulesId\x88\x01\x01\x12\x1d\n" +
 	"\n" +
-	"project_id\x18\x02 \x01(\tR\tprojectId\x12#\n" +
-	"\rrepository_id\x18\x03 \x01(\tR\frepositoryId\x12\x18\n" +
+	"project_id\x18\x02 \x01(\tR\tprojectId\x12(\n" +
+	"\rrepository_id\x18\x03 \x01(\tH\x01R\frepositoryId\x88\x01\x01\x12\x18\n" +
 	"\apattern\x18\x04 \x01(\tR\apattern\x12'\n" +
 	"\x0frequired_checks\x18\x05 \x03(\tR\x0erequiredChecks\x12A\n" +
 	"\fmerge_policy\x18\x06 \x01(\x0e2\x1e.kodex.projects.v1.MergePolicyR\vmergePolicy\x12<\n" +
 	"\x06status\x18\a \x01(\x0e2$.kodex.projects.v1.BranchRulesStatusR\x06status\x122\n" +
-	"\x04meta\x18\b \x01(\v2\x1e.kodex.projects.v1.CommandMetaR\x04meta\"X\n" +
+	"\x04meta\x18\b \x01(\v2\x1e.kodex.projects.v1.CommandMetaR\x04metaB\x12\n" +
+	"\x10_branch_rules_idB\x10\n" +
+	"\x0e_repository_id\"X\n" +
 	"\x13BranchRulesResponse\x12A\n" +
 	"\fbranch_rules\x18\x01 \x01(\v2\x1e.kodex.projects.v1.BranchRulesR\vbranchRules\"q\n" +
 	"\x15GetBranchRulesRequest\x12&\n" +
 	"\x0fbranch_rules_id\x18\x01 \x01(\tR\rbranchRulesId\x120\n" +
-	"\x04meta\x18\x02 \x01(\v2\x1c.kodex.projects.v1.QueryMetaR\x04meta\"\x84\x02\n" +
+	"\x04meta\x18\x02 \x01(\v2\x1c.kodex.projects.v1.QueryMetaR\x04meta\"\x9b\x02\n" +
 	"\x16ListBranchRulesRequest\x12\x1d\n" +
 	"\n" +
-	"project_id\x18\x01 \x01(\tR\tprojectId\x12#\n" +
-	"\rrepository_id\x18\x02 \x01(\tR\frepositoryId\x12@\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12(\n" +
+	"\rrepository_id\x18\x02 \x01(\tH\x00R\frepositoryId\x88\x01\x01\x12@\n" +
 	"\bstatuses\x18\x03 \x03(\x0e2$.kodex.projects.v1.BranchRulesStatusR\bstatuses\x122\n" +
 	"\x04page\x18\x04 \x01(\v2\x1e.kodex.projects.v1.PageRequestR\x04page\x120\n" +
-	"\x04meta\x18\x05 \x01(\v2\x1c.kodex.projects.v1.QueryMetaR\x04meta\"\x91\x01\n" +
+	"\x04meta\x18\x05 \x01(\v2\x1c.kodex.projects.v1.QueryMetaR\x04metaB\x10\n" +
+	"\x0e_repository_id\"\x91\x01\n" +
 	"\x17ListBranchRulesResponse\x12A\n" +
 	"\fbranch_rules\x18\x01 \x03(\v2\x1e.kodex.projects.v1.BranchRulesR\vbranchRules\x123\n" +
-	"\x04page\x18\x02 \x01(\v2\x1f.kodex.projects.v1.PageResponseR\x04page\"\xd8\x03\n" +
-	"\x17PutReleasePolicyRequest\x12*\n" +
-	"\x11release_policy_id\x18\x01 \x01(\tR\x0freleasePolicyId\x12\x1d\n" +
+	"\x04page\x18\x02 \x01(\v2\x1f.kodex.projects.v1.PageResponseR\x04page\"\x8d\x04\n" +
+	"\x17PutReleasePolicyRequest\x12/\n" +
+	"\x11release_policy_id\x18\x01 \x01(\tH\x00R\x0freleasePolicyId\x88\x01\x01\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x02 \x01(\tR\tprojectId\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12%\n" +
 	"\x0ebranch_pattern\x18\x04 \x01(\tR\rbranchPattern\x12M\n" +
 	"\x10rollout_strategy\x18\x05 \x01(\x0e2\".kodex.projects.v1.RolloutStrategyR\x0frolloutStrategy\x12J\n" +
-	"\x0frollback_policy\x18\x06 \x01(\x0e2!.kodex.projects.v1.RollbackPolicyR\x0erollbackPolicy\x12(\n" +
-	"\x10risk_profile_ref\x18\a \x01(\tR\x0eriskProfileRef\x12>\n" +
+	"\x0frollback_policy\x18\x06 \x01(\x0e2!.kodex.projects.v1.RollbackPolicyR\x0erollbackPolicy\x12-\n" +
+	"\x10risk_profile_ref\x18\a \x01(\tH\x01R\x0eriskProfileRef\x88\x01\x01\x12>\n" +
 	"\x06status\x18\b \x01(\x0e2&.kodex.projects.v1.ReleasePolicyStatusR\x06status\x122\n" +
-	"\x04meta\x18\t \x01(\v2\x1e.kodex.projects.v1.CommandMetaR\x04meta\"`\n" +
+	"\x04meta\x18\t \x01(\v2\x1e.kodex.projects.v1.CommandMetaR\x04metaB\x14\n" +
+	"\x12_release_policy_idB\x13\n" +
+	"\x11_risk_profile_ref\"`\n" +
 	"\x15ReleasePolicyResponse\x12G\n" +
 	"\x0erelease_policy\x18\x01 \x01(\v2 .kodex.projects.v1.ReleasePolicyR\rreleasePolicy\"w\n" +
 	"\x17GetReleasePolicyRequest\x12*\n" +
@@ -6772,55 +6827,62 @@ const file_kodex_projects_v1_project_catalog_proto_rawDesc = "" +
 	"\x04meta\x18\x04 \x01(\v2\x1c.kodex.projects.v1.QueryMetaR\x04meta\"\x9f\x01\n" +
 	"\x1bListReleasePoliciesResponse\x12K\n" +
 	"\x10release_policies\x18\x01 \x03(\v2 .kodex.projects.v1.ReleasePolicyR\x0freleasePolicies\x123\n" +
-	"\x04page\x18\x02 \x01(\v2\x1f.kodex.projects.v1.PageResponseR\x04page\"\xb9\x02\n" +
-	"\x15PutReleaseLineRequest\x12&\n" +
-	"\x0frelease_line_id\x18\x01 \x01(\tR\rreleaseLineId\x12\x1d\n" +
+	"\x04page\x18\x02 \x01(\v2\x1f.kodex.projects.v1.PageResponseR\x04page\"\xd2\x02\n" +
+	"\x15PutReleaseLineRequest\x12+\n" +
+	"\x0frelease_line_id\x18\x01 \x01(\tH\x00R\rreleaseLineId\x88\x01\x01\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x02 \x01(\tR\tprojectId\x12*\n" +
 	"\x11release_policy_id\x18\x03 \x01(\tR\x0freleasePolicyId\x12\x12\n" +
 	"\x04name\x18\x04 \x01(\tR\x04name\x12%\n" +
 	"\x0ebranch_pattern\x18\x05 \x01(\tR\rbranchPattern\x12>\n" +
 	"\x06status\x18\x06 \x01(\x0e2&.kodex.projects.v1.ReleasePolicyStatusR\x06status\x122\n" +
-	"\x04meta\x18\a \x01(\v2\x1e.kodex.projects.v1.CommandMetaR\x04meta\"X\n" +
+	"\x04meta\x18\a \x01(\v2\x1e.kodex.projects.v1.CommandMetaR\x04metaB\x12\n" +
+	"\x10_release_line_id\"X\n" +
 	"\x13ReleaseLineResponse\x12A\n" +
 	"\frelease_line\x18\x01 \x01(\v2\x1e.kodex.projects.v1.ReleaseLineR\vreleaseLine\"q\n" +
 	"\x15GetReleaseLineRequest\x12&\n" +
 	"\x0frelease_line_id\x18\x01 \x01(\tR\rreleaseLineId\x120\n" +
-	"\x04meta\x18\x02 \x01(\v2\x1c.kodex.projects.v1.QueryMetaR\x04meta\"\x8e\x02\n" +
+	"\x04meta\x18\x02 \x01(\v2\x1c.kodex.projects.v1.QueryMetaR\x04meta\"\xa9\x02\n" +
 	"\x17ListReleaseLinesRequest\x12\x1d\n" +
 	"\n" +
-	"project_id\x18\x01 \x01(\tR\tprojectId\x12*\n" +
-	"\x11release_policy_id\x18\x02 \x01(\tR\x0freleasePolicyId\x12B\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12/\n" +
+	"\x11release_policy_id\x18\x02 \x01(\tH\x00R\x0freleasePolicyId\x88\x01\x01\x12B\n" +
 	"\bstatuses\x18\x03 \x03(\x0e2&.kodex.projects.v1.ReleasePolicyStatusR\bstatuses\x122\n" +
 	"\x04page\x18\x04 \x01(\v2\x1e.kodex.projects.v1.PageRequestR\x04page\x120\n" +
-	"\x04meta\x18\x05 \x01(\v2\x1c.kodex.projects.v1.QueryMetaR\x04meta\"\x94\x01\n" +
+	"\x04meta\x18\x05 \x01(\v2\x1c.kodex.projects.v1.QueryMetaR\x04metaB\x14\n" +
+	"\x12_release_policy_id\"\x94\x01\n" +
 	"\x18ListReleaseLinesResponse\x12C\n" +
 	"\rrelease_lines\x18\x01 \x03(\v2\x1e.kodex.projects.v1.ReleaseLineR\freleaseLines\x123\n" +
-	"\x04page\x18\x02 \x01(\v2\x1f.kodex.projects.v1.PageResponseR\x04page\"\xd8\x02\n" +
-	"\x19PutPlacementPolicyRequest\x12.\n" +
-	"\x13placement_policy_id\x18\x01 \x01(\tR\x11placementPolicyId\x12\x1d\n" +
+	"\x04page\x18\x02 \x01(\v2\x1f.kodex.projects.v1.PageResponseR\x04page\"\xa1\x03\n" +
+	"\x19PutPlacementPolicyRequest\x123\n" +
+	"\x13placement_policy_id\x18\x01 \x01(\tH\x00R\x11placementPolicyId\x88\x01\x01\x12\x1d\n" +
 	"\n" +
-	"project_id\x18\x02 \x01(\tR\tprojectId\x12#\n" +
-	"\rrepository_id\x18\x03 \x01(\tR\frepositoryId\x12\x1f\n" +
-	"\vservice_key\x18\x04 \x01(\tR\n" +
-	"serviceKey\x120\n" +
+	"project_id\x18\x02 \x01(\tR\tprojectId\x12(\n" +
+	"\rrepository_id\x18\x03 \x01(\tH\x01R\frepositoryId\x88\x01\x01\x12$\n" +
+	"\vservice_key\x18\x04 \x01(\tH\x02R\n" +
+	"serviceKey\x88\x01\x01\x120\n" +
 	"\x14allowed_cluster_refs\x18\x05 \x03(\tR\x12allowedClusterRefs\x12@\n" +
 	"\x06status\x18\x06 \x01(\x0e2(.kodex.projects.v1.PlacementPolicyStatusR\x06status\x122\n" +
-	"\x04meta\x18\a \x01(\v2\x1e.kodex.projects.v1.CommandMetaR\x04meta\"h\n" +
+	"\x04meta\x18\a \x01(\v2\x1e.kodex.projects.v1.CommandMetaR\x04metaB\x16\n" +
+	"\x14_placement_policy_idB\x10\n" +
+	"\x0e_repository_idB\x0e\n" +
+	"\f_service_key\"h\n" +
 	"\x17PlacementPolicyResponse\x12M\n" +
 	"\x10placement_policy\x18\x01 \x01(\v2\".kodex.projects.v1.PlacementPolicyR\x0fplacementPolicy\"}\n" +
 	"\x19GetPlacementPolicyRequest\x12.\n" +
 	"\x13placement_policy_id\x18\x01 \x01(\tR\x11placementPolicyId\x120\n" +
-	"\x04meta\x18\x02 \x01(\v2\x1c.kodex.projects.v1.QueryMetaR\x04meta\"\xaf\x02\n" +
+	"\x04meta\x18\x02 \x01(\v2\x1c.kodex.projects.v1.QueryMetaR\x04meta\"\xdb\x02\n" +
 	"\x1cListPlacementPoliciesRequest\x12\x1d\n" +
 	"\n" +
-	"project_id\x18\x01 \x01(\tR\tprojectId\x12#\n" +
-	"\rrepository_id\x18\x02 \x01(\tR\frepositoryId\x12\x1f\n" +
-	"\vservice_key\x18\x03 \x01(\tR\n" +
-	"serviceKey\x12D\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12(\n" +
+	"\rrepository_id\x18\x02 \x01(\tH\x00R\frepositoryId\x88\x01\x01\x12$\n" +
+	"\vservice_key\x18\x03 \x01(\tH\x01R\n" +
+	"serviceKey\x88\x01\x01\x12D\n" +
 	"\bstatuses\x18\x04 \x03(\x0e2(.kodex.projects.v1.PlacementPolicyStatusR\bstatuses\x122\n" +
 	"\x04page\x18\x05 \x01(\v2\x1e.kodex.projects.v1.PageRequestR\x04page\x120\n" +
-	"\x04meta\x18\x06 \x01(\v2\x1c.kodex.projects.v1.QueryMetaR\x04meta\"\xa7\x01\n" +
+	"\x04meta\x18\x06 \x01(\v2\x1c.kodex.projects.v1.QueryMetaR\x04metaB\x10\n" +
+	"\x0e_repository_idB\x0e\n" +
+	"\f_service_key\"\xa7\x01\n" +
 	"\x1dListPlacementPoliciesResponse\x12Q\n" +
 	"\x12placement_policies\x18\x01 \x03(\v2\".kodex.projects.v1.PlacementPolicyR\x11placementPolicies\x123\n" +
 	"\x04page\x18\x02 \x01(\v2\x1f.kodex.projects.v1.PageResponseR\x04page*\x84\x01\n" +
@@ -7249,8 +7311,37 @@ func file_kodex_projects_v1_project_catalog_proto_init() {
 		return
 	}
 	file_kodex_projects_v1_project_catalog_proto_msgTypes[0].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[2].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[4].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[5].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[6].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[7].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[8].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[9].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[10].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[11].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[12].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[14].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[15].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[18].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[19].OneofWrappers = []any{}
 	file_kodex_projects_v1_project_catalog_proto_msgTypes[20].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[23].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[25].OneofWrappers = []any{}
 	file_kodex_projects_v1_project_catalog_proto_msgTypes[26].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[31].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[33].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[34].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[38].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[40].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[43].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[47].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[50].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[52].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[57].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[60].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[62].OneofWrappers = []any{}
+	file_kodex_projects_v1_project_catalog_proto_msgTypes[65].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
