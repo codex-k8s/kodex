@@ -32,6 +32,7 @@ func NewServer(cfg Config, deps Dependencies) (*grpcruntime.Server, error) {
 		return nil, fmt.Errorf("grpc authenticator is required when auth is enabled")
 	}
 	interceptors := []UnaryInterceptor{
+		UnaryCorrelationInterceptor(),
 		UnaryRecoveryInterceptor(deps.Logger),
 		UnaryMetricsInterceptor(deps.Metrics),
 		UnaryAuthInterceptor(cfg.AuthRequired, deps.Authenticator),

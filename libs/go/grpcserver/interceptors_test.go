@@ -36,6 +36,32 @@ func TestUnaryAuthInterceptorStoresVerifiedCaller(t *testing.T) {
 	}
 }
 
+func TestUnaryCorrelationInterceptorStoresSafeMetadata(t *testing.T) {
+	t.Parallel()
+
+	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs(
+		MetadataTraceID, "trace-1",
+		MetadataRequestID, "request-1",
+		MetadataRequestSource, "staff-gateway",
+	))
+	_, err := UnaryCorrelationInterceptor()(ctx, nil, unaryInfo(), func(ctx context.Context, _ any) (any, error) {
+		correlation, ok := RequestCorrelationFromContext(ctx)
+		if !ok {
+			t.Fatal("request correlation is missing")
+		}
+		if correlation.TraceID != "trace-1" || correlation.RequestID != "request-1" || correlation.Source != "staff-gateway" {
+			t.Fatalf("request correlation = %+v", correlation)
+		}
+		if attrs := LogAttrsFromContext(ctx); len(attrs) != 6 {
+			t.Fatalf("log attrs len = %d, want 6", len(attrs))
+		}
+		return nil, nil
+	})
+	if err != nil {
+		t.Fatalf("UnaryCorrelationInterceptor(): %v", err)
+	}
+}
+
 func TestUnaryAuthInterceptorRejectsMissingToken(t *testing.T) {
 	t.Parallel()
 

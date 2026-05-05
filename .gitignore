@@ -29,6 +29,9 @@ go.work.sum
 
 # Local-only temporary dev rules for agents
 .local/agents-temp-dev-rules.md
+.local/build/
+.local/render/
+.local/remote-smoke/
 
 # Frontend build artifacts
 services/staff/web-console/node_modules/

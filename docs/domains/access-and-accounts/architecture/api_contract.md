@@ -151,6 +151,7 @@ approvals:
 ## Наблюдаемость
 
 - Логи: `request_id`, `command_id`, `actor_id`, `operation`, `aggregate_id`, `decision`, без секретов, персональных данных, токенов, email, имён и лишнего тела запроса.
+- Межсервисный gRPC-контур принимает безопасные метаданные `x-kodex-trace-id`, `x-kodex-request-id`, `x-kodex-session-id`, `x-kodex-request-source` и добавляет их в контекст логирования. Эти метаданные не заменяют доменный `RequestContext`, а связывают технические логи, аудит и будущие распределённые трассы.
 - Метрики: задержка операций, конфликты, запрещённые решения, пользователи в ожидании, заблокированные пользователи, статусы внешних аккаунтов.
 - Трейсы: `external-gateway|staff-gateway|integration-gateway -> access-manager`, `platform-mcp-server -> access-manager`, `provider-hub -> access-manager`.
 - Аудит: отдельная доменная запись `AccessDecisionAudit` для решений доступа и административных изменений.
