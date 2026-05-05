@@ -384,6 +384,7 @@ func TestRepositoryIntegrationPoliciesAndRules(t *testing.T) {
 	if err := repository.PutPlacementPolicy(ctx, placement, &placementPreviousVersion, testEvent("project.placement_policy.updated", "placement_policy", placement.ID, placement.UpdatedAt), nil); !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("stale placement policy update error = %v, want conflict", err)
 	}
+	activeOverrideAt := time.Now().UTC()
 	override := entity.PolicyOverride{
 		Base:              entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
 		ProjectID:         project.ID,
@@ -392,11 +393,31 @@ func TestRepositoryIntegrationPoliciesAndRules(t *testing.T) {
 		Payload:           []byte(`{"allowed_cluster_refs":["hotfix"]}`),
 		Reason:            "hotfix",
 		Status:            enum.PolicyOverrideStatusActive,
-		ExpiresAt:         now.Add(time.Hour),
+		ExpiresAt:         activeOverrideAt.Add(time.Hour),
 		CreatedByActorRef: "user:owner",
 	}
 	if err := repository.CreatePolicyOverride(ctx, override, testEvent("project.policy_override.created", "policy_override", override.ID, now), testCommandResult(uuid.New(), operationCreatePolicyOverride, "policy_override", override.ID, now)); err != nil {
 		t.Fatalf("create policy override: %v", err)
+	}
+	activeOverrides, _, err := repository.ListPolicyOverrides(ctx, query.PolicyOverrideFilter{
+		ProjectID:   project.ID,
+		TargetTypes: []enum.PolicyOverrideTargetType{enum.PolicyOverrideTargetPlacementPolicy},
+		TargetID:    &placement.ID,
+		ActiveOnly:  true,
+		ActiveAt:    &activeOverrideAt,
+	})
+	if err != nil {
+		t.Fatalf("list active policy overrides: %v", err)
+	}
+	if len(activeOverrides) != 1 || activeOverrides[0].ID != override.ID || !jsonEqual(activeOverrides[0].Payload, override.Payload) {
+		t.Fatalf("active policy overrides = %+v, want override %s", activeOverrides, override.ID)
+	}
+	workspace, err := repository.GetWorkspacePolicy(ctx, query.WorkspacePolicyFilter{ProjectID: project.ID})
+	if err != nil {
+		t.Fatalf("get workspace policy with overrides: %v", err)
+	}
+	if len(workspace.ActivePolicyOverrides) != 1 || workspace.ActivePolicyOverrides[0].ID != override.ID {
+		t.Fatalf("workspace active policy overrides = %+v, want override %s", workspace.ActivePolicyOverrides, override.ID)
 	}
 	proposal := entity.PolicyEditProposal{
 		ID:           uuid.New(),

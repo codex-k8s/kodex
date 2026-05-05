@@ -67,6 +67,7 @@ const (
 	operationListBranchRules                  = "domain.Repository.ListBranchRules"
 	operationListDocumentationSources         = "domain.Repository.ListDocumentationSources"
 	operationListPlacementPolicies            = "domain.Repository.ListPlacementPolicies"
+	operationListPolicyOverrides              = "domain.Repository.ListPolicyOverrides"
 	operationListProjects                     = "domain.Repository.ListProjects"
 	operationListReleaseLines                 = "domain.Repository.ListReleaseLines"
 	operationListReleasePolicies              = "domain.Repository.ListReleasePolicies"
@@ -176,6 +177,10 @@ func (r *Repository) CreatePolicyOverride(ctx context.Context, override entity.P
 	return r.createWithCommandResult(ctx, operationCreatePolicyOverride, event, affectedMutation(queryPolicyOverrideCreate, policyOverrideArgs(override)), result)
 }
 
+func (r *Repository) ListPolicyOverrides(ctx context.Context, filter query.PolicyOverrideFilter) ([]entity.PolicyOverride, query.PageResult, error) {
+	return queryPage(ctx, r.db, operationListPolicyOverrides, queryPolicyOverrideList, policyOverrideFilterArgs(filter), scanPolicyOverride)
+}
+
 func (r *Repository) PutDocumentationSource(ctx context.Context, source entity.DocumentationSource, previousVersion *int64, event entity.OutboxEvent, result *entity.CommandResult) error {
 	return r.putWithCommandResult(ctx, operationPutDocumentationSource, event, documentationSourceMutation(source, previousVersion), result)
 }
@@ -202,6 +207,13 @@ func (r *Repository) GetWorkspacePolicy(ctx context.Context, filter query.Worksp
 	if err != nil {
 		return entity.WorkspacePolicy{}, err
 	}
+	activeOverrides, _, err := r.ListPolicyOverrides(ctx, query.PolicyOverrideFilter{
+		ProjectID:  filter.ProjectID,
+		ActiveOnly: true,
+	})
+	if err != nil {
+		return entity.WorkspacePolicy{}, err
+	}
 	policyVersion := int64(0)
 	policy, err := r.GetServicesPolicy(ctx, filter.ProjectID, nil)
 	if err != nil && !errors.Is(err, errs.ErrNotFound) {
@@ -211,10 +223,11 @@ func (r *Repository) GetWorkspacePolicy(ctx context.Context, filter query.Worksp
 		policyVersion = policy.PolicyVersion
 	}
 	result := entity.WorkspacePolicy{
-		ProjectID:            filter.ProjectID,
-		CodeSources:          codeSources,
-		DocumentationSources: documentationSources,
-		PolicyVersion:        policyVersion,
+		ProjectID:             filter.ProjectID,
+		CodeSources:           codeSources,
+		DocumentationSources:  documentationSources,
+		ActivePolicyOverrides: activeOverrides,
+		PolicyVersion:         policyVersion,
 	}
 	if filter.IncludeGuidancePackages {
 		refs, err := queryMany(ctx, r.db, operationGetWorkspacePolicy, queryWorkspaceGuidanceRefList, pgx.NamedArgs{"project_id": filter.ProjectID}, scanGuidanceRef)

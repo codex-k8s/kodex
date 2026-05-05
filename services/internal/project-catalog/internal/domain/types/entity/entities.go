@@ -166,11 +166,12 @@ type WorkspaceDocumentationSource struct {
 
 // WorkspacePolicy is the source set allowed for an agent workspace.
 type WorkspacePolicy struct {
-	ProjectID            uuid.UUID
-	CodeSources          []WorkspaceCodeSource
-	DocumentationSources []WorkspaceDocumentationSource
-	GuidancePackageRefs  []string
-	PolicyVersion        int64
+	ProjectID             uuid.UUID
+	CodeSources           []WorkspaceCodeSource
+	DocumentationSources  []WorkspaceDocumentationSource
+	GuidancePackageRefs   []string
+	ActivePolicyOverrides []PolicyOverride
+	PolicyVersion         int64
 }
 
 // PolicyEditProposal records a request to change services.yaml through a PR.

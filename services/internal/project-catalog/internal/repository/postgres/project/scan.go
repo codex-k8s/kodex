@@ -245,6 +245,32 @@ func scanPlacementPolicy(row postgreslib.RowScanner) (entity.PlacementPolicy, er
 	return policy, err
 }
 
+func scanPolicyOverride(row postgreslib.RowScanner) (entity.PolicyOverride, error) {
+	var override entity.PolicyOverride
+	var targetID pgtype.UUID
+	var payload []byte
+	var targetType, status string
+	err := row.Scan(
+		&override.ID,
+		&override.ProjectID,
+		&targetType,
+		&targetID,
+		&payload,
+		&override.Reason,
+		&status,
+		&override.ExpiresAt,
+		&override.CreatedByActorRef,
+		&override.Version,
+		&override.CreatedAt,
+		&override.UpdatedAt,
+	)
+	override.TargetID = postgreslib.UUIDPtrFromPG(targetID)
+	override.Payload = append(override.Payload[:0], payload...)
+	override.TargetType = enum.PolicyOverrideTargetType(targetType)
+	override.Status = enum.PolicyOverrideStatus(status)
+	return override, err
+}
+
 func scanCommandResult(row postgreslib.RowScanner) (entity.CommandResult, error) {
 	var result entity.CommandResult
 	var commandID pgtype.UUID

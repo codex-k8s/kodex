@@ -38,6 +38,8 @@ service ProjectCatalogService {
   rpc CreatePolicyOverride(CreatePolicyOverrideRequest) returns (PolicyOverrideResponse);
   // CancelPolicyOverride cancels an active operator override before expiration.
   rpc CancelPolicyOverride(CancelPolicyOverrideRequest) returns (PolicyOverrideResponse);
+  // ListPolicyOverrides returns visible operator overrides for a project.
+  rpc ListPolicyOverrides(ListPolicyOverridesRequest) returns (ListPolicyOverridesResponse);
   // PutDocumentationSource creates or updates a documentation source.
   rpc PutDocumentationSource(PutDocumentationSourceRequest) returns (DocumentationSourceResponse);
   // GetDocumentationSource returns a documentation source.
@@ -531,6 +533,8 @@ message WorkspacePolicy {
   repeated string guidance_package_refs = 4;
   // policy_version is the services policy version used to build this result.
   int64 policy_version = 5;
+  // active_policy_overrides are active emergency deviations from Git-managed policy.
+  repeated PolicyOverride active_policy_overrides = 6;
 }
 
 // WorkspaceCodeSource describes one code checkout source.
@@ -837,6 +841,32 @@ message CancelPolicyOverrideRequest {
 message PolicyOverrideResponse {
   // policy_override is the returned override.
   PolicyOverride policy_override = 1;
+}
+
+// ListPolicyOverridesRequest lists operator policy overrides.
+message ListPolicyOverridesRequest {
+  // project_id is the owner project id.
+  string project_id = 1;
+  // target_types optionally filter overridden policy areas.
+  repeated PolicyOverrideTargetType target_types = 2;
+  // target_id optionally filters a concrete overridden aggregate.
+  optional string target_id = 3;
+  // statuses optionally filter override lifecycle when active_only is false.
+  repeated PolicyOverrideStatus statuses = 4;
+  // active_only returns only active and unexpired overrides.
+  bool active_only = 5;
+  // page limits response size.
+  PageRequest page = 6;
+  // meta carries read actor and request context.
+  QueryMeta meta = 7;
+}
+
+// ListPolicyOverridesResponse returns operator policy overrides.
+message ListPolicyOverridesResponse {
+  // policy_overrides are returned in stable server-defined order.
+  repeated PolicyOverride policy_overrides = 1;
+  // page describes continuation state.
+  PageResponse page = 2;
 }
 
 // PutDocumentationSourceRequest creates or updates a documentation source.

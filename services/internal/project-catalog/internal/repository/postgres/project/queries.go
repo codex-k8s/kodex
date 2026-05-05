@@ -24,6 +24,7 @@ var (
 	queryPlacementPolicyUpdate             = mustLoadQuery("placement_policy__update")
 	queryPolicyEditProposalCreate          = mustLoadQuery("policy_edit_proposal__create")
 	queryPolicyOverrideCreate              = mustLoadQuery("policy_override__create")
+	queryPolicyOverrideList                = mustLoadQuery("policy_override__list")
 	queryProjectCreate                     = mustLoadQuery("project__create")
 	queryProjectGetByID                    = mustLoadQuery("project__get_by_id")
 	queryProjectList                       = mustLoadQuery("project__list")

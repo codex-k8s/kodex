@@ -41,6 +41,8 @@ type Repository interface {
 	CreatePolicyEditProposal(ctx context.Context, proposal entity.PolicyEditProposal, result entity.CommandResult) error
 	// CreatePolicyOverride stores an emergency override and its outbox event.
 	CreatePolicyOverride(ctx context.Context, override entity.PolicyOverride, event entity.OutboxEvent, result entity.CommandResult) error
+	// ListPolicyOverrides returns operator overrides matching filter.
+	ListPolicyOverrides(ctx context.Context, filter query.PolicyOverrideFilter) ([]entity.PolicyOverride, query.PageResult, error)
 	// PutDocumentationSource creates or updates a documentation source with optimistic concurrency.
 	PutDocumentationSource(ctx context.Context, source entity.DocumentationSource, previousVersion *int64, event entity.OutboxEvent, result *entity.CommandResult) error
 	// GetDocumentationSource returns a documentation source by id.

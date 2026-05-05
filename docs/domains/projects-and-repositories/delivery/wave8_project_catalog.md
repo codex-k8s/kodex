@@ -78,6 +78,7 @@ approvals:
 | `CreatePolicyEditProposal` | Готов в proto. | PostgreSQL-слой готов; provider PR отложен до #631/#632. |
 | `CreatePolicyOverride` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#632. |
 | `CancelPolicyOverride` | Готов в proto. | Отложена до #631/#632. |
+| `ListPolicyOverrides` | Готов в proto. | PostgreSQL-слой готов; активные переопределения также входят в `GetWorkspacePolicy`; gRPC отложена до #631/#632. |
 | `PutDocumentationSource` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#632. |
 | `GetDocumentationSource` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#632. |
 | `ListDocumentationSources` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#632. |

@@ -155,6 +155,17 @@ func policyOverrideArgs(override entity.PolicyOverride) pgx.NamedArgs {
 	})
 }
 
+func policyOverrideFilterArgs(filter query.PolicyOverrideFilter) pageQueryArgs {
+	return withPage(filter.Page, pgx.NamedArgs{
+		"project_id":   filter.ProjectID,
+		"target_types": postgreslib.StringValues(filter.TargetTypes),
+		"target_id":    postgreslib.NullableUUID(filter.TargetID),
+		"statuses":     postgreslib.StringValues(filter.Statuses),
+		"active_only":  filter.ActiveOnly,
+		"active_at":    postgreslib.NullableTime(filter.ActiveAt),
+	})
+}
+
 func policyEditProposalArgs(proposal entity.PolicyEditProposal) pgx.NamedArgs {
 	return pgx.NamedArgs{
 		"id":                proposal.ID,

@@ -52,10 +52,11 @@ approvals:
 | `CreatePolicyEditProposal` | gRPC command | `project.policy.propose` | `CommandMeta.command_id` | Создаёт запрос на PR-изменение `services.yaml` вместо прямой записи в БД. |
 | `CreatePolicyOverride` | gRPC command | `project.policy.override` | `CommandMeta.command_id` | Создаёт временное операторское переопределение с причиной, сроком действия и аудитом. |
 | `CancelPolicyOverride` | gRPC command | `project.policy.override.cancel` | ожидаемая версия | Досрочно отменяет активное операторское переопределение с причиной. |
+| `ListPolicyOverrides` | gRPC query | `project.policy.read` | нет | Читает активные или исторические операторские переопределения политики. |
 | `PutDocumentationSource` | gRPC command | `project.docs.update` | ожидаемая версия | Обновляет источник документации. |
 | `GetDocumentationSource` | gRPC query | `project.docs.read` | нет | Читает конкретный источник документации. |
 | `ListDocumentationSources` | gRPC query | `project.docs.read` | нет | Читает источники документации проекта, репозитория или сервиса. |
-| `GetWorkspacePolicy` | gRPC query | `project.workspace.read` | нет | Возвращает разрешённый состав рабочего контура из активной проверенной политики. |
+| `GetWorkspacePolicy` | gRPC query | `project.workspace.read` | нет | Возвращает разрешённый состав рабочего контура из активной проверенной политики и активные операторские переопределения. |
 | `PutBranchRules` | gRPC command | `project.branch_rules.update` | ожидаемая версия | Обновляет правила веток. |
 | `GetBranchRules` | gRPC query | `project.branch_rules.read` | нет | Читает конкретный набор правил веток. |
 | `ListBranchRules` | gRPC query | `project.branch_rules.read` | нет | Читает активные правила веток проекта или репозитория. |
