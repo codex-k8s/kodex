@@ -9,4 +9,4 @@ WHERE project_id = @project_id
   AND (@scope_id = '' OR scope_id = @scope_id)
   AND (cardinality(@statuses::text[]) = 0 OR status = ANY(@statuses::text[]))
 ORDER BY scope_type, scope_id, local_path, id
-LIMIT @limit OFFSET @offset;
+LIMIT @limit::integer OFFSET @offset::integer;

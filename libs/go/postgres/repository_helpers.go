@@ -99,18 +99,11 @@ func WrapError(operation string, err error, sentinels ErrorSentinels) error {
 	return fmt.Errorf("%s: %w", operation, err)
 }
 
-// ScanRows scans all pgx rows with a caller-supplied row caster and closes rows.
+// ScanRows scans all pgx rows with a caller-supplied row caster and closes rows through pgx.CollectRows.
 func ScanRows[T any](rows pgx.Rows, scan func(RowScanner) (T, error)) ([]T, error) {
-	defer rows.Close()
-	var values []T
-	for rows.Next() {
-		value, err := scan(rows)
-		if err != nil {
-			return nil, err
-		}
-		values = append(values, value)
-	}
-	return values, rows.Err()
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (T, error) {
+		return scan(row)
+	})
 }
 
 // WithTx executes fn in a PostgreSQL transaction and rolls it back unless commit succeeds.

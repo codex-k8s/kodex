@@ -6,4 +6,4 @@ FROM project_catalog_release_policies
 WHERE project_id = @project_id
   AND (cardinality(@statuses::text[]) = 0 OR status = ANY(@statuses::text[]))
 ORDER BY name, id
-LIMIT @limit OFFSET @offset;
+LIMIT @limit::integer OFFSET @offset::integer;

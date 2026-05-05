@@ -7,7 +7,7 @@ WHERE published_at IS NULL
   AND next_attempt_at <= @now
   AND (locked_until IS NULL OR locked_until <= @now)
     ORDER BY occurred_at, id
-    LIMIT @limit
+    LIMIT @limit::integer
     FOR UPDATE SKIP LOCKED
 )
 UPDATE access_outbox_events AS event

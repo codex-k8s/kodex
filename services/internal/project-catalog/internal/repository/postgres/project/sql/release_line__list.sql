@@ -7,4 +7,4 @@ WHERE project_id = @project_id
   AND (@release_policy_id::uuid IS NULL OR release_policy_id = @release_policy_id)
   AND (cardinality(@statuses::text[]) = 0 OR status = ANY(@statuses::text[]))
 ORDER BY name, id
-LIMIT @limit OFFSET @offset;
+LIMIT @limit::integer OFFSET @offset::integer;

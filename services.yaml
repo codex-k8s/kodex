@@ -66,6 +66,15 @@ spec:
         - proto/kodex/access_accounts/v1
         - specs/asyncapi/access-manager.v1.yaml
         - deploy/base/access-manager
+    project-catalog:
+      value: "0.1.0"
+      bumpOn:
+        - services/internal/project-catalog
+        - libs/go/grpcserver
+        - libs/go/postgres
+        - proto/kodex/projects/v1
+        - specs/asyncapi/project-catalog.v1.yaml
+        - deploy/base/project-catalog
     platform-event-log:
       value: "0.1.0"
       bumpOn:
@@ -103,6 +112,23 @@ spec:
       context: .
       imageEnv: KODEX_ACCESS_MANAGER_MIGRATIONS_IMAGE
       migratesDatabase: kodex_access_manager
+    project-catalog:
+      type: build
+      repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_PROJECT_CATALOG_INTERNAL_IMAGE_REPOSITORY" "kodex/project-catalog" }}'
+      tagTemplate: '{{ index .Versions "project-catalog" }}'
+      dockerfile: services/internal/project-catalog/Dockerfile
+      target: prod
+      context: .
+      imageEnv: KODEX_PROJECT_CATALOG_IMAGE
+    project-catalog-migrations:
+      type: migration-build
+      repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_PROJECT_CATALOG_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY" "kodex/project-catalog-migrations" }}'
+      tagTemplate: '{{ index .Versions "project-catalog" }}'
+      dockerfile: services/internal/project-catalog/Dockerfile
+      target: migrations
+      context: .
+      imageEnv: KODEX_PROJECT_CATALOG_MIGRATIONS_IMAGE
+      migratesDatabase: kodex_project_catalog
     platform-event-log-migrations:
       type: migration-build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY" "kodex/platform-event-log-migrations" }}'
@@ -137,6 +163,30 @@ spec:
           livez: /health/livez
           readyz: /health/readyz
           metrics: /metrics
+    - name: project-catalog
+      status: foundation
+      zone: internal
+      path: services/internal/project-catalog
+      dockerfile: services/internal/project-catalog/Dockerfile
+      imageEnv: KODEX_PROJECT_CATALOG_IMAGE
+      internalImageRepositoryEnv: KODEX_PROJECT_CATALOG_INTERNAL_IMAGE_REPOSITORY
+      migrationsImageEnv: KODEX_PROJECT_CATALOG_MIGRATIONS_IMAGE
+      migrationsInternalImageRepositoryEnv: KODEX_PROJECT_CATALOG_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY
+      ownerDomain: projects-and-repositories
+      apiContracts:
+        grpc: proto/kodex/projects/v1/project_catalog.proto
+        asyncapi: specs/asyncapi/project-catalog.v1.yaml
+      database:
+        owner: project-catalog
+        migrations: services/internal/project-catalog/cmd/cli/migrations
+      deploy:
+        serviceManifest: deploy/base/project-catalog/project-catalog.yaml.tpl
+        migrationsManifest: deploy/base/project-catalog/migrations.yaml.tpl
+        kustomization: deploy/base/project-catalog/kustomization.yaml.tpl
+        health:
+          livez: /health/livez
+          readyz: /health/readyz
+          metrics: /metrics
   platformDataStores:
     - name: platform-event-log
       status: foundation
@@ -164,6 +214,7 @@ spec:
       path: deploy/base/postgres/postgres.yaml.tpl
       createsDatabases:
         - kodex_access_manager
+        - kodex_project_catalog
         - kodex_platform_event_log
       scriptSources:
         - deploy/base/postgres/bootstrap-databases.sh
@@ -182,12 +233,26 @@ spec:
         - postgres-secrets
         - postgres
         - platform-event-log-migrations
+    - name: project-catalog-migrations
+      path: deploy/base/project-catalog/migrations.yaml.tpl
+      migratesDatabase: kodex_project_catalog
+      requires:
+        - postgres-secrets
+        - postgres
+        - platform-event-log-migrations
     - name: access-manager
       path: deploy/base/access-manager/access-manager.yaml.tpl
       kustomization: deploy/base/access-manager/kustomization.yaml.tpl
       deploysService: access-manager
       requires:
         - access-manager-migrations
+        - platform-event-log-migrations
+    - name: project-catalog
+      path: deploy/base/project-catalog/project-catalog.yaml.tpl
+      kustomization: deploy/base/project-catalog/kustomization.yaml.tpl
+      deploysService: project-catalog
+      requires:
+        - project-catalog-migrations
         - platform-event-log-migrations
   notes:
     - New deployable services must be added only after the corresponding wave documentation is accepted.

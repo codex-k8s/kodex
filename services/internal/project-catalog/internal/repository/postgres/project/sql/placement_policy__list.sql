@@ -8,4 +8,4 @@ WHERE project_id = @project_id
   AND (@service_key = '' OR service_key = @service_key)
   AND (cardinality(@statuses::text[]) = 0 OR status = ANY(@statuses::text[]))
 ORDER BY service_key, id
-LIMIT @limit OFFSET @offset;
+LIMIT @limit::integer OFFSET @offset::integer;

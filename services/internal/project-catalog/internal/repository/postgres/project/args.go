@@ -1,6 +1,7 @@
 package project
 
 import (
+	"encoding/json"
 	"strconv"
 
 	"github.com/google/uuid"
@@ -160,10 +161,18 @@ func policyEditProposalArgs(proposal entity.PolicyEditProposal) pgx.NamedArgs {
 		"project_id":        proposal.ProjectID,
 		"repository_id":     proposal.RepositoryID,
 		"source_path":       proposal.SourcePath,
-		"requested_changes": postgreslib.JSONPayload(proposal.RequestedChangesJSON),
+		"requested_changes": postgreslib.JSONPayload(policyEditProposalRequestedChangesJSON(proposal.RequestedChanges)),
 		"status":            proposal.Status,
 		"created_at":        proposal.CreatedAt,
 	}
+}
+
+func policyEditProposalRequestedChangesJSON(changes value.PolicyEditProposalRequestedChanges) []byte {
+	payload, err := json.Marshal(changes)
+	if err != nil {
+		return nil
+	}
+	return payload
 }
 
 func commandIdentityArgs(identity query.CommandIdentity) pgx.NamedArgs {

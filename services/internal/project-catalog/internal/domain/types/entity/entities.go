@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/enum"
+	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/value"
 )
 
 // Base stores common aggregate metadata used for optimistic concurrency.
@@ -174,13 +175,13 @@ type WorkspacePolicy struct {
 
 // PolicyEditProposal records a request to change services.yaml through a PR.
 type PolicyEditProposal struct {
-	ID                   uuid.UUID
-	ProjectID            uuid.UUID
-	RepositoryID         uuid.UUID
-	SourcePath           string
-	RequestedChangesJSON []byte
-	Status               string
-	CreatedAt            time.Time
+	ID               uuid.UUID
+	ProjectID        uuid.UUID
+	RepositoryID     uuid.UUID
+	SourcePath       string
+	RequestedChanges value.PolicyEditProposalRequestedChanges
+	Status           string
+	CreatedAt        time.Time
 }
 
 // CommandResult stores the aggregate produced by an idempotent mutation command.

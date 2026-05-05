@@ -14,6 +14,7 @@ import (
 
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/errs"
+	accessrepo "github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/repository/access"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/query"
@@ -24,6 +25,8 @@ import (
 //
 //go:embed sql/*.sql
 var SQLFiles embed.FS
+
+var _ accessrepo.Repository = (*Repository)(nil)
 
 type database interface {
 	execer

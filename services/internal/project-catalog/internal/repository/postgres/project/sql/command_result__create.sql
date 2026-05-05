@@ -4,6 +4,6 @@ INSERT INTO project_catalog_command_results (
     aggregate_id, result_payload, created_at
 ) VALUES (
     @key, @command_id, @idempotency_key, @operation, @aggregate_type,
-    @aggregate_id, @result_payload, @created_at
+    @aggregate_id, @result_payload::jsonb, @created_at
 )
 ON CONFLICT DO NOTHING;

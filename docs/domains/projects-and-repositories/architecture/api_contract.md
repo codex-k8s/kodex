@@ -48,14 +48,14 @@ approvals:
 | `ListRepositories` | gRPC query | `repository.list` | нет | Список репозиториев проекта. |
 | `ImportServicesPolicy` | gRPC command | `project.policy.import` | `CommandMeta.command_id` | Импортирует `services.yaml`, управляемый через Git, после первичной загрузки, слияния PR или сверки и сохраняет проверенную проекцию. |
 | `GetServicesPolicy` | gRPC query | `project.policy.read` | нет | Читает активную проверенную проекцию `services.yaml`. |
-| `ListServiceDescriptors` | gRPC query | `project.policy.read` | нет | Читает типизированный список сервисов из активной политики. |
+| `ListServiceDescriptors` | gRPC query | `project.policy.read` | нет | Читает типизированный список сервисов из последней политики `valid + synced/overridden`. |
 | `CreatePolicyEditProposal` | gRPC command | `project.policy.propose` | `CommandMeta.command_id` | Создаёт запрос на PR-изменение `services.yaml` вместо прямой записи в БД. |
 | `CreatePolicyOverride` | gRPC command | `project.policy.override` | `CommandMeta.command_id` | Создаёт временное операторское переопределение с причиной, сроком действия и аудитом. |
 | `CancelPolicyOverride` | gRPC command | `project.policy.override.cancel` | ожидаемая версия | Досрочно отменяет активное операторское переопределение с причиной. |
 | `PutDocumentationSource` | gRPC command | `project.docs.update` | ожидаемая версия | Обновляет источник документации. |
 | `GetDocumentationSource` | gRPC query | `project.docs.read` | нет | Читает конкретный источник документации. |
 | `ListDocumentationSources` | gRPC query | `project.docs.read` | нет | Читает источники документации проекта, репозитория или сервиса. |
-| `GetWorkspacePolicy` | gRPC query | `project.workspace.read` | нет | Возвращает разрешённый состав рабочего контура. |
+| `GetWorkspacePolicy` | gRPC query | `project.workspace.read` | нет | Возвращает разрешённый состав рабочего контура из активной проверенной политики. |
 | `PutBranchRules` | gRPC command | `project.branch_rules.update` | ожидаемая версия | Обновляет правила веток. |
 | `GetBranchRules` | gRPC query | `project.branch_rules.read` | нет | Читает конкретный набор правил веток. |
 | `ListBranchRules` | gRPC query | `project.branch_rules.read` | нет | Читает активные правила веток проекта или репозитория. |
@@ -124,7 +124,7 @@ approvals:
 | AsyncAPI `project.*` | Стабильный `v1`, покрывает события из этого документа. |
 | Сервисный процесс `project-catalog` | Каркас готов: entrypoint, конфигурация, health/readyz/metrics и зарегистрированный gRPC-сервер. |
 | Бизнес-обработчики gRPC | Отложены до среза gRPC-операций; каркас возвращает `Unimplemented` через generated-сервер. |
-| PostgreSQL и outbox | Модель БД, миграции, слой репозитория и сервисный outbox готовы. Публикация в общий журнал событий подключается вместе с бизнес-обработчиками gRPC. |
+| PostgreSQL и outbox | Модель БД, миграции, слой репозитория, сервисный outbox и базовый deploy-инвентарь готовы. Публикация в общий журнал событий подключается вместе с бизнес-обработчиками gRPC. |
 
 ## Совместимость
 

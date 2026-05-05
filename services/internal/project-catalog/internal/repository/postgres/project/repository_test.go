@@ -240,6 +240,39 @@ func TestRepositoryIntegrationProjectsRepositoriesPoliciesAndOutbox(t *testing.T
 	if len(workspacePolicy.CodeSources) != 1 || len(workspacePolicy.DocumentationSources) != 1 || workspacePolicy.PolicyVersion != policy.PolicyVersion {
 		t.Fatalf("workspace policy = %+v, want one code source, one doc source and policy version %d", workspacePolicy, policy.PolicyVersion)
 	}
+	workspaceByServiceOnly, err := repository.GetWorkspacePolicy(ctx, query.WorkspacePolicyFilter{
+		ProjectID:   projectA.ID,
+		ServiceKeys: []string{"api"},
+	})
+	if err != nil {
+		t.Fatalf("get workspace policy by service: %v", err)
+	}
+	if len(workspaceByServiceOnly.CodeSources) != 1 || workspaceByServiceOnly.CodeSources[0].RepositoryID != repositoryA.ID {
+		t.Fatalf("workspace by service code sources = %+v, want repository %s", workspaceByServiceOnly.CodeSources, repositoryA.ID)
+	}
+
+	invalidPolicy := testServicesPolicy(projectA.ID, repositoryA.ID, now.Add(2*time.Minute))
+	invalidPolicy.ID = uuid.New()
+	invalidPolicy.PolicyVersion = 2
+	invalidPolicy.ValidationStatus = enum.ServicesPolicyValidationInvalid
+	invalidPolicy.ProjectionStatus = enum.ServicesPolicyProjectionFailed
+	if err := repository.ImportServicesPolicy(ctx, invalidPolicy, nil, testEvent("project.services_policy.imported", "services_policy", invalidPolicy.ID, invalidPolicy.ImportedAt), testCommandResult(uuid.New(), operationImportServicesPolicy, "services_policy", invalidPolicy.ID, invalidPolicy.ImportedAt)); err != nil {
+		t.Fatalf("import invalid services policy: %v", err)
+	}
+	activeAfterInvalid, err := repository.GetServicesPolicy(ctx, projectA.ID, nil)
+	if err != nil {
+		t.Fatalf("get active services policy after invalid import: %v", err)
+	}
+	if activeAfterInvalid.ID != policy.ID {
+		t.Fatalf("active policy after invalid import = %s, want %s", activeAfterInvalid.ID, policy.ID)
+	}
+	activeDescriptorsAfterInvalid, _, err := repository.ListServiceDescriptors(ctx, query.ServiceDescriptorFilter{ProjectID: projectA.ID, Statuses: []enum.ServiceStatus{enum.ServiceStatusActive}})
+	if err != nil {
+		t.Fatalf("list descriptors after invalid import: %v", err)
+	}
+	if len(activeDescriptorsAfterInvalid) != 2 {
+		t.Fatalf("active descriptors after invalid import = %d, want 2", len(activeDescriptorsAfterInvalid))
+	}
 	if got := countTableRows(t, ctx, pool, "project_catalog_outbox_events"); got < 7 {
 		t.Fatalf("outbox events = %d, want at least 7", got)
 	}
@@ -323,13 +356,22 @@ func TestRepositoryIntegrationPoliciesAndRules(t *testing.T) {
 		t.Fatalf("create policy override: %v", err)
 	}
 	proposal := entity.PolicyEditProposal{
-		ID:                   uuid.New(),
-		ProjectID:            project.ID,
-		RepositoryID:         repositoryBinding.ID,
-		SourcePath:           "services.yaml",
-		RequestedChangesJSON: []byte(`{"change":"add service"}`),
-		Status:               "pending",
-		CreatedAt:            now,
+		ID:           uuid.New(),
+		ProjectID:    project.ID,
+		RepositoryID: repositoryBinding.ID,
+		SourcePath:   "services.yaml",
+		RequestedChanges: value.PolicyEditProposalRequestedChanges{
+			Summary: "Добавить сервис",
+			Changes: []value.PolicyEditProposalChange{
+				{
+					Type:        value.PolicyEditProposalChangeAddService,
+					Target:      "services.billing-api",
+					Description: "Добавить backend-сервис биллинга.",
+				},
+			},
+		},
+		Status:    "pending",
+		CreatedAt: now,
 	}
 	if err := repository.CreatePolicyEditProposal(ctx, proposal, testCommandResult(uuid.New(), operationCreatePolicyEditProposal, "policy_edit_proposal", proposal.ID, now)); err != nil {
 		t.Fatalf("create policy edit proposal: %v", err)

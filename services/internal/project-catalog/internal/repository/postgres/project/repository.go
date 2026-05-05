@@ -16,6 +16,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/errs"
 	projectrepo "github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/repository/project"
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/query"
 )
 
@@ -130,12 +131,14 @@ func (r *Repository) ImportServicesPolicy(ctx context.Context, policy entity.Ser
 		if _, err := tx.Exec(ctx, queryServicesPolicyInsert, servicesPolicyArgs(policy)); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, queryServiceDescriptorMarkProjectStale, pgx.NamedArgs{"project_id": policy.ProjectID, "updated_at": policy.UpdatedAt}); err != nil {
-			return err
-		}
-		for _, descriptor := range descriptors {
-			if _, err := tx.Exec(ctx, queryServiceDescriptorInsert, serviceDescriptorArgs(descriptor)); err != nil {
+		if isActiveServicesPolicy(policy) {
+			if _, err := tx.Exec(ctx, queryServiceDescriptorMarkProjectStale, pgx.NamedArgs{"project_id": policy.ProjectID, "updated_at": policy.UpdatedAt}); err != nil {
 				return err
+			}
+			for _, descriptor := range descriptors {
+				if _, err := tx.Exec(ctx, queryServiceDescriptorInsert, serviceDescriptorArgs(descriptor)); err != nil {
+					return err
+				}
 			}
 		}
 		if err := insertOutboxEvent(ctx, tx, event); err != nil {
@@ -143,6 +146,13 @@ func (r *Repository) ImportServicesPolicy(ctx context.Context, policy entity.Ser
 		}
 		return postgreslib.RunMutations(ctx, tx, errs.ErrConflict, commandResultMutation(result))
 	})
+}
+
+func isActiveServicesPolicy(policy entity.ServicesPolicy) bool {
+	if policy.ValidationStatus != enum.ServicesPolicyValidationValid {
+		return false
+	}
+	return policy.ProjectionStatus == enum.ServicesPolicyProjectionSynced || policy.ProjectionStatus == enum.ServicesPolicyProjectionOverridden
 }
 
 func (r *Repository) GetServicesPolicy(ctx context.Context, projectID uuid.UUID, policyID *uuid.UUID) (entity.ServicesPolicy, error) {

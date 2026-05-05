@@ -10,6 +10,8 @@ import (
 	grpcruntime "google.golang.org/grpc"
 )
 
+var _ accessaccountsv1.AccessManagerServiceServer = (*Server)(nil)
+
 type accessService interface {
 	BootstrapUserFromIdentity(context.Context, accessservice.BootstrapUserFromIdentityInput) (accessservice.BootstrapUserFromIdentityResult, error)
 	SetUserStatus(context.Context, accessservice.SetUserStatusInput) (entity.User, error)

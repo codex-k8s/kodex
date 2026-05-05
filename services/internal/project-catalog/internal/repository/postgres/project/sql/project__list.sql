@@ -6,4 +6,4 @@ FROM project_catalog_projects
 WHERE (@organization_id::uuid IS NULL OR organization_id = @organization_id)
   AND (cardinality(@statuses::text[]) = 0 OR status = ANY(@statuses::text[]))
 ORDER BY slug, id
-LIMIT @limit OFFSET @offset;
+LIMIT @limit::integer OFFSET @offset::integer;

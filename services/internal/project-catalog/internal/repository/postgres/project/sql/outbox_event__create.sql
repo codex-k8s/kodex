@@ -4,5 +4,5 @@ INSERT INTO project_catalog_outbox_events (
     payload, occurred_at, published_at
 ) VALUES (
     @id, @event_type, @schema_version, @aggregate_type, @aggregate_id,
-    @payload, @occurred_at, @published_at
+    @payload::jsonb, @occurred_at, @published_at
 );

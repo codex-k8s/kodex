@@ -7,4 +7,4 @@ FROM project_catalog_repositories
 WHERE project_id = @project_id
   AND (cardinality(@statuses::text[]) = 0 OR status = ANY(@statuses::text[]))
 ORDER BY provider, provider_owner, provider_name, id
-LIMIT @limit OFFSET @offset;
+LIMIT @limit::integer OFFSET @offset::integer;

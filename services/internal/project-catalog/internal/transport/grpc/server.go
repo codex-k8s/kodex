@@ -5,6 +5,8 @@ import (
 	grpcruntime "google.golang.org/grpc"
 )
 
+var _ projectsv1.ProjectCatalogServiceServer = (*Server)(nil)
+
 // Server implements the generated ProjectCatalogServiceServer contract.
 type Server struct {
 	projectsv1.UnimplementedProjectCatalogServiceServer
