@@ -779,6 +779,104 @@ func TestListMembershipGraphReturnsActiveAndOptionalInactiveEdges(t *testing.T) 
 	}
 }
 
+func TestListMembershipGraphAuthorizesInactiveMembershipScopesThroughGroups(t *testing.T) {
+	t.Run("pending user group", func(t *testing.T) {
+		ctx := context.Background()
+		store := newMemoryRepository()
+		svc := New(store, fixedClock{}, newSequenceIDs())
+
+		user := store.seedUser(enum.UserStatusActive)
+		org, err := svc.CreateOrganization(ctx, CreateOrganizationInput{
+			Kind: enum.OrganizationKindClient, Slug: "client", DisplayName: "Клиент",
+			Meta: commandMeta("create-pending-group-scope-org"),
+		})
+		if err != nil {
+			t.Fatalf("create organization: %v", err)
+		}
+		group, err := svc.CreateGroup(ctx, CreateGroupInput{
+			ScopeType: enum.GroupScopeOrganization, ScopeID: &org.ID, Slug: "dev", DisplayName: "Разработчики",
+			Meta: commandMeta("create-pending-group-scope"),
+		})
+		if err != nil {
+			t.Fatalf("create group: %v", err)
+		}
+		pendingUserGroup, err := svc.SetMembership(ctx, SetMembershipInput{
+			SubjectType: enum.MembershipSubjectUser, SubjectID: user.ID,
+			TargetType: enum.MembershipTargetGroup, TargetID: group.ID,
+			Status: enum.MembershipStatusPending, Source: enum.MembershipSourceSync,
+		})
+		if err != nil {
+			t.Fatalf("set pending user group membership: %v", err)
+		}
+		meta := store.seedOperatorMetaForScope("list-pending-group-scope", accessActionListMembershipGraph, accessResourceMembershipGraph, value.ScopeRef{
+			Type: accessRuleScopeOrganization,
+			ID:   org.ID.String(),
+		})
+
+		graph, err := svc.ListMembershipGraph(ctx, ListMembershipGraphInput{
+			Subject:         value.SubjectRef{Type: string(enum.AccessSubjectUser), ID: user.ID.String()},
+			IncludeInactive: true,
+			Meta:            meta,
+		})
+		if err != nil {
+			t.Fatalf("list graph with pending group scope: %v", err)
+		}
+		assertMembershipIDs(t, graph.Edges, pendingUserGroup.ID)
+	})
+
+	t.Run("blocked group organization", func(t *testing.T) {
+		ctx := context.Background()
+		store := newMemoryRepository()
+		svc := New(store, fixedClock{}, newSequenceIDs())
+
+		user := store.seedUser(enum.UserStatusActive)
+		org, err := svc.CreateOrganization(ctx, CreateOrganizationInput{
+			Kind: enum.OrganizationKindClient, Slug: "client", DisplayName: "Клиент",
+			Meta: commandMeta("create-blocked-group-org"),
+		})
+		if err != nil {
+			t.Fatalf("create organization: %v", err)
+		}
+		group, err := svc.CreateGroup(ctx, CreateGroupInput{
+			ScopeType: enum.GroupScopeGlobal, Slug: "release-operators", DisplayName: "Релизные операторы",
+			Meta: commandMeta("create-global-blocked-group"),
+		})
+		if err != nil {
+			t.Fatalf("create group: %v", err)
+		}
+		activeUserGroup, err := svc.SetMembership(ctx, SetMembershipInput{
+			SubjectType: enum.MembershipSubjectUser, SubjectID: user.ID,
+			TargetType: enum.MembershipTargetGroup, TargetID: group.ID,
+			Source: enum.MembershipSourceManual,
+		})
+		if err != nil {
+			t.Fatalf("set active user group membership: %v", err)
+		}
+		blockedGroupOrg, err := svc.SetMembership(ctx, SetMembershipInput{
+			SubjectType: enum.MembershipSubjectGroup, SubjectID: group.ID,
+			TargetType: enum.MembershipTargetOrganization, TargetID: org.ID,
+			Status: enum.MembershipStatusBlocked, Source: enum.MembershipSourceSync,
+		})
+		if err != nil {
+			t.Fatalf("set blocked group organization membership: %v", err)
+		}
+		meta := store.seedOperatorMetaForScope("list-blocked-group-org", accessActionListMembershipGraph, accessResourceMembershipGraph, value.ScopeRef{
+			Type: accessRuleScopeOrganization,
+			ID:   org.ID.String(),
+		})
+
+		graph, err := svc.ListMembershipGraph(ctx, ListMembershipGraphInput{
+			Subject:         value.SubjectRef{Type: string(enum.AccessSubjectUser), ID: user.ID.String()},
+			IncludeInactive: true,
+			Meta:            meta,
+		})
+		if err != nil {
+			t.Fatalf("list graph with blocked group organization: %v", err)
+		}
+		assertMembershipIDs(t, graph.Edges, activeUserGroup.ID, blockedGroupOrg.ID)
+	})
+}
+
 func TestListMembershipGraphReadsOrganizationTargetSide(t *testing.T) {
 	ctx := context.Background()
 	store := newMemoryRepository()

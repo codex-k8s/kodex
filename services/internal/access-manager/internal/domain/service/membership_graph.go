@@ -583,12 +583,16 @@ func (s *Service) membershipGraphAccessScopes(ctx context.Context, subject value
 }
 
 func (s *Service) membershipGraphScopesFromEdges(ctx context.Context, subject value.SubjectRef) ([]value.ScopeRef, error) {
-	edges, err := s.collectMembershipGraphEdges(ctx, subject, false)
+	// Operators must authorize pending/blocked edges without expanding traversal through them.
+	edges, err := s.collectMembershipGraphEdges(ctx, subject, true)
 	if err != nil {
 		return nil, err
 	}
 	var scopes []value.ScopeRef
 	for _, edge := range edges {
+		if !membershipGraphScopeStatus(edge.Status) {
+			continue
+		}
 		switch edge.TargetType {
 		case enum.MembershipTargetOrganization:
 			scopes = append(scopes, value.ScopeRef{Type: accessRuleScopeOrganization, ID: edge.TargetID.String()})
@@ -603,6 +607,15 @@ func (s *Service) membershipGraphScopesFromEdges(ctx context.Context, subject va
 		}
 	}
 	return scopes, nil
+}
+
+func membershipGraphScopeStatus(status enum.MembershipStatus) bool {
+	switch status {
+	case enum.MembershipStatusActive, enum.MembershipStatusPending, enum.MembershipStatusBlocked:
+		return true
+	default:
+		return false
+	}
 }
 
 func membershipGraphSortKey(edge entity.Membership) string {
