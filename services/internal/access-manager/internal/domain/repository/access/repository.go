@@ -55,6 +55,8 @@ type Repository interface {
 	SetMembership(ctx context.Context, membership entity.Membership, event entity.OutboxEvent) error
 	// ListMemberships returns memberships for graph expansion.
 	ListMemberships(ctx context.Context, filter query.MembershipGraphFilter) ([]entity.Membership, error)
+	// ListMembershipsByTarget returns memberships that point to a graph target.
+	ListMembershipsByTarget(ctx context.Context, filter query.MembershipTargetFilter) ([]entity.Membership, error)
 	// PutExternalProvider upserts an external provider and its outbox event.
 	PutExternalProvider(ctx context.Context, provider entity.ExternalProvider, event entity.OutboxEvent) error
 	// UpdateExternalProvider updates an external provider with optimistic concurrency.

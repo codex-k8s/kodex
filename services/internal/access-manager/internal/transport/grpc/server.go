@@ -28,6 +28,7 @@ type accessService interface {
 	PutAccessRule(context.Context, accessservice.PutAccessRuleInput) (entity.AccessRule, error)
 	CheckAccess(context.Context, accessservice.CheckAccessInput) (accessservice.CheckAccessResult, error)
 	ExplainAccess(context.Context, accessservice.ExplainAccessInput) (accessservice.ExplainAccessResult, error)
+	ListMembershipGraph(context.Context, accessservice.ListMembershipGraphInput) (accessservice.ListMembershipGraphResult, error)
 	ListPendingAccess(context.Context, accessservice.ListPendingAccessInput) (accessservice.ListPendingAccessResult, error)
 	ResolveExternalAccountUsage(context.Context, accessservice.ResolveExternalAccountUsageInput) (accessservice.ResolveExternalAccountUsageResult, error)
 }
@@ -139,6 +140,11 @@ func (s *Server) CheckAccess(ctx context.Context, request *accessaccountsv1.Chec
 // ExplainAccess returns a previously audited access decision explanation.
 func (s *Server) ExplainAccess(ctx context.Context, request *accessaccountsv1.ExplainAccessRequest) (*accessaccountsv1.ExplainAccessResponse, error) {
 	return handleUnary(ctx, request, grpccasters.ExplainAccessInput, s.service.ExplainAccess, grpccasters.ExplainAccessResponse)
+}
+
+// ListMembershipGraph returns membership graph edges around a subject.
+func (s *Server) ListMembershipGraph(ctx context.Context, request *accessaccountsv1.ListMembershipGraphRequest) (*accessaccountsv1.ListMembershipGraphResponse, error) {
+	return handleUnary(ctx, request, grpccasters.ListMembershipGraphInput, s.service.ListMembershipGraph, grpccasters.ListMembershipGraphResponse)
 }
 
 // ListPendingAccess returns pending or blocked access items for operator UI.

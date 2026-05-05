@@ -32,6 +32,7 @@ var (
 	queryGroupGetByID                         = mustLoadQuery("group__get_by_id")
 	queryMembershipFindByIdentity             = mustLoadQuery("membership__find_by_identity")
 	queryMembershipListBySubject              = mustLoadQuery("membership__list_by_subject")
+	queryMembershipListByTarget               = mustLoadQuery("membership__list_by_target")
 	queryMembershipUpsert                     = mustLoadQuery("membership__upsert")
 	queryOrganizationCountActiveOwner         = mustLoadQuery("organization__count_active_owner")
 	queryOrganizationCreate                   = mustLoadQuery("organization__create")

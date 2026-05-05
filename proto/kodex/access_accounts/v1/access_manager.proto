@@ -939,6 +939,8 @@ message ListMembershipGraphRequest {
   SubjectRef subject = 1;
   // include_inactive includes pending, blocked or disabled memberships.
   bool include_inactive = 2;
+  // meta carries actor and audit context for the operator read.
+  CommandMeta meta = 3;
 }
 
 // MembershipEdge is one membership edge in the graph.

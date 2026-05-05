@@ -207,6 +207,22 @@ func ResolveExternalAccountUsageResponse(result service.ResolveExternalAccountUs
 	}
 }
 
+// ListMembershipGraphResponse maps membership graph edges to gRPC.
+func ListMembershipGraphResponse(result service.ListMembershipGraphResult) *accessaccountsv1.ListMembershipGraphResponse {
+	edges := make([]*accessaccountsv1.MembershipEdge, 0, len(result.Edges))
+	for _, edge := range result.Edges {
+		edges = append(edges, &accessaccountsv1.MembershipEdge{
+			MembershipId: uuidString(edge.ID),
+			Subject:      SubjectRefToProto(value.SubjectRef{Type: string(edge.SubjectType), ID: uuidString(edge.SubjectID)}),
+			Target:       membershipTargetRefToProto(edge),
+			Status:       MembershipStatusToProto(edge.Status),
+			Source:       MembershipSourceToProto(edge.Source),
+			Version:      edge.Version,
+		})
+	}
+	return &accessaccountsv1.ListMembershipGraphResponse{Root: SubjectRefToProto(result.Root), Edges: edges}
+}
+
 // ListPendingAccessResponse maps pending access items to gRPC.
 func ListPendingAccessResponse(result service.ListPendingAccessResult) *accessaccountsv1.ListPendingAccessResponse {
 	items := make([]*accessaccountsv1.PendingAccessItem, 0, len(result.Items))
@@ -221,6 +237,10 @@ func ListPendingAccessResponse(result service.ListPendingAccessResult) *accessac
 		})
 	}
 	return &accessaccountsv1.ListPendingAccessResponse{Items: items, NextCursor: result.NextCursor}
+}
+
+func membershipTargetRefToProto(edge entity.Membership) *accessaccountsv1.SubjectRef {
+	return SubjectRefToProto(value.SubjectRef{Type: string(edge.TargetType), ID: uuidString(edge.TargetID)})
 }
 
 // MatchedRulesToProto maps access decision explanation rules to gRPC.
