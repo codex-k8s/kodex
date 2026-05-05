@@ -5,7 +5,7 @@ title: kodex — индекс карты Issue
 status: active
 owner_role: KM
 created_at: 2026-04-25
-updated_at: 2026-04-26
+updated_at: 2026-05-05
 ---
 
 # Индекс карты Issue
@@ -35,3 +35,4 @@ updated_at: 2026-04-26
 | Волна 6.3 — сквозной архитектурный каркас платформы | `waves/wave-006-3-platform-architecture-frame.md` |
 | Волна 6.4 — пакет домена доступа | `waves/wave-006-4-access-domain-docs.md` |
 | Волна 7 — доступ, организации, группы и внешние аккаунты | `waves/wave-007-access-and-accounts.md` |
+| Технический срез после волны 7 | `waves/post-wave-7-housekeeping.md` |
