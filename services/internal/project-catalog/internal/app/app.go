@@ -9,9 +9,11 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
+	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	projectgrpc "github.com/codex-k8s/kodex/services/internal/project-catalog/internal/transport/grpc"
 	grpcruntime "google.golang.org/grpc"
 )
@@ -21,9 +23,15 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
+	dbPool, err := postgreslib.OpenPool(ctx, cfg.DatabasePoolSettings())
+	if err != nil {
+		return err
+	}
+	defer dbPool.Close()
+	components := processComponents{DBPool: dbPool}
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           healthMux(),
+		Handler:           healthMux(components),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	grpcMetrics, err := grpcserver.NewMetrics(nil, grpcserver.MetricsConfig{
@@ -83,12 +91,26 @@ func shutdownServers(ctx context.Context, httpServer *http.Server, grpcServer *g
 	return httpServer.Shutdown(shutdownCtx)
 }
 
-func healthMux() *http.ServeMux {
+type processComponents struct {
+	DBPool *pgxpool.Pool
+}
+
+func healthMux(components processComponents) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health/livez", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
-	mux.HandleFunc("/health/readyz", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/health/readyz", func(w http.ResponseWriter, r *http.Request) {
+		if components.DBPool == nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		readyCtx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		if err := components.DBPool.Ping(readyCtx); err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.Handle("/metrics", promhttp.Handler())

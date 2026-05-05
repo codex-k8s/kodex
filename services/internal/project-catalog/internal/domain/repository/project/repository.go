@@ -73,6 +73,14 @@ type Repository interface {
 	GetPlacementPolicy(ctx context.Context, id uuid.UUID) (entity.PlacementPolicy, error)
 	// ListPlacementPolicies returns placement policies matching filter.
 	ListPlacementPolicies(ctx context.Context, filter query.PlacementPolicyFilter) ([]entity.PlacementPolicy, query.PageResult, error)
+	// ClaimOutboxEvents leases unpublished outbox events for delivery.
+	ClaimOutboxEvents(ctx context.Context, limit int, now time.Time, lockedUntil time.Time) ([]entity.OutboxEvent, error)
+	// MarkOutboxEventPublished marks a leased outbox event as published.
+	MarkOutboxEventPublished(ctx context.Context, id uuid.UUID, attemptCount int, publishedAt time.Time) error
+	// MarkOutboxEventFailed schedules a leased outbox event for retry.
+	MarkOutboxEventFailed(ctx context.Context, id uuid.UUID, attemptCount int, nextAttemptAt time.Time, lastError string) error
+	// MarkOutboxEventPermanentlyFailed moves a leased outbox event to terminal failure.
+	MarkOutboxEventPermanentlyFailed(ctx context.Context, id uuid.UUID, attemptCount int, failedAt time.Time, lastError string) error
 }
 
 // Clock provides deterministic time for domain commands and tests.

@@ -174,12 +174,13 @@ type WorkspacePolicy struct {
 
 // PolicyEditProposal records a request to change services.yaml through a PR.
 type PolicyEditProposal struct {
-	ID           uuid.UUID
-	ProjectID    uuid.UUID
-	RepositoryID uuid.UUID
-	SourcePath   string
-	Status       string
-	CreatedAt    time.Time
+	ID                   uuid.UUID
+	ProjectID            uuid.UUID
+	RepositoryID         uuid.UUID
+	SourcePath           string
+	RequestedChangesJSON []byte
+	Status               string
+	CreatedAt            time.Time
 }
 
 // CommandResult stores the aggregate produced by an idempotent mutation command.

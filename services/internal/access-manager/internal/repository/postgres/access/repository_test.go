@@ -84,11 +84,11 @@ func TestWrapErrorMapsPostgresErrors(t *testing.T) {
 		want error
 	}{
 		{name: "not found", err: pgx.ErrNoRows, want: errs.ErrNotFound},
-		{name: "unique", err: &pgconn.PgError{Code: postgresUniqueViolation}, want: errs.ErrAlreadyExists},
-		{name: "foreign key", err: &pgconn.PgError{Code: postgresForeignKeyViolation}, want: errs.ErrPreconditionFailed},
-		{name: "check", err: &pgconn.PgError{Code: postgresCheckViolation}, want: errs.ErrInvalidArgument},
-		{name: "serialization", err: &pgconn.PgError{Code: postgresSerialization}, want: errs.ErrConflict},
-		{name: "deadlock", err: &pgconn.PgError{Code: postgresDeadlock}, want: errs.ErrConflict},
+		{name: "unique", err: &pgconn.PgError{Code: "23505"}, want: errs.ErrAlreadyExists},
+		{name: "foreign key", err: &pgconn.PgError{Code: "23503"}, want: errs.ErrPreconditionFailed},
+		{name: "check", err: &pgconn.PgError{Code: "23514"}, want: errs.ErrInvalidArgument},
+		{name: "serialization", err: &pgconn.PgError{Code: "40001"}, want: errs.ErrConflict},
+		{name: "deadlock", err: &pgconn.PgError{Code: "40P01"}, want: errs.ErrConflict},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
