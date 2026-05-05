@@ -1,0 +1,361 @@
+asyncapi: 3.0.0
+info:
+  title: kodex project-catalog events
+  version: 1.0.0
+  description: Stable v1 event contract published by project-catalog through the platform outbox.
+x-kodex-contract-status: stable-v1
+channels:
+  projectEvents:
+    address: project.events
+    messages:
+      projectEvent:
+        $ref: '#/components/messages/ProjectEvent'
+operations:
+  publishProjectEvent:
+    action: send
+    channel:
+      $ref: '#/channels/projectEvents'
+    messages:
+      - $ref: '#/channels/projectEvents/messages/projectEvent'
+components:
+  messages:
+    ProjectEvent:
+      name: ProjectEvent
+      title: Project domain event envelope
+      payload:
+        $ref: '#/components/schemas/ProjectEventEnvelope'
+  schemas:
+    ProjectEventEnvelope:
+      oneOf:
+        - $ref: '#/components/schemas/ProjectCreatedEvent'
+        - $ref: '#/components/schemas/ProjectUpdatedEvent'
+        - $ref: '#/components/schemas/RepositoryAttachedEvent'
+        - $ref: '#/components/schemas/RepositoryUpdatedEvent'
+        - $ref: '#/components/schemas/ServicesPolicyUpdatedEvent'
+        - $ref: '#/components/schemas/PolicyOverrideCreatedEvent'
+        - $ref: '#/components/schemas/PolicyOverrideExpiredEvent'
+        - $ref: '#/components/schemas/DocumentationSourceUpdatedEvent'
+        - $ref: '#/components/schemas/BranchRulesUpdatedEvent'
+        - $ref: '#/components/schemas/ReleasePolicyUpdatedEvent'
+        - $ref: '#/components/schemas/PlacementPolicyUpdatedEvent'
+    ProjectEventEnvelopeBase:
+      type: object
+      additionalProperties: false
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_type:
+          $ref: '#/components/schemas/ProjectEventType'
+        schema_version:
+          type: integer
+          minimum: 1
+        aggregate_type:
+          type: string
+        aggregate_id:
+          type: string
+          format: uuid
+        occurred_at:
+          type: string
+          format: date-time
+        payload:
+          $ref: '#/components/schemas/ProjectEventPayload'
+      required: [event_id, event_type, schema_version, aggregate_type, aggregate_id, occurred_at, payload]
+    ProjectCreatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProjectEventEnvelopeBase'
+        - $ref: '#/components/schemas/ProjectCreatedEventKind'
+    ProjectCreatedEventKind:
+      type: object
+      properties:
+        event_type:
+          type: string
+          const: project.project.created
+        aggregate_type:
+          type: string
+          const: project
+        payload:
+          $ref: '#/components/schemas/ProjectCreatedPayload'
+      required: [event_type, aggregate_type, payload]
+    ProjectUpdatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProjectEventEnvelopeBase'
+        - $ref: '#/components/schemas/ProjectUpdatedEventKind'
+    ProjectUpdatedEventKind:
+      type: object
+      properties:
+        event_type:
+          type: string
+          const: project.project.updated
+        aggregate_type:
+          type: string
+          const: project
+        payload:
+          $ref: '#/components/schemas/ProjectUpdatedPayload'
+      required: [event_type, aggregate_type, payload]
+    RepositoryAttachedEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProjectEventEnvelopeBase'
+        - $ref: '#/components/schemas/RepositoryAttachedEventKind'
+    RepositoryAttachedEventKind:
+      type: object
+      properties:
+        event_type:
+          type: string
+          const: project.repository.attached
+        aggregate_type:
+          type: string
+          const: repository
+        payload:
+          $ref: '#/components/schemas/RepositoryAttachedPayload'
+      required: [event_type, aggregate_type, payload]
+    RepositoryUpdatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProjectEventEnvelopeBase'
+        - $ref: '#/components/schemas/RepositoryUpdatedEventKind'
+    RepositoryUpdatedEventKind:
+      type: object
+      properties:
+        event_type:
+          type: string
+          const: project.repository.updated
+        aggregate_type:
+          type: string
+          const: repository
+        payload:
+          $ref: '#/components/schemas/RepositoryUpdatedPayload'
+      required: [event_type, aggregate_type, payload]
+    ServicesPolicyUpdatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProjectEventEnvelopeBase'
+        - $ref: '#/components/schemas/ServicesPolicyUpdatedEventKind'
+    ServicesPolicyUpdatedEventKind:
+      type: object
+      properties:
+        event_type:
+          type: string
+          const: project.services_policy.updated
+        aggregate_type:
+          type: string
+          const: services_policy
+        payload:
+          $ref: '#/components/schemas/ServicesPolicyUpdatedPayload'
+      required: [event_type, aggregate_type, payload]
+    PolicyOverrideCreatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProjectEventEnvelopeBase'
+        - $ref: '#/components/schemas/PolicyOverrideCreatedEventKind'
+    PolicyOverrideCreatedEventKind:
+      type: object
+      properties:
+        event_type:
+          type: string
+          const: project.policy_override.created
+        aggregate_type:
+          type: string
+          const: policy_override
+        payload:
+          $ref: '#/components/schemas/PolicyOverrideCreatedPayload'
+      required: [event_type, aggregate_type, payload]
+    PolicyOverrideExpiredEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProjectEventEnvelopeBase'
+        - $ref: '#/components/schemas/PolicyOverrideExpiredEventKind'
+    PolicyOverrideExpiredEventKind:
+      type: object
+      properties:
+        event_type:
+          type: string
+          const: project.policy_override.expired
+        aggregate_type:
+          type: string
+          const: policy_override
+        payload:
+          $ref: '#/components/schemas/PolicyOverrideExpiredPayload'
+      required: [event_type, aggregate_type, payload]
+    DocumentationSourceUpdatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProjectEventEnvelopeBase'
+        - $ref: '#/components/schemas/DocumentationSourceUpdatedEventKind'
+    DocumentationSourceUpdatedEventKind:
+      type: object
+      properties:
+        event_type:
+          type: string
+          const: project.documentation_source.updated
+        aggregate_type:
+          type: string
+          const: documentation_source
+        payload:
+          $ref: '#/components/schemas/DocumentationSourceUpdatedPayload'
+      required: [event_type, aggregate_type, payload]
+    BranchRulesUpdatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProjectEventEnvelopeBase'
+        - $ref: '#/components/schemas/BranchRulesUpdatedEventKind'
+    BranchRulesUpdatedEventKind:
+      type: object
+      properties:
+        event_type:
+          type: string
+          const: project.branch_rules.updated
+        aggregate_type:
+          type: string
+          const: branch_rules
+        payload:
+          $ref: '#/components/schemas/BranchRulesUpdatedPayload'
+      required: [event_type, aggregate_type, payload]
+    ReleasePolicyUpdatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProjectEventEnvelopeBase'
+        - $ref: '#/components/schemas/ReleasePolicyUpdatedEventKind'
+    ReleasePolicyUpdatedEventKind:
+      type: object
+      properties:
+        event_type:
+          type: string
+          const: project.release_policy.updated
+        aggregate_type:
+          type: string
+          const: release_policy
+        payload:
+          $ref: '#/components/schemas/ReleasePolicyUpdatedPayload'
+      required: [event_type, aggregate_type, payload]
+    PlacementPolicyUpdatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProjectEventEnvelopeBase'
+        - $ref: '#/components/schemas/PlacementPolicyUpdatedEventKind'
+    PlacementPolicyUpdatedEventKind:
+      type: object
+      properties:
+        event_type:
+          type: string
+          const: project.placement_policy.updated
+        aggregate_type:
+          type: string
+          const: placement_policy
+        payload:
+          $ref: '#/components/schemas/PlacementPolicyUpdatedPayload'
+      required: [event_type, aggregate_type, payload]
+    ProjectEventType:
+      type: string
+      enum:
+        - project.project.created
+        - project.project.updated
+        - project.repository.attached
+        - project.repository.updated
+        - project.services_policy.updated
+        - project.policy_override.created
+        - project.policy_override.expired
+        - project.documentation_source.updated
+        - project.branch_rules.updated
+        - project.release_policy.updated
+        - project.placement_policy.updated
+    ProjectEventPayload:
+      type: object
+      additionalProperties: false
+      properties:
+        project_id:
+          type: string
+          format: uuid
+        organization_id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        status:
+          type: string
+        repository_id:
+          type: string
+          format: uuid
+        provider:
+          type: string
+        provider_owner:
+          type: string
+        provider_name:
+          type: string
+        icon_object_uri:
+          type: string
+        policy_id:
+          type: string
+          format: uuid
+        policy_version:
+          type: integer
+          minimum: 1
+        source_commit_sha:
+          type: string
+        source_blob_sha:
+          type: string
+        content_hash:
+          type: string
+        override_id:
+          type: string
+          format: uuid
+        target_type:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        source_id:
+          type: string
+          format: uuid
+        scope_type:
+          type: string
+        access_mode:
+          type: string
+        branch_rules_id:
+          type: string
+          format: uuid
+        release_policy_id:
+          type: string
+          format: uuid
+        placement_policy_id:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          minimum: 1
+    ProjectCreatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/ProjectEventPayload'
+      required: [project_id, organization_id, slug, version]
+    ProjectUpdatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/ProjectEventPayload'
+      required: [project_id, status, version]
+    RepositoryAttachedPayload:
+      allOf:
+        - $ref: '#/components/schemas/ProjectEventPayload'
+      required: [project_id, repository_id, provider, provider_owner, provider_name, version]
+    RepositoryUpdatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/ProjectEventPayload'
+      required: [repository_id, status, version]
+    ServicesPolicyUpdatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/ProjectEventPayload'
+      required: [project_id, policy_id, policy_version, content_hash]
+    PolicyOverrideCreatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/ProjectEventPayload'
+      required: [project_id, override_id, target_type, expires_at]
+    PolicyOverrideExpiredPayload:
+      allOf:
+        - $ref: '#/components/schemas/ProjectEventPayload'
+      required: [project_id, override_id, target_type]
+    DocumentationSourceUpdatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/ProjectEventPayload'
+      required: [project_id, source_id, scope_type, access_mode]
+    BranchRulesUpdatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/ProjectEventPayload'
+      required: [project_id, branch_rules_id, version]
+    ReleasePolicyUpdatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/ProjectEventPayload'
+      required: [project_id, release_policy_id, version]
+    PlacementPolicyUpdatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/ProjectEventPayload'
+      required: [project_id, placement_policy_id, version]

@@ -1,0 +1,1056 @@
+syntax = "proto3";
+
+package kodex.projects.v1;
+
+option go_package = "github.com/codex-k8s/kodex/proto/gen/go/kodex/projects/v1;projectsv1";
+
+// ProjectCatalogService is the stable v1 inter-service contract for the
+// projects and repositories domain. It covers the command and read surface
+// agreed in docs/domains/projects-and-repositories/architecture/api_contract.md.
+service ProjectCatalogService {
+  // CreateProject creates a project in an organization.
+  rpc CreateProject(CreateProjectRequest) returns (ProjectResponse);
+  // UpdateProject changes safe project fields and lifecycle status.
+  rpc UpdateProject(UpdateProjectRequest) returns (ProjectResponse);
+  // GetProject returns authoritative project state.
+  rpc GetProject(GetProjectRequest) returns (ProjectResponse);
+  // ListProjects returns projects visible in an organization or filter scope.
+  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
+  // AttachRepository binds a provider repository to a project.
+  rpc AttachRepository(AttachRepositoryRequest) returns (RepositoryResponse);
+  // UpdateRepository changes safe repository binding fields.
+  rpc UpdateRepository(UpdateRepositoryRequest) returns (RepositoryResponse);
+  // GetRepository returns authoritative repository binding state.
+  rpc GetRepository(GetRepositoryRequest) returns (RepositoryResponse);
+  // ListRepositories returns repository bindings for a project.
+  rpc ListRepositories(ListRepositoriesRequest) returns (ListRepositoriesResponse);
+  // ImportServicesPolicy stores a checked services.yaml projection.
+  rpc ImportServicesPolicy(ImportServicesPolicyRequest) returns (ServicesPolicyResponse);
+  // GetServicesPolicy returns a checked services.yaml projection.
+  rpc GetServicesPolicy(GetServicesPolicyRequest) returns (ServicesPolicyResponse);
+  // ListServiceDescriptors returns typed service descriptors from active policy.
+  rpc ListServiceDescriptors(ListServiceDescriptorsRequest) returns (ListServiceDescriptorsResponse);
+  // CreatePolicyEditProposal creates a request to change services.yaml through PR.
+  rpc CreatePolicyEditProposal(CreatePolicyEditProposalRequest) returns (PolicyEditProposalResponse);
+  // CreatePolicyOverride creates a time-bound operator override.
+  rpc CreatePolicyOverride(CreatePolicyOverrideRequest) returns (PolicyOverrideResponse);
+  // PutDocumentationSource creates or updates a documentation source.
+  rpc PutDocumentationSource(PutDocumentationSourceRequest) returns (DocumentationSourceResponse);
+  // GetDocumentationSource returns a documentation source.
+  rpc GetDocumentationSource(GetDocumentationSourceRequest) returns (DocumentationSourceResponse);
+  // ListDocumentationSources returns documentation sources for a project scope.
+  rpc ListDocumentationSources(ListDocumentationSourcesRequest) returns (ListDocumentationSourcesResponse);
+  // GetWorkspacePolicy returns source checkout policy for an agent workspace.
+  rpc GetWorkspacePolicy(GetWorkspacePolicyRequest) returns (WorkspacePolicyResponse);
+  // PutBranchRules creates or updates branch rules.
+  rpc PutBranchRules(PutBranchRulesRequest) returns (BranchRulesResponse);
+  // GetBranchRules returns branch rules.
+  rpc GetBranchRules(GetBranchRulesRequest) returns (BranchRulesResponse);
+  // ListBranchRules returns active branch rules for a project or repository.
+  rpc ListBranchRules(ListBranchRulesRequest) returns (ListBranchRulesResponse);
+  // PutReleasePolicy creates or updates a release policy.
+  rpc PutReleasePolicy(PutReleasePolicyRequest) returns (ReleasePolicyResponse);
+  // GetReleasePolicy returns a release policy.
+  rpc GetReleasePolicy(GetReleasePolicyRequest) returns (ReleasePolicyResponse);
+  // ListReleasePolicies returns release policies for a project.
+  rpc ListReleasePolicies(ListReleasePoliciesRequest) returns (ListReleasePoliciesResponse);
+  // PutPlacementPolicy creates or updates placement policy.
+  rpc PutPlacementPolicy(PutPlacementPolicyRequest) returns (PlacementPolicyResponse);
+  // GetPlacementPolicy returns placement policy.
+  rpc GetPlacementPolicy(GetPlacementPolicyRequest) returns (PlacementPolicyResponse);
+  // ListPlacementPolicies returns placement policies for a project scope.
+  rpc ListPlacementPolicies(ListPlacementPoliciesRequest) returns (ListPlacementPoliciesResponse);
+}
+
+// CommandMeta is required for every mutating command.
+message CommandMeta {
+  // command_id is a unique command identifier. Either command_id or idempotency_key is required.
+  string command_id = 1;
+  // idempotency_key is an idempotency key scoped by operation and actor.
+  string idempotency_key = 2;
+  // expected_version is present only for existing aggregate mutations.
+  optional int64 expected_version = 3;
+  // actor is the authenticated caller.
+  Actor actor = 4;
+  // reason is a machine or operator reason for audit and domain events.
+  string reason = 5;
+  // request_id links the command to logs, traces and audit.
+  string request_id = 6;
+  // request_context carries safe request metadata; no tokens, secrets, email or names.
+  RequestContext request_context = 7;
+}
+
+// QueryMeta carries safe metadata for authoritative reads.
+message QueryMeta {
+  // actor is the authenticated caller.
+  Actor actor = 1;
+  // request_id links the read to logs and traces.
+  string request_id = 2;
+  // request_context carries safe request metadata.
+  RequestContext request_context = 3;
+}
+
+// RequestContext is safe request metadata used for audit and diagnostics.
+message RequestContext {
+  // source identifies caller surface, for example staff-gateway, platform-mcp-server or service.
+  string source = 1;
+  // trace_id links platform traces.
+  string trace_id = 2;
+  // session_id links a user session when available.
+  string session_id = 3;
+  // client_ip_hash is an optional hashed client address.
+  string client_ip_hash = 4;
+}
+
+// Actor identifies a user, service, agent or external account.
+message Actor {
+  // type is a subject type such as user, service, agent or external_account.
+  string type = 1;
+  // id is the subject identifier in its owner domain.
+  string id = 2;
+}
+
+// PageRequest limits list responses.
+message PageRequest {
+  // page_size is the maximum item count requested by caller.
+  int32 page_size = 1;
+  // page_token is an opaque continuation token returned by a previous call.
+  string page_token = 2;
+}
+
+// PageResponse describes list continuation state.
+message PageResponse {
+  // next_page_token is empty when there are no more items.
+  string next_page_token = 1;
+}
+
+// ProjectStatus is the closed set of project lifecycle statuses.
+enum ProjectStatus {
+  PROJECT_STATUS_UNSPECIFIED = 0;
+  PROJECT_STATUS_ACTIVE = 1;
+  PROJECT_STATUS_ARCHIVED = 2;
+  PROJECT_STATUS_DISABLED = 3;
+}
+
+// RepositoryProvider is the closed set of repository providers.
+enum RepositoryProvider {
+  REPOSITORY_PROVIDER_UNSPECIFIED = 0;
+  REPOSITORY_PROVIDER_GITHUB = 1;
+  REPOSITORY_PROVIDER_GITLAB = 2;
+}
+
+// RepositoryStatus is the closed set of repository binding statuses.
+enum RepositoryStatus {
+  REPOSITORY_STATUS_UNSPECIFIED = 0;
+  REPOSITORY_STATUS_ACTIVE = 1;
+  REPOSITORY_STATUS_PENDING = 2;
+  REPOSITORY_STATUS_BLOCKED = 3;
+  REPOSITORY_STATUS_ARCHIVED = 4;
+}
+
+// ServicesPolicyValidationStatus is the validation state of imported services.yaml.
+enum ServicesPolicyValidationStatus {
+  SERVICES_POLICY_VALIDATION_STATUS_UNSPECIFIED = 0;
+  SERVICES_POLICY_VALIDATION_STATUS_VALID = 1;
+  SERVICES_POLICY_VALIDATION_STATUS_INVALID = 2;
+  SERVICES_POLICY_VALIDATION_STATUS_STALE = 3;
+}
+
+// ServicesPolicyProjectionStatus is the projection state of imported services.yaml.
+enum ServicesPolicyProjectionStatus {
+  SERVICES_POLICY_PROJECTION_STATUS_UNSPECIFIED = 0;
+  SERVICES_POLICY_PROJECTION_STATUS_SYNCED = 1;
+  SERVICES_POLICY_PROJECTION_STATUS_PENDING = 2;
+  SERVICES_POLICY_PROJECTION_STATUS_FAILED = 3;
+  SERVICES_POLICY_PROJECTION_STATUS_OVERRIDDEN = 4;
+}
+
+// ServiceKind classifies a service described by services.yaml.
+enum ServiceKind {
+  SERVICE_KIND_UNSPECIFIED = 0;
+  SERVICE_KIND_BACKEND = 1;
+  SERVICE_KIND_FRONTEND = 2;
+  SERVICE_KIND_WORKER = 3;
+  SERVICE_KIND_DOCUMENTATION = 4;
+  SERVICE_KIND_PACKAGE = 5;
+  SERVICE_KIND_OTHER = 6;
+}
+
+// ServiceStatus is the closed set of service descriptor statuses.
+enum ServiceStatus {
+  SERVICE_STATUS_UNSPECIFIED = 0;
+  SERVICE_STATUS_ACTIVE = 1;
+  SERVICE_STATUS_DISABLED = 2;
+  SERVICE_STATUS_STALE = 3;
+}
+
+// DocumentationScopeType classifies where documentation source applies.
+enum DocumentationScopeType {
+  DOCUMENTATION_SCOPE_TYPE_UNSPECIFIED = 0;
+  DOCUMENTATION_SCOPE_TYPE_PROJECT = 1;
+  DOCUMENTATION_SCOPE_TYPE_SERVICE = 2;
+  DOCUMENTATION_SCOPE_TYPE_DEPENDENCY = 3;
+  DOCUMENTATION_SCOPE_TYPE_GUIDANCE_REF = 4;
+}
+
+// DocumentationAccessMode controls whether an agent may edit a documentation source.
+enum DocumentationAccessMode {
+  DOCUMENTATION_ACCESS_MODE_UNSPECIFIED = 0;
+  DOCUMENTATION_ACCESS_MODE_READ = 1;
+  DOCUMENTATION_ACCESS_MODE_WRITE = 2;
+}
+
+// DocumentationSourceStatus is the closed set of documentation source statuses.
+enum DocumentationSourceStatus {
+  DOCUMENTATION_SOURCE_STATUS_UNSPECIFIED = 0;
+  DOCUMENTATION_SOURCE_STATUS_ACTIVE = 1;
+  DOCUMENTATION_SOURCE_STATUS_DISABLED = 2;
+  DOCUMENTATION_SOURCE_STATUS_BLOCKED = 3;
+}
+
+// MergePolicy is the closed set of merge strategies allowed by branch rules.
+enum MergePolicy {
+  MERGE_POLICY_UNSPECIFIED = 0;
+  MERGE_POLICY_MERGE = 1;
+  MERGE_POLICY_SQUASH = 2;
+  MERGE_POLICY_REBASE = 3;
+  MERGE_POLICY_MANUAL = 4;
+}
+
+// BranchRulesStatus is the closed set of branch rule statuses.
+enum BranchRulesStatus {
+  BRANCH_RULES_STATUS_UNSPECIFIED = 0;
+  BRANCH_RULES_STATUS_ACTIVE = 1;
+  BRANCH_RULES_STATUS_DISABLED = 2;
+}
+
+// RolloutStrategy is the closed set of release rollout strategies.
+enum RolloutStrategy {
+  ROLLOUT_STRATEGY_UNSPECIFIED = 0;
+  ROLLOUT_STRATEGY_DIRECT = 1;
+  ROLLOUT_STRATEGY_STAGED = 2;
+  ROLLOUT_STRATEGY_CANARY = 3;
+}
+
+// RollbackPolicy is the closed set of release rollback policies.
+enum RollbackPolicy {
+  ROLLBACK_POLICY_UNSPECIFIED = 0;
+  ROLLBACK_POLICY_MANUAL = 1;
+  ROLLBACK_POLICY_AUTOMATIC_ON_GATE = 2;
+  ROLLBACK_POLICY_AUTOMATIC_ON_ALERT = 3;
+}
+
+// ReleasePolicyStatus is the closed set of release policy statuses.
+enum ReleasePolicyStatus {
+  RELEASE_POLICY_STATUS_UNSPECIFIED = 0;
+  RELEASE_POLICY_STATUS_ACTIVE = 1;
+  RELEASE_POLICY_STATUS_DISABLED = 2;
+  RELEASE_POLICY_STATUS_ARCHIVED = 3;
+}
+
+// PlacementPolicyStatus is the closed set of placement policy statuses.
+enum PlacementPolicyStatus {
+  PLACEMENT_POLICY_STATUS_UNSPECIFIED = 0;
+  PLACEMENT_POLICY_STATUS_ACTIVE = 1;
+  PLACEMENT_POLICY_STATUS_DISABLED = 2;
+}
+
+// PolicyOverrideTargetType is the closed set of override target types.
+enum PolicyOverrideTargetType {
+  POLICY_OVERRIDE_TARGET_TYPE_UNSPECIFIED = 0;
+  POLICY_OVERRIDE_TARGET_TYPE_SERVICES_POLICY = 1;
+  POLICY_OVERRIDE_TARGET_TYPE_BRANCH_RULES = 2;
+  POLICY_OVERRIDE_TARGET_TYPE_RELEASE_POLICY = 3;
+  POLICY_OVERRIDE_TARGET_TYPE_PLACEMENT_POLICY = 4;
+  POLICY_OVERRIDE_TARGET_TYPE_DOCUMENTATION_SOURCE = 5;
+}
+
+// PolicyOverrideStatus is the closed set of override statuses.
+enum PolicyOverrideStatus {
+  POLICY_OVERRIDE_STATUS_UNSPECIFIED = 0;
+  POLICY_OVERRIDE_STATUS_ACTIVE = 1;
+  POLICY_OVERRIDE_STATUS_EXPIRED = 2;
+  POLICY_OVERRIDE_STATUS_CANCELLED = 3;
+}
+
+// Project describes a project aggregate.
+message Project {
+  // project_id is the project aggregate id.
+  string project_id = 1;
+  // organization_id is the owner organization id from access-manager.
+  string organization_id = 2;
+  // slug is unique in organization scope.
+  string slug = 3;
+  // display_name is safe display text.
+  string display_name = 4;
+  // description is optional safe description.
+  string description = 5;
+  // icon_object_uri is an optional object-store URI for project icon.
+  string icon_object_uri = 6;
+  // status is project lifecycle status.
+  ProjectStatus status = 7;
+  // version is the aggregate version.
+  int64 version = 8;
+}
+
+// Repository describes a repository binding aggregate.
+message Repository {
+  // repository_id is the repository binding aggregate id.
+  string repository_id = 1;
+  // project_id is the project that owns the binding.
+  string project_id = 2;
+  // provider is the repository provider.
+  RepositoryProvider provider = 3;
+  // provider_owner is owner or group name at provider.
+  string provider_owner = 4;
+  // provider_name is repository name at provider.
+  string provider_name = 5;
+  // web_url is a safe URL to the provider repository.
+  string web_url = 6;
+  // default_branch is the default branch for project policy.
+  string default_branch = 7;
+  // status is repository binding status.
+  RepositoryStatus status = 8;
+  // provider_repository_id is optional provider-native id.
+  string provider_repository_id = 9;
+  // icon_object_uri is an optional object-store URI for repository icon.
+  string icon_object_uri = 10;
+  // version is the aggregate version.
+  int64 version = 11;
+}
+
+// ServicesPolicy describes a checked services.yaml projection.
+message ServicesPolicy {
+  // services_policy_id is the policy aggregate id.
+  string services_policy_id = 1;
+  // project_id is the project that owns the policy.
+  string project_id = 2;
+  // source_repository_id is the repository where source services.yaml was found.
+  string source_repository_id = 3;
+  // source_path is the policy file path.
+  string source_path = 4;
+  // source_ref is the branch, tag or provider ref used for import.
+  string source_ref = 5;
+  // source_commit_sha is the commit used for checked projection.
+  string source_commit_sha = 6;
+  // source_blob_sha is the provider file object hash when available.
+  string source_blob_sha = 7;
+  // policy_version is the checked policy version.
+  int64 policy_version = 8;
+  // content_hash is the normalized source content hash.
+  string content_hash = 9;
+  // validated_payload_json is normalized payload for audit and revalidation.
+  string validated_payload_json = 10;
+  // validation_status is source validation status.
+  ServicesPolicyValidationStatus validation_status = 11;
+  // projection_status is operational projection status.
+  ServicesPolicyProjectionStatus projection_status = 12;
+  // imported_at is the import time in RFC3339 format.
+  string imported_at = 13;
+}
+
+// ServiceDescriptor describes one typed service from checked services.yaml.
+message ServiceDescriptor {
+  // service_descriptor_id is the service descriptor id.
+  string service_descriptor_id = 1;
+  // project_id is the owner project id.
+  string project_id = 2;
+  // services_policy_id is the source checked policy id.
+  string services_policy_id = 3;
+  // repository_id is optional repository binding id.
+  string repository_id = 4;
+  // service_key is stable service key from services.yaml.
+  string service_key = 5;
+  // display_name is safe display text.
+  string display_name = 6;
+  // kind classifies the service.
+  ServiceKind kind = 7;
+  // root_path is the service root in workspace.
+  string root_path = 8;
+  // documentation_scope_id links service to documentation sources.
+  string documentation_scope_id = 9;
+  // depends_on_service_keys lists project service dependencies.
+  repeated string depends_on_service_keys = 10;
+  // status is service descriptor status.
+  ServiceStatus status = 11;
+  // version is the descriptor version.
+  int64 version = 12;
+}
+
+// DocumentationSource describes one project documentation source.
+message DocumentationSource {
+  // documentation_source_id is the source aggregate id.
+  string documentation_source_id = 1;
+  // project_id is the owner project id.
+  string project_id = 2;
+  // repository_id is optional repository binding id.
+  string repository_id = 3;
+  // scope_type classifies where the source applies.
+  DocumentationScopeType scope_type = 4;
+  // scope_id is optional service, dependency or guidance scope id.
+  string scope_id = 5;
+  // local_path is target path in workspace.
+  string local_path = 6;
+  // access_mode controls whether the source is editable.
+  DocumentationAccessMode access_mode = 7;
+  // status is source status.
+  DocumentationSourceStatus status = 8;
+  // version is the aggregate version.
+  int64 version = 9;
+}
+
+// BranchRules describes branch policy.
+message BranchRules {
+  // branch_rules_id is the branch rule aggregate id.
+  string branch_rules_id = 1;
+  // project_id is the owner project id.
+  string project_id = 2;
+  // repository_id narrows rules to one repository when set.
+  string repository_id = 3;
+  // pattern is the branch name pattern.
+  string pattern = 4;
+  // required_checks are provider check names required by policy.
+  repeated string required_checks = 5;
+  // merge_policy is the allowed merge strategy.
+  MergePolicy merge_policy = 6;
+  // status is branch rules status.
+  BranchRulesStatus status = 7;
+  // version is the aggregate version.
+  int64 version = 8;
+}
+
+// ReleasePolicy describes release policy.
+message ReleasePolicy {
+  // release_policy_id is the release policy aggregate id.
+  string release_policy_id = 1;
+  // project_id is the owner project id.
+  string project_id = 2;
+  // name is the policy display name.
+  string name = 3;
+  // branch_pattern is release branch pattern.
+  string branch_pattern = 4;
+  // rollout_strategy is the deployment rollout strategy.
+  RolloutStrategy rollout_strategy = 5;
+  // rollback_policy is the rollback rule.
+  RollbackPolicy rollback_policy = 6;
+  // risk_profile_ref references governance risk profile.
+  string risk_profile_ref = 7;
+  // status is release policy status.
+  ReleasePolicyStatus status = 8;
+  // version is the aggregate version.
+  int64 version = 9;
+}
+
+// ReleaseLine describes a concrete release line.
+message ReleaseLine {
+  // release_line_id is the release line aggregate id.
+  string release_line_id = 1;
+  // project_id is the owner project id.
+  string project_id = 2;
+  // release_policy_id is the source release policy id.
+  string release_policy_id = 3;
+  // name is the release line name.
+  string name = 4;
+  // branch_pattern is release branch pattern.
+  string branch_pattern = 5;
+  // status is release line status.
+  ReleasePolicyStatus status = 6;
+  // version is the aggregate version.
+  int64 version = 7;
+}
+
+// PlacementPolicy describes allowed runtime placement.
+message PlacementPolicy {
+  // placement_policy_id is the placement policy aggregate id.
+  string placement_policy_id = 1;
+  // project_id is the owner project id.
+  string project_id = 2;
+  // repository_id narrows policy to one repository when set.
+  string repository_id = 3;
+  // service_key narrows policy to one service when set.
+  string service_key = 4;
+  // allowed_cluster_refs contains fleet-manager cluster references.
+  repeated string allowed_cluster_refs = 5;
+  // status is placement policy status.
+  PlacementPolicyStatus status = 6;
+  // version is the aggregate version.
+  int64 version = 7;
+}
+
+// PolicyOverride describes a time-bound operator override.
+message PolicyOverride {
+  // policy_override_id is the override aggregate id.
+  string policy_override_id = 1;
+  // project_id is the owner project id.
+  string project_id = 2;
+  // target_type classifies overridden policy area.
+  PolicyOverrideTargetType target_type = 3;
+  // target_id is optional concrete aggregate id.
+  string target_id = 4;
+  // payload_json is the minimum override payload.
+  string payload_json = 5;
+  // reason is the operator reason.
+  string reason = 6;
+  // status is override lifecycle status.
+  PolicyOverrideStatus status = 7;
+  // expires_at is the expiration timestamp in RFC3339 format.
+  string expires_at = 8;
+  // created_by_actor_ref references the operator for audit.
+  string created_by_actor_ref = 9;
+  // version is the aggregate version.
+  int64 version = 10;
+}
+
+// WorkspacePolicy describes sources allowed in an agent workspace.
+message WorkspacePolicy {
+  // project_id is the project id.
+  string project_id = 1;
+  // code_sources are code repositories allowed in workspace.
+  repeated WorkspaceCodeSource code_sources = 2;
+  // documentation_sources are documentation sources allowed in workspace.
+  repeated WorkspaceDocumentationSource documentation_sources = 3;
+  // guidance_package_refs are installed guidance package references.
+  repeated string guidance_package_refs = 4;
+  // policy_version is the services policy version used to build this result.
+  int64 policy_version = 5;
+}
+
+// WorkspaceCodeSource describes one code checkout source.
+message WorkspaceCodeSource {
+  // repository_id is the repository binding id.
+  string repository_id = 1;
+  // provider is the repository provider.
+  RepositoryProvider provider = 2;
+  // provider_owner is owner or group name at provider.
+  string provider_owner = 3;
+  // provider_name is repository name at provider.
+  string provider_name = 4;
+  // default_branch is the default branch to checkout unless task overrides it.
+  string default_branch = 5;
+  // local_path is the target path in workspace.
+  string local_path = 6;
+  // access_mode controls whether the source is editable.
+  DocumentationAccessMode access_mode = 7;
+}
+
+// WorkspaceDocumentationSource describes one documentation checkout source.
+message WorkspaceDocumentationSource {
+  // documentation_source_id is the documentation source id.
+  string documentation_source_id = 1;
+  // repository_id is optional repository binding id.
+  string repository_id = 2;
+  // scope_type classifies where the source applies.
+  DocumentationScopeType scope_type = 3;
+  // scope_id is optional service, dependency or guidance scope id.
+  string scope_id = 4;
+  // local_path is the target path in workspace.
+  string local_path = 5;
+  // access_mode controls whether the source is editable.
+  DocumentationAccessMode access_mode = 6;
+}
+
+// CreateProjectRequest creates a project.
+message CreateProjectRequest {
+  // organization_id is the owner organization id.
+  string organization_id = 1;
+  // slug is unique project slug in organization scope.
+  string slug = 2;
+  // display_name is safe display text.
+  string display_name = 3;
+  // description is optional safe description.
+  string description = 4;
+  // icon_object_uri is an optional object-store URI for project icon.
+  string icon_object_uri = 5;
+  // status is optional target status; server defaults to active.
+  ProjectStatus status = 6;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 7;
+}
+
+// UpdateProjectRequest changes safe project fields.
+message UpdateProjectRequest {
+  // project_id is the project aggregate id.
+  string project_id = 1;
+  // slug is optional new slug.
+  optional string slug = 2;
+  // display_name is optional safe display text.
+  optional string display_name = 3;
+  // description is optional safe description; present empty value clears it.
+  optional string description = 4;
+  // icon_object_uri is optional icon URI; present empty value clears it.
+  optional string icon_object_uri = 5;
+  // status is optional target lifecycle status.
+  ProjectStatus status = 6;
+  // meta carries idempotency, expected version and audit context.
+  CommandMeta meta = 7;
+}
+
+// ProjectResponse returns project state.
+message ProjectResponse {
+  // project is the returned project state.
+  Project project = 1;
+}
+
+// GetProjectRequest reads a project by id.
+message GetProjectRequest {
+  // project_id is the project aggregate id.
+  string project_id = 1;
+  // meta carries read actor and request context.
+  QueryMeta meta = 2;
+}
+
+// ListProjectsRequest lists projects by organization and status.
+message ListProjectsRequest {
+  // organization_id optionally filters projects by organization.
+  string organization_id = 1;
+  // statuses optionally filter project lifecycle.
+  repeated ProjectStatus statuses = 2;
+  // page limits response size.
+  PageRequest page = 3;
+  // meta carries read actor and request context.
+  QueryMeta meta = 4;
+}
+
+// ListProjectsResponse returns project list.
+message ListProjectsResponse {
+  // projects are returned in stable server-defined order.
+  repeated Project projects = 1;
+  // page describes continuation state.
+  PageResponse page = 2;
+}
+
+// AttachRepositoryRequest attaches a repository to a project.
+message AttachRepositoryRequest {
+  // project_id is the owner project id.
+  string project_id = 1;
+  // provider is the repository provider.
+  RepositoryProvider provider = 2;
+  // provider_owner is owner or group name at provider.
+  string provider_owner = 3;
+  // provider_name is repository name at provider.
+  string provider_name = 4;
+  // web_url is a safe URL to the provider repository.
+  string web_url = 5;
+  // default_branch is the default branch.
+  string default_branch = 6;
+  // provider_repository_id is optional provider-native id.
+  string provider_repository_id = 7;
+  // icon_object_uri is an optional object-store URI for repository icon.
+  string icon_object_uri = 8;
+  // status is optional target status; server defaults to active.
+  RepositoryStatus status = 9;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 10;
+}
+
+// UpdateRepositoryRequest changes repository binding fields.
+message UpdateRepositoryRequest {
+  // repository_id is the repository binding aggregate id.
+  string repository_id = 1;
+  // default_branch is optional new default branch.
+  optional string default_branch = 2;
+  // status is optional target lifecycle status.
+  RepositoryStatus status = 3;
+  // icon_object_uri is optional icon URI; present empty value clears it.
+  optional string icon_object_uri = 4;
+  // meta carries idempotency, expected version and audit context.
+  CommandMeta meta = 5;
+}
+
+// RepositoryResponse returns repository binding state.
+message RepositoryResponse {
+  // repository is the returned repository state.
+  Repository repository = 1;
+}
+
+// GetRepositoryRequest reads a repository binding.
+message GetRepositoryRequest {
+  // repository_id is the repository binding aggregate id.
+  string repository_id = 1;
+  // meta carries read actor and request context.
+  QueryMeta meta = 2;
+}
+
+// ListRepositoriesRequest lists repositories in a project.
+message ListRepositoriesRequest {
+  // project_id filters repositories by owner project.
+  string project_id = 1;
+  // statuses optionally filter repository binding lifecycle.
+  repeated RepositoryStatus statuses = 2;
+  // page limits response size.
+  PageRequest page = 3;
+  // meta carries read actor and request context.
+  QueryMeta meta = 4;
+}
+
+// ListRepositoriesResponse returns repository list.
+message ListRepositoriesResponse {
+  // repositories are returned in stable server-defined order.
+  repeated Repository repositories = 1;
+  // page describes continuation state.
+  PageResponse page = 2;
+}
+
+// ImportServicesPolicyRequest imports a checked services.yaml projection.
+message ImportServicesPolicyRequest {
+  // project_id is the owner project id.
+  string project_id = 1;
+  // source_repository_id is the repository where source policy was found.
+  string source_repository_id = 2;
+  // source_path is the policy file path.
+  string source_path = 3;
+  // source_ref is the branch, tag or provider ref used for import.
+  string source_ref = 4;
+  // source_commit_sha is the commit used for checked projection.
+  string source_commit_sha = 5;
+  // source_blob_sha is the provider file object hash when available.
+  string source_blob_sha = 6;
+  // content_hash is the normalized source content hash.
+  string content_hash = 7;
+  // validated_payload_json is normalized payload for audit and revalidation.
+  string validated_payload_json = 8;
+  // service_descriptors are typed descriptors extracted from policy.
+  repeated ServiceDescriptor service_descriptors = 9;
+  // validation_status is source validation status.
+  ServicesPolicyValidationStatus validation_status = 10;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 11;
+}
+
+// ServicesPolicyResponse returns services policy state.
+message ServicesPolicyResponse {
+  // services_policy is the returned checked policy.
+  ServicesPolicy services_policy = 1;
+}
+
+// GetServicesPolicyRequest reads active or concrete services policy.
+message GetServicesPolicyRequest {
+  // project_id is the owner project id.
+  string project_id = 1;
+  // services_policy_id optionally selects a concrete policy version.
+  string services_policy_id = 2;
+  // meta carries read actor and request context.
+  QueryMeta meta = 3;
+}
+
+// ListServiceDescriptorsRequest lists typed descriptors from active policy.
+message ListServiceDescriptorsRequest {
+  // project_id is the owner project id.
+  string project_id = 1;
+  // repository_id optionally filters descriptors by repository.
+  string repository_id = 2;
+  // service_keys optionally selects concrete services.
+  repeated string service_keys = 3;
+  // statuses optionally filter descriptor lifecycle.
+  repeated ServiceStatus statuses = 4;
+  // page limits response size.
+  PageRequest page = 5;
+  // meta carries read actor and request context.
+  QueryMeta meta = 6;
+}
+
+// ListServiceDescriptorsResponse returns service descriptors.
+message ListServiceDescriptorsResponse {
+  // service_descriptors are returned in stable server-defined order.
+  repeated ServiceDescriptor service_descriptors = 1;
+  // page describes continuation state.
+  PageResponse page = 2;
+}
+
+// CreatePolicyEditProposalRequest requests a PR-backed services.yaml change.
+message CreatePolicyEditProposalRequest {
+  // project_id is the owner project id.
+  string project_id = 1;
+  // repository_id is the repository where services.yaml should be edited.
+  string repository_id = 2;
+  // source_path is the policy file path.
+  string source_path = 3;
+  // requested_changes_json is typed proposal payload serialized by caller.
+  string requested_changes_json = 4;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 5;
+}
+
+// PolicyEditProposalResponse returns a policy edit proposal.
+message PolicyEditProposalResponse {
+  // proposal_id is the project-catalog proposal id.
+  string proposal_id = 1;
+  // project_id is the owner project id.
+  string project_id = 2;
+  // repository_id is the target repository id.
+  string repository_id = 3;
+  // status is a machine-readable proposal status.
+  string status = 4;
+}
+
+// CreatePolicyOverrideRequest creates an emergency policy override.
+message CreatePolicyOverrideRequest {
+  // project_id is the owner project id.
+  string project_id = 1;
+  // target_type classifies overridden policy area.
+  PolicyOverrideTargetType target_type = 2;
+  // target_id is optional concrete aggregate id.
+  string target_id = 3;
+  // payload_json is the minimum override payload.
+  string payload_json = 4;
+  // expires_at is the expiration timestamp in RFC3339 format.
+  string expires_at = 5;
+  // meta carries idempotency and audit context; reason is required.
+  CommandMeta meta = 6;
+}
+
+// PolicyOverrideResponse returns override state.
+message PolicyOverrideResponse {
+  // policy_override is the returned override.
+  PolicyOverride policy_override = 1;
+}
+
+// PutDocumentationSourceRequest creates or updates a documentation source.
+message PutDocumentationSourceRequest {
+  // documentation_source_id is optional source aggregate id.
+  string documentation_source_id = 1;
+  // project_id is the owner project id.
+  string project_id = 2;
+  // repository_id is optional repository binding id.
+  string repository_id = 3;
+  // scope_type classifies where the source applies.
+  DocumentationScopeType scope_type = 4;
+  // scope_id is optional service, dependency or guidance scope id.
+  string scope_id = 5;
+  // local_path is target path in workspace.
+  string local_path = 6;
+  // access_mode controls whether the source is editable.
+  DocumentationAccessMode access_mode = 7;
+  // status is source status.
+  DocumentationSourceStatus status = 8;
+  // meta carries idempotency, optional expected version and audit context.
+  CommandMeta meta = 9;
+}
+
+// DocumentationSourceResponse returns documentation source state.
+message DocumentationSourceResponse {
+  // documentation_source is the returned source.
+  DocumentationSource documentation_source = 1;
+}
+
+// GetDocumentationSourceRequest reads a documentation source.
+message GetDocumentationSourceRequest {
+  // documentation_source_id is the source aggregate id.
+  string documentation_source_id = 1;
+  // meta carries read actor and request context.
+  QueryMeta meta = 2;
+}
+
+// ListDocumentationSourcesRequest lists documentation sources.
+message ListDocumentationSourcesRequest {
+  // project_id is the owner project id.
+  string project_id = 1;
+  // repository_id optionally filters sources by repository.
+  string repository_id = 2;
+  // scope_type optionally filters source scope.
+  DocumentationScopeType scope_type = 3;
+  // scope_id optionally filters source scope id.
+  string scope_id = 4;
+  // statuses optionally filter source lifecycle.
+  repeated DocumentationSourceStatus statuses = 5;
+  // page limits response size.
+  PageRequest page = 6;
+  // meta carries read actor and request context.
+  QueryMeta meta = 7;
+}
+
+// ListDocumentationSourcesResponse returns documentation sources.
+message ListDocumentationSourcesResponse {
+  // documentation_sources are returned in stable server-defined order.
+  repeated DocumentationSource documentation_sources = 1;
+  // page describes continuation state.
+  PageResponse page = 2;
+}
+
+// GetWorkspacePolicyRequest reads agent workspace policy.
+message GetWorkspacePolicyRequest {
+  // project_id is the owner project id.
+  string project_id = 1;
+  // repository_ids optionally select repositories.
+  repeated string repository_ids = 2;
+  // service_keys optionally select services.
+  repeated string service_keys = 3;
+  // include_guidance_packages controls whether guidance package refs are returned.
+  bool include_guidance_packages = 4;
+  // meta carries read actor and request context.
+  QueryMeta meta = 5;
+}
+
+// WorkspacePolicyResponse returns workspace policy.
+message WorkspacePolicyResponse {
+  // workspace_policy is the returned policy.
+  WorkspacePolicy workspace_policy = 1;
+}
+
+// PutBranchRulesRequest creates or updates branch rules.
+message PutBranchRulesRequest {
+  // branch_rules_id is optional branch rules aggregate id.
+  string branch_rules_id = 1;
+  // project_id is the owner project id.
+  string project_id = 2;
+  // repository_id narrows rules to one repository when set.
+  string repository_id = 3;
+  // pattern is the branch name pattern.
+  string pattern = 4;
+  // required_checks are provider check names required by policy.
+  repeated string required_checks = 5;
+  // merge_policy is the allowed merge strategy.
+  MergePolicy merge_policy = 6;
+  // status is branch rules status.
+  BranchRulesStatus status = 7;
+  // meta carries idempotency, optional expected version and audit context.
+  CommandMeta meta = 8;
+}
+
+// BranchRulesResponse returns branch rules state.
+message BranchRulesResponse {
+  // branch_rules is the returned branch rules.
+  BranchRules branch_rules = 1;
+}
+
+// GetBranchRulesRequest reads branch rules.
+message GetBranchRulesRequest {
+  // branch_rules_id is the branch rules aggregate id.
+  string branch_rules_id = 1;
+  // meta carries read actor and request context.
+  QueryMeta meta = 2;
+}
+
+// ListBranchRulesRequest lists branch rules.
+message ListBranchRulesRequest {
+  // project_id is the owner project id.
+  string project_id = 1;
+  // repository_id optionally filters rules by repository.
+  string repository_id = 2;
+  // statuses optionally filter rules lifecycle.
+  repeated BranchRulesStatus statuses = 3;
+  // page limits response size.
+  PageRequest page = 4;
+  // meta carries read actor and request context.
+  QueryMeta meta = 5;
+}
+
+// ListBranchRulesResponse returns branch rules list.
+message ListBranchRulesResponse {
+  // branch_rules are returned in stable server-defined order.
+  repeated BranchRules branch_rules = 1;
+  // page describes continuation state.
+  PageResponse page = 2;
+}
+
+// PutReleasePolicyRequest creates or updates release policy.
+message PutReleasePolicyRequest {
+  // release_policy_id is optional release policy aggregate id.
+  string release_policy_id = 1;
+  // project_id is the owner project id.
+  string project_id = 2;
+  // name is the policy display name.
+  string name = 3;
+  // branch_pattern is release branch pattern.
+  string branch_pattern = 4;
+  // rollout_strategy is the deployment rollout strategy.
+  RolloutStrategy rollout_strategy = 5;
+  // rollback_policy is the rollback rule.
+  RollbackPolicy rollback_policy = 6;
+  // risk_profile_ref references governance risk profile.
+  string risk_profile_ref = 7;
+  // status is release policy status.
+  ReleasePolicyStatus status = 8;
+  // meta carries idempotency, optional expected version and audit context.
+  CommandMeta meta = 9;
+}
+
+// ReleasePolicyResponse returns release policy state.
+message ReleasePolicyResponse {
+  // release_policy is the returned release policy.
+  ReleasePolicy release_policy = 1;
+}
+
+// GetReleasePolicyRequest reads release policy.
+message GetReleasePolicyRequest {
+  // release_policy_id is the release policy aggregate id.
+  string release_policy_id = 1;
+  // meta carries read actor and request context.
+  QueryMeta meta = 2;
+}
+
+// ListReleasePoliciesRequest lists release policies.
+message ListReleasePoliciesRequest {
+  // project_id is the owner project id.
+  string project_id = 1;
+  // statuses optionally filter policy lifecycle.
+  repeated ReleasePolicyStatus statuses = 2;
+  // page limits response size.
+  PageRequest page = 3;
+  // meta carries read actor and request context.
+  QueryMeta meta = 4;
+}
+
+// ListReleasePoliciesResponse returns release policies.
+message ListReleasePoliciesResponse {
+  // release_policies are returned in stable server-defined order.
+  repeated ReleasePolicy release_policies = 1;
+  // page describes continuation state.
+  PageResponse page = 2;
+}
+
+// PutPlacementPolicyRequest creates or updates placement policy.
+message PutPlacementPolicyRequest {
+  // placement_policy_id is optional placement policy aggregate id.
+  string placement_policy_id = 1;
+  // project_id is the owner project id.
+  string project_id = 2;
+  // repository_id narrows policy to one repository when set.
+  string repository_id = 3;
+  // service_key narrows policy to one service when set.
+  string service_key = 4;
+  // allowed_cluster_refs contains fleet-manager cluster references.
+  repeated string allowed_cluster_refs = 5;
+  // status is placement policy status.
+  PlacementPolicyStatus status = 6;
+  // meta carries idempotency, optional expected version and audit context.
+  CommandMeta meta = 7;
+}
+
+// PlacementPolicyResponse returns placement policy state.
+message PlacementPolicyResponse {
+  // placement_policy is the returned placement policy.
+  PlacementPolicy placement_policy = 1;
+}
+
+// GetPlacementPolicyRequest reads placement policy.
+message GetPlacementPolicyRequest {
+  // placement_policy_id is the placement policy aggregate id.
+  string placement_policy_id = 1;
+  // meta carries read actor and request context.
+  QueryMeta meta = 2;
+}
+
+// ListPlacementPoliciesRequest lists placement policies.
+message ListPlacementPoliciesRequest {
+  // project_id is the owner project id.
+  string project_id = 1;
+  // repository_id optionally filters policy by repository.
+  string repository_id = 2;
+  // service_key optionally filters policy by service.
+  string service_key = 3;
+  // statuses optionally filter policy lifecycle.
+  repeated PlacementPolicyStatus statuses = 4;
+  // page limits response size.
+  PageRequest page = 5;
+  // meta carries read actor and request context.
+  QueryMeta meta = 6;
+}
+
+// ListPlacementPoliciesResponse returns placement policies.
+message ListPlacementPoliciesResponse {
+  // placement_policies are returned in stable server-defined order.
+  repeated PlacementPolicy placement_policies = 1;
+  // page describes continuation state.
+  PageResponse page = 2;
+}
