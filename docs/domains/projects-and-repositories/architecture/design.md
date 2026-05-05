@@ -142,6 +142,7 @@ sequenceDiagram
 - `project.documentation_source.updated`;
 - `project.branch_rules.updated`;
 - `project.release_policy.updated`;
+- `project.release_line.updated`;
 - `project.placement_policy.updated`.
 
 События публикуются через сервисный outbox и общий `platform-event-log`. Потребители строят свои проекции или запускают свою бизнес-логику, но не меняют каноническое состояние `project-catalog` напрямую.

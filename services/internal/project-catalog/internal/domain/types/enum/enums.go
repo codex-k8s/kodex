@@ -163,6 +163,7 @@ const (
 	PolicyOverrideTargetServicesPolicy      PolicyOverrideTargetType = "services_policy"
 	PolicyOverrideTargetBranchRules         PolicyOverrideTargetType = "branch_rules"
 	PolicyOverrideTargetReleasePolicy       PolicyOverrideTargetType = "release_policy"
+	PolicyOverrideTargetReleaseLine         PolicyOverrideTargetType = "release_line"
 	PolicyOverrideTargetPlacementPolicy     PolicyOverrideTargetType = "placement_policy"
 	PolicyOverrideTargetDocumentationSource PolicyOverrideTargetType = "documentation_source"
 )

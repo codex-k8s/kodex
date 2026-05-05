@@ -118,17 +118,28 @@ approvals:
 | `merge_policy` | enum | нет | `merge`, `squash`, `rebase`, `manual`. |
 | `status` | enum | нет | `active`, `disabled`. |
 
-### ReleasePolicy и ReleaseLine
+### ReleasePolicy
 
 | Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
-| `id` | uuid | нет | Идентификатор политики или линии. |
+| `id` | uuid | нет | Идентификатор релизной политики. |
 | `project_id` | uuid | нет | Проект. |
-| `name` | text | нет | Название линии или политики. |
+| `name` | text | нет | Название политики. |
 | `branch_pattern` | text | нет | Шаблон релизной ветки. |
 | `rollout_strategy` | enum | нет | Стратегия выкладки: `direct`, `staged`, `canary`. |
 | `rollback_policy` | enum | нет | Политика отката: `manual`, `automatic_on_gate`, `automatic_on_alert`. |
 | `risk_profile_ref` | text | да | Ссылка на риск-профиль в домене governance. |
+| `status` | enum | нет | `active`, `disabled`, `archived`. |
+
+### ReleaseLine
+
+| Поле | Тип | Может быть пустым | Примечание |
+|---|---|---:|---|
+| `id` | uuid | нет | Идентификатор релизной линии. |
+| `project_id` | uuid | нет | Проект. |
+| `release_policy_id` | uuid | нет | Релизная политика, по которой живёт линия. |
+| `name` | text | нет | Название линии. |
+| `branch_pattern` | text | нет | Шаблон релизной ветки. |
 | `status` | enum | нет | `active`, `disabled`, `archived`. |
 
 ### PlacementPolicy
@@ -150,7 +161,7 @@ approvals:
 |---|---|---:|---|
 | `id` | uuid | нет | Идентификатор переопределения. |
 | `project_id` | uuid | нет | Проект-владелец. |
-| `target_type` | enum | нет | `services_policy`, `branch_rules`, `release_policy`, `placement_policy`, `documentation_source`. |
+| `target_type` | enum | нет | `services_policy`, `branch_rules`, `release_policy`, `release_line`, `placement_policy`, `documentation_source`. |
 | `target_id` | uuid | да | Конкретный агрегат, если переопределение привязано к нему. |
 | `payload` | jsonb | нет | Минимальный набор временно переопределённых параметров. |
 | `reason` | text | нет | Причина аварийного изменения. |
@@ -210,6 +221,7 @@ approvals:
 | Источники документации для рабочего контура | `(project_id, scope_type, scope_id, status)` |
 | Активные правила веток | `(project_id, repository_id, status)` |
 | Активные релизные политики | `(project_id, status)` |
+| Релизные линии проекта или политики | `(project_id, release_policy_id, status)` |
 | Активные переопределения | `(project_id, target_type, status, expires_at)` |
 | Непубликованные события | `(published_at, occurred_at)` where `published_at is null` |
 | Идемпотентный след команд | `(command_id)` unique |
