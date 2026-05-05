@@ -137,6 +137,7 @@ sequenceDiagram
 - `project.project.created`;
 - `project.project.updated`;
 - `project.project.archived`;
+- `project.project.disabled`;
 - `project.repository.attached`;
 - `project.repository.updated`;
 - `project.repository.detached`;
@@ -153,9 +154,11 @@ sequenceDiagram
 - `project.release_policy.created`;
 - `project.release_policy.updated`;
 - `project.release_policy.archived`;
+- `project.release_policy.disabled`;
 - `project.release_line.created`;
 - `project.release_line.updated`;
 - `project.release_line.archived`;
+- `project.release_line.disabled`;
 - `project.placement_policy.created`;
 - `project.placement_policy.updated`;
 - `project.placement_policy.disabled`.

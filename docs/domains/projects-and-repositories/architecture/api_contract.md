@@ -43,6 +43,7 @@ approvals:
 | `ListProjects` | gRPC query | `project.list` | нет | Пакетное чтение для внутренних сервисов и `staff-gateway`. |
 | `AttachRepository` | gRPC command | `repository.attach` | `CommandMeta.command_id` | Привязывает репозиторий к проекту. |
 | `UpdateRepository` | gRPC command | `repository.update` | ожидаемая версия | Обновляет статус, ссылку на иконку и поля политики привязки. |
+| `DetachRepository` | gRPC command | `repository.detach` | ожидаемая версия | Архивирует привязку репозитория и убирает её из активной политики проекта. |
 | `GetRepository` | gRPC query | `repository.read` | нет | Авторитетное чтение привязки репозитория. |
 | `ListRepositories` | gRPC query | `repository.list` | нет | Список репозиториев проекта. |
 | `ImportServicesPolicy` | gRPC command | `project.policy.import` | `CommandMeta.command_id` | Импортирует `services.yaml`, управляемый через Git, после первичной загрузки, слияния PR или сверки и сохраняет проверенную проекцию. |
@@ -50,6 +51,7 @@ approvals:
 | `ListServiceDescriptors` | gRPC query | `project.policy.read` | нет | Читает типизированный список сервисов из активной политики. |
 | `CreatePolicyEditProposal` | gRPC command | `project.policy.propose` | `CommandMeta.command_id` | Создаёт запрос на PR-изменение `services.yaml` вместо прямой записи в БД. |
 | `CreatePolicyOverride` | gRPC command | `project.policy.override` | `CommandMeta.command_id` | Создаёт временное операторское переопределение с причиной, сроком действия и аудитом. |
+| `CancelPolicyOverride` | gRPC command | `project.policy.override.cancel` | ожидаемая версия | Досрочно отменяет активное операторское переопределение с причиной. |
 | `PutDocumentationSource` | gRPC command | `project.docs.update` | ожидаемая версия | Обновляет источник документации. |
 | `GetDocumentationSource` | gRPC query | `project.docs.read` | нет | Читает конкретный источник документации. |
 | `ListDocumentationSources` | gRPC query | `project.docs.read` | нет | Читает источники документации проекта, репозитория или сервиса. |
@@ -88,10 +90,11 @@ approvals:
 | `project.project.created` | project | `project_id`, `organization_id`, `slug`, `icon_object_uri`, `version` |
 | `project.project.updated` | project | `project_id`, `status`, `icon_object_uri`, `version` |
 | `project.project.archived` | project | `project_id`, `status`, `version` |
+| `project.project.disabled` | project | `project_id`, `status`, `version` |
 | `project.repository.attached` | repository | `project_id`, `repository_id`, `provider`, `provider_owner`, `provider_name`, `icon_object_uri`, `version` |
 | `project.repository.updated` | repository | `project_id`, `repository_id`, `status`, `icon_object_uri`, `version` |
 | `project.repository.detached` | repository | `project_id`, `repository_id`, `status`, `version` |
-| `project.services_policy.imported` | services_policy | `project_id`, `policy_id`, `policy_version`, `source_commit_sha`, `source_blob_sha`, `content_hash` |
+| `project.services_policy.imported` | services_policy | `project_id`, `policy_id`, `policy_version`, `source_commit_sha`, `content_hash`; `source_blob_sha` передаётся, когда доступен у провайдера |
 | `project.policy_override.created` | policy_override | `project_id`, `override_id`, `target_type`, `expires_at` |
 | `project.policy_override.expired` | policy_override | `project_id`, `override_id`, `target_type` |
 | `project.policy_override.cancelled` | policy_override | `project_id`, `override_id`, `target_type` |
@@ -104,9 +107,11 @@ approvals:
 | `project.release_policy.created` | release_policy | `project_id`, `release_policy_id`, `version` |
 | `project.release_policy.updated` | release_policy | `project_id`, `release_policy_id`, `version` |
 | `project.release_policy.archived` | release_policy | `project_id`, `release_policy_id`, `status`, `version` |
+| `project.release_policy.disabled` | release_policy | `project_id`, `release_policy_id`, `status`, `version` |
 | `project.release_line.created` | release_line | `project_id`, `release_policy_id`, `release_line_id`, `version` |
 | `project.release_line.updated` | release_line | `project_id`, `release_policy_id`, `release_line_id`, `version` |
 | `project.release_line.archived` | release_line | `project_id`, `release_policy_id`, `release_line_id`, `status`, `version` |
+| `project.release_line.disabled` | release_line | `project_id`, `release_policy_id`, `release_line_id`, `status`, `version` |
 | `project.placement_policy.created` | placement_policy | `project_id`, `placement_policy_id`, `version` |
 | `project.placement_policy.updated` | placement_policy | `project_id`, `placement_policy_id`, `version` |
 | `project.placement_policy.disabled` | placement_policy | `project_id`, `placement_policy_id`, `status`, `version` |

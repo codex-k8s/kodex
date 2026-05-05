@@ -25,6 +25,7 @@ const (
 	ProjectCatalogService_ListProjects_FullMethodName             = "/kodex.projects.v1.ProjectCatalogService/ListProjects"
 	ProjectCatalogService_AttachRepository_FullMethodName         = "/kodex.projects.v1.ProjectCatalogService/AttachRepository"
 	ProjectCatalogService_UpdateRepository_FullMethodName         = "/kodex.projects.v1.ProjectCatalogService/UpdateRepository"
+	ProjectCatalogService_DetachRepository_FullMethodName         = "/kodex.projects.v1.ProjectCatalogService/DetachRepository"
 	ProjectCatalogService_GetRepository_FullMethodName            = "/kodex.projects.v1.ProjectCatalogService/GetRepository"
 	ProjectCatalogService_ListRepositories_FullMethodName         = "/kodex.projects.v1.ProjectCatalogService/ListRepositories"
 	ProjectCatalogService_ImportServicesPolicy_FullMethodName     = "/kodex.projects.v1.ProjectCatalogService/ImportServicesPolicy"
@@ -32,6 +33,7 @@ const (
 	ProjectCatalogService_ListServiceDescriptors_FullMethodName   = "/kodex.projects.v1.ProjectCatalogService/ListServiceDescriptors"
 	ProjectCatalogService_CreatePolicyEditProposal_FullMethodName = "/kodex.projects.v1.ProjectCatalogService/CreatePolicyEditProposal"
 	ProjectCatalogService_CreatePolicyOverride_FullMethodName     = "/kodex.projects.v1.ProjectCatalogService/CreatePolicyOverride"
+	ProjectCatalogService_CancelPolicyOverride_FullMethodName     = "/kodex.projects.v1.ProjectCatalogService/CancelPolicyOverride"
 	ProjectCatalogService_PutDocumentationSource_FullMethodName   = "/kodex.projects.v1.ProjectCatalogService/PutDocumentationSource"
 	ProjectCatalogService_GetDocumentationSource_FullMethodName   = "/kodex.projects.v1.ProjectCatalogService/GetDocumentationSource"
 	ProjectCatalogService_ListDocumentationSources_FullMethodName = "/kodex.projects.v1.ProjectCatalogService/ListDocumentationSources"
@@ -70,6 +72,8 @@ type ProjectCatalogServiceClient interface {
 	AttachRepository(ctx context.Context, in *AttachRepositoryRequest, opts ...grpc.CallOption) (*RepositoryResponse, error)
 	// UpdateRepository changes safe repository binding fields.
 	UpdateRepository(ctx context.Context, in *UpdateRepositoryRequest, opts ...grpc.CallOption) (*RepositoryResponse, error)
+	// DetachRepository archives a repository binding and removes it from active project policy.
+	DetachRepository(ctx context.Context, in *DetachRepositoryRequest, opts ...grpc.CallOption) (*RepositoryResponse, error)
 	// GetRepository returns authoritative repository binding state.
 	GetRepository(ctx context.Context, in *GetRepositoryRequest, opts ...grpc.CallOption) (*RepositoryResponse, error)
 	// ListRepositories returns repository bindings for a project.
@@ -84,6 +88,8 @@ type ProjectCatalogServiceClient interface {
 	CreatePolicyEditProposal(ctx context.Context, in *CreatePolicyEditProposalRequest, opts ...grpc.CallOption) (*PolicyEditProposalResponse, error)
 	// CreatePolicyOverride creates a time-bound operator override.
 	CreatePolicyOverride(ctx context.Context, in *CreatePolicyOverrideRequest, opts ...grpc.CallOption) (*PolicyOverrideResponse, error)
+	// CancelPolicyOverride cancels an active operator override before expiration.
+	CancelPolicyOverride(ctx context.Context, in *CancelPolicyOverrideRequest, opts ...grpc.CallOption) (*PolicyOverrideResponse, error)
 	// PutDocumentationSource creates or updates a documentation source.
 	PutDocumentationSource(ctx context.Context, in *PutDocumentationSourceRequest, opts ...grpc.CallOption) (*DocumentationSourceResponse, error)
 	// GetDocumentationSource returns a documentation source.
@@ -186,6 +192,16 @@ func (c *projectCatalogServiceClient) UpdateRepository(ctx context.Context, in *
 	return out, nil
 }
 
+func (c *projectCatalogServiceClient) DetachRepository(ctx context.Context, in *DetachRepositoryRequest, opts ...grpc.CallOption) (*RepositoryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RepositoryResponse)
+	err := c.cc.Invoke(ctx, ProjectCatalogService_DetachRepository_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *projectCatalogServiceClient) GetRepository(ctx context.Context, in *GetRepositoryRequest, opts ...grpc.CallOption) (*RepositoryResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RepositoryResponse)
@@ -250,6 +266,16 @@ func (c *projectCatalogServiceClient) CreatePolicyOverride(ctx context.Context, 
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(PolicyOverrideResponse)
 	err := c.cc.Invoke(ctx, ProjectCatalogService_CreatePolicyOverride_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectCatalogServiceClient) CancelPolicyOverride(ctx context.Context, in *CancelPolicyOverrideRequest, opts ...grpc.CallOption) (*PolicyOverrideResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PolicyOverrideResponse)
+	err := c.cc.Invoke(ctx, ProjectCatalogService_CancelPolicyOverride_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -436,6 +462,8 @@ type ProjectCatalogServiceServer interface {
 	AttachRepository(context.Context, *AttachRepositoryRequest) (*RepositoryResponse, error)
 	// UpdateRepository changes safe repository binding fields.
 	UpdateRepository(context.Context, *UpdateRepositoryRequest) (*RepositoryResponse, error)
+	// DetachRepository archives a repository binding and removes it from active project policy.
+	DetachRepository(context.Context, *DetachRepositoryRequest) (*RepositoryResponse, error)
 	// GetRepository returns authoritative repository binding state.
 	GetRepository(context.Context, *GetRepositoryRequest) (*RepositoryResponse, error)
 	// ListRepositories returns repository bindings for a project.
@@ -450,6 +478,8 @@ type ProjectCatalogServiceServer interface {
 	CreatePolicyEditProposal(context.Context, *CreatePolicyEditProposalRequest) (*PolicyEditProposalResponse, error)
 	// CreatePolicyOverride creates a time-bound operator override.
 	CreatePolicyOverride(context.Context, *CreatePolicyOverrideRequest) (*PolicyOverrideResponse, error)
+	// CancelPolicyOverride cancels an active operator override before expiration.
+	CancelPolicyOverride(context.Context, *CancelPolicyOverrideRequest) (*PolicyOverrideResponse, error)
 	// PutDocumentationSource creates or updates a documentation source.
 	PutDocumentationSource(context.Context, *PutDocumentationSourceRequest) (*DocumentationSourceResponse, error)
 	// GetDocumentationSource returns a documentation source.
@@ -510,6 +540,9 @@ func (UnimplementedProjectCatalogServiceServer) AttachRepository(context.Context
 func (UnimplementedProjectCatalogServiceServer) UpdateRepository(context.Context, *UpdateRepositoryRequest) (*RepositoryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateRepository not implemented")
 }
+func (UnimplementedProjectCatalogServiceServer) DetachRepository(context.Context, *DetachRepositoryRequest) (*RepositoryResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DetachRepository not implemented")
+}
 func (UnimplementedProjectCatalogServiceServer) GetRepository(context.Context, *GetRepositoryRequest) (*RepositoryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetRepository not implemented")
 }
@@ -530,6 +563,9 @@ func (UnimplementedProjectCatalogServiceServer) CreatePolicyEditProposal(context
 }
 func (UnimplementedProjectCatalogServiceServer) CreatePolicyOverride(context.Context, *CreatePolicyOverrideRequest) (*PolicyOverrideResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreatePolicyOverride not implemented")
+}
+func (UnimplementedProjectCatalogServiceServer) CancelPolicyOverride(context.Context, *CancelPolicyOverrideRequest) (*PolicyOverrideResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CancelPolicyOverride not implemented")
 }
 func (UnimplementedProjectCatalogServiceServer) PutDocumentationSource(context.Context, *PutDocumentationSourceRequest) (*DocumentationSourceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PutDocumentationSource not implemented")
@@ -708,6 +744,24 @@ func _ProjectCatalogService_UpdateRepository_Handler(srv interface{}, ctx contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProjectCatalogService_DetachRepository_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DetachRepositoryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectCatalogServiceServer).DetachRepository(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectCatalogService_DetachRepository_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectCatalogServiceServer).DetachRepository(ctx, req.(*DetachRepositoryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ProjectCatalogService_GetRepository_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetRepositoryRequest)
 	if err := dec(in); err != nil {
@@ -830,6 +884,24 @@ func _ProjectCatalogService_CreatePolicyOverride_Handler(srv interface{}, ctx co
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProjectCatalogServiceServer).CreatePolicyOverride(ctx, req.(*CreatePolicyOverrideRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectCatalogService_CancelPolicyOverride_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelPolicyOverrideRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectCatalogServiceServer).CancelPolicyOverride(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectCatalogService_CancelPolicyOverride_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectCatalogServiceServer).CancelPolicyOverride(ctx, req.(*CancelPolicyOverrideRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1154,6 +1226,10 @@ var ProjectCatalogService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ProjectCatalogService_UpdateRepository_Handler,
 		},
 		{
+			MethodName: "DetachRepository",
+			Handler:    _ProjectCatalogService_DetachRepository_Handler,
+		},
+		{
 			MethodName: "GetRepository",
 			Handler:    _ProjectCatalogService_GetRepository_Handler,
 		},
@@ -1180,6 +1256,10 @@ var ProjectCatalogService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreatePolicyOverride",
 			Handler:    _ProjectCatalogService_CreatePolicyOverride_Handler,
+		},
+		{
+			MethodName: "CancelPolicyOverride",
+			Handler:    _ProjectCatalogService_CancelPolicyOverride_Handler,
 		},
 		{
 			MethodName: "PutDocumentationSource",

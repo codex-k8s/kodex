@@ -20,6 +20,8 @@ service ProjectCatalogService {
   rpc AttachRepository(AttachRepositoryRequest) returns (RepositoryResponse);
   // UpdateRepository changes safe repository binding fields.
   rpc UpdateRepository(UpdateRepositoryRequest) returns (RepositoryResponse);
+  // DetachRepository archives a repository binding and removes it from active project policy.
+  rpc DetachRepository(DetachRepositoryRequest) returns (RepositoryResponse);
   // GetRepository returns authoritative repository binding state.
   rpc GetRepository(GetRepositoryRequest) returns (RepositoryResponse);
   // ListRepositories returns repository bindings for a project.
@@ -34,6 +36,8 @@ service ProjectCatalogService {
   rpc CreatePolicyEditProposal(CreatePolicyEditProposalRequest) returns (PolicyEditProposalResponse);
   // CreatePolicyOverride creates a time-bound operator override.
   rpc CreatePolicyOverride(CreatePolicyOverrideRequest) returns (PolicyOverrideResponse);
+  // CancelPolicyOverride cancels an active operator override before expiration.
+  rpc CancelPolicyOverride(CancelPolicyOverrideRequest) returns (PolicyOverrideResponse);
   // PutDocumentationSource creates or updates a documentation source.
   rpc PutDocumentationSource(PutDocumentationSourceRequest) returns (DocumentationSourceResponse);
   // GetDocumentationSource returns a documentation source.
@@ -346,7 +350,7 @@ message ServicesPolicy {
   // source_ref is the branch, tag or provider ref used for import.
   optional string source_ref = 5;
   // source_commit_sha is the commit used for checked projection.
-  optional string source_commit_sha = 6;
+  string source_commit_sha = 6;
   // source_blob_sha is the provider file object hash when available.
   optional string source_blob_sha = 7;
   // policy_version is the checked policy version.
@@ -671,6 +675,14 @@ message UpdateRepositoryRequest {
   CommandMeta meta = 5;
 }
 
+// DetachRepositoryRequest archives an active repository binding.
+message DetachRepositoryRequest {
+  // repository_id is the repository binding aggregate id.
+  string repository_id = 1;
+  // meta carries idempotency, expected version and audit context.
+  CommandMeta meta = 2;
+}
+
 // RepositoryResponse returns repository binding state.
 message RepositoryResponse {
   // repository is the returned repository state.
@@ -716,7 +728,7 @@ message ImportServicesPolicyRequest {
   // source_ref is the branch, tag or provider ref used for import.
   optional string source_ref = 4;
   // source_commit_sha is the commit used for checked projection.
-  optional string source_commit_sha = 5;
+  string source_commit_sha = 5;
   // source_blob_sha is the provider file object hash when available.
   optional string source_blob_sha = 6;
   // content_hash is the normalized source content hash.
@@ -811,6 +823,14 @@ message CreatePolicyOverrideRequest {
   string expires_at = 5;
   // meta carries idempotency and audit context; reason is required.
   CommandMeta meta = 6;
+}
+
+// CancelPolicyOverrideRequest cancels an active emergency policy override.
+message CancelPolicyOverrideRequest {
+  // policy_override_id is the override aggregate id.
+  string policy_override_id = 1;
+  // meta carries idempotency, expected version and audit context; reason is required.
+  CommandMeta meta = 2;
 }
 
 // PolicyOverrideResponse returns override state.

@@ -72,6 +72,7 @@
 
 - Runtime config читается через `github.com/caarlos0/env/v11`.
 - У сервиса должна быть явная `Config`-структура с тегами `env` и `envDefault`/`required`, если значение обязательно.
+- Простые обязательные env задавать встроенными тегами `required` и `notEmpty`; ручная `Validate()` остаётся только для условных правил, cross-field инвариантов, диапазонов чисел и соотношений длительностей.
 - Ручные helper-функции поверх `os.Getenv` для обычного чтения env не добавлять.
 - Ошибку парсинга конфигурации возвращать из `LoadConfig` и логировать только в entrypoint/composition root.
 
@@ -136,7 +137,7 @@
 - Structured logs, без секретов/PII.
 - OTel tracing и пропагация контекста.
 - Graceful shutdown по `SIGINT|SIGTERM|SIGQUIT|SIGHUP`.
-- Базовый контекст приложения (`context.Background()`) создаётся только в `internal/app/*` (composition root) и прокидывается зависимостям через конструкторы/методы; в transport/domain/repository-слоях прямой вызов `context.Background()` запрещён.
+- Базовый контекст приложения (`context.Background()`) создаётся только в `cmd/<service>/main.go` и прокидывается дальше через `internal/app`. Для graceful shutdown внутри `internal/app` использовать производный контекст от входного `ctx`, например `context.WithTimeout(context.WithoutCancel(ctx), timeout)`, а не новый `context.Background()`. В transport/domain/repository-слоях прямой вызов `context.Background()` запрещён.
 
 ## Запрещено
 

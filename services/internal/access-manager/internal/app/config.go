@@ -16,7 +16,7 @@ type Config struct {
 	HTTPAddr                  string        `env:"KODEX_ACCESS_MANAGER_HTTP_ADDR" envDefault:":8080"`
 	GRPCAddr                  string        `env:"KODEX_ACCESS_MANAGER_GRPC_ADDR" envDefault:":9090"`
 	GRPCAuthRequired          bool          `env:"KODEX_ACCESS_MANAGER_GRPC_AUTH_REQUIRED" envDefault:"true"`
-	GRPCAuthToken             string        `env:"KODEX_ACCESS_MANAGER_GRPC_AUTH_TOKEN"`
+	GRPCAuthToken             string        `env:"KODEX_ACCESS_MANAGER_GRPC_AUTH_TOKEN,notEmpty"`
 	GRPCMaxInFlight           int           `env:"KODEX_ACCESS_MANAGER_GRPC_MAX_IN_FLIGHT" envDefault:"128"`
 	GRPCMaxConcurrentStreams  uint32        `env:"KODEX_ACCESS_MANAGER_GRPC_MAX_CONCURRENT_STREAMS" envDefault:"128"`
 	GRPCUnaryTimeout          time.Duration `env:"KODEX_ACCESS_MANAGER_GRPC_UNARY_TIMEOUT" envDefault:"30s"`
@@ -37,12 +37,12 @@ type Config struct {
 	DatabaseRetryInitialDelay time.Duration `env:"KODEX_ACCESS_MANAGER_DATABASE_CONNECT_RETRY_INITIAL_DELAY" envDefault:"500ms"`
 	DatabaseRetryMaxDelay     time.Duration `env:"KODEX_ACCESS_MANAGER_DATABASE_CONNECT_RETRY_MAX_DELAY" envDefault:"5s"`
 	DatabaseRetryJitterRatio  float64       `env:"KODEX_ACCESS_MANAGER_DATABASE_CONNECT_RETRY_JITTER_RATIO" envDefault:"0.2"`
-	EventLogDatabaseDSN       string        `env:"KODEX_ACCESS_MANAGER_EVENT_LOG_DATABASE_DSN"`
+	EventLogDatabaseDSN       string        `env:"KODEX_ACCESS_MANAGER_EVENT_LOG_DATABASE_DSN,notEmpty"`
 	EventLogDatabaseMaxConns  int32         `env:"KODEX_ACCESS_MANAGER_EVENT_LOG_DATABASE_MAX_CONNS" envDefault:"4"`
 	EventLogDatabaseMinConns  int32         `env:"KODEX_ACCESS_MANAGER_EVENT_LOG_DATABASE_MIN_CONNS" envDefault:"0"`
 	OutboxDispatchEnabled     bool          `env:"KODEX_ACCESS_MANAGER_OUTBOX_DISPATCH_ENABLED" envDefault:"true"`
 	OutboxPublisherKind       string        `env:"KODEX_ACCESS_MANAGER_OUTBOX_PUBLISHER_KIND" envDefault:"postgres-event-log"`
-	OutboxEventLogSource      string        `env:"KODEX_ACCESS_MANAGER_OUTBOX_EVENT_LOG_SOURCE" envDefault:"access-manager"`
+	OutboxEventLogSource      string        `env:"KODEX_ACCESS_MANAGER_OUTBOX_EVENT_LOG_SOURCE,notEmpty" envDefault:"access-manager"`
 	OutboxAllowLossyPublisher bool          `env:"KODEX_ACCESS_MANAGER_OUTBOX_ALLOW_LOSSY_DIAGNOSTIC_PUBLISHER" envDefault:"false"`
 	OutboxBatchSize           int           `env:"KODEX_ACCESS_MANAGER_OUTBOX_BATCH_SIZE" envDefault:"100"`
 	OutboxPollInterval        time.Duration `env:"KODEX_ACCESS_MANAGER_OUTBOX_POLL_INTERVAL" envDefault:"1s"`

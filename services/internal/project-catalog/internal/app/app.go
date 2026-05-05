@@ -49,7 +49,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 
 	select {
 	case <-ctx.Done():
-		return shutdownServers(httpServer, grpcServer)
+		return shutdownServers(ctx, httpServer, grpcServer)
 	case err := <-errCh:
 		grpcServer.Stop()
 		_ = httpServer.Close()
@@ -76,8 +76,8 @@ func serveGRPC(server *grpcruntime.Server, addr string, logger *slog.Logger, err
 	}
 }
 
-func shutdownServers(httpServer *http.Server, grpcServer *grpcruntime.Server) error {
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+func shutdownServers(ctx context.Context, httpServer *http.Server, grpcServer *grpcruntime.Server) error {
+	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer cancel()
 	grpcServer.GracefulStop()
 	return httpServer.Shutdown(shutdownCtx)

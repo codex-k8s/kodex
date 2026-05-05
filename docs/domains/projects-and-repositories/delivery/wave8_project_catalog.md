@@ -69,6 +69,7 @@ approvals:
 | `ListProjects` | Готов в proto. | Отложена до #631. |
 | `AttachRepository` | Готов в proto. | Отложена до #631. |
 | `UpdateRepository` | Готов в proto. | Отложена до #631. |
+| `DetachRepository` | Готов в proto. | Отложена до #631. |
 | `GetRepository` | Готов в proto. | Отложена до #631. |
 | `ListRepositories` | Готов в proto. | Отложена до #631. |
 | `ImportServicesPolicy` | Готов в proto. | Отложена до #631/#632. |
@@ -76,6 +77,7 @@ approvals:
 | `ListServiceDescriptors` | Готов в proto. | Отложена до #631/#632. |
 | `CreatePolicyEditProposal` | Готов в proto. | Отложена до #631/#632. |
 | `CreatePolicyOverride` | Готов в proto. | Отложена до #631/#632. |
+| `CancelPolicyOverride` | Готов в proto. | Отложена до #631/#632. |
 | `PutDocumentationSource` | Готов в proto. | Отложена до #631/#632. |
 | `GetDocumentationSource` | Готов в proto. | Отложена до #631/#632. |
 | `ListDocumentationSources` | Готов в proto. | Отложена до #631/#632. |
@@ -100,6 +102,7 @@ approvals:
 | `project.project.created` | Готово в AsyncAPI. | Отложена до outbox-срезов #630/#631. |
 | `project.project.updated` | Готово в AsyncAPI. | Отложена до outbox-срезов #630/#631. |
 | `project.project.archived` | Готово в AsyncAPI. | Отложена до outbox-срезов #630/#631. |
+| `project.project.disabled` | Готово в AsyncAPI. | Отложена до outbox-срезов #630/#631. |
 | `project.repository.attached` | Готово в AsyncAPI. | Отложена до outbox-срезов #630/#631. |
 | `project.repository.updated` | Готово в AsyncAPI. | Отложена до outbox-срезов #630/#631. |
 | `project.repository.detached` | Готово в AsyncAPI. | Отложена до outbox-срезов #630/#631. |
@@ -116,9 +119,11 @@ approvals:
 | `project.release_policy.created` | Готово в AsyncAPI. | Отложена до #633. |
 | `project.release_policy.updated` | Готово в AsyncAPI. | Отложена до #633. |
 | `project.release_policy.archived` | Готово в AsyncAPI. | Отложена до #633. |
+| `project.release_policy.disabled` | Готово в AsyncAPI. | Отложена до #633. |
 | `project.release_line.created` | Готово в AsyncAPI. | Отложена до #633. |
 | `project.release_line.updated` | Готово в AsyncAPI. | Отложена до #633. |
 | `project.release_line.archived` | Готово в AsyncAPI. | Отложена до #633. |
+| `project.release_line.disabled` | Готово в AsyncAPI. | Отложена до #633. |
 | `project.placement_policy.created` | Готово в AsyncAPI. | Отложена до #633. |
 | `project.placement_policy.updated` | Готово в AsyncAPI. | Отложена до #633. |
 | `project.placement_policy.disabled` | Готово в AsyncAPI. | Отложена до #633. |

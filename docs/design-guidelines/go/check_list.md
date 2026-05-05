@@ -17,11 +17,11 @@
 - В больших `service.go`/`handler.go` вспомогательные модели/типы/no-op реализации вынесены в отдельные файлы пакета (`*_types.go`, `*_helpers.go`, `*_noop.go`).
 - Helper-код разложен по уровню переиспользования: локальный helper только для одного места; общий для пакета в `*_helpers.go`; межсервисный в `libs/*`.
 - Ошибки маппятся на границе транспорта (HTTP error handler / gRPC interceptor); в handlers нет ad-hoc маппинга межслойных ошибок.
-- `context.Background()` создан только в composition root (`internal/app/*`); в transport/domain/repository используется прокинутый контекст.
+- `context.Background()` создан только в `cmd/<service>/main.go`; `internal/app` и нижние слои используют прокинутый контекст или производный контекст через `context.WithoutCancel`.
 - Функции/методы оформлены с компактными сигнатурами (предпочтительно в одну строку); при большом числе аргументов используется `Config/Params/Input` структура.
 - Интеграция с Kubernetes идёт через интерфейс/адаптер; прямой shell-first сценарий не является основным путём.
 - Интеграция с репозиториями идёт через provider-интерфейсы (без GitHub-specific логики в домене).
-- Runtime config читается через `github.com/caarlos0/env/v11`; нет ручных helper-функций поверх `os.Getenv` для обычного чтения env.
+- Runtime config читается через `github.com/caarlos0/env/v11`; простые обязательные env отмечены `required`/`notEmpty`, а ручная `Validate()` используется только для условных и cross-field правил.
 - HTTP gateway (если есть): OpenAPI в `specs/openapi/<gateway-surface>.v<major>.yaml`; validation/codegen выполнены.
 - Внутренний доменный сервис не публикует прямой OpenAPI для бизнес-ручек; наружный HTTP идёт через gateway-спецификации.
 - Async/webhook payload contracts (если есть): описаны в `specs/asyncapi/<service-name>.v<major>.yaml`.

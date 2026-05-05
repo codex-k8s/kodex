@@ -111,7 +111,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 
 	select {
 	case <-ctx.Done():
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 		defer cancel()
 		grpcServer.GracefulStop()
 		return httpServer.Shutdown(shutdownCtx)

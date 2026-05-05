@@ -30,6 +30,7 @@ components:
         - $ref: '#/components/schemas/ProjectCreatedEvent'
         - $ref: '#/components/schemas/ProjectUpdatedEvent'
         - $ref: '#/components/schemas/ProjectArchivedEvent'
+        - $ref: '#/components/schemas/ProjectDisabledEvent'
         - $ref: '#/components/schemas/RepositoryAttachedEvent'
         - $ref: '#/components/schemas/RepositoryUpdatedEvent'
         - $ref: '#/components/schemas/RepositoryDetachedEvent'
@@ -46,9 +47,11 @@ components:
         - $ref: '#/components/schemas/ReleasePolicyCreatedEvent'
         - $ref: '#/components/schemas/ReleasePolicyUpdatedEvent'
         - $ref: '#/components/schemas/ReleasePolicyArchivedEvent'
+        - $ref: '#/components/schemas/ReleasePolicyDisabledEvent'
         - $ref: '#/components/schemas/ReleaseLineCreatedEvent'
         - $ref: '#/components/schemas/ReleaseLineUpdatedEvent'
         - $ref: '#/components/schemas/ReleaseLineArchivedEvent'
+        - $ref: '#/components/schemas/ReleaseLineDisabledEvent'
         - $ref: '#/components/schemas/PlacementPolicyCreatedEvent'
         - $ref: '#/components/schemas/PlacementPolicyUpdatedEvent'
         - $ref: '#/components/schemas/PlacementPolicyDisabledEvent'
@@ -123,6 +126,22 @@ components:
           const: project
         payload:
           $ref: '#/components/schemas/ProjectArchivedPayload'
+      required: [event_type, aggregate_type, payload]
+    ProjectDisabledEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProjectEventEnvelopeBase'
+        - $ref: '#/components/schemas/ProjectDisabledEventKind'
+    ProjectDisabledEventKind:
+      type: object
+      properties:
+        event_type:
+          type: string
+          const: project.project.disabled
+        aggregate_type:
+          type: string
+          const: project
+        payload:
+          $ref: '#/components/schemas/ProjectDisabledPayload'
       required: [event_type, aggregate_type, payload]
 
     RepositoryAttachedEvent:
@@ -386,6 +405,22 @@ components:
         payload:
           $ref: '#/components/schemas/ReleasePolicyArchivedPayload'
       required: [event_type, aggregate_type, payload]
+    ReleasePolicyDisabledEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProjectEventEnvelopeBase'
+        - $ref: '#/components/schemas/ReleasePolicyDisabledEventKind'
+    ReleasePolicyDisabledEventKind:
+      type: object
+      properties:
+        event_type:
+          type: string
+          const: project.release_policy.disabled
+        aggregate_type:
+          type: string
+          const: release_policy
+        payload:
+          $ref: '#/components/schemas/ReleasePolicyDisabledPayload'
+      required: [event_type, aggregate_type, payload]
 
     ReleaseLineCreatedEvent:
       allOf:
@@ -434,6 +469,22 @@ components:
           const: release_line
         payload:
           $ref: '#/components/schemas/ReleaseLineArchivedPayload'
+      required: [event_type, aggregate_type, payload]
+    ReleaseLineDisabledEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProjectEventEnvelopeBase'
+        - $ref: '#/components/schemas/ReleaseLineDisabledEventKind'
+    ReleaseLineDisabledEventKind:
+      type: object
+      properties:
+        event_type:
+          type: string
+          const: project.release_line.disabled
+        aggregate_type:
+          type: string
+          const: release_line
+        payload:
+          $ref: '#/components/schemas/ReleaseLineDisabledPayload'
       required: [event_type, aggregate_type, payload]
 
     PlacementPolicyCreatedEvent:
@@ -491,6 +542,7 @@ components:
         - project.project.created
         - project.project.updated
         - project.project.archived
+        - project.project.disabled
         - project.repository.attached
         - project.repository.updated
         - project.repository.detached
@@ -507,9 +559,11 @@ components:
         - project.release_policy.created
         - project.release_policy.updated
         - project.release_policy.archived
+        - project.release_policy.disabled
         - project.release_line.created
         - project.release_line.updated
         - project.release_line.archived
+        - project.release_line.disabled
         - project.placement_policy.created
         - project.placement_policy.updated
         - project.placement_policy.disabled
@@ -593,6 +647,10 @@ components:
       allOf:
         - $ref: '#/components/schemas/ProjectEventPayload'
       required: [project_id, status, version]
+    ProjectDisabledPayload:
+      allOf:
+        - $ref: '#/components/schemas/ProjectEventPayload'
+      required: [project_id, status, version]
     RepositoryAttachedPayload:
       allOf:
         - $ref: '#/components/schemas/ProjectEventPayload'
@@ -608,7 +666,7 @@ components:
     ServicesPolicyImportedPayload:
       allOf:
         - $ref: '#/components/schemas/ProjectEventPayload'
-      required: [project_id, policy_id, policy_version, content_hash]
+      required: [project_id, policy_id, policy_version, source_commit_sha, content_hash]
     PolicyOverrideCreatedPayload:
       allOf:
         - $ref: '#/components/schemas/ProjectEventPayload'
@@ -657,6 +715,10 @@ components:
       allOf:
         - $ref: '#/components/schemas/ProjectEventPayload'
       required: [project_id, release_policy_id, status, version]
+    ReleasePolicyDisabledPayload:
+      allOf:
+        - $ref: '#/components/schemas/ProjectEventPayload'
+      required: [project_id, release_policy_id, status, version]
     ReleaseLineCreatedPayload:
       allOf:
         - $ref: '#/components/schemas/ProjectEventPayload'
@@ -666,6 +728,10 @@ components:
         - $ref: '#/components/schemas/ProjectEventPayload'
       required: [project_id, release_policy_id, release_line_id, version]
     ReleaseLineArchivedPayload:
+      allOf:
+        - $ref: '#/components/schemas/ProjectEventPayload'
+      required: [project_id, release_policy_id, release_line_id, status, version]
+    ReleaseLineDisabledPayload:
       allOf:
         - $ref: '#/components/schemas/ProjectEventPayload'
       required: [project_id, release_policy_id, release_line_id, status, version]

@@ -65,7 +65,7 @@ approvals:
 | `source_repository_id` | uuid | да | Где найден исходный `services.yaml`. |
 | `source_path` | text | нет | Путь к файлу политики. |
 | `source_ref` | text | да | Ветка, тег или другой ref, откуда импортирована политика. |
-| `source_commit_sha` | text | да | Commit, из которого импортирована проверенная политика. |
+| `source_commit_sha` | text | нет | Commit, из которого импортирована проверенная политика. |
 | `source_blob_sha` | text | да | Хэш объекта файла у провайдера, если доступен. |
 | `policy_version` | bigint | нет | Версия проверенного снимка. |
 | `content_hash` | text | нет | Хэш исходного содержимого. |

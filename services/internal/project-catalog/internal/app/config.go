@@ -15,7 +15,7 @@ type Config struct {
 	HTTPAddr                 string        `env:"KODEX_PROJECT_CATALOG_HTTP_ADDR" envDefault:":8080"`
 	GRPCAddr                 string        `env:"KODEX_PROJECT_CATALOG_GRPC_ADDR" envDefault:":9090"`
 	GRPCAuthRequired         bool          `env:"KODEX_PROJECT_CATALOG_GRPC_AUTH_REQUIRED" envDefault:"true"`
-	GRPCAuthToken            string        `env:"KODEX_PROJECT_CATALOG_GRPC_AUTH_TOKEN"`
+	GRPCAuthToken            string        `env:"KODEX_PROJECT_CATALOG_GRPC_AUTH_TOKEN,notEmpty"`
 	GRPCMaxInFlight          int           `env:"KODEX_PROJECT_CATALOG_GRPC_MAX_IN_FLIGHT" envDefault:"128"`
 	GRPCMaxConcurrentStreams uint32        `env:"KODEX_PROJECT_CATALOG_GRPC_MAX_CONCURRENT_STREAMS" envDefault:"128"`
 	GRPCUnaryTimeout         time.Duration `env:"KODEX_PROJECT_CATALOG_GRPC_UNARY_TIMEOUT" envDefault:"30s"`
@@ -29,17 +29,14 @@ type Config struct {
 
 // LoadConfig reads process configuration from environment variables.
 func LoadConfig() (Config, error) {
-	cfg := Config{}
-	parseErr := env.ParseWithOptions(&cfg, env.Options{})
-	validateErr := cfg.Validate()
-	switch {
-	case parseErr != nil:
-		return Config{}, fmt.Errorf("parse project-catalog config from environment: %w", parseErr)
-	case validateErr != nil:
-		return Config{}, validateErr
-	default:
-		return cfg, nil
+	var cfg Config
+	if err := env.Parse(&cfg); err != nil {
+		return Config{}, fmt.Errorf("parse project-catalog config from environment: %w", err)
 	}
+	if err := cfg.Validate(); err != nil {
+		return Config{}, err
+	}
+	return cfg, nil
 }
 
 // Validate checks configuration invariants that protect runtime boundaries.
