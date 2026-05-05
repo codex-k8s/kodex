@@ -29,7 +29,7 @@ approvals:
 
 - gRPC proto: `proto/kodex/projects/v1/project_catalog.proto`.
 - AsyncAPI: `specs/asyncapi/project-catalog.v1.yaml`.
-- Внешний HTTP: через тонкий `api-gateway` с OpenAPI-контрактом, не напрямую из доменного сервиса.
+- Внешний HTTP для операторской и администраторской консоли: через тонкий `staff-gateway` с OpenAPI-контрактом, не напрямую из доменного сервиса.
 
 Этот документ фиксирует целевой обзор операций и событий. Фактическими источниками правды для транспорта будут proto и AsyncAPI; до их появления документ не считается стабильной спецификацией реализации.
 
@@ -40,7 +40,7 @@ approvals:
 | `CreateProject` | gRPC command | `project.create` | `CommandMeta.command_id` | Создаёт проект, включая опциональную ссылку на иконку. |
 | `UpdateProject` | gRPC command | `project.update` | ожидаемая версия | Обновляет название, описание, статус и ссылку на иконку. |
 | `GetProject` | gRPC query | `project.read` | нет | Авторитетное чтение проекта. |
-| `ListProjects` | gRPC query | `project.list` | нет | Пакетное чтение для внутренних сервисов и `api-gateway`. |
+| `ListProjects` | gRPC query | `project.list` | нет | Пакетное чтение для внутренних сервисов и `staff-gateway`. |
 | `AttachRepository` | gRPC command | `repository.attach` | `CommandMeta.command_id` | Привязывает репозиторий к проекту. |
 | `UpdateRepository` | gRPC command | `repository.update` | ожидаемая версия | Обновляет статус, ссылку на иконку и поля политики привязки. |
 | `GetRepository` | gRPC query | `repository.read` | нет | Авторитетное чтение привязки репозитория. |
