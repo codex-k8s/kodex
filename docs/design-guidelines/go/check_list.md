@@ -21,7 +21,7 @@
 - Функции/методы оформлены с компактными сигнатурами (предпочтительно в одну строку); при большом числе аргументов используется `Config/Params/Input` структура.
 - Интеграция с Kubernetes идёт через интерфейс/адаптер; прямой shell-first сценарий не является основным путём.
 - Интеграция с репозиториями идёт через provider-интерфейсы (без GitHub-specific логики в домене).
-- Runtime config читается через `github.com/caarlos0/env/v11`; простые обязательные env отмечены `required`/`notEmpty`, а ручная `Validate()` используется только для условных и cross-field правил.
+- Runtime config читается через `github.com/caarlos0/env/v11`; простые обязательные env отмечены `required`/`notEmpty`, а условно обязательные env проверяются только в ручной `Validate()`.
 - HTTP gateway (если есть): OpenAPI в `specs/openapi/<gateway-surface>.v<major>.yaml`; validation/codegen выполнены.
 - Внутренний доменный сервис не публикует прямой OpenAPI для бизнес-ручек; наружный HTTP идёт через gateway-спецификации.
 - Async/webhook payload contracts (если есть): описаны в `specs/asyncapi/<service-name>.v<major>.yaml`.

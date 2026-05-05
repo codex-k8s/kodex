@@ -15,7 +15,7 @@ type Config struct {
 	HTTPAddr                 string        `env:"KODEX_PROJECT_CATALOG_HTTP_ADDR" envDefault:":8080"`
 	GRPCAddr                 string        `env:"KODEX_PROJECT_CATALOG_GRPC_ADDR" envDefault:":9090"`
 	GRPCAuthRequired         bool          `env:"KODEX_PROJECT_CATALOG_GRPC_AUTH_REQUIRED" envDefault:"true"`
-	GRPCAuthToken            string        `env:"KODEX_PROJECT_CATALOG_GRPC_AUTH_TOKEN,notEmpty"`
+	GRPCAuthToken            string        `env:"KODEX_PROJECT_CATALOG_GRPC_AUTH_TOKEN"`
 	GRPCMaxInFlight          int           `env:"KODEX_PROJECT_CATALOG_GRPC_MAX_IN_FLIGHT" envDefault:"128"`
 	GRPCMaxConcurrentStreams uint32        `env:"KODEX_PROJECT_CATALOG_GRPC_MAX_CONCURRENT_STREAMS" envDefault:"128"`
 	GRPCUnaryTimeout         time.Duration `env:"KODEX_PROJECT_CATALOG_GRPC_UNARY_TIMEOUT" envDefault:"30s"`

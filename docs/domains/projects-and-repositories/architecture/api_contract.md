@@ -87,12 +87,12 @@ approvals:
 
 | Event | Aggregate | Payload минимум |
 |---|---|---|
-| `project.project.created` | project | `project_id`, `organization_id`, `slug`, `icon_object_uri`, `version` |
-| `project.project.updated` | project | `project_id`, `status`, `icon_object_uri`, `version` |
+| `project.project.created` | project | `project_id`, `organization_id`, `slug`, `version`; `icon_object_uri`, если задано |
+| `project.project.updated` | project | `project_id`, `status`, `version`; `icon_object_uri`, если задано |
 | `project.project.archived` | project | `project_id`, `status`, `version` |
 | `project.project.disabled` | project | `project_id`, `status`, `version` |
-| `project.repository.attached` | repository | `project_id`, `repository_id`, `provider`, `provider_owner`, `provider_name`, `icon_object_uri`, `version` |
-| `project.repository.updated` | repository | `project_id`, `repository_id`, `status`, `icon_object_uri`, `version` |
+| `project.repository.attached` | repository | `project_id`, `repository_id`, `provider`, `provider_owner`, `provider_name`, `version`; `icon_object_uri`, если задано |
+| `project.repository.updated` | repository | `project_id`, `repository_id`, `status`, `version`; `icon_object_uri`, если задано |
 | `project.repository.detached` | repository | `project_id`, `repository_id`, `status`, `version` |
 | `project.services_policy.imported` | services_policy | `project_id`, `policy_id`, `policy_version`, `source_commit_sha`, `content_hash`; `source_blob_sha` передаётся, когда доступен у провайдера |
 | `project.policy_override.created` | policy_override | `project_id`, `override_id`, `target_type`, `expires_at` |
