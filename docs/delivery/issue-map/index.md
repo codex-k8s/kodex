@@ -36,3 +36,4 @@ updated_at: 2026-05-05
 | Волна 6.4 — пакет домена доступа | `waves/wave-006-4-access-domain-docs.md` |
 | Волна 7 — доступ, организации, группы и внешние аккаунты | `waves/wave-007-access-and-accounts.md` |
 | Технический срез после волны 7 | `waves/post-wave-7-housekeeping.md` |
+| Волна 8 — проекты и репозитории | `waves/wave-008-projects-and-repositories.md` |
