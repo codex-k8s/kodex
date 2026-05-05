@@ -185,7 +185,7 @@ spec:
               cpu: "{{ envOr "KODEX_ACCESS_MANAGER_CPU_REQUEST" "100m" }}"
               memory: "{{ envOr "KODEX_ACCESS_MANAGER_MEMORY_REQUEST" "128Mi" }}"
             limits:
-              cpu: "{{ envOr "KODEX_ACCESS_MANAGER_CPU_LIMIT" "1" }}"
+              cpu: "{{ envOr "KODEX_ACCESS_MANAGER_CPU_LIMIT" "2" }}"
               memory: "{{ envOr "KODEX_ACCESS_MANAGER_MEMORY_LIMIT" "512Mi" }}"
           securityContext:
             runAsNonRoot: true

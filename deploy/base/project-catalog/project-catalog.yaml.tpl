@@ -146,7 +146,7 @@ spec:
               cpu: "{{ envOr "KODEX_PROJECT_CATALOG_CPU_REQUEST" "100m" }}"
               memory: "{{ envOr "KODEX_PROJECT_CATALOG_MEMORY_REQUEST" "128Mi" }}"
             limits:
-              cpu: "{{ envOr "KODEX_PROJECT_CATALOG_CPU_LIMIT" "1" }}"
+              cpu: "{{ envOr "KODEX_PROJECT_CATALOG_CPU_LIMIT" "2" }}"
               memory: "{{ envOr "KODEX_PROJECT_CATALOG_MEMORY_LIMIT" "512Mi" }}"
           securityContext:
             runAsNonRoot: true

@@ -136,10 +136,8 @@ func (r *Repository) ImportServicesPolicy(ctx context.Context, policy entity.Ser
 			if _, err := tx.Exec(ctx, queryServiceDescriptorMarkProjectStale, pgx.NamedArgs{"project_id": policy.ProjectID, "updated_at": policy.UpdatedAt}); err != nil {
 				return err
 			}
-			for _, descriptor := range descriptors {
-				if _, err := tx.Exec(ctx, queryServiceDescriptorInsert, serviceDescriptorArgs(descriptor)); err != nil {
-					return err
-				}
+			if err := insertServiceDescriptors(ctx, tx, descriptors); err != nil {
+				return err
 			}
 		}
 		if err := insertOutboxEvent(ctx, tx, event); err != nil {
@@ -147,6 +145,28 @@ func (r *Repository) ImportServicesPolicy(ctx context.Context, policy entity.Ser
 		}
 		return postgreslib.RunMutations(ctx, tx, errs.ErrConflict, commandResultMutation(result))
 	})
+}
+
+func insertServiceDescriptors(ctx context.Context, tx pgx.Tx, descriptors []entity.ServiceDescriptor) (err error) {
+	if len(descriptors) == 0 {
+		return nil
+	}
+	var batch pgx.Batch
+	for _, descriptor := range descriptors {
+		batch.Queue(queryServiceDescriptorInsert, serviceDescriptorArgs(descriptor))
+	}
+	results := tx.SendBatch(ctx, &batch)
+	defer func() {
+		if closeErr := results.Close(); err == nil {
+			err = closeErr
+		}
+	}()
+	for range descriptors {
+		if _, err = results.Exec(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func isActiveServicesPolicy(policy entity.ServicesPolicy) bool {
