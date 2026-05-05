@@ -16,14 +16,14 @@ type CommandIdentity struct {
 
 // MembershipGraphFilter selects memberships for subject-side graph expansion.
 type MembershipGraphFilter struct {
-	Subject value.SubjectRef
-	Status  enum.MembershipStatus
+	Subject  value.SubjectRef
+	Statuses []enum.MembershipStatus
 }
 
 // MembershipTargetFilter selects memberships that point to a graph target.
 type MembershipTargetFilter struct {
-	Target value.SubjectRef
-	Status enum.MembershipStatus
+	Target   value.SubjectRef
+	Statuses []enum.MembershipStatus
 }
 
 // MembershipIdentity is the natural key of a membership edge.

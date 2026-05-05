@@ -2269,9 +2269,10 @@ func (r *memoryRepository) FindMembership(_ context.Context, identity query.Memb
 }
 
 func (r *memoryRepository) ListMemberships(_ context.Context, filter query.MembershipGraphFilter) ([]entity.Membership, error) {
+	statuses := membershipStatusesSet(filter.Statuses)
 	var result []entity.Membership
 	for _, membership := range r.memberships {
-		if string(membership.SubjectType) == filter.Subject.Type && membership.SubjectID.String() == filter.Subject.ID && membership.Status == filter.Status {
+		if string(membership.SubjectType) == filter.Subject.Type && membership.SubjectID.String() == filter.Subject.ID && statuses[membership.Status] {
 			result = append(result, membership)
 		}
 	}
@@ -2279,13 +2280,22 @@ func (r *memoryRepository) ListMemberships(_ context.Context, filter query.Membe
 }
 
 func (r *memoryRepository) ListMembershipsByTarget(_ context.Context, filter query.MembershipTargetFilter) ([]entity.Membership, error) {
+	statuses := membershipStatusesSet(filter.Statuses)
 	var result []entity.Membership
 	for _, membership := range r.memberships {
-		if string(membership.TargetType) == filter.Target.Type && membership.TargetID.String() == filter.Target.ID && membership.Status == filter.Status {
+		if string(membership.TargetType) == filter.Target.Type && membership.TargetID.String() == filter.Target.ID && statuses[membership.Status] {
 			result = append(result, membership)
 		}
 	}
 	return result, nil
+}
+
+func membershipStatusesSet(statuses []enum.MembershipStatus) map[enum.MembershipStatus]bool {
+	result := make(map[enum.MembershipStatus]bool, len(statuses))
+	for _, status := range statuses {
+		result[status] = true
+	}
+	return result
 }
 
 func (r *memoryRepository) PutExternalProvider(_ context.Context, provider entity.ExternalProvider, event entity.OutboxEvent) error {

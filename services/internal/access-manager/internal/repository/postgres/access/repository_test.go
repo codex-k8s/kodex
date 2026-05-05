@@ -225,16 +225,53 @@ func TestRepositoryIntegrationListMembershipsByTarget(t *testing.T) {
 	if err := repository.SetMembership(ctx, membership, testEvent("access.membership.created", "membership", membership.ID, now)); err != nil {
 		t.Fatalf("set membership: %v", err)
 	}
+	pendingUser := entity.User{
+		Base:         entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		PrimaryEmail: "pending-member@example.com",
+		Status:       enum.UserStatusActive,
+	}
+	pendingIdentity := entity.UserIdentity{
+		ID:           uuid.New(),
+		UserID:       pendingUser.ID,
+		Provider:     enum.IdentityProviderKeycloak,
+		Subject:      "kc-pending-member",
+		EmailAtLogin: pendingUser.PrimaryEmail,
+	}
+	if err := repository.CreateUser(ctx, pendingUser, pendingIdentity, testEvent("access.user.created", "user", pendingUser.ID, now)); err != nil {
+		t.Fatalf("create pending user: %v", err)
+	}
+	pendingMembership := entity.Membership{
+		Base:        entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		SubjectType: enum.MembershipSubjectUser,
+		SubjectID:   pendingUser.ID,
+		TargetType:  enum.MembershipTargetGroup,
+		TargetID:    group.ID,
+		Status:      enum.MembershipStatusPending,
+		Source:      enum.MembershipSourceSync,
+	}
+	if err := repository.SetMembership(ctx, pendingMembership, testEvent("access.membership.created", "membership", pendingMembership.ID, now)); err != nil {
+		t.Fatalf("set pending membership: %v", err)
+	}
 
 	items, err := repository.ListMembershipsByTarget(ctx, query.MembershipTargetFilter{
-		Target: value.SubjectRef{Type: string(enum.AccessSubjectGroup), ID: group.ID.String()},
-		Status: enum.MembershipStatusActive,
+		Target:   value.SubjectRef{Type: string(enum.AccessSubjectGroup), ID: group.ID.String()},
+		Statuses: []enum.MembershipStatus{enum.MembershipStatusActive, enum.MembershipStatusPending},
 	})
 	if err != nil {
 		t.Fatalf("list memberships by target: %v", err)
 	}
-	if len(items) != 1 || items[0].ID != membership.ID {
-		t.Fatalf("memberships by target = %+v, want membership %s", items, membership.ID)
+	if len(items) != 2 {
+		t.Fatalf("memberships by target count = %d, want 2: %+v", len(items), items)
+	}
+	seen := make(map[uuid.UUID]struct{}, len(items))
+	for _, item := range items {
+		seen[item.ID] = struct{}{}
+	}
+	if _, ok := seen[membership.ID]; !ok {
+		t.Fatalf("memberships by target = %+v, want active membership %s", items, membership.ID)
+	}
+	if _, ok := seen[pendingMembership.ID]; !ok {
+		t.Fatalf("memberships by target = %+v, want pending membership %s", items, pendingMembership.ID)
 	}
 }
 
