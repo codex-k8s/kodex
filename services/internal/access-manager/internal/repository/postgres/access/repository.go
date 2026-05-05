@@ -65,6 +65,7 @@ const (
 	operationFindMembership                       = "domain.Repository.FindMembership"
 	operationSetMembership                        = "domain.Repository.SetMembership"
 	operationListMemberships                      = "domain.Repository.ListMemberships"
+	operationListMembershipsByTarget              = "domain.Repository.ListMembershipsByTarget"
 	operationPutExternalProvider                  = "domain.Repository.PutExternalProvider"
 	operationUpdateExternalProvider               = "domain.Repository.UpdateExternalProvider"
 	operationGetExternalProvider                  = "domain.Repository.GetExternalProvider"
@@ -197,21 +198,54 @@ func (r *Repository) SetMembership(ctx context.Context, membership entity.Member
 }
 
 func (r *Repository) ListMemberships(ctx context.Context, filter query.MembershipGraphFilter) ([]entity.Membership, error) {
-	subjectID, err := uuid.Parse(filter.Subject.ID)
+	return r.listMembershipRowsByRef(ctx, operationListMemberships, queryMembershipListBySubject, filter.Subject, filter.Status, membershipRefSubject)
+}
+
+func (r *Repository) ListMembershipsByTarget(ctx context.Context, filter query.MembershipTargetFilter) ([]entity.Membership, error) {
+	return r.listMembershipRowsByRef(ctx, operationListMembershipsByTarget, queryMembershipListByTarget, filter.Target, filter.Status, membershipRefTarget)
+}
+
+func (r *Repository) listMembershipRowsByRef(
+	ctx context.Context,
+	operation string,
+	sql string,
+	ref value.SubjectRef,
+	status enum.MembershipStatus,
+	refKind membershipRefKind,
+) ([]entity.Membership, error) {
+	refID, err := uuid.Parse(ref.ID)
 	if err != nil {
-		return nil, wrapError(operationListMemberships, errs.ErrInvalidArgument)
+		return nil, wrapError(operation, errs.ErrInvalidArgument)
 	}
-	rows, err := r.db.Query(ctx, queryMembershipListBySubject, pgx.NamedArgs{
-		"subject_type": filter.Subject.Type,
-		"subject_id":   subjectID,
-		"status":       string(filter.Status),
-	})
+	return r.listMembershipRows(ctx, operation, sql, membershipRefArgs(ref, refID, status, refKind))
+}
+
+func (r *Repository) listMembershipRows(ctx context.Context, operation string, sql string, args pgx.NamedArgs) ([]entity.Membership, error) {
+	rows, err := r.db.Query(ctx, sql, args)
 	if err != nil {
-		return nil, wrapError(operationListMemberships, err)
+		return nil, wrapError(operation, err)
 	}
 	memberships, err := scanRows(rows, scanMembership)
-	return memberships, wrapError(operationListMemberships, err)
+	return memberships, wrapError(operation, err)
 }
+
+func membershipRefArgs(ref value.SubjectRef, id uuid.UUID, status enum.MembershipStatus, kind membershipRefKind) pgx.NamedArgs {
+	switch kind {
+	case membershipRefSubject:
+		return pgx.NamedArgs{"subject_type": ref.Type, "subject_id": id, "status": string(status)}
+	case membershipRefTarget:
+		return pgx.NamedArgs{"target_type": ref.Type, "target_id": id, "status": string(status)}
+	default:
+		return pgx.NamedArgs{"status": string(status)}
+	}
+}
+
+type membershipRefKind string
+
+const (
+	membershipRefSubject membershipRefKind = "subject"
+	membershipRefTarget  membershipRefKind = "target"
+)
 
 func (r *Repository) PutExternalProvider(ctx context.Context, provider entity.ExternalProvider, event entity.OutboxEvent) error {
 	return r.mutateWithOutbox(ctx, operationPutExternalProvider, event, mutation{query: queryExternalProviderUpsert, args: externalProviderArgs(provider), requireAffected: true})

@@ -90,42 +90,67 @@ func (s *Service) resolveSubjects(ctx context.Context, subject value.SubjectRef)
 	return subjects, "", nil
 }
 
+// collectMembershipGraphEdges walks subject-side effective memberships and target-side organization/group roots.
 func (s *Service) collectMembershipGraphEdges(ctx context.Context, root value.SubjectRef, includeInactive bool) ([]entity.Membership, error) {
-	seenSubjects := map[string]struct{}{root.Type + ":" + root.ID: {}}
 	seenEdges := make(map[uuid.UUID]struct{})
-	queue := []value.SubjectRef{root}
+	seenSubjects := make(map[string]struct{})
+	seenTargets := make(map[string]struct{})
+	var subjectQueue []value.SubjectRef
+	var targetQueue []value.SubjectRef
+	subjectQueue = enqueueMembershipGraphRef(subjectQueue, seenSubjects, root, membershipGraphQueueSubject)
+	targetQueue = enqueueMembershipGraphRef(targetQueue, seenTargets, root, membershipGraphQueueTarget)
 	var edges []entity.Membership
-	for len(queue) > 0 {
-		current := queue[0]
-		queue = queue[1:]
-		if _, ok := accessSubjectToMembershipSubject(current.Type); !ok {
-			continue
-		}
-		memberships, err := s.listMembershipsForGraph(ctx, current, includeInactive)
-		if err != nil {
-			return nil, err
-		}
-		for _, membership := range memberships {
-			if _, ok := seenEdges[membership.ID]; !ok {
-				seenEdges[membership.ID] = struct{}{}
-				edges = append(edges, membership)
-			}
-			if membership.Status != enum.MembershipStatusActive {
-				continue
-			}
-			target, effective, err := s.effectiveMembershipTarget(ctx, membership)
+	for len(subjectQueue) > 0 || len(targetQueue) > 0 {
+		for len(subjectQueue) > 0 {
+			current := subjectQueue[0]
+			subjectQueue = subjectQueue[1:]
+			memberships, err := s.listMembershipsForGraph(ctx, current, includeInactive, membershipGraphDirectionSubject)
 			if err != nil {
 				return nil, err
 			}
-			if !effective || target.Type != string(enum.AccessSubjectGroup) {
-				continue
+			for _, membership := range memberships {
+				edges = appendMembershipGraphEdge(edges, seenEdges, membership)
+				if membership.Status != enum.MembershipStatusActive {
+					continue
+				}
+				target, effective, err := s.effectiveMembershipTarget(ctx, membership)
+				if err != nil {
+					return nil, err
+				}
+				if effective && target.Type == string(enum.AccessSubjectGroup) {
+					subjectQueue = enqueueMembershipGraphRef(subjectQueue, seenSubjects, target, membershipGraphQueueSubject)
+				}
 			}
-			key := target.Type + ":" + target.ID
-			if _, ok := seenSubjects[key]; ok {
-				continue
+			if current.Type == string(enum.AccessSubjectGroup) {
+				groupID, err := uuid.Parse(current.ID)
+				if err != nil {
+					return nil, errs.ErrInvalidArgument
+				}
+				parents, err := s.parentGroupSubjects(ctx, groupID)
+				if err != nil {
+					return nil, err
+				}
+				for _, parent := range parents {
+					subjectQueue = enqueueMembershipGraphRef(subjectQueue, seenSubjects, parent, membershipGraphQueueSubject)
+				}
 			}
-			seenSubjects[key] = struct{}{}
-			queue = append(queue, target)
+		}
+		for len(targetQueue) > 0 {
+			current := targetQueue[0]
+			targetQueue = targetQueue[1:]
+			memberships, err := s.listMembershipsForGraph(ctx, current, includeInactive, membershipGraphDirectionTarget)
+			if err != nil {
+				return nil, err
+			}
+			for _, membership := range memberships {
+				edges = appendMembershipGraphEdge(edges, seenEdges, membership)
+				if membership.Status != enum.MembershipStatusActive || membership.SubjectType != enum.MembershipSubjectGroup {
+					continue
+				}
+				subject := value.SubjectRef{Type: string(enum.AccessSubjectGroup), ID: membership.SubjectID.String()}
+				subjectQueue = enqueueMembershipGraphRef(subjectQueue, seenSubjects, subject, membershipGraphQueueSubject)
+				targetQueue = enqueueMembershipGraphRef(targetQueue, seenTargets, subject, membershipGraphQueueTarget)
+			}
 		}
 	}
 	sort.SliceStable(edges, func(i, j int) bool {
@@ -134,25 +159,96 @@ func (s *Service) collectMembershipGraphEdges(ctx context.Context, root value.Su
 	return edges, nil
 }
 
-func (s *Service) listMembershipsForGraph(ctx context.Context, subject value.SubjectRef, includeInactive bool) ([]entity.Membership, error) {
-	statuses := []enum.MembershipStatus{enum.MembershipStatusActive}
-	if includeInactive {
-		statuses = []enum.MembershipStatus{
-			enum.MembershipStatusActive,
-			enum.MembershipStatusPending,
-			enum.MembershipStatusBlocked,
-			enum.MembershipStatusDisabled,
-		}
-	}
+func (s *Service) listMembershipsForGraph(
+	ctx context.Context,
+	ref value.SubjectRef,
+	includeInactive bool,
+	direction membershipGraphDirection,
+) ([]entity.Membership, error) {
 	var memberships []entity.Membership
-	for _, status := range statuses {
-		items, err := s.repository.ListMemberships(ctx, query.MembershipGraphFilter{Subject: subject, Status: status})
+	for _, status := range membershipGraphStatuses(includeInactive) {
+		items, err := s.listMembershipsForGraphStatus(ctx, ref, status, direction)
 		if err != nil {
 			return nil, err
 		}
 		memberships = append(memberships, items...)
 	}
 	return memberships, nil
+}
+
+func (s *Service) listMembershipsForGraphStatus(
+	ctx context.Context,
+	ref value.SubjectRef,
+	status enum.MembershipStatus,
+	direction membershipGraphDirection,
+) ([]entity.Membership, error) {
+	switch direction {
+	case membershipGraphDirectionSubject:
+		return s.repository.ListMemberships(ctx, query.MembershipGraphFilter{Subject: ref, Status: status})
+	case membershipGraphDirectionTarget:
+		return s.repository.ListMembershipsByTarget(ctx, query.MembershipTargetFilter{Target: ref, Status: status})
+	default:
+		return nil, errs.ErrInvalidArgument
+	}
+}
+
+type membershipGraphDirection string
+
+const (
+	membershipGraphDirectionSubject membershipGraphDirection = "subject"
+	membershipGraphDirectionTarget  membershipGraphDirection = "target"
+)
+
+func membershipGraphStatuses(includeInactive bool) []enum.MembershipStatus {
+	if !includeInactive {
+		return []enum.MembershipStatus{enum.MembershipStatusActive}
+	}
+	return []enum.MembershipStatus{
+		enum.MembershipStatusActive,
+		enum.MembershipStatusPending,
+		enum.MembershipStatusBlocked,
+		enum.MembershipStatusDisabled,
+	}
+}
+
+func enqueueMembershipGraphRef(queue []value.SubjectRef, seen map[string]struct{}, subject value.SubjectRef, kind membershipGraphQueueKind) []value.SubjectRef {
+	if !membershipGraphQueueSupports(kind, subject.Type) {
+		return queue
+	}
+	key := subject.Type + ":" + subject.ID
+	if _, ok := seen[key]; ok {
+		return queue
+	}
+	seen[key] = struct{}{}
+	return append(queue, subject)
+}
+
+func membershipGraphQueueSupports(kind membershipGraphQueueKind, subjectType string) bool {
+	switch kind {
+	case membershipGraphQueueSubject:
+		_, ok := accessSubjectToMembershipSubject(subjectType)
+		return ok
+	case membershipGraphQueueTarget:
+		_, ok := accessSubjectToMembershipTarget(subjectType)
+		return ok
+	default:
+		return false
+	}
+}
+
+type membershipGraphQueueKind string
+
+const (
+	membershipGraphQueueSubject membershipGraphQueueKind = "subject"
+	membershipGraphQueueTarget  membershipGraphQueueKind = "target"
+)
+
+func appendMembershipGraphEdge(edges []entity.Membership, seen map[uuid.UUID]struct{}, membership entity.Membership) []entity.Membership {
+	if _, ok := seen[membership.ID]; ok {
+		return edges
+	}
+	seen[membership.ID] = struct{}{}
+	return append(edges, membership)
 }
 
 func (s *Service) accessSubjectStopReason(ctx context.Context, subject value.SubjectRef) (string, error) {
@@ -306,6 +402,17 @@ func accessSubjectToMembershipSubject(subjectType string) (enum.MembershipSubjec
 	}
 }
 
+func accessSubjectToMembershipTarget(subjectType string) (enum.MembershipTargetType, bool) {
+	switch subjectType {
+	case string(enum.AccessSubjectOrganization):
+		return enum.MembershipTargetOrganization, true
+	case string(enum.AccessSubjectGroup):
+		return enum.MembershipTargetGroup, true
+	default:
+		return "", false
+	}
+}
+
 func (s *Service) effectiveMembershipTarget(ctx context.Context, membership entity.Membership) (value.SubjectRef, bool, error) {
 	switch membership.TargetType {
 	case enum.MembershipTargetOrganization:
@@ -384,6 +491,33 @@ func (s *Service) appendParentGroups(
 	}
 }
 
+func (s *Service) parentGroupSubjects(ctx context.Context, groupID uuid.UUID) ([]value.SubjectRef, error) {
+	var parents []value.SubjectRef
+	seen := make(map[uuid.UUID]struct{})
+	for {
+		if _, ok := seen[groupID]; ok {
+			return parents, nil
+		}
+		seen[groupID] = struct{}{}
+		group, err := s.repository.GetGroup(ctx, groupID)
+		if err != nil {
+			return nil, err
+		}
+		if group.Status != enum.GroupStatusActive || group.ParentGroupID == nil {
+			return parents, nil
+		}
+		parentGroup, err := s.repository.GetGroup(ctx, *group.ParentGroupID)
+		if err != nil {
+			return nil, err
+		}
+		if parentGroup.Status != enum.GroupStatusActive {
+			return parents, nil
+		}
+		parents = append(parents, value.SubjectRef{Type: string(enum.AccessSubjectGroup), ID: parentGroup.ID.String()})
+		groupID = parentGroup.ID
+	}
+}
+
 func (s *Service) normalizeMembershipGraphSubject(ctx context.Context, subject value.SubjectRef) (value.SubjectRef, []value.ScopeRef, error) {
 	subject.Type = strings.TrimSpace(subject.Type)
 	subject.ID = strings.TrimSpace(subject.ID)
@@ -410,16 +544,31 @@ func (s *Service) membershipGraphAccessScopes(ctx context.Context, subject value
 	}
 	switch subject.Type {
 	case string(enum.AccessSubjectUser):
-		return s.repository.ListUserAccessScopes(ctx, subjectID)
+		scopes, err := s.repository.ListUserAccessScopes(ctx, subjectID)
+		if err != nil {
+			return nil, err
+		}
+		graphScopes, err := s.membershipGraphScopesFromEdges(ctx, subject)
+		if err != nil {
+			return nil, err
+		}
+		return append(scopes, graphScopes...), nil
 	case string(enum.AccessSubjectGroup):
 		group, err := s.repository.GetGroup(ctx, subjectID)
 		if err != nil {
 			return nil, err
 		}
+		var scopes []value.ScopeRef
 		if group.ScopeType == enum.GroupScopeOrganization && group.ScopeID != nil {
-			return []value.ScopeRef{{Type: accessRuleScopeOrganization, ID: group.ScopeID.String()}}, nil
+			scopes = append(scopes, value.ScopeRef{Type: accessRuleScopeOrganization, ID: group.ScopeID.String()})
+		} else {
+			scopes = append(scopes, value.ScopeRef{Type: accessRuleScopeGlobal})
 		}
-		return []value.ScopeRef{{Type: accessRuleScopeGlobal}}, nil
+		graphScopes, err := s.membershipGraphScopesFromEdges(ctx, subject)
+		if err != nil {
+			return nil, err
+		}
+		return append(scopes, graphScopes...), nil
 	case string(enum.AccessSubjectOrganization):
 		return []value.ScopeRef{{Type: accessRuleScopeOrganization, ID: subject.ID}}, nil
 	case string(enum.AccessSubjectExternalAccount):
@@ -427,23 +576,33 @@ func (s *Service) membershipGraphAccessScopes(ctx context.Context, subject value
 		if err != nil {
 			return nil, err
 		}
-		return []value.ScopeRef{externalAccountOwnerAccessScope(account)}, nil
+		return []value.ScopeRef{externalAccountOwnerScope(account)}, nil
 	default:
 		return nil, errs.ErrInvalidArgument
 	}
 }
 
-func externalAccountOwnerAccessScope(account entity.ExternalAccount) value.ScopeRef {
-	switch account.OwnerScopeType {
-	case enum.ExternalAccountScopeOrganization:
-		return value.ScopeRef{Type: accessRuleScopeOrganization, ID: account.OwnerScopeID}
-	case enum.ExternalAccountScopeProject:
-		return value.ScopeRef{Type: accessRuleScopeProject, ID: account.OwnerScopeID}
-	case enum.ExternalAccountScopeRepository:
-		return value.ScopeRef{Type: accessRuleScopeRepository, ID: account.OwnerScopeID}
-	default:
-		return value.ScopeRef{Type: accessRuleScopeGlobal}
+func (s *Service) membershipGraphScopesFromEdges(ctx context.Context, subject value.SubjectRef) ([]value.ScopeRef, error) {
+	edges, err := s.collectMembershipGraphEdges(ctx, subject, false)
+	if err != nil {
+		return nil, err
 	}
+	var scopes []value.ScopeRef
+	for _, edge := range edges {
+		switch edge.TargetType {
+		case enum.MembershipTargetOrganization:
+			scopes = append(scopes, value.ScopeRef{Type: accessRuleScopeOrganization, ID: edge.TargetID.String()})
+		case enum.MembershipTargetGroup:
+			group, err := s.repository.GetGroup(ctx, edge.TargetID)
+			if err != nil {
+				return nil, err
+			}
+			if group.ScopeType == enum.GroupScopeOrganization && group.ScopeID != nil {
+				scopes = append(scopes, value.ScopeRef{Type: accessRuleScopeOrganization, ID: group.ScopeID.String()})
+			}
+		}
+	}
+	return scopes, nil
 }
 
 func membershipGraphSortKey(edge entity.Membership) string {

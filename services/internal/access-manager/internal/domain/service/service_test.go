@@ -751,7 +751,10 @@ func TestListMembershipGraphReturnsActiveAndOptionalInactiveEdges(t *testing.T) 
 	if err != nil {
 		t.Fatalf("set pending user organization membership: %v", err)
 	}
-	meta := store.seedOperatorMeta("list-membership-graph", accessActionListMembershipGraph, accessResourceMembershipGraph)
+	meta := store.seedOperatorMetaForScope("list-membership-graph", accessActionListMembershipGraph, accessResourceMembershipGraph, value.ScopeRef{
+		Type: accessRuleScopeOrganization,
+		ID:   org.ID.String(),
+	})
 
 	activeOnly, err := svc.ListMembershipGraph(ctx, ListMembershipGraphInput{
 		Subject: value.SubjectRef{Type: string(enum.AccessSubjectUser), ID: user.ID.String()},
@@ -773,6 +776,154 @@ func TestListMembershipGraphReturnsActiveAndOptionalInactiveEdges(t *testing.T) 
 	assertMembershipIDs(t, withInactive.Edges, activeUserGroup.ID, pendingUserOrg.ID, activeGroupOrg.ID)
 	if withInactive.Root.ID != user.ID.String() || withInactive.Root.Type != string(enum.AccessSubjectUser) {
 		t.Fatalf("root = %+v, want user %s", withInactive.Root, user.ID)
+	}
+}
+
+func TestListMembershipGraphReadsOrganizationTargetSide(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+
+	user := store.seedUser(enum.UserStatusActive)
+	org, err := svc.CreateOrganization(ctx, CreateOrganizationInput{
+		Kind: enum.OrganizationKindClient, Slug: "client", DisplayName: "Клиент",
+		Meta: commandMeta("create-target-org"),
+	})
+	if err != nil {
+		t.Fatalf("create organization: %v", err)
+	}
+	group, err := svc.CreateGroup(ctx, CreateGroupInput{
+		ScopeType: enum.GroupScopeOrganization, ScopeID: &org.ID, Slug: "dev", DisplayName: "Разработчики",
+		Meta: commandMeta("create-target-group"),
+	})
+	if err != nil {
+		t.Fatalf("create group: %v", err)
+	}
+	userGroup, err := svc.SetMembership(ctx, SetMembershipInput{
+		SubjectType: enum.MembershipSubjectUser, SubjectID: user.ID,
+		TargetType: enum.MembershipTargetGroup, TargetID: group.ID,
+		Source: enum.MembershipSourceManual,
+	})
+	if err != nil {
+		t.Fatalf("set user group membership: %v", err)
+	}
+	groupOrg, err := svc.SetMembership(ctx, SetMembershipInput{
+		SubjectType: enum.MembershipSubjectGroup, SubjectID: group.ID,
+		TargetType: enum.MembershipTargetOrganization, TargetID: org.ID,
+		Source: enum.MembershipSourceManual,
+	})
+	if err != nil {
+		t.Fatalf("set group organization membership: %v", err)
+	}
+	meta := store.seedOperatorMetaForScope("list-organization-membership-graph", accessActionListMembershipGraph, accessResourceMembershipGraph, value.ScopeRef{
+		Type: accessRuleScopeOrganization,
+		ID:   org.ID.String(),
+	})
+
+	graph, err := svc.ListMembershipGraph(ctx, ListMembershipGraphInput{
+		Subject: value.SubjectRef{Type: string(enum.AccessSubjectOrganization), ID: org.ID.String()},
+		Meta:    meta,
+	})
+	if err != nil {
+		t.Fatalf("list organization graph: %v", err)
+	}
+	assertMembershipIDs(t, graph.Edges, userGroup.ID, groupOrg.ID)
+}
+
+func TestListMembershipGraphIncludesParentGroupMembershipEdges(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+
+	user := store.seedUser(enum.UserStatusActive)
+	org, err := svc.CreateOrganization(ctx, CreateOrganizationInput{
+		Kind: enum.OrganizationKindClient, Slug: "client", DisplayName: "Клиент",
+		Meta: commandMeta("create-parent-org"),
+	})
+	if err != nil {
+		t.Fatalf("create organization: %v", err)
+	}
+	parent, err := svc.CreateGroup(ctx, CreateGroupInput{
+		ScopeType: enum.GroupScopeOrganization, ScopeID: &org.ID, Slug: "owners", DisplayName: "Владельцы",
+		Meta: commandMeta("create-parent-list-group"),
+	})
+	if err != nil {
+		t.Fatalf("create parent group: %v", err)
+	}
+	child, err := svc.CreateGroup(ctx, CreateGroupInput{
+		ScopeType: enum.GroupScopeOrganization, ScopeID: &org.ID, Slug: "reviewers", DisplayName: "Ревьюеры",
+		ParentGroupID: &parent.ID, Meta: commandMeta("create-child-list-group"),
+	})
+	if err != nil {
+		t.Fatalf("create child group: %v", err)
+	}
+	userChild, err := svc.SetMembership(ctx, SetMembershipInput{
+		SubjectType: enum.MembershipSubjectUser, SubjectID: user.ID,
+		TargetType: enum.MembershipTargetGroup, TargetID: child.ID,
+		Source: enum.MembershipSourceManual,
+	})
+	if err != nil {
+		t.Fatalf("set user child membership: %v", err)
+	}
+	parentOrg, err := svc.SetMembership(ctx, SetMembershipInput{
+		SubjectType: enum.MembershipSubjectGroup, SubjectID: parent.ID,
+		TargetType: enum.MembershipTargetOrganization, TargetID: org.ID,
+		Source: enum.MembershipSourceManual,
+	})
+	if err != nil {
+		t.Fatalf("set parent organization membership: %v", err)
+	}
+	meta := store.seedOperatorMetaForScope("list-parent-membership-graph", accessActionListMembershipGraph, accessResourceMembershipGraph, value.ScopeRef{
+		Type: accessRuleScopeOrganization,
+		ID:   org.ID.String(),
+	})
+
+	graph, err := svc.ListMembershipGraph(ctx, ListMembershipGraphInput{
+		Subject: value.SubjectRef{Type: string(enum.AccessSubjectUser), ID: user.ID.String()},
+		Meta:    meta,
+	})
+	if err != nil {
+		t.Fatalf("list parent graph: %v", err)
+	}
+	assertMembershipIDs(t, graph.Edges, userChild.ID, parentOrg.ID)
+}
+
+func TestListMembershipGraphUsesRawExternalAccountOwnerScope(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+
+	owner := store.seedUser(enum.UserStatusActive)
+	provider, err := svc.PutExternalProvider(ctx, PutExternalProviderInput{
+		Slug: "github", ProviderKind: enum.ExternalProviderRepository, DisplayName: "GitHub",
+	})
+	if err != nil {
+		t.Fatalf("put provider: %v", err)
+	}
+	account, err := svc.RegisterExternalAccount(ctx, RegisterExternalAccountInput{
+		ExternalProviderID: provider.ID,
+		AccountType:        enum.ExternalAccountBot,
+		DisplayName:        "bot",
+		OwnerScopeType:     enum.ExternalAccountScopeUser,
+		OwnerScopeID:       owner.ID.String(),
+		Status:             enum.ExternalAccountStatusActive,
+		Meta:               commandMeta("register-user-owned-account"),
+	})
+	if err != nil {
+		t.Fatalf("register account: %v", err)
+	}
+	meta := store.seedOperatorMeta("list-user-owned-account-graph", accessActionListMembershipGraph, accessResourceMembershipGraph)
+
+	_, err = svc.ListMembershipGraph(ctx, ListMembershipGraphInput{
+		Subject: value.SubjectRef{Type: string(enum.AccessSubjectExternalAccount), ID: account.ID.String()},
+		Meta:    meta,
+	})
+	if err != nil {
+		t.Fatalf("list external account graph: %v", err)
+	}
+	scope, ok := lastAuditScope(store)
+	if !ok || scope != (value.ScopeRef{Type: string(enum.ExternalAccountScopeUser), ID: owner.ID.String()}) {
+		t.Fatalf("audit scope = %+v, want user owner scope", scope)
 	}
 }
 
@@ -2023,6 +2174,16 @@ func (r *memoryRepository) ListMemberships(_ context.Context, filter query.Membe
 	var result []entity.Membership
 	for _, membership := range r.memberships {
 		if string(membership.SubjectType) == filter.Subject.Type && membership.SubjectID.String() == filter.Subject.ID && membership.Status == filter.Status {
+			result = append(result, membership)
+		}
+	}
+	return result, nil
+}
+
+func (r *memoryRepository) ListMembershipsByTarget(_ context.Context, filter query.MembershipTargetFilter) ([]entity.Membership, error) {
+	var result []entity.Membership
+	for _, membership := range r.memberships {
+		if string(membership.TargetType) == filter.Target.Type && membership.TargetID.String() == filter.Target.ID && membership.Status == filter.Status {
 			result = append(result, membership)
 		}
 	}

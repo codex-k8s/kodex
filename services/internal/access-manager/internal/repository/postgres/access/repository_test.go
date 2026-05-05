@@ -160,6 +160,84 @@ func TestRepositoryIntegrationMutationReadAndOutbox(t *testing.T) {
 	}
 }
 
+func TestRepositoryIntegrationListMembershipsByTarget(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openIntegrationPool(t, ctx)
+	repository := NewRepository(pool)
+	now := time.Date(2026, 4, 30, 12, 0, 0, 0, time.UTC)
+	organization := entity.Organization{
+		Base:        entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		Kind:        enum.OrganizationKindClient,
+		Slug:        "target-client",
+		DisplayName: "Target Client",
+		Status:      enum.OrganizationStatusActive,
+	}
+	if err := repository.CreateOrganization(
+		ctx,
+		organization,
+		testEvent("access.organization.created", "organization", organization.ID, now),
+		testCommandResult(uuid.New(), testServiceCreateOrganizationOperation, "organization", organization.ID, now),
+	); err != nil {
+		t.Fatalf("create organization: %v", err)
+	}
+	group := entity.Group{
+		Base:        entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		ScopeType:   enum.GroupScopeOrganization,
+		ScopeID:     &organization.ID,
+		Slug:        "developers",
+		DisplayName: "Developers",
+		Status:      enum.GroupStatusActive,
+	}
+	if err := repository.CreateGroup(
+		ctx,
+		group,
+		testEvent("access.group.created", "group", group.ID, now),
+		testCommandResult(uuid.New(), "domain.Service.CreateGroup", "group", group.ID, now),
+	); err != nil {
+		t.Fatalf("create group: %v", err)
+	}
+	user := entity.User{
+		Base:         entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		PrimaryEmail: "member@example.com",
+		Status:       enum.UserStatusActive,
+	}
+	identity := entity.UserIdentity{
+		ID:           uuid.New(),
+		UserID:       user.ID,
+		Provider:     enum.IdentityProviderKeycloak,
+		Subject:      "kc-member",
+		EmailAtLogin: user.PrimaryEmail,
+	}
+	if err := repository.CreateUser(ctx, user, identity, testEvent("access.user.created", "user", user.ID, now)); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	membership := entity.Membership{
+		Base:        entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		SubjectType: enum.MembershipSubjectUser,
+		SubjectID:   user.ID,
+		TargetType:  enum.MembershipTargetGroup,
+		TargetID:    group.ID,
+		Status:      enum.MembershipStatusActive,
+		Source:      enum.MembershipSourceManual,
+	}
+	if err := repository.SetMembership(ctx, membership, testEvent("access.membership.created", "membership", membership.ID, now)); err != nil {
+		t.Fatalf("set membership: %v", err)
+	}
+
+	items, err := repository.ListMembershipsByTarget(ctx, query.MembershipTargetFilter{
+		Target: value.SubjectRef{Type: string(enum.AccessSubjectGroup), ID: group.ID.String()},
+		Status: enum.MembershipStatusActive,
+	})
+	if err != nil {
+		t.Fatalf("list memberships by target: %v", err)
+	}
+	if len(items) != 1 || items[0].ID != membership.ID {
+		t.Fatalf("memberships by target = %+v, want membership %s", items, membership.ID)
+	}
+}
+
 func TestRepositoryIntegrationOutboxClaimRetryAndPublish(t *testing.T) {
 	t.Parallel()
 
