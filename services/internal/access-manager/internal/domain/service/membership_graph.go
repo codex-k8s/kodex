@@ -14,6 +14,25 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/value"
 )
 
+// ListMembershipGraph returns operator-visible membership edges around a subject.
+func (s *Service) ListMembershipGraph(ctx context.Context, input ListMembershipGraphInput) (ListMembershipGraphResult, error) {
+	subject, scopes, err := s.normalizeMembershipGraphSubject(ctx, input.Subject)
+	if err != nil {
+		return ListMembershipGraphResult{}, err
+	}
+	if err := s.requireAllowedInAnyScope(ctx, input.Meta, accessActionListMembershipGraph, value.ResourceRef{
+		Type: accessResourceMembershipGraph,
+		ID:   subject.Type + ":" + subject.ID,
+	}, scopes); err != nil {
+		return ListMembershipGraphResult{}, err
+	}
+	edges, err := s.collectMembershipGraphEdges(ctx, subject, input.IncludeInactive)
+	if err != nil {
+		return ListMembershipGraphResult{}, err
+	}
+	return ListMembershipGraphResult{Root: subject, Edges: edges}, nil
+}
+
 func (s *Service) resolveSubjects(ctx context.Context, subject value.SubjectRef) ([]value.SubjectRef, string, error) {
 	subjects := []value.SubjectRef{subject}
 	reasonCode, err := s.accessSubjectStopReason(ctx, subject)
@@ -69,6 +88,71 @@ func (s *Service) resolveSubjects(ctx context.Context, subject value.SubjectRef)
 		}
 	}
 	return subjects, "", nil
+}
+
+func (s *Service) collectMembershipGraphEdges(ctx context.Context, root value.SubjectRef, includeInactive bool) ([]entity.Membership, error) {
+	seenSubjects := map[string]struct{}{root.Type + ":" + root.ID: {}}
+	seenEdges := make(map[uuid.UUID]struct{})
+	queue := []value.SubjectRef{root}
+	var edges []entity.Membership
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		if _, ok := accessSubjectToMembershipSubject(current.Type); !ok {
+			continue
+		}
+		memberships, err := s.listMembershipsForGraph(ctx, current, includeInactive)
+		if err != nil {
+			return nil, err
+		}
+		for _, membership := range memberships {
+			if _, ok := seenEdges[membership.ID]; !ok {
+				seenEdges[membership.ID] = struct{}{}
+				edges = append(edges, membership)
+			}
+			if membership.Status != enum.MembershipStatusActive {
+				continue
+			}
+			target, effective, err := s.effectiveMembershipTarget(ctx, membership)
+			if err != nil {
+				return nil, err
+			}
+			if !effective || target.Type != string(enum.AccessSubjectGroup) {
+				continue
+			}
+			key := target.Type + ":" + target.ID
+			if _, ok := seenSubjects[key]; ok {
+				continue
+			}
+			seenSubjects[key] = struct{}{}
+			queue = append(queue, target)
+		}
+	}
+	sort.SliceStable(edges, func(i, j int) bool {
+		return membershipGraphSortKey(edges[i]) < membershipGraphSortKey(edges[j])
+	})
+	return edges, nil
+}
+
+func (s *Service) listMembershipsForGraph(ctx context.Context, subject value.SubjectRef, includeInactive bool) ([]entity.Membership, error) {
+	statuses := []enum.MembershipStatus{enum.MembershipStatusActive}
+	if includeInactive {
+		statuses = []enum.MembershipStatus{
+			enum.MembershipStatusActive,
+			enum.MembershipStatusPending,
+			enum.MembershipStatusBlocked,
+			enum.MembershipStatusDisabled,
+		}
+	}
+	var memberships []entity.Membership
+	for _, status := range statuses {
+		items, err := s.repository.ListMemberships(ctx, query.MembershipGraphFilter{Subject: subject, Status: status})
+		if err != nil {
+			return nil, err
+		}
+		memberships = append(memberships, items...)
+	}
+	return memberships, nil
 }
 
 func (s *Service) accessSubjectStopReason(ctx context.Context, subject value.SubjectRef) (string, error) {
@@ -298,6 +382,74 @@ func (s *Service) appendParentGroups(
 		subjects, queue = appendResolvedSubject(subjects, queue, seen, parent)
 		groupID = parentGroup.ID
 	}
+}
+
+func (s *Service) normalizeMembershipGraphSubject(ctx context.Context, subject value.SubjectRef) (value.SubjectRef, []value.ScopeRef, error) {
+	subject.Type = strings.TrimSpace(subject.Type)
+	subject.ID = strings.TrimSpace(subject.ID)
+	if subject.Type == "" || subject.ID == "" {
+		return value.SubjectRef{}, nil, errs.ErrInvalidArgument
+	}
+	if _, _, err := parseStoredAccessSubjectID(subject); err != nil {
+		return value.SubjectRef{}, nil, err
+	}
+	if _, err := s.accessSubjectStopReason(ctx, subject); err != nil {
+		return value.SubjectRef{}, nil, err
+	}
+	scopes, err := s.membershipGraphAccessScopes(ctx, subject)
+	if err != nil {
+		return value.SubjectRef{}, nil, err
+	}
+	return subject, scopes, nil
+}
+
+func (s *Service) membershipGraphAccessScopes(ctx context.Context, subject value.SubjectRef) ([]value.ScopeRef, error) {
+	subjectID, _, err := parseStoredAccessSubjectID(subject)
+	if err != nil {
+		return nil, err
+	}
+	switch subject.Type {
+	case string(enum.AccessSubjectUser):
+		return s.repository.ListUserAccessScopes(ctx, subjectID)
+	case string(enum.AccessSubjectGroup):
+		group, err := s.repository.GetGroup(ctx, subjectID)
+		if err != nil {
+			return nil, err
+		}
+		if group.ScopeType == enum.GroupScopeOrganization && group.ScopeID != nil {
+			return []value.ScopeRef{{Type: accessRuleScopeOrganization, ID: group.ScopeID.String()}}, nil
+		}
+		return []value.ScopeRef{{Type: accessRuleScopeGlobal}}, nil
+	case string(enum.AccessSubjectOrganization):
+		return []value.ScopeRef{{Type: accessRuleScopeOrganization, ID: subject.ID}}, nil
+	case string(enum.AccessSubjectExternalAccount):
+		account, err := s.repository.GetExternalAccount(ctx, subjectID)
+		if err != nil {
+			return nil, err
+		}
+		return []value.ScopeRef{externalAccountOwnerAccessScope(account)}, nil
+	default:
+		return nil, errs.ErrInvalidArgument
+	}
+}
+
+func externalAccountOwnerAccessScope(account entity.ExternalAccount) value.ScopeRef {
+	switch account.OwnerScopeType {
+	case enum.ExternalAccountScopeOrganization:
+		return value.ScopeRef{Type: accessRuleScopeOrganization, ID: account.OwnerScopeID}
+	case enum.ExternalAccountScopeProject:
+		return value.ScopeRef{Type: accessRuleScopeProject, ID: account.OwnerScopeID}
+	case enum.ExternalAccountScopeRepository:
+		return value.ScopeRef{Type: accessRuleScopeRepository, ID: account.OwnerScopeID}
+	default:
+		return value.ScopeRef{Type: accessRuleScopeGlobal}
+	}
+}
+
+func membershipGraphSortKey(edge entity.Membership) string {
+	return string(edge.SubjectType) + ":" + edge.SubjectID.String() + ">" +
+		string(edge.TargetType) + ":" + edge.TargetID.String() + ":" +
+		string(edge.Status) + ":" + edge.ID.String()
 }
 
 func sameUUIDPtr(a *uuid.UUID, b *uuid.UUID) bool {

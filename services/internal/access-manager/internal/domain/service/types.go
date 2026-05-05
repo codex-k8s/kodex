@@ -43,6 +43,19 @@ type SetMembershipInput struct {
 	Meta        value.CommandMeta
 }
 
+// ListMembershipGraphInput selects operator-visible membership graph edges.
+type ListMembershipGraphInput struct {
+	Subject         value.SubjectRef
+	IncludeInactive bool
+	Meta            value.CommandMeta
+}
+
+// ListMembershipGraphResult returns graph edges around the requested subject.
+type ListMembershipGraphResult struct {
+	Root  value.SubjectRef
+	Edges []entity.Membership
+}
+
 // PutAllowlistEntryInput creates or replaces an allowlist entry.
 type PutAllowlistEntryInput struct {
 	MatchType      enum.AllowlistMatchType

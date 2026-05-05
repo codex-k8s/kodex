@@ -2,7 +2,7 @@
 doc_id: MAP-CK8S-WAVE-007
 type: issue-map
 title: kodex — карта Issue волны 7
-status: checkpointed
+status: completed
 owner_role: KM
 created_at: 2026-04-25
 updated_at: 2026-05-05
@@ -18,7 +18,7 @@ updated_at: 2026-05-05
 
 | Issue/PR | Документы | Домен | Статус | Примечание |
 |---|---|---|---|---|
-| #599 | `docs/domains/access-and-accounts/product/requirements.md`, `docs/domains/access-and-accounts/architecture/design.md`, `docs/domains/access-and-accounts/architecture/data_model.md`, `proto/kodex/access_accounts/v1/access_manager.proto`, `services/internal/access-manager/**`, `libs/go/postgres/**` | access-and-accounts | фундамент готов, есть хвост | Организации, группы, членство и outbox получили PostgreSQL repository; gRPC-слой подключает `CreateOrganization`, `CreateGroup`, `SetMembership`. Операторский путь чтения `ListMembershipGraph` не закрыт и требует решения владельца. |
+| #599 | `docs/domains/access-and-accounts/product/requirements.md`, `docs/domains/access-and-accounts/architecture/design.md`, `docs/domains/access-and-accounts/architecture/data_model.md`, `proto/kodex/access_accounts/v1/access_manager.proto`, `services/internal/access-manager/**`, `libs/go/postgres/**` | access-and-accounts | закрывается как выполненная | Организации, группы, членство и outbox получили PostgreSQL repository; gRPC-слой подключает `CreateOrganization`, `CreateGroup`, `SetMembership` и `ListMembershipGraph`. Операторское чтение графа членства проверяет `CommandMeta.actor` через `CheckAccess`. |
 | #600 | `docs/domains/access-and-accounts/product/requirements.md`, `docs/domains/access-and-accounts/architecture/data_model.md`, `docs/domains/access-and-accounts/architecture/api_contract.md`, `proto/kodex/access_accounts/v1/access_manager.proto`, `services/internal/access-manager/**` | access-and-accounts | закрыта как выполненная | Путь первичной инициализации пользователя по allowlist получил PostgreSQL-записи пользователя, идентичности и правил допуска; gRPC-слой подключает `BootstrapUserFromIdentity`, `PutAllowlistEntry`, `SetUserStatus`, `DisableAllowlistEntry` и `ListPendingAccess`. |
 | #601 | `docs/domains/access-and-accounts/product/requirements.md`, `docs/domains/access-and-accounts/architecture/design.md`, `docs/domains/access-and-accounts/architecture/data_model.md`, `docs/domains/access-and-accounts/architecture/api_contract.md`, `proto/kodex/access_accounts/v1/access_manager.proto`, `services/internal/access-manager/**` | access-and-accounts | закрыта как выполненная | Поставщики, внешние аккаунты, привязки и ссылки на секреты получили PostgreSQL-репозиторий; gRPC-слой подключает создание поставщика, регистрацию аккаунта, привязку, `ResolveExternalAccountUsage`, обновление поставщика, изменение статуса внешнего аккаунта и отключение привязки. |
 | #602 | `docs/domains/access-and-accounts/product/requirements.md`, `docs/domains/access-and-accounts/architecture/design.md`, `docs/domains/access-and-accounts/architecture/data_model.md`, `docs/domains/access-and-accounts/architecture/api_contract.md`, `specs/asyncapi/access-manager.v1.yaml`, `services/internal/access-manager/**` | access-and-accounts | закрыта как выполненная | Каталог действий, правила доступа, аудит решений и outbox получили PostgreSQL repository; gRPC-слой подключает `PutAccessAction`, `PutAccessRule`, `CheckAccess` и `ExplainAccess`. Отключение правил остаётся административным хвостом будущих операторских сценариев. |

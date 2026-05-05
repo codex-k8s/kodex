@@ -416,6 +416,19 @@ func ResolveExternalAccountUsageInput(request *accessaccountsv1.ResolveExternalA
 	}, nil
 }
 
+// ListMembershipGraphInput maps a gRPC request to the domain graph read input.
+func ListMembershipGraphInput(request *accessaccountsv1.ListMembershipGraphRequest) (accessservice.ListMembershipGraphInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return accessservice.ListMembershipGraphInput{}, err
+	}
+	return accessservice.ListMembershipGraphInput{
+		Subject:         SubjectRefFromProto(request.GetSubject()),
+		IncludeInactive: request.GetIncludeInactive(),
+		Meta:            meta,
+	}, nil
+}
+
 // ListPendingAccessInput maps a gRPC request to the domain read input.
 func ListPendingAccessInput(request *accessaccountsv1.ListPendingAccessRequest) (accessservice.ListPendingAccessInput, error) {
 	meta, err := CommandMetaFromProto(request.GetMeta())

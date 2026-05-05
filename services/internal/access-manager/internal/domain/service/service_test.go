@@ -706,6 +706,99 @@ func TestCheckAccessResolvesTransitiveMembershipGraph(t *testing.T) {
 	}
 }
 
+func TestListMembershipGraphReturnsActiveAndOptionalInactiveEdges(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+
+	user := store.seedUser(enum.UserStatusActive)
+	org, err := svc.CreateOrganization(ctx, CreateOrganizationInput{
+		Kind: enum.OrganizationKindClient, Slug: "client", DisplayName: "Клиент",
+		Meta: commandMeta("create-client-org"),
+	})
+	if err != nil {
+		t.Fatalf("create organization: %v", err)
+	}
+	group, err := svc.CreateGroup(ctx, CreateGroupInput{
+		ScopeType: enum.GroupScopeOrganization, ScopeID: &org.ID, Slug: "dev", DisplayName: "Разработчики",
+		Meta: commandMeta("create-dev-group"),
+	})
+	if err != nil {
+		t.Fatalf("create group: %v", err)
+	}
+	activeUserGroup, err := svc.SetMembership(ctx, SetMembershipInput{
+		SubjectType: enum.MembershipSubjectUser, SubjectID: user.ID,
+		TargetType: enum.MembershipTargetGroup, TargetID: group.ID,
+		Source: enum.MembershipSourceManual,
+	})
+	if err != nil {
+		t.Fatalf("set active user group membership: %v", err)
+	}
+	activeGroupOrg, err := svc.SetMembership(ctx, SetMembershipInput{
+		SubjectType: enum.MembershipSubjectGroup, SubjectID: group.ID,
+		TargetType: enum.MembershipTargetOrganization, TargetID: org.ID,
+		Source: enum.MembershipSourceManual,
+	})
+	if err != nil {
+		t.Fatalf("set active group organization membership: %v", err)
+	}
+	pendingUserOrg, err := svc.SetMembership(ctx, SetMembershipInput{
+		SubjectType: enum.MembershipSubjectUser, SubjectID: user.ID,
+		TargetType: enum.MembershipTargetOrganization, TargetID: org.ID,
+		Status: enum.MembershipStatusPending,
+		Source: enum.MembershipSourceSync,
+	})
+	if err != nil {
+		t.Fatalf("set pending user organization membership: %v", err)
+	}
+	meta := store.seedOperatorMeta("list-membership-graph", accessActionListMembershipGraph, accessResourceMembershipGraph)
+
+	activeOnly, err := svc.ListMembershipGraph(ctx, ListMembershipGraphInput{
+		Subject: value.SubjectRef{Type: string(enum.AccessSubjectUser), ID: user.ID.String()},
+		Meta:    meta,
+	})
+	if err != nil {
+		t.Fatalf("list active graph: %v", err)
+	}
+	assertMembershipIDs(t, activeOnly.Edges, activeUserGroup.ID, activeGroupOrg.ID)
+
+	withInactive, err := svc.ListMembershipGraph(ctx, ListMembershipGraphInput{
+		Subject:         value.SubjectRef{Type: string(enum.AccessSubjectUser), ID: user.ID.String()},
+		IncludeInactive: true,
+		Meta:            meta,
+	})
+	if err != nil {
+		t.Fatalf("list graph with inactive: %v", err)
+	}
+	assertMembershipIDs(t, withInactive.Edges, activeUserGroup.ID, pendingUserOrg.ID, activeGroupOrg.ID)
+	if withInactive.Root.ID != user.ID.String() || withInactive.Root.Type != string(enum.AccessSubjectUser) {
+		t.Fatalf("root = %+v, want user %s", withInactive.Root, user.ID)
+	}
+}
+
+func TestListMembershipGraphRequiresAuthorizedActor(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+
+	user := store.seedUser(enum.UserStatusActive)
+	_, err := svc.ListMembershipGraph(ctx, ListMembershipGraphInput{
+		Subject: value.SubjectRef{Type: string(enum.AccessSubjectUser), ID: user.ID.String()},
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+
+	operator := store.seedUser(enum.UserStatusActive)
+	_, err = svc.ListMembershipGraph(ctx, ListMembershipGraphInput{
+		Subject: value.SubjectRef{Type: string(enum.AccessSubjectUser), ID: user.ID.String()},
+		Meta:    value.CommandMeta{Actor: value.Actor{Type: string(enum.AccessSubjectUser), ID: operator.ID.String()}},
+	})
+	if !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("err = %v, want %v", err, errs.ErrForbidden)
+	}
+}
+
 func TestCheckAccessDeniesNonActiveExternalAccountSubject(t *testing.T) {
 	statuses := []enum.ExternalAccountStatus{
 		enum.ExternalAccountStatusPending,
@@ -2353,6 +2446,22 @@ func sameAccessRuleIdentity(a entity.AccessRule, b entity.AccessRule) bool {
 		a.ResourceID == b.ResourceID &&
 		a.ScopeType == b.ScopeType &&
 		a.ScopeID == b.ScopeID
+}
+
+func assertMembershipIDs(t *testing.T, edges []entity.Membership, want ...uuid.UUID) {
+	t.Helper()
+	if len(edges) != len(want) {
+		t.Fatalf("edges = %d, want %d: %+v", len(edges), len(want), edges)
+	}
+	got := make(map[uuid.UUID]struct{}, len(edges))
+	for _, edge := range edges {
+		got[edge.ID] = struct{}{}
+	}
+	for _, id := range want {
+		if _, ok := got[id]; !ok {
+			t.Fatalf("edges missing membership %s: %+v", id, edges)
+		}
+	}
 }
 
 func ptrInt64(value int64) *int64 {

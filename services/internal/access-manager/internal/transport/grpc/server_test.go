@@ -169,6 +169,57 @@ func TestListPendingAccessMapsRequestAndResponse(t *testing.T) {
 	}
 }
 
+func TestListMembershipGraphMapsRequestAndResponse(t *testing.T) {
+	t.Parallel()
+
+	userID := uuid.MustParse("77777777-7777-4777-8777-777777777777")
+	groupID := uuid.MustParse("88888888-8888-4888-8888-888888888888")
+	membershipID := uuid.MustParse("99999999-9999-4999-8999-999999999999")
+	service := &fakeAccessService{
+		listMembershipGraph: func(_ context.Context, input accessservice.ListMembershipGraphInput) (accessservice.ListMembershipGraphResult, error) {
+			if input.Subject.Type != "user" || input.Subject.ID != userID.String() || !input.IncludeInactive {
+				t.Fatalf("unexpected graph input: %+v", input)
+			}
+			if input.Meta.Actor.ID != "operator-1" {
+				t.Fatalf("unexpected actor: %+v", input.Meta.Actor)
+			}
+			return accessservice.ListMembershipGraphResult{
+				Root: input.Subject,
+				Edges: []entity.Membership{{
+					Base:        entity.Base{ID: membershipID, Version: 2},
+					SubjectType: enum.MembershipSubjectUser,
+					SubjectID:   userID,
+					TargetType:  enum.MembershipTargetGroup,
+					TargetID:    groupID,
+					Status:      enum.MembershipStatusActive,
+					Source:      enum.MembershipSourceManual,
+				}},
+			}, nil
+		},
+	}
+
+	response, err := NewServer(service).ListMembershipGraph(context.Background(), &accessaccountsv1.ListMembershipGraphRequest{
+		Subject:         &accessaccountsv1.SubjectRef{Type: "user", Id: userID.String()},
+		IncludeInactive: true,
+		Meta:            &accessaccountsv1.CommandMeta{Actor: &accessaccountsv1.Actor{Type: "user", Id: "operator-1"}},
+	})
+	if err != nil {
+		t.Fatalf("ListMembershipGraph(): %v", err)
+	}
+	if response.GetRoot().GetId() != userID.String() || len(response.GetEdges()) != 1 {
+		t.Fatalf("response = %+v, want one graph edge", response)
+	}
+	edge := response.GetEdges()[0]
+	if edge.GetMembershipId() != membershipID.String() ||
+		edge.GetSubject().GetId() != userID.String() ||
+		edge.GetTarget().GetId() != groupID.String() ||
+		edge.GetStatus() != accessaccountsv1.MembershipStatus_MEMBERSHIP_STATUS_ACTIVE ||
+		edge.GetSource() != accessaccountsv1.MembershipSource_MEMBERSHIP_SOURCE_MANUAL ||
+		edge.GetVersion() != 2 {
+		t.Fatalf("edge = %+v, want mapped membership edge", edge)
+	}
+}
+
 func TestUpdateExternalProviderMapsRequestAndResponse(t *testing.T) {
 	t.Parallel()
 
@@ -371,6 +422,7 @@ type fakeAccessService struct {
 	createOrganization            func(context.Context, accessservice.CreateOrganizationInput) (entity.Organization, error)
 	disableExternalAccountBinding func(context.Context, accessservice.DisableExternalAccountBindingInput) (entity.ExternalAccountBinding, error)
 	explainAccess                 func(context.Context, accessservice.ExplainAccessInput) (accessservice.ExplainAccessResult, error)
+	listMembershipGraph           func(context.Context, accessservice.ListMembershipGraphInput) (accessservice.ListMembershipGraphResult, error)
 	listPendingAccess             func(context.Context, accessservice.ListPendingAccessInput) (accessservice.ListPendingAccessResult, error)
 	setUserStatus                 func(context.Context, accessservice.SetUserStatusInput) (entity.User, error)
 	updateExternalAccountStatus   func(context.Context, accessservice.UpdateExternalAccountStatusInput) (entity.ExternalAccount, error)
@@ -465,6 +517,13 @@ func (f *fakeAccessService) ExplainAccess(ctx context.Context, input accessservi
 		return f.explainAccess(ctx, input)
 	}
 	return accessservice.ExplainAccessResult{}, errs.ErrNotFound
+}
+
+func (f *fakeAccessService) ListMembershipGraph(ctx context.Context, input accessservice.ListMembershipGraphInput) (accessservice.ListMembershipGraphResult, error) {
+	if f.listMembershipGraph != nil {
+		return f.listMembershipGraph(ctx, input)
+	}
+	return accessservice.ListMembershipGraphResult{}, errs.ErrNotFound
 }
 
 func (f *fakeAccessService) ListPendingAccess(ctx context.Context, input accessservice.ListPendingAccessInput) (accessservice.ListPendingAccessResult, error) {
