@@ -100,7 +100,7 @@ sequenceDiagram
   participant P as project-catalog
   participant DB as project DB
   H->>P: AttachRepository(provider ref, project id)
-  P->>DB: upsert repository binding + outbox
+  P->>DB: insert repository binding + outbox
   P-->>H: repository binding
 ```
 

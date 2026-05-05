@@ -23,7 +23,7 @@
 | `github.com/oapi-codegen/runtime` | `v1.1.2` | OpenAPI generated transport runtime | типы/утилиты для сгенерированного OpenAPI Go-кода |
 | `github.com/prometheus/client_golang` | `v1.23.2` | Observability | `/metrics` и базовые метрики сервиса |
 | `github.com/jackc/pgx/v5` | `v5.8.0` | PostgreSQL driver | доступ к PostgreSQL |
-| `github.com/google/uuid` | `v1.6.0` | Utility | генерация идентификаторов |
+| `github.com/google/uuid` | `v1.6.0` | Utility, PostgreSQL helpers | генерация и передача идентификаторов, включая общие helpers в `libs/go/postgres` |
 | `github.com/caarlos0/env/v11` | `v11.3.1` | Config | типобезопасный env->struct парсинг конфигурации |
 | `github.com/golang-jwt/jwt/v5` | `v5.3.0` | Auth | выпуск и валидация short-lived JWT для staff API |
 | `golang.org/x/crypto` | `v0.47.0` | Security | sealed-box шифрование значений для GitHub repository secrets (`CreateOrUpdateRepoSecret`) |

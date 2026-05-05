@@ -173,11 +173,11 @@ func (r *Repository) CreatePolicyEditProposal(ctx context.Context, proposal enti
 }
 
 func (r *Repository) CreatePolicyOverride(ctx context.Context, override entity.PolicyOverride, event entity.OutboxEvent, result entity.CommandResult) error {
-	return r.createWithCommandResult(ctx, operationCreatePolicyOverride, event, affectedMutation(queryPolicyOverrideUpsert, policyOverrideArgs(override)), result)
+	return r.createWithCommandResult(ctx, operationCreatePolicyOverride, event, affectedMutation(queryPolicyOverrideCreate, policyOverrideArgs(override)), result)
 }
 
-func (r *Repository) PutDocumentationSource(ctx context.Context, source entity.DocumentationSource, event entity.OutboxEvent, result *entity.CommandResult) error {
-	return r.putWithCommandResult(ctx, operationPutDocumentationSource, event, affectedMutation(queryDocumentationSourceUpsert, documentationSourceArgs(source)), result)
+func (r *Repository) PutDocumentationSource(ctx context.Context, source entity.DocumentationSource, previousVersion *int64, event entity.OutboxEvent, result *entity.CommandResult) error {
+	return r.putWithCommandResult(ctx, operationPutDocumentationSource, event, documentationSourceMutation(source, previousVersion), result)
 }
 
 func (r *Repository) GetDocumentationSource(ctx context.Context, id uuid.UUID) (entity.DocumentationSource, error) {
@@ -226,8 +226,9 @@ func (r *Repository) GetWorkspacePolicy(ctx context.Context, filter query.Worksp
 	return result, nil
 }
 
-func (r *Repository) PutBranchRules(ctx context.Context, rules entity.BranchRules, event entity.OutboxEvent, result *entity.CommandResult) error {
-	return r.putWithCommandResult(ctx, operationPutBranchRules, event, affectedMutation(queryBranchRulesUpsert, branchRulesArgs(rules)), result)
+func (r *Repository) PutBranchRules(ctx context.Context, rules entity.BranchRules, previousVersion *int64, event entity.OutboxEvent, result *entity.CommandResult) error {
+	change := branchRulesMutation(rules, previousVersion)
+	return r.putWithCommandResult(ctx, operationPutBranchRules, event, change, result)
 }
 
 func (r *Repository) GetBranchRules(ctx context.Context, id uuid.UUID) (entity.BranchRules, error) {
@@ -238,8 +239,10 @@ func (r *Repository) ListBranchRules(ctx context.Context, filter query.BranchRul
 	return queryPage(ctx, r.db, operationListBranchRules, queryBranchRulesList, branchRulesFilterArgs(filter), scanBranchRules)
 }
 
-func (r *Repository) PutReleasePolicy(ctx context.Context, policy entity.ReleasePolicy, event entity.OutboxEvent, result *entity.CommandResult) error {
-	return r.putWithCommandResult(ctx, operationPutReleasePolicy, event, affectedMutation(queryReleasePolicyUpsert, releasePolicyArgs(policy)), result)
+func (r *Repository) PutReleasePolicy(ctx context.Context, policy entity.ReleasePolicy, previousVersion *int64, event entity.OutboxEvent, result *entity.CommandResult) error {
+	change := releasePolicyMutation(policy, previousVersion)
+	err := r.putWithCommandResult(ctx, operationPutReleasePolicy, event, change, result)
+	return err
 }
 
 func (r *Repository) GetReleasePolicy(ctx context.Context, id uuid.UUID) (entity.ReleasePolicy, error) {
@@ -250,8 +253,11 @@ func (r *Repository) ListReleasePolicies(ctx context.Context, filter query.Relea
 	return queryPage(ctx, r.db, operationListReleasePolicies, queryReleasePolicyList, releasePolicyFilterArgs(filter), scanReleasePolicy)
 }
 
-func (r *Repository) PutReleaseLine(ctx context.Context, line entity.ReleaseLine, event entity.OutboxEvent, result *entity.CommandResult) error {
-	return r.putWithCommandResult(ctx, operationPutReleaseLine, event, affectedMutation(queryReleaseLineUpsert, releaseLineArgs(line)), result)
+func (r *Repository) PutReleaseLine(ctx context.Context, line entity.ReleaseLine, previousVersion *int64, event entity.OutboxEvent, result *entity.CommandResult) error {
+	if previousVersion == nil {
+		return r.putWithCommandResult(ctx, operationPutReleaseLine, event, releaseLineMutation(line, nil), result)
+	}
+	return r.putWithCommandResult(ctx, operationPutReleaseLine, event, releaseLineMutation(line, previousVersion), result)
 }
 
 func (r *Repository) GetReleaseLine(ctx context.Context, id uuid.UUID) (entity.ReleaseLine, error) {
@@ -262,8 +268,11 @@ func (r *Repository) ListReleaseLines(ctx context.Context, filter query.ReleaseL
 	return queryPage(ctx, r.db, operationListReleaseLines, queryReleaseLineList, releaseLineFilterArgs(filter), scanReleaseLine)
 }
 
-func (r *Repository) PutPlacementPolicy(ctx context.Context, policy entity.PlacementPolicy, event entity.OutboxEvent, result *entity.CommandResult) error {
-	return r.putWithCommandResult(ctx, operationPutPlacementPolicy, event, affectedMutation(queryPlacementPolicyUpsert, placementPolicyArgs(policy)), result)
+func (r *Repository) PutPlacementPolicy(ctx context.Context, policy entity.PlacementPolicy, previousVersion *int64, event entity.OutboxEvent, result *entity.CommandResult) error {
+	change := placementPolicyMutation(policy, previousVersion)
+	mutations := []mutation{change}
+	mutations = appendOptionalCommandResult(mutations, result)
+	return r.mutateWithOutbox(ctx, operationPutPlacementPolicy, event, mutations...)
 }
 
 func (r *Repository) GetPlacementPolicy(ctx context.Context, id uuid.UUID) (entity.PlacementPolicy, error) {
@@ -397,4 +406,32 @@ func projectUpdateMutation(project entity.Project, previousVersion int64) mutati
 
 func repositoryUpdateMutation(repository entity.RepositoryBinding, previousVersion int64) mutation {
 	return affectedMutation(queryRepositoryUpdate, repositoryUpdateArgs(repository, previousVersion))
+}
+
+func versionedPutMutation(createQuery string, updateQuery string, args pgx.NamedArgs, previousVersion *int64) mutation {
+	if previousVersion == nil {
+		return affectedMutation(createQuery, args)
+	}
+	args["previous_version"] = *previousVersion
+	return affectedMutation(updateQuery, args)
+}
+
+func documentationSourceMutation(source entity.DocumentationSource, previousVersion *int64) mutation {
+	return versionedPutMutation(queryDocumentationSourceCreate, queryDocumentationSourceUpdate, documentationSourceArgs(source), previousVersion)
+}
+
+func branchRulesMutation(rules entity.BranchRules, previousVersion *int64) mutation {
+	return versionedPutMutation(queryBranchRulesCreate, queryBranchRulesUpdate, branchRulesArgs(rules), previousVersion)
+}
+
+func releasePolicyMutation(policy entity.ReleasePolicy, previousVersion *int64) mutation {
+	return versionedPutMutation(queryReleasePolicyCreate, queryReleasePolicyUpdate, releasePolicyArgs(policy), previousVersion)
+}
+
+func releaseLineMutation(line entity.ReleaseLine, previousVersion *int64) mutation {
+	return versionedPutMutation(queryReleaseLineCreate, queryReleaseLineUpdate, releaseLineArgs(line), previousVersion)
+}
+
+func placementPolicyMutation(policy entity.PlacementPolicy, previousVersion *int64) mutation {
+	return versionedPutMutation(queryPlacementPolicyCreate, queryPlacementPolicyUpdate, placementPolicyArgs(policy), previousVersion)
 }

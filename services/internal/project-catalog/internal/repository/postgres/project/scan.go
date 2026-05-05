@@ -268,6 +268,9 @@ func scanCommandResult(row postgreslib.RowScanner) (entity.CommandResult, error)
 
 func scanOutboxEvent(row postgreslib.RowScanner) (entity.OutboxEvent, error) {
 	scanned, err := postgreslib.ScanOutboxEventRow(row)
+	if err != nil {
+		return entity.OutboxEvent{}, err
+	}
 	var event entity.OutboxEvent
 	event.ID = scanned.Identity.RowID
 	event.AggregateType = scanned.Identity.SubjectKind

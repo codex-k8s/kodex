@@ -225,8 +225,19 @@ func TestRepositoryIntegrationProjectsRepositoriesPoliciesAndOutbox(t *testing.T
 	}
 
 	docSource := testDocumentationSource(projectA.ID, &repositoryA.ID, "service", "api", now)
-	if err := repository.PutDocumentationSource(ctx, docSource, testEvent("project.documentation_source.created", "documentation_source", docSource.ID, now), nil); err != nil {
+	if err := repository.PutDocumentationSource(ctx, docSource, nil, testEvent("project.documentation_source.created", "documentation_source", docSource.ID, now), nil); err != nil {
 		t.Fatalf("put documentation source: %v", err)
+	}
+	docSourcePreviousVersion := docSource.Version
+	docSource.Version = 2
+	docSource.UpdatedAt = now.Add(time.Minute)
+	docSource.LocalPath = "docs/api-v2"
+	if err := repository.PutDocumentationSource(ctx, docSource, &docSourcePreviousVersion, testEvent("project.documentation_source.updated", "documentation_source", docSource.ID, docSource.UpdatedAt), nil); err != nil {
+		t.Fatalf("update documentation source: %v", err)
+	}
+	docSource.Version = 3
+	if err := repository.PutDocumentationSource(ctx, docSource, &docSourcePreviousVersion, testEvent("project.documentation_source.updated", "documentation_source", docSource.ID, docSource.UpdatedAt), nil); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("stale documentation source update error = %v, want conflict", err)
 	}
 	workspacePolicy, err := repository.GetWorkspacePolicy(ctx, query.WorkspacePolicyFilter{
 		ProjectID:               projectA.ID,
@@ -303,7 +314,7 @@ func TestRepositoryIntegrationPoliciesAndRules(t *testing.T) {
 		MergePolicy:    enum.MergePolicySquash,
 		Status:         enum.BranchRulesStatusActive,
 	}
-	if err := repository.PutBranchRules(ctx, branchRules, testEvent("project.branch_rules.created", "branch_rules", branchRules.ID, now), nil); err != nil {
+	if err := repository.PutBranchRules(ctx, branchRules, nil, testEvent("project.branch_rules.created", "branch_rules", branchRules.ID, now), nil); err != nil {
 		t.Fatalf("put branch rules: %v", err)
 	}
 	releasePolicy := entity.ReleasePolicy{
@@ -316,7 +327,7 @@ func TestRepositoryIntegrationPoliciesAndRules(t *testing.T) {
 		RiskProfileRef:  "standard",
 		Status:          enum.ReleasePolicyStatusActive,
 	}
-	if err := repository.PutReleasePolicy(ctx, releasePolicy, testEvent("project.release_policy.created", "release_policy", releasePolicy.ID, now), nil); err != nil {
+	if err := repository.PutReleasePolicy(ctx, releasePolicy, nil, testEvent("project.release_policy.created", "release_policy", releasePolicy.ID, now), nil); err != nil {
 		t.Fatalf("put release policy: %v", err)
 	}
 	releaseLine := entity.ReleaseLine{
@@ -327,7 +338,7 @@ func TestRepositoryIntegrationPoliciesAndRules(t *testing.T) {
 		BranchPattern:   "release/2026.05",
 		Status:          enum.ReleasePolicyStatusActive,
 	}
-	if err := repository.PutReleaseLine(ctx, releaseLine, testEvent("project.release_line.created", "release_line", releaseLine.ID, now), nil); err != nil {
+	if err := repository.PutReleaseLine(ctx, releaseLine, nil, testEvent("project.release_line.created", "release_line", releaseLine.ID, now), nil); err != nil {
 		t.Fatalf("put release line: %v", err)
 	}
 	placement := entity.PlacementPolicy{
@@ -338,8 +349,40 @@ func TestRepositoryIntegrationPoliciesAndRules(t *testing.T) {
 		AllowedClusterRefs: []string{"prod-eu"},
 		Status:             enum.PlacementPolicyStatusActive,
 	}
-	if err := repository.PutPlacementPolicy(ctx, placement, testEvent("project.placement_policy.created", "placement_policy", placement.ID, now), nil); err != nil {
+	if err := repository.PutPlacementPolicy(ctx, placement, nil, testEvent("project.placement_policy.created", "placement_policy", placement.ID, now), nil); err != nil {
 		t.Fatalf("put placement policy: %v", err)
+	}
+	branchPreviousVersion := branchRules.Version
+	branchRules.Version = 2
+	branchRules.UpdatedAt = now.Add(time.Minute)
+	branchRules.RequiredChecks = []string{"unit", "lint", "integration"}
+	if err := repository.PutBranchRules(ctx, branchRules, &branchPreviousVersion, testEvent("project.branch_rules.updated", "branch_rules", branchRules.ID, branchRules.UpdatedAt), nil); err != nil {
+		t.Fatalf("update branch rules: %v", err)
+	}
+	releasePolicyPreviousVersion := releasePolicy.Version
+	releasePolicy.Version = 2
+	releasePolicy.UpdatedAt = now.Add(time.Minute)
+	releasePolicy.RolloutStrategy = enum.RolloutStrategyStaged
+	if err := repository.PutReleasePolicy(ctx, releasePolicy, &releasePolicyPreviousVersion, testEvent("project.release_policy.updated", "release_policy", releasePolicy.ID, releasePolicy.UpdatedAt), nil); err != nil {
+		t.Fatalf("update release policy: %v", err)
+	}
+	releaseLinePreviousVersion := releaseLine.Version
+	releaseLine.Version = 2
+	releaseLine.UpdatedAt = now.Add(time.Minute)
+	releaseLine.Status = enum.ReleasePolicyStatusArchived
+	if err := repository.PutReleaseLine(ctx, releaseLine, &releaseLinePreviousVersion, testEvent("project.release_line.archived", "release_line", releaseLine.ID, releaseLine.UpdatedAt), nil); err != nil {
+		t.Fatalf("update release line: %v", err)
+	}
+	placementPreviousVersion := placement.Version
+	placement.Version = 2
+	placement.UpdatedAt = now.Add(time.Minute)
+	placement.AllowedClusterRefs = []string{"prod-eu", "prod-us"}
+	if err := repository.PutPlacementPolicy(ctx, placement, &placementPreviousVersion, testEvent("project.placement_policy.updated", "placement_policy", placement.ID, placement.UpdatedAt), nil); err != nil {
+		t.Fatalf("update placement policy: %v", err)
+	}
+	placement.Version = 3
+	if err := repository.PutPlacementPolicy(ctx, placement, &placementPreviousVersion, testEvent("project.placement_policy.updated", "placement_policy", placement.ID, placement.UpdatedAt), nil); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("stale placement policy update error = %v, want conflict", err)
 	}
 	override := entity.PolicyOverride{
 		Base:              entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
@@ -385,7 +428,7 @@ func TestRepositoryIntegrationPoliciesAndRules(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list release policies: %v", err)
 	}
-	releaseLines, _, err := repository.ListReleaseLines(ctx, query.ReleaseLineFilter{ProjectID: project.ID, ReleasePolicyID: &releasePolicy.ID, Statuses: []enum.ReleasePolicyStatus{enum.ReleasePolicyStatusActive}})
+	releaseLines, _, err := repository.ListReleaseLines(ctx, query.ReleaseLineFilter{ProjectID: project.ID, ReleasePolicyID: &releasePolicy.ID, Statuses: []enum.ReleasePolicyStatus{enum.ReleasePolicyStatusArchived}})
 	if err != nil {
 		t.Fatalf("list release lines: %v", err)
 	}
