@@ -45,9 +45,11 @@ approvals:
 | `UpdateRepository` | gRPC command | `repository.update` | ожидаемая версия | Обновляет статус, ссылку на иконку и поля политики привязки. |
 | `GetRepository` | gRPC query | `repository.read` | нет | Авторитетное чтение привязки репозитория. |
 | `ListRepositories` | gRPC query | `repository.list` | нет | Список репозиториев проекта. |
-| `PutServicesPolicy` | gRPC command | `project.policy.update` | ожидаемая версия | Сохраняет проверенную версию политики `services.yaml`. |
-| `GetServicesPolicy` | gRPC query | `project.policy.read` | нет | Читает активную проверенную политику `services.yaml`. |
+| `ImportServicesPolicy` | gRPC command | `project.policy.import` | `CommandMeta.command_id` | Импортирует `services.yaml`, управляемый через Git, после первичной загрузки, слияния PR или сверки и сохраняет проверенную проекцию. |
+| `GetServicesPolicy` | gRPC query | `project.policy.read` | нет | Читает активную проверенную проекцию `services.yaml`. |
 | `ListServiceDescriptors` | gRPC query | `project.policy.read` | нет | Читает типизированный список сервисов из активной политики. |
+| `CreatePolicyEditProposal` | gRPC command | `project.policy.propose` | `CommandMeta.command_id` | Создаёт запрос на PR-изменение `services.yaml` вместо прямой записи в БД. |
+| `CreatePolicyOverride` | gRPC command | `project.policy.override` | `CommandMeta.command_id` | Создаёт временное операторское переопределение с причиной, сроком действия и аудитом. |
 | `PutDocumentationSource` | gRPC command | `project.docs.update` | ожидаемая версия | Обновляет источник документации. |
 | `GetDocumentationSource` | gRPC query | `project.docs.read` | нет | Читает конкретный источник документации. |
 | `ListDocumentationSources` | gRPC query | `project.docs.read` | нет | Читает источники документации проекта, репозитория или сервиса. |
@@ -82,7 +84,9 @@ approvals:
 | `project.project.updated` | project | `project_id`, `status`, `icon_object_uri`, `version` |
 | `project.repository.attached` | repository | `project_id`, `repository_id`, `provider`, `provider_owner`, `provider_name`, `icon_object_uri`, `version` |
 | `project.repository.updated` | repository | `repository_id`, `status`, `icon_object_uri`, `version` |
-| `project.services_policy.updated` | services_policy | `project_id`, `policy_id`, `policy_version`, `content_hash` |
+| `project.services_policy.updated` | services_policy | `project_id`, `policy_id`, `policy_version`, `source_commit_sha`, `source_blob_sha`, `content_hash` |
+| `project.policy_override.created` | policy_override | `project_id`, `override_id`, `target_type`, `expires_at` |
+| `project.policy_override.expired` | policy_override | `project_id`, `override_id`, `target_type` |
 | `project.documentation_source.updated` | documentation_source | `project_id`, `source_id`, `scope_type`, `access_mode` |
 | `project.branch_rules.updated` | branch_rules | `project_id`, `repository_id`, `version` |
 | `project.release_policy.updated` | release_policy | `project_id`, `policy_id`, `version` |

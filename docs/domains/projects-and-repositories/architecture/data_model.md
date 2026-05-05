@@ -20,7 +20,7 @@ approvals:
 
 ## TL;DR
 
-- Ключевые сущности: `Project`, `RepositoryBinding`, `ServicesPolicy`, `ServiceDescriptor`, `DocumentationSource`, `BranchRules`, `ReleasePolicy`, `ReleaseLine`, `PlacementPolicy`.
+- Ключевые сущности: `Project`, `RepositoryBinding`, `ServicesPolicy`, `ServiceDescriptor`, `DocumentationSource`, `BranchRules`, `ReleasePolicy`, `ReleaseLine`, `PlacementPolicy`, `PolicyOverride`.
 - Технические агрегаты: `CommandResult`, `OutboxEvent`.
 - Основные связи: проект владеет репозиториями и политикой; репозиторий может иметь свои уточняющие правила; источники документации связываются с проектом, репозиторием или сервисом.
 - Риски миграций: нельзя хранить чужие provider-native сущности как канонические данные; нельзя делать SQL-связи с БД других сервисов.
@@ -64,10 +64,15 @@ approvals:
 | `project_id` | uuid | нет | Проект-владелец. |
 | `source_repository_id` | uuid | да | Где найден исходный `services.yaml`. |
 | `source_path` | text | нет | Путь к файлу политики. |
+| `source_ref` | text | да | Ветка, тег или другой ref, откуда импортирована политика. |
+| `source_commit_sha` | text | да | Commit, из которого импортирована проверенная политика. |
+| `source_blob_sha` | text | да | Хэш объекта файла у провайдера, если доступен. |
 | `policy_version` | bigint | нет | Версия проверенного снимка. |
 | `content_hash` | text | нет | Хэш исходного содержимого. |
 | `validated_payload` | jsonb | нет | Нормализованный снимок исходной политики для аудита и повторной валидации; не является основным контуром чтения для сервисов. |
 | `validation_status` | enum | нет | `valid`, `invalid`, `stale`. |
+| `projection_status` | enum | нет | `synced`, `pending`, `failed`, `overridden`. |
+| `imported_at` | timestamptz | нет | Когда проекция была сохранена в БД. |
 
 ### ServiceDescriptor
 
@@ -137,6 +142,23 @@ approvals:
 | `allowed_cluster_refs` | text[] | нет | Внешние ссылки на контуры `fleet-manager`. |
 | `status` | enum | нет | `active`, `disabled`. |
 
+### PolicyOverride
+
+`PolicyOverride` описывает аварийное временное отклонение от политики, управляемой через Git. Это не основной путь изменения `services.yaml`: штатные изменения создаются через PR, проходят ревью и затем импортируются в `project-catalog`.
+
+| Поле | Тип | Может быть пустым | Примечание |
+|---|---|---:|---|
+| `id` | uuid | нет | Идентификатор переопределения. |
+| `project_id` | uuid | нет | Проект-владелец. |
+| `target_type` | enum | нет | `services_policy`, `branch_rules`, `release_policy`, `placement_policy`, `documentation_source`. |
+| `target_id` | uuid | да | Конкретный агрегат, если переопределение привязано к нему. |
+| `payload` | jsonb | нет | Минимальный набор временно переопределённых параметров. |
+| `reason` | text | нет | Причина аварийного изменения. |
+| `status` | enum | нет | `active`, `expired`, `cancelled`. |
+| `expires_at` | timestamptz | нет | Срок действия переопределения. |
+| `created_by_actor_ref` | text | нет | Внешняя ссылка на инициатора для аудита. |
+| `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
+
 ### CommandResult
 
 `CommandResult` хранит идемпотентный след команды в той же БД, где меняется агрегат. Повтор команды с тем же `command_id` возвращает сохранённый результат, а не создаёт второе изменение.
@@ -169,7 +191,7 @@ approvals:
 
 ## Связи
 
-- `Project` владеет `RepositoryBinding`, `ServicesPolicy`, `ServiceDescriptor`, `DocumentationSource`, `BranchRules`, `ReleasePolicy`, `ReleaseLine`, `PlacementPolicy`.
+- `Project` владеет `RepositoryBinding`, `ServicesPolicy`, `ServiceDescriptor`, `DocumentationSource`, `BranchRules`, `ReleasePolicy`, `ReleaseLine`, `PlacementPolicy`, `PolicyOverride`.
 - `ServicesPolicy` владеет набором `ServiceDescriptor`, полученным из проверенной версии `services.yaml`.
 - Внутри БД `project-catalog` допустимы обычные внешние ключи между своими таблицами.
 - Ссылки на организации, кластеры, роли, агентные процессы и provider-native сущности хранятся как внешние идентификаторы без SQL-связей с чужими БД.
@@ -183,16 +205,20 @@ approvals:
 | Поиск репозитория по provider identity | `(provider, provider_owner, provider_name)` unique для активной привязки |
 | Сервисы проекта | `(project_id, status, service_key)` unique для активного сервиса |
 | Сервисы репозитория | `(repository_id, status, service_key)` |
+| Актуальная проекция `services.yaml` | `(project_id, projection_status, policy_version)` |
+| Сверка политики по источнику | `(source_repository_id, source_path, source_commit_sha, content_hash)` |
 | Источники документации для рабочего контура | `(project_id, scope_type, scope_id, status)` |
 | Активные правила веток | `(project_id, repository_id, status)` |
 | Активные релизные политики | `(project_id, status)` |
+| Активные переопределения | `(project_id, target_type, status, expires_at)` |
 | Непубликованные события | `(published_at, occurred_at)` where `published_at is null` |
 | Идемпотентный след команд | `(command_id)` unique |
 
 ## Политика хранения данных
 
 - Архивные проекты и репозитории не удаляются физически в MVP, чтобы сохранить аудит и связи с provider-native артефактами.
-- Старые версии `ServicesPolicy` могут храниться как история изменений с ограничением срока хранения, если содержимое станет большим.
+- Старые версии `ServicesPolicy` хранятся как история проверенных проекций политики, управляемой через Git, с ограничением срока хранения, если содержимое станет большим.
+- Штатная декларативная политика меняется через PR с правкой `services.yaml`; прямые `PolicyOverride` не заменяют источник намерения в Git и должны иметь срок действия.
 - Сырые секреты, токены провайдера и содержимое приватных файлов не хранятся в домене.
 - Иконки проектов и репозиториев хранятся как объекты в бакете; `project-catalog` хранит только `icon_object_uri` и не отвечает за загрузку, преобразование и выдачу бинарных изображений.
 
