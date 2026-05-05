@@ -22,8 +22,8 @@ approvals:
 
 - Тип API: внутренний gRPC `ProjectCatalogService`, доменные события `project.*`.
 - Аутентификация: через gateway, сервисный токен или MCP-границу; команды дополнительно проверяются через `access-manager`.
-- Версионирование: предварительный целевой `v1`; стабильным контракт становится после появления proto и AsyncAPI как источников правды.
-- Основные операции: проекты, репозитории, политика `services.yaml`, источники документации, правила веток, релизная политика, политика размещения, политика рабочего контура.
+- Версионирование: стабильный транспортный `v1`; источники правды — proto и AsyncAPI.
+- Основные операции: проекты, репозитории, политика `services.yaml`, источники документации, правила веток, релизная политика, релизные линии, политика размещения, политика рабочего контура.
 
 ## Спецификации
 
@@ -31,7 +31,7 @@ approvals:
 - AsyncAPI: `specs/asyncapi/project-catalog.v1.yaml`.
 - Внешний HTTP для операторской и администраторской консоли: через тонкий `staff-gateway` с OpenAPI-контрактом, не напрямую из доменного сервиса.
 
-Этот документ фиксирует целевой обзор операций и событий. Фактическими источниками правды для транспорта будут proto и AsyncAPI; до их появления документ не считается стабильной спецификацией реализации.
+Этот документ фиксирует обзор операций и событий. Фактическими источниками правды для транспорта являются proto и AsyncAPI; если описание ниже расходится с машинной спецификацией, исправляется документ или контракт в том же PR.
 
 ## Операции
 
@@ -43,6 +43,7 @@ approvals:
 | `ListProjects` | gRPC query | `project.list` | нет | Пакетное чтение для внутренних сервисов и `staff-gateway`. |
 | `AttachRepository` | gRPC command | `repository.attach` | `CommandMeta.command_id` | Привязывает репозиторий к проекту. |
 | `UpdateRepository` | gRPC command | `repository.update` | ожидаемая версия | Обновляет статус, ссылку на иконку и поля политики привязки. |
+| `DetachRepository` | gRPC command | `repository.detach` | ожидаемая версия | Архивирует привязку репозитория и убирает её из активной политики проекта. |
 | `GetRepository` | gRPC query | `repository.read` | нет | Авторитетное чтение привязки репозитория. |
 | `ListRepositories` | gRPC query | `repository.list` | нет | Список репозиториев проекта. |
 | `ImportServicesPolicy` | gRPC command | `project.policy.import` | `CommandMeta.command_id` | Импортирует `services.yaml`, управляемый через Git, после первичной загрузки, слияния PR или сверки и сохраняет проверенную проекцию. |
@@ -50,6 +51,7 @@ approvals:
 | `ListServiceDescriptors` | gRPC query | `project.policy.read` | нет | Читает типизированный список сервисов из активной политики. |
 | `CreatePolicyEditProposal` | gRPC command | `project.policy.propose` | `CommandMeta.command_id` | Создаёт запрос на PR-изменение `services.yaml` вместо прямой записи в БД. |
 | `CreatePolicyOverride` | gRPC command | `project.policy.override` | `CommandMeta.command_id` | Создаёт временное операторское переопределение с причиной, сроком действия и аудитом. |
+| `CancelPolicyOverride` | gRPC command | `project.policy.override.cancel` | ожидаемая версия | Досрочно отменяет активное операторское переопределение с причиной. |
 | `PutDocumentationSource` | gRPC command | `project.docs.update` | ожидаемая версия | Обновляет источник документации. |
 | `GetDocumentationSource` | gRPC query | `project.docs.read` | нет | Читает конкретный источник документации. |
 | `ListDocumentationSources` | gRPC query | `project.docs.read` | нет | Читает источники документации проекта, репозитория или сервиса. |
@@ -60,6 +62,9 @@ approvals:
 | `PutReleasePolicy` | gRPC command | `project.release_policy.update` | ожидаемая версия | Обновляет релизную политику. |
 | `GetReleasePolicy` | gRPC query | `project.release_policy.read` | нет | Читает конкретную релизную политику. |
 | `ListReleasePolicies` | gRPC query | `project.release_policy.read` | нет | Читает релизные политики проекта. |
+| `PutReleaseLine` | gRPC command | `project.release_line.update` | ожидаемая версия | Обновляет конкретную релизную линию. |
+| `GetReleaseLine` | gRPC query | `project.release_line.read` | нет | Читает конкретную релизную линию. |
+| `ListReleaseLines` | gRPC query | `project.release_line.read` | нет | Читает релизные линии проекта или релизной политики. |
 | `PutPlacementPolicy` | gRPC command | `project.placement_policy.update` | ожидаемая версия | Обновляет допустимые контуры размещения. |
 | `GetPlacementPolicy` | gRPC query | `project.placement_policy.read` | нет | Читает конкретную политику размещения. |
 | `ListPlacementPolicies` | gRPC query | `project.placement_policy.read` | нет | Читает политики размещения проекта, репозитория или сервиса. |
@@ -78,19 +83,48 @@ approvals:
 
 ## События
 
+События фиксируют бизнес-факты жизненного цикла, а не полный CRUD. Физическое удаление не входит в штатный `v1`: вместо `deleted` используются архивирование, отключение, отвязка, истечение срока или отмена.
+
 | Event | Aggregate | Payload минимум |
 |---|---|---|
-| `project.project.created` | project | `project_id`, `organization_id`, `slug`, `icon_object_uri`, `version` |
-| `project.project.updated` | project | `project_id`, `status`, `icon_object_uri`, `version` |
-| `project.repository.attached` | repository | `project_id`, `repository_id`, `provider`, `provider_owner`, `provider_name`, `icon_object_uri`, `version` |
-| `project.repository.updated` | repository | `repository_id`, `status`, `icon_object_uri`, `version` |
-| `project.services_policy.updated` | services_policy | `project_id`, `policy_id`, `policy_version`, `source_commit_sha`, `source_blob_sha`, `content_hash` |
+| `project.project.created` | project | `project_id`, `organization_id`, `slug`, `version`; `icon_object_uri`, если задано |
+| `project.project.updated` | project | `project_id`, `status`, `version`; `icon_object_uri`, если задано |
+| `project.project.archived` | project | `project_id`, `status`, `version` |
+| `project.project.disabled` | project | `project_id`, `status`, `version` |
+| `project.repository.attached` | repository | `project_id`, `repository_id`, `provider`, `provider_owner`, `provider_name`, `version`; `icon_object_uri`, если задано |
+| `project.repository.updated` | repository | `project_id`, `repository_id`, `status`, `version`; `icon_object_uri`, если задано |
+| `project.repository.detached` | repository | `project_id`, `repository_id`, `status`, `version` |
+| `project.services_policy.imported` | services_policy | `project_id`, `policy_id`, `policy_version`, `source_commit_sha`, `content_hash`; `source_blob_sha` передаётся, когда доступен у провайдера |
 | `project.policy_override.created` | policy_override | `project_id`, `override_id`, `target_type`, `expires_at` |
 | `project.policy_override.expired` | policy_override | `project_id`, `override_id`, `target_type` |
+| `project.policy_override.cancelled` | policy_override | `project_id`, `override_id`, `target_type` |
+| `project.documentation_source.created` | documentation_source | `project_id`, `source_id`, `scope_type`, `access_mode` |
 | `project.documentation_source.updated` | documentation_source | `project_id`, `source_id`, `scope_type`, `access_mode` |
-| `project.branch_rules.updated` | branch_rules | `project_id`, `repository_id`, `version` |
-| `project.release_policy.updated` | release_policy | `project_id`, `policy_id`, `version` |
-| `project.placement_policy.updated` | placement_policy | `project_id`, `policy_id`, `version` |
+| `project.documentation_source.disabled` | documentation_source | `project_id`, `source_id`, `status` |
+| `project.branch_rules.created` | branch_rules | `project_id`, `branch_rules_id`, `version` |
+| `project.branch_rules.updated` | branch_rules | `project_id`, `branch_rules_id`, `version` |
+| `project.branch_rules.disabled` | branch_rules | `project_id`, `branch_rules_id`, `status`, `version` |
+| `project.release_policy.created` | release_policy | `project_id`, `release_policy_id`, `version` |
+| `project.release_policy.updated` | release_policy | `project_id`, `release_policy_id`, `version` |
+| `project.release_policy.archived` | release_policy | `project_id`, `release_policy_id`, `status`, `version` |
+| `project.release_policy.disabled` | release_policy | `project_id`, `release_policy_id`, `status`, `version` |
+| `project.release_line.created` | release_line | `project_id`, `release_policy_id`, `release_line_id`, `version` |
+| `project.release_line.updated` | release_line | `project_id`, `release_policy_id`, `release_line_id`, `version` |
+| `project.release_line.archived` | release_line | `project_id`, `release_policy_id`, `release_line_id`, `status`, `version` |
+| `project.release_line.disabled` | release_line | `project_id`, `release_policy_id`, `release_line_id`, `status`, `version` |
+| `project.placement_policy.created` | placement_policy | `project_id`, `placement_policy_id`, `version` |
+| `project.placement_policy.updated` | placement_policy | `project_id`, `placement_policy_id`, `version` |
+| `project.placement_policy.disabled` | placement_policy | `project_id`, `placement_policy_id`, `status`, `version` |
+
+## Состояние реализации
+
+| Область | Статус |
+|---|---|
+| gRPC proto `ProjectCatalogService` | Стабильный `v1`, покрывает весь согласованный объём операций. |
+| AsyncAPI `project.*` | Стабильный `v1`, покрывает события из этого документа. |
+| Сервисный процесс `project-catalog` | Каркас готов: entrypoint, конфигурация, health/readyz/metrics и зарегистрированный gRPC-сервер. |
+| Бизнес-обработчики gRPC | Отложены до среза gRPC-операций; каркас возвращает `Unimplemented` через generated-сервер. |
+| PostgreSQL и outbox | Отложены до среза модели БД и репозитория. |
 
 ## Совместимость
 

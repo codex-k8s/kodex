@@ -27,6 +27,26 @@ func TestLoadConfigAcceptsDatabaseDSNFromEnvironment(t *testing.T) {
 	}
 }
 
+func TestLoadConfigAllowsMissingConditionalEnvWhenFeaturesDisabled(t *testing.T) {
+	t.Setenv("KODEX_ACCESS_MANAGER_DATABASE_DSN", "postgres://postgres:5432/kodex_access_manager?sslmode=disable")
+	t.Setenv("KODEX_ACCESS_MANAGER_GRPC_AUTH_REQUIRED", "false")
+	t.Setenv("KODEX_ACCESS_MANAGER_GRPC_AUTH_TOKEN", "")
+	t.Setenv("KODEX_ACCESS_MANAGER_OUTBOX_DISPATCH_ENABLED", "false")
+	t.Setenv("KODEX_ACCESS_MANAGER_EVENT_LOG_DATABASE_DSN", "")
+	t.Setenv("KODEX_ACCESS_MANAGER_OUTBOX_EVENT_LOG_SOURCE", "")
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig(): %v", err)
+	}
+	if cfg.GRPCAuthRequired {
+		t.Fatal("GRPCAuthRequired = true, want false")
+	}
+	if cfg.OutboxDispatchEnabled {
+		t.Fatal("OutboxDispatchEnabled = true, want false")
+	}
+}
+
 func TestValidateRequiresGRPCAuthTokenWhenAuthEnabled(t *testing.T) {
 	t.Parallel()
 

@@ -55,7 +55,7 @@ approvals:
 - Основной путь изменения: агент или человек правит `services.yaml` в PR вместе с кодом и документацией.
 - PR должен проходить валидацию `services.yaml`, включая сервисы, зависимости, источники документации, правила выкладки, правила управления рисками и правила обязательного ревью человеком.
 - После слияния PR webhook или периодическая сверка передаёт новую версию файла в `project-catalog`.
-- `project-catalog` валидирует файл, сохраняет новую проекцию в БД, обновляет типизированные модели чтения и публикует `project.services_policy.updated`.
+- `project-catalog` валидирует файл, сохраняет новую проекцию в БД, обновляет типизированные модели чтения и публикует `project.services_policy.imported`.
 - Если webhook потерян, сверка сравнивает сохранённые `source_commit_sha`, `source_blob_sha` и `content_hash` с фактическим состоянием репозитория и догоняет проекцию.
 - Редактирование декларативной политики из пользовательского интерфейса по умолчанию создаёт PR с изменением `services.yaml`, а не пишет новую политику напрямую в БД.
 - Прямое операторское переопределение допустимо только для аварийного случая: с причиной, сроком действия, аудитом, отдельным статусом и явной индикацией, что состояние временно расходится с политикой, управляемой через Git.
@@ -136,15 +136,36 @@ sequenceDiagram
 Минимальные события:
 - `project.project.created`;
 - `project.project.updated`;
+- `project.project.archived`;
+- `project.project.disabled`;
 - `project.repository.attached`;
 - `project.repository.updated`;
-- `project.services_policy.updated`;
+- `project.repository.detached`;
+- `project.services_policy.imported`;
+- `project.policy_override.created`;
+- `project.policy_override.expired`;
+- `project.policy_override.cancelled`;
+- `project.documentation_source.created`;
 - `project.documentation_source.updated`;
+- `project.documentation_source.disabled`;
+- `project.branch_rules.created`;
 - `project.branch_rules.updated`;
+- `project.branch_rules.disabled`;
+- `project.release_policy.created`;
 - `project.release_policy.updated`;
-- `project.placement_policy.updated`.
+- `project.release_policy.archived`;
+- `project.release_policy.disabled`;
+- `project.release_line.created`;
+- `project.release_line.updated`;
+- `project.release_line.archived`;
+- `project.release_line.disabled`;
+- `project.placement_policy.created`;
+- `project.placement_policy.updated`;
+- `project.placement_policy.disabled`.
 
 События публикуются через сервисный outbox и общий `platform-event-log`. Потребители строят свои проекции или запускают свою бизнес-логику, но не меняют каноническое состояние `project-catalog` напрямую.
+
+Физическое удаление не является штатным бизнес-сценарием `v1`, поэтому событие `deleted` не публикуется. Завершение жизненного цикла выражается через `archived`, `disabled`, `detached`, `expired` или `cancelled`.
 
 ## Конкурентные изменения
 
