@@ -1,0 +1,255 @@
+---
+doc_id: DM-CK8S-PROVIDER-HUB-0001
+type: data-model
+title: kodex — модель данных provider-hub
+status: active
+owner_role: SA
+created_at: 2026-05-06
+updated_at: 2026-05-06
+related_issues: [281, 282]
+related_prs: []
+approvals:
+  required: ["Owner"]
+  status: approved
+  request_id: "owner-2026-05-06-provider-hub-boundaries"
+  approved_by: "ai-da-stas"
+  approved_at: 2026-05-06
+---
+
+# Модель данных: provider-hub
+
+## TL;DR
+
+- Ключевые сущности: runtime-состояние аккаунта провайдера, webhook event, provider event, work item projection, comment projection, relationship, sync cursor, limit snapshot и operation log.
+- Основные связи: все ссылки на проекты, репозитории, внешние аккаунты, run и job хранятся как внешние идентификаторы без SQL-связей с чужими БД.
+- Риски миграций: нельзя хранить provider truth как собственную истину платформы и нельзя копить сырые payload без retention.
+
+## Базовые правила
+
+- БД `provider-hub` принадлежит только `provider-hub`.
+- Таблицы не имеют `FOREIGN KEY` в БД других сервисов.
+- Конкурентные команды используют версии агрегатов и идемпотентные ключи.
+- Сырые webhook payload имеют срок хранения.
+- Нормализованные проекции хранят только поля, нужные платформе для UI, поиска, приёмки, синхронизации и аудита.
+- Полные diff, review truth, ветки и теги остаются у провайдера.
+
+## Сущности
+
+### `ProviderAccountRuntimeState`
+
+Назначение: операционное состояние внешнего аккаунта у провайдера.
+
+Важные инварианты:
+
+- политика аккаунта и область применения находятся в `access-manager`;
+- `provider-hub` хранит только runtime-состояние использования аккаунта у провайдера;
+- сырые секреты не хранятся в БД.
+
+| Поле | Тип | Nullable | Ограничения | Примечание |
+|---|---|---:|---|---|
+| `id` | UUID | no | primary key | Идентификатор runtime-записи. |
+| `external_account_id` | UUID | no | indexed | Ссылка на внешний аккаунт из `access-manager`. |
+| `provider_slug` | text | no | indexed | `github`, позднее `gitlab`. |
+| `status` | text | no | enum-like | `active`, `reauthorization_required`, `limited`, `disabled`, `error`. |
+| `last_checked_at` | timestamptz | yes |  | Последняя проверка. |
+| `last_success_at` | timestamptz | yes |  | Последняя успешная операция. |
+| `last_error_code` | text | no | default '' | Классификация ошибки. |
+| `last_error_message` | text | no | default '' | Короткое описание без секрета. |
+| `version` | bigint | no | monotonic | Оптимистичная конкуренция. |
+
+### `WebhookEvent`
+
+Назначение: сырой входящий сигнал провайдера.
+
+Важные инварианты:
+
+- дедупликация обязательна по delivery id или аналогу;
+- payload хранится с retention;
+- нормализация идёт асинхронно.
+
+| Поле | Тип | Nullable | Ограничения | Примечание |
+|---|---|---:|---|---|
+| `id` | UUID | no | primary key | Идентификатор события. |
+| `provider_slug` | text | no | indexed | Поставщик. |
+| `delivery_id` | text | no | unique by provider | Идентификатор доставки webhook. |
+| `event_name` | text | no | indexed | Имя события провайдера. |
+| `repository_provider_id` | text | no | default '' | Внешний id репозитория, если есть. |
+| `received_at` | timestamptz | no | indexed | Время приёма. |
+| `processing_status` | text | no | indexed | `pending`, `processed`, `failed`, `ignored`. |
+| `payload_json` | jsonb | no |  | Сырой payload с retention. |
+| `last_error` | text | no | default '' | Короткая ошибка обработки. |
+| `retain_until` | timestamptz | no | indexed | Срок хранения payload. |
+
+### `ProviderEvent`
+
+Назначение: нормализованное событие провайдера после разбора raw webhook или сверки.
+
+| Поле | Тип | Nullable | Ограничения | Примечание |
+|---|---|---:|---|---|
+| `id` | UUID | no | primary key | Идентификатор нормализованного события. |
+| `source_webhook_event_id` | UUID | yes | indexed | Ссылка внутри БД `provider-hub`. |
+| `event_type` | text | no | indexed | Нормализованный тип. |
+| `aggregate_type` | text | no | indexed | `work_item`, `comment`, `relationship`, `account_runtime_state`, `limit`. |
+| `aggregate_id` | text | no | indexed | Внешний или внутренний id агрегата. |
+| `payload_json` | jsonb | no |  | Типизированный payload в реализации. |
+| `occurred_at` | timestamptz | no | indexed | Время изменения у провайдера. |
+
+### `ProviderWorkItemProjection`
+
+Назначение: нормализованное зеркало `Issue` или `PR/MR`.
+
+Важные инварианты:
+
+- источник истины остаётся у провайдера;
+- одна задача может иметь несколько связанных `PR/MR`;
+- поле `project_id` и `repository_id` являются внешними идентификаторами из `project-catalog`.
+
+| Поле | Тип | Nullable | Ограничения | Примечание |
+|---|---|---:|---|---|
+| `id` | UUID | no | primary key | Внутренний id проекции. |
+| `provider_slug` | text | no | indexed | Поставщик. |
+| `provider_work_item_id` | text | no | unique by provider | Внешний id. |
+| `project_id` | UUID | yes | indexed | Внешняя ссылка на проект. |
+| `repository_id` | UUID | yes | indexed | Внешняя ссылка на repository binding. |
+| `repository_full_name` | text | no | indexed | `owner/name` или аналог. |
+| `kind` | text | no | indexed | `issue`, `pull_request`, `merge_request`. |
+| `number` | bigint | no | indexed | Номер у провайдера. |
+| `url` | text | no |  | Ссылка на провайдера. |
+| `title` | text | no |  | Текущее название. |
+| `state` | text | no | indexed | `open`, `closed`, `merged`, provider-normalized. |
+| `work_item_type` | text | no | default '' | `initiative`, `dev`, `qa` и другие типы. |
+| `labels_json` | jsonb | no | default [] | Нормализованные метки. |
+| `assignees_json` | jsonb | no | default [] | Назначенные участники. |
+| `milestone` | text | no | default '' | Нормализованная веха, если есть. |
+| `project_fields_json` | jsonb | no | default {} | Нужные project fields. |
+| `watermark_status` | text | no | indexed | `missing`, `valid`, `invalid`, `stale`. |
+| `watermark_json` | jsonb | no | default {} | Разобранный watermark. |
+| `body_digest` | text | no | default '' | Digest тела. |
+| `provider_updated_at` | timestamptz | yes | indexed | Время обновления у провайдера. |
+| `synced_at` | timestamptz | no | indexed | Время последней успешной синхронизации. |
+| `drift_status` | text | no | indexed | `fresh`, `suspected`, `stale`, `failed`. |
+| `version` | bigint | no | monotonic | Версия проекции. |
+
+### `ProviderCommentProjection`
+
+Назначение: нормализованный комментарий, mention или review-сигнал.
+
+| Поле | Тип | Nullable | Ограничения | Примечание |
+|---|---|---:|---|---|
+| `id` | UUID | no | primary key | Внутренний id. |
+| `work_item_projection_id` | UUID | no | indexed | Ссылка внутри БД `provider-hub`. |
+| `provider_comment_id` | text | no | unique by provider | Внешний id. |
+| `kind` | text | no | indexed | `comment`, `review`, `mention`, `system`. |
+| `author_provider_login` | text | no | indexed | Логин автора у провайдера. |
+| `body_digest` | text | no | default '' | Digest тела. |
+| `summary` | text | no | default '' | Короткая выдержка для UI. |
+| `provider_created_at` | timestamptz | yes |  | Время создания у провайдера. |
+| `provider_updated_at` | timestamptz | yes |  | Время обновления у провайдера. |
+
+### `ProviderRelationship`
+
+Назначение: нормализованная связь provider-native объектов.
+
+Примеры связей: исходная задача, связанный `PR/MR`, follow-up, blocks, blocked-by, release link, package source link.
+
+| Поле | Тип | Nullable | Ограничения | Примечание |
+|---|---|---:|---|---|
+| `id` | UUID | no | primary key | Идентификатор связи. |
+| `source_work_item_id` | UUID | no | indexed | Внутренняя ссылка на проекцию. |
+| `target_work_item_id` | UUID | yes | indexed | Внутренняя ссылка, если цель уже известна. |
+| `target_provider_ref` | text | no | default '' | URL или provider ref, если проекции ещё нет. |
+| `relationship_type` | text | no | indexed | Нормализованный тип связи. |
+| `source` | text | no | indexed | `provider`, `watermark`, `comment`, `manual`, `reconciliation`. |
+| `confidence` | text | no | default 'confirmed' | `confirmed`, `inferred`, `suspected`. |
+| `created_at` | timestamptz | no |  | Время создания связи. |
+
+### `SyncCursor`
+
+Назначение: состояние инкрементальной сверки по области синхронизации.
+
+| Поле | Тип | Nullable | Ограничения | Примечание |
+|---|---|---:|---|---|
+| `id` | UUID | no | primary key | Идентификатор курсора. |
+| `provider_slug` | text | no | indexed | Поставщик. |
+| `scope_type` | text | no | indexed | `repository`, `organization`, `work_item`, `package_source`. |
+| `scope_ref` | text | no | indexed | Внешняя область. |
+| `artifact_kind` | text | no | indexed | `issue`, `pull_request`, `comment`, `relationship`, `repository`. |
+| `cursor_value` | text | no | default '' | Provider cursor или timestamp marker. |
+| `overlap_since` | timestamptz | yes |  | Начало окна перекрытия. |
+| `priority` | text | no | indexed | `hot`, `warm`, `cold`. |
+| `last_success_at` | timestamptz | yes | indexed | Последняя успешная сверка. |
+| `last_checked_at` | timestamptz | yes | indexed | Последняя попытка. |
+| `last_error` | text | no | default '' | Короткая ошибка. |
+| `rate_budget_state_json` | jsonb | no | default {} | Снимок бюджета лимитов. |
+| `lease_owner` | text | no | default '' | Владелец короткой аренды. |
+| `lease_until` | timestamptz | yes | indexed | Конец аренды. |
+
+### `ProviderLimitSnapshot`
+
+Назначение: известный снимок лимитов провайдера.
+
+| Поле | Тип | Nullable | Ограничения | Примечание |
+|---|---|---:|---|---|
+| `id` | UUID | no | primary key | Идентификатор снимка. |
+| `external_account_id` | UUID | no | indexed | Внешний аккаунт из `access-manager`. |
+| `provider_slug` | text | no | indexed | Поставщик. |
+| `limit_class` | text | no | indexed | `core`, `graphql`, `search`, provider-specific class. |
+| `remaining` | bigint | yes |  | Остаток, если известен. |
+| `limit_value` | bigint | yes |  | Общий лимит, если известен. |
+| `reset_at` | timestamptz | yes | indexed | Время сброса. |
+| `captured_at` | timestamptz | no | indexed | Время снимка. |
+| `source` | text | no | indexed | `provider_hub`, `slot_agent_before`, `slot_agent_after`, `slot_agent_signal`. |
+
+### `ProviderOperation`
+
+Назначение: аудит и диагностика операции платформы во внешнем провайдере.
+
+| Поле | Тип | Nullable | Ограничения | Примечание |
+|---|---|---:|---|---|
+| `id` | UUID | no | primary key | Идентификатор операции. |
+| `command_id` | text | no | unique by operation | Идемпотентный ключ. |
+| `actor_id` | UUID | yes | indexed | Субъект платформы, если есть. |
+| `external_account_id` | UUID | no | indexed | Использованный внешний аккаунт. |
+| `provider_slug` | text | no | indexed | Поставщик. |
+| `operation_type` | text | no | indexed | Нормализованный тип операции. |
+| `target_ref` | text | no | indexed | Provider target. |
+| `status` | text | no | indexed | `succeeded`, `failed`, `retryable_failed`, `denied`. |
+| `result_ref` | text | no | default '' | URL/id результата. |
+| `error_code` | text | no | default '' | Классификация ошибки. |
+| `error_message` | text | no | default '' | Короткое сообщение без секрета. |
+| `rate_limit_snapshot_id` | UUID | yes | indexed | Снимок лимитов после операции. |
+| `started_at` | timestamptz | no | indexed | Начало. |
+| `finished_at` | timestamptz | yes | indexed | Завершение. |
+
+## Индексы и критичные запросы
+
+| Запрос | Индексы |
+|---|---|
+| Найти рабочий артефакт по provider ref | `(provider_slug, repository_full_name, kind, number)` и `(provider_slug, provider_work_item_id)` |
+| Получить активные `Issue/PR` проекта | `(project_id, kind, state, provider_updated_at)` |
+| Найти рассинхронизированные артефакты | `(drift_status, synced_at)` |
+| Дедуплицировать webhook | unique `(provider_slug, delivery_id)` |
+| Выбрать курсоры сверки | `(priority, last_checked_at)`, `(lease_until)` |
+| Посмотреть лимиты аккаунта | `(external_account_id, limit_class, captured_at)` |
+| Найти operation по идемпотентному ключу | unique `(operation_type, command_id)` |
+
+## Политика хранения
+
+| Данные | Политика |
+|---|---|
+| Raw webhook payload | Хранить ограниченный срок, достаточный для диагностики и повторной обработки. |
+| Нормализованные provider events | Хранить по политике аудита и диагностики домена. |
+| Проекции рабочих артефактов | Хранить пока артефакт связан с активным проектом, архивом или аудитом. |
+| Комментарии | Хранить digest, краткую выдержку и provider ref; полные тела не копить без подтверждённого сценария. |
+| Снимки лимитов | Хранить агрегированно и с ограничением по сроку. |
+| Operation log | Хранить как аудит provider-операций без секретов и полных payload. |
+
+## Миграции
+
+Миграции будут жить в `services/internal/provider-hub/cmd/cli/migrations/*.sql` после создания сервиса. До появления кода этот документ фиксирует целевую модель и инварианты.
+
+## Апрув
+
+- request_id: `owner-2026-05-06-provider-hub-boundaries`
+- Решение: approved
+- Комментарий: модель данных `provider-hub` согласована как целевое состояние PRV-0.

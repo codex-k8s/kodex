@@ -5,17 +5,26 @@ title: kodex — карта Issue домена рабочих сущностей
 status: active
 owner_role: KM
 created_at: 2026-04-25
-updated_at: 2026-04-25
+updated_at: 2026-05-06
 ---
 
 # Карта Issue — рабочие сущности провайдера
 
 ## TL;DR
 
-Долгоживущая карта домена `provider-native-work-items`.
+Долгоживущая карта домена `provider-native-work-items` и сервиса-владельца `provider-hub`.
 
 ## Матрица
 
 | Issue/PR | Документы | Волна | Статус | Примечание |
 |---|---|---|---|---|
-| не назначено | `docs/domains/provider-native-work-items/` | wave 10 | planned | `Issue`, `PR/MR`, комментарии, связи, ветки и теги. |
+| не назначено | `docs/domains/provider-native-work-items/product/requirements.md`, `docs/domains/provider-native-work-items/architecture/design.md`, `docs/domains/provider-native-work-items/architecture/data_model.md`, `docs/domains/provider-native-work-items/architecture/api_contract.md`, `docs/domains/provider-native-work-items/delivery/provider_hub_delivery.md` | PRV-0 | active | Доменный каркас и границы `provider-hub`. |
+| не назначено | `proto/kodex/providers/**`, `specs/asyncapi/provider-hub.v1.yaml`, `docs/domains/provider-native-work-items/delivery/provider_hub_delivery.md` | PRV-1 | planned | gRPC/AsyncAPI контракты и generated-код. |
+| не назначено | `services/internal/provider-hub/**`, `docs/domains/provider-native-work-items/architecture/data_model.md` | PRV-2 | planned | Сервисный каркас, БД, миграции и repository layer. |
+| не назначено | `services/internal/provider-hub/**`, `docs/domains/provider-native-work-items/architecture/design.md` | PRV-3 | planned | Внешние аккаунты у провайдера, лимиты, GitHub adapter и operation log. |
+| не назначено | `services/internal/provider-hub/**`, `specs/asyncapi/provider-hub.v1.yaml` | PRV-4 | planned | Webhook inbox, дедупликация, нормализация и события. |
+| не назначено | `services/internal/provider-hub/**`, `docs/domains/provider-native-work-items/architecture/data_model.md` | PRV-5 | planned | Проекции `Issue`, `PR/MR`, комментариев, review-сигналов, watermark и связей. |
+| не назначено | `services/internal/provider-hub/**`, `docs/domains/provider-native-work-items/architecture/design.md` | PRV-6 | planned | Incremental reconciliation, `sync_cursor`, drift status и ускоряющие сигналы. |
+| не назначено | `services/internal/provider-hub/**`, `docs/domains/provider-native-work-items/architecture/api_contract.md` | PRV-7 | planned | Платформенные provider-операции для agent-manager/MCP. |
+| #281, #282 | `docs/domains/provider-native-work-items/delivery/provider_hub_delivery.md` | PRV-8 | planned | Provider-часть empty repository bootstrap и existing repository adoption; сканирование и отчёт по существующему репозиторию выполняет агентная роль через workspace. |
+| не назначено | `services/internal/provider-hub/**`, deploy-манифесты, runbook/monitoring docs | PRV-9 | planned | Эксплуатационный контур `provider-hub`. |
