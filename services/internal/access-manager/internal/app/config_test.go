@@ -3,6 +3,8 @@ package app
 import (
 	"testing"
 	"time"
+
+	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
 )
 
 func TestLoadConfigRequiresDatabaseDSN(t *testing.T) {
@@ -139,7 +141,7 @@ func TestValidateRejectsEnabledOutboxWithoutPublisher(t *testing.T) {
 
 	cfg := validConfig()
 	cfg.OutboxDispatchEnabled = true
-	cfg.OutboxPublisherKind = outboxPublisherKindDisabled
+	cfg.OutboxPublisherKind = outboxlib.PublisherKindDisabled
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() err = nil, want outbox publisher kind error")
 	}
@@ -150,7 +152,7 @@ func TestValidateAllowsExplicitLossyDiagnosticPublisher(t *testing.T) {
 
 	cfg := validConfig()
 	cfg.OutboxDispatchEnabled = true
-	cfg.OutboxPublisherKind = outboxPublisherKindDiagnosticLogLossy
+	cfg.OutboxPublisherKind = outboxlib.PublisherKindDiagnosticLogLossy
 	cfg.OutboxAllowLossyPublisher = true
 	cfg.EventLogDatabaseDSN = ""
 	if err := cfg.Validate(); err != nil {
@@ -207,7 +209,7 @@ func validConfig() Config {
 		EventLogDatabaseMaxConns:  4,
 		EventLogDatabaseMinConns:  0,
 		OutboxDispatchEnabled:     true,
-		OutboxPublisherKind:       outboxPublisherKindPostgresEventLog,
+		OutboxPublisherKind:       outboxlib.PublisherKindPostgresEventLog,
 		OutboxEventLogSource:      "access-manager",
 		OutboxAllowLossyPublisher: false,
 		OutboxBatchSize:           100,

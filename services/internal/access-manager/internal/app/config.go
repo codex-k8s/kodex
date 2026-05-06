@@ -8,6 +8,7 @@ import (
 	"github.com/caarlos0/env/v11"
 
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
+	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 )
 
@@ -96,17 +97,17 @@ func (cfg Config) Validate() error {
 		return fmt.Errorf("KODEX_ACCESS_MANAGER_GRPC_MAX_SEND_MESSAGE_BYTES must be greater than zero")
 	}
 	switch strings.TrimSpace(cfg.OutboxPublisherKind) {
-	case outboxPublisherKindDisabled, outboxPublisherKindDiagnosticLogLossy, outboxPublisherKindPostgresEventLog:
+	case outboxlib.PublisherKindDisabled, outboxlib.PublisherKindDiagnosticLogLossy, outboxlib.PublisherKindPostgresEventLog:
 	default:
 		return fmt.Errorf("KODEX_ACCESS_MANAGER_OUTBOX_PUBLISHER_KIND must be disabled, diagnostic-log-lossy or postgres-event-log")
 	}
-	if cfg.OutboxDispatchEnabled && strings.TrimSpace(cfg.OutboxPublisherKind) == outboxPublisherKindDisabled {
+	if cfg.OutboxDispatchEnabled && strings.TrimSpace(cfg.OutboxPublisherKind) == outboxlib.PublisherKindDisabled {
 		return fmt.Errorf("KODEX_ACCESS_MANAGER_OUTBOX_PUBLISHER_KIND must be configured when outbox dispatch is enabled")
 	}
-	if strings.TrimSpace(cfg.OutboxPublisherKind) == outboxPublisherKindDiagnosticLogLossy && !cfg.OutboxAllowLossyPublisher {
+	if strings.TrimSpace(cfg.OutboxPublisherKind) == outboxlib.PublisherKindDiagnosticLogLossy && !cfg.OutboxAllowLossyPublisher {
 		return fmt.Errorf("KODEX_ACCESS_MANAGER_OUTBOX_ALLOW_LOSSY_DIAGNOSTIC_PUBLISHER must be true for diagnostic-log-lossy publisher")
 	}
-	if strings.TrimSpace(cfg.OutboxPublisherKind) == outboxPublisherKindPostgresEventLog && strings.TrimSpace(cfg.OutboxEventLogSource) == "" {
+	if strings.TrimSpace(cfg.OutboxPublisherKind) == outboxlib.PublisherKindPostgresEventLog && strings.TrimSpace(cfg.OutboxEventLogSource) == "" {
 		return fmt.Errorf("KODEX_ACCESS_MANAGER_OUTBOX_EVENT_LOG_SOURCE must be configured for postgres-event-log publisher")
 	}
 	if cfg.needsEventLogDatabase() && strings.TrimSpace(cfg.EventLogDatabaseDSN) == "" {
@@ -155,7 +156,7 @@ func (cfg Config) Validate() error {
 }
 
 func (cfg Config) needsEventLogDatabase() bool {
-	return cfg.OutboxDispatchEnabled && strings.TrimSpace(cfg.OutboxPublisherKind) == outboxPublisherKindPostgresEventLog
+	return cfg.OutboxDispatchEnabled && strings.TrimSpace(cfg.OutboxPublisherKind) == outboxlib.PublisherKindPostgresEventLog
 }
 
 // DatabasePoolSettings converts service config to the shared pgxpool contract.
@@ -201,8 +202,8 @@ func (cfg Config) GRPCServerConfig() grpcserver.Config {
 }
 
 // OutboxDispatcherConfig converts service env config to the outbox delivery worker contract.
-func (cfg Config) OutboxDispatcherConfig() outboxDispatcherConfig {
-	return outboxDispatcherConfig{
+func (cfg Config) OutboxDispatcherConfig() outboxlib.Config {
+	return outboxlib.Config{
 		BatchSize:           cfg.OutboxBatchSize,
 		PollInterval:        cfg.OutboxPollInterval,
 		LockTTL:             cfg.OutboxLockTTL,

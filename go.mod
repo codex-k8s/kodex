@@ -8,12 +8,13 @@ require (
 	github.com/caarlos0/env/v11 v11.3.1
 	github.com/codex-k8s/kodex/libs/go/eventlog v0.0.0
 	github.com/codex-k8s/kodex/libs/go/grpcserver v0.0.0
+	github.com/codex-k8s/kodex/libs/go/outbox v0.0.0
 	github.com/codex-k8s/kodex/libs/go/postgres v0.0.0
 	github.com/google/uuid v1.6.0
-	github.com/jackc/pgx/v5 v5.8.0
+	github.com/jackc/pgx/v5 v5.9.2
 	github.com/prometheus/client_golang v1.23.2
 	go.yaml.in/yaml/v2 v2.4.3
-	google.golang.org/grpc v1.78.0
+	google.golang.org/grpc v1.79.3
 	google.golang.org/protobuf v1.36.10
 )
 
@@ -33,11 +34,13 @@ require (
 	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/text v0.33.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20251029180050-ab9386a59fda // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217 // indirect
 )
 
 replace github.com/codex-k8s/kodex/libs/go/eventlog => ./libs/go/eventlog
 
 replace github.com/codex-k8s/kodex/libs/go/grpcserver => ./libs/go/grpcserver
+
+replace github.com/codex-k8s/kodex/libs/go/outbox => ./libs/go/outbox
 
 replace github.com/codex-k8s/kodex/libs/go/postgres => ./libs/go/postgres

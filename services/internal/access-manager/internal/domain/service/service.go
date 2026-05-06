@@ -500,7 +500,7 @@ func (s *Service) BindExternalAccount(ctx context.Context, input BindExternalAcc
 		return entity.ExternalAccountBinding{}, err
 	}
 	for _, actionKey := range allowedActionKeys {
-		action, err := s.repository.GetAccessActionByKey(ctx, actionKey)
+		action, err := s.accessActionByKey(ctx, actionKey)
 		if err != nil {
 			return entity.ExternalAccountBinding{}, err
 		}
@@ -558,6 +558,9 @@ func (s *Service) PutAccessAction(ctx context.Context, input PutAccessActionInpu
 	if strings.TrimSpace(input.Key) == "" || strings.TrimSpace(input.ResourceType) == "" {
 		return entity.AccessAction{}, errs.ErrInvalidArgument
 	}
+	if err := rejectSystemAccessActionMutation(input.Key); err != nil {
+		return entity.AccessAction{}, err
+	}
 	now := s.now(input.Meta)
 	action := entity.AccessAction{
 		Base: entity.Base{ID: s.ids.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
@@ -612,7 +615,7 @@ func (s *Service) PutAccessRule(ctx context.Context, input PutAccessRuleInput) (
 	if err := validateAccessRuleScope(input.ScopeType, input.ScopeID); err != nil {
 		return entity.AccessRule{}, err
 	}
-	action, err := s.repository.GetAccessActionByKey(ctx, input.ActionKey)
+	action, err := s.accessActionByKey(ctx, input.ActionKey)
 	if err != nil {
 		return entity.AccessRule{}, err
 	}
@@ -679,7 +682,7 @@ func (s *Service) CheckAccess(ctx context.Context, input CheckAccessInput) (Chec
 		strings.TrimSpace(input.ActionKey) == "" || strings.TrimSpace(input.Resource.Type) == "" {
 		return CheckAccessResult{}, errs.ErrInvalidArgument
 	}
-	action, err := s.repository.GetAccessActionByKey(ctx, input.ActionKey)
+	action, err := s.accessActionByKey(ctx, input.ActionKey)
 	if err != nil {
 		if errors.Is(err, errs.ErrNotFound) {
 			return s.recordDecision(ctx, input, enum.AccessDecisionDeny, reasonActionNotFound, nil)

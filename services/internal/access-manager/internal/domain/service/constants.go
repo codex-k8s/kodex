@@ -1,5 +1,7 @@
 package service
 
+import accessevents "github.com/codex-k8s/kodex/libs/go/platformevents/access"
+
 const (
 	reasonAllowlistEmail       = "allowlist_email"
 	reasonAllowlistDomain      = "allowlist_domain"
@@ -23,41 +25,41 @@ const (
 )
 
 const (
-	accessEventOrganizationCreated               = "access.organization.created"
-	accessEventGroupCreated                      = "access.group.created"
-	accessEventMembershipCreated                 = "access.membership.created"
-	accessEventMembershipUpdated                 = "access.membership.updated"
-	accessEventMembershipDisabled                = "access.membership.disabled"
-	accessEventAllowlistEntryCreated             = "access.allowlist_entry.created"
-	accessEventAllowlistEntryUpdated             = "access.allowlist_entry.updated"
-	accessEventAllowlistEntryDisabled            = "access.allowlist_entry.disabled"
-	accessEventUserCreated                       = "access.user.created"
-	accessEventUserStatusChanged                 = "access.user.status_changed"
-	accessEventUserIdentityLinked                = "access.user.identity_linked"
-	accessEventExternalProviderCreated           = "access.external_provider.created"
-	accessEventExternalProviderUpdated           = "access.external_provider.updated"
-	accessEventExternalProviderDisabled          = "access.external_provider.disabled"
-	accessEventExternalAccountCreated            = "access.external_account.created"
-	accessEventExternalAccountStatusChanged      = "access.external_account.status_changed"
-	accessEventExternalAccountBindingCreated     = "access.external_account_binding.created"
-	accessEventExternalAccountBindingUpdated     = "access.external_account_binding.updated"
-	accessEventExternalAccountBindingDisabled    = "access.external_account_binding.disabled"
-	accessEventAccessActionCreated               = "access.access_action.created"
-	accessEventAccessActionUpdated               = "access.access_action.updated"
-	accessEventAccessRuleCreated                 = "access.access_rule.created"
-	accessEventAccessRuleUpdated                 = "access.access_rule.updated"
-	accessEventAccessDecisionRecorded            = "access.access_decision.recorded"
-	accessAggregateOrganization                  = "organization"
-	accessAggregateGroup                         = "group"
-	accessAggregateMembership                    = "membership"
-	accessAggregateAllowlistEntry                = "allowlist_entry"
-	accessAggregateUser                          = "user"
-	accessAggregateExternalProvider              = "external_provider"
-	accessAggregateExternalAccount               = "external_account"
-	accessAggregateExternalAccountBinding        = "external_account_binding"
-	accessAggregateAccessAction                  = "access_action"
-	accessAggregateAccessRule                    = "access_rule"
-	accessAggregateAccessDecisionAudit           = "access_decision_audit"
+	accessEventOrganizationCreated               = accessevents.EventOrganizationCreated
+	accessEventGroupCreated                      = accessevents.EventGroupCreated
+	accessEventMembershipCreated                 = accessevents.EventMembershipCreated
+	accessEventMembershipUpdated                 = accessevents.EventMembershipUpdated
+	accessEventMembershipDisabled                = accessevents.EventMembershipDisabled
+	accessEventAllowlistEntryCreated             = accessevents.EventAllowlistEntryCreated
+	accessEventAllowlistEntryUpdated             = accessevents.EventAllowlistEntryUpdated
+	accessEventAllowlistEntryDisabled            = accessevents.EventAllowlistEntryDisabled
+	accessEventUserCreated                       = accessevents.EventUserCreated
+	accessEventUserStatusChanged                 = accessevents.EventUserStatusChanged
+	accessEventUserIdentityLinked                = accessevents.EventUserIdentityLinked
+	accessEventExternalProviderCreated           = accessevents.EventExternalProviderCreated
+	accessEventExternalProviderUpdated           = accessevents.EventExternalProviderUpdated
+	accessEventExternalProviderDisabled          = accessevents.EventExternalProviderDisabled
+	accessEventExternalAccountCreated            = accessevents.EventExternalAccountCreated
+	accessEventExternalAccountStatusChanged      = accessevents.EventExternalAccountStatusChanged
+	accessEventExternalAccountBindingCreated     = accessevents.EventExternalAccountBindingCreated
+	accessEventExternalAccountBindingUpdated     = accessevents.EventExternalAccountBindingUpdated
+	accessEventExternalAccountBindingDisabled    = accessevents.EventExternalAccountBindingDisabled
+	accessEventAccessActionCreated               = accessevents.EventAccessActionCreated
+	accessEventAccessActionUpdated               = accessevents.EventAccessActionUpdated
+	accessEventAccessRuleCreated                 = accessevents.EventAccessRuleCreated
+	accessEventAccessRuleUpdated                 = accessevents.EventAccessRuleUpdated
+	accessEventAccessDecisionRecorded            = accessevents.EventAccessDecisionRecorded
+	accessAggregateOrganization                  = accessevents.AggregateOrganization
+	accessAggregateGroup                         = accessevents.AggregateGroup
+	accessAggregateMembership                    = accessevents.AggregateMembership
+	accessAggregateAllowlistEntry                = accessevents.AggregateAllowlistEntry
+	accessAggregateUser                          = accessevents.AggregateUser
+	accessAggregateExternalProvider              = accessevents.AggregateExternalProvider
+	accessAggregateExternalAccount               = accessevents.AggregateExternalAccount
+	accessAggregateExternalAccountBinding        = accessevents.AggregateExternalAccountBinding
+	accessAggregateAccessAction                  = accessevents.AggregateAccessAction
+	accessAggregateAccessRule                    = accessevents.AggregateAccessRule
+	accessAggregateAccessDecisionAudit           = accessevents.AggregateAccessDecisionAudit
 	accessOperationCreateOrganization            = "domain.Service.CreateOrganization"
 	accessOperationCreateGroup                   = "domain.Service.CreateGroup"
 	accessOperationSetUserStatus                 = "domain.Service.SetUserStatus"

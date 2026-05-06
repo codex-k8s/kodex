@@ -5,7 +5,7 @@ title: kodex — поставка project-catalog
 status: active
 owner_role: EM
 created_at: 2026-05-05
-updated_at: 2026-05-05
+updated_at: 2026-05-06
 related_issues: [628, 629, 630, 631, 632, 633, 281, 282]
 related_prs: []
 related_docsets:
@@ -59,75 +59,75 @@ approvals:
 
 ## Реализация операций
 
-Срез #629 фиксирует стабильный транспортный контракт и запускаемый каркас сервиса. Срез #630 добавляет PostgreSQL-модель, миграции, слой репозитория, оптимистичную конкуренцию, идемпотентный след, сервисный outbox и минимальный deploy-инвентарь. Бизнес-обработчики gRPC остаются отдельным срезом, чтобы transport-логика не смешивалась с моделью хранения.
+Срез #629 фиксирует стабильный транспортный контракт и запускаемый каркас сервиса. Срез #630 добавляет PostgreSQL-модель, миграции, слой репозитория, оптимистичную конкуренцию, идемпотентный след, сервисный outbox и минимальный deploy-инвентарь. Срез #631 подключает gRPC-обработчики к доменному сервису, проверке доступа через `access-manager` и доставке outbox в `platform-event-log`.
 
 | Операция | Контракт | Реализация |
 |---|---|---|
-| `CreateProject` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631. |
-| `UpdateProject` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631. |
-| `GetProject` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631. |
-| `ListProjects` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631. |
-| `AttachRepository` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631. |
-| `UpdateRepository` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631. |
-| `DetachRepository` | Готов в proto. | Отложена до #631. |
-| `GetRepository` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631. |
-| `ListRepositories` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631. |
-| `ImportServicesPolicy` | Готов в proto. | PostgreSQL-слой готов; gRPC/валидация файла отложены до #631/#632. |
-| `GetServicesPolicy` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#632. |
-| `ListServiceDescriptors` | Готов в proto. | PostgreSQL-слой готов; чтение ограничено последней `valid + synced/overridden` политикой; gRPC отложена до #631/#632. |
-| `CreatePolicyEditProposal` | Готов в proto. | PostgreSQL-слой готов; provider PR отложен до #631/#632. |
-| `CreatePolicyOverride` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#632. |
-| `CancelPolicyOverride` | Готов в proto. | Отложена до #631/#632. |
-| `ListPolicyOverrides` | Готов в proto. | PostgreSQL-слой готов; активные переопределения также входят в `GetWorkspacePolicy`; gRPC отложена до #631/#632. |
-| `PutDocumentationSource` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#632. |
-| `GetDocumentationSource` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#632. |
-| `ListDocumentationSources` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#632. |
-| `GetWorkspacePolicy` | Готов в proto. | PostgreSQL-слой готов; источники ограничены активной проверенной политикой, фильтр сервисов сужает код и документацию; gRPC отложена до #631/#632. |
-| `PutBranchRules` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#633. |
-| `GetBranchRules` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#633. |
-| `ListBranchRules` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#633. |
-| `PutReleasePolicy` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#633. |
-| `GetReleasePolicy` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#633. |
-| `ListReleasePolicies` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#633. |
-| `PutReleaseLine` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#633. |
-| `GetReleaseLine` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#633. |
-| `ListReleaseLines` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#633. |
-| `PutPlacementPolicy` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#633. |
-| `GetPlacementPolicy` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#633. |
-| `ListPlacementPolicies` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#633. |
+| `CreateProject` | Готов в proto. | gRPC, доменная команда, проверка доступа и outbox подключены. |
+| `UpdateProject` | Готов в proto. | gRPC, доменная команда, проверка доступа и outbox подключены. |
+| `GetProject` | Готов в proto. | gRPC-чтение и проверка доступа подключены. |
+| `ListProjects` | Готов в proto. | gRPC-чтение и проверка доступа подключены. |
+| `AttachRepository` | Готов в proto. | gRPC, доменная команда, проверка доступа и outbox подключены. |
+| `UpdateRepository` | Готов в proto. | gRPC, доменная команда, проверка доступа и outbox подключены. |
+| `DetachRepository` | Готов в proto. | gRPC, доменная команда, проверка доступа и outbox подключены. |
+| `GetRepository` | Готов в proto. | gRPC-чтение и проверка доступа подключены. |
+| `ListRepositories` | Готов в proto. | gRPC-чтение и проверка доступа подключены. |
+| `ImportServicesPolicy` | Готов в proto. | gRPC, доменная команда, проверка доступа и outbox подключены; построитель проверенной проекции файла развивается в #632. |
+| `GetServicesPolicy` | Готов в proto. | gRPC-чтение и проверка доступа подключены. |
+| `ListServiceDescriptors` | Готов в proto. | gRPC-чтение и проверка доступа подключены; чтение ограничено последней `valid + synced/overridden` политикой. |
+| `CreatePolicyEditProposal` | Готов в proto. | gRPC и сохранение предложения подключены; создание provider PR развивается в #632. |
+| `CreatePolicyOverride` | Готов в proto. | gRPC, доменная команда, проверка доступа и outbox подключены. |
+| `CancelPolicyOverride` | Готов в proto. | Отложена до #632. |
+| `ListPolicyOverrides` | Готов в proto. | gRPC-чтение и проверка доступа подключены; активные переопределения также входят в `GetWorkspacePolicy`. |
+| `PutDocumentationSource` | Готов в proto. | gRPC, доменная команда, проверка доступа и outbox подключены. |
+| `GetDocumentationSource` | Готов в proto. | gRPC-чтение и проверка доступа подключены. |
+| `ListDocumentationSources` | Готов в proto. | gRPC-чтение и проверка доступа подключены. |
+| `GetWorkspacePolicy` | Готов в proto. | gRPC-чтение и проверка доступа подключены; источники ограничены активной проверенной политикой, фильтр сервисов сужает код и документацию. |
+| `PutBranchRules` | Готов в proto. | gRPC, доменная команда, проверка доступа и outbox подключены. |
+| `GetBranchRules` | Готов в proto. | gRPC-чтение и проверка доступа подключены. |
+| `ListBranchRules` | Готов в proto. | gRPC-чтение и проверка доступа подключены. |
+| `PutReleasePolicy` | Готов в proto. | gRPC, доменная команда, проверка доступа и outbox подключены. |
+| `GetReleasePolicy` | Готов в proto. | gRPC-чтение и проверка доступа подключены. |
+| `ListReleasePolicies` | Готов в proto. | gRPC-чтение и проверка доступа подключены. |
+| `PutReleaseLine` | Готов в proto. | gRPC, доменная команда, проверка доступа и outbox подключены. |
+| `GetReleaseLine` | Готов в proto. | gRPC-чтение и проверка доступа подключены. |
+| `ListReleaseLines` | Готов в proto. | gRPC-чтение и проверка доступа подключены. |
+| `PutPlacementPolicy` | Готов в proto. | gRPC, доменная команда, проверка доступа и outbox подключены. |
+| `GetPlacementPolicy` | Готов в proto. | gRPC-чтение и проверка доступа подключены. |
+| `ListPlacementPolicies` | Готов в proto. | gRPC-чтение и проверка доступа подключены. |
 
 ## Реализация событий
 
 | Событие | Контракт | Публикация |
 |---|---|---|
-| `project.project.created` | Готово в AsyncAPI. | Запись в сервисный outbox готова; публикация через gRPC-команды отложена до #631. |
-| `project.project.updated` | Готово в AsyncAPI. | Запись в сервисный outbox готова; публикация через gRPC-команды отложена до #631. |
-| `project.project.archived` | Готово в AsyncAPI. | Запись в сервисный outbox готова; публикация через gRPC-команды отложена до #631. |
-| `project.project.disabled` | Готово в AsyncAPI. | Запись в сервисный outbox готова; публикация через gRPC-команды отложена до #631. |
-| `project.repository.attached` | Готово в AsyncAPI. | Запись в сервисный outbox готова; публикация через gRPC-команды отложена до #631. |
-| `project.repository.updated` | Готово в AsyncAPI. | Запись в сервисный outbox готова; публикация через gRPC-команды отложена до #631. |
-| `project.repository.detached` | Готово в AsyncAPI. | Отложена до #631. |
-| `project.services_policy.imported` | Готово в AsyncAPI. | Отложена до #632. |
-| `project.policy_override.created` | Готово в AsyncAPI. | Отложена до #632. |
+| `project.project.created` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
+| `project.project.updated` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
+| `project.project.archived` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
+| `project.project.disabled` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
+| `project.repository.attached` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
+| `project.repository.updated` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
+| `project.repository.detached` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
+| `project.services_policy.imported` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
+| `project.policy_override.created` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
 | `project.policy_override.expired` | Готово в AsyncAPI. | Отложена до #632. |
 | `project.policy_override.cancelled` | Готово в AsyncAPI. | Отложена до #632. |
-| `project.documentation_source.created` | Готово в AsyncAPI. | Отложена до #632. |
-| `project.documentation_source.updated` | Готово в AsyncAPI. | Отложена до #632. |
-| `project.documentation_source.disabled` | Готово в AsyncAPI. | Отложена до #632. |
-| `project.branch_rules.created` | Готово в AsyncAPI. | Отложена до #633. |
-| `project.branch_rules.updated` | Готово в AsyncAPI. | Отложена до #633. |
-| `project.branch_rules.disabled` | Готово в AsyncAPI. | Отложена до #633. |
-| `project.release_policy.created` | Готово в AsyncAPI. | Отложена до #633. |
-| `project.release_policy.updated` | Готово в AsyncAPI. | Отложена до #633. |
-| `project.release_policy.archived` | Готово в AsyncAPI. | Отложена до #633. |
-| `project.release_policy.disabled` | Готово в AsyncAPI. | Отложена до #633. |
-| `project.release_line.created` | Готово в AsyncAPI. | Отложена до #633. |
-| `project.release_line.updated` | Готово в AsyncAPI. | Отложена до #633. |
-| `project.release_line.archived` | Готово в AsyncAPI. | Отложена до #633. |
-| `project.release_line.disabled` | Готово в AsyncAPI. | Отложена до #633. |
-| `project.placement_policy.created` | Готово в AsyncAPI. | Отложена до #633. |
-| `project.placement_policy.updated` | Готово в AsyncAPI. | Отложена до #633. |
-| `project.placement_policy.disabled` | Готово в AsyncAPI. | Отложена до #633. |
+| `project.documentation_source.created` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
+| `project.documentation_source.updated` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
+| `project.documentation_source.disabled` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
+| `project.branch_rules.created` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
+| `project.branch_rules.updated` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
+| `project.branch_rules.disabled` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
+| `project.release_policy.created` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
+| `project.release_policy.updated` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
+| `project.release_policy.archived` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
+| `project.release_policy.disabled` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
+| `project.release_line.created` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
+| `project.release_line.updated` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
+| `project.release_line.archived` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
+| `project.release_line.disabled` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
+| `project.placement_policy.created` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
+| `project.placement_policy.updated` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
+| `project.placement_policy.disabled` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
 
 ## Связь с задачами подключения репозиториев
 

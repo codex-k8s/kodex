@@ -138,6 +138,23 @@ type CreatePolicyOverrideInput struct {
 	Meta       value.CommandMeta
 }
 
+// ListPolicyOverridesInput selects operator policy overrides.
+type ListPolicyOverridesInput struct {
+	ProjectID   uuid.UUID
+	TargetTypes []enum.PolicyOverrideTargetType
+	TargetID    *uuid.UUID
+	Statuses    []enum.PolicyOverrideStatus
+	ActiveOnly  bool
+	Page        value.PageRequest
+	Meta        value.QueryMeta
+}
+
+// ListPolicyOverridesResult returns operator overrides and paging metadata.
+type ListPolicyOverridesResult struct {
+	PolicyOverrides []entity.PolicyOverride
+	Page            value.PageResult
+}
+
 // PutDocumentationSourceInput creates or updates a documentation source.
 type PutDocumentationSourceInput struct {
 	DocumentationSourceID *uuid.UUID

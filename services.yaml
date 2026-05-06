@@ -72,6 +72,7 @@ spec:
         - services/internal/project-catalog
         - libs/go/grpcserver
         - libs/go/postgres
+        - libs/go/eventlog
         - proto/kodex/projects/v1
         - specs/asyncapi/project-catalog.v1.yaml
         - deploy/base/project-catalog
@@ -254,6 +255,7 @@ spec:
       requires:
         - project-catalog-migrations
         - platform-event-log-migrations
+        - access-manager
   notes:
     - New deployable services must be added only after the corresponding wave documentation is accepted.
     - Versions and images are centralized in spec.versions and spec.images; build/deploy tooling must not duplicate image tags in scripts.

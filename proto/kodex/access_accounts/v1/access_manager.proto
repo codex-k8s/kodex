@@ -44,7 +44,7 @@ service AccessManagerService {
   rpc BindExternalAccount(BindExternalAccountRequest) returns (ExternalAccountBindingResponse);
   // DisableExternalAccountBinding disables an account binding without deleting history.
   rpc DisableExternalAccountBinding(DisableExternalAccountBindingRequest) returns (ExternalAccountBindingResponse);
-  // PutAccessAction creates or updates an action from the access-action catalog.
+  // PutAccessAction creates or updates a user/plugin action from the access-action catalog.
   rpc PutAccessAction(PutAccessActionRequest) returns (AccessActionResponse);
   // PutAccessRule creates or updates an access rule.
   rpc PutAccessRule(PutAccessRuleRequest) returns (AccessRuleResponse);
@@ -729,7 +729,7 @@ message ExternalAccountBindingResponse {
   int64 version = 7;
 }
 
-// PutAccessActionRequest creates or updates an access action.
+// PutAccessActionRequest creates or updates a user/plugin access action.
 message PutAccessActionRequest {
   // key is stable action key, for example provider.issue.write.
   string key = 1;

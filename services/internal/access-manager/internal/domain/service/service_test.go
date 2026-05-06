@@ -566,7 +566,7 @@ func TestCheckAccessExplicitDenyWins(t *testing.T) {
 
 	user := store.seedUser(enum.UserStatusActive)
 	action, err := svc.PutAccessAction(ctx, PutAccessActionInput{
-		Key: "project.read", DisplayName: "Чтение проекта", ResourceType: "project",
+		Key: "test.project.read", DisplayName: "Чтение проекта", ResourceType: "project",
 	})
 	if err != nil {
 		t.Fatalf("put action: %v", err)
@@ -637,11 +637,40 @@ func TestCheckAccessRejectsBlankRequiredInput(t *testing.T) {
 	}
 
 	_, err = svc.CheckAccess(context.Background(), CheckAccessInput{
-		ActionKey: "project.read",
+		ActionKey: "test.project.read",
 		Resource:  value.ResourceRef{Type: "project", ID: "project-1"},
 	})
 	if !errors.Is(err, errs.ErrInvalidArgument) {
 		t.Fatalf("subject err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+}
+
+func TestSystemAccessActionCatalogProvidesCodeOwnedProjectActions(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	user := store.seedUser(enum.UserStatusActive)
+
+	_, err := svc.PutAccessRule(ctx, PutAccessRuleInput{
+		Effect: enum.AccessEffectAllow, SubjectType: enum.AccessSubjectUser, SubjectID: user.ID.String(),
+		ActionKey: "project.read", ResourceType: "project", ScopeType: "global",
+	})
+	if err != nil {
+		t.Fatalf("put rule for system action: %v", err)
+	}
+	if _, ok := store.actions["project.read"]; ok {
+		t.Fatal("system action was persisted in custom action catalog")
+	}
+}
+
+func TestPutAccessActionRejectsSystemActionMutation(t *testing.T) {
+	svc := New(newMemoryRepository(), fixedClock{}, newSequenceIDs())
+
+	_, err := svc.PutAccessAction(context.Background(), PutAccessActionInput{
+		Key: "project.read", DisplayName: "Переопределить", ResourceType: "project",
+	})
+	if !errors.Is(err, errs.ErrPreconditionFailed) {
+		t.Fatalf("err = %v, want %v", err, errs.ErrPreconditionFailed)
 	}
 }
 
@@ -680,7 +709,7 @@ func TestCheckAccessResolvesTransitiveMembershipGraph(t *testing.T) {
 		t.Fatalf("set group organization membership: %v", err)
 	}
 	action, err := svc.PutAccessAction(ctx, PutAccessActionInput{
-		Key: "project.read", DisplayName: "Чтение проекта", ResourceType: "project",
+		Key: "test.project.read", DisplayName: "Чтение проекта", ResourceType: "project",
 	})
 	if err != nil {
 		t.Fatalf("put action: %v", err)
@@ -1076,7 +1105,7 @@ func TestCheckAccessDeniesNonActiveExternalAccountSubject(t *testing.T) {
 				t.Fatalf("register account: %v", err)
 			}
 			action, err := svc.PutAccessAction(ctx, PutAccessActionInput{
-				Key: "project.read", DisplayName: "Чтение проекта", ResourceType: "project",
+				Key: "test.project.read", DisplayName: "Чтение проекта", ResourceType: "project",
 			})
 			if err != nil {
 				t.Fatalf("put action: %v", err)
@@ -1135,7 +1164,7 @@ func TestCheckAccessSkipsInactiveMembershipTarget(t *testing.T) {
 	store.groups[group.ID] = group
 
 	action, err := svc.PutAccessAction(ctx, PutAccessActionInput{
-		Key: "project.read", DisplayName: "Чтение проекта", ResourceType: "project",
+		Key: "test.project.read", DisplayName: "Чтение проекта", ResourceType: "project",
 	})
 	if err != nil {
 		t.Fatalf("put action: %v", err)
@@ -1188,7 +1217,7 @@ func TestCheckAccessResolvesRootGroupParents(t *testing.T) {
 		t.Fatalf("create child group: %v", err)
 	}
 	action, err := svc.PutAccessAction(ctx, PutAccessActionInput{
-		Key: "project.read", DisplayName: "Чтение проекта", ResourceType: "project",
+		Key: "test.project.read", DisplayName: "Чтение проекта", ResourceType: "project",
 	})
 	if err != nil {
 		t.Fatalf("put action: %v", err)
@@ -1676,7 +1705,7 @@ func TestPutAccessRuleRequiresActiveCatalogAction(t *testing.T) {
 	user := store.seedUser(enum.UserStatusActive)
 
 	action, err := svc.PutAccessAction(ctx, PutAccessActionInput{
-		Key: "project.read", DisplayName: "Чтение проекта", ResourceType: "project", Status: enum.AccessActionStatusDisabled,
+		Key: "test.project.read", DisplayName: "Чтение проекта", ResourceType: "project", Status: enum.AccessActionStatusDisabled,
 	})
 	if err != nil {
 		t.Fatalf("put action: %v", err)
@@ -1697,14 +1726,14 @@ func TestPutAccessRuleRequiresCatalogResourceType(t *testing.T) {
 	user := store.seedUser(enum.UserStatusActive)
 
 	_, err := svc.PutAccessAction(ctx, PutAccessActionInput{
-		Key: "project.read", DisplayName: "Чтение проекта", ResourceType: "project",
+		Key: "test.project.read", DisplayName: "Чтение проекта", ResourceType: "project",
 	})
 	if err != nil {
 		t.Fatalf("put action: %v", err)
 	}
 	_, err = svc.PutAccessRule(ctx, PutAccessRuleInput{
 		Effect: enum.AccessEffectAllow, SubjectType: enum.AccessSubjectUser, SubjectID: user.ID.String(),
-		ActionKey: "project.read", ResourceType: "repository", ScopeType: "global",
+		ActionKey: "test.project.read", ResourceType: "repository", ScopeType: "global",
 	})
 	if !errors.Is(err, errs.ErrPreconditionFailed) {
 		t.Fatalf("err = %v, want %v", err, errs.ErrPreconditionFailed)
@@ -1745,7 +1774,7 @@ func TestPutAccessRuleKeepsIdentityOnUpdate(t *testing.T) {
 	svc := New(store, fixedClock{}, newSequenceIDs())
 	user := store.seedUser(enum.UserStatusActive)
 	action, err := svc.PutAccessAction(ctx, PutAccessActionInput{
-		Key: "project.read", DisplayName: "Чтение проекта", ResourceType: "project",
+		Key: "test.project.read", DisplayName: "Чтение проекта", ResourceType: "project",
 	})
 	if err != nil {
 		t.Fatalf("put action: %v", err)
@@ -1786,7 +1815,7 @@ func TestPutAccessRuleRejectsDisabledStatus(t *testing.T) {
 	svc := New(store, fixedClock{}, newSequenceIDs())
 	user := store.seedUser(enum.UserStatusActive)
 	action, err := svc.PutAccessAction(ctx, PutAccessActionInput{
-		Key: "project.read", DisplayName: "Чтение проекта", ResourceType: "project",
+		Key: "test.project.read", DisplayName: "Чтение проекта", ResourceType: "project",
 	})
 	if err != nil {
 		t.Fatalf("put action: %v", err)
@@ -1806,7 +1835,7 @@ func TestCheckAccessUsesGlobalScopeRule(t *testing.T) {
 	svc := New(store, fixedClock{}, newSequenceIDs())
 	user := store.seedUser(enum.UserStatusActive)
 	action, err := svc.PutAccessAction(ctx, PutAccessActionInput{
-		Key: "project.read", DisplayName: "Чтение проекта", ResourceType: "project",
+		Key: "test.project.read", DisplayName: "Чтение проекта", ResourceType: "project",
 	})
 	if err != nil {
 		t.Fatalf("put action: %v", err)
@@ -1838,7 +1867,7 @@ func TestCheckAccessAuditsAllowAndExplainAccessReadsDecision(t *testing.T) {
 	svc := New(store, fixedClock{}, newSequenceIDs())
 	user := store.seedUser(enum.UserStatusActive)
 	action, err := svc.PutAccessAction(ctx, PutAccessActionInput{
-		Key: "project.read", DisplayName: "Чтение проекта", ResourceType: "project",
+		Key: "test.project.read", DisplayName: "Чтение проекта", ResourceType: "project",
 	})
 	if err != nil {
 		t.Fatalf("put action: %v", err)
@@ -1876,12 +1905,6 @@ func TestCheckAccessAuditsAllowAndExplainAccessReadsDecision(t *testing.T) {
 	}
 	if store.audits[0].RequestContext.TraceID != "trace-1" {
 		t.Fatalf("audit request trace = %q, want trace-1", store.audits[0].RequestContext.TraceID)
-	}
-	_, err = svc.PutAccessAction(ctx, PutAccessActionInput{
-		Key: accessActionExplainAccess, DisplayName: "Чтение объяснения доступа", ResourceType: accessResourceAccessDecisionAudit,
-	})
-	if err != nil {
-		t.Fatalf("put explain action: %v", err)
 	}
 	_, err = svc.PutAccessRule(ctx, PutAccessRuleInput{
 		Effect: enum.AccessEffectAllow, SubjectType: enum.AccessSubjectUser, SubjectID: user.ID.String(),
@@ -1946,7 +1969,7 @@ func TestCheckAccessDeniesInvalidActionState(t *testing.T) {
 		t.Fatalf("put disabled action: %v", err)
 	}
 	_, err = svc.PutAccessAction(ctx, PutAccessActionInput{
-		Key: "project.read", DisplayName: "Чтение проекта", ResourceType: "project",
+		Key: "test.project.read", DisplayName: "Чтение проекта", ResourceType: "project",
 	})
 	if err != nil {
 		t.Fatalf("put action: %v", err)
@@ -1960,7 +1983,7 @@ func TestCheckAccessDeniesInvalidActionState(t *testing.T) {
 	}{
 		{name: "missing action", actionKey: "project.missing", resourceType: "project", wantReason: reasonActionNotFound},
 		{name: "disabled action", actionKey: "project.disabled", resourceType: "project", wantReason: reasonActionDisabled},
-		{name: "resource mismatch", actionKey: "project.read", resourceType: "repository", wantReason: reasonResourceTypeMismatch},
+		{name: "resource mismatch", actionKey: "test.project.read", resourceType: "repository", wantReason: reasonResourceTypeMismatch},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1986,7 +2009,7 @@ func TestCheckAccessReturnsPendingForPendingUser(t *testing.T) {
 	svc := New(store, fixedClock{}, newSequenceIDs())
 	user := store.seedUser(enum.UserStatusPending)
 	action, err := svc.PutAccessAction(ctx, PutAccessActionInput{
-		Key: "project.read", DisplayName: "Чтение проекта", ResourceType: "project",
+		Key: "test.project.read", DisplayName: "Чтение проекта", ResourceType: "project",
 	})
 	if err != nil {
 		t.Fatalf("put action: %v", err)

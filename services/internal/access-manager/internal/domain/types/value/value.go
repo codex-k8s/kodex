@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	accessevents "github.com/codex-k8s/kodex/libs/go/platformevents/access"
 )
 
 // Actor identifies the principal that initiated a command.
@@ -70,41 +72,5 @@ type DecisionExplanation struct {
 	MatchedRules  []RuleExplanation
 }
 
-// AccessEventPayload is the common typed payload envelope for access events.
-type AccessEventPayload struct {
-	OrganizationID           string `json:"organization_id,omitempty"`
-	Kind                     string `json:"kind,omitempty"`
-	Status                   string `json:"status,omitempty"`
-	OldStatus                string `json:"old_status,omitempty"`
-	NewStatus                string `json:"new_status,omitempty"`
-	Version                  int64  `json:"version,omitempty"`
-	GroupID                  string `json:"group_id,omitempty"`
-	ScopeType                string `json:"scope_type,omitempty"`
-	ScopeID                  string `json:"scope_id,omitempty"`
-	MembershipID             string `json:"membership_id,omitempty"`
-	SubjectType              string `json:"subject_type,omitempty"`
-	SubjectID                string `json:"subject_id,omitempty"`
-	TargetType               string `json:"target_type,omitempty"`
-	TargetID                 string `json:"target_id,omitempty"`
-	AllowlistEntryID         string `json:"allowlist_entry_id,omitempty"`
-	MatchType                string `json:"match_type,omitempty"`
-	UserID                   string `json:"user_id,omitempty"`
-	IdentityID               string `json:"identity_id,omitempty"`
-	IdentityProvider         string `json:"identity_provider,omitempty"`
-	ExternalProviderID       string `json:"external_provider_id,omitempty"`
-	Slug                     string `json:"slug,omitempty"`
-	ExternalAccountID        string `json:"external_account_id,omitempty"`
-	AccountType              string `json:"account_type,omitempty"`
-	SecretBindingRefID       string `json:"secret_binding_ref_id,omitempty"`
-	StoreType                string `json:"store_type,omitempty"`
-	ExternalAccountBindingID string `json:"external_account_binding_id,omitempty"`
-	UsageScopeType           string `json:"usage_scope_type,omitempty"`
-	UsageScopeID             string `json:"usage_scope_id,omitempty"`
-	AccessActionID           string `json:"access_action_id,omitempty"`
-	ActionKey                string `json:"action_key,omitempty"`
-	AccessRuleID             string `json:"access_rule_id,omitempty"`
-	Effect                   string `json:"effect,omitempty"`
-	AccessDecisionAuditID    string `json:"access_decision_audit_id,omitempty"`
-	Decision                 string `json:"decision,omitempty"`
-	ReasonCode               string `json:"reason_code,omitempty"`
-}
+// AccessEventPayload is generated from AsyncAPI and used by access events.
+type AccessEventPayload = accessevents.Payload

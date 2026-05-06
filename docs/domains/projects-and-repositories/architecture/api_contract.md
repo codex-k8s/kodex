@@ -5,7 +5,7 @@ title: kodex — API-обзор project-catalog
 status: active
 owner_role: SA
 created_at: 2026-05-05
-updated_at: 2026-05-05
+updated_at: 2026-05-06
 related_issues: [628, 629, 630, 631, 632, 633]
 related_prs: []
 approvals:
@@ -52,7 +52,7 @@ approvals:
 | `CreatePolicyEditProposal` | gRPC command | `project.policy.propose` | `CommandMeta.command_id` | Создаёт запрос на PR-изменение `services.yaml` вместо прямой записи в БД. |
 | `CreatePolicyOverride` | gRPC command | `project.policy.override` | `CommandMeta.command_id` | Создаёт временное операторское переопределение с причиной, сроком действия и аудитом. |
 | `CancelPolicyOverride` | gRPC command | `project.policy.override.cancel` | ожидаемая версия | Досрочно отменяет активное операторское переопределение с причиной. |
-| `ListPolicyOverrides` | gRPC query | `project.policy.read` | нет | Читает активные или исторические операторские переопределения политики. |
+| `ListPolicyOverrides` | gRPC query | `project.policy.override.read` | нет | Читает активные или исторические операторские переопределения политики. |
 | `PutDocumentationSource` | gRPC command | `project.docs.update` | ожидаемая версия | Обновляет источник документации. |
 | `GetDocumentationSource` | gRPC query | `project.docs.read` | нет | Читает конкретный источник документации. |
 | `ListDocumentationSources` | gRPC query | `project.docs.read` | нет | Читает источники документации проекта, репозитория или сервиса. |
@@ -123,9 +123,9 @@ approvals:
 |---|---|
 | gRPC proto `ProjectCatalogService` | Стабильный `v1`, покрывает весь согласованный объём операций. |
 | AsyncAPI `project.*` | Стабильный `v1`, покрывает события из этого документа. |
-| Сервисный процесс `project-catalog` | Каркас готов: entrypoint, конфигурация, health/readyz/metrics и зарегистрированный gRPC-сервер. |
-| Бизнес-обработчики gRPC | Отложены до среза gRPC-операций; каркас возвращает `Unimplemented` через generated-сервер. |
-| PostgreSQL и outbox | Модель БД, миграции, слой репозитория, сервисный outbox и базовый deploy-инвентарь готовы. Публикация в общий журнал событий подключается вместе с бизнес-обработчиками gRPC. |
+| Сервисный процесс `project-catalog` | Подключены entrypoint, конфигурация, health/readyz/metrics, gRPC-сервер, проверка доступа через `access-manager` и outbox-dispatcher. |
+| Бизнес-обработчики gRPC | Подключены к доменному сервису для проектов, репозиториев, проверенной проекции `services.yaml`, источников документации, правил веток, релизных политик, релизных линий и политики размещения. `CancelPolicyOverride` остаётся в бэклоге следующего среза. |
+| PostgreSQL и outbox | Модель БД, миграции, слой репозитория, сервисный outbox и публикация событий в `platform-event-log` подключены. |
 
 ## Совместимость
 

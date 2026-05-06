@@ -202,7 +202,8 @@ func TestRepositoryIntegrationProjectsRepositoriesPoliciesAndOutbox(t *testing.T
 		testServiceDescriptor(projectA.ID, policy.ID, &repositoryA.ID, "api", enum.ServiceKindBackend, now),
 		testServiceDescriptor(projectA.ID, policy.ID, &repositoryB.ID, "worker", enum.ServiceKindWorker, now),
 	}
-	if err := repository.ImportServicesPolicy(ctx, policy, descriptors, testEvent("project.services_policy.imported", "services_policy", policy.ID, now), testCommandResult(uuid.New(), operationImportServicesPolicy, "services_policy", policy.ID, now)); err != nil {
+	policy, err = repository.ImportServicesPolicy(ctx, policy, descriptors, testCommandResult(uuid.New(), operationImportServicesPolicy, "services_policy", policy.ID, now), testServicesPolicyEvent(now))
+	if err != nil {
 		t.Fatalf("import services policy: %v", err)
 	}
 	activePolicy, err := repository.GetServicesPolicy(ctx, projectA.ID, nil)
@@ -264,11 +265,14 @@ func TestRepositoryIntegrationProjectsRepositoriesPoliciesAndOutbox(t *testing.T
 
 	invalidPolicy := testServicesPolicy(projectA.ID, repositoryA.ID, now.Add(2*time.Minute))
 	invalidPolicy.ID = uuid.New()
-	invalidPolicy.PolicyVersion = 2
 	invalidPolicy.ValidationStatus = enum.ServicesPolicyValidationInvalid
 	invalidPolicy.ProjectionStatus = enum.ServicesPolicyProjectionFailed
-	if err := repository.ImportServicesPolicy(ctx, invalidPolicy, nil, testEvent("project.services_policy.imported", "services_policy", invalidPolicy.ID, invalidPolicy.ImportedAt), testCommandResult(uuid.New(), operationImportServicesPolicy, "services_policy", invalidPolicy.ID, invalidPolicy.ImportedAt)); err != nil {
+	invalidPolicy, err = repository.ImportServicesPolicy(ctx, invalidPolicy, nil, testCommandResult(uuid.New(), operationImportServicesPolicy, "services_policy", invalidPolicy.ID, invalidPolicy.ImportedAt), testServicesPolicyEvent(invalidPolicy.ImportedAt))
+	if err != nil {
 		t.Fatalf("import invalid services policy: %v", err)
+	}
+	if invalidPolicy.PolicyVersion != policy.PolicyVersion+1 {
+		t.Fatalf("invalid policy version = %d, want %d", invalidPolicy.PolicyVersion, policy.PolicyVersion+1)
 	}
 	activeAfterInvalid, err := repository.GetServicesPolicy(ctx, projectA.ID, nil)
 	if err != nil {
@@ -316,7 +320,7 @@ func TestRepositoryIntegrationImportServicesPolicyBatchesDescriptors(t *testing.
 		testServiceDescriptor(project.ID, policy.ID, &repositoryWorker.ID, "worker", enum.ServiceKindWorker, now),
 		testServiceDescriptor(project.ID, policy.ID, &repositoryFrontend.ID, "frontend", enum.ServiceKindFrontend, now),
 	}
-	if err := repository.ImportServicesPolicy(ctx, policy, descriptors, testEvent("project.services_policy.imported", "services_policy", policy.ID, now), testCommandResult(uuid.New(), operationImportServicesPolicy, "services_policy", policy.ID, now)); err != nil {
+	if _, err := repository.ImportServicesPolicy(ctx, policy, descriptors, testCommandResult(uuid.New(), operationImportServicesPolicy, "services_policy", policy.ID, now), testServicesPolicyEvent(now)); err != nil {
 		t.Fatalf("import services policy: %v", err)
 	}
 
@@ -458,6 +462,13 @@ func TestRepositoryIntegrationPoliciesAndRules(t *testing.T) {
 	if err := repository.CreatePolicyOverride(ctx, override, testEvent("project.policy_override.created", "policy_override", override.ID, now), testCommandResult(uuid.New(), operationCreatePolicyOverride, "policy_override", override.ID, now)); err != nil {
 		t.Fatalf("create policy override: %v", err)
 	}
+	loadedOverride, err := repository.GetPolicyOverride(ctx, override.ID)
+	if err != nil {
+		t.Fatalf("get policy override: %v", err)
+	}
+	if loadedOverride.ID != override.ID || loadedOverride.ProjectID != project.ID || !jsonEqual(loadedOverride.Payload, override.Payload) {
+		t.Fatalf("loaded policy override = %+v, want %+v", loadedOverride, override)
+	}
 	activeOverrides, _, err := repository.ListPolicyOverrides(ctx, query.PolicyOverrideFilter{
 		ProjectID:   project.ID,
 		TargetTypes: []enum.PolicyOverrideTargetType{enum.PolicyOverrideTargetPlacementPolicy},
@@ -498,6 +509,13 @@ func TestRepositoryIntegrationPoliciesAndRules(t *testing.T) {
 	}
 	if err := repository.CreatePolicyEditProposal(ctx, proposal, testCommandResult(uuid.New(), operationCreatePolicyEditProposal, "policy_edit_proposal", proposal.ID, now)); err != nil {
 		t.Fatalf("create policy edit proposal: %v", err)
+	}
+	loadedProposal, err := repository.GetPolicyEditProposal(ctx, proposal.ID)
+	if err != nil {
+		t.Fatalf("get policy edit proposal: %v", err)
+	}
+	if loadedProposal.ID != proposal.ID || loadedProposal.ProjectID != project.ID || loadedProposal.RequestedChanges.Summary != proposal.RequestedChanges.Summary {
+		t.Fatalf("loaded policy edit proposal = %+v, want %+v", loadedProposal, proposal)
 	}
 
 	branchRulesItems, _, err := repository.ListBranchRules(ctx, query.BranchRulesFilter{ProjectID: project.ID, RepositoryID: &repositoryBinding.ID, Statuses: []enum.BranchRulesStatus{enum.BranchRulesStatusActive}})
@@ -748,6 +766,28 @@ func testEvent(eventType string, aggregateType string, aggregateID uuid.UUID, oc
 		AggregateID:   aggregateID,
 		Payload:       []byte(`{"ok":true}`),
 		OccurredAt:    occurredAt,
+	}
+}
+
+func testServicesPolicyEvent(occurredAt time.Time) func(entity.ServicesPolicy) (entity.OutboxEvent, error) {
+	return func(policy entity.ServicesPolicy) (entity.OutboxEvent, error) {
+		payload, err := json.Marshal(value.ProjectEventPayload{
+			ProjectID:     policy.ProjectID.String(),
+			PolicyID:      policy.ID.String(),
+			PolicyVersion: policy.PolicyVersion,
+		})
+		if err != nil {
+			return entity.OutboxEvent{}, err
+		}
+		return entity.OutboxEvent{
+			ID:            uuid.New(),
+			EventType:     "project.services_policy.imported",
+			SchemaVersion: 1,
+			AggregateType: "services_policy",
+			AggregateID:   policy.ID,
+			Payload:       payload,
+			OccurredAt:    occurredAt,
+		}, nil
 	}
 }
 
