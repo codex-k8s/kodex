@@ -62,6 +62,14 @@ func main() {
 			PayloadSchema:   "ProjectEventPayload",
 			OutputPath:      "libs/go/platformevents/project/events.gen.go",
 		},
+		{
+			Domain:          "package",
+			PackageName:     "packagehub",
+			SpecPath:        "specs/asyncapi/package-hub.v1.yaml",
+			EventTypeSchema: "PackageEventType",
+			PayloadSchema:   "PackageEventPayload",
+			OutputPath:      "libs/go/platformevents/packagehub/events.gen.go",
+		},
 	}
 	for _, spec := range specs {
 		if err := generate(spec); err != nil {

@@ -1,0 +1,364 @@
+asyncapi: 3.0.0
+info:
+  title: kodex package-hub events
+  version: 1.0.0
+  description: Stable v1 lifecycle event contract published by package-hub through the platform outbox.
+x-kodex-contract-status: stable-v1
+channels:
+  packageEvents:
+    address: package.events
+    messages:
+      packageEvent:
+        $ref: '#/components/messages/PackageEvent'
+operations:
+  publishPackageEvent:
+    action: send
+    channel:
+      $ref: '#/channels/packageEvents'
+    messages:
+      - $ref: '#/channels/packageEvents/messages/packageEvent'
+components:
+  messages:
+    PackageEvent:
+      name: PackageEvent
+      title: Package domain event envelope
+      payload:
+        $ref: '#/components/schemas/PackageEventEnvelope'
+  schemas:
+    PackageEventEnvelope:
+      oneOf:
+        - $ref: '#/components/schemas/PackageSourceConnectedEvent'
+        - $ref: '#/components/schemas/PackageSourceUpdatedEvent'
+        - $ref: '#/components/schemas/PackageSourceDisabledEvent'
+        - $ref: '#/components/schemas/PackageCatalogSyncedEvent'
+        - $ref: '#/components/schemas/PackageDiscoveredEvent'
+        - $ref: '#/components/schemas/PackageUpdatedEvent'
+        - $ref: '#/components/schemas/PackageVersionDiscoveredEvent'
+        - $ref: '#/components/schemas/PackageVersionUpdatedEvent'
+        - $ref: '#/components/schemas/PackageVersionRevokedEvent'
+        - $ref: '#/components/schemas/PackageVerificationUpdatedEvent'
+        - $ref: '#/components/schemas/PackageInstallationRequestedEvent'
+        - $ref: '#/components/schemas/PackageInstallationActivatedEvent'
+        - $ref: '#/components/schemas/PackageInstallationUpdatedEvent'
+        - $ref: '#/components/schemas/PackageInstallationDisabledEvent'
+        - $ref: '#/components/schemas/PackageInstallationUninstalledEvent'
+        - $ref: '#/components/schemas/PackageSecretSchemaUpdatedEvent'
+    PackageEventEnvelopeBase:
+      type: object
+      additionalProperties: false
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_type:
+          $ref: '#/components/schemas/PackageEventType'
+        schema_version:
+          type: integer
+          minimum: 1
+        aggregate_type:
+          type: string
+        aggregate_id:
+          type: string
+          format: uuid
+        occurred_at:
+          type: string
+          format: date-time
+        payload:
+          $ref: '#/components/schemas/PackageEventPayload'
+      required: [event_id, event_type, schema_version, aggregate_type, aggregate_id, occurred_at, payload]
+
+    PackageSourceConnectedEvent:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventEnvelopeBase'
+        - $ref: '#/components/schemas/PackageSourceConnectedEventKind'
+    PackageSourceConnectedEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: package.source.connected}
+        aggregate_type: {type: string, const: package_source}
+        payload: {$ref: '#/components/schemas/PackageSourceConnectedPayload'}
+      required: [event_type, aggregate_type, payload]
+    PackageSourceUpdatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventEnvelopeBase'
+        - $ref: '#/components/schemas/PackageSourceUpdatedEventKind'
+    PackageSourceUpdatedEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: package.source.updated}
+        aggregate_type: {type: string, const: package_source}
+        payload: {$ref: '#/components/schemas/PackageSourceUpdatedPayload'}
+      required: [event_type, aggregate_type, payload]
+    PackageSourceDisabledEvent:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventEnvelopeBase'
+        - $ref: '#/components/schemas/PackageSourceDisabledEventKind'
+    PackageSourceDisabledEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: package.source.disabled}
+        aggregate_type: {type: string, const: package_source}
+        payload: {$ref: '#/components/schemas/PackageSourceDisabledPayload'}
+      required: [event_type, aggregate_type, payload]
+
+    PackageCatalogSyncedEvent:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventEnvelopeBase'
+        - $ref: '#/components/schemas/PackageCatalogSyncedEventKind'
+    PackageCatalogSyncedEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: package.catalog.synced}
+        aggregate_type: {type: string, const: package_source}
+        payload: {$ref: '#/components/schemas/PackageCatalogSyncedPayload'}
+      required: [event_type, aggregate_type, payload]
+
+    PackageDiscoveredEvent:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventEnvelopeBase'
+        - $ref: '#/components/schemas/PackageDiscoveredEventKind'
+    PackageDiscoveredEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: package.package.discovered}
+        aggregate_type: {type: string, const: package}
+        payload: {$ref: '#/components/schemas/PackageDiscoveredPayload'}
+      required: [event_type, aggregate_type, payload]
+    PackageUpdatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventEnvelopeBase'
+        - $ref: '#/components/schemas/PackageUpdatedEventKind'
+    PackageUpdatedEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: package.package.updated}
+        aggregate_type: {type: string, const: package}
+        payload: {$ref: '#/components/schemas/PackageUpdatedPayload'}
+      required: [event_type, aggregate_type, payload]
+
+    PackageVersionDiscoveredEvent:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventEnvelopeBase'
+        - $ref: '#/components/schemas/PackageVersionDiscoveredEventKind'
+    PackageVersionDiscoveredEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: package.version.discovered}
+        aggregate_type: {type: string, const: package_version}
+        payload: {$ref: '#/components/schemas/PackageVersionDiscoveredPayload'}
+      required: [event_type, aggregate_type, payload]
+    PackageVersionUpdatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventEnvelopeBase'
+        - $ref: '#/components/schemas/PackageVersionUpdatedEventKind'
+    PackageVersionUpdatedEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: package.version.updated}
+        aggregate_type: {type: string, const: package_version}
+        payload: {$ref: '#/components/schemas/PackageVersionUpdatedPayload'}
+      required: [event_type, aggregate_type, payload]
+    PackageVersionRevokedEvent:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventEnvelopeBase'
+        - $ref: '#/components/schemas/PackageVersionRevokedEventKind'
+    PackageVersionRevokedEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: package.version.revoked}
+        aggregate_type: {type: string, const: package_version}
+        payload: {$ref: '#/components/schemas/PackageVersionRevokedPayload'}
+      required: [event_type, aggregate_type, payload]
+    PackageVerificationUpdatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventEnvelopeBase'
+        - $ref: '#/components/schemas/PackageVerificationUpdatedEventKind'
+    PackageVerificationUpdatedEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: package.verification.updated}
+        aggregate_type: {type: string, const: package_version}
+        payload: {$ref: '#/components/schemas/PackageVerificationUpdatedPayload'}
+      required: [event_type, aggregate_type, payload]
+
+    PackageInstallationRequestedEvent:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventEnvelopeBase'
+        - $ref: '#/components/schemas/PackageInstallationRequestedEventKind'
+    PackageInstallationRequestedEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: package.installation.requested}
+        aggregate_type: {type: string, const: package_installation}
+        payload: {$ref: '#/components/schemas/PackageInstallationRequestedPayload'}
+      required: [event_type, aggregate_type, payload]
+    PackageInstallationActivatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventEnvelopeBase'
+        - $ref: '#/components/schemas/PackageInstallationActivatedEventKind'
+    PackageInstallationActivatedEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: package.installation.activated}
+        aggregate_type: {type: string, const: package_installation}
+        payload: {$ref: '#/components/schemas/PackageInstallationActivatedPayload'}
+      required: [event_type, aggregate_type, payload]
+    PackageInstallationUpdatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventEnvelopeBase'
+        - $ref: '#/components/schemas/PackageInstallationUpdatedEventKind'
+    PackageInstallationUpdatedEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: package.installation.updated}
+        aggregate_type: {type: string, const: package_installation}
+        payload: {$ref: '#/components/schemas/PackageInstallationUpdatedPayload'}
+      required: [event_type, aggregate_type, payload]
+    PackageInstallationDisabledEvent:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventEnvelopeBase'
+        - $ref: '#/components/schemas/PackageInstallationDisabledEventKind'
+    PackageInstallationDisabledEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: package.installation.disabled}
+        aggregate_type: {type: string, const: package_installation}
+        payload: {$ref: '#/components/schemas/PackageInstallationDisabledPayload'}
+      required: [event_type, aggregate_type, payload]
+    PackageInstallationUninstalledEvent:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventEnvelopeBase'
+        - $ref: '#/components/schemas/PackageInstallationUninstalledEventKind'
+    PackageInstallationUninstalledEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: package.installation.uninstalled}
+        aggregate_type: {type: string, const: package_installation}
+        payload: {$ref: '#/components/schemas/PackageInstallationUninstalledPayload'}
+      required: [event_type, aggregate_type, payload]
+
+    PackageSecretSchemaUpdatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventEnvelopeBase'
+        - $ref: '#/components/schemas/PackageSecretSchemaUpdatedEventKind'
+    PackageSecretSchemaUpdatedEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: package.secret_schema.updated}
+        aggregate_type: {type: string, const: package_version}
+        payload: {$ref: '#/components/schemas/PackageSecretSchemaUpdatedPayload'}
+      required: [event_type, aggregate_type, payload]
+
+    PackageEventType:
+      type: string
+      enum:
+        - package.source.connected
+        - package.source.updated
+        - package.source.disabled
+        - package.catalog.synced
+        - package.package.discovered
+        - package.package.updated
+        - package.version.discovered
+        - package.version.updated
+        - package.version.revoked
+        - package.verification.updated
+        - package.installation.requested
+        - package.installation.activated
+        - package.installation.updated
+        - package.installation.disabled
+        - package.installation.uninstalled
+        - package.secret_schema.updated
+    PackageEventPayload:
+      type: object
+      additionalProperties: false
+      properties:
+        source_id: {type: string, format: uuid}
+        source_kind: {type: string}
+        status: {type: string}
+        version: {type: integer, format: int64}
+        synced_at: {type: string, format: date-time}
+        package_count: {type: integer}
+        version_count: {type: integer}
+        package_id: {type: string, format: uuid}
+        slug: {type: string}
+        package_kind: {type: string}
+        trust_status: {type: string}
+        package_version_id: {type: string, format: uuid}
+        version_label: {type: string}
+        manifest_digest: {type: string}
+        verification_status: {type: string}
+        release_status: {type: string}
+        revision: {type: integer, format: int64}
+        reason_code: {type: string}
+        installation_id: {type: string, format: uuid}
+        scope_type: {type: string}
+        scope_ref: {type: string}
+        installation_status: {type: string}
+        desired_state: {type: string}
+        secret_binding_status: {type: string}
+        schema_digest: {type: string}
+
+    PackageSourceConnectedPayload:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventPayload'
+      required: [source_id, source_kind, status, version]
+    PackageSourceUpdatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventPayload'
+      required: [source_id, status, version]
+    PackageSourceDisabledPayload:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventPayload'
+      required: [source_id, status, version]
+    PackageCatalogSyncedPayload:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventPayload'
+      required: [source_id, synced_at, package_count, version_count]
+    PackageDiscoveredPayload:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventPayload'
+      required: [package_id, source_id, slug, package_kind]
+    PackageUpdatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventPayload'
+      required: [package_id, slug, status, trust_status, version]
+    PackageVersionDiscoveredPayload:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventPayload'
+      required: [package_id, package_version_id, version_label, manifest_digest]
+    PackageVersionUpdatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventPayload'
+      required: [package_id, package_version_id, verification_status, release_status, revision]
+    PackageVersionRevokedPayload:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventPayload'
+      required: [package_id, package_version_id, reason_code, revision]
+    PackageVerificationUpdatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventPayload'
+      required: [package_id, package_version_id, verification_status, revision]
+    PackageInstallationRequestedPayload:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventPayload'
+      required: [installation_id, package_id, package_version_id, scope_type, scope_ref]
+    PackageInstallationActivatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventPayload'
+      required: [installation_id, package_id, package_version_id, scope_type, scope_ref]
+    PackageInstallationUpdatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventPayload'
+      required: [installation_id, installation_status, desired_state, version]
+    PackageInstallationDisabledPayload:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventPayload'
+      required: [installation_id, installation_status, version]
+    PackageInstallationUninstalledPayload:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventPayload'
+      required: [installation_id, installation_status, version]
+    PackageSecretSchemaUpdatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/PackageEventPayload'
+      required: [package_id, package_version_id, schema_digest]

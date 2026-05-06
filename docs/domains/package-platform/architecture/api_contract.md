@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-06
 updated_at: 2026-05-06
-related_issues: [642]
+related_issues: [642, 646]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -98,8 +98,10 @@ approvals:
 | Область | Статус |
 |---|---|
 | Доменная документация | Подготовлена как целевой стартовый срез. |
-| gRPC proto `PackageHubService` | Запланирован следующим контрактным срезом. |
-| AsyncAPI `package.*` | Запланирован следующим контрактным срезом. |
+| gRPC proto `PackageHubService` | Подготовлен как стабильный транспортный `v1` в `proto/kodex/packages/v1/package_hub.proto`. |
+| AsyncAPI `package.*` | Подготовлен как стабильный событийный `v1` в `specs/asyncapi/package-hub.v1.yaml`. |
+| Go-артефакты gRPC | Генерируются в `proto/gen/go/kodex/packages/v1/**`. |
+| Go-артефакты событий | Генерируются в `libs/go/platformevents/packagehub/events.gen.go`. |
 | Сервисный процесс `package-hub` | Запланирован после контрактного среза. |
 | PostgreSQL и outbox | Запланированы после контрактного среза. |
 
