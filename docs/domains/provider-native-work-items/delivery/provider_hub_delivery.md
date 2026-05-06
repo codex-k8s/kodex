@@ -41,20 +41,20 @@ approvals:
 
 | Срез | Результат |
 |---|---|
-| PH-0 | Доменная документация, границы, требования, модель данных, API-карта и план поставки готовы. |
-| PH-1 | gRPC/AsyncAPI контракты `provider-hub`, generated-код и таблица реализации операций готовы. |
-| PH-2 | Сервисный каркас, БД, миграции, repository layer, config, health/readiness и базовые тесты готовы. |
-| PH-3 | Runtime-состояние внешних аккаунтов у провайдера, provider client interface, GitHub adapter, лимиты и operation log готовы. |
-| PH-4 | Webhook inbox, дедупликация, нормализация GitHub-событий и публикация базовых `provider.*` событий готовы. |
-| PH-5 | Проекции `Issue`, `PR/MR`, комментариев, review-сигналов, watermark и provider relationships готовы. |
-| PH-6 | Incremental reconciliation, `sync_cursor`, hot/warm/cold приоритеты, drift status и ускоряющие сигналы готовы. |
-| PH-7 | Платформенные provider-операции для agent-manager/MCP готовы с аудитом и идемпотентностью. |
-| PH-8 | Provider-часть empty repository bootstrap и existing repository adoption готова; содержательное сканирование и отчёт по существующему репозиторию остаются агентной работой через workspace. |
-| PH-9 | Kubernetes-манифесты, БД, migration job, metrics, alerts, runbook и smoke-путь готовы. |
+| PRV-0 | Доменная документация, границы, требования, модель данных, API-карта и план поставки готовы. |
+| PRV-1 | gRPC/AsyncAPI контракты `provider-hub`, generated-код и таблица реализации операций готовы. |
+| PRV-2 | Сервисный каркас, БД, миграции, repository layer, config, health/readiness и базовые тесты готовы. |
+| PRV-3 | Runtime-состояние внешних аккаунтов у провайдера, provider client interface, GitHub adapter, лимиты и operation log готовы. |
+| PRV-4 | Webhook inbox, дедупликация, нормализация GitHub-событий и публикация базовых `provider.*` событий готовы. |
+| PRV-5 | Проекции `Issue`, `PR/MR`, комментариев, review-сигналов, watermark и provider relationships готовы. |
+| PRV-6 | Incremental reconciliation, `sync_cursor`, hot/warm/cold приоритеты, drift status и ускоряющие сигналы готовы. |
+| PRV-7 | Платформенные provider-операции для agent-manager/MCP готовы с аудитом и идемпотентностью. |
+| PRV-8 | Provider-часть empty repository bootstrap и existing repository adoption готова; содержательное сканирование и отчёт по существующему репозиторию остаются агентной работой через workspace. |
+| PRV-9 | Kubernetes-манифесты, БД, migration job, metrics, alerts, runbook и smoke-путь готовы. |
 
 ## Таблица реализации
 
-До PH-1 контракт считается описанным на уровне API-карты. После генерации proto и AsyncAPI этот раздел должен вестись в каждом PR, который меняет состав команд, чтений или событий.
+До PRV-1 контракт считается описанным на уровне API-карты. После генерации proto и AsyncAPI этот раздел должен вестись в каждом PR, который меняет состав команд, чтений или событий.
 
 | Группа | Текущий статус |
 |---|---|
@@ -63,23 +63,23 @@ approvals:
 | Reconciliation | Описано в API-карте, реализация не начата. |
 | Provider operations | Описано в API-карте, реализация не начата. |
 | Account runtime state и лимиты | Описано в API-карте, реализация не начата. |
-| Empty repository bootstrap | Provider write и зеркало оставлены до PH-8; решение о составе bootstrap-артефактов приходит из проектного и агентного контура. |
-| Existing repository adoption | Provider PR, зеркало и связи оставлены до PH-8; сканирование и отчёт выполняет агентная роль через workspace. |
+| Empty repository bootstrap | Provider write и зеркало оставлены до PRV-8; решение о составе bootstrap-артефактов приходит из проектного и агентного контура. |
+| Existing repository adoption | Provider PR, зеркало и связи оставлены до PRV-8; сканирование и отчёт выполняет агентная роль через workspace. |
 
 ## Зависимости и синхронизация
 
 | С кем синхронизироваться | Когда | Что согласовать |
 |---|---|---|
-| `project-catalog` | До PH-1 и перед PH-8 | `project_id`, `repository_id`, provider ref, состояние подключения репозитория, `services.yaml` bootstrap/adoption. |
-| `access-manager` | До PH-3 | Набор действий доступа для provider-операций и контракт разрешения внешнего аккаунта. |
-| `package-hub` | До PH-5 и PH-7 | Как пакеты ссылаются на provider-репозитории и PR в пакетных репозиториях. |
-| `integration-gateway` | До PH-4 | Формат внутреннего вызова `IngestWebhookEvent` и ответственность за проверку подписи. |
-| `agent-manager` и `platform-mcp-server` | До PH-7 | Каталог provider-инструментов, идемпотентность и ожидаемый результат операций. |
-| `operations-hub` | До PH-5 и PH-9 | Какие поля проекций нужны операторским экранам и диагностике. |
+| `project-catalog` | До PRV-1 и перед PRV-8 | `project_id`, `repository_id`, provider ref, состояние подключения репозитория, `services.yaml` bootstrap/adoption. |
+| `access-manager` | До PRV-3 | Набор действий доступа для provider-операций и контракт разрешения внешнего аккаунта. |
+| `package-hub` | До PRV-5 и PRV-7 | Как пакеты ссылаются на provider-репозитории и PR в пакетных репозиториях. |
+| `integration-gateway` | До PRV-4 | Формат внутреннего вызова `IngestWebhookEvent` и ответственность за проверку подписи. |
+| `agent-manager` и `platform-mcp-server` | До PRV-7 | Каталог provider-инструментов, идемпотентность и ожидаемый результат операций. |
+| `operations-hub` | До PRV-5 и PRV-9 | Какие поля проекций нужны операторским экранам и диагностике. |
 
 ## Связь с задачами подключения репозиториев
 
-Задачи #281 и #282 остаются открытыми до PH-8.
+Задачи #281 и #282 остаются открытыми до PRV-8.
 
 Решение:
 
@@ -101,4 +101,4 @@ approvals:
 
 - request_id: `owner-2026-05-06-provider-hub-boundaries`
 - Решение: approved
-- Комментарий: план поставки `provider-hub` согласован как целевое состояние PH-0.
+- Комментарий: план поставки `provider-hub` согласован как целевое состояние PRV-0.

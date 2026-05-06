@@ -22,7 +22,7 @@ approvals:
 
 - Тип API: внутренний gRPC для команд и чтений, AsyncAPI для `provider.*` событий.
 - Аутентификация: внутренний сервисный контур; команды дополнительно проверяют actor и право использования внешнего аккаунта через `access-manager`.
-- Версионирование: стабильный `v1` после PH-1; до генерации proto этот документ задаёт карту операций.
+- Версионирование: стабильный `v1` после PRV-1; до генерации proto этот документ задаёт карту операций.
 - Основные операции: ingest webhook, чтение проекций, provider operations, reconciliation, account runtime state и limit snapshots.
 
 ## Спецификации
@@ -31,7 +31,7 @@ approvals:
 |---|---|
 | gRPC proto | `proto/kodex/providers/v1/provider_hub.proto` |
 | AsyncAPI | `specs/asyncapi/provider-hub.v1.yaml` |
-| Go event contracts | generated-код из AsyncAPI после PH-1 |
+| Go event contracts | generated-код из AsyncAPI после PRV-1 |
 
 ## Группы операций
 
@@ -136,4 +136,4 @@ approvals:
 
 - request_id: `owner-2026-05-06-provider-hub-boundaries`
 - Решение: approved
-- Комментарий: API-карта `provider-hub` согласована как целевое состояние PH-0.
+- Комментарий: API-карта `provider-hub` согласована как целевое состояние PRV-0.

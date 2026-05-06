@@ -252,4 +252,4 @@ approvals:
 
 - request_id: `owner-2026-05-06-provider-hub-boundaries`
 - Решение: approved
-- Комментарий: модель данных `provider-hub` согласована как целевое состояние PH-0.
+- Комментарий: модель данных `provider-hub` согласована как целевое состояние PRV-0.
