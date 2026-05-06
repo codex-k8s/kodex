@@ -496,6 +496,27 @@ func TestImportServicesPolicyAcceptsDeployableServicesDraftShape(t *testing.T) {
 	}
 }
 
+func TestImportServicesPolicyRejectsPayloadWithoutServiceEntries(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, &sequenceIDs{ids: []uuid.UUID{uuid.New()}})
+
+	_, err := svc.ImportServicesPolicy(ctx, ImportServicesPolicyInput{
+		ProjectID:        uuid.New(),
+		SourcePath:       "services.yaml",
+		SourceCommitSHA:  "0123456789abcdef0123456789abcdef01234567",
+		ContentHash:      "sha256:policy",
+		ValidatedPayload: []byte(`{"spec":{}}`),
+		ServiceDescriptors: []entity.ServiceDescriptor{
+			{ServiceKey: "api", DisplayName: "API", Kind: enum.ServiceKindBackend, RootPath: "services/api"},
+		},
+		Meta: commandMeta(uuid.New()),
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("ImportServicesPolicy() err = %v, want invalid argument", err)
+	}
+}
+
 func TestImportServicesPolicyRejectsDuplicateServiceKeys(t *testing.T) {
 	ctx := context.Background()
 	store := newMemoryRepository()

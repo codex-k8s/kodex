@@ -38,12 +38,6 @@ func buildServicesPolicyProjection(input ImportServicesPolicyInput, validationSt
 		return servicesPolicyProjection{}, err
 	}
 	if len(descriptors) == 0 {
-		descriptors, err = validateProvidedServiceDescriptors(input.ServiceDescriptors, input.SourceRepositoryID)
-		if err != nil {
-			return servicesPolicyProjection{}, err
-		}
-	}
-	if len(descriptors) == 0 {
 		return servicesPolicyProjection{}, errs.ErrInvalidArgument
 	}
 	return servicesPolicyProjection{payload: payload, descriptors: descriptors}, nil
@@ -167,38 +161,6 @@ func normalizeWorkspacePath(text string) (string, error) {
 		return "", errs.ErrInvalidArgument
 	}
 	return cleaned, nil
-}
-
-func validateProvidedServiceDescriptors(descriptors []entity.ServiceDescriptor, fallbackRepositoryID *uuid.UUID) ([]entity.ServiceDescriptor, error) {
-	result := make([]entity.ServiceDescriptor, 0, len(descriptors))
-	for _, descriptor := range descriptors {
-		if descriptor.RepositoryID == nil {
-			descriptor.RepositoryID = fallbackRepositoryID
-		}
-		rootPath, err := normalizeWorkspacePath(descriptor.RootPath)
-		if err != nil {
-			return nil, err
-		}
-		descriptor.ServiceKey = strings.TrimSpace(descriptor.ServiceKey)
-		descriptor.DisplayName = strings.TrimSpace(descriptor.DisplayName)
-		descriptor.RootPath = rootPath
-		descriptor.DocumentationScopeID = strings.TrimSpace(descriptor.DocumentationScopeID)
-		descriptor.DependsOnServiceKeys = normalizeServiceKeys(descriptor.DependsOnServiceKeys)
-		if descriptor.DisplayName == "" {
-			descriptor.DisplayName = descriptor.ServiceKey
-		}
-		if descriptor.DocumentationScopeID == "" {
-			descriptor.DocumentationScopeID = descriptor.ServiceKey
-		}
-		if descriptor.Kind == "" {
-			descriptor.Kind = enum.ServiceKindOther
-		}
-		if descriptor.Status == "" {
-			descriptor.Status = enum.ServiceStatusActive
-		}
-		result = append(result, descriptor)
-	}
-	return validateServiceDescriptorSet(result)
 }
 
 func validateServiceDescriptorSet(descriptors []entity.ServiceDescriptor) ([]entity.ServiceDescriptor, error) {
