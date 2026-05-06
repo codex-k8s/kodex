@@ -1,13 +1,16 @@
 # Известные повторы временно приняты, пока общий сервисный runtime ещё выносится в libs/go.
 # Новые блоки нельзя добавлять сюда без отдельной задачи или явного решения на ревью.
-services/internal/access-manager/internal/app/config.go:204-214: duplicate of services/internal/project-catalog/internal/app/config.go:205-215
-services/internal/project-catalog/internal/app/config.go:205-215: duplicate of services/internal/access-manager/internal/app/config.go:204-214
-services/internal/access-manager/internal/app/app.go:132-141: duplicate of services/internal/project-catalog/internal/app/app.go:153-162
-services/internal/project-catalog/internal/app/app.go:153-162: duplicate of services/internal/access-manager/internal/app/app.go:132-141
-services/internal/access-manager/internal/domain/service/events_helpers.go:60-72: duplicate of services/internal/project-catalog/internal/domain/service/events_helpers.go:53-65
-services/internal/project-catalog/internal/domain/service/events_helpers.go:53-65: duplicate of services/internal/access-manager/internal/domain/service/events_helpers.go:60-72
-services/internal/access-manager/internal/app/app.go:93-110: duplicate of services/internal/project-catalog/internal/app/app.go:91-108
-services/internal/project-catalog/internal/app/app.go:91-108: duplicate of services/internal/access-manager/internal/app/app.go:93-110
+# Service-local outbox entity conversion остаётся в baseline, пока доменные entity пакеты не сведены к общему event field contract.
+services/internal/access-manager/internal/app/config.go:205-215: duplicate of services/internal/project-catalog/internal/app/config.go:206-216
+services/internal/project-catalog/internal/app/config.go:206-216: duplicate of services/internal/access-manager/internal/app/config.go:205-215
+services/internal/access-manager/internal/app/app.go:141-150: duplicate of services/internal/project-catalog/internal/app/app.go:162-171
+services/internal/project-catalog/internal/app/app.go:162-171: duplicate of services/internal/access-manager/internal/app/app.go:141-150
+services/internal/access-manager/internal/domain/service/events_helpers.go:59-71: duplicate of services/internal/project-catalog/internal/domain/service/events_helpers.go:54-66
+services/internal/project-catalog/internal/domain/service/events_helpers.go:54-66: duplicate of services/internal/access-manager/internal/domain/service/events_helpers.go:59-71
+services/internal/access-manager/internal/app/app.go:94-119: duplicate of services/internal/project-catalog/internal/app/app.go:92-117
+services/internal/project-catalog/internal/app/app.go:92-117: duplicate of services/internal/access-manager/internal/app/app.go:94-119
+services/internal/access-manager/internal/app/outbox.go:1-21: duplicate of services/internal/project-catalog/internal/app/outbox.go:1-21
+services/internal/project-catalog/internal/app/outbox.go:1-21: duplicate of services/internal/access-manager/internal/app/outbox.go:1-21
 services/internal/project-catalog/internal/transport/grpc/casters/requests.go:404-416: duplicate of services/internal/project-catalog/internal/transport/grpc/casters/requests.go:491-503
 services/internal/project-catalog/internal/transport/grpc/casters/requests.go:491-503: duplicate of services/internal/project-catalog/internal/transport/grpc/casters/requests.go:404-416
 services/internal/access-manager/internal/transport/grpc/server.go:157-173: duplicate of services/internal/project-catalog/internal/transport/grpc/server.go:226-242
@@ -15,8 +18,8 @@ services/internal/project-catalog/internal/transport/grpc/server.go:226-242: dup
 services/internal/project-catalog/internal/domain/service/governance_lifecycle.go:366-368: duplicate of services/internal/project-catalog/internal/domain/service/governance_lifecycle.go:370-372
 services/internal/project-catalog/internal/domain/service/governance_lifecycle.go:370-372: duplicate of services/internal/project-catalog/internal/domain/service/governance_lifecycle.go:388-390
 services/internal/project-catalog/internal/domain/service/governance_lifecycle.go:388-390: duplicate of services/internal/project-catalog/internal/domain/service/governance_lifecycle.go:366-368
-services/internal/access-manager/internal/app/config.go:171-185: duplicate of services/internal/project-catalog/internal/app/config.go:172-186
-services/internal/project-catalog/internal/app/config.go:172-186: duplicate of services/internal/access-manager/internal/app/config.go:171-185
+services/internal/access-manager/internal/app/config.go:172-186: duplicate of services/internal/project-catalog/internal/app/config.go:173-187
+services/internal/project-catalog/internal/app/config.go:173-187: duplicate of services/internal/access-manager/internal/app/config.go:172-186
 services/internal/access-manager/internal/transport/grpc/interceptors.go:62-72: duplicate of services/internal/project-catalog/internal/transport/grpc/interceptors.go:62-72
 services/internal/project-catalog/internal/transport/grpc/interceptors.go:62-72: duplicate of services/internal/access-manager/internal/transport/grpc/interceptors.go:62-72
 services/internal/project-catalog/internal/domain/service/governance_lifecycle.go:279-294: duplicate of services/internal/project-catalog/internal/domain/service/policy_lifecycle.go:75-90

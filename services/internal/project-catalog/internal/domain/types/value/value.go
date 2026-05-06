@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	projectevents "github.com/codex-k8s/kodex/libs/go/platformevents/project"
 )
 
 // Actor identifies the principal that initiated a command or read.
@@ -51,34 +53,8 @@ type PageResult struct {
 	NextPageToken string
 }
 
-// ProjectEventPayload is the common typed payload envelope for project events.
-type ProjectEventPayload struct {
-	ProjectID         string `json:"project_id,omitempty"`
-	OrganizationID    string `json:"organization_id,omitempty"`
-	Slug              string `json:"slug,omitempty"`
-	Status            string `json:"status,omitempty"`
-	RepositoryID      string `json:"repository_id,omitempty"`
-	Provider          string `json:"provider,omitempty"`
-	ProviderOwner     string `json:"provider_owner,omitempty"`
-	ProviderName      string `json:"provider_name,omitempty"`
-	IconObjectURI     string `json:"icon_object_uri,omitempty"`
-	PolicyID          string `json:"policy_id,omitempty"`
-	PolicyVersion     int64  `json:"policy_version,omitempty"`
-	SourceCommitSHA   string `json:"source_commit_sha,omitempty"`
-	SourceBlobSHA     string `json:"source_blob_sha,omitempty"`
-	ContentHash       string `json:"content_hash,omitempty"`
-	OverrideID        string `json:"override_id,omitempty"`
-	TargetType        string `json:"target_type,omitempty"`
-	ExpiresAt         string `json:"expires_at,omitempty"`
-	SourceID          string `json:"source_id,omitempty"`
-	ScopeType         string `json:"scope_type,omitempty"`
-	AccessMode        string `json:"access_mode,omitempty"`
-	BranchRulesID     string `json:"branch_rules_id,omitempty"`
-	ReleasePolicyID   string `json:"release_policy_id,omitempty"`
-	ReleaseLineID     string `json:"release_line_id,omitempty"`
-	PlacementPolicyID string `json:"placement_policy_id,omitempty"`
-	Version           int64  `json:"version,omitempty"`
-}
+// ProjectEventPayload is generated from AsyncAPI and used by project events.
+type ProjectEventPayload = projectevents.Payload
 
 // PolicyEditProposalRequestedChanges is the typed request to change services.yaml through PR.
 type PolicyEditProposalRequestedChanges struct {

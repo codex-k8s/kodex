@@ -91,7 +91,7 @@ type AccessManagerServiceClient interface {
 	BindExternalAccount(ctx context.Context, in *BindExternalAccountRequest, opts ...grpc.CallOption) (*ExternalAccountBindingResponse, error)
 	// DisableExternalAccountBinding disables an account binding without deleting history.
 	DisableExternalAccountBinding(ctx context.Context, in *DisableExternalAccountBindingRequest, opts ...grpc.CallOption) (*ExternalAccountBindingResponse, error)
-	// PutAccessAction creates or updates an action from the access-action catalog.
+	// PutAccessAction creates or updates a user/plugin action from the access-action catalog.
 	PutAccessAction(ctx context.Context, in *PutAccessActionRequest, opts ...grpc.CallOption) (*AccessActionResponse, error)
 	// PutAccessRule creates or updates an access rule.
 	PutAccessRule(ctx context.Context, in *PutAccessRuleRequest, opts ...grpc.CallOption) (*AccessRuleResponse, error)
@@ -421,7 +421,7 @@ type AccessManagerServiceServer interface {
 	BindExternalAccount(context.Context, *BindExternalAccountRequest) (*ExternalAccountBindingResponse, error)
 	// DisableExternalAccountBinding disables an account binding without deleting history.
 	DisableExternalAccountBinding(context.Context, *DisableExternalAccountBindingRequest) (*ExternalAccountBindingResponse, error)
-	// PutAccessAction creates or updates an action from the access-action catalog.
+	// PutAccessAction creates or updates a user/plugin action from the access-action catalog.
 	PutAccessAction(context.Context, *PutAccessActionRequest) (*AccessActionResponse, error)
 	// PutAccessRule creates or updates an access rule.
 	PutAccessRule(context.Context, *PutAccessRuleRequest) (*AccessRuleResponse, error)

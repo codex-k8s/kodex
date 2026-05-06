@@ -8,6 +8,7 @@
 
 - append-only журнал `platform_event_log` в отдельной БД `platform-event-log`;
 - идемпотентную запись события по `event_id` и неизменяемому содержимому;
+- `PostgresPublisher` для публикации service outbox событий через общий `libs/go/outbox` contract;
 - независимый checkpoint для каждого потребителя;
 - короткую аренду checkpoint, чтобы один потребитель не обрабатывался несколькими worker одновременно;
 - базовую веерную доставку: разные `consumer_name` читают один и тот же поток независимо.

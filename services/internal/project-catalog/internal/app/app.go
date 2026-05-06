@@ -18,6 +18,7 @@ import (
 
 	eventlog "github.com/codex-k8s/kodex/libs/go/eventlog"
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
+	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	accessclient "github.com/codex-k8s/kodex/services/internal/project-catalog/internal/clients/access"
 	projectservice "github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/service"
@@ -89,15 +90,23 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	go serveHTTP(httpServer, cfg.HTTPAddr, logger, errCh)
 	go serveGRPC(grpcServer, cfg.GRPCAddr, logger, errCh)
 	if cfg.OutboxDispatchEnabled {
-		publisher, err := newOutboxPublisher(cfg, outboxEventLogAppender(eventLogPool), logger)
+		publisher, err := eventlog.NewOutboxPublisher(
+			cfg.OutboxPublisherKind,
+			cfg.OutboxAllowLossyPublisher,
+			cfg.OutboxEventLogSource,
+			outboxEventLogAppender(eventLogPool),
+			logger,
+			"project-catalog",
+		)
 		if err != nil {
 			return err
 		}
-		dispatcher := newOutboxDispatcher(
-			components.OutboxStore,
+		dispatcher := outboxlib.NewDispatcher(
+			outboxlib.NewStoreAdapter(components.OutboxStore, outboxEvent),
 			publisher,
 			cfg.OutboxDispatcherConfig(),
 			logger,
+			"project-catalog",
 		)
 		go func() {
 			logger.Info("project-catalog outbox dispatcher starting")
@@ -147,7 +156,7 @@ type processComponents struct {
 	DBPool         *pgxpool.Pool
 	EventLogDBPool *pgxpool.Pool
 	ProjectService *projectservice.Service
-	OutboxStore    outboxStore
+	OutboxStore    serviceOutboxStore
 }
 
 func openOutboxEventLogPool(ctx context.Context, cfg Config) (*pgxpool.Pool, error) {
@@ -161,7 +170,7 @@ func openOutboxEventLogPool(ctx context.Context, cfg Config) (*pgxpool.Pool, err
 	return pool, nil
 }
 
-func outboxEventLogAppender(pool *pgxpool.Pool) eventLogAppender {
+func outboxEventLogAppender(pool *pgxpool.Pool) eventlog.Appender {
 	if pool == nil {
 		return nil
 	}

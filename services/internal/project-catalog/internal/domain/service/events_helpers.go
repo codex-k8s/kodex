@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
+	projectevents "github.com/codex-k8s/kodex/libs/go/platformevents/project"
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/value"
 )
@@ -45,7 +46,7 @@ func (s *Service) event(eventType string, aggregateType string, aggregateID uuid
 		return entity.OutboxEvent{}, fmt.Errorf("marshal project event payload %s: %w", eventType, err)
 	}
 	return entity.OutboxEvent{
-		ID: s.ids.New(), EventType: eventType, SchemaVersion: schemaVersionProjectEventV1,
+		ID: s.ids.New(), EventType: eventType, SchemaVersion: projectevents.SchemaVersion,
 		AggregateType: aggregateType, AggregateID: aggregateID, Payload: raw, OccurredAt: occurredAt,
 	}, nil
 }

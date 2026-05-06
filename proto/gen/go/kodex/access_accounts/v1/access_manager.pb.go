@@ -3987,7 +3987,7 @@ func (x *ExternalAccountBindingResponse) GetVersion() int64 {
 	return 0
 }
 
-// PutAccessActionRequest creates or updates an access action.
+// PutAccessActionRequest creates or updates a user/plugin access action.
 type PutAccessActionRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// key is stable action key, for example provider.issue.write.

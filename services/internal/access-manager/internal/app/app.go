@@ -16,6 +16,7 @@ import (
 
 	eventlog "github.com/codex-k8s/kodex/libs/go/eventlog"
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
+	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	accessservice "github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/service"
 	accesspostgres "github.com/codex-k8s/kodex/services/internal/access-manager/internal/repository/postgres/access"
@@ -91,15 +92,23 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		}
 	}()
 	if cfg.OutboxDispatchEnabled {
-		publisher, err := newOutboxPublisher(cfg, outboxEventLogAppender(eventLogPool), logger)
+		publisher, err := eventlog.NewOutboxPublisher(
+			cfg.OutboxPublisherKind,
+			cfg.OutboxAllowLossyPublisher,
+			cfg.OutboxEventLogSource,
+			outboxEventLogAppender(eventLogPool),
+			logger,
+			"access-manager",
+		)
 		if err != nil {
 			return err
 		}
-		dispatcher := newOutboxDispatcher(
-			components.OutboxStore,
+		dispatcher := outboxlib.NewDispatcher(
+			outboxlib.NewStoreAdapter(components.OutboxStore, outboxEvent),
 			publisher,
 			cfg.OutboxDispatcherConfig(),
 			logger,
+			"access-manager",
 		)
 		go func() {
 			logger.Info("access-manager outbox dispatcher starting")
@@ -126,7 +135,7 @@ type processComponents struct {
 	DBPool         *pgxpool.Pool
 	EventLogDBPool *pgxpool.Pool
 	AccessService  *accessservice.Service
-	OutboxStore    outboxStore
+	OutboxStore    serviceOutboxStore
 }
 
 func openOutboxEventLogPool(ctx context.Context, cfg Config) (*pgxpool.Pool, error) {
@@ -140,7 +149,7 @@ func openOutboxEventLogPool(ctx context.Context, cfg Config) (*pgxpool.Pool, err
 	return pool, nil
 }
 
-func outboxEventLogAppender(pool *pgxpool.Pool) eventLogAppender {
+func outboxEventLogAppender(pool *pgxpool.Pool) eventlog.Appender {
 	if pool == nil {
 		return nil
 	}

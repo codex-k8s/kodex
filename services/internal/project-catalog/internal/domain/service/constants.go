@@ -1,42 +1,44 @@
 package service
 
+import projectevents "github.com/codex-k8s/kodex/libs/go/platformevents/project"
+
 const (
-	projectEventProjectCreated           = "project.project.created"
-	projectEventProjectUpdated           = "project.project.updated"
-	projectEventProjectArchived          = "project.project.archived"
-	projectEventProjectDisabled          = "project.project.disabled"
-	projectEventRepositoryAttached       = "project.repository.attached"
-	projectEventRepositoryUpdated        = "project.repository.updated"
-	projectEventRepositoryDetached       = "project.repository.detached"
-	projectEventServicesPolicyImported   = "project.services_policy.imported"
-	projectEventPolicyOverrideCreated    = "project.policy_override.created"
-	projectEventPolicyOverrideCancelled  = "project.policy_override.cancelled"
-	projectEventDocumentationCreated     = "project.documentation_source.created"
-	projectEventDocumentationUpdated     = "project.documentation_source.updated"
-	projectEventDocumentationDisabled    = "project.documentation_source.disabled"
-	projectEventBranchRulesCreated       = "project.branch_rules.created"
-	projectEventBranchRulesUpdated       = "project.branch_rules.updated"
-	projectEventBranchRulesDisabled      = "project.branch_rules.disabled"
-	projectEventReleasePolicyCreated     = "project.release_policy.created"
-	projectEventReleasePolicyUpdated     = "project.release_policy.updated"
-	projectEventReleasePolicyArchived    = "project.release_policy.archived"
-	projectEventReleasePolicyDisabled    = "project.release_policy.disabled"
-	projectEventReleaseLineCreated       = "project.release_line.created"
-	projectEventReleaseLineUpdated       = "project.release_line.updated"
-	projectEventReleaseLineArchived      = "project.release_line.archived"
-	projectEventReleaseLineDisabled      = "project.release_line.disabled"
-	projectEventPlacementPolicyCreated   = "project.placement_policy.created"
-	projectEventPlacementPolicyUpdated   = "project.placement_policy.updated"
-	projectEventPlacementPolicyDisabled  = "project.placement_policy.disabled"
-	projectAggregateProject              = "project"
-	projectAggregateRepository           = "repository"
-	projectAggregateServicesPolicy       = "services_policy"
-	projectAggregatePolicyOverride       = "policy_override"
-	projectAggregateDocumentationSource  = "documentation_source"
-	projectAggregateBranchRules          = "branch_rules"
-	projectAggregateReleasePolicy        = "release_policy"
-	projectAggregateReleaseLine          = "release_line"
-	projectAggregatePlacementPolicy      = "placement_policy"
+	projectEventProjectCreated           = projectevents.EventProjectCreated
+	projectEventProjectUpdated           = projectevents.EventProjectUpdated
+	projectEventProjectArchived          = projectevents.EventProjectArchived
+	projectEventProjectDisabled          = projectevents.EventProjectDisabled
+	projectEventRepositoryAttached       = projectevents.EventRepositoryAttached
+	projectEventRepositoryUpdated        = projectevents.EventRepositoryUpdated
+	projectEventRepositoryDetached       = projectevents.EventRepositoryDetached
+	projectEventServicesPolicyImported   = projectevents.EventServicesPolicyImported
+	projectEventPolicyOverrideCreated    = projectevents.EventPolicyOverrideCreated
+	projectEventPolicyOverrideCancelled  = projectevents.EventPolicyOverrideCancelled
+	projectEventDocumentationCreated     = projectevents.EventDocumentationSourceCreated
+	projectEventDocumentationUpdated     = projectevents.EventDocumentationSourceUpdated
+	projectEventDocumentationDisabled    = projectevents.EventDocumentationSourceDisabled
+	projectEventBranchRulesCreated       = projectevents.EventBranchRulesCreated
+	projectEventBranchRulesUpdated       = projectevents.EventBranchRulesUpdated
+	projectEventBranchRulesDisabled      = projectevents.EventBranchRulesDisabled
+	projectEventReleasePolicyCreated     = projectevents.EventReleasePolicyCreated
+	projectEventReleasePolicyUpdated     = projectevents.EventReleasePolicyUpdated
+	projectEventReleasePolicyArchived    = projectevents.EventReleasePolicyArchived
+	projectEventReleasePolicyDisabled    = projectevents.EventReleasePolicyDisabled
+	projectEventReleaseLineCreated       = projectevents.EventReleaseLineCreated
+	projectEventReleaseLineUpdated       = projectevents.EventReleaseLineUpdated
+	projectEventReleaseLineArchived      = projectevents.EventReleaseLineArchived
+	projectEventReleaseLineDisabled      = projectevents.EventReleaseLineDisabled
+	projectEventPlacementPolicyCreated   = projectevents.EventPlacementPolicyCreated
+	projectEventPlacementPolicyUpdated   = projectevents.EventPlacementPolicyUpdated
+	projectEventPlacementPolicyDisabled  = projectevents.EventPlacementPolicyDisabled
+	projectAggregateProject              = projectevents.AggregateProject
+	projectAggregateRepository           = projectevents.AggregateRepository
+	projectAggregateServicesPolicy       = projectevents.AggregateServicesPolicy
+	projectAggregatePolicyOverride       = projectevents.AggregatePolicyOverride
+	projectAggregateDocumentationSource  = projectevents.AggregateDocumentationSource
+	projectAggregateBranchRules          = projectevents.AggregateBranchRules
+	projectAggregateReleasePolicy        = projectevents.AggregateReleasePolicy
+	projectAggregateReleaseLine          = projectevents.AggregateReleaseLine
+	projectAggregatePlacementPolicy      = projectevents.AggregatePlacementPolicy
 	projectOperationCreateProject        = "domain.Service.CreateProject"
 	projectOperationUpdateProject        = "domain.Service.UpdateProject"
 	projectOperationAttachRepository     = "domain.Service.AttachRepository"
@@ -79,8 +81,6 @@ const (
 	projectActionPlacementPolicyRead     = "project.placement_policy.read"
 	projectProposalStatusPending         = "pending"
 )
-
-const schemaVersionProjectEventV1 = 1
 
 type resourceRef struct {
 	Type      string

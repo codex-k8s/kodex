@@ -3,6 +3,8 @@ package app
 import (
 	"testing"
 	"time"
+
+	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
 )
 
 func TestLoadConfigRequiresDatabaseDSN(t *testing.T) {
@@ -82,7 +84,7 @@ func validConfig() Config {
 		EventLogDatabaseMaxConns:   4,
 		EventLogDatabaseMinConns:   0,
 		OutboxDispatchEnabled:      true,
-		OutboxPublisherKind:        outboxPublisherKindPostgresEventLog,
+		OutboxPublisherKind:        outboxlib.PublisherKindPostgresEventLog,
 		OutboxEventLogSource:       "project-catalog",
 		OutboxBatchSize:            100,
 		OutboxPollInterval:         time.Second,

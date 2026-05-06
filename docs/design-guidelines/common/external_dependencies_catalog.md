@@ -25,6 +25,7 @@
 | `github.com/jackc/pgx/v5` | `v5.8.0` | PostgreSQL driver | доступ к PostgreSQL |
 | `github.com/google/uuid` | `v1.6.0` | Utility, PostgreSQL helpers | генерация и передача идентификаторов, включая общие helpers в `libs/go/postgres` |
 | `github.com/caarlos0/env/v11` | `v11.3.1` | Config | типобезопасный env->struct парсинг конфигурации |
+| `github.com/nicksnyder/go-i18n/v2` | `v2.6.1` | Backend i18n | локализация системных message id через общий runtime `libs/go/i18n` |
 | `github.com/golang-jwt/jwt/v5` | `v5.3.0` | Auth | выпуск и валидация short-lived JWT для staff API |
 | `golang.org/x/crypto` | `v0.47.0` | Security | sealed-box шифрование значений для GitHub repository secrets (`CreateOrUpdateRepoSecret`) |
 | `k8s.io/client-go` | `v0.35.0` | Kubernetes integration | запуск/проверка Job через Kubernetes SDK |

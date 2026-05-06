@@ -8,11 +8,10 @@ import (
 
 	"github.com/google/uuid"
 
+	accessevents "github.com/codex-k8s/kodex/libs/go/platformevents/access"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/value"
 )
-
-const schemaVersionAccessEventV1 = 1
 
 type accessPayloadStringField uint8
 
@@ -40,7 +39,7 @@ func (s *Service) event(eventType string, aggregateType string, aggregateID uuid
 		return entity.OutboxEvent{}, fmt.Errorf("marshal access event payload %s: %w", eventType, err)
 	}
 	return entity.OutboxEvent{
-		ID: eventID, EventType: eventType, SchemaVersion: schemaVersionAccessEventV1,
+		ID: eventID, EventType: eventType, SchemaVersion: accessevents.SchemaVersion,
 		AggregateType: aggregateType, AggregateID: aggregateID, Payload: raw, OccurredAt: occurredAt,
 	}, nil
 }
