@@ -268,7 +268,3 @@ func (panicDatabase) Exec(context.Context, string, ...any) (pgconn.CommandTag, e
 func (panicDatabase) Query(context.Context, string, ...any) (pgx.Rows, error) {
 	panic("database must not be called")
 }
-
-func (panicDatabase) QueryRow(context.Context, string, ...any) pgx.Row {
-	panic("database must not be called")
-}

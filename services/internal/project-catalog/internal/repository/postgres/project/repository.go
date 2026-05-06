@@ -250,7 +250,7 @@ func (r *Repository) GetWorkspacePolicy(ctx context.Context, filter query.Worksp
 		PolicyVersion:         policyVersion,
 	}
 	if filter.IncludeGuidancePackages {
-		refs, err := queryMany(ctx, r.db, operationGetWorkspacePolicy, queryWorkspaceGuidanceRefList, pgx.NamedArgs{"project_id": filter.ProjectID}, scanGuidanceRef)
+		refs, err := queryManyRowTo(ctx, r.db, operationGetWorkspacePolicy, queryWorkspaceGuidanceRefList, pgx.NamedArgs{"project_id": filter.ProjectID}, pgx.RowTo[string])
 		if err != nil {
 			return entity.WorkspacePolicy{}, err
 		}
@@ -413,6 +413,15 @@ func queryMany[T any](ctx context.Context, db queryer, operation string, sql str
 		return nil, wrapError(operation, err)
 	}
 	items, err := postgreslib.ScanRows(rows, scan)
+	return items, wrapError(operation, err)
+}
+
+func queryManyRowTo[T any](ctx context.Context, db queryer, operation string, sql string, args pgx.NamedArgs, scan pgx.RowToFunc[T]) ([]T, error) {
+	rows, err := db.Query(ctx, sql, args)
+	if err != nil {
+		return nil, wrapError(operation, err)
+	}
+	items, err := pgx.CollectRows(rows, scan)
 	return items, wrapError(operation, err)
 }
 

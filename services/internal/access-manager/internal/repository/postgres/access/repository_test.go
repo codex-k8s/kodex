@@ -135,6 +135,13 @@ func TestRepositoryIntegrationMutationReadAndOutbox(t *testing.T) {
 	if stored.ID != organization.ID || stored.Slug != organization.Slug {
 		t.Fatalf("stored organization = %#v, want %#v", stored, organization)
 	}
+	activeOwnerCount, err := repository.CountActiveOwnerOrganizations(ctx)
+	if err != nil {
+		t.Fatalf("count active owner organizations: %v", err)
+	}
+	if activeOwnerCount != 1 {
+		t.Fatalf("active owner organizations = %d, want 1", activeOwnerCount)
+	}
 	if got := countTableRows(t, ctx, pool, "access_outbox_events"); got != 1 {
 		t.Fatalf("outbox events = %d, want 1", got)
 	}

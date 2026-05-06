@@ -348,9 +348,3 @@ func scanWorkspaceDocumentationSource(row postgreslib.RowScanner) (entity.Worksp
 	source.AccessMode = enum.SourceAccessMode(accessMode)
 	return source, err
 }
-
-func scanGuidanceRef(row postgreslib.RowScanner) (string, error) {
-	var ref string
-	err := row.Scan(&ref)
-	return ref, err
-}
