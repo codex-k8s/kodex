@@ -394,7 +394,7 @@ func TestImportServicesPolicyAssignsMonotonicVersions(t *testing.T) {
 		SourcePath:         "services.yaml",
 		SourceCommitSHA:    "0123456789abcdef0123456789abcdef01234567",
 		ContentHash:        "sha256:first",
-		ValidatedPayload:   []byte(`{"services":["api"]}`),
+		ValidatedPayload:   []byte(servicesPolicyPayload("api", "services/internal/api", "backend")),
 		Meta:               commandMeta(uuid.New()),
 	})
 	if err != nil {
@@ -406,7 +406,7 @@ func TestImportServicesPolicyAssignsMonotonicVersions(t *testing.T) {
 		SourcePath:         "services.yaml",
 		SourceCommitSHA:    "abcdef0123456789abcdef0123456789abcdef01",
 		ContentHash:        "sha256:second",
-		ValidatedPayload:   []byte(`{"services":["api","worker"]}`),
+		ValidatedPayload:   []byte(servicesPolicyPayload("worker", "services/internal/worker", "worker")),
 		Meta:               commandMeta(uuid.New()),
 	})
 	if err != nil {
@@ -421,6 +421,114 @@ func TestImportServicesPolicyAssignsMonotonicVersions(t *testing.T) {
 	}
 	if payload.PolicyVersion != second.PolicyVersion {
 		t.Fatalf("event policy version = %d, want %d", payload.PolicyVersion, second.PolicyVersion)
+	}
+}
+
+func TestImportServicesPolicyBuildsDescriptorsFromPayload(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, &sequenceIDs{ids: []uuid.UUID{
+		uuid.New(), uuid.New(), uuid.New(),
+	}})
+
+	policy, err := svc.ImportServicesPolicy(ctx, ImportServicesPolicyInput{
+		ProjectID:          projectID,
+		SourceRepositoryID: &repositoryID,
+		SourcePath:         "services.yaml",
+		SourceCommitSHA:    "0123456789abcdef0123456789abcdef01234567",
+		ContentHash:        "sha256:policy",
+		ValidatedPayload: []byte(`{
+			"apiVersion": "kodex.works/v1alpha1",
+			"kind": "ServiceStackDraft",
+			"spec": {
+				"services": [
+					{"key":"api","displayName":"Public API","kind":"backend","rootPath":"services/api","documentationScopeId":"api"},
+					{"key":"worker","kind":"worker","rootPath":"services/worker","dependsOn":["api"]}
+				]
+			}
+		}`),
+		ServiceDescriptors: []entity.ServiceDescriptor{
+			{ServiceKey: "ignored", DisplayName: "Ignored", Kind: enum.ServiceKindOther, RootPath: "ignored"},
+		},
+		Meta: commandMeta(uuid.New()),
+	})
+	if err != nil {
+		t.Fatalf("ImportServicesPolicy(): %v", err)
+	}
+	descriptors := store.serviceDescriptors[policy.ID]
+	if len(descriptors) != 2 {
+		t.Fatalf("descriptors = %d, want 2", len(descriptors))
+	}
+	if descriptors[0].ServiceKey != "api" || descriptors[0].RepositoryID == nil || *descriptors[0].RepositoryID != repositoryID {
+		t.Fatalf("first descriptor = %+v, want api with source repository", descriptors[0])
+	}
+	if descriptors[1].DisplayName != "worker" || len(descriptors[1].DependsOnServiceKeys) != 1 || descriptors[1].DependsOnServiceKeys[0] != "api" {
+		t.Fatalf("second descriptor = %+v, want worker depending on api", descriptors[1])
+	}
+}
+
+func TestImportServicesPolicyAcceptsDeployableServicesDraftShape(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New()}})
+
+	policy, err := svc.ImportServicesPolicy(ctx, ImportServicesPolicyInput{
+		ProjectID:        projectID,
+		SourcePath:       "services.yaml",
+		SourceCommitSHA:  "0123456789abcdef0123456789abcdef01234567",
+		ContentHash:      "sha256:policy",
+		ValidatedPayload: []byte(`{"apiVersion":"kodex.works/v1alpha1","kind":"ServiceStackDraft","spec":{"deployableServices":[{"name":"project-catalog","status":"foundation","path":"services/internal/project-catalog"}]}}`),
+		Meta:             commandMeta(uuid.New()),
+	})
+	if err != nil {
+		t.Fatalf("ImportServicesPolicy(): %v", err)
+	}
+	descriptors := store.serviceDescriptors[policy.ID]
+	if len(descriptors) != 1 {
+		t.Fatalf("descriptors = %d, want 1", len(descriptors))
+	}
+	descriptor := descriptors[0]
+	if descriptor.ServiceKey != "project-catalog" || descriptor.RootPath != "services/internal/project-catalog" || descriptor.Status != enum.ServiceStatusActive {
+		t.Fatalf("descriptor = %+v, want active project-catalog descriptor", descriptor)
+	}
+}
+
+func TestImportServicesPolicyRejectsDuplicateServiceKeys(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, &sequenceIDs{ids: []uuid.UUID{uuid.New()}})
+
+	_, err := svc.ImportServicesPolicy(ctx, ImportServicesPolicyInput{
+		ProjectID:        uuid.New(),
+		SourcePath:       "services.yaml",
+		SourceCommitSHA:  "0123456789abcdef0123456789abcdef01234567",
+		ContentHash:      "sha256:policy",
+		ValidatedPayload: []byte(`{"spec":{"services":[{"key":"api","rootPath":"services/api"},{"key":"api","rootPath":"services/api-copy"}]}}`),
+		Meta:             commandMeta(uuid.New()),
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("ImportServicesPolicy() err = %v, want invalid argument", err)
+	}
+}
+
+func TestImportServicesPolicyRejectsUnknownDependency(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, &sequenceIDs{ids: []uuid.UUID{uuid.New()}})
+
+	_, err := svc.ImportServicesPolicy(ctx, ImportServicesPolicyInput{
+		ProjectID:        uuid.New(),
+		SourcePath:       "services.yaml",
+		SourceCommitSHA:  "0123456789abcdef0123456789abcdef01234567",
+		ContentHash:      "sha256:policy",
+		ValidatedPayload: []byte(`{"spec":{"services":[{"key":"worker","rootPath":"services/worker","dependsOn":["api"]}]}}`),
+		Meta:             commandMeta(uuid.New()),
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("ImportServicesPolicy() err = %v, want invalid argument", err)
 	}
 }
 
@@ -475,10 +583,15 @@ func stringPtr(value string) *string {
 	return &value
 }
 
+func servicesPolicyPayload(key string, rootPath string, kind string) string {
+	return `{"spec":{"services":[{"key":"` + key + `","rootPath":"` + rootPath + `","kind":"` + kind + `"}]}}`
+}
+
 type memoryRepository struct {
 	projects            map[uuid.UUID]entity.Project
 	repositories        map[uuid.UUID]entity.RepositoryBinding
 	policies            map[uuid.UUID]entity.ServicesPolicy
+	serviceDescriptors  map[uuid.UUID][]entity.ServiceDescriptor
 	branchRules         map[uuid.UUID]entity.BranchRules
 	policyEditProposals map[uuid.UUID]entity.PolicyEditProposal
 	policyOverrides     map[uuid.UUID]entity.PolicyOverride
@@ -492,6 +605,7 @@ func newMemoryRepository() *memoryRepository {
 		projects:            map[uuid.UUID]entity.Project{},
 		repositories:        map[uuid.UUID]entity.RepositoryBinding{},
 		policies:            map[uuid.UUID]entity.ServicesPolicy{},
+		serviceDescriptors:  map[uuid.UUID][]entity.ServiceDescriptor{},
 		branchRules:         map[uuid.UUID]entity.BranchRules{},
 		policyEditProposals: map[uuid.UUID]entity.PolicyEditProposal{},
 		policyOverrides:     map[uuid.UUID]entity.PolicyOverride{},
@@ -572,7 +686,7 @@ func (r *memoryRepository) ListRepositories(context.Context, query.RepositoryFil
 	return nil, query.PageResult{}, nil
 }
 
-func (r *memoryRepository) ImportServicesPolicy(_ context.Context, policy entity.ServicesPolicy, _ []entity.ServiceDescriptor, result entity.CommandResult, buildEvent projectrepo.ServicesPolicyEventBuilder) (entity.ServicesPolicy, error) {
+func (r *memoryRepository) ImportServicesPolicy(_ context.Context, policy entity.ServicesPolicy, descriptors []entity.ServiceDescriptor, result entity.CommandResult, buildEvent projectrepo.ServicesPolicyEventBuilder) (entity.ServicesPolicy, error) {
 	r.policyVersions[policy.ProjectID]++
 	policy.PolicyVersion = r.policyVersions[policy.ProjectID]
 	event, err := buildEvent(policy)
@@ -580,6 +694,7 @@ func (r *memoryRepository) ImportServicesPolicy(_ context.Context, policy entity
 		return entity.ServicesPolicy{}, err
 	}
 	r.policies[policy.ID] = policy
+	r.serviceDescriptors[policy.ID] = descriptors
 	r.events = append(r.events, event)
 	r.commandResults[result.Key] = result
 	return policy, nil
