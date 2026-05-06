@@ -1,0 +1,116 @@
+---
+doc_id: API-CK8S-PACKAGE-0001
+type: api-contract
+title: kodex — API-обзор package-hub
+status: active
+owner_role: SA
+created_at: 2026-05-06
+updated_at: 2026-05-06
+related_issues: [642]
+related_prs: []
+approvals:
+  required: ["Owner"]
+  status: approved
+  request_id: "owner-2026-05-06-package-platform-kickoff"
+  approved_by: "ai-da-stas"
+  approved_at: 2026-05-06
+---
+
+# API-обзор: package-hub
+
+## TL;DR
+
+- Тип API: внутренний gRPC `PackageHubService`, доменные события `package.*`.
+- Аутентификация: через gateway, сервисный токен или MCP-границу; команды дополнительно проверяются через `access-manager`.
+- Версионирование: стабильный транспортный `v1`; источники правды будущих контрактов — proto и AsyncAPI.
+- Основные операции: источники пакетов, синхронизация доступного каталога, чтения пакетов и версий, установки, схемы секретов, статус верификации.
+
+## Спецификации
+
+- gRPC proto: `proto/kodex/packages/v1/package_hub.proto`.
+- AsyncAPI: `specs/asyncapi/package-hub.v1.yaml`.
+- Внешний HTTP для операторской и администраторской консоли: через тонкий `staff-gateway` с OpenAPI-контрактом, не напрямую из доменного сервиса.
+
+Этот документ фиксирует обзор операций и событий. Фактическими источниками правды для транспорта станут proto и AsyncAPI; если описание ниже расходится с машинной спецификацией, исправляется документ или контракт в том же изменении.
+
+## Операции
+
+| Операция | Вид | Доступ | Идемпотентность | Примечание |
+|---|---|---|---|---|
+| `ConnectPackageSource` | gRPC command | `package.source.connect` | `CommandMeta.command_id` | Подключает источник магазина, пользовательский источник или встроенный источник. |
+| `UpdatePackageSource` | gRPC command | `package.source.update` | ожидаемая версия | Обновляет имя, статус, ссылку endpoint или параметры источника. |
+| `DisablePackageSource` | gRPC command | `package.source.disable` | ожидаемая версия | Отключает источник без физического удаления. |
+| `GetPackageSource` | gRPC query | `package.source.read` | нет | Авторитетное чтение источника. |
+| `ListPackageSources` | gRPC query | `package.source.read` | нет | Список источников по scope и статусу. |
+| `SyncAvailablePackages` | gRPC command | `package.catalog.sync` | `CommandMeta.command_id` | Синхронизирует локальный доступный каталог из источника. |
+| `GetPackage` | gRPC query | `package.catalog.read` | нет | Читает пакетную запись. |
+| `ListPackages` | gRPC query | `package.catalog.read` | нет | Фильтрует доступные пакеты по виду, источнику, статусу и коммерческому признаку. |
+| `GetPackageVersion` | gRPC query | `package.catalog.read` | нет | Читает конкретную версию, manifest и статус проверки. |
+| `ListPackageVersions` | gRPC query | `package.catalog.read` | нет | Список версий пакета. |
+| `GetPackageManifest` | gRPC query | `package.manifest.read` | нет | Возвращает нормализованный снимок manifest. |
+| `RequestPackageInstallation` | gRPC command | `package.install` | `CommandMeta.command_id` | Создаёт установку или запрос установки пакета в заданной области. |
+| `UpdatePackageInstallation` | gRPC command | `package.installation.update` | ожидаемая версия | Меняет статус, desired state или выбранную версию установки. |
+| `DisablePackageInstallation` | gRPC command | `package.installation.disable` | ожидаемая версия | Отключает установленный пакет без удаления истории. |
+| `UninstallPackage` | gRPC command | `package.uninstall` | ожидаемая версия | Переводит установку в `uninstalled` и публикует событие. |
+| `GetPackageInstallation` | gRPC query | `package.installation.read` | нет | Авторитетное чтение установки. |
+| `ListPackageInstallations` | gRPC query | `package.installation.read` | нет | Список установок по области, статусу и виду пакета. |
+| `GetPackageSecretSchema` | gRPC query | `package.secret.read` | нет | Читает схему секретов версии пакета. |
+| `RefreshPackageInstallationSecretStatus` | gRPC command | `package.installation.update` | ожидаемая версия | Перечитывает состояние привязок секретов из `access-manager` и обновляет только статус заполненности установки. |
+| `SetPackageVerification` | gRPC command | `package.verify` | `CommandMeta.command_id` + ожидаемая ревизия версии пакета | Фиксирует верификацию, отклонение или отзыв версии пакета. |
+
+## Модель ошибок
+
+| Ошибка | Когда возвращается |
+|---|---|
+| `invalid_argument` | Невалидный slug, область, manifest, версия, source ref или secret schema. |
+| `permission_denied` | `access-manager` запретил действие. |
+| `not_found` | Источник, пакет, версия или установка не найдены. |
+| `already_exists` | Дубликат slug источника, slug пакета или активной установки в той же области. |
+| `failed_precondition` | Нельзя установить отозванную версию, пакет с незаполненными обязательными секретами или пакет, запрещённый policy. |
+| `aborted` | Конфликт ожидаемой версии. |
+| `unavailable` | Временная ошибка зависимости, БД или источника каталога. |
+
+## События
+
+События фиксируют бизнес-факты жизненного цикла, а не полный CRUD. Физическое удаление не входит в штатный `v1`: вместо `deleted` используются отключение, отзыв и снятие установки.
+
+| Event | Aggregate | Payload минимум |
+|---|---|---|
+| `package.source.connected` | package_source | `source_id`, `source_kind`, `status`, `version` |
+| `package.source.updated` | package_source | `source_id`, `status`, `version` |
+| `package.source.disabled` | package_source | `source_id`, `status`, `version` |
+| `package.catalog.synced` | package_source | `source_id`, `synced_at`, `package_count`, `version_count` |
+| `package.package.discovered` | package | `package_id`, `source_id`, `slug`, `package_kind` |
+| `package.package.updated` | package | `package_id`, `slug`, `status`, `trust_status` |
+| `package.version.discovered` | package_version | `package_id`, `package_version_id`, `version`, `manifest_digest` |
+| `package.version.updated` | package_version | `package_id`, `package_version_id`, `verification_status`, `release_status` |
+| `package.version.revoked` | package_version | `package_id`, `package_version_id`, `reason` |
+| `package.verification.updated` | package_version | `package_id`, `package_version_id`, `verification_status` |
+| `package.installation.requested` | installation | `installation_id`, `package_id`, `package_version_id`, `scope_type`, `scope_ref` |
+| `package.installation.activated` | installation | `installation_id`, `package_id`, `package_version_id`, `scope_type`, `scope_ref` |
+| `package.installation.updated` | installation | `installation_id`, `installation_status`, `desired_state`, `version` |
+| `package.installation.disabled` | installation | `installation_id`, `installation_status`, `version` |
+| `package.installation.uninstalled` | installation | `installation_id`, `installation_status`, `version` |
+| `package.secret_schema.updated` | package_version | `package_id`, `package_version_id`, `schema_digest` |
+
+## Состояние реализации
+
+| Область | Статус |
+|---|---|
+| Доменная документация | Подготовлена как целевой стартовый срез. |
+| gRPC proto `PackageHubService` | Запланирован следующим контрактным срезом. |
+| AsyncAPI `package.*` | Запланирован следующим контрактным срезом. |
+| Сервисный процесс `package-hub` | Запланирован после контрактного среза. |
+| PostgreSQL и outbox | Запланированы после контрактного среза. |
+
+## Совместимость
+
+- Стабильный `v1` контракт не должен удалять поля без цикла `deprecate -> migrate -> remove`.
+- gRPC-контракт не импортирует transport DTO в домен; преобразование должно жить в transport caster слое.
+- События должны проектироваться так, чтобы переход с PostgreSQL event log на брокер не ломал доменные контракты.
+
+## Апрув
+
+- request_id: `owner-2026-05-06-package-platform-kickoff`
+- Решение: approved
+- Комментарий: API-обзор `package-hub` согласован как целевое состояние стартового среза; стабильные transport-спецификации создаются отдельным срезом.
