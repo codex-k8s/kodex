@@ -11,6 +11,9 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/query"
 )
 
+// ServicesPolicyEventBuilder builds an outbox event after repository assigns the next policy version.
+type ServicesPolicyEventBuilder func(entity.ServicesPolicy) (entity.OutboxEvent, error)
+
 // Repository is the domain persistence contract for project-catalog use cases.
 type Repository interface {
 	// GetCommandResult returns a previously applied idempotent command result.
@@ -32,7 +35,7 @@ type Repository interface {
 	// ListRepositories returns repository bindings matching filter.
 	ListRepositories(ctx context.Context, filter query.RepositoryFilter) ([]entity.RepositoryBinding, query.PageResult, error)
 	// ImportServicesPolicy stores checked policy, descriptors, outbox event and command result atomically.
-	ImportServicesPolicy(ctx context.Context, policy entity.ServicesPolicy, descriptors []entity.ServiceDescriptor, event entity.OutboxEvent, result entity.CommandResult) error
+	ImportServicesPolicy(ctx context.Context, policy entity.ServicesPolicy, descriptors []entity.ServiceDescriptor, result entity.CommandResult, buildEvent ServicesPolicyEventBuilder) (entity.ServicesPolicy, error)
 	// GetServicesPolicy returns active or concrete checked services policy.
 	GetServicesPolicy(ctx context.Context, projectID uuid.UUID, policyID *uuid.UUID) (entity.ServicesPolicy, error)
 	// ListServiceDescriptors returns typed descriptors matching filter.

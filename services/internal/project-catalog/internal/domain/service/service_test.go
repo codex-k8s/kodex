@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/errs"
+	projectrepo "github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/repository/project"
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/query"
@@ -114,6 +116,98 @@ func TestCreateProjectStopsWhenAccessDenied(t *testing.T) {
 	}
 }
 
+func TestUpdateRepositoryReplayStillChecksAccess(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	commandID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = entity.RepositoryBinding{
+		Base:          entity.Base{ID: repositoryID, Version: 1},
+		ProjectID:     projectID,
+		Provider:      enum.RepositoryProviderGitHub,
+		ProviderOwner: "codex-k8s",
+		ProviderName:  "kodex",
+		DefaultBranch: "main",
+		Status:        enum.RepositoryStatusActive,
+	}
+	authorizer := &spyAuthorizer{}
+	svc := NewWithConfig(store, fixedClock{}, &sequenceIDs{ids: []uuid.UUID{uuid.New()}}, Config{Authorizer: authorizer})
+
+	meta := commandMeta(commandID)
+	meta.ExpectedVersion = int64Ptr(1)
+	updated, err := svc.UpdateRepository(ctx, UpdateRepositoryInput{
+		RepositoryID:  repositoryID,
+		DefaultBranch: stringPtr("develop"),
+		Meta:          meta,
+	})
+	if err != nil {
+		t.Fatalf("UpdateRepository(): %v", err)
+	}
+	if updated.DefaultBranch != "develop" {
+		t.Fatalf("updated default branch = %q, want develop", updated.DefaultBranch)
+	}
+
+	authorizer.err = errs.ErrForbidden
+	_, err = svc.UpdateRepository(ctx, UpdateRepositoryInput{
+		RepositoryID:  repositoryID,
+		DefaultBranch: stringPtr("ignored"),
+		Meta:          meta,
+	})
+	if !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("replay err = %v, want %v", err, errs.ErrForbidden)
+	}
+	if len(authorizer.requests) != 2 {
+		t.Fatalf("access checks = %d, want 2 including replay", len(authorizer.requests))
+	}
+}
+
+func TestImportServicesPolicyAssignsMonotonicVersions(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, &sequenceIDs{ids: []uuid.UUID{
+		uuid.New(), uuid.New(),
+		uuid.New(), uuid.New(),
+	}})
+
+	first, err := svc.ImportServicesPolicy(ctx, ImportServicesPolicyInput{
+		ProjectID:          projectID,
+		SourceRepositoryID: &repositoryID,
+		SourcePath:         "services.yaml",
+		SourceCommitSHA:    "0123456789abcdef0123456789abcdef01234567",
+		ContentHash:        "sha256:first",
+		ValidatedPayload:   []byte(`{"services":["api"]}`),
+		Meta:               commandMeta(uuid.New()),
+	})
+	if err != nil {
+		t.Fatalf("first ImportServicesPolicy(): %v", err)
+	}
+	second, err := svc.ImportServicesPolicy(ctx, ImportServicesPolicyInput{
+		ProjectID:          projectID,
+		SourceRepositoryID: &repositoryID,
+		SourcePath:         "services.yaml",
+		SourceCommitSHA:    "abcdef0123456789abcdef0123456789abcdef01",
+		ContentHash:        "sha256:second",
+		ValidatedPayload:   []byte(`{"services":["api","worker"]}`),
+		Meta:               commandMeta(uuid.New()),
+	})
+	if err != nil {
+		t.Fatalf("second ImportServicesPolicy(): %v", err)
+	}
+	if first.PolicyVersion != 1 || second.PolicyVersion != 2 {
+		t.Fatalf("policy versions = %d, %d; want 1, 2", first.PolicyVersion, second.PolicyVersion)
+	}
+	var payload value.ProjectEventPayload
+	if err := json.Unmarshal(store.events[len(store.events)-1].Payload, &payload); err != nil {
+		t.Fatalf("unmarshal event payload: %v", err)
+	}
+	if payload.PolicyVersion != second.PolicyVersion {
+		t.Fatalf("event policy version = %d, want %d", payload.PolicyVersion, second.PolicyVersion)
+	}
+}
+
 type spyAuthorizer struct {
 	requests []AuthorizationRequest
 	err      error
@@ -157,8 +251,19 @@ func commandMeta(commandID uuid.UUID) value.CommandMeta {
 	}
 }
 
+func int64Ptr(value int64) *int64 {
+	return &value
+}
+
+func stringPtr(value string) *string {
+	return &value
+}
+
 type memoryRepository struct {
 	projects       map[uuid.UUID]entity.Project
+	repositories   map[uuid.UUID]entity.RepositoryBinding
+	policies       map[uuid.UUID]entity.ServicesPolicy
+	policyVersions map[uuid.UUID]int64
 	commandResults map[string]entity.CommandResult
 	events         []entity.OutboxEvent
 }
@@ -166,6 +271,9 @@ type memoryRepository struct {
 func newMemoryRepository() *memoryRepository {
 	return &memoryRepository{
 		projects:       map[uuid.UUID]entity.Project{},
+		repositories:   map[uuid.UUID]entity.RepositoryBinding{},
+		policies:       map[uuid.UUID]entity.ServicesPolicy{},
+		policyVersions: map[uuid.UUID]int64{},
 		commandResults: map[string]entity.CommandResult{},
 	}
 }
@@ -214,28 +322,65 @@ func (r *memoryRepository) ListProjects(context.Context, query.ProjectFilter) ([
 	return projects, query.PageResult{}, nil
 }
 
-func (r *memoryRepository) AttachRepository(context.Context, entity.RepositoryBinding, entity.OutboxEvent, entity.CommandResult) error {
-	return errs.ErrInvalidArgument
+func (r *memoryRepository) AttachRepository(_ context.Context, repository entity.RepositoryBinding, event entity.OutboxEvent, result entity.CommandResult) error {
+	r.repositories[repository.ID] = repository
+	r.events = append(r.events, event)
+	r.commandResults[result.Key] = result
+	return nil
 }
 
-func (r *memoryRepository) UpdateRepository(context.Context, entity.RepositoryBinding, int64, entity.OutboxEvent, *entity.CommandResult) error {
-	return errs.ErrInvalidArgument
+func (r *memoryRepository) UpdateRepository(_ context.Context, repository entity.RepositoryBinding, _ int64, event entity.OutboxEvent, result *entity.CommandResult) error {
+	r.repositories[repository.ID] = repository
+	r.events = append(r.events, event)
+	if result != nil {
+		r.commandResults[result.Key] = *result
+	}
+	return nil
 }
 
-func (r *memoryRepository) GetRepository(context.Context, uuid.UUID) (entity.RepositoryBinding, error) {
-	return entity.RepositoryBinding{}, errs.ErrNotFound
+func (r *memoryRepository) GetRepository(_ context.Context, id uuid.UUID) (entity.RepositoryBinding, error) {
+	repository, ok := r.repositories[id]
+	if !ok {
+		return entity.RepositoryBinding{}, errs.ErrNotFound
+	}
+	return repository, nil
 }
 
 func (r *memoryRepository) ListRepositories(context.Context, query.RepositoryFilter) ([]entity.RepositoryBinding, query.PageResult, error) {
 	return nil, query.PageResult{}, nil
 }
 
-func (r *memoryRepository) ImportServicesPolicy(context.Context, entity.ServicesPolicy, []entity.ServiceDescriptor, entity.OutboxEvent, entity.CommandResult) error {
-	return errs.ErrInvalidArgument
+func (r *memoryRepository) ImportServicesPolicy(_ context.Context, policy entity.ServicesPolicy, _ []entity.ServiceDescriptor, result entity.CommandResult, buildEvent projectrepo.ServicesPolicyEventBuilder) (entity.ServicesPolicy, error) {
+	r.policyVersions[policy.ProjectID]++
+	policy.PolicyVersion = r.policyVersions[policy.ProjectID]
+	event, err := buildEvent(policy)
+	if err != nil {
+		return entity.ServicesPolicy{}, err
+	}
+	r.policies[policy.ID] = policy
+	r.events = append(r.events, event)
+	r.commandResults[result.Key] = result
+	return policy, nil
 }
 
-func (r *memoryRepository) GetServicesPolicy(context.Context, uuid.UUID, *uuid.UUID) (entity.ServicesPolicy, error) {
-	return entity.ServicesPolicy{}, errs.ErrNotFound
+func (r *memoryRepository) GetServicesPolicy(_ context.Context, projectID uuid.UUID, policyID *uuid.UUID) (entity.ServicesPolicy, error) {
+	if policyID != nil {
+		policy, ok := r.policies[*policyID]
+		if !ok {
+			return entity.ServicesPolicy{}, errs.ErrNotFound
+		}
+		return policy, nil
+	}
+	var latest entity.ServicesPolicy
+	for _, policy := range r.policies {
+		if policy.ProjectID == projectID && policy.PolicyVersion > latest.PolicyVersion {
+			latest = policy
+		}
+	}
+	if latest.ID == uuid.Nil {
+		return entity.ServicesPolicy{}, errs.ErrNotFound
+	}
+	return latest, nil
 }
 
 func (r *memoryRepository) ListServiceDescriptors(context.Context, query.ServiceDescriptorFilter) ([]entity.ServiceDescriptor, query.PageResult, error) {

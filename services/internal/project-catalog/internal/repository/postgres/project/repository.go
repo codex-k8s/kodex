@@ -127,8 +127,21 @@ func (r *Repository) ListRepositories(ctx context.Context, filter query.Reposito
 	return queryPage(ctx, r.db, operationListRepositories, queryRepositoryList, repositoryFilterArgs(filter), scanRepository)
 }
 
-func (r *Repository) ImportServicesPolicy(ctx context.Context, policy entity.ServicesPolicy, descriptors []entity.ServiceDescriptor, event entity.OutboxEvent, result entity.CommandResult) error {
-	return r.withTx(ctx, operationImportServicesPolicy, func(tx pgx.Tx) error {
+func (r *Repository) ImportServicesPolicy(ctx context.Context, policy entity.ServicesPolicy, descriptors []entity.ServiceDescriptor, result entity.CommandResult, buildEvent projectrepo.ServicesPolicyEventBuilder) (entity.ServicesPolicy, error) {
+	if buildEvent == nil {
+		return entity.ServicesPolicy{}, errs.ErrInvalidArgument
+	}
+	var imported entity.ServicesPolicy
+	err := r.withTx(ctx, operationImportServicesPolicy, func(tx pgx.Tx) error {
+		policyVersion, err := nextServicesPolicyVersion(ctx, tx, policy.ProjectID)
+		if err != nil {
+			return err
+		}
+		policy.PolicyVersion = policyVersion
+		event, err := buildEvent(policy)
+		if err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, queryServicesPolicyInsert, servicesPolicyArgs(policy)); err != nil {
 			return err
 		}
@@ -143,8 +156,22 @@ func (r *Repository) ImportServicesPolicy(ctx context.Context, policy entity.Ser
 		if err := insertOutboxEvent(ctx, tx, event); err != nil {
 			return err
 		}
-		return postgreslib.RunMutation(ctx, tx, errs.ErrConflict, commandResultMutation(result))
+		if err := postgreslib.RunMutation(ctx, tx, errs.ErrConflict, commandResultMutation(result)); err != nil {
+			return err
+		}
+		imported = policy
+		return nil
 	})
+	if err != nil {
+		return entity.ServicesPolicy{}, err
+	}
+	return imported, nil
+}
+
+func nextServicesPolicyVersion(ctx context.Context, tx pgx.Tx, projectID uuid.UUID) (int64, error) {
+	var version int64
+	err := tx.QueryRow(ctx, queryServicesPolicyNextVersion, pgx.NamedArgs{"project_id": projectID}).Scan(&version)
+	return version, err
 }
 
 func insertServiceDescriptors(ctx context.Context, tx pgx.Tx, descriptors []entity.ServiceDescriptor) (err error) {

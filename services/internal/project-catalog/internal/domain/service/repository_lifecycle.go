@@ -81,21 +81,24 @@ func (s *Service) updateRepository(
 	if err := requireProjectID(repositoryID); err != nil {
 		return entity.RepositoryBinding{}, err
 	}
-	if result, ok, err := s.findCommandResult(ctx, meta, operation, projectAggregateRepository); ok || err != nil {
-		if err != nil {
-			return entity.RepositoryBinding{}, err
-		}
-		return s.repository.GetRepository(ctx, result.AggregateID)
-	}
-	previousVersion, err := expectedVersion(meta)
-	if err != nil {
-		return entity.RepositoryBinding{}, err
-	}
 	current, err := s.repository.GetRepository(ctx, repositoryID)
 	if err != nil {
 		return entity.RepositoryBinding{}, err
 	}
 	if err := s.authorizeCommand(ctx, meta, actionKey, repositoryScopedResource(repositoryID, current.ProjectID)); err != nil {
+		return entity.RepositoryBinding{}, err
+	}
+	if result, ok, err := s.findCommandResult(ctx, meta, operation, projectAggregateRepository); ok || err != nil {
+		if err != nil {
+			return entity.RepositoryBinding{}, err
+		}
+		if result.AggregateID != repositoryID {
+			return entity.RepositoryBinding{}, errs.ErrConflict
+		}
+		return current, nil
+	}
+	previousVersion, err := expectedVersion(meta)
+	if err != nil {
 		return entity.RepositoryBinding{}, err
 	}
 	now := s.clock.Now()

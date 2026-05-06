@@ -774,8 +774,8 @@ func TestRepositoryIntegrationAccessRuleIdentityIsUnique(t *testing.T) {
 	now := time.Date(2026, 4, 30, 12, 0, 0, 0, time.UTC)
 	action := entity.AccessAction{
 		Base:         entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
-		Key:          "project.read",
-		DisplayName:  "Project read",
+		Key:          "test.project.read",
+		DisplayName:  "Test project read",
 		ResourceType: "project",
 		Status:       enum.AccessActionStatusActive,
 	}

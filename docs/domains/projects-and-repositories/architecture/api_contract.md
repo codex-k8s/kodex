@@ -52,7 +52,7 @@ approvals:
 | `CreatePolicyEditProposal` | gRPC command | `project.policy.propose` | `CommandMeta.command_id` | Создаёт запрос на PR-изменение `services.yaml` вместо прямой записи в БД. |
 | `CreatePolicyOverride` | gRPC command | `project.policy.override` | `CommandMeta.command_id` | Создаёт временное операторское переопределение с причиной, сроком действия и аудитом. |
 | `CancelPolicyOverride` | gRPC command | `project.policy.override.cancel` | ожидаемая версия | Досрочно отменяет активное операторское переопределение с причиной. |
-| `ListPolicyOverrides` | gRPC query | `project.policy.read` | нет | Читает активные или исторические операторские переопределения политики. |
+| `ListPolicyOverrides` | gRPC query | `project.policy.override.read` | нет | Читает активные или исторические операторские переопределения политики. |
 | `PutDocumentationSource` | gRPC command | `project.docs.update` | ожидаемая версия | Обновляет источник документации. |
 | `GetDocumentationSource` | gRPC query | `project.docs.read` | нет | Читает конкретный источник документации. |
 | `ListDocumentationSources` | gRPC query | `project.docs.read` | нет | Читает источники документации проекта, репозитория или сервиса. |

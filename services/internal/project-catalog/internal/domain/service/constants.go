@@ -64,6 +64,7 @@ const (
 	projectActionPolicyRead              = "project.policy.read"
 	projectActionPolicyPropose           = "project.policy.propose"
 	projectActionPolicyOverride          = "project.policy.override"
+	projectActionPolicyOverrideRead      = "project.policy.override.read"
 	projectActionPolicyOverrideCancel    = "project.policy.override.cancel"
 	projectActionDocsUpdate              = "project.docs.update"
 	projectActionDocsRead                = "project.docs.read"

@@ -39,7 +39,6 @@ func (s *Service) ImportServicesPolicy(ctx context.Context, input ImportServices
 		SourceRef:          strings.TrimSpace(input.SourceRef),
 		SourceCommitSHA:    strings.TrimSpace(input.SourceCommitSHA),
 		SourceBlobSHA:      strings.TrimSpace(input.SourceBlobSHA),
-		PolicyVersion:      1,
 		ContentHash:        strings.TrimSpace(input.ContentHash),
 		ValidatedPayload:   input.ValidatedPayload,
 		ValidationStatus:   validationStatus,
@@ -54,14 +53,11 @@ func (s *Service) ImportServicesPolicy(ctx context.Context, input ImportServices
 	if err != nil {
 		return entity.ServicesPolicy{}, err
 	}
-	event, err := s.servicesPolicyEvent(policy)
+	imported, err := s.repository.ImportServicesPolicy(ctx, policy, descriptors, *result, s.servicesPolicyEvent)
 	if err != nil {
 		return entity.ServicesPolicy{}, err
 	}
-	if err := s.repository.ImportServicesPolicy(ctx, policy, descriptors, event, *result); err != nil {
-		return entity.ServicesPolicy{}, err
-	}
-	return policy, nil
+	return imported, nil
 }
 
 // GetServicesPolicy returns active or concrete checked services policy.
@@ -188,7 +184,7 @@ func (s *Service) CreatePolicyOverride(ctx context.Context, input CreatePolicyOv
 
 // ListPolicyOverrides returns operator overrides matching filter.
 func (s *Service) ListPolicyOverrides(ctx context.Context, input ListPolicyOverridesInput) (ListPolicyOverridesResult, error) {
-	if err := s.authorizeProjectQuery(ctx, input.ProjectID, input.Meta, projectActionPolicyRead, projectAggregatePolicyOverride); err != nil {
+	if err := s.authorizeProjectQuery(ctx, input.ProjectID, input.Meta, projectActionPolicyOverrideRead, projectAggregatePolicyOverride); err != nil {
 		return ListPolicyOverridesResult{}, err
 	}
 	activeAt := s.clock.Now()
