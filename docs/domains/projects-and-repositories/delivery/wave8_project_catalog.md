@@ -43,7 +43,7 @@ approvals:
 |---|---|---|
 | Стартовый срез | #628 | Доменная документация, план поставки и карты связей готовы. |
 | 8.1 | #629 | Контракты `project-catalog`, сервисный каркас и доменные интерфейсы готовы. |
-| 8.2 | #630 | PostgreSQL-модель, миграции, слой репозитория, outbox и тесты. |
+| 8.2 | #630 | PostgreSQL-модель, миграции, слой репозитория, outbox, deploy-инвентарь и тесты. |
 | 8.3 | #631 | gRPC-операции, проверки доступа, события и транспортные тесты. |
 | 8.4 | #632 | Политика `services.yaml`, управляемая через Git, импорт проверенной проекции, источники документации и политика рабочего контура. |
 | 8.5 | #633 | Правила веток, релизная политика, релизные линии, политика размещения, манифесты deploy и закрытие Wave 8. |
@@ -59,53 +59,54 @@ approvals:
 
 ## Реализация операций
 
-Срез #629 фиксирует стабильный транспортный контракт и запускаемый каркас сервиса. Бизнес-обработчики gRPC намеренно не реализуются в этом PR, чтобы не смешивать контрактный срез с PostgreSQL и доменной логикой.
+Срез #629 фиксирует стабильный транспортный контракт и запускаемый каркас сервиса. Срез #630 добавляет PostgreSQL-модель, миграции, слой репозитория, оптимистичную конкуренцию, идемпотентный след, сервисный outbox и минимальный deploy-инвентарь. Бизнес-обработчики gRPC остаются отдельным срезом, чтобы transport-логика не смешивалась с моделью хранения.
 
 | Операция | Контракт | Реализация |
 |---|---|---|
-| `CreateProject` | Готов в proto. | Отложена до #631. |
-| `UpdateProject` | Готов в proto. | Отложена до #631. |
-| `GetProject` | Готов в proto. | Отложена до #631. |
-| `ListProjects` | Готов в proto. | Отложена до #631. |
-| `AttachRepository` | Готов в proto. | Отложена до #631. |
-| `UpdateRepository` | Готов в proto. | Отложена до #631. |
+| `CreateProject` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631. |
+| `UpdateProject` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631. |
+| `GetProject` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631. |
+| `ListProjects` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631. |
+| `AttachRepository` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631. |
+| `UpdateRepository` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631. |
 | `DetachRepository` | Готов в proto. | Отложена до #631. |
-| `GetRepository` | Готов в proto. | Отложена до #631. |
-| `ListRepositories` | Готов в proto. | Отложена до #631. |
-| `ImportServicesPolicy` | Готов в proto. | Отложена до #631/#632. |
-| `GetServicesPolicy` | Готов в proto. | Отложена до #631/#632. |
-| `ListServiceDescriptors` | Готов в proto. | Отложена до #631/#632. |
-| `CreatePolicyEditProposal` | Готов в proto. | Отложена до #631/#632. |
-| `CreatePolicyOverride` | Готов в proto. | Отложена до #631/#632. |
+| `GetRepository` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631. |
+| `ListRepositories` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631. |
+| `ImportServicesPolicy` | Готов в proto. | PostgreSQL-слой готов; gRPC/валидация файла отложены до #631/#632. |
+| `GetServicesPolicy` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#632. |
+| `ListServiceDescriptors` | Готов в proto. | PostgreSQL-слой готов; чтение ограничено последней `valid + synced/overridden` политикой; gRPC отложена до #631/#632. |
+| `CreatePolicyEditProposal` | Готов в proto. | PostgreSQL-слой готов; provider PR отложен до #631/#632. |
+| `CreatePolicyOverride` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#632. |
 | `CancelPolicyOverride` | Готов в proto. | Отложена до #631/#632. |
-| `PutDocumentationSource` | Готов в proto. | Отложена до #631/#632. |
-| `GetDocumentationSource` | Готов в proto. | Отложена до #631/#632. |
-| `ListDocumentationSources` | Готов в proto. | Отложена до #631/#632. |
-| `GetWorkspacePolicy` | Готов в proto. | Отложена до #631/#632. |
-| `PutBranchRules` | Готов в proto. | Отложена до #631/#633. |
-| `GetBranchRules` | Готов в proto. | Отложена до #631/#633. |
-| `ListBranchRules` | Готов в proto. | Отложена до #631/#633. |
-| `PutReleasePolicy` | Готов в proto. | Отложена до #631/#633. |
-| `GetReleasePolicy` | Готов в proto. | Отложена до #631/#633. |
-| `ListReleasePolicies` | Готов в proto. | Отложена до #631/#633. |
-| `PutReleaseLine` | Готов в proto. | Отложена до #631/#633. |
-| `GetReleaseLine` | Готов в proto. | Отложена до #631/#633. |
-| `ListReleaseLines` | Готов в proto. | Отложена до #631/#633. |
-| `PutPlacementPolicy` | Готов в proto. | Отложена до #631/#633. |
-| `GetPlacementPolicy` | Готов в proto. | Отложена до #631/#633. |
-| `ListPlacementPolicies` | Готов в proto. | Отложена до #631/#633. |
+| `ListPolicyOverrides` | Готов в proto. | PostgreSQL-слой готов; активные переопределения также входят в `GetWorkspacePolicy`; gRPC отложена до #631/#632. |
+| `PutDocumentationSource` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#632. |
+| `GetDocumentationSource` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#632. |
+| `ListDocumentationSources` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#632. |
+| `GetWorkspacePolicy` | Готов в proto. | PostgreSQL-слой готов; источники ограничены активной проверенной политикой, фильтр сервисов сужает код и документацию; gRPC отложена до #631/#632. |
+| `PutBranchRules` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#633. |
+| `GetBranchRules` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#633. |
+| `ListBranchRules` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#633. |
+| `PutReleasePolicy` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#633. |
+| `GetReleasePolicy` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#633. |
+| `ListReleasePolicies` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#633. |
+| `PutReleaseLine` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#633. |
+| `GetReleaseLine` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#633. |
+| `ListReleaseLines` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#633. |
+| `PutPlacementPolicy` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#633. |
+| `GetPlacementPolicy` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#633. |
+| `ListPlacementPolicies` | Готов в proto. | PostgreSQL-слой готов; gRPC отложена до #631/#633. |
 
 ## Реализация событий
 
 | Событие | Контракт | Публикация |
 |---|---|---|
-| `project.project.created` | Готово в AsyncAPI. | Отложена до outbox-срезов #630/#631. |
-| `project.project.updated` | Готово в AsyncAPI. | Отложена до outbox-срезов #630/#631. |
-| `project.project.archived` | Готово в AsyncAPI. | Отложена до outbox-срезов #630/#631. |
-| `project.project.disabled` | Готово в AsyncAPI. | Отложена до outbox-срезов #630/#631. |
-| `project.repository.attached` | Готово в AsyncAPI. | Отложена до outbox-срезов #630/#631. |
-| `project.repository.updated` | Готово в AsyncAPI. | Отложена до outbox-срезов #630/#631. |
-| `project.repository.detached` | Готово в AsyncAPI. | Отложена до outbox-срезов #630/#631. |
+| `project.project.created` | Готово в AsyncAPI. | Запись в сервисный outbox готова; публикация через gRPC-команды отложена до #631. |
+| `project.project.updated` | Готово в AsyncAPI. | Запись в сервисный outbox готова; публикация через gRPC-команды отложена до #631. |
+| `project.project.archived` | Готово в AsyncAPI. | Запись в сервисный outbox готова; публикация через gRPC-команды отложена до #631. |
+| `project.project.disabled` | Готово в AsyncAPI. | Запись в сервисный outbox готова; публикация через gRPC-команды отложена до #631. |
+| `project.repository.attached` | Готово в AsyncAPI. | Запись в сервисный outbox готова; публикация через gRPC-команды отложена до #631. |
+| `project.repository.updated` | Готово в AsyncAPI. | Запись в сервисный outbox готова; публикация через gRPC-команды отложена до #631. |
+| `project.repository.detached` | Готово в AsyncAPI. | Отложена до #631. |
 | `project.services_policy.imported` | Готово в AsyncAPI. | Отложена до #632. |
 | `project.policy_override.created` | Готово в AsyncAPI. | Отложена до #632. |
 | `project.policy_override.expired` | Готово в AsyncAPI. | Отложена до #632. |

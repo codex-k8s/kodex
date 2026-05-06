@@ -2,6 +2,8 @@
 package query
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/enum"
@@ -89,4 +91,15 @@ type WorkspacePolicyFilter struct {
 	RepositoryIDs           []uuid.UUID
 	ServiceKeys             []string
 	IncludeGuidancePackages bool
+}
+
+// PolicyOverrideFilter selects operator policy overrides.
+type PolicyOverrideFilter struct {
+	ProjectID   uuid.UUID
+	TargetTypes []enum.PolicyOverrideTargetType
+	TargetID    *uuid.UUID
+	Statuses    []enum.PolicyOverrideStatus
+	ActiveOnly  bool
+	ActiveAt    *time.Time
+	Page        value.PageRequest
 }

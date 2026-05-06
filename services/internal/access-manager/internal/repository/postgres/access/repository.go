@@ -12,7 +12,9 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/errs"
+	accessrepo "github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/repository/access"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/query"
@@ -23,6 +25,8 @@ import (
 //
 //go:embed sql/*.sql
 var SQLFiles embed.FS
+
+var _ accessrepo.Repository = (*Repository)(nil)
 
 type database interface {
 	execer
@@ -104,8 +108,8 @@ func (r *Repository) GetCommandResult(ctx context.Context, identity query.Comman
 }
 
 func (r *Repository) CreateOrganization(ctx context.Context, organization entity.Organization, event entity.OutboxEvent, result entity.CommandResult) error {
-	create := mutation{query: queryOrganizationCreate}
-	create.args = organizationArgs(organization)
+	create := mutation{Query: queryOrganizationCreate}
+	create.Args = organizationArgs(organization)
 	return r.createWithCommandResult(ctx, operationCreateOrganization, event, create, result)
 }
 
@@ -124,8 +128,8 @@ func (r *Repository) CreateUser(ctx context.Context, user entity.User, identity 
 		ctx,
 		operationCreateUser,
 		event,
-		mutation{query: queryUserCreate, args: userArgs(user)},
-		mutation{query: queryUserIdentityCreate, args: userIdentityArgs(identity)},
+		mutation{Query: queryUserCreate, Args: userArgs(user)},
+		mutation{Query: queryUserIdentityCreate, Args: userIdentityArgs(identity)},
 	)
 }
 
@@ -150,16 +154,16 @@ func (r *Repository) ListUserAccessScopes(ctx context.Context, userID uuid.UUID)
 	if err != nil {
 		return nil, wrapError(operationListUserAccessScopes, err)
 	}
-	scopes, err := scanRows(rows, scanScopeRef)
+	scopes, err := postgreslib.ScanRows(rows, scanScopeRef)
 	return scopes, wrapError(operationListUserAccessScopes, err)
 }
 
 func (r *Repository) LinkUserIdentity(ctx context.Context, identity entity.UserIdentity, event entity.OutboxEvent) error {
-	return r.mutateWithOutbox(ctx, operationLinkUserIdentity, event, mutation{query: queryUserIdentityCreate, args: userIdentityArgs(identity)})
+	return r.mutateWithOutbox(ctx, operationLinkUserIdentity, event, mutation{Query: queryUserIdentityCreate, Args: userIdentityArgs(identity)})
 }
 
 func (r *Repository) PutAllowlistEntry(ctx context.Context, entry entity.AllowlistEntry, event entity.OutboxEvent) error {
-	return r.mutateWithOutbox(ctx, operationPutAllowlistEntry, event, mutation{query: queryAllowlistEntryUpsert, args: allowlistEntryArgs(entry), requireAffected: true})
+	return r.mutateWithOutbox(ctx, operationPutAllowlistEntry, event, mutation{Query: queryAllowlistEntryUpsert, Args: allowlistEntryArgs(entry), RequireAffected: true})
 }
 
 func (r *Repository) UpdateAllowlistEntry(ctx context.Context, entry entity.AllowlistEntry, previousVersion int64, event entity.OutboxEvent, result *entity.CommandResult) error {
@@ -175,8 +179,8 @@ func (r *Repository) GetAllowlistEntry(ctx context.Context, id uuid.UUID) (entit
 }
 
 func (r *Repository) CreateGroup(ctx context.Context, group entity.Group, event entity.OutboxEvent, result entity.CommandResult) error {
-	create := mutation{args: groupArgs(group)}
-	create.query = queryGroupCreate
+	create := mutation{Args: groupArgs(group)}
+	create.Query = queryGroupCreate
 	return r.createWithCommandResult(ctx, operationCreateGroup, event, create, result)
 }
 
@@ -194,7 +198,7 @@ func (r *Repository) FindMembership(ctx context.Context, identity query.Membersh
 }
 
 func (r *Repository) SetMembership(ctx context.Context, membership entity.Membership, event entity.OutboxEvent) error {
-	return r.mutateWithOutbox(ctx, operationSetMembership, event, mutation{query: queryMembershipUpsert, args: membershipArgs(membership), requireAffected: true})
+	return r.mutateWithOutbox(ctx, operationSetMembership, event, mutation{Query: queryMembershipUpsert, Args: membershipArgs(membership), RequireAffected: true})
 }
 
 func (r *Repository) ListMemberships(ctx context.Context, filter query.MembershipGraphFilter) ([]entity.Membership, error) {
@@ -229,7 +233,7 @@ func (r *Repository) listMembershipRows(ctx context.Context, operation string, s
 	if err != nil {
 		return nil, wrapError(operation, err)
 	}
-	memberships, err := scanRows(rows, scanMembership)
+	memberships, err := postgreslib.ScanRows(rows, scanMembership)
 	return memberships, wrapError(operation, err)
 }
 
@@ -266,7 +270,7 @@ const (
 )
 
 func (r *Repository) PutExternalProvider(ctx context.Context, provider entity.ExternalProvider, event entity.OutboxEvent) error {
-	return r.mutateWithOutbox(ctx, operationPutExternalProvider, event, mutation{query: queryExternalProviderUpsert, args: externalProviderArgs(provider), requireAffected: true})
+	return r.mutateWithOutbox(ctx, operationPutExternalProvider, event, mutation{Query: queryExternalProviderUpsert, Args: externalProviderArgs(provider), RequireAffected: true})
 }
 
 func (r *Repository) UpdateExternalProvider(ctx context.Context, provider entity.ExternalProvider, previousVersion int64, event entity.OutboxEvent, result *entity.CommandResult) error {
@@ -283,8 +287,8 @@ func (r *Repository) GetExternalProviderBySlug(ctx context.Context, slug string)
 
 func (r *Repository) RegisterExternalAccount(ctx context.Context, account entity.ExternalAccount, event entity.OutboxEvent, result entity.CommandResult) error {
 	create := mutation{
-		query: queryExternalAccountCreate,
-		args:  externalAccountArgs(account),
+		Query: queryExternalAccountCreate,
+		Args:  externalAccountArgs(account),
 	}
 	return r.createWithCommandResult(ctx, operationRegisterExternalAccount, event, create, result)
 }
@@ -298,7 +302,7 @@ func (r *Repository) GetExternalAccount(ctx context.Context, id uuid.UUID) (enti
 }
 
 func (r *Repository) BindExternalAccount(ctx context.Context, binding entity.ExternalAccountBinding, event entity.OutboxEvent) error {
-	return r.mutateWithOutbox(ctx, operationBindExternalAccount, event, mutation{query: queryExternalAccountBindingUpsert, args: externalAccountBindingArgs(binding), requireAffected: true})
+	return r.mutateWithOutbox(ctx, operationBindExternalAccount, event, mutation{Query: queryExternalAccountBindingUpsert, Args: externalAccountBindingArgs(binding), RequireAffected: true})
 }
 
 func (r *Repository) GetExternalAccountBinding(ctx context.Context, id uuid.UUID) (entity.ExternalAccountBinding, error) {
@@ -327,7 +331,7 @@ func (r *Repository) FindExternalAccountBindingByIdentity(ctx context.Context, i
 }
 
 func (r *Repository) PutSecretBindingRef(ctx context.Context, secret entity.SecretBindingRef, event entity.OutboxEvent) error {
-	return r.mutateWithOutbox(ctx, operationPutSecretBindingRef, event, mutation{query: querySecretBindingRefUpsert, args: secretBindingRefArgs(secret), requireAffected: true})
+	return r.mutateWithOutbox(ctx, operationPutSecretBindingRef, event, mutation{Query: querySecretBindingRefUpsert, Args: secretBindingRefArgs(secret), RequireAffected: true})
 }
 
 func (r *Repository) GetSecretBindingRef(ctx context.Context, id uuid.UUID) (entity.SecretBindingRef, error) {
@@ -335,7 +339,7 @@ func (r *Repository) GetSecretBindingRef(ctx context.Context, id uuid.UUID) (ent
 }
 
 func (r *Repository) PutAccessAction(ctx context.Context, action entity.AccessAction, event entity.OutboxEvent) error {
-	return r.mutateWithOutbox(ctx, operationPutAccessAction, event, mutation{query: queryAccessActionUpsert, args: accessActionArgs(action), requireAffected: true})
+	return r.mutateWithOutbox(ctx, operationPutAccessAction, event, mutation{Query: queryAccessActionUpsert, Args: accessActionArgs(action), RequireAffected: true})
 }
 
 func (r *Repository) GetAccessActionByKey(ctx context.Context, key string) (entity.AccessAction, error) {
@@ -343,7 +347,7 @@ func (r *Repository) GetAccessActionByKey(ctx context.Context, key string) (enti
 }
 
 func (r *Repository) PutAccessRule(ctx context.Context, rule entity.AccessRule, event entity.OutboxEvent) error {
-	return r.mutateWithOutbox(ctx, operationPutAccessRule, event, mutation{query: queryAccessRuleUpsert, args: accessRuleArgs(rule), requireAffected: true})
+	return r.mutateWithOutbox(ctx, operationPutAccessRule, event, mutation{Query: queryAccessRuleUpsert, Args: accessRuleArgs(rule), RequireAffected: true})
 }
 
 func (r *Repository) FindAccessRule(ctx context.Context, identity query.AccessRuleIdentity) (entity.AccessRule, error) {
@@ -381,7 +385,7 @@ func (r *Repository) ListAccessRules(ctx context.Context, filter query.AccessRul
 	if err != nil {
 		return nil, wrapError(operationListAccessRules, err)
 	}
-	rules, err := scanRows(rows, scanAccessRule)
+	rules, err := postgreslib.ScanRows(rows, scanAccessRule)
 	return rules, wrapError(operationListAccessRules, err)
 }
 
@@ -419,35 +423,28 @@ func (r *Repository) ListPendingAccess(ctx context.Context, filter query.Pending
 	if err != nil {
 		return nil, wrapError(operationListPendingAccess, err)
 	}
-	items, err := scanRows(rows, scanPendingAccessItem)
+	items, err := postgreslib.ScanRows(rows, scanPendingAccessItem)
 	return items, wrapError(operationListPendingAccess, err)
 }
 
 func (r *Repository) ClaimOutboxEvents(ctx context.Context, limit int, now time.Time, lockedUntil time.Time) ([]entity.OutboxEvent, error) {
-	if limit < 1 || lockedUntil.Before(now) || lockedUntil.Equal(now) {
+	args, ok := postgreslib.OutboxClaimArgs(limit, now, lockedUntil)
+	if !ok {
 		return nil, wrapError(operationClaimOutboxEvents, errs.ErrInvalidArgument)
 	}
-	rows, err := r.db.Query(ctx, queryOutboxEventClaim, pgx.NamedArgs{
-		"limit":        limit,
-		"now":          now,
-		"locked_until": lockedUntil,
-	})
+	rows, err := r.db.Query(ctx, queryOutboxEventClaim, args)
 	if err != nil {
 		return nil, wrapError(operationClaimOutboxEvents, err)
 	}
-	events, err := scanRows(rows, scanOutboxEvent)
+	events, err := postgreslib.ScanRows(rows, scanOutboxEvent)
 	return events, wrapError(operationClaimOutboxEvents, err)
 }
 
 func (r *Repository) MarkOutboxEventPublished(ctx context.Context, id uuid.UUID, attemptCount int, publishedAt time.Time) error {
-	if id == uuid.Nil || attemptCount < 1 || publishedAt.IsZero() {
+	ok, err := postgreslib.ExecOutboxPublished(ctx, r.db, queryOutboxEventMarkPublished, id, attemptCount, publishedAt)
+	if !ok {
 		return wrapError(operationMarkOutboxEventPublished, errs.ErrInvalidArgument)
 	}
-	_, err := r.db.Exec(ctx, queryOutboxEventMarkPublished, pgx.NamedArgs{
-		"id":            id,
-		"attempt_count": attemptCount,
-		"published_at":  publishedAt,
-	})
 	return wrapError(operationMarkOutboxEventPublished, err)
 }
 
@@ -487,60 +484,25 @@ func (r *Repository) markOutboxEventDeliveryFailure(
 	timestampValue time.Time,
 	lastError string,
 ) error {
-	if id == uuid.Nil || attemptCount < 1 || timestampValue.IsZero() {
+	ok, err := postgreslib.ExecOutboxDeliveryFailure(ctx, r.db, queryText, id, attemptCount, timestampName, timestampValue, lastError)
+	if !ok {
 		return wrapError(operation, errs.ErrInvalidArgument)
 	}
-	args := pgx.NamedArgs{
-		"id":            id,
-		"attempt_count": attemptCount,
-		"last_error":    lastError,
-	}
-	args[timestampName] = timestampValue
-	_, err := r.db.Exec(ctx, queryText, args)
 	return wrapError(operation, err)
 }
 
 func (r *Repository) withTx(ctx context.Context, operation string, fn func(tx pgx.Tx) error) error {
-	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		return wrapError(operation, err)
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			_ = tx.Rollback(ctx)
-		}
-	}()
-	if err := fn(tx); err != nil {
-		return wrapError(operation, err)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return wrapError(operation, err)
-	}
-	committed = true
-	return nil
+	return wrapError(operation, postgreslib.WithTx(ctx, r.db, fn))
 }
 
-type mutation struct {
-	query           string
-	args            pgx.NamedArgs
-	requireAffected bool
-}
+type mutation = postgreslib.Mutation
 
 type updateArgsBuilder[T any] func(T, int64) pgx.NamedArgs
 
 func (r *Repository) mutateWithOutbox(ctx context.Context, operation string, event entity.OutboxEvent, mutations ...mutation) error {
+	mutations = append(mutations, mutation{Query: queryOutboxEventCreate, Args: outboxEventArgs(event), RequireAffected: true})
 	return r.withTx(ctx, operation, func(tx pgx.Tx) error {
-		for _, item := range mutations {
-			tag, err := tx.Exec(ctx, item.query, item.args)
-			if err != nil {
-				return err
-			}
-			if item.requireAffected && tag.RowsAffected() == 0 {
-				return errs.ErrConflict
-			}
-		}
-		return insertOutboxEvent(ctx, tx, event)
+		return postgreslib.RunDistinctMutations(ctx, tx, errs.ErrConflict, mutations...)
 	})
 }
 
@@ -549,7 +511,7 @@ func (r *Repository) createWithCommandResult(ctx context.Context, operation stri
 }
 
 func (r *Repository) updateWithCommandResult(ctx context.Context, operation string, queryText string, args pgx.NamedArgs, event entity.OutboxEvent, result *entity.CommandResult) error {
-	mutations := []mutation{{query: queryText, args: args, requireAffected: true}}
+	mutations := []mutation{{Query: queryText, Args: args, RequireAffected: true}}
 	mutations = appendOptionalCommandResult(mutations, result)
 	return r.mutateWithOutbox(ctx, operation, event, mutations...)
 }
@@ -569,7 +531,7 @@ func updateAggregateWithCommandResult[T any](
 }
 
 func commandResultMutation(result entity.CommandResult) mutation {
-	return mutation{query: queryCommandResultCreate, args: commandResultArgs(result), requireAffected: true}
+	return mutation{Query: queryCommandResultCreate, Args: commandResultArgs(result), RequireAffected: true}
 }
 
 func appendOptionalCommandResult(mutations []mutation, result *entity.CommandResult) []mutation {
@@ -580,11 +542,10 @@ func appendOptionalCommandResult(mutations []mutation, result *entity.CommandRes
 }
 
 func insertOutboxEvent(ctx context.Context, db execer, event entity.OutboxEvent) error {
-	_, err := db.Exec(ctx, queryOutboxEventCreate, outboxEventArgs(event))
-	return err
+	return postgreslib.RunMutation(ctx, db, errs.ErrConflict, mutation{Query: queryOutboxEventCreate, Args: outboxEventArgs(event), RequireAffected: true})
 }
 
-func queryOne[T any](ctx context.Context, db queryer, operation, sql string, args pgx.NamedArgs, scan func(rowScanner) (T, error)) (T, error) {
+func queryOne[T any](ctx context.Context, db queryer, operation, sql string, args pgx.NamedArgs, scan func(postgreslib.RowScanner) (T, error)) (T, error) {
 	value, err := scan(db.QueryRow(ctx, sql, args))
 	return value, wrapError(operation, err)
 }

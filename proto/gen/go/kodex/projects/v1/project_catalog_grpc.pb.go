@@ -34,6 +34,7 @@ const (
 	ProjectCatalogService_CreatePolicyEditProposal_FullMethodName = "/kodex.projects.v1.ProjectCatalogService/CreatePolicyEditProposal"
 	ProjectCatalogService_CreatePolicyOverride_FullMethodName     = "/kodex.projects.v1.ProjectCatalogService/CreatePolicyOverride"
 	ProjectCatalogService_CancelPolicyOverride_FullMethodName     = "/kodex.projects.v1.ProjectCatalogService/CancelPolicyOverride"
+	ProjectCatalogService_ListPolicyOverrides_FullMethodName      = "/kodex.projects.v1.ProjectCatalogService/ListPolicyOverrides"
 	ProjectCatalogService_PutDocumentationSource_FullMethodName   = "/kodex.projects.v1.ProjectCatalogService/PutDocumentationSource"
 	ProjectCatalogService_GetDocumentationSource_FullMethodName   = "/kodex.projects.v1.ProjectCatalogService/GetDocumentationSource"
 	ProjectCatalogService_ListDocumentationSources_FullMethodName = "/kodex.projects.v1.ProjectCatalogService/ListDocumentationSources"
@@ -90,6 +91,8 @@ type ProjectCatalogServiceClient interface {
 	CreatePolicyOverride(ctx context.Context, in *CreatePolicyOverrideRequest, opts ...grpc.CallOption) (*PolicyOverrideResponse, error)
 	// CancelPolicyOverride cancels an active operator override before expiration.
 	CancelPolicyOverride(ctx context.Context, in *CancelPolicyOverrideRequest, opts ...grpc.CallOption) (*PolicyOverrideResponse, error)
+	// ListPolicyOverrides returns visible operator overrides for a project.
+	ListPolicyOverrides(ctx context.Context, in *ListPolicyOverridesRequest, opts ...grpc.CallOption) (*ListPolicyOverridesResponse, error)
 	// PutDocumentationSource creates or updates a documentation source.
 	PutDocumentationSource(ctx context.Context, in *PutDocumentationSourceRequest, opts ...grpc.CallOption) (*DocumentationSourceResponse, error)
 	// GetDocumentationSource returns a documentation source.
@@ -276,6 +279,16 @@ func (c *projectCatalogServiceClient) CancelPolicyOverride(ctx context.Context, 
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(PolicyOverrideResponse)
 	err := c.cc.Invoke(ctx, ProjectCatalogService_CancelPolicyOverride_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectCatalogServiceClient) ListPolicyOverrides(ctx context.Context, in *ListPolicyOverridesRequest, opts ...grpc.CallOption) (*ListPolicyOverridesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPolicyOverridesResponse)
+	err := c.cc.Invoke(ctx, ProjectCatalogService_ListPolicyOverrides_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -480,6 +493,8 @@ type ProjectCatalogServiceServer interface {
 	CreatePolicyOverride(context.Context, *CreatePolicyOverrideRequest) (*PolicyOverrideResponse, error)
 	// CancelPolicyOverride cancels an active operator override before expiration.
 	CancelPolicyOverride(context.Context, *CancelPolicyOverrideRequest) (*PolicyOverrideResponse, error)
+	// ListPolicyOverrides returns visible operator overrides for a project.
+	ListPolicyOverrides(context.Context, *ListPolicyOverridesRequest) (*ListPolicyOverridesResponse, error)
 	// PutDocumentationSource creates or updates a documentation source.
 	PutDocumentationSource(context.Context, *PutDocumentationSourceRequest) (*DocumentationSourceResponse, error)
 	// GetDocumentationSource returns a documentation source.
@@ -566,6 +581,9 @@ func (UnimplementedProjectCatalogServiceServer) CreatePolicyOverride(context.Con
 }
 func (UnimplementedProjectCatalogServiceServer) CancelPolicyOverride(context.Context, *CancelPolicyOverrideRequest) (*PolicyOverrideResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CancelPolicyOverride not implemented")
+}
+func (UnimplementedProjectCatalogServiceServer) ListPolicyOverrides(context.Context, *ListPolicyOverridesRequest) (*ListPolicyOverridesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListPolicyOverrides not implemented")
 }
 func (UnimplementedProjectCatalogServiceServer) PutDocumentationSource(context.Context, *PutDocumentationSourceRequest) (*DocumentationSourceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PutDocumentationSource not implemented")
@@ -902,6 +920,24 @@ func _ProjectCatalogService_CancelPolicyOverride_Handler(srv interface{}, ctx co
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProjectCatalogServiceServer).CancelPolicyOverride(ctx, req.(*CancelPolicyOverrideRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectCatalogService_ListPolicyOverrides_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPolicyOverridesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectCatalogServiceServer).ListPolicyOverrides(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectCatalogService_ListPolicyOverrides_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectCatalogServiceServer).ListPolicyOverrides(ctx, req.(*ListPolicyOverridesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1260,6 +1296,10 @@ var ProjectCatalogService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CancelPolicyOverride",
 			Handler:    _ProjectCatalogService_CancelPolicyOverride_Handler,
+		},
+		{
+			MethodName: "ListPolicyOverrides",
+			Handler:    _ProjectCatalogService_ListPolicyOverrides_Handler,
 		},
 		{
 			MethodName: "PutDocumentationSource",

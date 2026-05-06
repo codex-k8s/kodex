@@ -121,11 +121,11 @@ type ListServiceDescriptorsResult struct {
 
 // CreatePolicyEditProposalInput requests a PR-backed services.yaml change.
 type CreatePolicyEditProposalInput struct {
-	ProjectID            uuid.UUID
-	RepositoryID         uuid.UUID
-	SourcePath           string
-	RequestedChangesJSON []byte
-	Meta                 value.CommandMeta
+	ProjectID        uuid.UUID
+	RepositoryID     uuid.UUID
+	SourcePath       string
+	RequestedChanges value.PolicyEditProposalRequestedChanges
+	Meta             value.CommandMeta
 }
 
 // CreatePolicyOverrideInput creates an emergency policy override.

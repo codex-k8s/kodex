@@ -41,38 +41,48 @@ type Repository interface {
 	CreatePolicyEditProposal(ctx context.Context, proposal entity.PolicyEditProposal, result entity.CommandResult) error
 	// CreatePolicyOverride stores an emergency override and its outbox event.
 	CreatePolicyOverride(ctx context.Context, override entity.PolicyOverride, event entity.OutboxEvent, result entity.CommandResult) error
-	// PutDocumentationSource stores a documentation source and its outbox event.
-	PutDocumentationSource(ctx context.Context, source entity.DocumentationSource, event entity.OutboxEvent, result *entity.CommandResult) error
+	// ListPolicyOverrides returns operator overrides matching filter.
+	ListPolicyOverrides(ctx context.Context, filter query.PolicyOverrideFilter) ([]entity.PolicyOverride, query.PageResult, error)
+	// PutDocumentationSource creates or updates a documentation source with optimistic concurrency.
+	PutDocumentationSource(ctx context.Context, source entity.DocumentationSource, previousVersion *int64, event entity.OutboxEvent, result *entity.CommandResult) error
 	// GetDocumentationSource returns a documentation source by id.
 	GetDocumentationSource(ctx context.Context, id uuid.UUID) (entity.DocumentationSource, error)
 	// ListDocumentationSources returns documentation sources matching filter.
 	ListDocumentationSources(ctx context.Context, filter query.DocumentationSourceFilter) ([]entity.DocumentationSource, query.PageResult, error)
 	// GetWorkspacePolicy returns allowed source set for an agent workspace.
 	GetWorkspacePolicy(ctx context.Context, filter query.WorkspacePolicyFilter) (entity.WorkspacePolicy, error)
-	// PutBranchRules stores branch rules and its outbox event.
-	PutBranchRules(ctx context.Context, rules entity.BranchRules, event entity.OutboxEvent, result *entity.CommandResult) error
+	// PutBranchRules creates or updates branch rules with optimistic concurrency.
+	PutBranchRules(ctx context.Context, rules entity.BranchRules, previousVersion *int64, event entity.OutboxEvent, result *entity.CommandResult) error
 	// GetBranchRules returns branch rules by id.
 	GetBranchRules(ctx context.Context, id uuid.UUID) (entity.BranchRules, error)
 	// ListBranchRules returns branch rules matching filter.
 	ListBranchRules(ctx context.Context, filter query.BranchRulesFilter) ([]entity.BranchRules, query.PageResult, error)
-	// PutReleasePolicy stores release policy and its outbox event.
-	PutReleasePolicy(ctx context.Context, policy entity.ReleasePolicy, event entity.OutboxEvent, result *entity.CommandResult) error
+	// PutReleasePolicy creates or updates release policy with optimistic concurrency.
+	PutReleasePolicy(ctx context.Context, policy entity.ReleasePolicy, previousVersion *int64, event entity.OutboxEvent, result *entity.CommandResult) error
 	// GetReleasePolicy returns release policy by id.
 	GetReleasePolicy(ctx context.Context, id uuid.UUID) (entity.ReleasePolicy, error)
 	// ListReleasePolicies returns release policies matching filter.
 	ListReleasePolicies(ctx context.Context, filter query.ReleasePolicyFilter) ([]entity.ReleasePolicy, query.PageResult, error)
-	// PutReleaseLine stores release line and its outbox event.
-	PutReleaseLine(ctx context.Context, line entity.ReleaseLine, event entity.OutboxEvent, result *entity.CommandResult) error
+	// PutReleaseLine creates or updates release line with optimistic concurrency.
+	PutReleaseLine(ctx context.Context, line entity.ReleaseLine, previousVersion *int64, event entity.OutboxEvent, result *entity.CommandResult) error
 	// GetReleaseLine returns release line by id.
 	GetReleaseLine(ctx context.Context, id uuid.UUID) (entity.ReleaseLine, error)
 	// ListReleaseLines returns release lines matching filter.
 	ListReleaseLines(ctx context.Context, filter query.ReleaseLineFilter) ([]entity.ReleaseLine, query.PageResult, error)
-	// PutPlacementPolicy stores placement policy and its outbox event.
-	PutPlacementPolicy(ctx context.Context, policy entity.PlacementPolicy, event entity.OutboxEvent, result *entity.CommandResult) error
+	// PutPlacementPolicy creates or updates placement policy with optimistic concurrency.
+	PutPlacementPolicy(ctx context.Context, policy entity.PlacementPolicy, previousVersion *int64, event entity.OutboxEvent, result *entity.CommandResult) error
 	// GetPlacementPolicy returns placement policy by id.
 	GetPlacementPolicy(ctx context.Context, id uuid.UUID) (entity.PlacementPolicy, error)
 	// ListPlacementPolicies returns placement policies matching filter.
 	ListPlacementPolicies(ctx context.Context, filter query.PlacementPolicyFilter) ([]entity.PlacementPolicy, query.PageResult, error)
+	// ClaimOutboxEvents leases unpublished outbox events for delivery.
+	ClaimOutboxEvents(ctx context.Context, limit int, now time.Time, lockedUntil time.Time) ([]entity.OutboxEvent, error)
+	// MarkOutboxEventPublished marks a leased outbox event as published.
+	MarkOutboxEventPublished(ctx context.Context, id uuid.UUID, attemptCount int, publishedAt time.Time) error
+	// MarkOutboxEventFailed schedules a leased outbox event for retry.
+	MarkOutboxEventFailed(ctx context.Context, id uuid.UUID, attemptCount int, nextAttemptAt time.Time, lastError string) error
+	// MarkOutboxEventPermanentlyFailed moves a leased outbox event to terminal failure.
+	MarkOutboxEventPermanentlyFailed(ctx context.Context, id uuid.UUID, attemptCount int, failedAt time.Time, lastError string) error
 }
 
 // Clock provides deterministic time for domain commands and tests.

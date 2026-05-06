@@ -79,3 +79,28 @@ type ProjectEventPayload struct {
 	PlacementPolicyID string `json:"placement_policy_id,omitempty"`
 	Version           int64  `json:"version,omitempty"`
 }
+
+// PolicyEditProposalRequestedChanges is the typed request to change services.yaml through PR.
+type PolicyEditProposalRequestedChanges struct {
+	Summary string                     `json:"summary,omitempty"`
+	Changes []PolicyEditProposalChange `json:"changes,omitempty"`
+}
+
+// PolicyEditProposalChange describes one requested services.yaml change.
+type PolicyEditProposalChange struct {
+	Type        PolicyEditProposalChangeType `json:"type"`
+	Target      string                       `json:"target,omitempty"`
+	Description string                       `json:"description,omitempty"`
+}
+
+// PolicyEditProposalChangeType classifies supported services.yaml edit intents.
+type PolicyEditProposalChangeType string
+
+const (
+	PolicyEditProposalChangeAddService          PolicyEditProposalChangeType = "add_service"
+	PolicyEditProposalChangeUpdateService       PolicyEditProposalChangeType = "update_service"
+	PolicyEditProposalChangeRemoveService       PolicyEditProposalChangeType = "remove_service"
+	PolicyEditProposalChangeAddDocumentation    PolicyEditProposalChangeType = "add_documentation_source"
+	PolicyEditProposalChangeUpdateDocumentation PolicyEditProposalChangeType = "update_documentation_source"
+	PolicyEditProposalChangeUpdatePolicy        PolicyEditProposalChangeType = "update_policy"
+)

@@ -1,11 +1,9 @@
 package access
 
 import (
-	"time"
-
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/query"
 )
@@ -18,7 +16,7 @@ func organizationArgs(organization entity.Organization) pgx.NamedArgs {
 		"display_name":           organization.DisplayName,
 		"image_asset_ref":        organization.ImageAssetRef,
 		"status":                 string(organization.Status),
-		"parent_organization_id": nullableUUID(organization.ParentOrganizationID),
+		"parent_organization_id": postgreslib.NullableUUID(organization.ParentOrganizationID),
 		"version":                organization.Version,
 		"created_at":             organization.CreatedAt,
 		"updated_at":             organization.UpdatedAt,
@@ -52,7 +50,7 @@ func userIdentityArgs(identity entity.UserIdentity) pgx.NamedArgs {
 		"provider":       string(identity.Provider),
 		"subject":        identity.Subject,
 		"email_at_login": identity.EmailAtLogin,
-		"last_login_at":  nullableTime(identity.LastLoginAt),
+		"last_login_at":  postgreslib.NullableTime(identity.LastLoginAt),
 	}
 }
 
@@ -62,15 +60,15 @@ func userIdentityLookupArgs(provider string, subject string) pgx.NamedArgs {
 
 func commandIdentityArgs(identity query.CommandIdentity) pgx.NamedArgs {
 	return pgx.NamedArgs{
-		"command_id":      nullableCommandID(identity.CommandID),
-		"idempotency_key": commandLookupIdempotencyKey(identity),
+		"command_id":      postgreslib.NullableCommandID(identity.CommandID),
+		"idempotency_key": postgreslib.IdempotencyLookupKey(identity.CommandID, identity.IdempotencyKey),
 	}
 }
 
 func commandResultArgs(result entity.CommandResult) pgx.NamedArgs {
 	return pgx.NamedArgs{
 		"key":             result.Key,
-		"command_id":      nullableCommandID(result.CommandID),
+		"command_id":      postgreslib.NullableCommandID(result.CommandID),
 		"idempotency_key": result.IdempotencyKey,
 		"operation":       result.Operation,
 		"aggregate_type":  result.AggregateType,
@@ -84,7 +82,7 @@ func allowlistEntryArgs(entry entity.AllowlistEntry) pgx.NamedArgs {
 		"id":              entry.ID,
 		"match_type":      string(entry.MatchType),
 		"value":           entry.Value,
-		"organization_id": nullableUUID(entry.OrganizationID),
+		"organization_id": postgreslib.NullableUUID(entry.OrganizationID),
 		"default_status":  string(entry.DefaultStatus),
 		"status":          string(entry.Status),
 		"version":         entry.Version,
@@ -107,10 +105,10 @@ func groupArgs(group entity.Group) pgx.NamedArgs {
 	return pgx.NamedArgs{
 		"id":              group.ID,
 		"scope_type":      string(group.ScopeType),
-		"scope_id":        nullableUUID(group.ScopeID),
+		"scope_id":        postgreslib.NullableUUID(group.ScopeID),
 		"slug":            group.Slug,
 		"display_name":    group.DisplayName,
-		"parent_group_id": nullableUUID(group.ParentGroupID),
+		"parent_group_id": postgreslib.NullableUUID(group.ParentGroupID),
 		"image_asset_ref": group.ImageAssetRef,
 		"status":          string(group.Status),
 		"version":         group.Version,
@@ -165,7 +163,7 @@ func externalAccountArgs(account entity.ExternalAccount) pgx.NamedArgs {
 		"owner_scope_type":      string(account.OwnerScopeType),
 		"owner_scope_id":        account.OwnerScopeID,
 		"status":                string(account.Status),
-		"secret_binding_ref_id": nullableUUID(account.SecretBindingRefID),
+		"secret_binding_ref_id": postgreslib.NullableUUID(account.SecretBindingRefID),
 		"version":               account.Version,
 		"created_at":            account.CreatedAt,
 		"updated_at":            account.UpdatedAt,
@@ -200,7 +198,7 @@ func secretBindingRefArgs(secret entity.SecretBindingRef) pgx.NamedArgs {
 		"store_type":        string(secret.StoreType),
 		"store_ref":         secret.StoreRef,
 		"value_fingerprint": secret.ValueFingerprint,
-		"rotated_at":        nullableTime(secret.RotatedAt),
+		"rotated_at":        postgreslib.NullableTime(secret.RotatedAt),
 		"version":           secret.Version,
 		"created_at":        secret.CreatedAt,
 		"updated_at":        secret.UpdatedAt,
@@ -268,42 +266,10 @@ func outboxEventArgs(event entity.OutboxEvent) pgx.NamedArgs {
 		"aggregate_id":   event.AggregateID,
 		"payload":        string(event.Payload),
 		"occurred_at":    event.OccurredAt,
-		"published_at":   nullableTime(event.PublishedAt),
+		"published_at":   postgreslib.NullableTime(event.PublishedAt),
 	}
-}
-
-func nullableUUID(id *uuid.UUID) any {
-	if id == nil {
-		return nil
-	}
-	return *id
-}
-
-func nullableTime(value *time.Time) any {
-	if value == nil {
-		return nil
-	}
-	return *value
 }
 
 func withBaseArgs(base entity.Base, args pgx.NamedArgs) pgx.NamedArgs {
-	args["id"] = base.ID
-	args["version"] = base.Version
-	args["created_at"] = base.CreatedAt
-	args["updated_at"] = base.UpdatedAt
-	return args
-}
-
-func nullableCommandID(id uuid.UUID) any {
-	if id == uuid.Nil {
-		return nil
-	}
-	return id
-}
-
-func commandLookupIdempotencyKey(identity query.CommandIdentity) string {
-	if identity.CommandID != uuid.Nil {
-		return ""
-	}
-	return identity.IdempotencyKey
+	return postgreslib.AddBaseArgs(args, base.ID, base.Version, base.CreatedAt, base.UpdatedAt)
 }

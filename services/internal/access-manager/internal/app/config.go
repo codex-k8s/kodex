@@ -160,10 +160,19 @@ func (cfg Config) needsEventLogDatabase() bool {
 
 // DatabasePoolSettings converts service config to the shared pgxpool contract.
 func (cfg Config) DatabasePoolSettings() postgreslib.PoolSettings {
-	return postgreslib.PoolSettings{
-		DSN:                      cfg.DatabaseDSN,
-		MaxConns:                 cfg.DatabaseMaxConns,
-		MinConns:                 cfg.DatabaseMinConns,
+	return postgreslib.PoolSettingsFromRuntime(cfg.databaseRuntimeSettings(cfg.DatabaseDSN, cfg.DatabaseMaxConns, cfg.DatabaseMinConns))
+}
+
+// EventLogDatabasePoolSettings converts event-log env config to a separate pgxpool contract.
+func (cfg Config) EventLogDatabasePoolSettings() postgreslib.PoolSettings {
+	return postgreslib.PoolSettingsFromRuntime(cfg.databaseRuntimeSettings(cfg.EventLogDatabaseDSN, cfg.EventLogDatabaseMaxConns, cfg.EventLogDatabaseMinConns))
+}
+
+func (cfg Config) databaseRuntimeSettings(dsn string, maxConns int32, minConns int32) postgreslib.PoolRuntimeSettings {
+	return postgreslib.PoolRuntimeSettings{
+		DSN:                      dsn,
+		MaxConns:                 maxConns,
+		MinConns:                 minConns,
 		MaxConnLifetime:          cfg.DatabaseMaxConnLifetime,
 		MaxConnIdleTime:          cfg.DatabaseMaxConnIdleTime,
 		HealthCheckPeriod:        cfg.DatabaseHealthCheckPeriod,
@@ -173,15 +182,6 @@ func (cfg Config) DatabasePoolSettings() postgreslib.PoolSettings {
 		ConnectRetryMaxDelay:     cfg.DatabaseRetryMaxDelay,
 		ConnectRetryJitterRatio:  cfg.DatabaseRetryJitterRatio,
 	}
-}
-
-// EventLogDatabasePoolSettings converts event-log env config to a separate pgxpool contract.
-func (cfg Config) EventLogDatabasePoolSettings() postgreslib.PoolSettings {
-	settings := cfg.DatabasePoolSettings()
-	settings.DSN = cfg.EventLogDatabaseDSN
-	settings.MaxConns = cfg.EventLogDatabaseMaxConns
-	settings.MinConns = cfg.EventLogDatabaseMinConns
-	return settings
 }
 
 // GRPCServerConfig converts service env config to the shared gRPC runtime contract.

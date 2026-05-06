@@ -90,4 +90,4 @@ SELECT
     created_at
 FROM pending_items
 ORDER BY sort_at DESC, item_type, item_id
-LIMIT @limit OFFSET @offset;
+LIMIT @limit::integer OFFSET @offset::integer;

@@ -5,19 +5,15 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/value"
 )
 
-type rowScanner interface {
-	Scan(dest ...any) error
-}
-
-func scanOrganization(row rowScanner) (entity.Organization, error) {
+func scanOrganization(row postgreslib.RowScanner) (entity.Organization, error) {
 	var organization entity.Organization
 	var kind, status string
 	var parentOrganizationID pgtype.UUID
@@ -35,11 +31,11 @@ func scanOrganization(row rowScanner) (entity.Organization, error) {
 	)
 	organization.Kind = enum.OrganizationKind(kind)
 	organization.Status = enum.OrganizationStatus(status)
-	organization.ParentOrganizationID = uuidPtrFromPG(parentOrganizationID)
+	organization.ParentOrganizationID = postgreslib.UUIDPtrFromPG(parentOrganizationID)
 	return organization, err
 }
 
-func scanUser(row rowScanner) (entity.User, error) {
+func scanUser(row postgreslib.RowScanner) (entity.User, error) {
 	var user entity.User
 	var status string
 	err := row.Scan(
@@ -57,7 +53,7 @@ func scanUser(row rowScanner) (entity.User, error) {
 	return user, err
 }
 
-func scanCommandResult(row rowScanner) (entity.CommandResult, error) {
+func scanCommandResult(row postgreslib.RowScanner) (entity.CommandResult, error) {
 	var result entity.CommandResult
 	var commandID pgtype.UUID
 	err := row.Scan(
@@ -69,13 +65,13 @@ func scanCommandResult(row rowScanner) (entity.CommandResult, error) {
 		&result.AggregateID,
 		&result.CreatedAt,
 	)
-	if id := uuidPtrFromPG(commandID); id != nil {
+	if id := postgreslib.UUIDPtrFromPG(commandID); id != nil {
 		result.CommandID = *id
 	}
 	return result, err
 }
 
-func scanAllowlistEntry(row rowScanner) (entity.AllowlistEntry, error) {
+func scanAllowlistEntry(row postgreslib.RowScanner) (entity.AllowlistEntry, error) {
 	var entry entity.AllowlistEntry
 	var matchType, defaultStatus, status string
 	var organizationID pgtype.UUID
@@ -91,13 +87,13 @@ func scanAllowlistEntry(row rowScanner) (entity.AllowlistEntry, error) {
 		&entry.UpdatedAt,
 	)
 	entry.MatchType = enum.AllowlistMatchType(matchType)
-	entry.OrganizationID = uuidPtrFromPG(organizationID)
+	entry.OrganizationID = postgreslib.UUIDPtrFromPG(organizationID)
 	entry.DefaultStatus = enum.UserStatus(defaultStatus)
 	entry.Status = enum.AllowlistStatus(status)
 	return entry, err
 }
 
-func scanPendingAccessItem(row rowScanner) (entity.PendingAccessItem, error) {
+func scanPendingAccessItem(row postgreslib.RowScanner) (entity.PendingAccessItem, error) {
 	var item entity.PendingAccessItem
 	var subjectType, subjectID string
 	err := row.Scan(
@@ -113,40 +109,33 @@ func scanPendingAccessItem(row rowScanner) (entity.PendingAccessItem, error) {
 	return item, err
 }
 
-func scanScopeRef(row rowScanner) (value.ScopeRef, error) {
+func scanScopeRef(row postgreslib.RowScanner) (value.ScopeRef, error) {
 	var scope value.ScopeRef
 	err := row.Scan(&scope.Type, &scope.ID)
 	return scope, err
 }
 
-func scanOutboxEvent(row rowScanner) (entity.OutboxEvent, error) {
-	var event entity.OutboxEvent
-	var payload []byte
-	var publishedAt, lockedUntil, failedPermanentlyAt pgtype.Timestamptz
-	err := row.Scan(
-		&event.ID,
-		&event.EventType,
-		&event.SchemaVersion,
-		&event.AggregateType,
-		&event.AggregateID,
-		&payload,
-		&event.OccurredAt,
-		&publishedAt,
-		&event.AttemptCount,
-		&event.NextAttemptAt,
-		&lockedUntil,
-		&failedPermanentlyAt,
-		&event.FailureKind,
-		&event.LastError,
-	)
-	event.Payload = append(event.Payload[:0], payload...)
-	event.PublishedAt = timePtrFromPG(publishedAt)
-	event.LockedUntil = timePtrFromPG(lockedUntil)
-	event.FailedPermanentlyAt = timePtrFromPG(failedPermanentlyAt)
-	return event, err
+func scanOutboxEvent(row postgreslib.RowScanner) (entity.OutboxEvent, error) {
+	scanned, err := postgreslib.ScanOutboxEventRow(row)
+	return entity.OutboxEvent{
+		ID:                  scanned.Identity.RowID,
+		EventType:           scanned.Identity.TypeName,
+		SchemaVersion:       scanned.Identity.ContractVersion,
+		AggregateType:       scanned.Identity.SubjectKind,
+		AggregateID:         scanned.Identity.SubjectID,
+		Payload:             scanned.Body,
+		OccurredAt:          scanned.Identity.CreatedAt,
+		PublishedAt:         scanned.Delivery.SentAt,
+		AttemptCount:        scanned.Delivery.Attempts,
+		NextAttemptAt:       scanned.Delivery.RetryAt,
+		LockedUntil:         scanned.Delivery.LeaseUntil,
+		FailedPermanentlyAt: scanned.Failure.DeadAt,
+		FailureKind:         scanned.Failure.FailureCode,
+		LastError:           scanned.Failure.ErrorText,
+	}, err
 }
 
-func scanGroup(row rowScanner) (entity.Group, error) {
+func scanGroup(row postgreslib.RowScanner) (entity.Group, error) {
 	var group entity.Group
 	var scopeType, status string
 	var scopeID, parentGroupID pgtype.UUID
@@ -164,13 +153,13 @@ func scanGroup(row rowScanner) (entity.Group, error) {
 		&group.UpdatedAt,
 	)
 	group.ScopeType = enum.GroupScopeType(scopeType)
-	group.ScopeID = uuidPtrFromPG(scopeID)
-	group.ParentGroupID = uuidPtrFromPG(parentGroupID)
+	group.ScopeID = postgreslib.UUIDPtrFromPG(scopeID)
+	group.ParentGroupID = postgreslib.UUIDPtrFromPG(parentGroupID)
 	group.Status = enum.GroupStatus(status)
 	return group, err
 }
 
-func scanMembership(row rowScanner) (entity.Membership, error) {
+func scanMembership(row postgreslib.RowScanner) (entity.Membership, error) {
 	var membership entity.Membership
 	var subjectType, targetType, status, source string
 	err := row.Scan(
@@ -193,25 +182,12 @@ func scanMembership(row rowScanner) (entity.Membership, error) {
 	return membership, err
 }
 
-func scanRows[T any](rows pgx.Rows, scan func(rowScanner) (T, error)) ([]T, error) {
-	defer rows.Close()
-	var values []T
-	for rows.Next() {
-		value, err := scan(rows)
-		if err != nil {
-			return nil, err
-		}
-		values = append(values, value)
-	}
-	return values, rows.Err()
-}
-
-func scanExternalProvider(row rowScanner) (entity.ExternalProvider, error) {
+func scanExternalProvider(row postgreslib.RowScanner) (entity.ExternalProvider, error) {
 	var scanned externalProviderRow
 	return scanned.scan(row)
 }
 
-func scanExternalAccount(row rowScanner) (entity.ExternalAccount, error) {
+func scanExternalAccount(row postgreslib.RowScanner) (entity.ExternalAccount, error) {
 	var account entity.ExternalAccount
 	var accountType, ownerScopeType, status string
 	var secretBindingRefID pgtype.UUID
@@ -232,11 +208,11 @@ func scanExternalAccount(row rowScanner) (entity.ExternalAccount, error) {
 	account.AccountType = enum.ExternalAccountType(accountType)
 	account.OwnerScopeType = enum.ExternalAccountScopeType(ownerScopeType)
 	account.Status = enum.ExternalAccountStatus(status)
-	account.SecretBindingRefID = uuidPtrFromPG(secretBindingRefID)
+	account.SecretBindingRefID = postgreslib.UUIDPtrFromPG(secretBindingRefID)
 	return account, err
 }
 
-func scanExternalAccountBinding(row rowScanner) (entity.ExternalAccountBinding, error) {
+func scanExternalAccountBinding(row postgreslib.RowScanner) (entity.ExternalAccountBinding, error) {
 	var scanned externalAccountBindingRow
 	err := row.Scan(
 		&scanned.id,
@@ -252,7 +228,7 @@ func scanExternalAccountBinding(row rowScanner) (entity.ExternalAccountBinding, 
 	return scanned.toEntity(), err
 }
 
-func scanSecretBindingRef(row rowScanner) (entity.SecretBindingRef, error) {
+func scanSecretBindingRef(row postgreslib.RowScanner) (entity.SecretBindingRef, error) {
 	var secret entity.SecretBindingRef
 	var storeType string
 	var rotatedAt pgtype.Timestamptz
@@ -267,11 +243,11 @@ func scanSecretBindingRef(row rowScanner) (entity.SecretBindingRef, error) {
 		&secret.UpdatedAt,
 	)
 	secret.StoreType = enum.SecretStoreType(storeType)
-	secret.RotatedAt = timePtrFromPG(rotatedAt)
+	secret.RotatedAt = postgreslib.TimePtrFromPG(rotatedAt)
 	return secret, err
 }
 
-func scanAccessAction(row rowScanner) (entity.AccessAction, error) {
+func scanAccessAction(row postgreslib.RowScanner) (entity.AccessAction, error) {
 	var action entity.AccessAction
 	var status string
 	err := row.Scan(
@@ -289,7 +265,7 @@ func scanAccessAction(row rowScanner) (entity.AccessAction, error) {
 	return action, err
 }
 
-func scanAccessRule(row rowScanner) (entity.AccessRule, error) {
+func scanAccessRule(row postgreslib.RowScanner) (entity.AccessRule, error) {
 	var rule entity.AccessRule
 	var effect, subjectType, status string
 	err := row.Scan(
@@ -314,7 +290,7 @@ func scanAccessRule(row rowScanner) (entity.AccessRule, error) {
 	return rule, err
 }
 
-func scanAccessDecisionAudit(row rowScanner) (entity.AccessDecisionAudit, error) {
+func scanAccessDecisionAudit(row postgreslib.RowScanner) (entity.AccessDecisionAudit, error) {
 	var audit entity.AccessDecisionAudit
 	var subjectType, subjectID, resourceType, resourceID, scopeType, scopeID, decision string
 	var requestContext, explanation []byte
@@ -350,21 +326,6 @@ func scanAccessDecisionAudit(row rowScanner) (entity.AccessDecisionAudit, error)
 	return audit, nil
 }
 
-func uuidPtrFromPG(value pgtype.UUID) *uuid.UUID {
-	if !value.Valid {
-		return nil
-	}
-	id := uuid.UUID(value.Bytes)
-	return &id
-}
-
-func timePtrFromPG(value pgtype.Timestamptz) *time.Time {
-	if !value.Valid {
-		return nil
-	}
-	return &value.Time
-}
-
 type externalProviderRow struct {
 	id           uuid.UUID
 	slug         string
@@ -388,7 +349,7 @@ func (row externalProviderRow) toEntity() entity.ExternalProvider {
 	}
 }
 
-func (row *externalProviderRow) scan(scanner rowScanner) (entity.ExternalProvider, error) {
+func (row *externalProviderRow) scan(scanner postgreslib.RowScanner) (entity.ExternalProvider, error) {
 	err := scanner.Scan(&row.id, &row.slug, &row.kind, &row.displayName, &row.iconAssetRef, &row.status, &row.version, &row.createdAt, &row.updatedAt)
 	return row.toEntity(), err
 }
