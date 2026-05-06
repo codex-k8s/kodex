@@ -35,6 +35,8 @@ approvals:
 
 ## Операции
 
+`ImportServicesPolicy` принимает нормализованный `validated_payload_json` как источник построения активной проекции. Транспортное поле `service_descriptors` сохранено в `v1` для совместимости контракта, но не является источником канонической проекции: если `valid` payload не содержит service entries, команда должна вернуть `invalid_argument`.
+
 | Операция | Вид | Доступ | Идемпотентность | Примечание |
 |---|---|---|---|---|
 | `CreateProject` | gRPC command | `project.create` | `CommandMeta.command_id` | Создаёт проект, включая опциональную ссылку на иконку. |

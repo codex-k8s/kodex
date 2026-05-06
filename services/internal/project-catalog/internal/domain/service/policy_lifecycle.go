@@ -12,7 +12,6 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/query"
-	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/value"
 )
 
 // ImportServicesPolicy stores a checked services.yaml projection.
@@ -31,6 +30,10 @@ func (s *Service) ImportServicesPolicy(ctx context.Context, input ImportServices
 	}
 	now := s.clock.Now()
 	validationStatus := defaultValidationStatus(input.ValidationStatus)
+	projection, err := buildServicesPolicyProjection(input, validationStatus)
+	if err != nil {
+		return entity.ServicesPolicy{}, err
+	}
 	policy := entity.ServicesPolicy{
 		Base:               newBase(s.ids.New(), now),
 		ProjectID:          input.ProjectID,
@@ -40,15 +43,15 @@ func (s *Service) ImportServicesPolicy(ctx context.Context, input ImportServices
 		SourceCommitSHA:    strings.TrimSpace(input.SourceCommitSHA),
 		SourceBlobSHA:      strings.TrimSpace(input.SourceBlobSHA),
 		ContentHash:        strings.TrimSpace(input.ContentHash),
-		ValidatedPayload:   input.ValidatedPayload,
+		ValidatedPayload:   projection.payload,
 		ValidationStatus:   validationStatus,
 		ProjectionStatus:   projectionStatusForValidation(validationStatus),
 		ImportedAt:         now,
 	}
-	if policy.SourcePath == "" || policy.SourceCommitSHA == "" || policy.ContentHash == "" || !json.Valid(policy.ValidatedPayload) {
+	if policy.SourcePath == "" || policy.SourceCommitSHA == "" || policy.ContentHash == "" {
 		return entity.ServicesPolicy{}, errs.ErrInvalidArgument
 	}
-	descriptors := s.prepareServiceDescriptors(policy, input.ServiceDescriptors, now)
+	descriptors := s.prepareServiceDescriptors(policy, projection.descriptors, now)
 	result, err := commandResult(input.Meta, projectOperationImportServicesPolicy, projectAggregateServicesPolicy, policy.ID, now)
 	if err != nil {
 		return entity.ServicesPolicy{}, err
@@ -73,20 +76,20 @@ func (s *Service) GetServicesPolicy(ctx context.Context, input GetServicesPolicy
 
 // ListServiceDescriptors returns typed services from checked policy.
 func (s *Service) ListServiceDescriptors(ctx context.Context, input ListServiceDescriptorsInput) (ListServiceDescriptorsResult, error) {
-	return listProjectScoped(s, ctx, input.ProjectID, input.Meta, projectActionPolicyRead, projectAggregateServicesPolicy,
-		func(ctx context.Context) ([]entity.ServiceDescriptor, value.PageResult, error) {
-			return s.repository.ListServiceDescriptors(ctx, query.ServiceDescriptorFilter{
-				ProjectID:    input.ProjectID,
-				RepositoryID: input.RepositoryID,
-				ServiceKeys:  input.ServiceKeys,
-				Statuses:     input.Statuses,
-				Page:         input.Page,
-			})
-		},
-		func(descriptors []entity.ServiceDescriptor, page value.PageResult) ListServiceDescriptorsResult {
-			return ListServiceDescriptorsResult{ServiceDescriptors: descriptors, Page: page}
-		},
-	)
+	if err := s.authorizeProjectQuery(ctx, input.ProjectID, input.Meta, projectActionPolicyRead, projectAggregateServicesPolicy); err != nil {
+		return ListServiceDescriptorsResult{}, err
+	}
+	descriptors, page, err := s.repository.ListServiceDescriptors(ctx, query.ServiceDescriptorFilter{
+		ProjectID:    input.ProjectID,
+		RepositoryID: input.RepositoryID,
+		ServiceKeys:  input.ServiceKeys,
+		Statuses:     input.Statuses,
+		Page:         input.Page,
+	})
+	if err != nil {
+		return ListServiceDescriptorsResult{}, err
+	}
+	return ListServiceDescriptorsResult{ServiceDescriptors: descriptors, Page: page}, nil
 }
 
 // CreatePolicyEditProposal stores a request to change services.yaml through provider PR.

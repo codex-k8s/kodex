@@ -75,14 +75,14 @@ approvals:
 | `source_blob_sha` | text | да | Хэш объекта файла у провайдера, если доступен. |
 | `policy_version` | bigint | нет | Версия проверенного снимка. |
 | `content_hash` | text | нет | Хэш исходного содержимого. |
-| `validated_payload` | jsonb | нет | Нормализованный снимок исходной политики для аудита и повторной валидации; не является основным контуром чтения для сервисов. |
+| `validated_payload` | jsonb | нет | Нормализованный типизированный снимок исходной политики для аудита и повторной валидации; не является основным контуром чтения для сервисов. |
 | `validation_status` | enum | нет | `valid`, `invalid`, `stale`. |
 | `projection_status` | enum | нет | `synced`, `pending`, `failed`, `overridden`. |
 | `imported_at` | timestamptz | нет | Когда проекция была сохранена в БД. |
 
 ### ServiceDescriptor
 
-`ServiceDescriptor` — типизированная и индексируемая часть проверенного `services.yaml`. Код не должен каждый раз разбирать `validated_payload` ради рабочих чтений, привязки документации или политики размещения.
+`ServiceDescriptor` — типизированная и индексируемая часть проверенного `services.yaml`. `project-catalog` строит этот набор из нормализованного `validated_payload`, а не принимает его как чужую каноническую истину. Код не должен каждый раз разбирать `validated_payload` ради рабочих чтений, привязки документации или политики размещения.
 
 | Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
@@ -232,6 +232,7 @@ approvals:
 
 - `Project` владеет `RepositoryBinding`, `ServicesPolicy`, `ServiceDescriptor`, `DocumentationSource`, `BranchRules`, `ReleasePolicy`, `ReleaseLine`, `PlacementPolicy`, `PolicyOverride`.
 - `ServicesPolicy` владеет набором `ServiceDescriptor`, полученным из проверенной версии `services.yaml`.
+- `validated_payload` хранится как нормализованный JSON по модели политики `services.yaml`; сырой YAML остаётся в Git у провайдера.
 - `ServiceDescriptor` считается активным только внутри последней политики `valid + synced/overridden`. Импорт невалидной или неуспешной проекции не переводит предыдущие descriptors в `stale`.
 - Внутри БД `project-catalog` допустимы обычные внешние ключи между своими таблицами.
 - Ссылки на организации, кластеры, роли, агентные процессы и provider-native сущности хранятся как внешние идентификаторы без SQL-связей с чужими БД.
