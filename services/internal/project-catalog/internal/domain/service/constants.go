@@ -1,6 +1,9 @@
 package service
 
-import projectevents "github.com/codex-k8s/kodex/libs/go/platformevents/project"
+import (
+	"github.com/codex-k8s/kodex/libs/go/accesscatalog"
+	projectevents "github.com/codex-k8s/kodex/libs/go/platformevents/project"
+)
 
 const (
 	projectEventProjectCreated           = projectevents.EventProjectCreated
@@ -54,32 +57,32 @@ const (
 	projectOperationPutReleasePolicy     = "domain.Service.PutReleasePolicy"
 	projectOperationPutReleaseLine       = "domain.Service.PutReleaseLine"
 	projectOperationPutPlacementPolicy   = "domain.Service.PutPlacementPolicy"
-	projectActionCreate                  = "project.create"
-	projectActionUpdate                  = "project.update"
-	projectActionRead                    = "project.read"
-	projectActionList                    = "project.list"
-	projectActionRepositoryAttach        = "repository.attach"
-	projectActionRepositoryUpdate        = "repository.update"
-	projectActionRepositoryDetach        = "repository.detach"
-	projectActionRepositoryRead          = "repository.read"
-	projectActionRepositoryList          = "repository.list"
-	projectActionPolicyImport            = "project.policy.import"
-	projectActionPolicyRead              = "project.policy.read"
-	projectActionPolicyPropose           = "project.policy.propose"
-	projectActionPolicyOverride          = "project.policy.override"
-	projectActionPolicyOverrideRead      = "project.policy.override.read"
-	projectActionPolicyOverrideCancel    = "project.policy.override.cancel"
-	projectActionDocsUpdate              = "project.docs.update"
-	projectActionDocsRead                = "project.docs.read"
-	projectActionWorkspaceRead           = "project.workspace.read"
-	projectActionBranchRulesUpdate       = "project.branch_rules.update"
-	projectActionBranchRulesRead         = "project.branch_rules.read"
-	projectActionReleasePolicyUpdate     = "project.release_policy.update"
-	projectActionReleasePolicyRead       = "project.release_policy.read"
-	projectActionReleaseLineUpdate       = "project.release_line.update"
-	projectActionReleaseLineRead         = "project.release_line.read"
-	projectActionPlacementPolicyUpdate   = "project.placement_policy.update"
-	projectActionPlacementPolicyRead     = "project.placement_policy.read"
+	projectActionCreate                  = accesscatalog.ActionProjectCreate
+	projectActionUpdate                  = accesscatalog.ActionProjectUpdate
+	projectActionRead                    = accesscatalog.ActionProjectRead
+	projectActionList                    = accesscatalog.ActionProjectList
+	projectActionRepositoryAttach        = accesscatalog.ActionRepositoryAttach
+	projectActionRepositoryUpdate        = accesscatalog.ActionRepositoryUpdate
+	projectActionRepositoryDetach        = accesscatalog.ActionRepositoryDetach
+	projectActionRepositoryRead          = accesscatalog.ActionRepositoryRead
+	projectActionRepositoryList          = accesscatalog.ActionRepositoryList
+	projectActionPolicyImport            = accesscatalog.ActionProjectPolicyImport
+	projectActionPolicyRead              = accesscatalog.ActionProjectPolicyRead
+	projectActionPolicyPropose           = accesscatalog.ActionProjectPolicyPropose
+	projectActionPolicyOverride          = accesscatalog.ActionProjectPolicyOverride
+	projectActionPolicyOverrideRead      = accesscatalog.ActionProjectPolicyOverrideRead
+	projectActionPolicyOverrideCancel    = accesscatalog.ActionProjectPolicyOverrideCancel
+	projectActionDocsUpdate              = accesscatalog.ActionProjectDocsUpdate
+	projectActionDocsRead                = accesscatalog.ActionProjectDocsRead
+	projectActionWorkspaceRead           = accesscatalog.ActionProjectWorkspaceRead
+	projectActionBranchRulesUpdate       = accesscatalog.ActionProjectBranchRulesUpdate
+	projectActionBranchRulesRead         = accesscatalog.ActionProjectBranchRulesRead
+	projectActionReleasePolicyUpdate     = accesscatalog.ActionProjectReleasePolicyUpdate
+	projectActionReleasePolicyRead       = accesscatalog.ActionProjectReleasePolicyRead
+	projectActionReleaseLineUpdate       = accesscatalog.ActionProjectReleaseLineUpdate
+	projectActionReleaseLineRead         = accesscatalog.ActionProjectReleaseLineRead
+	projectActionPlacementPolicyUpdate   = accesscatalog.ActionProjectPlacementUpdate
+	projectActionPlacementPolicyRead     = accesscatalog.ActionProjectPlacementRead
 	projectProposalStatusPending         = "pending"
 )
 
