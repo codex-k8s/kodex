@@ -1,6 +1,7 @@
 package project
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -269,6 +270,29 @@ func scanPolicyOverride(row postgreslib.RowScanner) (entity.PolicyOverride, erro
 	override.TargetType = enum.PolicyOverrideTargetType(targetType)
 	override.Status = enum.PolicyOverrideStatus(status)
 	return override, err
+}
+
+func scanPolicyEditProposal(row postgreslib.RowScanner) (entity.PolicyEditProposal, error) {
+	var proposal entity.PolicyEditProposal
+	var requestedChanges []byte
+	err := row.Scan(
+		&proposal.ID,
+		&proposal.ProjectID,
+		&proposal.RepositoryID,
+		&proposal.SourcePath,
+		&requestedChanges,
+		&proposal.Status,
+		&proposal.CreatedAt,
+	)
+	if err != nil {
+		return entity.PolicyEditProposal{}, err
+	}
+	if len(requestedChanges) > 0 {
+		if err := json.Unmarshal(requestedChanges, &proposal.RequestedChanges); err != nil {
+			return entity.PolicyEditProposal{}, err
+		}
+	}
+	return proposal, nil
 }
 
 func scanCommandResult(row postgreslib.RowScanner) (entity.CommandResult, error) {

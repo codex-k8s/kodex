@@ -97,11 +97,8 @@ func (s *Service) CreatePolicyEditProposal(ctx context.Context, input CreatePoli
 	if err := s.authorizeCommand(ctx, input.Meta, projectActionPolicyPropose, projectScopedResource(projectAggregateServicesPolicy, input.ProjectID)); err != nil {
 		return entity.PolicyEditProposal{}, err
 	}
-	if result, ok, err := s.findCommandResult(ctx, input.Meta, projectOperationPolicyEditProposal, "policy_edit_proposal"); ok || err != nil {
-		if err != nil {
-			return entity.PolicyEditProposal{}, err
-		}
-		return entity.PolicyEditProposal{ID: result.AggregateID, ProjectID: input.ProjectID, RepositoryID: input.RepositoryID, Status: projectProposalStatusPending}, nil
+	if proposal, ok, err := findScopedCommandReplay(s, ctx, input.Meta, projectOperationPolicyEditProposal, projectAggregatePolicyEditProposal, input.ProjectID, s.repository.GetPolicyEditProposal, policyEditProposalProjectID); ok || err != nil {
+		return proposal, err
 	}
 	now := s.clock.Now()
 	proposal := entity.PolicyEditProposal{
@@ -116,7 +113,7 @@ func (s *Service) CreatePolicyEditProposal(ctx context.Context, input CreatePoli
 	if proposal.RepositoryID == uuid.Nil || proposal.SourcePath == "" {
 		return entity.PolicyEditProposal{}, errs.ErrInvalidArgument
 	}
-	result, err := commandResult(input.Meta, projectOperationPolicyEditProposal, "policy_edit_proposal", proposal.ID, now)
+	result, err := commandResult(input.Meta, projectOperationPolicyEditProposal, projectAggregatePolicyEditProposal, proposal.ID, now)
 	if err != nil {
 		return entity.PolicyEditProposal{}, err
 	}
@@ -134,20 +131,8 @@ func (s *Service) CreatePolicyOverride(ctx context.Context, input CreatePolicyOv
 	if err := s.authorizeCommand(ctx, input.Meta, projectActionPolicyOverride, projectScopedResource(projectAggregatePolicyOverride, input.ProjectID)); err != nil {
 		return entity.PolicyOverride{}, err
 	}
-	if result, ok, err := s.findCommandResult(ctx, input.Meta, projectOperationPolicyOverride, projectAggregatePolicyOverride); ok || err != nil {
-		if err != nil {
-			return entity.PolicyOverride{}, err
-		}
-		overrides, _, err := s.repository.ListPolicyOverrides(ctx, query.PolicyOverrideFilter{ProjectID: input.ProjectID, Statuses: []enum.PolicyOverrideStatus{enum.PolicyOverrideStatusActive}})
-		if err != nil {
-			return entity.PolicyOverride{}, err
-		}
-		for _, override := range overrides {
-			if override.ID == result.AggregateID {
-				return override, nil
-			}
-		}
-		return entity.PolicyOverride{}, errs.ErrNotFound
+	if override, ok, err := findScopedCommandReplay(s, ctx, input.Meta, projectOperationPolicyOverride, projectAggregatePolicyOverride, input.ProjectID, s.repository.GetPolicyOverride, policyOverrideProjectID); ok || err != nil {
+		return override, err
 	}
 	expiresAt, err := parseRFC3339(input.ExpiresAt)
 	if err != nil {

@@ -462,6 +462,13 @@ func TestRepositoryIntegrationPoliciesAndRules(t *testing.T) {
 	if err := repository.CreatePolicyOverride(ctx, override, testEvent("project.policy_override.created", "policy_override", override.ID, now), testCommandResult(uuid.New(), operationCreatePolicyOverride, "policy_override", override.ID, now)); err != nil {
 		t.Fatalf("create policy override: %v", err)
 	}
+	loadedOverride, err := repository.GetPolicyOverride(ctx, override.ID)
+	if err != nil {
+		t.Fatalf("get policy override: %v", err)
+	}
+	if loadedOverride.ID != override.ID || loadedOverride.ProjectID != project.ID || !jsonEqual(loadedOverride.Payload, override.Payload) {
+		t.Fatalf("loaded policy override = %+v, want %+v", loadedOverride, override)
+	}
 	activeOverrides, _, err := repository.ListPolicyOverrides(ctx, query.PolicyOverrideFilter{
 		ProjectID:   project.ID,
 		TargetTypes: []enum.PolicyOverrideTargetType{enum.PolicyOverrideTargetPlacementPolicy},
@@ -502,6 +509,13 @@ func TestRepositoryIntegrationPoliciesAndRules(t *testing.T) {
 	}
 	if err := repository.CreatePolicyEditProposal(ctx, proposal, testCommandResult(uuid.New(), operationCreatePolicyEditProposal, "policy_edit_proposal", proposal.ID, now)); err != nil {
 		t.Fatalf("create policy edit proposal: %v", err)
+	}
+	loadedProposal, err := repository.GetPolicyEditProposal(ctx, proposal.ID)
+	if err != nil {
+		t.Fatalf("get policy edit proposal: %v", err)
+	}
+	if loadedProposal.ID != proposal.ID || loadedProposal.ProjectID != project.ID || loadedProposal.RequestedChanges.Summary != proposal.RequestedChanges.Summary {
+		t.Fatalf("loaded policy edit proposal = %+v, want %+v", loadedProposal, proposal)
 	}
 
 	branchRulesItems, _, err := repository.ListBranchRules(ctx, query.BranchRulesFilter{ProjectID: project.ID, RepositoryID: &repositoryBinding.ID, Statuses: []enum.BranchRulesStatus{enum.BranchRulesStatusActive}})

@@ -57,6 +57,8 @@ const (
 	operationGetCommandResult                 = "domain.Repository.GetCommandResult"
 	operationGetDocumentationSource           = "domain.Repository.GetDocumentationSource"
 	operationGetPlacementPolicy               = "domain.Repository.GetPlacementPolicy"
+	operationGetPolicyEditProposal            = "domain.Repository.GetPolicyEditProposal"
+	operationGetPolicyOverride                = "domain.Repository.GetPolicyOverride"
 	operationGetProject                       = "domain.Repository.GetProject"
 	operationGetReleaseLine                   = "domain.Repository.GetReleaseLine"
 	operationGetReleasePolicy                 = "domain.Repository.GetReleasePolicy"
@@ -220,8 +222,16 @@ func (r *Repository) CreatePolicyEditProposal(ctx context.Context, proposal enti
 	return r.mutate(ctx, operationCreatePolicyEditProposal, insertMutation(queryPolicyEditProposalCreate, policyEditProposalArgs(proposal)), commandResultMutation(result))
 }
 
+func (r *Repository) GetPolicyEditProposal(ctx context.Context, id uuid.UUID) (entity.PolicyEditProposal, error) {
+	return queryOne(ctx, r.db, operationGetPolicyEditProposal, queryPolicyEditProposalGetByID, pgx.NamedArgs{"id": id}, scanPolicyEditProposal)
+}
+
 func (r *Repository) CreatePolicyOverride(ctx context.Context, override entity.PolicyOverride, event entity.OutboxEvent, result entity.CommandResult) error {
 	return r.createWithCommandResult(ctx, operationCreatePolicyOverride, event, affectedMutation(queryPolicyOverrideCreate, policyOverrideArgs(override)), result)
+}
+
+func (r *Repository) GetPolicyOverride(ctx context.Context, id uuid.UUID) (entity.PolicyOverride, error) {
+	return queryOne(ctx, r.db, operationGetPolicyOverride, queryPolicyOverrideGetByID, pgx.NamedArgs{"id": id}, scanPolicyOverride)
 }
 
 func (r *Repository) ListPolicyOverrides(ctx context.Context, filter query.PolicyOverrideFilter) ([]entity.PolicyOverride, query.PageResult, error) {

@@ -42,8 +42,12 @@ type Repository interface {
 	ListServiceDescriptors(ctx context.Context, filter query.ServiceDescriptorFilter) ([]entity.ServiceDescriptor, query.PageResult, error)
 	// CreatePolicyEditProposal stores a request to change services.yaml through provider PR.
 	CreatePolicyEditProposal(ctx context.Context, proposal entity.PolicyEditProposal, result entity.CommandResult) error
+	// GetPolicyEditProposal returns a policy edit proposal by id.
+	GetPolicyEditProposal(ctx context.Context, id uuid.UUID) (entity.PolicyEditProposal, error)
 	// CreatePolicyOverride stores an emergency override and its outbox event.
 	CreatePolicyOverride(ctx context.Context, override entity.PolicyOverride, event entity.OutboxEvent, result entity.CommandResult) error
+	// GetPolicyOverride returns a policy override by id without active-state filtering.
+	GetPolicyOverride(ctx context.Context, id uuid.UUID) (entity.PolicyOverride, error)
 	// ListPolicyOverrides returns operator overrides matching filter.
 	ListPolicyOverrides(ctx context.Context, filter query.PolicyOverrideFilter) ([]entity.PolicyOverride, query.PageResult, error)
 	// PutDocumentationSource creates or updates a documentation source with optimistic concurrency.

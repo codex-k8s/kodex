@@ -33,6 +33,7 @@ const (
 	projectAggregateProject              = projectevents.AggregateProject
 	projectAggregateRepository           = projectevents.AggregateRepository
 	projectAggregateServicesPolicy       = projectevents.AggregateServicesPolicy
+	projectAggregatePolicyEditProposal   = "policy_edit_proposal"
 	projectAggregatePolicyOverride       = projectevents.AggregatePolicyOverride
 	projectAggregateDocumentationSource  = projectevents.AggregateDocumentationSource
 	projectAggregateBranchRules          = projectevents.AggregateBranchRules

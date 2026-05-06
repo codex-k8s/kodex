@@ -92,3 +92,11 @@ func releaseLineProjectID(line entity.ReleaseLine) uuid.UUID {
 func placementPolicyProjectID(policy entity.PlacementPolicy) uuid.UUID {
 	return policy.ProjectID
 }
+
+func policyEditProposalProjectID(proposal entity.PolicyEditProposal) uuid.UUID {
+	return proposal.ProjectID
+}
+
+func policyOverrideProjectID(override entity.PolicyOverride) uuid.UUID {
+	return override.ProjectID
+}

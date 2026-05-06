@@ -267,6 +267,117 @@ func TestPutBranchRulesReplayRejectsDifferentProjectScope(t *testing.T) {
 	}
 }
 
+func TestCreatePolicyEditProposalReplayRejectsDifferentProjectScope(t *testing.T) {
+	ctx := context.Background()
+	projectA := uuid.New()
+	projectB := uuid.New()
+	proposalID := uuid.New()
+	commandID := uuid.New()
+	store := newMemoryRepository()
+	store.policyEditProposals[proposalID] = entity.PolicyEditProposal{
+		ID:           proposalID,
+		ProjectID:    projectA,
+		RepositoryID: uuid.New(),
+		SourcePath:   "services.yaml",
+		RequestedChanges: value.PolicyEditProposalRequestedChanges{
+			Summary: "Изменить политику проекта A",
+		},
+		Status:    projectProposalStatusPending,
+		CreatedAt: fixedClock{}.Now(),
+	}
+	store.commandResults[commandID.String()] = entity.CommandResult{
+		Key:           commandID.String(),
+		CommandID:     commandID,
+		Operation:     projectOperationPolicyEditProposal,
+		AggregateType: projectAggregatePolicyEditProposal,
+		AggregateID:   proposalID,
+	}
+	svc := New(store, fixedClock{}, &sequenceIDs{})
+
+	_, err := svc.CreatePolicyEditProposal(ctx, CreatePolicyEditProposalInput{
+		ProjectID:    projectB,
+		RepositoryID: uuid.New(),
+		SourcePath:   "services.yaml",
+		Meta:         commandMeta(commandID),
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("replay err = %v, want %v", err, errs.ErrConflict)
+	}
+}
+
+func TestCreatePolicyOverrideReplayRejectsDifferentProjectScope(t *testing.T) {
+	ctx := context.Background()
+	projectA := uuid.New()
+	projectB := uuid.New()
+	overrideID := uuid.New()
+	commandID := uuid.New()
+	store := newMemoryRepository()
+	store.policyOverrides[overrideID] = entity.PolicyOverride{
+		Base:              entity.Base{ID: overrideID, Version: 1, CreatedAt: fixedClock{}.Now(), UpdatedAt: fixedClock{}.Now()},
+		ProjectID:         projectA,
+		TargetType:        enum.PolicyOverrideTargetServicesPolicy,
+		Payload:           []byte(`{"reason":"test"}`),
+		Reason:            "test",
+		Status:            enum.PolicyOverrideStatusActive,
+		ExpiresAt:         fixedClock{}.Now().Add(time.Hour),
+		CreatedByActorRef: "user:owner",
+	}
+	store.commandResults[commandID.String()] = entity.CommandResult{
+		Key:           commandID.String(),
+		CommandID:     commandID,
+		Operation:     projectOperationPolicyOverride,
+		AggregateType: projectAggregatePolicyOverride,
+		AggregateID:   overrideID,
+	}
+	svc := New(store, fixedClock{}, &sequenceIDs{})
+
+	_, err := svc.CreatePolicyOverride(ctx, CreatePolicyOverrideInput{
+		ProjectID: projectB,
+		Meta:      commandMeta(commandID),
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("replay err = %v, want %v", err, errs.ErrConflict)
+	}
+}
+
+func TestCreatePolicyOverrideReplayReturnsStoredInactiveOverride(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	overrideID := uuid.New()
+	commandID := uuid.New()
+	store := newMemoryRepository()
+	saved := entity.PolicyOverride{
+		Base:              entity.Base{ID: overrideID, Version: 1, CreatedAt: fixedClock{}.Now(), UpdatedAt: fixedClock{}.Now()},
+		ProjectID:         projectID,
+		TargetType:        enum.PolicyOverrideTargetServicesPolicy,
+		Payload:           []byte(`{"reason":"expired"}`),
+		Reason:            "expired",
+		Status:            enum.PolicyOverrideStatusExpired,
+		ExpiresAt:         fixedClock{}.Now().Add(-time.Hour),
+		CreatedByActorRef: "user:owner",
+	}
+	store.policyOverrides[overrideID] = saved
+	store.commandResults[commandID.String()] = entity.CommandResult{
+		Key:           commandID.String(),
+		CommandID:     commandID,
+		Operation:     projectOperationPolicyOverride,
+		AggregateType: projectAggregatePolicyOverride,
+		AggregateID:   overrideID,
+	}
+	svc := New(store, fixedClock{}, &sequenceIDs{})
+
+	replayed, err := svc.CreatePolicyOverride(ctx, CreatePolicyOverrideInput{
+		ProjectID: projectID,
+		Meta:      commandMeta(commandID),
+	})
+	if err != nil {
+		t.Fatalf("replay policy override: %v", err)
+	}
+	if replayed.ID != saved.ID || replayed.Status != enum.PolicyOverrideStatusExpired {
+		t.Fatalf("replayed override = %+v, want saved inactive override %+v", replayed, saved)
+	}
+}
+
 func TestImportServicesPolicyAssignsMonotonicVersions(t *testing.T) {
 	ctx := context.Background()
 	projectID := uuid.New()
@@ -365,23 +476,27 @@ func stringPtr(value string) *string {
 }
 
 type memoryRepository struct {
-	projects       map[uuid.UUID]entity.Project
-	repositories   map[uuid.UUID]entity.RepositoryBinding
-	policies       map[uuid.UUID]entity.ServicesPolicy
-	branchRules    map[uuid.UUID]entity.BranchRules
-	policyVersions map[uuid.UUID]int64
-	commandResults map[string]entity.CommandResult
-	events         []entity.OutboxEvent
+	projects            map[uuid.UUID]entity.Project
+	repositories        map[uuid.UUID]entity.RepositoryBinding
+	policies            map[uuid.UUID]entity.ServicesPolicy
+	branchRules         map[uuid.UUID]entity.BranchRules
+	policyEditProposals map[uuid.UUID]entity.PolicyEditProposal
+	policyOverrides     map[uuid.UUID]entity.PolicyOverride
+	policyVersions      map[uuid.UUID]int64
+	commandResults      map[string]entity.CommandResult
+	events              []entity.OutboxEvent
 }
 
 func newMemoryRepository() *memoryRepository {
 	return &memoryRepository{
-		projects:       map[uuid.UUID]entity.Project{},
-		repositories:   map[uuid.UUID]entity.RepositoryBinding{},
-		policies:       map[uuid.UUID]entity.ServicesPolicy{},
-		branchRules:    map[uuid.UUID]entity.BranchRules{},
-		policyVersions: map[uuid.UUID]int64{},
-		commandResults: map[string]entity.CommandResult{},
+		projects:            map[uuid.UUID]entity.Project{},
+		repositories:        map[uuid.UUID]entity.RepositoryBinding{},
+		policies:            map[uuid.UUID]entity.ServicesPolicy{},
+		branchRules:         map[uuid.UUID]entity.BranchRules{},
+		policyEditProposals: map[uuid.UUID]entity.PolicyEditProposal{},
+		policyOverrides:     map[uuid.UUID]entity.PolicyOverride{},
+		policyVersions:      map[uuid.UUID]int64{},
+		commandResults:      map[string]entity.CommandResult{},
 	}
 }
 
@@ -494,12 +609,33 @@ func (r *memoryRepository) ListServiceDescriptors(context.Context, query.Service
 	return nil, query.PageResult{}, nil
 }
 
-func (r *memoryRepository) CreatePolicyEditProposal(context.Context, entity.PolicyEditProposal, entity.CommandResult) error {
-	return errs.ErrInvalidArgument
+func (r *memoryRepository) CreatePolicyEditProposal(_ context.Context, proposal entity.PolicyEditProposal, result entity.CommandResult) error {
+	r.policyEditProposals[proposal.ID] = proposal
+	r.commandResults[result.Key] = result
+	return nil
 }
 
-func (r *memoryRepository) CreatePolicyOverride(context.Context, entity.PolicyOverride, entity.OutboxEvent, entity.CommandResult) error {
-	return errs.ErrInvalidArgument
+func (r *memoryRepository) GetPolicyEditProposal(_ context.Context, id uuid.UUID) (entity.PolicyEditProposal, error) {
+	proposal, ok := r.policyEditProposals[id]
+	if !ok {
+		return entity.PolicyEditProposal{}, errs.ErrNotFound
+	}
+	return proposal, nil
+}
+
+func (r *memoryRepository) CreatePolicyOverride(_ context.Context, override entity.PolicyOverride, event entity.OutboxEvent, result entity.CommandResult) error {
+	r.policyOverrides[override.ID] = override
+	r.events = append(r.events, event)
+	r.commandResults[result.Key] = result
+	return nil
+}
+
+func (r *memoryRepository) GetPolicyOverride(_ context.Context, id uuid.UUID) (entity.PolicyOverride, error) {
+	override, ok := r.policyOverrides[id]
+	if !ok {
+		return entity.PolicyOverride{}, errs.ErrNotFound
+	}
+	return override, nil
 }
 
 func (r *memoryRepository) ListPolicyOverrides(context.Context, query.PolicyOverrideFilter) ([]entity.PolicyOverride, query.PageResult, error) {
