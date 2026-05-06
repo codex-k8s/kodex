@@ -1,0 +1,731 @@
+package casters
+
+import (
+	"encoding/json"
+	"strings"
+
+	"github.com/google/uuid"
+
+	projectsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/projects/v1"
+	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/errs"
+	projectservice "github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/service"
+	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/enum"
+	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/value"
+)
+
+// CreateProjectInput maps a gRPC request to the domain command input.
+func CreateProjectInput(request *projectsv1.CreateProjectRequest) (projectservice.CreateProjectInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return projectservice.CreateProjectInput{}, err
+	}
+	organizationID, err := requiredUUID(request.GetOrganizationId())
+	if err != nil {
+		return projectservice.CreateProjectInput{}, err
+	}
+	status, err := projectStatusFromProto(request.GetStatus())
+	if err != nil {
+		return projectservice.CreateProjectInput{}, err
+	}
+	return projectservice.CreateProjectInput{
+		OrganizationID: organizationID,
+		Slug:           strings.TrimSpace(request.GetSlug()),
+		DisplayName:    strings.TrimSpace(request.GetDisplayName()),
+		Description:    strings.TrimSpace(request.GetDescription()),
+		IconObjectURI:  strings.TrimSpace(request.GetIconObjectUri()),
+		Status:         status,
+		Meta:           meta,
+	}, nil
+}
+
+// UpdateProjectInput maps a gRPC request to the domain command input.
+func UpdateProjectInput(request *projectsv1.UpdateProjectRequest) (projectservice.UpdateProjectInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return projectservice.UpdateProjectInput{}, err
+	}
+	projectID, err := requiredUUID(request.GetProjectId())
+	if err != nil {
+		return projectservice.UpdateProjectInput{}, err
+	}
+	status, err := projectStatusFromProto(request.GetStatus())
+	if err != nil {
+		return projectservice.UpdateProjectInput{}, err
+	}
+	return projectservice.UpdateProjectInput{
+		ProjectID:     projectID,
+		Slug:          request.Slug,
+		DisplayName:   request.DisplayName,
+		Description:   request.Description,
+		IconObjectURI: request.IconObjectUri,
+		Status:        status,
+		Meta:          meta,
+	}, nil
+}
+
+// GetProjectInput maps a gRPC request to id and query metadata.
+func GetProjectInput(request *projectsv1.GetProjectRequest) (uuid.UUID, value.QueryMeta, error) {
+	return idWithQueryMeta(request.GetProjectId(), request.GetMeta())
+}
+
+// ListProjectsInput maps a gRPC request to the domain read input.
+func ListProjectsInput(request *projectsv1.ListProjectsRequest) (projectservice.ListProjectsInput, error) {
+	meta, err := QueryMetaFromProto(request.GetMeta())
+	if err != nil {
+		return projectservice.ListProjectsInput{}, err
+	}
+	organizationID, err := optionalUUIDPtr(request.GetOrganizationId())
+	if err != nil {
+		return projectservice.ListProjectsInput{}, err
+	}
+	statuses, err := projectStatusesFromProto(request.GetStatuses())
+	if err != nil {
+		return projectservice.ListProjectsInput{}, err
+	}
+	return projectservice.ListProjectsInput{OrganizationID: organizationID, Statuses: statuses, Page: pageRequestFromProto(request.GetPage()), Meta: meta}, nil
+}
+
+// AttachRepositoryInput maps a gRPC request to the domain command input.
+func AttachRepositoryInput(request *projectsv1.AttachRepositoryRequest) (projectservice.AttachRepositoryInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return projectservice.AttachRepositoryInput{}, err
+	}
+	projectID, err := requiredUUID(request.GetProjectId())
+	if err != nil {
+		return projectservice.AttachRepositoryInput{}, err
+	}
+	provider, err := repositoryProviderFromProto(request.GetProvider())
+	if err != nil {
+		return projectservice.AttachRepositoryInput{}, err
+	}
+	status, err := repositoryStatusFromProto(request.GetStatus())
+	if err != nil {
+		return projectservice.AttachRepositoryInput{}, err
+	}
+	return projectservice.AttachRepositoryInput{
+		ProjectID:            projectID,
+		Provider:             provider,
+		ProviderOwner:        strings.TrimSpace(request.GetProviderOwner()),
+		ProviderName:         strings.TrimSpace(request.GetProviderName()),
+		WebURL:               strings.TrimSpace(request.GetWebUrl()),
+		DefaultBranch:        strings.TrimSpace(request.GetDefaultBranch()),
+		ProviderRepositoryID: strings.TrimSpace(request.GetProviderRepositoryId()),
+		IconObjectURI:        strings.TrimSpace(request.GetIconObjectUri()),
+		Status:               status,
+		Meta:                 meta,
+	}, nil
+}
+
+// UpdateRepositoryInput maps a gRPC request to the domain command input.
+func UpdateRepositoryInput(request *projectsv1.UpdateRepositoryRequest) (projectservice.UpdateRepositoryInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return projectservice.UpdateRepositoryInput{}, err
+	}
+	repositoryID, err := requiredUUID(request.GetRepositoryId())
+	if err != nil {
+		return projectservice.UpdateRepositoryInput{}, err
+	}
+	status, err := repositoryStatusFromProto(request.GetStatus())
+	if err != nil {
+		return projectservice.UpdateRepositoryInput{}, err
+	}
+	return projectservice.UpdateRepositoryInput{
+		RepositoryID:  repositoryID,
+		DefaultBranch: request.DefaultBranch,
+		Status:        status,
+		IconObjectURI: request.IconObjectUri,
+		Meta:          meta,
+	}, nil
+}
+
+// DetachRepositoryInput maps a gRPC request to id and command metadata.
+func DetachRepositoryInput(request *projectsv1.DetachRepositoryRequest) (uuid.UUID, value.CommandMeta, error) {
+	return idWithCommandMeta(request.GetRepositoryId(), request.GetMeta())
+}
+
+func GetRepositoryInput(request *projectsv1.GetRepositoryRequest) (uuid.UUID, value.QueryMeta, error) {
+	return idWithQueryMeta(request.GetRepositoryId(), request.GetMeta())
+}
+
+func ListRepositoriesInput(request *projectsv1.ListRepositoriesRequest) (projectservice.ListRepositoriesInput, error) {
+	return listProjectStatusesInput(
+		request.GetProjectId(),
+		request.GetMeta(),
+		request.GetPage(),
+		request.GetStatuses(),
+		repositoryStatusesFromProto,
+		buildListRepositoriesInput,
+	)
+}
+
+func ImportServicesPolicyInput(request *projectsv1.ImportServicesPolicyRequest) (projectservice.ImportServicesPolicyInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return projectservice.ImportServicesPolicyInput{}, err
+	}
+	projectID, err := requiredUUID(request.GetProjectId())
+	if err != nil {
+		return projectservice.ImportServicesPolicyInput{}, err
+	}
+	repositoryID, err := optionalUUIDPtr(request.GetSourceRepositoryId())
+	if err != nil {
+		return projectservice.ImportServicesPolicyInput{}, err
+	}
+	status, err := validationStatusFromProto(request.GetValidationStatus())
+	if err != nil {
+		return projectservice.ImportServicesPolicyInput{}, err
+	}
+	descriptors, err := serviceDescriptorsFromProto(request.GetServiceDescriptors())
+	if err != nil {
+		return projectservice.ImportServicesPolicyInput{}, err
+	}
+	return projectservice.ImportServicesPolicyInput{
+		ProjectID:          projectID,
+		SourceRepositoryID: repositoryID,
+		SourcePath:         strings.TrimSpace(request.GetSourcePath()),
+		SourceRef:          strings.TrimSpace(request.GetSourceRef()),
+		SourceCommitSHA:    strings.TrimSpace(request.GetSourceCommitSha()),
+		SourceBlobSHA:      strings.TrimSpace(request.GetSourceBlobSha()),
+		ContentHash:        strings.TrimSpace(request.GetContentHash()),
+		ValidatedPayload:   []byte(strings.TrimSpace(request.GetValidatedPayloadJson())),
+		ServiceDescriptors: descriptors,
+		ValidationStatus:   status,
+		Meta:               meta,
+	}, nil
+}
+
+func GetServicesPolicyInput(request *projectsv1.GetServicesPolicyRequest) (projectservice.GetServicesPolicyInput, error) {
+	meta, err := QueryMetaFromProto(request.GetMeta())
+	if err != nil {
+		return projectservice.GetServicesPolicyInput{}, err
+	}
+	projectID, err := requiredUUID(request.GetProjectId())
+	if err != nil {
+		return projectservice.GetServicesPolicyInput{}, err
+	}
+	policyID, err := optionalUUIDPtr(request.GetServicesPolicyId())
+	if err != nil {
+		return projectservice.GetServicesPolicyInput{}, err
+	}
+	return projectservice.GetServicesPolicyInput{ProjectID: projectID, ServicesPolicyID: policyID, Meta: meta}, nil
+}
+
+func ListServiceDescriptorsInput(request *projectsv1.ListServiceDescriptorsRequest) (projectservice.ListServiceDescriptorsInput, error) {
+	projectID, meta, err := idWithQueryMeta(request.GetProjectId(), request.GetMeta())
+	if err != nil {
+		return projectservice.ListServiceDescriptorsInput{}, err
+	}
+	repositoryID, err := optionalUUIDPtr(request.GetRepositoryId())
+	if err != nil {
+		return projectservice.ListServiceDescriptorsInput{}, err
+	}
+	statuses, err := serviceStatusesFromProto(request.GetStatuses())
+	if err != nil {
+		return projectservice.ListServiceDescriptorsInput{}, err
+	}
+	return projectservice.ListServiceDescriptorsInput{ProjectID: projectID, RepositoryID: repositoryID, ServiceKeys: trimStrings(request.GetServiceKeys()), Statuses: statuses, Page: pageRequestFromProto(request.GetPage()), Meta: meta}, nil
+}
+
+func CreatePolicyEditProposalInput(request *projectsv1.CreatePolicyEditProposalRequest) (projectservice.CreatePolicyEditProposalInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return projectservice.CreatePolicyEditProposalInput{}, err
+	}
+	projectID, err := requiredUUID(request.GetProjectId())
+	if err != nil {
+		return projectservice.CreatePolicyEditProposalInput{}, err
+	}
+	repositoryID, err := requiredUUID(request.GetRepositoryId())
+	if err != nil {
+		return projectservice.CreatePolicyEditProposalInput{}, err
+	}
+	var changes value.PolicyEditProposalRequestedChanges
+	if err := json.Unmarshal([]byte(strings.TrimSpace(request.GetRequestedChangesJson())), &changes); err != nil {
+		return projectservice.CreatePolicyEditProposalInput{}, errs.ErrInvalidArgument
+	}
+	return projectservice.CreatePolicyEditProposalInput{ProjectID: projectID, RepositoryID: repositoryID, SourcePath: strings.TrimSpace(request.GetSourcePath()), RequestedChanges: changes, Meta: meta}, nil
+}
+
+func CreatePolicyOverrideInput(request *projectsv1.CreatePolicyOverrideRequest) (projectservice.CreatePolicyOverrideInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return projectservice.CreatePolicyOverrideInput{}, err
+	}
+	projectID, err := requiredUUID(request.GetProjectId())
+	if err != nil {
+		return projectservice.CreatePolicyOverrideInput{}, err
+	}
+	targetType, err := policyOverrideTargetFromProto(request.GetTargetType())
+	if err != nil {
+		return projectservice.CreatePolicyOverrideInput{}, err
+	}
+	targetID, err := optionalUUIDPtr(request.GetTargetId())
+	if err != nil {
+		return projectservice.CreatePolicyOverrideInput{}, err
+	}
+	return projectservice.CreatePolicyOverrideInput{ProjectID: projectID, TargetType: targetType, TargetID: targetID, Payload: []byte(strings.TrimSpace(request.GetPayloadJson())), ExpiresAt: request.GetExpiresAt(), Meta: meta}, nil
+}
+
+func ListPolicyOverridesInput(request *projectsv1.ListPolicyOverridesRequest) (projectservice.ListPolicyOverridesInput, error) {
+	projectID, meta, err := idWithQueryMeta(request.GetProjectId(), request.GetMeta())
+	if err != nil {
+		return projectservice.ListPolicyOverridesInput{}, err
+	}
+	targetID, err := optionalUUIDPtr(request.GetTargetId())
+	if err != nil {
+		return projectservice.ListPolicyOverridesInput{}, err
+	}
+	targetTypes, err := policyOverrideTargetsFromProto(request.GetTargetTypes())
+	if err != nil {
+		return projectservice.ListPolicyOverridesInput{}, err
+	}
+	statuses, err := policyOverrideStatusesFromProto(request.GetStatuses())
+	if err != nil {
+		return projectservice.ListPolicyOverridesInput{}, err
+	}
+	return projectservice.ListPolicyOverridesInput{ProjectID: projectID, TargetTypes: targetTypes, TargetID: targetID, Statuses: statuses, ActiveOnly: request.GetActiveOnly(), Page: pageRequestFromProto(request.GetPage()), Meta: meta}, nil
+}
+
+func PutDocumentationSourceInput(request *projectsv1.PutDocumentationSourceRequest) (projectservice.PutDocumentationSourceInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return projectservice.PutDocumentationSourceInput{}, err
+	}
+	sourceID, err := optionalUUIDPtr(request.GetDocumentationSourceId())
+	if err != nil {
+		return projectservice.PutDocumentationSourceInput{}, err
+	}
+	projectID, err := requiredUUID(request.GetProjectId())
+	if err != nil {
+		return projectservice.PutDocumentationSourceInput{}, err
+	}
+	repositoryID, err := optionalUUIDPtr(request.GetRepositoryId())
+	if err != nil {
+		return projectservice.PutDocumentationSourceInput{}, err
+	}
+	scopeType, err := documentationScopeFromProto(request.GetScopeType())
+	if err != nil {
+		return projectservice.PutDocumentationSourceInput{}, err
+	}
+	accessMode, err := documentationAccessFromProto(request.GetAccessMode())
+	if err != nil {
+		return projectservice.PutDocumentationSourceInput{}, err
+	}
+	status, err := documentationStatusFromProto(request.GetStatus())
+	if err != nil {
+		return projectservice.PutDocumentationSourceInput{}, err
+	}
+	return projectservice.PutDocumentationSourceInput{
+		DocumentationSourceID: sourceID,
+		ProjectID:             projectID,
+		RepositoryID:          repositoryID,
+		ScopeType:             scopeType,
+		ScopeID:               strings.TrimSpace(request.GetScopeId()),
+		LocalPath:             strings.TrimSpace(request.GetLocalPath()),
+		AccessMode:            accessMode,
+		Status:                status,
+		Meta:                  meta,
+	}, nil
+}
+
+func GetDocumentationSourceInput(request *projectsv1.GetDocumentationSourceRequest) (uuid.UUID, value.QueryMeta, error) {
+	return idWithQueryMeta(request.GetDocumentationSourceId(), request.GetMeta())
+}
+
+func ListDocumentationSourcesInput(request *projectsv1.ListDocumentationSourcesRequest) (projectservice.ListDocumentationSourcesInput, error) {
+	projectID, meta, err := idWithQueryMeta(request.GetProjectId(), request.GetMeta())
+	if err != nil {
+		return projectservice.ListDocumentationSourcesInput{}, err
+	}
+	repositoryID, err := optionalUUIDPtr(request.GetRepositoryId())
+	if err != nil {
+		return projectservice.ListDocumentationSourcesInput{}, err
+	}
+	scopeType, err := documentationScopeFromProto(request.GetScopeType())
+	if err != nil {
+		return projectservice.ListDocumentationSourcesInput{}, err
+	}
+	statuses, err := documentationStatusesFromProto(request.GetStatuses())
+	if err != nil {
+		return projectservice.ListDocumentationSourcesInput{}, err
+	}
+	return projectservice.ListDocumentationSourcesInput{ProjectID: projectID, RepositoryID: repositoryID, ScopeType: scopeType, ScopeID: strings.TrimSpace(request.GetScopeId()), Statuses: statuses, Page: pageRequestFromProto(request.GetPage()), Meta: meta}, nil
+}
+
+func GetWorkspacePolicyInput(request *projectsv1.GetWorkspacePolicyRequest) (projectservice.GetWorkspacePolicyInput, error) {
+	projectID, meta, err := idWithQueryMeta(request.GetProjectId(), request.GetMeta())
+	if err != nil {
+		return projectservice.GetWorkspacePolicyInput{}, err
+	}
+	repositoryIDs, err := requiredUUIDs(request.GetRepositoryIds())
+	if err != nil {
+		return projectservice.GetWorkspacePolicyInput{}, err
+	}
+	return projectservice.GetWorkspacePolicyInput{ProjectID: projectID, RepositoryIDs: repositoryIDs, ServiceKeys: trimStrings(request.GetServiceKeys()), IncludeGuidancePackages: request.GetIncludeGuidancePackages(), Meta: meta}, nil
+}
+
+func PutBranchRulesInput(request *projectsv1.PutBranchRulesRequest) (projectservice.PutBranchRulesInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return projectservice.PutBranchRulesInput{}, err
+	}
+	id, err := optionalUUIDPtr(request.GetBranchRulesId())
+	if err != nil {
+		return projectservice.PutBranchRulesInput{}, err
+	}
+	projectID, err := requiredUUID(request.GetProjectId())
+	if err != nil {
+		return projectservice.PutBranchRulesInput{}, err
+	}
+	repositoryID, err := optionalUUIDPtr(request.GetRepositoryId())
+	if err != nil {
+		return projectservice.PutBranchRulesInput{}, err
+	}
+	mergePolicy, err := mergePolicyFromProto(request.GetMergePolicy())
+	if err != nil {
+		return projectservice.PutBranchRulesInput{}, err
+	}
+	status, err := branchRulesStatusFromProto(request.GetStatus())
+	if err != nil {
+		return projectservice.PutBranchRulesInput{}, err
+	}
+	return projectservice.PutBranchRulesInput{BranchRulesID: id, ProjectID: projectID, RepositoryID: repositoryID, Pattern: strings.TrimSpace(request.GetPattern()), RequiredChecks: trimStrings(request.GetRequiredChecks()), MergePolicy: mergePolicy, Status: status, Meta: meta}, nil
+}
+
+func GetBranchRulesInput(request *projectsv1.GetBranchRulesRequest) (uuid.UUID, value.QueryMeta, error) {
+	return idWithQueryMeta(request.GetBranchRulesId(), request.GetMeta())
+}
+
+func ListBranchRulesInput(request *projectsv1.ListBranchRulesRequest) (projectservice.ListBranchRulesInput, error) {
+	return listProjectOptionalIDStatusesInput(
+		request.GetProjectId(),
+		request.GetRepositoryId(),
+		request.GetMeta(),
+		request.GetPage(),
+		request.GetStatuses(),
+		branchRulesStatusesFromProto,
+		buildListBranchRulesInput,
+	)
+}
+
+func PutReleasePolicyInput(request *projectsv1.PutReleasePolicyRequest) (projectservice.PutReleasePolicyInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return projectservice.PutReleasePolicyInput{}, err
+	}
+	id, err := optionalUUIDPtr(request.GetReleasePolicyId())
+	if err != nil {
+		return projectservice.PutReleasePolicyInput{}, err
+	}
+	projectID, err := requiredUUID(request.GetProjectId())
+	if err != nil {
+		return projectservice.PutReleasePolicyInput{}, err
+	}
+	rollout, err := rolloutStrategyFromProto(request.GetRolloutStrategy())
+	if err != nil {
+		return projectservice.PutReleasePolicyInput{}, err
+	}
+	rollback, err := rollbackPolicyFromProto(request.GetRollbackPolicy())
+	if err != nil {
+		return projectservice.PutReleasePolicyInput{}, err
+	}
+	status, err := releaseStatusFromProto(request.GetStatus())
+	if err != nil {
+		return projectservice.PutReleasePolicyInput{}, err
+	}
+	return projectservice.PutReleasePolicyInput{ReleasePolicyID: id, ProjectID: projectID, Name: strings.TrimSpace(request.GetName()), BranchPattern: strings.TrimSpace(request.GetBranchPattern()), RolloutStrategy: rollout, RollbackPolicy: rollback, RiskProfileRef: strings.TrimSpace(request.GetRiskProfileRef()), Status: status, Meta: meta}, nil
+}
+
+func GetReleasePolicyInput(request *projectsv1.GetReleasePolicyRequest) (uuid.UUID, value.QueryMeta, error) {
+	return idWithQueryMeta(request.GetReleasePolicyId(), request.GetMeta())
+}
+
+func ListReleasePoliciesInput(request *projectsv1.ListReleasePoliciesRequest) (projectservice.ListReleasePoliciesInput, error) {
+	return listProjectStatusesInput(
+		request.GetProjectId(),
+		request.GetMeta(),
+		request.GetPage(),
+		request.GetStatuses(),
+		releaseStatusesFromProto,
+		buildListReleasePoliciesInput,
+	)
+}
+
+func PutReleaseLineInput(request *projectsv1.PutReleaseLineRequest) (projectservice.PutReleaseLineInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return projectservice.PutReleaseLineInput{}, err
+	}
+	id, err := optionalUUIDPtr(request.GetReleaseLineId())
+	if err != nil {
+		return projectservice.PutReleaseLineInput{}, err
+	}
+	projectID, err := requiredUUID(request.GetProjectId())
+	if err != nil {
+		return projectservice.PutReleaseLineInput{}, err
+	}
+	policyID, err := requiredUUID(request.GetReleasePolicyId())
+	if err != nil {
+		return projectservice.PutReleaseLineInput{}, err
+	}
+	status, err := releaseStatusFromProto(request.GetStatus())
+	if err != nil {
+		return projectservice.PutReleaseLineInput{}, err
+	}
+	return projectservice.PutReleaseLineInput{ReleaseLineID: id, ProjectID: projectID, ReleasePolicyID: policyID, Name: strings.TrimSpace(request.GetName()), BranchPattern: strings.TrimSpace(request.GetBranchPattern()), Status: status, Meta: meta}, nil
+}
+
+func GetReleaseLineInput(request *projectsv1.GetReleaseLineRequest) (uuid.UUID, value.QueryMeta, error) {
+	return idWithQueryMeta(request.GetReleaseLineId(), request.GetMeta())
+}
+
+func ListReleaseLinesInput(request *projectsv1.ListReleaseLinesRequest) (projectservice.ListReleaseLinesInput, error) {
+	return listProjectOptionalIDStatusesInput(
+		request.GetProjectId(),
+		request.GetReleasePolicyId(),
+		request.GetMeta(),
+		request.GetPage(),
+		request.GetStatuses(),
+		releaseStatusesFromProto,
+		buildListReleaseLinesInput,
+	)
+}
+
+func PutPlacementPolicyInput(request *projectsv1.PutPlacementPolicyRequest) (projectservice.PutPlacementPolicyInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return projectservice.PutPlacementPolicyInput{}, err
+	}
+	id, err := optionalUUIDPtr(request.GetPlacementPolicyId())
+	if err != nil {
+		return projectservice.PutPlacementPolicyInput{}, err
+	}
+	projectID, err := requiredUUID(request.GetProjectId())
+	if err != nil {
+		return projectservice.PutPlacementPolicyInput{}, err
+	}
+	repositoryID, err := optionalUUIDPtr(request.GetRepositoryId())
+	if err != nil {
+		return projectservice.PutPlacementPolicyInput{}, err
+	}
+	status, err := placementStatusFromProto(request.GetStatus())
+	if err != nil {
+		return projectservice.PutPlacementPolicyInput{}, err
+	}
+	return projectservice.PutPlacementPolicyInput{PlacementPolicyID: id, ProjectID: projectID, RepositoryID: repositoryID, ServiceKey: strings.TrimSpace(request.GetServiceKey()), AllowedClusterRefs: trimStrings(request.GetAllowedClusterRefs()), Status: status, Meta: meta}, nil
+}
+
+func GetPlacementPolicyInput(request *projectsv1.GetPlacementPolicyRequest) (uuid.UUID, value.QueryMeta, error) {
+	return idWithQueryMeta(request.GetPlacementPolicyId(), request.GetMeta())
+}
+
+func ListPlacementPoliciesInput(request *projectsv1.ListPlacementPoliciesRequest) (projectservice.ListPlacementPoliciesInput, error) {
+	projectID, meta, err := idWithQueryMeta(request.GetProjectId(), request.GetMeta())
+	if err != nil {
+		return projectservice.ListPlacementPoliciesInput{}, err
+	}
+	repositoryID, err := optionalUUIDPtr(request.GetRepositoryId())
+	if err != nil {
+		return projectservice.ListPlacementPoliciesInput{}, err
+	}
+	statuses, err := placementStatusesFromProto(request.GetStatuses())
+	if err != nil {
+		return projectservice.ListPlacementPoliciesInput{}, err
+	}
+	return projectservice.ListPlacementPoliciesInput{ProjectID: projectID, RepositoryID: repositoryID, ServiceKey: strings.TrimSpace(request.GetServiceKey()), Statuses: statuses, Page: pageRequestFromProto(request.GetPage()), Meta: meta}, nil
+}
+
+func serviceDescriptorsFromProto(items []*projectsv1.ServiceDescriptor) ([]entity.ServiceDescriptor, error) {
+	result := make([]entity.ServiceDescriptor, 0, len(items))
+	for _, item := range items {
+		kind, err := serviceKindFromProto(item.GetKind())
+		if err != nil {
+			return nil, err
+		}
+		status, err := serviceStatusFromProto(item.GetStatus())
+		if err != nil {
+			return nil, err
+		}
+		repositoryID, err := optionalUUIDPtr(item.GetRepositoryId())
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, entity.ServiceDescriptor{
+			RepositoryID:         repositoryID,
+			ServiceKey:           strings.TrimSpace(item.GetServiceKey()),
+			DisplayName:          strings.TrimSpace(item.GetDisplayName()),
+			Kind:                 kind,
+			RootPath:             strings.TrimSpace(item.GetRootPath()),
+			DocumentationScopeID: strings.TrimSpace(item.GetDocumentationScopeId()),
+			DependsOnServiceKeys: trimStrings(item.GetDependsOnServiceKeys()),
+			Status:               status,
+		})
+	}
+	return result, nil
+}
+
+func projectStatusesFromProto(values []projectsv1.ProjectStatus) ([]enum.ProjectStatus, error) {
+	return enumSlice(values, projectStatusFromProto)
+}
+
+func repositoryStatusesFromProto(values []projectsv1.RepositoryStatus) ([]enum.RepositoryStatus, error) {
+	return enumSlice(values, repositoryStatusFromProto)
+}
+
+func serviceStatusesFromProto(values []projectsv1.ServiceStatus) ([]enum.ServiceStatus, error) {
+	return enumSlice(values, serviceStatusFromProto)
+}
+
+func documentationStatusesFromProto(values []projectsv1.DocumentationSourceStatus) ([]enum.DocumentationSourceStatus, error) {
+	return enumSlice(values, documentationStatusFromProto)
+}
+
+func branchRulesStatusesFromProto(values []projectsv1.BranchRulesStatus) ([]enum.BranchRulesStatus, error) {
+	return enumSlice(values, branchRulesStatusFromProto)
+}
+
+func releaseStatusesFromProto(values []projectsv1.ReleasePolicyStatus) ([]enum.ReleasePolicyStatus, error) {
+	return enumSlice(values, releaseStatusFromProto)
+}
+
+func placementStatusesFromProto(values []projectsv1.PlacementPolicyStatus) ([]enum.PlacementPolicyStatus, error) {
+	return enumSlice(values, placementStatusFromProto)
+}
+
+func policyOverrideTargetsFromProto(values []projectsv1.PolicyOverrideTargetType) ([]enum.PolicyOverrideTargetType, error) {
+	return enumSlice(values, policyOverrideTargetFromProto)
+}
+
+func policyOverrideStatusesFromProto(values []projectsv1.PolicyOverrideStatus) ([]enum.PolicyOverrideStatus, error) {
+	return enumSlice(values, policyOverrideStatusFromProto)
+}
+
+func enumSlice[P comparable, D comparable](values []P, cast func(P) (D, error)) ([]D, error) {
+	result := make([]D, 0, len(values))
+	var zero D
+	for _, value := range values {
+		casted, err := cast(value)
+		if err != nil {
+			return nil, err
+		}
+		if casted != zero {
+			result = append(result, casted)
+		}
+	}
+	return result, nil
+}
+
+func requiredUUIDs(values []string) ([]uuid.UUID, error) {
+	result := make([]uuid.UUID, 0, len(values))
+	for _, value := range values {
+		if strings.TrimSpace(value) == "" {
+			continue
+		}
+		id, err := requiredUUID(value)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, id)
+	}
+	return result, nil
+}
+
+func trimStrings(values []string) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
+}
+
+func idWithQueryMeta(rawID string, rawMeta *projectsv1.QueryMeta) (uuid.UUID, value.QueryMeta, error) {
+	id, err := requiredUUID(rawID)
+	if err != nil {
+		return uuid.Nil, value.QueryMeta{}, err
+	}
+	return queryMetaForID(id, rawMeta)
+}
+
+func idWithCommandMeta(rawID string, rawMeta *projectsv1.CommandMeta) (uuid.UUID, value.CommandMeta, error) {
+	id, err := requiredUUID(rawID)
+	if err != nil {
+		return uuid.Nil, value.CommandMeta{}, err
+	}
+	return commandMetaForID(id, rawMeta)
+}
+
+func queryMetaForID(id uuid.UUID, rawMeta *projectsv1.QueryMeta) (uuid.UUID, value.QueryMeta, error) {
+	meta, err := QueryMetaFromProto(rawMeta)
+	return id, meta, err
+}
+
+func commandMetaForID(id uuid.UUID, rawMeta *projectsv1.CommandMeta) (uuid.UUID, value.CommandMeta, error) {
+	meta, err := CommandMetaFromProto(rawMeta)
+	return id, meta, err
+}
+
+func listProjectStatusesInput[ProtoStatus comparable, DomainStatus comparable, Result any](
+	rawProjectID string,
+	rawMeta *projectsv1.QueryMeta,
+	rawPage *projectsv1.PageRequest,
+	rawStatuses []ProtoStatus,
+	castStatuses func([]ProtoStatus) ([]DomainStatus, error),
+	build func(uuid.UUID, []DomainStatus, value.PageRequest, value.QueryMeta) Result,
+) (Result, error) {
+	var zero Result
+	projectID, meta, err := idWithQueryMeta(rawProjectID, rawMeta)
+	if err != nil {
+		return zero, err
+	}
+	statuses, err := castStatuses(rawStatuses)
+	if err != nil {
+		return zero, err
+	}
+	return build(projectID, statuses, pageRequestFromProto(rawPage), meta), nil
+}
+
+func listProjectOptionalIDStatusesInput[ProtoStatus comparable, DomainStatus comparable, Result any](
+	rawProjectID string,
+	rawOptionalID string,
+	rawMeta *projectsv1.QueryMeta,
+	rawPage *projectsv1.PageRequest,
+	rawStatuses []ProtoStatus,
+	castStatuses func([]ProtoStatus) ([]DomainStatus, error),
+	build func(uuid.UUID, *uuid.UUID, []DomainStatus, value.PageRequest, value.QueryMeta) Result,
+) (Result, error) {
+	var zero Result
+	projectID, meta, err := idWithQueryMeta(rawProjectID, rawMeta)
+	if err != nil {
+		return zero, err
+	}
+	optionalID, err := optionalUUIDPtr(rawOptionalID)
+	if err != nil {
+		return zero, err
+	}
+	statuses, err := castStatuses(rawStatuses)
+	if err != nil {
+		return zero, err
+	}
+	return build(projectID, optionalID, statuses, pageRequestFromProto(rawPage), meta), nil
+}
+
+func buildListRepositoriesInput(projectID uuid.UUID, statuses []enum.RepositoryStatus, page value.PageRequest, meta value.QueryMeta) projectservice.ListRepositoriesInput {
+	return projectservice.ListRepositoriesInput{ProjectID: projectID, Statuses: statuses, Page: page, Meta: meta}
+}
+
+func buildListReleasePoliciesInput(projectID uuid.UUID, statuses []enum.ReleasePolicyStatus, page value.PageRequest, meta value.QueryMeta) projectservice.ListReleasePoliciesInput {
+	return projectservice.ListReleasePoliciesInput{ProjectID: projectID, Statuses: statuses, Page: page, Meta: meta}
+}
+
+func buildListBranchRulesInput(projectID uuid.UUID, repositoryID *uuid.UUID, statuses []enum.BranchRulesStatus, page value.PageRequest, meta value.QueryMeta) projectservice.ListBranchRulesInput {
+	return projectservice.ListBranchRulesInput{ProjectID: projectID, RepositoryID: repositoryID, Statuses: statuses, Page: page, Meta: meta}
+}
+
+func buildListReleaseLinesInput(projectID uuid.UUID, policyID *uuid.UUID, statuses []enum.ReleasePolicyStatus, page value.PageRequest, meta value.QueryMeta) projectservice.ListReleaseLinesInput {
+	return projectservice.ListReleaseLinesInput{ProjectID: projectID, ReleasePolicyID: policyID, Statuses: statuses, Page: page, Meta: meta}
+}

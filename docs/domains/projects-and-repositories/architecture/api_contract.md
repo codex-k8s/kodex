@@ -5,7 +5,7 @@ title: kodex — API-обзор project-catalog
 status: active
 owner_role: SA
 created_at: 2026-05-05
-updated_at: 2026-05-05
+updated_at: 2026-05-06
 related_issues: [628, 629, 630, 631, 632, 633]
 related_prs: []
 approvals:
@@ -123,9 +123,9 @@ approvals:
 |---|---|
 | gRPC proto `ProjectCatalogService` | Стабильный `v1`, покрывает весь согласованный объём операций. |
 | AsyncAPI `project.*` | Стабильный `v1`, покрывает события из этого документа. |
-| Сервисный процесс `project-catalog` | Каркас готов: entrypoint, конфигурация, health/readyz/metrics и зарегистрированный gRPC-сервер. |
-| Бизнес-обработчики gRPC | Отложены до среза gRPC-операций; каркас возвращает `Unimplemented` через generated-сервер. |
-| PostgreSQL и outbox | Модель БД, миграции, слой репозитория, сервисный outbox и базовый deploy-инвентарь готовы. Публикация в общий журнал событий подключается вместе с бизнес-обработчиками gRPC. |
+| Сервисный процесс `project-catalog` | Подключены entrypoint, конфигурация, health/readyz/metrics, gRPC-сервер, проверка доступа через `access-manager` и outbox-dispatcher. |
+| Бизнес-обработчики gRPC | Подключены к доменному сервису для проектов, репозиториев, проверенной проекции `services.yaml`, источников документации, правил веток, релизных политик, релизных линий и политики размещения. `CancelPolicyOverride` остаётся в бэклоге следующего среза. |
+| PostgreSQL и outbox | Модель БД, миграции, слой репозитория, сервисный outbox и публикация событий в `platform-event-log` подключены. |
 
 ## Совместимость
 

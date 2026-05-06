@@ -71,12 +71,20 @@ spec:
               until psql "$KODEX_PROJECT_CATALOG_DATABASE_DSN" -v ON_ERROR_STOP=1 -tAc 'SELECT 1' >/dev/null 2>&1; do
                 sleep 2
               done
+              until psql "$KODEX_PROJECT_CATALOG_EVENT_LOG_DATABASE_DSN" -v ON_ERROR_STOP=1 -tAc 'SELECT 1' >/dev/null 2>&1; do
+                sleep 2
+              done
           env:
             - name: KODEX_PROJECT_CATALOG_DATABASE_DSN
               valueFrom:
                 secretKeyRef:
                   name: kodex-platform-runtime
                   key: KODEX_PROJECT_CATALOG_DATABASE_DSN
+            - name: KODEX_PROJECT_CATALOG_EVENT_LOG_DATABASE_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: kodex-platform-runtime
+                  key: KODEX_PLATFORM_EVENT_LOG_DATABASE_DSN
       containers:
         - name: project-catalog
           image: {{ envOr "KODEX_PROJECT_CATALOG_IMAGE" "" }}
@@ -125,6 +133,48 @@ spec:
               value: "{{ envOr "KODEX_PROJECT_CATALOG_DATABASE_MAX_CONNS" "8" }}"
             - name: KODEX_PROJECT_CATALOG_DATABASE_MIN_CONNS
               value: "{{ envOr "KODEX_PROJECT_CATALOG_DATABASE_MIN_CONNS" "1" }}"
+            - name: KODEX_PROJECT_CATALOG_ACCESS_CHECK_ENABLED
+              value: "{{ envOr "KODEX_PROJECT_CATALOG_ACCESS_CHECK_ENABLED" "true" }}"
+            - name: KODEX_PROJECT_CATALOG_ACCESS_MANAGER_GRPC_ADDR
+              value: "{{ envOr "KODEX_PROJECT_CATALOG_ACCESS_MANAGER_GRPC_ADDR" "access-manager:9090" }}"
+            - name: KODEX_PROJECT_CATALOG_ACCESS_MANAGER_GRPC_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: kodex-platform-runtime
+                  key: KODEX_ACCESS_MANAGER_GRPC_AUTH_TOKEN
+            - name: KODEX_PROJECT_CATALOG_ACCESS_MANAGER_CHECK_TIMEOUT
+              value: "{{ envOr "KODEX_PROJECT_CATALOG_ACCESS_MANAGER_CHECK_TIMEOUT" "3s" }}"
+            - name: KODEX_PROJECT_CATALOG_EVENT_LOG_DATABASE_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: kodex-platform-runtime
+                  key: KODEX_PLATFORM_EVENT_LOG_DATABASE_DSN
+            - name: KODEX_PROJECT_CATALOG_EVENT_LOG_DATABASE_MAX_CONNS
+              value: "{{ envOr "KODEX_PROJECT_CATALOG_EVENT_LOG_DATABASE_MAX_CONNS" "4" }}"
+            - name: KODEX_PROJECT_CATALOG_EVENT_LOG_DATABASE_MIN_CONNS
+              value: "{{ envOr "KODEX_PROJECT_CATALOG_EVENT_LOG_DATABASE_MIN_CONNS" "0" }}"
+            - name: KODEX_PROJECT_CATALOG_OUTBOX_DISPATCH_ENABLED
+              value: "{{ envOr "KODEX_PROJECT_CATALOG_OUTBOX_DISPATCH_ENABLED" "true" }}"
+            - name: KODEX_PROJECT_CATALOG_OUTBOX_PUBLISHER_KIND
+              value: "{{ envOr "KODEX_PROJECT_CATALOG_OUTBOX_PUBLISHER_KIND" "postgres-event-log" }}"
+            - name: KODEX_PROJECT_CATALOG_OUTBOX_EVENT_LOG_SOURCE
+              value: "{{ envOr "KODEX_PROJECT_CATALOG_OUTBOX_EVENT_LOG_SOURCE" "project-catalog" }}"
+            - name: KODEX_PROJECT_CATALOG_OUTBOX_BATCH_SIZE
+              value: "{{ envOr "KODEX_PROJECT_CATALOG_OUTBOX_BATCH_SIZE" "100" }}"
+            - name: KODEX_PROJECT_CATALOG_OUTBOX_POLL_INTERVAL
+              value: "{{ envOr "KODEX_PROJECT_CATALOG_OUTBOX_POLL_INTERVAL" "1s" }}"
+            - name: KODEX_PROJECT_CATALOG_OUTBOX_LOCK_TTL
+              value: "{{ envOr "KODEX_PROJECT_CATALOG_OUTBOX_LOCK_TTL" "30s" }}"
+            - name: KODEX_PROJECT_CATALOG_OUTBOX_PUBLISH_TIMEOUT
+              value: "{{ envOr "KODEX_PROJECT_CATALOG_OUTBOX_PUBLISH_TIMEOUT" "10s" }}"
+            - name: KODEX_PROJECT_CATALOG_OUTBOX_LEASE_SAFETY_MARGIN
+              value: "{{ envOr "KODEX_PROJECT_CATALOG_OUTBOX_LEASE_SAFETY_MARGIN" "5s" }}"
+            - name: KODEX_PROJECT_CATALOG_OUTBOX_RETRY_INITIAL_DELAY
+              value: "{{ envOr "KODEX_PROJECT_CATALOG_OUTBOX_RETRY_INITIAL_DELAY" "1s" }}"
+            - name: KODEX_PROJECT_CATALOG_OUTBOX_RETRY_MAX_DELAY
+              value: "{{ envOr "KODEX_PROJECT_CATALOG_OUTBOX_RETRY_MAX_DELAY" "1m" }}"
+            - name: KODEX_PROJECT_CATALOG_OUTBOX_FAILURE_MESSAGE_LIMIT
+              value: "{{ envOr "KODEX_PROJECT_CATALOG_OUTBOX_FAILURE_MESSAGE_LIMIT" "512" }}"
           readinessProbe:
             httpGet:
               path: /health/readyz
