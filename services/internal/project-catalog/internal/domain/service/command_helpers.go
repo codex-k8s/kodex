@@ -32,6 +32,31 @@ func (s *Service) findCommandResult(ctx context.Context, meta value.CommandMeta,
 	return result, true, nil
 }
 
+func findScopedCommandReplay[Aggregate any](
+	s *Service,
+	ctx context.Context,
+	meta value.CommandMeta,
+	operation string,
+	aggregateType string,
+	expectedScopeID uuid.UUID,
+	load func(context.Context, uuid.UUID) (Aggregate, error),
+	scopeID func(Aggregate) uuid.UUID,
+) (Aggregate, bool, error) {
+	var zero Aggregate
+	result, ok, err := s.findCommandResult(ctx, meta, operation, aggregateType)
+	if err != nil || !ok {
+		return zero, ok, err
+	}
+	aggregate, err := load(ctx, result.AggregateID)
+	if err != nil {
+		return zero, true, err
+	}
+	if scopeID(aggregate) != expectedScopeID {
+		return zero, true, errs.ErrConflict
+	}
+	return aggregate, true, nil
+}
+
 func commandIdentity(meta value.CommandMeta, operation string) (query.CommandIdentity, error) {
 	if meta.CommandID == uuid.Nil && strings.TrimSpace(meta.IdempotencyKey) == "" {
 		return query.CommandIdentity{}, errs.ErrInvalidArgument

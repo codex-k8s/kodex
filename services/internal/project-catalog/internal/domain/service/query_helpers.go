@@ -61,6 +61,18 @@ func listProjectScoped[Item any, Result any](
 	return build(items, page), nil
 }
 
+func projectID(project entity.Project) uuid.UUID {
+	return project.ID
+}
+
+func projectOrganizationID(project entity.Project) uuid.UUID {
+	return project.OrganizationID
+}
+
+func repositoryProjectID(repository entity.RepositoryBinding) uuid.UUID {
+	return repository.ProjectID
+}
+
 func documentationSourceProjectID(source entity.DocumentationSource) uuid.UUID {
 	return source.ProjectID
 }

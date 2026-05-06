@@ -93,6 +93,40 @@ func TestCreateProjectReplaysCommandResultWithoutNewEvent(t *testing.T) {
 	}
 }
 
+func TestCreateProjectReplayRejectsDifferentOrganizationScope(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	organizationA := uuid.New()
+	organizationB := uuid.New()
+	commandID := uuid.New()
+	store := newMemoryRepository()
+	store.projects[projectID] = entity.Project{
+		Base:           entity.Base{ID: projectID, Version: 1},
+		OrganizationID: organizationA,
+		Slug:           "private",
+		DisplayName:    "Private",
+		Status:         enum.ProjectStatusActive,
+	}
+	store.commandResults[commandID.String()] = entity.CommandResult{
+		Key:           commandID.String(),
+		CommandID:     commandID,
+		Operation:     projectOperationCreateProject,
+		AggregateType: projectAggregateProject,
+		AggregateID:   projectID,
+	}
+	svc := New(store, fixedClock{}, &sequenceIDs{})
+
+	_, err := svc.CreateProject(ctx, CreateProjectInput{
+		OrganizationID: organizationB,
+		Slug:           "other",
+		DisplayName:    "Other",
+		Meta:           commandMeta(commandID),
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("replay err = %v, want %v", err, errs.ErrConflict)
+	}
+}
+
 func TestCreateProjectStopsWhenAccessDenied(t *testing.T) {
 	store := newMemoryRepository()
 	svc := NewWithConfig(
@@ -113,6 +147,45 @@ func TestCreateProjectStopsWhenAccessDenied(t *testing.T) {
 	}
 	if len(store.projects) != 0 || len(store.events) != 0 {
 		t.Fatalf("store was mutated after denied access: projects=%d events=%d", len(store.projects), len(store.events))
+	}
+}
+
+func TestUpdateProjectReplayRejectsDifferentProjectScope(t *testing.T) {
+	ctx := context.Background()
+	projectA := uuid.New()
+	projectB := uuid.New()
+	commandID := uuid.New()
+	store := newMemoryRepository()
+	store.projects[projectA] = entity.Project{
+		Base:           entity.Base{ID: projectA, Version: 1},
+		OrganizationID: uuid.New(),
+		Slug:           "project-a",
+		DisplayName:    "Project A",
+		Status:         enum.ProjectStatusActive,
+	}
+	store.projects[projectB] = entity.Project{
+		Base:           entity.Base{ID: projectB, Version: 1},
+		OrganizationID: uuid.New(),
+		Slug:           "project-b",
+		DisplayName:    "Project B",
+		Status:         enum.ProjectStatusActive,
+	}
+	store.commandResults[commandID.String()] = entity.CommandResult{
+		Key:           commandID.String(),
+		CommandID:     commandID,
+		Operation:     projectOperationUpdateProject,
+		AggregateType: projectAggregateProject,
+		AggregateID:   projectA,
+	}
+	svc := New(store, fixedClock{}, &sequenceIDs{})
+
+	_, err := svc.UpdateProject(ctx, UpdateProjectInput{
+		ProjectID:   projectB,
+		DisplayName: stringPtr("ignored"),
+		Meta:        commandMeta(commandID),
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("replay err = %v, want %v", err, errs.ErrConflict)
 	}
 }
 
@@ -159,6 +232,38 @@ func TestUpdateRepositoryReplayStillChecksAccess(t *testing.T) {
 	}
 	if len(authorizer.requests) != 2 {
 		t.Fatalf("access checks = %d, want 2 including replay", len(authorizer.requests))
+	}
+}
+
+func TestPutBranchRulesReplayRejectsDifferentProjectScope(t *testing.T) {
+	ctx := context.Background()
+	projectA := uuid.New()
+	projectB := uuid.New()
+	rulesID := uuid.New()
+	commandID := uuid.New()
+	store := newMemoryRepository()
+	store.branchRules[rulesID] = entity.BranchRules{
+		Base:      entity.Base{ID: rulesID, Version: 1},
+		ProjectID: projectA,
+		Pattern:   "main",
+		Status:    enum.BranchRulesStatusActive,
+	}
+	store.commandResults[commandID.String()] = entity.CommandResult{
+		Key:           commandID.String(),
+		CommandID:     commandID,
+		Operation:     projectOperationPutBranchRules,
+		AggregateType: projectAggregateBranchRules,
+		AggregateID:   rulesID,
+	}
+	svc := New(store, fixedClock{}, &sequenceIDs{})
+
+	_, err := svc.PutBranchRules(ctx, PutBranchRulesInput{
+		ProjectID: projectB,
+		Pattern:   "main",
+		Meta:      commandMeta(commandID),
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("replay err = %v, want %v", err, errs.ErrConflict)
 	}
 }
 
@@ -263,6 +368,7 @@ type memoryRepository struct {
 	projects       map[uuid.UUID]entity.Project
 	repositories   map[uuid.UUID]entity.RepositoryBinding
 	policies       map[uuid.UUID]entity.ServicesPolicy
+	branchRules    map[uuid.UUID]entity.BranchRules
 	policyVersions map[uuid.UUID]int64
 	commandResults map[string]entity.CommandResult
 	events         []entity.OutboxEvent
@@ -273,6 +379,7 @@ func newMemoryRepository() *memoryRepository {
 		projects:       map[uuid.UUID]entity.Project{},
 		repositories:   map[uuid.UUID]entity.RepositoryBinding{},
 		policies:       map[uuid.UUID]entity.ServicesPolicy{},
+		branchRules:    map[uuid.UUID]entity.BranchRules{},
 		policyVersions: map[uuid.UUID]int64{},
 		commandResults: map[string]entity.CommandResult{},
 	}
@@ -419,8 +526,12 @@ func (r *memoryRepository) PutBranchRules(context.Context, entity.BranchRules, *
 	return errs.ErrInvalidArgument
 }
 
-func (r *memoryRepository) GetBranchRules(context.Context, uuid.UUID) (entity.BranchRules, error) {
-	return entity.BranchRules{}, errs.ErrNotFound
+func (r *memoryRepository) GetBranchRules(_ context.Context, id uuid.UUID) (entity.BranchRules, error) {
+	rules, ok := r.branchRules[id]
+	if !ok {
+		return entity.BranchRules{}, errs.ErrNotFound
+	}
+	return rules, nil
 }
 
 func (r *memoryRepository) ListBranchRules(context.Context, query.BranchRulesFilter) ([]entity.BranchRules, query.PageResult, error) {

@@ -29,11 +29,11 @@ func (s *Service) PutDocumentationSource(ctx context.Context, input PutDocumenta
 	if err := s.authorizeCommand(ctx, input.Meta, projectActionDocsUpdate, projectScopedResource(projectAggregateDocumentationSource, input.ProjectID)); err != nil {
 		return entity.DocumentationSource{}, err
 	}
-	if result, ok, err := s.findCommandResult(ctx, input.Meta, projectOperationPutDocumentation, projectAggregateDocumentationSource); ok || err != nil {
+	if replay, ok, err := findScopedCommandReplay(s, ctx, input.Meta, projectOperationPutDocumentation, projectAggregateDocumentationSource, input.ProjectID, s.repository.GetDocumentationSource, documentationSourceProjectID); ok || err != nil {
 		if err != nil {
 			return entity.DocumentationSource{}, err
 		}
-		return s.repository.GetDocumentationSource(ctx, result.AggregateID)
+		return replay, nil
 	}
 	now := s.clock.Now()
 	source := entity.DocumentationSource{

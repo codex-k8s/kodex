@@ -26,11 +26,11 @@ func (s *Service) PutBranchRules(ctx context.Context, input PutBranchRulesInput)
 	if err := s.authorizeCommand(ctx, input.Meta, projectActionBranchRulesUpdate, projectScopedResource(projectAggregateBranchRules, input.ProjectID)); err != nil {
 		return entity.BranchRules{}, err
 	}
-	if result, ok, err := s.findCommandResult(ctx, input.Meta, projectOperationPutBranchRules, projectAggregateBranchRules); ok || err != nil {
+	if replay, ok, err := findScopedCommandReplay(s, ctx, input.Meta, projectOperationPutBranchRules, projectAggregateBranchRules, input.ProjectID, s.repository.GetBranchRules, branchRulesProjectID); ok || err != nil {
 		if err != nil {
 			return entity.BranchRules{}, err
 		}
-		return s.repository.GetBranchRules(ctx, result.AggregateID)
+		return replay, nil
 	}
 	now := s.clock.Now()
 	rules := entity.BranchRules{
@@ -96,11 +96,11 @@ func (s *Service) PutReleasePolicy(ctx context.Context, input PutReleasePolicyIn
 	if err := s.authorizeCommand(ctx, input.Meta, projectActionReleasePolicyUpdate, projectScopedResource(projectAggregateReleasePolicy, input.ProjectID)); err != nil {
 		return entity.ReleasePolicy{}, err
 	}
-	if result, ok, err := s.findCommandResult(ctx, input.Meta, projectOperationPutReleasePolicy, projectAggregateReleasePolicy); ok || err != nil {
+	if replay, ok, err := findScopedCommandReplay(s, ctx, input.Meta, projectOperationPutReleasePolicy, projectAggregateReleasePolicy, input.ProjectID, s.repository.GetReleasePolicy, releasePolicyProjectID); ok || err != nil {
 		if err != nil {
 			return entity.ReleasePolicy{}, err
 		}
-		return s.repository.GetReleasePolicy(ctx, result.AggregateID)
+		return replay, nil
 	}
 	now := s.clock.Now()
 	policy := entity.ReleasePolicy{
@@ -166,11 +166,11 @@ func (s *Service) PutReleaseLine(ctx context.Context, input PutReleaseLineInput)
 	if err := s.authorizeCommand(ctx, input.Meta, projectActionReleaseLineUpdate, projectScopedResource(projectAggregateReleaseLine, input.ProjectID)); err != nil {
 		return entity.ReleaseLine{}, err
 	}
-	if result, ok, err := s.findCommandResult(ctx, input.Meta, projectOperationPutReleaseLine, projectAggregateReleaseLine); ok || err != nil {
+	if replay, ok, err := findScopedCommandReplay(s, ctx, input.Meta, projectOperationPutReleaseLine, projectAggregateReleaseLine, input.ProjectID, s.repository.GetReleaseLine, releaseLineProjectID); ok || err != nil {
 		if err != nil {
 			return entity.ReleaseLine{}, err
 		}
-		return s.repository.GetReleaseLine(ctx, result.AggregateID)
+		return replay, nil
 	}
 	now := s.clock.Now()
 	line := entity.ReleaseLine{
@@ -235,11 +235,11 @@ func (s *Service) PutPlacementPolicy(ctx context.Context, input PutPlacementPoli
 	if err := s.authorizeCommand(ctx, input.Meta, projectActionPlacementPolicyUpdate, projectScopedResource(projectAggregatePlacementPolicy, input.ProjectID)); err != nil {
 		return entity.PlacementPolicy{}, err
 	}
-	if result, ok, err := s.findCommandResult(ctx, input.Meta, projectOperationPutPlacementPolicy, projectAggregatePlacementPolicy); ok || err != nil {
+	if replay, ok, err := findScopedCommandReplay(s, ctx, input.Meta, projectOperationPutPlacementPolicy, projectAggregatePlacementPolicy, input.ProjectID, s.repository.GetPlacementPolicy, placementPolicyProjectID); ok || err != nil {
 		if err != nil {
 			return entity.PlacementPolicy{}, err
 		}
-		return s.repository.GetPlacementPolicy(ctx, result.AggregateID)
+		return replay, nil
 	}
 	now := s.clock.Now()
 	policy := entity.PlacementPolicy{

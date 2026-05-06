@@ -22,7 +22,7 @@
 | `github.com/getkin/kin-openapi` | `v0.133.0` | OpenAPI validation | загрузка/валидация OpenAPI и runtime request-validation в gateway-сервисах |
 | `github.com/oapi-codegen/runtime` | `v1.1.2` | OpenAPI generated transport runtime | типы/утилиты для сгенерированного OpenAPI Go-кода |
 | `github.com/prometheus/client_golang` | `v1.23.2` | Observability | `/metrics` и базовые метрики сервиса |
-| `github.com/jackc/pgx/v5` | `v5.8.0` | PostgreSQL driver | доступ к PostgreSQL |
+| `github.com/jackc/pgx/v5` | `v5.9.2` | PostgreSQL driver | доступ к PostgreSQL |
 | `github.com/google/uuid` | `v1.6.0` | Utility, PostgreSQL helpers | генерация и передача идентификаторов, включая общие helpers в `libs/go/postgres` |
 | `github.com/caarlos0/env/v11` | `v11.3.1` | Config | типобезопасный env->struct парсинг конфигурации |
 | `github.com/nicksnyder/go-i18n/v2` | `v2.6.1` | Backend i18n | локализация системных message id через общий runtime `libs/go/i18n` |
@@ -33,9 +33,9 @@
 | `k8s.io/apimachinery` | `v0.35.0` | Kubernetes API machinery | ошибки API, meta types, утилиты client-go |
 | `github.com/google/go-github/v82` | `v82.0.0` | Repository provider (GitHub) | настройка вебхуков и валидация доступа к репозиториям через GitHub API v3 |
 | `github.com/google/go-querystring` | `v1.2.0` | Dependency of go-github | сериализация query params для GitHub API клиента |
-| `google.golang.org/grpc` | `v1.78.0` | Internal transport | внутреннее service-to-service взаимодействие (`gateway` -> внутренний сервис и service-to-service) |
+| `google.golang.org/grpc` | `v1.79.3` | Internal transport | внутреннее service-to-service взаимодействие (`gateway` -> внутренний сервис и service-to-service) |
 | `google.golang.org/protobuf` | `v1.36.10` | Internal contracts | protobuf runtime для gRPC контрактов и сгенерированного кода в `proto/gen/go/**` |
-| `google.golang.org/genproto/googleapis/rpc` | `v0.0.0-20251029180050-ab9386a59fda` | gRPC error details | типизированные `errdetails` для conflict/status metadata во внутренних gRPC callback-ах |
+| `google.golang.org/genproto/googleapis/rpc` | `v0.0.0-20251202230838-ff82c1b0f217` | gRPC error details | типизированные `errdetails` для conflict/status metadata во внутренних gRPC callback-ах |
 | `go.yaml.in/yaml/v2` | `v2.4.3` | Contract tests | парсинг YAML-спецификаций в Go contract tests без строкового поиска по контракту |
 | `github.com/modelcontextprotocol/go-sdk` | `v1.3.0` | MCP transport | встроенный StreamableHTTP MCP transport/auth/resource/tool runtime для платформенного MCP-сервера |
 | `github.com/openai/openai-go/v3` | `v3.28.0` | Sprint S11 Telegram adapter voice STT | официальный OpenAI Go SDK для speech-to-text в `telegram-interaction-adapter`; используется для voice reply transcription после `ffmpeg` normalization |

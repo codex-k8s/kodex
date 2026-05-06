@@ -21,11 +21,11 @@ func (s *Service) CreateProject(ctx context.Context, input CreateProjectInput) (
 	if err := s.authorizeCommand(ctx, input.Meta, projectActionCreate, organizationScopedResource(projectAggregateProject, "", input.OrganizationID)); err != nil {
 		return entity.Project{}, err
 	}
-	if result, ok, err := s.findCommandResult(ctx, input.Meta, projectOperationCreateProject, projectAggregateProject); ok || err != nil {
+	if replay, ok, err := findScopedCommandReplay(s, ctx, input.Meta, projectOperationCreateProject, projectAggregateProject, input.OrganizationID, s.repository.GetProject, projectOrganizationID); ok || err != nil {
 		if err != nil {
 			return entity.Project{}, err
 		}
-		return s.repository.GetProject(ctx, result.AggregateID)
+		return replay, nil
 	}
 	now := s.clock.Now()
 	project := entity.Project{
@@ -62,11 +62,11 @@ func (s *Service) UpdateProject(ctx context.Context, input UpdateProjectInput) (
 	if err := s.authorizeCommand(ctx, input.Meta, projectActionUpdate, projectScopedResource(projectAggregateProject, input.ProjectID)); err != nil {
 		return entity.Project{}, err
 	}
-	if result, ok, err := s.findCommandResult(ctx, input.Meta, projectOperationUpdateProject, projectAggregateProject); ok || err != nil {
+	if replay, ok, err := findScopedCommandReplay(s, ctx, input.Meta, projectOperationUpdateProject, projectAggregateProject, input.ProjectID, s.repository.GetProject, projectID); ok || err != nil {
 		if err != nil {
 			return entity.Project{}, err
 		}
-		return s.repository.GetProject(ctx, result.AggregateID)
+		return replay, nil
 	}
 	previousVersion, err := expectedVersion(input.Meta)
 	if err != nil {

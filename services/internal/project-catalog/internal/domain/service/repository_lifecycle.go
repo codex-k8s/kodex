@@ -21,11 +21,11 @@ func (s *Service) AttachRepository(ctx context.Context, input AttachRepositoryIn
 	if err := s.authorizeCommand(ctx, input.Meta, projectActionRepositoryAttach, projectScopedResource(projectAggregateRepository, input.ProjectID)); err != nil {
 		return entity.RepositoryBinding{}, err
 	}
-	if result, ok, err := s.findCommandResult(ctx, input.Meta, projectOperationAttachRepository, projectAggregateRepository); ok || err != nil {
+	if replay, ok, err := findScopedCommandReplay(s, ctx, input.Meta, projectOperationAttachRepository, projectAggregateRepository, input.ProjectID, s.repository.GetRepository, repositoryProjectID); ok || err != nil {
 		if err != nil {
 			return entity.RepositoryBinding{}, err
 		}
-		return s.repository.GetRepository(ctx, result.AggregateID)
+		return replay, nil
 	}
 	now := s.clock.Now()
 	binding := entity.RepositoryBinding{
