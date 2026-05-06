@@ -13,7 +13,8 @@
 - `Execer`, `ExecQuerier`, `TxBeginner`, `RowScanner` — минимальные интерфейсы для `*pgxpool.Pool`, `pgx.Tx`, `pgx.Row`, `pgx.Rows` и тестовых дублей.
 - `Exec(ctx, db, sql, args...)` — выполняет `Exec` и возвращает исходную ошибку `pgx`.
 - `ExecRequireRow(ctx, db, sql, args...)` — выполняет `Exec` и возвращает `pgx.ErrNoRows`, если команда не затронула строки.
-- `Mutation`, `RunMutations` — последовательное выполнение SQL-изменений внутри транзакции с обязательной проверкой `RowsAffected`, когда операция должна изменить ровно существующий агрегат.
+- `Mutation`, `RunMutation` — выполнение одного SQL-изменения с обязательной проверкой `RowsAffected`, когда операция должна изменить существующий агрегат.
+- `RunDistinctMutations` — выполнение фиксированного набора разных SQL-изменений внутри короткой транзакции. Вспомогательная функция отклоняет повторяющийся SQL-текст и не предназначена для записи коллекций.
 - `WithTx(ctx, db, fn)` — короткая транзакция с автоматическим rollback до успешного commit.
 - `WrapError(operation, err, sentinels)` — переводит типовые ошибки PostgreSQL в доменные sentinel-ошибки сервиса и сохраняет исходную причину.
 - `ScanRows` — thin wrapper над `pgx.CollectRows` для ручных scanner-ов с доменной конвертацией.
@@ -68,13 +69,14 @@ defer pool.Close()
 - `Exec` и `ExecRequireRow` не нормализуют ошибки `pgx`/`pgconn`: слой репозитория сервиса сам переводит их в доменные ошибки.
 - `ExecRequireRow` дополнительно возвращает `pgx.ErrNoRows`, когда команда изменения не затронула ни одной строки.
 - `WrapError` нормализует только инфраструктурные классы ошибок: `unique_violation`, `foreign_key_violation`, `check_violation`, `serialization_failure`, `deadlock_detected`, `pgx.ErrNoRows`. Бизнесовые ошибки остаются в сервисе-владельце.
-- `RunMutations` не решает бизнес-конфликты само. Оно только превращает `RowsAffected() == 0` у помеченной mutation в переданный sentinel conflict; SQL обязан содержать проверку версии или другой инвариант.
+- `RunMutation` и `RunDistinctMutations` не решают бизнес-конфликты сами. Они только превращают `RowsAffected() == 0` у помеченной mutation в переданный sentinel conflict; SQL обязан содержать проверку версии или другой инвариант.
+- `RunDistinctMutations` нельзя использовать для построчной записи коллекций. Если нужно вставить или обновить несколько однотипных строк, использовать `pgx.Batch`, `COPY` или один пакетный SQL-запрос с `unnest`/`jsonb_to_recordset`.
 
 ## Пример короткой транзакции с optimistic concurrency
 
 ```go
 err := postgres.WithTx(ctx, pool, func(tx pgx.Tx) error {
-    return postgres.RunMutations(
+    return postgres.RunDistinctMutations(
         ctx,
         tx,
         errs.ErrConflict,

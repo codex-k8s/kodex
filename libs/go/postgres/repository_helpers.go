@@ -59,15 +59,33 @@ type Mutation struct {
 	RequireAffected bool
 }
 
-// RunMutations executes write operations and enforces optimistic affected-row checks.
-func RunMutations(ctx context.Context, db ExecQuerier, conflict error, mutations ...Mutation) error {
+// RunMutation executes one write operation and enforces optimistic affected-row checks.
+func RunMutation(ctx context.Context, db ExecQuerier, conflict error, mutation Mutation) error {
+	tag, err := db.Exec(ctx, mutation.Query, mutation.Args)
+	if err != nil {
+		return err
+	}
+	if mutation.RequireAffected && tag.RowsAffected() == 0 {
+		return conflict
+	}
+	return nil
+}
+
+// RunDistinctMutations executes a fixed set of different write operations.
+//
+// Do not use it for per-item collection writes. Repeated query text is rejected
+// so callers cannot hide N+1 write loops behind a shared helper.
+func RunDistinctMutations(ctx context.Context, db ExecQuerier, conflict error, mutations ...Mutation) error {
+	seenQueries := make(map[string]struct{}, len(mutations))
 	for _, mutation := range mutations {
-		tag, err := db.Exec(ctx, mutation.Query, mutation.Args)
-		if err != nil {
-			return err
+		if _, exists := seenQueries[mutation.Query]; exists {
+			return errors.New("postgres: duplicate mutation query in fixed mutation set")
 		}
-		if mutation.RequireAffected && tag.RowsAffected() == 0 {
-			return conflict
+		seenQueries[mutation.Query] = struct{}{}
+	}
+	for _, mutation := range mutations {
+		if err := RunMutation(ctx, db, conflict, mutation); err != nil {
+			return err
 		}
 	}
 	return nil

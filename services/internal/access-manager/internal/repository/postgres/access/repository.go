@@ -502,7 +502,7 @@ type updateArgsBuilder[T any] func(T, int64) pgx.NamedArgs
 func (r *Repository) mutateWithOutbox(ctx context.Context, operation string, event entity.OutboxEvent, mutations ...mutation) error {
 	mutations = append(mutations, mutation{Query: queryOutboxEventCreate, Args: outboxEventArgs(event), RequireAffected: true})
 	return r.withTx(ctx, operation, func(tx pgx.Tx) error {
-		return postgreslib.RunMutations(ctx, tx, errs.ErrConflict, mutations...)
+		return postgreslib.RunDistinctMutations(ctx, tx, errs.ErrConflict, mutations...)
 	})
 }
 
@@ -542,7 +542,7 @@ func appendOptionalCommandResult(mutations []mutation, result *entity.CommandRes
 }
 
 func insertOutboxEvent(ctx context.Context, db execer, event entity.OutboxEvent) error {
-	return postgreslib.RunMutations(ctx, db, errs.ErrConflict, mutation{Query: queryOutboxEventCreate, Args: outboxEventArgs(event), RequireAffected: true})
+	return postgreslib.RunMutation(ctx, db, errs.ErrConflict, mutation{Query: queryOutboxEventCreate, Args: outboxEventArgs(event), RequireAffected: true})
 }
 
 func queryOne[T any](ctx context.Context, db queryer, operation, sql string, args pgx.NamedArgs, scan func(postgreslib.RowScanner) (T, error)) (T, error) {

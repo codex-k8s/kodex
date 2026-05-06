@@ -289,6 +289,65 @@ func TestRepositoryIntegrationProjectsRepositoriesPoliciesAndOutbox(t *testing.T
 	}
 }
 
+func TestRepositoryIntegrationImportServicesPolicyBatchesDescriptors(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openIntegrationPool(t, ctx)
+	repository := NewRepository(pool)
+	now := time.Date(2026, 5, 5, 12, 0, 0, 0, time.UTC)
+	project := testProject(uuid.New(), "batch-policy", "Batch policy", now)
+	if err := repository.CreateProject(ctx, project, testEvent("project.project.created", "project", project.ID, now), testCommandResult(uuid.New(), operationCreateProject, "project", project.ID, now)); err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+
+	repositoryAPI := testRepository(project.ID, "batch-api", now)
+	repositoryWorker := testRepository(project.ID, "batch-worker", now)
+	repositoryFrontend := testRepository(project.ID, "batch-frontend", now)
+	for _, binding := range []entity.RepositoryBinding{repositoryAPI, repositoryWorker, repositoryFrontend} {
+		if err := repository.AttachRepository(ctx, binding, testEvent("project.repository.attached", "repository", binding.ID, now), testCommandResult(uuid.New(), operationAttachRepository, "repository", binding.ID, now)); err != nil {
+			t.Fatalf("attach repository %s: %v", binding.ProviderName, err)
+		}
+	}
+
+	policy := testServicesPolicy(project.ID, repositoryAPI.ID, now)
+	descriptors := []entity.ServiceDescriptor{
+		testServiceDescriptor(project.ID, policy.ID, &repositoryAPI.ID, "api", enum.ServiceKindBackend, now),
+		testServiceDescriptor(project.ID, policy.ID, &repositoryWorker.ID, "worker", enum.ServiceKindWorker, now),
+		testServiceDescriptor(project.ID, policy.ID, &repositoryFrontend.ID, "frontend", enum.ServiceKindFrontend, now),
+	}
+	if err := repository.ImportServicesPolicy(ctx, policy, descriptors, testEvent("project.services_policy.imported", "services_policy", policy.ID, now), testCommandResult(uuid.New(), operationImportServicesPolicy, "services_policy", policy.ID, now)); err != nil {
+		t.Fatalf("import services policy: %v", err)
+	}
+
+	services, _, err := repository.ListServiceDescriptors(ctx, query.ServiceDescriptorFilter{
+		ProjectID: project.ID,
+		Statuses:  []enum.ServiceStatus{enum.ServiceStatusActive},
+	})
+	if err != nil {
+		t.Fatalf("list service descriptors: %v", err)
+	}
+	if len(services) != len(descriptors) {
+		t.Fatalf("service descriptors = %d, want %d", len(services), len(descriptors))
+	}
+	servicesByKey := make(map[string]entity.ServiceDescriptor, len(services))
+	for _, service := range services {
+		servicesByKey[service.ServiceKey] = service
+	}
+	for _, descriptor := range descriptors {
+		service, ok := servicesByKey[descriptor.ServiceKey]
+		if !ok {
+			t.Fatalf("descriptor %s was not persisted", descriptor.ServiceKey)
+		}
+		if service.ID != descriptor.ID || service.RepositoryID == nil || *service.RepositoryID != *descriptor.RepositoryID {
+			t.Fatalf("descriptor %s = %+v, want id %s repository %s", descriptor.ServiceKey, service, descriptor.ID, *descriptor.RepositoryID)
+		}
+	}
+	if got := countTableRows(t, ctx, pool, "project_catalog_service_descriptors"); got != len(descriptors) {
+		t.Fatalf("project_catalog_service_descriptors rows = %d, want %d", got, len(descriptors))
+	}
+}
+
 func TestRepositoryIntegrationPoliciesAndRules(t *testing.T) {
 	t.Parallel()
 

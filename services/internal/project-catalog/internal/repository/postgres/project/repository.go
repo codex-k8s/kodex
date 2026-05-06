@@ -143,7 +143,7 @@ func (r *Repository) ImportServicesPolicy(ctx context.Context, policy entity.Ser
 		if err := insertOutboxEvent(ctx, tx, event); err != nil {
 			return err
 		}
-		return postgreslib.RunMutations(ctx, tx, errs.ErrConflict, commandResultMutation(result))
+		return postgreslib.RunMutation(ctx, tx, errs.ErrConflict, commandResultMutation(result))
 	})
 }
 
@@ -364,7 +364,7 @@ type mutation = postgreslib.Mutation
 
 func (r *Repository) mutate(ctx context.Context, operation string, mutations ...mutation) error {
 	return r.withTx(ctx, operation, func(tx pgx.Tx) error {
-		return postgreslib.RunMutations(ctx, tx, errs.ErrConflict, mutations...)
+		return postgreslib.RunDistinctMutations(ctx, tx, errs.ErrConflict, mutations...)
 	})
 }
 
@@ -399,7 +399,7 @@ func appendOptionalCommandResult(mutations []mutation, result *entity.CommandRes
 }
 
 func insertOutboxEvent(ctx context.Context, db execer, event entity.OutboxEvent) error {
-	return postgreslib.RunMutations(ctx, db, errs.ErrConflict, affectedMutation(queryOutboxEventCreate, outboxEventArgs(event)))
+	return postgreslib.RunMutation(ctx, db, errs.ErrConflict, affectedMutation(queryOutboxEventCreate, outboxEventArgs(event)))
 }
 
 func queryOne[T any](ctx context.Context, db queryer, operation string, sql string, args pgx.NamedArgs, scan func(postgreslib.RowScanner) (T, error)) (T, error) {
