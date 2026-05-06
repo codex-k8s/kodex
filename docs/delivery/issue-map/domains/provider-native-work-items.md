@@ -26,5 +26,5 @@ updated_at: 2026-05-06
 | не назначено | `services/internal/provider-hub/**`, `docs/domains/provider-native-work-items/architecture/data_model.md` | PH-5 | planned | Проекции `Issue`, `PR/MR`, комментариев, review-сигналов, watermark и связей. |
 | не назначено | `services/internal/provider-hub/**`, `docs/domains/provider-native-work-items/architecture/design.md` | PH-6 | planned | Incremental reconciliation, `sync_cursor`, drift status и ускоряющие сигналы. |
 | не назначено | `services/internal/provider-hub/**`, `docs/domains/provider-native-work-items/architecture/api_contract.md` | PH-7 | planned | Платформенные provider-операции для agent-manager/MCP. |
-| #281, #282 | `docs/domains/provider-native-work-items/delivery/provider_hub_delivery.md` | PH-8 | planned | Empty repository bootstrap и existing repository adoption. |
+| #281, #282 | `docs/domains/provider-native-work-items/delivery/provider_hub_delivery.md` | PH-8 | planned | Provider-часть empty repository bootstrap и existing repository adoption; сканирование и отчёт по существующему репозиторию выполняет агентная роль через workspace. |
 | не назначено | `services/internal/provider-hub/**`, deploy-манифесты, runbook/monitoring docs | PH-9 | planned | Эксплуатационный контур `provider-hub`. |

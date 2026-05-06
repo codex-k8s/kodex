@@ -121,8 +121,8 @@ approvals:
 | `provider.limit_snapshot.recorded` | Зафиксирован снимок лимитов. |
 | `provider.operation.completed` | Provider-операция завершилась успешно. |
 | `provider.operation.failed` | Provider-операция завершилась ошибкой. |
-| `provider.repository.bootstrap_required` | Репозиторий требует первичной инициализации. |
-| `provider.repository.adoption_required` | Существующий репозиторий требует adoption. |
+| `provider.repository.bootstrap_required` | Provider-состояние показывает, что репозиторий пустой и требует решения о первичной инициализации. |
+| `provider.repository.adoption_required` | Provider-состояние показывает, что существующий репозиторий требует агентного сканирования, отчёта и adoption через reviewable PR. |
 | `provider.repository.bootstrap_completed` | Bootstrap пустого репозитория завершён. |
 | `provider.repository.adoption_pr_created` | Создан reviewable PR для adoption. |
 

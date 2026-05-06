@@ -25,7 +25,7 @@ approvals:
 
 ## TL;DR
 
-`provider-hub` поставляется малыми PR-срезами: сначала доменная документация, затем контракты, каркас сервиса, GitHub adapter и лимиты, webhook inbox, проекции рабочих артефактов, сверка, provider-операции, сценарии bootstrap/adoption и эксплуатационный контур.
+`provider-hub` поставляется малыми PR-срезами: сначала доменная документация, затем контракты, каркас сервиса, GitHub adapter и лимиты, webhook inbox, проекции рабочих артефактов, сверка, provider-операции, provider-часть сценариев bootstrap/adoption и эксплуатационный контур.
 
 ## Входные артефакты
 
@@ -49,7 +49,7 @@ approvals:
 | PH-5 | Проекции `Issue`, `PR/MR`, комментариев, review-сигналов, watermark и provider relationships готовы. |
 | PH-6 | Incremental reconciliation, `sync_cursor`, hot/warm/cold приоритеты, drift status и ускоряющие сигналы готовы. |
 | PH-7 | Платформенные provider-операции для agent-manager/MCP готовы с аудитом и идемпотентностью. |
-| PH-8 | Empty repository bootstrap и existing repository adoption готовы; задачи подключения репозиториев закрываются. |
+| PH-8 | Provider-часть empty repository bootstrap и existing repository adoption готова; содержательное сканирование и отчёт по существующему репозиторию остаются агентной работой через workspace. |
 | PH-9 | Kubernetes-манифесты, БД, migration job, metrics, alerts, runbook и smoke-путь готовы. |
 
 ## Таблица реализации
@@ -63,8 +63,8 @@ approvals:
 | Reconciliation | Описано в API-карте, реализация не начата. |
 | Provider operations | Описано в API-карте, реализация не начата. |
 | Account runtime state и лимиты | Описано в API-карте, реализация не начата. |
-| Empty repository bootstrap | Оставлено до PH-8. |
-| Existing repository adoption | Оставлено до PH-8. |
+| Empty repository bootstrap | Provider write и зеркало оставлены до PH-8; решение о составе bootstrap-артефактов приходит из проектного и агентного контура. |
+| Existing repository adoption | Provider PR, зеркало и связи оставлены до PH-8; сканирование и отчёт выполняет агентная роль через workspace. |
 
 ## Зависимости и синхронизация
 
@@ -84,9 +84,10 @@ approvals:
 Решение:
 
 - `project-catalog` владеет проектной привязкой, политикой и `services.yaml`;
-- `provider-hub` владеет фактом provider-состояния, созданием или сканированием репозитория, bootstrap PR, provider relationships и проекциями;
-- empty repository допускает controlled direct bootstrap только как исключение;
-- existing repository adoption идёт через reviewable PR.
+- `provider-hub` владеет фактом provider-состояния, provider-операциями, зеркалом, provider relationships и созданием или обновлением provider-native артефактов;
+- `provider-hub` не владеет содержательным сканированием и отчётом по существующему репозиторию: его выполняет `agent-manager` через агентную роль и workspace с нужными инструкциями;
+- empty repository допускает controlled direct bootstrap только как исключение, при этом `provider-hub` выполняет provider write после решения о составе bootstrap-артефактов;
+- existing repository adoption идёт через reviewable PR, который `provider-hub` создаёт или обновляет по результату агентного отчёта и проектного решения.
 
 ## Definition of Done для каждого PR
 
