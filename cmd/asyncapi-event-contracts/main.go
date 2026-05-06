@@ -70,6 +70,14 @@ func main() {
 			PayloadSchema:   "PackageEventPayload",
 			OutputPath:      "libs/go/platformevents/packagehub/events.gen.go",
 		},
+		{
+			Domain:          "provider",
+			PackageName:     "provider",
+			SpecPath:        "specs/asyncapi/provider-hub.v1.yaml",
+			EventTypeSchema: "ProviderEventType",
+			PayloadSchema:   "ProviderEventPayload",
+			OutputPath:      "libs/go/platformevents/provider/events.gen.go",
+		},
 	}
 	for _, spec := range specs {
 		if err := generate(spec); err != nil {
@@ -314,6 +322,8 @@ var initialisms = map[string]string{
 	"grpc": "GRPC",
 	"http": "HTTP",
 	"id":   "ID",
+	"mr":   "MR",
+	"pr":   "PR",
 	"sha":  "SHA",
 	"uri":  "URI",
 	"url":  "URL",

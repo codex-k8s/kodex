@@ -18,8 +18,8 @@ updated_at: 2026-05-06
 
 | Issue/PR | Документы | Волна | Статус | Примечание |
 |---|---|---|---|---|
-| не назначено | `docs/domains/provider-native-work-items/product/requirements.md`, `docs/domains/provider-native-work-items/architecture/design.md`, `docs/domains/provider-native-work-items/architecture/data_model.md`, `docs/domains/provider-native-work-items/architecture/api_contract.md`, `docs/domains/provider-native-work-items/delivery/provider_hub_delivery.md` | PRV-0 | active | Доменный каркас и границы `provider-hub`. |
-| не назначено | `proto/kodex/providers/**`, `specs/asyncapi/provider-hub.v1.yaml`, `docs/domains/provider-native-work-items/delivery/provider_hub_delivery.md` | PRV-1 | planned | gRPC/AsyncAPI контракты и generated-код. |
+| не назначено | `docs/domains/provider-native-work-items/product/requirements.md`, `docs/domains/provider-native-work-items/architecture/design.md`, `docs/domains/provider-native-work-items/architecture/data_model.md`, `docs/domains/provider-native-work-items/architecture/api_contract.md`, `docs/domains/provider-native-work-items/delivery/provider_hub_delivery.md` | PRV-0 | done | Доменный каркас и границы `provider-hub`. |
+| не назначено | `proto/kodex/providers/**`, `specs/asyncapi/provider-hub.v1.yaml`, `docs/domains/provider-native-work-items/delivery/provider_hub_delivery.md` | PRV-1 | done | gRPC/AsyncAPI контракты и сгенерированный код. |
 | не назначено | `services/internal/provider-hub/**`, `docs/domains/provider-native-work-items/architecture/data_model.md` | PRV-2 | planned | Сервисный каркас, БД, миграции и repository layer. |
 | не назначено | `services/internal/provider-hub/**`, `docs/domains/provider-native-work-items/architecture/design.md` | PRV-3 | planned | Внешние аккаунты у провайдера, лимиты, GitHub adapter и operation log. |
 | не назначено | `services/internal/provider-hub/**`, `specs/asyncapi/provider-hub.v1.yaml` | PRV-4 | planned | Webhook inbox, дедупликация, нормализация и события. |
