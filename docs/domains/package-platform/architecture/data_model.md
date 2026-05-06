@@ -23,7 +23,7 @@ approvals:
 - Ключевые сущности: `PackageSource`, `PackageEntry`, `PackageVersion`, `PackageManifestSnapshot`, `PackageInstallation`, `PackageVerification`, `PackageSecretSchema`, `PackagePricingMetadata`.
 - Технические агрегаты: `CommandResult`, `OutboxEvent`.
 - Основные связи: источник магазина даёт доступные пакеты; пакет имеет версии; установка фиксирует выбранную версию, scope и статус; manifest задаёт требования.
-- Риски миграций: нельзя хранить сырые секреты, исходники пакетов, runtime-нагрузку или биллинг-истину в БД `package-hub`.
+- Риски миграций: нельзя хранить сырые секреты, канонические ссылки на заполненные секреты, исходники пакетов, runtime-нагрузку или биллинг-истину в БД `package-hub`.
 
 ## Правило пустых значений
 
@@ -32,6 +32,17 @@ approvals:
 В БД `NULL` используется только там, где отсутствие значения бизнесово отличается от пустого значения: внешние ссылки, необязательные временные метки, необязательные git-идентификаторы и ключи идемпотентности. Текстовые поля для безопасного отображения, описаний, ссылок и ref хранятся как `NOT NULL DEFAULT ''`, если пустая строка означает “не задано”.
 
 ## Сущности
+
+### Правило версий агрегатов
+
+Изменяемые агрегаты имеют монотонный маркер конкурентного изменения:
+- `PackageSource.version`;
+- `PackageEntry.version`;
+- `PackageVersion.revision`, потому что поле `version_label` уже занято версией пакета из manifest;
+- `PackageInstallation.version`;
+- `PackagePricingMetadata.version`.
+
+`PackageManifestSnapshot`, `PackageSecretSchema` и `PackageVerification` являются append-only записями. Изменение manifest, схемы секретов или результата проверки создаёт новую запись и обновляет версионируемый агрегат-владелец.
 
 ### PackageSource
 
@@ -69,6 +80,7 @@ approvals:
 | `commercial_status` | enum | нет | `free`, `paid`, `restricted`, `unknown`. |
 | `trust_status` | enum | нет | `built_in`, `verified`, `unverified`, `blocked`. |
 | `status` | enum | нет | `available`, `hidden`, `revoked`, `blocked`. |
+| `version` | bigint | нет | Оптимистичная конкуренция для изменения статуса, trust status и отображаемых метаданных. |
 | `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
 
 ### PackageVersion
@@ -79,13 +91,14 @@ approvals:
 |---|---|---:|---|
 | `id` | uuid | нет | Идентификатор версии. |
 | `package_id` | uuid | нет | Пакет-владелец. |
-| `version` | text | нет | Версия по manifest или тегу. |
+| `version_label` | text | нет | Версия по manifest или тегу. |
 | `source_ref_kind` | enum | нет | `git_tag`, `git_commit`, `gitlink`, `proxy_ref`. |
 | `source_ref` | text | нет | Тег, commit, gitlink или прокси-ссылка. |
 | `source_commit_sha` | text | да | Commit репозитория-источника, если известен. |
 | `manifest_digest` | text | нет | Digest проверенного manifest. |
 | `verification_status` | enum | нет | `verified`, `unverified`, `rejected`, `revoked`. |
 | `release_status` | enum | нет | `active`, `deprecated`, `revoked`, `blocked`. |
+| `revision` | bigint | нет | Монотонная ревизия для ожидаемой версии при изменении статуса проверки, release status и manifest-ссылок. |
 | `published_at` | timestamptz | да | Дата публикации версии, если известна. |
 | `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
 
@@ -134,22 +147,9 @@ approvals:
 | `fields` | jsonb | нет | Локализованные поля, типы, обязательность и подсказки. |
 | `created_at` | timestamptz | нет | Когда схема сохранена. |
 
-### PackageSecretBinding
-
-`PackageSecretBinding` хранит ссылку на заполненный секрет для конкретной установки. Сырые значения секретов не хранятся.
-
-| Поле | Тип | Может быть пустым | Примечание |
-|---|---|---:|---|
-| `id` | uuid | нет | Идентификатор привязки. |
-| `installation_id` | uuid | нет | Установка пакета. |
-| `field_key` | text | нет | Поле из secret schema. |
-| `secret_ref` | text | нет | Ссылка на секрет во внешнем хранилище. |
-| `status` | enum | нет | `active`, `missing`, `invalid`, `rotating`. |
-| `updated_at` | timestamptz | нет | Когда ссылка обновлена. |
-
 ### PackageVerification
 
-`PackageVerification` фиксирует результат проверки версии пакета.
+`PackageVerification` фиксирует append-only решение проверки версии пакета. Текущее состояние проверки хранится в `PackageVersion.verification_status`; команда проверки создаёт новую запись аудита и повышает `PackageVersion.revision`.
 
 | Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
@@ -158,7 +158,7 @@ approvals:
 | `verification_status` | enum | нет | `verified`, `unverified`, `rejected`, `revoked`. |
 | `verified_by_actor_ref` | text | да | Кто подтвердил или изменил статус. |
 | `verification_notes` | text | да | Короткое пояснение. |
-| `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
+| `created_at` | timestamptz | нет | Когда решение проверки зафиксировано. |
 
 ### PackagePricingMetadata
 
@@ -171,6 +171,7 @@ approvals:
 | `pricing_kind` | enum | нет | `free`, `paid`, `subscription`, `usage_based`, `restricted`. |
 | `currency` | text | да | Валюта, если цена известна. |
 | `price_payload` | jsonb | нет | Нормализованные ценовые параметры. |
+| `version` | bigint | нет | Оптимистичная конкуренция для изменения ценовых метаданных. |
 | `updated_at` | timestamptz | нет | Когда запись обновлена. |
 
 ### CommandResult
@@ -213,10 +214,11 @@ approvals:
 
 - `PackageSource` может быть источником многих `PackageEntry`.
 - `PackageEntry` владеет `PackageVersion`, `PackagePricingMetadata` и каталоговыми метаданными.
-- `PackageVersion` владеет `PackageManifestSnapshot`, `PackageSecretSchema` и `PackageVerification`.
-- `PackageInstallation` связывает выбранную `PackageVersion` с конкретным scope.
+- `PackageVersion` владеет `PackageManifestSnapshot`, `PackageSecretSchema` и append-only записями `PackageVerification`.
+- `PackageInstallation` связывает выбранную `PackageVersion` с конкретным scope и хранит только статус заполненности секретов.
 - Внутри БД `package-hub` допустимы обычные внешние ключи между своими таблицами.
 - Ссылки на организации, проекты, репозитории, внешние аккаунты, кластеры и provider-native объекты хранятся как внешние идентификаторы без SQL-связей с чужими БД.
+- Канонические ссылки на заполненные секреты хранит `access-manager` как `SecretBindingRef`; `package-hub` получает статус заполненности через команду, чтение или событие и не становится владельцем этих ссылок.
 
 ## Индексы и запросы
 

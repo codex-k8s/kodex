@@ -54,9 +54,9 @@ approvals:
 | `UninstallPackage` | gRPC command | `package.uninstall` | ожидаемая версия | Переводит установку в `uninstalled` и публикует событие. |
 | `GetPackageInstallation` | gRPC query | `package.installation.read` | нет | Авторитетное чтение установки. |
 | `ListPackageInstallations` | gRPC query | `package.installation.read` | нет | Список установок по области, статусу и виду пакета. |
-| `PutPackageSecretBinding` | gRPC command | `package.secret.bind` | ожидаемая версия | Сохраняет ссылку на секрет для поля manifest. |
-| `ListPackageSecretBindings` | gRPC query | `package.secret.read` | нет | Читает ссылки на секреты установки без сырых значений. |
-| `SetPackageVerification` | gRPC command | `package.verify` | `CommandMeta.command_id` | Фиксирует верификацию, отклонение или отзыв версии пакета. |
+| `GetPackageSecretSchema` | gRPC query | `package.secret.read` | нет | Читает схему секретов версии пакета. |
+| `RefreshPackageInstallationSecretStatus` | gRPC command | `package.installation.update` | ожидаемая версия | Перечитывает состояние привязок секретов из `access-manager` и обновляет только статус заполненности установки. |
+| `SetPackageVerification` | gRPC command | `package.verify` | `CommandMeta.command_id` + ожидаемая ревизия версии пакета | Фиксирует верификацию, отклонение или отзыв версии пакета. |
 
 ## Модель ошибок
 
