@@ -118,9 +118,8 @@ func (r *Repository) GetOrganization(ctx context.Context, id uuid.UUID) (entity.
 }
 
 func (r *Repository) CountActiveOwnerOrganizations(ctx context.Context) (int, error) {
-	var count int64
-	err := r.db.QueryRow(ctx, queryOrganizationCountActiveOwner).Scan(&count)
-	return int(count), wrapError(operationCountActiveOwnerOrganizations, err)
+	count, err := queryExactlyOneRowTo(ctx, r.db, operationCountActiveOwnerOrganizations, queryOrganizationCountActiveOwner, nil, pgx.RowTo[int64])
+	return int(count), err
 }
 
 func (r *Repository) CreateUser(ctx context.Context, user entity.User, identity entity.UserIdentity, event entity.OutboxEvent) error {
@@ -154,7 +153,7 @@ func (r *Repository) ListUserAccessScopes(ctx context.Context, userID uuid.UUID)
 	if err != nil {
 		return nil, wrapError(operationListUserAccessScopes, err)
 	}
-	scopes, err := postgreslib.ScanRows(rows, scanScopeRef)
+	scopes, err := pgx.CollectRows(rows, pgx.RowToStructByPos[value.ScopeRef])
 	return scopes, wrapError(operationListUserAccessScopes, err)
 }
 
@@ -547,5 +546,19 @@ func insertOutboxEvent(ctx context.Context, db execer, event entity.OutboxEvent)
 
 func queryOne[T any](ctx context.Context, db queryer, operation, sql string, args pgx.NamedArgs, scan func(postgreslib.RowScanner) (T, error)) (T, error) {
 	value, err := scan(db.QueryRow(ctx, sql, args))
+	return value, wrapError(operation, err)
+}
+
+func queryExactlyOneRowTo[T any](ctx context.Context, db queryer, operation string, sql string, args pgx.NamedArgs, scan pgx.RowToFunc[T]) (T, error) {
+	queryArgs := []any{}
+	if args != nil {
+		queryArgs = append(queryArgs, args)
+	}
+	rows, err := db.Query(ctx, sql, queryArgs...)
+	if err != nil {
+		var zero T
+		return zero, wrapError(operation, err)
+	}
+	value, err := pgx.CollectExactlyOneRow(rows, scan)
 	return value, wrapError(operation, err)
 }

@@ -21,7 +21,6 @@ type execer interface {
 
 type queryer interface {
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
-	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
 type database interface {
@@ -110,7 +109,11 @@ func (s *Store) GetStoredEvent(ctx context.Context, id uuid.UUID) (StoredEvent, 
 	if id == uuid.Nil {
 		return StoredEvent{}, fmt.Errorf("%w: event id is required", ErrInvalidEvent)
 	}
-	return scanStoredEvent(s.db.QueryRow(ctx, queryEventLogGetStoredEventByID, pgx.NamedArgs{"event_id": id}))
+	rows, err := s.db.Query(ctx, queryEventLogGetStoredEventByID, pgx.NamedArgs{"event_id": id})
+	if err != nil {
+		return StoredEvent{}, err
+	}
+	return pgx.CollectExactlyOneRow(rows, collectStoredEvent)
 }
 
 // GetCheckpointState returns a consumer checkpoint by name.
@@ -119,7 +122,11 @@ func (s *Store) GetCheckpointState(ctx context.Context, consumerName string) (Ch
 	if consumerName == "" {
 		return CheckpointState{}, fmt.Errorf("%w: consumer name is required", ErrInvalidClaim)
 	}
-	return scanCheckpointState(s.db.QueryRow(ctx, queryEventLogGetCheckpointState, pgx.NamedArgs{"consumer_name": consumerName}))
+	rows, err := s.db.Query(ctx, queryEventLogGetCheckpointState, pgx.NamedArgs{"consumer_name": consumerName})
+	if err != nil {
+		return CheckpointState{}, err
+	}
+	return pgx.CollectExactlyOneRow(rows, collectCheckpointState)
 }
 
 func (s *Store) ensureCheckpoint(ctx context.Context, consumerName string, updatedAt time.Time) error {
@@ -247,53 +254,71 @@ func ownedCheckpointArgs(consumerName string, leaseOwner string, now time.Time) 
 }
 
 func scanStoredEvents(rows pgx.Rows) ([]StoredEvent, error) {
-	defer rows.Close()
-	events := make([]StoredEvent, 0)
-	for rows.Next() {
-		event, err := scanStoredEvent(rows)
-		if err != nil {
-			return nil, err
-		}
-		events = append(events, event)
+	return pgx.CollectRows(rows, collectStoredEvent)
+}
+
+type storedEventRow struct {
+	SequenceID    int64
+	ID            uuid.UUID
+	SourceService string
+	EventType     string
+	SchemaVersion int
+	AggregateType string
+	AggregateID   uuid.UUID
+	Payload       []byte
+	OccurredAt    time.Time
+	RecordedAt    time.Time
+}
+
+func collectStoredEvent(row pgx.CollectableRow) (StoredEvent, error) {
+	scanned, err := pgx.RowToStructByPos[storedEventRow](row)
+	if err != nil {
+		return StoredEvent{}, err
 	}
-	return events, rows.Err()
+	return scanned.toStoredEvent(), nil
 }
 
-type rowScanner interface {
-	Scan(dest ...any) error
+func (row storedEventRow) toStoredEvent() StoredEvent {
+	return StoredEvent{
+		SequenceID: row.SequenceID,
+		Event: Event{
+			ID:            row.ID,
+			SourceService: row.SourceService,
+			EventType:     row.EventType,
+			SchemaVersion: row.SchemaVersion,
+			AggregateType: row.AggregateType,
+			AggregateID:   row.AggregateID,
+			Payload:       append([]byte(nil), row.Payload...),
+			OccurredAt:    row.OccurredAt,
+		},
+		RecordedAt: row.RecordedAt,
+	}
 }
 
-func scanStoredEvent(row rowScanner) (StoredEvent, error) {
-	var event StoredEvent
-	var payload []byte
-	err := row.Scan(
-		&event.SequenceID,
-		&event.ID,
-		&event.SourceService,
-		&event.EventType,
-		&event.SchemaVersion,
-		&event.AggregateType,
-		&event.AggregateID,
-		&payload,
-		&event.OccurredAt,
-		&event.RecordedAt,
-	)
-	event.Payload = append(event.Payload[:0], payload...)
-	return event, err
+type checkpointStateRow struct {
+	ConsumerName   string
+	LastSequenceID int64
+	LeaseOwner     string
+	LockedUntil    pgtype.Timestamptz
+	UpdatedAt      time.Time
 }
 
-func scanCheckpointState(row rowScanner) (CheckpointState, error) {
-	var checkpoint CheckpointState
-	var lockedUntil pgtype.Timestamptz
-	err := row.Scan(
-		&checkpoint.ConsumerName,
-		&checkpoint.LastSequenceID,
-		&checkpoint.LeaseOwner,
-		&lockedUntil,
-		&checkpoint.UpdatedAt,
-	)
-	checkpoint.LockedUntil = timePtrFromPG(lockedUntil)
-	return checkpoint, err
+func collectCheckpointState(row pgx.CollectableRow) (CheckpointState, error) {
+	scanned, err := pgx.RowToStructByPos[checkpointStateRow](row)
+	if err != nil {
+		return CheckpointState{}, err
+	}
+	return scanned.toCheckpointState(), nil
+}
+
+func (row checkpointStateRow) toCheckpointState() CheckpointState {
+	return CheckpointState{
+		ConsumerName:   row.ConsumerName,
+		LastSequenceID: row.LastSequenceID,
+		LeaseOwner:     row.LeaseOwner,
+		LockedUntil:    timePtrFromPG(row.LockedUntil),
+		UpdatedAt:      row.UpdatedAt,
+	}
 }
 
 func timePtrFromPG(value pgtype.Timestamptz) *time.Time {

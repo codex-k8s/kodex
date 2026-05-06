@@ -109,12 +109,6 @@ func scanPendingAccessItem(row postgreslib.RowScanner) (entity.PendingAccessItem
 	return item, err
 }
 
-func scanScopeRef(row postgreslib.RowScanner) (value.ScopeRef, error) {
-	var scope value.ScopeRef
-	err := row.Scan(&scope.Type, &scope.ID)
-	return scope, err
-}
-
 func scanOutboxEvent(row postgreslib.RowScanner) (entity.OutboxEvent, error) {
 	scanned, err := postgreslib.ScanOutboxEventRow(row)
 	return entity.OutboxEvent{
