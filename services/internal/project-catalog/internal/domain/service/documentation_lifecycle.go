@@ -36,20 +36,24 @@ func (s *Service) PutDocumentationSource(ctx context.Context, input PutDocumenta
 		return replay, nil
 	}
 	now := s.clock.Now()
+	localPath, err := normalizeWorkspacePath(input.LocalPath)
+	if err != nil {
+		return entity.DocumentationSource{}, err
+	}
 	source := entity.DocumentationSource{
 		Base:         newBase(sourceID, now),
 		ProjectID:    input.ProjectID,
 		RepositoryID: input.RepositoryID,
 		ScopeType:    input.ScopeType,
 		ScopeID:      strings.TrimSpace(input.ScopeID),
-		LocalPath:    strings.TrimSpace(input.LocalPath),
+		LocalPath:    localPath,
 		AccessMode:   defaultDocumentationAccessMode(input.AccessMode),
 		Status:       defaultDocumentationStatus(input.Status),
 	}
 	if previousVersion != nil {
 		source.Version = *previousVersion + 1
 	}
-	if source.ScopeType == "" || source.LocalPath == "" {
+	if err := validateDocumentationSource(source); err != nil {
 		return entity.DocumentationSource{}, errs.ErrInvalidArgument
 	}
 	result, err := commandResult(input.Meta, projectOperationPutDocumentation, projectAggregateDocumentationSource, source.ID, now)
@@ -95,6 +99,9 @@ func (s *Service) GetWorkspacePolicy(ctx context.Context, input GetWorkspacePoli
 	if err := requireProjectID(input.ProjectID); err != nil {
 		return entity.WorkspacePolicy{}, err
 	}
+	if err := validateWorkspacePolicyFilter(input); err != nil {
+		return entity.WorkspacePolicy{}, err
+	}
 	if err := s.authorizeQuery(ctx, input.Meta, projectActionWorkspaceRead, projectScopedResource(projectAggregateProject, input.ProjectID)); err != nil {
 		return entity.WorkspacePolicy{}, err
 	}
@@ -104,6 +111,20 @@ func (s *Service) GetWorkspacePolicy(ctx context.Context, input GetWorkspacePoli
 		ServiceKeys:             input.ServiceKeys,
 		IncludeGuidancePackages: input.IncludeGuidancePackages,
 	})
+}
+
+func validateWorkspacePolicyFilter(input GetWorkspacePolicyInput) error {
+	for _, repositoryID := range input.RepositoryIDs {
+		if repositoryID == uuid.Nil {
+			return errs.ErrInvalidArgument
+		}
+	}
+	for _, serviceKey := range input.ServiceKeys {
+		if !serviceKeyPattern.MatchString(strings.TrimSpace(serviceKey)) {
+			return errs.ErrInvalidArgument
+		}
+	}
+	return nil
 }
 
 func (s *Service) documentationEvent(eventType string, source entity.DocumentationSource) (entity.OutboxEvent, error) {

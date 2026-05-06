@@ -49,6 +49,7 @@ type Repository struct {
 
 const (
 	operationAttachRepository                 = "domain.Repository.AttachRepository"
+	operationCancelPolicyOverride             = "domain.Repository.CancelPolicyOverride"
 	operationClaimOutboxEvents                = "domain.Repository.ClaimOutboxEvents"
 	operationCreatePolicyEditProposal         = "domain.Repository.CreatePolicyEditProposal"
 	operationCreatePolicyOverride             = "domain.Repository.CreatePolicyOverride"
@@ -228,6 +229,12 @@ func (r *Repository) GetPolicyEditProposal(ctx context.Context, id uuid.UUID) (e
 
 func (r *Repository) CreatePolicyOverride(ctx context.Context, override entity.PolicyOverride, event entity.OutboxEvent, result entity.CommandResult) error {
 	return r.createWithCommandResult(ctx, operationCreatePolicyOverride, event, affectedMutation(queryPolicyOverrideCreate, policyOverrideArgs(override)), result)
+}
+
+func (r *Repository) CancelPolicyOverride(ctx context.Context, override entity.PolicyOverride, previousVersion int64, event entity.OutboxEvent, result *entity.CommandResult) error {
+	mutations := []mutation{policyOverrideCancelMutation(override, previousVersion)}
+	mutations = appendOptionalCommandResult(mutations, result)
+	return r.mutateWithOutbox(ctx, operationCancelPolicyOverride, event, mutations...)
 }
 
 func (r *Repository) GetPolicyOverride(ctx context.Context, id uuid.UUID) (entity.PolicyOverride, error) {
@@ -513,4 +520,10 @@ func releaseLineMutation(line entity.ReleaseLine, previousVersion *int64) mutati
 
 func placementPolicyMutation(policy entity.PlacementPolicy, previousVersion *int64) mutation {
 	return versionedPutMutation(queryPlacementPolicyCreate, queryPlacementPolicyUpdate, placementPolicyArgs(policy), previousVersion)
+}
+
+func policyOverrideCancelMutation(override entity.PolicyOverride, previousVersion int64) mutation {
+	args := policyOverrideArgs(override)
+	args["previous_version"] = previousVersion
+	return affectedMutation(queryPolicyOverrideCancel, args)
 }

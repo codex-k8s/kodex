@@ -30,6 +30,7 @@ type projectService interface {
 	ListServiceDescriptors(context.Context, projectservice.ListServiceDescriptorsInput) (projectservice.ListServiceDescriptorsResult, error)
 	CreatePolicyEditProposal(context.Context, projectservice.CreatePolicyEditProposalInput) (entity.PolicyEditProposal, error)
 	CreatePolicyOverride(context.Context, projectservice.CreatePolicyOverrideInput) (entity.PolicyOverride, error)
+	CancelPolicyOverride(context.Context, projectservice.CancelPolicyOverrideInput) (entity.PolicyOverride, error)
 	ListPolicyOverrides(context.Context, projectservice.ListPolicyOverridesInput) (projectservice.ListPolicyOverridesResult, error)
 	PutDocumentationSource(context.Context, projectservice.PutDocumentationSourceInput) (entity.DocumentationSource, error)
 	GetDocumentationSource(context.Context, uuid.UUID, value.QueryMeta) (entity.DocumentationSource, error)
@@ -54,6 +55,10 @@ type Server struct {
 	projectsv1.UnimplementedProjectCatalogServiceServer
 	service projectService
 }
+
+type unaryCaster[Request any, Input any] func(*Request) (Input, error)
+type unaryCaller[Input any, Output any] func(context.Context, Input) (Output, error)
+type unaryResponder[Output any, Response any] func(Output) *Response
 
 // NewServer creates a project-catalog gRPC transport around domain use cases.
 func NewServer(service projectService) *Server {
@@ -136,6 +141,11 @@ func (s *Server) CreatePolicyEditProposal(ctx context.Context, request *projects
 // CreatePolicyOverride creates a time-bound operator override.
 func (s *Server) CreatePolicyOverride(ctx context.Context, request *projectsv1.CreatePolicyOverrideRequest) (*projectsv1.PolicyOverrideResponse, error) {
 	return handleUnary(ctx, request, grpccasters.CreatePolicyOverrideInput, s.service.CreatePolicyOverride, grpccasters.PolicyOverrideResponse)
+}
+
+// CancelPolicyOverride cancels an active operator override.
+func (s *Server) CancelPolicyOverride(ctx context.Context, request *projectsv1.CancelPolicyOverrideRequest) (*projectsv1.PolicyOverrideResponse, error) {
+	return handleUnary(ctx, request, grpccasters.CancelPolicyOverrideInput, s.service.CancelPolicyOverride, grpccasters.PolicyOverrideResponse)
 }
 
 // ListPolicyOverrides returns visible operator overrides for a project.
@@ -226,19 +236,29 @@ func (s *Server) ListPlacementPolicies(ctx context.Context, request *projectsv1.
 func handleUnary[Request any, Input any, Output any, Response any](
 	ctx context.Context,
 	request *Request,
-	cast func(*Request) (Input, error),
-	call func(context.Context, Input) (Output, error),
+	cast unaryCaster[Request, Input],
+	call unaryCaller[Input, Output],
+	respond unaryResponder[Output, Response],
+) (*Response, error) {
+	return finishUnary(func() (Output, error) {
+		domainInput, err := cast(request)
+		if err != nil {
+			var zero Output
+			return zero, err
+		}
+		return call(ctx, domainInput)
+	}, respond)
+}
+
+func finishUnary[Output any, Response any](
+	run func() (Output, error),
 	respond func(Output) *Response,
 ) (*Response, error) {
-	input, err := cast(request)
+	domainOutput, err := run()
 	if err != nil {
 		return nil, err
 	}
-	output, err := call(ctx, input)
-	if err != nil {
-		return nil, err
-	}
-	return respond(output), nil
+	return respond(domainOutput), nil
 }
 
 func handleUnaryPair[Request any, First any, Second any, Output any, Response any](

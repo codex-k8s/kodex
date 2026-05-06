@@ -46,6 +46,8 @@ type Repository interface {
 	GetPolicyEditProposal(ctx context.Context, id uuid.UUID) (entity.PolicyEditProposal, error)
 	// CreatePolicyOverride stores an emergency override and its outbox event.
 	CreatePolicyOverride(ctx context.Context, override entity.PolicyOverride, event entity.OutboxEvent, result entity.CommandResult) error
+	// CancelPolicyOverride cancels an active emergency override with optimistic concurrency.
+	CancelPolicyOverride(ctx context.Context, override entity.PolicyOverride, previousVersion int64, event entity.OutboxEvent, result *entity.CommandResult) error
 	// GetPolicyOverride returns a policy override by id without active-state filtering.
 	GetPolicyOverride(ctx context.Context, id uuid.UUID) (entity.PolicyOverride, error)
 	// ListPolicyOverrides returns operator overrides matching filter.

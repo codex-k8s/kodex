@@ -269,6 +269,14 @@ func CreatePolicyOverrideInput(request *projectsv1.CreatePolicyOverrideRequest) 
 	return projectservice.CreatePolicyOverrideInput{ProjectID: projectID, TargetType: targetType, TargetID: targetID, Payload: []byte(strings.TrimSpace(request.GetPayloadJson())), ExpiresAt: request.GetExpiresAt(), Meta: meta}, nil
 }
 
+func CancelPolicyOverrideInput(request *projectsv1.CancelPolicyOverrideRequest) (projectservice.CancelPolicyOverrideInput, error) {
+	policyOverrideID, meta, err := idWithCommandMeta(request.GetPolicyOverrideId(), request.GetMeta())
+	if err != nil {
+		return projectservice.CancelPolicyOverrideInput{}, err
+	}
+	return projectservice.CancelPolicyOverrideInput{PolicyOverrideID: policyOverrideID, Meta: meta}, nil
+}
+
 func ListPolicyOverridesInput(request *projectsv1.ListPolicyOverridesRequest) (projectservice.ListPolicyOverridesInput, error) {
 	projectID, meta, err := idWithQueryMeta(request.GetProjectId(), request.GetMeta())
 	if err != nil {
@@ -727,5 +735,9 @@ func buildListBranchRulesInput(projectID uuid.UUID, repositoryID *uuid.UUID, sta
 }
 
 func buildListReleaseLinesInput(projectID uuid.UUID, policyID *uuid.UUID, statuses []enum.ReleasePolicyStatus, page value.PageRequest, meta value.QueryMeta) projectservice.ListReleaseLinesInput {
-	return projectservice.ListReleaseLinesInput{ProjectID: projectID, ReleasePolicyID: policyID, Statuses: statuses, Page: page, Meta: meta}
+	input := projectservice.ListReleaseLinesInput{ProjectID: projectID, ReleasePolicyID: policyID}
+	input.Statuses = statuses
+	input.Page = page
+	input.Meta = meta
+	return input
 }

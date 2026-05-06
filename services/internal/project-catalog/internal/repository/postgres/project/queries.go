@@ -25,6 +25,7 @@ var (
 	queryPolicyEditProposalCreate          = mustLoadQuery("policy_edit_proposal__create")
 	queryPolicyEditProposalGetByID         = mustLoadQuery("policy_edit_proposal__get_by_id")
 	queryPolicyOverrideCreate              = mustLoadQuery("policy_override__create")
+	queryPolicyOverrideCancel              = mustLoadQuery("policy_override__cancel")
 	queryPolicyOverrideGetByID             = mustLoadQuery("policy_override__get_by_id")
 	queryPolicyOverrideList                = mustLoadQuery("policy_override__list")
 	queryProjectCreate                     = mustLoadQuery("project__create")

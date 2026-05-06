@@ -202,6 +202,7 @@ func TestRepositoryIntegrationProjectsRepositoriesPoliciesAndOutbox(t *testing.T
 		testServiceDescriptor(projectA.ID, policy.ID, &repositoryA.ID, "api", enum.ServiceKindBackend, now),
 		testServiceDescriptor(projectA.ID, policy.ID, &repositoryB.ID, "worker", enum.ServiceKindWorker, now),
 	}
+	descriptors[0].DependsOnServiceKeys = []string{"worker"}
 	policy, err = repository.ImportServicesPolicy(ctx, policy, descriptors, testCommandResult(uuid.New(), operationImportServicesPolicy, "services_policy", policy.ID, now), testServicesPolicyEvent(now))
 	if err != nil {
 		t.Fatalf("import services policy: %v", err)
@@ -225,9 +226,26 @@ func TestRepositoryIntegrationProjectsRepositoriesPoliciesAndOutbox(t *testing.T
 		t.Fatalf("services = %+v, want api only", services)
 	}
 
+	projectDocSource := testDocumentationSource(projectA.ID, nil, "project", "", now)
+	projectDocSource.LocalPath = "docs/product"
+	if err := repository.PutDocumentationSource(ctx, projectDocSource, nil, testEvent("project.documentation_source.created", "documentation_source", projectDocSource.ID, now), nil); err != nil {
+		t.Fatalf("put project documentation source: %v", err)
+	}
 	docSource := testDocumentationSource(projectA.ID, &repositoryA.ID, "service", "api", now)
 	if err := repository.PutDocumentationSource(ctx, docSource, nil, testEvent("project.documentation_source.created", "documentation_source", docSource.ID, now), nil); err != nil {
 		t.Fatalf("put documentation source: %v", err)
+	}
+	dependencyDocSource := testDocumentationSource(projectA.ID, &repositoryB.ID, "dependency", "worker", now)
+	if err := repository.PutDocumentationSource(ctx, dependencyDocSource, nil, testEvent("project.documentation_source.created", "documentation_source", dependencyDocSource.ID, now), nil); err != nil {
+		t.Fatalf("put dependency documentation source: %v", err)
+	}
+	unrelatedDocSource := testDocumentationSource(projectA.ID, &repositoryB.ID, "dependency", "orphan", now)
+	if err := repository.PutDocumentationSource(ctx, unrelatedDocSource, nil, testEvent("project.documentation_source.created", "documentation_source", unrelatedDocSource.ID, now), nil); err != nil {
+		t.Fatalf("put unrelated dependency documentation source: %v", err)
+	}
+	guidanceSource := testDocumentationSource(projectA.ID, nil, "guidance_ref", "github.com/codex-k8s/kodex-guidelines-go-backend-ru", now)
+	if err := repository.PutDocumentationSource(ctx, guidanceSource, nil, testEvent("project.documentation_source.created", "documentation_source", guidanceSource.ID, now), nil); err != nil {
+		t.Fatalf("put guidance documentation source: %v", err)
 	}
 	docSourcePreviousVersion := docSource.Version
 	docSource.Version = 2
@@ -249,8 +267,11 @@ func TestRepositoryIntegrationProjectsRepositoriesPoliciesAndOutbox(t *testing.T
 	if err != nil {
 		t.Fatalf("get workspace policy: %v", err)
 	}
-	if len(workspacePolicy.CodeSources) != 1 || len(workspacePolicy.DocumentationSources) != 1 || workspacePolicy.PolicyVersion != policy.PolicyVersion {
-		t.Fatalf("workspace policy = %+v, want one code source, one doc source and policy version %d", workspacePolicy, policy.PolicyVersion)
+	if len(workspacePolicy.CodeSources) != 1 || len(workspacePolicy.DocumentationSources) != 2 || workspacePolicy.PolicyVersion != policy.PolicyVersion {
+		t.Fatalf("workspace policy = %+v, want one code source, project and service docs, policy version %d", workspacePolicy, policy.PolicyVersion)
+	}
+	if len(workspacePolicy.GuidancePackageRefs) != 1 || workspacePolicy.GuidancePackageRefs[0] != guidanceSource.ScopeID {
+		t.Fatalf("workspace guidance refs = %+v, want %s", workspacePolicy.GuidancePackageRefs, guidanceSource.ScopeID)
 	}
 	workspaceByServiceOnly, err := repository.GetWorkspacePolicy(ctx, query.WorkspacePolicyFilter{
 		ProjectID:   projectA.ID,
@@ -261,6 +282,9 @@ func TestRepositoryIntegrationProjectsRepositoriesPoliciesAndOutbox(t *testing.T
 	}
 	if len(workspaceByServiceOnly.CodeSources) != 1 || workspaceByServiceOnly.CodeSources[0].RepositoryID != repositoryA.ID {
 		t.Fatalf("workspace by service code sources = %+v, want repository %s", workspaceByServiceOnly.CodeSources, repositoryA.ID)
+	}
+	if len(workspaceByServiceOnly.DocumentationSources) != 3 {
+		t.Fatalf("workspace by service docs = %+v, want project, service and dependency docs", workspaceByServiceOnly.DocumentationSources)
 	}
 
 	invalidPolicy := testServicesPolicy(projectA.ID, repositoryA.ID, now.Add(2*time.Minute))
@@ -488,6 +512,23 @@ func TestRepositoryIntegrationPoliciesAndRules(t *testing.T) {
 	}
 	if len(workspace.ActivePolicyOverrides) != 1 || workspace.ActivePolicyOverrides[0].ID != override.ID {
 		t.Fatalf("workspace active policy overrides = %+v, want override %s", workspace.ActivePolicyOverrides, override.ID)
+	}
+	cancelledOverride := override
+	cancelledOverride.Version = 2
+	cancelledOverride.UpdatedAt = now.Add(2 * time.Minute)
+	cancelledOverride.Status = enum.PolicyOverrideStatusCancelled
+	if err := repository.CancelPolicyOverride(ctx, cancelledOverride, override.Version, testEvent("project.policy_override.cancelled", "policy_override", override.ID, cancelledOverride.UpdatedAt), nil); err != nil {
+		t.Fatalf("cancel policy override: %v", err)
+	}
+	cancelledLoaded, err := repository.GetPolicyOverride(ctx, override.ID)
+	if err != nil {
+		t.Fatalf("get cancelled policy override: %v", err)
+	}
+	if cancelledLoaded.Status != enum.PolicyOverrideStatusCancelled || cancelledLoaded.Version != 2 {
+		t.Fatalf("cancelled override = %+v, want cancelled version 2", cancelledLoaded)
+	}
+	if err := repository.CancelPolicyOverride(ctx, cancelledOverride, override.Version, testEvent("project.policy_override.cancelled", "policy_override", override.ID, cancelledOverride.UpdatedAt), nil); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("stale policy override cancel error = %v, want conflict", err)
 	}
 	proposal := entity.PolicyEditProposal{
 		ID:           uuid.New(),

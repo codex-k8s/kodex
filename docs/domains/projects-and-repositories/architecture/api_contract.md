@@ -35,7 +35,9 @@ approvals:
 
 ## Операции
 
-`ImportServicesPolicy` принимает нормализованный `validated_payload_json` как источник построения активной проекции. Транспортное поле `service_descriptors` сохранено в `v1` для совместимости контракта, но не является источником канонической проекции: если `valid` payload не содержит service entries, команда должна вернуть `invalid_argument`.
+`ImportServicesPolicy` принимает нормализованный `validated_payload_json` как источник построения активной проекции. Транспортное поле `service_descriptors` сохранено в `v1` для совместимости контракта, но не является источником канонической проекции: если `valid` payload не содержит сервисных записей, команда должна вернуть `invalid_argument`.
+
+Нормализованный payload также содержит источники документации. Для `valid` политики сервис проверяет scope, путь рабочего контура, режим доступа и связь с сервисами или зависимостями. `project-catalog` не выполняет checkout: `GetWorkspacePolicy` возвращает только разрешённый состав источников для `agent-manager` и `runtime-manager`.
 
 | Операция | Вид | Доступ | Идемпотентность | Примечание |
 |---|---|---|---|---|
@@ -53,7 +55,7 @@ approvals:
 | `ListServiceDescriptors` | gRPC query | `project.policy.read` | нет | Читает типизированный список сервисов из последней политики `valid + synced/overridden`. |
 | `CreatePolicyEditProposal` | gRPC command | `project.policy.propose` | `CommandMeta.command_id` | Создаёт запрос на PR-изменение `services.yaml` вместо прямой записи в БД. |
 | `CreatePolicyOverride` | gRPC command | `project.policy.override` | `CommandMeta.command_id` | Создаёт временное операторское переопределение с причиной, сроком действия и аудитом. |
-| `CancelPolicyOverride` | gRPC command | `project.policy.override.cancel` | ожидаемая версия | Досрочно отменяет активное операторское переопределение с причиной. |
+| `CancelPolicyOverride` | gRPC command | `project.policy.override.cancel` | ожидаемая версия | Досрочно отменяет активное операторское переопределение. Причина берётся из command meta и аудита запроса. |
 | `ListPolicyOverrides` | gRPC query | `project.policy.override.read` | нет | Читает активные или исторические операторские переопределения политики. |
 | `PutDocumentationSource` | gRPC command | `project.docs.update` | ожидаемая версия | Обновляет источник документации. |
 | `GetDocumentationSource` | gRPC query | `project.docs.read` | нет | Читает конкретный источник документации. |
@@ -126,7 +128,7 @@ approvals:
 | gRPC proto `ProjectCatalogService` | Стабильный `v1`, покрывает весь согласованный объём операций. |
 | AsyncAPI `project.*` | Стабильный `v1`, покрывает события из этого документа. |
 | Сервисный процесс `project-catalog` | Подключены entrypoint, конфигурация, health/readyz/metrics, gRPC-сервер, проверка доступа через `access-manager` и outbox-dispatcher. |
-| Бизнес-обработчики gRPC | Подключены к доменному сервису для проектов, репозиториев, проверенной проекции `services.yaml`, источников документации, правил веток, релизных политик, релизных линий и политики размещения. `CancelPolicyOverride` остаётся в бэклоге следующего среза. |
+| Бизнес-обработчики gRPC | Подключены к доменному сервису для проектов, репозиториев, проверенной проекции `services.yaml`, операторских переопределений, источников документации, правил веток, релизных политик, релизных линий и политики размещения. |
 | PostgreSQL и outbox | Модель БД, миграции, слой репозитория, сервисный outbox и публикация событий в `platform-event-log` подключены. |
 
 ## Совместимость

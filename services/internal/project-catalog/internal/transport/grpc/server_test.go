@@ -168,6 +168,10 @@ func (unimplementedProjectService) CreatePolicyOverride(context.Context, project
 	return entity.PolicyOverride{}, errs.ErrInvalidArgument
 }
 
+func (unimplementedProjectService) CancelPolicyOverride(context.Context, projectservice.CancelPolicyOverrideInput) (entity.PolicyOverride, error) {
+	return entity.PolicyOverride{}, errs.ErrInvalidArgument
+}
+
 func (unimplementedProjectService) ListPolicyOverrides(context.Context, projectservice.ListPolicyOverridesInput) (projectservice.ListPolicyOverridesResult, error) {
 	return projectservice.ListPolicyOverridesResult{}, errs.ErrInvalidArgument
 }

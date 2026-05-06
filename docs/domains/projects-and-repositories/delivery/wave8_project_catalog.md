@@ -72,17 +72,17 @@ approvals:
 | `DetachRepository` | Готов в proto. | gRPC, доменная команда, проверка доступа и outbox подключены. |
 | `GetRepository` | Готов в proto. | gRPC-чтение и проверка доступа подключены. |
 | `ListRepositories` | Готов в proto. | gRPC-чтение и проверка доступа подключены. |
-| `ImportServicesPolicy` | Готов в proto. | gRPC, доменная команда, проверка доступа, outbox и построение `ServiceDescriptor` из нормализованного payload подключены; источники документации и workspace policy развиваются в следующих срезах #632. |
+| `ImportServicesPolicy` | Готов в proto. | gRPC, доменная команда, проверка доступа, outbox, построение `ServiceDescriptor` и проверка источников документации из нормализованного payload подключены. |
 | `GetServicesPolicy` | Готов в proto. | gRPC-чтение и проверка доступа подключены. |
 | `ListServiceDescriptors` | Готов в proto. | gRPC-чтение и проверка доступа подключены; чтение ограничено последней `valid + synced/overridden` политикой и использует проекцию, построенную `project-catalog`. |
 | `CreatePolicyEditProposal` | Готов в proto. | gRPC и сохранение предложения подключены; создание provider PR развивается в #632. |
 | `CreatePolicyOverride` | Готов в proto. | gRPC, доменная команда, проверка доступа и outbox подключены. |
-| `CancelPolicyOverride` | Готов в proto. | Отложена до #632. |
+| `CancelPolicyOverride` | Готов в proto. | gRPC, доменная команда, проверка доступа, оптимистичная конкуренция, outbox и PostgreSQL-слой подключены. |
 | `ListPolicyOverrides` | Готов в proto. | gRPC-чтение и проверка доступа подключены; активные переопределения также входят в `GetWorkspacePolicy`. |
 | `PutDocumentationSource` | Готов в proto. | gRPC, доменная команда, проверка доступа и outbox подключены. |
 | `GetDocumentationSource` | Готов в proto. | gRPC-чтение и проверка доступа подключены. |
 | `ListDocumentationSources` | Готов в proto. | gRPC-чтение и проверка доступа подключены. |
-| `GetWorkspacePolicy` | Готов в proto. | gRPC-чтение и проверка доступа подключены; источники ограничены активной проверенной политикой, фильтр сервисов сужает код и документацию. |
+| `GetWorkspacePolicy` | Готов в proto. | gRPC-чтение и проверка доступа подключены; источники ограничены активной проверенной политикой, фильтр сервисов сужает код, сервисную документацию и документацию зависимостей. |
 | `PutBranchRules` | Готов в proto. | gRPC, доменная команда, проверка доступа и outbox подключены. |
 | `GetBranchRules` | Готов в proto. | gRPC-чтение и проверка доступа подключены. |
 | `ListBranchRules` | Готов в proto. | gRPC-чтение и проверка доступа подключены. |
@@ -109,8 +109,8 @@ approvals:
 | `project.repository.detached` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
 | `project.services_policy.imported` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
 | `project.policy_override.created` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
-| `project.policy_override.expired` | Готово в AsyncAPI. | Отложена до #632. |
-| `project.policy_override.cancelled` | Готово в AsyncAPI. | Отложена до #632. |
+| `project.policy_override.expired` | Готово в AsyncAPI. | Отложена до maintenance/job-среза; авторитетные чтения уже фильтруют истёкшие переопределения по времени. |
+| `project.policy_override.cancelled` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
 | `project.documentation_source.created` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
 | `project.documentation_source.updated` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
 | `project.documentation_source.disabled` | Готово в AsyncAPI. | Пишется в сервисный outbox и публикуется в `platform-event-log`. |
