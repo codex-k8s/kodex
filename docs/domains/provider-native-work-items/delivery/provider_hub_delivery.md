@@ -1,0 +1,103 @@
+---
+doc_id: DLV-CK8S-PROVIDER-HUB
+type: delivery-plan
+title: kodex — поставка provider-hub
+status: active
+owner_role: EM
+created_at: 2026-05-06
+updated_at: 2026-05-06
+related_issues: [281, 282]
+related_prs: []
+related_docsets:
+  - docs/domains/provider-native-work-items/product/requirements.md
+  - docs/domains/provider-native-work-items/architecture/design.md
+  - docs/domains/provider-native-work-items/architecture/data_model.md
+  - docs/domains/provider-native-work-items/architecture/api_contract.md
+approvals:
+  required: ["Owner"]
+  status: approved
+  request_id: "owner-2026-05-06-provider-hub-boundaries"
+  approved_by: "ai-da-stas"
+  approved_at: 2026-05-06
+---
+
+# Поставка provider-hub
+
+## TL;DR
+
+`provider-hub` поставляется малыми PR-срезами: сначала доменная документация, затем контракты, каркас сервиса, GitHub adapter и лимиты, webhook inbox, проекции рабочих артефактов, сверка, provider-операции, сценарии bootstrap/adoption и эксплуатационный контур.
+
+## Входные артефакты
+
+| Документ | Путь |
+|---|---|
+| Требования домена | `docs/domains/provider-native-work-items/product/requirements.md` |
+| Дизайн домена | `docs/domains/provider-native-work-items/architecture/design.md` |
+| Модель данных | `docs/domains/provider-native-work-items/architecture/data_model.md` |
+| API-обзор | `docs/domains/provider-native-work-items/architecture/api_contract.md` |
+| Сквозная модель интеграции с провайдерами | `docs/platform/architecture/provider_integration_model.md` |
+
+## Срезы поставки
+
+| Срез | Результат |
+|---|---|
+| PH-0 | Доменная документация, границы, требования, модель данных, API-карта и план поставки готовы. |
+| PH-1 | gRPC/AsyncAPI контракты `provider-hub`, generated-код и таблица реализации операций готовы. |
+| PH-2 | Сервисный каркас, БД, миграции, repository layer, config, health/readiness и базовые тесты готовы. |
+| PH-3 | Runtime-состояние внешних аккаунтов у провайдера, provider client interface, GitHub adapter, лимиты и operation log готовы. |
+| PH-4 | Webhook inbox, дедупликация, нормализация GitHub-событий и публикация базовых `provider.*` событий готовы. |
+| PH-5 | Проекции `Issue`, `PR/MR`, комментариев, review-сигналов, watermark и provider relationships готовы. |
+| PH-6 | Incremental reconciliation, `sync_cursor`, hot/warm/cold приоритеты, drift status и ускоряющие сигналы готовы. |
+| PH-7 | Платформенные provider-операции для agent-manager/MCP готовы с аудитом и идемпотентностью. |
+| PH-8 | Empty repository bootstrap и existing repository adoption готовы; задачи подключения репозиториев закрываются. |
+| PH-9 | Kubernetes-манифесты, БД, migration job, metrics, alerts, runbook и smoke-путь готовы. |
+
+## Таблица реализации
+
+До PH-1 контракт считается описанным на уровне API-карты. После генерации proto и AsyncAPI этот раздел должен вестись в каждом PR, который меняет состав команд, чтений или событий.
+
+| Группа | Текущий статус |
+|---|---|
+| Webhook ingest | Описано в API-карте, реализация не начата. |
+| Provider projections | Описано в API-карте, реализация не начата. |
+| Reconciliation | Описано в API-карте, реализация не начата. |
+| Provider operations | Описано в API-карте, реализация не начата. |
+| Account runtime state и лимиты | Описано в API-карте, реализация не начата. |
+| Empty repository bootstrap | Оставлено до PH-8. |
+| Existing repository adoption | Оставлено до PH-8. |
+
+## Зависимости и синхронизация
+
+| С кем синхронизироваться | Когда | Что согласовать |
+|---|---|---|
+| `project-catalog` | До PH-1 и перед PH-8 | `project_id`, `repository_id`, provider ref, состояние подключения репозитория, `services.yaml` bootstrap/adoption. |
+| `access-manager` | До PH-3 | Набор действий доступа для provider-операций и контракт разрешения внешнего аккаунта. |
+| `package-hub` | До PH-5 и PH-7 | Как пакеты ссылаются на provider-репозитории и PR в пакетных репозиториях. |
+| `integration-gateway` | До PH-4 | Формат внутреннего вызова `IngestWebhookEvent` и ответственность за проверку подписи. |
+| `agent-manager` и `platform-mcp-server` | До PH-7 | Каталог provider-инструментов, идемпотентность и ожидаемый результат операций. |
+| `operations-hub` | До PH-5 и PH-9 | Какие поля проекций нужны операторским экранам и диагностике. |
+
+## Связь с задачами подключения репозиториев
+
+Задачи #281 и #282 остаются открытыми до PH-8.
+
+Решение:
+
+- `project-catalog` владеет проектной привязкой, политикой и `services.yaml`;
+- `provider-hub` владеет фактом provider-состояния, созданием или сканированием репозитория, bootstrap PR, provider relationships и проекциями;
+- empty repository допускает controlled direct bootstrap только как исключение;
+- existing repository adoption идёт через reviewable PR.
+
+## Definition of Done для каждого PR
+
+- Обновлены документы домена и карта Issue, если меняется состав срезов.
+- Если меняются контракты, выполнена генерация и обновлена таблица реализации.
+- Если меняется Go-код, выполнены профильные Go-проверки.
+- Если меняются события, обновлены AsyncAPI и generated event contracts.
+- PR закрывает или ссылается на соответствующую GitHub Issue через тело PR.
+
+## Апрув
+
+- request_id: `owner-2026-05-06-provider-hub-boundaries`
+- Решение: approved
+- Комментарий: план поставки `provider-hub` согласован как целевое состояние PH-0.
