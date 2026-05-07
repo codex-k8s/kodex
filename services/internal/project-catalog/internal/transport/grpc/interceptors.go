@@ -15,17 +15,21 @@ func UnaryErrorInterceptor(logger *slog.Logger) grpcruntime.UnaryServerIntercept
 }
 
 func projectErrorMapper() grpcserver.DomainErrorMapper {
-	return grpcserver.NewDomainErrorMapper(
-		grpcserver.DomainErrorRule{Target: errs.ErrInvalidArgument, Code: codes.InvalidArgument, Message: "invalid request"},
-		grpcserver.DomainErrorRule{Target: errs.ErrForbidden, Code: codes.PermissionDenied, Message: "permission denied"},
-		grpcserver.DomainErrorRule{Target: errs.ErrNotFound, Code: codes.NotFound, Message: "not found"},
-		grpcserver.DomainErrorRule{Target: errs.ErrAlreadyExists, Code: codes.AlreadyExists, Message: "already exists"},
-		grpcserver.DomainErrorRule{Target: errs.ErrConflict, Code: codes.Aborted, Message: "version conflict"},
-		grpcserver.DomainErrorRule{Target: errs.ErrPreconditionFailed, Code: codes.FailedPrecondition, Message: "precondition failed"},
-		grpcserver.DomainErrorRule{Target: errs.ErrDependencyUnavailable, Code: codes.Unavailable, Message: "dependency unavailable"},
-	)
+	return grpcserver.NewDomainErrorMapper(projectErrorRules()...)
 }
 
-func errorToStatus(err error) error {
-	return projectErrorMapper()(err)
+func projectErrorRules() []grpcserver.DomainErrorRule {
+	return []grpcserver.DomainErrorRule{
+		projectRule(errs.ErrInvalidArgument, codes.InvalidArgument, "invalid request"),
+		projectRule(errs.ErrForbidden, codes.PermissionDenied, "permission denied"),
+		projectRule(errs.ErrNotFound, codes.NotFound, "not found"),
+		projectRule(errs.ErrAlreadyExists, codes.AlreadyExists, "already exists"),
+		projectRule(errs.ErrConflict, codes.Aborted, "version conflict"),
+		projectRule(errs.ErrPreconditionFailed, codes.FailedPrecondition, "precondition failed"),
+		projectRule(errs.ErrDependencyUnavailable, codes.Unavailable, "dependency unavailable"),
+	}
+}
+
+func projectRule(target error, code codes.Code, message string) grpcserver.DomainErrorRule {
+	return grpcserver.DomainErrorRule{Target: target, Code: code, Message: message}
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/value"
+	grpcruntime "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -77,7 +78,13 @@ func TestErrorToStatusMapsDomainErrors(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			if got := status.Code(errorToStatus(tc.err)); got != tc.code {
+
+			interceptor := UnaryErrorInterceptor(nil)
+			info := &grpcruntime.UnaryServerInfo{FullMethod: "/kodex.projects.v1.ProjectCatalogService/Test"}
+			_, err := interceptor(context.Background(), nil, info, func(context.Context, any) (any, error) {
+				return nil, tc.err
+			})
+			if got := status.Code(err); got != tc.code {
 				t.Fatalf("code = %s, want %s", got, tc.code)
 			}
 		})

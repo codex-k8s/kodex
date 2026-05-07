@@ -76,6 +76,7 @@ spec:
       value: "0.1.0"
       bumpOn:
         - services/internal/project-catalog
+        - libs/go/accesscheck
         - libs/go/accesscatalog
         - libs/go/grpcserver
         - libs/go/postgres
@@ -92,6 +93,7 @@ spec:
       value: "0.1.0"
       bumpOn:
         - services/internal/package-hub
+        - libs/go/accesscheck
         - libs/go/grpcserver
         - libs/go/serviceprocess
         - libs/go/servicemain
@@ -113,6 +115,8 @@ spec:
       value: "0.1.0"
       bumpOn:
         - services/internal/runtime-manager
+        - libs/go/accesscheck
+        - libs/go/accesscatalog
         - libs/go/eventlog
         - libs/go/grpcserver
         - libs/go/migrationtest

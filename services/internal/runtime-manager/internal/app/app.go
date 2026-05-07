@@ -7,11 +7,17 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
+
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
+	accessaccountsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/access_accounts/v1"
+	accessclient "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/clients/access"
+	runtimeservice "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/service"
 	runtimepostgres "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/repository/postgres/runtime"
 	runtimegrpc "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/transport/grpc"
+	grpcruntime "google.golang.org/grpc"
 )
 
 // Run starts runtime-manager process servers and shuts them down with context.
@@ -31,8 +37,23 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if eventLogPool != nil {
 		defer eventLogPool.Close()
 	}
+	authorizer, accessConn, err := newAuthorizer(cfg)
+	if err != nil {
+		return err
+	}
+	if accessConn != nil {
+		defer func() {
+			_ = accessConn.Close()
+		}()
+	}
 
 	runtimeRepository := runtimepostgres.NewRepository(dbPool)
+	slotConfig, err := cfg.SlotServiceConfig()
+	if err != nil {
+		return err
+	}
+	slotConfig.Authorizer = authorizer
+	runtimeService := runtimeservice.NewWithConfig(runtimeRepository, systemClock{}, uuidGenerator{}, slotConfig)
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           serviceprocess.NewHealthMux(readinessChecks(runtimeRepository, eventLogPool), 2*time.Second),
@@ -49,11 +70,14 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		Logger:        logger,
 		Metrics:       grpcMetrics,
 		Authenticator: grpcserver.NewSharedTokenAuthenticator(cfg.GRPC.AuthToken),
+		UnaryInterceptors: []grpcserver.UnaryInterceptor{
+			runtimegrpc.UnaryErrorInterceptor(logger),
+		},
 	})
 	if err != nil {
 		return err
 	}
-	runtimegrpc.RegisterRuntimeManagerService(grpcServer)
+	runtimegrpc.RegisterRuntimeManagerService(grpcServer, runtimeService)
 
 	errCh := make(chan error, 3)
 	go serviceprocess.StartHTTPServer(httpServer, "runtime-manager", logger, errCh)
@@ -96,6 +120,27 @@ type pingStore interface {
 	Ping(context.Context) error
 }
 
+func newAuthorizer(cfg Config) (runtimeservice.Authorizer, *grpcruntime.ClientConn, error) {
+	if !cfg.Access.CheckEnabled {
+		return runtimeservice.AllowAllAuthorizer{}, nil, nil
+	}
+	accessConfig := accessclient.Config{
+		Addr:      cfg.Access.AccessManagerGRPCAddr,
+		AuthToken: cfg.Access.AccessManagerAuthToken,
+		Timeout:   cfg.Access.CheckTimeout,
+	}
+	conn, err := accessclient.NewConnection(accessConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+	authorizer, err := accessclient.NewAuthorizer(accessaccountsv1.NewAccessManagerServiceClient(conn), accessConfig)
+	if err != nil {
+		_ = conn.Close()
+		return nil, nil, err
+	}
+	return authorizer, conn, nil
+}
+
 func readinessChecks(runtime runtimeStore, eventLog pingStore) []serviceprocess.ReadinessCheck {
 	checks := []serviceprocess.ReadinessCheck{
 		{Name: "runtime database", Check: runtime.Ping},
@@ -104,4 +149,16 @@ func readinessChecks(runtime runtimeStore, eventLog pingStore) []serviceprocess.
 		checks = append(checks, serviceprocess.ReadinessCheck{Name: "event log database", Check: eventLog.Ping})
 	}
 	return checks
+}
+
+type systemClock struct{}
+
+func (systemClock) Now() time.Time {
+	return time.Now().UTC()
+}
+
+type uuidGenerator struct{}
+
+func (uuidGenerator) New() uuid.UUID {
+	return uuid.New()
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
+	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	providersv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/value"
@@ -46,26 +47,25 @@ func QueryMetaFromProto(meta *providersv1.QueryMeta) (value.QueryMeta, error) {
 
 // ActorFromProto maps actor identity.
 func ActorFromProto(actor *providersv1.Actor) value.Actor {
-	result := value.Actor{}
 	if actor == nil {
-		return result
+		return value.Actor{}
 	}
-	result.Type = cleanText(actor.GetType())
-	result.ID = cleanText(actor.GetId())
-	return result
+	actorType, actorID := grpcserver.ActorParts(actor)
+	return value.Actor{Type: actorType, ID: actorID}
 }
 
 // RequestContextFromProto maps safe request metadata.
 func RequestContextFromProto(context *providersv1.RequestContext) value.RequestContext {
-	result := value.RequestContext{}
 	if context == nil {
-		return result
+		return value.RequestContext{}
 	}
-	result.Source = cleanText(context.GetSource())
-	result.TraceID = cleanText(context.GetTraceId())
-	result.SessionID = cleanText(context.GetSessionId())
-	result.ClientIPHash = cleanText(context.GetClientIpHash())
-	return result
+	source, traceID, sessionID, clientIPHash := grpcserver.RequestContextParts(context)
+	return value.RequestContext{
+		Source:       source,
+		TraceID:      traceID,
+		SessionID:    sessionID,
+		ClientIPHash: clientIPHash,
+	}
 }
 
 func requiredUUID(text string) (uuid.UUID, error) {

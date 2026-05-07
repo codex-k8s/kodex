@@ -13,6 +13,9 @@
 - базовые Prometheus-метрики unary RPC;
 - OpenTelemetry `StatsHandler` для входящих RPC;
 - W3C-проброс `tracecontext+baggage`;
-- резервная лог-корреляция из активного OpenTelemetry span, если вызывающая сторона не передала legacy `x-kodex-trace-id`.
+- резервная лог-корреляция из активного OpenTelemetry span, если вызывающая сторона не передала legacy `x-kodex-trace-id`;
+- общий boundary-interceptor для маппинга доменных sentinel-ошибок в transport-safe gRPC statuses через `DomainErrorRule`;
+- helper `HandleUnary` для одинакового пути `proto request -> domain input -> domain result -> proto response`;
+- нормализация общих actor/request-context protobuf-полей перед service-specific casting.
 
-В модуль не входят доменные handlers, cast `proto <-> domain` и маппинг доменных ошибок.
+В модуль не входят доменные handlers и сами правила доступа. Сервис сам объявляет свои `DomainErrorRule`, action/resource policy и cast `proto <-> domain`, а `grpcserver` только исполняет общий транспортный шаблон.

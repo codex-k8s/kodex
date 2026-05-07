@@ -48,6 +48,7 @@
   профильный `deploy/base/<db-owner>/migrations.yaml.tpl`, `bootstrap/host/config.env.example`,
   `bootstrap/host/bootstrap_remote_production.sh` и соответствующая архитектурная документация.
 - Вынос общего кода в целевой `libs/*` оправдан (>= 2 потребителя); нет “god-lib”.
+- Если общий код или локальный контракт стал зависимостью deployable-сервиса, `services.yaml` `spec.versions.<service>.bumpOn` синхронно обновлён для всех потребителей, чтобы изменение зависимости поднимало версии и образы сервисов.
 - Новый production-код не размещён внутри устаревших или архивных каталогов.
 - Если добавлена/обновлена внешняя зависимость, обновлён
   `docs/design-guidelines/common/external_dependencies_catalog.md`.

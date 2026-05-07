@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 
+	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	providersv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1"
 	providerservice "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/service"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/entity"
@@ -30,10 +31,6 @@ type Server struct {
 	service providerService
 }
 
-type unaryCaster[Request any, Input any] func(*Request) (Input, error)
-type unaryCaller[Input any, Output any] func(context.Context, Input) (Output, error)
-type unaryResponder[Output any, Response any] func(Output) *Response
-
 // NewServer creates a provider-hub gRPC transport around domain use cases.
 func NewServer(service providerService) *Server {
 	if service == nil {
@@ -49,63 +46,45 @@ func RegisterProviderHubService(registrar grpcruntime.ServiceRegistrar, service 
 
 // IngestWebhookEvent stores a verified webhook accepted by integration-gateway.
 func (s *Server) IngestWebhookEvent(ctx context.Context, request *providersv1.IngestWebhookEventRequest) (*providersv1.WebhookEventResponse, error) {
-	return handleUnary(ctx, request, grpccasters.IngestWebhookEventInput, s.service.IngestWebhookEvent, grpccasters.WebhookEventResponse)
+	return grpcserver.HandleUnary(ctx, request, grpccasters.IngestWebhookEventInput, s.service.IngestWebhookEvent, grpccasters.WebhookEventResponse)
 }
 
 // GetWebhookEvent returns a stored webhook for diagnostics.
 func (s *Server) GetWebhookEvent(ctx context.Context, request *providersv1.GetWebhookEventRequest) (*providersv1.WebhookEventResponse, error) {
-	return handleUnary(ctx, request, grpccasters.GetWebhookEventInput, s.service.GetWebhookEvent, grpccasters.WebhookEventResponse)
+	return grpcserver.HandleUnary(ctx, request, grpccasters.GetWebhookEventInput, s.service.GetWebhookEvent, grpccasters.WebhookEventResponse)
 }
 
 // ListWebhookEvents returns raw webhook events by operational filters.
 func (s *Server) ListWebhookEvents(ctx context.Context, request *providersv1.ListWebhookEventsRequest) (*providersv1.ListWebhookEventsResponse, error) {
-	return handleUnary(ctx, request, grpccasters.ListWebhookEventsInput, s.service.ListWebhookEvents, grpccasters.ListWebhookEventsResponse)
+	return grpcserver.HandleUnary(ctx, request, grpccasters.ListWebhookEventsInput, s.service.ListWebhookEvents, grpccasters.ListWebhookEventsResponse)
 }
 
 // RetryWebhookEventProcessing repeats normalization for a stored webhook.
 func (s *Server) RetryWebhookEventProcessing(ctx context.Context, request *providersv1.RetryWebhookEventProcessingRequest) (*providersv1.WebhookEventResponse, error) {
-	return handleUnary(ctx, request, grpccasters.RetryWebhookEventProcessingInput, s.service.RetryWebhookEventProcessing, grpccasters.WebhookEventResponse)
+	return grpcserver.HandleUnary(ctx, request, grpccasters.RetryWebhookEventProcessingInput, s.service.RetryWebhookEventProcessing, grpccasters.WebhookEventResponse)
 }
 
 // GetProviderAccountRuntimeState returns provider runtime state for one external account.
 func (s *Server) GetProviderAccountRuntimeState(ctx context.Context, request *providersv1.GetProviderAccountRuntimeStateRequest) (*providersv1.ProviderAccountRuntimeStateResponse, error) {
-	return handleUnary(ctx, request, grpccasters.GetProviderAccountRuntimeStateInput, s.service.GetProviderAccountRuntimeState, grpccasters.ProviderAccountRuntimeStateResponse)
+	return grpcserver.HandleUnary(ctx, request, grpccasters.GetProviderAccountRuntimeStateInput, s.service.GetProviderAccountRuntimeState, grpccasters.ProviderAccountRuntimeStateResponse)
 }
 
 // ListProviderAccountRuntimeStates returns provider runtime states by supported filters.
 func (s *Server) ListProviderAccountRuntimeStates(ctx context.Context, request *providersv1.ListProviderAccountRuntimeStatesRequest) (*providersv1.ListProviderAccountRuntimeStatesResponse, error) {
-	return handleUnary(ctx, request, grpccasters.ListProviderAccountRuntimeStatesInput, s.service.ListProviderAccountRuntimeStates, grpccasters.ListProviderAccountRuntimeStatesResponse)
+	return grpcserver.HandleUnary(ctx, request, grpccasters.ListProviderAccountRuntimeStatesInput, s.service.ListProviderAccountRuntimeStates, grpccasters.ListProviderAccountRuntimeStatesResponse)
 }
 
 // RecordProviderLimitSnapshot records known provider limits after an operation or signal.
 func (s *Server) RecordProviderLimitSnapshot(ctx context.Context, request *providersv1.RecordProviderLimitSnapshotRequest) (*providersv1.ProviderLimitSnapshotResponse, error) {
-	return handleUnary(ctx, request, grpccasters.RecordProviderLimitSnapshotInput, s.service.RecordProviderLimitSnapshot, grpccasters.ProviderLimitSnapshotResponse)
+	return grpcserver.HandleUnary(ctx, request, grpccasters.RecordProviderLimitSnapshotInput, s.service.RecordProviderLimitSnapshot, grpccasters.ProviderLimitSnapshotResponse)
 }
 
 // ListProviderLimitSnapshots returns recorded provider limit snapshots.
 func (s *Server) ListProviderLimitSnapshots(ctx context.Context, request *providersv1.ListProviderLimitSnapshotsRequest) (*providersv1.ListProviderLimitSnapshotsResponse, error) {
-	return handleUnary(ctx, request, grpccasters.ListProviderLimitSnapshotsInput, s.service.ListProviderLimitSnapshots, grpccasters.ListProviderLimitSnapshotsResponse)
+	return grpcserver.HandleUnary(ctx, request, grpccasters.ListProviderLimitSnapshotsInput, s.service.ListProviderLimitSnapshots, grpccasters.ListProviderLimitSnapshotsResponse)
 }
 
 // ListProviderOperations returns the operation log for diagnostics and audit.
 func (s *Server) ListProviderOperations(ctx context.Context, request *providersv1.ListProviderOperationsRequest) (*providersv1.ListProviderOperationsResponse, error) {
-	return handleUnary(ctx, request, grpccasters.ListProviderOperationsInput, s.service.ListProviderOperations, grpccasters.ListProviderOperationsResponse)
-}
-
-func handleUnary[Request any, Input any, Output any, Response any](
-	ctx context.Context,
-	request *Request,
-	cast unaryCaster[Request, Input],
-	call unaryCaller[Input, Output],
-	respond unaryResponder[Output, Response],
-) (*Response, error) {
-	domainInput, err := cast(request)
-	if err != nil {
-		return nil, err
-	}
-	domainOutput, err := call(ctx, domainInput)
-	if err != nil {
-		return nil, err
-	}
-	return respond(domainOutput), nil
+	return grpcserver.HandleUnary(ctx, request, grpccasters.ListProviderOperationsInput, s.service.ListProviderOperations, grpccasters.ListProviderOperationsResponse)
 }
