@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-06
 updated_at: 2026-05-07
-related_issues: [642, 646, 650, 673]
+related_issues: [642, 646, 650, 673, 678]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -37,9 +37,9 @@ approvals:
 
 | Операция | Вид | Доступ | Идемпотентность | Примечание |
 |---|---|---|---|---|
-| `ConnectPackageSource` | gRPC command | `package.source.connect` | `CommandMeta.command_id` | Подключает источник магазина, пользовательский источник или встроенный источник. |
-| `UpdatePackageSource` | gRPC command | `package.source.update` | ожидаемая версия | Обновляет имя, статус, ссылку endpoint или параметры источника. |
-| `DisablePackageSource` | gRPC command | `package.source.disable` | ожидаемая версия | Отключает источник без физического удаления. |
+| `ConnectPackageSource` | gRPC command | `package.source.connect` | `CommandMeta.command_id` или `idempotency_key` | Подключает источник магазина, пользовательский источник или встроенный источник. |
+| `UpdatePackageSource` | gRPC command | `package.source.update` | `CommandMeta.command_id` или `idempotency_key` + ожидаемая версия | Обновляет имя, статус, ссылку endpoint или параметры источника. |
+| `DisablePackageSource` | gRPC command | `package.source.disable` | `CommandMeta.command_id` или `idempotency_key` + ожидаемая версия | Отключает источник без физического удаления. |
 | `GetPackageSource` | gRPC query | `package.source.read` | нет | Авторитетное чтение источника. |
 | `ListPackageSources` | gRPC query | `package.source.read` | нет | Список источников по scope и статусу. |
 | `SyncAvailablePackages` | gRPC command | `package.catalog.sync` | `CommandMeta.command_id` | Синхронизирует локальный доступный каталог из источника. |
@@ -56,7 +56,7 @@ approvals:
 | `ListPackageInstallations` | gRPC query | `package.installation.read` | нет | Список установок по области, статусу и виду пакета. |
 | `GetPackageSecretSchema` | gRPC query | `package.secret.read` | нет | Читает схему секретов версии пакета. |
 | `RefreshPackageInstallationSecretStatus` | gRPC command | `package.installation.update` | ожидаемая версия | Перечитывает состояние привязок секретов из `access-manager` и обновляет только статус заполненности установки. |
-| `SetPackageVerification` | gRPC command | `package.verify` | `CommandMeta.command_id` + ожидаемая ревизия версии пакета | Фиксирует верификацию, отклонение или отзыв версии пакета. |
+| `SetPackageVerification` | gRPC command | `package.verify` | `CommandMeta.command_id` или `idempotency_key` + ожидаемая ревизия версии пакета | Фиксирует верификацию, отклонение или отзыв версии пакета. |
 
 ## Модель ошибок
 
@@ -104,8 +104,8 @@ approvals:
 | Go-артефакты событий | Генерируются в `libs/go/platformevents/packagehub/events.gen.go`. |
 | Сервисный процесс `package-hub` | Общий gRPC runtime, служебные `/health/*`, `/metrics`, PostgreSQL repository, проверка доступа через `access-manager` и часть операций `PackageHubService` подключены. |
 | PostgreSQL и outbox | Таблицы package-каталога, установок, проверок, идемпотентного следа и outbox добавлены; диспетчер публикует события через `platform-event-log`. |
-| Реализованные операции | `GetPackageSource`, `ListPackageSources`, `GetPackage`, `ListPackages`, `GetPackageVersion`, `ListPackageVersions`, `GetPackageManifest`, `SetPackageVerification`. |
-| Операции следующих срезов | Источники магазинов, синхронизация доступного каталога, установки, схемы секретов установок и runtime-связанные команды пока возвращают `unimplemented`. |
+| Реализованные операции | `ConnectPackageSource`, `UpdatePackageSource`, `DisablePackageSource`, `GetPackageSource`, `ListPackageSources`, `GetPackage`, `ListPackages`, `GetPackageVersion`, `ListPackageVersions`, `GetPackageManifest`, `SetPackageVerification`. |
+| Операции следующих срезов | Синхронизация доступного каталога, установки, схемы секретов установок и runtime-связанные команды пока возвращают `unimplemented`. |
 
 ## Совместимость
 

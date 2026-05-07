@@ -47,6 +47,7 @@ const (
 	operationCreatePackageInstallation = "domain.Repository.CreatePackageInstallation"
 	operationCreatePackageSecretSchema = "domain.Repository.CreatePackageSecretSchema"
 	operationCreatePackageSource       = "domain.Repository.CreatePackageSource"
+	operationCreatePackageSourceResult = "domain.Repository.CreatePackageSourceWithResult"
 	operationCreatePackageVersion      = "domain.Repository.CreatePackageVersion"
 	operationCreatePricingMetadata     = "domain.Repository.CreatePricingMetadata"
 	operationGetCommandResult          = "domain.Repository.GetCommandResult"
@@ -68,6 +69,7 @@ const (
 	operationOutboxMarkPublished       = "domain.Repository.MarkOutboxEventPublished"
 	operationSetPackageVerification    = "domain.Repository.SetPackageVerification"
 	operationUpdatePackageInstallation = "domain.Repository.UpdatePackageInstallation"
+	operationUpdatePackageSourceResult = "domain.Repository.UpdatePackageSourceWithResult"
 	operationUpdatePricingMetadata     = "domain.Repository.UpdatePricingMetadata"
 )
 
@@ -80,12 +82,28 @@ func (r *Repository) CreatePackageSource(ctx context.Context, source entity.Pack
 	return wrapError(operationCreatePackageSource, err)
 }
 
+func (r *Repository) CreatePackageSourceWithResult(ctx context.Context, source entity.PackageSource, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.mutate(ctx, operationCreatePackageSourceResult,
+		affectedMutation(queryPackageSourceCreate, packageSourceArgs(source)),
+		commandResultMutation(result),
+		outboxEventMutation(event),
+	)
+}
+
 func (r *Repository) GetPackageSource(ctx context.Context, id uuid.UUID) (entity.PackageSource, error) {
 	return queryOne(ctx, r.db, operationGetPackageSource, queryPackageSourceGetByID, pgx.NamedArgs{"id": id}, scanPackageSource)
 }
 
 func (r *Repository) ListPackageSources(ctx context.Context, filter query.PackageSourceFilter) ([]entity.PackageSource, value.PageResult, error) {
 	return queryPage(ctx, r.db, operationListPackageSources, queryPackageSourceList, packageSourceFilterArgs(filter), scanPackageSource)
+}
+
+func (r *Repository) UpdatePackageSourceWithResult(ctx context.Context, source entity.PackageSource, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.mutate(ctx, operationUpdatePackageSourceResult,
+		affectedMutation(queryPackageSourceUpdate, packageSourceUpdateArgs(source, previousVersion)),
+		commandResultMutation(result),
+		outboxEventMutation(event),
+	)
 }
 
 func (r *Repository) CreatePackage(ctx context.Context, entry entity.PackageEntry) error {

@@ -23,6 +23,31 @@ func requireOptionalID(id *uuid.UUID) error {
 	return nil
 }
 
+func requireText(value string) error {
+	if strings.TrimSpace(value) == "" {
+		return errs.ErrInvalidArgument
+	}
+	return nil
+}
+
+func requireSourceKind(kind enum.PackageSourceKind) error {
+	switch kind {
+	case enum.PackageSourceKindBuiltIn, enum.PackageSourceKindStorePackage, enum.PackageSourceKindCustomRepository, enum.PackageSourceKindProxy:
+		return nil
+	default:
+		return errs.ErrInvalidArgument
+	}
+}
+
+func requireSourceStatus(status enum.PackageSourceStatus) error {
+	switch status {
+	case enum.PackageSourceStatusActive, enum.PackageSourceStatusDisabled, enum.PackageSourceStatusBlocked, enum.PackageSourceStatusSyncFailed:
+		return nil
+	default:
+		return errs.ErrInvalidArgument
+	}
+}
+
 func requireVerificationStatus(status enum.PackageVerificationStatus) error {
 	switch status {
 	case enum.PackageVerificationStatusVerified, enum.PackageVerificationStatusUnverified, enum.PackageVerificationStatusRejected, enum.PackageVerificationStatusRevoked:

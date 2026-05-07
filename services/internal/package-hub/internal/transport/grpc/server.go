@@ -23,6 +23,9 @@ type Server struct {
 }
 
 type packageService interface {
+	ConnectPackageSource(context.Context, packageservice.ConnectPackageSourceInput) (entity.PackageSource, error)
+	UpdatePackageSource(context.Context, packageservice.UpdatePackageSourceInput) (entity.PackageSource, error)
+	DisablePackageSource(context.Context, packageservice.DisablePackageSourceInput) (entity.PackageSource, error)
 	GetPackageSource(context.Context, uuid.UUID, value.QueryMeta) (entity.PackageSource, error)
 	ListPackageSources(context.Context, packageservice.ListPackageSourcesInput) (packageservice.ListPackageSourcesResult, error)
 	GetPackage(context.Context, uuid.UUID, value.QueryMeta) (entity.PackageEntry, error)
@@ -48,6 +51,21 @@ func NewServer(service packageService) *Server {
 // RegisterPackageHubService registers package-hub handlers in a gRPC runtime.
 func RegisterPackageHubService(registrar grpcruntime.ServiceRegistrar, service packageService) {
 	packagesv1.RegisterPackageHubServiceServer(registrar, NewServer(service))
+}
+
+// ConnectPackageSource connects a source and records an idempotent command result.
+func (server *Server) ConnectPackageSource(ctx context.Context, request *packagesv1.ConnectPackageSourceRequest) (*packagesv1.PackageSourceResponse, error) {
+	return handleUnary(ctx, request, grpccasters.ConnectPackageSourceInput, server.service.ConnectPackageSource, grpccasters.PackageSourceResponse)
+}
+
+// UpdatePackageSource changes safe source metadata and lifecycle status.
+func (server *Server) UpdatePackageSource(ctx context.Context, request *packagesv1.UpdatePackageSourceRequest) (*packagesv1.PackageSourceResponse, error) {
+	return handleUnary(ctx, request, grpccasters.UpdatePackageSourceInput, server.service.UpdatePackageSource, grpccasters.PackageSourceResponse)
+}
+
+// DisablePackageSource disables a source without deleting catalog history.
+func (server *Server) DisablePackageSource(ctx context.Context, request *packagesv1.DisablePackageSourceRequest) (*packagesv1.PackageSourceResponse, error) {
+	return handleUnary(ctx, request, grpccasters.DisablePackageSourceInput, server.service.DisablePackageSource, grpccasters.PackageSourceResponse)
 }
 
 // GetPackageSource returns authoritative source state.

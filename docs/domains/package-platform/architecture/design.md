@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-06
 updated_at: 2026-05-07
-related_issues: [642, 655]
+related_issues: [642, 655, 678]
 related_prs: []
 related_adrs: []
 approvals:
@@ -77,7 +77,7 @@ sequenceDiagram
   G->>P: ConnectPackageSource(command) over gRPC
   P->>A: CheckAccess(package.source.connect)
   A-->>P: allow
-  P->>DB: insert source + outbox
+  P->>DB: insert source + command result + outbox
   P-->>G: source
   G-->>UI: PackageSourceResponse
 ```

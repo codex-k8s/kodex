@@ -14,8 +14,10 @@ import (
 
 type Repository interface {
 	CreatePackageSource(ctx context.Context, source entity.PackageSource) error
+	CreatePackageSourceWithResult(ctx context.Context, source entity.PackageSource, result entity.CommandResult, event entity.OutboxEvent) error
 	GetPackageSource(ctx context.Context, id uuid.UUID) (entity.PackageSource, error)
 	ListPackageSources(ctx context.Context, filter query.PackageSourceFilter) ([]entity.PackageSource, value.PageResult, error)
+	UpdatePackageSourceWithResult(ctx context.Context, source entity.PackageSource, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error
 	CreatePackage(ctx context.Context, entry entity.PackageEntry) error
 	GetPackage(ctx context.Context, id uuid.UUID) (entity.PackageEntry, error)
 	ListPackages(ctx context.Context, filter query.PackageFilter) ([]entity.PackageEntry, value.PageResult, error)

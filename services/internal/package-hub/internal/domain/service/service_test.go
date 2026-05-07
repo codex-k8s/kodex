@@ -168,6 +168,101 @@ func TestSetPackageVerificationReplayUsesStoredSnapshot(t *testing.T) {
 	}
 }
 
+func TestConnectPackageSourceAuthorizesBeforeReplayAndCreatesArtifacts(t *testing.T) {
+	t.Parallel()
+
+	organizationID := uuid.New()
+	repository := &fakeRepository{commandResultErr: errs.ErrNotFound}
+	authorizer := &recordingAuthorizer{}
+	service := NewWithConfig(repository, fixedClock{}, fixedIDs{}, Config{Authorizer: authorizer})
+
+	source, err := service.ConnectPackageSource(context.Background(), ConnectPackageSourceInput{
+		OrganizationID:     &organizationID,
+		Slug:               "package-store",
+		DisplayName:        "Магазин пакетов",
+		Kind:               enum.PackageSourceKindStorePackage,
+		RepositoryRef:      " github.com/codex-k8s/kodex-package-store ",
+		CatalogEndpointRef: " store.default ",
+		Meta:               commandMeta(),
+	})
+	if err != nil {
+		t.Fatalf("ConnectPackageSource(): %v", err)
+	}
+	if source.Status != enum.PackageSourceStatusActive || source.Version != 1 {
+		t.Fatalf("source = %+v, want active v1", source)
+	}
+	if source.RepositoryRef != "github.com/codex-k8s/kodex-package-store" || source.CatalogEndpointRef != "store.default" {
+		t.Fatalf("source refs = %q/%q, want trimmed refs", source.RepositoryRef, source.CatalogEndpointRef)
+	}
+	if repository.createSourceWithResultCalls != 1 || repository.getCommandResultCalls != 1 {
+		t.Fatalf("repository calls = create:%d replay:%d, want create and replay lookup", repository.createSourceWithResultCalls, repository.getCommandResultCalls)
+	}
+	if repository.createdSource.ID != source.ID || repository.createdResult.AggregateID != source.ID || repository.createdEvent.EventType != packageEventSourceConnected {
+		t.Fatalf("created artifacts = source:%+v result:%+v event:%+v, want source command artifacts", repository.createdSource, repository.createdResult, repository.createdEvent)
+	}
+	if len(authorizer.requests) != 1 || authorizer.requests[0].ActionKey != packageActionSourceConnect || authorizer.requests[0].ScopeID != organizationID.String() {
+		t.Fatalf("authorization requests = %+v, want source connect in organization scope", authorizer.requests)
+	}
+}
+
+func TestUpdatePackageSourceReplayUsesStoredSnapshot(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	sourceID := uuid.New()
+	organizationID := uuid.New()
+	updatedSource := entity.PackageSource{
+		VersionedBase: entity.VersionedBase{
+			ID:        sourceID,
+			Version:   2,
+			CreatedAt: now.Add(-time.Hour),
+			UpdatedAt: now,
+		},
+		OrganizationID:     &organizationID,
+		Slug:               "package-store",
+		DisplayName:        "Обновлённый магазин",
+		Kind:               enum.PackageSourceKindStorePackage,
+		RepositoryRef:      "github.com/codex-k8s/kodex-package-store",
+		CatalogEndpointRef: "store.v2",
+		Status:             enum.PackageSourceStatusBlocked,
+	}
+	payload, err := sourcePayload(updatedSource)
+	if err != nil {
+		t.Fatalf("sourcePayload(): %v", err)
+	}
+	meta := commandMeta()
+	repository := &fakeRepository{
+		packageSource: entity.PackageSource{
+			VersionedBase:  entity.VersionedBase{ID: sourceID, Version: 7},
+			OrganizationID: &organizationID,
+			Status:         enum.PackageSourceStatusActive,
+		},
+		commandResult: entity.CommandResult{
+			CommandID:     &meta.CommandID,
+			Operation:     packageOperationSourceUpdate,
+			AggregateType: enum.CommandAggregateTypePackageSource,
+			AggregateID:   sourceID,
+			ResultPayload: payload,
+		},
+	}
+	service := NewWithConfig(repository, fixedClock{}, fixedIDs{}, Config{Authorizer: &recordingAuthorizer{}})
+
+	result, err := service.UpdatePackageSource(context.Background(), UpdatePackageSourceInput{
+		SourceID: sourceID,
+		Status:   ptr(enum.PackageSourceStatusDisabled),
+		Meta:     meta,
+	})
+	if err != nil {
+		t.Fatalf("UpdatePackageSource(): %v", err)
+	}
+	if result.DisplayName != updatedSource.DisplayName || result.Version != updatedSource.Version || result.Status != updatedSource.Status {
+		t.Fatalf("replay result = %+v, want stored snapshot %+v", result, updatedSource)
+	}
+	if repository.updateSourceWithResultCalls != 0 {
+		t.Fatalf("update calls = %d, want replay without mutation", repository.updateSourceWithResultCalls)
+	}
+}
+
 type recordingAuthorizer struct {
 	requests []AuthorizationRequest
 	err      error
@@ -179,18 +274,34 @@ func (a *recordingAuthorizer) Authorize(_ context.Context, request Authorization
 }
 
 type fakeRepository struct {
-	packageEntry          entity.PackageEntry
-	packageSource         entity.PackageSource
-	packageVersion        entity.PackageVersion
-	commandResult         entity.CommandResult
-	commandResultErr      error
-	getVersionCalls       int
-	getCommandResultCalls int
-	setVerificationCalls  int
+	packageEntry                entity.PackageEntry
+	packageSource               entity.PackageSource
+	packageVersion              entity.PackageVersion
+	commandResult               entity.CommandResult
+	commandResultErr            error
+	createdSource               entity.PackageSource
+	createdResult               entity.CommandResult
+	createdEvent                entity.OutboxEvent
+	updatedSource               entity.PackageSource
+	updatedResult               entity.CommandResult
+	updatedEvent                entity.OutboxEvent
+	createSourceWithResultCalls int
+	updateSourceWithResultCalls int
+	getVersionCalls             int
+	getCommandResultCalls       int
+	setVerificationCalls        int
 }
 
 func (r *fakeRepository) CreatePackageSource(context.Context, entity.PackageSource) error {
 	panic("not implemented")
+}
+
+func (r *fakeRepository) CreatePackageSourceWithResult(_ context.Context, source entity.PackageSource, result entity.CommandResult, event entity.OutboxEvent) error {
+	r.createSourceWithResultCalls++
+	r.createdSource = source
+	r.createdResult = result
+	r.createdEvent = event
+	return nil
 }
 
 func (r *fakeRepository) GetPackageSource(context.Context, uuid.UUID) (entity.PackageSource, error) {
@@ -199,6 +310,14 @@ func (r *fakeRepository) GetPackageSource(context.Context, uuid.UUID) (entity.Pa
 
 func (r *fakeRepository) ListPackageSources(context.Context, query.PackageSourceFilter) ([]entity.PackageSource, value.PageResult, error) {
 	panic("not implemented")
+}
+
+func (r *fakeRepository) UpdatePackageSourceWithResult(_ context.Context, source entity.PackageSource, _ int64, result entity.CommandResult, event entity.OutboxEvent) error {
+	r.updateSourceWithResultCalls++
+	r.updatedSource = source
+	r.updatedResult = result
+	r.updatedEvent = event
+	return nil
 }
 
 func (r *fakeRepository) CreatePackage(context.Context, entity.PackageEntry) error {
@@ -326,4 +445,8 @@ func commandMeta() value.CommandMeta {
 		ExpectedVersion: &revision,
 		Actor:           value.Actor{Type: "user", ID: "owner"},
 	}
+}
+
+func ptr[T any](value T) *T {
+	return &value
 }

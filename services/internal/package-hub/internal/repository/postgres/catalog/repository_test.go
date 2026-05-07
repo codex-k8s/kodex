@@ -134,6 +134,40 @@ func TestRepositoryIntegrationCatalogStorage(t *testing.T) {
 	if len(sources) != 1 || page.NextPageToken != "" {
 		t.Fatalf("sources = %d token %q, want one source and no next token", len(sources), page.NextPageToken)
 	}
+	sourceCommandID := uuid.New()
+	sourceWithResult := testPackageSource(organizationID, "store-command", now.Add(time.Minute))
+	createSourceResult := testCommandResult(sourceCommandID, "package.source.connect", enum.CommandAggregateTypePackageSource, sourceWithResult.ID, "", now.Add(time.Minute))
+	createSourceEvent := testSourceOutboxEvent(sourceWithResult.ID, "package.source.connected", now.Add(time.Minute))
+	if err := repository.CreatePackageSourceWithResult(ctx, sourceWithResult, createSourceResult, createSourceEvent); err != nil {
+		t.Fatalf("create source with result: %v", err)
+	}
+	storedSourceCommand, err := repository.GetCommandResult(ctx, query.CommandIdentity{CommandID: &sourceCommandID})
+	if err != nil {
+		t.Fatalf("get source command result: %v", err)
+	}
+	if storedSourceCommand.AggregateType != enum.CommandAggregateTypePackageSource || storedSourceCommand.AggregateID != sourceWithResult.ID {
+		t.Fatalf("source command result = %+v, want package source aggregate", storedSourceCommand)
+	}
+	updatedSource := sourceWithResult
+	updatedSource.DisplayName = "Обновлённый магазин"
+	updatedSource.Status = enum.PackageSourceStatusBlocked
+	updatedSource.Version = 2
+	updatedSource.UpdatedAt = now.Add(2 * time.Minute)
+	updateSourceResult := testCommandResult(uuid.New(), "package.source.update", enum.CommandAggregateTypePackageSource, updatedSource.ID, "", updatedSource.UpdatedAt)
+	updateSourceEvent := testSourceOutboxEvent(updatedSource.ID, "package.source.updated", updatedSource.UpdatedAt)
+	if err := repository.UpdatePackageSourceWithResult(ctx, updatedSource, 99, updateSourceResult, updateSourceEvent); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("stale source update err = %v, want %v", err, errs.ErrConflict)
+	}
+	if err := repository.UpdatePackageSourceWithResult(ctx, updatedSource, 1, updateSourceResult, updateSourceEvent); err != nil {
+		t.Fatalf("update source with result: %v", err)
+	}
+	storedUpdatedSource, err := repository.GetPackageSource(ctx, updatedSource.ID)
+	if err != nil {
+		t.Fatalf("get updated source: %v", err)
+	}
+	if storedUpdatedSource.DisplayName != updatedSource.DisplayName || storedUpdatedSource.Status != updatedSource.Status || storedUpdatedSource.Version != 2 {
+		t.Fatalf("updated source = %+v, want blocked v2", storedUpdatedSource)
+	}
 
 	packageA := testPackage(source.ID, "telegram-approver", enum.PackageKindPlugin, now)
 	packageB := testPackage(source.ID, "go-guidelines", enum.PackageKindGuidance, now)
@@ -593,6 +627,18 @@ func testOutboxEvent(packageVersionID uuid.UUID, eventType string, now time.Time
 		EventType:     eventType,
 		SchemaVersion: 1,
 		Payload:       []byte(`{"package_version_id":"` + packageVersionID.String() + `"}`),
+		OccurredAt:    now,
+	}}
+}
+
+func testSourceOutboxEvent(sourceID uuid.UUID, eventType string, now time.Time) entity.OutboxEvent {
+	return entity.OutboxEvent{Event: outboxlib.Event{
+		ID:            uuid.New(),
+		AggregateType: "package_source",
+		AggregateID:   sourceID,
+		EventType:     eventType,
+		SchemaVersion: 1,
+		Payload:       []byte(`{"source_id":"` + sourceID.String() + `"}`),
 		OccurredAt:    now,
 	}}
 }

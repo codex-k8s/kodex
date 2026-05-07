@@ -22,6 +22,7 @@ var (
 	queryPackageSourceCreate         = mustLoadQuery("package_source__create")
 	queryPackageSourceGetByID        = mustLoadQuery("package_source__get_by_id")
 	queryPackageSourceList           = mustLoadQuery("package_source__list")
+	queryPackageSourceUpdate         = mustLoadQuery("package_source__update")
 	queryPackageSecretSchemaCreate   = mustLoadQuery("package_secret_schema__create")
 	queryPackageSecretSchemaLatest   = mustLoadQuery("package_secret_schema__get_latest")
 	queryPackageVerificationCreate   = mustLoadQuery("package_verification__create")

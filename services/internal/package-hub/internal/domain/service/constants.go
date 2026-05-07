@@ -6,10 +6,20 @@ import (
 )
 
 const (
+	packageEventSourceConnected     = packageevents.EventSourceConnected
+	packageEventSourceDisabled      = packageevents.EventSourceDisabled
+	packageEventSourceUpdated       = packageevents.EventSourceUpdated
 	packageEventVerificationUpdated = packageevents.EventVerificationUpdated
+	packageAggregateSource          = packageevents.AggregatePackageSource
 	packageAggregateVersion         = packageevents.AggregatePackageVersion
+	packageOperationSourceConnect   = "domain.Service.ConnectPackageSource"
+	packageOperationSourceDisable   = "domain.Service.DisablePackageSource"
+	packageOperationSourceUpdate    = "domain.Service.UpdatePackageSource"
 	packageOperationVerify          = "domain.Service.SetPackageVerification"
+	packageActionSourceConnect      = accesscatalog.ActionPackageSourceConnect
+	packageActionSourceDisable      = accesscatalog.ActionPackageSourceDisable
 	packageActionSourceRead         = accesscatalog.ActionPackageSourceRead
+	packageActionSourceUpdate       = accesscatalog.ActionPackageSourceUpdate
 	packageActionCatalogRead        = accesscatalog.ActionPackageCatalogRead
 	packageActionManifestRead       = accesscatalog.ActionPackageManifestRead
 	packageActionVerify             = accesscatalog.ActionPackageVerify
