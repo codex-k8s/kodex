@@ -5,8 +5,8 @@ title: kodex — C4 Container
 status: active
 owner_role: SA
 created_at: 2026-04-26
-updated_at: 2026-05-05
-related_issues: [599, 600, 601, 602]
+updated_at: 2026-05-07
+related_issues: [599, 600, 601, 602, 655]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -64,7 +64,7 @@ System_Boundary(kodex, "kodex") {
   Container(packageHub, "package-hub", "Go", "Пакеты, магазины, установка, версии")
   Container(agent, "agent-manager", "Go + LLM", "Процессы, роли, промпты, агентные запуски, приёмка")
   Container(fleet, "fleet-manager", "Go", "Серверы, кластеры, размещение")
-  Container(runtime, "runtime-manager", "Go", "Слоты, задания, сборка, выкладка, очистка")
+  Container(runtime, "runtime-manager", "Go", "Слоты, workspace, задания, сборка, выкладка, очистка")
   Container(billing, "billing-hub", "Go", "Записи затрат, биллинговые аккаунты, счета")
   Container(interaction, "interaction-hub", "Go", "Диалоги, согласования, уведомления, каналы")
   Container(operations, "operations-hub", "Go", "Проекции чтения, операторские ленты, очереди")
@@ -112,7 +112,7 @@ Rel(agent, providerHub, "Читает состояние провайдера и
 Rel(agent, runtime, "Запрашивает слоты и задания среды исполнения", "gRPC")
 Rel(agent, interaction, "Запрашивает обратную связь, согласования и уведомления", "gRPC")
 Rel(runtime, fleet, "Получает правила размещения и контур кластера", "gRPC")
-Rel(runtime, projects, "Читает политику репозитория и выкладки", "gRPC")
+Rel(runtime, projects, "Читает workspace, placement и release policy", "gRPC")
 Rel(packageHub, providerHub, "Читает репозитории-источники пакетов", "gRPC")
 Rel(billing, runtime, "Потребляет записи использования среды исполнения", "gRPC/events")
 Rel(billing, packageHub, "Потребляет использование пакетов и ценовые данные", "gRPC/events")
@@ -159,7 +159,7 @@ Rel(interaction, obj, "Хранит ссылки на медиа", "S3 API")
 | `package-hub` | Каталог пакетов, установленные и доступные пакеты, источники магазинов, версии, верификация, секреты пакетов. |
 | `agent-manager` | Процессы, этапы, роли, шаблоны промптов, агентные запуски, сессии, правила автоматизации, машина приёмки. |
 | `fleet-manager` | Серверы, Kubernetes-кластеры, здоровье, связность, размещение. |
-| `runtime-manager` | Слоты, платформенные задания, сборка, выкладка, зеркалирование, очистка, статус среды исполнения. |
+| `runtime-manager` | Слоты, workspace materialization, платформенные задания, сборка, выкладка, зеркалирование, очистка, prewarm/reuse и статус среды исполнения. |
 | `billing-hub` | Биллинговые аккаунты, записи затрат, распределение затрат, основа счёта. |
 | `interaction-hub` | Диалоговые ветки, согласования, уведомления, подписки, попытки доставки, обратные вызовы внешних каналов. |
 | `operations-hub` | Модели чтения для пользовательского интерфейса, ленты событий, очереди, блокировки, агрегированные статусы. |

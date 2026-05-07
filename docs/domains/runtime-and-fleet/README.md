@@ -2,20 +2,34 @@
 
 ## Назначение
 
-Домен описывает реестр серверов и Kubernetes-кластеров, политику размещения, режимы выполнения `code-only` и `full-env`, namespace-per-task slot, prewarmed slots, platform jobs для mirror/build/deploy, регламентные cleanup и health-check jobs, очистку и переинициализацию слота, задел на nested cluster, подготовку окружения, миграции, фикстуры и повторное использование runtime.
+Домен описывает два связанных, но разных owner-контура:
+
+- `runtime-manager` владеет слотами, workspace materialization, platform jobs, prewarm, reuse, cleanup, short log tail и техническим статусом среды исполнения;
+- `fleet-manager` владеет серверами, Kubernetes-кластерами, связностью, health и placement scope.
+
+`Run` принадлежит `agent-manager`. Runtime хранит только внешние ссылки на agent run и сессии, если они нужны для диагностики, связи с job или операторских проекций.
 
 ## Что входит
 
-- реестр серверов и Kubernetes-кластеров;
-- политика размещения;
-- режимы выполнения `code-only` и `full-env`;
-- namespace-per-task slot;
-- prewarmed slots;
-- platform jobs для mirror/build/deploy;
-- регламентные cleanup и health-check jobs;
-- очистка и переинициализация слота;
-- задел на nested cluster;
-- подготовка окружения, миграции, фикстуры и повторное использование runtime.
+- режимы выполнения `code-only`, `full-env` и production-контур только для чтения;
+- namespace-per-task slot как первая физическая форма слота;
+- задел на nested cluster и multi-cluster без изменения доменной модели слота;
+- подготовка workspace по политике, которой владеет `project-catalog`;
+- prewarmed slots и безопасное повторное использование по deterministic fingerprint;
+- platform jobs для mirror/build/deploy/cleanup/health-check/housekeeping;
+- короткий хвост лога и ссылки на полный источник логов;
+- cleanup и retention policy для runtime-объектов;
+- явная граница с `fleet-manager`, который выбирает и проверяет инфраструктурный контур.
+
+## Документы
+
+| Документ | Путь |
+|---|---|
+| Требования | `product/requirements.md` |
+| Дизайн | `architecture/design.md` |
+| Модель данных | `architecture/data_model.md` |
+| API-карта | `architecture/api_contract.md` |
+| План поставки | `delivery/runtime_manager_delivery.md` |
 
 ## Карта Issue
 

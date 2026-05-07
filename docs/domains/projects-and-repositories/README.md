@@ -19,8 +19,8 @@
 ## Что не входит
 
 - зеркало `Issue`, `PR/MR`, комментариев, webhook, лимиты и операции провайдера — зона `provider-hub`;
-- роли агентов, процессы, этапы и шаблоны промптов — зона `agent-manager`;
-- checkout рабочего контура, slot, `run`, `job`, build и deploy — зона `runtime-manager`;
+- роли агентов, процессы, этапы, шаблоны промптов и agent `Run` — зона `agent-manager`;
+- checkout рабочего контура, slot, `job`, build и deploy — зона `runtime-manager`;
 - серверы, Kubernetes-кластеры и доступность инфраструктуры — зона `fleet-manager`;
 - Human gate, уведомления и внешняя обратная связь — зона `interaction-hub`;
 - вычисление прав доступа и внешние аккаунты как субъекты политики — зона `access-manager`.
