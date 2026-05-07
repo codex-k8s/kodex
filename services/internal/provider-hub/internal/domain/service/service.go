@@ -157,7 +157,7 @@ func (s *Service) RetryWebhookEventProcessing(ctx context.Context, input RetryWe
 	webhook.ProcessingStatus = normalization.status
 	webhook.LastError = normalization.lastError
 	stored, err := s.repository.ProcessWebhookEvent(ctx, webhook, normalization.providerEvents, normalization.outboxEvents[1:])
-	if errors.Is(err, errs.ErrConflict) || errors.Is(err, errs.ErrNotFound) {
+	if errors.Is(err, errs.ErrNotFound) {
 		return s.currentWebhookAfterConcurrentProcessing(ctx, input.WebhookEventID)
 	}
 	return stored, err
@@ -169,8 +169,7 @@ func (s *Service) currentWebhookAfterConcurrentProcessing(ctx context.Context, w
 		return entity.WebhookEvent{}, err
 	}
 	switch current.ProcessingStatus {
-	case enum.WebhookProcessingStatusPending,
-		enum.WebhookProcessingStatusFailed,
+	case enum.WebhookProcessingStatusFailed,
 		enum.WebhookProcessingStatusProcessed,
 		enum.WebhookProcessingStatusIgnored:
 		return current, nil

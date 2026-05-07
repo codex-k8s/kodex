@@ -233,6 +233,86 @@ func TestRetryWebhookEventProcessingReturnsCurrentStateAfterConcurrentProcessing
 	}
 }
 
+func TestRetryWebhookEventProcessingDoesNotSwallowStorageConflict(t *testing.T) {
+	t.Parallel()
+
+	webhookID := uuid.New()
+	now := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	repository := &fakeRepository{
+		recordedWebhook: entity.WebhookEvent{
+			ID:               webhookID,
+			ProviderSlug:     enum.ProviderSlugGitHub,
+			DeliveryID:       "delivery-1",
+			EventName:        "issues",
+			ReceivedAt:       now,
+			ProcessingStatus: enum.WebhookProcessingStatusPending,
+			PayloadJSON:      []byte(`{"repository":{"id":101},"issue":{"id":55}}`),
+		},
+		processWebhookErr: errs.ErrConflict,
+	}
+	service := NewWithRuntime(
+		repository,
+		fixedClock{now: now},
+		&sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New()}},
+		fakeWebhookNormalizer{facts: value.ProviderWebhookFacts{
+			FactKind:             value.ProviderWebhookFactKindWorkItem,
+			ProviderWorkItemID:   "55",
+			Kind:                 "issue",
+			RepositoryProviderID: "101",
+			OccurredAt:           now,
+		}, ok: true},
+	)
+
+	_, err := service.RetryWebhookEventProcessing(context.Background(), RetryWebhookEventProcessingInput{
+		WebhookEventID: webhookID,
+		Meta:           value.CommandMeta{CommandID: uuid.New()},
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("RetryWebhookEventProcessing() err = %v, want %v", err, errs.ErrConflict)
+	}
+}
+
+func TestRetryWebhookEventProcessingReturnsConflictWhenRereadStaysPending(t *testing.T) {
+	t.Parallel()
+
+	webhookID := uuid.New()
+	now := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	pendingWebhook := entity.WebhookEvent{
+		ID:               webhookID,
+		ProviderSlug:     enum.ProviderSlugGitHub,
+		DeliveryID:       "delivery-1",
+		EventName:        "issues",
+		ReceivedAt:       now,
+		ProcessingStatus: enum.WebhookProcessingStatusPending,
+		PayloadJSON:      []byte(`{"repository":{"id":101},"issue":{"id":55}}`),
+	}
+	repository := &fakeRepository{
+		recordedWebhook:     pendingWebhook,
+		processWebhookErr:   errs.ErrNotFound,
+		webhookAfterProcess: &pendingWebhook,
+	}
+	service := NewWithRuntime(
+		repository,
+		fixedClock{now: now},
+		&sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New()}},
+		fakeWebhookNormalizer{facts: value.ProviderWebhookFacts{
+			FactKind:             value.ProviderWebhookFactKindWorkItem,
+			ProviderWorkItemID:   "55",
+			Kind:                 "issue",
+			RepositoryProviderID: "101",
+			OccurredAt:           now,
+		}, ok: true},
+	)
+
+	_, err := service.RetryWebhookEventProcessing(context.Background(), RetryWebhookEventProcessingInput{
+		WebhookEventID: webhookID,
+		Meta:           value.CommandMeta{CommandID: uuid.New()},
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("RetryWebhookEventProcessing() err = %v, want %v", err, errs.ErrConflict)
+	}
+}
+
 func TestListProviderAccountRuntimeStatesRejectsScopeFiltersUntilResolverExists(t *testing.T) {
 	t.Parallel()
 
