@@ -75,6 +75,33 @@ CREATE INDEX runtime_manager_workspace_materializations_slot_status_idx
 CREATE INDEX runtime_manager_workspace_materializations_fingerprint_idx
     ON runtime_manager_workspace_materializations (fingerprint);
 
+CREATE TABLE runtime_manager_command_results (
+    key text PRIMARY KEY,
+    command_id uuid,
+    idempotency_key text NOT NULL DEFAULT '',
+    operation text NOT NULL,
+    aggregate_type text NOT NULL,
+    aggregate_id uuid NOT NULL,
+    result_payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL,
+    CONSTRAINT runtime_manager_command_results_identity_chk
+        CHECK (command_id IS NOT NULL OR idempotency_key <> ''),
+    CONSTRAINT runtime_manager_command_results_operation_chk CHECK (operation <> ''),
+    CONSTRAINT runtime_manager_command_results_aggregate_type_chk CHECK (aggregate_type <> ''),
+    CONSTRAINT runtime_manager_command_results_payload_chk CHECK (jsonb_typeof(result_payload) = 'object')
+);
+
+CREATE UNIQUE INDEX runtime_manager_command_results_command_id_uidx
+    ON runtime_manager_command_results (command_id)
+    WHERE command_id IS NOT NULL;
+
+CREATE UNIQUE INDEX runtime_manager_command_results_idempotency_uidx
+    ON runtime_manager_command_results (operation, idempotency_key)
+    WHERE idempotency_key <> '';
+
+CREATE INDEX runtime_manager_command_results_aggregate_idx
+    ON runtime_manager_command_results (aggregate_type, aggregate_id, created_at);
+
 CREATE TABLE runtime_manager_jobs (
     id uuid PRIMARY KEY,
     command_id text NOT NULL,
@@ -300,5 +327,6 @@ DROP TABLE IF EXISTS runtime_manager_cleanup_policies;
 DROP TABLE IF EXISTS runtime_manager_artifact_refs;
 DROP TABLE IF EXISTS runtime_manager_job_steps;
 DROP TABLE IF EXISTS runtime_manager_jobs;
+DROP TABLE IF EXISTS runtime_manager_command_results;
 DROP TABLE IF EXISTS runtime_manager_workspace_materializations;
 DROP TABLE IF EXISTS runtime_manager_slots;

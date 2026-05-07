@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
+	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
 	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/enum"
 )
 
@@ -50,6 +51,18 @@ type WorkspaceMaterialization struct {
 	FinishedAt       *time.Time
 	LastErrorCode    string
 	LastErrorMessage string
+}
+
+// CommandResult stores idempotency trail for mutating runtime-manager commands.
+type CommandResult struct {
+	Key            string
+	CommandID      *uuid.UUID
+	IdempotencyKey string
+	Operation      string
+	AggregateType  string
+	AggregateID    uuid.UUID
+	ResultPayload  []byte
+	CreatedAt      time.Time
 }
 
 // Job is a technical platform operation owned by runtime-manager.
@@ -134,16 +147,9 @@ type PrewarmPool struct {
 
 // OutboxEvent stores a domain event until it is published to consumers.
 type OutboxEvent struct {
-	ID                  uuid.UUID
-	AggregateType       string
-	AggregateID         uuid.UUID
-	EventType           string
-	SchemaVersion       int
-	Payload             []byte
+	outboxlib.Event
 	PublishedAt         *time.Time
-	OccurredAt          time.Time
 	NextAttemptAt       time.Time
-	AttemptCount        int
 	LockedUntil         *time.Time
 	FailureKind         string
 	FailedPermanentlyAt *time.Time

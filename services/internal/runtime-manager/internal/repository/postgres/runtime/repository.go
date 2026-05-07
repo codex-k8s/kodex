@@ -80,27 +80,60 @@ func (r *Repository) ClaimOutboxEvents(ctx context.Context, limit int, now time.
 
 // MarkOutboxEventPublished marks a leased outbox event as published.
 func (r *Repository) MarkOutboxEventPublished(ctx context.Context, id uuid.UUID, attemptCount int, publishedAt time.Time) error {
-	ok, err := postgreslib.ExecOutboxPublished(ctx, r.db, queryOutboxEventMarkPublished, id, attemptCount, publishedAt)
-	if ok {
-		return wrapError(operationMarkOutboxEventPublished, err)
-	}
-	return wrapError(operationMarkOutboxEventPublished, errs.ErrInvalidArgument)
+	return r.finishPublishedOutboxEvent(ctx, outboxPublishedMutation{id: id, attempt: attemptCount, at: publishedAt})
 }
 
 // MarkOutboxEventFailed schedules a leased outbox event for retry.
 func (r *Repository) MarkOutboxEventFailed(ctx context.Context, id uuid.UUID, attemptCount int, nextAttemptAt time.Time, lastError string) error {
-	return r.markOutboxFailure(ctx, operationMarkOutboxEventFailed, queryOutboxEventMarkFailed, id, attemptCount, "next_attempt_at", nextAttemptAt, lastError)
+	return r.finishFailedOutboxEvent(ctx, newOutboxFailure(operationMarkOutboxEventFailed, queryOutboxEventMarkFailed, "next_attempt_at", id, attemptCount, nextAttemptAt, lastError))
 }
 
 // MarkOutboxEventPermanentlyFailed moves a leased outbox event to terminal failure.
 func (r *Repository) MarkOutboxEventPermanentlyFailed(ctx context.Context, id uuid.UUID, attemptCount int, failedAt time.Time, lastError string) error {
-	return r.markOutboxFailure(ctx, operationMarkOutboxEventPermanentlyFailed, queryOutboxEventMarkPermanentlyFailed, id, attemptCount, "failed_permanently_at", failedAt, lastError)
+	return r.finishFailedOutboxEvent(ctx, newOutboxFailure(operationMarkOutboxEventPermanentlyFailed, queryOutboxEventMarkPermanentlyFailed, "failed_permanently_at", id, attemptCount, failedAt, lastError))
 }
 
-func (r *Repository) markOutboxFailure(ctx context.Context, operation string, queryText string, id uuid.UUID, attempts int, timestampColumn string, timestamp time.Time, message string) error {
-	ok, err := postgreslib.ExecOutboxDeliveryFailure(ctx, r.db, queryText, id, attempts, timestampColumn, timestamp, message)
-	if ok {
-		return wrapError(operation, err)
+type outboxPublishedMutation struct {
+	id      uuid.UUID
+	attempt int
+	at      time.Time
+}
+
+func (r *Repository) finishPublishedOutboxEvent(ctx context.Context, mutation outboxPublishedMutation) error {
+	matched, err := postgreslib.ExecOutboxPublished(ctx, r.db, queryOutboxEventMarkPublished, mutation.id, mutation.attempt, mutation.at)
+	return r.wrapOutboxMutation(operationMarkOutboxEventPublished, matched, err)
+}
+
+type outboxFailureMutation struct {
+	operation      string
+	query          string
+	id             uuid.UUID
+	attempt        int
+	timestampField string
+	at             time.Time
+	message        string
+}
+
+func newOutboxFailure(operation string, query string, timestampField string, id uuid.UUID, attempt int, at time.Time, message string) outboxFailureMutation {
+	return outboxFailureMutation{
+		operation:      operation,
+		query:          query,
+		id:             id,
+		attempt:        attempt,
+		timestampField: timestampField,
+		at:             at,
+		message:        message,
 	}
-	return wrapError(operation, errs.ErrInvalidArgument)
+}
+
+func (r *Repository) finishFailedOutboxEvent(ctx context.Context, mutation outboxFailureMutation) error {
+	matched, err := postgreslib.ExecOutboxDeliveryFailure(ctx, r.db, mutation.query, mutation.id, mutation.attempt, mutation.timestampField, mutation.at, mutation.message)
+	return r.wrapOutboxMutation(mutation.operation, matched, err)
+}
+
+func (r *Repository) wrapOutboxMutation(operation string, matched bool, err error) error {
+	if !matched {
+		err = errs.ErrInvalidArgument
+	}
+	return wrapError(operation, err)
 }

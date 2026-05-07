@@ -1,8 +1,6 @@
 # Известные повторы временно приняты, пока общий сервисный runtime ещё выносится в libs/go.
 # Новые блоки нельзя добавлять сюда без отдельной задачи или явного решения на ревью.
 # Service-local outbox entity conversion остаётся в baseline, пока доменные entity пакеты не сведены к общему event field contract.
-# RTM-2 временно повторяет принятый сервисный bootstrap; перед добавлением нового owner-сервиса
-# оставшийся process/runtime шаблон нужно вынести в общий код или пересмотреть baseline отдельным срезом.
 services/internal/access-manager/internal/app/config.go:205-215: duplicate of services/internal/project-catalog/internal/app/config.go:206-216
 services/internal/project-catalog/internal/app/config.go:206-216: duplicate of services/internal/access-manager/internal/app/config.go:205-215
 services/internal/access-manager/internal/app/app.go:141-150: duplicate of services/internal/project-catalog/internal/app/app.go:162-171
@@ -44,33 +42,3 @@ services/internal/project-catalog/internal/transport/grpc/casters/requests.go:64
 services/internal/project-catalog/internal/transport/grpc/casters/requests.go:654-660: duplicate of services/internal/project-catalog/internal/transport/grpc/casters/requests.go:646-652
 services/internal/access-manager/internal/transport/grpc/interceptors.go:18-29: duplicate of services/internal/project-catalog/internal/transport/grpc/interceptors.go:18-29
 services/internal/project-catalog/internal/transport/grpc/interceptors.go:18-29: duplicate of services/internal/access-manager/internal/transport/grpc/interceptors.go:18-29
-services/internal/project-catalog/internal/app/app.go:92-117: duplicate of services/internal/runtime-manager/internal/app/app.go:78-103
-services/internal/runtime-manager/internal/app/app.go:78-103: duplicate of services/internal/access-manager/internal/app/app.go:94-119
-services/internal/project-catalog/internal/app/app.go:162-171: duplicate of services/internal/runtime-manager/internal/app/app.go:152-161
-services/internal/runtime-manager/internal/app/app.go:152-161: duplicate of services/internal/access-manager/internal/app/app.go:141-150
-services/internal/project-catalog/internal/repository/postgres/project/repository.go:416-422: duplicate of services/internal/runtime-manager/internal/repository/postgres/runtime/repository.go:100-106
-services/internal/runtime-manager/internal/repository/postgres/runtime/repository.go:100-106: duplicate of services/internal/project-catalog/internal/repository/postgres/project/repository.go:416-422
-services/internal/package-hub/internal/repository/postgres/catalog/errors.go:1-18: duplicate of services/internal/provider-hub/internal/repository/postgres/provider/errors.go:1-18
-services/internal/provider-hub/internal/repository/postgres/provider/errors.go:1-18: duplicate of services/internal/package-hub/internal/repository/postgres/catalog/errors.go:1-18
-services/internal/project-catalog/internal/app/app.go:129-153: duplicate of services/internal/runtime-manager/internal/app/app.go:115-139
-services/internal/runtime-manager/internal/app/app.go:115-139: duplicate of services/internal/project-catalog/internal/app/app.go:129-153
-services/internal/access-manager/internal/app/config.go:16-56: duplicate of services/internal/runtime-manager/internal/app/config.go:16-56
-services/internal/runtime-manager/internal/app/config.go:16-56: duplicate of services/internal/access-manager/internal/app/config.go:16-56
-services/internal/project-catalog/internal/transport/grpc/interceptors.go:1-79: duplicate of services/internal/runtime-manager/internal/transport/grpc/interceptors.go:1-79
-services/internal/runtime-manager/internal/transport/grpc/interceptors.go:1-79: duplicate of services/internal/project-catalog/internal/transport/grpc/interceptors.go:1-79
-services/internal/project-catalog/internal/app/config.go:173-187: duplicate of services/internal/runtime-manager/internal/app/config.go:196-210
-services/internal/runtime-manager/internal/app/config.go:196-210: duplicate of services/internal/access-manager/internal/app/config.go:172-186
-services/internal/project-catalog/internal/transport/grpc/interceptors.go:62-72: duplicate of services/internal/runtime-manager/internal/transport/grpc/interceptors.go:62-72
-services/internal/runtime-manager/internal/transport/grpc/interceptors.go:62-72: duplicate of services/internal/access-manager/internal/transport/grpc/interceptors.go:62-72
-services/internal/project-catalog/internal/app/app.go:201-227: duplicate of services/internal/runtime-manager/internal/app/app.go:170-196
-services/internal/runtime-manager/internal/app/app.go:170-196: duplicate of services/internal/project-catalog/internal/app/app.go:201-227
-services/internal/project-catalog/internal/app/outbox.go:1-21: duplicate of services/internal/runtime-manager/internal/app/outbox.go:1-21
-services/internal/runtime-manager/internal/app/outbox.go:1-21: duplicate of services/internal/access-manager/internal/app/outbox.go:1-21
-services/internal/package-hub/internal/app/config.go:47-63: duplicate of services/internal/runtime-manager/internal/app/config.go:85-101
-services/internal/runtime-manager/internal/app/config.go:85-101: duplicate of services/internal/package-hub/internal/app/config.go:47-63
-services/internal/project-catalog/internal/domain/types/entity/entities.go:201-216: duplicate of services/internal/runtime-manager/internal/domain/types/entity/entities.go:136-151
-services/internal/runtime-manager/internal/domain/types/entity/entities.go:136-151: duplicate of services/internal/project-catalog/internal/domain/types/entity/entities.go:201-216
-services/internal/project-catalog/internal/domain/errs/errors.go:2-21: duplicate of services/internal/runtime-manager/internal/domain/errs/errors.go:2-21
-services/internal/runtime-manager/internal/domain/errs/errors.go:2-21: duplicate of services/internal/project-catalog/internal/domain/errs/errors.go:2-21
-services/internal/project-catalog/internal/transport/grpc/interceptors.go:18-29: duplicate of services/internal/runtime-manager/internal/transport/grpc/interceptors.go:18-29
-services/internal/runtime-manager/internal/transport/grpc/interceptors.go:18-29: duplicate of services/internal/access-manager/internal/transport/grpc/interceptors.go:18-29

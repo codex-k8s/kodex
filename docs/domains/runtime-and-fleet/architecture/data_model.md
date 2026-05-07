@@ -65,8 +65,8 @@ approvals:
 | `lease_until` | timestamptz | yes | indexed | Истечение аренды. |
 | `last_error_code` | text | no | default '' | Классификация последней ошибки. |
 | `last_error_message` | text | no | default '' | Короткое сообщение без секрета. |
-| `created_at` | timestamptz | no | indexed | Создание. |
-| `updated_at` | timestamptz | no | indexed | Последнее изменение. |
+| `created_at` | timestamptz | no | indexed | Внутреннее persistence-поле; в текущий read contract не входит. |
+| `updated_at` | timestamptz | no | indexed | Внутреннее persistence-поле; в текущий read contract не входит. |
 | `version` | bigint | no | monotonic | Оптимистичная конкуренция. |
 
 ### `WorkspaceMaterialization`
@@ -92,7 +92,7 @@ approvals:
 | `last_error_code` | text | no | default '' | Классификация ошибки. |
 | `last_error_message` | text | no | default '' | Короткое сообщение без секрета. |
 | `created_at` | timestamptz | no | indexed | Создание. |
-| `updated_at` | timestamptz | no | indexed | Последнее изменение. |
+| `updated_at` | timestamptz | no | indexed | Внутреннее persistence-поле; в текущий read contract не входит. |
 | `version` | bigint | no | monotonic | Версия попытки. |
 
 ### `Job`
@@ -103,6 +103,7 @@ approvals:
 
 - `Job` не является agent `Run`;
 - job может быть связан со слотом, проектом, release line, пакетом или maintenance policy;
+- идемпотентный след mutating-команд хранится отдельно в `RuntimeManagerCommandResult`;
 - захват задания является короткой арендой с токеном, чтобы поздний исполнитель не мог перезаписать новую попытку;
 - долгие операции не держат SQL-блокировки.
 
@@ -138,6 +139,28 @@ approvals:
 | `updated_at` | timestamptz | no | indexed | Последнее изменение. |
 | `version` | bigint | no | monotonic | Оптимистичная конкуренция. |
 
+### `RuntimeManagerCommandResult`
+
+Назначение: persistent trail идемпотентных mutating-команд.
+
+Инварианты:
+
+- применяется ко всем mutating RPC, которые принимают `CommandMeta`;
+- `command_id` глобально уникален для повторяемой команды;
+- `idempotency_key` уникален в рамках операции;
+- `result_payload` хранит ограниченный результат без секретов, достаточный для безопасного повтора.
+
+| Поле | Тип | Nullable | Ограничения | Примечание |
+|---|---|---:|---|---|
+| `key` | text | no | primary key | Стабильный ключ результата команды. |
+| `command_id` | UUID | yes | unique when present | Идентификатор команды. |
+| `idempotency_key` | text | no | unique with operation when non-empty | Ключ идемпотентности для клиентов без UUID-команды. |
+| `operation` | text | no | indexed | Имя mutating RPC или внутренней команды. |
+| `aggregate_type` | text | no | indexed | Тип агрегата результата: `slot`, `workspace_materialization`, `job`, `cleanup_policy`, `prewarm_pool`. |
+| `aggregate_id` | UUID | no | indexed | Идентификатор агрегата результата. |
+| `result_payload` | jsonb | no | default {} | Ограниченный payload результата без секретов. |
+| `created_at` | timestamptz | no | indexed | Время фиксации результата. |
+
 ### `JobStep`
 
 Назначение: этап выполнения platform job.
@@ -154,8 +177,8 @@ approvals:
 | `external_ref` | text | no | default '' | Kubernetes Job/Pod или внешний ref. |
 | `error_code` | text | no | default '' | Классификация ошибки. |
 | `error_message` | text | no | default '' | Короткое сообщение. |
-| `created_at` | timestamptz | no | indexed | Создание. |
-| `updated_at` | timestamptz | no | indexed | Последнее изменение. |
+| `created_at` | timestamptz | no | indexed | Внутреннее persistence-поле; в текущий read contract не входит. |
+| `updated_at` | timestamptz | no | indexed | Внутреннее persistence-поле; в текущий read contract не входит. |
 | `version` | bigint | no | monotonic | Версия шага. |
 
 ### `RuntimeArtifactRef`
@@ -229,6 +252,9 @@ approvals:
 - `Slot(agent_run_id)`;
 - `WorkspaceMaterialization(slot_id, status)`;
 - `WorkspaceMaterialization(fingerprint)`;
+- `RuntimeManagerCommandResult(command_id)`;
+- `RuntimeManagerCommandResult(operation, idempotency_key)`;
+- `RuntimeManagerCommandResult(aggregate_type, aggregate_id, created_at)`;
 - `Job(status, lease_until, priority, created_at)`;
 - `Job(slot_id, status)`;
 - `Job(project_id, status)`;
