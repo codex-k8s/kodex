@@ -52,15 +52,15 @@ approvals:
 
 ## Таблица реализации
 
-Контракты будут зафиксированы в `proto/kodex/runtime/v1/runtime_manager.proto` и `specs/asyncapi/runtime-manager.v1.yaml` в RTM-1.
+Контракты зафиксированы в `proto/kodex/runtime/v1/runtime_manager.proto` и `specs/asyncapi/runtime-manager.v1.yaml`; Go-артефакты генерируются в `proto/gen/go/kodex/runtime/v1/**` и `libs/go/platformevents/runtime/events.gen.go`.
 
 | Группа | Контракт | Реализация |
 |---|---|---|
-| Слоты | Запланирован в RTM-1. | Не начата; будет в RTM-3 после каркаса и БД. |
-| Workspace materialization | Запланирован в RTM-1. | Не начата; будет в RTM-4. |
-| Platform jobs | Запланирован в RTM-1. | Не начата; будет в RTM-5. |
-| Runtime artifact refs | Запланирован в RTM-1. | Не начата; базовый слой будет в RTM-5. |
-| Cleanup/prewarm/reuse | Запланирован в RTM-1. | Не начата; будет в RTM-7. |
+| Слоты | Готов: `PrepareRuntime`, `ReserveSlot`, `ExtendSlotLease`, `ReleaseSlot`, `MarkSlotFailed`, `GetSlot`, `ListSlots`, события `runtime.slot.*`. | Не начата; будет в RTM-3 после каркаса и БД. |
+| Workspace materialization | Готов: старт, отчёт прогресса, чтения и события `runtime.workspace.*`. | Не начата; будет в RTM-4. |
+| Platform jobs | Готов: создание, claim с `lease_token`, progress, complete/fail/cancel, чтения и события `runtime.job.*`. | Не начата; будет в RTM-5. |
+| Runtime artifact refs | Готов: запись и чтение ссылок на внешние runtime-артефакты. | Не начата; базовый слой будет в RTM-5. |
+| Cleanup/prewarm/reuse | Готов: cleanup policy, cleanup batch, prewarm pool и события cleanup/prewarm. | Не начата; будет в RTM-7. |
 | Deploy/manifests | Не gRPC-группа. | Не начата; будет в RTM-6. |
 
 ## Синхронизация с параллельными доменами

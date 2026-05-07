@@ -1,0 +1,329 @@
+asyncapi: 3.0.0
+info:
+  title: kodex runtime-manager events
+  version: 1.0.0
+  description: Stable v1 lifecycle event contract published by runtime-manager through the platform outbox.
+x-kodex-contract-status: stable-v1
+channels:
+  runtimeEvents:
+    address: runtime.events
+    messages:
+      runtimeEvent:
+        $ref: '#/components/messages/RuntimeEvent'
+operations:
+  publishRuntimeEvent:
+    action: send
+    channel:
+      $ref: '#/channels/runtimeEvents'
+    messages:
+      - $ref: '#/channels/runtimeEvents/messages/runtimeEvent'
+components:
+  messages:
+    RuntimeEvent:
+      name: RuntimeEvent
+      title: Runtime domain event envelope
+      payload:
+        $ref: '#/components/schemas/RuntimeEventEnvelope'
+  schemas:
+    RuntimeEventEnvelope:
+      oneOf:
+        - $ref: '#/components/schemas/SlotReservedEvent'
+        - $ref: '#/components/schemas/SlotLeaseExtendedEvent'
+        - $ref: '#/components/schemas/SlotReleasedEvent'
+        - $ref: '#/components/schemas/SlotFailedEvent'
+        - $ref: '#/components/schemas/SlotCleanupRequestedEvent'
+        - $ref: '#/components/schemas/SlotCleanedEvent'
+        - $ref: '#/components/schemas/WorkspaceMaterializationStartedEvent'
+        - $ref: '#/components/schemas/WorkspaceMaterializationCompletedEvent'
+        - $ref: '#/components/schemas/WorkspaceMaterializationFailedEvent'
+        - $ref: '#/components/schemas/JobCreatedEvent'
+        - $ref: '#/components/schemas/JobStartedEvent'
+        - $ref: '#/components/schemas/JobStepUpdatedEvent'
+        - $ref: '#/components/schemas/JobCompletedEvent'
+        - $ref: '#/components/schemas/JobFailedEvent'
+        - $ref: '#/components/schemas/JobCancelledEvent'
+        - $ref: '#/components/schemas/CleanupFailedEvent'
+        - $ref: '#/components/schemas/PrewarmCapacityChangedEvent'
+    RuntimeEventEnvelopeBase:
+      type: object
+      additionalProperties: false
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_type:
+          $ref: '#/components/schemas/RuntimeEventType'
+        schema_version:
+          type: integer
+          minimum: 1
+        aggregate_type:
+          type: string
+        aggregate_id:
+          type: string
+          format: uuid
+        occurred_at:
+          type: string
+          format: date-time
+        payload:
+          $ref: '#/components/schemas/RuntimeEventPayload'
+      required: [event_id, event_type, schema_version, aggregate_type, aggregate_id, occurred_at, payload]
+
+    SlotReservedEvent:
+      allOf:
+        - $ref: '#/components/schemas/RuntimeEventEnvelopeBase'
+        - $ref: '#/components/schemas/SlotReservedEventKind'
+    SlotReservedEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: runtime.slot.reserved}
+        aggregate_type: {type: string, const: slot}
+        payload: {$ref: '#/components/schemas/SlotReservedPayload'}
+      required: [event_type, aggregate_type, payload]
+    SlotLeaseExtendedEvent:
+      allOf:
+        - $ref: '#/components/schemas/RuntimeEventEnvelopeBase'
+        - $ref: '#/components/schemas/SlotLeaseExtendedEventKind'
+    SlotLeaseExtendedEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: runtime.slot.lease_extended}
+        aggregate_type: {type: string, const: slot}
+        payload: {$ref: '#/components/schemas/SlotLeaseExtendedPayload'}
+      required: [event_type, aggregate_type, payload]
+    SlotReleasedEvent:
+      allOf:
+        - $ref: '#/components/schemas/RuntimeEventEnvelopeBase'
+        - $ref: '#/components/schemas/SlotReleasedEventKind'
+    SlotReleasedEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: runtime.slot.released}
+        aggregate_type: {type: string, const: slot}
+        payload: {$ref: '#/components/schemas/SlotReleasedPayload'}
+      required: [event_type, aggregate_type, payload]
+    SlotFailedEvent:
+      allOf:
+        - $ref: '#/components/schemas/RuntimeEventEnvelopeBase'
+        - $ref: '#/components/schemas/SlotFailedEventKind'
+    SlotFailedEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: runtime.slot.failed}
+        aggregate_type: {type: string, const: slot}
+        payload: {$ref: '#/components/schemas/SlotFailedPayload'}
+      required: [event_type, aggregate_type, payload]
+    SlotCleanupRequestedEvent:
+      allOf:
+        - $ref: '#/components/schemas/RuntimeEventEnvelopeBase'
+        - $ref: '#/components/schemas/SlotCleanupRequestedEventKind'
+    SlotCleanupRequestedEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: runtime.slot.cleanup_requested}
+        aggregate_type: {type: string, const: slot}
+        payload: {$ref: '#/components/schemas/SlotCleanupRequestedPayload'}
+      required: [event_type, aggregate_type, payload]
+    SlotCleanedEvent:
+      allOf:
+        - $ref: '#/components/schemas/RuntimeEventEnvelopeBase'
+        - $ref: '#/components/schemas/SlotCleanedEventKind'
+    SlotCleanedEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: runtime.slot.cleaned}
+        aggregate_type: {type: string, const: slot}
+        payload: {$ref: '#/components/schemas/SlotCleanedPayload'}
+      required: [event_type, aggregate_type, payload]
+
+    WorkspaceMaterializationStartedEvent:
+      allOf:
+        - $ref: '#/components/schemas/RuntimeEventEnvelopeBase'
+        - $ref: '#/components/schemas/WorkspaceMaterializationStartedEventKind'
+    WorkspaceMaterializationStartedEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: runtime.workspace.materialization_started}
+        aggregate_type: {type: string, const: workspace_materialization}
+        payload: {$ref: '#/components/schemas/WorkspaceMaterializationStartedPayload'}
+      required: [event_type, aggregate_type, payload]
+    WorkspaceMaterializationCompletedEvent:
+      allOf:
+        - $ref: '#/components/schemas/RuntimeEventEnvelopeBase'
+        - $ref: '#/components/schemas/WorkspaceMaterializationCompletedEventKind'
+    WorkspaceMaterializationCompletedEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: runtime.workspace.materialization_completed}
+        aggregate_type: {type: string, const: workspace_materialization}
+        payload: {$ref: '#/components/schemas/WorkspaceMaterializationCompletedPayload'}
+      required: [event_type, aggregate_type, payload]
+    WorkspaceMaterializationFailedEvent:
+      allOf:
+        - $ref: '#/components/schemas/RuntimeEventEnvelopeBase'
+        - $ref: '#/components/schemas/WorkspaceMaterializationFailedEventKind'
+    WorkspaceMaterializationFailedEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: runtime.workspace.materialization_failed}
+        aggregate_type: {type: string, const: workspace_materialization}
+        payload: {$ref: '#/components/schemas/WorkspaceMaterializationFailedPayload'}
+      required: [event_type, aggregate_type, payload]
+
+    JobCreatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/RuntimeEventEnvelopeBase'
+        - $ref: '#/components/schemas/JobCreatedEventKind'
+    JobCreatedEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: runtime.job.created}
+        aggregate_type: {type: string, const: job}
+        payload: {$ref: '#/components/schemas/JobCreatedPayload'}
+      required: [event_type, aggregate_type, payload]
+    JobStartedEvent:
+      allOf:
+        - $ref: '#/components/schemas/RuntimeEventEnvelopeBase'
+        - $ref: '#/components/schemas/JobStartedEventKind'
+    JobStartedEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: runtime.job.started}
+        aggregate_type: {type: string, const: job}
+        payload: {$ref: '#/components/schemas/JobStartedPayload'}
+      required: [event_type, aggregate_type, payload]
+    JobStepUpdatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/RuntimeEventEnvelopeBase'
+        - $ref: '#/components/schemas/JobStepUpdatedEventKind'
+    JobStepUpdatedEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: runtime.job.step_updated}
+        aggregate_type: {type: string, const: job}
+        payload: {$ref: '#/components/schemas/JobStepUpdatedPayload'}
+      required: [event_type, aggregate_type, payload]
+    JobCompletedEvent:
+      allOf:
+        - $ref: '#/components/schemas/RuntimeEventEnvelopeBase'
+        - $ref: '#/components/schemas/JobCompletedEventKind'
+    JobCompletedEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: runtime.job.completed}
+        aggregate_type: {type: string, const: job}
+        payload: {$ref: '#/components/schemas/JobCompletedPayload'}
+      required: [event_type, aggregate_type, payload]
+    JobFailedEvent:
+      allOf:
+        - $ref: '#/components/schemas/RuntimeEventEnvelopeBase'
+        - $ref: '#/components/schemas/JobFailedEventKind'
+    JobFailedEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: runtime.job.failed}
+        aggregate_type: {type: string, const: job}
+        payload: {$ref: '#/components/schemas/JobFailedPayload'}
+      required: [event_type, aggregate_type, payload]
+    JobCancelledEvent:
+      allOf:
+        - $ref: '#/components/schemas/RuntimeEventEnvelopeBase'
+        - $ref: '#/components/schemas/JobCancelledEventKind'
+    JobCancelledEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: runtime.job.cancelled}
+        aggregate_type: {type: string, const: job}
+        payload: {$ref: '#/components/schemas/JobCancelledPayload'}
+      required: [event_type, aggregate_type, payload]
+
+    CleanupFailedEvent:
+      allOf:
+        - $ref: '#/components/schemas/RuntimeEventEnvelopeBase'
+        - $ref: '#/components/schemas/CleanupFailedEventKind'
+    CleanupFailedEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: runtime.cleanup.failed}
+        aggregate_type: {type: string, const: cleanup}
+        payload: {$ref: '#/components/schemas/CleanupFailedPayload'}
+      required: [event_type, aggregate_type, payload]
+    PrewarmCapacityChangedEvent:
+      allOf:
+        - $ref: '#/components/schemas/RuntimeEventEnvelopeBase'
+        - $ref: '#/components/schemas/PrewarmCapacityChangedEventKind'
+    PrewarmCapacityChangedEventKind:
+      type: object
+      properties:
+        event_type: {type: string, const: runtime.prewarm.capacity_changed}
+        aggregate_type: {type: string, const: prewarm_pool}
+        payload: {$ref: '#/components/schemas/PrewarmCapacityChangedPayload'}
+      required: [event_type, aggregate_type, payload]
+
+    RuntimeEventType:
+      type: string
+      enum:
+        - runtime.slot.reserved
+        - runtime.slot.lease_extended
+        - runtime.slot.released
+        - runtime.slot.failed
+        - runtime.slot.cleanup_requested
+        - runtime.slot.cleaned
+        - runtime.workspace.materialization_started
+        - runtime.workspace.materialization_completed
+        - runtime.workspace.materialization_failed
+        - runtime.job.created
+        - runtime.job.started
+        - runtime.job.step_updated
+        - runtime.job.completed
+        - runtime.job.failed
+        - runtime.job.cancelled
+        - runtime.cleanup.failed
+        - runtime.prewarm.capacity_changed
+    RuntimeEventPayload:
+      type: object
+      additionalProperties: false
+      properties:
+        slot_id: {type: string, format: uuid}
+        slot_key: {type: string}
+        job_id: {type: string, format: uuid}
+        job_type: {type: string}
+        job_step_id: {type: string, format: uuid}
+        step_key: {type: string}
+        workspace_materialization_id: {type: string, format: uuid}
+        project_id: {type: string, format: uuid}
+        repository_id: {type: string, format: uuid}
+        agent_run_id: {type: string, format: uuid}
+        runtime_profile: {type: string}
+        fleet_scope_id: {type: string, format: uuid}
+        cluster_id: {type: string, format: uuid}
+        namespace_name: {type: string}
+        status: {type: string}
+        previous_status: {type: string}
+        lease_until: {type: string, format: date-time}
+        cleanup_policy_id: {type: string, format: uuid}
+        prewarm_pool_id: {type: string, format: uuid}
+        target_size: {type: integer}
+        capacity_status: {type: string}
+        error_code: {type: string}
+        error_message: {type: string}
+        fingerprint: {type: string}
+        full_log_ref: {type: string}
+        version: {type: integer}
+
+    SlotReservedPayload: {$ref: '#/components/schemas/RuntimeEventPayload'}
+    SlotLeaseExtendedPayload: {$ref: '#/components/schemas/RuntimeEventPayload'}
+    SlotReleasedPayload: {$ref: '#/components/schemas/RuntimeEventPayload'}
+    SlotFailedPayload: {$ref: '#/components/schemas/RuntimeEventPayload'}
+    SlotCleanupRequestedPayload: {$ref: '#/components/schemas/RuntimeEventPayload'}
+    SlotCleanedPayload: {$ref: '#/components/schemas/RuntimeEventPayload'}
+    WorkspaceMaterializationStartedPayload: {$ref: '#/components/schemas/RuntimeEventPayload'}
+    WorkspaceMaterializationCompletedPayload: {$ref: '#/components/schemas/RuntimeEventPayload'}
+    WorkspaceMaterializationFailedPayload: {$ref: '#/components/schemas/RuntimeEventPayload'}
+    JobCreatedPayload: {$ref: '#/components/schemas/RuntimeEventPayload'}
+    JobStartedPayload: {$ref: '#/components/schemas/RuntimeEventPayload'}
+    JobStepUpdatedPayload: {$ref: '#/components/schemas/RuntimeEventPayload'}
+    JobCompletedPayload: {$ref: '#/components/schemas/RuntimeEventPayload'}
+    JobFailedPayload: {$ref: '#/components/schemas/RuntimeEventPayload'}
+    JobCancelledPayload: {$ref: '#/components/schemas/RuntimeEventPayload'}
+    CleanupFailedPayload: {$ref: '#/components/schemas/RuntimeEventPayload'}
+    PrewarmCapacityChangedPayload: {$ref: '#/components/schemas/RuntimeEventPayload'}

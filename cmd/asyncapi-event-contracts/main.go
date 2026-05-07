@@ -78,6 +78,14 @@ func main() {
 			PayloadSchema:   "ProviderEventPayload",
 			OutputPath:      "libs/go/platformevents/provider/events.gen.go",
 		},
+		{
+			Domain:          "runtime",
+			PackageName:     "runtimeevents",
+			SpecPath:        "specs/asyncapi/runtime-manager.v1.yaml",
+			EventTypeSchema: "RuntimeEventType",
+			PayloadSchema:   "RuntimeEventPayload",
+			OutputPath:      "libs/go/platformevents/runtime/events.gen.go",
+		},
 	}
 	for _, spec := range specs {
 		if err := generate(spec); err != nil {

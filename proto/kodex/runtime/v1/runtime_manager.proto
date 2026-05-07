@@ -1,0 +1,1007 @@
+syntax = "proto3";
+
+package kodex.runtime.v1;
+
+option go_package = "github.com/codex-k8s/kodex/proto/gen/go/kodex/runtime/v1;runtimev1";
+
+// RuntimeManagerService is the stable v1 inter-service contract for the
+// runtime and fleet boundary. Runtime-manager owns slots, workspace
+// materialization, platform jobs, short diagnostics, cleanup and prewarm state.
+service RuntimeManagerService {
+  // PrepareRuntime resolves placement through fleet-manager, reserves a slot and starts workspace materialization.
+  rpc PrepareRuntime(PrepareRuntimeRequest) returns (PrepareRuntimeResponse);
+  // ReserveSlot reserves or creates a runtime slot.
+  rpc ReserveSlot(ReserveSlotRequest) returns (SlotResponse);
+  // ExtendSlotLease extends active slot lease.
+  rpc ExtendSlotLease(ExtendSlotLeaseRequest) returns (SlotResponse);
+  // ReleaseSlot releases a slot after work finishes.
+  rpc ReleaseSlot(ReleaseSlotRequest) returns (SlotResponse);
+  // MarkSlotFailed marks a slot as failed with a classified error.
+  rpc MarkSlotFailed(MarkSlotFailedRequest) returns (SlotResponse);
+  // GetSlot returns authoritative slot state.
+  rpc GetSlot(GetSlotRequest) returns (SlotResponse);
+  // ListSlots returns slots by project, status, runtime profile or fleet scope.
+  rpc ListSlots(ListSlotsRequest) returns (ListSlotsResponse);
+  // StartWorkspaceMaterialization starts source preparation inside a slot.
+  rpc StartWorkspaceMaterialization(StartWorkspaceMaterializationRequest) returns (WorkspaceMaterializationResponse);
+  // ReportWorkspaceMaterializationProgress updates materialization status, fingerprint and classified error.
+  rpc ReportWorkspaceMaterializationProgress(ReportWorkspaceMaterializationProgressRequest) returns (WorkspaceMaterializationResponse);
+  // GetWorkspaceMaterialization returns one materialization attempt.
+  rpc GetWorkspaceMaterialization(GetWorkspaceMaterializationRequest) returns (WorkspaceMaterializationResponse);
+  // ListWorkspaceMaterializations returns materialization attempts by slot or agent run.
+  rpc ListWorkspaceMaterializations(ListWorkspaceMaterializationsRequest) returns (ListWorkspaceMaterializationsResponse);
+  // CreateJob creates a platform technical job.
+  rpc CreateJob(CreateJobRequest) returns (JobResponse);
+  // ClaimRunnableJob claims a runnable job with a short lease and returns a lease token.
+  rpc ClaimRunnableJob(ClaimRunnableJobRequest) returns (ClaimRunnableJobResponse);
+  // ReportJobStepProgress updates job step progress and short diagnostics.
+  rpc ReportJobStepProgress(ReportJobStepProgressRequest) returns (JobResponse);
+  // CompleteJob completes a job successfully.
+  rpc CompleteJob(CompleteJobRequest) returns (JobResponse);
+  // FailJob completes a job with a classified error.
+  rpc FailJob(FailJobRequest) returns (JobResponse);
+  // CancelJob cancels a pending or running job by policy.
+  rpc CancelJob(CancelJobRequest) returns (JobResponse);
+  // GetJob returns authoritative job state.
+  rpc GetJob(GetJobRequest) returns (JobResponse);
+  // ListJobs returns jobs by status, type, project, slot, agent run or release line.
+  rpc ListJobs(ListJobsRequest) returns (ListJobsResponse);
+  // RecordRuntimeArtifactRef records a reference to an external runtime artifact.
+  rpc RecordRuntimeArtifactRef(RecordRuntimeArtifactRefRequest) returns (RuntimeArtifactRefResponse);
+  // ListRuntimeArtifactRefs returns runtime artifact references by job or slot.
+  rpc ListRuntimeArtifactRefs(ListRuntimeArtifactRefsRequest) returns (ListRuntimeArtifactRefsResponse);
+  // CreateOrUpdateCleanupPolicy creates or updates retention policy for runtime objects.
+  rpc CreateOrUpdateCleanupPolicy(CreateOrUpdateCleanupPolicyRequest) returns (CleanupPolicyResponse);
+  // RunCleanupBatch claims and executes a cleanup batch by policy.
+  rpc RunCleanupBatch(RunCleanupBatchRequest) returns (RunCleanupBatchResponse);
+  // CreateOrUpdatePrewarmPool creates or updates a pool of prewarmed slots.
+  rpc CreateOrUpdatePrewarmPool(CreateOrUpdatePrewarmPoolRequest) returns (PrewarmPoolResponse);
+  // ReconcilePrewarmPool reconciles actual prewarmed slots with target pool size.
+  rpc ReconcilePrewarmPool(ReconcilePrewarmPoolRequest) returns (PrewarmPoolResponse);
+}
+
+// CommandMeta is required for every mutating command.
+message CommandMeta {
+  // command_id is a unique command identifier. Either command_id or idempotency_key is required.
+  optional string command_id = 1;
+  // idempotency_key is an idempotency key scoped by operation and actor.
+  optional string idempotency_key = 2;
+  // expected_version is present only for existing aggregate mutations.
+  optional int64 expected_version = 3;
+  // actor is the authenticated caller.
+  Actor actor = 4;
+  // reason is a machine or operator reason for audit and domain events.
+  string reason = 5;
+  // request_id links the command to logs, traces and audit.
+  string request_id = 6;
+  // request_context carries safe request metadata; no tokens, secrets, email or names.
+  RequestContext request_context = 7;
+}
+
+// QueryMeta carries safe metadata for authoritative reads.
+message QueryMeta {
+  // actor is the authenticated caller.
+  Actor actor = 1;
+  // request_id links the read to logs and traces.
+  string request_id = 2;
+  // request_context carries safe request metadata.
+  RequestContext request_context = 3;
+}
+
+// RequestContext is safe request metadata used for audit and diagnostics.
+message RequestContext {
+  // source identifies caller surface, for example staff-gateway, platform-mcp-server or service.
+  string source = 1;
+  // trace_id links platform traces.
+  optional string trace_id = 2;
+  // session_id links a user session when available.
+  optional string session_id = 3;
+  // client_ip_hash is an optional hashed client address.
+  optional string client_ip_hash = 4;
+}
+
+// Actor identifies a user, service, agent or external account.
+message Actor {
+  // type is a subject type such as user, service, agent or external_account.
+  string type = 1;
+  // id is the subject identifier in its owner domain.
+  string id = 2;
+}
+
+// PageRequest limits list responses.
+message PageRequest {
+  // page_size is the maximum item count requested by caller.
+  int32 page_size = 1;
+  // page_token is an opaque continuation token returned by a previous call.
+  optional string page_token = 2;
+}
+
+// PageResponse describes list continuation state.
+message PageResponse {
+  // next_page_token is empty when there are no more items.
+  optional string next_page_token = 1;
+}
+
+// RuntimeMode classifies runtime isolation level.
+enum RuntimeMode {
+  RUNTIME_MODE_UNSPECIFIED = 0;
+  RUNTIME_MODE_CODE_ONLY = 1;
+  RUNTIME_MODE_FULL_ENV = 2;
+  RUNTIME_MODE_READ_ONLY_PRODUCTION = 3;
+}
+
+// SlotStatus is the slot lifecycle status.
+enum SlotStatus {
+  SLOT_STATUS_UNSPECIFIED = 0;
+  SLOT_STATUS_PREWARMED = 1;
+  SLOT_STATUS_RESERVED = 2;
+  SLOT_STATUS_MATERIALIZING = 3;
+  SLOT_STATUS_READY = 4;
+  SLOT_STATUS_IN_USE = 5;
+  SLOT_STATUS_RELEASING = 6;
+  SLOT_STATUS_FAILED = 7;
+  SLOT_STATUS_CLEANUP_PENDING = 8;
+  SLOT_STATUS_CLEANED = 9;
+}
+
+// WorkspaceSourceKind classifies one materialized source.
+enum WorkspaceSourceKind {
+  WORKSPACE_SOURCE_KIND_UNSPECIFIED = 0;
+  WORKSPACE_SOURCE_KIND_CODE = 1;
+  WORKSPACE_SOURCE_KIND_DOCUMENTATION = 2;
+  WORKSPACE_SOURCE_KIND_GUIDANCE_PACKAGE = 3;
+  WORKSPACE_SOURCE_KIND_GENERATED_CONTEXT = 4;
+}
+
+// WorkspaceSourceAccessMode controls whether a source is editable.
+enum WorkspaceSourceAccessMode {
+  WORKSPACE_SOURCE_ACCESS_MODE_UNSPECIFIED = 0;
+  WORKSPACE_SOURCE_ACCESS_MODE_READ = 1;
+  WORKSPACE_SOURCE_ACCESS_MODE_WRITE = 2;
+}
+
+// WorkspaceMaterializationStatus is the source preparation status.
+enum WorkspaceMaterializationStatus {
+  WORKSPACE_MATERIALIZATION_STATUS_UNSPECIFIED = 0;
+  WORKSPACE_MATERIALIZATION_STATUS_PENDING = 1;
+  WORKSPACE_MATERIALIZATION_STATUS_RUNNING = 2;
+  WORKSPACE_MATERIALIZATION_STATUS_COMPLETED = 3;
+  WORKSPACE_MATERIALIZATION_STATUS_FAILED = 4;
+  WORKSPACE_MATERIALIZATION_STATUS_CANCELLED = 5;
+}
+
+// JobType classifies platform technical jobs.
+enum JobType {
+  JOB_TYPE_UNSPECIFIED = 0;
+  JOB_TYPE_MIRROR = 1;
+  JOB_TYPE_BUILD = 2;
+  JOB_TYPE_DEPLOY = 3;
+  JOB_TYPE_CLEANUP = 4;
+  JOB_TYPE_HEALTH_CHECK = 5;
+  JOB_TYPE_HOUSEKEEPING = 6;
+  JOB_TYPE_WORKSPACE_MATERIALIZATION = 7;
+}
+
+// JobStatus is the platform job lifecycle status.
+enum JobStatus {
+  JOB_STATUS_UNSPECIFIED = 0;
+  JOB_STATUS_PENDING = 1;
+  JOB_STATUS_CLAIMED = 2;
+  JOB_STATUS_RUNNING = 3;
+  JOB_STATUS_SUCCEEDED = 4;
+  JOB_STATUS_FAILED = 5;
+  JOB_STATUS_CANCELLED = 6;
+  JOB_STATUS_TIMED_OUT = 7;
+}
+
+// JobPriority classifies job scheduling priority.
+enum JobPriority {
+  JOB_PRIORITY_UNSPECIFIED = 0;
+  JOB_PRIORITY_LOW = 1;
+  JOB_PRIORITY_NORMAL = 2;
+  JOB_PRIORITY_HIGH = 3;
+  JOB_PRIORITY_BLOCKING = 4;
+}
+
+// JobStepStatus is one job step status.
+enum JobStepStatus {
+  JOB_STEP_STATUS_UNSPECIFIED = 0;
+  JOB_STEP_STATUS_PENDING = 1;
+  JOB_STEP_STATUS_RUNNING = 2;
+  JOB_STEP_STATUS_SUCCEEDED = 3;
+  JOB_STEP_STATUS_FAILED = 4;
+  JOB_STEP_STATUS_SKIPPED = 5;
+}
+
+// RuntimeArtifactType classifies references to external runtime artifacts.
+enum RuntimeArtifactType {
+  RUNTIME_ARTIFACT_TYPE_UNSPECIFIED = 0;
+  RUNTIME_ARTIFACT_TYPE_IMAGE_REF = 1;
+  RUNTIME_ARTIFACT_TYPE_KUBERNETES_JOB = 2;
+  RUNTIME_ARTIFACT_TYPE_NAMESPACE = 3;
+  RUNTIME_ARTIFACT_TYPE_DEPLOYMENT = 4;
+  RUNTIME_ARTIFACT_TYPE_LOG_REF = 5;
+  RUNTIME_ARTIFACT_TYPE_MANIFEST_REF = 6;
+}
+
+// CleanupPolicyStatus is the cleanup policy lifecycle status.
+enum CleanupPolicyStatus {
+  CLEANUP_POLICY_STATUS_UNSPECIFIED = 0;
+  CLEANUP_POLICY_STATUS_ACTIVE = 1;
+  CLEANUP_POLICY_STATUS_DISABLED = 2;
+  CLEANUP_POLICY_STATUS_SUPERSEDED = 3;
+}
+
+// RuntimeScopeType classifies scope for cleanup and prewarm policies.
+enum RuntimeScopeType {
+  RUNTIME_SCOPE_TYPE_UNSPECIFIED = 0;
+  RUNTIME_SCOPE_TYPE_PLATFORM = 1;
+  RUNTIME_SCOPE_TYPE_ORGANIZATION = 2;
+  RUNTIME_SCOPE_TYPE_PROJECT = 3;
+  RUNTIME_SCOPE_TYPE_REPOSITORY = 4;
+  RUNTIME_SCOPE_TYPE_RUNTIME_PROFILE = 5;
+}
+
+// PrewarmPoolStatus is the prewarm pool lifecycle status.
+enum PrewarmPoolStatus {
+  PREWARM_POOL_STATUS_UNSPECIFIED = 0;
+  PREWARM_POOL_STATUS_ACTIVE = 1;
+  PREWARM_POOL_STATUS_PAUSED = 2;
+  PREWARM_POOL_STATUS_DISABLED = 3;
+}
+
+// CapacityStatus describes whether actual prewarm capacity matches policy.
+enum CapacityStatus {
+  CAPACITY_STATUS_UNSPECIFIED = 0;
+  CAPACITY_STATUS_OK = 1;
+  CAPACITY_STATUS_DEGRADED = 2;
+  CAPACITY_STATUS_INSUFFICIENT = 3;
+}
+
+// WorkspaceSource describes one source that runtime may materialize.
+message WorkspaceSource {
+  // source_id is the source identifier from the owner domain.
+  string source_id = 1;
+  // kind classifies source behavior.
+  WorkspaceSourceKind kind = 2;
+  // repository_id is an optional project-catalog repository binding id.
+  optional string repository_id = 3;
+  // provider is repository provider name, for example github or gitlab.
+  optional string provider = 4;
+  // provider_owner is owner or group name at provider.
+  optional string provider_owner = 5;
+  // provider_name is repository or package name at provider.
+  optional string provider_name = 6;
+  // source_ref is a branch, tag, commit, package version or generated context ref.
+  optional string source_ref = 7;
+  // commit_sha is the concrete commit when known.
+  optional string commit_sha = 8;
+  // local_path is the target path inside workspace.
+  string local_path = 9;
+  // access_mode controls whether the source is editable.
+  WorkspaceSourceAccessMode access_mode = 10;
+  // digest is an immutable content digest when known.
+  optional string digest = 11;
+  // metadata_json carries safe source metadata without secrets.
+  string metadata_json = 12;
+}
+
+// WorkspacePolicyInput is the checked source policy runtime can execute.
+message WorkspacePolicyInput {
+  // project_id is the project id from project-catalog.
+  string project_id = 1;
+  // policy_digest identifies the checked policy snapshot.
+  string policy_digest = 2;
+  // policy_version is the project policy version.
+  int64 policy_version = 3;
+  // sources are code, documentation, guidance and generated context sources.
+  repeated WorkspaceSource sources = 4;
+  // active_policy_override_ids lists active emergency overrides included in this policy.
+  repeated string active_policy_override_ids = 5;
+}
+
+// PlacementConstraints are passed to fleet-manager to resolve placement.
+message PlacementConstraints {
+  // project_id is the project id.
+  string project_id = 1;
+  // repository_ids optionally narrow placement to repositories.
+  repeated string repository_ids = 2;
+  // service_keys optionally narrow placement to service descriptors.
+  repeated string service_keys = 3;
+  // runtime_profile is the requested runtime profile.
+  string runtime_profile = 4;
+  // preferred_fleet_scope_id is an explicit preferred fleet scope when policy already resolved it.
+  optional string preferred_fleet_scope_id = 5;
+  // required_capabilities describe required cluster/runtime capabilities.
+  repeated string required_capabilities = 6;
+  // metadata_json carries safe placement metadata without secrets.
+  string metadata_json = 7;
+}
+
+// RuntimeContext describes how a caller can use prepared runtime.
+message RuntimeContext {
+  // slot_id is the prepared slot id.
+  string slot_id = 1;
+  // agent_run_id is the external agent run id, when bound.
+  optional string agent_run_id = 2;
+  // fleet_scope_id is the resolved fleet scope.
+  optional string fleet_scope_id = 3;
+  // cluster_id is the resolved cluster id.
+  optional string cluster_id = 4;
+  // namespace_name is the Kubernetes namespace in the first implementation.
+  string namespace_name = 5;
+  // runtime_profile is the active runtime profile.
+  string runtime_profile = 6;
+  // workspace_root is the root path inside prepared workspace.
+  string workspace_root = 7;
+  // materialization_fingerprint is the prepared workspace fingerprint.
+  string materialization_fingerprint = 8;
+}
+
+// Slot is an isolated runtime environment.
+message Slot {
+  // slot_id is the slot aggregate id.
+  string slot_id = 1;
+  // slot_key is a readable diagnostic key.
+  string slot_key = 2;
+  // status is the slot lifecycle status.
+  SlotStatus status = 3;
+  // runtime_mode is the requested isolation mode.
+  RuntimeMode runtime_mode = 4;
+  // is_prewarmed indicates that slot was created before task binding.
+  bool is_prewarmed = 5;
+  // fleet_scope_id is an external fleet scope id.
+  optional string fleet_scope_id = 6;
+  // cluster_id is an external fleet cluster id.
+  optional string cluster_id = 7;
+  // namespace_name is the Kubernetes namespace in the first implementation.
+  string namespace_name = 8;
+  // agent_run_id is an external agent-manager run id.
+  optional string agent_run_id = 9;
+  // project_id is an external project id.
+  optional string project_id = 10;
+  // repository_ids are external project-catalog repository ids.
+  repeated string repository_ids = 11;
+  // runtime_profile is the runtime profile key.
+  string runtime_profile = 12;
+  // fingerprint is the reuse safety fingerprint.
+  string fingerprint = 13;
+  // lease_owner identifies the current lease holder.
+  string lease_owner = 14;
+  // lease_until is the lease expiration time in RFC3339 format.
+  optional string lease_until = 15;
+  // last_error_code is the last classified error code.
+  string last_error_code = 16;
+  // last_error_message is the last safe error message without secrets.
+  string last_error_message = 17;
+  // created_at is creation time in RFC3339 format.
+  string created_at = 18;
+  // updated_at is update time in RFC3339 format.
+  string updated_at = 19;
+  // version is the aggregate version.
+  int64 version = 20;
+}
+
+// WorkspaceMaterialization is one attempt to prepare workspace sources.
+message WorkspaceMaterialization {
+  // workspace_materialization_id is the materialization attempt id.
+  string workspace_materialization_id = 1;
+  // slot_id is the runtime slot id.
+  string slot_id = 2;
+  // status is the materialization lifecycle status.
+  WorkspaceMaterializationStatus status = 3;
+  // policy_digest identifies the checked workspace policy snapshot.
+  string policy_digest = 4;
+  // sources are normalized sources used for materialization.
+  repeated WorkspaceSource sources = 5;
+  // fingerprint is the prepared workspace fingerprint.
+  string fingerprint = 6;
+  // started_at is start time in RFC3339 format.
+  optional string started_at = 7;
+  // finished_at is finish time in RFC3339 format.
+  optional string finished_at = 8;
+  // last_error_code is the last classified error code.
+  string last_error_code = 9;
+  // last_error_message is the last safe error message without secrets.
+  string last_error_message = 10;
+  // version is the aggregate version.
+  int64 version = 11;
+}
+
+// Job is a technical platform operation owned by runtime-manager.
+message Job {
+  // job_id is the job aggregate id.
+  string job_id = 1;
+  // command_id is the create command id used for idempotency.
+  string command_id = 2;
+  // job_type classifies the technical operation.
+  JobType job_type = 3;
+  // status is the job lifecycle status.
+  JobStatus status = 4;
+  // priority is the scheduling priority.
+  JobPriority priority = 5;
+  // lease_owner identifies the worker or controller that claimed the job.
+  string lease_owner = 6;
+  // lease_until is claim lease expiration time in RFC3339 format.
+  optional string lease_until = 7;
+  // claim_attempt increments every time the job is claimed.
+  int64 claim_attempt = 8;
+  // slot_id is an optional runtime slot id.
+  optional string slot_id = 9;
+  // agent_run_id is an external agent-manager run id.
+  optional string agent_run_id = 10;
+  // project_id is an external project id.
+  optional string project_id = 11;
+  // repository_id is an external repository binding id.
+  optional string repository_id = 12;
+  // release_line_id is an external release line id.
+  optional string release_line_id = 13;
+  // package_installation_id is an external package installation id.
+  optional string package_installation_id = 14;
+  // fleet_scope_id is an external fleet scope id.
+  optional string fleet_scope_id = 15;
+  // cluster_id is an external fleet cluster id.
+  optional string cluster_id = 16;
+  // requested_by is the actor id that requested the job when available.
+  optional string requested_by = 17;
+  // created_at is creation time in RFC3339 format.
+  string created_at = 18;
+  // started_at is start time in RFC3339 format.
+  optional string started_at = 19;
+  // finished_at is finish time in RFC3339 format.
+  optional string finished_at = 20;
+  // next_action describes the next expected operator or automation action.
+  string next_action = 21;
+  // last_error_code is the last classified error code.
+  string last_error_code = 22;
+  // last_error_message is the last safe error message without secrets.
+  string last_error_message = 23;
+  // short_log_tail stores a bounded diagnostic log tail.
+  string short_log_tail = 24;
+  // full_log_ref points to the full log source.
+  string full_log_ref = 25;
+  // version is the aggregate version.
+  int64 version = 26;
+  // steps are job steps returned with the job state.
+  repeated JobStep steps = 27;
+}
+
+// JobStep is one step of a platform job.
+message JobStep {
+  // job_step_id is the step id.
+  string job_step_id = 1;
+  // job_id is the parent job id.
+  string job_id = 2;
+  // step_key is a stable step key such as checkout, build or deploy.
+  string step_key = 3;
+  // status is the step status.
+  JobStepStatus status = 4;
+  // started_at is start time in RFC3339 format.
+  optional string started_at = 5;
+  // finished_at is finish time in RFC3339 format.
+  optional string finished_at = 6;
+  // short_log_tail stores a bounded diagnostic log tail for this step.
+  string short_log_tail = 7;
+  // external_ref points to Kubernetes Job, Pod or another external object.
+  string external_ref = 8;
+  // error_code is the classified step error code.
+  string error_code = 9;
+  // error_message is a safe step error message without secrets.
+  string error_message = 10;
+  // version is the step version.
+  int64 version = 11;
+}
+
+// RuntimeArtifactRef points to an external runtime artifact without copying it into runtime DB.
+message RuntimeArtifactRef {
+  // runtime_artifact_ref_id is the reference id.
+  string runtime_artifact_ref_id = 1;
+  // job_id optionally links the reference to a job.
+  optional string job_id = 2;
+  // slot_id optionally links the reference to a slot.
+  optional string slot_id = 3;
+  // artifact_type classifies the referenced artifact.
+  RuntimeArtifactType artifact_type = 4;
+  // external_ref is the primary source URI or object reference.
+  string external_ref = 5;
+  // digest is the immutable digest when known.
+  string digest = 6;
+  // metadata_json carries bounded safe metadata without secrets.
+  string metadata_json = 7;
+  // created_at is creation time in RFC3339 format.
+  string created_at = 8;
+}
+
+// CleanupPolicy describes retention and cleanup rules for runtime objects.
+message CleanupPolicy {
+  // cleanup_policy_id is the cleanup policy id.
+  string cleanup_policy_id = 1;
+  // scope_type classifies the scope this policy applies to.
+  RuntimeScopeType scope_type = 2;
+  // scope_id is the optional external scope id.
+  optional string scope_id = 3;
+  // ttl_seconds is the default retention period for completed runtime objects.
+  int64 ttl_seconds = 4;
+  // failed_ttl_seconds is the retention period for failed runtime objects.
+  int64 failed_ttl_seconds = 5;
+  // keep_short_log_tail controls whether bounded diagnostic tails remain after cleanup.
+  bool keep_short_log_tail = 6;
+  // status is the cleanup policy status.
+  CleanupPolicyStatus status = 7;
+  // created_at is creation time in RFC3339 format.
+  string created_at = 8;
+  // updated_at is update time in RFC3339 format.
+  string updated_at = 9;
+  // version is the aggregate version.
+  int64 version = 10;
+}
+
+// PrewarmPool describes desired prewarmed slot capacity.
+message PrewarmPool {
+  // prewarm_pool_id is the prewarm pool id.
+  string prewarm_pool_id = 1;
+  // scope_type classifies the scope this pool applies to.
+  RuntimeScopeType scope_type = 2;
+  // scope_id is the optional external scope id.
+  optional string scope_id = 3;
+  // runtime_profile is the runtime profile maintained by the pool.
+  string runtime_profile = 4;
+  // fleet_scope_id is the optional fleet scope for this pool.
+  optional string fleet_scope_id = 5;
+  // target_size is desired number of prewarmed slots.
+  int64 target_size = 6;
+  // status is the prewarm pool status.
+  PrewarmPoolStatus status = 7;
+  // last_capacity_status describes the last capacity reconciliation result.
+  CapacityStatus last_capacity_status = 8;
+  // created_at is creation time in RFC3339 format.
+  string created_at = 9;
+  // updated_at is update time in RFC3339 format.
+  string updated_at = 10;
+  // version is the aggregate version.
+  int64 version = 11;
+}
+
+message PrepareRuntimeRequest {
+  // agent_run_id is the external agent-manager run id when runtime is prepared for an agent run.
+  optional string agent_run_id = 1;
+  // runtime_profile is the requested runtime profile.
+  string runtime_profile = 2;
+  // runtime_mode is the requested runtime isolation mode.
+  RuntimeMode runtime_mode = 3;
+  // workspace_policy is the checked policy to materialize.
+  WorkspacePolicyInput workspace_policy = 4;
+  // placement_constraints are passed to fleet-manager for placement resolution.
+  PlacementConstraints placement_constraints = 5;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 6;
+}
+
+message PrepareRuntimeResponse {
+  // slot is the reserved or created runtime slot.
+  Slot slot = 1;
+  // workspace_materialization is the started or completed materialization attempt.
+  WorkspaceMaterialization workspace_materialization = 2;
+  // runtime_context is the prepared context returned to the caller.
+  RuntimeContext runtime_context = 3;
+}
+
+message ReserveSlotRequest {
+  // runtime_profile is the requested runtime profile.
+  string runtime_profile = 1;
+  // runtime_mode is the requested runtime isolation mode.
+  RuntimeMode runtime_mode = 2;
+  // workspace_policy_digest identifies the checked workspace policy snapshot.
+  string workspace_policy_digest = 3;
+  // agent_run_id is the external agent-manager run id when available.
+  optional string agent_run_id = 4;
+  // project_id is the external project id.
+  optional string project_id = 5;
+  // repository_ids are external repository binding ids.
+  repeated string repository_ids = 6;
+  // placement_constraints are passed to fleet-manager for placement resolution.
+  PlacementConstraints placement_constraints = 7;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 8;
+}
+
+message ExtendSlotLeaseRequest {
+  // slot_id is the slot aggregate id.
+  string slot_id = 1;
+  // lease_owner is the caller extending the lease.
+  string lease_owner = 2;
+  // lease_until is the new lease expiration time in RFC3339 format.
+  string lease_until = 3;
+  // meta carries idempotency, expected version and audit context.
+  CommandMeta meta = 4;
+}
+
+message ReleaseSlotRequest {
+  // slot_id is the slot aggregate id.
+  string slot_id = 1;
+  // lease_owner is the caller releasing the slot.
+  string lease_owner = 2;
+  // meta carries idempotency, expected version and audit context.
+  CommandMeta meta = 3;
+}
+
+message MarkSlotFailedRequest {
+  // slot_id is the slot aggregate id.
+  string slot_id = 1;
+  // error_code is a classified failure code.
+  string error_code = 2;
+  // error_message is a safe failure message without secrets.
+  string error_message = 3;
+  // meta carries idempotency, expected version and audit context.
+  CommandMeta meta = 4;
+}
+
+message SlotResponse {
+  // slot is the returned slot state.
+  Slot slot = 1;
+}
+
+message GetSlotRequest {
+  // slot_id is the slot aggregate id.
+  string slot_id = 1;
+  // meta carries read actor and request context.
+  QueryMeta meta = 2;
+}
+
+message ListSlotsRequest {
+  // project_id optionally filters slots by project.
+  optional string project_id = 1;
+  // statuses optionally filter slot lifecycle state.
+  repeated SlotStatus statuses = 2;
+  // runtime_profile optionally filters slots by runtime profile.
+  optional string runtime_profile = 3;
+  // fleet_scope_id optionally filters slots by fleet scope.
+  optional string fleet_scope_id = 4;
+  // agent_run_id optionally filters slots by external agent run id.
+  optional string agent_run_id = 5;
+  // page limits response size.
+  PageRequest page = 6;
+  // meta carries read actor and request context.
+  QueryMeta meta = 7;
+}
+
+message ListSlotsResponse {
+  // slots are returned in stable server-defined order.
+  repeated Slot slots = 1;
+  // page describes continuation state.
+  PageResponse page = 2;
+}
+
+message StartWorkspaceMaterializationRequest {
+  // slot_id is the slot where workspace will be materialized.
+  string slot_id = 1;
+  // workspace_policy is the checked policy to materialize.
+  WorkspacePolicyInput workspace_policy = 2;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 3;
+}
+
+message ReportWorkspaceMaterializationProgressRequest {
+  // workspace_materialization_id is the materialization attempt id.
+  string workspace_materialization_id = 1;
+  // status is the new materialization status.
+  WorkspaceMaterializationStatus status = 2;
+  // fingerprint is the prepared workspace fingerprint.
+  string fingerprint = 3;
+  // started_at is start time in RFC3339 format.
+  optional string started_at = 4;
+  // finished_at is finish time in RFC3339 format.
+  optional string finished_at = 5;
+  // error_code is a classified failure code.
+  string error_code = 6;
+  // error_message is a safe failure message without secrets.
+  string error_message = 7;
+  // meta carries idempotency, expected version and audit context.
+  CommandMeta meta = 8;
+}
+
+message WorkspaceMaterializationResponse {
+  // workspace_materialization is the returned materialization attempt.
+  WorkspaceMaterialization workspace_materialization = 1;
+}
+
+message GetWorkspaceMaterializationRequest {
+  // workspace_materialization_id is the materialization attempt id.
+  string workspace_materialization_id = 1;
+  // meta carries read actor and request context.
+  QueryMeta meta = 2;
+}
+
+message ListWorkspaceMaterializationsRequest {
+  // slot_id optionally filters attempts by slot.
+  optional string slot_id = 1;
+  // agent_run_id optionally filters attempts by external agent run id.
+  optional string agent_run_id = 2;
+  // statuses optionally filter materialization lifecycle state.
+  repeated WorkspaceMaterializationStatus statuses = 3;
+  // page limits response size.
+  PageRequest page = 4;
+  // meta carries read actor and request context.
+  QueryMeta meta = 5;
+}
+
+message ListWorkspaceMaterializationsResponse {
+  // workspace_materializations are returned in stable server-defined order.
+  repeated WorkspaceMaterialization workspace_materializations = 1;
+  // page describes continuation state.
+  PageResponse page = 2;
+}
+
+message CreateJobRequest {
+  // job_type classifies the technical operation.
+  JobType job_type = 1;
+  // priority is the scheduling priority.
+  JobPriority priority = 2;
+  // slot_id optionally links the job to a runtime slot.
+  optional string slot_id = 3;
+  // agent_run_id optionally links the job to an external agent run.
+  optional string agent_run_id = 4;
+  // project_id optionally links the job to a project.
+  optional string project_id = 5;
+  // repository_id optionally links the job to a repository.
+  optional string repository_id = 6;
+  // release_line_id optionally links the job to a release line.
+  optional string release_line_id = 7;
+  // package_installation_id optionally links the job to a package installation.
+  optional string package_installation_id = 8;
+  // placement_constraints are passed to fleet-manager when placement is needed.
+  PlacementConstraints placement_constraints = 9;
+  // job_input_json carries bounded operation input without secrets.
+  string job_input_json = 10;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 11;
+}
+
+message ClaimRunnableJobRequest {
+  // job_types optionally filters runnable jobs by type.
+  repeated JobType job_types = 1;
+  // worker_id identifies the worker process when available.
+  optional string worker_id = 2;
+  // lease_owner identifies the worker or controller claiming the job.
+  string lease_owner = 3;
+  // lease_until is claim lease expiration time in RFC3339 format.
+  string lease_until = 4;
+  // fleet_scope_id optionally filters jobs by fleet scope.
+  optional string fleet_scope_id = 5;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 6;
+}
+
+message ClaimRunnableJobResponse {
+  // job is the claimed job.
+  Job job = 1;
+  // lease_token must be presented by progress, complete and fail commands.
+  string lease_token = 2;
+}
+
+message ReportJobStepProgressRequest {
+  // job_id is the job aggregate id.
+  string job_id = 1;
+  // lease_token proves that caller owns the active job lease.
+  string lease_token = 2;
+  // step_key is a stable step key such as checkout, build or deploy.
+  string step_key = 3;
+  // status is the new step status.
+  JobStepStatus status = 4;
+  // started_at is step start time in RFC3339 format.
+  optional string started_at = 5;
+  // finished_at is step finish time in RFC3339 format.
+  optional string finished_at = 6;
+  // short_log_tail stores a bounded diagnostic log tail.
+  string short_log_tail = 7;
+  // external_ref points to Kubernetes Job, Pod or another external object.
+  string external_ref = 8;
+  // error_code is a classified error code.
+  string error_code = 9;
+  // error_message is a safe error message without secrets.
+  string error_message = 10;
+  // artifact_refs are external artifact references observed by this step.
+  repeated RuntimeArtifactRef artifact_refs = 11;
+  // meta carries idempotency, expected version and audit context.
+  CommandMeta meta = 12;
+}
+
+message CompleteJobRequest {
+  // job_id is the job aggregate id.
+  string job_id = 1;
+  // lease_token proves that caller owns the active job lease.
+  string lease_token = 2;
+  // short_log_tail stores a bounded diagnostic log tail.
+  string short_log_tail = 3;
+  // full_log_ref points to the full log source.
+  string full_log_ref = 4;
+  // meta carries idempotency, expected version and audit context.
+  CommandMeta meta = 5;
+}
+
+message FailJobRequest {
+  // job_id is the job aggregate id.
+  string job_id = 1;
+  // lease_token proves that caller owns the active job lease.
+  string lease_token = 2;
+  // error_code is a classified failure code.
+  string error_code = 3;
+  // error_message is a safe failure message without secrets.
+  string error_message = 4;
+  // short_log_tail stores a bounded diagnostic log tail.
+  string short_log_tail = 5;
+  // full_log_ref points to the full log source.
+  string full_log_ref = 6;
+  // meta carries idempotency, expected version and audit context.
+  CommandMeta meta = 7;
+}
+
+message CancelJobRequest {
+  // job_id is the job aggregate id.
+  string job_id = 1;
+  // meta carries idempotency, expected version and audit context.
+  CommandMeta meta = 2;
+}
+
+message JobResponse {
+  // job is the returned job state.
+  Job job = 1;
+}
+
+message GetJobRequest {
+  // job_id is the job aggregate id.
+  string job_id = 1;
+  // meta carries read actor and request context.
+  QueryMeta meta = 2;
+}
+
+message ListJobsRequest {
+  // statuses optionally filter job lifecycle state.
+  repeated JobStatus statuses = 1;
+  // job_types optionally filter jobs by type.
+  repeated JobType job_types = 2;
+  // project_id optionally filters jobs by project.
+  optional string project_id = 3;
+  // slot_id optionally filters jobs by slot.
+  optional string slot_id = 4;
+  // agent_run_id optionally filters jobs by external agent run.
+  optional string agent_run_id = 5;
+  // release_line_id optionally filters jobs by release line.
+  optional string release_line_id = 6;
+  // page limits response size.
+  PageRequest page = 7;
+  // meta carries read actor and request context.
+  QueryMeta meta = 8;
+}
+
+message ListJobsResponse {
+  // jobs are returned in stable server-defined order.
+  repeated Job jobs = 1;
+  // page describes continuation state.
+  PageResponse page = 2;
+}
+
+message RecordRuntimeArtifactRefRequest {
+  // job_id optionally links the reference to a job.
+  optional string job_id = 1;
+  // slot_id optionally links the reference to a slot.
+  optional string slot_id = 2;
+  // artifact_type classifies the referenced artifact.
+  RuntimeArtifactType artifact_type = 3;
+  // external_ref is the primary source URI or object reference.
+  string external_ref = 4;
+  // digest is the immutable digest when known.
+  string digest = 5;
+  // metadata_json carries bounded safe metadata without secrets.
+  string metadata_json = 6;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 7;
+}
+
+message RuntimeArtifactRefResponse {
+  // runtime_artifact_ref is the returned reference.
+  RuntimeArtifactRef runtime_artifact_ref = 1;
+}
+
+message ListRuntimeArtifactRefsRequest {
+  // job_id optionally filters references by job.
+  optional string job_id = 1;
+  // slot_id optionally filters references by slot.
+  optional string slot_id = 2;
+  // artifact_types optionally filter references by type.
+  repeated RuntimeArtifactType artifact_types = 3;
+  // page limits response size.
+  PageRequest page = 4;
+  // meta carries read actor and request context.
+  QueryMeta meta = 5;
+}
+
+message ListRuntimeArtifactRefsResponse {
+  // runtime_artifact_refs are returned in stable server-defined order.
+  repeated RuntimeArtifactRef runtime_artifact_refs = 1;
+  // page describes continuation state.
+  PageResponse page = 2;
+}
+
+message CreateOrUpdateCleanupPolicyRequest {
+  // cleanup_policy_id is optional policy id for update; absent value creates a new policy.
+  optional string cleanup_policy_id = 1;
+  // scope_type classifies the scope this policy applies to.
+  RuntimeScopeType scope_type = 2;
+  // scope_id is the optional external scope id.
+  optional string scope_id = 3;
+  // ttl_seconds is the default retention period for completed runtime objects.
+  int64 ttl_seconds = 4;
+  // failed_ttl_seconds is the retention period for failed runtime objects.
+  int64 failed_ttl_seconds = 5;
+  // keep_short_log_tail controls whether bounded diagnostic tails remain after cleanup.
+  bool keep_short_log_tail = 6;
+  // status is the cleanup policy status.
+  CleanupPolicyStatus status = 7;
+  // meta carries idempotency, expected version and audit context.
+  CommandMeta meta = 8;
+}
+
+message CleanupPolicyResponse {
+  // cleanup_policy is the returned cleanup policy state.
+  CleanupPolicy cleanup_policy = 1;
+}
+
+message RunCleanupBatchRequest {
+  // cleanup_policy_id optionally limits cleanup to one policy.
+  optional string cleanup_policy_id = 1;
+  // limit is the maximum number of runtime objects to claim.
+  int32 limit = 2;
+  // lease_owner identifies the worker or controller running cleanup.
+  string lease_owner = 3;
+  // lease_until is cleanup lease expiration time in RFC3339 format.
+  string lease_until = 4;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 5;
+}
+
+message RunCleanupBatchResponse {
+  // claimed_count is number of runtime objects claimed for cleanup.
+  int32 claimed_count = 1;
+  // cleaned_count is number of successfully cleaned runtime objects.
+  int32 cleaned_count = 2;
+  // failed_count is number of failed cleanup attempts.
+  int32 failed_count = 3;
+  // affected_slot_ids are slots touched by this cleanup batch.
+  repeated string affected_slot_ids = 4;
+}
+
+message CreateOrUpdatePrewarmPoolRequest {
+  // prewarm_pool_id is optional pool id for update; absent value creates a new pool.
+  optional string prewarm_pool_id = 1;
+  // scope_type classifies the scope this pool applies to.
+  RuntimeScopeType scope_type = 2;
+  // scope_id is the optional external scope id.
+  optional string scope_id = 3;
+  // runtime_profile is the runtime profile maintained by the pool.
+  string runtime_profile = 4;
+  // fleet_scope_id is the optional fleet scope for this pool.
+  optional string fleet_scope_id = 5;
+  // target_size is desired number of prewarmed slots.
+  int64 target_size = 6;
+  // status is the prewarm pool status.
+  PrewarmPoolStatus status = 7;
+  // meta carries idempotency, expected version and audit context.
+  CommandMeta meta = 8;
+}
+
+message PrewarmPoolResponse {
+  // prewarm_pool is the returned prewarm pool state.
+  PrewarmPool prewarm_pool = 1;
+}
+
+message ReconcilePrewarmPoolRequest {
+  // prewarm_pool_id is the pool id.
+  string prewarm_pool_id = 1;
+  // lease_owner identifies the worker or controller reconciling the pool.
+  string lease_owner = 2;
+  // lease_until is reconciliation lease expiration time in RFC3339 format.
+  string lease_until = 3;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 4;
+}
