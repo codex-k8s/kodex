@@ -696,14 +696,14 @@ func TestSystemAccessActionCatalogProvidesRuntimeActions(t *testing.T) {
 		Effect:       enum.AccessEffectAllow,
 		SubjectType:  enum.AccessSubjectUser,
 		SubjectID:    user.ID.String(),
-		ActionKey:    accesscatalog.ActionRuntimeSlotReserve,
-		ResourceType: accesscatalog.ResourceRuntimeSlot,
+		ActionKey:    accesscatalog.ActionRuntimeWorkspaceMaterializationStart,
+		ResourceType: accesscatalog.ResourceRuntimeWorkspace,
 		ScopeType:    "global",
 	})
 	if err != nil {
 		t.Fatalf("put rule for runtime system action: %v", err)
 	}
-	if _, ok := store.actions[accesscatalog.ActionRuntimeSlotReserve]; ok {
+	if _, ok := store.actions[accesscatalog.ActionRuntimeWorkspaceMaterializationStart]; ok {
 		t.Fatal("runtime system action was persisted in custom action catalog")
 	}
 }

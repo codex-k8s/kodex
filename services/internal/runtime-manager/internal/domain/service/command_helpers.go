@@ -43,15 +43,28 @@ func (s *Service) loadCommandResult(ctx context.Context, meta value.CommandMeta,
 }
 
 func (s *Service) slotReplay(ctx context.Context, meta value.CommandMeta, operation string, expectedSlotID *uuid.UUID) (entity.Slot, bool, error) {
-	result, ok, err := s.findCommandResult(ctx, meta, operation, aggregateTypeSlot)
+	return aggregateReplay(ctx, meta, operation, aggregateTypeSlot, expectedSlotID, s.findCommandResult, s.repository.GetSlot)
+}
+
+func aggregateReplay[T any](
+	ctx context.Context,
+	meta value.CommandMeta,
+	operation string,
+	aggregateType string,
+	expectedID *uuid.UUID,
+	find func(context.Context, value.CommandMeta, string, string) (entity.CommandResult, bool, error),
+	load func(context.Context, uuid.UUID) (T, error),
+) (T, bool, error) {
+	var zero T
+	result, ok, err := find(ctx, meta, operation, aggregateType)
 	if err != nil || !ok {
-		return entity.Slot{}, ok, err
+		return zero, ok, err
 	}
-	if expectedSlotID != nil && result.AggregateID != *expectedSlotID {
-		return entity.Slot{}, true, errs.ErrConflict
+	if expectedID != nil && result.AggregateID != *expectedID {
+		return zero, true, errs.ErrConflict
 	}
-	slot, err := s.repository.GetSlot(ctx, result.AggregateID)
-	return slot, true, err
+	aggregate, err := load(ctx, result.AggregateID)
+	return aggregate, true, err
 }
 
 func commandIdentity(meta value.CommandMeta, operation string) (query.CommandIdentity, error) {
@@ -66,7 +79,7 @@ func commandIdentity(meta value.CommandMeta, operation string) (query.CommandIde
 	return query.CommandIdentity{CommandID: meta.CommandID, IdempotencyKey: idempotencyKey, Operation: operation, Actor: actor}, nil
 }
 
-func commandResult(meta value.CommandMeta, operation string, aggregateID uuid.UUID, now time.Time) (entity.CommandResult, error) {
+func commandResult(meta value.CommandMeta, operation string, aggregateType string, aggregateID uuid.UUID, payload []byte, now time.Time) (entity.CommandResult, error) {
 	idempotencyKey := strings.TrimSpace(meta.IdempotencyKey)
 	if meta.CommandID == uuid.Nil && idempotencyKey == "" {
 		return entity.CommandResult{}, errs.ErrInvalidArgument
@@ -75,9 +88,15 @@ func commandResult(meta value.CommandMeta, operation string, aggregateID uuid.UU
 	if actor.Type == "" || actor.ID == "" {
 		return entity.CommandResult{}, errs.ErrInvalidArgument
 	}
+	if strings.TrimSpace(aggregateType) == "" {
+		return entity.CommandResult{}, errs.ErrInvalidArgument
+	}
 	identityKey := meta.CommandID.String()
 	if meta.CommandID == uuid.Nil {
 		identityKey = operation + ":" + actor.Type + ":" + actor.ID + ":" + idempotencyKey
+	}
+	if len(payload) == 0 {
+		payload = []byte("{}")
 	}
 	return entity.CommandResult{
 		Key:            identityKey,
@@ -85,9 +104,9 @@ func commandResult(meta value.CommandMeta, operation string, aggregateID uuid.UU
 		IdempotencyKey: idempotencyKey,
 		Actor:          actor,
 		Operation:      operation,
-		AggregateType:  aggregateTypeSlot,
+		AggregateType:  strings.TrimSpace(aggregateType),
 		AggregateID:    aggregateID,
-		ResultPayload:  []byte("{}"),
+		ResultPayload:  payload,
 		CreatedAt:      now,
 	}, nil
 }

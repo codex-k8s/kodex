@@ -8,6 +8,7 @@ import (
 	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
 	runtimeevents "github.com/codex-k8s/kodex/libs/go/platformevents/runtime"
 	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/value"
 )
 
@@ -61,4 +62,74 @@ func payloadPreviousStatus(status string) slotEventPayloadOption {
 	return func(payload *value.RuntimeEventPayload) {
 		payload.PreviousStatus = status
 	}
+}
+
+func (s *Service) workspaceEvent(
+	eventType string,
+	slot entity.Slot,
+	materialization entity.WorkspaceMaterialization,
+	occurredAt time.Time,
+	options ...slotEventPayloadOption,
+) (entity.OutboxEvent, error) {
+	payload := value.RuntimeEventPayload{
+		WorkspaceMaterializationID: materialization.ID.String(),
+		SlotID:                     slot.ID.String(),
+		SlotKey:                    slot.SlotKey,
+		Status:                     string(materialization.Status),
+		RuntimeProfile:             slot.RuntimeProfile,
+		Fingerprint:                materialization.Fingerprint,
+		NamespaceName:              slot.NamespaceName,
+		Version:                    materialization.Version,
+	}
+	if slot.FleetScopeID != nil {
+		payload.FleetScopeID = slot.FleetScopeID.String()
+	}
+	if slot.ClusterID != nil {
+		payload.ClusterID = slot.ClusterID.String()
+	}
+	if slot.AgentRunID != nil {
+		payload.AgentRunID = slot.AgentRunID.String()
+	}
+	if slot.ProjectID != nil {
+		payload.ProjectID = slot.ProjectID.String()
+	}
+	if materialization.LastErrorCode != "" {
+		payload.ErrorCode = materialization.LastErrorCode
+	}
+	if materialization.LastErrorMessage != "" {
+		payload.ErrorMessage = materialization.LastErrorMessage
+	}
+	for _, option := range options {
+		option(&payload)
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return entity.OutboxEvent{}, fmt.Errorf("marshal runtime event payload %s: %w", eventType, err)
+	}
+	return entity.OutboxEvent{
+		Event:         outboxlib.NewEvent(s.ids.New(), eventType, runtimeevents.SchemaVersion, aggregateTypeWorkspace, materialization.ID, raw, occurredAt, 0),
+		NextAttemptAt: occurredAt,
+	}, nil
+}
+
+func (s *Service) workspaceProgressEvent(
+	slot entity.Slot,
+	materialization entity.WorkspaceMaterialization,
+	previousStatus string,
+	occurredAt time.Time,
+) (*entity.OutboxEvent, error) {
+	var eventType string
+	switch materialization.Status {
+	case enum.WorkspaceMaterializationStatusCompleted:
+		eventType = eventWorkspaceCompleted
+	case enum.WorkspaceMaterializationStatusFailed:
+		eventType = eventWorkspaceFailed
+	default:
+		return nil, nil
+	}
+	event, err := s.workspaceEvent(eventType, slot, materialization, occurredAt, payloadPreviousStatus(previousStatus))
+	if err != nil {
+		return nil, err
+	}
+	return &event, nil
 }

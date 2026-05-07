@@ -27,13 +27,7 @@ func (r *Repository) GetCommandResult(ctx context.Context, identity query.Comman
 		"actor_id":        identity.Actor.ID,
 		"operation":       identity.Operation,
 	}
-	rows, err := r.db.Query(ctx, queryCommandResultGet, args)
-	if err != nil {
-		return entity.CommandResult{}, wrapError(operationGetCommandResult, err)
-	}
-	result, err := pgx.CollectExactlyOneRow(rows, func(row pgx.CollectableRow) (entity.CommandResult, error) {
-		return scanCommandResult(row)
-	})
+	result, err := queryOne(ctx, r.db, queryCommandResultGet, args, scanCommandResult)
 	return result, wrapError(operationGetCommandResult, err)
 }
 
@@ -77,14 +71,11 @@ func (r *Repository) UpdateSlot(ctx context.Context, slot entity.Slot, previousV
 
 // GetSlot returns one slot by id.
 func (r *Repository) GetSlot(ctx context.Context, id uuid.UUID) (entity.Slot, error) {
-	rows, err := r.db.Query(ctx, querySlotGet, pgx.NamedArgs{"id": id})
+	slot, err := queryOne(ctx, r.db, querySlotGet, pgx.NamedArgs{"id": id}, scanSlot)
 	if err != nil {
 		return entity.Slot{}, wrapError(operationGetSlot, err)
 	}
-	slot, err := pgx.CollectExactlyOneRow(rows, func(row pgx.CollectableRow) (entity.Slot, error) {
-		return scanSlot(row)
-	})
-	return slot, wrapError(operationGetSlot, err)
+	return slot, nil
 }
 
 // ListSlots returns slots matching the filter and page.

@@ -72,6 +72,37 @@ func scanCommandResult(row postgreslib.RowScanner) (entity.CommandResult, error)
 	return result, err
 }
 
+func scanWorkspaceMaterialization(row postgreslib.RowScanner) (entity.WorkspaceMaterialization, error) {
+	var materialization entity.WorkspaceMaterialization
+	var sourcesJSON []byte
+	var startedAt pgtype.Timestamptz
+	var finishedAt pgtype.Timestamptz
+	err := row.Scan(
+		&materialization.ID,
+		&materialization.SlotID,
+		&materialization.Status,
+		&materialization.PolicyDigest,
+		&sourcesJSON,
+		&materialization.Fingerprint,
+		&startedAt,
+		&finishedAt,
+		&materialization.LastErrorCode,
+		&materialization.LastErrorMessage,
+		&materialization.Version,
+		&materialization.CreatedAt,
+		&materialization.UpdatedAt,
+	)
+	if err != nil {
+		return entity.WorkspaceMaterialization{}, err
+	}
+	if err := json.Unmarshal(sourcesJSON, &materialization.Sources); err != nil {
+		return entity.WorkspaceMaterialization{}, err
+	}
+	materialization.StartedAt = postgreslib.TimePtrFromPG(startedAt)
+	materialization.FinishedAt = postgreslib.TimePtrFromPG(finishedAt)
+	return materialization, nil
+}
+
 func scanOutboxEvent(row postgreslib.RowScanner) (entity.OutboxEvent, error) {
 	var event entity.OutboxEvent
 	var publishedAt pgtype.Timestamptz

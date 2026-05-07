@@ -25,6 +25,16 @@ type Repository interface {
 	GetSlot(ctx context.Context, id uuid.UUID) (entity.Slot, error)
 	// ListSlots returns slots matching the filter and page.
 	ListSlots(ctx context.Context, filter query.SlotFilter) ([]entity.Slot, query.PageResult, error)
+	// PrepareRuntime creates a slot, starts materialization and stores both events and command result atomically.
+	PrepareRuntime(ctx context.Context, slot entity.Slot, materialization entity.WorkspaceMaterialization, slotEvent entity.OutboxEvent, workspaceEvent entity.OutboxEvent, result entity.CommandResult) error
+	// CreateWorkspaceMaterialization starts materialization in an existing slot atomically with the slot state update.
+	CreateWorkspaceMaterialization(ctx context.Context, slot entity.Slot, materialization entity.WorkspaceMaterialization, previousSlotVersion int64, event entity.OutboxEvent, result entity.CommandResult) error
+	// UpdateWorkspaceMaterialization stores materialization progress, optional slot mutation, optional event and command result atomically.
+	UpdateWorkspaceMaterialization(ctx context.Context, slot entity.Slot, materialization entity.WorkspaceMaterialization, previousSlotVersion int64, previousMaterializationVersion int64, event *entity.OutboxEvent, result entity.CommandResult) error
+	// GetWorkspaceMaterialization returns one materialization attempt by id.
+	GetWorkspaceMaterialization(ctx context.Context, id uuid.UUID) (entity.WorkspaceMaterialization, error)
+	// ListWorkspaceMaterializations returns materialization attempts matching the filter and page.
+	ListWorkspaceMaterializations(ctx context.Context, filter query.WorkspaceMaterializationFilter) ([]entity.WorkspaceMaterialization, query.PageResult, error)
 	// ClaimOutboxEvents leases unpublished outbox events for delivery.
 	ClaimOutboxEvents(ctx context.Context, limit int, now time.Time, lockedUntil time.Time) ([]entity.OutboxEvent, error)
 	// MarkOutboxEventPublished marks a leased outbox event as published.

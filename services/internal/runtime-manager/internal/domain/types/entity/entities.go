@@ -46,7 +46,7 @@ type WorkspaceMaterialization struct {
 	SlotID           uuid.UUID
 	Status           enum.WorkspaceMaterializationStatus
 	PolicyDigest     string
-	SourcesJSON      []byte
+	Sources          []value.WorkspaceSource
 	Fingerprint      string
 	StartedAt        *time.Time
 	FinishedAt       *time.Time

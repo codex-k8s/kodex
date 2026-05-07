@@ -31,3 +31,11 @@ type SlotFilter struct {
 	AgentRunID     *uuid.UUID
 	Page           value.PageRequest
 }
+
+// WorkspaceMaterializationFilter selects workspace preparation attempts for list queries.
+type WorkspaceMaterializationFilter struct {
+	SlotID     *uuid.UUID
+	AgentRunID *uuid.UUID
+	Statuses   []enum.WorkspaceMaterializationStatus
+	Page       value.PageRequest
+}
