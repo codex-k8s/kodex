@@ -38,7 +38,7 @@ approvals:
 | Операция | Вид | Доступ | Идемпотентность | Примечание |
 |---|---|---|---|---|
 | `ConnectPackageSource` | gRPC command | `package.source.connect` | `CommandMeta.command_id` или `idempotency_key` | Подключает источник магазина, пользовательский источник или встроенный источник. |
-| `UpdatePackageSource` | gRPC command | `package.source.update` | `CommandMeta.command_id` или `idempotency_key` + ожидаемая версия | Обновляет имя, статус, ссылку endpoint или параметры источника. |
+| `UpdatePackageSource` | gRPC command | `package.source.update` | `CommandMeta.command_id` или `idempotency_key` + ожидаемая версия | Обновляет имя, ссылку endpoint, параметры источника и неотключающие статусы; `disabled` разрешён только через `DisablePackageSource`. |
 | `DisablePackageSource` | gRPC command | `package.source.disable` | `CommandMeta.command_id` или `idempotency_key` + ожидаемая версия | Отключает источник без физического удаления. |
 | `GetPackageSource` | gRPC query | `package.source.read` | нет | Авторитетное чтение источника. |
 | `ListPackageSources` | gRPC query | `package.source.read` | нет | Список источников по scope и статусу. |

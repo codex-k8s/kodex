@@ -263,6 +263,32 @@ func TestUpdatePackageSourceReplayUsesStoredSnapshot(t *testing.T) {
 	}
 }
 
+func TestUpdatePackageSourceRejectsDisabledStatus(t *testing.T) {
+	t.Parallel()
+
+	sourceID := uuid.New()
+	repository := &fakeRepository{
+		packageSource: entity.PackageSource{
+			VersionedBase: entity.VersionedBase{ID: sourceID, Version: 1},
+			Status:        enum.PackageSourceStatusActive,
+		},
+		commandResultErr: errs.ErrNotFound,
+	}
+	service := NewWithConfig(repository, fixedClock{}, fixedIDs{}, Config{Authorizer: &recordingAuthorizer{}})
+
+	_, err := service.UpdatePackageSource(context.Background(), UpdatePackageSourceInput{
+		SourceID: sourceID,
+		Status:   ptr(enum.PackageSourceStatusDisabled),
+		Meta:     commandMeta(),
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("UpdatePackageSource() err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+	if repository.updateSourceWithResultCalls != 0 {
+		t.Fatalf("update calls = %d, want no mutation for disabled status", repository.updateSourceWithResultCalls)
+	}
+}
+
 type recordingAuthorizer struct {
 	requests []AuthorizationRequest
 	err      error

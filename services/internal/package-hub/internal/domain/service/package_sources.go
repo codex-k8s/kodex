@@ -155,7 +155,7 @@ func applyPackageSourceUpdate(current entity.PackageSource, input UpdatePackageS
 		updated.CatalogEndpointRef = strings.TrimSpace(*input.CatalogEndpointRef)
 	}
 	if input.Status != nil {
-		if err := requireSourceStatus(*input.Status); err != nil {
+		if err := requireSourceUpdateStatus(*input.Status); err != nil {
 			return entity.PackageSource{}, err
 		}
 		updated.Status = *input.Status

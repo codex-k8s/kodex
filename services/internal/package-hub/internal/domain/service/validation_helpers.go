@@ -48,6 +48,13 @@ func requireSourceStatus(status enum.PackageSourceStatus) error {
 	}
 }
 
+func requireSourceUpdateStatus(status enum.PackageSourceStatus) error {
+	if status == enum.PackageSourceStatusDisabled {
+		return errs.ErrInvalidArgument
+	}
+	return requireSourceStatus(status)
+}
+
 func requireVerificationStatus(status enum.PackageVerificationStatus) error {
 	switch status {
 	case enum.PackageVerificationStatusVerified, enum.PackageVerificationStatusUnverified, enum.PackageVerificationStatusRejected, enum.PackageVerificationStatusRevoked:
