@@ -5,7 +5,7 @@ title: kodex — карта Issue волны 8
 status: active
 owner_role: KM
 created_at: 2026-05-05
-updated_at: 2026-05-06
+updated_at: 2026-05-07
 ---
 
 # Карта Issue — волна 8
@@ -18,11 +18,11 @@ updated_at: 2026-05-06
 
 | Issue/PR | Документы | Домен | Статус | Примечание |
 |---|---|---|---|---|
-| #628 | `docs/domains/projects-and-repositories/**`, `docs/delivery/waves/wave-008-projects-and-repositories.md`, `docs/delivery/issue-map/domains/projects-and-repositories.md` | projects-and-repositories | закрывается как выполненная | Стартовый срез фиксирует доменный пакет, план поставки и очередь малых PR-срезов. |
-| #629 | `docs/domains/projects-and-repositories/architecture/api_contract.md`, `proto/kodex/projects/v1/project_catalog.proto`, `specs/asyncapi/project-catalog.v1.yaml`, `services/internal/project-catalog/**` | projects-and-repositories | закрывается как выполненная | Контракты, сервисный каркас и доменные интерфейсы. |
-| #630 | `docs/domains/projects-and-repositories/architecture/data_model.md`, `services/internal/project-catalog/**`, `libs/go/postgres/**` | projects-and-repositories | закрывается как выполненная | PostgreSQL-модель, миграции, слой репозитория, outbox и тесты. |
-| #639 | `services/internal/project-catalog/**`, `services/internal/access-manager/**`, `libs/go/**` | projects-and-repositories | закрывается как выполненная | Техническое выравнивание PostgreSQL-сканеров на штатные помощники `pgx`, где нет ручной доменной конвертации. |
-| #631 | `docs/domains/projects-and-repositories/architecture/api_contract.md`, `services/internal/project-catalog/**`, `libs/go/grpcserver/**`, `libs/go/eventlog/**` | projects-and-repositories | закрывается как выполненная | gRPC-операции, граница проверки доступа через `access-manager`, outbox-публикация в `platform-event-log`, доменные и транспортные тесты. |
-| #632 | `docs/domains/projects-and-repositories/product/requirements.md`, `docs/domains/projects-and-repositories/architecture/design.md`, `docs/domains/projects-and-repositories/architecture/data_model.md`, `services/internal/project-catalog/**` | projects-and-repositories | закрывается как выполненная | Политика `services.yaml`, источники документации, операторские переопределения и политика рабочего контура. |
-| #633 | `docs/domains/projects-and-repositories/delivery/wave8_project_catalog.md`, `deploy/base/project-catalog/**`, `services/internal/project-catalog/**` | projects-and-repositories | запланирована | Правила веток, релизная политика, политика размещения, манифесты и закрывающий контрольный срез. |
+| #628 | `docs/domains/projects-and-repositories/**`, `docs/delivery/waves/wave-008-projects-and-repositories.md`, `docs/delivery/issue-map/domains/projects-and-repositories.md` | projects-and-repositories | закрыта как выполненная | Стартовый срез фиксирует доменный пакет, план поставки и очередь малых PR-срезов. |
+| #629 | `docs/domains/projects-and-repositories/architecture/api_contract.md`, `proto/kodex/projects/v1/project_catalog.proto`, `specs/asyncapi/project-catalog.v1.yaml`, `services/internal/project-catalog/**` | projects-and-repositories | закрыта как выполненная | Контракты, сервисный каркас и доменные интерфейсы. |
+| #630 | `docs/domains/projects-and-repositories/architecture/data_model.md`, `services/internal/project-catalog/**`, `libs/go/postgres/**` | projects-and-repositories | закрыта как выполненная | PostgreSQL-модель, миграции, слой репозитория, outbox и тесты. |
+| #639 | `services/internal/project-catalog/**`, `services/internal/access-manager/**`, `libs/go/**` | projects-and-repositories | закрыта как выполненная | Техническое выравнивание PostgreSQL-сканеров на штатные помощники `pgx`, где нет ручной доменной конвертации. |
+| #631 | `docs/domains/projects-and-repositories/architecture/api_contract.md`, `services/internal/project-catalog/**`, `libs/go/grpcserver/**`, `libs/go/eventlog/**` | projects-and-repositories | закрыта как выполненная | gRPC-операции, граница проверки доступа через `access-manager`, outbox-публикация в `platform-event-log`, доменные и транспортные тесты. |
+| #632 | `docs/domains/projects-and-repositories/product/requirements.md`, `docs/domains/projects-and-repositories/architecture/design.md`, `docs/domains/projects-and-repositories/architecture/data_model.md`, `services/internal/project-catalog/**` | projects-and-repositories | закрыта как выполненная | Политика `services.yaml`, источники документации, операторские переопределения и политика рабочего контура. |
+| #633 | `docs/domains/projects-and-repositories/delivery/wave8_project_catalog.md`, `deploy/base/project-catalog/**`, `services/internal/project-catalog/**`, `scripts/build-project-catalog-images.sh`, `scripts/smoke-project-catalog.sh`, `bootstrap/remote/70_finalize_and_report.sh` | projects-and-repositories | закрывается как выполненная | Правила веток, релизная политика, политика размещения, манифесты и закрывающий контрольный срез. |
 | #281, #282 | `docs/domains/projects-and-repositories/**`, `docs/delivery/issue-map/domains/provider-native-work-items.md` | projects-and-repositories, provider-native-work-items | остаются открытыми | Wave 8 создаёт проектное основание подключения репозиториев; provider-native создание, сканирование и первичный PR требуют следующих срезов. |
