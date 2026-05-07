@@ -8,10 +8,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	grpcruntime "google.golang.org/grpc"
 
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
+	accessaccountsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/access_accounts/v1"
+	accessclient "github.com/codex-k8s/kodex/services/internal/package-hub/internal/clients/access"
 	packageservice "github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/service"
 	packagepostgres "github.com/codex-k8s/kodex/services/internal/package-hub/internal/repository/postgres/catalog"
 	packagegrpc "github.com/codex-k8s/kodex/services/internal/package-hub/internal/transport/grpc"
@@ -36,8 +39,15 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if eventLogPool != nil {
 		defer eventLogPool.Close()
 	}
+	authorizer, accessConn, err := newAuthorizer(cfg)
+	if err != nil {
+		return err
+	}
+	if accessConn != nil {
+		defer func() { _ = accessConn.Close() }()
+	}
 	packageRepository := packagepostgres.NewRepository(dbPool)
-	packageService := packageservice.New(packageRepository, systemClock{}, uuidGenerator{})
+	packageService := packageservice.NewWithConfig(packageRepository, systemClock{}, uuidGenerator{}, packageservice.Config{Authorizer: authorizer})
 	components := processComponents{PackageService: packageService}
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
@@ -99,6 +109,30 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 
 type processComponents struct {
 	PackageService *packageservice.Service
+}
+
+func newAuthorizer(cfg Config) (packageservice.Authorizer, *grpcruntime.ClientConn, error) {
+	if cfg.AccessCheckEnabled {
+		return connectAuthorizer(accessclient.Config{
+			Addr:      cfg.AccessManagerGRPCAddr,
+			AuthToken: cfg.AccessManagerGRPCAuthToken,
+			Timeout:   cfg.AccessManagerCheckTimeout,
+		})
+	}
+	return packageservice.AllowAllAuthorizer{}, nil, nil
+}
+
+func connectAuthorizer(accessConfig accessclient.Config) (packageservice.Authorizer, *grpcruntime.ClientConn, error) {
+	conn, err := accessclient.NewConnection(accessConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+	authorizer, err := accessclient.NewAuthorizer(accessaccountsv1.NewAccessManagerServiceClient(conn), accessConfig)
+	if err != nil {
+		_ = conn.Close()
+		return nil, nil, err
+	}
+	return authorizer, conn, nil
 }
 
 func readinessChecks(packageService *packageservice.Service, packageDB serviceprocess.PingStore, eventLogDB serviceprocess.PingStore) []serviceprocess.ReadinessCheck {

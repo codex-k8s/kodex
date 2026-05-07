@@ -21,7 +21,7 @@ approvals:
 ## TL;DR
 
 - Тип API: внутренний gRPC `PackageHubService`, доменные события `package.*`.
-- Аутентификация: через gateway, сервисный токен или MCP-границу; команды дополнительно проверяются через `access-manager`.
+- Аутентификация: через gateway, сервисный токен или MCP-границу; доменные команды и авторитетные чтения дополнительно проверяются через `access-manager`.
 - Версионирование: стабильный транспортный `v1`; источники правды будущих контрактов — proto и AsyncAPI.
 - Основные операции: источники пакетов, синхронизация доступного каталога, чтения пакетов и версий, установки, схемы секретов, статус верификации.
 
@@ -102,7 +102,7 @@ approvals:
 | AsyncAPI `package.*` | Подготовлен как стабильный событийный `v1` в `specs/asyncapi/package-hub.v1.yaml`. |
 | Go-артефакты gRPC | Генерируются в `proto/gen/go/kodex/packages/v1/**`. |
 | Go-артефакты событий | Генерируются в `libs/go/platformevents/packagehub/events.gen.go`. |
-| Сервисный процесс `package-hub` | Общий gRPC runtime, служебные `/health/*`, `/metrics`, PostgreSQL repository и часть операций `PackageHubService` подключены. |
+| Сервисный процесс `package-hub` | Общий gRPC runtime, служебные `/health/*`, `/metrics`, PostgreSQL repository, проверка доступа через `access-manager` и часть операций `PackageHubService` подключены. |
 | PostgreSQL и outbox | Таблицы package-каталога, установок, проверок, идемпотентного следа и outbox добавлены; диспетчер публикует события через `platform-event-log`. |
 | Реализованные операции | `GetPackageSource`, `ListPackageSources`, `GetPackage`, `ListPackages`, `GetPackageVersion`, `ListPackageVersions`, `GetPackageManifest`, `SetPackageVerification`. |
 | Операции следующих срезов | Источники магазинов, синхронизация доступного каталога, установки, схемы секретов установок и runtime-связанные команды пока возвращают `unimplemented`. |

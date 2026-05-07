@@ -15,6 +15,9 @@ func (s *Service) SetPackageVerification(ctx context.Context, input SetPackageVe
 	if err := requireVerificationStatus(input.VerificationStatus); err != nil {
 		return SetPackageVerificationResult{}, err
 	}
+	if err := s.authorizeCommand(ctx, input.Meta, packageActionVerify, versionScopedResource(packageResourceVersion, input.PackageVersionID.String(), input.PackageVersionID.String())); err != nil {
+		return SetPackageVerificationResult{}, err
+	}
 	replay, ok, err := s.findVerificationReplay(ctx, input.Meta, input.PackageVersionID)
 	if err != nil || ok {
 		return replay, err

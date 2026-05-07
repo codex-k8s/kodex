@@ -16,6 +16,13 @@ func requireID(id uuid.UUID) error {
 	return nil
 }
 
+func requireOptionalID(id *uuid.UUID) error {
+	if id != nil && *id == uuid.Nil {
+		return errs.ErrInvalidArgument
+	}
+	return nil
+}
+
 func requireVerificationStatus(status enum.PackageVerificationStatus) error {
 	switch status {
 	case enum.PackageVerificationStatusVerified, enum.PackageVerificationStatusUnverified, enum.PackageVerificationStatusRejected, enum.PackageVerificationStatusRevoked:
