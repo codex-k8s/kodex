@@ -4,22 +4,26 @@ set -euo pipefail
 access_package="./services/internal/access-manager/internal/repository/postgres/access"
 project_catalog_package="./services/internal/project-catalog/internal/repository/postgres/project"
 package_hub_package="./services/internal/package-hub/internal/repository/postgres/catalog"
+provider_hub_package="./services/internal/provider-hub/internal/repository/postgres/provider"
 
 run_postgres_tests() {
 	local access_dsn="$1"
 	local eventlog_dsn="$2"
 	local project_catalog_dsn="$3"
 	local package_hub_dsn="$4"
+	local provider_hub_dsn="$5"
 	if [[ -n "${KODEX_POSTGRES_TEST_PACKAGE:-}" ]]; then
 		KODEX_ACCESS_MANAGER_TEST_DATABASE_DSN="${access_dsn}" \
 			KODEX_PROJECT_CATALOG_TEST_DATABASE_DSN="${project_catalog_dsn}" \
 			KODEX_PACKAGE_HUB_TEST_DATABASE_DSN="${package_hub_dsn}" \
+			KODEX_PROVIDER_HUB_TEST_DATABASE_DSN="${provider_hub_dsn}" \
 			go test "${KODEX_POSTGRES_TEST_PACKAGE}" -run 'TestRepositoryIntegration' -count=1
 		return
 	fi
 	KODEX_ACCESS_MANAGER_TEST_DATABASE_DSN="${access_dsn}" go test "${access_package}" -run 'TestRepositoryIntegration' -count=1
 	KODEX_PROJECT_CATALOG_TEST_DATABASE_DSN="${project_catalog_dsn}" go test "${project_catalog_package}" -run 'TestRepositoryIntegration' -count=1
 	KODEX_PACKAGE_HUB_TEST_DATABASE_DSN="${package_hub_dsn}" go test "${package_hub_package}" -run 'TestRepositoryIntegration' -count=1
+	KODEX_PROVIDER_HUB_TEST_DATABASE_DSN="${provider_hub_dsn}" go test "${provider_hub_package}" -run 'TestRepositoryIntegration' -count=1
 	(
 		cd libs/go/eventlog
 		KODEX_EVENTLOG_TEST_DATABASE_DSN="${eventlog_dsn}" go test ./... -run 'TestPostgresIntegration' -count=1
@@ -39,7 +43,16 @@ if [[ -n "${KODEX_ACCESS_MANAGER_TEST_DATABASE_DSN:-}" ]]; then
 		echo "test-go-postgres: KODEX_PACKAGE_HUB_TEST_DATABASE_DSN is required when external access-manager DSN is provided" >&2
 		exit 1
 	fi
-	run_postgres_tests "${KODEX_ACCESS_MANAGER_TEST_DATABASE_DSN}" "${KODEX_EVENTLOG_TEST_DATABASE_DSN}" "${KODEX_PROJECT_CATALOG_TEST_DATABASE_DSN}" "${KODEX_PACKAGE_HUB_TEST_DATABASE_DSN}"
+	if [[ -z "${KODEX_PROVIDER_HUB_TEST_DATABASE_DSN:-}" ]]; then
+		echo "test-go-postgres: KODEX_PROVIDER_HUB_TEST_DATABASE_DSN is required when external access-manager DSN is provided" >&2
+		exit 1
+	fi
+	run_postgres_tests \
+		"${KODEX_ACCESS_MANAGER_TEST_DATABASE_DSN}" \
+		"${KODEX_EVENTLOG_TEST_DATABASE_DSN}" \
+		"${KODEX_PROJECT_CATALOG_TEST_DATABASE_DSN}" \
+		"${KODEX_PACKAGE_HUB_TEST_DATABASE_DSN}" \
+		"${KODEX_PROVIDER_HUB_TEST_DATABASE_DSN}"
 	exit 0
 fi
 
@@ -81,6 +94,7 @@ fi
 docker exec "${container}" createdb -U postgres kodex_platform_event_log_test
 docker exec "${container}" createdb -U postgres kodex_project_catalog_test
 docker exec "${container}" createdb -U postgres kodex_package_hub_test
+docker exec "${container}" createdb -U postgres kodex_provider_hub_test
 
 port="$(docker port "${container}" 5432/tcp | awk -F: '{print $NF}' | head -n 1)"
 if [[ -z "${port}" ]]; then
@@ -92,4 +106,5 @@ run_postgres_tests \
 	"postgres://postgres:${password}@127.0.0.1:${port}/kodex_access_manager_test?sslmode=disable" \
 	"postgres://postgres:${password}@127.0.0.1:${port}/kodex_platform_event_log_test?sslmode=disable" \
 	"postgres://postgres:${password}@127.0.0.1:${port}/kodex_project_catalog_test?sslmode=disable" \
-	"postgres://postgres:${password}@127.0.0.1:${port}/kodex_package_hub_test?sslmode=disable"
+	"postgres://postgres:${password}@127.0.0.1:${port}/kodex_package_hub_test?sslmode=disable" \
+	"postgres://postgres:${password}@127.0.0.1:${port}/kodex_provider_hub_test?sslmode=disable"

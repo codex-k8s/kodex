@@ -43,12 +43,15 @@ approvals:
 Важные инварианты:
 
 - политика аккаунта и область применения находятся в `access-manager`;
-- `provider-hub` хранит только runtime-состояние использования аккаунта у провайдера;
+- `provider-hub` хранит только операционное состояние использования аккаунта у провайдера;
 - сырые секреты не хранятся в БД.
+- частичный снимок одного класса лимита может перевести аккаунт в `limited`, но не может вернуть его в `active`; снятие `limited` выполняется только полным пересчётом лимитов или отдельным согласованным переходом состояния.
+- авторитетное обновление операционного состояния отделено от частичного обновления по снимку лимита и может снять `limited`, если полный пересчёт показал восстановление лимита.
+- частичное обновление по снимку лимита не применяет наблюдение, которое старше текущего `last_checked_at`, и не откатывает `status`, `last_checked_at`, `last_success_at`, `version` и поля последней ошибки.
 
 | Поле | Тип | Nullable | Ограничения | Примечание |
 |---|---|---:|---|---|
-| `id` | UUID | no | primary key | Идентификатор runtime-записи. |
+| `id` | UUID | no | primary key | Идентификатор записи операционного состояния. |
 | `external_account_id` | UUID | no | indexed | Ссылка на внешний аккаунт из `access-manager`. |
 | `provider_slug` | text | no | indexed | `github`, позднее `gitlab`. |
 | `status` | text | no | enum-like | `active`, `reauthorization_required`, `limited`, `disabled`, `error`. |
@@ -203,6 +206,12 @@ approvals:
 | `captured_at` | timestamptz | no | indexed | Время снимка. |
 | `source` | text | no | indexed | `provider_hub`, `slot_agent_before`, `slot_agent_after`, `slot_agent_signal`. |
 
+Идемпотентность записи снимка обеспечивается естественным ключом
+`external_account_id + provider_slug + limit_class + captured_at + source`.
+Повтор с тем же ключом и тем же содержимым возвращает уже записанный снимок без изменения исторического факта. Повтор с тем же ключом, но другим `remaining`, `limit_value` или `reset_at`, считается конфликтом доставки.
+Повтор уже записанного снимка не обновляет соседнее операционное состояние аккаунта: runtime state меняется только для нового наблюдения.
+Для конкурентных повторов запись снимка выполняется как `INSERT ... ON CONFLICT DO NOTHING RETURNING`, а replay-чтение выполняется отдельным SQL-вызовом внутри той же транзакции, чтобы второй запрос видел строку, которую только что зафиксировала конкурирующая транзакция.
+
 ### `ProviderOperation`
 
 Назначение: аудит и диагностика операции платформы во внешнем провайдере.
@@ -224,6 +233,9 @@ approvals:
 | `started_at` | timestamptz | no | indexed | Начало. |
 | `finished_at` | timestamptz | yes | indexed | Завершение. |
 | `version` | bigint | no | monotonic | Версия записи операции. |
+
+Идемпотентный повтор provider-операции по `operation_type + command_id` возвращает уже записанную операцию только при совпадении области и результата: `actor_id`, `external_account_id`, `provider_slug`, `target_ref`, `status`, `result_ref`, `error_code`, `error_message` и `rate_limit_snapshot_id`. Если тот же `command_id` приходит с другой областью или другим содержимым результата, операция конфликтует.
+Replay-чтение операции выполняется отдельным SQL-вызовом после `INSERT ... ON CONFLICT DO NOTHING RETURNING`, чтобы одинаковые конкурентные повторы не превращались в ложный конфликт.
 
 ### `ProviderHubOutboxEvent`
 

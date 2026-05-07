@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -57,4 +58,47 @@ func assertMigrationFile(t testing.TB, file string, seenVersions map[string]stri
 	if downIndex < upIndex {
 		t.Fatalf("migration %s has -- +goose Down before -- +goose Up", name)
 	}
+}
+
+// GooseUpStatements returns ordered executable statements from goose Up sections.
+func GooseUpStatements(t testing.TB, dir string) []string {
+	t.Helper()
+
+	files, err := filepath.Glob(filepath.Join(dir, "*.sql"))
+	if err != nil {
+		t.Fatalf("glob migrations: %v", err)
+	}
+	sort.Strings(files)
+	statements := make([]string, 0, len(files))
+	for _, file := range files {
+		contentBytes, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("read migration %s: %v", file, err)
+		}
+		statements = append(statements, splitStatements(upSection(t, string(contentBytes), filepath.Base(file)))...)
+	}
+	return statements
+}
+
+func upSection(t testing.TB, content string, name string) string {
+	t.Helper()
+
+	upIndex := strings.Index(content, "-- +goose Up")
+	downIndex := strings.Index(content, "-- +goose Down")
+	if upIndex < 0 || downIndex < 0 || downIndex < upIndex {
+		t.Fatalf("invalid goose migration markers in %s", name)
+	}
+	return content[upIndex+len("-- +goose Up") : downIndex]
+}
+
+func splitStatements(content string) []string {
+	parts := strings.Split(content, ";")
+	statements := make([]string, 0, len(parts))
+	for _, part := range parts {
+		statement := strings.TrimSpace(part)
+		if statement != "" {
+			statements = append(statements, statement)
+		}
+	}
+	return statements
 }

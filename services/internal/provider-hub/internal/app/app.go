@@ -52,6 +52,9 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		Logger:        logger,
 		Metrics:       grpcMetrics,
 		Authenticator: grpcserver.NewSharedTokenAuthenticator(cfg.GRPCAuthToken),
+		UnaryInterceptors: []grpcserver.UnaryInterceptor{
+			providergrpc.UnaryErrorInterceptor(logger),
+		},
 	})
 	if err != nil {
 		return err
