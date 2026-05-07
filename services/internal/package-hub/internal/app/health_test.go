@@ -4,7 +4,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
 	packageservice "github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/service"
 )
 
@@ -14,7 +16,7 @@ func TestHealthMuxLivezReturnsNoContent(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/health/livez", nil)
 	response := httptest.NewRecorder()
 
-	healthMux(processComponents{}).ServeHTTP(response, request)
+	serviceprocess.NewHealthMux(readinessChecks(nil), 2*time.Second).ServeHTTP(response, request)
 
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("livez status = %d, want %d", response.Code, http.StatusNoContent)
@@ -27,7 +29,7 @@ func TestHealthMuxReadyzRequiresService(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/health/readyz", nil)
 	response := httptest.NewRecorder()
 
-	healthMux(processComponents{}).ServeHTTP(response, request)
+	serviceprocess.NewHealthMux(readinessChecks(nil), 2*time.Second).ServeHTTP(response, request)
 
 	if response.Code != http.StatusServiceUnavailable {
 		t.Fatalf("readyz status = %d, want %d", response.Code, http.StatusServiceUnavailable)
@@ -40,7 +42,7 @@ func TestHealthMuxReadyzReturnsNoContentWhenServiceExists(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/health/readyz", nil)
 	response := httptest.NewRecorder()
 
-	healthMux(processComponents{PackageService: packageservice.New()}).ServeHTTP(response, request)
+	serviceprocess.NewHealthMux(readinessChecks(packageservice.New()), 2*time.Second).ServeHTTP(response, request)
 
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("readyz status = %d, want %d", response.Code, http.StatusNoContent)

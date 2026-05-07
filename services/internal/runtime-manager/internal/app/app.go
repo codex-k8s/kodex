@@ -1,0 +1,107 @@
+// Package app contains runtime-manager process composition and lifecycle.
+package app
+
+import (
+	"context"
+	"log/slog"
+	"net/http"
+	"time"
+
+	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
+	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
+	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
+	runtimepostgres "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/repository/postgres/runtime"
+	runtimegrpc "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/transport/grpc"
+)
+
+// Run starts runtime-manager process servers and shuts them down with context.
+func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
+	if err := cfg.Validate(); err != nil {
+		return err
+	}
+	dbPool, err := postgreslib.OpenPool(ctx, cfg.DatabasePoolSettings())
+	if err != nil {
+		return err
+	}
+	defer dbPool.Close()
+	eventLogPool, err := serviceprocess.OpenEventLogPool(ctx, cfg.needsEventLogDatabase(), cfg.EventLogDatabasePoolSettings())
+	if err != nil {
+		return err
+	}
+	if eventLogPool != nil {
+		defer eventLogPool.Close()
+	}
+
+	runtimeRepository := runtimepostgres.NewRepository(dbPool)
+	httpServer := &http.Server{
+		Addr:              cfg.HTTPAddr,
+		Handler:           serviceprocess.NewHealthMux(readinessChecks(runtimeRepository, eventLogPool), 2*time.Second),
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	grpcMetrics, err := grpcserver.NewMetrics(nil, grpcserver.MetricsConfig{
+		Subsystem:   "runtime_manager_grpc",
+		ServiceName: "runtime-manager",
+	})
+	if err != nil {
+		return err
+	}
+	grpcServer, err := grpcserver.NewServer(cfg.GRPCServerConfig(), grpcserver.Dependencies{
+		Logger:        logger,
+		Metrics:       grpcMetrics,
+		Authenticator: grpcserver.NewSharedTokenAuthenticator(cfg.GRPC.AuthToken),
+	})
+	if err != nil {
+		return err
+	}
+	runtimegrpc.RegisterRuntimeManagerService(grpcServer)
+
+	errCh := make(chan error, 3)
+	go serviceprocess.StartHTTPServer(httpServer, "runtime-manager", logger, errCh)
+	go serviceprocess.StartGRPCServer(grpcServer, "runtime-manager", cfg.GRPCAddr, logger, errCh)
+	err = serviceprocess.StartOutboxDispatcher(
+		ctx,
+		"runtime-manager",
+		runtimeRepository,
+		outboxEvent,
+		serviceprocess.OutboxRuntimeConfig{
+			DispatchEnabled:     cfg.Outbox.DispatchEnabled,
+			PublisherKind:       cfg.Outbox.PublisherKind,
+			AllowLossyPublisher: cfg.Outbox.AllowLossyPublisher,
+			EventLogSource:      cfg.Outbox.EventLogSource,
+			Dispatcher:          cfg.OutboxDispatcherConfig(),
+		},
+		serviceprocess.EventLogAppender(eventLogPool),
+		logger,
+		errCh,
+	)
+	if err != nil {
+		return err
+	}
+
+	select {
+	case <-ctx.Done():
+		return serviceprocess.ShutdownHTTPAndGRPC(ctx, httpServer, grpcServer, 10*time.Second)
+	case err := <-errCh:
+		grpcServer.Stop()
+		_ = httpServer.Close()
+		return err
+	}
+}
+
+type runtimeStore interface {
+	Ping(context.Context) error
+}
+
+type pingStore interface {
+	Ping(context.Context) error
+}
+
+func readinessChecks(runtime runtimeStore, eventLog pingStore) []serviceprocess.ReadinessCheck {
+	checks := []serviceprocess.ReadinessCheck{
+		{Name: "runtime database", Check: runtime.Ping},
+	}
+	if eventLog != nil {
+		checks = append(checks, serviceprocess.ReadinessCheck{Name: "event log database", Check: eventLog.Ping})
+	}
+	return checks
+}

@@ -3,21 +3,15 @@ package app
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	eventlog "github.com/codex-k8s/kodex/libs/go/eventlog"
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
-	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
+	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
 	accessservice "github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/service"
 	accesspostgres "github.com/codex-k8s/kodex/services/internal/access-manager/internal/repository/postgres/access"
 	accessgrpc "github.com/codex-k8s/kodex/services/internal/access-manager/internal/transport/grpc"
@@ -33,7 +27,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		return err
 	}
 	defer dbPool.Close()
-	eventLogPool, err := openOutboxEventLogPool(ctx, cfg)
+	eventLogPool, err := serviceprocess.OpenEventLogPool(ctx, cfg.needsEventLogDatabase(), cfg.EventLogDatabasePoolSettings())
 	if err != nil {
 		return err
 	}
@@ -43,14 +37,11 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 
 	accessRepository := accesspostgres.NewRepository(dbPool)
 	components := processComponents{
-		DBPool:         dbPool,
-		EventLogDBPool: eventLogPool,
-		AccessService:  accessservice.New(accessRepository, systemClock{}, uuidGenerator{}),
-		OutboxStore:    accessRepository,
+		AccessService: accessservice.New(accessRepository, systemClock{}, uuidGenerator{}),
 	}
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           healthMux(components),
+		Handler:           serviceprocess.NewHealthMux(readinessChecks(components.AccessService, dbPool, eventLogPool), 2*time.Second),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	grpcMetrics, err := grpcserver.NewMetrics(nil, grpcserver.MetricsConfig{
@@ -74,56 +65,31 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	accessgrpc.RegisterAccessManagerService(grpcServer, components.AccessService)
 
 	errCh := make(chan error, 3)
-	go func() {
-		logger.Info("access-manager http server starting", "addr", cfg.HTTPAddr)
-		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			errCh <- err
-		}
-	}()
-	go func() {
-		listener, err := net.Listen("tcp", cfg.GRPCAddr)
-		if err != nil {
-			errCh <- err
-			return
-		}
-		logger.Info("access-manager grpc server starting", "addr", cfg.GRPCAddr)
-		if err := grpcServer.Serve(listener); err != nil {
-			errCh <- err
-		}
-	}()
-	if cfg.OutboxDispatchEnabled {
-		publisher, err := eventlog.NewOutboxPublisher(
-			cfg.OutboxPublisherKind,
-			cfg.OutboxAllowLossyPublisher,
-			cfg.OutboxEventLogSource,
-			outboxEventLogAppender(eventLogPool),
-			logger,
-			"access-manager",
-		)
-		if err != nil {
-			return err
-		}
-		dispatcher := outboxlib.NewDispatcher(
-			outboxlib.NewStoreAdapter(components.OutboxStore, outboxEvent),
-			publisher,
-			cfg.OutboxDispatcherConfig(),
-			logger,
-			"access-manager",
-		)
-		go func() {
-			logger.Info("access-manager outbox dispatcher starting")
-			if err := dispatcher.Run(ctx); err != nil {
-				errCh <- err
-			}
-		}()
+	go serviceprocess.StartHTTPServer(httpServer, "access-manager", logger, errCh)
+	go serviceprocess.StartGRPCServer(grpcServer, "access-manager", cfg.GRPCAddr, logger, errCh)
+	err = serviceprocess.StartOutboxDispatcher(
+		ctx,
+		"access-manager",
+		accessRepository,
+		outboxEvent,
+		serviceprocess.OutboxRuntimeConfig{
+			DispatchEnabled:     cfg.OutboxDispatchEnabled,
+			PublisherKind:       cfg.OutboxPublisherKind,
+			AllowLossyPublisher: cfg.OutboxAllowLossyPublisher,
+			EventLogSource:      cfg.OutboxEventLogSource,
+			Dispatcher:          cfg.OutboxDispatcherConfig(),
+		},
+		serviceprocess.EventLogAppender(eventLogPool),
+		logger,
+		errCh,
+	)
+	if err != nil {
+		return err
 	}
 
 	select {
 	case <-ctx.Done():
-		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-		defer cancel()
-		grpcServer.GracefulStop()
-		return httpServer.Shutdown(shutdownCtx)
+		return serviceprocess.ShutdownHTTPAndGRPC(ctx, httpServer, grpcServer, 10*time.Second)
 	case err := <-errCh:
 		grpcServer.Stop()
 		_ = httpServer.Close()
@@ -132,56 +98,17 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 }
 
 type processComponents struct {
-	DBPool         *pgxpool.Pool
-	EventLogDBPool *pgxpool.Pool
-	AccessService  *accessservice.Service
-	OutboxStore    serviceOutboxStore
+	AccessService *accessservice.Service
 }
 
-func openOutboxEventLogPool(ctx context.Context, cfg Config) (*pgxpool.Pool, error) {
-	if !cfg.needsEventLogDatabase() {
-		return nil, nil
-	}
-	pool, err := postgreslib.OpenPool(ctx, cfg.EventLogDatabasePoolSettings())
-	if err != nil {
-		return nil, fmt.Errorf("open platform event log database pool: %w", err)
-	}
-	return pool, nil
-}
-
-func outboxEventLogAppender(pool *pgxpool.Pool) eventlog.Appender {
-	if pool == nil {
-		return nil
-	}
-	return eventlog.NewStore(pool)
-}
-
-func healthMux(components processComponents) *http.ServeMux {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/health/livez", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-	mux.HandleFunc("/health/readyz", func(w http.ResponseWriter, r *http.Request) {
-		if components.AccessService == nil {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			return
-		}
-		readyCtx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-		defer cancel()
-		if err := components.DBPool.Ping(readyCtx); err != nil {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			return
-		}
-		if components.EventLogDBPool != nil {
-			if err := components.EventLogDBPool.Ping(readyCtx); err != nil {
-				w.WriteHeader(http.StatusServiceUnavailable)
-				return
-			}
-		}
-		w.WriteHeader(http.StatusNoContent)
-	})
-	mux.Handle("/metrics", promhttp.Handler())
-	return mux
+func readinessChecks(accessService *accessservice.Service, accessDB serviceprocess.PingStore, eventLogDB serviceprocess.PingStore) []serviceprocess.ReadinessCheck {
+	return serviceprocess.ServiceDatabaseReadinessChecks(
+		"access service",
+		accessService != nil,
+		"access database",
+		accessDB,
+		eventLogDB,
+	)
 }
 
 type systemClock struct{}

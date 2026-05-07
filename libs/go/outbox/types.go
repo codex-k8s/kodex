@@ -32,6 +32,29 @@ type Event struct {
 	AttemptCount  int
 }
 
+// NewEvent creates the shared dispatcher event shape from a service-local outbox row.
+func NewEvent(
+	id uuid.UUID,
+	eventType string,
+	schemaVersion int,
+	aggregateType string,
+	aggregateID uuid.UUID,
+	payload []byte,
+	occurredAt time.Time,
+	attemptCount int,
+) Event {
+	return Event{
+		ID:            id,
+		EventType:     eventType,
+		SchemaVersion: schemaVersion,
+		AggregateType: aggregateType,
+		AggregateID:   aggregateID,
+		Payload:       payload,
+		OccurredAt:    occurredAt,
+		AttemptCount:  attemptCount,
+	}
+}
+
 // EntityStore is a service-local outbox store with a service-specific event entity type.
 type EntityStore[T any] interface {
 	ClaimOutboxEvents(ctx context.Context, limit int, now time.Time, lockedUntil time.Time) ([]T, error)

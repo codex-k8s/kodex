@@ -65,8 +65,8 @@ approvals:
 | `lease_until` | timestamptz | yes | indexed | Истечение аренды. |
 | `last_error_code` | text | no | default '' | Классификация последней ошибки. |
 | `last_error_message` | text | no | default '' | Короткое сообщение без секрета. |
-| `created_at` | timestamptz | no | indexed | Создание. |
-| `updated_at` | timestamptz | no | indexed | Последнее изменение. |
+| `created_at` | timestamptz | no | indexed | Создание; возвращается в read contract. |
+| `updated_at` | timestamptz | no | indexed | Последнее изменение; возвращается в read contract. |
 | `version` | bigint | no | monotonic | Оптимистичная конкуренция. |
 
 ### `WorkspaceMaterialization`
@@ -91,6 +91,8 @@ approvals:
 | `finished_at` | timestamptz | yes |  | Завершение. |
 | `last_error_code` | text | no | default '' | Классификация ошибки. |
 | `last_error_message` | text | no | default '' | Короткое сообщение без секрета. |
+| `created_at` | timestamptz | no | indexed | Внутреннее persistence-поле; в текущий read contract не входит. |
+| `updated_at` | timestamptz | no | indexed | Внутреннее persistence-поле; в текущий read contract не входит. |
 | `version` | bigint | no | monotonic | Версия попытки. |
 
 ### `Job`
@@ -101,6 +103,7 @@ approvals:
 
 - `Job` не является agent `Run`;
 - job может быть связан со слотом, проектом, release line, пакетом или maintenance policy;
+- идемпотентный след mutating-команд хранится отдельно в `RuntimeManagerCommandResult`;
 - захват задания является короткой арендой с токеном, чтобы поздний исполнитель не мог перезаписать новую попытку;
 - долгие операции не держат SQL-блокировки.
 
@@ -125,7 +128,7 @@ approvals:
 | `fleet_scope_id` | UUID | yes | indexed | Внешний fleet scope. |
 | `cluster_id` | UUID | yes | indexed | Внешний cluster ref. |
 | `requested_by` | UUID | yes | indexed | Actor, если применимо. |
-| `created_at` | timestamptz | no | indexed | Создание. |
+| `created_at` | timestamptz | no | indexed | Создание; возвращается в read contract. |
 | `started_at` | timestamptz | yes |  | Начало исполнения. |
 | `finished_at` | timestamptz | yes |  | Завершение. |
 | `next_action` | text | no | default '' | Что ожидается дальше. |
@@ -133,7 +136,30 @@ approvals:
 | `last_error_message` | text | no | default '' | Короткая ошибка без секрета. |
 | `short_log_tail` | text | no | default '' | Ограниченный хвост лога. |
 | `full_log_ref` | text | no | default '' | Ссылка на полный лог в Kubernetes или внешнем логировании. |
+| `updated_at` | timestamptz | no | indexed | Внутреннее persistence-поле; в текущий read contract не входит. |
 | `version` | bigint | no | monotonic | Оптимистичная конкуренция. |
+
+### `RuntimeManagerCommandResult`
+
+Назначение: persistent trail идемпотентных mutating-команд.
+
+Инварианты:
+
+- применяется ко всем mutating RPC, которые принимают `CommandMeta`;
+- `command_id` глобально уникален для повторяемой команды;
+- `idempotency_key` уникален в рамках операции;
+- `result_payload` хранит ограниченный результат без секретов, достаточный для безопасного повтора.
+
+| Поле | Тип | Nullable | Ограничения | Примечание |
+|---|---|---:|---|---|
+| `key` | text | no | primary key | Стабильный ключ результата команды. |
+| `command_id` | UUID | yes | unique when present | Идентификатор команды. |
+| `idempotency_key` | text | no | unique with operation when non-empty | Ключ идемпотентности для клиентов без UUID-команды. |
+| `operation` | text | no | indexed | Имя mutating RPC или внутренней команды. |
+| `aggregate_type` | text | no | indexed | Тип агрегата результата: `slot`, `workspace_materialization`, `job`, `cleanup_policy`, `prewarm_pool`. |
+| `aggregate_id` | UUID | no | indexed | Идентификатор агрегата результата. |
+| `result_payload` | jsonb | no | default {} | Ограниченный payload результата без секретов. |
+| `created_at` | timestamptz | no | indexed | Время фиксации результата. |
 
 ### `JobStep`
 
@@ -151,6 +177,8 @@ approvals:
 | `external_ref` | text | no | default '' | Kubernetes Job/Pod или внешний ref. |
 | `error_code` | text | no | default '' | Классификация ошибки. |
 | `error_message` | text | no | default '' | Короткое сообщение. |
+| `created_at` | timestamptz | no | indexed | Внутреннее persistence-поле; в текущий read contract не входит. |
+| `updated_at` | timestamptz | no | indexed | Внутреннее persistence-поле; в текущий read contract не входит. |
 | `version` | bigint | no | monotonic | Версия шага. |
 
 ### `RuntimeArtifactRef`
@@ -172,7 +200,7 @@ approvals:
 | `external_ref` | text | no | indexed | URI/ref первоисточника. |
 | `digest` | text | no | default '' | Digest, если известен. |
 | `metadata_json` | jsonb | no | default {} | Ограниченная диагностика без секретов. |
-| `created_at` | timestamptz | no | indexed | Создание. |
+| `created_at` | timestamptz | no | indexed | Создание; возвращается в read contract. |
 
 ### `CleanupPolicy`
 
@@ -182,13 +210,13 @@ approvals:
 |---|---|---:|---|---|
 | `id` | UUID | no | primary key | Идентификатор policy. |
 | `scope_type` | text | no | indexed | `platform`, `organization`, `project`, `repository`, `runtime_profile`. |
-| `scope_id` | UUID | yes | indexed | Внешний scope id. |
+| `scope_id` | text | no | indexed | Внешний scope id; для `platform` пустая строка, для `runtime_profile` ключ профиля. |
 | `ttl_seconds` | bigint | no |  | Срок хранения после завершения. |
 | `failed_ttl_seconds` | bigint | no |  | Срок хранения failed объектов. |
 | `keep_short_log_tail` | boolean | no | default true | Оставлять короткий хвост. |
 | `status` | text | no | indexed | `active`, `disabled`, `superseded`. |
-| `created_at` | timestamptz | no |  | Создание. |
-| `updated_at` | timestamptz | no |  | Обновление. |
+| `created_at` | timestamptz | no |  | Создание; возвращается в read contract. |
+| `updated_at` | timestamptz | no |  | Обновление; возвращается в read contract. |
 | `version` | bigint | no | monotonic | Версия policy. |
 
 ### `PrewarmPool`
@@ -199,14 +227,14 @@ approvals:
 |---|---|---:|---|---|
 | `id` | UUID | no | primary key | Идентификатор пула. |
 | `scope_type` | text | no | indexed | `platform`, `organization`, `project`, `repository`. |
-| `scope_id` | UUID | yes | indexed | Внешний scope id. |
+| `scope_id` | text | no | indexed | Внешний scope id; для `platform` пустая строка. |
 | `runtime_profile` | text | no | indexed | Профиль runtime. |
 | `fleet_scope_id` | UUID | yes | indexed | Внешний fleet scope. |
 | `target_size` | bigint | no |  | Желаемое число прогретых слотов. |
 | `status` | text | no | indexed | `active`, `paused`, `disabled`. |
 | `last_capacity_status` | text | no | default '' | `ok`, `degraded`, `insufficient`. |
-| `created_at` | timestamptz | no |  | Создание. |
-| `updated_at` | timestamptz | no |  | Обновление. |
+| `created_at` | timestamptz | no |  | Создание; возвращается в read contract. |
+| `updated_at` | timestamptz | no |  | Обновление; возвращается в read contract. |
 | `version` | bigint | no | monotonic | Версия пула. |
 
 ### `RuntimeManagerOutboxEvent`
@@ -224,6 +252,9 @@ approvals:
 - `Slot(agent_run_id)`;
 - `WorkspaceMaterialization(slot_id, status)`;
 - `WorkspaceMaterialization(fingerprint)`;
+- `RuntimeManagerCommandResult(command_id)`;
+- `RuntimeManagerCommandResult(operation, idempotency_key)`;
+- `RuntimeManagerCommandResult(aggregate_type, aggregate_id, created_at)`;
 - `Job(status, lease_until, priority, created_at)`;
 - `Job(slot_id, status)`;
 - `Job(project_id, status)`;

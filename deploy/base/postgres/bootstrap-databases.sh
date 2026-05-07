@@ -27,4 +27,5 @@ create_database() {
 wait_for_postgres
 create_database "${KODEX_ACCESS_MANAGER_DATABASE_NAME:-kodex_access_manager}"
 create_database "${KODEX_PROJECT_CATALOG_DATABASE_NAME:-kodex_project_catalog}"
+create_database "${KODEX_RUNTIME_MANAGER_DATABASE_NAME:-kodex_runtime_manager}"
 create_database "${KODEX_PLATFORM_EVENT_LOG_DATABASE_NAME:-kodex_platform_event_log}"
