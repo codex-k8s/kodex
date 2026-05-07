@@ -8,6 +8,13 @@ type ActionDescriptor struct {
 }
 
 const (
+	ScopeGlobal       = "global"
+	ScopeOrganization = "organization"
+	ScopeProject      = "project"
+	ScopeRepository   = "repository"
+)
+
+const (
 	ResourceProject             = "project"
 	ResourceRepository          = "repository"
 	ResourceServicesPolicy      = "services_policy"

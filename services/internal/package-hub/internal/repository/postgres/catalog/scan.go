@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/enum"
@@ -222,6 +223,31 @@ func scanCommandResult(row postgreslib.RowScanner) (entity.CommandResult, error)
 	result.AggregateType = enum.CommandAggregateType(aggregateType)
 	result.ResultPayload = append(result.ResultPayload[:0], resultPayload...)
 	return result, err
+}
+
+func scanOutboxEvent(row postgreslib.RowScanner) (entity.OutboxEvent, error) {
+	raw, err := postgreslib.ScanOutboxEventRow(row)
+	if err != nil {
+		return entity.OutboxEvent{}, err
+	}
+	return entity.OutboxEvent{
+		Event: outboxlib.Event{
+			ID:            raw.Identity.RowID,
+			EventType:     raw.Identity.TypeName,
+			SchemaVersion: raw.Identity.ContractVersion,
+			AggregateType: raw.Identity.SubjectKind,
+			AggregateID:   raw.Identity.SubjectID,
+			Payload:       raw.Body,
+			OccurredAt:    raw.Identity.CreatedAt,
+			AttemptCount:  raw.Delivery.Attempts,
+		},
+		NextAttemptAt:       raw.Delivery.RetryAt,
+		LockedUntil:         raw.Delivery.LeaseUntil,
+		FailureKind:         raw.Failure.FailureCode,
+		FailedPermanentlyAt: raw.Failure.DeadAt,
+		PublishedAt:         raw.Delivery.SentAt,
+		LastError:           raw.Failure.ErrorText,
+	}, nil
 }
 
 func localizedTextFromPayload(payload []byte) ([]value.LocalizedText, error) {
