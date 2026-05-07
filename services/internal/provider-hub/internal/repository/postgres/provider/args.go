@@ -5,6 +5,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
+	providerrepo "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/repository/provider"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/value"
@@ -218,6 +219,45 @@ func relationshipFilterArgs(filter query.RelationshipFilter) pageQueryArgs {
 		"sources":                 postgreslib.StringValues(filter.Sources),
 		"confidence_levels":       postgreslib.StringValues(filter.ConfidenceLevels),
 	})
+}
+
+func syncCursorArgs(cursor entity.SyncCursor) pgx.NamedArgs {
+	return withBaseArgs(cursor.Base, pgx.NamedArgs{
+		"provider_slug":          string(cursor.ProviderSlug),
+		"scope_type":             string(cursor.ScopeType),
+		"scope_ref":              cursor.ScopeRef,
+		"artifact_kind":          string(cursor.ArtifactKind),
+		"cursor_value":           cursor.CursorValue,
+		"overlap_since":          postgreslib.NullableTime(cursor.OverlapSince),
+		"priority":               string(cursor.Priority),
+		"last_success_at":        postgreslib.NullableTime(cursor.LastSuccessAt),
+		"last_checked_at":        postgreslib.NullableTime(cursor.LastCheckedAt),
+		"last_error":             cursor.LastError,
+		"rate_budget_state_json": jsonPayloadOrDefault(cursor.RateBudgetStateJSON, "{}"),
+		"lease_owner":            cursor.LeaseOwner,
+		"lease_until":            postgreslib.NullableTime(cursor.LeaseUntil),
+	})
+}
+
+func syncCursorFilterArgs(filter query.SyncCursorFilter) pageQueryArgs {
+	return withPage(filter.Page, pgx.NamedArgs{
+		"provider_slug":   string(filter.ProviderSlug),
+		"scope_type":      string(filter.ScopeType),
+		"scope_ref":       filter.ScopeRef,
+		"artifact_kinds":  postgreslib.StringValues(filter.ArtifactKinds),
+		"priorities":      postgreslib.StringValues(filter.Priorities),
+		"include_healthy": filter.IncludeHealthy,
+	})
+}
+
+func syncCursorClaimArgs(claim providerrepo.SyncCursorClaim) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"id":            postgreslib.NullableUUID(claim.ID),
+		"provider_slug": string(claim.ProviderSlug),
+		"lease_owner":   claim.LeaseOwner,
+		"now":           claim.Now,
+		"lease_until":   claim.LeaseUntil,
+	}
 }
 
 func limitSnapshotArgs(snapshot entity.ProviderLimitSnapshot) pgx.NamedArgs {

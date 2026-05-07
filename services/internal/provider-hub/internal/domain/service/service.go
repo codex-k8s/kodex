@@ -15,6 +15,8 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/query"
 )
 
+const syncCursorLeaseTTL = 30 * time.Second
+
 // Service is the domain entrypoint for provider-native work item workflows.
 type Service struct {
 	repository         providerrepo.Repository
@@ -264,6 +266,113 @@ func (s *Service) ListRelationships(ctx context.Context, input ListRelationships
 		return ListRelationshipsResult{}, err
 	}
 	return ListRelationshipsResult{Relationships: relationships, Page: page}, nil
+}
+
+// EnqueueReconciliation creates or updates sync cursors for one reconciliation scope.
+func (s *Service) EnqueueReconciliation(ctx context.Context, input EnqueueReconciliationInput) (EnqueueReconciliationResult, error) {
+	if !validCommandIdentity(input.Meta) {
+		return EnqueueReconciliationResult{}, errs.ErrInvalidArgument
+	}
+	providerSlug := enum.ProviderSlug(strings.TrimSpace(string(input.ProviderSlug)))
+	scopeRef := strings.TrimSpace(input.ScopeRef)
+	artifactKinds := uniqueSyncArtifactKinds(input.ArtifactKinds)
+	if !validProviderSlug(providerSlug) ||
+		!validSyncCursorScope(input.ScopeType) ||
+		scopeRef == "" ||
+		len(artifactKinds) == 0 ||
+		!validSyncArtifactKinds(artifactKinds) ||
+		!validSyncCursorPriority(input.Priority) {
+		return EnqueueReconciliationResult{}, errs.ErrInvalidArgument
+	}
+	now := s.clock.Now().UTC()
+	cursors := make([]entity.SyncCursor, 0, len(artifactKinds))
+	for _, artifactKind := range artifactKinds {
+		cursor := entity.SyncCursor{
+			Base: entity.Base{
+				ID:        s.ids.New(),
+				Version:   1,
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+			ProviderSlug:        providerSlug,
+			ScopeType:           input.ScopeType,
+			ScopeRef:            scopeRef,
+			ArtifactKind:        artifactKind,
+			Priority:            input.Priority,
+			RateBudgetStateJSON: []byte(`{}`),
+		}
+		stored, err := s.repository.UpsertSyncCursor(ctx, cursor)
+		if err != nil {
+			return EnqueueReconciliationResult{}, err
+		}
+		cursors = append(cursors, stored)
+	}
+	return EnqueueReconciliationResult{SyncCursors: cursors}, nil
+}
+
+// RunReconciliationBatch leases one cursor for the future provider batch worker.
+func (s *Service) RunReconciliationBatch(ctx context.Context, input RunReconciliationBatchInput) (RunReconciliationBatchResult, error) {
+	if !validCommandIdentity(input.Meta) || strings.TrimSpace(input.LeaseOwner) == "" || input.MaxItems < 0 {
+		return RunReconciliationBatchResult{}, errs.ErrInvalidArgument
+	}
+	if input.SyncCursorID != nil && *input.SyncCursorID == uuid.Nil {
+		return RunReconciliationBatchResult{}, errs.ErrInvalidArgument
+	}
+	providerSlug := enum.ProviderSlug(strings.TrimSpace(string(input.ProviderSlug)))
+	if providerSlug != "" && !validProviderSlug(providerSlug) {
+		return RunReconciliationBatchResult{}, errs.ErrInvalidArgument
+	}
+	now := s.clock.Now().UTC()
+	cursor, err := s.repository.ClaimSyncCursor(ctx, providerrepo.SyncCursorClaim{
+		ID:           input.SyncCursorID,
+		ProviderSlug: providerSlug,
+		LeaseOwner:   strings.TrimSpace(input.LeaseOwner),
+		Now:          now,
+		LeaseUntil:   now.Add(syncCursorLeaseTTL),
+	})
+	if err != nil {
+		return RunReconciliationBatchResult{}, err
+	}
+	return RunReconciliationBatchResult{SyncCursor: cursor}, nil
+}
+
+// GetSyncCursor returns one reconciliation cursor.
+func (s *Service) GetSyncCursor(ctx context.Context, input GetSyncCursorInput) (entity.SyncCursor, error) {
+	id := input.SyncCursorID
+	if id == uuid.Nil {
+		return entity.SyncCursor{}, errs.ErrInvalidArgument
+	}
+	return s.repository.GetSyncCursor(ctx, id)
+}
+
+// ListSyncCursors returns reconciliation cursors by supported filters.
+func (s *Service) ListSyncCursors(ctx context.Context, input ListSyncCursorsInput) (ListSyncCursorsResult, error) {
+	providerSlug := enum.ProviderSlug(strings.TrimSpace(string(input.ProviderSlug)))
+	if providerSlug != "" && !validProviderSlug(providerSlug) {
+		return ListSyncCursorsResult{}, errs.ErrInvalidArgument
+	}
+	if input.ScopeType != "" && !validSyncCursorScope(input.ScopeType) {
+		return ListSyncCursorsResult{}, errs.ErrInvalidArgument
+	}
+	if strings.TrimSpace(input.ScopeRef) == "" && input.ScopeRef != "" {
+		return ListSyncCursorsResult{}, errs.ErrInvalidArgument
+	}
+	if !validSyncArtifactKinds(input.ArtifactKinds) || !validSyncCursorPriorities(input.Priorities) {
+		return ListSyncCursorsResult{}, errs.ErrInvalidArgument
+	}
+	cursors, page, err := s.repository.ListSyncCursors(ctx, query.SyncCursorFilter{
+		ProviderSlug:   providerSlug,
+		ScopeType:      input.ScopeType,
+		ScopeRef:       strings.TrimSpace(input.ScopeRef),
+		ArtifactKinds:  input.ArtifactKinds,
+		Priorities:     input.Priorities,
+		IncludeHealthy: input.IncludeHealthy,
+		Page:           input.Page,
+	})
+	if err != nil {
+		return ListSyncCursorsResult{}, err
+	}
+	return ListSyncCursorsResult{SyncCursors: cursors, Page: page}, nil
 }
 
 func (s *Service) currentWebhookAfterConcurrentProcessing(ctx context.Context, webhookEventID uuid.UUID) (entity.WebhookEvent, error) {

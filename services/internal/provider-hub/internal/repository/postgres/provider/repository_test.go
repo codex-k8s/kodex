@@ -105,6 +105,108 @@ func TestWrapErrorMapsPostgresErrors(t *testing.T) {
 	}
 }
 
+func TestRepositoryIntegrationSyncCursors(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openIntegrationPool(t, ctx)
+	repository := NewRepository(pool)
+	now := time.Date(2026, 5, 7, 13, 0, 0, 0, time.UTC)
+	cursor := entity.SyncCursor{
+		Base: entity.Base{
+			ID:        uuid.New(),
+			Version:   1,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		ProviderSlug:        enum.ProviderSlugGitHub,
+		ScopeType:           enum.SyncCursorScopeRepository,
+		ScopeRef:            "codex-k8s/kodex",
+		ArtifactKind:        enum.SyncArtifactIssue,
+		Priority:            enum.SyncCursorPriorityWarm,
+		RateBudgetStateJSON: []byte(`{"remaining":4999}`),
+	}
+	stored, err := repository.UpsertSyncCursor(ctx, cursor)
+	if err != nil {
+		t.Fatalf("upsert sync cursor: %v", err)
+	}
+	if stored.ID != cursor.ID || stored.Priority != enum.SyncCursorPriorityWarm {
+		t.Fatalf("stored cursor = %+v, want id %s warm", stored, cursor.ID)
+	}
+
+	requeued := cursor
+	requeued.ID = uuid.New()
+	requeued.Priority = enum.SyncCursorPriorityHot
+	requeued.UpdatedAt = now.Add(time.Minute)
+	stored, err = repository.UpsertSyncCursor(ctx, requeued)
+	if err != nil {
+		t.Fatalf("requeue sync cursor: %v", err)
+	}
+	if stored.ID != cursor.ID || stored.Priority != enum.SyncCursorPriorityHot || stored.Version != 2 {
+		t.Fatalf("requeued cursor = %+v, want original id %s hot version 2", stored, cursor.ID)
+	}
+
+	loaded, err := repository.GetSyncCursor(ctx, cursor.ID)
+	if err != nil {
+		t.Fatalf("get sync cursor: %v", err)
+	}
+	if loaded.ID != cursor.ID || string(loaded.RateBudgetStateJSON) != `{"remaining": 4999}` {
+		t.Fatalf("loaded cursor = %+v, want stored budget", loaded)
+	}
+
+	failedCursor := entity.SyncCursor{
+		Base: entity.Base{
+			ID:        uuid.New(),
+			Version:   1,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		ProviderSlug:        enum.ProviderSlugGitHub,
+		ScopeType:           enum.SyncCursorScopeRepository,
+		ScopeRef:            "codex-k8s/kodex",
+		ArtifactKind:        enum.SyncArtifactPullRequest,
+		Priority:            enum.SyncCursorPriorityCold,
+		LastError:           "rate limited",
+		RateBudgetStateJSON: []byte(`{}`),
+	}
+	if _, err := repository.UpsertSyncCursor(ctx, failedCursor); err != nil {
+		t.Fatalf("upsert failed sync cursor: %v", err)
+	}
+	cursors, _, err := repository.ListSyncCursors(ctx, query.SyncCursorFilter{
+		ProviderSlug:   enum.ProviderSlugGitHub,
+		ScopeRef:       "codex-k8s/kodex",
+		IncludeHealthy: false,
+	})
+	if err != nil {
+		t.Fatalf("list unhealthy sync cursors: %v", err)
+	}
+	if len(cursors) != 1 || cursors[0].ID != failedCursor.ID {
+		t.Fatalf("unhealthy cursors = %+v, want failed cursor %s", cursors, failedCursor.ID)
+	}
+
+	claimed, err := repository.ClaimSyncCursor(ctx, providerrepo.SyncCursorClaim{
+		ProviderSlug: enum.ProviderSlugGitHub,
+		LeaseOwner:   "worker-1",
+		Now:          now.Add(2 * time.Minute),
+		LeaseUntil:   now.Add(2*time.Minute + 30*time.Second),
+	})
+	if err != nil {
+		t.Fatalf("claim sync cursor: %v", err)
+	}
+	if claimed.ID != cursor.ID || claimed.LeaseOwner != "worker-1" || claimed.LeaseUntil == nil {
+		t.Fatalf("claimed cursor = %+v, want hot cursor leased by worker-1", claimed)
+	}
+	_, err = repository.ClaimSyncCursor(ctx, providerrepo.SyncCursorClaim{
+		ID:         &cursor.ID,
+		LeaseOwner: "worker-2",
+		Now:        now.Add(2*time.Minute + time.Second),
+		LeaseUntil: now.Add(3 * time.Minute),
+	})
+	if !errors.Is(err, errs.ErrNotFound) {
+		t.Fatalf("claim leased sync cursor err = %v, want %v", err, errs.ErrNotFound)
+	}
+}
+
 func TestRepositoryIntegrationRuntimeStateLimitsAndOperations(t *testing.T) {
 	t.Parallel()
 

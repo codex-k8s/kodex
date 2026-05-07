@@ -162,6 +162,26 @@ func (r *Repository) ListRelationships(ctx context.Context, filter query.Relatio
 	return queryPage(ctx, r.db, operationListRelationships, queryRelationshipList, relationshipFilterArgs(filter), scanRelationship)
 }
 
+// UpsertSyncCursor creates or updates one reconciliation cursor.
+func (r *Repository) UpsertSyncCursor(ctx context.Context, cursor entity.SyncCursor) (entity.SyncCursor, error) {
+	return queryOne(ctx, r.db, operationUpsertSyncCursor, querySyncCursorUpsert, syncCursorArgs(cursor), scanSyncCursor)
+}
+
+// GetSyncCursor returns one reconciliation cursor by id.
+func (r *Repository) GetSyncCursor(ctx context.Context, id uuid.UUID) (entity.SyncCursor, error) {
+	return queryOne(ctx, r.db, operationGetSyncCursor, querySyncCursorGet, pgx.NamedArgs{"id": id}, scanSyncCursor)
+}
+
+// ListSyncCursors returns reconciliation cursors by supported filters.
+func (r *Repository) ListSyncCursors(ctx context.Context, filter query.SyncCursorFilter) ([]entity.SyncCursor, query.PageResult, error) {
+	return queryPage(ctx, r.db, operationListSyncCursors, querySyncCursorList, syncCursorFilterArgs(filter), scanSyncCursor)
+}
+
+// ClaimSyncCursor leases one due reconciliation cursor for a worker.
+func (r *Repository) ClaimSyncCursor(ctx context.Context, claim providerrepo.SyncCursorClaim) (entity.SyncCursor, error) {
+	return queryOne(ctx, r.db, operationClaimSyncCursor, querySyncCursorClaim, syncCursorClaimArgs(claim), scanSyncCursor)
+}
+
 // GetWebhookEvent returns a stored raw webhook by id.
 func (r *Repository) GetWebhookEvent(ctx context.Context, id uuid.UUID) (entity.WebhookEvent, error) {
 	return queryOne(ctx, r.db, operationGetWebhookEvent, queryWebhookEventGet, pgx.NamedArgs{"id": id}, scanWebhookEvent)
@@ -279,6 +299,10 @@ const (
 	operationListWorkItemProjections          = "domain.Repository.ListWorkItemProjections"
 	operationListComments                     = "domain.Repository.ListComments"
 	operationListRelationships                = "domain.Repository.ListRelationships"
+	operationUpsertSyncCursor                 = "domain.Repository.UpsertSyncCursor"
+	operationGetSyncCursor                    = "domain.Repository.GetSyncCursor"
+	operationListSyncCursors                  = "domain.Repository.ListSyncCursors"
+	operationClaimSyncCursor                  = "domain.Repository.ClaimSyncCursor"
 	operationGetAccountRuntimeState           = "domain.Repository.GetAccountRuntimeState"
 	operationListAccountRuntimeStates         = "domain.Repository.ListAccountRuntimeStates"
 	operationUpsertAccountRuntimeState        = "domain.Repository.UpsertAccountRuntimeState"

@@ -123,6 +123,61 @@ func validRelationshipConfidenceLevels(levels []enum.RelationshipConfidence) boo
 	return true
 }
 
+func validSyncCursorScope(scope enum.SyncCursorScopeType) bool {
+	switch scope {
+	case enum.SyncCursorScopeRepository,
+		enum.SyncCursorScopeOrganization,
+		enum.SyncCursorScopeWorkItem,
+		enum.SyncCursorScopePackageSource:
+		return true
+	default:
+		return false
+	}
+}
+
+func validSyncArtifactKind(kind enum.SyncArtifactKind) bool {
+	switch kind {
+	case enum.SyncArtifactIssue,
+		enum.SyncArtifactPullRequest,
+		enum.SyncArtifactMergeRequest,
+		enum.SyncArtifactComment,
+		enum.SyncArtifactRelationship,
+		enum.SyncArtifactRepository:
+		return true
+	default:
+		return false
+	}
+}
+
+func validSyncArtifactKinds(kinds []enum.SyncArtifactKind) bool {
+	for _, kind := range kinds {
+		if !validSyncArtifactKind(kind) {
+			return false
+		}
+	}
+	return true
+}
+
+func validSyncCursorPriority(priority enum.SyncCursorPriority) bool {
+	switch priority {
+	case enum.SyncCursorPriorityHot,
+		enum.SyncCursorPriorityWarm,
+		enum.SyncCursorPriorityCold:
+		return true
+	default:
+		return false
+	}
+}
+
+func validSyncCursorPriorities(priorities []enum.SyncCursorPriority) bool {
+	for _, priority := range priorities {
+		if !validSyncCursorPriority(priority) {
+			return false
+		}
+	}
+	return true
+}
+
 func validLimitSource(source enum.ProviderLimitSource) bool {
 	switch source {
 	case enum.ProviderLimitSourceProviderHub,
@@ -202,6 +257,19 @@ func trimStrings(values []string) []string {
 		if trimmed != "" {
 			result = append(result, trimmed)
 		}
+	}
+	return result
+}
+
+func uniqueSyncArtifactKinds(values []enum.SyncArtifactKind) []enum.SyncArtifactKind {
+	result := make([]enum.SyncArtifactKind, 0, len(values))
+	seen := make(map[enum.SyncArtifactKind]struct{}, len(values))
+	for _, value := range values {
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
 	}
 	return result
 }

@@ -168,6 +168,42 @@ func scanRelationship(row postgreslib.RowScanner) (entity.ProviderRelationship, 
 	return relationship, err
 }
 
+func scanSyncCursor(row postgreslib.RowScanner) (entity.SyncCursor, error) {
+	var cursor entity.SyncCursor
+	var providerSlug, scopeType, artifactKind, priority string
+	var overlapSince, lastSuccessAt, lastCheckedAt, leaseUntil pgtype.Timestamptz
+	var budget []byte
+	err := row.Scan(
+		&cursor.ID,
+		&providerSlug,
+		&scopeType,
+		&cursor.ScopeRef,
+		&artifactKind,
+		&cursor.CursorValue,
+		&overlapSince,
+		&priority,
+		&lastSuccessAt,
+		&lastCheckedAt,
+		&cursor.LastError,
+		&budget,
+		&cursor.LeaseOwner,
+		&leaseUntil,
+		&cursor.Version,
+		&cursor.CreatedAt,
+		&cursor.UpdatedAt,
+	)
+	cursor.ProviderSlug = enum.ProviderSlug(providerSlug)
+	cursor.ScopeType = enum.SyncCursorScopeType(scopeType)
+	cursor.ArtifactKind = enum.SyncArtifactKind(artifactKind)
+	cursor.OverlapSince = timePtrFromPG(overlapSince)
+	cursor.Priority = enum.SyncCursorPriority(priority)
+	cursor.LastSuccessAt = timePtrFromPG(lastSuccessAt)
+	cursor.LastCheckedAt = timePtrFromPG(lastCheckedAt)
+	cursor.RateBudgetStateJSON = append(cursor.RateBudgetStateJSON[:0], budget...)
+	cursor.LeaseUntil = timePtrFromPG(leaseUntil)
+	return cursor, err
+}
+
 func scanLimitSnapshot(row postgreslib.RowScanner) (entity.ProviderLimitSnapshot, error) {
 	var snapshot entity.ProviderLimitSnapshot
 	var providerSlug, source string

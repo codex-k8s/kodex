@@ -107,6 +107,24 @@ type ProviderRelationship struct {
 	CreatedAt         time.Time
 }
 
+// SyncCursor stores incremental reconciliation state for one provider scope.
+type SyncCursor struct {
+	Base
+	ProviderSlug        enum.ProviderSlug
+	ScopeType           enum.SyncCursorScopeType
+	ScopeRef            string
+	ArtifactKind        enum.SyncArtifactKind
+	CursorValue         string
+	OverlapSince        *time.Time
+	Priority            enum.SyncCursorPriority
+	LastSuccessAt       *time.Time
+	LastCheckedAt       *time.Time
+	LastError           string
+	RateBudgetStateJSON []byte
+	LeaseOwner          string
+	LeaseUntil          *time.Time
+}
+
 // ProviderLimitSnapshot stores one observed provider rate or quota snapshot.
 type ProviderLimitSnapshot struct {
 	ID                uuid.UUID

@@ -147,6 +147,62 @@ type ListRelationshipsResult struct {
 	Page          query.PageResult
 }
 
+// EnqueueReconciliationInput schedules reconciliation cursors for one provider scope.
+type EnqueueReconciliationInput struct {
+	ProviderSlug  enum.ProviderSlug
+	ScopeType     enum.SyncCursorScopeType
+	ScopeRef      string
+	ArtifactKinds []enum.SyncArtifactKind
+	Priority      enum.SyncCursorPriority
+	Meta          value.CommandMeta
+}
+
+// EnqueueReconciliationResult returns affected reconciliation cursors.
+type EnqueueReconciliationResult struct {
+	SyncCursors []entity.SyncCursor
+}
+
+// RunReconciliationBatchInput leases one cursor for a reconciliation worker.
+type RunReconciliationBatchInput struct {
+	SyncCursorID *uuid.UUID
+	ProviderSlug enum.ProviderSlug
+	MaxItems     int32
+	LeaseOwner   string
+	Meta         value.CommandMeta
+}
+
+// RunReconciliationBatchResult returns the leased cursor and current batch counters.
+type RunReconciliationBatchResult struct {
+	SyncCursor      entity.SyncCursor
+	ItemsProcessed  int64
+	EventsPublished int64
+	RetryAfter      string
+}
+
+// GetSyncCursorInput identifies one reconciliation cursor.
+type GetSyncCursorInput struct {
+	SyncCursorID uuid.UUID
+	Meta         value.QueryMeta
+}
+
+// ListSyncCursorsInput selects reconciliation cursors.
+type ListSyncCursorsInput struct {
+	ProviderSlug   enum.ProviderSlug
+	ScopeType      enum.SyncCursorScopeType
+	ScopeRef       string
+	ArtifactKinds  []enum.SyncArtifactKind
+	Priorities     []enum.SyncCursorPriority
+	IncludeHealthy bool
+	Page           value.PageRequest
+	Meta           value.QueryMeta
+}
+
+// ListSyncCursorsResult returns cursors and paging metadata.
+type ListSyncCursorsResult struct {
+	SyncCursors []entity.SyncCursor
+	Page        query.PageResult
+}
+
 // RecordProviderLimitSnapshotInput records an observed provider limit state.
 type RecordProviderLimitSnapshotInput struct {
 	ExternalAccountID uuid.UUID

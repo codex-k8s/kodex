@@ -88,6 +88,17 @@ type RelationshipFilter struct {
 	Page                 value.PageRequest
 }
 
+// SyncCursorFilter selects reconciliation cursors.
+type SyncCursorFilter struct {
+	ProviderSlug   enum.ProviderSlug
+	ScopeType      enum.SyncCursorScopeType
+	ScopeRef       string
+	ArtifactKinds  []enum.SyncArtifactKind
+	Priorities     []enum.SyncCursorPriority
+	IncludeHealthy bool
+	Page           value.PageRequest
+}
+
 // LimitSnapshotFilter selects provider limit snapshots.
 type LimitSnapshotFilter struct {
 	ExternalAccountID *uuid.UUID

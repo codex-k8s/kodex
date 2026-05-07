@@ -27,6 +27,10 @@ type Repository interface {
 	ListWorkItemProjections(context.Context, query.WorkItemProjectionFilter) ([]entity.ProviderWorkItemProjection, query.PageResult, error)
 	ListComments(context.Context, query.CommentProjectionFilter) ([]entity.ProviderCommentProjection, query.PageResult, error)
 	ListRelationships(context.Context, query.RelationshipFilter) ([]entity.ProviderRelationship, query.PageResult, error)
+	UpsertSyncCursor(context.Context, entity.SyncCursor) (entity.SyncCursor, error)
+	GetSyncCursor(context.Context, uuid.UUID) (entity.SyncCursor, error)
+	ListSyncCursors(context.Context, query.SyncCursorFilter) ([]entity.SyncCursor, query.PageResult, error)
+	ClaimSyncCursor(context.Context, SyncCursorClaim) (entity.SyncCursor, error)
 	UpsertAccountRuntimeState(context.Context, entity.ProviderAccountRuntimeState) (entity.ProviderAccountRuntimeState, error)
 	GetAccountRuntimeState(context.Context, query.AccountRuntimeStateLookup) (entity.ProviderAccountRuntimeState, error)
 	ListAccountRuntimeStates(context.Context, query.AccountRuntimeStateFilter) ([]entity.ProviderAccountRuntimeState, query.PageResult, error)
@@ -45,6 +49,15 @@ type ProjectionUpdate struct {
 	WorkItem      *entity.ProviderWorkItemProjection
 	Comments      []entity.ProviderCommentProjection
 	Relationships []entity.ProviderRelationship
+}
+
+// SyncCursorClaim identifies one cursor lease attempt for a reconciliation worker.
+type SyncCursorClaim struct {
+	ID           *uuid.UUID
+	ProviderSlug enum.ProviderSlug
+	LeaseOwner   string
+	Now          time.Time
+	LeaseUntil   time.Time
 }
 
 // WebhookNormalizer isolates provider-specific webhook payload parsing from the domain service.

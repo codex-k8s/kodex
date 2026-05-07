@@ -123,6 +123,55 @@ func ListRelationshipsResponse(result providerservice.ListRelationshipsResult) *
 	}
 }
 
+func SyncCursorToProto(cursor entity.SyncCursor) *providersv1.SyncCursor {
+	return &providersv1.SyncCursor{
+		SyncCursorId:        cursor.ID.String(),
+		ProviderSlug:        string(cursor.ProviderSlug),
+		ScopeType:           SyncCursorScopeToProto(cursor.ScopeType),
+		ScopeRef:            cursor.ScopeRef,
+		ArtifactKind:        SyncArtifactKindToProto(cursor.ArtifactKind),
+		CursorValue:         optionalStringPtr(cursor.CursorValue),
+		OverlapSince:        timePtrString(cursor.OverlapSince),
+		Priority:            SyncCursorPriorityToProto(cursor.Priority),
+		LastSuccessAt:       timePtrString(cursor.LastSuccessAt),
+		LastCheckedAt:       timePtrString(cursor.LastCheckedAt),
+		LastError:           optionalStringPtr(cursor.LastError),
+		RateBudgetStateJson: jsonObjectString(cursor.RateBudgetStateJSON),
+		LeaseOwner:          optionalStringPtr(cursor.LeaseOwner),
+		LeaseUntil:          timePtrString(cursor.LeaseUntil),
+	}
+}
+
+// ReconciliationRequestResponse maps affected sync cursors to gRPC.
+func ReconciliationRequestResponse(result providerservice.EnqueueReconciliationResult) *providersv1.ReconciliationRequestResponse {
+	return &providersv1.ReconciliationRequestResponse{
+		SyncCursors: mapSlice(result.SyncCursors, SyncCursorToProto),
+	}
+}
+
+// RunReconciliationBatchResponse maps a leased reconciliation batch to gRPC.
+func RunReconciliationBatchResponse(result providerservice.RunReconciliationBatchResult) *providersv1.RunReconciliationBatchResponse {
+	return &providersv1.RunReconciliationBatchResponse{
+		SyncCursor:      SyncCursorToProto(result.SyncCursor),
+		ItemsProcessed:  result.ItemsProcessed,
+		EventsPublished: result.EventsPublished,
+		RetryAfter:      optionalStringPtr(result.RetryAfter),
+	}
+}
+
+// SyncCursorResponse maps a sync cursor to gRPC.
+func SyncCursorResponse(cursor entity.SyncCursor) *providersv1.SyncCursorResponse {
+	return &providersv1.SyncCursorResponse{SyncCursor: SyncCursorToProto(cursor)}
+}
+
+// ListSyncCursorsResponse maps sync cursors to gRPC.
+func ListSyncCursorsResponse(result providerservice.ListSyncCursorsResult) *providersv1.ListSyncCursorsResponse {
+	return &providersv1.ListSyncCursorsResponse{
+		SyncCursors: mapSlice(result.SyncCursors, SyncCursorToProto),
+		Page:        pageResponseToProto(result.Page),
+	}
+}
+
 // ProviderAccountRuntimeStateResponse maps runtime state to gRPC.
 func ProviderAccountRuntimeStateResponse(state entity.ProviderAccountRuntimeState) *providersv1.ProviderAccountRuntimeStateResponse {
 	return &providersv1.ProviderAccountRuntimeStateResponse{RuntimeState: ProviderAccountRuntimeStateToProto(state)}
