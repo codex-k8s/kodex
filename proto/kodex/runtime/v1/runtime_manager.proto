@@ -242,6 +242,15 @@ enum RuntimeScopeType {
   RUNTIME_SCOPE_TYPE_RUNTIME_PROFILE = 5;
 }
 
+// PrewarmPoolScopeType classifies scope for prewarm pool policies.
+enum PrewarmPoolScopeType {
+  PREWARM_POOL_SCOPE_TYPE_UNSPECIFIED = 0;
+  PREWARM_POOL_SCOPE_TYPE_PLATFORM = 1;
+  PREWARM_POOL_SCOPE_TYPE_ORGANIZATION = 2;
+  PREWARM_POOL_SCOPE_TYPE_PROJECT = 3;
+  PREWARM_POOL_SCOPE_TYPE_REPOSITORY = 4;
+}
+
 // PrewarmPoolStatus is the prewarm pool lifecycle status.
 enum PrewarmPoolStatus {
   PREWARM_POOL_STATUS_UNSPECIFIED = 0;
@@ -420,50 +429,52 @@ message Job {
   JobStatus status = 4;
   // priority is the scheduling priority.
   JobPriority priority = 5;
+  // job_input_json carries bounded operation input without secrets.
+  string job_input_json = 6;
   // lease_owner identifies the worker or controller that claimed the job.
-  string lease_owner = 6;
+  string lease_owner = 7;
   // lease_until is claim lease expiration time in RFC3339 format.
-  optional string lease_until = 7;
+  optional string lease_until = 8;
   // claim_attempt increments every time the job is claimed.
-  int64 claim_attempt = 8;
+  int64 claim_attempt = 9;
   // slot_id is an optional runtime slot id.
-  optional string slot_id = 9;
+  optional string slot_id = 10;
   // agent_run_id is an external agent-manager run id.
-  optional string agent_run_id = 10;
+  optional string agent_run_id = 11;
   // project_id is an external project id.
-  optional string project_id = 11;
+  optional string project_id = 12;
   // repository_id is an external repository binding id.
-  optional string repository_id = 12;
+  optional string repository_id = 13;
   // release_line_id is an external release line id.
-  optional string release_line_id = 13;
+  optional string release_line_id = 14;
   // package_installation_id is an external package installation id.
-  optional string package_installation_id = 14;
+  optional string package_installation_id = 15;
   // fleet_scope_id is an external fleet scope id.
-  optional string fleet_scope_id = 15;
+  optional string fleet_scope_id = 16;
   // cluster_id is an external fleet cluster id.
-  optional string cluster_id = 16;
+  optional string cluster_id = 17;
   // requested_by is the actor id that requested the job when available.
-  optional string requested_by = 17;
+  optional string requested_by = 18;
   // created_at is creation time in RFC3339 format.
-  string created_at = 18;
+  string created_at = 19;
   // started_at is start time in RFC3339 format.
-  optional string started_at = 19;
+  optional string started_at = 20;
   // finished_at is finish time in RFC3339 format.
-  optional string finished_at = 20;
+  optional string finished_at = 21;
   // next_action describes the next expected operator or automation action.
-  string next_action = 21;
+  string next_action = 22;
   // last_error_code is the last classified error code.
-  string last_error_code = 22;
+  string last_error_code = 23;
   // last_error_message is the last safe error message without secrets.
-  string last_error_message = 23;
+  string last_error_message = 24;
   // short_log_tail stores a bounded diagnostic log tail.
-  string short_log_tail = 24;
+  string short_log_tail = 25;
   // full_log_ref points to the full log source.
-  string full_log_ref = 25;
+  string full_log_ref = 26;
   // version is the aggregate version.
-  int64 version = 26;
+  int64 version = 27;
   // steps are job steps returned with the job state.
-  repeated JobStep steps = 27;
+  repeated JobStep steps = 28;
 }
 
 // JobStep is one step of a platform job.
@@ -512,6 +523,18 @@ message RuntimeArtifactRef {
   string created_at = 8;
 }
 
+// RuntimeArtifactRefInput carries caller-provided external artifact reference data.
+message RuntimeArtifactRefInput {
+  // artifact_type classifies the referenced artifact.
+  RuntimeArtifactType artifact_type = 1;
+  // external_ref is the primary source URI or object reference.
+  string external_ref = 2;
+  // digest is the immutable digest when known.
+  string digest = 3;
+  // metadata_json carries bounded safe metadata without secrets.
+  string metadata_json = 4;
+}
+
 // CleanupPolicy describes retention and cleanup rules for runtime objects.
 message CleanupPolicy {
   // cleanup_policy_id is the cleanup policy id.
@@ -541,7 +564,7 @@ message PrewarmPool {
   // prewarm_pool_id is the prewarm pool id.
   string prewarm_pool_id = 1;
   // scope_type classifies the scope this pool applies to.
-  RuntimeScopeType scope_type = 2;
+  PrewarmPoolScopeType scope_type = 2;
   // scope_id is the optional external scope id.
   optional string scope_id = 3;
   // runtime_profile is the runtime profile maintained by the pool.
@@ -801,7 +824,7 @@ message ReportJobStepProgressRequest {
   // error_message is a safe error message without secrets.
   string error_message = 10;
   // artifact_refs are external artifact references observed by this step.
-  repeated RuntimeArtifactRef artifact_refs = 11;
+  repeated RuntimeArtifactRefInput artifact_refs = 11;
   // meta carries idempotency, expected version and audit context.
   CommandMeta meta = 12;
 }
@@ -886,16 +909,10 @@ message RecordRuntimeArtifactRefRequest {
   optional string job_id = 1;
   // slot_id optionally links the reference to a slot.
   optional string slot_id = 2;
-  // artifact_type classifies the referenced artifact.
-  RuntimeArtifactType artifact_type = 3;
-  // external_ref is the primary source URI or object reference.
-  string external_ref = 4;
-  // digest is the immutable digest when known.
-  string digest = 5;
-  // metadata_json carries bounded safe metadata without secrets.
-  string metadata_json = 6;
+  // artifact_ref carries caller-provided reference data.
+  RuntimeArtifactRefInput artifact_ref = 3;
   // meta carries idempotency and audit context.
-  CommandMeta meta = 7;
+  CommandMeta meta = 4;
 }
 
 message RuntimeArtifactRefResponse {
@@ -975,7 +992,7 @@ message CreateOrUpdatePrewarmPoolRequest {
   // prewarm_pool_id is optional pool id for update; absent value creates a new pool.
   optional string prewarm_pool_id = 1;
   // scope_type classifies the scope this pool applies to.
-  RuntimeScopeType scope_type = 2;
+  PrewarmPoolScopeType scope_type = 2;
   // scope_id is the optional external scope id.
   optional string scope_id = 3;
   // runtime_profile is the runtime profile maintained by the pool.

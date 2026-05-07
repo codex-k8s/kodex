@@ -244,7 +244,7 @@ components:
       type: object
       properties:
         event_type: {type: string, const: runtime.cleanup.failed}
-        aggregate_type: {type: string, const: cleanup}
+        aggregate_type: {type: string, const: cleanup_policy}
         payload: {$ref: '#/components/schemas/CleanupFailedPayload'}
       required: [event_type, aggregate_type, payload]
     PrewarmCapacityChangedEvent:

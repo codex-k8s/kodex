@@ -729,6 +729,62 @@ func (RuntimeScopeType) EnumDescriptor() ([]byte, []int) {
 	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{11}
 }
 
+// PrewarmPoolScopeType classifies scope for prewarm pool policies.
+type PrewarmPoolScopeType int32
+
+const (
+	PrewarmPoolScopeType_PREWARM_POOL_SCOPE_TYPE_UNSPECIFIED  PrewarmPoolScopeType = 0
+	PrewarmPoolScopeType_PREWARM_POOL_SCOPE_TYPE_PLATFORM     PrewarmPoolScopeType = 1
+	PrewarmPoolScopeType_PREWARM_POOL_SCOPE_TYPE_ORGANIZATION PrewarmPoolScopeType = 2
+	PrewarmPoolScopeType_PREWARM_POOL_SCOPE_TYPE_PROJECT      PrewarmPoolScopeType = 3
+	PrewarmPoolScopeType_PREWARM_POOL_SCOPE_TYPE_REPOSITORY   PrewarmPoolScopeType = 4
+)
+
+// Enum value maps for PrewarmPoolScopeType.
+var (
+	PrewarmPoolScopeType_name = map[int32]string{
+		0: "PREWARM_POOL_SCOPE_TYPE_UNSPECIFIED",
+		1: "PREWARM_POOL_SCOPE_TYPE_PLATFORM",
+		2: "PREWARM_POOL_SCOPE_TYPE_ORGANIZATION",
+		3: "PREWARM_POOL_SCOPE_TYPE_PROJECT",
+		4: "PREWARM_POOL_SCOPE_TYPE_REPOSITORY",
+	}
+	PrewarmPoolScopeType_value = map[string]int32{
+		"PREWARM_POOL_SCOPE_TYPE_UNSPECIFIED":  0,
+		"PREWARM_POOL_SCOPE_TYPE_PLATFORM":     1,
+		"PREWARM_POOL_SCOPE_TYPE_ORGANIZATION": 2,
+		"PREWARM_POOL_SCOPE_TYPE_PROJECT":      3,
+		"PREWARM_POOL_SCOPE_TYPE_REPOSITORY":   4,
+	}
+)
+
+func (x PrewarmPoolScopeType) Enum() *PrewarmPoolScopeType {
+	p := new(PrewarmPoolScopeType)
+	*p = x
+	return p
+}
+
+func (x PrewarmPoolScopeType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (PrewarmPoolScopeType) Descriptor() protoreflect.EnumDescriptor {
+	return file_kodex_runtime_v1_runtime_manager_proto_enumTypes[12].Descriptor()
+}
+
+func (PrewarmPoolScopeType) Type() protoreflect.EnumType {
+	return &file_kodex_runtime_v1_runtime_manager_proto_enumTypes[12]
+}
+
+func (x PrewarmPoolScopeType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use PrewarmPoolScopeType.Descriptor instead.
+func (PrewarmPoolScopeType) EnumDescriptor() ([]byte, []int) {
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{12}
+}
+
 // PrewarmPoolStatus is the prewarm pool lifecycle status.
 type PrewarmPoolStatus int32
 
@@ -766,11 +822,11 @@ func (x PrewarmPoolStatus) String() string {
 }
 
 func (PrewarmPoolStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_runtime_v1_runtime_manager_proto_enumTypes[12].Descriptor()
+	return file_kodex_runtime_v1_runtime_manager_proto_enumTypes[13].Descriptor()
 }
 
 func (PrewarmPoolStatus) Type() protoreflect.EnumType {
-	return &file_kodex_runtime_v1_runtime_manager_proto_enumTypes[12]
+	return &file_kodex_runtime_v1_runtime_manager_proto_enumTypes[13]
 }
 
 func (x PrewarmPoolStatus) Number() protoreflect.EnumNumber {
@@ -779,7 +835,7 @@ func (x PrewarmPoolStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use PrewarmPoolStatus.Descriptor instead.
 func (PrewarmPoolStatus) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{12}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{13}
 }
 
 // CapacityStatus describes whether actual prewarm capacity matches policy.
@@ -819,11 +875,11 @@ func (x CapacityStatus) String() string {
 }
 
 func (CapacityStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_runtime_v1_runtime_manager_proto_enumTypes[13].Descriptor()
+	return file_kodex_runtime_v1_runtime_manager_proto_enumTypes[14].Descriptor()
 }
 
 func (CapacityStatus) Type() protoreflect.EnumType {
-	return &file_kodex_runtime_v1_runtime_manager_proto_enumTypes[13]
+	return &file_kodex_runtime_v1_runtime_manager_proto_enumTypes[14]
 }
 
 func (x CapacityStatus) Number() protoreflect.EnumNumber {
@@ -832,7 +888,7 @@ func (x CapacityStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use CapacityStatus.Descriptor instead.
 func (CapacityStatus) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{13}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{14}
 }
 
 // CommandMeta is required for every mutating command.
@@ -2030,50 +2086,52 @@ type Job struct {
 	Status JobStatus `protobuf:"varint,4,opt,name=status,proto3,enum=kodex.runtime.v1.JobStatus" json:"status,omitempty"`
 	// priority is the scheduling priority.
 	Priority JobPriority `protobuf:"varint,5,opt,name=priority,proto3,enum=kodex.runtime.v1.JobPriority" json:"priority,omitempty"`
+	// job_input_json carries bounded operation input without secrets.
+	JobInputJson string `protobuf:"bytes,6,opt,name=job_input_json,json=jobInputJson,proto3" json:"job_input_json,omitempty"`
 	// lease_owner identifies the worker or controller that claimed the job.
-	LeaseOwner string `protobuf:"bytes,6,opt,name=lease_owner,json=leaseOwner,proto3" json:"lease_owner,omitempty"`
+	LeaseOwner string `protobuf:"bytes,7,opt,name=lease_owner,json=leaseOwner,proto3" json:"lease_owner,omitempty"`
 	// lease_until is claim lease expiration time in RFC3339 format.
-	LeaseUntil *string `protobuf:"bytes,7,opt,name=lease_until,json=leaseUntil,proto3,oneof" json:"lease_until,omitempty"`
+	LeaseUntil *string `protobuf:"bytes,8,opt,name=lease_until,json=leaseUntil,proto3,oneof" json:"lease_until,omitempty"`
 	// claim_attempt increments every time the job is claimed.
-	ClaimAttempt int64 `protobuf:"varint,8,opt,name=claim_attempt,json=claimAttempt,proto3" json:"claim_attempt,omitempty"`
+	ClaimAttempt int64 `protobuf:"varint,9,opt,name=claim_attempt,json=claimAttempt,proto3" json:"claim_attempt,omitempty"`
 	// slot_id is an optional runtime slot id.
-	SlotId *string `protobuf:"bytes,9,opt,name=slot_id,json=slotId,proto3,oneof" json:"slot_id,omitempty"`
+	SlotId *string `protobuf:"bytes,10,opt,name=slot_id,json=slotId,proto3,oneof" json:"slot_id,omitempty"`
 	// agent_run_id is an external agent-manager run id.
-	AgentRunId *string `protobuf:"bytes,10,opt,name=agent_run_id,json=agentRunId,proto3,oneof" json:"agent_run_id,omitempty"`
+	AgentRunId *string `protobuf:"bytes,11,opt,name=agent_run_id,json=agentRunId,proto3,oneof" json:"agent_run_id,omitempty"`
 	// project_id is an external project id.
-	ProjectId *string `protobuf:"bytes,11,opt,name=project_id,json=projectId,proto3,oneof" json:"project_id,omitempty"`
+	ProjectId *string `protobuf:"bytes,12,opt,name=project_id,json=projectId,proto3,oneof" json:"project_id,omitempty"`
 	// repository_id is an external repository binding id.
-	RepositoryId *string `protobuf:"bytes,12,opt,name=repository_id,json=repositoryId,proto3,oneof" json:"repository_id,omitempty"`
+	RepositoryId *string `protobuf:"bytes,13,opt,name=repository_id,json=repositoryId,proto3,oneof" json:"repository_id,omitempty"`
 	// release_line_id is an external release line id.
-	ReleaseLineId *string `protobuf:"bytes,13,opt,name=release_line_id,json=releaseLineId,proto3,oneof" json:"release_line_id,omitempty"`
+	ReleaseLineId *string `protobuf:"bytes,14,opt,name=release_line_id,json=releaseLineId,proto3,oneof" json:"release_line_id,omitempty"`
 	// package_installation_id is an external package installation id.
-	PackageInstallationId *string `protobuf:"bytes,14,opt,name=package_installation_id,json=packageInstallationId,proto3,oneof" json:"package_installation_id,omitempty"`
+	PackageInstallationId *string `protobuf:"bytes,15,opt,name=package_installation_id,json=packageInstallationId,proto3,oneof" json:"package_installation_id,omitempty"`
 	// fleet_scope_id is an external fleet scope id.
-	FleetScopeId *string `protobuf:"bytes,15,opt,name=fleet_scope_id,json=fleetScopeId,proto3,oneof" json:"fleet_scope_id,omitempty"`
+	FleetScopeId *string `protobuf:"bytes,16,opt,name=fleet_scope_id,json=fleetScopeId,proto3,oneof" json:"fleet_scope_id,omitempty"`
 	// cluster_id is an external fleet cluster id.
-	ClusterId *string `protobuf:"bytes,16,opt,name=cluster_id,json=clusterId,proto3,oneof" json:"cluster_id,omitempty"`
+	ClusterId *string `protobuf:"bytes,17,opt,name=cluster_id,json=clusterId,proto3,oneof" json:"cluster_id,omitempty"`
 	// requested_by is the actor id that requested the job when available.
-	RequestedBy *string `protobuf:"bytes,17,opt,name=requested_by,json=requestedBy,proto3,oneof" json:"requested_by,omitempty"`
+	RequestedBy *string `protobuf:"bytes,18,opt,name=requested_by,json=requestedBy,proto3,oneof" json:"requested_by,omitempty"`
 	// created_at is creation time in RFC3339 format.
-	CreatedAt string `protobuf:"bytes,18,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	CreatedAt string `protobuf:"bytes,19,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	// started_at is start time in RFC3339 format.
-	StartedAt *string `protobuf:"bytes,19,opt,name=started_at,json=startedAt,proto3,oneof" json:"started_at,omitempty"`
+	StartedAt *string `protobuf:"bytes,20,opt,name=started_at,json=startedAt,proto3,oneof" json:"started_at,omitempty"`
 	// finished_at is finish time in RFC3339 format.
-	FinishedAt *string `protobuf:"bytes,20,opt,name=finished_at,json=finishedAt,proto3,oneof" json:"finished_at,omitempty"`
+	FinishedAt *string `protobuf:"bytes,21,opt,name=finished_at,json=finishedAt,proto3,oneof" json:"finished_at,omitempty"`
 	// next_action describes the next expected operator or automation action.
-	NextAction string `protobuf:"bytes,21,opt,name=next_action,json=nextAction,proto3" json:"next_action,omitempty"`
+	NextAction string `protobuf:"bytes,22,opt,name=next_action,json=nextAction,proto3" json:"next_action,omitempty"`
 	// last_error_code is the last classified error code.
-	LastErrorCode string `protobuf:"bytes,22,opt,name=last_error_code,json=lastErrorCode,proto3" json:"last_error_code,omitempty"`
+	LastErrorCode string `protobuf:"bytes,23,opt,name=last_error_code,json=lastErrorCode,proto3" json:"last_error_code,omitempty"`
 	// last_error_message is the last safe error message without secrets.
-	LastErrorMessage string `protobuf:"bytes,23,opt,name=last_error_message,json=lastErrorMessage,proto3" json:"last_error_message,omitempty"`
+	LastErrorMessage string `protobuf:"bytes,24,opt,name=last_error_message,json=lastErrorMessage,proto3" json:"last_error_message,omitempty"`
 	// short_log_tail stores a bounded diagnostic log tail.
-	ShortLogTail string `protobuf:"bytes,24,opt,name=short_log_tail,json=shortLogTail,proto3" json:"short_log_tail,omitempty"`
+	ShortLogTail string `protobuf:"bytes,25,opt,name=short_log_tail,json=shortLogTail,proto3" json:"short_log_tail,omitempty"`
 	// full_log_ref points to the full log source.
-	FullLogRef string `protobuf:"bytes,25,opt,name=full_log_ref,json=fullLogRef,proto3" json:"full_log_ref,omitempty"`
+	FullLogRef string `protobuf:"bytes,26,opt,name=full_log_ref,json=fullLogRef,proto3" json:"full_log_ref,omitempty"`
 	// version is the aggregate version.
-	Version int64 `protobuf:"varint,26,opt,name=version,proto3" json:"version,omitempty"`
+	Version int64 `protobuf:"varint,27,opt,name=version,proto3" json:"version,omitempty"`
 	// steps are job steps returned with the job state.
-	Steps         []*JobStep `protobuf:"bytes,27,rep,name=steps,proto3" json:"steps,omitempty"`
+	Steps         []*JobStep `protobuf:"bytes,28,rep,name=steps,proto3" json:"steps,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2141,6 +2199,13 @@ func (x *Job) GetPriority() JobPriority {
 		return x.Priority
 	}
 	return JobPriority_JOB_PRIORITY_UNSPECIFIED
+}
+
+func (x *Job) GetJobInputJson() string {
+	if x != nil {
+		return x.JobInputJson
+	}
+	return ""
 }
 
 func (x *Job) GetLeaseOwner() string {
@@ -2542,6 +2607,79 @@ func (x *RuntimeArtifactRef) GetCreatedAt() string {
 	return ""
 }
 
+// RuntimeArtifactRefInput carries caller-provided external artifact reference data.
+type RuntimeArtifactRefInput struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// artifact_type classifies the referenced artifact.
+	ArtifactType RuntimeArtifactType `protobuf:"varint,1,opt,name=artifact_type,json=artifactType,proto3,enum=kodex.runtime.v1.RuntimeArtifactType" json:"artifact_type,omitempty"`
+	// external_ref is the primary source URI or object reference.
+	ExternalRef string `protobuf:"bytes,2,opt,name=external_ref,json=externalRef,proto3" json:"external_ref,omitempty"`
+	// digest is the immutable digest when known.
+	Digest string `protobuf:"bytes,3,opt,name=digest,proto3" json:"digest,omitempty"`
+	// metadata_json carries bounded safe metadata without secrets.
+	MetadataJson  string `protobuf:"bytes,4,opt,name=metadata_json,json=metadataJson,proto3" json:"metadata_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RuntimeArtifactRefInput) Reset() {
+	*x = RuntimeArtifactRefInput{}
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RuntimeArtifactRefInput) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RuntimeArtifactRefInput) ProtoMessage() {}
+
+func (x *RuntimeArtifactRefInput) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RuntimeArtifactRefInput.ProtoReflect.Descriptor instead.
+func (*RuntimeArtifactRefInput) Descriptor() ([]byte, []int) {
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *RuntimeArtifactRefInput) GetArtifactType() RuntimeArtifactType {
+	if x != nil {
+		return x.ArtifactType
+	}
+	return RuntimeArtifactType_RUNTIME_ARTIFACT_TYPE_UNSPECIFIED
+}
+
+func (x *RuntimeArtifactRefInput) GetExternalRef() string {
+	if x != nil {
+		return x.ExternalRef
+	}
+	return ""
+}
+
+func (x *RuntimeArtifactRefInput) GetDigest() string {
+	if x != nil {
+		return x.Digest
+	}
+	return ""
+}
+
+func (x *RuntimeArtifactRefInput) GetMetadataJson() string {
+	if x != nil {
+		return x.MetadataJson
+	}
+	return ""
+}
+
 // CleanupPolicy describes retention and cleanup rules for runtime objects.
 type CleanupPolicy struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -2571,7 +2709,7 @@ type CleanupPolicy struct {
 
 func (x *CleanupPolicy) Reset() {
 	*x = CleanupPolicy{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[15]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2583,7 +2721,7 @@ func (x *CleanupPolicy) String() string {
 func (*CleanupPolicy) ProtoMessage() {}
 
 func (x *CleanupPolicy) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[15]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2596,7 +2734,7 @@ func (x *CleanupPolicy) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CleanupPolicy.ProtoReflect.Descriptor instead.
 func (*CleanupPolicy) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{15}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *CleanupPolicy) GetCleanupPolicyId() string {
@@ -2675,7 +2813,7 @@ type PrewarmPool struct {
 	// prewarm_pool_id is the prewarm pool id.
 	PrewarmPoolId string `protobuf:"bytes,1,opt,name=prewarm_pool_id,json=prewarmPoolId,proto3" json:"prewarm_pool_id,omitempty"`
 	// scope_type classifies the scope this pool applies to.
-	ScopeType RuntimeScopeType `protobuf:"varint,2,opt,name=scope_type,json=scopeType,proto3,enum=kodex.runtime.v1.RuntimeScopeType" json:"scope_type,omitempty"`
+	ScopeType PrewarmPoolScopeType `protobuf:"varint,2,opt,name=scope_type,json=scopeType,proto3,enum=kodex.runtime.v1.PrewarmPoolScopeType" json:"scope_type,omitempty"`
 	// scope_id is the optional external scope id.
 	ScopeId *string `protobuf:"bytes,3,opt,name=scope_id,json=scopeId,proto3,oneof" json:"scope_id,omitempty"`
 	// runtime_profile is the runtime profile maintained by the pool.
@@ -2700,7 +2838,7 @@ type PrewarmPool struct {
 
 func (x *PrewarmPool) Reset() {
 	*x = PrewarmPool{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[16]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2712,7 +2850,7 @@ func (x *PrewarmPool) String() string {
 func (*PrewarmPool) ProtoMessage() {}
 
 func (x *PrewarmPool) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[16]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2725,7 +2863,7 @@ func (x *PrewarmPool) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrewarmPool.ProtoReflect.Descriptor instead.
 func (*PrewarmPool) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{16}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *PrewarmPool) GetPrewarmPoolId() string {
@@ -2735,11 +2873,11 @@ func (x *PrewarmPool) GetPrewarmPoolId() string {
 	return ""
 }
 
-func (x *PrewarmPool) GetScopeType() RuntimeScopeType {
+func (x *PrewarmPool) GetScopeType() PrewarmPoolScopeType {
 	if x != nil {
 		return x.ScopeType
 	}
-	return RuntimeScopeType_RUNTIME_SCOPE_TYPE_UNSPECIFIED
+	return PrewarmPoolScopeType_PREWARM_POOL_SCOPE_TYPE_UNSPECIFIED
 }
 
 func (x *PrewarmPool) GetScopeId() string {
@@ -2825,7 +2963,7 @@ type PrepareRuntimeRequest struct {
 
 func (x *PrepareRuntimeRequest) Reset() {
 	*x = PrepareRuntimeRequest{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[17]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2837,7 +2975,7 @@ func (x *PrepareRuntimeRequest) String() string {
 func (*PrepareRuntimeRequest) ProtoMessage() {}
 
 func (x *PrepareRuntimeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[17]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2850,7 +2988,7 @@ func (x *PrepareRuntimeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrepareRuntimeRequest.ProtoReflect.Descriptor instead.
 func (*PrepareRuntimeRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{17}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *PrepareRuntimeRequest) GetAgentRunId() string {
@@ -2909,7 +3047,7 @@ type PrepareRuntimeResponse struct {
 
 func (x *PrepareRuntimeResponse) Reset() {
 	*x = PrepareRuntimeResponse{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[18]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2921,7 +3059,7 @@ func (x *PrepareRuntimeResponse) String() string {
 func (*PrepareRuntimeResponse) ProtoMessage() {}
 
 func (x *PrepareRuntimeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[18]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2934,7 +3072,7 @@ func (x *PrepareRuntimeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrepareRuntimeResponse.ProtoReflect.Descriptor instead.
 func (*PrepareRuntimeResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{18}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *PrepareRuntimeResponse) GetSlot() *Slot {
@@ -2982,7 +3120,7 @@ type ReserveSlotRequest struct {
 
 func (x *ReserveSlotRequest) Reset() {
 	*x = ReserveSlotRequest{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[19]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2994,7 +3132,7 @@ func (x *ReserveSlotRequest) String() string {
 func (*ReserveSlotRequest) ProtoMessage() {}
 
 func (x *ReserveSlotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[19]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3007,7 +3145,7 @@ func (x *ReserveSlotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReserveSlotRequest.ProtoReflect.Descriptor instead.
 func (*ReserveSlotRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{19}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ReserveSlotRequest) GetRuntimeProfile() string {
@@ -3082,7 +3220,7 @@ type ExtendSlotLeaseRequest struct {
 
 func (x *ExtendSlotLeaseRequest) Reset() {
 	*x = ExtendSlotLeaseRequest{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[20]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3094,7 +3232,7 @@ func (x *ExtendSlotLeaseRequest) String() string {
 func (*ExtendSlotLeaseRequest) ProtoMessage() {}
 
 func (x *ExtendSlotLeaseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[20]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3107,7 +3245,7 @@ func (x *ExtendSlotLeaseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExtendSlotLeaseRequest.ProtoReflect.Descriptor instead.
 func (*ExtendSlotLeaseRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{20}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ExtendSlotLeaseRequest) GetSlotId() string {
@@ -3152,7 +3290,7 @@ type ReleaseSlotRequest struct {
 
 func (x *ReleaseSlotRequest) Reset() {
 	*x = ReleaseSlotRequest{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[21]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3164,7 +3302,7 @@ func (x *ReleaseSlotRequest) String() string {
 func (*ReleaseSlotRequest) ProtoMessage() {}
 
 func (x *ReleaseSlotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[21]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3177,7 +3315,7 @@ func (x *ReleaseSlotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleaseSlotRequest.ProtoReflect.Descriptor instead.
 func (*ReleaseSlotRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{21}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ReleaseSlotRequest) GetSlotId() string {
@@ -3217,7 +3355,7 @@ type MarkSlotFailedRequest struct {
 
 func (x *MarkSlotFailedRequest) Reset() {
 	*x = MarkSlotFailedRequest{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[22]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3229,7 +3367,7 @@ func (x *MarkSlotFailedRequest) String() string {
 func (*MarkSlotFailedRequest) ProtoMessage() {}
 
 func (x *MarkSlotFailedRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[22]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3242,7 +3380,7 @@ func (x *MarkSlotFailedRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarkSlotFailedRequest.ProtoReflect.Descriptor instead.
 func (*MarkSlotFailedRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{22}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *MarkSlotFailedRequest) GetSlotId() string {
@@ -3283,7 +3421,7 @@ type SlotResponse struct {
 
 func (x *SlotResponse) Reset() {
 	*x = SlotResponse{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[23]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3295,7 +3433,7 @@ func (x *SlotResponse) String() string {
 func (*SlotResponse) ProtoMessage() {}
 
 func (x *SlotResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[23]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3308,7 +3446,7 @@ func (x *SlotResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SlotResponse.ProtoReflect.Descriptor instead.
 func (*SlotResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{23}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *SlotResponse) GetSlot() *Slot {
@@ -3330,7 +3468,7 @@ type GetSlotRequest struct {
 
 func (x *GetSlotRequest) Reset() {
 	*x = GetSlotRequest{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[24]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3342,7 +3480,7 @@ func (x *GetSlotRequest) String() string {
 func (*GetSlotRequest) ProtoMessage() {}
 
 func (x *GetSlotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[24]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3355,7 +3493,7 @@ func (x *GetSlotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSlotRequest.ProtoReflect.Descriptor instead.
 func (*GetSlotRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{24}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *GetSlotRequest) GetSlotId() string {
@@ -3394,7 +3532,7 @@ type ListSlotsRequest struct {
 
 func (x *ListSlotsRequest) Reset() {
 	*x = ListSlotsRequest{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[25]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3406,7 +3544,7 @@ func (x *ListSlotsRequest) String() string {
 func (*ListSlotsRequest) ProtoMessage() {}
 
 func (x *ListSlotsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[25]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3419,7 +3557,7 @@ func (x *ListSlotsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSlotsRequest.ProtoReflect.Descriptor instead.
 func (*ListSlotsRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{25}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *ListSlotsRequest) GetProjectId() string {
@@ -3483,7 +3621,7 @@ type ListSlotsResponse struct {
 
 func (x *ListSlotsResponse) Reset() {
 	*x = ListSlotsResponse{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[26]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3495,7 +3633,7 @@ func (x *ListSlotsResponse) String() string {
 func (*ListSlotsResponse) ProtoMessage() {}
 
 func (x *ListSlotsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[26]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3508,7 +3646,7 @@ func (x *ListSlotsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSlotsResponse.ProtoReflect.Descriptor instead.
 func (*ListSlotsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{26}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *ListSlotsResponse) GetSlots() []*Slot {
@@ -3539,7 +3677,7 @@ type StartWorkspaceMaterializationRequest struct {
 
 func (x *StartWorkspaceMaterializationRequest) Reset() {
 	*x = StartWorkspaceMaterializationRequest{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[27]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3551,7 +3689,7 @@ func (x *StartWorkspaceMaterializationRequest) String() string {
 func (*StartWorkspaceMaterializationRequest) ProtoMessage() {}
 
 func (x *StartWorkspaceMaterializationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[27]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3564,7 +3702,7 @@ func (x *StartWorkspaceMaterializationRequest) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use StartWorkspaceMaterializationRequest.ProtoReflect.Descriptor instead.
 func (*StartWorkspaceMaterializationRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{27}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *StartWorkspaceMaterializationRequest) GetSlotId() string {
@@ -3612,7 +3750,7 @@ type ReportWorkspaceMaterializationProgressRequest struct {
 
 func (x *ReportWorkspaceMaterializationProgressRequest) Reset() {
 	*x = ReportWorkspaceMaterializationProgressRequest{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[28]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3624,7 +3762,7 @@ func (x *ReportWorkspaceMaterializationProgressRequest) String() string {
 func (*ReportWorkspaceMaterializationProgressRequest) ProtoMessage() {}
 
 func (x *ReportWorkspaceMaterializationProgressRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[28]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3637,7 +3775,7 @@ func (x *ReportWorkspaceMaterializationProgressRequest) ProtoReflect() protorefl
 
 // Deprecated: Use ReportWorkspaceMaterializationProgressRequest.ProtoReflect.Descriptor instead.
 func (*ReportWorkspaceMaterializationProgressRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{28}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *ReportWorkspaceMaterializationProgressRequest) GetWorkspaceMaterializationId() string {
@@ -3706,7 +3844,7 @@ type WorkspaceMaterializationResponse struct {
 
 func (x *WorkspaceMaterializationResponse) Reset() {
 	*x = WorkspaceMaterializationResponse{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[29]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3718,7 +3856,7 @@ func (x *WorkspaceMaterializationResponse) String() string {
 func (*WorkspaceMaterializationResponse) ProtoMessage() {}
 
 func (x *WorkspaceMaterializationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[29]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3731,7 +3869,7 @@ func (x *WorkspaceMaterializationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkspaceMaterializationResponse.ProtoReflect.Descriptor instead.
 func (*WorkspaceMaterializationResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{29}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *WorkspaceMaterializationResponse) GetWorkspaceMaterialization() *WorkspaceMaterialization {
@@ -3753,7 +3891,7 @@ type GetWorkspaceMaterializationRequest struct {
 
 func (x *GetWorkspaceMaterializationRequest) Reset() {
 	*x = GetWorkspaceMaterializationRequest{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[30]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3765,7 +3903,7 @@ func (x *GetWorkspaceMaterializationRequest) String() string {
 func (*GetWorkspaceMaterializationRequest) ProtoMessage() {}
 
 func (x *GetWorkspaceMaterializationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[30]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3778,7 +3916,7 @@ func (x *GetWorkspaceMaterializationRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use GetWorkspaceMaterializationRequest.ProtoReflect.Descriptor instead.
 func (*GetWorkspaceMaterializationRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{30}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *GetWorkspaceMaterializationRequest) GetWorkspaceMaterializationId() string {
@@ -3813,7 +3951,7 @@ type ListWorkspaceMaterializationsRequest struct {
 
 func (x *ListWorkspaceMaterializationsRequest) Reset() {
 	*x = ListWorkspaceMaterializationsRequest{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[31]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3825,7 +3963,7 @@ func (x *ListWorkspaceMaterializationsRequest) String() string {
 func (*ListWorkspaceMaterializationsRequest) ProtoMessage() {}
 
 func (x *ListWorkspaceMaterializationsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[31]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3838,7 +3976,7 @@ func (x *ListWorkspaceMaterializationsRequest) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use ListWorkspaceMaterializationsRequest.ProtoReflect.Descriptor instead.
 func (*ListWorkspaceMaterializationsRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{31}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *ListWorkspaceMaterializationsRequest) GetSlotId() string {
@@ -3888,7 +4026,7 @@ type ListWorkspaceMaterializationsResponse struct {
 
 func (x *ListWorkspaceMaterializationsResponse) Reset() {
 	*x = ListWorkspaceMaterializationsResponse{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[32]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3900,7 +4038,7 @@ func (x *ListWorkspaceMaterializationsResponse) String() string {
 func (*ListWorkspaceMaterializationsResponse) ProtoMessage() {}
 
 func (x *ListWorkspaceMaterializationsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[32]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3913,7 +4051,7 @@ func (x *ListWorkspaceMaterializationsResponse) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use ListWorkspaceMaterializationsResponse.ProtoReflect.Descriptor instead.
 func (*ListWorkspaceMaterializationsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{32}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *ListWorkspaceMaterializationsResponse) GetWorkspaceMaterializations() []*WorkspaceMaterialization {
@@ -3960,7 +4098,7 @@ type CreateJobRequest struct {
 
 func (x *CreateJobRequest) Reset() {
 	*x = CreateJobRequest{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[33]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3972,7 +4110,7 @@ func (x *CreateJobRequest) String() string {
 func (*CreateJobRequest) ProtoMessage() {}
 
 func (x *CreateJobRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[33]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3985,7 +4123,7 @@ func (x *CreateJobRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateJobRequest.ProtoReflect.Descriptor instead.
 func (*CreateJobRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{33}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *CreateJobRequest) GetJobType() JobType {
@@ -4085,7 +4223,7 @@ type ClaimRunnableJobRequest struct {
 
 func (x *ClaimRunnableJobRequest) Reset() {
 	*x = ClaimRunnableJobRequest{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[34]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4097,7 +4235,7 @@ func (x *ClaimRunnableJobRequest) String() string {
 func (*ClaimRunnableJobRequest) ProtoMessage() {}
 
 func (x *ClaimRunnableJobRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[34]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4110,7 +4248,7 @@ func (x *ClaimRunnableJobRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimRunnableJobRequest.ProtoReflect.Descriptor instead.
 func (*ClaimRunnableJobRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{34}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *ClaimRunnableJobRequest) GetJobTypes() []JobType {
@@ -4167,7 +4305,7 @@ type ClaimRunnableJobResponse struct {
 
 func (x *ClaimRunnableJobResponse) Reset() {
 	*x = ClaimRunnableJobResponse{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[35]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4179,7 +4317,7 @@ func (x *ClaimRunnableJobResponse) String() string {
 func (*ClaimRunnableJobResponse) ProtoMessage() {}
 
 func (x *ClaimRunnableJobResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[35]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4192,7 +4330,7 @@ func (x *ClaimRunnableJobResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimRunnableJobResponse.ProtoReflect.Descriptor instead.
 func (*ClaimRunnableJobResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{35}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *ClaimRunnableJobResponse) GetJob() *Job {
@@ -4232,7 +4370,7 @@ type ReportJobStepProgressRequest struct {
 	// error_message is a safe error message without secrets.
 	ErrorMessage string `protobuf:"bytes,10,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
 	// artifact_refs are external artifact references observed by this step.
-	ArtifactRefs []*RuntimeArtifactRef `protobuf:"bytes,11,rep,name=artifact_refs,json=artifactRefs,proto3" json:"artifact_refs,omitempty"`
+	ArtifactRefs []*RuntimeArtifactRefInput `protobuf:"bytes,11,rep,name=artifact_refs,json=artifactRefs,proto3" json:"artifact_refs,omitempty"`
 	// meta carries idempotency, expected version and audit context.
 	Meta          *CommandMeta `protobuf:"bytes,12,opt,name=meta,proto3" json:"meta,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -4241,7 +4379,7 @@ type ReportJobStepProgressRequest struct {
 
 func (x *ReportJobStepProgressRequest) Reset() {
 	*x = ReportJobStepProgressRequest{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[36]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4253,7 +4391,7 @@ func (x *ReportJobStepProgressRequest) String() string {
 func (*ReportJobStepProgressRequest) ProtoMessage() {}
 
 func (x *ReportJobStepProgressRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[36]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4266,7 +4404,7 @@ func (x *ReportJobStepProgressRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportJobStepProgressRequest.ProtoReflect.Descriptor instead.
 func (*ReportJobStepProgressRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{36}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *ReportJobStepProgressRequest) GetJobId() string {
@@ -4339,7 +4477,7 @@ func (x *ReportJobStepProgressRequest) GetErrorMessage() string {
 	return ""
 }
 
-func (x *ReportJobStepProgressRequest) GetArtifactRefs() []*RuntimeArtifactRef {
+func (x *ReportJobStepProgressRequest) GetArtifactRefs() []*RuntimeArtifactRefInput {
 	if x != nil {
 		return x.ArtifactRefs
 	}
@@ -4371,7 +4509,7 @@ type CompleteJobRequest struct {
 
 func (x *CompleteJobRequest) Reset() {
 	*x = CompleteJobRequest{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[37]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4383,7 +4521,7 @@ func (x *CompleteJobRequest) String() string {
 func (*CompleteJobRequest) ProtoMessage() {}
 
 func (x *CompleteJobRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[37]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4396,7 +4534,7 @@ func (x *CompleteJobRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteJobRequest.ProtoReflect.Descriptor instead.
 func (*CompleteJobRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{37}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *CompleteJobRequest) GetJobId() string {
@@ -4456,7 +4594,7 @@ type FailJobRequest struct {
 
 func (x *FailJobRequest) Reset() {
 	*x = FailJobRequest{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[38]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4468,7 +4606,7 @@ func (x *FailJobRequest) String() string {
 func (*FailJobRequest) ProtoMessage() {}
 
 func (x *FailJobRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[38]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4481,7 +4619,7 @@ func (x *FailJobRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FailJobRequest.ProtoReflect.Descriptor instead.
 func (*FailJobRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{38}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *FailJobRequest) GetJobId() string {
@@ -4545,7 +4683,7 @@ type CancelJobRequest struct {
 
 func (x *CancelJobRequest) Reset() {
 	*x = CancelJobRequest{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[39]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4557,7 +4695,7 @@ func (x *CancelJobRequest) String() string {
 func (*CancelJobRequest) ProtoMessage() {}
 
 func (x *CancelJobRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[39]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4570,7 +4708,7 @@ func (x *CancelJobRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelJobRequest.ProtoReflect.Descriptor instead.
 func (*CancelJobRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{39}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *CancelJobRequest) GetJobId() string {
@@ -4597,7 +4735,7 @@ type JobResponse struct {
 
 func (x *JobResponse) Reset() {
 	*x = JobResponse{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[40]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4609,7 +4747,7 @@ func (x *JobResponse) String() string {
 func (*JobResponse) ProtoMessage() {}
 
 func (x *JobResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[40]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4622,7 +4760,7 @@ func (x *JobResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JobResponse.ProtoReflect.Descriptor instead.
 func (*JobResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{40}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *JobResponse) GetJob() *Job {
@@ -4644,7 +4782,7 @@ type GetJobRequest struct {
 
 func (x *GetJobRequest) Reset() {
 	*x = GetJobRequest{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[41]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4656,7 +4794,7 @@ func (x *GetJobRequest) String() string {
 func (*GetJobRequest) ProtoMessage() {}
 
 func (x *GetJobRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[41]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4669,7 +4807,7 @@ func (x *GetJobRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetJobRequest.ProtoReflect.Descriptor instead.
 func (*GetJobRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{41}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *GetJobRequest) GetJobId() string {
@@ -4710,7 +4848,7 @@ type ListJobsRequest struct {
 
 func (x *ListJobsRequest) Reset() {
 	*x = ListJobsRequest{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[42]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4722,7 +4860,7 @@ func (x *ListJobsRequest) String() string {
 func (*ListJobsRequest) ProtoMessage() {}
 
 func (x *ListJobsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[42]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4735,7 +4873,7 @@ func (x *ListJobsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListJobsRequest.ProtoReflect.Descriptor instead.
 func (*ListJobsRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{42}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *ListJobsRequest) GetStatuses() []JobStatus {
@@ -4806,7 +4944,7 @@ type ListJobsResponse struct {
 
 func (x *ListJobsResponse) Reset() {
 	*x = ListJobsResponse{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[43]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4818,7 +4956,7 @@ func (x *ListJobsResponse) String() string {
 func (*ListJobsResponse) ProtoMessage() {}
 
 func (x *ListJobsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[43]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4831,7 +4969,7 @@ func (x *ListJobsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListJobsResponse.ProtoReflect.Descriptor instead.
 func (*ListJobsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{43}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *ListJobsResponse) GetJobs() []*Job {
@@ -4854,23 +4992,17 @@ type RecordRuntimeArtifactRefRequest struct {
 	JobId *string `protobuf:"bytes,1,opt,name=job_id,json=jobId,proto3,oneof" json:"job_id,omitempty"`
 	// slot_id optionally links the reference to a slot.
 	SlotId *string `protobuf:"bytes,2,opt,name=slot_id,json=slotId,proto3,oneof" json:"slot_id,omitempty"`
-	// artifact_type classifies the referenced artifact.
-	ArtifactType RuntimeArtifactType `protobuf:"varint,3,opt,name=artifact_type,json=artifactType,proto3,enum=kodex.runtime.v1.RuntimeArtifactType" json:"artifact_type,omitempty"`
-	// external_ref is the primary source URI or object reference.
-	ExternalRef string `protobuf:"bytes,4,opt,name=external_ref,json=externalRef,proto3" json:"external_ref,omitempty"`
-	// digest is the immutable digest when known.
-	Digest string `protobuf:"bytes,5,opt,name=digest,proto3" json:"digest,omitempty"`
-	// metadata_json carries bounded safe metadata without secrets.
-	MetadataJson string `protobuf:"bytes,6,opt,name=metadata_json,json=metadataJson,proto3" json:"metadata_json,omitempty"`
+	// artifact_ref carries caller-provided reference data.
+	ArtifactRef *RuntimeArtifactRefInput `protobuf:"bytes,3,opt,name=artifact_ref,json=artifactRef,proto3" json:"artifact_ref,omitempty"`
 	// meta carries idempotency and audit context.
-	Meta          *CommandMeta `protobuf:"bytes,7,opt,name=meta,proto3" json:"meta,omitempty"`
+	Meta          *CommandMeta `protobuf:"bytes,4,opt,name=meta,proto3" json:"meta,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RecordRuntimeArtifactRefRequest) Reset() {
 	*x = RecordRuntimeArtifactRefRequest{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[44]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4882,7 +5014,7 @@ func (x *RecordRuntimeArtifactRefRequest) String() string {
 func (*RecordRuntimeArtifactRefRequest) ProtoMessage() {}
 
 func (x *RecordRuntimeArtifactRefRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[44]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4895,7 +5027,7 @@ func (x *RecordRuntimeArtifactRefRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordRuntimeArtifactRefRequest.ProtoReflect.Descriptor instead.
 func (*RecordRuntimeArtifactRefRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{44}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *RecordRuntimeArtifactRefRequest) GetJobId() string {
@@ -4912,32 +5044,11 @@ func (x *RecordRuntimeArtifactRefRequest) GetSlotId() string {
 	return ""
 }
 
-func (x *RecordRuntimeArtifactRefRequest) GetArtifactType() RuntimeArtifactType {
+func (x *RecordRuntimeArtifactRefRequest) GetArtifactRef() *RuntimeArtifactRefInput {
 	if x != nil {
-		return x.ArtifactType
+		return x.ArtifactRef
 	}
-	return RuntimeArtifactType_RUNTIME_ARTIFACT_TYPE_UNSPECIFIED
-}
-
-func (x *RecordRuntimeArtifactRefRequest) GetExternalRef() string {
-	if x != nil {
-		return x.ExternalRef
-	}
-	return ""
-}
-
-func (x *RecordRuntimeArtifactRefRequest) GetDigest() string {
-	if x != nil {
-		return x.Digest
-	}
-	return ""
-}
-
-func (x *RecordRuntimeArtifactRefRequest) GetMetadataJson() string {
-	if x != nil {
-		return x.MetadataJson
-	}
-	return ""
+	return nil
 }
 
 func (x *RecordRuntimeArtifactRefRequest) GetMeta() *CommandMeta {
@@ -4957,7 +5068,7 @@ type RuntimeArtifactRefResponse struct {
 
 func (x *RuntimeArtifactRefResponse) Reset() {
 	*x = RuntimeArtifactRefResponse{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[45]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4969,7 +5080,7 @@ func (x *RuntimeArtifactRefResponse) String() string {
 func (*RuntimeArtifactRefResponse) ProtoMessage() {}
 
 func (x *RuntimeArtifactRefResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[45]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4982,7 +5093,7 @@ func (x *RuntimeArtifactRefResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RuntimeArtifactRefResponse.ProtoReflect.Descriptor instead.
 func (*RuntimeArtifactRefResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{45}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *RuntimeArtifactRefResponse) GetRuntimeArtifactRef() *RuntimeArtifactRef {
@@ -5010,7 +5121,7 @@ type ListRuntimeArtifactRefsRequest struct {
 
 func (x *ListRuntimeArtifactRefsRequest) Reset() {
 	*x = ListRuntimeArtifactRefsRequest{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[46]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5022,7 +5133,7 @@ func (x *ListRuntimeArtifactRefsRequest) String() string {
 func (*ListRuntimeArtifactRefsRequest) ProtoMessage() {}
 
 func (x *ListRuntimeArtifactRefsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[46]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5035,7 +5146,7 @@ func (x *ListRuntimeArtifactRefsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRuntimeArtifactRefsRequest.ProtoReflect.Descriptor instead.
 func (*ListRuntimeArtifactRefsRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{46}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *ListRuntimeArtifactRefsRequest) GetJobId() string {
@@ -5085,7 +5196,7 @@ type ListRuntimeArtifactRefsResponse struct {
 
 func (x *ListRuntimeArtifactRefsResponse) Reset() {
 	*x = ListRuntimeArtifactRefsResponse{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[47]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5097,7 +5208,7 @@ func (x *ListRuntimeArtifactRefsResponse) String() string {
 func (*ListRuntimeArtifactRefsResponse) ProtoMessage() {}
 
 func (x *ListRuntimeArtifactRefsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[47]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5110,7 +5221,7 @@ func (x *ListRuntimeArtifactRefsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRuntimeArtifactRefsResponse.ProtoReflect.Descriptor instead.
 func (*ListRuntimeArtifactRefsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{47}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *ListRuntimeArtifactRefsResponse) GetRuntimeArtifactRefs() []*RuntimeArtifactRef {
@@ -5151,7 +5262,7 @@ type CreateOrUpdateCleanupPolicyRequest struct {
 
 func (x *CreateOrUpdateCleanupPolicyRequest) Reset() {
 	*x = CreateOrUpdateCleanupPolicyRequest{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[48]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5163,7 +5274,7 @@ func (x *CreateOrUpdateCleanupPolicyRequest) String() string {
 func (*CreateOrUpdateCleanupPolicyRequest) ProtoMessage() {}
 
 func (x *CreateOrUpdateCleanupPolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[48]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5176,7 +5287,7 @@ func (x *CreateOrUpdateCleanupPolicyRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use CreateOrUpdateCleanupPolicyRequest.ProtoReflect.Descriptor instead.
 func (*CreateOrUpdateCleanupPolicyRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{48}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *CreateOrUpdateCleanupPolicyRequest) GetCleanupPolicyId() string {
@@ -5245,7 +5356,7 @@ type CleanupPolicyResponse struct {
 
 func (x *CleanupPolicyResponse) Reset() {
 	*x = CleanupPolicyResponse{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[49]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5257,7 +5368,7 @@ func (x *CleanupPolicyResponse) String() string {
 func (*CleanupPolicyResponse) ProtoMessage() {}
 
 func (x *CleanupPolicyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[49]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5270,7 +5381,7 @@ func (x *CleanupPolicyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CleanupPolicyResponse.ProtoReflect.Descriptor instead.
 func (*CleanupPolicyResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{49}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *CleanupPolicyResponse) GetCleanupPolicy() *CleanupPolicy {
@@ -5298,7 +5409,7 @@ type RunCleanupBatchRequest struct {
 
 func (x *RunCleanupBatchRequest) Reset() {
 	*x = RunCleanupBatchRequest{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[50]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5310,7 +5421,7 @@ func (x *RunCleanupBatchRequest) String() string {
 func (*RunCleanupBatchRequest) ProtoMessage() {}
 
 func (x *RunCleanupBatchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[50]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5323,7 +5434,7 @@ func (x *RunCleanupBatchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunCleanupBatchRequest.ProtoReflect.Descriptor instead.
 func (*RunCleanupBatchRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{50}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *RunCleanupBatchRequest) GetCleanupPolicyId() string {
@@ -5377,7 +5488,7 @@ type RunCleanupBatchResponse struct {
 
 func (x *RunCleanupBatchResponse) Reset() {
 	*x = RunCleanupBatchResponse{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[51]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5389,7 +5500,7 @@ func (x *RunCleanupBatchResponse) String() string {
 func (*RunCleanupBatchResponse) ProtoMessage() {}
 
 func (x *RunCleanupBatchResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[51]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5402,7 +5513,7 @@ func (x *RunCleanupBatchResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunCleanupBatchResponse.ProtoReflect.Descriptor instead.
 func (*RunCleanupBatchResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{51}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *RunCleanupBatchResponse) GetClaimedCount() int32 {
@@ -5438,7 +5549,7 @@ type CreateOrUpdatePrewarmPoolRequest struct {
 	// prewarm_pool_id is optional pool id for update; absent value creates a new pool.
 	PrewarmPoolId *string `protobuf:"bytes,1,opt,name=prewarm_pool_id,json=prewarmPoolId,proto3,oneof" json:"prewarm_pool_id,omitempty"`
 	// scope_type classifies the scope this pool applies to.
-	ScopeType RuntimeScopeType `protobuf:"varint,2,opt,name=scope_type,json=scopeType,proto3,enum=kodex.runtime.v1.RuntimeScopeType" json:"scope_type,omitempty"`
+	ScopeType PrewarmPoolScopeType `protobuf:"varint,2,opt,name=scope_type,json=scopeType,proto3,enum=kodex.runtime.v1.PrewarmPoolScopeType" json:"scope_type,omitempty"`
 	// scope_id is the optional external scope id.
 	ScopeId *string `protobuf:"bytes,3,opt,name=scope_id,json=scopeId,proto3,oneof" json:"scope_id,omitempty"`
 	// runtime_profile is the runtime profile maintained by the pool.
@@ -5457,7 +5568,7 @@ type CreateOrUpdatePrewarmPoolRequest struct {
 
 func (x *CreateOrUpdatePrewarmPoolRequest) Reset() {
 	*x = CreateOrUpdatePrewarmPoolRequest{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[52]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5469,7 +5580,7 @@ func (x *CreateOrUpdatePrewarmPoolRequest) String() string {
 func (*CreateOrUpdatePrewarmPoolRequest) ProtoMessage() {}
 
 func (x *CreateOrUpdatePrewarmPoolRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[52]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5482,7 +5593,7 @@ func (x *CreateOrUpdatePrewarmPoolRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateOrUpdatePrewarmPoolRequest.ProtoReflect.Descriptor instead.
 func (*CreateOrUpdatePrewarmPoolRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{52}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *CreateOrUpdatePrewarmPoolRequest) GetPrewarmPoolId() string {
@@ -5492,11 +5603,11 @@ func (x *CreateOrUpdatePrewarmPoolRequest) GetPrewarmPoolId() string {
 	return ""
 }
 
-func (x *CreateOrUpdatePrewarmPoolRequest) GetScopeType() RuntimeScopeType {
+func (x *CreateOrUpdatePrewarmPoolRequest) GetScopeType() PrewarmPoolScopeType {
 	if x != nil {
 		return x.ScopeType
 	}
-	return RuntimeScopeType_RUNTIME_SCOPE_TYPE_UNSPECIFIED
+	return PrewarmPoolScopeType_PREWARM_POOL_SCOPE_TYPE_UNSPECIFIED
 }
 
 func (x *CreateOrUpdatePrewarmPoolRequest) GetScopeId() string {
@@ -5551,7 +5662,7 @@ type PrewarmPoolResponse struct {
 
 func (x *PrewarmPoolResponse) Reset() {
 	*x = PrewarmPoolResponse{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[53]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5563,7 +5674,7 @@ func (x *PrewarmPoolResponse) String() string {
 func (*PrewarmPoolResponse) ProtoMessage() {}
 
 func (x *PrewarmPoolResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[53]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5576,7 +5687,7 @@ func (x *PrewarmPoolResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrewarmPoolResponse.ProtoReflect.Descriptor instead.
 func (*PrewarmPoolResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{53}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *PrewarmPoolResponse) GetPrewarmPool() *PrewarmPool {
@@ -5602,7 +5713,7 @@ type ReconcilePrewarmPoolRequest struct {
 
 func (x *ReconcilePrewarmPoolRequest) Reset() {
 	*x = ReconcilePrewarmPoolRequest{}
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[54]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5614,7 +5725,7 @@ func (x *ReconcilePrewarmPoolRequest) String() string {
 func (*ReconcilePrewarmPoolRequest) ProtoMessage() {}
 
 func (x *ReconcilePrewarmPoolRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[54]
+	mi := &file_kodex_runtime_v1_runtime_manager_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5627,7 +5738,7 @@ func (x *ReconcilePrewarmPoolRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReconcilePrewarmPoolRequest.ProtoReflect.Descriptor instead.
 func (*ReconcilePrewarmPoolRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{54}
+	return file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *ReconcilePrewarmPoolRequest) GetPrewarmPoolId() string {
@@ -5807,7 +5918,7 @@ const file_kodex_runtime_v1_runtime_manager_proto_rawDesc = "" +
 	" \x01(\tR\x10lastErrorMessage\x12\x18\n" +
 	"\aversion\x18\v \x01(\x03R\aversionB\r\n" +
 	"\v_started_atB\x0e\n" +
-	"\f_finished_at\"\x84\n" +
+	"\f_finished_at\"\xaa\n" +
 	"\n" +
 	"\x03Job\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x1d\n" +
@@ -5815,41 +5926,42 @@ const file_kodex_runtime_v1_runtime_manager_proto_rawDesc = "" +
 	"command_id\x18\x02 \x01(\tR\tcommandId\x124\n" +
 	"\bjob_type\x18\x03 \x01(\x0e2\x19.kodex.runtime.v1.JobTypeR\ajobType\x123\n" +
 	"\x06status\x18\x04 \x01(\x0e2\x1b.kodex.runtime.v1.JobStatusR\x06status\x129\n" +
-	"\bpriority\x18\x05 \x01(\x0e2\x1d.kodex.runtime.v1.JobPriorityR\bpriority\x12\x1f\n" +
-	"\vlease_owner\x18\x06 \x01(\tR\n" +
+	"\bpriority\x18\x05 \x01(\x0e2\x1d.kodex.runtime.v1.JobPriorityR\bpriority\x12$\n" +
+	"\x0ejob_input_json\x18\x06 \x01(\tR\fjobInputJson\x12\x1f\n" +
+	"\vlease_owner\x18\a \x01(\tR\n" +
 	"leaseOwner\x12$\n" +
-	"\vlease_until\x18\a \x01(\tH\x00R\n" +
+	"\vlease_until\x18\b \x01(\tH\x00R\n" +
 	"leaseUntil\x88\x01\x01\x12#\n" +
-	"\rclaim_attempt\x18\b \x01(\x03R\fclaimAttempt\x12\x1c\n" +
-	"\aslot_id\x18\t \x01(\tH\x01R\x06slotId\x88\x01\x01\x12%\n" +
-	"\fagent_run_id\x18\n" +
-	" \x01(\tH\x02R\n" +
+	"\rclaim_attempt\x18\t \x01(\x03R\fclaimAttempt\x12\x1c\n" +
+	"\aslot_id\x18\n" +
+	" \x01(\tH\x01R\x06slotId\x88\x01\x01\x12%\n" +
+	"\fagent_run_id\x18\v \x01(\tH\x02R\n" +
 	"agentRunId\x88\x01\x01\x12\"\n" +
 	"\n" +
-	"project_id\x18\v \x01(\tH\x03R\tprojectId\x88\x01\x01\x12(\n" +
-	"\rrepository_id\x18\f \x01(\tH\x04R\frepositoryId\x88\x01\x01\x12+\n" +
-	"\x0frelease_line_id\x18\r \x01(\tH\x05R\rreleaseLineId\x88\x01\x01\x12;\n" +
-	"\x17package_installation_id\x18\x0e \x01(\tH\x06R\x15packageInstallationId\x88\x01\x01\x12)\n" +
-	"\x0efleet_scope_id\x18\x0f \x01(\tH\aR\ffleetScopeId\x88\x01\x01\x12\"\n" +
+	"project_id\x18\f \x01(\tH\x03R\tprojectId\x88\x01\x01\x12(\n" +
+	"\rrepository_id\x18\r \x01(\tH\x04R\frepositoryId\x88\x01\x01\x12+\n" +
+	"\x0frelease_line_id\x18\x0e \x01(\tH\x05R\rreleaseLineId\x88\x01\x01\x12;\n" +
+	"\x17package_installation_id\x18\x0f \x01(\tH\x06R\x15packageInstallationId\x88\x01\x01\x12)\n" +
+	"\x0efleet_scope_id\x18\x10 \x01(\tH\aR\ffleetScopeId\x88\x01\x01\x12\"\n" +
 	"\n" +
-	"cluster_id\x18\x10 \x01(\tH\bR\tclusterId\x88\x01\x01\x12&\n" +
-	"\frequested_by\x18\x11 \x01(\tH\tR\vrequestedBy\x88\x01\x01\x12\x1d\n" +
+	"cluster_id\x18\x11 \x01(\tH\bR\tclusterId\x88\x01\x01\x12&\n" +
+	"\frequested_by\x18\x12 \x01(\tH\tR\vrequestedBy\x88\x01\x01\x12\x1d\n" +
 	"\n" +
-	"created_at\x18\x12 \x01(\tR\tcreatedAt\x12\"\n" +
+	"created_at\x18\x13 \x01(\tR\tcreatedAt\x12\"\n" +
 	"\n" +
-	"started_at\x18\x13 \x01(\tH\n" +
+	"started_at\x18\x14 \x01(\tH\n" +
 	"R\tstartedAt\x88\x01\x01\x12$\n" +
-	"\vfinished_at\x18\x14 \x01(\tH\vR\n" +
+	"\vfinished_at\x18\x15 \x01(\tH\vR\n" +
 	"finishedAt\x88\x01\x01\x12\x1f\n" +
-	"\vnext_action\x18\x15 \x01(\tR\n" +
+	"\vnext_action\x18\x16 \x01(\tR\n" +
 	"nextAction\x12&\n" +
-	"\x0flast_error_code\x18\x16 \x01(\tR\rlastErrorCode\x12,\n" +
-	"\x12last_error_message\x18\x17 \x01(\tR\x10lastErrorMessage\x12$\n" +
-	"\x0eshort_log_tail\x18\x18 \x01(\tR\fshortLogTail\x12 \n" +
-	"\ffull_log_ref\x18\x19 \x01(\tR\n" +
+	"\x0flast_error_code\x18\x17 \x01(\tR\rlastErrorCode\x12,\n" +
+	"\x12last_error_message\x18\x18 \x01(\tR\x10lastErrorMessage\x12$\n" +
+	"\x0eshort_log_tail\x18\x19 \x01(\tR\fshortLogTail\x12 \n" +
+	"\ffull_log_ref\x18\x1a \x01(\tR\n" +
 	"fullLogRef\x12\x18\n" +
-	"\aversion\x18\x1a \x01(\x03R\aversion\x12/\n" +
-	"\x05steps\x18\x1b \x03(\v2\x19.kodex.runtime.v1.JobStepR\x05stepsB\x0e\n" +
+	"\aversion\x18\x1b \x01(\x03R\aversion\x12/\n" +
+	"\x05steps\x18\x1c \x03(\v2\x19.kodex.runtime.v1.JobStepR\x05stepsB\x0e\n" +
 	"\f_lease_untilB\n" +
 	"\n" +
 	"\b_slot_idB\x0f\n" +
@@ -5893,7 +6005,12 @@ const file_kodex_runtime_v1_runtime_manager_proto_rawDesc = "" +
 	"created_at\x18\b \x01(\tR\tcreatedAtB\t\n" +
 	"\a_job_idB\n" +
 	"\n" +
-	"\b_slot_id\"\xc0\x03\n" +
+	"\b_slot_id\"\xc5\x01\n" +
+	"\x17RuntimeArtifactRefInput\x12J\n" +
+	"\rartifact_type\x18\x01 \x01(\x0e2%.kodex.runtime.v1.RuntimeArtifactTypeR\fartifactType\x12!\n" +
+	"\fexternal_ref\x18\x02 \x01(\tR\vexternalRef\x12\x16\n" +
+	"\x06digest\x18\x03 \x01(\tR\x06digest\x12#\n" +
+	"\rmetadata_json\x18\x04 \x01(\tR\fmetadataJson\"\xc0\x03\n" +
 	"\rCleanupPolicy\x12*\n" +
 	"\x11cleanup_policy_id\x18\x01 \x01(\tR\x0fcleanupPolicyId\x12A\n" +
 	"\n" +
@@ -5910,11 +6027,11 @@ const file_kodex_runtime_v1_runtime_manager_proto_rawDesc = "" +
 	"updated_at\x18\t \x01(\tR\tupdatedAt\x12\x18\n" +
 	"\aversion\x18\n" +
 	" \x01(\x03R\aversionB\v\n" +
-	"\t_scope_id\"\x96\x04\n" +
+	"\t_scope_id\"\x9a\x04\n" +
 	"\vPrewarmPool\x12&\n" +
-	"\x0fprewarm_pool_id\x18\x01 \x01(\tR\rprewarmPoolId\x12A\n" +
+	"\x0fprewarm_pool_id\x18\x01 \x01(\tR\rprewarmPoolId\x12E\n" +
 	"\n" +
-	"scope_type\x18\x02 \x01(\x0e2\".kodex.runtime.v1.RuntimeScopeTypeR\tscopeType\x12\x1e\n" +
+	"scope_type\x18\x02 \x01(\x0e2&.kodex.runtime.v1.PrewarmPoolScopeTypeR\tscopeType\x12\x1e\n" +
 	"\bscope_id\x18\x03 \x01(\tH\x00R\ascopeId\x88\x01\x01\x12'\n" +
 	"\x0fruntime_profile\x18\x04 \x01(\tR\x0eruntimeProfile\x12)\n" +
 	"\x0efleet_scope_id\x18\x05 \x01(\tH\x01R\ffleetScopeId\x88\x01\x01\x12\x1f\n" +
@@ -6069,7 +6186,7 @@ const file_kodex_runtime_v1_runtime_manager_proto_rawDesc = "" +
 	"\x18ClaimRunnableJobResponse\x12'\n" +
 	"\x03job\x18\x01 \x01(\v2\x15.kodex.runtime.v1.JobR\x03job\x12\x1f\n" +
 	"\vlease_token\x18\x02 \x01(\tR\n" +
-	"leaseToken\"\x9e\x04\n" +
+	"leaseToken\"\xa3\x04\n" +
 	"\x1cReportJobStepProgressRequest\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x1f\n" +
 	"\vlease_token\x18\x02 \x01(\tR\n" +
@@ -6085,8 +6202,8 @@ const file_kodex_runtime_v1_runtime_manager_proto_rawDesc = "" +
 	"\n" +
 	"error_code\x18\t \x01(\tR\terrorCode\x12#\n" +
 	"\rerror_message\x18\n" +
-	" \x01(\tR\ferrorMessage\x12I\n" +
-	"\rartifact_refs\x18\v \x03(\v2$.kodex.runtime.v1.RuntimeArtifactRefR\fartifactRefs\x121\n" +
+	" \x01(\tR\ferrorMessage\x12N\n" +
+	"\rartifact_refs\x18\v \x03(\v2).kodex.runtime.v1.RuntimeArtifactRefInputR\fartifactRefs\x121\n" +
 	"\x04meta\x18\f \x01(\v2\x1d.kodex.runtime.v1.CommandMetaR\x04metaB\r\n" +
 	"\v_started_atB\x0e\n" +
 	"\f_finished_at\"\xc7\x01\n" +
@@ -6135,15 +6252,12 @@ const file_kodex_runtime_v1_runtime_manager_proto_rawDesc = "" +
 	"\x10_release_line_id\"q\n" +
 	"\x10ListJobsResponse\x12)\n" +
 	"\x04jobs\x18\x01 \x03(\v2\x15.kodex.runtime.v1.JobR\x04jobs\x122\n" +
-	"\x04page\x18\x02 \x01(\v2\x1e.kodex.runtime.v1.PageResponseR\x04page\"\xd1\x02\n" +
+	"\x04page\x18\x02 \x01(\v2\x1e.kodex.runtime.v1.PageResponseR\x04page\"\xf3\x01\n" +
 	"\x1fRecordRuntimeArtifactRefRequest\x12\x1a\n" +
 	"\x06job_id\x18\x01 \x01(\tH\x00R\x05jobId\x88\x01\x01\x12\x1c\n" +
-	"\aslot_id\x18\x02 \x01(\tH\x01R\x06slotId\x88\x01\x01\x12J\n" +
-	"\rartifact_type\x18\x03 \x01(\x0e2%.kodex.runtime.v1.RuntimeArtifactTypeR\fartifactType\x12!\n" +
-	"\fexternal_ref\x18\x04 \x01(\tR\vexternalRef\x12\x16\n" +
-	"\x06digest\x18\x05 \x01(\tR\x06digest\x12#\n" +
-	"\rmetadata_json\x18\x06 \x01(\tR\fmetadataJson\x121\n" +
-	"\x04meta\x18\a \x01(\v2\x1d.kodex.runtime.v1.CommandMetaR\x04metaB\t\n" +
+	"\aslot_id\x18\x02 \x01(\tH\x01R\x06slotId\x88\x01\x01\x12L\n" +
+	"\fartifact_ref\x18\x03 \x01(\v2).kodex.runtime.v1.RuntimeArtifactRefInputR\vartifactRef\x121\n" +
+	"\x04meta\x18\x04 \x01(\v2\x1d.kodex.runtime.v1.CommandMetaR\x04metaB\t\n" +
 	"\a_job_idB\n" +
 	"\n" +
 	"\b_slot_id\"t\n" +
@@ -6189,11 +6303,11 @@ const file_kodex_runtime_v1_runtime_manager_proto_rawDesc = "" +
 	"\rclaimed_count\x18\x01 \x01(\x05R\fclaimedCount\x12#\n" +
 	"\rcleaned_count\x18\x02 \x01(\x05R\fcleanedCount\x12!\n" +
 	"\ffailed_count\x18\x03 \x01(\x05R\vfailedCount\x12*\n" +
-	"\x11affected_slot_ids\x18\x04 \x03(\tR\x0faffectedSlotIds\"\xcb\x03\n" +
+	"\x11affected_slot_ids\x18\x04 \x03(\tR\x0faffectedSlotIds\"\xcf\x03\n" +
 	" CreateOrUpdatePrewarmPoolRequest\x12+\n" +
-	"\x0fprewarm_pool_id\x18\x01 \x01(\tH\x00R\rprewarmPoolId\x88\x01\x01\x12A\n" +
+	"\x0fprewarm_pool_id\x18\x01 \x01(\tH\x00R\rprewarmPoolId\x88\x01\x01\x12E\n" +
 	"\n" +
-	"scope_type\x18\x02 \x01(\x0e2\".kodex.runtime.v1.RuntimeScopeTypeR\tscopeType\x12\x1e\n" +
+	"scope_type\x18\x02 \x01(\x0e2&.kodex.runtime.v1.PrewarmPoolScopeTypeR\tscopeType\x12\x1e\n" +
 	"\bscope_id\x18\x03 \x01(\tH\x01R\ascopeId\x88\x01\x01\x12'\n" +
 	"\x0fruntime_profile\x18\x04 \x01(\tR\x0eruntimeProfile\x12)\n" +
 	"\x0efleet_scope_id\x18\x05 \x01(\tH\x02R\ffleetScopeId\x88\x01\x01\x12\x1f\n" +
@@ -6297,7 +6411,13 @@ const file_kodex_runtime_v1_runtime_manager_proto_rawDesc = "" +
 	"\x1fRUNTIME_SCOPE_TYPE_ORGANIZATION\x10\x02\x12\x1e\n" +
 	"\x1aRUNTIME_SCOPE_TYPE_PROJECT\x10\x03\x12!\n" +
 	"\x1dRUNTIME_SCOPE_TYPE_REPOSITORY\x10\x04\x12&\n" +
-	"\"RUNTIME_SCOPE_TYPE_RUNTIME_PROFILE\x10\x05*\x9a\x01\n" +
+	"\"RUNTIME_SCOPE_TYPE_RUNTIME_PROFILE\x10\x05*\xdc\x01\n" +
+	"\x14PrewarmPoolScopeType\x12'\n" +
+	"#PREWARM_POOL_SCOPE_TYPE_UNSPECIFIED\x10\x00\x12$\n" +
+	" PREWARM_POOL_SCOPE_TYPE_PLATFORM\x10\x01\x12(\n" +
+	"$PREWARM_POOL_SCOPE_TYPE_ORGANIZATION\x10\x02\x12#\n" +
+	"\x1fPREWARM_POOL_SCOPE_TYPE_PROJECT\x10\x03\x12&\n" +
+	"\"PREWARM_POOL_SCOPE_TYPE_REPOSITORY\x10\x04*\x9a\x01\n" +
 	"\x11PrewarmPoolStatus\x12#\n" +
 	"\x1fPREWARM_POOL_STATUS_UNSPECIFIED\x10\x00\x12\x1e\n" +
 	"\x1aPREWARM_POOL_STATUS_ACTIVE\x10\x01\x12\x1e\n" +
@@ -6347,8 +6467,8 @@ func file_kodex_runtime_v1_runtime_manager_proto_rawDescGZIP() []byte {
 	return file_kodex_runtime_v1_runtime_manager_proto_rawDescData
 }
 
-var file_kodex_runtime_v1_runtime_manager_proto_enumTypes = make([]protoimpl.EnumInfo, 14)
-var file_kodex_runtime_v1_runtime_manager_proto_msgTypes = make([]protoimpl.MessageInfo, 55)
+var file_kodex_runtime_v1_runtime_manager_proto_enumTypes = make([]protoimpl.EnumInfo, 15)
+var file_kodex_runtime_v1_runtime_manager_proto_msgTypes = make([]protoimpl.MessageInfo, 56)
 var file_kodex_runtime_v1_runtime_manager_proto_goTypes = []any{
 	(RuntimeMode)(0),                                      // 0: kodex.runtime.v1.RuntimeMode
 	(SlotStatus)(0),                                       // 1: kodex.runtime.v1.SlotStatus
@@ -6362,212 +6482,215 @@ var file_kodex_runtime_v1_runtime_manager_proto_goTypes = []any{
 	(RuntimeArtifactType)(0),                              // 9: kodex.runtime.v1.RuntimeArtifactType
 	(CleanupPolicyStatus)(0),                              // 10: kodex.runtime.v1.CleanupPolicyStatus
 	(RuntimeScopeType)(0),                                 // 11: kodex.runtime.v1.RuntimeScopeType
-	(PrewarmPoolStatus)(0),                                // 12: kodex.runtime.v1.PrewarmPoolStatus
-	(CapacityStatus)(0),                                   // 13: kodex.runtime.v1.CapacityStatus
-	(*CommandMeta)(nil),                                   // 14: kodex.runtime.v1.CommandMeta
-	(*QueryMeta)(nil),                                     // 15: kodex.runtime.v1.QueryMeta
-	(*RequestContext)(nil),                                // 16: kodex.runtime.v1.RequestContext
-	(*Actor)(nil),                                         // 17: kodex.runtime.v1.Actor
-	(*PageRequest)(nil),                                   // 18: kodex.runtime.v1.PageRequest
-	(*PageResponse)(nil),                                  // 19: kodex.runtime.v1.PageResponse
-	(*WorkspaceSource)(nil),                               // 20: kodex.runtime.v1.WorkspaceSource
-	(*WorkspacePolicyInput)(nil),                          // 21: kodex.runtime.v1.WorkspacePolicyInput
-	(*PlacementConstraints)(nil),                          // 22: kodex.runtime.v1.PlacementConstraints
-	(*RuntimeContext)(nil),                                // 23: kodex.runtime.v1.RuntimeContext
-	(*Slot)(nil),                                          // 24: kodex.runtime.v1.Slot
-	(*WorkspaceMaterialization)(nil),                      // 25: kodex.runtime.v1.WorkspaceMaterialization
-	(*Job)(nil),                                           // 26: kodex.runtime.v1.Job
-	(*JobStep)(nil),                                       // 27: kodex.runtime.v1.JobStep
-	(*RuntimeArtifactRef)(nil),                            // 28: kodex.runtime.v1.RuntimeArtifactRef
-	(*CleanupPolicy)(nil),                                 // 29: kodex.runtime.v1.CleanupPolicy
-	(*PrewarmPool)(nil),                                   // 30: kodex.runtime.v1.PrewarmPool
-	(*PrepareRuntimeRequest)(nil),                         // 31: kodex.runtime.v1.PrepareRuntimeRequest
-	(*PrepareRuntimeResponse)(nil),                        // 32: kodex.runtime.v1.PrepareRuntimeResponse
-	(*ReserveSlotRequest)(nil),                            // 33: kodex.runtime.v1.ReserveSlotRequest
-	(*ExtendSlotLeaseRequest)(nil),                        // 34: kodex.runtime.v1.ExtendSlotLeaseRequest
-	(*ReleaseSlotRequest)(nil),                            // 35: kodex.runtime.v1.ReleaseSlotRequest
-	(*MarkSlotFailedRequest)(nil),                         // 36: kodex.runtime.v1.MarkSlotFailedRequest
-	(*SlotResponse)(nil),                                  // 37: kodex.runtime.v1.SlotResponse
-	(*GetSlotRequest)(nil),                                // 38: kodex.runtime.v1.GetSlotRequest
-	(*ListSlotsRequest)(nil),                              // 39: kodex.runtime.v1.ListSlotsRequest
-	(*ListSlotsResponse)(nil),                             // 40: kodex.runtime.v1.ListSlotsResponse
-	(*StartWorkspaceMaterializationRequest)(nil),          // 41: kodex.runtime.v1.StartWorkspaceMaterializationRequest
-	(*ReportWorkspaceMaterializationProgressRequest)(nil), // 42: kodex.runtime.v1.ReportWorkspaceMaterializationProgressRequest
-	(*WorkspaceMaterializationResponse)(nil),              // 43: kodex.runtime.v1.WorkspaceMaterializationResponse
-	(*GetWorkspaceMaterializationRequest)(nil),            // 44: kodex.runtime.v1.GetWorkspaceMaterializationRequest
-	(*ListWorkspaceMaterializationsRequest)(nil),          // 45: kodex.runtime.v1.ListWorkspaceMaterializationsRequest
-	(*ListWorkspaceMaterializationsResponse)(nil),         // 46: kodex.runtime.v1.ListWorkspaceMaterializationsResponse
-	(*CreateJobRequest)(nil),                              // 47: kodex.runtime.v1.CreateJobRequest
-	(*ClaimRunnableJobRequest)(nil),                       // 48: kodex.runtime.v1.ClaimRunnableJobRequest
-	(*ClaimRunnableJobResponse)(nil),                      // 49: kodex.runtime.v1.ClaimRunnableJobResponse
-	(*ReportJobStepProgressRequest)(nil),                  // 50: kodex.runtime.v1.ReportJobStepProgressRequest
-	(*CompleteJobRequest)(nil),                            // 51: kodex.runtime.v1.CompleteJobRequest
-	(*FailJobRequest)(nil),                                // 52: kodex.runtime.v1.FailJobRequest
-	(*CancelJobRequest)(nil),                              // 53: kodex.runtime.v1.CancelJobRequest
-	(*JobResponse)(nil),                                   // 54: kodex.runtime.v1.JobResponse
-	(*GetJobRequest)(nil),                                 // 55: kodex.runtime.v1.GetJobRequest
-	(*ListJobsRequest)(nil),                               // 56: kodex.runtime.v1.ListJobsRequest
-	(*ListJobsResponse)(nil),                              // 57: kodex.runtime.v1.ListJobsResponse
-	(*RecordRuntimeArtifactRefRequest)(nil),               // 58: kodex.runtime.v1.RecordRuntimeArtifactRefRequest
-	(*RuntimeArtifactRefResponse)(nil),                    // 59: kodex.runtime.v1.RuntimeArtifactRefResponse
-	(*ListRuntimeArtifactRefsRequest)(nil),                // 60: kodex.runtime.v1.ListRuntimeArtifactRefsRequest
-	(*ListRuntimeArtifactRefsResponse)(nil),               // 61: kodex.runtime.v1.ListRuntimeArtifactRefsResponse
-	(*CreateOrUpdateCleanupPolicyRequest)(nil),            // 62: kodex.runtime.v1.CreateOrUpdateCleanupPolicyRequest
-	(*CleanupPolicyResponse)(nil),                         // 63: kodex.runtime.v1.CleanupPolicyResponse
-	(*RunCleanupBatchRequest)(nil),                        // 64: kodex.runtime.v1.RunCleanupBatchRequest
-	(*RunCleanupBatchResponse)(nil),                       // 65: kodex.runtime.v1.RunCleanupBatchResponse
-	(*CreateOrUpdatePrewarmPoolRequest)(nil),              // 66: kodex.runtime.v1.CreateOrUpdatePrewarmPoolRequest
-	(*PrewarmPoolResponse)(nil),                           // 67: kodex.runtime.v1.PrewarmPoolResponse
-	(*ReconcilePrewarmPoolRequest)(nil),                   // 68: kodex.runtime.v1.ReconcilePrewarmPoolRequest
+	(PrewarmPoolScopeType)(0),                             // 12: kodex.runtime.v1.PrewarmPoolScopeType
+	(PrewarmPoolStatus)(0),                                // 13: kodex.runtime.v1.PrewarmPoolStatus
+	(CapacityStatus)(0),                                   // 14: kodex.runtime.v1.CapacityStatus
+	(*CommandMeta)(nil),                                   // 15: kodex.runtime.v1.CommandMeta
+	(*QueryMeta)(nil),                                     // 16: kodex.runtime.v1.QueryMeta
+	(*RequestContext)(nil),                                // 17: kodex.runtime.v1.RequestContext
+	(*Actor)(nil),                                         // 18: kodex.runtime.v1.Actor
+	(*PageRequest)(nil),                                   // 19: kodex.runtime.v1.PageRequest
+	(*PageResponse)(nil),                                  // 20: kodex.runtime.v1.PageResponse
+	(*WorkspaceSource)(nil),                               // 21: kodex.runtime.v1.WorkspaceSource
+	(*WorkspacePolicyInput)(nil),                          // 22: kodex.runtime.v1.WorkspacePolicyInput
+	(*PlacementConstraints)(nil),                          // 23: kodex.runtime.v1.PlacementConstraints
+	(*RuntimeContext)(nil),                                // 24: kodex.runtime.v1.RuntimeContext
+	(*Slot)(nil),                                          // 25: kodex.runtime.v1.Slot
+	(*WorkspaceMaterialization)(nil),                      // 26: kodex.runtime.v1.WorkspaceMaterialization
+	(*Job)(nil),                                           // 27: kodex.runtime.v1.Job
+	(*JobStep)(nil),                                       // 28: kodex.runtime.v1.JobStep
+	(*RuntimeArtifactRef)(nil),                            // 29: kodex.runtime.v1.RuntimeArtifactRef
+	(*RuntimeArtifactRefInput)(nil),                       // 30: kodex.runtime.v1.RuntimeArtifactRefInput
+	(*CleanupPolicy)(nil),                                 // 31: kodex.runtime.v1.CleanupPolicy
+	(*PrewarmPool)(nil),                                   // 32: kodex.runtime.v1.PrewarmPool
+	(*PrepareRuntimeRequest)(nil),                         // 33: kodex.runtime.v1.PrepareRuntimeRequest
+	(*PrepareRuntimeResponse)(nil),                        // 34: kodex.runtime.v1.PrepareRuntimeResponse
+	(*ReserveSlotRequest)(nil),                            // 35: kodex.runtime.v1.ReserveSlotRequest
+	(*ExtendSlotLeaseRequest)(nil),                        // 36: kodex.runtime.v1.ExtendSlotLeaseRequest
+	(*ReleaseSlotRequest)(nil),                            // 37: kodex.runtime.v1.ReleaseSlotRequest
+	(*MarkSlotFailedRequest)(nil),                         // 38: kodex.runtime.v1.MarkSlotFailedRequest
+	(*SlotResponse)(nil),                                  // 39: kodex.runtime.v1.SlotResponse
+	(*GetSlotRequest)(nil),                                // 40: kodex.runtime.v1.GetSlotRequest
+	(*ListSlotsRequest)(nil),                              // 41: kodex.runtime.v1.ListSlotsRequest
+	(*ListSlotsResponse)(nil),                             // 42: kodex.runtime.v1.ListSlotsResponse
+	(*StartWorkspaceMaterializationRequest)(nil),          // 43: kodex.runtime.v1.StartWorkspaceMaterializationRequest
+	(*ReportWorkspaceMaterializationProgressRequest)(nil), // 44: kodex.runtime.v1.ReportWorkspaceMaterializationProgressRequest
+	(*WorkspaceMaterializationResponse)(nil),              // 45: kodex.runtime.v1.WorkspaceMaterializationResponse
+	(*GetWorkspaceMaterializationRequest)(nil),            // 46: kodex.runtime.v1.GetWorkspaceMaterializationRequest
+	(*ListWorkspaceMaterializationsRequest)(nil),          // 47: kodex.runtime.v1.ListWorkspaceMaterializationsRequest
+	(*ListWorkspaceMaterializationsResponse)(nil),         // 48: kodex.runtime.v1.ListWorkspaceMaterializationsResponse
+	(*CreateJobRequest)(nil),                              // 49: kodex.runtime.v1.CreateJobRequest
+	(*ClaimRunnableJobRequest)(nil),                       // 50: kodex.runtime.v1.ClaimRunnableJobRequest
+	(*ClaimRunnableJobResponse)(nil),                      // 51: kodex.runtime.v1.ClaimRunnableJobResponse
+	(*ReportJobStepProgressRequest)(nil),                  // 52: kodex.runtime.v1.ReportJobStepProgressRequest
+	(*CompleteJobRequest)(nil),                            // 53: kodex.runtime.v1.CompleteJobRequest
+	(*FailJobRequest)(nil),                                // 54: kodex.runtime.v1.FailJobRequest
+	(*CancelJobRequest)(nil),                              // 55: kodex.runtime.v1.CancelJobRequest
+	(*JobResponse)(nil),                                   // 56: kodex.runtime.v1.JobResponse
+	(*GetJobRequest)(nil),                                 // 57: kodex.runtime.v1.GetJobRequest
+	(*ListJobsRequest)(nil),                               // 58: kodex.runtime.v1.ListJobsRequest
+	(*ListJobsResponse)(nil),                              // 59: kodex.runtime.v1.ListJobsResponse
+	(*RecordRuntimeArtifactRefRequest)(nil),               // 60: kodex.runtime.v1.RecordRuntimeArtifactRefRequest
+	(*RuntimeArtifactRefResponse)(nil),                    // 61: kodex.runtime.v1.RuntimeArtifactRefResponse
+	(*ListRuntimeArtifactRefsRequest)(nil),                // 62: kodex.runtime.v1.ListRuntimeArtifactRefsRequest
+	(*ListRuntimeArtifactRefsResponse)(nil),               // 63: kodex.runtime.v1.ListRuntimeArtifactRefsResponse
+	(*CreateOrUpdateCleanupPolicyRequest)(nil),            // 64: kodex.runtime.v1.CreateOrUpdateCleanupPolicyRequest
+	(*CleanupPolicyResponse)(nil),                         // 65: kodex.runtime.v1.CleanupPolicyResponse
+	(*RunCleanupBatchRequest)(nil),                        // 66: kodex.runtime.v1.RunCleanupBatchRequest
+	(*RunCleanupBatchResponse)(nil),                       // 67: kodex.runtime.v1.RunCleanupBatchResponse
+	(*CreateOrUpdatePrewarmPoolRequest)(nil),              // 68: kodex.runtime.v1.CreateOrUpdatePrewarmPoolRequest
+	(*PrewarmPoolResponse)(nil),                           // 69: kodex.runtime.v1.PrewarmPoolResponse
+	(*ReconcilePrewarmPoolRequest)(nil),                   // 70: kodex.runtime.v1.ReconcilePrewarmPoolRequest
 }
 var file_kodex_runtime_v1_runtime_manager_proto_depIdxs = []int32{
-	17,  // 0: kodex.runtime.v1.CommandMeta.actor:type_name -> kodex.runtime.v1.Actor
-	16,  // 1: kodex.runtime.v1.CommandMeta.request_context:type_name -> kodex.runtime.v1.RequestContext
-	17,  // 2: kodex.runtime.v1.QueryMeta.actor:type_name -> kodex.runtime.v1.Actor
-	16,  // 3: kodex.runtime.v1.QueryMeta.request_context:type_name -> kodex.runtime.v1.RequestContext
+	18,  // 0: kodex.runtime.v1.CommandMeta.actor:type_name -> kodex.runtime.v1.Actor
+	17,  // 1: kodex.runtime.v1.CommandMeta.request_context:type_name -> kodex.runtime.v1.RequestContext
+	18,  // 2: kodex.runtime.v1.QueryMeta.actor:type_name -> kodex.runtime.v1.Actor
+	17,  // 3: kodex.runtime.v1.QueryMeta.request_context:type_name -> kodex.runtime.v1.RequestContext
 	2,   // 4: kodex.runtime.v1.WorkspaceSource.kind:type_name -> kodex.runtime.v1.WorkspaceSourceKind
 	3,   // 5: kodex.runtime.v1.WorkspaceSource.access_mode:type_name -> kodex.runtime.v1.WorkspaceSourceAccessMode
-	20,  // 6: kodex.runtime.v1.WorkspacePolicyInput.sources:type_name -> kodex.runtime.v1.WorkspaceSource
+	21,  // 6: kodex.runtime.v1.WorkspacePolicyInput.sources:type_name -> kodex.runtime.v1.WorkspaceSource
 	1,   // 7: kodex.runtime.v1.Slot.status:type_name -> kodex.runtime.v1.SlotStatus
 	0,   // 8: kodex.runtime.v1.Slot.runtime_mode:type_name -> kodex.runtime.v1.RuntimeMode
 	4,   // 9: kodex.runtime.v1.WorkspaceMaterialization.status:type_name -> kodex.runtime.v1.WorkspaceMaterializationStatus
-	20,  // 10: kodex.runtime.v1.WorkspaceMaterialization.sources:type_name -> kodex.runtime.v1.WorkspaceSource
+	21,  // 10: kodex.runtime.v1.WorkspaceMaterialization.sources:type_name -> kodex.runtime.v1.WorkspaceSource
 	5,   // 11: kodex.runtime.v1.Job.job_type:type_name -> kodex.runtime.v1.JobType
 	6,   // 12: kodex.runtime.v1.Job.status:type_name -> kodex.runtime.v1.JobStatus
 	7,   // 13: kodex.runtime.v1.Job.priority:type_name -> kodex.runtime.v1.JobPriority
-	27,  // 14: kodex.runtime.v1.Job.steps:type_name -> kodex.runtime.v1.JobStep
+	28,  // 14: kodex.runtime.v1.Job.steps:type_name -> kodex.runtime.v1.JobStep
 	8,   // 15: kodex.runtime.v1.JobStep.status:type_name -> kodex.runtime.v1.JobStepStatus
 	9,   // 16: kodex.runtime.v1.RuntimeArtifactRef.artifact_type:type_name -> kodex.runtime.v1.RuntimeArtifactType
-	11,  // 17: kodex.runtime.v1.CleanupPolicy.scope_type:type_name -> kodex.runtime.v1.RuntimeScopeType
-	10,  // 18: kodex.runtime.v1.CleanupPolicy.status:type_name -> kodex.runtime.v1.CleanupPolicyStatus
-	11,  // 19: kodex.runtime.v1.PrewarmPool.scope_type:type_name -> kodex.runtime.v1.RuntimeScopeType
-	12,  // 20: kodex.runtime.v1.PrewarmPool.status:type_name -> kodex.runtime.v1.PrewarmPoolStatus
-	13,  // 21: kodex.runtime.v1.PrewarmPool.last_capacity_status:type_name -> kodex.runtime.v1.CapacityStatus
-	0,   // 22: kodex.runtime.v1.PrepareRuntimeRequest.runtime_mode:type_name -> kodex.runtime.v1.RuntimeMode
-	21,  // 23: kodex.runtime.v1.PrepareRuntimeRequest.workspace_policy:type_name -> kodex.runtime.v1.WorkspacePolicyInput
-	22,  // 24: kodex.runtime.v1.PrepareRuntimeRequest.placement_constraints:type_name -> kodex.runtime.v1.PlacementConstraints
-	14,  // 25: kodex.runtime.v1.PrepareRuntimeRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	24,  // 26: kodex.runtime.v1.PrepareRuntimeResponse.slot:type_name -> kodex.runtime.v1.Slot
-	25,  // 27: kodex.runtime.v1.PrepareRuntimeResponse.workspace_materialization:type_name -> kodex.runtime.v1.WorkspaceMaterialization
-	23,  // 28: kodex.runtime.v1.PrepareRuntimeResponse.runtime_context:type_name -> kodex.runtime.v1.RuntimeContext
-	0,   // 29: kodex.runtime.v1.ReserveSlotRequest.runtime_mode:type_name -> kodex.runtime.v1.RuntimeMode
-	22,  // 30: kodex.runtime.v1.ReserveSlotRequest.placement_constraints:type_name -> kodex.runtime.v1.PlacementConstraints
-	14,  // 31: kodex.runtime.v1.ReserveSlotRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	14,  // 32: kodex.runtime.v1.ExtendSlotLeaseRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	14,  // 33: kodex.runtime.v1.ReleaseSlotRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	14,  // 34: kodex.runtime.v1.MarkSlotFailedRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	24,  // 35: kodex.runtime.v1.SlotResponse.slot:type_name -> kodex.runtime.v1.Slot
-	15,  // 36: kodex.runtime.v1.GetSlotRequest.meta:type_name -> kodex.runtime.v1.QueryMeta
-	1,   // 37: kodex.runtime.v1.ListSlotsRequest.statuses:type_name -> kodex.runtime.v1.SlotStatus
-	18,  // 38: kodex.runtime.v1.ListSlotsRequest.page:type_name -> kodex.runtime.v1.PageRequest
-	15,  // 39: kodex.runtime.v1.ListSlotsRequest.meta:type_name -> kodex.runtime.v1.QueryMeta
-	24,  // 40: kodex.runtime.v1.ListSlotsResponse.slots:type_name -> kodex.runtime.v1.Slot
-	19,  // 41: kodex.runtime.v1.ListSlotsResponse.page:type_name -> kodex.runtime.v1.PageResponse
-	21,  // 42: kodex.runtime.v1.StartWorkspaceMaterializationRequest.workspace_policy:type_name -> kodex.runtime.v1.WorkspacePolicyInput
-	14,  // 43: kodex.runtime.v1.StartWorkspaceMaterializationRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	4,   // 44: kodex.runtime.v1.ReportWorkspaceMaterializationProgressRequest.status:type_name -> kodex.runtime.v1.WorkspaceMaterializationStatus
-	14,  // 45: kodex.runtime.v1.ReportWorkspaceMaterializationProgressRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	25,  // 46: kodex.runtime.v1.WorkspaceMaterializationResponse.workspace_materialization:type_name -> kodex.runtime.v1.WorkspaceMaterialization
-	15,  // 47: kodex.runtime.v1.GetWorkspaceMaterializationRequest.meta:type_name -> kodex.runtime.v1.QueryMeta
-	4,   // 48: kodex.runtime.v1.ListWorkspaceMaterializationsRequest.statuses:type_name -> kodex.runtime.v1.WorkspaceMaterializationStatus
-	18,  // 49: kodex.runtime.v1.ListWorkspaceMaterializationsRequest.page:type_name -> kodex.runtime.v1.PageRequest
-	15,  // 50: kodex.runtime.v1.ListWorkspaceMaterializationsRequest.meta:type_name -> kodex.runtime.v1.QueryMeta
-	25,  // 51: kodex.runtime.v1.ListWorkspaceMaterializationsResponse.workspace_materializations:type_name -> kodex.runtime.v1.WorkspaceMaterialization
-	19,  // 52: kodex.runtime.v1.ListWorkspaceMaterializationsResponse.page:type_name -> kodex.runtime.v1.PageResponse
-	5,   // 53: kodex.runtime.v1.CreateJobRequest.job_type:type_name -> kodex.runtime.v1.JobType
-	7,   // 54: kodex.runtime.v1.CreateJobRequest.priority:type_name -> kodex.runtime.v1.JobPriority
-	22,  // 55: kodex.runtime.v1.CreateJobRequest.placement_constraints:type_name -> kodex.runtime.v1.PlacementConstraints
-	14,  // 56: kodex.runtime.v1.CreateJobRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	5,   // 57: kodex.runtime.v1.ClaimRunnableJobRequest.job_types:type_name -> kodex.runtime.v1.JobType
-	14,  // 58: kodex.runtime.v1.ClaimRunnableJobRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	26,  // 59: kodex.runtime.v1.ClaimRunnableJobResponse.job:type_name -> kodex.runtime.v1.Job
-	8,   // 60: kodex.runtime.v1.ReportJobStepProgressRequest.status:type_name -> kodex.runtime.v1.JobStepStatus
-	28,  // 61: kodex.runtime.v1.ReportJobStepProgressRequest.artifact_refs:type_name -> kodex.runtime.v1.RuntimeArtifactRef
-	14,  // 62: kodex.runtime.v1.ReportJobStepProgressRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	14,  // 63: kodex.runtime.v1.CompleteJobRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	14,  // 64: kodex.runtime.v1.FailJobRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	14,  // 65: kodex.runtime.v1.CancelJobRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	26,  // 66: kodex.runtime.v1.JobResponse.job:type_name -> kodex.runtime.v1.Job
-	15,  // 67: kodex.runtime.v1.GetJobRequest.meta:type_name -> kodex.runtime.v1.QueryMeta
-	6,   // 68: kodex.runtime.v1.ListJobsRequest.statuses:type_name -> kodex.runtime.v1.JobStatus
-	5,   // 69: kodex.runtime.v1.ListJobsRequest.job_types:type_name -> kodex.runtime.v1.JobType
-	18,  // 70: kodex.runtime.v1.ListJobsRequest.page:type_name -> kodex.runtime.v1.PageRequest
-	15,  // 71: kodex.runtime.v1.ListJobsRequest.meta:type_name -> kodex.runtime.v1.QueryMeta
-	26,  // 72: kodex.runtime.v1.ListJobsResponse.jobs:type_name -> kodex.runtime.v1.Job
-	19,  // 73: kodex.runtime.v1.ListJobsResponse.page:type_name -> kodex.runtime.v1.PageResponse
-	9,   // 74: kodex.runtime.v1.RecordRuntimeArtifactRefRequest.artifact_type:type_name -> kodex.runtime.v1.RuntimeArtifactType
-	14,  // 75: kodex.runtime.v1.RecordRuntimeArtifactRefRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	28,  // 76: kodex.runtime.v1.RuntimeArtifactRefResponse.runtime_artifact_ref:type_name -> kodex.runtime.v1.RuntimeArtifactRef
-	9,   // 77: kodex.runtime.v1.ListRuntimeArtifactRefsRequest.artifact_types:type_name -> kodex.runtime.v1.RuntimeArtifactType
-	18,  // 78: kodex.runtime.v1.ListRuntimeArtifactRefsRequest.page:type_name -> kodex.runtime.v1.PageRequest
-	15,  // 79: kodex.runtime.v1.ListRuntimeArtifactRefsRequest.meta:type_name -> kodex.runtime.v1.QueryMeta
-	28,  // 80: kodex.runtime.v1.ListRuntimeArtifactRefsResponse.runtime_artifact_refs:type_name -> kodex.runtime.v1.RuntimeArtifactRef
-	19,  // 81: kodex.runtime.v1.ListRuntimeArtifactRefsResponse.page:type_name -> kodex.runtime.v1.PageResponse
-	11,  // 82: kodex.runtime.v1.CreateOrUpdateCleanupPolicyRequest.scope_type:type_name -> kodex.runtime.v1.RuntimeScopeType
-	10,  // 83: kodex.runtime.v1.CreateOrUpdateCleanupPolicyRequest.status:type_name -> kodex.runtime.v1.CleanupPolicyStatus
-	14,  // 84: kodex.runtime.v1.CreateOrUpdateCleanupPolicyRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	29,  // 85: kodex.runtime.v1.CleanupPolicyResponse.cleanup_policy:type_name -> kodex.runtime.v1.CleanupPolicy
-	14,  // 86: kodex.runtime.v1.RunCleanupBatchRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	11,  // 87: kodex.runtime.v1.CreateOrUpdatePrewarmPoolRequest.scope_type:type_name -> kodex.runtime.v1.RuntimeScopeType
-	12,  // 88: kodex.runtime.v1.CreateOrUpdatePrewarmPoolRequest.status:type_name -> kodex.runtime.v1.PrewarmPoolStatus
-	14,  // 89: kodex.runtime.v1.CreateOrUpdatePrewarmPoolRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	30,  // 90: kodex.runtime.v1.PrewarmPoolResponse.prewarm_pool:type_name -> kodex.runtime.v1.PrewarmPool
-	14,  // 91: kodex.runtime.v1.ReconcilePrewarmPoolRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
-	31,  // 92: kodex.runtime.v1.RuntimeManagerService.PrepareRuntime:input_type -> kodex.runtime.v1.PrepareRuntimeRequest
-	33,  // 93: kodex.runtime.v1.RuntimeManagerService.ReserveSlot:input_type -> kodex.runtime.v1.ReserveSlotRequest
-	34,  // 94: kodex.runtime.v1.RuntimeManagerService.ExtendSlotLease:input_type -> kodex.runtime.v1.ExtendSlotLeaseRequest
-	35,  // 95: kodex.runtime.v1.RuntimeManagerService.ReleaseSlot:input_type -> kodex.runtime.v1.ReleaseSlotRequest
-	36,  // 96: kodex.runtime.v1.RuntimeManagerService.MarkSlotFailed:input_type -> kodex.runtime.v1.MarkSlotFailedRequest
-	38,  // 97: kodex.runtime.v1.RuntimeManagerService.GetSlot:input_type -> kodex.runtime.v1.GetSlotRequest
-	39,  // 98: kodex.runtime.v1.RuntimeManagerService.ListSlots:input_type -> kodex.runtime.v1.ListSlotsRequest
-	41,  // 99: kodex.runtime.v1.RuntimeManagerService.StartWorkspaceMaterialization:input_type -> kodex.runtime.v1.StartWorkspaceMaterializationRequest
-	42,  // 100: kodex.runtime.v1.RuntimeManagerService.ReportWorkspaceMaterializationProgress:input_type -> kodex.runtime.v1.ReportWorkspaceMaterializationProgressRequest
-	44,  // 101: kodex.runtime.v1.RuntimeManagerService.GetWorkspaceMaterialization:input_type -> kodex.runtime.v1.GetWorkspaceMaterializationRequest
-	45,  // 102: kodex.runtime.v1.RuntimeManagerService.ListWorkspaceMaterializations:input_type -> kodex.runtime.v1.ListWorkspaceMaterializationsRequest
-	47,  // 103: kodex.runtime.v1.RuntimeManagerService.CreateJob:input_type -> kodex.runtime.v1.CreateJobRequest
-	48,  // 104: kodex.runtime.v1.RuntimeManagerService.ClaimRunnableJob:input_type -> kodex.runtime.v1.ClaimRunnableJobRequest
-	50,  // 105: kodex.runtime.v1.RuntimeManagerService.ReportJobStepProgress:input_type -> kodex.runtime.v1.ReportJobStepProgressRequest
-	51,  // 106: kodex.runtime.v1.RuntimeManagerService.CompleteJob:input_type -> kodex.runtime.v1.CompleteJobRequest
-	52,  // 107: kodex.runtime.v1.RuntimeManagerService.FailJob:input_type -> kodex.runtime.v1.FailJobRequest
-	53,  // 108: kodex.runtime.v1.RuntimeManagerService.CancelJob:input_type -> kodex.runtime.v1.CancelJobRequest
-	55,  // 109: kodex.runtime.v1.RuntimeManagerService.GetJob:input_type -> kodex.runtime.v1.GetJobRequest
-	56,  // 110: kodex.runtime.v1.RuntimeManagerService.ListJobs:input_type -> kodex.runtime.v1.ListJobsRequest
-	58,  // 111: kodex.runtime.v1.RuntimeManagerService.RecordRuntimeArtifactRef:input_type -> kodex.runtime.v1.RecordRuntimeArtifactRefRequest
-	60,  // 112: kodex.runtime.v1.RuntimeManagerService.ListRuntimeArtifactRefs:input_type -> kodex.runtime.v1.ListRuntimeArtifactRefsRequest
-	62,  // 113: kodex.runtime.v1.RuntimeManagerService.CreateOrUpdateCleanupPolicy:input_type -> kodex.runtime.v1.CreateOrUpdateCleanupPolicyRequest
-	64,  // 114: kodex.runtime.v1.RuntimeManagerService.RunCleanupBatch:input_type -> kodex.runtime.v1.RunCleanupBatchRequest
-	66,  // 115: kodex.runtime.v1.RuntimeManagerService.CreateOrUpdatePrewarmPool:input_type -> kodex.runtime.v1.CreateOrUpdatePrewarmPoolRequest
-	68,  // 116: kodex.runtime.v1.RuntimeManagerService.ReconcilePrewarmPool:input_type -> kodex.runtime.v1.ReconcilePrewarmPoolRequest
-	32,  // 117: kodex.runtime.v1.RuntimeManagerService.PrepareRuntime:output_type -> kodex.runtime.v1.PrepareRuntimeResponse
-	37,  // 118: kodex.runtime.v1.RuntimeManagerService.ReserveSlot:output_type -> kodex.runtime.v1.SlotResponse
-	37,  // 119: kodex.runtime.v1.RuntimeManagerService.ExtendSlotLease:output_type -> kodex.runtime.v1.SlotResponse
-	37,  // 120: kodex.runtime.v1.RuntimeManagerService.ReleaseSlot:output_type -> kodex.runtime.v1.SlotResponse
-	37,  // 121: kodex.runtime.v1.RuntimeManagerService.MarkSlotFailed:output_type -> kodex.runtime.v1.SlotResponse
-	37,  // 122: kodex.runtime.v1.RuntimeManagerService.GetSlot:output_type -> kodex.runtime.v1.SlotResponse
-	40,  // 123: kodex.runtime.v1.RuntimeManagerService.ListSlots:output_type -> kodex.runtime.v1.ListSlotsResponse
-	43,  // 124: kodex.runtime.v1.RuntimeManagerService.StartWorkspaceMaterialization:output_type -> kodex.runtime.v1.WorkspaceMaterializationResponse
-	43,  // 125: kodex.runtime.v1.RuntimeManagerService.ReportWorkspaceMaterializationProgress:output_type -> kodex.runtime.v1.WorkspaceMaterializationResponse
-	43,  // 126: kodex.runtime.v1.RuntimeManagerService.GetWorkspaceMaterialization:output_type -> kodex.runtime.v1.WorkspaceMaterializationResponse
-	46,  // 127: kodex.runtime.v1.RuntimeManagerService.ListWorkspaceMaterializations:output_type -> kodex.runtime.v1.ListWorkspaceMaterializationsResponse
-	54,  // 128: kodex.runtime.v1.RuntimeManagerService.CreateJob:output_type -> kodex.runtime.v1.JobResponse
-	49,  // 129: kodex.runtime.v1.RuntimeManagerService.ClaimRunnableJob:output_type -> kodex.runtime.v1.ClaimRunnableJobResponse
-	54,  // 130: kodex.runtime.v1.RuntimeManagerService.ReportJobStepProgress:output_type -> kodex.runtime.v1.JobResponse
-	54,  // 131: kodex.runtime.v1.RuntimeManagerService.CompleteJob:output_type -> kodex.runtime.v1.JobResponse
-	54,  // 132: kodex.runtime.v1.RuntimeManagerService.FailJob:output_type -> kodex.runtime.v1.JobResponse
-	54,  // 133: kodex.runtime.v1.RuntimeManagerService.CancelJob:output_type -> kodex.runtime.v1.JobResponse
-	54,  // 134: kodex.runtime.v1.RuntimeManagerService.GetJob:output_type -> kodex.runtime.v1.JobResponse
-	57,  // 135: kodex.runtime.v1.RuntimeManagerService.ListJobs:output_type -> kodex.runtime.v1.ListJobsResponse
-	59,  // 136: kodex.runtime.v1.RuntimeManagerService.RecordRuntimeArtifactRef:output_type -> kodex.runtime.v1.RuntimeArtifactRefResponse
-	61,  // 137: kodex.runtime.v1.RuntimeManagerService.ListRuntimeArtifactRefs:output_type -> kodex.runtime.v1.ListRuntimeArtifactRefsResponse
-	63,  // 138: kodex.runtime.v1.RuntimeManagerService.CreateOrUpdateCleanupPolicy:output_type -> kodex.runtime.v1.CleanupPolicyResponse
-	65,  // 139: kodex.runtime.v1.RuntimeManagerService.RunCleanupBatch:output_type -> kodex.runtime.v1.RunCleanupBatchResponse
-	67,  // 140: kodex.runtime.v1.RuntimeManagerService.CreateOrUpdatePrewarmPool:output_type -> kodex.runtime.v1.PrewarmPoolResponse
-	67,  // 141: kodex.runtime.v1.RuntimeManagerService.ReconcilePrewarmPool:output_type -> kodex.runtime.v1.PrewarmPoolResponse
-	117, // [117:142] is the sub-list for method output_type
-	92,  // [92:117] is the sub-list for method input_type
-	92,  // [92:92] is the sub-list for extension type_name
-	92,  // [92:92] is the sub-list for extension extendee
-	0,   // [0:92] is the sub-list for field type_name
+	9,   // 17: kodex.runtime.v1.RuntimeArtifactRefInput.artifact_type:type_name -> kodex.runtime.v1.RuntimeArtifactType
+	11,  // 18: kodex.runtime.v1.CleanupPolicy.scope_type:type_name -> kodex.runtime.v1.RuntimeScopeType
+	10,  // 19: kodex.runtime.v1.CleanupPolicy.status:type_name -> kodex.runtime.v1.CleanupPolicyStatus
+	12,  // 20: kodex.runtime.v1.PrewarmPool.scope_type:type_name -> kodex.runtime.v1.PrewarmPoolScopeType
+	13,  // 21: kodex.runtime.v1.PrewarmPool.status:type_name -> kodex.runtime.v1.PrewarmPoolStatus
+	14,  // 22: kodex.runtime.v1.PrewarmPool.last_capacity_status:type_name -> kodex.runtime.v1.CapacityStatus
+	0,   // 23: kodex.runtime.v1.PrepareRuntimeRequest.runtime_mode:type_name -> kodex.runtime.v1.RuntimeMode
+	22,  // 24: kodex.runtime.v1.PrepareRuntimeRequest.workspace_policy:type_name -> kodex.runtime.v1.WorkspacePolicyInput
+	23,  // 25: kodex.runtime.v1.PrepareRuntimeRequest.placement_constraints:type_name -> kodex.runtime.v1.PlacementConstraints
+	15,  // 26: kodex.runtime.v1.PrepareRuntimeRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	25,  // 27: kodex.runtime.v1.PrepareRuntimeResponse.slot:type_name -> kodex.runtime.v1.Slot
+	26,  // 28: kodex.runtime.v1.PrepareRuntimeResponse.workspace_materialization:type_name -> kodex.runtime.v1.WorkspaceMaterialization
+	24,  // 29: kodex.runtime.v1.PrepareRuntimeResponse.runtime_context:type_name -> kodex.runtime.v1.RuntimeContext
+	0,   // 30: kodex.runtime.v1.ReserveSlotRequest.runtime_mode:type_name -> kodex.runtime.v1.RuntimeMode
+	23,  // 31: kodex.runtime.v1.ReserveSlotRequest.placement_constraints:type_name -> kodex.runtime.v1.PlacementConstraints
+	15,  // 32: kodex.runtime.v1.ReserveSlotRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	15,  // 33: kodex.runtime.v1.ExtendSlotLeaseRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	15,  // 34: kodex.runtime.v1.ReleaseSlotRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	15,  // 35: kodex.runtime.v1.MarkSlotFailedRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	25,  // 36: kodex.runtime.v1.SlotResponse.slot:type_name -> kodex.runtime.v1.Slot
+	16,  // 37: kodex.runtime.v1.GetSlotRequest.meta:type_name -> kodex.runtime.v1.QueryMeta
+	1,   // 38: kodex.runtime.v1.ListSlotsRequest.statuses:type_name -> kodex.runtime.v1.SlotStatus
+	19,  // 39: kodex.runtime.v1.ListSlotsRequest.page:type_name -> kodex.runtime.v1.PageRequest
+	16,  // 40: kodex.runtime.v1.ListSlotsRequest.meta:type_name -> kodex.runtime.v1.QueryMeta
+	25,  // 41: kodex.runtime.v1.ListSlotsResponse.slots:type_name -> kodex.runtime.v1.Slot
+	20,  // 42: kodex.runtime.v1.ListSlotsResponse.page:type_name -> kodex.runtime.v1.PageResponse
+	22,  // 43: kodex.runtime.v1.StartWorkspaceMaterializationRequest.workspace_policy:type_name -> kodex.runtime.v1.WorkspacePolicyInput
+	15,  // 44: kodex.runtime.v1.StartWorkspaceMaterializationRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	4,   // 45: kodex.runtime.v1.ReportWorkspaceMaterializationProgressRequest.status:type_name -> kodex.runtime.v1.WorkspaceMaterializationStatus
+	15,  // 46: kodex.runtime.v1.ReportWorkspaceMaterializationProgressRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	26,  // 47: kodex.runtime.v1.WorkspaceMaterializationResponse.workspace_materialization:type_name -> kodex.runtime.v1.WorkspaceMaterialization
+	16,  // 48: kodex.runtime.v1.GetWorkspaceMaterializationRequest.meta:type_name -> kodex.runtime.v1.QueryMeta
+	4,   // 49: kodex.runtime.v1.ListWorkspaceMaterializationsRequest.statuses:type_name -> kodex.runtime.v1.WorkspaceMaterializationStatus
+	19,  // 50: kodex.runtime.v1.ListWorkspaceMaterializationsRequest.page:type_name -> kodex.runtime.v1.PageRequest
+	16,  // 51: kodex.runtime.v1.ListWorkspaceMaterializationsRequest.meta:type_name -> kodex.runtime.v1.QueryMeta
+	26,  // 52: kodex.runtime.v1.ListWorkspaceMaterializationsResponse.workspace_materializations:type_name -> kodex.runtime.v1.WorkspaceMaterialization
+	20,  // 53: kodex.runtime.v1.ListWorkspaceMaterializationsResponse.page:type_name -> kodex.runtime.v1.PageResponse
+	5,   // 54: kodex.runtime.v1.CreateJobRequest.job_type:type_name -> kodex.runtime.v1.JobType
+	7,   // 55: kodex.runtime.v1.CreateJobRequest.priority:type_name -> kodex.runtime.v1.JobPriority
+	23,  // 56: kodex.runtime.v1.CreateJobRequest.placement_constraints:type_name -> kodex.runtime.v1.PlacementConstraints
+	15,  // 57: kodex.runtime.v1.CreateJobRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	5,   // 58: kodex.runtime.v1.ClaimRunnableJobRequest.job_types:type_name -> kodex.runtime.v1.JobType
+	15,  // 59: kodex.runtime.v1.ClaimRunnableJobRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	27,  // 60: kodex.runtime.v1.ClaimRunnableJobResponse.job:type_name -> kodex.runtime.v1.Job
+	8,   // 61: kodex.runtime.v1.ReportJobStepProgressRequest.status:type_name -> kodex.runtime.v1.JobStepStatus
+	30,  // 62: kodex.runtime.v1.ReportJobStepProgressRequest.artifact_refs:type_name -> kodex.runtime.v1.RuntimeArtifactRefInput
+	15,  // 63: kodex.runtime.v1.ReportJobStepProgressRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	15,  // 64: kodex.runtime.v1.CompleteJobRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	15,  // 65: kodex.runtime.v1.FailJobRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	15,  // 66: kodex.runtime.v1.CancelJobRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	27,  // 67: kodex.runtime.v1.JobResponse.job:type_name -> kodex.runtime.v1.Job
+	16,  // 68: kodex.runtime.v1.GetJobRequest.meta:type_name -> kodex.runtime.v1.QueryMeta
+	6,   // 69: kodex.runtime.v1.ListJobsRequest.statuses:type_name -> kodex.runtime.v1.JobStatus
+	5,   // 70: kodex.runtime.v1.ListJobsRequest.job_types:type_name -> kodex.runtime.v1.JobType
+	19,  // 71: kodex.runtime.v1.ListJobsRequest.page:type_name -> kodex.runtime.v1.PageRequest
+	16,  // 72: kodex.runtime.v1.ListJobsRequest.meta:type_name -> kodex.runtime.v1.QueryMeta
+	27,  // 73: kodex.runtime.v1.ListJobsResponse.jobs:type_name -> kodex.runtime.v1.Job
+	20,  // 74: kodex.runtime.v1.ListJobsResponse.page:type_name -> kodex.runtime.v1.PageResponse
+	30,  // 75: kodex.runtime.v1.RecordRuntimeArtifactRefRequest.artifact_ref:type_name -> kodex.runtime.v1.RuntimeArtifactRefInput
+	15,  // 76: kodex.runtime.v1.RecordRuntimeArtifactRefRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	29,  // 77: kodex.runtime.v1.RuntimeArtifactRefResponse.runtime_artifact_ref:type_name -> kodex.runtime.v1.RuntimeArtifactRef
+	9,   // 78: kodex.runtime.v1.ListRuntimeArtifactRefsRequest.artifact_types:type_name -> kodex.runtime.v1.RuntimeArtifactType
+	19,  // 79: kodex.runtime.v1.ListRuntimeArtifactRefsRequest.page:type_name -> kodex.runtime.v1.PageRequest
+	16,  // 80: kodex.runtime.v1.ListRuntimeArtifactRefsRequest.meta:type_name -> kodex.runtime.v1.QueryMeta
+	29,  // 81: kodex.runtime.v1.ListRuntimeArtifactRefsResponse.runtime_artifact_refs:type_name -> kodex.runtime.v1.RuntimeArtifactRef
+	20,  // 82: kodex.runtime.v1.ListRuntimeArtifactRefsResponse.page:type_name -> kodex.runtime.v1.PageResponse
+	11,  // 83: kodex.runtime.v1.CreateOrUpdateCleanupPolicyRequest.scope_type:type_name -> kodex.runtime.v1.RuntimeScopeType
+	10,  // 84: kodex.runtime.v1.CreateOrUpdateCleanupPolicyRequest.status:type_name -> kodex.runtime.v1.CleanupPolicyStatus
+	15,  // 85: kodex.runtime.v1.CreateOrUpdateCleanupPolicyRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	31,  // 86: kodex.runtime.v1.CleanupPolicyResponse.cleanup_policy:type_name -> kodex.runtime.v1.CleanupPolicy
+	15,  // 87: kodex.runtime.v1.RunCleanupBatchRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	12,  // 88: kodex.runtime.v1.CreateOrUpdatePrewarmPoolRequest.scope_type:type_name -> kodex.runtime.v1.PrewarmPoolScopeType
+	13,  // 89: kodex.runtime.v1.CreateOrUpdatePrewarmPoolRequest.status:type_name -> kodex.runtime.v1.PrewarmPoolStatus
+	15,  // 90: kodex.runtime.v1.CreateOrUpdatePrewarmPoolRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	32,  // 91: kodex.runtime.v1.PrewarmPoolResponse.prewarm_pool:type_name -> kodex.runtime.v1.PrewarmPool
+	15,  // 92: kodex.runtime.v1.ReconcilePrewarmPoolRequest.meta:type_name -> kodex.runtime.v1.CommandMeta
+	33,  // 93: kodex.runtime.v1.RuntimeManagerService.PrepareRuntime:input_type -> kodex.runtime.v1.PrepareRuntimeRequest
+	35,  // 94: kodex.runtime.v1.RuntimeManagerService.ReserveSlot:input_type -> kodex.runtime.v1.ReserveSlotRequest
+	36,  // 95: kodex.runtime.v1.RuntimeManagerService.ExtendSlotLease:input_type -> kodex.runtime.v1.ExtendSlotLeaseRequest
+	37,  // 96: kodex.runtime.v1.RuntimeManagerService.ReleaseSlot:input_type -> kodex.runtime.v1.ReleaseSlotRequest
+	38,  // 97: kodex.runtime.v1.RuntimeManagerService.MarkSlotFailed:input_type -> kodex.runtime.v1.MarkSlotFailedRequest
+	40,  // 98: kodex.runtime.v1.RuntimeManagerService.GetSlot:input_type -> kodex.runtime.v1.GetSlotRequest
+	41,  // 99: kodex.runtime.v1.RuntimeManagerService.ListSlots:input_type -> kodex.runtime.v1.ListSlotsRequest
+	43,  // 100: kodex.runtime.v1.RuntimeManagerService.StartWorkspaceMaterialization:input_type -> kodex.runtime.v1.StartWorkspaceMaterializationRequest
+	44,  // 101: kodex.runtime.v1.RuntimeManagerService.ReportWorkspaceMaterializationProgress:input_type -> kodex.runtime.v1.ReportWorkspaceMaterializationProgressRequest
+	46,  // 102: kodex.runtime.v1.RuntimeManagerService.GetWorkspaceMaterialization:input_type -> kodex.runtime.v1.GetWorkspaceMaterializationRequest
+	47,  // 103: kodex.runtime.v1.RuntimeManagerService.ListWorkspaceMaterializations:input_type -> kodex.runtime.v1.ListWorkspaceMaterializationsRequest
+	49,  // 104: kodex.runtime.v1.RuntimeManagerService.CreateJob:input_type -> kodex.runtime.v1.CreateJobRequest
+	50,  // 105: kodex.runtime.v1.RuntimeManagerService.ClaimRunnableJob:input_type -> kodex.runtime.v1.ClaimRunnableJobRequest
+	52,  // 106: kodex.runtime.v1.RuntimeManagerService.ReportJobStepProgress:input_type -> kodex.runtime.v1.ReportJobStepProgressRequest
+	53,  // 107: kodex.runtime.v1.RuntimeManagerService.CompleteJob:input_type -> kodex.runtime.v1.CompleteJobRequest
+	54,  // 108: kodex.runtime.v1.RuntimeManagerService.FailJob:input_type -> kodex.runtime.v1.FailJobRequest
+	55,  // 109: kodex.runtime.v1.RuntimeManagerService.CancelJob:input_type -> kodex.runtime.v1.CancelJobRequest
+	57,  // 110: kodex.runtime.v1.RuntimeManagerService.GetJob:input_type -> kodex.runtime.v1.GetJobRequest
+	58,  // 111: kodex.runtime.v1.RuntimeManagerService.ListJobs:input_type -> kodex.runtime.v1.ListJobsRequest
+	60,  // 112: kodex.runtime.v1.RuntimeManagerService.RecordRuntimeArtifactRef:input_type -> kodex.runtime.v1.RecordRuntimeArtifactRefRequest
+	62,  // 113: kodex.runtime.v1.RuntimeManagerService.ListRuntimeArtifactRefs:input_type -> kodex.runtime.v1.ListRuntimeArtifactRefsRequest
+	64,  // 114: kodex.runtime.v1.RuntimeManagerService.CreateOrUpdateCleanupPolicy:input_type -> kodex.runtime.v1.CreateOrUpdateCleanupPolicyRequest
+	66,  // 115: kodex.runtime.v1.RuntimeManagerService.RunCleanupBatch:input_type -> kodex.runtime.v1.RunCleanupBatchRequest
+	68,  // 116: kodex.runtime.v1.RuntimeManagerService.CreateOrUpdatePrewarmPool:input_type -> kodex.runtime.v1.CreateOrUpdatePrewarmPoolRequest
+	70,  // 117: kodex.runtime.v1.RuntimeManagerService.ReconcilePrewarmPool:input_type -> kodex.runtime.v1.ReconcilePrewarmPoolRequest
+	34,  // 118: kodex.runtime.v1.RuntimeManagerService.PrepareRuntime:output_type -> kodex.runtime.v1.PrepareRuntimeResponse
+	39,  // 119: kodex.runtime.v1.RuntimeManagerService.ReserveSlot:output_type -> kodex.runtime.v1.SlotResponse
+	39,  // 120: kodex.runtime.v1.RuntimeManagerService.ExtendSlotLease:output_type -> kodex.runtime.v1.SlotResponse
+	39,  // 121: kodex.runtime.v1.RuntimeManagerService.ReleaseSlot:output_type -> kodex.runtime.v1.SlotResponse
+	39,  // 122: kodex.runtime.v1.RuntimeManagerService.MarkSlotFailed:output_type -> kodex.runtime.v1.SlotResponse
+	39,  // 123: kodex.runtime.v1.RuntimeManagerService.GetSlot:output_type -> kodex.runtime.v1.SlotResponse
+	42,  // 124: kodex.runtime.v1.RuntimeManagerService.ListSlots:output_type -> kodex.runtime.v1.ListSlotsResponse
+	45,  // 125: kodex.runtime.v1.RuntimeManagerService.StartWorkspaceMaterialization:output_type -> kodex.runtime.v1.WorkspaceMaterializationResponse
+	45,  // 126: kodex.runtime.v1.RuntimeManagerService.ReportWorkspaceMaterializationProgress:output_type -> kodex.runtime.v1.WorkspaceMaterializationResponse
+	45,  // 127: kodex.runtime.v1.RuntimeManagerService.GetWorkspaceMaterialization:output_type -> kodex.runtime.v1.WorkspaceMaterializationResponse
+	48,  // 128: kodex.runtime.v1.RuntimeManagerService.ListWorkspaceMaterializations:output_type -> kodex.runtime.v1.ListWorkspaceMaterializationsResponse
+	56,  // 129: kodex.runtime.v1.RuntimeManagerService.CreateJob:output_type -> kodex.runtime.v1.JobResponse
+	51,  // 130: kodex.runtime.v1.RuntimeManagerService.ClaimRunnableJob:output_type -> kodex.runtime.v1.ClaimRunnableJobResponse
+	56,  // 131: kodex.runtime.v1.RuntimeManagerService.ReportJobStepProgress:output_type -> kodex.runtime.v1.JobResponse
+	56,  // 132: kodex.runtime.v1.RuntimeManagerService.CompleteJob:output_type -> kodex.runtime.v1.JobResponse
+	56,  // 133: kodex.runtime.v1.RuntimeManagerService.FailJob:output_type -> kodex.runtime.v1.JobResponse
+	56,  // 134: kodex.runtime.v1.RuntimeManagerService.CancelJob:output_type -> kodex.runtime.v1.JobResponse
+	56,  // 135: kodex.runtime.v1.RuntimeManagerService.GetJob:output_type -> kodex.runtime.v1.JobResponse
+	59,  // 136: kodex.runtime.v1.RuntimeManagerService.ListJobs:output_type -> kodex.runtime.v1.ListJobsResponse
+	61,  // 137: kodex.runtime.v1.RuntimeManagerService.RecordRuntimeArtifactRef:output_type -> kodex.runtime.v1.RuntimeArtifactRefResponse
+	63,  // 138: kodex.runtime.v1.RuntimeManagerService.ListRuntimeArtifactRefs:output_type -> kodex.runtime.v1.ListRuntimeArtifactRefsResponse
+	65,  // 139: kodex.runtime.v1.RuntimeManagerService.CreateOrUpdateCleanupPolicy:output_type -> kodex.runtime.v1.CleanupPolicyResponse
+	67,  // 140: kodex.runtime.v1.RuntimeManagerService.RunCleanupBatch:output_type -> kodex.runtime.v1.RunCleanupBatchResponse
+	69,  // 141: kodex.runtime.v1.RuntimeManagerService.CreateOrUpdatePrewarmPool:output_type -> kodex.runtime.v1.PrewarmPoolResponse
+	69,  // 142: kodex.runtime.v1.RuntimeManagerService.ReconcilePrewarmPool:output_type -> kodex.runtime.v1.PrewarmPoolResponse
+	118, // [118:143] is the sub-list for method output_type
+	93,  // [93:118] is the sub-list for method input_type
+	93,  // [93:93] is the sub-list for extension type_name
+	93,  // [93:93] is the sub-list for extension extendee
+	0,   // [0:93] is the sub-list for field type_name
 }
 
 func init() { file_kodex_runtime_v1_runtime_manager_proto_init() }
@@ -6587,29 +6710,29 @@ func file_kodex_runtime_v1_runtime_manager_proto_init() {
 	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[12].OneofWrappers = []any{}
 	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[13].OneofWrappers = []any{}
 	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[14].OneofWrappers = []any{}
-	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[15].OneofWrappers = []any{}
 	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[16].OneofWrappers = []any{}
 	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[17].OneofWrappers = []any{}
-	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[19].OneofWrappers = []any{}
-	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[25].OneofWrappers = []any{}
-	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[28].OneofWrappers = []any{}
-	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[31].OneofWrappers = []any{}
-	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[33].OneofWrappers = []any{}
+	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[18].OneofWrappers = []any{}
+	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[20].OneofWrappers = []any{}
+	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[26].OneofWrappers = []any{}
+	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[29].OneofWrappers = []any{}
+	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[32].OneofWrappers = []any{}
 	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[34].OneofWrappers = []any{}
-	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[36].OneofWrappers = []any{}
-	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[42].OneofWrappers = []any{}
-	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[44].OneofWrappers = []any{}
-	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[46].OneofWrappers = []any{}
-	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[48].OneofWrappers = []any{}
-	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[50].OneofWrappers = []any{}
-	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[52].OneofWrappers = []any{}
+	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[35].OneofWrappers = []any{}
+	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[37].OneofWrappers = []any{}
+	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[43].OneofWrappers = []any{}
+	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[45].OneofWrappers = []any{}
+	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[47].OneofWrappers = []any{}
+	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[49].OneofWrappers = []any{}
+	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[51].OneofWrappers = []any{}
+	file_kodex_runtime_v1_runtime_manager_proto_msgTypes[53].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kodex_runtime_v1_runtime_manager_proto_rawDesc), len(file_kodex_runtime_v1_runtime_manager_proto_rawDesc)),
-			NumEnums:      14,
-			NumMessages:   55,
+			NumEnums:      15,
+			NumMessages:   56,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -25,7 +25,7 @@ const (
 )
 
 const (
-	AggregateCleanup                  = "cleanup"
+	AggregateCleanupPolicy            = "cleanup_policy"
 	AggregateJob                      = "job"
 	AggregatePrewarmPool              = "prewarm_pool"
 	AggregateSlot                     = "slot"

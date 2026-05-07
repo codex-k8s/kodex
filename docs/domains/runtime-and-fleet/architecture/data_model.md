@@ -111,6 +111,7 @@ approvals:
 | `job_type` | text | no | indexed | `mirror`, `build`, `deploy`, `cleanup`, `health_check`, `housekeeping`, `workspace_materialization`. |
 | `status` | text | no | indexed | `pending`, `claimed`, `running`, `succeeded`, `failed`, `cancelled`, `timed_out`. |
 | `priority` | text | no | indexed | `low`, `normal`, `high`, `blocking`. |
+| `job_input_json` | jsonb | no | default {} | Ограниченный вход технической операции без секретов; возвращается исполнителю при claim. |
 | `lease_owner` | text | no | default '' | Worker или controller, который забрал задание. |
 | `lease_token_hash` | text | no | default '' | Хэш токена, который должен прийти в командах отчёта, завершения и ошибки. |
 | `lease_until` | timestamptz | yes | indexed | Истечение аренды задания. |
