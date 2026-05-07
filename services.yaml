@@ -76,6 +76,13 @@ spec:
         - proto/kodex/projects/v1
         - specs/asyncapi/project-catalog.v1.yaml
         - deploy/base/project-catalog
+    package-hub:
+      value: "0.1.0"
+      bumpOn:
+        - services/internal/package-hub
+        - libs/go/grpcserver
+        - proto/kodex/packages/v1
+        - specs/asyncapi/package-hub.v1.yaml
     platform-event-log:
       value: "0.1.0"
       bumpOn:
