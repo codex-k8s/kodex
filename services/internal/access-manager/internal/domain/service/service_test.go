@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/codex-k8s/kodex/libs/go/accesscatalog"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/enum"
@@ -663,6 +664,28 @@ func TestSystemAccessActionCatalogProvidesCodeOwnedProjectActions(t *testing.T) 
 	}
 }
 
+func TestSystemAccessActionCatalogProvidesCodeOwnedPackageActions(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	user := store.seedUser(enum.UserStatusActive)
+
+	_, err := svc.PutAccessRule(ctx, PutAccessRuleInput{
+		Effect:       enum.AccessEffectAllow,
+		SubjectType:  enum.AccessSubjectUser,
+		SubjectID:    user.ID.String(),
+		ActionKey:    accesscatalog.ActionPackageInstall,
+		ResourceType: accesscatalog.ResourcePackageInstallation,
+		ScopeType:    "global",
+	})
+	if err != nil {
+		t.Fatalf("put rule for package system action: %v", err)
+	}
+	if _, ok := store.actions[accesscatalog.ActionPackageInstall]; ok {
+		t.Fatal("package system action was persisted in custom action catalog")
+	}
+}
+
 func TestPutAccessActionRejectsSystemActionMutation(t *testing.T) {
 	svc := New(newMemoryRepository(), fixedClock{}, newSequenceIDs())
 
@@ -671,6 +694,15 @@ func TestPutAccessActionRejectsSystemActionMutation(t *testing.T) {
 	})
 	if !errors.Is(err, errs.ErrPreconditionFailed) {
 		t.Fatalf("err = %v, want %v", err, errs.ErrPreconditionFailed)
+	}
+
+	_, err = svc.PutAccessAction(context.Background(), PutAccessActionInput{
+		Key:          accesscatalog.ActionPackageInstall,
+		DisplayName:  "Переопределить",
+		ResourceType: accesscatalog.ResourcePackageInstallation,
+	})
+	if !errors.Is(err, errs.ErrPreconditionFailed) {
+		t.Fatalf("package err = %v, want %v", err, errs.ErrPreconditionFailed)
 	}
 }
 

@@ -17,6 +17,13 @@ const (
 	ResourceReleasePolicy       = "release_policy"
 	ResourceReleaseLine         = "release_line"
 	ResourcePlacementPolicy     = "placement_policy"
+	ResourcePackageSource       = "package_source"
+	ResourcePackageCatalog      = "package_catalog"
+	ResourcePackage             = "package"
+	ResourcePackageVersion      = "package_version"
+	ResourcePackageManifest     = "package_manifest"
+	ResourcePackageInstallation = "package_installation"
+	ResourcePackageSecretSchema = "package_secret_schema"
 )
 
 const (
@@ -46,6 +53,20 @@ const (
 	ActionProjectReleaseLineRead      = "project.release_line.read"
 	ActionProjectPlacementUpdate      = "project.placement_policy.update"
 	ActionProjectPlacementRead        = "project.placement_policy.read"
+	ActionPackageSourceConnect        = "package.source.connect"
+	ActionPackageSourceUpdate         = "package.source.update"
+	ActionPackageSourceDisable        = "package.source.disable"
+	ActionPackageSourceRead           = "package.source.read"
+	ActionPackageCatalogSync          = "package.catalog.sync"
+	ActionPackageCatalogRead          = "package.catalog.read"
+	ActionPackageManifestRead         = "package.manifest.read"
+	ActionPackageInstall              = "package.install"
+	ActionPackageInstallationUpdate   = "package.installation.update"
+	ActionPackageInstallationDisable  = "package.installation.disable"
+	ActionPackageUninstall            = "package.uninstall"
+	ActionPackageInstallationRead     = "package.installation.read"
+	ActionPackageSecretRead           = "package.secret.read"
+	ActionPackageVerify               = "package.verify"
 )
 
 // ProjectCatalogActions returns system actions owned by the projects-and-repositories domain.
@@ -77,5 +98,25 @@ func ProjectCatalogActions() []ActionDescriptor {
 		{Key: ActionProjectReleaseLineRead, ResourceType: ResourceReleaseLine},
 		{Key: ActionProjectPlacementUpdate, ResourceType: ResourcePlacementPolicy},
 		{Key: ActionProjectPlacementRead, ResourceType: ResourcePlacementPolicy},
+	}
+}
+
+// PackageHubActions returns system actions owned by the package platform domain.
+func PackageHubActions() []ActionDescriptor {
+	return []ActionDescriptor{
+		{Key: ActionPackageSourceConnect, ResourceType: ResourcePackageSource},
+		{Key: ActionPackageSourceUpdate, ResourceType: ResourcePackageSource},
+		{Key: ActionPackageSourceDisable, ResourceType: ResourcePackageSource},
+		{Key: ActionPackageSourceRead, ResourceType: ResourcePackageSource},
+		{Key: ActionPackageCatalogSync, ResourceType: ResourcePackageCatalog},
+		{Key: ActionPackageCatalogRead, ResourceType: ResourcePackage},
+		{Key: ActionPackageManifestRead, ResourceType: ResourcePackageManifest},
+		{Key: ActionPackageInstall, ResourceType: ResourcePackageInstallation},
+		{Key: ActionPackageInstallationUpdate, ResourceType: ResourcePackageInstallation},
+		{Key: ActionPackageInstallationDisable, ResourceType: ResourcePackageInstallation},
+		{Key: ActionPackageUninstall, ResourceType: ResourcePackageInstallation},
+		{Key: ActionPackageInstallationRead, ResourceType: ResourcePackageInstallation},
+		{Key: ActionPackageSecretRead, ResourceType: ResourcePackageSecretSchema},
+		{Key: ActionPackageVerify, ResourceType: ResourcePackageVersion},
 	}
 }

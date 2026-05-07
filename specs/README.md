@@ -14,7 +14,7 @@
 ## Правила именования
 
 - Имя файла строится по gateway-поверхности или сервису-владельцу событий и версии: `<surface-or-service>.v<major>.yaml`.
-- Для домена доступа целевые файлы текущего среза: `asyncapi/access-manager.v1.yaml` и gRPC proto; HTTP-контракты появятся в OpenAPI-спецификациях соответствующих gateway.
+- Для внутренних доменных сервисов целевые файлы: AsyncAPI событий и gRPC proto; HTTP-контракты появляются только в OpenAPI-спецификациях соответствующих gateway.
 - gRPC-контракты остаются в `proto/kodex/<domain_or_service>/v<major>/**`.
 - Сгенерированный код не является источником истины и не правится руками.
 
@@ -31,3 +31,5 @@
 | Сервис | OpenAPI | AsyncAPI | gRPC |
 |---|---|---|---|
 | `access-manager` | нет прямого OpenAPI; HTTP принадлежит gateway-спецификациям | `asyncapi/access-manager.v1.yaml` стабильный `v1` | `../proto/kodex/access_accounts/v1/access_manager.proto` стабильный `v1` |
+| `project-catalog` | нет прямого OpenAPI; HTTP принадлежит gateway-спецификациям | `asyncapi/project-catalog.v1.yaml` стабильный `v1` | `../proto/kodex/projects/v1/project_catalog.proto` стабильный `v1` |
+| `package-hub` | нет прямого OpenAPI; HTTP принадлежит gateway-спецификациям | `asyncapi/package-hub.v1.yaml` стабильный `v1` | `../proto/kodex/packages/v1/package_hub.proto` стабильный `v1` |

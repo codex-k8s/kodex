@@ -38,7 +38,7 @@ dupl-go:
 	candidates="$$(mktemp)"; \
 	roots="$$(for root in services libs; do if [ -d "$$root" ]; then printf '%s\n' "$$root"; fi; done)"; \
 	if [ -n "$$roots" ]; then \
-		printf '%s\n' "$$roots" | xargs rg --files -g '*.go' -g '!**/*_test.go' -g '!**/generated/**' > "$$candidates"; \
+		printf '%s\n' "$$roots" | xargs rg --files -g '*.go' -g '!**/*_test.go' -g '!**/generated/**' -g '!**/*.gen.go' > "$$candidates"; \
 	fi; \
 	if [ ! -s "$$candidates" ]; then \
 		rm -f "$$tmp" "$$filtered" "$$candidates"; \

@@ -1,0 +1,809 @@
+syntax = "proto3";
+
+package kodex.packages.v1;
+
+option go_package = "github.com/codex-k8s/kodex/proto/gen/go/kodex/packages/v1;packagesv1";
+
+// PackageHubService is the stable v1 inter-service contract for the package
+// platform domain. It covers package sources, local catalog entries, package
+// versions, manifests, installations, secret schemas and verification state.
+service PackageHubService {
+  // ConnectPackageSource connects a built-in, store, custom repository or proxy source.
+  rpc ConnectPackageSource(ConnectPackageSourceRequest) returns (PackageSourceResponse);
+  // UpdatePackageSource changes safe source metadata and lifecycle status.
+  rpc UpdatePackageSource(UpdatePackageSourceRequest) returns (PackageSourceResponse);
+  // DisablePackageSource disables a source without deleting catalog history.
+  rpc DisablePackageSource(DisablePackageSourceRequest) returns (PackageSourceResponse);
+  // GetPackageSource returns authoritative source state.
+  rpc GetPackageSource(GetPackageSourceRequest) returns (PackageSourceResponse);
+  // ListPackageSources returns sources visible in the requested scope.
+  rpc ListPackageSources(ListPackageSourcesRequest) returns (ListPackageSourcesResponse);
+  // SyncAvailablePackages synchronizes local available catalog entries from a source.
+  rpc SyncAvailablePackages(SyncAvailablePackagesRequest) returns (SyncAvailablePackagesResponse);
+  // GetPackage returns an authoritative local package catalog entry.
+  rpc GetPackage(GetPackageRequest) returns (PackageResponse);
+  // ListPackages returns local available package catalog entries.
+  rpc ListPackages(ListPackagesRequest) returns (ListPackagesResponse);
+  // GetPackageVersion returns one package version.
+  rpc GetPackageVersion(GetPackageVersionRequest) returns (PackageVersionResponse);
+  // ListPackageVersions returns versions for one package.
+  rpc ListPackageVersions(ListPackageVersionsRequest) returns (ListPackageVersionsResponse);
+  // GetPackageManifest returns a normalized manifest snapshot for a package version.
+  rpc GetPackageManifest(GetPackageManifestRequest) returns (PackageManifestResponse);
+  // RequestPackageInstallation creates an installation request for a scope.
+  rpc RequestPackageInstallation(RequestPackageInstallationRequest) returns (PackageInstallationResponse);
+  // UpdatePackageInstallation changes selected version or desired state of an installation.
+  rpc UpdatePackageInstallation(UpdatePackageInstallationRequest) returns (PackageInstallationResponse);
+  // DisablePackageInstallation disables an installation without deleting history.
+  rpc DisablePackageInstallation(DisablePackageInstallationRequest) returns (PackageInstallationResponse);
+  // UninstallPackage marks an installation as uninstalled.
+  rpc UninstallPackage(UninstallPackageRequest) returns (PackageInstallationResponse);
+  // GetPackageInstallation returns authoritative installation state.
+  rpc GetPackageInstallation(GetPackageInstallationRequest) returns (PackageInstallationResponse);
+  // ListPackageInstallations returns installations by scope, package or status.
+  rpc ListPackageInstallations(ListPackageInstallationsRequest) returns (ListPackageInstallationsResponse);
+  // GetPackageSecretSchema returns required and optional secret fields for a package version.
+  rpc GetPackageSecretSchema(GetPackageSecretSchemaRequest) returns (PackageSecretSchemaResponse);
+  // RefreshPackageInstallationSecretStatus refreshes installation secret status from access-manager.
+  rpc RefreshPackageInstallationSecretStatus(RefreshPackageInstallationSecretStatusRequest) returns (PackageInstallationResponse);
+  // SetPackageVerification records a verification, rejection or revocation decision for a version.
+  rpc SetPackageVerification(SetPackageVerificationRequest) returns (PackageVerificationResponse);
+}
+
+// CommandMeta is required for every mutating command.
+message CommandMeta {
+  // command_id is a unique command identifier. Either command_id or idempotency_key is required.
+  optional string command_id = 1;
+  // idempotency_key is an idempotency key scoped by operation and actor.
+  optional string idempotency_key = 2;
+  // expected_version is present only for existing aggregate mutations.
+  optional int64 expected_version = 3;
+  // actor is the authenticated caller.
+  Actor actor = 4;
+  // reason is a machine or operator reason for audit and domain events.
+  string reason = 5;
+  // request_id links the command to logs, traces and audit.
+  string request_id = 6;
+  // request_context carries safe request metadata; no tokens, secrets, email or names.
+  RequestContext request_context = 7;
+}
+
+// QueryMeta carries safe metadata for authoritative reads.
+message QueryMeta {
+  // actor is the authenticated caller.
+  Actor actor = 1;
+  // request_id links the read to logs and traces.
+  string request_id = 2;
+  // request_context carries safe request metadata.
+  RequestContext request_context = 3;
+}
+
+// RequestContext is safe request metadata used for audit and diagnostics.
+message RequestContext {
+  // source identifies caller surface, for example staff-gateway, platform-mcp-server or service.
+  string source = 1;
+  // trace_id links platform traces.
+  optional string trace_id = 2;
+  // session_id links a user session when available.
+  optional string session_id = 3;
+  // client_ip_hash is an optional hashed client address.
+  optional string client_ip_hash = 4;
+}
+
+// Actor identifies a user, service, agent or external account.
+message Actor {
+  // type is a subject type such as user, service, agent or external_account.
+  string type = 1;
+  // id is the subject identifier in its owner domain.
+  string id = 2;
+}
+
+// PageRequest limits list responses.
+message PageRequest {
+  // page_size is the maximum item count requested by caller.
+  int32 page_size = 1;
+  // page_token is an opaque continuation token returned by a previous call.
+  optional string page_token = 2;
+}
+
+// PageResponse describes list continuation state.
+message PageResponse {
+  // next_page_token is empty when there are no more items.
+  optional string next_page_token = 1;
+}
+
+// LocalizedText carries text for one locale.
+message LocalizedText {
+  // locale is a BCP 47 locale code, for example ru or en-US.
+  string locale = 1;
+  // text is localized display text.
+  string text = 2;
+}
+
+// SourceRef points to a Git or proxy source for a package version.
+message SourceRef {
+  // kind classifies the source reference.
+  PackageVersionSourceRefKind kind = 1;
+  // ref is a tag, commit, gitlink or proxy reference.
+  string ref = 2;
+  // commit_sha is the concrete commit SHA when known.
+  optional string commit_sha = 3;
+}
+
+// ScopeRef identifies where an installation applies.
+message ScopeRef {
+  // type classifies installation scope.
+  PackageInstallationScopeType type = 1;
+  // ref is an external scope identifier owned by another domain.
+  string ref = 2;
+}
+
+// PackageSourceKind classifies source origin.
+enum PackageSourceKind {
+  PACKAGE_SOURCE_KIND_UNSPECIFIED = 0;
+  PACKAGE_SOURCE_KIND_BUILT_IN = 1;
+  PACKAGE_SOURCE_KIND_STORE_PACKAGE = 2;
+  PACKAGE_SOURCE_KIND_CUSTOM_REPOSITORY = 3;
+  PACKAGE_SOURCE_KIND_PROXY = 4;
+}
+
+// PackageSourceStatus is the source lifecycle status.
+enum PackageSourceStatus {
+  PACKAGE_SOURCE_STATUS_UNSPECIFIED = 0;
+  PACKAGE_SOURCE_STATUS_ACTIVE = 1;
+  PACKAGE_SOURCE_STATUS_DISABLED = 2;
+  PACKAGE_SOURCE_STATUS_BLOCKED = 3;
+  PACKAGE_SOURCE_STATUS_SYNC_FAILED = 4;
+}
+
+// PackageKind classifies package behavior.
+enum PackageKind {
+  PACKAGE_KIND_UNSPECIFIED = 0;
+  PACKAGE_KIND_PLUGIN = 1;
+  PACKAGE_KIND_GUIDANCE = 2;
+  PACKAGE_KIND_STORE = 3;
+  PACKAGE_KIND_PLATFORM_CONTENT = 4;
+}
+
+// PackageCommercialStatus describes commercial availability.
+enum PackageCommercialStatus {
+  PACKAGE_COMMERCIAL_STATUS_UNSPECIFIED = 0;
+  PACKAGE_COMMERCIAL_STATUS_FREE = 1;
+  PACKAGE_COMMERCIAL_STATUS_PAID = 2;
+  PACKAGE_COMMERCIAL_STATUS_RESTRICTED = 3;
+  PACKAGE_COMMERCIAL_STATUS_UNKNOWN = 4;
+}
+
+// PackageTrustStatus describes package trust level.
+enum PackageTrustStatus {
+  PACKAGE_TRUST_STATUS_UNSPECIFIED = 0;
+  PACKAGE_TRUST_STATUS_BUILT_IN = 1;
+  PACKAGE_TRUST_STATUS_VERIFIED = 2;
+  PACKAGE_TRUST_STATUS_UNVERIFIED = 3;
+  PACKAGE_TRUST_STATUS_BLOCKED = 4;
+}
+
+// PackageStatus is the local catalog entry status.
+enum PackageStatus {
+  PACKAGE_STATUS_UNSPECIFIED = 0;
+  PACKAGE_STATUS_AVAILABLE = 1;
+  PACKAGE_STATUS_HIDDEN = 2;
+  PACKAGE_STATUS_REVOKED = 3;
+  PACKAGE_STATUS_BLOCKED = 4;
+}
+
+// PackageVersionSourceRefKind classifies immutable version source reference.
+enum PackageVersionSourceRefKind {
+  PACKAGE_VERSION_SOURCE_REF_KIND_UNSPECIFIED = 0;
+  PACKAGE_VERSION_SOURCE_REF_KIND_GIT_TAG = 1;
+  PACKAGE_VERSION_SOURCE_REF_KIND_GIT_COMMIT = 2;
+  PACKAGE_VERSION_SOURCE_REF_KIND_GITLINK = 3;
+  PACKAGE_VERSION_SOURCE_REF_KIND_PROXY_REF = 4;
+}
+
+// PackageVerificationStatus is the verification decision for a package version.
+enum PackageVerificationStatus {
+  PACKAGE_VERIFICATION_STATUS_UNSPECIFIED = 0;
+  PACKAGE_VERIFICATION_STATUS_VERIFIED = 1;
+  PACKAGE_VERIFICATION_STATUS_UNVERIFIED = 2;
+  PACKAGE_VERIFICATION_STATUS_REJECTED = 3;
+  PACKAGE_VERIFICATION_STATUS_REVOKED = 4;
+}
+
+// PackageReleaseStatus is the release lifecycle status for a package version.
+enum PackageReleaseStatus {
+  PACKAGE_RELEASE_STATUS_UNSPECIFIED = 0;
+  PACKAGE_RELEASE_STATUS_ACTIVE = 1;
+  PACKAGE_RELEASE_STATUS_DEPRECATED = 2;
+  PACKAGE_RELEASE_STATUS_REVOKED = 3;
+  PACKAGE_RELEASE_STATUS_BLOCKED = 4;
+}
+
+// PackageManifestValidationStatus is manifest validation state.
+enum PackageManifestValidationStatus {
+  PACKAGE_MANIFEST_VALIDATION_STATUS_UNSPECIFIED = 0;
+  PACKAGE_MANIFEST_VALIDATION_STATUS_VALID = 1;
+  PACKAGE_MANIFEST_VALIDATION_STATUS_INVALID = 2;
+  PACKAGE_MANIFEST_VALIDATION_STATUS_WARNING = 3;
+}
+
+// PackageInstallationScopeType classifies installation scope.
+enum PackageInstallationScopeType {
+  PACKAGE_INSTALLATION_SCOPE_TYPE_UNSPECIFIED = 0;
+  PACKAGE_INSTALLATION_SCOPE_TYPE_PLATFORM = 1;
+  PACKAGE_INSTALLATION_SCOPE_TYPE_ORGANIZATION = 2;
+  PACKAGE_INSTALLATION_SCOPE_TYPE_PROJECT = 3;
+  PACKAGE_INSTALLATION_SCOPE_TYPE_REPOSITORY = 4;
+}
+
+// PackageInstallationStatus is installation lifecycle status.
+enum PackageInstallationStatus {
+  PACKAGE_INSTALLATION_STATUS_UNSPECIFIED = 0;
+  PACKAGE_INSTALLATION_STATUS_REQUESTED = 1;
+  PACKAGE_INSTALLATION_STATUS_ACTIVE = 2;
+  PACKAGE_INSTALLATION_STATUS_DISABLED = 3;
+  PACKAGE_INSTALLATION_STATUS_FAILED = 4;
+  PACKAGE_INSTALLATION_STATUS_UNINSTALLED = 5;
+}
+
+// PackageDesiredState describes requested installation state.
+enum PackageDesiredState {
+  PACKAGE_DESIRED_STATE_UNSPECIFIED = 0;
+  PACKAGE_DESIRED_STATE_PRESENT = 1;
+  PACKAGE_DESIRED_STATE_ABSENT = 2;
+  PACKAGE_DESIRED_STATE_SUSPENDED = 3;
+}
+
+// PackageSecretBindingStatus is the summarized secret binding state.
+enum PackageSecretBindingStatus {
+  PACKAGE_SECRET_BINDING_STATUS_UNSPECIFIED = 0;
+  PACKAGE_SECRET_BINDING_STATUS_NOT_REQUIRED = 1;
+  PACKAGE_SECRET_BINDING_STATUS_MISSING = 2;
+  PACKAGE_SECRET_BINDING_STATUS_COMPLETE = 3;
+  PACKAGE_SECRET_BINDING_STATUS_INVALID = 4;
+}
+
+// PackageHealthStatus is the summarized installation health state.
+enum PackageHealthStatus {
+  PACKAGE_HEALTH_STATUS_UNSPECIFIED = 0;
+  PACKAGE_HEALTH_STATUS_UNKNOWN = 1;
+  PACKAGE_HEALTH_STATUS_HEALTHY = 2;
+  PACKAGE_HEALTH_STATUS_DEGRADED = 3;
+  PACKAGE_HEALTH_STATUS_FAILED = 4;
+}
+
+// PackageSecretFieldKind classifies a secret field value.
+enum PackageSecretFieldKind {
+  PACKAGE_SECRET_FIELD_KIND_UNSPECIFIED = 0;
+  PACKAGE_SECRET_FIELD_KIND_STRING = 1;
+  PACKAGE_SECRET_FIELD_KIND_PASSWORD = 2;
+  PACKAGE_SECRET_FIELD_KIND_TOKEN = 3;
+  PACKAGE_SECRET_FIELD_KIND_JSON = 4;
+  PACKAGE_SECRET_FIELD_KIND_URL = 5;
+}
+
+// PackagePricingKind describes pricing metadata type.
+enum PackagePricingKind {
+  PACKAGE_PRICING_KIND_UNSPECIFIED = 0;
+  PACKAGE_PRICING_KIND_FREE = 1;
+  PACKAGE_PRICING_KIND_PAID = 2;
+  PACKAGE_PRICING_KIND_SUBSCRIPTION = 3;
+  PACKAGE_PRICING_KIND_USAGE_BASED = 4;
+  PACKAGE_PRICING_KIND_RESTRICTED = 5;
+}
+
+// PackageSource describes a connected package source.
+message PackageSource {
+  // id is the source identifier.
+  string id = 1;
+  // organization_id limits the source to an organization when present.
+  optional string organization_id = 2;
+  // slug is a unique source key in scope.
+  string slug = 3;
+  // display_name is a safe source name for users.
+  string display_name = 4;
+  // source_kind classifies source origin.
+  PackageSourceKind source_kind = 5;
+  // repository_ref is an external repository reference when source is repository-backed.
+  optional string repository_ref = 6;
+  // catalog_endpoint_ref is a logical store endpoint reference when catalog is fetched through a store package.
+  optional string catalog_endpoint_ref = 7;
+  // status is source lifecycle status.
+  PackageSourceStatus status = 8;
+  // last_sync_at is RFC3339 timestamp of the last successful synchronization.
+  optional string last_sync_at = 9;
+  // last_error is a short safe diagnostic message.
+  optional string last_error = 10;
+  // version is a monotonic marker for optimistic concurrency.
+  int64 version = 11;
+  // created_at is RFC3339 creation timestamp.
+  string created_at = 12;
+  // updated_at is RFC3339 update timestamp.
+  string updated_at = 13;
+}
+
+// PackageEntry describes one local catalog package.
+message PackageEntry {
+  // id is the local package identifier.
+  string id = 1;
+  // source_id is the source where the package was discovered.
+  optional string source_id = 2;
+  // slug is the stable package slug.
+  string slug = 3;
+  // package_kind classifies package behavior.
+  PackageKind package_kind = 4;
+  // publisher_ref is an external publisher reference.
+  optional string publisher_ref = 5;
+  // display_name contains localized package names.
+  repeated LocalizedText display_name = 6;
+  // description contains localized package descriptions.
+  repeated LocalizedText description = 7;
+  // icon_object_uri points to object storage or external icon URL.
+  optional string icon_object_uri = 8;
+  // commercial_status describes commercial availability.
+  PackageCommercialStatus commercial_status = 9;
+  // trust_status describes local trust level.
+  PackageTrustStatus trust_status = 10;
+  // status is local package lifecycle status.
+  PackageStatus status = 11;
+  // version is a monotonic marker for optimistic concurrency.
+  int64 version = 12;
+  // created_at is RFC3339 creation timestamp.
+  string created_at = 13;
+  // updated_at is RFC3339 update timestamp.
+  string updated_at = 14;
+}
+
+// PackageVersion describes one immutable package version with mutable verification state.
+message PackageVersion {
+  // id is the package version identifier.
+  string id = 1;
+  // package_id is the owning package identifier.
+  string package_id = 2;
+  // version_label is the version label from manifest or source tag.
+  string version_label = 3;
+  // source_ref identifies where this package version comes from.
+  SourceRef source_ref = 4;
+  // manifest_digest is the digest of the normalized manifest.
+  string manifest_digest = 5;
+  // verification_status is the current verification status.
+  PackageVerificationStatus verification_status = 6;
+  // release_status is the current release lifecycle status.
+  PackageReleaseStatus release_status = 7;
+  // revision is a monotonic marker for optimistic concurrency.
+  int64 revision = 8;
+  // published_at is RFC3339 publish timestamp when known.
+  optional string published_at = 9;
+  // created_at is RFC3339 creation timestamp.
+  string created_at = 10;
+  // updated_at is RFC3339 update timestamp.
+  string updated_at = 11;
+}
+
+// PackageManifestSnapshot stores normalized manifest data for audit and verification.
+message PackageManifestSnapshot {
+  // id is the manifest snapshot identifier.
+  string id = 1;
+  // package_version_id is the package version identifier.
+  string package_version_id = 2;
+  // schema_version is the manifest schema version.
+  int32 schema_version = 3;
+  // payload_json is normalized manifest JSON.
+  string payload_json = 4;
+  // validation_status is manifest validation state.
+  PackageManifestValidationStatus validation_status = 5;
+  // validation_errors contains structured validation diagnostics as JSON.
+  string validation_errors_json = 6;
+  // created_at is RFC3339 creation timestamp.
+  string created_at = 7;
+}
+
+// PackageSecretField describes one secret field required or suggested by a package version.
+message PackageSecretField {
+  // key is a stable machine key of the secret field.
+  string key = 1;
+  // kind classifies the expected value.
+  PackageSecretFieldKind kind = 2;
+  // required marks the field as mandatory before activation.
+  bool required = 3;
+  // display_name contains localized names.
+  repeated LocalizedText display_name = 4;
+  // description contains localized descriptions and hints.
+  repeated LocalizedText description = 5;
+}
+
+// PackageSecretSchema describes secret fields for a package version.
+message PackageSecretSchema {
+  // id is the secret schema identifier.
+  string id = 1;
+  // package_version_id is the package version identifier.
+  string package_version_id = 2;
+  // schema_digest is the digest of secret field definitions.
+  string schema_digest = 3;
+  // fields contains declared secret fields.
+  repeated PackageSecretField fields = 4;
+  // created_at is RFC3339 creation timestamp.
+  string created_at = 5;
+}
+
+// PackageInstallation describes selected package version and scope.
+message PackageInstallation {
+  // id is the installation identifier.
+  string id = 1;
+  // package_id is the package identifier.
+  string package_id = 2;
+  // package_version_id is the selected package version identifier.
+  string package_version_id = 3;
+  // scope identifies where the installation applies.
+  ScopeRef scope = 4;
+  // installation_status is lifecycle status.
+  PackageInstallationStatus installation_status = 5;
+  // desired_state is requested target state.
+  PackageDesiredState desired_state = 6;
+  // runtime_requirement_digest is a digest of runtime requirements when package needs runtime workload.
+  optional string runtime_requirement_digest = 7;
+  // secret_binding_status is a summarized status from access-manager and Vault.
+  PackageSecretBindingStatus secret_binding_status = 8;
+  // last_health_status is the latest summarized installation health.
+  PackageHealthStatus last_health_status = 9;
+  // version is a monotonic marker for optimistic concurrency.
+  int64 version = 10;
+  // created_at is RFC3339 creation timestamp.
+  string created_at = 11;
+  // updated_at is RFC3339 update timestamp.
+  string updated_at = 12;
+}
+
+// PackageVerification is an append-only verification audit record.
+message PackageVerification {
+  // id is the verification record identifier.
+  string id = 1;
+  // package_version_id is the package version identifier.
+  string package_version_id = 2;
+  // verification_status is the recorded decision.
+  PackageVerificationStatus verification_status = 3;
+  // verified_by_actor_ref identifies the actor or verifier profile when present.
+  optional string verified_by_actor_ref = 4;
+  // verification_notes is a short safe explanation.
+  optional string verification_notes = 5;
+  // created_at is RFC3339 creation timestamp.
+  string created_at = 6;
+}
+
+// PackagePricingMetadata stores pricing hints for future billing.
+message PackagePricingMetadata {
+  // id is the pricing metadata identifier.
+  string id = 1;
+  // package_id is the package identifier.
+  string package_id = 2;
+  // pricing_kind classifies pricing model.
+  PackagePricingKind pricing_kind = 3;
+  // currency is ISO 4217 currency when price is known.
+  optional string currency = 4;
+  // price_payload_json contains normalized pricing hints.
+  string price_payload_json = 5;
+  // version is a monotonic marker for optimistic concurrency.
+  int64 version = 6;
+  // updated_at is RFC3339 update timestamp.
+  string updated_at = 7;
+}
+
+// ConnectPackageSourceRequest is a command to connect a package source.
+message ConnectPackageSourceRequest {
+  // meta carries idempotency, actor and audit data.
+  CommandMeta meta = 1;
+  // organization_id limits the source to an organization when present.
+  optional string organization_id = 2;
+  // slug is a unique source key in scope.
+  string slug = 3;
+  // display_name is a safe source name for users.
+  string display_name = 4;
+  // source_kind classifies source origin.
+  PackageSourceKind source_kind = 5;
+  // repository_ref is an external repository reference when source is repository-backed.
+  optional string repository_ref = 6;
+  // catalog_endpoint_ref is a logical store endpoint reference when catalog is fetched through a store package.
+  optional string catalog_endpoint_ref = 7;
+}
+
+// UpdatePackageSourceRequest is a command to change source metadata.
+message UpdatePackageSourceRequest {
+  // meta carries expected version, actor and audit data.
+  CommandMeta meta = 1;
+  // source_id is the source identifier.
+  string source_id = 2;
+  // display_name changes source display name when present.
+  optional string display_name = 3;
+  // repository_ref changes or clears repository reference when present.
+  optional string repository_ref = 4;
+  // catalog_endpoint_ref changes or clears endpoint reference when present.
+  optional string catalog_endpoint_ref = 5;
+  // status changes source status when present.
+  optional PackageSourceStatus status = 6;
+}
+
+// DisablePackageSourceRequest is a command to disable a source.
+message DisablePackageSourceRequest {
+  // meta carries expected version, actor and audit data.
+  CommandMeta meta = 1;
+  // source_id is the source identifier.
+  string source_id = 2;
+}
+
+// GetPackageSourceRequest returns one source.
+message GetPackageSourceRequest {
+  // meta carries actor and request metadata.
+  QueryMeta meta = 1;
+  // source_id is the source identifier.
+  string source_id = 2;
+}
+
+// ListPackageSourcesRequest filters sources.
+message ListPackageSourcesRequest {
+  // meta carries actor and request metadata.
+  QueryMeta meta = 1;
+  // organization_id limits results to organization scope when present.
+  optional string organization_id = 2;
+  // source_kind filters by source kind when present.
+  optional PackageSourceKind source_kind = 3;
+  // status filters by source status when present.
+  optional PackageSourceStatus status = 4;
+  // page limits list results.
+  PageRequest page = 5;
+}
+
+// SyncAvailablePackagesRequest synchronizes local catalog from a source.
+message SyncAvailablePackagesRequest {
+  // meta carries idempotency, actor and audit data.
+  CommandMeta meta = 1;
+  // source_id is the source identifier.
+  string source_id = 2;
+}
+
+// GetPackageRequest returns one package.
+message GetPackageRequest {
+  // meta carries actor and request metadata.
+  QueryMeta meta = 1;
+  // package_id is the package identifier.
+  string package_id = 2;
+}
+
+// ListPackagesRequest filters local catalog entries.
+message ListPackagesRequest {
+  // meta carries actor and request metadata.
+  QueryMeta meta = 1;
+  // source_id filters packages by source when present.
+  optional string source_id = 2;
+  // package_kind filters packages by kind when present.
+  optional PackageKind package_kind = 3;
+  // status filters packages by lifecycle status when present.
+  optional PackageStatus status = 4;
+  // commercial_status filters packages by commercial availability when present.
+  optional PackageCommercialStatus commercial_status = 5;
+  // trust_status filters packages by trust status when present.
+  optional PackageTrustStatus trust_status = 6;
+  // query searches by slug and localized display metadata when present.
+  optional string query = 7;
+  // page limits list results.
+  PageRequest page = 8;
+}
+
+// GetPackageVersionRequest returns one package version.
+message GetPackageVersionRequest {
+  // meta carries actor and request metadata.
+  QueryMeta meta = 1;
+  // package_version_id is the package version identifier.
+  string package_version_id = 2;
+}
+
+// ListPackageVersionsRequest returns package versions.
+message ListPackageVersionsRequest {
+  // meta carries actor and request metadata.
+  QueryMeta meta = 1;
+  // package_id is the package identifier.
+  string package_id = 2;
+  // verification_status filters versions by verification state when present.
+  optional PackageVerificationStatus verification_status = 3;
+  // release_status filters versions by release status when present.
+  optional PackageReleaseStatus release_status = 4;
+  // page limits list results.
+  PageRequest page = 5;
+}
+
+// GetPackageManifestRequest returns manifest snapshot.
+message GetPackageManifestRequest {
+  // meta carries actor and request metadata.
+  QueryMeta meta = 1;
+  // package_version_id is the package version identifier.
+  string package_version_id = 2;
+}
+
+// RequestPackageInstallationRequest creates an installation request.
+message RequestPackageInstallationRequest {
+  // meta carries idempotency, actor and audit data.
+  CommandMeta meta = 1;
+  // package_id is the package identifier.
+  string package_id = 2;
+  // package_version_id is the requested package version identifier.
+  string package_version_id = 3;
+  // scope identifies where the installation applies.
+  ScopeRef scope = 4;
+  // desired_state is requested target state; server defaults to present.
+  optional PackageDesiredState desired_state = 5;
+}
+
+// UpdatePackageInstallationRequest changes installation state.
+message UpdatePackageInstallationRequest {
+  // meta carries expected version, actor and audit data.
+  CommandMeta meta = 1;
+  // installation_id is the installation identifier.
+  string installation_id = 2;
+  // package_version_id changes selected version when present.
+  optional string package_version_id = 3;
+  // desired_state changes target state when present.
+  optional PackageDesiredState desired_state = 4;
+  // installation_status changes lifecycle status when present.
+  optional PackageInstallationStatus installation_status = 5;
+}
+
+// DisablePackageInstallationRequest disables an installation.
+message DisablePackageInstallationRequest {
+  // meta carries expected version, actor and audit data.
+  CommandMeta meta = 1;
+  // installation_id is the installation identifier.
+  string installation_id = 2;
+}
+
+// UninstallPackageRequest uninstalls a package installation.
+message UninstallPackageRequest {
+  // meta carries expected version, actor and audit data.
+  CommandMeta meta = 1;
+  // installation_id is the installation identifier.
+  string installation_id = 2;
+}
+
+// GetPackageInstallationRequest returns one installation.
+message GetPackageInstallationRequest {
+  // meta carries actor and request metadata.
+  QueryMeta meta = 1;
+  // installation_id is the installation identifier.
+  string installation_id = 2;
+}
+
+// ListPackageInstallationsRequest filters installations.
+message ListPackageInstallationsRequest {
+  // meta carries actor and request metadata.
+  QueryMeta meta = 1;
+  // scope filters installations by scope when present.
+  ScopeRef scope = 2;
+  // package_id filters installations by package when present.
+  optional string package_id = 3;
+  // package_kind filters installations by package kind when present.
+  optional PackageKind package_kind = 4;
+  // installation_status filters installations by lifecycle status when present.
+  optional PackageInstallationStatus installation_status = 5;
+  // secret_binding_status filters installations by secret status when present.
+  optional PackageSecretBindingStatus secret_binding_status = 6;
+  // page limits list results.
+  PageRequest page = 7;
+}
+
+// GetPackageSecretSchemaRequest returns secret schema.
+message GetPackageSecretSchemaRequest {
+  // meta carries actor and request metadata.
+  QueryMeta meta = 1;
+  // package_version_id is the package version identifier.
+  string package_version_id = 2;
+}
+
+// RefreshPackageInstallationSecretStatusRequest refreshes secret status.
+message RefreshPackageInstallationSecretStatusRequest {
+  // meta carries expected version, actor and audit data.
+  CommandMeta meta = 1;
+  // installation_id is the installation identifier.
+  string installation_id = 2;
+}
+
+// SetPackageVerificationRequest records a verification decision.
+message SetPackageVerificationRequest {
+  // meta carries expected package version revision, actor and audit data.
+  CommandMeta meta = 1;
+  // package_version_id is the package version identifier.
+  string package_version_id = 2;
+  // verification_status is the recorded decision.
+  PackageVerificationStatus verification_status = 3;
+  // verification_notes is a short safe explanation.
+  optional string verification_notes = 4;
+  // release_status changes release lifecycle status when present.
+  optional PackageReleaseStatus release_status = 5;
+}
+
+// PackageSourceResponse wraps source state.
+message PackageSourceResponse {
+  // source is the authoritative source state.
+  PackageSource source = 1;
+}
+
+// ListPackageSourcesResponse contains sources and page state.
+message ListPackageSourcesResponse {
+  // items contains source states.
+  repeated PackageSource items = 1;
+  // page describes continuation state.
+  PageResponse page = 2;
+}
+
+// SyncAvailablePackagesResponse contains synchronization result.
+message SyncAvailablePackagesResponse {
+  // source is the synchronized source state.
+  PackageSource source = 1;
+  // package_count is the number of package entries observed in the source snapshot.
+  int32 package_count = 2;
+  // version_count is the number of package versions observed in the source snapshot.
+  int32 version_count = 3;
+  // synced_at is RFC3339 synchronization timestamp.
+  string synced_at = 4;
+}
+
+// PackageResponse wraps package state and optional pricing metadata.
+message PackageResponse {
+  // package is the authoritative local package catalog entry.
+  PackageEntry package_entry = 1;
+  // pricing contains current pricing metadata when available.
+  PackagePricingMetadata pricing = 2;
+}
+
+// ListPackagesResponse contains package entries and page state.
+message ListPackagesResponse {
+  // items contains package entries.
+  repeated PackageEntry items = 1;
+  // page describes continuation state.
+  PageResponse page = 2;
+}
+
+// PackageVersionResponse wraps package version state.
+message PackageVersionResponse {
+  // version is the authoritative package version state.
+  PackageVersion version = 1;
+}
+
+// ListPackageVersionsResponse contains package versions and page state.
+message ListPackageVersionsResponse {
+  // items contains package versions.
+  repeated PackageVersion items = 1;
+  // page describes continuation state.
+  PageResponse page = 2;
+}
+
+// PackageManifestResponse wraps manifest snapshot state.
+message PackageManifestResponse {
+  // manifest is the normalized manifest snapshot.
+  PackageManifestSnapshot manifest = 1;
+}
+
+// PackageInstallationResponse wraps installation state.
+message PackageInstallationResponse {
+  // installation is the authoritative installation state.
+  PackageInstallation installation = 1;
+}
+
+// ListPackageInstallationsResponse contains installations and page state.
+message ListPackageInstallationsResponse {
+  // items contains installation states.
+  repeated PackageInstallation items = 1;
+  // page describes continuation state.
+  PageResponse page = 2;
+}
+
+// PackageSecretSchemaResponse wraps secret schema state.
+message PackageSecretSchemaResponse {
+  // schema is the secret schema state.
+  PackageSecretSchema schema = 1;
+}
+
+// PackageVerificationResponse wraps verification audit state and updated package version.
+message PackageVerificationResponse {
+  // verification is the recorded append-only verification decision.
+  PackageVerification verification = 1;
+  // version is the updated package version state.
+  PackageVersion version = 2;
+}

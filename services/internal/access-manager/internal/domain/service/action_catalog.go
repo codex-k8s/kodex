@@ -36,6 +36,9 @@ func systemAccessActionDescriptors() []systemAccessActionDescriptor {
 	for _, action := range accesscatalog.ProjectCatalogActions() {
 		descriptors = append(descriptors, systemAccessActionDescriptor{key: action.Key, resourceType: action.ResourceType})
 	}
+	for _, action := range accesscatalog.PackageHubActions() {
+		descriptors = append(descriptors, systemAccessActionDescriptor{key: action.Key, resourceType: action.ResourceType})
+	}
 	return descriptors
 }
 
