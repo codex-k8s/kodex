@@ -13,6 +13,7 @@ import (
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
 	providerservice "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/service"
+	providergithub "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/provider/github"
 	providerpostgres "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/repository/postgres/provider"
 	providergrpc "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/transport/grpc"
 )
@@ -39,7 +40,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	components := processComponents{
 		DBPool:          dbPool,
 		EventLogDBPool:  eventLogPool,
-		ProviderService: providerservice.New(providerRepository),
+		ProviderService: providerservice.New(providerRepository, providergithub.New(providergithub.Config{})),
 		OutboxStore:     providerRepository,
 	}
 	httpServer := &http.Server{

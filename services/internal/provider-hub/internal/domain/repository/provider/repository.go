@@ -7,7 +7,9 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/value"
 )
 
 // Repository is the storage boundary owned by provider-hub.
@@ -32,6 +34,12 @@ type Repository interface {
 	MarkOutboxEventPublished(context.Context, uuid.UUID, int, time.Time) error
 	MarkOutboxEventFailed(context.Context, uuid.UUID, int, time.Time, string) error
 	MarkOutboxEventPermanentlyFailed(context.Context, uuid.UUID, int, time.Time, string) error
+}
+
+// WebhookNormalizer isolates provider-specific webhook payload parsing from the domain service.
+type WebhookNormalizer interface {
+	ProviderSlug() enum.ProviderSlug
+	NormalizeWebhook(entity.WebhookEvent) (value.ProviderWebhookFacts, bool, error)
 }
 
 // Clock provides deterministic time for domain commands and tests.

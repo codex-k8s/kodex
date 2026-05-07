@@ -17,18 +17,19 @@ import (
 
 // Service is the domain entrypoint for provider-native work item workflows.
 type Service struct {
-	repository providerrepo.Repository
-	clock      providerrepo.Clock
-	ids        providerrepo.IDGenerator
+	repository         providerrepo.Repository
+	clock              providerrepo.Clock
+	ids                providerrepo.IDGenerator
+	webhookNormalizers map[enum.ProviderSlug]providerrepo.WebhookNormalizer
 }
 
 // New creates a provider-hub domain service.
-func New(repository providerrepo.Repository) *Service {
-	return NewWithRuntime(repository, systemClock{}, uuidGenerator{})
+func New(repository providerrepo.Repository, normalizers ...providerrepo.WebhookNormalizer) *Service {
+	return NewWithRuntime(repository, systemClock{}, uuidGenerator{}, normalizers...)
 }
 
 // NewWithRuntime creates a provider-hub domain service with deterministic runtime dependencies.
-func NewWithRuntime(repository providerrepo.Repository, clock providerrepo.Clock, ids providerrepo.IDGenerator) *Service {
+func NewWithRuntime(repository providerrepo.Repository, clock providerrepo.Clock, ids providerrepo.IDGenerator, normalizers ...providerrepo.WebhookNormalizer) *Service {
 	if repository == nil {
 		panic("provider-hub repository is required")
 	}
@@ -38,7 +39,22 @@ func NewWithRuntime(repository providerrepo.Repository, clock providerrepo.Clock
 	if ids == nil {
 		panic("provider-hub id generator is required")
 	}
-	return &Service{repository: repository, clock: clock, ids: ids}
+	return &Service{repository: repository, clock: clock, ids: ids, webhookNormalizers: webhookNormalizerRegistry(normalizers)}
+}
+
+func webhookNormalizerRegistry(normalizers []providerrepo.WebhookNormalizer) map[enum.ProviderSlug]providerrepo.WebhookNormalizer {
+	registry := make(map[enum.ProviderSlug]providerrepo.WebhookNormalizer, len(normalizers))
+	for _, normalizer := range normalizers {
+		if normalizer == nil {
+			panic("provider-hub webhook normalizer is required")
+		}
+		providerSlug := normalizer.ProviderSlug()
+		if !validProviderSlug(providerSlug) {
+			panic("provider-hub webhook normalizer has invalid provider slug")
+		}
+		registry[providerSlug] = normalizer
+	}
+	return registry
 }
 
 // Ping checks whether the service can reach its owned storage.
@@ -141,10 +157,26 @@ func (s *Service) RetryWebhookEventProcessing(ctx context.Context, input RetryWe
 	webhook.ProcessingStatus = normalization.status
 	webhook.LastError = normalization.lastError
 	stored, err := s.repository.ProcessWebhookEvent(ctx, webhook, normalization.providerEvents, normalization.outboxEvents[1:])
-	if errors.Is(err, errs.ErrConflict) {
-		return s.repository.GetWebhookEvent(ctx, input.WebhookEventID)
+	if errors.Is(err, errs.ErrConflict) || errors.Is(err, errs.ErrNotFound) {
+		return s.currentWebhookAfterConcurrentProcessing(ctx, input.WebhookEventID)
 	}
 	return stored, err
+}
+
+func (s *Service) currentWebhookAfterConcurrentProcessing(ctx context.Context, webhookEventID uuid.UUID) (entity.WebhookEvent, error) {
+	current, err := s.repository.GetWebhookEvent(ctx, webhookEventID)
+	if err != nil {
+		return entity.WebhookEvent{}, err
+	}
+	switch current.ProcessingStatus {
+	case enum.WebhookProcessingStatusPending,
+		enum.WebhookProcessingStatusFailed,
+		enum.WebhookProcessingStatusProcessed,
+		enum.WebhookProcessingStatusIgnored:
+		return current, nil
+	default:
+		return entity.WebhookEvent{}, errs.ErrConflict
+	}
 }
 
 // GetProviderAccountRuntimeState returns runtime state by id or external account identity.

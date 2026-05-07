@@ -55,3 +55,23 @@ type PageResult struct {
 
 // ProviderEventPayload is generated from AsyncAPI and used by provider events.
 type ProviderEventPayload = providerevents.Payload
+
+// ProviderWebhookFactKind identifies the neutral artifact kind extracted from a provider webhook.
+type ProviderWebhookFactKind string
+
+const (
+	ProviderWebhookFactKindWorkItem ProviderWebhookFactKind = "work_item"
+	ProviderWebhookFactKindComment  ProviderWebhookFactKind = "comment"
+)
+
+// ProviderWebhookFacts contains provider-neutral data extracted by a provider adapter.
+type ProviderWebhookFacts struct {
+	FactKind             ProviderWebhookFactKind
+	ProviderWorkItemID   string
+	ProviderCommentID    string
+	Kind                 string
+	Number               int64
+	RepositoryFullName   string
+	RepositoryProviderID string
+	OccurredAt           time.Time
+}

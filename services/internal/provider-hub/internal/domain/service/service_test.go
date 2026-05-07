@@ -109,7 +109,20 @@ func TestIngestWebhookEventStoresProcessedGitHubIssueWebhook(t *testing.T) {
 	normalizedEventID := uuid.New()
 	now := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
 	repository := &fakeRepository{}
-	service := NewWithRuntime(repository, fixedClock{now: now}, &sequenceIDs{ids: []uuid.UUID{webhookID, receivedEventID, providerEventID, normalizedEventID}})
+	service := NewWithRuntime(
+		repository,
+		fixedClock{now: now},
+		&sequenceIDs{ids: []uuid.UUID{webhookID, receivedEventID, providerEventID, normalizedEventID}},
+		fakeWebhookNormalizer{facts: value.ProviderWebhookFacts{
+			FactKind:             value.ProviderWebhookFactKindWorkItem,
+			ProviderWorkItemID:   "55",
+			Kind:                 "issue",
+			Number:               7,
+			RepositoryFullName:   "codex-k8s/kodex",
+			RepositoryProviderID: "101",
+			OccurredAt:           now.Add(-time.Minute),
+		}, ok: true},
+	)
 
 	webhook, err := service.IngestWebhookEvent(context.Background(), IngestWebhookEventInput{
 		ProviderSlug:         enum.ProviderSlugGitHub,
@@ -142,7 +155,12 @@ func TestIngestWebhookEventStoresFailedKnownWebhookWithBadPayloadShape(t *testin
 
 	now := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
 	repository := &fakeRepository{}
-	service := NewWithRuntime(repository, fixedClock{now: now}, &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New()}})
+	service := NewWithRuntime(
+		repository,
+		fixedClock{now: now},
+		&sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New()}},
+		fakeWebhookNormalizer{ok: true, err: errors.New("provider payload misses required id")},
+	)
 
 	webhook, err := service.IngestWebhookEvent(context.Background(), IngestWebhookEventInput{
 		ProviderSlug: enum.ProviderSlugGitHub,
@@ -160,6 +178,58 @@ func TestIngestWebhookEventStoresFailedKnownWebhookWithBadPayloadShape(t *testin
 	}
 	if len(repository.recordedProviderEvents) != 0 || len(repository.recordedOutboxEvents) != 1 {
 		t.Fatalf("provider events = %d outbox = %d, want only received outbox", len(repository.recordedProviderEvents), len(repository.recordedOutboxEvents))
+	}
+}
+
+func TestRetryWebhookEventProcessingReturnsCurrentStateAfterConcurrentProcessing(t *testing.T) {
+	t.Parallel()
+
+	webhookID := uuid.New()
+	now := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	processedWebhook := entity.WebhookEvent{
+		ID:               webhookID,
+		ProviderSlug:     enum.ProviderSlugGitHub,
+		DeliveryID:       "delivery-1",
+		EventName:        "issues",
+		ReceivedAt:       now,
+		ProcessingStatus: enum.WebhookProcessingStatusProcessed,
+		PayloadJSON:      []byte(`{"repository":{"id":101},"issue":{"id":55}}`),
+	}
+	repository := &fakeRepository{
+		recordedWebhook: entity.WebhookEvent{
+			ID:               webhookID,
+			ProviderSlug:     enum.ProviderSlugGitHub,
+			DeliveryID:       "delivery-1",
+			EventName:        "issues",
+			ReceivedAt:       now,
+			ProcessingStatus: enum.WebhookProcessingStatusPending,
+			PayloadJSON:      []byte(`{"repository":{"id":101},"issue":{"id":55}}`),
+		},
+		processWebhookErr:   errs.ErrNotFound,
+		webhookAfterProcess: &processedWebhook,
+	}
+	service := NewWithRuntime(
+		repository,
+		fixedClock{now: now},
+		&sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New()}},
+		fakeWebhookNormalizer{facts: value.ProviderWebhookFacts{
+			FactKind:             value.ProviderWebhookFactKindWorkItem,
+			ProviderWorkItemID:   "55",
+			Kind:                 "issue",
+			RepositoryProviderID: "101",
+			OccurredAt:           now,
+		}, ok: true},
+	)
+
+	webhook, err := service.RetryWebhookEventProcessing(context.Background(), RetryWebhookEventProcessingInput{
+		WebhookEventID: webhookID,
+		Meta:           value.CommandMeta{CommandID: uuid.New()},
+	})
+	if err != nil {
+		t.Fatalf("RetryWebhookEventProcessing(): %v", err)
+	}
+	if webhook.ProcessingStatus != enum.WebhookProcessingStatusProcessed {
+		t.Fatalf("status = %s, want processed", webhook.ProcessingStatus)
 	}
 }
 
@@ -184,6 +254,8 @@ type fakeRepository struct {
 	recordedSnapshot       entity.ProviderLimitSnapshot
 	recordedRuntimeState   entity.ProviderAccountRuntimeState
 	recordedWebhook        entity.WebhookEvent
+	processWebhookErr      error
+	webhookAfterProcess    *entity.WebhookEvent
 	recordedProviderEvents []entity.ProviderEvent
 	recordedOutboxEvents   []entity.OutboxEvent
 }
@@ -208,6 +280,12 @@ func (r *fakeRepository) ProcessWebhookEvent(_ context.Context, webhook entity.W
 	r.recordedWebhook = webhook
 	r.recordedProviderEvents = providerEvents
 	r.recordedOutboxEvents = outboxEvents
+	if r.webhookAfterProcess != nil {
+		r.recordedWebhook = *r.webhookAfterProcess
+	}
+	if r.processWebhookErr != nil {
+		return webhook, r.processWebhookErr
+	}
 	return webhook, r.err
 }
 
@@ -284,4 +362,22 @@ func (g *sequenceIDs) New() uuid.UUID {
 	id := g.ids[0]
 	g.ids = g.ids[1:]
 	return id
+}
+
+type fakeWebhookNormalizer struct {
+	providerSlug enum.ProviderSlug
+	facts        value.ProviderWebhookFacts
+	ok           bool
+	err          error
+}
+
+func (n fakeWebhookNormalizer) ProviderSlug() enum.ProviderSlug {
+	if n.providerSlug == "" {
+		return enum.ProviderSlugGitHub
+	}
+	return n.providerSlug
+}
+
+func (n fakeWebhookNormalizer) NormalizeWebhook(entity.WebhookEvent) (value.ProviderWebhookFacts, bool, error) {
+	return n.facts, n.ok, n.err
 }

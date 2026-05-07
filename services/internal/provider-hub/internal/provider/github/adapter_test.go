@@ -11,7 +11,9 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/errs"
+	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/enum"
+	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/value"
 	providerclient "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/provider/client"
 )
 
@@ -68,6 +70,64 @@ func TestProbeAccountMapsUnauthorizedToPrecondition(t *testing.T) {
 	})
 	if !errors.Is(err, errs.ErrPreconditionFailed) {
 		t.Fatalf("ProbeAccount() err = %v, want %v", err, errs.ErrPreconditionFailed)
+	}
+}
+
+func TestNormalizeWebhookMapsGitHubIssuePayload(t *testing.T) {
+	t.Parallel()
+
+	receivedAt := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	facts, ok, err := New(Config{}).NormalizeWebhook(entity.WebhookEvent{
+		ProviderSlug: enum.ProviderSlugGitHub,
+		EventName:    "issues",
+		ReceivedAt:   receivedAt,
+		PayloadJSON:  []byte(`{"action":"opened","repository":{"id":101,"full_name":"codex-k8s/kodex"},"issue":{"id":55,"number":7,"updated_at":"2026-05-07T11:59:00Z"}}`),
+	})
+	if err != nil {
+		t.Fatalf("NormalizeWebhook(): %v", err)
+	}
+	if !ok {
+		t.Fatal("NormalizeWebhook() ok = false, want true")
+	}
+	if facts.FactKind != value.ProviderWebhookFactKindWorkItem || facts.ProviderWorkItemID != "55" || facts.RepositoryProviderID != "101" {
+		t.Fatalf("facts = %+v, want GitHub issue facts", facts)
+	}
+	if facts.OccurredAt != receivedAt.Add(-time.Minute) {
+		t.Fatalf("occurred_at = %s, want %s", facts.OccurredAt, receivedAt.Add(-time.Minute))
+	}
+}
+
+func TestNormalizeWebhookIgnoresUnsupportedGitHubEvent(t *testing.T) {
+	t.Parallel()
+
+	_, ok, err := New(Config{}).NormalizeWebhook(entity.WebhookEvent{
+		ProviderSlug: enum.ProviderSlugGitHub,
+		EventName:    "ping",
+		ReceivedAt:   time.Now(),
+		PayloadJSON:  []byte(`{"zen":"keep it logically awesome"}`),
+	})
+	if err != nil {
+		t.Fatalf("NormalizeWebhook(): %v", err)
+	}
+	if ok {
+		t.Fatal("NormalizeWebhook() ok = true, want false")
+	}
+}
+
+func TestNormalizeWebhookReturnsErrorForKnownPayloadWithoutRequiredID(t *testing.T) {
+	t.Parallel()
+
+	_, ok, err := New(Config{}).NormalizeWebhook(entity.WebhookEvent{
+		ProviderSlug: enum.ProviderSlugGitHub,
+		EventName:    "issues",
+		ReceivedAt:   time.Now(),
+		PayloadJSON:  []byte(`{"repository":{"id":101},"issue":{"number":7}}`),
+	})
+	if !ok {
+		t.Fatal("NormalizeWebhook() ok = false, want true for known event")
+	}
+	if err == nil {
+		t.Fatal("NormalizeWebhook() err = nil, want error")
 	}
 }
 
