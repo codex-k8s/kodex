@@ -81,14 +81,18 @@ func (r *Repository) ListAccountRuntimeStates(ctx context.Context, filter query.
 
 // RecordLimitSnapshot stores a provider limit snapshot and updates account runtime state atomically.
 func (r *Repository) RecordLimitSnapshot(ctx context.Context, snapshot entity.ProviderLimitSnapshot, state entity.ProviderAccountRuntimeState) (entity.ProviderLimitSnapshot, error) {
-	var stored limitSnapshotWriteResult
+	var stored entity.ProviderLimitSnapshot
 	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
 		var recordErr error
-		stored, recordErr = queryOne(ctx, tx, operationRecordLimitSnapshot, queryLimitSnapshotUpsert, limitSnapshotArgs(snapshot), scanLimitSnapshotWriteResult)
+		stored, recordErr = queryOne(ctx, tx, operationRecordLimitSnapshot, queryLimitSnapshotUpsert, limitSnapshotArgs(snapshot), scanLimitSnapshot)
 		if errors.Is(recordErr, errs.ErrNotFound) {
-			return errs.ErrConflict
+			stored, recordErr = queryOne(ctx, tx, operationRecordLimitSnapshot, queryLimitSnapshotGetReplay, limitSnapshotArgs(snapshot), scanLimitSnapshot)
+			if errors.Is(recordErr, errs.ErrNotFound) {
+				return errs.ErrConflict
+			}
+			return recordErr
 		}
-		if recordErr != nil || !stored.inserted {
+		if recordErr != nil {
 			return recordErr
 		}
 		_, err := queryOne(ctx, tx, operationUpsertAccountRuntimeState, queryAccountRuntimeStateUpsertFromSnapshot, accountRuntimeStateArgs(state), scanAccountRuntimeState)
@@ -97,7 +101,7 @@ func (r *Repository) RecordLimitSnapshot(ctx context.Context, snapshot entity.Pr
 	if err != nil {
 		return entity.ProviderLimitSnapshot{}, wrapError(operationRecordLimitSnapshot, err)
 	}
-	return stored.snapshot, nil
+	return stored, nil
 }
 
 // ListLimitSnapshots returns provider limit snapshots.
@@ -109,7 +113,10 @@ func (r *Repository) ListLimitSnapshots(ctx context.Context, filter query.LimitS
 func (r *Repository) RecordProviderOperation(ctx context.Context, operation entity.ProviderOperation) (entity.ProviderOperation, error) {
 	stored, err := queryOne(ctx, r.db, operationRecordProviderOperation, queryProviderOperationInsert, providerOperationArgs(operation), scanProviderOperation)
 	if errors.Is(err, errs.ErrNotFound) {
-		return entity.ProviderOperation{}, wrapError(operationRecordProviderOperation, errs.ErrConflict)
+		stored, err = queryOne(ctx, r.db, operationRecordProviderOperation, queryProviderOperationGetReplay, providerOperationArgs(operation), scanProviderOperation)
+		if errors.Is(err, errs.ErrNotFound) {
+			return entity.ProviderOperation{}, wrapError(operationRecordProviderOperation, errs.ErrConflict)
+		}
 	}
 	return stored, err
 }

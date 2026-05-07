@@ -236,6 +236,26 @@ func TestRepositoryIntegrationRuntimeStateLimitsAndOperations(t *testing.T) {
 	if storedState.Status != enum.ProviderAccountRuntimeStatusActive {
 		t.Fatalf("authoritative runtime state = %+v, want active", storedState)
 	}
+	delayedLimitedState := limitedState
+	delayedLimitedState.ID = uuid.New()
+	delayedLimitedState.UpdatedAt = now.Add(30 * time.Second)
+	delayedCheckedAt := now.Add(30 * time.Second)
+	delayedLimitedState.LastCheckedAt = &delayedCheckedAt
+	delayedLimitedState.LastSuccessAt = &delayedCheckedAt
+	delayedSnapshot := snapshot
+	delayedSnapshot.ID = uuid.New()
+	delayedSnapshot.LimitClass = "graphql"
+	delayedSnapshot.CapturedAt = delayedCheckedAt
+	if _, err := repository.RecordLimitSnapshot(ctx, delayedSnapshot, delayedLimitedState); err != nil {
+		t.Fatalf("record delayed limited snapshot: %v", err)
+	}
+	loadedState, err = repository.GetAccountRuntimeState(ctx, query.AccountRuntimeStateLookup{ExternalAccountID: &accountID, ProviderSlug: enum.ProviderSlugGitHub})
+	if err != nil {
+		t.Fatalf("get runtime state after delayed limited snapshot: %v", err)
+	}
+	if loadedState.Status != enum.ProviderAccountRuntimeStatusActive || loadedState.Version != storedState.Version {
+		t.Fatalf("runtime state after delayed limited snapshot = %+v, want unchanged active version %d", loadedState, storedState.Version)
+	}
 
 	snapshots, page, err := repository.ListLimitSnapshots(ctx, query.LimitSnapshotFilter{
 		ExternalAccountID: &accountID,
