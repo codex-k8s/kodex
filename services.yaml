@@ -67,6 +67,7 @@ spec:
         - libs/go/migrationtest
         - libs/go/outbox
         - libs/go/platformevents/access
+        - libs/go/serviceprocess
         - libs/go/servicemain
         - proto/kodex/access_accounts/v1
         - specs/asyncapi/access-manager.v1.yaml
@@ -82,6 +83,7 @@ spec:
         - libs/go/migrationtest
         - libs/go/outbox
         - libs/go/platformevents/project
+        - libs/go/serviceprocess
         - libs/go/servicemain
         - proto/kodex/projects/v1
         - specs/asyncapi/project-catalog.v1.yaml
@@ -91,6 +93,7 @@ spec:
       bumpOn:
         - services/internal/package-hub
         - libs/go/grpcserver
+        - libs/go/serviceprocess
         - libs/go/servicemain
         - proto/kodex/packages/v1
         - specs/asyncapi/package-hub.v1.yaml
@@ -101,6 +104,7 @@ spec:
         - libs/go/grpcserver
         - libs/go/postgres
         - libs/go/migrationtest
+        - libs/go/serviceprocess
         - libs/go/servicemain
         - proto/kodex/providers/v1
         - specs/asyncapi/provider-hub.v1.yaml
