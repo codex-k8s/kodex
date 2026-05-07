@@ -5,8 +5,8 @@ title: kodex — продуктовый глоссарий платформы
 status: active
 owner_role: KM
 created_at: 2026-04-26
-updated_at: 2026-04-26
-related_issues: [599, 600, 601, 602]
+updated_at: 2026-05-07
+related_issues: [599, 600, 601, 602, 655]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -64,7 +64,7 @@ approvals:
 | `Run` | Один исполняемый запуск агента внутри сессии. |
 | `Slot` | Изолированное Kubernetes-окружение под конкретную работу. |
 | `Job` | Техническая операция платформы: зеркалирование зависимостей, сборка, публикация образа, deploy, cleanup или health-check. |
-| Runtime | Контур исполнения `run`, `job`, slots, plugins и проектных workloads. |
+| Runtime | Контур среды исполнения: slots, platform jobs, workspace, plugins и проектные workloads. Agent `Run` принадлежит `agent-manager`. |
 | Fleet | Контур серверов и Kubernetes-кластеров, которыми управляет платформа. |
 | Placement policy | Правило выбора допустимого серверного или кластерного контура. |
 | SSO-провайдер | Самостоятельно управляемый контур входа в платформу по OIDC/SAML с подключением внешних поставщиков идентичности. Базовый вариант первой версии — Keycloak. |

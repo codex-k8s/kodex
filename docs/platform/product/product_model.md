@@ -5,8 +5,8 @@ title: kodex — сквозная продуктовая модель платф
 status: active
 owner_role: PM
 created_at: 2026-04-26
-updated_at: 2026-04-26
-related_issues: [599, 600, 601, 602]
+updated_at: 2026-05-07
+related_issues: [599, 600, 601, 602, 655]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -171,7 +171,7 @@ approvals:
 | Рабочие артефакты | `Issue`, `PR/MR`, комментарии, mentions, relationships, watermark и acceptance. |
 | Пакеты | Установленные пакеты, пользовательские источники, guidance packages, plugin packages и клиент к магазину пакетов. |
 | Агентная работа | Agent-manager, flow, роли, шаблоны промптов, sessions, runs и acceptance. |
-| Runtime | Slot, job, управление серверами и Kubernetes-кластерами, добавление пустого OS-сервера, установка зависимостей, Kubernetes и firewall, health-check и мониторинг с первым режимом один production-кластер. |
+| Runtime и fleet | Slot, job, workspace materialization, cleanup/prewarm/reuse, управление серверами и Kubernetes-кластерами, health-check и мониторинг с первым режимом один production-кластер. |
 | Взаимодействие | UI, голос, уведомления, Human gate и внешние каналы через пакеты и общий контракт взаимодействия. |
 | Биллинг | Учёт затрат и основа для выставления счетов. |
 | Релизы | Release policy, release line, gates, deploy jobs и postdeploy-контур. |

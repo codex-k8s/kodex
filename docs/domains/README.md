@@ -21,7 +21,7 @@
 | `provider-native-work-items/` | `Issue`, `PR/MR`, комментарии, mentions, relationships, поля провайдера и platform watermarks. |
 | `package-platform/` | Плагины, пакеты руководящей документации, клиент магазина пакетов, установка, версии и каталоги. |
 | `agent-orchestration/` | `agent-manager`, flow, этапы, роли, шаблоны промптов и правила автоматизации. |
-| `runtime-and-fleet/` | Слоты, `run`, `job`, серверы, Kubernetes-кластеры, размещение и platform jobs. |
+| `runtime-and-fleet/` | Слоты, platform jobs, подготовка workspace, prewarm/reuse/cleanup, серверы, Kubernetes-кластеры и placement scope. |
 | `interaction-hub/` | UI, голос, уведомления, внешняя обратная связь и расширяемые каналы взаимодействия. |
 | `console-and-operations-ux/` | Командный центр, рабочие представления, операционные статусы и диагностические экраны. |
 | `risk-and-release-governance/` | Риски, Human gate, релизные линии, правила веток и релизная автоматизация. |
