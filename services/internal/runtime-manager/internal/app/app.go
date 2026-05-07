@@ -58,25 +58,24 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	errCh := make(chan error, 3)
 	go serviceprocess.StartHTTPServer(httpServer, "runtime-manager", logger, errCh)
 	go serviceprocess.StartGRPCServer(grpcServer, "runtime-manager", cfg.GRPCAddr, logger, errCh)
-	if cfg.Outbox.DispatchEnabled {
-		err := serviceprocess.StartOutboxDispatcher(
-			ctx,
-			"runtime-manager",
-			runtimeRepository,
-			outboxEvent,
-			serviceprocess.OutboxRuntimeConfig{
-				PublisherKind:       cfg.Outbox.PublisherKind,
-				AllowLossyPublisher: cfg.Outbox.AllowLossyPublisher,
-				EventLogSource:      cfg.Outbox.EventLogSource,
-				Dispatcher:          cfg.OutboxDispatcherConfig(),
-			},
-			serviceprocess.EventLogAppender(eventLogPool),
-			logger,
-			errCh,
-		)
-		if err != nil {
-			return err
-		}
+	err = serviceprocess.StartOutboxDispatcher(
+		ctx,
+		"runtime-manager",
+		runtimeRepository,
+		outboxEvent,
+		serviceprocess.OutboxRuntimeConfig{
+			DispatchEnabled:     cfg.Outbox.DispatchEnabled,
+			PublisherKind:       cfg.Outbox.PublisherKind,
+			AllowLossyPublisher: cfg.Outbox.AllowLossyPublisher,
+			EventLogSource:      cfg.Outbox.EventLogSource,
+			Dispatcher:          cfg.OutboxDispatcherConfig(),
+		},
+		serviceprocess.EventLogAppender(eventLogPool),
+		logger,
+		errCh,
+	)
+	if err != nil {
+		return err
 	}
 
 	select {

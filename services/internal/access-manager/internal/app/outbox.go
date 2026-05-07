@@ -5,17 +5,15 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/types/entity"
 )
 
-type serviceOutboxStore = outboxlib.EntityStore[entity.OutboxEvent]
-
 func outboxEvent(event entity.OutboxEvent) outboxlib.Event {
-	return outboxlib.Event{
-		ID:            event.ID,
-		EventType:     event.EventType,
-		SchemaVersion: event.SchemaVersion,
-		AggregateType: event.AggregateType,
-		AggregateID:   event.AggregateID,
-		Payload:       event.Payload,
-		OccurredAt:    event.OccurredAt,
-		AttemptCount:  event.AttemptCount,
-	}
+	return outboxlib.NewEvent(
+		event.ID,
+		event.EventType,
+		event.SchemaVersion,
+		event.AggregateType,
+		event.AggregateID,
+		event.Payload,
+		event.OccurredAt,
+		event.AttemptCount,
+	)
 }

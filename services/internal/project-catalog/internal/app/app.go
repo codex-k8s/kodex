@@ -3,23 +3,17 @@ package app
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
 	"time"
 
 	accessaccountsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/access_accounts/v1"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	grpcruntime "google.golang.org/grpc"
 
-	eventlog "github.com/codex-k8s/kodex/libs/go/eventlog"
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
-	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
+	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
 	accessclient "github.com/codex-k8s/kodex/services/internal/project-catalog/internal/clients/access"
 	projectservice "github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/service"
 	projectpostgres "github.com/codex-k8s/kodex/services/internal/project-catalog/internal/repository/postgres/project"
@@ -36,7 +30,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		return err
 	}
 	defer dbPool.Close()
-	eventLogPool, err := openOutboxEventLogPool(ctx, cfg)
+	eventLogPool, err := serviceprocess.OpenEventLogPool(ctx, cfg.needsEventLogDatabase(), cfg.EventLogDatabasePoolSettings())
 	if err != nil {
 		return err
 	}
@@ -56,14 +50,11 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	projectRepository := projectpostgres.NewRepository(dbPool)
 	projectService := projectservice.NewWithConfig(projectRepository, systemClock{}, uuidGenerator{}, projectservice.Config{Authorizer: authorizer})
 	components := processComponents{
-		DBPool:         dbPool,
-		EventLogDBPool: eventLogPool,
 		ProjectService: projectService,
-		OutboxStore:    projectRepository,
 	}
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           healthMux(components),
+		Handler:           serviceprocess.NewHealthMux(readinessChecks(projectService, dbPool, eventLogPool), 2*time.Second),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	grpcMetrics, err := grpcserver.NewMetrics(nil, grpcserver.MetricsConfig{
@@ -87,38 +78,31 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	projectgrpc.RegisterProjectCatalogService(grpcServer, components.ProjectService)
 
 	errCh := make(chan error, 3)
-	go serveHTTP(httpServer, cfg.HTTPAddr, logger, errCh)
-	go serveGRPC(grpcServer, cfg.GRPCAddr, logger, errCh)
-	if cfg.OutboxDispatchEnabled {
-		publisher, err := eventlog.NewOutboxPublisher(
-			cfg.OutboxPublisherKind,
-			cfg.OutboxAllowLossyPublisher,
-			cfg.OutboxEventLogSource,
-			outboxEventLogAppender(eventLogPool),
-			logger,
-			"project-catalog",
-		)
-		if err != nil {
-			return err
-		}
-		dispatcher := outboxlib.NewDispatcher(
-			outboxlib.NewStoreAdapter(components.OutboxStore, outboxEvent),
-			publisher,
-			cfg.OutboxDispatcherConfig(),
-			logger,
-			"project-catalog",
-		)
-		go func() {
-			logger.Info("project-catalog outbox dispatcher starting")
-			if err := dispatcher.Run(ctx); err != nil {
-				errCh <- err
-			}
-		}()
+	go serviceprocess.StartHTTPServer(httpServer, "project-catalog", logger, errCh)
+	go serviceprocess.StartGRPCServer(grpcServer, "project-catalog", cfg.GRPCAddr, logger, errCh)
+	err = serviceprocess.StartOutboxDispatcher(
+		ctx,
+		"project-catalog",
+		projectRepository,
+		outboxEvent,
+		serviceprocess.OutboxRuntimeConfig{
+			DispatchEnabled:     cfg.OutboxDispatchEnabled,
+			PublisherKind:       cfg.OutboxPublisherKind,
+			AllowLossyPublisher: cfg.OutboxAllowLossyPublisher,
+			EventLogSource:      cfg.OutboxEventLogSource,
+			Dispatcher:          cfg.OutboxDispatcherConfig(),
+		},
+		serviceprocess.EventLogAppender(eventLogPool),
+		logger,
+		errCh,
+	)
+	if err != nil {
+		return err
 	}
 
 	select {
 	case <-ctx.Done():
-		return shutdownServers(ctx, httpServer, grpcServer)
+		return serviceprocess.ShutdownHTTPAndGRPC(ctx, httpServer, grpcServer, 10*time.Second)
 	case err := <-errCh:
 		grpcServer.Stop()
 		_ = httpServer.Close()
@@ -126,55 +110,8 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	}
 }
 
-func serveHTTP(server *http.Server, addr string, logger *slog.Logger, errCh chan<- error) {
-	logger.Info("project-catalog http server starting", "addr", addr)
-	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		errCh <- err
-	}
-}
-
-func serveGRPC(server *grpcruntime.Server, addr string, logger *slog.Logger, errCh chan<- error) {
-	listener, err := net.Listen("tcp", addr)
-	if err != nil {
-		errCh <- err
-		return
-	}
-	logger.Info("project-catalog grpc server starting", "addr", addr)
-	if err := server.Serve(listener); err != nil {
-		errCh <- err
-	}
-}
-
-func shutdownServers(ctx context.Context, httpServer *http.Server, grpcServer *grpcruntime.Server) error {
-	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-	defer cancel()
-	grpcServer.GracefulStop()
-	return httpServer.Shutdown(shutdownCtx)
-}
-
 type processComponents struct {
-	DBPool         *pgxpool.Pool
-	EventLogDBPool *pgxpool.Pool
 	ProjectService *projectservice.Service
-	OutboxStore    serviceOutboxStore
-}
-
-func openOutboxEventLogPool(ctx context.Context, cfg Config) (*pgxpool.Pool, error) {
-	if !cfg.needsEventLogDatabase() {
-		return nil, nil
-	}
-	pool, err := postgreslib.OpenPool(ctx, cfg.EventLogDatabasePoolSettings())
-	if err != nil {
-		return nil, fmt.Errorf("open platform event log database pool: %w", err)
-	}
-	return pool, nil
-}
-
-func outboxEventLogAppender(pool *pgxpool.Pool) eventlog.Appender {
-	if pool == nil {
-		return nil
-	}
-	return eventlog.NewStore(pool)
 }
 
 func newAuthorizer(cfg Config) (projectservice.Authorizer, *grpcruntime.ClientConn, error) {
@@ -198,32 +135,14 @@ func newAuthorizer(cfg Config) (projectservice.Authorizer, *grpcruntime.ClientCo
 	return authorizer, conn, nil
 }
 
-func healthMux(components processComponents) *http.ServeMux {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/health/livez", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-	mux.HandleFunc("/health/readyz", func(w http.ResponseWriter, r *http.Request) {
-		if components.ProjectService == nil || components.DBPool == nil {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			return
-		}
-		readyCtx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-		defer cancel()
-		if err := components.DBPool.Ping(readyCtx); err != nil {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			return
-		}
-		if components.EventLogDBPool != nil {
-			if err := components.EventLogDBPool.Ping(readyCtx); err != nil {
-				w.WriteHeader(http.StatusServiceUnavailable)
-				return
-			}
-		}
-		w.WriteHeader(http.StatusNoContent)
-	})
-	mux.Handle("/metrics", promhttp.Handler())
-	return mux
+func readinessChecks(projectService *projectservice.Service, projectDB serviceprocess.PingStore, eventLogDB serviceprocess.PingStore) []serviceprocess.ReadinessCheck {
+	return serviceprocess.ServiceDatabaseReadinessChecks(
+		"project service",
+		projectService != nil,
+		"project database",
+		projectDB,
+		eventLogDB,
+	)
 }
 
 type systemClock struct{}

@@ -34,6 +34,7 @@ func EventLogAppender(pool *pgxpool.Pool) eventlog.Appender {
 
 // OutboxRuntimeConfig contains process-level outbox publisher settings.
 type OutboxRuntimeConfig struct {
+	DispatchEnabled     bool
 	PublisherKind       string
 	AllowLossyPublisher bool
 	EventLogSource      string
@@ -51,6 +52,9 @@ func StartOutboxDispatcher[E any](
 	logger *slog.Logger,
 	errCh chan<- error,
 ) error {
+	if !cfg.DispatchEnabled {
+		return nil
+	}
 	publisher, err := eventlog.NewOutboxPublisher(
 		cfg.PublisherKind,
 		cfg.AllowLossyPublisher,

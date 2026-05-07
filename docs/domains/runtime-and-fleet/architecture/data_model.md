@@ -65,8 +65,8 @@ approvals:
 | `lease_until` | timestamptz | yes | indexed | Истечение аренды. |
 | `last_error_code` | text | no | default '' | Классификация последней ошибки. |
 | `last_error_message` | text | no | default '' | Короткое сообщение без секрета. |
-| `created_at` | timestamptz | no | indexed | Внутреннее persistence-поле; в текущий read contract не входит. |
-| `updated_at` | timestamptz | no | indexed | Внутреннее persistence-поле; в текущий read contract не входит. |
+| `created_at` | timestamptz | no | indexed | Создание; возвращается в read contract. |
+| `updated_at` | timestamptz | no | indexed | Последнее изменение; возвращается в read contract. |
 | `version` | bigint | no | monotonic | Оптимистичная конкуренция. |
 
 ### `WorkspaceMaterialization`
@@ -91,7 +91,7 @@ approvals:
 | `finished_at` | timestamptz | yes |  | Завершение. |
 | `last_error_code` | text | no | default '' | Классификация ошибки. |
 | `last_error_message` | text | no | default '' | Короткое сообщение без секрета. |
-| `created_at` | timestamptz | no | indexed | Создание. |
+| `created_at` | timestamptz | no | indexed | Внутреннее persistence-поле; в текущий read contract не входит. |
 | `updated_at` | timestamptz | no | indexed | Внутреннее persistence-поле; в текущий read contract не входит. |
 | `version` | bigint | no | monotonic | Версия попытки. |
 
@@ -128,7 +128,7 @@ approvals:
 | `fleet_scope_id` | UUID | yes | indexed | Внешний fleet scope. |
 | `cluster_id` | UUID | yes | indexed | Внешний cluster ref. |
 | `requested_by` | UUID | yes | indexed | Actor, если применимо. |
-| `created_at` | timestamptz | no | indexed | Создание. |
+| `created_at` | timestamptz | no | indexed | Создание; возвращается в read contract. |
 | `started_at` | timestamptz | yes |  | Начало исполнения. |
 | `finished_at` | timestamptz | yes |  | Завершение. |
 | `next_action` | text | no | default '' | Что ожидается дальше. |
@@ -136,7 +136,7 @@ approvals:
 | `last_error_message` | text | no | default '' | Короткая ошибка без секрета. |
 | `short_log_tail` | text | no | default '' | Ограниченный хвост лога. |
 | `full_log_ref` | text | no | default '' | Ссылка на полный лог в Kubernetes или внешнем логировании. |
-| `updated_at` | timestamptz | no | indexed | Последнее изменение. |
+| `updated_at` | timestamptz | no | indexed | Внутреннее persistence-поле; в текущий read contract не входит. |
 | `version` | bigint | no | monotonic | Оптимистичная конкуренция. |
 
 ### `RuntimeManagerCommandResult`
@@ -200,7 +200,7 @@ approvals:
 | `external_ref` | text | no | indexed | URI/ref первоисточника. |
 | `digest` | text | no | default '' | Digest, если известен. |
 | `metadata_json` | jsonb | no | default {} | Ограниченная диагностика без секретов. |
-| `created_at` | timestamptz | no | indexed | Создание. |
+| `created_at` | timestamptz | no | indexed | Создание; возвращается в read contract. |
 
 ### `CleanupPolicy`
 
@@ -215,8 +215,8 @@ approvals:
 | `failed_ttl_seconds` | bigint | no |  | Срок хранения failed объектов. |
 | `keep_short_log_tail` | boolean | no | default true | Оставлять короткий хвост. |
 | `status` | text | no | indexed | `active`, `disabled`, `superseded`. |
-| `created_at` | timestamptz | no |  | Создание. |
-| `updated_at` | timestamptz | no |  | Обновление. |
+| `created_at` | timestamptz | no |  | Создание; возвращается в read contract. |
+| `updated_at` | timestamptz | no |  | Обновление; возвращается в read contract. |
 | `version` | bigint | no | monotonic | Версия policy. |
 
 ### `PrewarmPool`
@@ -233,8 +233,8 @@ approvals:
 | `target_size` | bigint | no |  | Желаемое число прогретых слотов. |
 | `status` | text | no | indexed | `active`, `paused`, `disabled`. |
 | `last_capacity_status` | text | no | default '' | `ok`, `degraded`, `insufficient`. |
-| `created_at` | timestamptz | no |  | Создание. |
-| `updated_at` | timestamptz | no |  | Обновление. |
+| `created_at` | timestamptz | no |  | Создание; возвращается в read contract. |
+| `updated_at` | timestamptz | no |  | Обновление; возвращается в read contract. |
 | `version` | bigint | no | monotonic | Версия пула. |
 
 ### `RuntimeManagerOutboxEvent`

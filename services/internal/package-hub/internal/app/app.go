@@ -3,16 +3,12 @@ package app
 
 import (
 	"context"
-	"errors"
 	"log/slog"
-	"net"
 	"net/http"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	grpcruntime "google.golang.org/grpc"
-
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
+	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
 	packageservice "github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/service"
 	packagegrpc "github.com/codex-k8s/kodex/services/internal/package-hub/internal/transport/grpc"
 )
@@ -30,7 +26,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	}
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           healthMux(components),
+		Handler:           serviceprocess.NewHealthMux(readinessChecks(components.PackageService), 2*time.Second),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	grpcMetrics, err := grpcserver.NewMetrics(nil, grpcserver.MetricsConfig{
@@ -50,19 +46,13 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	}
 	packagegrpc.RegisterPackageHubService(grpcServer, components.PackageService)
 
-	servers := processServers{
-		httpServer: httpServer,
-		grpcServer: grpcServer,
-		grpcAddr:   cfg.GRPCAddr,
-		logger:     logger,
-	}
 	errCh := make(chan error, 2)
-	go servers.runHTTP(errCh)
-	go servers.runGRPC(errCh)
+	go serviceprocess.StartHTTPServer(httpServer, serviceName, logger, errCh)
+	go serviceprocess.StartGRPCServer(grpcServer, serviceName, cfg.GRPCAddr, logger, errCh)
 
 	select {
 	case <-ctx.Done():
-		return servers.shutdown(ctx)
+		return serviceprocess.ShutdownHTTPAndGRPC(ctx, httpServer, grpcServer, 10*time.Second)
 	case err := <-errCh:
 		grpcServer.Stop()
 		_ = httpServer.Close()
@@ -70,56 +60,12 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	}
 }
 
-type processServers struct {
-	httpServer *http.Server
-	grpcServer *grpcruntime.Server
-	grpcAddr   string
-	logger     *slog.Logger
-}
-
-func (servers processServers) runHTTP(errCh chan<- error) {
-	servers.logger.Info(serviceName+" http server starting", "addr", servers.httpServer.Addr)
-	err := servers.httpServer.ListenAndServe()
-	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		errCh <- err
-	}
-}
-
-func (servers processServers) runGRPC(errCh chan<- error) {
-	listener, err := net.Listen("tcp", servers.grpcAddr)
-	if err != nil {
-		errCh <- err
-		return
-	}
-	servers.logger.Info(serviceName+" grpc server starting", "addr", servers.grpcAddr)
-	if err := servers.grpcServer.Serve(listener); err != nil {
-		errCh <- err
-	}
-}
-
-func (servers processServers) shutdown(ctx context.Context) error {
-	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-	defer cancel()
-	servers.grpcServer.GracefulStop()
-	return servers.httpServer.Shutdown(shutdownCtx)
-}
-
 type processComponents struct {
 	PackageService *packageservice.Service
 }
 
-func healthMux(components processComponents) *http.ServeMux {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/health/livez", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-	mux.HandleFunc("/health/readyz", func(w http.ResponseWriter, _ *http.Request) {
-		if components.PackageService == nil {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	})
-	mux.Handle("/metrics", promhttp.Handler())
-	return mux
+func readinessChecks(packageService *packageservice.Service) []serviceprocess.ReadinessCheck {
+	return []serviceprocess.ReadinessCheck{
+		serviceprocess.StaticReadinessCheck("package service", packageService != nil),
+	}
 }
