@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-06
 updated_at: 2026-05-07
-related_issues: [642, 673]
+related_issues: [642, 673, 680]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -105,6 +105,8 @@ approvals:
 ### PackageManifestSnapshot
 
 `PackageManifestSnapshot` хранит нормализованный снимок manifest для аудита и повторной проверки. Это не замена исходному файлу в репозитории.
+
+При синхронизации доступного каталога новый снимок создаётся для новой версии пакета или при изменении source/manifest данных существующей версии. Повторная синхронизация без изменений не создаёт дубль снимка manifest.
 
 | Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|

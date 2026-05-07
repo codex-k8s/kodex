@@ -1,6 +1,8 @@
 package service
 
 import (
+	"bytes"
+	"encoding/json"
 	"strings"
 
 	"github.com/google/uuid"
@@ -62,6 +64,68 @@ func requireVerificationStatus(status enum.PackageVerificationStatus) error {
 	default:
 		return errs.ErrInvalidArgument
 	}
+}
+
+func requirePackageKind(kind enum.PackageKind) error {
+	switch kind {
+	case enum.PackageKindPlugin, enum.PackageKindGuidance, enum.PackageKindStore, enum.PackageKindPlatformContent:
+		return nil
+	default:
+		return errs.ErrInvalidArgument
+	}
+}
+
+func requirePackageStatus(status enum.PackageStatus) error {
+	switch status {
+	case enum.PackageStatusAvailable, enum.PackageStatusHidden, enum.PackageStatusRevoked, enum.PackageStatusBlocked:
+		return nil
+	default:
+		return errs.ErrInvalidArgument
+	}
+}
+
+func requireCommercialStatus(status enum.PackageCommercialStatus) error {
+	switch status {
+	case enum.PackageCommercialStatusFree, enum.PackageCommercialStatusPaid, enum.PackageCommercialStatusRestricted, enum.PackageCommercialStatusUnknown:
+		return nil
+	default:
+		return errs.ErrInvalidArgument
+	}
+}
+
+func requireTrustStatus(status enum.PackageTrustStatus) error {
+	switch status {
+	case enum.PackageTrustStatusBuiltIn, enum.PackageTrustStatusVerified, enum.PackageTrustStatusUnverified, enum.PackageTrustStatusBlocked:
+		return nil
+	default:
+		return errs.ErrInvalidArgument
+	}
+}
+
+func requireSourceRefKind(kind enum.PackageVersionSourceRefKind) error {
+	switch kind {
+	case enum.PackageVersionSourceRefKindGitTag, enum.PackageVersionSourceRefKindGitCommit, enum.PackageVersionSourceRefKindGitlink, enum.PackageVersionSourceRefKindProxyRef:
+		return nil
+	default:
+		return errs.ErrInvalidArgument
+	}
+}
+
+func requireReleaseStatus(status enum.PackageReleaseStatus) error {
+	switch status {
+	case enum.PackageReleaseStatusActive, enum.PackageReleaseStatusDeprecated, enum.PackageReleaseStatusRevoked, enum.PackageReleaseStatusBlocked:
+		return nil
+	default:
+		return errs.ErrInvalidArgument
+	}
+}
+
+func requireManifestPayload(payload []byte) error {
+	trimmed := bytes.TrimSpace(payload)
+	if len(trimmed) == 0 || trimmed[0] != '{' || !json.Valid(trimmed) {
+		return errs.ErrInvalidArgument
+	}
+	return nil
 }
 
 func defaultActorRef(actorType string, actorID string) string {

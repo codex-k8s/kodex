@@ -2096,6 +2096,297 @@ func (x *PackageManifestSnapshot) GetCreatedAt() string {
 	return ""
 }
 
+// CatalogSnapshot is a normalized source catalog state prepared by a source adapter.
+type CatalogSnapshot struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// packages contains packages observed in one source snapshot.
+	Packages []*CatalogPackageSnapshot `protobuf:"bytes,1,rep,name=packages,proto3" json:"packages,omitempty"`
+	// observed_at is RFC3339 time reported by the source adapter when known.
+	ObservedAt    *string `protobuf:"bytes,2,opt,name=observed_at,json=observedAt,proto3,oneof" json:"observed_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CatalogSnapshot) Reset() {
+	*x = CatalogSnapshot{}
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CatalogSnapshot) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CatalogSnapshot) ProtoMessage() {}
+
+func (x *CatalogSnapshot) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CatalogSnapshot.ProtoReflect.Descriptor instead.
+func (*CatalogSnapshot) Descriptor() ([]byte, []int) {
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *CatalogSnapshot) GetPackages() []*CatalogPackageSnapshot {
+	if x != nil {
+		return x.Packages
+	}
+	return nil
+}
+
+func (x *CatalogSnapshot) GetObservedAt() string {
+	if x != nil && x.ObservedAt != nil {
+		return *x.ObservedAt
+	}
+	return ""
+}
+
+// CatalogPackageSnapshot describes one package observed in a source snapshot.
+type CatalogPackageSnapshot struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// slug is the stable package slug inside the source.
+	Slug string `protobuf:"bytes,1,opt,name=slug,proto3" json:"slug,omitempty"`
+	// package_kind classifies package behavior.
+	PackageKind PackageKind `protobuf:"varint,2,opt,name=package_kind,json=packageKind,proto3,enum=kodex.packages.v1.PackageKind" json:"package_kind,omitempty"`
+	// publisher_ref is an external publisher reference.
+	PublisherRef *string `protobuf:"bytes,3,opt,name=publisher_ref,json=publisherRef,proto3,oneof" json:"publisher_ref,omitempty"`
+	// display_name contains localized package names.
+	DisplayName []*LocalizedText `protobuf:"bytes,4,rep,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	// description contains localized package descriptions.
+	Description []*LocalizedText `protobuf:"bytes,5,rep,name=description,proto3" json:"description,omitempty"`
+	// icon_object_uri points to object storage or external icon URL.
+	IconObjectUri *string `protobuf:"bytes,6,opt,name=icon_object_uri,json=iconObjectUri,proto3,oneof" json:"icon_object_uri,omitempty"`
+	// commercial_status describes commercial availability.
+	CommercialStatus PackageCommercialStatus `protobuf:"varint,7,opt,name=commercial_status,json=commercialStatus,proto3,enum=kodex.packages.v1.PackageCommercialStatus" json:"commercial_status,omitempty"`
+	// trust_status describes local trust level.
+	TrustStatus PackageTrustStatus `protobuf:"varint,8,opt,name=trust_status,json=trustStatus,proto3,enum=kodex.packages.v1.PackageTrustStatus" json:"trust_status,omitempty"`
+	// status is local package lifecycle status.
+	Status PackageStatus `protobuf:"varint,9,opt,name=status,proto3,enum=kodex.packages.v1.PackageStatus" json:"status,omitempty"`
+	// versions contains immutable package versions observed for this package.
+	Versions      []*CatalogVersionSnapshot `protobuf:"bytes,10,rep,name=versions,proto3" json:"versions,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CatalogPackageSnapshot) Reset() {
+	*x = CatalogPackageSnapshot{}
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CatalogPackageSnapshot) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CatalogPackageSnapshot) ProtoMessage() {}
+
+func (x *CatalogPackageSnapshot) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CatalogPackageSnapshot.ProtoReflect.Descriptor instead.
+func (*CatalogPackageSnapshot) Descriptor() ([]byte, []int) {
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *CatalogPackageSnapshot) GetSlug() string {
+	if x != nil {
+		return x.Slug
+	}
+	return ""
+}
+
+func (x *CatalogPackageSnapshot) GetPackageKind() PackageKind {
+	if x != nil {
+		return x.PackageKind
+	}
+	return PackageKind_PACKAGE_KIND_UNSPECIFIED
+}
+
+func (x *CatalogPackageSnapshot) GetPublisherRef() string {
+	if x != nil && x.PublisherRef != nil {
+		return *x.PublisherRef
+	}
+	return ""
+}
+
+func (x *CatalogPackageSnapshot) GetDisplayName() []*LocalizedText {
+	if x != nil {
+		return x.DisplayName
+	}
+	return nil
+}
+
+func (x *CatalogPackageSnapshot) GetDescription() []*LocalizedText {
+	if x != nil {
+		return x.Description
+	}
+	return nil
+}
+
+func (x *CatalogPackageSnapshot) GetIconObjectUri() string {
+	if x != nil && x.IconObjectUri != nil {
+		return *x.IconObjectUri
+	}
+	return ""
+}
+
+func (x *CatalogPackageSnapshot) GetCommercialStatus() PackageCommercialStatus {
+	if x != nil {
+		return x.CommercialStatus
+	}
+	return PackageCommercialStatus_PACKAGE_COMMERCIAL_STATUS_UNSPECIFIED
+}
+
+func (x *CatalogPackageSnapshot) GetTrustStatus() PackageTrustStatus {
+	if x != nil {
+		return x.TrustStatus
+	}
+	return PackageTrustStatus_PACKAGE_TRUST_STATUS_UNSPECIFIED
+}
+
+func (x *CatalogPackageSnapshot) GetStatus() PackageStatus {
+	if x != nil {
+		return x.Status
+	}
+	return PackageStatus_PACKAGE_STATUS_UNSPECIFIED
+}
+
+func (x *CatalogPackageSnapshot) GetVersions() []*CatalogVersionSnapshot {
+	if x != nil {
+		return x.Versions
+	}
+	return nil
+}
+
+// CatalogVersionSnapshot describes one package version observed in a source snapshot.
+type CatalogVersionSnapshot struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// version_label is the source version label.
+	VersionLabel string `protobuf:"bytes,1,opt,name=version_label,json=versionLabel,proto3" json:"version_label,omitempty"`
+	// source_ref identifies where this package version comes from.
+	SourceRef *SourceRef `protobuf:"bytes,2,opt,name=source_ref,json=sourceRef,proto3" json:"source_ref,omitempty"`
+	// manifest_digest is the digest of the normalized manifest.
+	ManifestDigest string `protobuf:"bytes,3,opt,name=manifest_digest,json=manifestDigest,proto3" json:"manifest_digest,omitempty"`
+	// manifest_schema_version is the package manifest schema version; server defaults to 1.
+	ManifestSchemaVersion *int32 `protobuf:"varint,4,opt,name=manifest_schema_version,json=manifestSchemaVersion,proto3,oneof" json:"manifest_schema_version,omitempty"`
+	// manifest_payload_json is normalized manifest JSON object.
+	ManifestPayloadJson string `protobuf:"bytes,5,opt,name=manifest_payload_json,json=manifestPayloadJson,proto3" json:"manifest_payload_json,omitempty"`
+	// verification_status overrides default unverified state when the source is trusted.
+	VerificationStatus *PackageVerificationStatus `protobuf:"varint,6,opt,name=verification_status,json=verificationStatus,proto3,enum=kodex.packages.v1.PackageVerificationStatus,oneof" json:"verification_status,omitempty"`
+	// release_status overrides default active lifecycle state when the source marks it differently.
+	ReleaseStatus *PackageReleaseStatus `protobuf:"varint,7,opt,name=release_status,json=releaseStatus,proto3,enum=kodex.packages.v1.PackageReleaseStatus,oneof" json:"release_status,omitempty"`
+	// published_at is RFC3339 publish timestamp when known.
+	PublishedAt   *string `protobuf:"bytes,8,opt,name=published_at,json=publishedAt,proto3,oneof" json:"published_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CatalogVersionSnapshot) Reset() {
+	*x = CatalogVersionSnapshot{}
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CatalogVersionSnapshot) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CatalogVersionSnapshot) ProtoMessage() {}
+
+func (x *CatalogVersionSnapshot) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CatalogVersionSnapshot.ProtoReflect.Descriptor instead.
+func (*CatalogVersionSnapshot) Descriptor() ([]byte, []int) {
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *CatalogVersionSnapshot) GetVersionLabel() string {
+	if x != nil {
+		return x.VersionLabel
+	}
+	return ""
+}
+
+func (x *CatalogVersionSnapshot) GetSourceRef() *SourceRef {
+	if x != nil {
+		return x.SourceRef
+	}
+	return nil
+}
+
+func (x *CatalogVersionSnapshot) GetManifestDigest() string {
+	if x != nil {
+		return x.ManifestDigest
+	}
+	return ""
+}
+
+func (x *CatalogVersionSnapshot) GetManifestSchemaVersion() int32 {
+	if x != nil && x.ManifestSchemaVersion != nil {
+		return *x.ManifestSchemaVersion
+	}
+	return 0
+}
+
+func (x *CatalogVersionSnapshot) GetManifestPayloadJson() string {
+	if x != nil {
+		return x.ManifestPayloadJson
+	}
+	return ""
+}
+
+func (x *CatalogVersionSnapshot) GetVerificationStatus() PackageVerificationStatus {
+	if x != nil && x.VerificationStatus != nil {
+		return *x.VerificationStatus
+	}
+	return PackageVerificationStatus_PACKAGE_VERIFICATION_STATUS_UNSPECIFIED
+}
+
+func (x *CatalogVersionSnapshot) GetReleaseStatus() PackageReleaseStatus {
+	if x != nil && x.ReleaseStatus != nil {
+		return *x.ReleaseStatus
+	}
+	return PackageReleaseStatus_PACKAGE_RELEASE_STATUS_UNSPECIFIED
+}
+
+func (x *CatalogVersionSnapshot) GetPublishedAt() string {
+	if x != nil && x.PublishedAt != nil {
+		return *x.PublishedAt
+	}
+	return ""
+}
+
 // PackageSecretField describes one secret field required or suggested by a package version.
 type PackageSecretField struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -2115,7 +2406,7 @@ type PackageSecretField struct {
 
 func (x *PackageSecretField) Reset() {
 	*x = PackageSecretField{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[13]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2127,7 +2418,7 @@ func (x *PackageSecretField) String() string {
 func (*PackageSecretField) ProtoMessage() {}
 
 func (x *PackageSecretField) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[13]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2140,7 +2431,7 @@ func (x *PackageSecretField) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PackageSecretField.ProtoReflect.Descriptor instead.
 func (*PackageSecretField) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{13}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *PackageSecretField) GetKey() string {
@@ -2197,7 +2488,7 @@ type PackageSecretSchema struct {
 
 func (x *PackageSecretSchema) Reset() {
 	*x = PackageSecretSchema{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[14]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2209,7 +2500,7 @@ func (x *PackageSecretSchema) String() string {
 func (*PackageSecretSchema) ProtoMessage() {}
 
 func (x *PackageSecretSchema) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[14]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2222,7 +2513,7 @@ func (x *PackageSecretSchema) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PackageSecretSchema.ProtoReflect.Descriptor instead.
 func (*PackageSecretSchema) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{14}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *PackageSecretSchema) GetId() string {
@@ -2293,7 +2584,7 @@ type PackageInstallation struct {
 
 func (x *PackageInstallation) Reset() {
 	*x = PackageInstallation{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[15]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2305,7 +2596,7 @@ func (x *PackageInstallation) String() string {
 func (*PackageInstallation) ProtoMessage() {}
 
 func (x *PackageInstallation) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[15]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2318,7 +2609,7 @@ func (x *PackageInstallation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PackageInstallation.ProtoReflect.Descriptor instead.
 func (*PackageInstallation) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{15}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *PackageInstallation) GetId() string {
@@ -2426,7 +2717,7 @@ type PackageVerification struct {
 
 func (x *PackageVerification) Reset() {
 	*x = PackageVerification{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[16]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2438,7 +2729,7 @@ func (x *PackageVerification) String() string {
 func (*PackageVerification) ProtoMessage() {}
 
 func (x *PackageVerification) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[16]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2451,7 +2742,7 @@ func (x *PackageVerification) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PackageVerification.ProtoReflect.Descriptor instead.
 func (*PackageVerification) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{16}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *PackageVerification) GetId() string {
@@ -2519,7 +2810,7 @@ type PackagePricingMetadata struct {
 
 func (x *PackagePricingMetadata) Reset() {
 	*x = PackagePricingMetadata{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[17]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2531,7 +2822,7 @@ func (x *PackagePricingMetadata) String() string {
 func (*PackagePricingMetadata) ProtoMessage() {}
 
 func (x *PackagePricingMetadata) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[17]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2544,7 +2835,7 @@ func (x *PackagePricingMetadata) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PackagePricingMetadata.ProtoReflect.Descriptor instead.
 func (*PackagePricingMetadata) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{17}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *PackagePricingMetadata) GetId() string {
@@ -2619,7 +2910,7 @@ type ConnectPackageSourceRequest struct {
 
 func (x *ConnectPackageSourceRequest) Reset() {
 	*x = ConnectPackageSourceRequest{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[18]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2631,7 +2922,7 @@ func (x *ConnectPackageSourceRequest) String() string {
 func (*ConnectPackageSourceRequest) ProtoMessage() {}
 
 func (x *ConnectPackageSourceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[18]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2644,7 +2935,7 @@ func (x *ConnectPackageSourceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConnectPackageSourceRequest.ProtoReflect.Descriptor instead.
 func (*ConnectPackageSourceRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{18}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ConnectPackageSourceRequest) GetMeta() *CommandMeta {
@@ -2717,7 +3008,7 @@ type UpdatePackageSourceRequest struct {
 
 func (x *UpdatePackageSourceRequest) Reset() {
 	*x = UpdatePackageSourceRequest{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[19]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2729,7 +3020,7 @@ func (x *UpdatePackageSourceRequest) String() string {
 func (*UpdatePackageSourceRequest) ProtoMessage() {}
 
 func (x *UpdatePackageSourceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[19]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2742,7 +3033,7 @@ func (x *UpdatePackageSourceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdatePackageSourceRequest.ProtoReflect.Descriptor instead.
 func (*UpdatePackageSourceRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{19}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *UpdatePackageSourceRequest) GetMeta() *CommandMeta {
@@ -2800,7 +3091,7 @@ type DisablePackageSourceRequest struct {
 
 func (x *DisablePackageSourceRequest) Reset() {
 	*x = DisablePackageSourceRequest{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[20]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2812,7 +3103,7 @@ func (x *DisablePackageSourceRequest) String() string {
 func (*DisablePackageSourceRequest) ProtoMessage() {}
 
 func (x *DisablePackageSourceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[20]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2825,7 +3116,7 @@ func (x *DisablePackageSourceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DisablePackageSourceRequest.ProtoReflect.Descriptor instead.
 func (*DisablePackageSourceRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{20}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *DisablePackageSourceRequest) GetMeta() *CommandMeta {
@@ -2855,7 +3146,7 @@ type GetPackageSourceRequest struct {
 
 func (x *GetPackageSourceRequest) Reset() {
 	*x = GetPackageSourceRequest{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[21]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2867,7 +3158,7 @@ func (x *GetPackageSourceRequest) String() string {
 func (*GetPackageSourceRequest) ProtoMessage() {}
 
 func (x *GetPackageSourceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[21]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2880,7 +3171,7 @@ func (x *GetPackageSourceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPackageSourceRequest.ProtoReflect.Descriptor instead.
 func (*GetPackageSourceRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{21}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *GetPackageSourceRequest) GetMeta() *QueryMeta {
@@ -2916,7 +3207,7 @@ type ListPackageSourcesRequest struct {
 
 func (x *ListPackageSourcesRequest) Reset() {
 	*x = ListPackageSourcesRequest{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[22]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2928,7 +3219,7 @@ func (x *ListPackageSourcesRequest) String() string {
 func (*ListPackageSourcesRequest) ProtoMessage() {}
 
 func (x *ListPackageSourcesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[22]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2941,7 +3232,7 @@ func (x *ListPackageSourcesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPackageSourcesRequest.ProtoReflect.Descriptor instead.
 func (*ListPackageSourcesRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{22}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *ListPackageSourcesRequest) GetMeta() *QueryMeta {
@@ -2985,14 +3276,16 @@ type SyncAvailablePackagesRequest struct {
 	// meta carries idempotency, actor and audit data.
 	Meta *CommandMeta `protobuf:"bytes,1,opt,name=meta,proto3" json:"meta,omitempty"`
 	// source_id is the source identifier.
-	SourceId      string `protobuf:"bytes,2,opt,name=source_id,json=sourceId,proto3" json:"source_id,omitempty"`
+	SourceId string `protobuf:"bytes,2,opt,name=source_id,json=sourceId,proto3" json:"source_id,omitempty"`
+	// snapshot contains normalized source catalog entries prepared outside package-hub.
+	Snapshot      *CatalogSnapshot `protobuf:"bytes,3,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SyncAvailablePackagesRequest) Reset() {
 	*x = SyncAvailablePackagesRequest{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[23]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3004,7 +3297,7 @@ func (x *SyncAvailablePackagesRequest) String() string {
 func (*SyncAvailablePackagesRequest) ProtoMessage() {}
 
 func (x *SyncAvailablePackagesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[23]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3017,7 +3310,7 @@ func (x *SyncAvailablePackagesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncAvailablePackagesRequest.ProtoReflect.Descriptor instead.
 func (*SyncAvailablePackagesRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{23}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *SyncAvailablePackagesRequest) GetMeta() *CommandMeta {
@@ -3034,6 +3327,13 @@ func (x *SyncAvailablePackagesRequest) GetSourceId() string {
 	return ""
 }
 
+func (x *SyncAvailablePackagesRequest) GetSnapshot() *CatalogSnapshot {
+	if x != nil {
+		return x.Snapshot
+	}
+	return nil
+}
+
 // GetPackageRequest returns one package.
 type GetPackageRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -3047,7 +3347,7 @@ type GetPackageRequest struct {
 
 func (x *GetPackageRequest) Reset() {
 	*x = GetPackageRequest{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[24]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3059,7 +3359,7 @@ func (x *GetPackageRequest) String() string {
 func (*GetPackageRequest) ProtoMessage() {}
 
 func (x *GetPackageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[24]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3072,7 +3372,7 @@ func (x *GetPackageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPackageRequest.ProtoReflect.Descriptor instead.
 func (*GetPackageRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{24}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *GetPackageRequest) GetMeta() *QueryMeta {
@@ -3114,7 +3414,7 @@ type ListPackagesRequest struct {
 
 func (x *ListPackagesRequest) Reset() {
 	*x = ListPackagesRequest{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[25]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3126,7 +3426,7 @@ func (x *ListPackagesRequest) String() string {
 func (*ListPackagesRequest) ProtoMessage() {}
 
 func (x *ListPackagesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[25]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3139,7 +3439,7 @@ func (x *ListPackagesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPackagesRequest.ProtoReflect.Descriptor instead.
 func (*ListPackagesRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{25}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *ListPackagesRequest) GetMeta() *QueryMeta {
@@ -3211,7 +3511,7 @@ type GetPackageVersionRequest struct {
 
 func (x *GetPackageVersionRequest) Reset() {
 	*x = GetPackageVersionRequest{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[26]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3223,7 +3523,7 @@ func (x *GetPackageVersionRequest) String() string {
 func (*GetPackageVersionRequest) ProtoMessage() {}
 
 func (x *GetPackageVersionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[26]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3236,7 +3536,7 @@ func (x *GetPackageVersionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPackageVersionRequest.ProtoReflect.Descriptor instead.
 func (*GetPackageVersionRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{26}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *GetPackageVersionRequest) GetMeta() *QueryMeta {
@@ -3272,7 +3572,7 @@ type ListPackageVersionsRequest struct {
 
 func (x *ListPackageVersionsRequest) Reset() {
 	*x = ListPackageVersionsRequest{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[27]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3284,7 +3584,7 @@ func (x *ListPackageVersionsRequest) String() string {
 func (*ListPackageVersionsRequest) ProtoMessage() {}
 
 func (x *ListPackageVersionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[27]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3297,7 +3597,7 @@ func (x *ListPackageVersionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPackageVersionsRequest.ProtoReflect.Descriptor instead.
 func (*ListPackageVersionsRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{27}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *ListPackageVersionsRequest) GetMeta() *QueryMeta {
@@ -3348,7 +3648,7 @@ type GetPackageManifestRequest struct {
 
 func (x *GetPackageManifestRequest) Reset() {
 	*x = GetPackageManifestRequest{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[28]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3360,7 +3660,7 @@ func (x *GetPackageManifestRequest) String() string {
 func (*GetPackageManifestRequest) ProtoMessage() {}
 
 func (x *GetPackageManifestRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[28]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3373,7 +3673,7 @@ func (x *GetPackageManifestRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPackageManifestRequest.ProtoReflect.Descriptor instead.
 func (*GetPackageManifestRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{28}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *GetPackageManifestRequest) GetMeta() *QueryMeta {
@@ -3409,7 +3709,7 @@ type RequestPackageInstallationRequest struct {
 
 func (x *RequestPackageInstallationRequest) Reset() {
 	*x = RequestPackageInstallationRequest{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[29]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3421,7 +3721,7 @@ func (x *RequestPackageInstallationRequest) String() string {
 func (*RequestPackageInstallationRequest) ProtoMessage() {}
 
 func (x *RequestPackageInstallationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[29]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3434,7 +3734,7 @@ func (x *RequestPackageInstallationRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use RequestPackageInstallationRequest.ProtoReflect.Descriptor instead.
 func (*RequestPackageInstallationRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{29}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *RequestPackageInstallationRequest) GetMeta() *CommandMeta {
@@ -3491,7 +3791,7 @@ type UpdatePackageInstallationRequest struct {
 
 func (x *UpdatePackageInstallationRequest) Reset() {
 	*x = UpdatePackageInstallationRequest{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[30]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3503,7 +3803,7 @@ func (x *UpdatePackageInstallationRequest) String() string {
 func (*UpdatePackageInstallationRequest) ProtoMessage() {}
 
 func (x *UpdatePackageInstallationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[30]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3516,7 +3816,7 @@ func (x *UpdatePackageInstallationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdatePackageInstallationRequest.ProtoReflect.Descriptor instead.
 func (*UpdatePackageInstallationRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{30}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *UpdatePackageInstallationRequest) GetMeta() *CommandMeta {
@@ -3567,7 +3867,7 @@ type DisablePackageInstallationRequest struct {
 
 func (x *DisablePackageInstallationRequest) Reset() {
 	*x = DisablePackageInstallationRequest{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[31]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3579,7 +3879,7 @@ func (x *DisablePackageInstallationRequest) String() string {
 func (*DisablePackageInstallationRequest) ProtoMessage() {}
 
 func (x *DisablePackageInstallationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[31]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3592,7 +3892,7 @@ func (x *DisablePackageInstallationRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use DisablePackageInstallationRequest.ProtoReflect.Descriptor instead.
 func (*DisablePackageInstallationRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{31}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *DisablePackageInstallationRequest) GetMeta() *CommandMeta {
@@ -3622,7 +3922,7 @@ type UninstallPackageRequest struct {
 
 func (x *UninstallPackageRequest) Reset() {
 	*x = UninstallPackageRequest{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[32]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3634,7 +3934,7 @@ func (x *UninstallPackageRequest) String() string {
 func (*UninstallPackageRequest) ProtoMessage() {}
 
 func (x *UninstallPackageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[32]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3647,7 +3947,7 @@ func (x *UninstallPackageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UninstallPackageRequest.ProtoReflect.Descriptor instead.
 func (*UninstallPackageRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{32}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *UninstallPackageRequest) GetMeta() *CommandMeta {
@@ -3677,7 +3977,7 @@ type GetPackageInstallationRequest struct {
 
 func (x *GetPackageInstallationRequest) Reset() {
 	*x = GetPackageInstallationRequest{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[33]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3689,7 +3989,7 @@ func (x *GetPackageInstallationRequest) String() string {
 func (*GetPackageInstallationRequest) ProtoMessage() {}
 
 func (x *GetPackageInstallationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[33]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3702,7 +4002,7 @@ func (x *GetPackageInstallationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPackageInstallationRequest.ProtoReflect.Descriptor instead.
 func (*GetPackageInstallationRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{33}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *GetPackageInstallationRequest) GetMeta() *QueryMeta {
@@ -3742,7 +4042,7 @@ type ListPackageInstallationsRequest struct {
 
 func (x *ListPackageInstallationsRequest) Reset() {
 	*x = ListPackageInstallationsRequest{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[34]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3754,7 +4054,7 @@ func (x *ListPackageInstallationsRequest) String() string {
 func (*ListPackageInstallationsRequest) ProtoMessage() {}
 
 func (x *ListPackageInstallationsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[34]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3767,7 +4067,7 @@ func (x *ListPackageInstallationsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPackageInstallationsRequest.ProtoReflect.Descriptor instead.
 func (*ListPackageInstallationsRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{34}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *ListPackageInstallationsRequest) GetMeta() *QueryMeta {
@@ -3832,7 +4132,7 @@ type GetPackageSecretSchemaRequest struct {
 
 func (x *GetPackageSecretSchemaRequest) Reset() {
 	*x = GetPackageSecretSchemaRequest{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[35]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3844,7 +4144,7 @@ func (x *GetPackageSecretSchemaRequest) String() string {
 func (*GetPackageSecretSchemaRequest) ProtoMessage() {}
 
 func (x *GetPackageSecretSchemaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[35]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3857,7 +4157,7 @@ func (x *GetPackageSecretSchemaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPackageSecretSchemaRequest.ProtoReflect.Descriptor instead.
 func (*GetPackageSecretSchemaRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{35}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *GetPackageSecretSchemaRequest) GetMeta() *QueryMeta {
@@ -3887,7 +4187,7 @@ type RefreshPackageInstallationSecretStatusRequest struct {
 
 func (x *RefreshPackageInstallationSecretStatusRequest) Reset() {
 	*x = RefreshPackageInstallationSecretStatusRequest{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[36]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3899,7 +4199,7 @@ func (x *RefreshPackageInstallationSecretStatusRequest) String() string {
 func (*RefreshPackageInstallationSecretStatusRequest) ProtoMessage() {}
 
 func (x *RefreshPackageInstallationSecretStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[36]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3912,7 +4212,7 @@ func (x *RefreshPackageInstallationSecretStatusRequest) ProtoReflect() protorefl
 
 // Deprecated: Use RefreshPackageInstallationSecretStatusRequest.ProtoReflect.Descriptor instead.
 func (*RefreshPackageInstallationSecretStatusRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{36}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *RefreshPackageInstallationSecretStatusRequest) GetMeta() *CommandMeta {
@@ -3948,7 +4248,7 @@ type SetPackageVerificationRequest struct {
 
 func (x *SetPackageVerificationRequest) Reset() {
 	*x = SetPackageVerificationRequest{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[37]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3960,7 +4260,7 @@ func (x *SetPackageVerificationRequest) String() string {
 func (*SetPackageVerificationRequest) ProtoMessage() {}
 
 func (x *SetPackageVerificationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[37]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3973,7 +4273,7 @@ func (x *SetPackageVerificationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetPackageVerificationRequest.ProtoReflect.Descriptor instead.
 func (*SetPackageVerificationRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{37}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *SetPackageVerificationRequest) GetMeta() *CommandMeta {
@@ -4022,7 +4322,7 @@ type PackageSourceResponse struct {
 
 func (x *PackageSourceResponse) Reset() {
 	*x = PackageSourceResponse{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[38]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4034,7 +4334,7 @@ func (x *PackageSourceResponse) String() string {
 func (*PackageSourceResponse) ProtoMessage() {}
 
 func (x *PackageSourceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[38]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4047,7 +4347,7 @@ func (x *PackageSourceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PackageSourceResponse.ProtoReflect.Descriptor instead.
 func (*PackageSourceResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{38}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *PackageSourceResponse) GetSource() *PackageSource {
@@ -4070,7 +4370,7 @@ type ListPackageSourcesResponse struct {
 
 func (x *ListPackageSourcesResponse) Reset() {
 	*x = ListPackageSourcesResponse{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[39]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4082,7 +4382,7 @@ func (x *ListPackageSourcesResponse) String() string {
 func (*ListPackageSourcesResponse) ProtoMessage() {}
 
 func (x *ListPackageSourcesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[39]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4095,7 +4395,7 @@ func (x *ListPackageSourcesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPackageSourcesResponse.ProtoReflect.Descriptor instead.
 func (*ListPackageSourcesResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{39}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *ListPackageSourcesResponse) GetItems() []*PackageSource {
@@ -4129,7 +4429,7 @@ type SyncAvailablePackagesResponse struct {
 
 func (x *SyncAvailablePackagesResponse) Reset() {
 	*x = SyncAvailablePackagesResponse{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[40]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4141,7 +4441,7 @@ func (x *SyncAvailablePackagesResponse) String() string {
 func (*SyncAvailablePackagesResponse) ProtoMessage() {}
 
 func (x *SyncAvailablePackagesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[40]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4154,7 +4454,7 @@ func (x *SyncAvailablePackagesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncAvailablePackagesResponse.ProtoReflect.Descriptor instead.
 func (*SyncAvailablePackagesResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{40}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *SyncAvailablePackagesResponse) GetSource() *PackageSource {
@@ -4198,7 +4498,7 @@ type PackageResponse struct {
 
 func (x *PackageResponse) Reset() {
 	*x = PackageResponse{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[41]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4210,7 +4510,7 @@ func (x *PackageResponse) String() string {
 func (*PackageResponse) ProtoMessage() {}
 
 func (x *PackageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[41]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4223,7 +4523,7 @@ func (x *PackageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PackageResponse.ProtoReflect.Descriptor instead.
 func (*PackageResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{41}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *PackageResponse) GetPackageEntry() *PackageEntry {
@@ -4253,7 +4553,7 @@ type ListPackagesResponse struct {
 
 func (x *ListPackagesResponse) Reset() {
 	*x = ListPackagesResponse{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[42]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4265,7 +4565,7 @@ func (x *ListPackagesResponse) String() string {
 func (*ListPackagesResponse) ProtoMessage() {}
 
 func (x *ListPackagesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[42]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4278,7 +4578,7 @@ func (x *ListPackagesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPackagesResponse.ProtoReflect.Descriptor instead.
 func (*ListPackagesResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{42}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *ListPackagesResponse) GetItems() []*PackageEntry {
@@ -4306,7 +4606,7 @@ type PackageVersionResponse struct {
 
 func (x *PackageVersionResponse) Reset() {
 	*x = PackageVersionResponse{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[43]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4318,7 +4618,7 @@ func (x *PackageVersionResponse) String() string {
 func (*PackageVersionResponse) ProtoMessage() {}
 
 func (x *PackageVersionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[43]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4331,7 +4631,7 @@ func (x *PackageVersionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PackageVersionResponse.ProtoReflect.Descriptor instead.
 func (*PackageVersionResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{43}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *PackageVersionResponse) GetVersion() *PackageVersion {
@@ -4354,7 +4654,7 @@ type ListPackageVersionsResponse struct {
 
 func (x *ListPackageVersionsResponse) Reset() {
 	*x = ListPackageVersionsResponse{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[44]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4366,7 +4666,7 @@ func (x *ListPackageVersionsResponse) String() string {
 func (*ListPackageVersionsResponse) ProtoMessage() {}
 
 func (x *ListPackageVersionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[44]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4379,7 +4679,7 @@ func (x *ListPackageVersionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPackageVersionsResponse.ProtoReflect.Descriptor instead.
 func (*ListPackageVersionsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{44}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *ListPackageVersionsResponse) GetItems() []*PackageVersion {
@@ -4407,7 +4707,7 @@ type PackageManifestResponse struct {
 
 func (x *PackageManifestResponse) Reset() {
 	*x = PackageManifestResponse{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[45]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4419,7 +4719,7 @@ func (x *PackageManifestResponse) String() string {
 func (*PackageManifestResponse) ProtoMessage() {}
 
 func (x *PackageManifestResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[45]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4432,7 +4732,7 @@ func (x *PackageManifestResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PackageManifestResponse.ProtoReflect.Descriptor instead.
 func (*PackageManifestResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{45}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *PackageManifestResponse) GetManifest() *PackageManifestSnapshot {
@@ -4453,7 +4753,7 @@ type PackageInstallationResponse struct {
 
 func (x *PackageInstallationResponse) Reset() {
 	*x = PackageInstallationResponse{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[46]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4465,7 +4765,7 @@ func (x *PackageInstallationResponse) String() string {
 func (*PackageInstallationResponse) ProtoMessage() {}
 
 func (x *PackageInstallationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[46]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4478,7 +4778,7 @@ func (x *PackageInstallationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PackageInstallationResponse.ProtoReflect.Descriptor instead.
 func (*PackageInstallationResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{46}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *PackageInstallationResponse) GetInstallation() *PackageInstallation {
@@ -4501,7 +4801,7 @@ type ListPackageInstallationsResponse struct {
 
 func (x *ListPackageInstallationsResponse) Reset() {
 	*x = ListPackageInstallationsResponse{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[47]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4513,7 +4813,7 @@ func (x *ListPackageInstallationsResponse) String() string {
 func (*ListPackageInstallationsResponse) ProtoMessage() {}
 
 func (x *ListPackageInstallationsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[47]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4526,7 +4826,7 @@ func (x *ListPackageInstallationsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPackageInstallationsResponse.ProtoReflect.Descriptor instead.
 func (*ListPackageInstallationsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{47}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *ListPackageInstallationsResponse) GetItems() []*PackageInstallation {
@@ -4554,7 +4854,7 @@ type PackageSecretSchemaResponse struct {
 
 func (x *PackageSecretSchemaResponse) Reset() {
 	*x = PackageSecretSchemaResponse{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[48]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4566,7 +4866,7 @@ func (x *PackageSecretSchemaResponse) String() string {
 func (*PackageSecretSchemaResponse) ProtoMessage() {}
 
 func (x *PackageSecretSchemaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[48]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4579,7 +4879,7 @@ func (x *PackageSecretSchemaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PackageSecretSchemaResponse.ProtoReflect.Descriptor instead.
 func (*PackageSecretSchemaResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{48}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *PackageSecretSchemaResponse) GetSchema() *PackageSecretSchema {
@@ -4602,7 +4902,7 @@ type PackageVerificationResponse struct {
 
 func (x *PackageVerificationResponse) Reset() {
 	*x = PackageVerificationResponse{}
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[49]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4614,7 +4914,7 @@ func (x *PackageVerificationResponse) String() string {
 func (*PackageVerificationResponse) ProtoMessage() {}
 
 func (x *PackageVerificationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[49]
+	mi := &file_kodex_packages_v1_package_hub_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4627,7 +4927,7 @@ func (x *PackageVerificationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PackageVerificationResponse.ProtoReflect.Descriptor instead.
 func (*PackageVerificationResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{49}
+	return file_kodex_packages_v1_package_hub_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *PackageVerificationResponse) GetVerification() *PackageVerification {
@@ -4772,7 +5072,40 @@ const file_kodex_packages_v1_package_hub_proto_rawDesc = "" +
 	"\x11validation_status\x18\x05 \x01(\x0e22.kodex.packages.v1.PackageManifestValidationStatusR\x10validationStatus\x124\n" +
 	"\x16validation_errors_json\x18\x06 \x01(\tR\x14validationErrorsJson\x12\x1d\n" +
 	"\n" +
-	"created_at\x18\a \x01(\tR\tcreatedAt\"\x8a\x02\n" +
+	"created_at\x18\a \x01(\tR\tcreatedAt\"\x8e\x01\n" +
+	"\x0fCatalogSnapshot\x12E\n" +
+	"\bpackages\x18\x01 \x03(\v2).kodex.packages.v1.CatalogPackageSnapshotR\bpackages\x12$\n" +
+	"\vobserved_at\x18\x02 \x01(\tH\x00R\n" +
+	"observedAt\x88\x01\x01B\x0e\n" +
+	"\f_observed_at\"\x99\x05\n" +
+	"\x16CatalogPackageSnapshot\x12\x12\n" +
+	"\x04slug\x18\x01 \x01(\tR\x04slug\x12A\n" +
+	"\fpackage_kind\x18\x02 \x01(\x0e2\x1e.kodex.packages.v1.PackageKindR\vpackageKind\x12(\n" +
+	"\rpublisher_ref\x18\x03 \x01(\tH\x00R\fpublisherRef\x88\x01\x01\x12C\n" +
+	"\fdisplay_name\x18\x04 \x03(\v2 .kodex.packages.v1.LocalizedTextR\vdisplayName\x12B\n" +
+	"\vdescription\x18\x05 \x03(\v2 .kodex.packages.v1.LocalizedTextR\vdescription\x12+\n" +
+	"\x0ficon_object_uri\x18\x06 \x01(\tH\x01R\riconObjectUri\x88\x01\x01\x12W\n" +
+	"\x11commercial_status\x18\a \x01(\x0e2*.kodex.packages.v1.PackageCommercialStatusR\x10commercialStatus\x12H\n" +
+	"\ftrust_status\x18\b \x01(\x0e2%.kodex.packages.v1.PackageTrustStatusR\vtrustStatus\x128\n" +
+	"\x06status\x18\t \x01(\x0e2 .kodex.packages.v1.PackageStatusR\x06status\x12E\n" +
+	"\bversions\x18\n" +
+	" \x03(\v2).kodex.packages.v1.CatalogVersionSnapshotR\bversionsB\x10\n" +
+	"\x0e_publisher_refB\x12\n" +
+	"\x10_icon_object_uri\"\xcd\x04\n" +
+	"\x16CatalogVersionSnapshot\x12#\n" +
+	"\rversion_label\x18\x01 \x01(\tR\fversionLabel\x12;\n" +
+	"\n" +
+	"source_ref\x18\x02 \x01(\v2\x1c.kodex.packages.v1.SourceRefR\tsourceRef\x12'\n" +
+	"\x0fmanifest_digest\x18\x03 \x01(\tR\x0emanifestDigest\x12;\n" +
+	"\x17manifest_schema_version\x18\x04 \x01(\x05H\x00R\x15manifestSchemaVersion\x88\x01\x01\x122\n" +
+	"\x15manifest_payload_json\x18\x05 \x01(\tR\x13manifestPayloadJson\x12b\n" +
+	"\x13verification_status\x18\x06 \x01(\x0e2,.kodex.packages.v1.PackageVerificationStatusH\x01R\x12verificationStatus\x88\x01\x01\x12S\n" +
+	"\x0erelease_status\x18\a \x01(\x0e2'.kodex.packages.v1.PackageReleaseStatusH\x02R\rreleaseStatus\x88\x01\x01\x12&\n" +
+	"\fpublished_at\x18\b \x01(\tH\x03R\vpublishedAt\x88\x01\x01B\x1a\n" +
+	"\x18_manifest_schema_versionB\x16\n" +
+	"\x14_verification_statusB\x11\n" +
+	"\x0f_release_statusB\x0f\n" +
+	"\r_published_at\"\x8a\x02\n" +
 	"\x12PackageSecretField\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12=\n" +
 	"\x04kind\x18\x02 \x01(\x0e2).kodex.packages.v1.PackageSecretFieldKindR\x04kind\x12\x1a\n" +
@@ -4863,10 +5196,11 @@ const file_kodex_packages_v1_package_hub_proto_rawDesc = "" +
 	"\x04page\x18\x05 \x01(\v2\x1e.kodex.packages.v1.PageRequestR\x04pageB\x12\n" +
 	"\x10_organization_idB\x0e\n" +
 	"\f_source_kindB\t\n" +
-	"\a_status\"o\n" +
+	"\a_status\"\xaf\x01\n" +
 	"\x1cSyncAvailablePackagesRequest\x122\n" +
 	"\x04meta\x18\x01 \x01(\v2\x1e.kodex.packages.v1.CommandMetaR\x04meta\x12\x1b\n" +
-	"\tsource_id\x18\x02 \x01(\tR\bsourceId\"d\n" +
+	"\tsource_id\x18\x02 \x01(\tR\bsourceId\x12>\n" +
+	"\bsnapshot\x18\x03 \x01(\v2\".kodex.packages.v1.CatalogSnapshotR\bsnapshot\"d\n" +
 	"\x11GetPackageRequest\x120\n" +
 	"\x04meta\x18\x01 \x01(\v2\x1c.kodex.packages.v1.QueryMetaR\x04meta\x12\x1d\n" +
 	"\n" +
@@ -5127,7 +5461,7 @@ func file_kodex_packages_v1_package_hub_proto_rawDescGZIP() []byte {
 }
 
 var file_kodex_packages_v1_package_hub_proto_enumTypes = make([]protoimpl.EnumInfo, 17)
-var file_kodex_packages_v1_package_hub_proto_msgTypes = make([]protoimpl.MessageInfo, 50)
+var file_kodex_packages_v1_package_hub_proto_msgTypes = make([]protoimpl.MessageInfo, 53)
 var file_kodex_packages_v1_package_hub_proto_goTypes = []any{
 	(PackageSourceKind)(0),                                // 0: kodex.packages.v1.PackageSourceKind
 	(PackageSourceStatus)(0),                              // 1: kodex.packages.v1.PackageSourceStatus
@@ -5159,43 +5493,46 @@ var file_kodex_packages_v1_package_hub_proto_goTypes = []any{
 	(*PackageEntry)(nil),                                  // 27: kodex.packages.v1.PackageEntry
 	(*PackageVersion)(nil),                                // 28: kodex.packages.v1.PackageVersion
 	(*PackageManifestSnapshot)(nil),                       // 29: kodex.packages.v1.PackageManifestSnapshot
-	(*PackageSecretField)(nil),                            // 30: kodex.packages.v1.PackageSecretField
-	(*PackageSecretSchema)(nil),                           // 31: kodex.packages.v1.PackageSecretSchema
-	(*PackageInstallation)(nil),                           // 32: kodex.packages.v1.PackageInstallation
-	(*PackageVerification)(nil),                           // 33: kodex.packages.v1.PackageVerification
-	(*PackagePricingMetadata)(nil),                        // 34: kodex.packages.v1.PackagePricingMetadata
-	(*ConnectPackageSourceRequest)(nil),                   // 35: kodex.packages.v1.ConnectPackageSourceRequest
-	(*UpdatePackageSourceRequest)(nil),                    // 36: kodex.packages.v1.UpdatePackageSourceRequest
-	(*DisablePackageSourceRequest)(nil),                   // 37: kodex.packages.v1.DisablePackageSourceRequest
-	(*GetPackageSourceRequest)(nil),                       // 38: kodex.packages.v1.GetPackageSourceRequest
-	(*ListPackageSourcesRequest)(nil),                     // 39: kodex.packages.v1.ListPackageSourcesRequest
-	(*SyncAvailablePackagesRequest)(nil),                  // 40: kodex.packages.v1.SyncAvailablePackagesRequest
-	(*GetPackageRequest)(nil),                             // 41: kodex.packages.v1.GetPackageRequest
-	(*ListPackagesRequest)(nil),                           // 42: kodex.packages.v1.ListPackagesRequest
-	(*GetPackageVersionRequest)(nil),                      // 43: kodex.packages.v1.GetPackageVersionRequest
-	(*ListPackageVersionsRequest)(nil),                    // 44: kodex.packages.v1.ListPackageVersionsRequest
-	(*GetPackageManifestRequest)(nil),                     // 45: kodex.packages.v1.GetPackageManifestRequest
-	(*RequestPackageInstallationRequest)(nil),             // 46: kodex.packages.v1.RequestPackageInstallationRequest
-	(*UpdatePackageInstallationRequest)(nil),              // 47: kodex.packages.v1.UpdatePackageInstallationRequest
-	(*DisablePackageInstallationRequest)(nil),             // 48: kodex.packages.v1.DisablePackageInstallationRequest
-	(*UninstallPackageRequest)(nil),                       // 49: kodex.packages.v1.UninstallPackageRequest
-	(*GetPackageInstallationRequest)(nil),                 // 50: kodex.packages.v1.GetPackageInstallationRequest
-	(*ListPackageInstallationsRequest)(nil),               // 51: kodex.packages.v1.ListPackageInstallationsRequest
-	(*GetPackageSecretSchemaRequest)(nil),                 // 52: kodex.packages.v1.GetPackageSecretSchemaRequest
-	(*RefreshPackageInstallationSecretStatusRequest)(nil), // 53: kodex.packages.v1.RefreshPackageInstallationSecretStatusRequest
-	(*SetPackageVerificationRequest)(nil),                 // 54: kodex.packages.v1.SetPackageVerificationRequest
-	(*PackageSourceResponse)(nil),                         // 55: kodex.packages.v1.PackageSourceResponse
-	(*ListPackageSourcesResponse)(nil),                    // 56: kodex.packages.v1.ListPackageSourcesResponse
-	(*SyncAvailablePackagesResponse)(nil),                 // 57: kodex.packages.v1.SyncAvailablePackagesResponse
-	(*PackageResponse)(nil),                               // 58: kodex.packages.v1.PackageResponse
-	(*ListPackagesResponse)(nil),                          // 59: kodex.packages.v1.ListPackagesResponse
-	(*PackageVersionResponse)(nil),                        // 60: kodex.packages.v1.PackageVersionResponse
-	(*ListPackageVersionsResponse)(nil),                   // 61: kodex.packages.v1.ListPackageVersionsResponse
-	(*PackageManifestResponse)(nil),                       // 62: kodex.packages.v1.PackageManifestResponse
-	(*PackageInstallationResponse)(nil),                   // 63: kodex.packages.v1.PackageInstallationResponse
-	(*ListPackageInstallationsResponse)(nil),              // 64: kodex.packages.v1.ListPackageInstallationsResponse
-	(*PackageSecretSchemaResponse)(nil),                   // 65: kodex.packages.v1.PackageSecretSchemaResponse
-	(*PackageVerificationResponse)(nil),                   // 66: kodex.packages.v1.PackageVerificationResponse
+	(*CatalogSnapshot)(nil),                               // 30: kodex.packages.v1.CatalogSnapshot
+	(*CatalogPackageSnapshot)(nil),                        // 31: kodex.packages.v1.CatalogPackageSnapshot
+	(*CatalogVersionSnapshot)(nil),                        // 32: kodex.packages.v1.CatalogVersionSnapshot
+	(*PackageSecretField)(nil),                            // 33: kodex.packages.v1.PackageSecretField
+	(*PackageSecretSchema)(nil),                           // 34: kodex.packages.v1.PackageSecretSchema
+	(*PackageInstallation)(nil),                           // 35: kodex.packages.v1.PackageInstallation
+	(*PackageVerification)(nil),                           // 36: kodex.packages.v1.PackageVerification
+	(*PackagePricingMetadata)(nil),                        // 37: kodex.packages.v1.PackagePricingMetadata
+	(*ConnectPackageSourceRequest)(nil),                   // 38: kodex.packages.v1.ConnectPackageSourceRequest
+	(*UpdatePackageSourceRequest)(nil),                    // 39: kodex.packages.v1.UpdatePackageSourceRequest
+	(*DisablePackageSourceRequest)(nil),                   // 40: kodex.packages.v1.DisablePackageSourceRequest
+	(*GetPackageSourceRequest)(nil),                       // 41: kodex.packages.v1.GetPackageSourceRequest
+	(*ListPackageSourcesRequest)(nil),                     // 42: kodex.packages.v1.ListPackageSourcesRequest
+	(*SyncAvailablePackagesRequest)(nil),                  // 43: kodex.packages.v1.SyncAvailablePackagesRequest
+	(*GetPackageRequest)(nil),                             // 44: kodex.packages.v1.GetPackageRequest
+	(*ListPackagesRequest)(nil),                           // 45: kodex.packages.v1.ListPackagesRequest
+	(*GetPackageVersionRequest)(nil),                      // 46: kodex.packages.v1.GetPackageVersionRequest
+	(*ListPackageVersionsRequest)(nil),                    // 47: kodex.packages.v1.ListPackageVersionsRequest
+	(*GetPackageManifestRequest)(nil),                     // 48: kodex.packages.v1.GetPackageManifestRequest
+	(*RequestPackageInstallationRequest)(nil),             // 49: kodex.packages.v1.RequestPackageInstallationRequest
+	(*UpdatePackageInstallationRequest)(nil),              // 50: kodex.packages.v1.UpdatePackageInstallationRequest
+	(*DisablePackageInstallationRequest)(nil),             // 51: kodex.packages.v1.DisablePackageInstallationRequest
+	(*UninstallPackageRequest)(nil),                       // 52: kodex.packages.v1.UninstallPackageRequest
+	(*GetPackageInstallationRequest)(nil),                 // 53: kodex.packages.v1.GetPackageInstallationRequest
+	(*ListPackageInstallationsRequest)(nil),               // 54: kodex.packages.v1.ListPackageInstallationsRequest
+	(*GetPackageSecretSchemaRequest)(nil),                 // 55: kodex.packages.v1.GetPackageSecretSchemaRequest
+	(*RefreshPackageInstallationSecretStatusRequest)(nil), // 56: kodex.packages.v1.RefreshPackageInstallationSecretStatusRequest
+	(*SetPackageVerificationRequest)(nil),                 // 57: kodex.packages.v1.SetPackageVerificationRequest
+	(*PackageSourceResponse)(nil),                         // 58: kodex.packages.v1.PackageSourceResponse
+	(*ListPackageSourcesResponse)(nil),                    // 59: kodex.packages.v1.ListPackageSourcesResponse
+	(*SyncAvailablePackagesResponse)(nil),                 // 60: kodex.packages.v1.SyncAvailablePackagesResponse
+	(*PackageResponse)(nil),                               // 61: kodex.packages.v1.PackageResponse
+	(*ListPackagesResponse)(nil),                          // 62: kodex.packages.v1.ListPackagesResponse
+	(*PackageVersionResponse)(nil),                        // 63: kodex.packages.v1.PackageVersionResponse
+	(*ListPackageVersionsResponse)(nil),                   // 64: kodex.packages.v1.ListPackageVersionsResponse
+	(*PackageManifestResponse)(nil),                       // 65: kodex.packages.v1.PackageManifestResponse
+	(*PackageInstallationResponse)(nil),                   // 66: kodex.packages.v1.PackageInstallationResponse
+	(*ListPackageInstallationsResponse)(nil),              // 67: kodex.packages.v1.ListPackageInstallationsResponse
+	(*PackageSecretSchemaResponse)(nil),                   // 68: kodex.packages.v1.PackageSecretSchemaResponse
+	(*PackageVerificationResponse)(nil),                   // 69: kodex.packages.v1.PackageVerificationResponse
 }
 var file_kodex_packages_v1_package_hub_proto_depIdxs = []int32{
 	20,  // 0: kodex.packages.v1.CommandMeta.actor:type_name -> kodex.packages.v1.Actor
@@ -5216,124 +5553,136 @@ var file_kodex_packages_v1_package_hub_proto_depIdxs = []int32{
 	7,   // 15: kodex.packages.v1.PackageVersion.verification_status:type_name -> kodex.packages.v1.PackageVerificationStatus
 	8,   // 16: kodex.packages.v1.PackageVersion.release_status:type_name -> kodex.packages.v1.PackageReleaseStatus
 	9,   // 17: kodex.packages.v1.PackageManifestSnapshot.validation_status:type_name -> kodex.packages.v1.PackageManifestValidationStatus
-	15,  // 18: kodex.packages.v1.PackageSecretField.kind:type_name -> kodex.packages.v1.PackageSecretFieldKind
-	23,  // 19: kodex.packages.v1.PackageSecretField.display_name:type_name -> kodex.packages.v1.LocalizedText
-	23,  // 20: kodex.packages.v1.PackageSecretField.description:type_name -> kodex.packages.v1.LocalizedText
-	30,  // 21: kodex.packages.v1.PackageSecretSchema.fields:type_name -> kodex.packages.v1.PackageSecretField
-	25,  // 22: kodex.packages.v1.PackageInstallation.scope:type_name -> kodex.packages.v1.ScopeRef
-	11,  // 23: kodex.packages.v1.PackageInstallation.installation_status:type_name -> kodex.packages.v1.PackageInstallationStatus
-	12,  // 24: kodex.packages.v1.PackageInstallation.desired_state:type_name -> kodex.packages.v1.PackageDesiredState
-	13,  // 25: kodex.packages.v1.PackageInstallation.secret_binding_status:type_name -> kodex.packages.v1.PackageSecretBindingStatus
-	14,  // 26: kodex.packages.v1.PackageInstallation.last_health_status:type_name -> kodex.packages.v1.PackageHealthStatus
-	7,   // 27: kodex.packages.v1.PackageVerification.verification_status:type_name -> kodex.packages.v1.PackageVerificationStatus
-	16,  // 28: kodex.packages.v1.PackagePricingMetadata.pricing_kind:type_name -> kodex.packages.v1.PackagePricingKind
-	17,  // 29: kodex.packages.v1.ConnectPackageSourceRequest.meta:type_name -> kodex.packages.v1.CommandMeta
-	0,   // 30: kodex.packages.v1.ConnectPackageSourceRequest.source_kind:type_name -> kodex.packages.v1.PackageSourceKind
-	17,  // 31: kodex.packages.v1.UpdatePackageSourceRequest.meta:type_name -> kodex.packages.v1.CommandMeta
-	1,   // 32: kodex.packages.v1.UpdatePackageSourceRequest.status:type_name -> kodex.packages.v1.PackageSourceStatus
-	17,  // 33: kodex.packages.v1.DisablePackageSourceRequest.meta:type_name -> kodex.packages.v1.CommandMeta
-	18,  // 34: kodex.packages.v1.GetPackageSourceRequest.meta:type_name -> kodex.packages.v1.QueryMeta
-	18,  // 35: kodex.packages.v1.ListPackageSourcesRequest.meta:type_name -> kodex.packages.v1.QueryMeta
-	0,   // 36: kodex.packages.v1.ListPackageSourcesRequest.source_kind:type_name -> kodex.packages.v1.PackageSourceKind
-	1,   // 37: kodex.packages.v1.ListPackageSourcesRequest.status:type_name -> kodex.packages.v1.PackageSourceStatus
-	21,  // 38: kodex.packages.v1.ListPackageSourcesRequest.page:type_name -> kodex.packages.v1.PageRequest
-	17,  // 39: kodex.packages.v1.SyncAvailablePackagesRequest.meta:type_name -> kodex.packages.v1.CommandMeta
-	18,  // 40: kodex.packages.v1.GetPackageRequest.meta:type_name -> kodex.packages.v1.QueryMeta
-	18,  // 41: kodex.packages.v1.ListPackagesRequest.meta:type_name -> kodex.packages.v1.QueryMeta
-	2,   // 42: kodex.packages.v1.ListPackagesRequest.package_kind:type_name -> kodex.packages.v1.PackageKind
-	5,   // 43: kodex.packages.v1.ListPackagesRequest.status:type_name -> kodex.packages.v1.PackageStatus
-	3,   // 44: kodex.packages.v1.ListPackagesRequest.commercial_status:type_name -> kodex.packages.v1.PackageCommercialStatus
-	4,   // 45: kodex.packages.v1.ListPackagesRequest.trust_status:type_name -> kodex.packages.v1.PackageTrustStatus
-	21,  // 46: kodex.packages.v1.ListPackagesRequest.page:type_name -> kodex.packages.v1.PageRequest
-	18,  // 47: kodex.packages.v1.GetPackageVersionRequest.meta:type_name -> kodex.packages.v1.QueryMeta
-	18,  // 48: kodex.packages.v1.ListPackageVersionsRequest.meta:type_name -> kodex.packages.v1.QueryMeta
-	7,   // 49: kodex.packages.v1.ListPackageVersionsRequest.verification_status:type_name -> kodex.packages.v1.PackageVerificationStatus
-	8,   // 50: kodex.packages.v1.ListPackageVersionsRequest.release_status:type_name -> kodex.packages.v1.PackageReleaseStatus
-	21,  // 51: kodex.packages.v1.ListPackageVersionsRequest.page:type_name -> kodex.packages.v1.PageRequest
-	18,  // 52: kodex.packages.v1.GetPackageManifestRequest.meta:type_name -> kodex.packages.v1.QueryMeta
-	17,  // 53: kodex.packages.v1.RequestPackageInstallationRequest.meta:type_name -> kodex.packages.v1.CommandMeta
-	25,  // 54: kodex.packages.v1.RequestPackageInstallationRequest.scope:type_name -> kodex.packages.v1.ScopeRef
-	12,  // 55: kodex.packages.v1.RequestPackageInstallationRequest.desired_state:type_name -> kodex.packages.v1.PackageDesiredState
-	17,  // 56: kodex.packages.v1.UpdatePackageInstallationRequest.meta:type_name -> kodex.packages.v1.CommandMeta
-	12,  // 57: kodex.packages.v1.UpdatePackageInstallationRequest.desired_state:type_name -> kodex.packages.v1.PackageDesiredState
-	11,  // 58: kodex.packages.v1.UpdatePackageInstallationRequest.installation_status:type_name -> kodex.packages.v1.PackageInstallationStatus
-	17,  // 59: kodex.packages.v1.DisablePackageInstallationRequest.meta:type_name -> kodex.packages.v1.CommandMeta
-	17,  // 60: kodex.packages.v1.UninstallPackageRequest.meta:type_name -> kodex.packages.v1.CommandMeta
-	18,  // 61: kodex.packages.v1.GetPackageInstallationRequest.meta:type_name -> kodex.packages.v1.QueryMeta
-	18,  // 62: kodex.packages.v1.ListPackageInstallationsRequest.meta:type_name -> kodex.packages.v1.QueryMeta
-	25,  // 63: kodex.packages.v1.ListPackageInstallationsRequest.scope:type_name -> kodex.packages.v1.ScopeRef
-	2,   // 64: kodex.packages.v1.ListPackageInstallationsRequest.package_kind:type_name -> kodex.packages.v1.PackageKind
-	11,  // 65: kodex.packages.v1.ListPackageInstallationsRequest.installation_status:type_name -> kodex.packages.v1.PackageInstallationStatus
-	13,  // 66: kodex.packages.v1.ListPackageInstallationsRequest.secret_binding_status:type_name -> kodex.packages.v1.PackageSecretBindingStatus
-	21,  // 67: kodex.packages.v1.ListPackageInstallationsRequest.page:type_name -> kodex.packages.v1.PageRequest
-	18,  // 68: kodex.packages.v1.GetPackageSecretSchemaRequest.meta:type_name -> kodex.packages.v1.QueryMeta
-	17,  // 69: kodex.packages.v1.RefreshPackageInstallationSecretStatusRequest.meta:type_name -> kodex.packages.v1.CommandMeta
-	17,  // 70: kodex.packages.v1.SetPackageVerificationRequest.meta:type_name -> kodex.packages.v1.CommandMeta
-	7,   // 71: kodex.packages.v1.SetPackageVerificationRequest.verification_status:type_name -> kodex.packages.v1.PackageVerificationStatus
-	8,   // 72: kodex.packages.v1.SetPackageVerificationRequest.release_status:type_name -> kodex.packages.v1.PackageReleaseStatus
-	26,  // 73: kodex.packages.v1.PackageSourceResponse.source:type_name -> kodex.packages.v1.PackageSource
-	26,  // 74: kodex.packages.v1.ListPackageSourcesResponse.items:type_name -> kodex.packages.v1.PackageSource
-	22,  // 75: kodex.packages.v1.ListPackageSourcesResponse.page:type_name -> kodex.packages.v1.PageResponse
-	26,  // 76: kodex.packages.v1.SyncAvailablePackagesResponse.source:type_name -> kodex.packages.v1.PackageSource
-	27,  // 77: kodex.packages.v1.PackageResponse.package_entry:type_name -> kodex.packages.v1.PackageEntry
-	34,  // 78: kodex.packages.v1.PackageResponse.pricing:type_name -> kodex.packages.v1.PackagePricingMetadata
-	27,  // 79: kodex.packages.v1.ListPackagesResponse.items:type_name -> kodex.packages.v1.PackageEntry
-	22,  // 80: kodex.packages.v1.ListPackagesResponse.page:type_name -> kodex.packages.v1.PageResponse
-	28,  // 81: kodex.packages.v1.PackageVersionResponse.version:type_name -> kodex.packages.v1.PackageVersion
-	28,  // 82: kodex.packages.v1.ListPackageVersionsResponse.items:type_name -> kodex.packages.v1.PackageVersion
-	22,  // 83: kodex.packages.v1.ListPackageVersionsResponse.page:type_name -> kodex.packages.v1.PageResponse
-	29,  // 84: kodex.packages.v1.PackageManifestResponse.manifest:type_name -> kodex.packages.v1.PackageManifestSnapshot
-	32,  // 85: kodex.packages.v1.PackageInstallationResponse.installation:type_name -> kodex.packages.v1.PackageInstallation
-	32,  // 86: kodex.packages.v1.ListPackageInstallationsResponse.items:type_name -> kodex.packages.v1.PackageInstallation
-	22,  // 87: kodex.packages.v1.ListPackageInstallationsResponse.page:type_name -> kodex.packages.v1.PageResponse
-	31,  // 88: kodex.packages.v1.PackageSecretSchemaResponse.schema:type_name -> kodex.packages.v1.PackageSecretSchema
-	33,  // 89: kodex.packages.v1.PackageVerificationResponse.verification:type_name -> kodex.packages.v1.PackageVerification
-	28,  // 90: kodex.packages.v1.PackageVerificationResponse.version:type_name -> kodex.packages.v1.PackageVersion
-	35,  // 91: kodex.packages.v1.PackageHubService.ConnectPackageSource:input_type -> kodex.packages.v1.ConnectPackageSourceRequest
-	36,  // 92: kodex.packages.v1.PackageHubService.UpdatePackageSource:input_type -> kodex.packages.v1.UpdatePackageSourceRequest
-	37,  // 93: kodex.packages.v1.PackageHubService.DisablePackageSource:input_type -> kodex.packages.v1.DisablePackageSourceRequest
-	38,  // 94: kodex.packages.v1.PackageHubService.GetPackageSource:input_type -> kodex.packages.v1.GetPackageSourceRequest
-	39,  // 95: kodex.packages.v1.PackageHubService.ListPackageSources:input_type -> kodex.packages.v1.ListPackageSourcesRequest
-	40,  // 96: kodex.packages.v1.PackageHubService.SyncAvailablePackages:input_type -> kodex.packages.v1.SyncAvailablePackagesRequest
-	41,  // 97: kodex.packages.v1.PackageHubService.GetPackage:input_type -> kodex.packages.v1.GetPackageRequest
-	42,  // 98: kodex.packages.v1.PackageHubService.ListPackages:input_type -> kodex.packages.v1.ListPackagesRequest
-	43,  // 99: kodex.packages.v1.PackageHubService.GetPackageVersion:input_type -> kodex.packages.v1.GetPackageVersionRequest
-	44,  // 100: kodex.packages.v1.PackageHubService.ListPackageVersions:input_type -> kodex.packages.v1.ListPackageVersionsRequest
-	45,  // 101: kodex.packages.v1.PackageHubService.GetPackageManifest:input_type -> kodex.packages.v1.GetPackageManifestRequest
-	46,  // 102: kodex.packages.v1.PackageHubService.RequestPackageInstallation:input_type -> kodex.packages.v1.RequestPackageInstallationRequest
-	47,  // 103: kodex.packages.v1.PackageHubService.UpdatePackageInstallation:input_type -> kodex.packages.v1.UpdatePackageInstallationRequest
-	48,  // 104: kodex.packages.v1.PackageHubService.DisablePackageInstallation:input_type -> kodex.packages.v1.DisablePackageInstallationRequest
-	49,  // 105: kodex.packages.v1.PackageHubService.UninstallPackage:input_type -> kodex.packages.v1.UninstallPackageRequest
-	50,  // 106: kodex.packages.v1.PackageHubService.GetPackageInstallation:input_type -> kodex.packages.v1.GetPackageInstallationRequest
-	51,  // 107: kodex.packages.v1.PackageHubService.ListPackageInstallations:input_type -> kodex.packages.v1.ListPackageInstallationsRequest
-	52,  // 108: kodex.packages.v1.PackageHubService.GetPackageSecretSchema:input_type -> kodex.packages.v1.GetPackageSecretSchemaRequest
-	53,  // 109: kodex.packages.v1.PackageHubService.RefreshPackageInstallationSecretStatus:input_type -> kodex.packages.v1.RefreshPackageInstallationSecretStatusRequest
-	54,  // 110: kodex.packages.v1.PackageHubService.SetPackageVerification:input_type -> kodex.packages.v1.SetPackageVerificationRequest
-	55,  // 111: kodex.packages.v1.PackageHubService.ConnectPackageSource:output_type -> kodex.packages.v1.PackageSourceResponse
-	55,  // 112: kodex.packages.v1.PackageHubService.UpdatePackageSource:output_type -> kodex.packages.v1.PackageSourceResponse
-	55,  // 113: kodex.packages.v1.PackageHubService.DisablePackageSource:output_type -> kodex.packages.v1.PackageSourceResponse
-	55,  // 114: kodex.packages.v1.PackageHubService.GetPackageSource:output_type -> kodex.packages.v1.PackageSourceResponse
-	56,  // 115: kodex.packages.v1.PackageHubService.ListPackageSources:output_type -> kodex.packages.v1.ListPackageSourcesResponse
-	57,  // 116: kodex.packages.v1.PackageHubService.SyncAvailablePackages:output_type -> kodex.packages.v1.SyncAvailablePackagesResponse
-	58,  // 117: kodex.packages.v1.PackageHubService.GetPackage:output_type -> kodex.packages.v1.PackageResponse
-	59,  // 118: kodex.packages.v1.PackageHubService.ListPackages:output_type -> kodex.packages.v1.ListPackagesResponse
-	60,  // 119: kodex.packages.v1.PackageHubService.GetPackageVersion:output_type -> kodex.packages.v1.PackageVersionResponse
-	61,  // 120: kodex.packages.v1.PackageHubService.ListPackageVersions:output_type -> kodex.packages.v1.ListPackageVersionsResponse
-	62,  // 121: kodex.packages.v1.PackageHubService.GetPackageManifest:output_type -> kodex.packages.v1.PackageManifestResponse
-	63,  // 122: kodex.packages.v1.PackageHubService.RequestPackageInstallation:output_type -> kodex.packages.v1.PackageInstallationResponse
-	63,  // 123: kodex.packages.v1.PackageHubService.UpdatePackageInstallation:output_type -> kodex.packages.v1.PackageInstallationResponse
-	63,  // 124: kodex.packages.v1.PackageHubService.DisablePackageInstallation:output_type -> kodex.packages.v1.PackageInstallationResponse
-	63,  // 125: kodex.packages.v1.PackageHubService.UninstallPackage:output_type -> kodex.packages.v1.PackageInstallationResponse
-	63,  // 126: kodex.packages.v1.PackageHubService.GetPackageInstallation:output_type -> kodex.packages.v1.PackageInstallationResponse
-	64,  // 127: kodex.packages.v1.PackageHubService.ListPackageInstallations:output_type -> kodex.packages.v1.ListPackageInstallationsResponse
-	65,  // 128: kodex.packages.v1.PackageHubService.GetPackageSecretSchema:output_type -> kodex.packages.v1.PackageSecretSchemaResponse
-	63,  // 129: kodex.packages.v1.PackageHubService.RefreshPackageInstallationSecretStatus:output_type -> kodex.packages.v1.PackageInstallationResponse
-	66,  // 130: kodex.packages.v1.PackageHubService.SetPackageVerification:output_type -> kodex.packages.v1.PackageVerificationResponse
-	111, // [111:131] is the sub-list for method output_type
-	91,  // [91:111] is the sub-list for method input_type
-	91,  // [91:91] is the sub-list for extension type_name
-	91,  // [91:91] is the sub-list for extension extendee
-	0,   // [0:91] is the sub-list for field type_name
+	31,  // 18: kodex.packages.v1.CatalogSnapshot.packages:type_name -> kodex.packages.v1.CatalogPackageSnapshot
+	2,   // 19: kodex.packages.v1.CatalogPackageSnapshot.package_kind:type_name -> kodex.packages.v1.PackageKind
+	23,  // 20: kodex.packages.v1.CatalogPackageSnapshot.display_name:type_name -> kodex.packages.v1.LocalizedText
+	23,  // 21: kodex.packages.v1.CatalogPackageSnapshot.description:type_name -> kodex.packages.v1.LocalizedText
+	3,   // 22: kodex.packages.v1.CatalogPackageSnapshot.commercial_status:type_name -> kodex.packages.v1.PackageCommercialStatus
+	4,   // 23: kodex.packages.v1.CatalogPackageSnapshot.trust_status:type_name -> kodex.packages.v1.PackageTrustStatus
+	5,   // 24: kodex.packages.v1.CatalogPackageSnapshot.status:type_name -> kodex.packages.v1.PackageStatus
+	32,  // 25: kodex.packages.v1.CatalogPackageSnapshot.versions:type_name -> kodex.packages.v1.CatalogVersionSnapshot
+	24,  // 26: kodex.packages.v1.CatalogVersionSnapshot.source_ref:type_name -> kodex.packages.v1.SourceRef
+	7,   // 27: kodex.packages.v1.CatalogVersionSnapshot.verification_status:type_name -> kodex.packages.v1.PackageVerificationStatus
+	8,   // 28: kodex.packages.v1.CatalogVersionSnapshot.release_status:type_name -> kodex.packages.v1.PackageReleaseStatus
+	15,  // 29: kodex.packages.v1.PackageSecretField.kind:type_name -> kodex.packages.v1.PackageSecretFieldKind
+	23,  // 30: kodex.packages.v1.PackageSecretField.display_name:type_name -> kodex.packages.v1.LocalizedText
+	23,  // 31: kodex.packages.v1.PackageSecretField.description:type_name -> kodex.packages.v1.LocalizedText
+	33,  // 32: kodex.packages.v1.PackageSecretSchema.fields:type_name -> kodex.packages.v1.PackageSecretField
+	25,  // 33: kodex.packages.v1.PackageInstallation.scope:type_name -> kodex.packages.v1.ScopeRef
+	11,  // 34: kodex.packages.v1.PackageInstallation.installation_status:type_name -> kodex.packages.v1.PackageInstallationStatus
+	12,  // 35: kodex.packages.v1.PackageInstallation.desired_state:type_name -> kodex.packages.v1.PackageDesiredState
+	13,  // 36: kodex.packages.v1.PackageInstallation.secret_binding_status:type_name -> kodex.packages.v1.PackageSecretBindingStatus
+	14,  // 37: kodex.packages.v1.PackageInstallation.last_health_status:type_name -> kodex.packages.v1.PackageHealthStatus
+	7,   // 38: kodex.packages.v1.PackageVerification.verification_status:type_name -> kodex.packages.v1.PackageVerificationStatus
+	16,  // 39: kodex.packages.v1.PackagePricingMetadata.pricing_kind:type_name -> kodex.packages.v1.PackagePricingKind
+	17,  // 40: kodex.packages.v1.ConnectPackageSourceRequest.meta:type_name -> kodex.packages.v1.CommandMeta
+	0,   // 41: kodex.packages.v1.ConnectPackageSourceRequest.source_kind:type_name -> kodex.packages.v1.PackageSourceKind
+	17,  // 42: kodex.packages.v1.UpdatePackageSourceRequest.meta:type_name -> kodex.packages.v1.CommandMeta
+	1,   // 43: kodex.packages.v1.UpdatePackageSourceRequest.status:type_name -> kodex.packages.v1.PackageSourceStatus
+	17,  // 44: kodex.packages.v1.DisablePackageSourceRequest.meta:type_name -> kodex.packages.v1.CommandMeta
+	18,  // 45: kodex.packages.v1.GetPackageSourceRequest.meta:type_name -> kodex.packages.v1.QueryMeta
+	18,  // 46: kodex.packages.v1.ListPackageSourcesRequest.meta:type_name -> kodex.packages.v1.QueryMeta
+	0,   // 47: kodex.packages.v1.ListPackageSourcesRequest.source_kind:type_name -> kodex.packages.v1.PackageSourceKind
+	1,   // 48: kodex.packages.v1.ListPackageSourcesRequest.status:type_name -> kodex.packages.v1.PackageSourceStatus
+	21,  // 49: kodex.packages.v1.ListPackageSourcesRequest.page:type_name -> kodex.packages.v1.PageRequest
+	17,  // 50: kodex.packages.v1.SyncAvailablePackagesRequest.meta:type_name -> kodex.packages.v1.CommandMeta
+	30,  // 51: kodex.packages.v1.SyncAvailablePackagesRequest.snapshot:type_name -> kodex.packages.v1.CatalogSnapshot
+	18,  // 52: kodex.packages.v1.GetPackageRequest.meta:type_name -> kodex.packages.v1.QueryMeta
+	18,  // 53: kodex.packages.v1.ListPackagesRequest.meta:type_name -> kodex.packages.v1.QueryMeta
+	2,   // 54: kodex.packages.v1.ListPackagesRequest.package_kind:type_name -> kodex.packages.v1.PackageKind
+	5,   // 55: kodex.packages.v1.ListPackagesRequest.status:type_name -> kodex.packages.v1.PackageStatus
+	3,   // 56: kodex.packages.v1.ListPackagesRequest.commercial_status:type_name -> kodex.packages.v1.PackageCommercialStatus
+	4,   // 57: kodex.packages.v1.ListPackagesRequest.trust_status:type_name -> kodex.packages.v1.PackageTrustStatus
+	21,  // 58: kodex.packages.v1.ListPackagesRequest.page:type_name -> kodex.packages.v1.PageRequest
+	18,  // 59: kodex.packages.v1.GetPackageVersionRequest.meta:type_name -> kodex.packages.v1.QueryMeta
+	18,  // 60: kodex.packages.v1.ListPackageVersionsRequest.meta:type_name -> kodex.packages.v1.QueryMeta
+	7,   // 61: kodex.packages.v1.ListPackageVersionsRequest.verification_status:type_name -> kodex.packages.v1.PackageVerificationStatus
+	8,   // 62: kodex.packages.v1.ListPackageVersionsRequest.release_status:type_name -> kodex.packages.v1.PackageReleaseStatus
+	21,  // 63: kodex.packages.v1.ListPackageVersionsRequest.page:type_name -> kodex.packages.v1.PageRequest
+	18,  // 64: kodex.packages.v1.GetPackageManifestRequest.meta:type_name -> kodex.packages.v1.QueryMeta
+	17,  // 65: kodex.packages.v1.RequestPackageInstallationRequest.meta:type_name -> kodex.packages.v1.CommandMeta
+	25,  // 66: kodex.packages.v1.RequestPackageInstallationRequest.scope:type_name -> kodex.packages.v1.ScopeRef
+	12,  // 67: kodex.packages.v1.RequestPackageInstallationRequest.desired_state:type_name -> kodex.packages.v1.PackageDesiredState
+	17,  // 68: kodex.packages.v1.UpdatePackageInstallationRequest.meta:type_name -> kodex.packages.v1.CommandMeta
+	12,  // 69: kodex.packages.v1.UpdatePackageInstallationRequest.desired_state:type_name -> kodex.packages.v1.PackageDesiredState
+	11,  // 70: kodex.packages.v1.UpdatePackageInstallationRequest.installation_status:type_name -> kodex.packages.v1.PackageInstallationStatus
+	17,  // 71: kodex.packages.v1.DisablePackageInstallationRequest.meta:type_name -> kodex.packages.v1.CommandMeta
+	17,  // 72: kodex.packages.v1.UninstallPackageRequest.meta:type_name -> kodex.packages.v1.CommandMeta
+	18,  // 73: kodex.packages.v1.GetPackageInstallationRequest.meta:type_name -> kodex.packages.v1.QueryMeta
+	18,  // 74: kodex.packages.v1.ListPackageInstallationsRequest.meta:type_name -> kodex.packages.v1.QueryMeta
+	25,  // 75: kodex.packages.v1.ListPackageInstallationsRequest.scope:type_name -> kodex.packages.v1.ScopeRef
+	2,   // 76: kodex.packages.v1.ListPackageInstallationsRequest.package_kind:type_name -> kodex.packages.v1.PackageKind
+	11,  // 77: kodex.packages.v1.ListPackageInstallationsRequest.installation_status:type_name -> kodex.packages.v1.PackageInstallationStatus
+	13,  // 78: kodex.packages.v1.ListPackageInstallationsRequest.secret_binding_status:type_name -> kodex.packages.v1.PackageSecretBindingStatus
+	21,  // 79: kodex.packages.v1.ListPackageInstallationsRequest.page:type_name -> kodex.packages.v1.PageRequest
+	18,  // 80: kodex.packages.v1.GetPackageSecretSchemaRequest.meta:type_name -> kodex.packages.v1.QueryMeta
+	17,  // 81: kodex.packages.v1.RefreshPackageInstallationSecretStatusRequest.meta:type_name -> kodex.packages.v1.CommandMeta
+	17,  // 82: kodex.packages.v1.SetPackageVerificationRequest.meta:type_name -> kodex.packages.v1.CommandMeta
+	7,   // 83: kodex.packages.v1.SetPackageVerificationRequest.verification_status:type_name -> kodex.packages.v1.PackageVerificationStatus
+	8,   // 84: kodex.packages.v1.SetPackageVerificationRequest.release_status:type_name -> kodex.packages.v1.PackageReleaseStatus
+	26,  // 85: kodex.packages.v1.PackageSourceResponse.source:type_name -> kodex.packages.v1.PackageSource
+	26,  // 86: kodex.packages.v1.ListPackageSourcesResponse.items:type_name -> kodex.packages.v1.PackageSource
+	22,  // 87: kodex.packages.v1.ListPackageSourcesResponse.page:type_name -> kodex.packages.v1.PageResponse
+	26,  // 88: kodex.packages.v1.SyncAvailablePackagesResponse.source:type_name -> kodex.packages.v1.PackageSource
+	27,  // 89: kodex.packages.v1.PackageResponse.package_entry:type_name -> kodex.packages.v1.PackageEntry
+	37,  // 90: kodex.packages.v1.PackageResponse.pricing:type_name -> kodex.packages.v1.PackagePricingMetadata
+	27,  // 91: kodex.packages.v1.ListPackagesResponse.items:type_name -> kodex.packages.v1.PackageEntry
+	22,  // 92: kodex.packages.v1.ListPackagesResponse.page:type_name -> kodex.packages.v1.PageResponse
+	28,  // 93: kodex.packages.v1.PackageVersionResponse.version:type_name -> kodex.packages.v1.PackageVersion
+	28,  // 94: kodex.packages.v1.ListPackageVersionsResponse.items:type_name -> kodex.packages.v1.PackageVersion
+	22,  // 95: kodex.packages.v1.ListPackageVersionsResponse.page:type_name -> kodex.packages.v1.PageResponse
+	29,  // 96: kodex.packages.v1.PackageManifestResponse.manifest:type_name -> kodex.packages.v1.PackageManifestSnapshot
+	35,  // 97: kodex.packages.v1.PackageInstallationResponse.installation:type_name -> kodex.packages.v1.PackageInstallation
+	35,  // 98: kodex.packages.v1.ListPackageInstallationsResponse.items:type_name -> kodex.packages.v1.PackageInstallation
+	22,  // 99: kodex.packages.v1.ListPackageInstallationsResponse.page:type_name -> kodex.packages.v1.PageResponse
+	34,  // 100: kodex.packages.v1.PackageSecretSchemaResponse.schema:type_name -> kodex.packages.v1.PackageSecretSchema
+	36,  // 101: kodex.packages.v1.PackageVerificationResponse.verification:type_name -> kodex.packages.v1.PackageVerification
+	28,  // 102: kodex.packages.v1.PackageVerificationResponse.version:type_name -> kodex.packages.v1.PackageVersion
+	38,  // 103: kodex.packages.v1.PackageHubService.ConnectPackageSource:input_type -> kodex.packages.v1.ConnectPackageSourceRequest
+	39,  // 104: kodex.packages.v1.PackageHubService.UpdatePackageSource:input_type -> kodex.packages.v1.UpdatePackageSourceRequest
+	40,  // 105: kodex.packages.v1.PackageHubService.DisablePackageSource:input_type -> kodex.packages.v1.DisablePackageSourceRequest
+	41,  // 106: kodex.packages.v1.PackageHubService.GetPackageSource:input_type -> kodex.packages.v1.GetPackageSourceRequest
+	42,  // 107: kodex.packages.v1.PackageHubService.ListPackageSources:input_type -> kodex.packages.v1.ListPackageSourcesRequest
+	43,  // 108: kodex.packages.v1.PackageHubService.SyncAvailablePackages:input_type -> kodex.packages.v1.SyncAvailablePackagesRequest
+	44,  // 109: kodex.packages.v1.PackageHubService.GetPackage:input_type -> kodex.packages.v1.GetPackageRequest
+	45,  // 110: kodex.packages.v1.PackageHubService.ListPackages:input_type -> kodex.packages.v1.ListPackagesRequest
+	46,  // 111: kodex.packages.v1.PackageHubService.GetPackageVersion:input_type -> kodex.packages.v1.GetPackageVersionRequest
+	47,  // 112: kodex.packages.v1.PackageHubService.ListPackageVersions:input_type -> kodex.packages.v1.ListPackageVersionsRequest
+	48,  // 113: kodex.packages.v1.PackageHubService.GetPackageManifest:input_type -> kodex.packages.v1.GetPackageManifestRequest
+	49,  // 114: kodex.packages.v1.PackageHubService.RequestPackageInstallation:input_type -> kodex.packages.v1.RequestPackageInstallationRequest
+	50,  // 115: kodex.packages.v1.PackageHubService.UpdatePackageInstallation:input_type -> kodex.packages.v1.UpdatePackageInstallationRequest
+	51,  // 116: kodex.packages.v1.PackageHubService.DisablePackageInstallation:input_type -> kodex.packages.v1.DisablePackageInstallationRequest
+	52,  // 117: kodex.packages.v1.PackageHubService.UninstallPackage:input_type -> kodex.packages.v1.UninstallPackageRequest
+	53,  // 118: kodex.packages.v1.PackageHubService.GetPackageInstallation:input_type -> kodex.packages.v1.GetPackageInstallationRequest
+	54,  // 119: kodex.packages.v1.PackageHubService.ListPackageInstallations:input_type -> kodex.packages.v1.ListPackageInstallationsRequest
+	55,  // 120: kodex.packages.v1.PackageHubService.GetPackageSecretSchema:input_type -> kodex.packages.v1.GetPackageSecretSchemaRequest
+	56,  // 121: kodex.packages.v1.PackageHubService.RefreshPackageInstallationSecretStatus:input_type -> kodex.packages.v1.RefreshPackageInstallationSecretStatusRequest
+	57,  // 122: kodex.packages.v1.PackageHubService.SetPackageVerification:input_type -> kodex.packages.v1.SetPackageVerificationRequest
+	58,  // 123: kodex.packages.v1.PackageHubService.ConnectPackageSource:output_type -> kodex.packages.v1.PackageSourceResponse
+	58,  // 124: kodex.packages.v1.PackageHubService.UpdatePackageSource:output_type -> kodex.packages.v1.PackageSourceResponse
+	58,  // 125: kodex.packages.v1.PackageHubService.DisablePackageSource:output_type -> kodex.packages.v1.PackageSourceResponse
+	58,  // 126: kodex.packages.v1.PackageHubService.GetPackageSource:output_type -> kodex.packages.v1.PackageSourceResponse
+	59,  // 127: kodex.packages.v1.PackageHubService.ListPackageSources:output_type -> kodex.packages.v1.ListPackageSourcesResponse
+	60,  // 128: kodex.packages.v1.PackageHubService.SyncAvailablePackages:output_type -> kodex.packages.v1.SyncAvailablePackagesResponse
+	61,  // 129: kodex.packages.v1.PackageHubService.GetPackage:output_type -> kodex.packages.v1.PackageResponse
+	62,  // 130: kodex.packages.v1.PackageHubService.ListPackages:output_type -> kodex.packages.v1.ListPackagesResponse
+	63,  // 131: kodex.packages.v1.PackageHubService.GetPackageVersion:output_type -> kodex.packages.v1.PackageVersionResponse
+	64,  // 132: kodex.packages.v1.PackageHubService.ListPackageVersions:output_type -> kodex.packages.v1.ListPackageVersionsResponse
+	65,  // 133: kodex.packages.v1.PackageHubService.GetPackageManifest:output_type -> kodex.packages.v1.PackageManifestResponse
+	66,  // 134: kodex.packages.v1.PackageHubService.RequestPackageInstallation:output_type -> kodex.packages.v1.PackageInstallationResponse
+	66,  // 135: kodex.packages.v1.PackageHubService.UpdatePackageInstallation:output_type -> kodex.packages.v1.PackageInstallationResponse
+	66,  // 136: kodex.packages.v1.PackageHubService.DisablePackageInstallation:output_type -> kodex.packages.v1.PackageInstallationResponse
+	66,  // 137: kodex.packages.v1.PackageHubService.UninstallPackage:output_type -> kodex.packages.v1.PackageInstallationResponse
+	66,  // 138: kodex.packages.v1.PackageHubService.GetPackageInstallation:output_type -> kodex.packages.v1.PackageInstallationResponse
+	67,  // 139: kodex.packages.v1.PackageHubService.ListPackageInstallations:output_type -> kodex.packages.v1.ListPackageInstallationsResponse
+	68,  // 140: kodex.packages.v1.PackageHubService.GetPackageSecretSchema:output_type -> kodex.packages.v1.PackageSecretSchemaResponse
+	66,  // 141: kodex.packages.v1.PackageHubService.RefreshPackageInstallationSecretStatus:output_type -> kodex.packages.v1.PackageInstallationResponse
+	69,  // 142: kodex.packages.v1.PackageHubService.SetPackageVerification:output_type -> kodex.packages.v1.PackageVerificationResponse
+	123, // [123:143] is the sub-list for method output_type
+	103, // [103:123] is the sub-list for method input_type
+	103, // [103:103] is the sub-list for extension type_name
+	103, // [103:103] is the sub-list for extension extendee
+	0,   // [0:103] is the sub-list for field type_name
 }
 
 func init() { file_kodex_packages_v1_package_hub_proto_init() }
@@ -5349,25 +5698,28 @@ func file_kodex_packages_v1_package_hub_proto_init() {
 	file_kodex_packages_v1_package_hub_proto_msgTypes[9].OneofWrappers = []any{}
 	file_kodex_packages_v1_package_hub_proto_msgTypes[10].OneofWrappers = []any{}
 	file_kodex_packages_v1_package_hub_proto_msgTypes[11].OneofWrappers = []any{}
+	file_kodex_packages_v1_package_hub_proto_msgTypes[13].OneofWrappers = []any{}
+	file_kodex_packages_v1_package_hub_proto_msgTypes[14].OneofWrappers = []any{}
 	file_kodex_packages_v1_package_hub_proto_msgTypes[15].OneofWrappers = []any{}
-	file_kodex_packages_v1_package_hub_proto_msgTypes[16].OneofWrappers = []any{}
-	file_kodex_packages_v1_package_hub_proto_msgTypes[17].OneofWrappers = []any{}
 	file_kodex_packages_v1_package_hub_proto_msgTypes[18].OneofWrappers = []any{}
 	file_kodex_packages_v1_package_hub_proto_msgTypes[19].OneofWrappers = []any{}
+	file_kodex_packages_v1_package_hub_proto_msgTypes[20].OneofWrappers = []any{}
+	file_kodex_packages_v1_package_hub_proto_msgTypes[21].OneofWrappers = []any{}
 	file_kodex_packages_v1_package_hub_proto_msgTypes[22].OneofWrappers = []any{}
 	file_kodex_packages_v1_package_hub_proto_msgTypes[25].OneofWrappers = []any{}
-	file_kodex_packages_v1_package_hub_proto_msgTypes[27].OneofWrappers = []any{}
-	file_kodex_packages_v1_package_hub_proto_msgTypes[29].OneofWrappers = []any{}
+	file_kodex_packages_v1_package_hub_proto_msgTypes[28].OneofWrappers = []any{}
 	file_kodex_packages_v1_package_hub_proto_msgTypes[30].OneofWrappers = []any{}
-	file_kodex_packages_v1_package_hub_proto_msgTypes[34].OneofWrappers = []any{}
+	file_kodex_packages_v1_package_hub_proto_msgTypes[32].OneofWrappers = []any{}
+	file_kodex_packages_v1_package_hub_proto_msgTypes[33].OneofWrappers = []any{}
 	file_kodex_packages_v1_package_hub_proto_msgTypes[37].OneofWrappers = []any{}
+	file_kodex_packages_v1_package_hub_proto_msgTypes[40].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kodex_packages_v1_package_hub_proto_rawDesc), len(file_kodex_packages_v1_package_hub_proto_rawDesc)),
 			NumEnums:      17,
-			NumMessages:   50,
+			NumMessages:   53,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -19,6 +19,15 @@ func ListPackageSourcesResponse(result service.ListPackageSourcesResult) *packag
 	return &packagesv1.ListPackageSourcesResponse{Items: mapProto(result.Sources, PackageSource), Page: pageResponseToProto(result.Page)}
 }
 
+func SyncAvailablePackagesResponse(result service.SyncAvailablePackagesResult) *packagesv1.SyncAvailablePackagesResponse {
+	return &packagesv1.SyncAvailablePackagesResponse{
+		Source:       PackageSource(result.Source),
+		PackageCount: int32(result.PackageCount),
+		VersionCount: int32(result.VersionCount),
+		SyncedAt:     formatTime(result.SyncedAt),
+	}
+}
+
 func PackageResponse(entry entity.PackageEntry) *packagesv1.PackageResponse {
 	return &packagesv1.PackageResponse{PackageEntry: PackageEntry(entry)}
 }

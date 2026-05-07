@@ -28,6 +28,7 @@ type packageService interface {
 	DisablePackageSource(context.Context, packageservice.DisablePackageSourceInput) (entity.PackageSource, error)
 	GetPackageSource(context.Context, uuid.UUID, value.QueryMeta) (entity.PackageSource, error)
 	ListPackageSources(context.Context, packageservice.ListPackageSourcesInput) (packageservice.ListPackageSourcesResult, error)
+	SyncAvailablePackages(context.Context, packageservice.SyncAvailablePackagesInput) (packageservice.SyncAvailablePackagesResult, error)
 	GetPackage(context.Context, uuid.UUID, value.QueryMeta) (entity.PackageEntry, error)
 	ListPackages(context.Context, packageservice.ListPackagesInput) (packageservice.ListPackagesResult, error)
 	GetPackageVersion(context.Context, uuid.UUID, value.QueryMeta) (entity.PackageVersion, error)
@@ -76,6 +77,11 @@ func (server *Server) GetPackageSource(ctx context.Context, request *packagesv1.
 // ListPackageSources returns sources visible in the requested scope.
 func (server *Server) ListPackageSources(ctx context.Context, request *packagesv1.ListPackageSourcesRequest) (*packagesv1.ListPackageSourcesResponse, error) {
 	return handleUnary(ctx, request, grpccasters.ListPackageSourcesInput, server.service.ListPackageSources, grpccasters.ListPackageSourcesResponse)
+}
+
+// SyncAvailablePackages stores a normalized catalog snapshot for a source.
+func (server *Server) SyncAvailablePackages(ctx context.Context, request *packagesv1.SyncAvailablePackagesRequest) (*packagesv1.SyncAvailablePackagesResponse, error) {
+	return handleUnary(ctx, request, grpccasters.SyncAvailablePackagesInput, server.service.SyncAvailablePackages, grpccasters.SyncAvailablePackagesResponse)
 }
 
 // GetPackage returns an authoritative local package catalog entry.

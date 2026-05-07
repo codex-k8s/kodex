@@ -18,6 +18,7 @@ type Repository interface {
 	GetPackageSource(ctx context.Context, id uuid.UUID) (entity.PackageSource, error)
 	ListPackageSources(ctx context.Context, filter query.PackageSourceFilter) ([]entity.PackageSource, value.PageResult, error)
 	UpdatePackageSourceWithResult(ctx context.Context, source entity.PackageSource, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error
+	SyncAvailableCatalog(ctx context.Context, plan CatalogSyncPlan) (CatalogSyncOutcome, error)
 	CreatePackage(ctx context.Context, entry entity.PackageEntry) error
 	GetPackage(ctx context.Context, id uuid.UUID) (entity.PackageEntry, error)
 	ListPackages(ctx context.Context, filter query.PackageFilter) ([]entity.PackageEntry, value.PageResult, error)
@@ -50,4 +51,43 @@ type Clock interface {
 
 type IDGenerator interface {
 	New() uuid.UUID
+}
+
+type CatalogSyncPlan struct {
+	Source                entity.PackageSource
+	PreviousSourceVersion int64
+	Items                 []CatalogSyncItem
+	Result                entity.CommandResult
+	BuildEvents           CatalogSyncEventBuilder
+}
+
+type CatalogSyncEventBuilder func(CatalogSyncOutcome) ([]entity.OutboxEvent, error)
+
+type CatalogSyncItem struct {
+	Entry    entity.PackageEntry
+	Versions []CatalogSyncVersionPlan
+}
+
+type CatalogSyncVersionPlan struct {
+	Version  entity.PackageVersion
+	Manifest entity.PackageManifestSnapshot
+}
+
+type CatalogSyncOutcome struct {
+	Source        entity.PackageSource
+	Packages      []CatalogSyncPackage
+	Versions      []CatalogSyncVersion
+	ManifestCount int
+}
+
+type CatalogSyncPackage struct {
+	Entry    entity.PackageEntry
+	Inserted bool
+	Changed  bool
+}
+
+type CatalogSyncVersion struct {
+	Version  entity.PackageVersion
+	Inserted bool
+	Changed  bool
 }

@@ -21,6 +21,7 @@ import (
 
 	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/errs"
+	catalogrepo "github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/repository/catalog"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/query"
@@ -267,6 +268,79 @@ func TestRepositoryIntegrationCatalogStorage(t *testing.T) {
 	}
 	if storedPricing.ID != pricing.ID || storedPricing.Kind != enum.PackagePricingKindSubscription || storedPricing.Currency != "USD" || storedPricing.Version != 2 {
 		t.Fatalf("pricing = %+v, want subscription USD v2", storedPricing)
+	}
+}
+
+func TestRepositoryIntegrationSyncAvailableCatalog(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openIntegrationPool(t, ctx)
+	repository := NewRepository(pool)
+	now := time.Date(2026, 5, 7, 14, 30, 0, 0, time.UTC)
+	source := testPackageSource(uuid.New(), "store-sync", now)
+	if err := repository.CreatePackageSource(ctx, source); err != nil {
+		t.Fatalf("create source: %v", err)
+	}
+
+	firstPlan := testCatalogSyncPlan(source, source.Version, "telegram-approver", "1.0.0", now.Add(time.Minute), uuid.New())
+	firstOutcome, err := repository.SyncAvailableCatalog(ctx, firstPlan)
+	if err != nil {
+		t.Fatalf("sync available catalog first: %v", err)
+	}
+	if len(firstOutcome.Packages) != 1 || !firstOutcome.Packages[0].Inserted || len(firstOutcome.Versions) != 1 || !firstOutcome.Versions[0].Inserted || firstOutcome.ManifestCount != 1 {
+		t.Fatalf("first outcome = %+v, want inserted package, inserted version and manifest", firstOutcome)
+	}
+	storedSource, err := repository.GetPackageSource(ctx, source.ID)
+	if err != nil {
+		t.Fatalf("get synced source: %v", err)
+	}
+	if storedSource.Version != 2 || storedSource.LastSyncAt == nil || !storedSource.LastSyncAt.Equal(now.Add(time.Minute)) {
+		t.Fatalf("synced source = %+v, want version 2 and last sync", storedSource)
+	}
+	packageID := firstOutcome.Packages[0].Entry.ID
+	versionID := firstOutcome.Versions[0].Version.ID
+	manifest, err := repository.GetLatestManifestSnapshot(ctx, versionID)
+	if err != nil {
+		t.Fatalf("get latest manifest after first sync: %v", err)
+	}
+	if !jsonPayloadEqual(manifest.Payload, []byte(`{"identity":{"slug":"telegram-approver"}}`)) {
+		t.Fatalf("manifest payload = %s, want initial slug", manifest.Payload)
+	}
+
+	secondPlan := testCatalogSyncPlan(storedSource, storedSource.Version, "telegram-approver", "1.0.0", now.Add(2*time.Minute), uuid.New())
+	secondPlan.Items[0].Entry.ID = uuid.New()
+	secondPlan.Items[0].Entry.DisplayName = []value.LocalizedText{{Locale: "ru", Text: "Telegram approvals"}}
+	secondPlan.Items[0].Versions[0].Version.ID = uuid.New()
+	secondPlan.Items[0].Versions[0].Version.ManifestDigest = "sha256:" + strings.Repeat("e", 64)
+	secondPlan.Items[0].Versions[0].Manifest.PackageVersionID = secondPlan.Items[0].Versions[0].Version.ID
+	secondPlan.Items[0].Versions[0].Manifest.Payload = []byte(`{"identity":{"slug":"telegram-approver"},"version":2}`)
+	secondOutcome, err := repository.SyncAvailableCatalog(ctx, secondPlan)
+	if err != nil {
+		t.Fatalf("sync available catalog second: %v", err)
+	}
+	if secondOutcome.Packages[0].Entry.ID != packageID || secondOutcome.Versions[0].Version.ID != versionID {
+		t.Fatalf("second outcome ids = package %s version %s, want existing %s/%s", secondOutcome.Packages[0].Entry.ID, secondOutcome.Versions[0].Version.ID, packageID, versionID)
+	}
+	if secondOutcome.Packages[0].Inserted || !secondOutcome.Packages[0].Changed || secondOutcome.Packages[0].Entry.Version != 2 {
+		t.Fatalf("second package outcome = %+v, want changed existing package v2", secondOutcome.Packages[0])
+	}
+	if secondOutcome.Versions[0].Inserted || !secondOutcome.Versions[0].Changed || secondOutcome.Versions[0].Version.Revision != 2 {
+		t.Fatalf("second version outcome = %+v, want changed existing version revision 2", secondOutcome.Versions[0])
+	}
+	updatedManifest, err := repository.GetLatestManifestSnapshot(ctx, versionID)
+	if err != nil {
+		t.Fatalf("get latest manifest after second sync: %v", err)
+	}
+	if !jsonPayloadEqual(updatedManifest.Payload, []byte(`{"identity":{"slug":"telegram-approver"},"version":2}`)) {
+		t.Fatalf("updated manifest payload = %s, want version 2", updatedManifest.Payload)
+	}
+	claimedEvents, err := repository.ClaimOutboxEvents(ctx, 10, now.Add(3*time.Minute), now.Add(4*time.Minute))
+	if err != nil {
+		t.Fatalf("claim outbox after sync: %v", err)
+	}
+	if len(claimedEvents) != 6 {
+		t.Fatalf("claimed events = %d, want six catalog sync events", len(claimedEvents))
 	}
 }
 
@@ -544,6 +618,37 @@ func testManifestSnapshot(packageVersionID uuid.UUID, now time.Time) entity.Pack
 	}
 }
 
+func testCatalogSyncPlan(source entity.PackageSource, previousVersion int64, packageSlug string, versionLabel string, now time.Time, commandID uuid.UUID) catalogrepo.CatalogSyncPlan {
+	syncedSource := source
+	syncedSource.Version = previousVersion + 1
+	syncedSource.Status = enum.PackageSourceStatusActive
+	syncedSource.LastSyncAt = &now
+	syncedSource.UpdatedAt = now
+	entry := testPackage(source.ID, packageSlug, enum.PackageKindPlugin, now)
+	version := testPackageVersion(entry.ID, versionLabel, now)
+	manifest := testManifestSnapshot(version.ID, now)
+	plan := catalogrepo.CatalogSyncPlan{
+		Source:                syncedSource,
+		PreviousSourceVersion: previousVersion,
+		Items: []catalogrepo.CatalogSyncItem{{
+			Entry: entry,
+			Versions: []catalogrepo.CatalogSyncVersionPlan{{
+				Version:  version,
+				Manifest: manifest,
+			}},
+		}},
+		Result: testCommandResult(commandID, "package.catalog.sync", enum.CommandAggregateTypePackageSource, source.ID, "", now),
+	}
+	plan.BuildEvents = func(outcome catalogrepo.CatalogSyncOutcome) ([]entity.OutboxEvent, error) {
+		return []entity.OutboxEvent{
+			testSourceOutboxEvent(outcome.Source.ID, "package.catalog.synced", now),
+			testPackageOutboxEvent(outcome.Packages[0].Entry.ID, "package.package.discovered", now),
+			testOutboxEvent(outcome.Versions[0].Version.ID, "package.version.discovered", now),
+		}, nil
+	}
+	return plan
+}
+
 func testPricing(packageID uuid.UUID, kind enum.PackagePricingKind, currency string, now time.Time) entity.PackagePricingMetadata {
 	return entity.PackagePricingMetadata{
 		ID:           uuid.New(),
@@ -639,6 +744,18 @@ func testSourceOutboxEvent(sourceID uuid.UUID, eventType string, now time.Time) 
 		EventType:     eventType,
 		SchemaVersion: 1,
 		Payload:       []byte(`{"source_id":"` + sourceID.String() + `"}`),
+		OccurredAt:    now,
+	}}
+}
+
+func testPackageOutboxEvent(packageID uuid.UUID, eventType string, now time.Time) entity.OutboxEvent {
+	return entity.OutboxEvent{Event: outboxlib.Event{
+		ID:            uuid.New(),
+		AggregateType: "package",
+		AggregateID:   packageID,
+		EventType:     eventType,
+		SchemaVersion: 1,
+		Payload:       []byte(`{"package_id":"` + packageID.String() + `"}`),
 		OccurredAt:    now,
 	}}
 }

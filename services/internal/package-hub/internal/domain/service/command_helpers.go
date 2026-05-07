@@ -25,6 +25,13 @@ type sourceCommandPayload struct {
 	Source packageSourceSnapshot `json:"source"`
 }
 
+type catalogSyncCommandPayload struct {
+	Source       packageSourceSnapshot `json:"source"`
+	PackageCount int64                 `json:"package_count"`
+	VersionCount int64                 `json:"version_count"`
+	SyncedAt     string                `json:"synced_at"`
+}
+
 type packageSourceSnapshot struct {
 	ID                 string `json:"id"`
 	OrganizationID     string `json:"organization_id,omitempty"`
@@ -91,24 +98,36 @@ func (s *Service) findSourceReplay(ctx context.Context, meta value.CommandMeta, 
 	return source, true, nil
 }
 
-func (s *Service) findVerificationReplay(ctx context.Context, meta value.CommandMeta, packageVersionID uuid.UUID) (SetPackageVerificationResult, bool, error) {
-	identity, err := commandIdentity(meta, packageOperationVerify)
+type commandReplaySpec[T any] struct {
+	Operation     string
+	AggregateType enum.CommandAggregateType
+	AggregateID   uuid.UUID
+	Decode        func([]byte) (T, error)
+}
+
+func replaySpec[T any](operation string, aggregateType enum.CommandAggregateType, aggregateID uuid.UUID, decode func([]byte) (T, error)) commandReplaySpec[T] {
+	return commandReplaySpec[T]{Operation: operation, AggregateType: aggregateType, AggregateID: aggregateID, Decode: decode}
+}
+
+func findCommandReplay[T any](ctx context.Context, service *Service, meta value.CommandMeta, spec commandReplaySpec[T]) (T, bool, error) {
+	var zero T
+	identity, err := commandIdentity(meta, spec.Operation)
 	if err != nil {
-		return SetPackageVerificationResult{}, false, err
+		return zero, false, err
 	}
-	result, err := s.repository.GetCommandResult(ctx, identity)
+	result, err := service.repository.GetCommandResult(ctx, identity)
 	if errors.Is(err, errs.ErrNotFound) {
-		return SetPackageVerificationResult{}, false, nil
+		return zero, false, nil
 	}
 	if err != nil {
-		return SetPackageVerificationResult{}, false, err
+		return zero, false, err
 	}
-	if result.Operation != packageOperationVerify || result.AggregateType != enum.CommandAggregateTypePackageVersion || result.AggregateID != packageVersionID {
-		return SetPackageVerificationResult{}, true, errs.ErrConflict
+	if result.Operation != spec.Operation || result.AggregateType != spec.AggregateType || result.AggregateID != spec.AggregateID {
+		return zero, true, errs.ErrConflict
 	}
-	replay, err := verificationResultFromPayload(result.ResultPayload)
+	replay, err := spec.Decode(result.ResultPayload)
 	if err != nil {
-		return SetPackageVerificationResult{}, true, err
+		return zero, true, err
 	}
 	return replay, true, nil
 }
@@ -156,21 +175,7 @@ func expectedRevision(meta value.CommandMeta) (int64, error) {
 
 func sourcePayload(source entity.PackageSource) ([]byte, error) {
 	return json.Marshal(sourceCommandPayload{
-		Source: packageSourceSnapshot{
-			ID:                 source.ID.String(),
-			OrganizationID:     formatOptionalUUID(source.OrganizationID),
-			Slug:               source.Slug,
-			DisplayName:        source.DisplayName,
-			SourceKind:         string(source.Kind),
-			RepositoryRef:      source.RepositoryRef,
-			CatalogEndpointRef: source.CatalogEndpointRef,
-			Status:             string(source.Status),
-			LastSyncAt:         formatOptionalTime(source.LastSyncAt),
-			LastError:          source.LastError,
-			Version:            source.Version,
-			CreatedAt:          source.CreatedAt.Format(time.RFC3339Nano),
-			UpdatedAt:          source.UpdatedAt.Format(time.RFC3339Nano),
-		},
+		Source: packageSourceSnapshotFromEntity(source),
 	})
 }
 
@@ -180,6 +185,31 @@ func sourceResultFromPayload(payload []byte) (entity.PackageSource, error) {
 		return entity.PackageSource{}, errs.ErrInvalidArgument
 	}
 	return packageSourceFromSnapshot(value.Source)
+}
+
+func catalogSyncPayload(result SyncAvailablePackagesResult) ([]byte, error) {
+	return json.Marshal(catalogSyncCommandPayload{
+		Source:       packageSourceSnapshotFromEntity(result.Source),
+		PackageCount: result.PackageCount,
+		VersionCount: result.VersionCount,
+		SyncedAt:     result.SyncedAt.Format(time.RFC3339Nano),
+	})
+}
+
+func catalogSyncResultFromPayload(payload []byte) (SyncAvailablePackagesResult, error) {
+	var stored catalogSyncCommandPayload
+	if err := json.Unmarshal(payload, &stored); err != nil {
+		return SyncAvailablePackagesResult{}, errs.ErrInvalidArgument
+	}
+	source, err := packageSourceFromSnapshot(stored.Source)
+	if err != nil {
+		return SyncAvailablePackagesResult{}, err
+	}
+	syncedAt, err := parseRequiredTime(stored.SyncedAt)
+	if err != nil {
+		return SyncAvailablePackagesResult{}, err
+	}
+	return SyncAvailablePackagesResult{Source: source, PackageCount: stored.PackageCount, VersionCount: stored.VersionCount, SyncedAt: syncedAt}, nil
 }
 
 func verificationPayload(verification entity.PackageVerification, version entity.PackageVersion) ([]byte, error) {
@@ -264,6 +294,24 @@ func packageSourceFromSnapshot(snapshot packageSourceSnapshot) (entity.PackageSo
 		LastSyncAt:         lastSyncAt,
 		LastError:          snapshot.LastError,
 	}, nil
+}
+
+func packageSourceSnapshotFromEntity(source entity.PackageSource) packageSourceSnapshot {
+	return packageSourceSnapshot{
+		ID:                 source.ID.String(),
+		OrganizationID:     formatOptionalUUID(source.OrganizationID),
+		Slug:               source.Slug,
+		DisplayName:        source.DisplayName,
+		SourceKind:         string(source.Kind),
+		RepositoryRef:      source.RepositoryRef,
+		CatalogEndpointRef: source.CatalogEndpointRef,
+		Status:             string(source.Status),
+		LastSyncAt:         formatOptionalTime(source.LastSyncAt),
+		LastError:          source.LastError,
+		Version:            source.Version,
+		CreatedAt:          source.CreatedAt.Format(time.RFC3339Nano),
+		UpdatedAt:          source.UpdatedAt.Format(time.RFC3339Nano),
+	}
 }
 
 func verificationFromSnapshot(snapshot packageVerificationSnapshot) (entity.PackageVerification, error) {

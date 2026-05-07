@@ -30,7 +30,52 @@ func (s *Service) event(eventType string, aggregateType string, aggregateID uuid
 }
 
 func (s *Service) verificationUpdatedEvent(version entity.PackageVersion, occurredAt time.Time) (entity.OutboxEvent, error) {
-	return s.event(packageEventVerificationUpdated, packageAggregateVersion, version.ID, value.PackageEventPayload{
+	return s.versionStateEvent(packageEventVerificationUpdated, version, occurredAt)
+}
+
+func (s *Service) catalogSyncedEvent(result SyncAvailablePackagesResult) (entity.OutboxEvent, error) {
+	return s.event(packageEventCatalogSynced, packageAggregateSource, result.Source.ID, value.PackageEventPayload{
+		SourceID:     result.Source.ID.String(),
+		SyncedAt:     result.SyncedAt.Format(time.RFC3339Nano),
+		PackageCount: result.PackageCount,
+		VersionCount: result.VersionCount,
+	}, result.SyncedAt)
+}
+
+func (s *Service) packageDiscoveredEvent(entry entity.PackageEntry, occurredAt time.Time) (entity.OutboxEvent, error) {
+	return s.event(packageEventPackageDiscovered, packageAggregatePackage, entry.ID, value.PackageEventPayload{
+		PackageID:   entry.ID.String(),
+		SourceID:    formatOptionalUUID(entry.SourceID),
+		Slug:        entry.Slug,
+		PackageKind: string(entry.Kind),
+	}, occurredAt)
+}
+
+func (s *Service) packageUpdatedEvent(entry entity.PackageEntry, occurredAt time.Time) (entity.OutboxEvent, error) {
+	return s.event(packageEventPackageUpdated, packageAggregatePackage, entry.ID, value.PackageEventPayload{
+		PackageID:   entry.ID.String(),
+		Slug:        entry.Slug,
+		Status:      string(entry.Status),
+		TrustStatus: string(entry.TrustStatus),
+		Version:     entry.Version,
+	}, occurredAt)
+}
+
+func (s *Service) versionDiscoveredEvent(version entity.PackageVersion, occurredAt time.Time) (entity.OutboxEvent, error) {
+	return s.event(packageEventVersionDiscovered, packageAggregateVersion, version.ID, value.PackageEventPayload{
+		PackageID:        version.PackageID.String(),
+		PackageVersionID: version.ID.String(),
+		VersionLabel:     version.VersionLabel,
+		ManifestDigest:   version.ManifestDigest,
+	}, occurredAt)
+}
+
+func (s *Service) versionUpdatedEvent(version entity.PackageVersion, occurredAt time.Time) (entity.OutboxEvent, error) {
+	return s.versionStateEvent(packageEventVersionUpdated, version, occurredAt)
+}
+
+func (s *Service) versionStateEvent(eventType string, version entity.PackageVersion, occurredAt time.Time) (entity.OutboxEvent, error) {
+	return s.event(eventType, packageAggregateVersion, version.ID, value.PackageEventPayload{
 		PackageID:          version.PackageID.String(),
 		PackageVersionID:   version.ID.String(),
 		VerificationStatus: string(version.VerificationStatus),
