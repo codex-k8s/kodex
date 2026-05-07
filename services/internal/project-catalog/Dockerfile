@@ -38,7 +38,7 @@ ENV GOCACHE="/tmp/.cache/go-build"
 
 USER 10001:10001
 
-ENTRYPOINT ["sh", "-ec", "if [ \"${KODEX_ENV:-development}\" = \"production\" ] || [ \"${KODEX_HOT_RELOAD:-true}\" = \"false\" ]; then exec /usr/local/bin/project-catalog; fi; exec CompileDaemon --build='go -C /workspace build -mod=readonly -o /tmp/project-catalog ./services/internal/project-catalog/cmd/project-catalog' --command='/tmp/project-catalog' --polling --graceful-kill"]
+ENTRYPOINT ["sh", "-ec", "if [ \"${KODEX_ENV:-development}\" = \"production\" ] || [ \"${KODEX_HOT_RELOAD:-true}\" = \"false\" ]; then exec /usr/local/bin/project-catalog; fi; exec CompileDaemon --directory=/workspace/services/internal/project-catalog --directory=/workspace/libs/go --directory=/workspace/proto --build-dir=/workspace --run-dir=/workspace --build='go build -mod=readonly -o /tmp/project-catalog ./services/internal/project-catalog/cmd/project-catalog' --command='/tmp/project-catalog' --polling --graceful-kill"]
 
 FROM ${GOLANG_IMAGE} AS migrations
 

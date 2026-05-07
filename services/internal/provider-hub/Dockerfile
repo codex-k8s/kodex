@@ -38,7 +38,7 @@ ENV GOCACHE="/tmp/.cache/go-build"
 
 USER 10001:10001
 
-ENTRYPOINT ["sh", "-ec", "if [ \"${KODEX_ENV:-development}\" = \"production\" ] || [ \"${KODEX_HOT_RELOAD:-true}\" = \"false\" ]; then exec /usr/local/bin/provider-hub; fi; exec CompileDaemon --build='go -C /workspace build -mod=readonly -o /tmp/provider-hub ./services/internal/provider-hub/cmd/provider-hub' --command='/tmp/provider-hub' --polling --graceful-kill"]
+ENTRYPOINT ["sh", "-ec", "if [ \"${KODEX_ENV:-development}\" = \"production\" ] || [ \"${KODEX_HOT_RELOAD:-true}\" = \"false\" ]; then exec /usr/local/bin/provider-hub; fi; exec CompileDaemon --directory=/workspace/services/internal/provider-hub --directory=/workspace/libs/go --directory=/workspace/proto --build-dir=/workspace --run-dir=/workspace --build='go build -mod=readonly -o /tmp/provider-hub ./services/internal/provider-hub/cmd/provider-hub' --command='/tmp/provider-hub' --polling --graceful-kill"]
 
 FROM ${GOLANG_IMAGE} AS migrations
 

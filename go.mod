@@ -11,6 +11,7 @@ require (
 	github.com/codex-k8s/kodex/libs/go/migrationtest v0.0.0
 	github.com/codex-k8s/kodex/libs/go/outbox v0.0.0
 	github.com/codex-k8s/kodex/libs/go/postgres v0.0.0
+	github.com/codex-k8s/kodex/libs/go/servicemain v0.0.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/prometheus/client_golang v1.23.2
@@ -47,3 +48,5 @@ replace github.com/codex-k8s/kodex/libs/go/migrationtest => ./libs/go/migrationt
 replace github.com/codex-k8s/kodex/libs/go/outbox => ./libs/go/outbox
 
 replace github.com/codex-k8s/kodex/libs/go/postgres => ./libs/go/postgres
+
+replace github.com/codex-k8s/kodex/libs/go/servicemain => ./libs/go/servicemain
