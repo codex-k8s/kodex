@@ -99,3 +99,68 @@ const (
 	PackagePricingKindUsageBased   PackagePricingKind = "usage_based"
 	PackagePricingKindRestricted   PackagePricingKind = "restricted"
 )
+
+type PackageInstallationScopeType string
+
+const (
+	PackageInstallationScopeTypePlatform     PackageInstallationScopeType = "platform"
+	PackageInstallationScopeTypeOrganization PackageInstallationScopeType = "organization"
+	PackageInstallationScopeTypeProject      PackageInstallationScopeType = "project"
+	PackageInstallationScopeTypeRepository   PackageInstallationScopeType = "repository"
+)
+
+type PackageInstallationStatus string
+
+const (
+	PackageInstallationStatusRequested   PackageInstallationStatus = "requested"
+	PackageInstallationStatusActive      PackageInstallationStatus = "active"
+	PackageInstallationStatusDisabled    PackageInstallationStatus = "disabled"
+	PackageInstallationStatusFailed      PackageInstallationStatus = "failed"
+	PackageInstallationStatusUninstalled PackageInstallationStatus = "uninstalled"
+)
+
+type PackageDesiredState string
+
+const (
+	PackageDesiredStatePresent   PackageDesiredState = "present"
+	PackageDesiredStateAbsent    PackageDesiredState = "absent"
+	PackageDesiredStateSuspended PackageDesiredState = "suspended"
+)
+
+type PackageSecretBindingStatus string
+
+const (
+	PackageSecretBindingStatusNotRequired PackageSecretBindingStatus = "not_required"
+	PackageSecretBindingStatusMissing     PackageSecretBindingStatus = "missing"
+	PackageSecretBindingStatusComplete    PackageSecretBindingStatus = "complete"
+	PackageSecretBindingStatusInvalid     PackageSecretBindingStatus = "invalid"
+)
+
+type PackageHealthStatus string
+
+const (
+	PackageHealthStatusUnknown  PackageHealthStatus = "unknown"
+	PackageHealthStatusHealthy  PackageHealthStatus = "healthy"
+	PackageHealthStatusDegraded PackageHealthStatus = "degraded"
+	PackageHealthStatusFailed   PackageHealthStatus = "failed"
+)
+
+type PackageSecretFieldKind string
+
+const (
+	PackageSecretFieldKindString   PackageSecretFieldKind = "string"
+	PackageSecretFieldKindPassword PackageSecretFieldKind = "password"
+	PackageSecretFieldKindToken    PackageSecretFieldKind = "token"
+	PackageSecretFieldKindJSON     PackageSecretFieldKind = "json"
+	PackageSecretFieldKindURL      PackageSecretFieldKind = "url"
+)
+
+type CommandAggregateType string
+
+const (
+	CommandAggregateTypePackageSource  CommandAggregateType = "package_source"
+	CommandAggregateTypePackage        CommandAggregateType = "package"
+	CommandAggregateTypePackageVersion CommandAggregateType = "package_version"
+	CommandAggregateTypeInstallation   CommandAggregateType = "installation"
+	CommandAggregateTypeVerification   CommandAggregateType = "verification"
+)

@@ -36,20 +36,30 @@ type Repository struct {
 }
 
 const (
-	operationCreateManifestSnapshot = "domain.Repository.CreateManifestSnapshot"
-	operationCreatePackage          = "domain.Repository.CreatePackage"
-	operationCreatePackageSource    = "domain.Repository.CreatePackageSource"
-	operationCreatePackageVersion   = "domain.Repository.CreatePackageVersion"
-	operationCreatePricingMetadata  = "domain.Repository.CreatePricingMetadata"
-	operationGetLatestManifest      = "domain.Repository.GetLatestManifestSnapshot"
-	operationGetPackage             = "domain.Repository.GetPackage"
-	operationGetPackageSource       = "domain.Repository.GetPackageSource"
-	operationGetPackageVersion      = "domain.Repository.GetPackageVersion"
-	operationGetPricingMetadata     = "domain.Repository.GetPricingMetadata"
-	operationListPackageSources     = "domain.Repository.ListPackageSources"
-	operationListPackageVersions    = "domain.Repository.ListPackageVersions"
-	operationListPackages           = "domain.Repository.ListPackages"
-	operationUpdatePricingMetadata  = "domain.Repository.UpdatePricingMetadata"
+	operationCreateCommandResult       = "domain.Repository.CreateCommandResult"
+	operationCreateManifestSnapshot    = "domain.Repository.CreateManifestSnapshot"
+	operationCreatePackage             = "domain.Repository.CreatePackage"
+	operationCreatePackageInstallation = "domain.Repository.CreatePackageInstallation"
+	operationCreatePackageSecretSchema = "domain.Repository.CreatePackageSecretSchema"
+	operationCreatePackageSource       = "domain.Repository.CreatePackageSource"
+	operationCreatePackageVerification = "domain.Repository.CreatePackageVerification"
+	operationCreatePackageVersion      = "domain.Repository.CreatePackageVersion"
+	operationCreatePricingMetadata     = "domain.Repository.CreatePricingMetadata"
+	operationGetCommandResult          = "domain.Repository.GetCommandResult"
+	operationGetLatestManifest         = "domain.Repository.GetLatestManifestSnapshot"
+	operationGetLatestSecretSchema     = "domain.Repository.GetLatestPackageSecretSchema"
+	operationGetPackage                = "domain.Repository.GetPackage"
+	operationGetPackageInstallation    = "domain.Repository.GetPackageInstallation"
+	operationGetPackageSource          = "domain.Repository.GetPackageSource"
+	operationGetPackageVersion         = "domain.Repository.GetPackageVersion"
+	operationGetPricingMetadata        = "domain.Repository.GetPricingMetadata"
+	operationListPackageInstallations  = "domain.Repository.ListPackageInstallations"
+	operationListPackageSources        = "domain.Repository.ListPackageSources"
+	operationListPackageVerifications  = "domain.Repository.ListPackageVerifications"
+	operationListPackageVersions       = "domain.Repository.ListPackageVersions"
+	operationListPackages              = "domain.Repository.ListPackages"
+	operationUpdatePackageInstallation = "domain.Repository.UpdatePackageInstallation"
+	operationUpdatePricingMetadata     = "domain.Repository.UpdatePricingMetadata"
 )
 
 func NewRepository(db *pgxpool.Pool) *Repository {
@@ -105,25 +115,67 @@ func (r *Repository) GetLatestManifestSnapshot(ctx context.Context, packageVersi
 }
 
 func (r *Repository) CreatePricingMetadata(ctx context.Context, metadata entity.PackagePricingMetadata) error {
-	err := postgreslib.RunMutation(ctx, r.db, errs.ErrConflict, postgreslib.Mutation{
-		Query:           queryPricingMetadataCreate,
-		Args:            pricingMetadataArgs(metadata),
-		RequireAffected: true,
-	})
-	return wrapError(operationCreatePricingMetadata, err)
+	return r.runAffected(ctx, operationCreatePricingMetadata, queryPricingMetadataCreate, pricingMetadataArgs(metadata))
 }
 
 func (r *Repository) UpdatePricingMetadata(ctx context.Context, metadata entity.PackagePricingMetadata, previousVersion int64) error {
-	err := postgreslib.RunMutation(ctx, r.db, errs.ErrConflict, postgreslib.Mutation{
-		Query:           queryPricingMetadataUpdate,
-		Args:            pricingMetadataUpdateArgs(metadata, previousVersion),
-		RequireAffected: true,
-	})
-	return wrapError(operationUpdatePricingMetadata, err)
+	return r.runAffected(ctx, operationUpdatePricingMetadata, queryPricingMetadataUpdate, pricingMetadataUpdateArgs(metadata, previousVersion))
 }
 
 func (r *Repository) GetPricingMetadata(ctx context.Context, packageID uuid.UUID) (entity.PackagePricingMetadata, error) {
 	return queryOne(ctx, r.db, operationGetPricingMetadata, queryPricingMetadataGetByPackage, pgx.NamedArgs{"package_id": packageID}, scanPricingMetadata)
+}
+
+func (r *Repository) CreatePackageInstallation(ctx context.Context, installation entity.PackageInstallation) error {
+	_, err := r.db.Exec(ctx, queryPackageInstallationCreate, packageInstallationArgs(installation))
+	return wrapError(operationCreatePackageInstallation, err)
+}
+
+func (r *Repository) UpdatePackageInstallation(ctx context.Context, installation entity.PackageInstallation, previousVersion int64) error {
+	return r.runAffected(ctx, operationUpdatePackageInstallation, queryPackageInstallationUpdate, packageInstallationUpdateArgs(installation, previousVersion))
+}
+
+func (r *Repository) GetPackageInstallation(ctx context.Context, id uuid.UUID) (entity.PackageInstallation, error) {
+	return queryOne(ctx, r.db, operationGetPackageInstallation, queryPackageInstallationGetByID, pgx.NamedArgs{"id": id}, scanPackageInstallation)
+}
+
+func (r *Repository) ListPackageInstallations(ctx context.Context, filter query.PackageInstallationFilter) ([]entity.PackageInstallation, value.PageResult, error) {
+	return queryPage(ctx, r.db, operationListPackageInstallations, queryPackageInstallationList, packageInstallationFilterArgs(filter), scanPackageInstallation)
+}
+
+func (r *Repository) CreatePackageSecretSchema(ctx context.Context, schema entity.PackageSecretSchema) error {
+	_, err := r.db.Exec(ctx, queryPackageSecretSchemaCreate, packageSecretSchemaArgs(schema))
+	return wrapError(operationCreatePackageSecretSchema, err)
+}
+
+func (r *Repository) GetLatestPackageSecretSchema(ctx context.Context, packageVersionID uuid.UUID) (entity.PackageSecretSchema, error) {
+	return queryOne(ctx, r.db, operationGetLatestSecretSchema, queryPackageSecretSchemaLatest, pgx.NamedArgs{"package_version_id": packageVersionID}, scanPackageSecretSchema)
+}
+
+func (r *Repository) CreatePackageVerification(ctx context.Context, verification entity.PackageVerification) error {
+	_, err := r.db.Exec(ctx, queryPackageVerificationCreate, packageVerificationArgs(verification))
+	return wrapError(operationCreatePackageVerification, err)
+}
+
+func (r *Repository) ListPackageVerifications(ctx context.Context, filter query.PackageVerificationFilter) ([]entity.PackageVerification, value.PageResult, error) {
+	return queryPage(ctx, r.db, operationListPackageVerifications, queryPackageVerificationList, packageVerificationFilterArgs(filter), scanPackageVerification)
+}
+
+func (r *Repository) CreateCommandResult(ctx context.Context, result entity.CommandResult) error {
+	return r.runAffected(ctx, operationCreateCommandResult, queryCommandResultCreate, commandResultArgs(result))
+}
+
+func (r *Repository) GetCommandResult(ctx context.Context, identity query.CommandIdentity) (entity.CommandResult, error) {
+	return queryOne(ctx, r.db, operationGetCommandResult, queryCommandResultGet, commandIdentityArgs(identity), scanCommandResult)
+}
+
+func (r *Repository) runAffected(ctx context.Context, operation string, queryText string, args pgx.NamedArgs) error {
+	err := postgreslib.RunMutation(ctx, r.db, errs.ErrConflict, postgreslib.Mutation{
+		Query:           queryText,
+		Args:            args,
+		RequireAffected: true,
+	})
+	return wrapError(operation, err)
 }
 
 func queryOne[T any](ctx context.Context, db execQuerier, operation string, queryText string, args pgx.NamedArgs, scan func(postgreslib.RowScanner) (T, error)) (T, error) {

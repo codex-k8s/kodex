@@ -5,14 +5,18 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/errs"
 )
 
-var packageHubErrorSentinels = postgreslib.ErrorSentinels{
-	NotFound:           errs.ErrNotFound,
-	Conflict:           errs.ErrConflict,
-	AlreadyExists:      errs.ErrAlreadyExists,
-	InvalidArgument:    errs.ErrInvalidArgument,
-	PreconditionFailed: errs.ErrPreconditionFailed,
-}
+var packageHubErrorSentinels = newErrorSentinels()
 
 func wrapError(operation string, err error) error {
 	return postgreslib.WrapError(operation, err, packageHubErrorSentinels)
+}
+
+func newErrorSentinels() postgreslib.ErrorSentinels {
+	sentinels := postgreslib.ErrorSentinels{}
+	sentinels.AlreadyExists = errs.ErrAlreadyExists
+	sentinels.Conflict = errs.ErrConflict
+	sentinels.InvalidArgument = errs.ErrInvalidArgument
+	sentinels.NotFound = errs.ErrNotFound
+	sentinels.PreconditionFailed = errs.ErrPreconditionFailed
+	return sentinels
 }

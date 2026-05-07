@@ -14,6 +14,19 @@ type SourceRef struct {
 	CommitSHA string
 }
 
+type ScopeRef struct {
+	Type enum.PackageInstallationScopeType
+	Ref  string
+}
+
+type PackageSecretField struct {
+	Key         string                      `json:"key"`
+	Kind        enum.PackageSecretFieldKind `json:"kind"`
+	Required    bool                        `json:"required"`
+	DisplayName []LocalizedText             `json:"display_name"`
+	Description []LocalizedText             `json:"description"`
+}
+
 type PageRequest struct {
 	PageSize  int32
 	PageToken string

@@ -31,3 +31,24 @@ type PackageVersionFilter struct {
 	ReleaseStatus      *enum.PackageReleaseStatus
 	Page               value.PageRequest
 }
+
+type PackageInstallationFilter struct {
+	Scope               *value.ScopeRef
+	PackageID           *uuid.UUID
+	PackageKind         *enum.PackageKind
+	InstallationStatus  *enum.PackageInstallationStatus
+	SecretBindingStatus *enum.PackageSecretBindingStatus
+	Page                value.PageRequest
+}
+
+type PackageVerificationFilter struct {
+	PackageVersionID   uuid.UUID
+	VerificationStatus *enum.PackageVerificationStatus
+	Page               value.PageRequest
+}
+
+type CommandIdentity struct {
+	CommandID      *uuid.UUID
+	IdempotencyKey string
+	Operation      string
+}

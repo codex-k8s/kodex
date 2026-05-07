@@ -26,4 +26,14 @@ type Repository interface {
 	CreatePricingMetadata(ctx context.Context, metadata entity.PackagePricingMetadata) error
 	UpdatePricingMetadata(ctx context.Context, metadata entity.PackagePricingMetadata, previousVersion int64) error
 	GetPricingMetadata(ctx context.Context, packageID uuid.UUID) (entity.PackagePricingMetadata, error)
+	CreatePackageInstallation(ctx context.Context, installation entity.PackageInstallation) error
+	UpdatePackageInstallation(ctx context.Context, installation entity.PackageInstallation, previousVersion int64) error
+	GetPackageInstallation(ctx context.Context, id uuid.UUID) (entity.PackageInstallation, error)
+	ListPackageInstallations(ctx context.Context, filter query.PackageInstallationFilter) ([]entity.PackageInstallation, value.PageResult, error)
+	CreatePackageSecretSchema(ctx context.Context, schema entity.PackageSecretSchema) error
+	GetLatestPackageSecretSchema(ctx context.Context, packageVersionID uuid.UUID) (entity.PackageSecretSchema, error)
+	CreatePackageVerification(ctx context.Context, verification entity.PackageVerification) error
+	ListPackageVerifications(ctx context.Context, filter query.PackageVerificationFilter) ([]entity.PackageVerification, value.PageResult, error)
+	CreateCommandResult(ctx context.Context, result entity.CommandResult) error
+	GetCommandResult(ctx context.Context, identity query.CommandIdentity) (entity.CommandResult, error)
 }

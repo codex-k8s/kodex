@@ -235,6 +235,152 @@ func TestRepositoryIntegrationCatalogStorage(t *testing.T) {
 	}
 }
 
+func TestRepositoryIntegrationInstallationStorage(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openIntegrationPool(t, ctx)
+	repository := NewRepository(pool)
+	now := time.Date(2026, 5, 7, 15, 0, 0, 0, time.UTC)
+
+	_, packageA, versionA := seedCatalog(t, ctx, repository, uuid.New(), now)
+
+	schema := testSecretSchema(versionA.ID, now)
+	if err := repository.CreatePackageSecretSchema(ctx, schema); err != nil {
+		t.Fatalf("create secret schema: %v", err)
+	}
+	if err := repository.CreatePackageSecretSchema(ctx, schema); !errors.Is(err, errs.ErrAlreadyExists) {
+		t.Fatalf("duplicate secret schema err = %v, want %v", err, errs.ErrAlreadyExists)
+	}
+	storedSchema, err := repository.GetLatestPackageSecretSchema(ctx, versionA.ID)
+	if err != nil {
+		t.Fatalf("get latest secret schema: %v", err)
+	}
+	if storedSchema.SchemaDigest != schema.SchemaDigest || len(storedSchema.Fields) != 1 || storedSchema.Fields[0].Key != "telegram_token" {
+		t.Fatalf("secret schema = %+v, want telegram_token field", storedSchema)
+	}
+	if _, err := pool.Exec(ctx, "UPDATE package_hub_package_secret_schemas SET fields = '[1]'::jsonb WHERE id = $1", schema.ID); err != nil {
+		t.Fatalf("corrupt secret schema fields: %v", err)
+	}
+	if _, err := repository.GetLatestPackageSecretSchema(ctx, versionA.ID); err == nil {
+		t.Fatal("get secret schema with malformed fields succeeded, want error")
+	}
+
+	installation := testInstallation(packageA.ID, versionA.ID, now)
+	if err := repository.CreatePackageInstallation(ctx, installation); err != nil {
+		t.Fatalf("create installation: %v", err)
+	}
+	if err := repository.CreatePackageInstallation(ctx, installation); !errors.Is(err, errs.ErrAlreadyExists) {
+		t.Fatalf("duplicate installation err = %v, want %v", err, errs.ErrAlreadyExists)
+	}
+	storedInstallation, err := repository.GetPackageInstallation(ctx, installation.ID)
+	if err != nil {
+		t.Fatalf("get installation: %v", err)
+	}
+	if storedInstallation.Scope != installation.Scope || storedInstallation.PackageVersionID != versionA.ID {
+		t.Fatalf("installation = %+v, want scope %+v and version %s", storedInstallation, installation.Scope, versionA.ID)
+	}
+	installations, page, err := repository.ListPackageInstallations(ctx, query.PackageInstallationFilter{
+		Scope:              &installation.Scope,
+		PackageKind:        ptr(enum.PackageKindPlugin),
+		InstallationStatus: ptr(enum.PackageInstallationStatusRequested),
+		Page:               value.PageRequest{PageSize: 1},
+	})
+	if err != nil {
+		t.Fatalf("list installations: %v", err)
+	}
+	if len(installations) != 1 || page.NextPageToken != "" || installations[0].ID != installation.ID {
+		t.Fatalf("installations = %+v token %q, want installation", installations, page.NextPageToken)
+	}
+	installation.InstallationStatus = enum.PackageInstallationStatusActive
+	installation.SecretBindingStatus = enum.PackageSecretBindingStatusComplete
+	installation.LastHealthStatus = enum.PackageHealthStatusHealthy
+	installation.Version = 2
+	installation.UpdatedAt = now.Add(time.Hour)
+	if err := repository.UpdatePackageInstallation(ctx, installation, 99); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("stale installation update err = %v, want %v", err, errs.ErrConflict)
+	}
+	if err := repository.UpdatePackageInstallation(ctx, installation, 1); err != nil {
+		t.Fatalf("update installation: %v", err)
+	}
+	storedInstallation, err = repository.GetPackageInstallation(ctx, installation.ID)
+	if err != nil {
+		t.Fatalf("get updated installation: %v", err)
+	}
+	if storedInstallation.InstallationStatus != enum.PackageInstallationStatusActive || storedInstallation.Version != 2 {
+		t.Fatalf("updated installation = %+v, want active v2", storedInstallation)
+	}
+
+	verificationA := testVerification(versionA.ID, enum.PackageVerificationStatusRejected, now)
+	verificationB := testVerification(versionA.ID, enum.PackageVerificationStatusVerified, now.Add(time.Minute))
+	if err := repository.CreatePackageVerification(ctx, verificationA); err != nil {
+		t.Fatalf("create verification A: %v", err)
+	}
+	if err := repository.CreatePackageVerification(ctx, verificationB); err != nil {
+		t.Fatalf("create verification B: %v", err)
+	}
+	verifications, page, err := repository.ListPackageVerifications(ctx, query.PackageVerificationFilter{
+		PackageVersionID:   versionA.ID,
+		VerificationStatus: ptr(enum.PackageVerificationStatusVerified),
+		Page:               value.PageRequest{PageSize: 1},
+	})
+	if err != nil {
+		t.Fatalf("list verifications: %v", err)
+	}
+	if len(verifications) != 1 || page.NextPageToken != "" || verifications[0].ID != verificationB.ID {
+		t.Fatalf("verifications = %+v token %q, want verification B", verifications, page.NextPageToken)
+	}
+
+	commandID := uuid.New()
+	commandResult := testCommandResult(commandID, installation.ID, now)
+	if err := repository.CreateCommandResult(ctx, commandResult); err != nil {
+		t.Fatalf("create command result: %v", err)
+	}
+	if err := repository.CreateCommandResult(ctx, commandResult); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("duplicate command result err = %v, want %v", err, errs.ErrConflict)
+	}
+	storedCommand, err := repository.GetCommandResult(ctx, query.CommandIdentity{CommandID: &commandID})
+	if err != nil {
+		t.Fatalf("get command result by command id: %v", err)
+	}
+	if storedCommand.AggregateID != installation.ID || string(storedCommand.ResultPayload) == "" {
+		t.Fatalf("command result = %+v, want installation aggregate", storedCommand)
+	}
+	idempotentResult := commandResult
+	idempotentResult.Key = "package.installation.update:request-1"
+	idempotentResult.CommandID = nil
+	idempotentResult.IdempotencyKey = "request-1"
+	idempotentResult.Operation = "package.installation.update"
+	if err := repository.CreateCommandResult(ctx, idempotentResult); err != nil {
+		t.Fatalf("create idempotent result: %v", err)
+	}
+	storedCommand, err = repository.GetCommandResult(ctx, query.CommandIdentity{Operation: idempotentResult.Operation, IdempotencyKey: idempotentResult.IdempotencyKey})
+	if err != nil {
+		t.Fatalf("get command result by idempotency key: %v", err)
+	}
+	if storedCommand.Key != idempotentResult.Key || storedCommand.CommandID != nil {
+		t.Fatalf("idempotent command = %+v, want key %s without command id", storedCommand, idempotentResult.Key)
+	}
+}
+
+func seedCatalog(t *testing.T, ctx context.Context, repository *Repository, organizationID uuid.UUID, now time.Time) (entity.PackageSource, entity.PackageEntry, entity.PackageVersion) {
+	t.Helper()
+
+	source := testPackageSource(organizationID, "store-"+organizationID.String()[:8], now)
+	if err := repository.CreatePackageSource(ctx, source); err != nil {
+		t.Fatalf("seed source: %v", err)
+	}
+	packageA := testPackage(source.ID, "telegram-approver-"+organizationID.String()[:8], enum.PackageKindPlugin, now)
+	if err := repository.CreatePackage(ctx, packageA); err != nil {
+		t.Fatalf("seed package: %v", err)
+	}
+	versionA := testPackageVersion(packageA.ID, "1.0.0", now)
+	if err := repository.CreatePackageVersion(ctx, versionA); err != nil {
+		t.Fatalf("seed version: %v", err)
+	}
+	return source, packageA, versionA
+}
+
 func testPackageSource(organizationID uuid.UUID, slug string, now time.Time) entity.PackageSource {
 	lastSyncAt := now.Add(-time.Minute)
 	return entity.PackageSource{
@@ -313,6 +459,69 @@ func testPricing(packageID uuid.UUID, kind enum.PackagePricingKind, currency str
 		PricePayload: []byte(`{}`),
 		Version:      1,
 		UpdatedAt:    now,
+	}
+}
+
+func testSecretSchema(packageVersionID uuid.UUID, now time.Time) entity.PackageSecretSchema {
+	return entity.PackageSecretSchema{
+		ID:               uuid.New(),
+		PackageVersionID: packageVersionID,
+		SchemaDigest:     "sha256:" + strings.Repeat("c", 64),
+		Fields: []value.PackageSecretField{{
+			Key:      "telegram_token",
+			Kind:     enum.PackageSecretFieldKindToken,
+			Required: true,
+			DisplayName: []value.LocalizedText{{
+				Locale: "ru",
+				Text:   "Токен Telegram",
+			}},
+			Description: []value.LocalizedText{{
+				Locale: "ru",
+				Text:   "Токен бота для отправки запросов согласования",
+			}},
+		}},
+		CreatedAt: now,
+	}
+}
+
+func testInstallation(packageID uuid.UUID, packageVersionID uuid.UUID, now time.Time) entity.PackageInstallation {
+	return entity.PackageInstallation{
+		VersionedBase:    entity.VersionedBase{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		PackageID:        packageID,
+		PackageVersionID: packageVersionID,
+		Scope: value.ScopeRef{
+			Type: enum.PackageInstallationScopeTypeProject,
+			Ref:  uuid.NewString(),
+		},
+		InstallationStatus:       enum.PackageInstallationStatusRequested,
+		DesiredState:             enum.PackageDesiredStatePresent,
+		RuntimeRequirementDigest: "sha256:" + strings.Repeat("d", 64),
+		SecretBindingStatus:      enum.PackageSecretBindingStatusMissing,
+		LastHealthStatus:         enum.PackageHealthStatusUnknown,
+	}
+}
+
+func testVerification(packageVersionID uuid.UUID, status enum.PackageVerificationStatus, now time.Time) entity.PackageVerification {
+	return entity.PackageVerification{
+		ID:                 uuid.New(),
+		PackageVersionID:   packageVersionID,
+		VerificationStatus: status,
+		VerifiedByActorRef: "owner:ai-da-stas",
+		VerificationNotes:  "Проверка версии пакета",
+		CreatedAt:          now,
+	}
+}
+
+func testCommandResult(commandID uuid.UUID, aggregateID uuid.UUID, now time.Time) entity.CommandResult {
+	return entity.CommandResult{
+		Key:            "package.installation.request:" + commandID.String(),
+		CommandID:      &commandID,
+		IdempotencyKey: "",
+		Operation:      "package.installation.request",
+		AggregateType:  enum.CommandAggregateTypeInstallation,
+		AggregateID:    aggregateID,
+		ResultPayload:  []byte(`{"installation_id":"` + aggregateID.String() + `"}`),
+		CreatedAt:      now,
 	}
 }
 
