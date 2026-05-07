@@ -1,31 +1,62 @@
 -- name: limit_snapshot__upsert :one
-INSERT INTO provider_hub_limit_snapshots (
-    id,
-    external_account_id,
-    provider_slug,
-    limit_class,
-    remaining,
-    limit_value,
-    reset_at,
-    captured_at,
-    source
-) VALUES (
-    @id,
-    @external_account_id,
-    @provider_slug,
-    @limit_class,
-    @remaining,
-    @limit_value,
-    @reset_at,
-    @captured_at,
-    @source
+WITH inserted AS (
+    INSERT INTO provider_hub_limit_snapshots (
+        id,
+        external_account_id,
+        provider_slug,
+        limit_class,
+        remaining,
+        limit_value,
+        reset_at,
+        captured_at,
+        source
+    ) VALUES (
+        @id,
+        @external_account_id,
+        @provider_slug,
+        @limit_class,
+        @remaining,
+        @limit_value,
+        @reset_at,
+        @captured_at,
+        @source
+    )
+    ON CONFLICT (external_account_id, provider_slug, limit_class, captured_at, source) DO NOTHING
+    RETURNING
+        id,
+        external_account_id,
+        provider_slug,
+        limit_class,
+        remaining,
+        limit_value,
+        reset_at,
+        captured_at,
+        source,
+        true AS inserted
+),
+replayed AS (
+    SELECT
+        id,
+        external_account_id,
+        provider_slug,
+        limit_class,
+        remaining,
+        limit_value,
+        reset_at,
+        captured_at,
+        source,
+        false AS inserted
+    FROM provider_hub_limit_snapshots
+    WHERE external_account_id = @external_account_id
+        AND provider_slug = @provider_slug
+        AND limit_class = @limit_class
+        AND captured_at = @captured_at
+        AND source = @source
+        AND remaining IS NOT DISTINCT FROM @remaining
+        AND limit_value IS NOT DISTINCT FROM @limit_value
+        AND reset_at IS NOT DISTINCT FROM @reset_at
 )
-ON CONFLICT (external_account_id, provider_slug, limit_class, captured_at, source) DO UPDATE SET
-    remaining = provider_hub_limit_snapshots.remaining
-WHERE provider_hub_limit_snapshots.remaining IS NOT DISTINCT FROM EXCLUDED.remaining
-    AND provider_hub_limit_snapshots.limit_value IS NOT DISTINCT FROM EXCLUDED.limit_value
-    AND provider_hub_limit_snapshots.reset_at IS NOT DISTINCT FROM EXCLUDED.reset_at
-RETURNING
+SELECT
     id,
     external_account_id,
     provider_slug,
@@ -34,4 +65,20 @@ RETURNING
     limit_value,
     reset_at,
     captured_at,
-    source;
+    source,
+    inserted
+FROM inserted
+UNION ALL
+SELECT
+    id,
+    external_account_id,
+    provider_slug,
+    limit_class,
+    remaining,
+    limit_value,
+    reset_at,
+    captured_at,
+    source,
+    inserted
+FROM replayed
+WHERE NOT EXISTS (SELECT 1 FROM inserted);

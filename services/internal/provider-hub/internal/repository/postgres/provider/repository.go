@@ -81,22 +81,23 @@ func (r *Repository) ListAccountRuntimeStates(ctx context.Context, filter query.
 
 // RecordLimitSnapshot stores a provider limit snapshot and updates account runtime state atomically.
 func (r *Repository) RecordLimitSnapshot(ctx context.Context, snapshot entity.ProviderLimitSnapshot, state entity.ProviderAccountRuntimeState) (entity.ProviderLimitSnapshot, error) {
-	var stored entity.ProviderLimitSnapshot
+	var stored limitSnapshotWriteResult
 	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
-		if _, err := queryOne(ctx, tx, operationUpsertAccountRuntimeState, queryAccountRuntimeStateUpsert, accountRuntimeStateArgs(state), scanAccountRuntimeState); err != nil {
-			return err
-		}
 		var recordErr error
-		stored, recordErr = queryOne(ctx, tx, operationRecordLimitSnapshot, queryLimitSnapshotUpsert, limitSnapshotArgs(snapshot), scanLimitSnapshot)
+		stored, recordErr = queryOne(ctx, tx, operationRecordLimitSnapshot, queryLimitSnapshotUpsert, limitSnapshotArgs(snapshot), scanLimitSnapshotWriteResult)
 		if errors.Is(recordErr, errs.ErrNotFound) {
 			return errs.ErrConflict
 		}
-		return recordErr
+		if recordErr != nil || !stored.inserted {
+			return recordErr
+		}
+		_, err := queryOne(ctx, tx, operationUpsertAccountRuntimeState, queryAccountRuntimeStateUpsertFromSnapshot, accountRuntimeStateArgs(state), scanAccountRuntimeState)
+		return err
 	})
 	if err != nil {
 		return entity.ProviderLimitSnapshot{}, wrapError(operationRecordLimitSnapshot, err)
 	}
-	return stored, nil
+	return stored.snapshot, nil
 }
 
 // ListLimitSnapshots returns provider limit snapshots.
@@ -106,7 +107,11 @@ func (r *Repository) ListLimitSnapshots(ctx context.Context, filter query.LimitS
 
 // RecordProviderOperation stores a provider operation audit record.
 func (r *Repository) RecordProviderOperation(ctx context.Context, operation entity.ProviderOperation) (entity.ProviderOperation, error) {
-	return queryOne(ctx, r.db, operationRecordProviderOperation, queryProviderOperationInsert, providerOperationArgs(operation), scanProviderOperation)
+	stored, err := queryOne(ctx, r.db, operationRecordProviderOperation, queryProviderOperationInsert, providerOperationArgs(operation), scanProviderOperation)
+	if errors.Is(err, errs.ErrNotFound) {
+		return entity.ProviderOperation{}, wrapError(operationRecordProviderOperation, errs.ErrConflict)
+	}
+	return stored, err
 }
 
 // ListProviderOperations returns provider operation audit records.

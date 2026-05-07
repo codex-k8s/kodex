@@ -58,6 +58,36 @@ func scanLimitSnapshot(row postgreslib.RowScanner) (entity.ProviderLimitSnapshot
 	return snapshot, err
 }
 
+type limitSnapshotWriteResult struct {
+	snapshot entity.ProviderLimitSnapshot
+	inserted bool
+}
+
+func scanLimitSnapshotWriteResult(row postgreslib.RowScanner) (limitSnapshotWriteResult, error) {
+	var result limitSnapshotWriteResult
+	var providerSlug, source string
+	var remaining, limitValue pgtype.Int8
+	var resetAt pgtype.Timestamptz
+	err := row.Scan(
+		&result.snapshot.ID,
+		&result.snapshot.ExternalAccountID,
+		&providerSlug,
+		&result.snapshot.LimitClass,
+		&remaining,
+		&limitValue,
+		&resetAt,
+		&result.snapshot.CapturedAt,
+		&source,
+		&result.inserted,
+	)
+	result.snapshot.ProviderSlug = enum.ProviderSlug(providerSlug)
+	result.snapshot.Remaining = int64PtrFromPG(remaining)
+	result.snapshot.LimitValue = int64PtrFromPG(limitValue)
+	result.snapshot.ResetAt = timePtrFromPG(resetAt)
+	result.snapshot.Source = enum.ProviderLimitSource(source)
+	return result, err
+}
+
 func scanProviderOperation(row postgreslib.RowScanner) (entity.ProviderOperation, error) {
 	var operation entity.ProviderOperation
 	var providerSlug, operationType, status string

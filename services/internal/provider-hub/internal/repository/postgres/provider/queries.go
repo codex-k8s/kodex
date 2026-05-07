@@ -3,13 +3,14 @@ package provider
 import "fmt"
 
 var (
-	queryAccountRuntimeStateGet    = mustLoadQuery("account_runtime_state__get")
-	queryAccountRuntimeStateList   = mustLoadQuery("account_runtime_state__list")
-	queryAccountRuntimeStateUpsert = mustLoadQuery("account_runtime_state__upsert")
-	queryLimitSnapshotList         = mustLoadQuery("limit_snapshot__list")
-	queryLimitSnapshotUpsert       = mustLoadQuery("limit_snapshot__upsert")
-	queryProviderOperationInsert   = mustLoadQuery("provider_operation__insert")
-	queryProviderOperationList     = mustLoadQuery("provider_operation__list")
+	queryAccountRuntimeStateGet                = mustLoadQuery("account_runtime_state__get")
+	queryAccountRuntimeStateList               = mustLoadQuery("account_runtime_state__list")
+	queryAccountRuntimeStateUpsert             = mustLoadQuery("account_runtime_state__upsert")
+	queryAccountRuntimeStateUpsertFromSnapshot = mustLoadQuery("account_runtime_state__upsert_from_snapshot")
+	queryLimitSnapshotList                     = mustLoadQuery("limit_snapshot__list")
+	queryLimitSnapshotUpsert                   = mustLoadQuery("limit_snapshot__upsert")
+	queryProviderOperationInsert               = mustLoadQuery("provider_operation__insert")
+	queryProviderOperationList                 = mustLoadQuery("provider_operation__list")
 )
 
 func mustLoadQuery(name string) string {

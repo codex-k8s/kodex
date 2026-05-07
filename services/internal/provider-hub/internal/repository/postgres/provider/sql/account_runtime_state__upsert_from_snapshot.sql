@@ -1,4 +1,4 @@
--- name: account_runtime_state__upsert :one
+-- name: account_runtime_state__upsert_from_snapshot :one
 INSERT INTO provider_hub_account_runtime_states (
     id,
     external_account_id,
@@ -25,7 +25,12 @@ INSERT INTO provider_hub_account_runtime_states (
     @updated_at
 )
 ON CONFLICT (external_account_id, provider_slug) DO UPDATE SET
-    status = EXCLUDED.status,
+    status = CASE
+        WHEN provider_hub_account_runtime_states.status = 'limited'
+            AND EXCLUDED.status = 'active'
+        THEN provider_hub_account_runtime_states.status
+        ELSE EXCLUDED.status
+    END,
     last_checked_at = COALESCE(EXCLUDED.last_checked_at, provider_hub_account_runtime_states.last_checked_at),
     last_success_at = COALESCE(EXCLUDED.last_success_at, provider_hub_account_runtime_states.last_success_at),
     last_error_code = EXCLUDED.last_error_code,

@@ -183,6 +183,13 @@ func TestRepositoryIntegrationRuntimeStateLimitsAndOperations(t *testing.T) {
 	if storedSnapshot.ID != firstSnapshotID || storedSnapshot.Remaining == nil || *storedSnapshot.Remaining != remaining {
 		t.Fatalf("duplicate snapshot = %+v, want original id %s remaining %d", storedSnapshot, firstSnapshotID, remaining)
 	}
+	loadedState, err = repository.GetAccountRuntimeState(ctx, query.AccountRuntimeStateLookup{ExternalAccountID: &accountID, ProviderSlug: enum.ProviderSlugGitHub})
+	if err != nil {
+		t.Fatalf("get runtime state after duplicate snapshot: %v", err)
+	}
+	if loadedState.Status != enum.ProviderAccountRuntimeStatusLimited || loadedState.Version != 2 {
+		t.Fatalf("runtime state after duplicate snapshot = %+v, want unchanged limited version 2", loadedState)
+	}
 	changedRemaining := int64(4998)
 	changedSnapshot := replayedSnapshot
 	changedSnapshot.ID = uuid.New()
@@ -190,6 +197,13 @@ func TestRepositoryIntegrationRuntimeStateLimitsAndOperations(t *testing.T) {
 	_, err = repository.RecordLimitSnapshot(ctx, changedSnapshot, state)
 	if !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("record changed duplicate snapshot err = %v, want %v", err, errs.ErrConflict)
+	}
+	loadedState, err = repository.GetAccountRuntimeState(ctx, query.AccountRuntimeStateLookup{ExternalAccountID: &accountID, ProviderSlug: enum.ProviderSlugGitHub})
+	if err != nil {
+		t.Fatalf("get runtime state after changed duplicate snapshot: %v", err)
+	}
+	if loadedState.Status != enum.ProviderAccountRuntimeStatusLimited || loadedState.Version != 2 {
+		t.Fatalf("runtime state after changed duplicate snapshot = %+v, want unchanged limited version 2", loadedState)
 	}
 	activeState := state
 	activeState.ID = uuid.New()
@@ -209,6 +223,18 @@ func TestRepositoryIntegrationRuntimeStateLimitsAndOperations(t *testing.T) {
 	}
 	if loadedState.Status != enum.ProviderAccountRuntimeStatusLimited {
 		t.Fatalf("runtime state after active class = %+v, want limited until full reconciliation clears it", loadedState)
+	}
+	authoritativeState := activeState
+	authoritativeState.ID = uuid.New()
+	authoritativeState.UpdatedAt = now.Add(3 * time.Minute)
+	authoritativeState.LastCheckedAt = &authoritativeState.UpdatedAt
+	authoritativeState.LastSuccessAt = &authoritativeState.UpdatedAt
+	storedState, err := repository.UpsertAccountRuntimeState(ctx, authoritativeState)
+	if err != nil {
+		t.Fatalf("authoritative upsert active runtime state: %v", err)
+	}
+	if storedState.Status != enum.ProviderAccountRuntimeStatusActive {
+		t.Fatalf("authoritative runtime state = %+v, want active", storedState)
 	}
 
 	snapshots, page, err := repository.ListLimitSnapshots(ctx, query.LimitSnapshotFilter{
@@ -238,6 +264,25 @@ func TestRepositoryIntegrationRuntimeStateLimitsAndOperations(t *testing.T) {
 	}
 	if _, err := repository.RecordProviderOperation(ctx, operation); err != nil {
 		t.Fatalf("record provider operation: %v", err)
+	}
+	replayedOperation := operation
+	replayedOperation.ID = uuid.New()
+	replayedOperation.StartedAt = now.Add(time.Minute)
+	replayedOperation.FinishedAt = &replayedOperation.StartedAt
+	replayedOperation.UpdatedAt = now.Add(time.Minute)
+	storedOperation, err := repository.RecordProviderOperation(ctx, replayedOperation)
+	if err != nil {
+		t.Fatalf("record duplicate provider operation: %v", err)
+	}
+	if storedOperation.ID != operation.ID || !storedOperation.StartedAt.Equal(operation.StartedAt) {
+		t.Fatalf("duplicate operation = %+v, want original id %s", storedOperation, operation.ID)
+	}
+	changedOperation := operation
+	changedOperation.ID = uuid.New()
+	changedOperation.ExternalAccountID = uuid.New()
+	_, err = repository.RecordProviderOperation(ctx, changedOperation)
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("record changed duplicate provider operation err = %v, want %v", err, errs.ErrConflict)
 	}
 	operations, _, err := repository.ListProviderOperations(ctx, query.ProviderOperationFilter{
 		ProviderSlug:      enum.ProviderSlugGitHub,
