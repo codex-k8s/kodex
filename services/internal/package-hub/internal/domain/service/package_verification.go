@@ -15,7 +15,15 @@ func (s *Service) SetPackageVerification(ctx context.Context, input SetPackageVe
 	if err := requireVerificationStatus(input.VerificationStatus); err != nil {
 		return SetPackageVerificationResult{}, err
 	}
-	if err := s.authorizeCommand(ctx, input.Meta, packageActionVerify, versionScopedResource(packageResourceVersion, input.PackageVersionID.String(), input.PackageVersionID.String())); err != nil {
+	current, err := s.repository.GetPackageVersion(ctx, input.PackageVersionID)
+	if err != nil {
+		return SetPackageVerificationResult{}, err
+	}
+	resource, err := s.versionVerificationResource(ctx, current)
+	if err != nil {
+		return SetPackageVerificationResult{}, err
+	}
+	if err := s.authorizeCommand(ctx, input.Meta, packageActionVerify, resource); err != nil {
 		return SetPackageVerificationResult{}, err
 	}
 	replay, ok, err := s.findVerificationReplay(ctx, input.Meta, input.PackageVersionID)
@@ -23,10 +31,6 @@ func (s *Service) SetPackageVerification(ctx context.Context, input SetPackageVe
 		return replay, err
 	}
 	previousRevision, err := expectedRevision(input.Meta)
-	if err != nil {
-		return SetPackageVerificationResult{}, err
-	}
-	current, err := s.repository.GetPackageVersion(ctx, input.PackageVersionID)
 	if err != nil {
 		return SetPackageVerificationResult{}, err
 	}

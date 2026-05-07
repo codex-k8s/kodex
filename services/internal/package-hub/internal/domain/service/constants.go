@@ -17,6 +17,8 @@ const (
 	packageResourcePackage          = accesscatalog.ResourcePackage
 	packageResourceVersion          = accesscatalog.ResourcePackageVersion
 	packageResourceManifest         = accesscatalog.ResourcePackageManifest
+	packageScopeGlobal              = accesscatalog.ScopeGlobal
+	packageScopeOrganization        = accesscatalog.ScopeOrganization
 )
 
 type resourceRef struct {

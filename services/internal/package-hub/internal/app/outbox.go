@@ -5,8 +5,6 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/entity"
 )
 
-type serviceOutboxStore = outboxlib.EntityStore[entity.OutboxEvent]
-
 func outboxEvent(event entity.OutboxEvent) outboxlib.Event {
 	return event.Event
 }

@@ -23,9 +23,13 @@ func TestGetPackageAuthorizesCatalogRead(t *testing.T) {
 
 	packageID := uuid.New()
 	sourceID := uuid.New()
+	organizationID := uuid.New()
 	repository := &fakeRepository{packageEntry: entity.PackageEntry{
 		VersionedBase: entity.VersionedBase{ID: packageID},
 		SourceID:      &sourceID,
+	}, packageSource: entity.PackageSource{
+		VersionedBase:  entity.VersionedBase{ID: sourceID},
+		OrganizationID: &organizationID,
 	}}
 	authorizer := &recordingAuthorizer{}
 	service := NewWithConfig(repository, fixedClock{}, fixedIDs{}, Config{Authorizer: authorizer})
@@ -41,26 +45,40 @@ func TestGetPackageAuthorizesCatalogRead(t *testing.T) {
 	if request.ActionKey != packageActionCatalogRead || request.ResourceType != packageResourcePackage || request.ResourceID != packageID.String() {
 		t.Fatalf("authorization resource = %+v, want package catalog read on package", request)
 	}
-	if request.ScopeType != "package_source" || request.ScopeID != sourceID.String() {
-		t.Fatalf("authorization scope = %+v, want package_source %s", request, sourceID)
+	if request.ScopeType != packageScopeOrganization || request.ScopeID != organizationID.String() {
+		t.Fatalf("authorization scope = %+v, want organization %s", request, organizationID)
 	}
 }
 
 func TestSetPackageVerificationAuthorizesBeforeReplay(t *testing.T) {
 	t.Parallel()
 
-	repository := &fakeRepository{}
+	packageID := uuid.New()
+	sourceID := uuid.New()
+	organizationID := uuid.New()
+	versionID := uuid.New()
+	repository := &fakeRepository{
+		packageEntry: entity.PackageEntry{
+			VersionedBase: entity.VersionedBase{ID: packageID},
+			SourceID:      &sourceID,
+		},
+		packageSource: entity.PackageSource{
+			VersionedBase:  entity.VersionedBase{ID: sourceID},
+			OrganizationID: &organizationID,
+		},
+		packageVersion: entity.PackageVersion{ID: versionID, PackageID: packageID},
+	}
 	service := NewWithConfig(repository, fixedClock{}, fixedIDs{}, Config{Authorizer: &recordingAuthorizer{err: errs.ErrForbidden}})
 	_, err := service.SetPackageVerification(context.Background(), SetPackageVerificationInput{
-		PackageVersionID:   uuid.New(),
+		PackageVersionID:   versionID,
 		VerificationStatus: enum.PackageVerificationStatusVerified,
 		Meta:               commandMeta(),
 	})
 	if !errors.Is(err, errs.ErrForbidden) {
 		t.Fatalf("SetPackageVerification() err = %v, want %v", err, errs.ErrForbidden)
 	}
-	if repository.getCommandResultCalls != 0 || repository.setVerificationCalls != 0 {
-		t.Fatalf("repository calls = getCommandResult:%d set:%d, want no replay or mutation before authorization", repository.getCommandResultCalls, repository.setVerificationCalls)
+	if repository.getVersionCalls != 1 || repository.getCommandResultCalls != 0 || repository.setVerificationCalls != 0 {
+		t.Fatalf("repository calls = getVersion:%d getCommandResult:%d set:%d, want aggregate load and no replay or mutation before authorization", repository.getVersionCalls, repository.getCommandResultCalls, repository.setVerificationCalls)
 	}
 }
 
@@ -69,6 +87,8 @@ func TestSetPackageVerificationReplayUsesStoredSnapshot(t *testing.T) {
 
 	now := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
 	packageID := uuid.New()
+	sourceID := uuid.New()
+	organizationID := uuid.New()
 	versionID := uuid.New()
 	verification := entity.PackageVerification{
 		ID:                 uuid.New(),
@@ -99,14 +119,32 @@ func TestSetPackageVerificationReplayUsesStoredSnapshot(t *testing.T) {
 		t.Fatalf("verificationPayload(): %v", err)
 	}
 	meta := commandMeta()
-	repository := &fakeRepository{commandResult: entity.CommandResult{
-		CommandID:     &meta.CommandID,
-		Operation:     packageOperationVerify,
-		AggregateType: enum.CommandAggregateTypePackageVersion,
-		AggregateID:   versionID,
-		ResultPayload: payload,
-	}}
-	service := NewWithConfig(repository, fixedClock{}, fixedIDs{}, Config{Authorizer: &recordingAuthorizer{}})
+	repository := &fakeRepository{
+		packageEntry: entity.PackageEntry{
+			VersionedBase: entity.VersionedBase{ID: packageID},
+			SourceID:      &sourceID,
+		},
+		packageSource: entity.PackageSource{
+			VersionedBase:  entity.VersionedBase{ID: sourceID},
+			OrganizationID: &organizationID,
+		},
+		packageVersion: entity.PackageVersion{
+			ID:                 versionID,
+			PackageID:          packageID,
+			VersionLabel:       "v1.0.1",
+			VerificationStatus: enum.PackageVerificationStatusVerified,
+			Revision:           7,
+		},
+		commandResult: entity.CommandResult{
+			CommandID:     &meta.CommandID,
+			Operation:     packageOperationVerify,
+			AggregateType: enum.CommandAggregateTypePackageVersion,
+			AggregateID:   versionID,
+			ResultPayload: payload,
+		},
+	}
+	authorizer := &recordingAuthorizer{}
+	service := NewWithConfig(repository, fixedClock{}, fixedIDs{}, Config{Authorizer: authorizer})
 
 	result, err := service.SetPackageVerification(context.Background(), SetPackageVerificationInput{
 		PackageVersionID:   versionID,
@@ -122,8 +160,11 @@ func TestSetPackageVerificationReplayUsesStoredSnapshot(t *testing.T) {
 	if result.Verification.ID != verification.ID || result.Verification.VerificationNotes != verification.VerificationNotes {
 		t.Fatalf("replay verification = %+v, want stored verification", result.Verification)
 	}
-	if repository.getVersionCalls != 0 || repository.setVerificationCalls != 0 {
-		t.Fatalf("repository calls = getVersion:%d set:%d, want replay from stored payload only", repository.getVersionCalls, repository.setVerificationCalls)
+	if repository.getVersionCalls != 1 || repository.getCommandResultCalls != 1 || repository.setVerificationCalls != 0 {
+		t.Fatalf("repository calls = getVersion:%d getCommandResult:%d set:%d, want authorization aggregate load, replay lookup and no mutation", repository.getVersionCalls, repository.getCommandResultCalls, repository.setVerificationCalls)
+	}
+	if len(authorizer.requests) != 1 || authorizer.requests[0].ScopeType != packageScopeOrganization || authorizer.requests[0].ScopeID != organizationID.String() {
+		t.Fatalf("authorization requests = %+v, want package.verify in organization scope", authorizer.requests)
 	}
 }
 
@@ -139,6 +180,7 @@ func (a *recordingAuthorizer) Authorize(_ context.Context, request Authorization
 
 type fakeRepository struct {
 	packageEntry          entity.PackageEntry
+	packageSource         entity.PackageSource
 	packageVersion        entity.PackageVersion
 	commandResult         entity.CommandResult
 	commandResultErr      error
@@ -152,7 +194,7 @@ func (r *fakeRepository) CreatePackageSource(context.Context, entity.PackageSour
 }
 
 func (r *fakeRepository) GetPackageSource(context.Context, uuid.UUID) (entity.PackageSource, error) {
-	panic("not implemented")
+	return r.packageSource, nil
 }
 
 func (r *fakeRepository) ListPackageSources(context.Context, query.PackageSourceFilter) ([]entity.PackageSource, value.PageResult, error) {

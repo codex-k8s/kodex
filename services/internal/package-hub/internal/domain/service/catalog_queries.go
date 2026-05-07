@@ -34,14 +34,33 @@ func (s *Service) ListPackageSources(ctx context.Context, input ListPackageSourc
 }
 
 func (s *Service) GetPackage(ctx context.Context, id uuid.UUID, meta value.QueryMeta) (entity.PackageEntry, error) {
-	return readAuthorized(ctx, s, id, meta, packageActionCatalogRead, s.repository.GetPackage, packageResource)
+	var zero entity.PackageEntry
+	if err := requireID(id); err != nil {
+		return zero, err
+	}
+	entry, err := s.repository.GetPackage(ctx, id)
+	if err != nil {
+		return zero, err
+	}
+	resource, err := s.packageResourceForEntry(ctx, entry, packageResourcePackage, entry.ID.String())
+	if err != nil {
+		return zero, err
+	}
+	if err := s.authorizeQuery(ctx, meta, packageActionCatalogRead, resource); err != nil {
+		return zero, err
+	}
+	return entry, nil
 }
 
 func (s *Service) ListPackages(ctx context.Context, input ListPackagesInput) (ListPackagesResult, error) {
 	if err := requireOptionalID(input.SourceID); err != nil {
 		return ListPackagesResult{}, err
 	}
-	if err := s.authorizeQuery(ctx, input.Meta, packageActionCatalogRead, listPackagesResource(input.SourceID)); err != nil {
+	resource, err := s.listPackagesResource(ctx, input.SourceID)
+	if err != nil {
+		return ListPackagesResult{}, err
+	}
+	if err := s.authorizeQuery(ctx, input.Meta, packageActionCatalogRead, resource); err != nil {
 		return ListPackagesResult{}, err
 	}
 	packages, page, err := s.repository.ListPackages(ctx, query.PackageFilter{
@@ -60,14 +79,33 @@ func (s *Service) ListPackages(ctx context.Context, input ListPackagesInput) (Li
 }
 
 func (s *Service) GetPackageVersion(ctx context.Context, id uuid.UUID, meta value.QueryMeta) (entity.PackageVersion, error) {
-	return readAuthorized(ctx, s, id, meta, packageActionCatalogRead, s.repository.GetPackageVersion, packageVersionCatalogResource)
+	var zero entity.PackageVersion
+	if err := requireID(id); err != nil {
+		return zero, err
+	}
+	version, err := s.repository.GetPackageVersion(ctx, id)
+	if err != nil {
+		return zero, err
+	}
+	resource, err := s.packageResourceByID(ctx, version.PackageID, packageResourcePackage, version.PackageID.String())
+	if err != nil {
+		return zero, err
+	}
+	if err := s.authorizeQuery(ctx, meta, packageActionCatalogRead, resource); err != nil {
+		return zero, err
+	}
+	return version, nil
 }
 
 func (s *Service) ListPackageVersions(ctx context.Context, input ListPackageVersionsInput) (ListPackageVersionsResult, error) {
 	if err := requireID(input.PackageID); err != nil {
 		return ListPackageVersionsResult{}, err
 	}
-	if err := s.authorizeQuery(ctx, input.Meta, packageActionCatalogRead, packageScopedResource(packageResourcePackage, input.PackageID.String(), input.PackageID.String())); err != nil {
+	resource, err := s.packageResourceByID(ctx, input.PackageID, packageResourcePackage, input.PackageID.String())
+	if err != nil {
+		return ListPackageVersionsResult{}, err
+	}
+	if err := s.authorizeQuery(ctx, input.Meta, packageActionCatalogRead, resource); err != nil {
 		return ListPackageVersionsResult{}, err
 	}
 	versions, page, err := s.repository.ListPackageVersions(ctx, query.PackageVersionFilter{
@@ -86,7 +124,15 @@ func (s *Service) GetPackageManifest(ctx context.Context, packageVersionID uuid.
 	if err := requireID(packageVersionID); err != nil {
 		return entity.PackageManifestSnapshot{}, err
 	}
-	if err := s.authorizeQuery(ctx, meta, packageActionManifestRead, versionScopedResource(packageResourceManifest, packageVersionID.String(), packageVersionID.String())); err != nil {
+	version, err := s.repository.GetPackageVersion(ctx, packageVersionID)
+	if err != nil {
+		return entity.PackageManifestSnapshot{}, err
+	}
+	resource, err := s.packageResourceByID(ctx, version.PackageID, packageResourceManifest, packageVersionID.String())
+	if err != nil {
+		return entity.PackageManifestSnapshot{}, err
+	}
+	if err := s.authorizeQuery(ctx, meta, packageActionManifestRead, resource); err != nil {
 		return entity.PackageManifestSnapshot{}, err
 	}
 	return s.repository.GetLatestManifestSnapshot(ctx, packageVersionID)
@@ -106,22 +152,48 @@ func listSourcesResource(organizationID *uuid.UUID) resourceRef {
 	return organizationScopedResource(packageResourceSource, "", organizationID.String())
 }
 
-func packageResource(entry entity.PackageEntry) resourceRef {
+func packageResourceInSource(entry entity.PackageEntry, resourceType string, resourceID string, source *entity.PackageSource) resourceRef {
 	if entry.SourceID != nil {
-		return sourceScopedResource(packageResourcePackage, entry.ID.String(), entry.SourceID.String())
+		if source != nil && source.OrganizationID != nil {
+			return organizationScopedResource(resourceType, resourceID, source.OrganizationID.String())
+		}
+		return globalResourceWithID(resourceType, resourceID)
 	}
-	return globalResourceWithID(packageResourcePackage, entry.ID.String())
+	return globalResourceWithID(resourceType, resourceID)
 }
 
-func listPackagesResource(sourceID *uuid.UUID) resourceRef {
+func (s *Service) listPackagesResource(ctx context.Context, sourceID *uuid.UUID) (resourceRef, error) {
 	if sourceID == nil {
-		return globalResource(packageResourcePackage)
+		return globalResource(packageResourcePackage), nil
 	}
-	return sourceScopedResource(packageResourcePackage, "", sourceID.String())
+	source, err := s.repository.GetPackageSource(ctx, *sourceID)
+	if err != nil {
+		return resourceRef{}, err
+	}
+	return packageResourceInSource(entity.PackageEntry{SourceID: sourceID}, packageResourcePackage, "", &source), nil
 }
 
-func packageVersionCatalogResource(version entity.PackageVersion) resourceRef {
-	return packageScopedResource(packageResourcePackage, version.PackageID.String(), version.PackageID.String())
+func (s *Service) packageResourceByID(ctx context.Context, packageID uuid.UUID, resourceType string, resourceID string) (resourceRef, error) {
+	entry, err := s.repository.GetPackage(ctx, packageID)
+	if err != nil {
+		return resourceRef{}, err
+	}
+	return s.packageResourceForEntry(ctx, entry, resourceType, resourceID)
+}
+
+func (s *Service) packageResourceForEntry(ctx context.Context, entry entity.PackageEntry, resourceType string, resourceID string) (resourceRef, error) {
+	if entry.SourceID == nil {
+		return packageResourceInSource(entry, resourceType, resourceID, nil), nil
+	}
+	source, err := s.repository.GetPackageSource(ctx, *entry.SourceID)
+	if err != nil {
+		return resourceRef{}, err
+	}
+	return packageResourceInSource(entry, resourceType, resourceID, &source), nil
+}
+
+func (s *Service) versionVerificationResource(ctx context.Context, version entity.PackageVersion) (resourceRef, error) {
+	return s.packageResourceByID(ctx, version.PackageID, packageResourceVersion, version.ID.String())
 }
 
 func readAuthorized[T any](

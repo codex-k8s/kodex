@@ -71,25 +71,13 @@ func authorizationRequest(actor value.Actor, actionKey string, resource resource
 }
 
 func globalResource(resourceType string) resourceRef {
-	return resourceRef{Type: resourceType, ScopeType: "global"}
+	return resourceRef{Type: resourceType, ScopeType: packageScopeGlobal}
 }
 
 func globalResourceWithID(resourceType string, id string) resourceRef {
-	return resourceRef{Type: resourceType, ID: id, ScopeType: "global"}
+	return resourceRef{Type: resourceType, ID: id, ScopeType: packageScopeGlobal}
 }
 
 func organizationScopedResource(resourceType string, id string, organizationID string) resourceRef {
-	return resourceRef{Type: resourceType, ID: id, ScopeType: "organization", ScopeID: organizationID}
-}
-
-func sourceScopedResource(resourceType string, id string, sourceID string) resourceRef {
-	return resourceRef{Type: resourceType, ID: id, ScopeType: "package_source", ScopeID: sourceID}
-}
-
-func packageScopedResource(resourceType string, id string, packageID string) resourceRef {
-	return resourceRef{Type: resourceType, ID: id, ScopeType: "package", ScopeID: packageID}
-}
-
-func versionScopedResource(resourceType string, id string, packageVersionID string) resourceRef {
-	return resourceRef{Type: resourceType, ID: id, ScopeType: "package_version", ScopeID: packageVersionID}
+	return resourceRef{Type: resourceType, ID: id, ScopeType: packageScopeOrganization, ScopeID: organizationID}
 }
