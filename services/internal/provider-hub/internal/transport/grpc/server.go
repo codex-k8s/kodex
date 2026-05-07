@@ -17,6 +17,11 @@ type providerService interface {
 	GetWebhookEvent(context.Context, providerservice.GetWebhookEventInput) (entity.WebhookEvent, error)
 	ListWebhookEvents(context.Context, providerservice.ListWebhookEventsInput) (providerservice.ListWebhookEventsResult, error)
 	RetryWebhookEventProcessing(context.Context, providerservice.RetryWebhookEventProcessingInput) (entity.WebhookEvent, error)
+	GetWorkItemProjection(context.Context, providerservice.GetWorkItemProjectionInput) (entity.ProviderWorkItemProjection, error)
+	FindWorkItemByProviderRef(context.Context, providerservice.FindWorkItemByProviderRefInput) (entity.ProviderWorkItemProjection, error)
+	ListWorkItemProjections(context.Context, providerservice.ListWorkItemProjectionsInput) (providerservice.ListWorkItemProjectionsResult, error)
+	ListComments(context.Context, providerservice.ListCommentsInput) (providerservice.ListCommentsResult, error)
+	ListRelationships(context.Context, providerservice.ListRelationshipsInput) (providerservice.ListRelationshipsResult, error)
 	GetProviderAccountRuntimeState(context.Context, providerservice.GetProviderAccountRuntimeStateInput) (entity.ProviderAccountRuntimeState, error)
 	ListProviderAccountRuntimeStates(context.Context, providerservice.ListProviderAccountRuntimeStatesInput) (providerservice.ListProviderAccountRuntimeStatesResult, error)
 	RecordProviderLimitSnapshot(context.Context, providerservice.RecordProviderLimitSnapshotInput) (entity.ProviderLimitSnapshot, error)
@@ -65,6 +70,31 @@ func (s *Server) ListWebhookEvents(ctx context.Context, request *providersv1.Lis
 // RetryWebhookEventProcessing repeats normalization for a stored webhook.
 func (s *Server) RetryWebhookEventProcessing(ctx context.Context, request *providersv1.RetryWebhookEventProcessingRequest) (*providersv1.WebhookEventResponse, error) {
 	return handleUnary(ctx, request, grpccasters.RetryWebhookEventProcessingInput, s.service.RetryWebhookEventProcessing, grpccasters.WebhookEventResponse)
+}
+
+// GetWorkItemProjection returns a normalized Issue or PR/MR projection.
+func (s *Server) GetWorkItemProjection(ctx context.Context, request *providersv1.GetWorkItemProjectionRequest) (*providersv1.WorkItemProjectionResponse, error) {
+	return handleUnary(ctx, request, grpccasters.GetWorkItemProjectionInput, s.service.GetWorkItemProjection, grpccasters.WorkItemProjectionResponse)
+}
+
+// FindWorkItemByProviderRef finds a projection by provider-native reference.
+func (s *Server) FindWorkItemByProviderRef(ctx context.Context, request *providersv1.FindWorkItemByProviderRefRequest) (*providersv1.WorkItemProjectionResponse, error) {
+	return handleUnary(ctx, request, grpccasters.FindWorkItemByProviderRefInput, s.service.FindWorkItemByProviderRef, grpccasters.WorkItemProjectionResponse)
+}
+
+// ListWorkItemProjections returns normalized work items by supported filters.
+func (s *Server) ListWorkItemProjections(ctx context.Context, request *providersv1.ListWorkItemProjectionsRequest) (*providersv1.ListWorkItemProjectionsResponse, error) {
+	return handleUnary(ctx, request, grpccasters.ListWorkItemProjectionsInput, s.service.ListWorkItemProjections, grpccasters.ListWorkItemProjectionsResponse)
+}
+
+// ListComments returns normalized comments and review signals for a work item.
+func (s *Server) ListComments(ctx context.Context, request *providersv1.ListCommentsRequest) (*providersv1.ListCommentsResponse, error) {
+	return handleUnary(ctx, request, grpccasters.ListCommentsInput, s.service.ListComments, grpccasters.ListCommentsResponse)
+}
+
+// ListRelationships returns normalized provider-native relationships.
+func (s *Server) ListRelationships(ctx context.Context, request *providersv1.ListRelationshipsRequest) (*providersv1.ListRelationshipsResponse, error) {
+	return handleUnary(ctx, request, grpccasters.ListRelationshipsInput, s.service.ListRelationships, grpccasters.ListRelationshipsResponse)
 }
 
 // GetProviderAccountRuntimeState returns provider runtime state for one external account.

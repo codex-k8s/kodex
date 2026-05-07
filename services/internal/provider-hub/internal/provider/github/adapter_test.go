@@ -81,7 +81,7 @@ func TestNormalizeWebhookMapsGitHubIssuePayload(t *testing.T) {
 		ProviderSlug: enum.ProviderSlugGitHub,
 		EventName:    "issues",
 		ReceivedAt:   receivedAt,
-		PayloadJSON:  []byte(`{"action":"opened","repository":{"id":101,"full_name":"codex-k8s/kodex"},"issue":{"id":55,"number":7,"updated_at":"2026-05-07T11:59:00Z"}}`),
+		PayloadJSON:  []byte(`{"action":"opened","repository":{"id":101,"full_name":"codex-k8s/kodex"},"issue":{"id":55,"number":7,"html_url":"https://github.com/codex-k8s/kodex/issues/7","title":"Issue title","state":"open","body":"Issue body","labels":[{"name":"type:dev"}],"assignees":[{"login":"kodex-agent"}],"updated_at":"2026-05-07T11:59:00Z"}}`),
 	})
 	if err != nil {
 		t.Fatalf("NormalizeWebhook(): %v", err)
@@ -94,6 +94,12 @@ func TestNormalizeWebhookMapsGitHubIssuePayload(t *testing.T) {
 	}
 	if facts.OccurredAt != receivedAt.Add(-time.Minute) {
 		t.Fatalf("occurred_at = %s, want %s", facts.OccurredAt, receivedAt.Add(-time.Minute))
+	}
+	if facts.WorkItem == nil {
+		t.Fatal("work item snapshot is nil, want issue snapshot")
+	}
+	if facts.WorkItem.Title != "Issue title" || facts.WorkItem.State != "open" || len(facts.WorkItem.Labels) != 1 || facts.WorkItem.Labels[0] != "type:dev" {
+		t.Fatalf("work item snapshot = %+v, want title, state and labels", facts.WorkItem)
 	}
 }
 

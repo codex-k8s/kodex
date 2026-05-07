@@ -68,8 +68,8 @@ func (r *Repository) Ping(ctx context.Context) error {
 	return nil
 }
 
-// StoreWebhookEvent stores a raw webhook, normalized provider events and outbox events atomically.
-func (r *Repository) StoreWebhookEvent(ctx context.Context, webhook entity.WebhookEvent, providerEvents []entity.ProviderEvent, outboxEvents []entity.OutboxEvent) (entity.WebhookEvent, []entity.ProviderEvent, error) {
+// StoreWebhookEvent stores a raw webhook, projections, normalized provider events and outbox events atomically.
+func (r *Repository) StoreWebhookEvent(ctx context.Context, webhook entity.WebhookEvent, projectionUpdate providerrepo.ProjectionUpdate, providerEvents []entity.ProviderEvent, outboxEvents []entity.OutboxEvent) (entity.WebhookEvent, []entity.ProviderEvent, error) {
 	var stored entity.WebhookEvent
 	var storedProviderEvents []entity.ProviderEvent
 	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
@@ -97,6 +97,9 @@ func (r *Repository) StoreWebhookEvent(ctx context.Context, webhook entity.Webho
 		if err != nil {
 			return err
 		}
+		if err := applyProjectionUpdate(ctx, tx, operationStoreWebhookEvent, projectionUpdate); err != nil {
+			return err
+		}
 		if err := insertOutboxEvents(ctx, tx, operationStoreWebhookEvent, outboxEvents); err != nil {
 			return err
 		}
@@ -109,8 +112,8 @@ func (r *Repository) StoreWebhookEvent(ctx context.Context, webhook entity.Webho
 	return stored, storedProviderEvents, nil
 }
 
-// ProcessWebhookEvent updates processing state and stores new normalized events atomically.
-func (r *Repository) ProcessWebhookEvent(ctx context.Context, webhook entity.WebhookEvent, providerEvents []entity.ProviderEvent, outboxEvents []entity.OutboxEvent) (entity.WebhookEvent, error) {
+// ProcessWebhookEvent updates processing state and stores projection changes atomically.
+func (r *Repository) ProcessWebhookEvent(ctx context.Context, webhook entity.WebhookEvent, projectionUpdate providerrepo.ProjectionUpdate, providerEvents []entity.ProviderEvent, outboxEvents []entity.OutboxEvent) (entity.WebhookEvent, error) {
 	var stored entity.WebhookEvent
 	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
 		var updateErr error
@@ -121,12 +124,35 @@ func (r *Repository) ProcessWebhookEvent(ctx context.Context, webhook entity.Web
 		if _, err := insertProviderEvents(ctx, tx, operationProcessWebhookEvent, providerEvents); err != nil {
 			return err
 		}
+		if err := applyProjectionUpdate(ctx, tx, operationProcessWebhookEvent, projectionUpdate); err != nil {
+			return err
+		}
 		return insertOutboxEvents(ctx, tx, operationProcessWebhookEvent, outboxEvents)
 	})
 	if err != nil {
 		return entity.WebhookEvent{}, wrapError(operationProcessWebhookEvent, err)
 	}
 	return stored, nil
+}
+
+// GetWorkItemProjection returns one Issue or PR/MR projection.
+func (r *Repository) GetWorkItemProjection(ctx context.Context, lookup query.ProviderTargetLookup) (entity.ProviderWorkItemProjection, error) {
+	return queryOne(ctx, r.db, operationGetWorkItemProjection, queryWorkItemProjectionGet, workItemProjectionLookupArgs(lookup), scanWorkItemProjection)
+}
+
+// ListWorkItemProjections returns Issue and PR/MR projections.
+func (r *Repository) ListWorkItemProjections(ctx context.Context, filter query.WorkItemProjectionFilter) ([]entity.ProviderWorkItemProjection, query.PageResult, error) {
+	return queryPage(ctx, r.db, operationListWorkItemProjections, queryWorkItemProjectionList, workItemProjectionFilterArgs(filter), scanWorkItemProjection)
+}
+
+// ListComments returns comment projections for one work item.
+func (r *Repository) ListComments(ctx context.Context, filter query.CommentProjectionFilter) ([]entity.ProviderCommentProjection, query.PageResult, error) {
+	return queryPage(ctx, r.db, operationListComments, queryCommentProjectionList, commentProjectionFilterArgs(filter), scanCommentProjection)
+}
+
+// ListRelationships returns normalized relationships.
+func (r *Repository) ListRelationships(ctx context.Context, filter query.RelationshipFilter) ([]entity.ProviderRelationship, query.PageResult, error) {
+	return queryPage(ctx, r.db, operationListRelationships, queryRelationshipList, relationshipFilterArgs(filter), scanRelationship)
 }
 
 // GetWebhookEvent returns a stored raw webhook by id.
@@ -242,6 +268,10 @@ const (
 	operationGetWebhookEvent                  = "domain.Repository.GetWebhookEvent"
 	operationListWebhookEvents                = "domain.Repository.ListWebhookEvents"
 	operationListProviderEvents               = "domain.Repository.ListProviderEvents"
+	operationGetWorkItemProjection            = "domain.Repository.GetWorkItemProjection"
+	operationListWorkItemProjections          = "domain.Repository.ListWorkItemProjections"
+	operationListComments                     = "domain.Repository.ListComments"
+	operationListRelationships                = "domain.Repository.ListRelationships"
 	operationGetAccountRuntimeState           = "domain.Repository.GetAccountRuntimeState"
 	operationListAccountRuntimeStates         = "domain.Repository.ListAccountRuntimeStates"
 	operationUpsertAccountRuntimeState        = "domain.Repository.UpsertAccountRuntimeState"
@@ -295,6 +325,29 @@ func insertOutboxEvents(ctx context.Context, db execer, operation string, events
 	for _, event := range events {
 		if _, err := db.Exec(ctx, queryOutboxEventCreate, outboxEventArgs(event)); err != nil {
 			return wrapError(operation, err)
+		}
+	}
+	return nil
+}
+
+func applyProjectionUpdate(ctx context.Context, db queryer, operation string, update providerrepo.ProjectionUpdate) error {
+	if update.WorkItem == nil {
+		return nil
+	}
+	storedWorkItem, err := queryOne(ctx, db, operation, queryWorkItemProjectionUpsert, workItemProjectionArgs(*update.WorkItem), scanWorkItemProjection)
+	if err != nil {
+		return err
+	}
+	for _, comment := range update.Comments {
+		comment.WorkItemProjectionID = storedWorkItem.ID
+		if _, err := queryOne(ctx, db, operation, queryCommentProjectionUpsert, commentProjectionArgs(comment), scanCommentProjection); err != nil {
+			return err
+		}
+	}
+	for _, relationship := range update.Relationships {
+		relationship.SourceWorkItemID = storedWorkItem.ID
+		if _, err := queryOne(ctx, db, operation, queryRelationshipUpsert, relationshipArgs(relationship), scanRelationship); err != nil {
+			return err
 		}
 	}
 	return nil

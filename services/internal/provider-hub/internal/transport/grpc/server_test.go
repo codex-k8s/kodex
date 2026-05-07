@@ -22,9 +22,9 @@ func TestServerEmbedsGeneratedUnimplementedContract(t *testing.T) {
 	t.Parallel()
 
 	server := NewServer(fakeService{})
-	_, err := server.GetWorkItemProjection(context.Background(), &providersv1.GetWorkItemProjectionRequest{})
+	_, err := server.RegisterProviderArtifactSignal(context.Background(), &providersv1.RegisterProviderArtifactSignalRequest{})
 	if status.Code(err) != codes.Unimplemented {
-		t.Fatalf("GetWorkItemProjection() code = %s, want unimplemented", status.Code(err))
+		t.Fatalf("RegisterProviderArtifactSignal() code = %s, want unimplemented", status.Code(err))
 	}
 }
 
@@ -76,6 +76,29 @@ func TestIngestWebhookEventMapsRequestAndResponse(t *testing.T) {
 	}
 	if response.GetWebhookEvent().GetProcessingStatus() != providersv1.WebhookProcessingStatus_WEBHOOK_PROCESSING_STATUS_PROCESSED {
 		t.Fatalf("status = %s, want processed", response.GetWebhookEvent().GetProcessingStatus())
+	}
+}
+
+func TestGetWorkItemProjectionMapsRequestAndResponse(t *testing.T) {
+	t.Parallel()
+
+	projectionID := uuid.New()
+	response, err := NewServer(fakeService{}).GetWorkItemProjection(context.Background(), &providersv1.GetWorkItemProjectionRequest{
+		WorkItemProjectionId: projectionID.String(),
+		Meta:                 &providersv1.QueryMeta{Actor: &providersv1.Actor{Type: "user", Id: uuid.NewString()}},
+	})
+	if err != nil {
+		t.Fatalf("GetWorkItemProjection(): %v", err)
+	}
+	projection := response.GetWorkItemProjection()
+	if projection.GetWorkItemProjectionId() != projectionID.String() {
+		t.Fatalf("projection id = %s, want %s", projection.GetWorkItemProjectionId(), projectionID)
+	}
+	if projection.GetKind() != providersv1.WorkItemKind_WORK_ITEM_KIND_ISSUE {
+		t.Fatalf("kind = %s, want issue", projection.GetKind())
+	}
+	if len(projection.GetLabels()) != 1 || projection.GetLabels()[0] != "bug" {
+		t.Fatalf("labels = %+v, want bug", projection.GetLabels())
 	}
 }
 
@@ -149,6 +172,74 @@ func (fakeService) GetWebhookEvent(context.Context, providerservice.GetWebhookEv
 		ProcessingStatus: enum.WebhookProcessingStatusProcessed,
 		PayloadJSON:      []byte(`{}`),
 		RetainUntil:      now.Add(24 * time.Hour),
+	}, nil
+}
+
+func (fakeService) GetWorkItemProjection(_ context.Context, input providerservice.GetWorkItemProjectionInput) (entity.ProviderWorkItemProjection, error) {
+	now := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	return entity.ProviderWorkItemProjection{
+		Base:               entity.Base{ID: input.WorkItemProjectionID, Version: 1, CreatedAt: now, UpdatedAt: now},
+		ProviderSlug:       enum.ProviderSlugGitHub,
+		ProviderWorkItemID: "55",
+		RepositoryFullName: "codex-k8s/kodex",
+		Kind:               enum.WorkItemKindIssue,
+		Number:             7,
+		URL:                "https://github.com/codex-k8s/kodex/issues/7",
+		Title:              "Issue",
+		State:              "open",
+		LabelsJSON:         []byte(`["bug"]`),
+		AssigneesJSON:      []byte(`["kodex-agent"]`),
+		WatermarkStatus:    enum.WorkItemWatermarkStatusValid,
+		ProviderUpdatedAt:  &now,
+		SyncedAt:           now,
+		DriftStatus:        enum.WorkItemDriftStatusFresh,
+	}, nil
+}
+
+func (fakeService) FindWorkItemByProviderRef(context.Context, providerservice.FindWorkItemByProviderRefInput) (entity.ProviderWorkItemProjection, error) {
+	return fakeService{}.GetWorkItemProjection(context.Background(), providerservice.GetWorkItemProjectionInput{WorkItemProjectionID: uuid.New()})
+}
+
+func (fakeService) ListWorkItemProjections(context.Context, providerservice.ListWorkItemProjectionsInput) (providerservice.ListWorkItemProjectionsResult, error) {
+	item, err := fakeService{}.GetWorkItemProjection(context.Background(), providerservice.GetWorkItemProjectionInput{WorkItemProjectionID: uuid.New()})
+	if err != nil {
+		return providerservice.ListWorkItemProjectionsResult{}, err
+	}
+	return providerservice.ListWorkItemProjectionsResult{
+		WorkItemProjections: []entity.ProviderWorkItemProjection{item},
+		Page:                query.PageResult{},
+	}, nil
+}
+
+func (fakeService) ListComments(context.Context, providerservice.ListCommentsInput) (providerservice.ListCommentsResult, error) {
+	now := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	return providerservice.ListCommentsResult{
+		Comments: []entity.ProviderCommentProjection{{
+			Base:                entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+			ProviderCommentID:   "900",
+			Kind:                enum.CommentKindComment,
+			AuthorProviderLogin: "kodex-agent",
+			BodyDigest:          "digest",
+			Summary:             "comment",
+			ProviderCreatedAt:   &now,
+			ProviderUpdatedAt:   &now,
+		}},
+		Page: query.PageResult{},
+	}, nil
+}
+
+func (fakeService) ListRelationships(context.Context, providerservice.ListRelationshipsInput) (providerservice.ListRelationshipsResult, error) {
+	return providerservice.ListRelationshipsResult{
+		Relationships: []entity.ProviderRelationship{{
+			ID:                uuid.New(),
+			SourceWorkItemID:  uuid.New(),
+			TargetProviderRef: "https://github.com/codex-k8s/kodex/pull/8",
+			RelationshipType:  "source",
+			Source:            enum.RelationshipSourceWatermark,
+			Confidence:        enum.RelationshipConfidenceConfirmed,
+			CreatedAt:         time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC),
+		}},
+		Page: query.PageResult{},
 	}, nil
 }
 

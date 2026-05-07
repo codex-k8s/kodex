@@ -10,16 +10,18 @@ import (
 
 	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/errs"
+	providerrepo "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/repository/provider"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/value"
 )
 
 type webhookNormalizationResult struct {
-	status         enum.WebhookProcessingStatus
-	lastError      string
-	providerEvents []entity.ProviderEvent
-	outboxEvents   []entity.OutboxEvent
+	status           enum.WebhookProcessingStatus
+	lastError        string
+	projectionUpdate providerrepo.ProjectionUpdate
+	providerEvents   []entity.ProviderEvent
+	outboxEvents     []entity.OutboxEvent
 }
 
 func (s *Service) normalizeWebhook(webhook entity.WebhookEvent) (webhookNormalizationResult, error) {
@@ -81,10 +83,16 @@ func (s *Service) normalizeWebhook(webhook entity.WebhookEvent) (webhookNormaliz
 	if err != nil {
 		return webhookNormalizationResult{}, err
 	}
+	projectionUpdate, projectionOutbox, err := s.projectionUpdateFromFacts(webhook, facts)
+	if err != nil {
+		return webhookNormalizationResult{}, err
+	}
+	outboxEvents := append([]entity.OutboxEvent{receivedEvent, normalizedOutbox}, projectionOutbox...)
 	return webhookNormalizationResult{
-		status:         enum.WebhookProcessingStatusProcessed,
-		providerEvents: []entity.ProviderEvent{providerEvent},
-		outboxEvents:   []entity.OutboxEvent{receivedEvent, normalizedOutbox},
+		status:           enum.WebhookProcessingStatusProcessed,
+		projectionUpdate: projectionUpdate,
+		providerEvents:   []entity.ProviderEvent{providerEvent},
+		outboxEvents:     outboxEvents,
 	}, nil
 }
 

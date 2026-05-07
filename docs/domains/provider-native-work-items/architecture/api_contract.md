@@ -5,7 +5,7 @@ title: kodex — API-контракт provider-hub
 status: active
 owner_role: SA
 created_at: 2026-05-06
-updated_at: 2026-05-06
+updated_at: 2026-05-07
 related_issues: [281, 282]
 related_prs: []
 approvals:
@@ -52,7 +52,7 @@ approvals:
 |---|---|---|---|
 | `GetWorkItemProjection` | Прочитать `Issue` или `PR/MR` по внутреннему id. | `agent-manager`, `operations-hub`, MCP | Read-only. |
 | `FindWorkItemByProviderRef` | Найти проекцию по `owner/repo/number`, URL или provider id. | `agent-manager`, MCP | Read-only. |
-| `ListWorkItemProjections` | Список по проекту, репозиторию, состоянию, типу, меткам, drift status. | UI через будущие проекции | Read-only. |
+| `ListWorkItemProjections` | Список по проекту, репозиторию, состоянию, типу, меткам, drift status. | `operations-hub`, `agent-manager`, MCP | Read-only. |
 | `ListComments` | Комментарии, mentions и review-сигналы по артефакту. | `agent-manager`, `operations-hub` | Read-only. |
 | `ListRelationships` | Связи артефакта с задачами, PR, follow-up и блокировками. | `agent-manager`, `operations-hub` | Read-only. |
 

@@ -55,6 +55,57 @@ type ProviderEvent struct {
 	OccurredAt           time.Time
 }
 
+// ProviderWorkItemProjection stores a normalized Issue or PR/MR mirror.
+type ProviderWorkItemProjection struct {
+	Base
+	ProviderSlug       enum.ProviderSlug
+	ProviderWorkItemID string
+	ProjectID          *uuid.UUID
+	RepositoryID       *uuid.UUID
+	RepositoryFullName string
+	Kind               enum.WorkItemKind
+	Number             int64
+	URL                string
+	Title              string
+	State              string
+	WorkItemType       string
+	LabelsJSON         []byte
+	AssigneesJSON      []byte
+	Milestone          string
+	ProjectFieldsJSON  []byte
+	WatermarkStatus    enum.WorkItemWatermarkStatus
+	WatermarkJSON      []byte
+	BodyDigest         string
+	ProviderUpdatedAt  *time.Time
+	SyncedAt           time.Time
+	DriftStatus        enum.WorkItemDriftStatus
+}
+
+// ProviderCommentProjection stores a normalized comment, mention or review signal.
+type ProviderCommentProjection struct {
+	Base
+	WorkItemProjectionID uuid.UUID
+	ProviderCommentID    string
+	Kind                 enum.CommentKind
+	AuthorProviderLogin  string
+	BodyDigest           string
+	Summary              string
+	ProviderCreatedAt    *time.Time
+	ProviderUpdatedAt    *time.Time
+}
+
+// ProviderRelationship stores a normalized relationship between provider-native objects.
+type ProviderRelationship struct {
+	ID                uuid.UUID
+	SourceWorkItemID  uuid.UUID
+	TargetWorkItemID  *uuid.UUID
+	TargetProviderRef string
+	RelationshipType  string
+	Source            enum.RelationshipSource
+	Confidence        enum.RelationshipConfidence
+	CreatedAt         time.Time
+}
+
 // ProviderLimitSnapshot stores one observed provider rate or quota snapshot.
 type ProviderLimitSnapshot struct {
 	ID                uuid.UUID

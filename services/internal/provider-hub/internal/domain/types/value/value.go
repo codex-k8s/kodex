@@ -74,4 +74,35 @@ type ProviderWebhookFacts struct {
 	RepositoryFullName   string
 	RepositoryProviderID string
 	OccurredAt           time.Time
+	WorkItem             *ProviderWorkItemSnapshot
+	Comment              *ProviderCommentSnapshot
+}
+
+// ProviderWorkItemSnapshot is a provider-neutral snapshot extracted from webhook or sync payload.
+type ProviderWorkItemSnapshot struct {
+	ProviderSlug       string
+	ProviderWorkItemID string
+	RepositoryFullName string
+	Kind               string
+	Number             int64
+	URL                string
+	Title              string
+	State              string
+	Body               string
+	Labels             []string
+	Assignees          []string
+	Milestone          string
+	ProviderUpdatedAt  time.Time
+}
+
+// ProviderCommentSnapshot is a provider-neutral comment-like snapshot.
+type ProviderCommentSnapshot struct {
+	ProviderSlug       string
+	ProviderCommentID  string
+	ProviderWorkItemID string
+	Kind               string
+	AuthorLogin        string
+	Body               string
+	ProviderCreatedAt  time.Time
+	ProviderUpdatedAt  time.Time
 }
