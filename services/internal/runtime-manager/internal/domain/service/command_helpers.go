@@ -59,7 +59,11 @@ func commandIdentity(meta value.CommandMeta, operation string) (query.CommandIde
 	if meta.CommandID == uuid.Nil && idempotencyKey == "" {
 		return query.CommandIdentity{}, errs.ErrInvalidArgument
 	}
-	return query.CommandIdentity{CommandID: meta.CommandID, IdempotencyKey: idempotencyKey, Operation: operation}, nil
+	actor := normalizedActor(meta.Actor)
+	if actor.Type == "" || actor.ID == "" {
+		return query.CommandIdentity{}, errs.ErrInvalidArgument
+	}
+	return query.CommandIdentity{CommandID: meta.CommandID, IdempotencyKey: idempotencyKey, Operation: operation, Actor: actor}, nil
 }
 
 func commandResult(meta value.CommandMeta, operation string, aggregateID uuid.UUID, now time.Time) (entity.CommandResult, error) {
@@ -67,20 +71,29 @@ func commandResult(meta value.CommandMeta, operation string, aggregateID uuid.UU
 	if meta.CommandID == uuid.Nil && idempotencyKey == "" {
 		return entity.CommandResult{}, errs.ErrInvalidArgument
 	}
+	actor := normalizedActor(meta.Actor)
+	if actor.Type == "" || actor.ID == "" {
+		return entity.CommandResult{}, errs.ErrInvalidArgument
+	}
 	identityKey := meta.CommandID.String()
 	if meta.CommandID == uuid.Nil {
-		identityKey = operation + ":" + idempotencyKey
+		identityKey = operation + ":" + actor.Type + ":" + actor.ID + ":" + idempotencyKey
 	}
 	return entity.CommandResult{
 		Key:            identityKey,
 		CommandID:      nullableUUID(meta.CommandID),
 		IdempotencyKey: idempotencyKey,
+		Actor:          actor,
 		Operation:      operation,
 		AggregateType:  aggregateTypeSlot,
 		AggregateID:    aggregateID,
 		ResultPayload:  []byte("{}"),
 		CreatedAt:      now,
 	}, nil
+}
+
+func normalizedActor(actor value.Actor) value.Actor {
+	return value.Actor{Type: strings.TrimSpace(actor.Type), ID: strings.TrimSpace(actor.ID)}
 }
 
 func expectedVersion(meta value.CommandMeta) (int64, error) {

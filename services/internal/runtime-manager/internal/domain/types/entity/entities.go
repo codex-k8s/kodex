@@ -8,6 +8,7 @@ import (
 
 	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
 	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/enum"
+	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/value"
 )
 
 // Base stores common aggregate metadata used for optimistic concurrency.
@@ -58,6 +59,7 @@ type CommandResult struct {
 	Key            string
 	CommandID      *uuid.UUID
 	IdempotencyKey string
+	Actor          value.Actor
 	Operation      string
 	AggregateType  string
 	AggregateID    uuid.UUID

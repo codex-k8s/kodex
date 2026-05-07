@@ -44,7 +44,7 @@ approvals:
 | RTM-0 | #655 | Доменная документация, границы runtime/fleet, карта Issue и план поставки готовы. |
 | RTM-1 | #656 | gRPC и AsyncAPI контракты `runtime-manager`, события и сгенерированные Go-контракты готовы. |
 | RTM-2 | #657 | Сервисный каркас, PostgreSQL-модель, миграции, repository, health/readiness, outbox и базовые тесты готовы. |
-| RTM-3 | #658 | Жизненный цикл слотов готов: reserve, extend lease, release, fail, MVP default cluster ref и `runtime.slot.*` события. |
+| RTM-3 | #658 | Жизненный цикл слотов готов: reserve, extend lease, release, fail, MVP default cluster ref, проверка доступа через `access-manager` и `runtime.slot.*` события. |
 | RTM-4 | #659 | Workspace materialization готова: source refs, writable/read-only, local paths, fingerprint и ошибки подготовки. |
 | RTM-5 | #660 | Platform job MVP готов: job/step state machine, short log tail, full log ref, executor boundary и `runtime.job.*` события. |
 | RTM-6 | #661 | Эксплуатационный контур готов: Dockerfile, manifests, DB bootstrap, migration job, `services.yaml`, smoke path и runbook. |
@@ -56,7 +56,7 @@ approvals:
 
 | Группа | Контракт | Реализация |
 |---|---|---|
-| Слоты | Готов: `PrepareRuntime`, `ReserveSlot`, `ExtendSlotLease`, `ReleaseSlot`, `MarkSlotFailed`, `GetSlot`, `ListSlots`, события `runtime.slot.*`. | Команды `ReserveSlot`, `ExtendSlotLease`, `ReleaseSlot`, `MarkSlotFailed`, чтения `GetSlot`/`ListSlots`, идемпотентность, проверка версии агрегата и MVP default fleet config готовы. `PrepareRuntime` остаётся фасадной командой следующего среза workspace materialization. |
+| Слоты | Готов: `PrepareRuntime`, `ReserveSlot`, `ExtendSlotLease`, `ReleaseSlot`, `MarkSlotFailed`, `GetSlot`, `ListSlots`, события `runtime.slot.*`. | Команды `ReserveSlot`, `ExtendSlotLease`, `ReleaseSlot`, `MarkSlotFailed`, чтения `GetSlot`/`ListSlots`, идемпотентность с actor scope, проверка доступа через `access-manager`, проверка версии агрегата, lease expiry guard и MVP default fleet config готовы. `PrepareRuntime` остаётся фасадной командой следующего среза workspace materialization. |
 | Workspace materialization | Готов: старт, отчёт прогресса, чтения и события `runtime.workspace.*`. | Не начата; будет в RTM-4. |
 | Platform jobs | Готов: создание, claim с `lease_token`, progress, complete/fail/cancel, чтения и события `runtime.job.*`. | Базовые таблицы job/job step готовы; команды и state machine будут в RTM-5. |
 | Runtime artifact refs | Готов: запись и чтение ссылок на внешние runtime-артефакты. | Базовая таблица готова; команды записи и чтения будут в RTM-5. |

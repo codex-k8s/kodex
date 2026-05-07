@@ -12,9 +12,12 @@ import (
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
+	accessaccountsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/access_accounts/v1"
+	accessclient "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/clients/access"
 	runtimeservice "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/service"
 	runtimepostgres "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/repository/postgres/runtime"
 	runtimegrpc "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/transport/grpc"
+	grpcruntime "google.golang.org/grpc"
 )
 
 // Run starts runtime-manager process servers and shuts them down with context.
@@ -34,12 +37,22 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if eventLogPool != nil {
 		defer eventLogPool.Close()
 	}
+	authorizer, accessConn, err := newAuthorizer(cfg)
+	if err != nil {
+		return err
+	}
+	if accessConn != nil {
+		defer func() {
+			_ = accessConn.Close()
+		}()
+	}
 
 	runtimeRepository := runtimepostgres.NewRepository(dbPool)
 	slotConfig, err := cfg.SlotServiceConfig()
 	if err != nil {
 		return err
 	}
+	slotConfig.Authorizer = authorizer
 	runtimeService := runtimeservice.NewWithConfig(runtimeRepository, systemClock{}, uuidGenerator{}, slotConfig)
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
@@ -105,6 +118,27 @@ type runtimeStore interface {
 
 type pingStore interface {
 	Ping(context.Context) error
+}
+
+func newAuthorizer(cfg Config) (runtimeservice.Authorizer, *grpcruntime.ClientConn, error) {
+	if !cfg.Access.CheckEnabled {
+		return runtimeservice.AllowAllAuthorizer{}, nil, nil
+	}
+	accessConfig := accessclient.Config{
+		Addr:      cfg.Access.AccessManagerGRPCAddr,
+		AuthToken: cfg.Access.AccessManagerAuthToken,
+		Timeout:   cfg.Access.CheckTimeout,
+	}
+	conn, err := accessclient.NewConnection(accessConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+	authorizer, err := accessclient.NewAuthorizer(accessaccountsv1.NewAccessManagerServiceClient(conn), accessConfig)
+	if err != nil {
+		_ = conn.Close()
+		return nil, nil, err
+	}
+	return authorizer, conn, nil
 }
 
 func readinessChecks(runtime runtimeStore, eventLog pingStore) []serviceprocess.ReadinessCheck {

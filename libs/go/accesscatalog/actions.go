@@ -31,6 +31,7 @@ const (
 	ResourcePackageManifest     = "package_manifest"
 	ResourcePackageInstallation = "package_installation"
 	ResourcePackageSecretSchema = "package_secret_schema"
+	ResourceRuntimeSlot         = "runtime_slot"
 )
 
 const (
@@ -74,6 +75,12 @@ const (
 	ActionPackageInstallationRead     = "package.installation.read"
 	ActionPackageSecretRead           = "package.secret.read"
 	ActionPackageVerify               = "package.verify"
+	ActionRuntimeSlotReserve          = "runtime.slot.reserve"
+	ActionRuntimeSlotExtendLease      = "runtime.slot.lease.extend"
+	ActionRuntimeSlotRelease          = "runtime.slot.release"
+	ActionRuntimeSlotFail             = "runtime.slot.fail"
+	ActionRuntimeSlotRead             = "runtime.slot.read"
+	ActionRuntimeSlotList             = "runtime.slot.list"
 )
 
 // ProjectCatalogActions returns system actions owned by the projects-and-repositories domain.
@@ -125,5 +132,17 @@ func PackageHubActions() []ActionDescriptor {
 		{Key: ActionPackageInstallationRead, ResourceType: ResourcePackageInstallation},
 		{Key: ActionPackageSecretRead, ResourceType: ResourcePackageSecretSchema},
 		{Key: ActionPackageVerify, ResourceType: ResourcePackageVersion},
+	}
+}
+
+// RuntimeManagerActions returns system actions owned by the runtime-and-fleet domain.
+func RuntimeManagerActions() []ActionDescriptor {
+	return []ActionDescriptor{
+		{Key: ActionRuntimeSlotReserve, ResourceType: ResourceRuntimeSlot},
+		{Key: ActionRuntimeSlotExtendLease, ResourceType: ResourceRuntimeSlot},
+		{Key: ActionRuntimeSlotRelease, ResourceType: ResourceRuntimeSlot},
+		{Key: ActionRuntimeSlotFail, ResourceType: ResourceRuntimeSlot},
+		{Key: ActionRuntimeSlotRead, ResourceType: ResourceRuntimeSlot},
+		{Key: ActionRuntimeSlotList, ResourceType: ResourceRuntimeSlot},
 	}
 }

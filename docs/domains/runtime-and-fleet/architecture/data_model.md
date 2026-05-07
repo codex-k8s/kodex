@@ -147,14 +147,16 @@ approvals:
 
 - применяется ко всем mutating RPC, которые принимают `CommandMeta`;
 - `command_id` глобально уникален для повторяемой команды;
-- `idempotency_key` уникален в рамках операции;
+- `idempotency_key` уникален в рамках пары actor + операция;
 - `result_payload` хранит ограниченный результат без секретов, достаточный для безопасного повтора.
 
 | Поле | Тип | Nullable | Ограничения | Примечание |
 |---|---|---:|---|---|
 | `key` | text | no | primary key | Стабильный ключ результата команды. |
 | `command_id` | UUID | yes | unique when present | Идентификатор команды. |
-| `idempotency_key` | text | no | unique with operation when non-empty | Ключ идемпотентности для клиентов без UUID-команды. |
+| `idempotency_key` | text | no | unique with actor and operation when non-empty | Ключ идемпотентности для клиентов без UUID-команды. |
+| `actor_type` | text | no | indexed | Тип субъекта, в рамках которого действует `idempotency_key`. |
+| `actor_id` | text | no | indexed | Идентификатор субъекта, в рамках которого действует `idempotency_key`. |
 | `operation` | text | no | indexed | Имя mutating RPC или внутренней команды. |
 | `aggregate_type` | text | no | indexed | Тип агрегата результата: `slot`, `workspace_materialization`, `job`, `cleanup_policy`, `prewarm_pool`. |
 | `aggregate_id` | UUID | no | indexed | Идентификатор агрегата результата. |
@@ -253,7 +255,7 @@ approvals:
 - `WorkspaceMaterialization(slot_id, status)`;
 - `WorkspaceMaterialization(fingerprint)`;
 - `RuntimeManagerCommandResult(command_id)`;
-- `RuntimeManagerCommandResult(operation, idempotency_key)`;
+- `RuntimeManagerCommandResult(operation, actor_type, actor_id, idempotency_key)`;
 - `RuntimeManagerCommandResult(aggregate_type, aggregate_id, created_at)`;
 - `Job(status, lease_until, priority, created_at)`;
 - `Job(slot_id, status)`;

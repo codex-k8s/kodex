@@ -23,6 +23,7 @@ type Config struct {
 	EventLogDatabase RuntimeEventLogDBConfig `envPrefix:"KODEX_RUNTIME_MANAGER_EVENT_LOG_DATABASE_"`
 	Outbox           RuntimeOutboxConfig     `envPrefix:"KODEX_RUNTIME_MANAGER_OUTBOX_"`
 	Slot             RuntimeSlotConfig       `envPrefix:"KODEX_RUNTIME_MANAGER_SLOT_"`
+	Access           RuntimeAccessConfig     `envPrefix:"KODEX_RUNTIME_MANAGER_ACCESS_"`
 }
 
 // RuntimeGRPCConfig contains gRPC boundary limits.
@@ -96,6 +97,14 @@ type RuntimeSlotConfig struct {
 	DefaultLeaseTTL     time.Duration `env:"DEFAULT_LEASE_TTL" envDefault:"30m"`
 }
 
+// RuntimeAccessConfig contains access-manager authorization settings.
+type RuntimeAccessConfig struct {
+	CheckEnabled           bool          `env:"CHECK_ENABLED" envDefault:"true"`
+	AccessManagerGRPCAddr  string        `env:"MANAGER_GRPC_ADDR" envDefault:"access-manager:9090"`
+	AccessManagerAuthToken string        `env:"MANAGER_GRPC_AUTH_TOKEN"`
+	CheckTimeout           time.Duration `env:"MANAGER_CHECK_TIMEOUT" envDefault:"3s"`
+}
+
 // LoadConfig reads process configuration from environment variables.
 func LoadConfig() (Config, error) {
 	cfg, err := env.ParseAs[Config]()
@@ -122,7 +131,10 @@ func (cfg Config) Validate() error {
 	if err := cfg.validateOutboxSettings(); err != nil {
 		return err
 	}
-	return cfg.validateSlotSettings()
+	if err := cfg.validateSlotSettings(); err != nil {
+		return err
+	}
+	return cfg.validateAccessSettings()
 }
 
 func (cfg Config) validateGRPCSettings() error {
@@ -235,6 +247,19 @@ func (cfg Config) validateSlotSettings() error {
 	}
 	if cfg.Slot.DefaultLeaseTTL <= 0 {
 		return fmt.Errorf("KODEX_RUNTIME_MANAGER_SLOT_DEFAULT_LEASE_TTL is invalid")
+	}
+	return nil
+}
+
+func (cfg Config) validateAccessSettings() error {
+	if cfg.Access.CheckTimeout <= 0 {
+		return fmt.Errorf("KODEX_RUNTIME_MANAGER_ACCESS_MANAGER_CHECK_TIMEOUT is invalid")
+	}
+	if cfg.Access.CheckEnabled && strings.TrimSpace(cfg.Access.AccessManagerGRPCAddr) == "" {
+		return fmt.Errorf("KODEX_RUNTIME_MANAGER_ACCESS_MANAGER_GRPC_ADDR is required when access checks are enabled")
+	}
+	if cfg.Access.CheckEnabled && strings.TrimSpace(cfg.Access.AccessManagerAuthToken) == "" {
+		return fmt.Errorf("KODEX_RUNTIME_MANAGER_ACCESS_MANAGER_GRPC_AUTH_TOKEN is required when access checks are enabled")
 	}
 	return nil
 }

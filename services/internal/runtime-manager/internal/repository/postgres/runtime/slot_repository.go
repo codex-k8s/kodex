@@ -23,6 +23,8 @@ func (r *Repository) GetCommandResult(ctx context.Context, identity query.Comman
 	args := pgx.NamedArgs{
 		"command_id":      postgreslib.NullableCommandID(identity.CommandID),
 		"idempotency_key": postgreslib.IdempotencyLookupKey(identity.CommandID, identity.IdempotencyKey),
+		"actor_type":      identity.Actor.Type,
+		"actor_id":        identity.Actor.ID,
 		"operation":       identity.Operation,
 	}
 	rows, err := r.db.Query(ctx, queryCommandResultGet, args)
@@ -165,10 +167,12 @@ func outboxEventArgs(event entity.OutboxEvent) pgx.NamedArgs {
 }
 
 func commandResultArgs(result entity.CommandResult) pgx.NamedArgs {
-	args := make(pgx.NamedArgs, 8)
+	args := make(pgx.NamedArgs, 10)
 	args["key"] = result.Key
 	args["command_id"] = postgreslib.NullableUUID(result.CommandID)
 	args["idempotency_key"] = result.IdempotencyKey
+	args["actor_type"] = result.Actor.Type
+	args["actor_id"] = result.Actor.ID
 	args["operation"] = result.Operation
 	args["aggregate_type"] = result.AggregateType
 	args["aggregate_id"] = result.AggregateID

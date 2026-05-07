@@ -20,6 +20,9 @@ func (s *Service) ReserveSlot(ctx context.Context, input ReserveSlotInput) (enti
 	if err := validateReserveInput(input); err != nil {
 		return entity.Slot{}, err
 	}
+	if err := s.authorizeCommand(ctx, input.Meta, actionSlotReserve, slotResource(uuid.Nil, input.ProjectID)); err != nil {
+		return entity.Slot{}, err
+	}
 	if replay, ok, err := s.slotReplay(ctx, input.Meta, operationReserveSlot, nil); err != nil || ok {
 		if err == nil {
 			err = validateSlotReplayScope(replay, input.ProjectID, input.AgentRunID, input.RepositoryIDs)
@@ -81,6 +84,9 @@ func (s *Service) ExtendSlotLease(ctx context.Context, input ExtendSlotLeaseInpu
 	if strings.TrimSpace(input.LeaseOwner) == "" || input.LeaseUntil.IsZero() {
 		return entity.Slot{}, errs.ErrInvalidArgument
 	}
+	if err := s.authorizeCommand(ctx, input.Meta, actionSlotExtendLease, slotResource(input.SlotID, nil)); err != nil {
+		return entity.Slot{}, err
+	}
 	if replay, ok, err := s.slotReplay(ctx, input.Meta, operationExtendSlotLease, &input.SlotID); err != nil || ok {
 		return replay, err
 	}
@@ -92,7 +98,7 @@ func (s *Service) ExtendSlotLease(ctx context.Context, input ExtendSlotLeaseInpu
 	if err != nil {
 		return entity.Slot{}, err
 	}
-	if err := validateActiveLeaseMutation(slot, input.LeaseOwner); err != nil {
+	if err := validateActiveLeaseMutation(slot, input.LeaseOwner, s.clock.Now()); err != nil {
 		return entity.Slot{}, err
 	}
 	if !input.LeaseUntil.After(s.clock.Now()) {
@@ -122,6 +128,9 @@ func (s *Service) ReleaseSlot(ctx context.Context, input ReleaseSlotInput) (enti
 	if strings.TrimSpace(input.LeaseOwner) == "" {
 		return entity.Slot{}, errs.ErrInvalidArgument
 	}
+	if err := s.authorizeCommand(ctx, input.Meta, actionSlotRelease, slotResource(input.SlotID, nil)); err != nil {
+		return entity.Slot{}, err
+	}
 	if replay, ok, err := s.slotReplay(ctx, input.Meta, operationReleaseSlot, &input.SlotID); err != nil || ok {
 		return replay, err
 	}
@@ -133,7 +142,7 @@ func (s *Service) ReleaseSlot(ctx context.Context, input ReleaseSlotInput) (enti
 	if err != nil {
 		return entity.Slot{}, err
 	}
-	if err := validateActiveLeaseMutation(slot, input.LeaseOwner); err != nil {
+	if err := validateActiveLeaseMutation(slot, input.LeaseOwner, s.clock.Now()); err != nil {
 		return entity.Slot{}, err
 	}
 	now := commandTime(input.Meta, s.clock.Now())
@@ -161,6 +170,9 @@ func (s *Service) MarkSlotFailed(ctx context.Context, input MarkSlotFailedInput)
 	}
 	if strings.TrimSpace(input.ErrorCode) == "" {
 		return entity.Slot{}, errs.ErrInvalidArgument
+	}
+	if err := s.authorizeCommand(ctx, input.Meta, actionSlotFail, slotResource(input.SlotID, nil)); err != nil {
+		return entity.Slot{}, err
 	}
 	if replay, ok, err := s.slotReplay(ctx, input.Meta, operationMarkSlotFailed, &input.SlotID); err != nil || ok {
 		return replay, err
@@ -200,11 +212,17 @@ func (s *Service) GetSlot(ctx context.Context, input GetSlotInput) (entity.Slot,
 	if err != nil {
 		return entity.Slot{}, err
 	}
+	if err := s.authorizeQuery(ctx, input.Meta, actionSlotRead, slotResource(slotID, nil)); err != nil {
+		return entity.Slot{}, err
+	}
 	return s.repository.GetSlot(ctx, slotID)
 }
 
 // ListSlots returns runtime slots by filters.
 func (s *Service) ListSlots(ctx context.Context, input ListSlotsInput) (ListSlotsResult, error) {
+	if err := s.authorizeQuery(ctx, input.Meta, actionSlotList, slotResource(uuid.Nil, input.ProjectID)); err != nil {
+		return ListSlotsResult{}, err
+	}
 	filter := query.SlotFilter{
 		ProjectID:      input.ProjectID,
 		Statuses:       append([]enum.SlotStatus(nil), input.Statuses...),
@@ -245,11 +263,14 @@ func validateExistingSlotCommand(slotID uuid.UUID, meta value.CommandMeta, opera
 	return err
 }
 
-func validateActiveLeaseMutation(slot entity.Slot, leaseOwner string) error {
+func validateActiveLeaseMutation(slot entity.Slot, leaseOwner string, now time.Time) error {
 	if !activeSlotStatus(slot.Status) {
 		return errs.ErrPreconditionFailed
 	}
 	if strings.TrimSpace(slot.LeaseOwner) == "" || slot.LeaseOwner != strings.TrimSpace(leaseOwner) {
+		return errs.ErrConflict
+	}
+	if slot.LeaseUntil == nil || !slot.LeaseUntil.After(now) {
 		return errs.ErrConflict
 	}
 	return nil

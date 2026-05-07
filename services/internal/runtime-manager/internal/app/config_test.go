@@ -20,6 +20,7 @@ func TestLoadConfigAllowsMissingGRPCAuthTokenWhenAuthDisabled(t *testing.T) {
 	t.Setenv("KODEX_RUNTIME_MANAGER_GRPC_AUTH_REQUIRED", "false")
 	t.Setenv("KODEX_RUNTIME_MANAGER_GRPC_AUTH_TOKEN", "")
 	t.Setenv("KODEX_RUNTIME_MANAGER_OUTBOX_DISPATCH_ENABLED", "false")
+	t.Setenv("KODEX_RUNTIME_MANAGER_ACCESS_CHECK_ENABLED", "false")
 
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -58,6 +59,17 @@ func TestValidateRequiresEventLogDSNForPostgresPublisher(t *testing.T) {
 
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() err = nil, want missing event-log DSN error")
+	}
+}
+
+func TestValidateRequiresAccessTokenWhenChecksEnabled(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.Access.AccessManagerAuthToken = ""
+
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() err = nil, want missing access-manager token error")
 	}
 }
 
@@ -137,6 +149,12 @@ func validConfig() Config {
 			DefaultClusterID:    "00000000-0000-0000-0000-000000000002",
 			NamespacePrefix:     "kodex-rt",
 			DefaultLeaseTTL:     30 * time.Minute,
+		},
+		Access: RuntimeAccessConfig{
+			CheckEnabled:           true,
+			AccessManagerGRPCAddr:  "access-manager:9090",
+			AccessManagerAuthToken: "access-token",
+			CheckTimeout:           3 * time.Second,
 		},
 	}
 }

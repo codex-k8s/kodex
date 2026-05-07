@@ -686,6 +686,28 @@ func TestSystemAccessActionCatalogProvidesCodeOwnedPackageActions(t *testing.T) 
 	}
 }
 
+func TestSystemAccessActionCatalogProvidesRuntimeActions(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	user := store.seedUser(enum.UserStatusActive)
+
+	_, err := svc.PutAccessRule(ctx, PutAccessRuleInput{
+		Effect:       enum.AccessEffectAllow,
+		SubjectType:  enum.AccessSubjectUser,
+		SubjectID:    user.ID.String(),
+		ActionKey:    accesscatalog.ActionRuntimeSlotReserve,
+		ResourceType: accesscatalog.ResourceRuntimeSlot,
+		ScopeType:    "global",
+	})
+	if err != nil {
+		t.Fatalf("put rule for runtime system action: %v", err)
+	}
+	if _, ok := store.actions[accesscatalog.ActionRuntimeSlotReserve]; ok {
+		t.Fatal("runtime system action was persisted in custom action catalog")
+	}
+}
+
 func TestPutAccessActionRejectsSystemActionMutation(t *testing.T) {
 	svc := New(newMemoryRepository(), fixedClock{}, newSequenceIDs())
 
@@ -703,6 +725,15 @@ func TestPutAccessActionRejectsSystemActionMutation(t *testing.T) {
 	})
 	if !errors.Is(err, errs.ErrPreconditionFailed) {
 		t.Fatalf("package err = %v, want %v", err, errs.ErrPreconditionFailed)
+	}
+
+	_, err = svc.PutAccessAction(context.Background(), PutAccessActionInput{
+		Key:          accesscatalog.ActionRuntimeSlotReserve,
+		DisplayName:  "Переопределить",
+		ResourceType: accesscatalog.ResourceRuntimeSlot,
+	})
+	if !errors.Is(err, errs.ErrPreconditionFailed) {
+		t.Fatalf("runtime err = %v, want %v", err, errs.ErrPreconditionFailed)
 	}
 }
 

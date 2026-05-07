@@ -60,6 +60,8 @@ func scanCommandResult(row postgreslib.RowScanner) (entity.CommandResult, error)
 		&result.Key,
 		&commandID,
 		&result.IdempotencyKey,
+		&result.Actor.Type,
+		&result.Actor.ID,
 		&result.Operation,
 		&result.AggregateType,
 		&result.AggregateID,

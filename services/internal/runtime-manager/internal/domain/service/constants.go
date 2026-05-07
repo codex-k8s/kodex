@@ -1,6 +1,9 @@
 package service
 
-import runtimeevents "github.com/codex-k8s/kodex/libs/go/platformevents/runtime"
+import (
+	"github.com/codex-k8s/kodex/libs/go/accesscatalog"
+	runtimeevents "github.com/codex-k8s/kodex/libs/go/platformevents/runtime"
+)
 
 const (
 	operationReserveSlot     = "domain.Service.ReserveSlot"
@@ -14,4 +17,10 @@ const (
 	eventSlotLeaseExtended   = runtimeevents.EventSlotLeaseExtended
 	eventSlotReleased        = runtimeevents.EventSlotReleased
 	eventSlotFailed          = runtimeevents.EventSlotFailed
+	actionSlotReserve        = accesscatalog.ActionRuntimeSlotReserve
+	actionSlotExtendLease    = accesscatalog.ActionRuntimeSlotExtendLease
+	actionSlotRelease        = accesscatalog.ActionRuntimeSlotRelease
+	actionSlotFail           = accesscatalog.ActionRuntimeSlotFail
+	actionSlotRead           = accesscatalog.ActionRuntimeSlotRead
+	actionSlotList           = accesscatalog.ActionRuntimeSlotList
 )

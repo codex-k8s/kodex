@@ -19,6 +19,7 @@ type CommandIdentity struct {
 	CommandID      uuid.UUID
 	IdempotencyKey string
 	Operation      string
+	Actor          value.Actor
 }
 
 // SlotFilter selects runtime slots for list queries.

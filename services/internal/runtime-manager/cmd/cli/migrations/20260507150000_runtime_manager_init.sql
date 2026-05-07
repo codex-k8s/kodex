@@ -79,6 +79,8 @@ CREATE TABLE runtime_manager_command_results (
     key text PRIMARY KEY,
     command_id uuid,
     idempotency_key text NOT NULL DEFAULT '',
+    actor_type text NOT NULL,
+    actor_id text NOT NULL,
     operation text NOT NULL,
     aggregate_type text NOT NULL,
     aggregate_id uuid NOT NULL,
@@ -86,6 +88,7 @@ CREATE TABLE runtime_manager_command_results (
     created_at timestamptz NOT NULL,
     CONSTRAINT runtime_manager_command_results_identity_chk
         CHECK (command_id IS NOT NULL OR idempotency_key <> ''),
+    CONSTRAINT runtime_manager_command_results_actor_chk CHECK (actor_type <> '' AND actor_id <> ''),
     CONSTRAINT runtime_manager_command_results_operation_chk CHECK (operation <> ''),
     CONSTRAINT runtime_manager_command_results_aggregate_type_chk CHECK (aggregate_type <> ''),
     CONSTRAINT runtime_manager_command_results_payload_chk CHECK (jsonb_typeof(result_payload) = 'object')
@@ -96,7 +99,7 @@ CREATE UNIQUE INDEX runtime_manager_command_results_command_id_uidx
     WHERE command_id IS NOT NULL;
 
 CREATE UNIQUE INDEX runtime_manager_command_results_idempotency_uidx
-    ON runtime_manager_command_results (operation, idempotency_key)
+    ON runtime_manager_command_results (operation, actor_type, actor_id, idempotency_key)
     WHERE idempotency_key <> '';
 
 CREATE INDEX runtime_manager_command_results_aggregate_idx
