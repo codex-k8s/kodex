@@ -26,6 +26,7 @@ var _ runtimerepo.Repository = (*Repository)(nil)
 
 type database interface {
 	Ping(ctx context.Context) error
+	postgreslib.TxBeginner
 	execer
 	queryer
 }
@@ -44,11 +45,16 @@ type Repository struct {
 }
 
 const (
+	operationCreateSlot                       = "domain.Repository.CreateSlot"
+	operationGetCommandResult                 = "domain.Repository.GetCommandResult"
+	operationGetSlot                          = "domain.Repository.GetSlot"
+	operationListSlots                        = "domain.Repository.ListSlots"
 	operationClaimOutboxEvents                = "domain.Repository.ClaimOutboxEvents"
 	operationMarkOutboxEventFailed            = "domain.Repository.MarkOutboxEventFailed"
 	operationMarkOutboxEventPermanentlyFailed = "domain.Repository.MarkOutboxEventPermanentlyFailed"
 	operationMarkOutboxEventPublished         = "domain.Repository.MarkOutboxEventPublished"
 	operationPing                             = "domain.Repository.Ping"
+	operationUpdateSlot                       = "domain.Repository.UpdateSlot"
 )
 
 // NewRepository creates a PostgreSQL-backed runtime repository.

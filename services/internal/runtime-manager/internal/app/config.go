@@ -6,10 +6,12 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/google/uuid"
 
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
+	runtimeservice "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/service"
 )
 
 // Config contains process-level runtime-manager server configuration.
@@ -20,6 +22,7 @@ type Config struct {
 	Database         RuntimeDatabaseConfig   `envPrefix:"KODEX_RUNTIME_MANAGER_DATABASE_"`
 	EventLogDatabase RuntimeEventLogDBConfig `envPrefix:"KODEX_RUNTIME_MANAGER_EVENT_LOG_DATABASE_"`
 	Outbox           RuntimeOutboxConfig     `envPrefix:"KODEX_RUNTIME_MANAGER_OUTBOX_"`
+	Slot             RuntimeSlotConfig       `envPrefix:"KODEX_RUNTIME_MANAGER_SLOT_"`
 }
 
 // RuntimeGRPCConfig contains gRPC boundary limits.
@@ -85,6 +88,14 @@ type RuntimeOutboxConfig struct {
 	FailureMessageLimit int           `env:"FAILURE_MESSAGE_LIMIT" envDefault:"512"`
 }
 
+// RuntimeSlotConfig contains MVP slot lifecycle defaults.
+type RuntimeSlotConfig struct {
+	DefaultFleetScopeID string        `env:"DEFAULT_FLEET_SCOPE_ID" envDefault:"00000000-0000-0000-0000-000000000001"`
+	DefaultClusterID    string        `env:"DEFAULT_CLUSTER_ID" envDefault:"00000000-0000-0000-0000-000000000002"`
+	NamespacePrefix     string        `env:"NAMESPACE_PREFIX" envDefault:"kodex-rt"`
+	DefaultLeaseTTL     time.Duration `env:"DEFAULT_LEASE_TTL" envDefault:"30m"`
+}
+
 // LoadConfig reads process configuration from environment variables.
 func LoadConfig() (Config, error) {
 	cfg, err := env.ParseAs[Config]()
@@ -108,7 +119,10 @@ func (cfg Config) Validate() error {
 	if err := cfg.validateDatabaseSettings(); err != nil {
 		return err
 	}
-	return cfg.validateOutboxSettings()
+	if err := cfg.validateOutboxSettings(); err != nil {
+		return err
+	}
+	return cfg.validateSlotSettings()
 }
 
 func (cfg Config) validateGRPCSettings() error {
@@ -209,6 +223,22 @@ func (cfg Config) validateOutboxSettings() error {
 	return nil
 }
 
+func (cfg Config) validateSlotSettings() error {
+	if _, err := parseRequiredUUID("KODEX_RUNTIME_MANAGER_SLOT_DEFAULT_FLEET_SCOPE_ID", cfg.Slot.DefaultFleetScopeID); err != nil {
+		return err
+	}
+	if _, err := parseRequiredUUID("KODEX_RUNTIME_MANAGER_SLOT_DEFAULT_CLUSTER_ID", cfg.Slot.DefaultClusterID); err != nil {
+		return err
+	}
+	if strings.Trim(strings.ToLower(cfg.Slot.NamespacePrefix), "-") == "" {
+		return fmt.Errorf("KODEX_RUNTIME_MANAGER_SLOT_NAMESPACE_PREFIX is invalid")
+	}
+	if cfg.Slot.DefaultLeaseTTL <= 0 {
+		return fmt.Errorf("KODEX_RUNTIME_MANAGER_SLOT_DEFAULT_LEASE_TTL is invalid")
+	}
+	return nil
+}
+
 func (cfg Config) needsEventLogDatabase() bool {
 	return cfg.Outbox.DispatchEnabled && strings.TrimSpace(cfg.Outbox.PublisherKind) == outboxlib.PublisherKindPostgresEventLog
 }
@@ -237,6 +267,32 @@ func (cfg Config) poolRuntimeSettings(dsn string, maxConns int32, minConns int32
 		ConnectRetryMaxDelay:     cfg.Database.Retry.Max,
 		ConnectRetryJitterRatio:  cfg.Database.Retry.JitterRatio,
 	}
+}
+
+// SlotServiceConfig converts process config to the runtime domain service config.
+func (cfg Config) SlotServiceConfig() (runtimeservice.Config, error) {
+	fleetScopeID, err := parseRequiredUUID("KODEX_RUNTIME_MANAGER_SLOT_DEFAULT_FLEET_SCOPE_ID", cfg.Slot.DefaultFleetScopeID)
+	if err != nil {
+		return runtimeservice.Config{}, err
+	}
+	clusterID, err := parseRequiredUUID("KODEX_RUNTIME_MANAGER_SLOT_DEFAULT_CLUSTER_ID", cfg.Slot.DefaultClusterID)
+	if err != nil {
+		return runtimeservice.Config{}, err
+	}
+	return runtimeservice.Config{
+		DefaultFleetScopeID: fleetScopeID,
+		DefaultClusterID:    clusterID,
+		NamespacePrefix:     strings.Trim(strings.ToLower(cfg.Slot.NamespacePrefix), "-"),
+		DefaultLeaseTTL:     cfg.Slot.DefaultLeaseTTL,
+	}, nil
+}
+
+func parseRequiredUUID(name string, raw string) (uuid.UUID, error) {
+	id, err := uuid.Parse(strings.TrimSpace(raw))
+	if err != nil || id == uuid.Nil {
+		return uuid.Nil, fmt.Errorf("%s is invalid", name)
+	}
+	return id, nil
 }
 
 // GRPCServerConfig converts service env config to the shared gRPC runtime contract.

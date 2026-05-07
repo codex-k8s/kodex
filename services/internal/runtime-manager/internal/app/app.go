@@ -7,9 +7,12 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
+
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
+	runtimeservice "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/service"
 	runtimepostgres "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/repository/postgres/runtime"
 	runtimegrpc "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/transport/grpc"
 )
@@ -33,6 +36,11 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	}
 
 	runtimeRepository := runtimepostgres.NewRepository(dbPool)
+	slotConfig, err := cfg.SlotServiceConfig()
+	if err != nil {
+		return err
+	}
+	runtimeService := runtimeservice.NewWithConfig(runtimeRepository, systemClock{}, uuidGenerator{}, slotConfig)
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           serviceprocess.NewHealthMux(readinessChecks(runtimeRepository, eventLogPool), 2*time.Second),
@@ -49,11 +57,14 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		Logger:        logger,
 		Metrics:       grpcMetrics,
 		Authenticator: grpcserver.NewSharedTokenAuthenticator(cfg.GRPC.AuthToken),
+		UnaryInterceptors: []grpcserver.UnaryInterceptor{
+			runtimegrpc.UnaryErrorInterceptor(logger),
+		},
 	})
 	if err != nil {
 		return err
 	}
-	runtimegrpc.RegisterRuntimeManagerService(grpcServer)
+	runtimegrpc.RegisterRuntimeManagerService(grpcServer, runtimeService)
 
 	errCh := make(chan error, 3)
 	go serviceprocess.StartHTTPServer(httpServer, "runtime-manager", logger, errCh)
@@ -104,4 +115,16 @@ func readinessChecks(runtime runtimeStore, eventLog pingStore) []serviceprocess.
 		checks = append(checks, serviceprocess.ReadinessCheck{Name: "event log database", Check: eventLog.Ping})
 	}
 	return checks
+}
+
+type systemClock struct{}
+
+func (systemClock) Now() time.Time {
+	return time.Now().UTC()
+}
+
+type uuidGenerator struct{}
+
+func (uuidGenerator) New() uuid.UUID {
+	return uuid.New()
 }

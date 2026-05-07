@@ -56,7 +56,7 @@ approvals:
 
 | Группа | Контракт | Реализация |
 |---|---|---|
-| Слоты | Готов: `PrepareRuntime`, `ReserveSlot`, `ExtendSlotLease`, `ReleaseSlot`, `MarkSlotFailed`, `GetSlot`, `ListSlots`, события `runtime.slot.*`. | Базовая таблица и миграция готовы; команды жизненного цикла будут в RTM-3. |
+| Слоты | Готов: `PrepareRuntime`, `ReserveSlot`, `ExtendSlotLease`, `ReleaseSlot`, `MarkSlotFailed`, `GetSlot`, `ListSlots`, события `runtime.slot.*`. | Команды `ReserveSlot`, `ExtendSlotLease`, `ReleaseSlot`, `MarkSlotFailed`, чтения `GetSlot`/`ListSlots`, идемпотентность, проверка версии агрегата и MVP default fleet config готовы. `PrepareRuntime` остаётся фасадной командой следующего среза workspace materialization. |
 | Workspace materialization | Готов: старт, отчёт прогресса, чтения и события `runtime.workspace.*`. | Не начата; будет в RTM-4. |
 | Platform jobs | Готов: создание, claim с `lease_token`, progress, complete/fail/cancel, чтения и события `runtime.job.*`. | Базовые таблицы job/job step готовы; команды и state machine будут в RTM-5. |
 | Runtime artifact refs | Готов: запись и чтение ссылок на внешние runtime-артефакты. | Базовая таблица готова; команды записи и чтения будут в RTM-5. |

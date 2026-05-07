@@ -1,0 +1,98 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/errs"
+	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/value"
+)
+
+func (s *Service) findCommandResult(ctx context.Context, meta value.CommandMeta, operation string, aggregateType string) (entity.CommandResult, bool, error) {
+	result, found, err := s.loadCommandResult(ctx, meta, operation)
+	switch {
+	case err != nil:
+		return entity.CommandResult{}, false, err
+	case !found:
+		return entity.CommandResult{}, false, nil
+	case result.Operation != operation:
+		return entity.CommandResult{}, false, errs.ErrConflict
+	case result.AggregateType != aggregateType:
+		return entity.CommandResult{}, false, errs.ErrConflict
+	default:
+		return result, true, nil
+	}
+}
+
+func (s *Service) loadCommandResult(ctx context.Context, meta value.CommandMeta, operation string) (entity.CommandResult, bool, error) {
+	identity, err := commandIdentity(meta, operation)
+	if err != nil {
+		return entity.CommandResult{}, false, err
+	}
+	result, err := s.repository.GetCommandResult(ctx, identity)
+	if errors.Is(err, errs.ErrNotFound) {
+		return entity.CommandResult{}, false, nil
+	}
+	return result, err == nil, err
+}
+
+func (s *Service) slotReplay(ctx context.Context, meta value.CommandMeta, operation string, expectedSlotID *uuid.UUID) (entity.Slot, bool, error) {
+	result, ok, err := s.findCommandResult(ctx, meta, operation, aggregateTypeSlot)
+	if err != nil || !ok {
+		return entity.Slot{}, ok, err
+	}
+	if expectedSlotID != nil && result.AggregateID != *expectedSlotID {
+		return entity.Slot{}, true, errs.ErrConflict
+	}
+	slot, err := s.repository.GetSlot(ctx, result.AggregateID)
+	return slot, true, err
+}
+
+func commandIdentity(meta value.CommandMeta, operation string) (query.CommandIdentity, error) {
+	idempotencyKey := strings.TrimSpace(meta.IdempotencyKey)
+	if meta.CommandID == uuid.Nil && idempotencyKey == "" {
+		return query.CommandIdentity{}, errs.ErrInvalidArgument
+	}
+	return query.CommandIdentity{CommandID: meta.CommandID, IdempotencyKey: idempotencyKey, Operation: operation}, nil
+}
+
+func commandResult(meta value.CommandMeta, operation string, aggregateID uuid.UUID, now time.Time) (entity.CommandResult, error) {
+	idempotencyKey := strings.TrimSpace(meta.IdempotencyKey)
+	if meta.CommandID == uuid.Nil && idempotencyKey == "" {
+		return entity.CommandResult{}, errs.ErrInvalidArgument
+	}
+	identityKey := meta.CommandID.String()
+	if meta.CommandID == uuid.Nil {
+		identityKey = operation + ":" + idempotencyKey
+	}
+	return entity.CommandResult{
+		Key:            identityKey,
+		CommandID:      nullableUUID(meta.CommandID),
+		IdempotencyKey: idempotencyKey,
+		Operation:      operation,
+		AggregateType:  aggregateTypeSlot,
+		AggregateID:    aggregateID,
+		ResultPayload:  []byte("{}"),
+		CreatedAt:      now,
+	}, nil
+}
+
+func expectedVersion(meta value.CommandMeta) (int64, error) {
+	if meta.ExpectedVersion == nil || *meta.ExpectedVersion < 1 {
+		return 0, errs.ErrInvalidArgument
+	}
+	return *meta.ExpectedVersion, nil
+}
+
+func nullableUUID(id uuid.UUID) *uuid.UUID {
+	if id == uuid.Nil {
+		return nil
+	}
+	return &id
+}

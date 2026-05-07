@@ -1,0 +1,285 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/errs"
+	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/enum"
+	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/value"
+)
+
+func TestReserveSlotPersistsLeaseAndDefaultFleetRefs(t *testing.T) {
+	t.Parallel()
+
+	svc, repo := newTestService()
+	projectID := mustUUID("00000000-0000-0000-0000-000000000021")
+
+	slot, err := svc.ReserveSlot(context.Background(), ReserveSlotInput{
+		RuntimeProfile:        "go-backend",
+		RuntimeMode:           enum.RuntimeModeFullEnv,
+		WorkspacePolicyDigest: "policy-sha",
+		ProjectID:             &projectID,
+		Meta:                  commandMeta(mustUUID("00000000-0000-0000-0000-000000000101"), 0),
+	})
+	if err != nil {
+		t.Fatalf("ReserveSlot(): %v", err)
+	}
+	if slot.Status != enum.SlotStatusReserved {
+		t.Fatalf("Status = %s, want reserved", slot.Status)
+	}
+	if slot.FleetScopeID == nil || *slot.FleetScopeID != testFleetScopeID {
+		t.Fatalf("FleetScopeID = %v, want %s", slot.FleetScopeID, testFleetScopeID)
+	}
+	if slot.ClusterID == nil || *slot.ClusterID != testClusterID {
+		t.Fatalf("ClusterID = %v, want %s", slot.ClusterID, testClusterID)
+	}
+	if slot.LeaseOwner != "service:agent-manager" {
+		t.Fatalf("LeaseOwner = %s, want service:agent-manager", slot.LeaseOwner)
+	}
+	if slot.LeaseUntil == nil || !slot.LeaseUntil.Equal(testNow.Add(30*time.Minute)) {
+		t.Fatalf("LeaseUntil = %v, want default ttl", slot.LeaseUntil)
+	}
+	if len(repo.events) != 1 || repo.events[0].EventType != eventSlotReserved {
+		t.Fatalf("events = %#v, want slot reserved", repo.events)
+	}
+}
+
+func TestReserveSlotIdempotentReplayChecksScope(t *testing.T) {
+	t.Parallel()
+
+	svc, _ := newTestService()
+	meta := commandMeta(mustUUID("00000000-0000-0000-0000-000000000102"), 0)
+	projectID := mustUUID("00000000-0000-0000-0000-000000000022")
+	otherProjectID := mustUUID("00000000-0000-0000-0000-000000000023")
+
+	first, err := svc.ReserveSlot(context.Background(), ReserveSlotInput{
+		RuntimeProfile:        "go-backend",
+		RuntimeMode:           enum.RuntimeModeCodeOnly,
+		WorkspacePolicyDigest: "policy-sha",
+		ProjectID:             &projectID,
+		Meta:                  meta,
+	})
+	if err != nil {
+		t.Fatalf("first ReserveSlot(): %v", err)
+	}
+	replay, err := svc.ReserveSlot(context.Background(), ReserveSlotInput{
+		RuntimeProfile:        "go-backend",
+		RuntimeMode:           enum.RuntimeModeCodeOnly,
+		WorkspacePolicyDigest: "policy-sha",
+		ProjectID:             &projectID,
+		Meta:                  meta,
+	})
+	if err != nil {
+		t.Fatalf("replay ReserveSlot(): %v", err)
+	}
+	if replay.ID != first.ID {
+		t.Fatalf("replay slot id = %s, want %s", replay.ID, first.ID)
+	}
+	_, err = svc.ReserveSlot(context.Background(), ReserveSlotInput{
+		RuntimeProfile:        "go-backend",
+		RuntimeMode:           enum.RuntimeModeCodeOnly,
+		WorkspacePolicyDigest: "policy-sha",
+		ProjectID:             &otherProjectID,
+		Meta:                  meta,
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("cross-scope replay error = %v, want conflict", err)
+	}
+}
+
+func TestExtendReleaseAndFailSlotUseExpectedVersion(t *testing.T) {
+	t.Parallel()
+
+	svc, _ := newTestService()
+	slot, err := svc.ReserveSlot(context.Background(), ReserveSlotInput{
+		RuntimeProfile:        "go-backend",
+		RuntimeMode:           enum.RuntimeModeFullEnv,
+		WorkspacePolicyDigest: "policy-sha",
+		Meta:                  commandMeta(mustUUID("00000000-0000-0000-0000-000000000103"), 0),
+	})
+	if err != nil {
+		t.Fatalf("ReserveSlot(): %v", err)
+	}
+	extendedUntil := testNow.Add(time.Hour)
+	extended, err := svc.ExtendSlotLease(context.Background(), ExtendSlotLeaseInput{
+		SlotID:     slot.ID,
+		LeaseOwner: slot.LeaseOwner,
+		LeaseUntil: extendedUntil,
+		Meta:       commandMeta(mustUUID("00000000-0000-0000-0000-000000000104"), slot.Version),
+	})
+	if err != nil {
+		t.Fatalf("ExtendSlotLease(): %v", err)
+	}
+	if extended.Version != 2 || extended.LeaseUntil == nil || !extended.LeaseUntil.Equal(extendedUntil) {
+		t.Fatalf("extended slot = %#v, want version 2 and extended lease", extended)
+	}
+	_, err = svc.ReleaseSlot(context.Background(), ReleaseSlotInput{
+		SlotID:     slot.ID,
+		LeaseOwner: slot.LeaseOwner,
+		Meta:       commandMeta(mustUUID("00000000-0000-0000-0000-000000000105"), 1),
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("stale ReleaseSlot() error = %v, want conflict", err)
+	}
+	failed, err := svc.MarkSlotFailed(context.Background(), MarkSlotFailedInput{
+		SlotID:       slot.ID,
+		ErrorCode:    "KUBERNETES_ERROR",
+		ErrorMessage: "pod failed",
+		Meta:         commandMeta(mustUUID("00000000-0000-0000-0000-000000000106"), extended.Version),
+	})
+	if err != nil {
+		t.Fatalf("MarkSlotFailed(): %v", err)
+	}
+	if failed.Status != enum.SlotStatusFailed || failed.LastErrorCode != "KUBERNETES_ERROR" {
+		t.Fatalf("failed slot = %#v, want failed with error code", failed)
+	}
+}
+
+var (
+	testNow          = time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	testFleetScopeID = mustUUID("00000000-0000-0000-0000-000000000011")
+	testClusterID    = mustUUID("00000000-0000-0000-0000-000000000012")
+)
+
+func newTestService() (*Service, *fakeRepository) {
+	repo := &fakeRepository{
+		slots:   make(map[uuid.UUID]entity.Slot),
+		results: make(map[string]entity.CommandResult),
+	}
+	ids := &sequenceIDs{values: []uuid.UUID{
+		mustUUID("00000000-0000-0000-0000-000000000201"),
+		mustUUID("00000000-0000-0000-0000-000000000202"),
+		mustUUID("00000000-0000-0000-0000-000000000203"),
+		mustUUID("00000000-0000-0000-0000-000000000204"),
+		mustUUID("00000000-0000-0000-0000-000000000205"),
+		mustUUID("00000000-0000-0000-0000-000000000206"),
+		mustUUID("00000000-0000-0000-0000-000000000207"),
+		mustUUID("00000000-0000-0000-0000-000000000208"),
+	}}
+	svc := NewWithConfig(repo, fixedClock{now: testNow}, ids, Config{
+		DefaultFleetScopeID: testFleetScopeID,
+		DefaultClusterID:    testClusterID,
+		NamespacePrefix:     "kodex-rt",
+		DefaultLeaseTTL:     30 * time.Minute,
+	})
+	return svc, repo
+}
+
+func commandMeta(commandID uuid.UUID, expectedVersion int64) value.CommandMeta {
+	var expected *int64
+	if expectedVersion > 0 {
+		expected = &expectedVersion
+	}
+	return value.CommandMeta{
+		CommandID:       commandID,
+		ExpectedVersion: expected,
+		Actor:           value.Actor{Type: "service", ID: "agent-manager"},
+	}
+}
+
+type fixedClock struct {
+	now time.Time
+}
+
+func (c fixedClock) Now() time.Time {
+	return c.now
+}
+
+type sequenceIDs struct {
+	values []uuid.UUID
+}
+
+func (g *sequenceIDs) New() uuid.UUID {
+	if len(g.values) == 0 {
+		return uuid.New()
+	}
+	id := g.values[0]
+	g.values = g.values[1:]
+	return id
+}
+
+type fakeRepository struct {
+	slots   map[uuid.UUID]entity.Slot
+	results map[string]entity.CommandResult
+	events  []entity.OutboxEvent
+}
+
+func (r *fakeRepository) Ping(context.Context) error { return nil }
+
+func (r *fakeRepository) GetCommandResult(_ context.Context, identity query.CommandIdentity) (entity.CommandResult, error) {
+	key := identity.CommandID.String()
+	if identity.CommandID == uuid.Nil {
+		key = identity.Operation + ":" + identity.IdempotencyKey
+	}
+	result, ok := r.results[key]
+	if !ok {
+		return entity.CommandResult{}, errs.ErrNotFound
+	}
+	return result, nil
+}
+
+func (r *fakeRepository) CreateSlot(_ context.Context, slot entity.Slot, event entity.OutboxEvent, result entity.CommandResult) error {
+	r.slots[slot.ID] = slot
+	r.events = append(r.events, event)
+	r.results[result.Key] = result
+	return nil
+}
+
+func (r *fakeRepository) UpdateSlot(_ context.Context, slot entity.Slot, previousVersion int64, event entity.OutboxEvent, result *entity.CommandResult) error {
+	current, ok := r.slots[slot.ID]
+	if !ok {
+		return errs.ErrNotFound
+	}
+	if current.Version != previousVersion {
+		return errs.ErrConflict
+	}
+	r.slots[slot.ID] = slot
+	r.events = append(r.events, event)
+	if result != nil {
+		r.results[result.Key] = *result
+	}
+	return nil
+}
+
+func (r *fakeRepository) GetSlot(_ context.Context, id uuid.UUID) (entity.Slot, error) {
+	slot, ok := r.slots[id]
+	if !ok {
+		return entity.Slot{}, errs.ErrNotFound
+	}
+	return slot, nil
+}
+
+func (r *fakeRepository) ListSlots(context.Context, query.SlotFilter) ([]entity.Slot, query.PageResult, error) {
+	slots := make([]entity.Slot, 0, len(r.slots))
+	for _, slot := range r.slots {
+		slots = append(slots, slot)
+	}
+	return slots, query.PageResult{}, nil
+}
+
+func (r *fakeRepository) ClaimOutboxEvents(context.Context, int, time.Time, time.Time) ([]entity.OutboxEvent, error) {
+	return nil, nil
+}
+
+func (r *fakeRepository) MarkOutboxEventPublished(context.Context, uuid.UUID, int, time.Time) error {
+	return nil
+}
+
+func (r *fakeRepository) MarkOutboxEventFailed(context.Context, uuid.UUID, int, time.Time, string) error {
+	return nil
+}
+
+func (r *fakeRepository) MarkOutboxEventPermanentlyFailed(context.Context, uuid.UUID, int, time.Time, string) error {
+	return nil
+}
+
+func mustUUID(text string) uuid.UUID {
+	return uuid.MustParse(text)
+}

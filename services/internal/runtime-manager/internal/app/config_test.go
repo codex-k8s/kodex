@@ -61,6 +61,26 @@ func TestValidateRequiresEventLogDSNForPostgresPublisher(t *testing.T) {
 	}
 }
 
+func TestSlotServiceConfigIncludesExplicitMVPPlacement(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+
+	slotConfig, err := cfg.SlotServiceConfig()
+	if err != nil {
+		t.Fatalf("SlotServiceConfig(): %v", err)
+	}
+	if slotConfig.DefaultFleetScopeID.String() != cfg.Slot.DefaultFleetScopeID {
+		t.Fatalf("DefaultFleetScopeID = %s, want %s", slotConfig.DefaultFleetScopeID, cfg.Slot.DefaultFleetScopeID)
+	}
+	if slotConfig.DefaultClusterID.String() != cfg.Slot.DefaultClusterID {
+		t.Fatalf("DefaultClusterID = %s, want %s", slotConfig.DefaultClusterID, cfg.Slot.DefaultClusterID)
+	}
+	if slotConfig.NamespacePrefix != cfg.Slot.NamespacePrefix {
+		t.Fatalf("NamespacePrefix = %s, want %s", slotConfig.NamespacePrefix, cfg.Slot.NamespacePrefix)
+	}
+}
+
 func validConfig() Config {
 	return Config{
 		HTTPAddr: ":8080",
@@ -111,6 +131,12 @@ func validConfig() Config {
 			RetryInitialDelay:   time.Second,
 			RetryMaxDelay:       time.Minute,
 			FailureMessageLimit: 512,
+		},
+		Slot: RuntimeSlotConfig{
+			DefaultFleetScopeID: "00000000-0000-0000-0000-000000000001",
+			DefaultClusterID:    "00000000-0000-0000-0000-000000000002",
+			NamespacePrefix:     "kodex-rt",
+			DefaultLeaseTTL:     30 * time.Minute,
 		},
 	}
 }
