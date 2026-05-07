@@ -5,8 +5,8 @@ title: kodex — поставка package-hub
 status: active
 owner_role: EM
 created_at: 2026-05-06
-updated_at: 2026-05-06
-related_issues: [642, 646]
+updated_at: 2026-05-07
+related_issues: [642, 646, 650]
 related_prs: []
 related_docsets:
   - docs/domains/package-platform/product/requirements.md
@@ -43,11 +43,50 @@ approvals:
 |---|---|---|
 | PKG-1 | #642 | Доменная документация, план поставки, каталоги и карта связей готовы. |
 | PKG-2 | #646 | gRPC и AsyncAPI контракты `package-hub`, действия доступа и список событий готовы. |
-| PKG-3 | не назначено | Сервисный каркас, PostgreSQL-модель, миграции, outbox и базовые чтения готовы. |
+| PKG-3.1 | #650 | Сервисный процесс, служебный HTTP-контур, общий gRPC runtime и регистрация `PackageHubService` готовы без БД-логики; трассировка OpenTelemetry вынесена в отдельный срез общего runtime до первой реализации бизнес-операций. |
+| PKG-3.2 | не назначено | PostgreSQL-модель источников, пакетов, версий, manifest и ценовых метаданных готова. |
+| PKG-3.3 | не назначено | PostgreSQL-модель установок, схем секретов, проверки, идемпотентности и optimistic concurrency готова. |
+| PKG-3.4 | не назначено | Outbox и первые repository-backed gRPC операции готовы. |
 | PKG-4 | не назначено | Источники магазинов, синхронизация доступного каталога и проверка manifest готовы. |
 | PKG-5 | не назначено | Установки пакетов, версии, привязки секретов и события установки готовы. |
 | PKG-6 | не назначено | Специализация плагинов, руководящих пакетов, магазина и пакетов пользовательского контента платформы готова. |
 | PKG-7 | не назначено | Манифесты deploy, migration job, config, health, metrics и runbook готовы. |
+
+## Статус операций `PackageHubService`
+
+Стабильный `PackageHubService v1` уже фиксирует полный транспортный контракт домена. Кодовый каркас `PKG-3.1` регистрирует сервис, но не реализует бизнес-операции: все методы пока возвращают `unimplemented` через сгенерированный `UnimplementedPackageHubServiceServer`.
+
+| Операция | Текущий статус кода | Плановый срез |
+|---|---|---|
+| `ConnectPackageSource` | `unimplemented` | PKG-4 |
+| `UpdatePackageSource` | `unimplemented` | PKG-4 |
+| `DisablePackageSource` | `unimplemented` | PKG-4 |
+| `GetPackageSource` | `unimplemented` | PKG-3.4 |
+| `ListPackageSources` | `unimplemented` | PKG-3.4 |
+| `SyncAvailablePackages` | `unimplemented` | PKG-4 |
+| `GetPackage` | `unimplemented` | PKG-3.4 |
+| `ListPackages` | `unimplemented` | PKG-3.4 |
+| `GetPackageVersion` | `unimplemented` | PKG-3.4 |
+| `ListPackageVersions` | `unimplemented` | PKG-3.4 |
+| `GetPackageManifest` | `unimplemented` | PKG-3.4 |
+| `RequestPackageInstallation` | `unimplemented` | PKG-5 |
+| `UpdatePackageInstallation` | `unimplemented` | PKG-5 |
+| `DisablePackageInstallation` | `unimplemented` | PKG-5 |
+| `UninstallPackage` | `unimplemented` | PKG-5 |
+| `GetPackageInstallation` | `unimplemented` | PKG-5 |
+| `ListPackageInstallations` | `unimplemented` | PKG-5 |
+| `GetPackageSecretSchema` | `unimplemented` | PKG-5 |
+| `RefreshPackageInstallationSecretStatus` | `unimplemented` | PKG-5 |
+| `SetPackageVerification` | `unimplemented` | PKG-3.4 |
+
+## Наблюдаемость `PKG-3.1`
+
+| Область | Статус | Примечание |
+|---|---|---|
+| Проверки состояния | готово | `/health/livez` и `/health/readyz` добавлены в служебный HTTP-контур. |
+| Метрики | готово | `/metrics` и gRPC-метрики подключены через общий `grpcserver`. |
+| Структурированные логи | готово для процесса | Entry point и запуск серверов пишут JSON-логи без бизнес-данных. |
+| Трассировка OpenTelemetry и проброс контекста | отдельный срез общего runtime | В `PKG-3.1` не считается закрытым пунктом Go-чек-листа. Требуется расширить общий `libs/go/grpcserver` и применить ко всем новым Go-сервисам до первой реализации операций `package-hub` на хранилище. |
 
 ## Синхронизация с параллельными доменами
 

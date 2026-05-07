@@ -5,8 +5,8 @@ title: kodex — API-обзор package-hub
 status: active
 owner_role: SA
 created_at: 2026-05-06
-updated_at: 2026-05-06
-related_issues: [642, 646]
+updated_at: 2026-05-07
+related_issues: [642, 646, 650]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -102,7 +102,7 @@ approvals:
 | AsyncAPI `package.*` | Подготовлен как стабильный событийный `v1` в `specs/asyncapi/package-hub.v1.yaml`. |
 | Go-артефакты gRPC | Генерируются в `proto/gen/go/kodex/packages/v1/**`. |
 | Go-артефакты событий | Генерируются в `libs/go/platformevents/packagehub/events.gen.go`. |
-| Сервисный процесс `package-hub` | Запланирован после контрактного среза. |
+| Сервисный процесс `package-hub` | Каркас процесса подготовлен: общий gRPC runtime, служебные `/health/*`, `/metrics` и регистрация стабильного `PackageHubService`; операции пока возвращают `unimplemented`. |
 | PostgreSQL и outbox | Запланированы после контрактного среза. |
 
 ## Совместимость
