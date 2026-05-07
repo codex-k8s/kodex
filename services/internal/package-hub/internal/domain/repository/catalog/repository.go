@@ -32,8 +32,7 @@ type Repository interface {
 	ListPackageInstallations(ctx context.Context, filter query.PackageInstallationFilter) ([]entity.PackageInstallation, value.PageResult, error)
 	CreatePackageSecretSchema(ctx context.Context, schema entity.PackageSecretSchema) error
 	GetLatestPackageSecretSchema(ctx context.Context, packageVersionID uuid.UUID) (entity.PackageSecretSchema, error)
-	CreatePackageVerification(ctx context.Context, verification entity.PackageVerification) error
+	SetPackageVerification(ctx context.Context, version entity.PackageVersion, previousRevision int64, verification entity.PackageVerification, result entity.CommandResult) error
 	ListPackageVerifications(ctx context.Context, filter query.PackageVerificationFilter) ([]entity.PackageVerification, value.PageResult, error)
-	CreateCommandResult(ctx context.Context, result entity.CommandResult) error
 	GetCommandResult(ctx context.Context, identity query.CommandIdentity) (entity.CommandResult, error)
 }

@@ -1,8 +1,11 @@
 -- +goose Up
+ALTER TABLE package_hub_package_versions
+    ADD CONSTRAINT package_hub_package_versions_package_id_id_uid UNIQUE (package_id, id);
+
 CREATE TABLE package_hub_package_installations (
     id uuid PRIMARY KEY,
     package_id uuid NOT NULL REFERENCES package_hub_packages(id),
-    package_version_id uuid NOT NULL REFERENCES package_hub_package_versions(id),
+    package_version_id uuid NOT NULL,
     scope_type text NOT NULL,
     scope_ref text NOT NULL,
     installation_status text NOT NULL,
@@ -24,7 +27,10 @@ CREATE TABLE package_hub_package_installations (
         CHECK (secret_binding_status IN ('not_required', 'missing', 'complete', 'invalid')),
     CONSTRAINT package_hub_package_installations_health_status_chk
         CHECK (last_health_status IN ('unknown', 'healthy', 'degraded', 'failed')),
-    CONSTRAINT package_hub_package_installations_version_chk CHECK (version > 0)
+    CONSTRAINT package_hub_package_installations_version_chk CHECK (version > 0),
+    CONSTRAINT package_hub_package_installations_package_version_fk
+        FOREIGN KEY (package_id, package_version_id)
+        REFERENCES package_hub_package_versions(package_id, id)
 );
 
 CREATE UNIQUE INDEX package_hub_package_installations_active_scope_uidx
@@ -94,7 +100,7 @@ CREATE UNIQUE INDEX package_hub_command_results_command_id_uidx
 
 CREATE UNIQUE INDEX package_hub_command_results_operation_idempotency_uidx
     ON package_hub_command_results (operation, idempotency_key)
-    WHERE command_id IS NULL AND idempotency_key <> '';
+    WHERE idempotency_key <> '';
 
 CREATE INDEX package_hub_command_results_aggregate_idx
     ON package_hub_command_results (aggregate_type, aggregate_id);
@@ -104,3 +110,6 @@ DROP TABLE IF EXISTS package_hub_command_results;
 DROP TABLE IF EXISTS package_hub_package_verifications;
 DROP TABLE IF EXISTS package_hub_package_secret_schemas;
 DROP TABLE IF EXISTS package_hub_package_installations;
+
+ALTER TABLE package_hub_package_versions
+    DROP CONSTRAINT IF EXISTS package_hub_package_versions_package_id_id_uid;

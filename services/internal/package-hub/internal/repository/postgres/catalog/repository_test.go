@@ -244,6 +244,7 @@ func TestRepositoryIntegrationInstallationStorage(t *testing.T) {
 	now := time.Date(2026, 5, 7, 15, 0, 0, 0, time.UTC)
 
 	_, packageA, versionA := seedCatalog(t, ctx, repository, uuid.New(), now)
+	_, _, versionB := seedCatalog(t, ctx, repository, uuid.New(), now.Add(time.Minute))
 
 	schema := testSecretSchema(versionA.ID, now)
 	if err := repository.CreatePackageSecretSchema(ctx, schema); err != nil {
@@ -267,6 +268,10 @@ func TestRepositoryIntegrationInstallationStorage(t *testing.T) {
 	}
 
 	installation := testInstallation(packageA.ID, versionA.ID, now)
+	mismatchedInstallation := testInstallation(packageA.ID, versionB.ID, now)
+	if err := repository.CreatePackageInstallation(ctx, mismatchedInstallation); !errors.Is(err, errs.ErrPreconditionFailed) {
+		t.Fatalf("cross-package installation err = %v, want %v", err, errs.ErrPreconditionFailed)
+	}
 	if err := repository.CreatePackageInstallation(ctx, installation); err != nil {
 		t.Fatalf("create installation: %v", err)
 	}
@@ -312,12 +317,36 @@ func TestRepositoryIntegrationInstallationStorage(t *testing.T) {
 	}
 
 	verificationA := testVerification(versionA.ID, enum.PackageVerificationStatusRejected, now)
-	verificationB := testVerification(versionA.ID, enum.PackageVerificationStatusVerified, now.Add(time.Minute))
-	if err := repository.CreatePackageVerification(ctx, verificationA); err != nil {
-		t.Fatalf("create verification A: %v", err)
+	rejectedVersion := versionA
+	rejectedVersion.VerificationStatus = enum.PackageVerificationStatusRejected
+	rejectedVersion.ReleaseStatus = enum.PackageReleaseStatusBlocked
+	rejectedVersion.Revision = 2
+	rejectedVersion.UpdatedAt = now.Add(time.Minute)
+	rejectCommandID := uuid.New()
+	rejectResult := testCommandResult(rejectCommandID, "package.verify", enum.CommandAggregateTypePackageVersion, versionA.ID, "", now)
+	if err := repository.SetPackageVerification(ctx, rejectedVersion, 99, verificationA, rejectResult); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("stale verification err = %v, want %v", err, errs.ErrConflict)
 	}
-	if err := repository.CreatePackageVerification(ctx, verificationB); err != nil {
-		t.Fatalf("create verification B: %v", err)
+	if err := repository.SetPackageVerification(ctx, rejectedVersion, 1, verificationA, rejectResult); err != nil {
+		t.Fatalf("set verification A: %v", err)
+	}
+	storedVersion, err := repository.GetPackageVersion(ctx, versionA.ID)
+	if err != nil {
+		t.Fatalf("get verified package version: %v", err)
+	}
+	if storedVersion.VerificationStatus != enum.PackageVerificationStatusRejected || storedVersion.ReleaseStatus != enum.PackageReleaseStatusBlocked || storedVersion.Revision != 2 {
+		t.Fatalf("verified version = %+v, want rejected blocked revision 2", storedVersion)
+	}
+	verificationB := testVerification(versionA.ID, enum.PackageVerificationStatusVerified, now.Add(2*time.Minute))
+	verifiedVersion := storedVersion
+	verifiedVersion.VerificationStatus = enum.PackageVerificationStatusVerified
+	verifiedVersion.ReleaseStatus = enum.PackageReleaseStatusActive
+	verifiedVersion.Revision = 3
+	verifiedVersion.UpdatedAt = now.Add(2 * time.Minute)
+	verifyCommandID := uuid.New()
+	verifyResult := testCommandResult(verifyCommandID, "package.verify", enum.CommandAggregateTypePackageVersion, versionA.ID, "verify-repeat", now.Add(2*time.Minute))
+	if err := repository.SetPackageVerification(ctx, verifiedVersion, 2, verificationB, verifyResult); err != nil {
+		t.Fatalf("set verification B: %v", err)
 	}
 	verifications, page, err := repository.ListPackageVerifications(ctx, query.PackageVerificationFilter{
 		PackageVersionID:   versionA.ID,
@@ -331,35 +360,36 @@ func TestRepositoryIntegrationInstallationStorage(t *testing.T) {
 		t.Fatalf("verifications = %+v token %q, want verification B", verifications, page.NextPageToken)
 	}
 
-	commandID := uuid.New()
-	commandResult := testCommandResult(commandID, installation.ID, now)
-	if err := repository.CreateCommandResult(ctx, commandResult); err != nil {
-		t.Fatalf("create command result: %v", err)
-	}
-	if err := repository.CreateCommandResult(ctx, commandResult); !errors.Is(err, errs.ErrConflict) {
-		t.Fatalf("duplicate command result err = %v, want %v", err, errs.ErrConflict)
-	}
-	storedCommand, err := repository.GetCommandResult(ctx, query.CommandIdentity{CommandID: &commandID})
+	storedCommand, err := repository.GetCommandResult(ctx, query.CommandIdentity{CommandID: &verifyCommandID})
 	if err != nil {
 		t.Fatalf("get command result by command id: %v", err)
 	}
-	if storedCommand.AggregateID != installation.ID || string(storedCommand.ResultPayload) == "" {
-		t.Fatalf("command result = %+v, want installation aggregate", storedCommand)
+	if storedCommand.AggregateID != versionA.ID || string(storedCommand.ResultPayload) == "" {
+		t.Fatalf("command result = %+v, want package version aggregate", storedCommand)
 	}
-	idempotentResult := commandResult
-	idempotentResult.Key = "package.installation.update:request-1"
-	idempotentResult.CommandID = nil
-	idempotentResult.IdempotencyKey = "request-1"
-	idempotentResult.Operation = "package.installation.update"
-	if err := repository.CreateCommandResult(ctx, idempotentResult); err != nil {
-		t.Fatalf("create idempotent result: %v", err)
-	}
-	storedCommand, err = repository.GetCommandResult(ctx, query.CommandIdentity{Operation: idempotentResult.Operation, IdempotencyKey: idempotentResult.IdempotencyKey})
+	replayCommandID := uuid.New()
+	storedCommand, err = repository.GetCommandResult(ctx, query.CommandIdentity{CommandID: &replayCommandID, Operation: verifyResult.Operation, IdempotencyKey: verifyResult.IdempotencyKey})
 	if err != nil {
-		t.Fatalf("get command result by idempotency key: %v", err)
+		t.Fatalf("get command result by idempotency key with another command id: %v", err)
 	}
-	if storedCommand.Key != idempotentResult.Key || storedCommand.CommandID != nil {
-		t.Fatalf("idempotent command = %+v, want key %s without command id", storedCommand, idempotentResult.Key)
+	if storedCommand.Key != verifyResult.Key || storedCommand.CommandID == nil || *storedCommand.CommandID != verifyCommandID {
+		t.Fatalf("idempotent command = %+v, want original command id %s", storedCommand, verifyCommandID)
+	}
+	revokedVersion := verifiedVersion
+	revokedVersion.VerificationStatus = enum.PackageVerificationStatusRevoked
+	revokedVersion.ReleaseStatus = enum.PackageReleaseStatusRevoked
+	revokedVersion.Revision = 4
+	revokedVersion.UpdatedAt = now.Add(3 * time.Minute)
+	duplicateIdempotencyResult := testCommandResult(replayCommandID, "package.verify", enum.CommandAggregateTypePackageVersion, versionA.ID, "verify-repeat", now.Add(3*time.Minute))
+	if err := repository.SetPackageVerification(ctx, revokedVersion, 3, testVerification(versionA.ID, enum.PackageVerificationStatusRevoked, now.Add(3*time.Minute)), duplicateIdempotencyResult); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("duplicate idempotency verification err = %v, want %v", err, errs.ErrConflict)
+	}
+	storedVersion, err = repository.GetPackageVersion(ctx, versionA.ID)
+	if err != nil {
+		t.Fatalf("get package version after duplicate idempotency: %v", err)
+	}
+	if storedVersion.Revision != 3 || storedVersion.VerificationStatus != enum.PackageVerificationStatusVerified {
+		t.Fatalf("version after duplicate idempotency = %+v, want verified revision 3", storedVersion)
 	}
 }
 
@@ -512,15 +542,15 @@ func testVerification(packageVersionID uuid.UUID, status enum.PackageVerificatio
 	}
 }
 
-func testCommandResult(commandID uuid.UUID, aggregateID uuid.UUID, now time.Time) entity.CommandResult {
+func testCommandResult(commandID uuid.UUID, operation string, aggregateType enum.CommandAggregateType, aggregateID uuid.UUID, idempotencyKey string, now time.Time) entity.CommandResult {
 	return entity.CommandResult{
-		Key:            "package.installation.request:" + commandID.String(),
+		Key:            operation + ":" + commandID.String(),
 		CommandID:      &commandID,
-		IdempotencyKey: "",
-		Operation:      "package.installation.request",
-		AggregateType:  enum.CommandAggregateTypeInstallation,
+		IdempotencyKey: idempotencyKey,
+		Operation:      operation,
+		AggregateType:  aggregateType,
 		AggregateID:    aggregateID,
-		ResultPayload:  []byte(`{"installation_id":"` + aggregateID.String() + `"}`),
+		ResultPayload:  []byte(`{"aggregate_id":"` + aggregateID.String() + `"}`),
 		CreatedAt:      now,
 	}
 }

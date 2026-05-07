@@ -10,4 +10,6 @@ SELECT
     created_at
 FROM package_hub_command_results
 WHERE (@command_id::uuid IS NOT NULL AND command_id = @command_id::uuid)
-   OR (@command_id::uuid IS NULL AND operation = @operation AND idempotency_key = @idempotency_key);
+   OR (@idempotency_key::text <> '' AND operation = @operation AND idempotency_key = @idempotency_key)
+ORDER BY CASE WHEN @command_id::uuid IS NOT NULL AND command_id = @command_id::uuid THEN 0 ELSE 1 END
+LIMIT 1;

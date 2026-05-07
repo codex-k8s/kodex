@@ -71,6 +71,18 @@ func packageVersionArgs(version entity.PackageVersion) pgx.NamedArgs {
 	}
 }
 
+func packageVersionVerificationArgs(version entity.PackageVersion, previousRevision int64) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"id":                  version.ID,
+		"package_id":          version.PackageID,
+		"verification_status": string(version.VerificationStatus),
+		"release_status":      string(version.ReleaseStatus),
+		"revision":            version.Revision,
+		"updated_at":          version.UpdatedAt,
+		"previous_revision":   previousRevision,
+	}
+}
+
 func manifestSnapshotArgs(snapshot entity.PackageManifestSnapshot) pgx.NamedArgs {
 	return pgx.NamedArgs{
 		"id":                 snapshot.ID,

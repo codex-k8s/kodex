@@ -24,6 +24,7 @@ var (
 	queryPackageVersionCreate        = mustLoadQuery("package_version__create")
 	queryPackageVersionGetByID       = mustLoadQuery("package_version__get_by_id")
 	queryPackageVersionList          = mustLoadQuery("package_version__list")
+	queryPackageVersionVerification  = mustLoadQuery("package_version__set_verification")
 	queryPricingMetadataCreate       = mustLoadQuery("pricing_metadata__create")
 	queryPricingMetadataGetByPackage = mustLoadQuery("pricing_metadata__get_by_package")
 	queryPricingMetadataUpdate       = mustLoadQuery("pricing_metadata__update")
