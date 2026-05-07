@@ -128,6 +128,13 @@ message PageResponse {
   optional string next_page_token = 1;
 }
 
+// StringListPatch distinguishes absent list update from replacing the list with an empty value.
+message StringListPatch {
+  // values is the complete replacement list.
+  // Empty values with present message clears the list.
+  repeated string values = 1;
+}
+
 // WorkItemKind classifies provider-native work items.
 enum WorkItemKind {
   WORK_ITEM_KIND_UNSPECIFIED = 0;
@@ -839,10 +846,11 @@ message UpdateIssueRequest {
   optional string title = 2;
   // body is optional replacement body.
   optional string body = 3;
-  // labels replaces provider labels when present.
-  repeated string labels = 4;
-  // assignee_provider_logins replaces provider assignees when present.
-  repeated string assignee_provider_logins = 5;
+  // labels replaces provider labels when the message is present; empty values clear labels.
+  StringListPatch labels = 4;
+  // assignee_provider_logins replaces provider assignees when the message is present;
+  // empty values clear assignees.
+  StringListPatch assignee_provider_logins = 5;
   // milestone is optional provider milestone title or id.
   optional string milestone = 6;
   // state is optional provider-normalized lifecycle state.
