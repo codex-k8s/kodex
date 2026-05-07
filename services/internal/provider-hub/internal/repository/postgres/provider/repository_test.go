@@ -17,6 +17,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	migrationtest "github.com/codex-k8s/kodex/libs/go/migrationtest"
+	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
+	providerevents "github.com/codex-k8s/kodex/libs/go/platformevents/provider"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/enum"
@@ -316,6 +318,79 @@ func TestRepositoryIntegrationRuntimeStateLimitsAndOperations(t *testing.T) {
 	if len(operations) != 1 || operations[0].ID != operation.ID {
 		t.Fatalf("operations = %+v, want operation %s", operations, operation.ID)
 	}
+
+	webhook := entity.WebhookEvent{
+		ID:                   uuid.New(),
+		ProviderSlug:         enum.ProviderSlugGitHub,
+		DeliveryID:           "delivery-1",
+		EventName:            "issues",
+		RepositoryProviderID: "100",
+		ReceivedAt:           now,
+		ProcessingStatus:     enum.WebhookProcessingStatusProcessed,
+		PayloadJSON:          []byte(`{"issue":{"id":55,"number":7},"repository":{"id":100}}`),
+		RetainUntil:          now.Add(30 * 24 * time.Hour),
+	}
+	sourceWebhookID := webhook.ID
+	providerEvent := entity.ProviderEvent{
+		ID:                   uuid.New(),
+		SourceWebhookEventID: &sourceWebhookID,
+		EventType:            providerevents.EventWorkItemSynced,
+		AggregateType:        providerevents.AggregateWorkItem,
+		AggregateID:          "55",
+		PayloadJSON:          []byte(`{"provider_slug":"github","webhook_event_id":"` + webhook.ID.String() + `"}`),
+		OccurredAt:           now,
+	}
+	outboxEvents := []entity.OutboxEvent{
+		testOutboxEvent(providerevents.EventWebhookReceived, providerevents.AggregateWebhookEvent, webhook.ID, now),
+		testOutboxEvent(providerevents.EventWebhookNormalized, providerevents.AggregateProviderEvent, providerEvent.ID, now),
+	}
+	storedWebhook, providerEvents, err := repository.StoreWebhookEvent(ctx, webhook, []entity.ProviderEvent{providerEvent}, outboxEvents)
+	if err != nil {
+		t.Fatalf("store webhook event: %v", err)
+	}
+	if storedWebhook.ID != webhook.ID || storedWebhook.ProcessingStatus != enum.WebhookProcessingStatusProcessed {
+		t.Fatalf("stored webhook = %+v, want processed id %s", storedWebhook, webhook.ID)
+	}
+	if len(providerEvents) != 1 || providerEvents[0].AggregateID != "55" {
+		t.Fatalf("provider events = %+v, want aggregate 55", providerEvents)
+	}
+	replayedWebhook := webhook
+	replayedWebhook.ID = uuid.New()
+	storedWebhook, providerEvents, err = repository.StoreWebhookEvent(ctx, replayedWebhook, []entity.ProviderEvent{{ID: uuid.New()}}, []entity.OutboxEvent{testOutboxEvent(providerevents.EventWebhookReceived, providerevents.AggregateWebhookEvent, replayedWebhook.ID, now)})
+	if err != nil {
+		t.Fatalf("replay webhook event: %v", err)
+	}
+	if storedWebhook.ID != webhook.ID || len(providerEvents) != 1 || providerEvents[0].ID != providerEvent.ID {
+		t.Fatalf("replayed webhook = %+v provider events = %+v, want original", storedWebhook, providerEvents)
+	}
+	changedWebhook := webhook
+	changedWebhook.ID = uuid.New()
+	changedWebhook.PayloadJSON = []byte(`{"issue":{"id":56},"repository":{"id":100}}`)
+	_, _, err = repository.StoreWebhookEvent(ctx, changedWebhook, nil, nil)
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("store changed duplicate webhook err = %v, want %v", err, errs.ErrConflict)
+	}
+	webhooks, _, err := repository.ListWebhookEvents(ctx, query.WebhookEventFilter{
+		ProviderSlug:       enum.ProviderSlugGitHub,
+		EventNames:         []string{"issues"},
+		ProcessingStatuses: []enum.WebhookProcessingStatus{enum.WebhookProcessingStatusProcessed},
+	})
+	if err != nil {
+		t.Fatalf("list webhook events: %v", err)
+	}
+	if len(webhooks) != 1 || webhooks[0].ID != webhook.ID {
+		t.Fatalf("webhooks = %+v, want webhook %s", webhooks, webhook.ID)
+	}
+	claimed, err := repository.ClaimOutboxEvents(ctx, 10, now, now.Add(time.Minute))
+	if err != nil {
+		t.Fatalf("claim outbox events: %v", err)
+	}
+	if len(claimed) < 2 {
+		t.Fatalf("claimed outbox events = %d, want at least 2", len(claimed))
+	}
+	if err := repository.MarkOutboxEventPublished(ctx, claimed[0].ID, claimed[0].AttemptCount, now.Add(time.Second)); err != nil {
+		t.Fatalf("mark outbox published: %v", err)
+	}
 }
 
 func openIntegrationPool(t *testing.T, ctx context.Context) *pgxpool.Pool {
@@ -355,4 +430,9 @@ func openIntegrationPool(t *testing.T, ctx context.Context) *pgxpool.Pool {
 		}
 	}
 	return pool
+}
+
+func testOutboxEvent(eventType string, aggregateType string, aggregateID uuid.UUID, occurredAt time.Time) entity.OutboxEvent {
+	event := outboxlib.NewEvent(uuid.New(), eventType, providerevents.SchemaVersion, aggregateType, aggregateID, []byte(`{"ok":true}`), occurredAt, 0)
+	return outboxlib.RecordFromParts(event, outboxlib.RecordDelivery{}, outboxlib.RecordFailure{})
 }

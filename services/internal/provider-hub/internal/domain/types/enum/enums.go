@@ -9,6 +9,16 @@ const (
 	ProviderSlugGitLab ProviderSlug = "gitlab"
 )
 
+// WebhookProcessingStatus describes raw webhook processing state.
+type WebhookProcessingStatus string
+
+const (
+	WebhookProcessingStatusPending   WebhookProcessingStatus = "pending"
+	WebhookProcessingStatusProcessed WebhookProcessingStatus = "processed"
+	WebhookProcessingStatusFailed    WebhookProcessingStatus = "failed"
+	WebhookProcessingStatusIgnored   WebhookProcessingStatus = "ignored"
+)
+
 // ProviderAccountRuntimeStatus describes account health at provider side.
 type ProviderAccountRuntimeStatus string
 

@@ -55,6 +55,30 @@ func TestRecordProviderLimitSnapshotMapsRequestAndResponse(t *testing.T) {
 	}
 }
 
+func TestIngestWebhookEventMapsRequestAndResponse(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.NewString()
+	receivedAt := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	response, err := NewServer(fakeService{}).IngestWebhookEvent(context.Background(), &providersv1.IngestWebhookEventRequest{
+		ProviderSlug: "github",
+		DeliveryId:   "delivery-1",
+		EventName:    "issues",
+		PayloadJson:  `{"issue":{"id":1}}`,
+		ReceivedAt:   receivedAt.Format(time.RFC3339Nano),
+		Meta:         &providersv1.CommandMeta{CommandId: &commandID, RequestId: "req-1"},
+	})
+	if err != nil {
+		t.Fatalf("IngestWebhookEvent(): %v", err)
+	}
+	if response.GetWebhookEvent().GetDeliveryId() != "delivery-1" {
+		t.Fatalf("delivery id = %s, want delivery-1", response.GetWebhookEvent().GetDeliveryId())
+	}
+	if response.GetWebhookEvent().GetProcessingStatus() != providersv1.WebhookProcessingStatus_WEBHOOK_PROCESSING_STATUS_PROCESSED {
+		t.Fatalf("status = %s, want processed", response.GetWebhookEvent().GetProcessingStatus())
+	}
+}
+
 func TestNewServerPanicsWithoutService(t *testing.T) {
 	t.Parallel()
 
@@ -100,6 +124,41 @@ func TestUnaryErrorInterceptorMapsDomainErrors(t *testing.T) {
 }
 
 type fakeService struct{}
+
+func (fakeService) IngestWebhookEvent(_ context.Context, input providerservice.IngestWebhookEventInput) (entity.WebhookEvent, error) {
+	return entity.WebhookEvent{
+		ID:               uuid.New(),
+		ProviderSlug:     input.ProviderSlug,
+		DeliveryID:       input.DeliveryID,
+		EventName:        input.EventName,
+		ReceivedAt:       input.ReceivedAt,
+		ProcessingStatus: enum.WebhookProcessingStatusProcessed,
+		PayloadJSON:      input.PayloadJSON,
+		RetainUntil:      input.ReceivedAt.Add(24 * time.Hour),
+	}, nil
+}
+
+func (fakeService) GetWebhookEvent(context.Context, providerservice.GetWebhookEventInput) (entity.WebhookEvent, error) {
+	now := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	return entity.WebhookEvent{
+		ID:               uuid.New(),
+		ProviderSlug:     enum.ProviderSlugGitHub,
+		DeliveryID:       "delivery-1",
+		EventName:        "issues",
+		ReceivedAt:       now,
+		ProcessingStatus: enum.WebhookProcessingStatusProcessed,
+		PayloadJSON:      []byte(`{}`),
+		RetainUntil:      now.Add(24 * time.Hour),
+	}, nil
+}
+
+func (fakeService) ListWebhookEvents(context.Context, providerservice.ListWebhookEventsInput) (providerservice.ListWebhookEventsResult, error) {
+	return providerservice.ListWebhookEventsResult{Page: query.PageResult{}}, nil
+}
+
+func (fakeService) RetryWebhookEventProcessing(ctx context.Context, input providerservice.RetryWebhookEventProcessingInput) (entity.WebhookEvent, error) {
+	return fakeService{}.GetWebhookEvent(ctx, providerservice.GetWebhookEventInput{WebhookEventID: input.WebhookEventID})
+}
 
 func (fakeService) GetProviderAccountRuntimeState(context.Context, providerservice.GetProviderAccountRuntimeStateInput) (entity.ProviderAccountRuntimeState, error) {
 	return entity.ProviderAccountRuntimeState{

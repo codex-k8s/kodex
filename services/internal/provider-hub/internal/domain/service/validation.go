@@ -33,6 +33,20 @@ func validRuntimeStatuses(statuses []enum.ProviderAccountRuntimeStatus) bool {
 	return true
 }
 
+func validWebhookStatuses(statuses []enum.WebhookProcessingStatus) bool {
+	for _, status := range statuses {
+		switch status {
+		case enum.WebhookProcessingStatusPending,
+			enum.WebhookProcessingStatusProcessed,
+			enum.WebhookProcessingStatusFailed,
+			enum.WebhookProcessingStatusIgnored:
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 func validLimitSource(source enum.ProviderLimitSource) bool {
 	switch source {
 	case enum.ProviderLimitSourceProviderHub,

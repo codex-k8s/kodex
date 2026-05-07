@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
+	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/enum"
 )
 
@@ -27,6 +28,31 @@ type ProviderAccountRuntimeState struct {
 	LastSuccessAt     *time.Time
 	LastErrorCode     string
 	LastErrorMessage  string
+}
+
+// WebhookEvent stores a raw provider webhook accepted from the edge gateway.
+type WebhookEvent struct {
+	ID                   uuid.UUID
+	ProviderSlug         enum.ProviderSlug
+	DeliveryID           string
+	EventName            string
+	RepositoryProviderID string
+	ReceivedAt           time.Time
+	ProcessingStatus     enum.WebhookProcessingStatus
+	PayloadJSON          []byte
+	LastError            string
+	RetainUntil          time.Time
+}
+
+// ProviderEvent stores one normalized provider event derived from a webhook or reconciliation.
+type ProviderEvent struct {
+	ID                   uuid.UUID
+	SourceWebhookEventID *uuid.UUID
+	EventType            string
+	AggregateType        string
+	AggregateID          string
+	PayloadJSON          []byte
+	OccurredAt           time.Time
 }
 
 // ProviderLimitSnapshot stores one observed provider rate or quota snapshot.
@@ -59,3 +85,6 @@ type ProviderOperation struct {
 	StartedAt           time.Time
 	FinishedAt          *time.Time
 }
+
+// OutboxEvent stores a domain event until it is published to platform-event-log.
+type OutboxEvent = outboxlib.Record

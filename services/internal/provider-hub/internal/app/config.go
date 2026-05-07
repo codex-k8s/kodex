@@ -8,12 +8,24 @@ import (
 	"github.com/caarlos0/env/v11"
 
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
+	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 )
 
 // Config contains process-level provider-hub server configuration.
 type Config struct {
 	HTTPAddr                  string        `env:"KODEX_PROVIDER_HUB_HTTP_ADDR" envDefault:":8080"`
+	DatabaseDSN               string        `env:"KODEX_PROVIDER_HUB_DATABASE_DSN,required,notEmpty"`
+	DatabaseMaxConns          int32         `env:"KODEX_PROVIDER_HUB_DATABASE_MAX_CONNS" envDefault:"8"`
+	DatabaseMinConns          int32         `env:"KODEX_PROVIDER_HUB_DATABASE_MIN_CONNS" envDefault:"1"`
+	DatabaseMaxConnLifetime   time.Duration `env:"KODEX_PROVIDER_HUB_DATABASE_MAX_CONN_LIFETIME" envDefault:"1h"`
+	DatabaseMaxConnIdleTime   time.Duration `env:"KODEX_PROVIDER_HUB_DATABASE_MAX_CONN_IDLE_TIME" envDefault:"15m"`
+	DatabaseHealthCheckPeriod time.Duration `env:"KODEX_PROVIDER_HUB_DATABASE_HEALTH_CHECK_PERIOD" envDefault:"30s"`
+	DatabasePingTimeout       time.Duration `env:"KODEX_PROVIDER_HUB_DATABASE_PING_TIMEOUT" envDefault:"5s"`
+	DatabaseRetryMaxAttempts  int           `env:"KODEX_PROVIDER_HUB_DATABASE_CONNECT_RETRY_MAX_ATTEMPTS" envDefault:"6"`
+	DatabaseRetryInitialDelay time.Duration `env:"KODEX_PROVIDER_HUB_DATABASE_CONNECT_RETRY_INITIAL_DELAY" envDefault:"500ms"`
+	DatabaseRetryMaxDelay     time.Duration `env:"KODEX_PROVIDER_HUB_DATABASE_CONNECT_RETRY_MAX_DELAY" envDefault:"5s"`
+	DatabaseRetryJitterRatio  float64       `env:"KODEX_PROVIDER_HUB_DATABASE_CONNECT_RETRY_JITTER_RATIO" envDefault:"0.2"`
 	GRPCAddr                  string        `env:"KODEX_PROVIDER_HUB_GRPC_ADDR" envDefault:":9090"`
 	GRPCAuthRequired          bool          `env:"KODEX_PROVIDER_HUB_GRPC_AUTH_REQUIRED" envDefault:"true"`
 	GRPCAuthToken             string        `env:"KODEX_PROVIDER_HUB_GRPC_AUTH_TOKEN"`
@@ -26,17 +38,21 @@ type Config struct {
 	GRPCPermitWithoutStream   bool          `env:"KODEX_PROVIDER_HUB_GRPC_PERMIT_WITHOUT_STREAM" envDefault:"false"`
 	GRPCMaxRecvMessageBytes   int           `env:"KODEX_PROVIDER_HUB_GRPC_MAX_RECV_MESSAGE_BYTES" envDefault:"4194304"`
 	GRPCMaxSendMessageBytes   int           `env:"KODEX_PROVIDER_HUB_GRPC_MAX_SEND_MESSAGE_BYTES" envDefault:"4194304"`
-	DatabaseDSN               string        `env:"KODEX_PROVIDER_HUB_DATABASE_DSN,required,notEmpty"`
-	DatabaseMaxConns          int32         `env:"KODEX_PROVIDER_HUB_DATABASE_MAX_CONNS" envDefault:"8"`
-	DatabaseMinConns          int32         `env:"KODEX_PROVIDER_HUB_DATABASE_MIN_CONNS" envDefault:"1"`
-	DatabaseMaxConnLifetime   time.Duration `env:"KODEX_PROVIDER_HUB_DATABASE_MAX_CONN_LIFETIME" envDefault:"1h"`
-	DatabaseMaxConnIdleTime   time.Duration `env:"KODEX_PROVIDER_HUB_DATABASE_MAX_CONN_IDLE_TIME" envDefault:"15m"`
-	DatabaseHealthCheckPeriod time.Duration `env:"KODEX_PROVIDER_HUB_DATABASE_HEALTH_CHECK_PERIOD" envDefault:"30s"`
-	DatabasePingTimeout       time.Duration `env:"KODEX_PROVIDER_HUB_DATABASE_PING_TIMEOUT" envDefault:"5s"`
-	DatabaseRetryMaxAttempts  int           `env:"KODEX_PROVIDER_HUB_DATABASE_CONNECT_RETRY_MAX_ATTEMPTS" envDefault:"6"`
-	DatabaseRetryInitialDelay time.Duration `env:"KODEX_PROVIDER_HUB_DATABASE_CONNECT_RETRY_INITIAL_DELAY" envDefault:"500ms"`
-	DatabaseRetryMaxDelay     time.Duration `env:"KODEX_PROVIDER_HUB_DATABASE_CONNECT_RETRY_MAX_DELAY" envDefault:"5s"`
-	DatabaseRetryJitterRatio  float64       `env:"KODEX_PROVIDER_HUB_DATABASE_CONNECT_RETRY_JITTER_RATIO" envDefault:"0.2"`
+	EventLogDatabaseDSN       string        `env:"KODEX_PROVIDER_HUB_EVENT_LOG_DATABASE_DSN"`
+	EventLogDatabaseMaxConns  int32         `env:"KODEX_PROVIDER_HUB_EVENT_LOG_DATABASE_MAX_CONNS" envDefault:"4"`
+	EventLogDatabaseMinConns  int32         `env:"KODEX_PROVIDER_HUB_EVENT_LOG_DATABASE_MIN_CONNS" envDefault:"0"`
+	OutboxDispatchEnabled     bool          `env:"KODEX_PROVIDER_HUB_OUTBOX_DISPATCH_ENABLED" envDefault:"true"`
+	OutboxPublisherKind       string        `env:"KODEX_PROVIDER_HUB_OUTBOX_PUBLISHER_KIND" envDefault:"postgres-event-log"`
+	OutboxEventLogSource      string        `env:"KODEX_PROVIDER_HUB_OUTBOX_EVENT_LOG_SOURCE" envDefault:"provider-hub"`
+	OutboxAllowLossyPublisher bool          `env:"KODEX_PROVIDER_HUB_OUTBOX_ALLOW_LOSSY_DIAGNOSTIC_PUBLISHER" envDefault:"false"`
+	OutboxBatchSize           int           `env:"KODEX_PROVIDER_HUB_OUTBOX_BATCH_SIZE" envDefault:"100"`
+	OutboxPollInterval        time.Duration `env:"KODEX_PROVIDER_HUB_OUTBOX_POLL_INTERVAL" envDefault:"1s"`
+	OutboxLockTTL             time.Duration `env:"KODEX_PROVIDER_HUB_OUTBOX_LOCK_TTL" envDefault:"30s"`
+	OutboxPublishTimeout      time.Duration `env:"KODEX_PROVIDER_HUB_OUTBOX_PUBLISH_TIMEOUT" envDefault:"10s"`
+	OutboxLeaseSafetyMargin   time.Duration `env:"KODEX_PROVIDER_HUB_OUTBOX_LEASE_SAFETY_MARGIN" envDefault:"5s"`
+	OutboxRetryInitialDelay   time.Duration `env:"KODEX_PROVIDER_HUB_OUTBOX_RETRY_INITIAL_DELAY" envDefault:"1s"`
+	OutboxRetryMaxDelay       time.Duration `env:"KODEX_PROVIDER_HUB_OUTBOX_RETRY_MAX_DELAY" envDefault:"1m"`
+	OutboxFailureMessageLimit int           `env:"KODEX_PROVIDER_HUB_OUTBOX_FAILURE_MESSAGE_LIMIT" envDefault:"512"`
 }
 
 // LoadConfig reads process configuration from environment variables.
@@ -62,7 +78,7 @@ func (cfg Config) Validate() error {
 	if err := cfg.validateDatabaseSettings(); err != nil {
 		return err
 	}
-	return nil
+	return cfg.validateOutboxSettings()
 }
 
 func (cfg Config) validateGRPCSettings() error {
@@ -127,6 +143,67 @@ func (cfg Config) validateDatabaseSettings() error {
 	return nil
 }
 
+func (cfg Config) validateOutboxSettings() error {
+	switch strings.TrimSpace(cfg.OutboxPublisherKind) {
+	case outboxlib.PublisherKindDisabled, outboxlib.PublisherKindDiagnosticLogLossy, outboxlib.PublisherKindPostgresEventLog:
+	default:
+		return fmt.Errorf("KODEX_PROVIDER_HUB_OUTBOX_PUBLISHER_KIND must be disabled, diagnostic-log-lossy or postgres-event-log")
+	}
+	if cfg.OutboxDispatchEnabled && strings.TrimSpace(cfg.OutboxPublisherKind) == outboxlib.PublisherKindDisabled {
+		return fmt.Errorf("KODEX_PROVIDER_HUB_OUTBOX_PUBLISHER_KIND must be configured when outbox dispatch is enabled")
+	}
+	if strings.TrimSpace(cfg.OutboxPublisherKind) == outboxlib.PublisherKindDiagnosticLogLossy && !cfg.OutboxAllowLossyPublisher {
+		return fmt.Errorf("KODEX_PROVIDER_HUB_OUTBOX_ALLOW_LOSSY_DIAGNOSTIC_PUBLISHER must be true for diagnostic-log-lossy publisher")
+	}
+	if strings.TrimSpace(cfg.OutboxPublisherKind) == outboxlib.PublisherKindPostgresEventLog && strings.TrimSpace(cfg.OutboxEventLogSource) == "" {
+		return fmt.Errorf("KODEX_PROVIDER_HUB_OUTBOX_EVENT_LOG_SOURCE must be configured for postgres-event-log publisher")
+	}
+	if cfg.needsEventLogDatabase() && strings.TrimSpace(cfg.EventLogDatabaseDSN) == "" {
+		return fmt.Errorf("KODEX_PROVIDER_HUB_EVENT_LOG_DATABASE_DSN is required for postgres-event-log publisher")
+	}
+	if cfg.EventLogDatabaseMaxConns < 0 {
+		return fmt.Errorf("KODEX_PROVIDER_HUB_EVENT_LOG_DATABASE_MAX_CONNS must not be negative")
+	}
+	if cfg.EventLogDatabaseMinConns < 0 {
+		return fmt.Errorf("KODEX_PROVIDER_HUB_EVENT_LOG_DATABASE_MIN_CONNS must not be negative")
+	}
+	if cfg.needsEventLogDatabase() && cfg.EventLogDatabaseMaxConns < 1 {
+		return fmt.Errorf("KODEX_PROVIDER_HUB_EVENT_LOG_DATABASE_MAX_CONNS must be greater than zero for postgres-event-log publisher")
+	}
+	if cfg.EventLogDatabaseMaxConns > 0 && cfg.EventLogDatabaseMinConns > cfg.EventLogDatabaseMaxConns {
+		return fmt.Errorf("KODEX_PROVIDER_HUB_EVENT_LOG_DATABASE_MIN_CONNS must be less than or equal to max conns")
+	}
+	if err := requirePositive("KODEX_PROVIDER_HUB_OUTBOX_BATCH_SIZE", cfg.OutboxBatchSize); err != nil {
+		return err
+	}
+	if err := requireDuration("KODEX_PROVIDER_HUB_OUTBOX_POLL_INTERVAL", cfg.OutboxPollInterval); err != nil {
+		return err
+	}
+	if err := requireDuration("KODEX_PROVIDER_HUB_OUTBOX_LOCK_TTL", cfg.OutboxLockTTL); err != nil {
+		return err
+	}
+	if err := requireDuration("KODEX_PROVIDER_HUB_OUTBOX_PUBLISH_TIMEOUT", cfg.OutboxPublishTimeout); err != nil {
+		return err
+	}
+	if cfg.OutboxLeaseSafetyMargin < 0 {
+		return fmt.Errorf("KODEX_PROVIDER_HUB_OUTBOX_LEASE_SAFETY_MARGIN must not be negative")
+	}
+	if cfg.OutboxPublishTimeout+cfg.OutboxLeaseSafetyMargin >= cfg.OutboxLockTTL {
+		return fmt.Errorf("KODEX_PROVIDER_HUB_OUTBOX_PUBLISH_TIMEOUT plus safety margin must be less than KODEX_PROVIDER_HUB_OUTBOX_LOCK_TTL")
+	}
+	if err := requireDuration("KODEX_PROVIDER_HUB_OUTBOX_RETRY_INITIAL_DELAY", cfg.OutboxRetryInitialDelay); err != nil {
+		return err
+	}
+	if cfg.OutboxRetryMaxDelay < cfg.OutboxRetryInitialDelay {
+		return fmt.Errorf("KODEX_PROVIDER_HUB_OUTBOX_RETRY_MAX_DELAY must be greater than or equal to initial delay")
+	}
+	return requirePositive("KODEX_PROVIDER_HUB_OUTBOX_FAILURE_MESSAGE_LIMIT", cfg.OutboxFailureMessageLimit)
+}
+
+func (cfg Config) needsEventLogDatabase() bool {
+	return cfg.OutboxDispatchEnabled && strings.TrimSpace(cfg.OutboxPublisherKind) == outboxlib.PublisherKindPostgresEventLog
+}
+
 func requirePositive(name string, value int) error {
 	if value <= 0 {
 		return fmt.Errorf("%s is invalid", name)
@@ -143,22 +220,31 @@ func requireDuration(name string, value time.Duration) error {
 
 // DatabasePoolSettings converts service config to the shared pgxpool contract.
 func (cfg Config) DatabasePoolSettings() postgreslib.PoolSettings {
-	return postgreslib.PoolSettingsFromRuntime(postgreslib.PoolRuntimeSettings{
-		DSN:                      cfg.DatabaseDSN,
-		MaxConns:                 cfg.DatabaseMaxConns,
-		MinConns:                 cfg.DatabaseMinConns,
-		MaxConnLifetime:          cfg.DatabaseMaxConnLifetime,
-		MaxConnIdleTime:          cfg.DatabaseMaxConnIdleTime,
-		HealthCheckPeriod:        cfg.DatabaseHealthCheckPeriod,
-		PingTimeout:              cfg.DatabasePingTimeout,
-		ConnectRetryMaxAttempts:  cfg.DatabaseRetryMaxAttempts,
-		ConnectRetryInitialDelay: cfg.DatabaseRetryInitialDelay,
-		ConnectRetryMaxDelay:     cfg.DatabaseRetryMaxDelay,
-		ConnectRetryJitterRatio:  cfg.DatabaseRetryJitterRatio,
-	})
+	return postgreslib.PoolSettingsFromRuntime(cfg.databaseRuntimeSettings(cfg.DatabaseDSN, cfg.DatabaseMaxConns, cfg.DatabaseMinConns))
+}
+
+// EventLogDatabasePoolSettings converts event-log env config to a separate pgxpool contract.
+func (cfg Config) EventLogDatabasePoolSettings() postgreslib.PoolSettings {
+	return postgreslib.PoolSettingsFromRuntime(cfg.databaseRuntimeSettings(cfg.EventLogDatabaseDSN, cfg.EventLogDatabaseMaxConns, cfg.EventLogDatabaseMinConns))
+}
+
+func (cfg Config) optionalEventLogDatabasePoolSettings() (postgreslib.PoolSettings, bool) {
+	if !cfg.needsEventLogDatabase() {
+		return postgreslib.PoolSettings{}, false
+	}
+	return cfg.EventLogDatabasePoolSettings(), true
+}
+
+func (cfg Config) databaseRuntimeSettings(dsn string, maxConns int32, minConns int32) postgreslib.PoolRuntimeSettings {
+	return postgreslib.PoolRuntimeSettingsFromValues(dsn, maxConns, minConns, cfg.DatabaseMaxConnLifetime, cfg.DatabaseMaxConnIdleTime, cfg.DatabaseHealthCheckPeriod, cfg.DatabasePingTimeout, cfg.DatabaseRetryMaxAttempts, cfg.DatabaseRetryInitialDelay, cfg.DatabaseRetryMaxDelay, cfg.DatabaseRetryJitterRatio)
 }
 
 // GRPCServerConfig converts service env config to the shared gRPC runtime contract.
 func (cfg Config) GRPCServerConfig() grpcserver.Config {
 	return grpcserver.ConfigFromRuntimeValues(cfg.GRPCMaxInFlight, cfg.GRPCMaxConcurrentStreams, cfg.GRPCUnaryTimeout, cfg.GRPCKeepaliveTime, cfg.GRPCKeepaliveTimeout, cfg.GRPCKeepaliveMinTime, cfg.GRPCPermitWithoutStream, cfg.GRPCMaxRecvMessageBytes, cfg.GRPCMaxSendMessageBytes, cfg.GRPCAuthRequired)
+}
+
+// OutboxDispatcherConfig converts service env config to the outbox delivery worker contract.
+func (cfg Config) OutboxDispatcherConfig() outboxlib.Config {
+	return outboxlib.ConfigFromRuntimeValues(cfg.OutboxBatchSize, cfg.OutboxPollInterval, cfg.OutboxLockTTL, cfg.OutboxPublishTimeout, cfg.OutboxRetryInitialDelay, cfg.OutboxRetryMaxDelay, cfg.OutboxFailureMessageLimit)
 }

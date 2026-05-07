@@ -10,6 +10,88 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/enum"
 )
 
+// IngestWebhookEventInput maps a gRPC request to the domain command input.
+func IngestWebhookEventInput(request *providersv1.IngestWebhookEventRequest) (providerservice.IngestWebhookEventInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return providerservice.IngestWebhookEventInput{}, err
+	}
+	receivedAt, err := requiredTime(request.GetReceivedAt())
+	if err != nil {
+		return providerservice.IngestWebhookEventInput{}, err
+	}
+	return providerservice.IngestWebhookEventInput{
+		ProviderSlug:         providerSlug(request.GetProviderSlug()),
+		DeliveryID:           strings.TrimSpace(request.GetDeliveryId()),
+		EventName:            strings.TrimSpace(request.GetEventName()),
+		RepositoryProviderID: strings.TrimSpace(request.GetRepositoryProviderId()),
+		PayloadJSON:          []byte(strings.TrimSpace(request.GetPayloadJson())),
+		ReceivedAt:           receivedAt,
+		Meta:                 meta,
+	}, nil
+}
+
+// GetWebhookEventInput maps a gRPC request to the domain read input.
+func GetWebhookEventInput(request *providersv1.GetWebhookEventRequest) (providerservice.GetWebhookEventInput, error) {
+	meta, err := QueryMetaFromProto(request.GetMeta())
+	if err != nil {
+		return providerservice.GetWebhookEventInput{}, err
+	}
+	id, err := requiredUUID(request.GetWebhookEventId())
+	if err != nil {
+		return providerservice.GetWebhookEventInput{}, err
+	}
+	input := providerservice.GetWebhookEventInput{
+		WebhookEventID: id,
+		Meta:           meta,
+	}
+	return input, nil
+}
+
+// ListWebhookEventsInput maps a gRPC request to the domain read input.
+func ListWebhookEventsInput(request *providersv1.ListWebhookEventsRequest) (providerservice.ListWebhookEventsInput, error) {
+	meta, err := QueryMetaFromProto(request.GetMeta())
+	if err != nil {
+		return providerservice.ListWebhookEventsInput{}, err
+	}
+	statuses, err := webhookStatusesFromProto(request.GetProcessingStatuses())
+	if err != nil {
+		return providerservice.ListWebhookEventsInput{}, err
+	}
+	receivedSince, err := optionalTimePtr(request.GetReceivedSince())
+	if err != nil {
+		return providerservice.ListWebhookEventsInput{}, err
+	}
+	receivedUntil, err := optionalTimePtr(request.GetReceivedUntil())
+	if err != nil {
+		return providerservice.ListWebhookEventsInput{}, err
+	}
+	return providerservice.ListWebhookEventsInput{
+		ProviderSlug:         providerSlug(request.GetProviderSlug()),
+		DeliveryID:           strings.TrimSpace(request.GetDeliveryId()),
+		EventNames:           trimProtoStrings(request.GetEventNames()),
+		ProcessingStatuses:   statuses,
+		RepositoryProviderID: strings.TrimSpace(request.GetRepositoryProviderId()),
+		ReceivedSince:        receivedSince,
+		ReceivedUntil:        receivedUntil,
+		Page:                 pageRequestFromProto(request.GetPage()),
+		Meta:                 meta,
+	}, nil
+}
+
+// RetryWebhookEventProcessingInput maps a gRPC request to the domain command input.
+func RetryWebhookEventProcessingInput(request *providersv1.RetryWebhookEventProcessingRequest) (providerservice.RetryWebhookEventProcessingInput, error) {
+	id, err := requiredUUID(request.GetWebhookEventId())
+	if err != nil {
+		return providerservice.RetryWebhookEventProcessingInput{}, err
+	}
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return providerservice.RetryWebhookEventProcessingInput{}, err
+	}
+	return providerservice.RetryWebhookEventProcessingInput{WebhookEventID: id, Meta: meta}, nil
+}
+
 // GetProviderAccountRuntimeStateInput maps a gRPC request to the domain read input.
 func GetProviderAccountRuntimeStateInput(request *providersv1.GetProviderAccountRuntimeStateRequest) (providerservice.GetProviderAccountRuntimeStateInput, error) {
 	meta, err := QueryMetaFromProto(request.GetMeta())

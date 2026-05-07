@@ -5,10 +5,6 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/errs"
 )
 
-func wrapError(operation string, err error) error {
-	return postgreslib.WrapError(operation, err, providerErrorSentinels())
-}
-
 func providerErrorSentinels() postgreslib.ErrorSentinels {
 	return postgreslib.ErrorSentinels{
 		AlreadyExists:      errs.ErrAlreadyExists,
@@ -17,4 +13,8 @@ func providerErrorSentinels() postgreslib.ErrorSentinels {
 		NotFound:           errs.ErrNotFound,
 		PreconditionFailed: errs.ErrPreconditionFailed,
 	}
+}
+
+func wrapError(operation string, err error) error {
+	return postgreslib.WrapError(operation, err, providerErrorSentinels())
 }
