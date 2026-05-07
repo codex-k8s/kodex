@@ -120,6 +120,7 @@ approvals:
 | `local_path` | text | нет | Куда источник должен попадать в рабочий контур. |
 | `access_mode` | enum | нет | `read`, `write`. |
 | `status` | enum | нет | `active`, `disabled`, `blocked`. |
+| `managed_by_policy` | bool | нет | Источник синхронизируется из проверенного `services.yaml`, а не вручную. |
 
 ### BranchRules
 
@@ -243,6 +244,7 @@ approvals:
 - `ServicesPolicy` владеет набором `ServiceDescriptor`, полученным из проверенной версии `services.yaml`.
 - `validated_payload` хранится как нормализованный JSON по модели политики `services.yaml`; сырой YAML остаётся в Git у провайдера.
 - `ServiceDescriptor` считается активным только внутри последней политики `valid + synced/overridden`. Импорт невалидной или неуспешной проекции не переводит предыдущие descriptors в `stale`.
+- `DocumentationSource` может быть создан вручную или синхронизирован из `services.yaml`; источники, управляемые политикой, отключаются и пересобираются при каждом успешном импорте активной политики, ручные источники импортом не отключаются.
 - `WorkspacePolicy` строится из активных `ServiceDescriptor`, активных `DocumentationSource`, ссылок `guidance_ref` и активных `PolicyOverride`; он не хранится как отдельная таблица и не выполняет checkout.
 - Внутри БД `project-catalog` допустимы обычные внешние ключи между своими таблицами.
 - Ссылки на организации, кластеры, роли, агентные процессы и provider-native сущности хранятся как внешние идентификаторы без SQL-связей с чужими БД.
@@ -258,7 +260,7 @@ approvals:
 | Сервисы репозитория | `(repository_id, status, service_key)` |
 | Актуальная проекция `services.yaml` | `(project_id, projection_status, policy_version)` |
 | Сверка политики по источнику | `(source_repository_id, source_path, source_commit_sha, content_hash)` |
-| Источники документации для рабочего контура | `(project_id, scope_type, scope_id, status)` |
+| Источники документации для рабочего контура | unique `(project_id, scope_type, scope_id, local_path)`, чтение `(project_id, scope_type, scope_id, status)` |
 | Активные правила веток | `(project_id, repository_id, status)` |
 | Активные релизные политики | `(project_id, status)` |
 | Релизные линии проекта или политики | `(project_id, release_policy_id, status)` |

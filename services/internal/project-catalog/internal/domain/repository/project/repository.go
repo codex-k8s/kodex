@@ -34,8 +34,8 @@ type Repository interface {
 	GetRepository(ctx context.Context, id uuid.UUID) (entity.RepositoryBinding, error)
 	// ListRepositories returns repository bindings matching filter.
 	ListRepositories(ctx context.Context, filter query.RepositoryFilter) ([]entity.RepositoryBinding, query.PageResult, error)
-	// ImportServicesPolicy stores checked policy, descriptors, outbox event and command result atomically.
-	ImportServicesPolicy(ctx context.Context, policy entity.ServicesPolicy, descriptors []entity.ServiceDescriptor, result entity.CommandResult, buildEvent ServicesPolicyEventBuilder) (entity.ServicesPolicy, error)
+	// ImportServicesPolicy stores checked policy, descriptors, documentation sources, outbox event and command result atomically.
+	ImportServicesPolicy(ctx context.Context, policy entity.ServicesPolicy, descriptors []entity.ServiceDescriptor, documentationSources []entity.DocumentationSource, result entity.CommandResult, buildEvent ServicesPolicyEventBuilder) (entity.ServicesPolicy, error)
 	// GetServicesPolicy returns active or concrete checked services policy.
 	GetServicesPolicy(ctx context.Context, projectID uuid.UUID, policyID *uuid.UUID) (entity.ServicesPolicy, error)
 	// ListServiceDescriptors returns typed descriptors matching filter.

@@ -49,24 +49,9 @@ WHERE ds.project_id = @project_id::uuid
       cardinality(@repository_ids::uuid[]) = 0
       OR ds.scope_type = 'project'
       OR ds.repository_id = ANY(@repository_ids::uuid[])
-      OR EXISTS (
-          SELECT 1
-          FROM selected_descriptors AS sd
-          WHERE ds.scope_type = 'service'
-            AND ds.scope_id IN (sd.documentation_scope_id, sd.service_key)
-            AND sd.repository_id = ANY(@repository_ids::uuid[])
-      )
-      OR EXISTS (
-          SELECT 1
-          FROM selected_dependency_scopes AS dep
-          WHERE ds.scope_type = 'dependency'
-            AND dep.scope_id = ds.scope_id
-            AND dep.repository_id = ANY(@repository_ids::uuid[])
-      )
   )
   AND (
-      cardinality(@service_keys::text[]) = 0
-      OR ds.scope_type = 'project'
+      ds.scope_type = 'project'
       OR EXISTS (
           SELECT 1
           FROM selected_descriptors AS sd

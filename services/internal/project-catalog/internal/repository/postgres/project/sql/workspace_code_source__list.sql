@@ -26,8 +26,5 @@ FROM project_catalog_repositories AS r
 WHERE r.project_id = @project_id::uuid
   AND r.status = 'active'
   AND (cardinality(@repository_ids::uuid[]) = 0 OR r.id = ANY(@repository_ids::uuid[]))
-  AND (
-      cardinality(@service_keys::text[]) = 0
-      OR r.id IN (SELECT repository_id FROM selected_service_repositories)
-  )
+  AND r.id IN (SELECT repository_id FROM selected_service_repositories)
 ORDER BY r.provider, r.provider_owner, r.provider_name, r.id;

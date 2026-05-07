@@ -128,6 +128,7 @@ CREATE TABLE project_catalog_documentation_sources (
     local_path text NOT NULL,
     access_mode text NOT NULL,
     status text NOT NULL,
+    managed_by_policy boolean NOT NULL DEFAULT false,
     version bigint NOT NULL,
     created_at timestamptz NOT NULL,
     updated_at timestamptz NOT NULL,
@@ -143,9 +144,8 @@ CREATE TABLE project_catalog_documentation_sources (
     CONSTRAINT project_catalog_documentation_sources_version_chk CHECK (version > 0)
 );
 
-CREATE UNIQUE INDEX project_catalog_documentation_sources_active_uidx
-    ON project_catalog_documentation_sources (project_id, scope_type, scope_id, local_path)
-    WHERE status = 'active';
+CREATE UNIQUE INDEX project_catalog_documentation_sources_scope_path_uidx
+    ON project_catalog_documentation_sources (project_id, scope_type, scope_id, local_path);
 
 CREATE INDEX project_catalog_documentation_sources_scope_status_idx
     ON project_catalog_documentation_sources (project_id, scope_type, scope_id, status);

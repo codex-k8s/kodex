@@ -183,18 +183,22 @@ func TestRepositoryIntegrationProjectsRepositoriesPoliciesAndOutbox(t *testing.T
 
 	repositoryA := testRepository(projectA.ID, "billing-api", now)
 	repositoryB := testRepository(projectA.ID, "billing-worker", now)
+	repositoryC := testRepository(projectA.ID, "archived-service", now)
 	if err := repository.AttachRepository(ctx, repositoryA, testEvent("project.repository.attached", "repository", repositoryA.ID, now), testCommandResult(uuid.New(), operationAttachRepository, "repository", repositoryA.ID, now)); err != nil {
 		t.Fatalf("attach repository A: %v", err)
 	}
 	if err := repository.AttachRepository(ctx, repositoryB, testEvent("project.repository.attached", "repository", repositoryB.ID, now), testCommandResult(uuid.New(), operationAttachRepository, "repository", repositoryB.ID, now)); err != nil {
 		t.Fatalf("attach repository B: %v", err)
 	}
+	if err := repository.AttachRepository(ctx, repositoryC, testEvent("project.repository.attached", "repository", repositoryC.ID, now), testCommandResult(uuid.New(), operationAttachRepository, "repository", repositoryC.ID, now)); err != nil {
+		t.Fatalf("attach repository C: %v", err)
+	}
 	repositories, _, err := repository.ListRepositories(ctx, query.RepositoryFilter{ProjectID: projectA.ID, Statuses: []enum.RepositoryStatus{enum.RepositoryStatusActive}})
 	if err != nil {
 		t.Fatalf("list repositories: %v", err)
 	}
-	if len(repositories) != 2 {
-		t.Fatalf("repositories = %d, want 2", len(repositories))
+	if len(repositories) != 3 {
+		t.Fatalf("repositories = %d, want 3", len(repositories))
 	}
 
 	policy := testServicesPolicy(projectA.ID, repositoryA.ID, now)
@@ -203,7 +207,9 @@ func TestRepositoryIntegrationProjectsRepositoriesPoliciesAndOutbox(t *testing.T
 		testServiceDescriptor(projectA.ID, policy.ID, &repositoryB.ID, "worker", enum.ServiceKindWorker, now),
 	}
 	descriptors[0].DependsOnServiceKeys = []string{"worker"}
-	policy, err = repository.ImportServicesPolicy(ctx, policy, descriptors, testCommandResult(uuid.New(), operationImportServicesPolicy, "services_policy", policy.ID, now), testServicesPolicyEvent(now))
+	policySource := testDocumentationSource(projectA.ID, &repositoryA.ID, "service", "api", now)
+	policySource.LocalPath = "docs/api-from-policy"
+	policy, err = repository.ImportServicesPolicy(ctx, policy, descriptors, []entity.DocumentationSource{policySource}, testCommandResult(uuid.New(), operationImportServicesPolicy, "services_policy", policy.ID, now), testServicesPolicyEvent(now))
 	if err != nil {
 		t.Fatalf("import services policy: %v", err)
 	}
@@ -267,7 +273,7 @@ func TestRepositoryIntegrationProjectsRepositoriesPoliciesAndOutbox(t *testing.T
 	if err != nil {
 		t.Fatalf("get workspace policy: %v", err)
 	}
-	if len(workspacePolicy.CodeSources) != 1 || len(workspacePolicy.DocumentationSources) != 2 || workspacePolicy.PolicyVersion != policy.PolicyVersion {
+	if len(workspacePolicy.CodeSources) != 1 || len(workspacePolicy.DocumentationSources) != 3 || workspacePolicy.PolicyVersion != policy.PolicyVersion {
 		t.Fatalf("workspace policy = %+v, want one code source, project and service docs, policy version %d", workspacePolicy, policy.PolicyVersion)
 	}
 	if len(workspacePolicy.GuidancePackageRefs) != 1 || workspacePolicy.GuidancePackageRefs[0] != guidanceSource.ScopeID {
@@ -283,27 +289,55 @@ func TestRepositoryIntegrationProjectsRepositoriesPoliciesAndOutbox(t *testing.T
 	if len(workspaceByServiceOnly.CodeSources) != 1 || workspaceByServiceOnly.CodeSources[0].RepositoryID != repositoryA.ID {
 		t.Fatalf("workspace by service code sources = %+v, want repository %s", workspaceByServiceOnly.CodeSources, repositoryA.ID)
 	}
-	if len(workspaceByServiceOnly.DocumentationSources) != 3 {
+	if len(workspaceByServiceOnly.DocumentationSources) != 4 {
 		t.Fatalf("workspace by service docs = %+v, want project, service and dependency docs", workspaceByServiceOnly.DocumentationSources)
+	}
+	workspaceAll, err := repository.GetWorkspacePolicy(ctx, query.WorkspacePolicyFilter{ProjectID: projectA.ID})
+	if err != nil {
+		t.Fatalf("get full workspace policy: %v", err)
+	}
+	if len(workspaceAll.CodeSources) != 2 {
+		t.Fatalf("full workspace code sources = %+v, want only repositories from active service descriptors", workspaceAll.CodeSources)
+	}
+	if len(workspaceAll.DocumentationSources) != 4 {
+		t.Fatalf("full workspace documentation sources = %+v, want project, service, policy-managed service and dependency docs", workspaceAll.DocumentationSources)
+	}
+
+	replacementPolicy := testServicesPolicy(projectA.ID, repositoryA.ID, now.Add(time.Minute))
+	replacementDescriptors := []entity.ServiceDescriptor{
+		testServiceDescriptor(projectA.ID, replacementPolicy.ID, &repositoryA.ID, "api", enum.ServiceKindBackend, replacementPolicy.ImportedAt),
+		testServiceDescriptor(projectA.ID, replacementPolicy.ID, &repositoryB.ID, "worker", enum.ServiceKindWorker, replacementPolicy.ImportedAt),
+	}
+	replacementDescriptors[0].DependsOnServiceKeys = []string{"worker"}
+	replacementPolicy, err = repository.ImportServicesPolicy(ctx, replacementPolicy, replacementDescriptors, nil, testCommandResult(uuid.New(), operationImportServicesPolicy, "services_policy", replacementPolicy.ID, replacementPolicy.ImportedAt), testServicesPolicyEvent(replacementPolicy.ImportedAt))
+	if err != nil {
+		t.Fatalf("import replacement services policy: %v", err)
+	}
+	workspaceAfterPolicyDocRemoval, err := repository.GetWorkspacePolicy(ctx, query.WorkspacePolicyFilter{ProjectID: projectA.ID})
+	if err != nil {
+		t.Fatalf("get workspace policy after policy doc removal: %v", err)
+	}
+	if len(workspaceAfterPolicyDocRemoval.DocumentationSources) != 3 {
+		t.Fatalf("workspace docs after policy doc removal = %+v, want only manual project, service and dependency docs", workspaceAfterPolicyDocRemoval.DocumentationSources)
 	}
 
 	invalidPolicy := testServicesPolicy(projectA.ID, repositoryA.ID, now.Add(2*time.Minute))
 	invalidPolicy.ID = uuid.New()
 	invalidPolicy.ValidationStatus = enum.ServicesPolicyValidationInvalid
 	invalidPolicy.ProjectionStatus = enum.ServicesPolicyProjectionFailed
-	invalidPolicy, err = repository.ImportServicesPolicy(ctx, invalidPolicy, nil, testCommandResult(uuid.New(), operationImportServicesPolicy, "services_policy", invalidPolicy.ID, invalidPolicy.ImportedAt), testServicesPolicyEvent(invalidPolicy.ImportedAt))
+	invalidPolicy, err = repository.ImportServicesPolicy(ctx, invalidPolicy, nil, nil, testCommandResult(uuid.New(), operationImportServicesPolicy, "services_policy", invalidPolicy.ID, invalidPolicy.ImportedAt), testServicesPolicyEvent(invalidPolicy.ImportedAt))
 	if err != nil {
 		t.Fatalf("import invalid services policy: %v", err)
 	}
-	if invalidPolicy.PolicyVersion != policy.PolicyVersion+1 {
-		t.Fatalf("invalid policy version = %d, want %d", invalidPolicy.PolicyVersion, policy.PolicyVersion+1)
+	if invalidPolicy.PolicyVersion != replacementPolicy.PolicyVersion+1 {
+		t.Fatalf("invalid policy version = %d, want %d", invalidPolicy.PolicyVersion, replacementPolicy.PolicyVersion+1)
 	}
 	activeAfterInvalid, err := repository.GetServicesPolicy(ctx, projectA.ID, nil)
 	if err != nil {
 		t.Fatalf("get active services policy after invalid import: %v", err)
 	}
-	if activeAfterInvalid.ID != policy.ID {
-		t.Fatalf("active policy after invalid import = %s, want %s", activeAfterInvalid.ID, policy.ID)
+	if activeAfterInvalid.ID != replacementPolicy.ID {
+		t.Fatalf("active policy after invalid import = %s, want %s", activeAfterInvalid.ID, replacementPolicy.ID)
 	}
 	activeDescriptorsAfterInvalid, _, err := repository.ListServiceDescriptors(ctx, query.ServiceDescriptorFilter{ProjectID: projectA.ID, Statuses: []enum.ServiceStatus{enum.ServiceStatusActive}})
 	if err != nil {
@@ -344,7 +378,7 @@ func TestRepositoryIntegrationImportServicesPolicyBatchesDescriptors(t *testing.
 		testServiceDescriptor(project.ID, policy.ID, &repositoryWorker.ID, "worker", enum.ServiceKindWorker, now),
 		testServiceDescriptor(project.ID, policy.ID, &repositoryFrontend.ID, "frontend", enum.ServiceKindFrontend, now),
 	}
-	if _, err := repository.ImportServicesPolicy(ctx, policy, descriptors, testCommandResult(uuid.New(), operationImportServicesPolicy, "services_policy", policy.ID, now), testServicesPolicyEvent(now)); err != nil {
+	if _, err := repository.ImportServicesPolicy(ctx, policy, descriptors, nil, testCommandResult(uuid.New(), operationImportServicesPolicy, "services_policy", policy.ID, now), testServicesPolicyEvent(now)); err != nil {
 		t.Fatalf("import services policy: %v", err)
 	}
 

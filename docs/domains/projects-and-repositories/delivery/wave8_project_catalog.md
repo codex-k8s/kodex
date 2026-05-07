@@ -72,7 +72,7 @@ approvals:
 | `DetachRepository` | Готов в proto. | gRPC, доменная команда, проверка доступа и outbox подключены. |
 | `GetRepository` | Готов в proto. | gRPC-чтение и проверка доступа подключены. |
 | `ListRepositories` | Готов в proto. | gRPC-чтение и проверка доступа подключены. |
-| `ImportServicesPolicy` | Готов в proto. | gRPC, доменная команда, проверка доступа, outbox, построение `ServiceDescriptor` и проверка источников документации из нормализованного payload подключены. |
+| `ImportServicesPolicy` | Готов в proto. | gRPC, доменная команда, проверка доступа, outbox, построение `ServiceDescriptor`, проверка и синхронизация источников документации из нормализованного payload подключены. |
 | `GetServicesPolicy` | Готов в proto. | gRPC-чтение и проверка доступа подключены. |
 | `ListServiceDescriptors` | Готов в proto. | gRPC-чтение и проверка доступа подключены; чтение ограничено последней `valid + synced/overridden` политикой и использует проекцию, построенную `project-catalog`. |
 | `CreatePolicyEditProposal` | Готов в proto. | gRPC и сохранение предложения подключены; создание provider PR развивается в #632. |

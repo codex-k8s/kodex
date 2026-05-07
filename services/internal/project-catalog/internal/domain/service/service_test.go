@@ -471,12 +471,15 @@ func TestImportServicesPolicyBuildsDescriptorsFromPayload(t *testing.T) {
 
 func TestImportServicesPolicyValidatesDocumentationSources(t *testing.T) {
 	ctx := context.Background()
+	projectID := uuid.New()
 	repositoryID := uuid.New()
 	store := newMemoryRepository()
-	svc := New(store, fixedClock{}, &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New()}})
+	svc := New(store, fixedClock{}, &sequenceIDs{ids: []uuid.UUID{
+		uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(),
+	}})
 
-	_, err := svc.ImportServicesPolicy(ctx, ImportServicesPolicyInput{
-		ProjectID:          uuid.New(),
+	policy, err := svc.ImportServicesPolicy(ctx, ImportServicesPolicyInput{
+		ProjectID:          projectID,
 		SourceRepositoryID: &repositoryID,
 		SourcePath:         "services.yaml",
 		SourceCommitSHA:    "0123456789abcdef0123456789abcdef01234567",
@@ -499,6 +502,14 @@ func TestImportServicesPolicyValidatesDocumentationSources(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("ImportServicesPolicy(): %v", err)
+	}
+	if len(store.policyDocumentationSources[policy.ID]) != 4 {
+		t.Fatalf("policy documentation sources = %d, want 4", len(store.policyDocumentationSources[policy.ID]))
+	}
+	for _, source := range store.policyDocumentationSources[policy.ID] {
+		if source.ProjectID != projectID || source.ID == uuid.Nil {
+			t.Fatalf("policy documentation source = %+v, want project id and generated id", source)
+		}
 	}
 }
 
@@ -740,31 +751,33 @@ func servicesPolicyPayload(key string, rootPath string, kind string) string {
 }
 
 type memoryRepository struct {
-	projects             map[uuid.UUID]entity.Project
-	repositories         map[uuid.UUID]entity.RepositoryBinding
-	policies             map[uuid.UUID]entity.ServicesPolicy
-	serviceDescriptors   map[uuid.UUID][]entity.ServiceDescriptor
-	branchRules          map[uuid.UUID]entity.BranchRules
-	documentationSources map[uuid.UUID]entity.DocumentationSource
-	policyEditProposals  map[uuid.UUID]entity.PolicyEditProposal
-	policyOverrides      map[uuid.UUID]entity.PolicyOverride
-	policyVersions       map[uuid.UUID]int64
-	commandResults       map[string]entity.CommandResult
-	events               []entity.OutboxEvent
+	projects                   map[uuid.UUID]entity.Project
+	repositories               map[uuid.UUID]entity.RepositoryBinding
+	policies                   map[uuid.UUID]entity.ServicesPolicy
+	serviceDescriptors         map[uuid.UUID][]entity.ServiceDescriptor
+	policyDocumentationSources map[uuid.UUID][]entity.DocumentationSource
+	branchRules                map[uuid.UUID]entity.BranchRules
+	documentationSources       map[uuid.UUID]entity.DocumentationSource
+	policyEditProposals        map[uuid.UUID]entity.PolicyEditProposal
+	policyOverrides            map[uuid.UUID]entity.PolicyOverride
+	policyVersions             map[uuid.UUID]int64
+	commandResults             map[string]entity.CommandResult
+	events                     []entity.OutboxEvent
 }
 
 func newMemoryRepository() *memoryRepository {
 	return &memoryRepository{
-		projects:             map[uuid.UUID]entity.Project{},
-		repositories:         map[uuid.UUID]entity.RepositoryBinding{},
-		policies:             map[uuid.UUID]entity.ServicesPolicy{},
-		serviceDescriptors:   map[uuid.UUID][]entity.ServiceDescriptor{},
-		branchRules:          map[uuid.UUID]entity.BranchRules{},
-		documentationSources: map[uuid.UUID]entity.DocumentationSource{},
-		policyEditProposals:  map[uuid.UUID]entity.PolicyEditProposal{},
-		policyOverrides:      map[uuid.UUID]entity.PolicyOverride{},
-		policyVersions:       map[uuid.UUID]int64{},
-		commandResults:       map[string]entity.CommandResult{},
+		projects:                   map[uuid.UUID]entity.Project{},
+		repositories:               map[uuid.UUID]entity.RepositoryBinding{},
+		policies:                   map[uuid.UUID]entity.ServicesPolicy{},
+		serviceDescriptors:         map[uuid.UUID][]entity.ServiceDescriptor{},
+		policyDocumentationSources: map[uuid.UUID][]entity.DocumentationSource{},
+		branchRules:                map[uuid.UUID]entity.BranchRules{},
+		documentationSources:       map[uuid.UUID]entity.DocumentationSource{},
+		policyEditProposals:        map[uuid.UUID]entity.PolicyEditProposal{},
+		policyOverrides:            map[uuid.UUID]entity.PolicyOverride{},
+		policyVersions:             map[uuid.UUID]int64{},
+		commandResults:             map[string]entity.CommandResult{},
 	}
 }
 
@@ -840,7 +853,7 @@ func (r *memoryRepository) ListRepositories(context.Context, query.RepositoryFil
 	return nil, query.PageResult{}, nil
 }
 
-func (r *memoryRepository) ImportServicesPolicy(_ context.Context, policy entity.ServicesPolicy, descriptors []entity.ServiceDescriptor, result entity.CommandResult, buildEvent projectrepo.ServicesPolicyEventBuilder) (entity.ServicesPolicy, error) {
+func (r *memoryRepository) ImportServicesPolicy(_ context.Context, policy entity.ServicesPolicy, descriptors []entity.ServiceDescriptor, documentationSources []entity.DocumentationSource, result entity.CommandResult, buildEvent projectrepo.ServicesPolicyEventBuilder) (entity.ServicesPolicy, error) {
 	r.policyVersions[policy.ProjectID]++
 	policy.PolicyVersion = r.policyVersions[policy.ProjectID]
 	event, err := buildEvent(policy)
@@ -849,6 +862,7 @@ func (r *memoryRepository) ImportServicesPolicy(_ context.Context, policy entity
 	}
 	r.policies[policy.ID] = policy
 	r.serviceDescriptors[policy.ID] = descriptors
+	r.policyDocumentationSources[policy.ID] = documentationSources
 	r.events = append(r.events, event)
 	r.commandResults[result.Key] = result
 	return policy, nil

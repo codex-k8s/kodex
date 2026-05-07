@@ -18,8 +18,9 @@ import (
 var serviceKeyPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,127}$`)
 
 type servicesPolicyProjection struct {
-	payload     []byte
-	descriptors []entity.ServiceDescriptor
+	payload              []byte
+	descriptors          []entity.ServiceDescriptor
+	documentationSources []entity.DocumentationSource
 }
 
 func buildServicesPolicyProjection(input ImportServicesPolicyInput, validationStatus enum.ServicesPolicyValidationStatus) (servicesPolicyProjection, error) {
@@ -27,30 +28,28 @@ func buildServicesPolicyProjection(input ImportServicesPolicyInput, validationSt
 	if len(payload) == 0 || !json.Valid(payload) {
 		return servicesPolicyProjection{}, errs.ErrInvalidArgument
 	}
-	if _, err := parseServicesPolicyDocument(payload); err != nil {
+	document, err := parseServicesPolicyDocument(payload)
+	if err != nil {
 		return servicesPolicyProjection{}, err
 	}
 	if validationStatus != enum.ServicesPolicyValidationValid {
 		return servicesPolicyProjection{payload: payload}, nil
 	}
-	descriptors, err := descriptorsFromPolicyPayload(payload, input.SourceRepositoryID)
+	descriptors, err := descriptorsFromPolicyDocument(document, input.SourceRepositoryID)
 	if err != nil {
 		return servicesPolicyProjection{}, err
 	}
 	if len(descriptors) == 0 {
 		return servicesPolicyProjection{}, errs.ErrInvalidArgument
 	}
-	if err := validatePolicyDocumentationSources(payload, descriptors, input.SourceRepositoryID); err != nil {
+	documentationSources, err := documentationSourcesFromPolicyDocument(document, descriptors, input.SourceRepositoryID)
+	if err != nil {
 		return servicesPolicyProjection{}, err
 	}
-	return servicesPolicyProjection{payload: payload, descriptors: descriptors}, nil
+	return servicesPolicyProjection{payload: payload, descriptors: descriptors, documentationSources: documentationSources}, nil
 }
 
-func descriptorsFromPolicyPayload(payload []byte, fallbackRepositoryID *uuid.UUID) ([]entity.ServiceDescriptor, error) {
-	document, err := parseServicesPolicyDocument(payload)
-	if err != nil {
-		return nil, err
-	}
+func descriptorsFromPolicyDocument(document value.ServicesPolicyDocument, fallbackRepositoryID *uuid.UUID) ([]entity.ServiceDescriptor, error) {
 	entries := serviceEntries(document)
 	descriptors := make([]entity.ServiceDescriptor, 0, len(entries))
 	for _, entry := range entries {
@@ -205,35 +204,33 @@ func validateServiceDescriptorSet(descriptors []entity.ServiceDescriptor) ([]ent
 	return descriptors, nil
 }
 
-func validatePolicyDocumentationSources(payload []byte, descriptors []entity.ServiceDescriptor, fallbackRepositoryID *uuid.UUID) error {
-	document, err := parseServicesPolicyDocument(payload)
-	if err != nil {
-		return err
-	}
+func documentationSourcesFromPolicyDocument(document value.ServicesPolicyDocument, descriptors []entity.ServiceDescriptor, fallbackRepositoryID *uuid.UUID) ([]entity.DocumentationSource, error) {
 	entries := documentationEntries(document)
 	if len(entries) == 0 {
-		return nil
+		return nil, nil
 	}
 	serviceScopes, dependencyScopes := policyDocumentationScopes(descriptors)
+	sources := make([]entity.DocumentationSource, 0, len(entries))
 	seen := make(map[string]struct{}, len(entries))
 	for _, entry := range entries {
 		source, err := documentationSourceFromPolicy(entry, fallbackRepositoryID)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if err := validateDocumentationSource(source); err != nil {
-			return err
+			return nil, err
 		}
 		if err := validatePolicyDocumentationScope(source, serviceScopes, dependencyScopes); err != nil {
-			return err
+			return nil, err
 		}
 		key := string(source.ScopeType) + "\x00" + source.ScopeID + "\x00" + source.LocalPath
 		if _, ok := seen[key]; ok {
-			return errs.ErrInvalidArgument
+			return nil, errs.ErrInvalidArgument
 		}
 		seen[key] = struct{}{}
+		sources = append(sources, source)
 	}
-	return nil
+	return sources, nil
 }
 
 func policyDocumentationScopes(descriptors []entity.ServiceDescriptor) (map[string]struct{}, map[string]struct{}) {

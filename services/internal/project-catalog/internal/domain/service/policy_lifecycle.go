@@ -52,11 +52,12 @@ func (s *Service) ImportServicesPolicy(ctx context.Context, input ImportServices
 		return entity.ServicesPolicy{}, errs.ErrInvalidArgument
 	}
 	descriptors := s.prepareServiceDescriptors(policy, projection.descriptors, now)
+	documentationSources := s.preparePolicyDocumentationSources(policy, projection.documentationSources, now)
 	result, err := commandResult(input.Meta, projectOperationImportServicesPolicy, projectAggregateServicesPolicy, policy.ID, now)
 	if err != nil {
 		return entity.ServicesPolicy{}, err
 	}
-	imported, err := s.repository.ImportServicesPolicy(ctx, policy, descriptors, *result, s.servicesPolicyEvent)
+	imported, err := s.repository.ImportServicesPolicy(ctx, policy, descriptors, documentationSources, *result, s.servicesPolicyEvent)
 	if err != nil {
 		return entity.ServicesPolicy{}, err
 	}
@@ -241,6 +242,16 @@ func (s *Service) prepareServiceDescriptors(policy entity.ServicesPolicy, descri
 			descriptor.Status = enum.ServiceStatusActive
 		}
 		result = append(result, descriptor)
+	}
+	return result
+}
+
+func (s *Service) preparePolicyDocumentationSources(policy entity.ServicesPolicy, sources []entity.DocumentationSource, now time.Time) []entity.DocumentationSource {
+	result := make([]entity.DocumentationSource, 0, len(sources))
+	for _, source := range sources {
+		source.Base = newBase(s.ids.New(), now)
+		source.ProjectID = policy.ProjectID
+		result = append(result, source)
 	}
 	return result
 }

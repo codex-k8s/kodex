@@ -7,6 +7,7 @@ SET
     local_path = @local_path,
     access_mode = @access_mode,
     status = @status,
+    managed_by_policy = false,
     version = @version,
     updated_at = @updated_at
 WHERE id = @id
