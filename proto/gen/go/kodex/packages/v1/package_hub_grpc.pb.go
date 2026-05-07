@@ -71,7 +71,7 @@ type PackageHubServiceClient interface {
 	ListPackageVersions(ctx context.Context, in *ListPackageVersionsRequest, opts ...grpc.CallOption) (*ListPackageVersionsResponse, error)
 	// GetPackageManifest returns a normalized manifest snapshot for a package version.
 	GetPackageManifest(ctx context.Context, in *GetPackageManifestRequest, opts ...grpc.CallOption) (*PackageManifestResponse, error)
-	// RequestPackageInstallation creates or updates an installation request for a scope.
+	// RequestPackageInstallation creates an installation request for a scope.
 	RequestPackageInstallation(ctx context.Context, in *RequestPackageInstallationRequest, opts ...grpc.CallOption) (*PackageInstallationResponse, error)
 	// UpdatePackageInstallation changes selected version or desired state of an installation.
 	UpdatePackageInstallation(ctx context.Context, in *UpdatePackageInstallationRequest, opts ...grpc.CallOption) (*PackageInstallationResponse, error)
@@ -329,7 +329,7 @@ type PackageHubServiceServer interface {
 	ListPackageVersions(context.Context, *ListPackageVersionsRequest) (*ListPackageVersionsResponse, error)
 	// GetPackageManifest returns a normalized manifest snapshot for a package version.
 	GetPackageManifest(context.Context, *GetPackageManifestRequest) (*PackageManifestResponse, error)
-	// RequestPackageInstallation creates or updates an installation request for a scope.
+	// RequestPackageInstallation creates an installation request for a scope.
 	RequestPackageInstallation(context.Context, *RequestPackageInstallationRequest) (*PackageInstallationResponse, error)
 	// UpdatePackageInstallation changes selected version or desired state of an installation.
 	UpdatePackageInstallation(context.Context, *UpdatePackageInstallationRequest) (*PackageInstallationResponse, error)

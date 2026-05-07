@@ -30,7 +30,7 @@ service PackageHubService {
   rpc ListPackageVersions(ListPackageVersionsRequest) returns (ListPackageVersionsResponse);
   // GetPackageManifest returns a normalized manifest snapshot for a package version.
   rpc GetPackageManifest(GetPackageManifestRequest) returns (PackageManifestResponse);
-  // RequestPackageInstallation creates or updates an installation request for a scope.
+  // RequestPackageInstallation creates an installation request for a scope.
   rpc RequestPackageInstallation(RequestPackageInstallationRequest) returns (PackageInstallationResponse);
   // UpdatePackageInstallation changes selected version or desired state of an installation.
   rpc UpdatePackageInstallation(UpdatePackageInstallationRequest) returns (PackageInstallationResponse);
@@ -618,7 +618,7 @@ message GetPackageManifestRequest {
   string package_version_id = 2;
 }
 
-// RequestPackageInstallationRequest creates or updates an installation request.
+// RequestPackageInstallationRequest creates an installation request.
 message RequestPackageInstallationRequest {
   // meta carries idempotency, actor and audit data.
   CommandMeta meta = 1;

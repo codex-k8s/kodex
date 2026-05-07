@@ -3390,7 +3390,7 @@ func (x *GetPackageManifestRequest) GetPackageVersionId() string {
 	return ""
 }
 
-// RequestPackageInstallationRequest creates or updates an installation request.
+// RequestPackageInstallationRequest creates an installation request.
 type RequestPackageInstallationRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// meta carries idempotency, actor and audit data.

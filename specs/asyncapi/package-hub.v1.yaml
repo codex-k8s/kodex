@@ -361,4 +361,4 @@ components:
     PackageSecretSchemaUpdatedPayload:
       allOf:
         - $ref: '#/components/schemas/PackageEventPayload'
-      required: [package_id, package_version_id, schema_digest]
+      required: [package_id, package_version_id, schema_digest, revision]

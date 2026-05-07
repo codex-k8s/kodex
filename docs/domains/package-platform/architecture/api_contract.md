@@ -48,7 +48,7 @@ approvals:
 | `GetPackageVersion` | gRPC query | `package.catalog.read` | нет | Читает конкретную версию, manifest и статус проверки. |
 | `ListPackageVersions` | gRPC query | `package.catalog.read` | нет | Список версий пакета. |
 | `GetPackageManifest` | gRPC query | `package.manifest.read` | нет | Возвращает нормализованный снимок manifest. |
-| `RequestPackageInstallation` | gRPC command | `package.install` | `CommandMeta.command_id` | Создаёт установку или запрос установки пакета в заданной области. |
+| `RequestPackageInstallation` | gRPC command | `package.install` | `CommandMeta.command_id` | Создаёт запрос установки пакета в заданной области; если активная установка уже есть, возвращает `already_exists`, а изменение идёт через `UpdatePackageInstallation` с ожидаемой версией. |
 | `UpdatePackageInstallation` | gRPC command | `package.installation.update` | ожидаемая версия | Меняет статус, desired state или выбранную версию установки. |
 | `DisablePackageInstallation` | gRPC command | `package.installation.disable` | ожидаемая версия | Отключает установленный пакет без удаления истории. |
 | `UninstallPackage` | gRPC command | `package.uninstall` | ожидаемая версия | Переводит установку в `uninstalled` и публикует событие. |
@@ -81,17 +81,17 @@ approvals:
 | `package.source.disabled` | package_source | `source_id`, `status`, `version` |
 | `package.catalog.synced` | package_source | `source_id`, `synced_at`, `package_count`, `version_count` |
 | `package.package.discovered` | package | `package_id`, `source_id`, `slug`, `package_kind` |
-| `package.package.updated` | package | `package_id`, `slug`, `status`, `trust_status` |
-| `package.version.discovered` | package_version | `package_id`, `package_version_id`, `version`, `manifest_digest` |
-| `package.version.updated` | package_version | `package_id`, `package_version_id`, `verification_status`, `release_status` |
-| `package.version.revoked` | package_version | `package_id`, `package_version_id`, `reason` |
-| `package.verification.updated` | package_version | `package_id`, `package_version_id`, `verification_status` |
-| `package.installation.requested` | installation | `installation_id`, `package_id`, `package_version_id`, `scope_type`, `scope_ref` |
-| `package.installation.activated` | installation | `installation_id`, `package_id`, `package_version_id`, `scope_type`, `scope_ref` |
-| `package.installation.updated` | installation | `installation_id`, `installation_status`, `desired_state`, `version` |
-| `package.installation.disabled` | installation | `installation_id`, `installation_status`, `version` |
-| `package.installation.uninstalled` | installation | `installation_id`, `installation_status`, `version` |
-| `package.secret_schema.updated` | package_version | `package_id`, `package_version_id`, `schema_digest` |
+| `package.package.updated` | package | `package_id`, `slug`, `status`, `trust_status`, `version` |
+| `package.version.discovered` | package_version | `package_id`, `package_version_id`, `version_label`, `manifest_digest` |
+| `package.version.updated` | package_version | `package_id`, `package_version_id`, `verification_status`, `release_status`, `revision` |
+| `package.version.revoked` | package_version | `package_id`, `package_version_id`, `reason_code`, `revision` |
+| `package.verification.updated` | package_version | `package_id`, `package_version_id`, `verification_status`, `revision` |
+| `package.installation.requested` | package_installation | `installation_id`, `package_id`, `package_version_id`, `scope_type`, `scope_ref` |
+| `package.installation.activated` | package_installation | `installation_id`, `package_id`, `package_version_id`, `scope_type`, `scope_ref` |
+| `package.installation.updated` | package_installation | `installation_id`, `installation_status`, `desired_state`, `version` |
+| `package.installation.disabled` | package_installation | `installation_id`, `installation_status`, `version` |
+| `package.installation.uninstalled` | package_installation | `installation_id`, `installation_status`, `version` |
+| `package.secret_schema.updated` | package_version | `package_id`, `package_version_id`, `schema_digest`, `revision` |
 
 ## Состояние реализации
 
