@@ -52,11 +52,12 @@ func (s *Service) ImportServicesPolicy(ctx context.Context, input ImportServices
 		return entity.ServicesPolicy{}, errs.ErrInvalidArgument
 	}
 	descriptors := s.prepareServiceDescriptors(policy, projection.descriptors, now)
+	documentationSources := s.preparePolicyDocumentationSources(policy, projection.documentationSources, now)
 	result, err := commandResult(input.Meta, projectOperationImportServicesPolicy, projectAggregateServicesPolicy, policy.ID, now)
 	if err != nil {
 		return entity.ServicesPolicy{}, err
 	}
-	imported, err := s.repository.ImportServicesPolicy(ctx, policy, descriptors, *result, s.servicesPolicyEvent)
+	imported, err := s.repository.ImportServicesPolicy(ctx, policy, descriptors, documentationSources, *result, s.servicesPolicyEvent)
 	if err != nil {
 		return entity.ServicesPolicy{}, err
 	}
@@ -170,6 +171,46 @@ func (s *Service) CreatePolicyOverride(ctx context.Context, input CreatePolicyOv
 	return override, nil
 }
 
+// CancelPolicyOverride cancels an active operator override before expiration.
+func (s *Service) CancelPolicyOverride(ctx context.Context, input CancelPolicyOverrideInput) (entity.PolicyOverride, error) {
+	if input.PolicyOverrideID == uuid.Nil {
+		return entity.PolicyOverride{}, errs.ErrInvalidArgument
+	}
+	current, err := s.repository.GetPolicyOverride(ctx, input.PolicyOverrideID)
+	if err != nil {
+		return entity.PolicyOverride{}, err
+	}
+	if err := s.authorizeCommand(ctx, input.Meta, projectActionPolicyOverrideCancel, projectScopedResource(projectAggregatePolicyOverride, current.ProjectID)); err != nil {
+		return entity.PolicyOverride{}, err
+	}
+	if replay, ok, err := findScopedCommandReplay(s, ctx, input.Meta, projectOperationCancelPolicyOverride, projectAggregatePolicyOverride, current.ProjectID, s.repository.GetPolicyOverride, policyOverrideProjectID); ok || err != nil {
+		return replay, err
+	}
+	previousVersion, err := expectedVersion(input.Meta)
+	if err != nil {
+		return entity.PolicyOverride{}, err
+	}
+	if current.Status != enum.PolicyOverrideStatusActive {
+		return entity.PolicyOverride{}, errs.ErrPreconditionFailed
+	}
+	now := s.clock.Now()
+	cancelled := current
+	cancelled.Base = updatedBase(current.Base, now)
+	cancelled.Status = enum.PolicyOverrideStatusCancelled
+	result, err := commandResult(input.Meta, projectOperationCancelPolicyOverride, projectAggregatePolicyOverride, cancelled.ID, now)
+	if err != nil {
+		return entity.PolicyOverride{}, err
+	}
+	event, err := s.policyOverrideEvent(projectEventPolicyOverrideCancelled, cancelled)
+	if err != nil {
+		return entity.PolicyOverride{}, err
+	}
+	if err := s.repository.CancelPolicyOverride(ctx, cancelled, previousVersion, event, result); err != nil {
+		return entity.PolicyOverride{}, err
+	}
+	return cancelled, nil
+}
+
 // ListPolicyOverrides returns operator overrides matching filter.
 func (s *Service) ListPolicyOverrides(ctx context.Context, input ListPolicyOverridesInput) (ListPolicyOverridesResult, error) {
 	if err := s.authorizeProjectQuery(ctx, input.ProjectID, input.Meta, projectActionPolicyOverrideRead, projectAggregatePolicyOverride); err != nil {
@@ -201,6 +242,16 @@ func (s *Service) prepareServiceDescriptors(policy entity.ServicesPolicy, descri
 			descriptor.Status = enum.ServiceStatusActive
 		}
 		result = append(result, descriptor)
+	}
+	return result
+}
+
+func (s *Service) preparePolicyDocumentationSources(policy entity.ServicesPolicy, sources []entity.DocumentationSource, now time.Time) []entity.DocumentationSource {
+	result := make([]entity.DocumentationSource, 0, len(sources))
+	for _, source := range sources {
+		source.Base = newBase(s.ids.New(), now)
+		source.ProjectID = policy.ProjectID
+		result = append(result, source)
 	}
 	return result
 }

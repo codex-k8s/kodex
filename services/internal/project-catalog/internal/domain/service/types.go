@@ -138,6 +138,12 @@ type CreatePolicyOverrideInput struct {
 	Meta       value.CommandMeta
 }
 
+// CancelPolicyOverrideInput cancels an active emergency policy override.
+type CancelPolicyOverrideInput struct {
+	PolicyOverrideID uuid.UUID
+	Meta             value.CommandMeta
+}
+
 // ListPolicyOverridesInput selects operator policy overrides.
 type ListPolicyOverridesInput struct {
 	ProjectID   uuid.UUID

@@ -5,7 +5,7 @@ title: kodex — модель данных домена проектов и ре
 status: active
 owner_role: SA
 created_at: 2026-05-05
-updated_at: 2026-05-05
+updated_at: 2026-05-06
 related_issues: [628, 629, 630, 631, 632, 633]
 related_prs: []
 approvals:
@@ -75,7 +75,7 @@ approvals:
 | `source_blob_sha` | text | да | Хэш объекта файла у провайдера, если доступен. |
 | `policy_version` | bigint | нет | Версия проверенного снимка. |
 | `content_hash` | text | нет | Хэш исходного содержимого. |
-| `validated_payload` | jsonb | нет | Нормализованный типизированный снимок исходной политики для аудита и повторной валидации; не является основным контуром чтения для сервисов. |
+| `validated_payload` | jsonb | нет | Нормализованный типизированный снимок исходной политики для аудита и повторной валидации. Содержит сервисы, зависимости и источники документации; рабочие чтения используют построенные проекции и отдельные таблицы, а не повторный разбор файла. |
 | `validation_status` | enum | нет | `valid`, `invalid`, `stale`. |
 | `projection_status` | enum | нет | `synced`, `pending`, `failed`, `overridden`. |
 | `imported_at` | timestamptz | нет | Когда проекция была сохранена в БД. |
@@ -101,6 +101,15 @@ approvals:
 
 ### DocumentationSource
 
+`DocumentationSource` описывает источник, который можно включить в рабочий контур агента. Источник может быть задан через проверенную проектную политику или через авторитетную команду `project-catalog`, но штатное изменение декларативной политики всё равно проходит через PR к `services.yaml`.
+
+Правила:
+- `project`-источник доступен в рабочем контуре проекта независимо от выбранного сервиса;
+- `service`-источник привязывается к `ServiceDescriptor.service_key` или `documentation_scope_id`;
+- `dependency`-источник включается, когда выбранный сервис зависит от соответствующего сервиса;
+- `guidance_ref` хранит ссылку на руководящий пакет и возвращается отдельно от checkout-источников документации;
+- `local_path` должен быть относительным безопасным путём без выхода за пределы рабочего контура.
+
 | Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
 | `id` | uuid | нет | Идентификатор источника. |
@@ -111,6 +120,7 @@ approvals:
 | `local_path` | text | нет | Куда источник должен попадать в рабочий контур. |
 | `access_mode` | enum | нет | `read`, `write`. |
 | `status` | enum | нет | `active`, `disabled`, `blocked`. |
+| `managed_by_policy` | bool | нет | Источник синхронизируется из проверенного `services.yaml`, а не вручную. |
 
 ### BranchRules
 
@@ -234,6 +244,8 @@ approvals:
 - `ServicesPolicy` владеет набором `ServiceDescriptor`, полученным из проверенной версии `services.yaml`.
 - `validated_payload` хранится как нормализованный JSON по модели политики `services.yaml`; сырой YAML остаётся в Git у провайдера.
 - `ServiceDescriptor` считается активным только внутри последней политики `valid + synced/overridden`. Импорт невалидной или неуспешной проекции не переводит предыдущие descriptors в `stale`.
+- `DocumentationSource` может быть создан вручную или синхронизирован из `services.yaml`; источники, управляемые политикой, отключаются и пересобираются при каждом успешном импорте активной политики, ручные источники импортом не отключаются.
+- `WorkspacePolicy` строится из активных `ServiceDescriptor`, активных `DocumentationSource`, ссылок `guidance_ref` и активных `PolicyOverride`; он не хранится как отдельная таблица и не выполняет checkout.
 - Внутри БД `project-catalog` допустимы обычные внешние ключи между своими таблицами.
 - Ссылки на организации, кластеры, роли, агентные процессы и provider-native сущности хранятся как внешние идентификаторы без SQL-связей с чужими БД.
 
@@ -248,7 +260,7 @@ approvals:
 | Сервисы репозитория | `(repository_id, status, service_key)` |
 | Актуальная проекция `services.yaml` | `(project_id, projection_status, policy_version)` |
 | Сверка политики по источнику | `(source_repository_id, source_path, source_commit_sha, content_hash)` |
-| Источники документации для рабочего контура | `(project_id, scope_type, scope_id, status)` |
+| Источники документации для рабочего контура | unique `(project_id, scope_type, scope_id, local_path)`, чтение `(project_id, scope_type, scope_id, status)` |
 | Активные правила веток | `(project_id, repository_id, status)` |
 | Активные релизные политики | `(project_id, status)` |
 | Релизные линии проекта или политики | `(project_id, release_policy_id, status)` |

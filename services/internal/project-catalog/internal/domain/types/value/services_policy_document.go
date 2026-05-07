@@ -2,11 +2,12 @@ package value
 
 // ServicesPolicyDocument is the normalized JSON representation of services.yaml.
 type ServicesPolicyDocument struct {
-	APIVersion string                  `json:"apiVersion,omitempty" yaml:"apiVersion,omitempty"`
-	Kind       string                  `json:"kind,omitempty" yaml:"kind,omitempty"`
-	Metadata   ServicesPolicyMetadata  `json:"metadata,omitempty" yaml:"metadata,omitempty"`
-	Spec       ServicesPolicySpec      `json:"spec,omitempty" yaml:"spec,omitempty"`
-	Services   []ServicesPolicyService `json:"services,omitempty" yaml:"services,omitempty"`
+	APIVersion           string                              `json:"apiVersion,omitempty" yaml:"apiVersion,omitempty"`
+	Kind                 string                              `json:"kind,omitempty" yaml:"kind,omitempty"`
+	Metadata             ServicesPolicyMetadata              `json:"metadata,omitempty" yaml:"metadata,omitempty"`
+	Spec                 ServicesPolicySpec                  `json:"spec,omitempty" yaml:"spec,omitempty"`
+	Services             []ServicesPolicyService             `json:"services,omitempty" yaml:"services,omitempty"`
+	DocumentationSources []ServicesPolicyDocumentationSource `json:"documentationSources,omitempty" yaml:"documentationSources,omitempty"`
 }
 
 // ServicesPolicyMetadata stores safe document metadata.
@@ -17,8 +18,9 @@ type ServicesPolicyMetadata struct {
 
 // ServicesPolicySpec stores the policy body used by project-catalog.
 type ServicesPolicySpec struct {
-	Services           []ServicesPolicyService `json:"services,omitempty" yaml:"services,omitempty"`
-	DeployableServices []ServicesPolicyService `json:"deployableServices,omitempty" yaml:"deployableServices,omitempty"`
+	Services             []ServicesPolicyService             `json:"services,omitempty" yaml:"services,omitempty"`
+	DeployableServices   []ServicesPolicyService             `json:"deployableServices,omitempty" yaml:"deployableServices,omitempty"`
+	DocumentationSources []ServicesPolicyDocumentationSource `json:"documentationSources,omitempty" yaml:"documentationSources,omitempty"`
 }
 
 // ServicesPolicyService describes one service entry from normalized services.yaml.
@@ -35,4 +37,16 @@ type ServicesPolicyService struct {
 	DependsOn            []string `json:"dependsOn,omitempty" yaml:"dependsOn,omitempty"`
 	DependsOnServiceKeys []string `json:"dependsOnServiceKeys,omitempty" yaml:"dependsOnServiceKeys,omitempty"`
 	Status               string   `json:"status,omitempty" yaml:"status,omitempty"`
+}
+
+// ServicesPolicyDocumentationSource describes one documentation source from normalized services.yaml.
+type ServicesPolicyDocumentationSource struct {
+	Key          string `json:"key,omitempty" yaml:"key,omitempty"`
+	RepositoryID string `json:"repositoryId,omitempty" yaml:"repositoryId,omitempty"`
+	ScopeType    string `json:"scopeType,omitempty" yaml:"scopeType,omitempty"`
+	ScopeID      string `json:"scopeId,omitempty" yaml:"scopeId,omitempty"`
+	LocalPath    string `json:"localPath,omitempty" yaml:"localPath,omitempty"`
+	Path         string `json:"path,omitempty" yaml:"path,omitempty"`
+	AccessMode   string `json:"accessMode,omitempty" yaml:"accessMode,omitempty"`
+	Status       string `json:"status,omitempty" yaml:"status,omitempty"`
 }

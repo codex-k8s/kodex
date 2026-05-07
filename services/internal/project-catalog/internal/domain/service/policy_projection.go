@@ -18,8 +18,9 @@ import (
 var serviceKeyPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,127}$`)
 
 type servicesPolicyProjection struct {
-	payload     []byte
-	descriptors []entity.ServiceDescriptor
+	payload              []byte
+	descriptors          []entity.ServiceDescriptor
+	documentationSources []entity.DocumentationSource
 }
 
 func buildServicesPolicyProjection(input ImportServicesPolicyInput, validationStatus enum.ServicesPolicyValidationStatus) (servicesPolicyProjection, error) {
@@ -27,27 +28,28 @@ func buildServicesPolicyProjection(input ImportServicesPolicyInput, validationSt
 	if len(payload) == 0 || !json.Valid(payload) {
 		return servicesPolicyProjection{}, errs.ErrInvalidArgument
 	}
-	if _, err := parseServicesPolicyDocument(payload); err != nil {
+	document, err := parseServicesPolicyDocument(payload)
+	if err != nil {
 		return servicesPolicyProjection{}, err
 	}
 	if validationStatus != enum.ServicesPolicyValidationValid {
 		return servicesPolicyProjection{payload: payload}, nil
 	}
-	descriptors, err := descriptorsFromPolicyPayload(payload, input.SourceRepositoryID)
+	descriptors, err := descriptorsFromPolicyDocument(document, input.SourceRepositoryID)
 	if err != nil {
 		return servicesPolicyProjection{}, err
 	}
 	if len(descriptors) == 0 {
 		return servicesPolicyProjection{}, errs.ErrInvalidArgument
 	}
-	return servicesPolicyProjection{payload: payload, descriptors: descriptors}, nil
+	documentationSources, err := documentationSourcesFromPolicyDocument(document, descriptors, input.SourceRepositoryID)
+	if err != nil {
+		return servicesPolicyProjection{}, err
+	}
+	return servicesPolicyProjection{payload: payload, descriptors: descriptors, documentationSources: documentationSources}, nil
 }
 
-func descriptorsFromPolicyPayload(payload []byte, fallbackRepositoryID *uuid.UUID) ([]entity.ServiceDescriptor, error) {
-	document, err := parseServicesPolicyDocument(payload)
-	if err != nil {
-		return nil, err
-	}
+func descriptorsFromPolicyDocument(document value.ServicesPolicyDocument, fallbackRepositoryID *uuid.UUID) ([]entity.ServiceDescriptor, error) {
 	entries := serviceEntries(document)
 	descriptors := make([]entity.ServiceDescriptor, 0, len(entries))
 	for _, entry := range entries {
@@ -76,6 +78,13 @@ func serviceEntries(document value.ServicesPolicyDocument) []value.ServicesPolic
 		return document.Spec.DeployableServices
 	}
 	return document.Services
+}
+
+func documentationEntries(document value.ServicesPolicyDocument) []value.ServicesPolicyDocumentationSource {
+	if len(document.Spec.DocumentationSources) > 0 {
+		return document.Spec.DocumentationSources
+	}
+	return document.DocumentationSources
 }
 
 func descriptorFromPolicyService(item value.ServicesPolicyService, fallbackRepositoryID *uuid.UUID) (entity.ServiceDescriptor, error) {
@@ -195,6 +204,131 @@ func validateServiceDescriptorSet(descriptors []entity.ServiceDescriptor) ([]ent
 	return descriptors, nil
 }
 
+func documentationSourcesFromPolicyDocument(document value.ServicesPolicyDocument, descriptors []entity.ServiceDescriptor, fallbackRepositoryID *uuid.UUID) ([]entity.DocumentationSource, error) {
+	entries := documentationEntries(document)
+	if len(entries) == 0 {
+		return nil, nil
+	}
+	serviceScopes, dependencyScopes := policyDocumentationScopes(descriptors)
+	sources := make([]entity.DocumentationSource, 0, len(entries))
+	seen := make(map[string]struct{}, len(entries))
+	for _, entry := range entries {
+		source, err := documentationSourceFromPolicy(entry, fallbackRepositoryID)
+		if err != nil {
+			return nil, err
+		}
+		if err := validateDocumentationSource(source); err != nil {
+			return nil, err
+		}
+		if err := validatePolicyDocumentationScope(source, serviceScopes, dependencyScopes); err != nil {
+			return nil, err
+		}
+		key := string(source.ScopeType) + "\x00" + source.ScopeID + "\x00" + source.LocalPath
+		if _, ok := seen[key]; ok {
+			return nil, errs.ErrInvalidArgument
+		}
+		seen[key] = struct{}{}
+		sources = append(sources, source)
+	}
+	return sources, nil
+}
+
+func policyDocumentationScopes(descriptors []entity.ServiceDescriptor) (map[string]struct{}, map[string]struct{}) {
+	serviceScopes := make(map[string]struct{}, len(descriptors))
+	dependencyScopes := make(map[string]struct{}, len(descriptors))
+	for _, descriptor := range descriptors {
+		scopeID := firstNonEmpty(descriptor.DocumentationScopeID, descriptor.ServiceKey)
+		serviceScopes[scopeID] = struct{}{}
+		serviceScopes[descriptor.ServiceKey] = struct{}{}
+		for _, dependency := range descriptor.DependsOnServiceKeys {
+			dependencyScopes[dependency] = struct{}{}
+		}
+	}
+	for _, descriptor := range descriptors {
+		if _, ok := dependencyScopes[descriptor.ServiceKey]; ok {
+			dependencyScopes[firstNonEmpty(descriptor.DocumentationScopeID, descriptor.ServiceKey)] = struct{}{}
+		}
+	}
+	return serviceScopes, dependencyScopes
+}
+
+func documentationSourceFromPolicy(item value.ServicesPolicyDocumentationSource, fallbackRepositoryID *uuid.UUID) (entity.DocumentationSource, error) {
+	localPath, err := normalizeWorkspacePath(firstNonEmpty(item.LocalPath, item.Path))
+	if err != nil {
+		return entity.DocumentationSource{}, err
+	}
+	repositoryID, err := policyServiceRepositoryID(item.RepositoryID, fallbackRepositoryID)
+	if err != nil {
+		return entity.DocumentationSource{}, err
+	}
+	accessMode, err := documentationAccessModeFromPolicy(item.AccessMode)
+	if err != nil {
+		return entity.DocumentationSource{}, err
+	}
+	status, err := documentationStatusFromPolicy(item.Status)
+	if err != nil {
+		return entity.DocumentationSource{}, err
+	}
+	return entity.DocumentationSource{
+		RepositoryID: repositoryID,
+		ScopeType:    enum.DocumentationScopeType(strings.TrimSpace(item.ScopeType)),
+		ScopeID:      strings.TrimSpace(firstNonEmpty(item.ScopeID, item.Key)),
+		LocalPath:    localPath,
+		AccessMode:   accessMode,
+		Status:       status,
+	}, nil
+}
+
+func documentationAccessModeFromPolicy(mode string) (enum.DocumentationAccessMode, error) {
+	switch strings.TrimSpace(mode) {
+	case "", string(enum.DocumentationAccessRead):
+		return enum.DocumentationAccessRead, nil
+	case string(enum.DocumentationAccessWrite):
+		return enum.DocumentationAccessWrite, nil
+	default:
+		return "", errs.ErrInvalidArgument
+	}
+}
+
+func documentationStatusFromPolicy(status string) (enum.DocumentationSourceStatus, error) {
+	switch strings.TrimSpace(status) {
+	case "", string(enum.DocumentationSourceStatusActive):
+		return enum.DocumentationSourceStatusActive, nil
+	case string(enum.DocumentationSourceStatusDisabled):
+		return enum.DocumentationSourceStatusDisabled, nil
+	case string(enum.DocumentationSourceStatusBlocked):
+		return enum.DocumentationSourceStatusBlocked, nil
+	default:
+		return "", errs.ErrInvalidArgument
+	}
+}
+
+func validateDocumentationSource(source entity.DocumentationSource) error {
+	if !validDocumentationScope(source.ScopeType, source.ScopeID) ||
+		!validDocumentationAccessMode(source.AccessMode) ||
+		!validDocumentationStatus(source.Status) ||
+		source.LocalPath == "" {
+		return errs.ErrInvalidArgument
+	}
+	return nil
+}
+
+func validatePolicyDocumentationScope(source entity.DocumentationSource, serviceScopes map[string]struct{}, dependencyScopes map[string]struct{}) error {
+	switch source.ScopeType {
+	case enum.DocumentationScopeProject, enum.DocumentationScopeGuidanceRef:
+		return nil
+	case enum.DocumentationScopeService:
+		if _, ok := serviceScopes[source.ScopeID]; ok {
+			return nil
+		}
+	case enum.DocumentationScopeDependency:
+		if _, ok := dependencyScopes[source.ScopeID]; ok {
+			return nil
+		}
+	}
+	return errs.ErrInvalidArgument
+}
+
 func validServiceKind(kind enum.ServiceKind) bool {
 	switch kind {
 	case enum.ServiceKindBackend, enum.ServiceKindFrontend, enum.ServiceKindWorker, enum.ServiceKindDocumentation, enum.ServiceKindPackage, enum.ServiceKindOther:
@@ -207,6 +341,35 @@ func validServiceKind(kind enum.ServiceKind) bool {
 func validServiceStatus(status enum.ServiceStatus) bool {
 	switch status {
 	case enum.ServiceStatusActive, enum.ServiceStatusDisabled, enum.ServiceStatusStale:
+		return true
+	default:
+		return false
+	}
+}
+
+func validDocumentationScope(scopeType enum.DocumentationScopeType, scopeID string) bool {
+	switch scopeType {
+	case enum.DocumentationScopeProject:
+		return true
+	case enum.DocumentationScopeService, enum.DocumentationScopeDependency, enum.DocumentationScopeGuidanceRef:
+		return strings.TrimSpace(scopeID) != ""
+	default:
+		return false
+	}
+}
+
+func validDocumentationAccessMode(mode enum.DocumentationAccessMode) bool {
+	switch mode {
+	case enum.DocumentationAccessRead, enum.DocumentationAccessWrite:
+		return true
+	default:
+		return false
+	}
+}
+
+func validDocumentationStatus(status enum.DocumentationSourceStatus) bool {
+	switch status {
+	case enum.DocumentationSourceStatusActive, enum.DocumentationSourceStatusDisabled, enum.DocumentationSourceStatusBlocked:
 		return true
 	default:
 		return false
