@@ -40,6 +40,11 @@ type ExecQuerier interface {
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
 
+// RowQuerier is the minimal read contract shared by pgx pools and transactions.
+type RowQuerier interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+}
+
 // TxBeginner is the minimal transaction opener shared by pgx pools and test doubles.
 type TxBeginner interface {
 	BeginTx(ctx context.Context, txOptions pgx.TxOptions) (pgx.Tx, error)
@@ -51,6 +56,35 @@ type PoolRuntimeSettings = PoolSettings
 // PoolSettingsFromRuntime converts service env config to the shared pgxpool contract.
 func PoolSettingsFromRuntime(settings PoolRuntimeSettings) PoolSettings {
 	return settings
+}
+
+// PoolRuntimeSettingsFromValues builds pool settings from service-owned env fields.
+func PoolRuntimeSettingsFromValues(
+	dsn string,
+	maxConns int32,
+	minConns int32,
+	maxConnLifetime time.Duration,
+	maxConnIdleTime time.Duration,
+	healthCheckPeriod time.Duration,
+	pingTimeout time.Duration,
+	connectRetryMaxAttempts int,
+	connectRetryInitialDelay time.Duration,
+	connectRetryMaxDelay time.Duration,
+	connectRetryJitterRatio float64,
+) PoolRuntimeSettings {
+	return PoolRuntimeSettings{
+		DSN:                      dsn,
+		MaxConns:                 maxConns,
+		MinConns:                 minConns,
+		MaxConnLifetime:          maxConnLifetime,
+		MaxConnIdleTime:          maxConnIdleTime,
+		HealthCheckPeriod:        healthCheckPeriod,
+		PingTimeout:              pingTimeout,
+		ConnectRetryMaxAttempts:  connectRetryMaxAttempts,
+		ConnectRetryInitialDelay: connectRetryInitialDelay,
+		ConnectRetryMaxDelay:     connectRetryMaxDelay,
+		ConnectRetryJitterRatio:  connectRetryJitterRatio,
+	}
 }
 
 // Mutation describes one SQL write inside repository transactions.
@@ -215,6 +249,20 @@ func OutboxClaimArgs(limit int, now time.Time, lockedUntil time.Time) (pgx.Named
 	}, true
 }
 
+// ClaimOutboxRows validates claim bounds, executes the claim query and scans rows.
+func ClaimOutboxRows[T any](ctx context.Context, db RowQuerier, queryText string, limit int, now time.Time, lockedUntil time.Time, scan func(RowScanner) (T, error)) ([]T, bool, error) {
+	args, ok := OutboxClaimArgs(limit, now, lockedUntil)
+	if !ok {
+		return nil, false, nil
+	}
+	rows, err := db.Query(ctx, queryText, args)
+	if err != nil {
+		return nil, true, err
+	}
+	items, err := ScanRows(rows, scan)
+	return items, true, err
+}
+
 // OutboxPublishedArgs builds validated arguments for marking an event as published.
 func OutboxPublishedArgs(id uuid.UUID, attemptCount int, publishedAt time.Time) (pgx.NamedArgs, bool) {
 	if id == uuid.Nil || attemptCount < 1 || publishedAt.IsZero() {
@@ -227,6 +275,29 @@ func OutboxPublishedArgs(id uuid.UUID, attemptCount int, publishedAt time.Time) 
 	}, true
 }
 
+// OutboxCreateArgs builds common named arguments for service-local outbox inserts.
+func OutboxCreateArgs(
+	id uuid.UUID,
+	eventType string,
+	schemaVersion int,
+	aggregateType string,
+	aggregateID uuid.UUID,
+	payload []byte,
+	occurredAt time.Time,
+	publishedAt *time.Time,
+) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"id":             id,
+		"event_type":     eventType,
+		"schema_version": schemaVersion,
+		"aggregate_type": aggregateType,
+		"aggregate_id":   aggregateID,
+		"payload":        JSONPayload(payload),
+		"occurred_at":    occurredAt,
+		"published_at":   NullableTime(publishedAt),
+	}
+}
+
 // ExecOutboxPublished validates and applies a successful outbox publication update.
 func ExecOutboxPublished(ctx context.Context, db ExecQuerier, queryText string, id uuid.UUID, attemptCount int, publishedAt time.Time) (bool, error) {
 	args, ok := OutboxPublishedArgs(id, attemptCount, publishedAt)
@@ -235,6 +306,24 @@ func ExecOutboxPublished(ctx context.Context, db ExecQuerier, queryText string, 
 	}
 	_, err := db.Exec(ctx, queryText, args)
 	return true, err
+}
+
+// ApplyOutboxPublished validates and persists successful publication.
+func ApplyOutboxPublished(ctx context.Context, db ExecQuerier, queryText string, invalid error, id uuid.UUID, attemptCount int, publishedAt time.Time) error {
+	ok, err := ExecOutboxPublished(ctx, db, queryText, id, attemptCount, publishedAt)
+	if !ok {
+		return invalid
+	}
+	return err
+}
+
+// ApplyOutboxDeliveryFailure validates and persists a retry/final failure marker.
+func ApplyOutboxDeliveryFailure(ctx context.Context, db ExecQuerier, queryText string, invalid error, id uuid.UUID, attemptCount int, timestampName string, timestampValue time.Time, lastError string) error {
+	ok, err := ExecOutboxDeliveryFailure(ctx, db, queryText, id, attemptCount, timestampName, timestampValue, lastError)
+	if !ok {
+		return invalid
+	}
+	return err
 }
 
 // UUIDPtrFromPG converts a nullable pgtype UUID to a domain pointer.

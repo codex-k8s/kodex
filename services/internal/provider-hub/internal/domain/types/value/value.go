@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	providerevents "github.com/codex-k8s/kodex/libs/go/platformevents/provider"
 )
 
 // Actor identifies the principal that initiated a command or read.
@@ -50,3 +52,6 @@ type PageRequest struct {
 type PageResult struct {
 	NextPageToken string
 }
+
+// ProviderEventPayload is generated from AsyncAPI and used by provider events.
+type ProviderEventPayload = providerevents.Payload

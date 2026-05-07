@@ -5,6 +5,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/enum"
@@ -32,6 +33,46 @@ func scanAccountRuntimeState(row postgreslib.RowScanner) (entity.ProviderAccount
 	state.LastCheckedAt = timePtrFromPG(lastCheckedAt)
 	state.LastSuccessAt = timePtrFromPG(lastSuccessAt)
 	return state, err
+}
+
+func scanWebhookEvent(row postgreslib.RowScanner) (entity.WebhookEvent, error) {
+	var event entity.WebhookEvent
+	var providerSlug, status string
+	var payload []byte
+	err := row.Scan(
+		&event.ID,
+		&providerSlug,
+		&event.DeliveryID,
+		&event.EventName,
+		&event.RepositoryProviderID,
+		&event.ReceivedAt,
+		&status,
+		&payload,
+		&event.LastError,
+		&event.RetainUntil,
+	)
+	event.ProviderSlug = enum.ProviderSlug(providerSlug)
+	event.ProcessingStatus = enum.WebhookProcessingStatus(status)
+	event.PayloadJSON = append(event.PayloadJSON[:0], payload...)
+	return event, err
+}
+
+func scanProviderEvent(row postgreslib.RowScanner) (entity.ProviderEvent, error) {
+	var event entity.ProviderEvent
+	var sourceWebhookEventID pgtype.UUID
+	var payload []byte
+	err := row.Scan(
+		&event.ID,
+		&sourceWebhookEventID,
+		&event.EventType,
+		&event.AggregateType,
+		&event.AggregateID,
+		&payload,
+		&event.OccurredAt,
+	)
+	event.SourceWebhookEventID = postgreslib.UUIDPtrFromPG(sourceWebhookEventID)
+	event.PayloadJSON = append(event.PayloadJSON[:0], payload...)
+	return event, err
 }
 
 func scanLimitSnapshot(row postgreslib.RowScanner) (entity.ProviderLimitSnapshot, error) {
@@ -89,6 +130,32 @@ func scanProviderOperation(row postgreslib.RowScanner) (entity.ProviderOperation
 	operation.RateLimitSnapshotID = postgreslib.UUIDPtrFromPG(snapshotID)
 	operation.FinishedAt = timePtrFromPG(finishedAt)
 	return operation, err
+}
+
+func scanOutboxEvent(row postgreslib.RowScanner) (entity.OutboxEvent, error) {
+	scanned, err := postgreslib.ScanOutboxEventRow(row)
+	event := outboxlib.NewEvent(
+		scanned.Identity.RowID,
+		scanned.Identity.TypeName,
+		scanned.Identity.ContractVersion,
+		scanned.Identity.SubjectKind,
+		scanned.Identity.SubjectID,
+		scanned.Body,
+		scanned.Identity.CreatedAt,
+		scanned.Delivery.Attempts,
+	)
+	delivery := outboxlib.RecordDelivery{
+		PublishedAt:   scanned.Delivery.SentAt,
+		AttemptCount:  scanned.Delivery.Attempts,
+		NextAttemptAt: scanned.Delivery.RetryAt,
+		LockedUntil:   scanned.Delivery.LeaseUntil,
+	}
+	failure := outboxlib.RecordFailure{
+		FailedPermanentlyAt: scanned.Failure.DeadAt,
+		FailureKind:         scanned.Failure.FailureCode,
+		LastError:           scanned.Failure.ErrorText,
+	}
+	return outboxlib.RecordFromParts(event, delivery, failure), err
 }
 
 func timePtrFromPG(value pgtype.Timestamptz) *time.Time {

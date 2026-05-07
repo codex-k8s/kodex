@@ -48,6 +48,66 @@ func accountRuntimeStateFilterArgs(filter query.AccountRuntimeStateFilter) pageQ
 	})
 }
 
+func webhookEventArgs(event entity.WebhookEvent) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"id":                     event.ID,
+		"provider_slug":          string(event.ProviderSlug),
+		"delivery_id":            event.DeliveryID,
+		"event_name":             event.EventName,
+		"repository_provider_id": event.RepositoryProviderID,
+		"received_at":            event.ReceivedAt,
+		"processing_status":      string(event.ProcessingStatus),
+		"payload_json":           postgreslib.JSONPayload(event.PayloadJSON),
+		"last_error":             event.LastError,
+		"retain_until":           event.RetainUntil,
+	}
+}
+
+func webhookEventIdentityArgs(event entity.WebhookEvent) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"provider_slug": string(event.ProviderSlug),
+		"delivery_id":   event.DeliveryID,
+	}
+}
+
+func webhookEventFilterArgs(filter query.WebhookEventFilter) pageQueryArgs {
+	return withPage(filter.Page, pgx.NamedArgs{
+		"provider_slug":          string(filter.ProviderSlug),
+		"delivery_id":            filter.DeliveryID,
+		"event_names":            filter.EventNames,
+		"processing_statuses":    postgreslib.StringValues(filter.ProcessingStatuses),
+		"repository_provider_id": filter.RepositoryProviderID,
+		"received_since":         postgreslib.NullableTime(filter.ReceivedSince),
+		"received_until":         postgreslib.NullableTime(filter.ReceivedUntil),
+	})
+}
+
+func webhookEventProcessingArgs(event entity.WebhookEvent) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"id":                event.ID,
+		"processing_status": string(event.ProcessingStatus),
+		"last_error":        event.LastError,
+	}
+}
+
+func providerEventArgs(event entity.ProviderEvent) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"id":                      event.ID,
+		"source_webhook_event_id": postgreslib.NullableUUID(event.SourceWebhookEventID),
+		"event_type":              event.EventType,
+		"aggregate_type":          event.AggregateType,
+		"aggregate_id":            event.AggregateID,
+		"payload_json":            postgreslib.JSONPayload(event.PayloadJSON),
+		"occurred_at":             event.OccurredAt,
+	}
+}
+
+func providerEventFilterArgs(filter query.ProviderEventFilter) pageQueryArgs {
+	return withPage(filter.Page, pgx.NamedArgs{
+		"source_webhook_event_id": postgreslib.NullableUUID(filter.SourceWebhookEventID),
+	})
+}
+
 func limitSnapshotArgs(snapshot entity.ProviderLimitSnapshot) pgx.NamedArgs {
 	return pgx.NamedArgs{
 		"id":                  snapshot.ID,
@@ -98,6 +158,10 @@ func providerOperationFilterArgs(filter query.ProviderOperationFilter) pageQuery
 		"target_ref":          filter.TargetRef,
 		"started_since":       postgreslib.NullableTime(filter.StartedSince),
 	})
+}
+
+func outboxEventArgs(event entity.OutboxEvent) pgx.NamedArgs {
+	return postgreslib.OutboxCreateArgs(event.ID, event.EventType, event.SchemaVersion, event.AggregateType, event.AggregateID, event.Payload, event.OccurredAt, event.PublishedAt)
 }
 
 func withPage(page value.PageRequest, args pgx.NamedArgs) pageQueryArgs {

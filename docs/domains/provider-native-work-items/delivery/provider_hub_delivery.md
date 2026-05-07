@@ -58,7 +58,7 @@ approvals:
 
 | Группа | Контракт | Реализация |
 |---|---|---|
-| Приём webhook | Готово: `IngestWebhookEvent`, чтение, список и повторная обработка. | Не начата; будет в PRV-4 после контракта `integration-gateway`. |
+| Приём webhook | Готово: `IngestWebhookEvent`, чтение, список и повторная обработка. | Реализовано в PRV-4: входящий журнал, дедупликация по `provider_slug + delivery_id`, базовая нормализация GitHub-событий, статусы обработки и outbox-события `provider.webhook.received` / `provider.webhook.normalized`. Публичный HTTP webhook endpoint остаётся ответственностью будущего `integration-gateway`. |
 | Проекции артефактов провайдера | Готово: чтение рабочих артефактов, комментариев и связей. | Не начата; будет в PRV-5. |
 | Сверка | Готово: сигналы, очередь сверки, batch-обработка и курсоры. | Не начата; будет в PRV-6. |
 | Операции провайдера | Готово: создание и обновление `Issue`, комментариев, `PR/MR`, review-сигналов и связей. | Не начата; будет в PRV-7 после согласования `agent-manager` и MCP-инструментов. |
@@ -85,9 +85,14 @@ approvals:
 - разделение частичного runtime update от снимка лимита и авторитетного runtime upsert;
 - защита runtime state от устаревших частичных snapshot-наблюдений;
 - проверка области и результата при идемпотентном повторе provider operation;
-- отдельное replay-чтение для конкурентных повторов snapshot и provider operation.
+- отдельное replay-чтение для конкурентных повторов snapshot и provider operation;
+- входящий журнал webhook с идемпотентной записью по `provider_slug + delivery_id`;
+- синхронный первый проход нормализации для базовых GitHub-событий `issues`, `pull_request`, `issue_comment`, `pull_request_review` и `pull_request_review_comment`;
+- повторная обработка webhook для записей в статусах `pending` и `failed`;
+- запись нормализованных provider events и локальных outbox-событий `provider.webhook.received` / `provider.webhook.normalized`;
+- штатный outbox dispatcher `provider-hub` в `platform-event-log`.
 
-Ограничение среза: webhook, проекции рабочих артефактов, сверка и команды записи в провайдера пока остаются `Unimplemented`. Реализация этих операций добавляется в PRV-4..PRV-8 вместе с соответствующей доменной логикой. Kubernetes-манифесты, создание БД в deploy-контуре, migration job, alerts и runbook остаются в PRV-9.
+Ограничение среза: проекции рабочих артефактов, сверка и команды записи в провайдера пока остаются `Unimplemented`. Реализация этих операций добавляется в PRV-5..PRV-8 вместе с соответствующей доменной логикой. Kubernetes-манифесты, создание БД в deploy-контуре, migration job, alerts и runbook остаются в PRV-9.
 
 ## Зависимости и синхронизация
 
@@ -96,7 +101,7 @@ approvals:
 | `project-catalog` | До PRV-1 и перед PRV-8 | `project_id`, `repository_id`, provider ref, состояние подключения репозитория, `services.yaml` bootstrap/adoption. |
 | `access-manager` | Перед PRV-7 и при включении фильтров области операционных состояний | Набор действий доступа для provider-операций, контракт разрешения внешнего аккаунта и отображение внешних аккаунтов на проект/организацию. |
 | `package-hub` | До PRV-5 и PRV-7 | Как пакеты ссылаются на provider-репозитории и PR в пакетных репозиториях. |
-| `integration-gateway` | До PRV-4 | Формат внутреннего вызова `IngestWebhookEvent` и ответственность за проверку подписи. |
+| `integration-gateway` | Перед публичным приёмом webhook | Формат внутреннего вызова `IngestWebhookEvent` уже закреплён в `provider-hub`; `integration-gateway` отвечает за внешний HTTP, проверку подписи и передачу проверенного сигнала. |
 | `agent-manager` и `platform-mcp-server` | До PRV-7 | Каталог provider-инструментов, идемпотентность и ожидаемый результат операций. |
 | `operations-hub` | До PRV-5 и PRV-9 | Какие поля проекций нужны операторским экранам и диагностике. |
 

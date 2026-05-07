@@ -28,6 +28,24 @@ type AccountRuntimeStateFilter struct {
 	Page               value.PageRequest
 }
 
+// WebhookEventFilter selects raw webhook events.
+type WebhookEventFilter struct {
+	ProviderSlug         enum.ProviderSlug
+	DeliveryID           string
+	EventNames           []string
+	ProcessingStatuses   []enum.WebhookProcessingStatus
+	RepositoryProviderID string
+	ReceivedSince        *time.Time
+	ReceivedUntil        *time.Time
+	Page                 value.PageRequest
+}
+
+// ProviderEventFilter selects normalized provider events.
+type ProviderEventFilter struct {
+	SourceWebhookEventID *uuid.UUID
+	Page                 value.PageRequest
+}
+
 // LimitSnapshotFilter selects provider limit snapshots.
 type LimitSnapshotFilter struct {
 	ExternalAccountID *uuid.UUID

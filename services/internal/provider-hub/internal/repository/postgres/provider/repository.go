@@ -1,11 +1,15 @@
 package provider
 
 import (
+	"bytes"
 	"context"
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -62,6 +66,82 @@ func (r *Repository) Ping(ctx context.Context) error {
 		return fmt.Errorf("ping provider-hub postgres: %w", err)
 	}
 	return nil
+}
+
+// StoreWebhookEvent stores a raw webhook, normalized provider events and outbox events atomically.
+func (r *Repository) StoreWebhookEvent(ctx context.Context, webhook entity.WebhookEvent, providerEvents []entity.ProviderEvent, outboxEvents []entity.OutboxEvent) (entity.WebhookEvent, []entity.ProviderEvent, error) {
+	var stored entity.WebhookEvent
+	var storedProviderEvents []entity.ProviderEvent
+	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
+		var insertErr error
+		stored, insertErr = queryOne(ctx, tx, operationStoreWebhookEvent, queryWebhookEventInsert, webhookEventArgs(webhook), scanWebhookEvent)
+		if errors.Is(insertErr, errs.ErrNotFound) {
+			replayed, replayErr := queryOne(ctx, tx, operationStoreWebhookEvent, queryWebhookEventGetByDelivery, webhookEventIdentityArgs(webhook), scanWebhookEvent)
+			if replayErr != nil {
+				return replayErr
+			}
+			if !sameWebhookEvent(webhook, replayed) {
+				return errs.ErrConflict
+			}
+			stored = replayed
+			events, _, eventErr := queryPage(ctx, tx, operationListProviderEvents, queryProviderEventList, providerEventFilterArgs(query.ProviderEventFilter{
+				SourceWebhookEventID: &stored.ID,
+			}), scanProviderEvent)
+			storedProviderEvents = events
+			return eventErr
+		}
+		if insertErr != nil {
+			return insertErr
+		}
+		insertedProviderEvents, err := insertProviderEvents(ctx, tx, operationStoreWebhookEvent, providerEvents)
+		if err != nil {
+			return err
+		}
+		if err := insertOutboxEvents(ctx, tx, operationStoreWebhookEvent, outboxEvents); err != nil {
+			return err
+		}
+		storedProviderEvents = insertedProviderEvents
+		return nil
+	})
+	if err != nil {
+		return entity.WebhookEvent{}, nil, wrapError(operationStoreWebhookEvent, err)
+	}
+	return stored, storedProviderEvents, nil
+}
+
+// ProcessWebhookEvent updates processing state and stores new normalized events atomically.
+func (r *Repository) ProcessWebhookEvent(ctx context.Context, webhook entity.WebhookEvent, providerEvents []entity.ProviderEvent, outboxEvents []entity.OutboxEvent) (entity.WebhookEvent, error) {
+	var stored entity.WebhookEvent
+	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
+		var updateErr error
+		stored, updateErr = queryOne(ctx, tx, operationProcessWebhookEvent, queryWebhookEventUpdateProcessing, webhookEventProcessingArgs(webhook), scanWebhookEvent)
+		if updateErr != nil {
+			return updateErr
+		}
+		if _, err := insertProviderEvents(ctx, tx, operationProcessWebhookEvent, providerEvents); err != nil {
+			return err
+		}
+		return insertOutboxEvents(ctx, tx, operationProcessWebhookEvent, outboxEvents)
+	})
+	if err != nil {
+		return entity.WebhookEvent{}, wrapError(operationProcessWebhookEvent, err)
+	}
+	return stored, nil
+}
+
+// GetWebhookEvent returns a stored raw webhook by id.
+func (r *Repository) GetWebhookEvent(ctx context.Context, id uuid.UUID) (entity.WebhookEvent, error) {
+	return queryOne(ctx, r.db, operationGetWebhookEvent, queryWebhookEventGet, pgx.NamedArgs{"id": id}, scanWebhookEvent)
+}
+
+// ListWebhookEvents returns raw webhook events.
+func (r *Repository) ListWebhookEvents(ctx context.Context, filter query.WebhookEventFilter) ([]entity.WebhookEvent, query.PageResult, error) {
+	return queryPage(ctx, r.db, operationListWebhookEvents, queryWebhookEventList, webhookEventFilterArgs(filter), scanWebhookEvent)
+}
+
+// ListProviderEvents returns normalized provider events.
+func (r *Repository) ListProviderEvents(ctx context.Context, filter query.ProviderEventFilter) ([]entity.ProviderEvent, query.PageResult, error) {
+	return queryPage(ctx, r.db, operationListProviderEvents, queryProviderEventList, providerEventFilterArgs(filter), scanProviderEvent)
 }
 
 // UpsertAccountRuntimeState creates or updates provider-side account state.
@@ -126,14 +206,53 @@ func (r *Repository) ListProviderOperations(ctx context.Context, filter query.Pr
 	return queryPage(ctx, r.db, operationListProviderOperations, queryProviderOperationList, providerOperationFilterArgs(filter), scanProviderOperation)
 }
 
+// ClaimOutboxEvents leases unpublished outbox events for delivery.
+func (r *Repository) ClaimOutboxEvents(ctx context.Context, limit int, now time.Time, lockedUntil time.Time) ([]entity.OutboxEvent, error) {
+	events, ok, err := postgreslib.ClaimOutboxRows(ctx, r.db, queryOutboxEventClaim, limit, now, lockedUntil, scanOutboxEvent)
+	if !ok {
+		return nil, wrapError(operationClaimOutboxEvents, errs.ErrInvalidArgument)
+	}
+	return events, wrapError(operationClaimOutboxEvents, err)
+}
+
+// MarkOutboxEventPublished marks a leased outbox event as published.
+func (r *Repository) MarkOutboxEventPublished(ctx context.Context, id uuid.UUID, attemptCount int, publishedAt time.Time) error {
+	err := postgreslib.ApplyOutboxPublished(ctx, r.db, queryOutboxEventMarkPublished, errs.ErrInvalidArgument, id, attemptCount, publishedAt)
+	return wrapError(operationMarkOutboxEventPublished, err)
+}
+
+// MarkOutboxEventFailed schedules a leased outbox event for retry.
+func (r *Repository) MarkOutboxEventFailed(ctx context.Context, id uuid.UUID, attemptCount int, nextAttemptAt time.Time, lastError string) error {
+	return r.markOutboxEventDeliveryFailure(ctx, operationMarkOutboxEventFailed, queryOutboxEventMarkFailed, id, attemptCount, "next_attempt_at", nextAttemptAt, lastError)
+}
+
+// MarkOutboxEventPermanentlyFailed moves a leased outbox event to terminal failure.
+func (r *Repository) MarkOutboxEventPermanentlyFailed(ctx context.Context, id uuid.UUID, attemptCount int, failedAt time.Time, lastError string) error {
+	return r.markOutboxEventDeliveryFailure(ctx, operationMarkOutboxEventPermanentlyFailed, queryOutboxEventMarkPermanentlyFailed, id, attemptCount, "failed_permanently_at", failedAt, lastError)
+}
+
+func (r *Repository) markOutboxEventDeliveryFailure(ctx context.Context, operation string, queryText string, id uuid.UUID, attemptCount int, timestampName string, timestampValue time.Time, lastError string) error {
+	err := postgreslib.ApplyOutboxDeliveryFailure(ctx, r.db, queryText, errs.ErrInvalidArgument, id, attemptCount, timestampName, timestampValue, lastError)
+	return wrapError(operation, err)
+}
+
 const (
-	operationGetAccountRuntimeState    = "domain.Repository.GetAccountRuntimeState"
-	operationListAccountRuntimeStates  = "domain.Repository.ListAccountRuntimeStates"
-	operationUpsertAccountRuntimeState = "domain.Repository.UpsertAccountRuntimeState"
-	operationRecordLimitSnapshot       = "domain.Repository.RecordLimitSnapshot"
-	operationListLimitSnapshots        = "domain.Repository.ListLimitSnapshots"
-	operationRecordProviderOperation   = "domain.Repository.RecordProviderOperation"
-	operationListProviderOperations    = "domain.Repository.ListProviderOperations"
+	operationStoreWebhookEvent                = "domain.Repository.StoreWebhookEvent"
+	operationProcessWebhookEvent              = "domain.Repository.ProcessWebhookEvent"
+	operationGetWebhookEvent                  = "domain.Repository.GetWebhookEvent"
+	operationListWebhookEvents                = "domain.Repository.ListWebhookEvents"
+	operationListProviderEvents               = "domain.Repository.ListProviderEvents"
+	operationGetAccountRuntimeState           = "domain.Repository.GetAccountRuntimeState"
+	operationListAccountRuntimeStates         = "domain.Repository.ListAccountRuntimeStates"
+	operationUpsertAccountRuntimeState        = "domain.Repository.UpsertAccountRuntimeState"
+	operationRecordLimitSnapshot              = "domain.Repository.RecordLimitSnapshot"
+	operationListLimitSnapshots               = "domain.Repository.ListLimitSnapshots"
+	operationRecordProviderOperation          = "domain.Repository.RecordProviderOperation"
+	operationListProviderOperations           = "domain.Repository.ListProviderOperations"
+	operationClaimOutboxEvents                = "domain.Repository.ClaimOutboxEvents"
+	operationMarkOutboxEventPublished         = "domain.Repository.MarkOutboxEventPublished"
+	operationMarkOutboxEventFailed            = "domain.Repository.MarkOutboxEventFailed"
+	operationMarkOutboxEventPermanentlyFailed = "domain.Repository.MarkOutboxEventPermanentlyFailed"
 )
 
 func queryOne[T any](ctx context.Context, db queryer, operation string, sql string, args pgx.NamedArgs, scan func(postgreslib.RowScanner) (T, error)) (T, error) {
@@ -155,4 +274,44 @@ func queryPage[T any](ctx context.Context, db queryer, operation string, sql str
 	}
 	pageItems, page := pageResult(items, paging.limit, paging.nextOffset)
 	return pageItems, page, nil
+}
+
+func insertProviderEvents(ctx context.Context, db queryer, operation string, events []entity.ProviderEvent) ([]entity.ProviderEvent, error) {
+	if len(events) == 0 {
+		return nil, nil
+	}
+	result := make([]entity.ProviderEvent, 0, len(events))
+	for _, event := range events {
+		inserted, err := queryOne(ctx, db, operation, queryProviderEventInsert, providerEventArgs(event), scanProviderEvent)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, inserted)
+	}
+	return result, nil
+}
+
+func insertOutboxEvents(ctx context.Context, db execer, operation string, events []entity.OutboxEvent) error {
+	for _, event := range events {
+		if _, err := db.Exec(ctx, queryOutboxEventCreate, outboxEventArgs(event)); err != nil {
+			return wrapError(operation, err)
+		}
+	}
+	return nil
+}
+
+func sameWebhookEvent(left entity.WebhookEvent, right entity.WebhookEvent) bool {
+	return left.ProviderSlug == right.ProviderSlug &&
+		left.DeliveryID == right.DeliveryID &&
+		left.EventName == right.EventName &&
+		left.RepositoryProviderID == right.RepositoryProviderID &&
+		bytes.Equal(compactJSON(left.PayloadJSON), compactJSON(right.PayloadJSON))
+}
+
+func compactJSON(raw []byte) []byte {
+	var compacted bytes.Buffer
+	if err := json.Compact(&compacted, raw); err != nil {
+		return bytes.TrimSpace(raw)
+	}
+	return compacted.Bytes()
 }

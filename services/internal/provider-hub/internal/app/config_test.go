@@ -3,6 +3,8 @@ package app
 import (
 	"testing"
 	"time"
+
+	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
 )
 
 func TestLoadConfigRequiresDatabaseDSN(t *testing.T) {
@@ -15,6 +17,7 @@ func TestLoadConfigRequiresDatabaseDSN(t *testing.T) {
 
 func TestLoadConfigAcceptsRequiredEnvironment(t *testing.T) {
 	t.Setenv("KODEX_PROVIDER_HUB_DATABASE_DSN", "postgres://postgres:5432/kodex_provider_hub?sslmode=disable")
+	t.Setenv("KODEX_PROVIDER_HUB_EVENT_LOG_DATABASE_DSN", "postgres://postgres:5432/platform_event_log?sslmode=disable")
 	t.Setenv("KODEX_PROVIDER_HUB_GRPC_AUTH_TOKEN", "test-token")
 
 	cfg, err := LoadConfig()
@@ -28,6 +31,7 @@ func TestLoadConfigAcceptsRequiredEnvironment(t *testing.T) {
 
 func TestLoadConfigAllowsMissingAuthTokenWhenAuthDisabled(t *testing.T) {
 	t.Setenv("KODEX_PROVIDER_HUB_DATABASE_DSN", "postgres://postgres:5432/kodex_provider_hub?sslmode=disable")
+	t.Setenv("KODEX_PROVIDER_HUB_EVENT_LOG_DATABASE_DSN", "postgres://postgres:5432/platform_event_log?sslmode=disable")
 	t.Setenv("KODEX_PROVIDER_HUB_GRPC_AUTH_REQUIRED", "false")
 	t.Setenv("KODEX_PROVIDER_HUB_GRPC_AUTH_TOKEN", "")
 
@@ -37,6 +41,27 @@ func TestLoadConfigAllowsMissingAuthTokenWhenAuthDisabled(t *testing.T) {
 	}
 	if cfg.GRPCAuthRequired {
 		t.Fatal("GRPCAuthRequired = true, want false")
+	}
+}
+
+func TestValidateRejectsEnabledOutboxWithoutEventLogDSN(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.EventLogDatabaseDSN = ""
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() err = nil, want event log DSN error")
+	}
+}
+
+func TestValidateRejectsLossyOutboxWithoutExplicitAllow(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.OutboxPublisherKind = outboxlib.PublisherKindDiagnosticLogLossy
+	cfg.OutboxAllowLossyPublisher = false
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() err = nil, want lossy publisher error")
 	}
 }
 
@@ -70,6 +95,22 @@ func TestDatabasePoolSettingsIncludesRetryConfig(t *testing.T) {
 	}
 }
 
+func TestOutboxDispatcherConfigIncludesRetryConfig(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	outboxCfg := cfg.OutboxDispatcherConfig()
+	if outboxCfg.BatchSize != cfg.OutboxBatchSize {
+		t.Fatalf("BatchSize = %d, want %d", outboxCfg.BatchSize, cfg.OutboxBatchSize)
+	}
+	if outboxCfg.RetryInitialDelay != cfg.OutboxRetryInitialDelay {
+		t.Fatalf("RetryInitialDelay = %s, want %s", outboxCfg.RetryInitialDelay, cfg.OutboxRetryInitialDelay)
+	}
+	if outboxCfg.RetryMaxDelay != cfg.OutboxRetryMaxDelay {
+		t.Fatalf("RetryMaxDelay = %s, want %s", outboxCfg.RetryMaxDelay, cfg.OutboxRetryMaxDelay)
+	}
+}
+
 func validConfig() Config {
 	return Config{
 		HTTPAddr:                  ":8080",
@@ -95,5 +136,19 @@ func validConfig() Config {
 		DatabaseRetryInitialDelay: 500 * time.Millisecond,
 		DatabaseRetryMaxDelay:     5 * time.Second,
 		DatabaseRetryJitterRatio:  0.2,
+		EventLogDatabaseDSN:       "postgres://postgres:5432/platform_event_log?sslmode=disable",
+		EventLogDatabaseMaxConns:  4,
+		EventLogDatabaseMinConns:  0,
+		OutboxDispatchEnabled:     true,
+		OutboxPublisherKind:       outboxlib.PublisherKindPostgresEventLog,
+		OutboxEventLogSource:      "provider-hub",
+		OutboxBatchSize:           100,
+		OutboxPollInterval:        time.Second,
+		OutboxLockTTL:             30 * time.Second,
+		OutboxPublishTimeout:      10 * time.Second,
+		OutboxLeaseSafetyMargin:   5 * time.Second,
+		OutboxRetryInitialDelay:   time.Second,
+		OutboxRetryMaxDelay:       time.Minute,
+		OutboxFailureMessageLimit: 512,
 	}
 }

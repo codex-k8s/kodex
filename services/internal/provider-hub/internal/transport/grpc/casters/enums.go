@@ -18,6 +18,13 @@ var runtimeStatuses = map[providersv1.ProviderAccountRuntimeStatus]enum.Provider
 	providersv1.ProviderAccountRuntimeStatus_PROVIDER_ACCOUNT_RUNTIME_STATUS_ERROR:                    enum.ProviderAccountRuntimeStatusError,
 }
 
+var webhookStatuses = map[providersv1.WebhookProcessingStatus]enum.WebhookProcessingStatus{
+	providersv1.WebhookProcessingStatus_WEBHOOK_PROCESSING_STATUS_PENDING:   enum.WebhookProcessingStatusPending,
+	providersv1.WebhookProcessingStatus_WEBHOOK_PROCESSING_STATUS_PROCESSED: enum.WebhookProcessingStatusProcessed,
+	providersv1.WebhookProcessingStatus_WEBHOOK_PROCESSING_STATUS_FAILED:    enum.WebhookProcessingStatusFailed,
+	providersv1.WebhookProcessingStatus_WEBHOOK_PROCESSING_STATUS_IGNORED:   enum.WebhookProcessingStatusIgnored,
+}
+
 var operationTypes = map[providersv1.ProviderOperationType]enum.ProviderOperationType{
 	providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_ISSUE:         enum.ProviderOperationCreateIssue,
 	providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_ISSUE:         enum.ProviderOperationUpdateIssue,
@@ -41,6 +48,14 @@ func runtimeStatusesFromProto(statuses []providersv1.ProviderAccountRuntimeStatu
 
 func RuntimeStatusToProto(status enum.ProviderAccountRuntimeStatus) providersv1.ProviderAccountRuntimeStatus {
 	return enumToProto(status, providersv1.ProviderAccountRuntimeStatus_PROVIDER_ACCOUNT_RUNTIME_STATUS_UNSPECIFIED, invertEnum(runtimeStatuses))
+}
+
+func webhookStatusesFromProto(statuses []providersv1.WebhookProcessingStatus) ([]enum.WebhookProcessingStatus, error) {
+	return enumsFromProto(statuses, providersv1.WebhookProcessingStatus_WEBHOOK_PROCESSING_STATUS_UNSPECIFIED, webhookStatuses)
+}
+
+func WebhookStatusToProto(status enum.WebhookProcessingStatus) providersv1.WebhookProcessingStatus {
+	return enumToProto(status, providersv1.WebhookProcessingStatus_WEBHOOK_PROCESSING_STATUS_UNSPECIFIED, invertEnum(webhookStatuses))
 }
 
 func operationTypesFromProto(types []providersv1.ProviderOperationType) ([]enum.ProviderOperationType, error) {

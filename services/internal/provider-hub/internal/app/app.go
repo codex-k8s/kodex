@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
@@ -25,14 +27,24 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		return err
 	}
 	defer dbPool.Close()
+	eventLogPool, err := openOutboxEventLogPool(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	if eventLogPool != nil {
+		defer eventLogPool.Close()
+	}
 
 	providerRepository := providerpostgres.NewRepository(dbPool)
 	components := processComponents{
+		DBPool:          dbPool,
+		EventLogDBPool:  eventLogPool,
 		ProviderService: providerservice.New(providerRepository),
+		OutboxStore:     providerRepository,
 	}
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           serviceprocess.NewHealthMux(readinessChecks(components.ProviderService), 2*time.Second),
+		Handler:           serviceprocess.NewHealthMux(readinessChecks(components), 2*time.Second),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	grpcMetrics, err := grpcserver.NewMetrics(nil, grpcserver.MetricsConfig{
@@ -55,9 +67,12 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	}
 	providergrpc.RegisterProviderHubService(grpcServer, components.ProviderService)
 
-	errCh := make(chan error, 2)
+	errCh := make(chan error, 3)
 	go serviceprocess.StartHTTPServer(httpServer, "provider-hub", logger, errCh)
 	go serviceprocess.StartGRPCServer(grpcServer, "provider-hub", cfg.GRPCAddr, logger, errCh)
+	if err := startOutboxDispatcher(ctx, cfg, logger, eventLogPool, components.OutboxStore, errCh); err != nil {
+		return err
+	}
 
 	select {
 	case <-ctx.Done():
@@ -70,15 +85,45 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 }
 
 type processComponents struct {
+	DBPool          *pgxpool.Pool
+	EventLogDBPool  *pgxpool.Pool
 	ProviderService *providerservice.Service
+	OutboxStore     serviceOutboxStore
 }
 
-func readinessChecks(providerService *providerservice.Service) []serviceprocess.ReadinessCheck {
-	checks := []serviceprocess.ReadinessCheck{
-		serviceprocess.StaticReadinessCheck("provider service", providerService != nil),
+func openOutboxEventLogPool(ctx context.Context, cfg Config) (*pgxpool.Pool, error) {
+	settings, ok := cfg.optionalEventLogDatabasePoolSettings()
+	if !ok {
+		return nil, nil
 	}
-	if providerService != nil {
-		checks = append(checks, serviceprocess.ReadinessCheck{Name: "provider database", Check: providerService.Ping})
-	}
-	return checks
+	return serviceprocess.OpenEventLogPool(ctx, true, settings)
+}
+
+func startOutboxDispatcher(ctx context.Context, cfg Config, logger *slog.Logger, eventLogPool *pgxpool.Pool, store serviceOutboxStore, errCh chan<- error) error {
+	return serviceprocess.StartOutboxDispatcher(
+		ctx,
+		"provider-hub",
+		store,
+		outboxEvent,
+		serviceprocess.OutboxRuntimeConfig{
+			DispatchEnabled:     cfg.OutboxDispatchEnabled,
+			PublisherKind:       cfg.OutboxPublisherKind,
+			AllowLossyPublisher: cfg.OutboxAllowLossyPublisher,
+			EventLogSource:      cfg.OutboxEventLogSource,
+			Dispatcher:          cfg.OutboxDispatcherConfig(),
+		},
+		serviceprocess.EventLogAppender(eventLogPool),
+		logger,
+		errCh,
+	)
+}
+
+func readinessChecks(components processComponents) []serviceprocess.ReadinessCheck {
+	return serviceprocess.ServiceDatabaseReadinessChecks(
+		"provider service",
+		components.ProviderService != nil,
+		"provider database",
+		components.DBPool,
+		components.EventLogDBPool,
+	)
 }

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/errs"
 	providerrepo "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/repository/provider"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/query"
 )
 
@@ -42,6 +44,107 @@ func NewWithRuntime(repository providerrepo.Repository, clock providerrepo.Clock
 // Ping checks whether the service can reach its owned storage.
 func (s *Service) Ping(ctx context.Context) error {
 	return s.repository.Ping(ctx)
+}
+
+// IngestWebhookEvent stores a verified webhook and performs the first normalization pass.
+func (s *Service) IngestWebhookEvent(ctx context.Context, input IngestWebhookEventInput) (entity.WebhookEvent, error) {
+	if !validCommandIdentity(input.Meta) {
+		return entity.WebhookEvent{}, errs.ErrInvalidArgument
+	}
+	providerSlug := enum.ProviderSlug(strings.TrimSpace(string(input.ProviderSlug)))
+	eventName := strings.TrimSpace(input.EventName)
+	deliveryID := strings.TrimSpace(input.DeliveryID)
+	repositoryProviderID := strings.TrimSpace(input.RepositoryProviderID)
+	if !validProviderSlug(providerSlug) || deliveryID == "" || eventName == "" || input.ReceivedAt.IsZero() {
+		return entity.WebhookEvent{}, errs.ErrInvalidArgument
+	}
+	payload, err := canonicalJSONObject(input.PayloadJSON)
+	if err != nil {
+		return entity.WebhookEvent{}, err
+	}
+	webhook := entity.WebhookEvent{
+		ID:                   s.ids.New(),
+		ProviderSlug:         providerSlug,
+		DeliveryID:           deliveryID,
+		EventName:            eventName,
+		RepositoryProviderID: repositoryProviderID,
+		ReceivedAt:           input.ReceivedAt.UTC(),
+		ProcessingStatus:     enum.WebhookProcessingStatusPending,
+		PayloadJSON:          payload,
+		RetainUntil:          input.ReceivedAt.UTC().Add(webhookPayloadRetention),
+	}
+	normalization, err := s.normalizeWebhook(webhook)
+	if err != nil {
+		return entity.WebhookEvent{}, err
+	}
+	webhook.ProcessingStatus = normalization.status
+	webhook.LastError = normalization.lastError
+	stored, _, err := s.repository.StoreWebhookEvent(ctx, webhook, normalization.providerEvents, normalization.outboxEvents)
+	return stored, err
+}
+
+// GetWebhookEvent returns one stored webhook event for diagnostics.
+func (s *Service) GetWebhookEvent(ctx context.Context, input GetWebhookEventInput) (entity.WebhookEvent, error) {
+	if input.WebhookEventID == uuid.Nil {
+		return entity.WebhookEvent{}, errs.ErrInvalidArgument
+	}
+	return s.repository.GetWebhookEvent(ctx, input.WebhookEventID)
+}
+
+// ListWebhookEvents returns stored webhook events by supported filters.
+func (s *Service) ListWebhookEvents(ctx context.Context, input ListWebhookEventsInput) (ListWebhookEventsResult, error) {
+	if input.ProviderSlug != "" && !validProviderSlug(input.ProviderSlug) {
+		return ListWebhookEventsResult{}, errs.ErrInvalidArgument
+	}
+	if hasBlankStrings(input.EventNames) || !validWebhookStatuses(input.ProcessingStatuses) {
+		return ListWebhookEventsResult{}, errs.ErrInvalidArgument
+	}
+	if input.ReceivedSince != nil && input.ReceivedUntil != nil && input.ReceivedUntil.Before(*input.ReceivedSince) {
+		return ListWebhookEventsResult{}, errs.ErrInvalidArgument
+	}
+	webhooks, page, err := s.repository.ListWebhookEvents(ctx, query.WebhookEventFilter{
+		ProviderSlug:         input.ProviderSlug,
+		DeliveryID:           strings.TrimSpace(input.DeliveryID),
+		EventNames:           trimStrings(input.EventNames),
+		ProcessingStatuses:   input.ProcessingStatuses,
+		RepositoryProviderID: strings.TrimSpace(input.RepositoryProviderID),
+		ReceivedSince:        input.ReceivedSince,
+		ReceivedUntil:        input.ReceivedUntil,
+		Page:                 input.Page,
+	})
+	if err != nil {
+		return ListWebhookEventsResult{}, err
+	}
+	return ListWebhookEventsResult{WebhookEvents: webhooks, Page: page}, nil
+}
+
+// RetryWebhookEventProcessing repeats normalization for a failed or pending webhook.
+func (s *Service) RetryWebhookEventProcessing(ctx context.Context, input RetryWebhookEventProcessingInput) (entity.WebhookEvent, error) {
+	if !validCommandIdentity(input.Meta) || input.WebhookEventID == uuid.Nil {
+		return entity.WebhookEvent{}, errs.ErrInvalidArgument
+	}
+	webhook, err := s.repository.GetWebhookEvent(ctx, input.WebhookEventID)
+	if err != nil {
+		return entity.WebhookEvent{}, err
+	}
+	switch webhook.ProcessingStatus {
+	case enum.WebhookProcessingStatusProcessed, enum.WebhookProcessingStatusIgnored:
+		return webhook, nil
+	case enum.WebhookProcessingStatusPending, enum.WebhookProcessingStatusFailed:
+	default:
+		return entity.WebhookEvent{}, errs.ErrInvalidArgument
+	}
+	normalization, err := s.normalizeWebhook(webhook)
+	if err != nil {
+		return entity.WebhookEvent{}, err
+	}
+	webhook.ProcessingStatus = normalization.status
+	webhook.LastError = normalization.lastError
+	stored, err := s.repository.ProcessWebhookEvent(ctx, webhook, normalization.providerEvents, normalization.outboxEvents[1:])
+	if errors.Is(err, errs.ErrConflict) {
+		return s.repository.GetWebhookEvent(ctx, input.WebhookEventID)
+	}
+	return stored, err
 }
 
 // GetProviderAccountRuntimeState returns runtime state by id or external account identity.

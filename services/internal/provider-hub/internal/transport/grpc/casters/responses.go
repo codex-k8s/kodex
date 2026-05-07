@@ -8,6 +8,34 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/entity"
 )
 
+// WebhookEventResponse maps a stored webhook to gRPC.
+func WebhookEventResponse(event entity.WebhookEvent) *providersv1.WebhookEventResponse {
+	return &providersv1.WebhookEventResponse{WebhookEvent: WebhookEventToProto(event)}
+}
+
+func WebhookEventToProto(event entity.WebhookEvent) *providersv1.WebhookEvent {
+	return &providersv1.WebhookEvent{
+		WebhookEventId:       event.ID.String(),
+		ProviderSlug:         string(event.ProviderSlug),
+		DeliveryId:           event.DeliveryID,
+		EventName:            event.EventName,
+		RepositoryProviderId: optionalStringPtr(event.RepositoryProviderID),
+		ReceivedAt:           formatTime(event.ReceivedAt),
+		ProcessingStatus:     WebhookStatusToProto(event.ProcessingStatus),
+		PayloadJson:          string(event.PayloadJSON),
+		LastError:            optionalStringPtr(event.LastError),
+		RetainUntil:          formatTime(event.RetainUntil),
+	}
+}
+
+// ListWebhookEventsResponse maps stored webhooks to gRPC.
+func ListWebhookEventsResponse(result providerservice.ListWebhookEventsResult) *providersv1.ListWebhookEventsResponse {
+	return &providersv1.ListWebhookEventsResponse{
+		WebhookEvents: mapSlice(result.WebhookEvents, WebhookEventToProto),
+		Page:          pageResponseToProto(result.Page),
+	}
+}
+
 // ProviderAccountRuntimeStateResponse maps runtime state to gRPC.
 func ProviderAccountRuntimeStateResponse(state entity.ProviderAccountRuntimeState) *providersv1.ProviderAccountRuntimeStateResponse {
 	return &providersv1.ProviderAccountRuntimeStateResponse{RuntimeState: ProviderAccountRuntimeStateToProto(state)}

@@ -36,6 +36,48 @@ type ListProviderAccountRuntimeStatesResult struct {
 	Page          query.PageResult
 }
 
+// IngestWebhookEventInput stores a verified webhook from the edge gateway.
+type IngestWebhookEventInput struct {
+	ProviderSlug         enum.ProviderSlug
+	DeliveryID           string
+	EventName            string
+	RepositoryProviderID string
+	PayloadJSON          []byte
+	ReceivedAt           time.Time
+	Meta                 value.CommandMeta
+}
+
+// GetWebhookEventInput identifies a stored webhook.
+type GetWebhookEventInput struct {
+	WebhookEventID uuid.UUID
+	Meta           value.QueryMeta
+}
+
+// ListWebhookEventsInput selects stored webhooks.
+type ListWebhookEventsInput struct {
+	ProviderSlug         enum.ProviderSlug
+	DeliveryID           string
+	EventNames           []string
+	ProcessingStatuses   []enum.WebhookProcessingStatus
+	RepositoryProviderID string
+	ReceivedSince        *time.Time
+	ReceivedUntil        *time.Time
+	Page                 value.PageRequest
+	Meta                 value.QueryMeta
+}
+
+// ListWebhookEventsResult returns stored webhooks and paging metadata.
+type ListWebhookEventsResult struct {
+	WebhookEvents []entity.WebhookEvent
+	Page          query.PageResult
+}
+
+// RetryWebhookEventProcessingInput reprocesses a stored webhook.
+type RetryWebhookEventProcessingInput struct {
+	WebhookEventID uuid.UUID
+	Meta           value.CommandMeta
+}
+
 // RecordProviderLimitSnapshotInput records an observed provider limit state.
 type RecordProviderLimitSnapshotInput struct {
 	ExternalAccountID uuid.UUID

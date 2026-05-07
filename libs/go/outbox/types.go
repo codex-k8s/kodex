@@ -55,6 +55,50 @@ func NewEvent(
 	}
 }
 
+// Record is the shared flat shape for service-local outbox rows.
+type Record struct {
+	Event
+	PublishedAt         *time.Time
+	NextAttemptAt       time.Time
+	LockedUntil         *time.Time
+	FailedPermanentlyAt *time.Time
+	FailureKind         string
+	LastError           string
+}
+
+// RecordDelivery stores retry and publication fields for a service-local outbox row.
+type RecordDelivery struct {
+	PublishedAt   *time.Time
+	AttemptCount  int
+	NextAttemptAt time.Time
+	LockedUntil   *time.Time
+}
+
+// RecordFailure stores terminal failure diagnostics for a service-local outbox row.
+type RecordFailure struct {
+	FailedPermanentlyAt *time.Time
+	FailureKind         string
+	LastError           string
+}
+
+// EventFromRecord builds the dispatch event shape from a service-local outbox record.
+func EventFromRecord(record Record) Event {
+	return record.Event
+}
+
+// RecordFromParts builds the shared flat record from grouped outbox fields.
+func RecordFromParts(event Event, delivery RecordDelivery, failure RecordFailure) Record {
+	record := Record{Event: event}
+	record.PublishedAt = delivery.PublishedAt
+	record.AttemptCount = delivery.AttemptCount
+	record.NextAttemptAt = delivery.NextAttemptAt
+	record.LockedUntil = delivery.LockedUntil
+	record.FailedPermanentlyAt = failure.FailedPermanentlyAt
+	record.FailureKind = failure.FailureKind
+	record.LastError = failure.LastError
+	return record
+}
+
 // EntityStore is a service-local outbox store with a service-specific event entity type.
 type EntityStore[T any] interface {
 	ClaimOutboxEvents(ctx context.Context, limit int, now time.Time, lockedUntil time.Time) ([]T, error)
