@@ -1,0 +1,292 @@
+asyncapi: 3.0.0
+info:
+  title: kodex provider-hub events
+  version: 1.0.0
+  description: Stable v1 event contract published by provider-hub through the platform outbox.
+x-kodex-contract-status: stable-v1
+channels:
+  providerEvents:
+    address: provider.events
+    messages:
+      providerEvent:
+        $ref: '#/components/messages/ProviderEvent'
+operations:
+  publishProviderEvent:
+    action: send
+    channel:
+      $ref: '#/channels/providerEvents'
+    messages:
+      - $ref: '#/channels/providerEvents/messages/providerEvent'
+components:
+  messages:
+    ProviderEvent:
+      name: ProviderEvent
+      title: Provider domain event envelope
+      payload:
+        $ref: '#/components/schemas/ProviderEventEnvelope'
+  schemas:
+    ProviderEventEnvelope:
+      oneOf:
+        - $ref: '#/components/schemas/WebhookReceivedEvent'
+        - $ref: '#/components/schemas/WebhookNormalizedEvent'
+        - $ref: '#/components/schemas/WorkItemSyncedEvent'
+        - $ref: '#/components/schemas/WorkItemDriftDetectedEvent'
+        - $ref: '#/components/schemas/CommentSyncedEvent'
+        - $ref: '#/components/schemas/RelationshipSyncedEvent'
+        - $ref: '#/components/schemas/SyncCursorAdvancedEvent'
+        - $ref: '#/components/schemas/AccountRuntimeStateChangedEvent'
+        - $ref: '#/components/schemas/LimitSnapshotRecordedEvent'
+        - $ref: '#/components/schemas/OperationCompletedEvent'
+        - $ref: '#/components/schemas/OperationFailedEvent'
+        - $ref: '#/components/schemas/RepositoryBootstrapRequiredEvent'
+        - $ref: '#/components/schemas/RepositoryAdoptionRequiredEvent'
+        - $ref: '#/components/schemas/RepositoryBootstrapCompletedEvent'
+        - $ref: '#/components/schemas/RepositoryAdoptionPRCreatedEvent'
+    ProviderEventEnvelopeBase:
+      type: object
+      additionalProperties: false
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_type:
+          $ref: '#/components/schemas/ProviderEventType'
+        schema_version:
+          type: integer
+          minimum: 1
+        aggregate_type:
+          type: string
+        aggregate_id:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        payload:
+          $ref: '#/components/schemas/ProviderEventPayload'
+      required: [event_id, event_type, schema_version, aggregate_type, aggregate_id, occurred_at, payload]
+
+    WebhookReceivedEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProviderEventEnvelopeBase'
+        - $ref: '#/components/schemas/WebhookReceivedEventKind'
+    WebhookReceivedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: provider.webhook.received}, aggregate_type: {type: string, const: webhook_event}, payload: {$ref: '#/components/schemas/ProviderEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+    WebhookNormalizedEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProviderEventEnvelopeBase'
+        - $ref: '#/components/schemas/WebhookNormalizedEventKind'
+    WebhookNormalizedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: provider.webhook.normalized}, aggregate_type: {type: string, const: provider_event}, payload: {$ref: '#/components/schemas/ProviderEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+    WorkItemSyncedEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProviderEventEnvelopeBase'
+        - $ref: '#/components/schemas/WorkItemSyncedEventKind'
+    WorkItemSyncedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: provider.work_item.synced}, aggregate_type: {type: string, const: work_item}, payload: {$ref: '#/components/schemas/ProviderEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+    WorkItemDriftDetectedEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProviderEventEnvelopeBase'
+        - $ref: '#/components/schemas/WorkItemDriftDetectedEventKind'
+    WorkItemDriftDetectedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: provider.work_item.drift_detected}, aggregate_type: {type: string, const: work_item}, payload: {$ref: '#/components/schemas/ProviderEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+    CommentSyncedEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProviderEventEnvelopeBase'
+        - $ref: '#/components/schemas/CommentSyncedEventKind'
+    CommentSyncedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: provider.comment.synced}, aggregate_type: {type: string, const: comment}, payload: {$ref: '#/components/schemas/ProviderEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+    RelationshipSyncedEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProviderEventEnvelopeBase'
+        - $ref: '#/components/schemas/RelationshipSyncedEventKind'
+    RelationshipSyncedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: provider.relationship.synced}, aggregate_type: {type: string, const: relationship}, payload: {$ref: '#/components/schemas/ProviderEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+    SyncCursorAdvancedEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProviderEventEnvelopeBase'
+        - $ref: '#/components/schemas/SyncCursorAdvancedEventKind'
+    SyncCursorAdvancedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: provider.sync_cursor.advanced}, aggregate_type: {type: string, const: sync_cursor}, payload: {$ref: '#/components/schemas/ProviderEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+    AccountRuntimeStateChangedEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProviderEventEnvelopeBase'
+        - $ref: '#/components/schemas/AccountRuntimeStateChangedEventKind'
+    AccountRuntimeStateChangedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: provider.account_runtime_state.changed}, aggregate_type: {type: string, const: account_runtime_state}, payload: {$ref: '#/components/schemas/ProviderEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+    LimitSnapshotRecordedEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProviderEventEnvelopeBase'
+        - $ref: '#/components/schemas/LimitSnapshotRecordedEventKind'
+    LimitSnapshotRecordedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: provider.limit_snapshot.recorded}, aggregate_type: {type: string, const: limit_snapshot}, payload: {$ref: '#/components/schemas/ProviderEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+    OperationCompletedEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProviderEventEnvelopeBase'
+        - $ref: '#/components/schemas/OperationCompletedEventKind'
+    OperationCompletedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: provider.operation.completed}, aggregate_type: {type: string, const: provider_operation}, payload: {$ref: '#/components/schemas/ProviderEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+    OperationFailedEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProviderEventEnvelopeBase'
+        - $ref: '#/components/schemas/OperationFailedEventKind'
+    OperationFailedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: provider.operation.failed}, aggregate_type: {type: string, const: provider_operation}, payload: {$ref: '#/components/schemas/ProviderEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+    RepositoryBootstrapRequiredEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProviderEventEnvelopeBase'
+        - $ref: '#/components/schemas/RepositoryBootstrapRequiredEventKind'
+    RepositoryBootstrapRequiredEventKind:
+      type: object
+      properties: {event_type: {type: string, const: provider.repository.bootstrap_required}, aggregate_type: {type: string, const: repository}, payload: {$ref: '#/components/schemas/ProviderEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+    RepositoryAdoptionRequiredEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProviderEventEnvelopeBase'
+        - $ref: '#/components/schemas/RepositoryAdoptionRequiredEventKind'
+    RepositoryAdoptionRequiredEventKind:
+      type: object
+      properties: {event_type: {type: string, const: provider.repository.adoption_required}, aggregate_type: {type: string, const: repository}, payload: {$ref: '#/components/schemas/ProviderEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+    RepositoryBootstrapCompletedEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProviderEventEnvelopeBase'
+        - $ref: '#/components/schemas/RepositoryBootstrapCompletedEventKind'
+    RepositoryBootstrapCompletedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: provider.repository.bootstrap_completed}, aggregate_type: {type: string, const: repository}, payload: {$ref: '#/components/schemas/ProviderEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+    RepositoryAdoptionPRCreatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProviderEventEnvelopeBase'
+        - $ref: '#/components/schemas/RepositoryAdoptionPRCreatedEventKind'
+    RepositoryAdoptionPRCreatedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: provider.repository.adoption_pr_created}, aggregate_type: {type: string, const: repository}, payload: {$ref: '#/components/schemas/ProviderEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    ProviderEventType:
+      type: string
+      enum:
+        - provider.webhook.received
+        - provider.webhook.normalized
+        - provider.work_item.synced
+        - provider.work_item.drift_detected
+        - provider.comment.synced
+        - provider.relationship.synced
+        - provider.sync_cursor.advanced
+        - provider.account_runtime_state.changed
+        - provider.limit_snapshot.recorded
+        - provider.operation.completed
+        - provider.operation.failed
+        - provider.repository.bootstrap_required
+        - provider.repository.adoption_required
+        - provider.repository.bootstrap_completed
+        - provider.repository.adoption_pr_created
+    ProviderEventPayload:
+      type: object
+      additionalProperties: false
+      properties:
+        provider_slug:
+          type: string
+        webhook_event_id:
+          type: string
+          format: uuid
+        provider_event_id:
+          type: string
+          format: uuid
+        delivery_id:
+          type: string
+        event_name:
+          type: string
+        project_id:
+          type: string
+          format: uuid
+        repository_id:
+          type: string
+          format: uuid
+        repository_full_name:
+          type: string
+        provider_repository_id:
+          type: string
+        work_item_projection_id:
+          type: string
+          format: uuid
+        provider_work_item_id:
+          type: string
+        kind:
+          type: string
+        number:
+          type: integer
+        comment_projection_id:
+          type: string
+          format: uuid
+        provider_comment_id:
+          type: string
+        relationship_id:
+          type: string
+          format: uuid
+        relationship_type:
+          type: string
+        sync_cursor_id:
+          type: string
+          format: uuid
+        scope_type:
+          type: string
+        scope_ref:
+          type: string
+        external_account_id:
+          type: string
+          format: uuid
+        provider_account_runtime_state_id:
+          type: string
+          format: uuid
+        limit_snapshot_id:
+          type: string
+          format: uuid
+        limit_class:
+          type: string
+        provider_operation_id:
+          type: string
+          format: uuid
+        operation_type:
+          type: string
+        status:
+          type: string
+        error_code:
+          type: string
+        result_ref:
+          type: string
+        source:
+          type: string
+        drift_status:
+          type: string
+        watermark_status:
+          type: string
+        bootstrap_mode:
+          type: string
+        adoption_pr_ref:
+          type: string
+        version:
+          type: integer

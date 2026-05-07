@@ -1,0 +1,1086 @@
+syntax = "proto3";
+
+package kodex.providers.v1;
+
+option go_package = "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1;providersv1";
+
+// ProviderHubService is the stable v1 inter-service contract for provider-native
+// work items. It covers the command and read surface agreed in
+// docs/domains/provider-native-work-items/architecture/api_contract.md.
+service ProviderHubService {
+  // IngestWebhookEvent stores a verified provider webhook from the edge gateway.
+  rpc IngestWebhookEvent(IngestWebhookEventRequest) returns (WebhookEventResponse);
+  // GetWebhookEvent returns a stored raw webhook for diagnostics.
+  rpc GetWebhookEvent(GetWebhookEventRequest) returns (WebhookEventResponse);
+  // ListWebhookEvents returns stored webhooks with operational filters.
+  rpc ListWebhookEvents(ListWebhookEventsRequest) returns (ListWebhookEventsResponse);
+  // RetryWebhookEventProcessing enqueues a stored webhook for repeated normalization.
+  rpc RetryWebhookEventProcessing(RetryWebhookEventProcessingRequest) returns (WebhookEventResponse);
+
+  // GetWorkItemProjection returns a normalized Issue or PR/MR projection.
+  rpc GetWorkItemProjection(GetWorkItemProjectionRequest) returns (WorkItemProjectionResponse);
+  // FindWorkItemByProviderRef finds a projection by provider-native reference.
+  rpc FindWorkItemByProviderRef(FindWorkItemByProviderRefRequest) returns (WorkItemProjectionResponse);
+  // ListWorkItemProjections returns normalized work items by project, repository and state.
+  rpc ListWorkItemProjections(ListWorkItemProjectionsRequest) returns (ListWorkItemProjectionsResponse);
+  // ListComments returns normalized comments, mentions and review signals for a work item.
+  rpc ListComments(ListCommentsRequest) returns (ListCommentsResponse);
+  // ListRelationships returns normalized provider-native relationships.
+  rpc ListRelationships(ListRelationshipsRequest) returns (ListRelationshipsResponse);
+
+  // RegisterProviderArtifactSignal accepts an accelerating signal from an agent or manager.
+  rpc RegisterProviderArtifactSignal(RegisterProviderArtifactSignalRequest) returns (ProviderArtifactSignalResponse);
+  // EnqueueReconciliation schedules a reconciliation scope.
+  rpc EnqueueReconciliation(EnqueueReconciliationRequest) returns (ReconciliationRequestResponse);
+  // RunReconciliationBatch processes a leased reconciliation scope.
+  rpc RunReconciliationBatch(RunReconciliationBatchRequest) returns (RunReconciliationBatchResponse);
+  // GetSyncCursor returns reconciliation cursor state.
+  rpc GetSyncCursor(GetSyncCursorRequest) returns (SyncCursorResponse);
+  // ListSyncCursors returns reconciliation cursors by scope and health.
+  rpc ListSyncCursors(ListSyncCursorsRequest) returns (ListSyncCursorsResponse);
+
+  // CreateIssue creates a provider-native Issue through a managed external account.
+  rpc CreateIssue(CreateIssueRequest) returns (ProviderOperationResponse);
+  // UpdateIssue updates allowed Issue fields through a managed external account.
+  rpc UpdateIssue(UpdateIssueRequest) returns (ProviderOperationResponse);
+  // CreateComment creates a provider-native comment.
+  rpc CreateComment(CreateCommentRequest) returns (ProviderOperationResponse);
+  // UpdateComment updates a platform-owned comment when policy allows it.
+  rpc UpdateComment(UpdateCommentRequest) returns (ProviderOperationResponse);
+  // CreatePullRequest creates a provider-native PR/MR for a platform scenario.
+  rpc CreatePullRequest(CreatePullRequestRequest) returns (ProviderOperationResponse);
+  // CreateReviewSignal creates a review comment, approval or changes-request signal.
+  rpc CreateReviewSignal(CreateReviewSignalRequest) returns (ProviderOperationResponse);
+  // UpdateRelationship stores or updates a provider-native relationship where supported.
+  rpc UpdateRelationship(UpdateRelationshipRequest) returns (ProviderOperationResponse);
+
+  // GetProviderAccountRuntimeState returns provider runtime state for one external account.
+  rpc GetProviderAccountRuntimeState(GetProviderAccountRuntimeStateRequest) returns (ProviderAccountRuntimeStateResponse);
+  // ListProviderAccountRuntimeStates returns provider runtime states by provider or scope.
+  rpc ListProviderAccountRuntimeStates(ListProviderAccountRuntimeStatesRequest) returns (ListProviderAccountRuntimeStatesResponse);
+  // RecordProviderLimitSnapshot records known provider limits after an operation or signal.
+  rpc RecordProviderLimitSnapshot(RecordProviderLimitSnapshotRequest) returns (ProviderLimitSnapshotResponse);
+  // ListProviderLimitSnapshots returns recorded provider limit snapshots.
+  rpc ListProviderLimitSnapshots(ListProviderLimitSnapshotsRequest) returns (ListProviderLimitSnapshotsResponse);
+  // ListProviderOperations returns the operation log for diagnostics and audit.
+  rpc ListProviderOperations(ListProviderOperationsRequest) returns (ListProviderOperationsResponse);
+}
+
+// CommandMeta is required for every mutating command.
+message CommandMeta {
+  // command_id is a unique command identifier. Either command_id or idempotency_key is required.
+  optional string command_id = 1;
+  // idempotency_key is an idempotency key scoped by operation and actor.
+  optional string idempotency_key = 2;
+  // expected_version is present only for existing aggregate mutations.
+  optional int64 expected_version = 3;
+  // actor is the authenticated caller.
+  Actor actor = 4;
+  // reason is a machine or operator reason for audit and domain events.
+  string reason = 5;
+  // request_id links the command to logs, traces and audit.
+  string request_id = 6;
+  // request_context carries safe request metadata; no tokens, secrets, email or names.
+  RequestContext request_context = 7;
+}
+
+// QueryMeta carries safe metadata for authoritative reads.
+message QueryMeta {
+  // actor is the authenticated caller.
+  Actor actor = 1;
+  // request_id links the read to logs and traces.
+  string request_id = 2;
+  // request_context carries safe request metadata.
+  RequestContext request_context = 3;
+}
+
+// RequestContext is safe request metadata used for audit and diagnostics.
+message RequestContext {
+  // source identifies caller surface, for example integration-gateway, platform-mcp-server or service.
+  string source = 1;
+  // trace_id links platform traces.
+  optional string trace_id = 2;
+  // session_id links a user session when available.
+  optional string session_id = 3;
+  // client_ip_hash is an optional hashed client address.
+  optional string client_ip_hash = 4;
+}
+
+// Actor identifies a user, service, agent or external account.
+message Actor {
+  // type is a subject type such as user, service, agent or external_account.
+  string type = 1;
+  // id is the subject identifier in its owner domain.
+  string id = 2;
+}
+
+// PageRequest limits list responses.
+message PageRequest {
+  // page_size is the maximum item count requested by caller.
+  int32 page_size = 1;
+  // page_token is an opaque continuation token returned by a previous call.
+  optional string page_token = 2;
+}
+
+// PageResponse describes list continuation state.
+message PageResponse {
+  // next_page_token is empty when there are no more items.
+  optional string next_page_token = 1;
+}
+
+// StringListPatch distinguishes absent list update from replacing the list with an empty value.
+message StringListPatch {
+  // values is the complete replacement list.
+  // Empty values with present message clears the list.
+  repeated string values = 1;
+}
+
+// WorkItemKind classifies provider-native work items.
+enum WorkItemKind {
+  WORK_ITEM_KIND_UNSPECIFIED = 0;
+  WORK_ITEM_KIND_ISSUE = 1;
+  WORK_ITEM_KIND_PULL_REQUEST = 2;
+  WORK_ITEM_KIND_MERGE_REQUEST = 3;
+}
+
+// WebhookProcessingStatus is the stored raw webhook processing status.
+enum WebhookProcessingStatus {
+  WEBHOOK_PROCESSING_STATUS_UNSPECIFIED = 0;
+  WEBHOOK_PROCESSING_STATUS_PENDING = 1;
+  WEBHOOK_PROCESSING_STATUS_PROCESSED = 2;
+  WEBHOOK_PROCESSING_STATUS_FAILED = 3;
+  WEBHOOK_PROCESSING_STATUS_IGNORED = 4;
+}
+
+// WorkItemWatermarkStatus is the parsed watermark status.
+enum WorkItemWatermarkStatus {
+  WORK_ITEM_WATERMARK_STATUS_UNSPECIFIED = 0;
+  WORK_ITEM_WATERMARK_STATUS_MISSING = 1;
+  WORK_ITEM_WATERMARK_STATUS_VALID = 2;
+  WORK_ITEM_WATERMARK_STATUS_INVALID = 3;
+  WORK_ITEM_WATERMARK_STATUS_STALE = 4;
+}
+
+// WorkItemDriftStatus is the projection freshness state.
+enum WorkItemDriftStatus {
+  WORK_ITEM_DRIFT_STATUS_UNSPECIFIED = 0;
+  WORK_ITEM_DRIFT_STATUS_FRESH = 1;
+  WORK_ITEM_DRIFT_STATUS_SUSPECTED = 2;
+  WORK_ITEM_DRIFT_STATUS_STALE = 3;
+  WORK_ITEM_DRIFT_STATUS_FAILED = 4;
+}
+
+// CommentKind classifies provider-native comment-like records.
+enum CommentKind {
+  COMMENT_KIND_UNSPECIFIED = 0;
+  COMMENT_KIND_COMMENT = 1;
+  COMMENT_KIND_REVIEW = 2;
+  COMMENT_KIND_MENTION = 3;
+  COMMENT_KIND_SYSTEM = 4;
+}
+
+// RelationshipConfidence describes how reliable a relationship is.
+enum RelationshipConfidence {
+  RELATIONSHIP_CONFIDENCE_UNSPECIFIED = 0;
+  RELATIONSHIP_CONFIDENCE_CONFIRMED = 1;
+  RELATIONSHIP_CONFIDENCE_INFERRED = 2;
+  RELATIONSHIP_CONFIDENCE_SUSPECTED = 3;
+}
+
+// RelationshipSource classifies where a relationship came from.
+enum RelationshipSource {
+  RELATIONSHIP_SOURCE_UNSPECIFIED = 0;
+  RELATIONSHIP_SOURCE_PROVIDER = 1;
+  RELATIONSHIP_SOURCE_WATERMARK = 2;
+  RELATIONSHIP_SOURCE_COMMENT = 3;
+  RELATIONSHIP_SOURCE_MANUAL = 4;
+  RELATIONSHIP_SOURCE_RECONCILIATION = 5;
+}
+
+// SyncCursorScopeType classifies reconciliation scope.
+enum SyncCursorScopeType {
+  SYNC_CURSOR_SCOPE_TYPE_UNSPECIFIED = 0;
+  SYNC_CURSOR_SCOPE_TYPE_REPOSITORY = 1;
+  SYNC_CURSOR_SCOPE_TYPE_ORGANIZATION = 2;
+  SYNC_CURSOR_SCOPE_TYPE_WORK_ITEM = 3;
+  SYNC_CURSOR_SCOPE_TYPE_PACKAGE_SOURCE = 4;
+}
+
+// SyncArtifactKind classifies artifacts reconciled by a cursor.
+enum SyncArtifactKind {
+  SYNC_ARTIFACT_KIND_UNSPECIFIED = 0;
+  SYNC_ARTIFACT_KIND_ISSUE = 1;
+  SYNC_ARTIFACT_KIND_PULL_REQUEST = 2;
+  SYNC_ARTIFACT_KIND_MERGE_REQUEST = 3;
+  SYNC_ARTIFACT_KIND_COMMENT = 4;
+  SYNC_ARTIFACT_KIND_RELATIONSHIP = 5;
+  SYNC_ARTIFACT_KIND_REPOSITORY = 6;
+}
+
+// SyncCursorPriority classifies reconciliation urgency.
+enum SyncCursorPriority {
+  SYNC_CURSOR_PRIORITY_UNSPECIFIED = 0;
+  SYNC_CURSOR_PRIORITY_HOT = 1;
+  SYNC_CURSOR_PRIORITY_WARM = 2;
+  SYNC_CURSOR_PRIORITY_COLD = 3;
+}
+
+// ProviderAccountRuntimeStatus is the operational state of an external account at provider.
+enum ProviderAccountRuntimeStatus {
+  PROVIDER_ACCOUNT_RUNTIME_STATUS_UNSPECIFIED = 0;
+  PROVIDER_ACCOUNT_RUNTIME_STATUS_ACTIVE = 1;
+  PROVIDER_ACCOUNT_RUNTIME_STATUS_REAUTHORIZATION_REQUIRED = 2;
+  PROVIDER_ACCOUNT_RUNTIME_STATUS_LIMITED = 3;
+  PROVIDER_ACCOUNT_RUNTIME_STATUS_DISABLED = 4;
+  PROVIDER_ACCOUNT_RUNTIME_STATUS_ERROR = 5;
+}
+
+// ProviderOperationType classifies commands executed through provider-hub.
+enum ProviderOperationType {
+  PROVIDER_OPERATION_TYPE_UNSPECIFIED = 0;
+  PROVIDER_OPERATION_TYPE_CREATE_ISSUE = 1;
+  PROVIDER_OPERATION_TYPE_UPDATE_ISSUE = 2;
+  PROVIDER_OPERATION_TYPE_CREATE_COMMENT = 3;
+  PROVIDER_OPERATION_TYPE_UPDATE_COMMENT = 4;
+  PROVIDER_OPERATION_TYPE_CREATE_PULL_REQUEST = 5;
+  PROVIDER_OPERATION_TYPE_CREATE_REVIEW_SIGNAL = 6;
+  PROVIDER_OPERATION_TYPE_UPDATE_RELATIONSHIP = 7;
+}
+
+// ProviderOperationStatus is the execution state of a provider operation.
+enum ProviderOperationStatus {
+  PROVIDER_OPERATION_STATUS_UNSPECIFIED = 0;
+  PROVIDER_OPERATION_STATUS_SUCCEEDED = 1;
+  PROVIDER_OPERATION_STATUS_FAILED = 2;
+  PROVIDER_OPERATION_STATUS_RETRYABLE_FAILED = 3;
+  PROVIDER_OPERATION_STATUS_DENIED = 4;
+}
+
+// ReviewSignalKind classifies provider-native review actions.
+enum ReviewSignalKind {
+  REVIEW_SIGNAL_KIND_UNSPECIFIED = 0;
+  REVIEW_SIGNAL_KIND_COMMENT = 1;
+  REVIEW_SIGNAL_KIND_APPROVAL = 2;
+  REVIEW_SIGNAL_KIND_CHANGES_REQUESTED = 3;
+}
+
+// ProviderTarget identifies a provider-native object.
+message ProviderTarget {
+  // provider_slug is an extensible provider identifier such as github or gitlab.
+  string provider_slug = 1;
+  // repository_full_name is owner/name or provider equivalent.
+  optional string repository_full_name = 2;
+  // provider_repository_id is the provider-native repository id when available.
+  optional string provider_repository_id = 3;
+  // work_item_kind identifies Issue, PR or MR target.
+  optional WorkItemKind work_item_kind = 4;
+  // number is the provider-native issue or PR/MR number.
+  optional int64 number = 5;
+  // provider_object_id is the provider-native stable object id.
+  optional string provider_object_id = 6;
+  // web_url is the safe provider URL when caller only has a URL.
+  optional string web_url = 7;
+}
+
+// WebhookEvent is a stored raw webhook accepted from the edge gateway.
+message WebhookEvent {
+  // webhook_event_id is the stored webhook id.
+  string webhook_event_id = 1;
+  // provider_slug is an extensible provider identifier.
+  string provider_slug = 2;
+  // delivery_id is the provider delivery id used for deduplication.
+  string delivery_id = 3;
+  // event_name is the provider event name.
+  string event_name = 4;
+  // repository_provider_id is the provider-native repository id when present.
+  optional string repository_provider_id = 5;
+  // received_at is the receive time in RFC3339 format.
+  string received_at = 6;
+  // processing_status is raw webhook processing status.
+  WebhookProcessingStatus processing_status = 7;
+  // payload_json is the raw provider payload retained for a limited time.
+  string payload_json = 8;
+  // last_error is a short processing error without secrets.
+  optional string last_error = 9;
+  // retain_until is the payload retention deadline in RFC3339 format.
+  string retain_until = 10;
+}
+
+// ProviderEvent is a normalized event produced from webhook or reconciliation.
+message ProviderEvent {
+  // provider_event_id is the normalized event id.
+  string provider_event_id = 1;
+  // source_webhook_event_id links a raw webhook inside provider-hub when available.
+  optional string source_webhook_event_id = 2;
+  // event_type is the normalized provider event type.
+  string event_type = 3;
+  // aggregate_type is the normalized aggregate type.
+  string aggregate_type = 4;
+  // aggregate_id identifies the changed provider aggregate.
+  string aggregate_id = 5;
+  // payload_json is typed event payload serialized by provider-hub.
+  string payload_json = 6;
+  // occurred_at is the provider change time in RFC3339 format.
+  string occurred_at = 7;
+}
+
+// WorkItemProjection is a normalized Issue or PR/MR mirror.
+message WorkItemProjection {
+  // work_item_projection_id is the internal projection id.
+  string work_item_projection_id = 1;
+  // provider_slug is an extensible provider identifier.
+  string provider_slug = 2;
+  // provider_work_item_id is the provider-native stable work item id.
+  string provider_work_item_id = 3;
+  // project_id links project-catalog when known.
+  optional string project_id = 4;
+  // repository_id links project-catalog repository binding when known.
+  optional string repository_id = 5;
+  // repository_full_name is owner/name or provider equivalent.
+  string repository_full_name = 6;
+  // kind classifies Issue, PR or MR.
+  WorkItemKind kind = 7;
+  // number is the provider-native issue or PR/MR number.
+  int64 number = 8;
+  // web_url is a safe provider URL.
+  string web_url = 9;
+  // title is current provider title.
+  string title = 10;
+  // state is provider-normalized lifecycle state.
+  string state = 11;
+  // work_item_type is a platform task type parsed from provider fields or watermark.
+  optional string work_item_type = 12;
+  // labels are normalized label names.
+  repeated string labels = 13;
+  // assignee_provider_logins are provider logins assigned to the work item.
+  repeated string assignee_provider_logins = 14;
+  // milestone is normalized milestone text when available.
+  optional string milestone = 15;
+  // project_fields_json contains normalized provider project fields required by platform.
+  string project_fields_json = 16;
+  // watermark_status is parsed platform watermark state.
+  WorkItemWatermarkStatus watermark_status = 17;
+  // watermark_json is parsed platform watermark payload.
+  string watermark_json = 18;
+  // body_digest is a digest of provider body used for drift checks.
+  string body_digest = 19;
+  // provider_updated_at is provider update time in RFC3339 format when available.
+  optional string provider_updated_at = 20;
+  // synced_at is last successful sync time in RFC3339 format.
+  string synced_at = 21;
+  // drift_status is projection freshness state.
+  WorkItemDriftStatus drift_status = 22;
+  // version is the projection version.
+  int64 version = 23;
+}
+
+// CommentProjection is a normalized comment, mention or review signal.
+message CommentProjection {
+  // comment_projection_id is the internal projection id.
+  string comment_projection_id = 1;
+  // work_item_projection_id links the owning work item projection.
+  string work_item_projection_id = 2;
+  // provider_comment_id is the provider-native comment id.
+  string provider_comment_id = 3;
+  // kind classifies the comment-like record.
+  CommentKind kind = 4;
+  // author_provider_login is provider login of the author.
+  string author_provider_login = 5;
+  // body_digest is a digest of comment body.
+  string body_digest = 6;
+  // summary is a short safe excerpt for UI.
+  string summary = 7;
+  // provider_created_at is provider creation time in RFC3339 format when available.
+  optional string provider_created_at = 8;
+  // provider_updated_at is provider update time in RFC3339 format when available.
+  optional string provider_updated_at = 9;
+}
+
+// ProviderRelationship is a normalized relationship between provider-native objects.
+message ProviderRelationship {
+  // relationship_id is the relationship id.
+  string relationship_id = 1;
+  // source_work_item_projection_id is the source projection id.
+  string source_work_item_projection_id = 2;
+  // target_work_item_projection_id is present when target projection is known.
+  optional string target_work_item_projection_id = 3;
+  // target_provider_ref is URL or provider ref when target projection is not known yet.
+  optional string target_provider_ref = 4;
+  // relationship_type is an extensible normalized relationship type.
+  string relationship_type = 5;
+  // source classifies where the relationship came from.
+  RelationshipSource source = 6;
+  // confidence describes how reliable the relationship is.
+  RelationshipConfidence confidence = 7;
+  // created_at is creation time in RFC3339 format.
+  string created_at = 8;
+}
+
+// SyncCursor stores reconciliation state for one provider scope.
+message SyncCursor {
+  // sync_cursor_id is the cursor id.
+  string sync_cursor_id = 1;
+  // provider_slug is an extensible provider identifier.
+  string provider_slug = 2;
+  // scope_type classifies reconciliation scope.
+  SyncCursorScopeType scope_type = 3;
+  // scope_ref is the provider scope reference.
+  string scope_ref = 4;
+  // artifact_kind classifies synchronized artifact kind.
+  SyncArtifactKind artifact_kind = 5;
+  // cursor_value is provider cursor or timestamp marker.
+  optional string cursor_value = 6;
+  // overlap_since is the overlap window start in RFC3339 format.
+  optional string overlap_since = 7;
+  // priority classifies reconciliation urgency.
+  SyncCursorPriority priority = 8;
+  // last_success_at is last successful sync time in RFC3339 format.
+  optional string last_success_at = 9;
+  // last_checked_at is last attempt time in RFC3339 format.
+  optional string last_checked_at = 10;
+  // last_error is a short error without secrets.
+  optional string last_error = 11;
+  // rate_budget_state_json is the known rate budget state.
+  string rate_budget_state_json = 12;
+  // lease_owner is current lease owner when leased.
+  optional string lease_owner = 13;
+  // lease_until is the lease deadline in RFC3339 format.
+  optional string lease_until = 14;
+}
+
+// ProviderAccountRuntimeState is the operational state of an external account at provider.
+message ProviderAccountRuntimeState {
+  // provider_account_runtime_state_id is the runtime state id.
+  string provider_account_runtime_state_id = 1;
+  // external_account_id links access-manager external account.
+  string external_account_id = 2;
+  // provider_slug is an extensible provider identifier.
+  string provider_slug = 3;
+  // status is provider runtime state.
+  ProviderAccountRuntimeStatus status = 4;
+  // last_checked_at is last check time in RFC3339 format.
+  optional string last_checked_at = 5;
+  // last_success_at is last successful operation time in RFC3339 format.
+  optional string last_success_at = 6;
+  // last_error_code is a provider error classification.
+  optional string last_error_code = 7;
+  // last_error_message is a short error without secrets.
+  optional string last_error_message = 8;
+  // version is the runtime state version.
+  int64 version = 9;
+}
+
+// ProviderLimitSnapshot is a known provider limit state.
+message ProviderLimitSnapshot {
+  // provider_limit_snapshot_id is the snapshot id.
+  string provider_limit_snapshot_id = 1;
+  // external_account_id links access-manager external account.
+  string external_account_id = 2;
+  // provider_slug is an extensible provider identifier.
+  string provider_slug = 3;
+  // limit_class is provider limit class such as core, graphql or search.
+  string limit_class = 4;
+  // remaining is remaining budget when known.
+  optional int64 remaining = 5;
+  // limit_value is total budget when known.
+  optional int64 limit_value = 6;
+  // reset_at is reset time in RFC3339 format when known.
+  optional string reset_at = 7;
+  // captured_at is snapshot time in RFC3339 format.
+  string captured_at = 8;
+  // source identifies who recorded the snapshot.
+  string source = 9;
+}
+
+// ProviderOperation is an audited provider operation.
+message ProviderOperation {
+  // provider_operation_id is the operation id.
+  string provider_operation_id = 1;
+  // command_id is the idempotent command id.
+  string command_id = 2;
+  // actor_id is the platform actor id when known.
+  optional string actor_id = 3;
+  // external_account_id links access-manager external account.
+  string external_account_id = 4;
+  // provider_slug is an extensible provider identifier.
+  string provider_slug = 5;
+  // operation_type classifies the operation.
+  ProviderOperationType operation_type = 6;
+  // target_ref identifies provider target.
+  string target_ref = 7;
+  // status is execution status.
+  ProviderOperationStatus status = 8;
+  // result_ref is provider result URL or id when available.
+  optional string result_ref = 9;
+  // error_code is a provider error classification.
+  optional string error_code = 10;
+  // error_message is a short error without secrets.
+  optional string error_message = 11;
+  // rate_limit_snapshot_id links a limit snapshot after operation.
+  optional string rate_limit_snapshot_id = 12;
+  // started_at is operation start time in RFC3339 format.
+  string started_at = 13;
+  // finished_at is operation finish time in RFC3339 format when known.
+  optional string finished_at = 14;
+}
+
+// IngestWebhookEventRequest stores a verified webhook.
+message IngestWebhookEventRequest {
+  // provider_slug is an extensible provider identifier.
+  string provider_slug = 1;
+  // delivery_id is provider delivery id used for deduplication.
+  string delivery_id = 2;
+  // event_name is provider event name.
+  string event_name = 3;
+  // repository_provider_id is provider-native repository id when present.
+  optional string repository_provider_id = 4;
+  // payload_json is raw provider payload.
+  string payload_json = 5;
+  // received_at is receive time in RFC3339 format.
+  string received_at = 6;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 7;
+}
+
+// WebhookEventResponse returns stored webhook state.
+message WebhookEventResponse {
+  // webhook_event is the returned webhook state.
+  WebhookEvent webhook_event = 1;
+}
+
+// GetWebhookEventRequest reads a stored webhook.
+message GetWebhookEventRequest {
+  // webhook_event_id is the stored webhook id.
+  string webhook_event_id = 1;
+  // meta carries read actor and request context.
+  QueryMeta meta = 2;
+}
+
+// ListWebhookEventsRequest lists stored webhooks.
+message ListWebhookEventsRequest {
+  // provider_slug optionally filters by provider.
+  optional string provider_slug = 1;
+  // delivery_id optionally filters by provider delivery id.
+  optional string delivery_id = 2;
+  // event_names optionally filter provider event names.
+  repeated string event_names = 3;
+  // processing_statuses optionally filter processing status.
+  repeated WebhookProcessingStatus processing_statuses = 4;
+  // repository_provider_id optionally filters provider repository id.
+  optional string repository_provider_id = 5;
+  // received_since optionally filters lower receive time in RFC3339 format.
+  optional string received_since = 6;
+  // received_until optionally filters upper receive time in RFC3339 format.
+  optional string received_until = 7;
+  // page limits response size.
+  PageRequest page = 8;
+  // meta carries read actor and request context.
+  QueryMeta meta = 9;
+}
+
+// ListWebhookEventsResponse returns stored webhooks.
+message ListWebhookEventsResponse {
+  // webhook_events are returned in stable server-defined order.
+  repeated WebhookEvent webhook_events = 1;
+  // page describes continuation state.
+  PageResponse page = 2;
+}
+
+// RetryWebhookEventProcessingRequest re-enqueues a stored webhook.
+message RetryWebhookEventProcessingRequest {
+  // webhook_event_id is the stored webhook id.
+  string webhook_event_id = 1;
+  // meta carries idempotency, expected version and audit context.
+  CommandMeta meta = 2;
+}
+
+// GetWorkItemProjectionRequest reads a projection by id.
+message GetWorkItemProjectionRequest {
+  // work_item_projection_id is the internal projection id.
+  string work_item_projection_id = 1;
+  // meta carries read actor and request context.
+  QueryMeta meta = 2;
+}
+
+// FindWorkItemByProviderRefRequest finds a projection by provider-native reference.
+message FindWorkItemByProviderRefRequest {
+  // target identifies the provider-native object.
+  ProviderTarget target = 1;
+  // meta carries read actor and request context.
+  QueryMeta meta = 2;
+}
+
+// WorkItemProjectionResponse returns one work item projection.
+message WorkItemProjectionResponse {
+  // work_item_projection is the returned projection.
+  WorkItemProjection work_item_projection = 1;
+}
+
+// ListWorkItemProjectionsRequest lists work item projections.
+message ListWorkItemProjectionsRequest {
+  // project_id optionally filters by project-catalog project.
+  optional string project_id = 1;
+  // repository_id optionally filters by project-catalog repository binding.
+  optional string repository_id = 2;
+  // provider_slug optionally filters by provider.
+  optional string provider_slug = 3;
+  // repository_full_name optionally filters by provider repository name.
+  optional string repository_full_name = 4;
+  // kinds optionally filter Issue, PR or MR.
+  repeated WorkItemKind kinds = 5;
+  // states optionally filter provider-normalized states.
+  repeated string states = 6;
+  // labels optionally filter normalized label names.
+  repeated string labels = 7;
+  // work_item_types optionally filter platform work item types.
+  repeated string work_item_types = 8;
+  // drift_statuses optionally filter projection freshness.
+  repeated WorkItemDriftStatus drift_statuses = 9;
+  // updated_since optionally filters provider update time in RFC3339 format.
+  optional string updated_since = 10;
+  // page limits response size.
+  PageRequest page = 11;
+  // meta carries read actor and request context.
+  QueryMeta meta = 12;
+}
+
+// ListWorkItemProjectionsResponse returns work item projections.
+message ListWorkItemProjectionsResponse {
+  // work_item_projections are returned in stable server-defined order.
+  repeated WorkItemProjection work_item_projections = 1;
+  // page describes continuation state.
+  PageResponse page = 2;
+}
+
+// ListCommentsRequest lists comments for a work item.
+message ListCommentsRequest {
+  // work_item_projection_id selects a known work item projection.
+  string work_item_projection_id = 1;
+  // kinds optionally filter comment-like records.
+  repeated CommentKind kinds = 2;
+  // page limits response size.
+  PageRequest page = 3;
+  // meta carries read actor and request context.
+  QueryMeta meta = 4;
+}
+
+// ListCommentsResponse returns comment projections.
+message ListCommentsResponse {
+  // comments are returned in stable server-defined order.
+  repeated CommentProjection comments = 1;
+  // page describes continuation state.
+  PageResponse page = 2;
+}
+
+// ListRelationshipsRequest lists provider relationships.
+message ListRelationshipsRequest {
+  // work_item_projection_id optionally filters relationships touching one work item.
+  optional string work_item_projection_id = 1;
+  // relationship_types optionally filter normalized relationship types.
+  repeated string relationship_types = 2;
+  // sources optionally filter relationship source.
+  repeated RelationshipSource sources = 3;
+  // confidence_levels optionally filter confidence.
+  repeated RelationshipConfidence confidence_levels = 4;
+  // page limits response size.
+  PageRequest page = 5;
+  // meta carries read actor and request context.
+  QueryMeta meta = 6;
+}
+
+// ListRelationshipsResponse returns provider relationships.
+message ListRelationshipsResponse {
+  // relationships are returned in stable server-defined order.
+  repeated ProviderRelationship relationships = 1;
+  // page describes continuation state.
+  PageResponse page = 2;
+}
+
+// RegisterProviderArtifactSignalRequest records a provider artifact signal.
+message RegisterProviderArtifactSignalRequest {
+  // signal_id is optional idempotent signal id.
+  optional string signal_id = 1;
+  // target identifies the provider-native object.
+  ProviderTarget target = 2;
+  // source identifies signal origin, for example slot_agent_after or agent_manager.
+  string source = 3;
+  // observed_at is observation time in RFC3339 format.
+  string observed_at = 4;
+  // payload_json is optional typed signal payload.
+  optional string payload_json = 5;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 6;
+}
+
+// ProviderArtifactSignalResponse returns accepted signal state.
+message ProviderArtifactSignalResponse {
+  // signal_id is the accepted signal id.
+  string signal_id = 1;
+  // status is a machine-readable processing status.
+  string status = 2;
+  // target identifies the provider-native object.
+  ProviderTarget target = 3;
+}
+
+// EnqueueReconciliationRequest schedules reconciliation.
+message EnqueueReconciliationRequest {
+  // provider_slug is an extensible provider identifier.
+  string provider_slug = 1;
+  // scope_type classifies reconciliation scope.
+  SyncCursorScopeType scope_type = 2;
+  // scope_ref is provider scope reference.
+  string scope_ref = 3;
+  // artifact_kinds select artifacts to reconcile.
+  repeated SyncArtifactKind artifact_kinds = 4;
+  // priority classifies reconciliation urgency.
+  SyncCursorPriority priority = 5;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 6;
+}
+
+// ReconciliationRequestResponse returns scheduled reconciliation state.
+message ReconciliationRequestResponse {
+  // sync_cursors are affected or created cursors.
+  repeated SyncCursor sync_cursors = 1;
+}
+
+// RunReconciliationBatchRequest processes a reconciliation batch.
+message RunReconciliationBatchRequest {
+  // sync_cursor_id optionally selects an exact cursor.
+  optional string sync_cursor_id = 1;
+  // provider_slug optionally filters provider when cursor is selected by scheduler.
+  optional string provider_slug = 2;
+  // max_items limits provider items processed by one batch.
+  int32 max_items = 3;
+  // lease_owner identifies worker lease owner.
+  string lease_owner = 4;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 5;
+}
+
+// RunReconciliationBatchResponse returns batch result.
+message RunReconciliationBatchResponse {
+  // sync_cursor is the processed cursor.
+  SyncCursor sync_cursor = 1;
+  // items_processed is the number of provider items processed.
+  int64 items_processed = 2;
+  // events_published is the number of domain events published.
+  int64 events_published = 3;
+  // retry_after is optional delay hint in RFC3339 duration format.
+  optional string retry_after = 4;
+}
+
+// GetSyncCursorRequest reads a cursor.
+message GetSyncCursorRequest {
+  // sync_cursor_id is the cursor id.
+  string sync_cursor_id = 1;
+  // meta carries read actor and request context.
+  QueryMeta meta = 2;
+}
+
+// SyncCursorResponse returns cursor state.
+message SyncCursorResponse {
+  // sync_cursor is the returned cursor state.
+  SyncCursor sync_cursor = 1;
+}
+
+// ListSyncCursorsRequest lists cursors.
+message ListSyncCursorsRequest {
+  // provider_slug optionally filters provider.
+  optional string provider_slug = 1;
+  // scope_type optionally filters scope type.
+  optional SyncCursorScopeType scope_type = 2;
+  // scope_ref optionally filters scope reference.
+  optional string scope_ref = 3;
+  // artifact_kinds optionally filter artifact kinds.
+  repeated SyncArtifactKind artifact_kinds = 4;
+  // priorities optionally filter priority.
+  repeated SyncCursorPriority priorities = 5;
+  // include_healthy controls whether healthy cursors are returned with failed cursors.
+  bool include_healthy = 6;
+  // page limits response size.
+  PageRequest page = 7;
+  // meta carries read actor and request context.
+  QueryMeta meta = 8;
+}
+
+// ListSyncCursorsResponse returns cursors.
+message ListSyncCursorsResponse {
+  // sync_cursors are returned in stable server-defined order.
+  repeated SyncCursor sync_cursors = 1;
+  // page describes continuation state.
+  PageResponse page = 2;
+}
+
+// CreateIssueRequest creates a provider-native Issue.
+message CreateIssueRequest {
+  // project_id is the project-catalog project id.
+  string project_id = 1;
+  // repository_id is the project-catalog repository binding id.
+  string repository_id = 2;
+  // provider_slug is an extensible provider identifier.
+  string provider_slug = 3;
+  // title is provider Issue title.
+  string title = 4;
+  // body is provider Issue body.
+  string body = 5;
+  // labels are provider label names.
+  repeated string labels = 6;
+  // assignee_provider_logins are provider logins to assign.
+  repeated string assignee_provider_logins = 7;
+  // milestone is provider milestone title or id.
+  optional string milestone = 8;
+  // work_item_type is platform work item type to encode through provider fields or watermark.
+  optional string work_item_type = 9;
+  // watermark_json is platform watermark payload to place into body when required.
+  optional string watermark_json = 10;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 11;
+}
+
+// UpdateIssueRequest updates provider-native Issue fields.
+message UpdateIssueRequest {
+  // target identifies the provider-native Issue.
+  ProviderTarget target = 1;
+  // title is optional replacement title.
+  optional string title = 2;
+  // body is optional replacement body.
+  optional string body = 3;
+  // labels replaces provider labels when the message is present; empty values clear labels.
+  StringListPatch labels = 4;
+  // assignee_provider_logins replaces provider assignees when the message is present;
+  // empty values clear assignees.
+  StringListPatch assignee_provider_logins = 5;
+  // milestone is optional provider milestone title or id.
+  optional string milestone = 6;
+  // state is optional provider-normalized lifecycle state.
+  optional string state = 7;
+  // work_item_type is optional platform work item type.
+  optional string work_item_type = 8;
+  // watermark_json is optional platform watermark payload.
+  optional string watermark_json = 9;
+  // expected_provider_version is optional provider version or update marker.
+  optional string expected_provider_version = 10;
+  // meta carries idempotency, expected projection version and audit context.
+  CommandMeta meta = 11;
+}
+
+// CreateCommentRequest creates a provider-native comment.
+message CreateCommentRequest {
+  // target identifies the provider-native work item.
+  ProviderTarget target = 1;
+  // body is comment body.
+  string body = 2;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 3;
+}
+
+// UpdateCommentRequest updates a platform-owned provider comment.
+message UpdateCommentRequest {
+  // target identifies the provider-native comment.
+  ProviderTarget target = 1;
+  // provider_comment_id is the provider-native comment id.
+  string provider_comment_id = 2;
+  // body is replacement comment body.
+  string body = 3;
+  // expected_provider_version is optional provider version or update marker.
+  optional string expected_provider_version = 4;
+  // meta carries idempotency, expected projection version and audit context.
+  CommandMeta meta = 5;
+}
+
+// CreatePullRequestRequest creates a provider-native PR/MR.
+message CreatePullRequestRequest {
+  // project_id is the project-catalog project id.
+  string project_id = 1;
+  // repository_id is the project-catalog repository binding id.
+  string repository_id = 2;
+  // provider_slug is an extensible provider identifier.
+  string provider_slug = 3;
+  // title is PR/MR title.
+  string title = 4;
+  // body is PR/MR body.
+  string body = 5;
+  // head_branch is source branch.
+  string head_branch = 6;
+  // base_branch is target branch.
+  string base_branch = 7;
+  // draft controls provider draft state when supported.
+  bool draft = 8;
+  // labels are provider label names when supported.
+  repeated string labels = 9;
+  // linked_issue_ref optionally links source Issue.
+  optional string linked_issue_ref = 10;
+  // watermark_json is platform watermark payload to place into body when required.
+  optional string watermark_json = 11;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 12;
+}
+
+// CreateReviewSignalRequest creates a provider-native review signal.
+message CreateReviewSignalRequest {
+  // target identifies the provider-native PR/MR.
+  ProviderTarget target = 1;
+  // kind classifies review action.
+  ReviewSignalKind kind = 2;
+  // body is review body.
+  string body = 3;
+  // comments_json is optional typed inline comments payload.
+  optional string comments_json = 4;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 5;
+}
+
+// UpdateRelationshipRequest stores or updates a provider relationship.
+message UpdateRelationshipRequest {
+  // source identifies source work item.
+  ProviderTarget source = 1;
+  // target identifies target work item when known.
+  ProviderTarget target = 2;
+  // target_provider_ref is URL or provider ref when target object is not resolved.
+  optional string target_provider_ref = 3;
+  // relationship_type is an extensible normalized relationship type.
+  string relationship_type = 4;
+  // source_kind classifies relationship source.
+  RelationshipSource source_kind = 5;
+  // confidence describes how reliable the relationship is.
+  RelationshipConfidence confidence = 6;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 7;
+}
+
+// ProviderOperationResponse returns operation log entry and optional resulting projection.
+message ProviderOperationResponse {
+  // provider_operation is the operation log entry.
+  ProviderOperation provider_operation = 1;
+  // work_item_projection is returned when operation produced or updated a work item.
+  WorkItemProjection work_item_projection = 2;
+  // comment_projection is returned when operation produced or updated a comment.
+  CommentProjection comment_projection = 3;
+  // relationship is returned when operation produced or updated a relationship.
+  ProviderRelationship relationship = 4;
+}
+
+// GetProviderAccountRuntimeStateRequest reads runtime state.
+message GetProviderAccountRuntimeStateRequest {
+  // provider_account_runtime_state_id is the runtime state id.
+  optional string provider_account_runtime_state_id = 1;
+  // external_account_id links access-manager external account.
+  optional string external_account_id = 2;
+  // provider_slug optionally narrows external account lookup.
+  optional string provider_slug = 3;
+  // meta carries read actor and request context.
+  QueryMeta meta = 4;
+}
+
+// ProviderAccountRuntimeStateResponse returns runtime state.
+message ProviderAccountRuntimeStateResponse {
+  // runtime_state is the returned provider account runtime state.
+  ProviderAccountRuntimeState runtime_state = 1;
+}
+
+// ListProviderAccountRuntimeStatesRequest lists runtime states.
+message ListProviderAccountRuntimeStatesRequest {
+  // provider_slug optionally filters provider.
+  optional string provider_slug = 1;
+  // external_account_ids optionally filter access-manager external accounts.
+  repeated string external_account_ids = 2;
+  // statuses optionally filter provider runtime states.
+  repeated ProviderAccountRuntimeStatus statuses = 3;
+  // project_id optionally filters by project scope when mapping is known.
+  optional string project_id = 4;
+  // organization_id optionally filters by organization scope when mapping is known.
+  optional string organization_id = 5;
+  // page limits response size.
+  PageRequest page = 6;
+  // meta carries read actor and request context.
+  QueryMeta meta = 7;
+}
+
+// ListProviderAccountRuntimeStatesResponse returns runtime states.
+message ListProviderAccountRuntimeStatesResponse {
+  // runtime_states are returned in stable server-defined order.
+  repeated ProviderAccountRuntimeState runtime_states = 1;
+  // page describes continuation state.
+  PageResponse page = 2;
+}
+
+// RecordProviderLimitSnapshotRequest records a provider limit snapshot.
+message RecordProviderLimitSnapshotRequest {
+  // external_account_id links access-manager external account.
+  string external_account_id = 1;
+  // provider_slug is an extensible provider identifier.
+  string provider_slug = 2;
+  // limit_class is provider limit class such as core, graphql or search.
+  string limit_class = 3;
+  // remaining is remaining budget when known.
+  optional int64 remaining = 4;
+  // limit_value is total budget when known.
+  optional int64 limit_value = 5;
+  // reset_at is reset time in RFC3339 format when known.
+  optional string reset_at = 6;
+  // captured_at is snapshot time in RFC3339 format.
+  string captured_at = 7;
+  // source identifies who recorded the snapshot.
+  string source = 8;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 9;
+}
+
+// ProviderLimitSnapshotResponse returns provider limit snapshot.
+message ProviderLimitSnapshotResponse {
+  // limit_snapshot is the returned provider limit snapshot.
+  ProviderLimitSnapshot limit_snapshot = 1;
+}
+
+// ListProviderLimitSnapshotsRequest lists provider limit snapshots.
+message ListProviderLimitSnapshotsRequest {
+  // external_account_id optionally filters access-manager external account.
+  optional string external_account_id = 1;
+  // provider_slug optionally filters provider.
+  optional string provider_slug = 2;
+  // limit_classes optionally filter provider limit classes.
+  repeated string limit_classes = 3;
+  // captured_since optionally filters lower capture time in RFC3339 format.
+  optional string captured_since = 4;
+  // page limits response size.
+  PageRequest page = 5;
+  // meta carries read actor and request context.
+  QueryMeta meta = 6;
+}
+
+// ListProviderLimitSnapshotsResponse returns provider limit snapshots.
+message ListProviderLimitSnapshotsResponse {
+  // limit_snapshots are returned in stable server-defined order.
+  repeated ProviderLimitSnapshot limit_snapshots = 1;
+  // page describes continuation state.
+  PageResponse page = 2;
+}
+
+// ListProviderOperationsRequest lists provider operations.
+message ListProviderOperationsRequest {
+  // provider_slug optionally filters provider.
+  optional string provider_slug = 1;
+  // external_account_id optionally filters access-manager external account.
+  optional string external_account_id = 2;
+  // operation_types optionally filter operation types.
+  repeated ProviderOperationType operation_types = 3;
+  // statuses optionally filter operation status.
+  repeated ProviderOperationStatus statuses = 4;
+  // target_ref optionally filters provider target.
+  optional string target_ref = 5;
+  // started_since optionally filters lower start time in RFC3339 format.
+  optional string started_since = 6;
+  // page limits response size.
+  PageRequest page = 7;
+  // meta carries read actor and request context.
+  QueryMeta meta = 8;
+}
+
+// ListProviderOperationsResponse returns provider operations.
+message ListProviderOperationsResponse {
+  // provider_operations are returned in stable server-defined order.
+  repeated ProviderOperation provider_operations = 1;
+  // page describes continuation state.
+  PageResponse page = 2;
+}
