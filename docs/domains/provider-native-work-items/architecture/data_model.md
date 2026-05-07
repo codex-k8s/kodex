@@ -216,7 +216,7 @@ approvals:
 | `provider_slug` | text | no | indexed | Поставщик. |
 | `operation_type` | text | no | indexed | Нормализованный тип операции. |
 | `target_ref` | text | no | indexed | Provider target. |
-| `status` | text | no | indexed | `pending`, `running`, `succeeded`, `failed`, `rate_limited`. |
+| `status` | text | no | indexed | `succeeded`, `failed`, `retryable_failed`, `denied`. |
 | `result_ref` | text | no | default '' | URL/id результата. |
 | `error_code` | text | no | default '' | Классификация ошибки. |
 | `error_message` | text | no | default '' | Короткое сообщение без секрета. |

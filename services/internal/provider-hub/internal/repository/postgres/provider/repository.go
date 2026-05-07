@@ -5,7 +5,11 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	providerrepo "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/repository/provider"
 )
+
+var _ providerrepo.Repository = (*Repository)(nil)
 
 // Repository stores provider-hub state in PostgreSQL.
 type Repository struct {
