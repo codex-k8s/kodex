@@ -21,6 +21,26 @@ type verificationCommandPayload struct {
 	Version      packageVersionSnapshot      `json:"version"`
 }
 
+type sourceCommandPayload struct {
+	Source packageSourceSnapshot `json:"source"`
+}
+
+type packageSourceSnapshot struct {
+	ID                 string `json:"id"`
+	OrganizationID     string `json:"organization_id,omitempty"`
+	Slug               string `json:"slug"`
+	DisplayName        string `json:"display_name"`
+	SourceKind         string `json:"source_kind"`
+	RepositoryRef      string `json:"repository_ref,omitempty"`
+	CatalogEndpointRef string `json:"catalog_endpoint_ref,omitempty"`
+	Status             string `json:"status"`
+	LastSyncAt         string `json:"last_sync_at,omitempty"`
+	LastError          string `json:"last_error,omitempty"`
+	Version            int64  `json:"version"`
+	CreatedAt          string `json:"created_at"`
+	UpdatedAt          string `json:"updated_at"`
+}
+
 type packageVerificationSnapshot struct {
 	ID                 string `json:"id"`
 	PackageVersionID   string `json:"package_version_id"`
@@ -44,6 +64,31 @@ type packageVersionSnapshot struct {
 	PublishedAt        string `json:"published_at,omitempty"`
 	CreatedAt          string `json:"created_at"`
 	UpdatedAt          string `json:"updated_at"`
+}
+
+func (s *Service) findSourceReplay(ctx context.Context, meta value.CommandMeta, operation string, sourceID uuid.UUID) (entity.PackageSource, bool, error) {
+	identity, err := commandIdentity(meta, operation)
+	if err != nil {
+		return entity.PackageSource{}, false, err
+	}
+	result, err := s.repository.GetCommandResult(ctx, identity)
+	if errors.Is(err, errs.ErrNotFound) {
+		return entity.PackageSource{}, false, nil
+	}
+	if err != nil {
+		return entity.PackageSource{}, false, err
+	}
+	if result.Operation != operation || result.AggregateType != enum.CommandAggregateTypePackageSource {
+		return entity.PackageSource{}, true, errs.ErrConflict
+	}
+	if sourceID != uuid.Nil && result.AggregateID != sourceID {
+		return entity.PackageSource{}, true, errs.ErrConflict
+	}
+	source, err := sourceResultFromPayload(result.ResultPayload)
+	if err != nil {
+		return entity.PackageSource{}, true, err
+	}
+	return source, true, nil
 }
 
 func (s *Service) findVerificationReplay(ctx context.Context, meta value.CommandMeta, packageVersionID uuid.UUID) (SetPackageVerificationResult, bool, error) {
@@ -109,6 +154,34 @@ func expectedRevision(meta value.CommandMeta) (int64, error) {
 	return *meta.ExpectedVersion, nil
 }
 
+func sourcePayload(source entity.PackageSource) ([]byte, error) {
+	return json.Marshal(sourceCommandPayload{
+		Source: packageSourceSnapshot{
+			ID:                 source.ID.String(),
+			OrganizationID:     formatOptionalUUID(source.OrganizationID),
+			Slug:               source.Slug,
+			DisplayName:        source.DisplayName,
+			SourceKind:         string(source.Kind),
+			RepositoryRef:      source.RepositoryRef,
+			CatalogEndpointRef: source.CatalogEndpointRef,
+			Status:             string(source.Status),
+			LastSyncAt:         formatOptionalTime(source.LastSyncAt),
+			LastError:          source.LastError,
+			Version:            source.Version,
+			CreatedAt:          source.CreatedAt.Format(time.RFC3339Nano),
+			UpdatedAt:          source.UpdatedAt.Format(time.RFC3339Nano),
+		},
+	})
+}
+
+func sourceResultFromPayload(payload []byte) (entity.PackageSource, error) {
+	var value sourceCommandPayload
+	if err := json.Unmarshal(payload, &value); err != nil {
+		return entity.PackageSource{}, errs.ErrInvalidArgument
+	}
+	return packageSourceFromSnapshot(value.Source)
+}
+
 func verificationPayload(verification entity.PackageVerification, version entity.PackageVersion) ([]byte, error) {
 	return json.Marshal(verificationCommandPayload{
 		Verification: packageVerificationSnapshot{
@@ -151,6 +224,46 @@ func verificationResultFromPayload(payload []byte) (SetPackageVerificationResult
 		return SetPackageVerificationResult{}, err
 	}
 	return SetPackageVerificationResult{Verification: verification, Version: version}, nil
+}
+
+func packageSourceFromSnapshot(snapshot packageSourceSnapshot) (entity.PackageSource, error) {
+	id, err := parseRequiredUUID(snapshot.ID)
+	if err != nil {
+		return entity.PackageSource{}, err
+	}
+	organizationID, err := parseOptionalUUID(snapshot.OrganizationID)
+	if err != nil {
+		return entity.PackageSource{}, err
+	}
+	createdAt, err := parseRequiredTime(snapshot.CreatedAt)
+	if err != nil {
+		return entity.PackageSource{}, err
+	}
+	updatedAt, err := parseRequiredTime(snapshot.UpdatedAt)
+	if err != nil {
+		return entity.PackageSource{}, err
+	}
+	lastSyncAt, err := parseOptionalTime(snapshot.LastSyncAt)
+	if err != nil {
+		return entity.PackageSource{}, err
+	}
+	return entity.PackageSource{
+		VersionedBase: entity.VersionedBase{
+			ID:        id,
+			Version:   snapshot.Version,
+			CreatedAt: createdAt,
+			UpdatedAt: updatedAt,
+		},
+		OrganizationID:     organizationID,
+		Slug:               snapshot.Slug,
+		DisplayName:        snapshot.DisplayName,
+		Kind:               enum.PackageSourceKind(snapshot.SourceKind),
+		RepositoryRef:      snapshot.RepositoryRef,
+		CatalogEndpointRef: snapshot.CatalogEndpointRef,
+		Status:             enum.PackageSourceStatus(snapshot.Status),
+		LastSyncAt:         lastSyncAt,
+		LastError:          snapshot.LastError,
+	}, nil
 }
 
 func verificationFromSnapshot(snapshot packageVerificationSnapshot) (entity.PackageVerification, error) {
@@ -224,6 +337,17 @@ func parseRequiredUUID(raw string) (uuid.UUID, error) {
 	return id, nil
 }
 
+func parseOptionalUUID(raw string) (*uuid.UUID, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	id, err := parseRequiredUUID(raw)
+	if err != nil {
+		return nil, err
+	}
+	return &id, nil
+}
+
 func parseRequiredTime(raw string) (time.Time, error) {
 	parsed, err := time.Parse(time.RFC3339Nano, raw)
 	if err != nil {
@@ -248,4 +372,11 @@ func formatOptionalTime(value *time.Time) string {
 		return ""
 	}
 	return value.Format(time.RFC3339Nano)
+}
+
+func formatOptionalUUID(value *uuid.UUID) string {
+	if value == nil {
+		return ""
+	}
+	return value.String()
 }

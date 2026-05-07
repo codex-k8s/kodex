@@ -38,3 +38,25 @@ func (s *Service) verificationUpdatedEvent(version entity.PackageVersion, occurr
 		Revision:           version.Revision,
 	}, occurredAt)
 }
+
+func (s *Service) sourceConnectedEvent(source entity.PackageSource, occurredAt time.Time) (entity.OutboxEvent, error) {
+	return s.sourceEvent(packageEventSourceConnected, source, occurredAt)
+}
+
+func (s *Service) sourceUpdatedEvent(source entity.PackageSource, occurredAt time.Time) (entity.OutboxEvent, error) {
+	return s.sourceEvent(packageEventSourceUpdated, source, occurredAt)
+}
+
+func (s *Service) sourceDisabledEvent(source entity.PackageSource, occurredAt time.Time) (entity.OutboxEvent, error) {
+	return s.sourceEvent(packageEventSourceDisabled, source, occurredAt)
+}
+
+func (s *Service) sourceEvent(eventType string, source entity.PackageSource, occurredAt time.Time) (entity.OutboxEvent, error) {
+	return s.event(eventType, packageAggregateSource, source.ID, value.PackageEventPayload{
+		SourceID:   source.ID.String(),
+		SourceKind: string(source.Kind),
+		Status:     string(source.Status),
+		Version:    source.Version,
+		Slug:       source.Slug,
+	}, occurredAt)
+}

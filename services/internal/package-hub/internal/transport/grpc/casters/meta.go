@@ -109,6 +109,14 @@ func optionalStringPtr(text string) *string {
 	return &value
 }
 
+func optionalPresentString(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*value)
+	return &trimmed
+}
+
 func pageRequestFromProto(page *packagesv1.PageRequest) value.PageRequest {
 	if page == nil {
 		return value.PageRequest{}

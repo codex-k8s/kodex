@@ -49,8 +49,45 @@ func TestGetPackageReturnsRepositoryBackedResponse(t *testing.T) {
 	}
 }
 
+func TestConnectPackageSourceReturnsSourceResponse(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.NewString()
+	response, err := NewServer(fakePackageService{}).ConnectPackageSource(context.Background(), &packagesv1.ConnectPackageSourceRequest{
+		Meta:        &packagesv1.CommandMeta{CommandId: &commandID, Actor: &packagesv1.Actor{Type: "user", Id: "owner"}},
+		Slug:        "package-store",
+		DisplayName: "Магазин пакетов",
+		SourceKind:  packagesv1.PackageSourceKind_PACKAGE_SOURCE_KIND_STORE_PACKAGE,
+	})
+	if err != nil {
+		t.Fatalf("ConnectPackageSource(): %v", err)
+	}
+	if response.GetSource().GetSlug() != "package-store" || response.GetSource().GetStatus() != packagesv1.PackageSourceStatus_PACKAGE_SOURCE_STATUS_ACTIVE {
+		t.Fatalf("source response = %+v, want active package-store", response.GetSource())
+	}
+}
+
 type fakePackageService struct {
 	packageID uuid.UUID
+}
+
+func (fakePackageService) ConnectPackageSource(context.Context, packageservice.ConnectPackageSourceInput) (entity.PackageSource, error) {
+	now := time.Date(2026, 5, 7, 16, 0, 0, 0, time.UTC)
+	return entity.PackageSource{
+		VersionedBase: entity.VersionedBase{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		Slug:          "package-store",
+		DisplayName:   "Магазин пакетов",
+		Kind:          enum.PackageSourceKindStorePackage,
+		Status:        enum.PackageSourceStatusActive,
+	}, nil
+}
+
+func (fakePackageService) UpdatePackageSource(context.Context, packageservice.UpdatePackageSourceInput) (entity.PackageSource, error) {
+	return entity.PackageSource{}, nil
+}
+
+func (fakePackageService) DisablePackageSource(context.Context, packageservice.DisablePackageSourceInput) (entity.PackageSource, error) {
+	return entity.PackageSource{}, nil
 }
 
 func (fakePackageService) GetPackageSource(context.Context, uuid.UUID, value.QueryMeta) (entity.PackageSource, error) {

@@ -21,6 +21,30 @@ type ListPackageSourcesResult struct {
 	Page    value.PageResult
 }
 
+type ConnectPackageSourceInput struct {
+	OrganizationID     *uuid.UUID
+	Slug               string
+	DisplayName        string
+	Kind               enum.PackageSourceKind
+	RepositoryRef      string
+	CatalogEndpointRef string
+	Meta               value.CommandMeta
+}
+
+type UpdatePackageSourceInput struct {
+	SourceID           uuid.UUID
+	DisplayName        *string
+	RepositoryRef      *string
+	CatalogEndpointRef *string
+	Status             *enum.PackageSourceStatus
+	Meta               value.CommandMeta
+}
+
+type DisablePackageSourceInput struct {
+	SourceID uuid.UUID
+	Meta     value.CommandMeta
+}
+
 type ListPackagesInput struct {
 	SourceID         *uuid.UUID
 	Kind             *enum.PackageKind

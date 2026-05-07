@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-06
 updated_at: 2026-05-07
-related_issues: [642, 646, 650, 663, 667, 670, 673]
+related_issues: [642, 646, 650, 663, 667, 670, 673, 678]
 related_prs: []
 related_docsets:
   - docs/domains/package-platform/product/requirements.md
@@ -48,7 +48,8 @@ approvals:
 | PKG-3.2 | #667 | PostgreSQL-модель источников, пакетов, версий, manifest и ценовых метаданных готова: миграции, доменные типы, repository-контракт, PostgreSQL repository и интеграционные тесты. gRPC business handlers не входят в этот срез. |
 | PKG-3.3 | #670 | PostgreSQL-модель установок, схем секретов, проверок, идемпотентности и optimistic concurrency готова: миграции, доменные типы, repository-контракт, PostgreSQL repository и интеграционные тесты. gRPC business handlers и outbox не входят в этот срез. |
 | PKG-3.4 | #673 | Outbox, первые repository-backed gRPC чтения и команда проверки версии пакета готовы. |
-| PKG-4 | не назначено | Источники магазинов, синхронизация доступного каталога и проверка manifest готовы. |
+| PKG-4.1 | #678 | Команды подключения, обновления и отключения источников пакетов готовы: проверка доступа, идемпотентность, ожидаемая версия и события источника. |
+| PKG-4.2 | не назначено | Синхронизация доступного каталога и проверка manifest готовы. |
 | PKG-5 | не назначено | Установки пакетов, версии, привязки секретов и события установки готовы. |
 | PKG-6 | не назначено | Специализация плагинов, руководящих пакетов, магазина и пакетов пользовательского контента платформы готова. |
 | PKG-7 | не назначено | Манифесты deploy, migration job, config, health, metrics и runbook готовы. |
@@ -59,12 +60,12 @@ approvals:
 
 | Операция | Текущий статус кода | Плановый срез |
 |---|---|---|
-| `ConnectPackageSource` | `unimplemented` | PKG-4 |
-| `UpdatePackageSource` | `unimplemented` | PKG-4 |
-| `DisablePackageSource` | `unimplemented` | PKG-4 |
+| `ConnectPackageSource` | `ready` | PKG-4.1 |
+| `UpdatePackageSource` | `ready` | PKG-4.1 |
+| `DisablePackageSource` | `ready` | PKG-4.1 |
 | `GetPackageSource` | `ready` | PKG-3.4 |
 | `ListPackageSources` | `ready` | PKG-3.4 |
-| `SyncAvailablePackages` | `unimplemented` | PKG-4 |
+| `SyncAvailablePackages` | `unimplemented` | PKG-4.2 |
 | `GetPackage` | `ready` | PKG-3.4 |
 | `ListPackages` | `ready` | PKG-3.4 |
 | `GetPackageVersion` | `ready` | PKG-3.4 |
@@ -93,8 +94,8 @@ approvals:
 
 | Домен | Когда синхронизироваться | Причина |
 |---|---|---|
-| `project-catalog` | Перед PKG-4 и PKG-5 | `services.yaml` и workspace policy могут ссылаться на руководящие пакеты и package sources, но проектная политика остаётся у `project-catalog`. |
-| `provider-hub` | Перед PKG-4 | Репозитории-источники пакетов, webhook, PR и Git-истина пакета идут через provider-native контур. |
+| `project-catalog` | Перед PKG-4.2 и PKG-5 | `services.yaml` и workspace policy могут ссылаться на руководящие пакеты и package sources, но проектная политика остаётся у `project-catalog`. |
+| `provider-hub` | Перед PKG-4.2 | Репозитории-источники пакетов, webhook, PR и Git-истина пакета идут через provider-native контур. |
 | `access-manager` | Перед PKG-2 | Действия доступа для источников, установок, верификации и секретов должны быть согласованы с access catalog. |
 | `runtime-manager` и `fleet-manager` | Перед PKG-5 и PKG-7 | `package-hub` фиксирует установку и требования, но runtime-нагрузку, Kubernetes и размещение исполняет runtime/fleet контур. |
 | `agent-manager` | Перед PKG-6 | Руководящие пакеты и возможности пакетов влияют на подготовку агентного контекста. |

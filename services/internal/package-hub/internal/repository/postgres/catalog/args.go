@@ -38,6 +38,12 @@ func packageSourceArgs(source entity.PackageSource) pgx.NamedArgs {
 	})
 }
 
+func packageSourceUpdateArgs(source entity.PackageSource, previousVersion int64) pgx.NamedArgs {
+	args := packageSourceArgs(source)
+	args["previous_version"] = previousVersion
+	return args
+}
+
 func packageArgs(entry entity.PackageEntry) pgx.NamedArgs {
 	return withVersionedBaseArgs(entry.VersionedBase, pgx.NamedArgs{
 		"source_id":         postgreslib.NullableUUID(entry.SourceID),
