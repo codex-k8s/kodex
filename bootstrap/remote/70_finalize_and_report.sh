@@ -24,3 +24,4 @@ log "  sudo cat /var/lib/rancher/k3s/agent/etc/kubelet.conf.d/10-kodex-image-gc.
 log "  sudo systemctl status kodex-image-prune.timer --no-pager"
 log "  sudo nft list table inet kodex_fw"
 log "  run scripts/smoke-access-manager.sh with KODEX_SMOKE_ENV_FILE=${BOOTSTRAP_ENV_FILE}"
+log "  run scripts/smoke-project-catalog.sh with KODEX_SMOKE_ENV_FILE=${BOOTSTRAP_ENV_FILE}"

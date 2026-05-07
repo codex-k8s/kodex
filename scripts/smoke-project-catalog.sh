@@ -10,7 +10,7 @@ RESTART_DEPLOYMENT="${KODEX_SMOKE_RESTART_DEPLOYMENT:-true}"
 KEEP_RENDER_DIR="${KODEX_SMOKE_KEEP_RENDER_DIR:-false}"
 
 if [[ ! -f "$ENV_FILE" ]]; then
-  echo "smoke-access-manager: env file not found: $ENV_FILE" >&2
+  echo "smoke-project-catalog: env file not found: $ENV_FILE" >&2
   exit 1
 fi
 
@@ -47,16 +47,22 @@ namespace="${KODEX_PRODUCTION_NAMESPACE:-kodex-prod}"
 KODEX_POSTGRES_IMAGE="$(kodex_postgres_image)"
 KODEX_ACCESS_MANAGER_IMAGE="$(kodex_image_from_repo KODEX_ACCESS_MANAGER_IMAGE KODEX_ACCESS_MANAGER_INTERNAL_IMAGE_REPOSITORY kodex/access-manager KODEX_ACCESS_MANAGER_VERSION access-manager)"
 KODEX_ACCESS_MANAGER_MIGRATIONS_IMAGE="$(kodex_image_from_repo KODEX_ACCESS_MANAGER_MIGRATIONS_IMAGE KODEX_ACCESS_MANAGER_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY kodex/access-manager-migrations KODEX_ACCESS_MANAGER_VERSION access-manager)"
+KODEX_PROJECT_CATALOG_IMAGE="$(kodex_image_from_repo KODEX_PROJECT_CATALOG_IMAGE KODEX_PROJECT_CATALOG_INTERNAL_IMAGE_REPOSITORY kodex/project-catalog KODEX_PROJECT_CATALOG_VERSION project-catalog)"
+KODEX_PROJECT_CATALOG_MIGRATIONS_IMAGE="$(kodex_image_from_repo KODEX_PROJECT_CATALOG_MIGRATIONS_IMAGE KODEX_PROJECT_CATALOG_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY kodex/project-catalog-migrations KODEX_PROJECT_CATALOG_VERSION project-catalog)"
 KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_IMAGE="$(kodex_image_from_repo KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_IMAGE KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY kodex/platform-event-log-migrations KODEX_PLATFORM_EVENT_LOG_VERSION platform-event-log)"
 
 required_runtime_values=(
   KODEX_POSTGRES_PASSWORD
   KODEX_ACCESS_MANAGER_DATABASE_DSN
+  KODEX_PROJECT_CATALOG_DATABASE_DSN
   KODEX_PLATFORM_EVENT_LOG_DATABASE_DSN
   KODEX_ACCESS_MANAGER_EVENT_LOG_DATABASE_DSN
 )
 if [[ "${KODEX_ACCESS_MANAGER_GRPC_AUTH_REQUIRED:-true}" == "true" ]]; then
   required_runtime_values+=(KODEX_ACCESS_MANAGER_GRPC_AUTH_TOKEN)
+fi
+if [[ "${KODEX_PROJECT_CATALOG_GRPC_AUTH_REQUIRED:-true}" == "true" ]]; then
+  required_runtime_values+=(KODEX_PROJECT_CATALOG_GRPC_AUTH_TOKEN)
 fi
 missing_runtime_values=()
 for name in "${required_runtime_values[@]}"; do
@@ -65,7 +71,7 @@ for name in "${required_runtime_values[@]}"; do
   fi
 done
 if (( ${#missing_runtime_values[@]} > 0 )); then
-  echo "smoke-access-manager: normalized bootstrap env is required before render" >&2
+  echo "smoke-project-catalog: normalized bootstrap env is required before render" >&2
   echo "missing values: ${missing_runtime_values[*]}" >&2
   echo "use KODEX_SMOKE_ENV_FILE with generated bootstrap.env from bootstrap/host/bootstrap_remote_production.sh" >&2
   exit 1
@@ -76,12 +82,14 @@ required_images=(
   "$KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_IMAGE"
   "$KODEX_ACCESS_MANAGER_MIGRATIONS_IMAGE"
   "$KODEX_ACCESS_MANAGER_IMAGE"
+  "$KODEX_PROJECT_CATALOG_MIGRATIONS_IMAGE"
+  "$KODEX_PROJECT_CATALOG_IMAGE"
 )
 
 for image in "${required_images[@]}"; do
   if [[ -z "$image" ]]; then
-    echo "smoke-access-manager: image variables must be populated before apply" >&2
-    echo "required: KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_IMAGE, KODEX_ACCESS_MANAGER_MIGRATIONS_IMAGE, KODEX_ACCESS_MANAGER_IMAGE" >&2
+    echo "smoke-project-catalog: image variables must be populated before apply" >&2
+    echo "required: KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_IMAGE, KODEX_ACCESS_MANAGER_MIGRATIONS_IMAGE, KODEX_ACCESS_MANAGER_IMAGE, KODEX_PROJECT_CATALOG_MIGRATIONS_IMAGE, KODEX_PROJECT_CATALOG_IMAGE" >&2
     exit 1
   fi
 done
@@ -96,6 +104,8 @@ cp "$ENV_FILE" "$render_env_file"
   printf "KODEX_POSTGRES_IMAGE='%s'\n" "$KODEX_POSTGRES_IMAGE"
   printf "KODEX_ACCESS_MANAGER_IMAGE='%s'\n" "$KODEX_ACCESS_MANAGER_IMAGE"
   printf "KODEX_ACCESS_MANAGER_MIGRATIONS_IMAGE='%s'\n" "$KODEX_ACCESS_MANAGER_MIGRATIONS_IMAGE"
+  printf "KODEX_PROJECT_CATALOG_IMAGE='%s'\n" "$KODEX_PROJECT_CATALOG_IMAGE"
+  printf "KODEX_PROJECT_CATALOG_MIGRATIONS_IMAGE='%s'\n" "$KODEX_PROJECT_CATALOG_MIGRATIONS_IMAGE"
   printf "KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_IMAGE='%s'\n" "$KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_IMAGE"
 } >>"$render_env_file"
 
@@ -111,6 +121,7 @@ kubectl "${kubectl_args[@]}" create namespace "$namespace" --dry-run=client -o y
 kubectl "${kubectl_args[@]}" -n "$namespace" delete job kodex-postgres-bootstrap-databases --ignore-not-found
 kubectl "${kubectl_args[@]}" -n "$namespace" delete job platform-event-log-migrations --ignore-not-found
 kubectl "${kubectl_args[@]}" -n "$namespace" delete job access-manager-migrations --ignore-not-found
+kubectl "${kubectl_args[@]}" -n "$namespace" delete job project-catalog-migrations --ignore-not-found
 kubectl "${kubectl_args[@]}" apply -k "${RENDER_DIR}/postgres"
 kubectl "${kubectl_args[@]}" -n "$namespace" rollout status statefulset/postgres --timeout="$ROLL_OUT_TIMEOUT"
 kubectl "${kubectl_args[@]}" -n "$namespace" wait --for=condition=complete job/kodex-postgres-bootstrap-databases --timeout="$ROLL_OUT_TIMEOUT"
@@ -125,18 +136,26 @@ if [[ "$RESTART_DEPLOYMENT" == "true" ]]; then
 fi
 kubectl "${kubectl_args[@]}" -n "$namespace" rollout status deployment/access-manager --timeout="$ROLL_OUT_TIMEOUT"
 
+kubectl "${kubectl_args[@]}" apply -f "${RENDER_DIR}/project-catalog/migrations.yaml"
+kubectl "${kubectl_args[@]}" -n "$namespace" wait --for=condition=complete job/project-catalog-migrations --timeout="$ROLL_OUT_TIMEOUT"
+kubectl "${kubectl_args[@]}" apply -f "${RENDER_DIR}/project-catalog/project-catalog.yaml"
+if [[ "$RESTART_DEPLOYMENT" == "true" ]]; then
+  kubectl "${kubectl_args[@]}" -n "$namespace" rollout restart deployment/project-catalog
+fi
+kubectl "${kubectl_args[@]}" -n "$namespace" rollout status deployment/project-catalog --timeout="$ROLL_OUT_TIMEOUT"
+
 port_forward_log="$(mktemp)"
-kubectl "${kubectl_args[@]}" -n "$namespace" port-forward svc/access-manager 18080:8080 >"$port_forward_log" 2>&1 &
+kubectl "${kubectl_args[@]}" -n "$namespace" port-forward svc/project-catalog 18081:8080 >"$port_forward_log" 2>&1 &
 port_forward_pid="$!"
 
 for _ in $(seq 1 30); do
-  if curl -fsS http://127.0.0.1:18080/health/readyz >/dev/null; then
-    echo "smoke-access-manager: readyz OK"
+  if curl -fsS http://127.0.0.1:18081/health/readyz >/dev/null; then
+    echo "smoke-project-catalog: readyz OK"
     exit 0
   fi
   sleep 1
 done
 
 cat "$port_forward_log" >&2 || true
-echo "smoke-access-manager: readyz did not become healthy" >&2
+echo "smoke-project-catalog: readyz did not become healthy" >&2
 exit 1
