@@ -80,8 +80,8 @@ sequenceDiagram
   participant K as Kubernetes
   AM->>PC: GetWorkspacePolicy(project, task context)
   PC-->>AM: workspace policy + placement constraints
-  AM->>R: PrepareRuntime(agent_run_id, workspace policy, runtime profile)
-  R->>F: ResolvePlacement(scope, constraints)
+  AM->>R: PrepareRuntime(agent_run_id, workspace policy, runtime profile, placement constraints)
+  R->>F: ResolvePlacement(placement constraints)
   F-->>R: fleet scope + cluster ref
   R->>K: Create or reserve namespace slot
   R->>R: materialize workspace + persist state + outbox

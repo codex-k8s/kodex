@@ -133,8 +133,8 @@ sequenceDiagram
   AM->>P: ListGuidancePackages(scope)
   P-->>AM: package refs + versions + local paths
   AM->>PC: GetWorkspacePolicy(project context)
-  PC-->>AM: project docs + guidance refs
-  AM->>R: PrepareRuntime(agent_run_id, workspace policy, runtime profile)
+  PC-->>AM: workspace policy + guidance refs + placement constraints
+  AM->>R: PrepareRuntime(agent_run_id, workspace policy, runtime profile, placement constraints)
 ```
 
 Руководящий пакет не смешивается с проектной документацией. `project-catalog` отвечает за проектные источники, `package-hub` отвечает за пакет и версию руководства.

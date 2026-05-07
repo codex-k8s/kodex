@@ -41,9 +41,9 @@ approvals:
 
 | Операция | Назначение | Вызывает | Идемпотентность |
 |---|---|---|---|
-| `PrepareRuntime` | Фасадная команда для типового агентного запуска: выбрать fleet scope, выделить слот, запустить подготовку workspace и вернуть контекст runtime. | `agent-manager` | `command_id`; повтор возвращает тот же результат выделения слота и подготовки workspace или актуальный конфликт. |
+| `PrepareRuntime` | Фасадная команда для типового агентного запуска: получить fleet scope через `fleet-manager`, выделить слот, запустить подготовку workspace и вернуть контекст runtime. | `agent-manager` | `command_id`; повтор возвращает тот же результат выделения слота и подготовки workspace или актуальный конфликт. |
 
-`PrepareRuntime` не создаёт agent `Run` и не меняет flow. Он принимает внешний `agent_run_id`, runtime profile, workspace policy и placement constraints. Внутри домена команда использует те же инварианты, что `ReserveSlot` и `StartWorkspaceMaterialization`, а события публикуются как `runtime.slot.*` и `runtime.workspace.*`.
+`PrepareRuntime` не создаёт agent `Run`, не меняет flow и не выбирает инфраструктуру самостоятельно. Он принимает внешний `agent_run_id`, runtime profile, workspace policy и placement constraints. Если явный fleet scope не передан вызывающей стороной, `runtime-manager` обращается к `fleet-manager.ResolvePlacement` и исполняет полученное решение размещения. Внутри домена команда использует те же инварианты, что `ReserveSlot` и `StartWorkspaceMaterialization`, а события публикуются как `runtime.slot.*` и `runtime.workspace.*`.
 
 ### Слоты
 
@@ -106,7 +106,7 @@ approvals:
 | `RUNTIME_JOB_NOT_FOUND` | Job не найден. |
 | `RUNTIME_JOB_CONFLICT` | Статус job изменился конкурентно. |
 | `RUNTIME_JOB_FAILED` | Техническая операция завершилась ошибкой. |
-| `RUNTIME_FLEET_SCOPE_UNAVAILABLE` | Выбранный fleet scope или cluster ref недоступен. |
+| `RUNTIME_FLEET_SCOPE_UNAVAILABLE` | Полученный fleet scope или cluster ref недоступен. |
 | `RUNTIME_KUBERNETES_ERROR` | Ошибка Kubernetes API. |
 | `RUNTIME_PERMISSION_DENIED` | Действие запрещено policy или `access-manager`. |
 
