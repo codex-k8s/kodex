@@ -32,6 +32,7 @@ func TestRecordProviderLimitSnapshotMapsRequestAndResponse(t *testing.T) {
 	t.Parallel()
 
 	accountID := uuid.New()
+	commandID := uuid.NewString()
 	capturedAt := time.Date(2026, 5, 7, 11, 0, 0, 0, time.UTC)
 	remaining := int64(42)
 	response, err := NewServer(fakeService{}).RecordProviderLimitSnapshot(context.Background(), &providersv1.RecordProviderLimitSnapshotRequest{
@@ -41,7 +42,7 @@ func TestRecordProviderLimitSnapshotMapsRequestAndResponse(t *testing.T) {
 		Remaining:         &remaining,
 		CapturedAt:        capturedAt.Format(time.RFC3339Nano),
 		Source:            "provider_hub",
-		Meta:              &providersv1.CommandMeta{RequestId: "req-1"},
+		Meta:              &providersv1.CommandMeta{CommandId: &commandID, RequestId: "req-1"},
 	})
 	if err != nil {
 		t.Fatalf("RecordProviderLimitSnapshot(): %v", err)

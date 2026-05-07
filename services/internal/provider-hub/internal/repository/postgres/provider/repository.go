@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"embed"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
@@ -10,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
+	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/errs"
 	providerrepo "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/repository/provider"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/query"
@@ -86,6 +88,9 @@ func (r *Repository) RecordLimitSnapshot(ctx context.Context, snapshot entity.Pr
 		}
 		var recordErr error
 		stored, recordErr = queryOne(ctx, tx, operationRecordLimitSnapshot, queryLimitSnapshotUpsert, limitSnapshotArgs(snapshot), scanLimitSnapshot)
+		if errors.Is(recordErr, errs.ErrNotFound) {
+			return errs.ErrConflict
+		}
 		return recordErr
 	})
 	if err != nil {

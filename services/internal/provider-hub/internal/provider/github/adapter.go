@@ -3,12 +3,14 @@ package github
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
+	githubapi "github.com/google/go-github/v82/github"
 	"github.com/google/uuid"
 
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/errs"
@@ -107,48 +109,69 @@ func (a *Adapter) ProbeAccount(ctx context.Context, request providerclient.Accou
 	return providerclient.AccountProbeResult{RuntimeState: state, LimitSnapshots: snapshots}, nil
 }
 
-func (a *Adapter) fetchRateLimit(ctx context.Context, token string) (rateLimitResponse, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, a.baseURL+"/rate_limit", http.NoBody)
+func (a *Adapter) fetchRateLimit(ctx context.Context, token string) (*githubapi.RateLimits, error) {
+	client, err := a.githubClient(token)
 	if err != nil {
-		return rateLimitResponse{}, fmt.Errorf("build github rate limit request: %w", err)
+		return nil, err
 	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("User-Agent", a.userAgent)
-	resp, err := a.httpClient.Do(req)
+	rateLimits, _, err := client.RateLimit.Get(ctx)
 	if err != nil {
-		return rateLimitResponse{}, fmt.Errorf("request github rate limit: %w", err)
+		return nil, mapGitHubError(err)
 	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return rateLimitResponse{}, errs.ErrPreconditionFailed
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return rateLimitResponse{}, fmt.Errorf("%w: github rate limit status %d", errs.ErrDependencyUnavailable, resp.StatusCode)
-	}
-	var decoded rateLimitResponse
-	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
-		return rateLimitResponse{}, fmt.Errorf("decode github rate limit response: %w", err)
-	}
-	return decoded, nil
+	return rateLimits, nil
 }
 
-func (a *Adapter) limitSnapshots(externalAccountID uuid.UUID, capturedAt time.Time, response rateLimitResponse) []entity.ProviderLimitSnapshot {
+func (a *Adapter) githubClient(token string) (*githubapi.Client, error) {
+	client := githubapi.NewClient(a.httpClient).WithAuthToken(token)
+	client.UserAgent = a.userAgent
+	if a.baseURL == defaultBaseURL {
+		return client, nil
+	}
+	baseURL, err := url.Parse(a.baseURL + "/")
+	if err != nil {
+		return nil, fmt.Errorf("parse github base url: %w", err)
+	}
+	client.BaseURL = baseURL
+	return client, nil
+}
+
+func mapGitHubError(err error) error {
+	var rateLimitErr *githubapi.RateLimitError
+	if errors.As(err, &rateLimitErr) {
+		return errs.ErrPreconditionFailed
+	}
+	var githubErr *githubapi.ErrorResponse
+	if errors.As(err, &githubErr) && githubErr.Response != nil {
+		switch githubErr.Response.StatusCode {
+		case http.StatusUnauthorized, http.StatusForbidden:
+			return errs.ErrPreconditionFailed
+		default:
+			return fmt.Errorf("%w: github status %d", errs.ErrDependencyUnavailable, githubErr.Response.StatusCode)
+		}
+	}
+	return fmt.Errorf("request github rate limit: %w", err)
+}
+
+func (a *Adapter) limitSnapshots(externalAccountID uuid.UUID, capturedAt time.Time, rateLimits *githubapi.RateLimits) []entity.ProviderLimitSnapshot {
+	if rateLimits == nil {
+		return nil
+	}
 	resources := []struct {
 		class string
-		limit rateLimitResource
+		limit *githubapi.Rate
 	}{
-		{class: limitClassCore, limit: response.Resources.Core},
-		{class: limitClassSearch, limit: response.Resources.Search},
-		{class: limitClassGraphQL, limit: response.Resources.GraphQL},
+		{class: limitClassCore, limit: rateLimits.Core},
+		{class: limitClassSearch, limit: rateLimits.Search},
+		{class: limitClassGraphQL, limit: rateLimits.GraphQL},
 	}
 	snapshots := make([]entity.ProviderLimitSnapshot, 0, len(resources))
 	for _, resource := range resources {
+		if resource.limit == nil {
+			continue
+		}
 		limitValue := int64(resource.limit.Limit)
 		remaining := int64(resource.limit.Remaining)
-		resetAt := time.Unix(resource.limit.Reset, 0).UTC()
+		resetAt := resource.limit.Reset.UTC()
 		snapshots = append(snapshots, entity.ProviderLimitSnapshot{
 			ID:                a.ids.New(),
 			ExternalAccountID: externalAccountID,
@@ -171,20 +194,6 @@ func hasExhaustedLimit(snapshots []entity.ProviderLimitSnapshot) bool {
 		}
 	}
 	return false
-}
-
-type rateLimitResponse struct {
-	Resources struct {
-		Core    rateLimitResource `json:"core"`
-		Search  rateLimitResource `json:"search"`
-		GraphQL rateLimitResource `json:"graphql"`
-	} `json:"resources"`
-}
-
-type rateLimitResource struct {
-	Limit     int64 `json:"limit"`
-	Remaining int64 `json:"remaining"`
-	Reset     int64 `json:"reset"`
 }
 
 type uuidGenerator struct{}

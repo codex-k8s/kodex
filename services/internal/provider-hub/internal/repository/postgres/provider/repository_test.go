@@ -139,6 +139,7 @@ func TestRepositoryIntegrationRuntimeStateLimitsAndOperations(t *testing.T) {
 	if storedSnapshot.ID != snapshot.ID || storedSnapshot.Remaining == nil || *storedSnapshot.Remaining != remaining {
 		t.Fatalf("stored snapshot = %+v, want id %s remaining %d", storedSnapshot, snapshot.ID, remaining)
 	}
+	firstSnapshotID := snapshot.ID
 	loadedState, err := repository.GetAccountRuntimeState(ctx, query.AccountRuntimeStateLookup{ExternalAccountID: &accountID, ProviderSlug: enum.ProviderSlugGitHub})
 	if err != nil {
 		t.Fatalf("get account runtime state: %v", err)
@@ -163,6 +164,51 @@ func TestRepositoryIntegrationRuntimeStateLimitsAndOperations(t *testing.T) {
 	}
 	if loadedState.ID != state.ID || loadedState.Status != enum.ProviderAccountRuntimeStatusLimited || loadedState.Version != 2 {
 		t.Fatalf("updated state = %+v, want same id %s limited version 2", loadedState, state.ID)
+	}
+	replayedSnapshot := entity.ProviderLimitSnapshot{
+		ID:                uuid.New(),
+		ExternalAccountID: accountID,
+		ProviderSlug:      enum.ProviderSlugGitHub,
+		LimitClass:        "core",
+		Remaining:         &remaining,
+		LimitValue:        &limitValue,
+		ResetAt:           &resetAt,
+		CapturedAt:        now,
+		Source:            enum.ProviderLimitSourceProviderHub,
+	}
+	storedSnapshot, err = repository.RecordLimitSnapshot(ctx, replayedSnapshot, state)
+	if err != nil {
+		t.Fatalf("record duplicate limit snapshot: %v", err)
+	}
+	if storedSnapshot.ID != firstSnapshotID || storedSnapshot.Remaining == nil || *storedSnapshot.Remaining != remaining {
+		t.Fatalf("duplicate snapshot = %+v, want original id %s remaining %d", storedSnapshot, firstSnapshotID, remaining)
+	}
+	changedRemaining := int64(4998)
+	changedSnapshot := replayedSnapshot
+	changedSnapshot.ID = uuid.New()
+	changedSnapshot.Remaining = &changedRemaining
+	_, err = repository.RecordLimitSnapshot(ctx, changedSnapshot, state)
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("record changed duplicate snapshot err = %v, want %v", err, errs.ErrConflict)
+	}
+	activeState := state
+	activeState.ID = uuid.New()
+	activeState.Status = enum.ProviderAccountRuntimeStatusActive
+	activeState.UpdatedAt = now.Add(2 * time.Minute)
+	activeSnapshot := snapshot
+	activeSnapshot.ID = uuid.New()
+	activeSnapshot.LimitClass = "search"
+	activeSnapshot.Remaining = &remaining
+	activeSnapshot.CapturedAt = now.Add(2 * time.Minute)
+	if _, err := repository.RecordLimitSnapshot(ctx, activeSnapshot, activeState); err != nil {
+		t.Fatalf("record active class after limited snapshot: %v", err)
+	}
+	loadedState, err = repository.GetAccountRuntimeState(ctx, query.AccountRuntimeStateLookup{ExternalAccountID: &accountID, ProviderSlug: enum.ProviderSlugGitHub})
+	if err != nil {
+		t.Fatalf("get runtime state after active class: %v", err)
+	}
+	if loadedState.Status != enum.ProviderAccountRuntimeStatusLimited {
+		t.Fatalf("runtime state after active class = %+v, want limited until full reconciliation clears it", loadedState)
 	}
 
 	snapshots, page, err := repository.ListLimitSnapshots(ctx, query.LimitSnapshotFilter{

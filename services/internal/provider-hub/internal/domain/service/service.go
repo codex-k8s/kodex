@@ -93,6 +93,9 @@ func (s *Service) ListProviderAccountRuntimeStates(ctx context.Context, input Li
 
 // RecordProviderLimitSnapshot records a known provider limit state and updates account runtime state.
 func (s *Service) RecordProviderLimitSnapshot(ctx context.Context, input RecordProviderLimitSnapshotInput) (entity.ProviderLimitSnapshot, error) {
+	if !validCommandIdentity(input.Meta) {
+		return entity.ProviderLimitSnapshot{}, errs.ErrInvalidArgument
+	}
 	if input.ExternalAccountID == uuid.Nil || !validProviderSlug(input.ProviderSlug) {
 		return entity.ProviderLimitSnapshot{}, errs.ErrInvalidArgument
 	}

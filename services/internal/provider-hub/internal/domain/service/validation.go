@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/enum"
+	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/value"
 )
 
 func validProviderSlug(slug enum.ProviderSlug) bool {
@@ -42,6 +43,10 @@ func validLimitSource(source enum.ProviderLimitSource) bool {
 	default:
 		return false
 	}
+}
+
+func validCommandIdentity(meta value.CommandMeta) bool {
+	return meta.CommandID != uuid.Nil || strings.TrimSpace(meta.IdempotencyKey) != ""
 }
 
 func validOperationTypes(types []enum.ProviderOperationType) bool {

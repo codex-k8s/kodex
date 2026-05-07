@@ -81,6 +81,25 @@ func TestRecordProviderLimitSnapshotStoresLimitAndRuntimeState(t *testing.T) {
 	}
 }
 
+func TestRecordProviderLimitSnapshotRejectsMissingCommandIdentity(t *testing.T) {
+	t.Parallel()
+
+	remaining := int64(1)
+	service := NewWithRuntime(&fakeRepository{}, fixedClock{now: time.Now()}, &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New()}})
+
+	_, err := service.RecordProviderLimitSnapshot(context.Background(), RecordProviderLimitSnapshotInput{
+		ExternalAccountID: uuid.New(),
+		ProviderSlug:      enum.ProviderSlugGitHub,
+		LimitClass:        "core",
+		Remaining:         &remaining,
+		CapturedAt:        time.Now(),
+		Source:            enum.ProviderLimitSourceProviderHub,
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("RecordProviderLimitSnapshot() err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+}
+
 func TestListProviderAccountRuntimeStatesRejectsScopeFiltersUntilResolverExists(t *testing.T) {
 	t.Parallel()
 
