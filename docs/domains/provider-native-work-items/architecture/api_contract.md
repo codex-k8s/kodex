@@ -53,7 +53,7 @@ approvals:
 | `GetWorkItemProjection` | Прочитать `Issue` или `PR/MR` по внутреннему id. | `agent-manager`, `operations-hub`, MCP | Read-only. |
 | `FindWorkItemByProviderRef` | Найти проекцию по `owner/repo/number`, URL или provider id. | `agent-manager`, MCP | Read-only. |
 | `ListWorkItemProjections` | Список по проекту, репозиторию, состоянию, типу, меткам, drift status. | `operations-hub`, `agent-manager`, MCP | Read-only. |
-| `ListComments` | Комментарии, mentions и review-сигналы по артефакту. | `agent-manager`, `operations-hub` | Read-only. |
+| `ListComments` | Комментарии, mentions и review-сигналы по артефакту; для review-сигналов возвращает нормализованный `review_state`. | `agent-manager`, `operations-hub` | Read-only. |
 | `ListRelationships` | Связи артефакта с задачами, PR, follow-up и блокировками. | `agent-manager`, `operations-hub` | Read-only. |
 
 ### Reconciliation

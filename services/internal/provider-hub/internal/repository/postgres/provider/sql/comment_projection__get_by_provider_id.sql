@@ -1,4 +1,4 @@
--- name: comment_projection__list :many
+-- name: comment_projection__get_by_provider_id :one
 SELECT
     id,
     work_item_projection_id,
@@ -15,6 +15,5 @@ SELECT
     updated_at
 FROM provider_hub_comment_projections
 WHERE work_item_projection_id = @work_item_projection_id
-  AND (cardinality(@kinds::text[]) = 0 OR kind = ANY(@kinds::text[]))
-ORDER BY provider_updated_at DESC NULLS LAST, updated_at DESC, id
-LIMIT @limit::integer OFFSET @offset::integer;
+  AND provider_comment_id = @provider_comment_id
+LIMIT 1;

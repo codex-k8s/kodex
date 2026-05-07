@@ -36,16 +36,20 @@ type webhookMilestonePayload struct {
 }
 
 type issueWebhookPayload struct {
-	ID        json.Number              `json:"id"`
-	Number    int64                    `json:"number"`
-	HTMLURL   string                   `json:"html_url"`
-	Title     string                   `json:"title"`
-	State     string                   `json:"state"`
-	Body      string                   `json:"body"`
-	Labels    []webhookLabelPayload    `json:"labels"`
-	Assignees []webhookUserPayload     `json:"assignees"`
-	Milestone *webhookMilestonePayload `json:"milestone"`
-	UpdatedAt string                   `json:"updated_at"`
+	ID          json.Number              `json:"id"`
+	Number      int64                    `json:"number"`
+	HTMLURL     string                   `json:"html_url"`
+	Title       string                   `json:"title"`
+	State       string                   `json:"state"`
+	Body        string                   `json:"body"`
+	Labels      []webhookLabelPayload    `json:"labels"`
+	Assignees   []webhookUserPayload     `json:"assignees"`
+	Milestone   *webhookMilestonePayload `json:"milestone"`
+	UpdatedAt   string                   `json:"updated_at"`
+	PullRequest *struct {
+		HTMLURL string `json:"html_url"`
+		URL     string `json:"url"`
+	} `json:"pull_request"`
 }
 
 type pullRequestWebhookPayload struct {
@@ -73,6 +77,7 @@ type commentWebhookPayload struct {
 type reviewWebhookPayload struct {
 	ID          json.Number        `json:"id"`
 	Body        string             `json:"body"`
+	State       string             `json:"state"`
 	User        webhookUserPayload `json:"user"`
 	SubmittedAt string             `json:"submitted_at"`
 	UpdatedAt   string             `json:"updated_at"`
@@ -149,17 +154,22 @@ func normalizeWebhookPayload(eventName string, payload []byte, receivedAt time.T
 		if commentID == "" {
 			return webhookFacts{}, true, fmt.Errorf("github issue_comment webhook misses comment.id")
 		}
+		kind := issueCommentWorkItemKind(envelope.Issue)
+		workItemID := githubWorkItemRef(envelope.Repository.FullName, kind, envelope.Issue.Number)
+		if workItemID == "" {
+			return webhookFacts{}, true, fmt.Errorf("github issue_comment webhook misses stable work item ref")
+		}
 		return webhookFacts{
 			FactKind:             value.ProviderWebhookFactKindComment,
-			ProviderWorkItemID:   numberString(envelope.Issue.ID),
+			ProviderWorkItemID:   workItemID,
 			ProviderCommentID:    commentID,
 			Kind:                 "comment",
 			Number:               envelope.Issue.Number,
 			RepositoryFullName:   strings.TrimSpace(envelope.Repository.FullName),
 			RepositoryProviderID: numberString(envelope.Repository.ID),
 			OccurredAt:           timeValue(envelope.Comment.UpdatedAt, receivedAt),
-			WorkItem:             issueSnapshot(envelope.Repository, envelope.Issue, receivedAt),
-			Comment:              commentSnapshot("comment", numberString(envelope.Issue.ID), envelope.Comment, receivedAt),
+			WorkItem:             issueSnapshot(envelope.Repository, envelope.Issue, kind, workItemID, receivedAt),
+			Comment:              commentSnapshot("comment", workItemID, envelope.Comment, receivedAt),
 		}, true, nil
 	case "pull_request_review":
 		var envelope pullRequestReviewWebhookEnvelope
@@ -206,11 +216,14 @@ func pullRequestSource(envelope pullRequestWebhookEnvelope) workItemSource {
 }
 
 func workItemFactsFromPayload(repository webhookRepositoryPayload, item providerWorkItemPayload, kind string, receivedAt time.Time, missingMessage string) (value.ProviderWebhookFacts, bool, error) {
-	workItemID := numberString(item.id)
-	if workItemID == "" {
+	if numberString(item.id) == "" {
 		return webhookFacts{}, true, fmt.Errorf("%s", missingMessage)
 	}
-	snapshot := workItemSnapshot(repository, item, kind, receivedAt)
+	workItemID := githubWorkItemRef(repository.FullName, kind, item.number)
+	if workItemID == "" {
+		return webhookFacts{}, true, fmt.Errorf("github %s webhook misses stable work item ref", kind)
+	}
+	snapshot := workItemSnapshot(repository, item, kind, workItemID, receivedAt)
 	return workItemFacts(repository, workItemID, kind, item.number, item.updatedAt, receivedAt, &snapshot), true, nil
 }
 
@@ -239,16 +252,21 @@ func reviewFacts(repository webhookRepositoryPayload, pullRequest pullRequestWeb
 	if occurredAt.IsZero() {
 		occurredAt = receivedAt
 	}
+	workItemID := githubWorkItemRef(repository.FullName, "pull_request", pullRequest.Number)
+	if workItemID == "" {
+		return webhookFacts{}, true, fmt.Errorf("github %s webhook misses stable pull request ref", eventName)
+	}
+	comment.ProviderWorkItemID = workItemID
 	return webhookFacts{
 		FactKind:             value.ProviderWebhookFactKindComment,
-		ProviderWorkItemID:   numberString(pullRequest.ID),
+		ProviderWorkItemID:   workItemID,
 		ProviderCommentID:    commentID,
 		Kind:                 "review",
 		Number:               pullRequest.Number,
 		RepositoryFullName:   strings.TrimSpace(repository.FullName),
 		RepositoryProviderID: numberString(repository.ID),
 		OccurredAt:           occurredAt,
-		WorkItem:             pullRequestSnapshot(repository, pullRequest, receivedAt),
+		WorkItem:             pullRequestSnapshot(repository, pullRequest, workItemID, receivedAt),
 		Comment:              comment,
 	}, true, nil
 }
@@ -287,20 +305,20 @@ func pullRequestWorkItem(pullRequest pullRequestWebhookPayload) providerWorkItem
 	}
 }
 
-func issueSnapshot(repository webhookRepositoryPayload, issue issueWebhookPayload, fallback time.Time) *value.ProviderWorkItemSnapshot {
-	snapshot := workItemSnapshot(repository, issueWorkItem(issue), "issue", fallback)
+func issueSnapshot(repository webhookRepositoryPayload, issue issueWebhookPayload, kind string, workItemID string, fallback time.Time) *value.ProviderWorkItemSnapshot {
+	snapshot := workItemSnapshot(repository, issueWorkItem(issue), kind, workItemID, fallback)
 	return &snapshot
 }
 
-func pullRequestSnapshot(repository webhookRepositoryPayload, pullRequest pullRequestWebhookPayload, fallback time.Time) *value.ProviderWorkItemSnapshot {
-	snapshot := workItemSnapshot(repository, pullRequestWorkItem(pullRequest), "pull_request", fallback)
+func pullRequestSnapshot(repository webhookRepositoryPayload, pullRequest pullRequestWebhookPayload, workItemID string, fallback time.Time) *value.ProviderWorkItemSnapshot {
+	snapshot := workItemSnapshot(repository, pullRequestWorkItem(pullRequest), "pull_request", workItemID, fallback)
 	return &snapshot
 }
 
-func workItemSnapshot(repository webhookRepositoryPayload, item providerWorkItemPayload, kind string, fallback time.Time) value.ProviderWorkItemSnapshot {
+func workItemSnapshot(repository webhookRepositoryPayload, item providerWorkItemPayload, kind string, workItemID string, fallback time.Time) value.ProviderWorkItemSnapshot {
 	return value.ProviderWorkItemSnapshot{
 		ProviderSlug:       string(enum.ProviderSlugGitHub),
-		ProviderWorkItemID: numberString(item.id),
+		ProviderWorkItemID: workItemID,
 		RepositoryFullName: strings.TrimSpace(repository.FullName),
 		Kind:               kind,
 		Number:             item.number,
@@ -338,10 +356,36 @@ func reviewCommentSnapshot(workItemID string, review reviewWebhookPayload, fallb
 		ProviderCommentID:  numberString(review.ID),
 		ProviderWorkItemID: workItemID,
 		Kind:               "review",
+		ReviewState:        normalizedReviewState(review.State),
 		AuthorLogin:        strings.TrimSpace(review.User.Login),
 		Body:               strings.TrimSpace(review.Body),
 		ProviderCreatedAt:  timeValue(createdAt, fallback),
 		ProviderUpdatedAt:  timeValue(review.UpdatedAt, fallback),
+	}
+}
+
+func issueCommentWorkItemKind(issue issueWebhookPayload) string {
+	if issue.PullRequest != nil {
+		return "pull_request"
+	}
+	return "issue"
+}
+
+func githubWorkItemRef(repositoryFullName string, kind string, number int64) string {
+	repositoryFullName = strings.TrimSpace(repositoryFullName)
+	kind = strings.TrimSpace(kind)
+	if repositoryFullName == "" || kind == "" || number <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("github:%s:%s:%d", repositoryFullName, kind, number)
+}
+
+func normalizedReviewState(state string) string {
+	switch strings.ToLower(strings.TrimSpace(state)) {
+	case "approved", "changes_requested", "commented", "dismissed", "pending":
+		return strings.ToLower(strings.TrimSpace(state))
+	default:
+		return ""
 	}
 }
 

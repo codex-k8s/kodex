@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
@@ -166,6 +167,7 @@ func commentProjectionArgs(comment entity.ProviderCommentProjection) pgx.NamedAr
 		"work_item_projection_id": comment.WorkItemProjectionID,
 		"provider_comment_id":     comment.ProviderCommentID,
 		"kind":                    string(comment.Kind),
+		"review_state":            string(comment.ReviewState),
 		"author_provider_login":   comment.AuthorProviderLogin,
 		"body_digest":             comment.BodyDigest,
 		"summary":                 comment.Summary,
@@ -181,6 +183,13 @@ func commentProjectionFilterArgs(filter query.CommentProjectionFilter) pageQuery
 	})
 }
 
+func commentProjectionLookupArgs(workItemProjectionID uuid.UUID, providerCommentID string) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"work_item_projection_id": workItemProjectionID,
+		"provider_comment_id":     providerCommentID,
+	}
+}
+
 func relationshipArgs(relationship entity.ProviderRelationship) pgx.NamedArgs {
 	return pgx.NamedArgs{
 		"id":                  relationship.ID,
@@ -191,6 +200,14 @@ func relationshipArgs(relationship entity.ProviderRelationship) pgx.NamedArgs {
 		"source":              string(relationship.Source),
 		"confidence":          string(relationship.Confidence),
 		"created_at":          relationship.CreatedAt,
+	}
+}
+
+func watermarkRelationshipCleanupArgs(sourceWorkItemID uuid.UUID, relationshipIDs []uuid.UUID) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"source_work_item_id": sourceWorkItemID,
+		"relationship_types":  textValues([]string{"source", "parent", "next"}),
+		"relationship_ids":    postgreslib.UUIDValues(relationshipIDs),
 	}
 }
 

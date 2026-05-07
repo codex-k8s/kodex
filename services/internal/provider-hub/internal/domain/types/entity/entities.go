@@ -87,6 +87,7 @@ type ProviderCommentProjection struct {
 	WorkItemProjectionID uuid.UUID
 	ProviderCommentID    string
 	Kind                 enum.CommentKind
+	ReviewState          enum.ReviewState
 	AuthorProviderLogin  string
 	BodyDigest           string
 	Summary              string

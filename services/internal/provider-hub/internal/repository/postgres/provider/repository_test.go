@@ -486,6 +486,155 @@ func TestRepositoryIntegrationRuntimeStateLimitsAndOperations(t *testing.T) {
 	}
 }
 
+func TestRepositoryIntegrationProjectionIgnoresStaleWorkItemAndComment(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openIntegrationPool(t, ctx)
+	repository := NewRepository(pool)
+	now := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	workItemID := uuid.New()
+	commentID := uuid.New()
+	initial := projectionUpdateForTest(workItemID, commentID, now, "Свежая задача", "fresh-body", "Комментарий свежий", "comment-fresh", "https://github.com/codex-k8s/kodex/issues/8")
+	if _, _, err := repository.StoreWebhookEvent(ctx, webhookEventForTest(now, "delivery-fresh"), initial, nil, nil); err != nil {
+		t.Fatalf("store fresh projection: %v", err)
+	}
+	staleAt := now.Add(-time.Hour)
+	stale := projectionUpdateForTest(workItemID, commentID, staleAt, "Старая задача", "stale-body", "Комментарий старый", "comment-stale", "https://github.com/codex-k8s/kodex/issues/9")
+	if _, _, err := repository.StoreWebhookEvent(ctx, webhookEventForTest(now.Add(time.Minute), "delivery-stale"), stale, nil, nil); err != nil {
+		t.Fatalf("store stale projection: %v", err)
+	}
+
+	workItem, err := repository.GetWorkItemProjection(ctx, query.ProviderTargetLookup{
+		ProviderSlug:     enum.ProviderSlugGitHub,
+		ProviderObjectID: "github:codex-k8s/kodex:issue:7",
+	})
+	if err != nil {
+		t.Fatalf("get work item projection: %v", err)
+	}
+	if workItem.Title != "Свежая задача" || workItem.BodyDigest != "fresh-body" || workItem.ProviderUpdatedAt == nil || !workItem.ProviderUpdatedAt.Equal(now) {
+		t.Fatalf("work item = %+v, want fresh projection", workItem)
+	}
+	comments, _, err := repository.ListComments(ctx, query.CommentProjectionFilter{WorkItemProjectionID: workItem.ID})
+	if err != nil {
+		t.Fatalf("list comments: %v", err)
+	}
+	if len(comments) != 1 || comments[0].Summary != "Комментарий свежий" || comments[0].BodyDigest != "comment-fresh" {
+		t.Fatalf("comments = %+v, want fresh comment", comments)
+	}
+	relationships, _, err := repository.ListRelationships(ctx, query.RelationshipFilter{WorkItemProjectionID: &workItem.ID})
+	if err != nil {
+		t.Fatalf("list relationships: %v", err)
+	}
+	if len(relationships) != 1 || relationships[0].TargetProviderRef != "https://github.com/codex-k8s/kodex/issues/8" {
+		t.Fatalf("relationships = %+v, want fresh relationship", relationships)
+	}
+}
+
+func TestRepositoryIntegrationProjectionRebuildsWatermarkRelationships(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openIntegrationPool(t, ctx)
+	repository := NewRepository(pool)
+	now := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	workItemID := uuid.New()
+	commentID := uuid.New()
+	initial := projectionUpdateForTest(workItemID, commentID, now, "Задача", "body-1", "Комментарий", "comment-1", "https://github.com/codex-k8s/kodex/issues/8")
+	initial.Relationships = append(initial.Relationships, entity.ProviderRelationship{
+		ID:                uuid.New(),
+		TargetProviderRef: "https://github.com/codex-k8s/kodex/issues/1",
+		RelationshipType:  "source",
+		Source:            enum.RelationshipSourceWatermark,
+		Confidence:        enum.RelationshipConfidenceConfirmed,
+		CreatedAt:         now,
+	})
+	if _, _, err := repository.StoreWebhookEvent(ctx, webhookEventForTest(now, "delivery-rel-1"), initial, nil, nil); err != nil {
+		t.Fatalf("store initial relationships: %v", err)
+	}
+	updated := projectionUpdateForTest(workItemID, commentID, now.Add(time.Minute), "Задача", "body-2", "Комментарий", "comment-2", "https://github.com/codex-k8s/kodex/issues/9")
+	if _, _, err := repository.StoreWebhookEvent(ctx, webhookEventForTest(now.Add(time.Minute), "delivery-rel-2"), updated, nil, nil); err != nil {
+		t.Fatalf("store updated relationships: %v", err)
+	}
+	workItem, err := repository.GetWorkItemProjection(ctx, query.ProviderTargetLookup{
+		ProviderSlug:     enum.ProviderSlugGitHub,
+		ProviderObjectID: "github:codex-k8s/kodex:issue:7",
+	})
+	if err != nil {
+		t.Fatalf("get work item projection: %v", err)
+	}
+	relationships, _, err := repository.ListRelationships(ctx, query.RelationshipFilter{
+		WorkItemProjectionID: &workItem.ID,
+		Sources:              []enum.RelationshipSource{enum.RelationshipSourceWatermark},
+	})
+	if err != nil {
+		t.Fatalf("list relationships: %v", err)
+	}
+	if len(relationships) != 1 || relationships[0].RelationshipType != "next" || relationships[0].TargetProviderRef != "https://github.com/codex-k8s/kodex/issues/9" {
+		t.Fatalf("relationships = %+v, want only updated next relationship", relationships)
+	}
+}
+
+func webhookEventForTest(receivedAt time.Time, deliveryID string) entity.WebhookEvent {
+	return entity.WebhookEvent{
+		ID:                   uuid.New(),
+		ProviderSlug:         enum.ProviderSlugGitHub,
+		DeliveryID:           deliveryID,
+		EventName:            "issues",
+		RepositoryProviderID: "100",
+		ReceivedAt:           receivedAt,
+		ProcessingStatus:     enum.WebhookProcessingStatusProcessed,
+		PayloadJSON:          []byte(`{"issue":{"id":55,"number":7},"repository":{"id":100}}`),
+		RetainUntil:          receivedAt.Add(30 * 24 * time.Hour),
+	}
+}
+
+func projectionUpdateForTest(workItemID uuid.UUID, commentID uuid.UUID, providerUpdatedAt time.Time, title string, bodyDigest string, summary string, commentDigest string, nextRef string) providerrepo.ProjectionUpdate {
+	return providerrepo.ProjectionUpdate{
+		WorkItem: &entity.ProviderWorkItemProjection{
+			Base:               entity.Base{ID: workItemID, Version: 1, CreatedAt: providerUpdatedAt, UpdatedAt: providerUpdatedAt},
+			ProviderSlug:       enum.ProviderSlugGitHub,
+			ProviderWorkItemID: "github:codex-k8s/kodex:issue:7",
+			RepositoryFullName: "codex-k8s/kodex",
+			Kind:               enum.WorkItemKindIssue,
+			Number:             7,
+			URL:                "https://github.com/codex-k8s/kodex/issues/7",
+			Title:              title,
+			State:              "open",
+			WorkItemType:       "dev",
+			LabelsJSON:         []byte(`["type:dev"]`),
+			AssigneesJSON:      []byte(`[]`),
+			ProjectFieldsJSON:  []byte(`{}`),
+			WatermarkStatus:    enum.WorkItemWatermarkStatusValid,
+			WatermarkJSON:      []byte(`{"work_type":"dev"}`),
+			BodyDigest:         bodyDigest,
+			ProviderUpdatedAt:  &providerUpdatedAt,
+			SyncedAt:           providerUpdatedAt,
+			DriftStatus:        enum.WorkItemDriftStatusFresh,
+		},
+		Comments: []entity.ProviderCommentProjection{{
+			Base:                 entity.Base{ID: commentID, Version: 1, CreatedAt: providerUpdatedAt, UpdatedAt: providerUpdatedAt},
+			WorkItemProjectionID: workItemID,
+			ProviderCommentID:    "900",
+			Kind:                 enum.CommentKindComment,
+			AuthorProviderLogin:  "kodex-agent",
+			BodyDigest:           commentDigest,
+			Summary:              summary,
+			ProviderCreatedAt:    &providerUpdatedAt,
+			ProviderUpdatedAt:    &providerUpdatedAt,
+		}},
+		Relationships: []entity.ProviderRelationship{{
+			ID:                uuid.New(),
+			SourceWorkItemID:  workItemID,
+			TargetProviderRef: nextRef,
+			RelationshipType:  "next",
+			Source:            enum.RelationshipSourceWatermark,
+			Confidence:        enum.RelationshipConfidenceConfirmed,
+			CreatedAt:         providerUpdatedAt,
+		}},
+	}
+}
+
 func openIntegrationPool(t *testing.T, ctx context.Context) *pgxpool.Pool {
 	t.Helper()
 

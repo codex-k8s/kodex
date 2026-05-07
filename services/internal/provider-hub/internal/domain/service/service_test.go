@@ -242,6 +242,66 @@ func TestIngestWebhookEventStoresProjectionUpdateFromKnownFacts(t *testing.T) {
 	}
 }
 
+func TestWorkItemProjectionValidatesWatermarkContract(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name       string
+		kind       string
+		body       string
+		wantStatus enum.WorkItemWatermarkStatus
+	}{
+		{
+			name:       "valid issue",
+			kind:       string(enum.WorkItemKindIssue),
+			body:       "<!-- kodex:artifact v1\nkind: issue\nmanaged_by: kodex\nwork_type: dev\n-->\nbody",
+			wantStatus: enum.WorkItemWatermarkStatusValid,
+		},
+		{
+			name:       "missing work type",
+			kind:       string(enum.WorkItemKindIssue),
+			body:       "<!-- kodex:artifact v1\nkind: issue\nmanaged_by: kodex\n-->\nbody",
+			wantStatus: enum.WorkItemWatermarkStatusInvalid,
+		},
+		{
+			name:       "mismatched kind",
+			kind:       string(enum.WorkItemKindPullRequest),
+			body:       "<!-- kodex:artifact v1\nkind: issue\nmanaged_by: kodex\nwork_type: dev\nsource_ref: https://github.com/codex-k8s/kodex/issues/7\n-->\nbody",
+			wantStatus: enum.WorkItemWatermarkStatusInvalid,
+		},
+		{
+			name:       "pull request without source ref",
+			kind:       string(enum.WorkItemKindPullRequest),
+			body:       "<!-- kodex:artifact v1\nkind: pull_request\nmanaged_by: kodex\nwork_type: dev\n-->\nbody",
+			wantStatus: enum.WorkItemWatermarkStatusInvalid,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			projection, _, err := workItemProjectionFromSnapshot(value.ProviderWorkItemSnapshot{
+				ProviderSlug:       string(enum.ProviderSlugGitHub),
+				ProviderWorkItemID: "55",
+				RepositoryFullName: "codex-k8s/kodex",
+				Kind:               tc.kind,
+				Number:             7,
+				URL:                "https://github.com/codex-k8s/kodex/issues/7",
+				Title:              "Проверить контракт watermark",
+				State:              "open",
+				Body:               tc.body,
+				ProviderUpdatedAt:  now,
+			}, now)
+			if err != nil {
+				t.Fatalf("workItemProjectionFromSnapshot(): %v", err)
+			}
+			if projection.WatermarkStatus != tc.wantStatus {
+				t.Fatalf("watermark status = %s, want %s", projection.WatermarkStatus, tc.wantStatus)
+			}
+		})
+	}
+}
+
 func TestRetryWebhookEventProcessingReturnsCurrentStateAfterConcurrentProcessing(t *testing.T) {
 	t.Parallel()
 

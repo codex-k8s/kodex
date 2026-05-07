@@ -89,7 +89,7 @@ func TestNormalizeWebhookMapsGitHubIssuePayload(t *testing.T) {
 	if !ok {
 		t.Fatal("NormalizeWebhook() ok = false, want true")
 	}
-	if facts.FactKind != value.ProviderWebhookFactKindWorkItem || facts.ProviderWorkItemID != "55" || facts.RepositoryProviderID != "101" {
+	if facts.FactKind != value.ProviderWebhookFactKindWorkItem || facts.ProviderWorkItemID != "github:codex-k8s/kodex:issue:7" || facts.RepositoryProviderID != "101" {
 		t.Fatalf("facts = %+v, want GitHub issue facts", facts)
 	}
 	if facts.OccurredAt != receivedAt.Add(-time.Minute) {
@@ -100,6 +100,54 @@ func TestNormalizeWebhookMapsGitHubIssuePayload(t *testing.T) {
 	}
 	if facts.WorkItem.Title != "Issue title" || facts.WorkItem.State != "open" || len(facts.WorkItem.Labels) != 1 || facts.WorkItem.Labels[0] != "type:dev" {
 		t.Fatalf("work item snapshot = %+v, want title, state and labels", facts.WorkItem)
+	}
+}
+
+func TestNormalizeWebhookMapsGitHubPRConversationCommentToPullRequestProjection(t *testing.T) {
+	t.Parallel()
+
+	receivedAt := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	facts, ok, err := New(Config{}).NormalizeWebhook(entity.WebhookEvent{
+		ProviderSlug: enum.ProviderSlugGitHub,
+		EventName:    "issue_comment",
+		ReceivedAt:   receivedAt,
+		PayloadJSON:  []byte(`{"action":"created","repository":{"id":101,"full_name":"codex-k8s/kodex"},"issue":{"id":55,"number":7,"html_url":"https://github.com/codex-k8s/kodex/pull/7","title":"PR title","state":"open","body":"PR body","updated_at":"2026-05-07T11:59:00Z","pull_request":{"html_url":"https://github.com/codex-k8s/kodex/pull/7"}},"comment":{"id":900,"body":"Conversation comment","user":{"login":"reviewer"},"created_at":"2026-05-07T11:58:00Z","updated_at":"2026-05-07T11:59:30Z"}}`),
+	})
+	if err != nil {
+		t.Fatalf("NormalizeWebhook(): %v", err)
+	}
+	if !ok {
+		t.Fatal("NormalizeWebhook() ok = false, want true")
+	}
+	if facts.ProviderWorkItemID != "github:codex-k8s/kodex:pull_request:7" || facts.Kind != "comment" {
+		t.Fatalf("facts = %+v, want PR comment facts", facts)
+	}
+	if facts.WorkItem == nil || facts.WorkItem.Kind != string(enum.WorkItemKindPullRequest) || facts.WorkItem.ProviderWorkItemID != facts.ProviderWorkItemID {
+		t.Fatalf("work item = %+v, want pull request snapshot linked to facts", facts.WorkItem)
+	}
+	if facts.Comment == nil || facts.Comment.ProviderWorkItemID != facts.ProviderWorkItemID || facts.Comment.Kind != "comment" {
+		t.Fatalf("comment = %+v, want comment linked to PR projection", facts.Comment)
+	}
+}
+
+func TestNormalizeWebhookMapsGitHubReviewState(t *testing.T) {
+	t.Parallel()
+
+	receivedAt := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	facts, ok, err := New(Config{}).NormalizeWebhook(entity.WebhookEvent{
+		ProviderSlug: enum.ProviderSlugGitHub,
+		EventName:    "pull_request_review",
+		ReceivedAt:   receivedAt,
+		PayloadJSON:  []byte(`{"action":"submitted","repository":{"id":101,"full_name":"codex-k8s/kodex"},"pull_request":{"id":77,"number":7,"html_url":"https://github.com/codex-k8s/kodex/pull/7","title":"PR title","state":"open","body":"PR body","updated_at":"2026-05-07T11:59:00Z"},"review":{"id":901,"body":"Looks good","state":"approved","user":{"login":"owner"},"submitted_at":"2026-05-07T11:59:30Z"}}`),
+	})
+	if err != nil {
+		t.Fatalf("NormalizeWebhook(): %v", err)
+	}
+	if !ok {
+		t.Fatal("NormalizeWebhook() ok = false, want true")
+	}
+	if facts.ProviderWorkItemID != "github:codex-k8s/kodex:pull_request:7" || facts.Comment == nil || facts.Comment.ReviewState != string(enum.ReviewStateApproved) {
+		t.Fatalf("facts = %+v comment = %+v, want approved review linked to PR", facts, facts.Comment)
 	}
 }
 

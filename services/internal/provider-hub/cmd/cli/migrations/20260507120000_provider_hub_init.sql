@@ -133,6 +133,7 @@ CREATE TABLE provider_hub_comment_projections (
     work_item_projection_id uuid NOT NULL REFERENCES provider_hub_work_item_projections(id) ON DELETE CASCADE,
     provider_comment_id text NOT NULL,
     kind text NOT NULL,
+    review_state text NOT NULL DEFAULT '',
     author_provider_login text NOT NULL DEFAULT '',
     body_digest text NOT NULL DEFAULT '',
     summary text NOT NULL DEFAULT '',
@@ -144,6 +145,8 @@ CREATE TABLE provider_hub_comment_projections (
     UNIQUE (work_item_projection_id, provider_comment_id),
     CONSTRAINT provider_hub_comment_projections_provider_id_chk CHECK (provider_comment_id <> ''),
     CONSTRAINT provider_hub_comment_projections_kind_chk CHECK (kind IN ('comment', 'review', 'mention', 'system')),
+    CONSTRAINT provider_hub_comment_projections_review_state_chk
+        CHECK (review_state IN ('', 'approved', 'changes_requested', 'commented', 'dismissed', 'pending')),
     CONSTRAINT provider_hub_comment_projections_version_chk CHECK (version > 0)
 );
 

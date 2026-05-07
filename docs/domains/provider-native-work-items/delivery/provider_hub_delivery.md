@@ -91,14 +91,17 @@ approvals:
 - повторная обработка webhook для записей в статусах `pending` и `failed`;
 - запись нормализованных provider events и локальных outbox-событий `provider.webhook.received` / `provider.webhook.normalized`;
 - запись нормализованных проекций `Issue` и `PR/MR` из GitHub webhook payload;
-- запись проекций комментариев и review-сигналов, привязанных к рабочему артефакту;
-- разбор watermark из тела рабочего артефакта, фиксация статуса `missing`, `valid` или `invalid` и перенос безопасных полей в `watermark_json`;
-- построение provider relationships из watermark-полей `source_ref`, `parent_ref` и `next_ref`;
+- запись проекций комментариев и review-сигналов, привязанных к рабочему артефакту; review-сигналы сохраняют `review_state`;
+- защита проекций от задержанных webhook: более старый `provider_updated_at` не перезаписывает актуальные поля и не порождает событие проекции как свежее;
+- разбор watermark из тела рабочего артефакта, фиксация статуса `missing`, `valid` или `invalid` и перенос безопасных полей в `watermark_json`; `valid` требует `kind`, `managed_by`, `work_type`, совпадения `kind` с артефактом и `source_ref` для `PR/MR`;
+- построение provider relationships из watermark-полей `source_ref`, `parent_ref` и `next_ref` с пересборкой текущего watermark-набора при свежем обновлении;
 - gRPC-чтение проекций через `GetWorkItemProjection`, `FindWorkItemByProviderRef`, `ListWorkItemProjections`, `ListComments` и `ListRelationships`;
 - публикация локальных outbox-событий `provider.work_item.synced`, `provider.comment.synced` и `provider.relationship.synced`;
 - штатный outbox dispatcher `provider-hub` в `platform-event-log`.
 
 Ограничение среза: сверка, ускоряющие сигналы, команды записи в провайдера, bootstrap/adoption и эксплуатационный контур пока остаются `Unimplemented`. Реализация этих операций добавляется в PRV-6..PRV-9 вместе с соответствующей доменной логикой. Kubernetes-манифесты, создание БД в deploy-контуре, migration job, alerts и runbook остаются в PRV-9.
+
+Архитектурное исключение среза: вспомогательные функции gRPC caster остаются локальными в `provider-hub`, потому что вынос общего transport-пакета требует согласованного изменения `access-manager`, `project-catalog` и текущего сервиса. Это не должно копироваться в новые сервисы; отдельный малый срез перед следующим доменом должен вынести общую часть в `libs/go/**` и перевести существующие сервисы.
 
 ## Зависимости и синхронизация
 

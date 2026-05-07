@@ -79,6 +79,17 @@ const (
 	CommentKindSystem  CommentKind = "system"
 )
 
+// ReviewState classifies provider-native review decisions.
+type ReviewState string
+
+const (
+	ReviewStateApproved         ReviewState = "approved"
+	ReviewStateChangesRequested ReviewState = "changes_requested"
+	ReviewStateCommented        ReviewState = "commented"
+	ReviewStateDismissed        ReviewState = "dismissed"
+	ReviewStatePending          ReviewState = "pending"
+)
+
 // RelationshipSource classifies where a relationship was discovered.
 type RelationshipSource string
 

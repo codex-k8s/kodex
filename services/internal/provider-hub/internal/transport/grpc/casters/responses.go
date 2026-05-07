@@ -85,6 +85,7 @@ func CommentProjectionToProto(comment entity.ProviderCommentProjection) *provide
 		WorkItemProjectionId: comment.WorkItemProjectionID.String(),
 		ProviderCommentId:    comment.ProviderCommentID,
 		Kind:                 CommentKindToProto(comment.Kind),
+		ReviewState:          ReviewStateToProto(comment.ReviewState),
 		AuthorProviderLogin:  comment.AuthorProviderLogin,
 		BodyDigest:           comment.BodyDigest,
 		Summary:              comment.Summary,

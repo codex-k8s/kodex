@@ -74,7 +74,7 @@ func workItemProjectionFromSnapshot(snapshot value.ProviderWorkItemSnapshot, now
 	providerID := strings.TrimSpace(snapshot.ProviderWorkItemID)
 	repositoryFullName := strings.TrimSpace(snapshot.RepositoryFullName)
 	body := strings.TrimSpace(snapshot.Body)
-	watermark := parseWatermark(body)
+	watermark := parseWatermark(body, kind)
 	watermarkJSON, err := json.Marshal(watermark.fields)
 	if err != nil {
 		return entity.ProviderWorkItemProjection{}, nil, err
@@ -125,6 +125,7 @@ func commentProjectionFromSnapshot(snapshot value.ProviderCommentSnapshot, now t
 		WorkItemProjectionID: stableUUID("work-item", providerSlug, providerWorkItemID),
 		ProviderCommentID:    providerCommentID,
 		Kind:                 enum.CommentKind(strings.TrimSpace(snapshot.Kind)),
+		ReviewState:          enum.ReviewState(strings.TrimSpace(snapshot.ReviewState)),
 		AuthorProviderLogin:  strings.TrimSpace(snapshot.AuthorLogin),
 		BodyDigest:           bodyDigest(body),
 		Summary:              summary(body),
@@ -133,7 +134,7 @@ func commentProjectionFromSnapshot(snapshot value.ProviderCommentSnapshot, now t
 	}
 }
 
-func parseWatermark(body string) watermarkParseResult {
+func parseWatermark(body string, actualKind enum.WorkItemKind) watermarkParseResult {
 	start := strings.Index(body, watermarkStart)
 	if start < 0 {
 		return watermarkParseResult{status: enum.WorkItemWatermarkStatusMissing, fields: map[string]string{}}
@@ -155,8 +156,16 @@ func parseWatermark(body string) watermarkParseResult {
 			fields[key] = value
 		}
 	}
-	if fields["kind"] == "" || fields["managed_by"] == "" {
+	if fields["kind"] == "" || fields["managed_by"] == "" || fields["work_type"] == "" {
 		fields["error"] = "required watermark fields missing"
+		return watermarkParseResult{status: enum.WorkItemWatermarkStatusInvalid, fields: fields}
+	}
+	if fields["kind"] != string(actualKind) {
+		fields["error"] = "watermark kind mismatch"
+		return watermarkParseResult{status: enum.WorkItemWatermarkStatusInvalid, fields: fields}
+	}
+	if actualKind != enum.WorkItemKindIssue && strings.TrimSpace(fields["source_ref"]) == "" {
+		fields["error"] = "source_ref is required for pull request or merge request"
 		return watermarkParseResult{status: enum.WorkItemWatermarkStatusInvalid, fields: fields}
 	}
 	return watermarkParseResult{status: enum.WorkItemWatermarkStatusValid, fields: fields}
@@ -234,6 +243,7 @@ func (s *Service) commentSyncedOutbox(webhook entity.WebhookEvent, comment entit
 		ProviderWorkItemID:   facts.ProviderWorkItemID,
 		ProviderCommentID:    comment.ProviderCommentID,
 		Kind:                 string(comment.Kind),
+		ReviewState:          string(comment.ReviewState),
 		Number:               facts.Number,
 		Version:              comment.Version,
 	})

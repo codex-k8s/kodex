@@ -124,13 +124,14 @@ func scanWorkItemProjection(row postgreslib.RowScanner) (entity.ProviderWorkItem
 
 func scanCommentProjection(row postgreslib.RowScanner) (entity.ProviderCommentProjection, error) {
 	var comment entity.ProviderCommentProjection
-	var kind string
+	var kind, reviewState string
 	var providerCreatedAt, providerUpdatedAt pgtype.Timestamptz
 	err := row.Scan(
 		&comment.ID,
 		&comment.WorkItemProjectionID,
 		&comment.ProviderCommentID,
 		&kind,
+		&reviewState,
 		&comment.AuthorProviderLogin,
 		&comment.BodyDigest,
 		&comment.Summary,
@@ -141,6 +142,7 @@ func scanCommentProjection(row postgreslib.RowScanner) (entity.ProviderCommentPr
 		&comment.UpdatedAt,
 	)
 	comment.Kind = enum.CommentKind(kind)
+	comment.ReviewState = enum.ReviewState(reviewState)
 	comment.ProviderCreatedAt = timePtrFromPG(providerCreatedAt)
 	comment.ProviderUpdatedAt = timePtrFromPG(providerUpdatedAt)
 	return comment, err

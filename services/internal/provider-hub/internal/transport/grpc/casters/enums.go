@@ -52,6 +52,14 @@ var commentKinds = map[providersv1.CommentKind]enum.CommentKind{
 	providersv1.CommentKind_COMMENT_KIND_SYSTEM:  enum.CommentKindSystem,
 }
 
+var reviewStates = map[providersv1.ReviewState]enum.ReviewState{
+	providersv1.ReviewState_REVIEW_STATE_APPROVED:          enum.ReviewStateApproved,
+	providersv1.ReviewState_REVIEW_STATE_CHANGES_REQUESTED: enum.ReviewStateChangesRequested,
+	providersv1.ReviewState_REVIEW_STATE_COMMENTED:         enum.ReviewStateCommented,
+	providersv1.ReviewState_REVIEW_STATE_DISMISSED:         enum.ReviewStateDismissed,
+	providersv1.ReviewState_REVIEW_STATE_PENDING:           enum.ReviewStatePending,
+}
+
 var relationshipSources = map[providersv1.RelationshipSource]enum.RelationshipSource{
 	providersv1.RelationshipSource_RELATIONSHIP_SOURCE_PROVIDER:       enum.RelationshipSourceProvider,
 	providersv1.RelationshipSource_RELATIONSHIP_SOURCE_WATERMARK:      enum.RelationshipSourceWatermark,
@@ -136,6 +144,10 @@ func commentKindsFromProto(kinds []providersv1.CommentKind) ([]enum.CommentKind,
 
 func CommentKindToProto(kind enum.CommentKind) providersv1.CommentKind {
 	return enumToProto(kind, providersv1.CommentKind_COMMENT_KIND_UNSPECIFIED, invertEnum(commentKinds))
+}
+
+func ReviewStateToProto(state enum.ReviewState) providersv1.ReviewState {
+	return enumToProto(state, providersv1.ReviewState_REVIEW_STATE_UNSPECIFIED, invertEnum(reviewStates))
 }
 
 func relationshipSourcesFromProto(sources []providersv1.RelationshipSource) ([]enum.RelationshipSource, error) {

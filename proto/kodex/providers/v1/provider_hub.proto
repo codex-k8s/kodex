@@ -179,6 +179,16 @@ enum CommentKind {
   COMMENT_KIND_SYSTEM = 4;
 }
 
+// ReviewState classifies provider-native review decisions.
+enum ReviewState {
+  REVIEW_STATE_UNSPECIFIED = 0;
+  REVIEW_STATE_APPROVED = 1;
+  REVIEW_STATE_CHANGES_REQUESTED = 2;
+  REVIEW_STATE_COMMENTED = 3;
+  REVIEW_STATE_DISMISSED = 4;
+  REVIEW_STATE_PENDING = 5;
+}
+
 // RelationshipConfidence describes how reliable a relationship is.
 enum RelationshipConfidence {
   RELATIONSHIP_CONFIDENCE_UNSPECIFIED = 0;
@@ -394,6 +404,8 @@ message CommentProjection {
   optional string provider_created_at = 8;
   // provider_updated_at is provider update time in RFC3339 format when available.
   optional string provider_updated_at = 9;
+  // review_state is present for provider-native review decision records.
+  ReviewState review_state = 10;
 }
 
 // ProviderRelationship is a normalized relationship between provider-native objects.

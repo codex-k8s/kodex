@@ -298,6 +298,65 @@ func (CommentKind) EnumDescriptor() ([]byte, []int) {
 	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{4}
 }
 
+// ReviewState classifies provider-native review decisions.
+type ReviewState int32
+
+const (
+	ReviewState_REVIEW_STATE_UNSPECIFIED       ReviewState = 0
+	ReviewState_REVIEW_STATE_APPROVED          ReviewState = 1
+	ReviewState_REVIEW_STATE_CHANGES_REQUESTED ReviewState = 2
+	ReviewState_REVIEW_STATE_COMMENTED         ReviewState = 3
+	ReviewState_REVIEW_STATE_DISMISSED         ReviewState = 4
+	ReviewState_REVIEW_STATE_PENDING           ReviewState = 5
+)
+
+// Enum value maps for ReviewState.
+var (
+	ReviewState_name = map[int32]string{
+		0: "REVIEW_STATE_UNSPECIFIED",
+		1: "REVIEW_STATE_APPROVED",
+		2: "REVIEW_STATE_CHANGES_REQUESTED",
+		3: "REVIEW_STATE_COMMENTED",
+		4: "REVIEW_STATE_DISMISSED",
+		5: "REVIEW_STATE_PENDING",
+	}
+	ReviewState_value = map[string]int32{
+		"REVIEW_STATE_UNSPECIFIED":       0,
+		"REVIEW_STATE_APPROVED":          1,
+		"REVIEW_STATE_CHANGES_REQUESTED": 2,
+		"REVIEW_STATE_COMMENTED":         3,
+		"REVIEW_STATE_DISMISSED":         4,
+		"REVIEW_STATE_PENDING":           5,
+	}
+)
+
+func (x ReviewState) Enum() *ReviewState {
+	p := new(ReviewState)
+	*p = x
+	return p
+}
+
+func (x ReviewState) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ReviewState) Descriptor() protoreflect.EnumDescriptor {
+	return file_kodex_providers_v1_provider_hub_proto_enumTypes[5].Descriptor()
+}
+
+func (ReviewState) Type() protoreflect.EnumType {
+	return &file_kodex_providers_v1_provider_hub_proto_enumTypes[5]
+}
+
+func (x ReviewState) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ReviewState.Descriptor instead.
+func (ReviewState) EnumDescriptor() ([]byte, []int) {
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{5}
+}
+
 // RelationshipConfidence describes how reliable a relationship is.
 type RelationshipConfidence int32
 
@@ -335,11 +394,11 @@ func (x RelationshipConfidence) String() string {
 }
 
 func (RelationshipConfidence) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_providers_v1_provider_hub_proto_enumTypes[5].Descriptor()
+	return file_kodex_providers_v1_provider_hub_proto_enumTypes[6].Descriptor()
 }
 
 func (RelationshipConfidence) Type() protoreflect.EnumType {
-	return &file_kodex_providers_v1_provider_hub_proto_enumTypes[5]
+	return &file_kodex_providers_v1_provider_hub_proto_enumTypes[6]
 }
 
 func (x RelationshipConfidence) Number() protoreflect.EnumNumber {
@@ -348,7 +407,7 @@ func (x RelationshipConfidence) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use RelationshipConfidence.Descriptor instead.
 func (RelationshipConfidence) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{5}
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{6}
 }
 
 // RelationshipSource classifies where a relationship came from.
@@ -394,11 +453,11 @@ func (x RelationshipSource) String() string {
 }
 
 func (RelationshipSource) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_providers_v1_provider_hub_proto_enumTypes[6].Descriptor()
+	return file_kodex_providers_v1_provider_hub_proto_enumTypes[7].Descriptor()
 }
 
 func (RelationshipSource) Type() protoreflect.EnumType {
-	return &file_kodex_providers_v1_provider_hub_proto_enumTypes[6]
+	return &file_kodex_providers_v1_provider_hub_proto_enumTypes[7]
 }
 
 func (x RelationshipSource) Number() protoreflect.EnumNumber {
@@ -407,7 +466,7 @@ func (x RelationshipSource) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use RelationshipSource.Descriptor instead.
 func (RelationshipSource) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{6}
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{7}
 }
 
 // SyncCursorScopeType classifies reconciliation scope.
@@ -450,11 +509,11 @@ func (x SyncCursorScopeType) String() string {
 }
 
 func (SyncCursorScopeType) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_providers_v1_provider_hub_proto_enumTypes[7].Descriptor()
+	return file_kodex_providers_v1_provider_hub_proto_enumTypes[8].Descriptor()
 }
 
 func (SyncCursorScopeType) Type() protoreflect.EnumType {
-	return &file_kodex_providers_v1_provider_hub_proto_enumTypes[7]
+	return &file_kodex_providers_v1_provider_hub_proto_enumTypes[8]
 }
 
 func (x SyncCursorScopeType) Number() protoreflect.EnumNumber {
@@ -463,7 +522,7 @@ func (x SyncCursorScopeType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use SyncCursorScopeType.Descriptor instead.
 func (SyncCursorScopeType) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{7}
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{8}
 }
 
 // SyncArtifactKind classifies artifacts reconciled by a cursor.
@@ -512,11 +571,11 @@ func (x SyncArtifactKind) String() string {
 }
 
 func (SyncArtifactKind) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_providers_v1_provider_hub_proto_enumTypes[8].Descriptor()
+	return file_kodex_providers_v1_provider_hub_proto_enumTypes[9].Descriptor()
 }
 
 func (SyncArtifactKind) Type() protoreflect.EnumType {
-	return &file_kodex_providers_v1_provider_hub_proto_enumTypes[8]
+	return &file_kodex_providers_v1_provider_hub_proto_enumTypes[9]
 }
 
 func (x SyncArtifactKind) Number() protoreflect.EnumNumber {
@@ -525,7 +584,7 @@ func (x SyncArtifactKind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use SyncArtifactKind.Descriptor instead.
 func (SyncArtifactKind) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{8}
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{9}
 }
 
 // SyncCursorPriority classifies reconciliation urgency.
@@ -565,11 +624,11 @@ func (x SyncCursorPriority) String() string {
 }
 
 func (SyncCursorPriority) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_providers_v1_provider_hub_proto_enumTypes[9].Descriptor()
+	return file_kodex_providers_v1_provider_hub_proto_enumTypes[10].Descriptor()
 }
 
 func (SyncCursorPriority) Type() protoreflect.EnumType {
-	return &file_kodex_providers_v1_provider_hub_proto_enumTypes[9]
+	return &file_kodex_providers_v1_provider_hub_proto_enumTypes[10]
 }
 
 func (x SyncCursorPriority) Number() protoreflect.EnumNumber {
@@ -578,7 +637,7 @@ func (x SyncCursorPriority) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use SyncCursorPriority.Descriptor instead.
 func (SyncCursorPriority) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{9}
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{10}
 }
 
 // ProviderAccountRuntimeStatus is the operational state of an external account at provider.
@@ -624,11 +683,11 @@ func (x ProviderAccountRuntimeStatus) String() string {
 }
 
 func (ProviderAccountRuntimeStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_providers_v1_provider_hub_proto_enumTypes[10].Descriptor()
+	return file_kodex_providers_v1_provider_hub_proto_enumTypes[11].Descriptor()
 }
 
 func (ProviderAccountRuntimeStatus) Type() protoreflect.EnumType {
-	return &file_kodex_providers_v1_provider_hub_proto_enumTypes[10]
+	return &file_kodex_providers_v1_provider_hub_proto_enumTypes[11]
 }
 
 func (x ProviderAccountRuntimeStatus) Number() protoreflect.EnumNumber {
@@ -637,7 +696,7 @@ func (x ProviderAccountRuntimeStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ProviderAccountRuntimeStatus.Descriptor instead.
 func (ProviderAccountRuntimeStatus) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{10}
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{11}
 }
 
 // ProviderOperationType classifies commands executed through provider-hub.
@@ -689,11 +748,11 @@ func (x ProviderOperationType) String() string {
 }
 
 func (ProviderOperationType) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_providers_v1_provider_hub_proto_enumTypes[11].Descriptor()
+	return file_kodex_providers_v1_provider_hub_proto_enumTypes[12].Descriptor()
 }
 
 func (ProviderOperationType) Type() protoreflect.EnumType {
-	return &file_kodex_providers_v1_provider_hub_proto_enumTypes[11]
+	return &file_kodex_providers_v1_provider_hub_proto_enumTypes[12]
 }
 
 func (x ProviderOperationType) Number() protoreflect.EnumNumber {
@@ -702,7 +761,7 @@ func (x ProviderOperationType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ProviderOperationType.Descriptor instead.
 func (ProviderOperationType) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{11}
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{12}
 }
 
 // ProviderOperationStatus is the execution state of a provider operation.
@@ -745,11 +804,11 @@ func (x ProviderOperationStatus) String() string {
 }
 
 func (ProviderOperationStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_providers_v1_provider_hub_proto_enumTypes[12].Descriptor()
+	return file_kodex_providers_v1_provider_hub_proto_enumTypes[13].Descriptor()
 }
 
 func (ProviderOperationStatus) Type() protoreflect.EnumType {
-	return &file_kodex_providers_v1_provider_hub_proto_enumTypes[12]
+	return &file_kodex_providers_v1_provider_hub_proto_enumTypes[13]
 }
 
 func (x ProviderOperationStatus) Number() protoreflect.EnumNumber {
@@ -758,7 +817,7 @@ func (x ProviderOperationStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ProviderOperationStatus.Descriptor instead.
 func (ProviderOperationStatus) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{12}
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{13}
 }
 
 // ReviewSignalKind classifies provider-native review actions.
@@ -798,11 +857,11 @@ func (x ReviewSignalKind) String() string {
 }
 
 func (ReviewSignalKind) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_providers_v1_provider_hub_proto_enumTypes[13].Descriptor()
+	return file_kodex_providers_v1_provider_hub_proto_enumTypes[14].Descriptor()
 }
 
 func (ReviewSignalKind) Type() protoreflect.EnumType {
-	return &file_kodex_providers_v1_provider_hub_proto_enumTypes[13]
+	return &file_kodex_providers_v1_provider_hub_proto_enumTypes[14]
 }
 
 func (x ReviewSignalKind) Number() protoreflect.EnumNumber {
@@ -811,7 +870,7 @@ func (x ReviewSignalKind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ReviewSignalKind.Descriptor instead.
 func (ReviewSignalKind) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{13}
+	return file_kodex_providers_v1_provider_hub_proto_rawDescGZIP(), []int{14}
 }
 
 // CommandMeta is required for every mutating command.
@@ -1846,8 +1905,10 @@ type CommentProjection struct {
 	ProviderCreatedAt *string `protobuf:"bytes,8,opt,name=provider_created_at,json=providerCreatedAt,proto3,oneof" json:"provider_created_at,omitempty"`
 	// provider_updated_at is provider update time in RFC3339 format when available.
 	ProviderUpdatedAt *string `protobuf:"bytes,9,opt,name=provider_updated_at,json=providerUpdatedAt,proto3,oneof" json:"provider_updated_at,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// review_state is present for provider-native review decision records.
+	ReviewState   ReviewState `protobuf:"varint,10,opt,name=review_state,json=reviewState,proto3,enum=kodex.providers.v1.ReviewState" json:"review_state,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CommentProjection) Reset() {
@@ -1941,6 +2002,13 @@ func (x *CommentProjection) GetProviderUpdatedAt() string {
 		return *x.ProviderUpdatedAt
 	}
 	return ""
+}
+
+func (x *CommentProjection) GetReviewState() ReviewState {
+	if x != nil {
+		return x.ReviewState
+	}
+	return ReviewState_REVIEW_STATE_UNSPECIFIED
 }
 
 // ProviderRelationship is a normalized relationship between provider-native objects.
@@ -6073,7 +6141,7 @@ const file_kodex_providers_v1_provider_hub_proto_rawDesc = "" +
 	"\x0f_work_item_typeB\f\n" +
 	"\n" +
 	"_milestoneB\x16\n" +
-	"\x14_provider_updated_at\"\xec\x03\n" +
+	"\x14_provider_updated_at\"\xb0\x04\n" +
 	"\x11CommentProjection\x122\n" +
 	"\x15comment_projection_id\x18\x01 \x01(\tR\x13commentProjectionId\x125\n" +
 	"\x17work_item_projection_id\x18\x02 \x01(\tR\x14workItemProjectionId\x12.\n" +
@@ -6084,7 +6152,9 @@ const file_kodex_providers_v1_provider_hub_proto_rawDesc = "" +
 	"bodyDigest\x12\x18\n" +
 	"\asummary\x18\a \x01(\tR\asummary\x123\n" +
 	"\x13provider_created_at\x18\b \x01(\tH\x00R\x11providerCreatedAt\x88\x01\x01\x123\n" +
-	"\x13provider_updated_at\x18\t \x01(\tH\x01R\x11providerUpdatedAt\x88\x01\x01B\x16\n" +
+	"\x13provider_updated_at\x18\t \x01(\tH\x01R\x11providerUpdatedAt\x88\x01\x01\x12B\n" +
+	"\freview_state\x18\n" +
+	" \x01(\x0e2\x1f.kodex.providers.v1.ReviewStateR\vreviewStateB\x16\n" +
 	"\x14_provider_created_atB\x16\n" +
 	"\x14_provider_updated_at\"\x94\x04\n" +
 	"\x14ProviderRelationship\x12'\n" +
@@ -6540,7 +6610,14 @@ const file_kodex_providers_v1_provider_hub_proto_rawDesc = "" +
 	"\x14COMMENT_KIND_COMMENT\x10\x01\x12\x17\n" +
 	"\x13COMMENT_KIND_REVIEW\x10\x02\x12\x18\n" +
 	"\x14COMMENT_KIND_MENTION\x10\x03\x12\x17\n" +
-	"\x13COMMENT_KIND_SYSTEM\x10\x04*\xb5\x01\n" +
+	"\x13COMMENT_KIND_SYSTEM\x10\x04*\xbc\x01\n" +
+	"\vReviewState\x12\x1c\n" +
+	"\x18REVIEW_STATE_UNSPECIFIED\x10\x00\x12\x19\n" +
+	"\x15REVIEW_STATE_APPROVED\x10\x01\x12\"\n" +
+	"\x1eREVIEW_STATE_CHANGES_REQUESTED\x10\x02\x12\x1a\n" +
+	"\x16REVIEW_STATE_COMMENTED\x10\x03\x12\x1a\n" +
+	"\x16REVIEW_STATE_DISMISSED\x10\x04\x12\x18\n" +
+	"\x14REVIEW_STATE_PENDING\x10\x05*\xb5\x01\n" +
 	"\x16RelationshipConfidence\x12'\n" +
 	"#RELATIONSHIP_CONFIDENCE_UNSPECIFIED\x10\x00\x12%\n" +
 	"!RELATIONSHIP_CONFIDENCE_CONFIRMED\x10\x01\x12$\n" +
@@ -6639,7 +6716,7 @@ func file_kodex_providers_v1_provider_hub_proto_rawDescGZIP() []byte {
 	return file_kodex_providers_v1_provider_hub_proto_rawDescData
 }
 
-var file_kodex_providers_v1_provider_hub_proto_enumTypes = make([]protoimpl.EnumInfo, 14)
+var file_kodex_providers_v1_provider_hub_proto_enumTypes = make([]protoimpl.EnumInfo, 15)
 var file_kodex_providers_v1_provider_hub_proto_msgTypes = make([]protoimpl.MessageInfo, 60)
 var file_kodex_providers_v1_provider_hub_proto_goTypes = []any{
 	(WorkItemKind)(0),                                // 0: kodex.providers.v1.WorkItemKind
@@ -6647,242 +6724,244 @@ var file_kodex_providers_v1_provider_hub_proto_goTypes = []any{
 	(WorkItemWatermarkStatus)(0),                     // 2: kodex.providers.v1.WorkItemWatermarkStatus
 	(WorkItemDriftStatus)(0),                         // 3: kodex.providers.v1.WorkItemDriftStatus
 	(CommentKind)(0),                                 // 4: kodex.providers.v1.CommentKind
-	(RelationshipConfidence)(0),                      // 5: kodex.providers.v1.RelationshipConfidence
-	(RelationshipSource)(0),                          // 6: kodex.providers.v1.RelationshipSource
-	(SyncCursorScopeType)(0),                         // 7: kodex.providers.v1.SyncCursorScopeType
-	(SyncArtifactKind)(0),                            // 8: kodex.providers.v1.SyncArtifactKind
-	(SyncCursorPriority)(0),                          // 9: kodex.providers.v1.SyncCursorPriority
-	(ProviderAccountRuntimeStatus)(0),                // 10: kodex.providers.v1.ProviderAccountRuntimeStatus
-	(ProviderOperationType)(0),                       // 11: kodex.providers.v1.ProviderOperationType
-	(ProviderOperationStatus)(0),                     // 12: kodex.providers.v1.ProviderOperationStatus
-	(ReviewSignalKind)(0),                            // 13: kodex.providers.v1.ReviewSignalKind
-	(*CommandMeta)(nil),                              // 14: kodex.providers.v1.CommandMeta
-	(*QueryMeta)(nil),                                // 15: kodex.providers.v1.QueryMeta
-	(*RequestContext)(nil),                           // 16: kodex.providers.v1.RequestContext
-	(*Actor)(nil),                                    // 17: kodex.providers.v1.Actor
-	(*PageRequest)(nil),                              // 18: kodex.providers.v1.PageRequest
-	(*PageResponse)(nil),                             // 19: kodex.providers.v1.PageResponse
-	(*StringListPatch)(nil),                          // 20: kodex.providers.v1.StringListPatch
-	(*ProviderTarget)(nil),                           // 21: kodex.providers.v1.ProviderTarget
-	(*WebhookEvent)(nil),                             // 22: kodex.providers.v1.WebhookEvent
-	(*ProviderEvent)(nil),                            // 23: kodex.providers.v1.ProviderEvent
-	(*WorkItemProjection)(nil),                       // 24: kodex.providers.v1.WorkItemProjection
-	(*CommentProjection)(nil),                        // 25: kodex.providers.v1.CommentProjection
-	(*ProviderRelationship)(nil),                     // 26: kodex.providers.v1.ProviderRelationship
-	(*SyncCursor)(nil),                               // 27: kodex.providers.v1.SyncCursor
-	(*ProviderAccountRuntimeState)(nil),              // 28: kodex.providers.v1.ProviderAccountRuntimeState
-	(*ProviderLimitSnapshot)(nil),                    // 29: kodex.providers.v1.ProviderLimitSnapshot
-	(*ProviderOperation)(nil),                        // 30: kodex.providers.v1.ProviderOperation
-	(*IngestWebhookEventRequest)(nil),                // 31: kodex.providers.v1.IngestWebhookEventRequest
-	(*WebhookEventResponse)(nil),                     // 32: kodex.providers.v1.WebhookEventResponse
-	(*GetWebhookEventRequest)(nil),                   // 33: kodex.providers.v1.GetWebhookEventRequest
-	(*ListWebhookEventsRequest)(nil),                 // 34: kodex.providers.v1.ListWebhookEventsRequest
-	(*ListWebhookEventsResponse)(nil),                // 35: kodex.providers.v1.ListWebhookEventsResponse
-	(*RetryWebhookEventProcessingRequest)(nil),       // 36: kodex.providers.v1.RetryWebhookEventProcessingRequest
-	(*GetWorkItemProjectionRequest)(nil),             // 37: kodex.providers.v1.GetWorkItemProjectionRequest
-	(*FindWorkItemByProviderRefRequest)(nil),         // 38: kodex.providers.v1.FindWorkItemByProviderRefRequest
-	(*WorkItemProjectionResponse)(nil),               // 39: kodex.providers.v1.WorkItemProjectionResponse
-	(*ListWorkItemProjectionsRequest)(nil),           // 40: kodex.providers.v1.ListWorkItemProjectionsRequest
-	(*ListWorkItemProjectionsResponse)(nil),          // 41: kodex.providers.v1.ListWorkItemProjectionsResponse
-	(*ListCommentsRequest)(nil),                      // 42: kodex.providers.v1.ListCommentsRequest
-	(*ListCommentsResponse)(nil),                     // 43: kodex.providers.v1.ListCommentsResponse
-	(*ListRelationshipsRequest)(nil),                 // 44: kodex.providers.v1.ListRelationshipsRequest
-	(*ListRelationshipsResponse)(nil),                // 45: kodex.providers.v1.ListRelationshipsResponse
-	(*RegisterProviderArtifactSignalRequest)(nil),    // 46: kodex.providers.v1.RegisterProviderArtifactSignalRequest
-	(*ProviderArtifactSignalResponse)(nil),           // 47: kodex.providers.v1.ProviderArtifactSignalResponse
-	(*EnqueueReconciliationRequest)(nil),             // 48: kodex.providers.v1.EnqueueReconciliationRequest
-	(*ReconciliationRequestResponse)(nil),            // 49: kodex.providers.v1.ReconciliationRequestResponse
-	(*RunReconciliationBatchRequest)(nil),            // 50: kodex.providers.v1.RunReconciliationBatchRequest
-	(*RunReconciliationBatchResponse)(nil),           // 51: kodex.providers.v1.RunReconciliationBatchResponse
-	(*GetSyncCursorRequest)(nil),                     // 52: kodex.providers.v1.GetSyncCursorRequest
-	(*SyncCursorResponse)(nil),                       // 53: kodex.providers.v1.SyncCursorResponse
-	(*ListSyncCursorsRequest)(nil),                   // 54: kodex.providers.v1.ListSyncCursorsRequest
-	(*ListSyncCursorsResponse)(nil),                  // 55: kodex.providers.v1.ListSyncCursorsResponse
-	(*CreateIssueRequest)(nil),                       // 56: kodex.providers.v1.CreateIssueRequest
-	(*UpdateIssueRequest)(nil),                       // 57: kodex.providers.v1.UpdateIssueRequest
-	(*CreateCommentRequest)(nil),                     // 58: kodex.providers.v1.CreateCommentRequest
-	(*UpdateCommentRequest)(nil),                     // 59: kodex.providers.v1.UpdateCommentRequest
-	(*CreatePullRequestRequest)(nil),                 // 60: kodex.providers.v1.CreatePullRequestRequest
-	(*CreateReviewSignalRequest)(nil),                // 61: kodex.providers.v1.CreateReviewSignalRequest
-	(*UpdateRelationshipRequest)(nil),                // 62: kodex.providers.v1.UpdateRelationshipRequest
-	(*ProviderOperationResponse)(nil),                // 63: kodex.providers.v1.ProviderOperationResponse
-	(*GetProviderAccountRuntimeStateRequest)(nil),    // 64: kodex.providers.v1.GetProviderAccountRuntimeStateRequest
-	(*ProviderAccountRuntimeStateResponse)(nil),      // 65: kodex.providers.v1.ProviderAccountRuntimeStateResponse
-	(*ListProviderAccountRuntimeStatesRequest)(nil),  // 66: kodex.providers.v1.ListProviderAccountRuntimeStatesRequest
-	(*ListProviderAccountRuntimeStatesResponse)(nil), // 67: kodex.providers.v1.ListProviderAccountRuntimeStatesResponse
-	(*RecordProviderLimitSnapshotRequest)(nil),       // 68: kodex.providers.v1.RecordProviderLimitSnapshotRequest
-	(*ProviderLimitSnapshotResponse)(nil),            // 69: kodex.providers.v1.ProviderLimitSnapshotResponse
-	(*ListProviderLimitSnapshotsRequest)(nil),        // 70: kodex.providers.v1.ListProviderLimitSnapshotsRequest
-	(*ListProviderLimitSnapshotsResponse)(nil),       // 71: kodex.providers.v1.ListProviderLimitSnapshotsResponse
-	(*ListProviderOperationsRequest)(nil),            // 72: kodex.providers.v1.ListProviderOperationsRequest
-	(*ListProviderOperationsResponse)(nil),           // 73: kodex.providers.v1.ListProviderOperationsResponse
+	(ReviewState)(0),                                 // 5: kodex.providers.v1.ReviewState
+	(RelationshipConfidence)(0),                      // 6: kodex.providers.v1.RelationshipConfidence
+	(RelationshipSource)(0),                          // 7: kodex.providers.v1.RelationshipSource
+	(SyncCursorScopeType)(0),                         // 8: kodex.providers.v1.SyncCursorScopeType
+	(SyncArtifactKind)(0),                            // 9: kodex.providers.v1.SyncArtifactKind
+	(SyncCursorPriority)(0),                          // 10: kodex.providers.v1.SyncCursorPriority
+	(ProviderAccountRuntimeStatus)(0),                // 11: kodex.providers.v1.ProviderAccountRuntimeStatus
+	(ProviderOperationType)(0),                       // 12: kodex.providers.v1.ProviderOperationType
+	(ProviderOperationStatus)(0),                     // 13: kodex.providers.v1.ProviderOperationStatus
+	(ReviewSignalKind)(0),                            // 14: kodex.providers.v1.ReviewSignalKind
+	(*CommandMeta)(nil),                              // 15: kodex.providers.v1.CommandMeta
+	(*QueryMeta)(nil),                                // 16: kodex.providers.v1.QueryMeta
+	(*RequestContext)(nil),                           // 17: kodex.providers.v1.RequestContext
+	(*Actor)(nil),                                    // 18: kodex.providers.v1.Actor
+	(*PageRequest)(nil),                              // 19: kodex.providers.v1.PageRequest
+	(*PageResponse)(nil),                             // 20: kodex.providers.v1.PageResponse
+	(*StringListPatch)(nil),                          // 21: kodex.providers.v1.StringListPatch
+	(*ProviderTarget)(nil),                           // 22: kodex.providers.v1.ProviderTarget
+	(*WebhookEvent)(nil),                             // 23: kodex.providers.v1.WebhookEvent
+	(*ProviderEvent)(nil),                            // 24: kodex.providers.v1.ProviderEvent
+	(*WorkItemProjection)(nil),                       // 25: kodex.providers.v1.WorkItemProjection
+	(*CommentProjection)(nil),                        // 26: kodex.providers.v1.CommentProjection
+	(*ProviderRelationship)(nil),                     // 27: kodex.providers.v1.ProviderRelationship
+	(*SyncCursor)(nil),                               // 28: kodex.providers.v1.SyncCursor
+	(*ProviderAccountRuntimeState)(nil),              // 29: kodex.providers.v1.ProviderAccountRuntimeState
+	(*ProviderLimitSnapshot)(nil),                    // 30: kodex.providers.v1.ProviderLimitSnapshot
+	(*ProviderOperation)(nil),                        // 31: kodex.providers.v1.ProviderOperation
+	(*IngestWebhookEventRequest)(nil),                // 32: kodex.providers.v1.IngestWebhookEventRequest
+	(*WebhookEventResponse)(nil),                     // 33: kodex.providers.v1.WebhookEventResponse
+	(*GetWebhookEventRequest)(nil),                   // 34: kodex.providers.v1.GetWebhookEventRequest
+	(*ListWebhookEventsRequest)(nil),                 // 35: kodex.providers.v1.ListWebhookEventsRequest
+	(*ListWebhookEventsResponse)(nil),                // 36: kodex.providers.v1.ListWebhookEventsResponse
+	(*RetryWebhookEventProcessingRequest)(nil),       // 37: kodex.providers.v1.RetryWebhookEventProcessingRequest
+	(*GetWorkItemProjectionRequest)(nil),             // 38: kodex.providers.v1.GetWorkItemProjectionRequest
+	(*FindWorkItemByProviderRefRequest)(nil),         // 39: kodex.providers.v1.FindWorkItemByProviderRefRequest
+	(*WorkItemProjectionResponse)(nil),               // 40: kodex.providers.v1.WorkItemProjectionResponse
+	(*ListWorkItemProjectionsRequest)(nil),           // 41: kodex.providers.v1.ListWorkItemProjectionsRequest
+	(*ListWorkItemProjectionsResponse)(nil),          // 42: kodex.providers.v1.ListWorkItemProjectionsResponse
+	(*ListCommentsRequest)(nil),                      // 43: kodex.providers.v1.ListCommentsRequest
+	(*ListCommentsResponse)(nil),                     // 44: kodex.providers.v1.ListCommentsResponse
+	(*ListRelationshipsRequest)(nil),                 // 45: kodex.providers.v1.ListRelationshipsRequest
+	(*ListRelationshipsResponse)(nil),                // 46: kodex.providers.v1.ListRelationshipsResponse
+	(*RegisterProviderArtifactSignalRequest)(nil),    // 47: kodex.providers.v1.RegisterProviderArtifactSignalRequest
+	(*ProviderArtifactSignalResponse)(nil),           // 48: kodex.providers.v1.ProviderArtifactSignalResponse
+	(*EnqueueReconciliationRequest)(nil),             // 49: kodex.providers.v1.EnqueueReconciliationRequest
+	(*ReconciliationRequestResponse)(nil),            // 50: kodex.providers.v1.ReconciliationRequestResponse
+	(*RunReconciliationBatchRequest)(nil),            // 51: kodex.providers.v1.RunReconciliationBatchRequest
+	(*RunReconciliationBatchResponse)(nil),           // 52: kodex.providers.v1.RunReconciliationBatchResponse
+	(*GetSyncCursorRequest)(nil),                     // 53: kodex.providers.v1.GetSyncCursorRequest
+	(*SyncCursorResponse)(nil),                       // 54: kodex.providers.v1.SyncCursorResponse
+	(*ListSyncCursorsRequest)(nil),                   // 55: kodex.providers.v1.ListSyncCursorsRequest
+	(*ListSyncCursorsResponse)(nil),                  // 56: kodex.providers.v1.ListSyncCursorsResponse
+	(*CreateIssueRequest)(nil),                       // 57: kodex.providers.v1.CreateIssueRequest
+	(*UpdateIssueRequest)(nil),                       // 58: kodex.providers.v1.UpdateIssueRequest
+	(*CreateCommentRequest)(nil),                     // 59: kodex.providers.v1.CreateCommentRequest
+	(*UpdateCommentRequest)(nil),                     // 60: kodex.providers.v1.UpdateCommentRequest
+	(*CreatePullRequestRequest)(nil),                 // 61: kodex.providers.v1.CreatePullRequestRequest
+	(*CreateReviewSignalRequest)(nil),                // 62: kodex.providers.v1.CreateReviewSignalRequest
+	(*UpdateRelationshipRequest)(nil),                // 63: kodex.providers.v1.UpdateRelationshipRequest
+	(*ProviderOperationResponse)(nil),                // 64: kodex.providers.v1.ProviderOperationResponse
+	(*GetProviderAccountRuntimeStateRequest)(nil),    // 65: kodex.providers.v1.GetProviderAccountRuntimeStateRequest
+	(*ProviderAccountRuntimeStateResponse)(nil),      // 66: kodex.providers.v1.ProviderAccountRuntimeStateResponse
+	(*ListProviderAccountRuntimeStatesRequest)(nil),  // 67: kodex.providers.v1.ListProviderAccountRuntimeStatesRequest
+	(*ListProviderAccountRuntimeStatesResponse)(nil), // 68: kodex.providers.v1.ListProviderAccountRuntimeStatesResponse
+	(*RecordProviderLimitSnapshotRequest)(nil),       // 69: kodex.providers.v1.RecordProviderLimitSnapshotRequest
+	(*ProviderLimitSnapshotResponse)(nil),            // 70: kodex.providers.v1.ProviderLimitSnapshotResponse
+	(*ListProviderLimitSnapshotsRequest)(nil),        // 71: kodex.providers.v1.ListProviderLimitSnapshotsRequest
+	(*ListProviderLimitSnapshotsResponse)(nil),       // 72: kodex.providers.v1.ListProviderLimitSnapshotsResponse
+	(*ListProviderOperationsRequest)(nil),            // 73: kodex.providers.v1.ListProviderOperationsRequest
+	(*ListProviderOperationsResponse)(nil),           // 74: kodex.providers.v1.ListProviderOperationsResponse
 }
 var file_kodex_providers_v1_provider_hub_proto_depIdxs = []int32{
-	17,  // 0: kodex.providers.v1.CommandMeta.actor:type_name -> kodex.providers.v1.Actor
-	16,  // 1: kodex.providers.v1.CommandMeta.request_context:type_name -> kodex.providers.v1.RequestContext
-	17,  // 2: kodex.providers.v1.QueryMeta.actor:type_name -> kodex.providers.v1.Actor
-	16,  // 3: kodex.providers.v1.QueryMeta.request_context:type_name -> kodex.providers.v1.RequestContext
+	18,  // 0: kodex.providers.v1.CommandMeta.actor:type_name -> kodex.providers.v1.Actor
+	17,  // 1: kodex.providers.v1.CommandMeta.request_context:type_name -> kodex.providers.v1.RequestContext
+	18,  // 2: kodex.providers.v1.QueryMeta.actor:type_name -> kodex.providers.v1.Actor
+	17,  // 3: kodex.providers.v1.QueryMeta.request_context:type_name -> kodex.providers.v1.RequestContext
 	0,   // 4: kodex.providers.v1.ProviderTarget.work_item_kind:type_name -> kodex.providers.v1.WorkItemKind
 	1,   // 5: kodex.providers.v1.WebhookEvent.processing_status:type_name -> kodex.providers.v1.WebhookProcessingStatus
 	0,   // 6: kodex.providers.v1.WorkItemProjection.kind:type_name -> kodex.providers.v1.WorkItemKind
 	2,   // 7: kodex.providers.v1.WorkItemProjection.watermark_status:type_name -> kodex.providers.v1.WorkItemWatermarkStatus
 	3,   // 8: kodex.providers.v1.WorkItemProjection.drift_status:type_name -> kodex.providers.v1.WorkItemDriftStatus
 	4,   // 9: kodex.providers.v1.CommentProjection.kind:type_name -> kodex.providers.v1.CommentKind
-	6,   // 10: kodex.providers.v1.ProviderRelationship.source:type_name -> kodex.providers.v1.RelationshipSource
-	5,   // 11: kodex.providers.v1.ProviderRelationship.confidence:type_name -> kodex.providers.v1.RelationshipConfidence
-	7,   // 12: kodex.providers.v1.SyncCursor.scope_type:type_name -> kodex.providers.v1.SyncCursorScopeType
-	8,   // 13: kodex.providers.v1.SyncCursor.artifact_kind:type_name -> kodex.providers.v1.SyncArtifactKind
-	9,   // 14: kodex.providers.v1.SyncCursor.priority:type_name -> kodex.providers.v1.SyncCursorPriority
-	10,  // 15: kodex.providers.v1.ProviderAccountRuntimeState.status:type_name -> kodex.providers.v1.ProviderAccountRuntimeStatus
-	11,  // 16: kodex.providers.v1.ProviderOperation.operation_type:type_name -> kodex.providers.v1.ProviderOperationType
-	12,  // 17: kodex.providers.v1.ProviderOperation.status:type_name -> kodex.providers.v1.ProviderOperationStatus
-	14,  // 18: kodex.providers.v1.IngestWebhookEventRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	22,  // 19: kodex.providers.v1.WebhookEventResponse.webhook_event:type_name -> kodex.providers.v1.WebhookEvent
-	15,  // 20: kodex.providers.v1.GetWebhookEventRequest.meta:type_name -> kodex.providers.v1.QueryMeta
-	1,   // 21: kodex.providers.v1.ListWebhookEventsRequest.processing_statuses:type_name -> kodex.providers.v1.WebhookProcessingStatus
-	18,  // 22: kodex.providers.v1.ListWebhookEventsRequest.page:type_name -> kodex.providers.v1.PageRequest
-	15,  // 23: kodex.providers.v1.ListWebhookEventsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
-	22,  // 24: kodex.providers.v1.ListWebhookEventsResponse.webhook_events:type_name -> kodex.providers.v1.WebhookEvent
-	19,  // 25: kodex.providers.v1.ListWebhookEventsResponse.page:type_name -> kodex.providers.v1.PageResponse
-	14,  // 26: kodex.providers.v1.RetryWebhookEventProcessingRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	15,  // 27: kodex.providers.v1.GetWorkItemProjectionRequest.meta:type_name -> kodex.providers.v1.QueryMeta
-	21,  // 28: kodex.providers.v1.FindWorkItemByProviderRefRequest.target:type_name -> kodex.providers.v1.ProviderTarget
-	15,  // 29: kodex.providers.v1.FindWorkItemByProviderRefRequest.meta:type_name -> kodex.providers.v1.QueryMeta
-	24,  // 30: kodex.providers.v1.WorkItemProjectionResponse.work_item_projection:type_name -> kodex.providers.v1.WorkItemProjection
-	0,   // 31: kodex.providers.v1.ListWorkItemProjectionsRequest.kinds:type_name -> kodex.providers.v1.WorkItemKind
-	3,   // 32: kodex.providers.v1.ListWorkItemProjectionsRequest.drift_statuses:type_name -> kodex.providers.v1.WorkItemDriftStatus
-	18,  // 33: kodex.providers.v1.ListWorkItemProjectionsRequest.page:type_name -> kodex.providers.v1.PageRequest
-	15,  // 34: kodex.providers.v1.ListWorkItemProjectionsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
-	24,  // 35: kodex.providers.v1.ListWorkItemProjectionsResponse.work_item_projections:type_name -> kodex.providers.v1.WorkItemProjection
-	19,  // 36: kodex.providers.v1.ListWorkItemProjectionsResponse.page:type_name -> kodex.providers.v1.PageResponse
-	4,   // 37: kodex.providers.v1.ListCommentsRequest.kinds:type_name -> kodex.providers.v1.CommentKind
-	18,  // 38: kodex.providers.v1.ListCommentsRequest.page:type_name -> kodex.providers.v1.PageRequest
-	15,  // 39: kodex.providers.v1.ListCommentsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
-	25,  // 40: kodex.providers.v1.ListCommentsResponse.comments:type_name -> kodex.providers.v1.CommentProjection
-	19,  // 41: kodex.providers.v1.ListCommentsResponse.page:type_name -> kodex.providers.v1.PageResponse
-	6,   // 42: kodex.providers.v1.ListRelationshipsRequest.sources:type_name -> kodex.providers.v1.RelationshipSource
-	5,   // 43: kodex.providers.v1.ListRelationshipsRequest.confidence_levels:type_name -> kodex.providers.v1.RelationshipConfidence
-	18,  // 44: kodex.providers.v1.ListRelationshipsRequest.page:type_name -> kodex.providers.v1.PageRequest
-	15,  // 45: kodex.providers.v1.ListRelationshipsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
-	26,  // 46: kodex.providers.v1.ListRelationshipsResponse.relationships:type_name -> kodex.providers.v1.ProviderRelationship
-	19,  // 47: kodex.providers.v1.ListRelationshipsResponse.page:type_name -> kodex.providers.v1.PageResponse
-	21,  // 48: kodex.providers.v1.RegisterProviderArtifactSignalRequest.target:type_name -> kodex.providers.v1.ProviderTarget
-	14,  // 49: kodex.providers.v1.RegisterProviderArtifactSignalRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	21,  // 50: kodex.providers.v1.ProviderArtifactSignalResponse.target:type_name -> kodex.providers.v1.ProviderTarget
-	7,   // 51: kodex.providers.v1.EnqueueReconciliationRequest.scope_type:type_name -> kodex.providers.v1.SyncCursorScopeType
-	8,   // 52: kodex.providers.v1.EnqueueReconciliationRequest.artifact_kinds:type_name -> kodex.providers.v1.SyncArtifactKind
-	9,   // 53: kodex.providers.v1.EnqueueReconciliationRequest.priority:type_name -> kodex.providers.v1.SyncCursorPriority
-	14,  // 54: kodex.providers.v1.EnqueueReconciliationRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	27,  // 55: kodex.providers.v1.ReconciliationRequestResponse.sync_cursors:type_name -> kodex.providers.v1.SyncCursor
-	14,  // 56: kodex.providers.v1.RunReconciliationBatchRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	27,  // 57: kodex.providers.v1.RunReconciliationBatchResponse.sync_cursor:type_name -> kodex.providers.v1.SyncCursor
-	15,  // 58: kodex.providers.v1.GetSyncCursorRequest.meta:type_name -> kodex.providers.v1.QueryMeta
-	27,  // 59: kodex.providers.v1.SyncCursorResponse.sync_cursor:type_name -> kodex.providers.v1.SyncCursor
-	7,   // 60: kodex.providers.v1.ListSyncCursorsRequest.scope_type:type_name -> kodex.providers.v1.SyncCursorScopeType
-	8,   // 61: kodex.providers.v1.ListSyncCursorsRequest.artifact_kinds:type_name -> kodex.providers.v1.SyncArtifactKind
-	9,   // 62: kodex.providers.v1.ListSyncCursorsRequest.priorities:type_name -> kodex.providers.v1.SyncCursorPriority
-	18,  // 63: kodex.providers.v1.ListSyncCursorsRequest.page:type_name -> kodex.providers.v1.PageRequest
-	15,  // 64: kodex.providers.v1.ListSyncCursorsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
-	27,  // 65: kodex.providers.v1.ListSyncCursorsResponse.sync_cursors:type_name -> kodex.providers.v1.SyncCursor
-	19,  // 66: kodex.providers.v1.ListSyncCursorsResponse.page:type_name -> kodex.providers.v1.PageResponse
-	14,  // 67: kodex.providers.v1.CreateIssueRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	21,  // 68: kodex.providers.v1.UpdateIssueRequest.target:type_name -> kodex.providers.v1.ProviderTarget
-	20,  // 69: kodex.providers.v1.UpdateIssueRequest.labels:type_name -> kodex.providers.v1.StringListPatch
-	20,  // 70: kodex.providers.v1.UpdateIssueRequest.assignee_provider_logins:type_name -> kodex.providers.v1.StringListPatch
-	14,  // 71: kodex.providers.v1.UpdateIssueRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	21,  // 72: kodex.providers.v1.CreateCommentRequest.target:type_name -> kodex.providers.v1.ProviderTarget
-	14,  // 73: kodex.providers.v1.CreateCommentRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	21,  // 74: kodex.providers.v1.UpdateCommentRequest.target:type_name -> kodex.providers.v1.ProviderTarget
-	14,  // 75: kodex.providers.v1.UpdateCommentRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	14,  // 76: kodex.providers.v1.CreatePullRequestRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	21,  // 77: kodex.providers.v1.CreateReviewSignalRequest.target:type_name -> kodex.providers.v1.ProviderTarget
-	13,  // 78: kodex.providers.v1.CreateReviewSignalRequest.kind:type_name -> kodex.providers.v1.ReviewSignalKind
-	14,  // 79: kodex.providers.v1.CreateReviewSignalRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	21,  // 80: kodex.providers.v1.UpdateRelationshipRequest.source:type_name -> kodex.providers.v1.ProviderTarget
-	21,  // 81: kodex.providers.v1.UpdateRelationshipRequest.target:type_name -> kodex.providers.v1.ProviderTarget
-	6,   // 82: kodex.providers.v1.UpdateRelationshipRequest.source_kind:type_name -> kodex.providers.v1.RelationshipSource
-	5,   // 83: kodex.providers.v1.UpdateRelationshipRequest.confidence:type_name -> kodex.providers.v1.RelationshipConfidence
-	14,  // 84: kodex.providers.v1.UpdateRelationshipRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	30,  // 85: kodex.providers.v1.ProviderOperationResponse.provider_operation:type_name -> kodex.providers.v1.ProviderOperation
-	24,  // 86: kodex.providers.v1.ProviderOperationResponse.work_item_projection:type_name -> kodex.providers.v1.WorkItemProjection
-	25,  // 87: kodex.providers.v1.ProviderOperationResponse.comment_projection:type_name -> kodex.providers.v1.CommentProjection
-	26,  // 88: kodex.providers.v1.ProviderOperationResponse.relationship:type_name -> kodex.providers.v1.ProviderRelationship
-	15,  // 89: kodex.providers.v1.GetProviderAccountRuntimeStateRequest.meta:type_name -> kodex.providers.v1.QueryMeta
-	28,  // 90: kodex.providers.v1.ProviderAccountRuntimeStateResponse.runtime_state:type_name -> kodex.providers.v1.ProviderAccountRuntimeState
-	10,  // 91: kodex.providers.v1.ListProviderAccountRuntimeStatesRequest.statuses:type_name -> kodex.providers.v1.ProviderAccountRuntimeStatus
-	18,  // 92: kodex.providers.v1.ListProviderAccountRuntimeStatesRequest.page:type_name -> kodex.providers.v1.PageRequest
-	15,  // 93: kodex.providers.v1.ListProviderAccountRuntimeStatesRequest.meta:type_name -> kodex.providers.v1.QueryMeta
-	28,  // 94: kodex.providers.v1.ListProviderAccountRuntimeStatesResponse.runtime_states:type_name -> kodex.providers.v1.ProviderAccountRuntimeState
-	19,  // 95: kodex.providers.v1.ListProviderAccountRuntimeStatesResponse.page:type_name -> kodex.providers.v1.PageResponse
-	14,  // 96: kodex.providers.v1.RecordProviderLimitSnapshotRequest.meta:type_name -> kodex.providers.v1.CommandMeta
-	29,  // 97: kodex.providers.v1.ProviderLimitSnapshotResponse.limit_snapshot:type_name -> kodex.providers.v1.ProviderLimitSnapshot
-	18,  // 98: kodex.providers.v1.ListProviderLimitSnapshotsRequest.page:type_name -> kodex.providers.v1.PageRequest
-	15,  // 99: kodex.providers.v1.ListProviderLimitSnapshotsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
-	29,  // 100: kodex.providers.v1.ListProviderLimitSnapshotsResponse.limit_snapshots:type_name -> kodex.providers.v1.ProviderLimitSnapshot
-	19,  // 101: kodex.providers.v1.ListProviderLimitSnapshotsResponse.page:type_name -> kodex.providers.v1.PageResponse
-	11,  // 102: kodex.providers.v1.ListProviderOperationsRequest.operation_types:type_name -> kodex.providers.v1.ProviderOperationType
-	12,  // 103: kodex.providers.v1.ListProviderOperationsRequest.statuses:type_name -> kodex.providers.v1.ProviderOperationStatus
-	18,  // 104: kodex.providers.v1.ListProviderOperationsRequest.page:type_name -> kodex.providers.v1.PageRequest
-	15,  // 105: kodex.providers.v1.ListProviderOperationsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
-	30,  // 106: kodex.providers.v1.ListProviderOperationsResponse.provider_operations:type_name -> kodex.providers.v1.ProviderOperation
-	19,  // 107: kodex.providers.v1.ListProviderOperationsResponse.page:type_name -> kodex.providers.v1.PageResponse
-	31,  // 108: kodex.providers.v1.ProviderHubService.IngestWebhookEvent:input_type -> kodex.providers.v1.IngestWebhookEventRequest
-	33,  // 109: kodex.providers.v1.ProviderHubService.GetWebhookEvent:input_type -> kodex.providers.v1.GetWebhookEventRequest
-	34,  // 110: kodex.providers.v1.ProviderHubService.ListWebhookEvents:input_type -> kodex.providers.v1.ListWebhookEventsRequest
-	36,  // 111: kodex.providers.v1.ProviderHubService.RetryWebhookEventProcessing:input_type -> kodex.providers.v1.RetryWebhookEventProcessingRequest
-	37,  // 112: kodex.providers.v1.ProviderHubService.GetWorkItemProjection:input_type -> kodex.providers.v1.GetWorkItemProjectionRequest
-	38,  // 113: kodex.providers.v1.ProviderHubService.FindWorkItemByProviderRef:input_type -> kodex.providers.v1.FindWorkItemByProviderRefRequest
-	40,  // 114: kodex.providers.v1.ProviderHubService.ListWorkItemProjections:input_type -> kodex.providers.v1.ListWorkItemProjectionsRequest
-	42,  // 115: kodex.providers.v1.ProviderHubService.ListComments:input_type -> kodex.providers.v1.ListCommentsRequest
-	44,  // 116: kodex.providers.v1.ProviderHubService.ListRelationships:input_type -> kodex.providers.v1.ListRelationshipsRequest
-	46,  // 117: kodex.providers.v1.ProviderHubService.RegisterProviderArtifactSignal:input_type -> kodex.providers.v1.RegisterProviderArtifactSignalRequest
-	48,  // 118: kodex.providers.v1.ProviderHubService.EnqueueReconciliation:input_type -> kodex.providers.v1.EnqueueReconciliationRequest
-	50,  // 119: kodex.providers.v1.ProviderHubService.RunReconciliationBatch:input_type -> kodex.providers.v1.RunReconciliationBatchRequest
-	52,  // 120: kodex.providers.v1.ProviderHubService.GetSyncCursor:input_type -> kodex.providers.v1.GetSyncCursorRequest
-	54,  // 121: kodex.providers.v1.ProviderHubService.ListSyncCursors:input_type -> kodex.providers.v1.ListSyncCursorsRequest
-	56,  // 122: kodex.providers.v1.ProviderHubService.CreateIssue:input_type -> kodex.providers.v1.CreateIssueRequest
-	57,  // 123: kodex.providers.v1.ProviderHubService.UpdateIssue:input_type -> kodex.providers.v1.UpdateIssueRequest
-	58,  // 124: kodex.providers.v1.ProviderHubService.CreateComment:input_type -> kodex.providers.v1.CreateCommentRequest
-	59,  // 125: kodex.providers.v1.ProviderHubService.UpdateComment:input_type -> kodex.providers.v1.UpdateCommentRequest
-	60,  // 126: kodex.providers.v1.ProviderHubService.CreatePullRequest:input_type -> kodex.providers.v1.CreatePullRequestRequest
-	61,  // 127: kodex.providers.v1.ProviderHubService.CreateReviewSignal:input_type -> kodex.providers.v1.CreateReviewSignalRequest
-	62,  // 128: kodex.providers.v1.ProviderHubService.UpdateRelationship:input_type -> kodex.providers.v1.UpdateRelationshipRequest
-	64,  // 129: kodex.providers.v1.ProviderHubService.GetProviderAccountRuntimeState:input_type -> kodex.providers.v1.GetProviderAccountRuntimeStateRequest
-	66,  // 130: kodex.providers.v1.ProviderHubService.ListProviderAccountRuntimeStates:input_type -> kodex.providers.v1.ListProviderAccountRuntimeStatesRequest
-	68,  // 131: kodex.providers.v1.ProviderHubService.RecordProviderLimitSnapshot:input_type -> kodex.providers.v1.RecordProviderLimitSnapshotRequest
-	70,  // 132: kodex.providers.v1.ProviderHubService.ListProviderLimitSnapshots:input_type -> kodex.providers.v1.ListProviderLimitSnapshotsRequest
-	72,  // 133: kodex.providers.v1.ProviderHubService.ListProviderOperations:input_type -> kodex.providers.v1.ListProviderOperationsRequest
-	32,  // 134: kodex.providers.v1.ProviderHubService.IngestWebhookEvent:output_type -> kodex.providers.v1.WebhookEventResponse
-	32,  // 135: kodex.providers.v1.ProviderHubService.GetWebhookEvent:output_type -> kodex.providers.v1.WebhookEventResponse
-	35,  // 136: kodex.providers.v1.ProviderHubService.ListWebhookEvents:output_type -> kodex.providers.v1.ListWebhookEventsResponse
-	32,  // 137: kodex.providers.v1.ProviderHubService.RetryWebhookEventProcessing:output_type -> kodex.providers.v1.WebhookEventResponse
-	39,  // 138: kodex.providers.v1.ProviderHubService.GetWorkItemProjection:output_type -> kodex.providers.v1.WorkItemProjectionResponse
-	39,  // 139: kodex.providers.v1.ProviderHubService.FindWorkItemByProviderRef:output_type -> kodex.providers.v1.WorkItemProjectionResponse
-	41,  // 140: kodex.providers.v1.ProviderHubService.ListWorkItemProjections:output_type -> kodex.providers.v1.ListWorkItemProjectionsResponse
-	43,  // 141: kodex.providers.v1.ProviderHubService.ListComments:output_type -> kodex.providers.v1.ListCommentsResponse
-	45,  // 142: kodex.providers.v1.ProviderHubService.ListRelationships:output_type -> kodex.providers.v1.ListRelationshipsResponse
-	47,  // 143: kodex.providers.v1.ProviderHubService.RegisterProviderArtifactSignal:output_type -> kodex.providers.v1.ProviderArtifactSignalResponse
-	49,  // 144: kodex.providers.v1.ProviderHubService.EnqueueReconciliation:output_type -> kodex.providers.v1.ReconciliationRequestResponse
-	51,  // 145: kodex.providers.v1.ProviderHubService.RunReconciliationBatch:output_type -> kodex.providers.v1.RunReconciliationBatchResponse
-	53,  // 146: kodex.providers.v1.ProviderHubService.GetSyncCursor:output_type -> kodex.providers.v1.SyncCursorResponse
-	55,  // 147: kodex.providers.v1.ProviderHubService.ListSyncCursors:output_type -> kodex.providers.v1.ListSyncCursorsResponse
-	63,  // 148: kodex.providers.v1.ProviderHubService.CreateIssue:output_type -> kodex.providers.v1.ProviderOperationResponse
-	63,  // 149: kodex.providers.v1.ProviderHubService.UpdateIssue:output_type -> kodex.providers.v1.ProviderOperationResponse
-	63,  // 150: kodex.providers.v1.ProviderHubService.CreateComment:output_type -> kodex.providers.v1.ProviderOperationResponse
-	63,  // 151: kodex.providers.v1.ProviderHubService.UpdateComment:output_type -> kodex.providers.v1.ProviderOperationResponse
-	63,  // 152: kodex.providers.v1.ProviderHubService.CreatePullRequest:output_type -> kodex.providers.v1.ProviderOperationResponse
-	63,  // 153: kodex.providers.v1.ProviderHubService.CreateReviewSignal:output_type -> kodex.providers.v1.ProviderOperationResponse
-	63,  // 154: kodex.providers.v1.ProviderHubService.UpdateRelationship:output_type -> kodex.providers.v1.ProviderOperationResponse
-	65,  // 155: kodex.providers.v1.ProviderHubService.GetProviderAccountRuntimeState:output_type -> kodex.providers.v1.ProviderAccountRuntimeStateResponse
-	67,  // 156: kodex.providers.v1.ProviderHubService.ListProviderAccountRuntimeStates:output_type -> kodex.providers.v1.ListProviderAccountRuntimeStatesResponse
-	69,  // 157: kodex.providers.v1.ProviderHubService.RecordProviderLimitSnapshot:output_type -> kodex.providers.v1.ProviderLimitSnapshotResponse
-	71,  // 158: kodex.providers.v1.ProviderHubService.ListProviderLimitSnapshots:output_type -> kodex.providers.v1.ListProviderLimitSnapshotsResponse
-	73,  // 159: kodex.providers.v1.ProviderHubService.ListProviderOperations:output_type -> kodex.providers.v1.ListProviderOperationsResponse
-	134, // [134:160] is the sub-list for method output_type
-	108, // [108:134] is the sub-list for method input_type
-	108, // [108:108] is the sub-list for extension type_name
-	108, // [108:108] is the sub-list for extension extendee
-	0,   // [0:108] is the sub-list for field type_name
+	5,   // 10: kodex.providers.v1.CommentProjection.review_state:type_name -> kodex.providers.v1.ReviewState
+	7,   // 11: kodex.providers.v1.ProviderRelationship.source:type_name -> kodex.providers.v1.RelationshipSource
+	6,   // 12: kodex.providers.v1.ProviderRelationship.confidence:type_name -> kodex.providers.v1.RelationshipConfidence
+	8,   // 13: kodex.providers.v1.SyncCursor.scope_type:type_name -> kodex.providers.v1.SyncCursorScopeType
+	9,   // 14: kodex.providers.v1.SyncCursor.artifact_kind:type_name -> kodex.providers.v1.SyncArtifactKind
+	10,  // 15: kodex.providers.v1.SyncCursor.priority:type_name -> kodex.providers.v1.SyncCursorPriority
+	11,  // 16: kodex.providers.v1.ProviderAccountRuntimeState.status:type_name -> kodex.providers.v1.ProviderAccountRuntimeStatus
+	12,  // 17: kodex.providers.v1.ProviderOperation.operation_type:type_name -> kodex.providers.v1.ProviderOperationType
+	13,  // 18: kodex.providers.v1.ProviderOperation.status:type_name -> kodex.providers.v1.ProviderOperationStatus
+	15,  // 19: kodex.providers.v1.IngestWebhookEventRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	23,  // 20: kodex.providers.v1.WebhookEventResponse.webhook_event:type_name -> kodex.providers.v1.WebhookEvent
+	16,  // 21: kodex.providers.v1.GetWebhookEventRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	1,   // 22: kodex.providers.v1.ListWebhookEventsRequest.processing_statuses:type_name -> kodex.providers.v1.WebhookProcessingStatus
+	19,  // 23: kodex.providers.v1.ListWebhookEventsRequest.page:type_name -> kodex.providers.v1.PageRequest
+	16,  // 24: kodex.providers.v1.ListWebhookEventsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	23,  // 25: kodex.providers.v1.ListWebhookEventsResponse.webhook_events:type_name -> kodex.providers.v1.WebhookEvent
+	20,  // 26: kodex.providers.v1.ListWebhookEventsResponse.page:type_name -> kodex.providers.v1.PageResponse
+	15,  // 27: kodex.providers.v1.RetryWebhookEventProcessingRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	16,  // 28: kodex.providers.v1.GetWorkItemProjectionRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	22,  // 29: kodex.providers.v1.FindWorkItemByProviderRefRequest.target:type_name -> kodex.providers.v1.ProviderTarget
+	16,  // 30: kodex.providers.v1.FindWorkItemByProviderRefRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	25,  // 31: kodex.providers.v1.WorkItemProjectionResponse.work_item_projection:type_name -> kodex.providers.v1.WorkItemProjection
+	0,   // 32: kodex.providers.v1.ListWorkItemProjectionsRequest.kinds:type_name -> kodex.providers.v1.WorkItemKind
+	3,   // 33: kodex.providers.v1.ListWorkItemProjectionsRequest.drift_statuses:type_name -> kodex.providers.v1.WorkItemDriftStatus
+	19,  // 34: kodex.providers.v1.ListWorkItemProjectionsRequest.page:type_name -> kodex.providers.v1.PageRequest
+	16,  // 35: kodex.providers.v1.ListWorkItemProjectionsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	25,  // 36: kodex.providers.v1.ListWorkItemProjectionsResponse.work_item_projections:type_name -> kodex.providers.v1.WorkItemProjection
+	20,  // 37: kodex.providers.v1.ListWorkItemProjectionsResponse.page:type_name -> kodex.providers.v1.PageResponse
+	4,   // 38: kodex.providers.v1.ListCommentsRequest.kinds:type_name -> kodex.providers.v1.CommentKind
+	19,  // 39: kodex.providers.v1.ListCommentsRequest.page:type_name -> kodex.providers.v1.PageRequest
+	16,  // 40: kodex.providers.v1.ListCommentsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	26,  // 41: kodex.providers.v1.ListCommentsResponse.comments:type_name -> kodex.providers.v1.CommentProjection
+	20,  // 42: kodex.providers.v1.ListCommentsResponse.page:type_name -> kodex.providers.v1.PageResponse
+	7,   // 43: kodex.providers.v1.ListRelationshipsRequest.sources:type_name -> kodex.providers.v1.RelationshipSource
+	6,   // 44: kodex.providers.v1.ListRelationshipsRequest.confidence_levels:type_name -> kodex.providers.v1.RelationshipConfidence
+	19,  // 45: kodex.providers.v1.ListRelationshipsRequest.page:type_name -> kodex.providers.v1.PageRequest
+	16,  // 46: kodex.providers.v1.ListRelationshipsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	27,  // 47: kodex.providers.v1.ListRelationshipsResponse.relationships:type_name -> kodex.providers.v1.ProviderRelationship
+	20,  // 48: kodex.providers.v1.ListRelationshipsResponse.page:type_name -> kodex.providers.v1.PageResponse
+	22,  // 49: kodex.providers.v1.RegisterProviderArtifactSignalRequest.target:type_name -> kodex.providers.v1.ProviderTarget
+	15,  // 50: kodex.providers.v1.RegisterProviderArtifactSignalRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	22,  // 51: kodex.providers.v1.ProviderArtifactSignalResponse.target:type_name -> kodex.providers.v1.ProviderTarget
+	8,   // 52: kodex.providers.v1.EnqueueReconciliationRequest.scope_type:type_name -> kodex.providers.v1.SyncCursorScopeType
+	9,   // 53: kodex.providers.v1.EnqueueReconciliationRequest.artifact_kinds:type_name -> kodex.providers.v1.SyncArtifactKind
+	10,  // 54: kodex.providers.v1.EnqueueReconciliationRequest.priority:type_name -> kodex.providers.v1.SyncCursorPriority
+	15,  // 55: kodex.providers.v1.EnqueueReconciliationRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	28,  // 56: kodex.providers.v1.ReconciliationRequestResponse.sync_cursors:type_name -> kodex.providers.v1.SyncCursor
+	15,  // 57: kodex.providers.v1.RunReconciliationBatchRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	28,  // 58: kodex.providers.v1.RunReconciliationBatchResponse.sync_cursor:type_name -> kodex.providers.v1.SyncCursor
+	16,  // 59: kodex.providers.v1.GetSyncCursorRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	28,  // 60: kodex.providers.v1.SyncCursorResponse.sync_cursor:type_name -> kodex.providers.v1.SyncCursor
+	8,   // 61: kodex.providers.v1.ListSyncCursorsRequest.scope_type:type_name -> kodex.providers.v1.SyncCursorScopeType
+	9,   // 62: kodex.providers.v1.ListSyncCursorsRequest.artifact_kinds:type_name -> kodex.providers.v1.SyncArtifactKind
+	10,  // 63: kodex.providers.v1.ListSyncCursorsRequest.priorities:type_name -> kodex.providers.v1.SyncCursorPriority
+	19,  // 64: kodex.providers.v1.ListSyncCursorsRequest.page:type_name -> kodex.providers.v1.PageRequest
+	16,  // 65: kodex.providers.v1.ListSyncCursorsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	28,  // 66: kodex.providers.v1.ListSyncCursorsResponse.sync_cursors:type_name -> kodex.providers.v1.SyncCursor
+	20,  // 67: kodex.providers.v1.ListSyncCursorsResponse.page:type_name -> kodex.providers.v1.PageResponse
+	15,  // 68: kodex.providers.v1.CreateIssueRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	22,  // 69: kodex.providers.v1.UpdateIssueRequest.target:type_name -> kodex.providers.v1.ProviderTarget
+	21,  // 70: kodex.providers.v1.UpdateIssueRequest.labels:type_name -> kodex.providers.v1.StringListPatch
+	21,  // 71: kodex.providers.v1.UpdateIssueRequest.assignee_provider_logins:type_name -> kodex.providers.v1.StringListPatch
+	15,  // 72: kodex.providers.v1.UpdateIssueRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	22,  // 73: kodex.providers.v1.CreateCommentRequest.target:type_name -> kodex.providers.v1.ProviderTarget
+	15,  // 74: kodex.providers.v1.CreateCommentRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	22,  // 75: kodex.providers.v1.UpdateCommentRequest.target:type_name -> kodex.providers.v1.ProviderTarget
+	15,  // 76: kodex.providers.v1.UpdateCommentRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	15,  // 77: kodex.providers.v1.CreatePullRequestRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	22,  // 78: kodex.providers.v1.CreateReviewSignalRequest.target:type_name -> kodex.providers.v1.ProviderTarget
+	14,  // 79: kodex.providers.v1.CreateReviewSignalRequest.kind:type_name -> kodex.providers.v1.ReviewSignalKind
+	15,  // 80: kodex.providers.v1.CreateReviewSignalRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	22,  // 81: kodex.providers.v1.UpdateRelationshipRequest.source:type_name -> kodex.providers.v1.ProviderTarget
+	22,  // 82: kodex.providers.v1.UpdateRelationshipRequest.target:type_name -> kodex.providers.v1.ProviderTarget
+	7,   // 83: kodex.providers.v1.UpdateRelationshipRequest.source_kind:type_name -> kodex.providers.v1.RelationshipSource
+	6,   // 84: kodex.providers.v1.UpdateRelationshipRequest.confidence:type_name -> kodex.providers.v1.RelationshipConfidence
+	15,  // 85: kodex.providers.v1.UpdateRelationshipRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	31,  // 86: kodex.providers.v1.ProviderOperationResponse.provider_operation:type_name -> kodex.providers.v1.ProviderOperation
+	25,  // 87: kodex.providers.v1.ProviderOperationResponse.work_item_projection:type_name -> kodex.providers.v1.WorkItemProjection
+	26,  // 88: kodex.providers.v1.ProviderOperationResponse.comment_projection:type_name -> kodex.providers.v1.CommentProjection
+	27,  // 89: kodex.providers.v1.ProviderOperationResponse.relationship:type_name -> kodex.providers.v1.ProviderRelationship
+	16,  // 90: kodex.providers.v1.GetProviderAccountRuntimeStateRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	29,  // 91: kodex.providers.v1.ProviderAccountRuntimeStateResponse.runtime_state:type_name -> kodex.providers.v1.ProviderAccountRuntimeState
+	11,  // 92: kodex.providers.v1.ListProviderAccountRuntimeStatesRequest.statuses:type_name -> kodex.providers.v1.ProviderAccountRuntimeStatus
+	19,  // 93: kodex.providers.v1.ListProviderAccountRuntimeStatesRequest.page:type_name -> kodex.providers.v1.PageRequest
+	16,  // 94: kodex.providers.v1.ListProviderAccountRuntimeStatesRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	29,  // 95: kodex.providers.v1.ListProviderAccountRuntimeStatesResponse.runtime_states:type_name -> kodex.providers.v1.ProviderAccountRuntimeState
+	20,  // 96: kodex.providers.v1.ListProviderAccountRuntimeStatesResponse.page:type_name -> kodex.providers.v1.PageResponse
+	15,  // 97: kodex.providers.v1.RecordProviderLimitSnapshotRequest.meta:type_name -> kodex.providers.v1.CommandMeta
+	30,  // 98: kodex.providers.v1.ProviderLimitSnapshotResponse.limit_snapshot:type_name -> kodex.providers.v1.ProviderLimitSnapshot
+	19,  // 99: kodex.providers.v1.ListProviderLimitSnapshotsRequest.page:type_name -> kodex.providers.v1.PageRequest
+	16,  // 100: kodex.providers.v1.ListProviderLimitSnapshotsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	30,  // 101: kodex.providers.v1.ListProviderLimitSnapshotsResponse.limit_snapshots:type_name -> kodex.providers.v1.ProviderLimitSnapshot
+	20,  // 102: kodex.providers.v1.ListProviderLimitSnapshotsResponse.page:type_name -> kodex.providers.v1.PageResponse
+	12,  // 103: kodex.providers.v1.ListProviderOperationsRequest.operation_types:type_name -> kodex.providers.v1.ProviderOperationType
+	13,  // 104: kodex.providers.v1.ListProviderOperationsRequest.statuses:type_name -> kodex.providers.v1.ProviderOperationStatus
+	19,  // 105: kodex.providers.v1.ListProviderOperationsRequest.page:type_name -> kodex.providers.v1.PageRequest
+	16,  // 106: kodex.providers.v1.ListProviderOperationsRequest.meta:type_name -> kodex.providers.v1.QueryMeta
+	31,  // 107: kodex.providers.v1.ListProviderOperationsResponse.provider_operations:type_name -> kodex.providers.v1.ProviderOperation
+	20,  // 108: kodex.providers.v1.ListProviderOperationsResponse.page:type_name -> kodex.providers.v1.PageResponse
+	32,  // 109: kodex.providers.v1.ProviderHubService.IngestWebhookEvent:input_type -> kodex.providers.v1.IngestWebhookEventRequest
+	34,  // 110: kodex.providers.v1.ProviderHubService.GetWebhookEvent:input_type -> kodex.providers.v1.GetWebhookEventRequest
+	35,  // 111: kodex.providers.v1.ProviderHubService.ListWebhookEvents:input_type -> kodex.providers.v1.ListWebhookEventsRequest
+	37,  // 112: kodex.providers.v1.ProviderHubService.RetryWebhookEventProcessing:input_type -> kodex.providers.v1.RetryWebhookEventProcessingRequest
+	38,  // 113: kodex.providers.v1.ProviderHubService.GetWorkItemProjection:input_type -> kodex.providers.v1.GetWorkItemProjectionRequest
+	39,  // 114: kodex.providers.v1.ProviderHubService.FindWorkItemByProviderRef:input_type -> kodex.providers.v1.FindWorkItemByProviderRefRequest
+	41,  // 115: kodex.providers.v1.ProviderHubService.ListWorkItemProjections:input_type -> kodex.providers.v1.ListWorkItemProjectionsRequest
+	43,  // 116: kodex.providers.v1.ProviderHubService.ListComments:input_type -> kodex.providers.v1.ListCommentsRequest
+	45,  // 117: kodex.providers.v1.ProviderHubService.ListRelationships:input_type -> kodex.providers.v1.ListRelationshipsRequest
+	47,  // 118: kodex.providers.v1.ProviderHubService.RegisterProviderArtifactSignal:input_type -> kodex.providers.v1.RegisterProviderArtifactSignalRequest
+	49,  // 119: kodex.providers.v1.ProviderHubService.EnqueueReconciliation:input_type -> kodex.providers.v1.EnqueueReconciliationRequest
+	51,  // 120: kodex.providers.v1.ProviderHubService.RunReconciliationBatch:input_type -> kodex.providers.v1.RunReconciliationBatchRequest
+	53,  // 121: kodex.providers.v1.ProviderHubService.GetSyncCursor:input_type -> kodex.providers.v1.GetSyncCursorRequest
+	55,  // 122: kodex.providers.v1.ProviderHubService.ListSyncCursors:input_type -> kodex.providers.v1.ListSyncCursorsRequest
+	57,  // 123: kodex.providers.v1.ProviderHubService.CreateIssue:input_type -> kodex.providers.v1.CreateIssueRequest
+	58,  // 124: kodex.providers.v1.ProviderHubService.UpdateIssue:input_type -> kodex.providers.v1.UpdateIssueRequest
+	59,  // 125: kodex.providers.v1.ProviderHubService.CreateComment:input_type -> kodex.providers.v1.CreateCommentRequest
+	60,  // 126: kodex.providers.v1.ProviderHubService.UpdateComment:input_type -> kodex.providers.v1.UpdateCommentRequest
+	61,  // 127: kodex.providers.v1.ProviderHubService.CreatePullRequest:input_type -> kodex.providers.v1.CreatePullRequestRequest
+	62,  // 128: kodex.providers.v1.ProviderHubService.CreateReviewSignal:input_type -> kodex.providers.v1.CreateReviewSignalRequest
+	63,  // 129: kodex.providers.v1.ProviderHubService.UpdateRelationship:input_type -> kodex.providers.v1.UpdateRelationshipRequest
+	65,  // 130: kodex.providers.v1.ProviderHubService.GetProviderAccountRuntimeState:input_type -> kodex.providers.v1.GetProviderAccountRuntimeStateRequest
+	67,  // 131: kodex.providers.v1.ProviderHubService.ListProviderAccountRuntimeStates:input_type -> kodex.providers.v1.ListProviderAccountRuntimeStatesRequest
+	69,  // 132: kodex.providers.v1.ProviderHubService.RecordProviderLimitSnapshot:input_type -> kodex.providers.v1.RecordProviderLimitSnapshotRequest
+	71,  // 133: kodex.providers.v1.ProviderHubService.ListProviderLimitSnapshots:input_type -> kodex.providers.v1.ListProviderLimitSnapshotsRequest
+	73,  // 134: kodex.providers.v1.ProviderHubService.ListProviderOperations:input_type -> kodex.providers.v1.ListProviderOperationsRequest
+	33,  // 135: kodex.providers.v1.ProviderHubService.IngestWebhookEvent:output_type -> kodex.providers.v1.WebhookEventResponse
+	33,  // 136: kodex.providers.v1.ProviderHubService.GetWebhookEvent:output_type -> kodex.providers.v1.WebhookEventResponse
+	36,  // 137: kodex.providers.v1.ProviderHubService.ListWebhookEvents:output_type -> kodex.providers.v1.ListWebhookEventsResponse
+	33,  // 138: kodex.providers.v1.ProviderHubService.RetryWebhookEventProcessing:output_type -> kodex.providers.v1.WebhookEventResponse
+	40,  // 139: kodex.providers.v1.ProviderHubService.GetWorkItemProjection:output_type -> kodex.providers.v1.WorkItemProjectionResponse
+	40,  // 140: kodex.providers.v1.ProviderHubService.FindWorkItemByProviderRef:output_type -> kodex.providers.v1.WorkItemProjectionResponse
+	42,  // 141: kodex.providers.v1.ProviderHubService.ListWorkItemProjections:output_type -> kodex.providers.v1.ListWorkItemProjectionsResponse
+	44,  // 142: kodex.providers.v1.ProviderHubService.ListComments:output_type -> kodex.providers.v1.ListCommentsResponse
+	46,  // 143: kodex.providers.v1.ProviderHubService.ListRelationships:output_type -> kodex.providers.v1.ListRelationshipsResponse
+	48,  // 144: kodex.providers.v1.ProviderHubService.RegisterProviderArtifactSignal:output_type -> kodex.providers.v1.ProviderArtifactSignalResponse
+	50,  // 145: kodex.providers.v1.ProviderHubService.EnqueueReconciliation:output_type -> kodex.providers.v1.ReconciliationRequestResponse
+	52,  // 146: kodex.providers.v1.ProviderHubService.RunReconciliationBatch:output_type -> kodex.providers.v1.RunReconciliationBatchResponse
+	54,  // 147: kodex.providers.v1.ProviderHubService.GetSyncCursor:output_type -> kodex.providers.v1.SyncCursorResponse
+	56,  // 148: kodex.providers.v1.ProviderHubService.ListSyncCursors:output_type -> kodex.providers.v1.ListSyncCursorsResponse
+	64,  // 149: kodex.providers.v1.ProviderHubService.CreateIssue:output_type -> kodex.providers.v1.ProviderOperationResponse
+	64,  // 150: kodex.providers.v1.ProviderHubService.UpdateIssue:output_type -> kodex.providers.v1.ProviderOperationResponse
+	64,  // 151: kodex.providers.v1.ProviderHubService.CreateComment:output_type -> kodex.providers.v1.ProviderOperationResponse
+	64,  // 152: kodex.providers.v1.ProviderHubService.UpdateComment:output_type -> kodex.providers.v1.ProviderOperationResponse
+	64,  // 153: kodex.providers.v1.ProviderHubService.CreatePullRequest:output_type -> kodex.providers.v1.ProviderOperationResponse
+	64,  // 154: kodex.providers.v1.ProviderHubService.CreateReviewSignal:output_type -> kodex.providers.v1.ProviderOperationResponse
+	64,  // 155: kodex.providers.v1.ProviderHubService.UpdateRelationship:output_type -> kodex.providers.v1.ProviderOperationResponse
+	66,  // 156: kodex.providers.v1.ProviderHubService.GetProviderAccountRuntimeState:output_type -> kodex.providers.v1.ProviderAccountRuntimeStateResponse
+	68,  // 157: kodex.providers.v1.ProviderHubService.ListProviderAccountRuntimeStates:output_type -> kodex.providers.v1.ListProviderAccountRuntimeStatesResponse
+	70,  // 158: kodex.providers.v1.ProviderHubService.RecordProviderLimitSnapshot:output_type -> kodex.providers.v1.ProviderLimitSnapshotResponse
+	72,  // 159: kodex.providers.v1.ProviderHubService.ListProviderLimitSnapshots:output_type -> kodex.providers.v1.ListProviderLimitSnapshotsResponse
+	74,  // 160: kodex.providers.v1.ProviderHubService.ListProviderOperations:output_type -> kodex.providers.v1.ListProviderOperationsResponse
+	135, // [135:161] is the sub-list for method output_type
+	109, // [109:135] is the sub-list for method input_type
+	109, // [109:109] is the sub-list for extension type_name
+	109, // [109:109] is the sub-list for extension extendee
+	0,   // [0:109] is the sub-list for field type_name
 }
 
 func init() { file_kodex_providers_v1_provider_hub_proto_init() }
@@ -6928,7 +7007,7 @@ func file_kodex_providers_v1_provider_hub_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kodex_providers_v1_provider_hub_proto_rawDesc), len(file_kodex_providers_v1_provider_hub_proto_rawDesc)),
-			NumEnums:      14,
+			NumEnums:      15,
 			NumMessages:   60,
 			NumExtensions: 0,
 			NumServices:   1,

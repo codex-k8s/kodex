@@ -101,6 +101,7 @@ type ProviderCommentSnapshot struct {
 	ProviderCommentID  string
 	ProviderWorkItemID string
 	Kind               string
+	ReviewState        string
 	AuthorLogin        string
 	Body               string
 	ProviderCreatedAt  time.Time
