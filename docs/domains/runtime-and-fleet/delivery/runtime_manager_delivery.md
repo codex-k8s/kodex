@@ -56,11 +56,11 @@ approvals:
 
 | Группа | Контракт | Реализация |
 |---|---|---|
-| Слоты | Готов: `PrepareRuntime`, `ReserveSlot`, `ExtendSlotLease`, `ReleaseSlot`, `MarkSlotFailed`, `GetSlot`, `ListSlots`, события `runtime.slot.*`. | Не начата; будет в RTM-3 после каркаса и БД. |
+| Слоты | Готов: `PrepareRuntime`, `ReserveSlot`, `ExtendSlotLease`, `ReleaseSlot`, `MarkSlotFailed`, `GetSlot`, `ListSlots`, события `runtime.slot.*`. | Базовая таблица и миграция готовы; команды жизненного цикла будут в RTM-3. |
 | Workspace materialization | Готов: старт, отчёт прогресса, чтения и события `runtime.workspace.*`. | Не начата; будет в RTM-4. |
-| Platform jobs | Готов: создание, claim с `lease_token`, progress, complete/fail/cancel, чтения и события `runtime.job.*`. | Не начата; будет в RTM-5. |
-| Runtime artifact refs | Готов: запись и чтение ссылок на внешние runtime-артефакты. | Не начата; базовый слой будет в RTM-5. |
-| Cleanup/prewarm/reuse | Готов: cleanup policy, cleanup batch, prewarm pool и события cleanup/prewarm. | Не начата; будет в RTM-7. |
+| Platform jobs | Готов: создание, claim с `lease_token`, progress, complete/fail/cancel, чтения и события `runtime.job.*`. | Базовые таблицы job/job step готовы; команды и state machine будут в RTM-5. |
+| Runtime artifact refs | Готов: запись и чтение ссылок на внешние runtime-артефакты. | Базовая таблица готова; команды записи и чтения будут в RTM-5. |
+| Cleanup/prewarm/reuse | Готов: cleanup policy, cleanup batch, prewarm pool и события cleanup/prewarm. | Базовые таблицы cleanup policy и prewarm pool готовы; runtime-логика будет в RTM-7. |
 | Deploy/manifests | Не gRPC-группа. | Не начата; будет в RTM-6. |
 
 ## Синхронизация с параллельными доменами
