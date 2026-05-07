@@ -9,20 +9,6 @@ ROLL_OUT_TIMEOUT="${KODEX_ROLLOUT_TIMEOUT:-300s}"
 RESTART_DEPLOYMENT="${KODEX_SMOKE_RESTART_DEPLOYMENT:-true}"
 KEEP_RENDER_DIR="${KODEX_SMOKE_KEEP_RENDER_DIR:-false}"
 
-inventory_version() {
-  local key="$1"
-  awk -v key="$key" '
-    $0 ~ "^    " key ":" { found = 1; next }
-    found && $1 == "value:" {
-      value = $2
-      gsub(/"/, "", value)
-      print value
-      exit
-    }
-    found && $0 ~ "^    [A-Za-z0-9_-]+:" { exit }
-  ' "${PROJECT_ROOT}/services.yaml"
-}
-
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "smoke-access-manager: env file not found: $ENV_FILE" >&2
   exit 1
@@ -30,6 +16,8 @@ fi
 
 # shellcheck disable=SC1090
 source "$ENV_FILE"
+# shellcheck disable=SC1091
+source "${PROJECT_ROOT}/scripts/lib/inventory.sh"
 
 if [[ -z "$RENDER_DIR" ]]; then
   RENDER_DIR="$(mktemp -d)"
@@ -56,16 +44,10 @@ cleanup() {
 trap cleanup EXIT
 
 namespace="${KODEX_PRODUCTION_NAMESPACE:-kodex-prod}"
-internal_registry_host="${KODEX_INTERNAL_REGISTRY_HOST:-127.0.0.1:5000}"
-access_repo="${KODEX_ACCESS_MANAGER_INTERNAL_IMAGE_REPOSITORY:-kodex/access-manager}"
-access_migrations_repo="${KODEX_ACCESS_MANAGER_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY:-kodex/access-manager-migrations}"
-event_log_migrations_repo="${KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY:-kodex/platform-event-log-migrations}"
-access_version="${KODEX_ACCESS_MANAGER_VERSION:-$(inventory_version access-manager)}"
-event_log_version="${KODEX_PLATFORM_EVENT_LOG_VERSION:-$(inventory_version platform-event-log)}"
-
-KODEX_ACCESS_MANAGER_IMAGE="${KODEX_ACCESS_MANAGER_IMAGE:-${internal_registry_host}/${access_repo}:${access_version}}"
-KODEX_ACCESS_MANAGER_MIGRATIONS_IMAGE="${KODEX_ACCESS_MANAGER_MIGRATIONS_IMAGE:-${internal_registry_host}/${access_migrations_repo}:${access_version}}"
-KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_IMAGE="${KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_IMAGE:-${internal_registry_host}/${event_log_migrations_repo}:${event_log_version}}"
+KODEX_POSTGRES_IMAGE="$(kodex_postgres_image)"
+KODEX_ACCESS_MANAGER_IMAGE="$(kodex_image_from_repo KODEX_ACCESS_MANAGER_IMAGE KODEX_ACCESS_MANAGER_INTERNAL_IMAGE_REPOSITORY kodex/access-manager KODEX_ACCESS_MANAGER_VERSION access-manager)"
+KODEX_ACCESS_MANAGER_MIGRATIONS_IMAGE="$(kodex_image_from_repo KODEX_ACCESS_MANAGER_MIGRATIONS_IMAGE KODEX_ACCESS_MANAGER_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY kodex/access-manager-migrations KODEX_ACCESS_MANAGER_VERSION access-manager)"
+KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_IMAGE="$(kodex_image_from_repo KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_IMAGE KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY kodex/platform-event-log-migrations KODEX_PLATFORM_EVENT_LOG_VERSION platform-event-log)"
 
 required_runtime_values=(
   KODEX_POSTGRES_PASSWORD
@@ -90,7 +72,7 @@ if (( ${#missing_runtime_values[@]} > 0 )); then
 fi
 
 required_images=(
-  "${KODEX_POSTGRES_IMAGE:-pgvector/pgvector:pg16}"
+  "$KODEX_POSTGRES_IMAGE"
   "$KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_IMAGE"
   "$KODEX_ACCESS_MANAGER_MIGRATIONS_IMAGE"
   "$KODEX_ACCESS_MANAGER_IMAGE"
@@ -111,6 +93,7 @@ fi
 
 cp "$ENV_FILE" "$render_env_file"
 {
+  printf "KODEX_POSTGRES_IMAGE='%s'\n" "$KODEX_POSTGRES_IMAGE"
   printf "KODEX_ACCESS_MANAGER_IMAGE='%s'\n" "$KODEX_ACCESS_MANAGER_IMAGE"
   printf "KODEX_ACCESS_MANAGER_MIGRATIONS_IMAGE='%s'\n" "$KODEX_ACCESS_MANAGER_MIGRATIONS_IMAGE"
   printf "KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_IMAGE='%s'\n" "$KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_IMAGE"

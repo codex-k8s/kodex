@@ -5,20 +5,6 @@ PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ENV_FILE="${KODEX_BUILD_ENV_FILE:-${PROJECT_ROOT}/bootstrap/host/config.env}"
 IMAGE_TAR="${KODEX_BUILD_IMAGE_TAR:-${PROJECT_ROOT}/.local/build/access-manager-smoke-images.tar}"
 
-inventory_version() {
-  local key="$1"
-  awk -v key="$key" '
-    $0 ~ "^    " key ":" { found = 1; next }
-    found && $1 == "value:" {
-      value = $2
-      gsub(/"/, "", value)
-      print value
-      exit
-    }
-    found && $0 ~ "^    [A-Za-z0-9_-]+:" { exit }
-  ' "${PROJECT_ROOT}/services.yaml"
-}
-
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "build-access-manager-images: env file not found: $ENV_FILE" >&2
   exit 1
@@ -26,19 +12,13 @@ fi
 
 # shellcheck disable=SC1090
 source "$ENV_FILE"
+# shellcheck disable=SC1091
+source "${PROJECT_ROOT}/scripts/lib/inventory.sh"
 
-internal_registry_host="${KODEX_INTERNAL_REGISTRY_HOST:-127.0.0.1:5000}"
-access_repo="${KODEX_ACCESS_MANAGER_INTERNAL_IMAGE_REPOSITORY:-kodex/access-manager}"
-access_migrations_repo="${KODEX_ACCESS_MANAGER_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY:-kodex/access-manager-migrations}"
-event_log_migrations_repo="${KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY:-kodex/platform-event-log-migrations}"
-access_version="${KODEX_ACCESS_MANAGER_VERSION:-$(inventory_version access-manager)}"
-event_log_version="${KODEX_PLATFORM_EVENT_LOG_VERSION:-$(inventory_version platform-event-log)}"
-golang_version="${KODEX_GOLANG_ALPINE_VERSION:-$(inventory_version golang-alpine)}"
-
-access_image="${KODEX_ACCESS_MANAGER_IMAGE:-${internal_registry_host}/${access_repo}:${access_version}}"
-access_migrations_image="${KODEX_ACCESS_MANAGER_MIGRATIONS_IMAGE:-${internal_registry_host}/${access_migrations_repo}:${access_version}}"
-event_log_migrations_image="${KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_IMAGE:-${internal_registry_host}/${event_log_migrations_repo}:${event_log_version}}"
-golang_image="${KODEX_BUILD_GOLANG_IMAGE:-golang:${golang_version}}"
+access_image="$(kodex_image_from_repo KODEX_ACCESS_MANAGER_IMAGE KODEX_ACCESS_MANAGER_INTERNAL_IMAGE_REPOSITORY kodex/access-manager KODEX_ACCESS_MANAGER_VERSION access-manager)"
+access_migrations_image="$(kodex_image_from_repo KODEX_ACCESS_MANAGER_MIGRATIONS_IMAGE KODEX_ACCESS_MANAGER_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY kodex/access-manager-migrations KODEX_ACCESS_MANAGER_VERSION access-manager)"
+event_log_migrations_image="$(kodex_image_from_repo KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_IMAGE KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY kodex/platform-event-log-migrations KODEX_PLATFORM_EVENT_LOG_VERSION platform-event-log)"
+golang_image="$(kodex_golang_image)"
 
 docker build \
   --build-arg "GOLANG_IMAGE=${golang_image}" \
