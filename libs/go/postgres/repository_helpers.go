@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -284,6 +285,30 @@ func AddBaseArgs(args pgx.NamedArgs, id uuid.UUID, version int64, createdAt time
 	args["created_at"] = createdAt
 	args["updated_at"] = updatedAt
 	return args
+}
+
+// OffsetPageBounds converts an API page request into LIMIT/OFFSET values.
+func OffsetPageBounds(pageSize int32, pageToken string, defaultPageSize int32, maxPageSize int32) (limit int32, offset int32, nextOffset int32) {
+	limit = pageSize
+	if limit <= 0 {
+		limit = defaultPageSize
+	}
+	if limit > maxPageSize {
+		limit = maxPageSize
+	}
+	parsedOffset, err := strconv.ParseInt(pageToken, 10, 32)
+	if err == nil && parsedOffset > 0 {
+		offset = int32(parsedOffset)
+	}
+	return limit, offset, offset + limit
+}
+
+// TrimOffsetPage keeps one extra queried row only as a continuation signal.
+func TrimOffsetPage[T any](items []T, limit int32, nextOffset int32) ([]T, string) {
+	if int32(len(items)) <= limit {
+		return items, ""
+	}
+	return items[:len(items)-1], strconv.FormatInt(int64(nextOffset), 10)
 }
 
 // OutboxEventRow stores transport-neutral outbox columns scanned from service databases.

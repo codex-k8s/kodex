@@ -43,12 +43,12 @@ approvals:
 Важные инварианты:
 
 - политика аккаунта и область применения находятся в `access-manager`;
-- `provider-hub` хранит только runtime-состояние использования аккаунта у провайдера;
+- `provider-hub` хранит только операционное состояние использования аккаунта у провайдера;
 - сырые секреты не хранятся в БД.
 
 | Поле | Тип | Nullable | Ограничения | Примечание |
 |---|---|---:|---|---|
-| `id` | UUID | no | primary key | Идентификатор runtime-записи. |
+| `id` | UUID | no | primary key | Идентификатор записи операционного состояния. |
 | `external_account_id` | UUID | no | indexed | Ссылка на внешний аккаунт из `access-manager`. |
 | `provider_slug` | text | no | indexed | `github`, позднее `gitlab`. |
 | `status` | text | no | enum-like | `active`, `reauthorization_required`, `limited`, `disabled`, `error`. |
@@ -202,6 +202,9 @@ approvals:
 | `reset_at` | timestamptz | yes | indexed | Время сброса. |
 | `captured_at` | timestamptz | no | indexed | Время снимка. |
 | `source` | text | no | indexed | `provider_hub`, `slot_agent_before`, `slot_agent_after`, `slot_agent_signal`. |
+
+Идемпотентность записи снимка обеспечивается естественным ключом
+`external_account_id + provider_slug + limit_class + captured_at + source`.
 
 ### `ProviderOperation`
 
