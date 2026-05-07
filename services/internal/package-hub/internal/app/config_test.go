@@ -8,6 +8,9 @@ import (
 func TestLoadConfigAllowsMissingConditionalEnvWhenAuthDisabled(t *testing.T) {
 	t.Setenv("KODEX_PACKAGE_HUB_GRPC_AUTH_REQUIRED", "false")
 	t.Setenv("KODEX_PACKAGE_HUB_GRPC_AUTH_TOKEN", "")
+	t.Setenv("KODEX_PACKAGE_HUB_DATABASE_DSN", "postgres://package-hub")
+	t.Setenv("KODEX_PACKAGE_HUB_OUTBOX_PUBLISHER_KIND", "disabled")
+	t.Setenv("KODEX_PACKAGE_HUB_OUTBOX_DISPATCH_ENABLED", "false")
 
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -38,6 +41,16 @@ func TestValidateRejectsInvalidGRPCRuntimeLimits(t *testing.T) {
 	}
 }
 
+func TestValidateRequiresEventLogDSNForPostgresPublisher(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.EventLogDatabaseDSN = ""
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() err = nil, want event-log database dsn error")
+	}
+}
+
 func TestGRPCServerConfigMapsRuntimeLimits(t *testing.T) {
 	t.Parallel()
 
@@ -51,6 +64,16 @@ func TestGRPCServerConfigMapsRuntimeLimits(t *testing.T) {
 	}
 	if runtime.AuthRequired != cfg.GRPCAuthRequired {
 		t.Fatalf("AuthRequired = %v, want %v", runtime.AuthRequired, cfg.GRPCAuthRequired)
+	}
+}
+
+func TestOutboxDispatcherConfigMapsRuntimeLimits(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	runtime := cfg.OutboxDispatcherConfig()
+	if runtime.BatchSize != cfg.OutboxBatchSize {
+		t.Fatalf("BatchSize = %d, want %d", runtime.BatchSize, cfg.OutboxBatchSize)
 	}
 }
 
@@ -68,5 +91,31 @@ func validConfig() Config {
 		GRPCKeepaliveMinTime:     30 * time.Second,
 		GRPCMaxRecvMessageBytes:  4 * 1024 * 1024,
 		GRPCMaxSendMessageBytes:  4 * 1024 * 1024,
+		DatabaseDSN:              "postgres://package-hub",
+		DatabaseMaxConns:         8,
+		DatabaseMinConns:         1,
+		DatabaseMaxConnLifetime:  time.Hour,
+		DatabaseMaxConnIdleTime:  15 * time.Minute,
+		DatabaseHealthPeriod:     30 * time.Second,
+		DatabasePingTimeout:      5 * time.Second,
+		DatabaseRetryAttempts:    6,
+		DatabaseRetryInitial:     500 * time.Millisecond,
+		DatabaseRetryMax:         5 * time.Second,
+		DatabaseRetryJitterRatio: 0.2,
+		EventLogDatabaseDSN:      "postgres://platform-event-log",
+		EventLogDatabaseMaxConns: 4,
+		EventLogDatabaseMinConns: 0,
+		OutboxDispatchEnabled:    true,
+		OutboxPublisherKind:      "postgres-event-log",
+		OutboxEventLogSource:     "package-hub",
+		OutboxAllowLossy:         false,
+		OutboxBatchSize:          100,
+		OutboxPollInterval:       time.Second,
+		OutboxLockTTL:            30 * time.Second,
+		OutboxPublishTimeout:     10 * time.Second,
+		OutboxLeaseSafetyMargin:  5 * time.Second,
+		OutboxRetryInitialDelay:  time.Second,
+		OutboxRetryMaxDelay:      time.Minute,
+		OutboxFailureLimit:       512,
 	}
 }

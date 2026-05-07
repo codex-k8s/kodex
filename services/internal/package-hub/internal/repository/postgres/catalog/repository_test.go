@@ -19,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/enum"
@@ -324,10 +325,11 @@ func TestRepositoryIntegrationInstallationStorage(t *testing.T) {
 	rejectedVersion.UpdatedAt = now.Add(time.Minute)
 	rejectCommandID := uuid.New()
 	rejectResult := testCommandResult(rejectCommandID, "package.verify", enum.CommandAggregateTypePackageVersion, versionA.ID, "", now)
-	if err := repository.SetPackageVerification(ctx, rejectedVersion, 99, verificationA, rejectResult); !errors.Is(err, errs.ErrConflict) {
+	rejectEvent := testOutboxEvent(versionA.ID, "package.verification.updated", now)
+	if err := repository.SetPackageVerification(ctx, rejectedVersion, 99, verificationA, rejectResult, rejectEvent); !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("stale verification err = %v, want %v", err, errs.ErrConflict)
 	}
-	if err := repository.SetPackageVerification(ctx, rejectedVersion, 1, verificationA, rejectResult); err != nil {
+	if err := repository.SetPackageVerification(ctx, rejectedVersion, 1, verificationA, rejectResult, rejectEvent); err != nil {
 		t.Fatalf("set verification A: %v", err)
 	}
 	storedVersion, err := repository.GetPackageVersion(ctx, versionA.ID)
@@ -345,8 +347,35 @@ func TestRepositoryIntegrationInstallationStorage(t *testing.T) {
 	verifiedVersion.UpdatedAt = now.Add(2 * time.Minute)
 	verifyCommandID := uuid.New()
 	verifyResult := testCommandResult(verifyCommandID, "package.verify", enum.CommandAggregateTypePackageVersion, versionA.ID, "verify-repeat", now.Add(2*time.Minute))
-	if err := repository.SetPackageVerification(ctx, verifiedVersion, 2, verificationB, verifyResult); err != nil {
+	verifyEvent := testOutboxEvent(versionA.ID, "package.verification.updated", now.Add(2*time.Minute))
+	if err := repository.SetPackageVerification(ctx, verifiedVersion, 2, verificationB, verifyResult, verifyEvent); err != nil {
 		t.Fatalf("set verification B: %v", err)
+	}
+	claimedEvents, err := repository.ClaimOutboxEvents(ctx, 10, now.Add(3*time.Minute), now.Add(4*time.Minute))
+	if err != nil {
+		t.Fatalf("claim outbox events: %v", err)
+	}
+	if len(claimedEvents) != 2 || claimedEvents[0].EventType != "package.verification.updated" {
+		t.Fatalf("claimed events = %+v, want two verification events", claimedEvents)
+	}
+	if claimedEvents[0].AttemptCount != 1 || claimedEvents[0].LockedUntil == nil {
+		t.Fatalf("claimed event delivery = %+v, want attempt and lock", claimedEvents[0])
+	}
+	if err := repository.MarkOutboxEventFailed(ctx, claimedEvents[0].ID, claimedEvents[0].AttemptCount, now.Add(5*time.Minute), "temporary"); err != nil {
+		t.Fatalf("mark outbox failed: %v", err)
+	}
+	if err := repository.MarkOutboxEventPublished(ctx, claimedEvents[1].ID, claimedEvents[1].AttemptCount, now.Add(5*time.Minute)); err != nil {
+		t.Fatalf("mark outbox published: %v", err)
+	}
+	reclaimedEvents, err := repository.ClaimOutboxEvents(ctx, 10, now.Add(6*time.Minute), now.Add(7*time.Minute))
+	if err != nil {
+		t.Fatalf("reclaim outbox event: %v", err)
+	}
+	if len(reclaimedEvents) != 1 || reclaimedEvents[0].ID != claimedEvents[0].ID || reclaimedEvents[0].AttemptCount != 2 {
+		t.Fatalf("reclaimed events = %+v, want retried first event", reclaimedEvents)
+	}
+	if err := repository.MarkOutboxEventPermanentlyFailed(ctx, reclaimedEvents[0].ID, reclaimedEvents[0].AttemptCount, now.Add(8*time.Minute), "permanent"); err != nil {
+		t.Fatalf("mark outbox permanently failed: %v", err)
 	}
 	verifications, page, err := repository.ListPackageVerifications(ctx, query.PackageVerificationFilter{
 		PackageVersionID:   versionA.ID,
@@ -381,7 +410,8 @@ func TestRepositoryIntegrationInstallationStorage(t *testing.T) {
 	revokedVersion.Revision = 4
 	revokedVersion.UpdatedAt = now.Add(3 * time.Minute)
 	duplicateIdempotencyResult := testCommandResult(replayCommandID, "package.verify", enum.CommandAggregateTypePackageVersion, versionA.ID, "verify-repeat", now.Add(3*time.Minute))
-	if err := repository.SetPackageVerification(ctx, revokedVersion, 3, testVerification(versionA.ID, enum.PackageVerificationStatusRevoked, now.Add(3*time.Minute)), duplicateIdempotencyResult); !errors.Is(err, errs.ErrConflict) {
+	duplicateEvent := testOutboxEvent(versionA.ID, "package.verification.updated", now.Add(3*time.Minute))
+	if err := repository.SetPackageVerification(ctx, revokedVersion, 3, testVerification(versionA.ID, enum.PackageVerificationStatusRevoked, now.Add(3*time.Minute)), duplicateIdempotencyResult, duplicateEvent); !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("duplicate idempotency verification err = %v, want %v", err, errs.ErrConflict)
 	}
 	storedVersion, err = repository.GetPackageVersion(ctx, versionA.ID)
@@ -553,6 +583,18 @@ func testCommandResult(commandID uuid.UUID, operation string, aggregateType enum
 		ResultPayload:  []byte(`{"aggregate_id":"` + aggregateID.String() + `"}`),
 		CreatedAt:      now,
 	}
+}
+
+func testOutboxEvent(packageVersionID uuid.UUID, eventType string, now time.Time) entity.OutboxEvent {
+	return entity.OutboxEvent{Event: outboxlib.Event{
+		ID:            uuid.New(),
+		AggregateType: "package_version",
+		AggregateID:   packageVersionID,
+		EventType:     eventType,
+		SchemaVersion: 1,
+		Payload:       []byte(`{"package_version_id":"` + packageVersionID.String() + `"}`),
+		OccurredAt:    now,
+	}}
 }
 
 func ptr[T any](value T) *T {

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -16,7 +17,7 @@ func TestHealthMuxLivezReturnsNoContent(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/health/livez", nil)
 	response := httptest.NewRecorder()
 
-	serviceprocess.NewHealthMux(readinessChecks(nil), 2*time.Second).ServeHTTP(response, request)
+	serviceprocess.NewHealthMux(readinessChecks(nil, nil, nil), 2*time.Second).ServeHTTP(response, request)
 
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("livez status = %d, want %d", response.Code, http.StatusNoContent)
@@ -29,22 +30,28 @@ func TestHealthMuxReadyzRequiresService(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/health/readyz", nil)
 	response := httptest.NewRecorder()
 
-	serviceprocess.NewHealthMux(readinessChecks(nil), 2*time.Second).ServeHTTP(response, request)
+	serviceprocess.NewHealthMux(readinessChecks(nil, nil, nil), 2*time.Second).ServeHTTP(response, request)
 
 	if response.Code != http.StatusServiceUnavailable {
 		t.Fatalf("readyz status = %d, want %d", response.Code, http.StatusServiceUnavailable)
 	}
 }
 
-func TestHealthMuxReadyzReturnsNoContentWhenServiceExists(t *testing.T) {
+func TestHealthMuxReadyzReturnsNoContentWhenServiceAndDatabaseExist(t *testing.T) {
 	t.Parallel()
 
 	request := httptest.NewRequest(http.MethodGet, "/health/readyz", nil)
 	response := httptest.NewRecorder()
 
-	serviceprocess.NewHealthMux(readinessChecks(packageservice.New()), 2*time.Second).ServeHTTP(response, request)
+	serviceprocess.NewHealthMux(readinessChecks(&packageservice.Service{}, fakePingStore{}, nil), 2*time.Second).ServeHTTP(response, request)
 
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("readyz status = %d, want %d", response.Code, http.StatusNoContent)
 	}
+}
+
+type fakePingStore struct{}
+
+func (fakePingStore) Ping(context.Context) error {
+	return nil
 }

@@ -175,6 +175,17 @@ func commandIdentityArgs(identity query.CommandIdentity) pgx.NamedArgs {
 	}
 }
 
+func outboxEventArgs(event entity.OutboxEvent) pgx.NamedArgs {
+	args := pgx.NamedArgs{"id": event.ID, "event_type": event.EventType}
+	args["schema_version"] = event.SchemaVersion
+	args["aggregate_type"] = event.AggregateType
+	args["aggregate_id"] = event.AggregateID
+	args["payload"] = objectPayload(event.Payload)
+	args["occurred_at"] = event.OccurredAt
+	args["published_at"] = postgreslib.NullableTime(event.PublishedAt)
+	return args
+}
+
 func packageSourceFilterArgs(filter query.PackageSourceFilter) pageQueryArgs {
 	return withPage(filter.Page, pgx.NamedArgs{
 		"organization_id": postgreslib.NullableUUID(filter.OrganizationID),

@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
+	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/value"
 )
@@ -116,4 +117,14 @@ type CommandResult struct {
 	AggregateID    uuid.UUID
 	ResultPayload  []byte
 	CreatedAt      time.Time
+}
+
+type OutboxEvent struct {
+	outboxlib.Event
+	NextAttemptAt       time.Time
+	LockedUntil         *time.Time
+	FailureKind         string
+	FailedPermanentlyAt *time.Time
+	PublishedAt         *time.Time
+	LastError           string
 }

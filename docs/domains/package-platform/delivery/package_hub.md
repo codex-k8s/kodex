@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-06
 updated_at: 2026-05-07
-related_issues: [642, 646, 650, 663, 667, 670]
+related_issues: [642, 646, 650, 663, 667, 670, 673]
 related_prs: []
 related_docsets:
   - docs/domains/package-platform/product/requirements.md
@@ -47,7 +47,7 @@ approvals:
 | PKG-3.1 | #650 | Сервисный процесс, служебный HTTP-контур, общий gRPC runtime и регистрация `PackageHubService` готовы без БД-логики. |
 | PKG-3.2 | #667 | PostgreSQL-модель источников, пакетов, версий, manifest и ценовых метаданных готова: миграции, доменные типы, repository-контракт, PostgreSQL repository и интеграционные тесты. gRPC business handlers не входят в этот срез. |
 | PKG-3.3 | #670 | PostgreSQL-модель установок, схем секретов, проверок, идемпотентности и optimistic concurrency готова: миграции, доменные типы, repository-контракт, PostgreSQL repository и интеграционные тесты. gRPC business handlers и outbox не входят в этот срез. |
-| PKG-3.4 | не назначено | Outbox и первые repository-backed gRPC операции готовы. |
+| PKG-3.4 | #673 | Outbox, первые repository-backed gRPC чтения и команда проверки версии пакета готовы. |
 | PKG-4 | не назначено | Источники магазинов, синхронизация доступного каталога и проверка manifest готовы. |
 | PKG-5 | не назначено | Установки пакетов, версии, привязки секретов и события установки готовы. |
 | PKG-6 | не назначено | Специализация плагинов, руководящих пакетов, магазина и пакетов пользовательского контента платформы готова. |
@@ -55,21 +55,21 @@ approvals:
 
 ## Статус операций `PackageHubService`
 
-Стабильный `PackageHubService v1` уже фиксирует полный транспортный контракт домена. Кодовый каркас `PKG-3.1` регистрирует сервис, но не реализует бизнес-операции: все методы пока возвращают `unimplemented` через сгенерированный `UnimplementedPackageHubServiceServer`.
+Стабильный `PackageHubService v1` уже фиксирует полный транспортный контракт домена. Реализация идёт малыми срезами: готовые операции ниже работают через доменный сервис и PostgreSQL repository, остальные пока возвращают `unimplemented` через сгенерированный `UnimplementedPackageHubServiceServer`.
 
 | Операция | Текущий статус кода | Плановый срез |
 |---|---|---|
 | `ConnectPackageSource` | `unimplemented` | PKG-4 |
 | `UpdatePackageSource` | `unimplemented` | PKG-4 |
 | `DisablePackageSource` | `unimplemented` | PKG-4 |
-| `GetPackageSource` | `unimplemented` | PKG-3.4 |
-| `ListPackageSources` | `unimplemented` | PKG-3.4 |
+| `GetPackageSource` | `ready` | PKG-3.4 |
+| `ListPackageSources` | `ready` | PKG-3.4 |
 | `SyncAvailablePackages` | `unimplemented` | PKG-4 |
-| `GetPackage` | `unimplemented` | PKG-3.4 |
-| `ListPackages` | `unimplemented` | PKG-3.4 |
-| `GetPackageVersion` | `unimplemented` | PKG-3.4 |
-| `ListPackageVersions` | `unimplemented` | PKG-3.4 |
-| `GetPackageManifest` | `unimplemented` | PKG-3.4 |
+| `GetPackage` | `ready` | PKG-3.4 |
+| `ListPackages` | `ready` | PKG-3.4 |
+| `GetPackageVersion` | `ready` | PKG-3.4 |
+| `ListPackageVersions` | `ready` | PKG-3.4 |
+| `GetPackageManifest` | `ready` | PKG-3.4 |
 | `RequestPackageInstallation` | `unimplemented` | PKG-5 |
 | `UpdatePackageInstallation` | `unimplemented` | PKG-5 |
 | `DisablePackageInstallation` | `unimplemented` | PKG-5 |
@@ -78,7 +78,7 @@ approvals:
 | `ListPackageInstallations` | `unimplemented` | PKG-5 |
 | `GetPackageSecretSchema` | `unimplemented` | PKG-5 |
 | `RefreshPackageInstallationSecretStatus` | `unimplemented` | PKG-5 |
-| `SetPackageVerification` | `unimplemented` | PKG-3.4 |
+| `SetPackageVerification` | `ready` | PKG-3.4 |
 
 ## Наблюдаемость `PKG-3.1`
 

@@ -4,6 +4,7 @@ package catalog
 import (
 	"context"
 	"embed"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -61,6 +62,10 @@ const (
 	operationListPackageVerifications  = "domain.Repository.ListPackageVerifications"
 	operationListPackageVersions       = "domain.Repository.ListPackageVersions"
 	operationListPackages              = "domain.Repository.ListPackages"
+	operationOutboxClaim               = "domain.Repository.ClaimOutboxEvents"
+	operationOutboxMarkFailed          = "domain.Repository.MarkOutboxEventFailed"
+	operationOutboxMarkPermanent       = "domain.Repository.MarkOutboxEventPermanentlyFailed"
+	operationOutboxMarkPublished       = "domain.Repository.MarkOutboxEventPublished"
 	operationSetPackageVerification    = "domain.Repository.SetPackageVerification"
 	operationUpdatePackageInstallation = "domain.Repository.UpdatePackageInstallation"
 	operationUpdatePricingMetadata     = "domain.Repository.UpdatePricingMetadata"
@@ -156,7 +161,7 @@ func (r *Repository) GetLatestPackageSecretSchema(ctx context.Context, packageVe
 	return queryOne(ctx, r.db, operationGetLatestSecretSchema, queryPackageSecretSchemaLatest, pgx.NamedArgs{"package_version_id": packageVersionID}, scanPackageSecretSchema)
 }
 
-func (r *Repository) SetPackageVerification(ctx context.Context, version entity.PackageVersion, previousRevision int64, verification entity.PackageVerification, result entity.CommandResult) error {
+func (r *Repository) SetPackageVerification(ctx context.Context, version entity.PackageVersion, previousRevision int64, verification entity.PackageVerification, result entity.CommandResult, event entity.OutboxEvent) error {
 	if verification.PackageVersionID != version.ID {
 		return wrapError(operationSetPackageVerification, errs.ErrInvalidArgument)
 	}
@@ -164,6 +169,7 @@ func (r *Repository) SetPackageVerification(ctx context.Context, version entity.
 		affectedMutation(queryPackageVersionVerification, packageVersionVerificationArgs(version, previousRevision)),
 		affectedMutation(queryPackageVerificationCreate, packageVerificationArgs(verification)),
 		commandResultMutation(result),
+		outboxEventMutation(event),
 	)
 }
 
@@ -173,6 +179,63 @@ func (r *Repository) ListPackageVerifications(ctx context.Context, filter query.
 
 func (r *Repository) GetCommandResult(ctx context.Context, identity query.CommandIdentity) (entity.CommandResult, error) {
 	return queryOne(ctx, r.db, operationGetCommandResult, queryCommandResultGet, commandIdentityArgs(identity), scanCommandResult)
+}
+
+func (r *Repository) ClaimOutboxEvents(ctx context.Context, limit int, now time.Time, lockedUntil time.Time) ([]entity.OutboxEvent, error) {
+	args, ok := postgreslib.OutboxClaimArgs(limit, now, lockedUntil)
+	if !ok {
+		return nil, wrapError(operationOutboxClaim, errs.ErrInvalidArgument)
+	}
+	return queryAll(ctx, r.db, operationOutboxClaim, queryOutboxEventClaim, args, scanOutboxEvent)
+}
+
+func (r *Repository) MarkOutboxEventPublished(ctx context.Context, id uuid.UUID, attemptCount int, publishedAt time.Time) error {
+	update := outboxPublishUpdate{id: id, attempt: attemptCount, publishedAt: publishedAt}
+	ok, err := postgreslib.ExecOutboxPublished(ctx, r.db, queryOutboxEventMarkPublished, update.id, update.attempt, update.publishedAt)
+	if !ok {
+		return wrapError(operationOutboxMarkPublished, errs.ErrInvalidArgument)
+	}
+	return wrapError(operationOutboxMarkPublished, err)
+}
+
+func (r *Repository) MarkOutboxEventFailed(ctx context.Context, id uuid.UUID, attemptCount int, nextAttemptAt time.Time, lastError string) error {
+	return r.markOutboxFailure(ctx, retryOutboxUpdate(id, attemptCount, nextAttemptAt, lastError))
+}
+
+func (r *Repository) MarkOutboxEventPermanentlyFailed(ctx context.Context, id uuid.UUID, attemptCount int, failedAt time.Time, lastError string) error {
+	return r.markOutboxFailure(ctx, permanentOutboxUpdate(id, attemptCount, failedAt, lastError))
+}
+
+type outboxPublishUpdate struct {
+	id          uuid.UUID
+	attempt     int
+	publishedAt time.Time
+}
+
+type outboxFailureUpdate struct {
+	operation     string
+	queryText     string
+	id            uuid.UUID
+	attempt       int
+	timestampName string
+	timestamp     time.Time
+	details       string
+}
+
+func retryOutboxUpdate(id uuid.UUID, attempt int, retryAt time.Time, details string) outboxFailureUpdate {
+	return outboxFailureUpdate{operation: operationOutboxMarkFailed, queryText: queryOutboxEventMarkFailed, id: id, attempt: attempt, timestampName: "next_attempt_at", timestamp: retryAt, details: details}
+}
+
+func permanentOutboxUpdate(id uuid.UUID, attempt int, failedAt time.Time, details string) outboxFailureUpdate {
+	return outboxFailureUpdate{operation: operationOutboxMarkPermanent, queryText: queryOutboxEventMarkPermanent, id: id, attempt: attempt, timestampName: "failed_permanently_at", timestamp: failedAt, details: details}
+}
+
+func (r *Repository) markOutboxFailure(ctx context.Context, update outboxFailureUpdate) error {
+	ok, err := postgreslib.ExecOutboxDeliveryFailure(ctx, r.db, update.queryText, update.id, update.attempt, update.timestampName, update.timestamp, update.details)
+	if !ok {
+		return wrapError(update.operation, errs.ErrInvalidArgument)
+	}
+	return wrapError(update.operation, err)
 }
 
 func (r *Repository) runAffected(ctx context.Context, operation string, queryText string, args pgx.NamedArgs) error {
@@ -197,6 +260,10 @@ func commandResultMutation(result entity.CommandResult) mutation {
 	return affectedMutation(queryCommandResultCreate, commandResultArgs(result))
 }
 
+func outboxEventMutation(event entity.OutboxEvent) mutation {
+	return affectedMutation(queryOutboxEventCreate, outboxEventArgs(event))
+}
+
 func queryOne[T any](ctx context.Context, db execQuerier, operation string, queryText string, args pgx.NamedArgs, scan func(postgreslib.RowScanner) (T, error)) (T, error) {
 	value, err := scan(db.QueryRow(ctx, queryText, args))
 	if err != nil {
@@ -207,13 +274,21 @@ func queryOne[T any](ctx context.Context, db execQuerier, operation string, quer
 }
 
 func queryPage[T any](ctx context.Context, db execQuerier, operation string, queryText string, args pageQueryArgs, scan func(postgreslib.RowScanner) (T, error)) ([]T, value.PageResult, error) {
-	rows, err := db.Query(ctx, queryText, args.NamedArgs)
+	items, err := queryAll(ctx, db, operation, queryText, args.NamedArgs, scan)
 	if err != nil {
-		return nil, value.PageResult{}, wrapError(operation, err)
+		return nil, value.PageResult{}, err
+	}
+	return trimPage(items, args.PageSize, args.Offset), pageResult(items, args.PageSize, args.Offset), nil
+}
+
+func queryAll[T any](ctx context.Context, db execQuerier, operation string, queryText string, args pgx.NamedArgs, scan func(postgreslib.RowScanner) (T, error)) ([]T, error) {
+	rows, err := db.Query(ctx, queryText, args)
+	if err != nil {
+		return nil, wrapError(operation, err)
 	}
 	items, err := postgreslib.ScanRows(rows, scan)
 	if err != nil {
-		return nil, value.PageResult{}, wrapError(operation, err)
+		return nil, wrapError(operation, err)
 	}
-	return trimPage(items, args.PageSize, args.Offset), pageResult(items, args.PageSize, args.Offset), nil
+	return items, nil
 }

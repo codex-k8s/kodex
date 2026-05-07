@@ -3,6 +3,7 @@ package catalog
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -32,7 +33,19 @@ type Repository interface {
 	ListPackageInstallations(ctx context.Context, filter query.PackageInstallationFilter) ([]entity.PackageInstallation, value.PageResult, error)
 	CreatePackageSecretSchema(ctx context.Context, schema entity.PackageSecretSchema) error
 	GetLatestPackageSecretSchema(ctx context.Context, packageVersionID uuid.UUID) (entity.PackageSecretSchema, error)
-	SetPackageVerification(ctx context.Context, version entity.PackageVersion, previousRevision int64, verification entity.PackageVerification, result entity.CommandResult) error
+	SetPackageVerification(ctx context.Context, version entity.PackageVersion, previousRevision int64, verification entity.PackageVerification, result entity.CommandResult, event entity.OutboxEvent) error
 	ListPackageVerifications(ctx context.Context, filter query.PackageVerificationFilter) ([]entity.PackageVerification, value.PageResult, error)
 	GetCommandResult(ctx context.Context, identity query.CommandIdentity) (entity.CommandResult, error)
+	ClaimOutboxEvents(ctx context.Context, limit int, now time.Time, lockedUntil time.Time) ([]entity.OutboxEvent, error)
+	MarkOutboxEventPublished(ctx context.Context, id uuid.UUID, attemptCount int, publishedAt time.Time) error
+	MarkOutboxEventFailed(ctx context.Context, id uuid.UUID, attemptCount int, nextAttemptAt time.Time, lastError string) error
+	MarkOutboxEventPermanentlyFailed(ctx context.Context, id uuid.UUID, attemptCount int, failedAt time.Time, lastError string) error
+}
+
+type Clock interface {
+	Now() time.Time
+}
+
+type IDGenerator interface {
+	New() uuid.UUID
 }
