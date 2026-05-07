@@ -75,7 +75,7 @@ approvals:
 | `ImportServicesPolicy` | Готов в proto. | gRPC, доменная команда, проверка доступа, outbox, построение `ServiceDescriptor`, проверка и синхронизация источников документации из нормализованного payload подключены. |
 | `GetServicesPolicy` | Готов в proto. | gRPC-чтение и проверка доступа подключены. |
 | `ListServiceDescriptors` | Готов в proto. | gRPC-чтение и проверка доступа подключены; чтение ограничено последней `valid + synced/overridden` политикой и использует проекцию, построенную `project-catalog`. |
-| `CreatePolicyEditProposal` | Готов в proto. | gRPC и сохранение предложения подключены; создание provider PR развивается в #632. |
+| `CreatePolicyEditProposal` | Готов в proto. | gRPC и сохранение предложения подключены; создание PR у провайдера относится к `provider-hub` и не входит в границу `project-catalog`. |
 | `CreatePolicyOverride` | Готов в proto. | gRPC, доменная команда, проверка доступа и outbox подключены. |
 | `CancelPolicyOverride` | Готов в proto. | gRPC, доменная команда, проверка доступа, оптимистичная конкуренция, outbox и PostgreSQL-слой подключены. |
 | `ListPolicyOverrides` | Готов в proto. | gRPC-чтение и проверка доступа подключены; активные переопределения также входят в `GetWorkspacePolicy`. |
