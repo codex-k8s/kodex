@@ -5,8 +5,8 @@ title: kodex — дизайн домена пакетной платформы
 status: active
 owner_role: SA
 created_at: 2026-05-06
-updated_at: 2026-05-06
-related_issues: [642]
+updated_at: 2026-05-07
+related_issues: [642, 655]
 related_prs: []
 related_adrs: []
 approvals:
@@ -134,7 +134,7 @@ sequenceDiagram
   P-->>AM: package refs + versions + local paths
   AM->>PC: GetWorkspacePolicy(project context)
   PC-->>AM: project docs + guidance refs
-  AM->>R: StartRun(workspace policy)
+  AM->>R: PrepareRuntime(agent_run_id, workspace policy, runtime profile)
 ```
 
 Руководящий пакет не смешивается с проектной документацией. `project-catalog` отвечает за проектные источники, `package-hub` отвечает за пакет и версию руководства.

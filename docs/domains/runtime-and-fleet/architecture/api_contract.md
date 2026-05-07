@@ -37,6 +37,14 @@ approvals:
 
 ## Группы операций
 
+### Подготовка runtime
+
+| Операция | Назначение | Вызывает | Идемпотентность |
+|---|---|---|---|
+| `PrepareRuntime` | Фасадная команда для типового агентного запуска: выбрать fleet scope, выделить слот, запустить подготовку workspace и вернуть контекст runtime. | `agent-manager` | `command_id`; повтор возвращает тот же результат выделения слота и подготовки workspace или актуальный конфликт. |
+
+`PrepareRuntime` не создаёт agent `Run` и не меняет flow. Он принимает внешний `agent_run_id`, runtime profile, workspace policy и placement constraints. Внутри домена команда использует те же инварианты, что `ReserveSlot` и `StartWorkspaceMaterialization`, а события публикуются как `runtime.slot.*` и `runtime.workspace.*`.
+
 ### Слоты
 
 | Операция | Назначение | Вызывает | Идемпотентность |
@@ -62,10 +70,10 @@ approvals:
 | Операция | Назначение | Вызывает | Идемпотентность |
 |---|---|---|---|
 | `CreateJob` | Создать техническое задание: mirror, build, deploy, cleanup, health-check или housekeeping. | `agent-manager`, `package-hub`, release/governance контур, операторский контур | `command_id`. |
-| `ClaimRunnableJob` | Забрать job короткой арендой для исполнения. | `worker` | Lease. |
-| `ReportJobStepProgress` | Обновить шаг, короткий хвост лога и refs. | `worker` | `command_id + expected_version`. |
-| `CompleteJob` | Завершить job успешно. | `worker` | `command_id + expected_version`. |
-| `FailJob` | Завершить job ошибкой. | `worker` | `command_id + expected_version`. |
+| `ClaimRunnableJob` | Забрать задание короткой арендой для исполнения и получить `lease_token`. | `worker` | Аренда по `lease_owner`, `lease_until`, `lease_token`. |
+| `ReportJobStepProgress` | Обновить шаг, короткий хвост лога и refs. | `worker` | `lease_token + command_id + expected_version`. |
+| `CompleteJob` | Завершить задание успешно. | `worker` | `lease_token + command_id + expected_version`. |
+| `FailJob` | Завершить задание ошибкой. | `worker` | `lease_token + command_id + expected_version`. |
 | `CancelJob` | Отменить pending/running job по policy. | `agent-manager`, операторский контур | `command_id + expected_version`. |
 | `GetJob` | Прочитать job. | `agent-manager`, `operations-hub`, MCP | Read-only. |
 | `ListJobs` | Список по статусу, типу, проекту, слоту, agent run, release line. | Операторский контур | Read-only. |
@@ -110,6 +118,8 @@ approvals:
 | `runtime.slot.lease_extended` | Аренда слота продлена. |
 | `runtime.slot.released` | Слот освобождён. |
 | `runtime.slot.failed` | Слот переведён в ошибку. |
+| `runtime.slot.cleanup_requested` | Слот поставлен в очередь очистки. |
+| `runtime.slot.cleaned` | Слот успешно очищен. |
 | `runtime.workspace.materialization_started` | Подготовка workspace началась. |
 | `runtime.workspace.materialization_completed` | Подготовка workspace завершилась. |
 | `runtime.workspace.materialization_failed` | Подготовка workspace упала. |

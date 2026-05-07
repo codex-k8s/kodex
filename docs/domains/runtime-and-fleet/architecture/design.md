@@ -102,12 +102,14 @@ sequenceDiagram
   C->>R: CreateJob(command)
   R->>DB: insert job + first step + outbox
   W->>R: ClaimRunnableJob
+  R-->>W: job + lease_token + lease_until
   W->>K: Execute technical operation
-  W->>R: ReportStepProgress(status, short log tail, refs)
+  W->>R: ReportStepProgress(lease_token, status, short log tail, refs)
   R->>DB: update job step + job status + outbox
 ```
 
 `worker` может выполнять техническую работу, но не владеет конечным состоянием job.
+Если lease истёк и задание забрал другой исполнитель, старый `lease_token` больше не принимается.
 
 ### Cleanup и retention
 

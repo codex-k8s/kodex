@@ -118,7 +118,7 @@ sequenceDiagram
   participant R as runtime-manager
   AM->>P: GetWorkspacePolicy(project, task context)
   P-->>AM: code/docs/guidance sources
-  AM->>R: StartRun(workspace policy)
+  AM->>R: PrepareRuntime(agent_run_id, workspace policy, runtime profile)
 ```
 
 `project-catalog` не делает checkout. Он отдаёт разрешённый состав источников и режимы доступа.

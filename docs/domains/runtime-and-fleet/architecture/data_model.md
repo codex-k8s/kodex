@@ -101,6 +101,7 @@ approvals:
 
 - `Job` не является agent `Run`;
 - job может быть связан со слотом, проектом, release line, пакетом или maintenance policy;
+- захват задания является короткой арендой с токеном, чтобы поздний исполнитель не мог перезаписать новую попытку;
 - долгие операции не держат SQL-блокировки.
 
 | Поле | Тип | Nullable | Ограничения | Примечание |
@@ -110,6 +111,10 @@ approvals:
 | `job_type` | text | no | indexed | `mirror`, `build`, `deploy`, `cleanup`, `health_check`, `housekeeping`, `workspace_materialization`. |
 | `status` | text | no | indexed | `pending`, `claimed`, `running`, `succeeded`, `failed`, `cancelled`, `timed_out`. |
 | `priority` | text | no | indexed | `low`, `normal`, `high`, `blocking`. |
+| `lease_owner` | text | no | default '' | Worker или controller, который забрал задание. |
+| `lease_token_hash` | text | no | default '' | Хэш токена, который должен прийти в командах отчёта, завершения и ошибки. |
+| `lease_until` | timestamptz | yes | indexed | Истечение аренды задания. |
+| `claim_attempt` | bigint | no | default 0 | Номер попытки захвата для диагностики и защиты от поздних исполнителей. |
 | `slot_id` | UUID | yes | indexed | Ссылка внутри БД runtime. |
 | `agent_run_id` | UUID | yes | indexed | Внешняя ссылка на `Run`. |
 | `project_id` | UUID | yes | indexed | Внешняя ссылка на проект. |
@@ -218,7 +223,7 @@ approvals:
 - `Slot(agent_run_id)`;
 - `WorkspaceMaterialization(slot_id, status)`;
 - `WorkspaceMaterialization(fingerprint)`;
-- `Job(status, priority, created_at)`;
+- `Job(status, lease_until, priority, created_at)`;
 - `Job(slot_id, status)`;
 - `Job(project_id, status)`;
 - `Job(agent_run_id)`;
