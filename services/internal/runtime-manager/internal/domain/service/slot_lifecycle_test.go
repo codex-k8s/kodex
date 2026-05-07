@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/codex-k8s/kodex/libs/go/accesscatalog"
 	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/enum"
@@ -200,6 +201,56 @@ func TestExpiredLeaseCannotBeExtended(t *testing.T) {
 	}
 }
 
+func TestExistingSlotCommandsAuthorizeWithCurrentProjectScopeBeforeReplay(t *testing.T) {
+	t.Parallel()
+
+	authorizer := &recordAuthorizer{}
+	svc, _ := newTestServiceWithAuthorizer(authorizer)
+	projectID := mustUUID("00000000-0000-0000-0000-000000000024")
+	slot, err := svc.ReserveSlot(context.Background(), ReserveSlotInput{
+		RuntimeProfile:        "go-backend",
+		RuntimeMode:           enum.RuntimeModeFullEnv,
+		WorkspacePolicyDigest: "policy-sha",
+		ProjectID:             &projectID,
+		Meta:                  commandMeta(mustUUID("00000000-0000-0000-0000-000000000110"), 0),
+	})
+	if err != nil {
+		t.Fatalf("ReserveSlot(): %v", err)
+	}
+	authorizer.requests = nil
+	extendMeta := commandMeta(mustUUID("00000000-0000-0000-0000-000000000111"), slot.Version)
+	_, err = svc.ExtendSlotLease(context.Background(), ExtendSlotLeaseInput{
+		SlotID:     slot.ID,
+		LeaseOwner: slot.LeaseOwner,
+		LeaseUntil: testNow.Add(time.Hour),
+		Meta:       extendMeta,
+	})
+	if err != nil {
+		t.Fatalf("ExtendSlotLease(): %v", err)
+	}
+	if len(authorizer.requests) != 1 {
+		t.Fatalf("authorization requests = %d, want 1", len(authorizer.requests))
+	}
+	request := authorizer.requests[0]
+	if request.ScopeType != accesscatalog.ScopeProject || request.ScopeID != projectID.String() {
+		t.Fatalf("scope = %s/%s, want project/%s", request.ScopeType, request.ScopeID, projectID)
+	}
+	if request.ResourceID != slot.ID.String() || request.ActionKey != actionSlotExtendLease {
+		t.Fatalf("resource/action = %s/%s, want %s/%s", request.ResourceID, request.ActionKey, slot.ID, actionSlotExtendLease)
+	}
+
+	authorizer.deny = true
+	_, err = svc.ExtendSlotLease(context.Background(), ExtendSlotLeaseInput{
+		SlotID:     slot.ID,
+		LeaseOwner: slot.LeaseOwner,
+		LeaseUntil: testNow.Add(time.Hour),
+		Meta:       extendMeta,
+	})
+	if !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("replayed ExtendSlotLease() err = %v, want forbidden before replay", err)
+	}
+}
+
 func TestReserveSlotAuthorizesBeforeReplay(t *testing.T) {
 	t.Parallel()
 
@@ -236,6 +287,10 @@ var (
 )
 
 func newTestService() (*Service, *fakeRepository) {
+	return newTestServiceWithAuthorizer(nil)
+}
+
+func newTestServiceWithAuthorizer(authorizer Authorizer) (*Service, *fakeRepository) {
 	repo := &fakeRepository{
 		slots:   make(map[uuid.UUID]entity.Slot),
 		results: make(map[string]entity.CommandResult),
@@ -250,12 +305,16 @@ func newTestService() (*Service, *fakeRepository) {
 		mustUUID("00000000-0000-0000-0000-000000000207"),
 		mustUUID("00000000-0000-0000-0000-000000000208"),
 	}}
-	svc := NewWithConfig(repo, fixedClock{now: testNow}, ids, Config{
+	config := Config{
 		DefaultFleetScopeID: testFleetScopeID,
 		DefaultClusterID:    testClusterID,
 		NamespacePrefix:     "kodex-rt",
 		DefaultLeaseTTL:     30 * time.Minute,
-	})
+	}
+	if authorizer != nil {
+		config.Authorizer = authorizer
+	}
+	svc := NewWithConfig(repo, fixedClock{now: testNow}, ids, config)
 	return svc, repo
 }
 
@@ -362,6 +421,19 @@ type denyAuthorizer struct{}
 
 func (denyAuthorizer) Authorize(context.Context, AuthorizationRequest) error {
 	return errs.ErrForbidden
+}
+
+type recordAuthorizer struct {
+	deny     bool
+	requests []AuthorizationRequest
+}
+
+func (a *recordAuthorizer) Authorize(_ context.Context, request AuthorizationRequest) error {
+	a.requests = append(a.requests, request)
+	if a.deny {
+		return errs.ErrForbidden
+	}
+	return nil
 }
 
 func (r *fakeRepository) ClaimOutboxEvents(context.Context, int, time.Time, time.Time) ([]entity.OutboxEvent, error) {

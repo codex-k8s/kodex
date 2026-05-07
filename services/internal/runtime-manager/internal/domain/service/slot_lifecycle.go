@@ -84,17 +84,17 @@ func (s *Service) ExtendSlotLease(ctx context.Context, input ExtendSlotLeaseInpu
 	if strings.TrimSpace(input.LeaseOwner) == "" || input.LeaseUntil.IsZero() {
 		return entity.Slot{}, errs.ErrInvalidArgument
 	}
-	if err := s.authorizeCommand(ctx, input.Meta, actionSlotExtendLease, slotResource(input.SlotID, nil)); err != nil {
+	slot, err := s.repository.GetSlot(ctx, input.SlotID)
+	if err != nil {
+		return entity.Slot{}, err
+	}
+	if err := s.authorizeCommand(ctx, input.Meta, actionSlotExtendLease, slotResource(slot.ID, slot.ProjectID)); err != nil {
 		return entity.Slot{}, err
 	}
 	if replay, ok, err := s.slotReplay(ctx, input.Meta, operationExtendSlotLease, &input.SlotID); err != nil || ok {
 		return replay, err
 	}
 	expected, err := expectedVersion(input.Meta)
-	if err != nil {
-		return entity.Slot{}, err
-	}
-	slot, err := s.repository.GetSlot(ctx, input.SlotID)
 	if err != nil {
 		return entity.Slot{}, err
 	}
@@ -128,17 +128,17 @@ func (s *Service) ReleaseSlot(ctx context.Context, input ReleaseSlotInput) (enti
 	if strings.TrimSpace(input.LeaseOwner) == "" {
 		return entity.Slot{}, errs.ErrInvalidArgument
 	}
-	if err := s.authorizeCommand(ctx, input.Meta, actionSlotRelease, slotResource(input.SlotID, nil)); err != nil {
+	slot, err := s.repository.GetSlot(ctx, input.SlotID)
+	if err != nil {
+		return entity.Slot{}, err
+	}
+	if err := s.authorizeCommand(ctx, input.Meta, actionSlotRelease, slotResource(slot.ID, slot.ProjectID)); err != nil {
 		return entity.Slot{}, err
 	}
 	if replay, ok, err := s.slotReplay(ctx, input.Meta, operationReleaseSlot, &input.SlotID); err != nil || ok {
 		return replay, err
 	}
 	expected, err := expectedVersion(input.Meta)
-	if err != nil {
-		return entity.Slot{}, err
-	}
-	slot, err := s.repository.GetSlot(ctx, input.SlotID)
 	if err != nil {
 		return entity.Slot{}, err
 	}
@@ -171,17 +171,17 @@ func (s *Service) MarkSlotFailed(ctx context.Context, input MarkSlotFailedInput)
 	if strings.TrimSpace(input.ErrorCode) == "" {
 		return entity.Slot{}, errs.ErrInvalidArgument
 	}
-	if err := s.authorizeCommand(ctx, input.Meta, actionSlotFail, slotResource(input.SlotID, nil)); err != nil {
+	slot, err := s.repository.GetSlot(ctx, input.SlotID)
+	if err != nil {
+		return entity.Slot{}, err
+	}
+	if err := s.authorizeCommand(ctx, input.Meta, actionSlotFail, slotResource(slot.ID, slot.ProjectID)); err != nil {
 		return entity.Slot{}, err
 	}
 	if replay, ok, err := s.slotReplay(ctx, input.Meta, operationMarkSlotFailed, &input.SlotID); err != nil || ok {
 		return replay, err
 	}
 	expected, err := expectedVersion(input.Meta)
-	if err != nil {
-		return entity.Slot{}, err
-	}
-	slot, err := s.repository.GetSlot(ctx, input.SlotID)
 	if err != nil {
 		return entity.Slot{}, err
 	}
@@ -212,10 +212,14 @@ func (s *Service) GetSlot(ctx context.Context, input GetSlotInput) (entity.Slot,
 	if err != nil {
 		return entity.Slot{}, err
 	}
-	if err := s.authorizeQuery(ctx, input.Meta, actionSlotRead, slotResource(slotID, nil)); err != nil {
+	slot, err := s.repository.GetSlot(ctx, slotID)
+	if err != nil {
 		return entity.Slot{}, err
 	}
-	return s.repository.GetSlot(ctx, slotID)
+	if err := s.authorizeQuery(ctx, input.Meta, actionSlotRead, slotResource(slot.ID, slot.ProjectID)); err != nil {
+		return entity.Slot{}, err
+	}
+	return slot, nil
 }
 
 // ListSlots returns runtime slots by filters.
