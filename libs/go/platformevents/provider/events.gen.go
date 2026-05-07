@@ -63,6 +63,7 @@ type Payload struct {
 	RepositoryFullName            string `json:"repository_full_name,omitempty"`
 	RepositoryID                  string `json:"repository_id,omitempty"`
 	ResultRef                     string `json:"result_ref,omitempty"`
+	ReviewState                   string `json:"review_state,omitempty"`
 	ScopeRef                      string `json:"scope_ref,omitempty"`
 	ScopeType                     string `json:"scope_type,omitempty"`
 	Source                        string `json:"source,omitempty"`

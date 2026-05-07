@@ -1,6 +1,8 @@
 package casters
 
 import (
+	"encoding/json"
+
 	"github.com/google/uuid"
 
 	providersv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1"
@@ -32,6 +34,91 @@ func WebhookEventToProto(event entity.WebhookEvent) *providersv1.WebhookEvent {
 func ListWebhookEventsResponse(result providerservice.ListWebhookEventsResult) *providersv1.ListWebhookEventsResponse {
 	return &providersv1.ListWebhookEventsResponse{
 		WebhookEvents: mapSlice(result.WebhookEvents, WebhookEventToProto),
+		Page:          pageResponseToProto(result.Page),
+	}
+}
+
+// WorkItemProjectionResponse maps a work item projection to gRPC.
+func WorkItemProjectionResponse(projection entity.ProviderWorkItemProjection) *providersv1.WorkItemProjectionResponse {
+	return &providersv1.WorkItemProjectionResponse{WorkItemProjection: WorkItemProjectionToProto(projection)}
+}
+
+func WorkItemProjectionToProto(projection entity.ProviderWorkItemProjection) *providersv1.WorkItemProjection {
+	return &providersv1.WorkItemProjection{
+		WorkItemProjectionId:   projection.ID.String(),
+		ProviderSlug:           string(projection.ProviderSlug),
+		ProviderWorkItemId:     projection.ProviderWorkItemID,
+		ProjectId:              uuidPtrString(projection.ProjectID),
+		RepositoryId:           uuidPtrString(projection.RepositoryID),
+		RepositoryFullName:     projection.RepositoryFullName,
+		Kind:                   WorkItemKindToProto(projection.Kind),
+		Number:                 projection.Number,
+		WebUrl:                 projection.URL,
+		Title:                  projection.Title,
+		State:                  projection.State,
+		WorkItemType:           optionalStringPtr(projection.WorkItemType),
+		Labels:                 stringArrayFromJSON(projection.LabelsJSON),
+		AssigneeProviderLogins: stringArrayFromJSON(projection.AssigneesJSON),
+		Milestone:              optionalStringPtr(projection.Milestone),
+		ProjectFieldsJson:      jsonObjectString(projection.ProjectFieldsJSON),
+		WatermarkStatus:        WatermarkStatusToProto(projection.WatermarkStatus),
+		WatermarkJson:          jsonObjectString(projection.WatermarkJSON),
+		BodyDigest:             projection.BodyDigest,
+		ProviderUpdatedAt:      timePtrString(projection.ProviderUpdatedAt),
+		SyncedAt:               formatTime(projection.SyncedAt),
+		DriftStatus:            DriftStatusToProto(projection.DriftStatus),
+		Version:                projection.Version,
+	}
+}
+
+// ListWorkItemProjectionsResponse maps work item projection lists to gRPC.
+func ListWorkItemProjectionsResponse(result providerservice.ListWorkItemProjectionsResult) *providersv1.ListWorkItemProjectionsResponse {
+	return &providersv1.ListWorkItemProjectionsResponse{
+		WorkItemProjections: mapSlice(result.WorkItemProjections, WorkItemProjectionToProto),
+		Page:                pageResponseToProto(result.Page),
+	}
+}
+
+func CommentProjectionToProto(comment entity.ProviderCommentProjection) *providersv1.CommentProjection {
+	return &providersv1.CommentProjection{
+		CommentProjectionId:  comment.ID.String(),
+		WorkItemProjectionId: comment.WorkItemProjectionID.String(),
+		ProviderCommentId:    comment.ProviderCommentID,
+		Kind:                 CommentKindToProto(comment.Kind),
+		ReviewState:          ReviewStateToProto(comment.ReviewState),
+		AuthorProviderLogin:  comment.AuthorProviderLogin,
+		BodyDigest:           comment.BodyDigest,
+		Summary:              comment.Summary,
+		ProviderCreatedAt:    timePtrString(comment.ProviderCreatedAt),
+		ProviderUpdatedAt:    timePtrString(comment.ProviderUpdatedAt),
+	}
+}
+
+// ListCommentsResponse maps comment projections to gRPC.
+func ListCommentsResponse(result providerservice.ListCommentsResult) *providersv1.ListCommentsResponse {
+	return &providersv1.ListCommentsResponse{
+		Comments: mapSlice(result.Comments, CommentProjectionToProto),
+		Page:     pageResponseToProto(result.Page),
+	}
+}
+
+func RelationshipToProto(relationship entity.ProviderRelationship) *providersv1.ProviderRelationship {
+	return &providersv1.ProviderRelationship{
+		RelationshipId:             relationship.ID.String(),
+		SourceWorkItemProjectionId: relationship.SourceWorkItemID.String(),
+		TargetWorkItemProjectionId: uuidPtrString(relationship.TargetWorkItemID),
+		TargetProviderRef:          optionalStringPtr(relationship.TargetProviderRef),
+		RelationshipType:           relationship.RelationshipType,
+		Source:                     RelationshipSourceToProto(relationship.Source),
+		Confidence:                 RelationshipConfidenceToProto(relationship.Confidence),
+		CreatedAt:                  formatTime(relationship.CreatedAt),
+	}
+}
+
+// ListRelationshipsResponse maps provider relationships to gRPC.
+func ListRelationshipsResponse(result providerservice.ListRelationshipsResult) *providersv1.ListRelationshipsResponse {
+	return &providersv1.ListRelationshipsResponse{
+		Relationships: mapSlice(result.Relationships, RelationshipToProto),
 		Page:          pageResponseToProto(result.Page),
 	}
 }
@@ -123,6 +210,24 @@ func uuidPtrString(id *uuid.UUID) *string {
 	}
 	value := id.String()
 	return &value
+}
+
+func stringArrayFromJSON(raw []byte) []string {
+	if len(raw) == 0 {
+		return nil
+	}
+	var values []string
+	if err := json.Unmarshal(raw, &values); err != nil {
+		return nil
+	}
+	return values
+}
+
+func jsonObjectString(raw []byte) string {
+	if len(raw) == 0 {
+		return "{}"
+	}
+	return string(raw)
 }
 
 func mapSlice[Input any, Output any](items []Input, mapper func(Input) *Output) []*Output {

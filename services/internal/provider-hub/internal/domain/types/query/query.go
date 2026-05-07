@@ -46,6 +46,48 @@ type ProviderEventFilter struct {
 	Page                 value.PageRequest
 }
 
+// ProviderTargetLookup selects one work item projection by provider-native reference.
+type ProviderTargetLookup struct {
+	ID                 *uuid.UUID
+	ProviderSlug       enum.ProviderSlug
+	RepositoryFullName string
+	Kind               enum.WorkItemKind
+	Number             int64
+	ProviderObjectID   string
+	WebURL             string
+}
+
+// WorkItemProjectionFilter selects work item projections.
+type WorkItemProjectionFilter struct {
+	ProjectID          *uuid.UUID
+	RepositoryID       *uuid.UUID
+	ProviderSlug       enum.ProviderSlug
+	RepositoryFullName string
+	Kinds              []enum.WorkItemKind
+	States             []string
+	Labels             []string
+	WorkItemTypes      []string
+	DriftStatuses      []enum.WorkItemDriftStatus
+	UpdatedSince       *time.Time
+	Page               value.PageRequest
+}
+
+// CommentProjectionFilter selects comment projections for one work item.
+type CommentProjectionFilter struct {
+	WorkItemProjectionID uuid.UUID
+	Kinds                []enum.CommentKind
+	Page                 value.PageRequest
+}
+
+// RelationshipFilter selects provider relationships.
+type RelationshipFilter struct {
+	WorkItemProjectionID *uuid.UUID
+	RelationshipTypes    []string
+	Sources              []enum.RelationshipSource
+	ConfidenceLevels     []enum.RelationshipConfidence
+	Page                 value.PageRequest
+}
+
 // LimitSnapshotFilter selects provider limit snapshots.
 type LimitSnapshotFilter struct {
 	ExternalAccountID *uuid.UUID

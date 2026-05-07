@@ -78,6 +78,75 @@ type RetryWebhookEventProcessingInput struct {
 	Meta           value.CommandMeta
 }
 
+// GetWorkItemProjectionInput identifies one stored work item projection.
+type GetWorkItemProjectionInput struct {
+	WorkItemProjectionID uuid.UUID
+	Meta                 value.QueryMeta
+}
+
+// FindWorkItemByProviderRefInput selects a work item by provider-native reference.
+type FindWorkItemByProviderRefInput struct {
+	ProviderSlug       enum.ProviderSlug
+	RepositoryFullName string
+	Kind               enum.WorkItemKind
+	Number             int64
+	ProviderObjectID   string
+	WebURL             string
+	Meta               value.QueryMeta
+}
+
+// ListWorkItemProjectionsInput selects work item projections.
+type ListWorkItemProjectionsInput struct {
+	ProjectID          *uuid.UUID
+	RepositoryID       *uuid.UUID
+	ProviderSlug       enum.ProviderSlug
+	RepositoryFullName string
+	Kinds              []enum.WorkItemKind
+	States             []string
+	Labels             []string
+	WorkItemTypes      []string
+	DriftStatuses      []enum.WorkItemDriftStatus
+	UpdatedSince       *time.Time
+	Page               value.PageRequest
+	Meta               value.QueryMeta
+}
+
+// ListWorkItemProjectionsResult returns projections and paging metadata.
+type ListWorkItemProjectionsResult struct {
+	WorkItemProjections []entity.ProviderWorkItemProjection
+	Page                query.PageResult
+}
+
+// ListCommentsInput selects comments for one work item projection.
+type ListCommentsInput struct {
+	WorkItemProjectionID uuid.UUID
+	Kinds                []enum.CommentKind
+	Page                 value.PageRequest
+	Meta                 value.QueryMeta
+}
+
+// ListCommentsResult returns comment projections and paging metadata.
+type ListCommentsResult struct {
+	Comments []entity.ProviderCommentProjection
+	Page     query.PageResult
+}
+
+// ListRelationshipsInput selects relationships.
+type ListRelationshipsInput struct {
+	WorkItemProjectionID *uuid.UUID
+	RelationshipTypes    []string
+	Sources              []enum.RelationshipSource
+	ConfidenceLevels     []enum.RelationshipConfidence
+	Page                 value.PageRequest
+	Meta                 value.QueryMeta
+}
+
+// ListRelationshipsResult returns relationships and paging metadata.
+type ListRelationshipsResult struct {
+	Relationships []entity.ProviderRelationship
+	Page          query.PageResult
+}
+
 // RecordProviderLimitSnapshotInput records an observed provider limit state.
 type RecordProviderLimitSnapshotInput struct {
 	ExternalAccountID uuid.UUID

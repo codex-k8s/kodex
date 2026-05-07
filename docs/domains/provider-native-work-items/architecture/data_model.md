@@ -107,14 +107,17 @@ approvals:
 Важные инварианты:
 
 - источник истины остаётся у провайдера;
+- задержанный webhook не должен откатывать более свежую проекцию; если текущий `provider_updated_at` заполнен, входящий снимок с пустым или более старым `provider_updated_at` не обновляет поля проекции и не порождает событие проекции как свежее;
 - одна задача может иметь несколько связанных `PR/MR`;
 - поле `project_id` и `repository_id` являются внешними идентификаторами из `project-catalog`.
+- первичная запись строится из provider webhook или сверки, а `project_id` и `repository_id` могут оставаться пустыми до связывания с `project-catalog`;
+- watermark хранится только как разобранные безопасные поля; полный текст тела остаётся у провайдера, а в проекции хранится digest.
 
 | Поле | Тип | Nullable | Ограничения | Примечание |
 |---|---|---:|---|---|
 | `id` | UUID | no | primary key | Внутренний id проекции. |
 | `provider_slug` | text | no | indexed | Поставщик. |
-| `provider_work_item_id` | text | no | unique by provider | Внешний id. |
+| `provider_work_item_id` | text | no | unique by provider | Стабильная идентичность у провайдера. Для GitHub используется ссылка вида `github:<owner>/<repo>:<kind>:<number>`, чтобы `issue_comment` для PR и `pull_request` webhook сходились в одну PR-проекцию. |
 | `project_id` | UUID | yes | indexed | Внешняя ссылка на проект. |
 | `repository_id` | UUID | yes | indexed | Внешняя ссылка на repository binding. |
 | `repository_full_name` | text | no | indexed | `owner/name` или аналог. |
@@ -146,6 +149,7 @@ approvals:
 | `work_item_projection_id` | UUID | no | indexed | Ссылка внутри БД `provider-hub`. |
 | `provider_comment_id` | text | no | unique by provider | Внешний id. |
 | `kind` | text | no | indexed | `comment`, `review`, `mention`, `system`. |
+| `review_state` | text | no | default '' | `approved`, `changes_requested`, `commented`, `dismissed`, `pending`; пусто для обычных комментариев. |
 | `author_provider_login` | text | no | indexed | Логин автора у провайдера. |
 | `body_digest` | text | no | default '' | Digest тела. |
 | `summary` | text | no | default '' | Короткая выдержка для UI. |
@@ -158,6 +162,8 @@ approvals:
 Назначение: нормализованная связь provider-native объектов.
 
 Примеры связей: исходная задача, связанный `PR/MR`, follow-up, blocks, blocked-by, release link, package source link.
+
+Связь может ссылаться на уже известную внутреннюю проекцию через `target_work_item_id` или на внешнюю ссылку провайдера через `target_provider_ref`, если целевая проекция ещё не создана. Связи, извлечённые из watermark, помечаются source `watermark` и confidence `confirmed`. При свежем обновлении рабочего артефакта набор watermark-связей пересобирается целиком по полям `source_ref`, `parent_ref` и `next_ref`: отсутствующая в текущем watermark связь удаляется из подтверждённой проекции, чтобы `ListRelationships` не возвращал устаревшую ссылку.
 
 | Поле | Тип | Nullable | Ограничения | Примечание |
 |---|---|---:|---|---|

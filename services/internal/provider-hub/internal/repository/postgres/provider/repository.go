@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	providerevents "github.com/codex-k8s/kodex/libs/go/platformevents/provider"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/errs"
 	providerrepo "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/repository/provider"
@@ -68,8 +69,8 @@ func (r *Repository) Ping(ctx context.Context) error {
 	return nil
 }
 
-// StoreWebhookEvent stores a raw webhook, normalized provider events and outbox events atomically.
-func (r *Repository) StoreWebhookEvent(ctx context.Context, webhook entity.WebhookEvent, providerEvents []entity.ProviderEvent, outboxEvents []entity.OutboxEvent) (entity.WebhookEvent, []entity.ProviderEvent, error) {
+// StoreWebhookEvent stores a raw webhook, projections, normalized provider events and outbox events atomically.
+func (r *Repository) StoreWebhookEvent(ctx context.Context, webhook entity.WebhookEvent, projectionUpdate providerrepo.ProjectionUpdate, providerEvents []entity.ProviderEvent, outboxEvents []entity.OutboxEvent) (entity.WebhookEvent, []entity.ProviderEvent, error) {
 	var stored entity.WebhookEvent
 	var storedProviderEvents []entity.ProviderEvent
 	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
@@ -93,11 +94,17 @@ func (r *Repository) StoreWebhookEvent(ctx context.Context, webhook entity.Webho
 		if insertErr != nil {
 			return insertErr
 		}
-		insertedProviderEvents, err := insertProviderEvents(ctx, tx, operationStoreWebhookEvent, providerEvents)
+		projectionResult, err := applyProjectionUpdate(ctx, tx, operationStoreWebhookEvent, projectionUpdate)
 		if err != nil {
 			return err
 		}
-		if err := insertOutboxEvents(ctx, tx, operationStoreWebhookEvent, outboxEvents); err != nil {
+		filteredProviderEvents := filterProviderEvents(providerEvents, projectionUpdate, projectionResult)
+		insertedProviderEvents, err := insertProviderEvents(ctx, tx, operationStoreWebhookEvent, filteredProviderEvents)
+		if err != nil {
+			return err
+		}
+		filteredOutboxEvents := filterOutboxEvents(outboxEvents, filteredProviderEvents, projectionResult)
+		if err := insertOutboxEvents(ctx, tx, operationStoreWebhookEvent, filteredOutboxEvents); err != nil {
 			return err
 		}
 		storedProviderEvents = insertedProviderEvents
@@ -109,8 +116,8 @@ func (r *Repository) StoreWebhookEvent(ctx context.Context, webhook entity.Webho
 	return stored, storedProviderEvents, nil
 }
 
-// ProcessWebhookEvent updates processing state and stores new normalized events atomically.
-func (r *Repository) ProcessWebhookEvent(ctx context.Context, webhook entity.WebhookEvent, providerEvents []entity.ProviderEvent, outboxEvents []entity.OutboxEvent) (entity.WebhookEvent, error) {
+// ProcessWebhookEvent updates processing state and stores projection changes atomically.
+func (r *Repository) ProcessWebhookEvent(ctx context.Context, webhook entity.WebhookEvent, projectionUpdate providerrepo.ProjectionUpdate, providerEvents []entity.ProviderEvent, outboxEvents []entity.OutboxEvent) (entity.WebhookEvent, error) {
 	var stored entity.WebhookEvent
 	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
 		var updateErr error
@@ -118,15 +125,41 @@ func (r *Repository) ProcessWebhookEvent(ctx context.Context, webhook entity.Web
 		if updateErr != nil {
 			return updateErr
 		}
-		if _, err := insertProviderEvents(ctx, tx, operationProcessWebhookEvent, providerEvents); err != nil {
+		projectionResult, err := applyProjectionUpdate(ctx, tx, operationProcessWebhookEvent, projectionUpdate)
+		if err != nil {
 			return err
 		}
-		return insertOutboxEvents(ctx, tx, operationProcessWebhookEvent, outboxEvents)
+		filteredProviderEvents := filterProviderEvents(providerEvents, projectionUpdate, projectionResult)
+		if _, err := insertProviderEvents(ctx, tx, operationProcessWebhookEvent, filteredProviderEvents); err != nil {
+			return err
+		}
+		filteredOutboxEvents := filterOutboxEvents(outboxEvents, filteredProviderEvents, projectionResult)
+		return insertOutboxEvents(ctx, tx, operationProcessWebhookEvent, filteredOutboxEvents)
 	})
 	if err != nil {
 		return entity.WebhookEvent{}, wrapError(operationProcessWebhookEvent, err)
 	}
 	return stored, nil
+}
+
+// GetWorkItemProjection returns one Issue or PR/MR projection.
+func (r *Repository) GetWorkItemProjection(ctx context.Context, lookup query.ProviderTargetLookup) (entity.ProviderWorkItemProjection, error) {
+	return queryOne(ctx, r.db, operationGetWorkItemProjection, queryWorkItemProjectionGet, workItemProjectionLookupArgs(lookup), scanWorkItemProjection)
+}
+
+// ListWorkItemProjections returns Issue and PR/MR projections.
+func (r *Repository) ListWorkItemProjections(ctx context.Context, filter query.WorkItemProjectionFilter) ([]entity.ProviderWorkItemProjection, query.PageResult, error) {
+	return queryPage(ctx, r.db, operationListWorkItemProjections, queryWorkItemProjectionList, workItemProjectionFilterArgs(filter), scanWorkItemProjection)
+}
+
+// ListComments returns comment projections for one work item.
+func (r *Repository) ListComments(ctx context.Context, filter query.CommentProjectionFilter) ([]entity.ProviderCommentProjection, query.PageResult, error) {
+	return queryPage(ctx, r.db, operationListComments, queryCommentProjectionList, commentProjectionFilterArgs(filter), scanCommentProjection)
+}
+
+// ListRelationships returns normalized relationships.
+func (r *Repository) ListRelationships(ctx context.Context, filter query.RelationshipFilter) ([]entity.ProviderRelationship, query.PageResult, error) {
+	return queryPage(ctx, r.db, operationListRelationships, queryRelationshipList, relationshipFilterArgs(filter), scanRelationship)
 }
 
 // GetWebhookEvent returns a stored raw webhook by id.
@@ -242,6 +275,10 @@ const (
 	operationGetWebhookEvent                  = "domain.Repository.GetWebhookEvent"
 	operationListWebhookEvents                = "domain.Repository.ListWebhookEvents"
 	operationListProviderEvents               = "domain.Repository.ListProviderEvents"
+	operationGetWorkItemProjection            = "domain.Repository.GetWorkItemProjection"
+	operationListWorkItemProjections          = "domain.Repository.ListWorkItemProjections"
+	operationListComments                     = "domain.Repository.ListComments"
+	operationListRelationships                = "domain.Repository.ListRelationships"
 	operationGetAccountRuntimeState           = "domain.Repository.GetAccountRuntimeState"
 	operationListAccountRuntimeStates         = "domain.Repository.ListAccountRuntimeStates"
 	operationUpsertAccountRuntimeState        = "domain.Repository.UpsertAccountRuntimeState"
@@ -298,6 +335,182 @@ func insertOutboxEvents(ctx context.Context, db execer, operation string, events
 		}
 	}
 	return nil
+}
+
+type projectionUpdater interface {
+	queryer
+	execer
+}
+
+type projectionApplyResult struct {
+	hasProjection               bool
+	workItemApplied             bool
+	workItemProjectionID        uuid.UUID
+	appliedCommentProjectionIDs map[uuid.UUID]struct{}
+	appliedCommentProviderIDs   map[string]struct{}
+	appliedRelationshipIDs      map[uuid.UUID]struct{}
+}
+
+func applyProjectionUpdate(ctx context.Context, db projectionUpdater, operation string, update providerrepo.ProjectionUpdate) (projectionApplyResult, error) {
+	result := projectionApplyResult{
+		appliedCommentProjectionIDs: make(map[uuid.UUID]struct{}),
+		appliedCommentProviderIDs:   make(map[string]struct{}),
+		appliedRelationshipIDs:      make(map[uuid.UUID]struct{}),
+	}
+	if update.WorkItem == nil {
+		return result, nil
+	}
+	result.hasProjection = true
+	storedWorkItem, workItemApplied, err := upsertFreshWorkItemProjection(ctx, db, operation, *update.WorkItem)
+	if err != nil {
+		return result, err
+	}
+	result.workItemApplied = workItemApplied
+	result.workItemProjectionID = storedWorkItem.ID
+	for _, comment := range update.Comments {
+		comment.WorkItemProjectionID = storedWorkItem.ID
+		storedComment, commentApplied, err := upsertFreshCommentProjection(ctx, db, operation, comment)
+		if err != nil {
+			return result, err
+		}
+		if commentApplied {
+			result.appliedCommentProjectionIDs[storedComment.ID] = struct{}{}
+			result.appliedCommentProviderIDs[storedComment.ProviderCommentID] = struct{}{}
+		}
+	}
+	if workItemApplied {
+		if err := rebuildWatermarkRelationships(ctx, db, operation, storedWorkItem.ID, update.Relationships, result.appliedRelationshipIDs); err != nil {
+			return result, err
+		}
+	}
+	return result, nil
+}
+
+func upsertFreshWorkItemProjection(ctx context.Context, db queryer, operation string, incoming entity.ProviderWorkItemProjection) (entity.ProviderWorkItemProjection, bool, error) {
+	existing, err := queryOne(ctx, db, operation, queryWorkItemProjectionGet, workItemProjectionLookupArgs(query.ProviderTargetLookup{
+		ProviderSlug:     incoming.ProviderSlug,
+		ProviderObjectID: incoming.ProviderWorkItemID,
+	}), scanWorkItemProjection)
+	if err != nil && !errors.Is(err, errs.ErrNotFound) {
+		return entity.ProviderWorkItemProjection{}, false, err
+	}
+	if err == nil && !isProviderUpdateFresh(incoming.ProviderUpdatedAt, existing.ProviderUpdatedAt) {
+		return existing, false, nil
+	}
+	stored, err := queryOne(ctx, db, operation, queryWorkItemProjectionUpsert, workItemProjectionArgs(incoming), scanWorkItemProjection)
+	if err != nil {
+		return entity.ProviderWorkItemProjection{}, false, err
+	}
+	return stored, providerTimestampMatches(incoming.ProviderUpdatedAt, stored.ProviderUpdatedAt), nil
+}
+
+func upsertFreshCommentProjection(ctx context.Context, db queryer, operation string, incoming entity.ProviderCommentProjection) (entity.ProviderCommentProjection, bool, error) {
+	existing, err := queryOne(ctx, db, operation, queryCommentProjectionGetByProviderID, commentProjectionLookupArgs(incoming.WorkItemProjectionID, incoming.ProviderCommentID), scanCommentProjection)
+	if err != nil && !errors.Is(err, errs.ErrNotFound) {
+		return entity.ProviderCommentProjection{}, false, err
+	}
+	if err == nil && !isProviderUpdateFresh(incoming.ProviderUpdatedAt, existing.ProviderUpdatedAt) {
+		return existing, false, nil
+	}
+	stored, err := queryOne(ctx, db, operation, queryCommentProjectionUpsert, commentProjectionArgs(incoming), scanCommentProjection)
+	if err != nil {
+		return entity.ProviderCommentProjection{}, false, err
+	}
+	return stored, providerTimestampMatches(incoming.ProviderUpdatedAt, stored.ProviderUpdatedAt), nil
+}
+
+func rebuildWatermarkRelationships(ctx context.Context, db projectionUpdater, operation string, sourceWorkItemID uuid.UUID, relationships []entity.ProviderRelationship, applied map[uuid.UUID]struct{}) error {
+	currentRelationshipIDs := make([]uuid.UUID, 0, len(relationships))
+	for _, relationship := range relationships {
+		relationship.SourceWorkItemID = sourceWorkItemID
+		stored, err := queryOne(ctx, db, operation, queryRelationshipUpsert, relationshipArgs(relationship), scanRelationship)
+		if err != nil {
+			return err
+		}
+		currentRelationshipIDs = append(currentRelationshipIDs, stored.ID)
+		applied[stored.ID] = struct{}{}
+	}
+	_, err := db.Exec(ctx, queryRelationshipDeleteMissingWatermark, watermarkRelationshipCleanupArgs(sourceWorkItemID, currentRelationshipIDs))
+	if err != nil {
+		return wrapError(operation, err)
+	}
+	return nil
+}
+
+func isProviderUpdateFresh(incoming *time.Time, current *time.Time) bool {
+	if current == nil {
+		return true
+	}
+	if incoming == nil {
+		return false
+	}
+	return !incoming.Before(*current)
+}
+
+func providerTimestampMatches(incoming *time.Time, stored *time.Time) bool {
+	if incoming == nil {
+		return stored == nil
+	}
+	if stored == nil {
+		return false
+	}
+	return incoming.Equal(*stored)
+}
+
+func filterProviderEvents(events []entity.ProviderEvent, update providerrepo.ProjectionUpdate, result projectionApplyResult) []entity.ProviderEvent {
+	if !result.hasProjection {
+		return events
+	}
+	filtered := make([]entity.ProviderEvent, 0, len(events))
+	for _, event := range events {
+		switch event.AggregateType {
+		case providerevents.AggregateWorkItem:
+			if update.WorkItem != nil && result.workItemApplied && event.AggregateID == update.WorkItem.ProviderWorkItemID {
+				filtered = append(filtered, event)
+			}
+		case providerevents.AggregateComment:
+			if _, ok := result.appliedCommentProviderIDs[event.AggregateID]; ok {
+				filtered = append(filtered, event)
+			}
+		default:
+			filtered = append(filtered, event)
+		}
+	}
+	return filtered
+}
+
+func filterOutboxEvents(events []entity.OutboxEvent, providerEvents []entity.ProviderEvent, result projectionApplyResult) []entity.OutboxEvent {
+	if !result.hasProjection {
+		return events
+	}
+	providerEventIDs := make(map[uuid.UUID]struct{}, len(providerEvents))
+	for _, event := range providerEvents {
+		providerEventIDs[event.ID] = struct{}{}
+	}
+	filtered := make([]entity.OutboxEvent, 0, len(events))
+	for _, event := range events {
+		switch event.EventType {
+		case providerevents.EventWebhookNormalized:
+			if _, ok := providerEventIDs[event.AggregateID]; ok {
+				filtered = append(filtered, event)
+			}
+		case providerevents.EventWorkItemSynced:
+			if result.workItemApplied && event.AggregateID == result.workItemProjectionID {
+				filtered = append(filtered, event)
+			}
+		case providerevents.EventCommentSynced:
+			if _, ok := result.appliedCommentProjectionIDs[event.AggregateID]; ok {
+				filtered = append(filtered, event)
+			}
+		case providerevents.EventRelationshipSynced:
+			if _, ok := result.appliedRelationshipIDs[event.AggregateID]; ok {
+				filtered = append(filtered, event)
+			}
+		default:
+			filtered = append(filtered, event)
+		}
+	}
+	return filtered
 }
 
 func sameWebhookEvent(left entity.WebhookEvent, right entity.WebhookEvent) bool {

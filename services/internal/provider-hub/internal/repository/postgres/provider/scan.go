@@ -75,6 +75,99 @@ func scanProviderEvent(row postgreslib.RowScanner) (entity.ProviderEvent, error)
 	return event, err
 }
 
+func scanWorkItemProjection(row postgreslib.RowScanner) (entity.ProviderWorkItemProjection, error) {
+	var projection entity.ProviderWorkItemProjection
+	var providerSlug, kind, watermarkStatus, driftStatus string
+	var projectID, repositoryID pgtype.UUID
+	var labels, assignees, projectFields, watermark []byte
+	var providerUpdatedAt pgtype.Timestamptz
+	err := row.Scan(
+		&projection.ID,
+		&providerSlug,
+		&projection.ProviderWorkItemID,
+		&projectID,
+		&repositoryID,
+		&projection.RepositoryFullName,
+		&kind,
+		&projection.Number,
+		&projection.URL,
+		&projection.Title,
+		&projection.State,
+		&projection.WorkItemType,
+		&labels,
+		&assignees,
+		&projection.Milestone,
+		&projectFields,
+		&watermarkStatus,
+		&watermark,
+		&projection.BodyDigest,
+		&providerUpdatedAt,
+		&projection.SyncedAt,
+		&driftStatus,
+		&projection.Version,
+		&projection.CreatedAt,
+		&projection.UpdatedAt,
+	)
+	projection.ProviderSlug = enum.ProviderSlug(providerSlug)
+	projection.ProjectID = postgreslib.UUIDPtrFromPG(projectID)
+	projection.RepositoryID = postgreslib.UUIDPtrFromPG(repositoryID)
+	projection.Kind = enum.WorkItemKind(kind)
+	projection.LabelsJSON = append(projection.LabelsJSON[:0], labels...)
+	projection.AssigneesJSON = append(projection.AssigneesJSON[:0], assignees...)
+	projection.ProjectFieldsJSON = append(projection.ProjectFieldsJSON[:0], projectFields...)
+	projection.WatermarkStatus = enum.WorkItemWatermarkStatus(watermarkStatus)
+	projection.WatermarkJSON = append(projection.WatermarkJSON[:0], watermark...)
+	projection.ProviderUpdatedAt = timePtrFromPG(providerUpdatedAt)
+	projection.DriftStatus = enum.WorkItemDriftStatus(driftStatus)
+	return projection, err
+}
+
+func scanCommentProjection(row postgreslib.RowScanner) (entity.ProviderCommentProjection, error) {
+	var comment entity.ProviderCommentProjection
+	var kind, reviewState string
+	var providerCreatedAt, providerUpdatedAt pgtype.Timestamptz
+	err := row.Scan(
+		&comment.ID,
+		&comment.WorkItemProjectionID,
+		&comment.ProviderCommentID,
+		&kind,
+		&reviewState,
+		&comment.AuthorProviderLogin,
+		&comment.BodyDigest,
+		&comment.Summary,
+		&providerCreatedAt,
+		&providerUpdatedAt,
+		&comment.Version,
+		&comment.CreatedAt,
+		&comment.UpdatedAt,
+	)
+	comment.Kind = enum.CommentKind(kind)
+	comment.ReviewState = enum.ReviewState(reviewState)
+	comment.ProviderCreatedAt = timePtrFromPG(providerCreatedAt)
+	comment.ProviderUpdatedAt = timePtrFromPG(providerUpdatedAt)
+	return comment, err
+}
+
+func scanRelationship(row postgreslib.RowScanner) (entity.ProviderRelationship, error) {
+	var relationship entity.ProviderRelationship
+	var targetID pgtype.UUID
+	var source, confidence string
+	err := row.Scan(
+		&relationship.ID,
+		&relationship.SourceWorkItemID,
+		&targetID,
+		&relationship.TargetProviderRef,
+		&relationship.RelationshipType,
+		&source,
+		&confidence,
+		&relationship.CreatedAt,
+	)
+	relationship.TargetWorkItemID = postgreslib.UUIDPtrFromPG(targetID)
+	relationship.Source = enum.RelationshipSource(source)
+	relationship.Confidence = enum.RelationshipConfidence(confidence)
+	return relationship, err
+}
+
 func scanLimitSnapshot(row postgreslib.RowScanner) (entity.ProviderLimitSnapshot, error) {
 	var snapshot entity.ProviderLimitSnapshot
 	var providerSlug, source string

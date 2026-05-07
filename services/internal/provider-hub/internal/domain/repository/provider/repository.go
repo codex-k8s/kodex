@@ -18,11 +18,15 @@ import (
 // initial scaffold keeps only the readiness contract needed by the process.
 type Repository interface {
 	Ping(context.Context) error
-	StoreWebhookEvent(context.Context, entity.WebhookEvent, []entity.ProviderEvent, []entity.OutboxEvent) (entity.WebhookEvent, []entity.ProviderEvent, error)
-	ProcessWebhookEvent(context.Context, entity.WebhookEvent, []entity.ProviderEvent, []entity.OutboxEvent) (entity.WebhookEvent, error)
+	StoreWebhookEvent(context.Context, entity.WebhookEvent, ProjectionUpdate, []entity.ProviderEvent, []entity.OutboxEvent) (entity.WebhookEvent, []entity.ProviderEvent, error)
+	ProcessWebhookEvent(context.Context, entity.WebhookEvent, ProjectionUpdate, []entity.ProviderEvent, []entity.OutboxEvent) (entity.WebhookEvent, error)
 	GetWebhookEvent(context.Context, uuid.UUID) (entity.WebhookEvent, error)
 	ListWebhookEvents(context.Context, query.WebhookEventFilter) ([]entity.WebhookEvent, query.PageResult, error)
 	ListProviderEvents(context.Context, query.ProviderEventFilter) ([]entity.ProviderEvent, query.PageResult, error)
+	GetWorkItemProjection(context.Context, query.ProviderTargetLookup) (entity.ProviderWorkItemProjection, error)
+	ListWorkItemProjections(context.Context, query.WorkItemProjectionFilter) ([]entity.ProviderWorkItemProjection, query.PageResult, error)
+	ListComments(context.Context, query.CommentProjectionFilter) ([]entity.ProviderCommentProjection, query.PageResult, error)
+	ListRelationships(context.Context, query.RelationshipFilter) ([]entity.ProviderRelationship, query.PageResult, error)
 	UpsertAccountRuntimeState(context.Context, entity.ProviderAccountRuntimeState) (entity.ProviderAccountRuntimeState, error)
 	GetAccountRuntimeState(context.Context, query.AccountRuntimeStateLookup) (entity.ProviderAccountRuntimeState, error)
 	ListAccountRuntimeStates(context.Context, query.AccountRuntimeStateFilter) ([]entity.ProviderAccountRuntimeState, query.PageResult, error)
@@ -34,6 +38,13 @@ type Repository interface {
 	MarkOutboxEventPublished(context.Context, uuid.UUID, int, time.Time) error
 	MarkOutboxEventFailed(context.Context, uuid.UUID, int, time.Time, string) error
 	MarkOutboxEventPermanentlyFailed(context.Context, uuid.UUID, int, time.Time, string) error
+}
+
+// ProjectionUpdate stores projection changes derived from webhook, reconciliation or provider operation.
+type ProjectionUpdate struct {
+	WorkItem      *entity.ProviderWorkItemProjection
+	Comments      []entity.ProviderCommentProjection
+	Relationships []entity.ProviderRelationship
 }
 
 // WebhookNormalizer isolates provider-specific webhook payload parsing from the domain service.

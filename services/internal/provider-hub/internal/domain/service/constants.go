@@ -7,15 +7,17 @@ import (
 )
 
 const (
-	providerEventWebhookReceived   = providerevents.EventWebhookReceived
-	providerEventWebhookNormalized = providerevents.EventWebhookNormalized
-	providerEventWorkItemSynced    = providerevents.EventWorkItemSynced
-	providerEventCommentSynced     = providerevents.EventCommentSynced
+	providerEventWebhookReceived    = providerevents.EventWebhookReceived
+	providerEventWebhookNormalized  = providerevents.EventWebhookNormalized
+	providerEventWorkItemSynced     = providerevents.EventWorkItemSynced
+	providerEventCommentSynced      = providerevents.EventCommentSynced
+	providerEventRelationshipSynced = providerevents.EventRelationshipSynced
 
 	providerAggregateWebhookEvent  = providerevents.AggregateWebhookEvent
 	providerAggregateProviderEvent = providerevents.AggregateProviderEvent
 	providerAggregateWorkItem      = providerevents.AggregateWorkItem
 	providerAggregateComment       = providerevents.AggregateComment
+	providerAggregateRelationship  = providerevents.AggregateRelationship
 
 	providerEventSchemaVersion = providerevents.SchemaVersion
 	webhookPayloadRetention    = 30 * 24 * time.Hour

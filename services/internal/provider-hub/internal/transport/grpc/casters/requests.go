@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 
 	providersv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1"
+	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/errs"
 	providerservice "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/service"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/enum"
 )
@@ -81,15 +82,138 @@ func ListWebhookEventsInput(request *providersv1.ListWebhookEventsRequest) (prov
 
 // RetryWebhookEventProcessingInput maps a gRPC request to the domain command input.
 func RetryWebhookEventProcessingInput(request *providersv1.RetryWebhookEventProcessingRequest) (providerservice.RetryWebhookEventProcessingInput, error) {
-	id, err := requiredUUID(request.GetWebhookEventId())
+	id, meta, err := metaAndRequiredUUID(request.GetMeta(), request.GetWebhookEventId(), CommandMetaFromProto)
+	input := providerservice.RetryWebhookEventProcessingInput{WebhookEventID: id, Meta: meta}
+	return input, err
+}
+
+// GetWorkItemProjectionInput maps a gRPC request to the domain read input.
+func GetWorkItemProjectionInput(request *providersv1.GetWorkItemProjectionRequest) (providerservice.GetWorkItemProjectionInput, error) {
+	id, meta, err := metaAndRequiredUUID(request.GetMeta(), request.GetWorkItemProjectionId(), QueryMetaFromProto)
+	input := providerservice.GetWorkItemProjectionInput{WorkItemProjectionID: id, Meta: meta}
+	return input, err
+}
+
+// FindWorkItemByProviderRefInput maps a gRPC request to the domain read input.
+func FindWorkItemByProviderRefInput(request *providersv1.FindWorkItemByProviderRefRequest) (providerservice.FindWorkItemByProviderRefInput, error) {
+	meta, err := QueryMetaFromProto(request.GetMeta())
 	if err != nil {
-		return providerservice.RetryWebhookEventProcessingInput{}, err
+		return providerservice.FindWorkItemByProviderRefInput{}, err
 	}
-	meta, err := CommandMetaFromProto(request.GetMeta())
+	target := request.GetTarget()
+	if target == nil {
+		return providerservice.FindWorkItemByProviderRefInput{}, errs.ErrInvalidArgument
+	}
+	kind, err := workItemKindFromProto(target.GetWorkItemKind())
 	if err != nil {
-		return providerservice.RetryWebhookEventProcessingInput{}, err
+		return providerservice.FindWorkItemByProviderRefInput{}, err
 	}
-	return providerservice.RetryWebhookEventProcessingInput{WebhookEventID: id, Meta: meta}, nil
+	return providerservice.FindWorkItemByProviderRefInput{
+		ProviderSlug:       providerSlug(target.GetProviderSlug()),
+		RepositoryFullName: strings.TrimSpace(target.GetRepositoryFullName()),
+		Kind:               kind,
+		Number:             target.GetNumber(),
+		ProviderObjectID:   strings.TrimSpace(target.GetProviderObjectId()),
+		WebURL:             strings.TrimSpace(target.GetWebUrl()),
+		Meta:               meta,
+	}, nil
+}
+
+// ListWorkItemProjectionsInput maps a gRPC request to the domain read input.
+func ListWorkItemProjectionsInput(request *providersv1.ListWorkItemProjectionsRequest) (providerservice.ListWorkItemProjectionsInput, error) {
+	meta, err := QueryMetaFromProto(request.GetMeta())
+	if err != nil {
+		return providerservice.ListWorkItemProjectionsInput{}, err
+	}
+	projectID, err := optionalUUIDPtr(request.GetProjectId())
+	if err != nil {
+		return providerservice.ListWorkItemProjectionsInput{}, err
+	}
+	repositoryID, err := optionalUUIDPtr(request.GetRepositoryId())
+	if err != nil {
+		return providerservice.ListWorkItemProjectionsInput{}, err
+	}
+	kinds, err := workItemKindsFromProto(request.GetKinds())
+	if err != nil {
+		return providerservice.ListWorkItemProjectionsInput{}, err
+	}
+	driftStatuses, err := driftStatusesFromProto(request.GetDriftStatuses())
+	if err != nil {
+		return providerservice.ListWorkItemProjectionsInput{}, err
+	}
+	updatedSince, err := optionalTimePtr(request.GetUpdatedSince())
+	if err != nil {
+		return providerservice.ListWorkItemProjectionsInput{}, err
+	}
+	return providerservice.ListWorkItemProjectionsInput{
+		ProjectID:          projectID,
+		RepositoryID:       repositoryID,
+		ProviderSlug:       providerSlug(request.GetProviderSlug()),
+		RepositoryFullName: strings.TrimSpace(request.GetRepositoryFullName()),
+		Kinds:              kinds,
+		States:             trimProtoStrings(request.GetStates()),
+		Labels:             trimProtoStrings(request.GetLabels()),
+		WorkItemTypes:      trimProtoStrings(request.GetWorkItemTypes()),
+		DriftStatuses:      driftStatuses,
+		UpdatedSince:       updatedSince,
+		Page:               pageRequestFromProto(request.GetPage()),
+		Meta:               meta,
+	}, nil
+}
+
+// ListCommentsInput maps a gRPC request to the domain read input.
+func ListCommentsInput(request *providersv1.ListCommentsRequest) (providerservice.ListCommentsInput, error) {
+	id, meta, err := metaAndRequiredUUID(request.GetMeta(), request.GetWorkItemProjectionId(), QueryMetaFromProto)
+	if err != nil {
+		return providerservice.ListCommentsInput{}, err
+	}
+	kinds, err := commentKindsFromProto(request.GetKinds())
+	if err != nil {
+		return providerservice.ListCommentsInput{}, err
+	}
+	return providerservice.ListCommentsInput{WorkItemProjectionID: id, Kinds: kinds, Page: pageRequestFromProto(request.GetPage()), Meta: meta}, nil
+}
+
+func metaAndRequiredUUID[MetaRequest any, Meta any](metaRequest MetaRequest, idText string, cast func(MetaRequest) (Meta, error)) (uuid.UUID, Meta, error) {
+	id, err := requiredUUID(idText)
+	if err != nil {
+		var zero Meta
+		return uuid.Nil, zero, err
+	}
+	meta, err := cast(metaRequest)
+	if err != nil {
+		var zero Meta
+		return uuid.Nil, zero, err
+	}
+	return id, meta, nil
+}
+
+// ListRelationshipsInput maps a gRPC request to the domain read input.
+func ListRelationshipsInput(request *providersv1.ListRelationshipsRequest) (providerservice.ListRelationshipsInput, error) {
+	meta, err := QueryMetaFromProto(request.GetMeta())
+	if err != nil {
+		return providerservice.ListRelationshipsInput{}, err
+	}
+	id, err := optionalUUIDPtr(request.GetWorkItemProjectionId())
+	if err != nil {
+		return providerservice.ListRelationshipsInput{}, err
+	}
+	sources, err := relationshipSourcesFromProto(request.GetSources())
+	if err != nil {
+		return providerservice.ListRelationshipsInput{}, err
+	}
+	levels, err := relationshipConfidenceLevelsFromProto(request.GetConfidenceLevels())
+	if err != nil {
+		return providerservice.ListRelationshipsInput{}, err
+	}
+	return providerservice.ListRelationshipsInput{
+		WorkItemProjectionID: id,
+		RelationshipTypes:    trimProtoStrings(request.GetRelationshipTypes()),
+		Sources:              sources,
+		ConfidenceLevels:     levels,
+		Page:                 pageRequestFromProto(request.GetPage()),
+		Meta:                 meta,
+	}, nil
 }
 
 // GetProviderAccountRuntimeStateInput maps a gRPC request to the domain read input.

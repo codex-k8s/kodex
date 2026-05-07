@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/errs"
+	providerrepo "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/repository/provider"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/query"
@@ -181,6 +182,126 @@ func TestIngestWebhookEventStoresFailedKnownWebhookWithBadPayloadShape(t *testin
 	}
 }
 
+func TestIngestWebhookEventStoresProjectionUpdateFromKnownFacts(t *testing.T) {
+	t.Parallel()
+
+	webhookID := uuid.New()
+	now := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	repository := &fakeRepository{}
+	service := NewWithRuntime(
+		repository,
+		fixedClock{now: now},
+		&sequenceIDs{ids: []uuid.UUID{webhookID, uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()}},
+		fakeWebhookNormalizer{facts: value.ProviderWebhookFacts{
+			FactKind:             value.ProviderWebhookFactKindWorkItem,
+			ProviderWorkItemID:   "55",
+			Kind:                 "issue",
+			Number:               7,
+			RepositoryFullName:   "codex-k8s/kodex",
+			RepositoryProviderID: "101",
+			OccurredAt:           now.Add(-time.Minute),
+			WorkItem: &value.ProviderWorkItemSnapshot{
+				ProviderSlug:       string(enum.ProviderSlugGitHub),
+				ProviderWorkItemID: "55",
+				RepositoryFullName: "codex-k8s/kodex",
+				Kind:               string(enum.WorkItemKindIssue),
+				Number:             7,
+				URL:                "https://github.com/codex-k8s/kodex/issues/7",
+				Title:              "Проверить проекции",
+				State:              "open",
+				Body:               "<!-- kodex:artifact v1\nkind: issue\nmanaged_by: kodex\nwork_type: dev\nnext_ref: https://github.com/codex-k8s/kodex/issues/8\n-->\nОписание задачи",
+				Labels:             []string{"area:provider-hub"},
+				ProviderUpdatedAt:  now.Add(-time.Minute),
+			},
+		}, ok: true},
+	)
+
+	_, err := service.IngestWebhookEvent(context.Background(), IngestWebhookEventInput{
+		ProviderSlug:         enum.ProviderSlugGitHub,
+		DeliveryID:           "delivery-1",
+		EventName:            "issues",
+		RepositoryProviderID: "101",
+		ReceivedAt:           now,
+		PayloadJSON:          []byte(`{"action":"opened","repository":{"id":101,"full_name":"codex-k8s/kodex"},"issue":{"id":55,"number":7,"updated_at":"2026-05-07T11:59:00Z"}}`),
+		Meta:                 value.CommandMeta{CommandID: uuid.New()},
+	})
+	if err != nil {
+		t.Fatalf("IngestWebhookEvent(): %v", err)
+	}
+	if repository.recordedProjection.WorkItem == nil {
+		t.Fatal("projection work item is nil, want stored projection")
+	}
+	if repository.recordedProjection.WorkItem.WorkItemType != "dev" || repository.recordedProjection.WorkItem.WatermarkStatus != enum.WorkItemWatermarkStatusValid {
+		t.Fatalf("projection = %+v, want valid dev watermark", repository.recordedProjection.WorkItem)
+	}
+	if len(repository.recordedProjection.Relationships) != 1 || repository.recordedProjection.Relationships[0].RelationshipType != relationshipNext {
+		t.Fatalf("relationships = %+v, want next relationship", repository.recordedProjection.Relationships)
+	}
+	if len(repository.recordedOutboxEvents) != 4 {
+		t.Fatalf("outbox events = %d, want received, normalized, work item and relationship", len(repository.recordedOutboxEvents))
+	}
+}
+
+func TestWorkItemProjectionValidatesWatermarkContract(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name       string
+		kind       string
+		body       string
+		wantStatus enum.WorkItemWatermarkStatus
+	}{
+		{
+			name:       "valid issue",
+			kind:       string(enum.WorkItemKindIssue),
+			body:       "<!-- kodex:artifact v1\nkind: issue\nmanaged_by: kodex\nwork_type: dev\n-->\nbody",
+			wantStatus: enum.WorkItemWatermarkStatusValid,
+		},
+		{
+			name:       "missing work type",
+			kind:       string(enum.WorkItemKindIssue),
+			body:       "<!-- kodex:artifact v1\nkind: issue\nmanaged_by: kodex\n-->\nbody",
+			wantStatus: enum.WorkItemWatermarkStatusInvalid,
+		},
+		{
+			name:       "mismatched kind",
+			kind:       string(enum.WorkItemKindPullRequest),
+			body:       "<!-- kodex:artifact v1\nkind: issue\nmanaged_by: kodex\nwork_type: dev\nsource_ref: https://github.com/codex-k8s/kodex/issues/7\n-->\nbody",
+			wantStatus: enum.WorkItemWatermarkStatusInvalid,
+		},
+		{
+			name:       "pull request without source ref",
+			kind:       string(enum.WorkItemKindPullRequest),
+			body:       "<!-- kodex:artifact v1\nkind: pull_request\nmanaged_by: kodex\nwork_type: dev\n-->\nbody",
+			wantStatus: enum.WorkItemWatermarkStatusInvalid,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			projection, _, err := workItemProjectionFromSnapshot(value.ProviderWorkItemSnapshot{
+				ProviderSlug:       string(enum.ProviderSlugGitHub),
+				ProviderWorkItemID: "55",
+				RepositoryFullName: "codex-k8s/kodex",
+				Kind:               tc.kind,
+				Number:             7,
+				URL:                "https://github.com/codex-k8s/kodex/issues/7",
+				Title:              "Проверить контракт watermark",
+				State:              "open",
+				Body:               tc.body,
+				ProviderUpdatedAt:  now,
+			}, now)
+			if err != nil {
+				t.Fatalf("workItemProjectionFromSnapshot(): %v", err)
+			}
+			if projection.WatermarkStatus != tc.wantStatus {
+				t.Fatalf("watermark status = %s, want %s", projection.WatermarkStatus, tc.wantStatus)
+			}
+		})
+	}
+}
+
 func TestRetryWebhookEventProcessingReturnsCurrentStateAfterConcurrentProcessing(t *testing.T) {
 	t.Parallel()
 
@@ -328,16 +449,46 @@ func TestListProviderAccountRuntimeStatesRejectsScopeFiltersUntilResolverExists(
 	}
 }
 
+func TestGetWorkItemProjectionDelegatesToRepository(t *testing.T) {
+	t.Parallel()
+
+	projectionID := uuid.New()
+	repository := &fakeRepository{
+		workItemProjection: entity.ProviderWorkItemProjection{
+			Base: entity.Base{ID: projectionID},
+			Kind: enum.WorkItemKindIssue,
+		},
+	}
+	service := New(repository)
+
+	projection, err := service.GetWorkItemProjection(context.Background(), GetWorkItemProjectionInput{
+		WorkItemProjectionID: projectionID,
+		Meta:                 value.QueryMeta{Actor: value.Actor{Type: "user", ID: uuid.NewString()}},
+	})
+	if err != nil {
+		t.Fatalf("GetWorkItemProjection(): %v", err)
+	}
+	if projection.ID != projectionID {
+		t.Fatalf("projection id = %s, want %s", projection.ID, projectionID)
+	}
+	if repository.lastWorkItemLookup.ID == nil || *repository.lastWorkItemLookup.ID != projectionID {
+		t.Fatalf("lookup = %+v, want id %s", repository.lastWorkItemLookup, projectionID)
+	}
+}
+
 type fakeRepository struct {
 	err                    error
 	calls                  int
 	recordedSnapshot       entity.ProviderLimitSnapshot
 	recordedRuntimeState   entity.ProviderAccountRuntimeState
 	recordedWebhook        entity.WebhookEvent
+	recordedProjection     providerrepo.ProjectionUpdate
 	processWebhookErr      error
 	webhookAfterProcess    *entity.WebhookEvent
 	recordedProviderEvents []entity.ProviderEvent
 	recordedOutboxEvents   []entity.OutboxEvent
+	workItemProjection     entity.ProviderWorkItemProjection
+	lastWorkItemLookup     query.ProviderTargetLookup
 }
 
 func (r *fakeRepository) Ping(context.Context) error {
@@ -349,15 +500,17 @@ func (r *fakeRepository) UpsertAccountRuntimeState(context.Context, entity.Provi
 	return entity.ProviderAccountRuntimeState{}, r.err
 }
 
-func (r *fakeRepository) StoreWebhookEvent(_ context.Context, webhook entity.WebhookEvent, providerEvents []entity.ProviderEvent, outboxEvents []entity.OutboxEvent) (entity.WebhookEvent, []entity.ProviderEvent, error) {
+func (r *fakeRepository) StoreWebhookEvent(_ context.Context, webhook entity.WebhookEvent, projection providerrepo.ProjectionUpdate, providerEvents []entity.ProviderEvent, outboxEvents []entity.OutboxEvent) (entity.WebhookEvent, []entity.ProviderEvent, error) {
 	r.recordedWebhook = webhook
+	r.recordedProjection = projection
 	r.recordedProviderEvents = providerEvents
 	r.recordedOutboxEvents = outboxEvents
 	return webhook, providerEvents, r.err
 }
 
-func (r *fakeRepository) ProcessWebhookEvent(_ context.Context, webhook entity.WebhookEvent, providerEvents []entity.ProviderEvent, outboxEvents []entity.OutboxEvent) (entity.WebhookEvent, error) {
+func (r *fakeRepository) ProcessWebhookEvent(_ context.Context, webhook entity.WebhookEvent, projection providerrepo.ProjectionUpdate, providerEvents []entity.ProviderEvent, outboxEvents []entity.OutboxEvent) (entity.WebhookEvent, error) {
 	r.recordedWebhook = webhook
+	r.recordedProjection = projection
 	r.recordedProviderEvents = providerEvents
 	r.recordedOutboxEvents = outboxEvents
 	if r.webhookAfterProcess != nil {
@@ -378,6 +531,23 @@ func (r *fakeRepository) ListWebhookEvents(context.Context, query.WebhookEventFi
 }
 
 func (r *fakeRepository) ListProviderEvents(context.Context, query.ProviderEventFilter) ([]entity.ProviderEvent, query.PageResult, error) {
+	return nil, query.PageResult{}, r.err
+}
+
+func (r *fakeRepository) GetWorkItemProjection(_ context.Context, lookup query.ProviderTargetLookup) (entity.ProviderWorkItemProjection, error) {
+	r.lastWorkItemLookup = lookup
+	return r.workItemProjection, r.err
+}
+
+func (r *fakeRepository) ListWorkItemProjections(context.Context, query.WorkItemProjectionFilter) ([]entity.ProviderWorkItemProjection, query.PageResult, error) {
+	return nil, query.PageResult{}, r.err
+}
+
+func (r *fakeRepository) ListComments(context.Context, query.CommentProjectionFilter) ([]entity.ProviderCommentProjection, query.PageResult, error) {
+	return nil, query.PageResult{}, r.err
+}
+
+func (r *fakeRepository) ListRelationships(context.Context, query.RelationshipFilter) ([]entity.ProviderRelationship, query.PageResult, error) {
 	return nil, query.PageResult{}, r.err
 }
 

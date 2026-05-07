@@ -95,7 +95,7 @@ func (s *Service) IngestWebhookEvent(ctx context.Context, input IngestWebhookEve
 	}
 	webhook.ProcessingStatus = normalization.status
 	webhook.LastError = normalization.lastError
-	stored, _, err := s.repository.StoreWebhookEvent(ctx, webhook, normalization.providerEvents, normalization.outboxEvents)
+	stored, _, err := s.repository.StoreWebhookEvent(ctx, webhook, normalization.projectionUpdate, normalization.providerEvents, normalization.outboxEvents)
 	return stored, err
 }
 
@@ -156,11 +156,114 @@ func (s *Service) RetryWebhookEventProcessing(ctx context.Context, input RetryWe
 	}
 	webhook.ProcessingStatus = normalization.status
 	webhook.LastError = normalization.lastError
-	stored, err := s.repository.ProcessWebhookEvent(ctx, webhook, normalization.providerEvents, normalization.outboxEvents[1:])
+	stored, err := s.repository.ProcessWebhookEvent(ctx, webhook, normalization.projectionUpdate, normalization.providerEvents, normalization.outboxEvents[1:])
 	if errors.Is(err, errs.ErrNotFound) {
 		return s.currentWebhookAfterConcurrentProcessing(ctx, input.WebhookEventID)
 	}
 	return stored, err
+}
+
+// GetWorkItemProjection returns one Issue or PR/MR projection by internal id.
+func (s *Service) GetWorkItemProjection(ctx context.Context, input GetWorkItemProjectionInput) (entity.ProviderWorkItemProjection, error) {
+	if input.WorkItemProjectionID == uuid.Nil {
+		return entity.ProviderWorkItemProjection{}, errs.ErrInvalidArgument
+	}
+	id := input.WorkItemProjectionID
+	return s.repository.GetWorkItemProjection(ctx, query.ProviderTargetLookup{ID: &id})
+}
+
+// FindWorkItemByProviderRef finds one projection by provider-native reference.
+func (s *Service) FindWorkItemByProviderRef(ctx context.Context, input FindWorkItemByProviderRefInput) (entity.ProviderWorkItemProjection, error) {
+	if !validProviderSlug(input.ProviderSlug) {
+		return entity.ProviderWorkItemProjection{}, errs.ErrInvalidArgument
+	}
+	hasProviderID := strings.TrimSpace(input.ProviderObjectID) != ""
+	hasURL := strings.TrimSpace(input.WebURL) != ""
+	hasNumberRef := strings.TrimSpace(input.RepositoryFullName) != "" && validWorkItemKind(input.Kind) && input.Number > 0
+	if !hasProviderID && !hasURL && !hasNumberRef {
+		return entity.ProviderWorkItemProjection{}, errs.ErrInvalidArgument
+	}
+	return s.repository.GetWorkItemProjection(ctx, query.ProviderTargetLookup{
+		ProviderSlug:       input.ProviderSlug,
+		RepositoryFullName: strings.TrimSpace(input.RepositoryFullName),
+		Kind:               input.Kind,
+		Number:             input.Number,
+		ProviderObjectID:   strings.TrimSpace(input.ProviderObjectID),
+		WebURL:             strings.TrimSpace(input.WebURL),
+	})
+}
+
+// ListWorkItemProjections returns Issue and PR/MR projections by supported filters.
+func (s *Service) ListWorkItemProjections(ctx context.Context, input ListWorkItemProjectionsInput) (ListWorkItemProjectionsResult, error) {
+	if input.ProjectID != nil && *input.ProjectID == uuid.Nil {
+		return ListWorkItemProjectionsResult{}, errs.ErrInvalidArgument
+	}
+	if input.RepositoryID != nil && *input.RepositoryID == uuid.Nil {
+		return ListWorkItemProjectionsResult{}, errs.ErrInvalidArgument
+	}
+	if input.ProviderSlug != "" && !validProviderSlug(input.ProviderSlug) {
+		return ListWorkItemProjectionsResult{}, errs.ErrInvalidArgument
+	}
+	if !validWorkItemKinds(input.Kinds) || !validWorkItemDriftStatuses(input.DriftStatuses) {
+		return ListWorkItemProjectionsResult{}, errs.ErrInvalidArgument
+	}
+	if hasBlankStrings(input.States) || hasBlankStrings(input.Labels) || hasBlankStrings(input.WorkItemTypes) {
+		return ListWorkItemProjectionsResult{}, errs.ErrInvalidArgument
+	}
+	projections, page, err := s.repository.ListWorkItemProjections(ctx, query.WorkItemProjectionFilter{
+		ProjectID:          input.ProjectID,
+		RepositoryID:       input.RepositoryID,
+		ProviderSlug:       input.ProviderSlug,
+		RepositoryFullName: strings.TrimSpace(input.RepositoryFullName),
+		Kinds:              input.Kinds,
+		States:             trimStrings(input.States),
+		Labels:             trimStrings(input.Labels),
+		WorkItemTypes:      trimStrings(input.WorkItemTypes),
+		DriftStatuses:      input.DriftStatuses,
+		UpdatedSince:       input.UpdatedSince,
+		Page:               input.Page,
+	})
+	if err != nil {
+		return ListWorkItemProjectionsResult{}, err
+	}
+	return ListWorkItemProjectionsResult{WorkItemProjections: projections, Page: page}, nil
+}
+
+// ListComments returns normalized comments and review signals for a work item projection.
+func (s *Service) ListComments(ctx context.Context, input ListCommentsInput) (ListCommentsResult, error) {
+	if input.WorkItemProjectionID == uuid.Nil || !validCommentKinds(input.Kinds) {
+		return ListCommentsResult{}, errs.ErrInvalidArgument
+	}
+	comments, page, err := s.repository.ListComments(ctx, query.CommentProjectionFilter{
+		WorkItemProjectionID: input.WorkItemProjectionID,
+		Kinds:                input.Kinds,
+		Page:                 input.Page,
+	})
+	if err != nil {
+		return ListCommentsResult{}, err
+	}
+	return ListCommentsResult{Comments: comments, Page: page}, nil
+}
+
+// ListRelationships returns normalized provider relationships by supported filters.
+func (s *Service) ListRelationships(ctx context.Context, input ListRelationshipsInput) (ListRelationshipsResult, error) {
+	if input.WorkItemProjectionID != nil && *input.WorkItemProjectionID == uuid.Nil {
+		return ListRelationshipsResult{}, errs.ErrInvalidArgument
+	}
+	if hasBlankStrings(input.RelationshipTypes) || !validRelationshipSources(input.Sources) || !validRelationshipConfidenceLevels(input.ConfidenceLevels) {
+		return ListRelationshipsResult{}, errs.ErrInvalidArgument
+	}
+	relationships, page, err := s.repository.ListRelationships(ctx, query.RelationshipFilter{
+		WorkItemProjectionID: input.WorkItemProjectionID,
+		RelationshipTypes:    trimStrings(input.RelationshipTypes),
+		Sources:              input.Sources,
+		ConfidenceLevels:     input.ConfidenceLevels,
+		Page:                 input.Page,
+	})
+	if err != nil {
+		return ListRelationshipsResult{}, err
+	}
+	return ListRelationshipsResult{Relationships: relationships, Page: page}, nil
 }
 
 func (s *Service) currentWebhookAfterConcurrentProcessing(ctx context.Context, webhookEventID uuid.UUID) (entity.WebhookEvent, error) {

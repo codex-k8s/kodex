@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
@@ -74,7 +75,7 @@ func webhookEventFilterArgs(filter query.WebhookEventFilter) pageQueryArgs {
 	return withPage(filter.Page, pgx.NamedArgs{
 		"provider_slug":          string(filter.ProviderSlug),
 		"delivery_id":            filter.DeliveryID,
-		"event_names":            filter.EventNames,
+		"event_names":            textValues(filter.EventNames),
 		"processing_statuses":    postgreslib.StringValues(filter.ProcessingStatuses),
 		"repository_provider_id": filter.RepositoryProviderID,
 		"received_since":         postgreslib.NullableTime(filter.ReceivedSince),
@@ -108,6 +109,117 @@ func providerEventFilterArgs(filter query.ProviderEventFilter) pageQueryArgs {
 	})
 }
 
+func workItemProjectionArgs(projection entity.ProviderWorkItemProjection) pgx.NamedArgs {
+	return withBaseArgs(projection.Base, pgx.NamedArgs{
+		"provider_slug":         string(projection.ProviderSlug),
+		"provider_work_item_id": projection.ProviderWorkItemID,
+		"project_id":            postgreslib.NullableUUID(projection.ProjectID),
+		"repository_id":         postgreslib.NullableUUID(projection.RepositoryID),
+		"repository_full_name":  projection.RepositoryFullName,
+		"kind":                  string(projection.Kind),
+		"number":                projection.Number,
+		"url":                   projection.URL,
+		"title":                 projection.Title,
+		"state":                 projection.State,
+		"work_item_type":        projection.WorkItemType,
+		"labels_json":           jsonPayloadOrDefault(projection.LabelsJSON, "[]"),
+		"assignees_json":        jsonPayloadOrDefault(projection.AssigneesJSON, "[]"),
+		"milestone":             projection.Milestone,
+		"project_fields_json":   jsonPayloadOrDefault(projection.ProjectFieldsJSON, "{}"),
+		"watermark_status":      string(projection.WatermarkStatus),
+		"watermark_json":        jsonPayloadOrDefault(projection.WatermarkJSON, "{}"),
+		"body_digest":           projection.BodyDigest,
+		"provider_updated_at":   postgreslib.NullableTime(projection.ProviderUpdatedAt),
+		"synced_at":             projection.SyncedAt,
+		"drift_status":          string(projection.DriftStatus),
+	})
+}
+
+func workItemProjectionLookupArgs(lookup query.ProviderTargetLookup) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"id":                   postgreslib.NullableUUID(lookup.ID),
+		"provider_slug":        string(lookup.ProviderSlug),
+		"repository_full_name": lookup.RepositoryFullName,
+		"kind":                 string(lookup.Kind),
+		"number":               lookup.Number,
+		"provider_object_id":   lookup.ProviderObjectID,
+		"web_url":              lookup.WebURL,
+	}
+}
+
+func workItemProjectionFilterArgs(filter query.WorkItemProjectionFilter) pageQueryArgs {
+	return withPage(filter.Page, pgx.NamedArgs{
+		"project_id":           postgreslib.NullableUUID(filter.ProjectID),
+		"repository_id":        postgreslib.NullableUUID(filter.RepositoryID),
+		"provider_slug":        string(filter.ProviderSlug),
+		"repository_full_name": filter.RepositoryFullName,
+		"kinds":                postgreslib.StringValues(filter.Kinds),
+		"states":               textValues(filter.States),
+		"labels":               textValues(filter.Labels),
+		"work_item_types":      textValues(filter.WorkItemTypes),
+		"drift_statuses":       postgreslib.StringValues(filter.DriftStatuses),
+		"updated_since":        postgreslib.NullableTime(filter.UpdatedSince),
+	})
+}
+
+func commentProjectionArgs(comment entity.ProviderCommentProjection) pgx.NamedArgs {
+	return withBaseArgs(comment.Base, pgx.NamedArgs{
+		"work_item_projection_id": comment.WorkItemProjectionID,
+		"provider_comment_id":     comment.ProviderCommentID,
+		"kind":                    string(comment.Kind),
+		"review_state":            string(comment.ReviewState),
+		"author_provider_login":   comment.AuthorProviderLogin,
+		"body_digest":             comment.BodyDigest,
+		"summary":                 comment.Summary,
+		"provider_created_at":     postgreslib.NullableTime(comment.ProviderCreatedAt),
+		"provider_updated_at":     postgreslib.NullableTime(comment.ProviderUpdatedAt),
+	})
+}
+
+func commentProjectionFilterArgs(filter query.CommentProjectionFilter) pageQueryArgs {
+	return withPage(filter.Page, pgx.NamedArgs{
+		"work_item_projection_id": filter.WorkItemProjectionID,
+		"kinds":                   postgreslib.StringValues(filter.Kinds),
+	})
+}
+
+func commentProjectionLookupArgs(workItemProjectionID uuid.UUID, providerCommentID string) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"work_item_projection_id": workItemProjectionID,
+		"provider_comment_id":     providerCommentID,
+	}
+}
+
+func relationshipArgs(relationship entity.ProviderRelationship) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"id":                  relationship.ID,
+		"source_work_item_id": relationship.SourceWorkItemID,
+		"target_work_item_id": postgreslib.NullableUUID(relationship.TargetWorkItemID),
+		"target_provider_ref": relationship.TargetProviderRef,
+		"relationship_type":   relationship.RelationshipType,
+		"source":              string(relationship.Source),
+		"confidence":          string(relationship.Confidence),
+		"created_at":          relationship.CreatedAt,
+	}
+}
+
+func watermarkRelationshipCleanupArgs(sourceWorkItemID uuid.UUID, relationshipIDs []uuid.UUID) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"source_work_item_id": sourceWorkItemID,
+		"relationship_types":  textValues([]string{"source", "parent", "next"}),
+		"relationship_ids":    postgreslib.UUIDValues(relationshipIDs),
+	}
+}
+
+func relationshipFilterArgs(filter query.RelationshipFilter) pageQueryArgs {
+	return withPage(filter.Page, pgx.NamedArgs{
+		"work_item_projection_id": postgreslib.NullableUUID(filter.WorkItemProjectionID),
+		"relationship_types":      textValues(filter.RelationshipTypes),
+		"sources":                 postgreslib.StringValues(filter.Sources),
+		"confidence_levels":       postgreslib.StringValues(filter.ConfidenceLevels),
+	})
+}
+
 func limitSnapshotArgs(snapshot entity.ProviderLimitSnapshot) pgx.NamedArgs {
 	return pgx.NamedArgs{
 		"id":                  snapshot.ID,
@@ -126,7 +238,7 @@ func limitSnapshotFilterArgs(filter query.LimitSnapshotFilter) pageQueryArgs {
 	return withPage(filter.Page, pgx.NamedArgs{
 		"external_account_id": postgreslib.NullableUUID(filter.ExternalAccountID),
 		"provider_slug":       string(filter.ProviderSlug),
-		"limit_classes":       filter.LimitClasses,
+		"limit_classes":       textValues(filter.LimitClasses),
 		"captured_since":      postgreslib.NullableTime(filter.CapturedSince),
 	})
 }
@@ -185,4 +297,17 @@ func int64PtrValue(value *int64) any {
 		return nil
 	}
 	return *value
+}
+
+func textValues(values []string) []string {
+	result := make([]string, 0, len(values))
+	result = append(result, values...)
+	return result
+}
+
+func jsonPayloadOrDefault(payload []byte, fallback string) string {
+	if len(payload) == 0 {
+		return fallback
+	}
+	return string(payload)
 }

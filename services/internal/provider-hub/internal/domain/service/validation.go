@@ -47,6 +47,82 @@ func validWebhookStatuses(statuses []enum.WebhookProcessingStatus) bool {
 	return true
 }
 
+func validWorkItemKinds(kinds []enum.WorkItemKind) bool {
+	for _, kind := range kinds {
+		if !validWorkItemKind(kind) {
+			return false
+		}
+	}
+	return true
+}
+
+func validWorkItemKind(kind enum.WorkItemKind) bool {
+	switch kind {
+	case enum.WorkItemKindIssue,
+		enum.WorkItemKindPullRequest,
+		enum.WorkItemKindMergeRequest:
+		return true
+	default:
+		return false
+	}
+}
+
+func validWorkItemDriftStatuses(statuses []enum.WorkItemDriftStatus) bool {
+	for _, status := range statuses {
+		switch status {
+		case enum.WorkItemDriftStatusFresh,
+			enum.WorkItemDriftStatusSuspected,
+			enum.WorkItemDriftStatusStale,
+			enum.WorkItemDriftStatusFailed:
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func validCommentKinds(kinds []enum.CommentKind) bool {
+	for _, kind := range kinds {
+		switch kind {
+		case enum.CommentKindComment,
+			enum.CommentKindReview,
+			enum.CommentKindMention,
+			enum.CommentKindSystem:
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func validRelationshipSources(sources []enum.RelationshipSource) bool {
+	for _, source := range sources {
+		switch source {
+		case enum.RelationshipSourceProvider,
+			enum.RelationshipSourceWatermark,
+			enum.RelationshipSourceComment,
+			enum.RelationshipSourceManual,
+			enum.RelationshipSourceReconciliation:
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func validRelationshipConfidenceLevels(levels []enum.RelationshipConfidence) bool {
+	for _, level := range levels {
+		switch level {
+		case enum.RelationshipConfidenceConfirmed,
+			enum.RelationshipConfidenceInferred,
+			enum.RelationshipConfidenceSuspected:
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 func validLimitSource(source enum.ProviderLimitSource) bool {
 	switch source {
 	case enum.ProviderLimitSourceProviderHub,

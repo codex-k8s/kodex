@@ -40,6 +40,76 @@ const (
 	ProviderLimitSourceSlotAgentSignal ProviderLimitSource = "slot_agent_signal"
 )
 
+// WorkItemKind classifies provider-native work items.
+type WorkItemKind string
+
+const (
+	WorkItemKindIssue        WorkItemKind = "issue"
+	WorkItemKindPullRequest  WorkItemKind = "pull_request"
+	WorkItemKindMergeRequest WorkItemKind = "merge_request"
+)
+
+// WorkItemWatermarkStatus describes parsed platform watermark state.
+type WorkItemWatermarkStatus string
+
+const (
+	WorkItemWatermarkStatusMissing WorkItemWatermarkStatus = "missing"
+	WorkItemWatermarkStatusValid   WorkItemWatermarkStatus = "valid"
+	WorkItemWatermarkStatusInvalid WorkItemWatermarkStatus = "invalid"
+	WorkItemWatermarkStatusStale   WorkItemWatermarkStatus = "stale"
+)
+
+// WorkItemDriftStatus describes projection freshness.
+type WorkItemDriftStatus string
+
+const (
+	WorkItemDriftStatusFresh     WorkItemDriftStatus = "fresh"
+	WorkItemDriftStatusSuspected WorkItemDriftStatus = "suspected"
+	WorkItemDriftStatusStale     WorkItemDriftStatus = "stale"
+	WorkItemDriftStatusFailed    WorkItemDriftStatus = "failed"
+)
+
+// CommentKind classifies comment-like provider records.
+type CommentKind string
+
+const (
+	CommentKindComment CommentKind = "comment"
+	CommentKindReview  CommentKind = "review"
+	CommentKindMention CommentKind = "mention"
+	CommentKindSystem  CommentKind = "system"
+)
+
+// ReviewState classifies provider-native review decisions.
+type ReviewState string
+
+const (
+	ReviewStateApproved         ReviewState = "approved"
+	ReviewStateChangesRequested ReviewState = "changes_requested"
+	ReviewStateCommented        ReviewState = "commented"
+	ReviewStateDismissed        ReviewState = "dismissed"
+	ReviewStatePending          ReviewState = "pending"
+)
+
+// RelationshipSource classifies where a relationship was discovered.
+type RelationshipSource string
+
+const (
+	RelationshipSourceProvider       RelationshipSource = "provider"
+	RelationshipSourceWatermark      RelationshipSource = "watermark"
+	RelationshipSourceComment        RelationshipSource = "comment"
+	RelationshipSourceManual         RelationshipSource = "manual"
+	RelationshipSourceReconciliation RelationshipSource = "reconciliation"
+)
+
+// RelationshipConfidence describes relationship reliability.
+type RelationshipConfidence string
+
+const (
+	RelationshipConfidenceConfirmed RelationshipConfidence = "confirmed"
+	RelationshipConfidenceInferred  RelationshipConfidence = "inferred"
+	RelationshipConfidenceSuspected RelationshipConfidence = "suspected"
+)
+
 // ProviderOperationType classifies commands executed through provider-hub.
 type ProviderOperationType string
 
