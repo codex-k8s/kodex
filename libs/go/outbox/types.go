@@ -58,3 +58,24 @@ type Config struct {
 	RetryMaxDelay       time.Duration
 	FailureMessageLimit int
 }
+
+// ConfigFromRuntimeValues converts service env fields to dispatcher config.
+func ConfigFromRuntimeValues(
+	batchSize int,
+	pollInterval time.Duration,
+	lockTTL time.Duration,
+	publishTimeout time.Duration,
+	retryInitialDelay time.Duration,
+	retryMaxDelay time.Duration,
+	failureMessageLimit int,
+) Config {
+	return Config{
+		BatchSize:           batchSize,
+		PollInterval:        pollInterval,
+		LockTTL:             lockTTL,
+		PublishTimeout:      publishTimeout,
+		RetryInitialDelay:   retryInitialDelay,
+		RetryMaxDelay:       retryMaxDelay,
+		FailureMessageLimit: failureMessageLimit,
+	}
+}

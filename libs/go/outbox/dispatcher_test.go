@@ -94,6 +94,21 @@ func TestDispatcherDoesNotSwallowStoreErrors(t *testing.T) {
 	}
 }
 
+func TestConfigFromRuntimeValuesMapsAllFields(t *testing.T) {
+	t.Parallel()
+
+	cfg := ConfigFromRuntimeValues(11, 2*time.Second, 3*time.Second, 4*time.Second, 5*time.Second, 6*time.Second, 777)
+	if cfg.BatchSize != 11 ||
+		cfg.PollInterval != 2*time.Second ||
+		cfg.LockTTL != 3*time.Second ||
+		cfg.PublishTimeout != 4*time.Second ||
+		cfg.RetryInitialDelay != 5*time.Second ||
+		cfg.RetryMaxDelay != 6*time.Second ||
+		cfg.FailureMessageLimit != 777 {
+		t.Fatalf("ConfigFromRuntimeValues() = %+v", cfg)
+	}
+}
+
 func testConfig() Config {
 	return Config{
 		BatchSize:           10,

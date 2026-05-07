@@ -66,15 +66,5 @@ func (cfg Config) Validate() error {
 
 // GRPCServerConfig converts service env config to the shared gRPC runtime contract.
 func (cfg Config) GRPCServerConfig() grpcserver.Config {
-	runtime := grpcserver.Config{AuthRequired: cfg.GRPCAuthRequired}
-	runtime.MaxInFlight = cfg.GRPCMaxInFlight
-	runtime.MaxConcurrentStreams = cfg.GRPCMaxConcurrentStreams
-	runtime.UnaryTimeout = cfg.GRPCUnaryTimeout
-	runtime.KeepaliveTime = cfg.GRPCKeepaliveTime
-	runtime.KeepaliveTimeout = cfg.GRPCKeepaliveTimeout
-	runtime.KeepaliveMinTime = cfg.GRPCKeepaliveMinTime
-	runtime.PermitWithoutStream = cfg.GRPCPermitWithoutStream
-	runtime.MaxRecvMessageBytes = cfg.GRPCMaxRecvMessageBytes
-	runtime.MaxSendMessageBytes = cfg.GRPCMaxSendMessageBytes
-	return runtime
+	return grpcserver.ConfigFromRuntimeValues(cfg.GRPCMaxInFlight, cfg.GRPCMaxConcurrentStreams, cfg.GRPCUnaryTimeout, cfg.GRPCKeepaliveTime, cfg.GRPCKeepaliveTimeout, cfg.GRPCKeepaliveMinTime, cfg.GRPCPermitWithoutStream, cfg.GRPCMaxRecvMessageBytes, cfg.GRPCMaxSendMessageBytes, cfg.GRPCAuthRequired)
 }

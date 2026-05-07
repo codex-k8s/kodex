@@ -60,9 +60,14 @@ spec:
       value: "0.1.0"
       bumpOn:
         - services/internal/access-manager
+        - libs/go/accesscatalog
         - libs/go/grpcserver
         - libs/go/postgres
         - libs/go/eventlog
+        - libs/go/migrationtest
+        - libs/go/outbox
+        - libs/go/platformevents/access
+        - libs/go/servicemain
         - proto/kodex/access_accounts/v1
         - specs/asyncapi/access-manager.v1.yaml
         - deploy/base/access-manager
@@ -70,9 +75,14 @@ spec:
       value: "0.1.0"
       bumpOn:
         - services/internal/project-catalog
+        - libs/go/accesscatalog
         - libs/go/grpcserver
         - libs/go/postgres
         - libs/go/eventlog
+        - libs/go/migrationtest
+        - libs/go/outbox
+        - libs/go/platformevents/project
+        - libs/go/servicemain
         - proto/kodex/projects/v1
         - specs/asyncapi/project-catalog.v1.yaml
         - deploy/base/project-catalog
@@ -81,13 +91,26 @@ spec:
       bumpOn:
         - services/internal/package-hub
         - libs/go/grpcserver
+        - libs/go/servicemain
         - proto/kodex/packages/v1
         - specs/asyncapi/package-hub.v1.yaml
+    provider-hub:
+      value: "0.1.0"
+      bumpOn:
+        - services/internal/provider-hub
+        - libs/go/grpcserver
+        - libs/go/postgres
+        - libs/go/migrationtest
+        - libs/go/servicemain
+        - proto/kodex/providers/v1
+        - specs/asyncapi/provider-hub.v1.yaml
+        - deploy/base/provider-hub
     platform-event-log:
       value: "0.1.0"
       bumpOn:
         - services/internal/platform-event-log
         - libs/go/eventlog
+        - libs/go/migrationtest
         - deploy/base/platform-event-log
         - deploy/base/postgres
     golang-alpine:
@@ -137,6 +160,23 @@ spec:
       context: .
       imageEnv: KODEX_PROJECT_CATALOG_MIGRATIONS_IMAGE
       migratesDatabase: kodex_project_catalog
+    provider-hub:
+      type: build
+      repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_PROVIDER_HUB_INTERNAL_IMAGE_REPOSITORY" "kodex/provider-hub" }}'
+      tagTemplate: '{{ index .Versions "provider-hub" }}'
+      dockerfile: services/internal/provider-hub/Dockerfile
+      target: prod
+      context: .
+      imageEnv: KODEX_PROVIDER_HUB_IMAGE
+    provider-hub-migrations:
+      type: migration-build
+      repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_PROVIDER_HUB_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY" "kodex/provider-hub-migrations" }}'
+      tagTemplate: '{{ index .Versions "provider-hub" }}'
+      dockerfile: services/internal/provider-hub/Dockerfile
+      target: migrations
+      context: .
+      imageEnv: KODEX_PROVIDER_HUB_MIGRATIONS_IMAGE
+      migratesDatabase: kodex_provider_hub
     platform-event-log-migrations:
       type: migration-build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY" "kodex/platform-event-log-migrations" }}'
@@ -205,6 +245,29 @@ spec:
       migrationsImageEnv: KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_IMAGE
       clientLibrary: libs/go/eventlog
       purpose: shared-domain-event-log
+  serviceScaffolds:
+    - name: provider-hub
+      status: scaffold
+      zone: internal
+      path: services/internal/provider-hub
+      dockerfile: services/internal/provider-hub/Dockerfile
+      imageEnv: KODEX_PROVIDER_HUB_IMAGE
+      internalImageRepositoryEnv: KODEX_PROVIDER_HUB_INTERNAL_IMAGE_REPOSITORY
+      migrationsImageEnv: KODEX_PROVIDER_HUB_MIGRATIONS_IMAGE
+      migrationsInternalImageRepositoryEnv: KODEX_PROVIDER_HUB_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY
+      ownerDomain: provider-native-work-items
+      apiContracts:
+        grpc: proto/kodex/providers/v1/provider_hub.proto
+        asyncapi: specs/asyncapi/provider-hub.v1.yaml
+      database:
+        owner: provider-hub
+        migrations: services/internal/provider-hub/cmd/cli/migrations
+      deploy:
+        status: planned-after-service-implementation
+        health:
+          livez: /health/livez
+          readyz: /health/readyz
+          metrics: /metrics
   deployManifests:
     - name: postgres-stack
       path: deploy/base/postgres/kustomization.yaml.tpl
