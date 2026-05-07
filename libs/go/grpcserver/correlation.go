@@ -3,6 +3,7 @@ package grpcserver
 import (
 	"context"
 
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -61,12 +62,20 @@ func RequestCorrelationFromContext(ctx context.Context) (RequestCorrelation, boo
 // LogAttrsFromContext returns slog attributes that are safe to include in service logs.
 func LogAttrsFromContext(ctx context.Context) []any {
 	correlation, ok := RequestCorrelationFromContext(ctx)
-	if !ok || correlation.empty() {
+	spanContext := trace.SpanContextFromContext(ctx)
+	if (!ok || correlation.empty()) && !spanContext.IsValid() {
 		return nil
 	}
-	attrs := make([]any, 0, 8)
-	if correlation.TraceID != "" {
-		attrs = append(attrs, "trace_id", correlation.TraceID)
+	attrs := make([]any, 0, 10)
+	traceID := correlation.TraceID
+	if traceID == "" && spanContext.HasTraceID() {
+		traceID = spanContext.TraceID().String()
+	}
+	if traceID != "" {
+		attrs = append(attrs, "trace_id", traceID)
+	}
+	if spanContext.HasSpanID() {
+		attrs = append(attrs, "span_id", spanContext.SpanID().String())
 	}
 	if correlation.RequestID != "" {
 		attrs = append(attrs, "request_id", correlation.RequestID)

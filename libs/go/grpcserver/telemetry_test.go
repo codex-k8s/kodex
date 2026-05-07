@@ -34,7 +34,7 @@ func TestNewServerExtractsOpenTelemetryTraceContext(t *testing.T) {
 		t.Fatalf("NewServer(): %v", err)
 	}
 
-	service := &traceCaptureService{seen: make(chan trace.TraceID, 1)}
+	service := &traceCaptureService{seen: make(chan traceCapture, 1)}
 	registerTraceCaptureService(server, service)
 
 	listener := bufconn.Listen(1024 * 1024)
@@ -81,9 +81,12 @@ func TestNewServerExtractsOpenTelemetryTraceContext(t *testing.T) {
 	}
 
 	select {
-	case gotTraceID := <-service.seen:
-		if gotTraceID != wantTraceID {
-			t.Fatalf("trace id = %s, want %s", gotTraceID, wantTraceID)
+	case got := <-service.seen:
+		if got.traceID != wantTraceID {
+			t.Fatalf("trace id = %s, want %s", got.traceID, wantTraceID)
+		}
+		if gotTraceAttr, ok := logAttrValue(got.logAttrs, "trace_id"); !ok || gotTraceAttr != wantTraceID.String() {
+			t.Fatalf("log trace_id attr = %v, %t, want %s", gotTraceAttr, ok, wantTraceID)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("trace id was not captured")
@@ -95,7 +98,12 @@ type traceCaptureServiceServer interface {
 }
 
 type traceCaptureService struct {
-	seen chan trace.TraceID
+	seen chan traceCapture
+}
+
+type traceCapture struct {
+	traceID  trace.TraceID
+	logAttrs []any
 }
 
 func (*traceCaptureService) mustEmbedTraceCaptureServiceServer() {}
@@ -125,7 +133,10 @@ func traceCaptureUnaryHandler(
 	}
 	handler := func(ctx context.Context, _ any) (any, error) {
 		service := srv.(*traceCaptureService)
-		service.seen <- trace.SpanContextFromContext(ctx).TraceID()
+		service.seen <- traceCapture{
+			traceID:  trace.SpanContextFromContext(ctx).TraceID(),
+			logAttrs: LogAttrsFromContext(ctx),
+		}
 		return &emptypb.Empty{}, nil
 	}
 	if interceptor == nil {
@@ -135,4 +146,13 @@ func traceCaptureUnaryHandler(
 		Server:     srv,
 		FullMethod: traceCaptureMethod,
 	}, handler)
+}
+
+func logAttrValue(attrs []any, key string) (any, bool) {
+	for i := 0; i+1 < len(attrs); i += 2 {
+		if attrs[i] == key {
+			return attrs[i+1], true
+		}
+	}
+	return nil, false
 }

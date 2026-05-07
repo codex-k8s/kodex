@@ -18,7 +18,7 @@
 - `libs/go/crypto/*` — шифрование/расшифровка секретов и токенов.
 - `libs/go/db/*` — общие DB helpers (tx, pagination, jsonb/pgvector утилиты).
 - `libs/go/postgres/*` — общие PostgreSQL helpers и pgxpool runtime.
-- `libs/go/grpcserver/*` — общий runtime gRPC сервера, interceptors, auth и метрики.
+- `libs/go/grpcserver/*` — общий runtime gRPC сервера: gRPC-перехватчики, auth, Prometheus-метрики, OpenTelemetry tracing, проброс trace context и лог-корреляция.
 - `libs/go/outbox/*` — общий runtime доставщика сервисного outbox.
 - `libs/go/eventlog/*` — общий клиент `platform-event-log` и PostgreSQL publisher для outbox.
 - `libs/go/platformevents/*` — сгенерированные из AsyncAPI контракты доменных событий.
