@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-06
 updated_at: 2026-05-07
-related_issues: [642, 646, 650]
+related_issues: [642, 646, 650, 663]
 related_prs: []
 related_docsets:
   - docs/domains/package-platform/product/requirements.md
@@ -43,7 +43,8 @@ approvals:
 |---|---|---|
 | PKG-1 | #642 | Доменная документация, план поставки, каталоги и карта связей готовы. |
 | PKG-2 | #646 | gRPC и AsyncAPI контракты `package-hub`, действия доступа и список событий готовы. |
-| PKG-3.1 | #650 | Сервисный процесс, служебный HTTP-контур, общий gRPC runtime и регистрация `PackageHubService` готовы без БД-логики; трассировка OpenTelemetry вынесена в отдельный срез общего runtime до первой реализации бизнес-операций. |
+| Runtime перед PKG-3.2 | #663 | Общий `libs/go/grpcserver` подключает OpenTelemetry `StatsHandler`, создаёт серверный span для входящих RPC и извлекает W3C `traceparent`/`baggage`; экспортёр и OTel Collector боевого контура подключаются отдельным срезом начальной настройки. |
+| PKG-3.1 | #650 | Сервисный процесс, служебный HTTP-контур, общий gRPC runtime и регистрация `PackageHubService` готовы без БД-логики. |
 | PKG-3.2 | не назначено | PostgreSQL-модель источников, пакетов, версий, manifest и ценовых метаданных готова. |
 | PKG-3.3 | не назначено | PostgreSQL-модель установок, схем секретов, проверки, идемпотентности и optimistic concurrency готова. |
 | PKG-3.4 | не назначено | Outbox и первые repository-backed gRPC операции готовы. |
@@ -86,7 +87,7 @@ approvals:
 | Проверки состояния | готово | `/health/livez` и `/health/readyz` добавлены в служебный HTTP-контур. |
 | Метрики | готово | `/metrics` и gRPC-метрики подключены через общий `grpcserver`. |
 | Структурированные логи | готово для процесса | Entry point и запуск серверов пишут JSON-логи без бизнес-данных. |
-| Трассировка OpenTelemetry и проброс контекста | отдельный срез общего runtime | В `PKG-3.1` не считается закрытым пунктом Go-чек-листа. Требуется расширить общий `libs/go/grpcserver` и применить ко всем новым Go-сервисам до первой реализации операций `package-hub` на хранилище. |
+| Трассировка OpenTelemetry и проброс контекста | готово в общем runtime | `libs/go/grpcserver` подключает `otelgrpc.NewServerHandler` через `grpc.StatsHandler` и использует W3C `tracecontext+baggage`; экспорт трасс в OTel Collector не входит в этот срез и настраивается отдельно при начальной настройке наблюдаемости. |
 
 ## Синхронизация с параллельными доменами
 

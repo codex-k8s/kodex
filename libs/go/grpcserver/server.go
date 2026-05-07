@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"log/slog"
 
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 	grpcruntime "google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 )
@@ -19,6 +22,9 @@ type Dependencies struct {
 	Logger            *slog.Logger
 	Metrics           *Metrics
 	Authenticator     Authenticator
+	TracerProvider    trace.TracerProvider
+	MeterProvider     metric.MeterProvider
+	Propagator        propagation.TextMapPropagator
 	UnaryInterceptors []UnaryInterceptor
 	ServerOptions     []ServerOption
 }
@@ -41,6 +47,7 @@ func NewServer(cfg Config, deps Dependencies) (*grpcruntime.Server, error) {
 	}
 	interceptors = append(interceptors, deps.UnaryInterceptors...)
 	options := []ServerOption{
+		grpcruntime.StatsHandler(OpenTelemetryServerHandler(deps.TracerProvider, deps.MeterProvider, deps.Propagator)),
 		grpcruntime.MaxConcurrentStreams(cfg.MaxConcurrentStreams),
 		grpcruntime.MaxRecvMsgSize(cfg.MaxRecvMessageBytes),
 		grpcruntime.MaxSendMsgSize(cfg.MaxSendMessageBytes),
