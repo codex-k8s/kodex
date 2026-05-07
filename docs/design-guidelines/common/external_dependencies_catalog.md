@@ -34,8 +34,13 @@
 | `github.com/google/go-github/v82` | `v82.0.0` | Repository provider (GitHub) | настройка вебхуков и валидация доступа к репозиториям через GitHub API v3 |
 | `github.com/google/go-querystring` | `v1.2.0` | Dependency of go-github | сериализация query params для GitHub API клиента |
 | `google.golang.org/grpc` | `v1.79.3` | Internal transport | внутреннее service-to-service взаимодействие (`gateway` -> внутренний сервис и service-to-service) |
-| `google.golang.org/protobuf` | `v1.36.10` | Internal contracts | protobuf runtime для gRPC контрактов и сгенерированного кода в `proto/gen/go/**` |
-| `google.golang.org/genproto/googleapis/rpc` | `v0.0.0-20251202230838-ff82c1b0f217` | gRPC error details | типизированные `errdetails` для conflict/status metadata во внутренних gRPC callback-ах |
+| `go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc` | `v0.67.0` | Наблюдаемость внутреннего gRPC | трассировка и метрики gRPC-сервера через `grpc.StatsHandler`; версия выбрана без подъёма `google.golang.org/grpc` выше `v1.79.3` |
+| `go.opentelemetry.io/otel` | `v1.42.0` | API наблюдаемости | базовые OpenTelemetry API и W3C-схема проброса контекста для общих runtime-библиотек |
+| `go.opentelemetry.io/otel/metric` | `v1.42.0` | API метрик | типы `MeterProvider` для настройки gRPC-инструментации без привязки сервиса к конкретному экспортёру |
+| `go.opentelemetry.io/otel/trace` | `v1.42.0` | API трассировки | типы `TracerProvider` и trace context для настройки gRPC-инструментации без привязки сервиса к конкретному экспортёру |
+| `go.opentelemetry.io/otel/sdk` | `v1.42.0` | Тесты наблюдаемости и будущая SDK-инициализация | SDK-провайдеры для проверки проброса trace context; экспортёр и OTel Collector боевого контура подключаются отдельным срезом начальной настройки |
+| `google.golang.org/protobuf` | `v1.36.11` | Internal contracts | protobuf runtime для gRPC контрактов и сгенерированного кода в `proto/gen/go/**` |
+| `google.golang.org/genproto/googleapis/rpc` | `v0.0.0-20260406210006-6f92a3bedf2d` | gRPC error details | типизированные `errdetails` для conflict/status metadata во внутренних gRPC callback-ах |
 | `go.yaml.in/yaml/v2` | `v2.4.3` | Contract tests | парсинг YAML-спецификаций в Go contract tests без строкового поиска по контракту |
 | `github.com/modelcontextprotocol/go-sdk` | `v1.3.0` | MCP transport | встроенный StreamableHTTP MCP transport/auth/resource/tool runtime для платформенного MCP-сервера |
 | `github.com/openai/openai-go/v3` | `v3.28.0` | Sprint S11 Telegram adapter voice STT | официальный OpenAI Go SDK для speech-to-text в `telegram-interaction-adapter`; используется для voice reply transcription после `ffmpeg` normalization |
