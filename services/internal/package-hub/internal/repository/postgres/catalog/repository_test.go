@@ -160,6 +160,12 @@ func TestRepositoryIntegrationCatalogStorage(t *testing.T) {
 	if len(packages) != 1 || page.NextPageToken != "" || packages[0].ID != packageA.ID {
 		t.Fatalf("packages = %+v token %q, want package A only", packages, page.NextPageToken)
 	}
+	if _, err := pool.Exec(ctx, "UPDATE package_hub_packages SET display_name = '[1]'::jsonb WHERE id = $1", packageB.ID); err != nil {
+		t.Fatalf("corrupt package display name: %v", err)
+	}
+	if _, err := repository.GetPackage(ctx, packageB.ID); err == nil {
+		t.Fatal("get package with malformed localized payload succeeded, want error")
+	}
 
 	versionA := testPackageVersion(packageA.ID, "1.0.0", now)
 	versionB := testPackageVersion(packageA.ID, "1.1.0", now.Add(time.Minute))
@@ -203,22 +209,28 @@ func TestRepositoryIntegrationCatalogStorage(t *testing.T) {
 	}
 
 	pricing := testPricing(packageA.ID, enum.PackagePricingKindFree, "", now)
-	if err := repository.UpsertPricingMetadata(ctx, pricing); err != nil {
-		t.Fatalf("upsert pricing: %v", err)
+	if err := repository.CreatePricingMetadata(ctx, pricing); err != nil {
+		t.Fatalf("create pricing: %v", err)
+	}
+	if err := repository.CreatePricingMetadata(ctx, pricing); !errors.Is(err, errs.ErrAlreadyExists) {
+		t.Fatalf("duplicate pricing err = %v, want %v", err, errs.ErrAlreadyExists)
 	}
 	pricing.Kind = enum.PackagePricingKindSubscription
 	pricing.Currency = "USD"
 	pricing.PricePayload = []byte(`{"monthly":10}`)
 	pricing.Version = 2
 	pricing.UpdatedAt = now.Add(time.Hour)
-	if err := repository.UpsertPricingMetadata(ctx, pricing); err != nil {
-		t.Fatalf("upsert pricing update: %v", err)
+	if err := repository.UpdatePricingMetadata(ctx, pricing, 99); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("pricing stale update err = %v, want %v", err, errs.ErrConflict)
+	}
+	if err := repository.UpdatePricingMetadata(ctx, pricing, 1); err != nil {
+		t.Fatalf("update pricing: %v", err)
 	}
 	storedPricing, err := repository.GetPricingMetadata(ctx, packageA.ID)
 	if err != nil {
 		t.Fatalf("get pricing: %v", err)
 	}
-	if storedPricing.Kind != enum.PackagePricingKindSubscription || storedPricing.Currency != "USD" || storedPricing.Version != 2 {
+	if storedPricing.ID != pricing.ID || storedPricing.Kind != enum.PackagePricingKindSubscription || storedPricing.Currency != "USD" || storedPricing.Version != 2 {
 		t.Fatalf("pricing = %+v, want subscription USD v2", storedPricing)
 	}
 }

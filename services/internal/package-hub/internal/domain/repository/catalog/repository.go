@@ -23,6 +23,7 @@ type Repository interface {
 	ListPackageVersions(ctx context.Context, filter query.PackageVersionFilter) ([]entity.PackageVersion, value.PageResult, error)
 	CreateManifestSnapshot(ctx context.Context, snapshot entity.PackageManifestSnapshot) error
 	GetLatestManifestSnapshot(ctx context.Context, packageVersionID uuid.UUID) (entity.PackageManifestSnapshot, error)
-	UpsertPricingMetadata(ctx context.Context, metadata entity.PackagePricingMetadata) error
+	CreatePricingMetadata(ctx context.Context, metadata entity.PackagePricingMetadata) error
+	UpdatePricingMetadata(ctx context.Context, metadata entity.PackagePricingMetadata, previousVersion int64) error
 	GetPricingMetadata(ctx context.Context, packageID uuid.UUID) (entity.PackagePricingMetadata, error)
 }

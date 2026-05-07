@@ -95,6 +95,12 @@ func pricingMetadataArgs(metadata entity.PackagePricingMetadata) pgx.NamedArgs {
 	}
 }
 
+func pricingMetadataUpdateArgs(metadata entity.PackagePricingMetadata, previousVersion int64) pgx.NamedArgs {
+	args := pricingMetadataArgs(metadata)
+	args["previous_version"] = previousVersion
+	return args
+}
+
 func packageSourceFilterArgs(filter query.PackageSourceFilter) pageQueryArgs {
 	return withPage(filter.Page, pgx.NamedArgs{
 		"organization_id": postgreslib.NullableUUID(filter.OrganizationID),

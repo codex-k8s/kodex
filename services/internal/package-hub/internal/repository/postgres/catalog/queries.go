@@ -14,8 +14,9 @@ var (
 	queryPackageVersionCreate        = mustLoadQuery("package_version__create")
 	queryPackageVersionGetByID       = mustLoadQuery("package_version__get_by_id")
 	queryPackageVersionList          = mustLoadQuery("package_version__list")
+	queryPricingMetadataCreate       = mustLoadQuery("pricing_metadata__create")
 	queryPricingMetadataGetByPackage = mustLoadQuery("pricing_metadata__get_by_package")
-	queryPricingMetadataUpsert       = mustLoadQuery("pricing_metadata__upsert")
+	queryPricingMetadataUpdate       = mustLoadQuery("pricing_metadata__update")
 )
 
 func mustLoadQuery(name string) string {

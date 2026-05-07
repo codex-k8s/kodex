@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
+	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/errs"
 	catalogrepo "github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/repository/catalog"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/query"
@@ -39,6 +40,7 @@ const (
 	operationCreatePackage          = "domain.Repository.CreatePackage"
 	operationCreatePackageSource    = "domain.Repository.CreatePackageSource"
 	operationCreatePackageVersion   = "domain.Repository.CreatePackageVersion"
+	operationCreatePricingMetadata  = "domain.Repository.CreatePricingMetadata"
 	operationGetLatestManifest      = "domain.Repository.GetLatestManifestSnapshot"
 	operationGetPackage             = "domain.Repository.GetPackage"
 	operationGetPackageSource       = "domain.Repository.GetPackageSource"
@@ -47,7 +49,7 @@ const (
 	operationListPackageSources     = "domain.Repository.ListPackageSources"
 	operationListPackageVersions    = "domain.Repository.ListPackageVersions"
 	operationListPackages           = "domain.Repository.ListPackages"
-	operationUpsertPricingMetadata  = "domain.Repository.UpsertPricingMetadata"
+	operationUpdatePricingMetadata  = "domain.Repository.UpdatePricingMetadata"
 )
 
 func NewRepository(db *pgxpool.Pool) *Repository {
@@ -102,9 +104,22 @@ func (r *Repository) GetLatestManifestSnapshot(ctx context.Context, packageVersi
 	return queryOne(ctx, r.db, operationGetLatestManifest, queryManifestSnapshotGetLatest, pgx.NamedArgs{"package_version_id": packageVersionID}, scanManifestSnapshot)
 }
 
-func (r *Repository) UpsertPricingMetadata(ctx context.Context, metadata entity.PackagePricingMetadata) error {
-	_, err := r.db.Exec(ctx, queryPricingMetadataUpsert, pricingMetadataArgs(metadata))
-	return wrapError(operationUpsertPricingMetadata, err)
+func (r *Repository) CreatePricingMetadata(ctx context.Context, metadata entity.PackagePricingMetadata) error {
+	err := postgreslib.RunMutation(ctx, r.db, errs.ErrConflict, postgreslib.Mutation{
+		Query:           queryPricingMetadataCreate,
+		Args:            pricingMetadataArgs(metadata),
+		RequireAffected: true,
+	})
+	return wrapError(operationCreatePricingMetadata, err)
+}
+
+func (r *Repository) UpdatePricingMetadata(ctx context.Context, metadata entity.PackagePricingMetadata, previousVersion int64) error {
+	err := postgreslib.RunMutation(ctx, r.db, errs.ErrConflict, postgreslib.Mutation{
+		Query:           queryPricingMetadataUpdate,
+		Args:            pricingMetadataUpdateArgs(metadata, previousVersion),
+		RequireAffected: true,
+	})
+	return wrapError(operationUpdatePricingMetadata, err)
 }
 
 func (r *Repository) GetPricingMetadata(ctx context.Context, packageID uuid.UUID) (entity.PackagePricingMetadata, error) {

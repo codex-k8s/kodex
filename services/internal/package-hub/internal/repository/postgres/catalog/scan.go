@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -64,8 +65,17 @@ func scanPackage(row postgreslib.RowScanner) (entity.PackageEntry, error) {
 	entry.CommercialStatus = enum.PackageCommercialStatus(commercialStatus)
 	entry.TrustStatus = enum.PackageTrustStatus(trustStatus)
 	entry.Status = enum.PackageStatus(status)
-	entry.DisplayName = localizedTextFromPayload(displayName)
-	entry.Description = localizedTextFromPayload(description)
+	if err != nil {
+		return entry, err
+	}
+	entry.DisplayName, err = localizedTextFromPayload(displayName)
+	if err != nil {
+		return entry, fmt.Errorf("scan package display_name: %w", err)
+	}
+	entry.Description, err = localizedTextFromPayload(description)
+	if err != nil {
+		return entry, fmt.Errorf("scan package description: %w", err)
+	}
 	return entry, err
 }
 
@@ -132,13 +142,13 @@ func scanPricingMetadata(row postgreslib.RowScanner) (entity.PackagePricingMetad
 	return metadata, err
 }
 
-func localizedTextFromPayload(payload []byte) []value.LocalizedText {
+func localizedTextFromPayload(payload []byte) ([]value.LocalizedText, error) {
 	if len(payload) == 0 {
-		return nil
+		return nil, nil
 	}
 	var items []value.LocalizedText
 	if err := json.Unmarshal(payload, &items); err != nil {
-		return nil
+		return nil, err
 	}
-	return items
+	return items, nil
 }
