@@ -187,29 +187,10 @@ func (cfg Config) databaseRuntimeSettings(dsn string, maxConns int32, minConns i
 
 // GRPCServerConfig converts service env config to the shared gRPC runtime contract.
 func (cfg Config) GRPCServerConfig() grpcserver.Config {
-	return grpcserver.Config{
-		MaxInFlight:          cfg.GRPCMaxInFlight,
-		MaxConcurrentStreams: cfg.GRPCMaxConcurrentStreams,
-		UnaryTimeout:         cfg.GRPCUnaryTimeout,
-		KeepaliveTime:        cfg.GRPCKeepaliveTime,
-		KeepaliveTimeout:     cfg.GRPCKeepaliveTimeout,
-		KeepaliveMinTime:     cfg.GRPCKeepaliveMinTime,
-		PermitWithoutStream:  cfg.GRPCPermitWithoutStream,
-		MaxRecvMessageBytes:  cfg.GRPCMaxRecvMessageBytes,
-		MaxSendMessageBytes:  cfg.GRPCMaxSendMessageBytes,
-		AuthRequired:         cfg.GRPCAuthRequired,
-	}
+	return grpcserver.ConfigFromRuntimeValues(cfg.GRPCMaxInFlight, cfg.GRPCMaxConcurrentStreams, cfg.GRPCUnaryTimeout, cfg.GRPCKeepaliveTime, cfg.GRPCKeepaliveTimeout, cfg.GRPCKeepaliveMinTime, cfg.GRPCPermitWithoutStream, cfg.GRPCMaxRecvMessageBytes, cfg.GRPCMaxSendMessageBytes, cfg.GRPCAuthRequired)
 }
 
 // OutboxDispatcherConfig converts service env config to the outbox delivery worker contract.
 func (cfg Config) OutboxDispatcherConfig() outboxlib.Config {
-	return outboxlib.Config{
-		BatchSize:           cfg.OutboxBatchSize,
-		PollInterval:        cfg.OutboxPollInterval,
-		LockTTL:             cfg.OutboxLockTTL,
-		PublishTimeout:      cfg.OutboxPublishTimeout,
-		RetryInitialDelay:   cfg.OutboxRetryInitialDelay,
-		RetryMaxDelay:       cfg.OutboxRetryMaxDelay,
-		FailureMessageLimit: cfg.OutboxFailureMessageLimit,
-	}
+	return outboxlib.ConfigFromRuntimeValues(cfg.OutboxBatchSize, cfg.OutboxPollInterval, cfg.OutboxLockTTL, cfg.OutboxPublishTimeout, cfg.OutboxRetryInitialDelay, cfg.OutboxRetryMaxDelay, cfg.OutboxFailureMessageLimit)
 }

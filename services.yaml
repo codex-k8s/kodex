@@ -91,6 +91,7 @@ spec:
       bumpOn:
         - services/internal/package-hub
         - libs/go/grpcserver
+        - libs/go/servicemain
         - proto/kodex/packages/v1
         - specs/asyncapi/package-hub.v1.yaml
     provider-hub:

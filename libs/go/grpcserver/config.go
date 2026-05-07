@@ -19,6 +19,52 @@ type Config struct {
 	AuthRequired         bool
 }
 
+// RuntimeSettings contains service-level gRPC runtime settings before validation.
+type RuntimeSettings struct {
+	MaxInFlight          int
+	MaxConcurrentStreams uint32
+	UnaryTimeout         time.Duration
+	KeepaliveTime        time.Duration
+	KeepaliveTimeout     time.Duration
+	KeepaliveMinTime     time.Duration
+	PermitWithoutStream  bool
+	MaxRecvMessageBytes  int
+	MaxSendMessageBytes  int
+	AuthRequired         bool
+}
+
+// ConfigFromRuntimeSettings converts service runtime settings to server config.
+func ConfigFromRuntimeSettings(settings RuntimeSettings) Config {
+	return Config(settings)
+}
+
+// ConfigFromRuntimeValues converts common service env fields to server config.
+func ConfigFromRuntimeValues(
+	maxInFlight int,
+	maxConcurrentStreams uint32,
+	unaryTimeout time.Duration,
+	keepaliveTime time.Duration,
+	keepaliveTimeout time.Duration,
+	keepaliveMinTime time.Duration,
+	permitWithoutStream bool,
+	maxRecvMessageBytes int,
+	maxSendMessageBytes int,
+	authRequired bool,
+) Config {
+	return ConfigFromRuntimeSettings(RuntimeSettings{
+		MaxInFlight:          maxInFlight,
+		MaxConcurrentStreams: maxConcurrentStreams,
+		UnaryTimeout:         unaryTimeout,
+		KeepaliveTime:        keepaliveTime,
+		KeepaliveTimeout:     keepaliveTimeout,
+		KeepaliveMinTime:     keepaliveMinTime,
+		PermitWithoutStream:  permitWithoutStream,
+		MaxRecvMessageBytes:  maxRecvMessageBytes,
+		MaxSendMessageBytes:  maxSendMessageBytes,
+		AuthRequired:         authRequired,
+	})
+}
+
 // Validate checks runtime limits before a gRPC server is constructed.
 func (cfg Config) Validate() error {
 	if cfg.MaxInFlight < 1 {
