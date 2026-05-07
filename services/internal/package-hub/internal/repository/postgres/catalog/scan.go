@@ -142,13 +142,101 @@ func scanPricingMetadata(row postgreslib.RowScanner) (entity.PackagePricingMetad
 	return metadata, err
 }
 
+func scanPackageInstallation(row postgreslib.RowScanner) (entity.PackageInstallation, error) {
+	var installation entity.PackageInstallation
+	var scopeType, installationStatus, desiredState, secretBindingStatus, lastHealthStatus string
+	err := row.Scan(
+		&installation.ID,
+		&installation.PackageID,
+		&installation.PackageVersionID,
+		&scopeType,
+		&installation.Scope.Ref,
+		&installationStatus,
+		&desiredState,
+		&installation.RuntimeRequirementDigest,
+		&secretBindingStatus,
+		&lastHealthStatus,
+		&installation.Version,
+		&installation.CreatedAt,
+		&installation.UpdatedAt,
+	)
+	installation.Scope.Type = enum.PackageInstallationScopeType(scopeType)
+	installation.InstallationStatus = enum.PackageInstallationStatus(installationStatus)
+	installation.DesiredState = enum.PackageDesiredState(desiredState)
+	installation.SecretBindingStatus = enum.PackageSecretBindingStatus(secretBindingStatus)
+	installation.LastHealthStatus = enum.PackageHealthStatus(lastHealthStatus)
+	return installation, err
+}
+
+func scanPackageSecretSchema(row postgreslib.RowScanner) (entity.PackageSecretSchema, error) {
+	var schema entity.PackageSecretSchema
+	var fields []byte
+	err := row.Scan(
+		&schema.ID,
+		&schema.PackageVersionID,
+		&schema.SchemaDigest,
+		&fields,
+		&schema.CreatedAt,
+	)
+	if err != nil {
+		return schema, err
+	}
+	schema.Fields, err = secretFieldsFromPayload(fields)
+	if err != nil {
+		return schema, fmt.Errorf("scan package secret schema fields: %w", err)
+	}
+	return schema, nil
+}
+
+func scanPackageVerification(row postgreslib.RowScanner) (entity.PackageVerification, error) {
+	var verification entity.PackageVerification
+	var status string
+	err := row.Scan(
+		&verification.ID,
+		&verification.PackageVersionID,
+		&status,
+		&verification.VerifiedByActorRef,
+		&verification.VerificationNotes,
+		&verification.CreatedAt,
+	)
+	verification.VerificationStatus = enum.PackageVerificationStatus(status)
+	return verification, err
+}
+
+func scanCommandResult(row postgreslib.RowScanner) (entity.CommandResult, error) {
+	var result entity.CommandResult
+	var commandID pgtype.UUID
+	var aggregateType string
+	var resultPayload []byte
+	err := row.Scan(
+		&result.Key,
+		&commandID,
+		&result.IdempotencyKey,
+		&result.Operation,
+		&aggregateType,
+		&result.AggregateID,
+		&resultPayload,
+		&result.CreatedAt,
+	)
+	result.CommandID = postgreslib.UUIDPtrFromPG(commandID)
+	result.AggregateType = enum.CommandAggregateType(aggregateType)
+	result.ResultPayload = append(result.ResultPayload[:0], resultPayload...)
+	return result, err
+}
+
 func localizedTextFromPayload(payload []byte) ([]value.LocalizedText, error) {
+	return decodeJSONPayload[[]value.LocalizedText](payload)
+}
+
+func secretFieldsFromPayload(payload []byte) ([]value.PackageSecretField, error) {
+	return decodeJSONPayload[[]value.PackageSecretField](payload)
+}
+
+func decodeJSONPayload[T any](payload []byte) (T, error) {
+	var value T
 	if len(payload) == 0 {
-		return nil, nil
+		return value, nil
 	}
-	var items []value.LocalizedText
-	if err := json.Unmarshal(payload, &items); err != nil {
-		return nil, err
-	}
-	return items, nil
+	err := json.Unmarshal(payload, &value)
+	return value, err
 }

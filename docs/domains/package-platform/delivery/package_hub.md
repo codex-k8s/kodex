@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-06
 updated_at: 2026-05-07
-related_issues: [642, 646, 650, 663, 667]
+related_issues: [642, 646, 650, 663, 667, 670]
 related_prs: []
 related_docsets:
   - docs/domains/package-platform/product/requirements.md
@@ -46,7 +46,7 @@ approvals:
 | Runtime перед PKG-3.2 | #663 | Общий `libs/go/grpcserver` подключает OpenTelemetry `StatsHandler`, создаёт серверный span для входящих RPC и извлекает W3C `traceparent`/`baggage`; экспортёр и OTel Collector боевого контура подключаются отдельным срезом начальной настройки. |
 | PKG-3.1 | #650 | Сервисный процесс, служебный HTTP-контур, общий gRPC runtime и регистрация `PackageHubService` готовы без БД-логики. |
 | PKG-3.2 | #667 | PostgreSQL-модель источников, пакетов, версий, manifest и ценовых метаданных готова: миграции, доменные типы, repository-контракт, PostgreSQL repository и интеграционные тесты. gRPC business handlers не входят в этот срез. |
-| PKG-3.3 | не назначено | PostgreSQL-модель установок, схем секретов, проверки, идемпотентности и optimistic concurrency готова. |
+| PKG-3.3 | #670 | PostgreSQL-модель установок, схем секретов, проверок, идемпотентности и optimistic concurrency готова: миграции, доменные типы, repository-контракт, PostgreSQL repository и интеграционные тесты. gRPC business handlers и outbox не входят в этот срез. |
 | PKG-3.4 | не назначено | Outbox и первые repository-backed gRPC операции готовы. |
 | PKG-4 | не назначено | Источники магазинов, синхронизация доступного каталога и проверка manifest готовы. |
 | PKG-5 | не назначено | Установки пакетов, версии, привязки секретов и события установки готовы. |

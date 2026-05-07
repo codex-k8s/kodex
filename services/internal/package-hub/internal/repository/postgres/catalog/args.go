@@ -71,6 +71,18 @@ func packageVersionArgs(version entity.PackageVersion) pgx.NamedArgs {
 	}
 }
 
+func packageVersionVerificationArgs(version entity.PackageVersion, previousRevision int64) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"id":                  version.ID,
+		"package_id":          version.PackageID,
+		"verification_status": string(version.VerificationStatus),
+		"release_status":      string(version.ReleaseStatus),
+		"revision":            version.Revision,
+		"updated_at":          version.UpdatedAt,
+		"previous_revision":   previousRevision,
+	}
+}
+
 func manifestSnapshotArgs(snapshot entity.PackageManifestSnapshot) pgx.NamedArgs {
 	return pgx.NamedArgs{
 		"id":                 snapshot.ID,
@@ -101,6 +113,68 @@ func pricingMetadataUpdateArgs(metadata entity.PackagePricingMetadata, previousV
 	return args
 }
 
+func packageInstallationArgs(installation entity.PackageInstallation) pgx.NamedArgs {
+	return withVersionedBaseArgs(installation.VersionedBase, pgx.NamedArgs{
+		"package_id":                 installation.PackageID,
+		"package_version_id":         installation.PackageVersionID,
+		"scope_type":                 string(installation.Scope.Type),
+		"scope_ref":                  installation.Scope.Ref,
+		"installation_status":        string(installation.InstallationStatus),
+		"desired_state":              string(installation.DesiredState),
+		"runtime_requirement_digest": installation.RuntimeRequirementDigest,
+		"secret_binding_status":      string(installation.SecretBindingStatus),
+		"last_health_status":         string(installation.LastHealthStatus),
+	})
+}
+
+func packageInstallationUpdateArgs(installation entity.PackageInstallation, previousVersion int64) pgx.NamedArgs {
+	args := packageInstallationArgs(installation)
+	args["previous_version"] = previousVersion
+	return args
+}
+
+func packageSecretSchemaArgs(schema entity.PackageSecretSchema) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"id":                 schema.ID,
+		"package_version_id": schema.PackageVersionID,
+		"schema_digest":      schema.SchemaDigest,
+		"fields":             secretFieldsPayload(schema.Fields),
+		"created_at":         schema.CreatedAt,
+	}
+}
+
+func packageVerificationArgs(verification entity.PackageVerification) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"id":                    verification.ID,
+		"package_version_id":    verification.PackageVersionID,
+		"verification_status":   string(verification.VerificationStatus),
+		"verified_by_actor_ref": verification.VerifiedByActorRef,
+		"verification_notes":    verification.VerificationNotes,
+		"created_at":            verification.CreatedAt,
+	}
+}
+
+func commandResultArgs(result entity.CommandResult) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"key":             result.Key,
+		"command_id":      postgreslib.NullableUUID(result.CommandID),
+		"idempotency_key": result.IdempotencyKey,
+		"operation":       result.Operation,
+		"aggregate_type":  string(result.AggregateType),
+		"aggregate_id":    result.AggregateID,
+		"result_payload":  objectPayload(result.ResultPayload),
+		"created_at":      result.CreatedAt,
+	}
+}
+
+func commandIdentityArgs(identity query.CommandIdentity) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"command_id":      postgreslib.NullableUUID(identity.CommandID),
+		"idempotency_key": identity.IdempotencyKey,
+		"operation":       identity.Operation,
+	}
+}
+
 func packageSourceFilterArgs(filter query.PackageSourceFilter) pageQueryArgs {
 	return withPage(filter.Page, pgx.NamedArgs{
 		"organization_id": postgreslib.NullableUUID(filter.OrganizationID),
@@ -125,6 +199,30 @@ func packageVersionFilterArgs(filter query.PackageVersionFilter) pageQueryArgs {
 		"package_id":          filter.PackageID,
 		"verification_status": optionalString(filter.VerificationStatus),
 		"release_status":      optionalString(filter.ReleaseStatus),
+	})
+}
+
+func packageInstallationFilterArgs(filter query.PackageInstallationFilter) pageQueryArgs {
+	var scopeType any
+	var scopeRef any
+	if filter.Scope != nil {
+		scopeType = string(filter.Scope.Type)
+		scopeRef = filter.Scope.Ref
+	}
+	return withPage(filter.Page, pgx.NamedArgs{
+		"scope_type":            scopeType,
+		"scope_ref":             scopeRef,
+		"package_id":            postgreslib.NullableUUID(filter.PackageID),
+		"package_kind":          optionalString(filter.PackageKind),
+		"installation_status":   optionalString(filter.InstallationStatus),
+		"secret_binding_status": optionalString(filter.SecretBindingStatus),
+	})
+}
+
+func packageVerificationFilterArgs(filter query.PackageVerificationFilter) pageQueryArgs {
+	return withPage(filter.Page, pgx.NamedArgs{
+		"package_version_id":  filter.PackageVersionID,
+		"verification_status": optionalString(filter.VerificationStatus),
 	})
 }
 
@@ -191,6 +289,17 @@ func optionalString[T ~string](value *T) any {
 }
 
 func localizedTextPayload(items []value.LocalizedText) string {
+	if len(items) == 0 {
+		return "[]"
+	}
+	payload, err := json.Marshal(items)
+	if err != nil {
+		return "[]"
+	}
+	return string(payload)
+}
+
+func secretFieldsPayload(items []value.PackageSecretField) string {
 	if len(items) == 0 {
 		return "[]"
 	}
