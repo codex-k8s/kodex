@@ -1,0 +1,250 @@
+package service
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"io"
+	"strings"
+
+	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/errs"
+	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/enum"
+	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/value"
+)
+
+type packageManifestDocument struct {
+	Identity              *packageManifestIdentity     `json:"identity"`
+	Source                *packageManifestSource       `json:"source"`
+	Capabilities          []string                     `json:"capabilities"`
+	RequiredPlatformAPIs  []string                     `json:"required_platform_apis"`
+	RequiredAccessActions []string                     `json:"required_access_actions"`
+	Secrets               []value.PackageSecretField   `json:"secrets"`
+	Runtime               *packageManifestRuntime      `json:"runtime"`
+	Pricing               *packageManifestPricing      `json:"pricing"`
+	Verification          *packageManifestVerification `json:"verification"`
+}
+
+type packageManifestIdentity struct {
+	Slug        string                `json:"slug"`
+	Kind        enum.PackageKind      `json:"kind"`
+	Publisher   string                `json:"publisher"`
+	License     string                `json:"license"`
+	Name        []value.LocalizedText `json:"name"`
+	Description []value.LocalizedText `json:"description"`
+}
+
+type packageManifestSource struct {
+	RefKind enum.PackageVersionSourceRefKind `json:"ref_kind"`
+	Ref     string                           `json:"ref"`
+	Version string                           `json:"version"`
+	Digest  string                           `json:"digest"`
+}
+
+type packageManifestRuntime struct {
+	Required     bool   `json:"required"`
+	WorkloadKind string `json:"workload_kind,omitempty"`
+}
+
+type packageManifestPricing struct {
+	CommercialStatus enum.PackageCommercialStatus `json:"commercial_status"`
+}
+
+type packageManifestVerification struct {
+	TrustStatus        enum.PackageTrustStatus        `json:"trust_status"`
+	VerificationStatus enum.PackageVerificationStatus `json:"verification_status,omitempty"`
+	Restrictions       []packageManifestRestriction   `json:"restrictions,omitempty"`
+}
+
+type packageManifestRestriction struct {
+	Code        string                `json:"code"`
+	Description []value.LocalizedText `json:"description"`
+}
+
+func normalizePackageManifestPayload(parent CatalogPackageSnapshot, version CatalogVersionSnapshot) ([]byte, error) {
+	trimmed := bytes.TrimSpace(version.ManifestPayload)
+	if len(trimmed) == 0 || trimmed[0] != '{' || !json.Valid(trimmed) {
+		return nil, errs.ErrInvalidArgument
+	}
+	var document packageManifestDocument
+	decoder := json.NewDecoder(bytes.NewReader(trimmed))
+	if err := decoder.Decode(&document); err != nil {
+		return nil, errs.ErrInvalidArgument
+	}
+	if err := decoder.Decode(&packageManifestDocument{}); !errors.Is(err, io.EOF) {
+		return nil, errs.ErrInvalidArgument
+	}
+	if err := validatePackageManifestDocument(parent, version, document); err != nil {
+		return nil, err
+	}
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, trimmed); err != nil {
+		return nil, errs.ErrInvalidArgument
+	}
+	if err := requireManifestDigest(version.ManifestDigest, compact.Bytes()); err != nil {
+		return nil, err
+	}
+	return compact.Bytes(), nil
+}
+
+func validatePackageManifestDocument(parent CatalogPackageSnapshot, version CatalogVersionSnapshot, document packageManifestDocument) error {
+	if err := validatePackageManifestIdentity(parent, document.Identity); err != nil {
+		return err
+	}
+	if err := validatePackageManifestSource(version, document.Source); err != nil {
+		return err
+	}
+	if err := requireStringList(document.Capabilities, true); err != nil {
+		return err
+	}
+	if err := requireStringList(document.RequiredPlatformAPIs, false); err != nil {
+		return err
+	}
+	if err := requireStringList(document.RequiredAccessActions, false); err != nil {
+		return err
+	}
+	if err := validatePackageManifestSecrets(document.Secrets); err != nil {
+		return err
+	}
+	if err := validatePackageManifestRuntime(document.Runtime); err != nil {
+		return err
+	}
+	if err := validatePackageManifestPricing(parent, document.Pricing); err != nil {
+		return err
+	}
+	return validatePackageManifestVerification(parent, document.Verification)
+}
+
+func validatePackageManifestIdentity(parent CatalogPackageSnapshot, identity *packageManifestIdentity) error {
+	if identity == nil {
+		return errs.ErrInvalidArgument
+	}
+	identity.Slug = strings.TrimSpace(identity.Slug)
+	identity.Publisher = strings.TrimSpace(identity.Publisher)
+	identity.License = strings.TrimSpace(identity.License)
+	if identity.Slug != parent.Slug || identity.Kind != parent.Kind {
+		return errs.ErrInvalidArgument
+	}
+	if err := requireText(identity.Publisher); err != nil {
+		return err
+	}
+	if err := requireText(identity.License); err != nil {
+		return err
+	}
+	if err := requireLocalizedTexts(identity.Name, true); err != nil {
+		return err
+	}
+	return requireLocalizedTexts(identity.Description, true)
+}
+
+func validatePackageManifestSource(version CatalogVersionSnapshot, source *packageManifestSource) error {
+	if source == nil {
+		return errs.ErrInvalidArgument
+	}
+	source.Ref = strings.TrimSpace(source.Ref)
+	source.Version = strings.TrimSpace(source.Version)
+	source.Digest = strings.TrimSpace(source.Digest)
+	if source.RefKind != version.SourceRef.Kind || source.Ref != version.SourceRef.Ref || source.Version != version.VersionLabel {
+		return errs.ErrInvalidArgument
+	}
+	return requireText(source.Digest)
+}
+
+func validatePackageManifestSecrets(secrets []value.PackageSecretField) error {
+	seen := make(map[string]struct{}, len(secrets))
+	for _, secret := range secrets {
+		key := strings.TrimSpace(secret.Key)
+		if err := requireText(key); err != nil {
+			return err
+		}
+		if _, exists := seen[key]; exists {
+			return errs.ErrInvalidArgument
+		}
+		seen[key] = struct{}{}
+		if err := requireSecretFieldKind(secret.Kind); err != nil {
+			return err
+		}
+		if err := requireLocalizedTexts(secret.DisplayName, true); err != nil {
+			return err
+		}
+		if err := requireLocalizedTexts(secret.Description, false); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validatePackageManifestRuntime(runtime *packageManifestRuntime) error {
+	if runtime == nil {
+		return errs.ErrInvalidArgument
+	}
+	if runtime.Required {
+		return requireText(runtime.WorkloadKind)
+	}
+	return nil
+}
+
+func validatePackageManifestPricing(parent CatalogPackageSnapshot, pricing *packageManifestPricing) error {
+	if pricing == nil {
+		return errs.ErrInvalidArgument
+	}
+	if pricing.CommercialStatus != parent.CommercialStatus {
+		return errs.ErrInvalidArgument
+	}
+	return requireCommercialStatus(pricing.CommercialStatus)
+}
+
+func validatePackageManifestVerification(parent CatalogPackageSnapshot, verification *packageManifestVerification) error {
+	if verification == nil {
+		return errs.ErrInvalidArgument
+	}
+	if verification.TrustStatus != parent.TrustStatus {
+		return errs.ErrInvalidArgument
+	}
+	if err := requireTrustStatus(verification.TrustStatus); err != nil {
+		return err
+	}
+	if verification.VerificationStatus != "" {
+		if err := requireVerificationStatus(verification.VerificationStatus); err != nil {
+			return err
+		}
+	}
+	for _, restriction := range verification.Restrictions {
+		if err := requireText(restriction.Code); err != nil {
+			return err
+		}
+		if err := requireLocalizedTexts(restriction.Description, false); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func requireStringList(items []string, requireNonEmpty bool) error {
+	if requireNonEmpty && len(items) == 0 {
+		return errs.ErrInvalidArgument
+	}
+	seen := make(map[string]struct{}, len(items))
+	for _, item := range items {
+		trimmed := strings.TrimSpace(item)
+		if trimmed == "" {
+			return errs.ErrInvalidArgument
+		}
+		if _, exists := seen[trimmed]; exists {
+			return errs.ErrInvalidArgument
+		}
+		seen[trimmed] = struct{}{}
+	}
+	return nil
+}
+
+func requireManifestDigest(expected string, payload []byte) error {
+	expected = strings.TrimSpace(expected)
+	sum := sha256.Sum256(payload)
+	actual := "sha256:" + hex.EncodeToString(sum[:])
+	if expected != actual {
+		return errs.ErrInvalidArgument
+	}
+	return nil
+}

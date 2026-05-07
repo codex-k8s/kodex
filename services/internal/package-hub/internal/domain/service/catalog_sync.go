@@ -18,9 +18,11 @@ func (s *Service) SyncAvailablePackages(ctx context.Context, input SyncAvailable
 	if err := requireID(input.SourceID); err != nil {
 		return SyncAvailablePackagesResult{}, err
 	}
-	if err := validateCatalogSnapshot(input.Snapshot); err != nil {
+	snapshot, err := normalizeCatalogSnapshot(input.Snapshot)
+	if err != nil {
 		return SyncAvailablePackagesResult{}, err
 	}
+	input.Snapshot = snapshot
 	current, err := s.repository.GetPackageSource(ctx, input.SourceID)
 	if err != nil {
 		return SyncAvailablePackagesResult{}, err
@@ -179,80 +181,102 @@ func catalogChangeEvent[T any](
 	return entity.OutboxEvent{}, nil
 }
 
-func validateCatalogSnapshot(snapshot CatalogSnapshot) error {
+func normalizeCatalogSnapshot(snapshot CatalogSnapshot) (CatalogSnapshot, error) {
+	result := CatalogSnapshot{ObservedAt: snapshot.ObservedAt}
 	seenPackages := make(map[string]struct{}, len(snapshot.Packages))
 	for _, item := range snapshot.Packages {
-		slug := strings.TrimSpace(item.Slug)
+		normalized, err := normalizeCatalogPackage(item)
+		if err != nil {
+			return CatalogSnapshot{}, err
+		}
+		slug := normalized.Slug
 		if _, exists := seenPackages[slug]; exists {
-			return errs.ErrInvalidArgument
+			return CatalogSnapshot{}, errs.ErrInvalidArgument
 		}
 		seenPackages[slug] = struct{}{}
-		if err := validateCatalogPackage(item); err != nil {
-			return err
-		}
+		result.Packages = append(result.Packages, normalized)
 	}
-	return nil
+	return result, nil
 }
 
-func validateCatalogPackage(item CatalogPackageSnapshot) error {
-	if err := requireText(item.Slug); err != nil {
-		return err
+func normalizeCatalogPackage(item CatalogPackageSnapshot) (CatalogPackageSnapshot, error) {
+	normalized := item
+	normalized.Slug = strings.TrimSpace(item.Slug)
+	normalized.PublisherRef = strings.TrimSpace(item.PublisherRef)
+	normalized.DisplayName = normalizeLocalizedTexts(item.DisplayName)
+	normalized.Description = normalizeLocalizedTexts(item.Description)
+	normalized.IconObjectURI = strings.TrimSpace(item.IconObjectURI)
+	normalized.Versions = nil
+	if err := requireText(normalized.Slug); err != nil {
+		return CatalogPackageSnapshot{}, err
 	}
-	if err := requirePackageKind(item.Kind); err != nil {
-		return err
+	if err := requirePackageKind(normalized.Kind); err != nil {
+		return CatalogPackageSnapshot{}, err
 	}
-	if err := requireLocalizedTexts(item.DisplayName, true); err != nil {
-		return err
+	if err := requireLocalizedTexts(normalized.DisplayName, true); err != nil {
+		return CatalogPackageSnapshot{}, err
 	}
-	if err := requireLocalizedTexts(item.Description, false); err != nil {
-		return err
+	if err := requireLocalizedTexts(normalized.Description, false); err != nil {
+		return CatalogPackageSnapshot{}, err
 	}
-	if err := requireCommercialStatus(item.CommercialStatus); err != nil {
-		return err
+	if err := requireCommercialStatus(normalized.CommercialStatus); err != nil {
+		return CatalogPackageSnapshot{}, err
 	}
-	if err := requireTrustStatus(item.TrustStatus); err != nil {
-		return err
+	if err := requireTrustStatus(normalized.TrustStatus); err != nil {
+		return CatalogPackageSnapshot{}, err
 	}
-	if err := requirePackageStatus(item.Status); err != nil {
-		return err
+	if err := requirePackageStatus(normalized.Status); err != nil {
+		return CatalogPackageSnapshot{}, err
 	}
 	seenVersions := make(map[string]struct{}, len(item.Versions))
 	for _, version := range item.Versions {
-		label := strings.TrimSpace(version.VersionLabel)
+		normalizedVersion, err := normalizeCatalogVersion(normalized, version)
+		if err != nil {
+			return CatalogPackageSnapshot{}, err
+		}
+		label := normalizedVersion.VersionLabel
 		if _, exists := seenVersions[label]; exists {
-			return errs.ErrInvalidArgument
+			return CatalogPackageSnapshot{}, errs.ErrInvalidArgument
 		}
 		seenVersions[label] = struct{}{}
-		if err := validateCatalogVersion(version); err != nil {
-			return err
-		}
+		normalized.Versions = append(normalized.Versions, normalizedVersion)
 	}
-	return nil
+	return normalized, nil
 }
 
-func validateCatalogVersion(version CatalogVersionSnapshot) error {
-	if err := requireText(version.VersionLabel); err != nil {
-		return err
+func normalizeCatalogVersion(parent CatalogPackageSnapshot, version CatalogVersionSnapshot) (CatalogVersionSnapshot, error) {
+	normalized := version
+	normalized.VersionLabel = strings.TrimSpace(version.VersionLabel)
+	normalized.SourceRef.Ref = strings.TrimSpace(version.SourceRef.Ref)
+	normalized.SourceRef.CommitSHA = strings.TrimSpace(version.SourceRef.CommitSHA)
+	normalized.ManifestDigest = strings.TrimSpace(version.ManifestDigest)
+	if err := requireText(normalized.VersionLabel); err != nil {
+		return CatalogVersionSnapshot{}, err
 	}
-	if err := requireSourceRefKind(version.SourceRef.Kind); err != nil {
-		return err
+	if err := requireSourceRefKind(normalized.SourceRef.Kind); err != nil {
+		return CatalogVersionSnapshot{}, err
 	}
-	if err := requireText(version.SourceRef.Ref); err != nil {
-		return err
+	if err := requireText(normalized.SourceRef.Ref); err != nil {
+		return CatalogVersionSnapshot{}, err
 	}
-	if err := requireText(version.ManifestDigest); err != nil {
-		return err
+	if err := requireText(normalized.ManifestDigest); err != nil {
+		return CatalogVersionSnapshot{}, err
 	}
-	if version.ManifestSchema <= 0 {
-		return errs.ErrInvalidArgument
+	if normalized.ManifestSchema <= 0 {
+		return CatalogVersionSnapshot{}, errs.ErrInvalidArgument
 	}
-	if err := requireManifestPayload(version.ManifestPayload); err != nil {
-		return err
+	payload, err := normalizePackageManifestPayload(parent, normalized)
+	if err != nil {
+		return CatalogVersionSnapshot{}, err
 	}
-	if err := requireVerificationStatus(version.VerificationStatus); err != nil {
-		return err
+	normalized.ManifestPayload = payload
+	if err := requireVerificationStatus(normalized.VerificationStatus); err != nil {
+		return CatalogVersionSnapshot{}, err
 	}
-	return requireReleaseStatus(version.ReleaseStatus)
+	if err := requireReleaseStatus(normalized.ReleaseStatus); err != nil {
+		return CatalogVersionSnapshot{}, err
+	}
+	return normalized, nil
 }
 
 func requireLocalizedTexts(items []value.LocalizedText, requireNonEmpty bool) error {

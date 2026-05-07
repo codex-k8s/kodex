@@ -1,8 +1,6 @@
 package service
 
 import (
-	"bytes"
-	"encoding/json"
 	"strings"
 
 	"github.com/google/uuid"
@@ -120,12 +118,13 @@ func requireReleaseStatus(status enum.PackageReleaseStatus) error {
 	}
 }
 
-func requireManifestPayload(payload []byte) error {
-	trimmed := bytes.TrimSpace(payload)
-	if len(trimmed) == 0 || trimmed[0] != '{' || !json.Valid(trimmed) {
+func requireSecretFieldKind(kind enum.PackageSecretFieldKind) error {
+	switch kind {
+	case enum.PackageSecretFieldKindString, enum.PackageSecretFieldKindPassword, enum.PackageSecretFieldKindToken, enum.PackageSecretFieldKindJSON, enum.PackageSecretFieldKindURL:
+		return nil
+	default:
 		return errs.ErrInvalidArgument
 	}
-	return nil
 }
 
 func defaultActorRef(actorType string, actorID string) string {
