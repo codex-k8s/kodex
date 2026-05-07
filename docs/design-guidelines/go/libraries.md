@@ -11,6 +11,12 @@
 - нужен единый стандарт поведения (логирование/метрики/otel, middleware, клиенты);
 - API библиотеки можно сделать минимальным и стабильным.
 
+## Связь с версиями сервисов
+
+- Если сервис начинает импортировать библиотеку из `libs/go/*`, этот путь нужно синхронно добавить в `services.yaml` в `spec.versions.<service>.bumpOn`.
+- Если новая или изменённая библиотека из `libs/go/*` зависит от других локальных контрактов (`proto/**`, `specs/**`, `libs/go/accesscatalog`, `libs/go/platformevents/**` и т.п.), каждый deployable-сервис должен иметь в `bumpOn` как саму библиотеку, так и прямые локальные контракты, которые сервис импортирует или использует через неё как часть runtime/build-контракта.
+- Перед push нужно проверить все потребители новой библиотеки через поиск импортов и убедиться, что изменение библиотеки приведёт к пересборке всех затронутых образов.
+
 ## Что обычно выносим
 
 - `libs/go/observability/*` — логгер, метрики, OTel helpers.
@@ -21,6 +27,7 @@
 - `libs/go/grpcserver/*` — общий runtime gRPC сервера: gRPC-перехватчики, auth, Prometheus-метрики, OpenTelemetry tracing, проброс trace context и лог-корреляция.
 - `libs/go/outbox/*` — общий runtime доставщика сервисного outbox.
 - `libs/go/eventlog/*` — общий клиент `platform-event-log` и PostgreSQL publisher для outbox.
+- `libs/go/accesscheck/*` — общий клиент `access-manager` для `CheckAccess` и сервисных адаптеров авторизации.
 - `libs/go/platformevents/*` — сгенерированные из AsyncAPI контракты доменных событий.
 - `libs/go/i18n/*` — общий backend runtime локализации системных message id.
 - `libs/go/k8s/*` — клиентские адаптеры и шаблоны работы с Kubernetes API.
