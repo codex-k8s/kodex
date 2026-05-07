@@ -1,0 +1,99 @@
+package app
+
+import (
+	"testing"
+	"time"
+)
+
+func TestLoadConfigRequiresDatabaseDSN(t *testing.T) {
+	t.Setenv("KODEX_PROVIDER_HUB_DATABASE_DSN", "")
+
+	if _, err := LoadConfig(); err == nil {
+		t.Fatal("LoadConfig() err = nil, want required database DSN error")
+	}
+}
+
+func TestLoadConfigAcceptsRequiredEnvironment(t *testing.T) {
+	t.Setenv("KODEX_PROVIDER_HUB_DATABASE_DSN", "postgres://postgres:5432/kodex_provider_hub?sslmode=disable")
+	t.Setenv("KODEX_PROVIDER_HUB_GRPC_AUTH_TOKEN", "test-token")
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig(): %v", err)
+	}
+	if cfg.DatabaseDSN == "" {
+		t.Fatal("DatabaseDSN is empty")
+	}
+}
+
+func TestLoadConfigAllowsMissingAuthTokenWhenAuthDisabled(t *testing.T) {
+	t.Setenv("KODEX_PROVIDER_HUB_DATABASE_DSN", "postgres://postgres:5432/kodex_provider_hub?sslmode=disable")
+	t.Setenv("KODEX_PROVIDER_HUB_GRPC_AUTH_REQUIRED", "false")
+	t.Setenv("KODEX_PROVIDER_HUB_GRPC_AUTH_TOKEN", "")
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig(): %v", err)
+	}
+	if cfg.GRPCAuthRequired {
+		t.Fatal("GRPCAuthRequired = true, want false")
+	}
+}
+
+func TestValidateRejectsInvalidPoolBounds(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.DatabaseMinConns = cfg.DatabaseMaxConns + 1
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() err = nil, want pool bounds error")
+	}
+}
+
+func TestDatabasePoolSettingsIncludesRetryConfig(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	settings := cfg.DatabasePoolSettings()
+
+	if settings.ConnectRetryMaxAttempts != cfg.DatabaseRetryMaxAttempts {
+		t.Fatalf("ConnectRetryMaxAttempts = %d, want %d", settings.ConnectRetryMaxAttempts, cfg.DatabaseRetryMaxAttempts)
+	}
+	if settings.ConnectRetryInitialDelay != cfg.DatabaseRetryInitialDelay {
+		t.Fatalf("ConnectRetryInitialDelay = %s, want %s", settings.ConnectRetryInitialDelay, cfg.DatabaseRetryInitialDelay)
+	}
+	if settings.ConnectRetryMaxDelay != cfg.DatabaseRetryMaxDelay {
+		t.Fatalf("ConnectRetryMaxDelay = %s, want %s", settings.ConnectRetryMaxDelay, cfg.DatabaseRetryMaxDelay)
+	}
+	if settings.ConnectRetryJitterRatio != cfg.DatabaseRetryJitterRatio {
+		t.Fatalf("ConnectRetryJitterRatio = %f, want %f", settings.ConnectRetryJitterRatio, cfg.DatabaseRetryJitterRatio)
+	}
+}
+
+func validConfig() Config {
+	return Config{
+		HTTPAddr:                  ":8080",
+		GRPCAddr:                  ":9090",
+		GRPCAuthRequired:          true,
+		GRPCAuthToken:             "test-token",
+		GRPCMaxInFlight:           128,
+		GRPCMaxConcurrentStreams:  128,
+		GRPCUnaryTimeout:          30 * time.Second,
+		GRPCKeepaliveTime:         2 * time.Minute,
+		GRPCKeepaliveTimeout:      20 * time.Second,
+		GRPCKeepaliveMinTime:      30 * time.Second,
+		GRPCMaxRecvMessageBytes:   4 * 1024 * 1024,
+		GRPCMaxSendMessageBytes:   4 * 1024 * 1024,
+		DatabaseDSN:               "postgres://postgres:5432/kodex_provider_hub?sslmode=disable",
+		DatabaseMaxConns:          8,
+		DatabaseMinConns:          1,
+		DatabaseMaxConnLifetime:   time.Hour,
+		DatabaseMaxConnIdleTime:   15 * time.Minute,
+		DatabaseHealthCheckPeriod: 30 * time.Second,
+		DatabasePingTimeout:       5 * time.Second,
+		DatabaseRetryMaxAttempts:  6,
+		DatabaseRetryInitialDelay: 500 * time.Millisecond,
+		DatabaseRetryMaxDelay:     5 * time.Second,
+		DatabaseRetryJitterRatio:  0.2,
+	}
+}

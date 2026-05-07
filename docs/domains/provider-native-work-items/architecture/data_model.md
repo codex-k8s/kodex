@@ -5,7 +5,7 @@ title: kodex — модель данных provider-hub
 status: active
 owner_role: SA
 created_at: 2026-05-06
-updated_at: 2026-05-06
+updated_at: 2026-05-07
 related_issues: [281, 282]
 related_prs: []
 approvals:
@@ -20,15 +20,16 @@ approvals:
 
 ## TL;DR
 
-- Ключевые сущности: runtime-состояние аккаунта провайдера, webhook event, provider event, work item projection, comment projection, relationship, sync cursor, limit snapshot и operation log.
+- Ключевые сущности: операционное состояние аккаунта провайдера, входящее webhook-событие, нормализованное событие провайдера, проекция рабочего артефакта, проекция комментария, связь, курсор сверки, снимок лимита, журнал операций и локальный outbox доменных событий.
 - Основные связи: все ссылки на проекты, репозитории, внешние аккаунты, run и job хранятся как внешние идентификаторы без SQL-связей с чужими БД.
-- Риски миграций: нельзя хранить provider truth как собственную истину платформы и нельзя копить сырые payload без retention.
+- Риски миграций: нельзя хранить состояние провайдера как собственную истину платформы и нельзя копить сырые payload без политики хранения.
 
 ## Базовые правила
 
 - БД `provider-hub` принадлежит только `provider-hub`.
 - Таблицы не имеют `FOREIGN KEY` в БД других сервисов.
 - Конкурентные команды используют версии агрегатов и идемпотентные ключи.
+- Межсервисные доменные события сначала фиксируются в локальном outbox сервиса-владельца, а затем доставляются в общий `platform-event-log`.
 - Сырые webhook payload имеют срок хранения.
 - Нормализованные проекции хранят только поля, нужные платформе для UI, поиска, приёмки, синхронизации и аудита.
 - Полные diff, review truth, ветки и теги остаются у провайдера.
@@ -64,7 +65,7 @@ approvals:
 Важные инварианты:
 
 - дедупликация обязательна по delivery id или аналогу;
-- payload хранится с retention;
+- payload хранится ограниченный срок;
 - нормализация идёт асинхронно.
 
 | Поле | Тип | Nullable | Ограничения | Примечание |
@@ -76,7 +77,7 @@ approvals:
 | `repository_provider_id` | text | no | default '' | Внешний id репозитория, если есть. |
 | `received_at` | timestamptz | no | indexed | Время приёма. |
 | `processing_status` | text | no | indexed | `pending`, `processed`, `failed`, `ignored`. |
-| `payload_json` | jsonb | no |  | Сырой payload с retention. |
+| `payload_json` | jsonb | no |  | Сырой payload с ограниченным сроком хранения. |
 | `last_error` | text | no | default '' | Короткая ошибка обработки. |
 | `retain_until` | timestamptz | no | indexed | Срок хранения payload. |
 
@@ -145,6 +146,7 @@ approvals:
 | `summary` | text | no | default '' | Короткая выдержка для UI. |
 | `provider_created_at` | timestamptz | yes |  | Время создания у провайдера. |
 | `provider_updated_at` | timestamptz | yes |  | Время обновления у провайдера. |
+| `version` | bigint | no | monotonic | Версия проекции. |
 
 ### `ProviderRelationship`
 
@@ -173,7 +175,7 @@ approvals:
 | `provider_slug` | text | no | indexed | Поставщик. |
 | `scope_type` | text | no | indexed | `repository`, `organization`, `work_item`, `package_source`. |
 | `scope_ref` | text | no | indexed | Внешняя область. |
-| `artifact_kind` | text | no | indexed | `issue`, `pull_request`, `comment`, `relationship`, `repository`. |
+| `artifact_kind` | text | no | indexed | `issue`, `pull_request`, `merge_request`, `comment`, `relationship`, `repository`. |
 | `cursor_value` | text | no | default '' | Provider cursor или timestamp marker. |
 | `overlap_since` | timestamptz | yes |  | Начало окна перекрытия. |
 | `priority` | text | no | indexed | `hot`, `warm`, `cold`. |
@@ -183,6 +185,7 @@ approvals:
 | `rate_budget_state_json` | jsonb | no | default {} | Снимок бюджета лимитов. |
 | `lease_owner` | text | no | default '' | Владелец короткой аренды. |
 | `lease_until` | timestamptz | yes | indexed | Конец аренды. |
+| `version` | bigint | no | monotonic | Версия курсора. |
 
 ### `ProviderLimitSnapshot`
 
@@ -213,13 +216,42 @@ approvals:
 | `provider_slug` | text | no | indexed | Поставщик. |
 | `operation_type` | text | no | indexed | Нормализованный тип операции. |
 | `target_ref` | text | no | indexed | Provider target. |
-| `status` | text | no | indexed | `succeeded`, `failed`, `retryable_failed`, `denied`. |
+| `status` | text | no | indexed | `pending`, `running`, `succeeded`, `failed`, `rate_limited`. |
 | `result_ref` | text | no | default '' | URL/id результата. |
 | `error_code` | text | no | default '' | Классификация ошибки. |
 | `error_message` | text | no | default '' | Короткое сообщение без секрета. |
 | `rate_limit_snapshot_id` | UUID | yes | indexed | Снимок лимитов после операции. |
 | `started_at` | timestamptz | no | indexed | Начало. |
 | `finished_at` | timestamptz | yes | indexed | Завершение. |
+| `version` | bigint | no | monotonic | Версия записи операции. |
+
+### `ProviderHubOutboxEvent`
+
+Назначение: локальная очередь доменных событий, которые `provider-hub` уже зафиксировал в своей транзакции и должен доставить в общий `platform-event-log`.
+
+Важные инварианты:
+
+- таблица находится в БД `provider-hub`, а не в БД `platform-event-log`;
+- запись outbox создаётся в той же транзакции, что и изменение доменной модели;
+- повторная доставка управляется lease, счётчиком попыток и временем следующей попытки;
+- режим `diagnostic-log-lossy` не является штатной доставкой для контуров, где события должны получить другие сервисы.
+
+| Поле | Тип | Nullable | Ограничения | Примечание |
+|---|---|---:|---|---|
+| `id` | UUID | no | primary key | Идентификатор события outbox. |
+| `event_type` | text | no | indexed | Тип доменного события. |
+| `schema_version` | integer | no | > 0 | Версия схемы события. |
+| `aggregate_type` | text | no | indexed | Тип агрегата. |
+| `aggregate_id` | UUID | no | indexed | Идентификатор агрегата. |
+| `payload` | jsonb | no | object | Payload события. |
+| `occurred_at` | timestamptz | no | indexed | Время возникновения события. |
+| `published_at` | timestamptz | yes | indexed | Время успешной доставки. |
+| `attempt_count` | integer | no | >= 0 | Количество попыток публикации. |
+| `next_attempt_at` | timestamptz | no | indexed | Когда можно делать следующую попытку. |
+| `locked_until` | timestamptz | yes | indexed | Lease публикации. |
+| `failed_permanently_at` | timestamptz | yes |  | Время окончательного отказа. |
+| `failure_kind` | text | no | enum-like | `''`, `transient`, `permanent`. |
+| `last_error` | text | no | default '' | Короткая ошибка без секрета. |
 
 ## Индексы и критичные запросы
 
@@ -243,10 +275,11 @@ approvals:
 | Комментарии | Хранить digest, краткую выдержку и provider ref; полные тела не копить без подтверждённого сценария. |
 | Снимки лимитов | Хранить агрегированно и с ограничением по сроку. |
 | Operation log | Хранить как аудит provider-операций без секретов и полных payload. |
+| Локальный outbox | Хранить до успешной доставки или до ручного разбора окончательных отказов. |
 
 ## Миграции
 
-Миграции будут жить в `services/internal/provider-hub/cmd/cli/migrations/*.sql` после создания сервиса. До появления кода этот документ фиксирует целевую модель и инварианты.
+Миграции живут в `services/internal/provider-hub/cmd/cli/migrations/*.sql`. Первый срез создаёт схему `provider_hub_*` для целевой доменной модели и локального outbox. Создание БД в Kubernetes, migration job и эксплуатационные манифесты фиксируются отдельным эксплуатационным срезом.
 
 ## Апрув
 
