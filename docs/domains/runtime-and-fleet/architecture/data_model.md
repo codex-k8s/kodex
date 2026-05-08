@@ -44,7 +44,8 @@ approvals:
 - первая физическая форма — Kubernetes namespace;
 - доменная модель не зашивает namespace как единственную будущую форму;
 - слот может ссылаться на agent run, но не владеет им;
-- lease защищает слот от одновременного использования.
+- lease защищает слот от одновременного использования;
+- активная попытка подготовки workspace хранится на слоте, чтобы поздний исполнитель старой попытки не перезаписал результат новой попытки или release/cleanup.
 
 | Поле | Тип | Nullable | Ограничения | Примечание |
 |---|---|---:|---|---|
@@ -59,6 +60,7 @@ approvals:
 | `agent_run_id` | UUID | yes | indexed | Внешняя ссылка на `Run` из `agent-manager`. |
 | `project_id` | UUID | yes | indexed | Внешняя ссылка на проект. |
 | `repository_ids_json` | jsonb | no | default [] | Внешние repository ids из `project-catalog`. |
+| `active_workspace_materialization_id` | UUID | yes | indexed | Текущая попытка подготовки workspace, которая имеет право менять состояние слота. |
 | `runtime_profile` | text | no | indexed | Профиль runtime, например `code-only-go`, `full-env-web`. |
 | `fingerprint` | text | no | default '' | Отпечаток безопасного reuse. |
 | `lease_owner` | text | no | default '' | Короткая аренда слота. |
@@ -77,7 +79,8 @@ approvals:
 
 - состав источников приходит из workspace policy, которой владеет другой домен;
 - runtime хранит результат подготовки, а не проектную политику как истину;
-- writable/read-only режим источников фиксируется явно.
+- writable/read-only режим источников фиксируется явно;
+- `project_id` полученной workspace policy должен совпадать с `project_id` слота.
 
 | Поле | Тип | Nullable | Ограничения | Примечание |
 |---|---|---:|---|---|

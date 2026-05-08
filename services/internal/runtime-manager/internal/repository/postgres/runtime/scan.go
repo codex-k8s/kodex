@@ -15,6 +15,7 @@ func scanSlot(row postgreslib.RowScanner) (entity.Slot, error) {
 	var clusterID pgtype.UUID
 	var agentRunID pgtype.UUID
 	var projectID pgtype.UUID
+	var activeWorkspaceMaterializationID pgtype.UUID
 	var repositoryIDsJSON []byte
 	var leaseUntil pgtype.Timestamptz
 	err := row.Scan(
@@ -29,6 +30,7 @@ func scanSlot(row postgreslib.RowScanner) (entity.Slot, error) {
 		&agentRunID,
 		&projectID,
 		&repositoryIDsJSON,
+		&activeWorkspaceMaterializationID,
 		&slot.RuntimeProfile,
 		&slot.Fingerprint,
 		&slot.LeaseOwner,
@@ -46,6 +48,7 @@ func scanSlot(row postgreslib.RowScanner) (entity.Slot, error) {
 	slot.ClusterID = postgreslib.UUIDPtrFromPG(clusterID)
 	slot.AgentRunID = postgreslib.UUIDPtrFromPG(agentRunID)
 	slot.ProjectID = postgreslib.UUIDPtrFromPG(projectID)
+	slot.ActiveWorkspaceMaterializationID = postgreslib.UUIDPtrFromPG(activeWorkspaceMaterializationID)
 	slot.LeaseUntil = postgreslib.TimePtrFromPG(leaseUntil)
 	if err := json.Unmarshal(repositoryIDsJSON, &slot.RepositoryIDs); err != nil {
 		return entity.Slot{}, err

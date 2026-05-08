@@ -50,6 +50,7 @@ func (s *Service) PrepareRuntime(ctx context.Context, input PrepareRuntimeInput)
 	slotID := s.ids.New()
 	workspaceID := s.ids.New()
 	leaseUntil := now.Add(s.config.DefaultLeaseTTL)
+	activeWorkspaceMaterializationID := workspaceID
 	slot := entity.Slot{
 		Base: entity.Base{
 			ID:        slotID,
@@ -57,19 +58,20 @@ func (s *Service) PrepareRuntime(ctx context.Context, input PrepareRuntimeInput)
 			CreatedAt: now,
 			UpdatedAt: now,
 		},
-		SlotKey:        s.slotKey(slotID),
-		Status:         enum.SlotStatusMaterializing,
-		RuntimeMode:    input.RuntimeMode,
-		FleetScopeID:   fleetScopeID,
-		ClusterID:      clusterID,
-		NamespaceName:  s.namespaceName(slotID),
-		AgentRunID:     input.AgentRunID,
-		ProjectID:      &projectID,
-		RepositoryIDs:  repositoryIDsFromSources(input.WorkspacePolicy.Sources),
-		RuntimeProfile: strings.TrimSpace(input.RuntimeProfile),
-		Fingerprint:    strings.TrimSpace(input.WorkspacePolicy.PolicyDigest),
-		LeaseOwner:     owner,
-		LeaseUntil:     &leaseUntil,
+		SlotKey:                          s.slotKey(slotID),
+		Status:                           enum.SlotStatusMaterializing,
+		RuntimeMode:                      input.RuntimeMode,
+		FleetScopeID:                     fleetScopeID,
+		ClusterID:                        clusterID,
+		NamespaceName:                    s.namespaceName(slotID),
+		AgentRunID:                       input.AgentRunID,
+		ProjectID:                        &projectID,
+		RepositoryIDs:                    repositoryIDsFromSources(input.WorkspacePolicy.Sources),
+		ActiveWorkspaceMaterializationID: &activeWorkspaceMaterializationID,
+		RuntimeProfile:                   strings.TrimSpace(input.RuntimeProfile),
+		Fingerprint:                      strings.TrimSpace(input.WorkspacePolicy.PolicyDigest),
+		LeaseOwner:                       owner,
+		LeaseUntil:                       &leaseUntil,
 	}
 	materialization := newWorkspaceMaterialization(workspaceID, slot.ID, input.WorkspacePolicy, now)
 	slotEvent, err := s.slotEvent(eventSlotReserved, slot, now)
@@ -106,6 +108,9 @@ func (s *Service) StartWorkspaceMaterialization(ctx context.Context, input Start
 	if err := s.authorizeCommand(ctx, input.Meta, actionWorkspaceStart, workspaceResource(uuid.Nil, slot.ProjectID)); err != nil {
 		return entity.WorkspaceMaterialization{}, err
 	}
+	if err := validateWorkspacePolicyProject(slot, input.WorkspacePolicy.ProjectID); err != nil {
+		return entity.WorkspaceMaterialization{}, err
+	}
 	if replay, ok, err := aggregateReplay(ctx, input.Meta, operationStartWorkspace, aggregateTypeWorkspace, nil, s.findCommandResult, s.repository.GetWorkspaceMaterialization); err != nil || ok {
 		if err == nil {
 			err = validateWorkspaceReplayScope(replay, input.SlotID, input.WorkspacePolicy.PolicyDigest)
@@ -115,13 +120,17 @@ func (s *Service) StartWorkspaceMaterialization(ctx context.Context, input Start
 	if slot.Status == enum.SlotStatusCleaned || slot.Status == enum.SlotStatusCleanupPending || slot.Status == enum.SlotStatusFailed {
 		return entity.WorkspaceMaterialization{}, errs.ErrPreconditionFailed
 	}
+	if slot.ActiveWorkspaceMaterializationID != nil {
+		return entity.WorkspaceMaterialization{}, errs.ErrConflict
+	}
 	now := commandTime(input.Meta, s.clock.Now())
 	previousSlotVersion := slot.Version
+	materialization := newWorkspaceMaterialization(s.ids.New(), slot.ID, input.WorkspacePolicy, now)
 	slot.Status = enum.SlotStatusMaterializing
+	slot.ActiveWorkspaceMaterializationID = nullableUUID(materialization.ID)
 	slot.Fingerprint = strings.TrimSpace(input.WorkspacePolicy.PolicyDigest)
 	slot.UpdatedAt = now
 	slot.Version++
-	materialization := newWorkspaceMaterialization(s.ids.New(), slot.ID, input.WorkspacePolicy, now)
 	event, err := s.workspaceEvent(eventWorkspaceStarted, slot, materialization, now)
 	if err != nil {
 		return entity.WorkspaceMaterialization{}, err
@@ -157,6 +166,9 @@ func (s *Service) ReportWorkspaceMaterializationProgress(ctx context.Context, in
 		return entity.WorkspaceMaterialization{}, err
 	}
 	if materialization.Version != expected || terminalWorkspaceStatus(materialization.Status) {
+		return entity.WorkspaceMaterialization{}, errs.ErrConflict
+	}
+	if !activeWorkspaceMaterialization(slot, materialization.ID) || slot.Status != enum.SlotStatusMaterializing {
 		return entity.WorkspaceMaterialization{}, errs.ErrConflict
 	}
 	now := commandTime(input.Meta, s.clock.Now())
@@ -402,20 +414,35 @@ func updateSlotAfterWorkspaceProgress(slot *entity.Slot, materialization entity.
 	switch materialization.Status {
 	case enum.WorkspaceMaterializationStatusCompleted:
 		slot.Status = enum.SlotStatusReady
+		slot.ActiveWorkspaceMaterializationID = nil
 		slot.Fingerprint = materialization.Fingerprint
 		slot.LastErrorCode = ""
 		slot.LastErrorMessage = ""
 	case enum.WorkspaceMaterializationStatusFailed:
 		slot.Status = enum.SlotStatusFailed
+		slot.ActiveWorkspaceMaterializationID = nil
 		slot.LastErrorCode = materialization.LastErrorCode
 		slot.LastErrorMessage = materialization.LastErrorMessage
 	case enum.WorkspaceMaterializationStatusCancelled:
 		slot.Status = enum.SlotStatusCleanupPending
+		slot.ActiveWorkspaceMaterializationID = nil
 	default:
 		slot.Status = enum.SlotStatusMaterializing
+		slot.ActiveWorkspaceMaterializationID = nullableUUID(materialization.ID)
 	}
 	slot.UpdatedAt = now
 	slot.Version++
+}
+
+func validateWorkspacePolicyProject(slot entity.Slot, projectID uuid.UUID) error {
+	if slot.ProjectID == nil || *slot.ProjectID != projectID {
+		return errs.ErrConflict
+	}
+	return nil
+}
+
+func activeWorkspaceMaterialization(slot entity.Slot, materializationID uuid.UUID) bool {
+	return slot.ActiveWorkspaceMaterializationID != nil && *slot.ActiveWorkspaceMaterializationID == materializationID
 }
 
 func validateWorkspaceReplayScope(materialization entity.WorkspaceMaterialization, slotID uuid.UUID, policyDigest string) error {

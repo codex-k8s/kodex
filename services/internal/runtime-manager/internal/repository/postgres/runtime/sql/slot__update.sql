@@ -10,6 +10,7 @@ SET
     agent_run_id = @agent_run_id::uuid,
     project_id = @project_id::uuid,
     repository_ids_json = @repository_ids_json::jsonb,
+    active_workspace_materialization_id = @active_workspace_materialization_id::uuid,
     runtime_profile = @runtime_profile,
     fingerprint = @fingerprint,
     lease_owner = @lease_owner,

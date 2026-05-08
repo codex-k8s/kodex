@@ -46,8 +46,38 @@ func TestStartWorkspaceMaterializationPersistsSourcesAndMarksSlotMaterializing(t
 	if updatedSlot.Status != enum.SlotStatusMaterializing || updatedSlot.Fingerprint != "workspace-policy-sha" {
 		t.Fatalf("slot after materialization = %#v, want materializing with policy digest", updatedSlot)
 	}
+	if updatedSlot.ActiveWorkspaceMaterializationID == nil || *updatedSlot.ActiveWorkspaceMaterializationID != materialization.ID {
+		t.Fatalf("active materialization = %v, want %s", updatedSlot.ActiveWorkspaceMaterializationID, materialization.ID)
+	}
 	if len(repo.events) < 2 || repo.events[len(repo.events)-1].EventType != eventWorkspaceStarted {
 		t.Fatalf("last event = %#v, want workspace started", repo.events)
+	}
+}
+
+func TestStartWorkspaceMaterializationRejectsCrossProjectPolicy(t *testing.T) {
+	t.Parallel()
+
+	svc, _ := newTestService()
+	projectID := mustUUID("00000000-0000-0000-0000-000000000037")
+	otherProjectID := mustUUID("00000000-0000-0000-0000-000000000038")
+	slot, err := svc.ReserveSlot(context.Background(), ReserveSlotInput{
+		RuntimeProfile:        "go-backend",
+		RuntimeMode:           enum.RuntimeModeFullEnv,
+		WorkspacePolicyDigest: "policy-before",
+		ProjectID:             &projectID,
+		Meta:                  commandMeta(mustUUID("00000000-0000-0000-0000-000000000312"), 0),
+	})
+	if err != nil {
+		t.Fatalf("ReserveSlot(): %v", err)
+	}
+
+	_, err = svc.StartWorkspaceMaterialization(context.Background(), StartWorkspaceMaterializationInput{
+		SlotID:          slot.ID,
+		WorkspacePolicy: testWorkspacePolicy(otherProjectID),
+		Meta:            commandMeta(mustUUID("00000000-0000-0000-0000-000000000313"), 0),
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("StartWorkspaceMaterialization() err = %v, want conflict", err)
 	}
 }
 
@@ -90,6 +120,9 @@ func TestReportWorkspaceMaterializationCompletedMarksSlotReady(t *testing.T) {
 	updatedSlot := repo.slots[slot.ID]
 	if updatedSlot.Status != enum.SlotStatusReady || updatedSlot.Fingerprint != "materialized-fingerprint" {
 		t.Fatalf("slot after complete = %#v, want ready with materialization fingerprint", updatedSlot)
+	}
+	if updatedSlot.ActiveWorkspaceMaterializationID != nil {
+		t.Fatalf("active materialization = %v, want nil after terminal progress", updatedSlot.ActiveWorkspaceMaterializationID)
 	}
 	if repo.events[len(repo.events)-1].EventType != eventWorkspaceCompleted {
 		t.Fatalf("last event = %s, want workspace completed", repo.events[len(repo.events)-1].EventType)
@@ -136,6 +169,52 @@ func TestReportWorkspaceMaterializationFailureIsManagedRuntimeState(t *testing.T
 	updatedSlot := repo.slots[slot.ID]
 	if updatedSlot.Status != enum.SlotStatusFailed || updatedSlot.LastErrorCode != failed.LastErrorCode {
 		t.Fatalf("slot after failure = %#v, want failed with managed error", updatedSlot)
+	}
+	if updatedSlot.ActiveWorkspaceMaterializationID != nil {
+		t.Fatalf("active materialization = %v, want nil after failure", updatedSlot.ActiveWorkspaceMaterializationID)
+	}
+}
+
+func TestReportWorkspaceMaterializationRejectsInactiveAttempt(t *testing.T) {
+	t.Parallel()
+
+	svc, repo := newTestService()
+	projectID := mustUUID("00000000-0000-0000-0000-000000000039")
+	slot, err := svc.ReserveSlot(context.Background(), ReserveSlotInput{
+		RuntimeProfile:        "go-backend",
+		RuntimeMode:           enum.RuntimeModeFullEnv,
+		WorkspacePolicyDigest: "policy-before",
+		ProjectID:             &projectID,
+		Meta:                  commandMeta(mustUUID("00000000-0000-0000-0000-000000000314"), 0),
+	})
+	if err != nil {
+		t.Fatalf("ReserveSlot(): %v", err)
+	}
+	materialization, err := svc.StartWorkspaceMaterialization(context.Background(), StartWorkspaceMaterializationInput{
+		SlotID:          slot.ID,
+		WorkspacePolicy: testWorkspacePolicy(projectID),
+		Meta:            commandMeta(mustUUID("00000000-0000-0000-0000-000000000315"), 0),
+	})
+	if err != nil {
+		t.Fatalf("StartWorkspaceMaterialization(): %v", err)
+	}
+	newAttemptID := mustUUID("00000000-0000-0000-0000-000000000040")
+	staleGuardSlot := repo.slots[slot.ID]
+	staleGuardSlot.ActiveWorkspaceMaterializationID = &newAttemptID
+	staleGuardSlot.Version++
+	repo.slots[slot.ID] = staleGuardSlot
+
+	_, err = svc.ReportWorkspaceMaterializationProgress(context.Background(), ReportWorkspaceMaterializationProgressInput{
+		WorkspaceMaterializationID: materialization.ID,
+		Status:                     enum.WorkspaceMaterializationStatusCompleted,
+		Fingerprint:                "stale-fingerprint",
+		Meta:                       commandMeta(mustUUID("00000000-0000-0000-0000-000000000316"), materialization.Version),
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("ReportWorkspaceMaterializationProgress() err = %v, want conflict", err)
+	}
+	if repo.slots[slot.ID].Fingerprint == "stale-fingerprint" {
+		t.Fatalf("slot fingerprint was overwritten by stale materialization")
 	}
 }
 
@@ -211,6 +290,9 @@ func TestPrepareRuntimeCreatesSlotAndWorkspaceAttempt(t *testing.T) {
 	}
 	if result.WorkspaceMaterialization.SlotID != result.Slot.ID {
 		t.Fatalf("materialization slot id = %s, want %s", result.WorkspaceMaterialization.SlotID, result.Slot.ID)
+	}
+	if result.Slot.ActiveWorkspaceMaterializationID == nil || *result.Slot.ActiveWorkspaceMaterializationID != result.WorkspaceMaterialization.ID {
+		t.Fatalf("active materialization = %v, want %s", result.Slot.ActiveWorkspaceMaterializationID, result.WorkspaceMaterialization.ID)
 	}
 	if result.RuntimeContext.WorkspaceRoot != "/workspace" {
 		t.Fatalf("workspace root = %s, want /workspace", result.RuntimeContext.WorkspaceRoot)

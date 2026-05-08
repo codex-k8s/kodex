@@ -11,6 +11,7 @@ SELECT
     agent_run_id,
     project_id,
     repository_ids_json,
+    active_workspace_materialization_id,
     runtime_profile,
     fingerprint,
     lease_owner,

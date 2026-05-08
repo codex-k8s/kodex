@@ -148,6 +148,7 @@ func (s *Service) ReleaseSlot(ctx context.Context, input ReleaseSlotInput) (enti
 	now := commandTime(input.Meta, s.clock.Now())
 	previousStatus := string(slot.Status)
 	slot.Status = enum.SlotStatusCleanupPending
+	slot.ActiveWorkspaceMaterializationID = nil
 	slot.LeaseOwner = ""
 	slot.LeaseUntil = nil
 	slot.UpdatedAt = now
@@ -191,6 +192,7 @@ func (s *Service) MarkSlotFailed(ctx context.Context, input MarkSlotFailedInput)
 	now := commandTime(input.Meta, s.clock.Now())
 	previousStatus := string(slot.Status)
 	slot.Status = enum.SlotStatusFailed
+	slot.ActiveWorkspaceMaterializationID = nil
 	slot.LastErrorCode = strings.TrimSpace(input.ErrorCode)
 	slot.LastErrorMessage = strings.TrimSpace(input.ErrorMessage)
 	slot.UpdatedAt = now

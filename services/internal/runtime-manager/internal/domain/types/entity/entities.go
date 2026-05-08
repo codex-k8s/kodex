@@ -22,22 +22,23 @@ type Base struct {
 // Slot is an isolated runtime environment.
 type Slot struct {
 	Base
-	SlotKey          string
-	Status           enum.SlotStatus
-	RuntimeMode      enum.RuntimeMode
-	IsPrewarmed      bool
-	FleetScopeID     *uuid.UUID
-	ClusterID        *uuid.UUID
-	NamespaceName    string
-	AgentRunID       *uuid.UUID
-	ProjectID        *uuid.UUID
-	RepositoryIDs    []uuid.UUID
-	RuntimeProfile   string
-	Fingerprint      string
-	LeaseOwner       string
-	LeaseUntil       *time.Time
-	LastErrorCode    string
-	LastErrorMessage string
+	SlotKey                          string
+	Status                           enum.SlotStatus
+	RuntimeMode                      enum.RuntimeMode
+	IsPrewarmed                      bool
+	FleetScopeID                     *uuid.UUID
+	ClusterID                        *uuid.UUID
+	NamespaceName                    string
+	AgentRunID                       *uuid.UUID
+	ProjectID                        *uuid.UUID
+	RepositoryIDs                    []uuid.UUID
+	ActiveWorkspaceMaterializationID *uuid.UUID
+	RuntimeProfile                   string
+	Fingerprint                      string
+	LeaseOwner                       string
+	LeaseUntil                       *time.Time
+	LastErrorCode                    string
+	LastErrorMessage                 string
 }
 
 // WorkspaceMaterialization is one attempt to prepare workspace sources.
