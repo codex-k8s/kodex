@@ -398,6 +398,48 @@ func TestSyncAvailablePackagesRejectsManifestDigestMismatch(t *testing.T) {
 	}
 }
 
+func TestSyncAvailablePackagesRejectsUnknownManifestAccessAction(t *testing.T) {
+	t.Parallel()
+
+	sourceID := uuid.New()
+	repository := &fakeRepository{commandResultErr: errs.ErrNotFound}
+	service := NewWithConfig(repository, fixedClock{}, newSequenceIDs(6), Config{Authorizer: &recordingAuthorizer{}})
+	manifestPayload := bytes.Replace(testCatalogManifestPayload(), []byte(`"required_access_actions": ["package.installation.read"]`), []byte(`"required_access_actions": ["package.installation.reed"]`), 1)
+
+	_, err := service.SyncAvailablePackages(context.Background(), SyncAvailablePackagesInput{
+		SourceID: sourceID,
+		Snapshot: CatalogSnapshot{Packages: []CatalogPackageSnapshot{{
+			Slug:             "telegram-approver",
+			Kind:             enum.PackageKindPlugin,
+			PublisherRef:     "codex-k8s",
+			DisplayName:      []value.LocalizedText{{Locale: "ru", Text: "Telegram-апрувер"}},
+			Description:      []value.LocalizedText{{Locale: "ru", Text: "Запрашивает согласования через Telegram"}},
+			CommercialStatus: enum.PackageCommercialStatusFree,
+			TrustStatus:      enum.PackageTrustStatusVerified,
+			Status:           enum.PackageStatusAvailable,
+			Versions: []CatalogVersionSnapshot{{
+				VersionLabel: "1.0.0",
+				SourceRef: value.SourceRef{
+					Kind: enum.PackageVersionSourceRefKindGitTag,
+					Ref:  "v1.0.0",
+				},
+				ManifestDigest:     testManifestDigest(t, manifestPayload),
+				ManifestSchema:     1,
+				ManifestPayload:    manifestPayload,
+				VerificationStatus: enum.PackageVerificationStatusUnverified,
+				ReleaseStatus:      enum.PackageReleaseStatusActive,
+			}},
+		}}},
+		Meta: commandMeta(),
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("SyncAvailablePackages() err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+	if repository.syncCatalogCalls != 0 || repository.getSourceCalls != 0 {
+		t.Fatalf("repository calls = sync:%d getSource:%d, want validation before reads and mutations", repository.syncCatalogCalls, repository.getSourceCalls)
+	}
+}
+
 func testCatalogManifestPayload() []byte {
 	return []byte(`{
 		"identity": {

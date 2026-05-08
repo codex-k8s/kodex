@@ -1,11 +1,15 @@
 // Package accesscatalog contains shared system access action keys.
 package accesscatalog
 
+import "strings"
+
 // ActionDescriptor describes one code-owned system access action.
 type ActionDescriptor struct {
 	Key          string
 	ResourceType string
 }
+
+var systemActionsByKey = actionDescriptorCatalog(SystemActions())
 
 const (
 	ScopeGlobal       = "global"
@@ -145,4 +149,28 @@ func RuntimeManagerActions() []ActionDescriptor {
 		{Key: ActionRuntimeSlotRead, ResourceType: ResourceRuntimeSlot},
 		{Key: ActionRuntimeSlotList, ResourceType: ResourceRuntimeSlot},
 	}
+}
+
+// SystemActions returns all shared code-owned system actions.
+func SystemActions() []ActionDescriptor {
+	actions := make([]ActionDescriptor, 0, len(ProjectCatalogActions())+len(PackageHubActions())+len(RuntimeManagerActions()))
+	actions = append(actions, ProjectCatalogActions()...)
+	actions = append(actions, PackageHubActions()...)
+	actions = append(actions, RuntimeManagerActions()...)
+	return actions
+}
+
+// SystemActionByKey returns a shared code-owned system action descriptor by key.
+func SystemActionByKey(key string) (ActionDescriptor, bool) {
+	key = strings.TrimSpace(key)
+	action, ok := systemActionsByKey[key]
+	return action, ok
+}
+
+func actionDescriptorCatalog(actions []ActionDescriptor) map[string]ActionDescriptor {
+	catalog := make(map[string]ActionDescriptor, len(actions))
+	for _, action := range actions {
+		catalog[action.Key] = action
+	}
+	return catalog
 }

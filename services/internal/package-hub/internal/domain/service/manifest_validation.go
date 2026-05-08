@@ -9,6 +9,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/codex-k8s/kodex/libs/go/accesscatalog"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/value"
@@ -101,7 +102,7 @@ func validatePackageManifestDocument(parent CatalogPackageSnapshot, version Cata
 	if err := requireStringList(document.RequiredPlatformAPIs, false); err != nil {
 		return err
 	}
-	if err := requireStringList(document.RequiredAccessActions, false); err != nil {
+	if err := validateRequiredAccessActions(document.RequiredAccessActions); err != nil {
 		return err
 	}
 	if err := validatePackageManifestSecrets(document.Secrets); err != nil {
@@ -149,6 +150,18 @@ func validatePackageManifestSource(version CatalogVersionSnapshot, source *packa
 		return errs.ErrInvalidArgument
 	}
 	return requireText(source.Digest)
+}
+
+func validateRequiredAccessActions(actions []string) error {
+	if err := requireStringList(actions, false); err != nil {
+		return err
+	}
+	for _, action := range actions {
+		if _, ok := accesscatalog.SystemActionByKey(action); !ok {
+			return errs.ErrInvalidArgument
+		}
+	}
+	return nil
 }
 
 func validatePackageManifestSecrets(secrets []value.PackageSecretField) error {
@@ -228,7 +241,7 @@ func requireStringList(items []string, requireNonEmpty bool) error {
 	seen := make(map[string]struct{}, len(items))
 	for _, item := range items {
 		trimmed := strings.TrimSpace(item)
-		if trimmed == "" {
+		if trimmed == "" || item != trimmed {
 			return errs.ErrInvalidArgument
 		}
 		if _, exists := seen[trimmed]; exists {

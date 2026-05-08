@@ -86,7 +86,7 @@ approvals:
 | Область | Статус | Примечание |
 |---|---|---|
 | Нормализованный снимок каталога | готово | `SyncAvailablePackages` принимает packages, versions и JSON-содержимое manifest, подготовленные адаптером источника. |
-| Проверка manifest | готово | Сервис проверяет обязательные блоки manifest, локализованные метаданные, права, секреты, runtime-требования, уникальность slug/version и соответствие `manifest_digest` компактному JSON manifest. |
+| Проверка manifest | готово | Сервис проверяет обязательные блоки manifest, локализованные метаданные, права из `libs/go/accesscatalog`, секреты, runtime-требования, уникальность slug/version и соответствие `manifest_digest` компактному JSON manifest. |
 | Запись каталога | готово | Источник, пакеты, версии, новые снимки manifest, command result и outbox пишутся в одной PostgreSQL-транзакции. |
 | События | готово | Публикуются `package.catalog.synced`, `package.package.discovered/updated`, `package.version.discovered/updated`. |
 | Получение из внешнего store/provider | следующий срез интеграции | Реальный обход Git/store/provider остаётся вне `package-hub`: внешний адаптер готовит нормализованный снимок и вызывает gRPC-команду. |
