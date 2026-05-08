@@ -3,8 +3,10 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -137,6 +139,111 @@ func TestJobLeaseTokenRequiredForWorkerMutations(t *testing.T) {
 	})
 	if !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("CompleteJob() err = %v, want conflict for wrong token", err)
+	}
+}
+
+func TestClaimRunnableJobReplayDoesNotClaimAnotherJob(t *testing.T) {
+	t.Parallel()
+
+	svc, repo := newTestService()
+	for index, idText := range []string{"00000000-0000-0000-0000-000000000520", "00000000-0000-0000-0000-000000000521"} {
+		_, err := svc.CreateJob(context.Background(), CreateJobInput{
+			JobType:      enum.JobTypeBuild,
+			Priority:     enum.JobPriorityNormal,
+			JobInputJSON: []byte(`{"target":"api"}`),
+			Meta:         commandMeta(mustUUID(idText), 0),
+		})
+		if err != nil {
+			t.Fatalf("CreateJob(%d): %v", index, err)
+		}
+	}
+	meta := commandMeta(mustUUID("00000000-0000-0000-0000-000000000522"), 0)
+	claim, err := svc.ClaimRunnableJob(context.Background(), ClaimRunnableJobInput{
+		JobTypes:   []enum.JobType{enum.JobTypeBuild},
+		LeaseOwner: "worker/runtime-claim",
+		LeaseUntil: testNow.Add(10 * time.Minute),
+		Meta:       meta,
+	})
+	if err != nil {
+		t.Fatalf("ClaimRunnableJob(): %v", err)
+	}
+	_, err = svc.ClaimRunnableJob(context.Background(), ClaimRunnableJobInput{
+		JobTypes:   []enum.JobType{enum.JobTypeBuild},
+		LeaseOwner: "worker/runtime-claim",
+		LeaseUntil: testNow.Add(10 * time.Minute),
+		Meta:       meta,
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("replay ClaimRunnableJob() err = %v, want conflict", err)
+	}
+	pending := 0
+	for _, job := range repo.jobs {
+		if job.ID != claim.Job.ID && job.Status == enum.JobStatusPending {
+			pending++
+		}
+	}
+	if pending != 1 {
+		t.Fatalf("pending jobs after claim replay = %d, want second job untouched", pending)
+	}
+}
+
+func TestJobInputJSONKeepsLargeNumbers(t *testing.T) {
+	t.Parallel()
+
+	svc, _ := newTestService()
+	payload := []byte(`{"policy_version":1234567890123456789}`)
+	job, err := svc.CreateJob(context.Background(), CreateJobInput{
+		JobType:      enum.JobTypeHousekeeping,
+		Priority:     enum.JobPriorityNormal,
+		JobInputJSON: payload,
+		Meta:         commandMeta(mustUUID("00000000-0000-0000-0000-000000000523"), 0),
+	})
+	if err != nil {
+		t.Fatalf("CreateJob(): %v", err)
+	}
+	if string(job.JobInputJSON) != string(payload) {
+		t.Fatalf("job input json = %s, want %s", job.JobInputJSON, payload)
+	}
+}
+
+func TestShortLogTailKeepsValidUTF8(t *testing.T) {
+	t.Parallel()
+
+	svc, _ := newTestService()
+	job, err := svc.CreateJob(context.Background(), CreateJobInput{
+		JobType:      enum.JobTypeBuild,
+		Priority:     enum.JobPriorityNormal,
+		JobInputJSON: []byte(`{"target":"api"}`),
+		Meta:         commandMeta(mustUUID("00000000-0000-0000-0000-000000000524"), 0),
+	})
+	if err != nil {
+		t.Fatalf("CreateJob(): %v", err)
+	}
+	claim, err := svc.ClaimRunnableJob(context.Background(), ClaimRunnableJobInput{
+		LeaseOwner: "worker/runtime-utf8",
+		LeaseUntil: testNow.Add(10 * time.Minute),
+		Meta:       commandMeta(mustUUID("00000000-0000-0000-0000-000000000525"), 0),
+	})
+	if err != nil {
+		t.Fatalf("ClaimRunnableJob(): %v", err)
+	}
+	logTail := strings.Repeat("ошибка-", maxShortLogTailBytes)
+	progress, err := svc.ReportJobStepProgress(context.Background(), ReportJobStepProgressInput{
+		JobID:        job.ID,
+		LeaseToken:   claim.LeaseToken,
+		StepKey:      "utf8-log",
+		Status:       enum.JobStepStatusRunning,
+		ShortLogTail: logTail,
+		Meta:         commandMeta(mustUUID("00000000-0000-0000-0000-000000000526"), claim.Job.Version),
+	})
+	if err != nil {
+		t.Fatalf("ReportJobStepProgress(): %v", err)
+	}
+	if len(progress.ShortLogTail) > maxShortLogTailBytes || !utf8.ValidString(progress.ShortLogTail) {
+		t.Fatalf("job short log tail is invalid: len=%d valid=%v", len(progress.ShortLogTail), utf8.ValidString(progress.ShortLogTail))
+	}
+	if len(progress.Steps) != 1 || len(progress.Steps[0].ShortLogTail) > maxShortLogTailBytes || !utf8.ValidString(progress.Steps[0].ShortLogTail) {
+		t.Fatalf("step short log tail is invalid: steps=%#v", progress.Steps)
 	}
 }
 

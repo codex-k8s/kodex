@@ -525,7 +525,7 @@ func (r *fakeRepository) CreateJob(_ context.Context, job entity.Job, event enti
 	return nil
 }
 
-func (r *fakeRepository) ClaimRunnableJob(_ context.Context, filter query.JobClaimFilter, eventFactory runtimerepo.JobEventFactory) (entity.Job, error) {
+func (r *fakeRepository) ClaimRunnableJob(_ context.Context, filter query.JobClaimFilter, recordFactory runtimerepo.JobClaimRecordFactory) (entity.Job, error) {
 	for id, job := range r.jobs {
 		if !runnableFakeJob(job, filter) {
 			continue
@@ -540,12 +540,13 @@ func (r *fakeRepository) ClaimRunnableJob(_ context.Context, filter query.JobCla
 		}
 		job.UpdatedAt = filter.Now
 		job.Version++
-		event, err := eventFactory(job)
+		event, result, err := recordFactory(job)
 		if err != nil {
 			return entity.Job{}, err
 		}
 		r.jobs[id] = job
 		r.events = append(r.events, event)
+		r.results[result.Key] = result
 		return job, nil
 	}
 	return entity.Job{}, errs.ErrNotFound

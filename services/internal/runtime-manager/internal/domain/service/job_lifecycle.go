@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -83,6 +84,12 @@ func (s *Service) ClaimRunnableJob(ctx context.Context, input ClaimRunnableJobIn
 	if err := s.authorizeCommand(ctx, input.Meta, actionJobClaim, jobResource(uuid.Nil, nil)); err != nil {
 		return ClaimRunnableJobResult{}, err
 	}
+	if _, replayed, err := s.findCommandResult(ctx, input.Meta, operationClaimJob, aggregateTypeJob); err != nil || replayed {
+		if err == nil {
+			err = errs.ErrConflict
+		}
+		return ClaimRunnableJobResult{}, err
+	}
 	leaseToken := s.ids.New().String()
 	now := commandTime(input.Meta, s.clock.Now())
 	filter := query.JobClaimFilter{
@@ -93,10 +100,18 @@ func (s *Service) ClaimRunnableJob(ctx context.Context, input ClaimRunnableJobIn
 		LeaseUntil:     input.LeaseUntil,
 		Now:            now,
 	}
-	eventFactory := func(job entity.Job) (entity.OutboxEvent, error) {
-		return s.jobEvent(eventJobStarted, job, now)
+	recordFactory := func(job entity.Job) (entity.OutboxEvent, entity.CommandResult, error) {
+		event, err := s.jobEvent(eventJobStarted, job, now)
+		if err != nil {
+			return entity.OutboxEvent{}, entity.CommandResult{}, err
+		}
+		result, err := commandResult(input.Meta, operationClaimJob, aggregateTypeJob, job.ID, nil, now)
+		if err != nil {
+			return entity.OutboxEvent{}, entity.CommandResult{}, err
+		}
+		return event, result, nil
 	}
-	job, err := s.repository.ClaimRunnableJob(ctx, filter, eventFactory)
+	job, err := s.repository.ClaimRunnableJob(ctx, filter, recordFactory)
 	if err != nil {
 		return ClaimRunnableJobResult{}, err
 	}
@@ -583,18 +598,19 @@ func validateRuntimeArtifactRefInput(input RuntimeArtifactRefInput) error {
 }
 
 func normalizedJSONObject(payload []byte) ([]byte, error) {
-	if len(payload) == 0 {
+	trimmed := bytes.TrimSpace(payload)
+	if len(trimmed) == 0 {
 		return []byte(`{}`), nil
 	}
-	var parsed map[string]any
-	if err := json.Unmarshal(payload, &parsed); err != nil {
+	var parsed map[string]json.RawMessage
+	if err := json.Unmarshal(trimmed, &parsed); err != nil {
 		return nil, errs.ErrInvalidArgument
 	}
-	normalized, err := json.Marshal(parsed)
-	if err != nil {
-		return nil, err
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, trimmed); err != nil {
+		return nil, errs.ErrInvalidArgument
 	}
-	return normalized, nil
+	return compact.Bytes(), nil
 }
 
 func normalizedMetadataJSON(payload []byte) []byte {
@@ -616,9 +632,17 @@ func requestedBy(actor value.Actor) *uuid.UUID {
 func boundedLogTail(text string) string {
 	text = strings.TrimSpace(text)
 	if len(text) <= maxShortLogTailBytes {
-		return text
+		return strings.ToValidUTF8(text, "")
 	}
-	return text[len(text)-maxShortLogTailBytes:]
+	tail := text[len(text)-maxShortLogTailBytes:]
+	for len(tail) > 0 && !utf8.ValidString(tail) {
+		_, size := utf8.DecodeRuneInString(tail)
+		if size < 1 {
+			return ""
+		}
+		tail = tail[size:]
+	}
+	return strings.ToValidUTF8(tail, "")
 }
 
 func leaseTokenHash(token string) string {

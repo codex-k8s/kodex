@@ -45,7 +45,7 @@ const (
 	ResourceRuntimeSlot            = "runtime_slot"
 	ResourceRuntimeWorkspace       = "runtime_workspace_materialization"
 	ResourceRuntimeJob             = "runtime_job"
-	ResourceRuntimeArtifactRef      = "runtime_artifact_ref"
+	ResourceRuntimeArtifactRef     = "runtime_artifact_ref"
 )
 
 const (

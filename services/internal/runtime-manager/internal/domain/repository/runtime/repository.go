@@ -37,8 +37,8 @@ type Repository interface {
 	ListWorkspaceMaterializations(ctx context.Context, filter query.WorkspaceMaterializationFilter) ([]entity.WorkspaceMaterialization, query.PageResult, error)
 	// CreateJob stores a new platform job, its event and command result atomically.
 	CreateJob(ctx context.Context, job entity.Job, event entity.OutboxEvent, result entity.CommandResult) error
-	// ClaimRunnableJob atomically leases one runnable job and stores its start event.
-	ClaimRunnableJob(ctx context.Context, filter query.JobClaimFilter, eventFactory JobEventFactory) (entity.Job, error)
+	// ClaimRunnableJob atomically leases one runnable job and stores its start event and command result.
+	ClaimRunnableJob(ctx context.Context, filter query.JobClaimFilter, recordFactory JobClaimRecordFactory) (entity.Job, error)
 	// UpdateJob stores a job mutation, changed steps, artifact refs, optional event and command result atomically.
 	UpdateJob(ctx context.Context, job entity.Job, previousVersion int64, steps []entity.JobStep, refs []entity.RuntimeArtifactRef, event *entity.OutboxEvent, result entity.CommandResult) error
 	// GetJob returns one platform job by id.
@@ -71,5 +71,5 @@ type IDGenerator interface {
 	New() uuid.UUID
 }
 
-// JobEventFactory builds the started event for the concrete job claimed inside repository transaction.
-type JobEventFactory func(entity.Job) (entity.OutboxEvent, error)
+// JobClaimRecordFactory builds the event and command result for the concrete job claimed inside repository transaction.
+type JobClaimRecordFactory func(entity.Job) (entity.OutboxEvent, entity.CommandResult, error)

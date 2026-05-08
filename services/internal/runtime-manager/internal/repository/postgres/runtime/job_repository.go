@@ -33,23 +33,25 @@ func (r *Repository) CreateJob(ctx context.Context, job entity.Job, event entity
 	return wrapError(operationCreateJob, err)
 }
 
-// ClaimRunnableJob atomically leases one runnable job and stores its start event.
-func (r *Repository) ClaimRunnableJob(ctx context.Context, filter query.JobClaimFilter, eventFactory runtimerepo.JobEventFactory) (entity.Job, error) {
+// ClaimRunnableJob atomically leases one runnable job and stores its start event and command result.
+func (r *Repository) ClaimRunnableJob(ctx context.Context, filter query.JobClaimFilter, recordFactory runtimerepo.JobClaimRecordFactory) (entity.Job, error) {
 	var claimed entity.Job
 	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
 		job, err := queryOne(ctx, tx, queryJobClaim, jobClaimArgs(filter), scanJob)
 		if err != nil {
 			return err
 		}
-		event, err := eventFactory(job)
+		event, result, err := recordFactory(job)
 		if err != nil {
 			return err
 		}
-		if err := postgreslib.RunMutation(ctx, tx, errs.ErrConflict, postgreslib.Mutation{
-			Query:           queryOutboxEventInsert,
-			Args:            outboxEventArgs(event),
-			RequireAffected: true,
-		}); err != nil {
+		if err := postgreslib.RunDistinctMutations(
+			ctx,
+			tx,
+			errs.ErrConflict,
+			postgreslib.Mutation{Query: queryOutboxEventInsert, Args: outboxEventArgs(event), RequireAffected: true},
+			postgreslib.Mutation{Query: queryCommandResultInsert, Args: commandResultArgs(result), RequireAffected: true},
+		); err != nil {
 			return err
 		}
 		claimed = job

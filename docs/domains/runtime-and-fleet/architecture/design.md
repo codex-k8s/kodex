@@ -110,6 +110,7 @@ sequenceDiagram
 
 `worker` может выполнять техническую работу, но не владеет конечным состоянием job.
 Если lease истёк и задание забрал другой исполнитель, старый `lease_token` больше не принимается.
+Повторный `ClaimRunnableJob` с тем же `command_id` или `idempotency_key` не забирает следующую job: runtime-manager находит сохранённый `RuntimeManagerCommandResult` и возвращает conflict, так как одноразовый `lease_token` не хранится в открытом виде и не переотдаётся при replay.
 
 ### Cleanup и retention
 
