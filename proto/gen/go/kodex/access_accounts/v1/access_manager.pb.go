@@ -5057,8 +5057,10 @@ type ResolveExternalAccountUsageResponse struct {
 	SecretStoreRef string `protobuf:"bytes,5,opt,name=secret_store_ref,json=secretStoreRef,proto3" json:"secret_store_ref,omitempty"`
 	// allowed_action_keys are actions allowed for this binding.
 	AllowedActionKeys []string `protobuf:"bytes,6,rep,name=allowed_action_keys,json=allowedActionKeys,proto3" json:"allowed_action_keys,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// provider_slug is the stable external provider slug, for example github.
+	ProviderSlug  string `protobuf:"bytes,7,opt,name=provider_slug,json=providerSlug,proto3" json:"provider_slug,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ResolveExternalAccountUsageResponse) Reset() {
@@ -5131,6 +5133,13 @@ func (x *ResolveExternalAccountUsageResponse) GetAllowedActionKeys() []string {
 		return x.AllowedActionKeys
 	}
 	return nil
+}
+
+func (x *ResolveExternalAccountUsageResponse) GetProviderSlug() string {
+	if x != nil {
+		return x.ProviderSlug
+	}
+	return ""
 }
 
 // ListMembershipGraphRequest returns graph membership around a subject.
@@ -5897,7 +5906,7 @@ const file_kodex_access_accounts_v1_access_manager_proto_rawDesc = "" +
 	"\n" +
 	"action_key\x18\x02 \x01(\tR\tactionKey\x12C\n" +
 	"\vusage_scope\x18\x03 \x01(\v2\".kodex.access_accounts.v1.ScopeRefR\n" +
-	"usageScope\"\xa0\x02\n" +
+	"usageScope\"\xc5\x02\n" +
 	"#ResolveExternalAccountUsageResponse\x12.\n" +
 	"\x13external_account_id\x18\x01 \x01(\tR\x11externalAccountId\x12\x1f\n" +
 	"\vprovider_id\x18\x02 \x01(\tR\n" +
@@ -5905,7 +5914,8 @@ const file_kodex_access_accounts_v1_access_manager_proto_rawDesc = "" +
 	"\rsecret_ref_id\x18\x03 \x01(\tR\vsecretRefId\x12*\n" +
 	"\x11secret_store_type\x18\x04 \x01(\tR\x0fsecretStoreType\x12(\n" +
 	"\x10secret_store_ref\x18\x05 \x01(\tR\x0esecretStoreRef\x12.\n" +
-	"\x13allowed_action_keys\x18\x06 \x03(\tR\x11allowedActionKeys\"\xc2\x01\n" +
+	"\x13allowed_action_keys\x18\x06 \x03(\tR\x11allowedActionKeys\x12#\n" +
+	"\rprovider_slug\x18\a \x01(\tR\fproviderSlug\"\xc2\x01\n" +
 	"\x1aListMembershipGraphRequest\x12>\n" +
 	"\asubject\x18\x01 \x01(\v2$.kodex.access_accounts.v1.SubjectRefR\asubject\x12)\n" +
 	"\x10include_inactive\x18\x02 \x01(\bR\x0fincludeInactive\x129\n" +

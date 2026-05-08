@@ -19,7 +19,7 @@ help:
 lint: lint-go dupl-go
 
 lint-go:
-	@packages="$$(for root in services cmd; do \
+	@packages="$$(for root in services cmd libs; do \
 		if [ -d "$$root" ]; then printf './%s/... ' "$$root"; fi; \
 	done)"; \
 	if [ -z "$$packages" ]; then \
@@ -59,7 +59,7 @@ dupl-go:
 	rm -f "$$tmp" "$$filtered" "$$candidates"
 
 test-go:
-	@packages="$$(for root in services cmd proto/gen/go; do \
+	@packages="$$(for root in services cmd proto/gen/go libs; do \
 		if [ -d "$$root" ]; then go list ./$$root/...; fi; \
 	done)"; \
 	if [ -z "$$packages" ]; then \

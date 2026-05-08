@@ -534,9 +534,15 @@ func (f *fakeAccessService) ListPendingAccess(ctx context.Context, input accesss
 }
 
 func (f *fakeAccessService) ResolveExternalAccountUsage(context.Context, accessservice.ResolveExternalAccountUsageInput) (accessservice.ResolveExternalAccountUsageResult, error) {
+	providerID := uuid.New()
 	return accessservice.ResolveExternalAccountUsageResult{
 		ExternalAccount: entity.ExternalAccount{
-			Base: entity.Base{ID: uuid.New(), CreatedAt: time.Now(), UpdatedAt: time.Now()},
+			Base:               entity.Base{ID: uuid.New(), CreatedAt: time.Now(), UpdatedAt: time.Now()},
+			ExternalProviderID: providerID,
+		},
+		ExternalProvider: entity.ExternalProvider{
+			Base: entity.Base{ID: providerID, CreatedAt: time.Now(), UpdatedAt: time.Now()},
+			Slug: "github",
 		},
 	}, nil
 }

@@ -31,3 +31,15 @@ func TestSystemActionByKey(t *testing.T) {
 		t.Fatalf("SystemActionByKey() ok = true for unknown action, want false")
 	}
 }
+
+func TestProviderHubActionsAreSystemActions(t *testing.T) {
+	t.Parallel()
+
+	action, ok := SystemActionByKey(ActionProviderReconciliationRun)
+	if !ok {
+		t.Fatalf("SystemActionByKey(%q) ok = false, want true", ActionProviderReconciliationRun)
+	}
+	if action.ResourceType != ResourceProviderReconciliation {
+		t.Fatalf("provider reconciliation resource = %q, want %q", action.ResourceType, ResourceProviderReconciliation)
+	}
+}

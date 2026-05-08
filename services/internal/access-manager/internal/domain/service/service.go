@@ -763,11 +763,24 @@ func (s *Service) ExplainAccess(ctx context.Context, input ExplainAccessInput) (
 
 // ResolveExternalAccountUsage returns account and secret references for allowed usage.
 func (s *Service) ResolveExternalAccountUsage(ctx context.Context, input ResolveExternalAccountUsageInput) (ResolveExternalAccountUsageResult, error) {
+	input.ActionKey = strings.TrimSpace(input.ActionKey)
+	input.UsageScope.Type = strings.TrimSpace(input.UsageScope.Type)
+	input.UsageScope.ID = strings.TrimSpace(input.UsageScope.ID)
+	if input.ExternalAccountID == uuid.Nil || input.ActionKey == "" || input.UsageScope.Type == "" || input.UsageScope.ID == "" {
+		return ResolveExternalAccountUsageResult{}, errs.ErrInvalidArgument
+	}
 	account, err := s.repository.GetExternalAccount(ctx, input.ExternalAccountID)
 	if err != nil {
 		return ResolveExternalAccountUsageResult{}, err
 	}
 	if account.Status != enum.ExternalAccountStatusActive || account.SecretBindingRefID == nil {
+		return ResolveExternalAccountUsageResult{}, errs.ErrPreconditionFailed
+	}
+	provider, err := s.repository.GetExternalProvider(ctx, account.ExternalProviderID)
+	if err != nil {
+		return ResolveExternalAccountUsageResult{}, err
+	}
+	if provider.Status != enum.ExternalProviderStatusActive {
 		return ResolveExternalAccountUsageResult{}, errs.ErrPreconditionFailed
 	}
 	binding, err := s.repository.FindExternalAccountBinding(ctx, query.ExternalAccountUsageFilter{
@@ -783,7 +796,7 @@ func (s *Service) ResolveExternalAccountUsage(ctx context.Context, input Resolve
 	if err != nil {
 		return ResolveExternalAccountUsageResult{}, err
 	}
-	return ResolveExternalAccountUsageResult{ExternalAccount: account, SecretRef: secret, AllowedActions: binding.AllowedActionKeys}, nil
+	return ResolveExternalAccountUsageResult{ExternalAccount: account, ExternalProvider: provider, SecretRef: secret, AllowedActions: binding.AllowedActionKeys}, nil
 }
 
 func normalizeCheckAccessInput(input CheckAccessInput) CheckAccessInput {

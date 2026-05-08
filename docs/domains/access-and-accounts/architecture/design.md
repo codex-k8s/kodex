@@ -108,7 +108,7 @@ sequenceDiagram
   participant V as хранилище секретов
   P->>A: ResolveExternalAccountUsage(account_id, action, scope)
   A->>A: Проверить политику и статус аккаунта
-  A-->>P: разрешённые операции + secret_ref
+  A-->>P: provider_slug + разрешённые операции + secret_ref
   P->>V: Получить секрет по secret_ref
   V-->>P: Секрет для операции
 ```
