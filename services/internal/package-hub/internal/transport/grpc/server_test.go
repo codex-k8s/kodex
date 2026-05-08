@@ -98,6 +98,23 @@ func (fakePackageService) ListPackageSources(context.Context, packageservice.Lis
 	return packageservice.ListPackageSourcesResult{}, nil
 }
 
+func (fakePackageService) SyncAvailablePackages(context.Context, packageservice.SyncAvailablePackagesInput) (packageservice.SyncAvailablePackagesResult, error) {
+	now := time.Date(2026, 5, 7, 16, 0, 0, 0, time.UTC)
+	return packageservice.SyncAvailablePackagesResult{
+		Source: entity.PackageSource{
+			VersionedBase: entity.VersionedBase{ID: uuid.New(), Version: 2, CreatedAt: now, UpdatedAt: now},
+			Slug:          "package-store",
+			DisplayName:   "Магазин пакетов",
+			Kind:          enum.PackageSourceKindStorePackage,
+			Status:        enum.PackageSourceStatusActive,
+			LastSyncAt:    &now,
+		},
+		PackageCount: 1,
+		VersionCount: 1,
+		SyncedAt:     now,
+	}, nil
+}
+
 func (s fakePackageService) GetPackage(_ context.Context, id uuid.UUID, _ value.QueryMeta) (entity.PackageEntry, error) {
 	now := time.Date(2026, 5, 7, 16, 0, 0, 0, time.UTC)
 	if s.packageID != uuid.Nil {

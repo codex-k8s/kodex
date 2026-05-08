@@ -80,6 +80,49 @@ func scanPackage(row postgreslib.RowScanner) (entity.PackageEntry, error) {
 	return entry, err
 }
 
+func scanPackageSync(row postgreslib.RowScanner) (entity.PackageEntry, bool, bool, error) {
+	var entry entity.PackageEntry
+	var sourceID pgtype.UUID
+	var displayName, description []byte
+	var kind, commercialStatus, trustStatus, status string
+	var inserted, changed bool
+	err := row.Scan(
+		&entry.ID,
+		&sourceID,
+		&entry.Slug,
+		&kind,
+		&entry.PublisherRef,
+		&displayName,
+		&description,
+		&entry.IconObjectURI,
+		&commercialStatus,
+		&trustStatus,
+		&status,
+		&entry.Version,
+		&entry.CreatedAt,
+		&entry.UpdatedAt,
+		&inserted,
+		&changed,
+	)
+	entry.SourceID = postgreslib.UUIDPtrFromPG(sourceID)
+	entry.Kind = enum.PackageKind(kind)
+	entry.CommercialStatus = enum.PackageCommercialStatus(commercialStatus)
+	entry.TrustStatus = enum.PackageTrustStatus(trustStatus)
+	entry.Status = enum.PackageStatus(status)
+	if err != nil {
+		return entry, inserted, changed, err
+	}
+	entry.DisplayName, err = localizedTextFromPayload(displayName)
+	if err != nil {
+		return entry, inserted, changed, fmt.Errorf("scan package display_name: %w", err)
+	}
+	entry.Description, err = localizedTextFromPayload(description)
+	if err != nil {
+		return entry, inserted, changed, fmt.Errorf("scan package description: %w", err)
+	}
+	return entry, inserted, changed, nil
+}
+
 func scanPackageVersion(row postgreslib.RowScanner) (entity.PackageVersion, error) {
 	var version entity.PackageVersion
 	var publishedAt pgtype.Timestamptz
@@ -104,6 +147,35 @@ func scanPackageVersion(row postgreslib.RowScanner) (entity.PackageVersion, erro
 	version.ReleaseStatus = enum.PackageReleaseStatus(releaseStatus)
 	version.PublishedAt = postgreslib.TimePtrFromPG(publishedAt)
 	return version, err
+}
+
+func scanPackageVersionSync(row postgreslib.RowScanner) (entity.PackageVersion, bool, bool, error) {
+	var version entity.PackageVersion
+	var publishedAt pgtype.Timestamptz
+	var sourceRefKind, verificationStatus, releaseStatus string
+	var inserted, changed bool
+	err := row.Scan(
+		&version.ID,
+		&version.PackageID,
+		&version.VersionLabel,
+		&sourceRefKind,
+		&version.SourceRef.Ref,
+		&version.SourceRef.CommitSHA,
+		&version.ManifestDigest,
+		&verificationStatus,
+		&releaseStatus,
+		&version.Revision,
+		&publishedAt,
+		&version.CreatedAt,
+		&version.UpdatedAt,
+		&inserted,
+		&changed,
+	)
+	version.SourceRef.Kind = enum.PackageVersionSourceRefKind(sourceRefKind)
+	version.VerificationStatus = enum.PackageVerificationStatus(verificationStatus)
+	version.ReleaseStatus = enum.PackageReleaseStatus(releaseStatus)
+	version.PublishedAt = postgreslib.TimePtrFromPG(publishedAt)
+	return version, inserted, changed, err
 }
 
 func scanManifestSnapshot(row postgreslib.RowScanner) (entity.PackageManifestSnapshot, error) {

@@ -398,6 +398,58 @@ message PackageManifestSnapshot {
   string created_at = 7;
 }
 
+// CatalogSnapshot is a normalized source catalog state prepared by a source adapter.
+message CatalogSnapshot {
+  // packages contains packages observed in one source snapshot.
+  repeated CatalogPackageSnapshot packages = 1;
+  // observed_at is RFC3339 time reported by the source adapter when known.
+  optional string observed_at = 2;
+}
+
+// CatalogPackageSnapshot describes one package observed in a source snapshot.
+message CatalogPackageSnapshot {
+  // slug is the stable package slug inside the source.
+  string slug = 1;
+  // package_kind classifies package behavior.
+  PackageKind package_kind = 2;
+  // publisher_ref is an external publisher reference.
+  optional string publisher_ref = 3;
+  // display_name contains localized package names.
+  repeated LocalizedText display_name = 4;
+  // description contains localized package descriptions.
+  repeated LocalizedText description = 5;
+  // icon_object_uri points to object storage or external icon URL.
+  optional string icon_object_uri = 6;
+  // commercial_status describes commercial availability.
+  PackageCommercialStatus commercial_status = 7;
+  // trust_status describes local trust level.
+  PackageTrustStatus trust_status = 8;
+  // status is local package lifecycle status.
+  PackageStatus status = 9;
+  // versions contains immutable package versions observed for this package.
+  repeated CatalogVersionSnapshot versions = 10;
+}
+
+// CatalogVersionSnapshot describes one package version observed in a source snapshot.
+message CatalogVersionSnapshot {
+  // version_label is the source version label.
+  string version_label = 1;
+  // source_ref identifies where this package version comes from.
+  SourceRef source_ref = 2;
+  // manifest_digest is the digest of the normalized manifest.
+  string manifest_digest = 3;
+  // manifest_schema_version is the package manifest schema version; server defaults to 1.
+  optional int32 manifest_schema_version = 4;
+  // manifest_payload_json is normalized manifest JSON object.
+  string manifest_payload_json = 5;
+  // verification_status overrides default unverified state when the source is trusted.
+  optional PackageVerificationStatus verification_status = 6;
+  // release_status overrides default active lifecycle state when the source marks it differently.
+  optional PackageReleaseStatus release_status = 7;
+  // published_at is RFC3339 publish timestamp when known.
+  optional string published_at = 8;
+}
+
 // PackageSecretField describes one secret field required or suggested by a package version.
 message PackageSecretField {
   // key is a stable machine key of the secret field.
@@ -558,6 +610,8 @@ message SyncAvailablePackagesRequest {
   CommandMeta meta = 1;
   // source_id is the source identifier.
   string source_id = 2;
+  // snapshot contains normalized source catalog entries prepared outside package-hub.
+  CatalogSnapshot snapshot = 3;
 }
 
 // GetPackageRequest returns one package.

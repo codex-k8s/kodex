@@ -64,6 +64,69 @@ func requireVerificationStatus(status enum.PackageVerificationStatus) error {
 	}
 }
 
+func requirePackageKind(kind enum.PackageKind) error {
+	switch kind {
+	case enum.PackageKindPlugin, enum.PackageKindGuidance, enum.PackageKindStore, enum.PackageKindPlatformContent:
+		return nil
+	default:
+		return errs.ErrInvalidArgument
+	}
+}
+
+func requirePackageStatus(status enum.PackageStatus) error {
+	switch status {
+	case enum.PackageStatusAvailable, enum.PackageStatusHidden, enum.PackageStatusRevoked, enum.PackageStatusBlocked:
+		return nil
+	default:
+		return errs.ErrInvalidArgument
+	}
+}
+
+func requireCommercialStatus(status enum.PackageCommercialStatus) error {
+	switch status {
+	case enum.PackageCommercialStatusFree, enum.PackageCommercialStatusPaid, enum.PackageCommercialStatusRestricted, enum.PackageCommercialStatusUnknown:
+		return nil
+	default:
+		return errs.ErrInvalidArgument
+	}
+}
+
+func requireTrustStatus(status enum.PackageTrustStatus) error {
+	switch status {
+	case enum.PackageTrustStatusBuiltIn, enum.PackageTrustStatusVerified, enum.PackageTrustStatusUnverified, enum.PackageTrustStatusBlocked:
+		return nil
+	default:
+		return errs.ErrInvalidArgument
+	}
+}
+
+func requireSourceRefKind(kind enum.PackageVersionSourceRefKind) error {
+	switch kind {
+	case enum.PackageVersionSourceRefKindGitTag, enum.PackageVersionSourceRefKindGitCommit, enum.PackageVersionSourceRefKindGitlink, enum.PackageVersionSourceRefKindProxyRef:
+		return nil
+	default:
+		return errs.ErrInvalidArgument
+	}
+}
+
+func requireReleaseStatus(status enum.PackageReleaseStatus) error {
+	switch status {
+	case enum.PackageReleaseStatusActive, enum.PackageReleaseStatusDeprecated, enum.PackageReleaseStatusRevoked, enum.PackageReleaseStatusBlocked:
+		return nil
+	default:
+		return errs.ErrInvalidArgument
+	}
+}
+
+func requireSecretFieldKind(kind enum.PackageSecretFieldKind) error {
+	switch kind {
+	case enum.PackageSecretFieldKindString, enum.PackageSecretFieldKindPassword, enum.PackageSecretFieldKindToken, enum.PackageSecretFieldKindJSON, enum.PackageSecretFieldKindURL:
+		return nil
+	default:
+		return errs.ErrInvalidArgument
+	}
+}
+
 func defaultActorRef(actorType string, actorID string) string {
 	actorType = strings.TrimSpace(actorType)
 	actorID = strings.TrimSpace(actorID)

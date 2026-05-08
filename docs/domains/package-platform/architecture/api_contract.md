@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-06
 updated_at: 2026-05-07
-related_issues: [642, 646, 650, 673, 678]
+related_issues: [642, 646, 650, 673, 678, 680]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -42,7 +42,7 @@ approvals:
 | `DisablePackageSource` | gRPC command | `package.source.disable` | `CommandMeta.command_id` или `idempotency_key` + ожидаемая версия | Отключает источник без физического удаления. |
 | `GetPackageSource` | gRPC query | `package.source.read` | нет | Авторитетное чтение источника. |
 | `ListPackageSources` | gRPC query | `package.source.read` | нет | Список источников по scope и статусу. |
-| `SyncAvailablePackages` | gRPC command | `package.catalog.sync` | `CommandMeta.command_id` | Синхронизирует локальный доступный каталог из источника. |
+| `SyncAvailablePackages` | gRPC command | `package.catalog.sync` | `CommandMeta.command_id` | Сохраняет нормализованный снимок доступного каталога из источника: packages, versions и manifest payload. |
 | `GetPackage` | gRPC query | `package.catalog.read` | нет | Читает пакетную запись. |
 | `ListPackages` | gRPC query | `package.catalog.read` | нет | Фильтрует доступные пакеты по виду, источнику, статусу и коммерческому признаку. |
 | `GetPackageVersion` | gRPC query | `package.catalog.read` | нет | Читает конкретную версию, manifest и статус проверки. |
@@ -57,6 +57,8 @@ approvals:
 | `GetPackageSecretSchema` | gRPC query | `package.secret.read` | нет | Читает схему секретов версии пакета. |
 | `RefreshPackageInstallationSecretStatus` | gRPC command | `package.installation.update` | ожидаемая версия | Перечитывает состояние привязок секретов из `access-manager` и обновляет только статус заполненности установки. |
 | `SetPackageVerification` | gRPC command | `package.verify` | `CommandMeta.command_id` или `idempotency_key` + ожидаемая ревизия версии пакета | Фиксирует верификацию, отклонение или отзыв версии пакета. |
+
+`SyncAvailablePackages` не ходит во внешний Git/store/provider напрямую. Эту работу выполняет адаптер источника: он получает данные, приводит их к нормализованному контракту снимка и вызывает `package-hub`. Так сервис остаётся владельцем локального каталога и проверки manifest, но не становится Git-клиентом магазина. `manifest_digest` сверяется как `sha256:<hex>` от компактного нормализованного JSON manifest; несовпадение считается невалидным снимком. `required_access_actions` сверяются с общим каталогом системных действий `libs/go/accesscatalog`; неизвестный ключ отклоняется как невалидный manifest.
 
 ## Модель ошибок
 
@@ -104,8 +106,8 @@ approvals:
 | Go-артефакты событий | Генерируются в `libs/go/platformevents/packagehub/events.gen.go`. |
 | Сервисный процесс `package-hub` | Общий gRPC runtime, служебные `/health/*`, `/metrics`, PostgreSQL repository, проверка доступа через `access-manager` и часть операций `PackageHubService` подключены. |
 | PostgreSQL и outbox | Таблицы package-каталога, установок, проверок, идемпотентного следа и outbox добавлены; диспетчер публикует события через `platform-event-log`. |
-| Реализованные операции | `ConnectPackageSource`, `UpdatePackageSource`, `DisablePackageSource`, `GetPackageSource`, `ListPackageSources`, `GetPackage`, `ListPackages`, `GetPackageVersion`, `ListPackageVersions`, `GetPackageManifest`, `SetPackageVerification`. |
-| Операции следующих срезов | Синхронизация доступного каталога, установки, схемы секретов установок и runtime-связанные команды пока возвращают `unimplemented`. |
+| Реализованные операции | `ConnectPackageSource`, `UpdatePackageSource`, `DisablePackageSource`, `GetPackageSource`, `ListPackageSources`, `SyncAvailablePackages`, `GetPackage`, `ListPackages`, `GetPackageVersion`, `ListPackageVersions`, `GetPackageManifest`, `SetPackageVerification`. |
+| Операции следующих срезов | Установки, схемы секретов установок и runtime-связанные команды пока возвращают `unimplemented`. |
 
 ## Совместимость
 

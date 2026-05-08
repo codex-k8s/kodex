@@ -1,7 +1,11 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -289,6 +293,203 @@ func TestUpdatePackageSourceRejectsDisabledStatus(t *testing.T) {
 	}
 }
 
+func TestSyncAvailablePackagesCreatesCatalogArtifacts(t *testing.T) {
+	t.Parallel()
+
+	sourceID := uuid.New()
+	organizationID := uuid.New()
+	repository := &fakeRepository{
+		packageSource: entity.PackageSource{
+			VersionedBase:  entity.VersionedBase{ID: sourceID, Version: 1},
+			OrganizationID: &organizationID,
+			Status:         enum.PackageSourceStatusSyncFailed,
+		},
+		commandResultErr: errs.ErrNotFound,
+	}
+	authorizer := &recordingAuthorizer{}
+	service := NewWithConfig(repository, fixedClock{}, newSequenceIDs(6), Config{Authorizer: authorizer})
+	manifestPayload := testCatalogManifestPayload()
+
+	result, err := service.SyncAvailablePackages(context.Background(), SyncAvailablePackagesInput{
+		SourceID: sourceID,
+		Snapshot: CatalogSnapshot{Packages: []CatalogPackageSnapshot{{
+			Slug:             "telegram-approver",
+			Kind:             enum.PackageKindPlugin,
+			PublisherRef:     "codex-k8s",
+			DisplayName:      []value.LocalizedText{{Locale: "ru", Text: "Telegram-апрувер"}},
+			Description:      []value.LocalizedText{{Locale: "ru", Text: "Запрашивает согласования через Telegram"}},
+			CommercialStatus: enum.PackageCommercialStatusFree,
+			TrustStatus:      enum.PackageTrustStatusVerified,
+			Status:           enum.PackageStatusAvailable,
+			Versions: []CatalogVersionSnapshot{{
+				VersionLabel: "1.0.0",
+				SourceRef: value.SourceRef{
+					Kind: enum.PackageVersionSourceRefKindGitTag,
+					Ref:  "v1.0.0",
+				},
+				ManifestDigest:     testManifestDigest(t, manifestPayload),
+				ManifestSchema:     1,
+				ManifestPayload:    manifestPayload,
+				VerificationStatus: enum.PackageVerificationStatusUnverified,
+				ReleaseStatus:      enum.PackageReleaseStatusActive,
+			}},
+		}}},
+		Meta: commandMeta(),
+	})
+	if err != nil {
+		t.Fatalf("SyncAvailablePackages(): %v", err)
+	}
+	if result.PackageCount != 1 || result.VersionCount != 1 || result.Source.Status != enum.PackageSourceStatusActive || result.Source.LastSyncAt == nil {
+		t.Fatalf("sync result = %+v, want one package, one version and active source", result)
+	}
+	if repository.syncCatalogCalls != 1 || len(repository.syncPlan.Items) != 1 || len(repository.syncEvents) != 3 {
+		t.Fatalf("sync calls = %d items = %d events = %d, want one call, one item, three events", repository.syncCatalogCalls, len(repository.syncPlan.Items), len(repository.syncEvents))
+	}
+	if repository.syncPlan.Items[0].Entry.Slug != "telegram-approver" || repository.syncPlan.Items[0].Versions[0].Manifest.ValidationStatus != enum.PackageManifestValidationStatusValid {
+		t.Fatalf("sync plan = %+v, want normalized package and valid manifest", repository.syncPlan.Items[0])
+	}
+	if repository.syncEvents[0].EventType != packageEventCatalogSynced || repository.syncEvents[1].EventType != packageEventPackageDiscovered || repository.syncEvents[2].EventType != packageEventVersionDiscovered {
+		t.Fatalf("sync events = %+v, want catalog, package and version events", repository.syncEvents)
+	}
+	if len(authorizer.requests) != 1 || authorizer.requests[0].ActionKey != packageActionCatalogSync || authorizer.requests[0].ResourceType != packageResourceCatalog || authorizer.requests[0].ScopeID != organizationID.String() {
+		t.Fatalf("authorization requests = %+v, want catalog sync in organization scope", authorizer.requests)
+	}
+}
+
+func TestSyncAvailablePackagesRejectsManifestDigestMismatch(t *testing.T) {
+	t.Parallel()
+
+	sourceID := uuid.New()
+	repository := &fakeRepository{commandResultErr: errs.ErrNotFound}
+	service := NewWithConfig(repository, fixedClock{}, newSequenceIDs(6), Config{Authorizer: &recordingAuthorizer{}})
+	manifestPayload := testCatalogManifestPayload()
+
+	_, err := service.SyncAvailablePackages(context.Background(), SyncAvailablePackagesInput{
+		SourceID: sourceID,
+		Snapshot: CatalogSnapshot{Packages: []CatalogPackageSnapshot{{
+			Slug:             "telegram-approver",
+			Kind:             enum.PackageKindPlugin,
+			PublisherRef:     "codex-k8s",
+			DisplayName:      []value.LocalizedText{{Locale: "ru", Text: "Telegram-апрувер"}},
+			Description:      []value.LocalizedText{{Locale: "ru", Text: "Запрашивает согласования через Telegram"}},
+			CommercialStatus: enum.PackageCommercialStatusFree,
+			TrustStatus:      enum.PackageTrustStatusVerified,
+			Status:           enum.PackageStatusAvailable,
+			Versions: []CatalogVersionSnapshot{{
+				VersionLabel: "1.0.0",
+				SourceRef: value.SourceRef{
+					Kind: enum.PackageVersionSourceRefKindGitTag,
+					Ref:  "v1.0.0",
+				},
+				ManifestDigest:     "sha256:stale",
+				ManifestSchema:     1,
+				ManifestPayload:    manifestPayload,
+				VerificationStatus: enum.PackageVerificationStatusUnverified,
+				ReleaseStatus:      enum.PackageReleaseStatusActive,
+			}},
+		}}},
+		Meta: commandMeta(),
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("SyncAvailablePackages() err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+	if repository.syncCatalogCalls != 0 || repository.getSourceCalls != 0 {
+		t.Fatalf("repository calls = sync:%d getSource:%d, want validation before reads and mutations", repository.syncCatalogCalls, repository.getSourceCalls)
+	}
+}
+
+func TestSyncAvailablePackagesRejectsUnknownManifestAccessAction(t *testing.T) {
+	t.Parallel()
+
+	sourceID := uuid.New()
+	repository := &fakeRepository{commandResultErr: errs.ErrNotFound}
+	service := NewWithConfig(repository, fixedClock{}, newSequenceIDs(6), Config{Authorizer: &recordingAuthorizer{}})
+	manifestPayload := bytes.Replace(testCatalogManifestPayload(), []byte(`"required_access_actions": ["package.installation.read"]`), []byte(`"required_access_actions": ["package.installation.reed"]`), 1)
+
+	_, err := service.SyncAvailablePackages(context.Background(), SyncAvailablePackagesInput{
+		SourceID: sourceID,
+		Snapshot: CatalogSnapshot{Packages: []CatalogPackageSnapshot{{
+			Slug:             "telegram-approver",
+			Kind:             enum.PackageKindPlugin,
+			PublisherRef:     "codex-k8s",
+			DisplayName:      []value.LocalizedText{{Locale: "ru", Text: "Telegram-апрувер"}},
+			Description:      []value.LocalizedText{{Locale: "ru", Text: "Запрашивает согласования через Telegram"}},
+			CommercialStatus: enum.PackageCommercialStatusFree,
+			TrustStatus:      enum.PackageTrustStatusVerified,
+			Status:           enum.PackageStatusAvailable,
+			Versions: []CatalogVersionSnapshot{{
+				VersionLabel: "1.0.0",
+				SourceRef: value.SourceRef{
+					Kind: enum.PackageVersionSourceRefKindGitTag,
+					Ref:  "v1.0.0",
+				},
+				ManifestDigest:     testManifestDigest(t, manifestPayload),
+				ManifestSchema:     1,
+				ManifestPayload:    manifestPayload,
+				VerificationStatus: enum.PackageVerificationStatusUnverified,
+				ReleaseStatus:      enum.PackageReleaseStatusActive,
+			}},
+		}}},
+		Meta: commandMeta(),
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("SyncAvailablePackages() err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+	if repository.syncCatalogCalls != 0 || repository.getSourceCalls != 0 {
+		t.Fatalf("repository calls = sync:%d getSource:%d, want validation before reads and mutations", repository.syncCatalogCalls, repository.getSourceCalls)
+	}
+}
+
+func testCatalogManifestPayload() []byte {
+	return []byte(`{
+		"identity": {
+			"slug": "telegram-approver",
+			"kind": "plugin",
+			"publisher": "codex-k8s",
+			"license": "MIT",
+			"name": [{"locale": "ru", "text": "Telegram-апрувер"}],
+			"description": [{"locale": "ru", "text": "Запрашивает согласования через Telegram"}]
+		},
+		"source": {
+			"ref_kind": "git_tag",
+			"ref": "v1.0.0",
+			"version": "1.0.0",
+			"digest": "sha256:source"
+		},
+		"capabilities": ["approval"],
+		"required_platform_apis": ["interaction.feedback"],
+		"required_access_actions": ["package.installation.read"],
+		"secrets": [{
+			"key": "telegram_token",
+			"kind": "token",
+			"required": true,
+			"display_name": [{"locale": "ru", "text": "Токен Telegram"}],
+			"description": [{"locale": "ru", "text": "Токен бота для запросов согласования"}]
+		}],
+		"runtime": {
+			"required": true,
+			"workload_kind": "deployment"
+		},
+		"pricing": {
+			"commercial_status": "free"
+		},
+		"verification": {
+			"trust_status": "verified",
+			"verification_status": "unverified"
+		}
+	}`)
+}
+
+func testManifestDigest(t *testing.T, payload []byte) string {
+	t.Helper()
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, payload); err != nil {
+		t.Fatalf("compact test manifest: %v", err)
+	}
+	sum := sha256.Sum256(compact.Bytes())
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
 type recordingAuthorizer struct {
 	requests []AuthorizationRequest
 	err      error
@@ -311,8 +512,12 @@ type fakeRepository struct {
 	updatedSource               entity.PackageSource
 	updatedResult               entity.CommandResult
 	updatedEvent                entity.OutboxEvent
+	syncPlan                    catalogrepo.CatalogSyncPlan
+	syncEvents                  []entity.OutboxEvent
 	createSourceWithResultCalls int
 	updateSourceWithResultCalls int
+	syncCatalogCalls            int
+	getSourceCalls              int
 	getVersionCalls             int
 	getCommandResultCalls       int
 	setVerificationCalls        int
@@ -331,6 +536,7 @@ func (r *fakeRepository) CreatePackageSourceWithResult(_ context.Context, source
 }
 
 func (r *fakeRepository) GetPackageSource(context.Context, uuid.UUID) (entity.PackageSource, error) {
+	r.getSourceCalls++
 	return r.packageSource, nil
 }
 
@@ -344,6 +550,25 @@ func (r *fakeRepository) UpdatePackageSourceWithResult(_ context.Context, source
 	r.updatedResult = result
 	r.updatedEvent = event
 	return nil
+}
+
+func (r *fakeRepository) SyncAvailableCatalog(_ context.Context, plan catalogrepo.CatalogSyncPlan) (catalogrepo.CatalogSyncOutcome, error) {
+	r.syncCatalogCalls++
+	r.syncPlan = plan
+	outcome := catalogrepo.CatalogSyncOutcome{Source: plan.Source}
+	for _, item := range plan.Items {
+		outcome.Packages = append(outcome.Packages, catalogrepo.CatalogSyncPackage{Entry: item.Entry, Inserted: true, Changed: true})
+		for _, version := range item.Versions {
+			version.Version.PackageID = item.Entry.ID
+			outcome.Versions = append(outcome.Versions, catalogrepo.CatalogSyncVersion{Version: version.Version, Inserted: true, Changed: true})
+		}
+	}
+	events, err := plan.BuildEvents(outcome)
+	if err != nil {
+		return catalogrepo.CatalogSyncOutcome{}, err
+	}
+	r.syncEvents = events
+	return outcome, nil
 }
 
 func (r *fakeRepository) CreatePackage(context.Context, entity.PackageEntry) error {
@@ -458,6 +683,28 @@ type fixedIDs struct{}
 
 func (fixedIDs) New() uuid.UUID {
 	return uuid.MustParse("00000000-0000-0000-0000-000000000111")
+}
+
+type sequenceIDs struct {
+	items []uuid.UUID
+	index int
+}
+
+func newSequenceIDs(count int) *sequenceIDs {
+	items := make([]uuid.UUID, count)
+	for index := range items {
+		items[index] = uuid.New()
+	}
+	return &sequenceIDs{items: items}
+}
+
+func (ids *sequenceIDs) New() uuid.UUID {
+	if ids.index >= len(ids.items) {
+		return uuid.New()
+	}
+	id := ids.items[ids.index]
+	ids.index++
+	return id
 }
 
 func queryMeta() value.QueryMeta {

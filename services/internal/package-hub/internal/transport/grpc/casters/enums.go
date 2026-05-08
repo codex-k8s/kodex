@@ -132,6 +132,10 @@ func SourceRefKindToProto(value enum.PackageVersionSourceRefKind) packagesv1.Pac
 	return protoEnum(value, sourceRefKindMap, packagesv1.PackageVersionSourceRefKind_PACKAGE_VERSION_SOURCE_REF_KIND_UNSPECIFIED)
 }
 
+func SourceRefKindFromProto(value packagesv1.PackageVersionSourceRefKind) (enum.PackageVersionSourceRefKind, error) {
+	return domainEnum(value, sourceRefKindMap)
+}
+
 func VerificationStatusFromProto(value packagesv1.PackageVerificationStatus) (enum.PackageVerificationStatus, error) {
 	return domainEnum(value, verificationStatusMap)
 }

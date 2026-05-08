@@ -94,6 +94,7 @@ spec:
       bumpOn:
         - services/internal/package-hub
         - libs/go/accesscheck
+        - libs/go/accesscatalog
         - libs/go/grpcserver
         - libs/go/serviceprocess
         - libs/go/servicemain

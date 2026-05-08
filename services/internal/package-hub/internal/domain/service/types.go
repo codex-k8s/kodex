@@ -1,6 +1,8 @@
 package service
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/entity"
@@ -59,6 +61,48 @@ type ListPackagesInput struct {
 type ListPackagesResult struct {
 	Packages []entity.PackageEntry
 	Page     value.PageResult
+}
+
+type CatalogSnapshot struct {
+	Packages   []CatalogPackageSnapshot
+	ObservedAt *time.Time
+}
+
+type CatalogPackageSnapshot struct {
+	Slug             string
+	Kind             enum.PackageKind
+	PublisherRef     string
+	DisplayName      []value.LocalizedText
+	Description      []value.LocalizedText
+	IconObjectURI    string
+	CommercialStatus enum.PackageCommercialStatus
+	TrustStatus      enum.PackageTrustStatus
+	Status           enum.PackageStatus
+	Versions         []CatalogVersionSnapshot
+}
+
+type CatalogVersionSnapshot struct {
+	VersionLabel       string
+	SourceRef          value.SourceRef
+	ManifestDigest     string
+	ManifestSchema     int32
+	ManifestPayload    []byte
+	VerificationStatus enum.PackageVerificationStatus
+	ReleaseStatus      enum.PackageReleaseStatus
+	PublishedAt        *time.Time
+}
+
+type SyncAvailablePackagesInput struct {
+	SourceID uuid.UUID
+	Snapshot CatalogSnapshot
+	Meta     value.CommandMeta
+}
+
+type SyncAvailablePackagesResult struct {
+	Source       entity.PackageSource
+	PackageCount int64
+	VersionCount int64
+	SyncedAt     time.Time
 }
 
 type ListPackageVersionsInput struct {

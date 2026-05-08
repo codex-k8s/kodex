@@ -33,13 +33,7 @@ func systemAccessActionDescriptors() []systemAccessActionDescriptor {
 		{key: accessActionManageExternalAccount, resourceType: accessResourceExternalAccount},
 		{key: accessActionManageExternalAccountBinding, resourceType: accessResourceExternalAccountBinding},
 	}
-	for _, action := range accesscatalog.ProjectCatalogActions() {
-		descriptors = append(descriptors, systemAccessActionDescriptor{key: action.Key, resourceType: action.ResourceType})
-	}
-	for _, action := range accesscatalog.PackageHubActions() {
-		descriptors = append(descriptors, systemAccessActionDescriptor{key: action.Key, resourceType: action.ResourceType})
-	}
-	for _, action := range accesscatalog.RuntimeManagerActions() {
+	for _, action := range accesscatalog.SystemActions() {
 		descriptors = append(descriptors, systemAccessActionDescriptor{key: action.Key, resourceType: action.ResourceType})
 	}
 	return descriptors

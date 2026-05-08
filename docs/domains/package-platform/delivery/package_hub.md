@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-06
 updated_at: 2026-05-07
-related_issues: [642, 646, 650, 663, 667, 670, 673, 678]
+related_issues: [642, 646, 650, 663, 667, 670, 673, 678, 680]
 related_prs: []
 related_docsets:
   - docs/domains/package-platform/product/requirements.md
@@ -49,7 +49,7 @@ approvals:
 | PKG-3.3 | #670 | PostgreSQL-модель установок, схем секретов, проверок, идемпотентности и optimistic concurrency готова: миграции, доменные типы, repository-контракт, PostgreSQL repository и интеграционные тесты. gRPC business handlers и outbox не входят в этот срез. |
 | PKG-3.4 | #673 | Outbox, первые repository-backed gRPC чтения и команда проверки версии пакета готовы. |
 | PKG-4.1 | #678 | Команды подключения, обновления и отключения источников пакетов готовы: проверка доступа, идемпотентность, ожидаемая версия и события источника. |
-| PKG-4.2 | не назначено | Синхронизация доступного каталога и проверка manifest готовы. |
+| PKG-4.2 | #680 | Синхронизация доступного каталога и проверка manifest готовы. |
 | PKG-5 | не назначено | Установки пакетов, версии, привязки секретов и события установки готовы. |
 | PKG-6 | не назначено | Специализация плагинов, руководящих пакетов, магазина и пакетов пользовательского контента платформы готова. |
 | PKG-7 | не назначено | Манифесты deploy, migration job, config, health, metrics и runbook готовы. |
@@ -65,7 +65,7 @@ approvals:
 | `DisablePackageSource` | `ready` | PKG-4.1 |
 | `GetPackageSource` | `ready` | PKG-3.4 |
 | `ListPackageSources` | `ready` | PKG-3.4 |
-| `SyncAvailablePackages` | `unimplemented` | PKG-4.2 |
+| `SyncAvailablePackages` | `ready` | PKG-4.2 |
 | `GetPackage` | `ready` | PKG-3.4 |
 | `ListPackages` | `ready` | PKG-3.4 |
 | `GetPackageVersion` | `ready` | PKG-3.4 |
@@ -80,6 +80,16 @@ approvals:
 | `GetPackageSecretSchema` | `unimplemented` | PKG-5 |
 | `RefreshPackageInstallationSecretStatus` | `unimplemented` | PKG-5 |
 | `SetPackageVerification` | `ready` | PKG-3.4 |
+
+## Синхронизация каталога `PKG-4.2`
+
+| Область | Статус | Примечание |
+|---|---|---|
+| Нормализованный снимок каталога | готово | `SyncAvailablePackages` принимает packages, versions и JSON-содержимое manifest, подготовленные адаптером источника. |
+| Проверка manifest | готово | Сервис проверяет обязательные блоки manifest, локализованные метаданные, права из `libs/go/accesscatalog`, секреты, runtime-требования, уникальность slug/version и соответствие `manifest_digest` компактному JSON manifest. |
+| Запись каталога | готово | Источник, пакеты, версии, новые снимки manifest, command result и outbox пишутся в одной PostgreSQL-транзакции. |
+| События | готово | Публикуются `package.catalog.synced`, `package.package.discovered/updated`, `package.version.discovered/updated`. |
+| Получение из внешнего store/provider | следующий срез интеграции | Реальный обход Git/store/provider остаётся вне `package-hub`: внешний адаптер готовит нормализованный снимок и вызывает gRPC-команду. |
 
 ## Наблюдаемость `PKG-3.1`
 

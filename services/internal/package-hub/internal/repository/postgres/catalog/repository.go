@@ -68,6 +68,7 @@ const (
 	operationOutboxMarkPermanent       = "domain.Repository.MarkOutboxEventPermanentlyFailed"
 	operationOutboxMarkPublished       = "domain.Repository.MarkOutboxEventPublished"
 	operationSetPackageVerification    = "domain.Repository.SetPackageVerification"
+	operationSyncAvailableCatalog      = "domain.Repository.SyncAvailableCatalog"
 	operationUpdatePackageInstallation = "domain.Repository.UpdatePackageInstallation"
 	operationUpdatePackageSourceResult = "domain.Repository.UpdatePackageSourceWithResult"
 	operationUpdatePricingMetadata     = "domain.Repository.UpdatePricingMetadata"
@@ -104,6 +105,133 @@ func (r *Repository) UpdatePackageSourceWithResult(ctx context.Context, source e
 		commandResultMutation(result),
 		outboxEventMutation(event),
 	)
+}
+
+func (r *Repository) SyncAvailableCatalog(ctx context.Context, plan catalogrepo.CatalogSyncPlan) (catalogrepo.CatalogSyncOutcome, error) {
+	var outcome catalogrepo.CatalogSyncOutcome
+	if plan.BuildEvents == nil {
+		return outcome, wrapError(operationSyncAvailableCatalog, errs.ErrInvalidArgument)
+	}
+	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
+		if err := postgreslib.RunMutation(ctx, tx, errs.ErrConflict, affectedMutation(queryPackageSourceUpdate, packageSourceUpdateArgs(plan.Source, plan.PreviousSourceVersion))); err != nil {
+			return err
+		}
+		outcome.Source = plan.Source
+		for _, item := range plan.Items {
+			syncedPackage, err := r.syncPackage(ctx, tx, item.Entry)
+			if err != nil {
+				return err
+			}
+			outcome.Packages = append(outcome.Packages, syncedPackage)
+			for _, versionPlan := range item.Versions {
+				versionPlan.Version.PackageID = syncedPackage.Entry.ID
+				syncedVersion, err := r.syncPackageVersion(ctx, tx, versionPlan.Version)
+				if err != nil {
+					return err
+				}
+				outcome.Versions = append(outcome.Versions, syncedVersion)
+				if syncedVersion.Inserted || syncedVersion.Changed {
+					versionPlan.Manifest.PackageVersionID = syncedVersion.Version.ID
+					if err := postgreslib.RunMutation(ctx, tx, errs.ErrConflict, affectedMutation(queryManifestSnapshotCreate, manifestSnapshotArgs(versionPlan.Manifest))); err != nil {
+						return err
+					}
+					outcome.ManifestCount++
+				}
+			}
+		}
+		if err := postgreslib.RunMutation(ctx, tx, errs.ErrConflict, commandResultMutation(plan.Result)); err != nil {
+			return err
+		}
+		events, err := plan.BuildEvents(outcome)
+		if err != nil {
+			return err
+		}
+		for _, event := range events {
+			if err := postgreslib.RunMutation(ctx, tx, errs.ErrConflict, outboxEventMutation(event)); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	return outcome, wrapError(operationSyncAvailableCatalog, err)
+}
+
+func (r *Repository) syncPackage(ctx context.Context, db execQuerier, entry entity.PackageEntry) (catalogrepo.CatalogSyncPackage, error) {
+	return syncCatalogRecordResult(ctx, db, queryPackageInsertIgnore, queryPackageUpdateBySourceSlug, packageArgs(entry), entry, scanPackageSyncState, packageSyncResult)
+}
+
+func (r *Repository) syncPackageVersion(ctx context.Context, db execQuerier, version entity.PackageVersion) (catalogrepo.CatalogSyncVersion, error) {
+	return syncCatalogRecordResult(ctx, db, queryPackageVersionInsertIgnore, queryPackageVersionUpdateByLabel, packageVersionArgs(version), version, scanPackageVersionSyncState, packageVersionSyncResult)
+}
+
+type syncState[T any] struct {
+	Value    T
+	Inserted bool
+	Changed  bool
+}
+
+func syncCatalogRecord[T any](
+	ctx context.Context,
+	db execQuerier,
+	insertQuery string,
+	updateQuery string,
+	args pgx.NamedArgs,
+	candidate T,
+	scanUpdated func(postgreslib.RowScanner) (syncState[T], error),
+) (syncState[T], error) {
+	tag, err := db.Exec(ctx, insertQuery, args)
+	if err != nil {
+		return syncState[T]{}, err
+	}
+	if tag.RowsAffected() == 1 {
+		return syncState[T]{Value: candidate, Inserted: true, Changed: true}, nil
+	}
+	return scanUpdated(db.QueryRow(ctx, updateQuery, args))
+}
+
+func syncCatalogRecordResult[T any, R any](
+	ctx context.Context,
+	db execQuerier,
+	insertQuery string,
+	updateQuery string,
+	args pgx.NamedArgs,
+	candidate T,
+	scanUpdated func(postgreslib.RowScanner) (syncState[T], error),
+	build func(syncState[T]) R,
+) (R, error) {
+	state, err := syncCatalogRecord(ctx, db, insertQuery, updateQuery, args, candidate, scanUpdated)
+	if err != nil {
+		var zero R
+		return zero, err
+	}
+	return build(state), nil
+}
+
+func syncStateFromScan[T any](
+	row postgreslib.RowScanner,
+	scan func(postgreslib.RowScanner) (T, bool, bool, error),
+) (syncState[T], error) {
+	stored, inserted, changed, err := scan(row)
+	if err != nil {
+		return syncState[T]{}, err
+	}
+	return syncState[T]{Value: stored, Inserted: inserted, Changed: changed}, nil
+}
+
+func scanPackageSyncState(row postgreslib.RowScanner) (syncState[entity.PackageEntry], error) {
+	return syncStateFromScan(row, scanPackageSync)
+}
+
+func scanPackageVersionSyncState(row postgreslib.RowScanner) (syncState[entity.PackageVersion], error) {
+	return syncStateFromScan(row, scanPackageVersionSync)
+}
+
+func packageSyncResult(state syncState[entity.PackageEntry]) catalogrepo.CatalogSyncPackage {
+	return catalogrepo.CatalogSyncPackage{Entry: state.Value, Inserted: state.Inserted, Changed: state.Changed}
+}
+
+func packageVersionSyncResult(state syncState[entity.PackageVersion]) catalogrepo.CatalogSyncVersion {
+	return catalogrepo.CatalogSyncVersion{Version: state.Value, Inserted: state.Inserted, Changed: state.Changed}
 }
 
 func (r *Repository) CreatePackage(ctx context.Context, entry entity.PackageEntry) error {

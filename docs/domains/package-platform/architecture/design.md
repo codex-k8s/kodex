@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-06
 updated_at: 2026-05-07
-related_issues: [642, 655, 678]
+related_issues: [642, 655, 678, 680]
 related_prs: []
 related_adrs: []
 approvals:
@@ -89,17 +89,18 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
   participant W as worker
+  participant A as source adapter
   participant P as package-hub
-  participant S as store package
   participant DB as package DB
-  W->>P: SyncAvailablePackages(source id)
-  P->>S: Fetch catalog snapshot
-  S-->>P: packages + versions + manifests
-  P->>DB: upsert catalog entries + outbox
+  W->>A: Получить каталог источника
+  A-->>W: Нормализованный снимок
+  W->>P: SyncAvailablePackages(source id + снимок)
+  P->>P: validate packages, versions and manifest
+  P->>DB: upsert catalog entries + manifest snapshots + outbox
   P-->>W: sync result
 ```
 
-Синхронизация не делает пользовательский запрос зависимым от внешнего магазина. UI и внутренние сервисы читают локальный доступный каталог.
+Синхронизация не делает пользовательский запрос зависимым от внешнего магазина. UI и внутренние сервисы читают локальный доступный каталог. `package-hub` не получает данные из Git/store/provider сам: адаптер источника готовит нормализованный снимок, а сервис атомарно сохраняет его вместе с событиями.
 
 ### Установка пакета
 
@@ -149,7 +150,7 @@ Manifest является обязательным файлом репозито
 | `source` | Репозиторий, допустимые ref, версия, digest и способ получения. |
 | `capabilities` | Возможности пакета: внешний канал, MCP-инструмент, руководство, сайт, магазин. |
 | `required_platform_apis` | Какие API платформы нужны пакету. |
-| `required_access_actions` | Какие действия доступа нужно выдать пакету или его runtime-нагрузке. |
+| `required_access_actions` | Какие системные действия доступа нужно выдать пакету или его runtime-нагрузке. Ключи должны существовать в общем каталоге `libs/go/accesscatalog`; произвольные динамические действия в этом поле не допускаются без отдельного контрактного расширения. |
 | `secrets` | Локализованные поля секретов, типы, обязательность и подсказки. |
 | `runtime` | Требования runtime-нагрузки, Kubernetes-манифесты, ресурсы, health и ограничения. |
 | `pricing` | Бесплатный, платный или коммерчески ограниченный пакет. |
