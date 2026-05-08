@@ -5,8 +5,8 @@ title: kodex — API-обзор package-hub
 status: active
 owner_role: SA
 created_at: 2026-05-06
-updated_at: 2026-05-07
-related_issues: [642, 646, 650, 673, 678, 680]
+updated_at: 2026-05-08
+related_issues: [642, 646, 650, 673, 678, 680, 684]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -48,7 +48,7 @@ approvals:
 | `GetPackageVersion` | gRPC query | `package.catalog.read` | нет | Читает конкретную версию, manifest и статус проверки. |
 | `ListPackageVersions` | gRPC query | `package.catalog.read` | нет | Список версий пакета. |
 | `GetPackageManifest` | gRPC query | `package.manifest.read` | нет | Возвращает нормализованный снимок manifest. |
-| `RequestPackageInstallation` | gRPC command | `package.install` | `CommandMeta.command_id` | Создаёт запрос установки пакета в заданной области; если активная установка уже есть, возвращает `already_exists`, а изменение идёт через `UpdatePackageInstallation` с ожидаемой версией. |
+| `RequestPackageInstallation` | gRPC command | `package.install` | `CommandMeta.command_id` или `idempotency_key` | Создаёт запрос установки пакета в заданной области; если активная установка уже есть, возвращает `already_exists`, а изменение идёт через `UpdatePackageInstallation` с ожидаемой версией. |
 | `UpdatePackageInstallation` | gRPC command | `package.installation.update` | ожидаемая версия | Меняет статус, desired state или выбранную версию установки. |
 | `DisablePackageInstallation` | gRPC command | `package.installation.disable` | ожидаемая версия | Отключает установленный пакет без удаления истории. |
 | `UninstallPackage` | gRPC command | `package.uninstall` | ожидаемая версия | Переводит установку в `uninstalled` и публикует событие. |
@@ -68,7 +68,7 @@ approvals:
 | `permission_denied` | `access-manager` запретил действие. |
 | `not_found` | Источник, пакет, версия или установка не найдены. |
 | `already_exists` | Дубликат slug источника, slug пакета или активной установки в той же области. |
-| `failed_precondition` | Нельзя установить отозванную версию, пакет с незаполненными обязательными секретами или пакет, запрещённый policy. |
+| `failed_precondition` | Нельзя установить отозванную версию, заблокированный пакет, версию без manifest или пакет, запрещённый policy. |
 | `aborted` | Конфликт ожидаемой версии. |
 | `unavailable` | Временная ошибка зависимости, БД или источника каталога. |
 
@@ -106,8 +106,8 @@ approvals:
 | Go-артефакты событий | Генерируются в `libs/go/platformevents/packagehub/events.gen.go`. |
 | Сервисный процесс `package-hub` | Общий gRPC runtime, служебные `/health/*`, `/metrics`, PostgreSQL repository, проверка доступа через `access-manager` и часть операций `PackageHubService` подключены. |
 | PostgreSQL и outbox | Таблицы package-каталога, установок, проверок, идемпотентного следа и outbox добавлены; диспетчер публикует события через `platform-event-log`. |
-| Реализованные операции | `ConnectPackageSource`, `UpdatePackageSource`, `DisablePackageSource`, `GetPackageSource`, `ListPackageSources`, `SyncAvailablePackages`, `GetPackage`, `ListPackages`, `GetPackageVersion`, `ListPackageVersions`, `GetPackageManifest`, `SetPackageVerification`. |
-| Операции следующих срезов | Установки, схемы секретов установок и runtime-связанные команды пока возвращают `unimplemented`. |
+| Реализованные операции | `ConnectPackageSource`, `UpdatePackageSource`, `DisablePackageSource`, `GetPackageSource`, `ListPackageSources`, `SyncAvailablePackages`, `GetPackage`, `ListPackages`, `GetPackageVersion`, `ListPackageVersions`, `GetPackageManifest`, `RequestPackageInstallation`, `GetPackageInstallation`, `ListPackageInstallations`, `SetPackageVerification`. |
+| Операции следующих срезов | Изменение, отключение и снятие установок, схемы секретов установок и runtime-связанные команды пока возвращают `unimplemented`. |
 
 ## Совместимость
 

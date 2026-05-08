@@ -31,6 +31,7 @@ type Repository interface {
 	UpdatePricingMetadata(ctx context.Context, metadata entity.PackagePricingMetadata, previousVersion int64) error
 	GetPricingMetadata(ctx context.Context, packageID uuid.UUID) (entity.PackagePricingMetadata, error)
 	CreatePackageInstallation(ctx context.Context, installation entity.PackageInstallation) error
+	CreatePackageInstallationWithResult(ctx context.Context, installation entity.PackageInstallation, result entity.CommandResult, event entity.OutboxEvent) error
 	UpdatePackageInstallation(ctx context.Context, installation entity.PackageInstallation, previousVersion int64) error
 	GetPackageInstallation(ctx context.Context, id uuid.UUID) (entity.PackageInstallation, error)
 	ListPackageInstallations(ctx context.Context, filter query.PackageInstallationFilter) ([]entity.PackageInstallation, value.PageResult, error)

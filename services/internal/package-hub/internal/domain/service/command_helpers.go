@@ -32,6 +32,10 @@ type catalogSyncCommandPayload struct {
 	SyncedAt     string                `json:"synced_at"`
 }
 
+type installationCommandPayload struct {
+	Installation packageInstallationSnapshot `json:"installation"`
+}
+
 type packageSourceSnapshot struct {
 	ID                 string `json:"id"`
 	OrganizationID     string `json:"organization_id,omitempty"`
@@ -71,6 +75,22 @@ type packageVersionSnapshot struct {
 	PublishedAt        string `json:"published_at,omitempty"`
 	CreatedAt          string `json:"created_at"`
 	UpdatedAt          string `json:"updated_at"`
+}
+
+type packageInstallationSnapshot struct {
+	ID                       string `json:"id"`
+	PackageID                string `json:"package_id"`
+	PackageVersionID         string `json:"package_version_id"`
+	ScopeType                string `json:"scope_type"`
+	ScopeRef                 string `json:"scope_ref"`
+	InstallationStatus       string `json:"installation_status"`
+	DesiredState             string `json:"desired_state"`
+	RuntimeRequirementDigest string `json:"runtime_requirement_digest,omitempty"`
+	SecretBindingStatus      string `json:"secret_binding_status"`
+	LastHealthStatus         string `json:"last_health_status"`
+	Version                  int64  `json:"version"`
+	CreatedAt                string `json:"created_at"`
+	UpdatedAt                string `json:"updated_at"`
 }
 
 func (s *Service) findSourceReplay(ctx context.Context, meta value.CommandMeta, operation string, sourceID uuid.UUID) (entity.PackageSource, bool, error) {
@@ -123,6 +143,39 @@ func findCommandReplay[T any](ctx context.Context, service *Service, meta value.
 		return zero, false, err
 	}
 	if result.Operation != spec.Operation || result.AggregateType != spec.AggregateType || result.AggregateID != spec.AggregateID {
+		return zero, true, errs.ErrConflict
+	}
+	replay, err := spec.Decode(result.ResultPayload)
+	if err != nil {
+		return zero, true, err
+	}
+	return replay, true, nil
+}
+
+type commandReplayByTypeSpec[T any] struct {
+	Operation     string
+	AggregateType enum.CommandAggregateType
+	Decode        func([]byte) (T, error)
+}
+
+func replayByTypeSpec[T any](operation string, aggregateType enum.CommandAggregateType, decode func([]byte) (T, error)) commandReplayByTypeSpec[T] {
+	return commandReplayByTypeSpec[T]{Operation: operation, AggregateType: aggregateType, Decode: decode}
+}
+
+func findCommandReplayByType[T any](ctx context.Context, service *Service, meta value.CommandMeta, spec commandReplayByTypeSpec[T]) (T, bool, error) {
+	var zero T
+	identity, err := commandIdentity(meta, spec.Operation)
+	if err != nil {
+		return zero, false, err
+	}
+	result, err := service.repository.GetCommandResult(ctx, identity)
+	if errors.Is(err, errs.ErrNotFound) {
+		return zero, false, nil
+	}
+	if err != nil {
+		return zero, false, err
+	}
+	if result.Operation != spec.Operation || result.AggregateType != spec.AggregateType {
 		return zero, true, errs.ErrConflict
 	}
 	replay, err := spec.Decode(result.ResultPayload)
@@ -210,6 +263,20 @@ func catalogSyncResultFromPayload(payload []byte) (SyncAvailablePackagesResult, 
 		return SyncAvailablePackagesResult{}, err
 	}
 	return SyncAvailablePackagesResult{Source: source, PackageCount: stored.PackageCount, VersionCount: stored.VersionCount, SyncedAt: syncedAt}, nil
+}
+
+func installationPayload(installation entity.PackageInstallation) ([]byte, error) {
+	return json.Marshal(installationCommandPayload{
+		Installation: packageInstallationSnapshotFromEntity(installation),
+	})
+}
+
+func installationResultFromPayload(payload []byte) (entity.PackageInstallation, error) {
+	var value installationCommandPayload
+	if err := json.Unmarshal(payload, &value); err != nil {
+		return entity.PackageInstallation{}, errs.ErrInvalidArgument
+	}
+	return packageInstallationFromSnapshot(value.Installation)
 }
 
 func verificationPayload(verification entity.PackageVerification, version entity.PackageVersion) ([]byte, error) {
@@ -311,6 +378,66 @@ func packageSourceSnapshotFromEntity(source entity.PackageSource) packageSourceS
 		Version:            source.Version,
 		CreatedAt:          source.CreatedAt.Format(time.RFC3339Nano),
 		UpdatedAt:          source.UpdatedAt.Format(time.RFC3339Nano),
+	}
+}
+
+func packageInstallationFromSnapshot(snapshot packageInstallationSnapshot) (entity.PackageInstallation, error) {
+	id, err := parseRequiredUUID(snapshot.ID)
+	if err != nil {
+		return entity.PackageInstallation{}, err
+	}
+	packageID, err := parseRequiredUUID(snapshot.PackageID)
+	if err != nil {
+		return entity.PackageInstallation{}, err
+	}
+	versionID, err := parseRequiredUUID(snapshot.PackageVersionID)
+	if err != nil {
+		return entity.PackageInstallation{}, err
+	}
+	createdAt, err := parseRequiredTime(snapshot.CreatedAt)
+	if err != nil {
+		return entity.PackageInstallation{}, err
+	}
+	updatedAt, err := parseRequiredTime(snapshot.UpdatedAt)
+	if err != nil {
+		return entity.PackageInstallation{}, err
+	}
+	return entity.PackageInstallation{
+		VersionedBase: entity.VersionedBase{
+			ID:        id,
+			Version:   snapshot.Version,
+			CreatedAt: createdAt,
+			UpdatedAt: updatedAt,
+		},
+		PackageID:        packageID,
+		PackageVersionID: versionID,
+		Scope: value.ScopeRef{
+			Type: enum.PackageInstallationScopeType(snapshot.ScopeType),
+			Ref:  snapshot.ScopeRef,
+		},
+		InstallationStatus:       enum.PackageInstallationStatus(snapshot.InstallationStatus),
+		DesiredState:             enum.PackageDesiredState(snapshot.DesiredState),
+		RuntimeRequirementDigest: snapshot.RuntimeRequirementDigest,
+		SecretBindingStatus:      enum.PackageSecretBindingStatus(snapshot.SecretBindingStatus),
+		LastHealthStatus:         enum.PackageHealthStatus(snapshot.LastHealthStatus),
+	}, nil
+}
+
+func packageInstallationSnapshotFromEntity(installation entity.PackageInstallation) packageInstallationSnapshot {
+	return packageInstallationSnapshot{
+		ID:                       installation.ID.String(),
+		PackageID:                installation.PackageID.String(),
+		PackageVersionID:         installation.PackageVersionID.String(),
+		ScopeType:                string(installation.Scope.Type),
+		ScopeRef:                 installation.Scope.Ref,
+		InstallationStatus:       string(installation.InstallationStatus),
+		DesiredState:             string(installation.DesiredState),
+		RuntimeRequirementDigest: installation.RuntimeRequirementDigest,
+		SecretBindingStatus:      string(installation.SecretBindingStatus),
+		LastHealthStatus:         string(installation.LastHealthStatus),
+		Version:                  installation.Version,
+		CreatedAt:                installation.CreatedAt.Format(time.RFC3339Nano),
+		UpdatedAt:                installation.UpdatedAt.Format(time.RFC3339Nano),
 	}
 }
 

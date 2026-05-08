@@ -22,7 +22,7 @@ type packageManifestDocument struct {
 	RequiredPlatformAPIs  []string                     `json:"required_platform_apis"`
 	RequiredAccessActions []string                     `json:"required_access_actions"`
 	Secrets               []value.PackageSecretField   `json:"secrets"`
-	Runtime               *packageManifestRuntime      `json:"runtime"`
+	Runtime               json.RawMessage              `json:"runtime"`
 	Pricing               *packageManifestPricing      `json:"pricing"`
 	Verification          *packageManifestVerification `json:"verification"`
 }
@@ -188,14 +188,31 @@ func validatePackageManifestSecrets(secrets []value.PackageSecretField) error {
 	return nil
 }
 
-func validatePackageManifestRuntime(runtime *packageManifestRuntime) error {
-	if runtime == nil {
-		return errs.ErrInvalidArgument
+func validatePackageManifestRuntime(payload json.RawMessage) error {
+	runtime, _, err := parsePackageManifestRuntime(payload)
+	if err != nil {
+		return err
 	}
 	if runtime.Required {
 		return requireText(runtime.WorkloadKind)
 	}
 	return nil
+}
+
+func parsePackageManifestRuntime(payload json.RawMessage) (packageManifestRuntime, []byte, error) {
+	trimmed := bytes.TrimSpace(payload)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) || trimmed[0] != '{' || !json.Valid(trimmed) {
+		return packageManifestRuntime{}, nil, errs.ErrInvalidArgument
+	}
+	var runtime packageManifestRuntime
+	if err := json.Unmarshal(trimmed, &runtime); err != nil {
+		return packageManifestRuntime{}, nil, errs.ErrInvalidArgument
+	}
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, trimmed); err != nil {
+		return packageManifestRuntime{}, nil, errs.ErrInvalidArgument
+	}
+	return runtime, compact.Bytes(), nil
 }
 
 func validatePackageManifestPricing(parent CatalogPackageSnapshot, pricing *packageManifestPricing) error {
@@ -254,10 +271,41 @@ func requireStringList(items []string, requireNonEmpty bool) error {
 
 func requireManifestDigest(expected string, payload []byte) error {
 	expected = strings.TrimSpace(expected)
-	sum := sha256.Sum256(payload)
-	actual := "sha256:" + hex.EncodeToString(sum[:])
+	actual := sha256Digest(payload)
 	if expected != actual {
 		return errs.ErrInvalidArgument
 	}
 	return nil
+}
+
+type packageInstallationRequirements struct {
+	RuntimeRequirementDigest string
+	SecretBindingStatus      enum.PackageSecretBindingStatus
+}
+
+func packageInstallationRequirementsFromManifest(payload []byte) (packageInstallationRequirements, error) {
+	var document packageManifestDocument
+	if err := json.Unmarshal(payload, &document); err != nil {
+		return packageInstallationRequirements{}, errs.ErrInvalidArgument
+	}
+	result := packageInstallationRequirements{SecretBindingStatus: enum.PackageSecretBindingStatusNotRequired}
+	for _, secret := range document.Secrets {
+		if secret.Required {
+			result.SecretBindingStatus = enum.PackageSecretBindingStatusMissing
+			break
+		}
+	}
+	runtime, runtimePayload, err := parsePackageManifestRuntime(document.Runtime)
+	if err != nil {
+		return packageInstallationRequirements{}, err
+	}
+	if runtime.Required {
+		result.RuntimeRequirementDigest = sha256Digest(runtimePayload)
+	}
+	return result, nil
+}
+
+func sha256Digest(payload []byte) string {
+	sum := sha256.Sum256(payload)
+	return "sha256:" + hex.EncodeToString(sum[:])
 }

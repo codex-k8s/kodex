@@ -33,6 +33,28 @@ func (s *Service) verificationUpdatedEvent(version entity.PackageVersion, occurr
 	return s.versionStateEvent(packageEventVerificationUpdated, version, occurredAt)
 }
 
+func (s *Service) installationRequestedEvent(installation entity.PackageInstallation, occurredAt time.Time) (entity.OutboxEvent, error) {
+	return s.installationStateEvent(packageEventInstallationRequested, installation, occurredAt)
+}
+
+func (s *Service) installationActivatedEvent(installation entity.PackageInstallation, occurredAt time.Time) (entity.OutboxEvent, error) {
+	return s.installationStateEvent(packageEventInstallationActivated, installation, occurredAt)
+}
+
+func (s *Service) installationStateEvent(eventType string, installation entity.PackageInstallation, occurredAt time.Time) (entity.OutboxEvent, error) {
+	return s.event(eventType, packageAggregateInstallation, installation.ID, value.PackageEventPayload{
+		InstallationID:      installation.ID.String(),
+		PackageID:           installation.PackageID.String(),
+		PackageVersionID:    installation.PackageVersionID.String(),
+		ScopeType:           string(installation.Scope.Type),
+		ScopeRef:            installation.Scope.Ref,
+		InstallationStatus:  string(installation.InstallationStatus),
+		DesiredState:        string(installation.DesiredState),
+		SecretBindingStatus: string(installation.SecretBindingStatus),
+		Version:             installation.Version,
+	}, occurredAt)
+}
+
 func (s *Service) catalogSyncedEvent(result SyncAvailablePackagesResult) (entity.OutboxEvent, error) {
 	return s.event(packageEventCatalogSynced, packageAggregateSource, result.Source.ID, value.PackageEventPayload{
 		SourceID:     result.Source.ID.String(),

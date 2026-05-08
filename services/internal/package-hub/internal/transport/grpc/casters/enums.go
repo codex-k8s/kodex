@@ -80,6 +80,41 @@ var manifestValidationStatusMap = []enumPair[packagesv1.PackageManifestValidatio
 	{packagesv1.PackageManifestValidationStatus_PACKAGE_MANIFEST_VALIDATION_STATUS_WARNING, enum.PackageManifestValidationStatusWarning},
 }
 
+var installationScopeTypeMap = []enumPair[packagesv1.PackageInstallationScopeType, enum.PackageInstallationScopeType]{
+	{packagesv1.PackageInstallationScopeType_PACKAGE_INSTALLATION_SCOPE_TYPE_PLATFORM, enum.PackageInstallationScopeTypePlatform},
+	{packagesv1.PackageInstallationScopeType_PACKAGE_INSTALLATION_SCOPE_TYPE_ORGANIZATION, enum.PackageInstallationScopeTypeOrganization},
+	{packagesv1.PackageInstallationScopeType_PACKAGE_INSTALLATION_SCOPE_TYPE_PROJECT, enum.PackageInstallationScopeTypeProject},
+	{packagesv1.PackageInstallationScopeType_PACKAGE_INSTALLATION_SCOPE_TYPE_REPOSITORY, enum.PackageInstallationScopeTypeRepository},
+}
+
+var installationStatusMap = []enumPair[packagesv1.PackageInstallationStatus, enum.PackageInstallationStatus]{
+	{packagesv1.PackageInstallationStatus_PACKAGE_INSTALLATION_STATUS_REQUESTED, enum.PackageInstallationStatusRequested},
+	{packagesv1.PackageInstallationStatus_PACKAGE_INSTALLATION_STATUS_ACTIVE, enum.PackageInstallationStatusActive},
+	{packagesv1.PackageInstallationStatus_PACKAGE_INSTALLATION_STATUS_DISABLED, enum.PackageInstallationStatusDisabled},
+	{packagesv1.PackageInstallationStatus_PACKAGE_INSTALLATION_STATUS_FAILED, enum.PackageInstallationStatusFailed},
+	{packagesv1.PackageInstallationStatus_PACKAGE_INSTALLATION_STATUS_UNINSTALLED, enum.PackageInstallationStatusUninstalled},
+}
+
+var desiredStateMap = []enumPair[packagesv1.PackageDesiredState, enum.PackageDesiredState]{
+	{packagesv1.PackageDesiredState_PACKAGE_DESIRED_STATE_PRESENT, enum.PackageDesiredStatePresent},
+	{packagesv1.PackageDesiredState_PACKAGE_DESIRED_STATE_ABSENT, enum.PackageDesiredStateAbsent},
+	{packagesv1.PackageDesiredState_PACKAGE_DESIRED_STATE_SUSPENDED, enum.PackageDesiredStateSuspended},
+}
+
+var secretBindingStatusMap = []enumPair[packagesv1.PackageSecretBindingStatus, enum.PackageSecretBindingStatus]{
+	{packagesv1.PackageSecretBindingStatus_PACKAGE_SECRET_BINDING_STATUS_NOT_REQUIRED, enum.PackageSecretBindingStatusNotRequired},
+	{packagesv1.PackageSecretBindingStatus_PACKAGE_SECRET_BINDING_STATUS_MISSING, enum.PackageSecretBindingStatusMissing},
+	{packagesv1.PackageSecretBindingStatus_PACKAGE_SECRET_BINDING_STATUS_COMPLETE, enum.PackageSecretBindingStatusComplete},
+	{packagesv1.PackageSecretBindingStatus_PACKAGE_SECRET_BINDING_STATUS_INVALID, enum.PackageSecretBindingStatusInvalid},
+}
+
+var healthStatusMap = []enumPair[packagesv1.PackageHealthStatus, enum.PackageHealthStatus]{
+	{packagesv1.PackageHealthStatus_PACKAGE_HEALTH_STATUS_UNKNOWN, enum.PackageHealthStatusUnknown},
+	{packagesv1.PackageHealthStatus_PACKAGE_HEALTH_STATUS_HEALTHY, enum.PackageHealthStatusHealthy},
+	{packagesv1.PackageHealthStatus_PACKAGE_HEALTH_STATUS_DEGRADED, enum.PackageHealthStatusDegraded},
+	{packagesv1.PackageHealthStatus_PACKAGE_HEALTH_STATUS_FAILED, enum.PackageHealthStatusFailed},
+}
+
 func SourceKindFromProto(value packagesv1.PackageSourceKind) (enum.PackageSourceKind, error) {
 	return domainEnum(value, sourceKindMap)
 }
@@ -156,6 +191,42 @@ func ManifestValidationStatusToProto(value enum.PackageManifestValidationStatus)
 	return protoEnum(value, manifestValidationStatusMap, packagesv1.PackageManifestValidationStatus_PACKAGE_MANIFEST_VALIDATION_STATUS_UNSPECIFIED)
 }
 
+func InstallationScopeTypeFromProto(value packagesv1.PackageInstallationScopeType) (enum.PackageInstallationScopeType, error) {
+	return domainEnum(value, installationScopeTypeMap)
+}
+
+func InstallationScopeTypeToProto(value enum.PackageInstallationScopeType) packagesv1.PackageInstallationScopeType {
+	return protoEnum(value, installationScopeTypeMap, packagesv1.PackageInstallationScopeType_PACKAGE_INSTALLATION_SCOPE_TYPE_UNSPECIFIED)
+}
+
+func InstallationStatusFromProto(value packagesv1.PackageInstallationStatus) (enum.PackageInstallationStatus, error) {
+	return domainEnum(value, installationStatusMap)
+}
+
+func InstallationStatusToProto(value enum.PackageInstallationStatus) packagesv1.PackageInstallationStatus {
+	return protoEnum(value, installationStatusMap, packagesv1.PackageInstallationStatus_PACKAGE_INSTALLATION_STATUS_UNSPECIFIED)
+}
+
+func DesiredStateFromProto(value packagesv1.PackageDesiredState) (enum.PackageDesiredState, error) {
+	return domainEnum(value, desiredStateMap)
+}
+
+func DesiredStateToProto(value enum.PackageDesiredState) packagesv1.PackageDesiredState {
+	return protoEnum(value, desiredStateMap, packagesv1.PackageDesiredState_PACKAGE_DESIRED_STATE_UNSPECIFIED)
+}
+
+func SecretBindingStatusFromProto(value packagesv1.PackageSecretBindingStatus) (enum.PackageSecretBindingStatus, error) {
+	return domainEnum(value, secretBindingStatusMap)
+}
+
+func SecretBindingStatusToProto(value enum.PackageSecretBindingStatus) packagesv1.PackageSecretBindingStatus {
+	return protoEnum(value, secretBindingStatusMap, packagesv1.PackageSecretBindingStatus_PACKAGE_SECRET_BINDING_STATUS_UNSPECIFIED)
+}
+
+func HealthStatusToProto(value enum.PackageHealthStatus) packagesv1.PackageHealthStatus {
+	return protoEnum(value, healthStatusMap, packagesv1.PackageHealthStatus_PACKAGE_HEALTH_STATUS_UNSPECIFIED)
+}
+
 func optionalPackageKind(value *packagesv1.PackageKind) (*enum.PackageKind, error) {
 	return optionalEnum(value, PackageKindFromProto)
 }
@@ -178,6 +249,18 @@ func optionalVerificationStatus(value *packagesv1.PackageVerificationStatus) (*e
 
 func optionalReleaseStatus(value *packagesv1.PackageReleaseStatus) (*enum.PackageReleaseStatus, error) {
 	return optionalEnum(value, ReleaseStatusFromProto)
+}
+
+func optionalInstallationStatus(value *packagesv1.PackageInstallationStatus) (*enum.PackageInstallationStatus, error) {
+	return optionalEnum(value, InstallationStatusFromProto)
+}
+
+func optionalDesiredState(value *packagesv1.PackageDesiredState) (*enum.PackageDesiredState, error) {
+	return optionalEnum(value, DesiredStateFromProto)
+}
+
+func optionalSecretBindingStatus(value *packagesv1.PackageSecretBindingStatus) (*enum.PackageSecretBindingStatus, error) {
+	return optionalEnum(value, SecretBindingStatusFromProto)
 }
 
 func optionalSourceKind(value *packagesv1.PackageSourceKind) (*enum.PackageSourceKind, error) {

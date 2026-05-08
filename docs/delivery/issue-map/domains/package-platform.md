@@ -5,7 +5,7 @@ title: kodex — карта Issue домена пакетной платформ
 status: active
 owner_role: KM
 created_at: 2026-04-25
-updated_at: 2026-05-07
+updated_at: 2026-05-08
 ---
 
 # Карта Issue — пакетная платформа
@@ -27,5 +27,6 @@ updated_at: 2026-05-07
 | #673 | `services/internal/package-hub/**`, `docs/domains/package-platform/architecture/data_model.md`, `docs/domains/package-platform/delivery/package_hub.md` | PKG-3.4 | готово | Outbox, базовые repository-backed gRPC чтения и команда проверки версии пакета. |
 | #678 | `services/internal/package-hub/**`, `docs/domains/package-platform/architecture/api_contract.md`, `docs/domains/package-platform/architecture/design.md`, `docs/domains/package-platform/delivery/package_hub.md` | PKG-4.1 | готово | Команды жизненного цикла источников пакетов: подключение, обновление, отключение, идемпотентность и события. |
 | #680 | `proto/kodex/packages/**`, `proto/gen/go/kodex/packages/**`, `services/internal/package-hub/**`, `docs/domains/package-platform/architecture/api_contract.md`, `docs/domains/package-platform/architecture/design.md`, `docs/domains/package-platform/delivery/package_hub.md` | PKG-4.2 | готово | Синхронизация доступного каталога принимает нормализованный снимок, проверяет manifest, создаёт или обновляет packages/versions и пишет события. |
-| не назначено | `services/internal/package-hub/**`, `docs/catalogs/plugins/**`, `docs/catalogs/guidance-packages/**` | PKG-5/PKG-6 | запланировано | Установки, версии, секреты, плагины и руководящие пакеты. |
+| #684 | `services/internal/package-hub/**`, `docs/domains/package-platform/architecture/api_contract.md`, `docs/domains/package-platform/architecture/design.md`, `docs/domains/package-platform/delivery/package_hub.md` | PKG-5.1 | готово | Запрос установки пакета и чтения установок: проверка доступа, идемпотентность, manifest-derived статусы и события установки. |
+| не назначено | `services/internal/package-hub/**`, `docs/catalogs/plugins/**`, `docs/catalogs/guidance-packages/**` | PKG-5.2/PKG-6 | запланировано | Изменение и снятие установок, секреты, плагины и руководящие пакеты. |
 | не назначено | `deploy/**`, `services.yaml`, `docs/domains/package-platform/**` | PKG-7 | запланировано | Эксплуатационный контур `package-hub`: манифесты, migration job, config, health, metrics и runbook. |

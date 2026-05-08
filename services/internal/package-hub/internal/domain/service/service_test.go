@@ -440,6 +440,144 @@ func TestSyncAvailablePackagesRejectsUnknownManifestAccessAction(t *testing.T) {
 	}
 }
 
+func TestRequestPackageInstallationCreatesRequestedArtifacts(t *testing.T) {
+	t.Parallel()
+
+	packageID := uuid.New()
+	versionID := uuid.New()
+	scope := value.ScopeRef{Type: enum.PackageInstallationScopeTypeProject, Ref: uuid.NewString()}
+	repository := &fakeRepository{
+		packageEntry: entity.PackageEntry{
+			VersionedBase: entity.VersionedBase{ID: packageID},
+			Status:        enum.PackageStatusAvailable,
+			TrustStatus:   enum.PackageTrustStatusVerified,
+		},
+		packageVersion: entity.PackageVersion{
+			ID:                 versionID,
+			PackageID:          packageID,
+			ReleaseStatus:      enum.PackageReleaseStatusActive,
+			VerificationStatus: enum.PackageVerificationStatusVerified,
+		},
+		manifestSnapshot: entity.PackageManifestSnapshot{PackageVersionID: versionID, Payload: testCatalogManifestPayload()},
+		commandResultErr: errs.ErrNotFound,
+	}
+	authorizer := &recordingAuthorizer{}
+	service := NewWithConfig(repository, fixedClock{}, newSequenceIDs(2), Config{Authorizer: authorizer})
+
+	installation, err := service.RequestPackageInstallation(context.Background(), RequestPackageInstallationInput{
+		PackageID:        packageID,
+		PackageVersionID: versionID,
+		Scope:            scope,
+		Meta:             commandMeta(),
+	})
+	if err != nil {
+		t.Fatalf("RequestPackageInstallation(): %v", err)
+	}
+	if installation.InstallationStatus != enum.PackageInstallationStatusRequested || installation.SecretBindingStatus != enum.PackageSecretBindingStatusMissing {
+		t.Fatalf("installation = %+v, want requested with missing required secret", installation)
+	}
+	if installation.RuntimeRequirementDigest == "" || installation.DesiredState != enum.PackageDesiredStatePresent {
+		t.Fatalf("installation requirements = %+v, want runtime digest and present desired state", installation)
+	}
+	if repository.createInstallationWithResultCalls != 1 || repository.createdInstallation.ID != installation.ID {
+		t.Fatalf("create installation calls = %d created = %+v, want one created installation", repository.createInstallationWithResultCalls, repository.createdInstallation)
+	}
+	if repository.createdResult.AggregateType != enum.CommandAggregateTypeInstallation || repository.createdResult.AggregateID != installation.ID {
+		t.Fatalf("command result = %+v, want installation aggregate", repository.createdResult)
+	}
+	if repository.createdEvent.EventType != packageEventInstallationRequested || repository.createdEvent.AggregateID != installation.ID {
+		t.Fatalf("event = %+v, want installation requested event", repository.createdEvent)
+	}
+	if len(authorizer.requests) != 1 || authorizer.requests[0].ActionKey != packageActionInstall || authorizer.requests[0].ScopeType != packageScopeProject || authorizer.requests[0].ScopeID != scope.Ref {
+		t.Fatalf("authorization requests = %+v, want install in project scope", authorizer.requests)
+	}
+}
+
+func TestPackageInstallationRequirementsDigestUsesFullRuntimeBlock(t *testing.T) {
+	t.Parallel()
+
+	runtimeWithSmallResources := bytes.Replace(
+		testCatalogManifestPayload(),
+		[]byte(`"workload_kind": "deployment"`),
+		[]byte(`"workload_kind": "deployment", "resources": {"cpu": "250m"}`),
+		1,
+	)
+	runtimeWithLargeResources := bytes.Replace(
+		testCatalogManifestPayload(),
+		[]byte(`"workload_kind": "deployment"`),
+		[]byte(`"workload_kind": "deployment", "resources": {"cpu": "500m"}`),
+		1,
+	)
+
+	smallRequirements, err := packageInstallationRequirementsFromManifest(runtimeWithSmallResources)
+	if err != nil {
+		t.Fatalf("packageInstallationRequirementsFromManifest(small): %v", err)
+	}
+	largeRequirements, err := packageInstallationRequirementsFromManifest(runtimeWithLargeResources)
+	if err != nil {
+		t.Fatalf("packageInstallationRequirementsFromManifest(large): %v", err)
+	}
+	if smallRequirements.RuntimeRequirementDigest == "" || largeRequirements.RuntimeRequirementDigest == "" {
+		t.Fatalf("runtime digests = %q / %q, want non-empty digests", smallRequirements.RuntimeRequirementDigest, largeRequirements.RuntimeRequirementDigest)
+	}
+	if smallRequirements.RuntimeRequirementDigest == largeRequirements.RuntimeRequirementDigest {
+		t.Fatalf("runtime digest = %q for different runtime blocks, want different digests", smallRequirements.RuntimeRequirementDigest)
+	}
+}
+
+func TestRequestPackageInstallationReplayChecksRequestAndReadAccess(t *testing.T) {
+	t.Parallel()
+
+	packageID := uuid.New()
+	versionID := uuid.New()
+	scope := value.ScopeRef{Type: enum.PackageInstallationScopeTypeRepository, Ref: uuid.NewString()}
+	stored := entity.PackageInstallation{
+		VersionedBase: entity.VersionedBase{
+			ID:        uuid.New(),
+			Version:   1,
+			CreatedAt: time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC),
+			UpdatedAt: time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC),
+		},
+		PackageID:           packageID,
+		PackageVersionID:    versionID,
+		Scope:               scope,
+		InstallationStatus:  enum.PackageInstallationStatusActive,
+		DesiredState:        enum.PackageDesiredStatePresent,
+		SecretBindingStatus: enum.PackageSecretBindingStatusNotRequired,
+		LastHealthStatus:    enum.PackageHealthStatusUnknown,
+	}
+	payload, err := installationPayload(stored)
+	if err != nil {
+		t.Fatalf("installationPayload(): %v", err)
+	}
+	meta := commandMeta()
+	repository := &fakeRepository{commandResult: entity.CommandResult{
+		CommandID:     &meta.CommandID,
+		Operation:     packageOperationInstall,
+		AggregateType: enum.CommandAggregateTypeInstallation,
+		AggregateID:   stored.ID,
+		ResultPayload: payload,
+	}}
+	authorizer := &recordingAuthorizer{}
+	service := NewWithConfig(repository, fixedClock{}, fixedIDs{}, Config{Authorizer: authorizer})
+
+	replay, err := service.RequestPackageInstallation(context.Background(), RequestPackageInstallationInput{
+		PackageID:        packageID,
+		PackageVersionID: versionID,
+		Scope:            scope,
+		Meta:             meta,
+	})
+	if err != nil {
+		t.Fatalf("RequestPackageInstallation replay(): %v", err)
+	}
+	if replay.ID != stored.ID || repository.createInstallationWithResultCalls != 0 {
+		t.Fatalf("replay = %+v create calls = %d, want stored installation without mutation", replay, repository.createInstallationWithResultCalls)
+	}
+	if len(authorizer.requests) != 2 || authorizer.requests[0].ActionKey != packageActionInstall || authorizer.requests[1].ActionKey != packageActionInstallationRead {
+		t.Fatalf("authorization requests = %+v, want install check and read check on replay", authorizer.requests)
+	}
+}
+
 func testCatalogManifestPayload() []byte {
 	return []byte(`{
 		"identity": {
@@ -501,26 +639,32 @@ func (a *recordingAuthorizer) Authorize(_ context.Context, request Authorization
 }
 
 type fakeRepository struct {
-	packageEntry                entity.PackageEntry
-	packageSource               entity.PackageSource
-	packageVersion              entity.PackageVersion
-	commandResult               entity.CommandResult
-	commandResultErr            error
-	createdSource               entity.PackageSource
-	createdResult               entity.CommandResult
-	createdEvent                entity.OutboxEvent
-	updatedSource               entity.PackageSource
-	updatedResult               entity.CommandResult
-	updatedEvent                entity.OutboxEvent
-	syncPlan                    catalogrepo.CatalogSyncPlan
-	syncEvents                  []entity.OutboxEvent
-	createSourceWithResultCalls int
-	updateSourceWithResultCalls int
-	syncCatalogCalls            int
-	getSourceCalls              int
-	getVersionCalls             int
-	getCommandResultCalls       int
-	setVerificationCalls        int
+	packageEntry                      entity.PackageEntry
+	packageSource                     entity.PackageSource
+	packageVersion                    entity.PackageVersion
+	packageInstallation               entity.PackageInstallation
+	manifestSnapshot                  entity.PackageManifestSnapshot
+	commandResult                     entity.CommandResult
+	commandResultErr                  error
+	createdSource                     entity.PackageSource
+	createdInstallation               entity.PackageInstallation
+	createdResult                     entity.CommandResult
+	createdEvent                      entity.OutboxEvent
+	updatedSource                     entity.PackageSource
+	updatedResult                     entity.CommandResult
+	updatedEvent                      entity.OutboxEvent
+	syncPlan                          catalogrepo.CatalogSyncPlan
+	syncEvents                        []entity.OutboxEvent
+	createSourceWithResultCalls       int
+	updateSourceWithResultCalls       int
+	syncCatalogCalls                  int
+	createInstallationWithResultCalls int
+	getInstallationCalls              int
+	listInstallationsCalls            int
+	getSourceCalls                    int
+	getVersionCalls                   int
+	getCommandResultCalls             int
+	setVerificationCalls              int
 }
 
 func (r *fakeRepository) CreatePackageSource(context.Context, entity.PackageSource) error {
@@ -601,7 +745,7 @@ func (r *fakeRepository) CreateManifestSnapshot(context.Context, entity.PackageM
 }
 
 func (r *fakeRepository) GetLatestManifestSnapshot(context.Context, uuid.UUID) (entity.PackageManifestSnapshot, error) {
-	panic("not implemented")
+	return r.manifestSnapshot, nil
 }
 
 func (r *fakeRepository) CreatePricingMetadata(context.Context, entity.PackagePricingMetadata) error {
@@ -620,16 +764,29 @@ func (r *fakeRepository) CreatePackageInstallation(context.Context, entity.Packa
 	panic("not implemented")
 }
 
+func (r *fakeRepository) CreatePackageInstallationWithResult(_ context.Context, installation entity.PackageInstallation, result entity.CommandResult, event entity.OutboxEvent) error {
+	r.createInstallationWithResultCalls++
+	r.createdInstallation = installation
+	r.createdResult = result
+	r.createdEvent = event
+	return nil
+}
+
 func (r *fakeRepository) UpdatePackageInstallation(context.Context, entity.PackageInstallation, int64) error {
 	panic("not implemented")
 }
 
 func (r *fakeRepository) GetPackageInstallation(context.Context, uuid.UUID) (entity.PackageInstallation, error) {
-	panic("not implemented")
+	r.getInstallationCalls++
+	return r.packageInstallation, nil
 }
 
 func (r *fakeRepository) ListPackageInstallations(context.Context, query.PackageInstallationFilter) ([]entity.PackageInstallation, value.PageResult, error) {
-	panic("not implemented")
+	r.listInstallationsCalls++
+	if r.packageInstallation.ID == uuid.Nil {
+		return nil, value.PageResult{}, nil
+	}
+	return []entity.PackageInstallation{r.packageInstallation}, value.PageResult{}, nil
 }
 
 func (r *fakeRepository) CreatePackageSecretSchema(context.Context, entity.PackageSecretSchema) error {

@@ -183,6 +183,76 @@ func GetPackageManifestInput(request *packagesv1.GetPackageManifestRequest) (IDQ
 	return queryByIDInput(request.GetPackageVersionId(), request.GetMeta())
 }
 
+func RequestPackageInstallationInput(request *packagesv1.RequestPackageInstallationRequest) (service.RequestPackageInstallationInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return service.RequestPackageInstallationInput{}, err
+	}
+	packageID, err := requiredUUID(request.GetPackageId())
+	if err != nil {
+		return service.RequestPackageInstallationInput{}, err
+	}
+	versionID, err := requiredUUID(request.GetPackageVersionId())
+	if err != nil {
+		return service.RequestPackageInstallationInput{}, err
+	}
+	scope, err := scopeRefFromProto(request.GetScope())
+	if err != nil {
+		return service.RequestPackageInstallationInput{}, err
+	}
+	desiredState, err := optionalDesiredState(request.DesiredState)
+	if err != nil {
+		return service.RequestPackageInstallationInput{}, err
+	}
+	return service.RequestPackageInstallationInput{
+		PackageID:        packageID,
+		PackageVersionID: versionID,
+		Scope:            scope,
+		DesiredState:     desiredState,
+		Meta:             meta,
+	}, nil
+}
+
+func GetPackageInstallationInput(request *packagesv1.GetPackageInstallationRequest) (IDQueryInput, error) {
+	return queryByIDInput(request.GetInstallationId(), request.GetMeta())
+}
+
+func ListPackageInstallationsInput(request *packagesv1.ListPackageInstallationsRequest) (service.ListPackageInstallationsInput, error) {
+	meta, err := QueryMetaFromProto(request.GetMeta())
+	if err != nil {
+		return service.ListPackageInstallationsInput{}, err
+	}
+	scope, err := optionalScopeRefFromProto(request.GetScope())
+	if err != nil {
+		return service.ListPackageInstallationsInput{}, err
+	}
+	packageID, err := optionalUUIDPtr(request.GetPackageId())
+	if err != nil {
+		return service.ListPackageInstallationsInput{}, err
+	}
+	packageKind, err := optionalPackageKind(request.PackageKind)
+	if err != nil {
+		return service.ListPackageInstallationsInput{}, err
+	}
+	installationStatus, err := optionalInstallationStatus(request.InstallationStatus)
+	if err != nil {
+		return service.ListPackageInstallationsInput{}, err
+	}
+	secretBindingStatus, err := optionalSecretBindingStatus(request.SecretBindingStatus)
+	if err != nil {
+		return service.ListPackageInstallationsInput{}, err
+	}
+	return service.ListPackageInstallationsInput{
+		Scope:               scope,
+		PackageID:           packageID,
+		PackageKind:         packageKind,
+		InstallationStatus:  installationStatus,
+		SecretBindingStatus: secretBindingStatus,
+		Page:                pageRequestFromProto(request.GetPage()),
+		Meta:                meta,
+	}, nil
+}
+
 func SetPackageVerificationInput(request *packagesv1.SetPackageVerificationRequest) (service.SetPackageVerificationInput, error) {
 	meta, err := CommandMetaFromProto(request.GetMeta())
 	if err != nil {
@@ -352,6 +422,28 @@ func sourceRefFromProto(ref *packagesv1.SourceRef) (value.SourceRef, error) {
 		return value.SourceRef{}, err
 	}
 	return value.SourceRef{Kind: kind, Ref: strings.TrimSpace(ref.GetRef()), CommitSHA: strings.TrimSpace(ref.GetCommitSha())}, nil
+}
+
+func optionalScopeRefFromProto(ref *packagesv1.ScopeRef) (*value.ScopeRef, error) {
+	if ref == nil {
+		return nil, nil
+	}
+	scope, err := scopeRefFromProto(ref)
+	if err != nil {
+		return nil, err
+	}
+	return &scope, nil
+}
+
+func scopeRefFromProto(ref *packagesv1.ScopeRef) (value.ScopeRef, error) {
+	if ref == nil {
+		return value.ScopeRef{}, errs.ErrInvalidArgument
+	}
+	scopeType, err := InstallationScopeTypeFromProto(ref.GetType())
+	if err != nil {
+		return value.ScopeRef{}, err
+	}
+	return value.ScopeRef{Type: scopeType, Ref: strings.TrimSpace(ref.GetRef())}, nil
 }
 
 func localizedTextFromProto(items []*packagesv1.LocalizedText) []value.LocalizedText {

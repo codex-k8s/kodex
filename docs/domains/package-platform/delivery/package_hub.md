@@ -5,8 +5,8 @@ title: kodex — поставка package-hub
 status: active
 owner_role: EM
 created_at: 2026-05-06
-updated_at: 2026-05-07
-related_issues: [642, 646, 650, 663, 667, 670, 673, 678, 680]
+updated_at: 2026-05-08
+related_issues: [642, 646, 650, 663, 667, 670, 673, 678, 680, 684]
 related_prs: []
 related_docsets:
   - docs/domains/package-platform/product/requirements.md
@@ -50,7 +50,9 @@ approvals:
 | PKG-3.4 | #673 | Outbox, первые repository-backed gRPC чтения и команда проверки версии пакета готовы. |
 | PKG-4.1 | #678 | Команды подключения, обновления и отключения источников пакетов готовы: проверка доступа, идемпотентность, ожидаемая версия и события источника. |
 | PKG-4.2 | #680 | Синхронизация доступного каталога и проверка manifest готовы. |
-| PKG-5 | не назначено | Установки пакетов, версии, привязки секретов и события установки готовы. |
+| PKG-5.1 | #684 | Запрос установки пакета и чтения установок готовы: `RequestPackageInstallation`, `GetPackageInstallation`, `ListPackageInstallations`, идемпотентность, проверка доступа, проверка готовности к установке и события `package.installation.requested/activated`. |
+| PKG-5.2 | не назначено | Изменение, отключение и снятие установки готовы: `UpdatePackageInstallation`, `DisablePackageInstallation`, `UninstallPackage`, ожидаемая версия и события жизненного цикла. |
+| PKG-5.3 | не назначено | Схемы секретов установок и сверка статуса заполненности готовы: `GetPackageSecretSchema`, `RefreshPackageInstallationSecretStatus` и связь с контуром секретов. |
 | PKG-6 | не назначено | Специализация плагинов, руководящих пакетов, магазина и пакетов пользовательского контента платформы готова. |
 | PKG-7 | не назначено | Манифесты deploy, migration job, config, health, metrics и runbook готовы. |
 
@@ -71,14 +73,14 @@ approvals:
 | `GetPackageVersion` | `ready` | PKG-3.4 |
 | `ListPackageVersions` | `ready` | PKG-3.4 |
 | `GetPackageManifest` | `ready` | PKG-3.4 |
-| `RequestPackageInstallation` | `unimplemented` | PKG-5 |
-| `UpdatePackageInstallation` | `unimplemented` | PKG-5 |
-| `DisablePackageInstallation` | `unimplemented` | PKG-5 |
-| `UninstallPackage` | `unimplemented` | PKG-5 |
-| `GetPackageInstallation` | `unimplemented` | PKG-5 |
-| `ListPackageInstallations` | `unimplemented` | PKG-5 |
-| `GetPackageSecretSchema` | `unimplemented` | PKG-5 |
-| `RefreshPackageInstallationSecretStatus` | `unimplemented` | PKG-5 |
+| `RequestPackageInstallation` | `ready` | PKG-5.1 |
+| `UpdatePackageInstallation` | `unimplemented` | PKG-5.2 |
+| `DisablePackageInstallation` | `unimplemented` | PKG-5.2 |
+| `UninstallPackage` | `unimplemented` | PKG-5.2 |
+| `GetPackageInstallation` | `ready` | PKG-5.1 |
+| `ListPackageInstallations` | `ready` | PKG-5.1 |
+| `GetPackageSecretSchema` | `unimplemented` | PKG-5.3 |
+| `RefreshPackageInstallationSecretStatus` | `unimplemented` | PKG-5.3 |
 | `SetPackageVerification` | `ready` | PKG-3.4 |
 
 ## Синхронизация каталога `PKG-4.2`
@@ -90,6 +92,17 @@ approvals:
 | Запись каталога | готово | Источник, пакеты, версии, новые снимки manifest, command result и outbox пишутся в одной PostgreSQL-транзакции. |
 | События | готово | Публикуются `package.catalog.synced`, `package.package.discovered/updated`, `package.version.discovered/updated`. |
 | Получение из внешнего store/provider | следующий срез интеграции | Реальный обход Git/store/provider остаётся вне `package-hub`: внешний адаптер готовит нормализованный снимок и вызывает gRPC-команду. |
+
+## Установки пакетов `PKG-5.1`
+
+| Область | Статус | Примечание |
+|---|---|---|
+| Запрос установки | готово | `RequestPackageInstallation` проверяет права `package.install`, существование пакета и версии, статус пакета, статус версии, manifest и создаёт установку в заданной области. |
+| Идемпотентность | готово | Повтор команды по `command_id` или `idempotency_key` возвращает сохранённый снимок установки только после сверки входных параметров и повторной проверки права чтения. |
+| Начальный статус | готово | Установка становится `active`, если package manifest не требует runtime-нагрузку и обязательные секреты; иначе получает статус `requested`. |
+| События | готово | Команда пишет `package.installation.requested` или `package.installation.activated` через outbox в той же транзакции, что и установка и command result. |
+| Чтения | готово | `GetPackageInstallation` и `ListPackageInstallations` проверяют `package.installation.read` и читают локальную PostgreSQL-проекцию установок. |
+| Не входит в срез | запланировано | Изменение версии, отключение, снятие установки, обновление статуса секретов и runtime-запуск идут отдельными срезами, чтобы не смешивать доменную запись установки с соседними runtime и контуром секретов. |
 
 ## Наблюдаемость `PKG-3.1`
 
@@ -107,7 +120,7 @@ approvals:
 | `project-catalog` | Перед PKG-4.2 и PKG-5 | `services.yaml` и workspace policy могут ссылаться на руководящие пакеты и package sources, но проектная политика остаётся у `project-catalog`. |
 | `provider-hub` | Перед PKG-4.2 | Репозитории-источники пакетов, webhook, PR и Git-истина пакета идут через provider-native контур. |
 | `access-manager` | Перед PKG-2 | Действия доступа для источников, установок, верификации и секретов должны быть согласованы с access catalog. |
-| `runtime-manager` и `fleet-manager` | Перед PKG-5 и PKG-7 | `package-hub` фиксирует установку и требования, но runtime-нагрузку, Kubernetes и размещение исполняет runtime/fleet контур. |
+| `runtime-manager` и `fleet-manager` | Перед runtime-срезом установок и PKG-7 | `package-hub` фиксирует установку и требования, но runtime-нагрузку, Kubernetes и размещение исполняет runtime/fleet контур. |
 | `agent-manager` | Перед PKG-6 | Руководящие пакеты и возможности пакетов влияют на подготовку агентного контекста. |
 | `billing-hub` | После PKG-5 | Ценовые метаданные и факты установки нужны для будущего учёта, но счета не живут в `package-hub`. |
 
