@@ -220,6 +220,27 @@ CREATE INDEX provider_hub_sync_cursors_lease_idx
     ON provider_hub_sync_cursors (lease_until)
     WHERE lease_until IS NOT NULL;
 
+CREATE TABLE provider_hub_reconciliation_requests (
+    id uuid PRIMARY KEY,
+    provider_slug text NOT NULL,
+    scope_type text NOT NULL,
+    scope_ref text NOT NULL,
+    idempotency_key text NOT NULL,
+    artifact_kinds_json jsonb NOT NULL,
+    priority text NOT NULL,
+    created_at timestamptz NOT NULL,
+    updated_at timestamptz NOT NULL,
+    UNIQUE (provider_slug, scope_type, scope_ref, idempotency_key),
+    CONSTRAINT provider_hub_reconciliation_requests_provider_chk CHECK (provider_slug <> ''),
+    CONSTRAINT provider_hub_reconciliation_requests_scope_type_chk
+        CHECK (scope_type IN ('repository', 'organization', 'work_item', 'package_source')),
+    CONSTRAINT provider_hub_reconciliation_requests_scope_ref_chk CHECK (scope_ref <> ''),
+    CONSTRAINT provider_hub_reconciliation_requests_idempotency_chk CHECK (idempotency_key <> ''),
+    CONSTRAINT provider_hub_reconciliation_requests_artifacts_chk
+        CHECK (jsonb_typeof(artifact_kinds_json) = 'array' AND jsonb_array_length(artifact_kinds_json) > 0),
+    CONSTRAINT provider_hub_reconciliation_requests_priority_chk CHECK (priority IN ('hot', 'warm', 'cold'))
+);
+
 CREATE TABLE provider_hub_limit_snapshots (
     id uuid PRIMARY KEY,
     external_account_id uuid NOT NULL,

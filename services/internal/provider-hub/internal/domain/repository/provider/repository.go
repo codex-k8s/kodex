@@ -27,7 +27,7 @@ type Repository interface {
 	ListWorkItemProjections(context.Context, query.WorkItemProjectionFilter) ([]entity.ProviderWorkItemProjection, query.PageResult, error)
 	ListComments(context.Context, query.CommentProjectionFilter) ([]entity.ProviderCommentProjection, query.PageResult, error)
 	ListRelationships(context.Context, query.RelationshipFilter) ([]entity.ProviderRelationship, query.PageResult, error)
-	UpsertSyncCursor(context.Context, entity.SyncCursor) (entity.SyncCursor, error)
+	EnqueueSyncCursors(context.Context, entity.ReconciliationRequest, []entity.SyncCursor) ([]entity.SyncCursor, error)
 	GetSyncCursor(context.Context, uuid.UUID) (entity.SyncCursor, error)
 	ListSyncCursors(context.Context, query.SyncCursorFilter) ([]entity.SyncCursor, query.PageResult, error)
 	ClaimSyncCursor(context.Context, SyncCursorClaim) (entity.SyncCursor, error)

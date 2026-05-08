@@ -5,7 +5,7 @@ title: kodex — карта Issue домена рабочих сущностей
 status: active
 owner_role: KM
 created_at: 2026-04-25
-updated_at: 2026-05-07
+updated_at: 2026-05-08
 ---
 
 # Карта Issue — рабочие сущности провайдера
@@ -24,7 +24,7 @@ updated_at: 2026-05-07
 | не назначено | `services/internal/provider-hub/**`, `docs/domains/provider-native-work-items/architecture/design.md`, `docs/domains/provider-native-work-items/architecture/data_model.md`, `docs/domains/provider-native-work-items/delivery/provider_hub_delivery.md` | PRV-3 | done | Внешние аккаунты у провайдера, лимиты, GitHub-адаптер и журнал операций. |
 | не назначено | `services/internal/provider-hub/**`, `docs/domains/provider-native-work-items/architecture/design.md`, `docs/domains/provider-native-work-items/architecture/data_model.md`, `docs/domains/provider-native-work-items/delivery/provider_hub_delivery.md` | PRV-4 | done | Журнал webhook, дедупликация, нормализация GitHub-событий и базовые outbox-события. |
 | не назначено | `services/internal/provider-hub/**`, `docs/domains/provider-native-work-items/architecture/data_model.md`, `docs/domains/provider-native-work-items/delivery/provider_hub_delivery.md` | PRV-5 | done | Проекции `Issue`, `PR/MR`, комментариев, review-сигналов, watermark и связей. |
-| не назначено | `services/internal/provider-hub/**`, `docs/domains/provider-native-work-items/delivery/provider_hub_delivery.md` | PRV-6.1 | done | Очередь сверки, `sync_cursor`, чтение, список и короткая аренда курсора. |
+| не назначено | `services/internal/provider-hub/**`, `docs/domains/provider-native-work-items/architecture/data_model.md`, `docs/domains/provider-native-work-items/architecture/api_contract.md`, `docs/domains/provider-native-work-items/delivery/provider_hub_delivery.md` | PRV-6.1 | done | Идемпотентная и атомарная очередь сверки, `sync_cursor`, чтение, список и короткая аренда курсора. |
 | не назначено | `services/internal/provider-hub/**`, `docs/domains/provider-native-work-items/architecture/design.md` | PRV-6.2 | planned | Инкрементальная batch-сверка GitHub по курсорам, окнам перекрытия, лимитному бюджету и drift status. |
 | не назначено | `services/internal/provider-hub/**`, `docs/domains/provider-native-work-items/architecture/api_contract.md` | PRV-6.3 | planned | Ускоряющие сигналы от agent-manager/MCP и slot-агентов. |
 | не назначено | `services/internal/provider-hub/**`, `docs/domains/provider-native-work-items/architecture/api_contract.md` | PRV-7 | planned | Платформенные provider-операции для agent-manager/MCP. |

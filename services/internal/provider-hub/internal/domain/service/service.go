@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"sort"
 	"strings"
 	"time"
 
@@ -15,7 +16,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/query"
 )
 
-const syncCursorLeaseTTL = 30 * time.Second
+const (
+	syncCursorLeaseTTL          = 30 * time.Second
+	maxReconciliationBatchItems = int32(500)
+)
 
 // Service is the domain entrypoint for provider-native work item workflows.
 type Service struct {
@@ -270,12 +274,16 @@ func (s *Service) ListRelationships(ctx context.Context, input ListRelationships
 
 // EnqueueReconciliation creates or updates sync cursors for one reconciliation scope.
 func (s *Service) EnqueueReconciliation(ctx context.Context, input EnqueueReconciliationInput) (EnqueueReconciliationResult, error) {
-	if !validCommandIdentity(input.Meta) {
+	idempotencyKey := strings.TrimSpace(input.Meta.IdempotencyKey)
+	if !validCommandIdentity(input.Meta) || idempotencyKey == "" {
 		return EnqueueReconciliationResult{}, errs.ErrInvalidArgument
 	}
 	providerSlug := enum.ProviderSlug(strings.TrimSpace(string(input.ProviderSlug)))
 	scopeRef := strings.TrimSpace(input.ScopeRef)
 	artifactKinds := uniqueSyncArtifactKinds(input.ArtifactKinds)
+	sort.Slice(artifactKinds, func(i, j int) bool {
+		return artifactKinds[i] < artifactKinds[j]
+	})
 	if !validProviderSlug(providerSlug) ||
 		!validSyncCursorScope(input.ScopeType) ||
 		scopeRef == "" ||
@@ -285,9 +293,20 @@ func (s *Service) EnqueueReconciliation(ctx context.Context, input EnqueueReconc
 		return EnqueueReconciliationResult{}, errs.ErrInvalidArgument
 	}
 	now := s.clock.Now().UTC()
+	request := entity.ReconciliationRequest{
+		ID:             s.ids.New(),
+		ProviderSlug:   providerSlug,
+		ScopeType:      input.ScopeType,
+		ScopeRef:       scopeRef,
+		IdempotencyKey: idempotencyKey,
+		ArtifactKinds:  artifactKinds,
+		Priority:       input.Priority,
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
 	cursors := make([]entity.SyncCursor, 0, len(artifactKinds))
 	for _, artifactKind := range artifactKinds {
-		cursor := entity.SyncCursor{
+		cursors = append(cursors, entity.SyncCursor{
 			Base: entity.Base{
 				ID:        s.ids.New(),
 				Version:   1,
@@ -300,19 +319,21 @@ func (s *Service) EnqueueReconciliation(ctx context.Context, input EnqueueReconc
 			ArtifactKind:        artifactKind,
 			Priority:            input.Priority,
 			RateBudgetStateJSON: []byte(`{}`),
-		}
-		stored, err := s.repository.UpsertSyncCursor(ctx, cursor)
-		if err != nil {
-			return EnqueueReconciliationResult{}, err
-		}
-		cursors = append(cursors, stored)
+		})
 	}
-	return EnqueueReconciliationResult{SyncCursors: cursors}, nil
+	stored, err := s.repository.EnqueueSyncCursors(ctx, request, cursors)
+	if err != nil {
+		return EnqueueReconciliationResult{}, err
+	}
+	return EnqueueReconciliationResult{SyncCursors: stored}, nil
 }
 
 // RunReconciliationBatch leases one cursor for the future provider batch worker.
 func (s *Service) RunReconciliationBatch(ctx context.Context, input RunReconciliationBatchInput) (RunReconciliationBatchResult, error) {
-	if !validCommandIdentity(input.Meta) || strings.TrimSpace(input.LeaseOwner) == "" || input.MaxItems < 0 {
+	if !validCommandIdentity(input.Meta) ||
+		strings.TrimSpace(input.LeaseOwner) == "" ||
+		input.MaxItems <= 0 ||
+		input.MaxItems > maxReconciliationBatchItems {
 		return RunReconciliationBatchResult{}, errs.ErrInvalidArgument
 	}
 	if input.SyncCursorID != nil && *input.SyncCursorID == uuid.Nil {

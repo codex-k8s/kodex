@@ -112,46 +112,71 @@ func TestRepositoryIntegrationSyncCursors(t *testing.T) {
 	pool := openIntegrationPool(t, ctx)
 	repository := NewRepository(pool)
 	now := time.Date(2026, 5, 7, 13, 0, 0, 0, time.UTC)
-	cursor := entity.SyncCursor{
-		Base: entity.Base{
-			ID:        uuid.New(),
-			Version:   1,
-			CreatedAt: now,
-			UpdatedAt: now,
-		},
-		ProviderSlug:        enum.ProviderSlugGitHub,
-		ScopeType:           enum.SyncCursorScopeRepository,
-		ScopeRef:            "codex-k8s/kodex",
-		ArtifactKind:        enum.SyncArtifactIssue,
-		Priority:            enum.SyncCursorPriorityWarm,
-		RateBudgetStateJSON: []byte(`{"remaining":4999}`),
+	request := entity.ReconciliationRequest{
+		ID:             uuid.New(),
+		ProviderSlug:   enum.ProviderSlugGitHub,
+		ScopeType:      enum.SyncCursorScopeRepository,
+		ScopeRef:       "codex-k8s/kodex",
+		IdempotencyKey: "repo-sync-1",
+		ArtifactKinds:  []enum.SyncArtifactKind{enum.SyncArtifactIssue, enum.SyncArtifactPullRequest},
+		Priority:       enum.SyncCursorPriorityWarm,
+		CreatedAt:      now,
+		UpdatedAt:      now,
 	}
-	stored, err := repository.UpsertSyncCursor(ctx, cursor)
+	cursor := testSyncCursor(uuid.New(), request, enum.SyncArtifactIssue, now)
+	prCursor := testSyncCursor(uuid.New(), request, enum.SyncArtifactPullRequest, now)
+	stored, err := repository.EnqueueSyncCursors(ctx, request, []entity.SyncCursor{cursor, prCursor})
 	if err != nil {
-		t.Fatalf("upsert sync cursor: %v", err)
+		t.Fatalf("enqueue sync cursors: %v", err)
 	}
-	if stored.ID != cursor.ID || stored.Priority != enum.SyncCursorPriorityWarm {
-		t.Fatalf("stored cursor = %+v, want id %s warm", stored, cursor.ID)
+	if len(stored) != 2 || stored[0].ID != cursor.ID || stored[1].ID != prCursor.ID {
+		t.Fatalf("stored cursors = %+v, want issue and pr cursors", stored)
 	}
 
-	requeued := cursor
-	requeued.ID = uuid.New()
-	requeued.Priority = enum.SyncCursorPriorityHot
-	requeued.UpdatedAt = now.Add(time.Minute)
-	stored, err = repository.UpsertSyncCursor(ctx, requeued)
+	replayed, err := repository.EnqueueSyncCursors(ctx, request, []entity.SyncCursor{
+		testSyncCursor(uuid.New(), request, enum.SyncArtifactIssue, now.Add(time.Minute)),
+		testSyncCursor(uuid.New(), request, enum.SyncArtifactPullRequest, now.Add(time.Minute)),
+	})
 	if err != nil {
-		t.Fatalf("requeue sync cursor: %v", err)
+		t.Fatalf("replay enqueue sync cursors: %v", err)
 	}
-	if stored.ID != cursor.ID || stored.Priority != enum.SyncCursorPriorityHot || stored.Version != 2 {
-		t.Fatalf("requeued cursor = %+v, want original id %s hot version 2", stored, cursor.ID)
+	if len(replayed) != 2 || replayed[0].ID != cursor.ID || replayed[0].Version != 1 {
+		t.Fatalf("replayed cursors = %+v, want original cursor without version bump", replayed)
 	}
 
 	loaded, err := repository.GetSyncCursor(ctx, cursor.ID)
 	if err != nil {
 		t.Fatalf("get sync cursor: %v", err)
 	}
-	if loaded.ID != cursor.ID || string(loaded.RateBudgetStateJSON) != `{"remaining": 4999}` {
-		t.Fatalf("loaded cursor = %+v, want stored budget", loaded)
+	if loaded.ID != cursor.ID || loaded.Priority != enum.SyncCursorPriorityWarm {
+		t.Fatalf("loaded cursor = %+v, want original warm cursor", loaded)
+	}
+
+	changedRequest := request
+	changedRequest.Priority = enum.SyncCursorPriorityHot
+	changedRequest.UpdatedAt = now.Add(time.Minute)
+	if _, err := repository.EnqueueSyncCursors(ctx, changedRequest, []entity.SyncCursor{
+		testSyncCursor(uuid.New(), changedRequest, enum.SyncArtifactIssue, now.Add(time.Minute)),
+		testSyncCursor(uuid.New(), changedRequest, enum.SyncArtifactPullRequest, now.Add(time.Minute)),
+	}); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("changed idempotent request err = %v, want %v", err, errs.ErrConflict)
+	}
+
+	requeueRequest := request
+	requeueRequest.ID = uuid.New()
+	requeueRequest.IdempotencyKey = "repo-sync-2"
+	requeueRequest.ArtifactKinds = []enum.SyncArtifactKind{enum.SyncArtifactIssue}
+	requeueRequest.Priority = enum.SyncCursorPriorityHot
+	requeueRequest.CreatedAt = now.Add(2 * time.Minute)
+	requeueRequest.UpdatedAt = now.Add(2 * time.Minute)
+	requeued, err := repository.EnqueueSyncCursors(ctx, requeueRequest, []entity.SyncCursor{
+		testSyncCursor(uuid.New(), requeueRequest, enum.SyncArtifactIssue, now.Add(2*time.Minute)),
+	})
+	if err != nil {
+		t.Fatalf("requeue sync cursor: %v", err)
+	}
+	if len(requeued) != 1 || requeued[0].ID != cursor.ID || requeued[0].Priority != enum.SyncCursorPriorityHot || requeued[0].Version != 2 {
+		t.Fatalf("requeued cursor = %+v, want original id %s hot version 2", requeued, cursor.ID)
 	}
 
 	failedCursor := entity.SyncCursor{
@@ -162,19 +187,30 @@ func TestRepositoryIntegrationSyncCursors(t *testing.T) {
 			UpdatedAt: now,
 		},
 		ProviderSlug:        enum.ProviderSlugGitHub,
-		ScopeType:           enum.SyncCursorScopeRepository,
-		ScopeRef:            "codex-k8s/kodex",
-		ArtifactKind:        enum.SyncArtifactPullRequest,
+		ScopeType:           enum.SyncCursorScopeWorkItem,
+		ScopeRef:            "github:issue:42",
+		ArtifactKind:        enum.SyncArtifactComment,
 		Priority:            enum.SyncCursorPriorityCold,
 		LastError:           "rate limited",
 		RateBudgetStateJSON: []byte(`{}`),
 	}
-	if _, err := repository.UpsertSyncCursor(ctx, failedCursor); err != nil {
+	failedRequest := entity.ReconciliationRequest{
+		ID:             uuid.New(),
+		ProviderSlug:   enum.ProviderSlugGitHub,
+		ScopeType:      enum.SyncCursorScopeWorkItem,
+		ScopeRef:       "github:issue:42",
+		IdempotencyKey: "work-item-comments-1",
+		ArtifactKinds:  []enum.SyncArtifactKind{enum.SyncArtifactComment},
+		Priority:       enum.SyncCursorPriorityCold,
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+	if _, err := repository.EnqueueSyncCursors(ctx, failedRequest, []entity.SyncCursor{failedCursor}); err != nil {
 		t.Fatalf("upsert failed sync cursor: %v", err)
 	}
 	cursors, _, err := repository.ListSyncCursors(ctx, query.SyncCursorFilter{
 		ProviderSlug:   enum.ProviderSlugGitHub,
-		ScopeRef:       "codex-k8s/kodex",
+		ScopeRef:       "github:issue:42",
 		IncludeHealthy: false,
 	})
 	if err != nil {
@@ -204,6 +240,23 @@ func TestRepositoryIntegrationSyncCursors(t *testing.T) {
 	})
 	if !errors.Is(err, errs.ErrNotFound) {
 		t.Fatalf("claim leased sync cursor err = %v, want %v", err, errs.ErrNotFound)
+	}
+}
+
+func testSyncCursor(id uuid.UUID, request entity.ReconciliationRequest, artifactKind enum.SyncArtifactKind, now time.Time) entity.SyncCursor {
+	return entity.SyncCursor{
+		Base: entity.Base{
+			ID:        id,
+			Version:   1,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		ProviderSlug:        request.ProviderSlug,
+		ScopeType:           request.ScopeType,
+		ScopeRef:            request.ScopeRef,
+		ArtifactKind:        artifactKind,
+		Priority:            request.Priority,
+		RateBudgetStateJSON: []byte(`{"remaining":4999}`),
 	}
 }
 

@@ -5,7 +5,7 @@ title: kodex — поставка provider-hub
 status: active
 owner_role: EM
 created_at: 2026-05-06
-updated_at: 2026-05-07
+updated_at: 2026-05-08
 related_issues: [281, 282]
 related_prs: []
 related_docsets:
@@ -100,7 +100,8 @@ approvals:
 - gRPC-чтение проекций через `GetWorkItemProjection`, `FindWorkItemByProviderRef`, `ListWorkItemProjections`, `ListComments` и `ListRelationships`;
 - публикация локальных outbox-событий `provider.work_item.synced`, `provider.comment.synced` и `provider.relationship.synced`;
 - очередь сверки через `EnqueueReconciliation`, `GetSyncCursor`, `ListSyncCursors` и базовый lease-путь `RunReconciliationBatch` без обращения к внешнему provider API;
-- PostgreSQL-хранение курсоров сверки с естественным ключом `provider_slug + scope_type + scope_ref + artifact_kind`, сохранением более высокого приоритета при повторной постановке и защитой lease через `FOR UPDATE SKIP LOCKED`;
+- идемпотентная постановка сверки по `provider_slug + scope_type + scope_ref + idempotency_key`: повтор той же команды не меняет курсоры, а повтор с другим составом запроса возвращает конфликт;
+- PostgreSQL-хранение курсоров сверки с естественным ключом `provider_slug + scope_type + scope_ref + artifact_kind`, пакетной атомарной постановкой нескольких `artifact_kind`, сохранением более высокого приоритета при новой постановке и защитой lease через `FOR UPDATE SKIP LOCKED`;
 - штатный outbox dispatcher `provider-hub` в `platform-event-log`.
 
 Ограничение среза: PRV-6.1 только ставит курсоры в очередь, отдаёт их на чтение и выдаёт короткую аренду worker. Он не читает GitHub API, не продвигает `cursor_value`, не публикует `provider.sync_cursor.advanced` и не выставляет итоговый drift status. Реальная batch-сверка провайдера будет добавлена в PRV-6.2, ускоряющие сигналы — в PRV-6.3. Команды записи в провайдера, bootstrap/adoption и эксплуатационный контур пока остаются `Unimplemented`. Kubernetes-манифесты, создание БД в deploy-контуре, migration job, alerts и runbook остаются в PRV-9.

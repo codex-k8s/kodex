@@ -125,6 +125,19 @@ type SyncCursor struct {
 	LeaseUntil          *time.Time
 }
 
+// ReconciliationRequest stores an idempotent enqueue command for one provider scope.
+type ReconciliationRequest struct {
+	ID             uuid.UUID
+	ProviderSlug   enum.ProviderSlug
+	ScopeType      enum.SyncCursorScopeType
+	ScopeRef       string
+	IdempotencyKey string
+	ArtifactKinds  []enum.SyncArtifactKind
+	Priority       enum.SyncCursorPriority
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
 // ProviderLimitSnapshot stores one observed provider rate or quota snapshot.
 type ProviderLimitSnapshot struct {
 	ID                uuid.UUID
