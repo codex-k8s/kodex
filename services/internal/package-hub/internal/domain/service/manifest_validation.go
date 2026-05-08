@@ -22,7 +22,7 @@ type packageManifestDocument struct {
 	RequiredPlatformAPIs  []string                     `json:"required_platform_apis"`
 	RequiredAccessActions []string                     `json:"required_access_actions"`
 	Secrets               []value.PackageSecretField   `json:"secrets"`
-	Runtime               *packageManifestRuntime      `json:"runtime"`
+	Runtime               json.RawMessage              `json:"runtime"`
 	Pricing               *packageManifestPricing      `json:"pricing"`
 	Verification          *packageManifestVerification `json:"verification"`
 }
@@ -188,14 +188,31 @@ func validatePackageManifestSecrets(secrets []value.PackageSecretField) error {
 	return nil
 }
 
-func validatePackageManifestRuntime(runtime *packageManifestRuntime) error {
-	if runtime == nil {
-		return errs.ErrInvalidArgument
+func validatePackageManifestRuntime(payload json.RawMessage) error {
+	runtime, _, err := parsePackageManifestRuntime(payload)
+	if err != nil {
+		return err
 	}
 	if runtime.Required {
 		return requireText(runtime.WorkloadKind)
 	}
 	return nil
+}
+
+func parsePackageManifestRuntime(payload json.RawMessage) (packageManifestRuntime, []byte, error) {
+	trimmed := bytes.TrimSpace(payload)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) || trimmed[0] != '{' || !json.Valid(trimmed) {
+		return packageManifestRuntime{}, nil, errs.ErrInvalidArgument
+	}
+	var runtime packageManifestRuntime
+	if err := json.Unmarshal(trimmed, &runtime); err != nil {
+		return packageManifestRuntime{}, nil, errs.ErrInvalidArgument
+	}
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, trimmed); err != nil {
+		return packageManifestRuntime{}, nil, errs.ErrInvalidArgument
+	}
+	return runtime, compact.Bytes(), nil
 }
 
 func validatePackageManifestPricing(parent CatalogPackageSnapshot, pricing *packageManifestPricing) error {
@@ -278,11 +295,11 @@ func packageInstallationRequirementsFromManifest(payload []byte) (packageInstall
 			break
 		}
 	}
-	if document.Runtime != nil && document.Runtime.Required {
-		runtimePayload, err := json.Marshal(document.Runtime)
-		if err != nil {
-			return packageInstallationRequirements{}, err
-		}
+	runtime, runtimePayload, err := parsePackageManifestRuntime(document.Runtime)
+	if err != nil {
+		return packageInstallationRequirements{}, err
+	}
+	if runtime.Required {
 		result.RuntimeRequirementDigest = sha256Digest(runtimePayload)
 	}
 	return result, nil

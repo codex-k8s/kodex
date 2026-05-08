@@ -493,6 +493,38 @@ func TestRequestPackageInstallationCreatesRequestedArtifacts(t *testing.T) {
 	}
 }
 
+func TestPackageInstallationRequirementsDigestUsesFullRuntimeBlock(t *testing.T) {
+	t.Parallel()
+
+	runtimeWithSmallResources := bytes.Replace(
+		testCatalogManifestPayload(),
+		[]byte(`"workload_kind": "deployment"`),
+		[]byte(`"workload_kind": "deployment", "resources": {"cpu": "250m"}`),
+		1,
+	)
+	runtimeWithLargeResources := bytes.Replace(
+		testCatalogManifestPayload(),
+		[]byte(`"workload_kind": "deployment"`),
+		[]byte(`"workload_kind": "deployment", "resources": {"cpu": "500m"}`),
+		1,
+	)
+
+	smallRequirements, err := packageInstallationRequirementsFromManifest(runtimeWithSmallResources)
+	if err != nil {
+		t.Fatalf("packageInstallationRequirementsFromManifest(small): %v", err)
+	}
+	largeRequirements, err := packageInstallationRequirementsFromManifest(runtimeWithLargeResources)
+	if err != nil {
+		t.Fatalf("packageInstallationRequirementsFromManifest(large): %v", err)
+	}
+	if smallRequirements.RuntimeRequirementDigest == "" || largeRequirements.RuntimeRequirementDigest == "" {
+		t.Fatalf("runtime digests = %q / %q, want non-empty digests", smallRequirements.RuntimeRequirementDigest, largeRequirements.RuntimeRequirementDigest)
+	}
+	if smallRequirements.RuntimeRequirementDigest == largeRequirements.RuntimeRequirementDigest {
+		t.Fatalf("runtime digest = %q for different runtime blocks, want different digests", smallRequirements.RuntimeRequirementDigest)
+	}
+}
+
 func TestRequestPackageInstallationReplayChecksRequestAndReadAccess(t *testing.T) {
 	t.Parallel()
 
