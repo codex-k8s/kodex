@@ -26,6 +26,16 @@ type runtimeService interface {
 	ReportWorkspaceMaterializationProgress(context.Context, runtimeservice.ReportWorkspaceMaterializationProgressInput) (entity.WorkspaceMaterialization, error)
 	GetWorkspaceMaterialization(context.Context, runtimeservice.GetWorkspaceMaterializationInput) (entity.WorkspaceMaterialization, error)
 	ListWorkspaceMaterializations(context.Context, runtimeservice.ListWorkspaceMaterializationsInput) (runtimeservice.ListWorkspaceMaterializationsResult, error)
+	CreateJob(context.Context, runtimeservice.CreateJobInput) (entity.Job, error)
+	ClaimRunnableJob(context.Context, runtimeservice.ClaimRunnableJobInput) (runtimeservice.ClaimRunnableJobResult, error)
+	ReportJobStepProgress(context.Context, runtimeservice.ReportJobStepProgressInput) (entity.Job, error)
+	CompleteJob(context.Context, runtimeservice.CompleteJobInput) (entity.Job, error)
+	FailJob(context.Context, runtimeservice.FailJobInput) (entity.Job, error)
+	CancelJob(context.Context, runtimeservice.CancelJobInput) (entity.Job, error)
+	GetJob(context.Context, runtimeservice.GetJobInput) (entity.Job, error)
+	ListJobs(context.Context, runtimeservice.ListJobsInput) (runtimeservice.ListJobsResult, error)
+	RecordRuntimeArtifactRef(context.Context, runtimeservice.RecordRuntimeArtifactRefInput) (entity.RuntimeArtifactRef, error)
+	ListRuntimeArtifactRefs(context.Context, runtimeservice.ListRuntimeArtifactRefsInput) (runtimeservice.ListRuntimeArtifactRefsResult, error)
 }
 
 // Server exposes the generated runtime-manager service.
@@ -100,4 +110,54 @@ func (s *Server) GetWorkspaceMaterialization(ctx context.Context, request *runti
 // ListWorkspaceMaterializations returns materialization attempts by slot or agent run.
 func (s *Server) ListWorkspaceMaterializations(ctx context.Context, request *runtimev1.ListWorkspaceMaterializationsRequest) (*runtimev1.ListWorkspaceMaterializationsResponse, error) {
 	return grpcserver.HandleUnary(ctx, request, grpccasters.ListWorkspaceMaterializationsInput, s.service.ListWorkspaceMaterializations, grpccasters.ListWorkspaceMaterializationsResponse)
+}
+
+// CreateJob creates a platform technical job.
+func (s *Server) CreateJob(ctx context.Context, request *runtimev1.CreateJobRequest) (*runtimev1.JobResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.CreateJobInput, s.service.CreateJob, grpccasters.JobResponse)
+}
+
+// ClaimRunnableJob claims a runnable job and returns a one-time lease token.
+func (s *Server) ClaimRunnableJob(ctx context.Context, request *runtimev1.ClaimRunnableJobRequest) (*runtimev1.ClaimRunnableJobResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.ClaimRunnableJobInput, s.service.ClaimRunnableJob, grpccasters.ClaimRunnableJobResponse)
+}
+
+// ReportJobStepProgress updates job step progress and bounded diagnostics.
+func (s *Server) ReportJobStepProgress(ctx context.Context, request *runtimev1.ReportJobStepProgressRequest) (*runtimev1.JobResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.ReportJobStepProgressInput, s.service.ReportJobStepProgress, grpccasters.JobResponse)
+}
+
+// CompleteJob completes a job successfully.
+func (s *Server) CompleteJob(ctx context.Context, request *runtimev1.CompleteJobRequest) (*runtimev1.JobResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.CompleteJobInput, s.service.CompleteJob, grpccasters.JobResponse)
+}
+
+// FailJob completes a job with a classified failure.
+func (s *Server) FailJob(ctx context.Context, request *runtimev1.FailJobRequest) (*runtimev1.JobResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.FailJobInput, s.service.FailJob, grpccasters.JobResponse)
+}
+
+// CancelJob cancels a non-terminal job.
+func (s *Server) CancelJob(ctx context.Context, request *runtimev1.CancelJobRequest) (*runtimev1.JobResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.CancelJobInput, s.service.CancelJob, grpccasters.JobResponse)
+}
+
+// GetJob returns authoritative job state.
+func (s *Server) GetJob(ctx context.Context, request *runtimev1.GetJobRequest) (*runtimev1.JobResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.GetJobInput, s.service.GetJob, grpccasters.JobResponse)
+}
+
+// ListJobs returns platform jobs by filters.
+func (s *Server) ListJobs(ctx context.Context, request *runtimev1.ListJobsRequest) (*runtimev1.ListJobsResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.ListJobsInput, s.service.ListJobs, grpccasters.ListJobsResponse)
+}
+
+// RecordRuntimeArtifactRef stores a reference to an external runtime artifact.
+func (s *Server) RecordRuntimeArtifactRef(ctx context.Context, request *runtimev1.RecordRuntimeArtifactRefRequest) (*runtimev1.RuntimeArtifactRefResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.RecordRuntimeArtifactRefInput, s.service.RecordRuntimeArtifactRef, grpccasters.RuntimeArtifactRefResponse)
+}
+
+// ListRuntimeArtifactRefs returns external artifact references by job or slot.
+func (s *Server) ListRuntimeArtifactRefs(ctx context.Context, request *runtimev1.ListRuntimeArtifactRefsRequest) (*runtimev1.ListRuntimeArtifactRefsResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.ListRuntimeArtifactRefsInput, s.service.ListRuntimeArtifactRefs, grpccasters.ListRuntimeArtifactRefsResponse)
 }

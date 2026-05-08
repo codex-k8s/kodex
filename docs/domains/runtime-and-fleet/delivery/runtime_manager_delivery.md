@@ -5,7 +5,7 @@ title: kodex — поставка runtime-manager
 status: active
 owner_role: EM
 created_at: 2026-05-07
-updated_at: 2026-05-07
+updated_at: 2026-05-08
 related_issues: [655, 656, 657, 658, 659, 660, 661, 662]
 related_prs: []
 related_docsets:
@@ -58,8 +58,8 @@ approvals:
 |---|---|---|
 | Слоты | Готов: `PrepareRuntime`, `ReserveSlot`, `ExtendSlotLease`, `ReleaseSlot`, `MarkSlotFailed`, `GetSlot`, `ListSlots`, события `runtime.slot.*`. | Команды `ReserveSlot`, `ExtendSlotLease`, `ReleaseSlot`, `MarkSlotFailed`, чтения `GetSlot`/`ListSlots`, идемпотентность с actor scope, проверка доступа через `access-manager`, проверка версии агрегата, lease expiry guard и MVP default fleet config готовы. `PrepareRuntime` готов как фасад: создаёт слот и запускает подготовку workspace одной идемпотентной командой. |
 | Workspace materialization | Готов: старт, отчёт прогресса, чтения и события `runtime.workspace.*`. | Готовы команды `StartWorkspaceMaterialization`, `ReportWorkspaceMaterializationProgress`, чтения `GetWorkspaceMaterialization`/`ListWorkspaceMaterializations`, хранение нормализованных source refs, access mode, local path, fingerprint и безопасных ошибок подготовки. При старте слот переходит в `materializing`, при успехе в `ready`, при ошибке в `failed`. Runtime проверяет совпадение проекта workspace policy и слота, а слот хранит активную попытку подготовки для защиты от поздних отчётов старых исполнителей. |
-| Platform jobs | Готов: создание, claim с `lease_token`, progress, complete/fail/cancel, чтения и события `runtime.job.*`. | Базовые таблицы job/job step готовы; команды и state machine будут в RTM-5. |
-| Runtime artifact refs | Готов: запись и чтение ссылок на внешние runtime-артефакты. | Базовая таблица готова; команды записи и чтения будут в RTM-5. |
+| Platform jobs | Готов: создание, claim с `lease_token`, progress, complete/fail/cancel, чтения и события `runtime.job.*`. | Команды `CreateJob`, `ClaimRunnableJob`, `ReportJobStepProgress`, `CompleteJob`, `FailJob`, `CancelJob`, чтения `GetJob`/`ListJobs`, PostgreSQL repository, проверка доступа и gRPC wiring готовы. Исполнитель получает короткий lease и одноразовый `lease_token`; Kubernetes executor остаётся за эксплуатационным срезом. |
+| Runtime artifact refs | Готов: запись и чтение ссылок на внешние runtime-артефакты. | Команды `RecordRuntimeArtifactRef`/`ListRuntimeArtifactRefs` готовы; PostgreSQL хранит только ссылку, digest и ограниченную диагностику без blob, полного лога или registry catalog. |
 | Cleanup/prewarm/reuse | Готов: cleanup policy, cleanup batch, prewarm pool и события cleanup/prewarm. | Базовые таблицы cleanup policy и prewarm pool готовы; runtime-логика будет в RTM-7. |
 | Deploy/manifests | Не gRPC-группа. | Не начата; будет в RTM-6. |
 

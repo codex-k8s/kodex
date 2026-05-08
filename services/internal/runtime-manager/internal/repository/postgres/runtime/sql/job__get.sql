@@ -1,0 +1,33 @@
+-- name: job__get :one
+SELECT
+    id,
+    command_id,
+    job_type,
+    status,
+    priority,
+    job_input_json,
+    lease_owner,
+    lease_token_hash,
+    lease_until,
+    claim_attempt,
+    slot_id,
+    agent_run_id,
+    project_id,
+    repository_id,
+    release_line_id,
+    package_installation_id,
+    fleet_scope_id,
+    cluster_id,
+    requested_by,
+    created_at,
+    started_at,
+    finished_at,
+    next_action,
+    last_error_code,
+    last_error_message,
+    short_log_tail,
+    full_log_ref,
+    updated_at,
+    version
+FROM runtime_manager_jobs
+WHERE id = @id;

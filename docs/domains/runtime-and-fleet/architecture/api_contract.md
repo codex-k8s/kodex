@@ -70,7 +70,7 @@ approvals:
 | Операция | Назначение | Вызывает | Идемпотентность |
 |---|---|---|---|
 | `CreateJob` | Создать техническое задание: mirror, build, deploy, cleanup, health-check или housekeeping. | `agent-manager`, `package-hub`, release/governance контур, операторский контур | `command_id`. |
-| `ClaimRunnableJob` | Забрать задание короткой арендой для исполнения и получить `lease_token`. | `worker` | Аренда по `lease_owner`, `lease_until`, `lease_token`. |
+| `ClaimRunnableJob` | Забрать задание короткой арендой для исполнения и получить `lease_token`. | `worker` | `command_id` фиксируется в `RuntimeManagerCommandResult`; повтор с тем же ключом возвращает conflict без повторного захвата, потому что `lease_token` одноразовый и не хранится в открытом виде. |
 | `ReportJobStepProgress` | Обновить шаг, короткий хвост лога и refs. | `worker` | `lease_token + command_id + expected_version`. |
 | `CompleteJob` | Завершить задание успешно. | `worker` | `lease_token + command_id + expected_version`. |
 | `FailJob` | Завершить задание ошибкой. | `worker` | `lease_token + command_id + expected_version`. |

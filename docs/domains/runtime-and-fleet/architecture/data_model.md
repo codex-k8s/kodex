@@ -5,7 +5,7 @@ title: kodex — модель данных runtime-manager
 status: active
 owner_role: SA
 created_at: 2026-05-07
-updated_at: 2026-05-07
+updated_at: 2026-05-08
 related_issues: [655, 657, 658, 659, 660, 662]
 related_prs: []
 approvals:
@@ -152,6 +152,7 @@ approvals:
 - `command_id` глобально уникален для повторяемой команды;
 - `idempotency_key` уникален в рамках пары actor + операция;
 - `result_payload` хранит ограниченный результат без секретов, достаточный для безопасного повтора.
+- Для `ClaimRunnableJob` результат команды фиксирует захваченную job, но не хранит и не возвращает `lease_token`; повтор команды завершается conflict, чтобы не захватить другую job при сетевом retry.
 
 | Поле | Тип | Nullable | Ограничения | Примечание |
 |---|---|---:|---|---|
@@ -161,7 +162,7 @@ approvals:
 | `actor_type` | text | no | indexed | Тип субъекта, в рамках которого действует `idempotency_key`. |
 | `actor_id` | text | no | indexed | Идентификатор субъекта, в рамках которого действует `idempotency_key`. |
 | `operation` | text | no | indexed | Имя mutating RPC или внутренней команды. |
-| `aggregate_type` | text | no | indexed | Тип агрегата результата: `slot`, `workspace_materialization`, `job`, `cleanup_policy`, `prewarm_pool`. |
+| `aggregate_type` | text | no | indexed | Тип агрегата результата: `slot`, `workspace_materialization`, `job`, `runtime_artifact_ref`, `cleanup_policy`, `prewarm_pool`. |
 | `aggregate_id` | UUID | no | indexed | Идентификатор агрегата результата. |
 | `result_payload` | jsonb | no | default {} | Ограниченный payload результата без секретов. |
 | `created_at` | timestamptz | no | indexed | Время фиксации результата. |

@@ -20,12 +20,12 @@ func TestSystemActionsHaveUniqueKeys(t *testing.T) {
 func TestSystemActionByKey(t *testing.T) {
 	t.Parallel()
 
-	action, ok := SystemActionByKey(" " + ActionPackageInstallationRead + " ")
+	action, ok := SystemActionByKey(" " + ActionRuntimeJobCreate + " ")
 	if !ok {
 		t.Fatalf("SystemActionByKey() ok = false, want true")
 	}
-	if action.Key != ActionPackageInstallationRead || action.ResourceType != ResourcePackageInstallation {
-		t.Fatalf("SystemActionByKey() = %+v, want package installation read", action)
+	if action.Key != ActionRuntimeJobCreate || action.ResourceType != ResourceRuntimeJob {
+		t.Fatalf("SystemActionByKey() = %+v, want runtime job create", action)
 	}
 	if _, ok := SystemActionByKey("package.installation.reed"); ok {
 		t.Fatalf("SystemActionByKey() ok = true for unknown action, want false")

@@ -44,6 +44,8 @@ const (
 	ResourceProviderReconciliation = "provider_reconciliation"
 	ResourceRuntimeSlot            = "runtime_slot"
 	ResourceRuntimeWorkspace       = "runtime_workspace_materialization"
+	ResourceRuntimeJob             = "runtime_job"
+	ResourceRuntimeArtifactRef     = "runtime_artifact_ref"
 )
 
 const (
@@ -104,6 +106,16 @@ const (
 	ActionRuntimeWorkspaceMaterializationReport = "runtime.workspace.materialization.report"
 	ActionRuntimeWorkspaceMaterializationRead   = "runtime.workspace.materialization.read"
 	ActionRuntimeWorkspaceMaterializationList   = "runtime.workspace.materialization.list"
+	ActionRuntimeJobCreate                      = "runtime.job.create"
+	ActionRuntimeJobClaim                       = "runtime.job.claim"
+	ActionRuntimeJobStepReport                  = "runtime.job.step.report"
+	ActionRuntimeJobComplete                    = "runtime.job.complete"
+	ActionRuntimeJobFail                        = "runtime.job.fail"
+	ActionRuntimeJobCancel                      = "runtime.job.cancel"
+	ActionRuntimeJobRead                        = "runtime.job.read"
+	ActionRuntimeJobList                        = "runtime.job.list"
+	ActionRuntimeArtifactRefRecord              = "runtime.artifact_ref.record"
+	ActionRuntimeArtifactRefList                = "runtime.artifact_ref.list"
 )
 
 // ProjectCatalogActions returns system actions owned by the projects-and-repositories domain.
@@ -184,6 +196,16 @@ func RuntimeManagerActions() []ActionDescriptor {
 		{Key: ActionRuntimeWorkspaceMaterializationReport, ResourceType: ResourceRuntimeWorkspace},
 		{Key: ActionRuntimeWorkspaceMaterializationRead, ResourceType: ResourceRuntimeWorkspace},
 		{Key: ActionRuntimeWorkspaceMaterializationList, ResourceType: ResourceRuntimeWorkspace},
+		{Key: ActionRuntimeJobCreate, ResourceType: ResourceRuntimeJob},
+		{Key: ActionRuntimeJobClaim, ResourceType: ResourceRuntimeJob},
+		{Key: ActionRuntimeJobStepReport, ResourceType: ResourceRuntimeJob},
+		{Key: ActionRuntimeJobComplete, ResourceType: ResourceRuntimeJob},
+		{Key: ActionRuntimeJobFail, ResourceType: ResourceRuntimeJob},
+		{Key: ActionRuntimeJobCancel, ResourceType: ResourceRuntimeJob},
+		{Key: ActionRuntimeJobRead, ResourceType: ResourceRuntimeJob},
+		{Key: ActionRuntimeJobList, ResourceType: ResourceRuntimeJob},
+		{Key: ActionRuntimeArtifactRefRecord, ResourceType: ResourceRuntimeArtifactRef},
+		{Key: ActionRuntimeArtifactRefList, ResourceType: ResourceRuntimeArtifactRef},
 	}
 }
 

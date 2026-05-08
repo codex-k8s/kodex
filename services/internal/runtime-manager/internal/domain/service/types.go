@@ -100,6 +100,135 @@ type ListWorkspaceMaterializationsResult struct {
 	Page                      value.PageResult
 }
 
+// CreateJobInput describes a request to create a platform technical job.
+type CreateJobInput struct {
+	JobType               enum.JobType
+	Priority              enum.JobPriority
+	SlotID                *uuid.UUID
+	AgentRunID            *uuid.UUID
+	ProjectID             *uuid.UUID
+	RepositoryID          *uuid.UUID
+	ReleaseLineID         *uuid.UUID
+	PackageInstallationID *uuid.UUID
+	PreferredFleetScopeID *uuid.UUID
+	JobInputJSON          []byte
+	Meta                  value.CommandMeta
+}
+
+// ClaimRunnableJobInput describes a worker claim request for a runnable job.
+type ClaimRunnableJobInput struct {
+	JobTypes     []enum.JobType
+	WorkerID     string
+	LeaseOwner   string
+	LeaseUntil   time.Time
+	FleetScopeID *uuid.UUID
+	Meta         value.CommandMeta
+}
+
+// ClaimRunnableJobResult contains a claimed job and its one-time lease token.
+type ClaimRunnableJobResult struct {
+	Job        entity.Job
+	LeaseToken string
+}
+
+// ReportJobStepProgressInput describes one step update from a job worker.
+type ReportJobStepProgressInput struct {
+	JobID        uuid.UUID
+	LeaseToken   string
+	StepKey      string
+	Status       enum.JobStepStatus
+	StartedAt    *time.Time
+	FinishedAt   *time.Time
+	ShortLogTail string
+	ExternalRef  string
+	ErrorCode    string
+	ErrorMessage string
+	ArtifactRefs []RuntimeArtifactRefInput
+	Meta         value.CommandMeta
+}
+
+// CompleteJobInput describes a successful job completion.
+type CompleteJobInput struct {
+	JobID        uuid.UUID
+	LeaseToken   string
+	ShortLogTail string
+	FullLogRef   string
+	Meta         value.CommandMeta
+}
+
+// FailJobInput describes a failed job completion with operator diagnostics.
+type FailJobInput struct {
+	JobID        uuid.UUID
+	LeaseToken   string
+	ErrorCode    string
+	ErrorMessage string
+	ShortLogTail string
+	FullLogRef   string
+	NextAction   string
+	Meta         value.CommandMeta
+}
+
+// CancelJobInput describes policy-driven cancellation for a non-terminal job.
+type CancelJobInput struct {
+	JobID uuid.UUID
+	Meta  value.CommandMeta
+}
+
+// GetJobInput describes a job read request.
+type GetJobInput struct {
+	JobID uuid.UUID
+	Meta  value.QueryMeta
+}
+
+// ListJobsInput describes job list filters.
+type ListJobsInput struct {
+	Statuses      []enum.JobStatus
+	JobTypes      []enum.JobType
+	ProjectID     *uuid.UUID
+	SlotID        *uuid.UUID
+	AgentRunID    *uuid.UUID
+	ReleaseLineID *uuid.UUID
+	Page          value.PageRequest
+	Meta          value.QueryMeta
+}
+
+// ListJobsResult contains a page of platform jobs.
+type ListJobsResult struct {
+	Jobs []entity.Job
+	Page value.PageResult
+}
+
+// RuntimeArtifactRefInput is the caller-provided reference data.
+type RuntimeArtifactRefInput struct {
+	ArtifactType enum.RuntimeArtifactType
+	ExternalRef  string
+	Digest       string
+	MetadataJSON []byte
+}
+
+// RecordRuntimeArtifactRefInput describes a command to store one external artifact reference.
+type RecordRuntimeArtifactRefInput struct {
+	JobID       *uuid.UUID
+	SlotID      *uuid.UUID
+	ArtifactRef RuntimeArtifactRefInput
+	Meta        value.CommandMeta
+}
+
+// ListRuntimeArtifactRefsInput describes artifact reference list filters.
+type ListRuntimeArtifactRefsInput struct {
+	JobID         *uuid.UUID
+	SlotID        *uuid.UUID
+	ArtifactTypes []enum.RuntimeArtifactType
+	Page          value.PageRequest
+	Meta          value.QueryMeta
+}
+
+// ListRuntimeArtifactRefsResult contains a page of external runtime artifact references.
+type ListRuntimeArtifactRefsResult struct {
+	RuntimeArtifactRefs []entity.RuntimeArtifactRef
+	Page                value.PageResult
+}
+
 // ExtendSlotLeaseInput describes a request to prolong an active slot lease.
 type ExtendSlotLeaseInput struct {
 	SlotID     uuid.UUID

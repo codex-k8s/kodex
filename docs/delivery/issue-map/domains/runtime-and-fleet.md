@@ -5,7 +5,7 @@ title: kodex — карта Issue домена runtime и fleet
 status: active
 owner_role: KM
 created_at: 2026-04-25
-updated_at: 2026-05-07
+updated_at: 2026-05-08
 ---
 
 # Карта Issue — runtime и контур серверов и кластеров
@@ -23,6 +23,6 @@ updated_at: 2026-05-07
 | #657 | `services/internal/runtime-manager/**`, `docs/domains/runtime-and-fleet/architecture/data_model.md`, `docs/domains/runtime-and-fleet/delivery/runtime_manager_delivery.md` | RTM-2 | готово | Каркас сервиса, PostgreSQL-модель, миграции, repository, health/readiness и outbox. |
 | #658 | `services/internal/runtime-manager/**`, `docs/domains/runtime-and-fleet/architecture/design.md` | RTM-3 | готово | Жизненный цикл слотов: reserve, extend lease, release, fail, чтения, идемпотентность, проверка версии агрегата и MVP default cluster boundary. |
 | #659 | `services/internal/runtime-manager/**`, `docs/domains/runtime-and-fleet/architecture/design.md` | RTM-4 | готово | Workspace materialization: source refs, access mode, local paths, fingerprint, ошибки подготовки, gRPC-ручки и события `runtime.workspace.*`. |
-| #660 | `services/internal/runtime-manager/**`, `docs/domains/runtime-and-fleet/architecture/data_model.md` | RTM-5 | запланировано | Platform job MVP: job/step state machine, short log tail, full log ref и executor boundary. |
+| #660 | `services/internal/runtime-manager/**`, `docs/domains/runtime-and-fleet/architecture/data_model.md`, `docs/domains/runtime-and-fleet/delivery/runtime_manager_delivery.md` | RTM-5 | готово | Platform job MVP: job/step state machine, short log tail, full log ref, runtime artifact refs, gRPC wiring и executor boundary. |
 | #661 | `deploy/**`, `services.yaml`, `services/internal/runtime-manager/**`, `docs/domains/runtime-and-fleet/delivery/runtime_manager_delivery.md` | RTM-6 | запланировано | Эксплуатационный контур: Dockerfile, manifests, DB bootstrap, migration job, smoke и runbook. |
 | #662 | `services/internal/runtime-manager/**`, `docs/domains/runtime-and-fleet/architecture/design.md` | RTM-7 | запланировано | Cleanup, retention, prewarm pool и deterministic reuse. |
