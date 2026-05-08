@@ -69,7 +69,7 @@ func (s *Service) ReserveSlot(ctx context.Context, input ReserveSlotInput) (enti
 	if err != nil {
 		return entity.Slot{}, err
 	}
-	result, err := commandResult(input.Meta, operationReserveSlot, slot.ID, now)
+	result, err := commandResult(input.Meta, operationReserveSlot, aggregateTypeSlot, slot.ID, nil, now)
 	if err != nil {
 		return entity.Slot{}, err
 	}
@@ -113,7 +113,7 @@ func (s *Service) ExtendSlotLease(ctx context.Context, input ExtendSlotLeaseInpu
 	if err != nil {
 		return entity.Slot{}, err
 	}
-	result, err := commandResult(input.Meta, operationExtendSlotLease, slot.ID, now)
+	result, err := commandResult(input.Meta, operationExtendSlotLease, aggregateTypeSlot, slot.ID, nil, now)
 	if err != nil {
 		return entity.Slot{}, err
 	}
@@ -148,6 +148,7 @@ func (s *Service) ReleaseSlot(ctx context.Context, input ReleaseSlotInput) (enti
 	now := commandTime(input.Meta, s.clock.Now())
 	previousStatus := string(slot.Status)
 	slot.Status = enum.SlotStatusCleanupPending
+	slot.ActiveWorkspaceMaterializationID = nil
 	slot.LeaseOwner = ""
 	slot.LeaseUntil = nil
 	slot.UpdatedAt = now
@@ -156,7 +157,7 @@ func (s *Service) ReleaseSlot(ctx context.Context, input ReleaseSlotInput) (enti
 	if err != nil {
 		return entity.Slot{}, err
 	}
-	result, err := commandResult(input.Meta, operationReleaseSlot, slot.ID, now)
+	result, err := commandResult(input.Meta, operationReleaseSlot, aggregateTypeSlot, slot.ID, nil, now)
 	if err != nil {
 		return entity.Slot{}, err
 	}
@@ -191,6 +192,7 @@ func (s *Service) MarkSlotFailed(ctx context.Context, input MarkSlotFailedInput)
 	now := commandTime(input.Meta, s.clock.Now())
 	previousStatus := string(slot.Status)
 	slot.Status = enum.SlotStatusFailed
+	slot.ActiveWorkspaceMaterializationID = nil
 	slot.LastErrorCode = strings.TrimSpace(input.ErrorCode)
 	slot.LastErrorMessage = strings.TrimSpace(input.ErrorMessage)
 	slot.UpdatedAt = now
@@ -199,7 +201,7 @@ func (s *Service) MarkSlotFailed(ctx context.Context, input MarkSlotFailedInput)
 	if err != nil {
 		return entity.Slot{}, err
 	}
-	result, err := commandResult(input.Meta, operationMarkSlotFailed, slot.ID, now)
+	result, err := commandResult(input.Meta, operationMarkSlotFailed, aggregateTypeSlot, slot.ID, nil, now)
 	if err != nil {
 		return entity.Slot{}, err
 	}

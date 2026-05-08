@@ -14,6 +14,10 @@ var (
 	querySlotInsert                       = mustLoadQuery("slot__insert")
 	querySlotList                         = mustLoadQuery("slot__list")
 	querySlotUpdate                       = mustLoadQuery("slot__update")
+	queryWorkspaceMaterializationGet      = mustLoadQuery("workspace_materialization__get")
+	queryWorkspaceMaterializationInsert   = mustLoadQuery("workspace_materialization__insert")
+	queryWorkspaceMaterializationList     = mustLoadQuery("workspace_materialization__list")
+	queryWorkspaceMaterializationUpdate   = mustLoadQuery("workspace_materialization__update")
 )
 
 func mustLoadQuery(name string) string {

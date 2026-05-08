@@ -118,9 +118,17 @@ func authorizationRequest(
 }
 
 func slotResource(slotID uuid.UUID, projectID *uuid.UUID) resourceRef {
+	return runtimeResource(accesscatalog.ResourceRuntimeSlot, slotID, projectID)
+}
+
+func workspaceResource(workspaceID uuid.UUID, projectID *uuid.UUID) resourceRef {
+	return runtimeResource(accesscatalog.ResourceRuntimeWorkspace, workspaceID, projectID)
+}
+
+func runtimeResource(resourceType string, resourceUUID uuid.UUID, projectID *uuid.UUID) resourceRef {
 	resourceID := ""
-	if slotID != uuid.Nil {
-		resourceID = slotID.String()
+	if resourceUUID != uuid.Nil {
+		resourceID = resourceUUID.String()
 	}
 	scopeType := accesscatalog.ScopeGlobal
 	scopeID := ""
@@ -128,5 +136,5 @@ func slotResource(slotID uuid.UUID, projectID *uuid.UUID) resourceRef {
 		scopeType = accesscatalog.ScopeProject
 		scopeID = projectID.String()
 	}
-	return resourceRef{Type: accesscatalog.ResourceRuntimeSlot, ID: resourceID, ScopeType: scopeType, ScopeID: scopeID}
+	return resourceRef{Type: resourceType, ID: resourceID, ScopeType: scopeType, ScopeID: scopeID}
 }

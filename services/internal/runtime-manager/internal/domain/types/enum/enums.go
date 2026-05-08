@@ -36,6 +36,24 @@ const (
 	WorkspaceMaterializationStatusCancelled WorkspaceMaterializationStatus = "cancelled"
 )
 
+// WorkspaceSourceKind classifies one materialized source.
+type WorkspaceSourceKind string
+
+const (
+	WorkspaceSourceKindCode             WorkspaceSourceKind = "code"
+	WorkspaceSourceKindDocumentation    WorkspaceSourceKind = "documentation"
+	WorkspaceSourceKindGuidancePackage  WorkspaceSourceKind = "guidance_package"
+	WorkspaceSourceKindGeneratedContext WorkspaceSourceKind = "generated_context"
+)
+
+// WorkspaceSourceAccessMode controls whether a materialized source is editable.
+type WorkspaceSourceAccessMode string
+
+const (
+	WorkspaceSourceAccessModeRead  WorkspaceSourceAccessMode = "read"
+	WorkspaceSourceAccessModeWrite WorkspaceSourceAccessMode = "write"
+)
+
 // JobType classifies platform technical jobs.
 type JobType string
 

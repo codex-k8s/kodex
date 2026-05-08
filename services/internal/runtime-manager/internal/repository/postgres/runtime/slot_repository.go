@@ -27,13 +27,7 @@ func (r *Repository) GetCommandResult(ctx context.Context, identity query.Comman
 		"actor_id":        identity.Actor.ID,
 		"operation":       identity.Operation,
 	}
-	rows, err := r.db.Query(ctx, queryCommandResultGet, args)
-	if err != nil {
-		return entity.CommandResult{}, wrapError(operationGetCommandResult, err)
-	}
-	result, err := pgx.CollectExactlyOneRow(rows, func(row pgx.CollectableRow) (entity.CommandResult, error) {
-		return scanCommandResult(row)
-	})
+	result, err := queryOne(ctx, r.db, queryCommandResultGet, args, scanCommandResult)
 	return result, wrapError(operationGetCommandResult, err)
 }
 
@@ -77,14 +71,11 @@ func (r *Repository) UpdateSlot(ctx context.Context, slot entity.Slot, previousV
 
 // GetSlot returns one slot by id.
 func (r *Repository) GetSlot(ctx context.Context, id uuid.UUID) (entity.Slot, error) {
-	rows, err := r.db.Query(ctx, querySlotGet, pgx.NamedArgs{"id": id})
+	slot, err := queryOne(ctx, r.db, querySlotGet, pgx.NamedArgs{"id": id}, scanSlot)
 	if err != nil {
 		return entity.Slot{}, wrapError(operationGetSlot, err)
 	}
-	slot, err := pgx.CollectExactlyOneRow(rows, func(row pgx.CollectableRow) (entity.Slot, error) {
-		return scanSlot(row)
-	})
-	return slot, wrapError(operationGetSlot, err)
+	return slot, nil
 }
 
 // ListSlots returns slots matching the filter and page.
@@ -117,26 +108,27 @@ func slotArgs(slot entity.Slot) (pgx.NamedArgs, error) {
 		return nil, err
 	}
 	return pgx.NamedArgs{
-		"id":                  slot.ID,
-		"slot_key":            slot.SlotKey,
-		"status":              string(slot.Status),
-		"runtime_mode":        string(slot.RuntimeMode),
-		"is_prewarmed":        slot.IsPrewarmed,
-		"fleet_scope_id":      postgreslib.NullableUUID(slot.FleetScopeID),
-		"cluster_id":          postgreslib.NullableUUID(slot.ClusterID),
-		"namespace_name":      slot.NamespaceName,
-		"agent_run_id":        postgreslib.NullableUUID(slot.AgentRunID),
-		"project_id":          postgreslib.NullableUUID(slot.ProjectID),
-		"repository_ids_json": string(repositoryIDs),
-		"runtime_profile":     slot.RuntimeProfile,
-		"fingerprint":         slot.Fingerprint,
-		"lease_owner":         slot.LeaseOwner,
-		"lease_until":         postgreslib.NullableTime(slot.LeaseUntil),
-		"last_error_code":     slot.LastErrorCode,
-		"last_error_message":  slot.LastErrorMessage,
-		"version":             slot.Version,
-		"created_at":          slot.CreatedAt,
-		"updated_at":          slot.UpdatedAt,
+		"id":                                  slot.ID,
+		"slot_key":                            slot.SlotKey,
+		"status":                              string(slot.Status),
+		"runtime_mode":                        string(slot.RuntimeMode),
+		"is_prewarmed":                        slot.IsPrewarmed,
+		"fleet_scope_id":                      postgreslib.NullableUUID(slot.FleetScopeID),
+		"cluster_id":                          postgreslib.NullableUUID(slot.ClusterID),
+		"namespace_name":                      slot.NamespaceName,
+		"agent_run_id":                        postgreslib.NullableUUID(slot.AgentRunID),
+		"project_id":                          postgreslib.NullableUUID(slot.ProjectID),
+		"repository_ids_json":                 string(repositoryIDs),
+		"active_workspace_materialization_id": postgreslib.NullableUUID(slot.ActiveWorkspaceMaterializationID),
+		"runtime_profile":                     slot.RuntimeProfile,
+		"fingerprint":                         slot.Fingerprint,
+		"lease_owner":                         slot.LeaseOwner,
+		"lease_until":                         postgreslib.NullableTime(slot.LeaseUntil),
+		"last_error_code":                     slot.LastErrorCode,
+		"last_error_message":                  slot.LastErrorMessage,
+		"version":                             slot.Version,
+		"created_at":                          slot.CreatedAt,
+		"updated_at":                          slot.UpdatedAt,
 	}, nil
 }
 

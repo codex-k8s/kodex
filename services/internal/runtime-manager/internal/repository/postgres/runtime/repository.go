@@ -49,6 +49,11 @@ const (
 	operationGetCommandResult                 = "domain.Repository.GetCommandResult"
 	operationGetSlot                          = "domain.Repository.GetSlot"
 	operationListSlots                        = "domain.Repository.ListSlots"
+	operationPrepareRuntime                   = "domain.Repository.PrepareRuntime"
+	operationCreateWorkspaceMaterialization   = "domain.Repository.CreateWorkspaceMaterialization"
+	operationGetWorkspaceMaterialization      = "domain.Repository.GetWorkspaceMaterialization"
+	operationListWorkspaceMaterializations    = "domain.Repository.ListWorkspaceMaterializations"
+	operationUpdateWorkspaceMaterialization   = "domain.Repository.UpdateWorkspaceMaterialization"
 	operationClaimOutboxEvents                = "domain.Repository.ClaimOutboxEvents"
 	operationMarkOutboxEventFailed            = "domain.Repository.MarkOutboxEventFailed"
 	operationMarkOutboxEventPermanentlyFailed = "domain.Repository.MarkOutboxEventPermanentlyFailed"
@@ -142,4 +147,15 @@ func (r *Repository) wrapOutboxMutation(operation string, matched bool, err erro
 		err = errs.ErrInvalidArgument
 	}
 	return wrapError(operation, err)
+}
+
+func queryOne[T any](ctx context.Context, db queryer, query string, args pgx.NamedArgs, scan func(postgreslib.RowScanner) (T, error)) (T, error) {
+	rows, err := db.Query(ctx, query, args)
+	if err != nil {
+		var zero T
+		return zero, err
+	}
+	return pgx.CollectExactlyOneRow(rows, func(row pgx.CollectableRow) (T, error) {
+		return scan(row)
+	})
 }

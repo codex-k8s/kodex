@@ -255,8 +255,9 @@ func TestReserveSlotAuthorizesBeforeReplay(t *testing.T) {
 	t.Parallel()
 
 	repo := &fakeRepository{
-		slots:   make(map[uuid.UUID]entity.Slot),
-		results: make(map[string]entity.CommandResult),
+		slots:                     make(map[uuid.UUID]entity.Slot),
+		workspaceMaterializations: make(map[uuid.UUID]entity.WorkspaceMaterialization),
+		results:                   make(map[string]entity.CommandResult),
 	}
 	svc := NewWithConfig(repo, fixedClock{now: testNow}, &sequenceIDs{values: []uuid.UUID{mustUUID("00000000-0000-0000-0000-000000000209")}}, Config{
 		DefaultFleetScopeID: testFleetScopeID,
@@ -292,8 +293,9 @@ func newTestService() (*Service, *fakeRepository) {
 
 func newTestServiceWithAuthorizer(authorizer Authorizer) (*Service, *fakeRepository) {
 	repo := &fakeRepository{
-		slots:   make(map[uuid.UUID]entity.Slot),
-		results: make(map[string]entity.CommandResult),
+		slots:                     make(map[uuid.UUID]entity.Slot),
+		workspaceMaterializations: make(map[uuid.UUID]entity.WorkspaceMaterialization),
+		results:                   make(map[string]entity.CommandResult),
 	}
 	ids := &sequenceIDs{values: []uuid.UUID{
 		mustUUID("00000000-0000-0000-0000-000000000201"),
@@ -304,6 +306,12 @@ func newTestServiceWithAuthorizer(authorizer Authorizer) (*Service, *fakeReposit
 		mustUUID("00000000-0000-0000-0000-000000000206"),
 		mustUUID("00000000-0000-0000-0000-000000000207"),
 		mustUUID("00000000-0000-0000-0000-000000000208"),
+		mustUUID("00000000-0000-0000-0000-000000000209"),
+		mustUUID("00000000-0000-0000-0000-000000000210"),
+		mustUUID("00000000-0000-0000-0000-000000000211"),
+		mustUUID("00000000-0000-0000-0000-000000000212"),
+		mustUUID("00000000-0000-0000-0000-000000000213"),
+		mustUUID("00000000-0000-0000-0000-000000000214"),
 	}}
 	config := Config{
 		DefaultFleetScopeID: testFleetScopeID,
@@ -359,9 +367,10 @@ func (g *sequenceIDs) New() uuid.UUID {
 }
 
 type fakeRepository struct {
-	slots   map[uuid.UUID]entity.Slot
-	results map[string]entity.CommandResult
-	events  []entity.OutboxEvent
+	slots                     map[uuid.UUID]entity.Slot
+	workspaceMaterializations map[uuid.UUID]entity.WorkspaceMaterialization
+	results                   map[string]entity.CommandResult
+	events                    []entity.OutboxEvent
 }
 
 func (r *fakeRepository) Ping(context.Context) error { return nil }
@@ -383,6 +392,91 @@ func (r *fakeRepository) CreateSlot(_ context.Context, slot entity.Slot, event e
 	r.events = append(r.events, event)
 	r.results[result.Key] = result
 	return nil
+}
+
+func (r *fakeRepository) PrepareRuntime(
+	_ context.Context,
+	slot entity.Slot,
+	materialization entity.WorkspaceMaterialization,
+	slotEvent entity.OutboxEvent,
+	workspaceEvent entity.OutboxEvent,
+	result entity.CommandResult,
+) error {
+	r.slots[slot.ID] = slot
+	r.workspaceMaterializations[materialization.ID] = materialization
+	r.events = append(r.events, slotEvent, workspaceEvent)
+	r.results[result.Key] = result
+	return nil
+}
+
+func (r *fakeRepository) CreateWorkspaceMaterialization(
+	_ context.Context,
+	slot entity.Slot,
+	materialization entity.WorkspaceMaterialization,
+	previousSlotVersion int64,
+	event entity.OutboxEvent,
+	result entity.CommandResult,
+) error {
+	currentSlot, ok := r.slots[slot.ID]
+	if !ok {
+		return errs.ErrNotFound
+	}
+	if currentSlot.Version != previousSlotVersion {
+		return errs.ErrConflict
+	}
+	r.slots[slot.ID] = slot
+	r.workspaceMaterializations[materialization.ID] = materialization
+	r.events = append(r.events, event)
+	r.results[result.Key] = result
+	return nil
+}
+
+func (r *fakeRepository) UpdateWorkspaceMaterialization(
+	_ context.Context,
+	slot entity.Slot,
+	materialization entity.WorkspaceMaterialization,
+	previousSlotVersion int64,
+	previousMaterializationVersion int64,
+	event *entity.OutboxEvent,
+	result entity.CommandResult,
+) error {
+	currentSlot, ok := r.slots[slot.ID]
+	if !ok {
+		return errs.ErrNotFound
+	}
+	if currentSlot.Version != previousSlotVersion {
+		return errs.ErrConflict
+	}
+	currentMaterialization, ok := r.workspaceMaterializations[materialization.ID]
+	if !ok {
+		return errs.ErrNotFound
+	}
+	if currentMaterialization.Version != previousMaterializationVersion {
+		return errs.ErrConflict
+	}
+	r.slots[slot.ID] = slot
+	r.workspaceMaterializations[materialization.ID] = materialization
+	if event != nil {
+		r.events = append(r.events, *event)
+	}
+	r.results[result.Key] = result
+	return nil
+}
+
+func (r *fakeRepository) GetWorkspaceMaterialization(_ context.Context, id uuid.UUID) (entity.WorkspaceMaterialization, error) {
+	materialization, ok := r.workspaceMaterializations[id]
+	if !ok {
+		return entity.WorkspaceMaterialization{}, errs.ErrNotFound
+	}
+	return materialization, nil
+}
+
+func (r *fakeRepository) ListWorkspaceMaterializations(context.Context, query.WorkspaceMaterializationFilter) ([]entity.WorkspaceMaterialization, query.PageResult, error) {
+	items := make([]entity.WorkspaceMaterialization, 0, len(r.workspaceMaterializations))
+	for _, materialization := range r.workspaceMaterializations {
+		items = append(items, materialization)
+	}
+	return items, query.PageResult{}, nil
 }
 
 func (r *fakeRepository) UpdateSlot(_ context.Context, slot entity.Slot, previousVersion int64, event entity.OutboxEvent, result *entity.CommandResult) error {
