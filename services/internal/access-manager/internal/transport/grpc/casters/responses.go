@@ -204,6 +204,7 @@ func ResolveExternalAccountUsageResponse(result service.ResolveExternalAccountUs
 		SecretStoreType:   secretStoreTypeToProtoString[result.SecretRef.StoreType],
 		SecretStoreRef:    result.SecretRef.StoreRef,
 		AllowedActionKeys: result.AllowedActions,
+		ProviderSlug:      result.ExternalProvider.Slug,
 	}
 }
 

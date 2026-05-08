@@ -98,8 +98,9 @@ sequenceDiagram
   participant DB as provider DB
   W->>H: RunReconciliation(scope)
   H->>DB: load sync cursor and rate budget
-  H->>A: ResolveExternalAccountUsage
-  A-->>H: allowed account ref
+  H->>A: ResolveExternalAccountUsage(account, action, scope)
+  A-->>H: provider_slug + secret_ref
+  H->>H: Получить значение секрета через настроенное хранилище
   H->>P: Fetch changed artifacts
   P-->>H: Changed artifacts
   H->>DB: update projections, cursor, drift status, outbox
@@ -119,15 +120,16 @@ sequenceDiagram
   participant DB as provider DB
   AM->>MCP: Provider tool call
   MCP->>H: CreateOrUpdateArtifact(command)
-  H->>A: ResolveExternalAccountUsage
-  A-->>H: allowed account ref
+  H->>A: ResolveExternalAccountUsage(account, action, scope)
+  A-->>H: provider_slug + secret_ref
+  H->>H: Получить значение секрета через настроенное хранилище
   H->>P: Provider API operation
   P-->>H: Result + limit headers
   H->>DB: operation log + projection signal + outbox
   H-->>MCP: Normalized result
 ```
 
-`provider-hub` не решает сам, можно ли использовать внешний аккаунт. Он запрашивает разрешение у `access-manager`, выполняет операцию через адаптер и фиксирует результат.
+`provider-hub` не решает сам, можно ли использовать внешний аккаунт. Он выбирает внешний аккаунт по политике своего сценария, запрашивает подтверждение у `access-manager`, получает только ссылку на секрет, затем забирает значение секрета через настроенное хранилище секретов, выполняет операцию через адаптер и фиксирует результат. `access-manager` не возвращает значение токена и не становится прокси секретов.
 
 ### Сигнал от slot-агента
 

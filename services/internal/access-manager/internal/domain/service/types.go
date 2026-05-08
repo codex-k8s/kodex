@@ -218,9 +218,10 @@ type ResolveExternalAccountUsageInput struct {
 
 // ResolveExternalAccountUsageResult returns the permitted account and secret ref.
 type ResolveExternalAccountUsageResult struct {
-	ExternalAccount entity.ExternalAccount
-	SecretRef       entity.SecretBindingRef
-	AllowedActions  []string
+	ExternalAccount  entity.ExternalAccount
+	ExternalProvider entity.ExternalProvider
+	SecretRef        entity.SecretBindingRef
+	AllowedActions   []string
 }
 
 // ListPendingAccessInput selects operator-visible access items that need attention.

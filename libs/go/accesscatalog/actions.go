@@ -19,24 +19,31 @@ const (
 )
 
 const (
-	ResourceProject             = "project"
-	ResourceRepository          = "repository"
-	ResourceServicesPolicy      = "services_policy"
-	ResourcePolicyOverride      = "policy_override"
-	ResourceDocumentationSource = "documentation_source"
-	ResourceBranchRules         = "branch_rules"
-	ResourceReleasePolicy       = "release_policy"
-	ResourceReleaseLine         = "release_line"
-	ResourcePlacementPolicy     = "placement_policy"
-	ResourcePackageSource       = "package_source"
-	ResourcePackageCatalog      = "package_catalog"
-	ResourcePackage             = "package"
-	ResourcePackageVersion      = "package_version"
-	ResourcePackageManifest     = "package_manifest"
-	ResourcePackageInstallation = "package_installation"
-	ResourcePackageSecretSchema = "package_secret_schema"
-	ResourceRuntimeSlot         = "runtime_slot"
-	ResourceRuntimeWorkspace    = "runtime_workspace_materialization"
+	ResourceProject                = "project"
+	ResourceRepository             = "repository"
+	ResourceServicesPolicy         = "services_policy"
+	ResourcePolicyOverride         = "policy_override"
+	ResourceDocumentationSource    = "documentation_source"
+	ResourceBranchRules            = "branch_rules"
+	ResourceReleasePolicy          = "release_policy"
+	ResourceReleaseLine            = "release_line"
+	ResourcePlacementPolicy        = "placement_policy"
+	ResourcePackageSource          = "package_source"
+	ResourcePackageCatalog         = "package_catalog"
+	ResourcePackage                = "package"
+	ResourcePackageVersion         = "package_version"
+	ResourcePackageManifest        = "package_manifest"
+	ResourcePackageInstallation    = "package_installation"
+	ResourcePackageSecretSchema    = "package_secret_schema"
+	ResourceProviderWorkItem       = "provider_work_item"
+	ResourceProviderIssue          = "provider_issue"
+	ResourceProviderPullRequest    = "provider_pull_request"
+	ResourceProviderComment        = "provider_comment"
+	ResourceProviderReviewSignal   = "provider_review_signal"
+	ResourceProviderRelationship   = "provider_relationship"
+	ResourceProviderReconciliation = "provider_reconciliation"
+	ResourceRuntimeSlot            = "runtime_slot"
+	ResourceRuntimeWorkspace       = "runtime_workspace_materialization"
 )
 
 const (
@@ -80,6 +87,13 @@ const (
 	ActionPackageInstallationRead               = "package.installation.read"
 	ActionPackageSecretRead                     = "package.secret.read"
 	ActionPackageVerify                         = "package.verify"
+	ActionProviderWorkItemRead                  = "provider.work_item.read"
+	ActionProviderIssueWrite                    = "provider.issue.write"
+	ActionProviderPullRequestWrite              = "provider.pull_request.write"
+	ActionProviderCommentWrite                  = "provider.comment.write"
+	ActionProviderReviewSignalWrite             = "provider.review_signal.write"
+	ActionProviderRelationshipWrite             = "provider.relationship.write"
+	ActionProviderReconciliationRun             = "provider.reconciliation.run"
 	ActionRuntimeSlotReserve                    = "runtime.slot.reserve"
 	ActionRuntimeSlotExtendLease                = "runtime.slot.lease.extend"
 	ActionRuntimeSlotRelease                    = "runtime.slot.release"
@@ -144,6 +158,19 @@ func PackageHubActions() []ActionDescriptor {
 	}
 }
 
+// ProviderHubActions returns system actions owned by the provider-native work items domain.
+func ProviderHubActions() []ActionDescriptor {
+	return []ActionDescriptor{
+		{Key: ActionProviderWorkItemRead, ResourceType: ResourceProviderWorkItem},
+		{Key: ActionProviderIssueWrite, ResourceType: ResourceProviderIssue},
+		{Key: ActionProviderPullRequestWrite, ResourceType: ResourceProviderPullRequest},
+		{Key: ActionProviderCommentWrite, ResourceType: ResourceProviderComment},
+		{Key: ActionProviderReviewSignalWrite, ResourceType: ResourceProviderReviewSignal},
+		{Key: ActionProviderRelationshipWrite, ResourceType: ResourceProviderRelationship},
+		{Key: ActionProviderReconciliationRun, ResourceType: ResourceProviderReconciliation},
+	}
+}
+
 // RuntimeManagerActions returns system actions owned by the runtime-and-fleet domain.
 func RuntimeManagerActions() []ActionDescriptor {
 	return []ActionDescriptor{
@@ -162,9 +189,10 @@ func RuntimeManagerActions() []ActionDescriptor {
 
 // SystemActions returns all shared code-owned system actions.
 func SystemActions() []ActionDescriptor {
-	actions := make([]ActionDescriptor, 0, len(ProjectCatalogActions())+len(PackageHubActions())+len(RuntimeManagerActions()))
+	actions := make([]ActionDescriptor, 0, len(ProjectCatalogActions())+len(PackageHubActions())+len(ProviderHubActions())+len(RuntimeManagerActions()))
 	actions = append(actions, ProjectCatalogActions()...)
 	actions = append(actions, PackageHubActions()...)
+	actions = append(actions, ProviderHubActions()...)
 	actions = append(actions, RuntimeManagerActions()...)
 	return actions
 }

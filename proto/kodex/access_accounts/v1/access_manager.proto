@@ -931,6 +931,8 @@ message ResolveExternalAccountUsageResponse {
   string secret_store_ref = 5;
   // allowed_action_keys are actions allowed for this binding.
   repeated string allowed_action_keys = 6;
+  // provider_slug is the stable external provider slug, for example github.
+  string provider_slug = 7;
 }
 
 // ListMembershipGraphRequest returns graph membership around a subject.

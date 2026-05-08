@@ -1401,22 +1401,16 @@ func TestResolveExternalAccountUsageRequiresAllowedActionAndSecret(t *testing.T)
 	if err != nil {
 		t.Fatalf("register account: %v", err)
 	}
-	_, err = svc.PutAccessAction(ctx, PutAccessActionInput{
-		Key: "provider.issue.write", DisplayName: "Запись Issue", ResourceType: "provider_issue",
-	})
-	if err != nil {
-		t.Fatalf("put access action: %v", err)
-	}
 	_, err = svc.BindExternalAccount(ctx, BindExternalAccountInput{
 		ExternalAccountID: account.ID, UsageScopeType: enum.ExternalAccountScopeProject, UsageScopeID: "project-1",
-		AllowedActionKeys: []string{"provider.issue.write"}, Status: enum.ExternalAccountBindingStatusActive,
+		AllowedActionKeys: []string{accesscatalog.ActionProviderIssueWrite}, Status: enum.ExternalAccountBindingStatusActive,
 	})
 	if err != nil {
 		t.Fatalf("bind account: %v", err)
 	}
 
 	result, err := svc.ResolveExternalAccountUsage(ctx, ResolveExternalAccountUsageInput{
-		ExternalAccountID: account.ID, ActionKey: "provider.issue.write",
+		ExternalAccountID: account.ID, ActionKey: accesscatalog.ActionProviderIssueWrite,
 		UsageScope: value.ScopeRef{Type: string(enum.ExternalAccountScopeProject), ID: "project-1"},
 	})
 	if err != nil {
@@ -1424,6 +1418,23 @@ func TestResolveExternalAccountUsageRequiresAllowedActionAndSecret(t *testing.T)
 	}
 	if result.SecretRef.StoreRef != secret.StoreRef {
 		t.Fatalf("secret ref = %s, want %s", result.SecretRef.StoreRef, secret.StoreRef)
+	}
+	if result.ExternalProvider.Slug != "github" {
+		t.Fatalf("provider slug = %s, want github", result.ExternalProvider.Slug)
+	}
+}
+
+func TestResolveExternalAccountUsageRejectsInvalidInput(t *testing.T) {
+	t.Parallel()
+
+	svc := New(newMemoryRepository(), fixedClock{}, newSequenceIDs())
+	_, err := svc.ResolveExternalAccountUsage(context.Background(), ResolveExternalAccountUsageInput{
+		ExternalAccountID: uuid.Nil,
+		ActionKey:         accesscatalog.ActionProviderIssueWrite,
+		UsageScope:        value.ScopeRef{Type: string(enum.ExternalAccountScopeProject), ID: "project-1"},
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("resolve err = %v, want %v", err, errs.ErrInvalidArgument)
 	}
 }
 
@@ -1461,7 +1472,7 @@ func TestBindExternalAccountRequiresCatalogAction(t *testing.T) {
 	}
 	_, err = svc.BindExternalAccount(ctx, BindExternalAccountInput{
 		ExternalAccountID: account.ID, UsageScopeType: enum.ExternalAccountScopeProject, UsageScopeID: "project-1",
-		AllowedActionKeys: []string{"provider.issue.write"},
+		AllowedActionKeys: []string{"provider.issue.wirte"},
 	})
 	if !errors.Is(err, errs.ErrNotFound) {
 		t.Fatalf("err = %v, want %v", err, errs.ErrNotFound)
@@ -1485,24 +1496,16 @@ func TestBindExternalAccountKeepsIdentityOnUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("register account: %v", err)
 	}
-	_, err = svc.PutAccessAction(ctx, PutAccessActionInput{Key: "provider.issue.write", DisplayName: "Запись Issue", ResourceType: "provider_issue"})
-	if err != nil {
-		t.Fatalf("put first action: %v", err)
-	}
-	_, err = svc.PutAccessAction(ctx, PutAccessActionInput{Key: "provider.pr.write", DisplayName: "Запись PR", ResourceType: "provider_pr"})
-	if err != nil {
-		t.Fatalf("put second action: %v", err)
-	}
 	created, err := svc.BindExternalAccount(ctx, BindExternalAccountInput{
 		ExternalAccountID: account.ID, UsageScopeType: enum.ExternalAccountScopeProject, UsageScopeID: "project-1",
-		AllowedActionKeys: []string{"provider.issue.write"},
+		AllowedActionKeys: []string{accesscatalog.ActionProviderIssueWrite},
 	})
 	if err != nil {
 		t.Fatalf("bind account: %v", err)
 	}
 	updated, err := svc.BindExternalAccount(ctx, BindExternalAccountInput{
 		ExternalAccountID: account.ID, UsageScopeType: enum.ExternalAccountScopeProject, UsageScopeID: "project-1",
-		AllowedActionKeys: []string{"provider.issue.write", "provider.pr.write"},
+		AllowedActionKeys: []string{accesscatalog.ActionProviderIssueWrite, accesscatalog.ActionProviderPullRequestWrite},
 		Meta:              value.CommandMeta{ExpectedVersion: ptrInt64(created.Version)},
 	})
 	if err != nil {
@@ -1530,13 +1533,9 @@ func TestBindExternalAccountRejectsDisabledStatus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("register account: %v", err)
 	}
-	_, err = svc.PutAccessAction(ctx, PutAccessActionInput{Key: "provider.issue.write", DisplayName: "Запись Issue", ResourceType: "provider_issue"})
-	if err != nil {
-		t.Fatalf("put action: %v", err)
-	}
 	_, err = svc.BindExternalAccount(ctx, BindExternalAccountInput{
 		ExternalAccountID: account.ID, UsageScopeType: enum.ExternalAccountScopeProject, UsageScopeID: "project-1",
-		AllowedActionKeys: []string{"provider.issue.write"}, Status: enum.ExternalAccountBindingStatusDisabled,
+		AllowedActionKeys: []string{accesscatalog.ActionProviderIssueWrite}, Status: enum.ExternalAccountBindingStatusDisabled,
 	})
 	if !errors.Is(err, errs.ErrInvalidArgument) {
 		t.Fatalf("err = %v, want %v", err, errs.ErrInvalidArgument)
@@ -1697,12 +1696,9 @@ func TestDisableExternalAccountBindingUpdatesStatusAndKeepsIdentity(t *testing.T
 	if err != nil {
 		t.Fatalf("register account: %v", err)
 	}
-	if _, err := svc.PutAccessAction(ctx, PutAccessActionInput{Key: "provider.issue.write", DisplayName: "Запись Issue", ResourceType: "provider_issue"}); err != nil {
-		t.Fatalf("put action: %v", err)
-	}
 	binding, err := svc.BindExternalAccount(ctx, BindExternalAccountInput{
 		ExternalAccountID: account.ID, UsageScopeType: enum.ExternalAccountScopeProject, UsageScopeID: "project-1",
-		AllowedActionKeys: []string{"provider.issue.write"},
+		AllowedActionKeys: []string{accesscatalog.ActionProviderIssueWrite},
 	})
 	if err != nil {
 		t.Fatalf("bind account: %v", err)
