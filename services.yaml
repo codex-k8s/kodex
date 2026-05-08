@@ -127,6 +127,7 @@ spec:
         - libs/go/servicemain
         - proto/kodex/runtime/v1
         - specs/asyncapi/runtime-manager.v1.yaml
+        - deploy/base/runtime-manager
     platform-event-log:
       value: "0.1.0"
       bumpOn:
@@ -200,7 +201,7 @@ spec:
       imageEnv: KODEX_PROVIDER_HUB_MIGRATIONS_IMAGE
       migratesDatabase: kodex_provider_hub
     runtime-manager:
-      type: planned-build
+      type: build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_RUNTIME_MANAGER_INTERNAL_IMAGE_REPOSITORY" "kodex/runtime-manager" }}'
       tagTemplate: '{{ index .Versions "runtime-manager" }}'
       dockerfile: services/internal/runtime-manager/Dockerfile
@@ -208,7 +209,7 @@ spec:
       context: .
       imageEnv: KODEX_RUNTIME_MANAGER_IMAGE
     runtime-manager-migrations:
-      type: planned-migration-build
+      type: migration-build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_RUNTIME_MANAGER_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY" "kodex/runtime-manager-migrations" }}'
       tagTemplate: '{{ index .Versions "runtime-manager" }}'
       dockerfile: services/internal/runtime-manager/Dockerfile
@@ -274,6 +275,30 @@ spec:
           livez: /health/livez
           readyz: /health/readyz
           metrics: /metrics
+    - name: runtime-manager
+      status: foundation
+      zone: internal
+      path: services/internal/runtime-manager
+      dockerfile: services/internal/runtime-manager/Dockerfile
+      imageEnv: KODEX_RUNTIME_MANAGER_IMAGE
+      internalImageRepositoryEnv: KODEX_RUNTIME_MANAGER_INTERNAL_IMAGE_REPOSITORY
+      migrationsImageEnv: KODEX_RUNTIME_MANAGER_MIGRATIONS_IMAGE
+      migrationsInternalImageRepositoryEnv: KODEX_RUNTIME_MANAGER_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY
+      ownerDomain: runtime-and-fleet
+      apiContracts:
+        grpc: proto/kodex/runtime/v1/runtime_manager.proto
+        asyncapi: specs/asyncapi/runtime-manager.v1.yaml
+      database:
+        owner: runtime-manager
+        migrations: services/internal/runtime-manager/cmd/cli/migrations
+      deploy:
+        serviceManifest: deploy/base/runtime-manager/runtime-manager.yaml.tpl
+        migrationsManifest: deploy/base/runtime-manager/migrations.yaml.tpl
+        kustomization: deploy/base/runtime-manager/kustomization.yaml.tpl
+        health:
+          livez: /health/livez
+          readyz: /health/readyz
+          metrics: /metrics
   platformDataStores:
     - name: platform-event-log
       status: foundation
@@ -285,7 +310,7 @@ spec:
       clientLibrary: libs/go/eventlog
       purpose: shared-domain-event-log
     - name: runtime-manager
-      status: scaffold
+      status: foundation
       owner: runtime-manager
       databaseName: kodex_runtime_manager
       migrations: services/internal/runtime-manager/cmd/cli/migrations
@@ -311,28 +336,6 @@ spec:
         migrations: services/internal/provider-hub/cmd/cli/migrations
       deploy:
         status: planned-after-service-implementation
-        health:
-          livez: /health/livez
-          readyz: /health/readyz
-          metrics: /metrics
-    - name: runtime-manager
-      status: scaffold
-      zone: internal
-      path: services/internal/runtime-manager
-      dockerfile: services/internal/runtime-manager/Dockerfile
-      imageEnv: KODEX_RUNTIME_MANAGER_IMAGE
-      internalImageRepositoryEnv: KODEX_RUNTIME_MANAGER_INTERNAL_IMAGE_REPOSITORY
-      migrationsImageEnv: KODEX_RUNTIME_MANAGER_MIGRATIONS_IMAGE
-      migrationsInternalImageRepositoryEnv: KODEX_RUNTIME_MANAGER_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY
-      ownerDomain: runtime-and-fleet
-      apiContracts:
-        grpc: proto/kodex/runtime/v1/runtime_manager.proto
-        asyncapi: specs/asyncapi/runtime-manager.v1.yaml
-      database:
-        owner: runtime-manager
-        migrations: services/internal/runtime-manager/cmd/cli/migrations
-      deploy:
-        status: planned
         health:
           livez: /health/livez
           readyz: /health/readyz
@@ -381,6 +384,13 @@ spec:
         - postgres-secrets
         - postgres
         - platform-event-log-migrations
+    - name: runtime-manager-migrations
+      path: deploy/base/runtime-manager/migrations.yaml.tpl
+      migratesDatabase: kodex_runtime_manager
+      requires:
+        - postgres-secrets
+        - postgres
+        - platform-event-log-migrations
     - name: access-manager
       path: deploy/base/access-manager/access-manager.yaml.tpl
       kustomization: deploy/base/access-manager/kustomization.yaml.tpl
@@ -394,6 +404,14 @@ spec:
       deploysService: project-catalog
       requires:
         - project-catalog-migrations
+        - platform-event-log-migrations
+        - access-manager
+    - name: runtime-manager
+      path: deploy/base/runtime-manager/runtime-manager.yaml.tpl
+      kustomization: deploy/base/runtime-manager/kustomization.yaml.tpl
+      deploysService: runtime-manager
+      requires:
+        - runtime-manager-migrations
         - platform-event-log-migrations
         - access-manager
   notes:

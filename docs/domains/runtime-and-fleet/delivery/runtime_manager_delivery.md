@@ -61,7 +61,36 @@ approvals:
 | Platform jobs | Готов: создание, claim с `lease_token`, progress, complete/fail/cancel, чтения и события `runtime.job.*`. | Команды `CreateJob`, `ClaimRunnableJob`, `ReportJobStepProgress`, `CompleteJob`, `FailJob`, `CancelJob`, чтения `GetJob`/`ListJobs`, PostgreSQL repository, проверка доступа и gRPC wiring готовы. Исполнитель получает короткий lease и одноразовый `lease_token`; Kubernetes executor остаётся за эксплуатационным срезом. |
 | Runtime artifact refs | Готов: запись и чтение ссылок на внешние runtime-артефакты. | Команды `RecordRuntimeArtifactRef`/`ListRuntimeArtifactRefs` готовы; PostgreSQL хранит только ссылку, digest и ограниченную диагностику без blob, полного лога или registry catalog. |
 | Cleanup/prewarm/reuse | Готов: cleanup policy, cleanup batch, prewarm pool и события cleanup/prewarm. | Базовые таблицы cleanup policy и prewarm pool готовы; runtime-логика будет в RTM-7. |
-| Deploy/manifests | Не gRPC-группа. | Не начата; будет в RTM-6. |
+| Deploy/manifests | Не gRPC-группа. | Готовы Dockerfile, service/deployment manifests, migration job, `services.yaml`, DB bootstrap wiring, smoke-путь и эксплуатационные документы. |
+
+## Эксплуатационный контур
+
+`runtime-manager` разворачивается как внутренний сервис с двумя портами:
+- `http:8080` для `/health/livez`, `/health/readyz` и будущих технических метрик;
+- `grpc:9090` для внутреннего `RuntimeManagerService`.
+
+Порядок выкладки:
+1. PostgreSQL stack и `kodex-postgres-bootstrap-databases`.
+2. `platform-event-log-migrations`.
+3. `access-manager-migrations` и `access-manager`.
+4. `runtime-manager-migrations`.
+5. `runtime-manager`.
+
+Runtime-сервис использует:
+- собственную БД `kodex_runtime_manager`;
+- общий event log через `KODEX_RUNTIME_MANAGER_EVENT_LOG_DATABASE_DSN`;
+- shared token для входящего gRPC;
+- `access-manager` как проверку доступа для runtime-команд и чтений;
+- явные MVP defaults `KODEX_RUNTIME_MANAGER_SLOT_DEFAULT_FLEET_SCOPE_ID` и `KODEX_RUNTIME_MANAGER_SLOT_DEFAULT_CLUSTER_ID`, пока не готов `fleet-manager`.
+
+Smoke-путь:
+- `scripts/build-runtime-manager-images.sh` собирает образы для runtime-проверки;
+- `scripts/smoke-runtime-manager.sh` применяет зависимости, миграции, deployment, проверяет readiness и gRPC boundary;
+- адреса, домены и креды из локального `bootstrap/host/config.env` не публикуются в Issue/PR.
+
+Операционные документы:
+- `docs/domains/runtime-and-fleet/ops/runtime_manager_runbook.md`;
+- `docs/domains/runtime-and-fleet/ops/runtime_manager_monitoring.md`.
 
 ## Синхронизация с параллельными доменами
 

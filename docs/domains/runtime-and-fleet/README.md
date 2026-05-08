@@ -30,6 +30,8 @@
 | Модель данных | `architecture/data_model.md` |
 | API-карта | `architecture/api_contract.md` |
 | План поставки | `delivery/runtime_manager_delivery.md` |
+| Runbook runtime-manager | `ops/runtime_manager_runbook.md` |
+| Наблюдаемость runtime-manager | `ops/runtime_manager_monitoring.md` |
 
 ## Карта Issue
 
