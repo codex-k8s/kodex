@@ -2,6 +2,7 @@
 INSERT INTO provider_hub_reconciliation_requests (
     id,
     provider_slug,
+    external_account_id,
     scope_type,
     scope_ref,
     idempotency_key,
@@ -12,6 +13,7 @@ INSERT INTO provider_hub_reconciliation_requests (
 ) VALUES (
     @id,
     @provider_slug,
+    @external_account_id,
     @scope_type,
     @scope_ref,
     @idempotency_key,
@@ -24,6 +26,7 @@ ON CONFLICT (provider_slug, scope_type, scope_ref, idempotency_key) DO NOTHING
 RETURNING
     id,
     provider_slug,
+    external_account_id,
     scope_type,
     scope_ref,
     idempotency_key,

@@ -111,6 +111,7 @@ type ProviderRelationship struct {
 type SyncCursor struct {
 	Base
 	ProviderSlug        enum.ProviderSlug
+	ExternalAccountID   uuid.UUID
 	ScopeType           enum.SyncCursorScopeType
 	ScopeRef            string
 	ArtifactKind        enum.SyncArtifactKind
@@ -127,15 +128,16 @@ type SyncCursor struct {
 
 // ReconciliationRequest stores an idempotent enqueue command for one provider scope.
 type ReconciliationRequest struct {
-	ID             uuid.UUID
-	ProviderSlug   enum.ProviderSlug
-	ScopeType      enum.SyncCursorScopeType
-	ScopeRef       string
-	IdempotencyKey string
-	ArtifactKinds  []enum.SyncArtifactKind
-	Priority       enum.SyncCursorPriority
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	ID                uuid.UUID
+	ProviderSlug      enum.ProviderSlug
+	ExternalAccountID uuid.UUID
+	ScopeType         enum.SyncCursorScopeType
+	ScopeRef          string
+	IdempotencyKey    string
+	ArtifactKinds     []enum.SyncArtifactKind
+	Priority          enum.SyncCursorPriority
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 }
 
 // ProviderLimitSnapshot stores one observed provider rate or quota snapshot.

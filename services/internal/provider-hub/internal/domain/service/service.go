@@ -285,6 +285,7 @@ func (s *Service) EnqueueReconciliation(ctx context.Context, input EnqueueReconc
 		return artifactKinds[i] < artifactKinds[j]
 	})
 	if !validProviderSlug(providerSlug) ||
+		input.ExternalAccountID == uuid.Nil ||
 		!validSyncCursorScope(input.ScopeType) ||
 		scopeRef == "" ||
 		len(artifactKinds) == 0 ||
@@ -294,15 +295,16 @@ func (s *Service) EnqueueReconciliation(ctx context.Context, input EnqueueReconc
 	}
 	now := s.clock.Now().UTC()
 	request := entity.ReconciliationRequest{
-		ID:             s.ids.New(),
-		ProviderSlug:   providerSlug,
-		ScopeType:      input.ScopeType,
-		ScopeRef:       scopeRef,
-		IdempotencyKey: idempotencyKey,
-		ArtifactKinds:  artifactKinds,
-		Priority:       input.Priority,
-		CreatedAt:      now,
-		UpdatedAt:      now,
+		ID:                s.ids.New(),
+		ProviderSlug:      providerSlug,
+		ExternalAccountID: input.ExternalAccountID,
+		ScopeType:         input.ScopeType,
+		ScopeRef:          scopeRef,
+		IdempotencyKey:    idempotencyKey,
+		ArtifactKinds:     artifactKinds,
+		Priority:          input.Priority,
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}
 	cursors := make([]entity.SyncCursor, 0, len(artifactKinds))
 	for _, artifactKind := range artifactKinds {
@@ -314,6 +316,7 @@ func (s *Service) EnqueueReconciliation(ctx context.Context, input EnqueueReconc
 				UpdatedAt: now,
 			},
 			ProviderSlug:        providerSlug,
+			ExternalAccountID:   input.ExternalAccountID,
 			ScopeType:           input.ScopeType,
 			ScopeRef:            scopeRef,
 			ArtifactKind:        artifactKind,
@@ -339,17 +342,21 @@ func (s *Service) RunReconciliationBatch(ctx context.Context, input RunReconcili
 	if input.SyncCursorID != nil && *input.SyncCursorID == uuid.Nil {
 		return RunReconciliationBatchResult{}, errs.ErrInvalidArgument
 	}
+	if input.ExternalAccountID != nil && *input.ExternalAccountID == uuid.Nil {
+		return RunReconciliationBatchResult{}, errs.ErrInvalidArgument
+	}
 	providerSlug := enum.ProviderSlug(strings.TrimSpace(string(input.ProviderSlug)))
 	if providerSlug != "" && !validProviderSlug(providerSlug) {
 		return RunReconciliationBatchResult{}, errs.ErrInvalidArgument
 	}
 	now := s.clock.Now().UTC()
 	cursor, err := s.repository.ClaimSyncCursor(ctx, providerrepo.SyncCursorClaim{
-		ID:           input.SyncCursorID,
-		ProviderSlug: providerSlug,
-		LeaseOwner:   strings.TrimSpace(input.LeaseOwner),
-		Now:          now,
-		LeaseUntil:   now.Add(syncCursorLeaseTTL),
+		ID:                input.SyncCursorID,
+		ProviderSlug:      providerSlug,
+		ExternalAccountID: input.ExternalAccountID,
+		LeaseOwner:        strings.TrimSpace(input.LeaseOwner),
+		Now:               now,
+		LeaseUntil:        now.Add(syncCursorLeaseTTL),
 	})
 	if err != nil {
 		return RunReconciliationBatchResult{}, err
@@ -372,6 +379,9 @@ func (s *Service) ListSyncCursors(ctx context.Context, input ListSyncCursorsInpu
 	if providerSlug != "" && !validProviderSlug(providerSlug) {
 		return ListSyncCursorsResult{}, errs.ErrInvalidArgument
 	}
+	if input.ExternalAccountID != nil && *input.ExternalAccountID == uuid.Nil {
+		return ListSyncCursorsResult{}, errs.ErrInvalidArgument
+	}
 	if input.ScopeType != "" && !validSyncCursorScope(input.ScopeType) {
 		return ListSyncCursorsResult{}, errs.ErrInvalidArgument
 	}
@@ -382,13 +392,14 @@ func (s *Service) ListSyncCursors(ctx context.Context, input ListSyncCursorsInpu
 		return ListSyncCursorsResult{}, errs.ErrInvalidArgument
 	}
 	cursors, page, err := s.repository.ListSyncCursors(ctx, query.SyncCursorFilter{
-		ProviderSlug:   providerSlug,
-		ScopeType:      input.ScopeType,
-		ScopeRef:       strings.TrimSpace(input.ScopeRef),
-		ArtifactKinds:  input.ArtifactKinds,
-		Priorities:     input.Priorities,
-		IncludeHealthy: input.IncludeHealthy,
-		Page:           input.Page,
+		ProviderSlug:      providerSlug,
+		ExternalAccountID: input.ExternalAccountID,
+		ScopeType:         input.ScopeType,
+		ScopeRef:          strings.TrimSpace(input.ScopeRef),
+		ArtifactKinds:     input.ArtifactKinds,
+		Priorities:        input.Priorities,
+		IncludeHealthy:    input.IncludeHealthy,
+		Page:              input.Page,
 	})
 	if err != nil {
 		return ListSyncCursorsResult{}, err

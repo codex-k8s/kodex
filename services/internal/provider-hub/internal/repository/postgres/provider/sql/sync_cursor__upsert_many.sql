@@ -7,6 +7,7 @@ upserted AS (
     INSERT INTO provider_hub_sync_cursors (
         id,
         provider_slug,
+        external_account_id,
         scope_type,
         scope_ref,
         artifact_kind,
@@ -26,6 +27,7 @@ upserted AS (
     SELECT
         input_rows.id,
         @provider_slug,
+        @external_account_id,
         @scope_type,
         @scope_ref,
         input_rows.artifact_kind,
@@ -48,11 +50,15 @@ upserted AS (
             WHEN provider_hub_sync_cursors.priority = 'warm' OR EXCLUDED.priority = 'warm' THEN 'warm'
             ELSE 'cold'
         END,
+        external_account_id = COALESCE(provider_hub_sync_cursors.external_account_id, EXCLUDED.external_account_id),
         updated_at = EXCLUDED.updated_at,
         version = provider_hub_sync_cursors.version + 1
+    WHERE provider_hub_sync_cursors.external_account_id IS NULL
+       OR provider_hub_sync_cursors.external_account_id = EXCLUDED.external_account_id
     RETURNING
         id,
         provider_slug,
+        external_account_id,
         scope_type,
         scope_ref,
         artifact_kind,

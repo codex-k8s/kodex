@@ -177,6 +177,7 @@ func scanSyncCursor(row postgreslib.RowScanner) (entity.SyncCursor, error) {
 	err := row.Scan(
 		&cursor.ID,
 		&providerSlug,
+		&cursor.ExternalAccountID,
 		&scopeType,
 		&cursor.ScopeRef,
 		&artifactKind,
@@ -212,6 +213,7 @@ func scanReconciliationRequest(row postgreslib.RowScanner) (entity.Reconciliatio
 	if err := row.Scan(
 		&request.ID,
 		&providerSlug,
+		&request.ExternalAccountID,
 		&scopeType,
 		&request.ScopeRef,
 		&request.IdempotencyKey,

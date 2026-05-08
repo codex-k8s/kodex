@@ -398,6 +398,7 @@ func insertOutboxEvents(ctx context.Context, db execer, operation string, events
 
 func sameReconciliationRequest(expected entity.ReconciliationRequest, actual entity.ReconciliationRequest) bool {
 	return expected.ProviderSlug == actual.ProviderSlug &&
+		expected.ExternalAccountID == actual.ExternalAccountID &&
 		expected.ScopeType == actual.ScopeType &&
 		expected.ScopeRef == actual.ScopeRef &&
 		expected.IdempotencyKey == actual.IdempotencyKey &&

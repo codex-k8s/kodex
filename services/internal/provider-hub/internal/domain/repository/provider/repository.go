@@ -53,11 +53,12 @@ type ProjectionUpdate struct {
 
 // SyncCursorClaim identifies one cursor lease attempt for a reconciliation worker.
 type SyncCursorClaim struct {
-	ID           *uuid.UUID
-	ProviderSlug enum.ProviderSlug
-	LeaseOwner   string
-	Now          time.Time
-	LeaseUntil   time.Time
+	ID                *uuid.UUID
+	ProviderSlug      enum.ProviderSlug
+	ExternalAccountID *uuid.UUID
+	LeaseOwner        string
+	Now               time.Time
+	LeaseUntil        time.Time
 }
 
 // WebhookNormalizer isolates provider-specific webhook payload parsing from the domain service.

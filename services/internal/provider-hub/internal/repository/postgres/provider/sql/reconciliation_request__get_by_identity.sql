@@ -2,6 +2,7 @@
 SELECT
     id,
     provider_slug,
+    external_account_id,
     scope_type,
     scope_ref,
     idempotency_key,

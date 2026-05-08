@@ -48,7 +48,7 @@ approvals:
 | PRV-4 | Журнал webhook, дедупликация, нормализация GitHub-событий и публикация базовых `provider.*` событий готовы. |
 | PRV-5 | Проекции `Issue`, `PR/MR`, комментариев, review-сигналов, watermark и provider relationships готовы. |
 | PRV-6.1 | Очередь сверки, `sync_cursor`, приоритеты `hot/warm/cold`, чтение курсоров и короткая аренда курсора для worker готовы. |
-| PRV-6.2 | Инкрементальная batch-сверка GitHub по курсорам, окнам перекрытия, лимитному бюджету и drift status готова. |
+| PRV-6.2 | Инкрементальная batch-сверка GitHub по курсорам, выбранному внешнему аккаунту, окнам перекрытия, лимитному бюджету и drift status готова. |
 | PRV-6.3 | Ускоряющие сигналы от agent-manager/MCP и slot-агентов готовы. |
 | PRV-7 | Платформенные provider-операции для agent-manager/MCP готовы с аудитом и идемпотентностью. |
 | PRV-8 | Provider-часть empty repository bootstrap и existing repository adoption готова; содержательное сканирование и отчёт по существующему репозиторию остаются агентной работой через workspace. |
@@ -100,7 +100,8 @@ approvals:
 - gRPC-чтение проекций через `GetWorkItemProjection`, `FindWorkItemByProviderRef`, `ListWorkItemProjections`, `ListComments` и `ListRelationships`;
 - публикация локальных outbox-событий `provider.work_item.synced`, `provider.comment.synced` и `provider.relationship.synced`;
 - очередь сверки через `EnqueueReconciliation`, `GetSyncCursor`, `ListSyncCursors` и базовый lease-путь `RunReconciliationBatch` без обращения к внешнему provider API;
-- идемпотентная постановка сверки по `provider_slug + scope_type + scope_ref + idempotency_key`: повтор той же команды не меняет курсоры, а повтор с другим составом запроса возвращает конфликт;
+- явное сохранение `external_account_id` в запросе постановки и курсоре сверки, чтобы worker не выбирал внешний аккаунт неявно;
+- идемпотентная постановка сверки по `provider_slug + scope_type + scope_ref + idempotency_key`: повтор той же команды не меняет курсоры, а повтор с другим внешним аккаунтом или составом запроса возвращает конфликт;
 - PostgreSQL-хранение курсоров сверки с естественным ключом `provider_slug + scope_type + scope_ref + artifact_kind`, пакетной атомарной постановкой нескольких `artifact_kind`, сохранением более высокого приоритета при новой постановке и защитой lease через `FOR UPDATE SKIP LOCKED`;
 - штатный outbox dispatcher `provider-hub` в `platform-event-log`.
 
