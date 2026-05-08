@@ -206,6 +206,21 @@ func TestJobInputJSONKeepsLargeNumbers(t *testing.T) {
 	}
 }
 
+func TestJobInputJSONRejectsNull(t *testing.T) {
+	t.Parallel()
+
+	svc, _ := newTestService()
+	_, err := svc.CreateJob(context.Background(), CreateJobInput{
+		JobType:      enum.JobTypeHousekeeping,
+		Priority:     enum.JobPriorityNormal,
+		JobInputJSON: []byte(`null`),
+		Meta:         commandMeta(mustUUID("00000000-0000-0000-0000-000000000527"), 0),
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("CreateJob() err = %v, want invalid argument for null job input", err)
+	}
+}
+
 func TestShortLogTailKeepsValidUTF8(t *testing.T) {
 	t.Parallel()
 
@@ -244,6 +259,27 @@ func TestShortLogTailKeepsValidUTF8(t *testing.T) {
 	}
 	if len(progress.Steps) != 1 || len(progress.Steps[0].ShortLogTail) > maxShortLogTailBytes || !utf8.ValidString(progress.Steps[0].ShortLogTail) {
 		t.Fatalf("step short log tail is invalid: steps=%#v", progress.Steps)
+	}
+}
+
+func TestRuntimeArtifactMetadataRejectsNull(t *testing.T) {
+	t.Parallel()
+
+	svc, _ := newTestService()
+	slotID := mustUUID("00000000-0000-0000-0000-000000000528")
+	projectID := mustUUID("00000000-0000-0000-0000-000000000529")
+	svc.repository.(*fakeRepository).slots[slotID] = entitySlot(slotID, projectID)
+	_, err := svc.RecordRuntimeArtifactRef(context.Background(), RecordRuntimeArtifactRefInput{
+		SlotID: &slotID,
+		ArtifactRef: RuntimeArtifactRefInput{
+			ArtifactType: enum.RuntimeArtifactTypeLogRef,
+			ExternalRef:  "k8s://pods/runtime/log",
+			MetadataJSON: []byte(`null`),
+		},
+		Meta: commandMeta(mustUUID("00000000-0000-0000-0000-000000000530"), 0),
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("RecordRuntimeArtifactRef() err = %v, want invalid argument for null metadata", err)
 	}
 }
 

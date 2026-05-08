@@ -606,6 +606,9 @@ func normalizedJSONObject(payload []byte) ([]byte, error) {
 	if err := json.Unmarshal(trimmed, &parsed); err != nil {
 		return nil, errs.ErrInvalidArgument
 	}
+	if parsed == nil {
+		return nil, errs.ErrInvalidArgument
+	}
 	var compact bytes.Buffer
 	if err := json.Compact(&compact, trimmed); err != nil {
 		return nil, errs.ErrInvalidArgument
