@@ -3909,7 +3909,8 @@ type EnqueueReconciliationRequest struct {
 	ArtifactKinds []SyncArtifactKind `protobuf:"varint,4,rep,packed,name=artifact_kinds,json=artifactKinds,proto3,enum=kodex.providers.v1.SyncArtifactKind" json:"artifact_kinds,omitempty"`
 	// priority classifies reconciliation urgency.
 	Priority SyncCursorPriority `protobuf:"varint,5,opt,name=priority,proto3,enum=kodex.providers.v1.SyncCursorPriority" json:"priority,omitempty"`
-	// meta carries idempotency and audit context.
+	// meta carries idempotency and audit context. meta.idempotency_key is required for this operation;
+	// command_id alone is not enough because enqueue replay is scoped by provider_slug, scope_type and scope_ref.
 	Meta          *CommandMeta `protobuf:"bytes,6,opt,name=meta,proto3" json:"meta,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

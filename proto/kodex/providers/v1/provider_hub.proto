@@ -746,7 +746,8 @@ message EnqueueReconciliationRequest {
   repeated SyncArtifactKind artifact_kinds = 4;
   // priority classifies reconciliation urgency.
   SyncCursorPriority priority = 5;
-  // meta carries idempotency and audit context.
+  // meta carries idempotency and audit context. meta.idempotency_key is required for this operation;
+  // command_id alone is not enough because enqueue replay is scoped by provider_slug, scope_type and scope_ref.
   CommandMeta meta = 6;
 }
 
