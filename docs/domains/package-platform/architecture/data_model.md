@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-06
 updated_at: 2026-05-07
-related_issues: [642, 673, 680]
+related_issues: [642, 673, 680, 689]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -121,6 +121,8 @@ approvals:
 ### PackageInstallation
 
 `PackageInstallation` фиксирует установленный пакет, выбранную версию и область применения.
+
+Обычное изменение версии или desired state повышает `version` и публикует `package.installation.updated`. Отключение и снятие установки выполняются отдельными командами: `disabled` соответствует desired state `suspended`, `uninstalled` соответствует desired state `absent`. Физического удаления записи установки в первой версии нет.
 
 | Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|

@@ -66,9 +66,7 @@ func UpdatePackageSourceInput(request *packagesv1.UpdatePackageSourceRequest) (s
 }
 
 func DisablePackageSourceInput(request *packagesv1.DisablePackageSourceRequest) (service.DisablePackageSourceInput, error) {
-	return sourceCommandInput(request.GetSourceId(), request.GetMeta(), func(sourceID uuid.UUID, meta value.CommandMeta) service.DisablePackageSourceInput {
-		return service.DisablePackageSourceInput{SourceID: sourceID, Meta: meta}
-	})
+	return idCommandInput(request.GetSourceId(), request.GetMeta(), newDisablePackageSourceInput)
 }
 
 func GetPackageSourceInput(request *packagesv1.GetPackageSourceRequest) (IDQueryInput, error) {
@@ -100,9 +98,7 @@ func ListPackageSourcesInput(request *packagesv1.ListPackageSourcesRequest) (ser
 }
 
 func SyncAvailablePackagesInput(request *packagesv1.SyncAvailablePackagesRequest) (service.SyncAvailablePackagesInput, error) {
-	input, err := sourceCommandInput(request.GetSourceId(), request.GetMeta(), func(sourceID uuid.UUID, meta value.CommandMeta) service.SyncAvailablePackagesInput {
-		return service.SyncAvailablePackagesInput{SourceID: sourceID, Meta: meta}
-	})
+	input, err := idCommandInput(request.GetSourceId(), request.GetMeta(), newSyncAvailablePackagesInput)
 	if err != nil {
 		return service.SyncAvailablePackagesInput{}, err
 	}
@@ -213,6 +209,44 @@ func RequestPackageInstallationInput(request *packagesv1.RequestPackageInstallat
 	}, nil
 }
 
+func UpdatePackageInstallationInput(request *packagesv1.UpdatePackageInstallationRequest) (service.UpdatePackageInstallationInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return service.UpdatePackageInstallationInput{}, err
+	}
+	installationID, err := requiredUUID(request.GetInstallationId())
+	if err != nil {
+		return service.UpdatePackageInstallationInput{}, err
+	}
+	versionID, err := optionalUUIDPtr(request.GetPackageVersionId())
+	if err != nil {
+		return service.UpdatePackageInstallationInput{}, err
+	}
+	desiredState, err := optionalDesiredState(request.DesiredState)
+	if err != nil {
+		return service.UpdatePackageInstallationInput{}, err
+	}
+	installationStatus, err := optionalInstallationStatus(request.InstallationStatus)
+	if err != nil {
+		return service.UpdatePackageInstallationInput{}, err
+	}
+	return service.UpdatePackageInstallationInput{
+		InstallationID:     installationID,
+		PackageVersionID:   versionID,
+		DesiredState:       desiredState,
+		InstallationStatus: installationStatus,
+		Meta:               meta,
+	}, nil
+}
+
+func DisablePackageInstallationInput(request *packagesv1.DisablePackageInstallationRequest) (service.DisablePackageInstallationInput, error) {
+	return idCommandInput(request.GetInstallationId(), request.GetMeta(), newDisablePackageInstallationInput)
+}
+
+func UninstallPackageInput(request *packagesv1.UninstallPackageRequest) (service.UninstallPackageInput, error) {
+	return idCommandInput(request.GetInstallationId(), request.GetMeta(), newUninstallPackageInput)
+}
+
 func GetPackageInstallationInput(request *packagesv1.GetPackageInstallationRequest) (IDQueryInput, error) {
 	return queryByIDInput(request.GetInstallationId(), request.GetMeta())
 }
@@ -291,7 +325,23 @@ func queryByIDInput(idText string, metaMessage *packagesv1.QueryMeta) (IDQueryIn
 	return IDQueryInput{ID: id, Meta: meta}, nil
 }
 
-func sourceCommandInput[T any](idText string, metaMessage *packagesv1.CommandMeta, build func(uuid.UUID, value.CommandMeta) T) (T, error) {
+func newDisablePackageSourceInput(sourceID uuid.UUID, meta value.CommandMeta) service.DisablePackageSourceInput {
+	return service.DisablePackageSourceInput{SourceID: sourceID, Meta: meta}
+}
+
+func newSyncAvailablePackagesInput(sourceID uuid.UUID, meta value.CommandMeta) service.SyncAvailablePackagesInput {
+	return service.SyncAvailablePackagesInput{SourceID: sourceID, Meta: meta}
+}
+
+func newDisablePackageInstallationInput(installationID uuid.UUID, meta value.CommandMeta) service.DisablePackageInstallationInput {
+	return service.DisablePackageInstallationInput{InstallationID: installationID, Meta: meta}
+}
+
+func newUninstallPackageInput(installationID uuid.UUID, meta value.CommandMeta) service.UninstallPackageInput {
+	return service.UninstallPackageInput{InstallationID: installationID, Meta: meta}
+}
+
+func idCommandInput[T any](idText string, metaMessage *packagesv1.CommandMeta, build func(uuid.UUID, value.CommandMeta) T) (T, error) {
 	sourceID, err := requiredUUID(idText)
 	if err != nil {
 		var zero T

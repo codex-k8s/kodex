@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-06
 updated_at: 2026-05-08
-related_issues: [642, 646, 650, 673, 678, 680, 684]
+related_issues: [642, 646, 650, 673, 678, 680, 684, 689]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -106,8 +106,8 @@ approvals:
 | Go-артефакты событий | Генерируются в `libs/go/platformevents/packagehub/events.gen.go`. |
 | Сервисный процесс `package-hub` | Общий gRPC runtime, служебные `/health/*`, `/metrics`, PostgreSQL repository, проверка доступа через `access-manager` и часть операций `PackageHubService` подключены. |
 | PostgreSQL и outbox | Таблицы package-каталога, установок, проверок, идемпотентного следа и outbox добавлены; диспетчер публикует события через `platform-event-log`. |
-| Реализованные операции | `ConnectPackageSource`, `UpdatePackageSource`, `DisablePackageSource`, `GetPackageSource`, `ListPackageSources`, `SyncAvailablePackages`, `GetPackage`, `ListPackages`, `GetPackageVersion`, `ListPackageVersions`, `GetPackageManifest`, `RequestPackageInstallation`, `GetPackageInstallation`, `ListPackageInstallations`, `SetPackageVerification`. |
-| Операции следующих срезов | Изменение, отключение и снятие установок, схемы секретов установок и runtime-связанные команды пока возвращают `unimplemented`. |
+| Реализованные операции | `ConnectPackageSource`, `UpdatePackageSource`, `DisablePackageSource`, `GetPackageSource`, `ListPackageSources`, `SyncAvailablePackages`, `GetPackage`, `ListPackages`, `GetPackageVersion`, `ListPackageVersions`, `GetPackageManifest`, `RequestPackageInstallation`, `UpdatePackageInstallation`, `DisablePackageInstallation`, `UninstallPackage`, `GetPackageInstallation`, `ListPackageInstallations`, `SetPackageVerification`. |
+| Операции следующих срезов | Схемы секретов установок и runtime-связанные команды пока возвращают `unimplemented`. |
 
 ## Совместимость
 

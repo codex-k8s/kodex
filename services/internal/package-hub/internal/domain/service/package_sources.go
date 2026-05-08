@@ -10,7 +10,6 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/enum"
-	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/value"
 )
 
 func (s *Service) ConnectPackageSource(ctx context.Context, input ConnectPackageSourceInput) (entity.PackageSource, error) {
@@ -50,7 +49,7 @@ func (s *Service) ConnectPackageSource(ctx context.Context, input ConnectPackage
 		CatalogEndpointRef: strings.TrimSpace(input.CatalogEndpointRef),
 		Status:             enum.PackageSourceStatusActive,
 	}
-	result, event, err := s.sourceCommandArtifacts(input.Meta, packageOperationSourceConnect, source, s.sourceConnectedEvent)
+	result, event, err := commandArtifacts(input.Meta, packageOperationSourceConnect, enum.CommandAggregateTypePackageSource, source.ID, source, source.UpdatedAt, sourcePayload, s.sourceConnectedEvent)
 	if err != nil {
 		return entity.PackageSource{}, err
 	}
@@ -83,7 +82,7 @@ func (s *Service) UpdatePackageSource(ctx context.Context, input UpdatePackageSo
 	if err != nil {
 		return entity.PackageSource{}, err
 	}
-	result, event, err := s.sourceCommandArtifacts(input.Meta, packageOperationSourceUpdate, updated, s.sourceUpdatedEvent)
+	result, event, err := commandArtifacts(input.Meta, packageOperationSourceUpdate, enum.CommandAggregateTypePackageSource, updated.ID, updated, updated.UpdatedAt, sourcePayload, s.sourceUpdatedEvent)
 	if err != nil {
 		return entity.PackageSource{}, err
 	}
@@ -117,7 +116,7 @@ func (s *Service) DisablePackageSource(ctx context.Context, input DisablePackage
 	updated.Status = enum.PackageSourceStatusDisabled
 	updated.Version = current.Version + 1
 	updated.UpdatedAt = s.clock.Now()
-	result, event, err := s.sourceCommandArtifacts(input.Meta, packageOperationSourceDisable, updated, s.sourceDisabledEvent)
+	result, event, err := commandArtifacts(input.Meta, packageOperationSourceDisable, enum.CommandAggregateTypePackageSource, updated.ID, updated, updated.UpdatedAt, sourcePayload, s.sourceDisabledEvent)
 	if err != nil {
 		return entity.PackageSource{}, err
 	}
@@ -163,22 +162,4 @@ func applyPackageSourceUpdate(current entity.PackageSource, input UpdatePackageS
 	updated.Version = current.Version + 1
 	updated.UpdatedAt = now
 	return updated, nil
-}
-
-type sourceEventBuilder func(entity.PackageSource, time.Time) (entity.OutboxEvent, error)
-
-func (s *Service) sourceCommandArtifacts(meta value.CommandMeta, operation string, source entity.PackageSource, eventBuilder sourceEventBuilder) (entity.CommandResult, entity.OutboxEvent, error) {
-	payload, err := sourcePayload(source)
-	if err != nil {
-		return entity.CommandResult{}, entity.OutboxEvent{}, err
-	}
-	result, err := commandResult(meta, operation, enum.CommandAggregateTypePackageSource, source.ID, payload, source.UpdatedAt)
-	if err != nil {
-		return entity.CommandResult{}, entity.OutboxEvent{}, err
-	}
-	event, err := eventBuilder(source, source.UpdatedAt)
-	if err != nil {
-		return entity.CommandResult{}, entity.OutboxEvent{}, err
-	}
-	return result, event, nil
 }

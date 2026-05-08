@@ -126,6 +126,24 @@ type RequestPackageInstallationInput struct {
 	Meta             value.CommandMeta
 }
 
+type UpdatePackageInstallationInput struct {
+	InstallationID     uuid.UUID
+	PackageVersionID   *uuid.UUID
+	DesiredState       *enum.PackageDesiredState
+	InstallationStatus *enum.PackageInstallationStatus
+	Meta               value.CommandMeta
+}
+
+type DisablePackageInstallationInput struct {
+	InstallationID uuid.UUID
+	Meta           value.CommandMeta
+}
+
+type UninstallPackageInput struct {
+	InstallationID uuid.UUID
+	Meta           value.CommandMeta
+}
+
 type ListPackageInstallationsInput struct {
 	Scope               *value.ScopeRef
 	PackageID           *uuid.UUID

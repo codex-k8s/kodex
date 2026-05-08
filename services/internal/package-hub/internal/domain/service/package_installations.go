@@ -10,6 +10,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/enum"
+	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/value"
 )
 
 func (s *Service) RequestPackageInstallation(ctx context.Context, input RequestPackageInstallationInput) (entity.PackageInstallation, error) {
@@ -76,6 +77,47 @@ func (s *Service) RequestPackageInstallation(ctx context.Context, input RequestP
 	return installation, nil
 }
 
+func (s *Service) UpdatePackageInstallation(ctx context.Context, input UpdatePackageInstallationInput) (entity.PackageInstallation, error) {
+	if err := validatePackageInstallationUpdateInput(input); err != nil {
+		return entity.PackageInstallation{}, err
+	}
+	current, err := s.repository.GetPackageInstallation(ctx, input.InstallationID)
+	if err != nil {
+		return entity.PackageInstallation{}, err
+	}
+	if err := s.authorizeCommand(ctx, input.Meta, packageActionInstallationUpdate, installationResource(current)); err != nil {
+		return entity.PackageInstallation{}, err
+	}
+	replay, ok, err := findCommandReplay(ctx, s, input.Meta, replaySpec(packageOperationInstallationUpdate, enum.CommandAggregateTypeInstallation, input.InstallationID, installationResultFromPayload))
+	if err != nil || ok {
+		return replay, err
+	}
+	previousVersion, err := expectedRevision(input.Meta)
+	if err != nil {
+		return entity.PackageInstallation{}, err
+	}
+	updated, err := s.applyPackageInstallationUpdate(ctx, current, input)
+	if err != nil {
+		return entity.PackageInstallation{}, err
+	}
+	result, event, err := commandArtifacts(input.Meta, packageOperationInstallationUpdate, enum.CommandAggregateTypeInstallation, updated.ID, updated, updated.UpdatedAt, installationPayload, s.installationUpdatedEvent)
+	if err != nil {
+		return entity.PackageInstallation{}, err
+	}
+	if err := s.repository.UpdatePackageInstallationWithResult(ctx, updated, previousVersion, result, event); err != nil {
+		return entity.PackageInstallation{}, err
+	}
+	return updated, nil
+}
+
+func (s *Service) DisablePackageInstallation(ctx context.Context, input DisablePackageInstallationInput) (entity.PackageInstallation, error) {
+	return s.changePackageInstallationLifecycle(ctx, input.InstallationID, input.Meta, packageActionInstallationDisable, packageOperationInstallationDisable, s.disablePackageInstallation, s.installationDisabledEvent)
+}
+
+func (s *Service) UninstallPackage(ctx context.Context, input UninstallPackageInput) (entity.PackageInstallation, error) {
+	return s.changePackageInstallationLifecycle(ctx, input.InstallationID, input.Meta, packageActionUninstall, packageOperationUninstall, s.uninstallPackageInstallation, s.installationUninstalledEvent)
+}
+
 func validateInstallationRequest(input RequestPackageInstallationInput) error {
 	if err := requireID(input.PackageID); err != nil {
 		return err
@@ -98,6 +140,29 @@ func validateInstallationRequest(input RequestPackageInstallationInput) error {
 	return nil
 }
 
+func validatePackageInstallationUpdateInput(input UpdatePackageInstallationInput) error {
+	if err := requireID(input.InstallationID); err != nil {
+		return err
+	}
+	if input.PackageVersionID == nil && input.DesiredState == nil && input.InstallationStatus == nil {
+		return errs.ErrInvalidArgument
+	}
+	if err := requireOptionalID(input.PackageVersionID); err != nil {
+		return err
+	}
+	if input.DesiredState != nil {
+		if err := requireDesiredState(*input.DesiredState); err != nil {
+			return err
+		}
+	}
+	if input.InstallationStatus != nil {
+		if err := requirePackageInstallationUpdateStatus(*input.InstallationStatus); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *Service) installablePackageVersion(ctx context.Context, packageID uuid.UUID, packageVersionID uuid.UUID) (entity.PackageEntry, entity.PackageVersion, error) {
 	entry, err := s.repository.GetPackage(ctx, packageID)
 	if err != nil {
@@ -114,6 +179,54 @@ func (s *Service) installablePackageVersion(ctx context.Context, packageID uuid.
 		return entity.PackageEntry{}, entity.PackageVersion{}, errs.ErrPreconditionFailed
 	}
 	return entry, version, nil
+}
+
+func (s *Service) applyPackageInstallationUpdate(ctx context.Context, current entity.PackageInstallation, input UpdatePackageInstallationInput) (entity.PackageInstallation, error) {
+	if current.InstallationStatus == enum.PackageInstallationStatusUninstalled {
+		return entity.PackageInstallation{}, errs.ErrPreconditionFailed
+	}
+	updated := current
+	changed := false
+
+	if input.PackageVersionID != nil && *input.PackageVersionID != current.PackageVersionID {
+		requirements, err := s.installationRequirementsForVersionChange(ctx, current.PackageID, *input.PackageVersionID)
+		if err != nil {
+			return entity.PackageInstallation{}, err
+		}
+		updated.PackageVersionID = *input.PackageVersionID
+		updated.RuntimeRequirementDigest = requirements.RuntimeRequirementDigest
+		updated.SecretBindingStatus = requirements.SecretBindingStatus
+		updated.LastHealthStatus = enum.PackageHealthStatusUnknown
+		if current.InstallationStatus != enum.PackageInstallationStatusDisabled {
+			updated.InstallationStatus = installationInitialStatus(requirements)
+		}
+		changed = true
+	}
+	if input.DesiredState != nil && *input.DesiredState != updated.DesiredState {
+		updated.DesiredState = *input.DesiredState
+		changed = true
+	}
+	if input.InstallationStatus != nil && *input.InstallationStatus != updated.InstallationStatus {
+		updated.InstallationStatus = *input.InstallationStatus
+		changed = true
+	}
+	if !changed {
+		return entity.PackageInstallation{}, errs.ErrInvalidArgument
+	}
+	if updated.InstallationStatus == enum.PackageInstallationStatusActive && updated.SecretBindingStatus == enum.PackageSecretBindingStatusMissing {
+		return entity.PackageInstallation{}, errs.ErrPreconditionFailed
+	}
+	updated.Version = current.Version + 1
+	updated.UpdatedAt = s.clock.Now()
+	return updated, nil
+}
+
+func (s *Service) installationRequirementsForVersionChange(ctx context.Context, packageID uuid.UUID, packageVersionID uuid.UUID) (packageInstallationRequirements, error) {
+	_, version, err := s.installablePackageVersion(ctx, packageID, packageVersionID)
+	if err != nil {
+		return packageInstallationRequirements{}, err
+	}
+	return s.packageVersionInstallationRequirements(ctx, version.ID)
 }
 
 func (s *Service) packageVersionInstallationRequirements(ctx context.Context, packageVersionID uuid.UUID) (packageInstallationRequirements, error) {
@@ -138,6 +251,13 @@ func isInstallableVersion(version entity.PackageVersion) bool {
 	return version.VerificationStatus != enum.PackageVerificationStatusRejected && version.VerificationStatus != enum.PackageVerificationStatusRevoked
 }
 
+func requirePackageInstallationUpdateStatus(status enum.PackageInstallationStatus) error {
+	if status == enum.PackageInstallationStatusDisabled || status == enum.PackageInstallationStatusUninstalled {
+		return errs.ErrInvalidArgument
+	}
+	return requireInstallationStatus(status)
+}
+
 func installationInitialStatus(requirements packageInstallationRequirements) enum.PackageInstallationStatus {
 	if requirements.RuntimeRequirementDigest == "" && requirements.SecretBindingStatus != enum.PackageSecretBindingStatusMissing {
 		return enum.PackageInstallationStatusActive
@@ -160,6 +280,77 @@ func requireInstallationReplay(input RequestPackageInstallationInput, replay ent
 		return errs.ErrConflict
 	}
 	return nil
+}
+
+type packageInstallationStateMutator func(entity.PackageInstallation, time.Time) (entity.PackageInstallation, error)
+
+type packageInstallationEventBuilder func(entity.PackageInstallation, time.Time) (entity.OutboxEvent, error)
+
+func (s *Service) changePackageInstallationLifecycle(
+	ctx context.Context,
+	installationID uuid.UUID,
+	meta value.CommandMeta,
+	actionKey string,
+	operation string,
+	mutate packageInstallationStateMutator,
+	eventBuilder packageInstallationEventBuilder,
+) (entity.PackageInstallation, error) {
+	if err := requireID(installationID); err != nil {
+		return entity.PackageInstallation{}, err
+	}
+	current, err := s.repository.GetPackageInstallation(ctx, installationID)
+	if err != nil {
+		return entity.PackageInstallation{}, err
+	}
+	if err := s.authorizeCommand(ctx, meta, actionKey, installationResource(current)); err != nil {
+		return entity.PackageInstallation{}, err
+	}
+	replay, ok, err := findCommandReplay(ctx, s, meta, replaySpec(operation, enum.CommandAggregateTypeInstallation, installationID, installationResultFromPayload))
+	if err != nil || ok {
+		return replay, err
+	}
+	previousVersion, err := expectedRevision(meta)
+	if err != nil {
+		return entity.PackageInstallation{}, err
+	}
+	updated, err := mutate(current, s.clock.Now())
+	if err != nil {
+		return entity.PackageInstallation{}, err
+	}
+	result, event, err := commandArtifacts(meta, operation, enum.CommandAggregateTypeInstallation, updated.ID, updated, updated.UpdatedAt, installationPayload, eventBuilder)
+	if err != nil {
+		return entity.PackageInstallation{}, err
+	}
+	if err := s.repository.UpdatePackageInstallationWithResult(ctx, updated, previousVersion, result, event); err != nil {
+		return entity.PackageInstallation{}, err
+	}
+	return updated, nil
+}
+
+func (s *Service) disablePackageInstallation(current entity.PackageInstallation, now time.Time) (entity.PackageInstallation, error) {
+	if current.InstallationStatus == enum.PackageInstallationStatusDisabled || current.InstallationStatus == enum.PackageInstallationStatusUninstalled {
+		return entity.PackageInstallation{}, errs.ErrPreconditionFailed
+	}
+	updated := current
+	updated.InstallationStatus = enum.PackageInstallationStatusDisabled
+	updated.DesiredState = enum.PackageDesiredStateSuspended
+	updated.LastHealthStatus = enum.PackageHealthStatusUnknown
+	updated.Version = current.Version + 1
+	updated.UpdatedAt = now
+	return updated, nil
+}
+
+func (s *Service) uninstallPackageInstallation(current entity.PackageInstallation, now time.Time) (entity.PackageInstallation, error) {
+	if current.InstallationStatus == enum.PackageInstallationStatusUninstalled {
+		return entity.PackageInstallation{}, errs.ErrPreconditionFailed
+	}
+	updated := current
+	updated.InstallationStatus = enum.PackageInstallationStatusUninstalled
+	updated.DesiredState = enum.PackageDesiredStateAbsent
+	updated.LastHealthStatus = enum.PackageHealthStatusUnknown
+	updated.Version = current.Version + 1
+	updated.UpdatedAt = now
+	return updated, nil
 }
 
 func (s *Service) installationCreatedEvent(installation entity.PackageInstallation, occurredAt time.Time) (entity.OutboxEvent, error) {

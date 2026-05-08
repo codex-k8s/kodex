@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-06
 updated_at: 2026-05-08
-related_issues: [642, 646, 650, 663, 667, 670, 673, 678, 680, 684]
+related_issues: [642, 646, 650, 663, 667, 670, 673, 678, 680, 684, 689]
 related_prs: []
 related_docsets:
   - docs/domains/package-platform/product/requirements.md
@@ -51,7 +51,7 @@ approvals:
 | PKG-4.1 | #678 | Команды подключения, обновления и отключения источников пакетов готовы: проверка доступа, идемпотентность, ожидаемая версия и события источника. |
 | PKG-4.2 | #680 | Синхронизация доступного каталога и проверка manifest готовы. |
 | PKG-5.1 | #684 | Запрос установки пакета и чтения установок готовы: `RequestPackageInstallation`, `GetPackageInstallation`, `ListPackageInstallations`, идемпотентность, проверка доступа, проверка готовности к установке и события `package.installation.requested/activated`. |
-| PKG-5.2 | не назначено | Изменение, отключение и снятие установки готовы: `UpdatePackageInstallation`, `DisablePackageInstallation`, `UninstallPackage`, ожидаемая версия и события жизненного цикла. |
+| PKG-5.2 | #689 | Изменение, отключение и снятие установки готовы: `UpdatePackageInstallation`, `DisablePackageInstallation`, `UninstallPackage`, ожидаемая версия и события жизненного цикла. |
 | PKG-5.3 | не назначено | Схемы секретов установок и сверка статуса заполненности готовы: `GetPackageSecretSchema`, `RefreshPackageInstallationSecretStatus` и связь с контуром секретов. |
 | PKG-6 | не назначено | Специализация плагинов, руководящих пакетов, магазина и пакетов пользовательского контента платформы готова. |
 | PKG-7 | не назначено | Манифесты deploy, migration job, config, health, metrics и runbook готовы. |
@@ -74,9 +74,9 @@ approvals:
 | `ListPackageVersions` | `ready` | PKG-3.4 |
 | `GetPackageManifest` | `ready` | PKG-3.4 |
 | `RequestPackageInstallation` | `ready` | PKG-5.1 |
-| `UpdatePackageInstallation` | `unimplemented` | PKG-5.2 |
-| `DisablePackageInstallation` | `unimplemented` | PKG-5.2 |
-| `UninstallPackage` | `unimplemented` | PKG-5.2 |
+| `UpdatePackageInstallation` | `ready` | PKG-5.2 |
+| `DisablePackageInstallation` | `ready` | PKG-5.2 |
+| `UninstallPackage` | `ready` | PKG-5.2 |
 | `GetPackageInstallation` | `ready` | PKG-5.1 |
 | `ListPackageInstallations` | `ready` | PKG-5.1 |
 | `GetPackageSecretSchema` | `unimplemented` | PKG-5.3 |
@@ -103,6 +103,17 @@ approvals:
 | События | готово | Команда пишет `package.installation.requested` или `package.installation.activated` через outbox в той же транзакции, что и установка и command result. |
 | Чтения | готово | `GetPackageInstallation` и `ListPackageInstallations` проверяют `package.installation.read` и читают локальную PostgreSQL-проекцию установок. |
 | Не входит в срез | запланировано | Изменение версии, отключение, снятие установки, обновление статуса секретов и runtime-запуск идут отдельными срезами, чтобы не смешивать доменную запись установки с соседними runtime и контуром секретов. |
+
+## Жизненный цикл установок `PKG-5.2`
+
+| Область | Статус | Примечание |
+|---|---|---|
+| Изменение установки | готово | `UpdatePackageInstallation` меняет выбранную версию, desired state и безопасные статусы `requested`, `active`, `failed`; статусы `disabled` и `uninstalled` доступны только через отдельные команды. |
+| Пересчёт требований | готово | При смене версии `package-hub` проверяет пакет и версию, читает последний manifest, пересчитывает `runtime_requirement_digest`, статус секретов и сбрасывает health в `unknown`. |
+| Отключение установки | готово | `DisablePackageInstallation` переводит установку в `disabled`, desired state в `suspended` и публикует `package.installation.disabled`. |
+| Снятие установки | готово | `UninstallPackage` переводит установку в `uninstalled`, desired state в `absent` и публикует `package.installation.uninstalled`. |
+| Конкурентность и идемпотентность | готово | Все три команды требуют expected version, сохраняют command result и outbox-событие в одной PostgreSQL-транзакции. |
+| Не входит в срез | запланировано | Фактическое снятие Kubernetes workloads остаётся в runtime-контуре; сверка заполненности секретов остаётся в PKG-5.3. |
 
 ## Наблюдаемость `PKG-3.1`
 

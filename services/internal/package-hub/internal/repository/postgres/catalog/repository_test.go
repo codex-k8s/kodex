@@ -424,6 +424,23 @@ func TestRepositoryIntegrationInstallationStorage(t *testing.T) {
 	if storedInstallation.InstallationStatus != enum.PackageInstallationStatusActive || storedInstallation.Version != 2 {
 		t.Fatalf("updated installation = %+v, want active v2", storedInstallation)
 	}
+	installation.InstallationStatus = enum.PackageInstallationStatusDisabled
+	installation.DesiredState = enum.PackageDesiredStateSuspended
+	installation.Version = 3
+	installation.UpdatedAt = now.Add(2 * time.Hour)
+	disableCommandID := uuid.New()
+	disableResult := testCommandResult(disableCommandID, "package.installation.disable", enum.CommandAggregateTypeInstallation, installation.ID, "", now)
+	disableEvent := testInstallationOutboxEvent(installation.ID, "package.installation.disabled", now)
+	if err := repository.UpdatePackageInstallationWithResult(ctx, installation, 2, disableResult, disableEvent); err != nil {
+		t.Fatalf("update installation with result: %v", err)
+	}
+	storedDisableResult, err := repository.GetCommandResult(ctx, query.CommandIdentity{CommandID: &disableCommandID, Operation: "package.installation.disable"})
+	if err != nil {
+		t.Fatalf("get installation disable command result: %v", err)
+	}
+	if storedDisableResult.AggregateID != installation.ID || storedDisableResult.AggregateType != enum.CommandAggregateTypeInstallation {
+		t.Fatalf("disable command result = %+v, want installation aggregate", storedDisableResult)
+	}
 
 	verificationA := testVerification(versionA.ID, enum.PackageVerificationStatusRejected, now)
 	rejectedVersion := versionA
@@ -463,23 +480,33 @@ func TestRepositoryIntegrationInstallationStorage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("claim outbox events: %v", err)
 	}
-	if len(claimedEvents) != 2 || claimedEvents[0].EventType != "package.verification.updated" {
-		t.Fatalf("claimed events = %+v, want two verification events", claimedEvents)
+	if len(claimedEvents) != 3 {
+		t.Fatalf("claimed events = %+v, want two verification events and one installation event", claimedEvents)
 	}
-	if claimedEvents[0].AttemptCount != 1 || claimedEvents[0].LockedUntil == nil {
-		t.Fatalf("claimed event delivery = %+v, want attempt and lock", claimedEvents[0])
+	eventTypes := map[string]int{}
+	for _, event := range claimedEvents {
+		eventTypes[event.EventType]++
+		if event.AttemptCount != 1 || event.LockedUntil == nil {
+			t.Fatalf("claimed event delivery = %+v, want attempt and lock", event)
+		}
 	}
+	if eventTypes["package.verification.updated"] != 2 || eventTypes["package.installation.disabled"] != 1 {
+		t.Fatalf("claimed event types = %+v, want verification x2 and installation disabled x1", eventTypes)
+	}
+	retryEventID := claimedEvents[0].ID
 	if err := repository.MarkOutboxEventFailed(ctx, claimedEvents[0].ID, claimedEvents[0].AttemptCount, now.Add(5*time.Minute), "temporary"); err != nil {
 		t.Fatalf("mark outbox failed: %v", err)
 	}
-	if err := repository.MarkOutboxEventPublished(ctx, claimedEvents[1].ID, claimedEvents[1].AttemptCount, now.Add(5*time.Minute)); err != nil {
-		t.Fatalf("mark outbox published: %v", err)
+	for _, event := range claimedEvents[1:] {
+		if err := repository.MarkOutboxEventPublished(ctx, event.ID, event.AttemptCount, now.Add(5*time.Minute)); err != nil {
+			t.Fatalf("mark outbox published: %v", err)
+		}
 	}
 	reclaimedEvents, err := repository.ClaimOutboxEvents(ctx, 10, now.Add(6*time.Minute), now.Add(7*time.Minute))
 	if err != nil {
 		t.Fatalf("reclaim outbox event: %v", err)
 	}
-	if len(reclaimedEvents) != 1 || reclaimedEvents[0].ID != claimedEvents[0].ID || reclaimedEvents[0].AttemptCount != 2 {
+	if len(reclaimedEvents) != 1 || reclaimedEvents[0].ID != retryEventID || reclaimedEvents[0].AttemptCount != 2 {
 		t.Fatalf("reclaimed events = %+v, want retried first event", reclaimedEvents)
 	}
 	if err := repository.MarkOutboxEventPermanentlyFailed(ctx, reclaimedEvents[0].ID, reclaimedEvents[0].AttemptCount, now.Add(8*time.Minute), "permanent"); err != nil {
@@ -756,6 +783,18 @@ func testPackageOutboxEvent(packageID uuid.UUID, eventType string, now time.Time
 		EventType:     eventType,
 		SchemaVersion: 1,
 		Payload:       []byte(`{"package_id":"` + packageID.String() + `"}`),
+		OccurredAt:    now,
+	}}
+}
+
+func testInstallationOutboxEvent(installationID uuid.UUID, eventType string, now time.Time) entity.OutboxEvent {
+	return entity.OutboxEvent{Event: outboxlib.Event{
+		ID:            uuid.New(),
+		AggregateType: "package_installation",
+		AggregateID:   installationID,
+		EventType:     eventType,
+		SchemaVersion: 1,
+		Payload:       []byte(`{"installation_id":"` + installationID.String() + `"}`),
 		OccurredAt:    now,
 	}}
 }

@@ -41,6 +41,18 @@ func (s *Service) installationActivatedEvent(installation entity.PackageInstalla
 	return s.installationStateEvent(packageEventInstallationActivated, installation, occurredAt)
 }
 
+func (s *Service) installationUpdatedEvent(installation entity.PackageInstallation, occurredAt time.Time) (entity.OutboxEvent, error) {
+	return s.installationStateEvent(packageEventInstallationUpdated, installation, occurredAt)
+}
+
+func (s *Service) installationDisabledEvent(installation entity.PackageInstallation, occurredAt time.Time) (entity.OutboxEvent, error) {
+	return s.installationStateEvent(packageEventInstallationDisabled, installation, occurredAt)
+}
+
+func (s *Service) installationUninstalledEvent(installation entity.PackageInstallation, occurredAt time.Time) (entity.OutboxEvent, error) {
+	return s.installationStateEvent(packageEventInstallationUninstalled, installation, occurredAt)
+}
+
 func (s *Service) installationStateEvent(eventType string, installation entity.PackageInstallation, occurredAt time.Time) (entity.OutboxEvent, error) {
 	return s.event(eventType, packageAggregateInstallation, installation.ID, value.PackageEventPayload{
 		InstallationID:      installation.ID.String(),
