@@ -46,14 +46,22 @@ type Repository struct {
 
 const (
 	operationCreateSlot                       = "domain.Repository.CreateSlot"
+	operationCreateJob                        = "domain.Repository.CreateJob"
 	operationGetCommandResult                 = "domain.Repository.GetCommandResult"
+	operationGetJob                           = "domain.Repository.GetJob"
+	operationGetRuntimeArtifactRef            = "domain.Repository.GetRuntimeArtifactRef"
 	operationGetSlot                          = "domain.Repository.GetSlot"
 	operationListSlots                        = "domain.Repository.ListSlots"
+	operationListJobs                         = "domain.Repository.ListJobs"
+	operationListRuntimeArtifactRefs          = "domain.Repository.ListRuntimeArtifactRefs"
 	operationPrepareRuntime                   = "domain.Repository.PrepareRuntime"
+	operationClaimRunnableJob                 = "domain.Repository.ClaimRunnableJob"
 	operationCreateWorkspaceMaterialization   = "domain.Repository.CreateWorkspaceMaterialization"
 	operationGetWorkspaceMaterialization      = "domain.Repository.GetWorkspaceMaterialization"
 	operationListWorkspaceMaterializations    = "domain.Repository.ListWorkspaceMaterializations"
+	operationRecordRuntimeArtifactRef         = "domain.Repository.RecordRuntimeArtifactRef"
 	operationUpdateWorkspaceMaterialization   = "domain.Repository.UpdateWorkspaceMaterialization"
+	operationUpdateJob                        = "domain.Repository.UpdateJob"
 	operationClaimOutboxEvents                = "domain.Repository.ClaimOutboxEvents"
 	operationMarkOutboxEventFailed            = "domain.Repository.MarkOutboxEventFailed"
 	operationMarkOutboxEventPermanentlyFailed = "domain.Repository.MarkOutboxEventPermanentlyFailed"
@@ -158,4 +166,13 @@ func queryOne[T any](ctx context.Context, db queryer, query string, args pgx.Nam
 	return pgx.CollectExactlyOneRow(rows, func(row pgx.CollectableRow) (T, error) {
 		return scan(row)
 	})
+}
+
+func getByID[T any](ctx context.Context, db queryer, id uuid.UUID, query string, operation string, scan func(postgreslib.RowScanner) (T, error)) (T, error) {
+	value, err := queryOne(ctx, db, query, pgx.NamedArgs{"id": id}, scan)
+	if err != nil {
+		var zero T
+		return zero, wrapError(operation, err)
+	}
+	return value, nil
 }

@@ -6,174 +6,236 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/enum"
 )
 
+var (
+	runtimeModeFromProto = map[runtimev1.RuntimeMode]enum.RuntimeMode{
+		runtimev1.RuntimeMode_RUNTIME_MODE_CODE_ONLY:            enum.RuntimeModeCodeOnly,
+		runtimev1.RuntimeMode_RUNTIME_MODE_FULL_ENV:             enum.RuntimeModeFullEnv,
+		runtimev1.RuntimeMode_RUNTIME_MODE_READ_ONLY_PRODUCTION: enum.RuntimeModeReadOnlyProduction,
+	}
+	runtimeModeToProto = invertEnumMap(runtimeModeFromProto)
+
+	slotStatusFromProto = map[runtimev1.SlotStatus]enum.SlotStatus{
+		runtimev1.SlotStatus_SLOT_STATUS_PREWARMED:       enum.SlotStatusPrewarmed,
+		runtimev1.SlotStatus_SLOT_STATUS_RESERVED:        enum.SlotStatusReserved,
+		runtimev1.SlotStatus_SLOT_STATUS_MATERIALIZING:   enum.SlotStatusMaterializing,
+		runtimev1.SlotStatus_SLOT_STATUS_READY:           enum.SlotStatusReady,
+		runtimev1.SlotStatus_SLOT_STATUS_IN_USE:          enum.SlotStatusInUse,
+		runtimev1.SlotStatus_SLOT_STATUS_RELEASING:       enum.SlotStatusReleasing,
+		runtimev1.SlotStatus_SLOT_STATUS_FAILED:          enum.SlotStatusFailed,
+		runtimev1.SlotStatus_SLOT_STATUS_CLEANUP_PENDING: enum.SlotStatusCleanupPending,
+		runtimev1.SlotStatus_SLOT_STATUS_CLEANED:         enum.SlotStatusCleaned,
+	}
+	slotStatusToProto = invertEnumMap(slotStatusFromProto)
+
+	workspaceMaterializationStatusFromProto = map[runtimev1.WorkspaceMaterializationStatus]enum.WorkspaceMaterializationStatus{
+		runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_PENDING:   enum.WorkspaceMaterializationStatusPending,
+		runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_RUNNING:   enum.WorkspaceMaterializationStatusRunning,
+		runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_COMPLETED: enum.WorkspaceMaterializationStatusCompleted,
+		runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_FAILED:    enum.WorkspaceMaterializationStatusFailed,
+		runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_CANCELLED: enum.WorkspaceMaterializationStatusCancelled,
+	}
+	workspaceMaterializationStatusToProto = invertEnumMap(workspaceMaterializationStatusFromProto)
+
+	workspaceSourceKindFromProto = map[runtimev1.WorkspaceSourceKind]enum.WorkspaceSourceKind{
+		runtimev1.WorkspaceSourceKind_WORKSPACE_SOURCE_KIND_CODE:              enum.WorkspaceSourceKindCode,
+		runtimev1.WorkspaceSourceKind_WORKSPACE_SOURCE_KIND_DOCUMENTATION:     enum.WorkspaceSourceKindDocumentation,
+		runtimev1.WorkspaceSourceKind_WORKSPACE_SOURCE_KIND_GUIDANCE_PACKAGE:  enum.WorkspaceSourceKindGuidancePackage,
+		runtimev1.WorkspaceSourceKind_WORKSPACE_SOURCE_KIND_GENERATED_CONTEXT: enum.WorkspaceSourceKindGeneratedContext,
+	}
+	workspaceSourceKindToProto = invertEnumMap(workspaceSourceKindFromProto)
+
+	workspaceSourceAccessModeFromProto = map[runtimev1.WorkspaceSourceAccessMode]enum.WorkspaceSourceAccessMode{
+		runtimev1.WorkspaceSourceAccessMode_WORKSPACE_SOURCE_ACCESS_MODE_READ:  enum.WorkspaceSourceAccessModeRead,
+		runtimev1.WorkspaceSourceAccessMode_WORKSPACE_SOURCE_ACCESS_MODE_WRITE: enum.WorkspaceSourceAccessModeWrite,
+	}
+	workspaceSourceAccessModeToProto = invertEnumMap(workspaceSourceAccessModeFromProto)
+
+	jobTypeFromProto = newJobTypeMap()
+	jobTypeToProto   = invertEnumMap(jobTypeFromProto)
+
+	jobStatusFromProto = newJobStatusMap()
+	jobStatusToProto   = invertEnumMap(jobStatusFromProto)
+
+	jobPriorityFromProto = map[runtimev1.JobPriority]enum.JobPriority{
+		runtimev1.JobPriority_JOB_PRIORITY_LOW:      enum.JobPriorityLow,
+		runtimev1.JobPriority_JOB_PRIORITY_NORMAL:   enum.JobPriorityNormal,
+		runtimev1.JobPriority_JOB_PRIORITY_HIGH:     enum.JobPriorityHigh,
+		runtimev1.JobPriority_JOB_PRIORITY_BLOCKING: enum.JobPriorityBlocking,
+	}
+	jobPriorityToProto = invertEnumMap(jobPriorityFromProto)
+
+	jobStepStatusFromProto = map[runtimev1.JobStepStatus]enum.JobStepStatus{
+		runtimev1.JobStepStatus_JOB_STEP_STATUS_PENDING:   enum.JobStepStatusPending,
+		runtimev1.JobStepStatus_JOB_STEP_STATUS_RUNNING:   enum.JobStepStatusRunning,
+		runtimev1.JobStepStatus_JOB_STEP_STATUS_SUCCEEDED: enum.JobStepStatusSucceeded,
+		runtimev1.JobStepStatus_JOB_STEP_STATUS_FAILED:    enum.JobStepStatusFailed,
+		runtimev1.JobStepStatus_JOB_STEP_STATUS_SKIPPED:   enum.JobStepStatusSkipped,
+	}
+	jobStepStatusToProto = invertEnumMap(jobStepStatusFromProto)
+
+	runtimeArtifactTypeFromProto = map[runtimev1.RuntimeArtifactType]enum.RuntimeArtifactType{
+		runtimev1.RuntimeArtifactType_RUNTIME_ARTIFACT_TYPE_IMAGE_REF:      enum.RuntimeArtifactTypeImageRef,
+		runtimev1.RuntimeArtifactType_RUNTIME_ARTIFACT_TYPE_KUBERNETES_JOB: enum.RuntimeArtifactTypeKubernetesJob,
+		runtimev1.RuntimeArtifactType_RUNTIME_ARTIFACT_TYPE_NAMESPACE:      enum.RuntimeArtifactTypeNamespace,
+		runtimev1.RuntimeArtifactType_RUNTIME_ARTIFACT_TYPE_DEPLOYMENT:     enum.RuntimeArtifactTypeDeployment,
+		runtimev1.RuntimeArtifactType_RUNTIME_ARTIFACT_TYPE_LOG_REF:        enum.RuntimeArtifactTypeLogRef,
+		runtimev1.RuntimeArtifactType_RUNTIME_ARTIFACT_TYPE_MANIFEST_REF:   enum.RuntimeArtifactTypeManifestRef,
+	}
+	runtimeArtifactTypeToProto = invertEnumMap(runtimeArtifactTypeFromProto)
+)
+
+func enumFromProto[Proto comparable, Domain any](value Proto, values map[Proto]Domain) (Domain, error) {
+	mapped, ok := values[value]
+	if !ok {
+		var zero Domain
+		return zero, errs.ErrInvalidArgument
+	}
+	return mapped, nil
+}
+
+func enumToProto[Domain comparable, Proto any](value Domain, values map[Domain]Proto, zero Proto) Proto {
+	if mapped, ok := values[value]; ok {
+		return mapped
+	}
+	return zero
+}
+
+func invertEnumMap[Proto comparable, Domain comparable](values map[Proto]Domain) map[Domain]Proto {
+	result := make(map[Domain]Proto, len(values))
+	for protoValue, domainValue := range values {
+		result[domainValue] = protoValue
+	}
+	return result
+}
+
+func newJobTypeMap() map[runtimev1.JobType]enum.JobType {
+	return map[runtimev1.JobType]enum.JobType{
+		runtimev1.JobType_JOB_TYPE_MIRROR:                    enum.JobTypeMirror,
+		runtimev1.JobType_JOB_TYPE_BUILD:                     enum.JobTypeBuild,
+		runtimev1.JobType_JOB_TYPE_DEPLOY:                    enum.JobTypeDeploy,
+		runtimev1.JobType_JOB_TYPE_CLEANUP:                   enum.JobTypeCleanup,
+		runtimev1.JobType_JOB_TYPE_HEALTH_CHECK:              enum.JobTypeHealthCheck,
+		runtimev1.JobType_JOB_TYPE_HOUSEKEEPING:              enum.JobTypeHousekeeping,
+		runtimev1.JobType_JOB_TYPE_WORKSPACE_MATERIALIZATION: enum.JobTypeWorkspaceMaterialization,
+	}
+}
+
+func newJobStatusMap() map[runtimev1.JobStatus]enum.JobStatus {
+	pairs := []struct {
+		proto  runtimev1.JobStatus
+		domain enum.JobStatus
+	}{
+		{proto: runtimev1.JobStatus_JOB_STATUS_PENDING, domain: enum.JobStatusPending},
+		{proto: runtimev1.JobStatus_JOB_STATUS_CLAIMED, domain: enum.JobStatusClaimed},
+		{proto: runtimev1.JobStatus_JOB_STATUS_RUNNING, domain: enum.JobStatusRunning},
+		{proto: runtimev1.JobStatus_JOB_STATUS_SUCCEEDED, domain: enum.JobStatusSucceeded},
+		{proto: runtimev1.JobStatus_JOB_STATUS_FAILED, domain: enum.JobStatusFailed},
+		{proto: runtimev1.JobStatus_JOB_STATUS_CANCELLED, domain: enum.JobStatusCancelled},
+		{proto: runtimev1.JobStatus_JOB_STATUS_TIMED_OUT, domain: enum.JobStatusTimedOut},
+	}
+	values := make(map[runtimev1.JobStatus]enum.JobStatus, len(pairs))
+	for _, pair := range pairs {
+		values[pair.proto] = pair.domain
+	}
+	return values
+}
+
 // RuntimeModeFromProto maps the runtime mode enum.
 func RuntimeModeFromProto(mode runtimev1.RuntimeMode) (enum.RuntimeMode, error) {
-	switch mode {
-	case runtimev1.RuntimeMode_RUNTIME_MODE_CODE_ONLY:
-		return enum.RuntimeModeCodeOnly, nil
-	case runtimev1.RuntimeMode_RUNTIME_MODE_FULL_ENV:
-		return enum.RuntimeModeFullEnv, nil
-	case runtimev1.RuntimeMode_RUNTIME_MODE_READ_ONLY_PRODUCTION:
-		return enum.RuntimeModeReadOnlyProduction, nil
-	default:
-		return "", errs.ErrInvalidArgument
-	}
+	return enumFromProto(mode, runtimeModeFromProto)
 }
 
 // RuntimeModeToProto maps the runtime mode enum.
 func RuntimeModeToProto(mode enum.RuntimeMode) runtimev1.RuntimeMode {
-	switch mode {
-	case enum.RuntimeModeCodeOnly:
-		return runtimev1.RuntimeMode_RUNTIME_MODE_CODE_ONLY
-	case enum.RuntimeModeFullEnv:
-		return runtimev1.RuntimeMode_RUNTIME_MODE_FULL_ENV
-	case enum.RuntimeModeReadOnlyProduction:
-		return runtimev1.RuntimeMode_RUNTIME_MODE_READ_ONLY_PRODUCTION
-	default:
-		return runtimev1.RuntimeMode_RUNTIME_MODE_UNSPECIFIED
-	}
+	return enumToProto(mode, runtimeModeToProto, runtimev1.RuntimeMode_RUNTIME_MODE_UNSPECIFIED)
 }
 
 // SlotStatusFromProto maps slot status filters.
 func SlotStatusFromProto(status runtimev1.SlotStatus) (enum.SlotStatus, error) {
-	switch status {
-	case runtimev1.SlotStatus_SLOT_STATUS_PREWARMED:
-		return enum.SlotStatusPrewarmed, nil
-	case runtimev1.SlotStatus_SLOT_STATUS_RESERVED:
-		return enum.SlotStatusReserved, nil
-	case runtimev1.SlotStatus_SLOT_STATUS_MATERIALIZING:
-		return enum.SlotStatusMaterializing, nil
-	case runtimev1.SlotStatus_SLOT_STATUS_READY:
-		return enum.SlotStatusReady, nil
-	case runtimev1.SlotStatus_SLOT_STATUS_IN_USE:
-		return enum.SlotStatusInUse, nil
-	case runtimev1.SlotStatus_SLOT_STATUS_RELEASING:
-		return enum.SlotStatusReleasing, nil
-	case runtimev1.SlotStatus_SLOT_STATUS_FAILED:
-		return enum.SlotStatusFailed, nil
-	case runtimev1.SlotStatus_SLOT_STATUS_CLEANUP_PENDING:
-		return enum.SlotStatusCleanupPending, nil
-	case runtimev1.SlotStatus_SLOT_STATUS_CLEANED:
-		return enum.SlotStatusCleaned, nil
-	default:
-		return "", errs.ErrInvalidArgument
-	}
+	return enumFromProto(status, slotStatusFromProto)
 }
 
 // SlotStatusToProto maps slot status.
 func SlotStatusToProto(status enum.SlotStatus) runtimev1.SlotStatus {
-	switch status {
-	case enum.SlotStatusPrewarmed:
-		return runtimev1.SlotStatus_SLOT_STATUS_PREWARMED
-	case enum.SlotStatusReserved:
-		return runtimev1.SlotStatus_SLOT_STATUS_RESERVED
-	case enum.SlotStatusMaterializing:
-		return runtimev1.SlotStatus_SLOT_STATUS_MATERIALIZING
-	case enum.SlotStatusReady:
-		return runtimev1.SlotStatus_SLOT_STATUS_READY
-	case enum.SlotStatusInUse:
-		return runtimev1.SlotStatus_SLOT_STATUS_IN_USE
-	case enum.SlotStatusReleasing:
-		return runtimev1.SlotStatus_SLOT_STATUS_RELEASING
-	case enum.SlotStatusFailed:
-		return runtimev1.SlotStatus_SLOT_STATUS_FAILED
-	case enum.SlotStatusCleanupPending:
-		return runtimev1.SlotStatus_SLOT_STATUS_CLEANUP_PENDING
-	case enum.SlotStatusCleaned:
-		return runtimev1.SlotStatus_SLOT_STATUS_CLEANED
-	default:
-		return runtimev1.SlotStatus_SLOT_STATUS_UNSPECIFIED
-	}
+	return enumToProto(status, slotStatusToProto, runtimev1.SlotStatus_SLOT_STATUS_UNSPECIFIED)
 }
 
 // WorkspaceMaterializationStatusFromProto maps materialization status.
 func WorkspaceMaterializationStatusFromProto(status runtimev1.WorkspaceMaterializationStatus) (enum.WorkspaceMaterializationStatus, error) {
-	switch status {
-	case runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_PENDING:
-		return enum.WorkspaceMaterializationStatusPending, nil
-	case runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_RUNNING:
-		return enum.WorkspaceMaterializationStatusRunning, nil
-	case runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_COMPLETED:
-		return enum.WorkspaceMaterializationStatusCompleted, nil
-	case runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_FAILED:
-		return enum.WorkspaceMaterializationStatusFailed, nil
-	case runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_CANCELLED:
-		return enum.WorkspaceMaterializationStatusCancelled, nil
-	default:
-		return "", errs.ErrInvalidArgument
-	}
+	return enumFromProto(status, workspaceMaterializationStatusFromProto)
 }
 
 // WorkspaceMaterializationStatusToProto maps materialization status.
 func WorkspaceMaterializationStatusToProto(status enum.WorkspaceMaterializationStatus) runtimev1.WorkspaceMaterializationStatus {
-	switch status {
-	case enum.WorkspaceMaterializationStatusPending:
-		return runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_PENDING
-	case enum.WorkspaceMaterializationStatusRunning:
-		return runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_RUNNING
-	case enum.WorkspaceMaterializationStatusCompleted:
-		return runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_COMPLETED
-	case enum.WorkspaceMaterializationStatusFailed:
-		return runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_FAILED
-	case enum.WorkspaceMaterializationStatusCancelled:
-		return runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_CANCELLED
-	default:
-		return runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_UNSPECIFIED
-	}
+	return enumToProto(status, workspaceMaterializationStatusToProto, runtimev1.WorkspaceMaterializationStatus_WORKSPACE_MATERIALIZATION_STATUS_UNSPECIFIED)
 }
 
 // WorkspaceSourceKindFromProto maps a workspace source kind.
 func WorkspaceSourceKindFromProto(kind runtimev1.WorkspaceSourceKind) (enum.WorkspaceSourceKind, error) {
-	switch kind {
-	case runtimev1.WorkspaceSourceKind_WORKSPACE_SOURCE_KIND_CODE:
-		return enum.WorkspaceSourceKindCode, nil
-	case runtimev1.WorkspaceSourceKind_WORKSPACE_SOURCE_KIND_DOCUMENTATION:
-		return enum.WorkspaceSourceKindDocumentation, nil
-	case runtimev1.WorkspaceSourceKind_WORKSPACE_SOURCE_KIND_GUIDANCE_PACKAGE:
-		return enum.WorkspaceSourceKindGuidancePackage, nil
-	case runtimev1.WorkspaceSourceKind_WORKSPACE_SOURCE_KIND_GENERATED_CONTEXT:
-		return enum.WorkspaceSourceKindGeneratedContext, nil
-	default:
-		return "", errs.ErrInvalidArgument
-	}
+	return enumFromProto(kind, workspaceSourceKindFromProto)
 }
 
 // WorkspaceSourceKindToProto maps a workspace source kind.
 func WorkspaceSourceKindToProto(kind enum.WorkspaceSourceKind) runtimev1.WorkspaceSourceKind {
-	switch kind {
-	case enum.WorkspaceSourceKindCode:
-		return runtimev1.WorkspaceSourceKind_WORKSPACE_SOURCE_KIND_CODE
-	case enum.WorkspaceSourceKindDocumentation:
-		return runtimev1.WorkspaceSourceKind_WORKSPACE_SOURCE_KIND_DOCUMENTATION
-	case enum.WorkspaceSourceKindGuidancePackage:
-		return runtimev1.WorkspaceSourceKind_WORKSPACE_SOURCE_KIND_GUIDANCE_PACKAGE
-	case enum.WorkspaceSourceKindGeneratedContext:
-		return runtimev1.WorkspaceSourceKind_WORKSPACE_SOURCE_KIND_GENERATED_CONTEXT
-	default:
-		return runtimev1.WorkspaceSourceKind_WORKSPACE_SOURCE_KIND_UNSPECIFIED
-	}
+	return enumToProto(kind, workspaceSourceKindToProto, runtimev1.WorkspaceSourceKind_WORKSPACE_SOURCE_KIND_UNSPECIFIED)
 }
 
 // WorkspaceSourceAccessModeFromProto maps source access mode.
 func WorkspaceSourceAccessModeFromProto(mode runtimev1.WorkspaceSourceAccessMode) (enum.WorkspaceSourceAccessMode, error) {
-	switch mode {
-	case runtimev1.WorkspaceSourceAccessMode_WORKSPACE_SOURCE_ACCESS_MODE_READ:
-		return enum.WorkspaceSourceAccessModeRead, nil
-	case runtimev1.WorkspaceSourceAccessMode_WORKSPACE_SOURCE_ACCESS_MODE_WRITE:
-		return enum.WorkspaceSourceAccessModeWrite, nil
-	default:
-		return "", errs.ErrInvalidArgument
-	}
+	return enumFromProto(mode, workspaceSourceAccessModeFromProto)
 }
 
 // WorkspaceSourceAccessModeToProto maps source access mode.
 func WorkspaceSourceAccessModeToProto(mode enum.WorkspaceSourceAccessMode) runtimev1.WorkspaceSourceAccessMode {
-	switch mode {
-	case enum.WorkspaceSourceAccessModeRead:
-		return runtimev1.WorkspaceSourceAccessMode_WORKSPACE_SOURCE_ACCESS_MODE_READ
-	case enum.WorkspaceSourceAccessModeWrite:
-		return runtimev1.WorkspaceSourceAccessMode_WORKSPACE_SOURCE_ACCESS_MODE_WRITE
-	default:
-		return runtimev1.WorkspaceSourceAccessMode_WORKSPACE_SOURCE_ACCESS_MODE_UNSPECIFIED
-	}
+	return enumToProto(mode, workspaceSourceAccessModeToProto, runtimev1.WorkspaceSourceAccessMode_WORKSPACE_SOURCE_ACCESS_MODE_UNSPECIFIED)
+}
+
+// JobTypeFromProto maps a platform job type.
+func JobTypeFromProto(jobType runtimev1.JobType) (enum.JobType, error) {
+	return enumFromProto(jobType, jobTypeFromProto)
+}
+
+// JobTypeToProto maps a platform job type.
+func JobTypeToProto(jobType enum.JobType) runtimev1.JobType {
+	return enumToProto(jobType, jobTypeToProto, runtimev1.JobType_JOB_TYPE_UNSPECIFIED)
+}
+
+// JobStatusFromProto maps a job status filter.
+func JobStatusFromProto(status runtimev1.JobStatus) (enum.JobStatus, error) {
+	return enumFromProto(status, jobStatusFromProto)
+}
+
+// JobStatusToProto maps a job status.
+func JobStatusToProto(status enum.JobStatus) runtimev1.JobStatus {
+	return enumToProto(status, jobStatusToProto, runtimev1.JobStatus_JOB_STATUS_UNSPECIFIED)
+}
+
+// JobPriorityFromProto maps a job priority.
+func JobPriorityFromProto(priority runtimev1.JobPriority) (enum.JobPriority, error) {
+	return enumFromProto(priority, jobPriorityFromProto)
+}
+
+// JobPriorityToProto maps a job priority.
+func JobPriorityToProto(priority enum.JobPriority) runtimev1.JobPriority {
+	return enumToProto(priority, jobPriorityToProto, runtimev1.JobPriority_JOB_PRIORITY_UNSPECIFIED)
+}
+
+// JobStepStatusFromProto maps a job step status.
+func JobStepStatusFromProto(status runtimev1.JobStepStatus) (enum.JobStepStatus, error) {
+	return enumFromProto(status, jobStepStatusFromProto)
+}
+
+// JobStepStatusToProto maps a job step status.
+func JobStepStatusToProto(status enum.JobStepStatus) runtimev1.JobStepStatus {
+	return enumToProto(status, jobStepStatusToProto, runtimev1.JobStepStatus_JOB_STEP_STATUS_UNSPECIFIED)
+}
+
+// RuntimeArtifactTypeFromProto maps an external runtime artifact type.
+func RuntimeArtifactTypeFromProto(artifactType runtimev1.RuntimeArtifactType) (enum.RuntimeArtifactType, error) {
+	return enumFromProto(artifactType, runtimeArtifactTypeFromProto)
+}
+
+// RuntimeArtifactTypeToProto maps an external runtime artifact type.
+func RuntimeArtifactTypeToProto(artifactType enum.RuntimeArtifactType) runtimev1.RuntimeArtifactType {
+	return enumToProto(artifactType, runtimeArtifactTypeToProto, runtimev1.RuntimeArtifactType_RUNTIME_ARTIFACT_TYPE_UNSPECIFIED)
 }

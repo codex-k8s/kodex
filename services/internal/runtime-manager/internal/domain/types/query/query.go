@@ -2,6 +2,8 @@
 package query
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 
 	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/enum"
@@ -38,4 +40,33 @@ type WorkspaceMaterializationFilter struct {
 	AgentRunID *uuid.UUID
 	Statuses   []enum.WorkspaceMaterializationStatus
 	Page       value.PageRequest
+}
+
+// JobFilter selects platform technical jobs.
+type JobFilter struct {
+	Statuses      []enum.JobStatus
+	JobTypes      []enum.JobType
+	ProjectID     *uuid.UUID
+	SlotID        *uuid.UUID
+	AgentRunID    *uuid.UUID
+	ReleaseLineID *uuid.UUID
+	Page          value.PageRequest
+}
+
+// JobClaimFilter selects one runnable job for an exclusive short lease.
+type JobClaimFilter struct {
+	JobTypes       []enum.JobType
+	FleetScopeID   *uuid.UUID
+	LeaseOwner     string
+	LeaseTokenHash string
+	LeaseUntil     time.Time
+	Now            time.Time
+}
+
+// RuntimeArtifactRefFilter selects external artifact references.
+type RuntimeArtifactRefFilter struct {
+	JobID         *uuid.UUID
+	SlotID        *uuid.UUID
+	ArtifactTypes []enum.RuntimeArtifactType
+	Page          value.PageRequest
 }

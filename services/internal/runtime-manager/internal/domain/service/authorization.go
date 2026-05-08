@@ -125,6 +125,14 @@ func workspaceResource(workspaceID uuid.UUID, projectID *uuid.UUID) resourceRef 
 	return runtimeResource(accesscatalog.ResourceRuntimeWorkspace, workspaceID, projectID)
 }
 
+func jobResource(jobID uuid.UUID, projectID *uuid.UUID) resourceRef {
+	return runtimeResource(accesscatalog.ResourceRuntimeJob, jobID, projectID)
+}
+
+func artifactResource(artifactID uuid.UUID, projectID *uuid.UUID) resourceRef {
+	return runtimeResource(accesscatalog.ResourceRuntimeArtifactRef, artifactID, projectID)
+}
+
 func runtimeResource(resourceType string, resourceUUID uuid.UUID, projectID *uuid.UUID) resourceRef {
 	resourceID := ""
 	if resourceUUID != uuid.Nil {

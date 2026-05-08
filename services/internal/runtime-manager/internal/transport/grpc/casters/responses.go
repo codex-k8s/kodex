@@ -31,6 +31,21 @@ func WorkspaceMaterializationResponse(materialization entity.WorkspaceMaterializ
 	return &runtimev1.WorkspaceMaterializationResponse{WorkspaceMaterialization: WorkspaceMaterializationToProto(materialization)}
 }
 
+// JobResponse maps a domain job to a gRPC response.
+func JobResponse(job entity.Job) *runtimev1.JobResponse {
+	return &runtimev1.JobResponse{Job: JobToProto(job)}
+}
+
+// ClaimRunnableJobResponse maps a claimed job and one-time lease token.
+func ClaimRunnableJobResponse(result runtimeservice.ClaimRunnableJobResult) *runtimev1.ClaimRunnableJobResponse {
+	return &runtimev1.ClaimRunnableJobResponse{Job: JobToProto(result.Job), LeaseToken: result.LeaseToken}
+}
+
+// RuntimeArtifactRefResponse maps one external artifact reference.
+func RuntimeArtifactRefResponse(ref entity.RuntimeArtifactRef) *runtimev1.RuntimeArtifactRefResponse {
+	return &runtimev1.RuntimeArtifactRefResponse{RuntimeArtifactRef: RuntimeArtifactRefToProto(ref)}
+}
+
 // ListSlotsResponse maps a domain slot page to a gRPC response.
 func ListSlotsResponse(result runtimeservice.ListSlotsResult) *runtimev1.ListSlotsResponse {
 	return &runtimev1.ListSlotsResponse{Slots: slotsToProto(result.Slots), Page: pageResponseToProto(result.Page)}
@@ -41,6 +56,19 @@ func ListWorkspaceMaterializationsResponse(result runtimeservice.ListWorkspaceMa
 	return &runtimev1.ListWorkspaceMaterializationsResponse{
 		WorkspaceMaterializations: workspaceMaterializationsToProto(result.WorkspaceMaterializations),
 		Page:                      pageResponseToProto(result.Page),
+	}
+}
+
+// ListJobsResponse maps a domain job page to a gRPC response.
+func ListJobsResponse(result runtimeservice.ListJobsResult) *runtimev1.ListJobsResponse {
+	return &runtimev1.ListJobsResponse{Jobs: jobsToProto(result.Jobs), Page: pageResponseToProto(result.Page)}
+}
+
+// ListRuntimeArtifactRefsResponse maps an artifact reference page to a gRPC response.
+func ListRuntimeArtifactRefsResponse(result runtimeservice.ListRuntimeArtifactRefsResult) *runtimev1.ListRuntimeArtifactRefsResponse {
+	return &runtimev1.ListRuntimeArtifactRefsResponse{
+		RuntimeArtifactRefs: runtimeArtifactRefsToProto(result.RuntimeArtifactRefs),
+		Page:                pageResponseToProto(result.Page),
 	}
 }
 
@@ -101,6 +129,71 @@ func RuntimeContextToProto(context runtimeservice.RuntimeContext) *runtimev1.Run
 	}
 }
 
+// JobToProto maps one platform job.
+func JobToProto(job entity.Job) *runtimev1.Job {
+	return &runtimev1.Job{
+		JobId:                 job.ID.String(),
+		CommandId:             job.CommandID,
+		JobType:               JobTypeToProto(job.JobType),
+		Status:                JobStatusToProto(job.Status),
+		Priority:              JobPriorityToProto(job.Priority),
+		JobInputJson:          string(job.JobInputJSON),
+		LeaseOwner:            job.LeaseOwner,
+		LeaseUntil:            timeStringPtr(job.LeaseUntil),
+		ClaimAttempt:          job.ClaimAttempt,
+		SlotId:                uuidStringPtr(job.SlotID),
+		AgentRunId:            uuidStringPtr(job.AgentRunID),
+		ProjectId:             uuidStringPtr(job.ProjectID),
+		RepositoryId:          uuidStringPtr(job.RepositoryID),
+		ReleaseLineId:         uuidStringPtr(job.ReleaseLineID),
+		PackageInstallationId: uuidStringPtr(job.PackageInstallationID),
+		FleetScopeId:          uuidStringPtr(job.FleetScopeID),
+		ClusterId:             uuidStringPtr(job.ClusterID),
+		RequestedBy:           uuidStringPtr(job.RequestedBy),
+		CreatedAt:             job.CreatedAt.UTC().Format(time.RFC3339Nano),
+		StartedAt:             timeStringPtr(job.StartedAt),
+		FinishedAt:            timeStringPtr(job.FinishedAt),
+		NextAction:            job.NextAction,
+		LastErrorCode:         job.LastErrorCode,
+		LastErrorMessage:      job.LastErrorMessage,
+		ShortLogTail:          job.ShortLogTail,
+		FullLogRef:            job.FullLogRef,
+		Version:               job.Version,
+		Steps:                 jobStepsToProto(job.Steps),
+	}
+}
+
+// JobStepToProto maps one job step.
+func JobStepToProto(step entity.JobStep) *runtimev1.JobStep {
+	return &runtimev1.JobStep{
+		JobStepId:    step.ID.String(),
+		JobId:        step.JobID.String(),
+		StepKey:      step.StepKey,
+		Status:       JobStepStatusToProto(step.Status),
+		StartedAt:    timeStringPtr(step.StartedAt),
+		FinishedAt:   timeStringPtr(step.FinishedAt),
+		ShortLogTail: step.ShortLogTail,
+		ExternalRef:  step.ExternalRef,
+		ErrorCode:    step.ErrorCode,
+		ErrorMessage: step.ErrorMessage,
+		Version:      step.Version,
+	}
+}
+
+// RuntimeArtifactRefToProto maps one external runtime artifact reference.
+func RuntimeArtifactRefToProto(ref entity.RuntimeArtifactRef) *runtimev1.RuntimeArtifactRef {
+	return &runtimev1.RuntimeArtifactRef{
+		RuntimeArtifactRefId: ref.ID.String(),
+		JobId:                uuidStringPtr(ref.JobID),
+		SlotId:               uuidStringPtr(ref.SlotID),
+		ArtifactType:         RuntimeArtifactTypeToProto(ref.ArtifactType),
+		ExternalRef:          ref.ExternalRef,
+		Digest:               ref.Digest,
+		MetadataJson:         string(ref.MetadataJSON),
+		CreatedAt:            ref.CreatedAt.UTC().Format(time.RFC3339Nano),
+	}
+}
+
 // WorkspaceSourcesToProto maps normalized workspace sources.
 func WorkspaceSourcesToProto(sources []value.WorkspaceSource) []*runtimev1.WorkspaceSource {
 	if len(sources) == 0 {
@@ -158,6 +251,30 @@ func workspaceMaterializationsToProto(materializations []entity.WorkspaceMateria
 	result := make([]*runtimev1.WorkspaceMaterialization, 0, len(materializations))
 	for _, materialization := range materializations {
 		result = append(result, WorkspaceMaterializationToProto(materialization))
+	}
+	return result
+}
+
+func jobsToProto(jobs []entity.Job) []*runtimev1.Job {
+	result := make([]*runtimev1.Job, 0, len(jobs))
+	for _, job := range jobs {
+		result = append(result, JobToProto(job))
+	}
+	return result
+}
+
+func jobStepsToProto(steps []entity.JobStep) []*runtimev1.JobStep {
+	result := make([]*runtimev1.JobStep, 0, len(steps))
+	for _, step := range steps {
+		result = append(result, JobStepToProto(step))
+	}
+	return result
+}
+
+func runtimeArtifactRefsToProto(refs []entity.RuntimeArtifactRef) []*runtimev1.RuntimeArtifactRef {
+	result := make([]*runtimev1.RuntimeArtifactRef, 0, len(refs))
+	for _, ref := range refs {
+		result = append(result, RuntimeArtifactRefToProto(ref))
 	}
 	return result
 }

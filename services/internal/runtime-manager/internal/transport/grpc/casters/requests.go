@@ -325,6 +325,321 @@ func ListSlotsInput(request *runtimev1.ListSlotsRequest) (runtimeservice.ListSlo
 	}, nil
 }
 
+// CreateJobInput maps a gRPC job creation request.
+func CreateJobInput(request *runtimev1.CreateJobRequest) (runtimeservice.CreateJobInput, error) {
+	if request == nil {
+		return runtimeservice.CreateJobInput{}, errs.ErrInvalidArgument
+	}
+	jobType, err := JobTypeFromProto(request.GetJobType())
+	if err != nil {
+		return runtimeservice.CreateJobInput{}, err
+	}
+	priority, err := JobPriorityFromProto(request.GetPriority())
+	if err != nil {
+		return runtimeservice.CreateJobInput{}, err
+	}
+	slotID, err := optionalUUIDPtr(request.GetSlotId())
+	if err != nil {
+		return runtimeservice.CreateJobInput{}, err
+	}
+	agentRunID, err := optionalUUIDPtr(request.GetAgentRunId())
+	if err != nil {
+		return runtimeservice.CreateJobInput{}, err
+	}
+	projectID, err := optionalUUIDPtr(request.GetProjectId())
+	if err != nil {
+		return runtimeservice.CreateJobInput{}, err
+	}
+	repositoryID, err := optionalUUIDPtr(request.GetRepositoryId())
+	if err != nil {
+		return runtimeservice.CreateJobInput{}, err
+	}
+	releaseLineID, err := optionalUUIDPtr(request.GetReleaseLineId())
+	if err != nil {
+		return runtimeservice.CreateJobInput{}, err
+	}
+	packageInstallationID, err := optionalUUIDPtr(request.GetPackageInstallationId())
+	if err != nil {
+		return runtimeservice.CreateJobInput{}, err
+	}
+	fleetScopeID, err := preferredFleetScopeID(request.GetPlacementConstraints())
+	if err != nil {
+		return runtimeservice.CreateJobInput{}, err
+	}
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return runtimeservice.CreateJobInput{}, err
+	}
+	return runtimeservice.CreateJobInput{
+		JobType:               jobType,
+		Priority:              priority,
+		SlotID:                slotID,
+		AgentRunID:            agentRunID,
+		ProjectID:             projectID,
+		RepositoryID:          repositoryID,
+		ReleaseLineID:         releaseLineID,
+		PackageInstallationID: packageInstallationID,
+		PreferredFleetScopeID: fleetScopeID,
+		JobInputJSON:          []byte(strings.TrimSpace(request.GetJobInputJson())),
+		Meta:                  meta,
+	}, nil
+}
+
+// ClaimRunnableJobInput maps a gRPC worker claim request.
+func ClaimRunnableJobInput(request *runtimev1.ClaimRunnableJobRequest) (runtimeservice.ClaimRunnableJobInput, error) {
+	if request == nil {
+		return runtimeservice.ClaimRunnableJobInput{}, errs.ErrInvalidArgument
+	}
+	jobTypes, err := jobTypesFromProto(request.GetJobTypes())
+	if err != nil {
+		return runtimeservice.ClaimRunnableJobInput{}, err
+	}
+	leaseUntil, err := requiredTime(request.GetLeaseUntil())
+	if err != nil {
+		return runtimeservice.ClaimRunnableJobInput{}, err
+	}
+	fleetScopeID, err := optionalUUIDPtr(request.GetFleetScopeId())
+	if err != nil {
+		return runtimeservice.ClaimRunnableJobInput{}, err
+	}
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return runtimeservice.ClaimRunnableJobInput{}, err
+	}
+	return runtimeservice.ClaimRunnableJobInput{
+		JobTypes:     jobTypes,
+		WorkerID:     strings.TrimSpace(request.GetWorkerId()),
+		LeaseOwner:   strings.TrimSpace(request.GetLeaseOwner()),
+		LeaseUntil:   leaseUntil,
+		FleetScopeID: fleetScopeID,
+		Meta:         meta,
+	}, nil
+}
+
+// ReportJobStepProgressInput maps a gRPC job step update.
+func ReportJobStepProgressInput(request *runtimev1.ReportJobStepProgressRequest) (runtimeservice.ReportJobStepProgressInput, error) {
+	if request == nil {
+		return runtimeservice.ReportJobStepProgressInput{}, errs.ErrInvalidArgument
+	}
+	jobID, err := requiredUUID(request.GetJobId())
+	if err != nil {
+		return runtimeservice.ReportJobStepProgressInput{}, err
+	}
+	status, err := JobStepStatusFromProto(request.GetStatus())
+	if err != nil {
+		return runtimeservice.ReportJobStepProgressInput{}, err
+	}
+	startedAt, err := optionalTime(request.GetStartedAt())
+	if err != nil {
+		return runtimeservice.ReportJobStepProgressInput{}, err
+	}
+	finishedAt, err := optionalTime(request.GetFinishedAt())
+	if err != nil {
+		return runtimeservice.ReportJobStepProgressInput{}, err
+	}
+	refs, err := runtimeArtifactRefInputsFromProto(request.GetArtifactRefs())
+	if err != nil {
+		return runtimeservice.ReportJobStepProgressInput{}, err
+	}
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return runtimeservice.ReportJobStepProgressInput{}, err
+	}
+	return runtimeservice.ReportJobStepProgressInput{
+		JobID:        jobID,
+		LeaseToken:   strings.TrimSpace(request.GetLeaseToken()),
+		StepKey:      strings.TrimSpace(request.GetStepKey()),
+		Status:       status,
+		StartedAt:    startedAt,
+		FinishedAt:   finishedAt,
+		ShortLogTail: request.GetShortLogTail(),
+		ExternalRef:  strings.TrimSpace(request.GetExternalRef()),
+		ErrorCode:    strings.TrimSpace(request.GetErrorCode()),
+		ErrorMessage: strings.TrimSpace(request.GetErrorMessage()),
+		ArtifactRefs: refs,
+		Meta:         meta,
+	}, nil
+}
+
+// CompleteJobInput maps a gRPC successful job completion.
+func CompleteJobInput(request *runtimev1.CompleteJobRequest) (runtimeservice.CompleteJobInput, error) {
+	if request == nil {
+		return runtimeservice.CompleteJobInput{}, errs.ErrInvalidArgument
+	}
+	jobID, err := requiredUUID(request.GetJobId())
+	if err != nil {
+		return runtimeservice.CompleteJobInput{}, err
+	}
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return runtimeservice.CompleteJobInput{}, err
+	}
+	return runtimeservice.CompleteJobInput{
+		JobID:        jobID,
+		LeaseToken:   strings.TrimSpace(request.GetLeaseToken()),
+		ShortLogTail: request.GetShortLogTail(),
+		FullLogRef:   strings.TrimSpace(request.GetFullLogRef()),
+		Meta:         meta,
+	}, nil
+}
+
+// FailJobInput maps a gRPC failed job completion.
+func FailJobInput(request *runtimev1.FailJobRequest) (runtimeservice.FailJobInput, error) {
+	if request == nil {
+		return runtimeservice.FailJobInput{}, errs.ErrInvalidArgument
+	}
+	jobID, err := requiredUUID(request.GetJobId())
+	if err != nil {
+		return runtimeservice.FailJobInput{}, err
+	}
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return runtimeservice.FailJobInput{}, err
+	}
+	return runtimeservice.FailJobInput{
+		JobID:        jobID,
+		LeaseToken:   strings.TrimSpace(request.GetLeaseToken()),
+		ErrorCode:    strings.TrimSpace(request.GetErrorCode()),
+		ErrorMessage: strings.TrimSpace(request.GetErrorMessage()),
+		ShortLogTail: request.GetShortLogTail(),
+		FullLogRef:   strings.TrimSpace(request.GetFullLogRef()),
+		Meta:         meta,
+	}, nil
+}
+
+// CancelJobInput maps a gRPC cancellation request.
+func CancelJobInput(request *runtimev1.CancelJobRequest) (runtimeservice.CancelJobInput, error) {
+	if request == nil {
+		return runtimeservice.CancelJobInput{}, errs.ErrInvalidArgument
+	}
+	jobID, err := requiredUUID(request.GetJobId())
+	if err != nil {
+		return runtimeservice.CancelJobInput{}, err
+	}
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return runtimeservice.CancelJobInput{}, err
+	}
+	return runtimeservice.CancelJobInput{JobID: jobID, Meta: meta}, nil
+}
+
+// GetJobInput maps a get request into id and query metadata.
+func GetJobInput(request *runtimev1.GetJobRequest) (runtimeservice.GetJobInput, error) {
+	result := runtimeservice.GetJobInput{}
+	if request == nil {
+		return result, errs.ErrInvalidArgument
+	}
+	jobID, err := requiredUUID(request.GetJobId())
+	if err != nil {
+		return result, err
+	}
+	meta, err := QueryMetaFromProto(request.GetMeta())
+	if err != nil {
+		return result, err
+	}
+	result.JobID = jobID
+	result.Meta = meta
+	return result, nil
+}
+
+// ListJobsInput maps job list filters.
+func ListJobsInput(request *runtimev1.ListJobsRequest) (runtimeservice.ListJobsInput, error) {
+	if request == nil {
+		return runtimeservice.ListJobsInput{}, errs.ErrInvalidArgument
+	}
+	statuses, err := jobStatusesFromProto(request.GetStatuses())
+	if err != nil {
+		return runtimeservice.ListJobsInput{}, err
+	}
+	jobTypes, err := jobTypesFromProto(request.GetJobTypes())
+	if err != nil {
+		return runtimeservice.ListJobsInput{}, err
+	}
+	projectID, err := optionalUUIDPtr(request.GetProjectId())
+	if err != nil {
+		return runtimeservice.ListJobsInput{}, err
+	}
+	slotID, err := optionalUUIDPtr(request.GetSlotId())
+	if err != nil {
+		return runtimeservice.ListJobsInput{}, err
+	}
+	agentRunID, err := optionalUUIDPtr(request.GetAgentRunId())
+	if err != nil {
+		return runtimeservice.ListJobsInput{}, err
+	}
+	releaseLineID, err := optionalUUIDPtr(request.GetReleaseLineId())
+	if err != nil {
+		return runtimeservice.ListJobsInput{}, err
+	}
+	meta, err := QueryMetaFromProto(request.GetMeta())
+	if err != nil {
+		return runtimeservice.ListJobsInput{}, err
+	}
+	return runtimeservice.ListJobsInput{
+		Statuses:      statuses,
+		JobTypes:      jobTypes,
+		ProjectID:     projectID,
+		SlotID:        slotID,
+		AgentRunID:    agentRunID,
+		ReleaseLineID: releaseLineID,
+		Page:          pageRequestFromProto(request.GetPage()),
+		Meta:          meta,
+	}, nil
+}
+
+// RecordRuntimeArtifactRefInput maps one external artifact reference command.
+func RecordRuntimeArtifactRefInput(request *runtimev1.RecordRuntimeArtifactRefRequest) (runtimeservice.RecordRuntimeArtifactRefInput, error) {
+	if request == nil {
+		return runtimeservice.RecordRuntimeArtifactRefInput{}, errs.ErrInvalidArgument
+	}
+	jobID, err := optionalUUIDPtr(request.GetJobId())
+	if err != nil {
+		return runtimeservice.RecordRuntimeArtifactRefInput{}, err
+	}
+	slotID, err := optionalUUIDPtr(request.GetSlotId())
+	if err != nil {
+		return runtimeservice.RecordRuntimeArtifactRefInput{}, err
+	}
+	ref, err := runtimeArtifactRefInputFromProto(request.GetArtifactRef())
+	if err != nil {
+		return runtimeservice.RecordRuntimeArtifactRefInput{}, err
+	}
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return runtimeservice.RecordRuntimeArtifactRefInput{}, err
+	}
+	return runtimeservice.RecordRuntimeArtifactRefInput{JobID: jobID, SlotID: slotID, ArtifactRef: ref, Meta: meta}, nil
+}
+
+// ListRuntimeArtifactRefsInput maps artifact reference list filters.
+func ListRuntimeArtifactRefsInput(request *runtimev1.ListRuntimeArtifactRefsRequest) (runtimeservice.ListRuntimeArtifactRefsInput, error) {
+	if request == nil {
+		return runtimeservice.ListRuntimeArtifactRefsInput{}, errs.ErrInvalidArgument
+	}
+	result := runtimeservice.ListRuntimeArtifactRefsInput{Page: pageRequestFromProto(request.GetPage())}
+	jobID, err := optionalUUIDPtr(request.GetJobId())
+	if err != nil {
+		return runtimeservice.ListRuntimeArtifactRefsInput{}, err
+	}
+	result.JobID = jobID
+	slotID, err := optionalUUIDPtr(request.GetSlotId())
+	if err != nil {
+		return runtimeservice.ListRuntimeArtifactRefsInput{}, err
+	}
+	result.SlotID = slotID
+	artifactTypes, err := runtimeArtifactTypesFromProto(request.GetArtifactTypes())
+	if err != nil {
+		return runtimeservice.ListRuntimeArtifactRefsInput{}, err
+	}
+	result.ArtifactTypes = artifactTypes
+	meta, err := QueryMetaFromProto(request.GetMeta())
+	if err != nil {
+		return runtimeservice.ListRuntimeArtifactRefsInput{}, err
+	}
+	result.Meta = meta
+	return result, nil
+}
+
 func repeatedUUIDs(values []string) ([]uuid.UUID, error) {
 	result := make([]uuid.UUID, len(values))
 	for index, value := range values {
@@ -350,15 +665,7 @@ func requiredIDAndQueryMeta(idText string, metaProto *runtimev1.QueryMeta) (uuid
 }
 
 func workspaceSourcesFromProto(sources []*runtimev1.WorkspaceSource) ([]value.WorkspaceSource, error) {
-	result := make([]value.WorkspaceSource, 0, len(sources))
-	for _, source := range sources {
-		mapped, err := workspaceSourceFromProto(source)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, mapped)
-	}
-	return result, nil
+	return repeatedEnumsFromProto(sources, workspaceSourceFromProto)
 }
 
 func workspaceSourceFromProto(source *runtimev1.WorkspaceSource) (value.WorkspaceSource, error) {
@@ -397,6 +704,30 @@ func workspaceSourceFromProto(source *runtimev1.WorkspaceSource) (value.Workspac
 	}, nil
 }
 
+func runtimeArtifactRefInputsFromProto(refs []*runtimev1.RuntimeArtifactRefInput) ([]runtimeservice.RuntimeArtifactRefInput, error) {
+	return repeatedEnumsFromProto(refs, runtimeArtifactRefInputFromProto)
+}
+
+func runtimeArtifactRefInputFromProto(ref *runtimev1.RuntimeArtifactRefInput) (runtimeservice.RuntimeArtifactRefInput, error) {
+	if ref == nil {
+		return runtimeservice.RuntimeArtifactRefInput{}, errs.ErrInvalidArgument
+	}
+	artifactType, err := RuntimeArtifactTypeFromProto(ref.GetArtifactType())
+	if err != nil {
+		return runtimeservice.RuntimeArtifactRefInput{}, err
+	}
+	metadata := []byte(strings.TrimSpace(ref.GetMetadataJson()))
+	if len(metadata) == 0 {
+		metadata = []byte(`{}`)
+	}
+	return runtimeservice.RuntimeArtifactRefInput{
+		ArtifactType: artifactType,
+		ExternalRef:  strings.TrimSpace(ref.GetExternalRef()),
+		Digest:       strings.TrimSpace(ref.GetDigest()),
+		MetadataJSON: metadata,
+	}, nil
+}
+
 func preferredFleetScopeID(constraints *runtimev1.PlacementConstraints) (*uuid.UUID, error) {
 	if constraints == nil {
 		return nil, nil
@@ -430,6 +761,18 @@ func workspaceMaterializationStatusesFromProto(statuses []runtimev1.WorkspaceMat
 
 func slotStatusesFromProto(statuses []runtimev1.SlotStatus) ([]enum.SlotStatus, error) {
 	return repeatedEnumsFromProto(statuses, SlotStatusFromProto)
+}
+
+func jobTypesFromProto(jobTypes []runtimev1.JobType) ([]enum.JobType, error) {
+	return repeatedEnumsFromProto(jobTypes, JobTypeFromProto)
+}
+
+func jobStatusesFromProto(statuses []runtimev1.JobStatus) ([]enum.JobStatus, error) {
+	return repeatedEnumsFromProto(statuses, JobStatusFromProto)
+}
+
+func runtimeArtifactTypesFromProto(artifactTypes []runtimev1.RuntimeArtifactType) ([]enum.RuntimeArtifactType, error) {
+	return repeatedEnumsFromProto(artifactTypes, RuntimeArtifactTypeFromProto)
 }
 
 func repeatedEnumsFromProto[Proto any, Domain any](statuses []Proto, convert func(Proto) (Domain, error)) ([]Domain, error) {

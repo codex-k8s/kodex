@@ -71,11 +71,7 @@ func (r *Repository) UpdateSlot(ctx context.Context, slot entity.Slot, previousV
 
 // GetSlot returns one slot by id.
 func (r *Repository) GetSlot(ctx context.Context, id uuid.UUID) (entity.Slot, error) {
-	slot, err := queryOne(ctx, r.db, querySlotGet, pgx.NamedArgs{"id": id}, scanSlot)
-	if err != nil {
-		return entity.Slot{}, wrapError(operationGetSlot, err)
-	}
-	return slot, nil
+	return getByID(ctx, r.db, id, querySlotGet, operationGetSlot, scanSlot)
 }
 
 // ListSlots returns slots matching the filter and page.

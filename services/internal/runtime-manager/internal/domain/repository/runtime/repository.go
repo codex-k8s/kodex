@@ -35,6 +35,22 @@ type Repository interface {
 	GetWorkspaceMaterialization(ctx context.Context, id uuid.UUID) (entity.WorkspaceMaterialization, error)
 	// ListWorkspaceMaterializations returns materialization attempts matching the filter and page.
 	ListWorkspaceMaterializations(ctx context.Context, filter query.WorkspaceMaterializationFilter) ([]entity.WorkspaceMaterialization, query.PageResult, error)
+	// CreateJob stores a new platform job, its event and command result atomically.
+	CreateJob(ctx context.Context, job entity.Job, event entity.OutboxEvent, result entity.CommandResult) error
+	// ClaimRunnableJob atomically leases one runnable job and stores its start event.
+	ClaimRunnableJob(ctx context.Context, filter query.JobClaimFilter, eventFactory JobEventFactory) (entity.Job, error)
+	// UpdateJob stores a job mutation, changed steps, artifact refs, optional event and command result atomically.
+	UpdateJob(ctx context.Context, job entity.Job, previousVersion int64, steps []entity.JobStep, refs []entity.RuntimeArtifactRef, event *entity.OutboxEvent, result entity.CommandResult) error
+	// GetJob returns one platform job by id.
+	GetJob(ctx context.Context, id uuid.UUID) (entity.Job, error)
+	// ListJobs returns platform jobs matching the filter and page.
+	ListJobs(ctx context.Context, filter query.JobFilter) ([]entity.Job, query.PageResult, error)
+	// RecordRuntimeArtifactRef stores one reference to an external runtime artifact.
+	RecordRuntimeArtifactRef(ctx context.Context, ref entity.RuntimeArtifactRef, result entity.CommandResult) error
+	// GetRuntimeArtifactRef returns one external runtime artifact reference by id.
+	GetRuntimeArtifactRef(ctx context.Context, id uuid.UUID) (entity.RuntimeArtifactRef, error)
+	// ListRuntimeArtifactRefs returns external runtime artifact references matching the filter and page.
+	ListRuntimeArtifactRefs(ctx context.Context, filter query.RuntimeArtifactRefFilter) ([]entity.RuntimeArtifactRef, query.PageResult, error)
 	// ClaimOutboxEvents leases unpublished outbox events for delivery.
 	ClaimOutboxEvents(ctx context.Context, limit int, now time.Time, lockedUntil time.Time) ([]entity.OutboxEvent, error)
 	// MarkOutboxEventPublished marks a leased outbox event as published.
@@ -54,3 +70,6 @@ type Clock interface {
 type IDGenerator interface {
 	New() uuid.UUID
 }
+
+// JobEventFactory builds the started event for the concrete job claimed inside repository transaction.
+type JobEventFactory func(entity.Job) (entity.OutboxEvent, error)

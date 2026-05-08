@@ -10,6 +10,7 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/accesscatalog"
 	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/errs"
+	runtimerepo "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/repository/runtime"
 	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/query"
@@ -257,6 +258,8 @@ func TestReserveSlotAuthorizesBeforeReplay(t *testing.T) {
 	repo := &fakeRepository{
 		slots:                     make(map[uuid.UUID]entity.Slot),
 		workspaceMaterializations: make(map[uuid.UUID]entity.WorkspaceMaterialization),
+		jobs:                      make(map[uuid.UUID]entity.Job),
+		runtimeArtifactRefs:       make(map[uuid.UUID]entity.RuntimeArtifactRef),
 		results:                   make(map[string]entity.CommandResult),
 	}
 	svc := NewWithConfig(repo, fixedClock{now: testNow}, &sequenceIDs{values: []uuid.UUID{mustUUID("00000000-0000-0000-0000-000000000209")}}, Config{
@@ -295,6 +298,8 @@ func newTestServiceWithAuthorizer(authorizer Authorizer) (*Service, *fakeReposit
 	repo := &fakeRepository{
 		slots:                     make(map[uuid.UUID]entity.Slot),
 		workspaceMaterializations: make(map[uuid.UUID]entity.WorkspaceMaterialization),
+		jobs:                      make(map[uuid.UUID]entity.Job),
+		runtimeArtifactRefs:       make(map[uuid.UUID]entity.RuntimeArtifactRef),
 		results:                   make(map[string]entity.CommandResult),
 	}
 	ids := &sequenceIDs{values: []uuid.UUID{
@@ -369,6 +374,8 @@ func (g *sequenceIDs) New() uuid.UUID {
 type fakeRepository struct {
 	slots                     map[uuid.UUID]entity.Slot
 	workspaceMaterializations map[uuid.UUID]entity.WorkspaceMaterialization
+	jobs                      map[uuid.UUID]entity.Job
+	runtimeArtifactRefs       map[uuid.UUID]entity.RuntimeArtifactRef
 	results                   map[string]entity.CommandResult
 	events                    []entity.OutboxEvent
 }
@@ -509,6 +516,134 @@ func (r *fakeRepository) ListSlots(context.Context, query.SlotFilter) ([]entity.
 		slots = append(slots, slot)
 	}
 	return slots, query.PageResult{}, nil
+}
+
+func (r *fakeRepository) CreateJob(_ context.Context, job entity.Job, event entity.OutboxEvent, result entity.CommandResult) error {
+	r.jobs[job.ID] = job
+	r.events = append(r.events, event)
+	r.results[result.Key] = result
+	return nil
+}
+
+func (r *fakeRepository) ClaimRunnableJob(_ context.Context, filter query.JobClaimFilter, eventFactory runtimerepo.JobEventFactory) (entity.Job, error) {
+	for id, job := range r.jobs {
+		if !runnableFakeJob(job, filter) {
+			continue
+		}
+		job.Status = enum.JobStatusClaimed
+		job.LeaseOwner = filter.LeaseOwner
+		job.LeaseTokenHash = filter.LeaseTokenHash
+		job.LeaseUntil = &filter.LeaseUntil
+		job.ClaimAttempt++
+		if job.StartedAt == nil {
+			job.StartedAt = &filter.Now
+		}
+		job.UpdatedAt = filter.Now
+		job.Version++
+		event, err := eventFactory(job)
+		if err != nil {
+			return entity.Job{}, err
+		}
+		r.jobs[id] = job
+		r.events = append(r.events, event)
+		return job, nil
+	}
+	return entity.Job{}, errs.ErrNotFound
+}
+
+func (r *fakeRepository) UpdateJob(_ context.Context, job entity.Job, previousVersion int64, steps []entity.JobStep, refs []entity.RuntimeArtifactRef, event *entity.OutboxEvent, result entity.CommandResult) error {
+	current, ok := r.jobs[job.ID]
+	if !ok {
+		return errs.ErrNotFound
+	}
+	if current.Version != previousVersion {
+		return errs.ErrConflict
+	}
+	job.Steps = replaceFakeSteps(current.Steps, steps)
+	r.jobs[job.ID] = job
+	for _, ref := range refs {
+		r.runtimeArtifactRefs[ref.ID] = ref
+	}
+	if event != nil {
+		r.events = append(r.events, *event)
+	}
+	r.results[result.Key] = result
+	return nil
+}
+
+func (r *fakeRepository) GetJob(_ context.Context, id uuid.UUID) (entity.Job, error) {
+	job, ok := r.jobs[id]
+	if !ok {
+		return entity.Job{}, errs.ErrNotFound
+	}
+	return job, nil
+}
+
+func (r *fakeRepository) ListJobs(context.Context, query.JobFilter) ([]entity.Job, query.PageResult, error) {
+	jobs := make([]entity.Job, 0, len(r.jobs))
+	for _, job := range r.jobs {
+		jobs = append(jobs, job)
+	}
+	return jobs, query.PageResult{}, nil
+}
+
+func (r *fakeRepository) RecordRuntimeArtifactRef(_ context.Context, ref entity.RuntimeArtifactRef, result entity.CommandResult) error {
+	r.runtimeArtifactRefs[ref.ID] = ref
+	r.results[result.Key] = result
+	return nil
+}
+
+func (r *fakeRepository) GetRuntimeArtifactRef(_ context.Context, id uuid.UUID) (entity.RuntimeArtifactRef, error) {
+	ref, ok := r.runtimeArtifactRefs[id]
+	if !ok {
+		return entity.RuntimeArtifactRef{}, errs.ErrNotFound
+	}
+	return ref, nil
+}
+
+func (r *fakeRepository) ListRuntimeArtifactRefs(context.Context, query.RuntimeArtifactRefFilter) ([]entity.RuntimeArtifactRef, query.PageResult, error) {
+	refs := make([]entity.RuntimeArtifactRef, 0, len(r.runtimeArtifactRefs))
+	for _, ref := range r.runtimeArtifactRefs {
+		refs = append(refs, ref)
+	}
+	return refs, query.PageResult{}, nil
+}
+
+func runnableFakeJob(job entity.Job, filter query.JobClaimFilter) bool {
+	if len(filter.JobTypes) > 0 {
+		found := false
+		for _, jobType := range filter.JobTypes {
+			if job.JobType == jobType {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	if filter.FleetScopeID != nil && !sameUUIDPtr(job.FleetScopeID, filter.FleetScopeID) {
+		return false
+	}
+	return job.Status == enum.JobStatusPending || ((job.Status == enum.JobStatusClaimed || job.Status == enum.JobStatusRunning) && job.LeaseUntil != nil && !job.LeaseUntil.After(filter.Now))
+}
+
+func replaceFakeSteps(current []entity.JobStep, updates []entity.JobStep) []entity.JobStep {
+	result := append([]entity.JobStep(nil), current...)
+	for _, update := range updates {
+		replaced := false
+		for index := range result {
+			if result[index].StepKey == update.StepKey {
+				result[index] = update
+				replaced = true
+				break
+			}
+		}
+		if !replaced {
+			result = append(result, update)
+		}
+	}
+	return result
 }
 
 type denyAuthorizer struct{}
