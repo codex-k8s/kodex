@@ -254,10 +254,41 @@ func requireStringList(items []string, requireNonEmpty bool) error {
 
 func requireManifestDigest(expected string, payload []byte) error {
 	expected = strings.TrimSpace(expected)
-	sum := sha256.Sum256(payload)
-	actual := "sha256:" + hex.EncodeToString(sum[:])
+	actual := sha256Digest(payload)
 	if expected != actual {
 		return errs.ErrInvalidArgument
 	}
 	return nil
+}
+
+type packageInstallationRequirements struct {
+	RuntimeRequirementDigest string
+	SecretBindingStatus      enum.PackageSecretBindingStatus
+}
+
+func packageInstallationRequirementsFromManifest(payload []byte) (packageInstallationRequirements, error) {
+	var document packageManifestDocument
+	if err := json.Unmarshal(payload, &document); err != nil {
+		return packageInstallationRequirements{}, errs.ErrInvalidArgument
+	}
+	result := packageInstallationRequirements{SecretBindingStatus: enum.PackageSecretBindingStatusNotRequired}
+	for _, secret := range document.Secrets {
+		if secret.Required {
+			result.SecretBindingStatus = enum.PackageSecretBindingStatusMissing
+			break
+		}
+	}
+	if document.Runtime != nil && document.Runtime.Required {
+		runtimePayload, err := json.Marshal(document.Runtime)
+		if err != nil {
+			return packageInstallationRequirements{}, err
+		}
+		result.RuntimeRequirementDigest = sha256Digest(runtimePayload)
+	}
+	return result, nil
+}
+
+func sha256Digest(payload []byte) string {
+	sum := sha256.Sum256(payload)
+	return "sha256:" + hex.EncodeToString(sum[:])
 }

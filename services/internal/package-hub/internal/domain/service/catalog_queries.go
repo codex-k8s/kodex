@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/value"
 )
@@ -138,6 +139,49 @@ func (s *Service) GetPackageManifest(ctx context.Context, packageVersionID uuid.
 	return s.repository.GetLatestManifestSnapshot(ctx, packageVersionID)
 }
 
+func (s *Service) GetPackageInstallation(ctx context.Context, id uuid.UUID, meta value.QueryMeta) (entity.PackageInstallation, error) {
+	return readAuthorized(ctx, s, id, meta, packageActionInstallationRead, s.repository.GetPackageInstallation, installationResource)
+}
+
+func (s *Service) ListPackageInstallations(ctx context.Context, input ListPackageInstallationsInput) (ListPackageInstallationsResult, error) {
+	if err := requireOptionalInstallationScope(input.Scope); err != nil {
+		return ListPackageInstallationsResult{}, err
+	}
+	if err := requireOptionalID(input.PackageID); err != nil {
+		return ListPackageInstallationsResult{}, err
+	}
+	if input.PackageKind != nil {
+		if err := requirePackageKind(*input.PackageKind); err != nil {
+			return ListPackageInstallationsResult{}, err
+		}
+	}
+	if input.InstallationStatus != nil {
+		if err := requireInstallationStatus(*input.InstallationStatus); err != nil {
+			return ListPackageInstallationsResult{}, err
+		}
+	}
+	if input.SecretBindingStatus != nil {
+		if err := requireSecretBindingStatus(*input.SecretBindingStatus); err != nil {
+			return ListPackageInstallationsResult{}, err
+		}
+	}
+	if err := s.authorizeQuery(ctx, input.Meta, packageActionInstallationRead, listInstallationsResource(input.Scope)); err != nil {
+		return ListPackageInstallationsResult{}, err
+	}
+	installations, page, err := s.repository.ListPackageInstallations(ctx, query.PackageInstallationFilter{
+		Scope:               input.Scope,
+		PackageID:           input.PackageID,
+		PackageKind:         input.PackageKind,
+		InstallationStatus:  input.InstallationStatus,
+		SecretBindingStatus: input.SecretBindingStatus,
+		Page:                input.Page,
+	})
+	if err != nil {
+		return ListPackageInstallationsResult{}, err
+	}
+	return ListPackageInstallationsResult{Installations: installations, Page: page}, nil
+}
+
 func sourceResource(source entity.PackageSource) resourceRef {
 	if source.OrganizationID != nil {
 		return organizationScopedResource(packageResourceSource, source.ID.String(), source.OrganizationID.String())
@@ -194,6 +238,30 @@ func (s *Service) packageResourceForEntry(ctx context.Context, entry entity.Pack
 
 func (s *Service) versionVerificationResource(ctx context.Context, version entity.PackageVersion) (resourceRef, error) {
 	return s.packageResourceByID(ctx, version.PackageID, packageResourceVersion, version.ID.String())
+}
+
+func installationResource(installation entity.PackageInstallation) resourceRef {
+	return scopedInstallationResource(installation.ID.String(), installation.Scope)
+}
+
+func listInstallationsResource(scope *value.ScopeRef) resourceRef {
+	if scope == nil {
+		return globalResource(packageResourceInstallation)
+	}
+	return scopedInstallationResource("", *scope)
+}
+
+func scopedInstallationResource(id string, scope value.ScopeRef) resourceRef {
+	switch scope.Type {
+	case enum.PackageInstallationScopeTypeOrganization:
+		return organizationScopedResource(packageResourceInstallation, id, scope.Ref)
+	case enum.PackageInstallationScopeTypeProject:
+		return resourceRef{Type: packageResourceInstallation, ID: id, ScopeType: packageScopeProject, ScopeID: scope.Ref}
+	case enum.PackageInstallationScopeTypeRepository:
+		return resourceRef{Type: packageResourceInstallation, ID: id, ScopeType: packageScopeRepository, ScopeID: scope.Ref}
+	default:
+		return globalResourceWithID(packageResourceInstallation, id)
+	}
 }
 
 func readAuthorized[T any](

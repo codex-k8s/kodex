@@ -42,36 +42,37 @@ type Repository struct {
 }
 
 const (
-	operationCreateManifestSnapshot    = "domain.Repository.CreateManifestSnapshot"
-	operationCreatePackage             = "domain.Repository.CreatePackage"
-	operationCreatePackageInstallation = "domain.Repository.CreatePackageInstallation"
-	operationCreatePackageSecretSchema = "domain.Repository.CreatePackageSecretSchema"
-	operationCreatePackageSource       = "domain.Repository.CreatePackageSource"
-	operationCreatePackageSourceResult = "domain.Repository.CreatePackageSourceWithResult"
-	operationCreatePackageVersion      = "domain.Repository.CreatePackageVersion"
-	operationCreatePricingMetadata     = "domain.Repository.CreatePricingMetadata"
-	operationGetCommandResult          = "domain.Repository.GetCommandResult"
-	operationGetLatestManifest         = "domain.Repository.GetLatestManifestSnapshot"
-	operationGetLatestSecretSchema     = "domain.Repository.GetLatestPackageSecretSchema"
-	operationGetPackage                = "domain.Repository.GetPackage"
-	operationGetPackageInstallation    = "domain.Repository.GetPackageInstallation"
-	operationGetPackageSource          = "domain.Repository.GetPackageSource"
-	operationGetPackageVersion         = "domain.Repository.GetPackageVersion"
-	operationGetPricingMetadata        = "domain.Repository.GetPricingMetadata"
-	operationListPackageInstallations  = "domain.Repository.ListPackageInstallations"
-	operationListPackageSources        = "domain.Repository.ListPackageSources"
-	operationListPackageVerifications  = "domain.Repository.ListPackageVerifications"
-	operationListPackageVersions       = "domain.Repository.ListPackageVersions"
-	operationListPackages              = "domain.Repository.ListPackages"
-	operationOutboxClaim               = "domain.Repository.ClaimOutboxEvents"
-	operationOutboxMarkFailed          = "domain.Repository.MarkOutboxEventFailed"
-	operationOutboxMarkPermanent       = "domain.Repository.MarkOutboxEventPermanentlyFailed"
-	operationOutboxMarkPublished       = "domain.Repository.MarkOutboxEventPublished"
-	operationSetPackageVerification    = "domain.Repository.SetPackageVerification"
-	operationSyncAvailableCatalog      = "domain.Repository.SyncAvailableCatalog"
-	operationUpdatePackageInstallation = "domain.Repository.UpdatePackageInstallation"
-	operationUpdatePackageSourceResult = "domain.Repository.UpdatePackageSourceWithResult"
-	operationUpdatePricingMetadata     = "domain.Repository.UpdatePricingMetadata"
+	operationCreateManifestSnapshot          = "domain.Repository.CreateManifestSnapshot"
+	operationCreatePackage                   = "domain.Repository.CreatePackage"
+	operationCreatePackageInstallation       = "domain.Repository.CreatePackageInstallation"
+	operationCreatePackageInstallationResult = "domain.Repository.CreatePackageInstallationWithResult"
+	operationCreatePackageSecretSchema       = "domain.Repository.CreatePackageSecretSchema"
+	operationCreatePackageSource             = "domain.Repository.CreatePackageSource"
+	operationCreatePackageSourceResult       = "domain.Repository.CreatePackageSourceWithResult"
+	operationCreatePackageVersion            = "domain.Repository.CreatePackageVersion"
+	operationCreatePricingMetadata           = "domain.Repository.CreatePricingMetadata"
+	operationGetCommandResult                = "domain.Repository.GetCommandResult"
+	operationGetLatestManifest               = "domain.Repository.GetLatestManifestSnapshot"
+	operationGetLatestSecretSchema           = "domain.Repository.GetLatestPackageSecretSchema"
+	operationGetPackage                      = "domain.Repository.GetPackage"
+	operationGetPackageInstallation          = "domain.Repository.GetPackageInstallation"
+	operationGetPackageSource                = "domain.Repository.GetPackageSource"
+	operationGetPackageVersion               = "domain.Repository.GetPackageVersion"
+	operationGetPricingMetadata              = "domain.Repository.GetPricingMetadata"
+	operationListPackageInstallations        = "domain.Repository.ListPackageInstallations"
+	operationListPackageSources              = "domain.Repository.ListPackageSources"
+	operationListPackageVerifications        = "domain.Repository.ListPackageVerifications"
+	operationListPackageVersions             = "domain.Repository.ListPackageVersions"
+	operationListPackages                    = "domain.Repository.ListPackages"
+	operationOutboxClaim                     = "domain.Repository.ClaimOutboxEvents"
+	operationOutboxMarkFailed                = "domain.Repository.MarkOutboxEventFailed"
+	operationOutboxMarkPermanent             = "domain.Repository.MarkOutboxEventPermanentlyFailed"
+	operationOutboxMarkPublished             = "domain.Repository.MarkOutboxEventPublished"
+	operationSetPackageVerification          = "domain.Repository.SetPackageVerification"
+	operationSyncAvailableCatalog            = "domain.Repository.SyncAvailableCatalog"
+	operationUpdatePackageInstallation       = "domain.Repository.UpdatePackageInstallation"
+	operationUpdatePackageSourceResult       = "domain.Repository.UpdatePackageSourceWithResult"
+	operationUpdatePricingMetadata           = "domain.Repository.UpdatePricingMetadata"
 )
 
 func NewRepository(db *pgxpool.Pool) *Repository {
@@ -84,11 +85,7 @@ func (r *Repository) CreatePackageSource(ctx context.Context, source entity.Pack
 }
 
 func (r *Repository) CreatePackageSourceWithResult(ctx context.Context, source entity.PackageSource, result entity.CommandResult, event entity.OutboxEvent) error {
-	return r.mutate(ctx, operationCreatePackageSourceResult,
-		affectedMutation(queryPackageSourceCreate, packageSourceArgs(source)),
-		commandResultMutation(result),
-		outboxEventMutation(event),
-	)
+	return r.createWithResult(ctx, operationCreatePackageSourceResult, queryPackageSourceCreate, packageSourceArgs(source), result, event)
 }
 
 func (r *Repository) GetPackageSource(ctx context.Context, id uuid.UUID) (entity.PackageSource, error) {
@@ -286,6 +283,10 @@ func (r *Repository) CreatePackageInstallation(ctx context.Context, installation
 	return wrapError(operationCreatePackageInstallation, err)
 }
 
+func (r *Repository) CreatePackageInstallationWithResult(ctx context.Context, installation entity.PackageInstallation, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.createWithResult(ctx, operationCreatePackageInstallationResult, queryPackageInstallationCreate, packageInstallationArgs(installation), result, event)
+}
+
 func (r *Repository) UpdatePackageInstallation(ctx context.Context, installation entity.PackageInstallation, previousVersion int64) error {
 	return r.runAffected(ctx, operationUpdatePackageInstallation, queryPackageInstallationUpdate, packageInstallationUpdateArgs(installation, previousVersion))
 }
@@ -390,6 +391,14 @@ func (r *Repository) runAffected(ctx context.Context, operation string, queryTex
 }
 
 type mutation = postgreslib.Mutation
+
+func (r *Repository) createWithResult(ctx context.Context, operation string, queryText string, args pgx.NamedArgs, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.mutate(ctx, operation,
+		affectedMutation(queryText, args),
+		commandResultMutation(result),
+		outboxEventMutation(event),
+	)
+}
 
 func (r *Repository) mutate(ctx context.Context, operation string, mutations ...mutation) error {
 	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {

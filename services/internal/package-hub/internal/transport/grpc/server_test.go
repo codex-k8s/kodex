@@ -67,6 +67,30 @@ func TestConnectPackageSourceReturnsSourceResponse(t *testing.T) {
 	}
 }
 
+func TestRequestPackageInstallationReturnsInstallationResponse(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.NewString()
+	packageID := uuid.New()
+	versionID := uuid.New()
+	scopeRef := uuid.NewString()
+	response, err := NewServer(fakePackageService{}).RequestPackageInstallation(context.Background(), &packagesv1.RequestPackageInstallationRequest{
+		Meta:             &packagesv1.CommandMeta{CommandId: &commandID, Actor: &packagesv1.Actor{Type: "user", Id: "owner"}},
+		PackageId:        packageID.String(),
+		PackageVersionId: versionID.String(),
+		Scope: &packagesv1.ScopeRef{
+			Type: packagesv1.PackageInstallationScopeType_PACKAGE_INSTALLATION_SCOPE_TYPE_PROJECT,
+			Ref:  scopeRef,
+		},
+	})
+	if err != nil {
+		t.Fatalf("RequestPackageInstallation(): %v", err)
+	}
+	if response.GetInstallation().GetPackageId() != packageID.String() || response.GetInstallation().GetScope().GetRef() != scopeRef {
+		t.Fatalf("installation response = %+v, want package %s scope %s", response.GetInstallation(), packageID, scopeRef)
+	}
+}
+
 type fakePackageService struct {
 	packageID uuid.UUID
 }
@@ -143,6 +167,28 @@ func (fakePackageService) ListPackageVersions(context.Context, packageservice.Li
 
 func (fakePackageService) GetPackageManifest(context.Context, uuid.UUID, value.QueryMeta) (entity.PackageManifestSnapshot, error) {
 	return entity.PackageManifestSnapshot{}, nil
+}
+
+func (fakePackageService) RequestPackageInstallation(_ context.Context, input packageservice.RequestPackageInstallationInput) (entity.PackageInstallation, error) {
+	now := time.Date(2026, 5, 7, 16, 0, 0, 0, time.UTC)
+	return entity.PackageInstallation{
+		VersionedBase:       entity.VersionedBase{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		PackageID:           input.PackageID,
+		PackageVersionID:    input.PackageVersionID,
+		Scope:               input.Scope,
+		InstallationStatus:  enum.PackageInstallationStatusRequested,
+		DesiredState:        enum.PackageDesiredStatePresent,
+		SecretBindingStatus: enum.PackageSecretBindingStatusMissing,
+		LastHealthStatus:    enum.PackageHealthStatusUnknown,
+	}, nil
+}
+
+func (fakePackageService) GetPackageInstallation(context.Context, uuid.UUID, value.QueryMeta) (entity.PackageInstallation, error) {
+	return entity.PackageInstallation{}, nil
+}
+
+func (fakePackageService) ListPackageInstallations(context.Context, packageservice.ListPackageInstallationsInput) (packageservice.ListPackageInstallationsResult, error) {
+	return packageservice.ListPackageInstallationsResult{}, nil
 }
 
 func (fakePackageService) SetPackageVerification(context.Context, packageservice.SetPackageVerificationInput) (packageservice.SetPackageVerificationResult, error) {

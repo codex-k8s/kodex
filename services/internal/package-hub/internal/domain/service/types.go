@@ -118,6 +118,29 @@ type ListPackageVersionsResult struct {
 	Page     value.PageResult
 }
 
+type RequestPackageInstallationInput struct {
+	PackageID        uuid.UUID
+	PackageVersionID uuid.UUID
+	Scope            value.ScopeRef
+	DesiredState     *enum.PackageDesiredState
+	Meta             value.CommandMeta
+}
+
+type ListPackageInstallationsInput struct {
+	Scope               *value.ScopeRef
+	PackageID           *uuid.UUID
+	PackageKind         *enum.PackageKind
+	InstallationStatus  *enum.PackageInstallationStatus
+	SecretBindingStatus *enum.PackageSecretBindingStatus
+	Page                value.PageRequest
+	Meta                value.QueryMeta
+}
+
+type ListPackageInstallationsResult struct {
+	Installations []entity.PackageInstallation
+	Page          value.PageResult
+}
+
 type SetPackageVerificationInput struct {
 	PackageVersionID   uuid.UUID
 	VerificationStatus enum.PackageVerificationStatus

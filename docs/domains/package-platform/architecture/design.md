@@ -5,8 +5,8 @@ title: kodex — дизайн домена пакетной платформы
 status: active
 owner_role: SA
 created_at: 2026-05-06
-updated_at: 2026-05-07
-related_issues: [642, 655, 678, 680]
+updated_at: 2026-05-08
+related_issues: [642, 655, 678, 680, 684]
 related_prs: []
 related_adrs: []
 approvals:
@@ -112,10 +112,10 @@ sequenceDiagram
   participant P as package-hub
   participant R as runtime-manager
   UI->>G: POST /package-installations
-  G->>P: InstallPackage(command)
+  G->>P: RequestPackageInstallation(command)
   P->>A: CheckAccess(package.install)
   A-->>P: allow
-  P->>P: validate manifest, scope, secrets
+  P->>P: validate package, version, manifest and scope
   P->>P: persist installation + outbox
   P-->>G: installation pending/active
   P-->>R: package.installation.requested event

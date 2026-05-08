@@ -7,6 +7,7 @@ import (
 
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/enum"
+	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/value"
 )
 
 func requireID(id uuid.UUID) error {
@@ -112,6 +113,56 @@ func requireSourceRefKind(kind enum.PackageVersionSourceRefKind) error {
 func requireReleaseStatus(status enum.PackageReleaseStatus) error {
 	switch status {
 	case enum.PackageReleaseStatusActive, enum.PackageReleaseStatusDeprecated, enum.PackageReleaseStatusRevoked, enum.PackageReleaseStatusBlocked:
+		return nil
+	default:
+		return errs.ErrInvalidArgument
+	}
+}
+
+func requireInstallationScope(scope value.ScopeRef) error {
+	if err := requireInstallationScopeType(scope.Type); err != nil {
+		return err
+	}
+	return requireText(scope.Ref)
+}
+
+func requireOptionalInstallationScope(scope *value.ScopeRef) error {
+	if scope == nil {
+		return nil
+	}
+	return requireInstallationScope(*scope)
+}
+
+func requireInstallationScopeType(scopeType enum.PackageInstallationScopeType) error {
+	switch scopeType {
+	case enum.PackageInstallationScopeTypePlatform, enum.PackageInstallationScopeTypeOrganization, enum.PackageInstallationScopeTypeProject, enum.PackageInstallationScopeTypeRepository:
+		return nil
+	default:
+		return errs.ErrInvalidArgument
+	}
+}
+
+func requireInstallationStatus(status enum.PackageInstallationStatus) error {
+	switch status {
+	case enum.PackageInstallationStatusRequested, enum.PackageInstallationStatusActive, enum.PackageInstallationStatusDisabled, enum.PackageInstallationStatusFailed, enum.PackageInstallationStatusUninstalled:
+		return nil
+	default:
+		return errs.ErrInvalidArgument
+	}
+}
+
+func requireDesiredState(state enum.PackageDesiredState) error {
+	switch state {
+	case enum.PackageDesiredStatePresent, enum.PackageDesiredStateAbsent, enum.PackageDesiredStateSuspended:
+		return nil
+	default:
+		return errs.ErrInvalidArgument
+	}
+}
+
+func requireSecretBindingStatus(status enum.PackageSecretBindingStatus) error {
+	switch status {
+	case enum.PackageSecretBindingStatusNotRequired, enum.PackageSecretBindingStatusMissing, enum.PackageSecretBindingStatusComplete, enum.PackageSecretBindingStatusInvalid:
 		return nil
 	default:
 		return errs.ErrInvalidArgument

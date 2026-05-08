@@ -35,6 +35,9 @@ type packageService interface {
 	GetPackageVersion(context.Context, uuid.UUID, value.QueryMeta) (entity.PackageVersion, error)
 	ListPackageVersions(context.Context, packageservice.ListPackageVersionsInput) (packageservice.ListPackageVersionsResult, error)
 	GetPackageManifest(context.Context, uuid.UUID, value.QueryMeta) (entity.PackageManifestSnapshot, error)
+	RequestPackageInstallation(context.Context, packageservice.RequestPackageInstallationInput) (entity.PackageInstallation, error)
+	GetPackageInstallation(context.Context, uuid.UUID, value.QueryMeta) (entity.PackageInstallation, error)
+	ListPackageInstallations(context.Context, packageservice.ListPackageInstallationsInput) (packageservice.ListPackageInstallationsResult, error)
 	SetPackageVerification(context.Context, packageservice.SetPackageVerificationInput) (packageservice.SetPackageVerificationResult, error)
 }
 
@@ -106,6 +109,21 @@ func (server *Server) GetPackageManifest(ctx context.Context, request *packagesv
 	return grpcserver.HandleUnary(ctx, request, grpccasters.GetPackageManifestInput, server.getPackageManifest, grpccasters.PackageManifestResponse)
 }
 
+// RequestPackageInstallation records an installation intent for a package version and scope.
+func (server *Server) RequestPackageInstallation(ctx context.Context, request *packagesv1.RequestPackageInstallationRequest) (*packagesv1.PackageInstallationResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.RequestPackageInstallationInput, server.service.RequestPackageInstallation, grpccasters.PackageInstallationResponse)
+}
+
+// GetPackageInstallation returns one authoritative installation state.
+func (server *Server) GetPackageInstallation(ctx context.Context, request *packagesv1.GetPackageInstallationRequest) (*packagesv1.PackageInstallationResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.GetPackageInstallationInput, server.getPackageInstallation, grpccasters.PackageInstallationResponse)
+}
+
+// ListPackageInstallations returns installations visible in the requested scope.
+func (server *Server) ListPackageInstallations(ctx context.Context, request *packagesv1.ListPackageInstallationsRequest) (*packagesv1.ListPackageInstallationsResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.ListPackageInstallationsInput, server.service.ListPackageInstallations, grpccasters.ListPackageInstallationsResponse)
+}
+
 // SetPackageVerification records a verification decision for a version.
 func (server *Server) SetPackageVerification(ctx context.Context, request *packagesv1.SetPackageVerificationRequest) (*packagesv1.PackageVerificationResponse, error) {
 	return grpcserver.HandleUnary(ctx, request, grpccasters.SetPackageVerificationInput, server.service.SetPackageVerification, grpccasters.PackageVerificationResponse)
@@ -125,4 +143,8 @@ func (server *Server) getPackageVersion(ctx context.Context, input grpccasters.I
 
 func (server *Server) getPackageManifest(ctx context.Context, input grpccasters.IDQueryInput) (entity.PackageManifestSnapshot, error) {
 	return server.service.GetPackageManifest(ctx, input.ID, input.Meta)
+}
+
+func (server *Server) getPackageInstallation(ctx context.Context, input grpccasters.IDQueryInput) (entity.PackageInstallation, error) {
+	return server.service.GetPackageInstallation(ctx, input.ID, input.Meta)
 }

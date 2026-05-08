@@ -48,6 +48,14 @@ func PackageManifestResponse(snapshot entity.PackageManifestSnapshot) *packagesv
 	return &packagesv1.PackageManifestResponse{Manifest: PackageManifestSnapshot(snapshot)}
 }
 
+func PackageInstallationResponse(installation entity.PackageInstallation) *packagesv1.PackageInstallationResponse {
+	return &packagesv1.PackageInstallationResponse{Installation: PackageInstallation(installation)}
+}
+
+func ListPackageInstallationsResponse(result service.ListPackageInstallationsResult) *packagesv1.ListPackageInstallationsResponse {
+	return &packagesv1.ListPackageInstallationsResponse{Items: mapProto(result.Installations, PackageInstallation), Page: pageResponseToProto(result.Page)}
+}
+
 func PackageVerificationResponse(result service.SetPackageVerificationResult) *packagesv1.PackageVerificationResponse {
 	return &packagesv1.PackageVerificationResponse{Verification: PackageVerification(result.Verification), Version: PackageVersion(result.Version)}
 }
@@ -122,6 +130,30 @@ func PackageManifestSnapshot(snapshot entity.PackageManifestSnapshot) *packagesv
 		ValidationStatus:     ManifestValidationStatusToProto(snapshot.ValidationStatus),
 		ValidationErrorsJson: string(snapshot.ValidationErrors),
 		CreatedAt:            formatTime(snapshot.CreatedAt),
+	}
+}
+
+func PackageInstallation(installation entity.PackageInstallation) *packagesv1.PackageInstallation {
+	return &packagesv1.PackageInstallation{
+		Id:                       installation.ID.String(),
+		PackageId:                installation.PackageID.String(),
+		PackageVersionId:         installation.PackageVersionID.String(),
+		Scope:                    ScopeRef(installation.Scope),
+		InstallationStatus:       InstallationStatusToProto(installation.InstallationStatus),
+		DesiredState:             DesiredStateToProto(installation.DesiredState),
+		RuntimeRequirementDigest: optionalStringPtr(installation.RuntimeRequirementDigest),
+		SecretBindingStatus:      SecretBindingStatusToProto(installation.SecretBindingStatus),
+		LastHealthStatus:         HealthStatusToProto(installation.LastHealthStatus),
+		Version:                  installation.Version,
+		CreatedAt:                formatTime(installation.CreatedAt),
+		UpdatedAt:                formatTime(installation.UpdatedAt),
+	}
+}
+
+func ScopeRef(scope value.ScopeRef) *packagesv1.ScopeRef {
+	return &packagesv1.ScopeRef{
+		Type: InstallationScopeTypeToProto(scope.Type),
+		Ref:  scope.Ref,
 	}
 }
 
