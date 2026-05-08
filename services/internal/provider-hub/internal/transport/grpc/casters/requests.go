@@ -216,6 +216,93 @@ func ListRelationshipsInput(request *providersv1.ListRelationshipsRequest) (prov
 	}, nil
 }
 
+// EnqueueReconciliationInput maps a gRPC request to the domain command input.
+func EnqueueReconciliationInput(request *providersv1.EnqueueReconciliationRequest) (providerservice.EnqueueReconciliationInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return providerservice.EnqueueReconciliationInput{}, err
+	}
+	scopeType, err := syncCursorScopeFromProto(request.GetScopeType())
+	if err != nil {
+		return providerservice.EnqueueReconciliationInput{}, err
+	}
+	artifactKinds, err := syncArtifactKindsFromProto(request.GetArtifactKinds())
+	if err != nil {
+		return providerservice.EnqueueReconciliationInput{}, err
+	}
+	priority, err := syncCursorPriorityFromProto(request.GetPriority())
+	if err != nil {
+		return providerservice.EnqueueReconciliationInput{}, err
+	}
+	return providerservice.EnqueueReconciliationInput{
+		ProviderSlug:  providerSlug(request.GetProviderSlug()),
+		ScopeType:     scopeType,
+		ScopeRef:      strings.TrimSpace(request.GetScopeRef()),
+		ArtifactKinds: artifactKinds,
+		Priority:      priority,
+		Meta:          meta,
+	}, nil
+}
+
+// RunReconciliationBatchInput maps a gRPC request to the domain command input.
+func RunReconciliationBatchInput(request *providersv1.RunReconciliationBatchRequest) (providerservice.RunReconciliationBatchInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return providerservice.RunReconciliationBatchInput{}, err
+	}
+	syncCursorID, err := optionalUUIDPtr(request.GetSyncCursorId())
+	if err != nil {
+		return providerservice.RunReconciliationBatchInput{}, err
+	}
+	return providerservice.RunReconciliationBatchInput{
+		SyncCursorID: syncCursorID,
+		ProviderSlug: providerSlug(request.GetProviderSlug()),
+		MaxItems:     request.GetMaxItems(),
+		LeaseOwner:   strings.TrimSpace(request.GetLeaseOwner()),
+		Meta:         meta,
+	}, nil
+}
+
+// GetSyncCursorInput maps a gRPC request to the domain read input.
+func GetSyncCursorInput(request *providersv1.GetSyncCursorRequest) (providerservice.GetSyncCursorInput, error) {
+	id, meta, err := metaAndRequiredUUID(request.GetMeta(), request.GetSyncCursorId(), QueryMetaFromProto)
+	input := providerservice.GetSyncCursorInput{SyncCursorID: id, Meta: meta}
+	return input, err
+}
+
+// ListSyncCursorsInput maps a gRPC request to the domain read input.
+func ListSyncCursorsInput(request *providersv1.ListSyncCursorsRequest) (providerservice.ListSyncCursorsInput, error) {
+	meta, err := QueryMetaFromProto(request.GetMeta())
+	if err != nil {
+		return providerservice.ListSyncCursorsInput{}, err
+	}
+	var scopeType enum.SyncCursorScopeType
+	if request.ScopeType != nil {
+		scopeType, err = optionalSyncCursorScopeFromProto(request.GetScopeType())
+		if err != nil {
+			return providerservice.ListSyncCursorsInput{}, err
+		}
+	}
+	artifactKinds, err := syncArtifactKindsFromProto(request.GetArtifactKinds())
+	if err != nil {
+		return providerservice.ListSyncCursorsInput{}, err
+	}
+	priorities, err := syncCursorPrioritiesFromProto(request.GetPriorities())
+	if err != nil {
+		return providerservice.ListSyncCursorsInput{}, err
+	}
+	return providerservice.ListSyncCursorsInput{
+		ProviderSlug:   providerSlug(request.GetProviderSlug()),
+		ScopeType:      scopeType,
+		ScopeRef:       strings.TrimSpace(request.GetScopeRef()),
+		ArtifactKinds:  artifactKinds,
+		Priorities:     priorities,
+		IncludeHealthy: request.GetIncludeHealthy(),
+		Page:           pageRequestFromProto(request.GetPage()),
+		Meta:           meta,
+	}, nil
+}
+
 // GetProviderAccountRuntimeStateInput maps a gRPC request to the domain read input.
 func GetProviderAccountRuntimeStateInput(request *providersv1.GetProviderAccountRuntimeStateRequest) (providerservice.GetProviderAccountRuntimeStateInput, error) {
 	meta, err := QueryMetaFromProto(request.GetMeta())

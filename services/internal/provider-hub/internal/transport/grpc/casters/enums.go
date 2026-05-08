@@ -74,6 +74,19 @@ var relationshipConfidenceLevels = map[providersv1.RelationshipConfidence]enum.R
 	providersv1.RelationshipConfidence_RELATIONSHIP_CONFIDENCE_SUSPECTED: enum.RelationshipConfidenceSuspected,
 }
 
+var syncCursorScopes = map[providersv1.SyncCursorScopeType]enum.SyncCursorScopeType{
+	providersv1.SyncCursorScopeType_SYNC_CURSOR_SCOPE_TYPE_REPOSITORY:     enum.SyncCursorScopeRepository,
+	providersv1.SyncCursorScopeType_SYNC_CURSOR_SCOPE_TYPE_ORGANIZATION:   enum.SyncCursorScopeOrganization,
+	providersv1.SyncCursorScopeType_SYNC_CURSOR_SCOPE_TYPE_WORK_ITEM:      enum.SyncCursorScopeWorkItem,
+	providersv1.SyncCursorScopeType_SYNC_CURSOR_SCOPE_TYPE_PACKAGE_SOURCE: enum.SyncCursorScopePackageSource,
+}
+
+var syncCursorPriorities = map[providersv1.SyncCursorPriority]enum.SyncCursorPriority{
+	providersv1.SyncCursorPriority_SYNC_CURSOR_PRIORITY_HOT:  enum.SyncCursorPriorityHot,
+	providersv1.SyncCursorPriority_SYNC_CURSOR_PRIORITY_WARM: enum.SyncCursorPriorityWarm,
+	providersv1.SyncCursorPriority_SYNC_CURSOR_PRIORITY_COLD: enum.SyncCursorPriorityCold,
+}
+
 var operationTypes = map[providersv1.ProviderOperationType]enum.ProviderOperationType{
 	providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_ISSUE:         enum.ProviderOperationCreateIssue,
 	providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_ISSUE:         enum.ProviderOperationUpdateIssue,
@@ -164,6 +177,100 @@ func relationshipConfidenceLevelsFromProto(levels []providersv1.RelationshipConf
 
 func RelationshipConfidenceToProto(level enum.RelationshipConfidence) providersv1.RelationshipConfidence {
 	return enumToProto(level, providersv1.RelationshipConfidence_RELATIONSHIP_CONFIDENCE_UNSPECIFIED, invertEnum(relationshipConfidenceLevels))
+}
+
+func syncCursorScopeFromProto(scope providersv1.SyncCursorScopeType) (enum.SyncCursorScopeType, error) {
+	if scope == providersv1.SyncCursorScopeType_SYNC_CURSOR_SCOPE_TYPE_UNSPECIFIED {
+		return "", errs.ErrInvalidArgument
+	}
+	mapped, ok := syncCursorScopes[scope]
+	if !ok {
+		return "", errs.ErrInvalidArgument
+	}
+	return mapped, nil
+}
+
+func optionalSyncCursorScopeFromProto(scope providersv1.SyncCursorScopeType) (enum.SyncCursorScopeType, error) {
+	if scope == providersv1.SyncCursorScopeType_SYNC_CURSOR_SCOPE_TYPE_UNSPECIFIED {
+		return "", nil
+	}
+	return syncCursorScopeFromProto(scope)
+}
+
+func SyncCursorScopeToProto(scope enum.SyncCursorScopeType) providersv1.SyncCursorScopeType {
+	return enumToProto(scope, providersv1.SyncCursorScopeType_SYNC_CURSOR_SCOPE_TYPE_UNSPECIFIED, invertEnum(syncCursorScopes))
+}
+
+func syncArtifactKindsFromProto(kinds []providersv1.SyncArtifactKind) ([]enum.SyncArtifactKind, error) {
+	if len(kinds) == 0 {
+		return nil, nil
+	}
+	result := make([]enum.SyncArtifactKind, 0, len(kinds))
+	for index := range kinds {
+		mapped, err := syncArtifactKindFromProto(kinds[index])
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, mapped)
+	}
+	return result, nil
+}
+
+func syncArtifactKindFromProto(kind providersv1.SyncArtifactKind) (enum.SyncArtifactKind, error) {
+	switch kind {
+	case providersv1.SyncArtifactKind_SYNC_ARTIFACT_KIND_ISSUE:
+		return enum.SyncArtifactIssue, nil
+	case providersv1.SyncArtifactKind_SYNC_ARTIFACT_KIND_PULL_REQUEST:
+		return enum.SyncArtifactPullRequest, nil
+	case providersv1.SyncArtifactKind_SYNC_ARTIFACT_KIND_MERGE_REQUEST:
+		return enum.SyncArtifactMergeRequest, nil
+	case providersv1.SyncArtifactKind_SYNC_ARTIFACT_KIND_COMMENT:
+		return enum.SyncArtifactComment, nil
+	case providersv1.SyncArtifactKind_SYNC_ARTIFACT_KIND_RELATIONSHIP:
+		return enum.SyncArtifactRelationship, nil
+	case providersv1.SyncArtifactKind_SYNC_ARTIFACT_KIND_REPOSITORY:
+		return enum.SyncArtifactRepository, nil
+	default:
+		return "", errs.ErrInvalidArgument
+	}
+}
+
+func SyncArtifactKindToProto(kind enum.SyncArtifactKind) providersv1.SyncArtifactKind {
+	switch kind {
+	case enum.SyncArtifactIssue:
+		return providersv1.SyncArtifactKind_SYNC_ARTIFACT_KIND_ISSUE
+	case enum.SyncArtifactPullRequest:
+		return providersv1.SyncArtifactKind_SYNC_ARTIFACT_KIND_PULL_REQUEST
+	case enum.SyncArtifactMergeRequest:
+		return providersv1.SyncArtifactKind_SYNC_ARTIFACT_KIND_MERGE_REQUEST
+	case enum.SyncArtifactComment:
+		return providersv1.SyncArtifactKind_SYNC_ARTIFACT_KIND_COMMENT
+	case enum.SyncArtifactRelationship:
+		return providersv1.SyncArtifactKind_SYNC_ARTIFACT_KIND_RELATIONSHIP
+	case enum.SyncArtifactRepository:
+		return providersv1.SyncArtifactKind_SYNC_ARTIFACT_KIND_REPOSITORY
+	default:
+		return providersv1.SyncArtifactKind_SYNC_ARTIFACT_KIND_UNSPECIFIED
+	}
+}
+
+func syncCursorPriorityFromProto(priority providersv1.SyncCursorPriority) (enum.SyncCursorPriority, error) {
+	if priority == providersv1.SyncCursorPriority_SYNC_CURSOR_PRIORITY_UNSPECIFIED {
+		return "", errs.ErrInvalidArgument
+	}
+	mapped, ok := syncCursorPriorities[priority]
+	if !ok {
+		return "", errs.ErrInvalidArgument
+	}
+	return mapped, nil
+}
+
+func syncCursorPrioritiesFromProto(priorities []providersv1.SyncCursorPriority) ([]enum.SyncCursorPriority, error) {
+	return enumsFromProto(priorities, providersv1.SyncCursorPriority_SYNC_CURSOR_PRIORITY_UNSPECIFIED, syncCursorPriorities)
+}
+
+func SyncCursorPriorityToProto(priority enum.SyncCursorPriority) providersv1.SyncCursorPriority {
+	return enumToProto(priority, providersv1.SyncCursorPriority_SYNC_CURSOR_PRIORITY_UNSPECIFIED, invertEnum(syncCursorPriorities))
 }
 
 func operationTypesFromProto(types []providersv1.ProviderOperationType) ([]enum.ProviderOperationType, error) {

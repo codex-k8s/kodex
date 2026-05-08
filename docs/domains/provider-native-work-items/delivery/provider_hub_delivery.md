@@ -5,7 +5,7 @@ title: kodex — поставка provider-hub
 status: active
 owner_role: EM
 created_at: 2026-05-06
-updated_at: 2026-05-07
+updated_at: 2026-05-08
 related_issues: [281, 282]
 related_prs: []
 related_docsets:
@@ -47,7 +47,9 @@ approvals:
 | PRV-3 | Операционное состояние внешних аккаунтов у провайдера, интерфейс клиента провайдера, GitHub-адаптер, лимиты и журнал операций готовы. |
 | PRV-4 | Журнал webhook, дедупликация, нормализация GitHub-событий и публикация базовых `provider.*` событий готовы. |
 | PRV-5 | Проекции `Issue`, `PR/MR`, комментариев, review-сигналов, watermark и provider relationships готовы. |
-| PRV-6 | Инкрементальная сверка, `sync_cursor`, приоритеты `hot/warm/cold`, drift status и ускоряющие сигналы готовы. |
+| PRV-6.1 | Очередь сверки, `sync_cursor`, приоритеты `hot/warm/cold`, чтение курсоров и короткая аренда курсора для worker готовы. |
+| PRV-6.2 | Инкрементальная batch-сверка GitHub по курсорам, окнам перекрытия, лимитному бюджету и drift status готова. |
+| PRV-6.3 | Ускоряющие сигналы от agent-manager/MCP и slot-агентов готовы. |
 | PRV-7 | Платформенные provider-операции для agent-manager/MCP готовы с аудитом и идемпотентностью. |
 | PRV-8 | Provider-часть empty repository bootstrap и existing repository adoption готова; содержательное сканирование и отчёт по существующему репозиторию остаются агентной работой через workspace. |
 | PRV-9 | Kubernetes-манифесты, БД, migration job, metrics, alerts, runbook и smoke-путь готовы. |
@@ -60,7 +62,7 @@ approvals:
 |---|---|---|
 | Приём webhook | Готово: `IngestWebhookEvent`, чтение, список и повторная обработка. | Реализовано в PRV-4: входящий журнал, дедупликация по `provider_slug + delivery_id`, базовая нормализация GitHub-событий, статусы обработки и outbox-события `provider.webhook.received` / `provider.webhook.normalized`. Публичный HTTP webhook endpoint остаётся ответственностью будущего `integration-gateway`. |
 | Проекции артефактов провайдера | Готово: чтение рабочих артефактов, комментариев и связей. | Реализовано в PRV-5: запись проекций `Issue`, `PR/MR`, комментариев и review-сигналов при нормализации webhook, разбор watermark, связи из watermark, чтение по provider ref и списочные gRPC-операции. |
-| Сверка | Готово: сигналы, очередь сверки, batch-обработка и курсоры. | Не начата; будет в PRV-6. |
+| Сверка | Готово: сигналы, очередь сверки, batch-обработка и курсоры. | Частично реализовано в PRV-6.1: доменная модель `sync_cursor`, постановка области в очередь, чтение, список и короткая аренда курсора. Реальная batch-сверка провайдера, drift status и ускоряющие сигналы остаются в PRV-6.2/PRV-6.3. |
 | Операции провайдера | Готово: создание и обновление `Issue`, комментариев, `PR/MR`, review-сигналов и связей. | Не начата; будет в PRV-7 после согласования `agent-manager` и MCP-инструментов. |
 | Операционное состояние аккаунта и лимиты | Готово: состояние аккаунта у провайдера, снимки лимитов и журнал операций. | Реализовано в PRV-3: доменная логика, PostgreSQL-репозиторий, gRPC-чтение/запись снимков лимитов, базовый GitHub-адаптер для проверки лимитов. Фильтры по проекту и организации в списке операционных состояний остаются контрактным заделом до подключения разрешения внешних аккаунтов через `access-manager`. |
 | Первичная инициализация пустого репозитория | Готово на уровне событий bootstrap required/completed и операций провайдера. | Запись в провайдера и зеркало оставлены до PRV-8; решение о составе первичных артефактов приходит из проектного и агентного контура. |
@@ -97,9 +99,12 @@ approvals:
 - построение provider relationships из watermark-полей `source_ref`, `parent_ref` и `next_ref` с пересборкой текущего watermark-набора при свежем обновлении;
 - gRPC-чтение проекций через `GetWorkItemProjection`, `FindWorkItemByProviderRef`, `ListWorkItemProjections`, `ListComments` и `ListRelationships`;
 - публикация локальных outbox-событий `provider.work_item.synced`, `provider.comment.synced` и `provider.relationship.synced`;
+- очередь сверки через `EnqueueReconciliation`, `GetSyncCursor`, `ListSyncCursors` и базовый lease-путь `RunReconciliationBatch` без обращения к внешнему provider API;
+- идемпотентная постановка сверки по `provider_slug + scope_type + scope_ref + idempotency_key`: повтор той же команды не меняет курсоры, а повтор с другим составом запроса возвращает конфликт;
+- PostgreSQL-хранение курсоров сверки с естественным ключом `provider_slug + scope_type + scope_ref + artifact_kind`, пакетной атомарной постановкой нескольких `artifact_kind`, сохранением более высокого приоритета при новой постановке и защитой lease через `FOR UPDATE SKIP LOCKED`;
 - штатный outbox dispatcher `provider-hub` в `platform-event-log`.
 
-Ограничение среза: сверка, ускоряющие сигналы, команды записи в провайдера, bootstrap/adoption и эксплуатационный контур пока остаются `Unimplemented`. Реализация этих операций добавляется в PRV-6..PRV-9 вместе с соответствующей доменной логикой. Kubernetes-манифесты, создание БД в deploy-контуре, migration job, alerts и runbook остаются в PRV-9.
+Ограничение среза: PRV-6.1 только ставит курсоры в очередь, отдаёт их на чтение и выдаёт короткую аренду worker. Он не читает GitHub API, не продвигает `cursor_value`, не публикует `provider.sync_cursor.advanced` и не выставляет итоговый drift status. Реальная batch-сверка провайдера будет добавлена в PRV-6.2, ускоряющие сигналы — в PRV-6.3. Команды записи в провайдера, bootstrap/adoption и эксплуатационный контур пока остаются `Unimplemented`. Kubernetes-манифесты, создание БД в deploy-контуре, migration job, alerts и runbook остаются в PRV-9.
 
 Архитектурное исключение среза: вспомогательные функции gRPC caster остаются локальными в `provider-hub`, потому что вынос общего transport-пакета требует согласованного изменения `access-manager`, `project-catalog` и текущего сервиса. Это не должно копироваться в новые сервисы; отдельный малый срез перед следующим доменом должен вынести общую часть в `libs/go/**` и перевести существующие сервисы.
 

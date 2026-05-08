@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -168,6 +169,67 @@ func scanRelationship(row postgreslib.RowScanner) (entity.ProviderRelationship, 
 	return relationship, err
 }
 
+func scanSyncCursor(row postgreslib.RowScanner) (entity.SyncCursor, error) {
+	var cursor entity.SyncCursor
+	var providerSlug, scopeType, artifactKind, priority string
+	var overlapSince, lastSuccessAt, lastCheckedAt, leaseUntil pgtype.Timestamptz
+	var budget []byte
+	err := row.Scan(
+		&cursor.ID,
+		&providerSlug,
+		&scopeType,
+		&cursor.ScopeRef,
+		&artifactKind,
+		&cursor.CursorValue,
+		&overlapSince,
+		&priority,
+		&lastSuccessAt,
+		&lastCheckedAt,
+		&cursor.LastError,
+		&budget,
+		&cursor.LeaseOwner,
+		&leaseUntil,
+		&cursor.Version,
+		&cursor.CreatedAt,
+		&cursor.UpdatedAt,
+	)
+	cursor.ProviderSlug = enum.ProviderSlug(providerSlug)
+	cursor.ScopeType = enum.SyncCursorScopeType(scopeType)
+	cursor.ArtifactKind = enum.SyncArtifactKind(artifactKind)
+	cursor.OverlapSince = timePtrFromPG(overlapSince)
+	cursor.Priority = enum.SyncCursorPriority(priority)
+	cursor.LastSuccessAt = timePtrFromPG(lastSuccessAt)
+	cursor.LastCheckedAt = timePtrFromPG(lastCheckedAt)
+	cursor.RateBudgetStateJSON = append(cursor.RateBudgetStateJSON[:0], budget...)
+	cursor.LeaseUntil = timePtrFromPG(leaseUntil)
+	return cursor, err
+}
+
+func scanReconciliationRequest(row postgreslib.RowScanner) (entity.ReconciliationRequest, error) {
+	var request entity.ReconciliationRequest
+	var providerSlug, scopeType, priority string
+	var artifactKinds []byte
+	if err := row.Scan(
+		&request.ID,
+		&providerSlug,
+		&scopeType,
+		&request.ScopeRef,
+		&request.IdempotencyKey,
+		&artifactKinds,
+		&priority,
+		&request.CreatedAt,
+		&request.UpdatedAt,
+	); err != nil {
+		return request, err
+	}
+	request.ProviderSlug = enum.ProviderSlug(providerSlug)
+	request.ScopeType = enum.SyncCursorScopeType(scopeType)
+	request.Priority = enum.SyncCursorPriority(priority)
+	kinds, err := scanArtifactKinds(artifactKinds)
+	request.ArtifactKinds = kinds
+	return request, err
+}
+
 func scanLimitSnapshot(row postgreslib.RowScanner) (entity.ProviderLimitSnapshot, error) {
 	var snapshot entity.ProviderLimitSnapshot
 	var providerSlug, source string
@@ -190,6 +252,18 @@ func scanLimitSnapshot(row postgreslib.RowScanner) (entity.ProviderLimitSnapshot
 	snapshot.ResetAt = timePtrFromPG(resetAt)
 	snapshot.Source = enum.ProviderLimitSource(source)
 	return snapshot, err
+}
+
+func scanArtifactKinds(payload []byte) ([]enum.SyncArtifactKind, error) {
+	var raw []string
+	if err := json.Unmarshal(payload, &raw); err != nil {
+		return nil, err
+	}
+	result := make([]enum.SyncArtifactKind, 0, len(raw))
+	for _, value := range raw {
+		result = append(result, enum.SyncArtifactKind(value))
+	}
+	return result, nil
 }
 
 func scanProviderOperation(row postgreslib.RowScanner) (entity.ProviderOperation, error) {

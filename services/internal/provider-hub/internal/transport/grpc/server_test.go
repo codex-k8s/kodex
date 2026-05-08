@@ -79,6 +79,30 @@ func TestIngestWebhookEventMapsRequestAndResponse(t *testing.T) {
 	}
 }
 
+func TestEnqueueReconciliationMapsRequestAndResponse(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.NewString()
+	response, err := NewServer(fakeService{}).EnqueueReconciliation(context.Background(), &providersv1.EnqueueReconciliationRequest{
+		ProviderSlug:  "github",
+		ScopeType:     providersv1.SyncCursorScopeType_SYNC_CURSOR_SCOPE_TYPE_REPOSITORY,
+		ScopeRef:      "codex-k8s/kodex",
+		ArtifactKinds: []providersv1.SyncArtifactKind{providersv1.SyncArtifactKind_SYNC_ARTIFACT_KIND_ISSUE},
+		Priority:      providersv1.SyncCursorPriority_SYNC_CURSOR_PRIORITY_HOT,
+		Meta:          &providersv1.CommandMeta{CommandId: &commandID, RequestId: "req-1"},
+	})
+	if err != nil {
+		t.Fatalf("EnqueueReconciliation(): %v", err)
+	}
+	if len(response.GetSyncCursors()) != 1 {
+		t.Fatalf("sync cursors = %d, want 1", len(response.GetSyncCursors()))
+	}
+	cursor := response.GetSyncCursors()[0]
+	if cursor.GetScopeRef() != "codex-k8s/kodex" || cursor.GetArtifactKind() != providersv1.SyncArtifactKind_SYNC_ARTIFACT_KIND_ISSUE {
+		t.Fatalf("cursor = %+v, want issue cursor", cursor)
+	}
+}
+
 func TestGetWorkItemProjectionMapsRequestAndResponse(t *testing.T) {
 	t.Parallel()
 
@@ -241,6 +265,67 @@ func (fakeService) ListRelationships(context.Context, providerservice.ListRelati
 		}},
 		Page: query.PageResult{},
 	}, nil
+}
+
+func (fakeService) EnqueueReconciliation(_ context.Context, input providerservice.EnqueueReconciliationInput) (providerservice.EnqueueReconciliationResult, error) {
+	now := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	cursors := make([]entity.SyncCursor, 0, len(input.ArtifactKinds))
+	for _, artifactKind := range input.ArtifactKinds {
+		cursors = append(cursors, entity.SyncCursor{
+			Base:                entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+			ProviderSlug:        input.ProviderSlug,
+			ScopeType:           input.ScopeType,
+			ScopeRef:            input.ScopeRef,
+			ArtifactKind:        artifactKind,
+			Priority:            input.Priority,
+			RateBudgetStateJSON: []byte(`{}`),
+		})
+	}
+	return providerservice.EnqueueReconciliationResult{SyncCursors: cursors}, nil
+}
+
+func (fakeService) RunReconciliationBatch(_ context.Context, input providerservice.RunReconciliationBatchInput) (providerservice.RunReconciliationBatchResult, error) {
+	now := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	cursorID := uuid.New()
+	if input.SyncCursorID != nil {
+		cursorID = *input.SyncCursorID
+	}
+	leaseUntil := now.Add(30 * time.Second)
+	return providerservice.RunReconciliationBatchResult{
+		SyncCursor: entity.SyncCursor{
+			Base:                entity.Base{ID: cursorID, Version: 2, CreatedAt: now, UpdatedAt: now},
+			ProviderSlug:        enum.ProviderSlugGitHub,
+			ScopeType:           enum.SyncCursorScopeRepository,
+			ScopeRef:            "codex-k8s/kodex",
+			ArtifactKind:        enum.SyncArtifactIssue,
+			Priority:            enum.SyncCursorPriorityHot,
+			LastCheckedAt:       &now,
+			RateBudgetStateJSON: []byte(`{}`),
+			LeaseOwner:          input.LeaseOwner,
+			LeaseUntil:          &leaseUntil,
+		},
+	}, nil
+}
+
+func (fakeService) GetSyncCursor(_ context.Context, input providerservice.GetSyncCursorInput) (entity.SyncCursor, error) {
+	now := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	return entity.SyncCursor{
+		Base:                entity.Base{ID: input.SyncCursorID, Version: 1, CreatedAt: now, UpdatedAt: now},
+		ProviderSlug:        enum.ProviderSlugGitHub,
+		ScopeType:           enum.SyncCursorScopeRepository,
+		ScopeRef:            "codex-k8s/kodex",
+		ArtifactKind:        enum.SyncArtifactIssue,
+		Priority:            enum.SyncCursorPriorityHot,
+		RateBudgetStateJSON: []byte(`{}`),
+	}, nil
+}
+
+func (fakeService) ListSyncCursors(context.Context, providerservice.ListSyncCursorsInput) (providerservice.ListSyncCursorsResult, error) {
+	cursor, err := fakeService{}.GetSyncCursor(context.Background(), providerservice.GetSyncCursorInput{SyncCursorID: uuid.New()})
+	if err != nil {
+		return providerservice.ListSyncCursorsResult{}, err
+	}
+	return providerservice.ListSyncCursorsResult{SyncCursors: []entity.SyncCursor{cursor}, Page: query.PageResult{}}, nil
 }
 
 func (fakeService) ListWebhookEvents(context.Context, providerservice.ListWebhookEventsInput) (providerservice.ListWebhookEventsResult, error) {

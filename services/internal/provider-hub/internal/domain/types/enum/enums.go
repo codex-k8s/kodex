@@ -110,6 +110,37 @@ const (
 	RelationshipConfidenceSuspected RelationshipConfidence = "suspected"
 )
 
+// SyncCursorScopeType classifies reconciliation scope.
+type SyncCursorScopeType string
+
+const (
+	SyncCursorScopeRepository    SyncCursorScopeType = "repository"
+	SyncCursorScopeOrganization  SyncCursorScopeType = "organization"
+	SyncCursorScopeWorkItem      SyncCursorScopeType = "work_item"
+	SyncCursorScopePackageSource SyncCursorScopeType = "package_source"
+)
+
+// SyncArtifactKind classifies artifacts reconciled by a cursor.
+type SyncArtifactKind string
+
+const (
+	SyncArtifactIssue        SyncArtifactKind = "issue"
+	SyncArtifactPullRequest  SyncArtifactKind = "pull_request"
+	SyncArtifactMergeRequest SyncArtifactKind = "merge_request"
+	SyncArtifactComment      SyncArtifactKind = "comment"
+	SyncArtifactRelationship SyncArtifactKind = "relationship"
+	SyncArtifactRepository   SyncArtifactKind = "repository"
+)
+
+// SyncCursorPriority classifies reconciliation urgency.
+type SyncCursorPriority string
+
+const (
+	SyncCursorPriorityHot  SyncCursorPriority = "hot"
+	SyncCursorPriorityWarm SyncCursorPriority = "warm"
+	SyncCursorPriorityCold SyncCursorPriority = "cold"
+)
+
 // ProviderOperationType classifies commands executed through provider-hub.
 type ProviderOperationType string
 

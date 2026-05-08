@@ -5,7 +5,7 @@ title: kodex — API-контракт provider-hub
 status: active
 owner_role: SA
 created_at: 2026-05-06
-updated_at: 2026-05-07
+updated_at: 2026-05-08
 related_issues: [281, 282]
 related_prs: []
 approvals:
@@ -61,8 +61,8 @@ approvals:
 | Операция | Назначение | Вызывает | Идемпотентность |
 |---|---|---|---|
 | `RegisterProviderArtifactSignal` | Ускоряющий сигнал от slot-агента или agent-manager. | MCP, `agent-manager` | По signal id или provider ref + окно времени. |
-| `EnqueueReconciliation` | Поставить область в очередь сверки. | Админский контур, сервисы-владельцы | По scope + idempotency key. |
-| `RunReconciliationBatch` | Выполнить пачку сверки. | `worker` по поручению домена | Lease на `SyncCursor`. |
+| `EnqueueReconciliation` | Поставить область в очередь сверки. | Админский контур, сервисы-владельцы | По `provider_slug + scope_type + scope_ref + idempotency_key`; `idempotency_key` обязателен. |
+| `RunReconciliationBatch` | Выполнить пачку сверки. | `worker` по поручению домена | Lease на `SyncCursor`; `max_items` должен быть положительным и не выше сервисного лимита. |
 | `GetSyncCursor` | Прочитать состояние курсора. | Операторский контур | Read-only. |
 | `ListSyncCursors` | Список курсоров и drift status. | Операторский контур | Read-only. |
 

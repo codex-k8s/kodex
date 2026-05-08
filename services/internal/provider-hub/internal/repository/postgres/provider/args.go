@@ -1,11 +1,15 @@
 package provider
 
 import (
+	"encoding/json"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
+	providerrepo "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/repository/provider"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/value"
 )
@@ -19,6 +23,11 @@ type pageQueryArgs struct {
 	args       pgx.NamedArgs
 	limit      int32
 	nextOffset int32
+}
+
+func allRowsArgs(args pgx.NamedArgs, expectedRows int) pageQueryArgs {
+	limit := int32(expectedRows)
+	return pageQueryArgs{args: args, limit: limit, nextOffset: limit}
 }
 
 func accountRuntimeStateArgs(state entity.ProviderAccountRuntimeState) pgx.NamedArgs {
@@ -218,6 +227,89 @@ func relationshipFilterArgs(filter query.RelationshipFilter) pageQueryArgs {
 		"sources":                 postgreslib.StringValues(filter.Sources),
 		"confidence_levels":       postgreslib.StringValues(filter.ConfidenceLevels),
 	})
+}
+
+func reconciliationRequestArgs(request entity.ReconciliationRequest) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"id":                  request.ID,
+		"provider_slug":       string(request.ProviderSlug),
+		"scope_type":          string(request.ScopeType),
+		"scope_ref":           request.ScopeRef,
+		"idempotency_key":     request.IdempotencyKey,
+		"artifact_kinds_json": artifactKindsJSON(request.ArtifactKinds),
+		"priority":            string(request.Priority),
+		"created_at":          request.CreatedAt,
+		"updated_at":          request.UpdatedAt,
+	}
+}
+
+func syncCursorsBatchArgs(cursors []entity.SyncCursor) pgx.NamedArgs {
+	ids := make([]uuid.UUID, 0, len(cursors))
+	artifactKinds := make([]enum.SyncArtifactKind, 0, len(cursors))
+	var first entity.SyncCursor
+	if len(cursors) > 0 {
+		first = cursors[0]
+	}
+	for _, cursor := range cursors {
+		ids = append(ids, cursor.ID)
+		artifactKinds = append(artifactKinds, cursor.ArtifactKind)
+	}
+	return withBaseArgs(first.Base, pgx.NamedArgs{
+		"ids":                    ids,
+		"provider_slug":          string(first.ProviderSlug),
+		"scope_type":             string(first.ScopeType),
+		"scope_ref":              first.ScopeRef,
+		"artifact_kinds":         postgreslib.StringValues(artifactKinds),
+		"cursor_value":           first.CursorValue,
+		"overlap_since":          postgreslib.NullableTime(first.OverlapSince),
+		"priority":               string(first.Priority),
+		"last_success_at":        postgreslib.NullableTime(first.LastSuccessAt),
+		"last_checked_at":        postgreslib.NullableTime(first.LastCheckedAt),
+		"last_error":             first.LastError,
+		"rate_budget_state_json": jsonPayloadOrDefault(first.RateBudgetStateJSON, "{}"),
+		"lease_owner":            first.LeaseOwner,
+		"lease_until":            postgreslib.NullableTime(first.LeaseUntil),
+	})
+}
+
+func syncCursorRequestLookupArgs(request entity.ReconciliationRequest) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"provider_slug":   string(request.ProviderSlug),
+		"scope_type":      string(request.ScopeType),
+		"scope_ref":       request.ScopeRef,
+		"idempotency_key": request.IdempotencyKey,
+		"artifact_kinds":  postgreslib.StringValues(request.ArtifactKinds),
+	}
+}
+
+func syncCursorFilterArgs(filter query.SyncCursorFilter) pageQueryArgs {
+	return withPage(filter.Page, pgx.NamedArgs{
+		"provider_slug":   string(filter.ProviderSlug),
+		"scope_type":      string(filter.ScopeType),
+		"scope_ref":       filter.ScopeRef,
+		"artifact_kinds":  postgreslib.StringValues(filter.ArtifactKinds),
+		"priorities":      postgreslib.StringValues(filter.Priorities),
+		"include_healthy": filter.IncludeHealthy,
+	})
+}
+
+func syncCursorClaimArgs(claim providerrepo.SyncCursorClaim) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"id":            postgreslib.NullableUUID(claim.ID),
+		"provider_slug": string(claim.ProviderSlug),
+		"lease_owner":   claim.LeaseOwner,
+		"now":           claim.Now,
+		"lease_until":   claim.LeaseUntil,
+	}
+}
+
+func artifactKindsJSON(kinds []enum.SyncArtifactKind) string {
+	values := postgreslib.StringValues(kinds)
+	payload, err := json.Marshal(values)
+	if err != nil {
+		panic(err)
+	}
+	return string(payload)
 }
 
 func limitSnapshotArgs(snapshot entity.ProviderLimitSnapshot) pgx.NamedArgs {

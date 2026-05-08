@@ -476,6 +476,125 @@ func TestGetWorkItemProjectionDelegatesToRepository(t *testing.T) {
 	}
 }
 
+func TestEnqueueReconciliationCreatesCursorsForUniqueArtifacts(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 7, 13, 0, 0, 0, time.UTC)
+	issueCursorID := uuid.New()
+	prCursorID := uuid.New()
+	repository := &fakeRepository{}
+	requestID := uuid.New()
+	service := NewWithRuntime(repository, fixedClock{now: now}, &sequenceIDs{ids: []uuid.UUID{requestID, issueCursorID, prCursorID}})
+
+	result, err := service.EnqueueReconciliation(context.Background(), EnqueueReconciliationInput{
+		ProviderSlug:  enum.ProviderSlugGitHub,
+		ScopeType:     enum.SyncCursorScopeRepository,
+		ScopeRef:      " codex-k8s/kodex ",
+		ArtifactKinds: []enum.SyncArtifactKind{enum.SyncArtifactIssue, enum.SyncArtifactPullRequest, enum.SyncArtifactIssue},
+		Priority:      enum.SyncCursorPriorityHot,
+		Meta:          value.CommandMeta{IdempotencyKey: "repo-sync-1"},
+	})
+	if err != nil {
+		t.Fatalf("EnqueueReconciliation(): %v", err)
+	}
+	if len(result.SyncCursors) != 2 {
+		t.Fatalf("sync cursors = %d, want 2", len(result.SyncCursors))
+	}
+	if repository.reconciliationRequest.ID != requestID || repository.reconciliationRequest.IdempotencyKey != "repo-sync-1" {
+		t.Fatalf("request = %+v, want idempotent request %s", repository.reconciliationRequest, requestID)
+	}
+	if repository.enqueuedSyncCursors[0].ID != issueCursorID || repository.enqueuedSyncCursors[0].ScopeRef != "codex-k8s/kodex" {
+		t.Fatalf("first cursor = %+v, want trimmed scope and id %s", repository.enqueuedSyncCursors[0], issueCursorID)
+	}
+	if string(repository.enqueuedSyncCursors[0].RateBudgetStateJSON) != "{}" {
+		t.Fatalf("rate budget json = %s, want {}", repository.enqueuedSyncCursors[0].RateBudgetStateJSON)
+	}
+}
+
+func TestEnqueueReconciliationRejectsMissingCommandIdentity(t *testing.T) {
+	t.Parallel()
+
+	service := NewWithRuntime(&fakeRepository{}, fixedClock{now: time.Now()}, &sequenceIDs{ids: []uuid.UUID{uuid.New()}})
+	_, err := service.EnqueueReconciliation(context.Background(), EnqueueReconciliationInput{
+		ProviderSlug:  enum.ProviderSlugGitHub,
+		ScopeType:     enum.SyncCursorScopeRepository,
+		ScopeRef:      "codex-k8s/kodex",
+		ArtifactKinds: []enum.SyncArtifactKind{enum.SyncArtifactIssue},
+		Priority:      enum.SyncCursorPriorityHot,
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("EnqueueReconciliation() err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+}
+
+func TestEnqueueReconciliationRejectsMissingIdempotencyKey(t *testing.T) {
+	t.Parallel()
+
+	service := NewWithRuntime(&fakeRepository{}, fixedClock{now: time.Now()}, &sequenceIDs{ids: []uuid.UUID{uuid.New()}})
+	_, err := service.EnqueueReconciliation(context.Background(), EnqueueReconciliationInput{
+		ProviderSlug:  enum.ProviderSlugGitHub,
+		ScopeType:     enum.SyncCursorScopeRepository,
+		ScopeRef:      "codex-k8s/kodex",
+		ArtifactKinds: []enum.SyncArtifactKind{enum.SyncArtifactIssue},
+		Priority:      enum.SyncCursorPriorityHot,
+		Meta:          value.CommandMeta{CommandID: uuid.New()},
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("EnqueueReconciliation() err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+}
+
+func TestRunReconciliationBatchClaimsCursor(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 7, 13, 30, 0, 0, time.UTC)
+	cursorID := uuid.New()
+	repository := &fakeRepository{
+		syncCursor: entity.SyncCursor{
+			Base:         entity.Base{ID: cursorID, Version: 2},
+			ProviderSlug: enum.ProviderSlugGitHub,
+			ScopeType:    enum.SyncCursorScopeRepository,
+			ScopeRef:     "codex-k8s/kodex",
+			ArtifactKind: enum.SyncArtifactIssue,
+			Priority:     enum.SyncCursorPriorityHot,
+		},
+	}
+	service := NewWithRuntime(repository, fixedClock{now: now}, &sequenceIDs{ids: []uuid.UUID{uuid.New()}})
+
+	result, err := service.RunReconciliationBatch(context.Background(), RunReconciliationBatchInput{
+		SyncCursorID: &cursorID,
+		MaxItems:     50,
+		LeaseOwner:   "worker-1",
+		Meta:         value.CommandMeta{CommandID: uuid.New()},
+	})
+	if err != nil {
+		t.Fatalf("RunReconciliationBatch(): %v", err)
+	}
+	if result.SyncCursor.ID != cursorID {
+		t.Fatalf("leased cursor id = %s, want %s", result.SyncCursor.ID, cursorID)
+	}
+	if repository.syncCursorClaim.ID == nil || *repository.syncCursorClaim.ID != cursorID {
+		t.Fatalf("claim = %+v, want cursor id %s", repository.syncCursorClaim, cursorID)
+	}
+	if repository.syncCursorClaim.LeaseOwner != "worker-1" || !repository.syncCursorClaim.LeaseUntil.Equal(now.Add(syncCursorLeaseTTL)) {
+		t.Fatalf("claim = %+v, want lease owner and ttl", repository.syncCursorClaim)
+	}
+}
+
+func TestRunReconciliationBatchRejectsInvalidMaxItems(t *testing.T) {
+	t.Parallel()
+
+	service := NewWithRuntime(&fakeRepository{}, fixedClock{now: time.Now()}, &sequenceIDs{ids: []uuid.UUID{uuid.New()}})
+	_, err := service.RunReconciliationBatch(context.Background(), RunReconciliationBatchInput{
+		MaxItems:   0,
+		LeaseOwner: "worker-1",
+		Meta:       value.CommandMeta{CommandID: uuid.New()},
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("RunReconciliationBatch() err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+}
+
 type fakeRepository struct {
 	err                    error
 	calls                  int
@@ -489,6 +608,10 @@ type fakeRepository struct {
 	recordedOutboxEvents   []entity.OutboxEvent
 	workItemProjection     entity.ProviderWorkItemProjection
 	lastWorkItemLookup     query.ProviderTargetLookup
+	reconciliationRequest  entity.ReconciliationRequest
+	enqueuedSyncCursors    []entity.SyncCursor
+	syncCursor             entity.SyncCursor
+	syncCursorClaim        providerrepo.SyncCursorClaim
 }
 
 func (r *fakeRepository) Ping(context.Context) error {
@@ -549,6 +672,28 @@ func (r *fakeRepository) ListComments(context.Context, query.CommentProjectionFi
 
 func (r *fakeRepository) ListRelationships(context.Context, query.RelationshipFilter) ([]entity.ProviderRelationship, query.PageResult, error) {
 	return nil, query.PageResult{}, r.err
+}
+
+func (r *fakeRepository) EnqueueSyncCursors(_ context.Context, request entity.ReconciliationRequest, cursors []entity.SyncCursor) ([]entity.SyncCursor, error) {
+	r.reconciliationRequest = request
+	r.enqueuedSyncCursors = append(r.enqueuedSyncCursors, cursors...)
+	return cursors, r.err
+}
+
+func (r *fakeRepository) GetSyncCursor(context.Context, uuid.UUID) (entity.SyncCursor, error) {
+	return r.syncCursor, r.err
+}
+
+func (r *fakeRepository) ListSyncCursors(context.Context, query.SyncCursorFilter) ([]entity.SyncCursor, query.PageResult, error) {
+	if r.syncCursor.ID == uuid.Nil {
+		return nil, query.PageResult{}, r.err
+	}
+	return []entity.SyncCursor{r.syncCursor}, query.PageResult{}, r.err
+}
+
+func (r *fakeRepository) ClaimSyncCursor(_ context.Context, claim providerrepo.SyncCursorClaim) (entity.SyncCursor, error) {
+	r.syncCursorClaim = claim
+	return r.syncCursor, r.err
 }
 
 func (r *fakeRepository) GetAccountRuntimeState(context.Context, query.AccountRuntimeStateLookup) (entity.ProviderAccountRuntimeState, error) {

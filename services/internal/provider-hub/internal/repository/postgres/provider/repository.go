@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -162,6 +163,60 @@ func (r *Repository) ListRelationships(ctx context.Context, filter query.Relatio
 	return queryPage(ctx, r.db, operationListRelationships, queryRelationshipList, relationshipFilterArgs(filter), scanRelationship)
 }
 
+// EnqueueSyncCursors records one idempotent enqueue request and creates all requested cursors atomically.
+func (r *Repository) EnqueueSyncCursors(ctx context.Context, request entity.ReconciliationRequest, cursors []entity.SyncCursor) ([]entity.SyncCursor, error) {
+	var stored []entity.SyncCursor
+	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
+		inserted, err := queryOne(ctx, tx, operationEnqueueSyncCursors, queryReconciliationRequestInsert, reconciliationRequestArgs(request), scanReconciliationRequest)
+		if errors.Is(err, errs.ErrNotFound) {
+			replayed, replayErr := queryOne(ctx, tx, operationEnqueueSyncCursors, queryReconciliationRequestGetByIdentity, syncCursorRequestLookupArgs(request), scanReconciliationRequest)
+			if replayErr != nil {
+				return replayErr
+			}
+			if !sameReconciliationRequest(request, replayed) {
+				return errs.ErrConflict
+			}
+			existing, _, listErr := queryPage(ctx, tx, operationEnqueueSyncCursors, querySyncCursorListForRequest, allRowsArgs(syncCursorRequestLookupArgs(request), len(request.ArtifactKinds)), scanSyncCursor)
+			if listErr == nil && len(existing) != len(request.ArtifactKinds) {
+				return errs.ErrConflict
+			}
+			stored = existing
+			return listErr
+		}
+		if err != nil {
+			return err
+		}
+		if !sameReconciliationRequest(request, inserted) {
+			return errs.ErrConflict
+		}
+		upserted, _, upsertErr := queryPage(ctx, tx, operationEnqueueSyncCursors, querySyncCursorUpsertMany, allRowsArgs(syncCursorsBatchArgs(cursors), len(cursors)), scanSyncCursor)
+		if upsertErr == nil && len(upserted) != len(cursors) {
+			return errs.ErrConflict
+		}
+		stored = upserted
+		return upsertErr
+	})
+	if err != nil {
+		return nil, wrapError(operationEnqueueSyncCursors, err)
+	}
+	return stored, nil
+}
+
+// GetSyncCursor returns one reconciliation cursor by id.
+func (r *Repository) GetSyncCursor(ctx context.Context, id uuid.UUID) (entity.SyncCursor, error) {
+	return queryOne(ctx, r.db, operationGetSyncCursor, querySyncCursorGet, pgx.NamedArgs{"id": id}, scanSyncCursor)
+}
+
+// ListSyncCursors returns reconciliation cursors by supported filters.
+func (r *Repository) ListSyncCursors(ctx context.Context, filter query.SyncCursorFilter) ([]entity.SyncCursor, query.PageResult, error) {
+	return queryPage(ctx, r.db, operationListSyncCursors, querySyncCursorList, syncCursorFilterArgs(filter), scanSyncCursor)
+}
+
+// ClaimSyncCursor leases one due reconciliation cursor for a worker.
+func (r *Repository) ClaimSyncCursor(ctx context.Context, claim providerrepo.SyncCursorClaim) (entity.SyncCursor, error) {
+	return queryOne(ctx, r.db, operationClaimSyncCursor, querySyncCursorClaim, syncCursorClaimArgs(claim), scanSyncCursor)
+}
+
 // GetWebhookEvent returns a stored raw webhook by id.
 func (r *Repository) GetWebhookEvent(ctx context.Context, id uuid.UUID) (entity.WebhookEvent, error) {
 	return queryOne(ctx, r.db, operationGetWebhookEvent, queryWebhookEventGet, pgx.NamedArgs{"id": id}, scanWebhookEvent)
@@ -279,6 +334,10 @@ const (
 	operationListWorkItemProjections          = "domain.Repository.ListWorkItemProjections"
 	operationListComments                     = "domain.Repository.ListComments"
 	operationListRelationships                = "domain.Repository.ListRelationships"
+	operationEnqueueSyncCursors               = "domain.Repository.EnqueueSyncCursors"
+	operationGetSyncCursor                    = "domain.Repository.GetSyncCursor"
+	operationListSyncCursors                  = "domain.Repository.ListSyncCursors"
+	operationClaimSyncCursor                  = "domain.Repository.ClaimSyncCursor"
 	operationGetAccountRuntimeState           = "domain.Repository.GetAccountRuntimeState"
 	operationListAccountRuntimeStates         = "domain.Repository.ListAccountRuntimeStates"
 	operationUpsertAccountRuntimeState        = "domain.Repository.UpsertAccountRuntimeState"
@@ -335,6 +394,15 @@ func insertOutboxEvents(ctx context.Context, db execer, operation string, events
 		}
 	}
 	return nil
+}
+
+func sameReconciliationRequest(expected entity.ReconciliationRequest, actual entity.ReconciliationRequest) bool {
+	return expected.ProviderSlug == actual.ProviderSlug &&
+		expected.ScopeType == actual.ScopeType &&
+		expected.ScopeRef == actual.ScopeRef &&
+		expected.IdempotencyKey == actual.IdempotencyKey &&
+		expected.Priority == actual.Priority &&
+		slices.Equal(expected.ArtifactKinds, actual.ArtifactKinds)
 }
 
 type projectionUpdater interface {

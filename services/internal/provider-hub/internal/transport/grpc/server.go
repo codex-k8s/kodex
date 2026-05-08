@@ -23,6 +23,10 @@ type providerService interface {
 	ListWorkItemProjections(context.Context, providerservice.ListWorkItemProjectionsInput) (providerservice.ListWorkItemProjectionsResult, error)
 	ListComments(context.Context, providerservice.ListCommentsInput) (providerservice.ListCommentsResult, error)
 	ListRelationships(context.Context, providerservice.ListRelationshipsInput) (providerservice.ListRelationshipsResult, error)
+	EnqueueReconciliation(context.Context, providerservice.EnqueueReconciliationInput) (providerservice.EnqueueReconciliationResult, error)
+	RunReconciliationBatch(context.Context, providerservice.RunReconciliationBatchInput) (providerservice.RunReconciliationBatchResult, error)
+	GetSyncCursor(context.Context, providerservice.GetSyncCursorInput) (entity.SyncCursor, error)
+	ListSyncCursors(context.Context, providerservice.ListSyncCursorsInput) (providerservice.ListSyncCursorsResult, error)
 	GetProviderAccountRuntimeState(context.Context, providerservice.GetProviderAccountRuntimeStateInput) (entity.ProviderAccountRuntimeState, error)
 	ListProviderAccountRuntimeStates(context.Context, providerservice.ListProviderAccountRuntimeStatesInput) (providerservice.ListProviderAccountRuntimeStatesResult, error)
 	RecordProviderLimitSnapshot(context.Context, providerservice.RecordProviderLimitSnapshotInput) (entity.ProviderLimitSnapshot, error)
@@ -92,6 +96,26 @@ func (s *Server) ListComments(ctx context.Context, request *providersv1.ListComm
 // ListRelationships returns normalized provider-native relationships.
 func (s *Server) ListRelationships(ctx context.Context, request *providersv1.ListRelationshipsRequest) (*providersv1.ListRelationshipsResponse, error) {
 	return grpcserver.HandleUnary(ctx, request, grpccasters.ListRelationshipsInput, s.service.ListRelationships, grpccasters.ListRelationshipsResponse)
+}
+
+// EnqueueReconciliation schedules reconciliation cursors for one provider scope.
+func (s *Server) EnqueueReconciliation(ctx context.Context, request *providersv1.EnqueueReconciliationRequest) (*providersv1.ReconciliationRequestResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.EnqueueReconciliationInput, s.service.EnqueueReconciliation, grpccasters.ReconciliationRequestResponse)
+}
+
+// RunReconciliationBatch leases one cursor for a reconciliation worker.
+func (s *Server) RunReconciliationBatch(ctx context.Context, request *providersv1.RunReconciliationBatchRequest) (*providersv1.RunReconciliationBatchResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.RunReconciliationBatchInput, s.service.RunReconciliationBatch, grpccasters.RunReconciliationBatchResponse)
+}
+
+// GetSyncCursor returns one reconciliation cursor.
+func (s *Server) GetSyncCursor(ctx context.Context, request *providersv1.GetSyncCursorRequest) (*providersv1.SyncCursorResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.GetSyncCursorInput, s.service.GetSyncCursor, grpccasters.SyncCursorResponse)
+}
+
+// ListSyncCursors returns reconciliation cursors by supported filters.
+func (s *Server) ListSyncCursors(ctx context.Context, request *providersv1.ListSyncCursorsRequest) (*providersv1.ListSyncCursorsResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.ListSyncCursorsInput, s.service.ListSyncCursors, grpccasters.ListSyncCursorsResponse)
 }
 
 // GetProviderAccountRuntimeState returns provider runtime state for one external account.
