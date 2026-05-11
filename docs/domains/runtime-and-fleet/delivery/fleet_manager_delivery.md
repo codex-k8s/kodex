@@ -1,0 +1,101 @@
+---
+doc_id: DLV-CK8S-FLEET-MANAGER
+type: delivery-plan
+title: kodex — поставка fleet-manager
+status: active
+owner_role: EM
+created_at: 2026-05-11
+updated_at: 2026-05-11
+related_issues: [699]
+related_prs: []
+related_docsets:
+  - docs/domains/runtime-and-fleet/product/fleet_manager_requirements.md
+  - docs/domains/runtime-and-fleet/architecture/fleet_manager_design.md
+  - docs/domains/runtime-and-fleet/architecture/fleet_manager_data_model.md
+  - docs/domains/runtime-and-fleet/architecture/fleet_manager_api_contract.md
+approvals:
+  required: ["Owner"]
+  status: approved
+  request_id: "owner-2026-05-11-fleet-manager-kickoff"
+  approved_by: "ai-da-stas"
+  approved_at: 2026-05-11
+---
+
+# Поставка fleet-manager
+
+## TL;DR
+
+`fleet-manager` поставляется малыми PR-срезами: сначала доменная документация, затем gRPC/AsyncAPI контракты, сервисный каркас и БД, default scope/cluster, связность и health, resolver размещения, интеграция с `runtime-manager`, контур выкладки и операционные документы.
+
+Стартовый FLEET-0 не создаёт код. Он фиксирует границу: `runtime-manager` владеет слотами/jobs/workspace, а `fleet-manager` владеет серверами, Kubernetes-кластерами, связностью, health и placement scope.
+
+## Входные артефакты
+
+| Документ | Путь |
+|---|---|
+| Требования fleet-manager | `docs/domains/runtime-and-fleet/product/fleet_manager_requirements.md` |
+| Дизайн fleet-manager | `docs/domains/runtime-and-fleet/architecture/fleet_manager_design.md` |
+| Модель данных fleet-manager | `docs/domains/runtime-and-fleet/architecture/fleet_manager_data_model.md` |
+| API-карта fleet-manager | `docs/domains/runtime-and-fleet/architecture/fleet_manager_api_contract.md` |
+| Карта Issue домена | `docs/delivery/issue-map/domains/runtime-and-fleet.md` |
+
+## Срезы поставки
+
+| Срез | Issue | Результат |
+|---|---|---|
+| FLEET-0 | #699 | Доменная документация, границы runtime/fleet, MVP default cluster, будущие контракты, план поставки и карта Issue. |
+| FLEET-1 | создать перед срезом | gRPC и AsyncAPI контракты `fleet-manager`, события `fleet.*`, сгенерированные Go-контракты и ключи действий. |
+| FLEET-2 | создать перед срезом | Сервисный каркас, конфигурация, PostgreSQL-модель, миграции, слой репозитория, health/readiness и outbox. |
+| FLEET-3 | создать перед срезом | Команды и чтения для fleet scopes, servers, Kubernetes clusters, seed/default cluster и базовые проверки доступа. |
+| FLEET-4 | создать перед срезом | Проверки связности, health snapshots, события деградации и операторские модели чтения. |
+| FLEET-5 | создать перед срезом | Правила размещения, `ResolvePlacement`, журнал решений и интеграционный контракт для `runtime-manager`. |
+| FLEET-6 | создать перед срезом | Dockerfile, манифесты, migration job, `services.yaml`, smoke-путь, runbook и monitoring. |
+
+## Таблица реализации
+
+| Группа | Контракт | Реализация |
+|---|---|---|
+| Fleet scopes | Запланирован в FLEET-1. | Не реализовано в FLEET-0. |
+| Servers | Запланирован в FLEET-1. | Не реализовано в FLEET-0. |
+| Kubernetes clusters | Запланирован в FLEET-1. | Не реализовано в FLEET-0. |
+| Связность и health | Запланирован в FLEET-1. | Не реализовано в FLEET-0. |
+| Placement | Запланирован в FLEET-1. | Не реализовано в FLEET-0. |
+| Контур выкладки | Не gRPC-группа. | Запланировано в FLEET-6. |
+
+## Зависимости и блокировки
+
+| Домен или сервис | Связь | Статус |
+|---|---|---|
+| `runtime-manager` | Основной потребитель `ResolvePlacement`; после FLEET-5 runtime должен перейти с локального default config на fleet decision. | Сейчас не блокирует FLEET-0..FLEET-4. Интеграция нужна в FLEET-5. |
+| `project-catalog` | Источник placement policy проекта, репозитория и сервиса. | Текущие проектные контракты достаточны для kickoff; точную форму ограничений подтвердить перед FLEET-5. |
+| `package-hub` | Источник runtime-требований для runtime-нагрузок пакетов и плагинов. | Не блокирует FLEET-0..FLEET-4; нужен контракт требований перед размещением runtime-нагрузки пакета. |
+| `agent-manager` | Инициирует runtime через `runtime-manager`. | Не блокирует fleet kickoff; прямой fleet API для agent-manager не планируется в MVP. |
+| `access-manager` | Проверка прав на управление fleet scope, servers, clusters и placement rules. | Нужны ключи действий и проверка доступа в FLEET-1/FLEET-3. |
+| Secret resolver/Vault/Kubernetes Secret клиент | Получение значения kubeconfig/service account по разрешённой ссылке. | Не нужен для FLEET-0/FLEET-1; нужен до реальных connectivity checks в FLEET-4. |
+
+## Критерии начала кода
+
+- Принят FLEET-0 docset.
+- Для кодового PR заведён отдельный GitHub Issue.
+- Контрактный PR создаёт proto и AsyncAPI до реализации операций.
+- Старый код из `deprecated/**` не используется как основа реализации.
+- В PR, который закрывает Issue, тело содержит `Closes #...`.
+
+## Критерии завершения fleet-manager MVP
+
+- `fleet-manager` имеет собственную БД, миграции, контракты, события и deploy-контур.
+- Fleet scope, server, Kubernetes cluster, health snapshot и placement decision имеют авторитетные команды и чтения.
+- MVP default cluster описан как данные fleet, а не скрытая особенность `runtime-manager`.
+- `runtime-manager` может получать placement decision и не выбирает cluster самостоятельно.
+- `package-hub` и `project-catalog` могут передавать ограничения и требования без владения fleet-состоянием.
+- Полные kubeconfig, Kubernetes objects, events и logs не хранятся в PostgreSQL `fleet-manager`.
+
+## Рекомендуемый следующий шаг после FLEET-0
+
+Идти в FLEET-1: создать `proto/kodex/fleet/v1/fleet_manager.proto`, `specs/asyncapi/fleet-manager.v1.yaml`, сгенерированные Go-контракты событий и ключи действий. Код сервиса начинать только после принятия контракта.
+
+## Апрув
+
+- request_id: `owner-2026-05-11-fleet-manager-kickoff`
+- Решение: approved
+- Комментарий: план поставки `fleet-manager` согласован как стартовое целевое состояние FLEET-0.

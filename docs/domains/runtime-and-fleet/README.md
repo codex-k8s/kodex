@@ -26,10 +26,15 @@
 | Документ | Путь |
 |---|---|
 | Требования | `product/requirements.md` |
+| Требования fleet-manager | `product/fleet_manager_requirements.md` |
 | Дизайн | `architecture/design.md` |
+| Дизайн fleet-manager | `architecture/fleet_manager_design.md` |
 | Модель данных | `architecture/data_model.md` |
+| Модель данных fleet-manager | `architecture/fleet_manager_data_model.md` |
 | API-карта | `architecture/api_contract.md` |
+| API-карта fleet-manager | `architecture/fleet_manager_api_contract.md` |
 | План поставки | `delivery/runtime_manager_delivery.md` |
+| План поставки fleet-manager | `delivery/fleet_manager_delivery.md` |
 | Runbook runtime-manager | `ops/runtime_manager_runbook.md` |
 | Наблюдаемость runtime-manager | `ops/runtime_manager_monitoring.md` |
 

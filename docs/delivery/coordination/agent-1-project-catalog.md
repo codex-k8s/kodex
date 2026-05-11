@@ -2,10 +2,11 @@
 
 ## Зона ответственности
 
-Агент #1 ведёт два связанных контура:
+Агент #1 ведёт три связанных контура:
 
 - домен проектов и репозиториев, основной сервис `project-catalog`;
-- домен runtime и fleet в части `runtime-manager`.
+- домен runtime и fleet в части `runtime-manager`;
+- домен runtime и fleet в части `fleet-manager`.
 
 `project-catalog` отвечает за:
 
@@ -24,6 +25,13 @@
 - политики очистки, пакетную очистку, prewarm pool и безопасное переиспользование слотов;
 - deploy-контур самого `runtime-manager`;
 - команды, чтения и события `runtime.*`.
+
+`fleet-manager` отвечает за:
+
+- серверы, Kubernetes-кластеры, связность, health и placement scope;
+- default fleet scope и default cluster в MVP;
+- будущий выбор `fleet_scope_id` и `cluster_id` для runtime;
+- события `fleet.*`.
 
 Агент #1 не владеет пользователями, организациями, членством, внешними аккаунтами, сырыми секретами, provider-native операциями записи, пакетным каталогом, магазином пакетов, UI и внешними gateway.
 
@@ -58,6 +66,14 @@
 
 Итог: `runtime-manager` имеет стабильные `v1` контракты, БД, миграции, gRPC-слой, outbox, deploy-контур, smoke-путь и реализованный runtime MVP по слотам, workspace materialization, platform jobs, cleanup, prewarm и reuse.
 
+## Что уже сделано по `fleet-manager`
+
+| Срез | Issue | Статус | Результат |
+|---|---:|---|---|
+| FLEET-0 | #699 | готово | Доменная документация, границы runtime/fleet, MVP default cluster, будущие контракты, план поставки и карта Issue. |
+
+Итог: `fleet-manager` пока не имеет кода. Зафиксирована целевая граница и порядок поставки: контракты, сервисный каркас, default scope/cluster, health, placement resolver и deploy-контур.
+
 ## Текущий бэклог агента #1
 
 | Направление | Статус | Что осталось |
@@ -68,7 +84,7 @@
 | `project.policy_override.expired` | запланировано позже | Контракт события есть; нужна логика обслуживания или platform job, которая будет снимать истёкшие переопределения как операционный срез. |
 | Организационные runtime-политики | частично заблокировано | Cleanup для `organization` scope отклоняется, а prewarm хранит политику без фактической раскладки, пока runtime не получает проекцию организации на слоты. |
 | Реальный исполнитель platform jobs | запланировано позже | `runtime-manager` хранит и выдаёт jobs; конкретный исполнитель на Kubernetes или агентный исполнитель нужен отдельным срезом после согласования с `agent-manager`/ops-контуром. |
-| Fleet manager | отдельный домен | `runtime-manager` использует MVP default fleet scope/cluster; серверы, кластеры и placement scope должны появиться в отдельном `fleet-manager`. |
+| Контракты `fleet-manager` | следующий локальный срез | После FLEET-0 нужен FLEET-1: proto, AsyncAPI, события `fleet.*`, ключи действий и таблица реализации операций. |
 
 ## Блокировки от `access-manager`
 
@@ -133,12 +149,13 @@
 - `provider-hub` зависит от `project-catalog` при привязке provider-native объектов к локальному проекту и репозиторию.
 - `package-hub` зависит от `project-catalog`, когда пакетные источники и руководящие пакеты становятся частью проектной политики.
 - `agent-manager` зависит от `runtime-manager` для слотов, workspace materialization и platform jobs, но `Run` остаётся сущностью `agent-manager`.
+- `runtime-manager` зависит от `fleet-manager` для целевого `ResolvePlacement`; до интеграционного среза runtime использует MVP default refs.
 - `operations-hub` и будущий `staff-gateway` зависят от чтений `project-catalog` и `runtime-manager` для операторских экранов.
 
 ## Рекомендуемый следующий шаг
 
-Для агента #1 нет незавершённого локального RTM или Wave 8 среза, который нужно закрыть до соседних доменов. Дальше рационально идти в один из трёх вариантов:
+Для агента #1 нет незавершённого локального RTM или Wave 8 среза, который нужно закрыть до соседних доменов. После FLEET-0 рационально идти в один из трёх вариантов:
 
-- подготовить отдельный `fleet-manager` kickoff, если нужен контур серверов и кластеров;
+- идти в FLEET-1 и создать контракты `fleet-manager`;
 - дождаться `provider-hub` bootstrap/adoption контракта и закрывать #281/#282;
 - начать gateway/UI-срез только после согласования состава `staff-gateway` ручек.
