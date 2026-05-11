@@ -331,11 +331,12 @@ message PlacementDecision {
   optional string project_id = 7;
   optional string repository_id = 8;
   RuntimeMode runtime_mode = 9;
-  string input_json = 10;
-  string reason_code = 11;
-  string reason_message = 12;
-  bool used_default_path = 13;
-  string created_at = 14;
+  string runtime_profile = 10;
+  string input_json = 11;
+  string reason_code = 12;
+  string reason_message = 13;
+  bool used_default_path = 14;
+  string created_at = 15;
 }
 
 message CreateFleetScopeRequest {
@@ -568,11 +569,12 @@ message ResolvePlacementRequest {
   optional string repository_id = 2;
   optional string service_key = 3;
   RuntimeMode runtime_mode = 4;
-  optional string preferred_fleet_scope_id = 5;
-  optional string preferred_cluster_id = 6;
-  string placement_constraints_json = 7;
-  string runtime_requirements_json = 8;
-  CommandMeta meta = 9;
+  string runtime_profile = 5;
+  optional string preferred_fleet_scope_id = 6;
+  optional string preferred_cluster_id = 7;
+  string placement_constraints_json = 8;
+  string runtime_requirements_json = 9;
+  CommandMeta meta = 10;
 }
 
 message ResolvePlacementResponse {

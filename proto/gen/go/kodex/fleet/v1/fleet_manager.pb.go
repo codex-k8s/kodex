@@ -1808,11 +1808,12 @@ type PlacementDecision struct {
 	ProjectId          *string                 `protobuf:"bytes,7,opt,name=project_id,json=projectId,proto3,oneof" json:"project_id,omitempty"`
 	RepositoryId       *string                 `protobuf:"bytes,8,opt,name=repository_id,json=repositoryId,proto3,oneof" json:"repository_id,omitempty"`
 	RuntimeMode        RuntimeMode             `protobuf:"varint,9,opt,name=runtime_mode,json=runtimeMode,proto3,enum=kodex.fleet.v1.RuntimeMode" json:"runtime_mode,omitempty"`
-	InputJson          string                  `protobuf:"bytes,10,opt,name=input_json,json=inputJson,proto3" json:"input_json,omitempty"`
-	ReasonCode         string                  `protobuf:"bytes,11,opt,name=reason_code,json=reasonCode,proto3" json:"reason_code,omitempty"`
-	ReasonMessage      string                  `protobuf:"bytes,12,opt,name=reason_message,json=reasonMessage,proto3" json:"reason_message,omitempty"`
-	UsedDefaultPath    bool                    `protobuf:"varint,13,opt,name=used_default_path,json=usedDefaultPath,proto3" json:"used_default_path,omitempty"`
-	CreatedAt          string                  `protobuf:"bytes,14,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	RuntimeProfile     string                  `protobuf:"bytes,10,opt,name=runtime_profile,json=runtimeProfile,proto3" json:"runtime_profile,omitempty"`
+	InputJson          string                  `protobuf:"bytes,11,opt,name=input_json,json=inputJson,proto3" json:"input_json,omitempty"`
+	ReasonCode         string                  `protobuf:"bytes,12,opt,name=reason_code,json=reasonCode,proto3" json:"reason_code,omitempty"`
+	ReasonMessage      string                  `protobuf:"bytes,13,opt,name=reason_message,json=reasonMessage,proto3" json:"reason_message,omitempty"`
+	UsedDefaultPath    bool                    `protobuf:"varint,14,opt,name=used_default_path,json=usedDefaultPath,proto3" json:"used_default_path,omitempty"`
+	CreatedAt          string                  `protobuf:"bytes,15,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -1908,6 +1909,13 @@ func (x *PlacementDecision) GetRuntimeMode() RuntimeMode {
 		return x.RuntimeMode
 	}
 	return RuntimeMode_RUNTIME_MODE_UNSPECIFIED
+}
+
+func (x *PlacementDecision) GetRuntimeProfile() string {
+	if x != nil {
+		return x.RuntimeProfile
+	}
+	return ""
 }
 
 func (x *PlacementDecision) GetInputJson() string {
@@ -4135,11 +4143,12 @@ type ResolvePlacementRequest struct {
 	RepositoryId             *string                `protobuf:"bytes,2,opt,name=repository_id,json=repositoryId,proto3,oneof" json:"repository_id,omitempty"`
 	ServiceKey               *string                `protobuf:"bytes,3,opt,name=service_key,json=serviceKey,proto3,oneof" json:"service_key,omitempty"`
 	RuntimeMode              RuntimeMode            `protobuf:"varint,4,opt,name=runtime_mode,json=runtimeMode,proto3,enum=kodex.fleet.v1.RuntimeMode" json:"runtime_mode,omitempty"`
-	PreferredFleetScopeId    *string                `protobuf:"bytes,5,opt,name=preferred_fleet_scope_id,json=preferredFleetScopeId,proto3,oneof" json:"preferred_fleet_scope_id,omitempty"`
-	PreferredClusterId       *string                `protobuf:"bytes,6,opt,name=preferred_cluster_id,json=preferredClusterId,proto3,oneof" json:"preferred_cluster_id,omitempty"`
-	PlacementConstraintsJson string                 `protobuf:"bytes,7,opt,name=placement_constraints_json,json=placementConstraintsJson,proto3" json:"placement_constraints_json,omitempty"`
-	RuntimeRequirementsJson  string                 `protobuf:"bytes,8,opt,name=runtime_requirements_json,json=runtimeRequirementsJson,proto3" json:"runtime_requirements_json,omitempty"`
-	Meta                     *CommandMeta           `protobuf:"bytes,9,opt,name=meta,proto3" json:"meta,omitempty"`
+	RuntimeProfile           string                 `protobuf:"bytes,5,opt,name=runtime_profile,json=runtimeProfile,proto3" json:"runtime_profile,omitempty"`
+	PreferredFleetScopeId    *string                `protobuf:"bytes,6,opt,name=preferred_fleet_scope_id,json=preferredFleetScopeId,proto3,oneof" json:"preferred_fleet_scope_id,omitempty"`
+	PreferredClusterId       *string                `protobuf:"bytes,7,opt,name=preferred_cluster_id,json=preferredClusterId,proto3,oneof" json:"preferred_cluster_id,omitempty"`
+	PlacementConstraintsJson string                 `protobuf:"bytes,8,opt,name=placement_constraints_json,json=placementConstraintsJson,proto3" json:"placement_constraints_json,omitempty"`
+	RuntimeRequirementsJson  string                 `protobuf:"bytes,9,opt,name=runtime_requirements_json,json=runtimeRequirementsJson,proto3" json:"runtime_requirements_json,omitempty"`
+	Meta                     *CommandMeta           `protobuf:"bytes,10,opt,name=meta,proto3" json:"meta,omitempty"`
 	unknownFields            protoimpl.UnknownFields
 	sizeCache                protoimpl.SizeCache
 }
@@ -4200,6 +4209,13 @@ func (x *ResolvePlacementRequest) GetRuntimeMode() RuntimeMode {
 		return x.RuntimeMode
 	}
 	return RuntimeMode_RUNTIME_MODE_UNSPECIFIED
+}
+
+func (x *ResolvePlacementRequest) GetRuntimeProfile() string {
+	if x != nil {
+		return x.RuntimeProfile
+	}
+	return ""
 }
 
 func (x *ResolvePlacementRequest) GetPreferredFleetScopeId() string {
@@ -4671,7 +4687,7 @@ const file_kodex_fleet_v1_fleet_manager_proto_rawDesc = "" +
 	"\n" +
 	"updated_at\x18\t \x01(\tR\tupdatedAt\x12\x18\n" +
 	"\aversion\x18\n" +
-	" \x01(\x03R\aversion\"\x9a\x05\n" +
+	" \x01(\x03R\aversion\"\xc3\x05\n" +
 	"\x11PlacementDecision\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\"\n" +
 	"\n" +
@@ -4684,16 +4700,17 @@ const file_kodex_fleet_v1_fleet_manager_proto_rawDesc = "" +
 	"\n" +
 	"project_id\x18\a \x01(\tH\x03R\tprojectId\x88\x01\x01\x12(\n" +
 	"\rrepository_id\x18\b \x01(\tH\x04R\frepositoryId\x88\x01\x01\x12>\n" +
-	"\fruntime_mode\x18\t \x01(\x0e2\x1b.kodex.fleet.v1.RuntimeModeR\vruntimeMode\x12\x1d\n" +
+	"\fruntime_mode\x18\t \x01(\x0e2\x1b.kodex.fleet.v1.RuntimeModeR\vruntimeMode\x12'\n" +
+	"\x0fruntime_profile\x18\n" +
+	" \x01(\tR\x0eruntimeProfile\x12\x1d\n" +
 	"\n" +
-	"input_json\x18\n" +
-	" \x01(\tR\tinputJson\x12\x1f\n" +
-	"\vreason_code\x18\v \x01(\tR\n" +
+	"input_json\x18\v \x01(\tR\tinputJson\x12\x1f\n" +
+	"\vreason_code\x18\f \x01(\tR\n" +
 	"reasonCode\x12%\n" +
-	"\x0ereason_message\x18\f \x01(\tR\rreasonMessage\x12*\n" +
-	"\x11used_default_path\x18\r \x01(\bR\x0fusedDefaultPath\x12\x1d\n" +
+	"\x0ereason_message\x18\r \x01(\tR\rreasonMessage\x12*\n" +
+	"\x11used_default_path\x18\x0e \x01(\bR\x0fusedDefaultPath\x12\x1d\n" +
 	"\n" +
-	"created_at\x18\x0e \x01(\tR\tcreatedAtB\r\n" +
+	"created_at\x18\x0f \x01(\tR\tcreatedAtB\r\n" +
 	"\v_command_idB\x11\n" +
 	"\x0f_fleet_scope_idB\r\n" +
 	"\v_cluster_idB\r\n" +
@@ -4926,19 +4943,21 @@ const file_kodex_fleet_v1_fleet_manager_proto_rawDesc = "" +
 	"\x0eplacement_rule\x18\x01 \x01(\v2\x1d.kodex.fleet.v1.PlacementRuleR\rplacementRule\"\x96\x01\n" +
 	"\x1aListPlacementRulesResponse\x12F\n" +
 	"\x0fplacement_rules\x18\x01 \x03(\v2\x1d.kodex.fleet.v1.PlacementRuleR\x0eplacementRules\x120\n" +
-	"\x04page\x18\x02 \x01(\v2\x1c.kodex.fleet.v1.PageResponseR\x04page\"\xd4\x04\n" +
+	"\x04page\x18\x02 \x01(\v2\x1c.kodex.fleet.v1.PageResponseR\x04page\"\xfd\x04\n" +
 	"\x17ResolvePlacementRequest\x12\"\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tH\x00R\tprojectId\x88\x01\x01\x12(\n" +
 	"\rrepository_id\x18\x02 \x01(\tH\x01R\frepositoryId\x88\x01\x01\x12$\n" +
 	"\vservice_key\x18\x03 \x01(\tH\x02R\n" +
 	"serviceKey\x88\x01\x01\x12>\n" +
-	"\fruntime_mode\x18\x04 \x01(\x0e2\x1b.kodex.fleet.v1.RuntimeModeR\vruntimeMode\x12<\n" +
-	"\x18preferred_fleet_scope_id\x18\x05 \x01(\tH\x03R\x15preferredFleetScopeId\x88\x01\x01\x125\n" +
-	"\x14preferred_cluster_id\x18\x06 \x01(\tH\x04R\x12preferredClusterId\x88\x01\x01\x12<\n" +
-	"\x1aplacement_constraints_json\x18\a \x01(\tR\x18placementConstraintsJson\x12:\n" +
-	"\x19runtime_requirements_json\x18\b \x01(\tR\x17runtimeRequirementsJson\x12/\n" +
-	"\x04meta\x18\t \x01(\v2\x1b.kodex.fleet.v1.CommandMetaR\x04metaB\r\n" +
+	"\fruntime_mode\x18\x04 \x01(\x0e2\x1b.kodex.fleet.v1.RuntimeModeR\vruntimeMode\x12'\n" +
+	"\x0fruntime_profile\x18\x05 \x01(\tR\x0eruntimeProfile\x12<\n" +
+	"\x18preferred_fleet_scope_id\x18\x06 \x01(\tH\x03R\x15preferredFleetScopeId\x88\x01\x01\x125\n" +
+	"\x14preferred_cluster_id\x18\a \x01(\tH\x04R\x12preferredClusterId\x88\x01\x01\x12<\n" +
+	"\x1aplacement_constraints_json\x18\b \x01(\tR\x18placementConstraintsJson\x12:\n" +
+	"\x19runtime_requirements_json\x18\t \x01(\tR\x17runtimeRequirementsJson\x12/\n" +
+	"\x04meta\x18\n" +
+	" \x01(\v2\x1b.kodex.fleet.v1.CommandMetaR\x04metaB\r\n" +
 	"\v_project_idB\x10\n" +
 	"\x0e_repository_idB\x0e\n" +
 	"\f_service_keyB\x1b\n" +

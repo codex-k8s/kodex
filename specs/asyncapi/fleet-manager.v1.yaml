@@ -228,6 +228,8 @@ components:
           format: uuid
         runtime_mode:
           type: string
+        runtime_profile:
+          type: string
         scope_key:
           type: string
         scope_owner_id:

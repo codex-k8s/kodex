@@ -123,7 +123,7 @@ sequenceDiagram
   participant F as fleet-manager
   participant S as secret store
   O->>F: RegisterKubernetesCluster(scope, secret ref, is_default)
-  F->>A: authorize fleet.cluster.write
+  F->>A: authorize fleet.cluster.register
   F->>S: проверить metadata secret ref
   F->>F: сохранить cluster + outbox
 ```

@@ -23,7 +23,7 @@ approvals:
 - Тип API: внутренний gRPC для команд и чтений, AsyncAPI для `fleet.*` событий.
 - Аутентификация: внутренний сервисный контур; изменяющие команды принимают `CommandMeta` и проверяются через `access-manager`.
 - Версионирование: стабильный `v1` создан в контрактном срезе до реализации операций.
-- Основные операции: fleet scopes, servers, Kubernetes clusters, связность/health, placement rules и `ResolvePlacement` по набору активных кластеров.
+- Основные операции: fleet scopes, servers, Kubernetes clusters, связность/health, placement rules и `ResolvePlacement` по набору активных кластеров с учётом `runtime_mode` и `runtime_profile`.
 
 ## Спецификации
 
@@ -82,7 +82,7 @@ approvals:
 | `PutPlacementRule` | Создать или обновить правило выбора кластера внутри scope. | Операторский контур, автоматизация policy | `command_id + expected_version` при update. |
 | `GetPlacementRule` | Прочитать правило. | Операторский контур | Только чтение. |
 | `ListPlacementRules` | Список правил по scope и статусу. | Операторский контур | Только чтение. |
-| `ResolvePlacement` | Вернуть `fleet_scope_id`, `cluster_id` и объяснение решения для runtime-запроса. | `runtime-manager` | `command_id` или `request_fingerprint`. |
+| `ResolvePlacement` | Вернуть `fleet_scope_id`, `cluster_id` и объяснение решения для runtime-запроса по `runtime_mode`, `runtime_profile`, ограничениям и требованиям. | `runtime-manager` | `command_id` или `request_fingerprint`. |
 | `GetPlacementDecision` | Прочитать сохранённое решение. | `runtime-manager`, операторский контур | Только чтение. |
 | `ListPlacementDecisions` | История решений по проекту, репозиторию, scope или cluster. | Операторский контур | Только чтение. |
 

@@ -45,6 +45,7 @@ type Payload struct {
 	ReasonMessage       string `json:"reason_message,omitempty"`
 	RepositoryID        string `json:"repository_id,omitempty"`
 	RuntimeMode         string `json:"runtime_mode,omitempty"`
+	RuntimeProfile      string `json:"runtime_profile,omitempty"`
 	ScopeKey            string `json:"scope_key,omitempty"`
 	ScopeOwnerID        string `json:"scope_owner_id,omitempty"`
 	ScopeType           string `json:"scope_type,omitempty"`
