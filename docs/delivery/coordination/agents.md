@@ -2,13 +2,13 @@
 
 ## TL;DR
 
-Параллельная разработка разделена на три доменных потока. Для `provider-hub` сняты базовые блокировки по provider-действиям и `ResolveExternalAccountUsage`, но полная GitHub-сверка и provider-операции записи ждут общий secret resolver/Vault/Kubernetes Secret клиент.
+Параллельная разработка разделена на три доменных потока. Агент #1 подтвердил, что `project-catalog` Wave 8 и `runtime-manager` RTM-0..RTM-7 готовы. Для `project-catalog` остаются интеграционные хвосты по bootstrap/adoption репозиториев, которые требуют `provider-hub`; для `runtime-manager` текущий MVP не блокируется соседними доменами, но организационные runtime-политики, workspace с руководящими пакетами и сценарии исполнения runtime-нагрузок требуют новых междоменных контрактов. Для `provider-hub` сняты базовые блокировки по provider-действиям и `ResolveExternalAccountUsage`, но полная GitHub-сверка и provider-операции записи ждут общий secret resolver/Vault/Kubernetes Secret клиент.
 
 ## Раскладка ответственности
 
 | Агент | Домен | Основной сервис | За что отвечает | Файл бэклога |
 |---|---|---|---|---|
-| #1 | Проекты и репозитории | `project-catalog` | Проекты, репозитории, сервисная карта проекта, проверенная версия `services.yaml`, связи проекта с provider-native сущностями. Требует подтверждения агентом #1. | `agent-1-project-catalog.md` |
+| #1 | Проекты, репозитории, runtime | `project-catalog`, `runtime-manager` | Проекты, репозитории, проверенная версия `services.yaml`, источники документации, правила веток, релизные политики, политика размещения, слоты, workspace materialization, platform jobs, cleanup, prewarm и reuse. | `agent-1-project-catalog.md` |
 | #2 | Provider-native интеграции | `provider-hub` | Внешние Git-провайдеры, репозитории, Issue/PR/MR, комментарии, review-сигналы, webhook, локальные проекции, связи, сверка внешнего состояния, лимиты и операции провайдера на границе ссылок на секреты. | `agent-2-provider-hub.md` |
 | #3 | Пакетная платформа | `package-hub` | Источники пакетов, доступный каталог, версии, manifest, установки, схемы секретов, верификация пакетов и события `package.*`. | `agent-3-package-hub.md` |
 
@@ -18,11 +18,15 @@
 |---|---|---|---|
 | `access-manager` | `package-hub` | Сверка заполненности секретов установки: нужен контракт состояния секретов пакета/установки. | `package-hub` делает только чтение схем секретов; пересчёт статуса установки ждёт контракт. |
 | `access-manager` | `provider-hub` | Базовый контракт выбора и подтверждения внешнего аккаунта снят через `ResolveExternalAccountUsage`; остаётся получение значения секрета по разрешённой ссылке. | Не делать локальный обход с хранением токена в `provider-hub`; нужен общий secret resolver/Vault/Kubernetes Secret клиент. |
-| `access-manager` | `project-catalog` | Членство, организации, группы, доступы к проектам и репозиториям. | Агент #1 должен подтвердить, какие операции можно делать с внешними идентификаторами, а какие ждут контракт прав. |
-| `provider-hub` | `project-catalog` | Provider refs, webhook-факты и provider-native связи; привязка проекций к `project_id`/`repository_id` требует сопоставления со стороны `project-catalog`. | `project-catalog` не должен сам становиться Git-клиентом; нужна явная связка `provider_slug + repository ref -> project/repository`. |
+| `access-manager` | `project-catalog` | Текущие команды и чтения не блокируются; будущие проектные экраны членства, групп, организаций и owner approval требуют моделей чтения контура доступа и governance. | Не заводить локальные сущности членства в `project-catalog`; ждать или согласовать отдельный access-контракт для UI и approval. |
+| `access-manager` | `runtime-manager` | Текущие RTM-0..RTM-7 срезы не блокируются; организационный scope cleanup/prewarm требует проекции организации на runtime-слоты. | `cleanup` для `organization` scope остаётся отклонённым, prewarm policy хранится без фактической раскладки до появления контракта организации. |
+| `provider-hub` | `project-catalog` | Bootstrap/adoption репозиториев, создание policy/bootstrap PR и provider-native связи; привязка проекций к `project_id`/`repository_id` требует явного сопоставления. | `project-catalog` не должен сам становиться Git-клиентом; нужна связка `provider_slug + provider_repository_id/full_name -> project_id + repository_id` и команда provider-контура на создание PR. |
+| `provider-hub` | `runtime-manager` | Текущие runtime-срезы не блокируются; будущие workspace source refs и сигналы после работы slot-агентов требуют provider-проекций. | Runtime хранит source refs и состояние, но не ходит напрямую в GitHub/GitLab; ускоряющие сигналы согласовать через `provider-hub`/agent-manager. |
 | `project-catalog` | `package-hub` | Проектная политика, где могут ссылаться источники пакетов и руководящие пакеты. | `package-hub` хранит пакетную истину, но не владеет проектной политикой. |
 | `provider-hub` и пакет магазина | `package-hub` | Реальная синхронизация пользовательских источников пакетов из Git/provider и связи пакетных PR/Issue с пакетной моделью. | `package-hub` сохраняет нормализованный снимок; provider-доступ и provider relationships согласуются отдельно. |
 | `agent-manager` | `package-hub` | Использование руководящих пакетов в workspace агента. | `package-hub` может дать каталог и установки; подготовка рабочего контекста остаётся у `agent-manager`. |
+| `package-hub` | `project-catalog` | Проверка доступности руководящих пакетов и пакетных источников в проектной политике. | `project-catalog` хранит ссылки и проверенную проектную проекцию; пакетную доступность подтверждать через `package-hub`, когда появится контракт чтения установок. |
+| `package-hub` | `runtime-manager` | Workspace с руководящими пакетами и запуск runtime-нагрузок пакетов или плагинов. | Нужны контракт чтения установленных руководящих пакетов и контракт передачи требований пакета в workspace/runtime-нагрузку. |
 | `runtime-manager` и `fleet-manager` | `package-hub` | Запуск runtime-нагрузок пакетов и размещение в Kubernetes. | `package-hub` фиксирует установку и требования, runtime/fleet выполняют техническую работу. |
 | `runtime-manager` | `provider-hub` | Не блокирует текущие проекции, webhook, очередь сверки и ускоряющие сигналы; может понадобиться, если batch-сверка будет запускаться как platform job. | До выбора модели исполнения сверки не завязывать `provider-hub` на runtime job; deploy-паттерн можно переиспользовать позже. |
 | `agent-manager` и `platform-mcp-server` | `provider-hub` | Provider-операции записи и ускоряющие сигналы требуют согласованного набора инструментов, идемпотентности и прав. | Ускоряющие сигналы можно делать локально в `provider-hub`; команды записи делать после secret resolver и MCP-контракта. |
