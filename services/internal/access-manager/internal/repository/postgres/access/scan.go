@@ -2,6 +2,8 @@ package access
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -272,13 +274,40 @@ func scanPackageInstallationSecretRef(row postgreslib.RowScanner) (entity.Packag
 	ref.Status = enum.PackageInstallationSecretRefStatus(status)
 	ref.SecretRef.StoreType = enum.SecretStoreType(storeType)
 	ref.SecretRef.RotatedAt = postgreslib.TimePtrFromPG(rotatedAt)
-	if err := json.Unmarshal(metadata, &ref.Metadata); err != nil {
+	ref.Metadata, err = safeStringMetadata(metadata)
+	if err != nil {
 		return entity.PackageInstallationSecretRef{}, err
 	}
-	if ref.Metadata == nil {
-		ref.Metadata = map[string]string{}
-	}
 	return ref, nil
+}
+
+func safeStringMetadata(raw []byte) (map[string]string, error) {
+	var metadata map[string]string
+	if err := json.Unmarshal(raw, &metadata); err != nil {
+		return nil, err
+	}
+	if metadata == nil {
+		return map[string]string{}, nil
+	}
+	for key := range metadata {
+		if !isSafeMetadataKey(key) {
+			return nil, fmt.Errorf("unsafe metadata key %q", key)
+		}
+	}
+	return metadata, nil
+}
+
+func isSafeMetadataKey(key string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(key))
+	if normalized == "" {
+		return false
+	}
+	for _, marker := range []string{"token", "secret", "password", "credential", "value", "key"} {
+		if strings.Contains(normalized, marker) {
+			return false
+		}
+	}
+	return true
 }
 
 func scanAccessAction(row postgreslib.RowScanner) (entity.AccessAction, error) {

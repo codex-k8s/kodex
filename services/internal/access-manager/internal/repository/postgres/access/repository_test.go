@@ -816,6 +816,71 @@ INSERT INTO access_package_installation_secret_refs (
 	}
 }
 
+func TestRepositoryIntegrationPackageInstallationSecretRefsRejectUnsafeMetadata(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openIntegrationPool(t, ctx)
+	repository := NewRepository(pool)
+	now := time.Date(2026, 5, 12, 13, 15, 0, 0, time.UTC)
+	secret := entity.SecretBindingRef{
+		Base:      entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		StoreType: enum.SecretStoreVault,
+		StoreRef:  "secret/package/telegram#token",
+	}
+	if err := repository.PutSecretBindingRef(ctx, secret, testEvent("access.secret_binding_ref.created", "secret_binding_ref", secret.ID, now)); err != nil {
+		t.Fatalf("put secret ref: %v", err)
+	}
+
+	cases := []struct {
+		name     string
+		metadata string
+	}{
+		{name: "non string value", metadata: `{"configured_by":7}`},
+		{name: "nested value", metadata: `{"configured_by":{"value":"owner"}}`},
+		{name: "sensitive key", metadata: `{"token":"masked"}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := pool.Exec(ctx, `
+INSERT INTO access_package_installation_secret_refs (
+    id, package_installation_id, installation_scope_type, installation_scope_id,
+    logical_key, secret_binding_ref_id, status, metadata, version, created_at, updated_at
+) VALUES (
+    $1, $2, 'project', 'project-1', 'telegram_token', $3, 'configured',
+    $4::jsonb, 1, $5, $5
+)`, uuid.New(), uuid.New(), secret.ID, tc.metadata, now)
+			if err == nil {
+				t.Fatalf("insert unsafe metadata succeeded, want check violation")
+			}
+			var pgErr *pgconn.PgError
+			if !errors.As(err, &pgErr) || pgErr.Code != "23514" {
+				t.Fatalf("err = %v, want check violation", err)
+			}
+		})
+	}
+}
+
+func TestSafeStringMetadataRejectsUnsafePayload(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		raw  []byte
+	}{
+		{name: "non string value", raw: []byte(`{"configured_by":7}`)},
+		{name: "nested value", raw: []byte(`{"configured_by":{"value":"owner"}}`)},
+		{name: "sensitive key", raw: []byte(`{"secret_hint":"masked"}`)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := safeStringMetadata(tc.raw); err == nil {
+				t.Fatalf("safeStringMetadata() succeeded, want error")
+			}
+		})
+	}
+}
+
 func TestRepositoryIntegrationAccessRuleIdentityIsUnique(t *testing.T) {
 	t.Parallel()
 
