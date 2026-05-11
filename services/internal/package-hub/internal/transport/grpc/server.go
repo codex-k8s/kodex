@@ -36,6 +36,9 @@ type packageService interface {
 	ListPackageVersions(context.Context, packageservice.ListPackageVersionsInput) (packageservice.ListPackageVersionsResult, error)
 	GetPackageManifest(context.Context, uuid.UUID, value.QueryMeta) (entity.PackageManifestSnapshot, error)
 	RequestPackageInstallation(context.Context, packageservice.RequestPackageInstallationInput) (entity.PackageInstallation, error)
+	UpdatePackageInstallation(context.Context, packageservice.UpdatePackageInstallationInput) (entity.PackageInstallation, error)
+	DisablePackageInstallation(context.Context, packageservice.DisablePackageInstallationInput) (entity.PackageInstallation, error)
+	UninstallPackage(context.Context, packageservice.UninstallPackageInput) (entity.PackageInstallation, error)
 	GetPackageInstallation(context.Context, uuid.UUID, value.QueryMeta) (entity.PackageInstallation, error)
 	ListPackageInstallations(context.Context, packageservice.ListPackageInstallationsInput) (packageservice.ListPackageInstallationsResult, error)
 	SetPackageVerification(context.Context, packageservice.SetPackageVerificationInput) (packageservice.SetPackageVerificationResult, error)
@@ -112,6 +115,21 @@ func (server *Server) GetPackageManifest(ctx context.Context, request *packagesv
 // RequestPackageInstallation records an installation intent for a package version and scope.
 func (server *Server) RequestPackageInstallation(ctx context.Context, request *packagesv1.RequestPackageInstallationRequest) (*packagesv1.PackageInstallationResponse, error) {
 	return grpcserver.HandleUnary(ctx, request, grpccasters.RequestPackageInstallationInput, server.service.RequestPackageInstallation, grpccasters.PackageInstallationResponse)
+}
+
+// UpdatePackageInstallation changes installation version, desired state or safe lifecycle status.
+func (server *Server) UpdatePackageInstallation(ctx context.Context, request *packagesv1.UpdatePackageInstallationRequest) (*packagesv1.PackageInstallationResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.UpdatePackageInstallationInput, server.service.UpdatePackageInstallation, grpccasters.PackageInstallationResponse)
+}
+
+// DisablePackageInstallation disables an installation without deleting history.
+func (server *Server) DisablePackageInstallation(ctx context.Context, request *packagesv1.DisablePackageInstallationRequest) (*packagesv1.PackageInstallationResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.DisablePackageInstallationInput, server.service.DisablePackageInstallation, grpccasters.PackageInstallationResponse)
+}
+
+// UninstallPackage marks an installation as uninstalled.
+func (server *Server) UninstallPackage(ctx context.Context, request *packagesv1.UninstallPackageRequest) (*packagesv1.PackageInstallationResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.UninstallPackageInput, server.service.UninstallPackage, grpccasters.PackageInstallationResponse)
 }
 
 // GetPackageInstallation returns one authoritative installation state.

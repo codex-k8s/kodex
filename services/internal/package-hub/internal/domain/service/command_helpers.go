@@ -219,6 +219,31 @@ func commandResult(meta value.CommandMeta, operation string, aggregateType enum.
 	}, nil
 }
 
+func commandArtifacts[T any](
+	meta value.CommandMeta,
+	operation string,
+	aggregateType enum.CommandAggregateType,
+	aggregateID uuid.UUID,
+	subject T,
+	occurredAt time.Time,
+	payloadBuilder func(T) ([]byte, error),
+	eventBuilder func(T, time.Time) (entity.OutboxEvent, error),
+) (entity.CommandResult, entity.OutboxEvent, error) {
+	payload, err := payloadBuilder(subject)
+	if err != nil {
+		return entity.CommandResult{}, entity.OutboxEvent{}, err
+	}
+	result, err := commandResult(meta, operation, aggregateType, aggregateID, payload, occurredAt)
+	if err != nil {
+		return entity.CommandResult{}, entity.OutboxEvent{}, err
+	}
+	event, err := eventBuilder(subject, occurredAt)
+	if err != nil {
+		return entity.CommandResult{}, entity.OutboxEvent{}, err
+	}
+	return result, event, nil
+}
+
 func expectedRevision(meta value.CommandMeta) (int64, error) {
 	if meta.ExpectedVersion == nil || *meta.ExpectedVersion < 1 {
 		return 0, errs.ErrInvalidArgument

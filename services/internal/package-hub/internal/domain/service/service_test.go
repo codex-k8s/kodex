@@ -578,6 +578,158 @@ func TestRequestPackageInstallationReplayChecksRequestAndReadAccess(t *testing.T
 	}
 }
 
+func TestUpdatePackageInstallationChangesVersionAndWritesEvent(t *testing.T) {
+	t.Parallel()
+
+	packageID := uuid.New()
+	currentVersionID := uuid.New()
+	nextVersionID := uuid.New()
+	installationID := uuid.New()
+	repository := &fakeRepository{
+		packageEntry: entity.PackageEntry{
+			VersionedBase: entity.VersionedBase{ID: packageID},
+			Status:        enum.PackageStatusAvailable,
+			TrustStatus:   enum.PackageTrustStatusVerified,
+		},
+		packageVersion: entity.PackageVersion{
+			ID:                 nextVersionID,
+			PackageID:          packageID,
+			ReleaseStatus:      enum.PackageReleaseStatusActive,
+			VerificationStatus: enum.PackageVerificationStatusVerified,
+		},
+		packageInstallation: entity.PackageInstallation{
+			VersionedBase:            entity.VersionedBase{ID: installationID, Version: 1, CreatedAt: time.Date(2026, 5, 7, 11, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 5, 7, 11, 0, 0, 0, time.UTC)},
+			PackageID:                packageID,
+			PackageVersionID:         currentVersionID,
+			Scope:                    value.ScopeRef{Type: enum.PackageInstallationScopeTypeProject, Ref: uuid.NewString()},
+			InstallationStatus:       enum.PackageInstallationStatusActive,
+			DesiredState:             enum.PackageDesiredStatePresent,
+			SecretBindingStatus:      enum.PackageSecretBindingStatusComplete,
+			LastHealthStatus:         enum.PackageHealthStatusHealthy,
+			RuntimeRequirementDigest: "sha256:old",
+		},
+		manifestSnapshot: entity.PackageManifestSnapshot{PackageVersionID: nextVersionID, Payload: testCatalogManifestPayload()},
+		commandResultErr: errs.ErrNotFound,
+	}
+	authorizer := &recordingAuthorizer{}
+	service := NewWithConfig(repository, fixedClock{}, newSequenceIDs(2), Config{Authorizer: authorizer})
+
+	updated, err := service.UpdatePackageInstallation(context.Background(), UpdatePackageInstallationInput{
+		InstallationID:   installationID,
+		PackageVersionID: &nextVersionID,
+		Meta:             commandMeta(),
+	})
+	if err != nil {
+		t.Fatalf("UpdatePackageInstallation(): %v", err)
+	}
+	if updated.PackageVersionID != nextVersionID || updated.InstallationStatus != enum.PackageInstallationStatusRequested || updated.SecretBindingStatus != enum.PackageSecretBindingStatusMissing {
+		t.Fatalf("updated installation = %+v, want next version with requested/missing", updated)
+	}
+	if updated.RuntimeRequirementDigest == "" || updated.RuntimeRequirementDigest == "sha256:old" || updated.LastHealthStatus != enum.PackageHealthStatusUnknown {
+		t.Fatalf("updated requirements = %+v, want recalculated requirements and unknown health", updated)
+	}
+	if repository.updateInstallationWithResultCalls != 1 || repository.updatedInstallation.ID != installationID {
+		t.Fatalf("update installation calls = %d updated = %+v, want one update", repository.updateInstallationWithResultCalls, repository.updatedInstallation)
+	}
+	if repository.updatedEvent.EventType != packageEventInstallationUpdated || repository.updatedResult.Operation != packageOperationInstallationUpdate {
+		t.Fatalf("event/result = %s/%s, want installation updated result", repository.updatedEvent.EventType, repository.updatedResult.Operation)
+	}
+	if len(authorizer.requests) != 1 || authorizer.requests[0].ActionKey != packageActionInstallationUpdate {
+		t.Fatalf("authorization requests = %+v, want installation update", authorizer.requests)
+	}
+}
+
+func TestDisablePackageInstallationWritesLifecycleEvent(t *testing.T) {
+	t.Parallel()
+
+	installationID := uuid.New()
+	repository := &fakeRepository{
+		packageInstallation: entity.PackageInstallation{
+			VersionedBase:       entity.VersionedBase{ID: installationID, Version: 1, CreatedAt: time.Date(2026, 5, 7, 11, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 5, 7, 11, 0, 0, 0, time.UTC)},
+			PackageID:           uuid.New(),
+			PackageVersionID:    uuid.New(),
+			Scope:               value.ScopeRef{Type: enum.PackageInstallationScopeTypeRepository, Ref: uuid.NewString()},
+			InstallationStatus:  enum.PackageInstallationStatusActive,
+			DesiredState:        enum.PackageDesiredStatePresent,
+			SecretBindingStatus: enum.PackageSecretBindingStatusComplete,
+			LastHealthStatus:    enum.PackageHealthStatusHealthy,
+		},
+		commandResultErr: errs.ErrNotFound,
+	}
+	authorizer := &recordingAuthorizer{}
+	service := NewWithConfig(repository, fixedClock{}, newSequenceIDs(1), Config{Authorizer: authorizer})
+
+	updated, err := service.DisablePackageInstallation(context.Background(), DisablePackageInstallationInput{
+		InstallationID: installationID,
+		Meta:           commandMeta(),
+	})
+	if err != nil {
+		t.Fatalf("DisablePackageInstallation(): %v", err)
+	}
+	if updated.InstallationStatus != enum.PackageInstallationStatusDisabled || updated.DesiredState != enum.PackageDesiredStateSuspended {
+		t.Fatalf("disabled installation = %+v, want disabled/suspended", updated)
+	}
+	if repository.updatedEvent.EventType != packageEventInstallationDisabled || repository.updatedResult.Operation != packageOperationInstallationDisable {
+		t.Fatalf("event/result = %s/%s, want installation disabled result", repository.updatedEvent.EventType, repository.updatedResult.Operation)
+	}
+	if len(authorizer.requests) != 1 || authorizer.requests[0].ActionKey != packageActionInstallationDisable {
+		t.Fatalf("authorization requests = %+v, want installation disable", authorizer.requests)
+	}
+}
+
+func TestUninstallPackageWritesLifecycleEvent(t *testing.T) {
+	t.Parallel()
+
+	installationID := uuid.New()
+	repository := &fakeRepository{
+		packageInstallation: entity.PackageInstallation{
+			VersionedBase:       entity.VersionedBase{ID: installationID, Version: 1, CreatedAt: time.Date(2026, 5, 7, 11, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 5, 7, 11, 0, 0, 0, time.UTC)},
+			PackageID:           uuid.New(),
+			PackageVersionID:    uuid.New(),
+			Scope:               value.ScopeRef{Type: enum.PackageInstallationScopeTypeOrganization, Ref: uuid.NewString()},
+			InstallationStatus:  enum.PackageInstallationStatusDisabled,
+			DesiredState:        enum.PackageDesiredStateSuspended,
+			SecretBindingStatus: enum.PackageSecretBindingStatusComplete,
+			LastHealthStatus:    enum.PackageHealthStatusUnknown,
+		},
+		commandResultErr: errs.ErrNotFound,
+	}
+	authorizer := &recordingAuthorizer{}
+	service := NewWithConfig(repository, fixedClock{}, newSequenceIDs(1), Config{Authorizer: authorizer})
+
+	updated, err := service.UninstallPackage(context.Background(), UninstallPackageInput{
+		InstallationID: installationID,
+		Meta:           commandMeta(),
+	})
+	if err != nil {
+		t.Fatalf("UninstallPackage(): %v", err)
+	}
+	if updated.InstallationStatus != enum.PackageInstallationStatusUninstalled || updated.DesiredState != enum.PackageDesiredStateAbsent {
+		t.Fatalf("uninstalled installation = %+v, want uninstalled/absent", updated)
+	}
+	if repository.updatedEvent.EventType != packageEventInstallationUninstalled || repository.updatedResult.Operation != packageOperationUninstall {
+		t.Fatalf("event/result = %s/%s, want installation uninstalled result", repository.updatedEvent.EventType, repository.updatedResult.Operation)
+	}
+	if len(authorizer.requests) != 1 || authorizer.requests[0].ActionKey != packageActionUninstall {
+		t.Fatalf("authorization requests = %+v, want package uninstall", authorizer.requests)
+	}
+}
+
+func TestUpdatePackageInstallationRejectsDedicatedLifecycleStatuses(t *testing.T) {
+	t.Parallel()
+
+	service := NewWithConfig(&fakeRepository{}, fixedClock{}, fixedIDs{}, Config{Authorizer: &recordingAuthorizer{}})
+	disabled := enum.PackageInstallationStatusDisabled
+	_, err := service.UpdatePackageInstallation(context.Background(), UpdatePackageInstallationInput{
+		InstallationID:     uuid.New(),
+		InstallationStatus: &disabled,
+		Meta:               commandMeta(),
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("UpdatePackageInstallation() err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+}
+
 func testCatalogManifestPayload() []byte {
 	return []byte(`{
 		"identity": {
@@ -651,6 +803,7 @@ type fakeRepository struct {
 	createdResult                     entity.CommandResult
 	createdEvent                      entity.OutboxEvent
 	updatedSource                     entity.PackageSource
+	updatedInstallation               entity.PackageInstallation
 	updatedResult                     entity.CommandResult
 	updatedEvent                      entity.OutboxEvent
 	syncPlan                          catalogrepo.CatalogSyncPlan
@@ -659,6 +812,7 @@ type fakeRepository struct {
 	updateSourceWithResultCalls       int
 	syncCatalogCalls                  int
 	createInstallationWithResultCalls int
+	updateInstallationWithResultCalls int
 	getInstallationCalls              int
 	listInstallationsCalls            int
 	getSourceCalls                    int
@@ -774,6 +928,14 @@ func (r *fakeRepository) CreatePackageInstallationWithResult(_ context.Context, 
 
 func (r *fakeRepository) UpdatePackageInstallation(context.Context, entity.PackageInstallation, int64) error {
 	panic("not implemented")
+}
+
+func (r *fakeRepository) UpdatePackageInstallationWithResult(_ context.Context, installation entity.PackageInstallation, _ int64, result entity.CommandResult, event entity.OutboxEvent) error {
+	r.updateInstallationWithResultCalls++
+	r.updatedInstallation = installation
+	r.updatedResult = result
+	r.updatedEvent = event
+	return nil
 }
 
 func (r *fakeRepository) GetPackageInstallation(context.Context, uuid.UUID) (entity.PackageInstallation, error) {

@@ -33,6 +33,7 @@ type Repository interface {
 	CreatePackageInstallation(ctx context.Context, installation entity.PackageInstallation) error
 	CreatePackageInstallationWithResult(ctx context.Context, installation entity.PackageInstallation, result entity.CommandResult, event entity.OutboxEvent) error
 	UpdatePackageInstallation(ctx context.Context, installation entity.PackageInstallation, previousVersion int64) error
+	UpdatePackageInstallationWithResult(ctx context.Context, installation entity.PackageInstallation, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error
 	GetPackageInstallation(ctx context.Context, id uuid.UUID) (entity.PackageInstallation, error)
 	ListPackageInstallations(ctx context.Context, filter query.PackageInstallationFilter) ([]entity.PackageInstallation, value.PageResult, error)
 	CreatePackageSecretSchema(ctx context.Context, schema entity.PackageSecretSchema) error

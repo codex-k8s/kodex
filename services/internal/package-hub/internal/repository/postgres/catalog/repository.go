@@ -71,6 +71,7 @@ const (
 	operationSetPackageVerification          = "domain.Repository.SetPackageVerification"
 	operationSyncAvailableCatalog            = "domain.Repository.SyncAvailableCatalog"
 	operationUpdatePackageInstallation       = "domain.Repository.UpdatePackageInstallation"
+	operationUpdatePackageInstallationResult = "domain.Repository.UpdatePackageInstallationWithResult"
 	operationUpdatePackageSourceResult       = "domain.Repository.UpdatePackageSourceWithResult"
 	operationUpdatePricingMetadata           = "domain.Repository.UpdatePricingMetadata"
 )
@@ -85,7 +86,7 @@ func (r *Repository) CreatePackageSource(ctx context.Context, source entity.Pack
 }
 
 func (r *Repository) CreatePackageSourceWithResult(ctx context.Context, source entity.PackageSource, result entity.CommandResult, event entity.OutboxEvent) error {
-	return r.createWithResult(ctx, operationCreatePackageSourceResult, queryPackageSourceCreate, packageSourceArgs(source), result, event)
+	return r.mutateWithResult(ctx, operationCreatePackageSourceResult, queryPackageSourceCreate, packageSourceArgs(source), result, event)
 }
 
 func (r *Repository) GetPackageSource(ctx context.Context, id uuid.UUID) (entity.PackageSource, error) {
@@ -97,11 +98,8 @@ func (r *Repository) ListPackageSources(ctx context.Context, filter query.Packag
 }
 
 func (r *Repository) UpdatePackageSourceWithResult(ctx context.Context, source entity.PackageSource, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
-	return r.mutate(ctx, operationUpdatePackageSourceResult,
-		affectedMutation(queryPackageSourceUpdate, packageSourceUpdateArgs(source, previousVersion)),
-		commandResultMutation(result),
-		outboxEventMutation(event),
-	)
+	args := packageSourceUpdateArgs(source, previousVersion)
+	return r.mutateWithResult(ctx, operationUpdatePackageSourceResult, queryPackageSourceUpdate, args, result, event)
 }
 
 func (r *Repository) SyncAvailableCatalog(ctx context.Context, plan catalogrepo.CatalogSyncPlan) (catalogrepo.CatalogSyncOutcome, error) {
@@ -284,11 +282,20 @@ func (r *Repository) CreatePackageInstallation(ctx context.Context, installation
 }
 
 func (r *Repository) CreatePackageInstallationWithResult(ctx context.Context, installation entity.PackageInstallation, result entity.CommandResult, event entity.OutboxEvent) error {
-	return r.createWithResult(ctx, operationCreatePackageInstallationResult, queryPackageInstallationCreate, packageInstallationArgs(installation), result, event)
+	return r.mutateWithResult(ctx, operationCreatePackageInstallationResult, queryPackageInstallationCreate, packageInstallationArgs(installation), result, event)
 }
 
 func (r *Repository) UpdatePackageInstallation(ctx context.Context, installation entity.PackageInstallation, previousVersion int64) error {
 	return r.runAffected(ctx, operationUpdatePackageInstallation, queryPackageInstallationUpdate, packageInstallationUpdateArgs(installation, previousVersion))
+}
+
+func (r *Repository) UpdatePackageInstallationWithResult(ctx context.Context, installation entity.PackageInstallation, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.updatePackageInstallationWithResult(ctx, packageInstallationResultUpdate{
+		installation:      installation,
+		previousVersion:   previousVersion,
+		commandResult:     result,
+		domainOutboxEvent: event,
+	})
 }
 
 func (r *Repository) GetPackageInstallation(ctx context.Context, id uuid.UUID) (entity.PackageInstallation, error) {
@@ -392,7 +399,19 @@ func (r *Repository) runAffected(ctx context.Context, operation string, queryTex
 
 type mutation = postgreslib.Mutation
 
-func (r *Repository) createWithResult(ctx context.Context, operation string, queryText string, args pgx.NamedArgs, result entity.CommandResult, event entity.OutboxEvent) error {
+type packageInstallationResultUpdate struct {
+	installation      entity.PackageInstallation
+	previousVersion   int64
+	commandResult     entity.CommandResult
+	domainOutboxEvent entity.OutboxEvent
+}
+
+func (r *Repository) updatePackageInstallationWithResult(ctx context.Context, update packageInstallationResultUpdate) error {
+	args := packageInstallationUpdateArgs(update.installation, update.previousVersion)
+	return r.mutateWithResult(ctx, operationUpdatePackageInstallationResult, queryPackageInstallationUpdate, args, update.commandResult, update.domainOutboxEvent)
+}
+
+func (r *Repository) mutateWithResult(ctx context.Context, operation string, queryText string, args pgx.NamedArgs, result entity.CommandResult, event entity.OutboxEvent) error {
 	return r.mutate(ctx, operation,
 		affectedMutation(queryText, args),
 		commandResultMutation(result),

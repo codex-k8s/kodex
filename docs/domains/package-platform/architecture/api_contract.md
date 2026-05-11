@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-06
 updated_at: 2026-05-08
-related_issues: [642, 646, 650, 673, 678, 680, 684]
+related_issues: [642, 646, 650, 673, 678, 680, 684, 689]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -49,9 +49,9 @@ approvals:
 | `ListPackageVersions` | gRPC query | `package.catalog.read` | нет | Список версий пакета. |
 | `GetPackageManifest` | gRPC query | `package.manifest.read` | нет | Возвращает нормализованный снимок manifest. |
 | `RequestPackageInstallation` | gRPC command | `package.install` | `CommandMeta.command_id` или `idempotency_key` | Создаёт запрос установки пакета в заданной области; если активная установка уже есть, возвращает `already_exists`, а изменение идёт через `UpdatePackageInstallation` с ожидаемой версией. |
-| `UpdatePackageInstallation` | gRPC command | `package.installation.update` | ожидаемая версия | Меняет статус, desired state или выбранную версию установки. |
-| `DisablePackageInstallation` | gRPC command | `package.installation.disable` | ожидаемая версия | Отключает установленный пакет без удаления истории. |
-| `UninstallPackage` | gRPC command | `package.uninstall` | ожидаемая версия | Переводит установку в `uninstalled` и публикует событие. |
+| `UpdatePackageInstallation` | gRPC command | `package.installation.update` | `CommandMeta.command_id` или `idempotency_key` + ожидаемая версия | Меняет статус, desired state или выбранную версию установки. |
+| `DisablePackageInstallation` | gRPC command | `package.installation.disable` | `CommandMeta.command_id` или `idempotency_key` + ожидаемая версия | Отключает установленный пакет без удаления истории. |
+| `UninstallPackage` | gRPC command | `package.uninstall` | `CommandMeta.command_id` или `idempotency_key` + ожидаемая версия | Переводит установку в `uninstalled` и публикует событие. |
 | `GetPackageInstallation` | gRPC query | `package.installation.read` | нет | Авторитетное чтение установки. |
 | `ListPackageInstallations` | gRPC query | `package.installation.read` | нет | Список установок по области, статусу и виду пакета. |
 | `GetPackageSecretSchema` | gRPC query | `package.secret.read` | нет | Читает схему секретов версии пакета. |
@@ -106,8 +106,8 @@ approvals:
 | Go-артефакты событий | Генерируются в `libs/go/platformevents/packagehub/events.gen.go`. |
 | Сервисный процесс `package-hub` | Общий gRPC runtime, служебные `/health/*`, `/metrics`, PostgreSQL repository, проверка доступа через `access-manager` и часть операций `PackageHubService` подключены. |
 | PostgreSQL и outbox | Таблицы package-каталога, установок, проверок, идемпотентного следа и outbox добавлены; диспетчер публикует события через `platform-event-log`. |
-| Реализованные операции | `ConnectPackageSource`, `UpdatePackageSource`, `DisablePackageSource`, `GetPackageSource`, `ListPackageSources`, `SyncAvailablePackages`, `GetPackage`, `ListPackages`, `GetPackageVersion`, `ListPackageVersions`, `GetPackageManifest`, `RequestPackageInstallation`, `GetPackageInstallation`, `ListPackageInstallations`, `SetPackageVerification`. |
-| Операции следующих срезов | Изменение, отключение и снятие установок, схемы секретов установок и runtime-связанные команды пока возвращают `unimplemented`. |
+| Реализованные операции | `ConnectPackageSource`, `UpdatePackageSource`, `DisablePackageSource`, `GetPackageSource`, `ListPackageSources`, `SyncAvailablePackages`, `GetPackage`, `ListPackages`, `GetPackageVersion`, `ListPackageVersions`, `GetPackageManifest`, `RequestPackageInstallation`, `UpdatePackageInstallation`, `DisablePackageInstallation`, `UninstallPackage`, `GetPackageInstallation`, `ListPackageInstallations`, `SetPackageVerification`. |
+| Операции следующих срезов | Схемы секретов установок и runtime-связанные команды пока возвращают `unimplemented`. |
 
 ## Совместимость
 

@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-06
 updated_at: 2026-05-08
-related_issues: [642, 655, 678, 680, 684]
+related_issues: [642, 655, 678, 680, 684, 689]
 related_prs: []
 related_adrs: []
 approvals:
@@ -122,6 +122,26 @@ sequenceDiagram
 ```
 
 `package-hub` фиксирует установку и публикует событие. Если пакет требует runtime-нагрузку, `runtime-manager` выполняет техническую работу по своему контракту.
+
+### Изменение и снятие установки
+
+```mermaid
+sequenceDiagram
+  participant UI as web-console
+  participant G as staff-gateway
+  participant A as access-manager
+  participant P as package-hub
+  participant DB as package DB
+  UI->>G: PATCH /package-installations/{id}
+  G->>P: UpdatePackageInstallation(command)
+  P->>A: CheckAccess(package.installation.update)
+  A-->>P: allow
+  P->>P: validate expected version, target version and manifest
+  P->>DB: update installation + command result + outbox
+  P-->>G: installation state
+```
+
+Отключение и снятие установки идут отдельными командами `DisablePackageInstallation` и `UninstallPackage`, чтобы события `package.installation.disabled` и `package.installation.uninstalled` не смешивались с обычным изменением версии или desired state. `package-hub` не удаляет runtime-нагрузку сам: он меняет локальное состояние и публикует событие для runtime-контура.
 
 ### Использование руководящего пакета агентом
 

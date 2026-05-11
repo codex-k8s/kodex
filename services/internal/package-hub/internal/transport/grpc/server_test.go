@@ -91,6 +91,23 @@ func TestRequestPackageInstallationReturnsInstallationResponse(t *testing.T) {
 	}
 }
 
+func TestDisablePackageInstallationReturnsInstallationResponse(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.NewString()
+	installationID := uuid.New()
+	response, err := NewServer(fakePackageService{}).DisablePackageInstallation(context.Background(), &packagesv1.DisablePackageInstallationRequest{
+		Meta:           &packagesv1.CommandMeta{CommandId: &commandID, Actor: &packagesv1.Actor{Type: "user", Id: "owner"}},
+		InstallationId: installationID.String(),
+	})
+	if err != nil {
+		t.Fatalf("DisablePackageInstallation(): %v", err)
+	}
+	if response.GetInstallation().GetId() != installationID.String() || response.GetInstallation().GetInstallationStatus() != packagesv1.PackageInstallationStatus_PACKAGE_INSTALLATION_STATUS_DISABLED {
+		t.Fatalf("installation response = %+v, want disabled %s", response.GetInstallation(), installationID)
+	}
+}
+
 type fakePackageService struct {
 	packageID uuid.UUID
 }
@@ -178,6 +195,52 @@ func (fakePackageService) RequestPackageInstallation(_ context.Context, input pa
 		Scope:               input.Scope,
 		InstallationStatus:  enum.PackageInstallationStatusRequested,
 		DesiredState:        enum.PackageDesiredStatePresent,
+		SecretBindingStatus: enum.PackageSecretBindingStatusMissing,
+		LastHealthStatus:    enum.PackageHealthStatusUnknown,
+	}, nil
+}
+
+func (fakePackageService) UpdatePackageInstallation(_ context.Context, input packageservice.UpdatePackageInstallationInput) (entity.PackageInstallation, error) {
+	now := time.Date(2026, 5, 7, 16, 0, 0, 0, time.UTC)
+	versionID := uuid.New()
+	if input.PackageVersionID != nil {
+		versionID = *input.PackageVersionID
+	}
+	return entity.PackageInstallation{
+		VersionedBase:       entity.VersionedBase{ID: input.InstallationID, Version: 2, CreatedAt: now, UpdatedAt: now},
+		PackageID:           uuid.New(),
+		PackageVersionID:    versionID,
+		Scope:               value.ScopeRef{Type: enum.PackageInstallationScopeTypeProject, Ref: uuid.NewString()},
+		InstallationStatus:  enum.PackageInstallationStatusRequested,
+		DesiredState:        enum.PackageDesiredStatePresent,
+		SecretBindingStatus: enum.PackageSecretBindingStatusMissing,
+		LastHealthStatus:    enum.PackageHealthStatusUnknown,
+	}, nil
+}
+
+func (fakePackageService) DisablePackageInstallation(_ context.Context, input packageservice.DisablePackageInstallationInput) (entity.PackageInstallation, error) {
+	now := time.Date(2026, 5, 7, 16, 0, 0, 0, time.UTC)
+	return entity.PackageInstallation{
+		VersionedBase:       entity.VersionedBase{ID: input.InstallationID, Version: 2, CreatedAt: now, UpdatedAt: now},
+		PackageID:           uuid.New(),
+		PackageVersionID:    uuid.New(),
+		Scope:               value.ScopeRef{Type: enum.PackageInstallationScopeTypeProject, Ref: uuid.NewString()},
+		InstallationStatus:  enum.PackageInstallationStatusDisabled,
+		DesiredState:        enum.PackageDesiredStateSuspended,
+		SecretBindingStatus: enum.PackageSecretBindingStatusMissing,
+		LastHealthStatus:    enum.PackageHealthStatusUnknown,
+	}, nil
+}
+
+func (fakePackageService) UninstallPackage(_ context.Context, input packageservice.UninstallPackageInput) (entity.PackageInstallation, error) {
+	now := time.Date(2026, 5, 7, 16, 0, 0, 0, time.UTC)
+	return entity.PackageInstallation{
+		VersionedBase:       entity.VersionedBase{ID: input.InstallationID, Version: 2, CreatedAt: now, UpdatedAt: now},
+		PackageID:           uuid.New(),
+		PackageVersionID:    uuid.New(),
+		Scope:               value.ScopeRef{Type: enum.PackageInstallationScopeTypeProject, Ref: uuid.NewString()},
+		InstallationStatus:  enum.PackageInstallationStatusUninstalled,
+		DesiredState:        enum.PackageDesiredStateAbsent,
 		SecretBindingStatus: enum.PackageSecretBindingStatusMissing,
 		LastHealthStatus:    enum.PackageHealthStatusUnknown,
 	}, nil
