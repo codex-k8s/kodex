@@ -82,6 +82,43 @@ var (
 		runtimev1.RuntimeArtifactType_RUNTIME_ARTIFACT_TYPE_MANIFEST_REF:   enum.RuntimeArtifactTypeManifestRef,
 	}
 	runtimeArtifactTypeToProto = invertEnumMap(runtimeArtifactTypeFromProto)
+
+	cleanupPolicyStatusFromProto = map[runtimev1.CleanupPolicyStatus]enum.CleanupPolicyStatus{
+		runtimev1.CleanupPolicyStatus_CLEANUP_POLICY_STATUS_ACTIVE:     enum.CleanupPolicyStatusActive,
+		runtimev1.CleanupPolicyStatus_CLEANUP_POLICY_STATUS_DISABLED:   enum.CleanupPolicyStatusDisabled,
+		runtimev1.CleanupPolicyStatus_CLEANUP_POLICY_STATUS_SUPERSEDED: enum.CleanupPolicyStatusSuperseded,
+	}
+	cleanupPolicyStatusToProto = invertEnumMap(cleanupPolicyStatusFromProto)
+
+	runtimeScopeTypeFromProto = map[runtimev1.RuntimeScopeType]enum.RuntimeScopeType{
+		runtimev1.RuntimeScopeType_RUNTIME_SCOPE_TYPE_PLATFORM:        enum.RuntimeScopePlatform,
+		runtimev1.RuntimeScopeType_RUNTIME_SCOPE_TYPE_ORGANIZATION:    enum.RuntimeScopeOrganization,
+		runtimev1.RuntimeScopeType_RUNTIME_SCOPE_TYPE_PROJECT:         enum.RuntimeScopeProject,
+		runtimev1.RuntimeScopeType_RUNTIME_SCOPE_TYPE_REPOSITORY:      enum.RuntimeScopeRepository,
+		runtimev1.RuntimeScopeType_RUNTIME_SCOPE_TYPE_RUNTIME_PROFILE: enum.RuntimeScopeRuntimeProfile,
+	}
+	runtimeScopeTypeToProto = invertEnumMap(runtimeScopeTypeFromProto)
+
+	prewarmPoolScopeTypeFromProto = map[runtimev1.PrewarmPoolScopeType]enum.PrewarmPoolScopeType{
+		runtimev1.PrewarmPoolScopeType_PREWARM_POOL_SCOPE_TYPE_PLATFORM:     enum.PrewarmPoolScopePlatform,
+		runtimev1.PrewarmPoolScopeType_PREWARM_POOL_SCOPE_TYPE_ORGANIZATION: enum.PrewarmPoolScopeOrganization,
+		runtimev1.PrewarmPoolScopeType_PREWARM_POOL_SCOPE_TYPE_PROJECT:      enum.PrewarmPoolScopeProject,
+		runtimev1.PrewarmPoolScopeType_PREWARM_POOL_SCOPE_TYPE_REPOSITORY:   enum.PrewarmPoolScopeRepository,
+	}
+	prewarmPoolScopeTypeToProto = invertEnumMap(prewarmPoolScopeTypeFromProto)
+
+	prewarmPoolStatusFromProto = map[runtimev1.PrewarmPoolStatus]enum.PrewarmPoolStatus{
+		runtimev1.PrewarmPoolStatus_PREWARM_POOL_STATUS_ACTIVE:   enum.PrewarmPoolStatusActive,
+		runtimev1.PrewarmPoolStatus_PREWARM_POOL_STATUS_PAUSED:   enum.PrewarmPoolStatusPaused,
+		runtimev1.PrewarmPoolStatus_PREWARM_POOL_STATUS_DISABLED: enum.PrewarmPoolStatusDisabled,
+	}
+	prewarmPoolStatusToProto = invertEnumMap(prewarmPoolStatusFromProto)
+
+	capacityStatusToProto = map[enum.CapacityStatus]runtimev1.CapacityStatus{
+		enum.CapacityStatusOK:           runtimev1.CapacityStatus_CAPACITY_STATUS_OK,
+		enum.CapacityStatusDegraded:     runtimev1.CapacityStatus_CAPACITY_STATUS_DEGRADED,
+		enum.CapacityStatusInsufficient: runtimev1.CapacityStatus_CAPACITY_STATUS_INSUFFICIENT,
+	}
 )
 
 func enumFromProto[Proto comparable, Domain any](value Proto, values map[Proto]Domain) (Domain, error) {
@@ -238,4 +275,49 @@ func RuntimeArtifactTypeFromProto(artifactType runtimev1.RuntimeArtifactType) (e
 // RuntimeArtifactTypeToProto maps an external runtime artifact type.
 func RuntimeArtifactTypeToProto(artifactType enum.RuntimeArtifactType) runtimev1.RuntimeArtifactType {
 	return enumToProto(artifactType, runtimeArtifactTypeToProto, runtimev1.RuntimeArtifactType_RUNTIME_ARTIFACT_TYPE_UNSPECIFIED)
+}
+
+// CleanupPolicyStatusFromProto maps cleanup policy status.
+func CleanupPolicyStatusFromProto(status runtimev1.CleanupPolicyStatus) (enum.CleanupPolicyStatus, error) {
+	return enumFromProto(status, cleanupPolicyStatusFromProto)
+}
+
+// CleanupPolicyStatusToProto maps cleanup policy status.
+func CleanupPolicyStatusToProto(status enum.CleanupPolicyStatus) runtimev1.CleanupPolicyStatus {
+	return enumToProto(status, cleanupPolicyStatusToProto, runtimev1.CleanupPolicyStatus_CLEANUP_POLICY_STATUS_UNSPECIFIED)
+}
+
+// RuntimeScopeTypeFromProto maps cleanup scope type.
+func RuntimeScopeTypeFromProto(scope runtimev1.RuntimeScopeType) (enum.RuntimeScopeType, error) {
+	return enumFromProto(scope, runtimeScopeTypeFromProto)
+}
+
+// RuntimeScopeTypeToProto maps cleanup scope type.
+func RuntimeScopeTypeToProto(scope enum.RuntimeScopeType) runtimev1.RuntimeScopeType {
+	return enumToProto(scope, runtimeScopeTypeToProto, runtimev1.RuntimeScopeType_RUNTIME_SCOPE_TYPE_UNSPECIFIED)
+}
+
+// PrewarmPoolScopeTypeFromProto maps prewarm pool scope type.
+func PrewarmPoolScopeTypeFromProto(scope runtimev1.PrewarmPoolScopeType) (enum.PrewarmPoolScopeType, error) {
+	return enumFromProto(scope, prewarmPoolScopeTypeFromProto)
+}
+
+// PrewarmPoolScopeTypeToProto maps prewarm pool scope type.
+func PrewarmPoolScopeTypeToProto(scope enum.PrewarmPoolScopeType) runtimev1.PrewarmPoolScopeType {
+	return enumToProto(scope, prewarmPoolScopeTypeToProto, runtimev1.PrewarmPoolScopeType_PREWARM_POOL_SCOPE_TYPE_UNSPECIFIED)
+}
+
+// PrewarmPoolStatusFromProto maps prewarm pool status.
+func PrewarmPoolStatusFromProto(status runtimev1.PrewarmPoolStatus) (enum.PrewarmPoolStatus, error) {
+	return enumFromProto(status, prewarmPoolStatusFromProto)
+}
+
+// PrewarmPoolStatusToProto maps prewarm pool status.
+func PrewarmPoolStatusToProto(status enum.PrewarmPoolStatus) runtimev1.PrewarmPoolStatus {
+	return enumToProto(status, prewarmPoolStatusToProto, runtimev1.PrewarmPoolStatus_PREWARM_POOL_STATUS_UNSPECIFIED)
+}
+
+// CapacityStatusToProto maps prewarm capacity status.
+func CapacityStatusToProto(status enum.CapacityStatus) runtimev1.CapacityStatus {
+	return enumToProto(status, capacityStatusToProto, runtimev1.CapacityStatus_CAPACITY_STATUS_UNSPECIFIED)
 }

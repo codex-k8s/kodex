@@ -46,6 +46,8 @@ const (
 	ResourceRuntimeWorkspace       = "runtime_workspace_materialization"
 	ResourceRuntimeJob             = "runtime_job"
 	ResourceRuntimeArtifactRef     = "runtime_artifact_ref"
+	ResourceRuntimeCleanupPolicy   = "runtime_cleanup_policy"
+	ResourceRuntimePrewarmPool     = "runtime_prewarm_pool"
 )
 
 const (
@@ -116,6 +118,10 @@ const (
 	ActionRuntimeJobList                        = "runtime.job.list"
 	ActionRuntimeArtifactRefRecord              = "runtime.artifact_ref.record"
 	ActionRuntimeArtifactRefList                = "runtime.artifact_ref.list"
+	ActionRuntimeCleanupPolicyUpsert            = "runtime.cleanup_policy.upsert"
+	ActionRuntimeCleanupRun                     = "runtime.cleanup.run"
+	ActionRuntimePrewarmPoolUpsert              = "runtime.prewarm_pool.upsert"
+	ActionRuntimePrewarmPoolReconcile           = "runtime.prewarm_pool.reconcile"
 )
 
 // ProjectCatalogActions returns system actions owned by the projects-and-repositories domain.
@@ -206,6 +212,10 @@ func RuntimeManagerActions() []ActionDescriptor {
 		{Key: ActionRuntimeJobList, ResourceType: ResourceRuntimeJob},
 		{Key: ActionRuntimeArtifactRefRecord, ResourceType: ResourceRuntimeArtifactRef},
 		{Key: ActionRuntimeArtifactRefList, ResourceType: ResourceRuntimeArtifactRef},
+		{Key: ActionRuntimeCleanupPolicyUpsert, ResourceType: ResourceRuntimeCleanupPolicy},
+		{Key: ActionRuntimeCleanupRun, ResourceType: ResourceRuntimeCleanupPolicy},
+		{Key: ActionRuntimePrewarmPoolUpsert, ResourceType: ResourceRuntimePrewarmPool},
+		{Key: ActionRuntimePrewarmPoolReconcile, ResourceType: ResourceRuntimePrewarmPool},
 	}
 }
 

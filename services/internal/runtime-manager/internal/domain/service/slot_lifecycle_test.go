@@ -260,6 +260,8 @@ func TestReserveSlotAuthorizesBeforeReplay(t *testing.T) {
 		workspaceMaterializations: make(map[uuid.UUID]entity.WorkspaceMaterialization),
 		jobs:                      make(map[uuid.UUID]entity.Job),
 		runtimeArtifactRefs:       make(map[uuid.UUID]entity.RuntimeArtifactRef),
+		cleanupPolicies:           make(map[uuid.UUID]entity.CleanupPolicy),
+		prewarmPools:              make(map[uuid.UUID]entity.PrewarmPool),
 		results:                   make(map[string]entity.CommandResult),
 	}
 	svc := NewWithConfig(repo, fixedClock{now: testNow}, &sequenceIDs{values: []uuid.UUID{mustUUID("00000000-0000-0000-0000-000000000209")}}, Config{
@@ -300,6 +302,8 @@ func newTestServiceWithAuthorizer(authorizer Authorizer) (*Service, *fakeReposit
 		workspaceMaterializations: make(map[uuid.UUID]entity.WorkspaceMaterialization),
 		jobs:                      make(map[uuid.UUID]entity.Job),
 		runtimeArtifactRefs:       make(map[uuid.UUID]entity.RuntimeArtifactRef),
+		cleanupPolicies:           make(map[uuid.UUID]entity.CleanupPolicy),
+		prewarmPools:              make(map[uuid.UUID]entity.PrewarmPool),
 		results:                   make(map[string]entity.CommandResult),
 	}
 	ids := &sequenceIDs{values: []uuid.UUID{
@@ -376,6 +380,8 @@ type fakeRepository struct {
 	workspaceMaterializations map[uuid.UUID]entity.WorkspaceMaterialization
 	jobs                      map[uuid.UUID]entity.Job
 	runtimeArtifactRefs       map[uuid.UUID]entity.RuntimeArtifactRef
+	cleanupPolicies           map[uuid.UUID]entity.CleanupPolicy
+	prewarmPools              map[uuid.UUID]entity.PrewarmPool
 	results                   map[string]entity.CommandResult
 	events                    []entity.OutboxEvent
 }
@@ -399,6 +405,35 @@ func (r *fakeRepository) CreateSlot(_ context.Context, slot entity.Slot, event e
 	r.events = append(r.events, event)
 	r.results[result.Key] = result
 	return nil
+}
+
+func (r *fakeRepository) ClaimReusableSlot(_ context.Context, filter query.ReusableSlotFilter, recordFactory runtimerepo.SlotReuseRecordFactory) (entity.Slot, error) {
+	for id, slot := range r.slots {
+		if !reusableFakeSlot(slot, filter, r.jobs) {
+			continue
+		}
+		slot.Status = enum.SlotStatusReserved
+		slot.AgentRunID = filter.AgentRunID
+		slot.ProjectID = filter.ProjectID
+		slot.RepositoryIDs = append([]uuid.UUID(nil), filter.RepositoryIDs...)
+		slot.ClusterID = filter.ClusterID
+		slot.Fingerprint = filter.Fingerprint
+		slot.LeaseOwner = filter.LeaseOwner
+		slot.LeaseUntil = &filter.LeaseUntil
+		slot.LastErrorCode = ""
+		slot.LastErrorMessage = ""
+		slot.UpdatedAt = filter.Now
+		slot.Version++
+		event, result, err := recordFactory(slot)
+		if err != nil {
+			return entity.Slot{}, err
+		}
+		r.slots[id] = slot
+		r.events = append(r.events, event)
+		r.results[result.Key] = result
+		return slot, nil
+	}
+	return entity.Slot{}, errs.ErrNotFound
 }
 
 func (r *fakeRepository) PrepareRuntime(
@@ -610,6 +645,132 @@ func (r *fakeRepository) ListRuntimeArtifactRefs(context.Context, query.RuntimeA
 	return refs, query.PageResult{}, nil
 }
 
+func (r *fakeRepository) CreateCleanupPolicy(_ context.Context, policy entity.CleanupPolicy, result entity.CommandResult) error {
+	r.cleanupPolicies[policy.ID] = policy
+	r.results[result.Key] = result
+	return nil
+}
+
+func (r *fakeRepository) UpdateCleanupPolicy(_ context.Context, policy entity.CleanupPolicy, previousVersion int64, result entity.CommandResult) error {
+	current, ok := r.cleanupPolicies[policy.ID]
+	if !ok {
+		return errs.ErrNotFound
+	}
+	if current.Version != previousVersion {
+		return errs.ErrConflict
+	}
+	r.cleanupPolicies[policy.ID] = policy
+	r.results[result.Key] = result
+	return nil
+}
+
+func (r *fakeRepository) GetCleanupPolicy(_ context.Context, id uuid.UUID) (entity.CleanupPolicy, error) {
+	policy, ok := r.cleanupPolicies[id]
+	if !ok {
+		return entity.CleanupPolicy{}, errs.ErrNotFound
+	}
+	return policy, nil
+}
+
+func (r *fakeRepository) RunCleanupBatch(_ context.Context, filter query.CleanupBatchFilter, recordFactory runtimerepo.CleanupBatchRecordFactory) (runtimerepo.CleanupBatchResult, error) {
+	result := runtimerepo.CleanupBatchResult{}
+	for _, policy := range r.cleanupPolicies {
+		if policy.Status != enum.CleanupPolicyStatusActive || (filter.CleanupPolicyID != nil && policy.ID != *filter.CleanupPolicyID) {
+			continue
+		}
+		for id, slot := range r.slots {
+			if result.ClaimedCount >= filter.Limit || !cleanupFakeSlotMatches(slot, policy, filter.Now) {
+				continue
+			}
+			if fakeSlotHasActiveJob(slot.ID, r.jobs) {
+				slot.LastErrorCode = "CLEANUP_BLOCKED_BY_ACTIVE_JOB"
+				slot.LastErrorMessage = "cleanup is blocked by active runtime jobs"
+				slot.UpdatedAt = filter.Now
+				slot.Version++
+				r.slots[id] = slot
+				result.FailedSlots = append(result.FailedSlots, slot)
+			} else {
+				slot.Status = enum.SlotStatusCleaned
+				slot.LeaseOwner = ""
+				slot.LeaseUntil = nil
+				slot.LastErrorCode = ""
+				slot.LastErrorMessage = ""
+				slot.UpdatedAt = filter.Now
+				slot.Version++
+				r.slots[id] = slot
+				result.CleanedSlots = append(result.CleanedSlots, slot)
+			}
+			result.ClaimedCount++
+			result.AffectedSlotIDs = append(result.AffectedSlotIDs, slot.ID)
+		}
+	}
+	result.CleanedCount = len(result.CleanedSlots)
+	result.FailedCount = len(result.FailedSlots)
+	events, command, err := recordFactory(result)
+	if err != nil {
+		return runtimerepo.CleanupBatchResult{}, err
+	}
+	r.events = append(r.events, events...)
+	r.results[command.Key] = command
+	return result, nil
+}
+
+func (r *fakeRepository) CreatePrewarmPool(_ context.Context, pool entity.PrewarmPool, result entity.CommandResult) error {
+	r.prewarmPools[pool.ID] = pool
+	r.results[result.Key] = result
+	return nil
+}
+
+func (r *fakeRepository) UpdatePrewarmPool(_ context.Context, pool entity.PrewarmPool, previousVersion int64, result entity.CommandResult) error {
+	current, ok := r.prewarmPools[pool.ID]
+	if !ok {
+		return errs.ErrNotFound
+	}
+	if current.Version != previousVersion {
+		return errs.ErrConflict
+	}
+	r.prewarmPools[pool.ID] = pool
+	r.results[result.Key] = result
+	return nil
+}
+
+func (r *fakeRepository) GetPrewarmPool(_ context.Context, id uuid.UUID) (entity.PrewarmPool, error) {
+	pool, ok := r.prewarmPools[id]
+	if !ok {
+		return entity.PrewarmPool{}, errs.ErrNotFound
+	}
+	return pool, nil
+}
+
+func (r *fakeRepository) ReconcilePrewarmPool(_ context.Context, filter query.PrewarmPoolReconcileFilter, recordFactory runtimerepo.PrewarmPoolReconcileRecordFactory) (entity.PrewarmPool, error) {
+	pool, ok := r.prewarmPools[filter.PrewarmPoolID]
+	if !ok {
+		return entity.PrewarmPool{}, errs.ErrNotFound
+	}
+	currentSize := int64(0)
+	excessSlots := []entity.Slot{}
+	for _, slot := range r.slots {
+		if prewarmFakeSlotMatchesPool(slot, pool) {
+			currentSize++
+			excessSlots = append(excessSlots, slot)
+		}
+	}
+	record, events, command, err := recordFactory(runtimerepo.PrewarmPoolReconcileState{Pool: pool, CurrentSize: currentSize, ExcessSlots: excessSlots})
+	if err != nil {
+		return entity.PrewarmPool{}, err
+	}
+	r.prewarmPools[pool.ID] = record.Pool
+	for _, slot := range record.CreatedSlots {
+		r.slots[slot.ID] = slot
+	}
+	for _, slot := range record.CleanupSlots {
+		r.slots[slot.ID] = slot
+	}
+	r.events = append(r.events, events...)
+	r.results[command.Key] = command
+	return record.Pool, nil
+}
+
 func runnableFakeJob(job entity.Job, filter query.JobClaimFilter) bool {
 	if len(filter.JobTypes) > 0 {
 		found := false
@@ -627,6 +788,90 @@ func runnableFakeJob(job entity.Job, filter query.JobClaimFilter) bool {
 		return false
 	}
 	return job.Status == enum.JobStatusPending || ((job.Status == enum.JobStatusClaimed || job.Status == enum.JobStatusRunning) && job.LeaseUntil != nil && !job.LeaseUntil.After(filter.Now))
+}
+
+func reusableFakeSlot(slot entity.Slot, filter query.ReusableSlotFilter, jobs map[uuid.UUID]entity.Job) bool {
+	if slot.RuntimeProfile != filter.RuntimeProfile || slot.RuntimeMode != filter.RuntimeMode {
+		return false
+	}
+	if !sameUUIDPtr(slot.FleetScopeID, filter.FleetScopeID) || fakeSlotHasActiveJob(slot.ID, jobs) {
+		return false
+	}
+	if slot.LeaseUntil != nil && slot.LeaseUntil.After(filter.Now) {
+		return false
+	}
+	switch slot.Status {
+	case enum.SlotStatusPrewarmed:
+		return slot.Fingerprint == "" || slot.Fingerprint == filter.Fingerprint
+	case enum.SlotStatusReady:
+		return slot.Fingerprint == filter.Fingerprint
+	default:
+		return false
+	}
+}
+
+func cleanupFakeSlotMatches(slot entity.Slot, policy entity.CleanupPolicy, now time.Time) bool {
+	if !cleanupFakeScopeMatches(slot, policy) {
+		return false
+	}
+	switch slot.Status {
+	case enum.SlotStatusCleanupPending:
+		return !slot.UpdatedAt.After(now.Add(-time.Duration(policy.TTLSeconds) * time.Second))
+	case enum.SlotStatusFailed:
+		return !slot.UpdatedAt.After(now.Add(-time.Duration(policy.FailedTTLSeconds) * time.Second))
+	default:
+		return false
+	}
+}
+
+func cleanupFakeScopeMatches(slot entity.Slot, policy entity.CleanupPolicy) bool {
+	switch policy.ScopeType {
+	case enum.RuntimeScopePlatform:
+		return true
+	case enum.RuntimeScopeProject:
+		return slot.ProjectID != nil && slot.ProjectID.String() == policy.ScopeID
+	case enum.RuntimeScopeRepository:
+		for _, id := range slot.RepositoryIDs {
+			if id.String() == policy.ScopeID {
+				return true
+			}
+		}
+		return false
+	case enum.RuntimeScopeRuntimeProfile:
+		return slot.RuntimeProfile == policy.ScopeID
+	default:
+		return false
+	}
+}
+
+func fakeSlotHasActiveJob(slotID uuid.UUID, jobs map[uuid.UUID]entity.Job) bool {
+	for _, job := range jobs {
+		if job.SlotID != nil && *job.SlotID == slotID && (job.Status == enum.JobStatusPending || job.Status == enum.JobStatusClaimed || job.Status == enum.JobStatusRunning) {
+			return true
+		}
+	}
+	return false
+}
+
+func prewarmFakeSlotMatchesPool(slot entity.Slot, pool entity.PrewarmPool) bool {
+	if slot.Status != enum.SlotStatusPrewarmed || !slot.IsPrewarmed || slot.RuntimeProfile != pool.RuntimeProfile || !sameUUIDPtr(slot.FleetScopeID, pool.FleetScopeID) {
+		return false
+	}
+	switch pool.ScopeType {
+	case enum.PrewarmPoolScopePlatform:
+		return true
+	case enum.PrewarmPoolScopeProject:
+		return slot.ProjectID != nil && slot.ProjectID.String() == pool.ScopeID
+	case enum.PrewarmPoolScopeRepository:
+		for _, id := range slot.RepositoryIDs {
+			if id.String() == pool.ScopeID {
+				return true
+			}
+		}
+		return false
+	default:
+		return false
+	}
 }
 
 func replaceFakeSteps(current []entity.JobStep, updates []entity.JobStep) []entity.JobStep {

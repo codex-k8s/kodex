@@ -218,6 +218,43 @@ func scanRuntimeArtifactRef(row postgreslib.RowScanner) (entity.RuntimeArtifactR
 	return ref, nil
 }
 
+func scanCleanupPolicy(row postgreslib.RowScanner) (entity.CleanupPolicy, error) {
+	var policy entity.CleanupPolicy
+	err := row.Scan(
+		&policy.ID,
+		&policy.ScopeType,
+		&policy.ScopeID,
+		&policy.TTLSeconds,
+		&policy.FailedTTLSeconds,
+		&policy.KeepShortLogTail,
+		&policy.Status,
+		&policy.CreatedAt,
+		&policy.UpdatedAt,
+		&policy.Version,
+	)
+	return policy, err
+}
+
+func scanPrewarmPool(row postgreslib.RowScanner) (entity.PrewarmPool, error) {
+	var pool entity.PrewarmPool
+	var fleetScopeID pgtype.UUID
+	err := row.Scan(
+		&pool.ID,
+		&pool.ScopeType,
+		&pool.ScopeID,
+		&pool.RuntimeProfile,
+		&fleetScopeID,
+		&pool.TargetSize,
+		&pool.Status,
+		&pool.LastCapacityStatus,
+		&pool.CreatedAt,
+		&pool.UpdatedAt,
+		&pool.Version,
+	)
+	pool.FleetScopeID = postgreslib.UUIDPtrFromPG(fleetScopeID)
+	return pool, err
+}
+
 func scanOutboxEvent(row postgreslib.RowScanner) (entity.OutboxEvent, error) {
 	var event entity.OutboxEvent
 	var publishedAt pgtype.Timestamptz

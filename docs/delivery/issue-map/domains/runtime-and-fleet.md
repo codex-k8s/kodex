@@ -5,7 +5,7 @@ title: kodex — карта Issue домена runtime и fleet
 status: active
 owner_role: KM
 created_at: 2026-04-25
-updated_at: 2026-05-08
+updated_at: 2026-05-11
 ---
 
 # Карта Issue — runtime и контур серверов и кластеров
@@ -25,4 +25,4 @@ updated_at: 2026-05-08
 | #659 | `services/internal/runtime-manager/**`, `docs/domains/runtime-and-fleet/architecture/design.md` | RTM-4 | готово | Workspace materialization: source refs, access mode, local paths, fingerprint, ошибки подготовки, gRPC-ручки и события `runtime.workspace.*`. |
 | #660 | `services/internal/runtime-manager/**`, `docs/domains/runtime-and-fleet/architecture/data_model.md`, `docs/domains/runtime-and-fleet/delivery/runtime_manager_delivery.md` | RTM-5 | готово | Platform job MVP: job/step state machine, short log tail, full log ref, runtime artifact refs, gRPC wiring и executor boundary. |
 | #661 | `deploy/**`, `services.yaml`, `services/internal/runtime-manager/**`, `docs/domains/runtime-and-fleet/delivery/runtime_manager_delivery.md`, `docs/domains/runtime-and-fleet/ops/**` | RTM-6 | готово | Эксплуатационный контур: Dockerfile, manifests, DB bootstrap, migration job, smoke, runbook и monitoring. |
-| #662 | `services/internal/runtime-manager/**`, `docs/domains/runtime-and-fleet/architecture/design.md` | RTM-7 | запланировано | Cleanup, retention, prewarm pool и deterministic reuse. |
+| #662 | `services/internal/runtime-manager/**`, `docs/domains/runtime-and-fleet/delivery/runtime_manager_delivery.md` | RTM-7 | готово | Политики очистки, пакетная очистка, prewarm pool, детерминированное переиспользование и видимость ошибок очистки. |

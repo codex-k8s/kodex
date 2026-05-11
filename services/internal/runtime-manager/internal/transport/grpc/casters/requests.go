@@ -223,20 +223,15 @@ func ExtendSlotLeaseInput(request *runtimev1.ExtendSlotLeaseRequest) (runtimeser
 	if err != nil {
 		return runtimeservice.ExtendSlotLeaseInput{}, err
 	}
-	leaseUntil, err := requiredTime(request.GetLeaseUntil())
+	lease, err := commandLeaseFromProto(request.GetLeaseOwner(), request.GetLeaseUntil(), request.GetMeta())
 	if err != nil {
 		return runtimeservice.ExtendSlotLeaseInput{}, err
 	}
-	meta, err := CommandMetaFromProto(request.GetMeta())
-	if err != nil {
-		return runtimeservice.ExtendSlotLeaseInput{}, err
-	}
-	return runtimeservice.ExtendSlotLeaseInput{
-		SlotID:     slotID,
-		LeaseOwner: strings.TrimSpace(request.GetLeaseOwner()),
-		LeaseUntil: leaseUntil,
-		Meta:       meta,
-	}, nil
+	input := runtimeservice.ExtendSlotLeaseInput{SlotID: slotID}
+	input.LeaseOwner = lease.Owner
+	input.LeaseUntil = lease.Until
+	input.Meta = lease.Meta
+	return input, nil
 }
 
 // ReleaseSlotInput maps a gRPC slot release request.
@@ -637,6 +632,145 @@ func ListRuntimeArtifactRefsInput(request *runtimev1.ListRuntimeArtifactRefsRequ
 	}
 	result.Meta = meta
 	return result, nil
+}
+
+// CreateOrUpdateCleanupPolicyInput maps a gRPC cleanup policy upsert request.
+func CreateOrUpdateCleanupPolicyInput(request *runtimev1.CreateOrUpdateCleanupPolicyRequest) (runtimeservice.CreateOrUpdateCleanupPolicyInput, error) {
+	if request == nil {
+		return runtimeservice.CreateOrUpdateCleanupPolicyInput{}, errs.ErrInvalidArgument
+	}
+	scope, err := RuntimeScopeTypeFromProto(request.GetScopeType())
+	if err != nil {
+		return runtimeservice.CreateOrUpdateCleanupPolicyInput{}, err
+	}
+	status, err := CleanupPolicyStatusFromProto(request.GetStatus())
+	if err != nil {
+		return runtimeservice.CreateOrUpdateCleanupPolicyInput{}, err
+	}
+	id, err := optionalUUIDPtr(request.GetCleanupPolicyId())
+	if err != nil {
+		return runtimeservice.CreateOrUpdateCleanupPolicyInput{}, err
+	}
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return runtimeservice.CreateOrUpdateCleanupPolicyInput{}, err
+	}
+	return runtimeservice.CreateOrUpdateCleanupPolicyInput{
+		CleanupPolicyID:  id,
+		ScopeType:        scope,
+		ScopeID:          strings.TrimSpace(request.GetScopeId()),
+		TTLSeconds:       request.GetTtlSeconds(),
+		FailedTTLSeconds: request.GetFailedTtlSeconds(),
+		KeepShortLogTail: request.GetKeepShortLogTail(),
+		Status:           status,
+		Meta:             meta,
+	}, nil
+}
+
+// RunCleanupBatchInput maps a gRPC cleanup batch request.
+func RunCleanupBatchInput(request *runtimev1.RunCleanupBatchRequest) (runtimeservice.RunCleanupBatchInput, error) {
+	if request == nil {
+		return runtimeservice.RunCleanupBatchInput{}, errs.ErrInvalidArgument
+	}
+	id, err := optionalUUIDPtr(request.GetCleanupPolicyId())
+	if err != nil {
+		return runtimeservice.RunCleanupBatchInput{}, err
+	}
+	leaseUntil, err := requiredTime(request.GetLeaseUntil())
+	if err != nil {
+		return runtimeservice.RunCleanupBatchInput{}, err
+	}
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return runtimeservice.RunCleanupBatchInput{}, err
+	}
+	return runtimeservice.RunCleanupBatchInput{
+		CleanupPolicyID: id,
+		Limit:           int(request.GetLimit()),
+		LeaseOwner:      strings.TrimSpace(request.GetLeaseOwner()),
+		LeaseUntil:      leaseUntil,
+		Meta:            meta,
+	}, nil
+}
+
+// CreateOrUpdatePrewarmPoolInput maps a gRPC prewarm pool upsert request.
+func CreateOrUpdatePrewarmPoolInput(request *runtimev1.CreateOrUpdatePrewarmPoolRequest) (runtimeservice.CreateOrUpdatePrewarmPoolInput, error) {
+	if request == nil {
+		return runtimeservice.CreateOrUpdatePrewarmPoolInput{}, errs.ErrInvalidArgument
+	}
+	scope, err := PrewarmPoolScopeTypeFromProto(request.GetScopeType())
+	if err != nil {
+		return runtimeservice.CreateOrUpdatePrewarmPoolInput{}, err
+	}
+	status, err := PrewarmPoolStatusFromProto(request.GetStatus())
+	if err != nil {
+		return runtimeservice.CreateOrUpdatePrewarmPoolInput{}, err
+	}
+	id, err := optionalUUIDPtr(request.GetPrewarmPoolId())
+	if err != nil {
+		return runtimeservice.CreateOrUpdatePrewarmPoolInput{}, err
+	}
+	fleetScopeID, err := optionalUUIDPtr(request.GetFleetScopeId())
+	if err != nil {
+		return runtimeservice.CreateOrUpdatePrewarmPoolInput{}, err
+	}
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return runtimeservice.CreateOrUpdatePrewarmPoolInput{}, err
+	}
+	return runtimeservice.CreateOrUpdatePrewarmPoolInput{
+		PrewarmPoolID:  id,
+		ScopeType:      scope,
+		ScopeID:        strings.TrimSpace(request.GetScopeId()),
+		RuntimeProfile: strings.TrimSpace(request.GetRuntimeProfile()),
+		FleetScopeID:   fleetScopeID,
+		TargetSize:     request.GetTargetSize(),
+		Status:         status,
+		Meta:           meta,
+	}, nil
+}
+
+// ReconcilePrewarmPoolInput maps a gRPC prewarm reconciliation request.
+func ReconcilePrewarmPoolInput(request *runtimev1.ReconcilePrewarmPoolRequest) (runtimeservice.ReconcilePrewarmPoolInput, error) {
+	if request == nil {
+		return runtimeservice.ReconcilePrewarmPoolInput{}, errs.ErrInvalidArgument
+	}
+	id, err := requiredUUID(request.GetPrewarmPoolId())
+	if err != nil {
+		return runtimeservice.ReconcilePrewarmPoolInput{}, err
+	}
+	lease, err := commandLeaseFromProto(request.GetLeaseOwner(), request.GetLeaseUntil(), request.GetMeta())
+	if err != nil {
+		return runtimeservice.ReconcilePrewarmPoolInput{}, err
+	}
+	return newPrewarmReconcileInput(id, lease), nil
+}
+
+func newPrewarmReconcileInput(id uuid.UUID, lease commandLease) runtimeservice.ReconcilePrewarmPoolInput {
+	return runtimeservice.ReconcilePrewarmPoolInput{
+		PrewarmPoolID: id,
+		LeaseOwner:    lease.Owner,
+		LeaseUntil:    lease.Until,
+		Meta:          lease.Meta,
+	}
+}
+
+type commandLease struct {
+	Owner string
+	Until time.Time
+	Meta  value.CommandMeta
+}
+
+func commandLeaseFromProto(owner string, until string, metaProto *runtimev1.CommandMeta) (commandLease, error) {
+	leaseUntil, err := requiredTime(until)
+	if err != nil {
+		return commandLease{}, err
+	}
+	meta, err := CommandMetaFromProto(metaProto)
+	if err != nil {
+		return commandLease{}, err
+	}
+	return commandLease{Owner: strings.TrimSpace(owner), Until: leaseUntil, Meta: meta}, nil
 }
 
 func repeatedUUIDs(values []string) ([]uuid.UUID, error) {

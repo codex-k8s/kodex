@@ -36,6 +36,10 @@ type runtimeService interface {
 	ListJobs(context.Context, runtimeservice.ListJobsInput) (runtimeservice.ListJobsResult, error)
 	RecordRuntimeArtifactRef(context.Context, runtimeservice.RecordRuntimeArtifactRefInput) (entity.RuntimeArtifactRef, error)
 	ListRuntimeArtifactRefs(context.Context, runtimeservice.ListRuntimeArtifactRefsInput) (runtimeservice.ListRuntimeArtifactRefsResult, error)
+	CreateOrUpdateCleanupPolicy(context.Context, runtimeservice.CreateOrUpdateCleanupPolicyInput) (entity.CleanupPolicy, error)
+	RunCleanupBatch(context.Context, runtimeservice.RunCleanupBatchInput) (runtimeservice.RunCleanupBatchResult, error)
+	CreateOrUpdatePrewarmPool(context.Context, runtimeservice.CreateOrUpdatePrewarmPoolInput) (entity.PrewarmPool, error)
+	ReconcilePrewarmPool(context.Context, runtimeservice.ReconcilePrewarmPoolInput) (entity.PrewarmPool, error)
 }
 
 // Server exposes the generated runtime-manager service.
@@ -160,4 +164,24 @@ func (s *Server) RecordRuntimeArtifactRef(ctx context.Context, request *runtimev
 // ListRuntimeArtifactRefs returns external artifact references by job or slot.
 func (s *Server) ListRuntimeArtifactRefs(ctx context.Context, request *runtimev1.ListRuntimeArtifactRefsRequest) (*runtimev1.ListRuntimeArtifactRefsResponse, error) {
 	return grpcserver.HandleUnary(ctx, request, grpccasters.ListRuntimeArtifactRefsInput, s.service.ListRuntimeArtifactRefs, grpccasters.ListRuntimeArtifactRefsResponse)
+}
+
+// CreateOrUpdateCleanupPolicy creates or updates runtime retention policy.
+func (s *Server) CreateOrUpdateCleanupPolicy(ctx context.Context, request *runtimev1.CreateOrUpdateCleanupPolicyRequest) (*runtimev1.CleanupPolicyResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.CreateOrUpdateCleanupPolicyInput, s.service.CreateOrUpdateCleanupPolicy, grpccasters.CleanupPolicyResponse)
+}
+
+// RunCleanupBatch claims and executes one cleanup batch.
+func (s *Server) RunCleanupBatch(ctx context.Context, request *runtimev1.RunCleanupBatchRequest) (*runtimev1.RunCleanupBatchResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.RunCleanupBatchInput, s.service.RunCleanupBatch, grpccasters.RunCleanupBatchResponse)
+}
+
+// CreateOrUpdatePrewarmPool creates or updates desired prewarmed slot capacity.
+func (s *Server) CreateOrUpdatePrewarmPool(ctx context.Context, request *runtimev1.CreateOrUpdatePrewarmPoolRequest) (*runtimev1.PrewarmPoolResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.CreateOrUpdatePrewarmPoolInput, s.service.CreateOrUpdatePrewarmPool, grpccasters.PrewarmPoolResponse)
+}
+
+// ReconcilePrewarmPool reconciles actual prewarmed slots with target pool size.
+func (s *Server) ReconcilePrewarmPool(ctx context.Context, request *runtimev1.ReconcilePrewarmPoolRequest) (*runtimev1.PrewarmPoolResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.ReconcilePrewarmPoolInput, s.service.ReconcilePrewarmPool, grpccasters.PrewarmPoolResponse)
 }

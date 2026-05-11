@@ -43,7 +43,9 @@ func (s *Service) loadCommandResult(ctx context.Context, meta value.CommandMeta,
 }
 
 func (s *Service) slotReplay(ctx context.Context, meta value.CommandMeta, operation string, expectedSlotID *uuid.UUID) (entity.Slot, bool, error) {
-	return aggregateReplay(ctx, meta, operation, aggregateTypeSlot, expectedSlotID, s.findCommandResult, s.repository.GetSlot)
+	findResult := s.findCommandResult
+	loadSlot := s.repository.GetSlot
+	return aggregateReplay(ctx, meta, operation, aggregateTypeSlot, expectedSlotID, findResult, loadSlot)
 }
 
 func aggregateReplay[T any](

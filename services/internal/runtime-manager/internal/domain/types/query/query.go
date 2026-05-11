@@ -34,6 +34,21 @@ type SlotFilter struct {
 	Page           value.PageRequest
 }
 
+// ReusableSlotFilter selects one safe slot for deterministic reuse.
+type ReusableSlotFilter struct {
+	RuntimeProfile string
+	RuntimeMode    enum.RuntimeMode
+	Fingerprint    string
+	AgentRunID     *uuid.UUID
+	ProjectID      *uuid.UUID
+	RepositoryIDs  []uuid.UUID
+	FleetScopeID   *uuid.UUID
+	ClusterID      *uuid.UUID
+	LeaseOwner     string
+	LeaseUntil     time.Time
+	Now            time.Time
+}
+
 // WorkspaceMaterializationFilter selects workspace preparation attempts for list queries.
 type WorkspaceMaterializationFilter struct {
 	SlotID     *uuid.UUID
@@ -69,4 +84,21 @@ type RuntimeArtifactRefFilter struct {
 	SlotID        *uuid.UUID
 	ArtifactTypes []enum.RuntimeArtifactType
 	Page          value.PageRequest
+}
+
+// CleanupBatchFilter selects expired runtime objects for one cleanup command.
+type CleanupBatchFilter struct {
+	CleanupPolicyID *uuid.UUID
+	Limit           int
+	LeaseOwner      string
+	LeaseUntil      time.Time
+	Now             time.Time
+}
+
+// PrewarmPoolReconcileFilter selects one prewarm pool for capacity reconciliation.
+type PrewarmPoolReconcileFilter struct {
+	PrewarmPoolID uuid.UUID
+	LeaseOwner    string
+	LeaseUntil    time.Time
+	Now           time.Time
 }
