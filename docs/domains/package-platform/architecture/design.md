@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-06
 updated_at: 2026-05-11
-related_issues: [642, 655, 678, 680, 684, 689, 692, 700]
+related_issues: [642, 655, 678, 680, 684, 689, 692, 700, 704]
 related_prs: []
 related_adrs: []
 approvals:
@@ -153,14 +153,16 @@ sequenceDiagram
   participant P as package-hub
   participant PC as project-catalog
   participant R as runtime-manager
-  AM->>P: ListGuidancePackages(scope)
-  P-->>AM: package refs + versions + local paths
+  AM->>P: ListPackageInstallations(package_kind=guidance, scope)
+  P-->>AM: ссылки на пакеты + выбранные версии
+  AM->>P: GetPackageManifest(package_version_id)
+  P-->>AM: проверенный manifest руководящего пакета
   AM->>PC: GetWorkspacePolicy(project context)
-  PC-->>AM: workspace policy + guidance refs + placement constraints
+  PC-->>AM: политика workspace + ссылки на руководства + ограничения размещения
   AM->>R: PrepareRuntime(agent_run_id, workspace policy, runtime profile, placement constraints)
 ```
 
-Руководящий пакет не смешивается с проектной документацией. `project-catalog` отвечает за проектные источники, `package-hub` отвечает за пакет и версию руководства.
+Руководящий пакет не смешивается с проектной документацией. `project-catalog` отвечает за проектные источники и политику рабочего контура, `package-hub` отвечает за пакет, выбранную версию, установку в scope и проверенный снимок manifest. Отдельный RPC для руководящих пакетов не нужен: будущий `agent-manager` получает их через `ListPackages`, `ListPackageInstallations` с фильтром `package_kind=guidance` и `GetPackageManifest`, а checkout и mount документов выполняет не `package-hub`.
 
 ## Manifest пакета
 

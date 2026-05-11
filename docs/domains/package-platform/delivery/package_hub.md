@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-06
 updated_at: 2026-05-11
-related_issues: [642, 646, 650, 663, 667, 670, 673, 678, 680, 684, 689, 692, 700]
+related_issues: [642, 646, 650, 663, 667, 670, 673, 678, 680, 684, 689, 692, 700, 704]
 related_prs: []
 related_docsets:
   - docs/domains/package-platform/product/requirements.md
@@ -55,7 +55,8 @@ approvals:
 | PKG-5.3a | #692 | Чтение схем секретов версий пакетов готово: снимки схем создаются из manifest при синхронизации каталога, `GetPackageSecretSchema` читает локальную схему с проверкой `package.secret.read`. |
 | PKG-5.3b | не назначено | Сверка статуса заполненности секретов установки должна быть готова: `RefreshPackageInstallationSecretStatus` и связь с контуром секретов после согласования контракта заполненности секретов пакета в `access-manager`. |
 | PKG-6.1 | #700 | Специализация видов пакетов готова: `plugin`, `guidance`, `store`, `platform_content`, правила manifest по виду и модели чтения через `package_kind`. |
-| PKG-6.2+ | не назначено | Следующие специализированные сценарии руководящих пакетов, магазина и пользовательского контента платформы готовы без runtime-запуска и provider-native синхронизации. |
+| PKG-6.2 | #704 | Руководящие пакеты доступны как `package_kind=guidance`: каталог, установки и manifest читаются через существующие операции без отдельного RPC, runtime-запуска и provider-native синхронизации. |
+| PKG-6.3+ | не назначено | Следующие специализированные сценарии магазина и пользовательского контента платформы готовы без runtime-запуска и provider-native синхронизации. |
 | PKG-7 | не назначено | Манифесты deploy, migration job, config, health, metrics и runbook готовы. |
 
 ## Статус операций `PackageHubService`
@@ -134,6 +135,16 @@ approvals:
 | Проверка manifest | готово | `SyncAvailablePackages` сверяет `CatalogPackageSnapshot.package_kind` с `identity.kind` и применяет правила вида: `guidance` не требует runtime/секреты/API/действия, `store` требует capability `store`, `platform_content` требует capability `platform_content` без секретов/API/действий, `plugin` не использует capability других видов. |
 | Модели чтения | готово | `ListPackages` и `ListPackageInstallations` принимают фильтр `package_kind`; невалидный enum отклоняется до авторизации и чтения БД. |
 | Не входит в срез | запланировано | Runtime-запуск пакетов, получение каталога из Git/store/provider и сверка заполненности секретов остаются в отдельных срезах. |
+
+## Руководящие пакеты `PKG-6.2`
+
+| Область | Статус | Примечание |
+|---|---|---|
+| Каталог руководящих пакетов | готово | `ListPackages(package_kind=guidance)` отдаёт локальные доступные руководящие пакеты из единой модели каталога. |
+| Установки руководящих пакетов | готово | `ListPackageInstallations(package_kind=guidance, scope=...)` отдаёт установки руководящих пакетов в области платформы, организации, проекта или репозитория. |
+| Manifest руководящего пакета | готово | `GetPackageManifest(package_version_id)` отдаёт проверенный снимок manifest, где описан источник, версия и состав руководящего пакета. |
+| Проверка manifest | готово | `guidance` требует capability `guidance` и отклоняется, если manifest содержит runtime, секреты, действия доступа или API платформы. |
+| Не входит в срез | запланировано | Checkout, mount и сборка рабочего контекста агента остаются в `agent-manager` и runtime-контуре; `package-hub` не хранит тексты руководящих документов в БД. |
 
 ## Наблюдаемость `PKG-3.1`
 
