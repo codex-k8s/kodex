@@ -83,13 +83,15 @@ func TestEnqueueReconciliationMapsRequestAndResponse(t *testing.T) {
 	t.Parallel()
 
 	commandID := uuid.NewString()
+	externalAccountID := uuid.NewString()
 	response, err := NewServer(fakeService{}).EnqueueReconciliation(context.Background(), &providersv1.EnqueueReconciliationRequest{
-		ProviderSlug:  "github",
-		ScopeType:     providersv1.SyncCursorScopeType_SYNC_CURSOR_SCOPE_TYPE_REPOSITORY,
-		ScopeRef:      "codex-k8s/kodex",
-		ArtifactKinds: []providersv1.SyncArtifactKind{providersv1.SyncArtifactKind_SYNC_ARTIFACT_KIND_ISSUE},
-		Priority:      providersv1.SyncCursorPriority_SYNC_CURSOR_PRIORITY_HOT,
-		Meta:          &providersv1.CommandMeta{CommandId: &commandID, RequestId: "req-1"},
+		ProviderSlug:      "github",
+		ExternalAccountId: externalAccountID,
+		ScopeType:         providersv1.SyncCursorScopeType_SYNC_CURSOR_SCOPE_TYPE_REPOSITORY,
+		ScopeRef:          "codex-k8s/kodex",
+		ArtifactKinds:     []providersv1.SyncArtifactKind{providersv1.SyncArtifactKind_SYNC_ARTIFACT_KIND_ISSUE},
+		Priority:          providersv1.SyncCursorPriority_SYNC_CURSOR_PRIORITY_HOT,
+		Meta:              &providersv1.CommandMeta{CommandId: &commandID, RequestId: "req-1"},
 	})
 	if err != nil {
 		t.Fatalf("EnqueueReconciliation(): %v", err)
@@ -98,7 +100,9 @@ func TestEnqueueReconciliationMapsRequestAndResponse(t *testing.T) {
 		t.Fatalf("sync cursors = %d, want 1", len(response.GetSyncCursors()))
 	}
 	cursor := response.GetSyncCursors()[0]
-	if cursor.GetScopeRef() != "codex-k8s/kodex" || cursor.GetArtifactKind() != providersv1.SyncArtifactKind_SYNC_ARTIFACT_KIND_ISSUE {
+	if cursor.GetExternalAccountId() != externalAccountID ||
+		cursor.GetScopeRef() != "codex-k8s/kodex" ||
+		cursor.GetArtifactKind() != providersv1.SyncArtifactKind_SYNC_ARTIFACT_KIND_ISSUE {
 		t.Fatalf("cursor = %+v, want issue cursor", cursor)
 	}
 }
@@ -274,6 +278,7 @@ func (fakeService) EnqueueReconciliation(_ context.Context, input providerservic
 		cursors = append(cursors, entity.SyncCursor{
 			Base:                entity.Base{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
 			ProviderSlug:        input.ProviderSlug,
+			ExternalAccountID:   input.ExternalAccountID,
 			ScopeType:           input.ScopeType,
 			ScopeRef:            input.ScopeRef,
 			ArtifactKind:        artifactKind,
@@ -290,11 +295,16 @@ func (fakeService) RunReconciliationBatch(_ context.Context, input providerservi
 	if input.SyncCursorID != nil {
 		cursorID = *input.SyncCursorID
 	}
+	externalAccountID := uuid.New()
+	if input.ExternalAccountID != nil {
+		externalAccountID = *input.ExternalAccountID
+	}
 	leaseUntil := now.Add(30 * time.Second)
 	return providerservice.RunReconciliationBatchResult{
 		SyncCursor: entity.SyncCursor{
 			Base:                entity.Base{ID: cursorID, Version: 2, CreatedAt: now, UpdatedAt: now},
 			ProviderSlug:        enum.ProviderSlugGitHub,
+			ExternalAccountID:   externalAccountID,
 			ScopeType:           enum.SyncCursorScopeRepository,
 			ScopeRef:            "codex-k8s/kodex",
 			ArtifactKind:        enum.SyncArtifactIssue,
@@ -312,6 +322,7 @@ func (fakeService) GetSyncCursor(_ context.Context, input providerservice.GetSyn
 	return entity.SyncCursor{
 		Base:                entity.Base{ID: input.SyncCursorID, Version: 1, CreatedAt: now, UpdatedAt: now},
 		ProviderSlug:        enum.ProviderSlugGitHub,
+		ExternalAccountID:   uuid.New(),
 		ScopeType:           enum.SyncCursorScopeRepository,
 		ScopeRef:            "codex-k8s/kodex",
 		ArtifactKind:        enum.SyncArtifactIssue,

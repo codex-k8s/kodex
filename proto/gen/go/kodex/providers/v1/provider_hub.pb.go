@@ -2127,6 +2127,8 @@ type SyncCursor struct {
 	SyncCursorId string `protobuf:"bytes,1,opt,name=sync_cursor_id,json=syncCursorId,proto3" json:"sync_cursor_id,omitempty"`
 	// provider_slug is an extensible provider identifier.
 	ProviderSlug string `protobuf:"bytes,2,opt,name=provider_slug,json=providerSlug,proto3" json:"provider_slug,omitempty"`
+	// external_account_id is the selected external account confirmed through access-manager before provider API use.
+	ExternalAccountId string `protobuf:"bytes,15,opt,name=external_account_id,json=externalAccountId,proto3" json:"external_account_id,omitempty"`
 	// scope_type classifies reconciliation scope.
 	ScopeType SyncCursorScopeType `protobuf:"varint,3,opt,name=scope_type,json=scopeType,proto3,enum=kodex.providers.v1.SyncCursorScopeType" json:"scope_type,omitempty"`
 	// scope_ref is the provider scope reference.
@@ -2195,6 +2197,13 @@ func (x *SyncCursor) GetSyncCursorId() string {
 func (x *SyncCursor) GetProviderSlug() string {
 	if x != nil {
 		return x.ProviderSlug
+	}
+	return ""
+}
+
+func (x *SyncCursor) GetExternalAccountId() string {
+	if x != nil {
+		return x.ExternalAccountId
 	}
 	return ""
 }
@@ -3911,9 +3920,11 @@ type EnqueueReconciliationRequest struct {
 	Priority SyncCursorPriority `protobuf:"varint,5,opt,name=priority,proto3,enum=kodex.providers.v1.SyncCursorPriority" json:"priority,omitempty"`
 	// meta carries idempotency and audit context. meta.idempotency_key is required for this operation;
 	// command_id alone is not enough because enqueue replay is scoped by provider_slug, scope_type and scope_ref.
-	Meta          *CommandMeta `protobuf:"bytes,6,opt,name=meta,proto3" json:"meta,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Meta *CommandMeta `protobuf:"bytes,6,opt,name=meta,proto3" json:"meta,omitempty"`
+	// external_account_id is the account chosen by the caller's policy for this reconciliation scope.
+	ExternalAccountId string `protobuf:"bytes,7,opt,name=external_account_id,json=externalAccountId,proto3" json:"external_account_id,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *EnqueueReconciliationRequest) Reset() {
@@ -3988,6 +3999,13 @@ func (x *EnqueueReconciliationRequest) GetMeta() *CommandMeta {
 	return nil
 }
 
+func (x *EnqueueReconciliationRequest) GetExternalAccountId() string {
+	if x != nil {
+		return x.ExternalAccountId
+	}
+	return ""
+}
+
 // ReconciliationRequestResponse returns scheduled reconciliation state.
 type ReconciliationRequestResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -4046,9 +4064,11 @@ type RunReconciliationBatchRequest struct {
 	// lease_owner identifies worker lease owner.
 	LeaseOwner string `protobuf:"bytes,4,opt,name=lease_owner,json=leaseOwner,proto3" json:"lease_owner,omitempty"`
 	// meta carries idempotency and audit context.
-	Meta          *CommandMeta `protobuf:"bytes,5,opt,name=meta,proto3" json:"meta,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Meta *CommandMeta `protobuf:"bytes,5,opt,name=meta,proto3" json:"meta,omitempty"`
+	// external_account_id optionally filters scheduler selection to one selected external account.
+	ExternalAccountId *string `protobuf:"bytes,6,opt,name=external_account_id,json=externalAccountId,proto3,oneof" json:"external_account_id,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *RunReconciliationBatchRequest) Reset() {
@@ -4114,6 +4134,13 @@ func (x *RunReconciliationBatchRequest) GetMeta() *CommandMeta {
 		return x.Meta
 	}
 	return nil
+}
+
+func (x *RunReconciliationBatchRequest) GetExternalAccountId() string {
+	if x != nil && x.ExternalAccountId != nil {
+		return *x.ExternalAccountId
+	}
+	return ""
 }
 
 // RunReconciliationBatchResponse returns batch result.
@@ -4308,9 +4335,11 @@ type ListSyncCursorsRequest struct {
 	// page limits response size.
 	Page *PageRequest `protobuf:"bytes,7,opt,name=page,proto3" json:"page,omitempty"`
 	// meta carries read actor and request context.
-	Meta          *QueryMeta `protobuf:"bytes,8,opt,name=meta,proto3" json:"meta,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Meta *QueryMeta `protobuf:"bytes,8,opt,name=meta,proto3" json:"meta,omitempty"`
+	// external_account_id optionally filters cursors by selected external account.
+	ExternalAccountId *string `protobuf:"bytes,9,opt,name=external_account_id,json=externalAccountId,proto3,oneof" json:"external_account_id,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *ListSyncCursorsRequest) Reset() {
@@ -4397,6 +4426,13 @@ func (x *ListSyncCursorsRequest) GetMeta() *QueryMeta {
 		return x.Meta
 	}
 	return nil
+}
+
+func (x *ListSyncCursorsRequest) GetExternalAccountId() string {
+	if x != nil && x.ExternalAccountId != nil {
+		return *x.ExternalAccountId
+	}
+	return ""
 }
 
 // ListSyncCursorsResponse returns cursors.
@@ -6171,11 +6207,12 @@ const file_kodex_providers_v1_provider_hub_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\b \x01(\tR\tcreatedAtB!\n" +
 	"\x1f_target_work_item_projection_idB\x16\n" +
-	"\x14_target_provider_ref\"\x96\x06\n" +
+	"\x14_target_provider_ref\"\xc6\x06\n" +
 	"\n" +
 	"SyncCursor\x12$\n" +
 	"\x0esync_cursor_id\x18\x01 \x01(\tR\fsyncCursorId\x12#\n" +
-	"\rprovider_slug\x18\x02 \x01(\tR\fproviderSlug\x12F\n" +
+	"\rprovider_slug\x18\x02 \x01(\tR\fproviderSlug\x12.\n" +
+	"\x13external_account_id\x18\x0f \x01(\tR\x11externalAccountId\x12F\n" +
 	"\n" +
 	"scope_type\x18\x03 \x01(\x0e2'.kodex.providers.v1.SyncCursorScopeTypeR\tscopeType\x12\x1b\n" +
 	"\tscope_ref\x18\x04 \x01(\tR\bscopeRef\x12I\n" +
@@ -6363,7 +6400,7 @@ const file_kodex_providers_v1_provider_hub_proto_rawDesc = "" +
 	"\x1eProviderArtifactSignalResponse\x12\x1b\n" +
 	"\tsignal_id\x18\x01 \x01(\tR\bsignalId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12:\n" +
-	"\x06target\x18\x03 \x01(\v2\".kodex.providers.v1.ProviderTargetR\x06target\"\xee\x02\n" +
+	"\x06target\x18\x03 \x01(\v2\".kodex.providers.v1.ProviderTargetR\x06target\"\x9e\x03\n" +
 	"\x1cEnqueueReconciliationRequest\x12#\n" +
 	"\rprovider_slug\x18\x01 \x01(\tR\fproviderSlug\x12F\n" +
 	"\n" +
@@ -6371,18 +6408,21 @@ const file_kodex_providers_v1_provider_hub_proto_rawDesc = "" +
 	"\tscope_ref\x18\x03 \x01(\tR\bscopeRef\x12K\n" +
 	"\x0eartifact_kinds\x18\x04 \x03(\x0e2$.kodex.providers.v1.SyncArtifactKindR\rartifactKinds\x12B\n" +
 	"\bpriority\x18\x05 \x01(\x0e2&.kodex.providers.v1.SyncCursorPriorityR\bpriority\x123\n" +
-	"\x04meta\x18\x06 \x01(\v2\x1f.kodex.providers.v1.CommandMetaR\x04meta\"b\n" +
+	"\x04meta\x18\x06 \x01(\v2\x1f.kodex.providers.v1.CommandMetaR\x04meta\x12.\n" +
+	"\x13external_account_id\x18\a \x01(\tR\x11externalAccountId\"b\n" +
 	"\x1dReconciliationRequestResponse\x12A\n" +
-	"\fsync_cursors\x18\x01 \x03(\v2\x1e.kodex.providers.v1.SyncCursorR\vsyncCursors\"\x8c\x02\n" +
+	"\fsync_cursors\x18\x01 \x03(\v2\x1e.kodex.providers.v1.SyncCursorR\vsyncCursors\"\xd9\x02\n" +
 	"\x1dRunReconciliationBatchRequest\x12)\n" +
 	"\x0esync_cursor_id\x18\x01 \x01(\tH\x00R\fsyncCursorId\x88\x01\x01\x12(\n" +
 	"\rprovider_slug\x18\x02 \x01(\tH\x01R\fproviderSlug\x88\x01\x01\x12\x1b\n" +
 	"\tmax_items\x18\x03 \x01(\x05R\bmaxItems\x12\x1f\n" +
 	"\vlease_owner\x18\x04 \x01(\tR\n" +
 	"leaseOwner\x123\n" +
-	"\x04meta\x18\x05 \x01(\v2\x1f.kodex.providers.v1.CommandMetaR\x04metaB\x11\n" +
+	"\x04meta\x18\x05 \x01(\v2\x1f.kodex.providers.v1.CommandMetaR\x04meta\x123\n" +
+	"\x13external_account_id\x18\x06 \x01(\tH\x02R\x11externalAccountId\x88\x01\x01B\x11\n" +
 	"\x0f_sync_cursor_idB\x10\n" +
-	"\x0e_provider_slug\"\xeb\x01\n" +
+	"\x0e_provider_slugB\x16\n" +
+	"\x14_external_account_id\"\xeb\x01\n" +
 	"\x1eRunReconciliationBatchResponse\x12?\n" +
 	"\vsync_cursor\x18\x01 \x01(\v2\x1e.kodex.providers.v1.SyncCursorR\n" +
 	"syncCursor\x12'\n" +
@@ -6396,7 +6436,7 @@ const file_kodex_providers_v1_provider_hub_proto_rawDesc = "" +
 	"\x04meta\x18\x02 \x01(\v2\x1d.kodex.providers.v1.QueryMetaR\x04meta\"U\n" +
 	"\x12SyncCursorResponse\x12?\n" +
 	"\vsync_cursor\x18\x01 \x01(\v2\x1e.kodex.providers.v1.SyncCursorR\n" +
-	"syncCursor\"\x86\x04\n" +
+	"syncCursor\"\xd3\x04\n" +
 	"\x16ListSyncCursorsRequest\x12(\n" +
 	"\rprovider_slug\x18\x01 \x01(\tH\x00R\fproviderSlug\x88\x01\x01\x12K\n" +
 	"\n" +
@@ -6408,11 +6448,13 @@ const file_kodex_providers_v1_provider_hub_proto_rawDesc = "" +
 	"priorities\x12'\n" +
 	"\x0finclude_healthy\x18\x06 \x01(\bR\x0eincludeHealthy\x123\n" +
 	"\x04page\x18\a \x01(\v2\x1f.kodex.providers.v1.PageRequestR\x04page\x121\n" +
-	"\x04meta\x18\b \x01(\v2\x1d.kodex.providers.v1.QueryMetaR\x04metaB\x10\n" +
+	"\x04meta\x18\b \x01(\v2\x1d.kodex.providers.v1.QueryMetaR\x04meta\x123\n" +
+	"\x13external_account_id\x18\t \x01(\tH\x03R\x11externalAccountId\x88\x01\x01B\x10\n" +
 	"\x0e_provider_slugB\r\n" +
 	"\v_scope_typeB\f\n" +
 	"\n" +
-	"_scope_ref\"\x92\x01\n" +
+	"_scope_refB\x16\n" +
+	"\x14_external_account_id\"\x92\x01\n" +
 	"\x17ListSyncCursorsResponse\x12A\n" +
 	"\fsync_cursors\x18\x01 \x03(\v2\x1e.kodex.providers.v1.SyncCursorR\vsyncCursors\x124\n" +
 	"\x04page\x18\x02 \x01(\v2 .kodex.providers.v1.PageResponseR\x04page\"\xdc\x03\n" +

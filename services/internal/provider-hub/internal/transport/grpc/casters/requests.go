@@ -234,13 +234,18 @@ func EnqueueReconciliationInput(request *providersv1.EnqueueReconciliationReques
 	if err != nil {
 		return providerservice.EnqueueReconciliationInput{}, err
 	}
+	externalAccountID, err := requiredUUID(request.GetExternalAccountId())
+	if err != nil {
+		return providerservice.EnqueueReconciliationInput{}, err
+	}
 	return providerservice.EnqueueReconciliationInput{
-		ProviderSlug:  providerSlug(request.GetProviderSlug()),
-		ScopeType:     scopeType,
-		ScopeRef:      strings.TrimSpace(request.GetScopeRef()),
-		ArtifactKinds: artifactKinds,
-		Priority:      priority,
-		Meta:          meta,
+		ProviderSlug:      providerSlug(request.GetProviderSlug()),
+		ExternalAccountID: externalAccountID,
+		ScopeType:         scopeType,
+		ScopeRef:          strings.TrimSpace(request.GetScopeRef()),
+		ArtifactKinds:     artifactKinds,
+		Priority:          priority,
+		Meta:              meta,
 	}, nil
 }
 
@@ -254,12 +259,17 @@ func RunReconciliationBatchInput(request *providersv1.RunReconciliationBatchRequ
 	if err != nil {
 		return providerservice.RunReconciliationBatchInput{}, err
 	}
+	externalAccountID, err := optionalUUIDPtr(request.GetExternalAccountId())
+	if err != nil {
+		return providerservice.RunReconciliationBatchInput{}, err
+	}
 	return providerservice.RunReconciliationBatchInput{
-		SyncCursorID: syncCursorID,
-		ProviderSlug: providerSlug(request.GetProviderSlug()),
-		MaxItems:     request.GetMaxItems(),
-		LeaseOwner:   strings.TrimSpace(request.GetLeaseOwner()),
-		Meta:         meta,
+		SyncCursorID:      syncCursorID,
+		ProviderSlug:      providerSlug(request.GetProviderSlug()),
+		ExternalAccountID: externalAccountID,
+		MaxItems:          request.GetMaxItems(),
+		LeaseOwner:        strings.TrimSpace(request.GetLeaseOwner()),
+		Meta:              meta,
 	}, nil
 }
 
@@ -291,15 +301,20 @@ func ListSyncCursorsInput(request *providersv1.ListSyncCursorsRequest) (provider
 	if err != nil {
 		return providerservice.ListSyncCursorsInput{}, err
 	}
+	externalAccountID, err := optionalUUIDPtr(request.GetExternalAccountId())
+	if err != nil {
+		return providerservice.ListSyncCursorsInput{}, err
+	}
 	return providerservice.ListSyncCursorsInput{
-		ProviderSlug:   providerSlug(request.GetProviderSlug()),
-		ScopeType:      scopeType,
-		ScopeRef:       strings.TrimSpace(request.GetScopeRef()),
-		ArtifactKinds:  artifactKinds,
-		Priorities:     priorities,
-		IncludeHealthy: request.GetIncludeHealthy(),
-		Page:           pageRequestFromProto(request.GetPage()),
-		Meta:           meta,
+		ProviderSlug:      providerSlug(request.GetProviderSlug()),
+		ExternalAccountID: externalAccountID,
+		ScopeType:         scopeType,
+		ScopeRef:          strings.TrimSpace(request.GetScopeRef()),
+		ArtifactKinds:     artifactKinds,
+		Priorities:        priorities,
+		IncludeHealthy:    request.GetIncludeHealthy(),
+		Page:              pageRequestFromProto(request.GetPage()),
+		Meta:              meta,
 	}, nil
 }
 

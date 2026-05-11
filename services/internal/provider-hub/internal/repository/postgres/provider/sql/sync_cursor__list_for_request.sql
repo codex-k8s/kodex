@@ -2,6 +2,7 @@
 SELECT
     id,
     provider_slug,
+    external_account_id,
     scope_type,
     scope_ref,
     artifact_kind,
@@ -19,6 +20,7 @@ SELECT
     updated_at
 FROM provider_hub_sync_cursors
 WHERE provider_slug = @provider_slug
+  AND external_account_id = @external_account_id
   AND scope_type = @scope_type
   AND scope_ref = @scope_ref
   AND artifact_kind = ANY(@artifact_kinds::text[])

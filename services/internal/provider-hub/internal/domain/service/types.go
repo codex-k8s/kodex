@@ -149,12 +149,13 @@ type ListRelationshipsResult struct {
 
 // EnqueueReconciliationInput schedules reconciliation cursors for one provider scope.
 type EnqueueReconciliationInput struct {
-	ProviderSlug  enum.ProviderSlug
-	ScopeType     enum.SyncCursorScopeType
-	ScopeRef      string
-	ArtifactKinds []enum.SyncArtifactKind
-	Priority      enum.SyncCursorPriority
-	Meta          value.CommandMeta
+	ProviderSlug      enum.ProviderSlug
+	ExternalAccountID uuid.UUID
+	ScopeType         enum.SyncCursorScopeType
+	ScopeRef          string
+	ArtifactKinds     []enum.SyncArtifactKind
+	Priority          enum.SyncCursorPriority
+	Meta              value.CommandMeta
 }
 
 // EnqueueReconciliationResult returns affected reconciliation cursors.
@@ -164,11 +165,12 @@ type EnqueueReconciliationResult struct {
 
 // RunReconciliationBatchInput leases one cursor for a reconciliation worker.
 type RunReconciliationBatchInput struct {
-	SyncCursorID *uuid.UUID
-	ProviderSlug enum.ProviderSlug
-	MaxItems     int32
-	LeaseOwner   string
-	Meta         value.CommandMeta
+	SyncCursorID      *uuid.UUID
+	ProviderSlug      enum.ProviderSlug
+	ExternalAccountID *uuid.UUID
+	MaxItems          int32
+	LeaseOwner        string
+	Meta              value.CommandMeta
 }
 
 // RunReconciliationBatchResult returns the leased cursor and current batch counters.
@@ -187,14 +189,15 @@ type GetSyncCursorInput struct {
 
 // ListSyncCursorsInput selects reconciliation cursors.
 type ListSyncCursorsInput struct {
-	ProviderSlug   enum.ProviderSlug
-	ScopeType      enum.SyncCursorScopeType
-	ScopeRef       string
-	ArtifactKinds  []enum.SyncArtifactKind
-	Priorities     []enum.SyncCursorPriority
-	IncludeHealthy bool
-	Page           value.PageRequest
-	Meta           value.QueryMeta
+	ProviderSlug      enum.ProviderSlug
+	ExternalAccountID *uuid.UUID
+	ScopeType         enum.SyncCursorScopeType
+	ScopeRef          string
+	ArtifactKinds     []enum.SyncArtifactKind
+	Priorities        []enum.SyncCursorPriority
+	IncludeHealthy    bool
+	Page              value.PageRequest
+	Meta              value.QueryMeta
 }
 
 // ListSyncCursorsResult returns cursors and paging metadata.

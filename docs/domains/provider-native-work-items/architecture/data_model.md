@@ -178,14 +178,15 @@ approvals:
 
 ### `SyncCursor`
 
-Назначение: состояние инкрементальной сверки по области синхронизации.
+Назначение: состояние инкрементальной сверки по области синхронизации и выбранному внешнему аккаунту.
 
-Постановка курсоров выполняется через `ReconciliationRequest`. Один запрос с одним `idempotency_key` может создать или повысить приоритет сразу нескольких курсоров в одной транзакции. Повтор того же запроса возвращает текущие курсоры без изменения `updated_at` и `version`; повтор с тем же `provider_slug + scope_type + scope_ref + idempotency_key`, но другим набором артефактов или другим приоритетом, считается конфликтом.
+Постановка курсоров выполняется через `ReconciliationRequest`. Вызывающий сценарий выбирает внешний аккаунт заранее и передаёт его в очередь сверки; `provider-hub` не выбирает аккаунт неявно во время запуска обработчика. Перед обращением к API провайдера курсор подтверждается через `access-manager`, который возвращает только ссылку на секрет без значения токена. Один запрос с одним `idempotency_key` может создать или повысить приоритет сразу нескольких курсоров в одной транзакции. Повтор того же запроса возвращает текущие курсоры без изменения `updated_at` и `version`; повтор с тем же `provider_slug + scope_type + scope_ref + idempotency_key`, но другим внешним аккаунтом, набором артефактов или приоритетом, считается конфликтом.
 
 | Поле | Тип | Nullable | Ограничения | Примечание |
 |---|---|---:|---|---|
 | `id` | UUID | no | primary key | Идентификатор курсора. |
 | `provider_slug` | text | no | indexed | Поставщик. |
+| `external_account_id` | UUID | no | indexed | Внешний аккаунт из `access-manager`, выбранный политикой вызывающего сценария. |
 | `scope_type` | text | no | indexed | `repository`, `organization`, `work_item`, `package_source`. |
 | `scope_ref` | text | no | indexed | Внешняя область. |
 | `artifact_kind` | text | no | indexed | `issue`, `pull_request`, `merge_request`, `comment`, `relationship`, `repository`. |
@@ -208,6 +209,7 @@ approvals:
 |---|---|---:|---|---|
 | `id` | UUID | no | primary key | Идентификатор запроса. |
 | `provider_slug` | text | no | indexed | Поставщик. |
+| `external_account_id` | UUID | no | indexed | Внешний аккаунт из `access-manager`, выбранный для создаваемых курсоров. |
 | `scope_type` | text | no | unique part | Область сверки. |
 | `scope_ref` | text | no | unique part | Внешняя область. |
 | `idempotency_key` | text | no | unique part | Ключ повтора команды внутри области. |
@@ -299,7 +301,7 @@ Replay-чтение операции выполняется отдельным S
 | Получить активные `Issue/PR` проекта | `(project_id, kind, state, provider_updated_at)` |
 | Найти рассинхронизированные артефакты | `(drift_status, synced_at)` |
 | Дедуплицировать webhook | unique `(provider_slug, delivery_id)` |
-| Выбрать курсоры сверки | `(priority, last_checked_at)`, `(lease_until)` |
+| Выбрать курсоры сверки | `(priority, last_checked_at)`, `(lease_until)`, `(external_account_id, priority, last_checked_at)` |
 | Посмотреть лимиты аккаунта | `(external_account_id, limit_class, captured_at)` |
 | Найти operation по идемпотентному ключу | unique `(operation_type, command_id)` |
 

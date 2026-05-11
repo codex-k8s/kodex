@@ -112,16 +112,19 @@ func TestRepositoryIntegrationSyncCursors(t *testing.T) {
 	pool := openIntegrationPool(t, ctx)
 	repository := NewRepository(pool)
 	now := time.Date(2026, 5, 7, 13, 0, 0, 0, time.UTC)
+	accountID := uuid.New()
+	otherAccountID := uuid.New()
 	request := entity.ReconciliationRequest{
-		ID:             uuid.New(),
-		ProviderSlug:   enum.ProviderSlugGitHub,
-		ScopeType:      enum.SyncCursorScopeRepository,
-		ScopeRef:       "codex-k8s/kodex",
-		IdempotencyKey: "repo-sync-1",
-		ArtifactKinds:  []enum.SyncArtifactKind{enum.SyncArtifactIssue, enum.SyncArtifactPullRequest},
-		Priority:       enum.SyncCursorPriorityWarm,
-		CreatedAt:      now,
-		UpdatedAt:      now,
+		ID:                uuid.New(),
+		ProviderSlug:      enum.ProviderSlugGitHub,
+		ExternalAccountID: accountID,
+		ScopeType:         enum.SyncCursorScopeRepository,
+		ScopeRef:          "codex-k8s/kodex",
+		IdempotencyKey:    "repo-sync-1",
+		ArtifactKinds:     []enum.SyncArtifactKind{enum.SyncArtifactIssue, enum.SyncArtifactPullRequest},
+		Priority:          enum.SyncCursorPriorityWarm,
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}
 	cursor := testSyncCursor(uuid.New(), request, enum.SyncArtifactIssue, now)
 	prCursor := testSyncCursor(uuid.New(), request, enum.SyncArtifactPullRequest, now)
@@ -151,6 +154,9 @@ func TestRepositoryIntegrationSyncCursors(t *testing.T) {
 	if loaded.ID != cursor.ID || loaded.Priority != enum.SyncCursorPriorityWarm {
 		t.Fatalf("loaded cursor = %+v, want original warm cursor", loaded)
 	}
+	if loaded.ExternalAccountID != accountID {
+		t.Fatalf("loaded cursor account = %s, want %s", loaded.ExternalAccountID, accountID)
+	}
 
 	changedRequest := request
 	changedRequest.Priority = enum.SyncCursorPriorityHot
@@ -179,6 +185,19 @@ func TestRepositoryIntegrationSyncCursors(t *testing.T) {
 		t.Fatalf("requeued cursor = %+v, want original id %s hot version 2", requeued, cursor.ID)
 	}
 
+	conflictingAccountRequest := request
+	conflictingAccountRequest.ID = uuid.New()
+	conflictingAccountRequest.ExternalAccountID = otherAccountID
+	conflictingAccountRequest.IdempotencyKey = "repo-sync-other-account"
+	conflictingAccountRequest.ArtifactKinds = []enum.SyncArtifactKind{enum.SyncArtifactIssue}
+	conflictingAccountRequest.CreatedAt = now.Add(3 * time.Minute)
+	conflictingAccountRequest.UpdatedAt = now.Add(3 * time.Minute)
+	if _, err := repository.EnqueueSyncCursors(ctx, conflictingAccountRequest, []entity.SyncCursor{
+		testSyncCursor(uuid.New(), conflictingAccountRequest, enum.SyncArtifactIssue, now.Add(3*time.Minute)),
+	}); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("conflicting account enqueue err = %v, want %v", err, errs.ErrConflict)
+	}
+
 	failedCursor := entity.SyncCursor{
 		Base: entity.Base{
 			ID:        uuid.New(),
@@ -187,6 +206,7 @@ func TestRepositoryIntegrationSyncCursors(t *testing.T) {
 			UpdatedAt: now,
 		},
 		ProviderSlug:        enum.ProviderSlugGitHub,
+		ExternalAccountID:   accountID,
 		ScopeType:           enum.SyncCursorScopeWorkItem,
 		ScopeRef:            "github:issue:42",
 		ArtifactKind:        enum.SyncArtifactComment,
@@ -195,15 +215,16 @@ func TestRepositoryIntegrationSyncCursors(t *testing.T) {
 		RateBudgetStateJSON: []byte(`{}`),
 	}
 	failedRequest := entity.ReconciliationRequest{
-		ID:             uuid.New(),
-		ProviderSlug:   enum.ProviderSlugGitHub,
-		ScopeType:      enum.SyncCursorScopeWorkItem,
-		ScopeRef:       "github:issue:42",
-		IdempotencyKey: "work-item-comments-1",
-		ArtifactKinds:  []enum.SyncArtifactKind{enum.SyncArtifactComment},
-		Priority:       enum.SyncCursorPriorityCold,
-		CreatedAt:      now,
-		UpdatedAt:      now,
+		ID:                uuid.New(),
+		ProviderSlug:      enum.ProviderSlugGitHub,
+		ExternalAccountID: accountID,
+		ScopeType:         enum.SyncCursorScopeWorkItem,
+		ScopeRef:          "github:issue:42",
+		IdempotencyKey:    "work-item-comments-1",
+		ArtifactKinds:     []enum.SyncArtifactKind{enum.SyncArtifactComment},
+		Priority:          enum.SyncCursorPriorityCold,
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}
 	if _, err := repository.EnqueueSyncCursors(ctx, failedRequest, []entity.SyncCursor{failedCursor}); err != nil {
 		t.Fatalf("upsert failed sync cursor: %v", err)
@@ -221,10 +242,11 @@ func TestRepositoryIntegrationSyncCursors(t *testing.T) {
 	}
 
 	claimed, err := repository.ClaimSyncCursor(ctx, providerrepo.SyncCursorClaim{
-		ProviderSlug: enum.ProviderSlugGitHub,
-		LeaseOwner:   "worker-1",
-		Now:          now.Add(2 * time.Minute),
-		LeaseUntil:   now.Add(2*time.Minute + 30*time.Second),
+		ProviderSlug:      enum.ProviderSlugGitHub,
+		ExternalAccountID: &accountID,
+		LeaseOwner:        "worker-1",
+		Now:               now.Add(2 * time.Minute),
+		LeaseUntil:        now.Add(2*time.Minute + 30*time.Second),
 	})
 	if err != nil {
 		t.Fatalf("claim sync cursor: %v", err)
@@ -252,6 +274,7 @@ func testSyncCursor(id uuid.UUID, request entity.ReconciliationRequest, artifact
 			UpdatedAt: now,
 		},
 		ProviderSlug:        request.ProviderSlug,
+		ExternalAccountID:   request.ExternalAccountID,
 		ScopeType:           request.ScopeType,
 		ScopeRef:            request.ScopeRef,
 		ArtifactKind:        artifactKind,

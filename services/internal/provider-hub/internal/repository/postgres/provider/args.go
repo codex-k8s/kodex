@@ -233,6 +233,7 @@ func reconciliationRequestArgs(request entity.ReconciliationRequest) pgx.NamedAr
 	return pgx.NamedArgs{
 		"id":                  request.ID,
 		"provider_slug":       string(request.ProviderSlug),
+		"external_account_id": request.ExternalAccountID,
 		"scope_type":          string(request.ScopeType),
 		"scope_ref":           request.ScopeRef,
 		"idempotency_key":     request.IdempotencyKey,
@@ -257,6 +258,7 @@ func syncCursorsBatchArgs(cursors []entity.SyncCursor) pgx.NamedArgs {
 	return withBaseArgs(first.Base, pgx.NamedArgs{
 		"ids":                    ids,
 		"provider_slug":          string(first.ProviderSlug),
+		"external_account_id":    first.ExternalAccountID,
 		"scope_type":             string(first.ScopeType),
 		"scope_ref":              first.ScopeRef,
 		"artifact_kinds":         postgreslib.StringValues(artifactKinds),
@@ -274,32 +276,35 @@ func syncCursorsBatchArgs(cursors []entity.SyncCursor) pgx.NamedArgs {
 
 func syncCursorRequestLookupArgs(request entity.ReconciliationRequest) pgx.NamedArgs {
 	return pgx.NamedArgs{
-		"provider_slug":   string(request.ProviderSlug),
-		"scope_type":      string(request.ScopeType),
-		"scope_ref":       request.ScopeRef,
-		"idempotency_key": request.IdempotencyKey,
-		"artifact_kinds":  postgreslib.StringValues(request.ArtifactKinds),
+		"provider_slug":       string(request.ProviderSlug),
+		"external_account_id": request.ExternalAccountID,
+		"scope_type":          string(request.ScopeType),
+		"scope_ref":           request.ScopeRef,
+		"idempotency_key":     request.IdempotencyKey,
+		"artifact_kinds":      postgreslib.StringValues(request.ArtifactKinds),
 	}
 }
 
 func syncCursorFilterArgs(filter query.SyncCursorFilter) pageQueryArgs {
 	return withPage(filter.Page, pgx.NamedArgs{
-		"provider_slug":   string(filter.ProviderSlug),
-		"scope_type":      string(filter.ScopeType),
-		"scope_ref":       filter.ScopeRef,
-		"artifact_kinds":  postgreslib.StringValues(filter.ArtifactKinds),
-		"priorities":      postgreslib.StringValues(filter.Priorities),
-		"include_healthy": filter.IncludeHealthy,
+		"provider_slug":       string(filter.ProviderSlug),
+		"external_account_id": postgreslib.NullableUUID(filter.ExternalAccountID),
+		"scope_type":          string(filter.ScopeType),
+		"scope_ref":           filter.ScopeRef,
+		"artifact_kinds":      postgreslib.StringValues(filter.ArtifactKinds),
+		"priorities":          postgreslib.StringValues(filter.Priorities),
+		"include_healthy":     filter.IncludeHealthy,
 	})
 }
 
 func syncCursorClaimArgs(claim providerrepo.SyncCursorClaim) pgx.NamedArgs {
 	return pgx.NamedArgs{
-		"id":            postgreslib.NullableUUID(claim.ID),
-		"provider_slug": string(claim.ProviderSlug),
-		"lease_owner":   claim.LeaseOwner,
-		"now":           claim.Now,
-		"lease_until":   claim.LeaseUntil,
+		"id":                  postgreslib.NullableUUID(claim.ID),
+		"provider_slug":       string(claim.ProviderSlug),
+		"external_account_id": postgreslib.NullableUUID(claim.ExternalAccountID),
+		"lease_owner":         claim.LeaseOwner,
+		"now":                 claim.Now,
+		"lease_until":         claim.LeaseUntil,
 	}
 }
 

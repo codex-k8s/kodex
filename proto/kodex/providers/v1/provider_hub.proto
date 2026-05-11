@@ -434,6 +434,8 @@ message SyncCursor {
   string sync_cursor_id = 1;
   // provider_slug is an extensible provider identifier.
   string provider_slug = 2;
+  // external_account_id is the selected external account confirmed through access-manager before provider API use.
+  string external_account_id = 15;
   // scope_type classifies reconciliation scope.
   SyncCursorScopeType scope_type = 3;
   // scope_ref is the provider scope reference.
@@ -749,6 +751,8 @@ message EnqueueReconciliationRequest {
   // meta carries idempotency and audit context. meta.idempotency_key is required for this operation;
   // command_id alone is not enough because enqueue replay is scoped by provider_slug, scope_type and scope_ref.
   CommandMeta meta = 6;
+  // external_account_id is the account chosen by the caller's policy for this reconciliation scope.
+  string external_account_id = 7;
 }
 
 // ReconciliationRequestResponse returns scheduled reconciliation state.
@@ -769,6 +773,8 @@ message RunReconciliationBatchRequest {
   string lease_owner = 4;
   // meta carries idempotency and audit context.
   CommandMeta meta = 5;
+  // external_account_id optionally filters scheduler selection to one selected external account.
+  optional string external_account_id = 6;
 }
 
 // RunReconciliationBatchResponse returns batch result.
@@ -815,6 +821,8 @@ message ListSyncCursorsRequest {
   PageRequest page = 7;
   // meta carries read actor and request context.
   QueryMeta meta = 8;
+  // external_account_id optionally filters cursors by selected external account.
+  optional string external_account_id = 9;
 }
 
 // ListSyncCursorsResponse returns cursors.

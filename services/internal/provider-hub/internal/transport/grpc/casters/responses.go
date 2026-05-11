@@ -127,6 +127,7 @@ func SyncCursorToProto(cursor entity.SyncCursor) *providersv1.SyncCursor {
 	return &providersv1.SyncCursor{
 		SyncCursorId:        cursor.ID.String(),
 		ProviderSlug:        string(cursor.ProviderSlug),
+		ExternalAccountId:   cursor.ExternalAccountID.String(),
 		ScopeType:           SyncCursorScopeToProto(cursor.ScopeType),
 		ScopeRef:            cursor.ScopeRef,
 		ArtifactKind:        SyncArtifactKindToProto(cursor.ArtifactKind),

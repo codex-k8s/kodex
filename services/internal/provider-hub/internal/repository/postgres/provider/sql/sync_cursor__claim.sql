@@ -4,6 +4,7 @@ WITH candidates AS (
     FROM provider_hub_sync_cursors
     WHERE (@id::uuid IS NULL OR id = @id)
       AND (@provider_slug::text = '' OR provider_slug = @provider_slug)
+      AND (@external_account_id::uuid IS NULL OR external_account_id = @external_account_id)
       AND (lease_until IS NULL OR lease_until <= @now)
     ORDER BY
         CASE priority
@@ -29,6 +30,7 @@ WHERE cursor.id = candidates.id
 RETURNING
     cursor.id,
     cursor.provider_slug,
+    cursor.external_account_id,
     cursor.scope_type,
     cursor.scope_ref,
     cursor.artifact_kind,
