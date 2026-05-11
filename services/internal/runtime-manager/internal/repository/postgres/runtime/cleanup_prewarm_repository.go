@@ -243,6 +243,12 @@ func (r *Repository) claimCleanupSlots(ctx context.Context, tx pgx.Tx, policy en
 			}); err != nil {
 				return nil, nil, err
 			}
+			if err := postgreslib.RunMutation(ctx, tx, errs.ErrConflict, postgreslib.Mutation{
+				Query: queryCleanupSlotScrubJobStepTails,
+				Args:  pgx.NamedArgs{"slot_id": slot.ID, "now": filter.Now},
+			}); err != nil {
+				return nil, nil, err
+			}
 		}
 	}
 	remaining := limit - len(cleaned)

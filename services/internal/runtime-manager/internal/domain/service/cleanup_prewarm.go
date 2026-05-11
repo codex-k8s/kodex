@@ -27,15 +27,17 @@ func (s *Service) CreateOrUpdateCleanupPolicy(ctx context.Context, input CreateO
 	if err := validateCleanupPolicyInput(input); err != nil {
 		return entity.CleanupPolicy{}, err
 	}
-	resource := cleanupPolicyResource(input.CleanupPolicyID, input.ScopeType, input.ScopeID)
-	if err := s.authorizeCommand(ctx, input.Meta, actionCleanupUpsert, resource); err != nil {
-		return entity.CleanupPolicy{}, err
-	}
-	if replay, ok, err := s.cleanupPolicyReplay(ctx, input.Meta, operationUpsertCleanup, input.CleanupPolicyID); err != nil || ok {
-		return replay, err
-	}
 	now := commandTime(input.Meta, s.clock.Now())
 	if input.CleanupPolicyID == nil {
+		if err := s.authorizeCommand(ctx, input.Meta, actionCleanupUpsert, cleanupPolicyResource(nil, input.ScopeType, input.ScopeID)); err != nil {
+			return entity.CleanupPolicy{}, err
+		}
+		if replay, ok, err := s.cleanupPolicyReplay(ctx, input.Meta, operationUpsertCleanup, nil); err != nil || ok {
+			if err == nil {
+				err = validateCleanupPolicyReplay(replay, input)
+			}
+			return replay, err
+		}
 		policy := entity.CleanupPolicy{
 			Base:             entity.Base{ID: s.ids.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
 			ScopeType:        input.ScopeType,
@@ -51,11 +53,25 @@ func (s *Service) CreateOrUpdateCleanupPolicy(ctx context.Context, input CreateO
 		}
 		return policy, s.repository.CreateCleanupPolicy(ctx, policy, result)
 	}
-	expected, err := expectedVersion(input.Meta)
+	current, err := s.repository.GetCleanupPolicy(ctx, *input.CleanupPolicyID)
 	if err != nil {
 		return entity.CleanupPolicy{}, err
 	}
-	current, err := s.repository.GetCleanupPolicy(ctx, *input.CleanupPolicyID)
+	if err := s.authorizeCommand(ctx, input.Meta, actionCleanupUpsert, cleanupPolicyResource(&current.ID, current.ScopeType, current.ScopeID)); err != nil {
+		return entity.CleanupPolicy{}, err
+	}
+	if cleanupPolicyScopeChanged(current, input) {
+		if err := s.authorizeCommand(ctx, input.Meta, actionCleanupUpsert, cleanupPolicyResource(input.CleanupPolicyID, input.ScopeType, input.ScopeID)); err != nil {
+			return entity.CleanupPolicy{}, err
+		}
+	}
+	if replay, ok, err := s.cleanupPolicyReplay(ctx, input.Meta, operationUpsertCleanup, input.CleanupPolicyID); err != nil || ok {
+		if err == nil {
+			err = validateCleanupPolicyReplay(replay, input)
+		}
+		return replay, err
+	}
+	expected, err := expectedVersion(input.Meta)
 	if err != nil {
 		return entity.CleanupPolicy{}, err
 	}
@@ -143,19 +159,21 @@ func (s *Service) CreateOrUpdatePrewarmPool(ctx context.Context, input CreateOrU
 	if err := validatePrewarmPoolInput(input); err != nil {
 		return entity.PrewarmPool{}, err
 	}
-	resource := prewarmPoolResource(input.PrewarmPoolID, input.ScopeType, input.ScopeID)
-	if err := s.authorizeCommand(ctx, input.Meta, actionPrewarmUpsert, resource); err != nil {
-		return entity.PrewarmPool{}, err
-	}
-	if replay, ok, err := s.prewarmPoolReplay(ctx, input.Meta, operationUpsertPrewarm, input.PrewarmPoolID); err != nil || ok {
-		return replay, err
-	}
-	now := commandTime(input.Meta, s.clock.Now())
 	fleetScopeID, err := s.defaultFleetScopeID(input.FleetScopeID)
 	if err != nil {
 		return entity.PrewarmPool{}, err
 	}
+	now := commandTime(input.Meta, s.clock.Now())
 	if input.PrewarmPoolID == nil {
+		if err := s.authorizeCommand(ctx, input.Meta, actionPrewarmUpsert, prewarmPoolResource(nil, input.ScopeType, input.ScopeID)); err != nil {
+			return entity.PrewarmPool{}, err
+		}
+		if replay, ok, err := s.prewarmPoolReplay(ctx, input.Meta, operationUpsertPrewarm, nil); err != nil || ok {
+			if err == nil {
+				err = validatePrewarmPoolReplay(replay, input, fleetScopeID)
+			}
+			return replay, err
+		}
 		pool := entity.PrewarmPool{
 			Base:               entity.Base{ID: s.ids.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
 			ScopeType:          input.ScopeType,
@@ -175,11 +193,25 @@ func (s *Service) CreateOrUpdatePrewarmPool(ctx context.Context, input CreateOrU
 		}
 		return pool, s.repository.CreatePrewarmPool(ctx, pool, result)
 	}
-	expected, err := expectedVersion(input.Meta)
+	current, err := s.repository.GetPrewarmPool(ctx, *input.PrewarmPoolID)
 	if err != nil {
 		return entity.PrewarmPool{}, err
 	}
-	current, err := s.repository.GetPrewarmPool(ctx, *input.PrewarmPoolID)
+	if err := s.authorizeCommand(ctx, input.Meta, actionPrewarmUpsert, prewarmPoolResource(&current.ID, current.ScopeType, current.ScopeID)); err != nil {
+		return entity.PrewarmPool{}, err
+	}
+	if prewarmPoolScopeChanged(current, input) {
+		if err := s.authorizeCommand(ctx, input.Meta, actionPrewarmUpsert, prewarmPoolResource(input.PrewarmPoolID, input.ScopeType, input.ScopeID)); err != nil {
+			return entity.PrewarmPool{}, err
+		}
+	}
+	if replay, ok, err := s.prewarmPoolReplay(ctx, input.Meta, operationUpsertPrewarm, input.PrewarmPoolID); err != nil || ok {
+		if err == nil {
+			err = validatePrewarmPoolReplay(replay, input, fleetScopeID)
+		}
+		return replay, err
+	}
+	expected, err := expectedVersion(input.Meta)
 	if err != nil {
 		return entity.PrewarmPool{}, err
 	}
@@ -296,7 +328,7 @@ func validCleanupScope(scope enum.RuntimeScopeType, scopeID string) bool {
 	switch scope {
 	case enum.RuntimeScopePlatform:
 		return cleanScopeID(scopeID) == ""
-	case enum.RuntimeScopeOrganization, enum.RuntimeScopeProject, enum.RuntimeScopeRepository, enum.RuntimeScopeRuntimeProfile:
+	case enum.RuntimeScopeProject, enum.RuntimeScopeRepository, enum.RuntimeScopeRuntimeProfile:
 		return cleanScopeID(scopeID) != ""
 	default:
 		return false
@@ -364,6 +396,42 @@ func accessScopeType(scope string) string {
 	default:
 		return accesscatalog.ScopeGlobal
 	}
+}
+
+func cleanupPolicyScopeChanged(policy entity.CleanupPolicy, input CreateOrUpdateCleanupPolicyInput) bool {
+	return policy.ScopeType != input.ScopeType || policy.ScopeID != cleanScopeID(input.ScopeID)
+}
+
+func prewarmPoolScopeChanged(pool entity.PrewarmPool, input CreateOrUpdatePrewarmPoolInput) bool {
+	return pool.ScopeType != input.ScopeType || pool.ScopeID != cleanScopeID(input.ScopeID)
+}
+
+func validateCleanupPolicyReplay(policy entity.CleanupPolicy, input CreateOrUpdateCleanupPolicyInput) error {
+	if cleanupPolicyScopeChanged(policy, input) ||
+		policy.TTLSeconds != input.TTLSeconds ||
+		policy.FailedTTLSeconds != input.FailedTTLSeconds ||
+		policy.KeepShortLogTail != input.KeepShortLogTail ||
+		policy.Status != input.Status {
+		return errs.ErrConflict
+	}
+	if input.CleanupPolicyID != nil && policy.ID != *input.CleanupPolicyID {
+		return errs.ErrConflict
+	}
+	return nil
+}
+
+func validatePrewarmPoolReplay(pool entity.PrewarmPool, input CreateOrUpdatePrewarmPoolInput, fleetScopeID *uuid.UUID) error {
+	if prewarmPoolScopeChanged(pool, input) ||
+		pool.RuntimeProfile != strings.TrimSpace(input.RuntimeProfile) ||
+		!sameUUIDPtr(pool.FleetScopeID, fleetScopeID) ||
+		pool.TargetSize != input.TargetSize ||
+		pool.Status != input.Status {
+		return errs.ErrConflict
+	}
+	if input.PrewarmPoolID != nil && pool.ID != *input.PrewarmPoolID {
+		return errs.ErrConflict
+	}
+	return nil
 }
 
 func (s *Service) cleanupPolicyReplay(ctx context.Context, meta value.CommandMeta, operation string, expectedID *uuid.UUID) (entity.CleanupPolicy, bool, error) {

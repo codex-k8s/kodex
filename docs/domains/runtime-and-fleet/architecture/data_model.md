@@ -215,7 +215,7 @@ approvals:
 | Поле | Тип | Nullable | Ограничения | Примечание |
 |---|---|---:|---|---|
 | `id` | UUID | no | primary key | Идентификатор policy. |
-| `scope_type` | text | no | indexed | `platform`, `organization`, `project`, `repository`, `runtime_profile`. |
+| `scope_type` | text | no | indexed | `platform`, `project`, `repository`, `runtime_profile`; `organization` зарезервирован до появления projection организации на runtime-слотах и отклоняется командами cleanup. |
 | `scope_id` | text | no | indexed | Внешний scope id; для `platform` пустая строка, для `runtime_profile` ключ профиля. |
 | `ttl_seconds` | bigint | no |  | Срок хранения после завершения. |
 | `failed_ttl_seconds` | bigint | no |  | Срок хранения failed объектов. |

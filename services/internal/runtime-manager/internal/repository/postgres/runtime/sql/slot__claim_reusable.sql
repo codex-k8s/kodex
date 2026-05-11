@@ -7,6 +7,11 @@ WITH candidate AS (
       AND runtime_mode = @runtime_mode
       AND fleet_scope_id IS NOT DISTINCT FROM @fleet_scope_id::uuid
       AND (lease_until IS NULL OR lease_until <= @now::timestamptz)
+      AND (project_id IS NULL OR project_id IS NOT DISTINCT FROM @project_id::uuid)
+      AND (
+          jsonb_array_length(repository_ids_json) = 0
+          OR repository_ids_json <@ @repository_ids_json::jsonb
+      )
       AND (
           (status = 'prewarmed' AND (fingerprint = '' OR fingerprint = @fingerprint))
           OR (status = 'ready' AND fingerprint = @fingerprint)

@@ -698,6 +698,9 @@ func (r *fakeRepository) RunCleanupBatch(_ context.Context, filter query.Cleanup
 				slot.UpdatedAt = filter.Now
 				slot.Version++
 				r.slots[id] = slot
+				if !policy.KeepShortLogTail {
+					r.scrubFakeJobTails(slot.ID, filter.Now)
+				}
 				result.CleanedSlots = append(result.CleanedSlots, slot)
 			}
 			result.ClaimedCount++
@@ -713,6 +716,23 @@ func (r *fakeRepository) RunCleanupBatch(_ context.Context, filter query.Cleanup
 	r.events = append(r.events, events...)
 	r.results[command.Key] = command
 	return result, nil
+}
+
+func (r *fakeRepository) scrubFakeJobTails(slotID uuid.UUID, now time.Time) {
+	for id, job := range r.jobs {
+		if job.SlotID == nil || *job.SlotID != slotID {
+			continue
+		}
+		job.ShortLogTail = ""
+		for index := range job.Steps {
+			job.Steps[index].ShortLogTail = ""
+			job.Steps[index].UpdatedAt = now
+			job.Steps[index].Version++
+		}
+		job.UpdatedAt = now
+		job.Version++
+		r.jobs[id] = job
+	}
 }
 
 func (r *fakeRepository) CreatePrewarmPool(_ context.Context, pool entity.PrewarmPool, result entity.CommandResult) error {
@@ -797,6 +817,12 @@ func reusableFakeSlot(slot entity.Slot, filter query.ReusableSlotFilter, jobs ma
 	if !sameUUIDPtr(slot.FleetScopeID, filter.FleetScopeID) || fakeSlotHasActiveJob(slot.ID, jobs) {
 		return false
 	}
+	if slot.ProjectID != nil && !sameUUIDPtr(slot.ProjectID, filter.ProjectID) {
+		return false
+	}
+	if !repositoryScopeContained(slot.RepositoryIDs, filter.RepositoryIDs) {
+		return false
+	}
 	if slot.LeaseUntil != nil && slot.LeaseUntil.After(filter.Now) {
 		return false
 	}
@@ -808,6 +834,22 @@ func reusableFakeSlot(slot entity.Slot, filter query.ReusableSlotFilter, jobs ma
 	default:
 		return false
 	}
+}
+
+func repositoryScopeContained(slotRepositoryIDs []uuid.UUID, requestedRepositoryIDs []uuid.UUID) bool {
+	for _, slotRepositoryID := range slotRepositoryIDs {
+		found := false
+		for _, requestedRepositoryID := range requestedRepositoryIDs {
+			if slotRepositoryID == requestedRepositoryID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
 }
 
 func cleanupFakeSlotMatches(slot entity.Slot, policy entity.CleanupPolicy, now time.Time) bool {

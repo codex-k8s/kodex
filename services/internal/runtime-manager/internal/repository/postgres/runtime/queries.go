@@ -11,6 +11,7 @@ var (
 	queryCleanupPolicyUpdate              = mustLoadQuery("cleanup_policy__update")
 	queryCleanupSlotClaimBlocked          = mustLoadQuery("cleanup_slot__claim_blocked")
 	queryCleanupSlotClaimCleanable        = mustLoadQuery("cleanup_slot__claim_cleanable")
+	queryCleanupSlotScrubJobStepTails     = mustLoadQuery("cleanup_slot__scrub_job_step_tails")
 	queryCleanupSlotScrubJobTails         = mustLoadQuery("cleanup_slot__scrub_job_tails")
 	queryJobClaim                         = mustLoadQuery("job__claim")
 	queryJobGet                           = mustLoadQuery("job__get")
