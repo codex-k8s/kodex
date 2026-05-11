@@ -16,6 +16,10 @@ func newSecretValueOwned(raw []byte) SecretValue {
 	return SecretValue{raw: raw}
 }
 
+func newSecretValueFromString(raw string) SecretValue {
+	return newSecretValueOwned([]byte(raw))
+}
+
 // Bytes returns a copy of the secret bytes for one in-memory operation.
 func (v SecretValue) Bytes() []byte {
 	return append([]byte(nil), v.raw...)

@@ -160,7 +160,7 @@ func safeVaultKey(key string) bool {
 func vaultSecretValue(raw any) (SecretValue, error) {
 	switch typed := raw.(type) {
 	case string:
-		return NewSecretValue([]byte(typed)), nil
+		return newSecretValueFromString(typed), nil
 	case []byte:
 		value := NewSecretValue(typed)
 		clearBytes(typed)

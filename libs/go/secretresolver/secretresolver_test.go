@@ -68,6 +68,21 @@ func TestSecretValueClearZeroesInternalBuffer(t *testing.T) {
 	}
 }
 
+func TestSecretValueFromStringUsesOwnedMutableBuffer(t *testing.T) {
+	value := newSecretValueFromString("token-from-string")
+	alias := value.raw
+
+	if got := string(value.Bytes()); got != "token-from-string" {
+		t.Fatalf("value = %q, want token-from-string", got)
+	}
+	value.Clear()
+	for i, b := range alias {
+		if b != 0 {
+			t.Fatalf("alias[%d] = %d, want zero after Clear", i, b)
+		}
+	}
+}
+
 func TestMuxRoutesSecretOperations(t *testing.T) {
 	backend := &fakeBackend{value: NewSecretValue([]byte("token")), status: SecretStatus{Present: true, Version: "v1"}}
 	resolver, err := NewMux(map[string]Backend{StoreTypeKubernetesMountedSecret: backend})

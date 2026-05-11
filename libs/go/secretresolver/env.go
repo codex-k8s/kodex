@@ -28,7 +28,7 @@ func (b *EnvBackend) Resolve(ctx context.Context, ref SecretRef) (SecretValue, e
 	if !ok {
 		return SecretValue{}, ErrSecretNotFound
 	}
-	return NewSecretValue([]byte(value)), nil
+	return newSecretValueFromString(value), nil
 }
 
 // Check verifies environment variable presence without returning the value.
