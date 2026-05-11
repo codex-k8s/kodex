@@ -626,6 +626,67 @@ func TestSyncAvailablePackagesRejectsStoreManifestWithoutStoreCapability(t *test
 	}
 }
 
+func TestNormalizePackageManifestAcceptsStoreRuntimeAndIntegrationRequirements(t *testing.T) {
+	t.Parallel()
+
+	manifestPayload := testCatalogManifestPayloadForKind(
+		t,
+		"package-store",
+		enum.PackageKindStore,
+		[]string{"store"},
+		[]string{"package.catalog"},
+		[]string{"package.catalog.sync"},
+		[]value.PackageSecretField{testPackageSecretField("store_token")},
+		true,
+	)
+	_, err := normalizePackageManifestPayload(
+		CatalogPackageSnapshot{
+			Slug:             "package-store",
+			Kind:             enum.PackageKindStore,
+			CommercialStatus: enum.PackageCommercialStatusFree,
+			TrustStatus:      enum.PackageTrustStatusVerified,
+		},
+		CatalogVersionSnapshot{
+			VersionLabel: "1.0.0",
+			SourceRef: value.SourceRef{
+				Kind: enum.PackageVersionSourceRefKindGitTag,
+				Ref:  "v1.0.0",
+			},
+			ManifestDigest:  testManifestDigest(t, manifestPayload),
+			ManifestPayload: manifestPayload,
+		},
+	)
+	if err != nil {
+		t.Fatalf("normalizePackageManifestPayload(): %v", err)
+	}
+}
+
+func TestNormalizePackageManifestAcceptsPlatformContentRuntime(t *testing.T) {
+	t.Parallel()
+
+	manifestPayload := testCatalogManifestPayloadForKind(t, "platform-site", enum.PackageKindPlatformContent, []string{"platform_content"}, nil, nil, nil, true)
+	_, err := normalizePackageManifestPayload(
+		CatalogPackageSnapshot{
+			Slug:             "platform-site",
+			Kind:             enum.PackageKindPlatformContent,
+			CommercialStatus: enum.PackageCommercialStatusFree,
+			TrustStatus:      enum.PackageTrustStatusVerified,
+		},
+		CatalogVersionSnapshot{
+			VersionLabel: "1.0.0",
+			SourceRef: value.SourceRef{
+				Kind: enum.PackageVersionSourceRefKindGitTag,
+				Ref:  "v1.0.0",
+			},
+			ManifestDigest:  testManifestDigest(t, manifestPayload),
+			ManifestPayload: manifestPayload,
+		},
+	)
+	if err != nil {
+		t.Fatalf("normalizePackageManifestPayload(): %v", err)
+	}
+}
+
 func TestNormalizePackageManifestRejectsForeignReservedCapabilities(t *testing.T) {
 	t.Parallel()
 
@@ -684,18 +745,70 @@ func TestNormalizePackageManifestRejectsForeignReservedCapabilities(t *testing.T
 	}
 }
 
+func TestNormalizePackageManifestRejectsPlatformContentIntegrationRequirements(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		platformAPIs  []string
+		accessActions []string
+		secrets       []value.PackageSecretField
+	}{
+		{
+			name:    "with secret fields",
+			secrets: []value.PackageSecretField{testPackageSecretField("platform_site_token")},
+		},
+		{
+			name:         "with platform api",
+			platformAPIs: []string{"interaction.feedback"},
+		},
+		{
+			name:          "with access action",
+			accessActions: []string{"package.installation.read"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			manifestPayload := testCatalogManifestPayloadForKind(
+				t,
+				"platform-site",
+				enum.PackageKindPlatformContent,
+				[]string{"platform_content"},
+				tt.platformAPIs,
+				tt.accessActions,
+				tt.secrets,
+				false,
+			)
+			_, err := normalizePackageManifestPayload(
+				CatalogPackageSnapshot{
+					Slug:             "platform-site",
+					Kind:             enum.PackageKindPlatformContent,
+					CommercialStatus: enum.PackageCommercialStatusFree,
+					TrustStatus:      enum.PackageTrustStatusVerified,
+				},
+				CatalogVersionSnapshot{
+					VersionLabel: "1.0.0",
+					SourceRef: value.SourceRef{
+						Kind: enum.PackageVersionSourceRefKindGitTag,
+						Ref:  "v1.0.0",
+					},
+					ManifestDigest:  testManifestDigest(t, manifestPayload),
+					ManifestPayload: manifestPayload,
+				},
+			)
+			if !errors.Is(err, errs.ErrInvalidArgument) {
+				t.Fatalf("normalizePackageManifestPayload() err = %v, want %v", err, errs.ErrInvalidArgument)
+			}
+		})
+	}
+}
+
 func TestNormalizePackageManifestRejectsGuidanceRuntimeAndIntegrationRequirements(t *testing.T) {
 	t.Parallel()
 
-	secretFields := []value.PackageSecretField{{
-		Key:      "doc_token",
-		Kind:     enum.PackageSecretFieldKindToken,
-		Required: true,
-		DisplayName: []value.LocalizedText{{
-			Locale: "ru",
-			Text:   "Токен документации",
-		}},
-	}}
 	tests := []struct {
 		name            string
 		platformAPIs    []string
@@ -709,7 +822,7 @@ func TestNormalizePackageManifestRejectsGuidanceRuntimeAndIntegrationRequirement
 		},
 		{
 			name:    "with secret fields",
-			secrets: secretFields,
+			secrets: []value.PackageSecretField{testPackageSecretField("doc_token")},
 		},
 		{
 			name:         "with platform api",
@@ -793,6 +906,59 @@ func TestListPackagesReadsGuidanceCatalog(t *testing.T) {
 	}
 }
 
+func TestListPackagesReadsStoreAndPlatformContentCatalog(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		kind enum.PackageKind
+	}{
+		{
+			name: "store",
+			kind: enum.PackageKindStore,
+		},
+		{
+			name: "platform content",
+			kind: enum.PackageKindPlatformContent,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			packageID := uuid.New()
+			repository := &fakeRepository{
+				packageEntry: entity.PackageEntry{
+					VersionedBase: entity.VersionedBase{ID: packageID},
+					Kind:          tt.kind,
+					Status:        enum.PackageStatusAvailable,
+					TrustStatus:   enum.PackageTrustStatusVerified,
+				},
+			}
+			authorizer := &recordingAuthorizer{}
+			service := NewWithConfig(repository, fixedClock{}, fixedIDs{}, Config{Authorizer: authorizer})
+
+			result, err := service.ListPackages(context.Background(), ListPackagesInput{
+				Kind: &tt.kind,
+				Meta: queryMeta(),
+			})
+			if err != nil {
+				t.Fatalf("ListPackages(): %v", err)
+			}
+			if len(result.Packages) != 1 || result.Packages[0].ID != packageID || result.Packages[0].Kind != tt.kind {
+				t.Fatalf("packages = %+v, want %s package", result.Packages, tt.kind)
+			}
+			if repository.listPackagesCalls != 1 || repository.listPackagesFilter.Kind == nil || *repository.listPackagesFilter.Kind != tt.kind {
+				t.Fatalf("list filter = %+v calls = %d, want %s kind filter", repository.listPackagesFilter, repository.listPackagesCalls, tt.kind)
+			}
+			if len(authorizer.requests) != 1 || authorizer.requests[0].ActionKey != packageActionCatalogRead {
+				t.Fatalf("authorization requests = %+v, want catalog read", authorizer.requests)
+			}
+		})
+	}
+}
+
 func TestListPackageInstallationsReadsGuidanceInstallations(t *testing.T) {
 	t.Parallel()
 
@@ -828,6 +994,63 @@ func TestListPackageInstallationsReadsGuidanceInstallations(t *testing.T) {
 	}
 	if len(authorizer.requests) != 1 || authorizer.requests[0].ActionKey != packageActionInstallationRead {
 		t.Fatalf("authorization requests = %+v, want installation read", authorizer.requests)
+	}
+}
+
+func TestListPackageInstallationsReadsStoreAndPlatformContentInstallations(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		kind enum.PackageKind
+	}{
+		{
+			name: "store",
+			kind: enum.PackageKindStore,
+		},
+		{
+			name: "platform content",
+			kind: enum.PackageKindPlatformContent,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			scope := value.ScopeRef{Type: enum.PackageInstallationScopeTypePlatform, Ref: "default"}
+			installation := entity.PackageInstallation{
+				VersionedBase:       entity.VersionedBase{ID: uuid.New(), Version: 1},
+				PackageID:           uuid.New(),
+				PackageVersionID:    uuid.New(),
+				Scope:               scope,
+				InstallationStatus:  enum.PackageInstallationStatusActive,
+				DesiredState:        enum.PackageDesiredStatePresent,
+				SecretBindingStatus: enum.PackageSecretBindingStatusNotRequired,
+				LastHealthStatus:    enum.PackageHealthStatusUnknown,
+			}
+			repository := &fakeRepository{packageInstallation: installation}
+			authorizer := &recordingAuthorizer{}
+			service := NewWithConfig(repository, fixedClock{}, fixedIDs{}, Config{Authorizer: authorizer})
+
+			result, err := service.ListPackageInstallations(context.Background(), ListPackageInstallationsInput{
+				Scope:       &scope,
+				PackageKind: &tt.kind,
+				Meta:        queryMeta(),
+			})
+			if err != nil {
+				t.Fatalf("ListPackageInstallations(): %v", err)
+			}
+			if len(result.Installations) != 1 || result.Installations[0].ID != installation.ID {
+				t.Fatalf("installations = %+v, want %s installation", result.Installations, tt.kind)
+			}
+			if repository.listInstallationsCalls != 1 || repository.listInstallationsFilter.PackageKind == nil || *repository.listInstallationsFilter.PackageKind != tt.kind {
+				t.Fatalf("installation filter = %+v calls = %d, want %s kind filter", repository.listInstallationsFilter, repository.listInstallationsCalls, tt.kind)
+			}
+			if len(authorizer.requests) != 1 || authorizer.requests[0].ActionKey != packageActionInstallationRead {
+				t.Fatalf("authorization requests = %+v, want installation read", authorizer.requests)
+			}
+		})
 	}
 }
 
@@ -1239,6 +1462,22 @@ func testCatalogManifestPayloadForKind(
 		t.Fatalf("marshal manifest: %v", err)
 	}
 	return payload
+}
+
+func testPackageSecretField(key string) value.PackageSecretField {
+	return value.PackageSecretField{
+		Key:      key,
+		Kind:     enum.PackageSecretFieldKindToken,
+		Required: true,
+		DisplayName: []value.LocalizedText{{
+			Locale: "ru",
+			Text:   "Токен пакета",
+		}},
+		Description: []value.LocalizedText{{
+			Locale: "ru",
+			Text:   "Тестовый токен пакета",
+		}},
+	}
 }
 
 func testManifestDigest(t *testing.T, payload []byte) string {
