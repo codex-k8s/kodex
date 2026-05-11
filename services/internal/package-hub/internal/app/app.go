@@ -39,15 +39,23 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if eventLogPool != nil {
 		defer eventLogPool.Close()
 	}
-	authorizer, accessConn, err := newAuthorizer(cfg)
+	accessDependencies, accessConn, err := newAccessDependencies(cfg)
 	if err != nil {
 		return err
 	}
 	if accessConn != nil {
 		defer func() { _ = accessConn.Close() }()
 	}
+	secretChecker, err := newSecretChecker(cfg)
+	if err != nil {
+		return err
+	}
 	packageRepository := packagepostgres.NewRepository(dbPool)
-	packageService := packageservice.NewWithConfig(packageRepository, systemClock{}, uuidGenerator{}, packageservice.Config{Authorizer: authorizer})
+	packageService := packageservice.NewWithConfig(packageRepository, systemClock{}, uuidGenerator{}, packageservice.Config{
+		Authorizer:      accessDependencies.Authorizer,
+		SecretRefReader: accessDependencies.SecretRefReader,
+		SecretChecker:   secretChecker,
+	})
 	components := processComponents{PackageService: packageService}
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
@@ -111,28 +119,39 @@ type processComponents struct {
 	PackageService *packageservice.Service
 }
 
-func newAuthorizer(cfg Config) (packageservice.Authorizer, *grpcruntime.ClientConn, error) {
+type accessDependencies struct {
+	Authorizer      packageservice.Authorizer
+	SecretRefReader packageservice.SecretRefReader
+}
+
+func newAccessDependencies(cfg Config) (accessDependencies, *grpcruntime.ClientConn, error) {
 	if cfg.AccessCheckEnabled {
-		return connectAuthorizer(accessclient.Config{
+		return connectAccessDependencies(accessclient.Config{
 			Addr:      cfg.AccessManagerGRPCAddr,
 			AuthToken: cfg.AccessManagerGRPCAuthToken,
 			Timeout:   cfg.AccessManagerCheckTimeout,
 		})
 	}
-	return packageservice.AllowAllAuthorizer{}, nil, nil
+	return accessDependencies{Authorizer: packageservice.AllowAllAuthorizer{}}, nil, nil
 }
 
-func connectAuthorizer(accessConfig accessclient.Config) (packageservice.Authorizer, *grpcruntime.ClientConn, error) {
+func connectAccessDependencies(accessConfig accessclient.Config) (accessDependencies, *grpcruntime.ClientConn, error) {
 	conn, err := accessclient.NewConnection(accessConfig)
 	if err != nil {
-		return nil, nil, err
+		return accessDependencies{}, nil, err
 	}
-	authorizer, err := accessclient.NewAuthorizer(accessaccountsv1.NewAccessManagerServiceClient(conn), accessConfig)
+	client := accessaccountsv1.NewAccessManagerServiceClient(conn)
+	authorizer, err := accessclient.NewAuthorizer(client, accessConfig)
 	if err != nil {
 		_ = conn.Close()
-		return nil, nil, err
+		return accessDependencies{}, nil, err
 	}
-	return authorizer, conn, nil
+	secretRefs, err := accessclient.NewPackageSecretRefReader(client, accessConfig)
+	if err != nil {
+		_ = conn.Close()
+		return accessDependencies{}, nil, err
+	}
+	return accessDependencies{Authorizer: authorizer, SecretRefReader: secretRefs}, conn, nil
 }
 
 func readinessChecks(packageService *packageservice.Service, packageDB serviceprocess.PingStore, eventLogDB serviceprocess.PingStore) []serviceprocess.ReadinessCheck {

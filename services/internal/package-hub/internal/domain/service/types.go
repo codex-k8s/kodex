@@ -1,14 +1,24 @@
 package service
 
 import (
+	"context"
 	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/codex-k8s/kodex/libs/go/secretresolver"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/value"
 )
+
+type SecretRefReader interface {
+	ListPackageInstallationSecretRefs(ctx context.Context, input ListPackageInstallationSecretRefsInput) (ListPackageInstallationSecretRefsResult, error)
+}
+
+type SecretChecker interface {
+	Check(ctx context.Context, ref secretresolver.SecretRef) (secretresolver.SecretStatus, error)
+}
 
 type ListPackageSourcesInput struct {
 	OrganizationID *uuid.UUID
@@ -142,6 +152,22 @@ type DisablePackageInstallationInput struct {
 type UninstallPackageInput struct {
 	InstallationID uuid.UUID
 	Meta           value.CommandMeta
+}
+
+type RefreshPackageInstallationSecretStatusInput struct {
+	InstallationID uuid.UUID
+	Meta           value.CommandMeta
+}
+
+type ListPackageInstallationSecretRefsInput struct {
+	PackageInstallationID uuid.UUID
+	InstallationScope     value.ScopeRef
+	LogicalKeys           []string
+	Meta                  value.CommandMeta
+}
+
+type ListPackageInstallationSecretRefsResult struct {
+	SecretRefs []value.PackageInstallationSecretRef
 }
 
 type ListPackageInstallationsInput struct {

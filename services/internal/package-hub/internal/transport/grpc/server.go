@@ -40,6 +40,7 @@ type packageService interface {
 	UpdatePackageInstallation(context.Context, packageservice.UpdatePackageInstallationInput) (entity.PackageInstallation, error)
 	DisablePackageInstallation(context.Context, packageservice.DisablePackageInstallationInput) (entity.PackageInstallation, error)
 	UninstallPackage(context.Context, packageservice.UninstallPackageInput) (entity.PackageInstallation, error)
+	RefreshPackageInstallationSecretStatus(context.Context, packageservice.RefreshPackageInstallationSecretStatusInput) (entity.PackageInstallation, error)
 	GetPackageInstallation(context.Context, uuid.UUID, value.QueryMeta) (entity.PackageInstallation, error)
 	ListPackageInstallations(context.Context, packageservice.ListPackageInstallationsInput) (packageservice.ListPackageInstallationsResult, error)
 	SetPackageVerification(context.Context, packageservice.SetPackageVerificationInput) (packageservice.SetPackageVerificationResult, error)
@@ -136,6 +137,11 @@ func (server *Server) DisablePackageInstallation(ctx context.Context, request *p
 // UninstallPackage marks an installation as uninstalled.
 func (server *Server) UninstallPackage(ctx context.Context, request *packagesv1.UninstallPackageRequest) (*packagesv1.PackageInstallationResponse, error) {
 	return grpcserver.HandleUnary(ctx, request, grpccasters.UninstallPackageInput, server.service.UninstallPackage, grpccasters.PackageInstallationResponse)
+}
+
+// RefreshPackageInstallationSecretStatus recalculates value-free secret readiness.
+func (server *Server) RefreshPackageInstallationSecretStatus(ctx context.Context, request *packagesv1.RefreshPackageInstallationSecretStatusRequest) (*packagesv1.PackageInstallationResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.RefreshPackageInstallationSecretStatusInput, server.service.RefreshPackageInstallationSecretStatus, grpccasters.PackageInstallationResponse)
 }
 
 // GetPackageInstallation returns one authoritative installation state.

@@ -162,7 +162,12 @@ func requireDesiredState(state enum.PackageDesiredState) error {
 
 func requireSecretBindingStatus(status enum.PackageSecretBindingStatus) error {
 	switch status {
-	case enum.PackageSecretBindingStatusNotRequired, enum.PackageSecretBindingStatusMissing, enum.PackageSecretBindingStatusComplete, enum.PackageSecretBindingStatusInvalid:
+	case enum.PackageSecretBindingStatusNotRequired,
+		enum.PackageSecretBindingStatusMissing,
+		enum.PackageSecretBindingStatusComplete,
+		enum.PackageSecretBindingStatusInvalid,
+		enum.PackageSecretBindingStatusPartial,
+		enum.PackageSecretBindingStatusCheckFailed:
 		return nil
 	default:
 		return errs.ErrInvalidArgument

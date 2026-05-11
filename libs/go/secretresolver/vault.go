@@ -23,6 +23,13 @@ type VaultBackendConfig struct {
 	KVv2Factory func(mountPath string) VaultKVv2Client
 }
 
+// VaultClientConfig configures the official Vault SDK client used by VaultBackend.
+type VaultClientConfig struct {
+	Addr      string
+	Token     string
+	Namespace string
+}
+
 // VaultBackend resolves values from Vault KV v2 through the official Go SDK.
 type VaultBackend struct {
 	kvv2Factory func(mountPath string) VaultKVv2Client
@@ -46,6 +53,21 @@ func NewVaultBackend(cfg VaultBackendConfig) (*VaultBackend, error) {
 		}
 	}
 	return &VaultBackend{kvv2Factory: factory}, nil
+}
+
+// NewVaultBackendFromClientConfig creates a Vault backend from Vault SDK connection settings.
+func NewVaultBackendFromClientConfig(cfg VaultClientConfig) (*VaultBackend, error) {
+	vaultConfig := vaultapi.DefaultConfig()
+	vaultConfig.Address = strings.TrimSpace(cfg.Addr)
+	vaultClient, err := vaultapi.NewClient(vaultConfig)
+	if err != nil {
+		return nil, fmt.Errorf("create Vault client: %w", err)
+	}
+	vaultClient.SetToken(strings.TrimSpace(cfg.Token))
+	if namespace := strings.TrimSpace(cfg.Namespace); namespace != "" {
+		vaultClient.SetNamespace(namespace)
+	}
+	return NewVaultBackend(VaultBackendConfig{Client: vaultClient})
 }
 
 // Resolve reads one Vault KV v2 field into an in-memory SecretValue.

@@ -14,49 +14,55 @@ import (
 
 // Config contains process-level package-hub server configuration.
 type Config struct {
-	DatabaseDSN                string        `env:"KODEX_PACKAGE_HUB_DATABASE_DSN,required,notEmpty"`
-	DatabaseMaxConns           int32         `env:"KODEX_PACKAGE_HUB_DATABASE_MAX_CONNS" envDefault:"8"`
-	DatabaseMinConns           int32         `env:"KODEX_PACKAGE_HUB_DATABASE_MIN_CONNS" envDefault:"1"`
-	DatabaseMaxConnLifetime    time.Duration `env:"KODEX_PACKAGE_HUB_DATABASE_MAX_CONN_LIFETIME" envDefault:"1h"`
-	DatabaseMaxConnIdleTime    time.Duration `env:"KODEX_PACKAGE_HUB_DATABASE_MAX_CONN_IDLE_TIME" envDefault:"15m"`
-	DatabaseHealthPeriod       time.Duration `env:"KODEX_PACKAGE_HUB_DATABASE_HEALTH_CHECK_PERIOD" envDefault:"30s"`
-	DatabasePingTimeout        time.Duration `env:"KODEX_PACKAGE_HUB_DATABASE_PING_TIMEOUT" envDefault:"5s"`
-	DatabaseRetryAttempts      int           `env:"KODEX_PACKAGE_HUB_DATABASE_CONNECT_RETRY_MAX_ATTEMPTS" envDefault:"6"`
-	DatabaseRetryInitial       time.Duration `env:"KODEX_PACKAGE_HUB_DATABASE_CONNECT_RETRY_INITIAL_DELAY" envDefault:"500ms"`
-	DatabaseRetryMax           time.Duration `env:"KODEX_PACKAGE_HUB_DATABASE_CONNECT_RETRY_MAX_DELAY" envDefault:"5s"`
-	DatabaseRetryJitterRatio   float64       `env:"KODEX_PACKAGE_HUB_DATABASE_CONNECT_RETRY_JITTER_RATIO" envDefault:"0.2"`
-	EventLogDatabaseDSN        string        `env:"KODEX_PACKAGE_HUB_EVENT_LOG_DATABASE_DSN"`
-	EventLogDatabaseMaxConns   int32         `env:"KODEX_PACKAGE_HUB_EVENT_LOG_DATABASE_MAX_CONNS" envDefault:"4"`
-	EventLogDatabaseMinConns   int32         `env:"KODEX_PACKAGE_HUB_EVENT_LOG_DATABASE_MIN_CONNS" envDefault:"0"`
-	GRPCAddr                   string        `env:"KODEX_PACKAGE_HUB_GRPC_ADDR" envDefault:":9090"`
-	GRPCAuthRequired           bool          `env:"KODEX_PACKAGE_HUB_GRPC_AUTH_REQUIRED" envDefault:"true"`
-	GRPCAuthToken              string        `env:"KODEX_PACKAGE_HUB_GRPC_AUTH_TOKEN"`
-	GRPCMaxConcurrentStreams   uint32        `env:"KODEX_PACKAGE_HUB_GRPC_MAX_CONCURRENT_STREAMS" envDefault:"128"`
-	GRPCMaxInFlight            int           `env:"KODEX_PACKAGE_HUB_GRPC_MAX_IN_FLIGHT" envDefault:"128"`
-	GRPCMaxRecvMessageBytes    int           `env:"KODEX_PACKAGE_HUB_GRPC_MAX_RECV_MESSAGE_BYTES" envDefault:"4194304"`
-	GRPCMaxSendMessageBytes    int           `env:"KODEX_PACKAGE_HUB_GRPC_MAX_SEND_MESSAGE_BYTES" envDefault:"4194304"`
-	GRPCKeepaliveMinTime       time.Duration `env:"KODEX_PACKAGE_HUB_GRPC_KEEPALIVE_MIN_TIME" envDefault:"30s"`
-	GRPCKeepaliveTime          time.Duration `env:"KODEX_PACKAGE_HUB_GRPC_KEEPALIVE_TIME" envDefault:"2m"`
-	GRPCKeepaliveTimeout       time.Duration `env:"KODEX_PACKAGE_HUB_GRPC_KEEPALIVE_TIMEOUT" envDefault:"20s"`
-	GRPCPermitWithoutStream    bool          `env:"KODEX_PACKAGE_HUB_GRPC_PERMIT_WITHOUT_STREAM" envDefault:"false"`
-	GRPCUnaryTimeout           time.Duration `env:"KODEX_PACKAGE_HUB_GRPC_UNARY_TIMEOUT" envDefault:"30s"`
-	AccessCheckEnabled         bool          `env:"KODEX_PACKAGE_HUB_ACCESS_CHECK_ENABLED" envDefault:"true"`
-	AccessManagerGRPCAddr      string        `env:"KODEX_PACKAGE_HUB_ACCESS_MANAGER_GRPC_ADDR" envDefault:"access-manager:9090"`
-	AccessManagerGRPCAuthToken string        `env:"KODEX_PACKAGE_HUB_ACCESS_MANAGER_GRPC_AUTH_TOKEN"`
-	AccessManagerCheckTimeout  time.Duration `env:"KODEX_PACKAGE_HUB_ACCESS_MANAGER_CHECK_TIMEOUT" envDefault:"3s"`
-	HTTPAddr                   string        `env:"KODEX_PACKAGE_HUB_HTTP_ADDR" envDefault:":8080"`
-	OutboxDispatchEnabled      bool          `env:"KODEX_PACKAGE_HUB_OUTBOX_DISPATCH_ENABLED" envDefault:"true"`
-	OutboxPublisherKind        string        `env:"KODEX_PACKAGE_HUB_OUTBOX_PUBLISHER_KIND" envDefault:"postgres-event-log"`
-	OutboxEventLogSource       string        `env:"KODEX_PACKAGE_HUB_OUTBOX_EVENT_LOG_SOURCE" envDefault:"package-hub"`
-	OutboxAllowLossy           bool          `env:"KODEX_PACKAGE_HUB_OUTBOX_ALLOW_LOSSY_DIAGNOSTIC_PUBLISHER" envDefault:"false"`
-	OutboxBatchSize            int           `env:"KODEX_PACKAGE_HUB_OUTBOX_BATCH_SIZE" envDefault:"100"`
-	OutboxPollInterval         time.Duration `env:"KODEX_PACKAGE_HUB_OUTBOX_POLL_INTERVAL" envDefault:"1s"`
-	OutboxLockTTL              time.Duration `env:"KODEX_PACKAGE_HUB_OUTBOX_LOCK_TTL" envDefault:"30s"`
-	OutboxPublishTimeout       time.Duration `env:"KODEX_PACKAGE_HUB_OUTBOX_PUBLISH_TIMEOUT" envDefault:"10s"`
-	OutboxLeaseSafetyMargin    time.Duration `env:"KODEX_PACKAGE_HUB_OUTBOX_LEASE_SAFETY_MARGIN" envDefault:"5s"`
-	OutboxRetryInitialDelay    time.Duration `env:"KODEX_PACKAGE_HUB_OUTBOX_RETRY_INITIAL_DELAY" envDefault:"1s"`
-	OutboxRetryMaxDelay        time.Duration `env:"KODEX_PACKAGE_HUB_OUTBOX_RETRY_MAX_DELAY" envDefault:"1m"`
-	OutboxFailureLimit         int           `env:"KODEX_PACKAGE_HUB_OUTBOX_FAILURE_MESSAGE_LIMIT" envDefault:"512"`
+	DatabaseDSN                     string        `env:"KODEX_PACKAGE_HUB_DATABASE_DSN,required,notEmpty"`
+	DatabaseMaxConns                int32         `env:"KODEX_PACKAGE_HUB_DATABASE_MAX_CONNS" envDefault:"8"`
+	DatabaseMinConns                int32         `env:"KODEX_PACKAGE_HUB_DATABASE_MIN_CONNS" envDefault:"1"`
+	DatabaseMaxConnLifetime         time.Duration `env:"KODEX_PACKAGE_HUB_DATABASE_MAX_CONN_LIFETIME" envDefault:"1h"`
+	DatabaseMaxConnIdleTime         time.Duration `env:"KODEX_PACKAGE_HUB_DATABASE_MAX_CONN_IDLE_TIME" envDefault:"15m"`
+	DatabaseHealthPeriod            time.Duration `env:"KODEX_PACKAGE_HUB_DATABASE_HEALTH_CHECK_PERIOD" envDefault:"30s"`
+	DatabasePingTimeout             time.Duration `env:"KODEX_PACKAGE_HUB_DATABASE_PING_TIMEOUT" envDefault:"5s"`
+	DatabaseRetryAttempts           int           `env:"KODEX_PACKAGE_HUB_DATABASE_CONNECT_RETRY_MAX_ATTEMPTS" envDefault:"6"`
+	DatabaseRetryInitial            time.Duration `env:"KODEX_PACKAGE_HUB_DATABASE_CONNECT_RETRY_INITIAL_DELAY" envDefault:"500ms"`
+	DatabaseRetryMax                time.Duration `env:"KODEX_PACKAGE_HUB_DATABASE_CONNECT_RETRY_MAX_DELAY" envDefault:"5s"`
+	DatabaseRetryJitterRatio        float64       `env:"KODEX_PACKAGE_HUB_DATABASE_CONNECT_RETRY_JITTER_RATIO" envDefault:"0.2"`
+	EventLogDatabaseDSN             string        `env:"KODEX_PACKAGE_HUB_EVENT_LOG_DATABASE_DSN"`
+	EventLogDatabaseMaxConns        int32         `env:"KODEX_PACKAGE_HUB_EVENT_LOG_DATABASE_MAX_CONNS" envDefault:"4"`
+	EventLogDatabaseMinConns        int32         `env:"KODEX_PACKAGE_HUB_EVENT_LOG_DATABASE_MIN_CONNS" envDefault:"0"`
+	GRPCAddr                        string        `env:"KODEX_PACKAGE_HUB_GRPC_ADDR" envDefault:":9090"`
+	GRPCAuthRequired                bool          `env:"KODEX_PACKAGE_HUB_GRPC_AUTH_REQUIRED" envDefault:"true"`
+	GRPCAuthToken                   string        `env:"KODEX_PACKAGE_HUB_GRPC_AUTH_TOKEN"`
+	GRPCMaxConcurrentStreams        uint32        `env:"KODEX_PACKAGE_HUB_GRPC_MAX_CONCURRENT_STREAMS" envDefault:"128"`
+	GRPCMaxInFlight                 int           `env:"KODEX_PACKAGE_HUB_GRPC_MAX_IN_FLIGHT" envDefault:"128"`
+	GRPCMaxRecvMessageBytes         int           `env:"KODEX_PACKAGE_HUB_GRPC_MAX_RECV_MESSAGE_BYTES" envDefault:"4194304"`
+	GRPCMaxSendMessageBytes         int           `env:"KODEX_PACKAGE_HUB_GRPC_MAX_SEND_MESSAGE_BYTES" envDefault:"4194304"`
+	GRPCKeepaliveMinTime            time.Duration `env:"KODEX_PACKAGE_HUB_GRPC_KEEPALIVE_MIN_TIME" envDefault:"30s"`
+	GRPCKeepaliveTime               time.Duration `env:"KODEX_PACKAGE_HUB_GRPC_KEEPALIVE_TIME" envDefault:"2m"`
+	GRPCKeepaliveTimeout            time.Duration `env:"KODEX_PACKAGE_HUB_GRPC_KEEPALIVE_TIMEOUT" envDefault:"20s"`
+	GRPCPermitWithoutStream         bool          `env:"KODEX_PACKAGE_HUB_GRPC_PERMIT_WITHOUT_STREAM" envDefault:"false"`
+	GRPCUnaryTimeout                time.Duration `env:"KODEX_PACKAGE_HUB_GRPC_UNARY_TIMEOUT" envDefault:"30s"`
+	AccessCheckEnabled              bool          `env:"KODEX_PACKAGE_HUB_ACCESS_CHECK_ENABLED" envDefault:"true"`
+	AccessManagerGRPCAddr           string        `env:"KODEX_PACKAGE_HUB_ACCESS_MANAGER_GRPC_ADDR" envDefault:"access-manager:9090"`
+	AccessManagerGRPCAuthToken      string        `env:"KODEX_PACKAGE_HUB_ACCESS_MANAGER_GRPC_AUTH_TOKEN"`
+	AccessManagerCheckTimeout       time.Duration `env:"KODEX_PACKAGE_HUB_ACCESS_MANAGER_CHECK_TIMEOUT" envDefault:"3s"`
+	SecretEnvBackendEnabled         bool          `env:"KODEX_PACKAGE_HUB_SECRET_ENV_BACKEND_ENABLED" envDefault:"true"`
+	SecretMountedKubernetesRoot     string        `env:"KODEX_PACKAGE_HUB_SECRET_MOUNTED_KUBERNETES_ROOT"`
+	SecretMountedKubernetesMaxBytes int64         `env:"KODEX_PACKAGE_HUB_SECRET_MOUNTED_KUBERNETES_MAX_BYTES" envDefault:"1048576"`
+	VaultAddr                       string        `env:"KODEX_PACKAGE_HUB_VAULT_ADDR"`
+	VaultToken                      string        `env:"KODEX_PACKAGE_HUB_VAULT_TOKEN"`
+	VaultNamespace                  string        `env:"KODEX_PACKAGE_HUB_VAULT_NAMESPACE"`
+	HTTPAddr                        string        `env:"KODEX_PACKAGE_HUB_HTTP_ADDR" envDefault:":8080"`
+	OutboxDispatchEnabled           bool          `env:"KODEX_PACKAGE_HUB_OUTBOX_DISPATCH_ENABLED" envDefault:"true"`
+	OutboxPublisherKind             string        `env:"KODEX_PACKAGE_HUB_OUTBOX_PUBLISHER_KIND" envDefault:"postgres-event-log"`
+	OutboxEventLogSource            string        `env:"KODEX_PACKAGE_HUB_OUTBOX_EVENT_LOG_SOURCE" envDefault:"package-hub"`
+	OutboxAllowLossy                bool          `env:"KODEX_PACKAGE_HUB_OUTBOX_ALLOW_LOSSY_DIAGNOSTIC_PUBLISHER" envDefault:"false"`
+	OutboxBatchSize                 int           `env:"KODEX_PACKAGE_HUB_OUTBOX_BATCH_SIZE" envDefault:"100"`
+	OutboxPollInterval              time.Duration `env:"KODEX_PACKAGE_HUB_OUTBOX_POLL_INTERVAL" envDefault:"1s"`
+	OutboxLockTTL                   time.Duration `env:"KODEX_PACKAGE_HUB_OUTBOX_LOCK_TTL" envDefault:"30s"`
+	OutboxPublishTimeout            time.Duration `env:"KODEX_PACKAGE_HUB_OUTBOX_PUBLISH_TIMEOUT" envDefault:"10s"`
+	OutboxLeaseSafetyMargin         time.Duration `env:"KODEX_PACKAGE_HUB_OUTBOX_LEASE_SAFETY_MARGIN" envDefault:"5s"`
+	OutboxRetryInitialDelay         time.Duration `env:"KODEX_PACKAGE_HUB_OUTBOX_RETRY_INITIAL_DELAY" envDefault:"1s"`
+	OutboxRetryMaxDelay             time.Duration `env:"KODEX_PACKAGE_HUB_OUTBOX_RETRY_MAX_DELAY" envDefault:"1m"`
+	OutboxFailureLimit              int           `env:"KODEX_PACKAGE_HUB_OUTBOX_FAILURE_MESSAGE_LIMIT" envDefault:"512"`
 }
 
 // LoadConfig reads process configuration from environment variables.
@@ -87,6 +93,12 @@ func (cfg Config) Validate() error {
 	if cfg.AccessCheckEnabled && strings.TrimSpace(cfg.AccessManagerGRPCAuthToken) == "" {
 		return fmt.Errorf("KODEX_PACKAGE_HUB_ACCESS_MANAGER_GRPC_AUTH_TOKEN is required when access checks are enabled")
 	}
+	if !cfg.SecretEnvBackendEnabled && strings.TrimSpace(cfg.SecretMountedKubernetesRoot) == "" && strings.TrimSpace(cfg.VaultAddr) == "" {
+		return fmt.Errorf("at least one package-hub secret checker backend must be enabled")
+	}
+	if strings.TrimSpace(cfg.VaultAddr) != "" && strings.TrimSpace(cfg.VaultToken) == "" {
+		return fmt.Errorf("KODEX_PACKAGE_HUB_VAULT_TOKEN is required when Vault address is configured")
+	}
 	for _, item := range []struct {
 		name  string
 		valid bool
@@ -100,6 +112,7 @@ func (cfg Config) Validate() error {
 		{name: "KODEX_PACKAGE_HUB_GRPC_MAX_RECV_MESSAGE_BYTES", valid: cfg.GRPCMaxRecvMessageBytes > 0},
 		{name: "KODEX_PACKAGE_HUB_GRPC_MAX_SEND_MESSAGE_BYTES", valid: cfg.GRPCMaxSendMessageBytes > 0},
 		{name: "KODEX_PACKAGE_HUB_ACCESS_MANAGER_CHECK_TIMEOUT", valid: cfg.AccessManagerCheckTimeout > 0},
+		{name: "KODEX_PACKAGE_HUB_SECRET_MOUNTED_KUBERNETES_MAX_BYTES", valid: cfg.SecretMountedKubernetesMaxBytes > 0},
 		{name: "KODEX_PACKAGE_HUB_DATABASE_MAX_CONNS", valid: cfg.DatabaseMaxConns > 0},
 		{name: "KODEX_PACKAGE_HUB_DATABASE_MIN_CONNS", valid: cfg.DatabaseMinConns >= 0},
 		{name: "KODEX_PACKAGE_HUB_DATABASE_MAX_CONN_LIFETIME", valid: cfg.DatabaseMaxConnLifetime > 0},

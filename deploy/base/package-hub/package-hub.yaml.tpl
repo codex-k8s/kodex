@@ -144,6 +144,22 @@ spec:
                   key: KODEX_PACKAGE_HUB_ACCESS_MANAGER_GRPC_AUTH_TOKEN
             - name: KODEX_PACKAGE_HUB_ACCESS_MANAGER_CHECK_TIMEOUT
               value: "{{ envOr "KODEX_PACKAGE_HUB_ACCESS_MANAGER_CHECK_TIMEOUT" "3s" }}"
+            - name: KODEX_PACKAGE_HUB_SECRET_ENV_BACKEND_ENABLED
+              value: "{{ envOr "KODEX_PACKAGE_HUB_SECRET_ENV_BACKEND_ENABLED" "true" }}"
+            - name: KODEX_PACKAGE_HUB_SECRET_MOUNTED_KUBERNETES_ROOT
+              value: "{{ envOr "KODEX_PACKAGE_HUB_SECRET_MOUNTED_KUBERNETES_ROOT" "" }}"
+            - name: KODEX_PACKAGE_HUB_SECRET_MOUNTED_KUBERNETES_MAX_BYTES
+              value: "{{ envOr "KODEX_PACKAGE_HUB_SECRET_MOUNTED_KUBERNETES_MAX_BYTES" "1048576" }}"
+            - name: KODEX_PACKAGE_HUB_VAULT_ADDR
+              value: "{{ envOr "KODEX_PACKAGE_HUB_VAULT_ADDR" "" }}"
+            - name: KODEX_PACKAGE_HUB_VAULT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: kodex-platform-runtime
+                  key: KODEX_PACKAGE_HUB_VAULT_TOKEN
+                  optional: true
+            - name: KODEX_PACKAGE_HUB_VAULT_NAMESPACE
+              value: "{{ envOr "KODEX_PACKAGE_HUB_VAULT_NAMESPACE" "" }}"
             - name: KODEX_PACKAGE_HUB_EVENT_LOG_DATABASE_DSN
               valueFrom:
                 secretKeyRef:

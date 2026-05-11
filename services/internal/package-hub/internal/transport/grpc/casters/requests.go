@@ -251,6 +251,10 @@ func UninstallPackageInput(request *packagesv1.UninstallPackageRequest) (service
 	return idCommandInput(request.GetInstallationId(), request.GetMeta(), newUninstallPackageInput)
 }
 
+func RefreshPackageInstallationSecretStatusInput(request *packagesv1.RefreshPackageInstallationSecretStatusRequest) (service.RefreshPackageInstallationSecretStatusInput, error) {
+	return idCommandInput(request.GetInstallationId(), request.GetMeta(), newRefreshPackageInstallationSecretStatusInput)
+}
+
 func GetPackageInstallationInput(request *packagesv1.GetPackageInstallationRequest) (IDQueryInput, error) {
 	return queryByIDInput(request.GetInstallationId(), request.GetMeta())
 }
@@ -343,6 +347,10 @@ func newDisablePackageInstallationInput(installationID uuid.UUID, meta value.Com
 
 func newUninstallPackageInput(installationID uuid.UUID, meta value.CommandMeta) service.UninstallPackageInput {
 	return service.UninstallPackageInput{InstallationID: installationID, Meta: meta}
+}
+
+func newRefreshPackageInstallationSecretStatusInput(installationID uuid.UUID, meta value.CommandMeta) service.RefreshPackageInstallationSecretStatusInput {
+	return service.RefreshPackageInstallationSecretStatusInput{InstallationID: installationID, Meta: meta}
 }
 
 func idCommandInput[T any](idText string, metaMessage *packagesv1.CommandMeta, build func(uuid.UUID, value.CommandMeta) T) (T, error) {

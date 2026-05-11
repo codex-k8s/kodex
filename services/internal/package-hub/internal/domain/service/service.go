@@ -5,15 +5,19 @@ import catalogrepo "github.com/codex-k8s/kodex/services/internal/package-hub/int
 
 // Config contains optional package-hub service integrations.
 type Config struct {
-	Authorizer Authorizer
+	Authorizer      Authorizer
+	SecretRefReader SecretRefReader
+	SecretChecker   SecretChecker
 }
 
 // Service is the package-hub application service boundary.
 type Service struct {
-	repository catalogrepo.Repository
-	clock      catalogrepo.Clock
-	ids        catalogrepo.IDGenerator
-	authorizer Authorizer
+	repository      catalogrepo.Repository
+	clock           catalogrepo.Clock
+	ids             catalogrepo.IDGenerator
+	authorizer      Authorizer
+	secretRefReader SecretRefReader
+	secretChecker   SecretChecker
 }
 
 // New creates a package-hub service with explicit dependencies.
@@ -27,6 +31,8 @@ func New(repository catalogrepo.Repository, clock catalogrepo.Clock, ids catalog
 func NewWithConfig(repository catalogrepo.Repository, clock catalogrepo.Clock, ids catalogrepo.IDGenerator, cfg Config) *Service {
 	service := &Service{repository: repository, clock: clock, ids: ids}
 	service.setAuthorizer(cfg.Authorizer)
+	service.secretRefReader = cfg.SecretRefReader
+	service.secretChecker = cfg.SecretChecker
 	return service
 }
 

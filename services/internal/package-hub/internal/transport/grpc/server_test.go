@@ -129,6 +129,23 @@ func TestDisablePackageInstallationReturnsInstallationResponse(t *testing.T) {
 	}
 }
 
+func TestRefreshPackageInstallationSecretStatusReturnsInstallationResponse(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.NewString()
+	installationID := uuid.New()
+	response, err := NewServer(fakePackageService{}).RefreshPackageInstallationSecretStatus(context.Background(), &packagesv1.RefreshPackageInstallationSecretStatusRequest{
+		Meta:           &packagesv1.CommandMeta{CommandId: &commandID, ExpectedVersion: int64Ptr(1), Actor: &packagesv1.Actor{Type: "user", Id: "owner"}},
+		InstallationId: installationID.String(),
+	})
+	if err != nil {
+		t.Fatalf("RefreshPackageInstallationSecretStatus(): %v", err)
+	}
+	if response.GetInstallation().GetId() != installationID.String() || response.GetInstallation().GetSecretBindingStatus() != packagesv1.PackageSecretBindingStatus_PACKAGE_SECRET_BINDING_STATUS_COMPLETE {
+		t.Fatalf("installation response = %+v, want complete %s", response.GetInstallation(), installationID)
+	}
+}
+
 type fakePackageService struct {
 	packageID uuid.UUID
 }
@@ -283,6 +300,20 @@ func (fakePackageService) UninstallPackage(_ context.Context, input packageservi
 	}, nil
 }
 
+func (fakePackageService) RefreshPackageInstallationSecretStatus(_ context.Context, input packageservice.RefreshPackageInstallationSecretStatusInput) (entity.PackageInstallation, error) {
+	now := time.Date(2026, 5, 7, 16, 0, 0, 0, time.UTC)
+	return entity.PackageInstallation{
+		VersionedBase:       entity.VersionedBase{ID: input.InstallationID, Version: 2, CreatedAt: now, UpdatedAt: now},
+		PackageID:           uuid.New(),
+		PackageVersionID:    uuid.New(),
+		Scope:               value.ScopeRef{Type: enum.PackageInstallationScopeTypeProject, Ref: uuid.NewString()},
+		InstallationStatus:  enum.PackageInstallationStatusActive,
+		DesiredState:        enum.PackageDesiredStatePresent,
+		SecretBindingStatus: enum.PackageSecretBindingStatusComplete,
+		LastHealthStatus:    enum.PackageHealthStatusUnknown,
+	}, nil
+}
+
 func (fakePackageService) GetPackageInstallation(context.Context, uuid.UUID, value.QueryMeta) (entity.PackageInstallation, error) {
 	return entity.PackageInstallation{}, nil
 }
@@ -293,4 +324,8 @@ func (fakePackageService) ListPackageInstallations(context.Context, packageservi
 
 func (fakePackageService) SetPackageVerification(context.Context, packageservice.SetPackageVerificationInput) (packageservice.SetPackageVerificationResult, error) {
 	return packageservice.SetPackageVerificationResult{}, nil
+}
+
+func int64Ptr(value int64) *int64 {
+	return &value
 }

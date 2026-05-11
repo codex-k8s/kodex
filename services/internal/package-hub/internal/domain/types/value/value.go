@@ -63,6 +63,13 @@ type PackageSecretField struct {
 	Description []LocalizedText             `json:"description"`
 }
 
+type PackageInstallationSecretRef struct {
+	LogicalKey string
+	Status     enum.PackageInstallationSecretRefStatus
+	StoreType  string
+	StoreRef   string
+}
+
 type PageRequest struct {
 	PageSize  int32
 	PageToken string
