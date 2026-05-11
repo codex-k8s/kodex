@@ -15,7 +15,7 @@
 | `wave-007-access-and-accounts.md` | Первый кодовый домен: доступ, организации, группы и внешние аккаунты. | принята |
 | `wave-008-projects-and-repositories.md` | Второй кодовый домен: проекты, репозитории, проектная документация, правила веток и релизные политики. | завершена |
 | `runtime-manager RTM-0..RTM-7` | Среда исполнения: слоты, workspace materialization, platform jobs, cleanup, prewarm и reuse. | RTM-0..RTM-7 готовы |
-| `fleet-manager FLEET-0` | Контур серверов и кластеров: границы, default cluster MVP, будущие контракты и план поставки. | готово |
+| `fleet-manager FLEET-0` | Контур серверов и кластеров: границы, MVP с несколькими серверами, scope и кластерами, bootstrap seed `platform-default`, будущие контракты и план поставки. | готово |
 
 ## Планируемые gateway-срезы
 

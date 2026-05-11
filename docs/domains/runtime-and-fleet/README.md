@@ -13,13 +13,15 @@
 
 - режимы выполнения `code-only`, `full-env` и production-контур только для чтения;
 - namespace-per-task slot как первая физическая форма слота;
-- задел на nested cluster и multi-cluster без изменения доменной модели слота;
+- задел на вложенные и несколько кластеров без изменения доменной модели слота;
 - подготовка workspace по политике, которой владеет `project-catalog`;
 - prewarmed slots и безопасное повторное использование по deterministic fingerprint;
 - platform jobs для mirror/build/deploy/cleanup/health-check/housekeeping;
 - короткий хвост лога и ссылки на полный источник логов;
 - cleanup и retention policy для runtime-объектов;
-- явная граница с `fleet-manager`, который выбирает и проверяет инфраструктурный контур.
+- явная граница с `fleet-manager`, который выбирает и проверяет инфраструктурный контур;
+- реестр нескольких серверов, scope и кластеров как MVP fleet-контура;
+- bootstrap seed `platform-default` для одиночной установки без ограничения модели нескольких кластеров.
 
 ## Документы
 

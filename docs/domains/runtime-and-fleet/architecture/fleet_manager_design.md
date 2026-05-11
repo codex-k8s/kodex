@@ -24,13 +24,13 @@ approvals:
 - Что меняем: выделяем `fleet-manager` как сервис-владелец серверов, Kubernetes-кластеров, связности, health и placement scope.
 - Почему: `runtime-manager` должен исполнять на выбранном контуре, но не владеть реестром кластеров и не выбирать инфраструктуру сам.
 - Основные компоненты: БД `fleet-manager`, gRPC API, outbox, fleet scope, server, Kubernetes cluster, проверка связности, health snapshot, placement rule и placement decision.
-- Риски: превратить default cluster в вечную модель, смешать runtime job и fleet health-check, начать хранить kubeconfig и состояние Kubernetes в БД.
+- Риски: превратить bootstrap seed в вечную одиночную модель, смешать runtime job и fleet health-check, начать хранить kubeconfig и состояние Kubernetes в БД.
 
 ## Цели
 
 - Зафиксировать границу `fleet-manager` до контрактов и кода.
-- Описать MVP одного default cluster как seed-состояние.
-- Подготовить переход к multi-cluster и dedicated-cluster без изменения базовой модели.
+- Описать MVP как реестр нескольких fleet scope, серверов и Kubernetes-кластеров.
+- Описать `platform-default` как bootstrap seed/fallback для одиночной установки, а не как ограничение MVP.
 - Дать `runtime-manager` один понятный контракт для размещения слотов и jobs.
 - Оставить runtime-нагрузки пакетов за `runtime-manager`: fleet только выбирает инфраструктурный контур.
 
@@ -65,9 +65,11 @@ approvals:
 | Resolver размещения | Выбирает cluster ref по ограничениям, policy, health и сигналам ёмкости. |
 | Outbox-доставщик | Публикует `fleet.*` события через `platform-event-log`. |
 
-## MVP одного default cluster
+## MVP-реестр нескольких кластеров
 
-В MVP платформа стартует с одним Kubernetes-кластером. Это оформляется как данные fleet, а не как скрытая настройка runtime:
+В MVP `fleet-manager` сразу поддерживает несколько fleet scope, server и Kubernetes cluster. Одиночная установка стартует с bootstrap seed, но оператор может зарегистрировать дополнительные серверы, scope и кластеры без изменения модели БД и API.
+
+Bootstrap seed для одиночной установки:
 
 - seed-запись `FleetScope` с `scope_type=platform` и `scope_key=platform-default`;
 - seed-запись `KubernetesCluster`, связанная с этим scope;
@@ -75,15 +77,16 @@ approvals:
 - статус `active` и `is_default=true` у scope и cluster;
 - health snapshot с последней проверкой связности.
 
-`runtime-manager` на старте может продолжить принимать default refs через конфигурацию, но целевой путь — получить те же refs из `fleet-manager.ResolvePlacement`. После появления контракта runtime должен перестать выбирать default cluster самостоятельно.
+`platform-default` используется как seed/fallback, если других подходящих контуров нет или ограничения размещения не заданы. Он не должен быть единственным допустимым контуром в MVP. Целевой путь для `runtime-manager` — получить `fleet_scope_id` и `cluster_id` из `fleet-manager.ResolvePlacement`; runtime не выбирает cluster самостоятельно.
 
 Запрещено:
 
-- считать один cluster единственным возможным состоянием;
+- считать один кластер единственным возможным состоянием;
 - хранить kubeconfig как text/blob в БД;
 - размещать runtime по имени namespace без `fleet_scope_id` и `cluster_id`;
 - делать runtime-нагрузку пакета прямым вызовом из fleet;
-- вводить отдельный статус `placement_enabled`: размещение разрешается lifecycle-статусом `active`, default-флагом и health-снимком.
+- вводить отдельный статус `placement_enabled`: размещение разрешается lifecycle-статусом `active`, правилами placement и health-снимком;
+- откладывать реестр нескольких серверов, scope и кластеров на период после MVP.
 
 ## Модель размещения
 
@@ -105,13 +108,13 @@ approvals:
 - выбранная namespace strategy;
 - digest входных ограничений и версии правил;
 - причина выбора или отказа;
-- признак MVP default path, если решение принято через стартовый default cluster.
+- признак default path, если решение принято через bootstrap seed `platform-default`.
 
 Placement decision не создаёт slot и не запускает job. Он фиксирует объяснимое решение размещения, которое исполняет `runtime-manager`.
 
 ## Основные потоки
 
-### Регистрация default cluster
+### Регистрация bootstrap seed и дополнительных кластеров
 
 ```mermaid
 sequenceDiagram
@@ -119,7 +122,7 @@ sequenceDiagram
   participant A as access-manager
   participant F as fleet-manager
   participant S as secret store
-  O->>F: RegisterKubernetesCluster(default scope, secret ref)
+  O->>F: RegisterKubernetesCluster(scope, secret ref, is_default)
   F->>A: authorize fleet.cluster.write
   F->>S: проверить metadata secret ref
   F->>F: сохранить cluster + outbox
@@ -153,7 +156,7 @@ sequenceDiagram
   PC-->>AM: workspace policy + ограничения размещения
   AM->>R: PrepareRuntime(...)
   R->>F: ResolvePlacement(project refs, runtime profile, ограничения)
-  F-->>R: fleet_scope_id + cluster_id + причина решения
+  F-->>R: выбранные fleet_scope_id + cluster_id + причина решения
   R->>R: зарезервировать slot и подготовить workspace
 ```
 
@@ -180,7 +183,7 @@ sequenceDiagram
 - `fleet.cluster.registered`;
 - `fleet.cluster.updated`;
 - `fleet.cluster.suspended`;
-- `fleet.cluster.decommissioned`;
+- `fleet.cluster.decommissioned` — после MVP;
 - `fleet.health.checked`;
 - `fleet.health.degraded`;
 - `fleet.placement.resolved`;
@@ -198,7 +201,7 @@ sequenceDiagram
 ## Наблюдаемость
 
 - Логи: cluster id, fleet scope, operation, actor, correlation id, decision id, result.
-- Метрики: доступность кластера, длительность health check, failed checks, доля отказов размещения, использование default path.
+- Метрики: доступность кластеров, длительность health check, failed checks, доля отказов размещения, использование default path.
 - Трейсы: входящий gRPC, проверка доступа, lookup metadata секрета, Kubernetes API probe, публикация outbox.
 - Алерты: default cluster unavailable, repeated health degraded, placement reject spike, stale health snapshot.
 
@@ -207,7 +210,7 @@ sequenceDiagram
 | Риск | Митигирующее решение |
 |---|---|
 | `fleet-manager` начнёт исполнять jobs. | В API fleet нет операций создания runtime jobs; он возвращает только placement decision. |
-| Default cluster станет вечным пределом. | Default оформлен как seed scope/cluster и причина решения, а не как скрытая конфигурация. |
+| Bootstrap seed станет вечным пределом. | `platform-default` оформлен как обычные данные реестра и fallback-причина решения, а не как скрытая конфигурация или единственный MVP-кластер. |
 | Секреты попадут в БД. | Хранить только `secret_store_type` и `secret_store_ref`, значения получать через отдельный разрешённый клиент. |
 | Health превратится в полную копию Kubernetes. | Хранить только ограниченный snapshot и ссылки на первоисточник. |
 | Project policy начнёт дублироваться. | Fleet хранит placement rules только своего домена; проектная policy остаётся в `project-catalog`. |

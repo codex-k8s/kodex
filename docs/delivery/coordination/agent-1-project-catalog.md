@@ -29,7 +29,8 @@
 `fleet-manager` отвечает за:
 
 - серверы, Kubernetes-кластеры, связность, health и placement scope;
-- default fleet scope и default cluster в MVP;
+- реестр нескольких серверов, scope и кластеров в MVP;
+- bootstrap seed `platform-default` для одиночной установки;
 - будущий выбор `fleet_scope_id` и `cluster_id` для runtime;
 - события `fleet.*`.
 
@@ -58,7 +59,7 @@
 | RTM-0 | #655 | #664 | готово | Доменная документация, границы runtime/fleet, карта Issue и план поставки. |
 | RTM-1 | #656 | #669 | готово | gRPC/AsyncAPI контракты `runtime-manager`, события и сгенерированные Go-контракты. |
 | RTM-2 | #657 | #672 | готово | Сервисный каркас, PostgreSQL-модель, миграции, repository, health/readiness, outbox и базовые тесты. |
-| RTM-3 | #658 | #676 | готово | Жизненный цикл слотов: reserve, extend lease, release, fail, чтения, идемпотентность и MVP default fleet boundary. |
+| RTM-3 | #658 | #676 | готово | Жизненный цикл слотов: reserve, extend lease, release, fail, чтения, идемпотентность и bootstrap-граница fleet. |
 | RTM-4 | #659 | #683 | готово | Workspace materialization: source refs, access mode, local paths, fingerprint, progress и безопасные ошибки подготовки. |
 | RTM-5 | #660 | #687 | готово | Platform job MVP: job/step state machine, claim lease, progress, complete/fail/cancel, short log tail и runtime artifact refs. |
 | RTM-6 | #661 | #691 | готово | Dockerfile, manifests, PostgreSQL bootstrap, migration job, `services.yaml`, smoke-путь, runbook и monitoring-документы. |
@@ -70,9 +71,9 @@
 
 | Срез | Issue | Статус | Результат |
 |---|---:|---|---|
-| FLEET-0 | #699 | готово | Доменная документация, границы runtime/fleet, MVP default cluster, будущие контракты, план поставки и карта Issue. |
+| FLEET-0 | #699 | готово | Доменная документация, границы runtime/fleet, MVP с несколькими серверами, scope и кластерами, bootstrap seed `platform-default`, будущие контракты, план поставки и карта Issue. |
 
-Итог: `fleet-manager` пока не имеет кода. Зафиксирована целевая граница и порядок поставки: контракты, сервисный каркас, default scope/cluster, health, placement resolver и deploy-контур.
+Итог: `fleet-manager` пока не имеет кода. Зафиксирована целевая граница и порядок поставки: контракты, сервисный каркас, реестр нескольких scope/server/cluster, bootstrap seed `platform-default`, health, placement resolver и deploy-контур.
 
 ## Текущий бэклог агента #1
 
@@ -149,7 +150,7 @@
 - `provider-hub` зависит от `project-catalog` при привязке provider-native объектов к локальному проекту и репозиторию.
 - `package-hub` зависит от `project-catalog`, когда пакетные источники и руководящие пакеты становятся частью проектной политики.
 - `agent-manager` зависит от `runtime-manager` для слотов, workspace materialization и platform jobs, но `Run` остаётся сущностью `agent-manager`.
-- `runtime-manager` зависит от `fleet-manager` для целевого `ResolvePlacement`; до интеграционного среза runtime использует MVP default refs.
+- `runtime-manager` зависит от `fleet-manager` для целевого `ResolvePlacement`; до интеграционного среза runtime использует bootstrap default refs.
 - `operations-hub` и будущий `staff-gateway` зависят от чтений `project-catalog` и `runtime-manager` для операторских экранов.
 
 ## Рекомендуемый следующий шаг

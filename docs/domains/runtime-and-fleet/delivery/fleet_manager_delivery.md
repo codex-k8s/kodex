@@ -25,7 +25,7 @@ approvals:
 
 ## TL;DR
 
-`fleet-manager` поставляется малыми PR-срезами: сначала доменная документация, затем gRPC/AsyncAPI контракты, сервисный каркас и БД, default scope/cluster, связность и health, resolver размещения, интеграция с `runtime-manager`, контур выкладки и операционные документы.
+`fleet-manager` поставляется малыми PR-срезами: сначала доменная документация, затем gRPC/AsyncAPI контракты, сервисный каркас и БД, реестр нескольких scope/server/cluster, связность и health, resolver размещения, интеграция с `runtime-manager`, контур выкладки и операционные документы.
 
 Стартовый FLEET-0 не создаёт код. Он фиксирует границу: `runtime-manager` владеет слотами/jobs/workspace, а `fleet-manager` владеет серверами, Kubernetes-кластерами, связностью, health и placement scope.
 
@@ -43,23 +43,23 @@ approvals:
 
 | Срез | Issue | Результат |
 |---|---|---|
-| FLEET-0 | #699 | Доменная документация, границы runtime/fleet, MVP default cluster, будущие контракты, план поставки и карта Issue. |
+| FLEET-0 | #699 | Доменная документация, границы runtime/fleet, MVP с несколькими серверами, scope и кластерами, bootstrap seed `platform-default`, будущие контракты, план поставки и карта Issue. |
 | FLEET-1 | создать перед срезом | gRPC и AsyncAPI контракты `fleet-manager`, события `fleet.*`, сгенерированные Go-контракты и ключи действий. |
 | FLEET-2 | создать перед срезом | Сервисный каркас, конфигурация, PostgreSQL-модель, миграции, слой репозитория, health/readiness и outbox. |
-| FLEET-3 | создать перед срезом | Команды и чтения для fleet scopes, servers, Kubernetes clusters, seed/default cluster и базовые проверки доступа. |
-| FLEET-4 | создать перед срезом | Проверки связности, health snapshots, события деградации и операторские модели чтения. |
-| FLEET-5 | создать перед срезом | Правила размещения, `ResolvePlacement`, журнал решений и интеграционный контракт для `runtime-manager`. |
+| FLEET-3 | создать перед срезом | Команды и чтения реестра для нескольких fleet scope, серверов, Kubernetes-кластеров, bootstrap seed `platform-default` и базовые проверки доступа. |
+| FLEET-4 | создать перед срезом | Проверки связности, health snapshots и события деградации для нескольких кластеров. |
+| FLEET-5 | создать перед срезом | Правила размещения, `ResolvePlacement` по набору активных кластеров, журнал решений и интеграционный контракт для `runtime-manager`. |
 | FLEET-6 | создать перед срезом | Dockerfile, манифесты, migration job, `services.yaml`, smoke-путь, runbook и monitoring. |
 
 ## Таблица реализации
 
 | Группа | Контракт | Реализация |
 |---|---|---|
-| Fleet scopes | Запланирован в FLEET-1. | Не реализовано в FLEET-0. |
-| Servers | Запланирован в FLEET-1. | Не реализовано в FLEET-0. |
-| Kubernetes clusters | Запланирован в FLEET-1. | Не реализовано в FLEET-0. |
+| Fleet scopes | Запланирован в FLEET-1. | Реестр нескольких scope реализуется в FLEET-3. |
+| Servers | Запланирован в FLEET-1. | Реестр нескольких серверов реализуется в FLEET-3. |
+| Kubernetes clusters | Запланирован в FLEET-1. | Реестр нескольких кластеров реализуется в FLEET-3. |
 | Связность и health | Запланирован в FLEET-1. | Не реализовано в FLEET-0. |
-| Placement | Запланирован в FLEET-1. | Не реализовано в FLEET-0. |
+| Placement | Запланирован в FLEET-1. | Базовый выбор из набора активных кластеров реализуется в FLEET-5. |
 | Контур выкладки | Не gRPC-группа. | Запланировано в FLEET-6. |
 
 ## Зависимости и блокировки
@@ -70,8 +70,8 @@ approvals:
 | `project-catalog` | Источник placement policy проекта, репозитория и сервиса. | Текущие проектные контракты достаточны для kickoff; точную форму ограничений подтвердить перед FLEET-5. |
 | `package-hub` | Источник runtime-требований для runtime-нагрузок пакетов и плагинов. | Не блокирует FLEET-0..FLEET-4; нужен контракт требований перед размещением runtime-нагрузки пакета. |
 | `agent-manager` | Инициирует runtime через `runtime-manager`. | Не блокирует fleet kickoff; прямой fleet API для agent-manager не планируется в MVP. |
-| `access-manager` | Проверка прав на управление fleet scope, servers, clusters и placement rules. | Нужны ключи действий и проверка доступа в FLEET-1/FLEET-3. |
-| Secret resolver/Vault/Kubernetes Secret клиент | Получение значения kubeconfig/service account по разрешённой ссылке. | Не нужен для FLEET-0/FLEET-1; нужен до реальных connectivity checks в FLEET-4. |
+| `access-manager` | Проверка прав на управление fleet scope, серверами, кластерами и placement rules. | Нужны ключи действий и проверка доступа в FLEET-1/FLEET-3. |
+| Secret resolver/Vault/Kubernetes Secret клиент | Получение значения kubeconfig/service account по разрешённой ссылке. | Не нужен для FLEET-0/FLEET-1; нужен до регистрации реальных кластеров и connectivity checks в FLEET-3/FLEET-4. |
 
 ## Критерии начала кода
 
@@ -84,11 +84,22 @@ approvals:
 ## Критерии завершения fleet-manager MVP
 
 - `fleet-manager` имеет собственную БД, миграции, контракты, события и deploy-контур.
-- Fleet scope, server, Kubernetes cluster, health snapshot и placement decision имеют авторитетные команды и чтения.
-- MVP default cluster описан как данные fleet, а не скрытая особенность `runtime-manager`.
-- `runtime-manager` может получать placement decision и не выбирает cluster самостоятельно.
+- Несколько fleet scope, server и Kubernetes cluster имеют авторитетные команды и чтения уже в MVP.
+- Bootstrap `platform-default` описан как данные fleet и fallback, а не скрытая особенность `runtime-manager` или ограничение MVP.
+- `runtime-manager` может получать placement decision из набора активных кластеров и не выбирает cluster самостоятельно.
 - `package-hub` и `project-catalog` могут передавать ограничения и требования без владения fleet-состоянием.
 - Полные kubeconfig, Kubernetes objects, events и logs не хранятся в PostgreSQL `fleet-manager`.
+
+## После MVP
+
+За пределами MVP остаются:
+
+- автоматический SSH bootstrap сервера;
+- установка Kubernetes;
+- join-node;
+- cluster upgrade;
+- разрушительные lifecycle-операции для серверов и кластеров;
+- расширенная автоматизация capacity/rebalancing.
 
 ## Рекомендуемый следующий шаг после FLEET-0
 

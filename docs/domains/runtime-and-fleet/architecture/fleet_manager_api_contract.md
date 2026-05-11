@@ -23,7 +23,7 @@ approvals:
 - Тип API: внутренний gRPC для команд и чтений, AsyncAPI для `fleet.*` событий.
 - Аутентификация: внутренний сервисный контур; изменяющие команды принимают `CommandMeta` и проверяются через `access-manager`.
 - Версионирование: стабильный `v1` создаётся в контрактном срезе до реализации операций.
-- Основные операции: fleet scopes, servers, Kubernetes clusters, связность/health, placement rules и `ResolvePlacement`.
+- Основные операции: fleet scopes, servers, Kubernetes clusters, связность/health, placement rules и `ResolvePlacement` по набору активных кластеров.
 
 ## Спецификации
 
@@ -60,12 +60,11 @@ approvals:
 
 | Операция | Назначение | Вызывает | Идемпотентность |
 |---|---|---|---|
-| `RegisterKubernetesCluster` | Зарегистрировать кластер, default-признак внутри scope и ссылку на secret для доступа. | Операторский контур | `command_id`. |
+| `RegisterKubernetesCluster` | Зарегистрировать очередной кластер, default-признак внутри scope и ссылку на secret для доступа. | Операторский контур | `command_id`. |
 | `UpdateKubernetesCluster` | Обновить статус, scope, default-признак, region, class или secret ref. | Операторский контур | `command_id + expected_version`. |
 | `GetKubernetesCluster` | Прочитать кластер. | `runtime-manager`, операторский контур | Только чтение. |
 | `ListKubernetesClusters` | Список кластеров по scope, статусу и health. | Операторский контур | Только чтение. |
 | `SuspendKubernetesCluster` | Запретить новые размещения в кластер. | Операторский контур | `command_id + expected_version`. |
-| `DecommissionKubernetesCluster` | Вывести кластер из эксплуатации после миграции runtime-нагрузок. | Операторский контур | `command_id + expected_version`. |
 
 ### Связность и health
 
@@ -91,11 +90,22 @@ approvals:
 
 | Область | MVP | После MVP |
 |---|---|---|
-| Fleet scope | Один активный default scope + возможность хранить несколько. | Организационные, проектные, репозиторные и сервисные scope. |
-| Cluster | Один активный default cluster внутри default scope + базовые статусы. | Несколько кластеров, dedicated clusters, draining/decommission flows. |
-| Health | Проверка связности + ограниченный health snapshot. | Прогноз ёмкости, quota policy, деградация по метрикам. |
-| Placement | Default path + простые ограничения. | Взвешенный выбор, размещение с учётом стоимости и риска, multi-region. |
-| Runtime integration | `ResolvePlacement` как целевой контракт. | Автоматическая миграция runtime-сценариев с config default на fleet decision. |
+| Fleet scope | Несколько scope, включая bootstrap seed `platform-default`. | Автоматическое создание scope из внешних provisioning-сценариев. |
+| Server | Несколько server-записей с метаданными и ссылками на секреты. | Автоматический SSH bootstrap, установка Kubernetes и join-node. |
+| Cluster | Несколько Kubernetes-кластеров, один default-кластер внутри scope только как fallback. | Cluster upgrade, разрушительные lifecycle-операции и расширенное обслуживание. |
+| Health | Проверка связности + ограниченный health snapshot по каждому cluster. | Прогноз ёмкости, quota policy, автоматический rebalancing и capacity automation. |
+| Placement | Выбор активного cluster из реестра по ограничениям, health и default fallback. | Взвешенный выбор, размещение с учётом стоимости и риска, multi-region. |
+| Runtime integration | `runtime-manager` вызывает `ResolvePlacement` и получает fleet decision. | Дальнейшие улучшения идут через развитие placement policy. |
+
+## Отложенные операции после MVP
+
+| Операция | Почему не входит в MVP |
+|---|---|
+| `BootstrapServerOverSsh` | Автоматический SSH bootstrap сервера отложен; в MVP оператор регистрирует уже доступный контур и ссылки на секреты. |
+| `InstallKubernetes` | Установка Kubernetes отложена; MVP не становится инсталлятором кластера. |
+| `JoinNode` | Join-node автоматизация отложена; реестр уже может хранить несколько серверов и кластеров. |
+| `UpgradeKubernetesCluster` | Upgrade cluster требует отдельной операционной политики и rollback-плана. |
+| `DecommissionKubernetesCluster` | Разрушительная lifecycle-операция требует отдельной политики миграции runtime-нагрузок и owner approval. |
 
 ## Модель ошибок
 
@@ -122,7 +132,7 @@ approvals:
 | `fleet.cluster.registered` | Зарегистрирован Kubernetes-кластер. |
 | `fleet.cluster.updated` | Обновлён Kubernetes-кластер. |
 | `fleet.cluster.suspended` | Кластер приостановлен для новых размещений. |
-| `fleet.cluster.decommissioned` | Кластер выведен из эксплуатации. |
+| `fleet.cluster.decommissioned` | Кластер выведен из эксплуатации; событие относится к разрушительному lifecycle после MVP. |
 | `fleet.health.checked` | Health check завершён. |
 | `fleet.health.degraded` | Health перешёл в degraded/unhealthy. |
 | `fleet.placement.resolved` | Placement успешно разрешён. |
@@ -132,7 +142,8 @@ approvals:
 
 - Контракты `v1` должны покрыть согласованный объём fleet API, даже если реализация пойдёт несколькими срезами.
 - Если контракт опережает код, документ поставки содержит таблицу реализованного и отложенного объёма.
-- MVP default cluster должен быть частью данных и API, а не временной особенностью только runtime config.
+- Bootstrap `platform-default` должен быть частью данных и API, а не временной особенностью только runtime config.
+- API регистрации, чтения, health и placement должен быть рассчитан на несколько scope, серверов и кластеров уже в MVP.
 - `fleet-manager` не публикует OpenAPI напрямую; внешние HTTP-сценарии позже идут через подходящий gateway.
 
 ## Апрув
