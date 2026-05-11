@@ -147,6 +147,35 @@ type ListRelationshipsResult struct {
 	Page          query.PageResult
 }
 
+// ProviderArtifactTarget identifies a provider-native object referenced by an accelerating signal.
+type ProviderArtifactTarget struct {
+	ProviderSlug         enum.ProviderSlug
+	RepositoryFullName   string
+	ProviderRepositoryID string
+	WorkItemKind         enum.WorkItemKind
+	Number               int64
+	ProviderObjectID     string
+	WebURL               string
+}
+
+// RegisterProviderArtifactSignalInput records an accelerating signal from an agent or manager.
+type RegisterProviderArtifactSignalInput struct {
+	SignalID          string
+	ExternalAccountID uuid.UUID
+	Target            ProviderArtifactTarget
+	Source            string
+	ObservedAt        time.Time
+	PayloadJSON       []byte
+	Meta              value.CommandMeta
+}
+
+// ProviderArtifactSignalResult returns the accepted signal state.
+type ProviderArtifactSignalResult struct {
+	SignalID string
+	Status   string
+	Target   ProviderArtifactTarget
+}
+
 // EnqueueReconciliationInput schedules reconciliation cursors for one provider scope.
 type EnqueueReconciliationInput struct {
 	ProviderSlug      enum.ProviderSlug

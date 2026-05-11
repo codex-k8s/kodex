@@ -60,13 +60,15 @@ approvals:
 
 | Операция | Назначение | Вызывает | Идемпотентность |
 |---|---|---|---|
-| `RegisterProviderArtifactSignal` | Ускоряющий сигнал от slot-агента или agent-manager. | MCP, `agent-manager` | По signal id или provider ref + окно времени. |
+| `RegisterProviderArtifactSignal` | Ускоряющий сигнал от slot-агента или agent-manager. | MCP, `agent-manager` | По signal id, ключу идемпотентности команды или provider ref + окно времени. |
 | `EnqueueReconciliation` | Поставить область в очередь сверки. | Админский контур, сервисы-владельцы | По `provider_slug + scope_type + scope_ref + idempotency_key`; `idempotency_key` и `external_account_id` обязательны. |
 | `RunReconciliationBatch` | Выполнить пачку сверки. | `worker` по поручению домена | Lease на `SyncCursor`; `max_items` должен быть положительным и не выше сервисного лимита; внешний аккаунт берётся из курсора и подтверждается через `access-manager` перед API провайдера. |
 | `GetSyncCursor` | Прочитать состояние курсора. | Операторский контур | Read-only. |
 | `ListSyncCursors` | Список курсоров и drift status. | Операторский контур | Read-only. |
 
 Ручная пользовательская кнопка синхронизации не является нормальным UX. Допустима только админская постановка reconciliation job в очередь.
+
+`RegisterProviderArtifactSignal` принимает `external_account_id`, выбранный политикой вызывающего сценария. `provider-hub` не выбирает аккаунт неявно, не получает значение секрета и не ходит во внешний API провайдера. Сигнал только создаёт или поднимает до `hot` курсоры сверки для переданного `ProviderTarget`: для `Issue`/`PR/MR` ставятся курсоры основного артефакта, комментариев и связей; для repository target — курсор репозитория.
 
 ### Операции провайдера
 

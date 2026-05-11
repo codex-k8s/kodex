@@ -3764,9 +3764,11 @@ type RegisterProviderArtifactSignalRequest struct {
 	// payload_json is optional typed signal payload.
 	PayloadJson *string `protobuf:"bytes,5,opt,name=payload_json,json=payloadJson,proto3,oneof" json:"payload_json,omitempty"`
 	// meta carries idempotency and audit context.
-	Meta          *CommandMeta `protobuf:"bytes,6,opt,name=meta,proto3" json:"meta,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Meta *CommandMeta `protobuf:"bytes,6,opt,name=meta,proto3" json:"meta,omitempty"`
+	// external_account_id is the account chosen by caller policy for the accelerated reconciliation scope.
+	ExternalAccountId string `protobuf:"bytes,7,opt,name=external_account_id,json=externalAccountId,proto3" json:"external_account_id,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *RegisterProviderArtifactSignalRequest) Reset() {
@@ -3839,6 +3841,13 @@ func (x *RegisterProviderArtifactSignalRequest) GetMeta() *CommandMeta {
 		return x.Meta
 	}
 	return nil
+}
+
+func (x *RegisterProviderArtifactSignalRequest) GetExternalAccountId() string {
+	if x != nil {
+		return x.ExternalAccountId
+	}
+	return ""
 }
 
 // ProviderArtifactSignalResponse returns accepted signal state.
@@ -6385,7 +6394,7 @@ const file_kodex_providers_v1_provider_hub_proto_rawDesc = "" +
 	"\x18_work_item_projection_id\"\xa1\x01\n" +
 	"\x19ListRelationshipsResponse\x12N\n" +
 	"\rrelationships\x18\x01 \x03(\v2(.kodex.providers.v1.ProviderRelationshipR\rrelationships\x124\n" +
-	"\x04page\x18\x02 \x01(\v2 .kodex.providers.v1.PageResponseR\x04page\"\xba\x02\n" +
+	"\x04page\x18\x02 \x01(\v2 .kodex.providers.v1.PageResponseR\x04page\"\xea\x02\n" +
 	"%RegisterProviderArtifactSignalRequest\x12 \n" +
 	"\tsignal_id\x18\x01 \x01(\tH\x00R\bsignalId\x88\x01\x01\x12:\n" +
 	"\x06target\x18\x02 \x01(\v2\".kodex.providers.v1.ProviderTargetR\x06target\x12\x16\n" +
@@ -6393,7 +6402,8 @@ const file_kodex_providers_v1_provider_hub_proto_rawDesc = "" +
 	"\vobserved_at\x18\x04 \x01(\tR\n" +
 	"observedAt\x12&\n" +
 	"\fpayload_json\x18\x05 \x01(\tH\x01R\vpayloadJson\x88\x01\x01\x123\n" +
-	"\x04meta\x18\x06 \x01(\v2\x1f.kodex.providers.v1.CommandMetaR\x04metaB\f\n" +
+	"\x04meta\x18\x06 \x01(\v2\x1f.kodex.providers.v1.CommandMetaR\x04meta\x12.\n" +
+	"\x13external_account_id\x18\a \x01(\tR\x11externalAccountIdB\f\n" +
 	"\n" +
 	"_signal_idB\x0f\n" +
 	"\r_payload_json\"\x91\x01\n" +

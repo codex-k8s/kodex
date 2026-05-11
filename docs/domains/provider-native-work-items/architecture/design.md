@@ -139,12 +139,12 @@ sequenceDiagram
   participant MCP as platform-mcp-server
   participant H as provider-hub
   participant DB as provider DB
-  R->>MCP: Changed provider artifact signal
+  R->>MCP: Changed provider artifact signal + selected external_account_id
   MCP->>H: RegisterProviderArtifactSignal
   H->>DB: enqueue hot reconciliation scope
 ```
 
-Сигнал от агента ускоряет обновление проекции, но не заменяет webhook и reconciliation.
+Сигнал от агента ускоряет обновление проекции, но не заменяет webhook и reconciliation. Вызывающий контур передаёт уже выбранный внешний аккаунт; `provider-hub` использует его только как часть курсора сверки и не получает значение секрета в этом сценарии.
 
 ## Междоменные связи
 
