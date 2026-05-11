@@ -85,6 +85,8 @@ type Repository interface {
 	PutSecretBindingRef(ctx context.Context, secret entity.SecretBindingRef, event entity.OutboxEvent) error
 	// GetSecretBindingRef returns a secret reference by id.
 	GetSecretBindingRef(ctx context.Context, id uuid.UUID) (entity.SecretBindingRef, error)
+	// ListPackageInstallationSecretRefs returns value-free secret refs for a package installation.
+	ListPackageInstallationSecretRefs(ctx context.Context, filter query.PackageInstallationSecretRefsFilter) ([]entity.PackageInstallationSecretRef, error)
 	// PutAccessAction upserts an access action and its outbox event.
 	PutAccessAction(ctx context.Context, action entity.AccessAction, event entity.OutboxEvent) error
 	// GetAccessActionByKey returns an action by canonical key.

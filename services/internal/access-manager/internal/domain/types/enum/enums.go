@@ -235,3 +235,13 @@ const (
 	SecretStoreKubernetesMountedSecret SecretStoreType = "kubernetes_mounted_secret"
 	SecretStoreEnv                     SecretStoreType = "env"
 )
+
+// PackageInstallationSecretRefStatus describes value-free package secret binding state.
+type PackageInstallationSecretRefStatus string
+
+const (
+	PackageInstallationSecretRefStatusConfigured PackageInstallationSecretRefStatus = "configured"
+	PackageInstallationSecretRefStatusMissing    PackageInstallationSecretRefStatus = "missing"
+	PackageInstallationSecretRefStatusInvalid    PackageInstallationSecretRefStatus = "invalid"
+	PackageInstallationSecretRefStatusDisabled   PackageInstallationSecretRefStatus = "disabled"
+)

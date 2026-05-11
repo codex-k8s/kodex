@@ -42,6 +42,7 @@ var (
 	queryOutboxEventMarkFailed                = mustLoadQuery("outbox_event__mark_failed")
 	queryOutboxEventMarkPermanentlyFailed     = mustLoadQuery("outbox_event__mark_permanently_failed")
 	queryOutboxEventMarkPublished             = mustLoadQuery("outbox_event__mark_published")
+	queryPackageInstallationSecretRefList     = mustLoadQuery("package_installation_secret_ref__list")
 	queryPendingAccessList                    = mustLoadQuery("pending_access__list")
 	querySecretBindingRefGetByID              = mustLoadQuery("secret_binding_ref__get_by_id")
 	querySecretBindingRefUpsert               = mustLoadQuery("secret_binding_ref__upsert")

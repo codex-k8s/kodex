@@ -52,6 +52,8 @@ service AccessManagerService {
   rpc DisableAccessRule(DisableAccessRuleRequest) returns (AccessRuleResponse);
   // ResolveExternalAccountUsage checks whether an external account can be used.
   rpc ResolveExternalAccountUsage(ResolveExternalAccountUsageRequest) returns (ResolveExternalAccountUsageResponse);
+  // ListPackageInstallationSecretRefs returns value-free secret references for one package installation.
+  rpc ListPackageInstallationSecretRefs(ListPackageInstallationSecretRefsRequest) returns (ListPackageInstallationSecretRefsResponse);
   // CheckAccess resolves effective access for a subject, action and resource.
   rpc CheckAccess(CheckAccessRequest) returns (CheckAccessResponse);
   // ExplainAccess returns a previously audited access decision explanation.
@@ -130,6 +132,15 @@ enum AccessDecision {
   ACCESS_DECISION_ALLOW = 1;
   ACCESS_DECISION_DENY = 2;
   ACCESS_DECISION_PENDING = 3;
+}
+
+// PackageInstallationSecretRefStatus describes value-free configuration status.
+enum PackageInstallationSecretRefStatus {
+  PACKAGE_INSTALLATION_SECRET_REF_STATUS_UNSPECIFIED = 0;
+  PACKAGE_INSTALLATION_SECRET_REF_STATUS_CONFIGURED = 1;
+  PACKAGE_INSTALLATION_SECRET_REF_STATUS_MISSING = 2;
+  PACKAGE_INSTALLATION_SECRET_REF_STATUS_INVALID = 3;
+  PACKAGE_INSTALLATION_SECRET_REF_STATUS_DISABLED = 4;
 }
 
 // AccessEffect is the closed set of access rule effects.
@@ -933,6 +944,48 @@ message ResolveExternalAccountUsageResponse {
   repeated string allowed_action_keys = 6;
   // provider_slug is the stable external provider slug, for example github.
   string provider_slug = 7;
+}
+
+// ListPackageInstallationSecretRefsRequest asks for value-free package secret refs.
+message ListPackageInstallationSecretRefsRequest {
+  // package_installation_id is package-hub installation aggregate id.
+  string package_installation_id = 1;
+  // installation_scope is the package installation scope.
+  ScopeRef installation_scope = 2;
+  // logical_keys optionally restricts refs to known package secret schema keys.
+  repeated string logical_keys = 3;
+  // meta carries actor and audit context for read authorization.
+  CommandMeta meta = 4;
+}
+
+// PackageInstallationSecretRef is a value-free secret reference for a package installation.
+message PackageInstallationSecretRef {
+  // binding_id is access-manager binding row id when configured.
+  string binding_id = 1;
+  // logical_key is a stable secret key from package manifest schema.
+  string logical_key = 2;
+  // status is configured, missing, invalid or disabled.
+  PackageInstallationSecretRefStatus status = 3;
+  // secret_ref_id references access-manager secret metadata when configured.
+  string secret_ref_id = 4;
+  // secret_store_type is vault, kubernetes_mounted_secret, env, or a future agreed type.
+  string secret_store_type = 5;
+  // secret_store_ref is a pointer to secret location, never the secret value.
+  string secret_store_ref = 6;
+  // metadata contains safe key-value metadata without secret values.
+  map<string, string> metadata = 7;
+  // updated_at is RFC3339 timestamp of the binding update when configured.
+  string updated_at = 8;
+}
+
+// ListPackageInstallationSecretRefsResponse returns value-free package secret refs.
+message ListPackageInstallationSecretRefsResponse {
+  // package_installation_id is package-hub installation aggregate id.
+  string package_installation_id = 1;
+  // installation_scope is the package installation scope used for authorization.
+  ScopeRef installation_scope = 2;
+  // secret_refs contains configured refs or requested missing logical keys.
+  repeated PackageInstallationSecretRef secret_refs = 3;
 }
 
 // ListMembershipGraphRequest returns graph membership around a subject.

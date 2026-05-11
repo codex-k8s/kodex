@@ -74,6 +74,62 @@ func (AccessDecision) EnumDescriptor() ([]byte, []int) {
 	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{0}
 }
 
+// PackageInstallationSecretRefStatus describes value-free configuration status.
+type PackageInstallationSecretRefStatus int32
+
+const (
+	PackageInstallationSecretRefStatus_PACKAGE_INSTALLATION_SECRET_REF_STATUS_UNSPECIFIED PackageInstallationSecretRefStatus = 0
+	PackageInstallationSecretRefStatus_PACKAGE_INSTALLATION_SECRET_REF_STATUS_CONFIGURED  PackageInstallationSecretRefStatus = 1
+	PackageInstallationSecretRefStatus_PACKAGE_INSTALLATION_SECRET_REF_STATUS_MISSING     PackageInstallationSecretRefStatus = 2
+	PackageInstallationSecretRefStatus_PACKAGE_INSTALLATION_SECRET_REF_STATUS_INVALID     PackageInstallationSecretRefStatus = 3
+	PackageInstallationSecretRefStatus_PACKAGE_INSTALLATION_SECRET_REF_STATUS_DISABLED    PackageInstallationSecretRefStatus = 4
+)
+
+// Enum value maps for PackageInstallationSecretRefStatus.
+var (
+	PackageInstallationSecretRefStatus_name = map[int32]string{
+		0: "PACKAGE_INSTALLATION_SECRET_REF_STATUS_UNSPECIFIED",
+		1: "PACKAGE_INSTALLATION_SECRET_REF_STATUS_CONFIGURED",
+		2: "PACKAGE_INSTALLATION_SECRET_REF_STATUS_MISSING",
+		3: "PACKAGE_INSTALLATION_SECRET_REF_STATUS_INVALID",
+		4: "PACKAGE_INSTALLATION_SECRET_REF_STATUS_DISABLED",
+	}
+	PackageInstallationSecretRefStatus_value = map[string]int32{
+		"PACKAGE_INSTALLATION_SECRET_REF_STATUS_UNSPECIFIED": 0,
+		"PACKAGE_INSTALLATION_SECRET_REF_STATUS_CONFIGURED":  1,
+		"PACKAGE_INSTALLATION_SECRET_REF_STATUS_MISSING":     2,
+		"PACKAGE_INSTALLATION_SECRET_REF_STATUS_INVALID":     3,
+		"PACKAGE_INSTALLATION_SECRET_REF_STATUS_DISABLED":    4,
+	}
+)
+
+func (x PackageInstallationSecretRefStatus) Enum() *PackageInstallationSecretRefStatus {
+	p := new(PackageInstallationSecretRefStatus)
+	*p = x
+	return p
+}
+
+func (x PackageInstallationSecretRefStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (PackageInstallationSecretRefStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[1].Descriptor()
+}
+
+func (PackageInstallationSecretRefStatus) Type() protoreflect.EnumType {
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[1]
+}
+
+func (x PackageInstallationSecretRefStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use PackageInstallationSecretRefStatus.Descriptor instead.
+func (PackageInstallationSecretRefStatus) EnumDescriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{1}
+}
+
 // AccessEffect is the closed set of access rule effects.
 type AccessEffect int32
 
@@ -108,11 +164,11 @@ func (x AccessEffect) String() string {
 }
 
 func (AccessEffect) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[1].Descriptor()
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[2].Descriptor()
 }
 
 func (AccessEffect) Type() protoreflect.EnumType {
-	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[1]
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[2]
 }
 
 func (x AccessEffect) Number() protoreflect.EnumNumber {
@@ -121,7 +177,7 @@ func (x AccessEffect) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use AccessEffect.Descriptor instead.
 func (AccessEffect) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{1}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{2}
 }
 
 // OrganizationKind is the closed set of organization kinds.
@@ -170,11 +226,11 @@ func (x OrganizationKind) String() string {
 }
 
 func (OrganizationKind) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[2].Descriptor()
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[3].Descriptor()
 }
 
 func (OrganizationKind) Type() protoreflect.EnumType {
-	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[2]
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[3]
 }
 
 func (x OrganizationKind) Number() protoreflect.EnumNumber {
@@ -183,7 +239,7 @@ func (x OrganizationKind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use OrganizationKind.Descriptor instead.
 func (OrganizationKind) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{2}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{3}
 }
 
 // OrganizationStatus is the closed set of organization lifecycle statuses.
@@ -226,11 +282,11 @@ func (x OrganizationStatus) String() string {
 }
 
 func (OrganizationStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[3].Descriptor()
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[4].Descriptor()
 }
 
 func (OrganizationStatus) Type() protoreflect.EnumType {
-	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[3]
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[4]
 }
 
 func (x OrganizationStatus) Number() protoreflect.EnumNumber {
@@ -239,7 +295,7 @@ func (x OrganizationStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use OrganizationStatus.Descriptor instead.
 func (OrganizationStatus) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{3}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{4}
 }
 
 // UserStatus is the closed set of user lifecycle statuses.
@@ -282,11 +338,11 @@ func (x UserStatus) String() string {
 }
 
 func (UserStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[4].Descriptor()
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[5].Descriptor()
 }
 
 func (UserStatus) Type() protoreflect.EnumType {
-	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[4]
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[5]
 }
 
 func (x UserStatus) Number() protoreflect.EnumNumber {
@@ -295,7 +351,7 @@ func (x UserStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use UserStatus.Descriptor instead.
 func (UserStatus) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{4}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{5}
 }
 
 // GroupScopeType is the closed set of group scopes.
@@ -332,11 +388,11 @@ func (x GroupScopeType) String() string {
 }
 
 func (GroupScopeType) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[5].Descriptor()
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[6].Descriptor()
 }
 
 func (GroupScopeType) Type() protoreflect.EnumType {
-	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[5]
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[6]
 }
 
 func (x GroupScopeType) Number() protoreflect.EnumNumber {
@@ -345,7 +401,7 @@ func (x GroupScopeType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use GroupScopeType.Descriptor instead.
 func (GroupScopeType) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{5}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{6}
 }
 
 // GroupStatus is the closed set of group lifecycle statuses.
@@ -385,11 +441,11 @@ func (x GroupStatus) String() string {
 }
 
 func (GroupStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[6].Descriptor()
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[7].Descriptor()
 }
 
 func (GroupStatus) Type() protoreflect.EnumType {
-	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[6]
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[7]
 }
 
 func (x GroupStatus) Number() protoreflect.EnumNumber {
@@ -398,7 +454,7 @@ func (x GroupStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use GroupStatus.Descriptor instead.
 func (GroupStatus) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{6}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{7}
 }
 
 // MembershipSubjectType is the closed set of membership subject types.
@@ -438,11 +494,11 @@ func (x MembershipSubjectType) String() string {
 }
 
 func (MembershipSubjectType) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[7].Descriptor()
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[8].Descriptor()
 }
 
 func (MembershipSubjectType) Type() protoreflect.EnumType {
-	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[7]
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[8]
 }
 
 func (x MembershipSubjectType) Number() protoreflect.EnumNumber {
@@ -451,7 +507,7 @@ func (x MembershipSubjectType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use MembershipSubjectType.Descriptor instead.
 func (MembershipSubjectType) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{7}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{8}
 }
 
 // MembershipTargetType is the closed set of membership target types.
@@ -488,11 +544,11 @@ func (x MembershipTargetType) String() string {
 }
 
 func (MembershipTargetType) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[8].Descriptor()
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[9].Descriptor()
 }
 
 func (MembershipTargetType) Type() protoreflect.EnumType {
-	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[8]
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[9]
 }
 
 func (x MembershipTargetType) Number() protoreflect.EnumNumber {
@@ -501,7 +557,7 @@ func (x MembershipTargetType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use MembershipTargetType.Descriptor instead.
 func (MembershipTargetType) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{8}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{9}
 }
 
 // MembershipStatus is the closed set of membership statuses.
@@ -544,11 +600,11 @@ func (x MembershipStatus) String() string {
 }
 
 func (MembershipStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[9].Descriptor()
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[10].Descriptor()
 }
 
 func (MembershipStatus) Type() protoreflect.EnumType {
-	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[9]
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[10]
 }
 
 func (x MembershipStatus) Number() protoreflect.EnumNumber {
@@ -557,7 +613,7 @@ func (x MembershipStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use MembershipStatus.Descriptor instead.
 func (MembershipStatus) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{9}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{10}
 }
 
 // MembershipSource is the closed set of membership source types.
@@ -600,11 +656,11 @@ func (x MembershipSource) String() string {
 }
 
 func (MembershipSource) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[10].Descriptor()
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[11].Descriptor()
 }
 
 func (MembershipSource) Type() protoreflect.EnumType {
-	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[10]
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[11]
 }
 
 func (x MembershipSource) Number() protoreflect.EnumNumber {
@@ -613,7 +669,7 @@ func (x MembershipSource) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use MembershipSource.Descriptor instead.
 func (MembershipSource) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{10}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{11}
 }
 
 // AllowlistMatchType is the closed set of allowlist matching modes.
@@ -650,11 +706,11 @@ func (x AllowlistMatchType) String() string {
 }
 
 func (AllowlistMatchType) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[11].Descriptor()
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[12].Descriptor()
 }
 
 func (AllowlistMatchType) Type() protoreflect.EnumType {
-	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[11]
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[12]
 }
 
 func (x AllowlistMatchType) Number() protoreflect.EnumNumber {
@@ -663,7 +719,7 @@ func (x AllowlistMatchType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use AllowlistMatchType.Descriptor instead.
 func (AllowlistMatchType) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{11}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{12}
 }
 
 // AllowlistStatus is the closed set of allowlist entry statuses.
@@ -700,11 +756,11 @@ func (x AllowlistStatus) String() string {
 }
 
 func (AllowlistStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[12].Descriptor()
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[13].Descriptor()
 }
 
 func (AllowlistStatus) Type() protoreflect.EnumType {
-	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[12]
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[13]
 }
 
 func (x AllowlistStatus) Number() protoreflect.EnumNumber {
@@ -713,7 +769,7 @@ func (x AllowlistStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use AllowlistStatus.Descriptor instead.
 func (AllowlistStatus) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{12}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{13}
 }
 
 // ExternalProviderKind is the closed set of external provider kinds.
@@ -762,11 +818,11 @@ func (x ExternalProviderKind) String() string {
 }
 
 func (ExternalProviderKind) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[13].Descriptor()
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[14].Descriptor()
 }
 
 func (ExternalProviderKind) Type() protoreflect.EnumType {
-	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[13]
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[14]
 }
 
 func (x ExternalProviderKind) Number() protoreflect.EnumNumber {
@@ -775,7 +831,7 @@ func (x ExternalProviderKind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ExternalProviderKind.Descriptor instead.
 func (ExternalProviderKind) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{13}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{14}
 }
 
 // ExternalProviderStatus is the closed set of provider statuses.
@@ -812,11 +868,11 @@ func (x ExternalProviderStatus) String() string {
 }
 
 func (ExternalProviderStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[14].Descriptor()
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[15].Descriptor()
 }
 
 func (ExternalProviderStatus) Type() protoreflect.EnumType {
-	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[14]
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[15]
 }
 
 func (x ExternalProviderStatus) Number() protoreflect.EnumNumber {
@@ -825,7 +881,7 @@ func (x ExternalProviderStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ExternalProviderStatus.Descriptor instead.
 func (ExternalProviderStatus) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{14}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{15}
 }
 
 // ExternalAccountType is the closed set of external account types.
@@ -868,11 +924,11 @@ func (x ExternalAccountType) String() string {
 }
 
 func (ExternalAccountType) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[15].Descriptor()
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[16].Descriptor()
 }
 
 func (ExternalAccountType) Type() protoreflect.EnumType {
-	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[15]
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[16]
 }
 
 func (x ExternalAccountType) Number() protoreflect.EnumNumber {
@@ -881,7 +937,7 @@ func (x ExternalAccountType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ExternalAccountType.Descriptor instead.
 func (ExternalAccountType) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{15}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{16}
 }
 
 // ExternalAccountStatus is the closed set of external account statuses.
@@ -930,11 +986,11 @@ func (x ExternalAccountStatus) String() string {
 }
 
 func (ExternalAccountStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[16].Descriptor()
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[17].Descriptor()
 }
 
 func (ExternalAccountStatus) Type() protoreflect.EnumType {
-	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[16]
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[17]
 }
 
 func (x ExternalAccountStatus) Number() protoreflect.EnumNumber {
@@ -943,7 +999,7 @@ func (x ExternalAccountStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ExternalAccountStatus.Descriptor instead.
 func (ExternalAccountStatus) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{16}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{17}
 }
 
 // ExternalAccountScopeType is the closed set of external account usage scopes.
@@ -1007,11 +1063,11 @@ func (x ExternalAccountScopeType) String() string {
 }
 
 func (ExternalAccountScopeType) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[17].Descriptor()
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[18].Descriptor()
 }
 
 func (ExternalAccountScopeType) Type() protoreflect.EnumType {
-	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[17]
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[18]
 }
 
 func (x ExternalAccountScopeType) Number() protoreflect.EnumNumber {
@@ -1020,7 +1076,7 @@ func (x ExternalAccountScopeType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ExternalAccountScopeType.Descriptor instead.
 func (ExternalAccountScopeType) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{17}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{18}
 }
 
 // ExternalAccountBindingStatus is the closed set of account binding statuses.
@@ -1057,11 +1113,11 @@ func (x ExternalAccountBindingStatus) String() string {
 }
 
 func (ExternalAccountBindingStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[18].Descriptor()
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[19].Descriptor()
 }
 
 func (ExternalAccountBindingStatus) Type() protoreflect.EnumType {
-	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[18]
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[19]
 }
 
 func (x ExternalAccountBindingStatus) Number() protoreflect.EnumNumber {
@@ -1070,7 +1126,7 @@ func (x ExternalAccountBindingStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ExternalAccountBindingStatus.Descriptor instead.
 func (ExternalAccountBindingStatus) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{18}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{19}
 }
 
 // AccessActionStatus is the closed set of access action statuses.
@@ -1107,11 +1163,11 @@ func (x AccessActionStatus) String() string {
 }
 
 func (AccessActionStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[19].Descriptor()
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[20].Descriptor()
 }
 
 func (AccessActionStatus) Type() protoreflect.EnumType {
-	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[19]
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[20]
 }
 
 func (x AccessActionStatus) Number() protoreflect.EnumNumber {
@@ -1120,7 +1176,7 @@ func (x AccessActionStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use AccessActionStatus.Descriptor instead.
 func (AccessActionStatus) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{19}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{20}
 }
 
 // AccessRuleStatus is the closed set of access rule statuses.
@@ -1157,11 +1213,11 @@ func (x AccessRuleStatus) String() string {
 }
 
 func (AccessRuleStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[20].Descriptor()
+	return file_kodex_access_accounts_v1_access_manager_proto_enumTypes[21].Descriptor()
 }
 
 func (AccessRuleStatus) Type() protoreflect.EnumType {
-	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[20]
+	return &file_kodex_access_accounts_v1_access_manager_proto_enumTypes[21]
 }
 
 func (x AccessRuleStatus) Number() protoreflect.EnumNumber {
@@ -1170,7 +1226,7 @@ func (x AccessRuleStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use AccessRuleStatus.Descriptor instead.
 func (AccessRuleStatus) EnumDescriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{20}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{21}
 }
 
 // CommandMeta is required for every mutating command.
@@ -5142,6 +5198,252 @@ func (x *ResolveExternalAccountUsageResponse) GetProviderSlug() string {
 	return ""
 }
 
+// ListPackageInstallationSecretRefsRequest asks for value-free package secret refs.
+type ListPackageInstallationSecretRefsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// package_installation_id is package-hub installation aggregate id.
+	PackageInstallationId string `protobuf:"bytes,1,opt,name=package_installation_id,json=packageInstallationId,proto3" json:"package_installation_id,omitempty"`
+	// installation_scope is the package installation scope.
+	InstallationScope *ScopeRef `protobuf:"bytes,2,opt,name=installation_scope,json=installationScope,proto3" json:"installation_scope,omitempty"`
+	// logical_keys optionally restricts refs to known package secret schema keys.
+	LogicalKeys []string `protobuf:"bytes,3,rep,name=logical_keys,json=logicalKeys,proto3" json:"logical_keys,omitempty"`
+	// meta carries actor and audit context for read authorization.
+	Meta          *CommandMeta `protobuf:"bytes,4,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPackageInstallationSecretRefsRequest) Reset() {
+	*x = ListPackageInstallationSecretRefsRequest{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPackageInstallationSecretRefsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPackageInstallationSecretRefsRequest) ProtoMessage() {}
+
+func (x *ListPackageInstallationSecretRefsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPackageInstallationSecretRefsRequest.ProtoReflect.Descriptor instead.
+func (*ListPackageInstallationSecretRefsRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *ListPackageInstallationSecretRefsRequest) GetPackageInstallationId() string {
+	if x != nil {
+		return x.PackageInstallationId
+	}
+	return ""
+}
+
+func (x *ListPackageInstallationSecretRefsRequest) GetInstallationScope() *ScopeRef {
+	if x != nil {
+		return x.InstallationScope
+	}
+	return nil
+}
+
+func (x *ListPackageInstallationSecretRefsRequest) GetLogicalKeys() []string {
+	if x != nil {
+		return x.LogicalKeys
+	}
+	return nil
+}
+
+func (x *ListPackageInstallationSecretRefsRequest) GetMeta() *CommandMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+// PackageInstallationSecretRef is a value-free secret reference for a package installation.
+type PackageInstallationSecretRef struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// binding_id is access-manager binding row id when configured.
+	BindingId string `protobuf:"bytes,1,opt,name=binding_id,json=bindingId,proto3" json:"binding_id,omitempty"`
+	// logical_key is a stable secret key from package manifest schema.
+	LogicalKey string `protobuf:"bytes,2,opt,name=logical_key,json=logicalKey,proto3" json:"logical_key,omitempty"`
+	// status is configured, missing, invalid or disabled.
+	Status PackageInstallationSecretRefStatus `protobuf:"varint,3,opt,name=status,proto3,enum=kodex.access_accounts.v1.PackageInstallationSecretRefStatus" json:"status,omitempty"`
+	// secret_ref_id references access-manager secret metadata when configured.
+	SecretRefId string `protobuf:"bytes,4,opt,name=secret_ref_id,json=secretRefId,proto3" json:"secret_ref_id,omitempty"`
+	// secret_store_type is vault, kubernetes_mounted_secret, env, or a future agreed type.
+	SecretStoreType string `protobuf:"bytes,5,opt,name=secret_store_type,json=secretStoreType,proto3" json:"secret_store_type,omitempty"`
+	// secret_store_ref is a pointer to secret location, never the secret value.
+	SecretStoreRef string `protobuf:"bytes,6,opt,name=secret_store_ref,json=secretStoreRef,proto3" json:"secret_store_ref,omitempty"`
+	// metadata contains safe key-value metadata without secret values.
+	Metadata map[string]string `protobuf:"bytes,7,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// updated_at is RFC3339 timestamp of the binding update when configured.
+	UpdatedAt     string `protobuf:"bytes,8,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PackageInstallationSecretRef) Reset() {
+	*x = PackageInstallationSecretRef{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PackageInstallationSecretRef) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PackageInstallationSecretRef) ProtoMessage() {}
+
+func (x *PackageInstallationSecretRef) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PackageInstallationSecretRef.ProtoReflect.Descriptor instead.
+func (*PackageInstallationSecretRef) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{46}
+}
+
+func (x *PackageInstallationSecretRef) GetBindingId() string {
+	if x != nil {
+		return x.BindingId
+	}
+	return ""
+}
+
+func (x *PackageInstallationSecretRef) GetLogicalKey() string {
+	if x != nil {
+		return x.LogicalKey
+	}
+	return ""
+}
+
+func (x *PackageInstallationSecretRef) GetStatus() PackageInstallationSecretRefStatus {
+	if x != nil {
+		return x.Status
+	}
+	return PackageInstallationSecretRefStatus_PACKAGE_INSTALLATION_SECRET_REF_STATUS_UNSPECIFIED
+}
+
+func (x *PackageInstallationSecretRef) GetSecretRefId() string {
+	if x != nil {
+		return x.SecretRefId
+	}
+	return ""
+}
+
+func (x *PackageInstallationSecretRef) GetSecretStoreType() string {
+	if x != nil {
+		return x.SecretStoreType
+	}
+	return ""
+}
+
+func (x *PackageInstallationSecretRef) GetSecretStoreRef() string {
+	if x != nil {
+		return x.SecretStoreRef
+	}
+	return ""
+}
+
+func (x *PackageInstallationSecretRef) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+func (x *PackageInstallationSecretRef) GetUpdatedAt() string {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return ""
+}
+
+// ListPackageInstallationSecretRefsResponse returns value-free package secret refs.
+type ListPackageInstallationSecretRefsResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// package_installation_id is package-hub installation aggregate id.
+	PackageInstallationId string `protobuf:"bytes,1,opt,name=package_installation_id,json=packageInstallationId,proto3" json:"package_installation_id,omitempty"`
+	// installation_scope is the package installation scope used for authorization.
+	InstallationScope *ScopeRef `protobuf:"bytes,2,opt,name=installation_scope,json=installationScope,proto3" json:"installation_scope,omitempty"`
+	// secret_refs contains configured refs or requested missing logical keys.
+	SecretRefs    []*PackageInstallationSecretRef `protobuf:"bytes,3,rep,name=secret_refs,json=secretRefs,proto3" json:"secret_refs,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPackageInstallationSecretRefsResponse) Reset() {
+	*x = ListPackageInstallationSecretRefsResponse{}
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPackageInstallationSecretRefsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPackageInstallationSecretRefsResponse) ProtoMessage() {}
+
+func (x *ListPackageInstallationSecretRefsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPackageInstallationSecretRefsResponse.ProtoReflect.Descriptor instead.
+func (*ListPackageInstallationSecretRefsResponse) Descriptor() ([]byte, []int) {
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *ListPackageInstallationSecretRefsResponse) GetPackageInstallationId() string {
+	if x != nil {
+		return x.PackageInstallationId
+	}
+	return ""
+}
+
+func (x *ListPackageInstallationSecretRefsResponse) GetInstallationScope() *ScopeRef {
+	if x != nil {
+		return x.InstallationScope
+	}
+	return nil
+}
+
+func (x *ListPackageInstallationSecretRefsResponse) GetSecretRefs() []*PackageInstallationSecretRef {
+	if x != nil {
+		return x.SecretRefs
+	}
+	return nil
+}
+
 // ListMembershipGraphRequest returns graph membership around a subject.
 type ListMembershipGraphRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -5157,7 +5459,7 @@ type ListMembershipGraphRequest struct {
 
 func (x *ListMembershipGraphRequest) Reset() {
 	*x = ListMembershipGraphRequest{}
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[45]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5169,7 +5471,7 @@ func (x *ListMembershipGraphRequest) String() string {
 func (*ListMembershipGraphRequest) ProtoMessage() {}
 
 func (x *ListMembershipGraphRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[45]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5182,7 +5484,7 @@ func (x *ListMembershipGraphRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMembershipGraphRequest.ProtoReflect.Descriptor instead.
 func (*ListMembershipGraphRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{45}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *ListMembershipGraphRequest) GetSubject() *SubjectRef {
@@ -5227,7 +5529,7 @@ type MembershipEdge struct {
 
 func (x *MembershipEdge) Reset() {
 	*x = MembershipEdge{}
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[46]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5239,7 +5541,7 @@ func (x *MembershipEdge) String() string {
 func (*MembershipEdge) ProtoMessage() {}
 
 func (x *MembershipEdge) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[46]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5252,7 +5554,7 @@ func (x *MembershipEdge) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MembershipEdge.ProtoReflect.Descriptor instead.
 func (*MembershipEdge) Descriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{46}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *MembershipEdge) GetMembershipId() string {
@@ -5310,7 +5612,7 @@ type ListMembershipGraphResponse struct {
 
 func (x *ListMembershipGraphResponse) Reset() {
 	*x = ListMembershipGraphResponse{}
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[47]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5322,7 +5624,7 @@ func (x *ListMembershipGraphResponse) String() string {
 func (*ListMembershipGraphResponse) ProtoMessage() {}
 
 func (x *ListMembershipGraphResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[47]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5335,7 +5637,7 @@ func (x *ListMembershipGraphResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMembershipGraphResponse.ProtoReflect.Descriptor instead.
 func (*ListMembershipGraphResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{47}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *ListMembershipGraphResponse) GetRoot() *SubjectRef {
@@ -5369,7 +5671,7 @@ type ListPendingAccessRequest struct {
 
 func (x *ListPendingAccessRequest) Reset() {
 	*x = ListPendingAccessRequest{}
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[48]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5381,7 +5683,7 @@ func (x *ListPendingAccessRequest) String() string {
 func (*ListPendingAccessRequest) ProtoMessage() {}
 
 func (x *ListPendingAccessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[48]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5394,7 +5696,7 @@ func (x *ListPendingAccessRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPendingAccessRequest.ProtoReflect.Descriptor instead.
 func (*ListPendingAccessRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{48}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *ListPendingAccessRequest) GetScope() *ScopeRef {
@@ -5446,7 +5748,7 @@ type PendingAccessItem struct {
 
 func (x *PendingAccessItem) Reset() {
 	*x = PendingAccessItem{}
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[49]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5458,7 +5760,7 @@ func (x *PendingAccessItem) String() string {
 func (*PendingAccessItem) ProtoMessage() {}
 
 func (x *PendingAccessItem) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[49]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5471,7 +5773,7 @@ func (x *PendingAccessItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PendingAccessItem.ProtoReflect.Descriptor instead.
 func (*PendingAccessItem) Descriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{49}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *PendingAccessItem) GetItemId() string {
@@ -5529,7 +5831,7 @@ type ListPendingAccessResponse struct {
 
 func (x *ListPendingAccessResponse) Reset() {
 	*x = ListPendingAccessResponse{}
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[50]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5541,7 +5843,7 @@ func (x *ListPendingAccessResponse) String() string {
 func (*ListPendingAccessResponse) ProtoMessage() {}
 
 func (x *ListPendingAccessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[50]
+	mi := &file_kodex_access_accounts_v1_access_manager_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5554,7 +5856,7 @@ func (x *ListPendingAccessResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPendingAccessResponse.ProtoReflect.Descriptor instead.
 func (*ListPendingAccessResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{50}
+	return file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *ListPendingAccessResponse) GetItems() []*PendingAccessItem {
@@ -5915,7 +6217,32 @@ const file_kodex_access_accounts_v1_access_manager_proto_rawDesc = "" +
 	"\x11secret_store_type\x18\x04 \x01(\tR\x0fsecretStoreType\x12(\n" +
 	"\x10secret_store_ref\x18\x05 \x01(\tR\x0esecretStoreRef\x12.\n" +
 	"\x13allowed_action_keys\x18\x06 \x03(\tR\x11allowedActionKeys\x12#\n" +
-	"\rprovider_slug\x18\a \x01(\tR\fproviderSlug\"\xc2\x01\n" +
+	"\rprovider_slug\x18\a \x01(\tR\fproviderSlug\"\x93\x02\n" +
+	"(ListPackageInstallationSecretRefsRequest\x126\n" +
+	"\x17package_installation_id\x18\x01 \x01(\tR\x15packageInstallationId\x12Q\n" +
+	"\x12installation_scope\x18\x02 \x01(\v2\".kodex.access_accounts.v1.ScopeRefR\x11installationScope\x12!\n" +
+	"\flogical_keys\x18\x03 \x03(\tR\vlogicalKeys\x129\n" +
+	"\x04meta\x18\x04 \x01(\v2%.kodex.access_accounts.v1.CommandMetaR\x04meta\"\xec\x03\n" +
+	"\x1cPackageInstallationSecretRef\x12\x1d\n" +
+	"\n" +
+	"binding_id\x18\x01 \x01(\tR\tbindingId\x12\x1f\n" +
+	"\vlogical_key\x18\x02 \x01(\tR\n" +
+	"logicalKey\x12T\n" +
+	"\x06status\x18\x03 \x01(\x0e2<.kodex.access_accounts.v1.PackageInstallationSecretRefStatusR\x06status\x12\"\n" +
+	"\rsecret_ref_id\x18\x04 \x01(\tR\vsecretRefId\x12*\n" +
+	"\x11secret_store_type\x18\x05 \x01(\tR\x0fsecretStoreType\x12(\n" +
+	"\x10secret_store_ref\x18\x06 \x01(\tR\x0esecretStoreRef\x12`\n" +
+	"\bmetadata\x18\a \x03(\v2D.kodex.access_accounts.v1.PackageInstallationSecretRef.MetadataEntryR\bmetadata\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\b \x01(\tR\tupdatedAt\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8f\x02\n" +
+	")ListPackageInstallationSecretRefsResponse\x126\n" +
+	"\x17package_installation_id\x18\x01 \x01(\tR\x15packageInstallationId\x12Q\n" +
+	"\x12installation_scope\x18\x02 \x01(\v2\".kodex.access_accounts.v1.ScopeRefR\x11installationScope\x12W\n" +
+	"\vsecret_refs\x18\x03 \x03(\v26.kodex.access_accounts.v1.PackageInstallationSecretRefR\n" +
+	"secretRefs\"\xc2\x01\n" +
 	"\x1aListMembershipGraphRequest\x12>\n" +
 	"\asubject\x18\x01 \x01(\v2$.kodex.access_accounts.v1.SubjectRefR\asubject\x12)\n" +
 	"\x10include_inactive\x18\x02 \x01(\bR\x0fincludeInactive\x129\n" +
@@ -5952,7 +6279,13 @@ const file_kodex_access_accounts_v1_access_manager_proto_rawDesc = "" +
 	"\x1bACCESS_DECISION_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15ACCESS_DECISION_ALLOW\x10\x01\x12\x18\n" +
 	"\x14ACCESS_DECISION_DENY\x10\x02\x12\x1b\n" +
-	"\x17ACCESS_DECISION_PENDING\x10\x03*^\n" +
+	"\x17ACCESS_DECISION_PENDING\x10\x03*\xb0\x02\n" +
+	"\"PackageInstallationSecretRefStatus\x126\n" +
+	"2PACKAGE_INSTALLATION_SECRET_REF_STATUS_UNSPECIFIED\x10\x00\x125\n" +
+	"1PACKAGE_INSTALLATION_SECRET_REF_STATUS_CONFIGURED\x10\x01\x122\n" +
+	".PACKAGE_INSTALLATION_SECRET_REF_STATUS_MISSING\x10\x02\x122\n" +
+	".PACKAGE_INSTALLATION_SECRET_REF_STATUS_INVALID\x10\x03\x123\n" +
+	"/PACKAGE_INSTALLATION_SECRET_REF_STATUS_DISABLED\x10\x04*^\n" +
 	"\fAccessEffect\x12\x1d\n" +
 	"\x19ACCESS_EFFECT_UNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13ACCESS_EFFECT_ALLOW\x10\x01\x12\x16\n" +
@@ -6067,7 +6400,7 @@ const file_kodex_access_accounts_v1_access_manager_proto_rawDesc = "" +
 	"\x10AccessRuleStatus\x12\"\n" +
 	"\x1eACCESS_RULE_STATUS_UNSPECIFIED\x10\x00\x12\x1d\n" +
 	"\x19ACCESS_RULE_STATUS_ACTIVE\x10\x01\x12\x1f\n" +
-	"\x1bACCESS_RULE_STATUS_DISABLED\x10\x022\xd3\x19\n" +
+	"\x1bACCESS_RULE_STATUS_DISABLED\x10\x022\x82\x1b\n" +
 	"\x14AccessManagerService\x12\x94\x01\n" +
 	"\x19BootstrapUserFromIdentity\x12:.kodex.access_accounts.v1.BootstrapUserFromIdentityRequest\x1a;.kodex.access_accounts.v1.BootstrapUserFromIdentityResponse\x12g\n" +
 	"\rSetUserStatus\x12..kodex.access_accounts.v1.SetUserStatusRequest\x1a&.kodex.access_accounts.v1.UserResponse\x12y\n" +
@@ -6090,7 +6423,8 @@ const file_kodex_access_accounts_v1_access_manager_proto_rawDesc = "" +
 	"\x0fPutAccessAction\x120.kodex.access_accounts.v1.PutAccessActionRequest\x1a..kodex.access_accounts.v1.AccessActionResponse\x12m\n" +
 	"\rPutAccessRule\x12..kodex.access_accounts.v1.PutAccessRuleRequest\x1a,.kodex.access_accounts.v1.AccessRuleResponse\x12u\n" +
 	"\x11DisableAccessRule\x122.kodex.access_accounts.v1.DisableAccessRuleRequest\x1a,.kodex.access_accounts.v1.AccessRuleResponse\x12\x9a\x01\n" +
-	"\x1bResolveExternalAccountUsage\x12<.kodex.access_accounts.v1.ResolveExternalAccountUsageRequest\x1a=.kodex.access_accounts.v1.ResolveExternalAccountUsageResponse\x12j\n" +
+	"\x1bResolveExternalAccountUsage\x12<.kodex.access_accounts.v1.ResolveExternalAccountUsageRequest\x1a=.kodex.access_accounts.v1.ResolveExternalAccountUsageResponse\x12\xac\x01\n" +
+	"!ListPackageInstallationSecretRefs\x12B.kodex.access_accounts.v1.ListPackageInstallationSecretRefsRequest\x1aC.kodex.access_accounts.v1.ListPackageInstallationSecretRefsResponse\x12j\n" +
 	"\vCheckAccess\x12,.kodex.access_accounts.v1.CheckAccessRequest\x1a-.kodex.access_accounts.v1.CheckAccessResponse\x12p\n" +
 	"\rExplainAccess\x12..kodex.access_accounts.v1.ExplainAccessRequest\x1a/.kodex.access_accounts.v1.ExplainAccessResponse\x12\x82\x01\n" +
 	"\x13ListMembershipGraph\x124.kodex.access_accounts.v1.ListMembershipGraphRequest\x1a5.kodex.access_accounts.v1.ListMembershipGraphResponse\x12|\n" +
@@ -6108,241 +6442,254 @@ func file_kodex_access_accounts_v1_access_manager_proto_rawDescGZIP() []byte {
 	return file_kodex_access_accounts_v1_access_manager_proto_rawDescData
 }
 
-var file_kodex_access_accounts_v1_access_manager_proto_enumTypes = make([]protoimpl.EnumInfo, 21)
-var file_kodex_access_accounts_v1_access_manager_proto_msgTypes = make([]protoimpl.MessageInfo, 51)
+var file_kodex_access_accounts_v1_access_manager_proto_enumTypes = make([]protoimpl.EnumInfo, 22)
+var file_kodex_access_accounts_v1_access_manager_proto_msgTypes = make([]protoimpl.MessageInfo, 55)
 var file_kodex_access_accounts_v1_access_manager_proto_goTypes = []any{
-	(AccessDecision)(0),                          // 0: kodex.access_accounts.v1.AccessDecision
-	(AccessEffect)(0),                            // 1: kodex.access_accounts.v1.AccessEffect
-	(OrganizationKind)(0),                        // 2: kodex.access_accounts.v1.OrganizationKind
-	(OrganizationStatus)(0),                      // 3: kodex.access_accounts.v1.OrganizationStatus
-	(UserStatus)(0),                              // 4: kodex.access_accounts.v1.UserStatus
-	(GroupScopeType)(0),                          // 5: kodex.access_accounts.v1.GroupScopeType
-	(GroupStatus)(0),                             // 6: kodex.access_accounts.v1.GroupStatus
-	(MembershipSubjectType)(0),                   // 7: kodex.access_accounts.v1.MembershipSubjectType
-	(MembershipTargetType)(0),                    // 8: kodex.access_accounts.v1.MembershipTargetType
-	(MembershipStatus)(0),                        // 9: kodex.access_accounts.v1.MembershipStatus
-	(MembershipSource)(0),                        // 10: kodex.access_accounts.v1.MembershipSource
-	(AllowlistMatchType)(0),                      // 11: kodex.access_accounts.v1.AllowlistMatchType
-	(AllowlistStatus)(0),                         // 12: kodex.access_accounts.v1.AllowlistStatus
-	(ExternalProviderKind)(0),                    // 13: kodex.access_accounts.v1.ExternalProviderKind
-	(ExternalProviderStatus)(0),                  // 14: kodex.access_accounts.v1.ExternalProviderStatus
-	(ExternalAccountType)(0),                     // 15: kodex.access_accounts.v1.ExternalAccountType
-	(ExternalAccountStatus)(0),                   // 16: kodex.access_accounts.v1.ExternalAccountStatus
-	(ExternalAccountScopeType)(0),                // 17: kodex.access_accounts.v1.ExternalAccountScopeType
-	(ExternalAccountBindingStatus)(0),            // 18: kodex.access_accounts.v1.ExternalAccountBindingStatus
-	(AccessActionStatus)(0),                      // 19: kodex.access_accounts.v1.AccessActionStatus
-	(AccessRuleStatus)(0),                        // 20: kodex.access_accounts.v1.AccessRuleStatus
-	(*CommandMeta)(nil),                          // 21: kodex.access_accounts.v1.CommandMeta
-	(*RequestContext)(nil),                       // 22: kodex.access_accounts.v1.RequestContext
-	(*Actor)(nil),                                // 23: kodex.access_accounts.v1.Actor
-	(*SubjectRef)(nil),                           // 24: kodex.access_accounts.v1.SubjectRef
-	(*ResourceRef)(nil),                          // 25: kodex.access_accounts.v1.ResourceRef
-	(*ScopeRef)(nil),                             // 26: kodex.access_accounts.v1.ScopeRef
-	(*BootstrapUserFromIdentityRequest)(nil),     // 27: kodex.access_accounts.v1.BootstrapUserFromIdentityRequest
-	(*BootstrapUserFromIdentityResponse)(nil),    // 28: kodex.access_accounts.v1.BootstrapUserFromIdentityResponse
-	(*SetUserStatusRequest)(nil),                 // 29: kodex.access_accounts.v1.SetUserStatusRequest
-	(*UserResponse)(nil),                         // 30: kodex.access_accounts.v1.UserResponse
-	(*CreateOrganizationRequest)(nil),            // 31: kodex.access_accounts.v1.CreateOrganizationRequest
-	(*UpdateOrganizationRequest)(nil),            // 32: kodex.access_accounts.v1.UpdateOrganizationRequest
-	(*SuspendOrganizationRequest)(nil),           // 33: kodex.access_accounts.v1.SuspendOrganizationRequest
-	(*ArchiveOrganizationRequest)(nil),           // 34: kodex.access_accounts.v1.ArchiveOrganizationRequest
-	(*OrganizationResponse)(nil),                 // 35: kodex.access_accounts.v1.OrganizationResponse
-	(*CreateGroupRequest)(nil),                   // 36: kodex.access_accounts.v1.CreateGroupRequest
-	(*UpdateGroupRequest)(nil),                   // 37: kodex.access_accounts.v1.UpdateGroupRequest
-	(*DisableGroupRequest)(nil),                  // 38: kodex.access_accounts.v1.DisableGroupRequest
-	(*GroupResponse)(nil),                        // 39: kodex.access_accounts.v1.GroupResponse
-	(*SetMembershipRequest)(nil),                 // 40: kodex.access_accounts.v1.SetMembershipRequest
-	(*MembershipResponse)(nil),                   // 41: kodex.access_accounts.v1.MembershipResponse
-	(*PutAllowlistEntryRequest)(nil),             // 42: kodex.access_accounts.v1.PutAllowlistEntryRequest
-	(*DisableAllowlistEntryRequest)(nil),         // 43: kodex.access_accounts.v1.DisableAllowlistEntryRequest
-	(*AllowlistEntryResponse)(nil),               // 44: kodex.access_accounts.v1.AllowlistEntryResponse
-	(*RegisterExternalProviderRequest)(nil),      // 45: kodex.access_accounts.v1.RegisterExternalProviderRequest
-	(*UpdateExternalProviderRequest)(nil),        // 46: kodex.access_accounts.v1.UpdateExternalProviderRequest
-	(*ExternalProviderResponse)(nil),             // 47: kodex.access_accounts.v1.ExternalProviderResponse
-	(*RegisterExternalAccountRequest)(nil),       // 48: kodex.access_accounts.v1.RegisterExternalAccountRequest
-	(*UpdateExternalAccountStatusRequest)(nil),   // 49: kodex.access_accounts.v1.UpdateExternalAccountStatusRequest
-	(*ExternalAccountResponse)(nil),              // 50: kodex.access_accounts.v1.ExternalAccountResponse
-	(*BindExternalAccountRequest)(nil),           // 51: kodex.access_accounts.v1.BindExternalAccountRequest
-	(*DisableExternalAccountBindingRequest)(nil), // 52: kodex.access_accounts.v1.DisableExternalAccountBindingRequest
-	(*ExternalAccountBindingResponse)(nil),       // 53: kodex.access_accounts.v1.ExternalAccountBindingResponse
-	(*PutAccessActionRequest)(nil),               // 54: kodex.access_accounts.v1.PutAccessActionRequest
-	(*AccessActionResponse)(nil),                 // 55: kodex.access_accounts.v1.AccessActionResponse
-	(*PutAccessRuleRequest)(nil),                 // 56: kodex.access_accounts.v1.PutAccessRuleRequest
-	(*DisableAccessRuleRequest)(nil),             // 57: kodex.access_accounts.v1.DisableAccessRuleRequest
-	(*AccessRuleResponse)(nil),                   // 58: kodex.access_accounts.v1.AccessRuleResponse
-	(*CheckAccessRequest)(nil),                   // 59: kodex.access_accounts.v1.CheckAccessRequest
-	(*CheckAccessResponse)(nil),                  // 60: kodex.access_accounts.v1.CheckAccessResponse
-	(*MatchedRule)(nil),                          // 61: kodex.access_accounts.v1.MatchedRule
-	(*ExplainAccessRequest)(nil),                 // 62: kodex.access_accounts.v1.ExplainAccessRequest
-	(*ExplainAccessResponse)(nil),                // 63: kodex.access_accounts.v1.ExplainAccessResponse
-	(*ResolveExternalAccountUsageRequest)(nil),   // 64: kodex.access_accounts.v1.ResolveExternalAccountUsageRequest
-	(*ResolveExternalAccountUsageResponse)(nil),  // 65: kodex.access_accounts.v1.ResolveExternalAccountUsageResponse
-	(*ListMembershipGraphRequest)(nil),           // 66: kodex.access_accounts.v1.ListMembershipGraphRequest
-	(*MembershipEdge)(nil),                       // 67: kodex.access_accounts.v1.MembershipEdge
-	(*ListMembershipGraphResponse)(nil),          // 68: kodex.access_accounts.v1.ListMembershipGraphResponse
-	(*ListPendingAccessRequest)(nil),             // 69: kodex.access_accounts.v1.ListPendingAccessRequest
-	(*PendingAccessItem)(nil),                    // 70: kodex.access_accounts.v1.PendingAccessItem
-	(*ListPendingAccessResponse)(nil),            // 71: kodex.access_accounts.v1.ListPendingAccessResponse
+	(AccessDecision)(0),                               // 0: kodex.access_accounts.v1.AccessDecision
+	(PackageInstallationSecretRefStatus)(0),           // 1: kodex.access_accounts.v1.PackageInstallationSecretRefStatus
+	(AccessEffect)(0),                                 // 2: kodex.access_accounts.v1.AccessEffect
+	(OrganizationKind)(0),                             // 3: kodex.access_accounts.v1.OrganizationKind
+	(OrganizationStatus)(0),                           // 4: kodex.access_accounts.v1.OrganizationStatus
+	(UserStatus)(0),                                   // 5: kodex.access_accounts.v1.UserStatus
+	(GroupScopeType)(0),                               // 6: kodex.access_accounts.v1.GroupScopeType
+	(GroupStatus)(0),                                  // 7: kodex.access_accounts.v1.GroupStatus
+	(MembershipSubjectType)(0),                        // 8: kodex.access_accounts.v1.MembershipSubjectType
+	(MembershipTargetType)(0),                         // 9: kodex.access_accounts.v1.MembershipTargetType
+	(MembershipStatus)(0),                             // 10: kodex.access_accounts.v1.MembershipStatus
+	(MembershipSource)(0),                             // 11: kodex.access_accounts.v1.MembershipSource
+	(AllowlistMatchType)(0),                           // 12: kodex.access_accounts.v1.AllowlistMatchType
+	(AllowlistStatus)(0),                              // 13: kodex.access_accounts.v1.AllowlistStatus
+	(ExternalProviderKind)(0),                         // 14: kodex.access_accounts.v1.ExternalProviderKind
+	(ExternalProviderStatus)(0),                       // 15: kodex.access_accounts.v1.ExternalProviderStatus
+	(ExternalAccountType)(0),                          // 16: kodex.access_accounts.v1.ExternalAccountType
+	(ExternalAccountStatus)(0),                        // 17: kodex.access_accounts.v1.ExternalAccountStatus
+	(ExternalAccountScopeType)(0),                     // 18: kodex.access_accounts.v1.ExternalAccountScopeType
+	(ExternalAccountBindingStatus)(0),                 // 19: kodex.access_accounts.v1.ExternalAccountBindingStatus
+	(AccessActionStatus)(0),                           // 20: kodex.access_accounts.v1.AccessActionStatus
+	(AccessRuleStatus)(0),                             // 21: kodex.access_accounts.v1.AccessRuleStatus
+	(*CommandMeta)(nil),                               // 22: kodex.access_accounts.v1.CommandMeta
+	(*RequestContext)(nil),                            // 23: kodex.access_accounts.v1.RequestContext
+	(*Actor)(nil),                                     // 24: kodex.access_accounts.v1.Actor
+	(*SubjectRef)(nil),                                // 25: kodex.access_accounts.v1.SubjectRef
+	(*ResourceRef)(nil),                               // 26: kodex.access_accounts.v1.ResourceRef
+	(*ScopeRef)(nil),                                  // 27: kodex.access_accounts.v1.ScopeRef
+	(*BootstrapUserFromIdentityRequest)(nil),          // 28: kodex.access_accounts.v1.BootstrapUserFromIdentityRequest
+	(*BootstrapUserFromIdentityResponse)(nil),         // 29: kodex.access_accounts.v1.BootstrapUserFromIdentityResponse
+	(*SetUserStatusRequest)(nil),                      // 30: kodex.access_accounts.v1.SetUserStatusRequest
+	(*UserResponse)(nil),                              // 31: kodex.access_accounts.v1.UserResponse
+	(*CreateOrganizationRequest)(nil),                 // 32: kodex.access_accounts.v1.CreateOrganizationRequest
+	(*UpdateOrganizationRequest)(nil),                 // 33: kodex.access_accounts.v1.UpdateOrganizationRequest
+	(*SuspendOrganizationRequest)(nil),                // 34: kodex.access_accounts.v1.SuspendOrganizationRequest
+	(*ArchiveOrganizationRequest)(nil),                // 35: kodex.access_accounts.v1.ArchiveOrganizationRequest
+	(*OrganizationResponse)(nil),                      // 36: kodex.access_accounts.v1.OrganizationResponse
+	(*CreateGroupRequest)(nil),                        // 37: kodex.access_accounts.v1.CreateGroupRequest
+	(*UpdateGroupRequest)(nil),                        // 38: kodex.access_accounts.v1.UpdateGroupRequest
+	(*DisableGroupRequest)(nil),                       // 39: kodex.access_accounts.v1.DisableGroupRequest
+	(*GroupResponse)(nil),                             // 40: kodex.access_accounts.v1.GroupResponse
+	(*SetMembershipRequest)(nil),                      // 41: kodex.access_accounts.v1.SetMembershipRequest
+	(*MembershipResponse)(nil),                        // 42: kodex.access_accounts.v1.MembershipResponse
+	(*PutAllowlistEntryRequest)(nil),                  // 43: kodex.access_accounts.v1.PutAllowlistEntryRequest
+	(*DisableAllowlistEntryRequest)(nil),              // 44: kodex.access_accounts.v1.DisableAllowlistEntryRequest
+	(*AllowlistEntryResponse)(nil),                    // 45: kodex.access_accounts.v1.AllowlistEntryResponse
+	(*RegisterExternalProviderRequest)(nil),           // 46: kodex.access_accounts.v1.RegisterExternalProviderRequest
+	(*UpdateExternalProviderRequest)(nil),             // 47: kodex.access_accounts.v1.UpdateExternalProviderRequest
+	(*ExternalProviderResponse)(nil),                  // 48: kodex.access_accounts.v1.ExternalProviderResponse
+	(*RegisterExternalAccountRequest)(nil),            // 49: kodex.access_accounts.v1.RegisterExternalAccountRequest
+	(*UpdateExternalAccountStatusRequest)(nil),        // 50: kodex.access_accounts.v1.UpdateExternalAccountStatusRequest
+	(*ExternalAccountResponse)(nil),                   // 51: kodex.access_accounts.v1.ExternalAccountResponse
+	(*BindExternalAccountRequest)(nil),                // 52: kodex.access_accounts.v1.BindExternalAccountRequest
+	(*DisableExternalAccountBindingRequest)(nil),      // 53: kodex.access_accounts.v1.DisableExternalAccountBindingRequest
+	(*ExternalAccountBindingResponse)(nil),            // 54: kodex.access_accounts.v1.ExternalAccountBindingResponse
+	(*PutAccessActionRequest)(nil),                    // 55: kodex.access_accounts.v1.PutAccessActionRequest
+	(*AccessActionResponse)(nil),                      // 56: kodex.access_accounts.v1.AccessActionResponse
+	(*PutAccessRuleRequest)(nil),                      // 57: kodex.access_accounts.v1.PutAccessRuleRequest
+	(*DisableAccessRuleRequest)(nil),                  // 58: kodex.access_accounts.v1.DisableAccessRuleRequest
+	(*AccessRuleResponse)(nil),                        // 59: kodex.access_accounts.v1.AccessRuleResponse
+	(*CheckAccessRequest)(nil),                        // 60: kodex.access_accounts.v1.CheckAccessRequest
+	(*CheckAccessResponse)(nil),                       // 61: kodex.access_accounts.v1.CheckAccessResponse
+	(*MatchedRule)(nil),                               // 62: kodex.access_accounts.v1.MatchedRule
+	(*ExplainAccessRequest)(nil),                      // 63: kodex.access_accounts.v1.ExplainAccessRequest
+	(*ExplainAccessResponse)(nil),                     // 64: kodex.access_accounts.v1.ExplainAccessResponse
+	(*ResolveExternalAccountUsageRequest)(nil),        // 65: kodex.access_accounts.v1.ResolveExternalAccountUsageRequest
+	(*ResolveExternalAccountUsageResponse)(nil),       // 66: kodex.access_accounts.v1.ResolveExternalAccountUsageResponse
+	(*ListPackageInstallationSecretRefsRequest)(nil),  // 67: kodex.access_accounts.v1.ListPackageInstallationSecretRefsRequest
+	(*PackageInstallationSecretRef)(nil),              // 68: kodex.access_accounts.v1.PackageInstallationSecretRef
+	(*ListPackageInstallationSecretRefsResponse)(nil), // 69: kodex.access_accounts.v1.ListPackageInstallationSecretRefsResponse
+	(*ListMembershipGraphRequest)(nil),                // 70: kodex.access_accounts.v1.ListMembershipGraphRequest
+	(*MembershipEdge)(nil),                            // 71: kodex.access_accounts.v1.MembershipEdge
+	(*ListMembershipGraphResponse)(nil),               // 72: kodex.access_accounts.v1.ListMembershipGraphResponse
+	(*ListPendingAccessRequest)(nil),                  // 73: kodex.access_accounts.v1.ListPendingAccessRequest
+	(*PendingAccessItem)(nil),                         // 74: kodex.access_accounts.v1.PendingAccessItem
+	(*ListPendingAccessResponse)(nil),                 // 75: kodex.access_accounts.v1.ListPendingAccessResponse
+	nil,                                               // 76: kodex.access_accounts.v1.PackageInstallationSecretRef.MetadataEntry
 }
 var file_kodex_access_accounts_v1_access_manager_proto_depIdxs = []int32{
-	23,  // 0: kodex.access_accounts.v1.CommandMeta.actor:type_name -> kodex.access_accounts.v1.Actor
-	22,  // 1: kodex.access_accounts.v1.CommandMeta.request_context:type_name -> kodex.access_accounts.v1.RequestContext
-	21,  // 2: kodex.access_accounts.v1.BootstrapUserFromIdentityRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
-	4,   // 3: kodex.access_accounts.v1.BootstrapUserFromIdentityResponse.status:type_name -> kodex.access_accounts.v1.UserStatus
+	24,  // 0: kodex.access_accounts.v1.CommandMeta.actor:type_name -> kodex.access_accounts.v1.Actor
+	23,  // 1: kodex.access_accounts.v1.CommandMeta.request_context:type_name -> kodex.access_accounts.v1.RequestContext
+	22,  // 2: kodex.access_accounts.v1.BootstrapUserFromIdentityRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	5,   // 3: kodex.access_accounts.v1.BootstrapUserFromIdentityResponse.status:type_name -> kodex.access_accounts.v1.UserStatus
 	0,   // 4: kodex.access_accounts.v1.BootstrapUserFromIdentityResponse.decision:type_name -> kodex.access_accounts.v1.AccessDecision
-	4,   // 5: kodex.access_accounts.v1.SetUserStatusRequest.status:type_name -> kodex.access_accounts.v1.UserStatus
-	21,  // 6: kodex.access_accounts.v1.SetUserStatusRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
-	4,   // 7: kodex.access_accounts.v1.UserResponse.status:type_name -> kodex.access_accounts.v1.UserStatus
-	2,   // 8: kodex.access_accounts.v1.CreateOrganizationRequest.kind:type_name -> kodex.access_accounts.v1.OrganizationKind
-	3,   // 9: kodex.access_accounts.v1.CreateOrganizationRequest.status:type_name -> kodex.access_accounts.v1.OrganizationStatus
-	21,  // 10: kodex.access_accounts.v1.CreateOrganizationRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
-	21,  // 11: kodex.access_accounts.v1.UpdateOrganizationRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
-	21,  // 12: kodex.access_accounts.v1.SuspendOrganizationRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
-	21,  // 13: kodex.access_accounts.v1.ArchiveOrganizationRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
-	2,   // 14: kodex.access_accounts.v1.OrganizationResponse.kind:type_name -> kodex.access_accounts.v1.OrganizationKind
-	3,   // 15: kodex.access_accounts.v1.OrganizationResponse.status:type_name -> kodex.access_accounts.v1.OrganizationStatus
-	5,   // 16: kodex.access_accounts.v1.CreateGroupRequest.scope_type:type_name -> kodex.access_accounts.v1.GroupScopeType
-	21,  // 17: kodex.access_accounts.v1.CreateGroupRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
-	21,  // 18: kodex.access_accounts.v1.UpdateGroupRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
-	21,  // 19: kodex.access_accounts.v1.DisableGroupRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
-	5,   // 20: kodex.access_accounts.v1.GroupResponse.scope_type:type_name -> kodex.access_accounts.v1.GroupScopeType
-	6,   // 21: kodex.access_accounts.v1.GroupResponse.status:type_name -> kodex.access_accounts.v1.GroupStatus
-	7,   // 22: kodex.access_accounts.v1.SetMembershipRequest.subject_type:type_name -> kodex.access_accounts.v1.MembershipSubjectType
-	8,   // 23: kodex.access_accounts.v1.SetMembershipRequest.target_type:type_name -> kodex.access_accounts.v1.MembershipTargetType
-	9,   // 24: kodex.access_accounts.v1.SetMembershipRequest.status:type_name -> kodex.access_accounts.v1.MembershipStatus
-	10,  // 25: kodex.access_accounts.v1.SetMembershipRequest.source:type_name -> kodex.access_accounts.v1.MembershipSource
-	21,  // 26: kodex.access_accounts.v1.SetMembershipRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
-	7,   // 27: kodex.access_accounts.v1.MembershipResponse.subject_type:type_name -> kodex.access_accounts.v1.MembershipSubjectType
-	8,   // 28: kodex.access_accounts.v1.MembershipResponse.target_type:type_name -> kodex.access_accounts.v1.MembershipTargetType
-	9,   // 29: kodex.access_accounts.v1.MembershipResponse.status:type_name -> kodex.access_accounts.v1.MembershipStatus
-	10,  // 30: kodex.access_accounts.v1.MembershipResponse.source:type_name -> kodex.access_accounts.v1.MembershipSource
-	11,  // 31: kodex.access_accounts.v1.PutAllowlistEntryRequest.match_type:type_name -> kodex.access_accounts.v1.AllowlistMatchType
-	4,   // 32: kodex.access_accounts.v1.PutAllowlistEntryRequest.default_status:type_name -> kodex.access_accounts.v1.UserStatus
-	12,  // 33: kodex.access_accounts.v1.PutAllowlistEntryRequest.status:type_name -> kodex.access_accounts.v1.AllowlistStatus
-	21,  // 34: kodex.access_accounts.v1.PutAllowlistEntryRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
-	21,  // 35: kodex.access_accounts.v1.DisableAllowlistEntryRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
-	11,  // 36: kodex.access_accounts.v1.AllowlistEntryResponse.match_type:type_name -> kodex.access_accounts.v1.AllowlistMatchType
-	4,   // 37: kodex.access_accounts.v1.AllowlistEntryResponse.default_status:type_name -> kodex.access_accounts.v1.UserStatus
-	12,  // 38: kodex.access_accounts.v1.AllowlistEntryResponse.status:type_name -> kodex.access_accounts.v1.AllowlistStatus
-	13,  // 39: kodex.access_accounts.v1.RegisterExternalProviderRequest.provider_kind:type_name -> kodex.access_accounts.v1.ExternalProviderKind
-	14,  // 40: kodex.access_accounts.v1.RegisterExternalProviderRequest.status:type_name -> kodex.access_accounts.v1.ExternalProviderStatus
-	21,  // 41: kodex.access_accounts.v1.RegisterExternalProviderRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
-	13,  // 42: kodex.access_accounts.v1.UpdateExternalProviderRequest.provider_kind:type_name -> kodex.access_accounts.v1.ExternalProviderKind
-	14,  // 43: kodex.access_accounts.v1.UpdateExternalProviderRequest.status:type_name -> kodex.access_accounts.v1.ExternalProviderStatus
-	21,  // 44: kodex.access_accounts.v1.UpdateExternalProviderRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
-	13,  // 45: kodex.access_accounts.v1.ExternalProviderResponse.provider_kind:type_name -> kodex.access_accounts.v1.ExternalProviderKind
-	14,  // 46: kodex.access_accounts.v1.ExternalProviderResponse.status:type_name -> kodex.access_accounts.v1.ExternalProviderStatus
-	15,  // 47: kodex.access_accounts.v1.RegisterExternalAccountRequest.account_type:type_name -> kodex.access_accounts.v1.ExternalAccountType
-	17,  // 48: kodex.access_accounts.v1.RegisterExternalAccountRequest.owner_scope_type:type_name -> kodex.access_accounts.v1.ExternalAccountScopeType
-	16,  // 49: kodex.access_accounts.v1.RegisterExternalAccountRequest.status:type_name -> kodex.access_accounts.v1.ExternalAccountStatus
-	21,  // 50: kodex.access_accounts.v1.RegisterExternalAccountRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
-	16,  // 51: kodex.access_accounts.v1.UpdateExternalAccountStatusRequest.status:type_name -> kodex.access_accounts.v1.ExternalAccountStatus
-	21,  // 52: kodex.access_accounts.v1.UpdateExternalAccountStatusRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
-	15,  // 53: kodex.access_accounts.v1.ExternalAccountResponse.account_type:type_name -> kodex.access_accounts.v1.ExternalAccountType
-	17,  // 54: kodex.access_accounts.v1.ExternalAccountResponse.owner_scope_type:type_name -> kodex.access_accounts.v1.ExternalAccountScopeType
-	16,  // 55: kodex.access_accounts.v1.ExternalAccountResponse.status:type_name -> kodex.access_accounts.v1.ExternalAccountStatus
-	17,  // 56: kodex.access_accounts.v1.BindExternalAccountRequest.usage_scope_type:type_name -> kodex.access_accounts.v1.ExternalAccountScopeType
-	18,  // 57: kodex.access_accounts.v1.BindExternalAccountRequest.status:type_name -> kodex.access_accounts.v1.ExternalAccountBindingStatus
-	21,  // 58: kodex.access_accounts.v1.BindExternalAccountRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
-	21,  // 59: kodex.access_accounts.v1.DisableExternalAccountBindingRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
-	17,  // 60: kodex.access_accounts.v1.ExternalAccountBindingResponse.usage_scope_type:type_name -> kodex.access_accounts.v1.ExternalAccountScopeType
-	18,  // 61: kodex.access_accounts.v1.ExternalAccountBindingResponse.status:type_name -> kodex.access_accounts.v1.ExternalAccountBindingStatus
-	19,  // 62: kodex.access_accounts.v1.PutAccessActionRequest.status:type_name -> kodex.access_accounts.v1.AccessActionStatus
-	21,  // 63: kodex.access_accounts.v1.PutAccessActionRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
-	19,  // 64: kodex.access_accounts.v1.AccessActionResponse.status:type_name -> kodex.access_accounts.v1.AccessActionStatus
-	1,   // 65: kodex.access_accounts.v1.PutAccessRuleRequest.effect:type_name -> kodex.access_accounts.v1.AccessEffect
-	20,  // 66: kodex.access_accounts.v1.PutAccessRuleRequest.status:type_name -> kodex.access_accounts.v1.AccessRuleStatus
-	21,  // 67: kodex.access_accounts.v1.PutAccessRuleRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
-	21,  // 68: kodex.access_accounts.v1.DisableAccessRuleRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
-	1,   // 69: kodex.access_accounts.v1.AccessRuleResponse.effect:type_name -> kodex.access_accounts.v1.AccessEffect
-	20,  // 70: kodex.access_accounts.v1.AccessRuleResponse.status:type_name -> kodex.access_accounts.v1.AccessRuleStatus
-	24,  // 71: kodex.access_accounts.v1.CheckAccessRequest.subject:type_name -> kodex.access_accounts.v1.SubjectRef
-	25,  // 72: kodex.access_accounts.v1.CheckAccessRequest.resource:type_name -> kodex.access_accounts.v1.ResourceRef
-	26,  // 73: kodex.access_accounts.v1.CheckAccessRequest.scope:type_name -> kodex.access_accounts.v1.ScopeRef
-	21,  // 74: kodex.access_accounts.v1.CheckAccessRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	5,   // 5: kodex.access_accounts.v1.SetUserStatusRequest.status:type_name -> kodex.access_accounts.v1.UserStatus
+	22,  // 6: kodex.access_accounts.v1.SetUserStatusRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	5,   // 7: kodex.access_accounts.v1.UserResponse.status:type_name -> kodex.access_accounts.v1.UserStatus
+	3,   // 8: kodex.access_accounts.v1.CreateOrganizationRequest.kind:type_name -> kodex.access_accounts.v1.OrganizationKind
+	4,   // 9: kodex.access_accounts.v1.CreateOrganizationRequest.status:type_name -> kodex.access_accounts.v1.OrganizationStatus
+	22,  // 10: kodex.access_accounts.v1.CreateOrganizationRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	22,  // 11: kodex.access_accounts.v1.UpdateOrganizationRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	22,  // 12: kodex.access_accounts.v1.SuspendOrganizationRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	22,  // 13: kodex.access_accounts.v1.ArchiveOrganizationRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	3,   // 14: kodex.access_accounts.v1.OrganizationResponse.kind:type_name -> kodex.access_accounts.v1.OrganizationKind
+	4,   // 15: kodex.access_accounts.v1.OrganizationResponse.status:type_name -> kodex.access_accounts.v1.OrganizationStatus
+	6,   // 16: kodex.access_accounts.v1.CreateGroupRequest.scope_type:type_name -> kodex.access_accounts.v1.GroupScopeType
+	22,  // 17: kodex.access_accounts.v1.CreateGroupRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	22,  // 18: kodex.access_accounts.v1.UpdateGroupRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	22,  // 19: kodex.access_accounts.v1.DisableGroupRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	6,   // 20: kodex.access_accounts.v1.GroupResponse.scope_type:type_name -> kodex.access_accounts.v1.GroupScopeType
+	7,   // 21: kodex.access_accounts.v1.GroupResponse.status:type_name -> kodex.access_accounts.v1.GroupStatus
+	8,   // 22: kodex.access_accounts.v1.SetMembershipRequest.subject_type:type_name -> kodex.access_accounts.v1.MembershipSubjectType
+	9,   // 23: kodex.access_accounts.v1.SetMembershipRequest.target_type:type_name -> kodex.access_accounts.v1.MembershipTargetType
+	10,  // 24: kodex.access_accounts.v1.SetMembershipRequest.status:type_name -> kodex.access_accounts.v1.MembershipStatus
+	11,  // 25: kodex.access_accounts.v1.SetMembershipRequest.source:type_name -> kodex.access_accounts.v1.MembershipSource
+	22,  // 26: kodex.access_accounts.v1.SetMembershipRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	8,   // 27: kodex.access_accounts.v1.MembershipResponse.subject_type:type_name -> kodex.access_accounts.v1.MembershipSubjectType
+	9,   // 28: kodex.access_accounts.v1.MembershipResponse.target_type:type_name -> kodex.access_accounts.v1.MembershipTargetType
+	10,  // 29: kodex.access_accounts.v1.MembershipResponse.status:type_name -> kodex.access_accounts.v1.MembershipStatus
+	11,  // 30: kodex.access_accounts.v1.MembershipResponse.source:type_name -> kodex.access_accounts.v1.MembershipSource
+	12,  // 31: kodex.access_accounts.v1.PutAllowlistEntryRequest.match_type:type_name -> kodex.access_accounts.v1.AllowlistMatchType
+	5,   // 32: kodex.access_accounts.v1.PutAllowlistEntryRequest.default_status:type_name -> kodex.access_accounts.v1.UserStatus
+	13,  // 33: kodex.access_accounts.v1.PutAllowlistEntryRequest.status:type_name -> kodex.access_accounts.v1.AllowlistStatus
+	22,  // 34: kodex.access_accounts.v1.PutAllowlistEntryRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	22,  // 35: kodex.access_accounts.v1.DisableAllowlistEntryRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	12,  // 36: kodex.access_accounts.v1.AllowlistEntryResponse.match_type:type_name -> kodex.access_accounts.v1.AllowlistMatchType
+	5,   // 37: kodex.access_accounts.v1.AllowlistEntryResponse.default_status:type_name -> kodex.access_accounts.v1.UserStatus
+	13,  // 38: kodex.access_accounts.v1.AllowlistEntryResponse.status:type_name -> kodex.access_accounts.v1.AllowlistStatus
+	14,  // 39: kodex.access_accounts.v1.RegisterExternalProviderRequest.provider_kind:type_name -> kodex.access_accounts.v1.ExternalProviderKind
+	15,  // 40: kodex.access_accounts.v1.RegisterExternalProviderRequest.status:type_name -> kodex.access_accounts.v1.ExternalProviderStatus
+	22,  // 41: kodex.access_accounts.v1.RegisterExternalProviderRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	14,  // 42: kodex.access_accounts.v1.UpdateExternalProviderRequest.provider_kind:type_name -> kodex.access_accounts.v1.ExternalProviderKind
+	15,  // 43: kodex.access_accounts.v1.UpdateExternalProviderRequest.status:type_name -> kodex.access_accounts.v1.ExternalProviderStatus
+	22,  // 44: kodex.access_accounts.v1.UpdateExternalProviderRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	14,  // 45: kodex.access_accounts.v1.ExternalProviderResponse.provider_kind:type_name -> kodex.access_accounts.v1.ExternalProviderKind
+	15,  // 46: kodex.access_accounts.v1.ExternalProviderResponse.status:type_name -> kodex.access_accounts.v1.ExternalProviderStatus
+	16,  // 47: kodex.access_accounts.v1.RegisterExternalAccountRequest.account_type:type_name -> kodex.access_accounts.v1.ExternalAccountType
+	18,  // 48: kodex.access_accounts.v1.RegisterExternalAccountRequest.owner_scope_type:type_name -> kodex.access_accounts.v1.ExternalAccountScopeType
+	17,  // 49: kodex.access_accounts.v1.RegisterExternalAccountRequest.status:type_name -> kodex.access_accounts.v1.ExternalAccountStatus
+	22,  // 50: kodex.access_accounts.v1.RegisterExternalAccountRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	17,  // 51: kodex.access_accounts.v1.UpdateExternalAccountStatusRequest.status:type_name -> kodex.access_accounts.v1.ExternalAccountStatus
+	22,  // 52: kodex.access_accounts.v1.UpdateExternalAccountStatusRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	16,  // 53: kodex.access_accounts.v1.ExternalAccountResponse.account_type:type_name -> kodex.access_accounts.v1.ExternalAccountType
+	18,  // 54: kodex.access_accounts.v1.ExternalAccountResponse.owner_scope_type:type_name -> kodex.access_accounts.v1.ExternalAccountScopeType
+	17,  // 55: kodex.access_accounts.v1.ExternalAccountResponse.status:type_name -> kodex.access_accounts.v1.ExternalAccountStatus
+	18,  // 56: kodex.access_accounts.v1.BindExternalAccountRequest.usage_scope_type:type_name -> kodex.access_accounts.v1.ExternalAccountScopeType
+	19,  // 57: kodex.access_accounts.v1.BindExternalAccountRequest.status:type_name -> kodex.access_accounts.v1.ExternalAccountBindingStatus
+	22,  // 58: kodex.access_accounts.v1.BindExternalAccountRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	22,  // 59: kodex.access_accounts.v1.DisableExternalAccountBindingRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	18,  // 60: kodex.access_accounts.v1.ExternalAccountBindingResponse.usage_scope_type:type_name -> kodex.access_accounts.v1.ExternalAccountScopeType
+	19,  // 61: kodex.access_accounts.v1.ExternalAccountBindingResponse.status:type_name -> kodex.access_accounts.v1.ExternalAccountBindingStatus
+	20,  // 62: kodex.access_accounts.v1.PutAccessActionRequest.status:type_name -> kodex.access_accounts.v1.AccessActionStatus
+	22,  // 63: kodex.access_accounts.v1.PutAccessActionRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	20,  // 64: kodex.access_accounts.v1.AccessActionResponse.status:type_name -> kodex.access_accounts.v1.AccessActionStatus
+	2,   // 65: kodex.access_accounts.v1.PutAccessRuleRequest.effect:type_name -> kodex.access_accounts.v1.AccessEffect
+	21,  // 66: kodex.access_accounts.v1.PutAccessRuleRequest.status:type_name -> kodex.access_accounts.v1.AccessRuleStatus
+	22,  // 67: kodex.access_accounts.v1.PutAccessRuleRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	22,  // 68: kodex.access_accounts.v1.DisableAccessRuleRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	2,   // 69: kodex.access_accounts.v1.AccessRuleResponse.effect:type_name -> kodex.access_accounts.v1.AccessEffect
+	21,  // 70: kodex.access_accounts.v1.AccessRuleResponse.status:type_name -> kodex.access_accounts.v1.AccessRuleStatus
+	25,  // 71: kodex.access_accounts.v1.CheckAccessRequest.subject:type_name -> kodex.access_accounts.v1.SubjectRef
+	26,  // 72: kodex.access_accounts.v1.CheckAccessRequest.resource:type_name -> kodex.access_accounts.v1.ResourceRef
+	27,  // 73: kodex.access_accounts.v1.CheckAccessRequest.scope:type_name -> kodex.access_accounts.v1.ScopeRef
+	22,  // 74: kodex.access_accounts.v1.CheckAccessRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
 	0,   // 75: kodex.access_accounts.v1.CheckAccessResponse.decision:type_name -> kodex.access_accounts.v1.AccessDecision
-	61,  // 76: kodex.access_accounts.v1.CheckAccessResponse.matched_rules:type_name -> kodex.access_accounts.v1.MatchedRule
-	1,   // 77: kodex.access_accounts.v1.MatchedRule.effect:type_name -> kodex.access_accounts.v1.AccessEffect
-	24,  // 78: kodex.access_accounts.v1.MatchedRule.subject:type_name -> kodex.access_accounts.v1.SubjectRef
-	26,  // 79: kodex.access_accounts.v1.MatchedRule.scope:type_name -> kodex.access_accounts.v1.ScopeRef
-	26,  // 80: kodex.access_accounts.v1.ExplainAccessRequest.scope:type_name -> kodex.access_accounts.v1.ScopeRef
-	21,  // 81: kodex.access_accounts.v1.ExplainAccessRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	62,  // 76: kodex.access_accounts.v1.CheckAccessResponse.matched_rules:type_name -> kodex.access_accounts.v1.MatchedRule
+	2,   // 77: kodex.access_accounts.v1.MatchedRule.effect:type_name -> kodex.access_accounts.v1.AccessEffect
+	25,  // 78: kodex.access_accounts.v1.MatchedRule.subject:type_name -> kodex.access_accounts.v1.SubjectRef
+	27,  // 79: kodex.access_accounts.v1.MatchedRule.scope:type_name -> kodex.access_accounts.v1.ScopeRef
+	27,  // 80: kodex.access_accounts.v1.ExplainAccessRequest.scope:type_name -> kodex.access_accounts.v1.ScopeRef
+	22,  // 81: kodex.access_accounts.v1.ExplainAccessRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
 	0,   // 82: kodex.access_accounts.v1.ExplainAccessResponse.decision:type_name -> kodex.access_accounts.v1.AccessDecision
-	61,  // 83: kodex.access_accounts.v1.ExplainAccessResponse.matched_rules:type_name -> kodex.access_accounts.v1.MatchedRule
-	24,  // 84: kodex.access_accounts.v1.ExplainAccessResponse.subject:type_name -> kodex.access_accounts.v1.SubjectRef
-	25,  // 85: kodex.access_accounts.v1.ExplainAccessResponse.resource:type_name -> kodex.access_accounts.v1.ResourceRef
-	26,  // 86: kodex.access_accounts.v1.ExplainAccessResponse.scope:type_name -> kodex.access_accounts.v1.ScopeRef
-	22,  // 87: kodex.access_accounts.v1.ExplainAccessResponse.request_context:type_name -> kodex.access_accounts.v1.RequestContext
-	26,  // 88: kodex.access_accounts.v1.ResolveExternalAccountUsageRequest.usage_scope:type_name -> kodex.access_accounts.v1.ScopeRef
-	24,  // 89: kodex.access_accounts.v1.ListMembershipGraphRequest.subject:type_name -> kodex.access_accounts.v1.SubjectRef
-	21,  // 90: kodex.access_accounts.v1.ListMembershipGraphRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
-	24,  // 91: kodex.access_accounts.v1.MembershipEdge.subject:type_name -> kodex.access_accounts.v1.SubjectRef
-	24,  // 92: kodex.access_accounts.v1.MembershipEdge.target:type_name -> kodex.access_accounts.v1.SubjectRef
-	9,   // 93: kodex.access_accounts.v1.MembershipEdge.status:type_name -> kodex.access_accounts.v1.MembershipStatus
-	10,  // 94: kodex.access_accounts.v1.MembershipEdge.source:type_name -> kodex.access_accounts.v1.MembershipSource
-	24,  // 95: kodex.access_accounts.v1.ListMembershipGraphResponse.root:type_name -> kodex.access_accounts.v1.SubjectRef
-	67,  // 96: kodex.access_accounts.v1.ListMembershipGraphResponse.edges:type_name -> kodex.access_accounts.v1.MembershipEdge
-	26,  // 97: kodex.access_accounts.v1.ListPendingAccessRequest.scope:type_name -> kodex.access_accounts.v1.ScopeRef
-	21,  // 98: kodex.access_accounts.v1.ListPendingAccessRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
-	24,  // 99: kodex.access_accounts.v1.PendingAccessItem.subject:type_name -> kodex.access_accounts.v1.SubjectRef
-	70,  // 100: kodex.access_accounts.v1.ListPendingAccessResponse.items:type_name -> kodex.access_accounts.v1.PendingAccessItem
-	27,  // 101: kodex.access_accounts.v1.AccessManagerService.BootstrapUserFromIdentity:input_type -> kodex.access_accounts.v1.BootstrapUserFromIdentityRequest
-	29,  // 102: kodex.access_accounts.v1.AccessManagerService.SetUserStatus:input_type -> kodex.access_accounts.v1.SetUserStatusRequest
-	31,  // 103: kodex.access_accounts.v1.AccessManagerService.CreateOrganization:input_type -> kodex.access_accounts.v1.CreateOrganizationRequest
-	32,  // 104: kodex.access_accounts.v1.AccessManagerService.UpdateOrganization:input_type -> kodex.access_accounts.v1.UpdateOrganizationRequest
-	33,  // 105: kodex.access_accounts.v1.AccessManagerService.SuspendOrganization:input_type -> kodex.access_accounts.v1.SuspendOrganizationRequest
-	34,  // 106: kodex.access_accounts.v1.AccessManagerService.ArchiveOrganization:input_type -> kodex.access_accounts.v1.ArchiveOrganizationRequest
-	36,  // 107: kodex.access_accounts.v1.AccessManagerService.CreateGroup:input_type -> kodex.access_accounts.v1.CreateGroupRequest
-	37,  // 108: kodex.access_accounts.v1.AccessManagerService.UpdateGroup:input_type -> kodex.access_accounts.v1.UpdateGroupRequest
-	38,  // 109: kodex.access_accounts.v1.AccessManagerService.DisableGroup:input_type -> kodex.access_accounts.v1.DisableGroupRequest
-	40,  // 110: kodex.access_accounts.v1.AccessManagerService.SetMembership:input_type -> kodex.access_accounts.v1.SetMembershipRequest
-	42,  // 111: kodex.access_accounts.v1.AccessManagerService.PutAllowlistEntry:input_type -> kodex.access_accounts.v1.PutAllowlistEntryRequest
-	43,  // 112: kodex.access_accounts.v1.AccessManagerService.DisableAllowlistEntry:input_type -> kodex.access_accounts.v1.DisableAllowlistEntryRequest
-	45,  // 113: kodex.access_accounts.v1.AccessManagerService.RegisterExternalProvider:input_type -> kodex.access_accounts.v1.RegisterExternalProviderRequest
-	46,  // 114: kodex.access_accounts.v1.AccessManagerService.UpdateExternalProvider:input_type -> kodex.access_accounts.v1.UpdateExternalProviderRequest
-	48,  // 115: kodex.access_accounts.v1.AccessManagerService.RegisterExternalAccount:input_type -> kodex.access_accounts.v1.RegisterExternalAccountRequest
-	49,  // 116: kodex.access_accounts.v1.AccessManagerService.UpdateExternalAccountStatus:input_type -> kodex.access_accounts.v1.UpdateExternalAccountStatusRequest
-	51,  // 117: kodex.access_accounts.v1.AccessManagerService.BindExternalAccount:input_type -> kodex.access_accounts.v1.BindExternalAccountRequest
-	52,  // 118: kodex.access_accounts.v1.AccessManagerService.DisableExternalAccountBinding:input_type -> kodex.access_accounts.v1.DisableExternalAccountBindingRequest
-	54,  // 119: kodex.access_accounts.v1.AccessManagerService.PutAccessAction:input_type -> kodex.access_accounts.v1.PutAccessActionRequest
-	56,  // 120: kodex.access_accounts.v1.AccessManagerService.PutAccessRule:input_type -> kodex.access_accounts.v1.PutAccessRuleRequest
-	57,  // 121: kodex.access_accounts.v1.AccessManagerService.DisableAccessRule:input_type -> kodex.access_accounts.v1.DisableAccessRuleRequest
-	64,  // 122: kodex.access_accounts.v1.AccessManagerService.ResolveExternalAccountUsage:input_type -> kodex.access_accounts.v1.ResolveExternalAccountUsageRequest
-	59,  // 123: kodex.access_accounts.v1.AccessManagerService.CheckAccess:input_type -> kodex.access_accounts.v1.CheckAccessRequest
-	62,  // 124: kodex.access_accounts.v1.AccessManagerService.ExplainAccess:input_type -> kodex.access_accounts.v1.ExplainAccessRequest
-	66,  // 125: kodex.access_accounts.v1.AccessManagerService.ListMembershipGraph:input_type -> kodex.access_accounts.v1.ListMembershipGraphRequest
-	69,  // 126: kodex.access_accounts.v1.AccessManagerService.ListPendingAccess:input_type -> kodex.access_accounts.v1.ListPendingAccessRequest
-	28,  // 127: kodex.access_accounts.v1.AccessManagerService.BootstrapUserFromIdentity:output_type -> kodex.access_accounts.v1.BootstrapUserFromIdentityResponse
-	30,  // 128: kodex.access_accounts.v1.AccessManagerService.SetUserStatus:output_type -> kodex.access_accounts.v1.UserResponse
-	35,  // 129: kodex.access_accounts.v1.AccessManagerService.CreateOrganization:output_type -> kodex.access_accounts.v1.OrganizationResponse
-	35,  // 130: kodex.access_accounts.v1.AccessManagerService.UpdateOrganization:output_type -> kodex.access_accounts.v1.OrganizationResponse
-	35,  // 131: kodex.access_accounts.v1.AccessManagerService.SuspendOrganization:output_type -> kodex.access_accounts.v1.OrganizationResponse
-	35,  // 132: kodex.access_accounts.v1.AccessManagerService.ArchiveOrganization:output_type -> kodex.access_accounts.v1.OrganizationResponse
-	39,  // 133: kodex.access_accounts.v1.AccessManagerService.CreateGroup:output_type -> kodex.access_accounts.v1.GroupResponse
-	39,  // 134: kodex.access_accounts.v1.AccessManagerService.UpdateGroup:output_type -> kodex.access_accounts.v1.GroupResponse
-	39,  // 135: kodex.access_accounts.v1.AccessManagerService.DisableGroup:output_type -> kodex.access_accounts.v1.GroupResponse
-	41,  // 136: kodex.access_accounts.v1.AccessManagerService.SetMembership:output_type -> kodex.access_accounts.v1.MembershipResponse
-	44,  // 137: kodex.access_accounts.v1.AccessManagerService.PutAllowlistEntry:output_type -> kodex.access_accounts.v1.AllowlistEntryResponse
-	44,  // 138: kodex.access_accounts.v1.AccessManagerService.DisableAllowlistEntry:output_type -> kodex.access_accounts.v1.AllowlistEntryResponse
-	47,  // 139: kodex.access_accounts.v1.AccessManagerService.RegisterExternalProvider:output_type -> kodex.access_accounts.v1.ExternalProviderResponse
-	47,  // 140: kodex.access_accounts.v1.AccessManagerService.UpdateExternalProvider:output_type -> kodex.access_accounts.v1.ExternalProviderResponse
-	50,  // 141: kodex.access_accounts.v1.AccessManagerService.RegisterExternalAccount:output_type -> kodex.access_accounts.v1.ExternalAccountResponse
-	50,  // 142: kodex.access_accounts.v1.AccessManagerService.UpdateExternalAccountStatus:output_type -> kodex.access_accounts.v1.ExternalAccountResponse
-	53,  // 143: kodex.access_accounts.v1.AccessManagerService.BindExternalAccount:output_type -> kodex.access_accounts.v1.ExternalAccountBindingResponse
-	53,  // 144: kodex.access_accounts.v1.AccessManagerService.DisableExternalAccountBinding:output_type -> kodex.access_accounts.v1.ExternalAccountBindingResponse
-	55,  // 145: kodex.access_accounts.v1.AccessManagerService.PutAccessAction:output_type -> kodex.access_accounts.v1.AccessActionResponse
-	58,  // 146: kodex.access_accounts.v1.AccessManagerService.PutAccessRule:output_type -> kodex.access_accounts.v1.AccessRuleResponse
-	58,  // 147: kodex.access_accounts.v1.AccessManagerService.DisableAccessRule:output_type -> kodex.access_accounts.v1.AccessRuleResponse
-	65,  // 148: kodex.access_accounts.v1.AccessManagerService.ResolveExternalAccountUsage:output_type -> kodex.access_accounts.v1.ResolveExternalAccountUsageResponse
-	60,  // 149: kodex.access_accounts.v1.AccessManagerService.CheckAccess:output_type -> kodex.access_accounts.v1.CheckAccessResponse
-	63,  // 150: kodex.access_accounts.v1.AccessManagerService.ExplainAccess:output_type -> kodex.access_accounts.v1.ExplainAccessResponse
-	68,  // 151: kodex.access_accounts.v1.AccessManagerService.ListMembershipGraph:output_type -> kodex.access_accounts.v1.ListMembershipGraphResponse
-	71,  // 152: kodex.access_accounts.v1.AccessManagerService.ListPendingAccess:output_type -> kodex.access_accounts.v1.ListPendingAccessResponse
-	127, // [127:153] is the sub-list for method output_type
-	101, // [101:127] is the sub-list for method input_type
-	101, // [101:101] is the sub-list for extension type_name
-	101, // [101:101] is the sub-list for extension extendee
-	0,   // [0:101] is the sub-list for field type_name
+	62,  // 83: kodex.access_accounts.v1.ExplainAccessResponse.matched_rules:type_name -> kodex.access_accounts.v1.MatchedRule
+	25,  // 84: kodex.access_accounts.v1.ExplainAccessResponse.subject:type_name -> kodex.access_accounts.v1.SubjectRef
+	26,  // 85: kodex.access_accounts.v1.ExplainAccessResponse.resource:type_name -> kodex.access_accounts.v1.ResourceRef
+	27,  // 86: kodex.access_accounts.v1.ExplainAccessResponse.scope:type_name -> kodex.access_accounts.v1.ScopeRef
+	23,  // 87: kodex.access_accounts.v1.ExplainAccessResponse.request_context:type_name -> kodex.access_accounts.v1.RequestContext
+	27,  // 88: kodex.access_accounts.v1.ResolveExternalAccountUsageRequest.usage_scope:type_name -> kodex.access_accounts.v1.ScopeRef
+	27,  // 89: kodex.access_accounts.v1.ListPackageInstallationSecretRefsRequest.installation_scope:type_name -> kodex.access_accounts.v1.ScopeRef
+	22,  // 90: kodex.access_accounts.v1.ListPackageInstallationSecretRefsRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	1,   // 91: kodex.access_accounts.v1.PackageInstallationSecretRef.status:type_name -> kodex.access_accounts.v1.PackageInstallationSecretRefStatus
+	76,  // 92: kodex.access_accounts.v1.PackageInstallationSecretRef.metadata:type_name -> kodex.access_accounts.v1.PackageInstallationSecretRef.MetadataEntry
+	27,  // 93: kodex.access_accounts.v1.ListPackageInstallationSecretRefsResponse.installation_scope:type_name -> kodex.access_accounts.v1.ScopeRef
+	68,  // 94: kodex.access_accounts.v1.ListPackageInstallationSecretRefsResponse.secret_refs:type_name -> kodex.access_accounts.v1.PackageInstallationSecretRef
+	25,  // 95: kodex.access_accounts.v1.ListMembershipGraphRequest.subject:type_name -> kodex.access_accounts.v1.SubjectRef
+	22,  // 96: kodex.access_accounts.v1.ListMembershipGraphRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	25,  // 97: kodex.access_accounts.v1.MembershipEdge.subject:type_name -> kodex.access_accounts.v1.SubjectRef
+	25,  // 98: kodex.access_accounts.v1.MembershipEdge.target:type_name -> kodex.access_accounts.v1.SubjectRef
+	10,  // 99: kodex.access_accounts.v1.MembershipEdge.status:type_name -> kodex.access_accounts.v1.MembershipStatus
+	11,  // 100: kodex.access_accounts.v1.MembershipEdge.source:type_name -> kodex.access_accounts.v1.MembershipSource
+	25,  // 101: kodex.access_accounts.v1.ListMembershipGraphResponse.root:type_name -> kodex.access_accounts.v1.SubjectRef
+	71,  // 102: kodex.access_accounts.v1.ListMembershipGraphResponse.edges:type_name -> kodex.access_accounts.v1.MembershipEdge
+	27,  // 103: kodex.access_accounts.v1.ListPendingAccessRequest.scope:type_name -> kodex.access_accounts.v1.ScopeRef
+	22,  // 104: kodex.access_accounts.v1.ListPendingAccessRequest.meta:type_name -> kodex.access_accounts.v1.CommandMeta
+	25,  // 105: kodex.access_accounts.v1.PendingAccessItem.subject:type_name -> kodex.access_accounts.v1.SubjectRef
+	74,  // 106: kodex.access_accounts.v1.ListPendingAccessResponse.items:type_name -> kodex.access_accounts.v1.PendingAccessItem
+	28,  // 107: kodex.access_accounts.v1.AccessManagerService.BootstrapUserFromIdentity:input_type -> kodex.access_accounts.v1.BootstrapUserFromIdentityRequest
+	30,  // 108: kodex.access_accounts.v1.AccessManagerService.SetUserStatus:input_type -> kodex.access_accounts.v1.SetUserStatusRequest
+	32,  // 109: kodex.access_accounts.v1.AccessManagerService.CreateOrganization:input_type -> kodex.access_accounts.v1.CreateOrganizationRequest
+	33,  // 110: kodex.access_accounts.v1.AccessManagerService.UpdateOrganization:input_type -> kodex.access_accounts.v1.UpdateOrganizationRequest
+	34,  // 111: kodex.access_accounts.v1.AccessManagerService.SuspendOrganization:input_type -> kodex.access_accounts.v1.SuspendOrganizationRequest
+	35,  // 112: kodex.access_accounts.v1.AccessManagerService.ArchiveOrganization:input_type -> kodex.access_accounts.v1.ArchiveOrganizationRequest
+	37,  // 113: kodex.access_accounts.v1.AccessManagerService.CreateGroup:input_type -> kodex.access_accounts.v1.CreateGroupRequest
+	38,  // 114: kodex.access_accounts.v1.AccessManagerService.UpdateGroup:input_type -> kodex.access_accounts.v1.UpdateGroupRequest
+	39,  // 115: kodex.access_accounts.v1.AccessManagerService.DisableGroup:input_type -> kodex.access_accounts.v1.DisableGroupRequest
+	41,  // 116: kodex.access_accounts.v1.AccessManagerService.SetMembership:input_type -> kodex.access_accounts.v1.SetMembershipRequest
+	43,  // 117: kodex.access_accounts.v1.AccessManagerService.PutAllowlistEntry:input_type -> kodex.access_accounts.v1.PutAllowlistEntryRequest
+	44,  // 118: kodex.access_accounts.v1.AccessManagerService.DisableAllowlistEntry:input_type -> kodex.access_accounts.v1.DisableAllowlistEntryRequest
+	46,  // 119: kodex.access_accounts.v1.AccessManagerService.RegisterExternalProvider:input_type -> kodex.access_accounts.v1.RegisterExternalProviderRequest
+	47,  // 120: kodex.access_accounts.v1.AccessManagerService.UpdateExternalProvider:input_type -> kodex.access_accounts.v1.UpdateExternalProviderRequest
+	49,  // 121: kodex.access_accounts.v1.AccessManagerService.RegisterExternalAccount:input_type -> kodex.access_accounts.v1.RegisterExternalAccountRequest
+	50,  // 122: kodex.access_accounts.v1.AccessManagerService.UpdateExternalAccountStatus:input_type -> kodex.access_accounts.v1.UpdateExternalAccountStatusRequest
+	52,  // 123: kodex.access_accounts.v1.AccessManagerService.BindExternalAccount:input_type -> kodex.access_accounts.v1.BindExternalAccountRequest
+	53,  // 124: kodex.access_accounts.v1.AccessManagerService.DisableExternalAccountBinding:input_type -> kodex.access_accounts.v1.DisableExternalAccountBindingRequest
+	55,  // 125: kodex.access_accounts.v1.AccessManagerService.PutAccessAction:input_type -> kodex.access_accounts.v1.PutAccessActionRequest
+	57,  // 126: kodex.access_accounts.v1.AccessManagerService.PutAccessRule:input_type -> kodex.access_accounts.v1.PutAccessRuleRequest
+	58,  // 127: kodex.access_accounts.v1.AccessManagerService.DisableAccessRule:input_type -> kodex.access_accounts.v1.DisableAccessRuleRequest
+	65,  // 128: kodex.access_accounts.v1.AccessManagerService.ResolveExternalAccountUsage:input_type -> kodex.access_accounts.v1.ResolveExternalAccountUsageRequest
+	67,  // 129: kodex.access_accounts.v1.AccessManagerService.ListPackageInstallationSecretRefs:input_type -> kodex.access_accounts.v1.ListPackageInstallationSecretRefsRequest
+	60,  // 130: kodex.access_accounts.v1.AccessManagerService.CheckAccess:input_type -> kodex.access_accounts.v1.CheckAccessRequest
+	63,  // 131: kodex.access_accounts.v1.AccessManagerService.ExplainAccess:input_type -> kodex.access_accounts.v1.ExplainAccessRequest
+	70,  // 132: kodex.access_accounts.v1.AccessManagerService.ListMembershipGraph:input_type -> kodex.access_accounts.v1.ListMembershipGraphRequest
+	73,  // 133: kodex.access_accounts.v1.AccessManagerService.ListPendingAccess:input_type -> kodex.access_accounts.v1.ListPendingAccessRequest
+	29,  // 134: kodex.access_accounts.v1.AccessManagerService.BootstrapUserFromIdentity:output_type -> kodex.access_accounts.v1.BootstrapUserFromIdentityResponse
+	31,  // 135: kodex.access_accounts.v1.AccessManagerService.SetUserStatus:output_type -> kodex.access_accounts.v1.UserResponse
+	36,  // 136: kodex.access_accounts.v1.AccessManagerService.CreateOrganization:output_type -> kodex.access_accounts.v1.OrganizationResponse
+	36,  // 137: kodex.access_accounts.v1.AccessManagerService.UpdateOrganization:output_type -> kodex.access_accounts.v1.OrganizationResponse
+	36,  // 138: kodex.access_accounts.v1.AccessManagerService.SuspendOrganization:output_type -> kodex.access_accounts.v1.OrganizationResponse
+	36,  // 139: kodex.access_accounts.v1.AccessManagerService.ArchiveOrganization:output_type -> kodex.access_accounts.v1.OrganizationResponse
+	40,  // 140: kodex.access_accounts.v1.AccessManagerService.CreateGroup:output_type -> kodex.access_accounts.v1.GroupResponse
+	40,  // 141: kodex.access_accounts.v1.AccessManagerService.UpdateGroup:output_type -> kodex.access_accounts.v1.GroupResponse
+	40,  // 142: kodex.access_accounts.v1.AccessManagerService.DisableGroup:output_type -> kodex.access_accounts.v1.GroupResponse
+	42,  // 143: kodex.access_accounts.v1.AccessManagerService.SetMembership:output_type -> kodex.access_accounts.v1.MembershipResponse
+	45,  // 144: kodex.access_accounts.v1.AccessManagerService.PutAllowlistEntry:output_type -> kodex.access_accounts.v1.AllowlistEntryResponse
+	45,  // 145: kodex.access_accounts.v1.AccessManagerService.DisableAllowlistEntry:output_type -> kodex.access_accounts.v1.AllowlistEntryResponse
+	48,  // 146: kodex.access_accounts.v1.AccessManagerService.RegisterExternalProvider:output_type -> kodex.access_accounts.v1.ExternalProviderResponse
+	48,  // 147: kodex.access_accounts.v1.AccessManagerService.UpdateExternalProvider:output_type -> kodex.access_accounts.v1.ExternalProviderResponse
+	51,  // 148: kodex.access_accounts.v1.AccessManagerService.RegisterExternalAccount:output_type -> kodex.access_accounts.v1.ExternalAccountResponse
+	51,  // 149: kodex.access_accounts.v1.AccessManagerService.UpdateExternalAccountStatus:output_type -> kodex.access_accounts.v1.ExternalAccountResponse
+	54,  // 150: kodex.access_accounts.v1.AccessManagerService.BindExternalAccount:output_type -> kodex.access_accounts.v1.ExternalAccountBindingResponse
+	54,  // 151: kodex.access_accounts.v1.AccessManagerService.DisableExternalAccountBinding:output_type -> kodex.access_accounts.v1.ExternalAccountBindingResponse
+	56,  // 152: kodex.access_accounts.v1.AccessManagerService.PutAccessAction:output_type -> kodex.access_accounts.v1.AccessActionResponse
+	59,  // 153: kodex.access_accounts.v1.AccessManagerService.PutAccessRule:output_type -> kodex.access_accounts.v1.AccessRuleResponse
+	59,  // 154: kodex.access_accounts.v1.AccessManagerService.DisableAccessRule:output_type -> kodex.access_accounts.v1.AccessRuleResponse
+	66,  // 155: kodex.access_accounts.v1.AccessManagerService.ResolveExternalAccountUsage:output_type -> kodex.access_accounts.v1.ResolveExternalAccountUsageResponse
+	69,  // 156: kodex.access_accounts.v1.AccessManagerService.ListPackageInstallationSecretRefs:output_type -> kodex.access_accounts.v1.ListPackageInstallationSecretRefsResponse
+	61,  // 157: kodex.access_accounts.v1.AccessManagerService.CheckAccess:output_type -> kodex.access_accounts.v1.CheckAccessResponse
+	64,  // 158: kodex.access_accounts.v1.AccessManagerService.ExplainAccess:output_type -> kodex.access_accounts.v1.ExplainAccessResponse
+	72,  // 159: kodex.access_accounts.v1.AccessManagerService.ListMembershipGraph:output_type -> kodex.access_accounts.v1.ListMembershipGraphResponse
+	75,  // 160: kodex.access_accounts.v1.AccessManagerService.ListPendingAccess:output_type -> kodex.access_accounts.v1.ListPendingAccessResponse
+	134, // [134:161] is the sub-list for method output_type
+	107, // [107:134] is the sub-list for method input_type
+	107, // [107:107] is the sub-list for extension type_name
+	107, // [107:107] is the sub-list for extension extendee
+	0,   // [0:107] is the sub-list for field type_name
 }
 
 func init() { file_kodex_access_accounts_v1_access_manager_proto_init() }
@@ -6357,8 +6704,8 @@ func file_kodex_access_accounts_v1_access_manager_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kodex_access_accounts_v1_access_manager_proto_rawDesc), len(file_kodex_access_accounts_v1_access_manager_proto_rawDesc)),
-			NumEnums:      21,
-			NumMessages:   51,
+			NumEnums:      22,
+			NumMessages:   55,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

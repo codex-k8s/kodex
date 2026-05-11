@@ -84,6 +84,7 @@ const (
 	operationFindExternalAccountBindingByIdentity = "domain.Repository.FindExternalAccountBindingByIdentity"
 	operationPutSecretBindingRef                  = "domain.Repository.PutSecretBindingRef"
 	operationGetSecretBindingRef                  = "domain.Repository.GetSecretBindingRef"
+	operationListPackageInstallationSecretRefs    = "domain.Repository.ListPackageInstallationSecretRefs"
 	operationPutAccessAction                      = "domain.Repository.PutAccessAction"
 	operationGetAccessActionByKey                 = "domain.Repository.GetAccessActionByKey"
 	operationPutAccessRule                        = "domain.Repository.PutAccessRule"
@@ -335,6 +336,15 @@ func (r *Repository) PutSecretBindingRef(ctx context.Context, secret entity.Secr
 
 func (r *Repository) GetSecretBindingRef(ctx context.Context, id uuid.UUID) (entity.SecretBindingRef, error) {
 	return queryOne(ctx, r.db, operationGetSecretBindingRef, querySecretBindingRefGetByID, pgx.NamedArgs{"id": id}, scanSecretBindingRef)
+}
+
+func (r *Repository) ListPackageInstallationSecretRefs(ctx context.Context, filter query.PackageInstallationSecretRefsFilter) ([]entity.PackageInstallationSecretRef, error) {
+	rows, err := r.db.Query(ctx, queryPackageInstallationSecretRefList, packageInstallationSecretRefsFilterArgs(filter))
+	if err != nil {
+		return nil, wrapError(operationListPackageInstallationSecretRefs, err)
+	}
+	refs, err := postgreslib.ScanRows(rows, scanPackageInstallationSecretRef)
+	return refs, wrapError(operationListPackageInstallationSecretRefs, err)
 }
 
 func (r *Repository) PutAccessAction(ctx context.Context, action entity.AccessAction, event entity.OutboxEvent) error {

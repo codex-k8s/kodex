@@ -5,8 +5,8 @@ title: kodex — модель данных домена доступа и акк
 status: active
 owner_role: SA
 created_at: 2026-04-26
-updated_at: 2026-05-11
-related_issues: [599, 600, 601, 602, 711]
+updated_at: 2026-05-12
+related_issues: [599, 600, 601, 602, 711, 718]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -20,7 +20,7 @@ approvals:
 
 ## TL;DR
 
-- Ключевые сущности: `Organization`, `User`, `UserIdentity`, `AllowlistEntry`, `Group`, `Membership`, `AccessAction`, `AccessRule`, `AccessDecisionAudit`, `ExternalProvider`, `ExternalAccount`, `ExternalAccountBinding`, `SecretBindingRef`, `CommandResult`, `OutboxEvent`.
+- Ключевые сущности: `Organization`, `User`, `UserIdentity`, `AllowlistEntry`, `Group`, `Membership`, `AccessAction`, `AccessRule`, `AccessDecisionAudit`, `ExternalProvider`, `ExternalAccount`, `ExternalAccountBinding`, `SecretBindingRef`, `PackageInstallationSecretRef`, `CommandResult`, `OutboxEvent`.
 - Основные связи: пользователь входит в организации и группы через типизированное членство, правила доступа действуют по области применения, внешний аккаунт связан с организацией, проектом, репозиторием или ролью через привязку политики.
 - Риски миграций: нельзя зашить единственную организацию, хранить сырые секреты, смешать зеркало провайдера с политикой аккаунта и потерять объяснимость явного запрета.
 
@@ -226,6 +226,28 @@ approvals:
 `owner_scope_type` показывает, кто владеет внешним аккаунтом и отвечает за его секрет. `ExternalAccountBinding` показывает, кому разрешено использовать аккаунт. Это позволяет завести личный аккаунт пользователя, аккаунт отдельного агента, аккаунт группы, аккаунт роли или аккаунт конкретного flow без изменения структуры таблиц.
 
 `access-manager` хранит только ссылку на секрет и не выдаёт значение секрета в API. Вызвавший сервис получает значение секрета через общий `libs/go/secretresolver` по `store_type` и `store_ref` после успешного `ResolveExternalAccountUsage`. Значение живёт только в памяти процесса вызывающего сервиса на время операции и не попадает в БД, аудит, события, логи, трассировку, ошибки или публичные ответы.
+
+### `PackageInstallationSecretRef`
+
+`PackageInstallationSecretRef` связывает установку пакета с безопасной ссылкой на секрет для конкретного логического ключа из схемы пакета. Установкой пакета владеет `package-hub`, поэтому `package_installation_id`, `installation_scope_type` и `installation_scope_id` являются внешними идентификаторами без `FOREIGN KEY` в БД `package-hub`.
+
+| Поле | Тип | Может быть пустым | Примечание |
+|---|---|---:|---|
+| `id` | UUID | no | Идентификатор привязки секретного поля установки. |
+| `package_installation_id` | UUID | no | Внешний идентификатор установки из `package-hub`. |
+| `installation_scope_type` | enum | no | `platform`, `organization`, `project`, `repository`. |
+| `installation_scope_id` | string | no | Внешний идентификатор области установки. |
+| `logical_key` | string | no | Ключ поля из схемы секретов manifest. |
+| `secret_binding_ref_id` | UUID | no | `FOREIGN KEY` на `SecretBindingRef` внутри БД `access-manager`. |
+| `status` | enum | no | `configured`, `invalid`, `disabled`; `missing` вычисляется при чтении, если ключ ожидался, но привязки нет. |
+| `metadata` | jsonb | no | Безопасные метаданные привязки без значений секретов. |
+| `version` | int64 | no | Конкурентные изменения будущей команды настройки. |
+
+Инварианты:
+- одна установка не может иметь две активные записи с одним `logical_key`;
+- ответ API по этим данным не содержит значения секрета, отпечатка значения и других производных от значения;
+- `package-hub` получает эти ссылки только после проверки права `package.installation.secret_ref.read` в области установки;
+- фактическую доступность значения проверяет вызывающий сервис через `secretresolver.Checker`, а не через чтение значения.
 
 ### `AccessDecisionAudit`
 

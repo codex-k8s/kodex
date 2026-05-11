@@ -5,7 +5,7 @@ title: kodex — карта Issue домена пакетной платформ
 status: active
 owner_role: KM
 created_at: 2026-04-25
-updated_at: 2026-05-11
+updated_at: 2026-05-12
 ---
 
 # Карта Issue — пакетная платформа
@@ -30,8 +30,9 @@ updated_at: 2026-05-11
 | #684 | `services/internal/package-hub/**`, `docs/domains/package-platform/architecture/api_contract.md`, `docs/domains/package-platform/architecture/design.md`, `docs/domains/package-platform/delivery/package_hub.md` | PKG-5.1 | готово | Запрос установки пакета и чтения установок: проверка доступа, идемпотентность, manifest-derived статусы и события установки. |
 | #689 | `services/internal/package-hub/**`, `docs/domains/package-platform/architecture/api_contract.md`, `docs/domains/package-platform/architecture/data_model.md`, `docs/domains/package-platform/architecture/design.md`, `docs/domains/package-platform/delivery/package_hub.md` | PKG-5.2 | готово | Изменение, отключение и снятие установок: expected version, command result, outbox и gRPC handlers. |
 | #692 | `services/internal/package-hub/**`, `docs/domains/package-platform/architecture/api_contract.md`, `docs/domains/package-platform/architecture/data_model.md`, `docs/domains/package-platform/architecture/design.md`, `docs/domains/package-platform/delivery/package_hub.md` | PKG-5.3a | готово | Чтение схем секретов: снимки схем из manifest при синхронизации каталога, событие `package.secret_schema.updated` и gRPC `GetPackageSecretSchema`. |
-| не назначено | `services/internal/package-hub/**`, `docs/domains/package-platform/**` | PKG-5.3b | запланировано | Сверка статуса заполненности секретов установки после согласования контракта ссылок установки в `access-manager`; checker без возврата значения готов в общем secret resolver. |
-| #711 | `libs/go/secretresolver/**`, `docs/platform/architecture/secret_resolution.md`, `docs/domains/package-platform/**` | междоменный срез секретов | готово | `package-hub` может проверять доступность секрета без возврата значения через `secretresolver.Checker`, но не получает сырое значение и всё ещё ждёт access-контракт ссылок установки. |
+| не назначено | `services/internal/package-hub/**`, `docs/domains/package-platform/**` | PKG-5.3b | запланировано | Сверка статуса заполненности секретов установки через `RefreshPackageInstallationSecretStatus`: следующий срез подключит `package-hub` к контракту доступа для ссылок установки и `secretresolver.Checker`. |
+| #711 | `libs/go/secretresolver/**`, `docs/platform/architecture/secret_resolution.md`, `docs/domains/package-platform/**` | междоменный срез секретов | готово | `package-hub` может проверять доступность секрета без возврата значения через `secretresolver.Checker` и не получает сырое значение. |
+| #718 | `proto/kodex/access_accounts/**`, `services/internal/access-manager/**`, `docs/domains/access-and-accounts/**`, `docs/domains/package-platform/**` | междоменный срез доступа | в PR | `access-manager` добавляет `ListPackageInstallationSecretRefs` для безопасной выдачи ссылок и статусов секретов установки без значений; сам PKG-5.3b в `package-hub` не входит в этот срез. |
 | #700 | `services/internal/package-hub/**`, `docs/domains/package-platform/**`, `docs/catalogs/package-store/`, `docs/catalogs/plugins/`, `docs/catalogs/guidance-packages/` | PKG-6.1 | готово | Специализация видов пакетов: `plugin`, `guidance`, `store`, `platform_content`; валидация manifest по виду и модели чтения через фильтры `package_kind`. |
 | #704 | `services/internal/package-hub/**`, `docs/domains/package-platform/**`, `docs/catalogs/guidance-packages/**` | PKG-6.2 | готово | Руководящие пакеты отдаются как `package_kind=guidance` через существующие чтения каталога, установок и manifest; валидация запрещает runtime, секреты, действия доступа и API платформы. |
 | #706 | `services/internal/package-hub/**`, `docs/domains/package-platform/**`, `docs/catalogs/package-store/**` | PKG-6.3a | готово | Локальные сценарии `store` и `platform_content`: существующие чтения каталога, установок и manifest; валидация manifest без runtime-запуска, provider-native синхронизации и хранения файлов в БД. |

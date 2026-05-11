@@ -241,6 +241,46 @@ func scanSecretBindingRef(row postgreslib.RowScanner) (entity.SecretBindingRef, 
 	return secret, err
 }
 
+func scanPackageInstallationSecretRef(row postgreslib.RowScanner) (entity.PackageInstallationSecretRef, error) {
+	var ref entity.PackageInstallationSecretRef
+	var status, storeType string
+	var metadata []byte
+	var rotatedAt pgtype.Timestamptz
+	err := row.Scan(
+		&ref.ID,
+		&ref.PackageInstallationID,
+		&ref.InstallationScope.Type,
+		&ref.InstallationScope.ID,
+		&ref.LogicalKey,
+		&status,
+		&metadata,
+		&ref.Version,
+		&ref.CreatedAt,
+		&ref.UpdatedAt,
+		&ref.SecretRef.ID,
+		&storeType,
+		&ref.SecretRef.StoreRef,
+		&ref.SecretRef.ValueFingerprint,
+		&rotatedAt,
+		&ref.SecretRef.Version,
+		&ref.SecretRef.CreatedAt,
+		&ref.SecretRef.UpdatedAt,
+	)
+	if err != nil {
+		return entity.PackageInstallationSecretRef{}, err
+	}
+	ref.Status = enum.PackageInstallationSecretRefStatus(status)
+	ref.SecretRef.StoreType = enum.SecretStoreType(storeType)
+	ref.SecretRef.RotatedAt = postgreslib.TimePtrFromPG(rotatedAt)
+	if err := json.Unmarshal(metadata, &ref.Metadata); err != nil {
+		return entity.PackageInstallationSecretRef{}, err
+	}
+	if ref.Metadata == nil {
+		ref.Metadata = map[string]string{}
+	}
+	return ref, nil
+}
+
 func scanAccessAction(row postgreslib.RowScanner) (entity.AccessAction, error) {
 	var action entity.AccessAction
 	var status string

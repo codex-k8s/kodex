@@ -1438,6 +1438,124 @@ func TestResolveExternalAccountUsageRejectsInvalidInput(t *testing.T) {
 	}
 }
 
+func TestListPackageInstallationSecretRefsReturnsValueFreeRefs(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	installationID := uuid.New()
+	scope := value.ScopeRef{Type: accessRuleScopeProject, ID: "project-1"}
+	secret := store.seedSecret(enum.SecretStoreVault, "secret/package/telegram#token")
+	store.seedPackageInstallationSecretRef(installationID, scope, "telegram_token", secret)
+	meta := store.seedOperatorMetaForScope(
+		"package-secret-refs-read",
+		accesscatalog.ActionPackageInstallationSecretRefRead,
+		accesscatalog.ResourcePackageInstallationSecretRef,
+		scope,
+	)
+
+	result, err := svc.ListPackageInstallationSecretRefs(ctx, ListPackageInstallationSecretRefsInput{
+		PackageInstallationID: installationID,
+		InstallationScope:     scope,
+		LogicalKeys:           []string{"telegram_token"},
+		Meta:                  meta,
+	})
+	if err != nil {
+		t.Fatalf("list package secret refs: %v", err)
+	}
+	if len(result.SecretRefs) != 1 {
+		t.Fatalf("refs = %d, want 1", len(result.SecretRefs))
+	}
+	ref := result.SecretRefs[0]
+	if ref.LogicalKey != "telegram_token" || ref.Status != enum.PackageInstallationSecretRefStatusConfigured {
+		t.Fatalf("ref = %+v, want configured telegram_token", ref)
+	}
+	if ref.SecretRef.StoreType != enum.SecretStoreVault || ref.SecretRef.StoreRef != secret.StoreRef {
+		t.Fatalf("secret ref = %+v, want safe vault ref %s", ref.SecretRef, secret.StoreRef)
+	}
+	if strings.Contains(ref.SecretRef.StoreRef, "raw-secret-value") {
+		t.Fatalf("secret ref leaks value: %s", ref.SecretRef.StoreRef)
+	}
+}
+
+func TestListPackageInstallationSecretRefsRejectsForeignScope(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	installationID := uuid.New()
+	allowedScope := value.ScopeRef{Type: accessRuleScopeProject, ID: "project-1"}
+	requestedScope := value.ScopeRef{Type: accessRuleScopeProject, ID: "project-2"}
+	meta := store.seedOperatorMetaForScope(
+		"package-secret-refs-foreign-scope",
+		accesscatalog.ActionPackageInstallationSecretRefRead,
+		accesscatalog.ResourcePackageInstallationSecretRef,
+		allowedScope,
+	)
+
+	_, err := svc.ListPackageInstallationSecretRefs(ctx, ListPackageInstallationSecretRefsInput{
+		PackageInstallationID: installationID,
+		InstallationScope:     requestedScope,
+		LogicalKeys:           []string{"telegram_token"},
+		Meta:                  meta,
+	})
+	if !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("err = %v, want %v", err, errs.ErrForbidden)
+	}
+}
+
+func TestListPackageInstallationSecretRefsReportsMissingKeys(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	svc := New(store, fixedClock{}, newSequenceIDs())
+	installationID := uuid.New()
+	scope := value.ScopeRef{Type: accessRuleScopeOrganization, ID: uuid.NewString()}
+	secret := store.seedSecret(enum.SecretStoreEnv, "TELEGRAM_TOKEN")
+	store.seedPackageInstallationSecretRef(installationID, scope, "telegram_token", secret)
+	meta := store.seedOperatorMetaForScope(
+		"package-secret-refs-incomplete",
+		accesscatalog.ActionPackageInstallationSecretRefRead,
+		accesscatalog.ResourcePackageInstallationSecretRef,
+		scope,
+	)
+
+	result, err := svc.ListPackageInstallationSecretRefs(ctx, ListPackageInstallationSecretRefsInput{
+		PackageInstallationID: installationID,
+		InstallationScope:     scope,
+		LogicalKeys:           []string{"telegram_token", "webhook_secret"},
+		Meta:                  meta,
+	})
+	if err != nil {
+		t.Fatalf("list package secret refs: %v", err)
+	}
+	if len(result.SecretRefs) != 2 {
+		t.Fatalf("refs = %d, want 2", len(result.SecretRefs))
+	}
+	statuses := map[string]enum.PackageInstallationSecretRefStatus{}
+	for _, ref := range result.SecretRefs {
+		statuses[ref.LogicalKey] = ref.Status
+	}
+	if statuses["telegram_token"] != enum.PackageInstallationSecretRefStatusConfigured {
+		t.Fatalf("telegram_token status = %s, want configured", statuses["telegram_token"])
+	}
+	if statuses["webhook_secret"] != enum.PackageInstallationSecretRefStatusMissing {
+		t.Fatalf("webhook_secret status = %s, want missing", statuses["webhook_secret"])
+	}
+}
+
+func TestListPackageInstallationSecretRefsRejectsIncompleteInput(t *testing.T) {
+	t.Parallel()
+
+	svc := New(newMemoryRepository(), fixedClock{}, newSequenceIDs())
+	_, err := svc.ListPackageInstallationSecretRefs(context.Background(), ListPackageInstallationSecretRefsInput{
+		PackageInstallationID: uuid.New(),
+		InstallationScope:     value.ScopeRef{Type: accessRuleScopeProject, ID: "project-1"},
+		LogicalKeys:           []string{"   "},
+		Meta:                  commandMeta("blank-logical-key"),
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+}
+
 func TestBindExternalAccountRejectsBlankAllowedActions(t *testing.T) {
 	svc := New(newMemoryRepository(), fixedClock{}, newSequenceIDs())
 	_, err := svc.BindExternalAccount(context.Background(), BindExternalAccountInput{
@@ -2107,40 +2225,42 @@ func (g *sequenceIDs) New() uuid.UUID {
 }
 
 type memoryRepository struct {
-	organizations map[uuid.UUID]entity.Organization
-	users         map[uuid.UUID]entity.User
-	identities    map[string]entity.UserIdentity
-	allowlist     map[string]entity.AllowlistEntry
-	groups        map[uuid.UUID]entity.Group
-	memberships   map[uuid.UUID]entity.Membership
-	providers     map[uuid.UUID]entity.ExternalProvider
-	accounts      map[uuid.UUID]entity.ExternalAccount
-	bindings      map[uuid.UUID]entity.ExternalAccountBinding
-	secrets       map[uuid.UUID]entity.SecretBindingRef
-	actions       map[string]entity.AccessAction
-	rules         map[uuid.UUID]entity.AccessRule
-	commands      map[string]entity.CommandResult
-	audits        []entity.AccessDecisionAudit
-	events        []entity.OutboxEvent
-	ids           *sequenceIDs
+	organizations     map[uuid.UUID]entity.Organization
+	users             map[uuid.UUID]entity.User
+	identities        map[string]entity.UserIdentity
+	allowlist         map[string]entity.AllowlistEntry
+	groups            map[uuid.UUID]entity.Group
+	memberships       map[uuid.UUID]entity.Membership
+	providers         map[uuid.UUID]entity.ExternalProvider
+	accounts          map[uuid.UUID]entity.ExternalAccount
+	bindings          map[uuid.UUID]entity.ExternalAccountBinding
+	secrets           map[uuid.UUID]entity.SecretBindingRef
+	packageSecretRefs map[uuid.UUID]entity.PackageInstallationSecretRef
+	actions           map[string]entity.AccessAction
+	rules             map[uuid.UUID]entity.AccessRule
+	commands          map[string]entity.CommandResult
+	audits            []entity.AccessDecisionAudit
+	events            []entity.OutboxEvent
+	ids               *sequenceIDs
 }
 
 func newMemoryRepository() *memoryRepository {
 	return &memoryRepository{
-		organizations: make(map[uuid.UUID]entity.Organization),
-		users:         make(map[uuid.UUID]entity.User),
-		identities:    make(map[string]entity.UserIdentity),
-		allowlist:     make(map[string]entity.AllowlistEntry),
-		groups:        make(map[uuid.UUID]entity.Group),
-		memberships:   make(map[uuid.UUID]entity.Membership),
-		providers:     make(map[uuid.UUID]entity.ExternalProvider),
-		accounts:      make(map[uuid.UUID]entity.ExternalAccount),
-		bindings:      make(map[uuid.UUID]entity.ExternalAccountBinding),
-		secrets:       make(map[uuid.UUID]entity.SecretBindingRef),
-		actions:       make(map[string]entity.AccessAction),
-		rules:         make(map[uuid.UUID]entity.AccessRule),
-		commands:      make(map[string]entity.CommandResult),
-		ids:           newSequenceIDs(),
+		organizations:     make(map[uuid.UUID]entity.Organization),
+		users:             make(map[uuid.UUID]entity.User),
+		identities:        make(map[string]entity.UserIdentity),
+		allowlist:         make(map[string]entity.AllowlistEntry),
+		groups:            make(map[uuid.UUID]entity.Group),
+		memberships:       make(map[uuid.UUID]entity.Membership),
+		providers:         make(map[uuid.UUID]entity.ExternalProvider),
+		accounts:          make(map[uuid.UUID]entity.ExternalAccount),
+		bindings:          make(map[uuid.UUID]entity.ExternalAccountBinding),
+		secrets:           make(map[uuid.UUID]entity.SecretBindingRef),
+		packageSecretRefs: make(map[uuid.UUID]entity.PackageInstallationSecretRef),
+		actions:           make(map[string]entity.AccessAction),
+		rules:             make(map[uuid.UUID]entity.AccessRule),
+		commands:          make(map[string]entity.CommandResult),
+		ids:               newSequenceIDs(),
 	}
 }
 
@@ -2520,6 +2640,29 @@ func (r *memoryRepository) GetSecretBindingRef(_ context.Context, id uuid.UUID) 
 	return secret, nil
 }
 
+func (r *memoryRepository) ListPackageInstallationSecretRefs(_ context.Context, filter query.PackageInstallationSecretRefsFilter) ([]entity.PackageInstallationSecretRef, error) {
+	keySet := make(map[string]struct{}, len(filter.LogicalKeys))
+	for _, key := range filter.LogicalKeys {
+		keySet[key] = struct{}{}
+	}
+	result := make([]entity.PackageInstallationSecretRef, 0)
+	for _, ref := range r.packageSecretRefs {
+		if ref.PackageInstallationID != filter.PackageInstallationID {
+			continue
+		}
+		if ref.InstallationScope != filter.InstallationScope {
+			continue
+		}
+		if len(keySet) > 0 {
+			if _, ok := keySet[ref.LogicalKey]; !ok {
+				continue
+			}
+		}
+		result = append(result, ref)
+	}
+	return result, nil
+}
+
 func (r *memoryRepository) PutAccessAction(_ context.Context, action entity.AccessAction, event entity.OutboxEvent) error {
 	r.actions[action.Key] = action
 	r.events = append(r.events, event)
@@ -2720,6 +2863,21 @@ func (r *memoryRepository) seedSecret(storeType enum.SecretStoreType, storeRef s
 	}
 	r.secrets[secret.ID] = secret
 	return secret
+}
+
+func (r *memoryRepository) seedPackageInstallationSecretRef(installationID uuid.UUID, scope value.ScopeRef, logicalKey string, secret entity.SecretBindingRef) entity.PackageInstallationSecretRef {
+	now := fixedClock{}.Now()
+	ref := entity.PackageInstallationSecretRef{
+		Base:                  entity.Base{ID: r.ids.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		PackageInstallationID: installationID,
+		InstallationScope:     scope,
+		LogicalKey:            logicalKey,
+		SecretRef:             secret,
+		Status:                enum.PackageInstallationSecretRefStatusConfigured,
+		Metadata:              map[string]string{"source": "test"},
+	}
+	r.packageSecretRefs[ref.ID] = ref
+	return ref
 }
 
 func (r *memoryRepository) seedOperatorMeta(key string, actionKey string, resourceType string) value.CommandMeta {

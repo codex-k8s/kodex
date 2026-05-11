@@ -205,6 +205,15 @@ func secretBindingRefArgs(secret entity.SecretBindingRef) pgx.NamedArgs {
 	}
 }
 
+func packageInstallationSecretRefsFilterArgs(filter query.PackageInstallationSecretRefsFilter) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"package_installation_id": filter.PackageInstallationID,
+		"installation_scope_type": filter.InstallationScope.Type,
+		"installation_scope_id":   filter.InstallationScope.ID,
+		"logical_keys":            filter.LogicalKeys,
+	}
+}
+
 func accessActionArgs(action entity.AccessAction) pgx.NamedArgs {
 	return pgx.NamedArgs{
 		"id":            action.ID,

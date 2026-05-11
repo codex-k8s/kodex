@@ -259,6 +259,13 @@ var accessRuleStatusToProto = reverseEnumMap[enum.AccessRuleStatus, accessaccoun
 	enum.AccessRuleStatusDisabled: accessaccountsv1.AccessRuleStatus_ACCESS_RULE_STATUS_DISABLED,
 }
 
+var packageInstallationSecretRefStatusToProto = reverseEnumMap[enum.PackageInstallationSecretRefStatus, accessaccountsv1.PackageInstallationSecretRefStatus]{
+	enum.PackageInstallationSecretRefStatusConfigured: accessaccountsv1.PackageInstallationSecretRefStatus_PACKAGE_INSTALLATION_SECRET_REF_STATUS_CONFIGURED,
+	enum.PackageInstallationSecretRefStatusMissing:    accessaccountsv1.PackageInstallationSecretRefStatus_PACKAGE_INSTALLATION_SECRET_REF_STATUS_MISSING,
+	enum.PackageInstallationSecretRefStatusInvalid:    accessaccountsv1.PackageInstallationSecretRefStatus_PACKAGE_INSTALLATION_SECRET_REF_STATUS_INVALID,
+	enum.PackageInstallationSecretRefStatusDisabled:   accessaccountsv1.PackageInstallationSecretRefStatus_PACKAGE_INSTALLATION_SECRET_REF_STATUS_DISABLED,
+}
+
 var accessDecisionToProto = reverseEnumMap[enum.AccessDecision, accessaccountsv1.AccessDecision]{
 	enum.AccessDecisionAllow:   accessaccountsv1.AccessDecision_ACCESS_DECISION_ALLOW,
 	enum.AccessDecisionDeny:    accessaccountsv1.AccessDecision_ACCESS_DECISION_DENY,

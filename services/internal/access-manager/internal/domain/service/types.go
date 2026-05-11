@@ -224,6 +224,21 @@ type ResolveExternalAccountUsageResult struct {
 	AllowedActions   []string
 }
 
+// ListPackageInstallationSecretRefsInput asks for package installation secret refs.
+type ListPackageInstallationSecretRefsInput struct {
+	PackageInstallationID uuid.UUID
+	InstallationScope     value.ScopeRef
+	LogicalKeys           []string
+	Meta                  value.CommandMeta
+}
+
+// ListPackageInstallationSecretRefsResult returns value-free package secret refs.
+type ListPackageInstallationSecretRefsResult struct {
+	PackageInstallationID uuid.UUID
+	InstallationScope     value.ScopeRef
+	SecretRefs            []entity.PackageInstallationSecretRef
+}
+
 // ListPendingAccessInput selects operator-visible access items that need attention.
 type ListPendingAccessInput struct {
 	Scope  value.ScopeRef

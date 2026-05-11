@@ -5,8 +5,8 @@ title: kodex — безопасное разрешение секретов
 status: active
 owner_role: SA
 created_at: 2026-05-11
-updated_at: 2026-05-11
-related_issues: [711]
+updated_at: 2026-05-12
+related_issues: [711, 718]
 related_prs: []
 related_adrs: []
 approvals:
@@ -50,6 +50,18 @@ approvals:
 5. Если операции действительно нужен токен, домен вызывает `secretresolver.Resolver.Resolve`.
 6. Полученный `SecretValue` используется только в памяти процесса и только для конкретного внешнего вызова; вызывающий код сразу ставит `defer value.Clear()`.
 7. Для проверки наличия секрета без возврата значения вызывающему коду используется `secretresolver.Checker.Check`.
+
+## Пакетные установки
+
+Для установок пакетов `access-manager` хранит отдельные привязки логических ключей из схемы пакета к `SecretBindingRef`. `package-hub` читает их через `ListPackageInstallationSecretRefs` и получает только:
+
+- логический ключ секрета;
+- статус настройки: `configured`, `missing`, `invalid`, `disabled`;
+- `secret_store_type`;
+- `secret_store_ref`;
+- безопасные метаданные.
+
+`package-hub` не получает значение секрета и не хранит ссылку как свою каноническую модель. Если нужно пересчитать заполненность установки, `package-hub` берёт список ожидаемых ключей из своей `PackageSecretSchema`, запрашивает безопасные ссылки в `access-manager` и проверяет доступность только через `secretresolver.Checker`. Статус `missing` может быть вычислен на стороне `access-manager`, когда ожидаемый ключ передан в запросе, но привязки нет.
 
 ## Типы хранилищ первой версии
 
@@ -131,7 +143,7 @@ mount/path/to/secret#key
 ## Последующие расширения
 
 - реализация через Kubernetes API, если mounted/env/Vault окажутся недостаточными для отдельных workload и будет согласована строгая RBAC-модель без широкого `list/watch` Secret.
-- Статус заполненности пакетных секретов через `access-manager` и `Checker` без передачи значений в `package-hub`.
+- Подключение `package-hub` к `ListPackageInstallationSecretRefs` для пересчёта статуса заполненности установки через `Checker`.
 - Подключение resolver-клиента к `provider-hub` для batch-сверки и provider-операций.
 
 ## Апрув
