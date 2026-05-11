@@ -19,6 +19,7 @@ func TestLoadConfigAcceptsRequiredEnvironment(t *testing.T) {
 	t.Setenv("KODEX_PROVIDER_HUB_DATABASE_DSN", "postgres://postgres:5432/kodex_provider_hub?sslmode=disable")
 	t.Setenv("KODEX_PROVIDER_HUB_EVENT_LOG_DATABASE_DSN", "postgres://postgres:5432/platform_event_log?sslmode=disable")
 	t.Setenv("KODEX_PROVIDER_HUB_GRPC_AUTH_TOKEN", "test-token")
+	t.Setenv("KODEX_PROVIDER_HUB_ACCESS_MANAGER_GRPC_AUTH_TOKEN", "access-token")
 
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -34,6 +35,7 @@ func TestLoadConfigAllowsMissingAuthTokenWhenAuthDisabled(t *testing.T) {
 	t.Setenv("KODEX_PROVIDER_HUB_EVENT_LOG_DATABASE_DSN", "postgres://postgres:5432/platform_event_log?sslmode=disable")
 	t.Setenv("KODEX_PROVIDER_HUB_GRPC_AUTH_REQUIRED", "false")
 	t.Setenv("KODEX_PROVIDER_HUB_GRPC_AUTH_TOKEN", "")
+	t.Setenv("KODEX_PROVIDER_HUB_ACCESS_MANAGER_GRPC_AUTH_TOKEN", "access-token")
 
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -113,42 +115,49 @@ func TestOutboxDispatcherConfigIncludesRetryConfig(t *testing.T) {
 
 func validConfig() Config {
 	return Config{
-		HTTPAddr:                  ":8080",
-		GRPCAddr:                  ":9090",
-		GRPCAuthRequired:          true,
-		GRPCAuthToken:             "test-token",
-		GRPCMaxInFlight:           128,
-		GRPCMaxConcurrentStreams:  128,
-		GRPCUnaryTimeout:          30 * time.Second,
-		GRPCKeepaliveTime:         2 * time.Minute,
-		GRPCKeepaliveTimeout:      20 * time.Second,
-		GRPCKeepaliveMinTime:      30 * time.Second,
-		GRPCMaxRecvMessageBytes:   4 * 1024 * 1024,
-		GRPCMaxSendMessageBytes:   4 * 1024 * 1024,
-		DatabaseDSN:               "postgres://postgres:5432/kodex_provider_hub?sslmode=disable",
-		DatabaseMaxConns:          8,
-		DatabaseMinConns:          1,
-		DatabaseMaxConnLifetime:   time.Hour,
-		DatabaseMaxConnIdleTime:   15 * time.Minute,
-		DatabaseHealthCheckPeriod: 30 * time.Second,
-		DatabasePingTimeout:       5 * time.Second,
-		DatabaseRetryMaxAttempts:  6,
-		DatabaseRetryInitialDelay: 500 * time.Millisecond,
-		DatabaseRetryMaxDelay:     5 * time.Second,
-		DatabaseRetryJitterRatio:  0.2,
-		EventLogDatabaseDSN:       "postgres://postgres:5432/platform_event_log?sslmode=disable",
-		EventLogDatabaseMaxConns:  4,
-		EventLogDatabaseMinConns:  0,
-		OutboxDispatchEnabled:     true,
-		OutboxPublisherKind:       outboxlib.PublisherKindPostgresEventLog,
-		OutboxEventLogSource:      "provider-hub",
-		OutboxBatchSize:           100,
-		OutboxPollInterval:        time.Second,
-		OutboxLockTTL:             30 * time.Second,
-		OutboxPublishTimeout:      10 * time.Second,
-		OutboxLeaseSafetyMargin:   5 * time.Second,
-		OutboxRetryInitialDelay:   time.Second,
-		OutboxRetryMaxDelay:       time.Minute,
-		OutboxFailureMessageLimit: 512,
+		HTTPAddr:                   ":8080",
+		GRPCAddr:                   ":9090",
+		GRPCAuthRequired:           true,
+		GRPCAuthToken:              "test-token",
+		GRPCMaxInFlight:            128,
+		GRPCMaxConcurrentStreams:   128,
+		GRPCUnaryTimeout:           30 * time.Second,
+		GRPCKeepaliveTime:          2 * time.Minute,
+		GRPCKeepaliveTimeout:       20 * time.Second,
+		GRPCKeepaliveMinTime:       30 * time.Second,
+		GRPCMaxRecvMessageBytes:    4 * 1024 * 1024,
+		GRPCMaxSendMessageBytes:    4 * 1024 * 1024,
+		AccessManagerGRPCAddr:      "access-manager:9090",
+		AccessManagerGRPCAuthToken: "access-token",
+		AccessManagerGRPCTimeout:   3 * time.Second,
+		GitHubBaseURL:              "https://api.github.com",
+		GitHubUserAgent:            "kodex-provider-hub",
+		SecretMountedRoot:          "/var/run/kodex/secrets",
+		SecretMaxBytes:             1 << 20,
+		DatabaseDSN:                "postgres://postgres:5432/kodex_provider_hub?sslmode=disable",
+		DatabaseMaxConns:           8,
+		DatabaseMinConns:           1,
+		DatabaseMaxConnLifetime:    time.Hour,
+		DatabaseMaxConnIdleTime:    15 * time.Minute,
+		DatabaseHealthCheckPeriod:  30 * time.Second,
+		DatabasePingTimeout:        5 * time.Second,
+		DatabaseRetryMaxAttempts:   6,
+		DatabaseRetryInitialDelay:  500 * time.Millisecond,
+		DatabaseRetryMaxDelay:      5 * time.Second,
+		DatabaseRetryJitterRatio:   0.2,
+		EventLogDatabaseDSN:        "postgres://postgres:5432/platform_event_log?sslmode=disable",
+		EventLogDatabaseMaxConns:   4,
+		EventLogDatabaseMinConns:   0,
+		OutboxDispatchEnabled:      true,
+		OutboxPublisherKind:        outboxlib.PublisherKindPostgresEventLog,
+		OutboxEventLogSource:       "provider-hub",
+		OutboxBatchSize:            100,
+		OutboxPollInterval:         time.Second,
+		OutboxLockTTL:              30 * time.Second,
+		OutboxPublishTimeout:       10 * time.Second,
+		OutboxLeaseSafetyMargin:    5 * time.Second,
+		OutboxRetryInitialDelay:    time.Second,
+		OutboxRetryMaxDelay:        time.Minute,
+		OutboxFailureMessageLimit:  512,
 	}
 }

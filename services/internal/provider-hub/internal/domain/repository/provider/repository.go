@@ -32,6 +32,7 @@ type Repository interface {
 	GetSyncCursor(context.Context, uuid.UUID) (entity.SyncCursor, error)
 	ListSyncCursors(context.Context, query.SyncCursorFilter) ([]entity.SyncCursor, query.PageResult, error)
 	ClaimSyncCursor(context.Context, SyncCursorClaim) (entity.SyncCursor, error)
+	ApplyReconciliationBatch(context.Context, ReconciliationBatchCompletion) (entity.SyncCursor, []entity.ProviderEvent, error)
 	UpsertAccountRuntimeState(context.Context, entity.ProviderAccountRuntimeState) (entity.ProviderAccountRuntimeState, error)
 	GetAccountRuntimeState(context.Context, query.AccountRuntimeStateLookup) (entity.ProviderAccountRuntimeState, error)
 	ListAccountRuntimeStates(context.Context, query.AccountRuntimeStateFilter) ([]entity.ProviderAccountRuntimeState, query.PageResult, error)
@@ -60,6 +61,18 @@ type SyncCursorClaim struct {
 	LeaseOwner        string
 	Now               time.Time
 	LeaseUntil        time.Time
+}
+
+// ReconciliationBatchCompletion stores provider snapshots and advances or marks one cursor.
+type ReconciliationBatchCompletion struct {
+	Cursor             entity.SyncCursor
+	ExpectedLeaseOwner string
+	ProjectionUpdate   ProjectionUpdate
+	ProviderEvents     []entity.ProviderEvent
+	OutboxEvents       []entity.OutboxEvent
+	LimitSnapshots     []entity.ProviderLimitSnapshot
+	RuntimeState       *entity.ProviderAccountRuntimeState
+	Now                time.Time
 }
 
 // WebhookNormalizer isolates provider-specific webhook payload parsing from the domain service.

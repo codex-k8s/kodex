@@ -330,6 +330,22 @@ func syncCursorClaimArgs(claim providerrepo.SyncCursorClaim) pgx.NamedArgs {
 	}
 }
 
+func syncCursorCompletionArgs(completion providerrepo.ReconciliationBatchCompletion) pgx.NamedArgs {
+	cursor := completion.Cursor
+	return pgx.NamedArgs{
+		"id":                     cursor.ID,
+		"expected_lease_owner":   completion.ExpectedLeaseOwner,
+		"cursor_value":           cursor.CursorValue,
+		"overlap_since":          postgreslib.NullableTime(cursor.OverlapSince),
+		"last_success_at":        postgreslib.NullableTime(cursor.LastSuccessAt),
+		"last_error":             cursor.LastError,
+		"rate_budget_state_json": jsonPayloadOrDefault(cursor.RateBudgetStateJSON, "{}"),
+		"lease_owner":            cursor.LeaseOwner,
+		"lease_until":            postgreslib.NullableTime(cursor.LeaseUntil),
+		"now":                    completion.Now,
+	}
+}
+
 func artifactKindsJSON(kinds []enum.SyncArtifactKind) string {
 	values := postgreslib.StringValues(kinds)
 	payload, err := json.Marshal(values)

@@ -29,6 +29,7 @@ var (
 	querySyncCursorGet                         = mustLoadQuery("sync_cursor__get")
 	querySyncCursorListForRequest              = mustLoadQuery("sync_cursor__list_for_request")
 	querySyncCursorList                        = mustLoadQuery("sync_cursor__list")
+	querySyncCursorComplete                    = mustLoadQuery("sync_cursor__complete")
 	querySyncCursorUpsertMany                  = mustLoadQuery("sync_cursor__upsert_many")
 	queryLimitSnapshotGetReplay                = mustLoadQuery("limit_snapshot__get_replay")
 	queryLimitSnapshotList                     = mustLoadQuery("limit_snapshot__list")

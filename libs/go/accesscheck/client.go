@@ -110,6 +110,28 @@ func (c *Client) Check(ctx context.Context, request Request) error {
 	return nil
 }
 
+// ResolveExternalAccountUsage confirms external account usage and returns only a secret reference.
+func (c *Client) ResolveExternalAccountUsage(ctx context.Context, request ExternalAccountUsageRequest) (ExternalAccountUsage, error) {
+	if err := validateExternalAccountUsageRequest(request); err != nil {
+		return ExternalAccountUsage{}, err
+	}
+	checkCtx, cancel := context.WithTimeout(c.outgoingContext(ctx), c.timeout)
+	defer cancel()
+	response, err := c.client.ResolveExternalAccountUsage(checkCtx, externalAccountUsageRequest(request))
+	if err != nil {
+		return ExternalAccountUsage{}, mapAccessError(err)
+	}
+	return ExternalAccountUsage{
+		ExternalAccountID: response.GetExternalAccountId(),
+		ProviderID:        response.GetProviderId(),
+		ProviderSlug:      response.GetProviderSlug(),
+		SecretRefID:       response.GetSecretRefId(),
+		SecretStoreType:   response.GetSecretStoreType(),
+		SecretStoreRef:    response.GetSecretStoreRef(),
+		AllowedActionKeys: append([]string(nil), response.GetAllowedActionKeys()...),
+	}, nil
+}
+
 // NewRequest builds a typed accesscheck request from service-domain fields.
 func NewRequest(fields RequestFields) Request {
 	return Request{
@@ -172,6 +194,21 @@ func validateRequest(request Request) error {
 	return nil
 }
 
+func validateExternalAccountUsageRequest(request ExternalAccountUsageRequest) error {
+	required := []string{
+		request.ExternalAccountID,
+		request.ActionKey,
+		request.Scope.Type,
+		request.Scope.ID,
+	}
+	for _, item := range required {
+		if strings.TrimSpace(item) == "" {
+			return ErrInvalidRequest
+		}
+	}
+	return nil
+}
+
 func (c *Client) outgoingContext(ctx context.Context) context.Context {
 	return metadata.AppendToOutgoingContext(
 		ctx,
@@ -182,6 +219,17 @@ func (c *Client) outgoingContext(ctx context.Context) context.Context {
 		grpcserver.MetadataCallerID,
 		c.callerID,
 	)
+}
+
+func externalAccountUsageRequest(request ExternalAccountUsageRequest) *accessaccountsv1.ResolveExternalAccountUsageRequest {
+	return &accessaccountsv1.ResolveExternalAccountUsageRequest{
+		ExternalAccountId: strings.TrimSpace(request.ExternalAccountID),
+		ActionKey:         strings.TrimSpace(request.ActionKey),
+		UsageScope: &accessaccountsv1.ScopeRef{
+			Type: strings.TrimSpace(request.Scope.Type),
+			Id:   strings.TrimSpace(request.Scope.ID),
+		},
+	}
 }
 
 func checkAccessRequest(request Request) *accessaccountsv1.CheckAccessRequest {

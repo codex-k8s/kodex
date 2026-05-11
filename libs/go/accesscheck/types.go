@@ -79,6 +79,24 @@ type RequestFields struct {
 	Context      RequestContext
 }
 
+// ExternalAccountUsageRequest asks access-manager to confirm external account usage.
+type ExternalAccountUsageRequest struct {
+	ExternalAccountID string
+	ActionKey         string
+	Scope             Scope
+}
+
+// ExternalAccountUsage contains safe account metadata and a pointer to a secret.
+type ExternalAccountUsage struct {
+	ExternalAccountID string
+	ProviderID        string
+	ProviderSlug      string
+	SecretRefID       string
+	SecretStoreType   string
+	SecretStoreRef    string
+	AllowedActionKeys []string
+}
+
 // DomainErrors maps shared accesscheck errors to service-domain errors.
 type DomainErrors struct {
 	InvalidRequest        error

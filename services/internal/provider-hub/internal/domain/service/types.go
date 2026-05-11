@@ -1,15 +1,52 @@
 package service
 
 import (
+	"context"
 	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/codex-k8s/kodex/libs/go/secretresolver"
+	providerrepo "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/repository/provider"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/value"
+	providerclient "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/provider/client"
 )
+
+// AccountUsageResolver confirms whether provider-hub can use one external account.
+type AccountUsageResolver interface {
+	ResolveExternalAccountUsage(context.Context, ExternalAccountUsageInput) (ExternalAccountUsageResult, error)
+}
+
+// ExternalAccountUsageInput identifies one access-manager account usage decision.
+type ExternalAccountUsageInput struct {
+	ExternalAccountID uuid.UUID
+	ActionKey         string
+	ScopeType         string
+	ScopeID           string
+}
+
+// ExternalAccountUsageResult contains safe account metadata and secret reference.
+type ExternalAccountUsageResult struct {
+	ExternalAccountID string
+	ProviderSlug      enum.ProviderSlug
+	SecretStoreType   string
+	SecretStoreRef    string
+	AllowedActionKeys []string
+}
+
+// Dependencies contains domain service collaborators.
+type Dependencies struct {
+	Repository           providerrepo.Repository
+	Clock                providerrepo.Clock
+	IDGenerator          providerrepo.IDGenerator
+	AccountUsageResolver AccountUsageResolver
+	SecretResolver       secretresolver.Resolver
+	ProviderAdapters     []providerclient.Adapter
+	WebhookNormalizers   []providerrepo.WebhookNormalizer
+}
 
 // GetProviderAccountRuntimeStateInput identifies one runtime state.
 type GetProviderAccountRuntimeStateInput struct {

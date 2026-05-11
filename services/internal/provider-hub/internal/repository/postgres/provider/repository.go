@@ -213,6 +213,48 @@ func (r *Repository) ClaimSyncCursor(ctx context.Context, claim providerrepo.Syn
 	return queryOne(ctx, r.db, operationClaimSyncCursor, querySyncCursorClaim, syncCursorClaimArgs(claim), scanSyncCursor)
 }
 
+// ApplyReconciliationBatch stores provider snapshots and final cursor state atomically.
+func (r *Repository) ApplyReconciliationBatch(ctx context.Context, completion providerrepo.ReconciliationBatchCompletion) (entity.SyncCursor, []entity.ProviderEvent, error) {
+	var cursor entity.SyncCursor
+	var storedProviderEvents []entity.ProviderEvent
+	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
+		projectionResult, err := applyProjectionUpdate(ctx, tx, operationApplyReconciliationBatch, completion.ProjectionUpdate)
+		if err != nil {
+			return err
+		}
+		filteredProviderEvents := filterProviderEvents(completion.ProviderEvents, completion.ProjectionUpdate, projectionResult)
+		storedEvents, err := insertProviderEvents(ctx, tx, operationApplyReconciliationBatch, filteredProviderEvents)
+		if err != nil {
+			return err
+		}
+		filteredOutboxEvents := filterOutboxEvents(completion.OutboxEvents, filteredProviderEvents, projectionResult)
+		if err := insertOutboxEvents(ctx, tx, operationApplyReconciliationBatch, filteredOutboxEvents); err != nil {
+			return err
+		}
+		for _, snapshot := range completion.LimitSnapshots {
+			if _, err := queryOne(ctx, tx, operationRecordLimitSnapshot, queryLimitSnapshotUpsert, limitSnapshotArgs(snapshot), scanLimitSnapshot); err != nil {
+				return err
+			}
+		}
+		if completion.RuntimeState != nil {
+			if _, err := queryOne(ctx, tx, operationUpsertAccountRuntimeState, queryAccountRuntimeStateUpsertFromSnapshot, accountRuntimeStateArgs(*completion.RuntimeState), scanAccountRuntimeState); err != nil {
+				return err
+			}
+		}
+		updatedCursor, err := queryOne(ctx, tx, operationApplyReconciliationBatch, querySyncCursorComplete, syncCursorCompletionArgs(completion), scanSyncCursor)
+		if err != nil {
+			return err
+		}
+		cursor = updatedCursor
+		storedProviderEvents = storedEvents
+		return nil
+	})
+	if err != nil {
+		return entity.SyncCursor{}, nil, wrapError(operationApplyReconciliationBatch, err)
+	}
+	return cursor, storedProviderEvents, nil
+}
+
 // GetWebhookEvent returns a stored raw webhook by id.
 func (r *Repository) GetWebhookEvent(ctx context.Context, id uuid.UUID) (entity.WebhookEvent, error) {
 	return queryOne(ctx, r.db, operationGetWebhookEvent, queryWebhookEventGet, pgx.NamedArgs{"id": id}, scanWebhookEvent)
@@ -335,6 +377,7 @@ const (
 	operationGetSyncCursor                    = "domain.Repository.GetSyncCursor"
 	operationListSyncCursors                  = "domain.Repository.ListSyncCursors"
 	operationClaimSyncCursor                  = "domain.Repository.ClaimSyncCursor"
+	operationApplyReconciliationBatch         = "domain.Repository.ApplyReconciliationBatch"
 	operationGetAccountRuntimeState           = "domain.Repository.GetAccountRuntimeState"
 	operationListAccountRuntimeStates         = "domain.Repository.ListAccountRuntimeStates"
 	operationUpsertAccountRuntimeState        = "domain.Repository.UpsertAccountRuntimeState"

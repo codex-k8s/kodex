@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-11
 updated_at: 2026-05-12
-related_issues: [711, 718]
+related_issues: [711, 718, 719]
 related_prs: []
 related_adrs: []
 approvals:
@@ -29,7 +29,7 @@ approvals:
 |---|---|
 | `access-manager` | Владеет внешними аккаунтами, политикой использования, привязками аккаунтов к областям и ссылками на секреты. |
 | `libs/go/secretresolver` | Даёт общий контракт `Resolver` и `Checker`, безопасный тип `SecretValue`, выбор реализации хранилища по `store_type`, поддержку смонтированных Kubernetes Secret, env и Vault KV v2. |
-| `provider-hub` | После успешного `ResolveExternalAccountUsage` может вызвать `Resolver.Resolve`, выполнить один вызов API провайдера и сразу забыть значение. |
+| `provider-hub` | После успешного `ResolveExternalAccountUsage` вызывает `Resolver.Resolve` для пакетной GitHub-сверки в режиме только чтения, выполняет внешний API-вызов и сразу очищает значение. Операции записи в провайдера используют тот же контур в отдельном срезе. |
 | `package-hub` | Для статуса заполненности установки использует только `Checker.Check`; получение сырого значения секрета в пакетном домене запрещено. |
 | Runtime/deploy-контур | Подготавливает mount, переменные конфигурации resolver-клиента и доступ к выбранному хранилищу секретов. |
 
@@ -144,7 +144,7 @@ mount/path/to/secret#key
 
 - реализация через Kubernetes API, если mounted/env/Vault окажутся недостаточными для отдельных workload и будет согласована строгая RBAC-модель без широкого `list/watch` Secret.
 - Подключение `package-hub` к `ListPackageInstallationSecretRefs` для пересчёта статуса заполненности установки через `Checker`.
-- Подключение resolver-клиента к `provider-hub` для batch-сверки и provider-операций.
+- Подключение resolver-клиента к provider-операциям записи `provider-hub` после согласования MCP/agent-manager инструментов.
 
 ## Апрув
 
