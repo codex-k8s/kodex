@@ -149,8 +149,7 @@ func ReportWorkspaceMaterializationProgressInput(request *runtimev1.ReportWorksp
 
 // GetWorkspaceMaterializationInput maps a get request into id and query metadata.
 func GetWorkspaceMaterializationInput(request *runtimev1.GetWorkspaceMaterializationRequest) (runtimeservice.GetWorkspaceMaterializationInput, error) {
-	switch {
-	case request == nil:
+	if request == nil {
 		return runtimeservice.GetWorkspaceMaterializationInput{}, errs.ErrInvalidArgument
 	}
 	workspaceID, meta, err := requiredIDAndQueryMeta(request.GetWorkspaceMaterializationId(), request.GetMeta())
