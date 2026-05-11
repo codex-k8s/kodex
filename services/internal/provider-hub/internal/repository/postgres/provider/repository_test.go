@@ -286,29 +286,62 @@ func TestRepositoryIntegrationProviderArtifactSignals(t *testing.T) {
 		ObservedAt:        now.Add(-time.Minute),
 		CreatedAt:         now,
 	}
-	stored, err := repository.StoreProviderArtifactSignal(ctx, signal)
-	if err != nil {
-		t.Fatalf("store artifact signal: %v", err)
+	request := entity.ReconciliationRequest{
+		ID:                uuid.New(),
+		ProviderSlug:      signal.ProviderSlug,
+		ExternalAccountID: signal.ExternalAccountID,
+		ScopeType:         signal.ScopeType,
+		ScopeRef:          signal.ScopeRef,
+		IdempotencyKey:    signal.IdentityKey,
+		ArtifactKinds:     signal.ArtifactKinds,
+		Priority:          enum.SyncCursorPriorityHot,
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}
-	if stored.ID != signal.ID || stored.IdentityKey != signal.IdentityKey {
-		t.Fatalf("stored signal = %+v, want id %s identity %s", stored, signal.ID, signal.IdentityKey)
+	cursors := []entity.SyncCursor{
+		testSyncCursor(uuid.New(), request, enum.SyncArtifactComment, now),
+		testSyncCursor(uuid.New(), request, enum.SyncArtifactPullRequest, now),
+		testSyncCursor(uuid.New(), request, enum.SyncArtifactRelationship, now),
+	}
+	stored, err := repository.RegisterProviderArtifactSignal(ctx, signal, request, cursors)
+	if err != nil {
+		t.Fatalf("register artifact signal: %v", err)
+	}
+	if len(stored) != len(cursors) || stored[1].ID != cursors[1].ID || stored[1].Priority != enum.SyncCursorPriorityHot {
+		t.Fatalf("stored cursors = %+v, want hot cursors %+v", stored, cursors)
 	}
 
 	replay := signal
 	replay.ID = uuid.New()
 	replay.CreatedAt = now.Add(time.Minute)
-	replayed, err := repository.StoreProviderArtifactSignal(ctx, replay)
+	replayRequest := request
+	replayRequest.ID = uuid.New()
+	replayRequest.CreatedAt = now.Add(time.Minute)
+	replayRequest.UpdatedAt = now.Add(time.Minute)
+	replayCursors := []entity.SyncCursor{
+		testSyncCursor(uuid.New(), replayRequest, enum.SyncArtifactComment, now.Add(time.Minute)),
+		testSyncCursor(uuid.New(), replayRequest, enum.SyncArtifactPullRequest, now.Add(time.Minute)),
+		testSyncCursor(uuid.New(), replayRequest, enum.SyncArtifactRelationship, now.Add(time.Minute)),
+	}
+	replayed, err := repository.RegisterProviderArtifactSignal(ctx, replay, replayRequest, replayCursors)
 	if err != nil {
 		t.Fatalf("replay artifact signal: %v", err)
 	}
-	if replayed.ID != signal.ID {
-		t.Fatalf("replayed signal id = %s, want original %s", replayed.ID, signal.ID)
+	if len(replayed) != len(cursors) || replayed[1].ID != cursors[1].ID {
+		t.Fatalf("replayed cursors = %+v, want original %+v", replayed, cursors)
 	}
 
 	conflict := replay
 	conflict.ScopeRef = "codex-k8s/kodex#pull_request:704"
 	conflict.TargetJSON = []byte(`{"provider_slug":"github","repository_full_name":"codex-k8s/kodex","work_item_kind":"pull_request","number":704}`)
-	if _, err := repository.StoreProviderArtifactSignal(ctx, conflict); !errors.Is(err, errs.ErrConflict) {
+	conflictRequest := replayRequest
+	conflictRequest.ScopeRef = conflict.ScopeRef
+	conflictCursors := []entity.SyncCursor{
+		testSyncCursor(uuid.New(), conflictRequest, enum.SyncArtifactComment, now.Add(time.Minute)),
+		testSyncCursor(uuid.New(), conflictRequest, enum.SyncArtifactPullRequest, now.Add(time.Minute)),
+		testSyncCursor(uuid.New(), conflictRequest, enum.SyncArtifactRelationship, now.Add(time.Minute)),
+	}
+	if _, err := repository.RegisterProviderArtifactSignal(ctx, conflict, conflictRequest, conflictCursors); !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("conflicting artifact signal err = %v, want %v", err, errs.ErrConflict)
 	}
 }

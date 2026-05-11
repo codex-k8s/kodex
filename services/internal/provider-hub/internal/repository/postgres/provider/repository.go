@@ -164,20 +164,22 @@ func (r *Repository) ListRelationships(ctx context.Context, filter query.Relatio
 	return queryPage(ctx, r.db, operationListRelationships, queryRelationshipList, relationshipFilterArgs(filter), scanRelationship)
 }
 
-// StoreProviderArtifactSignal stores signal-level idempotency before cursor enqueue.
-func (r *Repository) StoreProviderArtifactSignal(ctx context.Context, signal entity.ProviderArtifactSignal) (entity.ProviderArtifactSignal, error) {
-	stored, err := queryOne(ctx, r.db, operationStoreProviderArtifactSignal, queryProviderArtifactSignalInsert, providerArtifactSignalArgs(signal), scanProviderArtifactSignal)
-	if errors.Is(err, errs.ErrNotFound) {
-		stored, err = queryOne(ctx, r.db, operationStoreProviderArtifactSignal, queryProviderArtifactSignalGetByIdentity, providerArtifactSignalIdentityArgs(signal), scanProviderArtifactSignal)
-		if err == nil && !sameProviderArtifactSignal(signal, stored) {
-			err = errs.ErrConflict
+// RegisterProviderArtifactSignal records signal identity and enqueues cursors atomically.
+func (r *Repository) RegisterProviderArtifactSignal(ctx context.Context, signal entity.ProviderArtifactSignal, request entity.ReconciliationRequest, cursors []entity.SyncCursor) ([]entity.SyncCursor, error) {
+	var stored []entity.SyncCursor
+	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
+		if _, err := storeProviderArtifactSignal(ctx, tx, operationRegisterProviderArtifactSignal, signal); err != nil {
+			return err
 		}
-	}
+		enqueued, err := enqueueSyncCursors(ctx, tx, operationRegisterProviderArtifactSignal, request, cursors)
+		if err != nil {
+			return err
+		}
+		stored = enqueued
+		return nil
+	})
 	if err != nil {
-		return entity.ProviderArtifactSignal{}, wrapError(operationStoreProviderArtifactSignal, err)
-	}
-	if !sameProviderArtifactSignal(signal, stored) {
-		return entity.ProviderArtifactSignal{}, wrapError(operationStoreProviderArtifactSignal, errs.ErrConflict)
+		return nil, wrapError(operationRegisterProviderArtifactSignal, err)
 	}
 	return stored, nil
 }
@@ -186,34 +188,9 @@ func (r *Repository) StoreProviderArtifactSignal(ctx context.Context, signal ent
 func (r *Repository) EnqueueSyncCursors(ctx context.Context, request entity.ReconciliationRequest, cursors []entity.SyncCursor) ([]entity.SyncCursor, error) {
 	var stored []entity.SyncCursor
 	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
-		inserted, err := queryOne(ctx, tx, operationEnqueueSyncCursors, queryReconciliationRequestInsert, reconciliationRequestArgs(request), scanReconciliationRequest)
-		if errors.Is(err, errs.ErrNotFound) {
-			replayed, replayErr := queryOne(ctx, tx, operationEnqueueSyncCursors, queryReconciliationRequestGetByIdentity, syncCursorRequestLookupArgs(request), scanReconciliationRequest)
-			if replayErr != nil {
-				return replayErr
-			}
-			if !sameReconciliationRequest(request, replayed) {
-				return errs.ErrConflict
-			}
-			existing, _, listErr := queryPage(ctx, tx, operationEnqueueSyncCursors, querySyncCursorListForRequest, allRowsArgs(syncCursorRequestLookupArgs(request), len(request.ArtifactKinds)), scanSyncCursor)
-			if listErr == nil && len(existing) != len(request.ArtifactKinds) {
-				return errs.ErrConflict
-			}
-			stored = existing
-			return listErr
-		}
-		if err != nil {
-			return err
-		}
-		if !sameReconciliationRequest(request, inserted) {
-			return errs.ErrConflict
-		}
-		upserted, _, upsertErr := queryPage(ctx, tx, operationEnqueueSyncCursors, querySyncCursorUpsertMany, allRowsArgs(syncCursorsBatchArgs(cursors), len(cursors)), scanSyncCursor)
-		if upsertErr == nil && len(upserted) != len(cursors) {
-			return errs.ErrConflict
-		}
-		stored = upserted
-		return upsertErr
+		var err error
+		stored, err = enqueueSyncCursors(ctx, tx, operationEnqueueSyncCursors, request, cursors)
+		return err
 	})
 	if err != nil {
 		return nil, wrapError(operationEnqueueSyncCursors, err)
@@ -353,7 +330,7 @@ const (
 	operationListWorkItemProjections          = "domain.Repository.ListWorkItemProjections"
 	operationListComments                     = "domain.Repository.ListComments"
 	operationListRelationships                = "domain.Repository.ListRelationships"
-	operationStoreProviderArtifactSignal      = "domain.Repository.StoreProviderArtifactSignal"
+	operationRegisterProviderArtifactSignal   = "domain.Repository.RegisterProviderArtifactSignal"
 	operationEnqueueSyncCursors               = "domain.Repository.EnqueueSyncCursors"
 	operationGetSyncCursor                    = "domain.Repository.GetSyncCursor"
 	operationListSyncCursors                  = "domain.Repository.ListSyncCursors"
@@ -414,6 +391,52 @@ func insertOutboxEvents(ctx context.Context, db execer, operation string, events
 		}
 	}
 	return nil
+}
+
+func storeProviderArtifactSignal(ctx context.Context, db queryer, operation string, signal entity.ProviderArtifactSignal) (entity.ProviderArtifactSignal, error) {
+	stored, err := queryOne(ctx, db, operation, queryProviderArtifactSignalInsert, providerArtifactSignalArgs(signal), scanProviderArtifactSignal)
+	if errors.Is(err, errs.ErrNotFound) {
+		stored, err = queryOne(ctx, db, operation, queryProviderArtifactSignalGetByIdentity, providerArtifactSignalIdentityArgs(signal), scanProviderArtifactSignal)
+		if err == nil && !sameProviderArtifactSignal(signal, stored) {
+			err = errs.ErrConflict
+		}
+	}
+	if err != nil {
+		return entity.ProviderArtifactSignal{}, err
+	}
+	if !sameProviderArtifactSignal(signal, stored) {
+		return entity.ProviderArtifactSignal{}, errs.ErrConflict
+	}
+	return stored, nil
+}
+
+func enqueueSyncCursors(ctx context.Context, db queryer, operation string, request entity.ReconciliationRequest, cursors []entity.SyncCursor) ([]entity.SyncCursor, error) {
+	inserted, err := queryOne(ctx, db, operation, queryReconciliationRequestInsert, reconciliationRequestArgs(request), scanReconciliationRequest)
+	if errors.Is(err, errs.ErrNotFound) {
+		replayed, replayErr := queryOne(ctx, db, operation, queryReconciliationRequestGetByIdentity, syncCursorRequestLookupArgs(request), scanReconciliationRequest)
+		if replayErr != nil {
+			return nil, replayErr
+		}
+		if !sameReconciliationRequest(request, replayed) {
+			return nil, errs.ErrConflict
+		}
+		existing, _, listErr := queryPage(ctx, db, operation, querySyncCursorListForRequest, allRowsArgs(syncCursorRequestLookupArgs(request), len(request.ArtifactKinds)), scanSyncCursor)
+		if listErr == nil && len(existing) != len(request.ArtifactKinds) {
+			return nil, errs.ErrConflict
+		}
+		return existing, listErr
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !sameReconciliationRequest(request, inserted) {
+		return nil, errs.ErrConflict
+	}
+	upserted, _, upsertErr := queryPage(ctx, db, operation, querySyncCursorUpsertMany, allRowsArgs(syncCursorsBatchArgs(cursors), len(cursors)), scanSyncCursor)
+	if upsertErr == nil && len(upserted) != len(cursors) {
+		return nil, errs.ErrConflict
+	}
+	return upserted, upsertErr
 }
 
 func sameReconciliationRequest(expected entity.ReconciliationRequest, actual entity.ReconciliationRequest) bool {

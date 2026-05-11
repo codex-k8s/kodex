@@ -60,7 +60,7 @@ func (s *Service) RegisterProviderArtifactSignal(ctx context.Context, input Regi
 	}
 
 	now := s.clock.Now().UTC()
-	storedSignal, err := s.repository.StoreProviderArtifactSignal(ctx, entity.ProviderArtifactSignal{
+	signal := entity.ProviderArtifactSignal{
 		ID:                s.ids.New(),
 		IdentityKey:       idempotencyKey,
 		ProviderSlug:      target.ProviderSlug,
@@ -73,9 +73,6 @@ func (s *Service) RegisterProviderArtifactSignal(ctx context.Context, input Regi
 		PayloadJSON:       payloadJSON,
 		ObservedAt:        observedAt,
 		CreatedAt:         now,
-	})
-	if err != nil {
-		return ProviderArtifactSignalResult{}, err
 	}
 	request := entity.ReconciliationRequest{
 		ID:                s.ids.New(),
@@ -83,14 +80,14 @@ func (s *Service) RegisterProviderArtifactSignal(ctx context.Context, input Regi
 		ExternalAccountID: input.ExternalAccountID,
 		ScopeType:         scopeType,
 		ScopeRef:          scopeRef,
-		IdempotencyKey:    storedSignal.IdentityKey,
+		IdempotencyKey:    idempotencyKey,
 		ArtifactKinds:     artifactKinds,
 		Priority:          enum.SyncCursorPriorityHot,
 		CreatedAt:         now,
 		UpdatedAt:         now,
 	}
 	cursors := s.buildSyncCursors(target.ProviderSlug, input.ExternalAccountID, scopeType, scopeRef, artifactKinds, enum.SyncCursorPriorityHot, now)
-	if _, err := s.repository.EnqueueSyncCursors(ctx, request, cursors); err != nil {
+	if _, err := s.repository.RegisterProviderArtifactSignal(ctx, signal, request, cursors); err != nil {
 		return ProviderArtifactSignalResult{}, err
 	}
 	return ProviderArtifactSignalResult{SignalID: signalID, Status: artifactSignalAccepted, Target: target}, nil

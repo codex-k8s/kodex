@@ -923,9 +923,11 @@ func (r *fakeRepository) ListRelationships(context.Context, query.RelationshipFi
 	return nil, query.PageResult{}, r.err
 }
 
-func (r *fakeRepository) StoreProviderArtifactSignal(_ context.Context, signal entity.ProviderArtifactSignal) (entity.ProviderArtifactSignal, error) {
+func (r *fakeRepository) RegisterProviderArtifactSignal(_ context.Context, signal entity.ProviderArtifactSignal, request entity.ReconciliationRequest, cursors []entity.SyncCursor) ([]entity.SyncCursor, error) {
 	r.providerArtifactSignal = signal
-	return signal, r.err
+	r.reconciliationRequest = request
+	r.enqueuedSyncCursors = append(r.enqueuedSyncCursors, cursors...)
+	return cursors, r.err
 }
 
 func (r *fakeRepository) EnqueueSyncCursors(_ context.Context, request entity.ReconciliationRequest, cursors []entity.SyncCursor) ([]entity.SyncCursor, error) {
