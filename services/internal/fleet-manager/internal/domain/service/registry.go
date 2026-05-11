@@ -42,6 +42,12 @@ func (s *Service) EnsurePlatformDefaultSeed(ctx context.Context) error {
 		LastHealthStatus:    enum.ClusterHealthStatusUnknown,
 		LastHealthCheckedAt: nil,
 	}
+	if err := validateFleetScope(scope); err != nil {
+		return err
+	}
+	if err := validateKubernetesCluster(cluster); err != nil {
+		return err
+	}
 	scopeEvent, err := s.scopeEvent(fleetEventScopeCreated, scope)
 	if err != nil {
 		return err
@@ -58,7 +64,7 @@ func (s *Service) CreateFleetScope(ctx context.Context, input CreateFleetScopeIn
 	if err := s.authorizeCommand(ctx, input.Meta, fleetActionScopeCreate, globalFleetResource(accesscatalog.ResourceFleetScope)); err != nil {
 		return entity.FleetScope{}, err
 	}
-	if replay, ok, err := replayAggregate(s, ctx, input.Meta, fleetOperationCreateScope, fleetAggregateScope, s.repository.GetFleetScope); ok || err != nil {
+	if replay, ok, err := replayCreated(s, ctx, input.Meta, fleetOperationCreateScope, fleetAggregateScope, fleetActionScopeRead, s.repository.GetFleetScope, scopeResource); ok || err != nil {
 		return replay, err
 	}
 	now := s.clock.Now()
@@ -158,7 +164,7 @@ func (s *Service) RegisterServer(ctx context.Context, input RegisterServerInput)
 	if err := s.authorizeCommand(ctx, input.Meta, fleetActionServerRegister, globalFleetResource(accesscatalog.ResourceFleetServer)); err != nil {
 		return entity.Server{}, err
 	}
-	if replay, ok, err := replayAggregate(s, ctx, input.Meta, fleetOperationRegisterServer, fleetAggregateServer, s.repository.GetServer); ok || err != nil {
+	if replay, ok, err := replayCreated(s, ctx, input.Meta, fleetOperationRegisterServer, fleetAggregateServer, fleetActionServerRead, s.repository.GetServer, serverResource); ok || err != nil {
 		return replay, err
 	}
 	now := s.clock.Now()
@@ -262,7 +268,7 @@ func (s *Service) RegisterKubernetesCluster(ctx context.Context, input RegisterK
 	if err := s.authorizeCommand(ctx, input.Meta, fleetActionClusterRegister, fleetResource(accesscatalog.ResourceFleetCluster, uuid.Nil, &input.FleetScopeID)); err != nil {
 		return entity.KubernetesCluster{}, err
 	}
-	if replay, ok, err := replayAggregate(s, ctx, input.Meta, fleetOperationRegisterCluster, fleetAggregateCluster, s.repository.GetKubernetesCluster); ok || err != nil {
+	if replay, ok, err := replayCreated(s, ctx, input.Meta, fleetOperationRegisterCluster, fleetAggregateCluster, fleetActionClusterRead, s.repository.GetKubernetesCluster, clusterResource); ok || err != nil {
 		return replay, err
 	}
 	if _, err := s.repository.GetFleetScope(ctx, input.FleetScopeID); err != nil {
@@ -614,6 +620,32 @@ func replayAggregate[T any](
 	}
 	aggregate, err := load(ctx, result.AggregateID)
 	return aggregate, true, err
+}
+
+func replayCreated[T any](
+	s *Service,
+	ctx context.Context,
+	meta value.CommandMeta,
+	operation string,
+	aggregateType string,
+	readAction string,
+	load func(context.Context, uuid.UUID) (T, error),
+	resource func(T) resourceRef,
+) (T, bool, error) {
+	aggregate, ok, err := replayAggregate(s, ctx, meta, operation, aggregateType, load)
+	if err != nil || !ok {
+		return aggregate, ok, err
+	}
+	queryMeta := value.QueryMeta{
+		Actor:          meta.Actor,
+		RequestID:      meta.RequestID,
+		RequestContext: meta.RequestContext,
+	}
+	if err := s.authorizeQuery(ctx, queryMeta, readAction, resource(aggregate)); err != nil {
+		var empty T
+		return empty, true, err
+	}
+	return aggregate, true, nil
 }
 
 func replayTarget[T any](

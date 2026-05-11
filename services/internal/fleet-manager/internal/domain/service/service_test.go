@@ -36,6 +36,7 @@ func TestCreateFleetScopeStoresCommandAndOutbox(t *testing.T) {
 	if len(repository.events) != 1 {
 		t.Fatalf("expected one outbox event, got %d", len(repository.events))
 	}
+	assertEvent(t, repository.events[0], fleetEventScopeCreated, fleetAggregateScope, scope.ID)
 
 	replayed, err := service.CreateFleetScope(context.Background(), CreateFleetScopeInput{
 		ScopeKey:     "ignored",
@@ -52,12 +53,243 @@ func TestCreateFleetScopeStoresCommandAndOutbox(t *testing.T) {
 	}
 }
 
+func TestCreateFleetScopeReplayRequiresReadAccess(t *testing.T) {
+	repository := newMemoryRepository()
+	meta := commandMeta(uuid.MustParse("11111111-1111-1111-1111-111111111111"), "create-platform")
+	created, err := newTestService(repository).CreateFleetScope(context.Background(), CreateFleetScopeInput{
+		ScopeKey:     "platform-secondary",
+		ScopeType:    enum.FleetScopeTypePlatform,
+		OwnerRefJSON: []byte("{}"),
+		DisplayName:  "Platform secondary",
+		Meta:         meta,
+	})
+	if err != nil {
+		t.Fatalf("CreateFleetScope returned error: %v", err)
+	}
+	service := newTestServiceWithAuthorizer(repository, authorizerFunc(func(_ context.Context, request AuthorizationRequest) error {
+		if request.ActionKey == fleetActionScopeRead && request.ResourceID == created.ID.String() {
+			return errs.ErrForbidden
+		}
+		return nil
+	}))
+
+	_, err = service.CreateFleetScope(context.Background(), CreateFleetScopeInput{
+		ScopeKey:     "ignored",
+		ScopeType:    enum.FleetScopeTypePlatform,
+		OwnerRefJSON: []byte("{}"),
+		DisplayName:  "Ignored",
+		Meta:         meta,
+	})
+	if !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("expected replay read denial, got %v", err)
+	}
+	if len(repository.events) != 1 {
+		t.Fatalf("denied replay must not append events, got %d", len(repository.events))
+	}
+}
+
+func TestCreateFleetScopeDeniedByAuthorizer(t *testing.T) {
+	repository := newMemoryRepository()
+	service := newTestServiceWithAuthorizer(repository, authorizerFunc(func(context.Context, AuthorizationRequest) error {
+		return errs.ErrForbidden
+	}))
+
+	_, err := service.CreateFleetScope(context.Background(), CreateFleetScopeInput{
+		ScopeKey:     "platform-secondary",
+		ScopeType:    enum.FleetScopeTypePlatform,
+		OwnerRefJSON: []byte("{}"),
+		DisplayName:  "Platform secondary",
+		Meta:         commandMeta(uuid.MustParse("11111111-1111-1111-1111-111111111111"), "create-platform"),
+	})
+	if !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("expected authorizer denial, got %v", err)
+	}
+	if len(repository.scopes) != 0 || len(repository.events) != 0 {
+		t.Fatalf("denied command must not mutate state: scopes=%d events=%d", len(repository.scopes), len(repository.events))
+	}
+}
+
+func TestUpdateFleetScopeRejectsStaleVersion(t *testing.T) {
+	repository := newMemoryRepository()
+	service := newTestService(repository)
+	scope, err := service.CreateFleetScope(context.Background(), CreateFleetScopeInput{
+		ScopeKey:     "platform-secondary",
+		ScopeType:    enum.FleetScopeTypePlatform,
+		OwnerRefJSON: []byte("{}"),
+		DisplayName:  "Platform secondary",
+		Meta:         commandMeta(uuid.MustParse("11111111-1111-1111-1111-111111111111"), "create-platform"),
+	})
+	if err != nil {
+		t.Fatalf("CreateFleetScope returned error: %v", err)
+	}
+	nextName := "Platform renamed"
+
+	_, err = service.UpdateFleetScope(context.Background(), UpdateFleetScopeInput{
+		FleetScopeID: scope.ID,
+		DisplayName:  &nextName,
+		Meta:         commandMetaWithVersion(uuid.MustParse("22222222-2222-2222-2222-222222222222"), "update-platform", 2),
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("expected optimistic conflict, got %v", err)
+	}
+	if repository.scopes[scope.ID].DisplayName != scope.DisplayName {
+		t.Fatalf("stale update changed scope: %+v", repository.scopes[scope.ID])
+	}
+}
+
 func TestUpdateKubernetesClusterKeepsServerWhenFieldOmitted(t *testing.T) {
 	repository := newMemoryRepository()
 	service := newTestService(repository)
 	scopeID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
 	serverID := uuid.MustParse("33333333-3333-3333-3333-333333333333")
 	clusterID := uuid.MustParse("44444444-4444-4444-4444-444444444444")
+	seedRegistry(repository, scopeID, serverID, clusterID)
+	nextKey := "cluster-renamed"
+
+	updated, err := service.UpdateKubernetesCluster(context.Background(), UpdateKubernetesClusterInput{
+		ClusterID:  clusterID,
+		ClusterKey: &nextKey,
+		Meta:       commandMetaWithVersion(uuid.MustParse("55555555-5555-5555-5555-555555555555"), "update-cluster", 1),
+	})
+	if err != nil {
+		t.Fatalf("UpdateKubernetesCluster returned error: %v", err)
+	}
+	if updated.ServerID == nil || *updated.ServerID != serverID {
+		t.Fatalf("server link was unexpectedly cleared: %+v", updated.ServerID)
+	}
+	if updated.ClusterKey != nextKey || updated.Version != 2 {
+		t.Fatalf("cluster was not updated: %+v", updated)
+	}
+}
+
+func TestLifecycleTransitionsCreateEvents(t *testing.T) {
+	repository := newMemoryRepository()
+	service := newTestService(repository)
+	scopeID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	serverID := uuid.MustParse("33333333-3333-3333-3333-333333333333")
+	clusterID := uuid.MustParse("44444444-4444-4444-4444-444444444444")
+	seedRegistry(repository, scopeID, serverID, clusterID)
+
+	scope, err := service.DisableFleetScope(context.Background(), scopeID, commandMetaWithVersion(uuid.MustParse("55555555-5555-5555-5555-555555555551"), "disable-scope", 1))
+	if err != nil {
+		t.Fatalf("DisableFleetScope returned error: %v", err)
+	}
+	if scope.Status != enum.FleetScopeStatusSuspended || scope.Version != 2 {
+		t.Fatalf("unexpected disabled scope: %+v", scope)
+	}
+	scope, err = service.EnableFleetScope(context.Background(), scopeID, commandMetaWithVersion(uuid.MustParse("55555555-5555-5555-5555-555555555552"), "enable-scope", 2))
+	if err != nil {
+		t.Fatalf("EnableFleetScope returned error: %v", err)
+	}
+	if scope.Status != enum.FleetScopeStatusActive || scope.Version != 3 {
+		t.Fatalf("unexpected enabled scope: %+v", scope)
+	}
+	server, err := service.DisableServer(context.Background(), serverID, commandMetaWithVersion(uuid.MustParse("55555555-5555-5555-5555-555555555553"), "disable-server", 1))
+	if err != nil {
+		t.Fatalf("DisableServer returned error: %v", err)
+	}
+	if server.Status != enum.ServerStatusSuspended || server.Version != 2 {
+		t.Fatalf("unexpected disabled server: %+v", server)
+	}
+	server, err = service.EnableServer(context.Background(), serverID, commandMetaWithVersion(uuid.MustParse("55555555-5555-5555-5555-555555555554"), "enable-server", 2))
+	if err != nil {
+		t.Fatalf("EnableServer returned error: %v", err)
+	}
+	if server.Status != enum.ServerStatusActive || server.Version != 3 {
+		t.Fatalf("unexpected enabled server: %+v", server)
+	}
+	cluster, err := service.DisableKubernetesCluster(context.Background(), clusterID, commandMetaWithVersion(uuid.MustParse("55555555-5555-5555-5555-555555555555"), "disable-cluster", 1))
+	if err != nil {
+		t.Fatalf("DisableKubernetesCluster returned error: %v", err)
+	}
+	if cluster.Status != enum.KubernetesClusterStatusSuspended || cluster.Version != 2 {
+		t.Fatalf("unexpected disabled cluster: %+v", cluster)
+	}
+	cluster, err = service.EnableKubernetesCluster(context.Background(), clusterID, commandMetaWithVersion(uuid.MustParse("55555555-5555-5555-5555-555555555556"), "enable-cluster", 2))
+	if err != nil {
+		t.Fatalf("EnableKubernetesCluster returned error: %v", err)
+	}
+	if cluster.Status != enum.KubernetesClusterStatusActive || cluster.Version != 3 {
+		t.Fatalf("unexpected enabled cluster: %+v", cluster)
+	}
+
+	if len(repository.events) != 6 {
+		t.Fatalf("expected six lifecycle events, got %d", len(repository.events))
+	}
+	assertEvent(t, repository.events[0], fleetEventScopeDisabled, fleetAggregateScope, scopeID)
+	assertEvent(t, repository.events[1], fleetEventScopeEnabled, fleetAggregateScope, scopeID)
+	assertEvent(t, repository.events[2], fleetEventServerDisabled, fleetAggregateServer, serverID)
+	assertEvent(t, repository.events[3], fleetEventServerEnabled, fleetAggregateServer, serverID)
+	assertEvent(t, repository.events[4], fleetEventClusterDisabled, fleetAggregateCluster, clusterID)
+	assertEvent(t, repository.events[5], fleetEventClusterEnabled, fleetAggregateCluster, clusterID)
+}
+
+func TestEnsurePlatformDefaultSeedCreatesRegistryDataOnce(t *testing.T) {
+	repository := newMemoryRepository()
+	service := newTestService(repository)
+
+	if err := service.EnsurePlatformDefaultSeed(context.Background()); err != nil {
+		t.Fatalf("EnsurePlatformDefaultSeed returned error: %v", err)
+	}
+	if len(repository.scopes) != 1 || len(repository.clusters) != 1 || len(repository.events) != 2 {
+		t.Fatalf("unexpected seed state: scopes=%d clusters=%d events=%d", len(repository.scopes), len(repository.clusters), len(repository.events))
+	}
+	if err := service.EnsurePlatformDefaultSeed(context.Background()); err != nil {
+		t.Fatalf("second EnsurePlatformDefaultSeed returned error: %v", err)
+	}
+	if len(repository.scopes) != 1 || len(repository.clusters) != 1 || len(repository.events) != 2 {
+		t.Fatalf("seed should be idempotent: scopes=%d clusters=%d events=%d", len(repository.scopes), len(repository.clusters), len(repository.events))
+	}
+}
+
+func TestEnsurePlatformDefaultSeedRejectsUnsafeSecretReference(t *testing.T) {
+	repository := newMemoryRepository()
+	service := NewWithConfig(repository, fixedClock{}, sequentialIDs{}, Config{
+		PlatformDefaultSeed: PlatformDefaultSeed{
+			SecretStoreRef: "apiVersion: v1\nkind: Secret",
+		},
+	})
+
+	err := service.EnsurePlatformDefaultSeed(context.Background())
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("expected invalid seed error, got %v", err)
+	}
+	if len(repository.scopes) != 0 || len(repository.clusters) != 0 || len(repository.events) != 0 {
+		t.Fatalf("invalid seed must not mutate state: scopes=%d clusters=%d events=%d", len(repository.scopes), len(repository.clusters), len(repository.events))
+	}
+}
+
+func newTestService(repository *memoryRepository) *Service {
+	return NewWithConfig(repository, fixedClock{}, sequentialIDs{}, Config{})
+}
+
+func newTestServiceWithAuthorizer(repository *memoryRepository, authorizer Authorizer) *Service {
+	return NewWithConfig(repository, fixedClock{}, sequentialIDs{}, Config{Authorizer: authorizer})
+}
+
+type authorizerFunc func(context.Context, AuthorizationRequest) error
+
+func (fn authorizerFunc) Authorize(ctx context.Context, request AuthorizationRequest) error {
+	return fn(ctx, request)
+}
+
+func commandMeta(commandID uuid.UUID, key string) value.CommandMeta {
+	return value.CommandMeta{
+		CommandID:      commandID,
+		IdempotencyKey: key,
+		Actor:          value.Actor{Type: "service", ID: "fleet-manager-test"},
+		RequestID:      "request-test",
+		RequestContext: value.RequestContext{Source: "test"},
+	}
+}
+
+func commandMetaWithVersion(commandID uuid.UUID, key string, version int64) value.CommandMeta {
+	meta := commandMeta(commandID, key)
+	meta.ExpectedVersion = &version
+	return meta
+}
+
+func seedRegistry(repository *memoryRepository, scopeID uuid.UUID, serverID uuid.UUID, clusterID uuid.UUID) {
 	now := time.Date(2026, 5, 12, 10, 0, 0, 0, time.UTC)
 	repository.scopes[scopeID] = entity.FleetScope{
 		Base:         entity.Base{ID: scopeID, Version: 1, CreatedAt: now, UpdatedAt: now},
@@ -81,60 +313,13 @@ func TestUpdateKubernetesClusterKeepsServerWhenFieldOmitted(t *testing.T) {
 		Status:           enum.KubernetesClusterStatusActive,
 		LastHealthStatus: enum.ClusterHealthStatusUnknown,
 	}
-	nextKey := "cluster-renamed"
-
-	updated, err := service.UpdateKubernetesCluster(context.Background(), UpdateKubernetesClusterInput{
-		ClusterID:  clusterID,
-		ClusterKey: &nextKey,
-		Meta:       commandMetaWithVersion(uuid.MustParse("55555555-5555-5555-5555-555555555555"), "update-cluster", 1),
-	})
-	if err != nil {
-		t.Fatalf("UpdateKubernetesCluster returned error: %v", err)
-	}
-	if updated.ServerID == nil || *updated.ServerID != serverID {
-		t.Fatalf("server link was unexpectedly cleared: %+v", updated.ServerID)
-	}
-	if updated.ClusterKey != nextKey || updated.Version != 2 {
-		t.Fatalf("cluster was not updated: %+v", updated)
-	}
 }
 
-func TestEnsurePlatformDefaultSeedCreatesRegistryDataOnce(t *testing.T) {
-	repository := newMemoryRepository()
-	service := newTestService(repository)
-
-	if err := service.EnsurePlatformDefaultSeed(context.Background()); err != nil {
-		t.Fatalf("EnsurePlatformDefaultSeed returned error: %v", err)
+func assertEvent(t *testing.T, event entity.OutboxEvent, eventType string, aggregateType string, aggregateID uuid.UUID) {
+	t.Helper()
+	if event.EventType != eventType || event.AggregateType != aggregateType || event.AggregateID != aggregateID {
+		t.Fatalf("unexpected event: got type=%s aggregate_type=%s aggregate_id=%s", event.EventType, event.AggregateType, event.AggregateID)
 	}
-	if len(repository.scopes) != 1 || len(repository.clusters) != 1 || len(repository.events) != 2 {
-		t.Fatalf("unexpected seed state: scopes=%d clusters=%d events=%d", len(repository.scopes), len(repository.clusters), len(repository.events))
-	}
-	if err := service.EnsurePlatformDefaultSeed(context.Background()); err != nil {
-		t.Fatalf("second EnsurePlatformDefaultSeed returned error: %v", err)
-	}
-	if len(repository.scopes) != 1 || len(repository.clusters) != 1 || len(repository.events) != 2 {
-		t.Fatalf("seed should be idempotent: scopes=%d clusters=%d events=%d", len(repository.scopes), len(repository.clusters), len(repository.events))
-	}
-}
-
-func newTestService(repository *memoryRepository) *Service {
-	return NewWithConfig(repository, fixedClock{}, sequentialIDs{}, Config{})
-}
-
-func commandMeta(commandID uuid.UUID, key string) value.CommandMeta {
-	return value.CommandMeta{
-		CommandID:      commandID,
-		IdempotencyKey: key,
-		Actor:          value.Actor{Type: "service", ID: "fleet-manager-test"},
-		RequestID:      "request-test",
-		RequestContext: value.RequestContext{Source: "test"},
-	}
-}
-
-func commandMetaWithVersion(commandID uuid.UUID, key string, version int64) value.CommandMeta {
-	meta := commandMeta(commandID, key)
-	meta.ExpectedVersion = &version
-	return meta
 }
 
 type fixedClock struct{}
@@ -170,7 +355,12 @@ func (r *memoryRepository) Ping(context.Context) error { return nil }
 
 func (r *memoryRepository) GetCommandResult(_ context.Context, identity query.CommandIdentity) (entity.CommandResult, error) {
 	for _, result := range r.commands {
-		if identity.CommandID != uuid.Nil && result.CommandID != nil && *result.CommandID == identity.CommandID {
+		if identity.CommandID != uuid.Nil &&
+			result.CommandID != nil &&
+			*result.CommandID == identity.CommandID &&
+			result.Operation == identity.Operation &&
+			result.ActorType == identity.Actor.Type &&
+			result.ActorID == identity.Actor.ID {
 			return result, nil
 		}
 		if identity.CommandID == uuid.Nil &&
