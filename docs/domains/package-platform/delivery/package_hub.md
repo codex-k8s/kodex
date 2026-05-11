@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-06
 updated_at: 2026-05-11
-related_issues: [642, 646, 650, 663, 667, 670, 673, 678, 680, 684, 689, 692, 700, 704, 706]
+related_issues: [642, 646, 650, 663, 667, 670, 673, 678, 680, 684, 689, 692, 700, 704, 706, 710]
 related_prs: []
 related_docsets:
   - docs/domains/package-platform/product/requirements.md
@@ -36,6 +36,7 @@ approvals:
 | Модель данных | `docs/domains/package-platform/architecture/data_model.md` |
 | API-обзор | `docs/domains/package-platform/architecture/api_contract.md` |
 | Карта Issue | `docs/delivery/issue-map/domains/package-platform.md` |
+| Runbook эксплуатации | `docs/domains/package-platform/operations/package_hub_runbook.md` |
 
 ## Срезы поставки
 
@@ -58,7 +59,7 @@ approvals:
 | PKG-6.2 | #704 | Руководящие пакеты доступны как `package_kind=guidance`: каталог, установки и manifest читаются через существующие операции без отдельного RPC, runtime-запуска и provider-native синхронизации. |
 | PKG-6.3a | #706 | Локальные сценарии `store` и `platform_content` готовы: manifest validation, чтения каталога, чтения установок и границы без runtime-запуска, provider-native синхронизации и хранения файлов в БД. |
 | PKG-6.3b+ | не назначено | Следующие интеграционные сценарии магазина и пользовательского контента платформы готовы после согласования внешнего адаптера магазина, provider-native доступа и runtime-размещения. |
-| PKG-7 | не назначено | Манифесты deploy, migration job, config, health, metrics и runbook готовы. |
+| PKG-7 | #710 | Манифесты deploy, migration job, config, health, metrics, smoke-проверка и runbook готовы. |
 
 ## Статус операций `PackageHubService`
 
@@ -157,6 +158,18 @@ approvals:
 | Проверка manifest пользовательского контента | готово | `platform_content` требует capability `platform_content`, запрещает capability `guidance` и `store`, а также секреты, действия доступа и API платформы; runtime допустим только как будущий способ доставки контента. |
 | Не входит в срез | запланировано | Внешний адаптер магазина, provider-native синхронизация, checkout исходников, runtime-размещение, UI/gateway и бизнес-система магазина не реализуются в `package-hub`. |
 
+## Эксплуатационный контур `PKG-7`
+
+| Область | Статус | Примечание |
+|---|---|---|
+| Dockerfile и образы | готово | `services/internal/package-hub/Dockerfile` собирает production-образ сервиса и отдельный образ миграций. |
+| Kubernetes manifests | готово | `deploy/base/package-hub/**` содержит `Deployment`, `Service`, `ServiceAccount` и `Job/package-hub-migrations`; секреты и БД добавлены в postgres-базу платформы. |
+| Конфигурация | готово | Env покрывает gRPC auth, лимиты соединений, БД, access-check, outbox, health/metrics и ресурсы Kubernetes без хардкода. |
+| `services.yaml` | готово | Сервис, версии, образы, БД, миграции, зависимости, health и manifests описаны в инвентаре платформы. |
+| Smoke-проверка | готово | `scripts/build-package-hub-images.sh` собирает smoke-набор образов, `scripts/smoke-package-hub.sh` проверяет миграции, rollout, `/health/readyz` и gRPC boundary. |
+| Runbook | готово | `docs/domains/package-platform/operations/package_hub_runbook.md` описывает диагностику, восстановление и откат. |
+| Не входит в срез | запланировано | Runtime-запуск пакетов, provider-native синхронизация, внешний магазин и пересчёт заполненности секретов установки остаются в соседних заблокированных срезах. |
+
 ## Наблюдаемость `PKG-3.1`
 
 | Область | Статус | Примечание |
@@ -173,7 +186,7 @@ approvals:
 | `project-catalog` | Перед PKG-4.2 и PKG-5 | `services.yaml` и workspace policy могут ссылаться на руководящие пакеты и package sources, но проектная политика остаётся у `project-catalog`. |
 | `provider-hub` | Перед PKG-4.2 | Репозитории-источники пакетов, webhook, PR и Git-истина пакета идут через provider-native контур. |
 | `access-manager` | Перед PKG-2 | Действия доступа для источников, установок, верификации и секретов должны быть согласованы с access catalog. |
-| `runtime-manager` и `fleet-manager` | Перед runtime-срезом установок и PKG-7 | `package-hub` фиксирует установку и требования, но runtime-нагрузку, Kubernetes и размещение исполняет runtime/fleet контур. |
+| `runtime-manager` и `fleet-manager` | Перед runtime-срезом установок | `package-hub` фиксирует установку и требования, но runtime-нагрузку, Kubernetes и размещение исполняет runtime/fleet контур. |
 | `agent-manager` | Перед PKG-6 | Руководящие пакеты и возможности пакетов влияют на подготовку агентного контекста. |
 | `billing-hub` | После PKG-5 | Ценовые метаданные и факты установки нужны для будущего учёта, но счета не живут в `package-hub`. |
 
