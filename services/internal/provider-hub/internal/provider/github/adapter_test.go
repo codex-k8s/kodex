@@ -92,8 +92,8 @@ func TestReconcileReadsRepositoryIssues(t *testing.T) {
 		if r.Header.Get("Authorization") != "Bearer token-value" {
 			t.Fatalf("authorization header = %q", r.Header.Get("Authorization"))
 		}
-		if r.URL.Query().Get("per_page") != "1" {
-			t.Fatalf("per_page = %q, want 1", r.URL.Query().Get("per_page"))
+		if r.URL.Query().Get("per_page") != "50" {
+			t.Fatalf("per_page = %q, want 50", r.URL.Query().Get("per_page"))
 		}
 		w.Header().Set("X-RateLimit-Limit", "5000")
 		w.Header().Set("X-RateLimit-Remaining", "4998")
@@ -127,11 +127,199 @@ func TestReconcileReadsRepositoryIssues(t *testing.T) {
 	if item.ProviderWorkItemID != "github:codex-k8s/kodex:issue:7" || item.Title != "Issue title" || len(item.Labels) != 1 {
 		t.Fatalf("work item = %+v, want normalized issue", item)
 	}
-	if result.NextCursorValue != "2026-05-07T12:00:00Z" {
-		t.Fatalf("next cursor = %q, want observed cursor when provider time is older", result.NextCursorValue)
+	if result.NextCursorValue != "2026-05-07T11:59:00Z" {
+		t.Fatalf("next cursor = %q, want provider watermark", result.NextCursorValue)
 	}
 	if len(result.LimitSnapshots) != 1 || *result.LimitSnapshots[0].Remaining != 4998 {
 		t.Fatalf("limit snapshots = %+v, want core remaining 4998", result.LimitSnapshots)
+	}
+}
+
+func TestReconcileRepositoryCursorUsesFilteredProviderWatermark(t *testing.T) {
+	t.Parallel()
+
+	accountID := uuid.New()
+	observedAt := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/repos/codex-k8s/kodex/issues" {
+			t.Fatalf("path = %s, want repository issues", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`[{"id":100,"number":7,"html_url":"https://github.com/codex-k8s/kodex/issues/7","title":"Issue title","state":"open","updated_at":"2026-05-07T11:58:00Z"}]`))
+	}))
+	defer server.Close()
+
+	token := secretresolver.NewSecretValue([]byte("token-value"))
+	defer token.Clear()
+	result, err := New(Config{BaseURL: server.URL, HTTPClient: server.Client()}).Reconcile(context.Background(), providerclient.ReconciliationRequest{
+		Credential: providerclient.AccountCredential{ExternalAccountID: accountID, ProviderSlug: enum.ProviderSlugGitHub, Token: token},
+		Cursor: entity.SyncCursor{
+			ProviderSlug: enum.ProviderSlugGitHub,
+			ScopeType:    enum.SyncCursorScopeRepository,
+			ScopeRef:     "codex-k8s/kodex",
+			ArtifactKind: enum.SyncArtifactPullRequest,
+		},
+		MaxItems:   1,
+		ObservedAt: observedAt,
+	})
+	if err != nil {
+		t.Fatalf("Reconcile(): %v", err)
+	}
+	if len(result.WorkItems) != 0 {
+		t.Fatalf("work items = %d, want none for filtered issue page", len(result.WorkItems))
+	}
+	if result.NextCursorValue != "2026-05-07T11:58:00Z" {
+		t.Fatalf("next cursor = %q, want filtered provider watermark", result.NextCursorValue)
+	}
+}
+
+func TestReconcileCommentsCursorUsesLastReturnedComment(t *testing.T) {
+	t.Parallel()
+
+	accountID := uuid.New()
+	observedAt := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/codex-k8s/kodex/issues/7":
+			_, _ = w.Write([]byte(`{"id":100,"number":7,"html_url":"https://github.com/codex-k8s/kodex/issues/7","title":"Issue title","state":"open","updated_at":"2026-05-07T11:00:00Z"}`))
+		case "/repos/codex-k8s/kodex/issues/7/comments":
+			_, _ = w.Write([]byte(`[{"id":200,"html_url":"https://github.com/codex-k8s/kodex/issues/7#issuecomment-200","body":"first","user":{"login":"reviewer"},"created_at":"2026-05-07T11:01:00Z","updated_at":"2026-05-07T11:01:00Z"},{"id":201,"html_url":"https://github.com/codex-k8s/kodex/issues/7#issuecomment-201","body":"second","user":{"login":"reviewer"},"created_at":"2026-05-07T11:02:00Z","updated_at":"2026-05-07T11:02:00Z"}]`))
+		default:
+			t.Fatalf("unexpected path = %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	token := secretresolver.NewSecretValue([]byte("token-value"))
+	defer token.Clear()
+	result, err := New(Config{BaseURL: server.URL, HTTPClient: server.Client()}).Reconcile(context.Background(), providerclient.ReconciliationRequest{
+		Credential: providerclient.AccountCredential{ExternalAccountID: accountID, ProviderSlug: enum.ProviderSlugGitHub, Token: token},
+		Cursor: entity.SyncCursor{
+			ProviderSlug: enum.ProviderSlugGitHub,
+			ScopeType:    enum.SyncCursorScopeWorkItem,
+			ScopeRef:     "codex-k8s/kodex#issue:7",
+			ArtifactKind: enum.SyncArtifactComment,
+		},
+		MaxItems:   1,
+		ObservedAt: observedAt,
+	})
+	if err != nil {
+		t.Fatalf("Reconcile(): %v", err)
+	}
+	if len(result.Comments) != 1 || result.Comments[0].Body != "first" {
+		t.Fatalf("comments = %+v, want only first comment", result.Comments)
+	}
+	if result.NextCursorValue != "2026-05-07T11:01:00Z" {
+		t.Fatalf("next cursor = %q, want last returned comment watermark", result.NextCursorValue)
+	}
+}
+
+func TestReconcilePullRequestCommentsReadsReviewPageBeforeAdvancingCursor(t *testing.T) {
+	t.Parallel()
+
+	accountID := uuid.New()
+	observedAt := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/codex-k8s/kodex/issues/7":
+			_, _ = w.Write([]byte(`{"id":100,"number":7,"html_url":"https://github.com/codex-k8s/kodex/pull/7","title":"PR title","state":"open","pull_request":{"url":"https://api.github.com/repos/codex-k8s/kodex/pulls/7"},"updated_at":"2026-05-07T11:00:00Z"}`))
+		case "/repos/codex-k8s/kodex/pulls/7":
+			_, _ = w.Write([]byte(`{"id":700,"number":7,"html_url":"https://github.com/codex-k8s/kodex/pull/7","title":"PR title","state":"open","updated_at":"2026-05-07T11:00:00Z"}`))
+		case "/repos/codex-k8s/kodex/issues/7/comments":
+			_, _ = w.Write([]byte(`[{"id":200,"html_url":"https://github.com/codex-k8s/kodex/pull/7#issuecomment-200","body":"later issue comment","user":{"login":"reviewer"},"created_at":"2026-05-07T11:05:00Z","updated_at":"2026-05-07T11:05:00Z"}]`))
+		case "/repos/codex-k8s/kodex/pulls/7/reviews":
+			if r.URL.Query().Get("page") == "2" {
+				_, _ = w.Write([]byte(`[{"id":301,"html_url":"https://github.com/codex-k8s/kodex/pull/7#pullrequestreview-301","body":"first review after cursor","state":"COMMENTED","user":{"login":"reviewer"},"submitted_at":"2026-05-07T11:01:00Z"}]`))
+				return
+			}
+			w.Header().Set("Link", `<`+server.URL+`/repos/codex-k8s/kodex/pulls/7/reviews?page=2>; rel="next"`)
+			_, _ = w.Write([]byte(`[{"id":300,"html_url":"https://github.com/codex-k8s/kodex/pull/7#pullrequestreview-300","body":"old review","state":"COMMENTED","user":{"login":"reviewer"},"submitted_at":"2026-05-07T10:00:00Z"}]`))
+		default:
+			t.Fatalf("unexpected path = %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	token := secretresolver.NewSecretValue([]byte("token-value"))
+	defer token.Clear()
+	result, err := New(Config{BaseURL: server.URL, HTTPClient: server.Client()}).Reconcile(context.Background(), providerclient.ReconciliationRequest{
+		Credential: providerclient.AccountCredential{ExternalAccountID: accountID, ProviderSlug: enum.ProviderSlugGitHub, Token: token},
+		Cursor: entity.SyncCursor{
+			ProviderSlug: enum.ProviderSlugGitHub,
+			ScopeType:    enum.SyncCursorScopeWorkItem,
+			ScopeRef:     "codex-k8s/kodex#number:7",
+			ArtifactKind: enum.SyncArtifactComment,
+			CursorValue:  "2026-05-07T10:30:00Z",
+		},
+		MaxItems:   1,
+		ObservedAt: observedAt,
+	})
+	if err != nil {
+		t.Fatalf("Reconcile(): %v", err)
+	}
+	if len(result.Comments) != 1 || result.Comments[0].Body != "first review after cursor" {
+		t.Fatalf("comments = %+v, want earliest review after cursor", result.Comments)
+	}
+	if result.NextCursorValue != "2026-05-07T11:01:00Z" {
+		t.Fatalf("next cursor = %q, want review watermark", result.NextCursorValue)
+	}
+}
+
+func TestReconcileSupportsGitHubWebURLAndRepositoryIDTargets(t *testing.T) {
+	t.Parallel()
+
+	accountID := uuid.New()
+	observedAt := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/codex-k8s/kodex/pulls/703":
+			_, _ = w.Write([]byte(`{"id":7030,"number":703,"html_url":"https://github.com/codex-k8s/kodex/pull/703","title":"PR title","state":"open","body":"PR body","updated_at":"2026-05-07T11:55:00Z"}`))
+		case "/repositories/101":
+			_, _ = w.Write([]byte(`{"id":101,"full_name":"codex-k8s/kodex"}`))
+		case "/repos/codex-k8s/kodex":
+			_, _ = w.Write([]byte(`{"id":101,"full_name":"codex-k8s/kodex"}`))
+		default:
+			t.Fatalf("unexpected path = %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	token := secretresolver.NewSecretValue([]byte("token-value"))
+	defer token.Clear()
+	adapter := New(Config{BaseURL: server.URL, HTTPClient: server.Client()})
+	workItemResult, err := adapter.Reconcile(context.Background(), providerclient.ReconciliationRequest{
+		Credential: providerclient.AccountCredential{ExternalAccountID: accountID, ProviderSlug: enum.ProviderSlugGitHub, Token: token},
+		Cursor: entity.SyncCursor{
+			ProviderSlug: enum.ProviderSlugGitHub,
+			ScopeType:    enum.SyncCursorScopeWorkItem,
+			ScopeRef:     "web_url:https://github.com/codex-k8s/kodex/pull/703",
+			ArtifactKind: enum.SyncArtifactPullRequest,
+		},
+		MaxItems:   1,
+		ObservedAt: observedAt,
+	})
+	if err != nil {
+		t.Fatalf("Reconcile() work item: %v", err)
+	}
+	if len(workItemResult.WorkItems) != 1 || workItemResult.WorkItems[0].ProviderWorkItemID != "github:codex-k8s/kodex:pull_request:703" {
+		t.Fatalf("work item result = %+v, want PR from web_url", workItemResult.WorkItems)
+	}
+	repositoryResult, err := adapter.Reconcile(context.Background(), providerclient.ReconciliationRequest{
+		Credential: providerclient.AccountCredential{ExternalAccountID: accountID, ProviderSlug: enum.ProviderSlugGitHub, Token: token},
+		Cursor: entity.SyncCursor{
+			ProviderSlug: enum.ProviderSlugGitHub,
+			ScopeType:    enum.SyncCursorScopeRepository,
+			ScopeRef:     "provider_repository_id:101",
+			ArtifactKind: enum.SyncArtifactRepository,
+		},
+		MaxItems:   1,
+		ObservedAt: observedAt,
+	})
+	if err != nil {
+		t.Fatalf("Reconcile() repository: %v", err)
+	}
+	if repositoryResult.NextCursorValue != observedAt.Format(time.RFC3339Nano) {
+		t.Fatalf("repository cursor = %q, want observed cursor", repositoryResult.NextCursorValue)
 	}
 }
 

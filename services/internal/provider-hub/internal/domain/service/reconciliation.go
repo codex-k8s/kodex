@@ -383,8 +383,11 @@ func reconciliationUsageScope(cursor entity.SyncCursor) (reconciliationScope, er
 
 func repositoryFromWorkItemScopeRef(scopeRef string) (string, error) {
 	scopeRef = strings.TrimSpace(scopeRef)
-	if scopeRef == "" || strings.HasPrefix(scopeRef, "provider_object_id:") {
+	if scopeRef == "" {
 		return "", errs.ErrInvalidArgument
+	}
+	if value, ok := strings.CutPrefix(scopeRef, "provider_object_id:"); ok {
+		return repositoryFromProviderObjectID(value)
 	}
 	if value, ok := strings.CutPrefix(scopeRef, "web_url:"); ok {
 		return repositoryFromGitHubWebURL(value)
@@ -394,6 +397,17 @@ func repositoryFromWorkItemScopeRef(scopeRef string) (string, error) {
 		return "", errs.ErrInvalidArgument
 	}
 	return strings.TrimSpace(repository), nil
+}
+
+func repositoryFromProviderObjectID(raw string) (string, error) {
+	parts := strings.Split(strings.TrimSpace(raw), ":")
+	if len(parts) == 4 && parts[0] == string(enum.ProviderSlugGitHub) {
+		repository := strings.TrimSpace(parts[1])
+		if repository != "" {
+			return repository, nil
+		}
+	}
+	return "", errs.ErrInvalidArgument
 }
 
 func repositoryFromGitHubWebURL(rawURL string) (string, error) {

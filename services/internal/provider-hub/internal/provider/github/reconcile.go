@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -49,7 +51,7 @@ func (a *Adapter) reconcileWorkItem(ctx context.Context, client *githubapi.Clien
 		}
 		result.WorkItems = append(result.WorkItems, pullRequestAPISnapshot(target.repository(), item))
 	case enum.SyncArtifactComment:
-		workItem, comments, err := a.fetchWorkItemComments(ctx, client, target, request.Cursor.CursorValue, int(request.MaxItems))
+		workItem, comments, cursorAt, err := a.fetchWorkItemComments(ctx, client, target, request.Cursor.CursorValue, int(request.MaxItems), observedAt)
 		if err != nil {
 			return providerclient.ReconciliationResult{}, err
 		}
@@ -57,6 +59,7 @@ func (a *Adapter) reconcileWorkItem(ctx context.Context, client *githubapi.Clien
 			result.WorkItems = append(result.WorkItems, workItem)
 		}
 		result.Comments = append(result.Comments, comments...)
+		return resultWithCursor(result, cursorAt), nil
 	case enum.SyncArtifactRelationship:
 		workItem, err := a.fetchWorkItemSnapshot(ctx, client, target)
 		if err != nil {
@@ -64,6 +67,9 @@ func (a *Adapter) reconcileWorkItem(ctx context.Context, client *githubapi.Clien
 		}
 		if workItem.ProviderWorkItemID != "" {
 			result.WorkItems = append(result.WorkItems, workItem)
+			if !workItem.ProviderUpdatedAt.IsZero() {
+				return resultWithCursor(result, workItem.ProviderUpdatedAt), nil
+			}
 		}
 	default:
 		return providerclient.ReconciliationResult{}, providerError(providerclient.ErrorKindUnsupported, 0, nil)
@@ -72,24 +78,15 @@ func (a *Adapter) reconcileWorkItem(ctx context.Context, client *githubapi.Clien
 }
 
 func (a *Adapter) reconcileRepository(ctx context.Context, client *githubapi.Client, request providerclient.ReconciliationRequest, observedAt time.Time) (providerclient.ReconciliationResult, error) {
-	owner, repo, err := parseRepositoryRef(request.Cursor.ScopeRef)
+	owner, repo, err := a.resolveRepositoryRef(ctx, client, request.Cursor.ScopeRef)
 	if err != nil {
 		return providerclient.ReconciliationResult{}, providerError(providerclient.ErrorKindUnsupported, 0, err)
 	}
-	limit := int(request.MaxItems)
-	if limit <= 0 || limit > githubAPIPerPage {
-		limit = githubAPIPerPage
-	}
-	// ProjectionUpdate currently commits one work item per cursor completion.
-	// The worker will re-enter through the advanced cursor for the next item.
-	if limit > 1 {
-		limit = 1
-	}
 	switch request.Cursor.ArtifactKind {
 	case enum.SyncArtifactIssue:
-		return a.reconcileRepositoryIssues(ctx, client, owner, repo, request, observedAt, limit)
+		return a.reconcileRepositoryIssues(ctx, client, owner, repo, request, observedAt)
 	case enum.SyncArtifactPullRequest:
-		return a.reconcileRepositoryPullRequests(ctx, client, owner, repo, request, observedAt, limit)
+		return a.reconcileRepositoryPullRequests(ctx, client, owner, repo, request, observedAt)
 	case enum.SyncArtifactRepository:
 		_, response, err := client.Repositories.Get(ctx, owner, repo)
 		if err != nil {
@@ -104,7 +101,7 @@ func (a *Adapter) reconcileRepository(ctx context.Context, client *githubapi.Cli
 	}
 }
 
-func (a *Adapter) reconcileRepositoryIssues(ctx context.Context, client *githubapi.Client, owner string, repo string, request providerclient.ReconciliationRequest, observedAt time.Time, limit int) (providerclient.ReconciliationResult, error) {
+func (a *Adapter) reconcileRepositoryIssues(ctx context.Context, client *githubapi.Client, owner string, repo string, request providerclient.ReconciliationRequest, observedAt time.Time) (providerclient.ReconciliationResult, error) {
 	since := cursorSince(request.Cursor)
 	options := &githubapi.IssueListByRepoOptions{
 		State:     "all",
@@ -112,65 +109,86 @@ func (a *Adapter) reconcileRepositoryIssues(ctx context.Context, client *githuba
 		Direction: "asc",
 		Since:     since,
 		ListOptions: githubapi.ListOptions{
-			PerPage: limit,
+			PerPage: githubAPIPerPage,
 		},
 	}
-	items, response, err := client.Issues.ListByRepo(ctx, owner, repo, options)
-	if err != nil {
-		return providerclient.ReconciliationResult{}, classifyGitHubError(err)
-	}
 	result := providerclient.ReconciliationResult{
-		LimitSnapshots:      a.limitSnapshots(request.Credential.ExternalAccountID, observedAt, rateLimitsFromResponse(response)),
-		RateBudgetStateJSON: rateBudgetStateJSON(response),
+		RateBudgetStateJSON: []byte(`{}`),
 	}
-	for _, item := range items {
-		if item == nil || item.IsPullRequest() {
-			continue
+	lastSeenAt := time.Time{}
+	for {
+		items, response, err := client.Issues.ListByRepo(ctx, owner, repo, options)
+		if err != nil {
+			return providerclient.ReconciliationResult{}, classifyGitHubError(err)
 		}
-		result.WorkItems = append(result.WorkItems, issueAPISnapshot(owner+"/"+repo, item, enum.WorkItemKindIssue))
-		if len(result.WorkItems) >= limit {
+		result.LimitSnapshots = a.limitSnapshots(request.Credential.ExternalAccountID, observedAt, rateLimitsFromResponse(response))
+		result.RateBudgetStateJSON = rateBudgetStateJSON(response)
+		for _, item := range items {
+			if item == nil {
+				continue
+			}
+			lastSeenAt = maxTime(lastSeenAt, issueUpdatedAt(item, observedAt))
+			if item.IsPullRequest() {
+				continue
+			}
+			result.WorkItems = append(result.WorkItems, issueAPISnapshot(owner+"/"+repo, item, enum.WorkItemKindIssue))
+			return resultWithCursor(result, issueUpdatedAt(item, observedAt)), nil
+		}
+		if response == nil || response.NextPage == 0 {
 			break
 		}
+		options.ListOptions.Page = response.NextPage
 	}
-	return resultWithCursor(result, maxProviderUpdatedAt(result, observedAt)), nil
+	return resultWithCursor(result, cursorAfterEmptyProjectionPage(lastSeenAt, observedAt)), nil
 }
 
-func (a *Adapter) reconcileRepositoryPullRequests(ctx context.Context, client *githubapi.Client, owner string, repo string, request providerclient.ReconciliationRequest, observedAt time.Time, limit int) (providerclient.ReconciliationResult, error) {
+func (a *Adapter) reconcileRepositoryPullRequests(ctx context.Context, client *githubapi.Client, owner string, repo string, request providerclient.ReconciliationRequest, observedAt time.Time) (providerclient.ReconciliationResult, error) {
 	since := cursorSince(request.Cursor)
 	options := &githubapi.IssueListByRepoOptions{
 		State:     "all",
 		Sort:      "updated",
 		Direction: "asc",
 		ListOptions: githubapi.ListOptions{
-			PerPage: limit,
+			PerPage: githubAPIPerPage,
 		},
 		Since: since,
 	}
-	items, response, err := client.Issues.ListByRepo(ctx, owner, repo, options)
-	if err != nil {
-		return providerclient.ReconciliationResult{}, classifyGitHubError(err)
-	}
 	result := providerclient.ReconciliationResult{
-		LimitSnapshots:      a.limitSnapshots(request.Credential.ExternalAccountID, observedAt, rateLimitsFromResponse(response)),
-		RateBudgetStateJSON: rateBudgetStateJSON(response),
+		RateBudgetStateJSON: []byte(`{}`),
 	}
-	for _, item := range items {
-		if item == nil || !item.IsPullRequest() {
-			continue
+	lastSeenAt := time.Time{}
+	for {
+		items, response, err := client.Issues.ListByRepo(ctx, owner, repo, options)
+		if err != nil {
+			return providerclient.ReconciliationResult{}, classifyGitHubError(err)
 		}
-		result.WorkItems = append(result.WorkItems, pullRequestIssueAPISnapshot(owner+"/"+repo, item))
-		if len(result.WorkItems) >= limit {
+		result.LimitSnapshots = a.limitSnapshots(request.Credential.ExternalAccountID, observedAt, rateLimitsFromResponse(response))
+		result.RateBudgetStateJSON = rateBudgetStateJSON(response)
+		for _, item := range items {
+			if item == nil {
+				continue
+			}
+			lastSeenAt = maxTime(lastSeenAt, issueUpdatedAt(item, observedAt))
+			if !item.IsPullRequest() {
+				continue
+			}
+			result.WorkItems = append(result.WorkItems, pullRequestIssueAPISnapshot(owner+"/"+repo, item))
+			return resultWithCursor(result, issueUpdatedAt(item, observedAt)), nil
+		}
+		if response == nil || response.NextPage == 0 {
 			break
 		}
+		options.ListOptions.Page = response.NextPage
 	}
-	return resultWithCursor(result, maxProviderUpdatedAt(result, observedAt)), nil
+	return resultWithCursor(result, cursorAfterEmptyProjectionPage(lastSeenAt, observedAt)), nil
 }
 
-func (a *Adapter) fetchWorkItemComments(ctx context.Context, client *githubapi.Client, target workItemScope, cursorValue string, maxItems int) (value.ProviderWorkItemSnapshot, []value.ProviderCommentSnapshot, error) {
-	workItem, err := a.fetchWorkItemSnapshot(ctx, client, target)
+func (a *Adapter) fetchWorkItemComments(ctx context.Context, client *githubapi.Client, target workItemScope, cursorValue string, maxItems int, observedAt time.Time) (value.ProviderWorkItemSnapshot, []value.ProviderCommentSnapshot, time.Time, error) {
+	workItem, actualKind, err := a.fetchWorkItemSnapshotWithKind(ctx, client, target)
 	if err != nil {
-		return value.ProviderWorkItemSnapshot{}, nil, err
+		return value.ProviderWorkItemSnapshot{}, nil, time.Time{}, err
 	}
+	target.kind = actualKind
 	since := parseCursorTime(cursorValue)
 	sortValue := "updated"
 	directionValue := "asc"
@@ -179,64 +197,100 @@ func (a *Adapter) fetchWorkItemComments(ctx context.Context, client *githubapi.C
 		Direction: &directionValue,
 		Since:     &since,
 		ListOptions: githubapi.ListOptions{
-			PerPage: boundedPageSize(maxItems),
+			PerPage: githubAPIPerPage,
 		},
 	}
-	items, _, err := client.Issues.ListComments(ctx, target.owner, target.repo, target.number, options)
-	if err != nil {
-		return value.ProviderWorkItemSnapshot{}, nil, classifyGitHubError(err)
-	}
-	comments := make([]value.ProviderCommentSnapshot, 0, len(items))
-	for _, item := range items {
-		if item == nil {
-			continue
-		}
-		comments = append(comments, issueCommentSnapshot(workItem.ProviderWorkItemID, item))
-		if len(comments) >= maxItems {
-			return workItem, comments, nil
-		}
-	}
-	if target.kind == enum.WorkItemKindPullRequest && len(comments) < maxItems {
-		reviews, _, err := client.PullRequests.ListReviews(ctx, target.owner, target.repo, target.number, &githubapi.ListOptions{PerPage: boundedPageSize(maxItems - len(comments))})
+	candidates := make([]commentCandidate, 0, maxItems)
+	for {
+		items, response, err := client.Issues.ListComments(ctx, target.owner, target.repo, target.number, options)
 		if err != nil {
-			return value.ProviderWorkItemSnapshot{}, nil, classifyGitHubError(err)
+			return value.ProviderWorkItemSnapshot{}, nil, time.Time{}, classifyGitHubError(err)
 		}
-		for _, review := range reviews {
-			if review == nil || !review.GetSubmittedAt().After(since) {
+		for _, item := range items {
+			if item == nil {
 				continue
 			}
-			comments = append(comments, reviewSnapshot(workItem.ProviderWorkItemID, review))
-			if len(comments) >= maxItems {
+			snapshot := issueCommentSnapshot(workItem.ProviderWorkItemID, item)
+			candidates = append(candidates, commentCandidate{Snapshot: snapshot, CursorAt: commentUpdatedAt(snapshot, observedAt)})
+		}
+		if len(candidates) >= maxItems || response == nil || response.NextPage == 0 {
+			break
+		}
+		options.Page = response.NextPage
+	}
+	if target.kind == enum.WorkItemKindPullRequest {
+		reviewOptions := &githubapi.ListOptions{PerPage: githubAPIPerPage}
+		reviewCandidateCount := 0
+		for {
+			reviews, response, err := client.PullRequests.ListReviews(ctx, target.owner, target.repo, target.number, reviewOptions)
+			if err != nil {
+				return value.ProviderWorkItemSnapshot{}, nil, time.Time{}, classifyGitHubError(err)
+			}
+			for _, review := range reviews {
+				if review == nil || !review.GetSubmittedAt().After(since) {
+					continue
+				}
+				snapshot := reviewSnapshot(workItem.ProviderWorkItemID, review)
+				candidates = append(candidates, commentCandidate{Snapshot: snapshot, CursorAt: commentUpdatedAt(snapshot, observedAt)})
+				reviewCandidateCount++
+			}
+			if response == nil || response.NextPage == 0 || (reviewCandidateCount > 0 && len(candidates) >= maxItems) {
 				break
 			}
+			reviewOptions.Page = response.NextPage
 		}
 	}
-	return workItem, comments, nil
+	comments, cursorAt := selectCommentCandidates(candidates, maxItems, observedAt)
+	return workItem, comments, cursorAt, nil
 }
 
 func (a *Adapter) fetchWorkItemSnapshot(ctx context.Context, client *githubapi.Client, target workItemScope) (value.ProviderWorkItemSnapshot, error) {
+	snapshot, _, err := a.fetchWorkItemSnapshotWithKind(ctx, client, target)
+	return snapshot, err
+}
+
+func (a *Adapter) fetchWorkItemSnapshotWithKind(ctx context.Context, client *githubapi.Client, target workItemScope) (value.ProviderWorkItemSnapshot, enum.WorkItemKind, error) {
 	switch target.kind {
 	case enum.WorkItemKindIssue:
 		item, _, err := client.Issues.Get(ctx, target.owner, target.repo, target.number)
 		if err != nil {
-			return value.ProviderWorkItemSnapshot{}, classifyGitHubError(err)
+			return value.ProviderWorkItemSnapshot{}, "", classifyGitHubError(err)
 		}
 		if item.IsPullRequest() {
-			return value.ProviderWorkItemSnapshot{}, nil
+			return value.ProviderWorkItemSnapshot{}, "", nil
 		}
-		return issueAPISnapshot(target.repository(), item, enum.WorkItemKindIssue), nil
+		return issueAPISnapshot(target.repository(), item, enum.WorkItemKindIssue), enum.WorkItemKindIssue, nil
 	case enum.WorkItemKindPullRequest:
 		item, _, err := client.PullRequests.Get(ctx, target.owner, target.repo, target.number)
 		if err != nil {
-			return value.ProviderWorkItemSnapshot{}, classifyGitHubError(err)
+			return value.ProviderWorkItemSnapshot{}, "", classifyGitHubError(err)
 		}
-		return pullRequestAPISnapshot(target.repository(), item), nil
+		return pullRequestAPISnapshot(target.repository(), item), enum.WorkItemKindPullRequest, nil
+	case "":
+		item, _, err := client.Issues.Get(ctx, target.owner, target.repo, target.number)
+		if err != nil {
+			return value.ProviderWorkItemSnapshot{}, "", classifyGitHubError(err)
+		}
+		if !item.IsPullRequest() {
+			return issueAPISnapshot(target.repository(), item, enum.WorkItemKindIssue), enum.WorkItemKindIssue, nil
+		}
+		pullRequest, _, err := client.PullRequests.Get(ctx, target.owner, target.repo, target.number)
+		if err != nil {
+			return value.ProviderWorkItemSnapshot{}, "", classifyGitHubError(err)
+		}
+		return pullRequestAPISnapshot(target.repository(), pullRequest), enum.WorkItemKindPullRequest, nil
 	default:
-		return value.ProviderWorkItemSnapshot{}, providerError(providerclient.ErrorKindUnsupported, 0, nil)
+		return value.ProviderWorkItemSnapshot{}, "", providerError(providerclient.ErrorKindUnsupported, 0, nil)
 	}
 }
 
 func parseWorkItemScope(scopeRef string) (workItemScope, error) {
+	if rawURL, ok := strings.CutPrefix(strings.TrimSpace(scopeRef), "web_url:"); ok {
+		return parseGitHubWorkItemURL(rawURL)
+	}
+	if providerObjectID, ok := strings.CutPrefix(strings.TrimSpace(scopeRef), "provider_object_id:"); ok {
+		return parseGitHubProviderWorkItemID(providerObjectID)
+	}
 	repository, rest, ok := strings.Cut(strings.TrimSpace(scopeRef), "#")
 	if !ok {
 		return workItemScope{}, providerclient.ErrUnsupported
@@ -255,14 +309,35 @@ func parseWorkItemScope(scopeRef string) (workItemScope, error) {
 	}
 	target := workItemScope{owner: owner, repo: repo, number: number}
 	switch strings.TrimSpace(kind) {
-	case string(enum.WorkItemKindIssue), "number", "":
+	case string(enum.WorkItemKindIssue):
 		target.kind = enum.WorkItemKindIssue
 	case string(enum.WorkItemKindPullRequest):
 		target.kind = enum.WorkItemKindPullRequest
+	case "number", "":
+		target.kind = ""
 	default:
 		return workItemScope{}, providerclient.ErrUnsupported
 	}
 	return target, nil
+}
+
+func (a *Adapter) resolveRepositoryRef(ctx context.Context, client *githubapi.Client, scopeRef string) (string, string, error) {
+	scopeRef = strings.TrimSpace(scopeRef)
+	if providerRepositoryID, ok := strings.CutPrefix(scopeRef, "provider_repository_id:"); ok {
+		id, err := strconv.ParseInt(strings.TrimSpace(providerRepositoryID), 10, 64)
+		if err != nil || id <= 0 {
+			return "", "", providerclient.ErrUnsupported
+		}
+		repository, _, err := client.Repositories.GetByID(ctx, id)
+		if err != nil {
+			return "", "", classifyGitHubError(err)
+		}
+		return parseRepositoryRef(repository.GetFullName())
+	}
+	if rawURL, ok := strings.CutPrefix(scopeRef, "web_url:"); ok {
+		return parseGitHubRepositoryURL(rawURL)
+	}
+	return parseRepositoryRef(scopeRef)
 }
 
 func parseRepositoryRef(scopeRef string) (string, string, error) {
@@ -271,6 +346,80 @@ func parseRepositoryRef(scopeRef string) (string, string, error) {
 		return "", "", providerclient.ErrUnsupported
 	}
 	return strings.TrimSpace(owner), strings.TrimSpace(repo), nil
+}
+
+func parseGitHubWorkItemURL(rawURL string) (workItemScope, error) {
+	owner, repo, kind, number, err := parseGitHubWorkItemURLParts(rawURL)
+	if err != nil {
+		return workItemScope{}, err
+	}
+	return workItemScope{owner: owner, repo: repo, kind: kind, number: number}, nil
+}
+
+func parseGitHubWorkItemURLParts(rawURL string) (string, string, enum.WorkItemKind, int, error) {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return "", "", "", 0, providerclient.ErrUnsupported
+	}
+	host := strings.TrimPrefix(strings.ToLower(parsed.Hostname()), "www.")
+	if host != "github.com" {
+		return "", "", "", 0, providerclient.ErrUnsupported
+	}
+	parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+	if len(parts) < 4 {
+		return "", "", "", 0, providerclient.ErrUnsupported
+	}
+	owner, repo := strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
+	number, err := strconv.Atoi(strings.TrimSpace(parts[3]))
+	if owner == "" || repo == "" || err != nil || number <= 0 {
+		return "", "", "", 0, providerclient.ErrUnsupported
+	}
+	switch parts[2] {
+	case "issues":
+		return owner, repo, enum.WorkItemKindIssue, number, nil
+	case "pull":
+		return owner, repo, enum.WorkItemKindPullRequest, number, nil
+	default:
+		return "", "", "", 0, providerclient.ErrUnsupported
+	}
+}
+
+func parseGitHubRepositoryURL(rawURL string) (string, string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return "", "", providerclient.ErrUnsupported
+	}
+	host := strings.TrimPrefix(strings.ToLower(parsed.Hostname()), "www.")
+	if host != "github.com" {
+		return "", "", providerclient.ErrUnsupported
+	}
+	parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+	if len(parts) < 2 {
+		return "", "", providerclient.ErrUnsupported
+	}
+	return parseRepositoryRef(parts[0] + "/" + parts[1])
+}
+
+func parseGitHubProviderWorkItemID(providerObjectID string) (workItemScope, error) {
+	parts := strings.Split(strings.TrimSpace(providerObjectID), ":")
+	if len(parts) != 4 || parts[0] != string(enum.ProviderSlugGitHub) {
+		return workItemScope{}, providerclient.ErrUnsupported
+	}
+	owner, repo, err := parseRepositoryRef(parts[1])
+	if err != nil {
+		return workItemScope{}, err
+	}
+	number, err := strconv.Atoi(strings.TrimSpace(parts[3]))
+	if err != nil || number <= 0 {
+		return workItemScope{}, providerclient.ErrUnsupported
+	}
+	kind := enum.WorkItemKind(strings.TrimSpace(parts[2]))
+	switch kind {
+	case enum.WorkItemKindIssue, enum.WorkItemKindPullRequest:
+		return workItemScope{owner: owner, repo: repo, kind: kind, number: number}, nil
+	default:
+		return workItemScope{}, providerclient.ErrUnsupported
+	}
 }
 
 func (s workItemScope) repository() string {
@@ -381,6 +530,65 @@ func reviewSnapshot(workItemID string, review *githubapi.PullRequestReview) valu
 	}
 }
 
+type commentCandidate struct {
+	Snapshot value.ProviderCommentSnapshot
+	CursorAt time.Time
+}
+
+func selectCommentCandidates(candidates []commentCandidate, maxItems int, observedAt time.Time) ([]value.ProviderCommentSnapshot, time.Time) {
+	if len(candidates) == 0 {
+		return nil, observedAt
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		left := candidates[i]
+		right := candidates[j]
+		if !left.CursorAt.Equal(right.CursorAt) {
+			return left.CursorAt.Before(right.CursorAt)
+		}
+		return left.Snapshot.ProviderCommentID < right.Snapshot.ProviderCommentID
+	})
+	limit := maxItems
+	if limit <= 0 || limit > len(candidates) {
+		limit = len(candidates)
+	}
+	comments := make([]value.ProviderCommentSnapshot, 0, limit)
+	for _, candidate := range candidates[:limit] {
+		comments = append(comments, candidate.Snapshot)
+	}
+	return comments, commentUpdatedAt(comments[len(comments)-1], observedAt)
+}
+
+func issueUpdatedAt(issue *githubapi.Issue, fallback time.Time) time.Time {
+	if issue == nil || issue.GetUpdatedAt().IsZero() {
+		return fallback.UTC()
+	}
+	return issue.GetUpdatedAt().UTC()
+}
+
+func commentUpdatedAt(comment value.ProviderCommentSnapshot, fallback time.Time) time.Time {
+	if comment.ProviderUpdatedAt.IsZero() {
+		return fallback.UTC()
+	}
+	return comment.ProviderUpdatedAt.UTC()
+}
+
+func cursorAfterEmptyProjectionPage(lastSeenAt time.Time, observedAt time.Time) time.Time {
+	if lastSeenAt.IsZero() {
+		return observedAt.UTC()
+	}
+	return lastSeenAt.UTC()
+}
+
+func maxTime(left time.Time, right time.Time) time.Time {
+	if right.IsZero() {
+		return left
+	}
+	if left.IsZero() || right.After(left) {
+		return right.UTC()
+	}
+	return left.UTC()
+}
+
 func userLogin(user *githubapi.User) string {
 	if user == nil {
 		return ""
@@ -407,13 +615,6 @@ func providerWorkItemID(repository string, kind enum.WorkItemKind, number int) s
 	return strings.Join([]string{string(enum.ProviderSlugGitHub), repository, string(kind), strconv.Itoa(number)}, ":")
 }
 
-func boundedPageSize(maxItems int) int {
-	if maxItems <= 0 || maxItems > githubAPIPerPage {
-		return githubAPIPerPage
-	}
-	return maxItems
-}
-
 func cursorSince(cursor entity.SyncCursor) time.Time {
 	if cursor.OverlapSince != nil {
 		return cursor.OverlapSince.UTC()
@@ -437,21 +638,6 @@ func resultWithCursor(result providerclient.ReconciliationResult, cursorAt time.
 		result.RateBudgetStateJSON = []byte(`{}`)
 	}
 	return result
-}
-
-func maxProviderUpdatedAt(result providerclient.ReconciliationResult, fallback time.Time) time.Time {
-	maxValue := fallback.UTC()
-	for _, item := range result.WorkItems {
-		if item.ProviderUpdatedAt.After(maxValue) {
-			maxValue = item.ProviderUpdatedAt.UTC()
-		}
-	}
-	for _, comment := range result.Comments {
-		if comment.ProviderUpdatedAt.After(maxValue) {
-			maxValue = comment.ProviderUpdatedAt.UTC()
-		}
-	}
-	return maxValue
 }
 
 type githubRateBudgetState struct {
