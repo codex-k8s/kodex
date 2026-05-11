@@ -45,7 +45,7 @@ approvals:
 1. Проверить, что namespace и базовые манифесты применены:
 
    ```bash
-   kubectl -n "$KODEX_PRODUCTION_NAMESPACE" get deploy,job,svc package-hub package-hub-migrations
+   kubectl -n "$KODEX_PRODUCTION_NAMESPACE" get deployment/package-hub service/package-hub job/package-hub-migrations
    ```
 
 2. Проверить миграции:

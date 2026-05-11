@@ -61,27 +61,49 @@ kodex_smoke_check_readyz package-hub 18083
 
 kodex_smoke_start_port_forward "svc/package-hub" "19093:9090"
 grpc_payload='{"meta":{"actor":{"type":"service","id":"smoke-package-hub"},"request_id":"smoke-package-hub","request_context":{"source":"smoke-package-hub"}},"page":{"page_size":1}}'
-grpc_output=""
+call_package_hub() {
+  local token="$1"
+  local grpc_headers=(
+    -H "x-kodex-caller-type: service"
+    -H "x-kodex-caller-id: smoke-package-hub"
+  )
+  if [[ -n "$token" ]]; then
+    grpc_headers+=(-H "authorization: Bearer ${token}")
+  fi
+
+  grpcurl \
+    -plaintext \
+    -proto "${PROJECT_ROOT}/proto/kodex/packages/v1/package_hub.proto" \
+    "${grpc_headers[@]}" \
+    -d "$grpc_payload" \
+    127.0.0.1:19093 \
+    kodex.packages.v1.PackageHubService/ListPackages
+}
+
+positive_output=""
 for _ in $(seq 1 30); do
-  grpc_output="$(
-    grpcurl \
-      -plaintext \
-      -proto "${PROJECT_ROOT}/proto/kodex/packages/v1/package_hub.proto" \
-      -H "authorization: Bearer invalid-smoke-token" \
-      -H "x-kodex-caller-type: service" \
-      -H "x-kodex-caller-id: smoke-package-hub" \
-      -d "$grpc_payload" \
-      127.0.0.1:19093 \
-      kodex.packages.v1.PackageHubService/ListPackages 2>&1
-  )" && grpc_status="ok" || grpc_status="$?"
-  if [[ "$grpc_status" == "ok" ]] || grep -Eq "Code: (Unauthenticated|PermissionDenied|NotFound|InvalidArgument)" <<<"$grpc_output"; then
-    echo "smoke-package-hub: gRPC boundary OK"
-    exit 0
+  positive_output="$(call_package_hub "${KODEX_PACKAGE_HUB_GRPC_AUTH_TOKEN:-}" 2>&1)" && positive_status="ok" || positive_status="$?"
+  if [[ "$positive_status" == "ok" ]] || grep -Eq "Code: PermissionDenied" <<<"$positive_output"; then
+    positive_status="accepted"
+    break
   fi
   sleep 1
 done
 
-cat "$KODEX_SMOKE_LAST_PORT_FORWARD_LOG" >&2 || true
-printf '%s\n' "$grpc_output" >&2
-echo "smoke-package-hub: gRPC boundary did not respond with an application status" >&2
-exit 1
+if [[ "$positive_status" != "accepted" ]]; then
+  cat "$KODEX_SMOKE_LAST_PORT_FORWARD_LOG" >&2 || true
+  printf '%s\n' "$positive_output" >&2
+  echo "smoke-package-hub: gRPC boundary did not accept the configured package-hub token" >&2
+  exit 1
+fi
+
+if [[ "${KODEX_PACKAGE_HUB_GRPC_AUTH_REQUIRED:-true}" == "true" ]]; then
+  negative_output="$(call_package_hub "invalid-smoke-token" 2>&1)" && negative_status="ok" || negative_status="$?"
+  if [[ "$negative_status" == "ok" ]] || ! grep -Eq "Code: Unauthenticated" <<<"$negative_output"; then
+    printf '%s\n' "$negative_output" >&2
+    echo "smoke-package-hub: invalid package-hub token must be rejected with Unauthenticated" >&2
+    exit 1
+  fi
+fi
+
+echo "smoke-package-hub: gRPC boundary OK"
