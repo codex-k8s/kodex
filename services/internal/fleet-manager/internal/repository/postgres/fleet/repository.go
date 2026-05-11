@@ -15,6 +15,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/fleet-manager/internal/domain/errs"
 	fleetrepo "github.com/codex-k8s/kodex/services/internal/fleet-manager/internal/domain/repository/fleet"
 	"github.com/codex-k8s/kodex/services/internal/fleet-manager/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/fleet-manager/internal/domain/types/query"
 )
 
 // SQLFiles contains named SQL queries for the fleet-manager PostgreSQL repository.
@@ -28,6 +29,7 @@ type database interface {
 	Ping(ctx context.Context) error
 	execer
 	queryer
+	BeginTx(ctx context.Context, txOptions pgx.TxOptions) (pgx.Tx, error)
 }
 
 type execer interface {
@@ -36,6 +38,7 @@ type execer interface {
 
 type queryer interface {
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
 // Repository persists fleet-manager aggregates in PostgreSQL.
@@ -46,10 +49,24 @@ type Repository struct {
 var (
 	operationAppendOutboxEvent                = repositoryOperation("AppendOutboxEvent")
 	operationClaimOutboxEvents                = repositoryOperation("ClaimOutboxEvents")
+	operationCreateFleetScope                 = repositoryOperation("CreateFleetScope")
+	operationEnsurePlatformDefaultSeed        = repositoryOperation("EnsurePlatformDefaultSeed")
+	operationGetCommandResult                 = repositoryOperation("GetCommandResult")
+	operationGetFleetScope                    = repositoryOperation("GetFleetScope")
+	operationGetKubernetesCluster             = repositoryOperation("GetKubernetesCluster")
+	operationGetServer                        = repositoryOperation("GetServer")
+	operationListFleetScopes                  = repositoryOperation("ListFleetScopes")
+	operationListKubernetesClusters           = repositoryOperation("ListKubernetesClusters")
+	operationListServers                      = repositoryOperation("ListServers")
 	operationMarkOutboxEventFailed            = repositoryOperation("MarkOutboxEventFailed")
 	operationMarkOutboxEventPermanentlyFailed = repositoryOperation("MarkOutboxEventPermanentlyFailed")
 	operationMarkOutboxEventPublished         = repositoryOperation("MarkOutboxEventPublished")
 	operationPing                             = repositoryOperation("Ping")
+	operationRegisterKubernetesCluster        = repositoryOperation("RegisterKubernetesCluster")
+	operationRegisterServer                   = repositoryOperation("RegisterServer")
+	operationUpdateFleetScope                 = repositoryOperation("UpdateFleetScope")
+	operationUpdateKubernetesCluster          = repositoryOperation("UpdateKubernetesCluster")
+	operationUpdateServer                     = repositoryOperation("UpdateServer")
 )
 
 func repositoryOperation(name string) string {
@@ -64,6 +81,99 @@ func NewRepository(db *pgxpool.Pool) *Repository {
 // Ping checks that the fleet database is reachable.
 func (r *Repository) Ping(ctx context.Context) error {
 	return wrapError(operationPing, r.db.Ping(ctx))
+}
+
+// GetCommandResult returns an applied idempotent command result.
+func (r *Repository) GetCommandResult(ctx context.Context, identity query.CommandIdentity) (entity.CommandResult, error) {
+	return queryOne(ctx, r.db, operationGetCommandResult, queryCommandResultGet, commandIdentityArgs(identity), scanCommandResult)
+}
+
+// CreateFleetScope stores a new fleet scope, command result and event atomically.
+func (r *Repository) CreateFleetScope(ctx context.Context, scope entity.FleetScope, event entity.OutboxEvent, result entity.CommandResult) error {
+	return r.createWithCommandResult(ctx, operationCreateFleetScope, event, insertMutation(queryFleetScopeCreate, fleetScopeArgs(scope)), result)
+}
+
+// UpdateFleetScope stores a versioned fleet scope mutation, command result and event atomically.
+func (r *Repository) UpdateFleetScope(ctx context.Context, scope entity.FleetScope, previousVersion int64, event entity.OutboxEvent, result entity.CommandResult) error {
+	update := affectedMutation(queryFleetScopeUpdate, fleetScopeUpdateArgs(scope, previousVersion))
+	return r.updateWithCommandResult(ctx, operationUpdateFleetScope, event, update, result)
+}
+
+// GetFleetScope returns a fleet scope by id.
+func (r *Repository) GetFleetScope(ctx context.Context, id uuid.UUID) (entity.FleetScope, error) {
+	return queryOne(ctx, r.db, operationGetFleetScope, queryFleetScopeGetByID, pgx.NamedArgs{"id": id}, scanFleetScope)
+}
+
+// ListFleetScopes returns fleet scopes by filter.
+func (r *Repository) ListFleetScopes(ctx context.Context, filter query.FleetScopeFilter) ([]entity.FleetScope, query.PageResult, error) {
+	return queryPage(ctx, r.db, operationListFleetScopes, queryFleetScopeList, fleetScopeFilterArgs(filter), scanFleetScope)
+}
+
+// RegisterServer stores a new server, command result and event atomically.
+func (r *Repository) RegisterServer(ctx context.Context, server entity.Server, event entity.OutboxEvent, result entity.CommandResult) error {
+	return r.createWithCommandResult(ctx, operationRegisterServer, event, insertMutation(queryServerCreate, serverArgs(server)), result)
+}
+
+// UpdateServer stores a versioned server mutation, command result and event atomically.
+func (r *Repository) UpdateServer(ctx context.Context, server entity.Server, previousVersion int64, event entity.OutboxEvent, result entity.CommandResult) error {
+	args := serverUpdateArgs(server, previousVersion)
+	return r.updateWithCommandResult(ctx, operationUpdateServer, event, affectedMutation(queryServerUpdate, args), result)
+}
+
+// GetServer returns a server by id.
+func (r *Repository) GetServer(ctx context.Context, id uuid.UUID) (entity.Server, error) {
+	return queryOne(ctx, r.db, operationGetServer, queryServerGetByID, pgx.NamedArgs{"id": id}, scanServer)
+}
+
+// ListServers returns servers by filter.
+func (r *Repository) ListServers(ctx context.Context, filter query.ServerFilter) ([]entity.Server, query.PageResult, error) {
+	return queryPage(ctx, r.db, operationListServers, queryServerList, serverFilterArgs(filter), scanServer)
+}
+
+// RegisterKubernetesCluster stores a new Kubernetes cluster, command result and event atomically.
+func (r *Repository) RegisterKubernetesCluster(ctx context.Context, cluster entity.KubernetesCluster, event entity.OutboxEvent, result entity.CommandResult) error {
+	return r.createWithCommandResult(ctx, operationRegisterKubernetesCluster, event, insertMutation(queryKubernetesClusterCreate, kubernetesClusterArgs(cluster)), result)
+}
+
+// UpdateKubernetesCluster stores a versioned Kubernetes cluster mutation, command result and event atomically.
+func (r *Repository) UpdateKubernetesCluster(ctx context.Context, cluster entity.KubernetesCluster, previousVersion int64, event entity.OutboxEvent, result entity.CommandResult) error {
+	return r.updateWithCommandResult(ctx, operationUpdateKubernetesCluster, event, kubernetesClusterUpdate(cluster, previousVersion), result)
+}
+
+// GetKubernetesCluster returns a Kubernetes cluster by id.
+func (r *Repository) GetKubernetesCluster(ctx context.Context, id uuid.UUID) (entity.KubernetesCluster, error) {
+	return queryOne(ctx, r.db, operationGetKubernetesCluster, queryKubernetesClusterGetByID, pgx.NamedArgs{"id": id}, scanKubernetesCluster)
+}
+
+// ListKubernetesClusters returns Kubernetes clusters by filter.
+func (r *Repository) ListKubernetesClusters(ctx context.Context, filter query.KubernetesClusterFilter) ([]entity.KubernetesCluster, query.PageResult, error) {
+	return queryPage(ctx, r.db, operationListKubernetesClusters, queryKubernetesClusterList, kubernetesClusterFilterArgs(filter), scanKubernetesCluster)
+}
+
+// EnsurePlatformDefaultSeed stores bootstrap default fleet data if it is absent.
+func (r *Repository) EnsurePlatformDefaultSeed(ctx context.Context, scope entity.FleetScope, cluster entity.KubernetesCluster, events []entity.OutboxEvent) error {
+	err := r.withTx(ctx, operationEnsurePlatformDefaultSeed, func(tx pgx.Tx) error {
+		scopeTag, err := tx.Exec(ctx, queryFleetScopeSeedCreate, fleetScopeArgs(scope))
+		if err != nil {
+			return err
+		}
+		if scopeTag.RowsAffected() > 0 && len(events) > 0 {
+			if err := insertOutboxEvent(ctx, tx, events[0]); err != nil {
+				return err
+			}
+		}
+		clusterTag, err := tx.Exec(ctx, queryKubernetesClusterSeedCreate, kubernetesClusterArgs(cluster))
+		if err != nil {
+			return err
+		}
+		if clusterTag.RowsAffected() > 0 && len(events) > 1 {
+			if err := insertOutboxEvent(ctx, tx, events[1]); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	return wrapError(operationEnsurePlatformDefaultSeed, err)
 }
 
 // AppendOutboxEvent stores one fleet domain event in the local outbox.
@@ -128,4 +238,86 @@ func (r *Repository) finishPublishedOutboxEvent(ctx context.Context, mutation ou
 func (r *Repository) finishFailedOutboxEvent(ctx context.Context, operation string, query string, timestampField string, id uuid.UUID, attempt int, at time.Time, message string) error {
 	err := postgreslib.ApplyOutboxDeliveryFailure(ctx, r.db, query, errs.ErrInvalidArgument, id, attempt, timestampField, at, message)
 	return wrapError(operation, err)
+}
+
+func (r *Repository) withTx(ctx context.Context, operation string, fn func(tx pgx.Tx) error) error {
+	return wrapError(operation, postgreslib.WithTx(ctx, r.db, fn))
+}
+
+type mutation = postgreslib.Mutation
+
+func (r *Repository) mutate(ctx context.Context, operation string, mutations ...mutation) error {
+	run := func(tx pgx.Tx) error { return runMutations(ctx, tx, mutations) }
+	return r.withTx(ctx, operation, run)
+}
+
+func (r *Repository) mutateWithOutbox(ctx context.Context, operation string, event entity.OutboxEvent, mutations ...mutation) error {
+	mutations = append(mutations, affectedMutation(queryOutboxEventInsert, outboxEventArgs(event)))
+	return r.mutate(ctx, operation, mutations...)
+}
+
+func (r *Repository) createWithCommandResult(ctx context.Context, operation string, event entity.OutboxEvent, create mutation, result entity.CommandResult) error {
+	return r.mutateWithOutbox(ctx, operation, event, create, commandResultMutation(result))
+}
+
+func (r *Repository) updateWithCommandResult(ctx context.Context, operation string, event entity.OutboxEvent, update mutation, result entity.CommandResult) error {
+	return r.createWithCommandResult(ctx, operation, event, update, result)
+}
+
+func commandResultMutation(result entity.CommandResult) mutation {
+	return affectedMutation(queryCommandResultCreate, commandResultArgs(result))
+}
+
+func insertOutboxEvent(ctx context.Context, db execer, event entity.OutboxEvent) error {
+	return postgreslib.RunMutation(ctx, db, errs.ErrConflict, affectedMutation(queryOutboxEventInsert, outboxEventArgs(event)))
+}
+
+func insertMutation(queryText string, args pgx.NamedArgs) mutation {
+	return mutation{Query: queryText, Args: args}
+}
+
+func affectedMutation(queryText string, args pgx.NamedArgs) mutation {
+	return mutation{Query: queryText, Args: args, RequireAffected: true}
+}
+
+func kubernetesClusterUpdate(cluster entity.KubernetesCluster, previousVersion int64) mutation {
+	args := kubernetesClusterUpdateArgs(cluster, previousVersion)
+	return affectedMutation(queryKubernetesClusterUpdate, args)
+}
+
+func runMutations(ctx context.Context, tx pgx.Tx, mutations []mutation) error {
+	return postgreslib.RunDistinctMutations(ctx, tx, errs.ErrConflict, mutations...)
+}
+
+func queryOne[T any](ctx context.Context, db queryer, operation string, sql string, args pgx.NamedArgs, scan func(postgreslib.RowScanner) (T, error)) (T, error) {
+	row := db.QueryRow(ctx, sql, args)
+	value, scanErr := scan(row)
+	return value, wrapError(operation, scanErr)
+}
+
+func queryMany[T any](ctx context.Context, db queryer, operation string, sql string, args pgx.NamedArgs, scan func(postgreslib.RowScanner) (T, error)) ([]T, error) {
+	rows, err := db.Query(ctx, sql, args)
+	if err != nil {
+		return nil, wrapError(operation, err)
+	}
+	defer rows.Close()
+	items := make([]T, 0)
+	for rows.Next() {
+		item, err := scan(rows)
+		if err != nil {
+			return nil, wrapError(operation, err)
+		}
+		items = append(items, item)
+	}
+	return items, wrapError(operation, rows.Err())
+}
+
+func queryPage[T any](ctx context.Context, db queryer, operation string, sql string, paging pageQueryArgs, scan func(postgreslib.RowScanner) (T, error)) ([]T, query.PageResult, error) {
+	items, listErr := queryMany(ctx, db, operation, sql, paging.args, scan)
+	if listErr != nil {
+		emptyPage := query.PageResult{}
+		return nil, emptyPage, listErr
+	}
+	values, page := pageResult(items, paging.limit, paging.nextOffset)
+	return values, page, nil
 }

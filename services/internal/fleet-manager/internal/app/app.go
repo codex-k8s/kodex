@@ -6,11 +6,17 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
+
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
+	accessaccountsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/access_accounts/v1"
+	accessclient "github.com/codex-k8s/kodex/services/internal/fleet-manager/internal/clients/access"
+	fleetservice "github.com/codex-k8s/kodex/services/internal/fleet-manager/internal/domain/service"
 	fleetpostgres "github.com/codex-k8s/kodex/services/internal/fleet-manager/internal/repository/postgres/fleet"
 	fleetgrpc "github.com/codex-k8s/kodex/services/internal/fleet-manager/internal/transport/grpc"
+	grpcruntime "google.golang.org/grpc"
 )
 
 // Run starts fleet-manager process servers and shuts them down with context.
@@ -30,8 +36,30 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if eventLogPool != nil {
 		defer eventLogPool.Close()
 	}
+	authorizer, accessConn, err := newAuthorizer(cfg)
+	if err != nil {
+		return err
+	}
+	if accessConn != nil {
+		defer func() {
+			_ = accessConn.Close()
+		}()
+	}
 
 	fleetRepository := fleetpostgres.NewRepository(dbPool)
+	seed, err := cfg.PlatformDefaultSeed()
+	if err != nil {
+		return err
+	}
+	fleetService := fleetservice.NewWithConfig(fleetRepository, systemClock{}, uuidGenerator{}, fleetservice.Config{
+		Authorizer:          authorizer,
+		PlatformDefaultSeed: seed,
+	})
+	if cfg.Bootstrap.SeedEnabled {
+		if err := fleetService.EnsurePlatformDefaultSeed(ctx); err != nil {
+			return err
+		}
+	}
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           serviceprocess.NewHealthMux(readinessChecks(fleetRepository, eventLogPool), 2*time.Second),
@@ -48,11 +76,14 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		Logger:        logger,
 		Metrics:       grpcMetrics,
 		Authenticator: grpcserver.NewSharedTokenAuthenticator(cfg.GRPC.AuthToken),
+		UnaryInterceptors: []grpcserver.UnaryInterceptor{
+			fleetgrpc.UnaryErrorInterceptor(logger),
+		},
 	})
 	if err != nil {
 		return err
 	}
-	fleetgrpc.RegisterFleetManagerService(grpcServer)
+	fleetgrpc.RegisterFleetManagerService(grpcServer, fleetService)
 
 	errCh := make(chan error, 3)
 	go serviceprocess.StartHTTPServer(httpServer, "fleet-manager", logger, errCh)
@@ -90,4 +121,41 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 
 func readinessChecks(fleet serviceprocess.PingStore, eventLog serviceprocess.PingStore) []serviceprocess.ReadinessCheck {
 	return serviceprocess.ServiceDatabaseReadinessChecks("fleet service", true, "fleet database", fleet, eventLog)
+}
+
+func newAuthorizer(cfg Config) (fleetservice.Authorizer, *grpcruntime.ClientConn, error) {
+	accessConfig := accessclient.Config{
+		Addr:      cfg.Access.AccessManagerGRPCAddr,
+		AuthToken: cfg.Access.AccessManagerAuthToken,
+		Timeout:   cfg.Access.CheckTimeout,
+	}
+	return connectAuthorizer(cfg.Access.CheckEnabled, accessConfig)
+}
+
+func connectAuthorizer(enabled bool, accessConfig accessclient.Config) (fleetservice.Authorizer, *grpcruntime.ClientConn, error) {
+	if !enabled {
+		return fleetservice.AllowAllAuthorizer{}, nil, nil
+	}
+	conn, err := accessclient.NewConnection(accessConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+	authorizer, err := accessclient.NewAuthorizer(accessaccountsv1.NewAccessManagerServiceClient(conn), accessConfig)
+	if err != nil {
+		_ = conn.Close()
+		return nil, nil, err
+	}
+	return authorizer, conn, nil
+}
+
+type systemClock struct{}
+
+func (systemClock) Now() time.Time {
+	return time.Now().UTC()
+}
+
+type uuidGenerator struct{}
+
+func (uuidGenerator) New() uuid.UUID {
+	return uuid.New()
 }

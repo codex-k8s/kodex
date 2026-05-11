@@ -5,8 +5,8 @@ title: kodex — модель данных fleet-manager
 status: active
 owner_role: SA
 created_at: 2026-05-11
-updated_at: 2026-05-11
-related_issues: [699, 708, 714]
+updated_at: 2026-05-12
+related_issues: [699, 708, 714, 717]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -111,7 +111,7 @@ approvals:
 | `id` | UUID | no | primary key | Идентификатор кластера. |
 | `fleet_scope_id` | UUID | no | indexed | Внешне видимый scope внутри БД fleet. |
 | `server_id` | UUID | yes | indexed | Связанный server, если есть. |
-| `cluster_key` | text | no | unique | Читаемый ключ. |
+| `cluster_key` | text | no | unique внутри `fleet_scope_id` | Читаемый ключ. |
 | `status` | text | no | indexed | `active`, `suspended`, `draining`, `unreachable`; `decommissioned` зарезервирован для разрушительного lifecycle после MVP. |
 | `is_default` | boolean | no | indexed | Default cluster внутри scope для MVP и будущего fallback. |
 | `api_endpoint_ref` | text | no | default '' | Безопасная ссылка на endpoint или hostname. |
@@ -243,7 +243,18 @@ approvals:
 - `fleet_manager_command_results`;
 - `fleet_manager_outbox_events`.
 
-Repository-слой FLEET-2 поддерживает readiness через `Ping`, локальный outbox и доставку в `platform-event-log`. CRUD агрегатов, bootstrap seed `platform-default`, connectivity checks и resolver размещения остаются в следующих срезах, чтобы не смешивать инфраструктурный каркас с бизнес-командами.
+Repository-слой FLEET-2 поддерживает readiness через `Ping`, локальный outbox и доставку в `platform-event-log`.
+
+FLEET-3 добавляет registry-команды и чтения:
+
+- CRUD и lifecycle-команды для `FleetScope`, `Server`, `KubernetesCluster`;
+- `command_results` для идемпотентности команд;
+- optimistic concurrency через `version`;
+- outbox-события `fleet.scope.*`, `fleet.server.*`, `fleet.cluster.*`;
+- bootstrap seed `platform-default` как обычные записи `fleet_manager_scopes` и `fleet_manager_kubernetes_clusters`;
+- миграцию `20260512110000_fleet_manager_cluster_key_scope_unique.sql`, которая фиксирует уникальность `cluster_key` внутри `fleet_scope_id`.
+
+Connectivity checks, health snapshots и resolver размещения остаются в следующих срезах.
 
 ## Что не хранится
 

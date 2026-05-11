@@ -5,8 +5,8 @@ title: kodex — дизайн fleet-manager
 status: active
 owner_role: SA
 created_at: 2026-05-11
-updated_at: 2026-05-11
-related_issues: [699, 708, 714]
+updated_at: 2026-05-12
+related_issues: [699, 708, 714, 717]
 related_prs: []
 related_adrs: []
 approvals:
@@ -67,7 +67,7 @@ approvals:
 
 ## Статус реализации
 
-FLEET-2 создаёт сервисный процесс `fleet-manager`, конфигурацию, gRPC-сервер, health/readiness, metrics, PostgreSQL-схему, repository-слой и локальный outbox. Доменные операции регистрации, чтения, health-check и placement resolver в этом срезе намеренно не реализованы: gRPC-методы возвращают штатный `unimplemented` до FLEET-3, FLEET-4 и FLEET-5.
+FLEET-2 создаёт сервисный процесс `fleet-manager`, конфигурацию, gRPC-сервер, health/readiness, metrics, PostgreSQL-схему, repository-слой и локальный outbox. FLEET-3 реализует registry-команды и чтения для fleet scope, server и Kubernetes cluster, включая `platform-default` как данные реестра. Health-check и placement resolver остаются отдельными срезами FLEET-4 и FLEET-5.
 
 ## MVP-реестр нескольких кластеров
 
@@ -79,7 +79,7 @@ Bootstrap seed для одиночной установки:
 - seed-запись `KubernetesCluster`, связанная с этим scope;
 - ссылка на secret с kubeconfig или учётными данными service account;
 - статус `active` и `is_default=true` у scope и cluster;
-- health snapshot с последней проверкой связности.
+- начальный health-статус `unknown` до первой проверки связности.
 
 `platform-default` используется как seed/fallback, если других подходящих контуров нет или ограничения размещения не заданы. Он не должен быть единственным допустимым контуром в MVP. Целевой путь для `runtime-manager` — получить `fleet_scope_id` и `cluster_id` из `fleet-manager.ResolvePlacement`; runtime не выбирает cluster самостоятельно.
 
