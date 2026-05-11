@@ -69,10 +69,10 @@ approvals:
 
 В MVP платформа стартует с одним Kubernetes-кластером. Это оформляется как данные fleet, а не как скрытая настройка runtime:
 
-- seed-запись `FleetScope` с типом `platform_default`;
+- seed-запись `FleetScope` с `scope_type=platform` и `scope_key=platform-default`;
 - seed-запись `KubernetesCluster`, связанная с этим scope;
 - ссылка на secret с kubeconfig или учётными данными service account;
-- статус `placement_enabled`;
+- статус `active` и `is_default=true` у scope и cluster;
 - health snapshot с последней проверкой связности.
 
 `runtime-manager` на старте может продолжить принимать default refs через конфигурацию, но целевой путь — получить те же refs из `fleet-manager.ResolvePlacement`. После появления контракта runtime должен перестать выбирать default cluster самостоятельно.
@@ -82,7 +82,8 @@ approvals:
 - считать один cluster единственным возможным состоянием;
 - хранить kubeconfig как text/blob в БД;
 - размещать runtime по имени namespace без `fleet_scope_id` и `cluster_id`;
-- делать runtime-нагрузку пакета прямым вызовом из fleet.
+- делать runtime-нагрузку пакета прямым вызовом из fleet;
+- вводить отдельный статус `placement_enabled`: размещение разрешается lifecycle-статусом `active`, default-флагом и health-снимком.
 
 ## Модель размещения
 

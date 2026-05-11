@@ -41,7 +41,7 @@ approvals:
 
 | Операция | Назначение | Вызывает | Идемпотентность |
 |---|---|---|---|
-| `CreateOrUpdateFleetScope` | Создать или обновить логический контур размещения. | Операторский контур, автоматизация платформы | `command_id + expected_version` при update. |
+| `CreateOrUpdateFleetScope` | Создать или обновить логический контур размещения с типизированной ссылкой владельца. | Операторский контур, автоматизация платформы | `command_id + expected_version` при update. |
 | `GetFleetScope` | Прочитать scope. | `runtime-manager`, операторский контур | Только чтение. |
 | `ListFleetScopes` | Получить список по типу, владельцу и статусу. | Операторский контур | Только чтение. |
 | `SuspendFleetScope` | Запретить новые размещения в scope. | Операторский контур | `command_id + expected_version`. |
@@ -60,8 +60,8 @@ approvals:
 
 | Операция | Назначение | Вызывает | Идемпотентность |
 |---|---|---|---|
-| `RegisterKubernetesCluster` | Зарегистрировать кластер и ссылку на secret для доступа. | Операторский контур | `command_id`. |
-| `UpdateKubernetesCluster` | Обновить статус, scope, region, class или secret ref. | Операторский контур | `command_id + expected_version`. |
+| `RegisterKubernetesCluster` | Зарегистрировать кластер, default-признак внутри scope и ссылку на secret для доступа. | Операторский контур | `command_id`. |
+| `UpdateKubernetesCluster` | Обновить статус, scope, default-признак, region, class или secret ref. | Операторский контур | `command_id + expected_version`. |
 | `GetKubernetesCluster` | Прочитать кластер. | `runtime-manager`, операторский контур | Только чтение. |
 | `ListKubernetesClusters` | Список кластеров по scope, статусу и health. | Операторский контур | Только чтение. |
 | `SuspendKubernetesCluster` | Запретить новые размещения в кластер. | Операторский контур | `command_id + expected_version`. |
@@ -91,8 +91,8 @@ approvals:
 
 | Область | MVP | После MVP |
 |---|---|---|
-| Fleet scope | Один default scope + возможность хранить несколько. | Организационные, проектные, репозиторные и сервисные scope. |
-| Cluster | Один default cluster + базовые статусы. | Несколько кластеров, dedicated clusters, draining/decommission flows. |
+| Fleet scope | Один активный default scope + возможность хранить несколько. | Организационные, проектные, репозиторные и сервисные scope. |
+| Cluster | Один активный default cluster внутри default scope + базовые статусы. | Несколько кластеров, dedicated clusters, draining/decommission flows. |
 | Health | Проверка связности + ограниченный health snapshot. | Прогноз ёмкости, quota policy, деградация по метрикам. |
 | Placement | Default path + простые ограничения. | Взвешенный выбор, размещение с учётом стоимости и риска, multi-region. |
 | Runtime integration | `ResolvePlacement` как целевой контракт. | Автоматическая миграция runtime-сценариев с config default на fleet decision. |

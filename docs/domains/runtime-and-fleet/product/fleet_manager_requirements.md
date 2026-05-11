@@ -67,7 +67,7 @@ approvals:
 | FLT-FR-1 | `fleet-manager` должен хранить fleet scope как логический контур размещения. | Обязательно |
 | FLT-FR-2 | `fleet-manager` должен хранить серверы, если кластер управляется платформой или привязан к конкретному хосту. | Обязательно |
 | FLT-FR-3 | `fleet-manager` должен хранить Kubernetes-кластеры как отдельные агрегаты с состоянием связности и health. | Обязательно |
-| FLT-FR-4 | В MVP должен быть один default fleet scope и один default cluster, но API и БД должны поддерживать несколько scope и cluster. | Обязательно |
+| FLT-FR-4 | В MVP должен быть один активный default fleet scope и один активный default cluster внутри него, но API и БД должны поддерживать несколько scope и cluster. | Обязательно |
 | FLT-FR-5 | Сырые kubeconfig, токены и ключи не должны храниться в БД `fleet-manager`; хранится только ссылка на secret. | Обязательно |
 | FLT-FR-6 | `fleet-manager` должен хранить результаты проверок связности и health без полного копирования состояния Kubernetes. | Обязательно |
 | FLT-FR-7 | `fleet-manager` должен уметь вернуть placement decision для runtime-запроса. | Обязательно |
@@ -81,11 +81,12 @@ approvals:
 
 | ID | Критерий |
 |---|---|
-| FLT-AC-1 | Если `runtime-manager` запрашивает размещение без явного cluster ref, fleet возвращает default scope/cluster в MVP и фиксирует, что решение принято упрощённым путём. |
+| FLT-AC-1 | Если `runtime-manager` запрашивает размещение без явного cluster ref, fleet возвращает единственные активные default scope/cluster в MVP и фиксирует, что решение принято упрощённым путём. |
 | FLT-AC-2 | Если default cluster недоступен, fleet возвращает отказ с причиной, а runtime не создаёт слот вслепую. |
 | FLT-AC-3 | Если у проекта есть ограничения размещения, fleet применяет их к доступным scope/cluster и возвращает выбранный контур или объяснимый отказ. |
 | FLT-AC-4 | Если кластер помечен как `draining` или `suspended`, новые runtime-размещения туда не выдаются. |
 | FLT-AC-5 | Если health-check падает, оператор видит snapshot, короткую ошибку и событие `fleet.health.degraded`. |
+| FLT-AC-6 | Если создаётся service scope, он ссылается на `project_id`, необязательный `repository_id` и `service_key`, а не на `ServiceDescriptor.id`. |
 
 ## Что не входит
 

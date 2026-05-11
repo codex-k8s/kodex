@@ -43,20 +43,30 @@ approvals:
 
 - MVP default cluster представлен через scope, а не через скрытую настройку runtime;
 - scope может быть platform-wide, организационным, проектным или репозиторным;
-- scope не является владельцем проекта или организации, а только хранит внешние ссылки.
+- scope не является владельцем проекта или организации, а только хранит внешние ссылки;
+- service scope ссылается на стабильную типизированную ссылку владельца, а не на `ServiceDescriptor.id` из проверенной проекции `services.yaml`.
 
 | Поле | Тип | Nullable | Ограничения | Примечание |
 |---|---|---:|---|---|
 | `id` | UUID | no | primary key | Идентификатор scope. |
 | `scope_key` | text | no | unique | Читаемый ключ, например `platform-default`. |
 | `scope_type` | text | no | indexed | `platform`, `organization`, `project`, `repository`, `service`. |
-| `scope_owner_id` | UUID | yes | indexed | Внешняя ссылка на организацию, проект, репозиторий или сервис. |
+| `scope_owner_id` | UUID | yes | indexed | Внешняя UUID-ссылка для `organization`, `project` или `repository`; для `service` не используется. |
+| `owner_ref_json` | jsonb | no | default {} | Типизированная ссылка владельца для случаев, где одного UUID недостаточно. Для `service`: `project_id`, необязательный `repository_id`, `service_key`. |
 | `display_name` | text | no |  | Название для оператора. |
 | `status` | text | no | indexed | `active`, `suspended`, `draining`, `archived`. |
 | `is_default` | boolean | no | indexed | Используется как default path MVP. |
 | `created_at` | timestamptz | no | indexed | Создание. |
 | `updated_at` | timestamptz | no | indexed | Обновление. |
 | `version` | bigint | no | monotonic | Оптимистичная конкуренция. |
+
+Инварианты ссылки владельца:
+
+- `scope_type=platform`: `scope_owner_id` пустой, `owner_ref_json={}`.
+- `scope_type=organization|project|repository`: `scope_owner_id` хранит стабильный UUID соответствующего агрегата-владельца.
+- `scope_type=service`: `scope_owner_id` пустой, `owner_ref_json` содержит `project_id`, необязательный `repository_id` и `service_key`.
+- `scope_type=service` запрещено трактовать как ссылку на `ServiceDescriptor.id`, потому что descriptor является строкой проверенной проекции и может быть создан заново при импорте новой policy.
+- В БД должно быть частичное уникальное ограничение: не больше одного активного default scope, то есть `is_default=true AND status='active'`.
 
 ### `Server`
 
@@ -91,7 +101,8 @@ approvals:
 
 - cluster принадлежит одному fleet scope как основному контуру размещения;
 - kubeconfig и токены хранятся только по ссылке на secret;
-- статус `draining` запрещает новые размещения, но не обязан немедленно останавливать существующие runtime-объекты.
+- статус `draining` запрещает новые размещения, но не обязан немедленно останавливать существующие runtime-объекты;
+- внутри одного активного fleet scope может быть только один активный default cluster.
 
 | Поле | Тип | Nullable | Ограничения | Примечание |
 |---|---|---:|---|---|
@@ -100,6 +111,7 @@ approvals:
 | `server_id` | UUID | yes | indexed | Связанный server, если есть. |
 | `cluster_key` | text | no | unique | Читаемый ключ. |
 | `status` | text | no | indexed | `active`, `suspended`, `draining`, `unreachable`, `decommissioned`. |
+| `is_default` | boolean | no | indexed | Default cluster внутри scope для MVP и будущего fallback. |
 | `api_endpoint_ref` | text | no | default '' | Безопасная ссылка на endpoint или hostname. |
 | `secret_store_type` | text | no | default '' | Тип хранилища секрета kubeconfig/service account. |
 | `secret_store_ref` | text | no | default '' | Ссылка на секрет без значения. |
@@ -111,6 +123,12 @@ approvals:
 | `created_at` | timestamptz | no | indexed | Создание. |
 | `updated_at` | timestamptz | no | indexed | Обновление. |
 | `version` | bigint | no | monotonic | Версия. |
+
+Инварианты default cluster:
+
+- В БД должно быть частичное уникальное ограничение: не больше одного активного default cluster на `fleet_scope_id`, то есть `is_default=true AND status='active'`.
+- Default path выбирает только активный default scope и активный default cluster с допустимым health.
+- Если default scope или default cluster отсутствует, suspended, draining, unreachable или unhealthy, `ResolvePlacement` возвращает отказ с причиной, а не выбирает другой контур неявно.
 
 ### `ClusterConnectivityCheck`
 
@@ -193,8 +211,11 @@ approvals:
 
 - `FleetScope(scope_type, scope_owner_id, status)`;
 - `FleetScope(is_default, status)`;
+- `FleetScope` частичное уникальное ограничение для активного default: `is_default=true AND status='active'`;
+- `FleetScope(owner_ref_json)` GIN или вычисляемые индексы для service scope, если поиск по сервису станет горячим путём;
 - `Server(status, provider_type)`;
 - `KubernetesCluster(fleet_scope_id, status)`;
+- `KubernetesCluster` частичное уникальное ограничение для активного default внутри scope: `(fleet_scope_id) WHERE is_default=true AND status='active'`;
 - `KubernetesCluster(last_health_status, last_health_checked_at)`;
 - `ClusterConnectivityCheck(cluster_id, created_at)`;
 - `ClusterHealthSnapshot(cluster_id, checked_at)`;
