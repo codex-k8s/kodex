@@ -134,6 +134,20 @@ spec:
         - proto/kodex/runtime/v1
         - specs/asyncapi/runtime-manager.v1.yaml
         - deploy/base/runtime-manager
+    fleet-manager:
+      value: "0.1.0"
+      bumpOn:
+        - services/internal/fleet-manager
+        - libs/go/grpcserver
+        - libs/go/postgres
+        - libs/go/eventlog
+        - libs/go/migrationtest
+        - libs/go/outbox
+        - libs/go/platformevents/fleet
+        - libs/go/serviceprocess
+        - libs/go/servicemain
+        - proto/kodex/fleet/v1
+        - specs/asyncapi/fleet-manager.v1.yaml
     platform-event-log:
       value: "0.1.0"
       bumpOn:
@@ -375,6 +389,12 @@ spec:
       dockerfile: services/internal/package-hub/Dockerfile
       migrationsImageEnv: KODEX_PACKAGE_HUB_MIGRATIONS_IMAGE
       purpose: package-sources-catalog-installations-manifest
+    - name: fleet-manager
+      status: scaffold
+      owner: fleet-manager
+      databaseName: kodex_fleet_manager
+      migrations: services/internal/fleet-manager/cmd/cli/migrations
+      purpose: fleet-scopes-servers-clusters-health-placement
   serviceScaffolds:
     - name: provider-hub
       status: scaffold
@@ -394,6 +414,23 @@ spec:
         migrations: services/internal/provider-hub/cmd/cli/migrations
       deploy:
         status: planned-after-service-implementation
+        health:
+          livez: /health/livez
+          readyz: /health/readyz
+          metrics: /metrics
+    - name: fleet-manager
+      status: scaffold
+      zone: internal
+      path: services/internal/fleet-manager
+      ownerDomain: runtime-and-fleet
+      apiContracts:
+        grpc: proto/kodex/fleet/v1/fleet_manager.proto
+        asyncapi: specs/asyncapi/fleet-manager.v1.yaml
+      database:
+        owner: fleet-manager
+        migrations: services/internal/fleet-manager/cmd/cli/migrations
+      deploy:
+        status: planned-in-fleet-6
         health:
           livez: /health/livez
           readyz: /health/readyz

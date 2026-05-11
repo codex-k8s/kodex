@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-11
 updated_at: 2026-05-11
-related_issues: [699, 708]
+related_issues: [699, 708, 714]
 related_prs: []
 related_adrs: []
 approvals:
@@ -64,6 +64,10 @@ approvals:
 | Сборщик health | Сохраняет ограниченный снимок состояния кластера, достаточный для размещения и оператора. |
 | Resolver размещения | Выбирает cluster ref по ограничениям, policy, health и сигналам ёмкости. |
 | Outbox-доставщик | Публикует `fleet.*` события через `platform-event-log`. |
+
+## Статус реализации
+
+FLEET-2 создаёт сервисный процесс `fleet-manager`, конфигурацию, gRPC-сервер, health/readiness, metrics, PostgreSQL-схему, repository-слой и локальный outbox. Доменные операции регистрации, чтения, health-check и placement resolver в этом срезе намеренно не реализованы: gRPC-методы возвращают штатный `unimplemented` до FLEET-3, FLEET-4 и FLEET-5.
 
 ## MVP-реестр нескольких кластеров
 

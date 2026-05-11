@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-11
 updated_at: 2026-05-11
-related_issues: [699, 708]
+related_issues: [699, 708, 714]
 related_prs: []
 related_docsets:
   - docs/domains/runtime-and-fleet/product/fleet_manager_requirements.md
@@ -45,7 +45,7 @@ approvals:
 |---|---|---|
 | FLEET-0 | #699 | Доменная документация, границы runtime/fleet, MVP с несколькими серверами, scope и кластерами, bootstrap seed `platform-default`, будущие контракты, план поставки и карта Issue. |
 | FLEET-1 | #708 | gRPC и AsyncAPI контракты `fleet-manager`, события `fleet.*`, сгенерированные Go-контракты и ключи действий. |
-| FLEET-2 | создать перед срезом | Сервисный каркас, конфигурация, PostgreSQL-модель, миграции, слой репозитория, health/readiness и outbox. |
+| FLEET-2 | #714 | Сервисный каркас, конфигурация, PostgreSQL-модель, миграции, слой репозитория, health/readiness и outbox. |
 | FLEET-3 | создать перед срезом | Команды и чтения реестра для нескольких fleet scope, серверов, Kubernetes-кластеров, bootstrap seed `platform-default` и базовые проверки доступа. |
 | FLEET-4 | создать перед срезом | Проверки связности, health snapshots и события деградации для нескольких кластеров. |
 | FLEET-5 | создать перед срезом | Правила размещения, `ResolvePlacement` по набору активных кластеров, журнал решений и интеграционный контракт для `runtime-manager`. |
@@ -55,11 +55,13 @@ approvals:
 
 | Группа | Контракт | Реализация |
 |---|---|---|
-| Fleet scopes | Готов: `CreateFleetScope`, `UpdateFleetScope`, `DisableFleetScope`, `EnableFleetScope`, `GetFleetScope`, `ListFleetScopes`. | Реестр нескольких scope реализуется в FLEET-3. |
-| Servers | Готов: `RegisterServer`, `UpdateServer`, `DisableServer`, `EnableServer`, `GetServer`, `ListServers`. | Реестр нескольких серверов реализуется в FLEET-3. |
-| Kubernetes clusters | Готов: `RegisterKubernetesCluster`, `UpdateKubernetesCluster`, `DisableKubernetesCluster`, `EnableKubernetesCluster`, `GetKubernetesCluster`, `ListKubernetesClusters`. | Реестр нескольких кластеров реализуется в FLEET-3. |
-| Связность и health | Готов: `RunClusterConnectivityCheck`, `GetClusterHealthSnapshot`, `ListClusterHealthSnapshots`, события `fleet.health.*`. | Проверки и snapshots реализуются в FLEET-4. |
-| Placement | Готов: `PutPlacementRule`, `GetPlacementRule`, `ListPlacementRules`, `ResolvePlacement`, чтения решений и события `fleet.placement.*`. | Базовый выбор из набора активных кластеров реализуется в FLEET-5. |
+| Сервисный процесс | Не отдельная gRPC-группа. | Реализовано в FLEET-2: конфигурация, gRPC runtime, health/readiness, metrics. |
+| PostgreSQL и outbox | Не отдельная gRPC-группа. | Реализовано в FLEET-2: начальная схема БД, миграции, repository для readiness/outbox и локальная очередь событий. |
+| Fleet scopes | Готов: `CreateFleetScope`, `UpdateFleetScope`, `DisableFleetScope`, `EnableFleetScope`, `GetFleetScope`, `ListFleetScopes`. | gRPC wiring готов в FLEET-2, бизнес-реализация реестра нескольких scope идёт в FLEET-3. |
+| Servers | Готов: `RegisterServer`, `UpdateServer`, `DisableServer`, `EnableServer`, `GetServer`, `ListServers`. | gRPC wiring готов в FLEET-2, бизнес-реализация реестра нескольких серверов идёт в FLEET-3. |
+| Kubernetes clusters | Готов: `RegisterKubernetesCluster`, `UpdateKubernetesCluster`, `DisableKubernetesCluster`, `EnableKubernetesCluster`, `GetKubernetesCluster`, `ListKubernetesClusters`. | gRPC wiring готов в FLEET-2, бизнес-реализация реестра нескольких кластеров идёт в FLEET-3. |
+| Связность и health | Готов: `RunClusterConnectivityCheck`, `GetClusterHealthSnapshot`, `ListClusterHealthSnapshots`, события `fleet.health.*`. | gRPC wiring и таблицы готовы в FLEET-2; проверки и snapshots реализуются в FLEET-4. |
+| Placement | Готов: `PutPlacementRule`, `GetPlacementRule`, `ListPlacementRules`, `ResolvePlacement`, чтения решений и события `fleet.placement.*`. | gRPC wiring и таблицы готовы в FLEET-2; базовый выбор из набора активных кластеров реализуется в FLEET-5. |
 | Контур выкладки | Не gRPC-группа. | Запланировано в FLEET-6. |
 
 ## Зависимости и блокировки
@@ -101,9 +103,9 @@ approvals:
 - разрушительные lifecycle-операции для серверов и кластеров;
 - расширенная автоматизация capacity/rebalancing.
 
-## Рекомендуемый следующий шаг после FLEET-1
+## Рекомендуемый следующий шаг после FLEET-2
 
-Идти в FLEET-2: создать сервисный каркас, конфигурацию, PostgreSQL-модель, миграции, слой репозитория, health/readiness и outbox. Команды registry, connectivity checks и placement resolver остаются для следующих срезов.
+Идти в FLEET-3: реализовать команды и чтения реестра нескольких fleet scope, серверов и Kubernetes-кластеров, включая bootstrap seed `platform-default` и базовые проверки доступа. Connectivity checks, health snapshots и placement resolver остаются в FLEET-4 и FLEET-5.
 
 ## Апрув
 

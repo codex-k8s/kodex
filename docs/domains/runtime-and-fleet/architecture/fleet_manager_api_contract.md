@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-11
 updated_at: 2026-05-11
-related_issues: [699, 708]
+related_issues: [699, 708, 714]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -33,7 +33,7 @@ approvals:
 | AsyncAPI | `specs/asyncapi/fleet-manager.v1.yaml` |
 | Go-контракты событий | `libs/go/platformevents/fleet/events.gen.go` |
 
-Контрактный срез фиксирует стабильную поверхность `fleet-manager` до сервисной реализации. Реализация операций, БД и миграции идут отдельным срезом.
+Контрактный срез фиксирует стабильную поверхность `fleet-manager` до сервисной реализации. FLEET-2 поднимает gRPC-процесс и регистрирует сервис, но бизнес-операции до FLEET-3/FLEET-4/FLEET-5 возвращают штатный `unimplemented`.
 
 ## Группы операций
 
@@ -109,6 +109,8 @@ approvals:
 | Health | Проверка связности + ограниченный health snapshot по каждому cluster. | Прогноз ёмкости, quota policy, автоматический rebalancing и capacity automation. |
 | Placement | Выбор активного cluster из реестра по ограничениям, health и default fallback. | Взвешенный выбор, размещение с учётом стоимости и риска, multi-region. |
 | Runtime integration | `runtime-manager` вызывает `ResolvePlacement` и получает fleet decision. | Дальнейшие улучшения идут через развитие placement policy. |
+
+Техническая поверхность FLEET-2 готова: процесс, gRPC runtime, health/readiness, metrics, PostgreSQL-схема и outbox. Это не означает готовность registry, health-check или placement сценариев.
 
 ## Отложенные операции после MVP
 
