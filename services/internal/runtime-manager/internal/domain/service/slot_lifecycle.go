@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"time"
@@ -42,8 +43,30 @@ func (s *Service) ReserveSlot(ctx context.Context, input ReserveSlotInput) (enti
 	if err != nil {
 		return entity.Slot{}, err
 	}
+	filter := query.ReusableSlotFilter{
+		RuntimeProfile: strings.TrimSpace(input.RuntimeProfile),
+		RuntimeMode:    input.RuntimeMode,
+		Fingerprint:    strings.TrimSpace(input.WorkspacePolicyDigest),
+		AgentRunID:     input.AgentRunID,
+		ProjectID:      input.ProjectID,
+		RepositoryIDs:  append([]uuid.UUID(nil), input.RepositoryIDs...),
+		FleetScopeID:   fleetScopeID,
+		ClusterID:      clusterID,
+		LeaseOwner:     owner,
+		LeaseUntil:     now.Add(s.config.DefaultLeaseTTL),
+		Now:            now,
+	}
+	reused, err := s.repository.ClaimReusableSlot(ctx, filter, func(slot entity.Slot) (entity.OutboxEvent, entity.CommandResult, error) {
+		return s.slotReservationRecords(input.Meta, slot, now)
+	})
+	if err == nil {
+		return reused, nil
+	}
+	if !errors.Is(err, errs.ErrNotFound) {
+		return entity.Slot{}, err
+	}
 	slotID := s.ids.New()
-	leaseUntil := now.Add(s.config.DefaultLeaseTTL)
+	leaseUntil := filter.LeaseUntil
 	slot := entity.Slot{
 		Base: entity.Base{
 			ID:        slotID,

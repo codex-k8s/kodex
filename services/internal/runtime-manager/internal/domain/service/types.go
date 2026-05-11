@@ -229,6 +229,55 @@ type ListRuntimeArtifactRefsResult struct {
 	Page                value.PageResult
 }
 
+// CreateOrUpdateCleanupPolicyInput describes retention policy upsert.
+type CreateOrUpdateCleanupPolicyInput struct {
+	CleanupPolicyID  *uuid.UUID
+	ScopeType        enum.RuntimeScopeType
+	ScopeID          string
+	TTLSeconds       int64
+	FailedTTLSeconds int64
+	KeepShortLogTail bool
+	Status           enum.CleanupPolicyStatus
+	Meta             value.CommandMeta
+}
+
+// RunCleanupBatchInput describes one cleanup worker command.
+type RunCleanupBatchInput struct {
+	CleanupPolicyID *uuid.UUID
+	Limit           int
+	LeaseOwner      string
+	LeaseUntil      time.Time
+	Meta            value.CommandMeta
+}
+
+// RunCleanupBatchResult contains cleanup counters and touched slots.
+type RunCleanupBatchResult struct {
+	ClaimedCount    int
+	CleanedCount    int
+	FailedCount     int
+	AffectedSlotIDs []uuid.UUID
+}
+
+// CreateOrUpdatePrewarmPoolInput describes prewarm pool policy upsert.
+type CreateOrUpdatePrewarmPoolInput struct {
+	PrewarmPoolID  *uuid.UUID
+	ScopeType      enum.PrewarmPoolScopeType
+	ScopeID        string
+	RuntimeProfile string
+	FleetScopeID   *uuid.UUID
+	TargetSize     int64
+	Status         enum.PrewarmPoolStatus
+	Meta           value.CommandMeta
+}
+
+// ReconcilePrewarmPoolInput describes one prewarm capacity reconciliation.
+type ReconcilePrewarmPoolInput struct {
+	PrewarmPoolID uuid.UUID
+	LeaseOwner    string
+	LeaseUntil    time.Time
+	Meta          value.CommandMeta
+}
+
 // ExtendSlotLeaseInput describes a request to prolong an active slot lease.
 type ExtendSlotLeaseInput struct {
 	SlotID     uuid.UUID

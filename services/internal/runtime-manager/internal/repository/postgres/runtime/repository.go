@@ -44,31 +44,44 @@ type Repository struct {
 	db database
 }
 
-const (
-	operationCreateSlot                       = "domain.Repository.CreateSlot"
-	operationCreateJob                        = "domain.Repository.CreateJob"
-	operationGetCommandResult                 = "domain.Repository.GetCommandResult"
-	operationGetJob                           = "domain.Repository.GetJob"
-	operationGetRuntimeArtifactRef            = "domain.Repository.GetRuntimeArtifactRef"
-	operationGetSlot                          = "domain.Repository.GetSlot"
-	operationListSlots                        = "domain.Repository.ListSlots"
-	operationListJobs                         = "domain.Repository.ListJobs"
-	operationListRuntimeArtifactRefs          = "domain.Repository.ListRuntimeArtifactRefs"
-	operationPrepareRuntime                   = "domain.Repository.PrepareRuntime"
-	operationClaimRunnableJob                 = "domain.Repository.ClaimRunnableJob"
-	operationCreateWorkspaceMaterialization   = "domain.Repository.CreateWorkspaceMaterialization"
-	operationGetWorkspaceMaterialization      = "domain.Repository.GetWorkspaceMaterialization"
-	operationListWorkspaceMaterializations    = "domain.Repository.ListWorkspaceMaterializations"
-	operationRecordRuntimeArtifactRef         = "domain.Repository.RecordRuntimeArtifactRef"
-	operationUpdateWorkspaceMaterialization   = "domain.Repository.UpdateWorkspaceMaterialization"
-	operationUpdateJob                        = "domain.Repository.UpdateJob"
-	operationClaimOutboxEvents                = "domain.Repository.ClaimOutboxEvents"
-	operationMarkOutboxEventFailed            = "domain.Repository.MarkOutboxEventFailed"
-	operationMarkOutboxEventPermanentlyFailed = "domain.Repository.MarkOutboxEventPermanentlyFailed"
-	operationMarkOutboxEventPublished         = "domain.Repository.MarkOutboxEventPublished"
-	operationPing                             = "domain.Repository.Ping"
-	operationUpdateSlot                       = "domain.Repository.UpdateSlot"
+var (
+	operationCreateSlot                       = repositoryOperation("CreateSlot")
+	operationClaimReusableSlot                = repositoryOperation("ClaimReusableSlot")
+	operationCreateCleanupPolicy              = repositoryOperation("CreateCleanupPolicy")
+	operationUpdateCleanupPolicy              = repositoryOperation("UpdateCleanupPolicy")
+	operationGetCleanupPolicy                 = repositoryOperation("GetCleanupPolicy")
+	operationRunCleanupBatch                  = repositoryOperation("RunCleanupBatch")
+	operationCreatePrewarmPool                = repositoryOperation("CreatePrewarmPool")
+	operationUpdatePrewarmPool                = repositoryOperation("UpdatePrewarmPool")
+	operationGetPrewarmPool                   = repositoryOperation("GetPrewarmPool")
+	operationReconcilePrewarmPool             = repositoryOperation("ReconcilePrewarmPool")
+	operationCreateJob                        = repositoryOperation("CreateJob")
+	operationGetCommandResult                 = repositoryOperation("GetCommandResult")
+	operationGetJob                           = repositoryOperation("GetJob")
+	operationGetRuntimeArtifactRef            = repositoryOperation("GetRuntimeArtifactRef")
+	operationGetSlot                          = repositoryOperation("GetSlot")
+	operationListSlots                        = repositoryOperation("ListSlots")
+	operationListJobs                         = repositoryOperation("ListJobs")
+	operationListRuntimeArtifactRefs          = repositoryOperation("ListRuntimeArtifactRefs")
+	operationPrepareRuntime                   = repositoryOperation("PrepareRuntime")
+	operationClaimRunnableJob                 = repositoryOperation("ClaimRunnableJob")
+	operationCreateWorkspaceMaterialization   = repositoryOperation("CreateWorkspaceMaterialization")
+	operationGetWorkspaceMaterialization      = repositoryOperation("GetWorkspaceMaterialization")
+	operationListWorkspaceMaterializations    = repositoryOperation("ListWorkspaceMaterializations")
+	operationRecordRuntimeArtifactRef         = repositoryOperation("RecordRuntimeArtifactRef")
+	operationUpdateWorkspaceMaterialization   = repositoryOperation("UpdateWorkspaceMaterialization")
+	operationUpdateJob                        = repositoryOperation("UpdateJob")
+	operationClaimOutboxEvents                = repositoryOperation("ClaimOutboxEvents")
+	operationMarkOutboxEventFailed            = repositoryOperation("MarkOutboxEventFailed")
+	operationMarkOutboxEventPermanentlyFailed = repositoryOperation("MarkOutboxEventPermanentlyFailed")
+	operationMarkOutboxEventPublished         = repositoryOperation("MarkOutboxEventPublished")
+	operationPing                             = repositoryOperation("Ping")
+	operationUpdateSlot                       = repositoryOperation("UpdateSlot")
 )
+
+func repositoryOperation(name string) string {
+	return "domain.Repository." + name
+}
 
 // NewRepository creates a PostgreSQL-backed runtime repository.
 func NewRepository(db *pgxpool.Pool) *Repository {
@@ -175,4 +188,55 @@ func getByID[T any](ctx context.Context, db queryer, id uuid.UUID, query string,
 		return zero, wrapError(operation, err)
 	}
 	return value, nil
+}
+
+func claimOneWithEventAndResult[T any](
+	ctx context.Context,
+	db database,
+	operation string,
+	query string,
+	args pgx.NamedArgs,
+	scan func(postgreslib.RowScanner) (T, error),
+	recordFactory func(T) (entity.OutboxEvent, entity.CommandResult, error),
+) (T, error) {
+	var claimed T
+	err := postgreslib.WithTx(ctx, db, func(tx pgx.Tx) error {
+		value, err := queryOne(ctx, tx, query, args, scan)
+		if err != nil {
+			return err
+		}
+		event, result, err := recordFactory(value)
+		if err != nil {
+			return err
+		}
+		if err := insertEventAndCommandResult(ctx, tx, event, result); err != nil {
+			return err
+		}
+		claimed = value
+		return nil
+	})
+	return claimed, wrapError(operation, err)
+}
+
+func insertEventAndCommandResult(ctx context.Context, tx pgx.Tx, event entity.OutboxEvent, result entity.CommandResult) error {
+	return postgreslib.RunDistinctMutations(
+		ctx,
+		tx,
+		errs.ErrConflict,
+		postgreslib.Mutation{Query: queryOutboxEventInsert, Args: outboxEventArgs(event), RequireAffected: true},
+		postgreslib.Mutation{Query: queryCommandResultInsert, Args: commandResultArgs(result), RequireAffected: true},
+	)
+}
+
+func (r *Repository) mutateRecordWithCommandResult(ctx context.Context, operation string, query string, args pgx.NamedArgs, result entity.CommandResult) error {
+	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
+		return postgreslib.RunDistinctMutations(
+			ctx,
+			tx,
+			errs.ErrConflict,
+			postgreslib.Mutation{Query: query, Args: args, RequireAffected: true},
+			postgreslib.Mutation{Query: queryCommandResultInsert, Args: commandResultArgs(result), RequireAffected: true},
+		)
+	})
+	return wrapError(operation, err)
 }

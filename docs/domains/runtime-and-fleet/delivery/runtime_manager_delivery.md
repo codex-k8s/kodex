@@ -5,7 +5,7 @@ title: kodex — поставка runtime-manager
 status: active
 owner_role: EM
 created_at: 2026-05-07
-updated_at: 2026-05-08
+updated_at: 2026-05-11
 related_issues: [655, 656, 657, 658, 659, 660, 661, 662]
 related_prs: []
 related_docsets:
@@ -60,7 +60,7 @@ approvals:
 | Workspace materialization | Готов: старт, отчёт прогресса, чтения и события `runtime.workspace.*`. | Готовы команды `StartWorkspaceMaterialization`, `ReportWorkspaceMaterializationProgress`, чтения `GetWorkspaceMaterialization`/`ListWorkspaceMaterializations`, хранение нормализованных source refs, access mode, local path, fingerprint и безопасных ошибок подготовки. При старте слот переходит в `materializing`, при успехе в `ready`, при ошибке в `failed`. Runtime проверяет совпадение проекта workspace policy и слота, а слот хранит активную попытку подготовки для защиты от поздних отчётов старых исполнителей. |
 | Platform jobs | Готов: создание, claim с `lease_token`, progress, complete/fail/cancel, чтения и события `runtime.job.*`. | Команды `CreateJob`, `ClaimRunnableJob`, `ReportJobStepProgress`, `CompleteJob`, `FailJob`, `CancelJob`, чтения `GetJob`/`ListJobs`, PostgreSQL repository, проверка доступа и gRPC wiring готовы. Исполнитель получает короткий lease и одноразовый `lease_token`; Kubernetes executor остаётся за эксплуатационным срезом. |
 | Runtime artifact refs | Готов: запись и чтение ссылок на внешние runtime-артефакты. | Команды `RecordRuntimeArtifactRef`/`ListRuntimeArtifactRefs` готовы; PostgreSQL хранит только ссылку, digest и ограниченную диагностику без blob, полного лога или registry catalog. |
-| Cleanup/prewarm/reuse | Готов: cleanup policy, cleanup batch, prewarm pool и события cleanup/prewarm. | Базовые таблицы cleanup policy и prewarm pool готовы; runtime-логика будет в RTM-7. |
+| Cleanup/prewarm/reuse | Готов: политики очистки, пакетная очистка, prewarm pool и события cleanup/prewarm. | Готовы команды `CreateOrUpdateCleanupPolicy`, `RunCleanupBatch`, `CreateOrUpdatePrewarmPool`, `ReconcilePrewarmPool`, PostgreSQL repository, проверка доступа и gRPC-подключение. Очистка переводит устаревшие слоты в `cleaned`, очищает короткие хвосты логов job и job step по политике и публикует видимый `runtime.cleanup.failed`, если очистку блокирует активная работа. Cleanup policy временно отклоняет `organization` scope, пока runtime не получает проекцию организации для слотов. Prewarm pool создаёт базовые `code_only` слоты под runtime profile; `ReserveSlot` переиспользует только безопасный prewarmed/ready слот с совпадающим fingerprint и совместимым project/repository scope. Организационный scope для prewarm фиксируется как состояние политики, но остаётся `insufficient`, пока runtime не получает проекцию организации для слотов. |
 | Deploy/manifests | Не gRPC-группа. | Готовы Dockerfile, service/deployment manifests, migration job, `services.yaml`, DB bootstrap wiring, smoke-путь и эксплуатационные документы. |
 
 ## Эксплуатационный контур

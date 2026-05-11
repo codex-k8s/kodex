@@ -14,7 +14,7 @@
 | `wave-006-4-access-domain-docs.md` | Пакет домена доступа перед реализацией `access-manager`. | принята |
 | `wave-007-access-and-accounts.md` | Первый кодовый домен: доступ, организации, группы и внешние аккаунты. | принята |
 | `wave-008-projects-and-repositories.md` | Второй кодовый домен: проекты, репозитории, проектная документация, правила веток и релизные политики. | завершена |
-| `runtime-manager RTM-0..RTM-7` | Среда исполнения: слоты, workspace materialization, platform jobs, cleanup, prewarm и reuse. | RTM-0..RTM-3 готовы, RTM-4 запланирована |
+| `runtime-manager RTM-0..RTM-7` | Среда исполнения: слоты, workspace materialization, platform jobs, cleanup, prewarm и reuse. | RTM-0..RTM-7 готовы |
 
 ## Планируемые gateway-срезы
 

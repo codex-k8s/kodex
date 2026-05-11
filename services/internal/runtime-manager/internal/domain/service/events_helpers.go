@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
+
 	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
 	runtimeevents "github.com/codex-k8s/kodex/libs/go/platformevents/runtime"
 	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/entity"
@@ -62,6 +64,10 @@ func payloadPreviousStatus(status string) runtimeEventPayloadOption {
 	return func(payload *value.RuntimeEventPayload) {
 		payload.PreviousStatus = status
 	}
+}
+
+func newRuntimeEvent(id uuid.UUID, eventType string, aggregateType string, aggregateID uuid.UUID, payload []byte, occurredAt time.Time) outboxlib.Event {
+	return outboxlib.NewEvent(id, eventType, runtimeevents.SchemaVersion, aggregateType, aggregateID, payload, occurredAt, 0)
 }
 
 func (s *Service) workspaceEvent(
@@ -183,4 +189,16 @@ func payloadJobStep(step entity.JobStep) runtimeEventPayloadOption {
 		payload.ErrorCode = step.ErrorCode
 		payload.ErrorMessage = step.ErrorMessage
 	}
+}
+
+func (s *Service) slotReservationRecords(meta value.CommandMeta, slot entity.Slot, occurredAt time.Time) (entity.OutboxEvent, entity.CommandResult, error) {
+	event, err := s.slotEvent(eventSlotReserved, slot, occurredAt)
+	if err != nil {
+		return entity.OutboxEvent{}, entity.CommandResult{}, err
+	}
+	result, err := commandResult(meta, operationReserveSlot, aggregateTypeSlot, slot.ID, nil, occurredAt)
+	if err != nil {
+		return entity.OutboxEvent{}, entity.CommandResult{}, err
+	}
+	return event, result, nil
 }

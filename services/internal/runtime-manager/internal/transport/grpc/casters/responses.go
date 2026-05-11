@@ -72,6 +72,30 @@ func ListRuntimeArtifactRefsResponse(result runtimeservice.ListRuntimeArtifactRe
 	}
 }
 
+// CleanupPolicyResponse maps one cleanup policy.
+func CleanupPolicyResponse(policy entity.CleanupPolicy) *runtimev1.CleanupPolicyResponse {
+	response := new(runtimev1.CleanupPolicyResponse)
+	response.CleanupPolicy = CleanupPolicyToProto(policy)
+	return response
+}
+
+// RunCleanupBatchResponse maps cleanup counters.
+func RunCleanupBatchResponse(result runtimeservice.RunCleanupBatchResult) *runtimev1.RunCleanupBatchResponse {
+	response := new(runtimev1.RunCleanupBatchResponse)
+	response.ClaimedCount = int32(result.ClaimedCount)
+	response.CleanedCount = int32(result.CleanedCount)
+	response.FailedCount = int32(result.FailedCount)
+	response.AffectedSlotIds = uuidStrings(result.AffectedSlotIDs)
+	return response
+}
+
+// PrewarmPoolResponse maps one prewarm pool.
+func PrewarmPoolResponse(pool entity.PrewarmPool) *runtimev1.PrewarmPoolResponse {
+	response := new(runtimev1.PrewarmPoolResponse)
+	response.PrewarmPool = PrewarmPoolToProto(pool)
+	return response
+}
+
 // SlotToProto maps one domain slot.
 func SlotToProto(slot entity.Slot) *runtimev1.Slot {
 	return &runtimev1.Slot{
@@ -191,6 +215,39 @@ func RuntimeArtifactRefToProto(ref entity.RuntimeArtifactRef) *runtimev1.Runtime
 		Digest:               ref.Digest,
 		MetadataJson:         string(ref.MetadataJSON),
 		CreatedAt:            ref.CreatedAt.UTC().Format(time.RFC3339Nano),
+	}
+}
+
+// CleanupPolicyToProto maps one cleanup policy.
+func CleanupPolicyToProto(policy entity.CleanupPolicy) *runtimev1.CleanupPolicy {
+	return &runtimev1.CleanupPolicy{
+		CleanupPolicyId:  policy.ID.String(),
+		ScopeType:        RuntimeScopeTypeToProto(policy.ScopeType),
+		ScopeId:          optionalStringPtr(policy.ScopeID),
+		TtlSeconds:       policy.TTLSeconds,
+		FailedTtlSeconds: policy.FailedTTLSeconds,
+		KeepShortLogTail: policy.KeepShortLogTail,
+		Status:           CleanupPolicyStatusToProto(policy.Status),
+		CreatedAt:        policy.CreatedAt.UTC().Format(time.RFC3339Nano),
+		UpdatedAt:        policy.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		Version:          policy.Version,
+	}
+}
+
+// PrewarmPoolToProto maps one prewarm pool.
+func PrewarmPoolToProto(pool entity.PrewarmPool) *runtimev1.PrewarmPool {
+	return &runtimev1.PrewarmPool{
+		PrewarmPoolId:      pool.ID.String(),
+		ScopeType:          PrewarmPoolScopeTypeToProto(pool.ScopeType),
+		ScopeId:            optionalStringPtr(pool.ScopeID),
+		RuntimeProfile:     pool.RuntimeProfile,
+		FleetScopeId:       uuidStringPtr(pool.FleetScopeID),
+		TargetSize:         pool.TargetSize,
+		Status:             PrewarmPoolStatusToProto(pool.Status),
+		LastCapacityStatus: CapacityStatusToProto(pool.LastCapacityStatus),
+		CreatedAt:          pool.CreatedAt.UTC().Format(time.RFC3339Nano),
+		UpdatedAt:          pool.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		Version:            pool.Version,
 	}
 }
 
