@@ -9,11 +9,13 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/codex-k8s/kodex/libs/go/secretresolver"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/errs"
 	providerrepo "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/repository/provider"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/query"
+	providerclient "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/provider/client"
 )
 
 const (
@@ -26,6 +28,9 @@ type Service struct {
 	repository         providerrepo.Repository
 	clock              providerrepo.Clock
 	ids                providerrepo.IDGenerator
+	accountUsage       AccountUsageResolver
+	secretResolver     secretresolver.Resolver
+	providerAdapters   map[enum.ProviderSlug]providerclient.Adapter
 	webhookNormalizers map[enum.ProviderSlug]providerrepo.WebhookNormalizer
 }
 
@@ -36,29 +41,67 @@ func New(repository providerrepo.Repository, normalizers ...providerrepo.Webhook
 
 // NewWithRuntime creates a provider-hub domain service with deterministic runtime dependencies.
 func NewWithRuntime(repository providerrepo.Repository, clock providerrepo.Clock, ids providerrepo.IDGenerator, normalizers ...providerrepo.WebhookNormalizer) *Service {
-	if repository == nil {
+	return NewWithDependencies(Dependencies{
+		Repository:         repository,
+		Clock:              clock,
+		IDGenerator:        ids,
+		WebhookNormalizers: normalizers,
+	})
+}
+
+// NewWithDependencies creates a provider-hub domain service with explicit collaborators.
+func NewWithDependencies(deps Dependencies) *Service {
+	if deps.Repository == nil {
 		panic("provider-hub repository is required")
 	}
-	if clock == nil {
-		panic("provider-hub clock is required")
+	if deps.Clock == nil {
+		deps.Clock = systemClock{}
 	}
-	if ids == nil {
-		panic("provider-hub id generator is required")
+	if deps.IDGenerator == nil {
+		deps.IDGenerator = uuidGenerator{}
 	}
-	return &Service{repository: repository, clock: clock, ids: ids, webhookNormalizers: webhookNormalizerRegistry(normalizers)}
+	return &Service{
+		repository:         deps.Repository,
+		clock:              deps.Clock,
+		ids:                deps.IDGenerator,
+		accountUsage:       deps.AccountUsageResolver,
+		secretResolver:     deps.SecretResolver,
+		providerAdapters:   providerAdapterRegistry(deps.ProviderAdapters),
+		webhookNormalizers: webhookNormalizerRegistry(deps.WebhookNormalizers),
+	}
 }
 
 func webhookNormalizerRegistry(normalizers []providerrepo.WebhookNormalizer) map[enum.ProviderSlug]providerrepo.WebhookNormalizer {
-	registry := make(map[enum.ProviderSlug]providerrepo.WebhookNormalizer, len(normalizers))
-	for _, normalizer := range normalizers {
-		if normalizer == nil {
-			panic("provider-hub webhook normalizer is required")
+	return providerSlugRegistry(
+		normalizers,
+		"provider-hub webhook normalizer is required",
+		"provider-hub webhook normalizer has invalid provider slug",
+	)
+}
+
+func providerAdapterRegistry(adapters []providerclient.Adapter) map[enum.ProviderSlug]providerclient.Adapter {
+	return providerSlugRegistry(
+		adapters,
+		"provider-hub adapter is required",
+		"provider-hub adapter has invalid provider slug",
+	)
+}
+
+type providerSlugger interface {
+	ProviderSlug() enum.ProviderSlug
+}
+
+func providerSlugRegistry[T providerSlugger](items []T, nilMessage string, invalidMessage string) map[enum.ProviderSlug]T {
+	registry := make(map[enum.ProviderSlug]T, len(items))
+	for _, item := range items {
+		if any(item) == nil {
+			panic(nilMessage)
 		}
-		providerSlug := normalizer.ProviderSlug()
+		providerSlug := item.ProviderSlug()
 		if !validProviderSlug(providerSlug) {
-			panic("provider-hub webhook normalizer has invalid provider slug")
+			panic(invalidMessage)
 		}
-		registry[providerSlug] = normalizer
+		registry[providerSlug] = item
 	}
 	return registry
 }
@@ -314,7 +357,7 @@ func (s *Service) EnqueueReconciliation(ctx context.Context, input EnqueueReconc
 	return EnqueueReconciliationResult{SyncCursors: stored}, nil
 }
 
-// RunReconciliationBatch leases one cursor for the future provider batch worker.
+// RunReconciliationBatch leases one cursor and performs read-only provider reconciliation.
 func (s *Service) RunReconciliationBatch(ctx context.Context, input RunReconciliationBatchInput) (RunReconciliationBatchResult, error) {
 	if !validCommandIdentity(input.Meta) ||
 		strings.TrimSpace(input.LeaseOwner) == "" ||
@@ -344,7 +387,7 @@ func (s *Service) RunReconciliationBatch(ctx context.Context, input RunReconcili
 	if err != nil {
 		return RunReconciliationBatchResult{}, err
 	}
-	return RunReconciliationBatchResult{SyncCursor: cursor}, nil
+	return s.runClaimedReconciliationBatch(ctx, cursor, input)
 }
 
 // GetSyncCursor returns one reconciliation cursor.

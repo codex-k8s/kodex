@@ -3,17 +3,20 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/codex-k8s/kodex/libs/go/secretresolver"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/errs"
 	providerrepo "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/repository/provider"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/value"
+	providerclient "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/provider/client"
 )
 
 func TestServicePingDelegatesToRepository(t *testing.T) {
@@ -803,7 +806,15 @@ func TestRunReconciliationBatchClaimsCursor(t *testing.T) {
 			Priority:          enum.SyncCursorPriorityHot,
 		},
 	}
-	service := NewWithRuntime(repository, fixedClock{now: now}, &sequenceIDs{ids: []uuid.UUID{uuid.New()}})
+	providerAdapter := &fakeProviderAdapter{}
+	service := NewWithDependencies(Dependencies{
+		Repository:           repository,
+		Clock:                fixedClock{now: now},
+		IDGenerator:          &sequenceIDs{ids: []uuid.UUID{uuid.New()}},
+		AccountUsageResolver: fakeAccountUsageResolver{providerSlug: enum.ProviderSlugGitHub},
+		SecretResolver:       fakeSecretResolver{secret: secretresolver.NewSecretValue([]byte("token-value"))},
+		ProviderAdapters:     []providerclient.Adapter{providerAdapter},
+	})
 
 	result, err := service.RunReconciliationBatch(context.Background(), RunReconciliationBatchInput{
 		SyncCursorID:      &cursorID,
@@ -827,6 +838,102 @@ func TestRunReconciliationBatchClaimsCursor(t *testing.T) {
 	if repository.syncCursorClaim.LeaseOwner != "worker-1" || !repository.syncCursorClaim.LeaseUntil.Equal(now.Add(syncCursorLeaseTTL)) {
 		t.Fatalf("claim = %+v, want lease owner and ttl", repository.syncCursorClaim)
 	}
+	tokenBytes := providerAdapter.observedToken.Bytes()
+	if len(tokenBytes) == 0 {
+		t.Fatal("provider token buffer was released before reconciliation was observed")
+	}
+	for _, value := range tokenBytes {
+		if value != 0 {
+			t.Fatal("provider token was not cleared after reconciliation")
+		}
+	}
+}
+
+func TestRunReconciliationBatchMarksSecretResolveFailureWithoutLeakingSecret(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 7, 14, 0, 0, 0, time.UTC)
+	cursorID := uuid.New()
+	repository := &fakeRepository{syncCursor: entity.SyncCursor{
+		Base:              entity.Base{ID: cursorID, Version: 2},
+		ProviderSlug:      enum.ProviderSlugGitHub,
+		ExternalAccountID: uuid.New(),
+		ScopeType:         enum.SyncCursorScopeRepository,
+		ScopeRef:          "codex-k8s/kodex",
+		ArtifactKind:      enum.SyncArtifactIssue,
+		Priority:          enum.SyncCursorPriorityHot,
+	}}
+	service := NewWithDependencies(Dependencies{
+		Repository:           repository,
+		Clock:                fixedClock{now: now},
+		IDGenerator:          &sequenceIDs{ids: []uuid.UUID{uuid.New()}},
+		AccountUsageResolver: fakeAccountUsageResolver{providerSlug: enum.ProviderSlugGitHub},
+		SecretResolver:       fakeSecretResolver{err: secretresolver.ErrSecretNotFound},
+		ProviderAdapters:     []providerclient.Adapter{&fakeProviderAdapter{}},
+	})
+
+	_, err := service.RunReconciliationBatch(context.Background(), RunReconciliationBatchInput{
+		MaxItems:   1,
+		LeaseOwner: "worker-1",
+		Meta:       value.CommandMeta{CommandID: uuid.New()},
+	})
+	if !errors.Is(err, errs.ErrPreconditionFailed) {
+		t.Fatalf("RunReconciliationBatch() err = %v, want %v", err, errs.ErrPreconditionFailed)
+	}
+	if repository.reconciliationCompletion.Cursor.LastError != reconciliationErrorSecretUnavailable {
+		t.Fatalf("last error = %q, want %q", repository.reconciliationCompletion.Cursor.LastError, reconciliationErrorSecretUnavailable)
+	}
+	if strings.Contains(repository.reconciliationCompletion.Cursor.LastError, "token-value") {
+		t.Fatal("cursor error leaks secret value")
+	}
+}
+
+func TestRunReconciliationBatchKeepsRateLimitedCursorLeasedForRetry(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 7, 15, 0, 0, 0, time.UTC)
+	retryAfter := time.Minute
+	repository := &fakeRepository{syncCursor: entity.SyncCursor{
+		Base:              entity.Base{ID: uuid.New(), Version: 2},
+		ProviderSlug:      enum.ProviderSlugGitHub,
+		ExternalAccountID: uuid.New(),
+		ScopeType:         enum.SyncCursorScopeRepository,
+		ScopeRef:          "codex-k8s/kodex",
+		ArtifactKind:      enum.SyncArtifactIssue,
+		Priority:          enum.SyncCursorPriorityHot,
+	}}
+	service := NewWithDependencies(Dependencies{
+		Repository:           repository,
+		Clock:                fixedClock{now: now},
+		IDGenerator:          &sequenceIDs{ids: []uuid.UUID{uuid.New()}},
+		AccountUsageResolver: fakeAccountUsageResolver{providerSlug: enum.ProviderSlugGitHub},
+		SecretResolver:       fakeSecretResolver{secret: secretresolver.NewSecretValue([]byte("token-value"))},
+		ProviderAdapters: []providerclient.Adapter{&fakeProviderAdapter{
+			err: &providerclient.Error{Kind: providerclient.ErrorKindRateLimited, RetryAfter: retryAfter, Cause: errors.New("token-value")},
+		}},
+	})
+
+	result, err := service.RunReconciliationBatch(context.Background(), RunReconciliationBatchInput{
+		MaxItems:   1,
+		LeaseOwner: "worker-1",
+		Meta:       value.CommandMeta{CommandID: uuid.New()},
+	})
+	if err != nil {
+		t.Fatalf("RunReconciliationBatch(): %v", err)
+	}
+	if result.RetryAfter != retryAfter.String() {
+		t.Fatalf("retry after = %q, want %q", result.RetryAfter, retryAfter.String())
+	}
+	cursor := repository.reconciliationCompletion.Cursor
+	if cursor.LastError != reconciliationErrorProviderRateLimited {
+		t.Fatalf("last error = %q, want rate limit", cursor.LastError)
+	}
+	if cursor.LeaseOwner != "worker-1" || cursor.LeaseUntil == nil || !cursor.LeaseUntil.Equal(now.Add(retryAfter)) {
+		t.Fatalf("cursor lease = owner %q until %v, want retry lease", cursor.LeaseOwner, cursor.LeaseUntil)
+	}
+	if strings.Contains(cursor.LastError, "token-value") || strings.Contains(result.RetryAfter, "token-value") {
+		t.Fatal("rate-limit result leaks secret value")
+	}
 }
 
 func TestRunReconciliationBatchRejectsInvalidMaxItems(t *testing.T) {
@@ -844,23 +951,24 @@ func TestRunReconciliationBatchRejectsInvalidMaxItems(t *testing.T) {
 }
 
 type fakeRepository struct {
-	err                    error
-	calls                  int
-	recordedSnapshot       entity.ProviderLimitSnapshot
-	recordedRuntimeState   entity.ProviderAccountRuntimeState
-	recordedWebhook        entity.WebhookEvent
-	recordedProjection     providerrepo.ProjectionUpdate
-	processWebhookErr      error
-	webhookAfterProcess    *entity.WebhookEvent
-	recordedProviderEvents []entity.ProviderEvent
-	recordedOutboxEvents   []entity.OutboxEvent
-	workItemProjection     entity.ProviderWorkItemProjection
-	lastWorkItemLookup     query.ProviderTargetLookup
-	reconciliationRequest  entity.ReconciliationRequest
-	enqueuedSyncCursors    []entity.SyncCursor
-	providerArtifactSignal entity.ProviderArtifactSignal
-	syncCursor             entity.SyncCursor
-	syncCursorClaim        providerrepo.SyncCursorClaim
+	err                      error
+	calls                    int
+	recordedSnapshot         entity.ProviderLimitSnapshot
+	recordedRuntimeState     entity.ProviderAccountRuntimeState
+	recordedWebhook          entity.WebhookEvent
+	recordedProjection       providerrepo.ProjectionUpdate
+	processWebhookErr        error
+	webhookAfterProcess      *entity.WebhookEvent
+	recordedProviderEvents   []entity.ProviderEvent
+	recordedOutboxEvents     []entity.OutboxEvent
+	workItemProjection       entity.ProviderWorkItemProjection
+	lastWorkItemLookup       query.ProviderTargetLookup
+	reconciliationRequest    entity.ReconciliationRequest
+	enqueuedSyncCursors      []entity.SyncCursor
+	providerArtifactSignal   entity.ProviderArtifactSignal
+	syncCursor               entity.SyncCursor
+	syncCursorClaim          providerrepo.SyncCursorClaim
+	reconciliationCompletion providerrepo.ReconciliationBatchCompletion
 }
 
 func (r *fakeRepository) Ping(context.Context) error {
@@ -952,6 +1060,21 @@ func (r *fakeRepository) ClaimSyncCursor(_ context.Context, claim providerrepo.S
 	return r.syncCursor, r.err
 }
 
+func (r *fakeRepository) ApplyReconciliationBatch(_ context.Context, completion providerrepo.ReconciliationBatchCompletion) (entity.SyncCursor, []entity.ProviderEvent, error) {
+	r.reconciliationCompletion = completion
+	r.syncCursor = completion.Cursor
+	r.recordedProjection = completion.ProjectionUpdate
+	r.recordedProviderEvents = append([]entity.ProviderEvent(nil), completion.ProviderEvents...)
+	r.recordedOutboxEvents = append([]entity.OutboxEvent(nil), completion.OutboxEvents...)
+	if completion.RuntimeState != nil {
+		r.recordedRuntimeState = *completion.RuntimeState
+	}
+	if len(completion.LimitSnapshots) > 0 {
+		r.recordedSnapshot = completion.LimitSnapshots[0]
+	}
+	return completion.Cursor, completion.ProviderEvents, r.err
+}
+
 func (r *fakeRepository) GetAccountRuntimeState(context.Context, query.AccountRuntimeStateLookup) (entity.ProviderAccountRuntimeState, error) {
 	return entity.ProviderAccountRuntimeState{}, r.err
 }
@@ -1031,4 +1154,59 @@ func (n fakeWebhookNormalizer) ProviderSlug() enum.ProviderSlug {
 
 func (n fakeWebhookNormalizer) NormalizeWebhook(entity.WebhookEvent) (value.ProviderWebhookFacts, bool, error) {
 	return n.facts, n.ok, n.err
+}
+
+type fakeAccountUsageResolver struct {
+	providerSlug enum.ProviderSlug
+	err          error
+}
+
+func (r fakeAccountUsageResolver) ResolveExternalAccountUsage(context.Context, ExternalAccountUsageInput) (ExternalAccountUsageResult, error) {
+	if r.err != nil {
+		return ExternalAccountUsageResult{}, r.err
+	}
+	providerSlug := r.providerSlug
+	if providerSlug == "" {
+		providerSlug = enum.ProviderSlugGitHub
+	}
+	return ExternalAccountUsageResult{
+		ExternalAccountID: uuid.NewString(),
+		ProviderSlug:      providerSlug,
+		SecretStoreType:   secretresolver.StoreTypeEnv,
+		SecretStoreRef:    "KODEX_TEST_TOKEN",
+	}, nil
+}
+
+type fakeSecretResolver struct {
+	secret secretresolver.SecretValue
+	err    error
+}
+
+func (r fakeSecretResolver) Resolve(context.Context, secretresolver.SecretRef) (secretresolver.SecretValue, error) {
+	if r.err != nil {
+		return secretresolver.SecretValue{}, r.err
+	}
+	return r.secret, nil
+}
+
+type fakeProviderAdapter struct {
+	result        providerclient.ReconciliationResult
+	err           error
+	observedToken secretresolver.SecretValue
+}
+
+func (a *fakeProviderAdapter) ProviderSlug() enum.ProviderSlug {
+	return enum.ProviderSlugGitHub
+}
+
+func (a *fakeProviderAdapter) ProbeAccount(context.Context, providerclient.AccountProbeRequest) (providerclient.AccountProbeResult, error) {
+	return providerclient.AccountProbeResult{}, nil
+}
+
+func (a *fakeProviderAdapter) Reconcile(_ context.Context, request providerclient.ReconciliationRequest) (providerclient.ReconciliationResult, error) {
+	a.observedToken = request.Credential.Token
+	if a.err != nil {
+		return providerclient.ReconciliationResult{}, a.err
+	}
+	return a.result, nil
 }

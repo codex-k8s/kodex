@@ -13,6 +13,7 @@ import (
 	githubapi "github.com/google/go-github/v82/github"
 	"github.com/google/uuid"
 
+	"github.com/codex-k8s/kodex/libs/go/secretresolver"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/enum"
@@ -25,6 +26,7 @@ const (
 	limitClassCore    = "core"
 	limitClassSearch  = "search"
 	limitClassGraphQL = "graphql"
+	defaultPageSize   = 50
 )
 
 var _ providerclient.Adapter = (*Adapter)(nil)
@@ -77,14 +79,14 @@ func (a *Adapter) ProviderSlug() enum.ProviderSlug {
 
 // ProbeAccount requests GitHub rate-limit state and maps it to provider-hub models.
 func (a *Adapter) ProbeAccount(ctx context.Context, request providerclient.AccountProbeRequest) (providerclient.AccountProbeResult, error) {
-	if request.Credential.ExternalAccountID == uuid.Nil || strings.TrimSpace(request.Credential.Token) == "" {
+	if request.Credential.ExternalAccountID == uuid.Nil || request.Credential.Token.Len() == 0 {
 		return providerclient.AccountProbeResult{}, errs.ErrInvalidArgument
 	}
 	observedAt := request.ObservedAt.UTC()
 	if observedAt.IsZero() {
 		observedAt = time.Now().UTC()
 	}
-	rateLimit, err := a.fetchRateLimit(ctx, strings.TrimSpace(request.Credential.Token))
+	rateLimit, err := a.fetchRateLimit(ctx, request.Credential.Token)
 	if err != nil {
 		return providerclient.AccountProbeResult{}, err
 	}
@@ -109,7 +111,33 @@ func (a *Adapter) ProbeAccount(ctx context.Context, request providerclient.Accou
 	return providerclient.AccountProbeResult{RuntimeState: state, LimitSnapshots: snapshots}, nil
 }
 
-func (a *Adapter) fetchRateLimit(ctx context.Context, token string) (*githubapi.RateLimits, error) {
+// Reconcile reads GitHub state for one provider-hub sync cursor without writing provider data.
+func (a *Adapter) Reconcile(ctx context.Context, request providerclient.ReconciliationRequest) (providerclient.ReconciliationResult, error) {
+	if request.Credential.ExternalAccountID == uuid.Nil || request.Credential.Token.Len() == 0 || request.MaxItems <= 0 {
+		return providerclient.ReconciliationResult{}, errs.ErrInvalidArgument
+	}
+	if request.Cursor.ProviderSlug != enum.ProviderSlugGitHub {
+		return providerclient.ReconciliationResult{}, providerError(providerclient.ErrorKindUnsupported, 0, nil)
+	}
+	client, err := a.githubClient(request.Credential.Token)
+	if err != nil {
+		return providerclient.ReconciliationResult{}, err
+	}
+	observedAt := request.ObservedAt.UTC()
+	if observedAt.IsZero() {
+		observedAt = time.Now().UTC()
+	}
+	switch request.Cursor.ScopeType {
+	case enum.SyncCursorScopeWorkItem:
+		return a.reconcileWorkItem(ctx, client, request, observedAt)
+	case enum.SyncCursorScopeRepository:
+		return a.reconcileRepository(ctx, client, request, observedAt)
+	default:
+		return providerclient.ReconciliationResult{}, providerError(providerclient.ErrorKindUnsupported, 0, nil)
+	}
+}
+
+func (a *Adapter) fetchRateLimit(ctx context.Context, token secretresolver.SecretValue) (*githubapi.RateLimits, error) {
 	client, err := a.githubClient(token)
 	if err != nil {
 		return nil, err
@@ -121,8 +149,13 @@ func (a *Adapter) fetchRateLimit(ctx context.Context, token string) (*githubapi.
 	return rateLimits, nil
 }
 
-func (a *Adapter) githubClient(token string) (*githubapi.Client, error) {
-	client := githubapi.NewClient(a.httpClient).WithAuthToken(token)
+func (a *Adapter) githubClient(token secretresolver.SecretValue) (*githubapi.Client, error) {
+	if token.Len() == 0 {
+		return nil, errs.ErrInvalidArgument
+	}
+	httpClient := *a.httpClient
+	httpClient.Transport = secretTransport{base: a.httpClient.Transport, token: token}
+	client := githubapi.NewClient(&httpClient)
 	client.UserAgent = a.userAgent
 	if a.baseURL == defaultBaseURL {
 		return client, nil
@@ -133,6 +166,23 @@ func (a *Adapter) githubClient(token string) (*githubapi.Client, error) {
 	}
 	client.BaseURL = baseURL
 	return client, nil
+}
+
+type secretTransport struct {
+	base  http.RoundTripper
+	token secretresolver.SecretValue
+}
+
+func (t secretTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	base := t.base
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	token := t.token.Bytes()
+	defer clear(token)
+	cloned := request.Clone(request.Context())
+	cloned.Header.Set("Authorization", "Bearer "+string(token))
+	return base.RoundTrip(cloned)
 }
 
 func mapGitHubError(err error) error {

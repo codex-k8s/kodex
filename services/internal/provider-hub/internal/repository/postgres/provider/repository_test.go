@@ -263,6 +263,37 @@ func TestRepositoryIntegrationSyncCursors(t *testing.T) {
 	if !errors.Is(err, errs.ErrNotFound) {
 		t.Fatalf("claim leased sync cursor err = %v, want %v", err, errs.ErrNotFound)
 	}
+
+	completedAt := now.Add(3 * time.Minute)
+	completedCursor := claimed
+	completedCursor.CursorValue = completedAt.Format(time.RFC3339Nano)
+	completedCursor.LastSuccessAt = &completedAt
+	completedCursor.LastCheckedAt = &completedAt
+	completedCursor.LastError = ""
+	completedCursor.RateBudgetStateJSON = []byte(`{"core":{"remaining":4998}}`)
+	completedCursor.LeaseOwner = ""
+	completedCursor.LeaseUntil = nil
+	workItemID := uuid.New()
+	commentID := uuid.New()
+	storedCursor, _, err := repository.ApplyReconciliationBatch(ctx, providerrepo.ReconciliationBatchCompletion{
+		Cursor:             completedCursor,
+		ExpectedLeaseOwner: "worker-1",
+		ProjectionUpdate:   projectionUpdateForTest(workItemID, commentID, completedAt, "Сверенная задача", "body-v1", "Комментарий сверки", "comment-v1", "https://github.com/codex-k8s/kodex/issues/8"),
+		Now:                completedAt,
+	})
+	if err != nil {
+		t.Fatalf("apply reconciliation batch: %v", err)
+	}
+	if storedCursor.ID != claimed.ID || storedCursor.LeaseOwner != "" || storedCursor.LastError != "" || storedCursor.LastSuccessAt == nil {
+		t.Fatalf("stored cursor = %+v, want completed cursor", storedCursor)
+	}
+	workItem, err := repository.GetWorkItemProjection(ctx, query.ProviderTargetLookup{ID: &workItemID})
+	if err != nil {
+		t.Fatalf("get reconciled work item: %v", err)
+	}
+	if workItem.Title != "Сверенная задача" || workItem.DriftStatus != enum.WorkItemDriftStatusFresh {
+		t.Fatalf("work item = %+v, want reconciled projection", workItem)
+	}
 }
 
 func TestRepositoryIntegrationProviderArtifactSignals(t *testing.T) {

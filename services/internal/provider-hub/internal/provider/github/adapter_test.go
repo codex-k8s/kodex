@@ -5,11 +5,13 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/codex-k8s/kodex/libs/go/secretresolver"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/enum"
@@ -34,11 +36,13 @@ func TestProbeAccountMapsGitHubRateLimits(t *testing.T) {
 	defer server.Close()
 
 	ids := idQueue([]uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New()})
+	token := secretresolver.NewSecretValue([]byte("token-value"))
+	defer token.Clear()
 	result, err := New(Config{BaseURL: server.URL, HTTPClient: server.Client(), IDGenerator: &ids}).ProbeAccount(context.Background(), providerclient.AccountProbeRequest{
 		Credential: providerclient.AccountCredential{
 			ExternalAccountID: accountID,
 			ProviderSlug:      enum.ProviderSlugGitHub,
-			Token:             "token-value",
+			Token:             token,
 		},
 		ObservedAt: observedAt,
 	})
@@ -64,12 +68,124 @@ func TestProbeAccountMapsUnauthorizedToPrecondition(t *testing.T) {
 	}))
 	defer server.Close()
 
+	token := secretresolver.NewSecretValue([]byte("expired"))
+	defer token.Clear()
 	_, err := New(Config{BaseURL: server.URL, HTTPClient: server.Client()}).ProbeAccount(context.Background(), providerclient.AccountProbeRequest{
-		Credential: providerclient.AccountCredential{ExternalAccountID: uuid.New(), Token: "expired"},
+		Credential: providerclient.AccountCredential{ExternalAccountID: uuid.New(), Token: token},
 		ObservedAt: time.Now(),
 	})
 	if !errors.Is(err, errs.ErrPreconditionFailed) {
 		t.Fatalf("ProbeAccount() err = %v, want %v", err, errs.ErrPreconditionFailed)
+	}
+}
+
+func TestReconcileReadsRepositoryIssues(t *testing.T) {
+	t.Parallel()
+
+	accountID := uuid.New()
+	observedAt := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
+	resetAt := observedAt.Add(time.Hour).Unix()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/repos/codex-k8s/kodex/issues" {
+			t.Fatalf("path = %s, want repository issues", r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer token-value" {
+			t.Fatalf("authorization header = %q", r.Header.Get("Authorization"))
+		}
+		if r.URL.Query().Get("per_page") != "1" {
+			t.Fatalf("per_page = %q, want 1", r.URL.Query().Get("per_page"))
+		}
+		w.Header().Set("X-RateLimit-Limit", "5000")
+		w.Header().Set("X-RateLimit-Remaining", "4998")
+		w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(resetAt, 10))
+		_, _ = w.Write([]byte(`[{"id":100,"number":7,"html_url":"https://github.com/codex-k8s/kodex/issues/7","title":"Issue title","state":"open","body":"<!-- kodex:artifact v1\nkind: issue\nmanaged_by: kodex\nwork_type: dev\n-->","labels":[{"name":"type:dev"}],"assignees":[{"login":"kodex-agent"}],"updated_at":"2026-05-07T11:59:00Z"}]`))
+	}))
+	defer server.Close()
+
+	token := secretresolver.NewSecretValue([]byte("token-value"))
+	defer token.Clear()
+	ids := idQueue([]uuid.UUID{uuid.New()})
+	result, err := New(Config{BaseURL: server.URL, HTTPClient: server.Client(), IDGenerator: &ids}).Reconcile(context.Background(), providerclient.ReconciliationRequest{
+		Credential: providerclient.AccountCredential{ExternalAccountID: accountID, ProviderSlug: enum.ProviderSlugGitHub, Token: token},
+		Cursor: entity.SyncCursor{
+			ProviderSlug:        enum.ProviderSlugGitHub,
+			ScopeType:           enum.SyncCursorScopeRepository,
+			ScopeRef:            "codex-k8s/kodex",
+			ArtifactKind:        enum.SyncArtifactIssue,
+			RateBudgetStateJSON: []byte(`{}`),
+		},
+		MaxItems:   50,
+		ObservedAt: observedAt,
+	})
+	if err != nil {
+		t.Fatalf("Reconcile(): %v", err)
+	}
+	if len(result.WorkItems) != 1 {
+		t.Fatalf("work items = %d, want 1", len(result.WorkItems))
+	}
+	item := result.WorkItems[0]
+	if item.ProviderWorkItemID != "github:codex-k8s/kodex:issue:7" || item.Title != "Issue title" || len(item.Labels) != 1 {
+		t.Fatalf("work item = %+v, want normalized issue", item)
+	}
+	if result.NextCursorValue != "2026-05-07T12:00:00Z" {
+		t.Fatalf("next cursor = %q, want observed cursor when provider time is older", result.NextCursorValue)
+	}
+	if len(result.LimitSnapshots) != 1 || *result.LimitSnapshots[0].Remaining != 4998 {
+		t.Fatalf("limit snapshots = %+v, want core remaining 4998", result.LimitSnapshots)
+	}
+}
+
+func TestReconcileClassifiesRateLimitAndTransientErrors(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name       string
+		statusCode int
+		headers    map[string]string
+		wantKind   providerclient.ErrorKind
+	}{
+		{
+			name:       "rate limit",
+			statusCode: http.StatusForbidden,
+			headers: map[string]string{
+				"X-RateLimit-Limit":     "5000",
+				"X-RateLimit-Remaining": "0",
+				"X-RateLimit-Reset":     strconv.FormatInt(time.Now().Add(time.Minute).Unix(), 10),
+			},
+			wantKind: providerclient.ErrorKindRateLimited,
+		},
+		{name: "transient", statusCode: http.StatusServiceUnavailable, wantKind: providerclient.ErrorKindTransient},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				for key, value := range tc.headers {
+					w.Header().Set(key, value)
+				}
+				w.WriteHeader(tc.statusCode)
+				_, _ = w.Write([]byte(`{"message":"provider error"}`))
+			}))
+			defer server.Close()
+			token := secretresolver.NewSecretValue([]byte("token-value"))
+			defer token.Clear()
+			_, err := New(Config{BaseURL: server.URL, HTTPClient: server.Client()}).Reconcile(context.Background(), providerclient.ReconciliationRequest{
+				Credential: providerclient.AccountCredential{ExternalAccountID: uuid.New(), ProviderSlug: enum.ProviderSlugGitHub, Token: token},
+				Cursor: entity.SyncCursor{
+					ProviderSlug: enum.ProviderSlugGitHub,
+					ScopeType:    enum.SyncCursorScopeRepository,
+					ScopeRef:     "codex-k8s/kodex",
+					ArtifactKind: enum.SyncArtifactIssue,
+				},
+				MaxItems:   1,
+				ObservedAt: time.Now(),
+			})
+			var providerErr *providerclient.Error
+			if !errors.As(err, &providerErr) || providerErr.Kind != tc.wantKind {
+				t.Fatalf("Reconcile() err = %v, want provider kind %s", err, tc.wantKind)
+			}
+		})
 	}
 }
 

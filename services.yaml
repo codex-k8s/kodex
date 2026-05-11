@@ -110,9 +110,14 @@ spec:
       value: "0.1.0"
       bumpOn:
         - services/internal/provider-hub
+        - libs/go/accesscatalog
+        - libs/go/accesscheck
         - libs/go/grpcserver
-        - libs/go/postgres
         - libs/go/migrationtest
+        - libs/go/outbox
+        - libs/go/platformevents/provider
+        - libs/go/postgres
+        - libs/go/secretresolver
         - libs/go/serviceprocess
         - libs/go/servicemain
         - proto/kodex/providers/v1
