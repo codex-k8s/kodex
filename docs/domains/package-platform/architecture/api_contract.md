@@ -49,9 +49,9 @@ approvals:
 | `ListPackageVersions` | gRPC query | `package.catalog.read` | нет | Список версий пакета. |
 | `GetPackageManifest` | gRPC query | `package.manifest.read` | нет | Возвращает нормализованный снимок manifest. |
 | `RequestPackageInstallation` | gRPC command | `package.install` | `CommandMeta.command_id` или `idempotency_key` | Создаёт запрос установки пакета в заданной области; если активная установка уже есть, возвращает `already_exists`, а изменение идёт через `UpdatePackageInstallation` с ожидаемой версией. |
-| `UpdatePackageInstallation` | gRPC command | `package.installation.update` | ожидаемая версия | Меняет статус, desired state или выбранную версию установки. |
-| `DisablePackageInstallation` | gRPC command | `package.installation.disable` | ожидаемая версия | Отключает установленный пакет без удаления истории. |
-| `UninstallPackage` | gRPC command | `package.uninstall` | ожидаемая версия | Переводит установку в `uninstalled` и публикует событие. |
+| `UpdatePackageInstallation` | gRPC command | `package.installation.update` | `CommandMeta.command_id` или `idempotency_key` + ожидаемая версия | Меняет статус, desired state или выбранную версию установки. |
+| `DisablePackageInstallation` | gRPC command | `package.installation.disable` | `CommandMeta.command_id` или `idempotency_key` + ожидаемая версия | Отключает установленный пакет без удаления истории. |
+| `UninstallPackage` | gRPC command | `package.uninstall` | `CommandMeta.command_id` или `idempotency_key` + ожидаемая версия | Переводит установку в `uninstalled` и публикует событие. |
 | `GetPackageInstallation` | gRPC query | `package.installation.read` | нет | Авторитетное чтение установки. |
 | `ListPackageInstallations` | gRPC query | `package.installation.read` | нет | Список установок по области, статусу и виду пакета. |
 | `GetPackageSecretSchema` | gRPC query | `package.secret.read` | нет | Читает схему секретов версии пакета. |
