@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-06
 updated_at: 2026-05-11
-related_issues: [642, 673, 680, 689, 692]
+related_issues: [642, 673, 680, 689, 692, 700]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -236,6 +236,18 @@ approvals:
 | Проверка установленной версии | `(package_id, package_version_id, scope_type, scope_ref)` |
 | Поиск проблемных установок | `(installation_status, secret_binding_status, last_health_status)` |
 | Поиск отозванных версий | `(verification_status, release_status)` |
+
+## Модели чтения по видам пакетов
+
+Вид пакета не выделяется в отдельный агрегат и не требует отдельной таблицы. Авторитетная модель чтения строится из существующих сущностей:
+
+| Чтение | Источник данных | Фильтр |
+|---|---|---|
+| Доступные плагины, руководящие пакеты, магазины и platform content | `PackageEntry` | `package_kind` в `ListPackages` |
+| Установки конкретного вида пакета в scope | `PackageInstallation` + `PackageEntry` | `package_kind` в `ListPackageInstallations` |
+| Версии и manifest конкретного пакета | `PackageVersion` + `PackageManifestSnapshot` | через `package_id` или `package_version_id`; вид берётся из `PackageEntry` |
+
+Такой подход сохраняет одну пакетную модель и не плодит параллельные сущности для каждого вида пакета. Если интерфейсу нужен специализированный экран, gateway собирает его из фильтрованных чтений `package-hub`, а не из отдельного каталога.
 
 ## Миграционные ограничения
 

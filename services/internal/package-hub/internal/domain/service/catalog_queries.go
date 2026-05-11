@@ -57,6 +57,26 @@ func (s *Service) ListPackages(ctx context.Context, input ListPackagesInput) (Li
 	if err := requireOptionalID(input.SourceID); err != nil {
 		return ListPackagesResult{}, err
 	}
+	if input.Kind != nil {
+		if err := requirePackageKind(*input.Kind); err != nil {
+			return ListPackagesResult{}, err
+		}
+	}
+	if input.Status != nil {
+		if err := requirePackageStatus(*input.Status); err != nil {
+			return ListPackagesResult{}, err
+		}
+	}
+	if input.CommercialStatus != nil {
+		if err := requireCommercialStatus(*input.CommercialStatus); err != nil {
+			return ListPackagesResult{}, err
+		}
+	}
+	if input.TrustStatus != nil {
+		if err := requireTrustStatus(*input.TrustStatus); err != nil {
+			return ListPackagesResult{}, err
+		}
+	}
 	resource, err := s.listPackagesResource(ctx, input.SourceID)
 	if err != nil {
 		return ListPackagesResult{}, err

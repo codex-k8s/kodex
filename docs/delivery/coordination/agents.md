@@ -2,7 +2,7 @@
 
 ## TL;DR
 
-Параллельная разработка разделена на три доменных потока. Агент #1 подтвердил, что `project-catalog` Wave 8 и `runtime-manager` RTM-0..RTM-7 готовы. Для `project-catalog` остаются интеграционные хвосты по bootstrap/adoption репозиториев, которые требуют `provider-hub`; для `runtime-manager` текущий MVP не блокируется соседними доменами, но организационные runtime-политики, workspace с руководящими пакетами и сценарии исполнения runtime-нагрузок требуют новых междоменных контрактов. Для `provider-hub` сняты базовые блокировки по provider-действиям и `ResolveExternalAccountUsage`, но полная GitHub-сверка и provider-операции записи ждут общий secret resolver/Vault/Kubernetes Secret клиент.
+Параллельная разработка разделена на три доменных потока. Агент #1 подтвердил, что `project-catalog` Wave 8 и `runtime-manager` RTM-0..RTM-7 готовы. Для `project-catalog` остаются интеграционные хвосты по bootstrap/adoption репозиториев, которые требуют `provider-hub`; для `runtime-manager` текущий MVP не блокируется соседними доменами, но организационные runtime-политики, workspace с руководящими пакетами и сценарии исполнения runtime-нагрузок требуют новых междоменных контрактов. Для `provider-hub` сняты базовые блокировки по provider-действиям и `ResolveExternalAccountUsage`, но полная GitHub-сверка и provider-операции записи ждут общий secret resolver/Vault/Kubernetes Secret клиент. Агент #3 довёл `package-hub` до специализации видов пакетов; следующий локальный пакетный срез можно делать вокруг руководящих пакетов, а пересчёт заполненности секретов установки всё ещё ждёт `access-manager`.
 
 ## Раскладка ответственности
 
