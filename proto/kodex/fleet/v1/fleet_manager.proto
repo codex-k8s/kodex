@@ -122,99 +122,153 @@ message PageResponse {
 
 // FleetScopeType classifies a logical placement scope.
 enum FleetScopeType {
+  // FLEET_SCOPE_TYPE_UNSPECIFIED is invalid and used only as a zero value.
   FLEET_SCOPE_TYPE_UNSPECIFIED = 0;
+  // FLEET_SCOPE_TYPE_PLATFORM is the platform-wide scope.
   FLEET_SCOPE_TYPE_PLATFORM = 1;
+  // FLEET_SCOPE_TYPE_ORGANIZATION is a scope owned by an organization.
   FLEET_SCOPE_TYPE_ORGANIZATION = 2;
+  // FLEET_SCOPE_TYPE_PROJECT is a scope owned by one project.
   FLEET_SCOPE_TYPE_PROJECT = 3;
+  // FLEET_SCOPE_TYPE_REPOSITORY is a scope owned by one repository.
   FLEET_SCOPE_TYPE_REPOSITORY = 4;
+  // FLEET_SCOPE_TYPE_SERVICE is a scope owned by one service inside project policy.
   FLEET_SCOPE_TYPE_SERVICE = 5;
 }
 
 // FleetScopeStatus is the lifecycle status of a placement scope.
 enum FleetScopeStatus {
+  // FLEET_SCOPE_STATUS_UNSPECIFIED is invalid and used only as a zero value.
   FLEET_SCOPE_STATUS_UNSPECIFIED = 0;
+  // FLEET_SCOPE_STATUS_ACTIVE allows new placements.
   FLEET_SCOPE_STATUS_ACTIVE = 1;
+  // FLEET_SCOPE_STATUS_SUSPENDED blocks new placements until reactivated.
   FLEET_SCOPE_STATUS_SUSPENDED = 2;
+  // FLEET_SCOPE_STATUS_DRAINING blocks new placements while existing work drains.
   FLEET_SCOPE_STATUS_DRAINING = 3;
+  // FLEET_SCOPE_STATUS_ARCHIVED hides the scope from active placement.
   FLEET_SCOPE_STATUS_ARCHIVED = 4;
 }
 
 // ServerProviderType classifies server ownership and provider family.
 enum ServerProviderType {
+  // SERVER_PROVIDER_TYPE_UNSPECIFIED is invalid and used only as a zero value.
   SERVER_PROVIDER_TYPE_UNSPECIFIED = 0;
+  // SERVER_PROVIDER_TYPE_BARE_METAL is a physical server.
   SERVER_PROVIDER_TYPE_BARE_METAL = 1;
+  // SERVER_PROVIDER_TYPE_VPS is a virtual private server.
   SERVER_PROVIDER_TYPE_VPS = 2;
+  // SERVER_PROVIDER_TYPE_CLOUD is a cloud VM or cloud host.
   SERVER_PROVIDER_TYPE_CLOUD = 3;
+  // SERVER_PROVIDER_TYPE_MANAGED is an externally managed host or service.
   SERVER_PROVIDER_TYPE_MANAGED = 4;
+  // SERVER_PROVIDER_TYPE_UNKNOWN is used when provider family is not known yet.
   SERVER_PROVIDER_TYPE_UNKNOWN = 5;
 }
 
 // ServerStatus is the server lifecycle status.
 enum ServerStatus {
+  // SERVER_STATUS_UNSPECIFIED is invalid and used only as a zero value.
   SERVER_STATUS_UNSPECIFIED = 0;
+  // SERVER_STATUS_ACTIVE allows new placements through clusters linked to the server.
   SERVER_STATUS_ACTIVE = 1;
+  // SERVER_STATUS_SUSPENDED blocks new placements through the server.
   SERVER_STATUS_SUSPENDED = 2;
+  // SERVER_STATUS_DRAINING blocks new placements while existing work drains.
   SERVER_STATUS_DRAINING = 3;
 }
 
 // KubernetesClusterStatus is the cluster lifecycle status.
 enum KubernetesClusterStatus {
+  // KUBERNETES_CLUSTER_STATUS_UNSPECIFIED is invalid and used only as a zero value.
   KUBERNETES_CLUSTER_STATUS_UNSPECIFIED = 0;
+  // KUBERNETES_CLUSTER_STATUS_ACTIVE allows new placements when health permits.
   KUBERNETES_CLUSTER_STATUS_ACTIVE = 1;
+  // KUBERNETES_CLUSTER_STATUS_SUSPENDED blocks new placements until reactivated.
   KUBERNETES_CLUSTER_STATUS_SUSPENDED = 2;
+  // KUBERNETES_CLUSTER_STATUS_DRAINING blocks new placements while existing work drains.
   KUBERNETES_CLUSTER_STATUS_DRAINING = 3;
+  // KUBERNETES_CLUSTER_STATUS_UNREACHABLE marks cluster API as unavailable.
   KUBERNETES_CLUSTER_STATUS_UNREACHABLE = 4;
 }
 
 // ClusterHealthStatus is the latest health classification.
 enum ClusterHealthStatus {
+  // CLUSTER_HEALTH_STATUS_UNSPECIFIED is invalid and used only as a zero value.
   CLUSTER_HEALTH_STATUS_UNSPECIFIED = 0;
+  // CLUSTER_HEALTH_STATUS_UNKNOWN means no recent health snapshot exists.
   CLUSTER_HEALTH_STATUS_UNKNOWN = 1;
+  // CLUSTER_HEALTH_STATUS_HEALTHY means placement can use the cluster.
   CLUSTER_HEALTH_STATUS_HEALTHY = 2;
+  // CLUSTER_HEALTH_STATUS_DEGRADED means placement should avoid the cluster unless policy permits.
   CLUSTER_HEALTH_STATUS_DEGRADED = 3;
+  // CLUSTER_HEALTH_STATUS_UNHEALTHY means placement must reject the cluster.
   CLUSTER_HEALTH_STATUS_UNHEALTHY = 4;
 }
 
 // CapacityStatus classifies whether a cluster has room for new runtime workloads.
 enum CapacityStatus {
+  // CAPACITY_STATUS_UNSPECIFIED is invalid and used only as a zero value.
   CAPACITY_STATUS_UNSPECIFIED = 0;
+  // CAPACITY_STATUS_UNKNOWN means capacity was not checked.
   CAPACITY_STATUS_UNKNOWN = 1;
+  // CAPACITY_STATUS_OK means capacity is available.
   CAPACITY_STATUS_OK = 2;
+  // CAPACITY_STATUS_LIMITED means capacity exists but is constrained.
   CAPACITY_STATUS_LIMITED = 3;
+  // CAPACITY_STATUS_EXHAUSTED means new placements should be rejected.
   CAPACITY_STATUS_EXHAUSTED = 4;
 }
 
 // ConnectivityCheckStatus is a single connectivity attempt status.
 enum ConnectivityCheckStatus {
+  // CONNECTIVITY_CHECK_STATUS_UNSPECIFIED is invalid and used only as a zero value.
   CONNECTIVITY_CHECK_STATUS_UNSPECIFIED = 0;
+  // CONNECTIVITY_CHECK_STATUS_PENDING means the check is queued.
   CONNECTIVITY_CHECK_STATUS_PENDING = 1;
+  // CONNECTIVITY_CHECK_STATUS_RUNNING means the check is currently executing.
   CONNECTIVITY_CHECK_STATUS_RUNNING = 2;
+  // CONNECTIVITY_CHECK_STATUS_SUCCEEDED means Kubernetes API connectivity succeeded.
   CONNECTIVITY_CHECK_STATUS_SUCCEEDED = 3;
+  // CONNECTIVITY_CHECK_STATUS_FAILED means Kubernetes API connectivity failed.
   CONNECTIVITY_CHECK_STATUS_FAILED = 4;
+  // CONNECTIVITY_CHECK_STATUS_TIMED_OUT means the check exceeded its timeout.
   CONNECTIVITY_CHECK_STATUS_TIMED_OUT = 5;
 }
 
 // RuntimeMode classifies runtime isolation level for placement.
 enum RuntimeMode {
+  // RUNTIME_MODE_UNSPECIFIED is invalid and used only as a zero value.
   RUNTIME_MODE_UNSPECIFIED = 0;
+  // RUNTIME_MODE_CODE_ONLY is a code-only runtime without full service dependencies.
   RUNTIME_MODE_CODE_ONLY = 1;
+  // RUNTIME_MODE_FULL_ENV is a full environment runtime.
   RUNTIME_MODE_FULL_ENV = 2;
+  // RUNTIME_MODE_READ_ONLY_PRODUCTION is a read-only production diagnostic runtime.
   RUNTIME_MODE_READ_ONLY_PRODUCTION = 3;
+  // RUNTIME_MODE_PLATFORM_JOB is a platform technical job runtime.
   RUNTIME_MODE_PLATFORM_JOB = 4;
 }
 
 // PlacementDecisionStatus is the result state of placement resolution.
 enum PlacementDecisionStatus {
+  // PLACEMENT_DECISION_STATUS_UNSPECIFIED is invalid and used only as a zero value.
   PLACEMENT_DECISION_STATUS_UNSPECIFIED = 0;
+  // PLACEMENT_DECISION_STATUS_RESOLVED means a cluster was selected.
   PLACEMENT_DECISION_STATUS_RESOLVED = 1;
+  // PLACEMENT_DECISION_STATUS_REJECTED means no acceptable cluster was found.
   PLACEMENT_DECISION_STATUS_REJECTED = 2;
 }
 
 // PlacementRuleStatus is the lifecycle status of a placement rule.
 enum PlacementRuleStatus {
+  // PLACEMENT_RULE_STATUS_UNSPECIFIED is invalid and used only as a zero value.
   PLACEMENT_RULE_STATUS_UNSPECIFIED = 0;
+  // PLACEMENT_RULE_STATUS_ACTIVE means the rule participates in placement.
   PLACEMENT_RULE_STATUS_ACTIVE = 1;
+  // PLACEMENT_RULE_STATUS_DISABLED means the rule is stored but ignored.
   PLACEMENT_RULE_STATUS_DISABLED = 2;
+  // PLACEMENT_RULE_STATUS_ARCHIVED hides the rule from active placement.
   PLACEMENT_RULE_STATUS_ARCHIVED = 3;
 }
 
@@ -246,361 +300,622 @@ message FleetScope {
 
 // Server is a managed or external server reference.
 message Server {
+  // id is the server identifier.
   string id = 1;
+  // server_key is a stable human-readable key unique in the server registry.
   string server_key = 2;
+  // provider_type classifies where the server comes from.
   ServerProviderType provider_type = 3;
+  // status is the server lifecycle status.
   ServerStatus status = 4;
+  // primary_address_ref is a safe address reference or inventory key, not a credential.
   string primary_address_ref = 5;
+  // region is an operator-defined placement region.
   string region = 6;
+  // capacity_class is an operator-defined class such as small, standard or gpu.
   string capacity_class = 7;
+  // secret_store_type identifies the external secret store that owns connection secrets.
   string secret_store_type = 8;
+  // secret_store_ref is an opaque secret reference; it must not contain secret values.
   string secret_store_ref = 9;
+  // created_at is creation time in RFC3339 format.
   string created_at = 10;
+  // updated_at is update time in RFC3339 format.
   string updated_at = 11;
+  // version is the aggregate version used for optimistic concurrency.
   int64 version = 12;
 }
 
 // KubernetesCluster is a cluster available for runtime placement.
 message KubernetesCluster {
+  // id is the Kubernetes cluster identifier.
   string id = 1;
+  // fleet_scope_id references the fleet scope that owns placement for this cluster.
   string fleet_scope_id = 2;
+  // server_id optionally links the cluster to a registered server; omitted for managed clusters.
   optional string server_id = 3;
+  // cluster_key is a stable human-readable key unique inside a fleet scope.
   string cluster_key = 4;
+  // status is the cluster lifecycle status.
   KubernetesClusterStatus status = 5;
+  // is_default marks fallback cluster inside its fleet scope, not a single-cluster limit.
   bool is_default = 6;
+  // api_endpoint_ref is a safe endpoint reference or inventory key, not a credential.
   string api_endpoint_ref = 7;
+  // secret_store_type identifies the external secret store that owns kube access secrets.
   string secret_store_type = 8;
+  // secret_store_ref is an opaque kubeconfig/service-account reference; it must not contain secret values.
   string secret_store_ref = 9;
+  // kubernetes_version is the observed or operator-declared Kubernetes version.
   string kubernetes_version = 10;
+  // region is an operator-defined placement region.
   string region = 11;
+  // capacity_class is an operator-defined class used by placement rules.
   string capacity_class = 12;
+  // last_health_status is the latest limited health classification known to fleet-manager.
   ClusterHealthStatus last_health_status = 13;
+  // last_health_checked_at is the latest health check time in RFC3339 format when known.
   optional string last_health_checked_at = 14;
+  // created_at is creation time in RFC3339 format.
   string created_at = 15;
+  // updated_at is update time in RFC3339 format.
   string updated_at = 16;
+  // version is the aggregate version used for optimistic concurrency.
   int64 version = 17;
 }
 
 // ClusterConnectivityCheck records one connectivity attempt.
 message ClusterConnectivityCheck {
+  // id is the connectivity check identifier.
   string id = 1;
+  // cluster_id references the checked Kubernetes cluster.
   string cluster_id = 2;
+  // status is the current attempt status.
   ConnectivityCheckStatus status = 3;
+  // started_at is check start time in RFC3339 format; omitted until the check starts.
   optional string started_at = 4;
+  // finished_at is check completion time in RFC3339 format; omitted while running.
   optional string finished_at = 5;
+  // latency_ms is the measured API latency in milliseconds; omitted when unavailable.
   optional int64 latency_ms = 6;
+  // error_code is a classified safe error code; empty for successful checks.
   string error_code = 7;
+  // error_message is a short safe diagnostic message without secrets.
   string error_message = 8;
+  // created_at is creation time in RFC3339 format.
   string created_at = 9;
 }
 
 // ClusterHealthSnapshot is a limited health view for placement and operators.
 message ClusterHealthSnapshot {
+  // id is the health snapshot identifier.
   string id = 1;
+  // cluster_id references the checked Kubernetes cluster.
   string cluster_id = 2;
+  // health_status is the limited health classification used for placement.
   ClusterHealthStatus health_status = 3;
+  // capacity_status is the limited capacity classification used for placement.
   CapacityStatus capacity_status = 4;
+  // summary_json is a safe typed JSON summary without full Kubernetes objects or secrets.
   string summary_json = 5;
+  // checked_at is snapshot time in RFC3339 format.
   string checked_at = 6;
+  // error_code is a classified safe error code; empty when health is acceptable.
   string error_code = 7;
+  // error_message is a short safe diagnostic message without secrets.
   string error_message = 8;
 }
 
 // PlacementRule is a fleet-owned placement rule.
 message PlacementRule {
+  // id is the placement rule identifier.
   string id = 1;
+  // fleet_scope_id references the scope where the rule is evaluated.
   string fleet_scope_id = 2;
+  // rule_key is a stable human-readable key unique inside a fleet scope.
   string rule_key = 3;
+  // status is the rule lifecycle status.
   PlacementRuleStatus status = 4;
+  // priority is evaluated in ascending order; lower values win.
   int64 priority = 5;
+  // match_json is safe typed JSON with project, repository, service, package and runtime profile matchers.
   string match_json = 6;
+  // constraints_json is safe typed JSON with placement constraints and preferred cluster rules.
   string constraints_json = 7;
+  // created_at is creation time in RFC3339 format.
   string created_at = 8;
+  // updated_at is update time in RFC3339 format.
   string updated_at = 9;
+  // version is the aggregate version used for optimistic concurrency.
   int64 version = 10;
 }
 
 // PlacementDecision records an explained placement result.
 message PlacementDecision {
+  // id is the placement decision identifier.
   string id = 1;
+  // command_id is copied from ResolvePlacement when provided for idempotency.
   optional string command_id = 2;
+  // request_fingerprint is a deterministic digest of safe placement input.
   string request_fingerprint = 3;
+  // status is the decision result.
   PlacementDecisionStatus status = 4;
+  // fleet_scope_id is the selected scope; omitted when placement is rejected before scope selection.
   optional string fleet_scope_id = 5;
+  // cluster_id is the selected cluster; omitted when placement is rejected.
   optional string cluster_id = 6;
+  // project_id is an external project reference when the request is project-scoped.
   optional string project_id = 7;
+  // repository_id is an external repository reference when the request is repository-scoped.
   optional string repository_id = 8;
+  // runtime_mode is the requested runtime isolation mode.
   RuntimeMode runtime_mode = 9;
+  // runtime_profile is the concrete runtime/toolchain profile such as code-only-go.
   string runtime_profile = 10;
+  // input_json is safe typed JSON containing replayable placement input without secrets.
   string input_json = 11;
+  // reason_code is a stable machine-readable reason for selection or rejection.
   string reason_code = 12;
+  // reason_message is a short safe explanation for operators.
   string reason_message = 13;
+  // used_default_path is true when placement used the bootstrap default fallback.
   bool used_default_path = 14;
+  // created_at is creation time in RFC3339 format.
   string created_at = 15;
 }
 
+// CreateFleetScopeRequest creates a logical placement scope.
 message CreateFleetScopeRequest {
+  // scope_key is a stable readable key, for example platform-default.
   string scope_key = 1;
+  // scope_type classifies owner level.
   FleetScopeType scope_type = 2;
+  // scope_owner_id references organization, project or repository when applicable.
   optional string scope_owner_id = 3;
+  // owner_ref_json is a typed safe JSON object for complex owner refs such as service scope.
   string owner_ref_json = 4;
+  // display_name is a human-readable name.
   string display_name = 5;
+  // is_default marks bootstrap fallback scope. It is not a single-scope MVP limit.
   bool is_default = 6;
+  // meta carries idempotency, actor, reason and audit context.
   CommandMeta meta = 7;
 }
 
+// UpdateFleetScopeRequest changes safe scope fields.
 message UpdateFleetScopeRequest {
+  // fleet_scope_id identifies the scope to update.
   string fleet_scope_id = 1;
+  // scope_key updates the stable readable key when present.
   optional string scope_key = 2;
+  // scope_owner_id updates the owner reference when present.
   optional string scope_owner_id = 3;
+  // owner_ref_json updates the typed safe JSON owner ref when present.
   optional string owner_ref_json = 4;
+  // display_name updates the human-readable name when present.
   optional string display_name = 5;
+  // status updates the lifecycle status when present.
   optional FleetScopeStatus status = 6;
+  // is_default updates fallback status when present.
   optional bool is_default = 7;
+  // meta carries expected_version, idempotency, actor, reason and audit context.
   CommandMeta meta = 8;
 }
 
+// DisableFleetScopeRequest disables new placements in a scope.
 message DisableFleetScopeRequest {
+  // fleet_scope_id identifies the scope to disable.
   string fleet_scope_id = 1;
+  // meta carries expected_version, idempotency, actor, reason and audit context.
   CommandMeta meta = 2;
 }
 
+// GetFleetScopeRequest reads one fleet scope.
 message GetFleetScopeRequest {
+  // fleet_scope_id identifies the scope to read.
   string fleet_scope_id = 1;
+  // meta carries caller and trace context for read audit.
   QueryMeta meta = 2;
 }
 
+// ListFleetScopesRequest lists fleet scopes by optional filters.
 message ListFleetScopesRequest {
+  // scope_types limits results to these owner levels; empty means all types.
   repeated FleetScopeType scope_types = 1;
+  // statuses limits results to these lifecycle statuses; empty means all statuses.
   repeated FleetScopeStatus statuses = 2;
+  // scope_owner_id limits results to an owner reference when present.
   optional string scope_owner_id = 3;
+  // is_default limits results by fallback marker when present.
   optional bool is_default = 4;
+  // page limits list size and carries continuation state.
   PageRequest page = 5;
+  // meta carries caller and trace context for read audit.
   QueryMeta meta = 6;
 }
 
+// FleetScopeResponse returns one fleet scope.
 message FleetScopeResponse {
+  // scope is the authoritative fleet scope state.
   FleetScope scope = 1;
 }
 
+// ListFleetScopesResponse returns fleet scopes and pagination state.
 message ListFleetScopesResponse {
+  // scopes contains the current page of fleet scopes.
   repeated FleetScope scopes = 1;
+  // page describes continuation state.
   PageResponse page = 2;
 }
 
+// RegisterServerRequest registers a managed or external server reference.
 message RegisterServerRequest {
+  // server_key is a stable human-readable key unique in the server registry.
   string server_key = 1;
+  // provider_type classifies where the server comes from.
   ServerProviderType provider_type = 2;
+  // primary_address_ref is a safe address reference or inventory key, not a credential.
   string primary_address_ref = 3;
+  // region is an operator-defined placement region.
   string region = 4;
+  // capacity_class is an operator-defined class such as small, standard or gpu.
   string capacity_class = 5;
+  // secret_store_type identifies the external secret store that owns connection secrets.
   string secret_store_type = 6;
+  // secret_store_ref is an opaque secret reference; it must not contain secret values.
   string secret_store_ref = 7;
+  // meta carries idempotency, actor, reason and audit context.
   CommandMeta meta = 8;
 }
 
+// UpdateServerRequest changes safe server fields.
 message UpdateServerRequest {
+  // server_id identifies the server to update.
   string server_id = 1;
+  // server_key updates the stable key when present.
   optional string server_key = 2;
+  // provider_type updates the provider classification when present.
   optional ServerProviderType provider_type = 3;
+  // status updates the lifecycle status when present.
   optional ServerStatus status = 4;
+  // primary_address_ref updates the safe address reference when present.
   optional string primary_address_ref = 5;
+  // region updates the placement region when present.
   optional string region = 6;
+  // capacity_class updates the capacity class when present.
   optional string capacity_class = 7;
+  // secret_store_type updates the external secret store type when present.
   optional string secret_store_type = 8;
+  // secret_store_ref updates the opaque secret reference when present.
   optional string secret_store_ref = 9;
+  // meta carries expected_version, idempotency, actor, reason and audit context.
   CommandMeta meta = 10;
 }
 
+// DisableServerRequest disables server use for new placements.
 message DisableServerRequest {
+  // server_id identifies the server to disable.
   string server_id = 1;
+  // meta carries expected_version, idempotency, actor, reason and audit context.
   CommandMeta meta = 2;
 }
 
+// GetServerRequest reads one server.
 message GetServerRequest {
+  // server_id identifies the server to read.
   string server_id = 1;
+  // meta carries caller and trace context for read audit.
   QueryMeta meta = 2;
 }
 
+// ListServersRequest lists servers by optional filters.
 message ListServersRequest {
+  // statuses limits results to these lifecycle statuses; empty means all statuses.
   repeated ServerStatus statuses = 1;
+  // provider_types limits results to these provider types; empty means all providers.
   repeated ServerProviderType provider_types = 2;
+  // region limits results to one placement region when present.
   optional string region = 3;
+  // capacity_class limits results to one capacity class when present.
   optional string capacity_class = 4;
+  // page limits list size and carries continuation state.
   PageRequest page = 5;
+  // meta carries caller and trace context for read audit.
   QueryMeta meta = 6;
 }
 
+// ServerResponse returns one server.
 message ServerResponse {
+  // server is the authoritative server state.
   Server server = 1;
 }
 
+// ListServersResponse returns servers and pagination state.
 message ListServersResponse {
+  // servers contains the current page of servers.
   repeated Server servers = 1;
+  // page describes continuation state.
   PageResponse page = 2;
 }
 
+// RegisterKubernetesClusterRequest registers one Kubernetes cluster.
 message RegisterKubernetesClusterRequest {
+  // fleet_scope_id identifies the owning placement scope.
   string fleet_scope_id = 1;
+  // server_id optionally links the cluster to a registered server; omitted for managed clusters.
   optional string server_id = 2;
+  // cluster_key is a stable human-readable key unique inside a fleet scope.
   string cluster_key = 3;
+  // is_default marks fallback cluster inside its fleet scope, not a single-cluster limit.
   bool is_default = 4;
+  // api_endpoint_ref is a safe endpoint reference or inventory key, not a credential.
   string api_endpoint_ref = 5;
+  // secret_store_type identifies the external secret store that owns kube access secrets.
   string secret_store_type = 6;
+  // secret_store_ref is an opaque kubeconfig/service-account reference; it must not contain secret values.
   string secret_store_ref = 7;
+  // kubernetes_version is the observed or operator-declared Kubernetes version.
   string kubernetes_version = 8;
+  // region is an operator-defined placement region.
   string region = 9;
+  // capacity_class is an operator-defined class used by placement rules.
   string capacity_class = 10;
+  // meta carries idempotency, actor, reason and audit context.
   CommandMeta meta = 11;
 }
 
+// UpdateKubernetesClusterRequest changes safe cluster fields.
 message UpdateKubernetesClusterRequest {
+  // cluster_id identifies the cluster to update.
   string cluster_id = 1;
+  // fleet_scope_id moves the cluster to another scope when present.
   optional string fleet_scope_id = 2;
+  // server_id updates the linked server when present; omitted means no change.
   optional string server_id = 3;
+  // cluster_key updates the stable key when present.
   optional string cluster_key = 4;
+  // status updates the lifecycle status when present.
   optional KubernetesClusterStatus status = 5;
+  // is_default updates fallback status inside the scope when present.
   optional bool is_default = 6;
+  // api_endpoint_ref updates the safe API endpoint reference when present.
   optional string api_endpoint_ref = 7;
+  // secret_store_type updates the external secret store type when present.
   optional string secret_store_type = 8;
+  // secret_store_ref updates the opaque kube access secret reference when present.
   optional string secret_store_ref = 9;
+  // kubernetes_version updates the observed or operator-declared Kubernetes version when present.
   optional string kubernetes_version = 10;
+  // region updates the placement region when present.
   optional string region = 11;
+  // capacity_class updates the capacity class when present.
   optional string capacity_class = 12;
+  // meta carries expected_version, idempotency, actor, reason and audit context.
   CommandMeta meta = 13;
 }
 
+// DisableKubernetesClusterRequest disables new placements in a cluster.
 message DisableKubernetesClusterRequest {
+  // cluster_id identifies the cluster to disable.
   string cluster_id = 1;
+  // meta carries expected_version, idempotency, actor, reason and audit context.
   CommandMeta meta = 2;
 }
 
+// GetKubernetesClusterRequest reads one Kubernetes cluster.
 message GetKubernetesClusterRequest {
+  // cluster_id identifies the cluster to read.
   string cluster_id = 1;
+  // meta carries caller and trace context for read audit.
   QueryMeta meta = 2;
 }
 
+// ListKubernetesClustersRequest lists Kubernetes clusters by optional filters.
 message ListKubernetesClustersRequest {
+  // fleet_scope_id limits results to one placement scope when present.
   optional string fleet_scope_id = 1;
+  // server_id limits results to clusters linked to one server when present.
   optional string server_id = 2;
+  // statuses limits results to these lifecycle statuses; empty means all statuses.
   repeated KubernetesClusterStatus statuses = 3;
+  // health_statuses limits results to these health statuses; empty means all health statuses.
   repeated ClusterHealthStatus health_statuses = 4;
+  // region limits results to one placement region when present.
   optional string region = 5;
+  // capacity_class limits results to one capacity class when present.
   optional string capacity_class = 6;
+  // is_default limits results by fallback marker when present.
   optional bool is_default = 7;
+  // page limits list size and carries continuation state.
   PageRequest page = 8;
+  // meta carries caller and trace context for read audit.
   QueryMeta meta = 9;
 }
 
+// KubernetesClusterResponse returns one Kubernetes cluster.
 message KubernetesClusterResponse {
+  // cluster is the authoritative Kubernetes cluster state.
   KubernetesCluster cluster = 1;
 }
 
+// ListKubernetesClustersResponse returns clusters and pagination state.
 message ListKubernetesClustersResponse {
+  // clusters contains the current page of Kubernetes clusters.
   repeated KubernetesCluster clusters = 1;
+  // page describes continuation state.
   PageResponse page = 2;
 }
 
+// RunClusterConnectivityCheckRequest requests a connectivity check.
 message RunClusterConnectivityCheckRequest {
+  // cluster_id identifies the cluster to check.
   string cluster_id = 1;
+  // meta carries idempotency, actor, reason and audit context.
   CommandMeta meta = 2;
 }
 
+// ClusterConnectivityCheckResponse returns one connectivity check.
 message ClusterConnectivityCheckResponse {
+  // connectivity_check is the authoritative connectivity check state.
   ClusterConnectivityCheck connectivity_check = 1;
 }
 
+// GetClusterHealthSnapshotRequest reads the latest or a concrete health snapshot.
 message GetClusterHealthSnapshotRequest {
+  // cluster_id identifies the cluster whose health is requested.
   string cluster_id = 1;
+  // health_snapshot_id selects a concrete snapshot; omitted means latest snapshot.
   optional string health_snapshot_id = 2;
+  // meta carries caller and trace context for read audit.
   QueryMeta meta = 3;
 }
 
+// ListClusterHealthSnapshotsRequest lists health snapshots for one cluster.
 message ListClusterHealthSnapshotsRequest {
+  // cluster_id identifies the cluster whose health history is requested.
   string cluster_id = 1;
+  // checked_since limits snapshots to RFC3339 timestamps greater than or equal to this value.
   optional string checked_since = 2;
+  // page limits list size and carries continuation state.
   PageRequest page = 3;
+  // meta carries caller and trace context for read audit.
   QueryMeta meta = 4;
 }
 
+// ClusterHealthSnapshotResponse returns one health snapshot.
 message ClusterHealthSnapshotResponse {
+  // health_snapshot is the limited health view.
   ClusterHealthSnapshot health_snapshot = 1;
 }
 
+// ListClusterHealthSnapshotsResponse returns health snapshots and pagination state.
 message ListClusterHealthSnapshotsResponse {
+  // health_snapshots contains the current page of health snapshots.
   repeated ClusterHealthSnapshot health_snapshots = 1;
+  // page describes continuation state.
   PageResponse page = 2;
 }
 
+// PutPlacementRuleRequest creates or updates one placement rule.
 message PutPlacementRuleRequest {
+  // placement_rule_id identifies an existing rule; omitted means create or upsert by rule key.
   optional string placement_rule_id = 1;
+  // fleet_scope_id identifies the scope where the rule is evaluated.
   string fleet_scope_id = 2;
+  // rule_key is a stable human-readable key unique inside a fleet scope.
   string rule_key = 3;
+  // status is the rule lifecycle status to store.
   PlacementRuleStatus status = 4;
+  // priority is evaluated in ascending order; lower values win.
   int64 priority = 5;
+  // match_json is safe typed JSON with project, repository, service, package and runtime profile matchers.
   string match_json = 6;
+  // constraints_json is safe typed JSON with placement constraints and preferred cluster rules.
   string constraints_json = 7;
+  // meta carries expected_version for updates, idempotency, actor, reason and audit context.
   CommandMeta meta = 8;
 }
 
+// GetPlacementRuleRequest reads one placement rule.
 message GetPlacementRuleRequest {
+  // placement_rule_id identifies the rule to read.
   string placement_rule_id = 1;
+  // meta carries caller and trace context for read audit.
   QueryMeta meta = 2;
 }
 
+// ListPlacementRulesRequest lists placement rules by optional filters.
 message ListPlacementRulesRequest {
+  // fleet_scope_id limits results to one placement scope when present.
   optional string fleet_scope_id = 1;
+  // statuses limits results to these lifecycle statuses; empty means all statuses.
   repeated PlacementRuleStatus statuses = 2;
+  // page limits list size and carries continuation state.
   PageRequest page = 3;
+  // meta carries caller and trace context for read audit.
   QueryMeta meta = 4;
 }
 
+// PlacementRuleResponse returns one placement rule.
 message PlacementRuleResponse {
+  // placement_rule is the authoritative rule state.
   PlacementRule placement_rule = 1;
 }
 
+// ListPlacementRulesResponse returns placement rules and pagination state.
 message ListPlacementRulesResponse {
+  // placement_rules contains the current page of placement rules.
   repeated PlacementRule placement_rules = 1;
+  // page describes continuation state.
   PageResponse page = 2;
 }
 
+// ResolvePlacementRequest asks fleet-manager to choose a cluster for runtime.
 message ResolvePlacementRequest {
+  // project_id is an external project reference when the request is project-scoped.
   optional string project_id = 1;
+  // repository_id is an external repository reference when the request is repository-scoped.
   optional string repository_id = 2;
+  // service_key identifies a service inside project policy when the request is service-scoped.
   optional string service_key = 3;
+  // runtime_mode is the requested runtime isolation mode.
   RuntimeMode runtime_mode = 4;
+  // runtime_profile is the concrete runtime/toolchain profile such as code-only-go.
   string runtime_profile = 5;
+  // preferred_fleet_scope_id is an optional caller preference; fleet may reject it by rules or health.
   optional string preferred_fleet_scope_id = 6;
+  // preferred_cluster_id is an optional caller preference; fleet may reject it by rules or health.
   optional string preferred_cluster_id = 7;
+  // placement_constraints_json is safe typed JSON from project policy and caller constraints.
   string placement_constraints_json = 8;
+  // runtime_requirements_json is safe typed JSON with package or runtime workload requirements.
   string runtime_requirements_json = 9;
+  // meta carries idempotency, actor, reason and audit context.
   CommandMeta meta = 10;
 }
 
+// ResolvePlacementResponse returns an explained placement decision.
 message ResolvePlacementResponse {
+  // decision is the recorded placement result.
   PlacementDecision decision = 1;
 }
 
+// GetPlacementDecisionRequest reads one placement decision.
 message GetPlacementDecisionRequest {
+  // placement_decision_id identifies the decision to read.
   string placement_decision_id = 1;
+  // meta carries caller and trace context for read audit.
   QueryMeta meta = 2;
 }
 
+// ListPlacementDecisionsRequest lists placement decisions by optional filters.
 message ListPlacementDecisionsRequest {
+  // project_id limits results to one project when present.
   optional string project_id = 1;
+  // repository_id limits results to one repository when present.
   optional string repository_id = 2;
+  // fleet_scope_id limits results to one placement scope when present.
   optional string fleet_scope_id = 3;
+  // cluster_id limits results to one Kubernetes cluster when present.
   optional string cluster_id = 4;
+  // statuses limits results to these decision statuses; empty means all statuses.
   repeated PlacementDecisionStatus statuses = 5;
+  // page limits list size and carries continuation state.
   PageRequest page = 6;
+  // meta carries caller and trace context for read audit.
   QueryMeta meta = 7;
 }
 
+// PlacementDecisionResponse returns one placement decision.
 message PlacementDecisionResponse {
+  // decision is the recorded placement result.
   PlacementDecision decision = 1;
 }
 
+// ListPlacementDecisionsResponse returns placement decisions and pagination state.
 message ListPlacementDecisionsResponse {
+  // decisions contains the current page of placement decisions.
   repeated PlacementDecision decisions = 1;
+  // page describes continuation state.
   PageResponse page = 2;
 }

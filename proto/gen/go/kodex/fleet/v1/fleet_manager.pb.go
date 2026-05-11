@@ -25,12 +25,18 @@ const (
 type FleetScopeType int32
 
 const (
-	FleetScopeType_FLEET_SCOPE_TYPE_UNSPECIFIED  FleetScopeType = 0
-	FleetScopeType_FLEET_SCOPE_TYPE_PLATFORM     FleetScopeType = 1
+	// FLEET_SCOPE_TYPE_UNSPECIFIED is invalid and used only as a zero value.
+	FleetScopeType_FLEET_SCOPE_TYPE_UNSPECIFIED FleetScopeType = 0
+	// FLEET_SCOPE_TYPE_PLATFORM is the platform-wide scope.
+	FleetScopeType_FLEET_SCOPE_TYPE_PLATFORM FleetScopeType = 1
+	// FLEET_SCOPE_TYPE_ORGANIZATION is a scope owned by an organization.
 	FleetScopeType_FLEET_SCOPE_TYPE_ORGANIZATION FleetScopeType = 2
-	FleetScopeType_FLEET_SCOPE_TYPE_PROJECT      FleetScopeType = 3
-	FleetScopeType_FLEET_SCOPE_TYPE_REPOSITORY   FleetScopeType = 4
-	FleetScopeType_FLEET_SCOPE_TYPE_SERVICE      FleetScopeType = 5
+	// FLEET_SCOPE_TYPE_PROJECT is a scope owned by one project.
+	FleetScopeType_FLEET_SCOPE_TYPE_PROJECT FleetScopeType = 3
+	// FLEET_SCOPE_TYPE_REPOSITORY is a scope owned by one repository.
+	FleetScopeType_FLEET_SCOPE_TYPE_REPOSITORY FleetScopeType = 4
+	// FLEET_SCOPE_TYPE_SERVICE is a scope owned by one service inside project policy.
+	FleetScopeType_FLEET_SCOPE_TYPE_SERVICE FleetScopeType = 5
 )
 
 // Enum value maps for FleetScopeType.
@@ -84,11 +90,16 @@ func (FleetScopeType) EnumDescriptor() ([]byte, []int) {
 type FleetScopeStatus int32
 
 const (
+	// FLEET_SCOPE_STATUS_UNSPECIFIED is invalid and used only as a zero value.
 	FleetScopeStatus_FLEET_SCOPE_STATUS_UNSPECIFIED FleetScopeStatus = 0
-	FleetScopeStatus_FLEET_SCOPE_STATUS_ACTIVE      FleetScopeStatus = 1
-	FleetScopeStatus_FLEET_SCOPE_STATUS_SUSPENDED   FleetScopeStatus = 2
-	FleetScopeStatus_FLEET_SCOPE_STATUS_DRAINING    FleetScopeStatus = 3
-	FleetScopeStatus_FLEET_SCOPE_STATUS_ARCHIVED    FleetScopeStatus = 4
+	// FLEET_SCOPE_STATUS_ACTIVE allows new placements.
+	FleetScopeStatus_FLEET_SCOPE_STATUS_ACTIVE FleetScopeStatus = 1
+	// FLEET_SCOPE_STATUS_SUSPENDED blocks new placements until reactivated.
+	FleetScopeStatus_FLEET_SCOPE_STATUS_SUSPENDED FleetScopeStatus = 2
+	// FLEET_SCOPE_STATUS_DRAINING blocks new placements while existing work drains.
+	FleetScopeStatus_FLEET_SCOPE_STATUS_DRAINING FleetScopeStatus = 3
+	// FLEET_SCOPE_STATUS_ARCHIVED hides the scope from active placement.
+	FleetScopeStatus_FLEET_SCOPE_STATUS_ARCHIVED FleetScopeStatus = 4
 )
 
 // Enum value maps for FleetScopeStatus.
@@ -140,12 +151,18 @@ func (FleetScopeStatus) EnumDescriptor() ([]byte, []int) {
 type ServerProviderType int32
 
 const (
+	// SERVER_PROVIDER_TYPE_UNSPECIFIED is invalid and used only as a zero value.
 	ServerProviderType_SERVER_PROVIDER_TYPE_UNSPECIFIED ServerProviderType = 0
-	ServerProviderType_SERVER_PROVIDER_TYPE_BARE_METAL  ServerProviderType = 1
-	ServerProviderType_SERVER_PROVIDER_TYPE_VPS         ServerProviderType = 2
-	ServerProviderType_SERVER_PROVIDER_TYPE_CLOUD       ServerProviderType = 3
-	ServerProviderType_SERVER_PROVIDER_TYPE_MANAGED     ServerProviderType = 4
-	ServerProviderType_SERVER_PROVIDER_TYPE_UNKNOWN     ServerProviderType = 5
+	// SERVER_PROVIDER_TYPE_BARE_METAL is a physical server.
+	ServerProviderType_SERVER_PROVIDER_TYPE_BARE_METAL ServerProviderType = 1
+	// SERVER_PROVIDER_TYPE_VPS is a virtual private server.
+	ServerProviderType_SERVER_PROVIDER_TYPE_VPS ServerProviderType = 2
+	// SERVER_PROVIDER_TYPE_CLOUD is a cloud VM or cloud host.
+	ServerProviderType_SERVER_PROVIDER_TYPE_CLOUD ServerProviderType = 3
+	// SERVER_PROVIDER_TYPE_MANAGED is an externally managed host or service.
+	ServerProviderType_SERVER_PROVIDER_TYPE_MANAGED ServerProviderType = 4
+	// SERVER_PROVIDER_TYPE_UNKNOWN is used when provider family is not known yet.
+	ServerProviderType_SERVER_PROVIDER_TYPE_UNKNOWN ServerProviderType = 5
 )
 
 // Enum value maps for ServerProviderType.
@@ -199,10 +216,14 @@ func (ServerProviderType) EnumDescriptor() ([]byte, []int) {
 type ServerStatus int32
 
 const (
+	// SERVER_STATUS_UNSPECIFIED is invalid and used only as a zero value.
 	ServerStatus_SERVER_STATUS_UNSPECIFIED ServerStatus = 0
-	ServerStatus_SERVER_STATUS_ACTIVE      ServerStatus = 1
-	ServerStatus_SERVER_STATUS_SUSPENDED   ServerStatus = 2
-	ServerStatus_SERVER_STATUS_DRAINING    ServerStatus = 3
+	// SERVER_STATUS_ACTIVE allows new placements through clusters linked to the server.
+	ServerStatus_SERVER_STATUS_ACTIVE ServerStatus = 1
+	// SERVER_STATUS_SUSPENDED blocks new placements through the server.
+	ServerStatus_SERVER_STATUS_SUSPENDED ServerStatus = 2
+	// SERVER_STATUS_DRAINING blocks new placements while existing work drains.
+	ServerStatus_SERVER_STATUS_DRAINING ServerStatus = 3
 )
 
 // Enum value maps for ServerStatus.
@@ -252,10 +273,15 @@ func (ServerStatus) EnumDescriptor() ([]byte, []int) {
 type KubernetesClusterStatus int32
 
 const (
+	// KUBERNETES_CLUSTER_STATUS_UNSPECIFIED is invalid and used only as a zero value.
 	KubernetesClusterStatus_KUBERNETES_CLUSTER_STATUS_UNSPECIFIED KubernetesClusterStatus = 0
-	KubernetesClusterStatus_KUBERNETES_CLUSTER_STATUS_ACTIVE      KubernetesClusterStatus = 1
-	KubernetesClusterStatus_KUBERNETES_CLUSTER_STATUS_SUSPENDED   KubernetesClusterStatus = 2
-	KubernetesClusterStatus_KUBERNETES_CLUSTER_STATUS_DRAINING    KubernetesClusterStatus = 3
+	// KUBERNETES_CLUSTER_STATUS_ACTIVE allows new placements when health permits.
+	KubernetesClusterStatus_KUBERNETES_CLUSTER_STATUS_ACTIVE KubernetesClusterStatus = 1
+	// KUBERNETES_CLUSTER_STATUS_SUSPENDED blocks new placements until reactivated.
+	KubernetesClusterStatus_KUBERNETES_CLUSTER_STATUS_SUSPENDED KubernetesClusterStatus = 2
+	// KUBERNETES_CLUSTER_STATUS_DRAINING blocks new placements while existing work drains.
+	KubernetesClusterStatus_KUBERNETES_CLUSTER_STATUS_DRAINING KubernetesClusterStatus = 3
+	// KUBERNETES_CLUSTER_STATUS_UNREACHABLE marks cluster API as unavailable.
 	KubernetesClusterStatus_KUBERNETES_CLUSTER_STATUS_UNREACHABLE KubernetesClusterStatus = 4
 )
 
@@ -308,11 +334,16 @@ func (KubernetesClusterStatus) EnumDescriptor() ([]byte, []int) {
 type ClusterHealthStatus int32
 
 const (
+	// CLUSTER_HEALTH_STATUS_UNSPECIFIED is invalid and used only as a zero value.
 	ClusterHealthStatus_CLUSTER_HEALTH_STATUS_UNSPECIFIED ClusterHealthStatus = 0
-	ClusterHealthStatus_CLUSTER_HEALTH_STATUS_UNKNOWN     ClusterHealthStatus = 1
-	ClusterHealthStatus_CLUSTER_HEALTH_STATUS_HEALTHY     ClusterHealthStatus = 2
-	ClusterHealthStatus_CLUSTER_HEALTH_STATUS_DEGRADED    ClusterHealthStatus = 3
-	ClusterHealthStatus_CLUSTER_HEALTH_STATUS_UNHEALTHY   ClusterHealthStatus = 4
+	// CLUSTER_HEALTH_STATUS_UNKNOWN means no recent health snapshot exists.
+	ClusterHealthStatus_CLUSTER_HEALTH_STATUS_UNKNOWN ClusterHealthStatus = 1
+	// CLUSTER_HEALTH_STATUS_HEALTHY means placement can use the cluster.
+	ClusterHealthStatus_CLUSTER_HEALTH_STATUS_HEALTHY ClusterHealthStatus = 2
+	// CLUSTER_HEALTH_STATUS_DEGRADED means placement should avoid the cluster unless policy permits.
+	ClusterHealthStatus_CLUSTER_HEALTH_STATUS_DEGRADED ClusterHealthStatus = 3
+	// CLUSTER_HEALTH_STATUS_UNHEALTHY means placement must reject the cluster.
+	ClusterHealthStatus_CLUSTER_HEALTH_STATUS_UNHEALTHY ClusterHealthStatus = 4
 )
 
 // Enum value maps for ClusterHealthStatus.
@@ -364,11 +395,16 @@ func (ClusterHealthStatus) EnumDescriptor() ([]byte, []int) {
 type CapacityStatus int32
 
 const (
+	// CAPACITY_STATUS_UNSPECIFIED is invalid and used only as a zero value.
 	CapacityStatus_CAPACITY_STATUS_UNSPECIFIED CapacityStatus = 0
-	CapacityStatus_CAPACITY_STATUS_UNKNOWN     CapacityStatus = 1
-	CapacityStatus_CAPACITY_STATUS_OK          CapacityStatus = 2
-	CapacityStatus_CAPACITY_STATUS_LIMITED     CapacityStatus = 3
-	CapacityStatus_CAPACITY_STATUS_EXHAUSTED   CapacityStatus = 4
+	// CAPACITY_STATUS_UNKNOWN means capacity was not checked.
+	CapacityStatus_CAPACITY_STATUS_UNKNOWN CapacityStatus = 1
+	// CAPACITY_STATUS_OK means capacity is available.
+	CapacityStatus_CAPACITY_STATUS_OK CapacityStatus = 2
+	// CAPACITY_STATUS_LIMITED means capacity exists but is constrained.
+	CapacityStatus_CAPACITY_STATUS_LIMITED CapacityStatus = 3
+	// CAPACITY_STATUS_EXHAUSTED means new placements should be rejected.
+	CapacityStatus_CAPACITY_STATUS_EXHAUSTED CapacityStatus = 4
 )
 
 // Enum value maps for CapacityStatus.
@@ -420,12 +456,18 @@ func (CapacityStatus) EnumDescriptor() ([]byte, []int) {
 type ConnectivityCheckStatus int32
 
 const (
+	// CONNECTIVITY_CHECK_STATUS_UNSPECIFIED is invalid and used only as a zero value.
 	ConnectivityCheckStatus_CONNECTIVITY_CHECK_STATUS_UNSPECIFIED ConnectivityCheckStatus = 0
-	ConnectivityCheckStatus_CONNECTIVITY_CHECK_STATUS_PENDING     ConnectivityCheckStatus = 1
-	ConnectivityCheckStatus_CONNECTIVITY_CHECK_STATUS_RUNNING     ConnectivityCheckStatus = 2
-	ConnectivityCheckStatus_CONNECTIVITY_CHECK_STATUS_SUCCEEDED   ConnectivityCheckStatus = 3
-	ConnectivityCheckStatus_CONNECTIVITY_CHECK_STATUS_FAILED      ConnectivityCheckStatus = 4
-	ConnectivityCheckStatus_CONNECTIVITY_CHECK_STATUS_TIMED_OUT   ConnectivityCheckStatus = 5
+	// CONNECTIVITY_CHECK_STATUS_PENDING means the check is queued.
+	ConnectivityCheckStatus_CONNECTIVITY_CHECK_STATUS_PENDING ConnectivityCheckStatus = 1
+	// CONNECTIVITY_CHECK_STATUS_RUNNING means the check is currently executing.
+	ConnectivityCheckStatus_CONNECTIVITY_CHECK_STATUS_RUNNING ConnectivityCheckStatus = 2
+	// CONNECTIVITY_CHECK_STATUS_SUCCEEDED means Kubernetes API connectivity succeeded.
+	ConnectivityCheckStatus_CONNECTIVITY_CHECK_STATUS_SUCCEEDED ConnectivityCheckStatus = 3
+	// CONNECTIVITY_CHECK_STATUS_FAILED means Kubernetes API connectivity failed.
+	ConnectivityCheckStatus_CONNECTIVITY_CHECK_STATUS_FAILED ConnectivityCheckStatus = 4
+	// CONNECTIVITY_CHECK_STATUS_TIMED_OUT means the check exceeded its timeout.
+	ConnectivityCheckStatus_CONNECTIVITY_CHECK_STATUS_TIMED_OUT ConnectivityCheckStatus = 5
 )
 
 // Enum value maps for ConnectivityCheckStatus.
@@ -479,11 +521,16 @@ func (ConnectivityCheckStatus) EnumDescriptor() ([]byte, []int) {
 type RuntimeMode int32
 
 const (
-	RuntimeMode_RUNTIME_MODE_UNSPECIFIED          RuntimeMode = 0
-	RuntimeMode_RUNTIME_MODE_CODE_ONLY            RuntimeMode = 1
-	RuntimeMode_RUNTIME_MODE_FULL_ENV             RuntimeMode = 2
+	// RUNTIME_MODE_UNSPECIFIED is invalid and used only as a zero value.
+	RuntimeMode_RUNTIME_MODE_UNSPECIFIED RuntimeMode = 0
+	// RUNTIME_MODE_CODE_ONLY is a code-only runtime without full service dependencies.
+	RuntimeMode_RUNTIME_MODE_CODE_ONLY RuntimeMode = 1
+	// RUNTIME_MODE_FULL_ENV is a full environment runtime.
+	RuntimeMode_RUNTIME_MODE_FULL_ENV RuntimeMode = 2
+	// RUNTIME_MODE_READ_ONLY_PRODUCTION is a read-only production diagnostic runtime.
 	RuntimeMode_RUNTIME_MODE_READ_ONLY_PRODUCTION RuntimeMode = 3
-	RuntimeMode_RUNTIME_MODE_PLATFORM_JOB         RuntimeMode = 4
+	// RUNTIME_MODE_PLATFORM_JOB is a platform technical job runtime.
+	RuntimeMode_RUNTIME_MODE_PLATFORM_JOB RuntimeMode = 4
 )
 
 // Enum value maps for RuntimeMode.
@@ -535,9 +582,12 @@ func (RuntimeMode) EnumDescriptor() ([]byte, []int) {
 type PlacementDecisionStatus int32
 
 const (
+	// PLACEMENT_DECISION_STATUS_UNSPECIFIED is invalid and used only as a zero value.
 	PlacementDecisionStatus_PLACEMENT_DECISION_STATUS_UNSPECIFIED PlacementDecisionStatus = 0
-	PlacementDecisionStatus_PLACEMENT_DECISION_STATUS_RESOLVED    PlacementDecisionStatus = 1
-	PlacementDecisionStatus_PLACEMENT_DECISION_STATUS_REJECTED    PlacementDecisionStatus = 2
+	// PLACEMENT_DECISION_STATUS_RESOLVED means a cluster was selected.
+	PlacementDecisionStatus_PLACEMENT_DECISION_STATUS_RESOLVED PlacementDecisionStatus = 1
+	// PLACEMENT_DECISION_STATUS_REJECTED means no acceptable cluster was found.
+	PlacementDecisionStatus_PLACEMENT_DECISION_STATUS_REJECTED PlacementDecisionStatus = 2
 )
 
 // Enum value maps for PlacementDecisionStatus.
@@ -585,10 +635,14 @@ func (PlacementDecisionStatus) EnumDescriptor() ([]byte, []int) {
 type PlacementRuleStatus int32
 
 const (
+	// PLACEMENT_RULE_STATUS_UNSPECIFIED is invalid and used only as a zero value.
 	PlacementRuleStatus_PLACEMENT_RULE_STATUS_UNSPECIFIED PlacementRuleStatus = 0
-	PlacementRuleStatus_PLACEMENT_RULE_STATUS_ACTIVE      PlacementRuleStatus = 1
-	PlacementRuleStatus_PLACEMENT_RULE_STATUS_DISABLED    PlacementRuleStatus = 2
-	PlacementRuleStatus_PLACEMENT_RULE_STATUS_ARCHIVED    PlacementRuleStatus = 3
+	// PLACEMENT_RULE_STATUS_ACTIVE means the rule participates in placement.
+	PlacementRuleStatus_PLACEMENT_RULE_STATUS_ACTIVE PlacementRuleStatus = 1
+	// PLACEMENT_RULE_STATUS_DISABLED means the rule is stored but ignored.
+	PlacementRuleStatus_PLACEMENT_RULE_STATUS_DISABLED PlacementRuleStatus = 2
+	// PLACEMENT_RULE_STATUS_ARCHIVED hides the rule from active placement.
+	PlacementRuleStatus_PLACEMENT_RULE_STATUS_ARCHIVED PlacementRuleStatus = 3
 )
 
 // Enum value maps for PlacementRuleStatus.
@@ -1165,21 +1219,33 @@ func (x *FleetScope) GetVersion() int64 {
 
 // Server is a managed or external server reference.
 type Server struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	Id                string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	ServerKey         string                 `protobuf:"bytes,2,opt,name=server_key,json=serverKey,proto3" json:"server_key,omitempty"`
-	ProviderType      ServerProviderType     `protobuf:"varint,3,opt,name=provider_type,json=providerType,proto3,enum=kodex.fleet.v1.ServerProviderType" json:"provider_type,omitempty"`
-	Status            ServerStatus           `protobuf:"varint,4,opt,name=status,proto3,enum=kodex.fleet.v1.ServerStatus" json:"status,omitempty"`
-	PrimaryAddressRef string                 `protobuf:"bytes,5,opt,name=primary_address_ref,json=primaryAddressRef,proto3" json:"primary_address_ref,omitempty"`
-	Region            string                 `protobuf:"bytes,6,opt,name=region,proto3" json:"region,omitempty"`
-	CapacityClass     string                 `protobuf:"bytes,7,opt,name=capacity_class,json=capacityClass,proto3" json:"capacity_class,omitempty"`
-	SecretStoreType   string                 `protobuf:"bytes,8,opt,name=secret_store_type,json=secretStoreType,proto3" json:"secret_store_type,omitempty"`
-	SecretStoreRef    string                 `protobuf:"bytes,9,opt,name=secret_store_ref,json=secretStoreRef,proto3" json:"secret_store_ref,omitempty"`
-	CreatedAt         string                 `protobuf:"bytes,10,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt         string                 `protobuf:"bytes,11,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	Version           int64                  `protobuf:"varint,12,opt,name=version,proto3" json:"version,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// id is the server identifier.
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// server_key is a stable human-readable key unique in the server registry.
+	ServerKey string `protobuf:"bytes,2,opt,name=server_key,json=serverKey,proto3" json:"server_key,omitempty"`
+	// provider_type classifies where the server comes from.
+	ProviderType ServerProviderType `protobuf:"varint,3,opt,name=provider_type,json=providerType,proto3,enum=kodex.fleet.v1.ServerProviderType" json:"provider_type,omitempty"`
+	// status is the server lifecycle status.
+	Status ServerStatus `protobuf:"varint,4,opt,name=status,proto3,enum=kodex.fleet.v1.ServerStatus" json:"status,omitempty"`
+	// primary_address_ref is a safe address reference or inventory key, not a credential.
+	PrimaryAddressRef string `protobuf:"bytes,5,opt,name=primary_address_ref,json=primaryAddressRef,proto3" json:"primary_address_ref,omitempty"`
+	// region is an operator-defined placement region.
+	Region string `protobuf:"bytes,6,opt,name=region,proto3" json:"region,omitempty"`
+	// capacity_class is an operator-defined class such as small, standard or gpu.
+	CapacityClass string `protobuf:"bytes,7,opt,name=capacity_class,json=capacityClass,proto3" json:"capacity_class,omitempty"`
+	// secret_store_type identifies the external secret store that owns connection secrets.
+	SecretStoreType string `protobuf:"bytes,8,opt,name=secret_store_type,json=secretStoreType,proto3" json:"secret_store_type,omitempty"`
+	// secret_store_ref is an opaque secret reference; it must not contain secret values.
+	SecretStoreRef string `protobuf:"bytes,9,opt,name=secret_store_ref,json=secretStoreRef,proto3" json:"secret_store_ref,omitempty"`
+	// created_at is creation time in RFC3339 format.
+	CreatedAt string `protobuf:"bytes,10,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	// updated_at is update time in RFC3339 format.
+	UpdatedAt string `protobuf:"bytes,11,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	// version is the aggregate version used for optimistic concurrency.
+	Version       int64 `protobuf:"varint,12,opt,name=version,proto3" json:"version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Server) Reset() {
@@ -1298,26 +1364,43 @@ func (x *Server) GetVersion() int64 {
 
 // KubernetesCluster is a cluster available for runtime placement.
 type KubernetesCluster struct {
-	state               protoimpl.MessageState  `protogen:"open.v1"`
-	Id                  string                  `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	FleetScopeId        string                  `protobuf:"bytes,2,opt,name=fleet_scope_id,json=fleetScopeId,proto3" json:"fleet_scope_id,omitempty"`
-	ServerId            *string                 `protobuf:"bytes,3,opt,name=server_id,json=serverId,proto3,oneof" json:"server_id,omitempty"`
-	ClusterKey          string                  `protobuf:"bytes,4,opt,name=cluster_key,json=clusterKey,proto3" json:"cluster_key,omitempty"`
-	Status              KubernetesClusterStatus `protobuf:"varint,5,opt,name=status,proto3,enum=kodex.fleet.v1.KubernetesClusterStatus" json:"status,omitempty"`
-	IsDefault           bool                    `protobuf:"varint,6,opt,name=is_default,json=isDefault,proto3" json:"is_default,omitempty"`
-	ApiEndpointRef      string                  `protobuf:"bytes,7,opt,name=api_endpoint_ref,json=apiEndpointRef,proto3" json:"api_endpoint_ref,omitempty"`
-	SecretStoreType     string                  `protobuf:"bytes,8,opt,name=secret_store_type,json=secretStoreType,proto3" json:"secret_store_type,omitempty"`
-	SecretStoreRef      string                  `protobuf:"bytes,9,opt,name=secret_store_ref,json=secretStoreRef,proto3" json:"secret_store_ref,omitempty"`
-	KubernetesVersion   string                  `protobuf:"bytes,10,opt,name=kubernetes_version,json=kubernetesVersion,proto3" json:"kubernetes_version,omitempty"`
-	Region              string                  `protobuf:"bytes,11,opt,name=region,proto3" json:"region,omitempty"`
-	CapacityClass       string                  `protobuf:"bytes,12,opt,name=capacity_class,json=capacityClass,proto3" json:"capacity_class,omitempty"`
-	LastHealthStatus    ClusterHealthStatus     `protobuf:"varint,13,opt,name=last_health_status,json=lastHealthStatus,proto3,enum=kodex.fleet.v1.ClusterHealthStatus" json:"last_health_status,omitempty"`
-	LastHealthCheckedAt *string                 `protobuf:"bytes,14,opt,name=last_health_checked_at,json=lastHealthCheckedAt,proto3,oneof" json:"last_health_checked_at,omitempty"`
-	CreatedAt           string                  `protobuf:"bytes,15,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt           string                  `protobuf:"bytes,16,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	Version             int64                   `protobuf:"varint,17,opt,name=version,proto3" json:"version,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// id is the Kubernetes cluster identifier.
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// fleet_scope_id references the fleet scope that owns placement for this cluster.
+	FleetScopeId string `protobuf:"bytes,2,opt,name=fleet_scope_id,json=fleetScopeId,proto3" json:"fleet_scope_id,omitempty"`
+	// server_id optionally links the cluster to a registered server; omitted for managed clusters.
+	ServerId *string `protobuf:"bytes,3,opt,name=server_id,json=serverId,proto3,oneof" json:"server_id,omitempty"`
+	// cluster_key is a stable human-readable key unique inside a fleet scope.
+	ClusterKey string `protobuf:"bytes,4,opt,name=cluster_key,json=clusterKey,proto3" json:"cluster_key,omitempty"`
+	// status is the cluster lifecycle status.
+	Status KubernetesClusterStatus `protobuf:"varint,5,opt,name=status,proto3,enum=kodex.fleet.v1.KubernetesClusterStatus" json:"status,omitempty"`
+	// is_default marks fallback cluster inside its fleet scope, not a single-cluster limit.
+	IsDefault bool `protobuf:"varint,6,opt,name=is_default,json=isDefault,proto3" json:"is_default,omitempty"`
+	// api_endpoint_ref is a safe endpoint reference or inventory key, not a credential.
+	ApiEndpointRef string `protobuf:"bytes,7,opt,name=api_endpoint_ref,json=apiEndpointRef,proto3" json:"api_endpoint_ref,omitempty"`
+	// secret_store_type identifies the external secret store that owns kube access secrets.
+	SecretStoreType string `protobuf:"bytes,8,opt,name=secret_store_type,json=secretStoreType,proto3" json:"secret_store_type,omitempty"`
+	// secret_store_ref is an opaque kubeconfig/service-account reference; it must not contain secret values.
+	SecretStoreRef string `protobuf:"bytes,9,opt,name=secret_store_ref,json=secretStoreRef,proto3" json:"secret_store_ref,omitempty"`
+	// kubernetes_version is the observed or operator-declared Kubernetes version.
+	KubernetesVersion string `protobuf:"bytes,10,opt,name=kubernetes_version,json=kubernetesVersion,proto3" json:"kubernetes_version,omitempty"`
+	// region is an operator-defined placement region.
+	Region string `protobuf:"bytes,11,opt,name=region,proto3" json:"region,omitempty"`
+	// capacity_class is an operator-defined class used by placement rules.
+	CapacityClass string `protobuf:"bytes,12,opt,name=capacity_class,json=capacityClass,proto3" json:"capacity_class,omitempty"`
+	// last_health_status is the latest limited health classification known to fleet-manager.
+	LastHealthStatus ClusterHealthStatus `protobuf:"varint,13,opt,name=last_health_status,json=lastHealthStatus,proto3,enum=kodex.fleet.v1.ClusterHealthStatus" json:"last_health_status,omitempty"`
+	// last_health_checked_at is the latest health check time in RFC3339 format when known.
+	LastHealthCheckedAt *string `protobuf:"bytes,14,opt,name=last_health_checked_at,json=lastHealthCheckedAt,proto3,oneof" json:"last_health_checked_at,omitempty"`
+	// created_at is creation time in RFC3339 format.
+	CreatedAt string `protobuf:"bytes,15,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	// updated_at is update time in RFC3339 format.
+	UpdatedAt string `protobuf:"bytes,16,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	// version is the aggregate version used for optimistic concurrency.
+	Version       int64 `protobuf:"varint,17,opt,name=version,proto3" json:"version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *KubernetesCluster) Reset() {
@@ -1471,16 +1554,25 @@ func (x *KubernetesCluster) GetVersion() int64 {
 
 // ClusterConnectivityCheck records one connectivity attempt.
 type ClusterConnectivityCheck struct {
-	state         protoimpl.MessageState  `protogen:"open.v1"`
-	Id            string                  `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	ClusterId     string                  `protobuf:"bytes,2,opt,name=cluster_id,json=clusterId,proto3" json:"cluster_id,omitempty"`
-	Status        ConnectivityCheckStatus `protobuf:"varint,3,opt,name=status,proto3,enum=kodex.fleet.v1.ConnectivityCheckStatus" json:"status,omitempty"`
-	StartedAt     *string                 `protobuf:"bytes,4,opt,name=started_at,json=startedAt,proto3,oneof" json:"started_at,omitempty"`
-	FinishedAt    *string                 `protobuf:"bytes,5,opt,name=finished_at,json=finishedAt,proto3,oneof" json:"finished_at,omitempty"`
-	LatencyMs     *int64                  `protobuf:"varint,6,opt,name=latency_ms,json=latencyMs,proto3,oneof" json:"latency_ms,omitempty"`
-	ErrorCode     string                  `protobuf:"bytes,7,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
-	ErrorMessage  string                  `protobuf:"bytes,8,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
-	CreatedAt     string                  `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// id is the connectivity check identifier.
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// cluster_id references the checked Kubernetes cluster.
+	ClusterId string `protobuf:"bytes,2,opt,name=cluster_id,json=clusterId,proto3" json:"cluster_id,omitempty"`
+	// status is the current attempt status.
+	Status ConnectivityCheckStatus `protobuf:"varint,3,opt,name=status,proto3,enum=kodex.fleet.v1.ConnectivityCheckStatus" json:"status,omitempty"`
+	// started_at is check start time in RFC3339 format; omitted until the check starts.
+	StartedAt *string `protobuf:"bytes,4,opt,name=started_at,json=startedAt,proto3,oneof" json:"started_at,omitempty"`
+	// finished_at is check completion time in RFC3339 format; omitted while running.
+	FinishedAt *string `protobuf:"bytes,5,opt,name=finished_at,json=finishedAt,proto3,oneof" json:"finished_at,omitempty"`
+	// latency_ms is the measured API latency in milliseconds; omitted when unavailable.
+	LatencyMs *int64 `protobuf:"varint,6,opt,name=latency_ms,json=latencyMs,proto3,oneof" json:"latency_ms,omitempty"`
+	// error_code is a classified safe error code; empty for successful checks.
+	ErrorCode string `protobuf:"bytes,7,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
+	// error_message is a short safe diagnostic message without secrets.
+	ErrorMessage string `protobuf:"bytes,8,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	// created_at is creation time in RFC3339 format.
+	CreatedAt     string `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1580,17 +1672,25 @@ func (x *ClusterConnectivityCheck) GetCreatedAt() string {
 
 // ClusterHealthSnapshot is a limited health view for placement and operators.
 type ClusterHealthSnapshot struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	ClusterId      string                 `protobuf:"bytes,2,opt,name=cluster_id,json=clusterId,proto3" json:"cluster_id,omitempty"`
-	HealthStatus   ClusterHealthStatus    `protobuf:"varint,3,opt,name=health_status,json=healthStatus,proto3,enum=kodex.fleet.v1.ClusterHealthStatus" json:"health_status,omitempty"`
-	CapacityStatus CapacityStatus         `protobuf:"varint,4,opt,name=capacity_status,json=capacityStatus,proto3,enum=kodex.fleet.v1.CapacityStatus" json:"capacity_status,omitempty"`
-	SummaryJson    string                 `protobuf:"bytes,5,opt,name=summary_json,json=summaryJson,proto3" json:"summary_json,omitempty"`
-	CheckedAt      string                 `protobuf:"bytes,6,opt,name=checked_at,json=checkedAt,proto3" json:"checked_at,omitempty"`
-	ErrorCode      string                 `protobuf:"bytes,7,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
-	ErrorMessage   string                 `protobuf:"bytes,8,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// id is the health snapshot identifier.
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// cluster_id references the checked Kubernetes cluster.
+	ClusterId string `protobuf:"bytes,2,opt,name=cluster_id,json=clusterId,proto3" json:"cluster_id,omitempty"`
+	// health_status is the limited health classification used for placement.
+	HealthStatus ClusterHealthStatus `protobuf:"varint,3,opt,name=health_status,json=healthStatus,proto3,enum=kodex.fleet.v1.ClusterHealthStatus" json:"health_status,omitempty"`
+	// capacity_status is the limited capacity classification used for placement.
+	CapacityStatus CapacityStatus `protobuf:"varint,4,opt,name=capacity_status,json=capacityStatus,proto3,enum=kodex.fleet.v1.CapacityStatus" json:"capacity_status,omitempty"`
+	// summary_json is a safe typed JSON summary without full Kubernetes objects or secrets.
+	SummaryJson string `protobuf:"bytes,5,opt,name=summary_json,json=summaryJson,proto3" json:"summary_json,omitempty"`
+	// checked_at is snapshot time in RFC3339 format.
+	CheckedAt string `protobuf:"bytes,6,opt,name=checked_at,json=checkedAt,proto3" json:"checked_at,omitempty"`
+	// error_code is a classified safe error code; empty when health is acceptable.
+	ErrorCode string `protobuf:"bytes,7,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
+	// error_message is a short safe diagnostic message without secrets.
+	ErrorMessage  string `protobuf:"bytes,8,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ClusterHealthSnapshot) Reset() {
@@ -1681,19 +1781,29 @@ func (x *ClusterHealthSnapshot) GetErrorMessage() string {
 
 // PlacementRule is a fleet-owned placement rule.
 type PlacementRule struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	Id              string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	FleetScopeId    string                 `protobuf:"bytes,2,opt,name=fleet_scope_id,json=fleetScopeId,proto3" json:"fleet_scope_id,omitempty"`
-	RuleKey         string                 `protobuf:"bytes,3,opt,name=rule_key,json=ruleKey,proto3" json:"rule_key,omitempty"`
-	Status          PlacementRuleStatus    `protobuf:"varint,4,opt,name=status,proto3,enum=kodex.fleet.v1.PlacementRuleStatus" json:"status,omitempty"`
-	Priority        int64                  `protobuf:"varint,5,opt,name=priority,proto3" json:"priority,omitempty"`
-	MatchJson       string                 `protobuf:"bytes,6,opt,name=match_json,json=matchJson,proto3" json:"match_json,omitempty"`
-	ConstraintsJson string                 `protobuf:"bytes,7,opt,name=constraints_json,json=constraintsJson,proto3" json:"constraints_json,omitempty"`
-	CreatedAt       string                 `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt       string                 `protobuf:"bytes,9,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	Version         int64                  `protobuf:"varint,10,opt,name=version,proto3" json:"version,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// id is the placement rule identifier.
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// fleet_scope_id references the scope where the rule is evaluated.
+	FleetScopeId string `protobuf:"bytes,2,opt,name=fleet_scope_id,json=fleetScopeId,proto3" json:"fleet_scope_id,omitempty"`
+	// rule_key is a stable human-readable key unique inside a fleet scope.
+	RuleKey string `protobuf:"bytes,3,opt,name=rule_key,json=ruleKey,proto3" json:"rule_key,omitempty"`
+	// status is the rule lifecycle status.
+	Status PlacementRuleStatus `protobuf:"varint,4,opt,name=status,proto3,enum=kodex.fleet.v1.PlacementRuleStatus" json:"status,omitempty"`
+	// priority is evaluated in ascending order; lower values win.
+	Priority int64 `protobuf:"varint,5,opt,name=priority,proto3" json:"priority,omitempty"`
+	// match_json is safe typed JSON with project, repository, service, package and runtime profile matchers.
+	MatchJson string `protobuf:"bytes,6,opt,name=match_json,json=matchJson,proto3" json:"match_json,omitempty"`
+	// constraints_json is safe typed JSON with placement constraints and preferred cluster rules.
+	ConstraintsJson string `protobuf:"bytes,7,opt,name=constraints_json,json=constraintsJson,proto3" json:"constraints_json,omitempty"`
+	// created_at is creation time in RFC3339 format.
+	CreatedAt string `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	// updated_at is update time in RFC3339 format.
+	UpdatedAt string `protobuf:"bytes,9,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	// version is the aggregate version used for optimistic concurrency.
+	Version       int64 `protobuf:"varint,10,opt,name=version,proto3" json:"version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PlacementRule) Reset() {
@@ -1798,24 +1908,39 @@ func (x *PlacementRule) GetVersion() int64 {
 
 // PlacementDecision records an explained placement result.
 type PlacementDecision struct {
-	state              protoimpl.MessageState  `protogen:"open.v1"`
-	Id                 string                  `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	CommandId          *string                 `protobuf:"bytes,2,opt,name=command_id,json=commandId,proto3,oneof" json:"command_id,omitempty"`
-	RequestFingerprint string                  `protobuf:"bytes,3,opt,name=request_fingerprint,json=requestFingerprint,proto3" json:"request_fingerprint,omitempty"`
-	Status             PlacementDecisionStatus `protobuf:"varint,4,opt,name=status,proto3,enum=kodex.fleet.v1.PlacementDecisionStatus" json:"status,omitempty"`
-	FleetScopeId       *string                 `protobuf:"bytes,5,opt,name=fleet_scope_id,json=fleetScopeId,proto3,oneof" json:"fleet_scope_id,omitempty"`
-	ClusterId          *string                 `protobuf:"bytes,6,opt,name=cluster_id,json=clusterId,proto3,oneof" json:"cluster_id,omitempty"`
-	ProjectId          *string                 `protobuf:"bytes,7,opt,name=project_id,json=projectId,proto3,oneof" json:"project_id,omitempty"`
-	RepositoryId       *string                 `protobuf:"bytes,8,opt,name=repository_id,json=repositoryId,proto3,oneof" json:"repository_id,omitempty"`
-	RuntimeMode        RuntimeMode             `protobuf:"varint,9,opt,name=runtime_mode,json=runtimeMode,proto3,enum=kodex.fleet.v1.RuntimeMode" json:"runtime_mode,omitempty"`
-	RuntimeProfile     string                  `protobuf:"bytes,10,opt,name=runtime_profile,json=runtimeProfile,proto3" json:"runtime_profile,omitempty"`
-	InputJson          string                  `protobuf:"bytes,11,opt,name=input_json,json=inputJson,proto3" json:"input_json,omitempty"`
-	ReasonCode         string                  `protobuf:"bytes,12,opt,name=reason_code,json=reasonCode,proto3" json:"reason_code,omitempty"`
-	ReasonMessage      string                  `protobuf:"bytes,13,opt,name=reason_message,json=reasonMessage,proto3" json:"reason_message,omitempty"`
-	UsedDefaultPath    bool                    `protobuf:"varint,14,opt,name=used_default_path,json=usedDefaultPath,proto3" json:"used_default_path,omitempty"`
-	CreatedAt          string                  `protobuf:"bytes,15,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// id is the placement decision identifier.
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// command_id is copied from ResolvePlacement when provided for idempotency.
+	CommandId *string `protobuf:"bytes,2,opt,name=command_id,json=commandId,proto3,oneof" json:"command_id,omitempty"`
+	// request_fingerprint is a deterministic digest of safe placement input.
+	RequestFingerprint string `protobuf:"bytes,3,opt,name=request_fingerprint,json=requestFingerprint,proto3" json:"request_fingerprint,omitempty"`
+	// status is the decision result.
+	Status PlacementDecisionStatus `protobuf:"varint,4,opt,name=status,proto3,enum=kodex.fleet.v1.PlacementDecisionStatus" json:"status,omitempty"`
+	// fleet_scope_id is the selected scope; omitted when placement is rejected before scope selection.
+	FleetScopeId *string `protobuf:"bytes,5,opt,name=fleet_scope_id,json=fleetScopeId,proto3,oneof" json:"fleet_scope_id,omitempty"`
+	// cluster_id is the selected cluster; omitted when placement is rejected.
+	ClusterId *string `protobuf:"bytes,6,opt,name=cluster_id,json=clusterId,proto3,oneof" json:"cluster_id,omitempty"`
+	// project_id is an external project reference when the request is project-scoped.
+	ProjectId *string `protobuf:"bytes,7,opt,name=project_id,json=projectId,proto3,oneof" json:"project_id,omitempty"`
+	// repository_id is an external repository reference when the request is repository-scoped.
+	RepositoryId *string `protobuf:"bytes,8,opt,name=repository_id,json=repositoryId,proto3,oneof" json:"repository_id,omitempty"`
+	// runtime_mode is the requested runtime isolation mode.
+	RuntimeMode RuntimeMode `protobuf:"varint,9,opt,name=runtime_mode,json=runtimeMode,proto3,enum=kodex.fleet.v1.RuntimeMode" json:"runtime_mode,omitempty"`
+	// runtime_profile is the concrete runtime/toolchain profile such as code-only-go.
+	RuntimeProfile string `protobuf:"bytes,10,opt,name=runtime_profile,json=runtimeProfile,proto3" json:"runtime_profile,omitempty"`
+	// input_json is safe typed JSON containing replayable placement input without secrets.
+	InputJson string `protobuf:"bytes,11,opt,name=input_json,json=inputJson,proto3" json:"input_json,omitempty"`
+	// reason_code is a stable machine-readable reason for selection or rejection.
+	ReasonCode string `protobuf:"bytes,12,opt,name=reason_code,json=reasonCode,proto3" json:"reason_code,omitempty"`
+	// reason_message is a short safe explanation for operators.
+	ReasonMessage string `protobuf:"bytes,13,opt,name=reason_message,json=reasonMessage,proto3" json:"reason_message,omitempty"`
+	// used_default_path is true when placement used the bootstrap default fallback.
+	UsedDefaultPath bool `protobuf:"varint,14,opt,name=used_default_path,json=usedDefaultPath,proto3" json:"used_default_path,omitempty"`
+	// created_at is creation time in RFC3339 format.
+	CreatedAt     string `protobuf:"bytes,15,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PlacementDecision) Reset() {
@@ -1953,15 +2078,23 @@ func (x *PlacementDecision) GetCreatedAt() string {
 	return ""
 }
 
+// CreateFleetScopeRequest creates a logical placement scope.
 type CreateFleetScopeRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ScopeKey      string                 `protobuf:"bytes,1,opt,name=scope_key,json=scopeKey,proto3" json:"scope_key,omitempty"`
-	ScopeType     FleetScopeType         `protobuf:"varint,2,opt,name=scope_type,json=scopeType,proto3,enum=kodex.fleet.v1.FleetScopeType" json:"scope_type,omitempty"`
-	ScopeOwnerId  *string                `protobuf:"bytes,3,opt,name=scope_owner_id,json=scopeOwnerId,proto3,oneof" json:"scope_owner_id,omitempty"`
-	OwnerRefJson  string                 `protobuf:"bytes,4,opt,name=owner_ref_json,json=ownerRefJson,proto3" json:"owner_ref_json,omitempty"`
-	DisplayName   string                 `protobuf:"bytes,5,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
-	IsDefault     bool                   `protobuf:"varint,6,opt,name=is_default,json=isDefault,proto3" json:"is_default,omitempty"`
-	Meta          *CommandMeta           `protobuf:"bytes,7,opt,name=meta,proto3" json:"meta,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// scope_key is a stable readable key, for example platform-default.
+	ScopeKey string `protobuf:"bytes,1,opt,name=scope_key,json=scopeKey,proto3" json:"scope_key,omitempty"`
+	// scope_type classifies owner level.
+	ScopeType FleetScopeType `protobuf:"varint,2,opt,name=scope_type,json=scopeType,proto3,enum=kodex.fleet.v1.FleetScopeType" json:"scope_type,omitempty"`
+	// scope_owner_id references organization, project or repository when applicable.
+	ScopeOwnerId *string `protobuf:"bytes,3,opt,name=scope_owner_id,json=scopeOwnerId,proto3,oneof" json:"scope_owner_id,omitempty"`
+	// owner_ref_json is a typed safe JSON object for complex owner refs such as service scope.
+	OwnerRefJson string `protobuf:"bytes,4,opt,name=owner_ref_json,json=ownerRefJson,proto3" json:"owner_ref_json,omitempty"`
+	// display_name is a human-readable name.
+	DisplayName string `protobuf:"bytes,5,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	// is_default marks bootstrap fallback scope. It is not a single-scope MVP limit.
+	IsDefault bool `protobuf:"varint,6,opt,name=is_default,json=isDefault,proto3" json:"is_default,omitempty"`
+	// meta carries idempotency, actor, reason and audit context.
+	Meta          *CommandMeta `protobuf:"bytes,7,opt,name=meta,proto3" json:"meta,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2045,16 +2178,25 @@ func (x *CreateFleetScopeRequest) GetMeta() *CommandMeta {
 	return nil
 }
 
+// UpdateFleetScopeRequest changes safe scope fields.
 type UpdateFleetScopeRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	FleetScopeId  string                 `protobuf:"bytes,1,opt,name=fleet_scope_id,json=fleetScopeId,proto3" json:"fleet_scope_id,omitempty"`
-	ScopeKey      *string                `protobuf:"bytes,2,opt,name=scope_key,json=scopeKey,proto3,oneof" json:"scope_key,omitempty"`
-	ScopeOwnerId  *string                `protobuf:"bytes,3,opt,name=scope_owner_id,json=scopeOwnerId,proto3,oneof" json:"scope_owner_id,omitempty"`
-	OwnerRefJson  *string                `protobuf:"bytes,4,opt,name=owner_ref_json,json=ownerRefJson,proto3,oneof" json:"owner_ref_json,omitempty"`
-	DisplayName   *string                `protobuf:"bytes,5,opt,name=display_name,json=displayName,proto3,oneof" json:"display_name,omitempty"`
-	Status        *FleetScopeStatus      `protobuf:"varint,6,opt,name=status,proto3,enum=kodex.fleet.v1.FleetScopeStatus,oneof" json:"status,omitempty"`
-	IsDefault     *bool                  `protobuf:"varint,7,opt,name=is_default,json=isDefault,proto3,oneof" json:"is_default,omitempty"`
-	Meta          *CommandMeta           `protobuf:"bytes,8,opt,name=meta,proto3" json:"meta,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// fleet_scope_id identifies the scope to update.
+	FleetScopeId string `protobuf:"bytes,1,opt,name=fleet_scope_id,json=fleetScopeId,proto3" json:"fleet_scope_id,omitempty"`
+	// scope_key updates the stable readable key when present.
+	ScopeKey *string `protobuf:"bytes,2,opt,name=scope_key,json=scopeKey,proto3,oneof" json:"scope_key,omitempty"`
+	// scope_owner_id updates the owner reference when present.
+	ScopeOwnerId *string `protobuf:"bytes,3,opt,name=scope_owner_id,json=scopeOwnerId,proto3,oneof" json:"scope_owner_id,omitempty"`
+	// owner_ref_json updates the typed safe JSON owner ref when present.
+	OwnerRefJson *string `protobuf:"bytes,4,opt,name=owner_ref_json,json=ownerRefJson,proto3,oneof" json:"owner_ref_json,omitempty"`
+	// display_name updates the human-readable name when present.
+	DisplayName *string `protobuf:"bytes,5,opt,name=display_name,json=displayName,proto3,oneof" json:"display_name,omitempty"`
+	// status updates the lifecycle status when present.
+	Status *FleetScopeStatus `protobuf:"varint,6,opt,name=status,proto3,enum=kodex.fleet.v1.FleetScopeStatus,oneof" json:"status,omitempty"`
+	// is_default updates fallback status when present.
+	IsDefault *bool `protobuf:"varint,7,opt,name=is_default,json=isDefault,proto3,oneof" json:"is_default,omitempty"`
+	// meta carries expected_version, idempotency, actor, reason and audit context.
+	Meta          *CommandMeta `protobuf:"bytes,8,opt,name=meta,proto3" json:"meta,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2145,10 +2287,13 @@ func (x *UpdateFleetScopeRequest) GetMeta() *CommandMeta {
 	return nil
 }
 
+// DisableFleetScopeRequest disables new placements in a scope.
 type DisableFleetScopeRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	FleetScopeId  string                 `protobuf:"bytes,1,opt,name=fleet_scope_id,json=fleetScopeId,proto3" json:"fleet_scope_id,omitempty"`
-	Meta          *CommandMeta           `protobuf:"bytes,2,opt,name=meta,proto3" json:"meta,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// fleet_scope_id identifies the scope to disable.
+	FleetScopeId string `protobuf:"bytes,1,opt,name=fleet_scope_id,json=fleetScopeId,proto3" json:"fleet_scope_id,omitempty"`
+	// meta carries expected_version, idempotency, actor, reason and audit context.
+	Meta          *CommandMeta `protobuf:"bytes,2,opt,name=meta,proto3" json:"meta,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2197,10 +2342,13 @@ func (x *DisableFleetScopeRequest) GetMeta() *CommandMeta {
 	return nil
 }
 
+// GetFleetScopeRequest reads one fleet scope.
 type GetFleetScopeRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	FleetScopeId  string                 `protobuf:"bytes,1,opt,name=fleet_scope_id,json=fleetScopeId,proto3" json:"fleet_scope_id,omitempty"`
-	Meta          *QueryMeta             `protobuf:"bytes,2,opt,name=meta,proto3" json:"meta,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// fleet_scope_id identifies the scope to read.
+	FleetScopeId string `protobuf:"bytes,1,opt,name=fleet_scope_id,json=fleetScopeId,proto3" json:"fleet_scope_id,omitempty"`
+	// meta carries caller and trace context for read audit.
+	Meta          *QueryMeta `protobuf:"bytes,2,opt,name=meta,proto3" json:"meta,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2249,14 +2397,21 @@ func (x *GetFleetScopeRequest) GetMeta() *QueryMeta {
 	return nil
 }
 
+// ListFleetScopesRequest lists fleet scopes by optional filters.
 type ListFleetScopesRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ScopeTypes    []FleetScopeType       `protobuf:"varint,1,rep,packed,name=scope_types,json=scopeTypes,proto3,enum=kodex.fleet.v1.FleetScopeType" json:"scope_types,omitempty"`
-	Statuses      []FleetScopeStatus     `protobuf:"varint,2,rep,packed,name=statuses,proto3,enum=kodex.fleet.v1.FleetScopeStatus" json:"statuses,omitempty"`
-	ScopeOwnerId  *string                `protobuf:"bytes,3,opt,name=scope_owner_id,json=scopeOwnerId,proto3,oneof" json:"scope_owner_id,omitempty"`
-	IsDefault     *bool                  `protobuf:"varint,4,opt,name=is_default,json=isDefault,proto3,oneof" json:"is_default,omitempty"`
-	Page          *PageRequest           `protobuf:"bytes,5,opt,name=page,proto3" json:"page,omitempty"`
-	Meta          *QueryMeta             `protobuf:"bytes,6,opt,name=meta,proto3" json:"meta,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// scope_types limits results to these owner levels; empty means all types.
+	ScopeTypes []FleetScopeType `protobuf:"varint,1,rep,packed,name=scope_types,json=scopeTypes,proto3,enum=kodex.fleet.v1.FleetScopeType" json:"scope_types,omitempty"`
+	// statuses limits results to these lifecycle statuses; empty means all statuses.
+	Statuses []FleetScopeStatus `protobuf:"varint,2,rep,packed,name=statuses,proto3,enum=kodex.fleet.v1.FleetScopeStatus" json:"statuses,omitempty"`
+	// scope_owner_id limits results to an owner reference when present.
+	ScopeOwnerId *string `protobuf:"bytes,3,opt,name=scope_owner_id,json=scopeOwnerId,proto3,oneof" json:"scope_owner_id,omitempty"`
+	// is_default limits results by fallback marker when present.
+	IsDefault *bool `protobuf:"varint,4,opt,name=is_default,json=isDefault,proto3,oneof" json:"is_default,omitempty"`
+	// page limits list size and carries continuation state.
+	Page *PageRequest `protobuf:"bytes,5,opt,name=page,proto3" json:"page,omitempty"`
+	// meta carries caller and trace context for read audit.
+	Meta          *QueryMeta `protobuf:"bytes,6,opt,name=meta,proto3" json:"meta,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2333,9 +2488,11 @@ func (x *ListFleetScopesRequest) GetMeta() *QueryMeta {
 	return nil
 }
 
+// FleetScopeResponse returns one fleet scope.
 type FleetScopeResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Scope         *FleetScope            `protobuf:"bytes,1,opt,name=scope,proto3" json:"scope,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// scope is the authoritative fleet scope state.
+	Scope         *FleetScope `protobuf:"bytes,1,opt,name=scope,proto3" json:"scope,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2377,10 +2534,13 @@ func (x *FleetScopeResponse) GetScope() *FleetScope {
 	return nil
 }
 
+// ListFleetScopesResponse returns fleet scopes and pagination state.
 type ListFleetScopesResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Scopes        []*FleetScope          `protobuf:"bytes,1,rep,name=scopes,proto3" json:"scopes,omitempty"`
-	Page          *PageResponse          `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// scopes contains the current page of fleet scopes.
+	Scopes []*FleetScope `protobuf:"bytes,1,rep,name=scopes,proto3" json:"scopes,omitempty"`
+	// page describes continuation state.
+	Page          *PageResponse `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2429,18 +2589,27 @@ func (x *ListFleetScopesResponse) GetPage() *PageResponse {
 	return nil
 }
 
+// RegisterServerRequest registers a managed or external server reference.
 type RegisterServerRequest struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	ServerKey         string                 `protobuf:"bytes,1,opt,name=server_key,json=serverKey,proto3" json:"server_key,omitempty"`
-	ProviderType      ServerProviderType     `protobuf:"varint,2,opt,name=provider_type,json=providerType,proto3,enum=kodex.fleet.v1.ServerProviderType" json:"provider_type,omitempty"`
-	PrimaryAddressRef string                 `protobuf:"bytes,3,opt,name=primary_address_ref,json=primaryAddressRef,proto3" json:"primary_address_ref,omitempty"`
-	Region            string                 `protobuf:"bytes,4,opt,name=region,proto3" json:"region,omitempty"`
-	CapacityClass     string                 `protobuf:"bytes,5,opt,name=capacity_class,json=capacityClass,proto3" json:"capacity_class,omitempty"`
-	SecretStoreType   string                 `protobuf:"bytes,6,opt,name=secret_store_type,json=secretStoreType,proto3" json:"secret_store_type,omitempty"`
-	SecretStoreRef    string                 `protobuf:"bytes,7,opt,name=secret_store_ref,json=secretStoreRef,proto3" json:"secret_store_ref,omitempty"`
-	Meta              *CommandMeta           `protobuf:"bytes,8,opt,name=meta,proto3" json:"meta,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// server_key is a stable human-readable key unique in the server registry.
+	ServerKey string `protobuf:"bytes,1,opt,name=server_key,json=serverKey,proto3" json:"server_key,omitempty"`
+	// provider_type classifies where the server comes from.
+	ProviderType ServerProviderType `protobuf:"varint,2,opt,name=provider_type,json=providerType,proto3,enum=kodex.fleet.v1.ServerProviderType" json:"provider_type,omitempty"`
+	// primary_address_ref is a safe address reference or inventory key, not a credential.
+	PrimaryAddressRef string `protobuf:"bytes,3,opt,name=primary_address_ref,json=primaryAddressRef,proto3" json:"primary_address_ref,omitempty"`
+	// region is an operator-defined placement region.
+	Region string `protobuf:"bytes,4,opt,name=region,proto3" json:"region,omitempty"`
+	// capacity_class is an operator-defined class such as small, standard or gpu.
+	CapacityClass string `protobuf:"bytes,5,opt,name=capacity_class,json=capacityClass,proto3" json:"capacity_class,omitempty"`
+	// secret_store_type identifies the external secret store that owns connection secrets.
+	SecretStoreType string `protobuf:"bytes,6,opt,name=secret_store_type,json=secretStoreType,proto3" json:"secret_store_type,omitempty"`
+	// secret_store_ref is an opaque secret reference; it must not contain secret values.
+	SecretStoreRef string `protobuf:"bytes,7,opt,name=secret_store_ref,json=secretStoreRef,proto3" json:"secret_store_ref,omitempty"`
+	// meta carries idempotency, actor, reason and audit context.
+	Meta          *CommandMeta `protobuf:"bytes,8,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RegisterServerRequest) Reset() {
@@ -2529,20 +2698,31 @@ func (x *RegisterServerRequest) GetMeta() *CommandMeta {
 	return nil
 }
 
+// UpdateServerRequest changes safe server fields.
 type UpdateServerRequest struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	ServerId          string                 `protobuf:"bytes,1,opt,name=server_id,json=serverId,proto3" json:"server_id,omitempty"`
-	ServerKey         *string                `protobuf:"bytes,2,opt,name=server_key,json=serverKey,proto3,oneof" json:"server_key,omitempty"`
-	ProviderType      *ServerProviderType    `protobuf:"varint,3,opt,name=provider_type,json=providerType,proto3,enum=kodex.fleet.v1.ServerProviderType,oneof" json:"provider_type,omitempty"`
-	Status            *ServerStatus          `protobuf:"varint,4,opt,name=status,proto3,enum=kodex.fleet.v1.ServerStatus,oneof" json:"status,omitempty"`
-	PrimaryAddressRef *string                `protobuf:"bytes,5,opt,name=primary_address_ref,json=primaryAddressRef,proto3,oneof" json:"primary_address_ref,omitempty"`
-	Region            *string                `protobuf:"bytes,6,opt,name=region,proto3,oneof" json:"region,omitempty"`
-	CapacityClass     *string                `protobuf:"bytes,7,opt,name=capacity_class,json=capacityClass,proto3,oneof" json:"capacity_class,omitempty"`
-	SecretStoreType   *string                `protobuf:"bytes,8,opt,name=secret_store_type,json=secretStoreType,proto3,oneof" json:"secret_store_type,omitempty"`
-	SecretStoreRef    *string                `protobuf:"bytes,9,opt,name=secret_store_ref,json=secretStoreRef,proto3,oneof" json:"secret_store_ref,omitempty"`
-	Meta              *CommandMeta           `protobuf:"bytes,10,opt,name=meta,proto3" json:"meta,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// server_id identifies the server to update.
+	ServerId string `protobuf:"bytes,1,opt,name=server_id,json=serverId,proto3" json:"server_id,omitempty"`
+	// server_key updates the stable key when present.
+	ServerKey *string `protobuf:"bytes,2,opt,name=server_key,json=serverKey,proto3,oneof" json:"server_key,omitempty"`
+	// provider_type updates the provider classification when present.
+	ProviderType *ServerProviderType `protobuf:"varint,3,opt,name=provider_type,json=providerType,proto3,enum=kodex.fleet.v1.ServerProviderType,oneof" json:"provider_type,omitempty"`
+	// status updates the lifecycle status when present.
+	Status *ServerStatus `protobuf:"varint,4,opt,name=status,proto3,enum=kodex.fleet.v1.ServerStatus,oneof" json:"status,omitempty"`
+	// primary_address_ref updates the safe address reference when present.
+	PrimaryAddressRef *string `protobuf:"bytes,5,opt,name=primary_address_ref,json=primaryAddressRef,proto3,oneof" json:"primary_address_ref,omitempty"`
+	// region updates the placement region when present.
+	Region *string `protobuf:"bytes,6,opt,name=region,proto3,oneof" json:"region,omitempty"`
+	// capacity_class updates the capacity class when present.
+	CapacityClass *string `protobuf:"bytes,7,opt,name=capacity_class,json=capacityClass,proto3,oneof" json:"capacity_class,omitempty"`
+	// secret_store_type updates the external secret store type when present.
+	SecretStoreType *string `protobuf:"bytes,8,opt,name=secret_store_type,json=secretStoreType,proto3,oneof" json:"secret_store_type,omitempty"`
+	// secret_store_ref updates the opaque secret reference when present.
+	SecretStoreRef *string `protobuf:"bytes,9,opt,name=secret_store_ref,json=secretStoreRef,proto3,oneof" json:"secret_store_ref,omitempty"`
+	// meta carries expected_version, idempotency, actor, reason and audit context.
+	Meta          *CommandMeta `protobuf:"bytes,10,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *UpdateServerRequest) Reset() {
@@ -2645,10 +2825,13 @@ func (x *UpdateServerRequest) GetMeta() *CommandMeta {
 	return nil
 }
 
+// DisableServerRequest disables server use for new placements.
 type DisableServerRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ServerId      string                 `protobuf:"bytes,1,opt,name=server_id,json=serverId,proto3" json:"server_id,omitempty"`
-	Meta          *CommandMeta           `protobuf:"bytes,2,opt,name=meta,proto3" json:"meta,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// server_id identifies the server to disable.
+	ServerId string `protobuf:"bytes,1,opt,name=server_id,json=serverId,proto3" json:"server_id,omitempty"`
+	// meta carries expected_version, idempotency, actor, reason and audit context.
+	Meta          *CommandMeta `protobuf:"bytes,2,opt,name=meta,proto3" json:"meta,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2697,10 +2880,13 @@ func (x *DisableServerRequest) GetMeta() *CommandMeta {
 	return nil
 }
 
+// GetServerRequest reads one server.
 type GetServerRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ServerId      string                 `protobuf:"bytes,1,opt,name=server_id,json=serverId,proto3" json:"server_id,omitempty"`
-	Meta          *QueryMeta             `protobuf:"bytes,2,opt,name=meta,proto3" json:"meta,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// server_id identifies the server to read.
+	ServerId string `protobuf:"bytes,1,opt,name=server_id,json=serverId,proto3" json:"server_id,omitempty"`
+	// meta carries caller and trace context for read audit.
+	Meta          *QueryMeta `protobuf:"bytes,2,opt,name=meta,proto3" json:"meta,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2749,14 +2935,21 @@ func (x *GetServerRequest) GetMeta() *QueryMeta {
 	return nil
 }
 
+// ListServersRequest lists servers by optional filters.
 type ListServersRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Statuses      []ServerStatus         `protobuf:"varint,1,rep,packed,name=statuses,proto3,enum=kodex.fleet.v1.ServerStatus" json:"statuses,omitempty"`
-	ProviderTypes []ServerProviderType   `protobuf:"varint,2,rep,packed,name=provider_types,json=providerTypes,proto3,enum=kodex.fleet.v1.ServerProviderType" json:"provider_types,omitempty"`
-	Region        *string                `protobuf:"bytes,3,opt,name=region,proto3,oneof" json:"region,omitempty"`
-	CapacityClass *string                `protobuf:"bytes,4,opt,name=capacity_class,json=capacityClass,proto3,oneof" json:"capacity_class,omitempty"`
-	Page          *PageRequest           `protobuf:"bytes,5,opt,name=page,proto3" json:"page,omitempty"`
-	Meta          *QueryMeta             `protobuf:"bytes,6,opt,name=meta,proto3" json:"meta,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// statuses limits results to these lifecycle statuses; empty means all statuses.
+	Statuses []ServerStatus `protobuf:"varint,1,rep,packed,name=statuses,proto3,enum=kodex.fleet.v1.ServerStatus" json:"statuses,omitempty"`
+	// provider_types limits results to these provider types; empty means all providers.
+	ProviderTypes []ServerProviderType `protobuf:"varint,2,rep,packed,name=provider_types,json=providerTypes,proto3,enum=kodex.fleet.v1.ServerProviderType" json:"provider_types,omitempty"`
+	// region limits results to one placement region when present.
+	Region *string `protobuf:"bytes,3,opt,name=region,proto3,oneof" json:"region,omitempty"`
+	// capacity_class limits results to one capacity class when present.
+	CapacityClass *string `protobuf:"bytes,4,opt,name=capacity_class,json=capacityClass,proto3,oneof" json:"capacity_class,omitempty"`
+	// page limits list size and carries continuation state.
+	Page *PageRequest `protobuf:"bytes,5,opt,name=page,proto3" json:"page,omitempty"`
+	// meta carries caller and trace context for read audit.
+	Meta          *QueryMeta `protobuf:"bytes,6,opt,name=meta,proto3" json:"meta,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2833,9 +3026,11 @@ func (x *ListServersRequest) GetMeta() *QueryMeta {
 	return nil
 }
 
+// ServerResponse returns one server.
 type ServerResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Server        *Server                `protobuf:"bytes,1,opt,name=server,proto3" json:"server,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// server is the authoritative server state.
+	Server        *Server `protobuf:"bytes,1,opt,name=server,proto3" json:"server,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2877,10 +3072,13 @@ func (x *ServerResponse) GetServer() *Server {
 	return nil
 }
 
+// ListServersResponse returns servers and pagination state.
 type ListServersResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Servers       []*Server              `protobuf:"bytes,1,rep,name=servers,proto3" json:"servers,omitempty"`
-	Page          *PageResponse          `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// servers contains the current page of servers.
+	Servers []*Server `protobuf:"bytes,1,rep,name=servers,proto3" json:"servers,omitempty"`
+	// page describes continuation state.
+	Page          *PageResponse `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2929,21 +3127,33 @@ func (x *ListServersResponse) GetPage() *PageResponse {
 	return nil
 }
 
+// RegisterKubernetesClusterRequest registers one Kubernetes cluster.
 type RegisterKubernetesClusterRequest struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	FleetScopeId      string                 `protobuf:"bytes,1,opt,name=fleet_scope_id,json=fleetScopeId,proto3" json:"fleet_scope_id,omitempty"`
-	ServerId          *string                `protobuf:"bytes,2,opt,name=server_id,json=serverId,proto3,oneof" json:"server_id,omitempty"`
-	ClusterKey        string                 `protobuf:"bytes,3,opt,name=cluster_key,json=clusterKey,proto3" json:"cluster_key,omitempty"`
-	IsDefault         bool                   `protobuf:"varint,4,opt,name=is_default,json=isDefault,proto3" json:"is_default,omitempty"`
-	ApiEndpointRef    string                 `protobuf:"bytes,5,opt,name=api_endpoint_ref,json=apiEndpointRef,proto3" json:"api_endpoint_ref,omitempty"`
-	SecretStoreType   string                 `protobuf:"bytes,6,opt,name=secret_store_type,json=secretStoreType,proto3" json:"secret_store_type,omitempty"`
-	SecretStoreRef    string                 `protobuf:"bytes,7,opt,name=secret_store_ref,json=secretStoreRef,proto3" json:"secret_store_ref,omitempty"`
-	KubernetesVersion string                 `protobuf:"bytes,8,opt,name=kubernetes_version,json=kubernetesVersion,proto3" json:"kubernetes_version,omitempty"`
-	Region            string                 `protobuf:"bytes,9,opt,name=region,proto3" json:"region,omitempty"`
-	CapacityClass     string                 `protobuf:"bytes,10,opt,name=capacity_class,json=capacityClass,proto3" json:"capacity_class,omitempty"`
-	Meta              *CommandMeta           `protobuf:"bytes,11,opt,name=meta,proto3" json:"meta,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// fleet_scope_id identifies the owning placement scope.
+	FleetScopeId string `protobuf:"bytes,1,opt,name=fleet_scope_id,json=fleetScopeId,proto3" json:"fleet_scope_id,omitempty"`
+	// server_id optionally links the cluster to a registered server; omitted for managed clusters.
+	ServerId *string `protobuf:"bytes,2,opt,name=server_id,json=serverId,proto3,oneof" json:"server_id,omitempty"`
+	// cluster_key is a stable human-readable key unique inside a fleet scope.
+	ClusterKey string `protobuf:"bytes,3,opt,name=cluster_key,json=clusterKey,proto3" json:"cluster_key,omitempty"`
+	// is_default marks fallback cluster inside its fleet scope, not a single-cluster limit.
+	IsDefault bool `protobuf:"varint,4,opt,name=is_default,json=isDefault,proto3" json:"is_default,omitempty"`
+	// api_endpoint_ref is a safe endpoint reference or inventory key, not a credential.
+	ApiEndpointRef string `protobuf:"bytes,5,opt,name=api_endpoint_ref,json=apiEndpointRef,proto3" json:"api_endpoint_ref,omitempty"`
+	// secret_store_type identifies the external secret store that owns kube access secrets.
+	SecretStoreType string `protobuf:"bytes,6,opt,name=secret_store_type,json=secretStoreType,proto3" json:"secret_store_type,omitempty"`
+	// secret_store_ref is an opaque kubeconfig/service-account reference; it must not contain secret values.
+	SecretStoreRef string `protobuf:"bytes,7,opt,name=secret_store_ref,json=secretStoreRef,proto3" json:"secret_store_ref,omitempty"`
+	// kubernetes_version is the observed or operator-declared Kubernetes version.
+	KubernetesVersion string `protobuf:"bytes,8,opt,name=kubernetes_version,json=kubernetesVersion,proto3" json:"kubernetes_version,omitempty"`
+	// region is an operator-defined placement region.
+	Region string `protobuf:"bytes,9,opt,name=region,proto3" json:"region,omitempty"`
+	// capacity_class is an operator-defined class used by placement rules.
+	CapacityClass string `protobuf:"bytes,10,opt,name=capacity_class,json=capacityClass,proto3" json:"capacity_class,omitempty"`
+	// meta carries idempotency, actor, reason and audit context.
+	Meta          *CommandMeta `protobuf:"bytes,11,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RegisterKubernetesClusterRequest) Reset() {
@@ -3053,23 +3263,37 @@ func (x *RegisterKubernetesClusterRequest) GetMeta() *CommandMeta {
 	return nil
 }
 
+// UpdateKubernetesClusterRequest changes safe cluster fields.
 type UpdateKubernetesClusterRequest struct {
-	state             protoimpl.MessageState   `protogen:"open.v1"`
-	ClusterId         string                   `protobuf:"bytes,1,opt,name=cluster_id,json=clusterId,proto3" json:"cluster_id,omitempty"`
-	FleetScopeId      *string                  `protobuf:"bytes,2,opt,name=fleet_scope_id,json=fleetScopeId,proto3,oneof" json:"fleet_scope_id,omitempty"`
-	ServerId          *string                  `protobuf:"bytes,3,opt,name=server_id,json=serverId,proto3,oneof" json:"server_id,omitempty"`
-	ClusterKey        *string                  `protobuf:"bytes,4,opt,name=cluster_key,json=clusterKey,proto3,oneof" json:"cluster_key,omitempty"`
-	Status            *KubernetesClusterStatus `protobuf:"varint,5,opt,name=status,proto3,enum=kodex.fleet.v1.KubernetesClusterStatus,oneof" json:"status,omitempty"`
-	IsDefault         *bool                    `protobuf:"varint,6,opt,name=is_default,json=isDefault,proto3,oneof" json:"is_default,omitempty"`
-	ApiEndpointRef    *string                  `protobuf:"bytes,7,opt,name=api_endpoint_ref,json=apiEndpointRef,proto3,oneof" json:"api_endpoint_ref,omitempty"`
-	SecretStoreType   *string                  `protobuf:"bytes,8,opt,name=secret_store_type,json=secretStoreType,proto3,oneof" json:"secret_store_type,omitempty"`
-	SecretStoreRef    *string                  `protobuf:"bytes,9,opt,name=secret_store_ref,json=secretStoreRef,proto3,oneof" json:"secret_store_ref,omitempty"`
-	KubernetesVersion *string                  `protobuf:"bytes,10,opt,name=kubernetes_version,json=kubernetesVersion,proto3,oneof" json:"kubernetes_version,omitempty"`
-	Region            *string                  `protobuf:"bytes,11,opt,name=region,proto3,oneof" json:"region,omitempty"`
-	CapacityClass     *string                  `protobuf:"bytes,12,opt,name=capacity_class,json=capacityClass,proto3,oneof" json:"capacity_class,omitempty"`
-	Meta              *CommandMeta             `protobuf:"bytes,13,opt,name=meta,proto3" json:"meta,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// cluster_id identifies the cluster to update.
+	ClusterId string `protobuf:"bytes,1,opt,name=cluster_id,json=clusterId,proto3" json:"cluster_id,omitempty"`
+	// fleet_scope_id moves the cluster to another scope when present.
+	FleetScopeId *string `protobuf:"bytes,2,opt,name=fleet_scope_id,json=fleetScopeId,proto3,oneof" json:"fleet_scope_id,omitempty"`
+	// server_id updates the linked server when present; omitted means no change.
+	ServerId *string `protobuf:"bytes,3,opt,name=server_id,json=serverId,proto3,oneof" json:"server_id,omitempty"`
+	// cluster_key updates the stable key when present.
+	ClusterKey *string `protobuf:"bytes,4,opt,name=cluster_key,json=clusterKey,proto3,oneof" json:"cluster_key,omitempty"`
+	// status updates the lifecycle status when present.
+	Status *KubernetesClusterStatus `protobuf:"varint,5,opt,name=status,proto3,enum=kodex.fleet.v1.KubernetesClusterStatus,oneof" json:"status,omitempty"`
+	// is_default updates fallback status inside the scope when present.
+	IsDefault *bool `protobuf:"varint,6,opt,name=is_default,json=isDefault,proto3,oneof" json:"is_default,omitempty"`
+	// api_endpoint_ref updates the safe API endpoint reference when present.
+	ApiEndpointRef *string `protobuf:"bytes,7,opt,name=api_endpoint_ref,json=apiEndpointRef,proto3,oneof" json:"api_endpoint_ref,omitempty"`
+	// secret_store_type updates the external secret store type when present.
+	SecretStoreType *string `protobuf:"bytes,8,opt,name=secret_store_type,json=secretStoreType,proto3,oneof" json:"secret_store_type,omitempty"`
+	// secret_store_ref updates the opaque kube access secret reference when present.
+	SecretStoreRef *string `protobuf:"bytes,9,opt,name=secret_store_ref,json=secretStoreRef,proto3,oneof" json:"secret_store_ref,omitempty"`
+	// kubernetes_version updates the observed or operator-declared Kubernetes version when present.
+	KubernetesVersion *string `protobuf:"bytes,10,opt,name=kubernetes_version,json=kubernetesVersion,proto3,oneof" json:"kubernetes_version,omitempty"`
+	// region updates the placement region when present.
+	Region *string `protobuf:"bytes,11,opt,name=region,proto3,oneof" json:"region,omitempty"`
+	// capacity_class updates the capacity class when present.
+	CapacityClass *string `protobuf:"bytes,12,opt,name=capacity_class,json=capacityClass,proto3,oneof" json:"capacity_class,omitempty"`
+	// meta carries expected_version, idempotency, actor, reason and audit context.
+	Meta          *CommandMeta `protobuf:"bytes,13,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *UpdateKubernetesClusterRequest) Reset() {
@@ -3193,10 +3417,13 @@ func (x *UpdateKubernetesClusterRequest) GetMeta() *CommandMeta {
 	return nil
 }
 
+// DisableKubernetesClusterRequest disables new placements in a cluster.
 type DisableKubernetesClusterRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ClusterId     string                 `protobuf:"bytes,1,opt,name=cluster_id,json=clusterId,proto3" json:"cluster_id,omitempty"`
-	Meta          *CommandMeta           `protobuf:"bytes,2,opt,name=meta,proto3" json:"meta,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// cluster_id identifies the cluster to disable.
+	ClusterId string `protobuf:"bytes,1,opt,name=cluster_id,json=clusterId,proto3" json:"cluster_id,omitempty"`
+	// meta carries expected_version, idempotency, actor, reason and audit context.
+	Meta          *CommandMeta `protobuf:"bytes,2,opt,name=meta,proto3" json:"meta,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3245,10 +3472,13 @@ func (x *DisableKubernetesClusterRequest) GetMeta() *CommandMeta {
 	return nil
 }
 
+// GetKubernetesClusterRequest reads one Kubernetes cluster.
 type GetKubernetesClusterRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ClusterId     string                 `protobuf:"bytes,1,opt,name=cluster_id,json=clusterId,proto3" json:"cluster_id,omitempty"`
-	Meta          *QueryMeta             `protobuf:"bytes,2,opt,name=meta,proto3" json:"meta,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// cluster_id identifies the cluster to read.
+	ClusterId string `protobuf:"bytes,1,opt,name=cluster_id,json=clusterId,proto3" json:"cluster_id,omitempty"`
+	// meta carries caller and trace context for read audit.
+	Meta          *QueryMeta `protobuf:"bytes,2,opt,name=meta,proto3" json:"meta,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3297,19 +3527,29 @@ func (x *GetKubernetesClusterRequest) GetMeta() *QueryMeta {
 	return nil
 }
 
+// ListKubernetesClustersRequest lists Kubernetes clusters by optional filters.
 type ListKubernetesClustersRequest struct {
-	state          protoimpl.MessageState    `protogen:"open.v1"`
-	FleetScopeId   *string                   `protobuf:"bytes,1,opt,name=fleet_scope_id,json=fleetScopeId,proto3,oneof" json:"fleet_scope_id,omitempty"`
-	ServerId       *string                   `protobuf:"bytes,2,opt,name=server_id,json=serverId,proto3,oneof" json:"server_id,omitempty"`
-	Statuses       []KubernetesClusterStatus `protobuf:"varint,3,rep,packed,name=statuses,proto3,enum=kodex.fleet.v1.KubernetesClusterStatus" json:"statuses,omitempty"`
-	HealthStatuses []ClusterHealthStatus     `protobuf:"varint,4,rep,packed,name=health_statuses,json=healthStatuses,proto3,enum=kodex.fleet.v1.ClusterHealthStatus" json:"health_statuses,omitempty"`
-	Region         *string                   `protobuf:"bytes,5,opt,name=region,proto3,oneof" json:"region,omitempty"`
-	CapacityClass  *string                   `protobuf:"bytes,6,opt,name=capacity_class,json=capacityClass,proto3,oneof" json:"capacity_class,omitempty"`
-	IsDefault      *bool                     `protobuf:"varint,7,opt,name=is_default,json=isDefault,proto3,oneof" json:"is_default,omitempty"`
-	Page           *PageRequest              `protobuf:"bytes,8,opt,name=page,proto3" json:"page,omitempty"`
-	Meta           *QueryMeta                `protobuf:"bytes,9,opt,name=meta,proto3" json:"meta,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// fleet_scope_id limits results to one placement scope when present.
+	FleetScopeId *string `protobuf:"bytes,1,opt,name=fleet_scope_id,json=fleetScopeId,proto3,oneof" json:"fleet_scope_id,omitempty"`
+	// server_id limits results to clusters linked to one server when present.
+	ServerId *string `protobuf:"bytes,2,opt,name=server_id,json=serverId,proto3,oneof" json:"server_id,omitempty"`
+	// statuses limits results to these lifecycle statuses; empty means all statuses.
+	Statuses []KubernetesClusterStatus `protobuf:"varint,3,rep,packed,name=statuses,proto3,enum=kodex.fleet.v1.KubernetesClusterStatus" json:"statuses,omitempty"`
+	// health_statuses limits results to these health statuses; empty means all health statuses.
+	HealthStatuses []ClusterHealthStatus `protobuf:"varint,4,rep,packed,name=health_statuses,json=healthStatuses,proto3,enum=kodex.fleet.v1.ClusterHealthStatus" json:"health_statuses,omitempty"`
+	// region limits results to one placement region when present.
+	Region *string `protobuf:"bytes,5,opt,name=region,proto3,oneof" json:"region,omitempty"`
+	// capacity_class limits results to one capacity class when present.
+	CapacityClass *string `protobuf:"bytes,6,opt,name=capacity_class,json=capacityClass,proto3,oneof" json:"capacity_class,omitempty"`
+	// is_default limits results by fallback marker when present.
+	IsDefault *bool `protobuf:"varint,7,opt,name=is_default,json=isDefault,proto3,oneof" json:"is_default,omitempty"`
+	// page limits list size and carries continuation state.
+	Page *PageRequest `protobuf:"bytes,8,opt,name=page,proto3" json:"page,omitempty"`
+	// meta carries caller and trace context for read audit.
+	Meta          *QueryMeta `protobuf:"bytes,9,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ListKubernetesClustersRequest) Reset() {
@@ -3405,9 +3645,11 @@ func (x *ListKubernetesClustersRequest) GetMeta() *QueryMeta {
 	return nil
 }
 
+// KubernetesClusterResponse returns one Kubernetes cluster.
 type KubernetesClusterResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Cluster       *KubernetesCluster     `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// cluster is the authoritative Kubernetes cluster state.
+	Cluster       *KubernetesCluster `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3449,10 +3691,13 @@ func (x *KubernetesClusterResponse) GetCluster() *KubernetesCluster {
 	return nil
 }
 
+// ListKubernetesClustersResponse returns clusters and pagination state.
 type ListKubernetesClustersResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Clusters      []*KubernetesCluster   `protobuf:"bytes,1,rep,name=clusters,proto3" json:"clusters,omitempty"`
-	Page          *PageResponse          `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// clusters contains the current page of Kubernetes clusters.
+	Clusters []*KubernetesCluster `protobuf:"bytes,1,rep,name=clusters,proto3" json:"clusters,omitempty"`
+	// page describes continuation state.
+	Page          *PageResponse `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3501,10 +3746,13 @@ func (x *ListKubernetesClustersResponse) GetPage() *PageResponse {
 	return nil
 }
 
+// RunClusterConnectivityCheckRequest requests a connectivity check.
 type RunClusterConnectivityCheckRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ClusterId     string                 `protobuf:"bytes,1,opt,name=cluster_id,json=clusterId,proto3" json:"cluster_id,omitempty"`
-	Meta          *CommandMeta           `protobuf:"bytes,2,opt,name=meta,proto3" json:"meta,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// cluster_id identifies the cluster to check.
+	ClusterId string `protobuf:"bytes,1,opt,name=cluster_id,json=clusterId,proto3" json:"cluster_id,omitempty"`
+	// meta carries idempotency, actor, reason and audit context.
+	Meta          *CommandMeta `protobuf:"bytes,2,opt,name=meta,proto3" json:"meta,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3553,8 +3801,10 @@ func (x *RunClusterConnectivityCheckRequest) GetMeta() *CommandMeta {
 	return nil
 }
 
+// ClusterConnectivityCheckResponse returns one connectivity check.
 type ClusterConnectivityCheckResponse struct {
-	state             protoimpl.MessageState    `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// connectivity_check is the authoritative connectivity check state.
 	ConnectivityCheck *ClusterConnectivityCheck `protobuf:"bytes,1,opt,name=connectivity_check,json=connectivityCheck,proto3" json:"connectivity_check,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
@@ -3597,13 +3847,17 @@ func (x *ClusterConnectivityCheckResponse) GetConnectivityCheck() *ClusterConnec
 	return nil
 }
 
+// GetClusterHealthSnapshotRequest reads the latest or a concrete health snapshot.
 type GetClusterHealthSnapshotRequest struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	ClusterId        string                 `protobuf:"bytes,1,opt,name=cluster_id,json=clusterId,proto3" json:"cluster_id,omitempty"`
-	HealthSnapshotId *string                `protobuf:"bytes,2,opt,name=health_snapshot_id,json=healthSnapshotId,proto3,oneof" json:"health_snapshot_id,omitempty"`
-	Meta             *QueryMeta             `protobuf:"bytes,3,opt,name=meta,proto3" json:"meta,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// cluster_id identifies the cluster whose health is requested.
+	ClusterId string `protobuf:"bytes,1,opt,name=cluster_id,json=clusterId,proto3" json:"cluster_id,omitempty"`
+	// health_snapshot_id selects a concrete snapshot; omitted means latest snapshot.
+	HealthSnapshotId *string `protobuf:"bytes,2,opt,name=health_snapshot_id,json=healthSnapshotId,proto3,oneof" json:"health_snapshot_id,omitempty"`
+	// meta carries caller and trace context for read audit.
+	Meta          *QueryMeta `protobuf:"bytes,3,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetClusterHealthSnapshotRequest) Reset() {
@@ -3657,12 +3911,17 @@ func (x *GetClusterHealthSnapshotRequest) GetMeta() *QueryMeta {
 	return nil
 }
 
+// ListClusterHealthSnapshotsRequest lists health snapshots for one cluster.
 type ListClusterHealthSnapshotsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ClusterId     string                 `protobuf:"bytes,1,opt,name=cluster_id,json=clusterId,proto3" json:"cluster_id,omitempty"`
-	CheckedSince  *string                `protobuf:"bytes,2,opt,name=checked_since,json=checkedSince,proto3,oneof" json:"checked_since,omitempty"`
-	Page          *PageRequest           `protobuf:"bytes,3,opt,name=page,proto3" json:"page,omitempty"`
-	Meta          *QueryMeta             `protobuf:"bytes,4,opt,name=meta,proto3" json:"meta,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// cluster_id identifies the cluster whose health history is requested.
+	ClusterId string `protobuf:"bytes,1,opt,name=cluster_id,json=clusterId,proto3" json:"cluster_id,omitempty"`
+	// checked_since limits snapshots to RFC3339 timestamps greater than or equal to this value.
+	CheckedSince *string `protobuf:"bytes,2,opt,name=checked_since,json=checkedSince,proto3,oneof" json:"checked_since,omitempty"`
+	// page limits list size and carries continuation state.
+	Page *PageRequest `protobuf:"bytes,3,opt,name=page,proto3" json:"page,omitempty"`
+	// meta carries caller and trace context for read audit.
+	Meta          *QueryMeta `protobuf:"bytes,4,opt,name=meta,proto3" json:"meta,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3725,8 +3984,10 @@ func (x *ListClusterHealthSnapshotsRequest) GetMeta() *QueryMeta {
 	return nil
 }
 
+// ClusterHealthSnapshotResponse returns one health snapshot.
 type ClusterHealthSnapshotResponse struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// health_snapshot is the limited health view.
 	HealthSnapshot *ClusterHealthSnapshot `protobuf:"bytes,1,opt,name=health_snapshot,json=healthSnapshot,proto3" json:"health_snapshot,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
@@ -3769,12 +4030,15 @@ func (x *ClusterHealthSnapshotResponse) GetHealthSnapshot() *ClusterHealthSnapsh
 	return nil
 }
 
+// ListClusterHealthSnapshotsResponse returns health snapshots and pagination state.
 type ListClusterHealthSnapshotsResponse struct {
-	state           protoimpl.MessageState   `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// health_snapshots contains the current page of health snapshots.
 	HealthSnapshots []*ClusterHealthSnapshot `protobuf:"bytes,1,rep,name=health_snapshots,json=healthSnapshots,proto3" json:"health_snapshots,omitempty"`
-	Page            *PageResponse            `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// page describes continuation state.
+	Page          *PageResponse `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ListClusterHealthSnapshotsResponse) Reset() {
@@ -3821,18 +4085,27 @@ func (x *ListClusterHealthSnapshotsResponse) GetPage() *PageResponse {
 	return nil
 }
 
+// PutPlacementRuleRequest creates or updates one placement rule.
 type PutPlacementRuleRequest struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	PlacementRuleId *string                `protobuf:"bytes,1,opt,name=placement_rule_id,json=placementRuleId,proto3,oneof" json:"placement_rule_id,omitempty"`
-	FleetScopeId    string                 `protobuf:"bytes,2,opt,name=fleet_scope_id,json=fleetScopeId,proto3" json:"fleet_scope_id,omitempty"`
-	RuleKey         string                 `protobuf:"bytes,3,opt,name=rule_key,json=ruleKey,proto3" json:"rule_key,omitempty"`
-	Status          PlacementRuleStatus    `protobuf:"varint,4,opt,name=status,proto3,enum=kodex.fleet.v1.PlacementRuleStatus" json:"status,omitempty"`
-	Priority        int64                  `protobuf:"varint,5,opt,name=priority,proto3" json:"priority,omitempty"`
-	MatchJson       string                 `protobuf:"bytes,6,opt,name=match_json,json=matchJson,proto3" json:"match_json,omitempty"`
-	ConstraintsJson string                 `protobuf:"bytes,7,opt,name=constraints_json,json=constraintsJson,proto3" json:"constraints_json,omitempty"`
-	Meta            *CommandMeta           `protobuf:"bytes,8,opt,name=meta,proto3" json:"meta,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// placement_rule_id identifies an existing rule; omitted means create or upsert by rule key.
+	PlacementRuleId *string `protobuf:"bytes,1,opt,name=placement_rule_id,json=placementRuleId,proto3,oneof" json:"placement_rule_id,omitempty"`
+	// fleet_scope_id identifies the scope where the rule is evaluated.
+	FleetScopeId string `protobuf:"bytes,2,opt,name=fleet_scope_id,json=fleetScopeId,proto3" json:"fleet_scope_id,omitempty"`
+	// rule_key is a stable human-readable key unique inside a fleet scope.
+	RuleKey string `protobuf:"bytes,3,opt,name=rule_key,json=ruleKey,proto3" json:"rule_key,omitempty"`
+	// status is the rule lifecycle status to store.
+	Status PlacementRuleStatus `protobuf:"varint,4,opt,name=status,proto3,enum=kodex.fleet.v1.PlacementRuleStatus" json:"status,omitempty"`
+	// priority is evaluated in ascending order; lower values win.
+	Priority int64 `protobuf:"varint,5,opt,name=priority,proto3" json:"priority,omitempty"`
+	// match_json is safe typed JSON with project, repository, service, package and runtime profile matchers.
+	MatchJson string `protobuf:"bytes,6,opt,name=match_json,json=matchJson,proto3" json:"match_json,omitempty"`
+	// constraints_json is safe typed JSON with placement constraints and preferred cluster rules.
+	ConstraintsJson string `protobuf:"bytes,7,opt,name=constraints_json,json=constraintsJson,proto3" json:"constraints_json,omitempty"`
+	// meta carries expected_version for updates, idempotency, actor, reason and audit context.
+	Meta          *CommandMeta `protobuf:"bytes,8,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PutPlacementRuleRequest) Reset() {
@@ -3921,12 +4194,15 @@ func (x *PutPlacementRuleRequest) GetMeta() *CommandMeta {
 	return nil
 }
 
+// GetPlacementRuleRequest reads one placement rule.
 type GetPlacementRuleRequest struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	PlacementRuleId string                 `protobuf:"bytes,1,opt,name=placement_rule_id,json=placementRuleId,proto3" json:"placement_rule_id,omitempty"`
-	Meta            *QueryMeta             `protobuf:"bytes,2,opt,name=meta,proto3" json:"meta,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// placement_rule_id identifies the rule to read.
+	PlacementRuleId string `protobuf:"bytes,1,opt,name=placement_rule_id,json=placementRuleId,proto3" json:"placement_rule_id,omitempty"`
+	// meta carries caller and trace context for read audit.
+	Meta          *QueryMeta `protobuf:"bytes,2,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetPlacementRuleRequest) Reset() {
@@ -3973,12 +4249,17 @@ func (x *GetPlacementRuleRequest) GetMeta() *QueryMeta {
 	return nil
 }
 
+// ListPlacementRulesRequest lists placement rules by optional filters.
 type ListPlacementRulesRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	FleetScopeId  *string                `protobuf:"bytes,1,opt,name=fleet_scope_id,json=fleetScopeId,proto3,oneof" json:"fleet_scope_id,omitempty"`
-	Statuses      []PlacementRuleStatus  `protobuf:"varint,2,rep,packed,name=statuses,proto3,enum=kodex.fleet.v1.PlacementRuleStatus" json:"statuses,omitempty"`
-	Page          *PageRequest           `protobuf:"bytes,3,opt,name=page,proto3" json:"page,omitempty"`
-	Meta          *QueryMeta             `protobuf:"bytes,4,opt,name=meta,proto3" json:"meta,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// fleet_scope_id limits results to one placement scope when present.
+	FleetScopeId *string `protobuf:"bytes,1,opt,name=fleet_scope_id,json=fleetScopeId,proto3,oneof" json:"fleet_scope_id,omitempty"`
+	// statuses limits results to these lifecycle statuses; empty means all statuses.
+	Statuses []PlacementRuleStatus `protobuf:"varint,2,rep,packed,name=statuses,proto3,enum=kodex.fleet.v1.PlacementRuleStatus" json:"statuses,omitempty"`
+	// page limits list size and carries continuation state.
+	Page *PageRequest `protobuf:"bytes,3,opt,name=page,proto3" json:"page,omitempty"`
+	// meta carries caller and trace context for read audit.
+	Meta          *QueryMeta `protobuf:"bytes,4,opt,name=meta,proto3" json:"meta,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4041,9 +4322,11 @@ func (x *ListPlacementRulesRequest) GetMeta() *QueryMeta {
 	return nil
 }
 
+// PlacementRuleResponse returns one placement rule.
 type PlacementRuleResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlacementRule *PlacementRule         `protobuf:"bytes,1,opt,name=placement_rule,json=placementRule,proto3" json:"placement_rule,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// placement_rule is the authoritative rule state.
+	PlacementRule *PlacementRule `protobuf:"bytes,1,opt,name=placement_rule,json=placementRule,proto3" json:"placement_rule,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4085,12 +4368,15 @@ func (x *PlacementRuleResponse) GetPlacementRule() *PlacementRule {
 	return nil
 }
 
+// ListPlacementRulesResponse returns placement rules and pagination state.
 type ListPlacementRulesResponse struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	PlacementRules []*PlacementRule       `protobuf:"bytes,1,rep,name=placement_rules,json=placementRules,proto3" json:"placement_rules,omitempty"`
-	Page           *PageResponse          `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// placement_rules contains the current page of placement rules.
+	PlacementRules []*PlacementRule `protobuf:"bytes,1,rep,name=placement_rules,json=placementRules,proto3" json:"placement_rules,omitempty"`
+	// page describes continuation state.
+	Page          *PageResponse `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ListPlacementRulesResponse) Reset() {
@@ -4137,20 +4423,31 @@ func (x *ListPlacementRulesResponse) GetPage() *PageResponse {
 	return nil
 }
 
+// ResolvePlacementRequest asks fleet-manager to choose a cluster for runtime.
 type ResolvePlacementRequest struct {
-	state                    protoimpl.MessageState `protogen:"open.v1"`
-	ProjectId                *string                `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3,oneof" json:"project_id,omitempty"`
-	RepositoryId             *string                `protobuf:"bytes,2,opt,name=repository_id,json=repositoryId,proto3,oneof" json:"repository_id,omitempty"`
-	ServiceKey               *string                `protobuf:"bytes,3,opt,name=service_key,json=serviceKey,proto3,oneof" json:"service_key,omitempty"`
-	RuntimeMode              RuntimeMode            `protobuf:"varint,4,opt,name=runtime_mode,json=runtimeMode,proto3,enum=kodex.fleet.v1.RuntimeMode" json:"runtime_mode,omitempty"`
-	RuntimeProfile           string                 `protobuf:"bytes,5,opt,name=runtime_profile,json=runtimeProfile,proto3" json:"runtime_profile,omitempty"`
-	PreferredFleetScopeId    *string                `protobuf:"bytes,6,opt,name=preferred_fleet_scope_id,json=preferredFleetScopeId,proto3,oneof" json:"preferred_fleet_scope_id,omitempty"`
-	PreferredClusterId       *string                `protobuf:"bytes,7,opt,name=preferred_cluster_id,json=preferredClusterId,proto3,oneof" json:"preferred_cluster_id,omitempty"`
-	PlacementConstraintsJson string                 `protobuf:"bytes,8,opt,name=placement_constraints_json,json=placementConstraintsJson,proto3" json:"placement_constraints_json,omitempty"`
-	RuntimeRequirementsJson  string                 `protobuf:"bytes,9,opt,name=runtime_requirements_json,json=runtimeRequirementsJson,proto3" json:"runtime_requirements_json,omitempty"`
-	Meta                     *CommandMeta           `protobuf:"bytes,10,opt,name=meta,proto3" json:"meta,omitempty"`
-	unknownFields            protoimpl.UnknownFields
-	sizeCache                protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// project_id is an external project reference when the request is project-scoped.
+	ProjectId *string `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3,oneof" json:"project_id,omitempty"`
+	// repository_id is an external repository reference when the request is repository-scoped.
+	RepositoryId *string `protobuf:"bytes,2,opt,name=repository_id,json=repositoryId,proto3,oneof" json:"repository_id,omitempty"`
+	// service_key identifies a service inside project policy when the request is service-scoped.
+	ServiceKey *string `protobuf:"bytes,3,opt,name=service_key,json=serviceKey,proto3,oneof" json:"service_key,omitempty"`
+	// runtime_mode is the requested runtime isolation mode.
+	RuntimeMode RuntimeMode `protobuf:"varint,4,opt,name=runtime_mode,json=runtimeMode,proto3,enum=kodex.fleet.v1.RuntimeMode" json:"runtime_mode,omitempty"`
+	// runtime_profile is the concrete runtime/toolchain profile such as code-only-go.
+	RuntimeProfile string `protobuf:"bytes,5,opt,name=runtime_profile,json=runtimeProfile,proto3" json:"runtime_profile,omitempty"`
+	// preferred_fleet_scope_id is an optional caller preference; fleet may reject it by rules or health.
+	PreferredFleetScopeId *string `protobuf:"bytes,6,opt,name=preferred_fleet_scope_id,json=preferredFleetScopeId,proto3,oneof" json:"preferred_fleet_scope_id,omitempty"`
+	// preferred_cluster_id is an optional caller preference; fleet may reject it by rules or health.
+	PreferredClusterId *string `protobuf:"bytes,7,opt,name=preferred_cluster_id,json=preferredClusterId,proto3,oneof" json:"preferred_cluster_id,omitempty"`
+	// placement_constraints_json is safe typed JSON from project policy and caller constraints.
+	PlacementConstraintsJson string `protobuf:"bytes,8,opt,name=placement_constraints_json,json=placementConstraintsJson,proto3" json:"placement_constraints_json,omitempty"`
+	// runtime_requirements_json is safe typed JSON with package or runtime workload requirements.
+	RuntimeRequirementsJson string `protobuf:"bytes,9,opt,name=runtime_requirements_json,json=runtimeRequirementsJson,proto3" json:"runtime_requirements_json,omitempty"`
+	// meta carries idempotency, actor, reason and audit context.
+	Meta          *CommandMeta `protobuf:"bytes,10,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ResolvePlacementRequest) Reset() {
@@ -4253,9 +4550,11 @@ func (x *ResolvePlacementRequest) GetMeta() *CommandMeta {
 	return nil
 }
 
+// ResolvePlacementResponse returns an explained placement decision.
 type ResolvePlacementResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Decision      *PlacementDecision     `protobuf:"bytes,1,opt,name=decision,proto3" json:"decision,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// decision is the recorded placement result.
+	Decision      *PlacementDecision `protobuf:"bytes,1,opt,name=decision,proto3" json:"decision,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4297,12 +4596,15 @@ func (x *ResolvePlacementResponse) GetDecision() *PlacementDecision {
 	return nil
 }
 
+// GetPlacementDecisionRequest reads one placement decision.
 type GetPlacementDecisionRequest struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	PlacementDecisionId string                 `protobuf:"bytes,1,opt,name=placement_decision_id,json=placementDecisionId,proto3" json:"placement_decision_id,omitempty"`
-	Meta                *QueryMeta             `protobuf:"bytes,2,opt,name=meta,proto3" json:"meta,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// placement_decision_id identifies the decision to read.
+	PlacementDecisionId string `protobuf:"bytes,1,opt,name=placement_decision_id,json=placementDecisionId,proto3" json:"placement_decision_id,omitempty"`
+	// meta carries caller and trace context for read audit.
+	Meta          *QueryMeta `protobuf:"bytes,2,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetPlacementDecisionRequest) Reset() {
@@ -4349,15 +4651,23 @@ func (x *GetPlacementDecisionRequest) GetMeta() *QueryMeta {
 	return nil
 }
 
+// ListPlacementDecisionsRequest lists placement decisions by optional filters.
 type ListPlacementDecisionsRequest struct {
-	state         protoimpl.MessageState    `protogen:"open.v1"`
-	ProjectId     *string                   `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3,oneof" json:"project_id,omitempty"`
-	RepositoryId  *string                   `protobuf:"bytes,2,opt,name=repository_id,json=repositoryId,proto3,oneof" json:"repository_id,omitempty"`
-	FleetScopeId  *string                   `protobuf:"bytes,3,opt,name=fleet_scope_id,json=fleetScopeId,proto3,oneof" json:"fleet_scope_id,omitempty"`
-	ClusterId     *string                   `protobuf:"bytes,4,opt,name=cluster_id,json=clusterId,proto3,oneof" json:"cluster_id,omitempty"`
-	Statuses      []PlacementDecisionStatus `protobuf:"varint,5,rep,packed,name=statuses,proto3,enum=kodex.fleet.v1.PlacementDecisionStatus" json:"statuses,omitempty"`
-	Page          *PageRequest              `protobuf:"bytes,6,opt,name=page,proto3" json:"page,omitempty"`
-	Meta          *QueryMeta                `protobuf:"bytes,7,opt,name=meta,proto3" json:"meta,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// project_id limits results to one project when present.
+	ProjectId *string `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3,oneof" json:"project_id,omitempty"`
+	// repository_id limits results to one repository when present.
+	RepositoryId *string `protobuf:"bytes,2,opt,name=repository_id,json=repositoryId,proto3,oneof" json:"repository_id,omitempty"`
+	// fleet_scope_id limits results to one placement scope when present.
+	FleetScopeId *string `protobuf:"bytes,3,opt,name=fleet_scope_id,json=fleetScopeId,proto3,oneof" json:"fleet_scope_id,omitempty"`
+	// cluster_id limits results to one Kubernetes cluster when present.
+	ClusterId *string `protobuf:"bytes,4,opt,name=cluster_id,json=clusterId,proto3,oneof" json:"cluster_id,omitempty"`
+	// statuses limits results to these decision statuses; empty means all statuses.
+	Statuses []PlacementDecisionStatus `protobuf:"varint,5,rep,packed,name=statuses,proto3,enum=kodex.fleet.v1.PlacementDecisionStatus" json:"statuses,omitempty"`
+	// page limits list size and carries continuation state.
+	Page *PageRequest `protobuf:"bytes,6,opt,name=page,proto3" json:"page,omitempty"`
+	// meta carries caller and trace context for read audit.
+	Meta          *QueryMeta `protobuf:"bytes,7,opt,name=meta,proto3" json:"meta,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4441,9 +4751,11 @@ func (x *ListPlacementDecisionsRequest) GetMeta() *QueryMeta {
 	return nil
 }
 
+// PlacementDecisionResponse returns one placement decision.
 type PlacementDecisionResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Decision      *PlacementDecision     `protobuf:"bytes,1,opt,name=decision,proto3" json:"decision,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// decision is the recorded placement result.
+	Decision      *PlacementDecision `protobuf:"bytes,1,opt,name=decision,proto3" json:"decision,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4485,10 +4797,13 @@ func (x *PlacementDecisionResponse) GetDecision() *PlacementDecision {
 	return nil
 }
 
+// ListPlacementDecisionsResponse returns placement decisions and pagination state.
 type ListPlacementDecisionsResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Decisions     []*PlacementDecision   `protobuf:"bytes,1,rep,name=decisions,proto3" json:"decisions,omitempty"`
-	Page          *PageResponse          `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// decisions contains the current page of placement decisions.
+	Decisions []*PlacementDecision `protobuf:"bytes,1,rep,name=decisions,proto3" json:"decisions,omitempty"`
+	// page describes continuation state.
+	Page          *PageResponse `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
