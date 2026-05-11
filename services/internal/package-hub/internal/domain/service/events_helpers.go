@@ -9,6 +9,7 @@ import (
 
 	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
 	packageevents "github.com/codex-k8s/kodex/libs/go/platformevents/packagehub"
+	catalogrepo "github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/repository/catalog"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/value"
 )
@@ -106,6 +107,15 @@ func (s *Service) versionDiscoveredEvent(version entity.PackageVersion, occurred
 
 func (s *Service) versionUpdatedEvent(version entity.PackageVersion, occurredAt time.Time) (entity.OutboxEvent, error) {
 	return s.versionStateEvent(packageEventVersionUpdated, version, occurredAt)
+}
+
+func (s *Service) secretSchemaUpdatedEvent(item catalogrepo.CatalogSyncSecretSchema, occurredAt time.Time) (entity.OutboxEvent, error) {
+	return s.event(packageEventSecretSchemaUpdated, packageAggregateVersion, item.Schema.PackageVersionID, value.PackageEventPayload{
+		PackageID:        item.PackageID.String(),
+		PackageVersionID: item.Schema.PackageVersionID.String(),
+		SchemaDigest:     item.Schema.SchemaDigest,
+		Revision:         item.VersionRevision,
+	}, occurredAt)
 }
 
 func (s *Service) versionStateEvent(eventType string, version entity.PackageVersion, occurredAt time.Time) (entity.OutboxEvent, error) {

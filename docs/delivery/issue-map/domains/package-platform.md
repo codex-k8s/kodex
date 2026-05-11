@@ -5,7 +5,7 @@ title: kodex — карта Issue домена пакетной платформ
 status: active
 owner_role: KM
 created_at: 2026-04-25
-updated_at: 2026-05-08
+updated_at: 2026-05-11
 ---
 
 # Карта Issue — пакетная платформа
@@ -29,5 +29,7 @@ updated_at: 2026-05-08
 | #680 | `proto/kodex/packages/**`, `proto/gen/go/kodex/packages/**`, `services/internal/package-hub/**`, `docs/domains/package-platform/architecture/api_contract.md`, `docs/domains/package-platform/architecture/design.md`, `docs/domains/package-platform/delivery/package_hub.md` | PKG-4.2 | готово | Синхронизация доступного каталога принимает нормализованный снимок, проверяет manifest, создаёт или обновляет packages/versions и пишет события. |
 | #684 | `services/internal/package-hub/**`, `docs/domains/package-platform/architecture/api_contract.md`, `docs/domains/package-platform/architecture/design.md`, `docs/domains/package-platform/delivery/package_hub.md` | PKG-5.1 | готово | Запрос установки пакета и чтения установок: проверка доступа, идемпотентность, manifest-derived статусы и события установки. |
 | #689 | `services/internal/package-hub/**`, `docs/domains/package-platform/architecture/api_contract.md`, `docs/domains/package-platform/architecture/data_model.md`, `docs/domains/package-platform/architecture/design.md`, `docs/domains/package-platform/delivery/package_hub.md` | PKG-5.2 | готово | Изменение, отключение и снятие установок: expected version, command result, outbox и gRPC handlers. |
-| не назначено | `services/internal/package-hub/**`, `docs/catalogs/plugins/**`, `docs/catalogs/guidance-packages/**` | PKG-5.3/PKG-6 | запланировано | Секреты установок, плагины и руководящие пакеты. |
+| #692 | `services/internal/package-hub/**`, `docs/domains/package-platform/architecture/api_contract.md`, `docs/domains/package-platform/architecture/data_model.md`, `docs/domains/package-platform/architecture/design.md`, `docs/domains/package-platform/delivery/package_hub.md` | PKG-5.3a | готово | Чтение схем секретов: снимки схем из manifest при синхронизации каталога, событие `package.secret_schema.updated` и gRPC `GetPackageSecretSchema`. |
+| не назначено | `services/internal/package-hub/**`, `docs/domains/package-platform/**` | PKG-5.3b | запланировано | Сверка статуса заполненности секретов установки после согласования контракта заполненности секретов пакета в `access-manager`. |
+| не назначено | `services/internal/package-hub/**`, `docs/catalogs/plugins/**`, `docs/catalogs/guidance-packages/**` | PKG-6 | запланировано | Плагины, руководящие пакеты, магазин и пакеты пользовательского контента платформы. |
 | не назначено | `deploy/**`, `services.yaml`, `docs/domains/package-platform/**` | PKG-7 | запланировано | Эксплуатационный контур `package-hub`: манифесты, migration job, config, health, metrics и runbook. |

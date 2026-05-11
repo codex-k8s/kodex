@@ -179,6 +179,10 @@ func GetPackageManifestInput(request *packagesv1.GetPackageManifestRequest) (IDQ
 	return queryByIDInput(request.GetPackageVersionId(), request.GetMeta())
 }
 
+func GetPackageSecretSchemaInput(request *packagesv1.GetPackageSecretSchemaRequest) (IDQueryInput, error) {
+	return queryByIDInput(request.GetPackageVersionId(), request.GetMeta())
+}
+
 func RequestPackageInstallationInput(request *packagesv1.RequestPackageInstallationRequest) (service.RequestPackageInstallationInput, error) {
 	meta, err := CommandMetaFromProto(request.GetMeta())
 	if err != nil {

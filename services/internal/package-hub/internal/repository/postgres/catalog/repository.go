@@ -131,6 +131,15 @@ func (r *Repository) SyncAvailableCatalog(ctx context.Context, plan catalogrepo.
 						return err
 					}
 					outcome.ManifestCount++
+					versionPlan.SecretSchema.PackageVersionID = syncedVersion.Version.ID
+					syncedSchema, err := r.syncPackageSecretSchema(ctx, tx, versionPlan.SecretSchema, syncedPackage.Entry.ID, syncedVersion.Version.Revision)
+					if err != nil {
+						return err
+					}
+					outcome.SecretSchemas = append(outcome.SecretSchemas, syncedSchema)
+					if syncedSchema.Inserted {
+						outcome.SecretSchemaCount++
+					}
 				}
 			}
 		}
@@ -157,6 +166,19 @@ func (r *Repository) syncPackage(ctx context.Context, db execQuerier, entry enti
 
 func (r *Repository) syncPackageVersion(ctx context.Context, db execQuerier, version entity.PackageVersion) (catalogrepo.CatalogSyncVersion, error) {
 	return syncCatalogRecordResult(ctx, db, queryPackageVersionInsertIgnore, queryPackageVersionUpdateByLabel, packageVersionArgs(version), version, scanPackageVersionSyncState, packageVersionSyncResult)
+}
+
+func (r *Repository) syncPackageSecretSchema(ctx context.Context, db execQuerier, schema entity.PackageSecretSchema, packageID uuid.UUID, versionRevision int64) (catalogrepo.CatalogSyncSecretSchema, error) {
+	tag, err := db.Exec(ctx, queryPackageSecretSchemaIgnore, packageSecretSchemaArgs(schema))
+	if err != nil {
+		return catalogrepo.CatalogSyncSecretSchema{}, err
+	}
+	return catalogrepo.CatalogSyncSecretSchema{
+		Schema:          schema,
+		PackageID:       packageID,
+		VersionRevision: versionRevision,
+		Inserted:        tag.RowsAffected() == 1,
+	}, nil
 }
 
 type syncState[T any] struct {

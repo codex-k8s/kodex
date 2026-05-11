@@ -54,6 +54,60 @@ func TestGetPackageAuthorizesCatalogRead(t *testing.T) {
 	}
 }
 
+func TestGetPackageSecretSchemaAuthorizesSecretRead(t *testing.T) {
+	t.Parallel()
+
+	packageID := uuid.New()
+	sourceID := uuid.New()
+	organizationID := uuid.New()
+	versionID := uuid.New()
+	schemaID := uuid.New()
+	repository := &fakeRepository{
+		packageEntry: entity.PackageEntry{
+			VersionedBase: entity.VersionedBase{ID: packageID},
+			SourceID:      &sourceID,
+		},
+		packageSource: entity.PackageSource{
+			VersionedBase:  entity.VersionedBase{ID: sourceID},
+			OrganizationID: &organizationID,
+		},
+		packageVersion: entity.PackageVersion{ID: versionID, PackageID: packageID},
+		secretSchema: entity.PackageSecretSchema{
+			ID:               schemaID,
+			PackageVersionID: versionID,
+			SchemaDigest:     "sha256:test",
+			Fields: []value.PackageSecretField{{
+				Key:      "telegram_token",
+				Kind:     enum.PackageSecretFieldKindToken,
+				Required: true,
+			}},
+		},
+	}
+	authorizer := &recordingAuthorizer{}
+	service := NewWithConfig(repository, fixedClock{}, fixedIDs{}, Config{Authorizer: authorizer})
+
+	schema, err := service.GetPackageSecretSchema(context.Background(), versionID, queryMeta())
+	if err != nil {
+		t.Fatalf("GetPackageSecretSchema(): %v", err)
+	}
+	if schema.ID != schemaID || len(schema.Fields) != 1 || schema.Fields[0].Key != "telegram_token" {
+		t.Fatalf("schema = %+v, want stored telegram_token schema", schema)
+	}
+	if repository.getVersionCalls != 1 || repository.getSecretSchemaCalls != 1 {
+		t.Fatalf("repository calls = getVersion:%d getSchema:%d, want version lookup and schema read", repository.getVersionCalls, repository.getSecretSchemaCalls)
+	}
+	if len(authorizer.requests) != 1 {
+		t.Fatalf("authorization calls = %d, want 1", len(authorizer.requests))
+	}
+	request := authorizer.requests[0]
+	if request.ActionKey != packageActionSecretRead || request.ResourceType != packageResourceSecretSchema || request.ResourceID != versionID.String() {
+		t.Fatalf("authorization resource = %+v, want secret schema read on package version", request)
+	}
+	if request.ScopeType != packageScopeOrganization || request.ScopeID != organizationID.String() {
+		t.Fatalf("authorization scope = %+v, want organization %s", request, organizationID)
+	}
+}
+
 func TestSetPackageVerificationAuthorizesBeforeReplay(t *testing.T) {
 	t.Parallel()
 
@@ -307,7 +361,7 @@ func TestSyncAvailablePackagesCreatesCatalogArtifacts(t *testing.T) {
 		commandResultErr: errs.ErrNotFound,
 	}
 	authorizer := &recordingAuthorizer{}
-	service := NewWithConfig(repository, fixedClock{}, newSequenceIDs(6), Config{Authorizer: authorizer})
+	service := NewWithConfig(repository, fixedClock{}, newSequenceIDs(8), Config{Authorizer: authorizer})
 	manifestPayload := testCatalogManifestPayload()
 
 	result, err := service.SyncAvailablePackages(context.Background(), SyncAvailablePackagesInput{
@@ -342,14 +396,18 @@ func TestSyncAvailablePackagesCreatesCatalogArtifacts(t *testing.T) {
 	if result.PackageCount != 1 || result.VersionCount != 1 || result.Source.Status != enum.PackageSourceStatusActive || result.Source.LastSyncAt == nil {
 		t.Fatalf("sync result = %+v, want one package, one version and active source", result)
 	}
-	if repository.syncCatalogCalls != 1 || len(repository.syncPlan.Items) != 1 || len(repository.syncEvents) != 3 {
-		t.Fatalf("sync calls = %d items = %d events = %d, want one call, one item, three events", repository.syncCatalogCalls, len(repository.syncPlan.Items), len(repository.syncEvents))
+	if repository.syncCatalogCalls != 1 || len(repository.syncPlan.Items) != 1 || len(repository.syncEvents) != 4 {
+		t.Fatalf("sync calls = %d items = %d events = %d, want one call, one item, four events", repository.syncCatalogCalls, len(repository.syncPlan.Items), len(repository.syncEvents))
 	}
 	if repository.syncPlan.Items[0].Entry.Slug != "telegram-approver" || repository.syncPlan.Items[0].Versions[0].Manifest.ValidationStatus != enum.PackageManifestValidationStatusValid {
 		t.Fatalf("sync plan = %+v, want normalized package and valid manifest", repository.syncPlan.Items[0])
 	}
-	if repository.syncEvents[0].EventType != packageEventCatalogSynced || repository.syncEvents[1].EventType != packageEventPackageDiscovered || repository.syncEvents[2].EventType != packageEventVersionDiscovered {
-		t.Fatalf("sync events = %+v, want catalog, package and version events", repository.syncEvents)
+	schema := repository.syncPlan.Items[0].Versions[0].SecretSchema
+	if schema.SchemaDigest == "" || len(schema.Fields) != 1 || schema.Fields[0].Key != "telegram_token" {
+		t.Fatalf("secret schema = %+v, want telegram_token field", schema)
+	}
+	if repository.syncEvents[0].EventType != packageEventCatalogSynced || repository.syncEvents[1].EventType != packageEventPackageDiscovered || repository.syncEvents[2].EventType != packageEventVersionDiscovered || repository.syncEvents[3].EventType != packageEventSecretSchemaUpdated {
+		t.Fatalf("sync events = %+v, want catalog, package, version and secret schema events", repository.syncEvents)
 	}
 	if len(authorizer.requests) != 1 || authorizer.requests[0].ActionKey != packageActionCatalogSync || authorizer.requests[0].ResourceType != packageResourceCatalog || authorizer.requests[0].ScopeID != organizationID.String() {
 		t.Fatalf("authorization requests = %+v, want catalog sync in organization scope", authorizer.requests)
@@ -796,6 +854,7 @@ type fakeRepository struct {
 	packageVersion                    entity.PackageVersion
 	packageInstallation               entity.PackageInstallation
 	manifestSnapshot                  entity.PackageManifestSnapshot
+	secretSchema                      entity.PackageSecretSchema
 	commandResult                     entity.CommandResult
 	commandResultErr                  error
 	createdSource                     entity.PackageSource
@@ -817,6 +876,7 @@ type fakeRepository struct {
 	listInstallationsCalls            int
 	getSourceCalls                    int
 	getVersionCalls                   int
+	getSecretSchemaCalls              int
 	getCommandResultCalls             int
 	setVerificationCalls              int
 }
@@ -858,7 +918,14 @@ func (r *fakeRepository) SyncAvailableCatalog(_ context.Context, plan catalogrep
 		outcome.Packages = append(outcome.Packages, catalogrepo.CatalogSyncPackage{Entry: item.Entry, Inserted: true, Changed: true})
 		for _, version := range item.Versions {
 			version.Version.PackageID = item.Entry.ID
+			version.SecretSchema.PackageVersionID = version.Version.ID
 			outcome.Versions = append(outcome.Versions, catalogrepo.CatalogSyncVersion{Version: version.Version, Inserted: true, Changed: true})
+			outcome.SecretSchemas = append(outcome.SecretSchemas, catalogrepo.CatalogSyncSecretSchema{
+				Schema:          version.SecretSchema,
+				PackageID:       item.Entry.ID,
+				VersionRevision: version.Version.Revision,
+				Inserted:        true,
+			})
 		}
 	}
 	events, err := plan.BuildEvents(outcome)
@@ -956,7 +1023,8 @@ func (r *fakeRepository) CreatePackageSecretSchema(context.Context, entity.Packa
 }
 
 func (r *fakeRepository) GetLatestPackageSecretSchema(context.Context, uuid.UUID) (entity.PackageSecretSchema, error) {
-	panic("not implemented")
+	r.getSecretSchemaCalls++
+	return r.secretSchema, nil
 }
 
 func (r *fakeRepository) SetPackageVerification(context.Context, entity.PackageVersion, int64, entity.PackageVerification, entity.CommandResult, entity.OutboxEvent) error {

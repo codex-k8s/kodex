@@ -8,9 +8,13 @@ import (
 	"errors"
 	"io"
 	"strings"
+	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/codex-k8s/kodex/libs/go/accesscatalog"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/errs"
+	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/value"
 )
@@ -303,6 +307,39 @@ func packageInstallationRequirementsFromManifest(payload []byte) (packageInstall
 		result.RuntimeRequirementDigest = sha256Digest(runtimePayload)
 	}
 	return result, nil
+}
+
+func packageSecretSchemaFromManifest(id uuid.UUID, packageVersionID uuid.UUID, payload []byte, createdAt time.Time) (entity.PackageSecretSchema, error) {
+	var document packageManifestDocument
+	if err := json.Unmarshal(payload, &document); err != nil {
+		return entity.PackageSecretSchema{}, errs.ErrInvalidArgument
+	}
+	fields := normalizePackageSecretFields(document.Secrets)
+	payloadBytes, err := json.Marshal(fields)
+	if err != nil {
+		return entity.PackageSecretSchema{}, errs.ErrInvalidArgument
+	}
+	return entity.PackageSecretSchema{
+		ID:               id,
+		PackageVersionID: packageVersionID,
+		SchemaDigest:     sha256Digest(payloadBytes),
+		Fields:           fields,
+		CreatedAt:        createdAt,
+	}, nil
+}
+
+func normalizePackageSecretFields(secrets []value.PackageSecretField) []value.PackageSecretField {
+	fields := make([]value.PackageSecretField, len(secrets))
+	for index, secret := range secrets {
+		fields[index] = value.PackageSecretField{
+			Key:         strings.TrimSpace(secret.Key),
+			Kind:        secret.Kind,
+			Required:    secret.Required,
+			DisplayName: normalizeLocalizedTexts(secret.DisplayName),
+			Description: normalizeLocalizedTexts(secret.Description),
+		}
+	}
+	return fields
 }
 
 func sha256Digest(payload []byte) string {

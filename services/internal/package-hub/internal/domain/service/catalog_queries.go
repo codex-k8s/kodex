@@ -122,21 +122,30 @@ func (s *Service) ListPackageVersions(ctx context.Context, input ListPackageVers
 }
 
 func (s *Service) GetPackageManifest(ctx context.Context, packageVersionID uuid.UUID, meta value.QueryMeta) (entity.PackageManifestSnapshot, error) {
+	return packageVersionArtifact(ctx, s, packageVersionID, meta, packageActionManifestRead, packageResourceManifest, s.repository.GetLatestManifestSnapshot)
+}
+
+func (s *Service) GetPackageSecretSchema(ctx context.Context, packageVersionID uuid.UUID, meta value.QueryMeta) (entity.PackageSecretSchema, error) {
+	return packageVersionArtifact(ctx, s, packageVersionID, meta, packageActionSecretRead, packageResourceSecretSchema, s.repository.GetLatestPackageSecretSchema)
+}
+
+func packageVersionArtifact[T any](ctx context.Context, service *Service, packageVersionID uuid.UUID, meta value.QueryMeta, action string, resourceType string, read func(context.Context, uuid.UUID) (T, error)) (T, error) {
+	var zero T
 	if err := requireID(packageVersionID); err != nil {
-		return entity.PackageManifestSnapshot{}, err
+		return zero, err
 	}
-	version, err := s.repository.GetPackageVersion(ctx, packageVersionID)
+	version, err := service.repository.GetPackageVersion(ctx, packageVersionID)
 	if err != nil {
-		return entity.PackageManifestSnapshot{}, err
+		return zero, err
 	}
-	resource, err := s.packageResourceByID(ctx, version.PackageID, packageResourceManifest, packageVersionID.String())
+	resource, err := service.packageResourceByID(ctx, version.PackageID, resourceType, packageVersionID.String())
 	if err != nil {
-		return entity.PackageManifestSnapshot{}, err
+		return zero, err
 	}
-	if err := s.authorizeQuery(ctx, meta, packageActionManifestRead, resource); err != nil {
-		return entity.PackageManifestSnapshot{}, err
+	if err := service.authorizeQuery(ctx, meta, action, resource); err != nil {
+		return zero, err
 	}
-	return s.repository.GetLatestManifestSnapshot(ctx, packageVersionID)
+	return read(ctx, packageVersionID)
 }
 
 func (s *Service) GetPackageInstallation(ctx context.Context, id uuid.UUID, meta value.QueryMeta) (entity.PackageInstallation, error) {

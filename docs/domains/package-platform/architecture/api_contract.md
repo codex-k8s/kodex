@@ -5,8 +5,8 @@ title: kodex — API-обзор package-hub
 status: active
 owner_role: SA
 created_at: 2026-05-06
-updated_at: 2026-05-08
-related_issues: [642, 646, 650, 673, 678, 680, 684, 689]
+updated_at: 2026-05-11
+related_issues: [642, 646, 650, 673, 678, 680, 684, 689, 692]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -64,7 +64,7 @@ approvals:
 
 | Ошибка | Когда возвращается |
 |---|---|
-| `invalid_argument` | Невалидный slug, область, manifest, версия, source ref или secret schema. |
+| `invalid_argument` | Невалидный slug, область, manifest, версия, source ref или схема секретов. |
 | `permission_denied` | `access-manager` запретил действие. |
 | `not_found` | Источник, пакет, версия или установка не найдены. |
 | `already_exists` | Дубликат slug источника, slug пакета или активной установки в той же области. |
@@ -106,8 +106,8 @@ approvals:
 | Go-артефакты событий | Генерируются в `libs/go/platformevents/packagehub/events.gen.go`. |
 | Сервисный процесс `package-hub` | Общий gRPC runtime, служебные `/health/*`, `/metrics`, PostgreSQL repository, проверка доступа через `access-manager` и часть операций `PackageHubService` подключены. |
 | PostgreSQL и outbox | Таблицы package-каталога, установок, проверок, идемпотентного следа и outbox добавлены; диспетчер публикует события через `platform-event-log`. |
-| Реализованные операции | `ConnectPackageSource`, `UpdatePackageSource`, `DisablePackageSource`, `GetPackageSource`, `ListPackageSources`, `SyncAvailablePackages`, `GetPackage`, `ListPackages`, `GetPackageVersion`, `ListPackageVersions`, `GetPackageManifest`, `RequestPackageInstallation`, `UpdatePackageInstallation`, `DisablePackageInstallation`, `UninstallPackage`, `GetPackageInstallation`, `ListPackageInstallations`, `SetPackageVerification`. |
-| Операции следующих срезов | Схемы секретов установок и runtime-связанные команды пока возвращают `unimplemented`. |
+| Реализованные операции | `ConnectPackageSource`, `UpdatePackageSource`, `DisablePackageSource`, `GetPackageSource`, `ListPackageSources`, `SyncAvailablePackages`, `GetPackage`, `ListPackages`, `GetPackageVersion`, `ListPackageVersions`, `GetPackageManifest`, `GetPackageSecretSchema`, `RequestPackageInstallation`, `UpdatePackageInstallation`, `DisablePackageInstallation`, `UninstallPackage`, `GetPackageInstallation`, `ListPackageInstallations`, `SetPackageVerification`. |
+| Операции следующих срезов | `RefreshPackageInstallationSecretStatus` и runtime-связанные команды пока возвращают `unimplemented`. |
 
 ## Совместимость
 
