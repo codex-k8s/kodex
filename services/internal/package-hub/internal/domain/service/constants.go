@@ -20,6 +20,7 @@ const (
 	packageEventInstallationUpdated     = packageevents.EventInstallationUpdated
 	packageEventInstallationDisabled    = packageevents.EventInstallationDisabled
 	packageEventInstallationUninstalled = packageevents.EventInstallationUninstalled
+	packageEventSecretSchemaUpdated     = packageevents.EventSecretSchemaUpdated
 	packageAggregatePackage             = packageevents.AggregatePackage
 	packageAggregateSource              = packageevents.AggregatePackageSource
 	packageAggregateVersion             = packageevents.AggregatePackageVersion
@@ -45,6 +46,7 @@ const (
 	packageActionInstallationDisable    = accesscatalog.ActionPackageInstallationDisable
 	packageActionUninstall              = accesscatalog.ActionPackageUninstall
 	packageActionInstallationRead       = accesscatalog.ActionPackageInstallationRead
+	packageActionSecretRead             = accesscatalog.ActionPackageSecretRead
 	packageActionVerify                 = accesscatalog.ActionPackageVerify
 	packageResourceSource               = accesscatalog.ResourcePackageSource
 	packageResourceCatalog              = accesscatalog.ResourcePackageCatalog
@@ -52,6 +54,7 @@ const (
 	packageResourceVersion              = accesscatalog.ResourcePackageVersion
 	packageResourceManifest             = accesscatalog.ResourcePackageManifest
 	packageResourceInstallation         = accesscatalog.ResourcePackageInstallation
+	packageResourceSecretSchema         = accesscatalog.ResourcePackageSecretSchema
 	packageScopeGlobal                  = accesscatalog.ScopeGlobal
 	packageScopeOrganization            = accesscatalog.ScopeOrganization
 	packageScopeProject                 = accesscatalog.ScopeProject

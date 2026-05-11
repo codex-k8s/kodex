@@ -35,6 +35,7 @@ type packageService interface {
 	GetPackageVersion(context.Context, uuid.UUID, value.QueryMeta) (entity.PackageVersion, error)
 	ListPackageVersions(context.Context, packageservice.ListPackageVersionsInput) (packageservice.ListPackageVersionsResult, error)
 	GetPackageManifest(context.Context, uuid.UUID, value.QueryMeta) (entity.PackageManifestSnapshot, error)
+	GetPackageSecretSchema(context.Context, uuid.UUID, value.QueryMeta) (entity.PackageSecretSchema, error)
 	RequestPackageInstallation(context.Context, packageservice.RequestPackageInstallationInput) (entity.PackageInstallation, error)
 	UpdatePackageInstallation(context.Context, packageservice.UpdatePackageInstallationInput) (entity.PackageInstallation, error)
 	DisablePackageInstallation(context.Context, packageservice.DisablePackageInstallationInput) (entity.PackageInstallation, error)
@@ -112,6 +113,11 @@ func (server *Server) GetPackageManifest(ctx context.Context, request *packagesv
 	return grpcserver.HandleUnary(ctx, request, grpccasters.GetPackageManifestInput, server.getPackageManifest, grpccasters.PackageManifestResponse)
 }
 
+// GetPackageSecretSchema returns required and optional secret fields for a package version.
+func (server *Server) GetPackageSecretSchema(ctx context.Context, request *packagesv1.GetPackageSecretSchemaRequest) (*packagesv1.PackageSecretSchemaResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.GetPackageSecretSchemaInput, server.getPackageSecretSchema, grpccasters.PackageSecretSchemaResponse)
+}
+
 // RequestPackageInstallation records an installation intent for a package version and scope.
 func (server *Server) RequestPackageInstallation(ctx context.Context, request *packagesv1.RequestPackageInstallationRequest) (*packagesv1.PackageInstallationResponse, error) {
 	return grpcserver.HandleUnary(ctx, request, grpccasters.RequestPackageInstallationInput, server.service.RequestPackageInstallation, grpccasters.PackageInstallationResponse)
@@ -161,6 +167,10 @@ func (server *Server) getPackageVersion(ctx context.Context, input grpccasters.I
 
 func (server *Server) getPackageManifest(ctx context.Context, input grpccasters.IDQueryInput) (entity.PackageManifestSnapshot, error) {
 	return server.service.GetPackageManifest(ctx, input.ID, input.Meta)
+}
+
+func (server *Server) getPackageSecretSchema(ctx context.Context, input grpccasters.IDQueryInput) (entity.PackageSecretSchema, error) {
+	return server.service.GetPackageSecretSchema(ctx, input.ID, input.Meta)
 }
 
 func (server *Server) getPackageInstallation(ctx context.Context, input grpccasters.IDQueryInput) (entity.PackageInstallation, error) {

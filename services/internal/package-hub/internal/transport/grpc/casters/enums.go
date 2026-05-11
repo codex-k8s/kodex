@@ -115,6 +115,14 @@ var healthStatusMap = []enumPair[packagesv1.PackageHealthStatus, enum.PackageHea
 	{packagesv1.PackageHealthStatus_PACKAGE_HEALTH_STATUS_FAILED, enum.PackageHealthStatusFailed},
 }
 
+var secretFieldKindMap = []enumPair[packagesv1.PackageSecretFieldKind, enum.PackageSecretFieldKind]{
+	{packagesv1.PackageSecretFieldKind_PACKAGE_SECRET_FIELD_KIND_STRING, enum.PackageSecretFieldKindString},
+	{packagesv1.PackageSecretFieldKind_PACKAGE_SECRET_FIELD_KIND_PASSWORD, enum.PackageSecretFieldKindPassword},
+	{packagesv1.PackageSecretFieldKind_PACKAGE_SECRET_FIELD_KIND_TOKEN, enum.PackageSecretFieldKindToken},
+	{packagesv1.PackageSecretFieldKind_PACKAGE_SECRET_FIELD_KIND_JSON, enum.PackageSecretFieldKindJSON},
+	{packagesv1.PackageSecretFieldKind_PACKAGE_SECRET_FIELD_KIND_URL, enum.PackageSecretFieldKindURL},
+}
+
 func SourceKindFromProto(value packagesv1.PackageSourceKind) (enum.PackageSourceKind, error) {
 	return domainEnum(value, sourceKindMap)
 }
@@ -225,6 +233,10 @@ func SecretBindingStatusToProto(value enum.PackageSecretBindingStatus) packagesv
 
 func HealthStatusToProto(value enum.PackageHealthStatus) packagesv1.PackageHealthStatus {
 	return protoEnum(value, healthStatusMap, packagesv1.PackageHealthStatus_PACKAGE_HEALTH_STATUS_UNSPECIFIED)
+}
+
+func SecretFieldKindToProto(value enum.PackageSecretFieldKind) packagesv1.PackageSecretFieldKind {
+	return protoEnum(value, secretFieldKindMap, packagesv1.PackageSecretFieldKind_PACKAGE_SECRET_FIELD_KIND_UNSPECIFIED)
 }
 
 func optionalPackageKind(value *packagesv1.PackageKind) (*enum.PackageKind, error) {

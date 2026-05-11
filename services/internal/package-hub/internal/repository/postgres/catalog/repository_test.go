@@ -288,8 +288,8 @@ func TestRepositoryIntegrationSyncAvailableCatalog(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sync available catalog first: %v", err)
 	}
-	if len(firstOutcome.Packages) != 1 || !firstOutcome.Packages[0].Inserted || len(firstOutcome.Versions) != 1 || !firstOutcome.Versions[0].Inserted || firstOutcome.ManifestCount != 1 {
-		t.Fatalf("first outcome = %+v, want inserted package, inserted version and manifest", firstOutcome)
+	if len(firstOutcome.Packages) != 1 || !firstOutcome.Packages[0].Inserted || len(firstOutcome.Versions) != 1 || !firstOutcome.Versions[0].Inserted || firstOutcome.ManifestCount != 1 || firstOutcome.SecretSchemaCount != 1 {
+		t.Fatalf("first outcome = %+v, want inserted package, inserted version, manifest and secret schema", firstOutcome)
 	}
 	storedSource, err := repository.GetPackageSource(ctx, source.ID)
 	if err != nil {
@@ -306,6 +306,13 @@ func TestRepositoryIntegrationSyncAvailableCatalog(t *testing.T) {
 	}
 	if !jsonPayloadEqual(manifest.Payload, []byte(`{"identity":{"slug":"telegram-approver"}}`)) {
 		t.Fatalf("manifest payload = %s, want initial slug", manifest.Payload)
+	}
+	secretSchema, err := repository.GetLatestPackageSecretSchema(ctx, versionID)
+	if err != nil {
+		t.Fatalf("get latest secret schema after first sync: %v", err)
+	}
+	if len(secretSchema.Fields) != 1 || secretSchema.Fields[0].Key != "telegram_token" {
+		t.Fatalf("secret schema = %+v, want telegram_token field", secretSchema)
 	}
 
 	secondPlan := testCatalogSyncPlan(storedSource, storedSource.Version, "telegram-approver", "1.0.0", now.Add(2*time.Minute), uuid.New())
@@ -327,6 +334,9 @@ func TestRepositoryIntegrationSyncAvailableCatalog(t *testing.T) {
 	}
 	if secondOutcome.Versions[0].Inserted || !secondOutcome.Versions[0].Changed || secondOutcome.Versions[0].Version.Revision != 2 {
 		t.Fatalf("second version outcome = %+v, want changed existing version revision 2", secondOutcome.Versions[0])
+	}
+	if secondOutcome.SecretSchemaCount != 0 {
+		t.Fatalf("second secret schema count = %d, want no new schema for unchanged secret fields", secondOutcome.SecretSchemaCount)
 	}
 	updatedManifest, err := repository.GetLatestManifestSnapshot(ctx, versionID)
 	if err != nil {
@@ -654,14 +664,16 @@ func testCatalogSyncPlan(source entity.PackageSource, previousVersion int64, pac
 	entry := testPackage(source.ID, packageSlug, enum.PackageKindPlugin, now)
 	version := testPackageVersion(entry.ID, versionLabel, now)
 	manifest := testManifestSnapshot(version.ID, now)
+	secretSchema := testSecretSchema(version.ID, now)
 	plan := catalogrepo.CatalogSyncPlan{
 		Source:                syncedSource,
 		PreviousSourceVersion: previousVersion,
 		Items: []catalogrepo.CatalogSyncItem{{
 			Entry: entry,
 			Versions: []catalogrepo.CatalogSyncVersionPlan{{
-				Version:  version,
-				Manifest: manifest,
+				Version:      version,
+				Manifest:     manifest,
+				SecretSchema: secretSchema,
 			}},
 		}},
 		Result: testCommandResult(commandID, "package.catalog.sync", enum.CommandAggregateTypePackageSource, source.ID, "", now),

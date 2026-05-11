@@ -119,7 +119,11 @@ func (s *Service) catalogSyncPlan(input SyncAvailablePackagesInput, result SyncA
 				ValidationErrors: []byte(`[]`),
 				CreatedAt:        result.SyncedAt,
 			}
-			planItem.Versions = append(planItem.Versions, catalogrepo.CatalogSyncVersionPlan{Version: version, Manifest: manifest})
+			secretSchema, err := packageSecretSchemaFromManifest(s.ids.New(), version.ID, manifest.Payload, result.SyncedAt)
+			if err != nil {
+				return catalogrepo.CatalogSyncPlan{}, err
+			}
+			planItem.Versions = append(planItem.Versions, catalogrepo.CatalogSyncVersionPlan{Version: version, Manifest: manifest, SecretSchema: secretSchema})
 		}
 		plan.Items = append(plan.Items, planItem)
 	}
@@ -128,7 +132,7 @@ func (s *Service) catalogSyncPlan(input SyncAvailablePackagesInput, result SyncA
 
 func (s *Service) catalogSyncEvents(result SyncAvailablePackagesResult) catalogrepo.CatalogSyncEventBuilder {
 	return func(outcome catalogrepo.CatalogSyncOutcome) ([]entity.OutboxEvent, error) {
-		events := make([]entity.OutboxEvent, 0, 1+len(outcome.Packages)+len(outcome.Versions))
+		events := make([]entity.OutboxEvent, 0, 1+len(outcome.Packages)+len(outcome.Versions)+len(outcome.SecretSchemas))
 		synced, err := s.catalogSyncedEvent(result)
 		if err != nil {
 			return nil, err
@@ -151,6 +155,16 @@ func (s *Service) catalogSyncEvents(result SyncAvailablePackagesResult) catalogr
 			if event.ID != uuid.Nil {
 				events = append(events, event)
 			}
+		}
+		for _, item := range outcome.SecretSchemas {
+			if !item.Inserted {
+				continue
+			}
+			event, err := s.secretSchemaUpdatedEvent(item, result.SyncedAt)
+			if err != nil {
+				return nil, err
+			}
+			events = append(events, event)
 		}
 		return events, nil
 	}

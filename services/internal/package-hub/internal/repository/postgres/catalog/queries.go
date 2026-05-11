@@ -26,6 +26,7 @@ var (
 	queryPackageSourceList           = mustLoadQuery("package_source__list")
 	queryPackageSourceUpdate         = mustLoadQuery("package_source__update")
 	queryPackageSecretSchemaCreate   = mustLoadQuery("package_secret_schema__create")
+	queryPackageSecretSchemaIgnore   = mustLoadQuery("package_secret_schema__insert_ignore")
 	queryPackageSecretSchemaLatest   = mustLoadQuery("package_secret_schema__get_latest")
 	queryPackageVerificationCreate   = mustLoadQuery("package_verification__create")
 	queryPackageVerificationList     = mustLoadQuery("package_verification__list")

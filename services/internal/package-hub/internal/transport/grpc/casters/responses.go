@@ -48,6 +48,10 @@ func PackageManifestResponse(snapshot entity.PackageManifestSnapshot) *packagesv
 	return &packagesv1.PackageManifestResponse{Manifest: PackageManifestSnapshot(snapshot)}
 }
 
+func PackageSecretSchemaResponse(schema entity.PackageSecretSchema) *packagesv1.PackageSecretSchemaResponse {
+	return &packagesv1.PackageSecretSchemaResponse{Schema: PackageSecretSchema(schema)}
+}
+
 func PackageInstallationResponse(installation entity.PackageInstallation) *packagesv1.PackageInstallationResponse {
 	return &packagesv1.PackageInstallationResponse{Installation: PackageInstallation(installation)}
 }
@@ -130,6 +134,26 @@ func PackageManifestSnapshot(snapshot entity.PackageManifestSnapshot) *packagesv
 		ValidationStatus:     ManifestValidationStatusToProto(snapshot.ValidationStatus),
 		ValidationErrorsJson: string(snapshot.ValidationErrors),
 		CreatedAt:            formatTime(snapshot.CreatedAt),
+	}
+}
+
+func PackageSecretSchema(schema entity.PackageSecretSchema) *packagesv1.PackageSecretSchema {
+	return &packagesv1.PackageSecretSchema{
+		Id:               schema.ID.String(),
+		PackageVersionId: schema.PackageVersionID.String(),
+		SchemaDigest:     schema.SchemaDigest,
+		Fields:           mapProto(schema.Fields, PackageSecretField),
+		CreatedAt:        formatTime(schema.CreatedAt),
+	}
+}
+
+func PackageSecretField(field value.PackageSecretField) *packagesv1.PackageSecretField {
+	return &packagesv1.PackageSecretField{
+		Key:         field.Key,
+		Kind:        SecretFieldKindToProto(field.Kind),
+		Required:    field.Required,
+		DisplayName: localizedTextToProto(field.DisplayName),
+		Description: localizedTextToProto(field.Description),
 	}
 }
 

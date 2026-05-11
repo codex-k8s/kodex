@@ -91,6 +91,27 @@ func TestRequestPackageInstallationReturnsInstallationResponse(t *testing.T) {
 	}
 }
 
+func TestGetPackageSecretSchemaReturnsSchemaResponse(t *testing.T) {
+	t.Parallel()
+
+	versionID := uuid.New()
+	response, err := NewServer(fakePackageService{}).GetPackageSecretSchema(context.Background(), &packagesv1.GetPackageSecretSchemaRequest{
+		Meta:             &packagesv1.QueryMeta{RequestId: "test"},
+		PackageVersionId: versionID.String(),
+	})
+	if err != nil {
+		t.Fatalf("GetPackageSecretSchema(): %v", err)
+	}
+	schema := response.GetSchema()
+	if schema.GetPackageVersionId() != versionID.String() || len(schema.GetFields()) != 1 {
+		t.Fatalf("schema response = %+v, want one field for version %s", schema, versionID)
+	}
+	field := schema.GetFields()[0]
+	if field.GetKey() != "telegram_token" || field.GetKind() != packagesv1.PackageSecretFieldKind_PACKAGE_SECRET_FIELD_KIND_TOKEN {
+		t.Fatalf("secret field = %+v, want telegram_token token", field)
+	}
+}
+
 func TestDisablePackageInstallationReturnsInstallationResponse(t *testing.T) {
 	t.Parallel()
 
@@ -184,6 +205,22 @@ func (fakePackageService) ListPackageVersions(context.Context, packageservice.Li
 
 func (fakePackageService) GetPackageManifest(context.Context, uuid.UUID, value.QueryMeta) (entity.PackageManifestSnapshot, error) {
 	return entity.PackageManifestSnapshot{}, nil
+}
+
+func (fakePackageService) GetPackageSecretSchema(_ context.Context, versionID uuid.UUID, _ value.QueryMeta) (entity.PackageSecretSchema, error) {
+	now := time.Date(2026, 5, 7, 16, 0, 0, 0, time.UTC)
+	return entity.PackageSecretSchema{
+		ID:               uuid.New(),
+		PackageVersionID: versionID,
+		SchemaDigest:     "sha256:secret",
+		Fields: []value.PackageSecretField{{
+			Key:         "telegram_token",
+			Kind:        enum.PackageSecretFieldKindToken,
+			Required:    true,
+			DisplayName: []value.LocalizedText{{Locale: "ru", Text: "Токен Telegram"}},
+		}},
+		CreatedAt: now,
+	}, nil
 }
 
 func (fakePackageService) RequestPackageInstallation(_ context.Context, input packageservice.RequestPackageInstallationInput) (entity.PackageInstallation, error) {

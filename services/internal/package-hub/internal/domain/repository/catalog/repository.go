@@ -71,15 +71,18 @@ type CatalogSyncItem struct {
 }
 
 type CatalogSyncVersionPlan struct {
-	Version  entity.PackageVersion
-	Manifest entity.PackageManifestSnapshot
+	Version      entity.PackageVersion
+	Manifest     entity.PackageManifestSnapshot
+	SecretSchema entity.PackageSecretSchema
 }
 
 type CatalogSyncOutcome struct {
-	Source        entity.PackageSource
-	Packages      []CatalogSyncPackage
-	Versions      []CatalogSyncVersion
-	ManifestCount int
+	Source            entity.PackageSource
+	Packages          []CatalogSyncPackage
+	Versions          []CatalogSyncVersion
+	SecretSchemas     []CatalogSyncSecretSchema
+	ManifestCount     int
+	SecretSchemaCount int
 }
 
 type CatalogSyncPackage struct {
@@ -92,4 +95,11 @@ type CatalogSyncVersion struct {
 	Version  entity.PackageVersion
 	Inserted bool
 	Changed  bool
+}
+
+type CatalogSyncSecretSchema struct {
+	Schema          entity.PackageSecretSchema
+	PackageID       uuid.UUID
+	VersionRevision int64
+	Inserted        bool
 }
