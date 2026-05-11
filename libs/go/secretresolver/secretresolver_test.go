@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	vaultapi "github.com/hashicorp/vault/api"
 )
 
 func TestSecretValueRedactsAndBlocksSerialization(t *testing.T) {
@@ -66,19 +69,19 @@ func TestSecretValueClearZeroesInternalBuffer(t *testing.T) {
 
 func TestMuxRoutesSecretOperations(t *testing.T) {
 	backend := &fakeBackend{value: NewSecretValue([]byte("token")), status: SecretStatus{Present: true, Version: "v1"}}
-	resolver, err := NewMux(map[string]Backend{StoreTypeKubernetesSecret: backend})
+	resolver, err := NewMux(map[string]Backend{StoreTypeKubernetesMountedSecret: backend})
 	if err != nil {
 		t.Fatalf("NewMux(): %v", err)
 	}
 
-	value, err := resolver.Resolve(context.Background(), SecretRef{StoreType: StoreTypeKubernetesSecret, StoreRef: "default/github#token"})
+	value, err := resolver.Resolve(context.Background(), SecretRef{StoreType: StoreTypeKubernetesMountedSecret, StoreRef: "default/github#token"})
 	if err != nil {
 		t.Fatalf("Resolve(): %v", err)
 	}
 	if got := string(value.Bytes()); got != "token" {
 		t.Fatalf("value = %q, want token", got)
 	}
-	status, err := resolver.Check(context.Background(), SecretRef{StoreType: StoreTypeKubernetesSecret, StoreRef: "default/github#token"})
+	status, err := resolver.Check(context.Background(), SecretRef{StoreType: StoreTypeKubernetesMountedSecret, StoreRef: "default/github#token"})
 	if err != nil {
 		t.Fatalf("Check(): %v", err)
 	}
@@ -88,7 +91,7 @@ func TestMuxRoutesSecretOperations(t *testing.T) {
 }
 
 func TestMuxRejectsUnknownBackend(t *testing.T) {
-	resolver, err := NewMux(map[string]Backend{StoreTypeKubernetesSecret: &fakeBackend{}})
+	resolver, err := NewMux(map[string]Backend{StoreTypeKubernetesMountedSecret: &fakeBackend{}})
 	if err != nil {
 		t.Fatalf("NewMux(): %v", err)
 	}
@@ -112,14 +115,14 @@ func TestMountedKubernetesBackendResolvesMountedSecret(t *testing.T) {
 		t.Fatalf("NewMountedKubernetesBackend(): %v", err)
 	}
 
-	value, err := backend.Resolve(context.Background(), SecretRef{StoreType: StoreTypeKubernetesSecret, StoreRef: "default/github-token#token"})
+	value, err := backend.Resolve(context.Background(), SecretRef{StoreType: StoreTypeKubernetesMountedSecret, StoreRef: "default/github-token#token"})
 	if err != nil {
 		t.Fatalf("Resolve(): %v", err)
 	}
 	if got := string(value.Bytes()); got != "mounted-token" {
 		t.Fatalf("value = %q, want mounted-token", got)
 	}
-	status, err := backend.Check(context.Background(), SecretRef{StoreType: StoreTypeKubernetesSecret, StoreRef: "default/github-token#token"})
+	status, err := backend.Check(context.Background(), SecretRef{StoreType: StoreTypeKubernetesMountedSecret, StoreRef: "default/github-token#token"})
 	if err != nil {
 		t.Fatalf("Check(): %v", err)
 	}
@@ -133,11 +136,11 @@ func TestMountedKubernetesBackendRejectsMissingSecret(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewMountedKubernetesBackend(): %v", err)
 	}
-	_, err = backend.Resolve(context.Background(), SecretRef{StoreType: StoreTypeKubernetesSecret, StoreRef: "default/missing#token"})
+	_, err = backend.Resolve(context.Background(), SecretRef{StoreType: StoreTypeKubernetesMountedSecret, StoreRef: "default/missing#token"})
 	if !errors.Is(err, ErrSecretNotFound) {
 		t.Fatalf("Resolve() err = %v, want %v", err, ErrSecretNotFound)
 	}
-	_, err = backend.Check(context.Background(), SecretRef{StoreType: StoreTypeKubernetesSecret, StoreRef: "default/missing#token"})
+	_, err = backend.Check(context.Background(), SecretRef{StoreType: StoreTypeKubernetesMountedSecret, StoreRef: "default/missing#token"})
 	if !errors.Is(err, ErrSecretNotFound) {
 		t.Fatalf("Check() err = %v, want %v", err, ErrSecretNotFound)
 	}
@@ -158,7 +161,7 @@ func TestMountedKubernetesBackendRejectsOversizedSecretWithoutLeak(t *testing.T)
 		t.Fatalf("NewMountedKubernetesBackend(): %v", err)
 	}
 
-	_, err = backend.Resolve(context.Background(), SecretRef{StoreType: StoreTypeKubernetesSecret, StoreRef: "default/oversized#token"})
+	_, err = backend.Resolve(context.Background(), SecretRef{StoreType: StoreTypeKubernetesMountedSecret, StoreRef: "default/oversized#token"})
 	if !errors.Is(err, ErrSecretUnavailable) {
 		t.Fatalf("Resolve() err = %v, want %v", err, ErrSecretUnavailable)
 	}
@@ -172,9 +175,122 @@ func TestMountedKubernetesBackendRejectsInvalidRef(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewMountedKubernetesBackend(): %v", err)
 	}
-	_, err = backend.Resolve(context.Background(), SecretRef{StoreType: StoreTypeKubernetesSecret, StoreRef: "../secret#token"})
+	_, err = backend.Resolve(context.Background(), SecretRef{StoreType: StoreTypeKubernetesMountedSecret, StoreRef: "../secret#token"})
 	if !errors.Is(err, ErrInvalidRef) {
 		t.Fatalf("Resolve() err = %v, want %v", err, ErrInvalidRef)
+	}
+}
+
+func TestEnvBackendResolvesEnvSecret(t *testing.T) {
+	t.Setenv("KODEX_TEST_SECRET", "env-token")
+	backend := NewEnvBackend()
+
+	value, err := backend.Resolve(context.Background(), SecretRef{StoreType: StoreTypeEnv, StoreRef: "KODEX_TEST_SECRET"})
+	if err != nil {
+		t.Fatalf("Resolve(): %v", err)
+	}
+	defer value.Clear()
+	if got := string(value.Bytes()); got != "env-token" {
+		t.Fatalf("value = %q, want env-token", got)
+	}
+	status, err := backend.Check(context.Background(), SecretRef{StoreType: StoreTypeEnv, StoreRef: "KODEX_TEST_SECRET"})
+	if err != nil {
+		t.Fatalf("Check(): %v", err)
+	}
+	if !status.Present || status.Version != "process-env" {
+		t.Fatalf("status = %+v, want process-env", status)
+	}
+}
+
+func TestEnvBackendRejectsMissingOrInvalidSecret(t *testing.T) {
+	backend := NewEnvBackend()
+	_, err := backend.Resolve(context.Background(), SecretRef{StoreType: StoreTypeEnv, StoreRef: "KODEX_MISSING_SECRET"})
+	if !errors.Is(err, ErrSecretNotFound) {
+		t.Fatalf("Resolve() err = %v, want %v", err, ErrSecretNotFound)
+	}
+	_, err = backend.Check(context.Background(), SecretRef{StoreType: StoreTypeEnv, StoreRef: "1BAD"})
+	if !errors.Is(err, ErrInvalidRef) {
+		t.Fatalf("Check() err = %v, want %v", err, ErrInvalidRef)
+	}
+}
+
+func TestVaultBackendResolvesKVv2Secret(t *testing.T) {
+	kv := &fakeVaultKVv2{
+		secret: &vaultapi.KVSecret{
+			Data:            map[string]interface{}{"token": "vault-token"},
+			VersionMetadata: &vaultapi.KVVersionMetadata{Version: 7},
+		},
+	}
+	backend, err := NewVaultBackend(VaultBackendConfig{KVv2Factory: func(mountPath string) VaultKVv2Client {
+		if mountPath != "secret" {
+			t.Fatalf("mountPath = %q, want secret", mountPath)
+		}
+		return kv
+	}})
+	if err != nil {
+		t.Fatalf("NewVaultBackend(): %v", err)
+	}
+
+	value, err := backend.Resolve(context.Background(), SecretRef{StoreType: StoreTypeVault, StoreRef: "secret/provider/github#token"})
+	if err != nil {
+		t.Fatalf("Resolve(): %v", err)
+	}
+	defer value.Clear()
+	if got := string(value.Bytes()); got != "vault-token" {
+		t.Fatalf("value = %q, want vault-token", got)
+	}
+	if kv.lastGetPath != "provider/github" {
+		t.Fatalf("Get path = %q, want provider/github", kv.lastGetPath)
+	}
+	if kv.secret.Data != nil {
+		t.Fatalf("Vault secret data was not scrubbed after Resolve")
+	}
+
+	kv.secret = &vaultapi.KVSecret{
+		Data:            map[string]interface{}{"token": "vault-token"},
+		VersionMetadata: &vaultapi.KVVersionMetadata{Version: 7},
+	}
+	status, err := backend.Check(context.Background(), SecretRef{StoreType: StoreTypeVault, StoreRef: "secret/provider/github#token"})
+	if err != nil {
+		t.Fatalf("Check(): %v", err)
+	}
+	if !status.Present || status.Version != "7" || kv.lastGetPath != "provider/github" {
+		t.Fatalf("status = %+v getPath = %q, want present version 7", status, kv.lastGetPath)
+	}
+}
+
+func TestVaultBackendRejectsMissingOrUnsupportedSecret(t *testing.T) {
+	kv := &fakeVaultKVv2{
+		secret: &vaultapi.KVSecret{Data: map[string]interface{}{"token": map[string]string{"nested": "unsupported"}}},
+	}
+	backend, err := NewVaultBackend(VaultBackendConfig{KVv2Factory: func(string) VaultKVv2Client { return kv }})
+	if err != nil {
+		t.Fatalf("NewVaultBackend(): %v", err)
+	}
+	_, err = backend.Resolve(context.Background(), SecretRef{StoreType: StoreTypeVault, StoreRef: "secret/provider/github#missing"})
+	if !errors.Is(err, ErrSecretNotFound) {
+		t.Fatalf("Resolve(missing key) err = %v, want %v", err, ErrSecretNotFound)
+	}
+	kv.secret = &vaultapi.KVSecret{Data: map[string]interface{}{"token": map[string]string{"nested": "unsupported"}}}
+	_, err = backend.Resolve(context.Background(), SecretRef{StoreType: StoreTypeVault, StoreRef: "secret/provider/github#token"})
+	if !errors.Is(err, ErrSecretUnavailable) {
+		t.Fatalf("Resolve(unsupported type) err = %v, want %v", err, ErrSecretUnavailable)
+	}
+}
+
+func TestVaultBackendMapsNotFound(t *testing.T) {
+	kv := &fakeVaultKVv2{err: &vaultapi.ResponseError{StatusCode: http.StatusNotFound}}
+	backend, err := NewVaultBackend(VaultBackendConfig{KVv2Factory: func(string) VaultKVv2Client { return kv }})
+	if err != nil {
+		t.Fatalf("NewVaultBackend(): %v", err)
+	}
+	_, err = backend.Resolve(context.Background(), SecretRef{StoreType: StoreTypeVault, StoreRef: "secret/provider/github#token"})
+	if !errors.Is(err, ErrSecretNotFound) {
+		t.Fatalf("Resolve() err = %v, want %v", err, ErrSecretNotFound)
+	}
+	_, err = backend.Check(context.Background(), SecretRef{StoreType: StoreTypeVault, StoreRef: "secret/provider/github#token"})
+	if !errors.Is(err, ErrSecretNotFound) {
+		t.Fatalf("Check() err = %v, want %v", err, ErrSecretNotFound)
 	}
 }
 
@@ -182,6 +298,20 @@ type fakeBackend struct {
 	value  SecretValue
 	status SecretStatus
 	err    error
+}
+
+type fakeVaultKVv2 struct {
+	secret      *vaultapi.KVSecret
+	err         error
+	lastGetPath string
+}
+
+func (f *fakeVaultKVv2) Get(_ context.Context, secretPath string) (*vaultapi.KVSecret, error) {
+	f.lastGetPath = secretPath
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.secret, nil
 }
 
 func (b *fakeBackend) Resolve(context.Context, SecretRef) (SecretValue, error) {

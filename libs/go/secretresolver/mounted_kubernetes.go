@@ -104,7 +104,7 @@ func (b *MountedKubernetesBackend) path(ref SecretRef) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if normalized.StoreType != StoreTypeKubernetesSecret {
+	if normalized.StoreType != StoreTypeKubernetesMountedSecret {
 		return "", ErrUnsupportedStoreType
 	}
 	parsed, err := parseMountedKubernetesRef(normalized.StoreRef)

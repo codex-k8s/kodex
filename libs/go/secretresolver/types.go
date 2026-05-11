@@ -7,10 +7,19 @@ import (
 )
 
 const (
-	// StoreTypeKubernetesSecret resolves references backed by Kubernetes Secret material.
-	StoreTypeKubernetesSecret = "kubernetes_secret"
+	// StoreTypeKubernetesMountedSecret resolves Kubernetes Secret values already mounted as files.
+	StoreTypeKubernetesMountedSecret = "kubernetes_mounted_secret"
+	// StoreTypeEnv resolves values already injected into process environment variables.
+	StoreTypeEnv = "env"
 	// StoreTypeVault resolves references backed by Vault material.
 	StoreTypeVault = "vault"
+
+	// StoreTypeKubernetesSecret is kept as a source-compatible alias for old code.
+	// New references must use StoreTypeKubernetesMountedSecret to avoid confusing
+	// mounted files with Kubernetes API reads.
+	//
+	// Deprecated: use StoreTypeKubernetesMountedSecret.
+	StoreTypeKubernetesSecret = StoreTypeKubernetesMountedSecret
 )
 
 var (

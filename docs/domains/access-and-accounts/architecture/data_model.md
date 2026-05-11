@@ -217,7 +217,7 @@ approvals:
 | Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
 | `id` | UUID | no | Идентификатор ссылки. |
-| `store_type` | enum | no | `vault`, `kubernetes_secret`, будущие типы. |
+| `store_type` | enum | no | `kubernetes_mounted_secret`, `env`, `vault`, будущие типы. |
 | `store_ref` | string | no | Путь или имя секрета без значения. |
 | `value_fingerprint` | string | yes | Нераскрывающий отпечаток для диагностики ротации. |
 | `rotated_at` | timestamp | yes | Последняя известная ротация. |

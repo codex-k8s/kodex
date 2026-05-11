@@ -33,7 +33,7 @@
 
 | Срез | Статус | Почему не завершён |
 |---|---|---|
-| PRV-6.2b | разблокировано контрактно | Общий resolver-контракт и минимальный Kubernetes mounted backend готовы; следующий срез должен подключить `libs/go/secretresolver` к worker `provider-hub`, выполнить GitHub batch-сверку и не сохранять токен. |
+| PRV-6.2b | разблокировано контрактно | Общий resolver-контракт и реализации хранилища `kubernetes_mounted_secret`, `env`, `vault` готовы; следующий срез должен подключить `libs/go/secretresolver` к worker `provider-hub`, выполнить GitHub batch-сверку и не сохранять токен. |
 | PRV-7 | заблокировано частично | Provider-операции записи уже могут использовать общий resolver-контракт, но требуют согласованный каталог MCP/agent-manager инструментов, идемпотентность команд и политику approval. Действия доступа уже есть. |
 | PRV-8 | заблокировано частично | Bootstrap/adoption зависят от проектной политики, repository binding и решения `project-catalog`; запись в провайдера должна использовать общий resolver-контракт после подключения операций записи. |
 | PRV-9 | запланировано позже | Kubernetes-манифесты, migration job, metrics, alerts, runbook и smoke можно делать по паттерну `runtime-manager`, когда будет принято решение разворачивать `provider-hub` на сервере. |
@@ -46,7 +46,7 @@
 - `access-manager` возвращает `provider_slug`, `secret_store_type` и `secret_store_ref`, но не значение секрета.
 
 Снято общим срезом:
-- добавлен `libs/go/secretresolver` с контрактами `Resolver` и `Checker`, безопасным `SecretValue`, mux по `store_type` и минимальным backend `kubernetes_secret` для смонтированных файлов;
+- добавлен `libs/go/secretresolver` с контрактами `Resolver` и `Checker`, безопасным `SecretValue`, mux по `store_type`, поддержкой смонтированных Kubernetes Secret, env и Vault KV v2;
 - batch-сверка и provider-операции могут получать значение по `secret_store_type + secret_store_ref` после положительного ответа `ResolveExternalAccountUsage`, не сохраняя токен в `provider-hub`.
 
 Остаётся сделать в `provider-hub`:

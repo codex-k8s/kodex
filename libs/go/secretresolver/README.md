@@ -13,9 +13,11 @@
 ## Контракты
 
 - `Resolver.Resolve` возвращает `SecretValue` для операций, которым действительно нужно значение секрета.
-- `Checker.Check` проверяет наличие секрета без возврата значения.
+- `Checker.Check` проверяет наличие секрета без возврата значения вызывающему коду.
 - `Mux` выбирает backend по `SecretRef.StoreType`.
-- `MountedKubernetesBackend` является минимальным MVP backend для Kubernetes Secret, смонтированных в файловую систему.
+- `MountedKubernetesBackend` читает заранее смонтированные Kubernetes Secret из файловой системы.
+- `EnvBackend` читает секреты, уже переданные workload через переменные окружения.
+- `VaultBackend` читает Vault KV v2 через официальный Go SDK `github.com/hashicorp/vault/api`.
 
 Пример использования:
 
@@ -30,15 +32,27 @@ token := value.Bytes()
 defer clear(token)
 ```
 
-## Kubernetes mounted backend
+## Ссылки на хранилища
 
-Backend ожидает `SecretRef`:
+### Kubernetes mounted
 
-- `StoreType`: `kubernetes_secret`;
+- `StoreType`: `kubernetes_mounted_secret`;
 - `StoreRef`: `namespace/secret-name#key`;
 - файл: `<root>/<namespace>/<secret-name>/<key>`.
 
-Kubernetes Secret, Vault или другой backend остаются деталями resolver-клиента. `provider-hub` и `package-hub` не должны включать эти детали в свою доменную модель.
+Старый Go-идентификатор `StoreTypeKubernetesSecret` оставлен только как source-compatible alias.
+
+### Env
+
+- `StoreType`: `env`;
+- `StoreRef`: имя переменной окружения.
+
+### Vault KV v2
+
+- `StoreType`: `vault`;
+- `StoreRef`: `mount/path/to/secret#key`.
+
+Kubernetes Secret, env, Vault или другой тип хранилища остаются деталями resolver-клиента. `provider-hub` и `package-hub` не должны включать эти детали в свою доменную модель.
 
 ## Проверки
 
