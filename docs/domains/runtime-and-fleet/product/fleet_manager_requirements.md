@@ -6,7 +6,7 @@ status: active
 owner_role: PM
 created_at: 2026-05-11
 updated_at: 2026-05-11
-related_issues: [699, 708]
+related_issues: [699, 708, 714]
 related_prs: []
 related_docsets:
   - docs/domains/runtime-and-fleet/product/requirements.md

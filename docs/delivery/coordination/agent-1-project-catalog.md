@@ -73,8 +73,9 @@
 |---|---:|---|---|
 | FLEET-0 | #699 | готово | Доменная документация, границы runtime/fleet, MVP с несколькими серверами, scope и кластерами, bootstrap seed `platform-default`, будущие контракты, план поставки и карта Issue. |
 | FLEET-1 | #708 | готово | gRPC и AsyncAPI контракты `fleet-manager`, события `fleet.*`, сгенерированные Go-контракты и ключи действий доступа. |
+| FLEET-2 | #714 | в PR | Сервисный каркас, конфигурация, PostgreSQL-модель, миграции, repository, health/readiness, metrics и outbox без registry/health/placement команд. |
 
-Итог: `fleet-manager` пока не имеет сервисной реализации. Зафиксирована целевая граница, создана контрактная поверхность и порядок поставки: сервисный каркас, реестр нескольких scope/server/cluster, bootstrap seed `platform-default`, health, placement resolver и deploy-контур.
+Итог: `fleet-manager` получает сервисный процесс и БД в FLEET-2. Реестр нескольких scope/server/cluster, bootstrap seed `platform-default`, health, placement resolver и deploy-контур остаются следующими срезами.
 
 ## Текущий бэклог агента #1
 
@@ -86,7 +87,7 @@
 | `project.policy_override.expired` | запланировано позже | Контракт события есть; нужна логика обслуживания или platform job, которая будет снимать истёкшие переопределения как операционный срез. |
 | Организационные runtime-политики | частично заблокировано | Cleanup для `organization` scope отклоняется, а prewarm хранит политику без фактической раскладки, пока runtime не получает проекцию организации на слоты. |
 | Реальный исполнитель platform jobs | запланировано позже | `runtime-manager` хранит и выдаёт jobs; конкретный исполнитель на Kubernetes или агентный исполнитель нужен отдельным срезом после согласования с `agent-manager`/ops-контуром. |
-| Сервисный каркас `fleet-manager` | следующий локальный срез | После FLEET-1 нужен FLEET-2: конфигурация, PostgreSQL-модель, миграции, repository, health/readiness и outbox без реализации registry-команд. |
+| Реестр `fleet-manager` | следующий локальный срез | После FLEET-2 нужен FLEET-3: команды и чтения нескольких scope/server/cluster, bootstrap seed `platform-default` и базовые проверки доступа. |
 
 ## Блокировки от `access-manager`
 
@@ -156,8 +157,8 @@
 
 ## Рекомендуемый следующий шаг
 
-Для агента #1 нет незавершённого локального RTM или Wave 8 среза, который нужно закрыть до соседних доменов. После FLEET-1 рационально идти в один из трёх вариантов:
+Для агента #1 нет незавершённого локального RTM или Wave 8 среза, который нужно закрыть до соседних доменов. После FLEET-2 рационально идти в один из трёх вариантов:
 
-- идти в FLEET-2 и создать сервисный каркас `fleet-manager`;
+- идти в FLEET-3 и реализовать registry-команды `fleet-manager`;
 - дождаться `provider-hub` bootstrap/adoption контракта и закрывать #281/#282;
 - начать gateway/UI-срез только после согласования состава `staff-gateway` ручек.

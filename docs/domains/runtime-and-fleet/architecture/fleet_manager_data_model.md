@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-11
 updated_at: 2026-05-11
-related_issues: [699, 708]
+related_issues: [699, 708, 714]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -226,6 +226,24 @@ approvals:
 - `PlacementDecision(request_fingerprint)`;
 - `PlacementDecision(project_id, repository_id, created_at)`;
 - `PlacementDecision(fleet_scope_id, cluster_id, created_at)`.
+
+## Реализация FLEET-2
+
+Сервисный каркас создаёт начальную PostgreSQL-схему в `services/internal/fleet-manager/cmd/cli/migrations/20260511190000_fleet_manager_init.sql`.
+
+Реализованы таблицы:
+
+- `fleet_manager_scopes`;
+- `fleet_manager_servers`;
+- `fleet_manager_kubernetes_clusters`;
+- `fleet_manager_cluster_connectivity_checks`;
+- `fleet_manager_cluster_health_snapshots`;
+- `fleet_manager_placement_rules`;
+- `fleet_manager_placement_decisions`;
+- `fleet_manager_command_results`;
+- `fleet_manager_outbox_events`.
+
+Repository-слой FLEET-2 поддерживает readiness через `Ping`, локальный outbox и доставку в `platform-event-log`. CRUD агрегатов, bootstrap seed `platform-default`, connectivity checks и resolver размещения остаются в следующих срезах, чтобы не смешивать инфраструктурный каркас с бизнес-командами.
 
 ## Что не хранится
 
