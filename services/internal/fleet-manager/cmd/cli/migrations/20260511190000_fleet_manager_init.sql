@@ -56,7 +56,7 @@ CREATE TABLE fleet_manager_servers (
     CONSTRAINT fleet_manager_servers_provider_type_chk
         CHECK (provider_type IN ('bare_metal', 'vps', 'cloud', 'managed', 'unknown')),
     CONSTRAINT fleet_manager_servers_status_chk
-        CHECK (status IN ('active', 'suspended', 'draining', 'decommissioned')),
+        CHECK (status IN ('active', 'suspended', 'draining')),
     CONSTRAINT fleet_manager_servers_key_chk CHECK (server_key <> ''),
     CONSTRAINT fleet_manager_servers_version_chk CHECK (version > 0)
 );
@@ -86,7 +86,7 @@ CREATE TABLE fleet_manager_kubernetes_clusters (
     updated_at timestamptz NOT NULL,
     version bigint NOT NULL,
     CONSTRAINT fleet_manager_kubernetes_clusters_status_chk
-        CHECK (status IN ('active', 'suspended', 'draining', 'unreachable', 'decommissioned')),
+        CHECK (status IN ('active', 'suspended', 'draining', 'unreachable')),
     CONSTRAINT fleet_manager_kubernetes_clusters_health_chk
         CHECK (last_health_status IN ('unknown', 'healthy', 'degraded', 'unhealthy')),
     CONSTRAINT fleet_manager_kubernetes_clusters_key_chk CHECK (cluster_key <> ''),

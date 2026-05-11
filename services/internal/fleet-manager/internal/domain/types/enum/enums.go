@@ -37,21 +37,19 @@ const (
 type ServerStatus string
 
 const (
-	ServerStatusActive         ServerStatus = "active"
-	ServerStatusSuspended      ServerStatus = "suspended"
-	ServerStatusDraining       ServerStatus = "draining"
-	ServerStatusDecommissioned ServerStatus = "decommissioned"
+	ServerStatusActive    ServerStatus = "active"
+	ServerStatusSuspended ServerStatus = "suspended"
+	ServerStatusDraining  ServerStatus = "draining"
 )
 
 // KubernetesClusterStatus describes whether a cluster can receive runtime placements.
 type KubernetesClusterStatus string
 
 const (
-	KubernetesClusterStatusActive         KubernetesClusterStatus = "active"
-	KubernetesClusterStatusSuspended      KubernetesClusterStatus = "suspended"
-	KubernetesClusterStatusDraining       KubernetesClusterStatus = "draining"
-	KubernetesClusterStatusUnreachable    KubernetesClusterStatus = "unreachable"
-	KubernetesClusterStatusDecommissioned KubernetesClusterStatus = "decommissioned"
+	KubernetesClusterStatusActive      KubernetesClusterStatus = "active"
+	KubernetesClusterStatusSuspended   KubernetesClusterStatus = "suspended"
+	KubernetesClusterStatusDraining    KubernetesClusterStatus = "draining"
+	KubernetesClusterStatusUnreachable KubernetesClusterStatus = "unreachable"
 )
 
 // ClusterHealthStatus summarizes the latest known cluster health.
