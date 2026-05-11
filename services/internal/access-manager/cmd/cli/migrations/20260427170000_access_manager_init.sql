@@ -165,7 +165,7 @@ CREATE TABLE access_secret_binding_refs (
     version bigint NOT NULL,
     created_at timestamptz NOT NULL,
     updated_at timestamptz NOT NULL,
-    CONSTRAINT access_secret_binding_refs_store_type_check CHECK (store_type IN ('vault', 'kubernetes_secret'))
+    CONSTRAINT access_secret_binding_refs_store_type_check CHECK (store_type IN ('vault', 'kubernetes_mounted_secret', 'env'))
 );
 
 CREATE TABLE access_external_accounts (

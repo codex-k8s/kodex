@@ -40,8 +40,6 @@ defer clear(token)
 - `StoreRef`: `namespace/secret-name#key`;
 - файл: `<root>/<namespace>/<secret-name>/<key>`.
 
-Старый Go-идентификатор `StoreTypeKubernetesSecret` оставлен только как source-compatible alias.
-
 ### Env
 
 - `StoreType`: `env`;

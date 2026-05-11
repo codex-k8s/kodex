@@ -13,13 +13,6 @@ const (
 	StoreTypeEnv = "env"
 	// StoreTypeVault resolves references backed by Vault material.
 	StoreTypeVault = "vault"
-
-	// StoreTypeKubernetesSecret is kept as a source-compatible alias for old code.
-	// New references must use StoreTypeKubernetesMountedSecret to avoid confusing
-	// mounted files with Kubernetes API reads.
-	//
-	// Deprecated: use StoreTypeKubernetesMountedSecret.
-	StoreTypeKubernetesSecret = StoreTypeKubernetesMountedSecret
 )
 
 var (
