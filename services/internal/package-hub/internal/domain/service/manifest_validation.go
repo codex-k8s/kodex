@@ -270,11 +270,11 @@ func validatePackageManifestVerification(parent CatalogPackageSnapshot, verifica
 func validatePackageManifestKindPolicy(document packageManifestDocument, runtime packageManifestRuntime) error {
 	switch document.Identity.Kind {
 	case enum.PackageKindPlugin:
-		return validatePluginManifestKindPolicy(document)
+		return rejectManifestCapabilities(document.Capabilities, packageCapabilityGuidance, packageCapabilityStore, packageCapabilityPlatformContent)
 	case enum.PackageKindGuidance:
 		return validateGuidanceManifestKindPolicy(document, runtime)
 	case enum.PackageKindStore:
-		return requireManifestCapability(document.Capabilities, packageCapabilityStore)
+		return validateStoreManifestKindPolicy(document)
 	case enum.PackageKindPlatformContent:
 		return validatePlatformContentManifestKindPolicy(document)
 	default:
@@ -282,18 +282,11 @@ func validatePackageManifestKindPolicy(document packageManifestDocument, runtime
 	}
 }
 
-func validatePluginManifestKindPolicy(document packageManifestDocument) error {
-	for _, capability := range document.Capabilities {
-		switch capability {
-		case packageCapabilityGuidance, packageCapabilityStore, packageCapabilityPlatformContent:
-			return errs.ErrInvalidArgument
-		}
-	}
-	return nil
-}
-
 func validateGuidanceManifestKindPolicy(document packageManifestDocument, runtime packageManifestRuntime) error {
 	if err := requireManifestCapability(document.Capabilities, packageCapabilityGuidance); err != nil {
+		return err
+	}
+	if err := rejectManifestCapabilities(document.Capabilities, packageCapabilityStore, packageCapabilityPlatformContent); err != nil {
 		return err
 	}
 	if runtime.Required || len(document.Secrets) > 0 || len(document.RequiredAccessActions) > 0 || len(document.RequiredPlatformAPIs) > 0 {
@@ -302,8 +295,18 @@ func validateGuidanceManifestKindPolicy(document packageManifestDocument, runtim
 	return nil
 }
 
+func validateStoreManifestKindPolicy(document packageManifestDocument) error {
+	if err := requireManifestCapability(document.Capabilities, packageCapabilityStore); err != nil {
+		return err
+	}
+	return rejectManifestCapabilities(document.Capabilities, packageCapabilityGuidance, packageCapabilityPlatformContent)
+}
+
 func validatePlatformContentManifestKindPolicy(document packageManifestDocument) error {
 	if err := requireManifestCapability(document.Capabilities, packageCapabilityPlatformContent); err != nil {
+		return err
+	}
+	if err := rejectManifestCapabilities(document.Capabilities, packageCapabilityGuidance, packageCapabilityStore); err != nil {
 		return err
 	}
 	if len(document.Secrets) > 0 || len(document.RequiredAccessActions) > 0 || len(document.RequiredPlatformAPIs) > 0 {
@@ -319,6 +322,17 @@ func requireManifestCapability(capabilities []string, required string) error {
 		}
 	}
 	return errs.ErrInvalidArgument
+}
+
+func rejectManifestCapabilities(capabilities []string, forbidden ...string) error {
+	for _, capability := range capabilities {
+		for _, item := range forbidden {
+			if capability == item {
+				return errs.ErrInvalidArgument
+			}
+		}
+	}
+	return nil
 }
 
 func requireStringList(items []string, requireNonEmpty bool) error {

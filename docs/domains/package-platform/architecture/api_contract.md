@@ -74,9 +74,9 @@ approvals:
 Manifest дополнительно проверяется по виду пакета:
 
 - `plugin` не должен выдавать себя за `guidance`, `store` или `platform_content` через зарезервированные capability.
-- `guidance` должен иметь capability `guidance` и не должен требовать runtime, секреты, действия доступа или API платформы.
-- `store` должен иметь capability `store`.
-- `platform_content` должен иметь capability `platform_content` и не должен требовать секреты, действия доступа или API платформы.
+- `guidance` должен иметь capability `guidance`, не должен иметь `store` или `platform_content` и не должен требовать runtime, секреты, действия доступа или API платформы.
+- `store` должен иметь capability `store` и не должен иметь `guidance` или `platform_content`.
+- `platform_content` должен иметь capability `platform_content`, не должен иметь `guidance` или `store` и не должен требовать секреты, действия доступа или API платформы.
 
 ## Модель ошибок
 

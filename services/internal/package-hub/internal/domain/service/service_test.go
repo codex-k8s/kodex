@@ -626,6 +626,64 @@ func TestSyncAvailablePackagesRejectsStoreManifestWithoutStoreCapability(t *test
 	}
 }
 
+func TestNormalizePackageManifestRejectsForeignReservedCapabilities(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		slug         string
+		kind         enum.PackageKind
+		capabilities []string
+	}{
+		{
+			name:         "guidance with platform content",
+			slug:         "go-guidelines",
+			kind:         enum.PackageKindGuidance,
+			capabilities: []string{"guidance", "platform_content"},
+		},
+		{
+			name:         "store with guidance",
+			slug:         "package-store",
+			kind:         enum.PackageKindStore,
+			capabilities: []string{"store", "guidance"},
+		},
+		{
+			name:         "platform content with store",
+			slug:         "platform-site",
+			kind:         enum.PackageKindPlatformContent,
+			capabilities: []string{"platform_content", "store"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			manifestPayload := testCatalogManifestPayloadForKind(t, tt.slug, tt.kind, tt.capabilities, nil, nil, nil, false)
+			_, err := normalizePackageManifestPayload(
+				CatalogPackageSnapshot{
+					Slug:             tt.slug,
+					Kind:             tt.kind,
+					CommercialStatus: enum.PackageCommercialStatusFree,
+					TrustStatus:      enum.PackageTrustStatusVerified,
+				},
+				CatalogVersionSnapshot{
+					VersionLabel: "1.0.0",
+					SourceRef: value.SourceRef{
+						Kind: enum.PackageVersionSourceRefKindGitTag,
+						Ref:  "v1.0.0",
+					},
+					ManifestDigest:  testManifestDigest(t, manifestPayload),
+					ManifestPayload: manifestPayload,
+				},
+			)
+			if !errors.Is(err, errs.ErrInvalidArgument) {
+				t.Fatalf("normalizePackageManifestPayload() err = %v, want %v", err, errs.ErrInvalidArgument)
+			}
+		})
+	}
+}
+
 func TestListPackagesRejectsInvalidKind(t *testing.T) {
 	t.Parallel()
 
