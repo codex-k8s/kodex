@@ -498,6 +498,211 @@ func TestSyncAvailablePackagesRejectsUnknownManifestAccessAction(t *testing.T) {
 	}
 }
 
+func TestSyncAvailablePackagesAcceptsGuidanceManifestKindPolicy(t *testing.T) {
+	t.Parallel()
+
+	sourceID := uuid.New()
+	repository := &fakeRepository{
+		packageSource: entity.PackageSource{
+			VersionedBase: entity.VersionedBase{ID: sourceID, Version: 1},
+			Status:        enum.PackageSourceStatusActive,
+		},
+		commandResultErr: errs.ErrNotFound,
+	}
+	service := NewWithConfig(repository, fixedClock{}, newSequenceIDs(8), Config{Authorizer: &recordingAuthorizer{}})
+	manifestPayload := testCatalogManifestPayloadForKind(t, "go-guidelines", enum.PackageKindGuidance, []string{"guidance"}, nil, nil, nil, false)
+
+	_, err := service.SyncAvailablePackages(context.Background(), SyncAvailablePackagesInput{
+		SourceID: sourceID,
+		Snapshot: CatalogSnapshot{Packages: []CatalogPackageSnapshot{{
+			Slug:             "go-guidelines",
+			Kind:             enum.PackageKindGuidance,
+			PublisherRef:     "codex-k8s",
+			DisplayName:      []value.LocalizedText{{Locale: "ru", Text: "Руководство Go"}},
+			Description:      []value.LocalizedText{{Locale: "ru", Text: "Правила разработки backend на Go"}},
+			CommercialStatus: enum.PackageCommercialStatusFree,
+			TrustStatus:      enum.PackageTrustStatusVerified,
+			Status:           enum.PackageStatusAvailable,
+			Versions: []CatalogVersionSnapshot{{
+				VersionLabel: "1.0.0",
+				SourceRef: value.SourceRef{
+					Kind: enum.PackageVersionSourceRefKindGitTag,
+					Ref:  "v1.0.0",
+				},
+				ManifestDigest:     testManifestDigest(t, manifestPayload),
+				ManifestSchema:     1,
+				ManifestPayload:    manifestPayload,
+				VerificationStatus: enum.PackageVerificationStatusUnverified,
+				ReleaseStatus:      enum.PackageReleaseStatusActive,
+			}},
+		}}},
+		Meta: commandMeta(),
+	})
+	if err != nil {
+		t.Fatalf("SyncAvailablePackages(): %v", err)
+	}
+	if repository.syncCatalogCalls != 1 || repository.syncPlan.Items[0].Entry.Kind != enum.PackageKindGuidance {
+		t.Fatalf("sync calls = %d kind = %s, want guidance package synced", repository.syncCatalogCalls, repository.syncPlan.Items[0].Entry.Kind)
+	}
+}
+
+func TestSyncAvailablePackagesRejectsGuidanceManifestWithRuntime(t *testing.T) {
+	t.Parallel()
+
+	sourceID := uuid.New()
+	repository := &fakeRepository{commandResultErr: errs.ErrNotFound}
+	service := NewWithConfig(repository, fixedClock{}, newSequenceIDs(6), Config{Authorizer: &recordingAuthorizer{}})
+	manifestPayload := testCatalogManifestPayloadForKind(t, "go-guidelines", enum.PackageKindGuidance, []string{"guidance"}, nil, nil, nil, true)
+
+	_, err := service.SyncAvailablePackages(context.Background(), SyncAvailablePackagesInput{
+		SourceID: sourceID,
+		Snapshot: CatalogSnapshot{Packages: []CatalogPackageSnapshot{{
+			Slug:             "go-guidelines",
+			Kind:             enum.PackageKindGuidance,
+			DisplayName:      []value.LocalizedText{{Locale: "ru", Text: "Руководство Go"}},
+			CommercialStatus: enum.PackageCommercialStatusFree,
+			TrustStatus:      enum.PackageTrustStatusVerified,
+			Status:           enum.PackageStatusAvailable,
+			Versions: []CatalogVersionSnapshot{{
+				VersionLabel: "1.0.0",
+				SourceRef: value.SourceRef{
+					Kind: enum.PackageVersionSourceRefKindGitTag,
+					Ref:  "v1.0.0",
+				},
+				ManifestDigest:     testManifestDigest(t, manifestPayload),
+				ManifestSchema:     1,
+				ManifestPayload:    manifestPayload,
+				VerificationStatus: enum.PackageVerificationStatusUnverified,
+				ReleaseStatus:      enum.PackageReleaseStatusActive,
+			}},
+		}}},
+		Meta: commandMeta(),
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("SyncAvailablePackages() err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+	if repository.syncCatalogCalls != 0 || repository.getSourceCalls != 0 {
+		t.Fatalf("repository calls = sync:%d getSource:%d, want validation before reads and mutations", repository.syncCatalogCalls, repository.getSourceCalls)
+	}
+}
+
+func TestSyncAvailablePackagesRejectsStoreManifestWithoutStoreCapability(t *testing.T) {
+	t.Parallel()
+
+	sourceID := uuid.New()
+	repository := &fakeRepository{commandResultErr: errs.ErrNotFound}
+	service := NewWithConfig(repository, fixedClock{}, newSequenceIDs(6), Config{Authorizer: &recordingAuthorizer{}})
+	manifestPayload := testCatalogManifestPayloadForKind(t, "package-store", enum.PackageKindStore, []string{"catalog"}, []string{"package.catalog.sync"}, nil, nil, true)
+
+	_, err := service.SyncAvailablePackages(context.Background(), SyncAvailablePackagesInput{
+		SourceID: sourceID,
+		Snapshot: CatalogSnapshot{Packages: []CatalogPackageSnapshot{{
+			Slug:             "package-store",
+			Kind:             enum.PackageKindStore,
+			DisplayName:      []value.LocalizedText{{Locale: "ru", Text: "Магазин пакетов"}},
+			CommercialStatus: enum.PackageCommercialStatusFree,
+			TrustStatus:      enum.PackageTrustStatusVerified,
+			Status:           enum.PackageStatusAvailable,
+			Versions: []CatalogVersionSnapshot{{
+				VersionLabel: "1.0.0",
+				SourceRef: value.SourceRef{
+					Kind: enum.PackageVersionSourceRefKindGitTag,
+					Ref:  "v1.0.0",
+				},
+				ManifestDigest:     testManifestDigest(t, manifestPayload),
+				ManifestSchema:     1,
+				ManifestPayload:    manifestPayload,
+				VerificationStatus: enum.PackageVerificationStatusUnverified,
+				ReleaseStatus:      enum.PackageReleaseStatusActive,
+			}},
+		}}},
+		Meta: commandMeta(),
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("SyncAvailablePackages() err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+	if repository.syncCatalogCalls != 0 || repository.getSourceCalls != 0 {
+		t.Fatalf("repository calls = sync:%d getSource:%d, want validation before reads and mutations", repository.syncCatalogCalls, repository.getSourceCalls)
+	}
+}
+
+func TestNormalizePackageManifestRejectsForeignReservedCapabilities(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		slug         string
+		kind         enum.PackageKind
+		capabilities []string
+	}{
+		{
+			name:         "guidance with platform content",
+			slug:         "go-guidelines",
+			kind:         enum.PackageKindGuidance,
+			capabilities: []string{"guidance", "platform_content"},
+		},
+		{
+			name:         "store with guidance",
+			slug:         "package-store",
+			kind:         enum.PackageKindStore,
+			capabilities: []string{"store", "guidance"},
+		},
+		{
+			name:         "platform content with store",
+			slug:         "platform-site",
+			kind:         enum.PackageKindPlatformContent,
+			capabilities: []string{"platform_content", "store"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			manifestPayload := testCatalogManifestPayloadForKind(t, tt.slug, tt.kind, tt.capabilities, nil, nil, nil, false)
+			_, err := normalizePackageManifestPayload(
+				CatalogPackageSnapshot{
+					Slug:             tt.slug,
+					Kind:             tt.kind,
+					CommercialStatus: enum.PackageCommercialStatusFree,
+					TrustStatus:      enum.PackageTrustStatusVerified,
+				},
+				CatalogVersionSnapshot{
+					VersionLabel: "1.0.0",
+					SourceRef: value.SourceRef{
+						Kind: enum.PackageVersionSourceRefKindGitTag,
+						Ref:  "v1.0.0",
+					},
+					ManifestDigest:  testManifestDigest(t, manifestPayload),
+					ManifestPayload: manifestPayload,
+				},
+			)
+			if !errors.Is(err, errs.ErrInvalidArgument) {
+				t.Fatalf("normalizePackageManifestPayload() err = %v, want %v", err, errs.ErrInvalidArgument)
+			}
+		})
+	}
+}
+
+func TestListPackagesRejectsInvalidKind(t *testing.T) {
+	t.Parallel()
+
+	invalidKind := enum.PackageKind("workflow")
+	authorizer := &recordingAuthorizer{}
+	service := NewWithConfig(&fakeRepository{}, fixedClock{}, fixedIDs{}, Config{Authorizer: authorizer})
+
+	_, err := service.ListPackages(context.Background(), ListPackagesInput{
+		Kind: &invalidKind,
+		Meta: queryMeta(),
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("ListPackages() err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+	if len(authorizer.requests) != 0 {
+		t.Fatalf("authorization requests = %+v, want validation before authorization", authorizer.requests)
+	}
+}
+
 func TestRequestPackageInstallationCreatesRequestedArtifacts(t *testing.T) {
 	t.Parallel()
 
@@ -826,6 +1031,67 @@ func testCatalogManifestPayload() []byte {
 			"verification_status": "unverified"
 		}
 	}`)
+}
+
+func testCatalogManifestPayloadForKind(
+	t *testing.T,
+	slug string,
+	kind enum.PackageKind,
+	capabilities []string,
+	platformAPIs []string,
+	accessActions []string,
+	secrets []value.PackageSecretField,
+	runtimeRequired bool,
+) []byte {
+	t.Helper()
+
+	runtime := packageManifestRuntime{Required: runtimeRequired}
+	if runtimeRequired {
+		runtime.WorkloadKind = "deployment"
+	}
+	runtimePayload, err := json.Marshal(runtime)
+	if err != nil {
+		t.Fatalf("marshal runtime manifest block: %v", err)
+	}
+	document := packageManifestDocument{
+		Identity: &packageManifestIdentity{
+			Slug:      slug,
+			Kind:      kind,
+			Publisher: "codex-k8s",
+			License:   "MIT",
+			Name: []value.LocalizedText{{
+				Locale: "ru",
+				Text:   slug,
+			}},
+			Description: []value.LocalizedText{{
+				Locale: "ru",
+				Text:   "Тестовый manifest",
+			}},
+		},
+		Source: &packageManifestSource{
+			RefKind: enum.PackageVersionSourceRefKindGitTag,
+			Ref:     "v1.0.0",
+			Version: "1.0.0",
+			Digest:  "sha256:source",
+		},
+		Capabilities:          capabilities,
+		RequiredPlatformAPIs:  platformAPIs,
+		RequiredAccessActions: accessActions,
+		Secrets:               secrets,
+		Runtime:               runtimePayload,
+		Pricing: &packageManifestPricing{
+			CommercialStatus: enum.PackageCommercialStatusFree,
+		},
+		Verification: &packageManifestVerification{
+			TrustStatus:        enum.PackageTrustStatusVerified,
+			VerificationStatus: enum.PackageVerificationStatusUnverified,
+		},
+	}
+	payload, err := json.Marshal(document)
+	if err != nil {
+		t.Fatalf("marshal manifest: %v", err)
+	}
+	return payload
 }
 
 func testManifestDigest(t *testing.T, payload []byte) string {

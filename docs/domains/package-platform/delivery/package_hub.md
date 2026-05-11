@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-06
 updated_at: 2026-05-11
-related_issues: [642, 646, 650, 663, 667, 670, 673, 678, 680, 684, 689, 692]
+related_issues: [642, 646, 650, 663, 667, 670, 673, 678, 680, 684, 689, 692, 700]
 related_prs: []
 related_docsets:
   - docs/domains/package-platform/product/requirements.md
@@ -54,7 +54,8 @@ approvals:
 | PKG-5.2 | #689 | Изменение, отключение и снятие установки готовы: `UpdatePackageInstallation`, `DisablePackageInstallation`, `UninstallPackage`, ожидаемая версия и события жизненного цикла. |
 | PKG-5.3a | #692 | Чтение схем секретов версий пакетов готово: снимки схем создаются из manifest при синхронизации каталога, `GetPackageSecretSchema` читает локальную схему с проверкой `package.secret.read`. |
 | PKG-5.3b | не назначено | Сверка статуса заполненности секретов установки должна быть готова: `RefreshPackageInstallationSecretStatus` и связь с контуром секретов после согласования контракта заполненности секретов пакета в `access-manager`. |
-| PKG-6 | не назначено | Специализация плагинов, руководящих пакетов, магазина и пакетов пользовательского контента платформы готова. |
+| PKG-6.1 | #700 | Специализация видов пакетов готова: `plugin`, `guidance`, `store`, `platform_content`, правила manifest по виду и модели чтения через `package_kind`. |
+| PKG-6.2+ | не назначено | Следующие специализированные сценарии руководящих пакетов, магазина и пользовательского контента платформы готовы без runtime-запуска и provider-native синхронизации. |
 | PKG-7 | не назначено | Манифесты deploy, migration job, config, health, metrics и runbook готовы. |
 
 ## Статус операций `PackageHubService`
@@ -124,6 +125,15 @@ approvals:
 | События | готово | Новая схема публикует `package.secret_schema.updated` через outbox вместе с остальными событиями синхронизации каталога. |
 | Чтение схемы | готово | `GetPackageSecretSchema` проверяет `package.secret.read` на ресурс схемы версии пакета и возвращает последнюю локальную схему. |
 | Не входит в срез | запланировано | `RefreshPackageInstallationSecretStatus` требует согласованного контракта `access-manager` для проверки заполненности секретов пакета и остаётся отдельным срезом. |
+
+## Виды пакетов `PKG-6.1`
+
+| Область | Статус | Примечание |
+|---|---|---|
+| Доменная модель | готово | Закрытый enum `PackageKind` уже содержит `plugin`, `guidance`, `store`, `platform_content`; произвольные строковые виды не допускаются. |
+| Проверка manifest | готово | `SyncAvailablePackages` сверяет `CatalogPackageSnapshot.package_kind` с `identity.kind` и применяет правила вида: `guidance` не требует runtime/секреты/API/действия, `store` требует capability `store`, `platform_content` требует capability `platform_content` без секретов/API/действий, `plugin` не использует capability других видов. |
+| Модели чтения | готово | `ListPackages` и `ListPackageInstallations` принимают фильтр `package_kind`; невалидный enum отклоняется до авторизации и чтения БД. |
+| Не входит в срез | запланировано | Runtime-запуск пакетов, получение каталога из Git/store/provider и сверка заполненности секретов остаются в отдельных срезах. |
 
 ## Наблюдаемость `PKG-3.1`
 

@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-06
 updated_at: 2026-05-11
-related_issues: [642, 646, 650, 673, 678, 680, 684, 689, 692]
+related_issues: [642, 646, 650, 673, 678, 680, 684, 689, 692, 700]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -59,6 +59,24 @@ approvals:
 | `SetPackageVerification` | gRPC command | `package.verify` | `CommandMeta.command_id` или `idempotency_key` + ожидаемая ревизия версии пакета | Фиксирует верификацию, отклонение или отзыв версии пакета. |
 
 `SyncAvailablePackages` не ходит во внешний Git/store/provider напрямую. Эту работу выполняет адаптер источника: он получает данные, приводит их к нормализованному контракту снимка и вызывает `package-hub`. Так сервис остаётся владельцем локального каталога и проверки manifest, но не становится Git-клиентом магазина. `manifest_digest` сверяется как `sha256:<hex>` от компактного нормализованного JSON manifest; несовпадение считается невалидным снимком. `required_access_actions` сверяются с общим каталогом системных действий `libs/go/accesscatalog`; неизвестный ключ отклоняется как невалидный manifest.
+
+## Виды пакетов в API
+
+Транспортный `PackageKind` является закрытым enum: `plugin`, `guidance`, `store`, `platform_content`. Произвольные строковые виды не принимаются.
+
+| Контракт | Как используется вид пакета |
+|---|---|
+| `CatalogPackageSnapshot.package_kind` | Внешний адаптер источника передаёт вид пакета вместе с нормализованным manifest. `package-hub` сверяет его с `identity.kind` внутри manifest. |
+| `PackageEntry.package_kind` | Локальная каталоговая запись хранит вид пакета как часть авторитетной модели чтения. |
+| `ListPackages.package_kind` | Фильтр каталога по виду пакета; невалидный enum отклоняется до проверки доступа и чтения БД. |
+| `ListPackageInstallations.package_kind` | Фильтр установок по виду пакета через связь установки с каталоговой записью пакета. |
+
+Manifest дополнительно проверяется по виду пакета:
+
+- `plugin` не должен выдавать себя за `guidance`, `store` или `platform_content` через зарезервированные capability.
+- `guidance` должен иметь capability `guidance`, не должен иметь `store` или `platform_content` и не должен требовать runtime, секреты, действия доступа или API платформы.
+- `store` должен иметь capability `store` и не должен иметь `guidance` или `platform_content`.
+- `platform_content` должен иметь capability `platform_content`, не должен иметь `guidance` или `store` и не должен требовать секреты, действия доступа или API платформы.
 
 ## Модель ошибок
 
