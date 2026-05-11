@@ -1,7 +1,5 @@
 package provider
 
-import "fmt"
-
 var (
 	queryAccountRuntimeStateGet                = mustLoadQuery("account_runtime_state__get")
 	queryAccountRuntimeStateList               = mustLoadQuery("account_runtime_state__list")
@@ -23,6 +21,8 @@ var (
 	queryRelationshipList                      = mustLoadQuery("relationship__list")
 	queryRelationshipDeleteMissingWatermark    = mustLoadQuery("relationship__delete_missing_watermark")
 	queryRelationshipUpsert                    = mustLoadQuery("relationship__upsert")
+	queryProviderArtifactSignalGetByIdentity   = mustLoadQuery("artifact_signal__get_by_identity")
+	queryProviderArtifactSignalInsert          = mustLoadQuery("artifact_signal__insert")
 	queryReconciliationRequestGetByIdentity    = mustLoadQuery("reconciliation_request__get_by_identity")
 	queryReconciliationRequestInsert           = mustLoadQuery("reconciliation_request__insert")
 	querySyncCursorClaim                       = mustLoadQuery("sync_cursor__claim")
@@ -42,19 +42,3 @@ var (
 	queryProviderOperationInsert               = mustLoadQuery("provider_operation__insert")
 	queryProviderOperationList                 = mustLoadQuery("provider_operation__list")
 )
-
-func mustLoadQuery(name string) string {
-	query, err := loadQuery(name)
-	if err != nil {
-		panic(err)
-	}
-	return query
-}
-
-func loadQuery(name string) (string, error) {
-	data, err := SQLFiles.ReadFile("sql/" + name + ".sql")
-	if err != nil {
-		return "", fmt.Errorf("load sql query %s: %w", name, err)
-	}
-	return string(data), nil
-}

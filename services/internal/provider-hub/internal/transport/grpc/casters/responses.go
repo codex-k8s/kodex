@@ -123,6 +123,28 @@ func ListRelationshipsResponse(result providerservice.ListRelationshipsResult) *
 	}
 }
 
+// ProviderArtifactSignalResponse maps accepted signal state to gRPC.
+func ProviderArtifactSignalResponse(result providerservice.ProviderArtifactSignalResult) *providersv1.ProviderArtifactSignalResponse {
+	return &providersv1.ProviderArtifactSignalResponse{
+		SignalId: result.SignalID,
+		Status:   result.Status,
+		Target:   ProviderArtifactTargetToProto(result.Target),
+	}
+}
+
+func ProviderArtifactTargetToProto(target providerservice.ProviderArtifactTarget) *providersv1.ProviderTarget {
+	workItemKind := WorkItemKindToProto(target.WorkItemKind)
+	return &providersv1.ProviderTarget{
+		ProviderSlug:         string(target.ProviderSlug),
+		RepositoryFullName:   optionalStringPtr(target.RepositoryFullName),
+		ProviderRepositoryId: optionalStringPtr(target.ProviderRepositoryID),
+		WorkItemKind:         optionalWorkItemKindPtr(workItemKind),
+		Number:               optionalPositiveInt64Ptr(target.Number),
+		ProviderObjectId:     optionalStringPtr(target.ProviderObjectID),
+		WebUrl:               optionalStringPtr(target.WebURL),
+	}
+}
+
 func SyncCursorToProto(cursor entity.SyncCursor) *providersv1.SyncCursor {
 	return &providersv1.SyncCursor{
 		SyncCursorId:        cursor.ID.String(),

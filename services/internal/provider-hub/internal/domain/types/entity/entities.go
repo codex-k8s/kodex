@@ -140,6 +140,22 @@ type ReconciliationRequest struct {
 	UpdatedAt         time.Time
 }
 
+// ProviderArtifactSignal stores signal-level idempotency before cursor enqueue.
+type ProviderArtifactSignal struct {
+	ID                uuid.UUID
+	IdentityKey       string
+	ProviderSlug      enum.ProviderSlug
+	ExternalAccountID uuid.UUID
+	Source            string
+	ScopeType         enum.SyncCursorScopeType
+	ScopeRef          string
+	ArtifactKinds     []enum.SyncArtifactKind
+	TargetJSON        []byte
+	PayloadJSON       []byte
+	ObservedAt        time.Time
+	CreatedAt         time.Time
+}
+
 // ProviderLimitSnapshot stores one observed provider rate or quota snapshot.
 type ProviderLimitSnapshot struct {
 	ID                uuid.UUID

@@ -265,6 +265,87 @@ func TestRepositoryIntegrationSyncCursors(t *testing.T) {
 	}
 }
 
+func TestRepositoryIntegrationProviderArtifactSignals(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openIntegrationPool(t, ctx)
+	repository := NewRepository(pool)
+	now := time.Date(2026, 5, 11, 14, 0, 0, 0, time.UTC)
+	signal := entity.ProviderArtifactSignal{
+		ID:                uuid.New(),
+		IdentityKey:       "artifact-signal:id:signal-1",
+		ProviderSlug:      enum.ProviderSlugGitHub,
+		ExternalAccountID: uuid.New(),
+		Source:            "slot_agent_after",
+		ScopeType:         enum.SyncCursorScopeWorkItem,
+		ScopeRef:          "codex-k8s/kodex#pull_request:703",
+		ArtifactKinds:     []enum.SyncArtifactKind{enum.SyncArtifactComment, enum.SyncArtifactPullRequest, enum.SyncArtifactRelationship},
+		TargetJSON:        []byte(`{"provider_slug":"github","repository_full_name":"codex-k8s/kodex","work_item_kind":"pull_request","number":703}`),
+		PayloadJSON:       []byte(`{"run_id":"run-1"}`),
+		ObservedAt:        now.Add(-time.Minute),
+		CreatedAt:         now,
+	}
+	request := entity.ReconciliationRequest{
+		ID:                uuid.New(),
+		ProviderSlug:      signal.ProviderSlug,
+		ExternalAccountID: signal.ExternalAccountID,
+		ScopeType:         signal.ScopeType,
+		ScopeRef:          signal.ScopeRef,
+		IdempotencyKey:    signal.IdentityKey,
+		ArtifactKinds:     signal.ArtifactKinds,
+		Priority:          enum.SyncCursorPriorityHot,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+	cursors := []entity.SyncCursor{
+		testSyncCursor(uuid.New(), request, enum.SyncArtifactComment, now),
+		testSyncCursor(uuid.New(), request, enum.SyncArtifactPullRequest, now),
+		testSyncCursor(uuid.New(), request, enum.SyncArtifactRelationship, now),
+	}
+	stored, err := repository.RegisterProviderArtifactSignal(ctx, signal, request, cursors)
+	if err != nil {
+		t.Fatalf("register artifact signal: %v", err)
+	}
+	if len(stored) != len(cursors) || stored[1].ID != cursors[1].ID || stored[1].Priority != enum.SyncCursorPriorityHot {
+		t.Fatalf("stored cursors = %+v, want hot cursors %+v", stored, cursors)
+	}
+
+	replay := signal
+	replay.ID = uuid.New()
+	replay.CreatedAt = now.Add(time.Minute)
+	replayRequest := request
+	replayRequest.ID = uuid.New()
+	replayRequest.CreatedAt = now.Add(time.Minute)
+	replayRequest.UpdatedAt = now.Add(time.Minute)
+	replayCursors := []entity.SyncCursor{
+		testSyncCursor(uuid.New(), replayRequest, enum.SyncArtifactComment, now.Add(time.Minute)),
+		testSyncCursor(uuid.New(), replayRequest, enum.SyncArtifactPullRequest, now.Add(time.Minute)),
+		testSyncCursor(uuid.New(), replayRequest, enum.SyncArtifactRelationship, now.Add(time.Minute)),
+	}
+	replayed, err := repository.RegisterProviderArtifactSignal(ctx, replay, replayRequest, replayCursors)
+	if err != nil {
+		t.Fatalf("replay artifact signal: %v", err)
+	}
+	if len(replayed) != len(cursors) || replayed[1].ID != cursors[1].ID {
+		t.Fatalf("replayed cursors = %+v, want original %+v", replayed, cursors)
+	}
+
+	conflict := replay
+	conflict.ScopeRef = "codex-k8s/kodex#pull_request:704"
+	conflict.TargetJSON = []byte(`{"provider_slug":"github","repository_full_name":"codex-k8s/kodex","work_item_kind":"pull_request","number":704}`)
+	conflictRequest := replayRequest
+	conflictRequest.ScopeRef = conflict.ScopeRef
+	conflictCursors := []entity.SyncCursor{
+		testSyncCursor(uuid.New(), conflictRequest, enum.SyncArtifactComment, now.Add(time.Minute)),
+		testSyncCursor(uuid.New(), conflictRequest, enum.SyncArtifactPullRequest, now.Add(time.Minute)),
+		testSyncCursor(uuid.New(), conflictRequest, enum.SyncArtifactRelationship, now.Add(time.Minute)),
+	}
+	if _, err := repository.RegisterProviderArtifactSignal(ctx, conflict, conflictRequest, conflictCursors); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("conflicting artifact signal err = %v, want %v", err, errs.ErrConflict)
+	}
+}
+
 func testSyncCursor(id uuid.UUID, request entity.ReconciliationRequest, artifactKind enum.SyncArtifactKind, now time.Time) entity.SyncCursor {
 	return entity.SyncCursor{
 		Base: entity.Base{

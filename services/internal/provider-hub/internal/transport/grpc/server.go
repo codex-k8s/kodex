@@ -23,6 +23,7 @@ type providerService interface {
 	ListWorkItemProjections(context.Context, providerservice.ListWorkItemProjectionsInput) (providerservice.ListWorkItemProjectionsResult, error)
 	ListComments(context.Context, providerservice.ListCommentsInput) (providerservice.ListCommentsResult, error)
 	ListRelationships(context.Context, providerservice.ListRelationshipsInput) (providerservice.ListRelationshipsResult, error)
+	RegisterProviderArtifactSignal(context.Context, providerservice.RegisterProviderArtifactSignalInput) (providerservice.ProviderArtifactSignalResult, error)
 	EnqueueReconciliation(context.Context, providerservice.EnqueueReconciliationInput) (providerservice.EnqueueReconciliationResult, error)
 	RunReconciliationBatch(context.Context, providerservice.RunReconciliationBatchInput) (providerservice.RunReconciliationBatchResult, error)
 	GetSyncCursor(context.Context, providerservice.GetSyncCursorInput) (entity.SyncCursor, error)
@@ -96,6 +97,11 @@ func (s *Server) ListComments(ctx context.Context, request *providersv1.ListComm
 // ListRelationships returns normalized provider-native relationships.
 func (s *Server) ListRelationships(ctx context.Context, request *providersv1.ListRelationshipsRequest) (*providersv1.ListRelationshipsResponse, error) {
 	return grpcserver.HandleUnary(ctx, request, grpccasters.ListRelationshipsInput, s.service.ListRelationships, grpccasters.ListRelationshipsResponse)
+}
+
+// RegisterProviderArtifactSignal accepts an internal signal and accelerates reconciliation.
+func (s *Server) RegisterProviderArtifactSignal(ctx context.Context, request *providersv1.RegisterProviderArtifactSignalRequest) (*providersv1.ProviderArtifactSignalResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.RegisterProviderArtifactSignalInput, s.service.RegisterProviderArtifactSignal, grpccasters.ProviderArtifactSignalResponse)
 }
 
 // EnqueueReconciliation schedules reconciliation cursors for one provider scope.

@@ -27,12 +27,12 @@
 | PRV-6.1 | #682 | готово | Идемпотентная очередь сверки, `sync_cursor`, чтение, список и короткая аренда курсора через `RunReconciliationBatch`. |
 | Access bridge | #686 | готово | В `accesscatalog` добавлены provider-действия, `ResolveExternalAccountUsage` возвращает `provider_slug` и ссылку на секрет без значения секрета. |
 | PRV-6.2a | #688 | готово | Курсоры сверки и запрос постановки явно фиксируют выбранный `external_account_id`; повтор с другим аккаунтом конфликтует. |
+| PRV-6.3 | #703 | готово | `RegisterProviderArtifactSignal` принимает внутренний сигнал от `agent-manager`/MCP/slot-агента, сохраняет signal-level идемпотентность и ставит `hot` cursor без чтения секрета и обращения к provider API. |
 
 ## Текущий бэклог
 
 | Срез | Статус | Почему не завершён |
 |---|---|---|
-| PRV-6.3 | можно делать независимо | Ускоряющий сигнал от `agent-manager`/MCP/slot-агента должен ставить hot cursor. Секреты и GitHub API для этого не нужны. |
 | PRV-6.2b | заблокировано | Реальная GitHub batch-сверка требует получить значение секрета после `ResolveExternalAccountUsage`. Сейчас есть только ссылка на секрет; нужен согласованный secret resolver/Vault/Kubernetes Secret клиент. |
 | PRV-7 | заблокировано частично | Provider-операции записи требуют secret resolver и согласованный каталог MCP/agent-manager инструментов. Действия доступа уже есть. |
 | PRV-8 | заблокировано частично | Bootstrap/adoption зависят от проектной политики, repository binding и решения `project-catalog`; запись в провайдера также ждёт secret resolver. |
@@ -64,7 +64,7 @@
 
 ## Блокировки от `package-hub`
 
-Сейчас не блокирует PRV-6.3 и базовые provider-операции.
+Сейчас не блокирует ускоряющие сигналы и базовые provider-операции.
 
 Будущие точки синхронизации:
 - если источник пакета находится в Git/provider, `package-hub` должен хранить пакетную истину и нормализованный снимок, а provider-доступ остаётся за `provider-hub` или отдельным adapter-контуром;
@@ -72,7 +72,7 @@
 
 ## Блокировки от `runtime-manager`
 
-Сейчас не блокирует provider projections, webhook, очередь сверки и PRV-6.3.
+Сейчас не блокирует provider projections, webhook, очередь сверки и ускоряющие сигналы.
 
 Требует решения позже:
 - если batch-сверка будет исполняться как платформенная job, нужен контракт постановки и claim job в `runtime-manager`;
@@ -83,8 +83,8 @@
 
 - `project-catalog` зависит от `provider-hub` по provider-native refs, webhook-фактам и связям, но проектная привязка остаётся у `project-catalog`.
 - `package-hub` зависит от `provider-hub`, когда пакетный источник является Git/provider-native источником или когда магазин/пакет обновляется через provider-native PR/Issue.
-- `agent-manager` и `platform-mcp-server` будут зависеть от `provider-hub` по provider-инструментам записи и ускоряющим сигналам.
+- `agent-manager` и `platform-mcp-server` могут использовать ускоряющие сигналы `provider-hub`; provider-инструменты записи остаются будущей зависимостью.
 
 ## Рекомендуемый следующий шаг
 
-Идти в PRV-6.3: реализовать `RegisterProviderArtifactSignal` как независимый срез, который ставит hot cursor по provider target. Полную GitHub batch-сверку PRV-6.2b не начинать до появления secret resolver/Vault/Kubernetes Secret клиента.
+Не начинать PRV-6.2b до появления secret resolver/Vault/Kubernetes Secret клиента. Следующий независимый срез для provider-hub стоит выбрать из операций без provider API или переключиться на согласование контракта секретов.

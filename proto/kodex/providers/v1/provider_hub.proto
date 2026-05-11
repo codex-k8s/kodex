@@ -724,6 +724,8 @@ message RegisterProviderArtifactSignalRequest {
   optional string payload_json = 5;
   // meta carries idempotency and audit context.
   CommandMeta meta = 6;
+  // external_account_id is the account chosen by caller policy for the accelerated reconciliation scope.
+  string external_account_id = 7;
 }
 
 // ProviderArtifactSignalResponse returns accepted signal state.

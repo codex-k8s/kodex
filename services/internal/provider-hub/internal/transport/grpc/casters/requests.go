@@ -216,6 +216,47 @@ func ListRelationshipsInput(request *providersv1.ListRelationshipsRequest) (prov
 	}, nil
 }
 
+// RegisterProviderArtifactSignalInput maps an accelerating signal to the domain command input.
+func RegisterProviderArtifactSignalInput(request *providersv1.RegisterProviderArtifactSignalRequest) (providerservice.RegisterProviderArtifactSignalInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return providerservice.RegisterProviderArtifactSignalInput{}, err
+	}
+	observedAt, err := requiredTime(request.GetObservedAt())
+	if err != nil {
+		return providerservice.RegisterProviderArtifactSignalInput{}, err
+	}
+	externalAccountID, err := requiredUUID(request.GetExternalAccountId())
+	if err != nil {
+		return providerservice.RegisterProviderArtifactSignalInput{}, err
+	}
+	target := request.GetTarget()
+	if target == nil {
+		return providerservice.RegisterProviderArtifactSignalInput{}, errs.ErrInvalidArgument
+	}
+	workItemKind, err := workItemKindFromProto(target.GetWorkItemKind())
+	if err != nil {
+		return providerservice.RegisterProviderArtifactSignalInput{}, err
+	}
+	return providerservice.RegisterProviderArtifactSignalInput{
+		SignalID:          strings.TrimSpace(request.GetSignalId()),
+		ExternalAccountID: externalAccountID,
+		Target: providerservice.ProviderArtifactTarget{
+			ProviderSlug:         providerSlug(target.GetProviderSlug()),
+			RepositoryFullName:   strings.TrimSpace(target.GetRepositoryFullName()),
+			ProviderRepositoryID: strings.TrimSpace(target.GetProviderRepositoryId()),
+			WorkItemKind:         workItemKind,
+			Number:               target.GetNumber(),
+			ProviderObjectID:     strings.TrimSpace(target.GetProviderObjectId()),
+			WebURL:               strings.TrimSpace(target.GetWebUrl()),
+		},
+		Source:      strings.TrimSpace(request.GetSource()),
+		ObservedAt:  observedAt,
+		PayloadJSON: []byte(strings.TrimSpace(request.GetPayloadJson())),
+		Meta:        meta,
+	}, nil
+}
+
 // EnqueueReconciliationInput maps a gRPC request to the domain command input.
 func EnqueueReconciliationInput(request *providersv1.EnqueueReconciliationRequest) (providerservice.EnqueueReconciliationInput, error) {
 	meta, err := CommandMetaFromProto(request.GetMeta())

@@ -159,6 +159,20 @@ func optionalInt64Ptr(value *int64) *int64 {
 	return value
 }
 
+func optionalPositiveInt64Ptr(value int64) *int64 {
+	if value <= 0 {
+		return nil
+	}
+	return &value
+}
+
+func optionalWorkItemKindPtr(kind providersv1.WorkItemKind) *providersv1.WorkItemKind {
+	if kind == providersv1.WorkItemKind_WORK_ITEM_KIND_UNSPECIFIED {
+		return nil
+	}
+	return &kind
+}
+
 func cleanText(text string) string {
 	return strings.TrimSpace(text)
 }

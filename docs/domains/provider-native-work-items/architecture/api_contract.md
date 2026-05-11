@@ -60,13 +60,27 @@ approvals:
 
 | Операция | Назначение | Вызывает | Идемпотентность |
 |---|---|---|---|
-| `RegisterProviderArtifactSignal` | Ускоряющий сигнал от slot-агента или agent-manager. | MCP, `agent-manager` | По signal id или provider ref + окно времени. |
+| `RegisterProviderArtifactSignal` | Ускоряющий сигнал от slot-агента или agent-manager. | MCP, `agent-manager` | По signal id, ключу идемпотентности команды или provider ref + окно времени. |
 | `EnqueueReconciliation` | Поставить область в очередь сверки. | Админский контур, сервисы-владельцы | По `provider_slug + scope_type + scope_ref + idempotency_key`; `idempotency_key` и `external_account_id` обязательны. |
 | `RunReconciliationBatch` | Выполнить пачку сверки. | `worker` по поручению домена | Lease на `SyncCursor`; `max_items` должен быть положительным и не выше сервисного лимита; внешний аккаунт берётся из курсора и подтверждается через `access-manager` перед API провайдера. |
 | `GetSyncCursor` | Прочитать состояние курсора. | Операторский контур | Read-only. |
 | `ListSyncCursors` | Список курсоров и drift status. | Операторский контур | Read-only. |
 
 Ручная пользовательская кнопка синхронизации не является нормальным UX. Допустима только админская постановка reconciliation job в очередь.
+
+`RegisterProviderArtifactSignal` принимает `external_account_id`, выбранный политикой вызывающего сценария. `provider-hub` не выбирает аккаунт неявно, не получает значение секрета и не ходит во внешний API провайдера. Сигнал только создаёт или поднимает до `hot` курсоры сверки для переданного `ProviderTarget`.
+
+Поддерживаемые формы `ProviderTarget`:
+
+- `repository_full_name + work_item_kind + number` — точный `Issue`, `PR` или `MR`;
+- `repository_full_name + number` без `work_item_kind` — рабочий артефакт неизвестного типа, который нужно быстро досверить;
+- `provider_object_id` без `work_item_kind` — рабочий артефакт по стабильному id провайдера;
+- `web_url` без `work_item_kind` — рабочий артефакт по безопасной ссылке провайдера;
+- `repository_full_name` или `provider_repository_id` без полей рабочего артефакта — repository scope.
+
+Если тип рабочего артефакта известен, ставятся курсоры основного артефакта, комментариев и связей. Если тип неизвестен, ставятся hot cursors для `issue`, `pull_request`, `merge_request`, комментариев и связей; обработчик сверки сам определяет фактический тип. Repository target создаёт только курсор репозитория.
+
+Идемпотентность сигнала хранится отдельно от очереди сверки. Явный `signal_id`, `meta.idempotency_key` и `meta.command_id` являются signal-level ключами: повтор с тем же ключом и тем же `target`, `external_account_id`, `source`, payload и временем наблюдения возвращает уже принятую запись, а повтор с другой областью считается конфликтом. Сохранение signal-level следа и постановка курсоров выполняются одной транзакцией, поэтому принятый сигнал не может остаться без соответствующего `ReconciliationRequest` и `SyncCursor`. Резервный ключ по provider ref и минутному окну времени остаётся target-scoped и нужен только когда вызывающий контур не передал явный ключ.
 
 ### Операции провайдера
 

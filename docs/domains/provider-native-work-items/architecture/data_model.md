@@ -201,6 +201,27 @@ approvals:
 | `lease_until` | timestamptz | yes | indexed | Конец аренды. |
 | `version` | bigint | no | monotonic | Версия курсора. |
 
+### `ProviderArtifactSignal`
+
+Назначение: идемпотентный след ускоряющего сигнала и атомарной постановки курсоров сверки.
+
+Сигнал сохраняется отдельно от `ReconciliationRequest`, потому что явный `signal_id`, ключ идемпотентности команды и `command_id` должны быть signal-level ключами, а не частью естественного ключа курсора. След сигнала, `ReconciliationRequest` и `SyncCursor` фиксируются одной транзакцией; если транзакция не завершилась, не остаётся принятого сигнала без курсоров. Повтор с тем же ключом и тем же содержимым возвращает уже принятую запись и повторно проходит тот же атомарный путь постановки курсоров. Повтор с тем же ключом, но другим `external_account_id`, `target`, `source`, payload, временем наблюдения, scope или набором артефактов считается конфликтом.
+
+| Поле | Тип | Nullable | Ограничения | Примечание |
+|---|---|---:|---|---|
+| `id` | UUID | no | primary key | Идентификатор принятого сигнала. |
+| `identity_key` | text | no | unique | Signal-level ключ идемпотентности. |
+| `provider_slug` | text | no | indexed | Поставщик. |
+| `external_account_id` | UUID | no | indexed | Внешний аккаунт из `access-manager`, выбранный вызывающим контуром. |
+| `source` | text | no | indexed | Источник сигнала: `agent_manager`, `platform_mcp`, `slot_agent_after` и подобные. |
+| `scope_type` | text | no | indexed | `work_item` или `repository` для текущего среза. |
+| `scope_ref` | text | no | indexed | Нормализованная область сверки. |
+| `artifact_kinds_json` | jsonb | no | array | Набор курсоров, которые нужно ускорить. |
+| `target_json` | jsonb | no | object | Канонический снимок нормализованного `ProviderTarget`. |
+| `payload_json` | jsonb | no | object | Безопасный дополнительный payload сигнала. |
+| `observed_at` | timestamptz | no | indexed | Когда источник увидел изменение у провайдера. |
+| `created_at` | timestamptz | no |  | Когда сигнал принят `provider-hub`. |
+
 ### `ReconciliationRequest`
 
 Назначение: идемпотентный след команды постановки области в очередь сверки.

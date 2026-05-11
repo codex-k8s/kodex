@@ -18,13 +18,39 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func TestServerEmbedsGeneratedUnimplementedContract(t *testing.T) {
+func TestRegisterProviderArtifactSignalMapsRequestAndResponse(t *testing.T) {
 	t.Parallel()
 
-	server := NewServer(fakeService{})
-	_, err := server.RegisterProviderArtifactSignal(context.Background(), &providersv1.RegisterProviderArtifactSignalRequest{})
-	if status.Code(err) != codes.Unimplemented {
-		t.Fatalf("RegisterProviderArtifactSignal() code = %s, want unimplemented", status.Code(err))
+	commandID := uuid.NewString()
+	externalAccountID := uuid.NewString()
+	signalID := "slot-agent-signal-1"
+	number := int64(688)
+	kind := providersv1.WorkItemKind_WORK_ITEM_KIND_PULL_REQUEST
+	observedAt := time.Date(2026, 5, 11, 9, 0, 0, 0, time.UTC)
+	response, err := NewServer(fakeService{}).RegisterProviderArtifactSignal(context.Background(), &providersv1.RegisterProviderArtifactSignalRequest{
+		SignalId:          &signalID,
+		ExternalAccountId: externalAccountID,
+		Target: &providersv1.ProviderTarget{
+			ProviderSlug:       "github",
+			RepositoryFullName: ptrString("codex-k8s/kodex"),
+			WorkItemKind:       &kind,
+			Number:             &number,
+		},
+		Source:     "slot_agent_after",
+		ObservedAt: observedAt.Format(time.RFC3339Nano),
+		Meta:       &providersv1.CommandMeta{CommandId: &commandID, RequestId: "req-1"},
+	})
+	if err != nil {
+		t.Fatalf("RegisterProviderArtifactSignal(): %v", err)
+	}
+	if response.GetSignalId() != signalID || response.GetStatus() != "accepted" {
+		t.Fatalf("signal response = %+v, want accepted signal", response)
+	}
+	if response.GetTarget().GetProviderSlug() != "github" ||
+		response.GetTarget().GetRepositoryFullName() != "codex-k8s/kodex" ||
+		response.GetTarget().GetWorkItemKind() != providersv1.WorkItemKind_WORK_ITEM_KIND_PULL_REQUEST ||
+		response.GetTarget().GetNumber() != number {
+		t.Fatalf("target = %+v, want PR target", response.GetTarget())
 	}
 }
 
@@ -271,6 +297,14 @@ func (fakeService) ListRelationships(context.Context, providerservice.ListRelati
 	}, nil
 }
 
+func (fakeService) RegisterProviderArtifactSignal(_ context.Context, input providerservice.RegisterProviderArtifactSignalInput) (providerservice.ProviderArtifactSignalResult, error) {
+	return providerservice.ProviderArtifactSignalResult{
+		SignalID: input.SignalID,
+		Status:   "accepted",
+		Target:   input.Target,
+	}, nil
+}
+
 func (fakeService) EnqueueReconciliation(_ context.Context, input providerservice.EnqueueReconciliationInput) (providerservice.EnqueueReconciliationResult, error) {
 	now := time.Date(2026, 5, 7, 12, 0, 0, 0, time.UTC)
 	cursors := make([]entity.SyncCursor, 0, len(input.ArtifactKinds))
@@ -388,4 +422,8 @@ func (fakeService) ListProviderLimitSnapshots(context.Context, providerservice.L
 
 func (fakeService) ListProviderOperations(context.Context, providerservice.ListProviderOperationsInput) (providerservice.ListProviderOperationsResult, error) {
 	return providerservice.ListProviderOperationsResult{Page: query.PageResult{}}, nil
+}
+
+func ptrString(value string) *string {
+	return &value
 }

@@ -306,24 +306,7 @@ func (s *Service) EnqueueReconciliation(ctx context.Context, input EnqueueReconc
 		CreatedAt:         now,
 		UpdatedAt:         now,
 	}
-	cursors := make([]entity.SyncCursor, 0, len(artifactKinds))
-	for _, artifactKind := range artifactKinds {
-		cursors = append(cursors, entity.SyncCursor{
-			Base: entity.Base{
-				ID:        s.ids.New(),
-				Version:   1,
-				CreatedAt: now,
-				UpdatedAt: now,
-			},
-			ProviderSlug:        providerSlug,
-			ExternalAccountID:   input.ExternalAccountID,
-			ScopeType:           input.ScopeType,
-			ScopeRef:            scopeRef,
-			ArtifactKind:        artifactKind,
-			Priority:            input.Priority,
-			RateBudgetStateJSON: []byte(`{}`),
-		})
-	}
+	cursors := s.buildSyncCursors(providerSlug, input.ExternalAccountID, input.ScopeType, scopeRef, artifactKinds, input.Priority, now)
 	stored, err := s.repository.EnqueueSyncCursors(ctx, request, cursors)
 	if err != nil {
 		return EnqueueReconciliationResult{}, err

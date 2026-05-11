@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"time"
 
@@ -163,38 +164,33 @@ func (r *Repository) ListRelationships(ctx context.Context, filter query.Relatio
 	return queryPage(ctx, r.db, operationListRelationships, queryRelationshipList, relationshipFilterArgs(filter), scanRelationship)
 }
 
+// RegisterProviderArtifactSignal records signal identity and enqueues cursors atomically.
+func (r *Repository) RegisterProviderArtifactSignal(ctx context.Context, signal entity.ProviderArtifactSignal, request entity.ReconciliationRequest, cursors []entity.SyncCursor) ([]entity.SyncCursor, error) {
+	var stored []entity.SyncCursor
+	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
+		if _, err := storeProviderArtifactSignal(ctx, tx, operationRegisterProviderArtifactSignal, signal); err != nil {
+			return err
+		}
+		enqueued, err := enqueueSyncCursors(ctx, tx, operationRegisterProviderArtifactSignal, request, cursors)
+		if err != nil {
+			return err
+		}
+		stored = enqueued
+		return nil
+	})
+	if err != nil {
+		return nil, wrapError(operationRegisterProviderArtifactSignal, err)
+	}
+	return stored, nil
+}
+
 // EnqueueSyncCursors records one idempotent enqueue request and creates all requested cursors atomically.
 func (r *Repository) EnqueueSyncCursors(ctx context.Context, request entity.ReconciliationRequest, cursors []entity.SyncCursor) ([]entity.SyncCursor, error) {
 	var stored []entity.SyncCursor
 	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
-		inserted, err := queryOne(ctx, tx, operationEnqueueSyncCursors, queryReconciliationRequestInsert, reconciliationRequestArgs(request), scanReconciliationRequest)
-		if errors.Is(err, errs.ErrNotFound) {
-			replayed, replayErr := queryOne(ctx, tx, operationEnqueueSyncCursors, queryReconciliationRequestGetByIdentity, syncCursorRequestLookupArgs(request), scanReconciliationRequest)
-			if replayErr != nil {
-				return replayErr
-			}
-			if !sameReconciliationRequest(request, replayed) {
-				return errs.ErrConflict
-			}
-			existing, _, listErr := queryPage(ctx, tx, operationEnqueueSyncCursors, querySyncCursorListForRequest, allRowsArgs(syncCursorRequestLookupArgs(request), len(request.ArtifactKinds)), scanSyncCursor)
-			if listErr == nil && len(existing) != len(request.ArtifactKinds) {
-				return errs.ErrConflict
-			}
-			stored = existing
-			return listErr
-		}
-		if err != nil {
-			return err
-		}
-		if !sameReconciliationRequest(request, inserted) {
-			return errs.ErrConflict
-		}
-		upserted, _, upsertErr := queryPage(ctx, tx, operationEnqueueSyncCursors, querySyncCursorUpsertMany, allRowsArgs(syncCursorsBatchArgs(cursors), len(cursors)), scanSyncCursor)
-		if upsertErr == nil && len(upserted) != len(cursors) {
-			return errs.ErrConflict
-		}
-		stored = upserted
-		return upsertErr
+		var err error
+		stored, err = enqueueSyncCursors(ctx, tx, operationEnqueueSyncCursors, request, cursors)
+		return err
 	})
 	if err != nil {
 		return nil, wrapError(operationEnqueueSyncCursors, err)
@@ -334,6 +330,7 @@ const (
 	operationListWorkItemProjections          = "domain.Repository.ListWorkItemProjections"
 	operationListComments                     = "domain.Repository.ListComments"
 	operationListRelationships                = "domain.Repository.ListRelationships"
+	operationRegisterProviderArtifactSignal   = "domain.Repository.RegisterProviderArtifactSignal"
 	operationEnqueueSyncCursors               = "domain.Repository.EnqueueSyncCursors"
 	operationGetSyncCursor                    = "domain.Repository.GetSyncCursor"
 	operationListSyncCursors                  = "domain.Repository.ListSyncCursors"
@@ -396,6 +393,52 @@ func insertOutboxEvents(ctx context.Context, db execer, operation string, events
 	return nil
 }
 
+func storeProviderArtifactSignal(ctx context.Context, db queryer, operation string, signal entity.ProviderArtifactSignal) (entity.ProviderArtifactSignal, error) {
+	stored, err := queryOne(ctx, db, operation, queryProviderArtifactSignalInsert, providerArtifactSignalArgs(signal), scanProviderArtifactSignal)
+	if errors.Is(err, errs.ErrNotFound) {
+		stored, err = queryOne(ctx, db, operation, queryProviderArtifactSignalGetByIdentity, providerArtifactSignalIdentityArgs(signal), scanProviderArtifactSignal)
+		if err == nil && !sameProviderArtifactSignal(signal, stored) {
+			err = errs.ErrConflict
+		}
+	}
+	if err != nil {
+		return entity.ProviderArtifactSignal{}, err
+	}
+	if !sameProviderArtifactSignal(signal, stored) {
+		return entity.ProviderArtifactSignal{}, errs.ErrConflict
+	}
+	return stored, nil
+}
+
+func enqueueSyncCursors(ctx context.Context, db queryer, operation string, request entity.ReconciliationRequest, cursors []entity.SyncCursor) ([]entity.SyncCursor, error) {
+	inserted, err := queryOne(ctx, db, operation, queryReconciliationRequestInsert, reconciliationRequestArgs(request), scanReconciliationRequest)
+	if errors.Is(err, errs.ErrNotFound) {
+		replayed, replayErr := queryOne(ctx, db, operation, queryReconciliationRequestGetByIdentity, syncCursorRequestLookupArgs(request), scanReconciliationRequest)
+		if replayErr != nil {
+			return nil, replayErr
+		}
+		if !sameReconciliationRequest(request, replayed) {
+			return nil, errs.ErrConflict
+		}
+		existing, _, listErr := queryPage(ctx, db, operation, querySyncCursorListForRequest, allRowsArgs(syncCursorRequestLookupArgs(request), len(request.ArtifactKinds)), scanSyncCursor)
+		if listErr == nil && len(existing) != len(request.ArtifactKinds) {
+			return nil, errs.ErrConflict
+		}
+		return existing, listErr
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !sameReconciliationRequest(request, inserted) {
+		return nil, errs.ErrConflict
+	}
+	upserted, _, upsertErr := queryPage(ctx, db, operation, querySyncCursorUpsertMany, allRowsArgs(syncCursorsBatchArgs(cursors), len(cursors)), scanSyncCursor)
+	if upsertErr == nil && len(upserted) != len(cursors) {
+		return nil, errs.ErrConflict
+	}
+	return upserted, upsertErr
+}
+
 func sameReconciliationRequest(expected entity.ReconciliationRequest, actual entity.ReconciliationRequest) bool {
 	return expected.ProviderSlug == actual.ProviderSlug &&
 		expected.ExternalAccountID == actual.ExternalAccountID &&
@@ -404,6 +447,19 @@ func sameReconciliationRequest(expected entity.ReconciliationRequest, actual ent
 		expected.IdempotencyKey == actual.IdempotencyKey &&
 		expected.Priority == actual.Priority &&
 		slices.Equal(expected.ArtifactKinds, actual.ArtifactKinds)
+}
+
+func sameProviderArtifactSignal(expected entity.ProviderArtifactSignal, actual entity.ProviderArtifactSignal) bool {
+	return expected.IdentityKey == actual.IdentityKey &&
+		expected.ProviderSlug == actual.ProviderSlug &&
+		expected.ExternalAccountID == actual.ExternalAccountID &&
+		expected.Source == actual.Source &&
+		expected.ScopeType == actual.ScopeType &&
+		expected.ScopeRef == actual.ScopeRef &&
+		expected.ObservedAt.Equal(actual.ObservedAt) &&
+		slices.Equal(expected.ArtifactKinds, actual.ArtifactKinds) &&
+		sameJSON(expected.TargetJSON, actual.TargetJSON) &&
+		sameJSON(expected.PayloadJSON, actual.PayloadJSON)
 }
 
 type projectionUpdater interface {
@@ -588,6 +644,15 @@ func sameWebhookEvent(left entity.WebhookEvent, right entity.WebhookEvent) bool 
 		left.EventName == right.EventName &&
 		left.RepositoryProviderID == right.RepositoryProviderID &&
 		bytes.Equal(compactJSON(left.PayloadJSON), compactJSON(right.PayloadJSON))
+}
+
+func sameJSON(left []byte, right []byte) bool {
+	var leftValue any
+	var rightValue any
+	if json.Unmarshal(left, &leftValue) != nil || json.Unmarshal(right, &rightValue) != nil {
+		return bytes.Equal(compactJSON(left), compactJSON(right))
+	}
+	return reflect.DeepEqual(leftValue, rightValue)
 }
 
 func compactJSON(raw []byte) []byte {
