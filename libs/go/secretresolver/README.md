@@ -7,7 +7,8 @@
 - `access-manager` остаётся владельцем внешних аккаунтов, правил доступа и ссылок на секреты.
 - Доменные сервисы сначала получают разрешение и `secret_store_type + secret_store_ref` через `access-manager`.
 - `secretresolver` получает значение по этой ссылке только в памяти процесса и только на время операции.
-- Значение секрета не сериализуется в JSON/text, не печатается через `fmt` и не должно попадать в БД, события, audit payload, traces, logs или errors.
+- Значение секрета не сериализуется в JSON/text, не печатается через `fmt` и не должно попадать в БД, события, тело аудита, трассировку, логи или ошибки.
+- Вызывающий код обязан завершать время жизни значения через `defer value.Clear()` сразу после успешного `Resolve`.
 
 ## Контракты
 
@@ -15,6 +16,19 @@
 - `Checker.Check` проверяет наличие секрета без возврата значения.
 - `Mux` выбирает backend по `SecretRef.StoreType`.
 - `MountedKubernetesBackend` является минимальным MVP backend для Kubernetes Secret, смонтированных в файловую систему.
+
+Пример использования:
+
+```go
+value, err := resolver.Resolve(ctx, ref)
+if err != nil {
+	return err
+}
+defer value.Clear()
+
+token := value.Bytes()
+defer clear(token)
+```
 
 ## Kubernetes mounted backend
 

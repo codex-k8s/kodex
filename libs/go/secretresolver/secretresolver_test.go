@@ -45,6 +45,25 @@ func TestSecretValueRedactsAndBlocksSerialization(t *testing.T) {
 	}
 }
 
+func TestSecretValueClearZeroesInternalBuffer(t *testing.T) {
+	value := newSecretValueOwned([]byte("token-to-clear"))
+	alias := value.raw
+
+	value.Clear()
+
+	if value.Len() != 0 {
+		t.Fatalf("Len() = %d, want 0 after Clear", value.Len())
+	}
+	if len(value.Bytes()) != 0 {
+		t.Fatalf("Bytes() returned data after Clear")
+	}
+	for i, b := range alias {
+		if b != 0 {
+			t.Fatalf("alias[%d] = %d, want zero after Clear", i, b)
+		}
+	}
+}
+
 func TestMuxRoutesSecretOperations(t *testing.T) {
 	backend := &fakeBackend{value: NewSecretValue([]byte("token")), status: SecretStatus{Present: true, Version: "v1"}}
 	resolver, err := NewMux(map[string]Backend{StoreTypeKubernetesSecret: backend})

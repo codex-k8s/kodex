@@ -12,9 +12,22 @@ func NewSecretValue(raw []byte) SecretValue {
 	return SecretValue{raw: append([]byte(nil), raw...)}
 }
 
+func newSecretValueOwned(raw []byte) SecretValue {
+	return SecretValue{raw: raw}
+}
+
 // Bytes returns a copy of the secret bytes for one in-memory operation.
 func (v SecretValue) Bytes() []byte {
 	return append([]byte(nil), v.raw...)
+}
+
+// Clear zeroes the internal buffer and releases it from the value.
+func (v *SecretValue) Clear() {
+	if v == nil {
+		return
+	}
+	clearBytes(v.raw)
+	v.raw = nil
 }
 
 // Len returns the byte length without exposing the value.
@@ -40,4 +53,10 @@ func (v SecretValue) MarshalJSON() ([]byte, error) {
 // MarshalText blocks accidental text serialization.
 func (v SecretValue) MarshalText() ([]byte, error) {
 	return nil, ErrSecretSerialization
+}
+
+func clearBytes(raw []byte) {
+	for i := range raw {
+		raw[i] = 0
+	}
 }

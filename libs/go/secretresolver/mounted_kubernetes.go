@@ -63,15 +63,18 @@ func (b *MountedKubernetesBackend) Resolve(ctx context.Context, ref SecretRef) (
 	defer func() { _ = file.Close() }()
 	raw, err := io.ReadAll(io.LimitReader(file, b.maxSecretBytes+1))
 	if err != nil {
+		clearBytes(raw)
 		return SecretValue{}, fmt.Errorf("%w: mounted Kubernetes Secret read failed", ErrSecretUnavailable)
 	}
 	if int64(len(raw)) > b.maxSecretBytes {
+		clearBytes(raw)
 		return SecretValue{}, fmt.Errorf("%w: mounted Kubernetes Secret exceeds max size", ErrSecretUnavailable)
 	}
 	if err := ctx.Err(); err != nil {
+		clearBytes(raw)
 		return SecretValue{}, err
 	}
-	return NewSecretValue(raw), nil
+	return newSecretValueOwned(raw), nil
 }
 
 // Check verifies file presence without reading the secret value.
