@@ -46,6 +46,7 @@ approvals:
 | `GetFleetScope` | Прочитать scope. | `runtime-manager`, операторский контур | Только чтение. |
 | `ListFleetScopes` | Получить список по типу, владельцу и статусу. | Операторский контур | Только чтение. |
 | `DisableFleetScope` | Запретить новые размещения в scope. | Операторский контур | `command_id + expected_version`. |
+| `EnableFleetScope` | Вернуть scope в перечень доступных для новых размещений после обслуживания. | Операторский контур | `command_id + expected_version`. |
 
 ### Servers
 
@@ -56,6 +57,7 @@ approvals:
 | `GetServer` | Прочитать сервер. | Операторский контур | Только чтение. |
 | `ListServers` | Список серверов по статусу, региону и классу. | Операторский контур | Только чтение. |
 | `DisableServer` | Запретить использование сервера для новых размещений. | Операторский контур | `command_id + expected_version`. |
+| `EnableServer` | Вернуть сервер в перечень доступных для новых размещений после обслуживания. | Операторский контур | `command_id + expected_version`. |
 
 ### Kubernetes clusters
 
@@ -66,6 +68,7 @@ approvals:
 | `GetKubernetesCluster` | Прочитать кластер. | `runtime-manager`, операторский контур | Только чтение. |
 | `ListKubernetesClusters` | Список кластеров по scope, статусу и health. | Операторский контур | Только чтение. |
 | `DisableKubernetesCluster` | Запретить новые размещения в кластер. | Операторский контур | `command_id + expected_version`. |
+| `EnableKubernetesCluster` | Вернуть кластер в перечень доступных для новых размещений после обслуживания. | Операторский контур | `command_id + expected_version`. |
 
 ### Связность и health
 
@@ -90,9 +93,9 @@ approvals:
 
 | Область | Ключи |
 |---|---|
-| Fleet scope | `fleet.scope.create`, `fleet.scope.update`, `fleet.scope.disable`, `fleet.scope.read`, `fleet.scope.list` |
-| Server | `fleet.server.register`, `fleet.server.update`, `fleet.server.disable`, `fleet.server.read`, `fleet.server.list` |
-| Kubernetes cluster | `fleet.cluster.register`, `fleet.cluster.update`, `fleet.cluster.disable`, `fleet.cluster.read`, `fleet.cluster.list` |
+| Fleet scope | `fleet.scope.create`, `fleet.scope.update`, `fleet.scope.disable`, `fleet.scope.enable`, `fleet.scope.read`, `fleet.scope.list` |
+| Server | `fleet.server.register`, `fleet.server.update`, `fleet.server.disable`, `fleet.server.enable`, `fleet.server.read`, `fleet.server.list` |
+| Kubernetes cluster | `fleet.cluster.register`, `fleet.cluster.update`, `fleet.cluster.disable`, `fleet.cluster.enable`, `fleet.cluster.read`, `fleet.cluster.list` |
 | Health | `fleet.health.check.run`, `fleet.health.read` |
 | Placement | `fleet.placement_rule.put`, `fleet.placement_rule.read`, `fleet.placement_rule.list`, `fleet.placement.resolve`, `fleet.placement_decision.read`, `fleet.placement_decision.list` |
 
@@ -136,12 +139,16 @@ approvals:
 |---|---|
 | `fleet.scope.created` | Создан fleet scope. |
 | `fleet.scope.updated` | Обновлён fleet scope. |
+| `fleet.scope.disabled` | Scope отключён для новых размещений. |
+| `fleet.scope.enabled` | Scope снова доступен для новых размещений. |
 | `fleet.server.created` | Зарегистрирован сервер. |
 | `fleet.server.updated` | Обновлён сервер. |
 | `fleet.server.disabled` | Сервер отключён для новых размещений. |
+| `fleet.server.enabled` | Сервер снова доступен для новых размещений. |
 | `fleet.cluster.created` | Зарегистрирован Kubernetes-кластер. |
 | `fleet.cluster.updated` | Обновлён Kubernetes-кластер. |
 | `fleet.cluster.disabled` | Кластер отключён для новых размещений. |
+| `fleet.cluster.enabled` | Кластер снова доступен для новых размещений. |
 | `fleet.health.checked` | Health check завершён. |
 | `fleet.health.degraded` | Health перешёл в degraded/unhealthy. |
 | `fleet.placement.resolved` | Placement успешно разрешён. |

@@ -2342,6 +2342,61 @@ func (x *DisableFleetScopeRequest) GetMeta() *CommandMeta {
 	return nil
 }
 
+// EnableFleetScopeRequest allows new placements in a disabled scope.
+type EnableFleetScopeRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// fleet_scope_id identifies the scope to enable.
+	FleetScopeId string `protobuf:"bytes,1,opt,name=fleet_scope_id,json=fleetScopeId,proto3" json:"fleet_scope_id,omitempty"`
+	// meta carries expected_version, idempotency, actor, reason and audit context.
+	Meta          *CommandMeta `protobuf:"bytes,2,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EnableFleetScopeRequest) Reset() {
+	*x = EnableFleetScopeRequest{}
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnableFleetScopeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnableFleetScopeRequest) ProtoMessage() {}
+
+func (x *EnableFleetScopeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnableFleetScopeRequest.ProtoReflect.Descriptor instead.
+func (*EnableFleetScopeRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *EnableFleetScopeRequest) GetFleetScopeId() string {
+	if x != nil {
+		return x.FleetScopeId
+	}
+	return ""
+}
+
+func (x *EnableFleetScopeRequest) GetMeta() *CommandMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
 // GetFleetScopeRequest reads one fleet scope.
 type GetFleetScopeRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -2355,7 +2410,7 @@ type GetFleetScopeRequest struct {
 
 func (x *GetFleetScopeRequest) Reset() {
 	*x = GetFleetScopeRequest{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[16]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2367,7 +2422,7 @@ func (x *GetFleetScopeRequest) String() string {
 func (*GetFleetScopeRequest) ProtoMessage() {}
 
 func (x *GetFleetScopeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[16]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2380,7 +2435,7 @@ func (x *GetFleetScopeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetFleetScopeRequest.ProtoReflect.Descriptor instead.
 func (*GetFleetScopeRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{16}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *GetFleetScopeRequest) GetFleetScopeId() string {
@@ -2418,7 +2473,7 @@ type ListFleetScopesRequest struct {
 
 func (x *ListFleetScopesRequest) Reset() {
 	*x = ListFleetScopesRequest{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[17]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2430,7 +2485,7 @@ func (x *ListFleetScopesRequest) String() string {
 func (*ListFleetScopesRequest) ProtoMessage() {}
 
 func (x *ListFleetScopesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[17]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2443,7 +2498,7 @@ func (x *ListFleetScopesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListFleetScopesRequest.ProtoReflect.Descriptor instead.
 func (*ListFleetScopesRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{17}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ListFleetScopesRequest) GetScopeTypes() []FleetScopeType {
@@ -2499,7 +2554,7 @@ type FleetScopeResponse struct {
 
 func (x *FleetScopeResponse) Reset() {
 	*x = FleetScopeResponse{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[18]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2511,7 +2566,7 @@ func (x *FleetScopeResponse) String() string {
 func (*FleetScopeResponse) ProtoMessage() {}
 
 func (x *FleetScopeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[18]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2524,7 +2579,7 @@ func (x *FleetScopeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FleetScopeResponse.ProtoReflect.Descriptor instead.
 func (*FleetScopeResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{18}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *FleetScopeResponse) GetScope() *FleetScope {
@@ -2547,7 +2602,7 @@ type ListFleetScopesResponse struct {
 
 func (x *ListFleetScopesResponse) Reset() {
 	*x = ListFleetScopesResponse{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[19]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2559,7 +2614,7 @@ func (x *ListFleetScopesResponse) String() string {
 func (*ListFleetScopesResponse) ProtoMessage() {}
 
 func (x *ListFleetScopesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[19]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2572,7 +2627,7 @@ func (x *ListFleetScopesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListFleetScopesResponse.ProtoReflect.Descriptor instead.
 func (*ListFleetScopesResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{19}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ListFleetScopesResponse) GetScopes() []*FleetScope {
@@ -2614,7 +2669,7 @@ type RegisterServerRequest struct {
 
 func (x *RegisterServerRequest) Reset() {
 	*x = RegisterServerRequest{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[20]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2626,7 +2681,7 @@ func (x *RegisterServerRequest) String() string {
 func (*RegisterServerRequest) ProtoMessage() {}
 
 func (x *RegisterServerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[20]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2639,7 +2694,7 @@ func (x *RegisterServerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterServerRequest.ProtoReflect.Descriptor instead.
 func (*RegisterServerRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{20}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *RegisterServerRequest) GetServerKey() string {
@@ -2727,7 +2782,7 @@ type UpdateServerRequest struct {
 
 func (x *UpdateServerRequest) Reset() {
 	*x = UpdateServerRequest{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[21]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2739,7 +2794,7 @@ func (x *UpdateServerRequest) String() string {
 func (*UpdateServerRequest) ProtoMessage() {}
 
 func (x *UpdateServerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[21]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2752,7 +2807,7 @@ func (x *UpdateServerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateServerRequest.ProtoReflect.Descriptor instead.
 func (*UpdateServerRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{21}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *UpdateServerRequest) GetServerId() string {
@@ -2838,7 +2893,7 @@ type DisableServerRequest struct {
 
 func (x *DisableServerRequest) Reset() {
 	*x = DisableServerRequest{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[22]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2850,7 +2905,7 @@ func (x *DisableServerRequest) String() string {
 func (*DisableServerRequest) ProtoMessage() {}
 
 func (x *DisableServerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[22]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2863,7 +2918,7 @@ func (x *DisableServerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DisableServerRequest.ProtoReflect.Descriptor instead.
 func (*DisableServerRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{22}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *DisableServerRequest) GetServerId() string {
@@ -2874,6 +2929,61 @@ func (x *DisableServerRequest) GetServerId() string {
 }
 
 func (x *DisableServerRequest) GetMeta() *CommandMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+// EnableServerRequest allows new placements through a disabled server.
+type EnableServerRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// server_id identifies the server to enable.
+	ServerId string `protobuf:"bytes,1,opt,name=server_id,json=serverId,proto3" json:"server_id,omitempty"`
+	// meta carries expected_version, idempotency, actor, reason and audit context.
+	Meta          *CommandMeta `protobuf:"bytes,2,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EnableServerRequest) Reset() {
+	*x = EnableServerRequest{}
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnableServerRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnableServerRequest) ProtoMessage() {}
+
+func (x *EnableServerRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnableServerRequest.ProtoReflect.Descriptor instead.
+func (*EnableServerRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *EnableServerRequest) GetServerId() string {
+	if x != nil {
+		return x.ServerId
+	}
+	return ""
+}
+
+func (x *EnableServerRequest) GetMeta() *CommandMeta {
 	if x != nil {
 		return x.Meta
 	}
@@ -2893,7 +3003,7 @@ type GetServerRequest struct {
 
 func (x *GetServerRequest) Reset() {
 	*x = GetServerRequest{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[23]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2905,7 +3015,7 @@ func (x *GetServerRequest) String() string {
 func (*GetServerRequest) ProtoMessage() {}
 
 func (x *GetServerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[23]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2918,7 +3028,7 @@ func (x *GetServerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetServerRequest.ProtoReflect.Descriptor instead.
 func (*GetServerRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{23}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *GetServerRequest) GetServerId() string {
@@ -2956,7 +3066,7 @@ type ListServersRequest struct {
 
 func (x *ListServersRequest) Reset() {
 	*x = ListServersRequest{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[24]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2968,7 +3078,7 @@ func (x *ListServersRequest) String() string {
 func (*ListServersRequest) ProtoMessage() {}
 
 func (x *ListServersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[24]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2981,7 +3091,7 @@ func (x *ListServersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListServersRequest.ProtoReflect.Descriptor instead.
 func (*ListServersRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{24}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *ListServersRequest) GetStatuses() []ServerStatus {
@@ -3037,7 +3147,7 @@ type ServerResponse struct {
 
 func (x *ServerResponse) Reset() {
 	*x = ServerResponse{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[25]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3049,7 +3159,7 @@ func (x *ServerResponse) String() string {
 func (*ServerResponse) ProtoMessage() {}
 
 func (x *ServerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[25]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3062,7 +3172,7 @@ func (x *ServerResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerResponse.ProtoReflect.Descriptor instead.
 func (*ServerResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{25}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *ServerResponse) GetServer() *Server {
@@ -3085,7 +3195,7 @@ type ListServersResponse struct {
 
 func (x *ListServersResponse) Reset() {
 	*x = ListServersResponse{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[26]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3097,7 +3207,7 @@ func (x *ListServersResponse) String() string {
 func (*ListServersResponse) ProtoMessage() {}
 
 func (x *ListServersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[26]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3110,7 +3220,7 @@ func (x *ListServersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListServersResponse.ProtoReflect.Descriptor instead.
 func (*ListServersResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{26}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *ListServersResponse) GetServers() []*Server {
@@ -3158,7 +3268,7 @@ type RegisterKubernetesClusterRequest struct {
 
 func (x *RegisterKubernetesClusterRequest) Reset() {
 	*x = RegisterKubernetesClusterRequest{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[27]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3170,7 +3280,7 @@ func (x *RegisterKubernetesClusterRequest) String() string {
 func (*RegisterKubernetesClusterRequest) ProtoMessage() {}
 
 func (x *RegisterKubernetesClusterRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[27]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3183,7 +3293,7 @@ func (x *RegisterKubernetesClusterRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterKubernetesClusterRequest.ProtoReflect.Descriptor instead.
 func (*RegisterKubernetesClusterRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{27}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *RegisterKubernetesClusterRequest) GetFleetScopeId() string {
@@ -3298,7 +3408,7 @@ type UpdateKubernetesClusterRequest struct {
 
 func (x *UpdateKubernetesClusterRequest) Reset() {
 	*x = UpdateKubernetesClusterRequest{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[28]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3310,7 +3420,7 @@ func (x *UpdateKubernetesClusterRequest) String() string {
 func (*UpdateKubernetesClusterRequest) ProtoMessage() {}
 
 func (x *UpdateKubernetesClusterRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[28]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3323,7 +3433,7 @@ func (x *UpdateKubernetesClusterRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateKubernetesClusterRequest.ProtoReflect.Descriptor instead.
 func (*UpdateKubernetesClusterRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{28}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *UpdateKubernetesClusterRequest) GetClusterId() string {
@@ -3430,7 +3540,7 @@ type DisableKubernetesClusterRequest struct {
 
 func (x *DisableKubernetesClusterRequest) Reset() {
 	*x = DisableKubernetesClusterRequest{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[29]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3442,7 +3552,7 @@ func (x *DisableKubernetesClusterRequest) String() string {
 func (*DisableKubernetesClusterRequest) ProtoMessage() {}
 
 func (x *DisableKubernetesClusterRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[29]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3455,7 +3565,7 @@ func (x *DisableKubernetesClusterRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DisableKubernetesClusterRequest.ProtoReflect.Descriptor instead.
 func (*DisableKubernetesClusterRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{29}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *DisableKubernetesClusterRequest) GetClusterId() string {
@@ -3466,6 +3576,61 @@ func (x *DisableKubernetesClusterRequest) GetClusterId() string {
 }
 
 func (x *DisableKubernetesClusterRequest) GetMeta() *CommandMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+// EnableKubernetesClusterRequest allows new placements in a disabled cluster.
+type EnableKubernetesClusterRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// cluster_id identifies the cluster to enable.
+	ClusterId string `protobuf:"bytes,1,opt,name=cluster_id,json=clusterId,proto3" json:"cluster_id,omitempty"`
+	// meta carries expected_version, idempotency, actor, reason and audit context.
+	Meta          *CommandMeta `protobuf:"bytes,2,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EnableKubernetesClusterRequest) Reset() {
+	*x = EnableKubernetesClusterRequest{}
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnableKubernetesClusterRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnableKubernetesClusterRequest) ProtoMessage() {}
+
+func (x *EnableKubernetesClusterRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnableKubernetesClusterRequest.ProtoReflect.Descriptor instead.
+func (*EnableKubernetesClusterRequest) Descriptor() ([]byte, []int) {
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *EnableKubernetesClusterRequest) GetClusterId() string {
+	if x != nil {
+		return x.ClusterId
+	}
+	return ""
+}
+
+func (x *EnableKubernetesClusterRequest) GetMeta() *CommandMeta {
 	if x != nil {
 		return x.Meta
 	}
@@ -3485,7 +3650,7 @@ type GetKubernetesClusterRequest struct {
 
 func (x *GetKubernetesClusterRequest) Reset() {
 	*x = GetKubernetesClusterRequest{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[30]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3497,7 +3662,7 @@ func (x *GetKubernetesClusterRequest) String() string {
 func (*GetKubernetesClusterRequest) ProtoMessage() {}
 
 func (x *GetKubernetesClusterRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[30]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3510,7 +3675,7 @@ func (x *GetKubernetesClusterRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetKubernetesClusterRequest.ProtoReflect.Descriptor instead.
 func (*GetKubernetesClusterRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{30}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *GetKubernetesClusterRequest) GetClusterId() string {
@@ -3554,7 +3719,7 @@ type ListKubernetesClustersRequest struct {
 
 func (x *ListKubernetesClustersRequest) Reset() {
 	*x = ListKubernetesClustersRequest{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[31]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3566,7 +3731,7 @@ func (x *ListKubernetesClustersRequest) String() string {
 func (*ListKubernetesClustersRequest) ProtoMessage() {}
 
 func (x *ListKubernetesClustersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[31]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3579,7 +3744,7 @@ func (x *ListKubernetesClustersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListKubernetesClustersRequest.ProtoReflect.Descriptor instead.
 func (*ListKubernetesClustersRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{31}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *ListKubernetesClustersRequest) GetFleetScopeId() string {
@@ -3656,7 +3821,7 @@ type KubernetesClusterResponse struct {
 
 func (x *KubernetesClusterResponse) Reset() {
 	*x = KubernetesClusterResponse{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[32]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3668,7 +3833,7 @@ func (x *KubernetesClusterResponse) String() string {
 func (*KubernetesClusterResponse) ProtoMessage() {}
 
 func (x *KubernetesClusterResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[32]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3681,7 +3846,7 @@ func (x *KubernetesClusterResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KubernetesClusterResponse.ProtoReflect.Descriptor instead.
 func (*KubernetesClusterResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{32}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *KubernetesClusterResponse) GetCluster() *KubernetesCluster {
@@ -3704,7 +3869,7 @@ type ListKubernetesClustersResponse struct {
 
 func (x *ListKubernetesClustersResponse) Reset() {
 	*x = ListKubernetesClustersResponse{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[33]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3716,7 +3881,7 @@ func (x *ListKubernetesClustersResponse) String() string {
 func (*ListKubernetesClustersResponse) ProtoMessage() {}
 
 func (x *ListKubernetesClustersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[33]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3729,7 +3894,7 @@ func (x *ListKubernetesClustersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListKubernetesClustersResponse.ProtoReflect.Descriptor instead.
 func (*ListKubernetesClustersResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{33}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *ListKubernetesClustersResponse) GetClusters() []*KubernetesCluster {
@@ -3759,7 +3924,7 @@ type RunClusterConnectivityCheckRequest struct {
 
 func (x *RunClusterConnectivityCheckRequest) Reset() {
 	*x = RunClusterConnectivityCheckRequest{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[34]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3771,7 +3936,7 @@ func (x *RunClusterConnectivityCheckRequest) String() string {
 func (*RunClusterConnectivityCheckRequest) ProtoMessage() {}
 
 func (x *RunClusterConnectivityCheckRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[34]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3784,7 +3949,7 @@ func (x *RunClusterConnectivityCheckRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use RunClusterConnectivityCheckRequest.ProtoReflect.Descriptor instead.
 func (*RunClusterConnectivityCheckRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{34}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *RunClusterConnectivityCheckRequest) GetClusterId() string {
@@ -3812,7 +3977,7 @@ type ClusterConnectivityCheckResponse struct {
 
 func (x *ClusterConnectivityCheckResponse) Reset() {
 	*x = ClusterConnectivityCheckResponse{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[35]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3824,7 +3989,7 @@ func (x *ClusterConnectivityCheckResponse) String() string {
 func (*ClusterConnectivityCheckResponse) ProtoMessage() {}
 
 func (x *ClusterConnectivityCheckResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[35]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3837,7 +4002,7 @@ func (x *ClusterConnectivityCheckResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClusterConnectivityCheckResponse.ProtoReflect.Descriptor instead.
 func (*ClusterConnectivityCheckResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{35}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *ClusterConnectivityCheckResponse) GetConnectivityCheck() *ClusterConnectivityCheck {
@@ -3862,7 +4027,7 @@ type GetClusterHealthSnapshotRequest struct {
 
 func (x *GetClusterHealthSnapshotRequest) Reset() {
 	*x = GetClusterHealthSnapshotRequest{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[36]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3874,7 +4039,7 @@ func (x *GetClusterHealthSnapshotRequest) String() string {
 func (*GetClusterHealthSnapshotRequest) ProtoMessage() {}
 
 func (x *GetClusterHealthSnapshotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[36]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3887,7 +4052,7 @@ func (x *GetClusterHealthSnapshotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetClusterHealthSnapshotRequest.ProtoReflect.Descriptor instead.
 func (*GetClusterHealthSnapshotRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{36}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *GetClusterHealthSnapshotRequest) GetClusterId() string {
@@ -3928,7 +4093,7 @@ type ListClusterHealthSnapshotsRequest struct {
 
 func (x *ListClusterHealthSnapshotsRequest) Reset() {
 	*x = ListClusterHealthSnapshotsRequest{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[37]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3940,7 +4105,7 @@ func (x *ListClusterHealthSnapshotsRequest) String() string {
 func (*ListClusterHealthSnapshotsRequest) ProtoMessage() {}
 
 func (x *ListClusterHealthSnapshotsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[37]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3953,7 +4118,7 @@ func (x *ListClusterHealthSnapshotsRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use ListClusterHealthSnapshotsRequest.ProtoReflect.Descriptor instead.
 func (*ListClusterHealthSnapshotsRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{37}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *ListClusterHealthSnapshotsRequest) GetClusterId() string {
@@ -3995,7 +4160,7 @@ type ClusterHealthSnapshotResponse struct {
 
 func (x *ClusterHealthSnapshotResponse) Reset() {
 	*x = ClusterHealthSnapshotResponse{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[38]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4007,7 +4172,7 @@ func (x *ClusterHealthSnapshotResponse) String() string {
 func (*ClusterHealthSnapshotResponse) ProtoMessage() {}
 
 func (x *ClusterHealthSnapshotResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[38]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4020,7 +4185,7 @@ func (x *ClusterHealthSnapshotResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClusterHealthSnapshotResponse.ProtoReflect.Descriptor instead.
 func (*ClusterHealthSnapshotResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{38}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *ClusterHealthSnapshotResponse) GetHealthSnapshot() *ClusterHealthSnapshot {
@@ -4043,7 +4208,7 @@ type ListClusterHealthSnapshotsResponse struct {
 
 func (x *ListClusterHealthSnapshotsResponse) Reset() {
 	*x = ListClusterHealthSnapshotsResponse{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[39]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4055,7 +4220,7 @@ func (x *ListClusterHealthSnapshotsResponse) String() string {
 func (*ListClusterHealthSnapshotsResponse) ProtoMessage() {}
 
 func (x *ListClusterHealthSnapshotsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[39]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4068,7 +4233,7 @@ func (x *ListClusterHealthSnapshotsResponse) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use ListClusterHealthSnapshotsResponse.ProtoReflect.Descriptor instead.
 func (*ListClusterHealthSnapshotsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{39}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *ListClusterHealthSnapshotsResponse) GetHealthSnapshots() []*ClusterHealthSnapshot {
@@ -4110,7 +4275,7 @@ type PutPlacementRuleRequest struct {
 
 func (x *PutPlacementRuleRequest) Reset() {
 	*x = PutPlacementRuleRequest{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[40]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4122,7 +4287,7 @@ func (x *PutPlacementRuleRequest) String() string {
 func (*PutPlacementRuleRequest) ProtoMessage() {}
 
 func (x *PutPlacementRuleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[40]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4135,7 +4300,7 @@ func (x *PutPlacementRuleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PutPlacementRuleRequest.ProtoReflect.Descriptor instead.
 func (*PutPlacementRuleRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{40}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *PutPlacementRuleRequest) GetPlacementRuleId() string {
@@ -4207,7 +4372,7 @@ type GetPlacementRuleRequest struct {
 
 func (x *GetPlacementRuleRequest) Reset() {
 	*x = GetPlacementRuleRequest{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[41]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4219,7 +4384,7 @@ func (x *GetPlacementRuleRequest) String() string {
 func (*GetPlacementRuleRequest) ProtoMessage() {}
 
 func (x *GetPlacementRuleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[41]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4232,7 +4397,7 @@ func (x *GetPlacementRuleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPlacementRuleRequest.ProtoReflect.Descriptor instead.
 func (*GetPlacementRuleRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{41}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *GetPlacementRuleRequest) GetPlacementRuleId() string {
@@ -4266,7 +4431,7 @@ type ListPlacementRulesRequest struct {
 
 func (x *ListPlacementRulesRequest) Reset() {
 	*x = ListPlacementRulesRequest{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[42]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4278,7 +4443,7 @@ func (x *ListPlacementRulesRequest) String() string {
 func (*ListPlacementRulesRequest) ProtoMessage() {}
 
 func (x *ListPlacementRulesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[42]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4291,7 +4456,7 @@ func (x *ListPlacementRulesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPlacementRulesRequest.ProtoReflect.Descriptor instead.
 func (*ListPlacementRulesRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{42}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *ListPlacementRulesRequest) GetFleetScopeId() string {
@@ -4333,7 +4498,7 @@ type PlacementRuleResponse struct {
 
 func (x *PlacementRuleResponse) Reset() {
 	*x = PlacementRuleResponse{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[43]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4345,7 +4510,7 @@ func (x *PlacementRuleResponse) String() string {
 func (*PlacementRuleResponse) ProtoMessage() {}
 
 func (x *PlacementRuleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[43]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4358,7 +4523,7 @@ func (x *PlacementRuleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlacementRuleResponse.ProtoReflect.Descriptor instead.
 func (*PlacementRuleResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{43}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *PlacementRuleResponse) GetPlacementRule() *PlacementRule {
@@ -4381,7 +4546,7 @@ type ListPlacementRulesResponse struct {
 
 func (x *ListPlacementRulesResponse) Reset() {
 	*x = ListPlacementRulesResponse{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[44]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4393,7 +4558,7 @@ func (x *ListPlacementRulesResponse) String() string {
 func (*ListPlacementRulesResponse) ProtoMessage() {}
 
 func (x *ListPlacementRulesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[44]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4406,7 +4571,7 @@ func (x *ListPlacementRulesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPlacementRulesResponse.ProtoReflect.Descriptor instead.
 func (*ListPlacementRulesResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{44}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *ListPlacementRulesResponse) GetPlacementRules() []*PlacementRule {
@@ -4452,7 +4617,7 @@ type ResolvePlacementRequest struct {
 
 func (x *ResolvePlacementRequest) Reset() {
 	*x = ResolvePlacementRequest{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[45]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4464,7 +4629,7 @@ func (x *ResolvePlacementRequest) String() string {
 func (*ResolvePlacementRequest) ProtoMessage() {}
 
 func (x *ResolvePlacementRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[45]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4477,7 +4642,7 @@ func (x *ResolvePlacementRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolvePlacementRequest.ProtoReflect.Descriptor instead.
 func (*ResolvePlacementRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{45}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *ResolvePlacementRequest) GetProjectId() string {
@@ -4561,7 +4726,7 @@ type ResolvePlacementResponse struct {
 
 func (x *ResolvePlacementResponse) Reset() {
 	*x = ResolvePlacementResponse{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[46]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4573,7 +4738,7 @@ func (x *ResolvePlacementResponse) String() string {
 func (*ResolvePlacementResponse) ProtoMessage() {}
 
 func (x *ResolvePlacementResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[46]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4586,7 +4751,7 @@ func (x *ResolvePlacementResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolvePlacementResponse.ProtoReflect.Descriptor instead.
 func (*ResolvePlacementResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{46}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *ResolvePlacementResponse) GetDecision() *PlacementDecision {
@@ -4609,7 +4774,7 @@ type GetPlacementDecisionRequest struct {
 
 func (x *GetPlacementDecisionRequest) Reset() {
 	*x = GetPlacementDecisionRequest{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[47]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4621,7 +4786,7 @@ func (x *GetPlacementDecisionRequest) String() string {
 func (*GetPlacementDecisionRequest) ProtoMessage() {}
 
 func (x *GetPlacementDecisionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[47]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4634,7 +4799,7 @@ func (x *GetPlacementDecisionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPlacementDecisionRequest.ProtoReflect.Descriptor instead.
 func (*GetPlacementDecisionRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{47}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *GetPlacementDecisionRequest) GetPlacementDecisionId() string {
@@ -4674,7 +4839,7 @@ type ListPlacementDecisionsRequest struct {
 
 func (x *ListPlacementDecisionsRequest) Reset() {
 	*x = ListPlacementDecisionsRequest{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[48]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4686,7 +4851,7 @@ func (x *ListPlacementDecisionsRequest) String() string {
 func (*ListPlacementDecisionsRequest) ProtoMessage() {}
 
 func (x *ListPlacementDecisionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[48]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4699,7 +4864,7 @@ func (x *ListPlacementDecisionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPlacementDecisionsRequest.ProtoReflect.Descriptor instead.
 func (*ListPlacementDecisionsRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{48}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *ListPlacementDecisionsRequest) GetProjectId() string {
@@ -4762,7 +4927,7 @@ type PlacementDecisionResponse struct {
 
 func (x *PlacementDecisionResponse) Reset() {
 	*x = PlacementDecisionResponse{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[49]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4774,7 +4939,7 @@ func (x *PlacementDecisionResponse) String() string {
 func (*PlacementDecisionResponse) ProtoMessage() {}
 
 func (x *PlacementDecisionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[49]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4787,7 +4952,7 @@ func (x *PlacementDecisionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlacementDecisionResponse.ProtoReflect.Descriptor instead.
 func (*PlacementDecisionResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{49}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *PlacementDecisionResponse) GetDecision() *PlacementDecision {
@@ -4810,7 +4975,7 @@ type ListPlacementDecisionsResponse struct {
 
 func (x *ListPlacementDecisionsResponse) Reset() {
 	*x = ListPlacementDecisionsResponse{}
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[50]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4822,7 +4987,7 @@ func (x *ListPlacementDecisionsResponse) String() string {
 func (*ListPlacementDecisionsResponse) ProtoMessage() {}
 
 func (x *ListPlacementDecisionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[50]
+	mi := &file_kodex_fleet_v1_fleet_manager_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4835,7 +5000,7 @@ func (x *ListPlacementDecisionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPlacementDecisionsResponse.ProtoReflect.Descriptor instead.
 func (*ListPlacementDecisionsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{50}
+	return file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *ListPlacementDecisionsResponse) GetDecisions() []*PlacementDecision {
@@ -5061,6 +5226,9 @@ const file_kodex_fleet_v1_fleet_manager_proto_rawDesc = "" +
 	"\v_is_default\"q\n" +
 	"\x18DisableFleetScopeRequest\x12$\n" +
 	"\x0efleet_scope_id\x18\x01 \x01(\tR\ffleetScopeId\x12/\n" +
+	"\x04meta\x18\x02 \x01(\v2\x1b.kodex.fleet.v1.CommandMetaR\x04meta\"p\n" +
+	"\x17EnableFleetScopeRequest\x12$\n" +
+	"\x0efleet_scope_id\x18\x01 \x01(\tR\ffleetScopeId\x12/\n" +
 	"\x04meta\x18\x02 \x01(\v2\x1b.kodex.fleet.v1.CommandMetaR\x04meta\"k\n" +
 	"\x14GetFleetScopeRequest\x12$\n" +
 	"\x0efleet_scope_id\x18\x01 \x01(\tR\ffleetScopeId\x12-\n" +
@@ -5113,6 +5281,9 @@ const file_kodex_fleet_v1_fleet_manager_proto_rawDesc = "" +
 	"\x12_secret_store_typeB\x13\n" +
 	"\x11_secret_store_ref\"d\n" +
 	"\x14DisableServerRequest\x12\x1b\n" +
+	"\tserver_id\x18\x01 \x01(\tR\bserverId\x12/\n" +
+	"\x04meta\x18\x02 \x01(\v2\x1b.kodex.fleet.v1.CommandMetaR\x04meta\"c\n" +
+	"\x13EnableServerRequest\x12\x1b\n" +
 	"\tserver_id\x18\x01 \x01(\tR\bserverId\x12/\n" +
 	"\x04meta\x18\x02 \x01(\v2\x1b.kodex.fleet.v1.CommandMetaR\x04meta\"^\n" +
 	"\x10GetServerRequest\x12\x1b\n" +
@@ -5181,6 +5352,10 @@ const file_kodex_fleet_v1_fleet_manager_proto_rawDesc = "" +
 	"\a_regionB\x11\n" +
 	"\x0f_capacity_class\"q\n" +
 	"\x1fDisableKubernetesClusterRequest\x12\x1d\n" +
+	"\n" +
+	"cluster_id\x18\x01 \x01(\tR\tclusterId\x12/\n" +
+	"\x04meta\x18\x02 \x01(\v2\x1b.kodex.fleet.v1.CommandMetaR\x04meta\"p\n" +
+	"\x1eEnableKubernetesClusterRequest\x12\x1d\n" +
 	"\n" +
 	"cluster_id\x18\x01 \x01(\tR\tclusterId\x12/\n" +
 	"\x04meta\x18\x02 \x01(\v2\x1b.kodex.fleet.v1.CommandMetaR\x04meta\"k\n" +
@@ -5366,21 +5541,24 @@ const file_kodex_fleet_v1_fleet_manager_proto_rawDesc = "" +
 	"!PLACEMENT_RULE_STATUS_UNSPECIFIED\x10\x00\x12 \n" +
 	"\x1cPLACEMENT_RULE_STATUS_ACTIVE\x10\x01\x12\"\n" +
 	"\x1ePLACEMENT_RULE_STATUS_DISABLED\x10\x02\x12\"\n" +
-	"\x1ePLACEMENT_RULE_STATUS_ARCHIVED\x10\x032\x83\x14\n" +
+	"\x1ePLACEMENT_RULE_STATUS_ARCHIVED\x10\x032\xaf\x16\n" +
 	"\x13FleetManagerService\x12_\n" +
 	"\x10CreateFleetScope\x12'.kodex.fleet.v1.CreateFleetScopeRequest\x1a\".kodex.fleet.v1.FleetScopeResponse\x12_\n" +
 	"\x10UpdateFleetScope\x12'.kodex.fleet.v1.UpdateFleetScopeRequest\x1a\".kodex.fleet.v1.FleetScopeResponse\x12a\n" +
-	"\x11DisableFleetScope\x12(.kodex.fleet.v1.DisableFleetScopeRequest\x1a\".kodex.fleet.v1.FleetScopeResponse\x12Y\n" +
+	"\x11DisableFleetScope\x12(.kodex.fleet.v1.DisableFleetScopeRequest\x1a\".kodex.fleet.v1.FleetScopeResponse\x12_\n" +
+	"\x10EnableFleetScope\x12'.kodex.fleet.v1.EnableFleetScopeRequest\x1a\".kodex.fleet.v1.FleetScopeResponse\x12Y\n" +
 	"\rGetFleetScope\x12$.kodex.fleet.v1.GetFleetScopeRequest\x1a\".kodex.fleet.v1.FleetScopeResponse\x12b\n" +
 	"\x0fListFleetScopes\x12&.kodex.fleet.v1.ListFleetScopesRequest\x1a'.kodex.fleet.v1.ListFleetScopesResponse\x12W\n" +
 	"\x0eRegisterServer\x12%.kodex.fleet.v1.RegisterServerRequest\x1a\x1e.kodex.fleet.v1.ServerResponse\x12S\n" +
 	"\fUpdateServer\x12#.kodex.fleet.v1.UpdateServerRequest\x1a\x1e.kodex.fleet.v1.ServerResponse\x12U\n" +
-	"\rDisableServer\x12$.kodex.fleet.v1.DisableServerRequest\x1a\x1e.kodex.fleet.v1.ServerResponse\x12M\n" +
+	"\rDisableServer\x12$.kodex.fleet.v1.DisableServerRequest\x1a\x1e.kodex.fleet.v1.ServerResponse\x12S\n" +
+	"\fEnableServer\x12#.kodex.fleet.v1.EnableServerRequest\x1a\x1e.kodex.fleet.v1.ServerResponse\x12M\n" +
 	"\tGetServer\x12 .kodex.fleet.v1.GetServerRequest\x1a\x1e.kodex.fleet.v1.ServerResponse\x12V\n" +
 	"\vListServers\x12\".kodex.fleet.v1.ListServersRequest\x1a#.kodex.fleet.v1.ListServersResponse\x12x\n" +
 	"\x19RegisterKubernetesCluster\x120.kodex.fleet.v1.RegisterKubernetesClusterRequest\x1a).kodex.fleet.v1.KubernetesClusterResponse\x12t\n" +
 	"\x17UpdateKubernetesCluster\x12..kodex.fleet.v1.UpdateKubernetesClusterRequest\x1a).kodex.fleet.v1.KubernetesClusterResponse\x12v\n" +
-	"\x18DisableKubernetesCluster\x12/.kodex.fleet.v1.DisableKubernetesClusterRequest\x1a).kodex.fleet.v1.KubernetesClusterResponse\x12n\n" +
+	"\x18DisableKubernetesCluster\x12/.kodex.fleet.v1.DisableKubernetesClusterRequest\x1a).kodex.fleet.v1.KubernetesClusterResponse\x12t\n" +
+	"\x17EnableKubernetesCluster\x12..kodex.fleet.v1.EnableKubernetesClusterRequest\x1a).kodex.fleet.v1.KubernetesClusterResponse\x12n\n" +
 	"\x14GetKubernetesCluster\x12+.kodex.fleet.v1.GetKubernetesClusterRequest\x1a).kodex.fleet.v1.KubernetesClusterResponse\x12w\n" +
 	"\x16ListKubernetesClusters\x12-.kodex.fleet.v1.ListKubernetesClustersRequest\x1a..kodex.fleet.v1.ListKubernetesClustersResponse\x12\x83\x01\n" +
 	"\x1bRunClusterConnectivityCheck\x122.kodex.fleet.v1.RunClusterConnectivityCheckRequest\x1a0.kodex.fleet.v1.ClusterConnectivityCheckResponse\x12z\n" +
@@ -5406,7 +5584,7 @@ func file_kodex_fleet_v1_fleet_manager_proto_rawDescGZIP() []byte {
 }
 
 var file_kodex_fleet_v1_fleet_manager_proto_enumTypes = make([]protoimpl.EnumInfo, 11)
-var file_kodex_fleet_v1_fleet_manager_proto_msgTypes = make([]protoimpl.MessageInfo, 51)
+var file_kodex_fleet_v1_fleet_manager_proto_msgTypes = make([]protoimpl.MessageInfo, 54)
 var file_kodex_fleet_v1_fleet_manager_proto_goTypes = []any{
 	(FleetScopeType)(0),                        // 0: kodex.fleet.v1.FleetScopeType
 	(FleetScopeStatus)(0),                      // 1: kodex.fleet.v1.FleetScopeStatus
@@ -5435,41 +5613,44 @@ var file_kodex_fleet_v1_fleet_manager_proto_goTypes = []any{
 	(*CreateFleetScopeRequest)(nil),            // 24: kodex.fleet.v1.CreateFleetScopeRequest
 	(*UpdateFleetScopeRequest)(nil),            // 25: kodex.fleet.v1.UpdateFleetScopeRequest
 	(*DisableFleetScopeRequest)(nil),           // 26: kodex.fleet.v1.DisableFleetScopeRequest
-	(*GetFleetScopeRequest)(nil),               // 27: kodex.fleet.v1.GetFleetScopeRequest
-	(*ListFleetScopesRequest)(nil),             // 28: kodex.fleet.v1.ListFleetScopesRequest
-	(*FleetScopeResponse)(nil),                 // 29: kodex.fleet.v1.FleetScopeResponse
-	(*ListFleetScopesResponse)(nil),            // 30: kodex.fleet.v1.ListFleetScopesResponse
-	(*RegisterServerRequest)(nil),              // 31: kodex.fleet.v1.RegisterServerRequest
-	(*UpdateServerRequest)(nil),                // 32: kodex.fleet.v1.UpdateServerRequest
-	(*DisableServerRequest)(nil),               // 33: kodex.fleet.v1.DisableServerRequest
-	(*GetServerRequest)(nil),                   // 34: kodex.fleet.v1.GetServerRequest
-	(*ListServersRequest)(nil),                 // 35: kodex.fleet.v1.ListServersRequest
-	(*ServerResponse)(nil),                     // 36: kodex.fleet.v1.ServerResponse
-	(*ListServersResponse)(nil),                // 37: kodex.fleet.v1.ListServersResponse
-	(*RegisterKubernetesClusterRequest)(nil),   // 38: kodex.fleet.v1.RegisterKubernetesClusterRequest
-	(*UpdateKubernetesClusterRequest)(nil),     // 39: kodex.fleet.v1.UpdateKubernetesClusterRequest
-	(*DisableKubernetesClusterRequest)(nil),    // 40: kodex.fleet.v1.DisableKubernetesClusterRequest
-	(*GetKubernetesClusterRequest)(nil),        // 41: kodex.fleet.v1.GetKubernetesClusterRequest
-	(*ListKubernetesClustersRequest)(nil),      // 42: kodex.fleet.v1.ListKubernetesClustersRequest
-	(*KubernetesClusterResponse)(nil),          // 43: kodex.fleet.v1.KubernetesClusterResponse
-	(*ListKubernetesClustersResponse)(nil),     // 44: kodex.fleet.v1.ListKubernetesClustersResponse
-	(*RunClusterConnectivityCheckRequest)(nil), // 45: kodex.fleet.v1.RunClusterConnectivityCheckRequest
-	(*ClusterConnectivityCheckResponse)(nil),   // 46: kodex.fleet.v1.ClusterConnectivityCheckResponse
-	(*GetClusterHealthSnapshotRequest)(nil),    // 47: kodex.fleet.v1.GetClusterHealthSnapshotRequest
-	(*ListClusterHealthSnapshotsRequest)(nil),  // 48: kodex.fleet.v1.ListClusterHealthSnapshotsRequest
-	(*ClusterHealthSnapshotResponse)(nil),      // 49: kodex.fleet.v1.ClusterHealthSnapshotResponse
-	(*ListClusterHealthSnapshotsResponse)(nil), // 50: kodex.fleet.v1.ListClusterHealthSnapshotsResponse
-	(*PutPlacementRuleRequest)(nil),            // 51: kodex.fleet.v1.PutPlacementRuleRequest
-	(*GetPlacementRuleRequest)(nil),            // 52: kodex.fleet.v1.GetPlacementRuleRequest
-	(*ListPlacementRulesRequest)(nil),          // 53: kodex.fleet.v1.ListPlacementRulesRequest
-	(*PlacementRuleResponse)(nil),              // 54: kodex.fleet.v1.PlacementRuleResponse
-	(*ListPlacementRulesResponse)(nil),         // 55: kodex.fleet.v1.ListPlacementRulesResponse
-	(*ResolvePlacementRequest)(nil),            // 56: kodex.fleet.v1.ResolvePlacementRequest
-	(*ResolvePlacementResponse)(nil),           // 57: kodex.fleet.v1.ResolvePlacementResponse
-	(*GetPlacementDecisionRequest)(nil),        // 58: kodex.fleet.v1.GetPlacementDecisionRequest
-	(*ListPlacementDecisionsRequest)(nil),      // 59: kodex.fleet.v1.ListPlacementDecisionsRequest
-	(*PlacementDecisionResponse)(nil),          // 60: kodex.fleet.v1.PlacementDecisionResponse
-	(*ListPlacementDecisionsResponse)(nil),     // 61: kodex.fleet.v1.ListPlacementDecisionsResponse
+	(*EnableFleetScopeRequest)(nil),            // 27: kodex.fleet.v1.EnableFleetScopeRequest
+	(*GetFleetScopeRequest)(nil),               // 28: kodex.fleet.v1.GetFleetScopeRequest
+	(*ListFleetScopesRequest)(nil),             // 29: kodex.fleet.v1.ListFleetScopesRequest
+	(*FleetScopeResponse)(nil),                 // 30: kodex.fleet.v1.FleetScopeResponse
+	(*ListFleetScopesResponse)(nil),            // 31: kodex.fleet.v1.ListFleetScopesResponse
+	(*RegisterServerRequest)(nil),              // 32: kodex.fleet.v1.RegisterServerRequest
+	(*UpdateServerRequest)(nil),                // 33: kodex.fleet.v1.UpdateServerRequest
+	(*DisableServerRequest)(nil),               // 34: kodex.fleet.v1.DisableServerRequest
+	(*EnableServerRequest)(nil),                // 35: kodex.fleet.v1.EnableServerRequest
+	(*GetServerRequest)(nil),                   // 36: kodex.fleet.v1.GetServerRequest
+	(*ListServersRequest)(nil),                 // 37: kodex.fleet.v1.ListServersRequest
+	(*ServerResponse)(nil),                     // 38: kodex.fleet.v1.ServerResponse
+	(*ListServersResponse)(nil),                // 39: kodex.fleet.v1.ListServersResponse
+	(*RegisterKubernetesClusterRequest)(nil),   // 40: kodex.fleet.v1.RegisterKubernetesClusterRequest
+	(*UpdateKubernetesClusterRequest)(nil),     // 41: kodex.fleet.v1.UpdateKubernetesClusterRequest
+	(*DisableKubernetesClusterRequest)(nil),    // 42: kodex.fleet.v1.DisableKubernetesClusterRequest
+	(*EnableKubernetesClusterRequest)(nil),     // 43: kodex.fleet.v1.EnableKubernetesClusterRequest
+	(*GetKubernetesClusterRequest)(nil),        // 44: kodex.fleet.v1.GetKubernetesClusterRequest
+	(*ListKubernetesClustersRequest)(nil),      // 45: kodex.fleet.v1.ListKubernetesClustersRequest
+	(*KubernetesClusterResponse)(nil),          // 46: kodex.fleet.v1.KubernetesClusterResponse
+	(*ListKubernetesClustersResponse)(nil),     // 47: kodex.fleet.v1.ListKubernetesClustersResponse
+	(*RunClusterConnectivityCheckRequest)(nil), // 48: kodex.fleet.v1.RunClusterConnectivityCheckRequest
+	(*ClusterConnectivityCheckResponse)(nil),   // 49: kodex.fleet.v1.ClusterConnectivityCheckResponse
+	(*GetClusterHealthSnapshotRequest)(nil),    // 50: kodex.fleet.v1.GetClusterHealthSnapshotRequest
+	(*ListClusterHealthSnapshotsRequest)(nil),  // 51: kodex.fleet.v1.ListClusterHealthSnapshotsRequest
+	(*ClusterHealthSnapshotResponse)(nil),      // 52: kodex.fleet.v1.ClusterHealthSnapshotResponse
+	(*ListClusterHealthSnapshotsResponse)(nil), // 53: kodex.fleet.v1.ListClusterHealthSnapshotsResponse
+	(*PutPlacementRuleRequest)(nil),            // 54: kodex.fleet.v1.PutPlacementRuleRequest
+	(*GetPlacementRuleRequest)(nil),            // 55: kodex.fleet.v1.GetPlacementRuleRequest
+	(*ListPlacementRulesRequest)(nil),          // 56: kodex.fleet.v1.ListPlacementRulesRequest
+	(*PlacementRuleResponse)(nil),              // 57: kodex.fleet.v1.PlacementRuleResponse
+	(*ListPlacementRulesResponse)(nil),         // 58: kodex.fleet.v1.ListPlacementRulesResponse
+	(*ResolvePlacementRequest)(nil),            // 59: kodex.fleet.v1.ResolvePlacementRequest
+	(*ResolvePlacementResponse)(nil),           // 60: kodex.fleet.v1.ResolvePlacementResponse
+	(*GetPlacementDecisionRequest)(nil),        // 61: kodex.fleet.v1.GetPlacementDecisionRequest
+	(*ListPlacementDecisionsRequest)(nil),      // 62: kodex.fleet.v1.ListPlacementDecisionsRequest
+	(*PlacementDecisionResponse)(nil),          // 63: kodex.fleet.v1.PlacementDecisionResponse
+	(*ListPlacementDecisionsResponse)(nil),     // 64: kodex.fleet.v1.ListPlacementDecisionsResponse
 }
 var file_kodex_fleet_v1_fleet_manager_proto_depIdxs = []int32{
 	14,  // 0: kodex.fleet.v1.CommandMeta.actor:type_name -> kodex.fleet.v1.Actor
@@ -5493,120 +5674,129 @@ var file_kodex_fleet_v1_fleet_manager_proto_depIdxs = []int32{
 	1,   // 18: kodex.fleet.v1.UpdateFleetScopeRequest.status:type_name -> kodex.fleet.v1.FleetScopeStatus
 	11,  // 19: kodex.fleet.v1.UpdateFleetScopeRequest.meta:type_name -> kodex.fleet.v1.CommandMeta
 	11,  // 20: kodex.fleet.v1.DisableFleetScopeRequest.meta:type_name -> kodex.fleet.v1.CommandMeta
-	12,  // 21: kodex.fleet.v1.GetFleetScopeRequest.meta:type_name -> kodex.fleet.v1.QueryMeta
-	0,   // 22: kodex.fleet.v1.ListFleetScopesRequest.scope_types:type_name -> kodex.fleet.v1.FleetScopeType
-	1,   // 23: kodex.fleet.v1.ListFleetScopesRequest.statuses:type_name -> kodex.fleet.v1.FleetScopeStatus
-	15,  // 24: kodex.fleet.v1.ListFleetScopesRequest.page:type_name -> kodex.fleet.v1.PageRequest
-	12,  // 25: kodex.fleet.v1.ListFleetScopesRequest.meta:type_name -> kodex.fleet.v1.QueryMeta
-	17,  // 26: kodex.fleet.v1.FleetScopeResponse.scope:type_name -> kodex.fleet.v1.FleetScope
-	17,  // 27: kodex.fleet.v1.ListFleetScopesResponse.scopes:type_name -> kodex.fleet.v1.FleetScope
-	16,  // 28: kodex.fleet.v1.ListFleetScopesResponse.page:type_name -> kodex.fleet.v1.PageResponse
-	2,   // 29: kodex.fleet.v1.RegisterServerRequest.provider_type:type_name -> kodex.fleet.v1.ServerProviderType
-	11,  // 30: kodex.fleet.v1.RegisterServerRequest.meta:type_name -> kodex.fleet.v1.CommandMeta
-	2,   // 31: kodex.fleet.v1.UpdateServerRequest.provider_type:type_name -> kodex.fleet.v1.ServerProviderType
-	3,   // 32: kodex.fleet.v1.UpdateServerRequest.status:type_name -> kodex.fleet.v1.ServerStatus
-	11,  // 33: kodex.fleet.v1.UpdateServerRequest.meta:type_name -> kodex.fleet.v1.CommandMeta
-	11,  // 34: kodex.fleet.v1.DisableServerRequest.meta:type_name -> kodex.fleet.v1.CommandMeta
-	12,  // 35: kodex.fleet.v1.GetServerRequest.meta:type_name -> kodex.fleet.v1.QueryMeta
-	3,   // 36: kodex.fleet.v1.ListServersRequest.statuses:type_name -> kodex.fleet.v1.ServerStatus
-	2,   // 37: kodex.fleet.v1.ListServersRequest.provider_types:type_name -> kodex.fleet.v1.ServerProviderType
-	15,  // 38: kodex.fleet.v1.ListServersRequest.page:type_name -> kodex.fleet.v1.PageRequest
-	12,  // 39: kodex.fleet.v1.ListServersRequest.meta:type_name -> kodex.fleet.v1.QueryMeta
-	18,  // 40: kodex.fleet.v1.ServerResponse.server:type_name -> kodex.fleet.v1.Server
-	18,  // 41: kodex.fleet.v1.ListServersResponse.servers:type_name -> kodex.fleet.v1.Server
-	16,  // 42: kodex.fleet.v1.ListServersResponse.page:type_name -> kodex.fleet.v1.PageResponse
-	11,  // 43: kodex.fleet.v1.RegisterKubernetesClusterRequest.meta:type_name -> kodex.fleet.v1.CommandMeta
-	4,   // 44: kodex.fleet.v1.UpdateKubernetesClusterRequest.status:type_name -> kodex.fleet.v1.KubernetesClusterStatus
-	11,  // 45: kodex.fleet.v1.UpdateKubernetesClusterRequest.meta:type_name -> kodex.fleet.v1.CommandMeta
-	11,  // 46: kodex.fleet.v1.DisableKubernetesClusterRequest.meta:type_name -> kodex.fleet.v1.CommandMeta
-	12,  // 47: kodex.fleet.v1.GetKubernetesClusterRequest.meta:type_name -> kodex.fleet.v1.QueryMeta
-	4,   // 48: kodex.fleet.v1.ListKubernetesClustersRequest.statuses:type_name -> kodex.fleet.v1.KubernetesClusterStatus
-	5,   // 49: kodex.fleet.v1.ListKubernetesClustersRequest.health_statuses:type_name -> kodex.fleet.v1.ClusterHealthStatus
-	15,  // 50: kodex.fleet.v1.ListKubernetesClustersRequest.page:type_name -> kodex.fleet.v1.PageRequest
-	12,  // 51: kodex.fleet.v1.ListKubernetesClustersRequest.meta:type_name -> kodex.fleet.v1.QueryMeta
-	19,  // 52: kodex.fleet.v1.KubernetesClusterResponse.cluster:type_name -> kodex.fleet.v1.KubernetesCluster
-	19,  // 53: kodex.fleet.v1.ListKubernetesClustersResponse.clusters:type_name -> kodex.fleet.v1.KubernetesCluster
-	16,  // 54: kodex.fleet.v1.ListKubernetesClustersResponse.page:type_name -> kodex.fleet.v1.PageResponse
-	11,  // 55: kodex.fleet.v1.RunClusterConnectivityCheckRequest.meta:type_name -> kodex.fleet.v1.CommandMeta
-	20,  // 56: kodex.fleet.v1.ClusterConnectivityCheckResponse.connectivity_check:type_name -> kodex.fleet.v1.ClusterConnectivityCheck
-	12,  // 57: kodex.fleet.v1.GetClusterHealthSnapshotRequest.meta:type_name -> kodex.fleet.v1.QueryMeta
-	15,  // 58: kodex.fleet.v1.ListClusterHealthSnapshotsRequest.page:type_name -> kodex.fleet.v1.PageRequest
-	12,  // 59: kodex.fleet.v1.ListClusterHealthSnapshotsRequest.meta:type_name -> kodex.fleet.v1.QueryMeta
-	21,  // 60: kodex.fleet.v1.ClusterHealthSnapshotResponse.health_snapshot:type_name -> kodex.fleet.v1.ClusterHealthSnapshot
-	21,  // 61: kodex.fleet.v1.ListClusterHealthSnapshotsResponse.health_snapshots:type_name -> kodex.fleet.v1.ClusterHealthSnapshot
-	16,  // 62: kodex.fleet.v1.ListClusterHealthSnapshotsResponse.page:type_name -> kodex.fleet.v1.PageResponse
-	10,  // 63: kodex.fleet.v1.PutPlacementRuleRequest.status:type_name -> kodex.fleet.v1.PlacementRuleStatus
-	11,  // 64: kodex.fleet.v1.PutPlacementRuleRequest.meta:type_name -> kodex.fleet.v1.CommandMeta
-	12,  // 65: kodex.fleet.v1.GetPlacementRuleRequest.meta:type_name -> kodex.fleet.v1.QueryMeta
-	10,  // 66: kodex.fleet.v1.ListPlacementRulesRequest.statuses:type_name -> kodex.fleet.v1.PlacementRuleStatus
-	15,  // 67: kodex.fleet.v1.ListPlacementRulesRequest.page:type_name -> kodex.fleet.v1.PageRequest
-	12,  // 68: kodex.fleet.v1.ListPlacementRulesRequest.meta:type_name -> kodex.fleet.v1.QueryMeta
-	22,  // 69: kodex.fleet.v1.PlacementRuleResponse.placement_rule:type_name -> kodex.fleet.v1.PlacementRule
-	22,  // 70: kodex.fleet.v1.ListPlacementRulesResponse.placement_rules:type_name -> kodex.fleet.v1.PlacementRule
-	16,  // 71: kodex.fleet.v1.ListPlacementRulesResponse.page:type_name -> kodex.fleet.v1.PageResponse
-	8,   // 72: kodex.fleet.v1.ResolvePlacementRequest.runtime_mode:type_name -> kodex.fleet.v1.RuntimeMode
-	11,  // 73: kodex.fleet.v1.ResolvePlacementRequest.meta:type_name -> kodex.fleet.v1.CommandMeta
-	23,  // 74: kodex.fleet.v1.ResolvePlacementResponse.decision:type_name -> kodex.fleet.v1.PlacementDecision
-	12,  // 75: kodex.fleet.v1.GetPlacementDecisionRequest.meta:type_name -> kodex.fleet.v1.QueryMeta
-	9,   // 76: kodex.fleet.v1.ListPlacementDecisionsRequest.statuses:type_name -> kodex.fleet.v1.PlacementDecisionStatus
-	15,  // 77: kodex.fleet.v1.ListPlacementDecisionsRequest.page:type_name -> kodex.fleet.v1.PageRequest
-	12,  // 78: kodex.fleet.v1.ListPlacementDecisionsRequest.meta:type_name -> kodex.fleet.v1.QueryMeta
-	23,  // 79: kodex.fleet.v1.PlacementDecisionResponse.decision:type_name -> kodex.fleet.v1.PlacementDecision
-	23,  // 80: kodex.fleet.v1.ListPlacementDecisionsResponse.decisions:type_name -> kodex.fleet.v1.PlacementDecision
-	16,  // 81: kodex.fleet.v1.ListPlacementDecisionsResponse.page:type_name -> kodex.fleet.v1.PageResponse
-	24,  // 82: kodex.fleet.v1.FleetManagerService.CreateFleetScope:input_type -> kodex.fleet.v1.CreateFleetScopeRequest
-	25,  // 83: kodex.fleet.v1.FleetManagerService.UpdateFleetScope:input_type -> kodex.fleet.v1.UpdateFleetScopeRequest
-	26,  // 84: kodex.fleet.v1.FleetManagerService.DisableFleetScope:input_type -> kodex.fleet.v1.DisableFleetScopeRequest
-	27,  // 85: kodex.fleet.v1.FleetManagerService.GetFleetScope:input_type -> kodex.fleet.v1.GetFleetScopeRequest
-	28,  // 86: kodex.fleet.v1.FleetManagerService.ListFleetScopes:input_type -> kodex.fleet.v1.ListFleetScopesRequest
-	31,  // 87: kodex.fleet.v1.FleetManagerService.RegisterServer:input_type -> kodex.fleet.v1.RegisterServerRequest
-	32,  // 88: kodex.fleet.v1.FleetManagerService.UpdateServer:input_type -> kodex.fleet.v1.UpdateServerRequest
-	33,  // 89: kodex.fleet.v1.FleetManagerService.DisableServer:input_type -> kodex.fleet.v1.DisableServerRequest
-	34,  // 90: kodex.fleet.v1.FleetManagerService.GetServer:input_type -> kodex.fleet.v1.GetServerRequest
-	35,  // 91: kodex.fleet.v1.FleetManagerService.ListServers:input_type -> kodex.fleet.v1.ListServersRequest
-	38,  // 92: kodex.fleet.v1.FleetManagerService.RegisterKubernetesCluster:input_type -> kodex.fleet.v1.RegisterKubernetesClusterRequest
-	39,  // 93: kodex.fleet.v1.FleetManagerService.UpdateKubernetesCluster:input_type -> kodex.fleet.v1.UpdateKubernetesClusterRequest
-	40,  // 94: kodex.fleet.v1.FleetManagerService.DisableKubernetesCluster:input_type -> kodex.fleet.v1.DisableKubernetesClusterRequest
-	41,  // 95: kodex.fleet.v1.FleetManagerService.GetKubernetesCluster:input_type -> kodex.fleet.v1.GetKubernetesClusterRequest
-	42,  // 96: kodex.fleet.v1.FleetManagerService.ListKubernetesClusters:input_type -> kodex.fleet.v1.ListKubernetesClustersRequest
-	45,  // 97: kodex.fleet.v1.FleetManagerService.RunClusterConnectivityCheck:input_type -> kodex.fleet.v1.RunClusterConnectivityCheckRequest
-	47,  // 98: kodex.fleet.v1.FleetManagerService.GetClusterHealthSnapshot:input_type -> kodex.fleet.v1.GetClusterHealthSnapshotRequest
-	48,  // 99: kodex.fleet.v1.FleetManagerService.ListClusterHealthSnapshots:input_type -> kodex.fleet.v1.ListClusterHealthSnapshotsRequest
-	51,  // 100: kodex.fleet.v1.FleetManagerService.PutPlacementRule:input_type -> kodex.fleet.v1.PutPlacementRuleRequest
-	52,  // 101: kodex.fleet.v1.FleetManagerService.GetPlacementRule:input_type -> kodex.fleet.v1.GetPlacementRuleRequest
-	53,  // 102: kodex.fleet.v1.FleetManagerService.ListPlacementRules:input_type -> kodex.fleet.v1.ListPlacementRulesRequest
-	56,  // 103: kodex.fleet.v1.FleetManagerService.ResolvePlacement:input_type -> kodex.fleet.v1.ResolvePlacementRequest
-	58,  // 104: kodex.fleet.v1.FleetManagerService.GetPlacementDecision:input_type -> kodex.fleet.v1.GetPlacementDecisionRequest
-	59,  // 105: kodex.fleet.v1.FleetManagerService.ListPlacementDecisions:input_type -> kodex.fleet.v1.ListPlacementDecisionsRequest
-	29,  // 106: kodex.fleet.v1.FleetManagerService.CreateFleetScope:output_type -> kodex.fleet.v1.FleetScopeResponse
-	29,  // 107: kodex.fleet.v1.FleetManagerService.UpdateFleetScope:output_type -> kodex.fleet.v1.FleetScopeResponse
-	29,  // 108: kodex.fleet.v1.FleetManagerService.DisableFleetScope:output_type -> kodex.fleet.v1.FleetScopeResponse
-	29,  // 109: kodex.fleet.v1.FleetManagerService.GetFleetScope:output_type -> kodex.fleet.v1.FleetScopeResponse
-	30,  // 110: kodex.fleet.v1.FleetManagerService.ListFleetScopes:output_type -> kodex.fleet.v1.ListFleetScopesResponse
-	36,  // 111: kodex.fleet.v1.FleetManagerService.RegisterServer:output_type -> kodex.fleet.v1.ServerResponse
-	36,  // 112: kodex.fleet.v1.FleetManagerService.UpdateServer:output_type -> kodex.fleet.v1.ServerResponse
-	36,  // 113: kodex.fleet.v1.FleetManagerService.DisableServer:output_type -> kodex.fleet.v1.ServerResponse
-	36,  // 114: kodex.fleet.v1.FleetManagerService.GetServer:output_type -> kodex.fleet.v1.ServerResponse
-	37,  // 115: kodex.fleet.v1.FleetManagerService.ListServers:output_type -> kodex.fleet.v1.ListServersResponse
-	43,  // 116: kodex.fleet.v1.FleetManagerService.RegisterKubernetesCluster:output_type -> kodex.fleet.v1.KubernetesClusterResponse
-	43,  // 117: kodex.fleet.v1.FleetManagerService.UpdateKubernetesCluster:output_type -> kodex.fleet.v1.KubernetesClusterResponse
-	43,  // 118: kodex.fleet.v1.FleetManagerService.DisableKubernetesCluster:output_type -> kodex.fleet.v1.KubernetesClusterResponse
-	43,  // 119: kodex.fleet.v1.FleetManagerService.GetKubernetesCluster:output_type -> kodex.fleet.v1.KubernetesClusterResponse
-	44,  // 120: kodex.fleet.v1.FleetManagerService.ListKubernetesClusters:output_type -> kodex.fleet.v1.ListKubernetesClustersResponse
-	46,  // 121: kodex.fleet.v1.FleetManagerService.RunClusterConnectivityCheck:output_type -> kodex.fleet.v1.ClusterConnectivityCheckResponse
-	49,  // 122: kodex.fleet.v1.FleetManagerService.GetClusterHealthSnapshot:output_type -> kodex.fleet.v1.ClusterHealthSnapshotResponse
-	50,  // 123: kodex.fleet.v1.FleetManagerService.ListClusterHealthSnapshots:output_type -> kodex.fleet.v1.ListClusterHealthSnapshotsResponse
-	54,  // 124: kodex.fleet.v1.FleetManagerService.PutPlacementRule:output_type -> kodex.fleet.v1.PlacementRuleResponse
-	54,  // 125: kodex.fleet.v1.FleetManagerService.GetPlacementRule:output_type -> kodex.fleet.v1.PlacementRuleResponse
-	55,  // 126: kodex.fleet.v1.FleetManagerService.ListPlacementRules:output_type -> kodex.fleet.v1.ListPlacementRulesResponse
-	57,  // 127: kodex.fleet.v1.FleetManagerService.ResolvePlacement:output_type -> kodex.fleet.v1.ResolvePlacementResponse
-	60,  // 128: kodex.fleet.v1.FleetManagerService.GetPlacementDecision:output_type -> kodex.fleet.v1.PlacementDecisionResponse
-	61,  // 129: kodex.fleet.v1.FleetManagerService.ListPlacementDecisions:output_type -> kodex.fleet.v1.ListPlacementDecisionsResponse
-	106, // [106:130] is the sub-list for method output_type
-	82,  // [82:106] is the sub-list for method input_type
-	82,  // [82:82] is the sub-list for extension type_name
-	82,  // [82:82] is the sub-list for extension extendee
-	0,   // [0:82] is the sub-list for field type_name
+	11,  // 21: kodex.fleet.v1.EnableFleetScopeRequest.meta:type_name -> kodex.fleet.v1.CommandMeta
+	12,  // 22: kodex.fleet.v1.GetFleetScopeRequest.meta:type_name -> kodex.fleet.v1.QueryMeta
+	0,   // 23: kodex.fleet.v1.ListFleetScopesRequest.scope_types:type_name -> kodex.fleet.v1.FleetScopeType
+	1,   // 24: kodex.fleet.v1.ListFleetScopesRequest.statuses:type_name -> kodex.fleet.v1.FleetScopeStatus
+	15,  // 25: kodex.fleet.v1.ListFleetScopesRequest.page:type_name -> kodex.fleet.v1.PageRequest
+	12,  // 26: kodex.fleet.v1.ListFleetScopesRequest.meta:type_name -> kodex.fleet.v1.QueryMeta
+	17,  // 27: kodex.fleet.v1.FleetScopeResponse.scope:type_name -> kodex.fleet.v1.FleetScope
+	17,  // 28: kodex.fleet.v1.ListFleetScopesResponse.scopes:type_name -> kodex.fleet.v1.FleetScope
+	16,  // 29: kodex.fleet.v1.ListFleetScopesResponse.page:type_name -> kodex.fleet.v1.PageResponse
+	2,   // 30: kodex.fleet.v1.RegisterServerRequest.provider_type:type_name -> kodex.fleet.v1.ServerProviderType
+	11,  // 31: kodex.fleet.v1.RegisterServerRequest.meta:type_name -> kodex.fleet.v1.CommandMeta
+	2,   // 32: kodex.fleet.v1.UpdateServerRequest.provider_type:type_name -> kodex.fleet.v1.ServerProviderType
+	3,   // 33: kodex.fleet.v1.UpdateServerRequest.status:type_name -> kodex.fleet.v1.ServerStatus
+	11,  // 34: kodex.fleet.v1.UpdateServerRequest.meta:type_name -> kodex.fleet.v1.CommandMeta
+	11,  // 35: kodex.fleet.v1.DisableServerRequest.meta:type_name -> kodex.fleet.v1.CommandMeta
+	11,  // 36: kodex.fleet.v1.EnableServerRequest.meta:type_name -> kodex.fleet.v1.CommandMeta
+	12,  // 37: kodex.fleet.v1.GetServerRequest.meta:type_name -> kodex.fleet.v1.QueryMeta
+	3,   // 38: kodex.fleet.v1.ListServersRequest.statuses:type_name -> kodex.fleet.v1.ServerStatus
+	2,   // 39: kodex.fleet.v1.ListServersRequest.provider_types:type_name -> kodex.fleet.v1.ServerProviderType
+	15,  // 40: kodex.fleet.v1.ListServersRequest.page:type_name -> kodex.fleet.v1.PageRequest
+	12,  // 41: kodex.fleet.v1.ListServersRequest.meta:type_name -> kodex.fleet.v1.QueryMeta
+	18,  // 42: kodex.fleet.v1.ServerResponse.server:type_name -> kodex.fleet.v1.Server
+	18,  // 43: kodex.fleet.v1.ListServersResponse.servers:type_name -> kodex.fleet.v1.Server
+	16,  // 44: kodex.fleet.v1.ListServersResponse.page:type_name -> kodex.fleet.v1.PageResponse
+	11,  // 45: kodex.fleet.v1.RegisterKubernetesClusterRequest.meta:type_name -> kodex.fleet.v1.CommandMeta
+	4,   // 46: kodex.fleet.v1.UpdateKubernetesClusterRequest.status:type_name -> kodex.fleet.v1.KubernetesClusterStatus
+	11,  // 47: kodex.fleet.v1.UpdateKubernetesClusterRequest.meta:type_name -> kodex.fleet.v1.CommandMeta
+	11,  // 48: kodex.fleet.v1.DisableKubernetesClusterRequest.meta:type_name -> kodex.fleet.v1.CommandMeta
+	11,  // 49: kodex.fleet.v1.EnableKubernetesClusterRequest.meta:type_name -> kodex.fleet.v1.CommandMeta
+	12,  // 50: kodex.fleet.v1.GetKubernetesClusterRequest.meta:type_name -> kodex.fleet.v1.QueryMeta
+	4,   // 51: kodex.fleet.v1.ListKubernetesClustersRequest.statuses:type_name -> kodex.fleet.v1.KubernetesClusterStatus
+	5,   // 52: kodex.fleet.v1.ListKubernetesClustersRequest.health_statuses:type_name -> kodex.fleet.v1.ClusterHealthStatus
+	15,  // 53: kodex.fleet.v1.ListKubernetesClustersRequest.page:type_name -> kodex.fleet.v1.PageRequest
+	12,  // 54: kodex.fleet.v1.ListKubernetesClustersRequest.meta:type_name -> kodex.fleet.v1.QueryMeta
+	19,  // 55: kodex.fleet.v1.KubernetesClusterResponse.cluster:type_name -> kodex.fleet.v1.KubernetesCluster
+	19,  // 56: kodex.fleet.v1.ListKubernetesClustersResponse.clusters:type_name -> kodex.fleet.v1.KubernetesCluster
+	16,  // 57: kodex.fleet.v1.ListKubernetesClustersResponse.page:type_name -> kodex.fleet.v1.PageResponse
+	11,  // 58: kodex.fleet.v1.RunClusterConnectivityCheckRequest.meta:type_name -> kodex.fleet.v1.CommandMeta
+	20,  // 59: kodex.fleet.v1.ClusterConnectivityCheckResponse.connectivity_check:type_name -> kodex.fleet.v1.ClusterConnectivityCheck
+	12,  // 60: kodex.fleet.v1.GetClusterHealthSnapshotRequest.meta:type_name -> kodex.fleet.v1.QueryMeta
+	15,  // 61: kodex.fleet.v1.ListClusterHealthSnapshotsRequest.page:type_name -> kodex.fleet.v1.PageRequest
+	12,  // 62: kodex.fleet.v1.ListClusterHealthSnapshotsRequest.meta:type_name -> kodex.fleet.v1.QueryMeta
+	21,  // 63: kodex.fleet.v1.ClusterHealthSnapshotResponse.health_snapshot:type_name -> kodex.fleet.v1.ClusterHealthSnapshot
+	21,  // 64: kodex.fleet.v1.ListClusterHealthSnapshotsResponse.health_snapshots:type_name -> kodex.fleet.v1.ClusterHealthSnapshot
+	16,  // 65: kodex.fleet.v1.ListClusterHealthSnapshotsResponse.page:type_name -> kodex.fleet.v1.PageResponse
+	10,  // 66: kodex.fleet.v1.PutPlacementRuleRequest.status:type_name -> kodex.fleet.v1.PlacementRuleStatus
+	11,  // 67: kodex.fleet.v1.PutPlacementRuleRequest.meta:type_name -> kodex.fleet.v1.CommandMeta
+	12,  // 68: kodex.fleet.v1.GetPlacementRuleRequest.meta:type_name -> kodex.fleet.v1.QueryMeta
+	10,  // 69: kodex.fleet.v1.ListPlacementRulesRequest.statuses:type_name -> kodex.fleet.v1.PlacementRuleStatus
+	15,  // 70: kodex.fleet.v1.ListPlacementRulesRequest.page:type_name -> kodex.fleet.v1.PageRequest
+	12,  // 71: kodex.fleet.v1.ListPlacementRulesRequest.meta:type_name -> kodex.fleet.v1.QueryMeta
+	22,  // 72: kodex.fleet.v1.PlacementRuleResponse.placement_rule:type_name -> kodex.fleet.v1.PlacementRule
+	22,  // 73: kodex.fleet.v1.ListPlacementRulesResponse.placement_rules:type_name -> kodex.fleet.v1.PlacementRule
+	16,  // 74: kodex.fleet.v1.ListPlacementRulesResponse.page:type_name -> kodex.fleet.v1.PageResponse
+	8,   // 75: kodex.fleet.v1.ResolvePlacementRequest.runtime_mode:type_name -> kodex.fleet.v1.RuntimeMode
+	11,  // 76: kodex.fleet.v1.ResolvePlacementRequest.meta:type_name -> kodex.fleet.v1.CommandMeta
+	23,  // 77: kodex.fleet.v1.ResolvePlacementResponse.decision:type_name -> kodex.fleet.v1.PlacementDecision
+	12,  // 78: kodex.fleet.v1.GetPlacementDecisionRequest.meta:type_name -> kodex.fleet.v1.QueryMeta
+	9,   // 79: kodex.fleet.v1.ListPlacementDecisionsRequest.statuses:type_name -> kodex.fleet.v1.PlacementDecisionStatus
+	15,  // 80: kodex.fleet.v1.ListPlacementDecisionsRequest.page:type_name -> kodex.fleet.v1.PageRequest
+	12,  // 81: kodex.fleet.v1.ListPlacementDecisionsRequest.meta:type_name -> kodex.fleet.v1.QueryMeta
+	23,  // 82: kodex.fleet.v1.PlacementDecisionResponse.decision:type_name -> kodex.fleet.v1.PlacementDecision
+	23,  // 83: kodex.fleet.v1.ListPlacementDecisionsResponse.decisions:type_name -> kodex.fleet.v1.PlacementDecision
+	16,  // 84: kodex.fleet.v1.ListPlacementDecisionsResponse.page:type_name -> kodex.fleet.v1.PageResponse
+	24,  // 85: kodex.fleet.v1.FleetManagerService.CreateFleetScope:input_type -> kodex.fleet.v1.CreateFleetScopeRequest
+	25,  // 86: kodex.fleet.v1.FleetManagerService.UpdateFleetScope:input_type -> kodex.fleet.v1.UpdateFleetScopeRequest
+	26,  // 87: kodex.fleet.v1.FleetManagerService.DisableFleetScope:input_type -> kodex.fleet.v1.DisableFleetScopeRequest
+	27,  // 88: kodex.fleet.v1.FleetManagerService.EnableFleetScope:input_type -> kodex.fleet.v1.EnableFleetScopeRequest
+	28,  // 89: kodex.fleet.v1.FleetManagerService.GetFleetScope:input_type -> kodex.fleet.v1.GetFleetScopeRequest
+	29,  // 90: kodex.fleet.v1.FleetManagerService.ListFleetScopes:input_type -> kodex.fleet.v1.ListFleetScopesRequest
+	32,  // 91: kodex.fleet.v1.FleetManagerService.RegisterServer:input_type -> kodex.fleet.v1.RegisterServerRequest
+	33,  // 92: kodex.fleet.v1.FleetManagerService.UpdateServer:input_type -> kodex.fleet.v1.UpdateServerRequest
+	34,  // 93: kodex.fleet.v1.FleetManagerService.DisableServer:input_type -> kodex.fleet.v1.DisableServerRequest
+	35,  // 94: kodex.fleet.v1.FleetManagerService.EnableServer:input_type -> kodex.fleet.v1.EnableServerRequest
+	36,  // 95: kodex.fleet.v1.FleetManagerService.GetServer:input_type -> kodex.fleet.v1.GetServerRequest
+	37,  // 96: kodex.fleet.v1.FleetManagerService.ListServers:input_type -> kodex.fleet.v1.ListServersRequest
+	40,  // 97: kodex.fleet.v1.FleetManagerService.RegisterKubernetesCluster:input_type -> kodex.fleet.v1.RegisterKubernetesClusterRequest
+	41,  // 98: kodex.fleet.v1.FleetManagerService.UpdateKubernetesCluster:input_type -> kodex.fleet.v1.UpdateKubernetesClusterRequest
+	42,  // 99: kodex.fleet.v1.FleetManagerService.DisableKubernetesCluster:input_type -> kodex.fleet.v1.DisableKubernetesClusterRequest
+	43,  // 100: kodex.fleet.v1.FleetManagerService.EnableKubernetesCluster:input_type -> kodex.fleet.v1.EnableKubernetesClusterRequest
+	44,  // 101: kodex.fleet.v1.FleetManagerService.GetKubernetesCluster:input_type -> kodex.fleet.v1.GetKubernetesClusterRequest
+	45,  // 102: kodex.fleet.v1.FleetManagerService.ListKubernetesClusters:input_type -> kodex.fleet.v1.ListKubernetesClustersRequest
+	48,  // 103: kodex.fleet.v1.FleetManagerService.RunClusterConnectivityCheck:input_type -> kodex.fleet.v1.RunClusterConnectivityCheckRequest
+	50,  // 104: kodex.fleet.v1.FleetManagerService.GetClusterHealthSnapshot:input_type -> kodex.fleet.v1.GetClusterHealthSnapshotRequest
+	51,  // 105: kodex.fleet.v1.FleetManagerService.ListClusterHealthSnapshots:input_type -> kodex.fleet.v1.ListClusterHealthSnapshotsRequest
+	54,  // 106: kodex.fleet.v1.FleetManagerService.PutPlacementRule:input_type -> kodex.fleet.v1.PutPlacementRuleRequest
+	55,  // 107: kodex.fleet.v1.FleetManagerService.GetPlacementRule:input_type -> kodex.fleet.v1.GetPlacementRuleRequest
+	56,  // 108: kodex.fleet.v1.FleetManagerService.ListPlacementRules:input_type -> kodex.fleet.v1.ListPlacementRulesRequest
+	59,  // 109: kodex.fleet.v1.FleetManagerService.ResolvePlacement:input_type -> kodex.fleet.v1.ResolvePlacementRequest
+	61,  // 110: kodex.fleet.v1.FleetManagerService.GetPlacementDecision:input_type -> kodex.fleet.v1.GetPlacementDecisionRequest
+	62,  // 111: kodex.fleet.v1.FleetManagerService.ListPlacementDecisions:input_type -> kodex.fleet.v1.ListPlacementDecisionsRequest
+	30,  // 112: kodex.fleet.v1.FleetManagerService.CreateFleetScope:output_type -> kodex.fleet.v1.FleetScopeResponse
+	30,  // 113: kodex.fleet.v1.FleetManagerService.UpdateFleetScope:output_type -> kodex.fleet.v1.FleetScopeResponse
+	30,  // 114: kodex.fleet.v1.FleetManagerService.DisableFleetScope:output_type -> kodex.fleet.v1.FleetScopeResponse
+	30,  // 115: kodex.fleet.v1.FleetManagerService.EnableFleetScope:output_type -> kodex.fleet.v1.FleetScopeResponse
+	30,  // 116: kodex.fleet.v1.FleetManagerService.GetFleetScope:output_type -> kodex.fleet.v1.FleetScopeResponse
+	31,  // 117: kodex.fleet.v1.FleetManagerService.ListFleetScopes:output_type -> kodex.fleet.v1.ListFleetScopesResponse
+	38,  // 118: kodex.fleet.v1.FleetManagerService.RegisterServer:output_type -> kodex.fleet.v1.ServerResponse
+	38,  // 119: kodex.fleet.v1.FleetManagerService.UpdateServer:output_type -> kodex.fleet.v1.ServerResponse
+	38,  // 120: kodex.fleet.v1.FleetManagerService.DisableServer:output_type -> kodex.fleet.v1.ServerResponse
+	38,  // 121: kodex.fleet.v1.FleetManagerService.EnableServer:output_type -> kodex.fleet.v1.ServerResponse
+	38,  // 122: kodex.fleet.v1.FleetManagerService.GetServer:output_type -> kodex.fleet.v1.ServerResponse
+	39,  // 123: kodex.fleet.v1.FleetManagerService.ListServers:output_type -> kodex.fleet.v1.ListServersResponse
+	46,  // 124: kodex.fleet.v1.FleetManagerService.RegisterKubernetesCluster:output_type -> kodex.fleet.v1.KubernetesClusterResponse
+	46,  // 125: kodex.fleet.v1.FleetManagerService.UpdateKubernetesCluster:output_type -> kodex.fleet.v1.KubernetesClusterResponse
+	46,  // 126: kodex.fleet.v1.FleetManagerService.DisableKubernetesCluster:output_type -> kodex.fleet.v1.KubernetesClusterResponse
+	46,  // 127: kodex.fleet.v1.FleetManagerService.EnableKubernetesCluster:output_type -> kodex.fleet.v1.KubernetesClusterResponse
+	46,  // 128: kodex.fleet.v1.FleetManagerService.GetKubernetesCluster:output_type -> kodex.fleet.v1.KubernetesClusterResponse
+	47,  // 129: kodex.fleet.v1.FleetManagerService.ListKubernetesClusters:output_type -> kodex.fleet.v1.ListKubernetesClustersResponse
+	49,  // 130: kodex.fleet.v1.FleetManagerService.RunClusterConnectivityCheck:output_type -> kodex.fleet.v1.ClusterConnectivityCheckResponse
+	52,  // 131: kodex.fleet.v1.FleetManagerService.GetClusterHealthSnapshot:output_type -> kodex.fleet.v1.ClusterHealthSnapshotResponse
+	53,  // 132: kodex.fleet.v1.FleetManagerService.ListClusterHealthSnapshots:output_type -> kodex.fleet.v1.ListClusterHealthSnapshotsResponse
+	57,  // 133: kodex.fleet.v1.FleetManagerService.PutPlacementRule:output_type -> kodex.fleet.v1.PlacementRuleResponse
+	57,  // 134: kodex.fleet.v1.FleetManagerService.GetPlacementRule:output_type -> kodex.fleet.v1.PlacementRuleResponse
+	58,  // 135: kodex.fleet.v1.FleetManagerService.ListPlacementRules:output_type -> kodex.fleet.v1.ListPlacementRulesResponse
+	60,  // 136: kodex.fleet.v1.FleetManagerService.ResolvePlacement:output_type -> kodex.fleet.v1.ResolvePlacementResponse
+	63,  // 137: kodex.fleet.v1.FleetManagerService.GetPlacementDecision:output_type -> kodex.fleet.v1.PlacementDecisionResponse
+	64,  // 138: kodex.fleet.v1.FleetManagerService.ListPlacementDecisions:output_type -> kodex.fleet.v1.ListPlacementDecisionsResponse
+	112, // [112:139] is the sub-list for method output_type
+	85,  // [85:112] is the sub-list for method input_type
+	85,  // [85:85] is the sub-list for extension type_name
+	85,  // [85:85] is the sub-list for extension extendee
+	0,   // [0:85] is the sub-list for field type_name
 }
 
 func init() { file_kodex_fleet_v1_fleet_manager_proto_init() }
@@ -5624,25 +5814,25 @@ func file_kodex_fleet_v1_fleet_manager_proto_init() {
 	file_kodex_fleet_v1_fleet_manager_proto_msgTypes[12].OneofWrappers = []any{}
 	file_kodex_fleet_v1_fleet_manager_proto_msgTypes[13].OneofWrappers = []any{}
 	file_kodex_fleet_v1_fleet_manager_proto_msgTypes[14].OneofWrappers = []any{}
-	file_kodex_fleet_v1_fleet_manager_proto_msgTypes[17].OneofWrappers = []any{}
-	file_kodex_fleet_v1_fleet_manager_proto_msgTypes[21].OneofWrappers = []any{}
-	file_kodex_fleet_v1_fleet_manager_proto_msgTypes[24].OneofWrappers = []any{}
-	file_kodex_fleet_v1_fleet_manager_proto_msgTypes[27].OneofWrappers = []any{}
-	file_kodex_fleet_v1_fleet_manager_proto_msgTypes[28].OneofWrappers = []any{}
-	file_kodex_fleet_v1_fleet_manager_proto_msgTypes[31].OneofWrappers = []any{}
-	file_kodex_fleet_v1_fleet_manager_proto_msgTypes[36].OneofWrappers = []any{}
-	file_kodex_fleet_v1_fleet_manager_proto_msgTypes[37].OneofWrappers = []any{}
+	file_kodex_fleet_v1_fleet_manager_proto_msgTypes[18].OneofWrappers = []any{}
+	file_kodex_fleet_v1_fleet_manager_proto_msgTypes[22].OneofWrappers = []any{}
+	file_kodex_fleet_v1_fleet_manager_proto_msgTypes[26].OneofWrappers = []any{}
+	file_kodex_fleet_v1_fleet_manager_proto_msgTypes[29].OneofWrappers = []any{}
+	file_kodex_fleet_v1_fleet_manager_proto_msgTypes[30].OneofWrappers = []any{}
+	file_kodex_fleet_v1_fleet_manager_proto_msgTypes[34].OneofWrappers = []any{}
+	file_kodex_fleet_v1_fleet_manager_proto_msgTypes[39].OneofWrappers = []any{}
 	file_kodex_fleet_v1_fleet_manager_proto_msgTypes[40].OneofWrappers = []any{}
-	file_kodex_fleet_v1_fleet_manager_proto_msgTypes[42].OneofWrappers = []any{}
+	file_kodex_fleet_v1_fleet_manager_proto_msgTypes[43].OneofWrappers = []any{}
 	file_kodex_fleet_v1_fleet_manager_proto_msgTypes[45].OneofWrappers = []any{}
 	file_kodex_fleet_v1_fleet_manager_proto_msgTypes[48].OneofWrappers = []any{}
+	file_kodex_fleet_v1_fleet_manager_proto_msgTypes[51].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kodex_fleet_v1_fleet_manager_proto_rawDesc), len(file_kodex_fleet_v1_fleet_manager_proto_rawDesc)),
 			NumEnums:      11,
-			NumMessages:   51,
+			NumMessages:   54,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

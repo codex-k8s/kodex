@@ -178,12 +178,15 @@ sequenceDiagram
 - `fleet.scope.created`;
 - `fleet.scope.updated`;
 - `fleet.scope.disabled`;
+- `fleet.scope.enabled`;
 - `fleet.server.created`;
 - `fleet.server.updated`;
 - `fleet.server.disabled`;
+- `fleet.server.enabled`;
 - `fleet.cluster.created`;
 - `fleet.cluster.updated`;
 - `fleet.cluster.disabled`;
+- `fleet.cluster.enabled`;
 - `fleet.health.checked`;
 - `fleet.health.degraded`;
 - `fleet.placement.resolved`;

@@ -47,11 +47,11 @@ func TestProviderHubActionsAreSystemActions(t *testing.T) {
 func TestFleetManagerActionsAreSystemActions(t *testing.T) {
 	t.Parallel()
 
-	action, ok := SystemActionByKey(ActionFleetPlacementResolve)
+	action, ok := SystemActionByKey(ActionFleetClusterEnable)
 	if !ok {
-		t.Fatalf("SystemActionByKey(%q) ok = false, want true", ActionFleetPlacementResolve)
+		t.Fatalf("SystemActionByKey(%q) ok = false, want true", ActionFleetClusterEnable)
 	}
-	if action.ResourceType != ResourceFleetPlacementDecision {
-		t.Fatalf("fleet placement resource = %q, want %q", action.ResourceType, ResourceFleetPlacementDecision)
+	if action.ResourceType != ResourceFleetCluster {
+		t.Fatalf("fleet cluster resource = %q, want %q", action.ResourceType, ResourceFleetCluster)
 	}
 }

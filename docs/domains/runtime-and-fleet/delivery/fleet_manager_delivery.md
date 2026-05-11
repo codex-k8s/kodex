@@ -55,9 +55,9 @@ approvals:
 
 | Группа | Контракт | Реализация |
 |---|---|---|
-| Fleet scopes | Готов: `CreateFleetScope`, `UpdateFleetScope`, `DisableFleetScope`, `GetFleetScope`, `ListFleetScopes`. | Реестр нескольких scope реализуется в FLEET-3. |
-| Servers | Готов: `RegisterServer`, `UpdateServer`, `DisableServer`, `GetServer`, `ListServers`. | Реестр нескольких серверов реализуется в FLEET-3. |
-| Kubernetes clusters | Готов: `RegisterKubernetesCluster`, `UpdateKubernetesCluster`, `DisableKubernetesCluster`, `GetKubernetesCluster`, `ListKubernetesClusters`. | Реестр нескольких кластеров реализуется в FLEET-3. |
+| Fleet scopes | Готов: `CreateFleetScope`, `UpdateFleetScope`, `DisableFleetScope`, `EnableFleetScope`, `GetFleetScope`, `ListFleetScopes`. | Реестр нескольких scope реализуется в FLEET-3. |
+| Servers | Готов: `RegisterServer`, `UpdateServer`, `DisableServer`, `EnableServer`, `GetServer`, `ListServers`. | Реестр нескольких серверов реализуется в FLEET-3. |
+| Kubernetes clusters | Готов: `RegisterKubernetesCluster`, `UpdateKubernetesCluster`, `DisableKubernetesCluster`, `EnableKubernetesCluster`, `GetKubernetesCluster`, `ListKubernetesClusters`. | Реестр нескольких кластеров реализуется в FLEET-3. |
 | Связность и health | Готов: `RunClusterConnectivityCheck`, `GetClusterHealthSnapshot`, `ListClusterHealthSnapshots`, события `fleet.health.*`. | Проверки и snapshots реализуются в FLEET-4. |
 | Placement | Готов: `PutPlacementRule`, `GetPlacementRule`, `ListPlacementRules`, `ResolvePlacement`, чтения решений и события `fleet.placement.*`. | Базовый выбор из набора активных кластеров реализуется в FLEET-5. |
 | Контур выкладки | Не gRPC-группа. | Запланировано в FLEET-6. |

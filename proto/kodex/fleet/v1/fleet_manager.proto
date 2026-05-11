@@ -14,6 +14,8 @@ service FleetManagerService {
   rpc UpdateFleetScope(UpdateFleetScopeRequest) returns (FleetScopeResponse);
   // DisableFleetScope disables new placements in a scope.
   rpc DisableFleetScope(DisableFleetScopeRequest) returns (FleetScopeResponse);
+  // EnableFleetScope allows new placements in a previously disabled scope.
+  rpc EnableFleetScope(EnableFleetScopeRequest) returns (FleetScopeResponse);
   // GetFleetScope returns authoritative scope state.
   rpc GetFleetScope(GetFleetScopeRequest) returns (FleetScopeResponse);
   // ListFleetScopes returns scopes by type, owner, status or default flag.
@@ -24,6 +26,8 @@ service FleetManagerService {
   rpc UpdateServer(UpdateServerRequest) returns (ServerResponse);
   // DisableServer disables server use for new placements.
   rpc DisableServer(DisableServerRequest) returns (ServerResponse);
+  // EnableServer allows new placements through a previously disabled server.
+  rpc EnableServer(EnableServerRequest) returns (ServerResponse);
   // GetServer returns authoritative server state.
   rpc GetServer(GetServerRequest) returns (ServerResponse);
   // ListServers returns servers by status, provider, region or capacity class.
@@ -34,6 +38,8 @@ service FleetManagerService {
   rpc UpdateKubernetesCluster(UpdateKubernetesClusterRequest) returns (KubernetesClusterResponse);
   // DisableKubernetesCluster disables new placements in a cluster.
   rpc DisableKubernetesCluster(DisableKubernetesClusterRequest) returns (KubernetesClusterResponse);
+  // EnableKubernetesCluster allows new placements in a previously disabled cluster.
+  rpc EnableKubernetesCluster(EnableKubernetesClusterRequest) returns (KubernetesClusterResponse);
   // GetKubernetesCluster returns authoritative cluster state.
   rpc GetKubernetesCluster(GetKubernetesClusterRequest) returns (KubernetesClusterResponse);
   // ListKubernetesClusters returns clusters by scope, server, status, region or health.
@@ -510,6 +516,14 @@ message DisableFleetScopeRequest {
   CommandMeta meta = 2;
 }
 
+// EnableFleetScopeRequest allows new placements in a disabled scope.
+message EnableFleetScopeRequest {
+  // fleet_scope_id identifies the scope to enable.
+  string fleet_scope_id = 1;
+  // meta carries expected_version, idempotency, actor, reason and audit context.
+  CommandMeta meta = 2;
+}
+
 // GetFleetScopeRequest reads one fleet scope.
 message GetFleetScopeRequest {
   // fleet_scope_id identifies the scope to read.
@@ -595,6 +609,14 @@ message UpdateServerRequest {
 // DisableServerRequest disables server use for new placements.
 message DisableServerRequest {
   // server_id identifies the server to disable.
+  string server_id = 1;
+  // meta carries expected_version, idempotency, actor, reason and audit context.
+  CommandMeta meta = 2;
+}
+
+// EnableServerRequest allows new placements through a disabled server.
+message EnableServerRequest {
+  // server_id identifies the server to enable.
   string server_id = 1;
   // meta carries expected_version, idempotency, actor, reason and audit context.
   CommandMeta meta = 2;
@@ -697,6 +719,14 @@ message UpdateKubernetesClusterRequest {
 // DisableKubernetesClusterRequest disables new placements in a cluster.
 message DisableKubernetesClusterRequest {
   // cluster_id identifies the cluster to disable.
+  string cluster_id = 1;
+  // meta carries expected_version, idempotency, actor, reason and audit context.
+  CommandMeta meta = 2;
+}
+
+// EnableKubernetesClusterRequest allows new placements in a disabled cluster.
+message EnableKubernetesClusterRequest {
+  // cluster_id identifies the cluster to enable.
   string cluster_id = 1;
   // meta carries expected_version, idempotency, actor, reason and audit context.
   CommandMeta meta = 2;

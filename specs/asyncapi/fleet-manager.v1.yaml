@@ -30,12 +30,15 @@ components:
         - $ref: '#/components/schemas/ScopeCreatedEvent'
         - $ref: '#/components/schemas/ScopeUpdatedEvent'
         - $ref: '#/components/schemas/ScopeDisabledEvent'
+        - $ref: '#/components/schemas/ScopeEnabledEvent'
         - $ref: '#/components/schemas/ServerCreatedEvent'
         - $ref: '#/components/schemas/ServerUpdatedEvent'
         - $ref: '#/components/schemas/ServerDisabledEvent'
+        - $ref: '#/components/schemas/ServerEnabledEvent'
         - $ref: '#/components/schemas/ClusterCreatedEvent'
         - $ref: '#/components/schemas/ClusterUpdatedEvent'
         - $ref: '#/components/schemas/ClusterDisabledEvent'
+        - $ref: '#/components/schemas/ClusterEnabledEvent'
         - $ref: '#/components/schemas/HealthCheckedEvent'
         - $ref: '#/components/schemas/HealthDegradedEvent'
         - $ref: '#/components/schemas/PlacementResolvedEvent'
@@ -88,6 +91,14 @@ components:
       type: object
       properties: {event_type: {type: string, const: fleet.scope.disabled}, aggregate_type: {type: string, const: fleet_scope}, payload: {$ref: '#/components/schemas/ScopeDisabledPayload'}}
       required: [event_type, aggregate_type, payload]
+    ScopeEnabledEvent:
+      allOf:
+        - $ref: '#/components/schemas/FleetEventEnvelopeBase'
+        - $ref: '#/components/schemas/ScopeEnabledEventKind'
+    ScopeEnabledEventKind:
+      type: object
+      properties: {event_type: {type: string, const: fleet.scope.enabled}, aggregate_type: {type: string, const: fleet_scope}, payload: {$ref: '#/components/schemas/ScopeEnabledPayload'}}
+      required: [event_type, aggregate_type, payload]
 
     ServerCreatedEvent:
       allOf:
@@ -113,6 +124,14 @@ components:
       type: object
       properties: {event_type: {type: string, const: fleet.server.disabled}, aggregate_type: {type: string, const: server}, payload: {$ref: '#/components/schemas/ServerDisabledPayload'}}
       required: [event_type, aggregate_type, payload]
+    ServerEnabledEvent:
+      allOf:
+        - $ref: '#/components/schemas/FleetEventEnvelopeBase'
+        - $ref: '#/components/schemas/ServerEnabledEventKind'
+    ServerEnabledEventKind:
+      type: object
+      properties: {event_type: {type: string, const: fleet.server.enabled}, aggregate_type: {type: string, const: server}, payload: {$ref: '#/components/schemas/ServerEnabledPayload'}}
+      required: [event_type, aggregate_type, payload]
 
     ClusterCreatedEvent:
       allOf:
@@ -137,6 +156,14 @@ components:
     ClusterDisabledEventKind:
       type: object
       properties: {event_type: {type: string, const: fleet.cluster.disabled}, aggregate_type: {type: string, const: kubernetes_cluster}, payload: {$ref: '#/components/schemas/ClusterDisabledPayload'}}
+      required: [event_type, aggregate_type, payload]
+    ClusterEnabledEvent:
+      allOf:
+        - $ref: '#/components/schemas/FleetEventEnvelopeBase'
+        - $ref: '#/components/schemas/ClusterEnabledEventKind'
+    ClusterEnabledEventKind:
+      type: object
+      properties: {event_type: {type: string, const: fleet.cluster.enabled}, aggregate_type: {type: string, const: kubernetes_cluster}, payload: {$ref: '#/components/schemas/ClusterEnabledPayload'}}
       required: [event_type, aggregate_type, payload]
 
     HealthCheckedEvent:
@@ -179,12 +206,15 @@ components:
         - fleet.scope.created
         - fleet.scope.updated
         - fleet.scope.disabled
+        - fleet.scope.enabled
         - fleet.server.created
         - fleet.server.updated
         - fleet.server.disabled
+        - fleet.server.enabled
         - fleet.cluster.created
         - fleet.cluster.updated
         - fleet.cluster.disabled
+        - fleet.cluster.enabled
         - fleet.health.checked
         - fleet.health.degraded
         - fleet.placement.resolved
@@ -251,12 +281,15 @@ components:
     ScopeCreatedPayload: {$ref: '#/components/schemas/FleetEventPayload'}
     ScopeUpdatedPayload: {$ref: '#/components/schemas/FleetEventPayload'}
     ScopeDisabledPayload: {$ref: '#/components/schemas/FleetEventPayload'}
+    ScopeEnabledPayload: {$ref: '#/components/schemas/FleetEventPayload'}
     ServerCreatedPayload: {$ref: '#/components/schemas/FleetEventPayload'}
     ServerUpdatedPayload: {$ref: '#/components/schemas/FleetEventPayload'}
     ServerDisabledPayload: {$ref: '#/components/schemas/FleetEventPayload'}
+    ServerEnabledPayload: {$ref: '#/components/schemas/FleetEventPayload'}
     ClusterCreatedPayload: {$ref: '#/components/schemas/FleetEventPayload'}
     ClusterUpdatedPayload: {$ref: '#/components/schemas/FleetEventPayload'}
     ClusterDisabledPayload: {$ref: '#/components/schemas/FleetEventPayload'}
+    ClusterEnabledPayload: {$ref: '#/components/schemas/FleetEventPayload'}
     HealthCheckedPayload: {$ref: '#/components/schemas/FleetEventPayload'}
     HealthDegradedPayload: {$ref: '#/components/schemas/FleetEventPayload'}
     PlacementResolvedPayload: {$ref: '#/components/schemas/FleetEventPayload'}

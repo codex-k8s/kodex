@@ -22,16 +22,19 @@ const (
 	FleetManagerService_CreateFleetScope_FullMethodName            = "/kodex.fleet.v1.FleetManagerService/CreateFleetScope"
 	FleetManagerService_UpdateFleetScope_FullMethodName            = "/kodex.fleet.v1.FleetManagerService/UpdateFleetScope"
 	FleetManagerService_DisableFleetScope_FullMethodName           = "/kodex.fleet.v1.FleetManagerService/DisableFleetScope"
+	FleetManagerService_EnableFleetScope_FullMethodName            = "/kodex.fleet.v1.FleetManagerService/EnableFleetScope"
 	FleetManagerService_GetFleetScope_FullMethodName               = "/kodex.fleet.v1.FleetManagerService/GetFleetScope"
 	FleetManagerService_ListFleetScopes_FullMethodName             = "/kodex.fleet.v1.FleetManagerService/ListFleetScopes"
 	FleetManagerService_RegisterServer_FullMethodName              = "/kodex.fleet.v1.FleetManagerService/RegisterServer"
 	FleetManagerService_UpdateServer_FullMethodName                = "/kodex.fleet.v1.FleetManagerService/UpdateServer"
 	FleetManagerService_DisableServer_FullMethodName               = "/kodex.fleet.v1.FleetManagerService/DisableServer"
+	FleetManagerService_EnableServer_FullMethodName                = "/kodex.fleet.v1.FleetManagerService/EnableServer"
 	FleetManagerService_GetServer_FullMethodName                   = "/kodex.fleet.v1.FleetManagerService/GetServer"
 	FleetManagerService_ListServers_FullMethodName                 = "/kodex.fleet.v1.FleetManagerService/ListServers"
 	FleetManagerService_RegisterKubernetesCluster_FullMethodName   = "/kodex.fleet.v1.FleetManagerService/RegisterKubernetesCluster"
 	FleetManagerService_UpdateKubernetesCluster_FullMethodName     = "/kodex.fleet.v1.FleetManagerService/UpdateKubernetesCluster"
 	FleetManagerService_DisableKubernetesCluster_FullMethodName    = "/kodex.fleet.v1.FleetManagerService/DisableKubernetesCluster"
+	FleetManagerService_EnableKubernetesCluster_FullMethodName     = "/kodex.fleet.v1.FleetManagerService/EnableKubernetesCluster"
 	FleetManagerService_GetKubernetesCluster_FullMethodName        = "/kodex.fleet.v1.FleetManagerService/GetKubernetesCluster"
 	FleetManagerService_ListKubernetesClusters_FullMethodName      = "/kodex.fleet.v1.FleetManagerService/ListKubernetesClusters"
 	FleetManagerService_RunClusterConnectivityCheck_FullMethodName = "/kodex.fleet.v1.FleetManagerService/RunClusterConnectivityCheck"
@@ -59,6 +62,8 @@ type FleetManagerServiceClient interface {
 	UpdateFleetScope(ctx context.Context, in *UpdateFleetScopeRequest, opts ...grpc.CallOption) (*FleetScopeResponse, error)
 	// DisableFleetScope disables new placements in a scope.
 	DisableFleetScope(ctx context.Context, in *DisableFleetScopeRequest, opts ...grpc.CallOption) (*FleetScopeResponse, error)
+	// EnableFleetScope allows new placements in a previously disabled scope.
+	EnableFleetScope(ctx context.Context, in *EnableFleetScopeRequest, opts ...grpc.CallOption) (*FleetScopeResponse, error)
 	// GetFleetScope returns authoritative scope state.
 	GetFleetScope(ctx context.Context, in *GetFleetScopeRequest, opts ...grpc.CallOption) (*FleetScopeResponse, error)
 	// ListFleetScopes returns scopes by type, owner, status or default flag.
@@ -69,6 +74,8 @@ type FleetManagerServiceClient interface {
 	UpdateServer(ctx context.Context, in *UpdateServerRequest, opts ...grpc.CallOption) (*ServerResponse, error)
 	// DisableServer disables server use for new placements.
 	DisableServer(ctx context.Context, in *DisableServerRequest, opts ...grpc.CallOption) (*ServerResponse, error)
+	// EnableServer allows new placements through a previously disabled server.
+	EnableServer(ctx context.Context, in *EnableServerRequest, opts ...grpc.CallOption) (*ServerResponse, error)
 	// GetServer returns authoritative server state.
 	GetServer(ctx context.Context, in *GetServerRequest, opts ...grpc.CallOption) (*ServerResponse, error)
 	// ListServers returns servers by status, provider, region or capacity class.
@@ -79,6 +86,8 @@ type FleetManagerServiceClient interface {
 	UpdateKubernetesCluster(ctx context.Context, in *UpdateKubernetesClusterRequest, opts ...grpc.CallOption) (*KubernetesClusterResponse, error)
 	// DisableKubernetesCluster disables new placements in a cluster.
 	DisableKubernetesCluster(ctx context.Context, in *DisableKubernetesClusterRequest, opts ...grpc.CallOption) (*KubernetesClusterResponse, error)
+	// EnableKubernetesCluster allows new placements in a previously disabled cluster.
+	EnableKubernetesCluster(ctx context.Context, in *EnableKubernetesClusterRequest, opts ...grpc.CallOption) (*KubernetesClusterResponse, error)
 	// GetKubernetesCluster returns authoritative cluster state.
 	GetKubernetesCluster(ctx context.Context, in *GetKubernetesClusterRequest, opts ...grpc.CallOption) (*KubernetesClusterResponse, error)
 	// ListKubernetesClusters returns clusters by scope, server, status, region or health.
@@ -141,6 +150,16 @@ func (c *fleetManagerServiceClient) DisableFleetScope(ctx context.Context, in *D
 	return out, nil
 }
 
+func (c *fleetManagerServiceClient) EnableFleetScope(ctx context.Context, in *EnableFleetScopeRequest, opts ...grpc.CallOption) (*FleetScopeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FleetScopeResponse)
+	err := c.cc.Invoke(ctx, FleetManagerService_EnableFleetScope_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *fleetManagerServiceClient) GetFleetScope(ctx context.Context, in *GetFleetScopeRequest, opts ...grpc.CallOption) (*FleetScopeResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(FleetScopeResponse)
@@ -191,6 +210,16 @@ func (c *fleetManagerServiceClient) DisableServer(ctx context.Context, in *Disab
 	return out, nil
 }
 
+func (c *fleetManagerServiceClient) EnableServer(ctx context.Context, in *EnableServerRequest, opts ...grpc.CallOption) (*ServerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ServerResponse)
+	err := c.cc.Invoke(ctx, FleetManagerService_EnableServer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *fleetManagerServiceClient) GetServer(ctx context.Context, in *GetServerRequest, opts ...grpc.CallOption) (*ServerResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ServerResponse)
@@ -235,6 +264,16 @@ func (c *fleetManagerServiceClient) DisableKubernetesCluster(ctx context.Context
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(KubernetesClusterResponse)
 	err := c.cc.Invoke(ctx, FleetManagerService_DisableKubernetesCluster_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fleetManagerServiceClient) EnableKubernetesCluster(ctx context.Context, in *EnableKubernetesClusterRequest, opts ...grpc.CallOption) (*KubernetesClusterResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(KubernetesClusterResponse)
+	err := c.cc.Invoke(ctx, FleetManagerService_EnableKubernetesCluster_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -365,6 +404,8 @@ type FleetManagerServiceServer interface {
 	UpdateFleetScope(context.Context, *UpdateFleetScopeRequest) (*FleetScopeResponse, error)
 	// DisableFleetScope disables new placements in a scope.
 	DisableFleetScope(context.Context, *DisableFleetScopeRequest) (*FleetScopeResponse, error)
+	// EnableFleetScope allows new placements in a previously disabled scope.
+	EnableFleetScope(context.Context, *EnableFleetScopeRequest) (*FleetScopeResponse, error)
 	// GetFleetScope returns authoritative scope state.
 	GetFleetScope(context.Context, *GetFleetScopeRequest) (*FleetScopeResponse, error)
 	// ListFleetScopes returns scopes by type, owner, status or default flag.
@@ -375,6 +416,8 @@ type FleetManagerServiceServer interface {
 	UpdateServer(context.Context, *UpdateServerRequest) (*ServerResponse, error)
 	// DisableServer disables server use for new placements.
 	DisableServer(context.Context, *DisableServerRequest) (*ServerResponse, error)
+	// EnableServer allows new placements through a previously disabled server.
+	EnableServer(context.Context, *EnableServerRequest) (*ServerResponse, error)
 	// GetServer returns authoritative server state.
 	GetServer(context.Context, *GetServerRequest) (*ServerResponse, error)
 	// ListServers returns servers by status, provider, region or capacity class.
@@ -385,6 +428,8 @@ type FleetManagerServiceServer interface {
 	UpdateKubernetesCluster(context.Context, *UpdateKubernetesClusterRequest) (*KubernetesClusterResponse, error)
 	// DisableKubernetesCluster disables new placements in a cluster.
 	DisableKubernetesCluster(context.Context, *DisableKubernetesClusterRequest) (*KubernetesClusterResponse, error)
+	// EnableKubernetesCluster allows new placements in a previously disabled cluster.
+	EnableKubernetesCluster(context.Context, *EnableKubernetesClusterRequest) (*KubernetesClusterResponse, error)
 	// GetKubernetesCluster returns authoritative cluster state.
 	GetKubernetesCluster(context.Context, *GetKubernetesClusterRequest) (*KubernetesClusterResponse, error)
 	// ListKubernetesClusters returns clusters by scope, server, status, region or health.
@@ -426,6 +471,9 @@ func (UnimplementedFleetManagerServiceServer) UpdateFleetScope(context.Context, 
 func (UnimplementedFleetManagerServiceServer) DisableFleetScope(context.Context, *DisableFleetScopeRequest) (*FleetScopeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DisableFleetScope not implemented")
 }
+func (UnimplementedFleetManagerServiceServer) EnableFleetScope(context.Context, *EnableFleetScopeRequest) (*FleetScopeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method EnableFleetScope not implemented")
+}
 func (UnimplementedFleetManagerServiceServer) GetFleetScope(context.Context, *GetFleetScopeRequest) (*FleetScopeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetFleetScope not implemented")
 }
@@ -441,6 +489,9 @@ func (UnimplementedFleetManagerServiceServer) UpdateServer(context.Context, *Upd
 func (UnimplementedFleetManagerServiceServer) DisableServer(context.Context, *DisableServerRequest) (*ServerResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DisableServer not implemented")
 }
+func (UnimplementedFleetManagerServiceServer) EnableServer(context.Context, *EnableServerRequest) (*ServerResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method EnableServer not implemented")
+}
 func (UnimplementedFleetManagerServiceServer) GetServer(context.Context, *GetServerRequest) (*ServerResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetServer not implemented")
 }
@@ -455,6 +506,9 @@ func (UnimplementedFleetManagerServiceServer) UpdateKubernetesCluster(context.Co
 }
 func (UnimplementedFleetManagerServiceServer) DisableKubernetesCluster(context.Context, *DisableKubernetesClusterRequest) (*KubernetesClusterResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DisableKubernetesCluster not implemented")
+}
+func (UnimplementedFleetManagerServiceServer) EnableKubernetesCluster(context.Context, *EnableKubernetesClusterRequest) (*KubernetesClusterResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method EnableKubernetesCluster not implemented")
 }
 func (UnimplementedFleetManagerServiceServer) GetKubernetesCluster(context.Context, *GetKubernetesClusterRequest) (*KubernetesClusterResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetKubernetesCluster not implemented")
@@ -564,6 +618,24 @@ func _FleetManagerService_DisableFleetScope_Handler(srv interface{}, ctx context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _FleetManagerService_EnableFleetScope_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnableFleetScopeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FleetManagerServiceServer).EnableFleetScope(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FleetManagerService_EnableFleetScope_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FleetManagerServiceServer).EnableFleetScope(ctx, req.(*EnableFleetScopeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _FleetManagerService_GetFleetScope_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetFleetScopeRequest)
 	if err := dec(in); err != nil {
@@ -654,6 +726,24 @@ func _FleetManagerService_DisableServer_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _FleetManagerService_EnableServer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnableServerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FleetManagerServiceServer).EnableServer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FleetManagerService_EnableServer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FleetManagerServiceServer).EnableServer(ctx, req.(*EnableServerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _FleetManagerService_GetServer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetServerRequest)
 	if err := dec(in); err != nil {
@@ -740,6 +830,24 @@ func _FleetManagerService_DisableKubernetesCluster_Handler(srv interface{}, ctx 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(FleetManagerServiceServer).DisableKubernetesCluster(ctx, req.(*DisableKubernetesClusterRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FleetManagerService_EnableKubernetesCluster_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnableKubernetesClusterRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FleetManagerServiceServer).EnableKubernetesCluster(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FleetManagerService_EnableKubernetesCluster_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FleetManagerServiceServer).EnableKubernetesCluster(ctx, req.(*EnableKubernetesClusterRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -962,6 +1070,10 @@ var FleetManagerService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _FleetManagerService_DisableFleetScope_Handler,
 		},
 		{
+			MethodName: "EnableFleetScope",
+			Handler:    _FleetManagerService_EnableFleetScope_Handler,
+		},
+		{
 			MethodName: "GetFleetScope",
 			Handler:    _FleetManagerService_GetFleetScope_Handler,
 		},
@@ -982,6 +1094,10 @@ var FleetManagerService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _FleetManagerService_DisableServer_Handler,
 		},
 		{
+			MethodName: "EnableServer",
+			Handler:    _FleetManagerService_EnableServer_Handler,
+		},
+		{
 			MethodName: "GetServer",
 			Handler:    _FleetManagerService_GetServer_Handler,
 		},
@@ -1000,6 +1116,10 @@ var FleetManagerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DisableKubernetesCluster",
 			Handler:    _FleetManagerService_DisableKubernetesCluster_Handler,
+		},
+		{
+			MethodName: "EnableKubernetesCluster",
+			Handler:    _FleetManagerService_EnableKubernetesCluster_Handler,
 		},
 		{
 			MethodName: "GetKubernetesCluster",

@@ -131,16 +131,19 @@ const (
 	ActionFleetScopeCreate                      = "fleet.scope.create"
 	ActionFleetScopeUpdate                      = "fleet.scope.update"
 	ActionFleetScopeDisable                     = "fleet.scope.disable"
+	ActionFleetScopeEnable                      = "fleet.scope.enable"
 	ActionFleetScopeRead                        = "fleet.scope.read"
 	ActionFleetScopeList                        = "fleet.scope.list"
 	ActionFleetServerRegister                   = "fleet.server.register"
 	ActionFleetServerUpdate                     = "fleet.server.update"
 	ActionFleetServerDisable                    = "fleet.server.disable"
+	ActionFleetServerEnable                     = "fleet.server.enable"
 	ActionFleetServerRead                       = "fleet.server.read"
 	ActionFleetServerList                       = "fleet.server.list"
 	ActionFleetClusterRegister                  = "fleet.cluster.register"
 	ActionFleetClusterUpdate                    = "fleet.cluster.update"
 	ActionFleetClusterDisable                   = "fleet.cluster.disable"
+	ActionFleetClusterEnable                    = "fleet.cluster.enable"
 	ActionFleetClusterRead                      = "fleet.cluster.read"
 	ActionFleetClusterList                      = "fleet.cluster.list"
 	ActionFleetHealthCheckRun                   = "fleet.health.check.run"
@@ -250,31 +253,54 @@ func RuntimeManagerActions() []ActionDescriptor {
 
 // FleetManagerActions returns system actions owned by the runtime-and-fleet domain.
 func FleetManagerActions() []ActionDescriptor {
-	return []ActionDescriptor{
-		{Key: ActionFleetScopeCreate, ResourceType: ResourceFleetScope},
-		{Key: ActionFleetScopeUpdate, ResourceType: ResourceFleetScope},
-		{Key: ActionFleetScopeDisable, ResourceType: ResourceFleetScope},
-		{Key: ActionFleetScopeRead, ResourceType: ResourceFleetScope},
-		{Key: ActionFleetScopeList, ResourceType: ResourceFleetScope},
-		{Key: ActionFleetServerRegister, ResourceType: ResourceFleetServer},
-		{Key: ActionFleetServerUpdate, ResourceType: ResourceFleetServer},
-		{Key: ActionFleetServerDisable, ResourceType: ResourceFleetServer},
-		{Key: ActionFleetServerRead, ResourceType: ResourceFleetServer},
-		{Key: ActionFleetServerList, ResourceType: ResourceFleetServer},
-		{Key: ActionFleetClusterRegister, ResourceType: ResourceFleetCluster},
-		{Key: ActionFleetClusterUpdate, ResourceType: ResourceFleetCluster},
-		{Key: ActionFleetClusterDisable, ResourceType: ResourceFleetCluster},
-		{Key: ActionFleetClusterRead, ResourceType: ResourceFleetCluster},
-		{Key: ActionFleetClusterList, ResourceType: ResourceFleetCluster},
-		{Key: ActionFleetHealthCheckRun, ResourceType: ResourceFleetHealth},
-		{Key: ActionFleetHealthRead, ResourceType: ResourceFleetHealth},
-		{Key: ActionFleetPlacementRulePut, ResourceType: ResourceFleetPlacementRule},
-		{Key: ActionFleetPlacementRuleRead, ResourceType: ResourceFleetPlacementRule},
-		{Key: ActionFleetPlacementRuleList, ResourceType: ResourceFleetPlacementRule},
-		{Key: ActionFleetPlacementResolve, ResourceType: ResourceFleetPlacementDecision},
-		{Key: ActionFleetPlacementDecisionRead, ResourceType: ResourceFleetPlacementDecision},
-		{Key: ActionFleetPlacementDecisionList, ResourceType: ResourceFleetPlacementDecision},
+	actions := make([]ActionDescriptor, 0, 26)
+	actions = append(actions, actionDescriptorsForResource(ResourceFleetScope,
+		ActionFleetScopeCreate,
+		ActionFleetScopeUpdate,
+		ActionFleetScopeDisable,
+		ActionFleetScopeEnable,
+		ActionFleetScopeRead,
+		ActionFleetScopeList,
+	)...)
+	actions = append(actions, actionDescriptorsForResource(ResourceFleetServer,
+		ActionFleetServerRegister,
+		ActionFleetServerUpdate,
+		ActionFleetServerDisable,
+		ActionFleetServerEnable,
+		ActionFleetServerRead,
+		ActionFleetServerList,
+	)...)
+	actions = append(actions, actionDescriptorsForResource(ResourceFleetCluster,
+		ActionFleetClusterRegister,
+		ActionFleetClusterUpdate,
+		ActionFleetClusterDisable,
+		ActionFleetClusterEnable,
+		ActionFleetClusterRead,
+		ActionFleetClusterList,
+	)...)
+	actions = append(actions, actionDescriptorsForResource(ResourceFleetHealth,
+		ActionFleetHealthCheckRun,
+		ActionFleetHealthRead,
+	)...)
+	actions = append(actions, actionDescriptorsForResource(ResourceFleetPlacementRule,
+		ActionFleetPlacementRulePut,
+		ActionFleetPlacementRuleRead,
+		ActionFleetPlacementRuleList,
+	)...)
+	actions = append(actions, actionDescriptorsForResource(ResourceFleetPlacementDecision,
+		ActionFleetPlacementResolve,
+		ActionFleetPlacementDecisionRead,
+		ActionFleetPlacementDecisionList,
+	)...)
+	return actions
+}
+
+func actionDescriptorsForResource(resourceType string, keys ...string) []ActionDescriptor {
+	actions := make([]ActionDescriptor, 0, len(keys))
+	for _, key := range keys {
+		actions = append(actions, ActionDescriptor{Key: key, ResourceType: resourceType})
 	}
+	return actions
 }
 
 // SystemActions returns all shared code-owned system actions.
