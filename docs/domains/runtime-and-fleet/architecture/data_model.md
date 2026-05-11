@@ -216,7 +216,7 @@ approvals:
 |---|---|---:|---|---|
 | `id` | UUID | no | primary key | Идентификатор policy. |
 | `scope_type` | text | no | indexed | `platform`, `project`, `repository`, `runtime_profile`; `organization` зарезервирован до появления projection организации на runtime-слотах и отклоняется командами cleanup. |
-| `scope_id` | text | no | indexed | Внешний scope id; для `platform` пустая строка, для `runtime_profile` ключ профиля. |
+| `scope_id` | text | no | indexed | Внешний scope id; для `platform` пустая строка, для `runtime_profile` ключ профиля, для `project`/`repository` валидный UUID. |
 | `ttl_seconds` | bigint | no |  | Срок хранения после завершения. |
 | `failed_ttl_seconds` | bigint | no |  | Срок хранения failed объектов. |
 | `keep_short_log_tail` | boolean | no | default true | Оставлять короткий хвост. |
@@ -233,7 +233,7 @@ approvals:
 |---|---|---:|---|---|
 | `id` | UUID | no | primary key | Идентификатор пула. |
 | `scope_type` | text | no | indexed | `platform`, `organization`, `project`, `repository`. |
-| `scope_id` | text | no | indexed | Внешний scope id; для `platform` пустая строка. |
+| `scope_id` | text | no | indexed | Внешний scope id; для `platform` пустая строка, для `project`/`repository` валидный UUID. |
 | `runtime_profile` | text | no | indexed | Профиль runtime. |
 | `fleet_scope_id` | UUID | yes | indexed | Внешний fleet scope. |
 | `target_size` | bigint | no |  | Желаемое число прогретых слотов. |

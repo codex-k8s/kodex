@@ -328,7 +328,9 @@ func validCleanupScope(scope enum.RuntimeScopeType, scopeID string) bool {
 	switch scope {
 	case enum.RuntimeScopePlatform:
 		return cleanScopeID(scopeID) == ""
-	case enum.RuntimeScopeProject, enum.RuntimeScopeRepository, enum.RuntimeScopeRuntimeProfile:
+	case enum.RuntimeScopeProject, enum.RuntimeScopeRepository:
+		return validUUIDScopeID(scopeID)
+	case enum.RuntimeScopeRuntimeProfile:
 		return cleanScopeID(scopeID) != ""
 	default:
 		return false
@@ -339,8 +341,10 @@ func validPrewarmScope(scope enum.PrewarmPoolScopeType, scopeID string) bool {
 	switch scope {
 	case enum.PrewarmPoolScopePlatform:
 		return cleanScopeID(scopeID) == ""
-	case enum.PrewarmPoolScopeOrganization, enum.PrewarmPoolScopeProject, enum.PrewarmPoolScopeRepository:
+	case enum.PrewarmPoolScopeOrganization:
 		return cleanScopeID(scopeID) != ""
+	case enum.PrewarmPoolScopeProject, enum.PrewarmPoolScopeRepository:
+		return validUUIDScopeID(scopeID)
 	default:
 		return false
 	}
@@ -366,6 +370,11 @@ func validPrewarmPoolStatus(status enum.PrewarmPoolStatus) bool {
 
 func cleanScopeID(scopeID string) string {
 	return strings.TrimSpace(scopeID)
+}
+
+func validUUIDScopeID(scopeID string) bool {
+	_, err := uuid.Parse(cleanScopeID(scopeID))
+	return err == nil
 }
 
 func cleanupPolicyResource(policyID *uuid.UUID, scope enum.RuntimeScopeType, scopeID string) resourceRef {

@@ -324,6 +324,25 @@ func TestCleanupPolicyRejectsOrganizationScopeUntilSlotProjectionExists(t *testi
 	}
 }
 
+func TestCleanupPolicyRejectsNonUUIDProjectAndRepositoryScopes(t *testing.T) {
+	t.Parallel()
+
+	svc, _ := newTestService()
+	for _, scope := range []enum.RuntimeScopeType{enum.RuntimeScopeProject, enum.RuntimeScopeRepository} {
+		_, err := svc.CreateOrUpdateCleanupPolicy(context.Background(), CreateOrUpdateCleanupPolicyInput{
+			ScopeType:        scope,
+			ScopeID:          "not-a-uuid",
+			TTLSeconds:       60,
+			FailedTTLSeconds: 60,
+			Status:           enum.CleanupPolicyStatusActive,
+			Meta:             commandMeta(mustUUID("00000000-0000-0000-0000-000000000746"), 0),
+		})
+		if !errors.Is(err, errs.ErrInvalidArgument) {
+			t.Fatalf("CreateOrUpdateCleanupPolicy(%s) err = %v, want invalid argument", scope, err)
+		}
+	}
+}
+
 func TestCleanupPolicyUpdateAuthorizesCurrentAndRequestedScopes(t *testing.T) {
 	t.Parallel()
 
@@ -461,6 +480,25 @@ func TestPrewarmPoolUpdateAuthorizesCurrentAndRequestedScopes(t *testing.T) {
 	}
 	if authorizer.requests[0].ScopeID != currentProjectID || authorizer.requests[1].ScopeID != targetProjectID {
 		t.Fatalf("authorization scope ids = %#v, want current then requested", authorizer.requests)
+	}
+}
+
+func TestPrewarmPoolRejectsNonUUIDProjectAndRepositoryScopes(t *testing.T) {
+	t.Parallel()
+
+	svc, _ := newTestService()
+	for _, scope := range []enum.PrewarmPoolScopeType{enum.PrewarmPoolScopeProject, enum.PrewarmPoolScopeRepository} {
+		_, err := svc.CreateOrUpdatePrewarmPool(context.Background(), CreateOrUpdatePrewarmPoolInput{
+			ScopeType:      scope,
+			ScopeID:        "not-a-uuid",
+			RuntimeProfile: "go-backend",
+			TargetSize:     1,
+			Status:         enum.PrewarmPoolStatusActive,
+			Meta:           commandMeta(mustUUID("00000000-0000-0000-0000-000000000747"), 0),
+		})
+		if !errors.Is(err, errs.ErrInvalidArgument) {
+			t.Fatalf("CreateOrUpdatePrewarmPool(%s) err = %v, want invalid argument", scope, err)
+		}
 	}
 }
 
