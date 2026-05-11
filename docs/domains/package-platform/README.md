@@ -19,6 +19,7 @@
 | `architecture/data_model.md` | Целевая модель данных `package-hub`. |
 | `architecture/api_contract.md` | Обзор будущих gRPC-операций и событий `package.*`. |
 | `delivery/package_hub.md` | План поставки домена малыми срезами. |
+| `operations/package_hub_runbook.md` | Runbook эксплуатации `package-hub`. |
 
 ## Связанные каталоги
 
@@ -42,6 +43,7 @@
 - Руководящие пакеты не смешиваются с проектной документацией: проектная документация описывается проектной политикой, а руководящие пакеты остаются пакетами со своей версией и источником.
 - Руководящие пакеты читаются через общие операции `ListPackages`, `ListPackageInstallations` и `GetPackageManifest` с видом `guidance`; отдельная сущность руководства в БД не создаётся.
 - Пакет магазина и пакет пользовательского контента платформы читаются через те же операции с видами `store` и `platform_content`; `package-hub` не хранит бизнес-состояние магазина и файлы сайта или документации в БД.
+- Эксплуатационный контур `package-hub` включает отдельный Dockerfile, Kubernetes manifests, migration job, health/metrics, smoke-проверку и runbook; запуск runtime-нагрузок пакетов остаётся за соседними доменами.
 
 ## Карта Issue
 
