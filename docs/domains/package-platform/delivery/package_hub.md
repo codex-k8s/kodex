@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-06
 updated_at: 2026-05-11
-related_issues: [642, 646, 650, 663, 667, 670, 673, 678, 680, 684, 689, 692, 700, 704]
+related_issues: [642, 646, 650, 663, 667, 670, 673, 678, 680, 684, 689, 692, 700, 704, 706]
 related_prs: []
 related_docsets:
   - docs/domains/package-platform/product/requirements.md
@@ -56,7 +56,8 @@ approvals:
 | PKG-5.3b | не назначено | Сверка статуса заполненности секретов установки должна быть готова: `RefreshPackageInstallationSecretStatus` и связь с контуром секретов после согласования контракта заполненности секретов пакета в `access-manager`. |
 | PKG-6.1 | #700 | Специализация видов пакетов готова: `plugin`, `guidance`, `store`, `platform_content`, правила manifest по виду и модели чтения через `package_kind`. |
 | PKG-6.2 | #704 | Руководящие пакеты доступны как `package_kind=guidance`: каталог, установки и manifest читаются через существующие операции без отдельного RPC, runtime-запуска и provider-native синхронизации. |
-| PKG-6.3+ | не назначено | Следующие специализированные сценарии магазина и пользовательского контента платформы готовы без runtime-запуска и provider-native синхронизации. |
+| PKG-6.3a | #706 | Локальные сценарии `store` и `platform_content` готовы: manifest validation, чтения каталога, чтения установок и границы без runtime-запуска, provider-native синхронизации и хранения файлов в БД. |
+| PKG-6.3b+ | не назначено | Следующие интеграционные сценарии магазина и пользовательского контента платформы готовы после согласования внешнего адаптера магазина, provider-native доступа и runtime-размещения. |
 | PKG-7 | не назначено | Манифесты deploy, migration job, config, health, metrics и runbook готовы. |
 
 ## Статус операций `PackageHubService`
@@ -145,6 +146,16 @@ approvals:
 | Manifest руководящего пакета | готово | `GetPackageManifest(package_version_id)` отдаёт проверенный снимок manifest, где описан источник, версия и состав руководящего пакета. |
 | Проверка manifest | готово | `guidance` требует capability `guidance` и отклоняется, если manifest содержит runtime, секреты, действия доступа или API платформы. |
 | Не входит в срез | запланировано | Checkout, mount и сборка рабочего контекста агента остаются в `agent-manager` и runtime-контуре; `package-hub` не хранит тексты руководящих документов в БД. |
+
+## Магазин и пользовательский контент платформы `PKG-6.3a`
+
+| Область | Статус | Примечание |
+|---|---|---|
+| Пакет магазина | готово | `ListPackages(package_kind=store)`, `ListPackageInstallations(package_kind=store, scope=...)` и `GetPackageManifest` отдают локальное состояние пакета магазина без обращения к внешнему магазину на пользовательский запрос. |
+| Пользовательский контент платформы | готово | `ListPackages(package_kind=platform_content)`, `ListPackageInstallations(package_kind=platform_content, scope=...)` и `GetPackageManifest` отдают локальное состояние пакета сайта, справки и API-материалов платформы. |
+| Проверка manifest магазина | готово | `store` требует capability `store`, запрещает capability `guidance` и `platform_content`, но может описывать runtime, секреты, действия доступа и API платформы для будущего исполнения магазина соседними контурами. |
+| Проверка manifest пользовательского контента | готово | `platform_content` требует capability `platform_content`, запрещает capability `guidance` и `store`, а также секреты, действия доступа и API платформы; runtime допустим только как будущий способ доставки контента. |
+| Не входит в срез | запланировано | Внешний адаптер магазина, provider-native синхронизация, checkout исходников, runtime-размещение, UI/gateway и бизнес-система магазина не реализуются в `package-hub`. |
 
 ## Наблюдаемость `PKG-3.1`
 
