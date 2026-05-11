@@ -33,6 +33,7 @@
 | `k8s.io/apimachinery` | `v0.35.0` | Kubernetes API machinery | ошибки API, meta types, утилиты client-go |
 | `github.com/google/go-github/v82` | `v82.0.0` | Repository provider (GitHub) | настройка вебхуков и валидация доступа к репозиториям через GitHub API v3 |
 | `github.com/google/go-querystring` | `v1.2.0` | Dependency of go-github | сериализация query params для GitHub API клиента |
+| `github.com/hashicorp/vault/api` | `v1.23.0` | Secret resolver | официальный Go SDK для чтения Vault KV v2 в `libs/go/secretresolver` без самописного Vault API клиента |
 | `google.golang.org/grpc` | `v1.79.3` | Internal transport | внутреннее service-to-service взаимодействие (`gateway` -> внутренний сервис и service-to-service) |
 | `go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc` | `v0.67.0` | Наблюдаемость внутреннего gRPC | трассировка и метрики gRPC-сервера через `grpc.StatsHandler`; версия выбрана без подъёма `google.golang.org/grpc` выше `v1.79.3` |
 | `go.opentelemetry.io/otel` | `v1.42.0` | API наблюдаемости | базовые OpenTelemetry API и W3C-схема проброса контекста для общих runtime-библиотек |

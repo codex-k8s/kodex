@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-06
 updated_at: 2026-05-11
-related_issues: [642, 646, 650, 663, 667, 670, 673, 678, 680, 684, 689, 692, 700, 704, 706, 710]
+related_issues: [642, 646, 650, 663, 667, 670, 673, 678, 680, 684, 689, 692, 700, 704, 706, 710, 711]
 related_prs: []
 related_docsets:
   - docs/domains/package-platform/product/requirements.md
@@ -54,7 +54,7 @@ approvals:
 | PKG-5.1 | #684 | Запрос установки пакета и чтения установок готовы: `RequestPackageInstallation`, `GetPackageInstallation`, `ListPackageInstallations`, идемпотентность, проверка доступа, проверка готовности к установке и события `package.installation.requested/activated`. |
 | PKG-5.2 | #689 | Изменение, отключение и снятие установки готовы: `UpdatePackageInstallation`, `DisablePackageInstallation`, `UninstallPackage`, ожидаемая версия и события жизненного цикла. |
 | PKG-5.3a | #692 | Чтение схем секретов версий пакетов готово: снимки схем создаются из manifest при синхронизации каталога, `GetPackageSecretSchema` читает локальную схему с проверкой `package.secret.read`. |
-| PKG-5.3b | не назначено | Сверка статуса заполненности секретов установки должна быть готова: `RefreshPackageInstallationSecretStatus` и связь с контуром секретов после согласования контракта заполненности секретов пакета в `access-manager`. |
+| PKG-5.3b | не назначено | Сверка статуса заполненности секретов установки должна быть готова: `RefreshPackageInstallationSecretStatus`, чтение канонических ссылок установки из `access-manager` и проверка доступности через `secretresolver.Checker` без возврата значения. |
 | PKG-6.1 | #700 | Специализация видов пакетов готова: `plugin`, `guidance`, `store`, `platform_content`, правила manifest по виду и модели чтения через `package_kind`. |
 | PKG-6.2 | #704 | Руководящие пакеты доступны как `package_kind=guidance`: каталог, установки и manifest читаются через существующие операции без отдельного RPC, runtime-запуска и provider-native синхронизации. |
 | PKG-6.3a | #706 | Локальные сценарии `store` и `platform_content` готовы: manifest validation, чтения каталога, чтения установок и границы без runtime-запуска, provider-native синхронизации и хранения файлов в БД. |
@@ -127,7 +127,7 @@ approvals:
 | Снимки схем секретов | готово | `SyncAvailablePackages` извлекает блок `secrets` из проверенного manifest, нормализует локализованные поля и сохраняет новую `PackageSecretSchema` только при новом digest. |
 | События | готово | Новая схема публикует `package.secret_schema.updated` через outbox вместе с остальными событиями синхронизации каталога. |
 | Чтение схемы | готово | `GetPackageSecretSchema` проверяет `package.secret.read` на ресурс схемы версии пакета и возвращает последнюю локальную схему. |
-| Не входит в срез | запланировано | `RefreshPackageInstallationSecretStatus` требует согласованного контракта `access-manager` для проверки заполненности секретов пакета и остаётся отдельным срезом. |
+| Не входит в срез | запланировано | `RefreshPackageInstallationSecretStatus` требует согласованного контракта `access-manager` для выдачи ссылок секретов установки. Общий `secretresolver.Checker` уже задаёт способ проверки доступности без раскрытия значений, но пакетный домен ещё не подключён к этому контракту. |
 
 ## Виды пакетов `PKG-6.1`
 

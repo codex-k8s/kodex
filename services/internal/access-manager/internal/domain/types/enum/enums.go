@@ -231,6 +231,7 @@ const (
 type SecretStoreType string
 
 const (
-	SecretStoreVault            SecretStoreType = "vault"
-	SecretStoreKubernetesSecret SecretStoreType = "kubernetes_secret"
+	SecretStoreVault                   SecretStoreType = "vault"
+	SecretStoreKubernetesMountedSecret SecretStoreType = "kubernetes_mounted_secret"
+	SecretStoreEnv                     SecretStoreType = "env"
 )

@@ -5051,7 +5051,7 @@ type ResolveExternalAccountUsageResponse struct {
 	ProviderId string `protobuf:"bytes,2,opt,name=provider_id,json=providerId,proto3" json:"provider_id,omitempty"`
 	// secret_ref_id references secret metadata.
 	SecretRefId string `protobuf:"bytes,3,opt,name=secret_ref_id,json=secretRefId,proto3" json:"secret_ref_id,omitempty"`
-	// secret_store_type is vault or kubernetes_secret.
+	// secret_store_type is vault, kubernetes_mounted_secret, env, or a future agreed type.
 	SecretStoreType string `protobuf:"bytes,4,opt,name=secret_store_type,json=secretStoreType,proto3" json:"secret_store_type,omitempty"`
 	// secret_store_ref is a pointer to secret location, never the secret value.
 	SecretStoreRef string `protobuf:"bytes,5,opt,name=secret_store_ref,json=secretStoreRef,proto3" json:"secret_store_ref,omitempty"`

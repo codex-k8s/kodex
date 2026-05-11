@@ -266,8 +266,9 @@ var accessDecisionToProto = reverseEnumMap[enum.AccessDecision, accessaccountsv1
 }
 
 var secretStoreTypeToProtoString = map[enum.SecretStoreType]string{
-	enum.SecretStoreVault:            "vault",
-	enum.SecretStoreKubernetesSecret: "kubernetes_secret",
+	enum.SecretStoreVault:                   "vault",
+	enum.SecretStoreKubernetesMountedSecret: "kubernetes_mounted_secret",
+	enum.SecretStoreEnv:                     "env",
 }
 
 func requiredEnum[P comparable, D ~string](value P, values enumMap[P, D]) (D, error) {

@@ -5,8 +5,8 @@ title: kodex — модель данных домена доступа и акк
 status: active
 owner_role: SA
 created_at: 2026-04-26
-updated_at: 2026-05-04
-related_issues: [599, 600, 601, 602]
+updated_at: 2026-05-11
+related_issues: [599, 600, 601, 602, 711]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -217,7 +217,7 @@ approvals:
 | Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
 | `id` | UUID | no | Идентификатор ссылки. |
-| `store_type` | enum | no | `vault`, `kubernetes_secret`, будущие типы. |
+| `store_type` | enum | no | `kubernetes_mounted_secret`, `env`, `vault`, будущие типы. |
 | `store_ref` | string | no | Путь или имя секрета без значения. |
 | `value_fingerprint` | string | yes | Нераскрывающий отпечаток для диагностики ротации. |
 | `rotated_at` | timestamp | yes | Последняя известная ротация. |
@@ -225,7 +225,7 @@ approvals:
 
 `owner_scope_type` показывает, кто владеет внешним аккаунтом и отвечает за его секрет. `ExternalAccountBinding` показывает, кому разрешено использовать аккаунт. Это позволяет завести личный аккаунт пользователя, аккаунт отдельного агента, аккаунт группы, аккаунт роли или аккаунт конкретного flow без изменения структуры таблиц.
 
-`access-manager` хранит только ссылку на секрет и не выдаёт значение секрета в API. Вызвавший сервис получает значение секрета через профильный секретный контур по `store_type` и `store_ref` после успешного `ResolveExternalAccountUsage`.
+`access-manager` хранит только ссылку на секрет и не выдаёт значение секрета в API. Вызвавший сервис получает значение секрета через общий `libs/go/secretresolver` по `store_type` и `store_ref` после успешного `ResolveExternalAccountUsage`. Значение живёт только в памяти процесса вызывающего сервиса на время операции и не попадает в БД, аудит, события, логи, трассировку, ошибки или публичные ответы.
 
 ### `AccessDecisionAudit`
 

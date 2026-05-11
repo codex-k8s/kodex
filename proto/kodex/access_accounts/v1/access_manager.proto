@@ -925,7 +925,7 @@ message ResolveExternalAccountUsageResponse {
   string provider_id = 2;
   // secret_ref_id references secret metadata.
   string secret_ref_id = 3;
-  // secret_store_type is vault or kubernetes_secret.
+  // secret_store_type is vault, kubernetes_mounted_secret, env, or a future agreed type.
   string secret_store_type = 4;
   // secret_store_ref is a pointer to secret location, never the secret value.
   string secret_store_ref = 5;

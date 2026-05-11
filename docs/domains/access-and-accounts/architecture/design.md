@@ -5,8 +5,8 @@ title: kodex — дизайн домена доступа и аккаунтов
 status: active
 owner_role: SA
 created_at: 2026-04-26
-updated_at: 2026-05-04
-related_issues: [599, 600, 601, 602]
+updated_at: 2026-05-11
+related_issues: [599, 600, 601, 602, 711]
 related_prs: []
 related_adrs: []
 approvals:
@@ -105,12 +105,15 @@ sequenceDiagram
 sequenceDiagram
   participant P as provider-hub
   participant A as access-manager
+  participant R as secret resolver
   participant V as хранилище секретов
   P->>A: ResolveExternalAccountUsage(account_id, action, scope)
   A->>A: Проверить политику и статус аккаунта
   A-->>P: provider_slug + разрешённые операции + secret_ref
-  P->>V: Получить секрет по secret_ref
-  V-->>P: Секрет для операции
+  P->>R: Resolve(secret_ref)
+  R->>V: Получить значение через настроенную реализацию
+  V-->>R: Значение секрета
+  R-->>P: SecretValue только в памяти процесса
 ```
 
 ## Конкурентные изменения
