@@ -232,6 +232,35 @@ func scanReconciliationRequest(row postgreslib.RowScanner) (entity.Reconciliatio
 	return request, err
 }
 
+func scanProviderArtifactSignal(row postgreslib.RowScanner) (entity.ProviderArtifactSignal, error) {
+	var signal entity.ProviderArtifactSignal
+	var providerSlug, scopeType string
+	var artifactKinds, targetJSON, payloadJSON []byte
+	if err := row.Scan(
+		&signal.ID,
+		&signal.IdentityKey,
+		&providerSlug,
+		&signal.ExternalAccountID,
+		&signal.Source,
+		&scopeType,
+		&signal.ScopeRef,
+		&artifactKinds,
+		&targetJSON,
+		&payloadJSON,
+		&signal.ObservedAt,
+		&signal.CreatedAt,
+	); err != nil {
+		return signal, err
+	}
+	kinds, err := scanArtifactKinds(artifactKinds)
+	signal.ProviderSlug = enum.ProviderSlug(providerSlug)
+	signal.ScopeType = enum.SyncCursorScopeType(scopeType)
+	signal.ArtifactKinds = kinds
+	signal.TargetJSON = append(signal.TargetJSON[:0], targetJSON...)
+	signal.PayloadJSON = append(signal.PayloadJSON[:0], payloadJSON...)
+	return signal, err
+}
+
 func scanLimitSnapshot(row postgreslib.RowScanner) (entity.ProviderLimitSnapshot, error) {
 	var snapshot entity.ProviderLimitSnapshot
 	var providerSlug, source string

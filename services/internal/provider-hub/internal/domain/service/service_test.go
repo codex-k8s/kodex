@@ -559,13 +559,14 @@ func TestRegisterProviderArtifactSignalEnqueuesHotWorkItemCursors(t *testing.T) 
 
 	now := time.Date(2026, 5, 11, 12, 0, 0, 0, time.UTC)
 	observedAt := now.Add(-2 * time.Minute)
+	signalStorageID := uuid.New()
 	requestID := uuid.New()
 	commentCursorID := uuid.New()
 	pullRequestCursorID := uuid.New()
 	relationshipCursorID := uuid.New()
 	externalAccountID := uuid.New()
 	repository := &fakeRepository{}
-	service := NewWithRuntime(repository, fixedClock{now: now}, &sequenceIDs{ids: []uuid.UUID{requestID, commentCursorID, pullRequestCursorID, relationshipCursorID}})
+	service := NewWithRuntime(repository, fixedClock{now: now}, &sequenceIDs{ids: []uuid.UUID{signalStorageID, requestID, commentCursorID, pullRequestCursorID, relationshipCursorID}})
 
 	result, err := service.RegisterProviderArtifactSignal(context.Background(), RegisterProviderArtifactSignalInput{
 		SignalID:          "slot-agent-signal-1",
@@ -588,12 +589,19 @@ func TestRegisterProviderArtifactSignalEnqueuesHotWorkItemCursors(t *testing.T) 
 		t.Fatalf("result = %+v, want accepted signal", result)
 	}
 	if repository.reconciliationRequest.ID != requestID ||
-		repository.reconciliationRequest.IdempotencyKey != "artifact-signal:slot-agent-signal-1" ||
+		repository.reconciliationRequest.IdempotencyKey != "artifact-signal:id:slot-agent-signal-1" ||
 		repository.reconciliationRequest.ExternalAccountID != externalAccountID ||
 		repository.reconciliationRequest.ScopeType != enum.SyncCursorScopeWorkItem ||
 		repository.reconciliationRequest.ScopeRef != "codex-k8s/kodex#pull_request:688" ||
 		repository.reconciliationRequest.Priority != enum.SyncCursorPriorityHot {
 		t.Fatalf("request = %+v, want hot work item signal request", repository.reconciliationRequest)
+	}
+	if repository.providerArtifactSignal.ID != signalStorageID ||
+		repository.providerArtifactSignal.IdentityKey != "artifact-signal:id:slot-agent-signal-1" ||
+		repository.providerArtifactSignal.ExternalAccountID != externalAccountID ||
+		repository.providerArtifactSignal.ScopeRef != "codex-k8s/kodex#pull_request:688" ||
+		string(repository.providerArtifactSignal.PayloadJSON) != `{"run_id":"run-1"}` {
+		t.Fatalf("stored signal = %+v, want signal-level idempotency record", repository.providerArtifactSignal)
 	}
 	wantKinds := []enum.SyncArtifactKind{enum.SyncArtifactComment, enum.SyncArtifactPullRequest, enum.SyncArtifactRelationship}
 	if len(repository.reconciliationRequest.ArtifactKinds) != len(wantKinds) {
@@ -612,6 +620,127 @@ func TestRegisterProviderArtifactSignalEnqueuesHotWorkItemCursors(t *testing.T) 
 		repository.enqueuedSyncCursors[1].ArtifactKind != enum.SyncArtifactPullRequest ||
 		repository.enqueuedSyncCursors[1].Priority != enum.SyncCursorPriorityHot {
 		t.Fatalf("pull request cursor = %+v, want hot PR cursor", repository.enqueuedSyncCursors[1])
+	}
+}
+
+func TestRegisterProviderArtifactSignalSupportsTargetForms(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 11, 13, 0, 0, 0, time.UTC)
+	externalAccountID := uuid.New()
+	cases := []struct {
+		name         string
+		target       ProviderArtifactTarget
+		wantScopeRef string
+		wantKinds    []enum.SyncArtifactKind
+	}{
+		{
+			name: "web URL without kind",
+			target: ProviderArtifactTarget{
+				ProviderSlug: enum.ProviderSlugGitHub,
+				WebURL:       "https://github.com/codex-k8s/kodex/pull/703",
+			},
+			wantScopeRef: "web_url:https://github.com/codex-k8s/kodex/pull/703",
+			wantKinds: []enum.SyncArtifactKind{
+				enum.SyncArtifactComment,
+				enum.SyncArtifactIssue,
+				enum.SyncArtifactMergeRequest,
+				enum.SyncArtifactPullRequest,
+				enum.SyncArtifactRelationship,
+			},
+		},
+		{
+			name: "provider object id without kind",
+			target: ProviderArtifactTarget{
+				ProviderSlug:     enum.ProviderSlugGitLab,
+				ProviderObjectID: "gid://gitlab/MergeRequest/42",
+			},
+			wantScopeRef: "provider_object_id:gid://gitlab/MergeRequest/42",
+			wantKinds: []enum.SyncArtifactKind{
+				enum.SyncArtifactComment,
+				enum.SyncArtifactIssue,
+				enum.SyncArtifactMergeRequest,
+				enum.SyncArtifactPullRequest,
+				enum.SyncArtifactRelationship,
+			},
+		},
+		{
+			name: "repository number without kind",
+			target: ProviderArtifactTarget{
+				ProviderSlug:       enum.ProviderSlugGitHub,
+				RepositoryFullName: "codex-k8s/kodex",
+				Number:             703,
+			},
+			wantScopeRef: "codex-k8s/kodex#number:703",
+			wantKinds: []enum.SyncArtifactKind{
+				enum.SyncArtifactComment,
+				enum.SyncArtifactIssue,
+				enum.SyncArtifactMergeRequest,
+				enum.SyncArtifactPullRequest,
+				enum.SyncArtifactRelationship,
+			},
+		},
+		{
+			name: "repository only",
+			target: ProviderArtifactTarget{
+				ProviderSlug:       enum.ProviderSlugGitHub,
+				RepositoryFullName: "codex-k8s/kodex",
+			},
+			wantScopeRef: "codex-k8s/kodex",
+			wantKinds:    []enum.SyncArtifactKind{enum.SyncArtifactRepository},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			ids := []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()}
+			repository := &fakeRepository{}
+			service := NewWithRuntime(repository, fixedClock{now: now}, &sequenceIDs{ids: ids})
+
+			_, err := service.RegisterProviderArtifactSignal(context.Background(), RegisterProviderArtifactSignalInput{
+				SignalID:          "signal-" + tc.name,
+				ExternalAccountID: externalAccountID,
+				Target:            tc.target,
+				Source:            "agent_manager",
+				ObservedAt:        now.Add(-time.Minute),
+				Meta:              value.CommandMeta{CommandID: uuid.New()},
+			})
+			if err != nil {
+				t.Fatalf("RegisterProviderArtifactSignal(): %v", err)
+			}
+			if repository.reconciliationRequest.ScopeRef != tc.wantScopeRef ||
+				repository.reconciliationRequest.Priority != enum.SyncCursorPriorityHot {
+				t.Fatalf("request = %+v, want scope ref %s hot", repository.reconciliationRequest, tc.wantScopeRef)
+			}
+			if len(repository.reconciliationRequest.ArtifactKinds) != len(tc.wantKinds) {
+				t.Fatalf("artifact kinds = %+v, want %+v", repository.reconciliationRequest.ArtifactKinds, tc.wantKinds)
+			}
+			for index, wantKind := range tc.wantKinds {
+				if repository.reconciliationRequest.ArtifactKinds[index] != wantKind {
+					t.Fatalf("artifact kinds = %+v, want %+v", repository.reconciliationRequest.ArtifactKinds, tc.wantKinds)
+				}
+			}
+		})
+	}
+}
+
+func TestRegisterProviderArtifactSignalRejectsNumberWithoutLocator(t *testing.T) {
+	t.Parallel()
+
+	service := NewWithRuntime(&fakeRepository{}, fixedClock{now: time.Now()}, &sequenceIDs{ids: []uuid.UUID{uuid.New()}})
+	_, err := service.RegisterProviderArtifactSignal(context.Background(), RegisterProviderArtifactSignalInput{
+		ExternalAccountID: uuid.New(),
+		Target: ProviderArtifactTarget{
+			ProviderSlug: enum.ProviderSlugGitHub,
+			Number:       581,
+		},
+		Source:     "agent_manager",
+		ObservedAt: time.Now(),
+		Meta:       value.CommandMeta{CommandID: uuid.New()},
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("RegisterProviderArtifactSignal() err = %v, want %v", err, errs.ErrInvalidArgument)
 	}
 }
 
@@ -729,6 +858,7 @@ type fakeRepository struct {
 	lastWorkItemLookup     query.ProviderTargetLookup
 	reconciliationRequest  entity.ReconciliationRequest
 	enqueuedSyncCursors    []entity.SyncCursor
+	providerArtifactSignal entity.ProviderArtifactSignal
 	syncCursor             entity.SyncCursor
 	syncCursorClaim        providerrepo.SyncCursorClaim
 }
@@ -791,6 +921,11 @@ func (r *fakeRepository) ListComments(context.Context, query.CommentProjectionFi
 
 func (r *fakeRepository) ListRelationships(context.Context, query.RelationshipFilter) ([]entity.ProviderRelationship, query.PageResult, error) {
 	return nil, query.PageResult{}, r.err
+}
+
+func (r *fakeRepository) StoreProviderArtifactSignal(_ context.Context, signal entity.ProviderArtifactSignal) (entity.ProviderArtifactSignal, error) {
+	r.providerArtifactSignal = signal
+	return signal, r.err
 }
 
 func (r *fakeRepository) EnqueueSyncCursors(_ context.Context, request entity.ReconciliationRequest, cursors []entity.SyncCursor) ([]entity.SyncCursor, error) {

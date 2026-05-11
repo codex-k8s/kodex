@@ -2,6 +2,7 @@ package provider
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -227,6 +228,27 @@ func relationshipFilterArgs(filter query.RelationshipFilter) pageQueryArgs {
 		"sources":                 postgreslib.StringValues(filter.Sources),
 		"confidence_levels":       postgreslib.StringValues(filter.ConfidenceLevels),
 	})
+}
+
+func providerArtifactSignalArgs(signal entity.ProviderArtifactSignal) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"id":                  signal.ID,
+		"identity_key":        signal.IdentityKey,
+		"provider_slug":       string(signal.ProviderSlug),
+		"external_account_id": signal.ExternalAccountID,
+		"source":              signal.Source,
+		"scope_type":          string(signal.ScopeType),
+		"scope_ref":           signal.ScopeRef,
+		"artifact_kinds_json": artifactKindsJSON(signal.ArtifactKinds),
+		"target_json":         jsonPayloadOrDefault(signal.TargetJSON, "{}"),
+		"payload_json":        jsonPayloadOrDefault(signal.PayloadJSON, "{}"),
+		"observed_at":         signal.ObservedAt.UTC().Round(time.Microsecond),
+		"created_at":          signal.CreatedAt.UTC().Round(time.Microsecond),
+	}
+}
+
+func providerArtifactSignalIdentityArgs(signal entity.ProviderArtifactSignal) pgx.NamedArgs {
+	return pgx.NamedArgs{"identity_key": signal.IdentityKey}
 }
 
 func reconciliationRequestArgs(request entity.ReconciliationRequest) pgx.NamedArgs {

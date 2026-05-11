@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"time"
 
@@ -161,6 +162,24 @@ func (r *Repository) ListComments(ctx context.Context, filter query.CommentProje
 // ListRelationships returns normalized relationships.
 func (r *Repository) ListRelationships(ctx context.Context, filter query.RelationshipFilter) ([]entity.ProviderRelationship, query.PageResult, error) {
 	return queryPage(ctx, r.db, operationListRelationships, queryRelationshipList, relationshipFilterArgs(filter), scanRelationship)
+}
+
+// StoreProviderArtifactSignal stores signal-level idempotency before cursor enqueue.
+func (r *Repository) StoreProviderArtifactSignal(ctx context.Context, signal entity.ProviderArtifactSignal) (entity.ProviderArtifactSignal, error) {
+	stored, err := queryOne(ctx, r.db, operationStoreProviderArtifactSignal, queryProviderArtifactSignalInsert, providerArtifactSignalArgs(signal), scanProviderArtifactSignal)
+	if errors.Is(err, errs.ErrNotFound) {
+		stored, err = queryOne(ctx, r.db, operationStoreProviderArtifactSignal, queryProviderArtifactSignalGetByIdentity, providerArtifactSignalIdentityArgs(signal), scanProviderArtifactSignal)
+		if err == nil && !sameProviderArtifactSignal(signal, stored) {
+			err = errs.ErrConflict
+		}
+	}
+	if err != nil {
+		return entity.ProviderArtifactSignal{}, wrapError(operationStoreProviderArtifactSignal, err)
+	}
+	if !sameProviderArtifactSignal(signal, stored) {
+		return entity.ProviderArtifactSignal{}, wrapError(operationStoreProviderArtifactSignal, errs.ErrConflict)
+	}
+	return stored, nil
 }
 
 // EnqueueSyncCursors records one idempotent enqueue request and creates all requested cursors atomically.
@@ -334,6 +353,7 @@ const (
 	operationListWorkItemProjections          = "domain.Repository.ListWorkItemProjections"
 	operationListComments                     = "domain.Repository.ListComments"
 	operationListRelationships                = "domain.Repository.ListRelationships"
+	operationStoreProviderArtifactSignal      = "domain.Repository.StoreProviderArtifactSignal"
 	operationEnqueueSyncCursors               = "domain.Repository.EnqueueSyncCursors"
 	operationGetSyncCursor                    = "domain.Repository.GetSyncCursor"
 	operationListSyncCursors                  = "domain.Repository.ListSyncCursors"
@@ -404,6 +424,19 @@ func sameReconciliationRequest(expected entity.ReconciliationRequest, actual ent
 		expected.IdempotencyKey == actual.IdempotencyKey &&
 		expected.Priority == actual.Priority &&
 		slices.Equal(expected.ArtifactKinds, actual.ArtifactKinds)
+}
+
+func sameProviderArtifactSignal(expected entity.ProviderArtifactSignal, actual entity.ProviderArtifactSignal) bool {
+	return expected.IdentityKey == actual.IdentityKey &&
+		expected.ProviderSlug == actual.ProviderSlug &&
+		expected.ExternalAccountID == actual.ExternalAccountID &&
+		expected.Source == actual.Source &&
+		expected.ScopeType == actual.ScopeType &&
+		expected.ScopeRef == actual.ScopeRef &&
+		expected.ObservedAt.Equal(actual.ObservedAt) &&
+		slices.Equal(expected.ArtifactKinds, actual.ArtifactKinds) &&
+		sameJSON(expected.TargetJSON, actual.TargetJSON) &&
+		sameJSON(expected.PayloadJSON, actual.PayloadJSON)
 }
 
 type projectionUpdater interface {
@@ -588,6 +621,15 @@ func sameWebhookEvent(left entity.WebhookEvent, right entity.WebhookEvent) bool 
 		left.EventName == right.EventName &&
 		left.RepositoryProviderID == right.RepositoryProviderID &&
 		bytes.Equal(compactJSON(left.PayloadJSON), compactJSON(right.PayloadJSON))
+}
+
+func sameJSON(left []byte, right []byte) bool {
+	var leftValue any
+	var rightValue any
+	if json.Unmarshal(left, &leftValue) != nil || json.Unmarshal(right, &rightValue) != nil {
+		return bytes.Equal(compactJSON(left), compactJSON(right))
+	}
+	return reflect.DeepEqual(leftValue, rightValue)
 }
 
 func compactJSON(raw []byte) []byte {

@@ -265,6 +265,54 @@ func TestRepositoryIntegrationSyncCursors(t *testing.T) {
 	}
 }
 
+func TestRepositoryIntegrationProviderArtifactSignals(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openIntegrationPool(t, ctx)
+	repository := NewRepository(pool)
+	now := time.Date(2026, 5, 11, 14, 0, 0, 0, time.UTC)
+	signal := entity.ProviderArtifactSignal{
+		ID:                uuid.New(),
+		IdentityKey:       "artifact-signal:id:signal-1",
+		ProviderSlug:      enum.ProviderSlugGitHub,
+		ExternalAccountID: uuid.New(),
+		Source:            "slot_agent_after",
+		ScopeType:         enum.SyncCursorScopeWorkItem,
+		ScopeRef:          "codex-k8s/kodex#pull_request:703",
+		ArtifactKinds:     []enum.SyncArtifactKind{enum.SyncArtifactComment, enum.SyncArtifactPullRequest, enum.SyncArtifactRelationship},
+		TargetJSON:        []byte(`{"provider_slug":"github","repository_full_name":"codex-k8s/kodex","work_item_kind":"pull_request","number":703}`),
+		PayloadJSON:       []byte(`{"run_id":"run-1"}`),
+		ObservedAt:        now.Add(-time.Minute),
+		CreatedAt:         now,
+	}
+	stored, err := repository.StoreProviderArtifactSignal(ctx, signal)
+	if err != nil {
+		t.Fatalf("store artifact signal: %v", err)
+	}
+	if stored.ID != signal.ID || stored.IdentityKey != signal.IdentityKey {
+		t.Fatalf("stored signal = %+v, want id %s identity %s", stored, signal.ID, signal.IdentityKey)
+	}
+
+	replay := signal
+	replay.ID = uuid.New()
+	replay.CreatedAt = now.Add(time.Minute)
+	replayed, err := repository.StoreProviderArtifactSignal(ctx, replay)
+	if err != nil {
+		t.Fatalf("replay artifact signal: %v", err)
+	}
+	if replayed.ID != signal.ID {
+		t.Fatalf("replayed signal id = %s, want original %s", replayed.ID, signal.ID)
+	}
+
+	conflict := replay
+	conflict.ScopeRef = "codex-k8s/kodex#pull_request:704"
+	conflict.TargetJSON = []byte(`{"provider_slug":"github","repository_full_name":"codex-k8s/kodex","work_item_kind":"pull_request","number":704}`)
+	if _, err := repository.StoreProviderArtifactSignal(ctx, conflict); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("conflicting artifact signal err = %v, want %v", err, errs.ErrConflict)
+	}
+}
+
 func testSyncCursor(id uuid.UUID, request entity.ReconciliationRequest, artifactKind enum.SyncArtifactKind, now time.Time) entity.SyncCursor {
 	return entity.SyncCursor{
 		Base: entity.Base{

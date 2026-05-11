@@ -103,8 +103,8 @@ approvals:
 - явное сохранение `external_account_id` в запросе постановки и курсоре сверки, чтобы worker не выбирал внешний аккаунт неявно;
 - идемпотентная постановка сверки по `provider_slug + scope_type + scope_ref + idempotency_key`: повтор той же команды не меняет курсоры, а повтор с другим внешним аккаунтом или составом запроса возвращает конфликт;
 - PostgreSQL-хранение курсоров сверки с естественным ключом `provider_slug + scope_type + scope_ref + artifact_kind`, пакетной атомарной постановкой нескольких `artifact_kind`, сохранением более высокого приоритета при новой постановке и защитой lease через `FOR UPDATE SKIP LOCKED`;
-- `RegisterProviderArtifactSignal` для внутренних сигналов от `agent-manager`, platform MCP и slot-агентов: вызывающий контур передаёт `external_account_id`, source, время наблюдения и provider target, а `provider-hub` ставит `hot` cursor без чтения секрета и без обращения в GitHub/GitLab API;
-- для сигналов по `Issue`/`PR/MR` ставятся курсоры основного артефакта, комментариев и связей; для repository target ставится курсор репозитория;
+- `RegisterProviderArtifactSignal` для внутренних сигналов от `agent-manager`, platform MCP и slot-агентов: вызывающий контур передаёт `external_account_id`, source, время наблюдения и provider target, а `provider-hub` сохраняет signal-level идемпотентность и ставит `hot` cursor без чтения секрета и без обращения в GitHub/GitLab API;
+- для сигналов по `Issue`/`PR/MR` ставятся курсоры основного артефакта, комментариев и связей; если тип рабочего артефакта неизвестен, ставятся hot cursors для `issue`, `pull_request`, `merge_request`, комментариев и связей; для repository target ставится курсор репозитория;
 - штатный outbox dispatcher `provider-hub` в `platform-event-log`.
 
 Миграция `external_account_id` для очереди сверки явно очищает строки `provider_hub_sync_cursors` и `provider_hub_reconciliation_requests`, созданные предыдущим срезом без знания внешнего аккаунта. Эти строки являются эфемерным состоянием планировщика и пересоздаются повторной постановкой сверки; так тестовые кластеры с уже развёрнутым PRV-6.1 не упираются в `ADD COLUMN ... NOT NULL`.

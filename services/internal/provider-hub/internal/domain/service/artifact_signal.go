@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -18,8 +19,9 @@ import (
 )
 
 const (
-	artifactSignalIDPrefix = "artifact-signal:"
-	artifactSignalAccepted = "accepted"
+	artifactSignalIDPrefix        = "artifact-signal:"
+	artifactSignalAccepted        = "accepted"
+	artifactSignalEmptyPayloadRaw = `{}`
 )
 
 // RegisterProviderArtifactSignal turns an internal artifact signal into hot reconciliation cursors.
@@ -32,10 +34,14 @@ func (s *Service) RegisterProviderArtifactSignal(ctx context.Context, input Regi
 		input.ObservedAt.IsZero() {
 		return ProviderArtifactSignalResult{}, errs.ErrInvalidArgument
 	}
+	observedAt := input.ObservedAt.UTC().Round(time.Microsecond)
+	payloadJSON := []byte(artifactSignalEmptyPayloadRaw)
 	if len(bytes.TrimSpace(input.PayloadJSON)) > 0 {
-		if _, err := canonicalJSONObject(input.PayloadJSON); err != nil {
+		compactPayload, err := canonicalJSONObject(input.PayloadJSON)
+		if err != nil {
 			return ProviderArtifactSignalResult{}, err
 		}
+		payloadJSON = compactPayload
 	}
 	scopeType, scopeRef, artifactKinds, err := artifactSignalScope(target)
 	if err != nil {
@@ -44,19 +50,40 @@ func (s *Service) RegisterProviderArtifactSignal(ctx context.Context, input Regi
 	sort.Slice(artifactKinds, func(i, j int) bool {
 		return artifactKinds[i] < artifactKinds[j]
 	})
-	signalID, idempotencyKey, err := artifactSignalIdentity(input.SignalID, input.Meta, source, target.ProviderSlug, scopeType, scopeRef, input.ObservedAt)
+	signalID, idempotencyKey, err := artifactSignalIdentity(input.SignalID, input.Meta, source, target.ProviderSlug, scopeType, scopeRef, observedAt)
+	if err != nil {
+		return ProviderArtifactSignalResult{}, err
+	}
+	targetJSON, err := artifactSignalTargetJSON(target)
 	if err != nil {
 		return ProviderArtifactSignalResult{}, err
 	}
 
 	now := s.clock.Now().UTC()
+	storedSignal, err := s.repository.StoreProviderArtifactSignal(ctx, entity.ProviderArtifactSignal{
+		ID:                s.ids.New(),
+		IdentityKey:       idempotencyKey,
+		ProviderSlug:      target.ProviderSlug,
+		ExternalAccountID: input.ExternalAccountID,
+		Source:            source,
+		ScopeType:         scopeType,
+		ScopeRef:          scopeRef,
+		ArtifactKinds:     artifactKinds,
+		TargetJSON:        targetJSON,
+		PayloadJSON:       payloadJSON,
+		ObservedAt:        observedAt,
+		CreatedAt:         now,
+	})
+	if err != nil {
+		return ProviderArtifactSignalResult{}, err
+	}
 	request := entity.ReconciliationRequest{
 		ID:                s.ids.New(),
 		ProviderSlug:      target.ProviderSlug,
 		ExternalAccountID: input.ExternalAccountID,
 		ScopeType:         scopeType,
 		ScopeRef:          scopeRef,
-		IdempotencyKey:    idempotencyKey,
+		IdempotencyKey:    storedSignal.IdentityKey,
 		ArtifactKinds:     artifactKinds,
 		Priority:          enum.SyncCursorPriorityHot,
 		CreatedAt:         now,
@@ -85,10 +112,14 @@ func artifactSignalScope(target ProviderArtifactTarget) (enum.SyncCursorScopeTyp
 	if target.Number < 0 {
 		return "", "", nil, errs.ErrInvalidArgument
 	}
-	if target.WorkItemKind != "" {
-		if !validWorkItemKind(target.WorkItemKind) {
-			return "", "", nil, errs.ErrInvalidArgument
-		}
+	if target.WorkItemKind != "" && !validWorkItemKind(target.WorkItemKind) {
+		return "", "", nil, errs.ErrInvalidArgument
+	}
+	if target.Number > 0 && target.RepositoryFullName == "" && target.ProviderObjectID == "" && target.WebURL == "" {
+		return "", "", nil, errs.ErrInvalidArgument
+	}
+
+	if target.WorkItemKind != "" || target.Number > 0 || target.ProviderObjectID != "" || target.WebURL != "" {
 		scopeRef := artifactSignalWorkItemScopeRef(target)
 		if scopeRef == "" {
 			return "", "", nil, errs.ErrInvalidArgument
@@ -106,7 +137,11 @@ func artifactSignalScope(target ProviderArtifactTarget) (enum.SyncCursorScopeTyp
 
 func artifactSignalWorkItemScopeRef(target ProviderArtifactTarget) string {
 	if target.RepositoryFullName != "" && target.Number > 0 {
-		return fmt.Sprintf("%s#%s:%s", target.RepositoryFullName, target.WorkItemKind, strconv.FormatInt(target.Number, 10))
+		kind := string(target.WorkItemKind)
+		if kind == "" {
+			kind = "number"
+		}
+		return fmt.Sprintf("%s#%s:%s", target.RepositoryFullName, kind, strconv.FormatInt(target.Number, 10))
 	}
 	if target.ProviderObjectID != "" {
 		return "provider_object_id:" + target.ProviderObjectID
@@ -125,6 +160,14 @@ func artifactKindsForWorkItemSignal(kind enum.WorkItemKind) []enum.SyncArtifactK
 		return []enum.SyncArtifactKind{enum.SyncArtifactPullRequest, enum.SyncArtifactComment, enum.SyncArtifactRelationship}
 	case enum.WorkItemKindMergeRequest:
 		return []enum.SyncArtifactKind{enum.SyncArtifactMergeRequest, enum.SyncArtifactComment, enum.SyncArtifactRelationship}
+	case "":
+		return []enum.SyncArtifactKind{
+			enum.SyncArtifactIssue,
+			enum.SyncArtifactPullRequest,
+			enum.SyncArtifactMergeRequest,
+			enum.SyncArtifactComment,
+			enum.SyncArtifactRelationship,
+		}
 	default:
 		return nil
 	}
@@ -132,24 +175,22 @@ func artifactKindsForWorkItemSignal(kind enum.WorkItemKind) []enum.SyncArtifactK
 
 func artifactSignalIdentity(signalID string, meta value.CommandMeta, source string, providerSlug enum.ProviderSlug, scopeType enum.SyncCursorScopeType, scopeRef string, observedAt time.Time) (string, string, error) {
 	cleanSignalID := strings.TrimSpace(signalID)
-	identity := cleanSignalID
 	switch {
-	case identity != "":
+	case cleanSignalID != "":
+		return cleanSignalID, artifactSignalIDPrefix + "id:" + cleanSignalID, nil
 	case strings.TrimSpace(meta.IdempotencyKey) != "":
-		identity = strings.TrimSpace(meta.IdempotencyKey)
+		key := strings.TrimSpace(meta.IdempotencyKey)
+		return key, artifactSignalIDPrefix + "idempotency:" + key, nil
 	case meta.CommandID != uuid.Nil:
-		identity = meta.CommandID.String()
+		key := meta.CommandID.String()
+		return key, artifactSignalIDPrefix + "command:" + key, nil
 	case !observedAt.IsZero():
 		window := observedAt.UTC().Truncate(time.Minute).Format(time.RFC3339)
-		identity = strings.Join([]string{source, string(providerSlug), string(scopeType), scopeRef, window}, "|")
-	}
-	if identity == "" {
+		key := strings.Join([]string{source, string(providerSlug), string(scopeType), scopeRef, window}, "|")
+		return key, artifactSignalIDPrefix + "window:" + key, nil
+	default:
 		return "", "", errs.ErrInvalidArgument
 	}
-	if cleanSignalID == "" {
-		cleanSignalID = identity
-	}
-	return cleanSignalID, artifactSignalIDPrefix + identity, nil
 }
 
 func (s *Service) buildSyncCursors(providerSlug enum.ProviderSlug, externalAccountID uuid.UUID, scopeType enum.SyncCursorScopeType, scopeRef string, artifactKinds []enum.SyncArtifactKind, priority enum.SyncCursorPriority, now time.Time) []entity.SyncCursor {
@@ -172,4 +213,22 @@ func (s *Service) buildSyncCursors(providerSlug enum.ProviderSlug, externalAccou
 		})
 	}
 	return cursors
+}
+
+type artifactSignalTargetSnapshot struct {
+	ProviderSlug         enum.ProviderSlug `json:"provider_slug"`
+	RepositoryFullName   string            `json:"repository_full_name,omitempty"`
+	ProviderRepositoryID string            `json:"provider_repository_id,omitempty"`
+	WorkItemKind         enum.WorkItemKind `json:"work_item_kind,omitempty"`
+	Number               int64             `json:"number,omitempty"`
+	ProviderObjectID     string            `json:"provider_object_id,omitempty"`
+	WebURL               string            `json:"web_url,omitempty"`
+}
+
+func artifactSignalTargetJSON(target ProviderArtifactTarget) ([]byte, error) {
+	raw, err := json.Marshal(artifactSignalTargetSnapshot(target))
+	if err != nil {
+		return nil, errs.ErrInvalidArgument
+	}
+	return raw, nil
 }
