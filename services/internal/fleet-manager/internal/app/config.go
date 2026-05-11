@@ -7,10 +7,12 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/google/uuid"
 
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
+	fleetservice "github.com/codex-k8s/kodex/services/internal/fleet-manager/internal/domain/service"
 )
 
 // Config contains process-level fleet-manager server configuration.
@@ -21,6 +23,8 @@ type Config struct {
 	Database         FleetDatabaseConfig   `envPrefix:"KODEX_FLEET_MANAGER_DATABASE_"`
 	EventLogDatabase FleetEventLogDBConfig `envPrefix:"KODEX_FLEET_MANAGER_EVENT_LOG_DATABASE_"`
 	Outbox           FleetOutboxConfig     `envPrefix:"KODEX_FLEET_MANAGER_OUTBOX_"`
+	Access           FleetAccessConfig     `envPrefix:"KODEX_FLEET_MANAGER_ACCESS_"`
+	Bootstrap        FleetBootstrapConfig  `envPrefix:"KODEX_FLEET_MANAGER_BOOTSTRAP_"`
 }
 
 // FleetGRPCConfig contains gRPC boundary limits.
@@ -86,6 +90,30 @@ type FleetOutboxConfig struct {
 	RetryMaxDelay       time.Duration `env:"RETRY_MAX_DELAY" envDefault:"1m"`
 }
 
+// FleetAccessConfig contains access-manager authorization settings.
+type FleetAccessConfig struct {
+	CheckEnabled           bool          `env:"CHECK_ENABLED" envDefault:"true"`
+	AccessManagerGRPCAddr  string        `env:"MANAGER_GRPC_ADDR" envDefault:"access-manager:9090"`
+	AccessManagerAuthToken string        `env:"MANAGER_GRPC_AUTH_TOKEN"`
+	CheckTimeout           time.Duration `env:"MANAGER_CHECK_TIMEOUT" envDefault:"3s"`
+}
+
+// FleetBootstrapConfig contains bootstrap seed for the default local installation path.
+type FleetBootstrapConfig struct {
+	SeedEnabled       bool   `env:"SEED_ENABLED" envDefault:"true"`
+	FleetScopeID      string `env:"FLEET_SCOPE_ID" envDefault:"00000000-0000-0000-0000-000000000001"`
+	ClusterID         string `env:"CLUSTER_ID" envDefault:"00000000-0000-0000-0000-000000000002"`
+	ScopeKey          string `env:"SCOPE_KEY" envDefault:"platform-default"`
+	ScopeDisplayName  string `env:"SCOPE_DISPLAY_NAME" envDefault:"Platform default"`
+	ClusterKey        string `env:"CLUSTER_KEY" envDefault:"platform-default"`
+	APIEndpointRef    string `env:"API_ENDPOINT_REF"`
+	SecretStoreType   string `env:"SECRET_STORE_TYPE"`
+	SecretStoreRef    string `env:"SECRET_STORE_REF"`
+	KubernetesVersion string `env:"KUBERNETES_VERSION"`
+	Region            string `env:"REGION"`
+	CapacityClass     string `env:"CAPACITY_CLASS"`
+}
+
 // LoadConfig reads process configuration from environment variables.
 func LoadConfig() (Config, error) {
 	cfg, err := env.ParseAs[Config]()
@@ -103,25 +131,34 @@ func (cfg Config) Validate() error {
 	if cfg.GRPC.AuthRequired && strings.TrimSpace(cfg.GRPC.AuthToken) == "" {
 		return fmt.Errorf("KODEX_FLEET_MANAGER_GRPC_AUTH_TOKEN is required when gRPC auth is enabled")
 	}
-	if err := cfg.validateGRPC(); err != nil {
-		return err
+	validators := []func() error{
+		cfg.validateGRPC,
+		cfg.validateDatabase,
+		cfg.validateOutbox,
+		cfg.validateAccess,
+		cfg.validateBootstrap,
 	}
-	if err := cfg.validateDatabase(); err != nil {
-		return err
+	for _, validate := range validators {
+		if err := validate(); err != nil {
+			return err
+		}
 	}
-	return cfg.validateOutbox()
+	return nil
 }
 
 func (cfg Config) validateGRPC() error {
-	numericChecks := map[string]bool{
-		"KODEX_FLEET_MANAGER_GRPC_MAX_IN_FLIGHT":          cfg.GRPC.MaxInFlight > 0,
-		"KODEX_FLEET_MANAGER_GRPC_MAX_CONCURRENT_STREAMS": cfg.GRPC.MaxConcurrentStreams > 0,
-		"KODEX_FLEET_MANAGER_GRPC_MAX_RECV_MESSAGE_BYTES": cfg.GRPC.MaxRecvMessageBytes > 0,
-		"KODEX_FLEET_MANAGER_GRPC_MAX_SEND_MESSAGE_BYTES": cfg.GRPC.MaxSendMessageBytes > 0,
+	numericChecks := []struct {
+		envName string
+		valid   bool
+	}{
+		{envName: "KODEX_FLEET_MANAGER_GRPC_MAX_IN_FLIGHT", valid: cfg.GRPC.MaxInFlight > 0},
+		{envName: "KODEX_FLEET_MANAGER_GRPC_MAX_CONCURRENT_STREAMS", valid: cfg.GRPC.MaxConcurrentStreams > 0},
+		{envName: "KODEX_FLEET_MANAGER_GRPC_MAX_RECV_MESSAGE_BYTES", valid: cfg.GRPC.MaxRecvMessageBytes > 0},
+		{envName: "KODEX_FLEET_MANAGER_GRPC_MAX_SEND_MESSAGE_BYTES", valid: cfg.GRPC.MaxSendMessageBytes > 0},
 	}
-	for name, ok := range numericChecks {
-		if !ok {
-			return fmt.Errorf("%s is invalid", name)
+	for _, check := range numericChecks {
+		if !check.valid {
+			return fmt.Errorf("%s is invalid", check.envName)
 		}
 	}
 	return validatePositiveDurations(map[string]time.Duration{
@@ -207,6 +244,35 @@ func (cfg Config) validateOutboxPublisher() error {
 	return nil
 }
 
+func (cfg Config) validateAccess() error {
+	if !cfg.Access.CheckEnabled {
+		return nil
+	}
+	if strings.TrimSpace(cfg.Access.AccessManagerGRPCAddr) == "" {
+		return fmt.Errorf("KODEX_FLEET_MANAGER_ACCESS_MANAGER_GRPC_ADDR is required when access checks are enabled")
+	}
+	if cfg.Access.CheckTimeout <= 0 {
+		return fmt.Errorf("KODEX_FLEET_MANAGER_ACCESS_MANAGER_CHECK_TIMEOUT is invalid")
+	}
+	return nil
+}
+
+func (cfg Config) validateBootstrap() error {
+	if !cfg.Bootstrap.SeedEnabled {
+		return nil
+	}
+	if _, err := uuid.Parse(strings.TrimSpace(cfg.Bootstrap.FleetScopeID)); err != nil {
+		return fmt.Errorf("KODEX_FLEET_MANAGER_BOOTSTRAP_FLEET_SCOPE_ID is invalid")
+	}
+	if _, err := uuid.Parse(strings.TrimSpace(cfg.Bootstrap.ClusterID)); err != nil {
+		return fmt.Errorf("KODEX_FLEET_MANAGER_BOOTSTRAP_CLUSTER_ID is invalid")
+	}
+	if strings.TrimSpace(cfg.Bootstrap.ScopeKey) == "" || strings.TrimSpace(cfg.Bootstrap.ClusterKey) == "" {
+		return fmt.Errorf("KODEX_FLEET_MANAGER_BOOTSTRAP_SCOPE_KEY and CLUSTER_KEY are required")
+	}
+	return nil
+}
+
 func validatePositiveDurations(values map[string]time.Duration) error {
 	for name, value := range values {
 		if value <= 0 {
@@ -273,4 +339,29 @@ func (cfg Config) OutboxDispatcherConfig() outboxlib.Config {
 		RetryMaxDelay:       cfg.Outbox.RetryMaxDelay,
 		FailureMessageLimit: cfg.Outbox.FailureMessageLimit,
 	}
+}
+
+// PlatformDefaultSeed converts bootstrap env config to the fleet domain seed.
+func (cfg Config) PlatformDefaultSeed() (fleetservice.PlatformDefaultSeed, error) {
+	scopeID, err := uuid.Parse(strings.TrimSpace(cfg.Bootstrap.FleetScopeID))
+	if err != nil {
+		return fleetservice.PlatformDefaultSeed{}, err
+	}
+	clusterID, err := uuid.Parse(strings.TrimSpace(cfg.Bootstrap.ClusterID))
+	if err != nil {
+		return fleetservice.PlatformDefaultSeed{}, err
+	}
+	return fleetservice.PlatformDefaultSeed{
+		FleetScopeID:      scopeID,
+		ClusterID:         clusterID,
+		ScopeKey:          strings.TrimSpace(cfg.Bootstrap.ScopeKey),
+		ScopeDisplayName:  strings.TrimSpace(cfg.Bootstrap.ScopeDisplayName),
+		ClusterKey:        strings.TrimSpace(cfg.Bootstrap.ClusterKey),
+		APIEndpointRef:    strings.TrimSpace(cfg.Bootstrap.APIEndpointRef),
+		SecretStoreType:   strings.TrimSpace(cfg.Bootstrap.SecretStoreType),
+		SecretStoreRef:    strings.TrimSpace(cfg.Bootstrap.SecretStoreRef),
+		KubernetesVersion: strings.TrimSpace(cfg.Bootstrap.KubernetesVersion),
+		Region:            strings.TrimSpace(cfg.Bootstrap.Region),
+		CapacityClass:     strings.TrimSpace(cfg.Bootstrap.CapacityClass),
+	}, nil
 }
