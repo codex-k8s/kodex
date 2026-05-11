@@ -41,7 +41,7 @@ func (s *Service) CreateOrUpdateCleanupPolicy(ctx context.Context, input CreateO
 		policy := entity.CleanupPolicy{
 			Base:             entity.Base{ID: s.ids.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
 			ScopeType:        input.ScopeType,
-			ScopeID:          cleanScopeID(input.ScopeID),
+			ScopeID:          normalizedCleanupScopeID(input.ScopeType, input.ScopeID),
 			TTLSeconds:       input.TTLSeconds,
 			FailedTTLSeconds: input.FailedTTLSeconds,
 			KeepShortLogTail: input.KeepShortLogTail,
@@ -77,7 +77,7 @@ func (s *Service) CreateOrUpdateCleanupPolicy(ctx context.Context, input CreateO
 	}
 	policy := current
 	policy.ScopeType = input.ScopeType
-	policy.ScopeID = cleanScopeID(input.ScopeID)
+	policy.ScopeID = normalizedCleanupScopeID(input.ScopeType, input.ScopeID)
 	policy.TTLSeconds = input.TTLSeconds
 	policy.FailedTTLSeconds = input.FailedTTLSeconds
 	policy.KeepShortLogTail = input.KeepShortLogTail
@@ -177,7 +177,7 @@ func (s *Service) CreateOrUpdatePrewarmPool(ctx context.Context, input CreateOrU
 		pool := entity.PrewarmPool{
 			Base:               entity.Base{ID: s.ids.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
 			ScopeType:          input.ScopeType,
-			ScopeID:            cleanScopeID(input.ScopeID),
+			ScopeID:            normalizedPrewarmScopeID(input.ScopeType, input.ScopeID),
 			RuntimeProfile:     strings.TrimSpace(input.RuntimeProfile),
 			FleetScopeID:       fleetScopeID,
 			TargetSize:         input.TargetSize,
@@ -217,7 +217,7 @@ func (s *Service) CreateOrUpdatePrewarmPool(ctx context.Context, input CreateOrU
 	}
 	pool := current
 	pool.ScopeType = input.ScopeType
-	pool.ScopeID = cleanScopeID(input.ScopeID)
+	pool.ScopeID = normalizedPrewarmScopeID(input.ScopeType, input.ScopeID)
 	pool.RuntimeProfile = strings.TrimSpace(input.RuntimeProfile)
 	pool.FleetScopeID = fleetScopeID
 	pool.TargetSize = input.TargetSize
@@ -373,16 +373,42 @@ func cleanScopeID(scopeID string) string {
 }
 
 func validUUIDScopeID(scopeID string) bool {
-	_, err := uuid.Parse(cleanScopeID(scopeID))
-	return err == nil
+	id, err := uuid.Parse(cleanScopeID(scopeID))
+	return err == nil && id != uuid.Nil
+}
+
+func normalizedCleanupScopeID(scope enum.RuntimeScopeType, scopeID string) string {
+	switch scope {
+	case enum.RuntimeScopeProject, enum.RuntimeScopeRepository:
+		return normalizedUUIDScopeID(scopeID)
+	default:
+		return cleanScopeID(scopeID)
+	}
+}
+
+func normalizedPrewarmScopeID(scope enum.PrewarmPoolScopeType, scopeID string) string {
+	switch scope {
+	case enum.PrewarmPoolScopeProject, enum.PrewarmPoolScopeRepository:
+		return normalizedUUIDScopeID(scopeID)
+	default:
+		return cleanScopeID(scopeID)
+	}
+}
+
+func normalizedUUIDScopeID(scopeID string) string {
+	id, err := uuid.Parse(cleanScopeID(scopeID))
+	if err != nil {
+		return cleanScopeID(scopeID)
+	}
+	return id.String()
 }
 
 func cleanupPolicyResource(policyID *uuid.UUID, scope enum.RuntimeScopeType, scopeID string) resourceRef {
-	return scopedRuntimeResource(accesscatalog.ResourceRuntimeCleanupPolicy, policyID, string(scope), scopeID)
+	return scopedRuntimeResource(accesscatalog.ResourceRuntimeCleanupPolicy, policyID, string(scope), normalizedCleanupScopeID(scope, scopeID))
 }
 
 func prewarmPoolResource(poolID *uuid.UUID, scope enum.PrewarmPoolScopeType, scopeID string) resourceRef {
-	return scopedRuntimeResource(accesscatalog.ResourceRuntimePrewarmPool, poolID, string(scope), scopeID)
+	return scopedRuntimeResource(accesscatalog.ResourceRuntimePrewarmPool, poolID, string(scope), normalizedPrewarmScopeID(scope, scopeID))
 }
 
 func scopedRuntimeResource(resourceType string, resourceUUID *uuid.UUID, scope string, scopeID string) resourceRef {
@@ -408,11 +434,11 @@ func accessScopeType(scope string) string {
 }
 
 func cleanupPolicyScopeChanged(policy entity.CleanupPolicy, input CreateOrUpdateCleanupPolicyInput) bool {
-	return policy.ScopeType != input.ScopeType || policy.ScopeID != cleanScopeID(input.ScopeID)
+	return policy.ScopeType != input.ScopeType || policy.ScopeID != normalizedCleanupScopeID(input.ScopeType, input.ScopeID)
 }
 
 func prewarmPoolScopeChanged(pool entity.PrewarmPool, input CreateOrUpdatePrewarmPoolInput) bool {
-	return pool.ScopeType != input.ScopeType || pool.ScopeID != cleanScopeID(input.ScopeID)
+	return pool.ScopeType != input.ScopeType || pool.ScopeID != normalizedPrewarmScopeID(input.ScopeType, input.ScopeID)
 }
 
 func validateCleanupPolicyReplay(policy entity.CleanupPolicy, input CreateOrUpdateCleanupPolicyInput) error {

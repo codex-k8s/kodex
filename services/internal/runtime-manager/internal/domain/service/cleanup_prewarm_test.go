@@ -341,6 +341,63 @@ func TestCleanupPolicyRejectsNonUUIDProjectAndRepositoryScopes(t *testing.T) {
 			t.Fatalf("CreateOrUpdateCleanupPolicy(%s) err = %v, want invalid argument", scope, err)
 		}
 	}
+	for _, scope := range []enum.RuntimeScopeType{enum.RuntimeScopeProject, enum.RuntimeScopeRepository} {
+		_, err := svc.CreateOrUpdateCleanupPolicy(context.Background(), CreateOrUpdateCleanupPolicyInput{
+			ScopeType:        scope,
+			ScopeID:          uuid.Nil.String(),
+			TTLSeconds:       60,
+			FailedTTLSeconds: 60,
+			Status:           enum.CleanupPolicyStatusActive,
+			Meta:             commandMeta(mustUUID("00000000-0000-0000-0000-000000000748"), 0),
+		})
+		if !errors.Is(err, errs.ErrInvalidArgument) {
+			t.Fatalf("CreateOrUpdateCleanupPolicy(%s nil) err = %v, want invalid argument", scope, err)
+		}
+	}
+}
+
+func TestCleanupPolicyNormalizesProjectAndRepositoryScopeUUID(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name      string
+		scope     enum.RuntimeScopeType
+		scopeID   string
+		commandID string
+	}{
+		{
+			name:      "project",
+			scope:     enum.RuntimeScopeProject,
+			scopeID:   "00000000-0000-0000-0000-000000000ABC",
+			commandID: "00000000-0000-0000-0000-000000000749",
+		},
+		{
+			name:      "repository",
+			scope:     enum.RuntimeScopeRepository,
+			scopeID:   "00000000-0000-0000-0000-000000000DEF",
+			commandID: "00000000-0000-0000-0000-00000000074a",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc, _ := newTestService()
+			policy, err := svc.CreateOrUpdateCleanupPolicy(context.Background(), CreateOrUpdateCleanupPolicyInput{
+				ScopeType:        tc.scope,
+				ScopeID:          tc.scopeID,
+				TTLSeconds:       60,
+				FailedTTLSeconds: 60,
+				Status:           enum.CleanupPolicyStatusActive,
+				Meta:             commandMeta(mustUUID(tc.commandID), 0),
+			})
+			if err != nil {
+				t.Fatalf("CreateOrUpdateCleanupPolicy(): %v", err)
+			}
+			if policy.ScopeID != uuid.MustParse(tc.scopeID).String() {
+				t.Fatalf("ScopeID = %s, want canonical UUID", policy.ScopeID)
+			}
+		})
+	}
 }
 
 func TestCleanupPolicyUpdateAuthorizesCurrentAndRequestedScopes(t *testing.T) {
@@ -499,6 +556,63 @@ func TestPrewarmPoolRejectsNonUUIDProjectAndRepositoryScopes(t *testing.T) {
 		if !errors.Is(err, errs.ErrInvalidArgument) {
 			t.Fatalf("CreateOrUpdatePrewarmPool(%s) err = %v, want invalid argument", scope, err)
 		}
+	}
+	for _, scope := range []enum.PrewarmPoolScopeType{enum.PrewarmPoolScopeProject, enum.PrewarmPoolScopeRepository} {
+		_, err := svc.CreateOrUpdatePrewarmPool(context.Background(), CreateOrUpdatePrewarmPoolInput{
+			ScopeType:      scope,
+			ScopeID:        uuid.Nil.String(),
+			RuntimeProfile: "go-backend",
+			TargetSize:     1,
+			Status:         enum.PrewarmPoolStatusActive,
+			Meta:           commandMeta(mustUUID("00000000-0000-0000-0000-000000000750"), 0),
+		})
+		if !errors.Is(err, errs.ErrInvalidArgument) {
+			t.Fatalf("CreateOrUpdatePrewarmPool(%s nil) err = %v, want invalid argument", scope, err)
+		}
+	}
+}
+
+func TestPrewarmPoolNormalizesProjectAndRepositoryScopeUUID(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name      string
+		scope     enum.PrewarmPoolScopeType
+		scopeID   string
+		commandID string
+	}{
+		{
+			name:      "project",
+			scope:     enum.PrewarmPoolScopeProject,
+			scopeID:   "00000000-0000-0000-0000-000000000ABC",
+			commandID: "00000000-0000-0000-0000-000000000751",
+		},
+		{
+			name:      "repository",
+			scope:     enum.PrewarmPoolScopeRepository,
+			scopeID:   "00000000-0000-0000-0000-000000000DEF",
+			commandID: "00000000-0000-0000-0000-000000000752",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc, _ := newTestService()
+			pool, err := svc.CreateOrUpdatePrewarmPool(context.Background(), CreateOrUpdatePrewarmPoolInput{
+				ScopeType:      tc.scope,
+				ScopeID:        tc.scopeID,
+				RuntimeProfile: "go-backend",
+				TargetSize:     1,
+				Status:         enum.PrewarmPoolStatusActive,
+				Meta:           commandMeta(mustUUID(tc.commandID), 0),
+			})
+			if err != nil {
+				t.Fatalf("CreateOrUpdatePrewarmPool(): %v", err)
+			}
+			if pool.ScopeID != uuid.MustParse(tc.scopeID).String() {
+				t.Fatalf("ScopeID = %s, want canonical UUID", pool.ScopeID)
+			}
+		})
 	}
 }
 
