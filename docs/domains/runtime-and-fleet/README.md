@@ -40,6 +40,17 @@
 | Runbook runtime-manager | `ops/runtime_manager_runbook.md` |
 | Наблюдаемость runtime-manager | `ops/runtime_manager_monitoring.md` |
 
+## Контракты
+
+| Контракт | Путь |
+|---|---|
+| gRPC `runtime-manager` | `proto/kodex/runtime/v1/runtime_manager.proto` |
+| AsyncAPI `runtime-manager` | `specs/asyncapi/runtime-manager.v1.yaml` |
+| Go-события `runtime.*` | `libs/go/platformevents/runtime/events.gen.go` |
+| gRPC `fleet-manager` | `proto/kodex/fleet/v1/fleet_manager.proto` |
+| AsyncAPI `fleet-manager` | `specs/asyncapi/fleet-manager.v1.yaml` |
+| Go-события `fleet.*` | `libs/go/platformevents/fleet/events.gen.go` |
+
 ## Карта Issue
 
 - Доменная карта: `docs/delivery/issue-map/domains/runtime-and-fleet.md`.

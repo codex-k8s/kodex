@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-11
 updated_at: 2026-05-11
-related_issues: [699]
+related_issues: [699, 708]
 related_prs: []
 related_docsets:
   - docs/domains/runtime-and-fleet/product/fleet_manager_requirements.md
@@ -44,7 +44,7 @@ approvals:
 | Срез | Issue | Результат |
 |---|---|---|
 | FLEET-0 | #699 | Доменная документация, границы runtime/fleet, MVP с несколькими серверами, scope и кластерами, bootstrap seed `platform-default`, будущие контракты, план поставки и карта Issue. |
-| FLEET-1 | создать перед срезом | gRPC и AsyncAPI контракты `fleet-manager`, события `fleet.*`, сгенерированные Go-контракты и ключи действий. |
+| FLEET-1 | #708 | gRPC и AsyncAPI контракты `fleet-manager`, события `fleet.*`, сгенерированные Go-контракты и ключи действий. |
 | FLEET-2 | создать перед срезом | Сервисный каркас, конфигурация, PostgreSQL-модель, миграции, слой репозитория, health/readiness и outbox. |
 | FLEET-3 | создать перед срезом | Команды и чтения реестра для нескольких fleet scope, серверов, Kubernetes-кластеров, bootstrap seed `platform-default` и базовые проверки доступа. |
 | FLEET-4 | создать перед срезом | Проверки связности, health snapshots и события деградации для нескольких кластеров. |
@@ -55,11 +55,11 @@ approvals:
 
 | Группа | Контракт | Реализация |
 |---|---|---|
-| Fleet scopes | Запланирован в FLEET-1. | Реестр нескольких scope реализуется в FLEET-3. |
-| Servers | Запланирован в FLEET-1. | Реестр нескольких серверов реализуется в FLEET-3. |
-| Kubernetes clusters | Запланирован в FLEET-1. | Реестр нескольких кластеров реализуется в FLEET-3. |
-| Связность и health | Запланирован в FLEET-1. | Не реализовано в FLEET-0. |
-| Placement | Запланирован в FLEET-1. | Базовый выбор из набора активных кластеров реализуется в FLEET-5. |
+| Fleet scopes | Готов: `CreateFleetScope`, `UpdateFleetScope`, `DisableFleetScope`, `GetFleetScope`, `ListFleetScopes`. | Реестр нескольких scope реализуется в FLEET-3. |
+| Servers | Готов: `RegisterServer`, `UpdateServer`, `DisableServer`, `GetServer`, `ListServers`. | Реестр нескольких серверов реализуется в FLEET-3. |
+| Kubernetes clusters | Готов: `RegisterKubernetesCluster`, `UpdateKubernetesCluster`, `DisableKubernetesCluster`, `GetKubernetesCluster`, `ListKubernetesClusters`. | Реестр нескольких кластеров реализуется в FLEET-3. |
+| Связность и health | Готов: `RunClusterConnectivityCheck`, `GetClusterHealthSnapshot`, `ListClusterHealthSnapshots`, события `fleet.health.*`. | Проверки и snapshots реализуются в FLEET-4. |
+| Placement | Готов: `PutPlacementRule`, `GetPlacementRule`, `ListPlacementRules`, `ResolvePlacement`, чтения решений и события `fleet.placement.*`. | Базовый выбор из набора активных кластеров реализуется в FLEET-5. |
 | Контур выкладки | Не gRPC-группа. | Запланировано в FLEET-6. |
 
 ## Зависимости и блокировки
@@ -70,7 +70,7 @@ approvals:
 | `project-catalog` | Источник placement policy проекта, репозитория и сервиса. | Текущие проектные контракты достаточны для kickoff; точную форму ограничений подтвердить перед FLEET-5. |
 | `package-hub` | Источник runtime-требований для runtime-нагрузок пакетов и плагинов. | Не блокирует FLEET-0..FLEET-4; нужен контракт требований перед размещением runtime-нагрузки пакета. |
 | `agent-manager` | Инициирует runtime через `runtime-manager`. | Не блокирует fleet kickoff; прямой fleet API для agent-manager не планируется в MVP. |
-| `access-manager` | Проверка прав на управление fleet scope, серверами, кластерами и placement rules. | Нужны ключи действий и проверка доступа в FLEET-1/FLEET-3. |
+| `access-manager` | Проверка прав на управление fleet scope, серверами, кластерами и placement rules. | Ключи действий заведены в FLEET-1; проверка доступа подключается в FLEET-3. |
 | Secret resolver/Vault/Kubernetes Secret клиент | Получение значения kubeconfig/service account по разрешённой ссылке. | Не нужен для FLEET-0/FLEET-1; нужен до регистрации реальных кластеров и connectivity checks в FLEET-3/FLEET-4. |
 
 ## Критерии начала кода
@@ -101,9 +101,9 @@ approvals:
 - разрушительные lifecycle-операции для серверов и кластеров;
 - расширенная автоматизация capacity/rebalancing.
 
-## Рекомендуемый следующий шаг после FLEET-0
+## Рекомендуемый следующий шаг после FLEET-1
 
-Идти в FLEET-1: создать `proto/kodex/fleet/v1/fleet_manager.proto`, `specs/asyncapi/fleet-manager.v1.yaml`, сгенерированные Go-контракты событий и ключи действий. Код сервиса начинать только после принятия контракта.
+Идти в FLEET-2: создать сервисный каркас, конфигурацию, PostgreSQL-модель, миграции, слой репозитория, health/readiness и outbox. Команды registry, connectivity checks и placement resolver остаются для следующих срезов.
 
 ## Апрув
 

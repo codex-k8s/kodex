@@ -1,0 +1,604 @@
+syntax = "proto3";
+
+package kodex.fleet.v1;
+
+option go_package = "github.com/codex-k8s/kodex/proto/gen/go/kodex/fleet/v1;fleetv1";
+
+// FleetManagerService is the stable v1 inter-service contract for the
+// server and Kubernetes cluster registry. Fleet-manager owns fleet scopes,
+// servers, clusters, connectivity, health and placement decisions.
+service FleetManagerService {
+  // CreateFleetScope creates a logical placement scope.
+  rpc CreateFleetScope(CreateFleetScopeRequest) returns (FleetScopeResponse);
+  // UpdateFleetScope changes safe scope fields and lifecycle status.
+  rpc UpdateFleetScope(UpdateFleetScopeRequest) returns (FleetScopeResponse);
+  // DisableFleetScope disables new placements in a scope.
+  rpc DisableFleetScope(DisableFleetScopeRequest) returns (FleetScopeResponse);
+  // GetFleetScope returns authoritative scope state.
+  rpc GetFleetScope(GetFleetScopeRequest) returns (FleetScopeResponse);
+  // ListFleetScopes returns scopes by type, owner, status or default flag.
+  rpc ListFleetScopes(ListFleetScopesRequest) returns (ListFleetScopesResponse);
+  // RegisterServer registers a server or external host reference.
+  rpc RegisterServer(RegisterServerRequest) returns (ServerResponse);
+  // UpdateServer changes safe server metadata and lifecycle status.
+  rpc UpdateServer(UpdateServerRequest) returns (ServerResponse);
+  // DisableServer disables server use for new placements.
+  rpc DisableServer(DisableServerRequest) returns (ServerResponse);
+  // GetServer returns authoritative server state.
+  rpc GetServer(GetServerRequest) returns (ServerResponse);
+  // ListServers returns servers by status, provider, region or capacity class.
+  rpc ListServers(ListServersRequest) returns (ListServersResponse);
+  // RegisterKubernetesCluster registers one Kubernetes cluster in a fleet scope.
+  rpc RegisterKubernetesCluster(RegisterKubernetesClusterRequest) returns (KubernetesClusterResponse);
+  // UpdateKubernetesCluster changes safe cluster metadata and lifecycle status.
+  rpc UpdateKubernetesCluster(UpdateKubernetesClusterRequest) returns (KubernetesClusterResponse);
+  // DisableKubernetesCluster disables new placements in a cluster.
+  rpc DisableKubernetesCluster(DisableKubernetesClusterRequest) returns (KubernetesClusterResponse);
+  // GetKubernetesCluster returns authoritative cluster state.
+  rpc GetKubernetesCluster(GetKubernetesClusterRequest) returns (KubernetesClusterResponse);
+  // ListKubernetesClusters returns clusters by scope, server, status, region or health.
+  rpc ListKubernetesClusters(ListKubernetesClustersRequest) returns (ListKubernetesClustersResponse);
+  // RunClusterConnectivityCheck requests a future connectivity check.
+  rpc RunClusterConnectivityCheck(RunClusterConnectivityCheckRequest) returns (ClusterConnectivityCheckResponse);
+  // GetClusterHealthSnapshot returns the latest or a concrete health snapshot.
+  rpc GetClusterHealthSnapshot(GetClusterHealthSnapshotRequest) returns (ClusterHealthSnapshotResponse);
+  // ListClusterHealthSnapshots returns health snapshot history for a cluster.
+  rpc ListClusterHealthSnapshots(ListClusterHealthSnapshotsRequest) returns (ListClusterHealthSnapshotsResponse);
+  // PutPlacementRule creates or updates a placement rule.
+  rpc PutPlacementRule(PutPlacementRuleRequest) returns (PlacementRuleResponse);
+  // GetPlacementRule returns a placement rule.
+  rpc GetPlacementRule(GetPlacementRuleRequest) returns (PlacementRuleResponse);
+  // ListPlacementRules returns placement rules by scope and status.
+  rpc ListPlacementRules(ListPlacementRulesRequest) returns (ListPlacementRulesResponse);
+  // ResolvePlacement selects an active cluster from the registry for a runtime request.
+  rpc ResolvePlacement(ResolvePlacementRequest) returns (ResolvePlacementResponse);
+  // GetPlacementDecision returns a recorded placement decision.
+  rpc GetPlacementDecision(GetPlacementDecisionRequest) returns (PlacementDecisionResponse);
+  // ListPlacementDecisions returns placement decisions by project, repository, scope or cluster.
+  rpc ListPlacementDecisions(ListPlacementDecisionsRequest) returns (ListPlacementDecisionsResponse);
+}
+
+// CommandMeta is required for every mutating command.
+message CommandMeta {
+  // command_id is a unique command identifier. Either command_id or idempotency_key is required.
+  optional string command_id = 1;
+  // idempotency_key is an idempotency key scoped by operation and actor.
+  optional string idempotency_key = 2;
+  // expected_version is present only for existing aggregate mutations.
+  optional int64 expected_version = 3;
+  // actor is the authenticated caller.
+  Actor actor = 4;
+  // reason is a machine or operator reason for audit and domain events.
+  string reason = 5;
+  // request_id links the command to logs, traces and audit.
+  string request_id = 6;
+  // request_context carries safe request metadata; no tokens, secrets, email or names.
+  RequestContext request_context = 7;
+}
+
+// QueryMeta carries safe metadata for authoritative reads.
+message QueryMeta {
+  // actor is the authenticated caller.
+  Actor actor = 1;
+  // request_id links the read to logs and traces.
+  string request_id = 2;
+  // request_context carries safe request metadata.
+  RequestContext request_context = 3;
+}
+
+// RequestContext is safe request metadata used for audit and diagnostics.
+message RequestContext {
+  // source identifies caller surface, for example staff-gateway, platform-mcp-server or service.
+  string source = 1;
+  // trace_id links platform traces.
+  optional string trace_id = 2;
+  // session_id links a user session when available.
+  optional string session_id = 3;
+  // client_ip_hash is an optional hashed client address.
+  optional string client_ip_hash = 4;
+}
+
+// Actor identifies a user, service, agent or external account.
+message Actor {
+  // type is a subject type such as user, service, agent or external_account.
+  string type = 1;
+  // id is the subject identifier in its owner domain.
+  string id = 2;
+}
+
+// PageRequest limits list responses.
+message PageRequest {
+  // page_size is the maximum item count requested by caller.
+  int32 page_size = 1;
+  // page_token is an opaque continuation token returned by a previous call.
+  optional string page_token = 2;
+}
+
+// PageResponse describes list continuation state.
+message PageResponse {
+  // next_page_token is empty when there are no more items.
+  optional string next_page_token = 1;
+}
+
+// FleetScopeType classifies a logical placement scope.
+enum FleetScopeType {
+  FLEET_SCOPE_TYPE_UNSPECIFIED = 0;
+  FLEET_SCOPE_TYPE_PLATFORM = 1;
+  FLEET_SCOPE_TYPE_ORGANIZATION = 2;
+  FLEET_SCOPE_TYPE_PROJECT = 3;
+  FLEET_SCOPE_TYPE_REPOSITORY = 4;
+  FLEET_SCOPE_TYPE_SERVICE = 5;
+}
+
+// FleetScopeStatus is the lifecycle status of a placement scope.
+enum FleetScopeStatus {
+  FLEET_SCOPE_STATUS_UNSPECIFIED = 0;
+  FLEET_SCOPE_STATUS_ACTIVE = 1;
+  FLEET_SCOPE_STATUS_SUSPENDED = 2;
+  FLEET_SCOPE_STATUS_DRAINING = 3;
+  FLEET_SCOPE_STATUS_ARCHIVED = 4;
+}
+
+// ServerProviderType classifies server ownership and provider family.
+enum ServerProviderType {
+  SERVER_PROVIDER_TYPE_UNSPECIFIED = 0;
+  SERVER_PROVIDER_TYPE_BARE_METAL = 1;
+  SERVER_PROVIDER_TYPE_VPS = 2;
+  SERVER_PROVIDER_TYPE_CLOUD = 3;
+  SERVER_PROVIDER_TYPE_MANAGED = 4;
+  SERVER_PROVIDER_TYPE_UNKNOWN = 5;
+}
+
+// ServerStatus is the server lifecycle status.
+enum ServerStatus {
+  SERVER_STATUS_UNSPECIFIED = 0;
+  SERVER_STATUS_ACTIVE = 1;
+  SERVER_STATUS_SUSPENDED = 2;
+  SERVER_STATUS_DRAINING = 3;
+}
+
+// KubernetesClusterStatus is the cluster lifecycle status.
+enum KubernetesClusterStatus {
+  KUBERNETES_CLUSTER_STATUS_UNSPECIFIED = 0;
+  KUBERNETES_CLUSTER_STATUS_ACTIVE = 1;
+  KUBERNETES_CLUSTER_STATUS_SUSPENDED = 2;
+  KUBERNETES_CLUSTER_STATUS_DRAINING = 3;
+  KUBERNETES_CLUSTER_STATUS_UNREACHABLE = 4;
+}
+
+// ClusterHealthStatus is the latest health classification.
+enum ClusterHealthStatus {
+  CLUSTER_HEALTH_STATUS_UNSPECIFIED = 0;
+  CLUSTER_HEALTH_STATUS_UNKNOWN = 1;
+  CLUSTER_HEALTH_STATUS_HEALTHY = 2;
+  CLUSTER_HEALTH_STATUS_DEGRADED = 3;
+  CLUSTER_HEALTH_STATUS_UNHEALTHY = 4;
+}
+
+// CapacityStatus classifies whether a cluster has room for new runtime workloads.
+enum CapacityStatus {
+  CAPACITY_STATUS_UNSPECIFIED = 0;
+  CAPACITY_STATUS_UNKNOWN = 1;
+  CAPACITY_STATUS_OK = 2;
+  CAPACITY_STATUS_LIMITED = 3;
+  CAPACITY_STATUS_EXHAUSTED = 4;
+}
+
+// ConnectivityCheckStatus is a single connectivity attempt status.
+enum ConnectivityCheckStatus {
+  CONNECTIVITY_CHECK_STATUS_UNSPECIFIED = 0;
+  CONNECTIVITY_CHECK_STATUS_PENDING = 1;
+  CONNECTIVITY_CHECK_STATUS_RUNNING = 2;
+  CONNECTIVITY_CHECK_STATUS_SUCCEEDED = 3;
+  CONNECTIVITY_CHECK_STATUS_FAILED = 4;
+  CONNECTIVITY_CHECK_STATUS_TIMED_OUT = 5;
+}
+
+// RuntimeMode classifies runtime isolation level for placement.
+enum RuntimeMode {
+  RUNTIME_MODE_UNSPECIFIED = 0;
+  RUNTIME_MODE_CODE_ONLY = 1;
+  RUNTIME_MODE_FULL_ENV = 2;
+  RUNTIME_MODE_READ_ONLY_PRODUCTION = 3;
+  RUNTIME_MODE_PLATFORM_JOB = 4;
+}
+
+// PlacementDecisionStatus is the result state of placement resolution.
+enum PlacementDecisionStatus {
+  PLACEMENT_DECISION_STATUS_UNSPECIFIED = 0;
+  PLACEMENT_DECISION_STATUS_RESOLVED = 1;
+  PLACEMENT_DECISION_STATUS_REJECTED = 2;
+}
+
+// PlacementRuleStatus is the lifecycle status of a placement rule.
+enum PlacementRuleStatus {
+  PLACEMENT_RULE_STATUS_UNSPECIFIED = 0;
+  PLACEMENT_RULE_STATUS_ACTIVE = 1;
+  PLACEMENT_RULE_STATUS_DISABLED = 2;
+  PLACEMENT_RULE_STATUS_ARCHIVED = 3;
+}
+
+// FleetScope is a logical placement boundary.
+message FleetScope {
+  // id is the fleet scope identifier.
+  string id = 1;
+  // scope_key is a stable readable key, for example platform-default.
+  string scope_key = 2;
+  // scope_type classifies owner level.
+  FleetScopeType scope_type = 3;
+  // scope_owner_id references organization, project or repository when applicable.
+  optional string scope_owner_id = 4;
+  // owner_ref_json is a typed safe JSON object for complex owner refs such as service scope.
+  string owner_ref_json = 5;
+  // display_name is a human readable name.
+  string display_name = 6;
+  // status is the lifecycle status.
+  FleetScopeStatus status = 7;
+  // is_default marks bootstrap fallback scope. It is not a single-scope MVP limit.
+  bool is_default = 8;
+  // created_at is creation time in RFC3339 format.
+  string created_at = 9;
+  // updated_at is update time in RFC3339 format.
+  string updated_at = 10;
+  // version is the aggregate version.
+  int64 version = 11;
+}
+
+// Server is a managed or external server reference.
+message Server {
+  string id = 1;
+  string server_key = 2;
+  ServerProviderType provider_type = 3;
+  ServerStatus status = 4;
+  string primary_address_ref = 5;
+  string region = 6;
+  string capacity_class = 7;
+  string secret_store_type = 8;
+  string secret_store_ref = 9;
+  string created_at = 10;
+  string updated_at = 11;
+  int64 version = 12;
+}
+
+// KubernetesCluster is a cluster available for runtime placement.
+message KubernetesCluster {
+  string id = 1;
+  string fleet_scope_id = 2;
+  optional string server_id = 3;
+  string cluster_key = 4;
+  KubernetesClusterStatus status = 5;
+  bool is_default = 6;
+  string api_endpoint_ref = 7;
+  string secret_store_type = 8;
+  string secret_store_ref = 9;
+  string kubernetes_version = 10;
+  string region = 11;
+  string capacity_class = 12;
+  ClusterHealthStatus last_health_status = 13;
+  optional string last_health_checked_at = 14;
+  string created_at = 15;
+  string updated_at = 16;
+  int64 version = 17;
+}
+
+// ClusterConnectivityCheck records one connectivity attempt.
+message ClusterConnectivityCheck {
+  string id = 1;
+  string cluster_id = 2;
+  ConnectivityCheckStatus status = 3;
+  optional string started_at = 4;
+  optional string finished_at = 5;
+  optional int64 latency_ms = 6;
+  string error_code = 7;
+  string error_message = 8;
+  string created_at = 9;
+}
+
+// ClusterHealthSnapshot is a limited health view for placement and operators.
+message ClusterHealthSnapshot {
+  string id = 1;
+  string cluster_id = 2;
+  ClusterHealthStatus health_status = 3;
+  CapacityStatus capacity_status = 4;
+  string summary_json = 5;
+  string checked_at = 6;
+  string error_code = 7;
+  string error_message = 8;
+}
+
+// PlacementRule is a fleet-owned placement rule.
+message PlacementRule {
+  string id = 1;
+  string fleet_scope_id = 2;
+  string rule_key = 3;
+  PlacementRuleStatus status = 4;
+  int64 priority = 5;
+  string match_json = 6;
+  string constraints_json = 7;
+  string created_at = 8;
+  string updated_at = 9;
+  int64 version = 10;
+}
+
+// PlacementDecision records an explained placement result.
+message PlacementDecision {
+  string id = 1;
+  optional string command_id = 2;
+  string request_fingerprint = 3;
+  PlacementDecisionStatus status = 4;
+  optional string fleet_scope_id = 5;
+  optional string cluster_id = 6;
+  optional string project_id = 7;
+  optional string repository_id = 8;
+  RuntimeMode runtime_mode = 9;
+  string input_json = 10;
+  string reason_code = 11;
+  string reason_message = 12;
+  bool used_default_path = 13;
+  string created_at = 14;
+}
+
+message CreateFleetScopeRequest {
+  string scope_key = 1;
+  FleetScopeType scope_type = 2;
+  optional string scope_owner_id = 3;
+  string owner_ref_json = 4;
+  string display_name = 5;
+  bool is_default = 6;
+  CommandMeta meta = 7;
+}
+
+message UpdateFleetScopeRequest {
+  string fleet_scope_id = 1;
+  optional string scope_key = 2;
+  optional string scope_owner_id = 3;
+  optional string owner_ref_json = 4;
+  optional string display_name = 5;
+  optional FleetScopeStatus status = 6;
+  optional bool is_default = 7;
+  CommandMeta meta = 8;
+}
+
+message DisableFleetScopeRequest {
+  string fleet_scope_id = 1;
+  CommandMeta meta = 2;
+}
+
+message GetFleetScopeRequest {
+  string fleet_scope_id = 1;
+  QueryMeta meta = 2;
+}
+
+message ListFleetScopesRequest {
+  repeated FleetScopeType scope_types = 1;
+  repeated FleetScopeStatus statuses = 2;
+  optional string scope_owner_id = 3;
+  optional bool is_default = 4;
+  PageRequest page = 5;
+  QueryMeta meta = 6;
+}
+
+message FleetScopeResponse {
+  FleetScope scope = 1;
+}
+
+message ListFleetScopesResponse {
+  repeated FleetScope scopes = 1;
+  PageResponse page = 2;
+}
+
+message RegisterServerRequest {
+  string server_key = 1;
+  ServerProviderType provider_type = 2;
+  string primary_address_ref = 3;
+  string region = 4;
+  string capacity_class = 5;
+  string secret_store_type = 6;
+  string secret_store_ref = 7;
+  CommandMeta meta = 8;
+}
+
+message UpdateServerRequest {
+  string server_id = 1;
+  optional string server_key = 2;
+  optional ServerProviderType provider_type = 3;
+  optional ServerStatus status = 4;
+  optional string primary_address_ref = 5;
+  optional string region = 6;
+  optional string capacity_class = 7;
+  optional string secret_store_type = 8;
+  optional string secret_store_ref = 9;
+  CommandMeta meta = 10;
+}
+
+message DisableServerRequest {
+  string server_id = 1;
+  CommandMeta meta = 2;
+}
+
+message GetServerRequest {
+  string server_id = 1;
+  QueryMeta meta = 2;
+}
+
+message ListServersRequest {
+  repeated ServerStatus statuses = 1;
+  repeated ServerProviderType provider_types = 2;
+  optional string region = 3;
+  optional string capacity_class = 4;
+  PageRequest page = 5;
+  QueryMeta meta = 6;
+}
+
+message ServerResponse {
+  Server server = 1;
+}
+
+message ListServersResponse {
+  repeated Server servers = 1;
+  PageResponse page = 2;
+}
+
+message RegisterKubernetesClusterRequest {
+  string fleet_scope_id = 1;
+  optional string server_id = 2;
+  string cluster_key = 3;
+  bool is_default = 4;
+  string api_endpoint_ref = 5;
+  string secret_store_type = 6;
+  string secret_store_ref = 7;
+  string kubernetes_version = 8;
+  string region = 9;
+  string capacity_class = 10;
+  CommandMeta meta = 11;
+}
+
+message UpdateKubernetesClusterRequest {
+  string cluster_id = 1;
+  optional string fleet_scope_id = 2;
+  optional string server_id = 3;
+  optional string cluster_key = 4;
+  optional KubernetesClusterStatus status = 5;
+  optional bool is_default = 6;
+  optional string api_endpoint_ref = 7;
+  optional string secret_store_type = 8;
+  optional string secret_store_ref = 9;
+  optional string kubernetes_version = 10;
+  optional string region = 11;
+  optional string capacity_class = 12;
+  CommandMeta meta = 13;
+}
+
+message DisableKubernetesClusterRequest {
+  string cluster_id = 1;
+  CommandMeta meta = 2;
+}
+
+message GetKubernetesClusterRequest {
+  string cluster_id = 1;
+  QueryMeta meta = 2;
+}
+
+message ListKubernetesClustersRequest {
+  optional string fleet_scope_id = 1;
+  optional string server_id = 2;
+  repeated KubernetesClusterStatus statuses = 3;
+  repeated ClusterHealthStatus health_statuses = 4;
+  optional string region = 5;
+  optional string capacity_class = 6;
+  optional bool is_default = 7;
+  PageRequest page = 8;
+  QueryMeta meta = 9;
+}
+
+message KubernetesClusterResponse {
+  KubernetesCluster cluster = 1;
+}
+
+message ListKubernetesClustersResponse {
+  repeated KubernetesCluster clusters = 1;
+  PageResponse page = 2;
+}
+
+message RunClusterConnectivityCheckRequest {
+  string cluster_id = 1;
+  CommandMeta meta = 2;
+}
+
+message ClusterConnectivityCheckResponse {
+  ClusterConnectivityCheck connectivity_check = 1;
+}
+
+message GetClusterHealthSnapshotRequest {
+  string cluster_id = 1;
+  optional string health_snapshot_id = 2;
+  QueryMeta meta = 3;
+}
+
+message ListClusterHealthSnapshotsRequest {
+  string cluster_id = 1;
+  optional string checked_since = 2;
+  PageRequest page = 3;
+  QueryMeta meta = 4;
+}
+
+message ClusterHealthSnapshotResponse {
+  ClusterHealthSnapshot health_snapshot = 1;
+}
+
+message ListClusterHealthSnapshotsResponse {
+  repeated ClusterHealthSnapshot health_snapshots = 1;
+  PageResponse page = 2;
+}
+
+message PutPlacementRuleRequest {
+  optional string placement_rule_id = 1;
+  string fleet_scope_id = 2;
+  string rule_key = 3;
+  PlacementRuleStatus status = 4;
+  int64 priority = 5;
+  string match_json = 6;
+  string constraints_json = 7;
+  CommandMeta meta = 8;
+}
+
+message GetPlacementRuleRequest {
+  string placement_rule_id = 1;
+  QueryMeta meta = 2;
+}
+
+message ListPlacementRulesRequest {
+  optional string fleet_scope_id = 1;
+  repeated PlacementRuleStatus statuses = 2;
+  PageRequest page = 3;
+  QueryMeta meta = 4;
+}
+
+message PlacementRuleResponse {
+  PlacementRule placement_rule = 1;
+}
+
+message ListPlacementRulesResponse {
+  repeated PlacementRule placement_rules = 1;
+  PageResponse page = 2;
+}
+
+message ResolvePlacementRequest {
+  optional string project_id = 1;
+  optional string repository_id = 2;
+  optional string service_key = 3;
+  RuntimeMode runtime_mode = 4;
+  optional string preferred_fleet_scope_id = 5;
+  optional string preferred_cluster_id = 6;
+  string placement_constraints_json = 7;
+  string runtime_requirements_json = 8;
+  CommandMeta meta = 9;
+}
+
+message ResolvePlacementResponse {
+  PlacementDecision decision = 1;
+}
+
+message GetPlacementDecisionRequest {
+  string placement_decision_id = 1;
+  QueryMeta meta = 2;
+}
+
+message ListPlacementDecisionsRequest {
+  optional string project_id = 1;
+  optional string repository_id = 2;
+  optional string fleet_scope_id = 3;
+  optional string cluster_id = 4;
+  repeated PlacementDecisionStatus statuses = 5;
+  PageRequest page = 6;
+  QueryMeta meta = 7;
+}
+
+message PlacementDecisionResponse {
+  PlacementDecision decision = 1;
+}
+
+message ListPlacementDecisionsResponse {
+  repeated PlacementDecision decisions = 1;
+  PageResponse page = 2;
+}

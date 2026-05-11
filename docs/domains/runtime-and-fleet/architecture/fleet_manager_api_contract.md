@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-11
 updated_at: 2026-05-11
-related_issues: [699]
+related_issues: [699, 708]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -22,18 +22,18 @@ approvals:
 
 - Тип API: внутренний gRPC для команд и чтений, AsyncAPI для `fleet.*` событий.
 - Аутентификация: внутренний сервисный контур; изменяющие команды принимают `CommandMeta` и проверяются через `access-manager`.
-- Версионирование: стабильный `v1` создаётся в контрактном срезе до реализации операций.
+- Версионирование: стабильный `v1` создан в контрактном срезе до реализации операций.
 - Основные операции: fleet scopes, servers, Kubernetes clusters, связность/health, placement rules и `ResolvePlacement` по набору активных кластеров.
 
 ## Спецификации
 
-| Контракт | Будущий источник правды |
+| Контракт | Источник правды |
 |---|---|
 | gRPC proto | `proto/kodex/fleet/v1/fleet_manager.proto` |
 | AsyncAPI | `specs/asyncapi/fleet-manager.v1.yaml` |
 | Go-контракты событий | `libs/go/platformevents/fleet/events.gen.go` |
 
-В FLEET-0 эти файлы ещё не создаются. Документ фиксирует будущий контракт, чтобы FLEET-1 не проектировал API с нуля и не смешивал fleet с runtime.
+Контрактный срез фиксирует стабильную поверхность `fleet-manager` до сервисной реализации. Реализация операций, БД и миграции идут отдельным срезом.
 
 ## Группы операций
 
@@ -41,10 +41,11 @@ approvals:
 
 | Операция | Назначение | Вызывает | Идемпотентность |
 |---|---|---|---|
-| `CreateOrUpdateFleetScope` | Создать или обновить логический контур размещения с типизированной ссылкой владельца. | Операторский контур, автоматизация платформы | `command_id + expected_version` при update. |
+| `CreateFleetScope` | Создать логический контур размещения с типизированной ссылкой владельца. | Операторский контур, автоматизация платформы | `command_id`. |
+| `UpdateFleetScope` | Обновить логический контур размещения. | Операторский контур, автоматизация платформы | `command_id + expected_version`. |
 | `GetFleetScope` | Прочитать scope. | `runtime-manager`, операторский контур | Только чтение. |
 | `ListFleetScopes` | Получить список по типу, владельцу и статусу. | Операторский контур | Только чтение. |
-| `SuspendFleetScope` | Запретить новые размещения в scope. | Операторский контур | `command_id + expected_version`. |
+| `DisableFleetScope` | Запретить новые размещения в scope. | Операторский контур | `command_id + expected_version`. |
 
 ### Servers
 
@@ -54,7 +55,7 @@ approvals:
 | `UpdateServer` | Обновить метаданные, регион, класс мощности или ссылки на секреты. | Операторский контур | `command_id + expected_version`. |
 | `GetServer` | Прочитать сервер. | Операторский контур | Только чтение. |
 | `ListServers` | Список серверов по статусу, региону и классу. | Операторский контур | Только чтение. |
-| `SuspendServer` | Запретить использование сервера для новых размещений. | Операторский контур | `command_id + expected_version`. |
+| `DisableServer` | Запретить использование сервера для новых размещений. | Операторский контур | `command_id + expected_version`. |
 
 ### Kubernetes clusters
 
@@ -64,14 +65,13 @@ approvals:
 | `UpdateKubernetesCluster` | Обновить статус, scope, default-признак, region, class или secret ref. | Операторский контур | `command_id + expected_version`. |
 | `GetKubernetesCluster` | Прочитать кластер. | `runtime-manager`, операторский контур | Только чтение. |
 | `ListKubernetesClusters` | Список кластеров по scope, статусу и health. | Операторский контур | Только чтение. |
-| `SuspendKubernetesCluster` | Запретить новые размещения в кластер. | Операторский контур | `command_id + expected_version`. |
+| `DisableKubernetesCluster` | Запретить новые размещения в кластер. | Операторский контур | `command_id + expected_version`. |
 
 ### Связность и health
 
 | Операция | Назначение | Вызывает | Идемпотентность |
 |---|---|---|---|
 | `RunClusterConnectivityCheck` | Проверить доступность Kubernetes API. | Внутренний исполнитель, операторский контур | `command_id`. |
-| `RecordClusterHealthSnapshot` | Записать ограниченный health snapshot после проверки. | Внутренний исполнитель, fleet controller | `command_id`. |
 | `GetClusterHealthSnapshot` | Прочитать последний или конкретный snapshot. | Операторский контур, `runtime-manager` | Только чтение. |
 | `ListClusterHealthSnapshots` | История snapshot по кластеру. | Операторский контур | Только чтение. |
 
@@ -85,6 +85,16 @@ approvals:
 | `ResolvePlacement` | Вернуть `fleet_scope_id`, `cluster_id` и объяснение решения для runtime-запроса. | `runtime-manager` | `command_id` или `request_fingerprint`. |
 | `GetPlacementDecision` | Прочитать сохранённое решение. | `runtime-manager`, операторский контур | Только чтение. |
 | `ListPlacementDecisions` | История решений по проекту, репозиторию, scope или cluster. | Операторский контур | Только чтение. |
+
+## Ключи действий доступа
+
+| Область | Ключи |
+|---|---|
+| Fleet scope | `fleet.scope.create`, `fleet.scope.update`, `fleet.scope.disable`, `fleet.scope.read`, `fleet.scope.list` |
+| Server | `fleet.server.register`, `fleet.server.update`, `fleet.server.disable`, `fleet.server.read`, `fleet.server.list` |
+| Kubernetes cluster | `fleet.cluster.register`, `fleet.cluster.update`, `fleet.cluster.disable`, `fleet.cluster.read`, `fleet.cluster.list` |
+| Health | `fleet.health.check.run`, `fleet.health.read` |
+| Placement | `fleet.placement_rule.put`, `fleet.placement_rule.read`, `fleet.placement_rule.list`, `fleet.placement.resolve`, `fleet.placement_decision.read`, `fleet.placement_decision.list` |
 
 ## MVP и отложенный объём
 
@@ -126,13 +136,12 @@ approvals:
 |---|---|
 | `fleet.scope.created` | Создан fleet scope. |
 | `fleet.scope.updated` | Обновлён fleet scope. |
-| `fleet.server.registered` | Зарегистрирован сервер. |
+| `fleet.server.created` | Зарегистрирован сервер. |
 | `fleet.server.updated` | Обновлён сервер. |
-| `fleet.server.suspended` | Сервер приостановлен. |
-| `fleet.cluster.registered` | Зарегистрирован Kubernetes-кластер. |
+| `fleet.server.disabled` | Сервер отключён для новых размещений. |
+| `fleet.cluster.created` | Зарегистрирован Kubernetes-кластер. |
 | `fleet.cluster.updated` | Обновлён Kubernetes-кластер. |
-| `fleet.cluster.suspended` | Кластер приостановлен для новых размещений. |
-| `fleet.cluster.decommissioned` | Кластер выведен из эксплуатации; событие относится к разрушительному lifecycle после MVP. |
+| `fleet.cluster.disabled` | Кластер отключён для новых размещений. |
 | `fleet.health.checked` | Health check завершён. |
 | `fleet.health.degraded` | Health перешёл в degraded/unhealthy. |
 | `fleet.placement.resolved` | Placement успешно разрешён. |

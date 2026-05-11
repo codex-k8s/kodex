@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-11
 updated_at: 2026-05-11
-related_issues: [699]
+related_issues: [699, 708]
 related_prs: []
 related_adrs: []
 approvals:
@@ -177,13 +177,13 @@ sequenceDiagram
 
 - `fleet.scope.created`;
 - `fleet.scope.updated`;
-- `fleet.server.registered`;
+- `fleet.scope.disabled`;
+- `fleet.server.created`;
 - `fleet.server.updated`;
-- `fleet.server.suspended`;
-- `fleet.cluster.registered`;
+- `fleet.server.disabled`;
+- `fleet.cluster.created`;
 - `fleet.cluster.updated`;
-- `fleet.cluster.suspended`;
-- `fleet.cluster.decommissioned` — после MVP;
+- `fleet.cluster.disabled`;
 - `fleet.health.checked`;
 - `fleet.health.degraded`;
 - `fleet.placement.resolved`;

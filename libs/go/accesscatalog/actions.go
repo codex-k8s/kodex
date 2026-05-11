@@ -48,6 +48,12 @@ const (
 	ResourceRuntimeArtifactRef     = "runtime_artifact_ref"
 	ResourceRuntimeCleanupPolicy   = "runtime_cleanup_policy"
 	ResourceRuntimePrewarmPool     = "runtime_prewarm_pool"
+	ResourceFleetScope             = "fleet_scope"
+	ResourceFleetServer            = "fleet_server"
+	ResourceFleetCluster           = "fleet_cluster"
+	ResourceFleetHealth            = "fleet_health"
+	ResourceFleetPlacementRule     = "fleet_placement_rule"
+	ResourceFleetPlacementDecision = "fleet_placement_decision"
 )
 
 const (
@@ -122,6 +128,29 @@ const (
 	ActionRuntimeCleanupRun                     = "runtime.cleanup.run"
 	ActionRuntimePrewarmPoolUpsert              = "runtime.prewarm_pool.upsert"
 	ActionRuntimePrewarmPoolReconcile           = "runtime.prewarm_pool.reconcile"
+	ActionFleetScopeCreate                      = "fleet.scope.create"
+	ActionFleetScopeUpdate                      = "fleet.scope.update"
+	ActionFleetScopeDisable                     = "fleet.scope.disable"
+	ActionFleetScopeRead                        = "fleet.scope.read"
+	ActionFleetScopeList                        = "fleet.scope.list"
+	ActionFleetServerRegister                   = "fleet.server.register"
+	ActionFleetServerUpdate                     = "fleet.server.update"
+	ActionFleetServerDisable                    = "fleet.server.disable"
+	ActionFleetServerRead                       = "fleet.server.read"
+	ActionFleetServerList                       = "fleet.server.list"
+	ActionFleetClusterRegister                  = "fleet.cluster.register"
+	ActionFleetClusterUpdate                    = "fleet.cluster.update"
+	ActionFleetClusterDisable                   = "fleet.cluster.disable"
+	ActionFleetClusterRead                      = "fleet.cluster.read"
+	ActionFleetClusterList                      = "fleet.cluster.list"
+	ActionFleetHealthCheckRun                   = "fleet.health.check.run"
+	ActionFleetHealthRead                       = "fleet.health.read"
+	ActionFleetPlacementRulePut                 = "fleet.placement_rule.put"
+	ActionFleetPlacementRuleRead                = "fleet.placement_rule.read"
+	ActionFleetPlacementRuleList                = "fleet.placement_rule.list"
+	ActionFleetPlacementResolve                 = "fleet.placement.resolve"
+	ActionFleetPlacementDecisionRead            = "fleet.placement_decision.read"
+	ActionFleetPlacementDecisionList            = "fleet.placement_decision.list"
 )
 
 // ProjectCatalogActions returns system actions owned by the projects-and-repositories domain.
@@ -219,13 +248,43 @@ func RuntimeManagerActions() []ActionDescriptor {
 	}
 }
 
+// FleetManagerActions returns system actions owned by the runtime-and-fleet domain.
+func FleetManagerActions() []ActionDescriptor {
+	return []ActionDescriptor{
+		{Key: ActionFleetScopeCreate, ResourceType: ResourceFleetScope},
+		{Key: ActionFleetScopeUpdate, ResourceType: ResourceFleetScope},
+		{Key: ActionFleetScopeDisable, ResourceType: ResourceFleetScope},
+		{Key: ActionFleetScopeRead, ResourceType: ResourceFleetScope},
+		{Key: ActionFleetScopeList, ResourceType: ResourceFleetScope},
+		{Key: ActionFleetServerRegister, ResourceType: ResourceFleetServer},
+		{Key: ActionFleetServerUpdate, ResourceType: ResourceFleetServer},
+		{Key: ActionFleetServerDisable, ResourceType: ResourceFleetServer},
+		{Key: ActionFleetServerRead, ResourceType: ResourceFleetServer},
+		{Key: ActionFleetServerList, ResourceType: ResourceFleetServer},
+		{Key: ActionFleetClusterRegister, ResourceType: ResourceFleetCluster},
+		{Key: ActionFleetClusterUpdate, ResourceType: ResourceFleetCluster},
+		{Key: ActionFleetClusterDisable, ResourceType: ResourceFleetCluster},
+		{Key: ActionFleetClusterRead, ResourceType: ResourceFleetCluster},
+		{Key: ActionFleetClusterList, ResourceType: ResourceFleetCluster},
+		{Key: ActionFleetHealthCheckRun, ResourceType: ResourceFleetHealth},
+		{Key: ActionFleetHealthRead, ResourceType: ResourceFleetHealth},
+		{Key: ActionFleetPlacementRulePut, ResourceType: ResourceFleetPlacementRule},
+		{Key: ActionFleetPlacementRuleRead, ResourceType: ResourceFleetPlacementRule},
+		{Key: ActionFleetPlacementRuleList, ResourceType: ResourceFleetPlacementRule},
+		{Key: ActionFleetPlacementResolve, ResourceType: ResourceFleetPlacementDecision},
+		{Key: ActionFleetPlacementDecisionRead, ResourceType: ResourceFleetPlacementDecision},
+		{Key: ActionFleetPlacementDecisionList, ResourceType: ResourceFleetPlacementDecision},
+	}
+}
+
 // SystemActions returns all shared code-owned system actions.
 func SystemActions() []ActionDescriptor {
-	actions := make([]ActionDescriptor, 0, len(ProjectCatalogActions())+len(PackageHubActions())+len(ProviderHubActions())+len(RuntimeManagerActions()))
+	actions := make([]ActionDescriptor, 0, len(ProjectCatalogActions())+len(PackageHubActions())+len(ProviderHubActions())+len(RuntimeManagerActions())+len(FleetManagerActions()))
 	actions = append(actions, ProjectCatalogActions()...)
 	actions = append(actions, PackageHubActions()...)
 	actions = append(actions, ProviderHubActions()...)
 	actions = append(actions, RuntimeManagerActions()...)
+	actions = append(actions, FleetManagerActions()...)
 	return actions
 }
 
