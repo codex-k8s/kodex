@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-11
 updated_at: 2026-05-11
-related_issues: [699]
+related_issues: [699, 708]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -194,6 +194,7 @@ approvals:
 | `cluster_id` | UUID | yes | indexed | Выбранный cluster. |
 | `project_id` | UUID | yes | indexed | Внешний project ref. |
 | `repository_id` | UUID | yes | indexed | Внешний repository ref. |
+| `runtime_mode` | text | no | default '' | Режим изоляции runtime. |
 | `runtime_profile` | text | no | default '' | Профиль runtime. |
 | `input_json` | jsonb | no | default {} | Ограниченный вход без секретов. |
 | `reason_code` | text | no | default '' | Причина выбора или отказа. |

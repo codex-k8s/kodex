@@ -43,3 +43,15 @@ func TestProviderHubActionsAreSystemActions(t *testing.T) {
 		t.Fatalf("provider reconciliation resource = %q, want %q", action.ResourceType, ResourceProviderReconciliation)
 	}
 }
+
+func TestFleetManagerActionsAreSystemActions(t *testing.T) {
+	t.Parallel()
+
+	action, ok := SystemActionByKey(ActionFleetClusterEnable)
+	if !ok {
+		t.Fatalf("SystemActionByKey(%q) ok = false, want true", ActionFleetClusterEnable)
+	}
+	if action.ResourceType != ResourceFleetCluster {
+		t.Fatalf("fleet cluster resource = %q, want %q", action.ResourceType, ResourceFleetCluster)
+	}
+}

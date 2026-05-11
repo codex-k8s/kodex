@@ -86,6 +86,14 @@ func main() {
 			PayloadSchema:   "RuntimeEventPayload",
 			OutputPath:      "libs/go/platformevents/runtime/events.gen.go",
 		},
+		{
+			Domain:          "fleet",
+			PackageName:     "fleet",
+			SpecPath:        "specs/asyncapi/fleet-manager.v1.yaml",
+			EventTypeSchema: "FleetEventType",
+			PayloadSchema:   "FleetEventPayload",
+			OutputPath:      "libs/go/platformevents/fleet/events.gen.go",
+		},
 	}
 	for _, spec := range specs {
 		if err := generate(spec); err != nil {

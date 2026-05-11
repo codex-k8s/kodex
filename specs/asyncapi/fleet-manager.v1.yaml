@@ -1,0 +1,296 @@
+asyncapi: 3.0.0
+info:
+  title: kodex fleet-manager events
+  version: 1.0.0
+  description: Stable v1 event contract published by fleet-manager through the platform outbox.
+x-kodex-contract-status: stable-v1
+channels:
+  fleetEvents:
+    address: fleet.events
+    messages:
+      fleetEvent:
+        $ref: '#/components/messages/FleetEvent'
+operations:
+  publishFleetEvent:
+    action: send
+    channel:
+      $ref: '#/channels/fleetEvents'
+    messages:
+      - $ref: '#/channels/fleetEvents/messages/fleetEvent'
+components:
+  messages:
+    FleetEvent:
+      name: FleetEvent
+      title: Fleet domain event envelope
+      payload:
+        $ref: '#/components/schemas/FleetEventEnvelope'
+  schemas:
+    FleetEventEnvelope:
+      oneOf:
+        - $ref: '#/components/schemas/ScopeCreatedEvent'
+        - $ref: '#/components/schemas/ScopeUpdatedEvent'
+        - $ref: '#/components/schemas/ScopeDisabledEvent'
+        - $ref: '#/components/schemas/ScopeEnabledEvent'
+        - $ref: '#/components/schemas/ServerCreatedEvent'
+        - $ref: '#/components/schemas/ServerUpdatedEvent'
+        - $ref: '#/components/schemas/ServerDisabledEvent'
+        - $ref: '#/components/schemas/ServerEnabledEvent'
+        - $ref: '#/components/schemas/ClusterCreatedEvent'
+        - $ref: '#/components/schemas/ClusterUpdatedEvent'
+        - $ref: '#/components/schemas/ClusterDisabledEvent'
+        - $ref: '#/components/schemas/ClusterEnabledEvent'
+        - $ref: '#/components/schemas/HealthCheckedEvent'
+        - $ref: '#/components/schemas/HealthDegradedEvent'
+        - $ref: '#/components/schemas/PlacementResolvedEvent'
+        - $ref: '#/components/schemas/PlacementRejectedEvent'
+    FleetEventEnvelopeBase:
+      type: object
+      additionalProperties: false
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_type:
+          $ref: '#/components/schemas/FleetEventType'
+        schema_version:
+          type: integer
+          minimum: 1
+        aggregate_type:
+          type: string
+        aggregate_id:
+          type: string
+          format: uuid
+        occurred_at:
+          type: string
+          format: date-time
+        payload:
+          $ref: '#/components/schemas/FleetEventPayload'
+      required: [event_id, event_type, schema_version, aggregate_type, aggregate_id, occurred_at, payload]
+
+    ScopeCreatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/FleetEventEnvelopeBase'
+        - $ref: '#/components/schemas/ScopeCreatedEventKind'
+    ScopeCreatedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: fleet.scope.created}, aggregate_type: {type: string, const: fleet_scope}, payload: {$ref: '#/components/schemas/ScopeCreatedPayload'}}
+      required: [event_type, aggregate_type, payload]
+    ScopeUpdatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/FleetEventEnvelopeBase'
+        - $ref: '#/components/schemas/ScopeUpdatedEventKind'
+    ScopeUpdatedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: fleet.scope.updated}, aggregate_type: {type: string, const: fleet_scope}, payload: {$ref: '#/components/schemas/ScopeUpdatedPayload'}}
+      required: [event_type, aggregate_type, payload]
+    ScopeDisabledEvent:
+      allOf:
+        - $ref: '#/components/schemas/FleetEventEnvelopeBase'
+        - $ref: '#/components/schemas/ScopeDisabledEventKind'
+    ScopeDisabledEventKind:
+      type: object
+      properties: {event_type: {type: string, const: fleet.scope.disabled}, aggregate_type: {type: string, const: fleet_scope}, payload: {$ref: '#/components/schemas/ScopeDisabledPayload'}}
+      required: [event_type, aggregate_type, payload]
+    ScopeEnabledEvent:
+      allOf:
+        - $ref: '#/components/schemas/FleetEventEnvelopeBase'
+        - $ref: '#/components/schemas/ScopeEnabledEventKind'
+    ScopeEnabledEventKind:
+      type: object
+      properties: {event_type: {type: string, const: fleet.scope.enabled}, aggregate_type: {type: string, const: fleet_scope}, payload: {$ref: '#/components/schemas/ScopeEnabledPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    ServerCreatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/FleetEventEnvelopeBase'
+        - $ref: '#/components/schemas/ServerCreatedEventKind'
+    ServerCreatedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: fleet.server.created}, aggregate_type: {type: string, const: server}, payload: {$ref: '#/components/schemas/ServerCreatedPayload'}}
+      required: [event_type, aggregate_type, payload]
+    ServerUpdatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/FleetEventEnvelopeBase'
+        - $ref: '#/components/schemas/ServerUpdatedEventKind'
+    ServerUpdatedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: fleet.server.updated}, aggregate_type: {type: string, const: server}, payload: {$ref: '#/components/schemas/ServerUpdatedPayload'}}
+      required: [event_type, aggregate_type, payload]
+    ServerDisabledEvent:
+      allOf:
+        - $ref: '#/components/schemas/FleetEventEnvelopeBase'
+        - $ref: '#/components/schemas/ServerDisabledEventKind'
+    ServerDisabledEventKind:
+      type: object
+      properties: {event_type: {type: string, const: fleet.server.disabled}, aggregate_type: {type: string, const: server}, payload: {$ref: '#/components/schemas/ServerDisabledPayload'}}
+      required: [event_type, aggregate_type, payload]
+    ServerEnabledEvent:
+      allOf:
+        - $ref: '#/components/schemas/FleetEventEnvelopeBase'
+        - $ref: '#/components/schemas/ServerEnabledEventKind'
+    ServerEnabledEventKind:
+      type: object
+      properties: {event_type: {type: string, const: fleet.server.enabled}, aggregate_type: {type: string, const: server}, payload: {$ref: '#/components/schemas/ServerEnabledPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    ClusterCreatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/FleetEventEnvelopeBase'
+        - $ref: '#/components/schemas/ClusterCreatedEventKind'
+    ClusterCreatedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: fleet.cluster.created}, aggregate_type: {type: string, const: kubernetes_cluster}, payload: {$ref: '#/components/schemas/ClusterCreatedPayload'}}
+      required: [event_type, aggregate_type, payload]
+    ClusterUpdatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/FleetEventEnvelopeBase'
+        - $ref: '#/components/schemas/ClusterUpdatedEventKind'
+    ClusterUpdatedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: fleet.cluster.updated}, aggregate_type: {type: string, const: kubernetes_cluster}, payload: {$ref: '#/components/schemas/ClusterUpdatedPayload'}}
+      required: [event_type, aggregate_type, payload]
+    ClusterDisabledEvent:
+      allOf:
+        - $ref: '#/components/schemas/FleetEventEnvelopeBase'
+        - $ref: '#/components/schemas/ClusterDisabledEventKind'
+    ClusterDisabledEventKind:
+      type: object
+      properties: {event_type: {type: string, const: fleet.cluster.disabled}, aggregate_type: {type: string, const: kubernetes_cluster}, payload: {$ref: '#/components/schemas/ClusterDisabledPayload'}}
+      required: [event_type, aggregate_type, payload]
+    ClusterEnabledEvent:
+      allOf:
+        - $ref: '#/components/schemas/FleetEventEnvelopeBase'
+        - $ref: '#/components/schemas/ClusterEnabledEventKind'
+    ClusterEnabledEventKind:
+      type: object
+      properties: {event_type: {type: string, const: fleet.cluster.enabled}, aggregate_type: {type: string, const: kubernetes_cluster}, payload: {$ref: '#/components/schemas/ClusterEnabledPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    HealthCheckedEvent:
+      allOf:
+        - $ref: '#/components/schemas/FleetEventEnvelopeBase'
+        - $ref: '#/components/schemas/HealthCheckedEventKind'
+    HealthCheckedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: fleet.health.checked}, aggregate_type: {type: string, const: cluster_health}, payload: {$ref: '#/components/schemas/HealthCheckedPayload'}}
+      required: [event_type, aggregate_type, payload]
+    HealthDegradedEvent:
+      allOf:
+        - $ref: '#/components/schemas/FleetEventEnvelopeBase'
+        - $ref: '#/components/schemas/HealthDegradedEventKind'
+    HealthDegradedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: fleet.health.degraded}, aggregate_type: {type: string, const: cluster_health}, payload: {$ref: '#/components/schemas/HealthDegradedPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    PlacementResolvedEvent:
+      allOf:
+        - $ref: '#/components/schemas/FleetEventEnvelopeBase'
+        - $ref: '#/components/schemas/PlacementResolvedEventKind'
+    PlacementResolvedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: fleet.placement.resolved}, aggregate_type: {type: string, const: placement_decision}, payload: {$ref: '#/components/schemas/PlacementResolvedPayload'}}
+      required: [event_type, aggregate_type, payload]
+    PlacementRejectedEvent:
+      allOf:
+        - $ref: '#/components/schemas/FleetEventEnvelopeBase'
+        - $ref: '#/components/schemas/PlacementRejectedEventKind'
+    PlacementRejectedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: fleet.placement.rejected}, aggregate_type: {type: string, const: placement_decision}, payload: {$ref: '#/components/schemas/PlacementRejectedPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    FleetEventType:
+      type: string
+      enum:
+        - fleet.scope.created
+        - fleet.scope.updated
+        - fleet.scope.disabled
+        - fleet.scope.enabled
+        - fleet.server.created
+        - fleet.server.updated
+        - fleet.server.disabled
+        - fleet.server.enabled
+        - fleet.cluster.created
+        - fleet.cluster.updated
+        - fleet.cluster.disabled
+        - fleet.cluster.enabled
+        - fleet.health.checked
+        - fleet.health.degraded
+        - fleet.placement.resolved
+        - fleet.placement.rejected
+    FleetEventPayload:
+      type: object
+      additionalProperties: false
+      properties:
+        capacity_status:
+          type: string
+        cluster_id:
+          type: string
+          format: uuid
+        cluster_key:
+          type: string
+        error_code:
+          type: string
+        error_message:
+          type: string
+        fleet_scope_id:
+          type: string
+          format: uuid
+        health_status:
+          type: string
+        is_default:
+          type: boolean
+        placement_decision_id:
+          type: string
+          format: uuid
+        previous_status:
+          type: string
+        project_id:
+          type: string
+          format: uuid
+        reason_code:
+          type: string
+        reason_message:
+          type: string
+        repository_id:
+          type: string
+          format: uuid
+        runtime_mode:
+          type: string
+        runtime_profile:
+          type: string
+        scope_key:
+          type: string
+        scope_owner_id:
+          type: string
+          format: uuid
+        scope_type:
+          type: string
+        server_id:
+          type: string
+          format: uuid
+        server_key:
+          type: string
+        status:
+          type: string
+        used_default_path:
+          type: boolean
+        version:
+          type: integer
+    ScopeCreatedPayload: {$ref: '#/components/schemas/FleetEventPayload'}
+    ScopeUpdatedPayload: {$ref: '#/components/schemas/FleetEventPayload'}
+    ScopeDisabledPayload: {$ref: '#/components/schemas/FleetEventPayload'}
+    ScopeEnabledPayload: {$ref: '#/components/schemas/FleetEventPayload'}
+    ServerCreatedPayload: {$ref: '#/components/schemas/FleetEventPayload'}
+    ServerUpdatedPayload: {$ref: '#/components/schemas/FleetEventPayload'}
+    ServerDisabledPayload: {$ref: '#/components/schemas/FleetEventPayload'}
+    ServerEnabledPayload: {$ref: '#/components/schemas/FleetEventPayload'}
+    ClusterCreatedPayload: {$ref: '#/components/schemas/FleetEventPayload'}
+    ClusterUpdatedPayload: {$ref: '#/components/schemas/FleetEventPayload'}
+    ClusterDisabledPayload: {$ref: '#/components/schemas/FleetEventPayload'}
+    ClusterEnabledPayload: {$ref: '#/components/schemas/FleetEventPayload'}
+    HealthCheckedPayload: {$ref: '#/components/schemas/FleetEventPayload'}
+    HealthDegradedPayload: {$ref: '#/components/schemas/FleetEventPayload'}
+    PlacementResolvedPayload: {$ref: '#/components/schemas/FleetEventPayload'}
+    PlacementRejectedPayload: {$ref: '#/components/schemas/FleetEventPayload'}
