@@ -27,6 +27,7 @@
 - `libs/go/grpcserver/*` — общий runtime gRPC сервера: gRPC-перехватчики, auth, Prometheus-метрики, OpenTelemetry tracing, проброс trace context и лог-корреляция.
 - `libs/go/outbox/*` — общий runtime доставщика сервисного outbox.
 - `libs/go/eventlog/*` — общий клиент `platform-event-log` и PostgreSQL publisher для outbox.
+- `libs/go/secretresolver/*` — общий контракт безопасного получения значения секрета по разрешённой ссылке и проверки доступности без раскрытия значения.
 - `libs/go/accesscheck/*` — общий клиент `access-manager` для `CheckAccess` и сервисных адаптеров авторизации.
 - `libs/go/platformevents/*` — сгенерированные из AsyncAPI контракты доменных событий.
 - `libs/go/i18n/*` — общий backend runtime локализации системных message id.

@@ -33,9 +33,9 @@
 
 | Срез | Статус | Почему не завершён |
 |---|---|---|
-| PRV-6.2b | заблокировано | Реальная GitHub batch-сверка требует получить значение секрета после `ResolveExternalAccountUsage`. Сейчас есть только ссылка на секрет; нужен согласованный secret resolver/Vault/Kubernetes Secret клиент. |
-| PRV-7 | заблокировано частично | Provider-операции записи требуют secret resolver и согласованный каталог MCP/agent-manager инструментов. Действия доступа уже есть. |
-| PRV-8 | заблокировано частично | Bootstrap/adoption зависят от проектной политики, repository binding и решения `project-catalog`; запись в провайдера также ждёт secret resolver. |
+| PRV-6.2b | разблокировано контрактно | Общий resolver-контракт и минимальный Kubernetes mounted backend готовы; следующий срез должен подключить `libs/go/secretresolver` к worker `provider-hub`, выполнить GitHub batch-сверку и не сохранять токен. |
+| PRV-7 | заблокировано частично | Provider-операции записи уже могут использовать общий resolver-контракт, но требуют согласованный каталог MCP/agent-manager инструментов, идемпотентность команд и политику approval. Действия доступа уже есть. |
+| PRV-8 | заблокировано частично | Bootstrap/adoption зависят от проектной политики, repository binding и решения `project-catalog`; запись в провайдера должна использовать общий resolver-контракт после подключения операций записи. |
 | PRV-9 | запланировано позже | Kubernetes-манифесты, migration job, metrics, alerts, runbook и smoke можно делать по паттерну `runtime-manager`, когда будет принято решение разворачивать `provider-hub` на сервере. |
 
 ## Блокировки от `access-manager`
@@ -45,8 +45,13 @@
 - `ResolveExternalAccountUsage` подтверждает выбранный внешний аккаунт, действие и область использования;
 - `access-manager` возвращает `provider_slug`, `secret_store_type` и `secret_store_ref`, но не значение секрета.
 
-Реальная оставшаяся блокировка:
-- нужен общий контракт/клиент получения значения секрета по `secret_store_type + secret_store_ref` после положительного ответа `ResolveExternalAccountUsage`. Без него нельзя выполнять GitHub batch-сверку и provider-операции записи.
+Снято общим срезом:
+- добавлен `libs/go/secretresolver` с контрактами `Resolver` и `Checker`, безопасным `SecretValue`, mux по `store_type` и минимальным backend `kubernetes_secret` для смонтированных файлов;
+- batch-сверка и provider-операции могут получать значение по `secret_store_type + secret_store_ref` после положительного ответа `ResolveExternalAccountUsage`, не сохраняя токен в `provider-hub`.
+
+Остаётся сделать в `provider-hub`:
+- подключить resolver-клиент к worker batch-сверки и GitHub adapter;
+- гарантировать, что значение секрета не попадёт в журнал операций, события, тело аудита, трассировку, логи и ошибки.
 
 Требует отдельного решения:
 - какие provider-операции требуют owner approval до выполнения через MCP/agent-manager;
@@ -87,4 +92,4 @@
 
 ## Рекомендуемый следующий шаг
 
-Не начинать PRV-6.2b до появления secret resolver/Vault/Kubernetes Secret клиента. Следующий независимый срез для provider-hub стоит выбрать из операций без provider API или переключиться на согласование контракта секретов.
+Следующий provider-срез — PRV-6.2b: подключить `libs/go/secretresolver` к batch-сверке, выполнить GitHub API-чтение по курсорам и обновить drift status. Не начинать provider write operations до согласования MCP/agent-manager инструментов и approval-политики.
