@@ -2,6 +2,8 @@ package access
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -239,6 +241,73 @@ func scanSecretBindingRef(row postgreslib.RowScanner) (entity.SecretBindingRef, 
 	secret.StoreType = enum.SecretStoreType(storeType)
 	secret.RotatedAt = postgreslib.TimePtrFromPG(rotatedAt)
 	return secret, err
+}
+
+func scanPackageInstallationSecretRef(row postgreslib.RowScanner) (entity.PackageInstallationSecretRef, error) {
+	var ref entity.PackageInstallationSecretRef
+	var status, storeType string
+	var metadata []byte
+	var rotatedAt pgtype.Timestamptz
+	err := row.Scan(
+		&ref.ID,
+		&ref.PackageInstallationID,
+		&ref.InstallationScope.Type,
+		&ref.InstallationScope.ID,
+		&ref.LogicalKey,
+		&status,
+		&metadata,
+		&ref.Version,
+		&ref.CreatedAt,
+		&ref.UpdatedAt,
+		&ref.SecretRef.ID,
+		&storeType,
+		&ref.SecretRef.StoreRef,
+		&ref.SecretRef.ValueFingerprint,
+		&rotatedAt,
+		&ref.SecretRef.Version,
+		&ref.SecretRef.CreatedAt,
+		&ref.SecretRef.UpdatedAt,
+	)
+	if err != nil {
+		return entity.PackageInstallationSecretRef{}, err
+	}
+	ref.Status = enum.PackageInstallationSecretRefStatus(status)
+	ref.SecretRef.StoreType = enum.SecretStoreType(storeType)
+	ref.SecretRef.RotatedAt = postgreslib.TimePtrFromPG(rotatedAt)
+	ref.Metadata, err = safeStringMetadata(metadata)
+	if err != nil {
+		return entity.PackageInstallationSecretRef{}, err
+	}
+	return ref, nil
+}
+
+func safeStringMetadata(raw []byte) (map[string]string, error) {
+	var metadata map[string]string
+	if err := json.Unmarshal(raw, &metadata); err != nil {
+		return nil, err
+	}
+	if metadata == nil {
+		return map[string]string{}, nil
+	}
+	for key := range metadata {
+		if !isSafeMetadataKey(key) {
+			return nil, fmt.Errorf("unsafe metadata key %q", key)
+		}
+	}
+	return metadata, nil
+}
+
+func isSafeMetadataKey(key string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(key))
+	if normalized == "" {
+		return false
+	}
+	for _, marker := range []string{"token", "secret", "password", "credential", "value", "key"} {
+		if strings.Contains(normalized, marker) {
+			return false
+		}
+	}
+	return true
 }
 
 func scanAccessAction(row postgreslib.RowScanner) (entity.AccessAction, error) {

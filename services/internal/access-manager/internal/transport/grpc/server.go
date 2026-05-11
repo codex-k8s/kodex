@@ -33,6 +33,7 @@ type accessService interface {
 	ListMembershipGraph(context.Context, accessservice.ListMembershipGraphInput) (accessservice.ListMembershipGraphResult, error)
 	ListPendingAccess(context.Context, accessservice.ListPendingAccessInput) (accessservice.ListPendingAccessResult, error)
 	ResolveExternalAccountUsage(context.Context, accessservice.ResolveExternalAccountUsageInput) (accessservice.ResolveExternalAccountUsageResult, error)
+	ListPackageInstallationSecretRefs(context.Context, accessservice.ListPackageInstallationSecretRefsInput) (accessservice.ListPackageInstallationSecretRefsResult, error)
 }
 
 // Server implements the generated AccessManagerServiceServer contract.
@@ -132,6 +133,11 @@ func (s *Server) PutAccessRule(ctx context.Context, request *accessaccountsv1.Pu
 // ResolveExternalAccountUsage checks whether an external account can be used.
 func (s *Server) ResolveExternalAccountUsage(ctx context.Context, request *accessaccountsv1.ResolveExternalAccountUsageRequest) (*accessaccountsv1.ResolveExternalAccountUsageResponse, error) {
 	return handleUnary(ctx, request, grpccasters.ResolveExternalAccountUsageInput, s.service.ResolveExternalAccountUsage, grpccasters.ResolveExternalAccountUsageResponse)
+}
+
+// ListPackageInstallationSecretRefs returns value-free refs for one package installation.
+func (s *Server) ListPackageInstallationSecretRefs(ctx context.Context, request *accessaccountsv1.ListPackageInstallationSecretRefsRequest) (*accessaccountsv1.ListPackageInstallationSecretRefsResponse, error) {
+	return handleUnary(ctx, request, grpccasters.ListPackageInstallationSecretRefsInput, s.service.ListPackageInstallationSecretRefs, grpccasters.ListPackageInstallationSecretRefsResponse)
 }
 
 // CheckAccess resolves effective access for a subject, action and resource.

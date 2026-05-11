@@ -19,32 +19,33 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AccessManagerService_BootstrapUserFromIdentity_FullMethodName     = "/kodex.access_accounts.v1.AccessManagerService/BootstrapUserFromIdentity"
-	AccessManagerService_SetUserStatus_FullMethodName                 = "/kodex.access_accounts.v1.AccessManagerService/SetUserStatus"
-	AccessManagerService_CreateOrganization_FullMethodName            = "/kodex.access_accounts.v1.AccessManagerService/CreateOrganization"
-	AccessManagerService_UpdateOrganization_FullMethodName            = "/kodex.access_accounts.v1.AccessManagerService/UpdateOrganization"
-	AccessManagerService_SuspendOrganization_FullMethodName           = "/kodex.access_accounts.v1.AccessManagerService/SuspendOrganization"
-	AccessManagerService_ArchiveOrganization_FullMethodName           = "/kodex.access_accounts.v1.AccessManagerService/ArchiveOrganization"
-	AccessManagerService_CreateGroup_FullMethodName                   = "/kodex.access_accounts.v1.AccessManagerService/CreateGroup"
-	AccessManagerService_UpdateGroup_FullMethodName                   = "/kodex.access_accounts.v1.AccessManagerService/UpdateGroup"
-	AccessManagerService_DisableGroup_FullMethodName                  = "/kodex.access_accounts.v1.AccessManagerService/DisableGroup"
-	AccessManagerService_SetMembership_FullMethodName                 = "/kodex.access_accounts.v1.AccessManagerService/SetMembership"
-	AccessManagerService_PutAllowlistEntry_FullMethodName             = "/kodex.access_accounts.v1.AccessManagerService/PutAllowlistEntry"
-	AccessManagerService_DisableAllowlistEntry_FullMethodName         = "/kodex.access_accounts.v1.AccessManagerService/DisableAllowlistEntry"
-	AccessManagerService_RegisterExternalProvider_FullMethodName      = "/kodex.access_accounts.v1.AccessManagerService/RegisterExternalProvider"
-	AccessManagerService_UpdateExternalProvider_FullMethodName        = "/kodex.access_accounts.v1.AccessManagerService/UpdateExternalProvider"
-	AccessManagerService_RegisterExternalAccount_FullMethodName       = "/kodex.access_accounts.v1.AccessManagerService/RegisterExternalAccount"
-	AccessManagerService_UpdateExternalAccountStatus_FullMethodName   = "/kodex.access_accounts.v1.AccessManagerService/UpdateExternalAccountStatus"
-	AccessManagerService_BindExternalAccount_FullMethodName           = "/kodex.access_accounts.v1.AccessManagerService/BindExternalAccount"
-	AccessManagerService_DisableExternalAccountBinding_FullMethodName = "/kodex.access_accounts.v1.AccessManagerService/DisableExternalAccountBinding"
-	AccessManagerService_PutAccessAction_FullMethodName               = "/kodex.access_accounts.v1.AccessManagerService/PutAccessAction"
-	AccessManagerService_PutAccessRule_FullMethodName                 = "/kodex.access_accounts.v1.AccessManagerService/PutAccessRule"
-	AccessManagerService_DisableAccessRule_FullMethodName             = "/kodex.access_accounts.v1.AccessManagerService/DisableAccessRule"
-	AccessManagerService_ResolveExternalAccountUsage_FullMethodName   = "/kodex.access_accounts.v1.AccessManagerService/ResolveExternalAccountUsage"
-	AccessManagerService_CheckAccess_FullMethodName                   = "/kodex.access_accounts.v1.AccessManagerService/CheckAccess"
-	AccessManagerService_ExplainAccess_FullMethodName                 = "/kodex.access_accounts.v1.AccessManagerService/ExplainAccess"
-	AccessManagerService_ListMembershipGraph_FullMethodName           = "/kodex.access_accounts.v1.AccessManagerService/ListMembershipGraph"
-	AccessManagerService_ListPendingAccess_FullMethodName             = "/kodex.access_accounts.v1.AccessManagerService/ListPendingAccess"
+	AccessManagerService_BootstrapUserFromIdentity_FullMethodName         = "/kodex.access_accounts.v1.AccessManagerService/BootstrapUserFromIdentity"
+	AccessManagerService_SetUserStatus_FullMethodName                     = "/kodex.access_accounts.v1.AccessManagerService/SetUserStatus"
+	AccessManagerService_CreateOrganization_FullMethodName                = "/kodex.access_accounts.v1.AccessManagerService/CreateOrganization"
+	AccessManagerService_UpdateOrganization_FullMethodName                = "/kodex.access_accounts.v1.AccessManagerService/UpdateOrganization"
+	AccessManagerService_SuspendOrganization_FullMethodName               = "/kodex.access_accounts.v1.AccessManagerService/SuspendOrganization"
+	AccessManagerService_ArchiveOrganization_FullMethodName               = "/kodex.access_accounts.v1.AccessManagerService/ArchiveOrganization"
+	AccessManagerService_CreateGroup_FullMethodName                       = "/kodex.access_accounts.v1.AccessManagerService/CreateGroup"
+	AccessManagerService_UpdateGroup_FullMethodName                       = "/kodex.access_accounts.v1.AccessManagerService/UpdateGroup"
+	AccessManagerService_DisableGroup_FullMethodName                      = "/kodex.access_accounts.v1.AccessManagerService/DisableGroup"
+	AccessManagerService_SetMembership_FullMethodName                     = "/kodex.access_accounts.v1.AccessManagerService/SetMembership"
+	AccessManagerService_PutAllowlistEntry_FullMethodName                 = "/kodex.access_accounts.v1.AccessManagerService/PutAllowlistEntry"
+	AccessManagerService_DisableAllowlistEntry_FullMethodName             = "/kodex.access_accounts.v1.AccessManagerService/DisableAllowlistEntry"
+	AccessManagerService_RegisterExternalProvider_FullMethodName          = "/kodex.access_accounts.v1.AccessManagerService/RegisterExternalProvider"
+	AccessManagerService_UpdateExternalProvider_FullMethodName            = "/kodex.access_accounts.v1.AccessManagerService/UpdateExternalProvider"
+	AccessManagerService_RegisterExternalAccount_FullMethodName           = "/kodex.access_accounts.v1.AccessManagerService/RegisterExternalAccount"
+	AccessManagerService_UpdateExternalAccountStatus_FullMethodName       = "/kodex.access_accounts.v1.AccessManagerService/UpdateExternalAccountStatus"
+	AccessManagerService_BindExternalAccount_FullMethodName               = "/kodex.access_accounts.v1.AccessManagerService/BindExternalAccount"
+	AccessManagerService_DisableExternalAccountBinding_FullMethodName     = "/kodex.access_accounts.v1.AccessManagerService/DisableExternalAccountBinding"
+	AccessManagerService_PutAccessAction_FullMethodName                   = "/kodex.access_accounts.v1.AccessManagerService/PutAccessAction"
+	AccessManagerService_PutAccessRule_FullMethodName                     = "/kodex.access_accounts.v1.AccessManagerService/PutAccessRule"
+	AccessManagerService_DisableAccessRule_FullMethodName                 = "/kodex.access_accounts.v1.AccessManagerService/DisableAccessRule"
+	AccessManagerService_ResolveExternalAccountUsage_FullMethodName       = "/kodex.access_accounts.v1.AccessManagerService/ResolveExternalAccountUsage"
+	AccessManagerService_ListPackageInstallationSecretRefs_FullMethodName = "/kodex.access_accounts.v1.AccessManagerService/ListPackageInstallationSecretRefs"
+	AccessManagerService_CheckAccess_FullMethodName                       = "/kodex.access_accounts.v1.AccessManagerService/CheckAccess"
+	AccessManagerService_ExplainAccess_FullMethodName                     = "/kodex.access_accounts.v1.AccessManagerService/ExplainAccess"
+	AccessManagerService_ListMembershipGraph_FullMethodName               = "/kodex.access_accounts.v1.AccessManagerService/ListMembershipGraph"
+	AccessManagerService_ListPendingAccess_FullMethodName                 = "/kodex.access_accounts.v1.AccessManagerService/ListPendingAccess"
 )
 
 // AccessManagerServiceClient is the client API for AccessManagerService service.
@@ -99,6 +100,8 @@ type AccessManagerServiceClient interface {
 	DisableAccessRule(ctx context.Context, in *DisableAccessRuleRequest, opts ...grpc.CallOption) (*AccessRuleResponse, error)
 	// ResolveExternalAccountUsage checks whether an external account can be used.
 	ResolveExternalAccountUsage(ctx context.Context, in *ResolveExternalAccountUsageRequest, opts ...grpc.CallOption) (*ResolveExternalAccountUsageResponse, error)
+	// ListPackageInstallationSecretRefs returns value-free secret references for one package installation.
+	ListPackageInstallationSecretRefs(ctx context.Context, in *ListPackageInstallationSecretRefsRequest, opts ...grpc.CallOption) (*ListPackageInstallationSecretRefsResponse, error)
 	// CheckAccess resolves effective access for a subject, action and resource.
 	CheckAccess(ctx context.Context, in *CheckAccessRequest, opts ...grpc.CallOption) (*CheckAccessResponse, error)
 	// ExplainAccess returns a previously audited access decision explanation.
@@ -337,6 +340,16 @@ func (c *accessManagerServiceClient) ResolveExternalAccountUsage(ctx context.Con
 	return out, nil
 }
 
+func (c *accessManagerServiceClient) ListPackageInstallationSecretRefs(ctx context.Context, in *ListPackageInstallationSecretRefsRequest, opts ...grpc.CallOption) (*ListPackageInstallationSecretRefsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPackageInstallationSecretRefsResponse)
+	err := c.cc.Invoke(ctx, AccessManagerService_ListPackageInstallationSecretRefs_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *accessManagerServiceClient) CheckAccess(ctx context.Context, in *CheckAccessRequest, opts ...grpc.CallOption) (*CheckAccessResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CheckAccessResponse)
@@ -429,6 +442,8 @@ type AccessManagerServiceServer interface {
 	DisableAccessRule(context.Context, *DisableAccessRuleRequest) (*AccessRuleResponse, error)
 	// ResolveExternalAccountUsage checks whether an external account can be used.
 	ResolveExternalAccountUsage(context.Context, *ResolveExternalAccountUsageRequest) (*ResolveExternalAccountUsageResponse, error)
+	// ListPackageInstallationSecretRefs returns value-free secret references for one package installation.
+	ListPackageInstallationSecretRefs(context.Context, *ListPackageInstallationSecretRefsRequest) (*ListPackageInstallationSecretRefsResponse, error)
 	// CheckAccess resolves effective access for a subject, action and resource.
 	CheckAccess(context.Context, *CheckAccessRequest) (*CheckAccessResponse, error)
 	// ExplainAccess returns a previously audited access decision explanation.
@@ -512,6 +527,9 @@ func (UnimplementedAccessManagerServiceServer) DisableAccessRule(context.Context
 }
 func (UnimplementedAccessManagerServiceServer) ResolveExternalAccountUsage(context.Context, *ResolveExternalAccountUsageRequest) (*ResolveExternalAccountUsageResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ResolveExternalAccountUsage not implemented")
+}
+func (UnimplementedAccessManagerServiceServer) ListPackageInstallationSecretRefs(context.Context, *ListPackageInstallationSecretRefsRequest) (*ListPackageInstallationSecretRefsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListPackageInstallationSecretRefs not implemented")
 }
 func (UnimplementedAccessManagerServiceServer) CheckAccess(context.Context, *CheckAccessRequest) (*CheckAccessResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CheckAccess not implemented")
@@ -942,6 +960,24 @@ func _AccessManagerService_ResolveExternalAccountUsage_Handler(srv interface{}, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AccessManagerService_ListPackageInstallationSecretRefs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPackageInstallationSecretRefsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccessManagerServiceServer).ListPackageInstallationSecretRefs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AccessManagerService_ListPackageInstallationSecretRefs_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccessManagerServiceServer).ListPackageInstallationSecretRefs(ctx, req.(*ListPackageInstallationSecretRefsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AccessManagerService_CheckAccess_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CheckAccessRequest)
 	if err := dec(in); err != nil {
@@ -1108,6 +1144,10 @@ var AccessManagerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ResolveExternalAccountUsage",
 			Handler:    _AccessManagerService_ResolveExternalAccountUsage_Handler,
+		},
+		{
+			MethodName: "ListPackageInstallationSecretRefs",
+			Handler:    _AccessManagerService_ListPackageInstallationSecretRefs_Handler,
 		},
 		{
 			MethodName: "CheckAccess",

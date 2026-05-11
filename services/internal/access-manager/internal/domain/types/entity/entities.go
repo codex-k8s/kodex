@@ -160,6 +160,17 @@ type SecretBindingRef struct {
 	RotatedAt        *time.Time
 }
 
+// PackageInstallationSecretRef links a package secret logical key to a safe secret ref.
+type PackageInstallationSecretRef struct {
+	Base
+	PackageInstallationID uuid.UUID
+	InstallationScope     value.ScopeRef
+	LogicalKey            string
+	SecretRef             SecretBindingRef
+	Status                enum.PackageInstallationSecretRefStatus
+	Metadata              map[string]string
+}
+
 // AccessDecisionAudit records auditable access decisions and their explanation.
 type AccessDecisionAudit struct {
 	ID             uuid.UUID

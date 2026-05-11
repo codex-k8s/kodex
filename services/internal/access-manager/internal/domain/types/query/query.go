@@ -68,6 +68,13 @@ type ExternalAccountBindingIdentity struct {
 	UsageScope        value.ScopeRef
 }
 
+// PackageInstallationSecretRefsFilter selects secret refs for a package installation.
+type PackageInstallationSecretRefsFilter struct {
+	PackageInstallationID uuid.UUID
+	InstallationScope     value.ScopeRef
+	LogicalKeys           []string
+}
+
 // PendingAccessFilter selects operator-visible access items that need attention.
 type PendingAccessFilter struct {
 	Scope  value.ScopeRef

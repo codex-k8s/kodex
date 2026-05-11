@@ -2,12 +2,14 @@ package grpc
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	accessaccountsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/access_accounts/v1"
 	"github.com/codex-k8s/kodex/services/internal/access-manager/internal/domain/errs"
@@ -414,19 +416,107 @@ func TestExplainAccessMapsRequestAndResponse(t *testing.T) {
 	}
 }
 
+func TestListPackageInstallationSecretRefsMapsValueFreeResponse(t *testing.T) {
+	t.Parallel()
+
+	installationID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	bindingID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+	secretRefID := uuid.MustParse("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+	updatedAt := time.Date(2026, 5, 12, 13, 30, 0, 0, time.UTC)
+	service := &fakeAccessService{
+		listPackageInstallationSecretRefs: func(_ context.Context, input accessservice.ListPackageInstallationSecretRefsInput) (accessservice.ListPackageInstallationSecretRefsResult, error) {
+			if input.PackageInstallationID != installationID ||
+				input.InstallationScope.Type != "project" ||
+				input.InstallationScope.ID != "project-1" ||
+				len(input.LogicalKeys) != 2 ||
+				input.LogicalKeys[0] != "api_token" ||
+				input.LogicalKeys[1] != "webhook_secret" {
+				t.Fatalf("unexpected input: %+v", input)
+			}
+			if input.Meta.Actor.ID != "package-hub" {
+				t.Fatalf("unexpected actor: %+v", input.Meta.Actor)
+			}
+			return accessservice.ListPackageInstallationSecretRefsResult{
+				PackageInstallationID: installationID,
+				InstallationScope:     input.InstallationScope,
+				SecretRefs: []entity.PackageInstallationSecretRef{
+					{
+						Base:                  entity.Base{ID: bindingID, UpdatedAt: updatedAt},
+						PackageInstallationID: installationID,
+						InstallationScope:     input.InstallationScope,
+						LogicalKey:            "api_token",
+						Status:                enum.PackageInstallationSecretRefStatusConfigured,
+						SecretRef: entity.SecretBindingRef{
+							Base:             entity.Base{ID: secretRefID},
+							StoreType:        enum.SecretStoreVault,
+							StoreRef:         "kv/package/project-1/api-token",
+							ValueFingerprint: "raw-secret-value-fingerprint",
+						},
+						Metadata: map[string]string{"configured_by": "owner"},
+					},
+					{
+						PackageInstallationID: installationID,
+						InstallationScope:     input.InstallationScope,
+						LogicalKey:            "webhook_secret",
+						Status:                enum.PackageInstallationSecretRefStatusMissing,
+					},
+				},
+			}, nil
+		},
+	}
+
+	response, err := NewServer(service).ListPackageInstallationSecretRefs(context.Background(), &accessaccountsv1.ListPackageInstallationSecretRefsRequest{
+		PackageInstallationId: installationID.String(),
+		InstallationScope:     &accessaccountsv1.ScopeRef{Type: "project", Id: "project-1"},
+		LogicalKeys:           []string{"api_token", "webhook_secret"},
+		Meta:                  &accessaccountsv1.CommandMeta{Actor: &accessaccountsv1.Actor{Type: "service", Id: "package-hub"}},
+	})
+	if err != nil {
+		t.Fatalf("ListPackageInstallationSecretRefs(): %v", err)
+	}
+	if response.GetPackageInstallationId() != installationID.String() || response.GetInstallationScope().GetId() != "project-1" || len(response.GetSecretRefs()) != 2 {
+		t.Fatalf("response = %+v, want two refs for project installation", response)
+	}
+	configured := response.GetSecretRefs()[0]
+	if configured.GetBindingId() != bindingID.String() ||
+		configured.GetLogicalKey() != "api_token" ||
+		configured.GetStatus() != accessaccountsv1.PackageInstallationSecretRefStatus_PACKAGE_INSTALLATION_SECRET_REF_STATUS_CONFIGURED ||
+		configured.GetSecretRefId() != secretRefID.String() ||
+		configured.GetSecretStoreType() != "vault" ||
+		configured.GetSecretStoreRef() != "kv/package/project-1/api-token" ||
+		configured.GetMetadata()["configured_by"] != "owner" ||
+		configured.GetUpdatedAt() == "" {
+		t.Fatalf("configured ref = %+v, want safe vault ref", configured)
+	}
+	missing := response.GetSecretRefs()[1]
+	if missing.GetLogicalKey() != "webhook_secret" ||
+		missing.GetStatus() != accessaccountsv1.PackageInstallationSecretRefStatus_PACKAGE_INSTALLATION_SECRET_REF_STATUS_MISSING ||
+		missing.GetSecretStoreRef() != "" {
+		t.Fatalf("missing ref = %+v, want missing without store ref", missing)
+	}
+	encoded, err := protojson.Marshal(response)
+	if err != nil {
+		t.Fatalf("marshal response: %v", err)
+	}
+	if strings.Contains(string(encoded), "raw-secret-value") || strings.Contains(string(encoded), "valueFingerprint") {
+		t.Fatalf("response leaks secret material: %s", encoded)
+	}
+}
+
 func errorsIsInvalidArgument(err error) bool {
 	return err == errs.ErrInvalidArgument
 }
 
 type fakeAccessService struct {
-	createOrganization            func(context.Context, accessservice.CreateOrganizationInput) (entity.Organization, error)
-	disableExternalAccountBinding func(context.Context, accessservice.DisableExternalAccountBindingInput) (entity.ExternalAccountBinding, error)
-	explainAccess                 func(context.Context, accessservice.ExplainAccessInput) (accessservice.ExplainAccessResult, error)
-	listMembershipGraph           func(context.Context, accessservice.ListMembershipGraphInput) (accessservice.ListMembershipGraphResult, error)
-	listPendingAccess             func(context.Context, accessservice.ListPendingAccessInput) (accessservice.ListPendingAccessResult, error)
-	setUserStatus                 func(context.Context, accessservice.SetUserStatusInput) (entity.User, error)
-	updateExternalAccountStatus   func(context.Context, accessservice.UpdateExternalAccountStatusInput) (entity.ExternalAccount, error)
-	updateExternalProvider        func(context.Context, accessservice.UpdateExternalProviderInput) (entity.ExternalProvider, error)
+	createOrganization                func(context.Context, accessservice.CreateOrganizationInput) (entity.Organization, error)
+	disableExternalAccountBinding     func(context.Context, accessservice.DisableExternalAccountBindingInput) (entity.ExternalAccountBinding, error)
+	explainAccess                     func(context.Context, accessservice.ExplainAccessInput) (accessservice.ExplainAccessResult, error)
+	listPackageInstallationSecretRefs func(context.Context, accessservice.ListPackageInstallationSecretRefsInput) (accessservice.ListPackageInstallationSecretRefsResult, error)
+	listMembershipGraph               func(context.Context, accessservice.ListMembershipGraphInput) (accessservice.ListMembershipGraphResult, error)
+	listPendingAccess                 func(context.Context, accessservice.ListPendingAccessInput) (accessservice.ListPendingAccessResult, error)
+	setUserStatus                     func(context.Context, accessservice.SetUserStatusInput) (entity.User, error)
+	updateExternalAccountStatus       func(context.Context, accessservice.UpdateExternalAccountStatusInput) (entity.ExternalAccount, error)
+	updateExternalProvider            func(context.Context, accessservice.UpdateExternalProviderInput) (entity.ExternalProvider, error)
 }
 
 func (f *fakeAccessService) BootstrapUserFromIdentity(context.Context, accessservice.BootstrapUserFromIdentityInput) (accessservice.BootstrapUserFromIdentityResult, error) {
@@ -531,6 +621,13 @@ func (f *fakeAccessService) ListPendingAccess(ctx context.Context, input accesss
 		return f.listPendingAccess(ctx, input)
 	}
 	return accessservice.ListPendingAccessResult{}, errs.ErrNotFound
+}
+
+func (f *fakeAccessService) ListPackageInstallationSecretRefs(ctx context.Context, input accessservice.ListPackageInstallationSecretRefsInput) (accessservice.ListPackageInstallationSecretRefsResult, error) {
+	if f.listPackageInstallationSecretRefs != nil {
+		return f.listPackageInstallationSecretRefs(ctx, input)
+	}
+	return accessservice.ListPackageInstallationSecretRefsResult{}, errs.ErrNotFound
 }
 
 func (f *fakeAccessService) ResolveExternalAccountUsage(context.Context, accessservice.ResolveExternalAccountUsageInput) (accessservice.ResolveExternalAccountUsageResult, error) {

@@ -208,6 +208,33 @@ func ResolveExternalAccountUsageResponse(result service.ResolveExternalAccountUs
 	}
 }
 
+// ListPackageInstallationSecretRefsResponse maps value-free package refs to gRPC.
+func ListPackageInstallationSecretRefsResponse(result service.ListPackageInstallationSecretRefsResult) *accessaccountsv1.ListPackageInstallationSecretRefsResponse {
+	refs := make([]*accessaccountsv1.PackageInstallationSecretRef, 0, len(result.SecretRefs))
+	for _, ref := range result.SecretRefs {
+		refs = append(refs, PackageInstallationSecretRef(ref))
+	}
+	return &accessaccountsv1.ListPackageInstallationSecretRefsResponse{
+		PackageInstallationId: uuidString(result.PackageInstallationID),
+		InstallationScope:     ScopeRefToProto(result.InstallationScope),
+		SecretRefs:            refs,
+	}
+}
+
+// PackageInstallationSecretRef maps one value-free package secret ref to gRPC.
+func PackageInstallationSecretRef(ref entity.PackageInstallationSecretRef) *accessaccountsv1.PackageInstallationSecretRef {
+	return &accessaccountsv1.PackageInstallationSecretRef{
+		BindingId:       uuidString(ref.ID),
+		LogicalKey:      ref.LogicalKey,
+		Status:          PackageInstallationSecretRefStatusToProto(ref.Status),
+		SecretRefId:     uuidString(ref.SecretRef.ID),
+		SecretStoreType: secretStoreTypeToProtoString[ref.SecretRef.StoreType],
+		SecretStoreRef:  ref.SecretRef.StoreRef,
+		Metadata:        ref.Metadata,
+		UpdatedAt:       timeString(ref.UpdatedAt),
+	}
+}
+
 // ListMembershipGraphResponse maps membership graph edges to gRPC.
 func ListMembershipGraphResponse(result service.ListMembershipGraphResult) *accessaccountsv1.ListMembershipGraphResponse {
 	edges := make([]*accessaccountsv1.MembershipEdge, 0, len(result.Edges))
@@ -259,6 +286,13 @@ func MatchedRulesToProto(rules []value.RuleExplanation) []*accessaccountsv1.Matc
 		})
 	}
 	return result
+}
+
+func timeString(value time.Time) string {
+	if value.IsZero() {
+		return ""
+	}
+	return value.Format(time.RFC3339Nano)
 }
 
 // OrganizationKindToProto maps a domain organization kind to gRPC.
@@ -364,6 +398,11 @@ func AccessEffectToProto(value enum.AccessEffect) accessaccountsv1.AccessEffect 
 // AccessRuleStatusToProto maps a domain access rule status to gRPC.
 func AccessRuleStatusToProto(value enum.AccessRuleStatus) accessaccountsv1.AccessRuleStatus {
 	return protoEnum(value, accessRuleStatusToProto, accessaccountsv1.AccessRuleStatus_ACCESS_RULE_STATUS_UNSPECIFIED)
+}
+
+// PackageInstallationSecretRefStatusToProto maps a value-free package secret status to gRPC.
+func PackageInstallationSecretRefStatusToProto(value enum.PackageInstallationSecretRefStatus) accessaccountsv1.PackageInstallationSecretRefStatus {
+	return protoEnum(value, packageInstallationSecretRefStatusToProto, accessaccountsv1.PackageInstallationSecretRefStatus_PACKAGE_INSTALLATION_SECRET_REF_STATUS_UNSPECIFIED)
 }
 
 // AccessDecisionToProto maps a domain access decision to gRPC.

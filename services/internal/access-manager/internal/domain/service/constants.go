@@ -1,6 +1,9 @@
 package service
 
-import accessevents "github.com/codex-k8s/kodex/libs/go/platformevents/access"
+import (
+	"github.com/codex-k8s/kodex/libs/go/accesscatalog"
+	accessevents "github.com/codex-k8s/kodex/libs/go/platformevents/access"
+)
 
 const (
 	reasonAllowlistEmail       = "allowlist_email"
@@ -80,6 +83,7 @@ const (
 	accessActionManageExternalProvider           = "access.external_provider.manage"
 	accessActionManageExternalAccount            = "access.external_account.manage"
 	accessActionManageExternalAccountBinding     = "access.external_account_binding.manage"
+	accessActionPackageInstallationSecretRefRead = accesscatalog.ActionPackageInstallationSecretRefRead
 	accessResourceAccessDecisionAudit            = "access_decision_audit"
 	accessResourceUser                           = "user"
 	accessResourceAllowlistEntry                 = "allowlist_entry"
@@ -88,4 +92,6 @@ const (
 	accessResourceExternalProvider               = "external_provider"
 	accessResourceExternalAccount                = "external_account"
 	accessResourceExternalAccountBinding         = "external_account_binding"
+	accessResourcePackageInstallationSecretRef   = accesscatalog.ResourcePackageInstallationSecretRef
+	packageInstallationScopePlatform             = "platform"
 )

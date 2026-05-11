@@ -416,6 +416,24 @@ func ResolveExternalAccountUsageInput(request *accessaccountsv1.ResolveExternalA
 	}, nil
 }
 
+// ListPackageInstallationSecretRefsInput maps a gRPC request to the domain read input.
+func ListPackageInstallationSecretRefsInput(request *accessaccountsv1.ListPackageInstallationSecretRefsRequest) (accessservice.ListPackageInstallationSecretRefsInput, error) {
+	installationID, err := requiredUUID(request.GetPackageInstallationId())
+	if err != nil {
+		return accessservice.ListPackageInstallationSecretRefsInput{}, err
+	}
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return accessservice.ListPackageInstallationSecretRefsInput{}, err
+	}
+	return accessservice.ListPackageInstallationSecretRefsInput{
+		PackageInstallationID: installationID,
+		InstallationScope:     ScopeRefFromProto(request.GetInstallationScope()),
+		LogicalKeys:           request.GetLogicalKeys(),
+		Meta:                  meta,
+	}, nil
+}
+
 // ListMembershipGraphInput maps a gRPC request to the domain graph read input.
 func ListMembershipGraphInput(request *accessaccountsv1.ListMembershipGraphRequest) (accessservice.ListMembershipGraphInput, error) {
 	meta, err := CommandMetaFromProto(request.GetMeta())
