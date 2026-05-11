@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-06
 updated_at: 2026-05-11
-related_issues: [642, 646, 650, 673, 678, 680, 684, 689, 692, 700]
+related_issues: [642, 646, 650, 673, 678, 680, 684, 689, 692, 700, 704]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -70,6 +70,16 @@ approvals:
 | `PackageEntry.package_kind` | Локальная каталоговая запись хранит вид пакета как часть авторитетной модели чтения. |
 | `ListPackages.package_kind` | Фильтр каталога по виду пакета; невалидный enum отклоняется до проверки доступа и чтения БД. |
 | `ListPackageInstallations.package_kind` | Фильтр установок по виду пакета через связь установки с каталоговой записью пакета. |
+
+Для руководящих пакетов отдельный transport-контракт не вводится. Текущий read-only сценарий покрывается так:
+
+| Сценарий | Контракт |
+|---|---|
+| Найти доступные руководящие пакеты | `ListPackages(package_kind=guidance)` |
+| Найти установленные руководящие пакеты в scope | `ListPackageInstallations(package_kind=guidance, scope=...)` |
+| Прочитать правила получения и состав пакета | `GetPackageManifest(package_version_id)` |
+
+`package-hub` отдаёт только пакетную истину: запись каталога, установку, выбранную версию и проверенный manifest. Подготовка workspace, checkout источника и mount локальных документов остаются за `agent-manager` и runtime-контуром.
 
 Manifest дополнительно проверяется по виду пакета:
 

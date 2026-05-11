@@ -684,6 +684,153 @@ func TestNormalizePackageManifestRejectsForeignReservedCapabilities(t *testing.T
 	}
 }
 
+func TestNormalizePackageManifestRejectsGuidanceRuntimeAndIntegrationRequirements(t *testing.T) {
+	t.Parallel()
+
+	secretFields := []value.PackageSecretField{{
+		Key:      "doc_token",
+		Kind:     enum.PackageSecretFieldKindToken,
+		Required: true,
+		DisplayName: []value.LocalizedText{{
+			Locale: "ru",
+			Text:   "Токен документации",
+		}},
+	}}
+	tests := []struct {
+		name            string
+		platformAPIs    []string
+		accessActions   []string
+		secrets         []value.PackageSecretField
+		runtimeRequired bool
+	}{
+		{
+			name:            "with runtime",
+			runtimeRequired: true,
+		},
+		{
+			name:    "with secret fields",
+			secrets: secretFields,
+		},
+		{
+			name:         "with platform api",
+			platformAPIs: []string{"interaction.feedback"},
+		},
+		{
+			name:          "with access action",
+			accessActions: []string{"package.installation.read"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			manifestPayload := testCatalogManifestPayloadForKind(
+				t,
+				"go-guidelines",
+				enum.PackageKindGuidance,
+				[]string{"guidance"},
+				tt.platformAPIs,
+				tt.accessActions,
+				tt.secrets,
+				tt.runtimeRequired,
+			)
+			_, err := normalizePackageManifestPayload(
+				CatalogPackageSnapshot{
+					Slug:             "go-guidelines",
+					Kind:             enum.PackageKindGuidance,
+					CommercialStatus: enum.PackageCommercialStatusFree,
+					TrustStatus:      enum.PackageTrustStatusVerified,
+				},
+				CatalogVersionSnapshot{
+					VersionLabel: "1.0.0",
+					SourceRef: value.SourceRef{
+						Kind: enum.PackageVersionSourceRefKindGitTag,
+						Ref:  "v1.0.0",
+					},
+					ManifestDigest:  testManifestDigest(t, manifestPayload),
+					ManifestPayload: manifestPayload,
+				},
+			)
+			if !errors.Is(err, errs.ErrInvalidArgument) {
+				t.Fatalf("normalizePackageManifestPayload() err = %v, want %v", err, errs.ErrInvalidArgument)
+			}
+		})
+	}
+}
+
+func TestListPackagesReadsGuidanceCatalog(t *testing.T) {
+	t.Parallel()
+
+	packageID := uuid.New()
+	kind := enum.PackageKindGuidance
+	repository := &fakeRepository{
+		packageEntry: entity.PackageEntry{
+			VersionedBase: entity.VersionedBase{ID: packageID},
+			Kind:          kind,
+			Status:        enum.PackageStatusAvailable,
+			TrustStatus:   enum.PackageTrustStatusVerified,
+		},
+	}
+	authorizer := &recordingAuthorizer{}
+	service := NewWithConfig(repository, fixedClock{}, fixedIDs{}, Config{Authorizer: authorizer})
+
+	result, err := service.ListPackages(context.Background(), ListPackagesInput{
+		Kind: &kind,
+		Meta: queryMeta(),
+	})
+	if err != nil {
+		t.Fatalf("ListPackages(): %v", err)
+	}
+	if len(result.Packages) != 1 || result.Packages[0].ID != packageID || result.Packages[0].Kind != enum.PackageKindGuidance {
+		t.Fatalf("packages = %+v, want guidance package", result.Packages)
+	}
+	if repository.listPackagesCalls != 1 || repository.listPackagesFilter.Kind == nil || *repository.listPackagesFilter.Kind != enum.PackageKindGuidance {
+		t.Fatalf("list filter = %+v calls = %d, want guidance kind filter", repository.listPackagesFilter, repository.listPackagesCalls)
+	}
+	if len(authorizer.requests) != 1 || authorizer.requests[0].ActionKey != packageActionCatalogRead {
+		t.Fatalf("authorization requests = %+v, want catalog read", authorizer.requests)
+	}
+}
+
+func TestListPackageInstallationsReadsGuidanceInstallations(t *testing.T) {
+	t.Parallel()
+
+	kind := enum.PackageKindGuidance
+	scope := value.ScopeRef{Type: enum.PackageInstallationScopeTypeProject, Ref: uuid.NewString()}
+	installation := entity.PackageInstallation{
+		VersionedBase:       entity.VersionedBase{ID: uuid.New(), Version: 1},
+		PackageID:           uuid.New(),
+		PackageVersionID:    uuid.New(),
+		Scope:               scope,
+		InstallationStatus:  enum.PackageInstallationStatusActive,
+		DesiredState:        enum.PackageDesiredStatePresent,
+		SecretBindingStatus: enum.PackageSecretBindingStatusNotRequired,
+		LastHealthStatus:    enum.PackageHealthStatusUnknown,
+	}
+	repository := &fakeRepository{packageInstallation: installation}
+	authorizer := &recordingAuthorizer{}
+	service := NewWithConfig(repository, fixedClock{}, fixedIDs{}, Config{Authorizer: authorizer})
+
+	result, err := service.ListPackageInstallations(context.Background(), ListPackageInstallationsInput{
+		Scope:       &scope,
+		PackageKind: &kind,
+		Meta:        queryMeta(),
+	})
+	if err != nil {
+		t.Fatalf("ListPackageInstallations(): %v", err)
+	}
+	if len(result.Installations) != 1 || result.Installations[0].ID != installation.ID {
+		t.Fatalf("installations = %+v, want guidance installation", result.Installations)
+	}
+	if repository.listInstallationsCalls != 1 || repository.listInstallationsFilter.PackageKind == nil || *repository.listInstallationsFilter.PackageKind != enum.PackageKindGuidance {
+		t.Fatalf("installation filter = %+v calls = %d, want guidance kind filter", repository.listInstallationsFilter, repository.listInstallationsCalls)
+	}
+	if len(authorizer.requests) != 1 || authorizer.requests[0].ActionKey != packageActionInstallationRead {
+		t.Fatalf("authorization requests = %+v, want installation read", authorizer.requests)
+	}
+}
+
 func TestListPackagesRejectsInvalidKind(t *testing.T) {
 	t.Parallel()
 
@@ -1123,6 +1270,8 @@ type fakeRepository struct {
 	secretSchema                      entity.PackageSecretSchema
 	commandResult                     entity.CommandResult
 	commandResultErr                  error
+	listPackagesFilter                query.PackageFilter
+	listInstallationsFilter           query.PackageInstallationFilter
 	createdSource                     entity.PackageSource
 	createdInstallation               entity.PackageInstallation
 	createdResult                     entity.CommandResult
@@ -1136,6 +1285,7 @@ type fakeRepository struct {
 	createSourceWithResultCalls       int
 	updateSourceWithResultCalls       int
 	syncCatalogCalls                  int
+	listPackagesCalls                 int
 	createInstallationWithResultCalls int
 	updateInstallationWithResultCalls int
 	getInstallationCalls              int
@@ -1210,8 +1360,13 @@ func (r *fakeRepository) GetPackage(_ context.Context, _ uuid.UUID) (entity.Pack
 	return r.packageEntry, nil
 }
 
-func (r *fakeRepository) ListPackages(context.Context, query.PackageFilter) ([]entity.PackageEntry, value.PageResult, error) {
-	panic("not implemented")
+func (r *fakeRepository) ListPackages(_ context.Context, filter query.PackageFilter) ([]entity.PackageEntry, value.PageResult, error) {
+	r.listPackagesCalls++
+	r.listPackagesFilter = filter
+	if r.packageEntry.ID == uuid.Nil {
+		return nil, value.PageResult{}, nil
+	}
+	return []entity.PackageEntry{r.packageEntry}, value.PageResult{}, nil
 }
 
 func (r *fakeRepository) CreatePackageVersion(context.Context, entity.PackageVersion) error {
@@ -1276,8 +1431,9 @@ func (r *fakeRepository) GetPackageInstallation(context.Context, uuid.UUID) (ent
 	return r.packageInstallation, nil
 }
 
-func (r *fakeRepository) ListPackageInstallations(context.Context, query.PackageInstallationFilter) ([]entity.PackageInstallation, value.PageResult, error) {
+func (r *fakeRepository) ListPackageInstallations(_ context.Context, filter query.PackageInstallationFilter) ([]entity.PackageInstallation, value.PageResult, error) {
 	r.listInstallationsCalls++
+	r.listInstallationsFilter = filter
 	if r.packageInstallation.ID == uuid.Nil {
 		return nil, value.PageResult{}, nil
 	}
