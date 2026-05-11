@@ -14,6 +14,7 @@ import (
 // VaultKVv2Client is the subset of the official Vault Go SDK used by the backend.
 type VaultKVv2Client interface {
 	Get(ctx context.Context, secretPath string) (*vaultapi.KVSecret, error)
+	GetMetadata(ctx context.Context, secretPath string) (*vaultapi.KVMetadata, error)
 }
 
 // VaultBackendConfig configures a Vault KV v2 secret resolver.
@@ -83,7 +84,7 @@ func (b *VaultBackend) Resolve(ctx context.Context, ref SecretRef) (SecretValue,
 	return value, nil
 }
 
-// Check verifies Vault KV v2 field presence without returning the value.
+// Check verifies Vault KV v2 path presence without reading secret data.
 func (b *VaultBackend) Check(ctx context.Context, ref SecretRef) (SecretStatus, error) {
 	if err := ctx.Err(); err != nil {
 		return SecretStatus{}, err
@@ -96,23 +97,17 @@ func (b *VaultBackend) Check(ctx context.Context, ref SecretRef) (SecretStatus, 
 	if kv == nil {
 		return SecretStatus{}, fmt.Errorf("%w: nil Vault KV v2 client", ErrSecretUnavailable)
 	}
-	secret, err := kv.Get(ctx, parsed.secretPath)
+	metadata, err := kv.GetMetadata(ctx, parsed.secretPath)
 	if vaultNotFound(err) {
 		return SecretStatus{}, ErrSecretNotFound
 	}
 	if err != nil {
 		return SecretStatus{}, fmt.Errorf("%w: Vault check failed", ErrSecretUnavailable)
 	}
-	if secret == nil || secret.Data == nil {
+	if !vaultMetadataPresent(metadata) {
 		return SecretStatus{}, ErrSecretNotFound
 	}
-	if _, ok := secret.Data[parsed.key]; !ok {
-		scrubVaultSecret(secret)
-		return SecretStatus{}, ErrSecretNotFound
-	}
-	version := vaultSecretVersion(secret)
-	scrubVaultSecret(secret)
-	return SecretStatus{Present: true, Version: version}, nil
+	return SecretStatus{Present: true, Version: vaultMetadataVersion(metadata)}, nil
 }
 
 func (b *VaultBackend) parse(ref SecretRef) (vaultKVv2Ref, error) {
@@ -192,16 +187,27 @@ func vaultNotFound(err error) bool {
 	if err == nil {
 		return false
 	}
+	if errors.Is(err, vaultapi.ErrSecretNotFound) {
+		return true
+	}
 	var responseErr *vaultapi.ResponseError
 	return errors.As(err, &responseErr) && responseErr.StatusCode == http.StatusNotFound
 }
 
-func vaultSecretVersion(secret *vaultapi.KVSecret) string {
-	if secret == nil || secret.VersionMetadata == nil {
+func vaultMetadataPresent(metadata *vaultapi.KVMetadata) bool {
+	if metadata == nil || metadata.CurrentVersion <= 0 {
+		return false
+	}
+	current, ok := metadata.Versions[strconv.Itoa(metadata.CurrentVersion)]
+	if !ok {
+		return true
+	}
+	return !current.Destroyed && current.DeletionTime.IsZero()
+}
+
+func vaultMetadataVersion(metadata *vaultapi.KVMetadata) string {
+	if metadata == nil || metadata.CurrentVersion <= 0 {
 		return ""
 	}
-	if secret.VersionMetadata.Version > 0 {
-		return strconv.Itoa(secret.VersionMetadata.Version)
-	}
-	return ""
+	return strconv.Itoa(metadata.CurrentVersion)
 }

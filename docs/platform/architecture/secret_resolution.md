@@ -98,6 +98,8 @@ mount/path/to/secret#key
 
 Например, `secret/provider/github#token` означает mount `secret`, путь `provider/github`, поле `token`. Настройка адреса Vault, namespace, TLS, auth method и token остаётся деталью runtime/deploy-контура и конфигурации resolver-клиента. Домены получают только `secret_store_type + secret_store_ref`; значение не возвращается через `access-manager` и не сохраняется в доменных БД.
 
+`Checker.Check` для Vault использует запрос только метаданных KV v2 через `GetMetadata`: он подтверждает наличие пути и текущей неудалённой версии без чтения `data`. Это безопасный путь для `package-hub`, но он не доказывает наличие конкретного поля `#key`; проверка на уровне конкретного ключа требует чтения значения через `Resolver.Resolve` и разрешена только контурам, которым можно выполнять внешнюю операцию с секретом.
+
 ## Безопасный тип значения
 
 `secretresolver.SecretValue`:

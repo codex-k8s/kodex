@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	vaultapi "github.com/hashicorp/vault/api"
 )
@@ -246,16 +247,25 @@ func TestVaultBackendResolvesKVv2Secret(t *testing.T) {
 		t.Fatalf("Vault secret data was not scrubbed after Resolve")
 	}
 
-	kv.secret = &vaultapi.KVSecret{
-		Data:            map[string]interface{}{"token": "vault-token"},
-		VersionMetadata: &vaultapi.KVVersionMetadata{Version: 7},
+	kv.metadata = &vaultapi.KVMetadata{
+		CurrentVersion: 7,
+		Versions: map[string]vaultapi.KVVersionMetadata{
+			"7": {Version: 7},
+		},
 	}
+	getCallsBeforeCheck := kv.getCalls
 	status, err := backend.Check(context.Background(), SecretRef{StoreType: StoreTypeVault, StoreRef: "secret/provider/github#token"})
 	if err != nil {
 		t.Fatalf("Check(): %v", err)
 	}
-	if !status.Present || status.Version != "7" || kv.lastGetPath != "provider/github" {
-		t.Fatalf("status = %+v getPath = %q, want present version 7", status, kv.lastGetPath)
+	if !status.Present || status.Version != "7" || kv.lastMetadataPath != "provider/github" {
+		t.Fatalf("status = %+v metadataPath = %q, want present version 7", status, kv.lastMetadataPath)
+	}
+	if kv.getCalls != getCallsBeforeCheck {
+		t.Fatalf("Check() called data Get: before=%d after=%d", getCallsBeforeCheck, kv.getCalls)
+	}
+	if kv.metadataCalls != 1 {
+		t.Fatalf("metadataCalls = %d, want 1", kv.metadataCalls)
 	}
 }
 
@@ -275,6 +285,62 @@ func TestVaultBackendRejectsMissingOrUnsupportedSecret(t *testing.T) {
 	_, err = backend.Resolve(context.Background(), SecretRef{StoreType: StoreTypeVault, StoreRef: "secret/provider/github#token"})
 	if !errors.Is(err, ErrSecretUnavailable) {
 		t.Fatalf("Resolve(unsupported type) err = %v, want %v", err, ErrSecretUnavailable)
+	}
+}
+
+func TestVaultBackendCheckUsesMetadataOnly(t *testing.T) {
+	kv := &fakeVaultKVv2{
+		secret: &vaultapi.KVSecret{
+			Data:            map[string]interface{}{"token": "vault-token"},
+			VersionMetadata: &vaultapi.KVVersionMetadata{Version: 3},
+		},
+		metadata: &vaultapi.KVMetadata{
+			CurrentVersion: 3,
+			Versions: map[string]vaultapi.KVVersionMetadata{
+				"3": {Version: 3},
+			},
+		},
+	}
+	backend, err := NewVaultBackend(VaultBackendConfig{KVv2Factory: func(string) VaultKVv2Client { return kv }})
+	if err != nil {
+		t.Fatalf("NewVaultBackend(): %v", err)
+	}
+
+	status, err := backend.Check(context.Background(), SecretRef{StoreType: StoreTypeVault, StoreRef: "secret/provider/github#token"})
+	if err != nil {
+		t.Fatalf("Check(): %v", err)
+	}
+	if !status.Present || status.Version != "3" {
+		t.Fatalf("status = %+v, want present version 3", status)
+	}
+	if kv.getCalls != 0 {
+		t.Fatalf("Check() called data Get %d times, want 0", kv.getCalls)
+	}
+	if kv.metadataCalls != 1 {
+		t.Fatalf("metadataCalls = %d, want 1", kv.metadataCalls)
+	}
+	if got := kv.secret.Data["token"]; got != "vault-token" {
+		t.Fatalf("Check() mutated data secret = %v, want untouched", got)
+	}
+}
+
+func TestVaultBackendCheckRejectsDeletedCurrentVersion(t *testing.T) {
+	kv := &fakeVaultKVv2{
+		metadata: &vaultapi.KVMetadata{
+			CurrentVersion: 4,
+			Versions: map[string]vaultapi.KVVersionMetadata{
+				"4": {Version: 4, DeletionTime: time.Now()},
+			},
+		},
+	}
+	backend, err := NewVaultBackend(VaultBackendConfig{KVv2Factory: func(string) VaultKVv2Client { return kv }})
+	if err != nil {
+		t.Fatalf("NewVaultBackend(): %v", err)
+	}
+
+	_, err = backend.Check(context.Background(), SecretRef{StoreType: StoreTypeVault, StoreRef: "secret/provider/github#token"})
+	if !errors.Is(err, ErrSecretNotFound) {
+		t.Fatalf("Check() err = %v, want %v", err, ErrSecretNotFound)
 	}
 }
 
@@ -301,17 +367,35 @@ type fakeBackend struct {
 }
 
 type fakeVaultKVv2 struct {
-	secret      *vaultapi.KVSecret
-	err         error
-	lastGetPath string
+	secret           *vaultapi.KVSecret
+	metadata         *vaultapi.KVMetadata
+	err              error
+	metadataErr      error
+	lastGetPath      string
+	lastMetadataPath string
+	getCalls         int
+	metadataCalls    int
 }
 
 func (f *fakeVaultKVv2) Get(_ context.Context, secretPath string) (*vaultapi.KVSecret, error) {
 	f.lastGetPath = secretPath
+	f.getCalls++
 	if f.err != nil {
 		return nil, f.err
 	}
 	return f.secret, nil
+}
+
+func (f *fakeVaultKVv2) GetMetadata(_ context.Context, secretPath string) (*vaultapi.KVMetadata, error) {
+	f.lastMetadataPath = secretPath
+	f.metadataCalls++
+	if f.metadataErr != nil {
+		return nil, f.metadataErr
+	}
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.metadata, nil
 }
 
 func (b *fakeBackend) Resolve(context.Context, SecretRef) (SecretValue, error) {
