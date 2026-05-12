@@ -230,30 +230,18 @@ func RegisterProviderArtifactSignalInput(request *providersv1.RegisterProviderAr
 	if err != nil {
 		return providerservice.RegisterProviderArtifactSignalInput{}, err
 	}
-	target := request.GetTarget()
-	if target == nil {
-		return providerservice.RegisterProviderArtifactSignalInput{}, errs.ErrInvalidArgument
-	}
-	workItemKind, err := workItemKindFromProto(target.GetWorkItemKind())
+	mappedTarget, err := ProviderTargetFromProto(request.GetTarget())
 	if err != nil {
-		return providerservice.RegisterProviderArtifactSignalInput{}, err
+		return providerservice.RegisterProviderArtifactSignalInput{}, errs.ErrInvalidArgument
 	}
 	return providerservice.RegisterProviderArtifactSignalInput{
 		SignalID:          strings.TrimSpace(request.GetSignalId()),
 		ExternalAccountID: externalAccountID,
-		Target: providerservice.ProviderArtifactTarget{
-			ProviderSlug:         providerSlug(target.GetProviderSlug()),
-			RepositoryFullName:   strings.TrimSpace(target.GetRepositoryFullName()),
-			ProviderRepositoryID: strings.TrimSpace(target.GetProviderRepositoryId()),
-			WorkItemKind:         workItemKind,
-			Number:               target.GetNumber(),
-			ProviderObjectID:     strings.TrimSpace(target.GetProviderObjectId()),
-			WebURL:               strings.TrimSpace(target.GetWebUrl()),
-		},
-		Source:      strings.TrimSpace(request.GetSource()),
-		ObservedAt:  observedAt,
-		PayloadJSON: []byte(strings.TrimSpace(request.GetPayloadJson())),
-		Meta:        meta,
+		Target:            providerservice.ProviderArtifactTarget(mappedTarget),
+		Source:            strings.TrimSpace(request.GetSource()),
+		ObservedAt:        observedAt,
+		PayloadJSON:       []byte(strings.TrimSpace(request.GetPayloadJson())),
+		Meta:              meta,
 	}, nil
 }
 

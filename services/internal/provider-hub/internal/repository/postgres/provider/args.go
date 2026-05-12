@@ -380,19 +380,22 @@ func limitSnapshotFilterArgs(filter query.LimitSnapshotFilter) pageQueryArgs {
 
 func providerOperationArgs(operation entity.ProviderOperation) pgx.NamedArgs {
 	return withBaseArgs(operation.Base, pgx.NamedArgs{
-		"command_id":             operation.CommandID,
-		"actor_id":               postgreslib.NullableUUID(operation.ActorID),
-		"external_account_id":    operation.ExternalAccountID,
-		"provider_slug":          string(operation.ProviderSlug),
-		"operation_type":         string(operation.OperationType),
-		"target_ref":             operation.TargetRef,
-		"status":                 string(operation.Status),
-		"result_ref":             operation.ResultRef,
-		"error_code":             operation.ErrorCode,
-		"error_message":          operation.ErrorMessage,
-		"rate_limit_snapshot_id": postgreslib.NullableUUID(operation.RateLimitSnapshotID),
-		"started_at":             operation.StartedAt,
-		"finished_at":            postgreslib.NullableTime(operation.FinishedAt),
+		"command_id":                    operation.CommandID,
+		"actor_id":                      postgreslib.NullableUUID(operation.ActorID),
+		"external_account_id":           operation.ExternalAccountID,
+		"provider_slug":                 string(operation.ProviderSlug),
+		"operation_type":                string(operation.OperationType),
+		"target_ref":                    operation.TargetRef,
+		"status":                        string(operation.Status),
+		"result_ref":                    operation.ResultRef,
+		"error_code":                    operation.ErrorCode,
+		"error_message":                 operation.ErrorMessage,
+		"rate_limit_snapshot_id":        postgreslib.NullableUUID(operation.RateLimitSnapshotID),
+		"operation_policy_context_json": jsonStructOrDefault(operation.OperationPolicyContext, "{}"),
+		"approval_gate_ref_json":        jsonStructOrDefault(operation.ApprovalGateRef, "{}"),
+		"provider_version":              operation.ProviderVersion,
+		"started_at":                    operation.StartedAt,
+		"finished_at":                   postgreslib.NullableTime(operation.FinishedAt),
 	})
 }
 
@@ -442,6 +445,14 @@ func textValues(values []string) []string {
 
 func jsonPayloadOrDefault(payload []byte, fallback string) string {
 	if len(payload) == 0 {
+		return fallback
+	}
+	return string(payload)
+}
+
+func jsonStructOrDefault(value any, fallback string) string {
+	payload, err := json.Marshal(value)
+	if err != nil || string(payload) == "null" {
 		return fallback
 	}
 	return string(payload)

@@ -163,3 +163,12 @@ const (
 	ProviderOperationStatusRetryableFailed ProviderOperationStatus = "retryable_failed"
 	ProviderOperationStatusDenied          ProviderOperationStatus = "denied"
 )
+
+// ReviewSignalKind classifies provider-native review actions requested by the platform.
+type ReviewSignalKind string
+
+const (
+	ReviewSignalKindComment          ReviewSignalKind = "comment"
+	ReviewSignalKindApproval         ReviewSignalKind = "approval"
+	ReviewSignalKindChangesRequested ReviewSignalKind = "changes_requested"
+)

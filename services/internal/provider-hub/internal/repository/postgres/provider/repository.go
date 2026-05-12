@@ -149,6 +149,14 @@ func (r *Repository) GetWorkItemProjection(ctx context.Context, lookup query.Pro
 	return queryOne(ctx, r.db, operationGetWorkItemProjection, queryWorkItemProjectionGet, workItemProjectionLookupArgs(lookup), scanWorkItemProjection)
 }
 
+// GetCommentProjectionByProviderID returns one normalized comment by provider id within one work item projection.
+func (r *Repository) GetCommentProjectionByProviderID(ctx context.Context, workItemProjectionID uuid.UUID, providerCommentID string) (entity.ProviderCommentProjection, error) {
+	return queryOne(ctx, r.db, operationGetCommentProjectionByProviderID, queryCommentProjectionGetByProviderID, pgx.NamedArgs{
+		"work_item_projection_id": workItemProjectionID,
+		"provider_comment_id":     providerCommentID,
+	}, scanCommentProjection)
+}
+
 // ListWorkItemProjections returns Issue and PR/MR projections.
 func (r *Repository) ListWorkItemProjections(ctx context.Context, filter query.WorkItemProjectionFilter) ([]entity.ProviderWorkItemProjection, query.PageResult, error) {
 	return queryPage(ctx, r.db, operationListWorkItemProjections, queryWorkItemProjectionList, workItemProjectionFilterArgs(filter), scanWorkItemProjection)
@@ -317,14 +325,29 @@ func (r *Repository) ListLimitSnapshots(ctx context.Context, filter query.LimitS
 
 // RecordProviderOperation stores a provider operation audit record.
 func (r *Repository) RecordProviderOperation(ctx context.Context, operation entity.ProviderOperation) (entity.ProviderOperation, error) {
-	stored, err := queryOne(ctx, r.db, operationRecordProviderOperation, queryProviderOperationInsert, providerOperationArgs(operation), scanProviderOperation)
-	if errors.Is(err, errs.ErrNotFound) {
-		stored, err = queryOne(ctx, r.db, operationRecordProviderOperation, queryProviderOperationGetReplay, providerOperationArgs(operation), scanProviderOperation)
-		if errors.Is(err, errs.ErrNotFound) {
-			return entity.ProviderOperation{}, wrapError(operationRecordProviderOperation, errs.ErrConflict)
-		}
-	}
+	stored, _, err := recordProviderOperation(ctx, r.db, operationRecordProviderOperation, operation)
 	return stored, err
+}
+
+// ApplyProviderOperation stores one finalized provider operation and its outbox side effects atomically.
+func (r *Repository) ApplyProviderOperation(ctx context.Context, completion providerrepo.ProviderOperationCompletion) (entity.ProviderOperation, error) {
+	var stored entity.ProviderOperation
+	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
+		var replay bool
+		var insertErr error
+		stored, replay, insertErr = recordProviderOperation(ctx, tx, operationApplyProviderOperation, completion.Operation)
+		if insertErr != nil {
+			return insertErr
+		}
+		if replay {
+			return nil
+		}
+		return insertOutboxEvents(ctx, tx, operationApplyProviderOperation, completion.OutboxEvents)
+	})
+	if err != nil {
+		return entity.ProviderOperation{}, wrapError(operationApplyProviderOperation, err)
+	}
+	return stored, nil
 }
 
 // ListProviderOperations returns provider operation audit records.
@@ -369,6 +392,7 @@ const (
 	operationListWebhookEvents                = "domain.Repository.ListWebhookEvents"
 	operationListProviderEvents               = "domain.Repository.ListProviderEvents"
 	operationGetWorkItemProjection            = "domain.Repository.GetWorkItemProjection"
+	operationGetCommentProjectionByProviderID = "domain.Repository.GetCommentProjectionByProviderID"
 	operationListWorkItemProjections          = "domain.Repository.ListWorkItemProjections"
 	operationListComments                     = "domain.Repository.ListComments"
 	operationListRelationships                = "domain.Repository.ListRelationships"
@@ -384,12 +408,26 @@ const (
 	operationRecordLimitSnapshot              = "domain.Repository.RecordLimitSnapshot"
 	operationListLimitSnapshots               = "domain.Repository.ListLimitSnapshots"
 	operationRecordProviderOperation          = "domain.Repository.RecordProviderOperation"
+	operationApplyProviderOperation           = "domain.Repository.ApplyProviderOperation"
 	operationListProviderOperations           = "domain.Repository.ListProviderOperations"
 	operationClaimOutboxEvents                = "domain.Repository.ClaimOutboxEvents"
 	operationMarkOutboxEventPublished         = "domain.Repository.MarkOutboxEventPublished"
 	operationMarkOutboxEventFailed            = "domain.Repository.MarkOutboxEventFailed"
 	operationMarkOutboxEventPermanentlyFailed = "domain.Repository.MarkOutboxEventPermanentlyFailed"
 )
+
+func recordProviderOperation(ctx context.Context, db queryer, operation string, providerOperation entity.ProviderOperation) (entity.ProviderOperation, bool, error) {
+	args := providerOperationArgs(providerOperation)
+	stored, err := queryOne(ctx, db, operation, queryProviderOperationInsert, args, scanProviderOperation)
+	if errors.Is(err, errs.ErrNotFound) {
+		stored, err = queryOne(ctx, db, operation, queryProviderOperationGetReplay, args, scanProviderOperation)
+		if errors.Is(err, errs.ErrNotFound) {
+			return entity.ProviderOperation{}, false, errs.ErrConflict
+		}
+		return stored, true, err
+	}
+	return stored, false, err
+}
 
 func queryOne[T any](ctx context.Context, db queryer, operation string, sql string, args pgx.NamedArgs, scan func(postgreslib.RowScanner) (T, error)) (T, error) {
 	result, err := scan(db.QueryRow(ctx, sql, args))

@@ -4,6 +4,7 @@ import (
 	providersv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/enum"
+	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/value"
 )
 
 type domainEnum interface {
@@ -102,6 +103,19 @@ var operationStatuses = map[providersv1.ProviderOperationStatus]enum.ProviderOpe
 	providersv1.ProviderOperationStatus_PROVIDER_OPERATION_STATUS_FAILED:           enum.ProviderOperationStatusFailed,
 	providersv1.ProviderOperationStatus_PROVIDER_OPERATION_STATUS_RETRYABLE_FAILED: enum.ProviderOperationStatusRetryableFailed,
 	providersv1.ProviderOperationStatus_PROVIDER_OPERATION_STATUS_DENIED:           enum.ProviderOperationStatusDenied,
+}
+
+var reviewSignalKinds = map[providersv1.ReviewSignalKind]enum.ReviewSignalKind{
+	providersv1.ReviewSignalKind_REVIEW_SIGNAL_KIND_COMMENT:           enum.ReviewSignalKindComment,
+	providersv1.ReviewSignalKind_REVIEW_SIGNAL_KIND_APPROVAL:          enum.ReviewSignalKindApproval,
+	providersv1.ReviewSignalKind_REVIEW_SIGNAL_KIND_CHANGES_REQUESTED: enum.ReviewSignalKindChangesRequested,
+}
+
+var operationRiskLevels = map[providersv1.ProviderOperationRiskLevel]value.ProviderOperationRiskLevel{
+	providersv1.ProviderOperationRiskLevel_PROVIDER_OPERATION_RISK_LEVEL_LOW:      value.ProviderOperationRiskLevelLow,
+	providersv1.ProviderOperationRiskLevel_PROVIDER_OPERATION_RISK_LEVEL_MEDIUM:   value.ProviderOperationRiskLevelMedium,
+	providersv1.ProviderOperationRiskLevel_PROVIDER_OPERATION_RISK_LEVEL_HIGH:     value.ProviderOperationRiskLevelHigh,
+	providersv1.ProviderOperationRiskLevel_PROVIDER_OPERATION_RISK_LEVEL_CRITICAL: value.ProviderOperationRiskLevelCritical,
 }
 
 func runtimeStatusesFromProto(statuses []providersv1.ProviderAccountRuntimeStatus) ([]enum.ProviderAccountRuntimeStatus, error) {
@@ -287,6 +301,36 @@ func operationStatusesFromProto(statuses []providersv1.ProviderOperationStatus) 
 
 func OperationStatusToProto(status enum.ProviderOperationStatus) providersv1.ProviderOperationStatus {
 	return enumToProto(status, providersv1.ProviderOperationStatus_PROVIDER_OPERATION_STATUS_UNSPECIFIED, invertEnum(operationStatuses))
+}
+
+func reviewSignalKindFromProto(kind providersv1.ReviewSignalKind) (enum.ReviewSignalKind, error) {
+	if kind == providersv1.ReviewSignalKind_REVIEW_SIGNAL_KIND_UNSPECIFIED {
+		return "", errs.ErrInvalidArgument
+	}
+	mapped, ok := reviewSignalKinds[kind]
+	if !ok {
+		return "", errs.ErrInvalidArgument
+	}
+	return mapped, nil
+}
+
+func ReviewSignalKindToProto(kind enum.ReviewSignalKind) providersv1.ReviewSignalKind {
+	return enumToProto(kind, providersv1.ReviewSignalKind_REVIEW_SIGNAL_KIND_UNSPECIFIED, invertEnum(reviewSignalKinds))
+}
+
+func operationRiskLevelFromProto(level providersv1.ProviderOperationRiskLevel) (value.ProviderOperationRiskLevel, error) {
+	if level == providersv1.ProviderOperationRiskLevel_PROVIDER_OPERATION_RISK_LEVEL_UNSPECIFIED {
+		return "", errs.ErrInvalidArgument
+	}
+	mapped, ok := operationRiskLevels[level]
+	if !ok {
+		return "", errs.ErrInvalidArgument
+	}
+	return mapped, nil
+}
+
+func OperationRiskLevelToProto(level value.ProviderOperationRiskLevel) providersv1.ProviderOperationRiskLevel {
+	return enumToProto(level, providersv1.ProviderOperationRiskLevel_PROVIDER_OPERATION_RISK_LEVEL_UNSPECIFIED, invertEnum(operationRiskLevels))
 }
 
 func enumsFromProto[Proto comparable, Domain domainEnum](values []Proto, unspecified Proto, mapping map[Proto]Domain) ([]Domain, error) {

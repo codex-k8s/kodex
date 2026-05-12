@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-06
 updated_at: 2026-05-12
-related_issues: [281, 282, 711, 719, 725]
+related_issues: [281, 282, 711, 719, 725, 729]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -292,6 +292,7 @@ approvals:
 
 Идемпотентный повтор provider-операции по `operation_type + command_id` возвращает уже записанную операцию только при совпадении области и результата: `actor_id`, `external_account_id`, `provider_slug`, `target_ref`, `status`, `result_ref`, `error_code`, `error_message`, `rate_limit_snapshot_id`, `operation_policy_context_json`, `approval_gate_ref_json` и `provider_version`. Если тот же `command_id` приходит с другой областью или другим содержимым результата, операция конфликтует.
 Replay-чтение операции выполняется отдельным SQL-вызовом после `INSERT ... ON CONFLICT DO NOTHING RETURNING`, чтобы одинаковые конкурентные повторы не превращались в ложный конфликт.
+Пока реальный provider write-адаптер не подключён, `ProviderOperation` может завершаться на уровне общего command pipeline статусами `succeeded`, `failed`, `retryable_failed` или `denied` и публиковать `provider.operation.completed/failed` без обновления внешнего провайдера. Это осознанная граница между внутренним pipeline и следующим срезом реальной записи.
 
 ### `ProviderHubOutboxEvent`
 

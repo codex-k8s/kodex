@@ -25,13 +25,14 @@ const (
 
 // Service is the domain entrypoint for provider-native work item workflows.
 type Service struct {
-	repository         providerrepo.Repository
-	clock              providerrepo.Clock
-	ids                providerrepo.IDGenerator
-	accountUsage       AccountUsageResolver
-	secretResolver     secretresolver.Resolver
-	providerAdapters   map[enum.ProviderSlug]providerclient.Adapter
-	webhookNormalizers map[enum.ProviderSlug]providerrepo.WebhookNormalizer
+	repository             providerrepo.Repository
+	clock                  providerrepo.Clock
+	ids                    providerrepo.IDGenerator
+	accountUsage           AccountUsageResolver
+	secretResolver         secretresolver.Resolver
+	providerAdapters       map[enum.ProviderSlug]providerclient.Adapter
+	providerWriteExecutors map[enum.ProviderSlug]providerclient.WriteExecutor
+	webhookNormalizers     map[enum.ProviderSlug]providerrepo.WebhookNormalizer
 }
 
 // New creates a provider-hub domain service.
@@ -61,13 +62,14 @@ func NewWithDependencies(deps Dependencies) *Service {
 		deps.IDGenerator = uuidGenerator{}
 	}
 	return &Service{
-		repository:         deps.Repository,
-		clock:              deps.Clock,
-		ids:                deps.IDGenerator,
-		accountUsage:       deps.AccountUsageResolver,
-		secretResolver:     deps.SecretResolver,
-		providerAdapters:   providerAdapterRegistry(deps.ProviderAdapters),
-		webhookNormalizers: webhookNormalizerRegistry(deps.WebhookNormalizers),
+		repository:             deps.Repository,
+		clock:                  deps.Clock,
+		ids:                    deps.IDGenerator,
+		accountUsage:           deps.AccountUsageResolver,
+		secretResolver:         deps.SecretResolver,
+		providerAdapters:       providerAdapterRegistry(deps.ProviderAdapters),
+		providerWriteExecutors: providerWriteExecutorRegistry(deps.ProviderWriteExecutors),
+		webhookNormalizers:     webhookNormalizerRegistry(deps.WebhookNormalizers),
 	}
 }
 
@@ -84,6 +86,14 @@ func providerAdapterRegistry(adapters []providerclient.Adapter) map[enum.Provide
 		adapters,
 		"provider-hub adapter is required",
 		"provider-hub adapter has invalid provider slug",
+	)
+}
+
+func providerWriteExecutorRegistry(executors []providerclient.WriteExecutor) map[enum.ProviderSlug]providerclient.WriteExecutor {
+	return providerSlugRegistry(
+		executors,
+		"provider-hub write executor is required",
+		"provider-hub write executor has invalid provider slug",
 	)
 }
 

@@ -8,6 +8,7 @@ import (
 
 	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/enum"
+	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/value"
 )
 
 // Base stores common aggregate metadata used for optimistic concurrency.
@@ -172,19 +173,22 @@ type ProviderLimitSnapshot struct {
 // ProviderOperation stores audit and diagnostics for a provider operation.
 type ProviderOperation struct {
 	Base
-	CommandID           string
-	ActorID             *uuid.UUID
-	ExternalAccountID   uuid.UUID
-	ProviderSlug        enum.ProviderSlug
-	OperationType       enum.ProviderOperationType
-	TargetRef           string
-	Status              enum.ProviderOperationStatus
-	ResultRef           string
-	ErrorCode           string
-	ErrorMessage        string
-	RateLimitSnapshotID *uuid.UUID
-	StartedAt           time.Time
-	FinishedAt          *time.Time
+	CommandID              string
+	ActorID                *uuid.UUID
+	ExternalAccountID      uuid.UUID
+	ProviderSlug           enum.ProviderSlug
+	OperationType          enum.ProviderOperationType
+	TargetRef              string
+	Status                 enum.ProviderOperationStatus
+	ResultRef              string
+	ErrorCode              string
+	ErrorMessage           string
+	RateLimitSnapshotID    *uuid.UUID
+	OperationPolicyContext value.ProviderOperationPolicyContext
+	ApprovalGateRef        value.ApprovalGateReference
+	ProviderVersion        string
+	StartedAt              time.Time
+	FinishedAt             *time.Time
 }
 
 // OutboxEvent stores a domain event until it is published to platform-event-log.

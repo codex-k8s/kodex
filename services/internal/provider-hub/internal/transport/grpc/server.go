@@ -33,6 +33,13 @@ type providerService interface {
 	RecordProviderLimitSnapshot(context.Context, providerservice.RecordProviderLimitSnapshotInput) (entity.ProviderLimitSnapshot, error)
 	ListProviderLimitSnapshots(context.Context, providerservice.ListProviderLimitSnapshotsInput) (providerservice.ListProviderLimitSnapshotsResult, error)
 	ListProviderOperations(context.Context, providerservice.ListProviderOperationsInput) (providerservice.ListProviderOperationsResult, error)
+	CreateIssue(context.Context, providerservice.CreateIssueInput) (providerservice.ProviderOperationResult, error)
+	UpdateIssue(context.Context, providerservice.UpdateIssueInput) (providerservice.ProviderOperationResult, error)
+	CreateComment(context.Context, providerservice.CreateCommentInput) (providerservice.ProviderOperationResult, error)
+	UpdateComment(context.Context, providerservice.UpdateCommentInput) (providerservice.ProviderOperationResult, error)
+	CreatePullRequest(context.Context, providerservice.CreatePullRequestInput) (providerservice.ProviderOperationResult, error)
+	CreateReviewSignal(context.Context, providerservice.CreateReviewSignalInput) (providerservice.ProviderOperationResult, error)
+	UpdateRelationship(context.Context, providerservice.UpdateRelationshipInput) (providerservice.ProviderOperationResult, error)
 }
 
 // Server exposes provider-hub through the generated gRPC contract.
@@ -117,6 +124,41 @@ func (s *Server) RunReconciliationBatch(ctx context.Context, request *providersv
 // GetSyncCursor returns one reconciliation cursor.
 func (s *Server) GetSyncCursor(ctx context.Context, request *providersv1.GetSyncCursorRequest) (*providersv1.SyncCursorResponse, error) {
 	return grpcserver.HandleUnary(ctx, request, grpccasters.GetSyncCursorInput, s.service.GetSyncCursor, grpccasters.SyncCursorResponse)
+}
+
+// CreateIssue records a typed provider issue creation command.
+func (s *Server) CreateIssue(ctx context.Context, request *providersv1.CreateIssueRequest) (*providersv1.ProviderOperationResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.CreateIssueInput, s.service.CreateIssue, grpccasters.ProviderOperationResponse)
+}
+
+// UpdateIssue records a typed provider issue update command.
+func (s *Server) UpdateIssue(ctx context.Context, request *providersv1.UpdateIssueRequest) (*providersv1.ProviderOperationResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.UpdateIssueInput, s.service.UpdateIssue, grpccasters.ProviderOperationResponse)
+}
+
+// CreateComment records a typed provider comment creation command.
+func (s *Server) CreateComment(ctx context.Context, request *providersv1.CreateCommentRequest) (*providersv1.ProviderOperationResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.CreateCommentInput, s.service.CreateComment, grpccasters.ProviderOperationResponse)
+}
+
+// UpdateComment records a typed provider comment update command.
+func (s *Server) UpdateComment(ctx context.Context, request *providersv1.UpdateCommentRequest) (*providersv1.ProviderOperationResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.UpdateCommentInput, s.service.UpdateComment, grpccasters.ProviderOperationResponse)
+}
+
+// CreatePullRequest records a typed provider PR/MR creation command.
+func (s *Server) CreatePullRequest(ctx context.Context, request *providersv1.CreatePullRequestRequest) (*providersv1.ProviderOperationResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.CreatePullRequestInput, s.service.CreatePullRequest, grpccasters.ProviderOperationResponse)
+}
+
+// CreateReviewSignal records a typed provider review signal command.
+func (s *Server) CreateReviewSignal(ctx context.Context, request *providersv1.CreateReviewSignalRequest) (*providersv1.ProviderOperationResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.CreateReviewSignalInput, s.service.CreateReviewSignal, grpccasters.ProviderOperationResponse)
+}
+
+// UpdateRelationship records one provider relationship update command.
+func (s *Server) UpdateRelationship(ctx context.Context, request *providersv1.UpdateRelationshipRequest) (*providersv1.ProviderOperationResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.UpdateRelationshipInput, s.service.UpdateRelationship, grpccasters.ProviderOperationResponse)
 }
 
 // ListSyncCursors returns reconciliation cursors by supported filters.
