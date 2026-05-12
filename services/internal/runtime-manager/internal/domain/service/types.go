@@ -129,14 +129,16 @@ type PlacementConstraintsInput struct {
 
 // PlacementResolutionRequest is the normalized request sent to the fleet placement owner.
 type PlacementResolutionRequest struct {
-	ProjectID             *uuid.UUID
-	RepositoryIDs         []uuid.UUID
-	ServiceKeys           []string
-	RuntimeMode           enum.RuntimeMode
-	RuntimeProfile        string
-	PreferredFleetScopeID *uuid.UUID
-	RequiredCapabilities  []string
-	Meta                  value.CommandMeta
+	ProjectID                *uuid.UUID
+	RepositoryIDs            []uuid.UUID
+	ServiceKeys              []string
+	RuntimeMode              enum.RuntimeMode
+	RuntimeProfile           string
+	PreferredFleetScopeID    *uuid.UUID
+	RequiredCapabilities     []string
+	PlacementConstraintsJSON []byte
+	RuntimeRequirementsJSON  []byte
+	Meta                     value.CommandMeta
 }
 
 // PlacementResolution is the fleet-owned result runtime-manager persists on slots and jobs.

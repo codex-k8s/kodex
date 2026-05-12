@@ -13,30 +13,34 @@ import (
 
 type prepareRuntimeResultPayload struct {
 	WorkspaceMaterializationID uuid.UUID `json:"workspace_materialization_id"`
+	PlacementFingerprint       string    `json:"placement_fingerprint,omitempty"`
 }
 
-func (s *Service) prepareRuntimeReplay(ctx context.Context, meta value.CommandMeta) (PrepareRuntimeResult, bool, error) {
+func (s *Service) prepareRuntimeReplay(ctx context.Context, meta value.CommandMeta) (PrepareRuntimeResult, entity.CommandResult, bool, error) {
 	result, ok, err := s.findCommandResult(ctx, meta, operationPrepareRuntime, aggregateTypeSlot)
 	if err != nil || !ok {
-		return PrepareRuntimeResult{}, ok, err
+		return PrepareRuntimeResult{}, entity.CommandResult{}, ok, err
 	}
 	var payload prepareRuntimeResultPayload
 	if err := json.Unmarshal(result.ResultPayload, &payload); err != nil || payload.WorkspaceMaterializationID == uuid.Nil {
-		return PrepareRuntimeResult{}, true, errs.ErrConflict
+		return PrepareRuntimeResult{}, result, true, errs.ErrConflict
 	}
 	slot, err := s.repository.GetSlot(ctx, result.AggregateID)
 	if err != nil {
-		return PrepareRuntimeResult{}, true, err
+		return PrepareRuntimeResult{}, result, true, err
 	}
 	materialization, err := s.repository.GetWorkspaceMaterialization(ctx, payload.WorkspaceMaterializationID)
 	if err != nil {
-		return PrepareRuntimeResult{}, true, err
+		return PrepareRuntimeResult{}, result, true, err
 	}
-	return PrepareRuntimeResult{Slot: slot, WorkspaceMaterialization: materialization, RuntimeContext: runtimeContext(slot, materialization)}, true, nil
+	return PrepareRuntimeResult{Slot: slot, WorkspaceMaterialization: materialization, RuntimeContext: runtimeContext(slot, materialization)}, result, true, nil
 }
 
-func prepareRuntimeCommandPayload(workspaceMaterializationID uuid.UUID) ([]byte, error) {
-	return json.Marshal(prepareRuntimeResultPayload{WorkspaceMaterializationID: workspaceMaterializationID})
+func prepareRuntimeCommandPayload(workspaceMaterializationID uuid.UUID, placementFingerprint string) ([]byte, error) {
+	return json.Marshal(prepareRuntimeResultPayload{
+		WorkspaceMaterializationID: workspaceMaterializationID,
+		PlacementFingerprint:       placementFingerprint,
+	})
 }
 
 func runtimeContext(slot entity.Slot, materialization entity.WorkspaceMaterialization) RuntimeContext {

@@ -35,9 +35,9 @@ func (s *Service) CreateJob(ctx context.Context, input CreateJobInput) (entity.J
 	if err := s.authorizeCommand(ctx, input.Meta, actionJobCreate, jobResource(uuid.Nil, resolved.ProjectID)); err != nil {
 		return entity.Job{}, err
 	}
-	if replay, ok, err := s.jobReplay(ctx, input.Meta, operationCreateJob, nil); err != nil || ok {
+	if replay, result, ok, err := s.createJobReplay(ctx, input.Meta); err != nil || ok {
 		if err == nil {
-			err = validateJobReplayScope(replay, resolved)
+			err = validateJobReplayScope(replay, resolved, result)
 		}
 		return replay, err
 	}
@@ -45,7 +45,7 @@ func (s *Service) CreateJob(ctx context.Context, input CreateJobInput) (entity.J
 		return entity.Job{}, errs.ErrPreconditionFailed
 	}
 	if input.SlotID == nil && (resolved.FleetScopeID == nil || resolved.ClusterID == nil) {
-		placement, err := s.resolveJobPlacement(ctx, input)
+		placement, err := s.resolvePlacement(ctx, resolved.PlacementRequest)
 		if err != nil {
 			return entity.Job{}, err
 		}
@@ -75,7 +75,11 @@ func (s *Service) CreateJob(ctx context.Context, input CreateJobInput) (entity.J
 		ClusterID:             resolved.ClusterID,
 		RequestedBy:           requestedBy(input.Meta.Actor),
 	}
-	result, err := commandResult(input.Meta, operationCreateJob, aggregateTypeJob, job.ID, nil, now)
+	resultPayload, err := createJobCommandPayload(resolved.PlacementFingerprint)
+	if err != nil {
+		return entity.Job{}, err
+	}
+	result, err := commandResult(input.Meta, operationCreateJob, aggregateTypeJob, job.ID, resultPayload, now)
 	if err != nil {
 		return entity.Job{}, err
 	}
@@ -372,6 +376,8 @@ type resolvedCreateJobInput struct {
 	FleetScopeID          *uuid.UUID
 	ClusterID             *uuid.UUID
 	JobInputJSON          []byte
+	PlacementRequest      PlacementResolutionRequest
+	PlacementFingerprint  string
 }
 
 func (s *Service) resolveJobCreateInput(ctx context.Context, input CreateJobInput) (resolvedCreateJobInput, error) {
@@ -407,16 +413,19 @@ func (s *Service) resolveJobCreateInput(ctx context.Context, input CreateJobInpu
 		resolved.ProjectID = slot.ProjectID
 		resolved.FleetScopeID = slot.FleetScopeID
 		resolved.ClusterID = slot.ClusterID
+	} else {
+		request, err := jobPlacementRequest(input)
+		if err != nil {
+			return resolvedCreateJobInput{}, err
+		}
+		fingerprint, err := placementRequestFingerprint(request)
+		if err != nil {
+			return resolvedCreateJobInput{}, err
+		}
+		resolved.PlacementRequest = request
+		resolved.PlacementFingerprint = fingerprint
 	}
 	return resolved, nil
-}
-
-func (s *Service) resolveJobPlacement(ctx context.Context, input CreateJobInput) (PlacementResolution, error) {
-	request, err := jobPlacementRequest(input)
-	if err != nil {
-		return PlacementResolution{}, err
-	}
-	return s.resolvePlacement(ctx, request)
 }
 
 func repositoryIDsForJob(repositoryID *uuid.UUID) []uuid.UUID {
@@ -446,7 +455,11 @@ func (s *Service) jobReplay(ctx context.Context, meta value.CommandMeta, operati
 	return job, true, err
 }
 
-func validateJobReplayScope(job entity.Job, input resolvedCreateJobInput) error {
+func (s *Service) createJobReplay(ctx context.Context, meta value.CommandMeta) (entity.Job, entity.CommandResult, bool, error) {
+	return aggregateReplayWithResult(ctx, meta, operationCreateJob, aggregateTypeJob, s.findCommandResult, s.repository.GetJob)
+}
+
+func validateJobReplayScope(job entity.Job, input resolvedCreateJobInput, result entity.CommandResult) error {
 	if job.JobType != input.JobType || job.Priority != input.Priority {
 		return errs.ErrConflict
 	}
@@ -465,7 +478,17 @@ func validateJobReplayScope(job entity.Job, input resolvedCreateJobInput) error 
 	if input.ClusterID != nil && !sameUUIDPtr(job.ClusterID, input.ClusterID) {
 		return errs.ErrConflict
 	}
+	if input.SlotID == nil {
+		return validatePlacementReplayFingerprint(result, input.PlacementFingerprint)
+	}
 	return nil
+}
+
+func createJobCommandPayload(placementFingerprint string) ([]byte, error) {
+	if strings.TrimSpace(placementFingerprint) == "" {
+		return nil, nil
+	}
+	return commandPayloadWithPlacementFingerprint(placementFingerprint)
 }
 
 func validateClaimJobInput(input ClaimRunnableJobInput, now time.Time) error {

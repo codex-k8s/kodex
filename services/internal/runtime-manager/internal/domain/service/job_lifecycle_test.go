@@ -246,6 +246,47 @@ func TestCreateJobAuthorizesBeforePlacement(t *testing.T) {
 	}
 }
 
+func TestCreateJobReplayRejectsChangedPlacementInput(t *testing.T) {
+	t.Parallel()
+
+	resolver := defaultPlacementResolver()
+	svc, _ := newTestServiceWithPlacementResolver(resolver)
+	projectID := mustUUID("00000000-0000-0000-0000-000000000543")
+	meta := commandMeta(mustUUID("00000000-0000-0000-0000-000000000544"), 0)
+
+	_, err := svc.CreateJob(context.Background(), CreateJobInput{
+		JobType:      enum.JobTypeBuild,
+		Priority:     enum.JobPriorityNormal,
+		ProjectID:    &projectID,
+		JobInputJSON: []byte(`{"target":"api"}`),
+		PlacementConstraints: PlacementConstraintsInput{
+			RequiredCapabilities: []string{"standard"},
+			MetadataJSON:         []byte(`{"regions":["eu-1"]}`),
+		},
+		Meta: meta,
+	})
+	if err != nil {
+		t.Fatalf("first CreateJob(): %v", err)
+	}
+	_, err = svc.CreateJob(context.Background(), CreateJobInput{
+		JobType:      enum.JobTypeBuild,
+		Priority:     enum.JobPriorityNormal,
+		ProjectID:    &projectID,
+		JobInputJSON: []byte(`{"target":"api"}`),
+		PlacementConstraints: PlacementConstraintsInput{
+			RequiredCapabilities: []string{"gpu"},
+			MetadataJSON:         []byte(`{"regions":["eu-1"]}`),
+		},
+		Meta: meta,
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("changed placement replay err = %v, want conflict", err)
+	}
+	if len(resolver.requests) != 1 {
+		t.Fatalf("placement resolver calls = %d, want no fleet call on conflicting replay", len(resolver.requests))
+	}
+}
+
 func TestJobInputJSONKeepsLargeNumbers(t *testing.T) {
 	t.Parallel()
 

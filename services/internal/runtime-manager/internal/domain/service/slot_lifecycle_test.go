@@ -103,6 +103,67 @@ func TestReserveSlotIdempotentReplayChecksScope(t *testing.T) {
 	}
 }
 
+func TestReserveSlotReplayRejectsChangedPlacementInput(t *testing.T) {
+	t.Parallel()
+
+	resolver := defaultPlacementResolver()
+	svc, _ := newTestServiceWithPlacementResolver(resolver)
+	meta := commandMeta(mustUUID("00000000-0000-0000-0000-000000000115"), 0)
+
+	_, err := svc.ReserveSlot(context.Background(), ReserveSlotInput{
+		RuntimeProfile:        "go-backend",
+		RuntimeMode:           enum.RuntimeModeCodeOnly,
+		WorkspacePolicyDigest: "policy-sha",
+		PlacementConstraints: PlacementConstraintsInput{
+			RequiredCapabilities: []string{"standard"},
+			MetadataJSON:         []byte(`{"regions":["eu-1"]}`),
+		},
+		Meta: meta,
+	})
+	if err != nil {
+		t.Fatalf("first ReserveSlot(): %v", err)
+	}
+	_, err = svc.ReserveSlot(context.Background(), ReserveSlotInput{
+		RuntimeProfile:        "go-backend",
+		RuntimeMode:           enum.RuntimeModeCodeOnly,
+		WorkspacePolicyDigest: "policy-sha",
+		PlacementConstraints: PlacementConstraintsInput{
+			RequiredCapabilities: []string{"gpu"},
+			MetadataJSON:         []byte(`{"regions":["eu-1"]}`),
+		},
+		Meta: meta,
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("changed placement replay error = %v, want conflict", err)
+	}
+	if len(resolver.requests) != 1 {
+		t.Fatalf("placement resolver calls = %d, want no fleet call on conflicting replay", len(resolver.requests))
+	}
+}
+
+func TestReserveSlotRejectsUnsupportedWidePlacementRequest(t *testing.T) {
+	t.Parallel()
+
+	resolver := defaultPlacementResolver()
+	svc, _ := newTestServiceWithPlacementResolver(resolver)
+	firstRepositoryID := mustUUID("00000000-0000-0000-0000-000000000116")
+	secondRepositoryID := mustUUID("00000000-0000-0000-0000-000000000117")
+
+	_, err := svc.ReserveSlot(context.Background(), ReserveSlotInput{
+		RuntimeProfile:        "go-backend",
+		RuntimeMode:           enum.RuntimeModeCodeOnly,
+		WorkspacePolicyDigest: "policy-sha",
+		RepositoryIDs:         []uuid.UUID{firstRepositoryID, secondRepositoryID},
+		Meta:                  commandMeta(mustUUID("00000000-0000-0000-0000-000000000118"), 0),
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("ReserveSlot() err = %v, want invalid argument for multi-repository placement", err)
+	}
+	if len(resolver.requests) != 0 {
+		t.Fatalf("placement resolver calls = %d, want none for unsupported request", len(resolver.requests))
+	}
+}
+
 func TestReserveSlotIdempotencyKeyIsScopedByActor(t *testing.T) {
 	t.Parallel()
 

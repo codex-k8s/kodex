@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"path"
+	"slices"
 	"strings"
 	"time"
 
@@ -28,19 +29,23 @@ func (s *Service) PrepareRuntime(ctx context.Context, input PrepareRuntimeInput)
 	if err := s.authorizeCommand(ctx, input.Meta, actionWorkspaceStart, workspaceResource(uuid.Nil, &projectID)); err != nil {
 		return PrepareRuntimeResult{}, err
 	}
-	if replay, ok, err := s.prepareRuntimeReplay(ctx, input.Meta); err != nil || ok {
+	repositoryIDs := repositoryIDsFromSources(input.WorkspacePolicy.Sources)
+	request, err := prepareRuntimePlacementRequest(input, repositoryIDs)
+	if err != nil {
+		return PrepareRuntimeResult{}, err
+	}
+	placementFingerprint, err := placementRequestFingerprint(request)
+	if err != nil {
+		return PrepareRuntimeResult{}, err
+	}
+	if replay, result, ok, err := s.prepareRuntimeReplay(ctx, input.Meta); err != nil || ok {
 		if err == nil {
-			err = validatePrepareRuntimeReplayScope(replay, input)
+			err = validatePrepareRuntimeReplayScope(replay, input, result, placementFingerprint)
 		}
 		return replay, err
 	}
 	now := commandTime(input.Meta, s.clock.Now())
 	owner, err := leaseOwner(input.Meta)
-	if err != nil {
-		return PrepareRuntimeResult{}, err
-	}
-	repositoryIDs := repositoryIDsFromSources(input.WorkspacePolicy.Sources)
-	request, err := prepareRuntimePlacementRequest(input, repositoryIDs)
 	if err != nil {
 		return PrepareRuntimeResult{}, err
 	}
@@ -85,7 +90,7 @@ func (s *Service) PrepareRuntime(ctx context.Context, input PrepareRuntimeInput)
 	if err != nil {
 		return PrepareRuntimeResult{}, err
 	}
-	resultPayload, err := prepareRuntimeCommandPayload(materialization.ID)
+	resultPayload, err := prepareRuntimeCommandPayload(materialization.ID, placementFingerprint)
 	if err != nil {
 		return PrepareRuntimeResult{}, err
 	}
@@ -455,15 +460,20 @@ func validateWorkspaceReplayScope(materialization entity.WorkspaceMaterializatio
 	return nil
 }
 
-func validatePrepareRuntimeReplayScope(replay PrepareRuntimeResult, input PrepareRuntimeInput) error {
+func validatePrepareRuntimeReplayScope(replay PrepareRuntimeResult, input PrepareRuntimeInput, result entity.CommandResult, placementFingerprint string) error {
 	if replay.Slot.ProjectID == nil || *replay.Slot.ProjectID != input.WorkspacePolicy.ProjectID {
 		return errs.ErrConflict
 	}
 	if !sameUUIDPtr(replay.Slot.AgentRunID, input.AgentRunID) {
 		return errs.ErrConflict
 	}
-	if replay.Slot.RuntimeProfile != strings.TrimSpace(input.RuntimeProfile) || replay.WorkspaceMaterialization.PolicyDigest != strings.TrimSpace(input.WorkspacePolicy.PolicyDigest) {
+	if replay.Slot.RuntimeProfile != strings.TrimSpace(input.RuntimeProfile) ||
+		replay.Slot.RuntimeMode != input.RuntimeMode ||
+		replay.WorkspaceMaterialization.PolicyDigest != strings.TrimSpace(input.WorkspacePolicy.PolicyDigest) {
 		return errs.ErrConflict
 	}
-	return nil
+	if !slices.Equal(normalizedPlacementUUIDs(replay.Slot.RepositoryIDs), normalizedPlacementUUIDs(repositoryIDsFromSources(input.WorkspacePolicy.Sources))) {
+		return errs.ErrConflict
+	}
+	return validatePlacementReplayFingerprint(result, placementFingerprint)
 }

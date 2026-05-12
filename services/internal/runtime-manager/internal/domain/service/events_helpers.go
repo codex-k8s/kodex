@@ -191,12 +191,16 @@ func payloadJobStep(step entity.JobStep) runtimeEventPayloadOption {
 	}
 }
 
-func (s *Service) slotReservationRecords(meta value.CommandMeta, slot entity.Slot, occurredAt time.Time) (entity.OutboxEvent, entity.CommandResult, error) {
+func (s *Service) slotReservationRecords(meta value.CommandMeta, slot entity.Slot, placementFingerprint string, occurredAt time.Time) (entity.OutboxEvent, entity.CommandResult, error) {
 	event, err := s.slotEvent(eventSlotReserved, slot, occurredAt)
 	if err != nil {
 		return entity.OutboxEvent{}, entity.CommandResult{}, err
 	}
-	result, err := commandResult(meta, operationReserveSlot, aggregateTypeSlot, slot.ID, nil, occurredAt)
+	payload, err := commandPayloadWithPlacementFingerprint(placementFingerprint)
+	if err != nil {
+		return entity.OutboxEvent{}, entity.CommandResult{}, err
+	}
+	result, err := commandResult(meta, operationReserveSlot, aggregateTypeSlot, slot.ID, payload, occurredAt)
 	if err != nil {
 		return entity.OutboxEvent{}, entity.CommandResult{}, err
 	}

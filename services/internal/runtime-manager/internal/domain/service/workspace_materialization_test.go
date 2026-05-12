@@ -307,6 +307,43 @@ func TestPrepareRuntimeCreatesSlotAndWorkspaceAttempt(t *testing.T) {
 	}
 }
 
+func TestPrepareRuntimeReplayRejectsChangedPlacementInput(t *testing.T) {
+	t.Parallel()
+
+	resolver := defaultPlacementResolver()
+	svc, _ := newTestServiceWithPlacementResolver(resolver)
+	projectID := mustUUID("00000000-0000-0000-0000-000000000042")
+	meta := commandMeta(mustUUID("00000000-0000-0000-0000-000000000317"), 0)
+
+	_, err := svc.PrepareRuntime(context.Background(), PrepareRuntimeInput{
+		RuntimeProfile:  "go-backend",
+		RuntimeMode:     enum.RuntimeModeFullEnv,
+		WorkspacePolicy: testWorkspacePolicy(projectID),
+		PlacementConstraints: PlacementConstraintsInput{
+			RequiredCapabilities: []string{"standard"},
+		},
+		Meta: meta,
+	})
+	if err != nil {
+		t.Fatalf("first PrepareRuntime(): %v", err)
+	}
+	_, err = svc.PrepareRuntime(context.Background(), PrepareRuntimeInput{
+		RuntimeProfile:  "go-backend",
+		RuntimeMode:     enum.RuntimeModeFullEnv,
+		WorkspacePolicy: testWorkspacePolicy(projectID),
+		PlacementConstraints: PlacementConstraintsInput{
+			RequiredCapabilities: []string{"gpu"},
+		},
+		Meta: meta,
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("changed placement replay err = %v, want conflict", err)
+	}
+	if len(resolver.requests) != 1 {
+		t.Fatalf("placement resolver calls = %d, want no fleet call on conflicting replay", len(resolver.requests))
+	}
+}
+
 func testWorkspacePolicy(projectID uuid.UUID) WorkspacePolicyInput {
 	repositoryID := mustUUID("00000000-0000-0000-0000-000000000041")
 	return WorkspacePolicyInput{

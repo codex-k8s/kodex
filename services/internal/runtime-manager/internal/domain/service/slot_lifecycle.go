@@ -24,18 +24,22 @@ func (s *Service) ReserveSlot(ctx context.Context, input ReserveSlotInput) (enti
 	if err := s.authorizeCommand(ctx, input.Meta, actionSlotReserve, slotResource(uuid.Nil, input.ProjectID)); err != nil {
 		return entity.Slot{}, err
 	}
-	if replay, ok, err := s.slotReplay(ctx, input.Meta, operationReserveSlot, nil); err != nil || ok {
+	request, err := slotPlacementRequest(input)
+	if err != nil {
+		return entity.Slot{}, err
+	}
+	placementFingerprint, err := placementRequestFingerprint(request)
+	if err != nil {
+		return entity.Slot{}, err
+	}
+	if replay, result, ok, err := s.reserveSlotReplay(ctx, input.Meta); err != nil || ok {
 		if err == nil {
-			err = validateSlotReplayScope(replay, input.ProjectID, input.AgentRunID, input.RepositoryIDs)
+			err = validateSlotReplayScope(replay, input, result, placementFingerprint)
 		}
 		return replay, err
 	}
 	now := commandTime(input.Meta, s.clock.Now())
 	owner, err := leaseOwner(input.Meta)
-	if err != nil {
-		return entity.Slot{}, err
-	}
-	request, err := slotPlacementRequest(input)
 	if err != nil {
 		return entity.Slot{}, err
 	}
@@ -59,7 +63,7 @@ func (s *Service) ReserveSlot(ctx context.Context, input ReserveSlotInput) (enti
 		Now:            now,
 	}
 	reused, err := s.repository.ClaimReusableSlot(ctx, filter, func(slot entity.Slot) (entity.OutboxEvent, entity.CommandResult, error) {
-		return s.slotReservationRecords(input.Meta, slot, now)
+		return s.slotReservationRecords(input.Meta, slot, placementFingerprint, now)
 	})
 	if err == nil {
 		return reused, nil
@@ -94,7 +98,11 @@ func (s *Service) ReserveSlot(ctx context.Context, input ReserveSlotInput) (enti
 	if err != nil {
 		return entity.Slot{}, err
 	}
-	result, err := commandResult(input.Meta, operationReserveSlot, aggregateTypeSlot, slot.ID, nil, now)
+	resultPayload, err := commandPayloadWithPlacementFingerprint(placementFingerprint)
+	if err != nil {
+		return entity.Slot{}, err
+	}
+	result, err := commandResult(input.Meta, operationReserveSlot, aggregateTypeSlot, slot.ID, resultPayload, now)
 	if err != nil {
 		return entity.Slot{}, err
 	}
@@ -307,14 +315,23 @@ func validateActiveLeaseMutation(slot entity.Slot, leaseOwner string, now time.T
 	return nil
 }
 
-func validateSlotReplayScope(slot entity.Slot, projectID *uuid.UUID, agentRunID *uuid.UUID, repositoryIDs []uuid.UUID) error {
-	if !sameUUIDPtr(slot.ProjectID, projectID) || !sameUUIDPtr(slot.AgentRunID, agentRunID) {
+func (s *Service) reserveSlotReplay(ctx context.Context, meta value.CommandMeta) (entity.Slot, entity.CommandResult, bool, error) {
+	return aggregateReplayWithResult(ctx, meta, operationReserveSlot, aggregateTypeSlot, s.findCommandResult, s.repository.GetSlot)
+}
+
+func validateSlotReplayScope(slot entity.Slot, input ReserveSlotInput, result entity.CommandResult, placementFingerprint string) error {
+	if !sameUUIDPtr(slot.ProjectID, input.ProjectID) || !sameUUIDPtr(slot.AgentRunID, input.AgentRunID) {
 		return errs.ErrConflict
 	}
-	if !slices.Equal(slot.RepositoryIDs, repositoryIDs) {
+	if slot.RuntimeProfile != strings.TrimSpace(input.RuntimeProfile) ||
+		slot.RuntimeMode != input.RuntimeMode ||
+		slot.Fingerprint != strings.TrimSpace(input.WorkspacePolicyDigest) {
 		return errs.ErrConflict
 	}
-	return nil
+	if !slices.Equal(normalizedPlacementUUIDs(slot.RepositoryIDs), normalizedPlacementUUIDs(input.RepositoryIDs)) {
+		return errs.ErrConflict
+	}
+	return validatePlacementReplayFingerprint(result, placementFingerprint)
 }
 
 func sameUUIDPtr(left *uuid.UUID, right *uuid.UUID) bool {

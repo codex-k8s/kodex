@@ -3,7 +3,6 @@ package fleet
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -115,24 +114,18 @@ func resolvePlacementRequest(request runtimeservice.PlacementResolutionRequest) 
 		RuntimeMode:              runtimeModeToFleet(request.RuntimeMode),
 		RuntimeProfile:           strings.TrimSpace(request.RuntimeProfile),
 		PreferredFleetScopeId:    optionalUUIDString(request.PreferredFleetScopeID),
-		PlacementConstraintsJson: string(mustPlacementJSON(emptyPlacementConstraints{})),
-		RuntimeRequirementsJson:  string(mustPlacementJSON(runtimeRequirements{CapacityClasses: request.RequiredCapabilities})),
+		PlacementConstraintsJson: string(defaultPlacementJSON(request.PlacementConstraintsJSON)),
+		RuntimeRequirementsJson:  string(defaultPlacementJSON(request.RuntimeRequirementsJSON)),
 		Meta:                     commandMetaToFleet(request.Meta),
 	}
 }
 
-type emptyPlacementConstraints struct{}
-
-type runtimeRequirements struct {
-	CapacityClasses []string `json:"capacity_classes,omitempty"`
-}
-
-func mustPlacementJSON(value any) []byte {
-	payload, err := json.Marshal(value)
-	if err != nil || len(payload) == 0 {
+func defaultPlacementJSON(payload []byte) []byte {
+	trimmed := strings.TrimSpace(string(payload))
+	if trimmed == "" {
 		return []byte(`{}`)
 	}
-	return payload
+	return []byte(trimmed)
 }
 
 func optionalUUIDString(id *uuid.UUID) *string {

@@ -69,6 +69,23 @@ func aggregateReplay[T any](
 	return aggregate, true, err
 }
 
+func aggregateReplayWithResult[T any](
+	ctx context.Context,
+	meta value.CommandMeta,
+	operation string,
+	aggregateType string,
+	find func(context.Context, value.CommandMeta, string, string) (entity.CommandResult, bool, error),
+	load func(context.Context, uuid.UUID) (T, error),
+) (T, entity.CommandResult, bool, error) {
+	var zero T
+	result, ok, err := find(ctx, meta, operation, aggregateType)
+	if err != nil || !ok {
+		return zero, entity.CommandResult{}, ok, err
+	}
+	aggregate, err := load(ctx, result.AggregateID)
+	return aggregate, result, true, err
+}
+
 func commandIdentity(meta value.CommandMeta, operation string) (query.CommandIdentity, error) {
 	idempotencyKey := strings.TrimSpace(meta.IdempotencyKey)
 	if meta.CommandID == uuid.Nil && idempotencyKey == "" {
