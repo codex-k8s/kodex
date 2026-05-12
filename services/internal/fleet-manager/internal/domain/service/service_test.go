@@ -537,6 +537,59 @@ func TestPutPlacementRuleCreatesAndUpdatesRule(t *testing.T) {
 	}
 }
 
+func TestPutPlacementRuleRejectsInvalidTypedJSON(t *testing.T) {
+	repository := newMemoryRepository()
+	scopeID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	serverID := uuid.MustParse("33333333-3333-3333-3333-333333333333")
+	clusterID := uuid.MustParse("44444444-4444-4444-4444-444444444444")
+	seedRegistry(repository, scopeID, serverID, clusterID)
+	service := newTestService(repository)
+
+	_, err := service.PutPlacementRule(context.Background(), PutPlacementRuleInput{
+		FleetScopeID:    scopeID,
+		RuleKey:         "bad-match",
+		Status:          enum.PlacementRuleStatusActive,
+		MatchJSON:       []byte(`{"runtime_modes":["code_only"],"unknown":true}`),
+		ConstraintsJSON: []byte(`{}`),
+		Meta:            commandMeta(uuid.MustParse("55555555-5555-5555-5555-555555555568"), "put-rule-bad-match"),
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("expected invalid argument for unknown match key, got %v", err)
+	}
+	if len(repository.placementRules) != 0 {
+		t.Fatalf("invalid rule must not be stored, got %d rules", len(repository.placementRules))
+	}
+
+	created, err := service.PutPlacementRule(context.Background(), PutPlacementRuleInput{
+		FleetScopeID:    scopeID,
+		RuleKey:         "valid",
+		Status:          enum.PlacementRuleStatusActive,
+		MatchJSON:       []byte(`{"runtime_modes":["code_only"]}`),
+		ConstraintsJSON: []byte(`{}`),
+		Meta:            commandMeta(uuid.MustParse("55555555-5555-5555-5555-555555555569"), "put-rule-valid"),
+	})
+	if err != nil {
+		t.Fatalf("PutPlacementRule create returned error: %v", err)
+	}
+
+	_, err = service.PutPlacementRule(context.Background(), PutPlacementRuleInput{
+		PlacementRuleID: &created.ID,
+		FleetScopeID:    scopeID,
+		RuleKey:         "valid",
+		Status:          enum.PlacementRuleStatusActive,
+		MatchJSON:       []byte(`{"runtime_modes":["code_only"]}`),
+		ConstraintsJSON: []byte(`{"cluster_ids":["not-a-uuid"]}`),
+		Meta:            commandMetaWithVersion(uuid.MustParse("55555555-5555-5555-5555-555555555570"), "put-rule-bad-constraints", 1),
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("expected invalid argument for invalid constraint uuid, got %v", err)
+	}
+	stored := repository.placementRules[created.ID]
+	if stored.Version != 1 || string(stored.ConstraintsJSON) != `{}` {
+		t.Fatalf("invalid update must not mutate stored rule: %+v", stored)
+	}
+}
+
 func TestResolvePlacementSelectsHealthyDefaultCluster(t *testing.T) {
 	repository := newMemoryRepository()
 	scopeID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
@@ -566,6 +619,53 @@ func TestResolvePlacementSelectsHealthyDefaultCluster(t *testing.T) {
 		t.Fatalf("expected one placement event, got %d", len(repository.events))
 	}
 	assertEvent(t, repository.events[0], fleetEventPlacementResolved, fleetAggregatePlacementDecision, decision.ID)
+}
+
+func TestResolvePlacementUsesDefaultWhenRulesDoNotMatch(t *testing.T) {
+	repository := newMemoryRepository()
+	scopeID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	serverID := uuid.MustParse("33333333-3333-3333-3333-333333333333")
+	clusterID := uuid.MustParse("44444444-4444-4444-4444-444444444444")
+	seedRegistry(repository, scopeID, serverID, clusterID)
+	scope := repository.scopes[scopeID]
+	scope.IsDefault = true
+	repository.scopes[scopeID] = scope
+	cluster := repository.clusters[clusterID]
+	cluster.IsDefault = true
+	cluster.LastHealthStatus = enum.ClusterHealthStatusHealthy
+	repository.clusters[clusterID] = cluster
+	service := newTestService(repository)
+
+	_, err := service.PutPlacementRule(context.Background(), PutPlacementRuleInput{
+		FleetScopeID:    scopeID,
+		RuleKey:         "service-a-only",
+		Status:          enum.PlacementRuleStatusActive,
+		Priority:        10,
+		MatchJSON:       []byte(`{"service_keys":["service-a"]}`),
+		ConstraintsJSON: []byte(`{"regions":["missing-region"]}`),
+		Meta:            commandMeta(uuid.MustParse("55555555-5555-5555-5555-555555555571"), "put-rule-service-a"),
+	})
+	if err != nil {
+		t.Fatalf("PutPlacementRule returned error: %v", err)
+	}
+
+	decision, err := service.ResolvePlacement(context.Background(), ResolvePlacementInput{
+		ServiceKey:               "service-b",
+		RuntimeMode:              enum.RuntimeModeCodeOnly,
+		RuntimeProfile:           "code-only-go",
+		PlacementConstraintsJSON: []byte(`{}`),
+		RuntimeRequirementsJSON:  []byte(`{}`),
+		Meta:                     commandMeta(uuid.MustParse("55555555-5555-5555-5555-555555555572"), "resolve-placement-service-b"),
+	})
+	if err != nil {
+		t.Fatalf("ResolvePlacement returned error: %v", err)
+	}
+	if decision.Status != enum.PlacementDecisionStatusResolved || decision.ClusterID == nil || *decision.ClusterID != clusterID {
+		t.Fatalf("unexpected decision: %+v", decision)
+	}
+	if decision.ReasonCode != "default_platform_cluster_selected" {
+		t.Fatalf("expected default fallback reason, got %q", decision.ReasonCode)
+	}
 }
 
 func TestResolvePlacementRejectsUnknownHealthCluster(t *testing.T) {

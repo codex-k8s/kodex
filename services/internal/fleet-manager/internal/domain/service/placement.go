@@ -1,10 +1,12 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"io"
 	"sort"
 	"strings"
 
@@ -100,8 +102,12 @@ func (s *Service) ResolvePlacement(ctx context.Context, input ResolvePlacementIn
 	if err != nil {
 		return entity.PlacementDecision{}, err
 	}
+	rulesByScope, err := groupActiveRules(rules)
+	if err != nil {
+		return entity.PlacementDecision{}, err
+	}
 
-	decision := s.resolvePlacementDecision(request, fingerprint, scopes, servers, clusters, rules)
+	decision := s.resolvePlacementDecision(request, fingerprint, scopes, servers, clusters, rulesByScope)
 	decision.CommandID = commandIDPtr(input.Meta.CommandID)
 	if err := validatePlacementDecision(decision); err != nil {
 		return entity.PlacementDecision{}, err
@@ -293,14 +299,14 @@ func (s *Service) buildPlacementRuleForPut(ctx context.Context, input PutPlaceme
 	}, 0, nil
 }
 
-func (s *Service) resolvePlacementDecision(request placementRequest, fingerprint string, scopes []entity.FleetScope, servers map[uuid.UUID]entity.Server, clusters []entity.KubernetesCluster, rules []entity.PlacementRule) entity.PlacementDecision {
+func (s *Service) resolvePlacementDecision(request placementRequest, fingerprint string, scopes []entity.FleetScope, servers map[uuid.UUID]entity.Server, clusters []entity.KubernetesCluster, rulesByScope map[uuid.UUID][]placementRuleDecoded) entity.PlacementDecision {
 	now := s.clock.Now()
 	contextState := placementDecisionContext{
 		Request:      request,
 		Scopes:       sortedScopes(scopes),
 		Servers:      servers,
 		Clusters:     sortedClusters(clusters),
-		RulesByScope: groupActiveRules(rules),
+		RulesByScope: rulesByScope,
 	}
 	decision := entity.PlacementDecision{
 		ID:                 s.ids.New(),
@@ -346,10 +352,7 @@ func selectPlacementCandidate(state placementDecisionContext) (*placementCandida
 			continue
 		}
 		decodedRules := state.RulesByScope[scope.ID]
-		matchedRule, hasRules := firstMatchingRule(decodedRules, state.Request)
-		if len(decodedRules) > 0 && !hasRules {
-			continue
-		}
+		matchedRule := firstMatchingRule(decodedRules, state.Request)
 		mergedConstraints, ok := mergePlacementConstraints(
 			state.Request.RequestConstraints,
 			state.Request.RuntimeRequirements,
@@ -490,13 +493,26 @@ func marshalPlacementDecisionInput(input placementDecisionInputJSON) ([]byte, er
 	return json.Marshal(input)
 }
 
-func parsePlacementConstraintJSON(payload []byte) (placementConstraintSet, error) {
+func decodePlacementJSONObject(payload []byte, target any) error {
 	if err := requireJSONObject(payload); err != nil {
-		return placementConstraintSet{}, err
+		return err
 	}
+	decoder := json.NewDecoder(bytes.NewReader(defaultJSON(payload)))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return errs.ErrInvalidArgument
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		return errs.ErrInvalidArgument
+	}
+	return nil
+}
+
+func parsePlacementConstraintJSON(payload []byte) (placementConstraintSet, error) {
 	var decoded placementConstraintJSON
-	if err := json.Unmarshal(defaultJSON(payload), &decoded); err != nil {
-		return placementConstraintSet{}, errs.ErrInvalidArgument
+	if err := decodePlacementJSONObject(payload, &decoded); err != nil {
+		return placementConstraintSet{}, err
 	}
 	fleetScopeIDs, err := parseUUIDStrings(decoded.FleetScopeIDs)
 	if err != nil {
@@ -518,12 +534,9 @@ func parsePlacementConstraintJSON(payload []byte) (placementConstraintSet, error
 }
 
 func parsePlacementRule(rule entity.PlacementRule) (placementRuleDecoded, error) {
-	if err := requireJSONObject(rule.MatchJSON); err != nil {
-		return placementRuleDecoded{}, err
-	}
 	var matchJSON placementRuleJSON
-	if err := json.Unmarshal(defaultJSON(rule.MatchJSON), &matchJSON); err != nil {
-		return placementRuleDecoded{}, errs.ErrInvalidArgument
+	if err := decodePlacementJSONObject(rule.MatchJSON, &matchJSON); err != nil {
+		return placementRuleDecoded{}, err
 	}
 	projectIDs, err := parseUUIDStrings(matchJSON.ProjectIDs)
 	if err != nil {
@@ -600,15 +613,15 @@ func parseRuntimeModes(values []string) ([]enum.RuntimeMode, error) {
 	return parsed, nil
 }
 
-func firstMatchingRule(rules []placementRuleDecoded, request placementRequest) (*entity.PlacementRule, bool) {
+func firstMatchingRule(rules []placementRuleDecoded, request placementRequest) *entity.PlacementRule {
 	for index := range rules {
 		if !ruleMatchesRequest(rules[index].Match, request) {
 			continue
 		}
 		rule := rules[index].Aggregate
-		return &rule, true
+		return &rule
 	}
-	return nil, len(rules) == 0
+	return nil
 }
 
 func ruleMatchesRequest(match placementRuleMatcher, request placementRequest) bool {
@@ -882,12 +895,12 @@ func sortedClusters(values []entity.KubernetesCluster) []entity.KubernetesCluste
 	return sortDefaultEntities(values, clusterIsDefault, clusterSortKey, clusterSortID)
 }
 
-func groupActiveRules(rules []entity.PlacementRule) map[uuid.UUID][]placementRuleDecoded {
+func groupActiveRules(rules []entity.PlacementRule) (map[uuid.UUID][]placementRuleDecoded, error) {
 	grouped := make(map[uuid.UUID][]placementRuleDecoded, len(rules))
 	for index := range rules {
 		decoded, err := parsePlacementRule(rules[index])
 		if err != nil {
-			continue
+			return nil, err
 		}
 		grouped[decoded.Aggregate.FleetScopeID] = append(grouped[decoded.Aggregate.FleetScopeID], decoded)
 	}
@@ -899,7 +912,7 @@ func groupActiveRules(rules []entity.PlacementRule) map[uuid.UUID][]placementRul
 			return grouped[scopeID][i].Aggregate.RuleKey < grouped[scopeID][j].Aggregate.RuleKey
 		})
 	}
-	return grouped
+	return grouped, nil
 }
 
 func matchedRulePriority(rule *entity.PlacementRule) int64 {
@@ -920,10 +933,8 @@ func validatePlacementRule(rule entity.PlacementRule) error {
 	if rule.ID == uuid.Nil || rule.FleetScopeID == uuid.Nil || trimString(rule.RuleKey) == "" || defaultPlacementRuleStatus(rule.Status) == "" {
 		return errs.ErrInvalidArgument
 	}
-	if err := requireJSONObject(rule.MatchJSON); err != nil {
-		return err
-	}
-	return requireJSONObject(rule.ConstraintsJSON)
+	_, err := parsePlacementRule(rule)
+	return err
 }
 
 func validatePlacementDecision(decision entity.PlacementDecision) error {

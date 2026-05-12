@@ -76,9 +76,9 @@
 | FLEET-2 | #714 | готово | Сервисный каркас, конфигурация, PostgreSQL-модель, миграции, repository, health/readiness, metrics и outbox без registry/health/placement команд. |
 | FLEET-3 | #717 | готово | Registry-команды и чтения нескольких scope/server/cluster, bootstrap seed `platform-default`, проверки доступа, идемпотентность, optimistic concurrency, command result и outbox-события. |
 | FLEET-4 | #726 | готово | Проверки связности Kubernetes API, health snapshots, чтения health, события `fleet.health.*`, command result и безопасное получение kubeconfig через `secretresolver`. |
-| FLEET-5 | #730 | в работе | Правила размещения, базовый `ResolvePlacement`, журнал placement decisions, проверки доступа, идемпотентность и outbox-события `fleet.placement.*`. |
+| FLEET-5 | #730 | в PR | Правила размещения, базовый `ResolvePlacement`, журнал placement decisions, проверки доступа, идемпотентность и outbox-события `fleet.placement.*`. |
 
-Итог: `fleet-manager` уже имеет сервисный процесс, БД, registry-поверхность и health-поверхность. Текущий срез FLEET-5 добавляет placement rules, базовый `ResolvePlacement` и журнал решений. После него остаются интеграция `runtime-manager` с fleet decision и deploy-контур `fleet-manager`.
+Итог: `fleet-manager` уже имеет сервисный процесс, БД, registry-поверхность и health-поверхность. Текущий PR FLEET-5 добавляет placement rules, базовый `ResolvePlacement` и журнал решений. После него остаются интеграция `runtime-manager` с fleet decision и deploy-контур `fleet-manager`.
 
 ## Текущий бэклог агента #1
 
