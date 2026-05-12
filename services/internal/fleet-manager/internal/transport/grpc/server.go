@@ -39,6 +39,12 @@ type fleetService interface {
 	RunClusterConnectivityCheck(context.Context, fleetservice.RunClusterConnectivityCheckInput) (entity.ClusterConnectivityCheck, error)
 	GetClusterHealthSnapshot(context.Context, fleetservice.GetClusterHealthSnapshotInput) (entity.ClusterHealthSnapshot, error)
 	ListClusterHealthSnapshots(context.Context, fleetservice.ListClusterHealthSnapshotsInput) (fleetservice.ListClusterHealthSnapshotsResult, error)
+	PutPlacementRule(context.Context, fleetservice.PutPlacementRuleInput) (entity.PlacementRule, error)
+	GetPlacementRule(context.Context, uuid.UUID, value.QueryMeta) (entity.PlacementRule, error)
+	ListPlacementRules(context.Context, fleetservice.ListPlacementRulesInput) (fleetservice.ListPlacementRulesResult, error)
+	ResolvePlacement(context.Context, fleetservice.ResolvePlacementInput) (entity.PlacementDecision, error)
+	GetPlacementDecision(context.Context, fleetservice.GetPlacementDecisionInput) (entity.PlacementDecision, error)
+	ListPlacementDecisions(context.Context, fleetservice.ListPlacementDecisionsInput) (fleetservice.ListPlacementDecisionsResult, error)
 }
 
 // Server implements the generated FleetManagerServiceServer contract.
@@ -163,4 +169,34 @@ func (s *Server) GetClusterHealthSnapshot(ctx context.Context, request *fleetv1.
 // ListClusterHealthSnapshots returns cluster health history.
 func (s *Server) ListClusterHealthSnapshots(ctx context.Context, request *fleetv1.ListClusterHealthSnapshotsRequest) (*fleetv1.ListClusterHealthSnapshotsResponse, error) {
 	return grpcserver.HandleUnary(ctx, request, grpccasters.ListClusterHealthSnapshotsInput, s.service.ListClusterHealthSnapshots, grpccasters.ListClusterHealthSnapshotsResponse)
+}
+
+// PutPlacementRule creates or updates one placement rule.
+func (s *Server) PutPlacementRule(ctx context.Context, request *fleetv1.PutPlacementRuleRequest) (*fleetv1.PlacementRuleResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.PutPlacementRuleInput, s.service.PutPlacementRule, grpccasters.PlacementRuleResponse)
+}
+
+// GetPlacementRule returns one placement rule.
+func (s *Server) GetPlacementRule(ctx context.Context, request *fleetv1.GetPlacementRuleRequest) (*fleetv1.PlacementRuleResponse, error) {
+	return grpcserver.HandleUnaryPair(ctx, request, grpccasters.GetPlacementRuleInput, s.service.GetPlacementRule, grpccasters.PlacementRuleResponse)
+}
+
+// ListPlacementRules returns placement rules by optional filters.
+func (s *Server) ListPlacementRules(ctx context.Context, request *fleetv1.ListPlacementRulesRequest) (*fleetv1.ListPlacementRulesResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.ListPlacementRulesInput, s.service.ListPlacementRules, grpccasters.ListPlacementRulesResponse)
+}
+
+// ResolvePlacement selects a placement target for runtime.
+func (s *Server) ResolvePlacement(ctx context.Context, request *fleetv1.ResolvePlacementRequest) (*fleetv1.ResolvePlacementResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.ResolvePlacementInput, s.service.ResolvePlacement, grpccasters.ResolvePlacementResponse)
+}
+
+// GetPlacementDecision returns one recorded placement decision.
+func (s *Server) GetPlacementDecision(ctx context.Context, request *fleetv1.GetPlacementDecisionRequest) (*fleetv1.PlacementDecisionResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.GetPlacementDecisionInput, s.service.GetPlacementDecision, grpccasters.PlacementDecisionResponse)
+}
+
+// ListPlacementDecisions returns placement decision history.
+func (s *Server) ListPlacementDecisions(ctx context.Context, request *fleetv1.ListPlacementDecisionsRequest) (*fleetv1.ListPlacementDecisionsResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.ListPlacementDecisionsInput, s.service.ListPlacementDecisions, grpccasters.ListPlacementDecisionsResponse)
 }

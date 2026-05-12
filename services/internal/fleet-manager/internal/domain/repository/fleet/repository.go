@@ -61,6 +61,22 @@ type Repository interface {
 	GetLatestClusterHealthSnapshot(ctx context.Context, clusterID uuid.UUID) (entity.ClusterHealthSnapshot, error)
 	// ListClusterHealthSnapshots returns health snapshots by filter.
 	ListClusterHealthSnapshots(ctx context.Context, filter query.ClusterHealthSnapshotFilter) ([]entity.ClusterHealthSnapshot, query.PageResult, error)
+	// CreatePlacementRule stores a new placement rule and command result atomically.
+	CreatePlacementRule(ctx context.Context, rule entity.PlacementRule, result entity.CommandResult) error
+	// UpdatePlacementRule stores a versioned placement rule mutation and command result atomically.
+	UpdatePlacementRule(ctx context.Context, rule entity.PlacementRule, previousVersion int64, result entity.CommandResult) error
+	// GetPlacementRule returns a placement rule by id.
+	GetPlacementRule(ctx context.Context, id uuid.UUID) (entity.PlacementRule, error)
+	// GetPlacementRuleByScopeKey returns a placement rule by scope and rule key.
+	GetPlacementRuleByScopeKey(ctx context.Context, fleetScopeID uuid.UUID, ruleKey string) (entity.PlacementRule, error)
+	// ListPlacementRules returns placement rules by filter.
+	ListPlacementRules(ctx context.Context, filter query.PlacementRuleFilter) ([]entity.PlacementRule, query.PageResult, error)
+	// CreatePlacementDecision stores one placement decision, command result and event atomically.
+	CreatePlacementDecision(ctx context.Context, decision entity.PlacementDecision, event entity.OutboxEvent, result entity.CommandResult) error
+	// GetPlacementDecision returns one placement decision by id.
+	GetPlacementDecision(ctx context.Context, id uuid.UUID) (entity.PlacementDecision, error)
+	// ListPlacementDecisions returns placement decisions by filter.
+	ListPlacementDecisions(ctx context.Context, filter query.PlacementDecisionFilter) ([]entity.PlacementDecision, query.PageResult, error)
 	// EnsurePlatformDefaultSeed stores bootstrap default fleet data if it is absent.
 	EnsurePlatformDefaultSeed(ctx context.Context, scope entity.FleetScope, cluster entity.KubernetesCluster, events []entity.OutboxEvent) error
 	// AppendOutboxEvent stores one fleet domain event in the local outbox.

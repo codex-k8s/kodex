@@ -495,6 +495,106 @@ func TestRunClusterConnectivityCheckEmitsDegradedEvent(t *testing.T) {
 	assertEvent(t, repository.events[1], fleetEventHealthDegraded, fleetAggregateHealth, repository.events[0].AggregateID)
 }
 
+func TestPutPlacementRuleCreatesAndUpdatesRule(t *testing.T) {
+	repository := newMemoryRepository()
+	scopeID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	serverID := uuid.MustParse("33333333-3333-3333-3333-333333333333")
+	clusterID := uuid.MustParse("44444444-4444-4444-4444-444444444444")
+	seedRegistry(repository, scopeID, serverID, clusterID)
+	service := newTestService(repository)
+
+	created, err := service.PutPlacementRule(context.Background(), PutPlacementRuleInput{
+		FleetScopeID:    scopeID,
+		RuleKey:         "default",
+		Status:          enum.PlacementRuleStatusActive,
+		Priority:        10,
+		MatchJSON:       []byte(`{"runtime_modes":["code_only"]}`),
+		ConstraintsJSON: []byte(`{"regions":["ru-1"]}`),
+		Meta:            commandMeta(uuid.MustParse("55555555-5555-5555-5555-555555555564"), "put-rule"),
+	})
+	if err != nil {
+		t.Fatalf("PutPlacementRule create returned error: %v", err)
+	}
+	if created.ID == uuid.Nil || created.Version != 1 {
+		t.Fatalf("unexpected created rule: %+v", created)
+	}
+
+	updated, err := service.PutPlacementRule(context.Background(), PutPlacementRuleInput{
+		PlacementRuleID: &created.ID,
+		FleetScopeID:    scopeID,
+		RuleKey:         "default",
+		Status:          enum.PlacementRuleStatusActive,
+		Priority:        5,
+		MatchJSON:       []byte(`{"runtime_modes":["code_only"]}`),
+		ConstraintsJSON: []byte(`{"regions":["ru-1"],"require_default":true}`),
+		Meta:            commandMetaWithVersion(uuid.MustParse("55555555-5555-5555-5555-555555555565"), "put-rule-update", 1),
+	})
+	if err != nil {
+		t.Fatalf("PutPlacementRule update returned error: %v", err)
+	}
+	if updated.Version != 2 || updated.Priority != 5 {
+		t.Fatalf("unexpected updated rule: %+v", updated)
+	}
+}
+
+func TestResolvePlacementSelectsHealthyDefaultCluster(t *testing.T) {
+	repository := newMemoryRepository()
+	scopeID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	serverID := uuid.MustParse("33333333-3333-3333-3333-333333333333")
+	clusterID := uuid.MustParse("44444444-4444-4444-4444-444444444444")
+	seedRegistry(repository, scopeID, serverID, clusterID)
+	cluster := repository.clusters[clusterID]
+	cluster.IsDefault = true
+	cluster.LastHealthStatus = enum.ClusterHealthStatusHealthy
+	repository.clusters[clusterID] = cluster
+	service := newTestService(repository)
+
+	decision, err := service.ResolvePlacement(context.Background(), ResolvePlacementInput{
+		RuntimeMode:              enum.RuntimeModeCodeOnly,
+		RuntimeProfile:           "code-only-go",
+		PlacementConstraintsJSON: []byte(`{}`),
+		RuntimeRequirementsJSON:  []byte(`{}`),
+		Meta:                     commandMeta(uuid.MustParse("55555555-5555-5555-5555-555555555566"), "resolve-placement"),
+	})
+	if err != nil {
+		t.Fatalf("ResolvePlacement returned error: %v", err)
+	}
+	if decision.Status != enum.PlacementDecisionStatusResolved || decision.ClusterID == nil || *decision.ClusterID != clusterID {
+		t.Fatalf("unexpected decision: %+v", decision)
+	}
+	if len(repository.events) != 1 {
+		t.Fatalf("expected one placement event, got %d", len(repository.events))
+	}
+	assertEvent(t, repository.events[0], fleetEventPlacementResolved, fleetAggregatePlacementDecision, decision.ID)
+}
+
+func TestResolvePlacementRejectsUnknownHealthCluster(t *testing.T) {
+	repository := newMemoryRepository()
+	scopeID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	serverID := uuid.MustParse("33333333-3333-3333-3333-333333333333")
+	clusterID := uuid.MustParse("44444444-4444-4444-4444-444444444444")
+	seedRegistry(repository, scopeID, serverID, clusterID)
+	service := newTestService(repository)
+
+	decision, err := service.ResolvePlacement(context.Background(), ResolvePlacementInput{
+		RuntimeMode:              enum.RuntimeModeCodeOnly,
+		RuntimeProfile:           "code-only-go",
+		PlacementConstraintsJSON: []byte(`{}`),
+		RuntimeRequirementsJSON:  []byte(`{}`),
+		Meta:                     commandMeta(uuid.MustParse("55555555-5555-5555-5555-555555555567"), "resolve-placement"),
+	})
+	if err != nil {
+		t.Fatalf("ResolvePlacement returned error: %v", err)
+	}
+	if decision.Status != enum.PlacementDecisionStatusRejected || decision.ClusterID != nil {
+		t.Fatalf("unexpected rejected decision: %+v", decision)
+	}
+	if len(repository.events) != 1 {
+		t.Fatalf("expected one placement event, got %d", len(repository.events))
+	}
+	assertEvent(t, repository.events[0], fleetEventPlacementRejected, fleetAggregatePlacementDecision, decision.ID)
+}
+
 func newTestService(repository *memoryRepository) *Service {
 	return NewWithConfig(repository, fixedClock{}, sequentialIDs{}, Config{})
 }
@@ -606,23 +706,27 @@ func (sequentialIDs) New() uuid.UUID {
 }
 
 type memoryRepository struct {
-	scopes          map[uuid.UUID]entity.FleetScope
-	servers         map[uuid.UUID]entity.Server
-	clusters        map[uuid.UUID]entity.KubernetesCluster
-	checks          map[uuid.UUID]entity.ClusterConnectivityCheck
-	healthSnapshots map[uuid.UUID]entity.ClusterHealthSnapshot
-	commands        map[string]entity.CommandResult
-	events          []entity.OutboxEvent
+	scopes             map[uuid.UUID]entity.FleetScope
+	servers            map[uuid.UUID]entity.Server
+	clusters           map[uuid.UUID]entity.KubernetesCluster
+	checks             map[uuid.UUID]entity.ClusterConnectivityCheck
+	healthSnapshots    map[uuid.UUID]entity.ClusterHealthSnapshot
+	placementRules     map[uuid.UUID]entity.PlacementRule
+	placementDecisions map[uuid.UUID]entity.PlacementDecision
+	commands           map[string]entity.CommandResult
+	events             []entity.OutboxEvent
 }
 
 func newMemoryRepository() *memoryRepository {
 	return &memoryRepository{
-		scopes:          map[uuid.UUID]entity.FleetScope{},
-		servers:         map[uuid.UUID]entity.Server{},
-		clusters:        map[uuid.UUID]entity.KubernetesCluster{},
-		checks:          map[uuid.UUID]entity.ClusterConnectivityCheck{},
-		healthSnapshots: map[uuid.UUID]entity.ClusterHealthSnapshot{},
-		commands:        map[string]entity.CommandResult{},
+		scopes:             map[uuid.UUID]entity.FleetScope{},
+		servers:            map[uuid.UUID]entity.Server{},
+		clusters:           map[uuid.UUID]entity.KubernetesCluster{},
+		checks:             map[uuid.UUID]entity.ClusterConnectivityCheck{},
+		healthSnapshots:    map[uuid.UUID]entity.ClusterHealthSnapshot{},
+		placementRules:     map[uuid.UUID]entity.PlacementRule{},
+		placementDecisions: map[uuid.UUID]entity.PlacementDecision{},
+		commands:           map[string]entity.CommandResult{},
 	}
 }
 
@@ -821,6 +925,102 @@ func (r *memoryRepository) ListClusterHealthSnapshots(_ context.Context, filter 
 	return items, query.PageResult{}, nil
 }
 
+func (r *memoryRepository) CreatePlacementRule(_ context.Context, rule entity.PlacementRule, result entity.CommandResult) error {
+	if _, exists := r.placementRules[rule.ID]; exists {
+		return errs.ErrAlreadyExists
+	}
+	for _, existing := range r.placementRules {
+		if existing.FleetScopeID == rule.FleetScopeID && existing.RuleKey == rule.RuleKey {
+			return errs.ErrAlreadyExists
+		}
+	}
+	r.placementRules[rule.ID] = rule
+	r.storeCommand(result)
+	return nil
+}
+
+func (r *memoryRepository) UpdatePlacementRule(_ context.Context, rule entity.PlacementRule, previousVersion int64, result entity.CommandResult) error {
+	current, ok := r.placementRules[rule.ID]
+	if !ok {
+		return errs.ErrNotFound
+	}
+	if current.Version != previousVersion {
+		return errs.ErrConflict
+	}
+	r.placementRules[rule.ID] = rule
+	r.storeCommand(result)
+	return nil
+}
+
+func (r *memoryRepository) GetPlacementRule(_ context.Context, id uuid.UUID) (entity.PlacementRule, error) {
+	rule, ok := r.placementRules[id]
+	if !ok {
+		return entity.PlacementRule{}, errs.ErrNotFound
+	}
+	return rule, nil
+}
+
+func (r *memoryRepository) GetPlacementRuleByScopeKey(_ context.Context, fleetScopeID uuid.UUID, ruleKey string) (entity.PlacementRule, error) {
+	for _, rule := range r.placementRules {
+		if rule.FleetScopeID == fleetScopeID && rule.RuleKey == ruleKey {
+			return rule, nil
+		}
+	}
+	return entity.PlacementRule{}, errs.ErrNotFound
+}
+
+func (r *memoryRepository) ListPlacementRules(_ context.Context, filter query.PlacementRuleFilter) ([]entity.PlacementRule, query.PageResult, error) {
+	items := make([]entity.PlacementRule, 0, len(r.placementRules))
+	for _, rule := range r.placementRules {
+		if filter.FleetScopeID != nil && rule.FleetScopeID != *filter.FleetScopeID {
+			continue
+		}
+		if len(filter.Statuses) > 0 && !containsPlacementRuleStatus(filter.Statuses, rule.Status) {
+			continue
+		}
+		items = append(items, rule)
+	}
+	return items, query.PageResult{}, nil
+}
+
+func (r *memoryRepository) CreatePlacementDecision(_ context.Context, decision entity.PlacementDecision, event entity.OutboxEvent, result entity.CommandResult) error {
+	r.placementDecisions[decision.ID] = decision
+	r.storeCommand(result)
+	r.events = append(r.events, event)
+	return nil
+}
+
+func (r *memoryRepository) GetPlacementDecision(_ context.Context, id uuid.UUID) (entity.PlacementDecision, error) {
+	decision, ok := r.placementDecisions[id]
+	if !ok {
+		return entity.PlacementDecision{}, errs.ErrNotFound
+	}
+	return decision, nil
+}
+
+func (r *memoryRepository) ListPlacementDecisions(_ context.Context, filter query.PlacementDecisionFilter) ([]entity.PlacementDecision, query.PageResult, error) {
+	items := make([]entity.PlacementDecision, 0, len(r.placementDecisions))
+	for _, decision := range r.placementDecisions {
+		if filter.ProjectID != nil && (decision.ProjectID == nil || *decision.ProjectID != *filter.ProjectID) {
+			continue
+		}
+		if filter.RepositoryID != nil && (decision.RepositoryID == nil || *decision.RepositoryID != *filter.RepositoryID) {
+			continue
+		}
+		if filter.FleetScopeID != nil && (decision.FleetScopeID == nil || *decision.FleetScopeID != *filter.FleetScopeID) {
+			continue
+		}
+		if filter.ClusterID != nil && (decision.ClusterID == nil || *decision.ClusterID != *filter.ClusterID) {
+			continue
+		}
+		if len(filter.Statuses) > 0 && !containsPlacementDecisionStatus(filter.Statuses, decision.Status) {
+			continue
+		}
+		items = append(items, decision)
+	}
+	return items, query.PageResult{}, nil
+}
+
 func (r *memoryRepository) EnsurePlatformDefaultSeed(_ context.Context, scope entity.FleetScope, cluster entity.KubernetesCluster, events []entity.OutboxEvent) error {
 	if _, exists := r.scopes[scope.ID]; !exists {
 		r.scopes[scope.ID] = scope
@@ -863,4 +1063,22 @@ func (r *memoryRepository) storeCommand(result entity.CommandResult) {
 		panic(errors.New("empty command key"))
 	}
 	r.commands[result.Key] = result
+}
+
+func containsPlacementRuleStatus(values []enum.PlacementRuleStatus, expected enum.PlacementRuleStatus) bool {
+	for index := range values {
+		if values[index] == expected {
+			return true
+		}
+	}
+	return false
+}
+
+func containsPlacementDecisionStatus(values []enum.PlacementDecisionStatus, expected enum.PlacementDecisionStatus) bool {
+	for index := range values {
+		if values[index] == expected {
+			return true
+		}
+	}
+	return false
 }

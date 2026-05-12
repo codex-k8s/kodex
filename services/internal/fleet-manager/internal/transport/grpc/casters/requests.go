@@ -359,6 +359,147 @@ func ListClusterHealthSnapshotsInput(request *fleetv1.ListClusterHealthSnapshots
 	}, nil
 }
 
+// PutPlacementRuleInput maps a gRPC request to the domain command input.
+func PutPlacementRuleInput(request *fleetv1.PutPlacementRuleRequest) (fleetservice.PutPlacementRuleInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return fleetservice.PutPlacementRuleInput{}, err
+	}
+	placementRuleID, err := optionalUUIDPtr(request.GetPlacementRuleId())
+	if err != nil {
+		return fleetservice.PutPlacementRuleInput{}, err
+	}
+	fleetScopeID, err := requiredUUID(request.GetFleetScopeId())
+	if err != nil {
+		return fleetservice.PutPlacementRuleInput{}, err
+	}
+	status, err := placementRuleStatusFromProto(request.GetStatus())
+	if err != nil {
+		return fleetservice.PutPlacementRuleInput{}, err
+	}
+	return fleetservice.PutPlacementRuleInput{
+		PlacementRuleID: placementRuleID,
+		FleetScopeID:    fleetScopeID,
+		RuleKey:         strings.TrimSpace(request.GetRuleKey()),
+		Status:          status,
+		Priority:        request.GetPriority(),
+		MatchJSON:       []byte(strings.TrimSpace(request.GetMatchJson())),
+		ConstraintsJSON: []byte(strings.TrimSpace(request.GetConstraintsJson())),
+		Meta:            meta,
+	}, nil
+}
+
+// GetPlacementRuleInput maps a gRPC request to id and query metadata.
+func GetPlacementRuleInput(request *fleetv1.GetPlacementRuleRequest) (uuid.UUID, value.QueryMeta, error) {
+	return idWithQueryMeta(request.GetPlacementRuleId(), request.GetMeta())
+}
+
+// ListPlacementRulesInput maps a gRPC request to the domain read input.
+func ListPlacementRulesInput(request *fleetv1.ListPlacementRulesRequest) (fleetservice.ListPlacementRulesInput, error) {
+	meta, page, err := queryMetaPage(request.GetMeta(), request.GetPage())
+	if err != nil {
+		return fleetservice.ListPlacementRulesInput{}, err
+	}
+	fleetScopeID, err := optionalUUIDPtr(request.GetFleetScopeId())
+	if err != nil {
+		return fleetservice.ListPlacementRulesInput{}, err
+	}
+	statuses, err := placementRuleStatusesFromProto(request.GetStatuses())
+	if err != nil {
+		return fleetservice.ListPlacementRulesInput{}, err
+	}
+	return fleetservice.ListPlacementRulesInput{
+		FleetScopeID: fleetScopeID,
+		Statuses:     statuses,
+		Page:         page,
+		Meta:         meta,
+	}, nil
+}
+
+// ResolvePlacementInput maps a gRPC request to the domain command input.
+func ResolvePlacementInput(request *fleetv1.ResolvePlacementRequest) (fleetservice.ResolvePlacementInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return fleetservice.ResolvePlacementInput{}, err
+	}
+	projectID, err := optionalUUIDPtr(request.GetProjectId())
+	if err != nil {
+		return fleetservice.ResolvePlacementInput{}, err
+	}
+	repositoryID, err := optionalUUIDPtr(request.GetRepositoryId())
+	if err != nil {
+		return fleetservice.ResolvePlacementInput{}, err
+	}
+	runtimeMode, err := runtimeModeFromProto(request.GetRuntimeMode())
+	if err != nil {
+		return fleetservice.ResolvePlacementInput{}, err
+	}
+	preferredFleetScopeID, err := optionalUUIDPtr(request.GetPreferredFleetScopeId())
+	if err != nil {
+		return fleetservice.ResolvePlacementInput{}, err
+	}
+	preferredClusterID, err := optionalUUIDPtr(request.GetPreferredClusterId())
+	if err != nil {
+		return fleetservice.ResolvePlacementInput{}, err
+	}
+	return fleetservice.ResolvePlacementInput{
+		ProjectID:                projectID,
+		RepositoryID:             repositoryID,
+		ServiceKey:               strings.TrimSpace(request.GetServiceKey()),
+		RuntimeMode:              runtimeMode,
+		RuntimeProfile:           strings.TrimSpace(request.GetRuntimeProfile()),
+		PreferredFleetScopeID:    preferredFleetScopeID,
+		PreferredClusterID:       preferredClusterID,
+		PlacementConstraintsJSON: []byte(strings.TrimSpace(request.GetPlacementConstraintsJson())),
+		RuntimeRequirementsJSON:  []byte(strings.TrimSpace(request.GetRuntimeRequirementsJson())),
+		Meta:                     meta,
+	}, nil
+}
+
+// GetPlacementDecisionInput maps a gRPC request to the domain read input.
+func GetPlacementDecisionInput(request *fleetv1.GetPlacementDecisionRequest) (fleetservice.GetPlacementDecisionInput, error) {
+	return queryInputByID(request.GetPlacementDecisionId(), request.GetMeta(), func(placementDecisionID uuid.UUID, meta value.QueryMeta) fleetservice.GetPlacementDecisionInput {
+		return fleetservice.GetPlacementDecisionInput{PlacementDecisionID: placementDecisionID, Meta: meta}
+	})
+}
+
+// ListPlacementDecisionsInput maps a gRPC request to the domain read input.
+func ListPlacementDecisionsInput(request *fleetv1.ListPlacementDecisionsRequest) (fleetservice.ListPlacementDecisionsInput, error) {
+	meta, err := QueryMetaFromProto(request.GetMeta())
+	if err != nil {
+		return fleetservice.ListPlacementDecisionsInput{}, err
+	}
+	projectID, err := optionalUUIDPtr(request.GetProjectId())
+	if err != nil {
+		return fleetservice.ListPlacementDecisionsInput{}, err
+	}
+	repositoryID, err := optionalUUIDPtr(request.GetRepositoryId())
+	if err != nil {
+		return fleetservice.ListPlacementDecisionsInput{}, err
+	}
+	fleetScopeID, err := optionalUUIDPtr(request.GetFleetScopeId())
+	if err != nil {
+		return fleetservice.ListPlacementDecisionsInput{}, err
+	}
+	clusterID, err := optionalUUIDPtr(request.GetClusterId())
+	if err != nil {
+		return fleetservice.ListPlacementDecisionsInput{}, err
+	}
+	statuses, err := placementDecisionStatusesFromProto(request.GetStatuses())
+	if err != nil {
+		return fleetservice.ListPlacementDecisionsInput{}, err
+	}
+	return fleetservice.ListPlacementDecisionsInput{
+		ProjectID:    projectID,
+		RepositoryID: repositoryID,
+		FleetScopeID: fleetScopeID,
+		ClusterID:    clusterID,
+		Statuses:     statuses,
+		Page:         pageRequestFromProto(request.GetPage()),
+		Meta:         meta,
+	}, nil
+}
+
 func optionalFleetScopeStatus(value *fleetv1.FleetScopeStatus) (enum.FleetScopeStatus, error) {
 	if value == nil {
 		return "", nil

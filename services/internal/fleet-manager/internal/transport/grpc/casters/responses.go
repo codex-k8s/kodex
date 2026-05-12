@@ -131,6 +131,63 @@ func ListClusterHealthSnapshotsResponse(result fleetservice.ListClusterHealthSna
 	return &fleetv1.ListClusterHealthSnapshotsResponse{HealthSnapshots: mapSlice(result.Snapshots, ClusterHealthSnapshotToProto), Page: pageResponseToProto(result.Page)}
 }
 
+// PlacementRuleResponse maps one placement rule aggregate to gRPC.
+func PlacementRuleResponse(rule entity.PlacementRule) *fleetv1.PlacementRuleResponse {
+	return &fleetv1.PlacementRuleResponse{PlacementRule: PlacementRuleToProto(rule)}
+}
+
+func PlacementRuleToProto(rule entity.PlacementRule) *fleetv1.PlacementRule {
+	return &fleetv1.PlacementRule{
+		Id:              rule.ID.String(),
+		FleetScopeId:    rule.FleetScopeID.String(),
+		RuleKey:         rule.RuleKey,
+		Status:          PlacementRuleStatusToProto(rule.Status),
+		Priority:        rule.Priority,
+		MatchJson:       string(rule.MatchJSON),
+		ConstraintsJson: string(rule.ConstraintsJSON),
+		CreatedAt:       formatTime(rule.CreatedAt),
+		UpdatedAt:       formatTime(rule.UpdatedAt),
+		Version:         rule.Version,
+	}
+}
+
+func ListPlacementRulesResponse(result fleetservice.ListPlacementRulesResult) *fleetv1.ListPlacementRulesResponse {
+	return &fleetv1.ListPlacementRulesResponse{PlacementRules: mapSlice(result.Rules, PlacementRuleToProto), Page: pageResponseToProto(result.Page)}
+}
+
+// PlacementDecisionResponse maps one placement decision to gRPC.
+func PlacementDecisionResponse(decision entity.PlacementDecision) *fleetv1.PlacementDecisionResponse {
+	return &fleetv1.PlacementDecisionResponse{Decision: PlacementDecisionToProto(decision)}
+}
+
+func PlacementDecisionToProto(decision entity.PlacementDecision) *fleetv1.PlacementDecision {
+	return &fleetv1.PlacementDecision{
+		Id:                 decision.ID.String(),
+		CommandId:          uuidPtrString(decision.CommandID),
+		RequestFingerprint: decision.RequestFingerprint,
+		Status:             PlacementDecisionStatusToProto(decision.Status),
+		FleetScopeId:       uuidPtrString(decision.FleetScopeID),
+		ClusterId:          uuidPtrString(decision.ClusterID),
+		ProjectId:          uuidPtrString(decision.ProjectID),
+		RepositoryId:       uuidPtrString(decision.RepositoryID),
+		RuntimeMode:        RuntimeModeToProto(decision.RuntimeMode),
+		RuntimeProfile:     decision.RuntimeProfile,
+		InputJson:          string(decision.InputJSON),
+		ReasonCode:         decision.ReasonCode,
+		ReasonMessage:      decision.ReasonMessage,
+		UsedDefaultPath:    decision.UsedDefaultPath,
+		CreatedAt:          formatTime(decision.CreatedAt),
+	}
+}
+
+func ResolvePlacementResponse(decision entity.PlacementDecision) *fleetv1.ResolvePlacementResponse {
+	return &fleetv1.ResolvePlacementResponse{Decision: PlacementDecisionToProto(decision)}
+}
+
+func ListPlacementDecisionsResponse(result fleetservice.ListPlacementDecisionsResult) *fleetv1.ListPlacementDecisionsResponse {
+	return &fleetv1.ListPlacementDecisionsResponse{Decisions: mapSlice(result.Decisions, PlacementDecisionToProto), Page: pageResponseToProto(result.Page)}
+}
+
 func formatTime(value time.Time) string {
 	if value.IsZero() {
 		return ""

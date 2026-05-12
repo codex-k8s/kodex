@@ -107,7 +107,7 @@ type PlacementDecision struct {
 	ClusterID          *uuid.UUID
 	ProjectID          *uuid.UUID
 	RepositoryID       *uuid.UUID
-	RuntimeMode        string
+	RuntimeMode        enum.RuntimeMode
 	RuntimeProfile     string
 	InputJSON          []byte
 	ReasonCode         string

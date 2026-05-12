@@ -105,6 +105,23 @@ func idWithQueryMeta(idText string, meta *fleetv1.QueryMeta) (uuid.UUID, value.Q
 	})
 }
 
+func queryMetaPage(meta *fleetv1.QueryMeta, page *fleetv1.PageRequest) (value.QueryMeta, value.PageRequest, error) {
+	queryMeta, err := QueryMetaFromProto(meta)
+	if err != nil {
+		return value.QueryMeta{}, value.PageRequest{}, err
+	}
+	return queryMeta, pageRequestFromProto(page), nil
+}
+
+func queryInputByID[T any](idText string, meta *fleetv1.QueryMeta, build func(uuid.UUID, value.QueryMeta) T) (T, error) {
+	id, queryMeta, err := idWithQueryMeta(idText, meta)
+	if err != nil {
+		var empty T
+		return empty, err
+	}
+	return build(id, queryMeta), nil
+}
+
 func idWithMeta[T any](idText string, build func() (T, error)) (uuid.UUID, T, error) {
 	id, err := requiredUUID(idText)
 	if err != nil {

@@ -57,20 +57,28 @@ var (
 	operationGetFleetScope                    = repositoryOperation("GetFleetScope")
 	operationGetKubernetesCluster             = repositoryOperation("GetKubernetesCluster")
 	operationGetLatestClusterHealthSnapshot   = repositoryOperation("GetLatestClusterHealthSnapshot")
+	operationGetPlacementDecision             = repositoryOperation("GetPlacementDecision")
+	operationGetPlacementRule                 = repositoryOperation("GetPlacementRule")
+	operationGetPlacementRuleByScopeKey       = repositoryOperation("GetPlacementRuleByScopeKey")
 	operationGetServer                        = repositoryOperation("GetServer")
 	operationListClusterHealthSnapshots       = repositoryOperation("ListClusterHealthSnapshots")
 	operationListFleetScopes                  = repositoryOperation("ListFleetScopes")
 	operationListKubernetesClusters           = repositoryOperation("ListKubernetesClusters")
+	operationListPlacementDecisions           = repositoryOperation("ListPlacementDecisions")
+	operationListPlacementRules               = repositoryOperation("ListPlacementRules")
 	operationListServers                      = repositoryOperation("ListServers")
 	operationMarkOutboxEventFailed            = repositoryOperation("MarkOutboxEventFailed")
 	operationMarkOutboxEventPermanentlyFailed = repositoryOperation("MarkOutboxEventPermanentlyFailed")
 	operationMarkOutboxEventPublished         = repositoryOperation("MarkOutboxEventPublished")
 	operationPing                             = repositoryOperation("Ping")
+	operationCreatePlacementDecision          = repositoryOperation("CreatePlacementDecision")
+	operationCreatePlacementRule              = repositoryOperation("CreatePlacementRule")
 	operationRegisterKubernetesCluster        = repositoryOperation("RegisterKubernetesCluster")
 	operationRegisterServer                   = repositoryOperation("RegisterServer")
 	operationStoreClusterHealthCheck          = repositoryOperation("StoreClusterHealthCheck")
 	operationUpdateFleetScope                 = repositoryOperation("UpdateFleetScope")
 	operationUpdateKubernetesCluster          = repositoryOperation("UpdateKubernetesCluster")
+	operationUpdatePlacementRule              = repositoryOperation("UpdatePlacementRule")
 	operationUpdateServer                     = repositoryOperation("UpdateServer")
 )
 
@@ -195,6 +203,46 @@ func (r *Repository) GetLatestClusterHealthSnapshot(ctx context.Context, cluster
 // ListClusterHealthSnapshots returns health snapshots by filter.
 func (r *Repository) ListClusterHealthSnapshots(ctx context.Context, filter query.ClusterHealthSnapshotFilter) ([]entity.ClusterHealthSnapshot, query.PageResult, error) {
 	return queryPage(ctx, r.db, operationListClusterHealthSnapshots, queryClusterHealthSnapshotList, clusterHealthSnapshotFilterArgs(filter), scanClusterHealthSnapshot)
+}
+
+// CreatePlacementRule stores a new placement rule and command result atomically.
+func (r *Repository) CreatePlacementRule(ctx context.Context, rule entity.PlacementRule, result entity.CommandResult) error {
+	return r.mutate(ctx, operationCreatePlacementRule, insertMutation(queryPlacementRuleCreate, placementRuleArgs(rule)), commandResultMutation(result))
+}
+
+// UpdatePlacementRule stores a versioned placement rule mutation and command result atomically.
+func (r *Repository) UpdatePlacementRule(ctx context.Context, rule entity.PlacementRule, previousVersion int64, result entity.CommandResult) error {
+	return r.mutate(ctx, operationUpdatePlacementRule, affectedMutation(queryPlacementRuleUpdate, placementRuleUpdateArgs(rule, previousVersion)), commandResultMutation(result))
+}
+
+// GetPlacementRule returns a placement rule by id.
+func (r *Repository) GetPlacementRule(ctx context.Context, id uuid.UUID) (entity.PlacementRule, error) {
+	return queryOne(ctx, r.db, operationGetPlacementRule, queryPlacementRuleGetByID, pgx.NamedArgs{"id": id}, scanPlacementRule)
+}
+
+// GetPlacementRuleByScopeKey returns a placement rule by scope and rule key.
+func (r *Repository) GetPlacementRuleByScopeKey(ctx context.Context, fleetScopeID uuid.UUID, ruleKey string) (entity.PlacementRule, error) {
+	return queryOne(ctx, r.db, operationGetPlacementRuleByScopeKey, queryPlacementRuleGetByScopeKey, pgx.NamedArgs{"fleet_scope_id": fleetScopeID, "rule_key": ruleKey}, scanPlacementRule)
+}
+
+// ListPlacementRules returns placement rules by filter.
+func (r *Repository) ListPlacementRules(ctx context.Context, filter query.PlacementRuleFilter) ([]entity.PlacementRule, query.PageResult, error) {
+	return queryPage(ctx, r.db, operationListPlacementRules, queryPlacementRuleList, placementRuleFilterArgs(filter), scanPlacementRule)
+}
+
+// CreatePlacementDecision stores one placement decision, command result and event atomically.
+func (r *Repository) CreatePlacementDecision(ctx context.Context, decision entity.PlacementDecision, event entity.OutboxEvent, result entity.CommandResult) error {
+	return r.createWithCommandResult(ctx, operationCreatePlacementDecision, event, insertMutation(queryPlacementDecisionCreate, placementDecisionArgs(decision)), result)
+}
+
+// GetPlacementDecision returns one placement decision by id.
+func (r *Repository) GetPlacementDecision(ctx context.Context, id uuid.UUID) (entity.PlacementDecision, error) {
+	return queryOne(ctx, r.db, operationGetPlacementDecision, queryPlacementDecisionGetByID, pgx.NamedArgs{"id": id}, scanPlacementDecision)
+}
+
+// ListPlacementDecisions returns placement decisions by filter.
+func (r *Repository) ListPlacementDecisions(ctx context.Context, filter query.PlacementDecisionFilter) ([]entity.PlacementDecision, query.PageResult, error) {
+	return queryPage(ctx, r.db, operationListPlacementDecisions, queryPlacementDecisionList, placementDecisionFilterArgs(filter), scanPlacementDecision)
 }
 
 // EnsurePlatformDefaultSeed stores bootstrap default fleet data if it is absent.
