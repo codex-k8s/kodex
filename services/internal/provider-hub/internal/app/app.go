@@ -3,13 +3,11 @@ package app
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
-	vaultapi "github.com/hashicorp/vault/api"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
@@ -168,17 +166,11 @@ func buildSecretResolver(cfg Config) (secretresolver.Resolver, error) {
 	}
 	vaultAddr := strings.TrimSpace(cfg.VaultAddr)
 	if vaultAddr != "" {
-		vaultConfig := vaultapi.DefaultConfig()
-		vaultConfig.Address = vaultAddr
-		vaultClient, err := vaultapi.NewClient(vaultConfig)
-		if err != nil {
-			return nil, fmt.Errorf("create Vault client: %w", err)
-		}
-		vaultClient.SetToken(strings.TrimSpace(cfg.VaultToken))
-		if namespace := strings.TrimSpace(cfg.VaultNamespace); namespace != "" {
-			vaultClient.SetNamespace(namespace)
-		}
-		vaultBackend, err := secretresolver.NewVaultBackend(secretresolver.VaultBackendConfig{Client: vaultClient})
+		vaultBackend, err := secretresolver.NewVaultBackendFromClientConfig(secretresolver.VaultClientConfig{
+			Addr:      vaultAddr,
+			Token:     cfg.VaultToken,
+			Namespace: cfg.VaultNamespace,
+		})
 		if err != nil {
 			return nil, err
 		}

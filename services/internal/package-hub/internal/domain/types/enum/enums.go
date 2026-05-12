@@ -134,6 +134,8 @@ const (
 	PackageSecretBindingStatusMissing     PackageSecretBindingStatus = "missing"
 	PackageSecretBindingStatusComplete    PackageSecretBindingStatus = "complete"
 	PackageSecretBindingStatusInvalid     PackageSecretBindingStatus = "invalid"
+	PackageSecretBindingStatusPartial     PackageSecretBindingStatus = "partial"
+	PackageSecretBindingStatusCheckFailed PackageSecretBindingStatus = "check_failed"
 )
 
 type PackageHealthStatus string
@@ -153,6 +155,15 @@ const (
 	PackageSecretFieldKindToken    PackageSecretFieldKind = "token"
 	PackageSecretFieldKindJSON     PackageSecretFieldKind = "json"
 	PackageSecretFieldKindURL      PackageSecretFieldKind = "url"
+)
+
+type PackageInstallationSecretRefStatus string
+
+const (
+	PackageInstallationSecretRefStatusConfigured PackageInstallationSecretRefStatus = "configured"
+	PackageInstallationSecretRefStatusMissing    PackageInstallationSecretRefStatus = "missing"
+	PackageInstallationSecretRefStatusInvalid    PackageInstallationSecretRefStatus = "invalid"
+	PackageInstallationSecretRefStatusDisabled   PackageInstallationSecretRefStatus = "disabled"
 )
 
 type CommandAggregateType string

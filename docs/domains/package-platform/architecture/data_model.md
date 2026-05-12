@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-06
 updated_at: 2026-05-12
-related_issues: [642, 673, 680, 689, 692, 700, 704, 706, 711, 718]
+related_issues: [642, 673, 680, 689, 692, 700, 704, 706, 711, 718, 723]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -134,7 +134,7 @@ approvals:
 | `installation_status` | enum | нет | `requested`, `active`, `disabled`, `failed`, `uninstalled`. |
 | `desired_state` | enum | нет | `present`, `absent`, `suspended`. |
 | `runtime_requirement_digest` | text | да | Digest runtime-требований, если пакет требует runtime-нагрузку. |
-| `secret_binding_status` | enum | нет | `not_required`, `missing`, `complete`, `invalid`. |
+| `secret_binding_status` | enum | нет | `not_required`, `missing`, `partial`, `complete`, `invalid`, `check_failed`. |
 | `last_health_status` | enum | нет | `unknown`, `healthy`, `degraded`, `failed`. |
 | `version` | bigint | нет | Оптимистичная конкуренция. |
 | `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |

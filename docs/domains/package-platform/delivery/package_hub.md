@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-06
 updated_at: 2026-05-12
-related_issues: [642, 646, 650, 663, 667, 670, 673, 678, 680, 684, 689, 692, 700, 704, 706, 710, 711, 718]
+related_issues: [642, 646, 650, 663, 667, 670, 673, 678, 680, 684, 689, 692, 700, 704, 706, 710, 711, 718, 723]
 related_prs: []
 related_docsets:
   - docs/domains/package-platform/product/requirements.md
@@ -54,7 +54,7 @@ approvals:
 | PKG-5.1 | #684 | Запрос установки пакета и чтения установок готовы: `RequestPackageInstallation`, `GetPackageInstallation`, `ListPackageInstallations`, идемпотентность, проверка доступа, проверка готовности к установке и события `package.installation.requested/activated`. |
 | PKG-5.2 | #689 | Изменение, отключение и снятие установки готовы: `UpdatePackageInstallation`, `DisablePackageInstallation`, `UninstallPackage`, ожидаемая версия и события жизненного цикла. |
 | PKG-5.3a | #692 | Чтение схем секретов версий пакетов готово: снимки схем создаются из manifest при синхронизации каталога, `GetPackageSecretSchema` читает локальную схему с проверкой `package.secret.read`. |
-| PKG-5.3b | не назначено | Сверка статуса заполненности секретов установки должна быть готова: `RefreshPackageInstallationSecretStatus`, чтение безопасных ссылок установки из `access-manager` и проверка доступности через `secretresolver.Checker` без возврата значения. |
+| PKG-5.3b | #723 | Сверка статуса заполненности секретов установки готова: `RefreshPackageInstallationSecretStatus`, чтение безопасных ссылок установки из `access-manager` и проверка доступности через `secretresolver.Checker` без возврата значения. |
 | PKG-6.1 | #700 | Специализация видов пакетов готова: `plugin`, `guidance`, `store`, `platform_content`, правила manifest по виду и модели чтения через `package_kind`. |
 | PKG-6.2 | #704 | Руководящие пакеты доступны как `package_kind=guidance`: каталог, установки и manifest читаются через существующие операции без отдельного RPC, runtime-запуска и provider-native синхронизации. |
 | PKG-6.3a | #706 | Локальные сценарии `store` и `platform_content` готовы: manifest validation, чтения каталога, чтения установок и границы без runtime-запуска, provider-native синхронизации и хранения файлов в БД. |
@@ -63,7 +63,7 @@ approvals:
 
 ## Статус операций `PackageHubService`
 
-Стабильный `PackageHubService v1` уже фиксирует полный транспортный контракт домена. Реализация идёт малыми срезами: готовые операции ниже работают через доменный сервис и PostgreSQL repository, остальные пока возвращают `unimplemented` через сгенерированный `UnimplementedPackageHubServiceServer`.
+Стабильный `PackageHubService v1` фиксирует транспортный контракт домена. Операции ниже работают через доменный сервис и PostgreSQL repository.
 
 | Операция | Текущий статус кода | Плановый срез |
 |---|---|---|
@@ -85,7 +85,7 @@ approvals:
 | `GetPackageInstallation` | `ready` | PKG-5.1 |
 | `ListPackageInstallations` | `ready` | PKG-5.1 |
 | `GetPackageSecretSchema` | `ready` | PKG-5.3a |
-| `RefreshPackageInstallationSecretStatus` | `unimplemented` | PKG-5.3b |
+| `RefreshPackageInstallationSecretStatus` | `ready` | PKG-5.3b |
 | `SetPackageVerification` | `ready` | PKG-3.4 |
 
 ## Синхронизация каталога `PKG-4.2`
@@ -118,7 +118,7 @@ approvals:
 | Отключение установки | готово | `DisablePackageInstallation` переводит установку в `disabled`, desired state в `suspended` и публикует `package.installation.disabled`. |
 | Снятие установки | готово | `UninstallPackage` переводит установку в `uninstalled`, desired state в `absent` и публикует `package.installation.uninstalled`. |
 | Конкурентность и идемпотентность | готово | Все три команды требуют expected version, сохраняют command result и outbox-событие в одной PostgreSQL-транзакции. |
-| Не входит в срез | запланировано | Фактическое снятие Kubernetes workloads остаётся в runtime-контуре; сверка заполненности секретов остаётся в PKG-5.3b. |
+| Не входит в срез | запланировано | Фактическое снятие Kubernetes workloads остаётся в runtime-контуре; сверка заполненности секретов закрыта отдельным срезом PKG-5.3b. |
 
 ## Схемы секретов `PKG-5.3a`
 
@@ -127,7 +127,17 @@ approvals:
 | Снимки схем секретов | готово | `SyncAvailablePackages` извлекает блок `secrets` из проверенного manifest, нормализует локализованные поля и сохраняет новую `PackageSecretSchema` только при новом digest. |
 | События | готово | Новая схема публикует `package.secret_schema.updated` через outbox вместе с остальными событиями синхронизации каталога. |
 | Чтение схемы | готово | `GetPackageSecretSchema` проверяет `package.secret.read` на ресурс схемы версии пакета и возвращает последнюю локальную схему. |
-| Не входит в срез | запланировано | `RefreshPackageInstallationSecretStatus` подключает существующий контракт `access-manager` для выдачи безопасных ссылок секретов установки. Общий `secretresolver.Checker` уже задаёт способ проверки доступности без раскрытия значений, но пакетный домен ещё не использует этот контракт. |
+
+## Сверка заполненности секретов `PKG-5.3b`
+
+| Область | Статус | Примечание |
+|---|---|---|
+| Команда пересчёта | готово | `RefreshPackageInstallationSecretStatus` читает текущую установку, требует expected version, проверяет `package.installation.update` и сохраняет command result вместе с `package.installation.updated`. |
+| Ссылки на секреты | готово | `package-hub` получает безопасные ссылки через `access-manager.ListPackageInstallationSecretRefs` и не хранит их как свою каноническую модель. |
+| Проверка без значения | готово | `secretresolver.Checker` проверяет доступность секрета без `Resolver.Resolve`; сырое значение секрета не попадает в ответ, БД, outbox, ошибки или тестовые payload. |
+| Итоговые статусы | готово | Установка получает `not_required`, `missing`, `partial`, `complete`, `invalid` или `check_failed` по обязательным и необязательным полям схемы. |
+| Активация установки | готово | Установка без runtime-требований переходит из `requested` в `active`, когда обязательные секреты не нужны или доступны; `partial` допускает активацию только потому, что отсутствуют необязательные поля. |
+| Не входит в срез | запланировано | Создание самих привязок секретов, форма заполнения секретов в UI и runtime-запуск пакетов остаются за соседними контурами. |
 
 ## Виды пакетов `PKG-6.1`
 
@@ -136,7 +146,7 @@ approvals:
 | Доменная модель | готово | Закрытый enum `PackageKind` уже содержит `plugin`, `guidance`, `store`, `platform_content`; произвольные строковые виды не допускаются. |
 | Проверка manifest | готово | `SyncAvailablePackages` сверяет `CatalogPackageSnapshot.package_kind` с `identity.kind` и применяет правила вида: `guidance` не требует runtime/секреты/API/действия, `store` требует capability `store`, `platform_content` требует capability `platform_content` без секретов/API/действий, `plugin` не использует capability других видов. |
 | Модели чтения | готово | `ListPackages` и `ListPackageInstallations` принимают фильтр `package_kind`; невалидный enum отклоняется до авторизации и чтения БД. |
-| Не входит в срез | запланировано | Runtime-запуск пакетов, получение каталога из Git/store/provider и сверка заполненности секретов остаются в отдельных срезах. |
+| Не входит в срез | запланировано | Runtime-запуск пакетов и получение каталога из Git/store/provider остаются в отдельных срезах. |
 
 ## Руководящие пакеты `PKG-6.2`
 
@@ -168,7 +178,7 @@ approvals:
 | `services.yaml` | готово | Сервис, версии, образы, БД, миграции, зависимости, health и manifests описаны в инвентаре платформы. |
 | Smoke-проверка | готово | `scripts/build-package-hub-images.sh` собирает smoke-набор образов, `scripts/smoke-package-hub.sh` проверяет миграции, rollout, `/health/readyz` и gRPC boundary. |
 | Runbook | готово | `docs/domains/package-platform/operations/package_hub_runbook.md` описывает диагностику, восстановление и откат. |
-| Не входит в срез | запланировано | Runtime-запуск пакетов, provider-native синхронизация, внешний магазин и подключение пересчёта заполненности секретов установки в `package-hub` остаются отдельными срезами. |
+| Не входит в срез | запланировано | Runtime-запуск пакетов, provider-native синхронизация и внешний магазин остаются отдельными срезами. |
 
 ## Наблюдаемость `PKG-3.1`
 

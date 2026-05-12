@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/codex-k8s/kodex/libs/go/secretresolver"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/errs"
 	catalogrepo "github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/repository/catalog"
 	"github.com/codex-k8s/kodex/services/internal/package-hub/internal/domain/types/entity"
@@ -1272,6 +1273,224 @@ func TestUpdatePackageInstallationChangesVersionAndWritesEvent(t *testing.T) {
 	}
 }
 
+func TestUpdatePackageInstallationRejectsActiveWhenSecretsNotReady(t *testing.T) {
+	t.Parallel()
+
+	blockingStatuses := []enum.PackageSecretBindingStatus{
+		enum.PackageSecretBindingStatusMissing,
+		enum.PackageSecretBindingStatusInvalid,
+		enum.PackageSecretBindingStatusCheckFailed,
+	}
+	for _, secretStatus := range blockingStatuses {
+		t.Run(string(secretStatus), func(t *testing.T) {
+			t.Parallel()
+
+			installationID := uuid.New()
+			active := enum.PackageInstallationStatusActive
+			repository := &fakeRepository{
+				packageInstallation: entity.PackageInstallation{
+					VersionedBase:       entity.VersionedBase{ID: installationID, Version: 1, CreatedAt: time.Date(2026, 5, 7, 11, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 5, 7, 11, 0, 0, 0, time.UTC)},
+					PackageID:           uuid.New(),
+					PackageVersionID:    uuid.New(),
+					Scope:               value.ScopeRef{Type: enum.PackageInstallationScopeTypeProject, Ref: uuid.NewString()},
+					InstallationStatus:  enum.PackageInstallationStatusRequested,
+					DesiredState:        enum.PackageDesiredStatePresent,
+					SecretBindingStatus: secretStatus,
+					LastHealthStatus:    enum.PackageHealthStatusUnknown,
+				},
+				commandResultErr: errs.ErrNotFound,
+			}
+			service := NewWithConfig(repository, fixedClock{}, newSequenceIDs(1), Config{Authorizer: &recordingAuthorizer{}})
+
+			_, err := service.UpdatePackageInstallation(context.Background(), UpdatePackageInstallationInput{
+				InstallationID:     installationID,
+				InstallationStatus: &active,
+				Meta:               commandMeta(),
+			})
+			if !errors.Is(err, errs.ErrPreconditionFailed) {
+				t.Fatalf("UpdatePackageInstallation() err = %v, want precondition failed for secret status %s", err, secretStatus)
+			}
+			if repository.updateInstallationWithResultCalls != 0 {
+				t.Fatalf("update calls = %d, want no mutation for secret status %s", repository.updateInstallationWithResultCalls, secretStatus)
+			}
+		})
+	}
+}
+
+func TestRefreshPackageInstallationSecretStatusMarksComplete(t *testing.T) {
+	t.Parallel()
+
+	installation := testSecretRefreshInstallation(enum.PackageSecretBindingStatusMissing)
+	reader := &fakeSecretRefReader{refs: []value.PackageInstallationSecretRef{
+		testSecretRef("telegram_token", enum.PackageInstallationSecretRefStatusConfigured, "env", "KODEX_TELEGRAM_TOKEN"),
+		testSecretRef("webhook_secret", enum.PackageInstallationSecretRefStatusConfigured, "env", "KODEX_WEBHOOK_SECRET"),
+	}}
+	checker := &fakeSecretChecker{statuses: map[string]secretresolver.SecretStatus{
+		"env\x00KODEX_TELEGRAM_TOKEN": {Present: true, Version: "env"},
+		"env\x00KODEX_WEBHOOK_SECRET": {Present: true, Version: "env"},
+	}}
+	repository := testSecretRefreshRepository(installation, []value.PackageSecretField{
+		testSecretField("telegram_token", true),
+		testSecretField("webhook_secret", false),
+	})
+	authorizer := &recordingAuthorizer{}
+	service := NewWithConfig(repository, fixedClock{}, newSequenceIDs(1), Config{Authorizer: authorizer, SecretRefReader: reader, SecretChecker: checker})
+
+	updated, err := service.RefreshPackageInstallationSecretStatus(context.Background(), RefreshPackageInstallationSecretStatusInput{
+		InstallationID: installation.ID,
+		Meta:           commandMeta(),
+	})
+	if err != nil {
+		t.Fatalf("RefreshPackageInstallationSecretStatus(): %v", err)
+	}
+	if updated.SecretBindingStatus != enum.PackageSecretBindingStatusComplete || updated.InstallationStatus != enum.PackageInstallationStatusActive {
+		t.Fatalf("updated = %+v, want active/complete", updated)
+	}
+	if repository.updateInstallationWithResultCalls != 1 || repository.updatedResult.Operation != packageOperationInstallationSecrets {
+		t.Fatalf("update calls/result = %d/%s, want secret refresh result", repository.updateInstallationWithResultCalls, repository.updatedResult.Operation)
+	}
+	if reader.input.PackageInstallationID != installation.ID || len(reader.input.LogicalKeys) != 2 {
+		t.Fatalf("reader input = %+v, want installation id and two logical keys", reader.input)
+	}
+	if len(checker.calls) != 2 {
+		t.Fatalf("checker calls = %+v, want two value-free checks", checker.calls)
+	}
+	if bytes.Contains(repository.updatedResult.ResultPayload, []byte("actual-secret-value")) {
+		t.Fatalf("command result leaked secret value: %s", repository.updatedResult.ResultPayload)
+	}
+	if len(authorizer.requests) != 1 || authorizer.requests[0].ActionKey != packageActionInstallationUpdate {
+		t.Fatalf("authorization requests = %+v, want installation update", authorizer.requests)
+	}
+}
+
+func TestRefreshPackageInstallationSecretStatusMarksMissingRequired(t *testing.T) {
+	t.Parallel()
+
+	installation := testSecretRefreshInstallation(enum.PackageSecretBindingStatusMissing)
+	reader := &fakeSecretRefReader{refs: []value.PackageInstallationSecretRef{
+		testSecretRef("telegram_token", enum.PackageInstallationSecretRefStatusMissing, "", ""),
+	}}
+	repository := testSecretRefreshRepository(installation, []value.PackageSecretField{testSecretField("telegram_token", true)})
+	service := NewWithConfig(repository, fixedClock{}, newSequenceIDs(1), Config{Authorizer: &recordingAuthorizer{}, SecretRefReader: reader, SecretChecker: &fakeSecretChecker{}})
+
+	updated, err := service.RefreshPackageInstallationSecretStatus(context.Background(), RefreshPackageInstallationSecretStatusInput{
+		InstallationID: installation.ID,
+		Meta:           commandMeta(),
+	})
+	if err != nil {
+		t.Fatalf("RefreshPackageInstallationSecretStatus(): %v", err)
+	}
+	if updated.SecretBindingStatus != enum.PackageSecretBindingStatusMissing || updated.InstallationStatus != enum.PackageInstallationStatusRequested {
+		t.Fatalf("updated = %+v, want requested/missing", updated)
+	}
+}
+
+func TestRefreshPackageInstallationSecretStatusMarksPartialOptional(t *testing.T) {
+	t.Parallel()
+
+	installation := testSecretRefreshInstallation(enum.PackageSecretBindingStatusMissing)
+	reader := &fakeSecretRefReader{refs: []value.PackageInstallationSecretRef{
+		testSecretRef("telegram_token", enum.PackageInstallationSecretRefStatusConfigured, "env", "KODEX_TELEGRAM_TOKEN"),
+		testSecretRef("webhook_secret", enum.PackageInstallationSecretRefStatusMissing, "", ""),
+	}}
+	checker := &fakeSecretChecker{statuses: map[string]secretresolver.SecretStatus{
+		"env\x00KODEX_TELEGRAM_TOKEN": {Present: true, Version: "env"},
+	}}
+	repository := testSecretRefreshRepository(installation, []value.PackageSecretField{
+		testSecretField("telegram_token", true),
+		testSecretField("webhook_secret", false),
+	})
+	service := NewWithConfig(repository, fixedClock{}, newSequenceIDs(1), Config{Authorizer: &recordingAuthorizer{}, SecretRefReader: reader, SecretChecker: checker})
+
+	updated, err := service.RefreshPackageInstallationSecretStatus(context.Background(), RefreshPackageInstallationSecretStatusInput{
+		InstallationID: installation.ID,
+		Meta:           commandMeta(),
+	})
+	if err != nil {
+		t.Fatalf("RefreshPackageInstallationSecretStatus(): %v", err)
+	}
+	if updated.SecretBindingStatus != enum.PackageSecretBindingStatusPartial || updated.InstallationStatus != enum.PackageInstallationStatusActive {
+		t.Fatalf("updated = %+v, want active/partial", updated)
+	}
+}
+
+func TestRefreshPackageInstallationSecretStatusReturnsAccessError(t *testing.T) {
+	t.Parallel()
+
+	installation := testSecretRefreshInstallation(enum.PackageSecretBindingStatusMissing)
+	reader := &fakeSecretRefReader{err: errs.ErrDependencyUnavailable}
+	repository := testSecretRefreshRepository(installation, []value.PackageSecretField{testSecretField("telegram_token", true)})
+	service := NewWithConfig(repository, fixedClock{}, newSequenceIDs(1), Config{Authorizer: &recordingAuthorizer{}, SecretRefReader: reader, SecretChecker: &fakeSecretChecker{}})
+
+	_, err := service.RefreshPackageInstallationSecretStatus(context.Background(), RefreshPackageInstallationSecretStatusInput{
+		InstallationID: installation.ID,
+		Meta:           commandMeta(),
+	})
+	if !errors.Is(err, errs.ErrDependencyUnavailable) {
+		t.Fatalf("RefreshPackageInstallationSecretStatus() err = %v, want dependency unavailable", err)
+	}
+	if repository.updateInstallationWithResultCalls != 0 {
+		t.Fatalf("update calls = %d, want no mutation on access error", repository.updateInstallationWithResultCalls)
+	}
+}
+
+func TestRefreshPackageInstallationSecretStatusStopsBeforeSecretRefsWhenForbidden(t *testing.T) {
+	t.Parallel()
+
+	installation := testSecretRefreshInstallation(enum.PackageSecretBindingStatusMissing)
+	reader := &fakeSecretRefReader{refs: []value.PackageInstallationSecretRef{
+		testSecretRef("telegram_token", enum.PackageInstallationSecretRefStatusConfigured, "env", "KODEX_TELEGRAM_TOKEN"),
+	}}
+	checker := &fakeSecretChecker{statuses: map[string]secretresolver.SecretStatus{
+		"env\x00KODEX_TELEGRAM_TOKEN": {Present: true, Version: "env"},
+	}}
+	repository := testSecretRefreshRepository(installation, []value.PackageSecretField{testSecretField("telegram_token", true)})
+	service := NewWithConfig(repository, fixedClock{}, newSequenceIDs(1), Config{
+		Authorizer:      &recordingAuthorizer{err: errs.ErrForbidden},
+		SecretRefReader: reader,
+		SecretChecker:   checker,
+	})
+
+	_, err := service.RefreshPackageInstallationSecretStatus(context.Background(), RefreshPackageInstallationSecretStatusInput{
+		InstallationID: installation.ID,
+		Meta:           commandMeta(),
+	})
+	if !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("RefreshPackageInstallationSecretStatus() err = %v, want forbidden", err)
+	}
+	if reader.calls != 0 || len(checker.calls) != 0 || repository.updateInstallationWithResultCalls != 0 {
+		t.Fatalf("side effects = refs:%d checks:%d updates:%d, want no secret reads/checks/update before authorization", reader.calls, len(checker.calls), repository.updateInstallationWithResultCalls)
+	}
+	if repository.getSecretSchemaCalls != 0 || repository.getCommandResultCalls != 0 {
+		t.Fatalf("repository calls = schema:%d replay:%d, want no schema/replay before authorization", repository.getSecretSchemaCalls, repository.getCommandResultCalls)
+	}
+}
+
+func TestRefreshPackageInstallationSecretStatusMarksCheckerError(t *testing.T) {
+	t.Parallel()
+
+	installation := testSecretRefreshInstallation(enum.PackageSecretBindingStatusMissing)
+	reader := &fakeSecretRefReader{refs: []value.PackageInstallationSecretRef{
+		testSecretRef("telegram_token", enum.PackageInstallationSecretRefStatusConfigured, "vault", "secret/package/telegram#token"),
+	}}
+	checker := &fakeSecretChecker{errs: map[string]error{
+		"vault\x00secret/package/telegram#token": secretresolver.ErrSecretUnavailable,
+	}}
+	repository := testSecretRefreshRepository(installation, []value.PackageSecretField{testSecretField("telegram_token", true)})
+	service := NewWithConfig(repository, fixedClock{}, newSequenceIDs(1), Config{Authorizer: &recordingAuthorizer{}, SecretRefReader: reader, SecretChecker: checker})
+
+	updated, err := service.RefreshPackageInstallationSecretStatus(context.Background(), RefreshPackageInstallationSecretStatusInput{
+		InstallationID: installation.ID,
+		Meta:           commandMeta(),
+	})
+	if err != nil {
+		t.Fatalf("RefreshPackageInstallationSecretStatus(): %v", err)
+	}
+	if updated.SecretBindingStatus != enum.PackageSecretBindingStatusCheckFailed {
+		t.Fatalf("secret status = %s, want check_failed", updated.SecretBindingStatus)
+	}
+}
+
 func TestDisablePackageInstallationWritesLifecycleEvent(t *testing.T) {
 	t.Parallel()
 
@@ -1536,6 +1755,40 @@ type fakeRepository struct {
 	setVerificationCalls              int
 }
 
+type fakeSecretRefReader struct {
+	calls int
+	input ListPackageInstallationSecretRefsInput
+	refs  []value.PackageInstallationSecretRef
+	err   error
+}
+
+func (r *fakeSecretRefReader) ListPackageInstallationSecretRefs(_ context.Context, input ListPackageInstallationSecretRefsInput) (ListPackageInstallationSecretRefsResult, error) {
+	r.calls++
+	r.input = input
+	if r.err != nil {
+		return ListPackageInstallationSecretRefsResult{}, r.err
+	}
+	return ListPackageInstallationSecretRefsResult{SecretRefs: r.refs}, nil
+}
+
+type fakeSecretChecker struct {
+	calls    []secretresolver.SecretRef
+	statuses map[string]secretresolver.SecretStatus
+	errs     map[string]error
+}
+
+func (c *fakeSecretChecker) Check(_ context.Context, ref secretresolver.SecretRef) (secretresolver.SecretStatus, error) {
+	c.calls = append(c.calls, ref)
+	key := ref.StoreType + "\x00" + ref.StoreRef
+	if err := c.errs[key]; err != nil {
+		return secretresolver.SecretStatus{}, err
+	}
+	if status, ok := c.statuses[key]; ok {
+		return status, nil
+	}
+	return secretresolver.SecretStatus{}, secretresolver.ErrSecretNotFound
+}
+
 func (r *fakeRepository) CreatePackageSource(context.Context, entity.PackageSource) error {
 	panic("not implemented")
 }
@@ -1765,6 +2018,51 @@ func commandMeta() value.CommandMeta {
 		CommandID:       uuid.New(),
 		ExpectedVersion: &revision,
 		Actor:           value.Actor{Type: "user", ID: "owner"},
+	}
+}
+
+func testSecretRefreshInstallation(status enum.PackageSecretBindingStatus) entity.PackageInstallation {
+	now := time.Date(2026, 5, 7, 11, 0, 0, 0, time.UTC)
+	return entity.PackageInstallation{
+		VersionedBase:       entity.VersionedBase{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		PackageID:           uuid.New(),
+		PackageVersionID:    uuid.New(),
+		Scope:               value.ScopeRef{Type: enum.PackageInstallationScopeTypeProject, Ref: uuid.NewString()},
+		InstallationStatus:  enum.PackageInstallationStatusRequested,
+		DesiredState:        enum.PackageDesiredStatePresent,
+		SecretBindingStatus: status,
+		LastHealthStatus:    enum.PackageHealthStatusUnknown,
+	}
+}
+
+func testSecretRefreshRepository(installation entity.PackageInstallation, fields []value.PackageSecretField) *fakeRepository {
+	return &fakeRepository{
+		packageInstallation: installation,
+		secretSchema: entity.PackageSecretSchema{
+			ID:               uuid.New(),
+			PackageVersionID: installation.PackageVersionID,
+			SchemaDigest:     "sha256:test",
+			Fields:           fields,
+			CreatedAt:        installation.CreatedAt,
+		},
+		commandResultErr: errs.ErrNotFound,
+	}
+}
+
+func testSecretField(key string, required bool) value.PackageSecretField {
+	return value.PackageSecretField{
+		Key:      key,
+		Kind:     enum.PackageSecretFieldKindToken,
+		Required: required,
+	}
+}
+
+func testSecretRef(key string, status enum.PackageInstallationSecretRefStatus, storeType string, storeRef string) value.PackageInstallationSecretRef {
+	return value.PackageInstallationSecretRef{
+		LogicalKey: key,
+		Status:     status,
+		StoreType:  storeType,
+		StoreRef:   storeRef,
 	}
 }
 

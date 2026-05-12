@@ -101,8 +101,10 @@ spec:
         - libs/go/outbox
         - libs/go/platformevents/packagehub
         - libs/go/postgres
+        - libs/go/secretresolver
         - libs/go/serviceprocess
         - libs/go/servicemain
+        - proto/kodex/access_accounts/v1
         - proto/kodex/packages/v1
         - specs/asyncapi/package-hub.v1.yaml
         - deploy/base/package-hub
