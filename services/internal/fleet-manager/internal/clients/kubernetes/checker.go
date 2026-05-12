@@ -10,6 +10,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/secretresolver"
 	fleetservice "github.com/codex-k8s/kodex/services/internal/fleet-manager/internal/domain/service"
 	"github.com/codex-k8s/kodex/services/internal/fleet-manager/internal/domain/types/enum"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -65,7 +66,7 @@ func (c *Checker) CheckClusterConnectivity(ctx context.Context, target fleetserv
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(ctx.Err(), context.Canceled) {
 			return failedResultWithLatency(enum.ConnectivityCheckStatusTimedOut, "kubernetes_api_timeout", "Kubernetes API check timed out", latency), nil
 		}
-		return failedResultWithLatency(enum.ConnectivityCheckStatusFailed, "kubernetes_api_unreachable", "Kubernetes API connectivity check failed", latency), nil
+		return kubernetesAPIFailure(err, latency), nil
 	}
 	if version == nil {
 		return failedResultWithLatency(enum.ConnectivityCheckStatusFailed, "kubernetes_version_unavailable", "Kubernetes API version response was empty", latency), nil
@@ -95,6 +96,19 @@ func secretResolverFailure(err error) fleetservice.ConnectivityCheckResult {
 		return failedResult(enum.ConnectivityCheckStatusFailed, "secret_not_found", "Cluster access secret was not found")
 	default:
 		return failedResult(enum.ConnectivityCheckStatusFailed, "secret_unavailable", "Cluster access secret is unavailable")
+	}
+}
+
+func kubernetesAPIFailure(err error, latency int64) fleetservice.ConnectivityCheckResult {
+	switch {
+	case apierrors.IsUnauthorized(err):
+		return failedResultWithLatency(enum.ConnectivityCheckStatusFailed, "kubernetes_api_auth_failed", "Kubernetes API authentication failed", latency)
+	case apierrors.IsForbidden(err):
+		return failedResultWithLatency(enum.ConnectivityCheckStatusFailed, "kubernetes_api_forbidden", "Kubernetes API access is forbidden", latency)
+	case apierrors.IsTooManyRequests(err):
+		return failedResultWithLatency(enum.ConnectivityCheckStatusFailed, "kubernetes_api_rate_limited", "Kubernetes API rate limit was reached", latency)
+	default:
+		return failedResultWithLatency(enum.ConnectivityCheckStatusFailed, "kubernetes_api_unreachable", "Kubernetes API connectivity check failed", latency)
 	}
 }
 

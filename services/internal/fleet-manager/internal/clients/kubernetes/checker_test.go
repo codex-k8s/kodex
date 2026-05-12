@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -72,22 +73,42 @@ func TestCheckerClassifiesMissingSecretSafely(t *testing.T) {
 	}
 }
 
-func TestCheckerClassifiesUnauthorizedAPIWithoutLeakingSecret(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.Error(w, "forbidden", http.StatusUnauthorized)
-	}))
-	defer server.Close()
-	secretValue := kubeconfigForServer(server.URL, "auth-token-that-must-not-leak")
-	checker := newTestChecker(t, fakeResolver{value: secretresolver.NewSecretValue([]byte(secretValue))})
+func TestCheckerClassifiesKubernetesStatusErrorsWithoutLeakingSecret(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     int
+		reason   string
+		expected string
+	}{
+		{name: "unauthorized", code: http.StatusUnauthorized, reason: "Unauthorized", expected: "kubernetes_api_auth_failed"},
+		{name: "forbidden", code: http.StatusForbidden, reason: "Forbidden", expected: "kubernetes_api_forbidden"},
+		{name: "rate_limited", code: http.StatusTooManyRequests, reason: "TooManyRequests", expected: "kubernetes_api_rate_limited"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				writeKubernetesStatus(w, tt.code, tt.reason)
+			}))
+			defer server.Close()
+			secretValue := kubeconfigForServer(server.URL, "auth-token-that-must-not-leak")
+			checker := newTestChecker(t, fakeResolver{value: secretresolver.NewSecretValue([]byte(secretValue))})
 
-	result, err := checker.CheckClusterConnectivity(context.Background(), checkTarget())
-	if err != nil {
-		t.Fatalf("CheckClusterConnectivity returned error: %v", err)
+			result, err := checker.CheckClusterConnectivity(context.Background(), checkTarget())
+			if err != nil {
+				t.Fatalf("CheckClusterConnectivity returned error: %v", err)
+			}
+			if result.Status != enum.ConnectivityCheckStatusFailed || result.ErrorCode != tt.expected {
+				t.Fatalf("unexpected Kubernetes status result: %+v", result)
+			}
+			assertNoSecretLeak(t, secretValue, result)
+		})
 	}
-	if result.Status != enum.ConnectivityCheckStatusFailed || result.ErrorCode != "kubernetes_api_unreachable" {
-		t.Fatalf("unexpected unauthorized API result: %+v", result)
-	}
-	assertNoSecretLeak(t, secretValue, result)
+}
+
+func writeKubernetesStatus(w http.ResponseWriter, code int, reason string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	_, _ = w.Write([]byte(`{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"denied","reason":"` + reason + `","code":` + strconv.Itoa(code) + `}`))
 }
 
 func TestCheckerClassifiesUnreachableAPIWithoutLeakingSecret(t *testing.T) {
