@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-06
 updated_at: 2026-05-12
-related_issues: [281, 282, 711, 719]
+related_issues: [281, 282, 711, 719, 725]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -281,11 +281,16 @@ approvals:
 | `error_code` | text | no | default '' | Классификация ошибки. |
 | `error_message` | text | no | default '' | Короткое сообщение без секрета. |
 | `rate_limit_snapshot_id` | UUID | yes | indexed | Снимок лимитов после операции. |
+| `operation_policy_context_json` | jsonb | no | default {} | Безопасный снимок контекста политики: роль, проект, стадия, операция, цель, изменяемые поля, риск, версия политики. |
+| `approval_gate_ref_json` | jsonb | no | default {} | Ссылка на уже принятое approval/gate решение, если оно требовалось policy. |
+| `provider_version` | text | no | default '' | Версия или update marker результата у провайдера, если доступна. |
 | `started_at` | timestamptz | no | indexed | Начало. |
 | `finished_at` | timestamptz | yes | indexed | Завершение. |
 | `version` | bigint | no | monotonic | Версия записи операции. |
 
-Идемпотентный повтор provider-операции по `operation_type + command_id` возвращает уже записанную операцию только при совпадении области и результата: `actor_id`, `external_account_id`, `provider_slug`, `target_ref`, `status`, `result_ref`, `error_code`, `error_message` и `rate_limit_snapshot_id`. Если тот же `command_id` приходит с другой областью или другим содержимым результата, операция конфликтует.
+`operation_policy_context_json` и `approval_gate_ref_json` не содержат секретов, token refs, сырых provider payload, email, имён или тел комментариев. Это только проверяемый след того, по какой роли, проекту, стадии, target, набору полей и версии политики команда была разрешена. `approval_gate_ref_json` хранит ссылку на внешний approval/gate, но не переносит в `provider-hub` владение самим решением.
+
+Идемпотентный повтор provider-операции по `operation_type + command_id` возвращает уже записанную операцию только при совпадении области и результата: `actor_id`, `external_account_id`, `provider_slug`, `target_ref`, `status`, `result_ref`, `error_code`, `error_message`, `rate_limit_snapshot_id`, `operation_policy_context_json`, `approval_gate_ref_json` и `provider_version`. Если тот же `command_id` приходит с другой областью или другим содержимым результата, операция конфликтует.
 Replay-чтение операции выполняется отдельным SQL-вызовом после `INSERT ... ON CONFLICT DO NOTHING RETURNING`, чтобы одинаковые конкурентные повторы не превращались в ложный конфликт.
 
 ### `ProviderHubOutboxEvent`

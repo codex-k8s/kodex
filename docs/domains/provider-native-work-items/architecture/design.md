@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-06
 updated_at: 2026-05-12
-related_issues: [281, 282, 711, 719]
+related_issues: [281, 282, 711, 719, 725]
 related_prs: []
 related_adrs: []
 approvals:
@@ -60,7 +60,7 @@ approvals:
 | Webhook inbox | Сохраняет входящие события, дедуплицирует и держит статус обработки. |
 | Нормализатор webhook | Порт доменного сервиса, реализация которого живёт в слое адаптеров конкретного провайдера и возвращает нейтральные факты провайдера. |
 | Reconciliation | Догоняет потерянные webhook через курсоры, окно перекрытия и приоритеты. |
-| Operation executor | Выполняет разрешённые provider-операции и пишет операционный след. |
+| Исполнитель операций | Выполняет разрешённые provider-операции и пишет операционный след. |
 | Outbox-доставщик | Публикует `provider.*` события после фиксации транзакции. |
 
 ## Основные потоки
@@ -115,21 +115,27 @@ sequenceDiagram
   participant AM as agent-manager
   participant MCP as platform-mcp-server
   participant H as provider-hub
+  participant G as approval/gate owner
   participant A as access-manager
   participant P as GitHub/GitLab
   participant DB as provider DB
-  AM->>MCP: Provider tool call
-  MCP->>H: CreateOrUpdateArtifact(command)
+  AM->>MCP: Typed provider tool call
+  MCP->>G: Проверить политику по риску
+  G-->>MCP: approval_gate_ref или not_required
+  MCP->>H: Типизированная команда записи + policy context
   H->>A: ResolveExternalAccountUsage(account, action, scope)
   A-->>H: provider_slug + secret_ref
+  H->>H: Проверить approval_gate_ref, если policy требует gate
   H->>H: Получить SecretValue через общий resolver-клиент
   H->>P: Provider API operation
   P-->>H: Result + limit headers
-  H->>DB: журнал операций + сигнал проекции + outbox
+  H->>DB: operation log + approval ref + projection signal + outbox
   H-->>MCP: Normalized result
 ```
 
-`provider-hub` не решает сам, можно ли использовать внешний аккаунт. В операциях и сверке внешний аккаунт передаётся явно по политике вызывающего сценария или по уже сохранённому курсору. `provider-hub` запрашивает подтверждение у `access-manager`, получает только ссылку на секрет, затем получает `SecretValue` через общий `libs/go/secretresolver`, выполняет операцию через адаптер и фиксирует результат. Значение секрета живёт только в памяти процесса на время внешнего вызова и не попадает в БД `provider-hub`, журнал операций, outbox, тело аудита, трассировку, логи или ошибки. `access-manager` не возвращает значение токена и не становится прокси секретов.
+Снаружи операции записи остаются типизированными инструментами: создать задачу, обновить задачу, создать или обновить комментарий, создать `PR/MR`, оставить review-сигнал, обновить связь. Внутри `provider-hub` они сходятся в общий конвейер команд: проверка команды и идемпотентности, проверка `operation_policy_context`, подтверждение `external_account_id` через `access-manager`, проверка ссылки на approval/gate, выполнение команды адаптера и запись `ProviderOperation`.
+
+`provider-hub` не решает сам, можно ли использовать внешний аккаунт, и не становится владельцем approval. В операциях и сверке внешний аккаунт передаётся явно по политике вызывающего сценария или по уже сохранённому курсору. Если политика по риску требует approval/gate, вызывающий контур передаёт `approval_gate_ref`; `provider-hub` только проверяет наличие ссылки и сохраняет её в журнале операции. `provider-hub` запрашивает подтверждение у `access-manager`, получает только ссылку на секрет, затем получает `SecretValue` через общий `libs/go/secretresolver`, выполняет операцию через адаптер и фиксирует результат. Значение секрета живёт только в памяти процесса на время внешнего вызова и не попадает в БД `provider-hub`, журнал операций, outbox, тело аудита, трассировку, логи или ошибки. `access-manager` не возвращает значение токена и не становится прокси секретов.
 
 В пакетной сверке только на чтение обработчик берёт арендованный `SyncCursor`, подтверждает `provider.reconciliation.run` через `access-manager`, получает токен через resolver только на время GitHub API-вызова и сохраняет только нормализованные проекции, операционное состояние, лимитный бюджет и безопасный код ошибки. Исчерпание лимита провайдера не считается бизнес-ошибкой: cursor остаётся с lease до retry-времени. Ошибка авторизации переводит runtime state аккаунта в `reauthorization_required`; отсутствие объекта, временные и постоянные ошибки фиксируются коротким кодом без provider payload и без секрета.
 
