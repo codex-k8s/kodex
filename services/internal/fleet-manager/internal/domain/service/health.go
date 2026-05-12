@@ -30,7 +30,7 @@ func (s *Service) RunClusterConnectivityCheck(ctx context.Context, input RunClus
 	if err := s.authorizeCommand(ctx, input.Meta, fleetActionHealthCheckRun, healthResource(cluster)); err != nil {
 		return entity.ClusterConnectivityCheck{}, err
 	}
-	if replay, ok, err := s.replayConnectivityCheck(ctx, input.Meta); ok || err != nil {
+	if replay, ok, err := s.replayConnectivityCheck(ctx, input.Meta, cluster); ok || err != nil {
 		return replay, err
 	}
 	checker, err := s.requireChecker()
@@ -139,13 +139,27 @@ func (s *Service) loadClusterForHealthRead(ctx context.Context, clusterID uuid.U
 	return cluster, nil
 }
 
-func (s *Service) replayConnectivityCheck(ctx context.Context, meta value.CommandMeta) (entity.ClusterConnectivityCheck, bool, error) {
+func (s *Service) replayConnectivityCheck(ctx context.Context, meta value.CommandMeta, cluster entity.KubernetesCluster) (entity.ClusterConnectivityCheck, bool, error) {
 	result, ok, err := s.findCommandResult(ctx, meta, fleetOperationRunHealthCheck, fleetAggregateHealth)
 	if err != nil || !ok {
 		return entity.ClusterConnectivityCheck{}, ok, err
 	}
 	check, err := s.repository.GetClusterConnectivityCheck(ctx, result.AggregateID)
-	return check, true, err
+	if err != nil {
+		return entity.ClusterConnectivityCheck{}, true, err
+	}
+	if check.ClusterID != cluster.ID {
+		return entity.ClusterConnectivityCheck{}, true, errs.ErrConflict
+	}
+	queryMeta := value.QueryMeta{
+		Actor:          meta.Actor,
+		RequestID:      meta.RequestID,
+		RequestContext: meta.RequestContext,
+	}
+	if err := s.authorizeQuery(ctx, queryMeta, fleetActionHealthRead, healthResource(cluster)); err != nil {
+		return entity.ClusterConnectivityCheck{}, true, err
+	}
+	return check, true, nil
 }
 
 func (s *Service) healthEvents(cluster entity.KubernetesCluster, snapshot entity.ClusterHealthSnapshot, previousHealth enum.ClusterHealthStatus) ([]entity.OutboxEvent, error) {

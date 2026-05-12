@@ -105,6 +105,9 @@ type FleetSecretConfig struct {
 	EnvEnabled                bool   `env:"ENV_ENABLED" envDefault:"true"`
 	MountedKubernetesRoot     string `env:"MOUNTED_KUBERNETES_ROOT"`
 	MountedKubernetesMaxBytes int64  `env:"MOUNTED_KUBERNETES_MAX_SECRET_BYTES" envDefault:"1048576"`
+	VaultAddr                 string `env:"VAULT_ADDR"`
+	VaultToken                string `env:"VAULT_TOKEN"`
+	VaultNamespace            string `env:"VAULT_NAMESPACE"`
 }
 
 // FleetConnectivityConfig contains bounded Kubernetes API probe settings.
@@ -276,6 +279,9 @@ func (cfg Config) validateAccess() error {
 func (cfg Config) validateSecrets() error {
 	if cfg.SecretResolver.MountedKubernetesMaxBytes <= 0 {
 		return fmt.Errorf("KODEX_FLEET_MANAGER_SECRET_RESOLVER_MOUNTED_KUBERNETES_MAX_SECRET_BYTES is invalid")
+	}
+	if strings.TrimSpace(cfg.SecretResolver.VaultAddr) != "" && strings.TrimSpace(cfg.SecretResolver.VaultToken) == "" {
+		return fmt.Errorf("KODEX_FLEET_MANAGER_SECRET_RESOLVER_VAULT_TOKEN is required when Vault address is configured")
 	}
 	return nil
 }

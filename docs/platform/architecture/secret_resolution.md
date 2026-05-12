@@ -31,7 +31,7 @@ approvals:
 | `libs/go/secretresolver` | Даёт общий контракт `Resolver` и `Checker`, безопасный тип `SecretValue`, выбор реализации хранилища по `store_type`, поддержку смонтированных Kubernetes Secret, env и Vault KV v2. |
 | `provider-hub` | После успешного `ResolveExternalAccountUsage` вызывает `Resolver.Resolve` для пакетной GitHub-сверки в режиме только чтения, выполняет внешний API-вызов и сразу очищает значение. Операции записи в провайдера используют тот же контур в отдельном срезе. |
 | `package-hub` | Для статуса заполненности установки использует только `Checker.Check`; получение сырого значения секрета в пакетном домене запрещено. |
-| `fleet-manager` | Для проверки связности кластера вызывает `Resolver.Resolve` по `secret_store_type + secret_store_ref`, строит Kubernetes client только в памяти процесса, выполняет короткий безопасный probe и сразу очищает значение. |
+| `fleet-manager` | Для проверки связности кластера вызывает `Resolver.Resolve` по `secret_store_type + secret_store_ref`, поддерживает env, смонтированные Kubernetes Secret и Vault KV v2, строит Kubernetes client только в памяти процесса, выполняет короткий безопасный probe и сразу очищает значение. |
 | Runtime/deploy-контур | Подготавливает mount, переменные конфигурации resolver-клиента и доступ к выбранному хранилищу секретов. |
 
 ## Запрещено

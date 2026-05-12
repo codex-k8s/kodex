@@ -4,9 +4,11 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	vaultapi "github.com/hashicorp/vault/api"
 
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
@@ -173,6 +175,23 @@ func newSecretResolver(cfg FleetSecretConfig) (secretresolver.Resolver, error) {
 			return nil, err
 		}
 		backends[secretresolver.StoreTypeKubernetesMountedSecret] = backend
+	}
+	if strings.TrimSpace(cfg.VaultAddr) != "" {
+		vaultConfig := vaultapi.DefaultConfig()
+		vaultConfig.Address = strings.TrimSpace(cfg.VaultAddr)
+		vaultClient, err := vaultapi.NewClient(vaultConfig)
+		if err != nil {
+			return nil, err
+		}
+		vaultClient.SetToken(strings.TrimSpace(cfg.VaultToken))
+		if namespace := strings.TrimSpace(cfg.VaultNamespace); namespace != "" {
+			vaultClient.SetNamespace(namespace)
+		}
+		backend, err := secretresolver.NewVaultBackend(secretresolver.VaultBackendConfig{Client: vaultClient})
+		if err != nil {
+			return nil, err
+		}
+		backends[secretresolver.StoreTypeVault] = backend
 	}
 	return secretresolver.NewMux(backends)
 }

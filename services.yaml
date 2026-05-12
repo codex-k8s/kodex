@@ -143,12 +143,15 @@ spec:
       value: "0.1.0"
       bumpOn:
         - services/internal/fleet-manager
+        - libs/go/accesscatalog
+        - libs/go/accesscheck
         - libs/go/grpcserver
         - libs/go/postgres
         - libs/go/eventlog
         - libs/go/migrationtest
         - libs/go/outbox
         - libs/go/platformevents/fleet
+        - libs/go/secretresolver
         - libs/go/serviceprocess
         - libs/go/servicemain
         - proto/kodex/fleet/v1

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -332,6 +333,69 @@ func TestRunClusterConnectivityCheckReplayReturnsStoredCheck(t *testing.T) {
 	}
 }
 
+func TestRunClusterConnectivityCheckReplayRejectsDifferentCluster(t *testing.T) {
+	repository := newMemoryRepository()
+	scopeID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	serverID := uuid.MustParse("33333333-3333-3333-3333-333333333333")
+	clusterID := uuid.MustParse("44444444-4444-4444-4444-444444444444")
+	otherClusterID := uuid.MustParse("44444444-4444-4444-4444-444444444445")
+	seedRegistry(repository, scopeID, serverID, clusterID)
+	seedCluster(repository, scopeID, serverID, otherClusterID, "cluster-b")
+	checker := &fakeConnectivityChecker{result: ConnectivityCheckResult{
+		Status:       enum.ConnectivityCheckStatusSucceeded,
+		HealthStatus: enum.ClusterHealthStatusHealthy,
+		SummaryJSON:  []byte(`{"probe":"test"}`),
+	}}
+	service := newTestServiceWithChecker(repository, checker)
+	meta := commandMeta(uuid.MustParse("55555555-5555-5555-5555-555555555561"), "check-cluster")
+
+	if _, err := service.RunClusterConnectivityCheck(context.Background(), RunClusterConnectivityCheckInput{ClusterID: clusterID, Meta: meta}); err != nil {
+		t.Fatalf("first check returned error: %v", err)
+	}
+	_, err := service.RunClusterConnectivityCheck(context.Background(), RunClusterConnectivityCheckInput{ClusterID: otherClusterID, Meta: meta})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("expected replay conflict for another cluster, got %v", err)
+	}
+	if checker.calls != 1 || len(repository.events) != 1 {
+		t.Fatalf("conflicted replay must not call checker or append events: calls=%d events=%d", checker.calls, len(repository.events))
+	}
+}
+
+func TestRunClusterConnectivityCheckReplayRequiresHealthReadAccess(t *testing.T) {
+	repository := newMemoryRepository()
+	scopeID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	serverID := uuid.MustParse("33333333-3333-3333-3333-333333333333")
+	clusterID := uuid.MustParse("44444444-4444-4444-4444-444444444444")
+	seedRegistry(repository, scopeID, serverID, clusterID)
+	checker := &fakeConnectivityChecker{result: ConnectivityCheckResult{
+		Status:       enum.ConnectivityCheckStatusSucceeded,
+		HealthStatus: enum.ClusterHealthStatusHealthy,
+		SummaryJSON:  []byte(`{"probe":"test"}`),
+	}}
+	meta := commandMeta(uuid.MustParse("55555555-5555-5555-5555-555555555562"), "check-cluster")
+	if _, err := newTestServiceWithChecker(repository, checker).RunClusterConnectivityCheck(context.Background(), RunClusterConnectivityCheckInput{ClusterID: clusterID, Meta: meta}); err != nil {
+		t.Fatalf("first check returned error: %v", err)
+	}
+	replayChecker := &fakeConnectivityChecker{}
+	service := NewWithConfig(repository, fixedClock{}, sequentialIDs{}, Config{
+		Authorizer: authorizerFunc(func(_ context.Context, request AuthorizationRequest) error {
+			if request.ActionKey == fleetActionHealthRead {
+				return errs.ErrForbidden
+			}
+			return nil
+		}),
+		ConnectivityChecker: replayChecker,
+	})
+
+	_, err := service.RunClusterConnectivityCheck(context.Background(), RunClusterConnectivityCheckInput{ClusterID: clusterID, Meta: meta})
+	if !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("expected replay read denial, got %v", err)
+	}
+	if replayChecker.calls != 0 || len(repository.events) != 1 {
+		t.Fatalf("denied replay must not call checker or append events: calls=%d events=%d", replayChecker.calls, len(repository.events))
+	}
+}
+
 func TestRunClusterConnectivityCheckDeniedByAuthorizer(t *testing.T) {
 	repository := newMemoryRepository()
 	scopeID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
@@ -358,6 +422,44 @@ func TestRunClusterConnectivityCheckDeniedByAuthorizer(t *testing.T) {
 	}
 	if checker.calls != 0 || len(repository.healthSnapshots) != 0 || len(repository.events) != 0 {
 		t.Fatalf("denied check must not mutate state: calls=%d snapshots=%d events=%d", checker.calls, len(repository.healthSnapshots), len(repository.events))
+	}
+}
+
+func TestRunClusterConnectivityCheckScrubsCheckerError(t *testing.T) {
+	repository := newMemoryRepository()
+	scopeID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	serverID := uuid.MustParse("33333333-3333-3333-3333-333333333333")
+	clusterID := uuid.MustParse("44444444-4444-4444-4444-444444444444")
+	seedRegistry(repository, scopeID, serverID, clusterID)
+	secretValue := "kubeconfig-token-value"
+	service := newTestServiceWithChecker(repository, &fakeConnectivityChecker{err: errors.New(secretValue)})
+
+	check, err := service.RunClusterConnectivityCheck(context.Background(), RunClusterConnectivityCheckInput{
+		ClusterID: clusterID,
+		Meta:      commandMeta(uuid.MustParse("55555555-5555-5555-5555-555555555563"), "check-cluster"),
+	})
+	if err != nil {
+		t.Fatalf("RunClusterConnectivityCheck returned error: %v", err)
+	}
+	snapshot, err := service.GetClusterHealthSnapshot(context.Background(), GetClusterHealthSnapshotInput{ClusterID: clusterID, Meta: queryMeta()})
+	if err != nil {
+		t.Fatalf("GetClusterHealthSnapshot returned error: %v", err)
+	}
+	if check.ErrorCode != "connectivity_check_failed" || check.ErrorMessage != "Cluster connectivity check failed" {
+		t.Fatalf("unexpected sanitized check error: %+v", check)
+	}
+	values := []string{
+		check.ErrorCode,
+		check.ErrorMessage,
+		snapshot.ErrorCode,
+		snapshot.ErrorMessage,
+		string(snapshot.SummaryJSON),
+		string(repository.events[0].Payload),
+	}
+	for _, value := range values {
+		if strings.Contains(value, secretValue) {
+			t.Fatalf("secret leaked into persisted health data: %s", value)
+		}
 	}
 }
 
@@ -467,6 +569,18 @@ func seedRegistry(repository *memoryRepository, scopeID uuid.UUID, serverID uuid
 		FleetScopeID:     scopeID,
 		ServerID:         &serverID,
 		ClusterKey:       "cluster-a",
+		Status:           enum.KubernetesClusterStatusActive,
+		LastHealthStatus: enum.ClusterHealthStatusUnknown,
+	}
+}
+
+func seedCluster(repository *memoryRepository, scopeID uuid.UUID, serverID uuid.UUID, clusterID uuid.UUID, key string) {
+	now := time.Date(2026, 5, 12, 10, 0, 0, 0, time.UTC)
+	repository.clusters[clusterID] = entity.KubernetesCluster{
+		Base:             entity.Base{ID: clusterID, Version: 1, CreatedAt: now, UpdatedAt: now},
+		FleetScopeID:     scopeID,
+		ServerID:         &serverID,
+		ClusterKey:       key,
 		Status:           enum.KubernetesClusterStatusActive,
 		LastHealthStatus: enum.ClusterHealthStatusUnknown,
 	}
