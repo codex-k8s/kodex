@@ -39,14 +39,17 @@ func (s *Service) PrepareRuntime(ctx context.Context, input PrepareRuntimeInput)
 	if err != nil {
 		return PrepareRuntimeResult{}, err
 	}
-	fleetScopeID, err := s.defaultFleetScopeID(input.PreferredFleetScopeID)
+	repositoryIDs := repositoryIDsFromSources(input.WorkspacePolicy.Sources)
+	request, err := prepareRuntimePlacementRequest(input, repositoryIDs)
 	if err != nil {
 		return PrepareRuntimeResult{}, err
 	}
-	clusterID, err := s.defaultClusterID()
+	placement, err := s.resolvePlacement(ctx, request)
 	if err != nil {
 		return PrepareRuntimeResult{}, err
 	}
+	fleetScopeID := placement.FleetScopeID
+	clusterID := placement.ClusterID
 	slotID := s.ids.New()
 	workspaceID := s.ids.New()
 	leaseUntil := now.Add(s.config.DefaultLeaseTTL)
@@ -61,12 +64,12 @@ func (s *Service) PrepareRuntime(ctx context.Context, input PrepareRuntimeInput)
 		SlotKey:                          s.slotKey(slotID),
 		Status:                           enum.SlotStatusMaterializing,
 		RuntimeMode:                      input.RuntimeMode,
-		FleetScopeID:                     fleetScopeID,
-		ClusterID:                        clusterID,
+		FleetScopeID:                     &fleetScopeID,
+		ClusterID:                        &clusterID,
 		NamespaceName:                    s.namespaceName(slotID),
 		AgentRunID:                       input.AgentRunID,
 		ProjectID:                        &projectID,
-		RepositoryIDs:                    repositoryIDsFromSources(input.WorkspacePolicy.Sources),
+		RepositoryIDs:                    repositoryIDs,
 		ActiveWorkspaceMaterializationID: &activeWorkspaceMaterializationID,
 		RuntimeProfile:                   strings.TrimSpace(input.RuntimeProfile),
 		Fingerprint:                      strings.TrimSpace(input.WorkspacePolicy.PolicyDigest),

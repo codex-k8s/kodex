@@ -16,7 +16,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/value"
 )
 
-// ReserveSlot creates a runtime slot in the explicit MVP fleet scope.
+// ReserveSlot creates a runtime slot using fleet-manager placement.
 func (s *Service) ReserveSlot(ctx context.Context, input ReserveSlotInput) (entity.Slot, error) {
 	if err := validateReserveInput(input); err != nil {
 		return entity.Slot{}, err
@@ -35,14 +35,16 @@ func (s *Service) ReserveSlot(ctx context.Context, input ReserveSlotInput) (enti
 	if err != nil {
 		return entity.Slot{}, err
 	}
-	fleetScopeID, err := s.defaultFleetScopeID(input.PreferredFleetScopeID)
+	request, err := slotPlacementRequest(input)
 	if err != nil {
 		return entity.Slot{}, err
 	}
-	clusterID, err := s.defaultClusterID()
+	placement, err := s.resolvePlacement(ctx, request)
 	if err != nil {
 		return entity.Slot{}, err
 	}
+	fleetScopeID := placement.FleetScopeID
+	clusterID := placement.ClusterID
 	filter := query.ReusableSlotFilter{
 		RuntimeProfile: strings.TrimSpace(input.RuntimeProfile),
 		RuntimeMode:    input.RuntimeMode,
@@ -50,8 +52,8 @@ func (s *Service) ReserveSlot(ctx context.Context, input ReserveSlotInput) (enti
 		AgentRunID:     input.AgentRunID,
 		ProjectID:      input.ProjectID,
 		RepositoryIDs:  append([]uuid.UUID(nil), input.RepositoryIDs...),
-		FleetScopeID:   fleetScopeID,
-		ClusterID:      clusterID,
+		FleetScopeID:   &fleetScopeID,
+		ClusterID:      &clusterID,
 		LeaseOwner:     owner,
 		LeaseUntil:     now.Add(s.config.DefaultLeaseTTL),
 		Now:            now,
@@ -77,8 +79,8 @@ func (s *Service) ReserveSlot(ctx context.Context, input ReserveSlotInput) (enti
 		SlotKey:        s.slotKey(slotID),
 		Status:         enum.SlotStatusReserved,
 		RuntimeMode:    input.RuntimeMode,
-		FleetScopeID:   fleetScopeID,
-		ClusterID:      clusterID,
+		FleetScopeID:   &fleetScopeID,
+		ClusterID:      &clusterID,
 		NamespaceName:  s.namespaceName(slotID),
 		AgentRunID:     input.AgentRunID,
 		ProjectID:      input.ProjectID,
@@ -331,7 +333,7 @@ func commandTime(meta value.CommandMeta, fallback time.Time) time.Time {
 
 func validRuntimeMode(mode enum.RuntimeMode) bool {
 	switch mode {
-	case enum.RuntimeModeCodeOnly, enum.RuntimeModeFullEnv, enum.RuntimeModeReadOnlyProduction:
+	case enum.RuntimeModeCodeOnly, enum.RuntimeModeFullEnv, enum.RuntimeModeReadOnlyProduction, enum.RuntimeModePlatformJob:
 		return true
 	default:
 		return false

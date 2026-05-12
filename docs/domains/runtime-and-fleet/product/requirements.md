@@ -85,7 +85,7 @@ approvals:
 | RTM-FR-15 | Cleanup и retention jobs должны быть видимы как runtime-события и операторские сигналы при сбое. | Обязательно |
 | RTM-FR-16 | `runtime-manager` должен исполнять runtime на уже выбранном fleet scope и не должен сам владеть реестром серверов и кластеров. | Обязательно |
 | RTM-FR-17 | `fleet-manager` должен владеть серверами, Kubernetes-кластерами, связностью, health и placement scope. | Обязательно |
-| RTM-FR-18 | В MVP допускается один default cluster через явный fleet ref или config, но API и БД не должны считать его единственным возможным контуром. | Обязательно |
+| RTM-FR-18 | В MVP `runtime-manager` должен получать placement decision у `fleet-manager`; `platform-default` допускается только как seed/fallback внутри fleet, а не как локальный выбор runtime. | Обязательно |
 | RTM-FR-19 | Runtime-события должны публиковаться через outbox и `platform-event-log`. | Обязательно |
 | RTM-FR-20 | Runtime должен давать `operations-hub` и будущему UI достаточно данных для диагностики без прямого чтения Kubernetes и БД сервиса. | Обязательно |
 

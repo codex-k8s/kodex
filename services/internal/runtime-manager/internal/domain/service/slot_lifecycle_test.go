@@ -17,10 +17,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/value"
 )
 
-func TestReserveSlotPersistsLeaseAndDefaultFleetRefs(t *testing.T) {
+func TestReserveSlotPersistsLeaseAndFleetPlacementRefs(t *testing.T) {
 	t.Parallel()
 
-	svc, repo := newTestService()
+	resolver := defaultPlacementResolver()
+	svc, repo := newTestServiceWithPlacementResolver(resolver)
 	projectID := mustUUID("00000000-0000-0000-0000-000000000021")
 
 	slot, err := svc.ReserveSlot(context.Background(), ReserveSlotInput{
@@ -50,6 +51,12 @@ func TestReserveSlotPersistsLeaseAndDefaultFleetRefs(t *testing.T) {
 	}
 	if len(repo.events) != 1 || repo.events[0].EventType != eventSlotReserved {
 		t.Fatalf("events = %#v, want slot reserved", repo.events)
+	}
+	if len(resolver.requests) != 1 {
+		t.Fatalf("placement resolver calls = %d, want 1", len(resolver.requests))
+	}
+	if resolver.requests[0].ProjectID == nil || *resolver.requests[0].ProjectID != projectID {
+		t.Fatalf("placement project = %v, want %s", resolver.requests[0].ProjectID, projectID)
 	}
 }
 
@@ -270,6 +277,7 @@ func TestReserveSlotAuthorizesBeforeReplay(t *testing.T) {
 		NamespacePrefix:     "kodex-rt",
 		DefaultLeaseTTL:     30 * time.Minute,
 		Authorizer:          denyAuthorizer{},
+		PlacementResolver:   defaultPlacementResolver(),
 	})
 
 	_, err := svc.ReserveSlot(context.Background(), ReserveSlotInput{
@@ -297,6 +305,14 @@ func newTestService() (*Service, *fakeRepository) {
 }
 
 func newTestServiceWithAuthorizer(authorizer Authorizer) (*Service, *fakeRepository) {
+	return newTestServiceWithAuthorizerAndPlacementResolver(authorizer, defaultPlacementResolver())
+}
+
+func newTestServiceWithPlacementResolver(resolver PlacementResolver) (*Service, *fakeRepository) {
+	return newTestServiceWithAuthorizerAndPlacementResolver(nil, resolver)
+}
+
+func newTestServiceWithAuthorizerAndPlacementResolver(authorizer Authorizer, resolver PlacementResolver) (*Service, *fakeRepository) {
 	repo := &fakeRepository{
 		slots:                     make(map[uuid.UUID]entity.Slot),
 		workspaceMaterializations: make(map[uuid.UUID]entity.WorkspaceMaterialization),
@@ -331,8 +347,27 @@ func newTestServiceWithAuthorizer(authorizer Authorizer) (*Service, *fakeReposit
 	if authorizer != nil {
 		config.Authorizer = authorizer
 	}
+	config.PlacementResolver = resolver
 	svc := NewWithConfig(repo, fixedClock{now: testNow}, ids, config)
 	return svc, repo
+}
+
+type fakePlacementResolver struct {
+	result   PlacementResolution
+	err      error
+	requests []PlacementResolutionRequest
+}
+
+func defaultPlacementResolver() *fakePlacementResolver {
+	return &fakePlacementResolver{result: PlacementResolution{FleetScopeID: testFleetScopeID, ClusterID: testClusterID}}
+}
+
+func (r *fakePlacementResolver) ResolvePlacement(_ context.Context, request PlacementResolutionRequest) (PlacementResolution, error) {
+	r.requests = append(r.requests, request)
+	if r.err != nil {
+		return PlacementResolution{}, r.err
+	}
+	return r.result, nil
 }
 
 func commandMeta(commandID uuid.UUID, expectedVersion int64) value.CommandMeta {

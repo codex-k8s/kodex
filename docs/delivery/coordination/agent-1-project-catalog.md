@@ -76,9 +76,9 @@
 | FLEET-2 | #714 | готово | Сервисный каркас, конфигурация, PostgreSQL-модель, миграции, repository, health/readiness, metrics и outbox без registry/health/placement команд. |
 | FLEET-3 | #717 | готово | Registry-команды и чтения нескольких scope/server/cluster, bootstrap seed `platform-default`, проверки доступа, идемпотентность, optimistic concurrency, command result и outbox-события. |
 | FLEET-4 | #726 | готово | Проверки связности Kubernetes API, health snapshots, чтения health, события `fleet.health.*`, command result и безопасное получение kubeconfig через `secretresolver`. |
-| FLEET-5 | #730 | в PR | Правила размещения, базовый `ResolvePlacement`, журнал placement decisions, проверки доступа, идемпотентность и outbox-события `fleet.placement.*`. |
+| FLEET-5 | #730 | готово | Правила размещения, базовый `ResolvePlacement`, журнал placement decisions, проверки доступа, идемпотентность и outbox-события `fleet.placement.*`. |
 
-Итог: `fleet-manager` уже имеет сервисный процесс, БД, registry-поверхность и health-поверхность. Текущий PR FLEET-5 добавляет placement rules, базовый `ResolvePlacement` и журнал решений. После него остаются интеграция `runtime-manager` с fleet decision и deploy-контур `fleet-manager`.
+Итог: `fleet-manager` уже имеет сервисный процесс, БД, registry-поверхность, health-поверхность, placement rules, базовый `ResolvePlacement` и журнал решений. Текущий интеграционный срез RTM-FLEET-1 переводит `runtime-manager` на fleet decision. После него остаётся deploy-контур `fleet-manager`.
 
 ## Текущий бэклог агента #1
 
@@ -90,7 +90,7 @@
 | `project.policy_override.expired` | запланировано позже | Контракт события есть; нужна логика обслуживания или platform job, которая будет снимать истёкшие переопределения как операционный срез. |
 | Организационные runtime-политики | частично заблокировано | Cleanup для `organization` scope отклоняется, а prewarm хранит политику без фактической раскладки, пока runtime не получает проекцию организации на слоты. |
 | Реальный исполнитель platform jobs | запланировано позже | `runtime-manager` хранит и выдаёт jobs; конкретный исполнитель на Kubernetes или агентный исполнитель нужен отдельным срезом после согласования с `agent-manager`/ops-контуром. |
-| Placement `fleet-manager` | текущий локальный срез | Реализуется FLEET-5: placement rules, `ResolvePlacement` по активным кластерам и журнал решений. |
+| Интеграция `runtime-manager` с fleet placement | текущий локальный срез: #735 | RTM-FLEET-1 переводит `PrepareRuntime`, `ReserveSlot` и `CreateJob` без slot на `fleet-manager.ResolvePlacement`; runtime сохраняет только `fleet_scope_id` и `cluster_id`. |
 
 ## Блокировки от `access-manager`
 
@@ -155,13 +155,13 @@
 - `provider-hub` зависит от `project-catalog` при привязке provider-native объектов к локальному проекту и репозиторию.
 - `package-hub` зависит от `project-catalog`, когда пакетные источники и руководящие пакеты становятся частью проектной политики.
 - `agent-manager` зависит от `runtime-manager` для слотов, workspace materialization и platform jobs, но `Run` остаётся сущностью `agent-manager`.
-- `runtime-manager` зависит от `fleet-manager` для целевого `ResolvePlacement`; до отдельного интеграционного среза runtime всё ещё использует bootstrap default refs, хотя сам resolver уже реализуется в FLEET-5.
+- `runtime-manager` зависит от `fleet-manager` для целевого `ResolvePlacement`; RTM-FLEET-1 убирает локальный выбор кластера из `PrepareRuntime`, `ReserveSlot` и `CreateJob` без slot.
 - `operations-hub` и будущий `staff-gateway` зависят от чтений `project-catalog` и `runtime-manager` для операторских экранов.
 
 ## Рекомендуемый следующий шаг
 
-Для агента #1 нет незавершённого локального RTM или Wave 8 среза, который нужно закрыть до соседних доменов. После FLEET-4 рационально идти в один из трёх вариантов:
+Для агента #1 нет незавершённого локального Wave 8 среза, который нужно закрыть до соседних доменов. После RTM-FLEET-1 рационально идти в один из трёх вариантов:
 
-- довести FLEET-5 и затем перейти к отдельному интеграционному PR, где `runtime-manager` будет вызывать `ResolvePlacement` вместо локального bootstrap fallback;
+- сделать FLEET-6: deploy-контур, smoke и runbook `fleet-manager`;
 - дождаться `provider-hub` bootstrap/adoption контракта и закрывать #281/#282;
 - начать gateway/UI-срез только после согласования состава `staff-gateway` ручек.

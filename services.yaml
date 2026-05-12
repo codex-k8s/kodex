@@ -138,6 +138,7 @@ spec:
         - libs/go/postgres
         - libs/go/serviceprocess
         - libs/go/servicemain
+        - proto/kodex/fleet/v1
         - proto/kodex/runtime/v1
         - specs/asyncapi/runtime-manager.v1.yaml
         - deploy/base/runtime-manager

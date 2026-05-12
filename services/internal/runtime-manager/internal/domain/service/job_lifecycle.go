@@ -41,6 +41,17 @@ func (s *Service) CreateJob(ctx context.Context, input CreateJobInput) (entity.J
 		}
 		return replay, err
 	}
+	if input.SlotID != nil && (resolved.FleetScopeID == nil || resolved.ClusterID == nil) {
+		return entity.Job{}, errs.ErrPreconditionFailed
+	}
+	if input.SlotID == nil && (resolved.FleetScopeID == nil || resolved.ClusterID == nil) {
+		placement, err := s.resolveJobPlacement(ctx, input)
+		if err != nil {
+			return entity.Job{}, err
+		}
+		resolved.FleetScopeID = &placement.FleetScopeID
+		resolved.ClusterID = &placement.ClusterID
+	}
 	now := commandTime(input.Meta, s.clock.Now())
 	jobID := s.ids.New()
 	job := entity.Job{
@@ -396,17 +407,31 @@ func (s *Service) resolveJobCreateInput(ctx context.Context, input CreateJobInpu
 		resolved.ProjectID = slot.ProjectID
 		resolved.FleetScopeID = slot.FleetScopeID
 		resolved.ClusterID = slot.ClusterID
-	} else {
-		resolved.FleetScopeID, err = s.defaultFleetScopeID(input.PreferredFleetScopeID)
-		if err != nil {
-			return resolvedCreateJobInput{}, err
-		}
-		resolved.ClusterID, err = s.defaultClusterID()
-		if err != nil {
-			return resolvedCreateJobInput{}, err
-		}
 	}
 	return resolved, nil
+}
+
+func (s *Service) resolveJobPlacement(ctx context.Context, input CreateJobInput) (PlacementResolution, error) {
+	request, err := jobPlacementRequest(input)
+	if err != nil {
+		return PlacementResolution{}, err
+	}
+	return s.resolvePlacement(ctx, request)
+}
+
+func repositoryIDsForJob(repositoryID *uuid.UUID) []uuid.UUID {
+	if repositoryID == nil {
+		return nil
+	}
+	return []uuid.UUID{*repositoryID}
+}
+
+func jobRuntimeProfile(profile string) string {
+	trimmed := strings.TrimSpace(profile)
+	if trimmed != "" {
+		return trimmed
+	}
+	return "platform-job"
 }
 
 func (s *Service) jobReplay(ctx context.Context, meta value.CommandMeta, operation string, expectedJobID *uuid.UUID) (entity.Job, bool, error) {
@@ -431,9 +456,13 @@ func validateJobReplayScope(job entity.Job, input resolvedCreateJobInput) error 
 		!sameUUIDPtr(job.RepositoryID, input.RepositoryID) ||
 		!sameUUIDPtr(job.ReleaseLineID, input.ReleaseLineID) ||
 		!sameUUIDPtr(job.PackageInstallationID, input.PackageInstallationID) ||
-		!sameUUIDPtr(job.FleetScopeID, input.FleetScopeID) ||
-		!sameUUIDPtr(job.ClusterID, input.ClusterID) ||
 		!bytes.Equal(job.JobInputJSON, input.JobInputJSON) {
+		return errs.ErrConflict
+	}
+	if input.FleetScopeID != nil && !sameUUIDPtr(job.FleetScopeID, input.FleetScopeID) {
+		return errs.ErrConflict
+	}
+	if input.ClusterID != nil && !sameUUIDPtr(job.ClusterID, input.ClusterID) {
 		return errs.ErrConflict
 	}
 	return nil
