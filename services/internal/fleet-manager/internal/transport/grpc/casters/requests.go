@@ -2,6 +2,7 @@ package casters
 
 import (
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -314,6 +315,50 @@ func ListKubernetesClustersInput(request *fleetv1.ListKubernetesClustersRequest)
 	}, nil
 }
 
+// RunClusterConnectivityCheckInput maps a gRPC request to the domain command input.
+func RunClusterConnectivityCheckInput(request *fleetv1.RunClusterConnectivityCheckRequest) (fleetservice.RunClusterConnectivityCheckInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return fleetservice.RunClusterConnectivityCheckInput{}, err
+	}
+	clusterID, err := requiredUUID(request.GetClusterId())
+	if err != nil {
+		return fleetservice.RunClusterConnectivityCheckInput{}, err
+	}
+	return fleetservice.RunClusterConnectivityCheckInput{ClusterID: clusterID, Meta: meta}, nil
+}
+
+// GetClusterHealthSnapshotInput maps a gRPC request to the domain read input.
+func GetClusterHealthSnapshotInput(request *fleetv1.GetClusterHealthSnapshotRequest) (fleetservice.GetClusterHealthSnapshotInput, error) {
+	clusterID, meta, err := idWithQueryMeta(request.GetClusterId(), request.GetMeta())
+	if err != nil {
+		return fleetservice.GetClusterHealthSnapshotInput{}, err
+	}
+	snapshotID, err := optionalUUIDPtr(request.GetHealthSnapshotId())
+	if err != nil {
+		return fleetservice.GetClusterHealthSnapshotInput{}, err
+	}
+	return fleetservice.GetClusterHealthSnapshotInput{ClusterID: clusterID, HealthSnapshotID: snapshotID, Meta: meta}, nil
+}
+
+// ListClusterHealthSnapshotsInput maps a gRPC request to the domain read input.
+func ListClusterHealthSnapshotsInput(request *fleetv1.ListClusterHealthSnapshotsRequest) (fleetservice.ListClusterHealthSnapshotsInput, error) {
+	clusterID, meta, err := idWithQueryMeta(request.GetClusterId(), request.GetMeta())
+	if err != nil {
+		return fleetservice.ListClusterHealthSnapshotsInput{}, err
+	}
+	checkedSince, err := optionalTimePtr(request.GetCheckedSince())
+	if err != nil {
+		return fleetservice.ListClusterHealthSnapshotsInput{}, err
+	}
+	return fleetservice.ListClusterHealthSnapshotsInput{
+		ClusterID:    clusterID,
+		CheckedSince: checkedSince,
+		Page:         pageRequestFromProto(request.GetPage()),
+		Meta:         meta,
+	}, nil
+}
+
 func optionalFleetScopeStatus(value *fleetv1.FleetScopeStatus) (enum.FleetScopeStatus, error) {
 	if value == nil {
 		return "", nil
@@ -356,4 +401,16 @@ func optionalBytes(value *string) *[]byte {
 	}
 	payload := []byte(strings.TrimSpace(*value))
 	return &payload
+}
+
+func optionalTimePtr(value string) (*time.Time, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil, nil
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, trimmed)
+	if err != nil {
+		return nil, err
+	}
+	return &parsed, nil
 }

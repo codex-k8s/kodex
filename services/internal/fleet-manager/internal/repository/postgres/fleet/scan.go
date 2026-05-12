@@ -87,6 +87,51 @@ func scanKubernetesCluster(row postgreslib.RowScanner) (entity.KubernetesCluster
 	return cluster, err
 }
 
+func scanClusterConnectivityCheck(row postgreslib.RowScanner) (entity.ClusterConnectivityCheck, error) {
+	var check entity.ClusterConnectivityCheck
+	var startedAt, finishedAt pgtype.Timestamptz
+	var latencyMS pgtype.Int8
+	var status string
+	err := row.Scan(
+		&check.ID,
+		&check.ClusterID,
+		&status,
+		&startedAt,
+		&finishedAt,
+		&latencyMS,
+		&check.ErrorCode,
+		&check.ErrorMessage,
+		&check.CreatedAt,
+	)
+	check.Status = enum.ConnectivityCheckStatus(status)
+	check.StartedAt = postgreslib.TimePtrFromPG(startedAt)
+	check.FinishedAt = postgreslib.TimePtrFromPG(finishedAt)
+	if latencyMS.Valid {
+		check.LatencyMS = &latencyMS.Int64
+	}
+	return check, err
+}
+
+func scanClusterHealthSnapshot(row postgreslib.RowScanner) (entity.ClusterHealthSnapshot, error) {
+	var snapshot entity.ClusterHealthSnapshot
+	var summary []byte
+	var healthStatus, capacityStatus string
+	err := row.Scan(
+		&snapshot.ID,
+		&snapshot.ClusterID,
+		&healthStatus,
+		&capacityStatus,
+		&summary,
+		&snapshot.CheckedAt,
+		&snapshot.ErrorCode,
+		&snapshot.ErrorMessage,
+	)
+	snapshot.HealthStatus = enum.ClusterHealthStatus(healthStatus)
+	snapshot.CapacityStatus = enum.CapacityStatus(capacityStatus)
+	snapshot.SummaryJSON = append(snapshot.SummaryJSON[:0], summary...)
+	return snapshot, err
+}
+
 func scanCommandResult(row postgreslib.RowScanner) (entity.CommandResult, error) {
 	var result entity.CommandResult
 	var commandID pgtype.UUID

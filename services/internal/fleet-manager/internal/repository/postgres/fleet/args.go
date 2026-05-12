@@ -76,6 +76,48 @@ func kubernetesClusterUpdateArgs(cluster entity.KubernetesCluster, previousVersi
 	return args
 }
 
+func kubernetesClusterHealthArgs(cluster entity.KubernetesCluster) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"id":                     cluster.ID,
+		"last_health_status":     string(cluster.LastHealthStatus),
+		"last_health_checked_at": postgreslib.NullableTime(cluster.LastHealthCheckedAt),
+	}
+}
+
+func clusterConnectivityCheckArgs(check entity.ClusterConnectivityCheck) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"id":            check.ID,
+		"cluster_id":    check.ClusterID,
+		"status":        string(check.Status),
+		"started_at":    postgreslib.NullableTime(check.StartedAt),
+		"finished_at":   postgreslib.NullableTime(check.FinishedAt),
+		"latency_ms":    nullableInt64(check.LatencyMS),
+		"error_code":    check.ErrorCode,
+		"error_message": check.ErrorMessage,
+		"created_at":    check.CreatedAt,
+	}
+}
+
+func clusterHealthSnapshotArgs(snapshot entity.ClusterHealthSnapshot) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"id":              snapshot.ID,
+		"cluster_id":      snapshot.ClusterID,
+		"health_status":   string(snapshot.HealthStatus),
+		"capacity_status": string(snapshot.CapacityStatus),
+		"summary_json":    postgreslib.JSONPayload(snapshot.SummaryJSON),
+		"checked_at":      snapshot.CheckedAt,
+		"error_code":      snapshot.ErrorCode,
+		"error_message":   snapshot.ErrorMessage,
+	}
+}
+
+func clusterHealthSnapshotFilterArgs(filter query.ClusterHealthSnapshotFilter) pageQueryArgs {
+	return withPage(filter.Page, pgx.NamedArgs{
+		"cluster_id":    filter.ClusterID,
+		"checked_since": postgreslib.NullableTime(filter.CheckedSince),
+	})
+}
+
 func commandIdentityArgs(identity query.CommandIdentity) pgx.NamedArgs {
 	return pgx.NamedArgs{
 		"command_id":      postgreslib.NullableCommandID(identity.CommandID),
@@ -182,6 +224,13 @@ func nullableCommandID(id *uuid.UUID) any {
 }
 
 func nullableBool(value *bool) any {
+	if value == nil {
+		return nil
+	}
+	return *value
+}
+
+func nullableInt64(value *int64) any {
 	if value == nil {
 		return nil
 	}

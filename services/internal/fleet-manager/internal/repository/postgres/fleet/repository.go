@@ -51,10 +51,14 @@ var (
 	operationClaimOutboxEvents                = repositoryOperation("ClaimOutboxEvents")
 	operationCreateFleetScope                 = repositoryOperation("CreateFleetScope")
 	operationEnsurePlatformDefaultSeed        = repositoryOperation("EnsurePlatformDefaultSeed")
+	operationGetClusterConnectivityCheck      = repositoryOperation("GetClusterConnectivityCheck")
+	operationGetClusterHealthSnapshot         = repositoryOperation("GetClusterHealthSnapshot")
 	operationGetCommandResult                 = repositoryOperation("GetCommandResult")
 	operationGetFleetScope                    = repositoryOperation("GetFleetScope")
 	operationGetKubernetesCluster             = repositoryOperation("GetKubernetesCluster")
+	operationGetLatestClusterHealthSnapshot   = repositoryOperation("GetLatestClusterHealthSnapshot")
 	operationGetServer                        = repositoryOperation("GetServer")
+	operationListClusterHealthSnapshots       = repositoryOperation("ListClusterHealthSnapshots")
 	operationListFleetScopes                  = repositoryOperation("ListFleetScopes")
 	operationListKubernetesClusters           = repositoryOperation("ListKubernetesClusters")
 	operationListServers                      = repositoryOperation("ListServers")
@@ -64,6 +68,7 @@ var (
 	operationPing                             = repositoryOperation("Ping")
 	operationRegisterKubernetesCluster        = repositoryOperation("RegisterKubernetesCluster")
 	operationRegisterServer                   = repositoryOperation("RegisterServer")
+	operationStoreClusterHealthCheck          = repositoryOperation("StoreClusterHealthCheck")
 	operationUpdateFleetScope                 = repositoryOperation("UpdateFleetScope")
 	operationUpdateKubernetesCluster          = repositoryOperation("UpdateKubernetesCluster")
 	operationUpdateServer                     = repositoryOperation("UpdateServer")
@@ -148,6 +153,48 @@ func (r *Repository) GetKubernetesCluster(ctx context.Context, id uuid.UUID) (en
 // ListKubernetesClusters returns Kubernetes clusters by filter.
 func (r *Repository) ListKubernetesClusters(ctx context.Context, filter query.KubernetesClusterFilter) ([]entity.KubernetesCluster, query.PageResult, error) {
 	return queryPage(ctx, r.db, operationListKubernetesClusters, queryKubernetesClusterList, kubernetesClusterFilterArgs(filter), scanKubernetesCluster)
+}
+
+// StoreClusterHealthCheck stores connectivity check, health snapshot, latest cluster health, command result and events atomically.
+func (r *Repository) StoreClusterHealthCheck(ctx context.Context, cluster entity.KubernetesCluster, check entity.ClusterConnectivityCheck, snapshot entity.ClusterHealthSnapshot, events []entity.OutboxEvent, result entity.CommandResult) error {
+	err := r.withTx(ctx, operationStoreClusterHealthCheck, func(tx pgx.Tx) error {
+		mutations := []mutation{
+			insertMutation(queryClusterConnectivityCheckCreate, clusterConnectivityCheckArgs(check)),
+			insertMutation(queryClusterHealthSnapshotCreate, clusterHealthSnapshotArgs(snapshot)),
+			affectedMutation(queryKubernetesClusterUpdateHealth, kubernetesClusterHealthArgs(cluster)),
+			commandResultMutation(result),
+		}
+		if err := runMutations(ctx, tx, mutations); err != nil {
+			return err
+		}
+		for index := range events {
+			if err := insertOutboxEvent(ctx, tx, events[index]); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	return wrapError(operationStoreClusterHealthCheck, err)
+}
+
+// GetClusterConnectivityCheck returns one connectivity check by id.
+func (r *Repository) GetClusterConnectivityCheck(ctx context.Context, id uuid.UUID) (entity.ClusterConnectivityCheck, error) {
+	return queryOne(ctx, r.db, operationGetClusterConnectivityCheck, queryClusterConnectivityCheckGetByID, pgx.NamedArgs{"id": id}, scanClusterConnectivityCheck)
+}
+
+// GetClusterHealthSnapshot returns one health snapshot by id.
+func (r *Repository) GetClusterHealthSnapshot(ctx context.Context, id uuid.UUID) (entity.ClusterHealthSnapshot, error) {
+	return queryOne(ctx, r.db, operationGetClusterHealthSnapshot, queryClusterHealthSnapshotGetByID, pgx.NamedArgs{"id": id}, scanClusterHealthSnapshot)
+}
+
+// GetLatestClusterHealthSnapshot returns the newest health snapshot for one cluster.
+func (r *Repository) GetLatestClusterHealthSnapshot(ctx context.Context, clusterID uuid.UUID) (entity.ClusterHealthSnapshot, error) {
+	return queryOne(ctx, r.db, operationGetLatestClusterHealthSnapshot, queryClusterHealthSnapshotGetLatest, pgx.NamedArgs{"cluster_id": clusterID}, scanClusterHealthSnapshot)
+}
+
+// ListClusterHealthSnapshots returns health snapshots by filter.
+func (r *Repository) ListClusterHealthSnapshots(ctx context.Context, filter query.ClusterHealthSnapshotFilter) ([]entity.ClusterHealthSnapshot, query.PageResult, error) {
+	return queryPage(ctx, r.db, operationListClusterHealthSnapshots, queryClusterHealthSnapshotList, clusterHealthSnapshotFilterArgs(filter), scanClusterHealthSnapshot)
 }
 
 // EnsurePlatformDefaultSeed stores bootstrap default fleet data if it is absent.

@@ -51,6 +51,16 @@ type Repository interface {
 	GetKubernetesCluster(ctx context.Context, id uuid.UUID) (entity.KubernetesCluster, error)
 	// ListKubernetesClusters returns Kubernetes clusters by filter.
 	ListKubernetesClusters(ctx context.Context, filter query.KubernetesClusterFilter) ([]entity.KubernetesCluster, query.PageResult, error)
+	// StoreClusterHealthCheck stores connectivity check, health snapshot, latest cluster health, command result and events atomically.
+	StoreClusterHealthCheck(ctx context.Context, cluster entity.KubernetesCluster, check entity.ClusterConnectivityCheck, snapshot entity.ClusterHealthSnapshot, events []entity.OutboxEvent, result entity.CommandResult) error
+	// GetClusterConnectivityCheck returns one connectivity check by id.
+	GetClusterConnectivityCheck(ctx context.Context, id uuid.UUID) (entity.ClusterConnectivityCheck, error)
+	// GetClusterHealthSnapshot returns one health snapshot by id.
+	GetClusterHealthSnapshot(ctx context.Context, id uuid.UUID) (entity.ClusterHealthSnapshot, error)
+	// GetLatestClusterHealthSnapshot returns the newest health snapshot for one cluster.
+	GetLatestClusterHealthSnapshot(ctx context.Context, clusterID uuid.UUID) (entity.ClusterHealthSnapshot, error)
+	// ListClusterHealthSnapshots returns health snapshots by filter.
+	ListClusterHealthSnapshots(ctx context.Context, filter query.ClusterHealthSnapshotFilter) ([]entity.ClusterHealthSnapshot, query.PageResult, error)
 	// EnsurePlatformDefaultSeed stores bootstrap default fleet data if it is absent.
 	EnsurePlatformDefaultSeed(ctx context.Context, scope entity.FleetScope, cluster entity.KubernetesCluster, events []entity.OutboxEvent) error
 	// AppendOutboxEvent stores one fleet domain event in the local outbox.

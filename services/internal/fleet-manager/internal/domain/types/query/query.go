@@ -2,6 +2,8 @@
 package query
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 
 	"github.com/codex-k8s/kodex/services/internal/fleet-manager/internal/domain/types/enum"
@@ -47,4 +49,11 @@ type KubernetesClusterFilter struct {
 	CapacityClass  string
 	IsDefault      *bool
 	Page           value.PageRequest
+}
+
+// ClusterHealthSnapshotFilter selects health snapshots for authoritative reads.
+type ClusterHealthSnapshotFilter struct {
+	ClusterID    uuid.UUID
+	CheckedSince *time.Time
+	Page         value.PageRequest
 }

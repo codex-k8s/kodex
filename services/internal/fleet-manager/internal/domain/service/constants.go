@@ -20,10 +20,13 @@ const (
 	fleetEventClusterUpdated  = fleetevents.EventClusterUpdated
 	fleetEventClusterDisabled = fleetevents.EventClusterDisabled
 	fleetEventClusterEnabled  = fleetevents.EventClusterEnabled
+	fleetEventHealthChecked   = fleetevents.EventHealthChecked
+	fleetEventHealthDegraded  = fleetevents.EventHealthDegraded
 
 	fleetAggregateScope   = fleetevents.AggregateFleetScope
 	fleetAggregateServer  = fleetevents.AggregateServer
 	fleetAggregateCluster = fleetevents.AggregateKubernetesCluster
+	fleetAggregateHealth  = fleetevents.AggregateClusterHealth
 
 	fleetOperationCreateScope     = "domain.Service.CreateFleetScope"
 	fleetOperationUpdateScope     = "domain.Service.UpdateFleetScope"
@@ -37,6 +40,7 @@ const (
 	fleetOperationUpdateCluster   = "domain.Service.UpdateKubernetesCluster"
 	fleetOperationDisableCluster  = "domain.Service.DisableKubernetesCluster"
 	fleetOperationEnableCluster   = "domain.Service.EnableKubernetesCluster"
+	fleetOperationRunHealthCheck  = "domain.Service.RunClusterConnectivityCheck"
 
 	fleetActionScopeCreate     = accesscatalog.ActionFleetScopeCreate
 	fleetActionScopeUpdate     = accesscatalog.ActionFleetScopeUpdate
@@ -56,6 +60,8 @@ const (
 	fleetActionClusterEnable   = accesscatalog.ActionFleetClusterEnable
 	fleetActionClusterRead     = accesscatalog.ActionFleetClusterRead
 	fleetActionClusterList     = accesscatalog.ActionFleetClusterList
+	fleetActionHealthCheckRun  = accesscatalog.ActionFleetHealthCheckRun
+	fleetActionHealthRead      = accesscatalog.ActionFleetHealthRead
 )
 
 type resourceRef struct {
