@@ -27,6 +27,7 @@ type Repository interface {
 	ListWorkItemProjections(context.Context, query.WorkItemProjectionFilter) ([]entity.ProviderWorkItemProjection, query.PageResult, error)
 	GetCommentProjectionByProviderID(context.Context, uuid.UUID, string) (entity.ProviderCommentProjection, error)
 	ListComments(context.Context, query.CommentProjectionFilter) ([]entity.ProviderCommentProjection, query.PageResult, error)
+	GetRelationshipByIdentity(context.Context, query.RelationshipLookup) (entity.ProviderRelationship, error)
 	ListRelationships(context.Context, query.RelationshipFilter) ([]entity.ProviderRelationship, query.PageResult, error)
 	RegisterProviderArtifactSignal(context.Context, entity.ProviderArtifactSignal, entity.ReconciliationRequest, []entity.SyncCursor) ([]entity.SyncCursor, error)
 	EnqueueSyncCursors(context.Context, entity.ReconciliationRequest, []entity.SyncCursor) ([]entity.SyncCursor, error)

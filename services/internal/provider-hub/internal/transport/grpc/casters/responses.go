@@ -113,6 +113,7 @@ func RelationshipToProto(relationship entity.ProviderRelationship) *providersv1.
 		Source:                     RelationshipSourceToProto(relationship.Source),
 		Confidence:                 RelationshipConfidenceToProto(relationship.Confidence),
 		CreatedAt:                  formatTime(relationship.CreatedAt),
+		Version:                    relationship.Version,
 	}
 }
 

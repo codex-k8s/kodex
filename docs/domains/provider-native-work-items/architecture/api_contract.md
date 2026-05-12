@@ -136,6 +136,7 @@ approvals:
 | `UpdateRelationship` | `provider.relationship.write` | Требуется, если связь влияет на release, blocker, follow-up или cross-project dependency. | `meta.expected_version` для локальной связи; provider version не нужен, если связь хранится только в зеркале. | `source`, `target`, `target_provider_ref`, `relationship_type`, `source_kind`, `confidence`. | Изменение provider object без отдельной команды записи, удаление чужой связи без политики, скрытые runtime-ссылки и секреты. | `ProviderOperationResponse` с операцией и связью. | `ProviderOperation` типа `UPDATE_RELATIONSHIP`; `provider.operation.completed/failed`, `provider.relationship.synced`. |
 
 Контекст политики должен перечислять `changed_fields` в терминах типизированного запроса. `provider-hub` не принимает свободный JSON patch для операций записи: inline comments review-сигнала передаются через `ReviewInlineComment`, а не через строковый JSON.
+Для `UpdateRelationship` вызывающий контур берёт `meta.expected_version` из `ProviderRelationship.version`, который возвращается в `ListRelationships` и в `ProviderOperationResponse.relationship`.
 
 ### Операционное состояние аккаунтов и лимиты
 

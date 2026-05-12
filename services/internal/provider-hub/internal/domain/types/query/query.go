@@ -88,6 +88,14 @@ type RelationshipFilter struct {
 	Page                 value.PageRequest
 }
 
+// RelationshipLookup selects one provider relationship by its natural identity.
+type RelationshipLookup struct {
+	SourceWorkItemID  uuid.UUID
+	TargetWorkItemID  *uuid.UUID
+	TargetProviderRef string
+	RelationshipType  string
+}
+
 // SyncCursorFilter selects reconciliation cursors.
 type SyncCursorFilter struct {
 	ProviderSlug      enum.ProviderSlug

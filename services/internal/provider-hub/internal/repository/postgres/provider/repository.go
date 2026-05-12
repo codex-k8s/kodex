@@ -172,6 +172,11 @@ func (r *Repository) ListRelationships(ctx context.Context, filter query.Relatio
 	return queryPage(ctx, r.db, operationListRelationships, queryRelationshipList, relationshipFilterArgs(filter), scanRelationship)
 }
 
+// GetRelationshipByIdentity returns one relationship by its natural identity.
+func (r *Repository) GetRelationshipByIdentity(ctx context.Context, lookup query.RelationshipLookup) (entity.ProviderRelationship, error) {
+	return queryOne(ctx, r.db, operationGetRelationshipByIdentity, queryRelationshipGetByIdentity, relationshipLookupArgs(lookup), scanRelationship)
+}
+
 // RegisterProviderArtifactSignal records signal identity and enqueues cursors atomically.
 func (r *Repository) RegisterProviderArtifactSignal(ctx context.Context, signal entity.ProviderArtifactSignal, request entity.ReconciliationRequest, cursors []entity.SyncCursor) ([]entity.SyncCursor, error) {
 	var stored []entity.SyncCursor
@@ -395,6 +400,7 @@ const (
 	operationGetCommentProjectionByProviderID = "domain.Repository.GetCommentProjectionByProviderID"
 	operationListWorkItemProjections          = "domain.Repository.ListWorkItemProjections"
 	operationListComments                     = "domain.Repository.ListComments"
+	operationGetRelationshipByIdentity        = "domain.Repository.GetRelationshipByIdentity"
 	operationListRelationships                = "domain.Repository.ListRelationships"
 	operationRegisterProviderArtifactSignal   = "domain.Repository.RegisterProviderArtifactSignal"
 	operationEnqueueSyncCursors               = "domain.Repository.EnqueueSyncCursors"

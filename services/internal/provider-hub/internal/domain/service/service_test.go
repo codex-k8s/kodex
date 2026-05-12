@@ -1297,6 +1297,13 @@ func (r *fakeRepository) ListComments(context.Context, query.CommentProjectionFi
 	return nil, query.PageResult{}, r.err
 }
 
+func (r *fakeRepository) GetRelationshipByIdentity(context.Context, query.RelationshipLookup) (entity.ProviderRelationship, error) {
+	if r.relationship.ID != uuid.Nil {
+		return r.relationship, r.err
+	}
+	return entity.ProviderRelationship{}, errs.ErrNotFound
+}
+
 func (r *fakeRepository) ListRelationships(context.Context, query.RelationshipFilter) ([]entity.ProviderRelationship, query.PageResult, error) {
 	if r.relationship.ID != uuid.Nil {
 		return []entity.ProviderRelationship{r.relationship}, query.PageResult{}, r.err

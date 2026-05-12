@@ -18,6 +18,7 @@ var (
 	queryCommentProjectionList                 = mustLoadQuery("comment_projection__list")
 	queryCommentProjectionGetByProviderID      = mustLoadQuery("comment_projection__get_by_provider_id")
 	queryCommentProjectionUpsert               = mustLoadQuery("comment_projection__upsert")
+	queryRelationshipGetByIdentity             = mustLoadQuery("relationship__get_by_identity")
 	queryRelationshipList                      = mustLoadQuery("relationship__list")
 	queryRelationshipDeleteMissingWatermark    = mustLoadQuery("relationship__delete_missing_watermark")
 	queryRelationshipUpsert                    = mustLoadQuery("relationship__upsert")

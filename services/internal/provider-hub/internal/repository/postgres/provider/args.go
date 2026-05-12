@@ -2,6 +2,7 @@ package provider
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -210,6 +211,15 @@ func relationshipArgs(relationship entity.ProviderRelationship) pgx.NamedArgs {
 		"source":              string(relationship.Source),
 		"confidence":          string(relationship.Confidence),
 		"created_at":          relationship.CreatedAt,
+	}
+}
+
+func relationshipLookupArgs(lookup query.RelationshipLookup) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"source_work_item_id": lookup.SourceWorkItemID,
+		"target_work_item_id": postgreslib.NullableUUID(lookup.TargetWorkItemID),
+		"target_provider_ref": strings.TrimSpace(lookup.TargetProviderRef),
+		"relationship_type":   strings.TrimSpace(lookup.RelationshipType),
 	}
 }
 
