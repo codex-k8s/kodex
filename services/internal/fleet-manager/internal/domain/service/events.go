@@ -78,6 +78,22 @@ func (s *Service) healthEvent(eventType string, cluster entity.KubernetesCluster
 	})
 }
 
+func (s *Service) placementDecisionEvent(eventType string, decision entity.PlacementDecision) (entity.OutboxEvent, error) {
+	return s.aggregateEvent(eventType, fleetAggregatePlacementDecision, decision.ID, decision.CreatedAt, fleetevents.Payload{
+		PlacementDecisionID: decision.ID.String(),
+		FleetScopeID:        uuidPtrString(decision.FleetScopeID),
+		ClusterID:           uuidPtrString(decision.ClusterID),
+		ProjectID:           uuidPtrString(decision.ProjectID),
+		RepositoryID:        uuidPtrString(decision.RepositoryID),
+		Status:              string(decision.Status),
+		RuntimeMode:         string(decision.RuntimeMode),
+		RuntimeProfile:      decision.RuntimeProfile,
+		ReasonCode:          decision.ReasonCode,
+		ReasonMessage:       decision.ReasonMessage,
+		UsedDefaultPath:     decision.UsedDefaultPath,
+	})
+}
+
 func uuidPtrString(id *uuid.UUID) string {
 	if id == nil || *id == uuid.Nil {
 		return ""

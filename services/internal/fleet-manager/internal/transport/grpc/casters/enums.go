@@ -68,6 +68,24 @@ var connectivityCheckStatuses = map[fleetv1.ConnectivityCheckStatus]enum.Connect
 	fleetv1.ConnectivityCheckStatus_CONNECTIVITY_CHECK_STATUS_TIMED_OUT: enum.ConnectivityCheckStatusTimedOut,
 }
 
+var runtimeModes = map[fleetv1.RuntimeMode]enum.RuntimeMode{
+	fleetv1.RuntimeMode_RUNTIME_MODE_CODE_ONLY:            enum.RuntimeModeCodeOnly,
+	fleetv1.RuntimeMode_RUNTIME_MODE_FULL_ENV:             enum.RuntimeModeFullEnv,
+	fleetv1.RuntimeMode_RUNTIME_MODE_READ_ONLY_PRODUCTION: enum.RuntimeModeReadOnlyProduction,
+	fleetv1.RuntimeMode_RUNTIME_MODE_PLATFORM_JOB:         enum.RuntimeModePlatformJob,
+}
+
+var placementRuleStatuses = map[fleetv1.PlacementRuleStatus]enum.PlacementRuleStatus{
+	fleetv1.PlacementRuleStatus_PLACEMENT_RULE_STATUS_ACTIVE:   enum.PlacementRuleStatusActive,
+	fleetv1.PlacementRuleStatus_PLACEMENT_RULE_STATUS_DISABLED: enum.PlacementRuleStatusDisabled,
+	fleetv1.PlacementRuleStatus_PLACEMENT_RULE_STATUS_ARCHIVED: enum.PlacementRuleStatusArchived,
+}
+
+var placementDecisionStatuses = map[fleetv1.PlacementDecisionStatus]enum.PlacementDecisionStatus{
+	fleetv1.PlacementDecisionStatus_PLACEMENT_DECISION_STATUS_RESOLVED: enum.PlacementDecisionStatusResolved,
+	fleetv1.PlacementDecisionStatus_PLACEMENT_DECISION_STATUS_REJECTED: enum.PlacementDecisionStatusRejected,
+}
+
 func fleetScopeTypeFromProto(value fleetv1.FleetScopeType) (enum.FleetScopeType, error) {
 	return enumFromProto(value, fleetv1.FleetScopeType_FLEET_SCOPE_TYPE_UNSPECIFIED, fleetScopeTypes, false)
 }
@@ -122,6 +140,34 @@ func CapacityStatusToProto(value enum.CapacityStatus) fleetv1.CapacityStatus {
 
 func ConnectivityCheckStatusToProto(value enum.ConnectivityCheckStatus) fleetv1.ConnectivityCheckStatus {
 	return enumToProto(value, fleetv1.ConnectivityCheckStatus_CONNECTIVITY_CHECK_STATUS_UNSPECIFIED, invertEnum(connectivityCheckStatuses))
+}
+
+func runtimeModeFromProto(value fleetv1.RuntimeMode) (enum.RuntimeMode, error) {
+	return enumFromProto(value, fleetv1.RuntimeMode_RUNTIME_MODE_UNSPECIFIED, runtimeModes, false)
+}
+
+func RuntimeModeToProto(value enum.RuntimeMode) fleetv1.RuntimeMode {
+	return enumToProto(value, fleetv1.RuntimeMode_RUNTIME_MODE_UNSPECIFIED, invertEnum(runtimeModes))
+}
+
+func placementRuleStatusFromProto(value fleetv1.PlacementRuleStatus) (enum.PlacementRuleStatus, error) {
+	return enumFromProto(value, fleetv1.PlacementRuleStatus_PLACEMENT_RULE_STATUS_UNSPECIFIED, placementRuleStatuses, false)
+}
+
+func placementDecisionStatusesFromProto(values []fleetv1.PlacementDecisionStatus) ([]enum.PlacementDecisionStatus, error) {
+	return enumsFromProto(values, placementDecisionStatuses, fleetv1.PlacementDecisionStatus_PLACEMENT_DECISION_STATUS_UNSPECIFIED)
+}
+
+func placementRuleStatusesFromProto(values []fleetv1.PlacementRuleStatus) ([]enum.PlacementRuleStatus, error) {
+	return enumsFromProto(values, placementRuleStatuses, fleetv1.PlacementRuleStatus_PLACEMENT_RULE_STATUS_UNSPECIFIED)
+}
+
+func PlacementRuleStatusToProto(value enum.PlacementRuleStatus) fleetv1.PlacementRuleStatus {
+	return enumToProto(value, fleetv1.PlacementRuleStatus_PLACEMENT_RULE_STATUS_UNSPECIFIED, invertEnum(placementRuleStatuses))
+}
+
+func PlacementDecisionStatusToProto(value enum.PlacementDecisionStatus) fleetv1.PlacementDecisionStatus {
+	return enumToProto(value, fleetv1.PlacementDecisionStatus_PLACEMENT_DECISION_STATUS_UNSPECIFIED, invertEnum(placementDecisionStatuses))
 }
 
 func fleetScopeTypesFromProto(values []fleetv1.FleetScopeType) ([]enum.FleetScopeType, error) {

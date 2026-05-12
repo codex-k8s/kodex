@@ -83,6 +83,16 @@ const (
 	ConnectivityCheckStatusTimedOut  ConnectivityCheckStatus = "timed_out"
 )
 
+// RuntimeMode describes the requested runtime isolation mode for placement.
+type RuntimeMode string
+
+const (
+	RuntimeModeCodeOnly           RuntimeMode = "code_only"
+	RuntimeModeFullEnv            RuntimeMode = "full_env"
+	RuntimeModeReadOnlyProduction RuntimeMode = "read_only_production"
+	RuntimeModePlatformJob        RuntimeMode = "platform_job"
+)
+
 // PlacementRuleStatus describes whether a rule participates in placement resolution.
 type PlacementRuleStatus string
 

@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-11
 updated_at: 2026-05-12
-related_issues: [699, 708, 714, 717]
+related_issues: [699, 708, 714, 717, 726, 730]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -175,7 +175,7 @@ approvals:
 | `status` | text | no | indexed | `active`, `disabled`, `archived`. |
 | `priority` | bigint | no | indexed | Порядок применения. |
 | `match_json` | jsonb | no | default {} | Условия: project/repository/service/package/runtime profile. |
-| `constraints_json` | jsonb | no | default {} | Требования: region, class, labels, isolation, health. |
+| `constraints_json` | jsonb | no | default {} | Требования: scope, cluster, region, class и health в согласованном объёме MVP. |
 | `created_at` | timestamptz | no | indexed | Создание. |
 | `updated_at` | timestamptz | no | indexed | Обновление. |
 | `version` | bigint | no | monotonic | Версия. |
@@ -201,6 +201,13 @@ approvals:
 | `reason_message` | text | no | default '' | Короткое объяснение. |
 | `used_default_path` | boolean | no | default false | Решение принято через bootstrap seed/fallback `platform-default`. |
 | `created_at` | timestamptz | no | indexed | Создание. |
+
+Поддержанный объём FLEET-5:
+
+- `PlacementRule.match_json` поддерживает `project_ids`, `repository_ids`, `service_keys`, `runtime_modes`, `runtime_profiles`;
+- `PlacementRule.constraints_json`, `placement_constraints_json` и `runtime_requirements_json` поддерживают `fleet_scope_ids`, `cluster_ids`, `cluster_keys`, `regions`, `capacity_classes`, `require_default`, `allow_degraded`;
+- `PlacementDecision.input_json` хранит ограниченный слепок входных ограничений и требований, достаточный для повторяемой диагностики, но без секретов, endpoint details и произвольных Kubernetes-объектов;
+- журнал `PlacementDecision` является операторским и диагностическим источником истории выбора или отказа размещения, а не очередью исполнения runtime.
 
 ### `FleetManagerOutboxEvent`
 
@@ -262,7 +269,13 @@ FLEET-4 добавляет health-поверхность:
 - `fleet.health.checked` публикуется на каждую завершённую проверку, `fleet.health.degraded` — при переходе в degraded/unhealthy;
 - `GetClusterHealthSnapshot` и `ListClusterHealthSnapshots` читают сохранённые snapshots по кластеру.
 
-Resolver размещения остаётся следующим срезом.
+FLEET-5 добавляет placement-поверхность:
+
+- `PutPlacementRule`, `GetPlacementRule`, `ListPlacementRules`;
+- `ResolvePlacement`, `GetPlacementDecision`, `ListPlacementDecisions`;
+- `command_results` для replay placement-команд;
+- outbox-события `fleet.placement.resolved` и `fleet.placement.rejected`;
+- сохранение журнала `PlacementDecision` с безопасной причиной выбора или отказа.
 
 ## Что не хранится
 

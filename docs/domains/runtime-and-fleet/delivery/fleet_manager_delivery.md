@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-11
 updated_at: 2026-05-12
-related_issues: [699, 708, 714, 717, 726]
+related_issues: [699, 708, 714, 717, 726, 730]
 related_prs: []
 related_docsets:
   - docs/domains/runtime-and-fleet/product/fleet_manager_requirements.md
@@ -48,7 +48,7 @@ approvals:
 | FLEET-2 | #714 | Сервисный каркас, конфигурация, PostgreSQL-модель, миграции, слой репозитория, health/readiness и outbox. |
 | FLEET-3 | #717 | Команды и чтения реестра для нескольких fleet scope, серверов, Kubernetes-кластеров, bootstrap seed `platform-default` и базовые проверки доступа. |
 | FLEET-4 | #726 | Проверки связности, health snapshots и события деградации для нескольких кластеров. |
-| FLEET-5 | создать перед срезом | Правила размещения, `ResolvePlacement` по набору активных кластеров, журнал решений и интеграционный контракт для `runtime-manager`. |
+| FLEET-5 | #730 | Правила размещения, `ResolvePlacement` по набору активных кластеров, журнал решений и интеграционный контракт для `runtime-manager`. |
 | FLEET-6 | создать перед срезом | Dockerfile, манифесты, migration job, `services.yaml`, smoke-путь, runbook и monitoring. |
 
 ## Таблица реализации
@@ -61,18 +61,18 @@ approvals:
 | Servers | Готов: `RegisterServer`, `UpdateServer`, `DisableServer`, `EnableServer`, `GetServer`, `ListServers`. | FLEET-3 реализует регистрацию, обновление, включение/отключение и чтения нескольких серверов без хранения значений секретов. |
 | Kubernetes clusters | Готов: `RegisterKubernetesCluster`, `UpdateKubernetesCluster`, `DisableKubernetesCluster`, `EnableKubernetesCluster`, `GetKubernetesCluster`, `ListKubernetesClusters`. | FLEET-3 реализует реестр нескольких кластеров, default-кластер внутри scope и ссылки на secret без чтения значения секрета. |
 | Связность и health | Готов: `RunClusterConnectivityCheck`, `GetClusterHealthSnapshot`, `ListClusterHealthSnapshots`, события `fleet.health.*`. | FLEET-4 реализует проверки Kubernetes API через отдельный checker, `secretresolver`, command result, outbox-события, latest health на cluster и историю snapshots без сохранения kubeconfig. |
-| Placement | Готов: `PutPlacementRule`, `GetPlacementRule`, `ListPlacementRules`, `ResolvePlacement`, чтения решений и события `fleet.placement.*`. | gRPC wiring и таблицы готовы в FLEET-2; базовый выбор из набора активных кластеров реализуется в FLEET-5. |
+| Placement | Готов: `PutPlacementRule`, `GetPlacementRule`, `ListPlacementRules`, `ResolvePlacement`, чтения решений и события `fleet.placement.*`. | Реализовано в FLEET-5: базовый выбор из набора активных кластеров, журнал решений, проверки доступа, идемпотентность и outbox-события. |
 | Контур выкладки | Не gRPC-группа. | Запланировано в FLEET-6. |
 
 ## Зависимости и блокировки
 
 | Домен или сервис | Связь | Статус |
 |---|---|---|
-| `runtime-manager` | Основной потребитель `ResolvePlacement`; после FLEET-5 runtime должен перейти с локального default config на fleet decision. | Сейчас не блокирует FLEET-0..FLEET-4. Интеграция нужна в FLEET-5. |
-| `project-catalog` | Источник placement policy проекта, репозитория и сервиса. | Текущие проектные контракты достаточны для kickoff; точную форму ограничений подтвердить перед FLEET-5. |
+| `runtime-manager` | Основной потребитель `ResolvePlacement`; после FLEET-5 runtime должен перейти с локального default config на fleet decision. | Сейчас не блокирует FLEET-0..FLEET-5. Интеграция нужна отдельным PR после готовности resolver. |
+| `project-catalog` | Источник placement policy проекта, репозитория и сервиса. | Текущие проектные контракты достаточны для FLEET-5; дальнейшее расширение ограничений идёт отдельными междоменными PR. |
 | `package-hub` | Источник runtime-требований для runtime-нагрузок пакетов и плагинов. | Не блокирует FLEET-0..FLEET-4; нужен контракт требований перед размещением runtime-нагрузки пакета. |
 | `agent-manager` | Инициирует runtime через `runtime-manager`. | Не блокирует fleet kickoff; прямой fleet API для agent-manager не планируется в MVP. |
-| `access-manager` | Проверка прав на управление fleet scope, серверами, кластерами, health и placement rules. | Ключи действий заведены в FLEET-1; проверки доступа registry-команд подключены в FLEET-3; health-команды и чтения подключены в FLEET-4. |
+| `access-manager` | Проверка прав на управление fleet scope, серверами, кластерами, health и placement rules. | Ключи действий заведены в FLEET-1; проверки доступа registry-команд подключены в FLEET-3; health-команды и чтения подключены в FLEET-4; placement-поверхность подключается в FLEET-5. |
 | Secret resolver/Vault/Kubernetes Secret клиент | Получение значения kubeconfig/service account по разрешённой ссылке. | FLEET-4 использует `secretresolver` и Kubernetes client-go только внутри проверки; значение секрета не сохраняется, не логируется и не попадает в события. |
 
 ## Критерии начала кода
@@ -105,7 +105,7 @@ approvals:
 
 ## Рекомендуемый следующий шаг после FLEET-4
 
-Идти в FLEET-5: реализовать placement rules, базовый `ResolvePlacement` по набору активных кластеров и журнал placement decisions. Интеграция `runtime-manager` с fleet decision остаётся отдельным срезом после готовности FLEET-5.
+После FLEET-5 идти в отдельный интеграционный срез: переключить `runtime-manager` с локального bootstrap fallback на вызов `fleet-manager.ResolvePlacement`, не смешивая эту работу с deploy-контуром FLEET-6.
 
 ## Апрув
 

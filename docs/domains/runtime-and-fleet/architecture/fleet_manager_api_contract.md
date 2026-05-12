@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-11
 updated_at: 2026-05-12
-related_issues: [699, 708, 714, 717]
+related_issues: [699, 708, 714, 717, 726, 730]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -33,7 +33,7 @@ approvals:
 | AsyncAPI | `specs/asyncapi/fleet-manager.v1.yaml` |
 | Go-контракты событий | `libs/go/platformevents/fleet/events.gen.go` |
 
-Контрактный срез фиксирует стабильную поверхность `fleet-manager` до сервисной реализации. FLEET-3 реализует registry-поверхность для fleet scope, server и Kubernetes cluster. FLEET-4 реализует операции связности и health. Placement rules и `ResolvePlacement` остаются штатно не реализованы до FLEET-5.
+Контрактный срез фиксирует стабильную поверхность `fleet-manager` до сервисной реализации. FLEET-3 реализует registry-поверхность для fleet scope, server и Kubernetes cluster. FLEET-4 реализует операции связности и health. FLEET-5 реализует placement rules, `ResolvePlacement` и журнал решений размещения в базовом согласованном объёме.
 
 ## Группы операций
 
@@ -110,7 +110,25 @@ approvals:
 | Placement | Выбор активного cluster из реестра по ограничениям, health и default fallback. | Взвешенный выбор, размещение с учётом стоимости и риска, multi-region. |
 | Runtime integration | `runtime-manager` вызывает `ResolvePlacement` и получает fleet decision. | Дальнейшие улучшения идут через развитие placement policy. |
 
-Техническая поверхность FLEET-2 готова: процесс, gRPC runtime, health/readiness, metrics, PostgreSQL-схема и outbox. Registry-поверхность FLEET-3 реализует команды и чтения с проверками доступа, идемпотентностью, optimistic concurrency и событиями `fleet.*`. Health-поверхность FLEET-4 реализует проверки связности через checker, `secretresolver`, command result, чтения snapshots и события `fleet.health.*`. Это не означает готовность сценариев размещения.
+Техническая поверхность FLEET-2 готова: процесс, gRPC runtime, health/readiness, metrics, PostgreSQL-схема и outbox. Registry-поверхность FLEET-3 реализует команды и чтения с проверками доступа, идемпотентностью, optimistic concurrency и событиями `fleet.*`. Health-поверхность FLEET-4 реализует проверки связности через checker, `secretresolver`, command result, чтения snapshots и события `fleet.health.*`. FLEET-5 поверх этого добавляет базовый resolver: он выбирает только активные scope и кластеры, использует последний health-снимок кластера, допускает degraded-кластеры только при явном разрешении во входных ограничениях и пишет журнал `PlacementDecision`.
+
+Поддержанный объём FLEET-5 для `PlacementRule.match_json`:
+
+- `project_ids`;
+- `repository_ids`;
+- `service_keys`;
+- `runtime_modes`;
+- `runtime_profiles`.
+
+Поддержанный объём FLEET-5 для `PlacementRule.constraints_json`, `placement_constraints_json` и `runtime_requirements_json`:
+
+- `fleet_scope_ids`;
+- `cluster_ids`;
+- `cluster_keys`;
+- `regions`;
+- `capacity_classes`;
+- `require_default`;
+- `allow_degraded`.
 
 ## Отложенные операции после MVP
 

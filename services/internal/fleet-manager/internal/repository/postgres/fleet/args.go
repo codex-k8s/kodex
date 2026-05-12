@@ -111,10 +111,64 @@ func clusterHealthSnapshotArgs(snapshot entity.ClusterHealthSnapshot) pgx.NamedA
 	}
 }
 
+func placementRuleArgs(rule entity.PlacementRule) pgx.NamedArgs {
+	return withBaseArgs(rule.Base, pgx.NamedArgs{
+		"fleet_scope_id":   rule.FleetScopeID,
+		"rule_key":         rule.RuleKey,
+		"status":           string(rule.Status),
+		"priority":         rule.Priority,
+		"match_json":       postgreslib.JSONPayload(rule.MatchJSON),
+		"constraints_json": postgreslib.JSONPayload(rule.ConstraintsJSON),
+	})
+}
+
+func placementRuleUpdateArgs(rule entity.PlacementRule, previousVersion int64) pgx.NamedArgs {
+	args := placementRuleArgs(rule)
+	args["previous_version"] = previousVersion
+	return args
+}
+
+func placementDecisionArgs(decision entity.PlacementDecision) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"id":                  decision.ID,
+		"command_id":          nullableCommandID(decision.CommandID),
+		"request_fingerprint": decision.RequestFingerprint,
+		"status":              string(decision.Status),
+		"fleet_scope_id":      postgreslib.NullableUUID(decision.FleetScopeID),
+		"cluster_id":          postgreslib.NullableUUID(decision.ClusterID),
+		"project_id":          postgreslib.NullableUUID(decision.ProjectID),
+		"repository_id":       postgreslib.NullableUUID(decision.RepositoryID),
+		"runtime_mode":        string(decision.RuntimeMode),
+		"runtime_profile":     decision.RuntimeProfile,
+		"input_json":          postgreslib.JSONPayload(decision.InputJSON),
+		"reason_code":         decision.ReasonCode,
+		"reason_message":      decision.ReasonMessage,
+		"used_default_path":   decision.UsedDefaultPath,
+		"created_at":          decision.CreatedAt,
+	}
+}
+
 func clusterHealthSnapshotFilterArgs(filter query.ClusterHealthSnapshotFilter) pageQueryArgs {
 	return withPage(filter.Page, pgx.NamedArgs{
 		"cluster_id":    filter.ClusterID,
 		"checked_since": postgreslib.NullableTime(filter.CheckedSince),
+	})
+}
+
+func placementRuleFilterArgs(filter query.PlacementRuleFilter) pageQueryArgs {
+	return withPage(filter.Page, pgx.NamedArgs{
+		"fleet_scope_id": postgreslib.NullableUUID(filter.FleetScopeID),
+		"statuses":       postgreslib.StringValues(filter.Statuses),
+	})
+}
+
+func placementDecisionFilterArgs(filter query.PlacementDecisionFilter) pageQueryArgs {
+	return withPage(filter.Page, pgx.NamedArgs{
+		"project_id":     postgreslib.NullableUUID(filter.ProjectID),
+		"repository_id":  postgreslib.NullableUUID(filter.RepositoryID),
+		"fleet_scope_id": postgreslib.NullableUUID(filter.FleetScopeID),
+		"cluster_id":     postgreslib.NullableUUID(filter.ClusterID),
+		"statuses":       postgreslib.StringValues(filter.Statuses),
 	})
 }
 

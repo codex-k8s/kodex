@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-11
 updated_at: 2026-05-12
-related_issues: [699, 708, 714, 717]
+related_issues: [699, 708, 714, 717, 726, 730]
 related_prs: []
 related_adrs: []
 approvals:
@@ -67,7 +67,7 @@ approvals:
 
 ## Статус реализации
 
-FLEET-2 создаёт сервисный процесс `fleet-manager`, конфигурацию, gRPC-сервер, health/readiness, metrics, PostgreSQL-схему, repository-слой и локальный outbox. FLEET-3 реализует registry-команды и чтения для fleet scope, server и Kubernetes cluster, включая `platform-default` как данные реестра. FLEET-4 реализует проверки связности Kubernetes API через отдельный checker, `secretresolver`, health snapshots и события `fleet.health.*`. Placement resolver остаётся отдельным срезом FLEET-5.
+FLEET-2 создаёт сервисный процесс `fleet-manager`, конфигурацию, gRPC-сервер, health/readiness, metrics, PostgreSQL-схему, repository-слой и локальный outbox. FLEET-3 реализует registry-команды и чтения для fleet scope, server и Kubernetes cluster, включая `platform-default` как данные реестра. FLEET-4 реализует проверки связности Kubernetes API через отдельный checker, `secretresolver`, health snapshots и события `fleet.health.*`. FLEET-5 добавляет placement rules, базовый resolver размещения и журнал решений.
 
 ## MVP-реестр нескольких кластеров
 
@@ -115,6 +115,15 @@ Bootstrap seed для одиночной установки:
 - признак default path, если решение принято через bootstrap seed `platform-default`.
 
 Placement decision не создаёт slot и не запускает job. Он фиксирует объяснимое решение размещения, которое исполняет `runtime-manager`.
+
+В согласованном объёме FLEET-5 resolver:
+
+- рассматривает только активные `FleetScope`, `Server` и `KubernetesCluster`;
+- использует последний health-снимок кластера и по умолчанию допускает только `healthy`;
+- допускает `degraded` только при явном разрешении во входных ограничениях или правилах;
+- умеет уважать `preferred_fleet_scope_id` и `preferred_cluster_id`, но возвращает отказ, если предпочтительный контур недоступен;
+- применяет `PlacementRule` по `scope`, `cluster`, `region`, `capacity_class`, `runtime_mode` и `runtime_profile` в ограниченном согласованном профиле;
+- использует `platform-default` или default-кластер scope только как fallback-path, а не как скрытый глобальный выбор.
 
 ## Основные потоки
 
@@ -206,6 +215,7 @@ sequenceDiagram
 - Команды принимают `command_id`; update/delete операции принимают ожидаемую версию.
 - Health check не держит SQL-блокировку на время обращения к Kubernetes.
 - Placement resolver читает консистентный снимок правил и health, записывает decision log отдельной короткой транзакцией.
+- Повтор `ResolvePlacement` по тому же `command_id` обязан возвращать уже сохранённое решение только при совпадении безопасного отпечатка входа; иначе команда отклоняется как конфликт идемпотентности.
 
 ## Наблюдаемость
 

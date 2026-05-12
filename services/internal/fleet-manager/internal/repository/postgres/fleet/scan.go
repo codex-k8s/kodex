@@ -132,6 +132,61 @@ func scanClusterHealthSnapshot(row postgreslib.RowScanner) (entity.ClusterHealth
 	return snapshot, err
 }
 
+func scanPlacementRule(row postgreslib.RowScanner) (entity.PlacementRule, error) {
+	var rule entity.PlacementRule
+	var matchJSON, constraintsJSON []byte
+	var status string
+	err := row.Scan(
+		&rule.ID,
+		&rule.FleetScopeID,
+		&rule.RuleKey,
+		&status,
+		&rule.Priority,
+		&matchJSON,
+		&constraintsJSON,
+		&rule.Version,
+		&rule.CreatedAt,
+		&rule.UpdatedAt,
+	)
+	rule.Status = enum.PlacementRuleStatus(status)
+	rule.MatchJSON = append(rule.MatchJSON[:0], matchJSON...)
+	rule.ConstraintsJSON = append(rule.ConstraintsJSON[:0], constraintsJSON...)
+	return rule, err
+}
+
+func scanPlacementDecision(row postgreslib.RowScanner) (entity.PlacementDecision, error) {
+	var decision entity.PlacementDecision
+	var commandID, fleetScopeID, clusterID, projectID, repositoryID pgtype.UUID
+	var inputJSON []byte
+	var status, runtimeMode string
+	err := row.Scan(
+		&decision.ID,
+		&commandID,
+		&decision.RequestFingerprint,
+		&status,
+		&fleetScopeID,
+		&clusterID,
+		&projectID,
+		&repositoryID,
+		&runtimeMode,
+		&decision.RuntimeProfile,
+		&inputJSON,
+		&decision.ReasonCode,
+		&decision.ReasonMessage,
+		&decision.UsedDefaultPath,
+		&decision.CreatedAt,
+	)
+	decision.CommandID = postgreslib.UUIDPtrFromPG(commandID)
+	decision.Status = enum.PlacementDecisionStatus(status)
+	decision.FleetScopeID = postgreslib.UUIDPtrFromPG(fleetScopeID)
+	decision.ClusterID = postgreslib.UUIDPtrFromPG(clusterID)
+	decision.ProjectID = postgreslib.UUIDPtrFromPG(projectID)
+	decision.RepositoryID = postgreslib.UUIDPtrFromPG(repositoryID)
+	decision.RuntimeMode = enum.RuntimeMode(runtimeMode)
+	decision.InputJSON = append(decision.InputJSON[:0], inputJSON...)
+	return decision, err
+}
+
 func scanCommandResult(row postgreslib.RowScanner) (entity.CommandResult, error) {
 	var result entity.CommandResult
 	var commandID pgtype.UUID

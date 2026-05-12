@@ -6,7 +6,7 @@ status: active
 owner_role: PM
 created_at: 2026-05-11
 updated_at: 2026-05-12
-related_issues: [699, 708, 714, 717]
+related_issues: [699, 708, 714, 717, 726, 730]
 related_prs: []
 related_docsets:
   - docs/domains/runtime-and-fleet/product/requirements.md
@@ -88,6 +88,8 @@ approvals:
 | FLT-AC-5 | Если health-check падает, оператор видит snapshot, короткую ошибку и событие `fleet.health.degraded`. |
 | FLT-AC-6 | Если создаётся service scope, он ссылается на `project_id`, необязательный `repository_id` и `service_key`, а не на `ServiceDescriptor.id`. |
 | FLT-AC-7 | Bootstrap создаёт `platform-default` scope/cluster для одиночной установки, но оператор может зарегистрировать дополнительные серверы, scope и кластеры уже в MVP. |
+| FLT-AC-8 | `ResolvePlacement` выбирает только активный scope и кластер с допустимым health и фиксирует placement decision с безопасной причиной выбора или отказа. |
+| FLT-AC-9 | `PlacementRule` позволяет оператору ограничить выбор по scope, cluster, region, `capacity_class`, `runtime_mode` и `runtime_profile` в согласованном объёме MVP. |
 
 ## Что не входит
 

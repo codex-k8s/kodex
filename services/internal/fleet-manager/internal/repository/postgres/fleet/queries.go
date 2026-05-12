@@ -1,7 +1,5 @@
 package fleet
 
-import "fmt"
-
 var (
 	queryCommandResultCreate              = mustLoadQuery("command_result__create")
 	queryCommandResultGet                 = mustLoadQuery("command_result__get")
@@ -22,6 +20,14 @@ var (
 	queryKubernetesClusterSeedCreate      = mustLoadQuery("kubernetes_cluster__seed_create")
 	queryKubernetesClusterUpdateHealth    = mustLoadQuery("kubernetes_cluster__update_health")
 	queryKubernetesClusterUpdate          = mustLoadQuery("kubernetes_cluster__update")
+	queryPlacementDecisionCreate          = mustLoadQuery("placement_decision__create")
+	queryPlacementDecisionGetByID         = mustLoadQuery("placement_decision__get_by_id")
+	queryPlacementDecisionList            = mustLoadQuery("placement_decision__list")
+	queryPlacementRuleCreate              = mustLoadQuery("placement_rule__create")
+	queryPlacementRuleGetByID             = mustLoadQuery("placement_rule__get_by_id")
+	queryPlacementRuleGetByScopeKey       = mustLoadQuery("placement_rule__get_by_scope_key")
+	queryPlacementRuleList                = mustLoadQuery("placement_rule__list")
+	queryPlacementRuleUpdate              = mustLoadQuery("placement_rule__update")
 	queryOutboxEventClaim                 = mustLoadQuery("outbox_event__claim")
 	queryOutboxEventInsert                = mustLoadQuery("outbox_event__insert")
 	queryOutboxEventMarkFailed            = mustLoadQuery("outbox_event__mark_failed")
@@ -32,19 +38,3 @@ var (
 	queryServerList                       = mustLoadQuery("server__list")
 	queryServerUpdate                     = mustLoadQuery("server__update")
 )
-
-func mustLoadQuery(name string) string {
-	query, err := loadQuery(name)
-	if err != nil {
-		panic(err)
-	}
-	return query
-}
-
-func loadQuery(name string) (string, error) {
-	data, err := SQLFiles.ReadFile("sql/" + name + ".sql")
-	if err != nil {
-		return "", fmt.Errorf("load sql query %s: %w", name, err)
-	}
-	return string(data), nil
-}

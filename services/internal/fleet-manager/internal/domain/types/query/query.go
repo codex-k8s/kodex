@@ -57,3 +57,20 @@ type ClusterHealthSnapshotFilter struct {
 	CheckedSince *time.Time
 	Page         value.PageRequest
 }
+
+// PlacementRuleFilter selects placement rules for authoritative reads.
+type PlacementRuleFilter struct {
+	FleetScopeID *uuid.UUID
+	Statuses     []enum.PlacementRuleStatus
+	Page         value.PageRequest
+}
+
+// PlacementDecisionFilter selects placement decisions for authoritative reads.
+type PlacementDecisionFilter struct {
+	ProjectID    *uuid.UUID
+	RepositoryID *uuid.UUID
+	FleetScopeID *uuid.UUID
+	ClusterID    *uuid.UUID
+	Statuses     []enum.PlacementDecisionStatus
+	Page         value.PageRequest
+}

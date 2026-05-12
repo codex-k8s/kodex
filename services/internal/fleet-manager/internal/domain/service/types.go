@@ -172,6 +172,69 @@ type ListClusterHealthSnapshotsResult struct {
 	Page      value.PageResult
 }
 
+// PutPlacementRuleInput creates or updates one placement rule.
+type PutPlacementRuleInput struct {
+	PlacementRuleID *uuid.UUID
+	FleetScopeID    uuid.UUID
+	RuleKey         string
+	Status          enum.PlacementRuleStatus
+	Priority        int64
+	MatchJSON       []byte
+	ConstraintsJSON []byte
+	Meta            value.CommandMeta
+}
+
+// ListPlacementRulesInput selects placement rules.
+type ListPlacementRulesInput struct {
+	FleetScopeID *uuid.UUID
+	Statuses     []enum.PlacementRuleStatus
+	Page         value.PageRequest
+	Meta         value.QueryMeta
+}
+
+// ListPlacementRulesResult returns placement rules and paging metadata.
+type ListPlacementRulesResult struct {
+	Rules []entity.PlacementRule
+	Page  value.PageResult
+}
+
+// ResolvePlacementInput requests an explained runtime placement decision.
+type ResolvePlacementInput struct {
+	ProjectID                *uuid.UUID
+	RepositoryID             *uuid.UUID
+	ServiceKey               string
+	RuntimeMode              enum.RuntimeMode
+	RuntimeProfile           string
+	PreferredFleetScopeID    *uuid.UUID
+	PreferredClusterID       *uuid.UUID
+	PlacementConstraintsJSON []byte
+	RuntimeRequirementsJSON  []byte
+	Meta                     value.CommandMeta
+}
+
+// GetPlacementDecisionInput reads one stored placement decision.
+type GetPlacementDecisionInput struct {
+	PlacementDecisionID uuid.UUID
+	Meta                value.QueryMeta
+}
+
+// ListPlacementDecisionsInput selects placement decisions.
+type ListPlacementDecisionsInput struct {
+	ProjectID    *uuid.UUID
+	RepositoryID *uuid.UUID
+	FleetScopeID *uuid.UUID
+	ClusterID    *uuid.UUID
+	Statuses     []enum.PlacementDecisionStatus
+	Page         value.PageRequest
+	Meta         value.QueryMeta
+}
+
+// ListPlacementDecisionsResult returns placement decisions and paging metadata.
+type ListPlacementDecisionsResult struct {
+	Decisions []entity.PlacementDecision
+	Page      value.PageResult
+}
+
 // ConnectivityCheckTarget contains safe cluster references required by a checker.
 type ConnectivityCheckTarget struct {
 	ClusterID       uuid.UUID
