@@ -82,6 +82,10 @@ message CommandMeta {
   string request_id = 6;
   // request_context carries safe request metadata; no tokens, secrets, email or names.
   RequestContext request_context = 7;
+  // operation_policy_context carries the risk-based policy input used by the caller.
+  ProviderOperationPolicyContext operation_policy_context = 8;
+  // approval_gate_ref carries an already approved gate reference when policy requires it.
+  ApprovalGateReference approval_gate_ref = 9;
 }
 
 // QueryMeta carries safe metadata for authoritative reads.
@@ -104,6 +108,63 @@ message RequestContext {
   optional string session_id = 3;
   // client_ip_hash is an optional hashed client address.
   optional string client_ip_hash = 4;
+}
+
+// ProviderOperationRiskLevel classifies write-operation risk.
+enum ProviderOperationRiskLevel {
+  PROVIDER_OPERATION_RISK_LEVEL_UNSPECIFIED = 0;
+  PROVIDER_OPERATION_RISK_LEVEL_LOW = 1;
+  PROVIDER_OPERATION_RISK_LEVEL_MEDIUM = 2;
+  PROVIDER_OPERATION_RISK_LEVEL_HIGH = 3;
+  PROVIDER_OPERATION_RISK_LEVEL_CRITICAL = 4;
+}
+
+// ProviderOperationPolicyContext is the safe policy context for a provider command.
+message ProviderOperationPolicyContext {
+  // project_id is the project-catalog project id used by risk policy.
+  optional string project_id = 1;
+  // repository_id is the project-catalog repository binding id used by risk policy.
+  optional string repository_id = 2;
+  // stage is the workflow or delivery stage, for example dev, qa or release.
+  optional string stage = 3;
+  // role_id is the platform role id used by the caller.
+  optional string role_id = 4;
+  // role_key is a stable role key used by policy and audit.
+  optional string role_key = 5;
+  // operation_type is the operation evaluated by policy.
+  ProviderOperationType operation_type = 6;
+  // target_ref is a safe provider target reference used by policy.
+  optional string target_ref = 7;
+  // changed_fields are typed field names the command wants to change.
+  repeated string changed_fields = 8;
+  // risk_tags are policy-specific risk classifiers.
+  repeated string risk_tags = 9;
+  // risk_level is the policy result known to the caller.
+  ProviderOperationRiskLevel risk_level = 10;
+  // approval_required tells provider-hub that an approval_gate_ref must be present.
+  bool approval_required = 11;
+  // policy_version identifies the risk policy revision.
+  optional string policy_version = 12;
+  // policy_snapshot_ref points to an immutable policy snapshot or decision record.
+  optional string policy_snapshot_ref = 13;
+}
+
+// ApprovalGateReference references an approval or gate decision owned by another service.
+message ApprovalGateReference {
+  // approval_id is the owner-service approval or gate id.
+  string approval_id = 1;
+  // gate_type classifies the gate, for example owner_approval, release_gate or risk_acceptance.
+  string gate_type = 2;
+  // decision is the approved decision value accepted by caller policy.
+  string decision = 3;
+  // decided_by_actor_id is the approving platform actor id when available.
+  optional string decided_by_actor_id = 4;
+  // decided_at is the decision time in RFC3339 format when available.
+  optional string decided_at = 5;
+  // evidence_ref points to safe approval evidence; it must not contain secrets.
+  optional string evidence_ref = 6;
+  // policy_version identifies the policy version used by the approval service.
+  optional string policy_version = 7;
 }
 
 // Actor identifies a user, service, agent or external account.
@@ -272,6 +333,24 @@ enum ReviewSignalKind {
   REVIEW_SIGNAL_KIND_COMMENT = 1;
   REVIEW_SIGNAL_KIND_APPROVAL = 2;
   REVIEW_SIGNAL_KIND_CHANGES_REQUESTED = 3;
+}
+
+// ReviewInlineComment is a typed inline comment for a provider-native review.
+message ReviewInlineComment {
+  // path is the repository file path.
+  string path = 1;
+  // body is the inline comment text.
+  string body = 2;
+  // line is the end line in the provider diff when creating a new thread.
+  optional int64 line = 3;
+  // start_line is the optional start line for a multi-line diff comment.
+  optional int64 start_line = 4;
+  // side is the provider diff side, for example LEFT or RIGHT.
+  optional string side = 5;
+  // start_side is the provider diff side for start_line when needed.
+  optional string start_side = 6;
+  // in_reply_to_provider_comment_id replies to an existing provider inline comment thread.
+  optional string in_reply_to_provider_comment_id = 7;
 }
 
 // ProviderTarget identifies a provider-native object.
@@ -536,6 +615,12 @@ message ProviderOperation {
   string started_at = 13;
   // finished_at is operation finish time in RFC3339 format when known.
   optional string finished_at = 14;
+  // operation_policy_context is the risk-based policy context accepted for the command.
+  ProviderOperationPolicyContext operation_policy_context = 15;
+  // approval_gate_ref is the approval or gate reference accepted for the command.
+  ApprovalGateReference approval_gate_ref = 16;
+  // provider_version is the resulting provider version or update marker when known.
+  optional string provider_version = 17;
 }
 
 // IngestWebhookEventRequest stores a verified webhook.
@@ -859,6 +944,8 @@ message CreateIssueRequest {
   optional string watermark_json = 10;
   // meta carries idempotency and audit context.
   CommandMeta meta = 11;
+  // external_account_id is the account selected by caller policy for the provider write.
+  string external_account_id = 12;
 }
 
 // UpdateIssueRequest updates provider-native Issue fields.
@@ -886,6 +973,8 @@ message UpdateIssueRequest {
   optional string expected_provider_version = 10;
   // meta carries idempotency, expected projection version and audit context.
   CommandMeta meta = 11;
+  // external_account_id is the account selected by caller policy for the provider write.
+  string external_account_id = 12;
 }
 
 // CreateCommentRequest creates a provider-native comment.
@@ -896,6 +985,8 @@ message CreateCommentRequest {
   string body = 2;
   // meta carries idempotency and audit context.
   CommandMeta meta = 3;
+  // external_account_id is the account selected by caller policy for the provider write.
+  string external_account_id = 4;
 }
 
 // UpdateCommentRequest updates a platform-owned provider comment.
@@ -910,6 +1001,8 @@ message UpdateCommentRequest {
   optional string expected_provider_version = 4;
   // meta carries idempotency, expected projection version and audit context.
   CommandMeta meta = 5;
+  // external_account_id is the account selected by caller policy for the provider write.
+  string external_account_id = 6;
 }
 
 // CreatePullRequestRequest creates a provider-native PR/MR.
@@ -938,6 +1031,8 @@ message CreatePullRequestRequest {
   optional string watermark_json = 11;
   // meta carries idempotency and audit context.
   CommandMeta meta = 12;
+  // external_account_id is the account selected by caller policy for the provider write.
+  string external_account_id = 13;
 }
 
 // CreateReviewSignalRequest creates a provider-native review signal.
@@ -948,10 +1043,12 @@ message CreateReviewSignalRequest {
   ReviewSignalKind kind = 2;
   // body is review body.
   string body = 3;
-  // comments_json is optional typed inline comments payload.
-  optional string comments_json = 4;
+  // inline_comments are typed inline review comments.
+  repeated ReviewInlineComment inline_comments = 4;
   // meta carries idempotency and audit context.
   CommandMeta meta = 5;
+  // external_account_id is the account selected by caller policy for the provider write.
+  string external_account_id = 6;
 }
 
 // UpdateRelationshipRequest stores or updates a provider relationship.
@@ -970,6 +1067,24 @@ message UpdateRelationshipRequest {
   RelationshipConfidence confidence = 6;
   // meta carries idempotency and audit context.
   CommandMeta meta = 7;
+  // external_account_id is the account selected by caller policy for the provider write.
+  string external_account_id = 8;
+}
+
+// ProviderOperationCommandResult returns a safe command result summary.
+message ProviderOperationCommandResult {
+  // target identifies the provider object touched by the command.
+  ProviderTarget target = 1;
+  // result_ref is a provider URL or id safe for UI and audit.
+  optional string result_ref = 2;
+  // provider_object_id is the provider-native object id when known.
+  optional string provider_object_id = 3;
+  // provider_version is the resulting provider version or update marker when known.
+  optional string provider_version = 4;
+  // reconciliation_enqueued tells caller whether follow-up reconciliation was scheduled.
+  bool reconciliation_enqueued = 5;
+  // emitted_event_types are domain event names emitted by provider-hub.
+  repeated string emitted_event_types = 6;
 }
 
 // ProviderOperationResponse returns operation log entry and optional resulting projection.
@@ -982,6 +1097,8 @@ message ProviderOperationResponse {
   CommentProjection comment_projection = 3;
   // relationship is returned when operation produced or updated a relationship.
   ProviderRelationship relationship = 4;
+  // result is a safe command result summary.
+  ProviderOperationCommandResult result = 5;
 }
 
 // GetProviderAccountRuntimeStateRequest reads runtime state.

@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-06
 updated_at: 2026-05-12
-related_issues: [281, 282, 711, 719]
+related_issues: [281, 282, 711, 719, 725]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -88,6 +88,17 @@ approvals:
 
 ### Операции провайдера
 
+Инструменты записи провайдера — это типизированные внешние инструменты для `agent-manager`, `platform-mcp-server` и внутренних контуров приёмки. Снаружи каждый инструмент имеет отдельный gRPC-метод и типизированный запрос, а внутри `provider-hub` все команды проходят общий конвейер команд:
+
+1. Проверить `CommandMeta`, `command_id` или `idempotency_key`, актёра и безопасный `RequestContext`.
+2. Проверить выбранный `external_account_id` через `access-manager` с нужным действием доступа.
+3. Проверить наличие `operation_policy_context`; если `approval_required=true`, проверить наличие `approval_gate_ref`.
+4. Взять значение секрета через `libs/go/secretresolver` только на время вызова адаптера.
+5. Выполнить команду адаптера провайдера, записать `ProviderOperation`, обновить локальные проекции или поставить сверку.
+6. Вернуть `ProviderOperationResponse` с безопасным результатом без токенов, сырых provider payload и внутренних ссылок на секреты.
+
+`provider-hub` не становится владельцем approval-сервиса. Он принимает ссылку на уже принятое решение как `approval_gate_ref`, фиксирует её в журнале операции и отклоняет команду, если политика вызывающего контура указала обязательность gate, но ссылка не передана.
+
 | Операция | Назначение | Вызывает | Идемпотентность |
 |---|---|---|---|
 | `CreateIssue` | Создать provider-native `Issue`. | `agent-manager`, MCP | `command_id`. |
@@ -102,6 +113,29 @@ approvals:
 
 В `UpdateIssue` списковые поля передаются через сообщения-патчи:
 отсутствующее сообщение означает «не менять», присутствующее сообщение с пустым списком означает «очистить список», присутствующее сообщение со значениями означает «заменить список».
+
+### Каталог инструментов записи провайдера
+
+Общие входные поля для всех команд записи:
+
+- `external_account_id` — выбранный вызывающим контуром внешний аккаунт;
+- `meta.command_id` или `meta.idempotency_key` — защита повтора;
+- `meta.operation_policy_context` — вход и результат политики по риску: роль, проект, стадия, операция, цель, изменяемые поля, риск, версия политики;
+- `meta.approval_gate_ref` — ссылка на approval/gate, если политика требует подтверждение;
+- `meta.expected_version` — версия локального агрегата `provider-hub`, если команда меняет уже известную проекцию;
+- `expected_provider_version` — версия или update marker провайдера, если провайдер поддерживает конкурентную защиту конкретного объекта.
+
+| Инструмент | Действие доступа | Ссылка на approval/gate | Ожидаемая версия | Можно менять | Запрещено менять | Результат | События и журнал |
+|---|---|---|---|---|---|---|---|
+| `CreateIssue` | `provider.issue.write` | Требуется, если политика по роли, проекту, стадии, target или полям повышает риск. | `meta.command_id` обязателен; provider version не нужен. | `title`, `body`, `labels`, `assignee_provider_logins`, `milestone`, `work_item_type`, `watermark_json`. | Владение проектом у провайдера, скрытые поля доступа, секреты, runtime-статусы, поля вне типизированного запроса. | `ProviderOperationResponse` с операцией, созданной проекцией рабочего артефакта, result target, provider id, URL и provider version, если доступна. | `ProviderOperation` типа `CREATE_ISSUE`; после успешной записи `provider.operation.completed`, `provider.work_item.synced` или горячая сверка; при ошибке `provider.operation.failed`. |
+| `UpdateIssue` | `provider.issue.write` | Требуется для опасных полей, release/ops стадий, цели, чувствительной для владельца, или высокой роли риска. | `meta.expected_version` для локальной проекции; `expected_provider_version`, если вызывающий контур работал с маркером провайдера. | `title`, `body`, `labels`, `assignee_provider_logins`, `milestone`, `state`, `work_item_type`, `watermark_json`. | Авторство, provider id, ссылка на репозиторий, привязка проекта, runtime-диагностика, ссылки на секреты, поля вне типизированного патча. | `ProviderOperationResponse` с операцией, обновлённой проекцией или поставленной сверкой, provider version. | `ProviderOperation` типа `UPDATE_ISSUE`; `provider.operation.completed/failed`, `provider.work_item.synced` или горячая сверка. |
+| `CreateComment` | `provider.comment.write` | Требуется, если комментарий создаёт внешнее обязательство, решение владельца или публичное обновление статуса в рискованной стадии. | `meta.command_id` обязателен; provider version не нужен. | `body` нового комментария к `ProviderTarget`. | Изменение чужих комментариев, review-решение, labels, state, секреты и вложения вне согласованного payload. | `ProviderOperationResponse` с операцией, проекцией комментария, result target, provider comment id и URL. | `ProviderOperation` типа `CREATE_COMMENT`; `provider.operation.completed/failed`, `provider.comment.synced` или горячая сверка. |
+| `UpdateComment` | `provider.comment.write` | Требуется при обновлении комментариев, видимых владельцу, release notes, подтверждения approval или публичных статусов. | `expected_provider_version`, если маркер провайдера известен; `meta.expected_version` для локальной проекции. | `body` платформенного комментария, который политика разрешает обновлять. | Чужие комментарии без политики владения, review-решение, целевой объект, provider id, секреты. | `ProviderOperationResponse` с операцией, проекцией комментария и provider version. | `ProviderOperation` типа `UPDATE_COMMENT`; `provider.operation.completed/failed`, `provider.comment.synced` или горячая сверка. |
+| `CreatePullRequest` / `CreateMergeRequest` | `provider.pull_request.write` | Обычно требуется для защищённой ветки, release/adoption/bootstrap, package source, prod-impact и high-risk изменений. | `meta.command_id` обязателен; provider version не нужен. | `title`, `body`, `head_branch`, `base_branch`, `draft`, `labels`, `linked_issue_ref`, `watermark_json`. | Прямой merge, force push, изменение branch policy, обход обязательных проверок, секреты, владение проектом у провайдера. | `ProviderOperationResponse` с операцией, проекцией `PR/MR`, provider id, URL и provider version, если доступна. | `ProviderOperation` типа `CREATE_PULL_REQUEST`; `provider.operation.completed/failed`, `provider.work_item.synced` или горячая сверка. |
+| `CreateReviewSignal` | `provider.review_signal.write` | Требуется для approval или changes requested, если политика не допускает автоматическое решение конкретной роли. | `meta.command_id` обязателен; provider version не нужен. | `kind`, `body`, `inline_comments` с полями `path`, `body`, `line`, `start_line`, `side`, `start_side`, `in_reply_to_provider_comment_id`. | Merge, изменение PR body/branch, изменение labels/state, скрытые проверки, review от имени неподтверждённого актёра, свободный JSON payload. | `ProviderOperationResponse` с операцией, проекцией комментария или review, result target и provider review id. | `ProviderOperation` типа `CREATE_REVIEW_SIGNAL`; `provider.operation.completed/failed`, `provider.comment.synced` или горячая сверка. |
+| `UpdateRelationship` | `provider.relationship.write` | Требуется, если связь влияет на release, blocker, follow-up или cross-project dependency. | `meta.expected_version` для локальной связи; provider version не нужен, если связь хранится только в зеркале. | `source`, `target`, `target_provider_ref`, `relationship_type`, `source_kind`, `confidence`. | Изменение provider object без отдельной команды записи, удаление чужой связи без политики, скрытые runtime-ссылки и секреты. | `ProviderOperationResponse` с операцией и связью. | `ProviderOperation` типа `UPDATE_RELATIONSHIP`; `provider.operation.completed/failed`, `provider.relationship.synced`. |
+
+Контекст политики должен перечислять `changed_fields` в терминах типизированного запроса. `provider-hub` не принимает свободный JSON patch для операций записи: inline comments review-сигнала передаются через `ReviewInlineComment`, а не через строковый JSON.
 
 ### Операционное состояние аккаунтов и лимиты
 
