@@ -49,7 +49,7 @@ approvals:
 | `CreatePromptTemplateVersion` | gRPC command | `agent.prompt.manage` | `command_id` | Создаёт версию prompt для роли. |
 | `ActivatePromptTemplateVersion` | gRPC command | `agent.prompt.manage` | `command_id` + expected version | Активирует prompt version для новых запусков. |
 | `StartAgentSession` | gRPC command | `agent.session.start` | `command_id` | Создаёт или продолжает сессию по пользовательскому запросу или provider target. |
-| `StartAgentRun` | gRPC command | `agent.run.start` | `command_id` | Создаёт `Run`, фиксирует версии и запрашивает runtime. |
+| `StartAgentRun` | gRPC command | `agent.run.start` | `command_id` | Создаёт `Run`, фиксирует `flow_version_id`, `stage_id`, `role_profile_id`, `role_profile_version`, `role_profile_digest`, `prompt_template_version_id`, `prompt_template_digest`, guidance refs и запрашивает runtime. |
 | `RecordRunState` | gRPC command | `agent.run.update` | `command_id` + expected version | Фиксирует переход `Run` после сигнала от runtime, MCP или агента. |
 | `RequestAcceptance` | gRPC command | `agent.acceptance.run` | `command_id` | Запускает машину приёмки по session/run/stage. |
 | `RecordAcceptanceResult` | gRPC command | `agent.acceptance.update` | `command_id` + expected version | Фиксирует результат проверки. |
@@ -115,7 +115,8 @@ MCP-инструменты не должны принимать свободны
 | `agent.human_gate.requested` | Требуется решение человека. |
 | `agent.human_gate.resolved` | Решение человека получено. |
 | `agent.flow.version_activated` | Активирована версия flow. |
-| `agent.role.version_activated` | Активирована версия роли или prompt. |
+| `agent.role.version_activated` | Активирована версия роли. |
+| `agent.prompt.version_activated` | Активирована версия prompt. |
 
 ## Состояние реализации
 
@@ -133,7 +134,7 @@ MCP-инструменты не должны принимать свободны
 - `v1` контракт должен покрыть согласованный объём доменного API, даже если реализация поставляется по срезам.
 - Если контракт опережает реализацию, delivery-документ фиксирует реализованные и отложенные операции.
 - События должны проектироваться так, чтобы переход с PostgreSQL event log на брокер не ломал payload.
-- `Run` должен сохранять версии flow/stage/role/prompt/guidance, чтобы новая версия конфигурации не меняла старые результаты.
+- `Run` должен сохранять immutable-ссылки и версии flow/stage/role/prompt/guidance, включая digest роли и prompt, чтобы новая версия конфигурации не меняла старые результаты.
 
 ## Апрув
 

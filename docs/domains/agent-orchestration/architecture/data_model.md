@@ -22,7 +22,7 @@ approvals:
 
 - Ключевые сущности: `Flow`, `FlowVersion`, `Stage`, `StageTransition`, `RoleProfile`, `StageRoleBinding`, `PromptTemplate`, `PromptTemplateVersion`, `AgentSession`, `AgentRun`, `AcceptanceCheck`, `AcceptanceResult`, `FollowUpIntent`, `AutomationBinding`.
 - Технические агрегаты: `CommandResult`, `OutboxEvent`.
-- Основные связи: flow содержит этапы; этапы привязывают роли; роль использует prompt version; сессия содержит agent `Run`; `Run` фиксирует версии flow/stage/role/prompt и ссылки на provider/runtime/package.
+- Основные связи: flow содержит этапы; этапы привязывают роли; роль использует prompt version; сессия содержит agent `Run`; `Run` фиксирует immutable-ссылки и версии flow/stage/role/prompt/guidance, а также ссылки на provider/runtime/package.
 - Риски миграций: нельзя хранить runtime filesystem, provider-native истину, пакетную истину, диалоговые сообщения, секреты и полные логи в БД `agent-manager`.
 
 ## Правило внешних ссылок
@@ -174,9 +174,13 @@ approvals:
 |---|---|---:|---|
 | `id` | uuid | нет | Идентификатор запуска. |
 | `session_id` | uuid | нет | Сессия-владелец. |
+| `flow_version_id` | uuid | да | Версия flow, использованная именно этим запуском; не выводится из текущего состояния сессии. |
 | `stage_id` | uuid | да | Этап, если run связан с flow. |
 | `role_profile_id` | uuid | нет | Роль. |
+| `role_profile_version` | bigint | нет | Версия профиля роли на момент запуска. |
+| `role_profile_digest` | text | нет | Digest нормализованного профиля роли на момент запуска. |
 | `prompt_template_version_id` | uuid | нет | Версия prompt. |
+| `prompt_template_digest` | text | нет | Digest prompt version, использованной при запуске. |
 | `runtime_ref` | text | да | Ссылка на slot/runtime context. |
 | `provider_target_ref` | text | да | Основная provider-native цель. |
 | `guidance_refs` | jsonb | нет | Использованные руководящие пакеты и версии. |
@@ -276,7 +280,7 @@ approvals:
 - `RoleProfile` владеет `PromptTemplate` и его версиями.
 - `StageRoleBinding` связывает `Stage` и `RoleProfile`.
 - `AgentSession` содержит несколько `AgentRun`.
-- `AgentRun` фиксирует версии `FlowVersion`, `Stage`, `RoleProfile`, `PromptTemplateVersion` и использованные guidance refs.
+- `AgentRun` фиксирует `FlowVersion`, `Stage`, `RoleProfile` с `role_profile_version` и `role_profile_digest`, `PromptTemplateVersion` с digest и использованные guidance refs.
 - `AcceptanceResult` и `FollowUpIntent` относятся к `AgentSession`, `AgentRun` и `Stage`.
 - Внутри БД `agent-manager` допустимы внешние ключи между своими таблицами.
 - Ссылки на provider, runtime, package, interaction, project и access домены хранятся как внешние идентификаторы без SQL-связей с чужими БД.
@@ -287,6 +291,7 @@ approvals:
 |---|---|
 | Активные сессии по provider-native задаче | `(provider_work_item_ref, status)` |
 | Запуски по сессии и статусу | `(session_id, status, created_at)` |
+| Запуски по flow/stage/role | `(flow_version_id, stage_id, role_profile_id, status)` |
 | Ожидающие решения или runtime | `(status, updated_at)` для `AgentRun` и `AcceptanceResult`. |
 | Активная версия flow | `(flow_id, status, version)` |
 | Активные роли по scope | `(scope_type, scope_ref, status, slug)` |
