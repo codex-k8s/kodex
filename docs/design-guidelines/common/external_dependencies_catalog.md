@@ -28,8 +28,8 @@
 | `github.com/nicksnyder/go-i18n/v2` | `v2.6.1` | Backend i18n | локализация системных message id через общий runtime `libs/go/i18n` |
 | `github.com/golang-jwt/jwt/v5` | `v5.3.0` | Auth | выпуск и валидация short-lived JWT для staff API |
 | `golang.org/x/crypto` | `v0.47.0` | Security | sealed-box шифрование значений для GitHub repository secrets (`CreateOrUpdateRepoSecret`) |
-| `k8s.io/client-go` | `v0.35.0` | Kubernetes integration | запуск/проверка Job через Kubernetes SDK |
-| `k8s.io/api` | `v0.35.0` | Kubernetes API types | типы `batch/v1`, `core/v1` для Job/Pod |
+| `k8s.io/client-go` | `v0.35.0` | Kubernetes integration | проверка связности кластера через discovery API и запуск/проверка Job через Kubernetes SDK |
+| `k8s.io/api` | `v0.35.0` | Kubernetes API types | типы Kubernetes для Job/Pod и будущих расширенных проверок кластера |
 | `k8s.io/apimachinery` | `v0.35.0` | Kubernetes API machinery | ошибки API, meta types, утилиты client-go |
 | `github.com/google/go-github/v82` | `v82.0.0` | Repository provider (GitHub) | настройка вебхуков и валидация доступа к репозиториям через GitHub API v3 |
 | `github.com/google/go-querystring` | `v1.2.0` | Dependency of go-github | сериализация query params для GitHub API клиента |

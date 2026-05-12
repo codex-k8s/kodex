@@ -67,7 +67,7 @@ approvals:
 
 ## Статус реализации
 
-FLEET-2 создаёт сервисный процесс `fleet-manager`, конфигурацию, gRPC-сервер, health/readiness, metrics, PostgreSQL-схему, repository-слой и локальный outbox. FLEET-3 реализует registry-команды и чтения для fleet scope, server и Kubernetes cluster, включая `platform-default` как данные реестра. Health-check и placement resolver остаются отдельными срезами FLEET-4 и FLEET-5.
+FLEET-2 создаёт сервисный процесс `fleet-manager`, конфигурацию, gRPC-сервер, health/readiness, metrics, PostgreSQL-схему, repository-слой и локальный outbox. FLEET-3 реализует registry-команды и чтения для fleet scope, server и Kubernetes cluster, включая `platform-default` как данные реестра. FLEET-4 реализует проверки связности Kubernetes API через отдельный checker, `secretresolver`, health snapshots и события `fleet.health.*`. Placement resolver остаётся отдельным срезом FLEET-5.
 
 ## MVP-реестр нескольких кластеров
 
@@ -138,15 +138,17 @@ sequenceDiagram
 sequenceDiagram
   participant W as worker
   participant F as fleet-manager
+  participant S as secretresolver
   participant K as Kubernetes API
   participant E as platform-event-log
-  W->>F: RunClusterHealthCheck(cluster_id)
-  F->>K: version, readyz, namespace probe, quota summary
-  F->>F: сохранить snapshot + cluster status
+  W->>F: RunClusterConnectivityCheck(cluster_id)
+  F->>S: Resolve(secret_store_type, secret_store_ref)
+  F->>K: ServerVersion через kubeconfig в памяти процесса
+  F->>F: сохранить check + snapshot + latest cluster health
   F->>E: опубликовать fleet.health.*
 ```
 
-Проверка хранит только ограниченный snapshot: статус, latency, короткую ошибку, capacity summary и timestamps. Полное состояние Kubernetes остаётся в Kubernetes и системах наблюдаемости.
+Проверка хранит только ограниченный snapshot: health status, capacity status, latency, короткую безопасную ошибку, техническую сводку и timestamps. FLEET-4 проверяет связность через `ServerVersion`; расширенные probes, quota/capacity summary и автоматизация rebalancing остаются отдельными улучшениями. Полное состояние Kubernetes остаётся в Kubernetes и системах наблюдаемости.
 
 ### Размещение runtime
 

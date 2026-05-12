@@ -98,6 +98,20 @@ func defaultClusterHealth(status enum.ClusterHealthStatus) enum.ClusterHealthSta
 	return status
 }
 
+func defaultCapacityStatus(status enum.CapacityStatus) enum.CapacityStatus {
+	if status == "" {
+		return enum.CapacityStatusUnknown
+	}
+	return status
+}
+
+func defaultConnectivityStatus(status enum.ConnectivityCheckStatus) enum.ConnectivityCheckStatus {
+	if status == "" {
+		return enum.ConnectivityCheckStatusFailed
+	}
+	return status
+}
+
 func validateFleetScope(scope entity.FleetScope) error {
 	if scope.ID == uuid.Nil || trimString(scope.ScopeKey) == "" || trimString(scope.DisplayName) == "" {
 		return errs.ErrInvalidArgument
@@ -132,6 +146,26 @@ func validateKubernetesCluster(cluster entity.KubernetesCluster) error {
 		return err
 	}
 	return nil
+}
+
+func validateClusterConnectivityCheck(check entity.ClusterConnectivityCheck) error {
+	if check.ID == uuid.Nil || check.ClusterID == uuid.Nil || defaultConnectivityStatus(check.Status) == "" || check.CreatedAt.IsZero() {
+		return errs.ErrInvalidArgument
+	}
+	if check.LatencyMS != nil && *check.LatencyMS < 0 {
+		return errs.ErrInvalidArgument
+	}
+	if check.StartedAt != nil && check.FinishedAt != nil && check.FinishedAt.Before(*check.StartedAt) {
+		return errs.ErrInvalidArgument
+	}
+	return nil
+}
+
+func validateClusterHealthSnapshot(snapshot entity.ClusterHealthSnapshot) error {
+	if snapshot.ID == uuid.Nil || snapshot.ClusterID == uuid.Nil || defaultClusterHealth(snapshot.HealthStatus) == "" || defaultCapacityStatus(snapshot.CapacityStatus) == "" || snapshot.CheckedAt.IsZero() {
+		return errs.ErrInvalidArgument
+	}
+	return requireJSONObject(snapshot.SummaryJSON)
 }
 
 func validateSecretReference(reference string) error {

@@ -64,6 +64,20 @@ func (s *Service) clusterEvent(eventType string, cluster entity.KubernetesCluste
 	})
 }
 
+func (s *Service) healthEvent(eventType string, cluster entity.KubernetesCluster, snapshot entity.ClusterHealthSnapshot, previousStatus string) (entity.OutboxEvent, error) {
+	return s.aggregateEvent(eventType, fleetAggregateHealth, snapshot.ID, snapshot.CheckedAt, fleetevents.Payload{
+		ClusterID:      cluster.ID.String(),
+		ClusterKey:     cluster.ClusterKey,
+		FleetScopeID:   cluster.FleetScopeID.String(),
+		ServerID:       uuidPtrString(cluster.ServerID),
+		HealthStatus:   string(snapshot.HealthStatus),
+		CapacityStatus: string(snapshot.CapacityStatus),
+		PreviousStatus: previousStatus,
+		ErrorCode:      snapshot.ErrorCode,
+		ErrorMessage:   snapshot.ErrorMessage,
+	})
+}
+
 func uuidPtrString(id *uuid.UUID) string {
 	if id == nil || *id == uuid.Nil {
 		return ""

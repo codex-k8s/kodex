@@ -10,9 +10,11 @@ import (
 
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
+	"github.com/codex-k8s/kodex/libs/go/secretresolver"
 	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
 	accessaccountsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/access_accounts/v1"
 	accessclient "github.com/codex-k8s/kodex/services/internal/fleet-manager/internal/clients/access"
+	fleetkubernetes "github.com/codex-k8s/kodex/services/internal/fleet-manager/internal/clients/kubernetes"
 	fleetservice "github.com/codex-k8s/kodex/services/internal/fleet-manager/internal/domain/service"
 	fleetpostgres "github.com/codex-k8s/kodex/services/internal/fleet-manager/internal/repository/postgres/fleet"
 	fleetgrpc "github.com/codex-k8s/kodex/services/internal/fleet-manager/internal/transport/grpc"
@@ -51,8 +53,17 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	secretResolver, err := newSecretResolver(cfg.SecretResolver)
+	if err != nil {
+		return err
+	}
+	checker, err := fleetkubernetes.NewChecker(secretResolver, cfg.Connectivity.CheckTimeout)
+	if err != nil {
+		return err
+	}
 	fleetService := fleetservice.NewWithConfig(fleetRepository, systemClock{}, uuidGenerator{}, fleetservice.Config{
 		Authorizer:          authorizer,
+		ConnectivityChecker: checker,
 		PlatformDefaultSeed: seed,
 	})
 	if cfg.Bootstrap.SeedEnabled {
@@ -146,6 +157,24 @@ func connectAuthorizer(enabled bool, accessConfig accessclient.Config) (fleetser
 		return nil, nil, err
 	}
 	return authorizer, conn, nil
+}
+
+func newSecretResolver(cfg FleetSecretConfig) (secretresolver.Resolver, error) {
+	backends := make(map[string]secretresolver.Backend)
+	if cfg.EnvEnabled {
+		backends[secretresolver.StoreTypeEnv] = secretresolver.NewEnvBackend()
+	}
+	if cfg.MountedKubernetesRoot != "" {
+		backend, err := secretresolver.NewMountedKubernetesBackend(secretresolver.MountedKubernetesBackendConfig{
+			Root:           cfg.MountedKubernetesRoot,
+			MaxSecretBytes: cfg.MountedKubernetesMaxBytes,
+		})
+		if err != nil {
+			return nil, err
+		}
+		backends[secretresolver.StoreTypeKubernetesMountedSecret] = backend
+	}
+	return secretresolver.NewMux(backends)
 }
 
 type systemClock struct{}

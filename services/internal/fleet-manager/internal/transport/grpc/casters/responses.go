@@ -90,6 +90,47 @@ func ListKubernetesClustersResponse(result fleetservice.ListKubernetesClustersRe
 	return &fleetv1.ListKubernetesClustersResponse{Clusters: mapSlice(result.Clusters, KubernetesClusterToProto), Page: pageResponseToProto(result.Page)}
 }
 
+// ClusterConnectivityCheckResponse maps one connectivity check to gRPC.
+func ClusterConnectivityCheckResponse(check entity.ClusterConnectivityCheck) *fleetv1.ClusterConnectivityCheckResponse {
+	return &fleetv1.ClusterConnectivityCheckResponse{ConnectivityCheck: ClusterConnectivityCheckToProto(check)}
+}
+
+func ClusterConnectivityCheckToProto(check entity.ClusterConnectivityCheck) *fleetv1.ClusterConnectivityCheck {
+	return &fleetv1.ClusterConnectivityCheck{
+		Id:           check.ID.String(),
+		ClusterId:    check.ClusterID.String(),
+		Status:       ConnectivityCheckStatusToProto(check.Status),
+		StartedAt:    timePtrString(check.StartedAt),
+		FinishedAt:   timePtrString(check.FinishedAt),
+		LatencyMs:    int64Ptr(check.LatencyMS),
+		ErrorCode:    check.ErrorCode,
+		ErrorMessage: check.ErrorMessage,
+		CreatedAt:    formatTime(check.CreatedAt),
+	}
+}
+
+// ClusterHealthSnapshotResponse maps one health snapshot to gRPC.
+func ClusterHealthSnapshotResponse(snapshot entity.ClusterHealthSnapshot) *fleetv1.ClusterHealthSnapshotResponse {
+	return &fleetv1.ClusterHealthSnapshotResponse{HealthSnapshot: ClusterHealthSnapshotToProto(snapshot)}
+}
+
+func ClusterHealthSnapshotToProto(snapshot entity.ClusterHealthSnapshot) *fleetv1.ClusterHealthSnapshot {
+	return &fleetv1.ClusterHealthSnapshot{
+		Id:             snapshot.ID.String(),
+		ClusterId:      snapshot.ClusterID.String(),
+		HealthStatus:   ClusterHealthStatusToProto(snapshot.HealthStatus),
+		CapacityStatus: CapacityStatusToProto(snapshot.CapacityStatus),
+		SummaryJson:    string(snapshot.SummaryJSON),
+		CheckedAt:      formatTime(snapshot.CheckedAt),
+		ErrorCode:      snapshot.ErrorCode,
+		ErrorMessage:   snapshot.ErrorMessage,
+	}
+}
+
+func ListClusterHealthSnapshotsResponse(result fleetservice.ListClusterHealthSnapshotsResult) *fleetv1.ListClusterHealthSnapshotsResponse {
+	return &fleetv1.ListClusterHealthSnapshotsResponse{HealthSnapshots: mapSlice(result.Snapshots, ClusterHealthSnapshotToProto), Page: pageResponseToProto(result.Page)}
+}
+
 func formatTime(value time.Time) string {
 	if value.IsZero() {
 		return ""
@@ -103,6 +144,14 @@ func timePtrString(value *time.Time) *string {
 	}
 	formatted := formatTime(*value)
 	return &formatted
+}
+
+func int64Ptr(value *int64) *int64 {
+	if value == nil {
+		return nil
+	}
+	copied := *value
+	return &copied
 }
 
 func mapSlice[I any, O any](items []I, convert func(I) *O) []*O {

@@ -17,14 +17,16 @@ import (
 
 // Config contains process-level fleet-manager server configuration.
 type Config struct {
-	HTTPAddr         string                `env:"KODEX_FLEET_MANAGER_HTTP_ADDR" envDefault:":8080"`
-	GRPCAddr         string                `env:"KODEX_FLEET_MANAGER_GRPC_ADDR" envDefault:":9090"`
-	GRPC             FleetGRPCConfig       `envPrefix:"KODEX_FLEET_MANAGER_GRPC_"`
-	Database         FleetDatabaseConfig   `envPrefix:"KODEX_FLEET_MANAGER_DATABASE_"`
-	EventLogDatabase FleetEventLogDBConfig `envPrefix:"KODEX_FLEET_MANAGER_EVENT_LOG_DATABASE_"`
-	Outbox           FleetOutboxConfig     `envPrefix:"KODEX_FLEET_MANAGER_OUTBOX_"`
-	Access           FleetAccessConfig     `envPrefix:"KODEX_FLEET_MANAGER_ACCESS_"`
-	Bootstrap        FleetBootstrapConfig  `envPrefix:"KODEX_FLEET_MANAGER_BOOTSTRAP_"`
+	HTTPAddr         string                  `env:"KODEX_FLEET_MANAGER_HTTP_ADDR" envDefault:":8080"`
+	GRPCAddr         string                  `env:"KODEX_FLEET_MANAGER_GRPC_ADDR" envDefault:":9090"`
+	GRPC             FleetGRPCConfig         `envPrefix:"KODEX_FLEET_MANAGER_GRPC_"`
+	Database         FleetDatabaseConfig     `envPrefix:"KODEX_FLEET_MANAGER_DATABASE_"`
+	EventLogDatabase FleetEventLogDBConfig   `envPrefix:"KODEX_FLEET_MANAGER_EVENT_LOG_DATABASE_"`
+	Outbox           FleetOutboxConfig       `envPrefix:"KODEX_FLEET_MANAGER_OUTBOX_"`
+	Access           FleetAccessConfig       `envPrefix:"KODEX_FLEET_MANAGER_ACCESS_"`
+	Bootstrap        FleetBootstrapConfig    `envPrefix:"KODEX_FLEET_MANAGER_BOOTSTRAP_"`
+	SecretResolver   FleetSecretConfig       `envPrefix:"KODEX_FLEET_MANAGER_SECRET_RESOLVER_"`
+	Connectivity     FleetConnectivityConfig `envPrefix:"KODEX_FLEET_MANAGER_CONNECTIVITY_"`
 }
 
 // FleetGRPCConfig contains gRPC boundary limits.
@@ -98,6 +100,18 @@ type FleetAccessConfig struct {
 	CheckTimeout           time.Duration `env:"MANAGER_CHECK_TIMEOUT" envDefault:"3s"`
 }
 
+// FleetSecretConfig contains value-safe secret resolver backend settings.
+type FleetSecretConfig struct {
+	EnvEnabled                bool   `env:"ENV_ENABLED" envDefault:"true"`
+	MountedKubernetesRoot     string `env:"MOUNTED_KUBERNETES_ROOT"`
+	MountedKubernetesMaxBytes int64  `env:"MOUNTED_KUBERNETES_MAX_SECRET_BYTES" envDefault:"1048576"`
+}
+
+// FleetConnectivityConfig contains bounded Kubernetes API probe settings.
+type FleetConnectivityConfig struct {
+	CheckTimeout time.Duration `env:"CHECK_TIMEOUT" envDefault:"5s"`
+}
+
 // FleetBootstrapConfig contains bootstrap seed for the default local installation path.
 type FleetBootstrapConfig struct {
 	SeedEnabled       bool   `env:"SEED_ENABLED" envDefault:"true"`
@@ -136,6 +150,8 @@ func (cfg Config) Validate() error {
 		cfg.validateDatabase,
 		cfg.validateOutbox,
 		cfg.validateAccess,
+		cfg.validateSecrets,
+		cfg.validateConnectivity,
 		cfg.validateBootstrap,
 	}
 	for _, validate := range validators {
@@ -255,6 +271,19 @@ func (cfg Config) validateAccess() error {
 		return fmt.Errorf("KODEX_FLEET_MANAGER_ACCESS_MANAGER_CHECK_TIMEOUT is invalid")
 	}
 	return nil
+}
+
+func (cfg Config) validateSecrets() error {
+	if cfg.SecretResolver.MountedKubernetesMaxBytes <= 0 {
+		return fmt.Errorf("KODEX_FLEET_MANAGER_SECRET_RESOLVER_MOUNTED_KUBERNETES_MAX_SECRET_BYTES is invalid")
+	}
+	return nil
+}
+
+func (cfg Config) validateConnectivity() error {
+	return validatePositiveDurations(map[string]time.Duration{
+		"KODEX_FLEET_MANAGER_CONNECTIVITY_CHECK_TIMEOUT": cfg.Connectivity.CheckTimeout,
+	})
 }
 
 func (cfg Config) validateBootstrap() error {

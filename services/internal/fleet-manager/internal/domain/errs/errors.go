@@ -5,17 +5,21 @@ import "errors"
 
 var (
 	// ErrAlreadyExists marks a unique identity conflict.
-	ErrAlreadyExists = errors.New("fleet already exists")
+	ErrAlreadyExists = fleetError("already exists")
 	// ErrConflict marks an optimistic concurrency conflict.
-	ErrConflict = errors.New("fleet conflict")
+	ErrConflict = fleetError("conflict")
 	// ErrDependencyUnavailable marks an unavailable dependent service.
-	ErrDependencyUnavailable = errors.New("fleet dependency unavailable")
+	ErrDependencyUnavailable = fleetError("dependency unavailable")
 	// ErrForbidden marks an access decision denial.
-	ErrForbidden = errors.New("fleet forbidden")
+	ErrForbidden = fleetError("forbidden")
 	// ErrInvalidArgument marks an invalid fleet command or persistence argument.
-	ErrInvalidArgument = errors.New("invalid fleet argument")
+	ErrInvalidArgument = fleetError("invalid argument")
 	// ErrNotFound marks absent fleet state.
-	ErrNotFound = errors.New("fleet not found")
+	ErrNotFound = fleetError("not found")
 	// ErrPreconditionFailed marks a missing or invalid dependent fleet state.
-	ErrPreconditionFailed = errors.New("fleet precondition failed")
+	ErrPreconditionFailed = fleetError("precondition failed")
 )
+
+func fleetError(message string) error {
+	return errors.New("fleet " + message)
+}

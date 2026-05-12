@@ -53,6 +53,21 @@ var clusterHealthStatuses = map[fleetv1.ClusterHealthStatus]enum.ClusterHealthSt
 	fleetv1.ClusterHealthStatus_CLUSTER_HEALTH_STATUS_UNHEALTHY: enum.ClusterHealthStatusUnhealthy,
 }
 
+var capacityStatuses = map[fleetv1.CapacityStatus]enum.CapacityStatus{
+	fleetv1.CapacityStatus_CAPACITY_STATUS_UNKNOWN:   enum.CapacityStatusUnknown,
+	fleetv1.CapacityStatus_CAPACITY_STATUS_OK:        enum.CapacityStatusOK,
+	fleetv1.CapacityStatus_CAPACITY_STATUS_LIMITED:   enum.CapacityStatusLimited,
+	fleetv1.CapacityStatus_CAPACITY_STATUS_EXHAUSTED: enum.CapacityStatusExhausted,
+}
+
+var connectivityCheckStatuses = map[fleetv1.ConnectivityCheckStatus]enum.ConnectivityCheckStatus{
+	fleetv1.ConnectivityCheckStatus_CONNECTIVITY_CHECK_STATUS_PENDING:   enum.ConnectivityCheckStatusPending,
+	fleetv1.ConnectivityCheckStatus_CONNECTIVITY_CHECK_STATUS_RUNNING:   enum.ConnectivityCheckStatusRunning,
+	fleetv1.ConnectivityCheckStatus_CONNECTIVITY_CHECK_STATUS_SUCCEEDED: enum.ConnectivityCheckStatusSucceeded,
+	fleetv1.ConnectivityCheckStatus_CONNECTIVITY_CHECK_STATUS_FAILED:    enum.ConnectivityCheckStatusFailed,
+	fleetv1.ConnectivityCheckStatus_CONNECTIVITY_CHECK_STATUS_TIMED_OUT: enum.ConnectivityCheckStatusTimedOut,
+}
+
 func fleetScopeTypeFromProto(value fleetv1.FleetScopeType) (enum.FleetScopeType, error) {
 	return enumFromProto(value, fleetv1.FleetScopeType_FLEET_SCOPE_TYPE_UNSPECIFIED, fleetScopeTypes, false)
 }
@@ -99,6 +114,14 @@ func clusterHealthStatusesFromProto(values []fleetv1.ClusterHealthStatus) ([]enu
 
 func ClusterHealthStatusToProto(value enum.ClusterHealthStatus) fleetv1.ClusterHealthStatus {
 	return enumToProto(value, fleetv1.ClusterHealthStatus_CLUSTER_HEALTH_STATUS_UNSPECIFIED, invertEnum(clusterHealthStatuses))
+}
+
+func CapacityStatusToProto(value enum.CapacityStatus) fleetv1.CapacityStatus {
+	return enumToProto(value, fleetv1.CapacityStatus_CAPACITY_STATUS_UNSPECIFIED, invertEnum(capacityStatuses))
+}
+
+func ConnectivityCheckStatusToProto(value enum.ConnectivityCheckStatus) fleetv1.ConnectivityCheckStatus {
+	return enumToProto(value, fleetv1.ConnectivityCheckStatus_CONNECTIVITY_CHECK_STATUS_UNSPECIFIED, invertEnum(connectivityCheckStatuses))
 }
 
 func fleetScopeTypesFromProto(values []fleetv1.FleetScopeType) ([]enum.FleetScopeType, error) {

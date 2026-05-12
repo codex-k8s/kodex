@@ -2,6 +2,8 @@
 package service
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 
 	"github.com/codex-k8s/kodex/services/internal/fleet-manager/internal/domain/types/entity"
@@ -141,6 +143,53 @@ type ListKubernetesClustersInput struct {
 type ListKubernetesClustersResult struct {
 	Clusters []entity.KubernetesCluster
 	Page     value.PageResult
+}
+
+// RunClusterConnectivityCheckInput requests a bounded Kubernetes API connectivity check.
+type RunClusterConnectivityCheckInput struct {
+	ClusterID uuid.UUID
+	Meta      value.CommandMeta
+}
+
+// GetClusterHealthSnapshotInput reads the latest or a concrete cluster health snapshot.
+type GetClusterHealthSnapshotInput struct {
+	ClusterID        uuid.UUID
+	HealthSnapshotID *uuid.UUID
+	Meta             value.QueryMeta
+}
+
+// ListClusterHealthSnapshotsInput selects health snapshots for one cluster.
+type ListClusterHealthSnapshotsInput struct {
+	ClusterID    uuid.UUID
+	CheckedSince *time.Time
+	Page         value.PageRequest
+	Meta         value.QueryMeta
+}
+
+// ListClusterHealthSnapshotsResult returns health snapshots and paging metadata.
+type ListClusterHealthSnapshotsResult struct {
+	Snapshots []entity.ClusterHealthSnapshot
+	Page      value.PageResult
+}
+
+// ConnectivityCheckTarget contains safe cluster references required by a checker.
+type ConnectivityCheckTarget struct {
+	ClusterID       uuid.UUID
+	ClusterKey      string
+	APIEndpointRef  string
+	SecretStoreType string
+	SecretStoreRef  string
+}
+
+// ConnectivityCheckResult is a value-safe checker response.
+type ConnectivityCheckResult struct {
+	Status         enum.ConnectivityCheckStatus
+	HealthStatus   enum.ClusterHealthStatus
+	CapacityStatus enum.CapacityStatus
+	SummaryJSON    []byte
+	LatencyMS      *int64
+	ErrorCode      string
+	ErrorMessage   string
 }
 
 // PlatformDefaultSeed describes bootstrap data for a single-install default path.

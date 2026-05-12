@@ -1,14 +1,23 @@
 package service
 
 import (
+	"context"
+
 	"github.com/google/uuid"
 
+	"github.com/codex-k8s/kodex/services/internal/fleet-manager/internal/domain/errs"
 	fleetrepo "github.com/codex-k8s/kodex/services/internal/fleet-manager/internal/domain/repository/fleet"
 )
+
+// ConnectivityChecker performs value-safe cluster connectivity probes.
+type ConnectivityChecker interface {
+	CheckClusterConnectivity(context.Context, ConnectivityCheckTarget) (ConnectivityCheckResult, error)
+}
 
 // Config contains fleet domain defaults and integrations.
 type Config struct {
 	Authorizer          Authorizer
+	ConnectivityChecker ConnectivityChecker
 	PlatformDefaultSeed PlatformDefaultSeed
 }
 
@@ -18,6 +27,7 @@ type Service struct {
 	clock      fleetrepo.Clock
 	ids        fleetrepo.IDGenerator
 	authorizer Authorizer
+	checker    ConnectivityChecker
 	seed       PlatformDefaultSeed
 }
 
@@ -27,7 +37,14 @@ func NewWithConfig(repository fleetrepo.Repository, clock fleetrepo.Clock, ids f
 	if authorizer == nil {
 		authorizer = AllowAllAuthorizer{}
 	}
-	return &Service{repository: repository, clock: clock, ids: ids, authorizer: authorizer, seed: normalizedSeed(cfg.PlatformDefaultSeed)}
+	return &Service{repository: repository, clock: clock, ids: ids, authorizer: authorizer, checker: cfg.ConnectivityChecker, seed: normalizedSeed(cfg.PlatformDefaultSeed)}
+}
+
+func (s *Service) requireChecker() (ConnectivityChecker, error) {
+	if s.checker == nil {
+		return nil, errs.ErrDependencyUnavailable
+	}
+	return s.checker, nil
 }
 
 func normalizedSeed(seed PlatformDefaultSeed) PlatformDefaultSeed {

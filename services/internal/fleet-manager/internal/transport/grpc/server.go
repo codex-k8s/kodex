@@ -36,6 +36,9 @@ type fleetService interface {
 	EnableKubernetesCluster(context.Context, uuid.UUID, value.CommandMeta) (entity.KubernetesCluster, error)
 	GetKubernetesCluster(context.Context, uuid.UUID, value.QueryMeta) (entity.KubernetesCluster, error)
 	ListKubernetesClusters(context.Context, fleetservice.ListKubernetesClustersInput) (fleetservice.ListKubernetesClustersResult, error)
+	RunClusterConnectivityCheck(context.Context, fleetservice.RunClusterConnectivityCheckInput) (entity.ClusterConnectivityCheck, error)
+	GetClusterHealthSnapshot(context.Context, fleetservice.GetClusterHealthSnapshotInput) (entity.ClusterHealthSnapshot, error)
+	ListClusterHealthSnapshots(context.Context, fleetservice.ListClusterHealthSnapshotsInput) (fleetservice.ListClusterHealthSnapshotsResult, error)
 }
 
 // Server implements the generated FleetManagerServiceServer contract.
@@ -145,4 +148,19 @@ func (s *Server) GetKubernetesCluster(ctx context.Context, request *fleetv1.GetK
 // ListKubernetesClusters returns clusters by scope, server, status, region or health.
 func (s *Server) ListKubernetesClusters(ctx context.Context, request *fleetv1.ListKubernetesClustersRequest) (*fleetv1.ListKubernetesClustersResponse, error) {
 	return grpcserver.HandleUnary(ctx, request, grpccasters.ListKubernetesClustersInput, s.service.ListKubernetesClusters, grpccasters.ListKubernetesClustersResponse)
+}
+
+// RunClusterConnectivityCheck verifies cluster connectivity and stores a health snapshot.
+func (s *Server) RunClusterConnectivityCheck(ctx context.Context, request *fleetv1.RunClusterConnectivityCheckRequest) (*fleetv1.ClusterConnectivityCheckResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.RunClusterConnectivityCheckInput, s.service.RunClusterConnectivityCheck, grpccasters.ClusterConnectivityCheckResponse)
+}
+
+// GetClusterHealthSnapshot returns latest or selected health state.
+func (s *Server) GetClusterHealthSnapshot(ctx context.Context, request *fleetv1.GetClusterHealthSnapshotRequest) (*fleetv1.ClusterHealthSnapshotResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.GetClusterHealthSnapshotInput, s.service.GetClusterHealthSnapshot, grpccasters.ClusterHealthSnapshotResponse)
+}
+
+// ListClusterHealthSnapshots returns cluster health history.
+func (s *Server) ListClusterHealthSnapshots(ctx context.Context, request *fleetv1.ListClusterHealthSnapshotsRequest) (*fleetv1.ListClusterHealthSnapshotsResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.ListClusterHealthSnapshotsInput, s.service.ListClusterHealthSnapshots, grpccasters.ListClusterHealthSnapshotsResponse)
 }

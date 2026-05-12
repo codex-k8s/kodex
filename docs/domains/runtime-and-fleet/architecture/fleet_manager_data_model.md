@@ -158,7 +158,7 @@ approvals:
 | `cluster_id` | UUID | no | indexed | Кластер. |
 | `health_status` | text | no | indexed | `healthy`, `degraded`, `unhealthy`, `unknown`. |
 | `capacity_status` | text | no | indexed | `ok`, `limited`, `exhausted`, `unknown`. |
-| `summary_json` | jsonb | no | default {} | Ограниченная сводка: nodes, allocatable, quotas, pressure flags. |
+| `summary_json` | jsonb | no | default {} | Ограниченная безопасная сводка. В FLEET-4 это результат probe и версия Kubernetes; расширенные nodes/quotas/pressure-сигналы добавляются отдельным срезом. |
 | `checked_at` | timestamptz | no | indexed | Время проверки. |
 | `error_code` | text | no | default '' | Ошибка, если есть. |
 | `error_message` | text | no | default '' | Короткое сообщение. |
@@ -254,7 +254,15 @@ FLEET-3 добавляет registry-команды и чтения:
 - bootstrap seed `platform-default` как обычные записи `fleet_manager_scopes` и `fleet_manager_kubernetes_clusters`;
 - миграцию `20260512110000_fleet_manager_cluster_key_scope_unique.sql`, которая фиксирует уникальность `cluster_key` внутри `fleet_scope_id`.
 
-Connectivity checks, health snapshots и resolver размещения остаются в следующих срезах.
+FLEET-4 добавляет health-поверхность:
+
+- `RunClusterConnectivityCheck` создаёт `ClusterConnectivityCheck`, `ClusterHealthSnapshot`, обновляет latest health поля кластера и пишет command result;
+- health telemetry не увеличивает `KubernetesCluster.version`: optimistic concurrency version используется для операторских изменений registry, а не для фоновых проверок;
+- проверка использует `secretresolver` и kubeconfig только в памяти процесса, без сохранения значения секрета;
+- `fleet.health.checked` публикуется на каждую завершённую проверку, `fleet.health.degraded` — при переходе в degraded/unhealthy;
+- `GetClusterHealthSnapshot` и `ListClusterHealthSnapshots` читают сохранённые snapshots по кластеру.
+
+Resolver размещения остаётся следующим срезом.
 
 ## Что не хранится
 
