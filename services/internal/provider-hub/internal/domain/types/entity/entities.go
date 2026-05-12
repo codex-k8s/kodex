@@ -99,6 +99,7 @@ type ProviderCommentProjection struct {
 // ProviderRelationship stores a normalized relationship between provider-native objects.
 type ProviderRelationship struct {
 	ID                uuid.UUID
+	Version           int64
 	SourceWorkItemID  uuid.UUID
 	TargetWorkItemID  *uuid.UUID
 	TargetProviderRef string

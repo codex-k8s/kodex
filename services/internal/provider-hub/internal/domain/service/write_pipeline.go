@@ -409,6 +409,11 @@ func (s *Service) UpdateRelationship(ctx context.Context, input UpdateRelationsh
 		scopeID:           providerScopeIDFromTarget(input.Source),
 		resultTarget:      resultTarget,
 		meta:              input.Meta,
+		validateExpectedVersion: s.expectedRelationshipVersionCheck(
+			input,
+			targetProviderRef,
+			input.Meta.ExpectedVersion,
+		),
 		executorRequest: providerclient.WriteRequest{
 			CommandID:    providerCommandKey(input.Meta),
 			TargetRef:    targetRef,
@@ -954,6 +959,44 @@ func (s *Service) expectedCommentVersionCheck(target ProviderTarget, providerCom
 	}
 }
 
+func (s *Service) expectedRelationshipVersionCheck(input UpdateRelationshipInput, targetProviderRef string, expectedVersion *int64) func(context.Context) error {
+	if expectedVersion == nil {
+		return nil
+	}
+	return func(ctx context.Context) error {
+		source, err := s.repository.GetWorkItemProjection(ctx, workItemLookupFromTarget(input.Source))
+		if err != nil {
+			return err
+		}
+		var targetID *uuid.UUID
+		if input.Target != nil {
+			target, targetErr := s.repository.GetWorkItemProjection(ctx, workItemLookupFromTarget(*input.Target))
+			if targetErr != nil {
+				return targetErr
+			}
+			targetID = &target.ID
+		}
+		relationships, _, err := s.repository.ListRelationships(ctx, query.RelationshipFilter{
+			WorkItemProjectionID: &source.ID,
+			RelationshipTypes:    []string{strings.TrimSpace(input.RelationshipType)},
+			Page:                 value.PageRequest{PageSize: maxExpectedRelationshipCandidates},
+		})
+		if err != nil {
+			return err
+		}
+		for _, relationship := range relationships {
+			if !sameRelationshipIdentity(relationship, source.ID, targetID, targetProviderRef) {
+				continue
+			}
+			if relationship.Version != *expectedVersion {
+				return errs.ErrConflict
+			}
+			return nil
+		}
+		return errs.ErrConflict
+	}
+}
+
 func workItemLookupFromTarget(target ProviderTarget) query.ProviderTargetLookup {
 	return query.ProviderTargetLookup{
 		ProviderSlug:       target.ProviderSlug,
@@ -963,4 +1006,19 @@ func workItemLookupFromTarget(target ProviderTarget) query.ProviderTargetLookup 
 		ProviderObjectID:   strings.TrimSpace(target.ProviderObjectID),
 		WebURL:             strings.TrimSpace(target.WebURL),
 	}
+}
+
+const maxExpectedRelationshipCandidates int32 = 100
+
+func sameRelationshipIdentity(relationship entity.ProviderRelationship, sourceID uuid.UUID, targetID *uuid.UUID, targetProviderRef string) bool {
+	if relationship.SourceWorkItemID != sourceID || relationship.TargetProviderRef != targetProviderRef {
+		return false
+	}
+	if targetID == nil {
+		return relationship.TargetWorkItemID == nil
+	}
+	if relationship.TargetWorkItemID == nil {
+		return false
+	}
+	return *relationship.TargetWorkItemID == *targetID
 }

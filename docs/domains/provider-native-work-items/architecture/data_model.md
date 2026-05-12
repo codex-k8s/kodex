@@ -163,7 +163,7 @@ approvals:
 
 Примеры связей: исходная задача, связанный `PR/MR`, follow-up, blocks, blocked-by, release link, package source link.
 
-Связь может ссылаться на уже известную внутреннюю проекцию через `target_work_item_id` или на внешнюю ссылку провайдера через `target_provider_ref`, если целевая проекция ещё не создана. Связи, извлечённые из watermark, помечаются source `watermark` и confidence `confirmed`. При свежем обновлении рабочего артефакта набор watermark-связей пересобирается целиком по полям `source_ref`, `parent_ref` и `next_ref`: отсутствующая в текущем watermark связь удаляется из подтверждённой проекции, чтобы `ListRelationships` не возвращал устаревшую ссылку.
+Связь может ссылаться на уже известную внутреннюю проекцию через `target_work_item_id` или на внешнюю ссылку провайдера через `target_provider_ref`, если целевая проекция ещё не создана. Связи, извлечённые из watermark, помечаются source `watermark` и confidence `confirmed`. При свежем обновлении рабочего артефакта набор watermark-связей пересобирается целиком по полям `source_ref`, `parent_ref` и `next_ref`: отсутствующая в текущем watermark связь удаляется из подтверждённой проекции, чтобы `ListRelationships` не возвращал устаревшую ссылку. Локальная версия связи меняется только при изменении управляемых полей связи и используется для оптимистичной конкурентной защиты в `UpdateRelationship`.
 
 | Поле | Тип | Nullable | Ограничения | Примечание |
 |---|---|---:|---|---|
@@ -175,6 +175,7 @@ approvals:
 | `source` | text | no | indexed | `provider`, `watermark`, `comment`, `manual`, `reconciliation`. |
 | `confidence` | text | no | default 'confirmed' | `confirmed`, `inferred`, `suspected`. |
 | `created_at` | timestamptz | no |  | Время создания связи. |
+| `version` | bigint | no | monotonic | Версия локальной связи для `meta.expected_version` в `UpdateRelationship`. |
 
 ### `SyncCursor`
 

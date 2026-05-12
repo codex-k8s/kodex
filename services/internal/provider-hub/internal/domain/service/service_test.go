@@ -1146,6 +1146,74 @@ func TestUpdateIssueChecksExpectedVersionBeforeExecutor(t *testing.T) {
 	}
 }
 
+func TestUpdateRelationshipChecksExpectedVersionBeforeExecutor(t *testing.T) {
+	t.Parallel()
+
+	sourceID := uuid.New()
+	targetProviderRef := "https://github.com/codex-k8s/kodex/pull/731"
+	executor := &fakeWriteExecutor{}
+	repository := &fakeRepository{
+		workItemProjection: entity.ProviderWorkItemProjection{
+			Base: entity.Base{ID: sourceID, Version: 7},
+			Kind: enum.WorkItemKindIssue,
+		},
+		relationship: entity.ProviderRelationship{
+			ID:                uuid.New(),
+			Version:           4,
+			SourceWorkItemID:  sourceID,
+			TargetProviderRef: targetProviderRef,
+			RelationshipType:  "linked_pr",
+			Source:            enum.RelationshipSourceManual,
+			Confidence:        enum.RelationshipConfidenceConfirmed,
+		},
+	}
+	service := NewWithDependencies(Dependencies{
+		Repository:             repository,
+		Clock:                  fixedClock{now: time.Date(2026, 5, 12, 10, 30, 0, 0, time.UTC)},
+		IDGenerator:            &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New()}},
+		AccountUsageResolver:   fakeAccountUsageResolver{},
+		ProviderWriteExecutors: []providerclient.WriteExecutor{executor},
+	})
+
+	expectedVersion := int64(3)
+	_, err := service.UpdateRelationship(context.Background(), UpdateRelationshipInput{
+		Source: ProviderTarget{
+			ProviderSlug:       enum.ProviderSlugGitHub,
+			RepositoryFullName: "codex-k8s/kodex",
+			WorkItemKind:       enum.WorkItemKindIssue,
+			Number:             581,
+		},
+		TargetProviderRef: &targetProviderRef,
+		RelationshipType:  "linked_pr",
+		SourceKind:        enum.RelationshipSourceManual,
+		Confidence:        enum.RelationshipConfidenceConfirmed,
+		ExternalAccountID: uuid.New(),
+		Meta: value.CommandMeta{
+			CommandID:       uuid.New(),
+			ExpectedVersion: &expectedVersion,
+			OperationPolicyContext: value.ProviderOperationPolicyContext{
+				RiskLevel: value.ProviderOperationRiskLevelLow,
+				ChangedFields: []string{
+					"source",
+					"target_provider_ref",
+					"relationship_type",
+					"source_kind",
+					"confidence",
+				},
+			},
+		},
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("UpdateRelationship() err = %v, want %v", err, errs.ErrConflict)
+	}
+	if executor.calls != 0 {
+		t.Fatalf("executor calls = %d, want 0", executor.calls)
+	}
+	if len(repository.recordedOutboxEvents) != 0 {
+		t.Fatalf("outbox = %+v, want no stored operation", repository.recordedOutboxEvents)
+	}
+}
+
 type fakeRepository struct {
 	err                       error
 	calls                     int
@@ -1159,6 +1227,7 @@ type fakeRepository struct {
 	recordedOutboxEvents      []entity.OutboxEvent
 	recordedProviderOperation entity.ProviderOperation
 	workItemProjection        entity.ProviderWorkItemProjection
+	relationship              entity.ProviderRelationship
 	lastWorkItemLookup        query.ProviderTargetLookup
 	reconciliationRequest     entity.ReconciliationRequest
 	enqueuedSyncCursors       []entity.SyncCursor
@@ -1229,6 +1298,9 @@ func (r *fakeRepository) ListComments(context.Context, query.CommentProjectionFi
 }
 
 func (r *fakeRepository) ListRelationships(context.Context, query.RelationshipFilter) ([]entity.ProviderRelationship, query.PageResult, error) {
+	if r.relationship.ID != uuid.Nil {
+		return []entity.ProviderRelationship{r.relationship}, query.PageResult{}, r.err
+	}
 	return nil, query.PageResult{}, r.err
 }
 

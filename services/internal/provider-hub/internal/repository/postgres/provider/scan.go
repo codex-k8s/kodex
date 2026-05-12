@@ -161,6 +161,7 @@ func scanRelationship(row postgreslib.RowScanner) (entity.ProviderRelationship, 
 		&relationship.RelationshipType,
 		&source,
 		&confidence,
+		&relationship.Version,
 		&relationship.CreatedAt,
 	)
 	relationship.TargetWorkItemID = postgreslib.UUIDPtrFromPG(targetID)
