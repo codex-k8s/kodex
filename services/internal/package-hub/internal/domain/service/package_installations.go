@@ -213,7 +213,7 @@ func (s *Service) applyPackageInstallationUpdate(ctx context.Context, current en
 	if !changed {
 		return entity.PackageInstallation{}, errs.ErrInvalidArgument
 	}
-	if updated.InstallationStatus == enum.PackageInstallationStatusActive && updated.SecretBindingStatus == enum.PackageSecretBindingStatusMissing {
+	if updated.InstallationStatus == enum.PackageInstallationStatusActive && !secretStatusAllowsActivation(updated.SecretBindingStatus) {
 		return entity.PackageInstallation{}, errs.ErrPreconditionFailed
 	}
 	updated.Version = current.Version + 1
@@ -259,7 +259,7 @@ func requirePackageInstallationUpdateStatus(status enum.PackageInstallationStatu
 }
 
 func installationInitialStatus(requirements packageInstallationRequirements) enum.PackageInstallationStatus {
-	if requirements.RuntimeRequirementDigest == "" && requirements.SecretBindingStatus != enum.PackageSecretBindingStatusMissing {
+	if requirements.RuntimeRequirementDigest == "" && secretStatusAllowsActivation(requirements.SecretBindingStatus) {
 		return enum.PackageInstallationStatusActive
 	}
 	return enum.PackageInstallationStatusRequested

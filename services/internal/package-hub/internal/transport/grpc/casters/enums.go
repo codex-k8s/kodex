@@ -106,6 +106,8 @@ var secretBindingStatusMap = []enumPair[packagesv1.PackageSecretBindingStatus, e
 	{packagesv1.PackageSecretBindingStatus_PACKAGE_SECRET_BINDING_STATUS_MISSING, enum.PackageSecretBindingStatusMissing},
 	{packagesv1.PackageSecretBindingStatus_PACKAGE_SECRET_BINDING_STATUS_COMPLETE, enum.PackageSecretBindingStatusComplete},
 	{packagesv1.PackageSecretBindingStatus_PACKAGE_SECRET_BINDING_STATUS_INVALID, enum.PackageSecretBindingStatusInvalid},
+	{packagesv1.PackageSecretBindingStatus_PACKAGE_SECRET_BINDING_STATUS_PARTIAL, enum.PackageSecretBindingStatusPartial},
+	{packagesv1.PackageSecretBindingStatus_PACKAGE_SECRET_BINDING_STATUS_CHECK_FAILED, enum.PackageSecretBindingStatusCheckFailed},
 }
 
 var healthStatusMap = []enumPair[packagesv1.PackageHealthStatus, enum.PackageHealthStatus]{

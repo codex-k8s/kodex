@@ -434,14 +434,33 @@ func TestRepositoryIntegrationInstallationStorage(t *testing.T) {
 	if storedInstallation.InstallationStatus != enum.PackageInstallationStatusActive || storedInstallation.Version != 2 {
 		t.Fatalf("updated installation = %+v, want active v2", storedInstallation)
 	}
+	installation.SecretBindingStatus = enum.PackageSecretBindingStatusPartial
+	installation.Version = 3
+	installation.UpdatedAt = now.Add(90 * time.Minute)
+	if err := repository.UpdatePackageInstallation(ctx, installation, 2); err != nil {
+		t.Fatalf("update installation to partial: %v", err)
+	}
+	storedInstallation, err = repository.GetPackageInstallation(ctx, installation.ID)
+	if err != nil {
+		t.Fatalf("get partial installation: %v", err)
+	}
+	if storedInstallation.SecretBindingStatus != enum.PackageSecretBindingStatusPartial {
+		t.Fatalf("secret status = %s, want partial", storedInstallation.SecretBindingStatus)
+	}
+	installation.SecretBindingStatus = enum.PackageSecretBindingStatusCheckFailed
+	installation.Version = 4
+	installation.UpdatedAt = now.Add(100 * time.Minute)
+	if err := repository.UpdatePackageInstallation(ctx, installation, 3); err != nil {
+		t.Fatalf("update installation to check_failed: %v", err)
+	}
 	installation.InstallationStatus = enum.PackageInstallationStatusDisabled
 	installation.DesiredState = enum.PackageDesiredStateSuspended
-	installation.Version = 3
+	installation.Version = 5
 	installation.UpdatedAt = now.Add(2 * time.Hour)
 	disableCommandID := uuid.New()
 	disableResult := testCommandResult(disableCommandID, "package.installation.disable", enum.CommandAggregateTypeInstallation, installation.ID, "", now)
 	disableEvent := testInstallationOutboxEvent(installation.ID, "package.installation.disabled", now)
-	if err := repository.UpdatePackageInstallationWithResult(ctx, installation, 2, disableResult, disableEvent); err != nil {
+	if err := repository.UpdatePackageInstallationWithResult(ctx, installation, 4, disableResult, disableEvent); err != nil {
 		t.Fatalf("update installation with result: %v", err)
 	}
 	storedDisableResult, err := repository.GetCommandResult(ctx, query.CommandIdentity{CommandID: &disableCommandID, Operation: "package.installation.disable"})

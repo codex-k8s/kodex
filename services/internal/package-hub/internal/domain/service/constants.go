@@ -29,6 +29,7 @@ const (
 	packageOperationInstall             = "domain.Service.RequestPackageInstallation"
 	packageOperationInstallationUpdate  = "domain.Service.UpdatePackageInstallation"
 	packageOperationInstallationDisable = "domain.Service.DisablePackageInstallation"
+	packageOperationInstallationSecrets = "domain.Service.RefreshPackageInstallationSecretStatus"
 	packageOperationUninstall           = "domain.Service.UninstallPackage"
 	packageOperationSourceConnect       = "domain.Service.ConnectPackageSource"
 	packageOperationSourceDisable       = "domain.Service.DisablePackageSource"
