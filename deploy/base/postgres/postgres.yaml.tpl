@@ -122,6 +122,8 @@ spec:
               value: "{{ envOr "KODEX_PROJECT_CATALOG_DATABASE_NAME" "kodex_project_catalog" }}"
             - name: KODEX_PACKAGE_HUB_DATABASE_NAME
               value: "{{ envOr "KODEX_PACKAGE_HUB_DATABASE_NAME" "kodex_package_hub" }}"
+            - name: KODEX_FLEET_MANAGER_DATABASE_NAME
+              value: "{{ envOr "KODEX_FLEET_MANAGER_DATABASE_NAME" "kodex_fleet_manager" }}"
             - name: KODEX_RUNTIME_MANAGER_DATABASE_NAME
               value: "{{ envOr "KODEX_RUNTIME_MANAGER_DATABASE_NAME" "kodex_runtime_manager" }}"
             - name: KODEX_PLATFORM_EVENT_LOG_DATABASE_NAME

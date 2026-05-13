@@ -159,6 +159,7 @@ spec:
         - libs/go/servicemain
         - proto/kodex/fleet/v1
         - specs/asyncapi/fleet-manager.v1.yaml
+        - deploy/base/fleet-manager
     platform-event-log:
       value: "0.1.0"
       bumpOn:
@@ -265,6 +266,23 @@ spec:
       context: .
       imageEnv: KODEX_RUNTIME_MANAGER_MIGRATIONS_IMAGE
       migratesDatabase: kodex_runtime_manager
+    fleet-manager:
+      type: build
+      repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_FLEET_MANAGER_INTERNAL_IMAGE_REPOSITORY" "kodex/fleet-manager" }}'
+      tagTemplate: '{{ index .Versions "fleet-manager" }}'
+      dockerfile: services/internal/fleet-manager/Dockerfile
+      target: prod
+      context: .
+      imageEnv: KODEX_FLEET_MANAGER_IMAGE
+    fleet-manager-migrations:
+      type: migration-build
+      repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_FLEET_MANAGER_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY" "kodex/fleet-manager-migrations" }}'
+      tagTemplate: '{{ index .Versions "fleet-manager" }}'
+      dockerfile: services/internal/fleet-manager/Dockerfile
+      target: migrations
+      context: .
+      imageEnv: KODEX_FLEET_MANAGER_MIGRATIONS_IMAGE
+      migratesDatabase: kodex_fleet_manager
     platform-event-log-migrations:
       type: migration-build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_PLATFORM_EVENT_LOG_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY" "kodex/platform-event-log-migrations" }}'
@@ -366,10 +384,41 @@ spec:
       database:
         owner: runtime-manager
         migrations: services/internal/runtime-manager/cmd/cli/migrations
+      dependencies:
+        - access-manager
+        - fleet-manager
+        - platform-event-log
       deploy:
         serviceManifest: deploy/base/runtime-manager/runtime-manager.yaml.tpl
         migrationsManifest: deploy/base/runtime-manager/migrations.yaml.tpl
         kustomization: deploy/base/runtime-manager/kustomization.yaml.tpl
+        health:
+          livez: /health/livez
+          readyz: /health/readyz
+          metrics: /metrics
+    - name: fleet-manager
+      status: foundation
+      zone: internal
+      path: services/internal/fleet-manager
+      dockerfile: services/internal/fleet-manager/Dockerfile
+      imageEnv: KODEX_FLEET_MANAGER_IMAGE
+      internalImageRepositoryEnv: KODEX_FLEET_MANAGER_INTERNAL_IMAGE_REPOSITORY
+      migrationsImageEnv: KODEX_FLEET_MANAGER_MIGRATIONS_IMAGE
+      migrationsInternalImageRepositoryEnv: KODEX_FLEET_MANAGER_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY
+      ownerDomain: runtime-and-fleet
+      apiContracts:
+        grpc: proto/kodex/fleet/v1/fleet_manager.proto
+        asyncapi: specs/asyncapi/fleet-manager.v1.yaml
+      database:
+        owner: fleet-manager
+        migrations: services/internal/fleet-manager/cmd/cli/migrations
+      dependencies:
+        - access-manager
+        - platform-event-log
+      deploy:
+        serviceManifest: deploy/base/fleet-manager/fleet-manager.yaml.tpl
+        migrationsManifest: deploy/base/fleet-manager/migrations.yaml.tpl
+        kustomization: deploy/base/fleet-manager/kustomization.yaml.tpl
         health:
           livez: /health/livez
           readyz: /health/readyz
@@ -401,10 +450,12 @@ spec:
       migrationsImageEnv: KODEX_PACKAGE_HUB_MIGRATIONS_IMAGE
       purpose: package-sources-catalog-installations-manifest
     - name: fleet-manager
-      status: scaffold
+      status: foundation
       owner: fleet-manager
       databaseName: kodex_fleet_manager
       migrations: services/internal/fleet-manager/cmd/cli/migrations
+      dockerfile: services/internal/fleet-manager/Dockerfile
+      migrationsImageEnv: KODEX_FLEET_MANAGER_MIGRATIONS_IMAGE
       purpose: fleet-scopes-servers-clusters-health-placement
   serviceScaffolds:
     - name: provider-hub
@@ -429,23 +480,6 @@ spec:
           livez: /health/livez
           readyz: /health/readyz
           metrics: /metrics
-    - name: fleet-manager
-      status: scaffold
-      zone: internal
-      path: services/internal/fleet-manager
-      ownerDomain: runtime-and-fleet
-      apiContracts:
-        grpc: proto/kodex/fleet/v1/fleet_manager.proto
-        asyncapi: specs/asyncapi/fleet-manager.v1.yaml
-      database:
-        owner: fleet-manager
-        migrations: services/internal/fleet-manager/cmd/cli/migrations
-      deploy:
-        status: planned-in-fleet-6
-        health:
-          livez: /health/livez
-          readyz: /health/readyz
-          metrics: /metrics
   deployManifests:
     - name: postgres-stack
       path: deploy/base/postgres/kustomization.yaml.tpl
@@ -465,6 +499,7 @@ spec:
         - kodex_access_manager
         - kodex_project_catalog
         - kodex_package_hub
+        - kodex_fleet_manager
         - kodex_runtime_manager
         - kodex_platform_event_log
       scriptSources:
@@ -505,6 +540,13 @@ spec:
         - postgres-secrets
         - postgres
         - platform-event-log-migrations
+    - name: fleet-manager-migrations
+      path: deploy/base/fleet-manager/migrations.yaml.tpl
+      migratesDatabase: kodex_fleet_manager
+      requires:
+        - postgres-secrets
+        - postgres
+        - platform-event-log-migrations
     - name: access-manager
       path: deploy/base/access-manager/access-manager.yaml.tpl
       kustomization: deploy/base/access-manager/kustomization.yaml.tpl
@@ -528,6 +570,14 @@ spec:
         - package-hub-migrations
         - platform-event-log-migrations
         - access-manager
+    - name: fleet-manager
+      path: deploy/base/fleet-manager/fleet-manager.yaml.tpl
+      kustomization: deploy/base/fleet-manager/kustomization.yaml.tpl
+      deploysService: fleet-manager
+      requires:
+        - fleet-manager-migrations
+        - platform-event-log-migrations
+        - access-manager
     - name: runtime-manager
       path: deploy/base/runtime-manager/runtime-manager.yaml.tpl
       kustomization: deploy/base/runtime-manager/kustomization.yaml.tpl
@@ -536,6 +586,7 @@ spec:
         - runtime-manager-migrations
         - platform-event-log-migrations
         - access-manager
+        - fleet-manager
   notes:
     - New deployable services must be added only after the corresponding wave documentation is accepted.
     - Versions and images are centralized in spec.versions and spec.images; build/deploy tooling must not duplicate image tags in scripts.

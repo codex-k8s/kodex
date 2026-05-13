@@ -5,8 +5,8 @@ title: kodex — поставка fleet-manager
 status: active
 owner_role: EM
 created_at: 2026-05-11
-updated_at: 2026-05-12
-related_issues: [699, 708, 714, 717, 726, 730]
+updated_at: 2026-05-13
+related_issues: [699, 708, 714, 717, 726, 730, 735, 738]
 related_prs: []
 related_docsets:
   - docs/domains/runtime-and-fleet/product/fleet_manager_requirements.md
@@ -49,7 +49,8 @@ approvals:
 | FLEET-3 | #717 | Команды и чтения реестра для нескольких fleet scope, серверов, Kubernetes-кластеров, bootstrap seed `platform-default` и базовые проверки доступа. |
 | FLEET-4 | #726 | Проверки связности, health snapshots и события деградации для нескольких кластеров. |
 | FLEET-5 | #730 | Правила размещения, `ResolvePlacement` по набору активных кластеров, журнал решений и интеграционный контракт для `runtime-manager`. |
-| FLEET-6 | создать перед срезом | Dockerfile, манифесты, migration job, `services.yaml`, smoke-путь, runbook и monitoring. |
+| RTM-FLEET-1 | #735 | `runtime-manager` вызывает `fleet-manager.ResolvePlacement` для новых слотов и jobs без slot; fleet остаётся владельцем выбора кластера и журнала решений. |
+| FLEET-6 | #738 | Dockerfile, манифесты, migration job, `services.yaml`, smoke-путь, runbook и monitoring. |
 
 ## Таблица реализации
 
@@ -62,13 +63,13 @@ approvals:
 | Kubernetes clusters | Готов: `RegisterKubernetesCluster`, `UpdateKubernetesCluster`, `DisableKubernetesCluster`, `EnableKubernetesCluster`, `GetKubernetesCluster`, `ListKubernetesClusters`. | FLEET-3 реализует реестр нескольких кластеров, default-кластер внутри scope и ссылки на secret без чтения значения секрета. |
 | Связность и health | Готов: `RunClusterConnectivityCheck`, `GetClusterHealthSnapshot`, `ListClusterHealthSnapshots`, события `fleet.health.*`. | FLEET-4 реализует проверки Kubernetes API через отдельный checker, `secretresolver`, command result, outbox-события, latest health на cluster и историю snapshots без сохранения kubeconfig. |
 | Placement | Готов: `PutPlacementRule`, `GetPlacementRule`, `ListPlacementRules`, `ResolvePlacement`, чтения решений и события `fleet.placement.*`. | Реализовано в FLEET-5: базовый выбор из набора активных кластеров, журнал решений, проверки доступа, идемпотентность и outbox-события. |
-| Контур выкладки | Не gRPC-группа. | Запланировано в FLEET-6. |
+| Контур выкладки | Не gRPC-группа. | FLEET-6 добавляет Dockerfile, Kubernetes-манифесты, PostgreSQL bootstrap, smoke-путь, runbook и monitoring. |
 
 ## Зависимости и блокировки
 
 | Домен или сервис | Связь | Статус |
 |---|---|---|
-| `runtime-manager` | Основной потребитель `ResolvePlacement`; RTM-FLEET-1 переводит новые слоты и jobs без slot на fleet decision. | Не блокирует FLEET-0..FLEET-5; deploy-контур `fleet-manager` остаётся отдельным срезом. |
+| `runtime-manager` | Основной потребитель `ResolvePlacement`; RTM-FLEET-1 перевёл новые слоты и jobs без slot на fleet decision. | Не блокирует FLEET-6; `runtime-manager` ждёт доступный `fleet-manager` в deploy-контуре. |
 | `project-catalog` | Источник placement policy проекта, репозитория и сервиса. | Текущие проектные контракты достаточны для FLEET-5; дальнейшее расширение ограничений идёт отдельными междоменными PR. |
 | `package-hub` | Источник runtime-требований для runtime-нагрузок пакетов и плагинов. | Не блокирует FLEET-0..FLEET-4; нужен контракт требований перед размещением runtime-нагрузки пакета. |
 | `agent-manager` | Инициирует runtime через `runtime-manager`. | Не блокирует fleet kickoff; прямой fleet API для agent-manager не планируется в MVP. |
@@ -103,9 +104,9 @@ approvals:
 - разрушительные lifecycle-операции для серверов и кластеров;
 - расширенная автоматизация capacity/rebalancing.
 
-## Рекомендуемый следующий шаг после FLEET-4
+## Рекомендуемый следующий шаг после FLEET-5
 
-После FLEET-5 выполнен отдельный интеграционный срез RTM-FLEET-1: `runtime-manager` вызывает `fleet-manager.ResolvePlacement` для новых слотов и jobs без slot. Дальше отдельно идёт deploy-контур FLEET-6.
+RTM-FLEET-1 готов: `runtime-manager` вызывает `fleet-manager.ResolvePlacement` для новых слотов и jobs без slot. Следующий локальный срез домена — FLEET-6: deploy-контур `fleet-manager`, smoke, runbook и monitoring.
 
 ## Апрув
 
