@@ -5,7 +5,7 @@ title: kodex — поставка agent-manager
 status: active
 owner_role: EM
 created_at: 2026-05-12
-updated_at: 2026-05-12
+updated_at: 2026-05-13
 related_issues: [733]
 related_prs: []
 related_docsets:
@@ -62,6 +62,7 @@ approvals:
 | `StartAgentSession` | запланировано | AGO-4 |
 | `StartAgentRun` | запланировано | AGO-4, AGO-6 |
 | `RecordRunState` | запланировано | AGO-4, AGO-6 |
+| `RecordSessionStateSnapshot` | запланировано | AGO-4, AGO-6 |
 | `RequestAcceptance` / `RecordAcceptanceResult` | запланировано | AGO-7 |
 | `CreateFollowUpIntent` | запланировано | AGO-8 |
 | `RequestHumanGate` | запланировано | AGO-8 |

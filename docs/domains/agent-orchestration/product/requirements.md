@@ -5,7 +5,7 @@ title: kodex — требования домена оркестрации аге
 status: active
 owner_role: PM
 created_at: 2026-05-12
-updated_at: 2026-05-12
+updated_at: 2026-05-13
 related_issues: [733]
 related_prs: []
 related_docsets:
@@ -71,7 +71,8 @@ approvals:
 | AGO-FR-11 | Домен должен публиковать `agent.*` события по жизненному циклу сессии, запуска, приёмки и follow-up. | Обязательно |
 | AGO-FR-12 | Домен должен поддерживать идемпотентные команды, ожидаемую версию и безопасный повтор запуска или приёмки. | Обязательно |
 | AGO-FR-13 | Домен должен работать через `platform-mcp-server` как инструментальную поверхность быстрого agent-manager и агентов в слотах. | Обязательно |
-| AGO-FR-14 | Домен не должен владеть слотами, workspace filesystem, platform jobs, GitHub/GitLab состоянием, пакетами, установками пакетов, диалогами или уведомлениями. | Обязательно |
+| AGO-FR-14 | Домен должен хранить актуальную ссылку на Codex session JSON/JSONL в S3-compatible объектном хранилище после каждого значимого turn/checkpoint, не записывая большой JSON в PostgreSQL. | Обязательно |
+| AGO-FR-15 | Домен не должен владеть слотами, workspace filesystem, platform jobs, GitHub/GitLab состоянием, пакетами, установками пакетов, диалогами или уведомлениями. | Обязательно |
 
 ## Критерии приёмки
 
@@ -85,6 +86,7 @@ approvals:
 | AGO-AC-6 | Если роль или flow меняется, новая версия не ломает уже запущенные сессии: `Run` фиксирует использованные версии. |
 | AGO-AC-7 | Если руководящий пакет установлен в scope, `agent-manager` читает его через `ListPackageInstallations(package_kind=guidance)` и `GetPackageManifest`. |
 | AGO-AC-8 | Если runtime-слот упал, `agent-manager` видит ошибку запуска, но техническое состояние слота остаётся у `runtime-manager`. |
+| AGO-AC-9 | Если runner передал новый session state snapshot, `agent-manager` фиксирует ссылку, digest и размер объекта, а `AgentSession` указывает на последний актуальный снимок. |
 
 ## Что не входит
 

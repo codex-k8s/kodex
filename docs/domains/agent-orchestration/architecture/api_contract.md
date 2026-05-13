@@ -5,7 +5,7 @@ title: kodex — API-обзор agent-manager
 status: active
 owner_role: SA
 created_at: 2026-05-12
-updated_at: 2026-05-12
+updated_at: 2026-05-13
 related_issues: [733]
 related_prs: []
 approvals:
@@ -51,6 +51,7 @@ approvals:
 | `StartAgentSession` | gRPC command | `agent.session.start` | `command_id` | Создаёт или продолжает сессию по пользовательскому запросу или provider target. |
 | `StartAgentRun` | gRPC command | `agent.run.start` | `command_id` | Создаёт `Run`, фиксирует `flow_version_id`, `stage_id`, `role_profile_id`, `role_profile_version`, `role_profile_digest`, `prompt_template_version_id`, `prompt_template_digest`, guidance refs и запрашивает runtime. |
 | `RecordRunState` | gRPC command | `agent.run.update` | `command_id` + expected version | Фиксирует переход `Run` после сигнала от runtime, MCP или агента. |
+| `RecordSessionStateSnapshot` | gRPC command | `agent.session.update` | `command_id` + expected version | Записывает метаданные Codex session JSON/JSONL в объектном хранилище и обновляет указатель на актуальный снимок сессии. |
 | `RequestAcceptance` | gRPC command | `agent.acceptance.run` | `command_id` | Запускает машину приёмки по session/run/stage. |
 | `RecordAcceptanceResult` | gRPC command | `agent.acceptance.update` | `command_id` + expected version | Фиксирует результат проверки. |
 | `CreateFollowUpIntent` | gRPC command | `agent.follow_up.create` | `command_id` | Формирует намерение следующей provider-native задачи. |
@@ -67,6 +68,7 @@ approvals:
 | `agent.start_session` | Начать или продолжить агентную сессию по пользовательскому запросу. |
 | `agent.start_role_run` | Запустить роль в рамках session/stage. |
 | `agent.record_run_result` | Принять результат от ролевого агента или runner. |
+| `agent.record_session_snapshot` | Зафиксировать ссылку на актуальный Codex session state без передачи содержимого JSON через MCP. |
 | `agent.request_acceptance` | Запустить машинную приёмку. |
 | `agent.request_follow_up` | Сформировать следующий provider-native `Issue`. |
 | `agent.ask_owner` | Запросить решение человека через `interaction-hub`. |
@@ -107,6 +109,7 @@ MCP-инструменты не должны принимать свободны
 | `agent.run.waiting` | Запуск ожидает человека, runtime, provider или retry. |
 | `agent.run.completed` | Ролевой запуск завершён. |
 | `agent.run.failed` | Ролевой запуск завершился ошибкой. |
+| `agent.session.snapshot_recorded` | Зафиксирован новый снимок Codex session state. |
 | `agent.acceptance.requested` | Запрошена машинная приёмка. |
 | `agent.acceptance.completed` | Приёмка завершилась успешно. |
 | `agent.acceptance.failed` | Приёмка обнаружила блокеры или ошибку. |

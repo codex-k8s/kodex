@@ -5,7 +5,7 @@ title: kodex — дизайн домена оркестрации агентов
 status: active
 owner_role: SA
 created_at: 2026-05-12
-updated_at: 2026-05-12
+updated_at: 2026-05-13
 related_issues: [733]
 related_prs: []
 related_adrs: []
@@ -59,6 +59,7 @@ approvals:
 | Движок flow | Выбирает этап, переход, обязательные артефакты, роли и gates. |
 | Запускатель ролей | Создаёт `Run`, фиксирует версии flow, этапа, роли, prompt и руководящих пакетов, затем запрашивает runtime-запуск. |
 | Рендер prompt | Собирает prompt из версии роли, задачи, stage, policy, руководящих пакетов и рабочего контекста. |
+| Запись снимков сессии | Фиксирует метаданные Codex session state после turn/checkpoint и обновляет указатель на актуальный снимок. |
 | Движок приёмки | Проверяет артефакты, watermark, статусы provider-native сущностей и условия перехода. |
 | Планировщик follow-up | Формирует намерение следующей задачи и вызывает provider-контур для создания или обновления `Issue`. |
 | Outbox-доставщик | Публикует `agent.*` события через `platform-event-log`. |
@@ -108,6 +109,8 @@ sequenceDiagram
 
 `agent-manager` не выполняет checkout и не монтирует файлы сам. Он выбирает руководящие пакеты и контекст, а подготовку workspace выполняет runtime-контур по проверенной политике.
 
+Codex session state сохраняется как JSON/JSONL-объект в S3-compatible хранилище после каждого значимого turn/checkpoint. `agent-manager` хранит метаданные снимка, digest, размер и указатель на последний актуальный объект; сам большой файл сессии не пишется в PostgreSQL.
+
 ### Приёмка результата агента
 
 ```mermaid
@@ -150,6 +153,7 @@ sequenceDiagram
 - workspace policy и placement constraints;
 - rendered execution context;
 - ссылки на provider-native задачу, stage, role и prompt version.
+- метаданные последнего Codex session snapshot, если runtime продолжает существующую сессию.
 
 `runtime-manager` возвращает slot ref, runtime context и технический статус. `Run` остаётся у `agent-manager`, slot/job остаются у runtime.
 
