@@ -1,0 +1,103 @@
+---
+doc_id: DLV-CK8S-AGENT-MANAGER
+type: delivery-plan
+title: kodex — поставка agent-manager
+status: active
+owner_role: EM
+created_at: 2026-05-12
+updated_at: 2026-05-13
+related_issues: [733]
+related_prs: []
+related_docsets:
+  - docs/domains/agent-orchestration/product/requirements.md
+  - docs/domains/agent-orchestration/architecture/design.md
+  - docs/domains/agent-orchestration/architecture/data_model.md
+  - docs/domains/agent-orchestration/architecture/api_contract.md
+approvals:
+  required: ["Owner"]
+  status: approved
+  request_id: "owner-2026-05-12-agent-manager-kickoff"
+  approved_by: "ai-da-stas"
+  approved_at: 2026-05-12
+---
+
+# Поставка agent-manager
+
+## TL;DR
+
+`agent-manager` поставляется малыми PR-срезами: сначала доменный пакет документации, затем транспортные контракты, сервисный каркас, модель flow/role/prompt, сессии и `Run`, машина приёмки, follow-up задачи и интеграции с package/runtime/provider/interaction контурами.
+
+## Входные артефакты
+
+| Документ | Путь |
+|---|---|
+| Требования домена | `docs/domains/agent-orchestration/product/requirements.md` |
+| Дизайн домена | `docs/domains/agent-orchestration/architecture/design.md` |
+| Модель данных | `docs/domains/agent-orchestration/architecture/data_model.md` |
+| API-обзор | `docs/domains/agent-orchestration/architecture/api_contract.md` |
+| Карта Issue | `docs/delivery/issue-map/domains/agent-orchestration.md` |
+
+## Срезы поставки
+
+| Срез | Issue | Результат |
+|---|---|---|
+| AGO-0 | #733 | Доменная документация, границы `agent-manager`, модель данных, API-обзор, план поставки и карты связей готовы. |
+| AGO-1 | не назначено | gRPC и AsyncAPI контракты `agent-manager`, события `agent.*` и действия доступа готовы. |
+| AGO-2 | не назначено | Сервисный процесс, health, metrics, конфигурация, пустой gRPC service и outbox-каркас готовы. |
+| AGO-3 | не назначено | PostgreSQL-модель flow, stage, role, prompt template, версий и command result готова. |
+| AGO-4 | не назначено | Сессии и agent `Run`: создание, чтение, статусы, идемпотентность и события готовы. |
+| AGO-5 | не назначено | Интеграция с `package-hub` для guidance packages и рендер агентного контекста готовы без checkout/mount. |
+| AGO-6 | не назначено | Интеграция с `runtime-manager`: подготовка workspace и запуск роли через runtime-контур готовы. |
+| AGO-7 | не назначено | Машина приёмки: проверка provider-native артефактов, watermark, ролей и policy готова. |
+| AGO-8 | не назначено | Follow-up задачи через `provider-hub` и Human gate через `interaction-hub` готовы. |
+| AGO-9 | не назначено | Эксплуатационный контур `agent-manager`: deploy manifests, migration job, smoke-проверки и runbook готовы. |
+
+## Статус операций `AgentManagerService`
+
+| Операция | Текущий статус | Плановый срез |
+|---|---|---|
+| `CreateFlow` / `UpdateFlow` / `CreateFlowVersion` / `ActivateFlowVersion` | запланировано | AGO-1..AGO-3 |
+| `CreateRoleProfile` / `UpdateRoleProfile` | запланировано | AGO-1..AGO-3 |
+| `CreatePromptTemplateVersion` / `ActivatePromptTemplateVersion` | запланировано | AGO-1..AGO-3 |
+| `StartAgentSession` | запланировано | AGO-4 |
+| `StartAgentRun` | запланировано | AGO-4, AGO-6 |
+| `RecordRunState` | запланировано | AGO-4, AGO-6 |
+| `RecordSessionStateSnapshot` | запланировано | AGO-4, AGO-6 |
+| `RequestAcceptance` / `RecordAcceptanceResult` | запланировано | AGO-7 |
+| `CreateFollowUpIntent` | запланировано | AGO-8 |
+| `RequestHumanGate` | запланировано | AGO-8 |
+| `GetAgentSession` / `ListAgentRuns` | запланировано | AGO-4 |
+
+## Синхронизация с параллельными доменами
+
+| Домен | Когда синхронизироваться | Причина |
+|---|---|---|
+| `package-hub` | Перед AGO-5 | Нужны чтения `ListPackageInstallations(package_kind=guidance)` и `GetPackageManifest`. |
+| `runtime-manager` | Перед AGO-6 | Нужен контракт подготовки workspace, запуска слота и передачи `agent_run_id`. |
+| `provider-hub` | Перед AGO-7 и AGO-8 | Нужны проекции `Issue/PR/MR`, ускоряющие сигналы сверки и типизированные provider-операции. |
+| `interaction-hub` | Перед AGO-8 | Нужен контракт Human gate, запроса обратной связи и возврата решения. |
+| `project-catalog` | Перед AGO-5 и AGO-6 | Нужны workspace policy, project/repository refs и release/risk policy. |
+| `access-manager` | Перед AGO-1 и AGO-4 | Нужны действия доступа для flow, role, prompt, session, run и acceptance. |
+| `platform-mcp-server` | Перед AGO-4 | Нужна инструментальная поверхность для agent-manager и агентов в слотах. |
+
+## Критерии начала кода
+
+- Принят пакет доменной документации `agent-orchestration`.
+- Для каждого кодового PR есть отдельный GitHub Issue.
+- Контрактный PR создаёт proto и AsyncAPI до реализации бизнес-операций.
+- Старый код из `deprecated/**` не используется как основа реализации.
+- Соседние доменные контракты не обходятся локальными заглушками без отдельного согласования.
+
+## Критерии завершения домена
+
+- `agent-manager` имеет свой контур данных, миграций, контрактов и событий.
+- Flow, stage, role, prompt, session, run, acceptance и follow-up имеют авторитетные команды и чтения.
+- Сервис публикует `agent.*` события через outbox и `platform-event-log`.
+- `package-hub`, `runtime-manager`, `provider-hub`, `interaction-hub`, `project-catalog`, `access-manager` и `platform-mcp-server` связаны через согласованные контракты.
+- Документы и карты Issue обновлены, хвосты перенесены в следующие срезы явно.
+
+## Апрув
+
+- request_id: `owner-2026-05-12-agent-manager-kickoff`
+- Решение: approved
+- Комментарий: план поставки `agent-manager` согласован как стартовое целевое состояние.
