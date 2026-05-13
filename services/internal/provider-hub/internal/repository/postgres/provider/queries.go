@@ -41,6 +41,7 @@ var (
 	queryOutboxEventMarkPermanentlyFailed      = mustLoadQuery("outbox_event__mark_permanently_failed")
 	queryOutboxEventMarkPublished              = mustLoadQuery("outbox_event__mark_published")
 	queryProviderOperationGetReplay            = mustLoadQuery("provider_operation__get_replay")
+	queryProviderOperationGetByCommand         = mustLoadQuery("provider_operation__get_by_command")
 	queryProviderOperationInsert               = mustLoadQuery("provider_operation__insert")
 	queryProviderOperationList                 = mustLoadQuery("provider_operation__list")
 )

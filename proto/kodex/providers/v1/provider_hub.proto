@@ -948,6 +948,8 @@ message CreateIssueRequest {
   CommandMeta meta = 11;
   // external_account_id is the account selected by caller policy for the provider write.
   string external_account_id = 12;
+  // repository_target identifies the provider repository where the Issue must be created.
+  ProviderTarget repository_target = 13;
 }
 
 // UpdateIssueRequest updates provider-native Issue fields.
@@ -1035,6 +1037,8 @@ message CreatePullRequestRequest {
   CommandMeta meta = 12;
   // external_account_id is the account selected by caller policy for the provider write.
   string external_account_id = 13;
+  // repository_target identifies the provider repository where the PR/MR must be created.
+  ProviderTarget repository_target = 14;
 }
 
 // CreateReviewSignalRequest creates a provider-native review signal.

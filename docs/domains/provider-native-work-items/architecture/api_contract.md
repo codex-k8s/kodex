@@ -5,8 +5,8 @@ title: kodex — API-контракт provider-hub
 status: active
 owner_role: SA
 created_at: 2026-05-06
-updated_at: 2026-05-12
-related_issues: [281, 282, 711, 719, 725, 729]
+updated_at: 2026-05-13
+related_issues: [281, 282, 711, 719, 725, 729, 737]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -93,8 +93,8 @@ approvals:
 1. Проверить `CommandMeta`, `command_id` или `idempotency_key`, актёра и безопасный `RequestContext`.
 2. Проверить выбранный `external_account_id` через `access-manager` с нужным действием доступа.
 3. Проверить наличие `operation_policy_context`; если `approval_required=true`, проверить наличие `approval_gate_ref`.
-4. Если для конкретной реализации уже подключён provider write-адаптер, взять значение секрета через `libs/go/secretresolver` только на время вызова адаптера.
-5. Выполнить общий command pipeline: записать `ProviderOperation`, проверить optimistic concurrency, зафиксировать `operation_policy_context` и `approval_gate_ref`, обновить локальные проекции или поставить сверку; реальный provider write-вызов выполняется только если подключён adapter следующего среза.
+4. Если команда требует внешнего write-вызова, взять значение секрета через `libs/go/secretresolver` только на время вызова адаптера.
+5. Выполнить общий command pipeline: записать `ProviderOperation`, проверить optimistic concurrency, зафиксировать `operation_policy_context` и `approval_gate_ref`, выполнить provider write через подключённый адаптер и сразу обновить локальные проекции или связь.
 6. Вернуть `ProviderOperationResponse` с безопасным результатом без токенов, сырых provider payload и внутренних ссылок на секреты.
 
 `provider-hub` не становится владельцем approval-сервиса. Он принимает ссылку на уже принятое решение как `approval_gate_ref`, фиксирует её в журнале операции и отклоняет команду, если политика вызывающего контура указала обязательность gate, но ссылка не передана.
@@ -109,7 +109,7 @@ approvals:
 | `CreateReviewSignal` | Оставить review/comment/approval там, где поддерживается провайдером. | Acceptance/gatekeeper контур | `command_id`. |
 | `UpdateRelationship` | Зафиксировать или обновить provider-native связь, если провайдер поддерживает. | `agent-manager`, MCP | `command_id`. |
 
-Каждая операция сначала запрашивает разрешение у `access-manager`. Общий pipeline PRV-7b не получает значение секрета и не выполняет внешний write-вызов: он только валидирует команду, проверяет доступ, фиксирует safe operation log и публикует `provider.operation.completed/failed`. Когда конкретный provider write-адаптер будет подключён, `provider-hub` получит секрет через `libs/go/secretresolver` только после разрешения доступа и удержит его в памяти процесса на время вызова адаптера. Если операция выполнена агентом напрямую через `gh` в слоте, она не попадает в этот набор как команда, но может передать ускоряющий сигнал и лимитный снимок.
+Каждая операция сначала запрашивает разрешение у `access-manager`. После положительного решения `provider-hub` получает секрет через `libs/go/secretresolver` только для операций, которым нужен внешний вызов, и удерживает значение в памяти процесса на время вызова адаптера. Для GitHub адаптер записи уже выполняет внешний write поверх общего pipeline; операции локального зеркала, например `UpdateRelationship`, не читают секрет и не обращаются к GitHub API. Если операция выполнена агентом напрямую через `gh` в слоте, она не попадает в этот набор как команда, но может передать ускоряющий сигнал и лимитный снимок.
 
 В `UpdateIssue` списковые поля передаются через сообщения-патчи:
 отсутствующее сообщение означает «не менять», присутствующее сообщение с пустым списком означает «очистить список», присутствующее сообщение со значениями означает «заменить список».
@@ -119,6 +119,7 @@ approvals:
 Общие входные поля для всех команд записи:
 
 - `external_account_id` — выбранный вызывающим контуром внешний аккаунт;
+- `repository_target` — provider-native репозиторий для команд создания `Issue` и `PR/MR`; `project_id` и `repository_id` остаются ссылками на проектную модель и не используются адаптером как `owner/repo`;
 - `meta.command_id` или `meta.idempotency_key` — защита повтора;
 - `meta.operation_policy_context` — вход и результат политики по риску: роль, проект, стадия, операция, цель, изменяемые поля, риск, версия политики;
 - `meta.approval_gate_ref` — ссылка на approval/gate, если политика требует подтверждение;
@@ -137,6 +138,7 @@ approvals:
 
 Контекст политики должен перечислять `changed_fields` в терминах типизированного запроса. `provider-hub` не принимает свободный JSON patch для операций записи: inline comments review-сигнала передаются через `ReviewInlineComment`, а не через строковый JSON.
 Для `UpdateRelationship` вызывающий контур берёт `meta.expected_version` из `ProviderRelationship.version`, который возвращается в `ListRelationships` и в `ProviderOperationResponse.relationship`.
+Для GitHub `expected_provider_version` передаётся как `If-Match`, если вызывающий контур получил provider version из предыдущего ответа или проекции. Если команда уже успешно записана по `command_id`, повтор возвращает сохранённый `ProviderOperation` и не выполняет внешний write повторно.
 
 ### Операционное состояние аккаунтов и лимиты
 

@@ -5,8 +5,8 @@ title: kodex — поставка provider-hub
 status: active
 owner_role: EM
 created_at: 2026-05-06
-updated_at: 2026-05-12
-related_issues: [281, 282, 711, 719, 725, 729]
+updated_at: 2026-05-13
+related_issues: [281, 282, 711, 719, 725, 729, 737]
 related_prs: []
 related_docsets:
   - docs/domains/provider-native-work-items/product/requirements.md
@@ -66,7 +66,7 @@ approvals:
 | Приём webhook | Готово: `IngestWebhookEvent`, чтение, список и повторная обработка. | Реализовано в PRV-4: входящий журнал, дедупликация по `provider_slug + delivery_id`, базовая нормализация GitHub-событий, статусы обработки и outbox-события `provider.webhook.received` / `provider.webhook.normalized`. Публичный HTTP webhook endpoint остаётся ответственностью будущего `integration-gateway`. |
 | Проекции артефактов провайдера | Готово: чтение рабочих артефактов, комментариев и связей. | Реализовано в PRV-5: запись проекций `Issue`, `PR/MR`, комментариев и review-сигналов при нормализации webhook, разбор watermark, связи из watermark, чтение по provider ref и списочные gRPC-операции. |
 | Сверка | Готово: сигналы, очередь сверки, пакетная обработка и курсоры. | Реализовано в режиме только чтения: PRV-6.1 добавил доменную модель `sync_cursor`, постановку области в очередь, чтение, список и короткую аренду курсора; PRV-6.3 добавил ускоряющий сигнал, который ставит `hot` cursor по provider target и выбранному внешнему аккаунту; PRV-6.2b подключил `ResolveExternalAccountUsage` и `libs/go/secretresolver` к обработчику, читает GitHub API по курсорам, обновляет проекции провайдера, лимитный бюджет, операционное состояние и безопасно продвигает курсор. |
-| Операции провайдера | Готово: типизированные команды записи, общий command pipeline, журнал операций и outbox-события результата. | PRV-7a зафиксировал контракт, PRV-7b реализовал gRPC handlers, casters, domain pipeline, optimistic concurrency, `ProviderOperation` с policy/gate trace и безопасный `ProviderOperationResponse`. Реальные GitHub/GitLab write-вызовы остаются в PRV-7c. |
+| Операции провайдера | Готово: типизированные команды записи, общий command pipeline, журнал операций и outbox-события результата. | PRV-7a зафиксировал контракт, PRV-7b реализовал gRPC handlers, casters, domain pipeline, optimistic concurrency, `ProviderOperation` с policy/gate trace и безопасный `ProviderOperationResponse`. PRV-7c подключает GitHub write-адаптер для создания и обновления задач, комментариев, `PR`, review-сигналов и provider-native связей без хранения токенов. GitLab-адаптер остаётся следующим расширением той же границы. |
 | Операционное состояние аккаунта и лимиты | Готово: состояние аккаунта у провайдера, снимки лимитов и журнал операций. | Реализовано в PRV-3: доменная логика, PostgreSQL-репозиторий, gRPC-чтение/запись снимков лимитов, базовый GitHub-адаптер для проверки лимитов. Фильтры по проекту и организации в списке операционных состояний остаются контрактным заделом до подключения разрешения внешних аккаунтов через `access-manager`. |
 | Первичная инициализация пустого репозитория | Готово на уровне событий bootstrap required/completed и операций провайдера. | Запись в провайдера и зеркало оставлены до PRV-8; решение о составе первичных артефактов приходит из проектного и агентного контура. |
 | Подключение существующего репозитория | Готово на уровне событий adoption required/adoption PR created и операций провайдера. | `PR` у провайдера, зеркало и связи оставлены до PRV-8; сканирование и отчёт выполняет агентная роль через workspace. |
@@ -114,11 +114,16 @@ approvals:
 - безопасная классификация ошибок сверки: rate limit оставляет lease до retry-времени, auth failure переводит runtime state в `reauthorization_required`, not found/permanent/transient ошибки фиксируются коротким кодом без токена;
 - контрактный каталог операций записи для `agent-manager` и platform MCP: `CreateIssue`, `UpdateIssue`, `CreateComment`, `UpdateComment`, `CreatePullRequest`, `CreateReviewSignal`, `UpdateRelationship`;
 - общий pipeline этих команд: gRPC handlers, transport casters, единый domain service, idempotent `ProviderOperation`, проверка `expected_version`, policy context, `approval_gate_ref` и outbox-события `provider.operation.completed/failed`;
-- безопасный `ProviderOperationResponse` без секретов, token refs, сырых provider payload и без реальных GitHub/GitLab write-вызовов в текущем срезе.
+- безопасный `ProviderOperationResponse` без секретов, token refs и сырых provider payload;
+- GitHub write-адаптер поверх общего command pipeline: создание задач, обновление задач, создание и обновление комментариев, создание `PR`, review-сигналы и обновление provider-native связей;
+- перед внешним write-вызовом `provider-hub` подтверждает выбранный внешний аккаунт через `access-manager`, получает `SecretValue` через общий resolver только в памяти процесса и очищает его после вызова;
+- повтор уже успешно записанной команды по `command_id` возвращает сохранённый `ProviderOperation` и не выполняет внешний GitHub write повторно;
+- успешные GitHub write-вызовы сразу обновляют локальные проекции рабочих артефактов, комментариев и связей, чтобы UI/MCP не ждали полной сверки;
+- ошибки GitHub классифицируются безопасно: auth/permission, not found, conflict/validation, rate limit/abuse, transient; в журнал операции и события попадает только короткий код без provider payload и без секрета.
 
 Миграция `external_account_id` для очереди сверки явно очищает строки `provider_hub_sync_cursors` и `provider_hub_reconciliation_requests`, созданные предыдущим срезом без знания внешнего аккаунта. Эти строки являются эфемерным состоянием планировщика и пересоздаются повторной постановкой сверки; так тестовые кластеры с уже развёрнутым PRV-6.1 не упираются в `ADD COLUMN ... NOT NULL`.
 
-Ограничение текущей сверки: пакетная GitHub-сверка работает только на чтение и обрабатывает один provider target за завершение аренды курсора, после чего обработчик повторно входит через продвинутый курсор. Общий исполнитель команд записи уже реализован, но реальные GitHub/GitLab write-вызовы, bootstrap/adoption и эксплуатационный контур пока остаются `Unimplemented`. Kubernetes-манифесты, создание БД в deploy-контуре, migration job, alerts и runbook остаются в PRV-9.
+Ограничение текущей сверки: пакетная GitHub-сверка работает только на чтение и обрабатывает один provider target за завершение аренды курсора, после чего обработчик повторно входит через продвинутый курсор. GitHub write-адаптер подключён к общему исполнителю команд записи, но MCP/server surface, agent-manager integration, UI/gateway, GitLab write adapter, bootstrap/adoption и эксплуатационный контур пока остаются отдельными срезами. Kubernetes-манифесты, создание БД в deploy-контуре, migration job, alerts и runbook остаются в PRV-9.
 
 Архитектурное исключение среза: вспомогательные функции gRPC caster остаются локальными в `provider-hub`, потому что вынос общего transport-пакета требует согласованного изменения `access-manager`, `project-catalog` и текущего сервиса. Это не должно копироваться в новые сервисы; отдельный малый срез перед следующим доменом должен вынести общую часть в `libs/go/**` и перевести существующие сервисы.
 
@@ -128,9 +133,9 @@ approvals:
 |---|---|---|
 | `project-catalog` | До PRV-1 и перед PRV-8 | `project_id`, `repository_id`, provider ref, состояние подключения репозитория, `services.yaml` bootstrap/adoption. |
 | `access-manager` | Перед PRV-6.2/PRV-7 и при включении фильтров области операционных состояний | Системные действия провайдера, контракт `ResolveExternalAccountUsage`, подтверждение выбранного внешнего аккаунта, `provider_slug` и ссылка на секрет без значения секрета. Значение после разрешения доступа получает общий `libs/go/secretresolver`; `provider-hub` не хранит токен. |
-| `package-hub` | Перед PRV-7c/PRV-8 | Как пакеты ссылаются на provider-репозитории и PR в пакетных репозиториях. |
+| `package-hub` | Перед PRV-8 | Как пакеты ссылаются на provider-репозитории и PR в пакетных репозиториях. |
 | `integration-gateway` | Перед публичным приёмом webhook | Формат внутреннего вызова `IngestWebhookEvent` уже закреплён в `provider-hub`; `integration-gateway` отвечает за внешний HTTP, проверку подписи и передачу проверенного сигнала. |
-| `agent-manager` и `platform-mcp-server` | До PRV-7c | Каталог provider-инструментов и общий pipeline уже готовы; перед реальным GitHub write-адаптером нужен финальный контракт вызова MCP и источник решения политики по риску. |
+| `agent-manager` и `platform-mcp-server` | После PRV-7c | GitHub write-адаптер готов на внутренней gRPC-границе; следующим шагом нужно согласовать MCP/server surface, источник решения политики по риску и порядок передачи `approval_gate_ref`. |
 | `operations-hub` | Перед PRV-6 и PRV-9 | Какие дополнительные поля проекций нужны операторским экранам, сверке и диагностике. |
 
 ## Связь с задачами подключения репозиториев

@@ -39,6 +39,7 @@ type WriteRequest struct {
 type CreateIssueCommand struct {
 	ProjectID              string
 	RepositoryID           string
+	RepositoryTarget       Target
 	Title                  string
 	Body                   string
 	Labels                 []string
@@ -78,16 +79,17 @@ type UpdateCommentCommand struct {
 
 // CreatePullRequestCommand describes one provider-native pull request creation.
 type CreatePullRequestCommand struct {
-	ProjectID      string
-	RepositoryID   string
-	Title          string
-	Body           string
-	HeadBranch     string
-	BaseBranch     string
-	Draft          bool
-	Labels         []string
-	LinkedIssueRef string
-	WatermarkJSON  []byte
+	ProjectID        string
+	RepositoryID     string
+	RepositoryTarget Target
+	Title            string
+	Body             string
+	HeadBranch       string
+	BaseBranch       string
+	Draft            bool
+	Labels           []string
+	LinkedIssueRef   string
+	WatermarkJSON    []byte
 }
 
 // ReviewSignalKind classifies provider-native review actions.
@@ -117,6 +119,16 @@ type UpdateRelationshipCommand struct {
 	Confidence        enum.RelationshipConfidence
 }
 
+// RelationshipResult describes one provider relationship projection to upsert after a command.
+type RelationshipResult struct {
+	Source            Target
+	Target            *Target
+	TargetProviderRef string
+	RelationshipType  string
+	SourceKind        enum.RelationshipSource
+	Confidence        enum.RelationshipConfidence
+}
+
 // Target is a normalized provider-native object reference used by write commands.
 type Target struct {
 	ProviderSlug         enum.ProviderSlug
@@ -133,6 +145,9 @@ type WriteResult struct {
 	ResultRef              string
 	ProviderObjectID       string
 	ProviderVersion        string
+	WorkItem               *value.ProviderWorkItemSnapshot
+	Comment                *value.ProviderCommentSnapshot
+	Relationship           *RelationshipResult
 	WorkItemProjectionID   *uuid.UUID
 	CommentProjectionID    *uuid.UUID
 	RelationshipID         *uuid.UUID

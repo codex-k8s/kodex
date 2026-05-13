@@ -21,6 +21,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/errs"
 	providerrepo "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/repository/provider"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/query"
 )
 
@@ -151,10 +152,8 @@ func (r *Repository) GetWorkItemProjection(ctx context.Context, lookup query.Pro
 
 // GetCommentProjectionByProviderID returns one normalized comment by provider id within one work item projection.
 func (r *Repository) GetCommentProjectionByProviderID(ctx context.Context, workItemProjectionID uuid.UUID, providerCommentID string) (entity.ProviderCommentProjection, error) {
-	return queryOne(ctx, r.db, operationGetCommentProjectionByProviderID, queryCommentProjectionGetByProviderID, pgx.NamedArgs{
-		"work_item_projection_id": workItemProjectionID,
-		"provider_comment_id":     providerCommentID,
-	}, scanCommentProjection)
+	args := commentProjectionLookupArgs(workItemProjectionID, providerCommentID)
+	return queryOne(ctx, r.db, operationGetCommentProjectionByProviderID, queryCommentProjectionGetByProviderID, args, scanCommentProjection)
 }
 
 // ListWorkItemProjections returns Issue and PR/MR projections.
@@ -347,7 +346,16 @@ func (r *Repository) ApplyProviderOperation(ctx context.Context, completion prov
 		if replay {
 			return nil
 		}
-		return insertOutboxEvents(ctx, tx, operationApplyProviderOperation, completion.OutboxEvents)
+		projectionResult, err := applyProjectionUpdate(ctx, tx, operationApplyProviderOperation, completion.ProjectionUpdate)
+		if err != nil {
+			return err
+		}
+		filteredProviderEvents := filterProviderEvents(completion.ProviderEvents, completion.ProjectionUpdate, projectionResult)
+		if _, err := insertProviderEvents(ctx, tx, operationApplyProviderOperation, filteredProviderEvents); err != nil {
+			return err
+		}
+		filteredOutboxEvents := filterOutboxEvents(completion.OutboxEvents, filteredProviderEvents, projectionResult)
+		return insertOutboxEvents(ctx, tx, operationApplyProviderOperation, filteredOutboxEvents)
 	})
 	if err != nil {
 		return entity.ProviderOperation{}, wrapError(operationApplyProviderOperation, err)
@@ -358,6 +366,14 @@ func (r *Repository) ApplyProviderOperation(ctx context.Context, completion prov
 // ListProviderOperations returns provider operation audit records.
 func (r *Repository) ListProviderOperations(ctx context.Context, filter query.ProviderOperationFilter) ([]entity.ProviderOperation, query.PageResult, error) {
 	return queryPage(ctx, r.db, operationListProviderOperations, queryProviderOperationList, providerOperationFilterArgs(filter), scanProviderOperation)
+}
+
+// GetProviderOperationByCommand returns an already recorded command result.
+func (r *Repository) GetProviderOperationByCommand(ctx context.Context, operationType enum.ProviderOperationType, commandID string) (entity.ProviderOperation, error) {
+	return queryOne(ctx, r.db, operationGetProviderOperationByCommand, queryProviderOperationGetByCommand, pgx.NamedArgs{
+		"operation_type": string(operationType),
+		"command_id":     commandID,
+	}, scanProviderOperation)
 }
 
 // ClaimOutboxEvents leases unpublished outbox events for delivery.
@@ -416,6 +432,7 @@ const (
 	operationRecordProviderOperation          = "domain.Repository.RecordProviderOperation"
 	operationApplyProviderOperation           = "domain.Repository.ApplyProviderOperation"
 	operationListProviderOperations           = "domain.Repository.ListProviderOperations"
+	operationGetProviderOperationByCommand    = "domain.Repository.GetProviderOperationByCommand"
 	operationClaimOutboxEvents                = "domain.Repository.ClaimOutboxEvents"
 	operationMarkOutboxEventPublished         = "domain.Repository.MarkOutboxEventPublished"
 	operationMarkOutboxEventFailed            = "domain.Repository.MarkOutboxEventFailed"
@@ -569,31 +586,38 @@ func applyProjectionUpdate(ctx context.Context, db projectionUpdater, operation 
 		appliedCommentProviderIDs:   make(map[string]struct{}),
 		appliedRelationshipIDs:      make(map[uuid.UUID]struct{}),
 	}
-	if update.WorkItem == nil {
-		return result, nil
-	}
-	result.hasProjection = true
-	storedWorkItem, workItemApplied, err := upsertFreshWorkItemProjection(ctx, db, operation, *update.WorkItem)
-	if err != nil {
-		return result, err
-	}
-	result.workItemApplied = workItemApplied
-	result.workItemProjectionID = storedWorkItem.ID
-	for _, comment := range update.Comments {
-		comment.WorkItemProjectionID = storedWorkItem.ID
-		storedComment, commentApplied, err := upsertFreshCommentProjection(ctx, db, operation, comment)
+	result.hasProjection = update.WorkItem != nil || len(update.Comments) > 0 || len(update.Relationships) > 0
+	if update.WorkItem != nil {
+		storedWorkItem, workItemApplied, err := upsertFreshWorkItemProjection(ctx, db, operation, *update.WorkItem)
 		if err != nil {
 			return result, err
 		}
-		if commentApplied {
-			result.appliedCommentProjectionIDs[storedComment.ID] = struct{}{}
-			result.appliedCommentProviderIDs[storedComment.ProviderCommentID] = struct{}{}
+		result.workItemApplied = workItemApplied
+		result.workItemProjectionID = storedWorkItem.ID
+		for _, comment := range update.Comments {
+			comment.WorkItemProjectionID = storedWorkItem.ID
+			storedComment, commentApplied, err := upsertFreshCommentProjection(ctx, db, operation, comment)
+			if err != nil {
+				return result, err
+			}
+			if commentApplied {
+				result.appliedCommentProjectionIDs[storedComment.ID] = struct{}{}
+				result.appliedCommentProviderIDs[storedComment.ProviderCommentID] = struct{}{}
+			}
 		}
+		if workItemApplied {
+			watermarkRelationships, nonWatermarkRelationships := splitWatermarkRelationships(update.Relationships)
+			if err := rebuildWatermarkRelationships(ctx, db, operation, storedWorkItem.ID, watermarkRelationships, result.appliedRelationshipIDs); err != nil {
+				return result, err
+			}
+			if err := upsertRelationships(ctx, db, operation, nonWatermarkRelationships, result.appliedRelationshipIDs); err != nil {
+				return result, err
+			}
+		}
+		return result, nil
 	}
-	if workItemApplied {
-		if err := rebuildWatermarkRelationships(ctx, db, operation, storedWorkItem.ID, update.Relationships, result.appliedRelationshipIDs); err != nil {
-			return result, err
-		}
+	if err := upsertRelationships(ctx, db, operation, update.Relationships, result.appliedRelationshipIDs); err != nil {
+		return result, err
 	}
 	return result, nil
 }
@@ -647,6 +671,30 @@ func rebuildWatermarkRelationships(ctx context.Context, db projectionUpdater, op
 		return wrapError(operation, err)
 	}
 	return nil
+}
+
+func upsertRelationships(ctx context.Context, db projectionUpdater, operation string, relationships []entity.ProviderRelationship, applied map[uuid.UUID]struct{}) error {
+	for _, relationship := range relationships {
+		stored, err := queryOne(ctx, db, operation, queryRelationshipUpsert, relationshipArgs(relationship), scanRelationship)
+		if err != nil {
+			return err
+		}
+		applied[stored.ID] = struct{}{}
+	}
+	return nil
+}
+
+func splitWatermarkRelationships(relationships []entity.ProviderRelationship) ([]entity.ProviderRelationship, []entity.ProviderRelationship) {
+	watermark := make([]entity.ProviderRelationship, 0, len(relationships))
+	other := make([]entity.ProviderRelationship, 0, len(relationships))
+	for _, relationship := range relationships {
+		if relationship.Source == enum.RelationshipSourceWatermark {
+			watermark = append(watermark, relationship)
+			continue
+		}
+		other = append(other, relationship)
+	}
+	return watermark, other
 }
 
 func isProviderUpdateFresh(incoming *time.Time, current *time.Time) bool {

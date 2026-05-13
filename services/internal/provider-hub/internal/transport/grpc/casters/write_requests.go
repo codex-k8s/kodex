@@ -28,10 +28,15 @@ func CreateIssueInput(request *providersv1.CreateIssueRequest) (providerservice.
 	if err != nil {
 		return providerservice.CreateIssueInput{}, err
 	}
+	repositoryTarget, err := ProviderTargetFromProto(request.GetRepositoryTarget())
+	if err != nil {
+		return providerservice.CreateIssueInput{}, err
+	}
 	return providerservice.CreateIssueInput{
 		ProjectID:              projectID,
 		RepositoryID:           repositoryID,
 		ProviderSlug:           providerSlug(request.GetProviderSlug()),
+		RepositoryTarget:       repositoryTarget,
 		Title:                  strings.TrimSpace(request.GetTitle()),
 		Body:                   strings.TrimSpace(request.GetBody()),
 		Labels:                 trimProtoStrings(request.GetLabels()),
@@ -147,10 +152,15 @@ func CreatePullRequestInput(request *providersv1.CreatePullRequestRequest) (prov
 	if err != nil {
 		return providerservice.CreatePullRequestInput{}, err
 	}
+	repositoryTarget, err := ProviderTargetFromProto(request.GetRepositoryTarget())
+	if err != nil {
+		return providerservice.CreatePullRequestInput{}, err
+	}
 	return providerservice.CreatePullRequestInput{
 		ProjectID:         projectID,
 		RepositoryID:      repositoryID,
 		ProviderSlug:      providerSlug(request.GetProviderSlug()),
+		RepositoryTarget:  repositoryTarget,
 		Title:             strings.TrimSpace(request.GetTitle()),
 		Body:              strings.TrimSpace(request.GetBody()),
 		HeadBranch:        strings.TrimSpace(request.GetHeadBranch()),

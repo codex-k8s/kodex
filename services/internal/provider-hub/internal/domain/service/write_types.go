@@ -24,6 +24,7 @@ type CreateIssueInput struct {
 	ProjectID              uuid.UUID
 	RepositoryID           uuid.UUID
 	ProviderSlug           enum.ProviderSlug
+	RepositoryTarget       ProviderTarget
 	Title                  string
 	Body                   string
 	Labels                 []string
@@ -74,6 +75,7 @@ type CreatePullRequestInput struct {
 	ProjectID         uuid.UUID
 	RepositoryID      uuid.UUID
 	ProviderSlug      enum.ProviderSlug
+	RepositoryTarget  ProviderTarget
 	Title             string
 	Body              string
 	HeadBranch        string

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/codex-k8s/kodex/libs/go/accesscatalog"
+	"github.com/codex-k8s/kodex/libs/go/secretresolver"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/errs"
 	providerrepo "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/repository/provider"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/entity"
@@ -25,6 +27,7 @@ const (
 	writeFailureAccessDenied        = "access_denied"
 	writeFailureApprovalRequired    = "approval_required"
 	writeFailureExecutorUnavailable = "write_executor_unavailable"
+	writeFailureSecretUnavailable   = "secret_unavailable"
 	writeFailureProviderAuthFailed  = "provider_auth_failed"
 	writeFailureProviderNotFound    = "provider_not_found"
 	writeFailureProviderRateLimited = "provider_rate_limited"
@@ -45,6 +48,7 @@ type providerWritePlan struct {
 	meta                    value.CommandMeta
 	executorRequest         providerclient.WriteRequest
 	validateExpectedVersion func(context.Context) error
+	skipProviderCredential  bool
 }
 
 type providerWriteFailure struct {
@@ -55,6 +59,10 @@ type providerWriteFailure struct {
 
 // CreateIssue records a typed provider issue creation command in the shared write pipeline.
 func (s *Service) CreateIssue(ctx context.Context, input CreateIssueInput) (ProviderOperationResult, error) {
+	repositoryTarget, err := repositoryTarget(input.ProviderSlug, input.RepositoryTarget)
+	if err != nil {
+		return ProviderOperationResult{}, err
+	}
 	if !validCommandIdentity(input.Meta) ||
 		input.ProjectID == uuid.Nil ||
 		input.RepositoryID == uuid.Nil ||
@@ -96,6 +104,7 @@ func (s *Service) CreateIssue(ctx context.Context, input CreateIssueInput) (Prov
 			CreateIssue: &providerclient.CreateIssueCommand{
 				ProjectID:              input.ProjectID.String(),
 				RepositoryID:           repositoryID,
+				RepositoryTarget:       toClientTarget(repositoryTarget),
 				Title:                  strings.TrimSpace(input.Title),
 				Body:                   strings.TrimSpace(input.Body),
 				Labels:                 append([]string(nil), trimStrings(input.Labels)...),
@@ -258,6 +267,10 @@ func (s *Service) UpdateComment(ctx context.Context, input UpdateCommentInput) (
 
 // CreatePullRequest records a typed PR/MR creation command in the shared write pipeline.
 func (s *Service) CreatePullRequest(ctx context.Context, input CreatePullRequestInput) (ProviderOperationResult, error) {
+	repositoryTarget, err := repositoryTarget(input.ProviderSlug, input.RepositoryTarget)
+	if err != nil {
+		return ProviderOperationResult{}, err
+	}
 	if !validCommandIdentity(input.Meta) ||
 		input.ProjectID == uuid.Nil ||
 		input.RepositoryID == uuid.Nil ||
@@ -299,16 +312,17 @@ func (s *Service) CreatePullRequest(ctx context.Context, input CreatePullRequest
 			TargetRef:    targetRef,
 			ProviderSlug: input.ProviderSlug,
 			CreatePullRequest: &providerclient.CreatePullRequestCommand{
-				ProjectID:      input.ProjectID.String(),
-				RepositoryID:   repositoryID,
-				Title:          strings.TrimSpace(input.Title),
-				Body:           strings.TrimSpace(input.Body),
-				HeadBranch:     strings.TrimSpace(input.HeadBranch),
-				BaseBranch:     strings.TrimSpace(input.BaseBranch),
-				Draft:          input.Draft,
-				Labels:         append([]string(nil), trimStrings(input.Labels)...),
-				LinkedIssueRef: optionalStringValue(input.LinkedIssueRef),
-				WatermarkJSON:  watermarkJSON,
+				ProjectID:        input.ProjectID.String(),
+				RepositoryID:     repositoryID,
+				RepositoryTarget: toClientTarget(repositoryTarget),
+				Title:            strings.TrimSpace(input.Title),
+				Body:             strings.TrimSpace(input.Body),
+				HeadBranch:       strings.TrimSpace(input.HeadBranch),
+				BaseBranch:       strings.TrimSpace(input.BaseBranch),
+				Draft:            input.Draft,
+				Labels:           append([]string(nil), trimStrings(input.Labels)...),
+				LinkedIssueRef:   optionalStringValue(input.LinkedIssueRef),
+				WatermarkJSON:    watermarkJSON,
 			},
 		},
 	}, changedFields)
@@ -400,15 +414,16 @@ func (s *Service) UpdateRelationship(ctx context.Context, input UpdateRelationsh
 		"confidence",
 	)
 	plan, err := s.buildWritePlan(providerWritePlan{
-		operationType:     enum.ProviderOperationUpdateRelationship,
-		actionKey:         accesscatalog.ActionProviderRelationshipWrite,
-		providerSlug:      input.Source.ProviderSlug,
-		externalAccountID: input.ExternalAccountID,
-		targetRef:         targetRef,
-		scopeType:         providerUsageScopeRepository,
-		scopeID:           providerScopeIDFromTarget(input.Source),
-		resultTarget:      resultTarget,
-		meta:              input.Meta,
+		operationType:          enum.ProviderOperationUpdateRelationship,
+		actionKey:              accesscatalog.ActionProviderRelationshipWrite,
+		providerSlug:           input.Source.ProviderSlug,
+		externalAccountID:      input.ExternalAccountID,
+		targetRef:              targetRef,
+		scopeType:              providerUsageScopeRepository,
+		scopeID:                providerScopeIDFromTarget(input.Source),
+		resultTarget:           resultTarget,
+		meta:                   input.Meta,
+		skipProviderCredential: true,
 		validateExpectedVersion: s.expectedRelationshipVersionCheck(
 			input,
 			targetProviderRef,
@@ -469,6 +484,13 @@ func (s *Service) executeProviderWrite(ctx context.Context, plan providerWritePl
 			errorMessage: "approval gate reference is required",
 		})
 	}
+	replayed, replayedResult, err := s.replayProviderWrite(ctx, plan)
+	if err != nil {
+		return ProviderOperationResult{}, err
+	}
+	if replayed {
+		return replayedResult, nil
+	}
 	executor := s.providerWriteExecutors[plan.providerSlug]
 	if executor == nil {
 		return s.finalizeProviderWrite(ctx, plan, providerclient.WriteResult{}, now, providerWriteFailure{
@@ -477,15 +499,97 @@ func (s *Service) executeProviderWrite(ctx context.Context, plan providerWritePl
 			errorMessage: "provider write executor is unavailable",
 		})
 	}
-	result, execErr := executor.Execute(ctx, writeRequestWithCredential(plan.executorRequest, providerclient.AccountCredential{
+	credential := providerclient.AccountCredential{
 		ExternalAccountID: plan.externalAccountID,
 		ProviderSlug:      plan.providerSlug,
-	}))
+	}
+	if !plan.skipProviderCredential {
+		secret, failure, resolveErr := s.resolveWriteSecret(ctx, usage)
+		if resolveErr != nil {
+			return ProviderOperationResult{}, resolveErr
+		}
+		if failure != nil {
+			return s.finalizeProviderWrite(ctx, plan, providerclient.WriteResult{}, now, *failure)
+		}
+		defer secret.Clear()
+		credential.Token = secret
+	}
+	result, execErr := executor.Execute(ctx, writeRequestWithCredential(plan.executorRequest, credential))
 	if execErr != nil {
 		return s.finalizeProviderWrite(ctx, plan, providerclient.WriteResult{}, now, mapProviderWriteError(execErr))
 	}
 	_ = usage
 	return s.finalizeProviderWrite(ctx, plan, result, now, providerWriteFailure{status: enum.ProviderOperationStatusSucceeded})
+}
+
+func (s *Service) replayProviderWrite(ctx context.Context, plan providerWritePlan) (bool, ProviderOperationResult, error) {
+	commandKey := providerCommandKey(plan.meta)
+	if strings.TrimSpace(commandKey) == "" {
+		return false, ProviderOperationResult{}, nil
+	}
+	stored, err := s.repository.GetProviderOperationByCommand(ctx, plan.operationType, commandKey)
+	if errors.Is(err, errs.ErrNotFound) {
+		return false, ProviderOperationResult{}, nil
+	}
+	if err != nil {
+		return false, ProviderOperationResult{}, err
+	}
+	if !sameProviderWriteReplay(stored, plan) {
+		return false, ProviderOperationResult{}, errs.ErrConflict
+	}
+	return true, ProviderOperationResult{
+		ProviderOperation: &stored,
+		Result: ProviderOperationCommandResult{
+			Target:            plan.resultTarget,
+			ResultRef:         stored.ResultRef,
+			ProviderVersion:   stored.ProviderVersion,
+			EmittedEventTypes: []string{providerOperationEventType(stored.Status)},
+		},
+	}, nil
+}
+
+func sameProviderWriteReplay(stored entity.ProviderOperation, plan providerWritePlan) bool {
+	return stored.CommandID == providerCommandKey(plan.meta) &&
+		sameOptionalUUID(stored.ActorID, actorUUIDPtr(plan.meta.Actor)) &&
+		stored.ExternalAccountID == plan.externalAccountID &&
+		stored.ProviderSlug == plan.providerSlug &&
+		stored.OperationType == plan.operationType &&
+		stored.TargetRef == plan.targetRef &&
+		reflect.DeepEqual(stored.OperationPolicyContext, plan.meta.OperationPolicyContext) &&
+		reflect.DeepEqual(stored.ApprovalGateRef, plan.meta.ApprovalGateRef)
+}
+
+func sameOptionalUUID(left *uuid.UUID, right *uuid.UUID) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return *left == *right
+}
+
+func (s *Service) resolveWriteSecret(ctx context.Context, usage ExternalAccountUsageResult) (secretresolver.SecretValue, *providerWriteFailure, error) {
+	if s.secretResolver == nil {
+		return secretresolver.SecretValue{}, &providerWriteFailure{
+			status:       enum.ProviderOperationStatusRetryableFailed,
+			errorCode:    writeFailureSecretUnavailable,
+			errorMessage: "secret resolver is unavailable",
+		}, nil
+	}
+	secret, err := s.secretResolver.Resolve(ctx, secretresolver.SecretRef{
+		StoreType: usage.SecretStoreType,
+		StoreRef:  usage.SecretStoreRef,
+	})
+	if err == nil {
+		return secret, nil, nil
+	}
+	failure := providerWriteFailure{
+		status:       enum.ProviderOperationStatusRetryableFailed,
+		errorCode:    writeFailureSecretUnavailable,
+		errorMessage: "provider credential is unavailable",
+	}
+	if errors.Is(mapSecretResolverError(err), errs.ErrPreconditionFailed) {
+		failure.status = enum.ProviderOperationStatusFailed
+	}
+	return secretresolver.SecretValue{}, &failure, nil
 }
 
 func (s *Service) resolveWriteAccount(ctx context.Context, plan providerWritePlan) (ExternalAccountUsageResult, *providerWriteFailure, error) {
@@ -563,15 +667,25 @@ func (s *Service) finalizeProviderWrite(ctx context.Context, plan providerWriteP
 	if err != nil {
 		return ProviderOperationResult{}, err
 	}
+	projectionUpdate, providerEvents, projectionOutboxEvents, projectionResult, err := s.providerWriteProjection(ctx, plan, executorResult, finishedAt)
+	if err != nil {
+		return ProviderOperationResult{}, err
+	}
+	outboxEvents := append([]entity.OutboxEvent{outboxEvent}, projectionOutboxEvents...)
 	storedOperation, err := s.repository.ApplyProviderOperation(ctx, providerrepo.ProviderOperationCompletion{
-		Operation:    operation,
-		OutboxEvents: []entity.OutboxEvent{outboxEvent},
+		Operation:        operation,
+		ProjectionUpdate: projectionUpdate,
+		ProviderEvents:   providerEvents,
+		OutboxEvents:     outboxEvents,
 	})
 	if err != nil {
 		return ProviderOperationResult{}, err
 	}
 	return ProviderOperationResult{
-		ProviderOperation: &storedOperation,
+		ProviderOperation:  &storedOperation,
+		WorkItemProjection: projectionResult.WorkItem,
+		CommentProjection:  projectionResult.Comment,
+		Relationship:       projectionResult.Relationship,
 		Result: ProviderOperationCommandResult{
 			Target:                 plan.resultTarget,
 			ResultRef:              strings.TrimSpace(executorResult.ResultRef),
@@ -581,6 +695,203 @@ func (s *Service) finalizeProviderWrite(ctx context.Context, plan providerWriteP
 			EmittedEventTypes:      []string{providerOperationEventType(storedOperation.Status)},
 		},
 	}, nil
+}
+
+type providerWriteProjectionResult struct {
+	WorkItem     *entity.ProviderWorkItemProjection
+	Comment      *entity.ProviderCommentProjection
+	Relationship *entity.ProviderRelationship
+}
+
+func (s *Service) providerWriteProjection(ctx context.Context, plan providerWritePlan, result providerclient.WriteResult, now time.Time) (providerrepo.ProjectionUpdate, []entity.ProviderEvent, []entity.OutboxEvent, providerWriteProjectionResult, error) {
+	var update providerrepo.ProjectionUpdate
+	var providerEvents []entity.ProviderEvent
+	var outboxEvents []entity.OutboxEvent
+	var commandResult providerWriteProjectionResult
+	if result.WorkItem != nil {
+		workItem, relationships, err := workItemProjectionFromSnapshot(*result.WorkItem, now)
+		if err != nil {
+			return providerrepo.ProjectionUpdate{}, nil, nil, providerWriteProjectionResult{}, err
+		}
+		update.WorkItem = &workItem
+		update.Relationships = append(update.Relationships, relationships...)
+		commandResult.WorkItem = &workItem
+		providerEvent, outboxEvent, err := s.providerWriteWorkItemEvents(plan, workItem)
+		if err != nil {
+			return providerrepo.ProjectionUpdate{}, nil, nil, providerWriteProjectionResult{}, err
+		}
+		providerEvents = append(providerEvents, providerEvent)
+		outboxEvents = append(outboxEvents, outboxEvent)
+	}
+	if result.Comment != nil {
+		comment := commentProjectionFromSnapshot(*result.Comment, now)
+		update.Comments = append(update.Comments, comment)
+		commandResult.Comment = &comment
+		providerEvent, outboxEvent, err := s.providerWriteCommentEvents(plan, comment, *result.Comment)
+		if err != nil {
+			return providerrepo.ProjectionUpdate{}, nil, nil, providerWriteProjectionResult{}, err
+		}
+		providerEvents = append(providerEvents, providerEvent)
+		outboxEvents = append(outboxEvents, outboxEvent)
+	}
+	if result.Relationship != nil {
+		relationship, err := s.providerWriteRelationship(ctx, *result.Relationship, now)
+		if err != nil {
+			return providerrepo.ProjectionUpdate{}, nil, nil, providerWriteProjectionResult{}, err
+		}
+		update.Relationships = append(update.Relationships, relationship)
+		commandResult.Relationship = &relationship
+		outboxEvent, err := s.providerWriteRelationshipOutbox(plan, relationship)
+		if err != nil {
+			return providerrepo.ProjectionUpdate{}, nil, nil, providerWriteProjectionResult{}, err
+		}
+		outboxEvents = append(outboxEvents, outboxEvent)
+	}
+	return update, providerEvents, outboxEvents, commandResult, nil
+}
+
+func (s *Service) providerWriteWorkItemEvents(plan providerWritePlan, workItem entity.ProviderWorkItemProjection) (entity.ProviderEvent, entity.OutboxEvent, error) {
+	providerEventID := s.ids.New()
+	providerPayload, err := marshalProviderEventPayload(value.ProviderEventPayload{
+		ProviderSlug:         string(plan.providerSlug),
+		ProviderEventID:      providerEventID.String(),
+		ExternalAccountID:    plan.externalAccountID.String(),
+		RepositoryFullName:   workItem.RepositoryFullName,
+		ProviderWorkItemID:   workItem.ProviderWorkItemID,
+		WorkItemProjectionID: workItem.ID.String(),
+		Kind:                 string(workItem.Kind),
+		Number:               workItem.Number,
+		WatermarkStatus:      string(workItem.WatermarkStatus),
+		DriftStatus:          string(workItem.DriftStatus),
+		OperationType:        string(plan.operationType),
+	})
+	if err != nil {
+		return entity.ProviderEvent{}, entity.OutboxEvent{}, err
+	}
+	providerEvent := entity.ProviderEvent{
+		ID:            providerEventID,
+		EventType:     providerEventWorkItemSynced,
+		AggregateType: providerAggregateWorkItem,
+		AggregateID:   workItem.ProviderWorkItemID,
+		PayloadJSON:   providerPayload,
+		OccurredAt:    workItem.SyncedAt,
+	}
+	outboxPayload, err := marshalProviderEventPayload(value.ProviderEventPayload{
+		ProviderSlug:         string(plan.providerSlug),
+		ExternalAccountID:    plan.externalAccountID.String(),
+		RepositoryFullName:   workItem.RepositoryFullName,
+		ProviderWorkItemID:   workItem.ProviderWorkItemID,
+		WorkItemProjectionID: workItem.ID.String(),
+		Kind:                 string(workItem.Kind),
+		Number:               workItem.Number,
+		WatermarkStatus:      string(workItem.WatermarkStatus),
+		DriftStatus:          string(workItem.DriftStatus),
+		OperationType:        string(plan.operationType),
+	})
+	if err != nil {
+		return entity.ProviderEvent{}, entity.OutboxEvent{}, err
+	}
+	return providerEvent, outboxEventRecord(s.ids.New(), providerEventWorkItemSynced, providerAggregateWorkItem, workItem.ID, outboxPayload, workItem.SyncedAt), nil
+}
+
+func (s *Service) providerWriteCommentEvents(plan providerWritePlan, comment entity.ProviderCommentProjection, snapshot value.ProviderCommentSnapshot) (entity.ProviderEvent, entity.OutboxEvent, error) {
+	occurredAt := comment.UpdatedAt
+	if comment.ProviderUpdatedAt != nil {
+		occurredAt = *comment.ProviderUpdatedAt
+	}
+	providerEventID := s.ids.New()
+	providerPayload, err := marshalProviderEventPayload(value.ProviderEventPayload{
+		ProviderSlug:        string(plan.providerSlug),
+		ProviderEventID:     providerEventID.String(),
+		ExternalAccountID:   plan.externalAccountID.String(),
+		ProviderWorkItemID:  snapshot.ProviderWorkItemID,
+		ProviderCommentID:   comment.ProviderCommentID,
+		CommentProjectionID: comment.ID.String(),
+		Kind:                string(comment.Kind),
+		ReviewState:         string(comment.ReviewState),
+		OperationType:       string(plan.operationType),
+	})
+	if err != nil {
+		return entity.ProviderEvent{}, entity.OutboxEvent{}, err
+	}
+	providerEvent := entity.ProviderEvent{
+		ID:            providerEventID,
+		EventType:     providerEventCommentSynced,
+		AggregateType: providerAggregateComment,
+		AggregateID:   comment.ProviderCommentID,
+		PayloadJSON:   providerPayload,
+		OccurredAt:    occurredAt,
+	}
+	outboxPayload, err := marshalProviderEventPayload(value.ProviderEventPayload{
+		ProviderSlug:        string(plan.providerSlug),
+		ExternalAccountID:   plan.externalAccountID.String(),
+		ProviderWorkItemID:  snapshot.ProviderWorkItemID,
+		ProviderCommentID:   comment.ProviderCommentID,
+		CommentProjectionID: comment.ID.String(),
+		Kind:                string(comment.Kind),
+		ReviewState:         string(comment.ReviewState),
+		OperationType:       string(plan.operationType),
+	})
+	if err != nil {
+		return entity.ProviderEvent{}, entity.OutboxEvent{}, err
+	}
+	return providerEvent, outboxEventRecord(s.ids.New(), providerEventCommentSynced, providerAggregateComment, comment.ID, outboxPayload, occurredAt), nil
+}
+
+func (s *Service) providerWriteRelationship(ctx context.Context, result providerclient.RelationshipResult, now time.Time) (entity.ProviderRelationship, error) {
+	source, err := s.repository.GetWorkItemProjection(ctx, workItemLookupFromClientTarget(result.Source))
+	if err != nil {
+		return entity.ProviderRelationship{}, err
+	}
+	targetProviderRef := strings.TrimSpace(result.TargetProviderRef)
+	var targetID *uuid.UUID
+	if result.Target != nil {
+		target, targetErr := s.repository.GetWorkItemProjection(ctx, workItemLookupFromClientTarget(*result.Target))
+		if targetErr != nil {
+			return entity.ProviderRelationship{}, targetErr
+		}
+		targetID = &target.ID
+		if targetProviderRef == "" {
+			targetProviderRef = target.ProviderWorkItemID
+		}
+	}
+	relationshipType := strings.TrimSpace(result.RelationshipType)
+	if relationshipType == "" || !validRelationshipSources([]enum.RelationshipSource{result.SourceKind}) || !validRelationshipConfidenceLevels([]enum.RelationshipConfidence{result.Confidence}) {
+		return entity.ProviderRelationship{}, errs.ErrInvalidArgument
+	}
+	stableTarget := targetProviderRef
+	if targetID != nil {
+		stableTarget = targetID.String()
+	}
+	if stableTarget == "" {
+		return entity.ProviderRelationship{}, errs.ErrInvalidArgument
+	}
+	return entity.ProviderRelationship{
+		ID:                stableUUID("relationship", source.ID.String(), relationshipType, stableTarget),
+		Version:           1,
+		SourceWorkItemID:  source.ID,
+		TargetWorkItemID:  targetID,
+		TargetProviderRef: targetProviderRef,
+		RelationshipType:  relationshipType,
+		Source:            result.SourceKind,
+		Confidence:        result.Confidence,
+		CreatedAt:         now,
+	}, nil
+}
+
+func (s *Service) providerWriteRelationshipOutbox(plan providerWritePlan, relationship entity.ProviderRelationship) (entity.OutboxEvent, error) {
+	payload, err := marshalProviderEventPayload(value.ProviderEventPayload{
+		ProviderSlug:      string(plan.providerSlug),
+		ExternalAccountID: plan.externalAccountID.String(),
+		RelationshipID:    relationship.ID.String(),
+		RelationshipType:  relationship.RelationshipType,
+		Source:            string(relationship.Source),
+		OperationType:     string(plan.operationType),
+	})
+	if err != nil {
+		return entity.OutboxEvent{}, err
+	}
+	return outboxEventRecord(s.ids.New(), providerEventRelationshipSynced, providerAggregateRelationship, relationship.ID, payload, relationship.CreatedAt), nil
 }
 
 func (s *Service) providerOperationOutbox(operation entity.ProviderOperation) (entity.OutboxEvent, error) {
@@ -714,6 +1025,30 @@ func providerTargetRef(target ProviderTarget) (string, error) {
 		return string(target.ProviderSlug) + ":url:" + webURL, nil
 	}
 	return "", errs.ErrInvalidArgument
+}
+
+func repositoryTarget(providerSlug enum.ProviderSlug, target ProviderTarget) (ProviderTarget, error) {
+	if !validProviderSlug(providerSlug) {
+		return ProviderTarget{}, errs.ErrInvalidArgument
+	}
+	target.ProviderSlug = enum.ProviderSlug(strings.TrimSpace(string(target.ProviderSlug)))
+	if target.ProviderSlug == "" {
+		target.ProviderSlug = providerSlug
+	}
+	if target.ProviderSlug != providerSlug {
+		return ProviderTarget{}, errs.ErrInvalidArgument
+	}
+	target.RepositoryFullName = strings.TrimSpace(target.RepositoryFullName)
+	target.ProviderRepositoryID = strings.TrimSpace(target.ProviderRepositoryID)
+	target.WebURL = strings.TrimSpace(target.WebURL)
+	target.ProviderObjectID = strings.TrimSpace(target.ProviderObjectID)
+	if target.WorkItemKind != "" || target.Number != 0 || target.ProviderObjectID != "" {
+		return ProviderTarget{}, errs.ErrInvalidArgument
+	}
+	if target.RepositoryFullName == "" && target.ProviderRepositoryID == "" && target.WebURL == "" {
+		return ProviderTarget{}, errs.ErrInvalidArgument
+	}
+	return target, nil
 }
 
 func repositoryTargetRef(providerSlug enum.ProviderSlug, repositoryID string) string {
@@ -996,6 +1331,17 @@ func (s *Service) expectedRelationshipVersionCheck(input UpdateRelationshipInput
 }
 
 func workItemLookupFromTarget(target ProviderTarget) query.ProviderTargetLookup {
+	return query.ProviderTargetLookup{
+		ProviderSlug:       target.ProviderSlug,
+		RepositoryFullName: strings.TrimSpace(target.RepositoryFullName),
+		Kind:               target.WorkItemKind,
+		Number:             target.Number,
+		ProviderObjectID:   strings.TrimSpace(target.ProviderObjectID),
+		WebURL:             strings.TrimSpace(target.WebURL),
+	}
+}
+
+func workItemLookupFromClientTarget(target providerclient.Target) query.ProviderTargetLookup {
 	return query.ProviderTargetLookup{
 		ProviderSlug:       target.ProviderSlug,
 		RepositoryFullName: strings.TrimSpace(target.RepositoryFullName),
