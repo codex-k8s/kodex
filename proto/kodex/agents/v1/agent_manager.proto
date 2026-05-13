@@ -180,6 +180,15 @@ message GuidanceRef {
   optional string source_ref = 4;
 }
 
+// GuidanceSelectionHint is an untrusted caller hint resolved by agent-manager
+// through package-hub before creating immutable GuidanceRef records on a run.
+message GuidanceSelectionHint {
+  // package_installation_ref optionally narrows selection to an installed guidance package.
+  optional string package_installation_ref = 1;
+  // package_slug optionally narrows selection by package slug inside the run scope.
+  optional string package_slug = 2;
+}
+
 // ObjectRef points to object storage without embedding object content.
 message ObjectRef {
   // object_uri points to S3-compatible object storage.
@@ -785,9 +794,8 @@ message StartAgentRunRequest {
   optional string stage_id = 4;
   string role_profile_id = 5;
   string prompt_template_version_id = 6;
-  RuntimeContextRef runtime_context = 7;
-  ProviderTargetRef provider_target = 8;
-  repeated GuidanceRef guidance_refs = 9;
+  ProviderTargetRef provider_target = 7;
+  repeated GuidanceSelectionHint guidance_selection_hints = 8;
 }
 
 message RecordRunStateRequest {

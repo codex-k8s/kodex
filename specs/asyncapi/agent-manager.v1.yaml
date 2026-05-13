@@ -75,7 +75,7 @@ components:
         - $ref: '#/components/schemas/SessionCreatedEventKind'
     SessionCreatedEventKind:
       type: object
-      properties: {event_type: {type: string, const: agent.session.created}, aggregate_type: {type: string, const: session}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      properties: {event_type: {type: string, const: agent.session.created}, aggregate_type: {type: string, const: session}, payload: {$ref: '#/components/schemas/SessionCreatedPayload'}}
       required: [event_type, aggregate_type, payload]
     SessionUpdatedEvent:
       allOf:
@@ -83,7 +83,7 @@ components:
         - $ref: '#/components/schemas/SessionUpdatedEventKind'
     SessionUpdatedEventKind:
       type: object
-      properties: {event_type: {type: string, const: agent.session.updated}, aggregate_type: {type: string, const: session}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      properties: {event_type: {type: string, const: agent.session.updated}, aggregate_type: {type: string, const: session}, payload: {$ref: '#/components/schemas/SessionUpdatedPayload'}}
       required: [event_type, aggregate_type, payload]
     SessionSnapshotRecordedEvent:
       allOf:
@@ -91,7 +91,7 @@ components:
         - $ref: '#/components/schemas/SessionSnapshotRecordedEventKind'
     SessionSnapshotRecordedEventKind:
       type: object
-      properties: {event_type: {type: string, const: agent.session.snapshot_recorded}, aggregate_type: {type: string, const: session}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      properties: {event_type: {type: string, const: agent.session.snapshot_recorded}, aggregate_type: {type: string, const: session}, payload: {$ref: '#/components/schemas/SessionSnapshotRecordedPayload'}}
       required: [event_type, aggregate_type, payload]
 
     RunRequestedEvent:
@@ -100,7 +100,7 @@ components:
         - $ref: '#/components/schemas/RunRequestedEventKind'
     RunRequestedEventKind:
       type: object
-      properties: {event_type: {type: string, const: agent.run.requested}, aggregate_type: {type: string, const: run}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      properties: {event_type: {type: string, const: agent.run.requested}, aggregate_type: {type: string, const: run}, payload: {$ref: '#/components/schemas/RunRequestedPayload'}}
       required: [event_type, aggregate_type, payload]
     RunStartedEvent:
       allOf:
@@ -108,7 +108,7 @@ components:
         - $ref: '#/components/schemas/RunStartedEventKind'
     RunStartedEventKind:
       type: object
-      properties: {event_type: {type: string, const: agent.run.started}, aggregate_type: {type: string, const: run}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      properties: {event_type: {type: string, const: agent.run.started}, aggregate_type: {type: string, const: run}, payload: {$ref: '#/components/schemas/RunStartedPayload'}}
       required: [event_type, aggregate_type, payload]
     RunWaitingEvent:
       allOf:
@@ -116,7 +116,7 @@ components:
         - $ref: '#/components/schemas/RunWaitingEventKind'
     RunWaitingEventKind:
       type: object
-      properties: {event_type: {type: string, const: agent.run.waiting}, aggregate_type: {type: string, const: run}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      properties: {event_type: {type: string, const: agent.run.waiting}, aggregate_type: {type: string, const: run}, payload: {$ref: '#/components/schemas/RunWaitingPayload'}}
       required: [event_type, aggregate_type, payload]
     RunCompletedEvent:
       allOf:
@@ -124,7 +124,7 @@ components:
         - $ref: '#/components/schemas/RunCompletedEventKind'
     RunCompletedEventKind:
       type: object
-      properties: {event_type: {type: string, const: agent.run.completed}, aggregate_type: {type: string, const: run}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      properties: {event_type: {type: string, const: agent.run.completed}, aggregate_type: {type: string, const: run}, payload: {$ref: '#/components/schemas/RunCompletedPayload'}}
       required: [event_type, aggregate_type, payload]
     RunFailedEvent:
       allOf:
@@ -132,7 +132,7 @@ components:
         - $ref: '#/components/schemas/RunFailedEventKind'
     RunFailedEventKind:
       type: object
-      properties: {event_type: {type: string, const: agent.run.failed}, aggregate_type: {type: string, const: run}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      properties: {event_type: {type: string, const: agent.run.failed}, aggregate_type: {type: string, const: run}, payload: {$ref: '#/components/schemas/RunFailedPayload'}}
       required: [event_type, aggregate_type, payload]
 
     AcceptanceRequestedEvent:
@@ -141,7 +141,7 @@ components:
         - $ref: '#/components/schemas/AcceptanceRequestedEventKind'
     AcceptanceRequestedEventKind:
       type: object
-      properties: {event_type: {type: string, const: agent.acceptance.requested}, aggregate_type: {type: string, const: acceptance}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      properties: {event_type: {type: string, const: agent.acceptance.requested}, aggregate_type: {type: string, const: acceptance}, payload: {$ref: '#/components/schemas/AcceptanceRequestedPayload'}}
       required: [event_type, aggregate_type, payload]
     AcceptanceCompletedEvent:
       allOf:
@@ -149,7 +149,7 @@ components:
         - $ref: '#/components/schemas/AcceptanceCompletedEventKind'
     AcceptanceCompletedEventKind:
       type: object
-      properties: {event_type: {type: string, const: agent.acceptance.completed}, aggregate_type: {type: string, const: acceptance}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      properties: {event_type: {type: string, const: agent.acceptance.completed}, aggregate_type: {type: string, const: acceptance}, payload: {$ref: '#/components/schemas/AcceptanceCompletedPayload'}}
       required: [event_type, aggregate_type, payload]
     AcceptanceFailedEvent:
       allOf:
@@ -157,7 +157,7 @@ components:
         - $ref: '#/components/schemas/AcceptanceFailedEventKind'
     AcceptanceFailedEventKind:
       type: object
-      properties: {event_type: {type: string, const: agent.acceptance.failed}, aggregate_type: {type: string, const: acceptance}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      properties: {event_type: {type: string, const: agent.acceptance.failed}, aggregate_type: {type: string, const: acceptance}, payload: {$ref: '#/components/schemas/AcceptanceFailedPayload'}}
       required: [event_type, aggregate_type, payload]
 
     FollowUpRequestedEvent:
@@ -166,7 +166,7 @@ components:
         - $ref: '#/components/schemas/FollowUpRequestedEventKind'
     FollowUpRequestedEventKind:
       type: object
-      properties: {event_type: {type: string, const: agent.follow_up.requested}, aggregate_type: {type: string, const: follow_up}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      properties: {event_type: {type: string, const: agent.follow_up.requested}, aggregate_type: {type: string, const: follow_up}, payload: {$ref: '#/components/schemas/FollowUpRequestedPayload'}}
       required: [event_type, aggregate_type, payload]
     FollowUpCreatedEvent:
       allOf:
@@ -174,7 +174,7 @@ components:
         - $ref: '#/components/schemas/FollowUpCreatedEventKind'
     FollowUpCreatedEventKind:
       type: object
-      properties: {event_type: {type: string, const: agent.follow_up.created}, aggregate_type: {type: string, const: follow_up}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      properties: {event_type: {type: string, const: agent.follow_up.created}, aggregate_type: {type: string, const: follow_up}, payload: {$ref: '#/components/schemas/FollowUpCreatedPayload'}}
       required: [event_type, aggregate_type, payload]
 
     HumanGateRequestedEvent:
@@ -183,7 +183,7 @@ components:
         - $ref: '#/components/schemas/HumanGateRequestedEventKind'
     HumanGateRequestedEventKind:
       type: object
-      properties: {event_type: {type: string, const: agent.human_gate.requested}, aggregate_type: {type: string, const: human_gate}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      properties: {event_type: {type: string, const: agent.human_gate.requested}, aggregate_type: {type: string, const: human_gate}, payload: {$ref: '#/components/schemas/HumanGateRequestedPayload'}}
       required: [event_type, aggregate_type, payload]
     HumanGateResolvedEvent:
       allOf:
@@ -191,7 +191,7 @@ components:
         - $ref: '#/components/schemas/HumanGateResolvedEventKind'
     HumanGateResolvedEventKind:
       type: object
-      properties: {event_type: {type: string, const: agent.human_gate.resolved}, aggregate_type: {type: string, const: human_gate}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      properties: {event_type: {type: string, const: agent.human_gate.resolved}, aggregate_type: {type: string, const: human_gate}, payload: {$ref: '#/components/schemas/HumanGateResolvedPayload'}}
       required: [event_type, aggregate_type, payload]
 
     FlowVersionActivatedEvent:
@@ -200,7 +200,7 @@ components:
         - $ref: '#/components/schemas/FlowVersionActivatedEventKind'
     FlowVersionActivatedEventKind:
       type: object
-      properties: {event_type: {type: string, const: agent.flow.version_activated}, aggregate_type: {type: string, const: flow}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      properties: {event_type: {type: string, const: agent.flow.version_activated}, aggregate_type: {type: string, const: flow}, payload: {$ref: '#/components/schemas/FlowVersionActivatedPayload'}}
       required: [event_type, aggregate_type, payload]
     RoleVersionActivatedEvent:
       allOf:
@@ -208,7 +208,7 @@ components:
         - $ref: '#/components/schemas/RoleVersionActivatedEventKind'
     RoleVersionActivatedEventKind:
       type: object
-      properties: {event_type: {type: string, const: agent.role.version_activated}, aggregate_type: {type: string, const: role}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      properties: {event_type: {type: string, const: agent.role.version_activated}, aggregate_type: {type: string, const: role}, payload: {$ref: '#/components/schemas/RoleVersionActivatedPayload'}}
       required: [event_type, aggregate_type, payload]
     PromptVersionActivatedEvent:
       allOf:
@@ -216,7 +216,7 @@ components:
         - $ref: '#/components/schemas/PromptVersionActivatedEventKind'
     PromptVersionActivatedEventKind:
       type: object
-      properties: {event_type: {type: string, const: agent.prompt.version_activated}, aggregate_type: {type: string, const: prompt}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      properties: {event_type: {type: string, const: agent.prompt.version_activated}, aggregate_type: {type: string, const: prompt}, payload: {$ref: '#/components/schemas/PromptVersionActivatedPayload'}}
       required: [event_type, aggregate_type, payload]
 
     AgentEventType:
@@ -309,3 +309,93 @@ components:
           type: integer
         activated_version:
           type: integer
+    SessionCreatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventPayload'
+        - type: object
+          required: [session_id, status, version]
+    SessionUpdatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventPayload'
+        - type: object
+          required: [session_id, previous_status, status, version]
+    SessionSnapshotRecordedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventPayload'
+        - type: object
+          required: [session_id, state_snapshot_id, state_snapshot_digest]
+    RunRequestedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventPayload'
+        - type: object
+          required: [session_id, run_id, role_profile_id, prompt_template_version_id, status, version]
+    RunStartedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventPayload'
+        - type: object
+          required: [session_id, run_id, runtime_slot_ref, status, version]
+    RunWaitingPayload:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventPayload'
+        - type: object
+          required: [session_id, run_id, status, reason_code, version]
+    RunCompletedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventPayload'
+        - type: object
+          required: [session_id, run_id, status, version]
+    RunFailedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventPayload'
+        - type: object
+          required: [session_id, run_id, status, failure_code, version]
+    AcceptanceRequestedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventPayload'
+        - type: object
+          required: [session_id, acceptance_result_id, status, version]
+    AcceptanceCompletedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventPayload'
+        - type: object
+          required: [session_id, acceptance_result_id, status, version]
+    AcceptanceFailedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventPayload'
+        - type: object
+          required: [session_id, acceptance_result_id, status, reason_code, version]
+    FollowUpRequestedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventPayload'
+        - type: object
+          required: [session_id, follow_up_intent_id, status, version]
+    FollowUpCreatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventPayload'
+        - type: object
+          required: [session_id, follow_up_intent_id, provider_work_item_ref, status, version]
+    HumanGateRequestedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventPayload'
+        - type: object
+          required: [session_id, human_gate_request_id, reason_code, status, version]
+    HumanGateResolvedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventPayload'
+        - type: object
+          required: [session_id, human_gate_request_id, interaction_ref, status, version]
+    FlowVersionActivatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventPayload'
+        - type: object
+          required: [flow_id, flow_version_id, activated_version, version]
+    RoleVersionActivatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventPayload'
+        - type: object
+          required: [role_profile_id, role_profile_version, role_profile_digest, version]
+    PromptVersionActivatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventPayload'
+        - type: object
+          required: [role_profile_id, prompt_template_version_id, prompt_template_digest, activated_version, version]

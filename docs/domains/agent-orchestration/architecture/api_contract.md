@@ -57,7 +57,7 @@ approvals:
 | `GetPromptTemplateVersion` | gRPC query | `agent.prompt.read` | нет | Читает одну версию prompt. |
 | `ListPromptTemplateVersions` | gRPC query | `agent.prompt.read` | нет | Список версий prompt по роли, назначению и статусу. |
 | `StartAgentSession` | gRPC command | `agent.session.start` | `command_id` | Создаёт или продолжает сессию по пользовательскому запросу или provider target. |
-| `StartAgentRun` | gRPC command | `agent.run.start` | `command_id` | Создаёт `Run`, фиксирует `flow_version_id`, `stage_id`, `role_profile_id`, `role_profile_version`, `role_profile_digest`, `prompt_template_version_id`, `prompt_template_digest`, guidance refs и запрашивает runtime. |
+| `StartAgentRun` | gRPC command | `agent.run.start` | `command_id` | Создаёт `Run`, фиксирует версии flow/stage/role/prompt, разрешает guidance hints через `package-hub` и запрашивает runtime; вызывающая сторона не передаёт готовые runtime refs или сырые guidance refs. |
 | `RecordRunState` | gRPC command | `agent.run.update` | `command_id` + expected version | Фиксирует переход `Run` после сигнала от runtime, MCP или агента. |
 | `RecordSessionStateSnapshot` | gRPC command | `agent.session.update` | `command_id` + expected version | Записывает метаданные Codex session JSON/JSONL в объектном хранилище и обновляет указатель на актуальный снимок сессии. |
 | `RequestAcceptance` | gRPC command | `agent.acceptance.run` | `command_id` | Запускает машину приёмки по session/run/stage. |

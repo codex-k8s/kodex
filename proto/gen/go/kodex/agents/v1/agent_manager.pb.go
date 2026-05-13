@@ -1802,6 +1802,62 @@ func (x *GuidanceRef) GetSourceRef() string {
 	return ""
 }
 
+// GuidanceSelectionHint is an untrusted caller hint resolved by agent-manager
+// through package-hub before creating immutable GuidanceRef records on a run.
+type GuidanceSelectionHint struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// package_installation_ref optionally narrows selection to an installed guidance package.
+	PackageInstallationRef *string `protobuf:"bytes,1,opt,name=package_installation_ref,json=packageInstallationRef,proto3,oneof" json:"package_installation_ref,omitempty"`
+	// package_slug optionally narrows selection by package slug inside the run scope.
+	PackageSlug   *string `protobuf:"bytes,2,opt,name=package_slug,json=packageSlug,proto3,oneof" json:"package_slug,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GuidanceSelectionHint) Reset() {
+	*x = GuidanceSelectionHint{}
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuidanceSelectionHint) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuidanceSelectionHint) ProtoMessage() {}
+
+func (x *GuidanceSelectionHint) ProtoReflect() protoreflect.Message {
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuidanceSelectionHint.ProtoReflect.Descriptor instead.
+func (*GuidanceSelectionHint) Descriptor() ([]byte, []int) {
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *GuidanceSelectionHint) GetPackageInstallationRef() string {
+	if x != nil && x.PackageInstallationRef != nil {
+		return *x.PackageInstallationRef
+	}
+	return ""
+}
+
+func (x *GuidanceSelectionHint) GetPackageSlug() string {
+	if x != nil && x.PackageSlug != nil {
+		return *x.PackageSlug
+	}
+	return ""
+}
+
 // ObjectRef points to object storage without embedding object content.
 type ObjectRef struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -1817,7 +1873,7 @@ type ObjectRef struct {
 
 func (x *ObjectRef) Reset() {
 	*x = ObjectRef{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[11]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1829,7 +1885,7 @@ func (x *ObjectRef) String() string {
 func (*ObjectRef) ProtoMessage() {}
 
 func (x *ObjectRef) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[11]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1842,7 +1898,7 @@ func (x *ObjectRef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ObjectRef.ProtoReflect.Descriptor instead.
 func (*ObjectRef) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{11}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ObjectRef) GetObjectUri() string {
@@ -1886,7 +1942,7 @@ type Flow struct {
 
 func (x *Flow) Reset() {
 	*x = Flow{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[12]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1898,7 +1954,7 @@ func (x *Flow) String() string {
 func (*Flow) ProtoMessage() {}
 
 func (x *Flow) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[12]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1911,7 +1967,7 @@ func (x *Flow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Flow.ProtoReflect.Descriptor instead.
 func (*Flow) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{12}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *Flow) GetId() string {
@@ -2011,7 +2067,7 @@ type FlowVersion struct {
 
 func (x *FlowVersion) Reset() {
 	*x = FlowVersion{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[13]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2023,7 +2079,7 @@ func (x *FlowVersion) String() string {
 func (*FlowVersion) ProtoMessage() {}
 
 func (x *FlowVersion) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[13]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2036,7 +2092,7 @@ func (x *FlowVersion) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FlowVersion.ProtoReflect.Descriptor instead.
 func (*FlowVersion) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{13}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *FlowVersion) GetId() string {
@@ -2136,7 +2192,7 @@ type Stage struct {
 
 func (x *Stage) Reset() {
 	*x = Stage{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[14]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2148,7 +2204,7 @@ func (x *Stage) String() string {
 func (*Stage) ProtoMessage() {}
 
 func (x *Stage) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[14]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2161,7 +2217,7 @@ func (x *Stage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Stage.ProtoReflect.Descriptor instead.
 func (*Stage) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{14}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *Stage) GetId() string {
@@ -2243,7 +2299,7 @@ type StageTransition struct {
 
 func (x *StageTransition) Reset() {
 	*x = StageTransition{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[15]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2255,7 +2311,7 @@ func (x *StageTransition) String() string {
 func (*StageTransition) ProtoMessage() {}
 
 func (x *StageTransition) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[15]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2268,7 +2324,7 @@ func (x *StageTransition) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StageTransition.ProtoReflect.Descriptor instead.
 func (*StageTransition) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{15}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *StageTransition) GetId() string {
@@ -2335,7 +2391,7 @@ type RoleProfile struct {
 
 func (x *RoleProfile) Reset() {
 	*x = RoleProfile{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[16]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2347,7 +2403,7 @@ func (x *RoleProfile) String() string {
 func (*RoleProfile) ProtoMessage() {}
 
 func (x *RoleProfile) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[16]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2360,7 +2416,7 @@ func (x *RoleProfile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoleProfile.ProtoReflect.Descriptor instead.
 func (*RoleProfile) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{16}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *RoleProfile) GetId() string {
@@ -2470,7 +2526,7 @@ type PromptTemplate struct {
 
 func (x *PromptTemplate) Reset() {
 	*x = PromptTemplate{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[17]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2482,7 +2538,7 @@ func (x *PromptTemplate) String() string {
 func (*PromptTemplate) ProtoMessage() {}
 
 func (x *PromptTemplate) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[17]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2495,7 +2551,7 @@ func (x *PromptTemplate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromptTemplate.ProtoReflect.Descriptor instead.
 func (*PromptTemplate) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{17}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *PromptTemplate) GetId() string {
@@ -2567,7 +2623,7 @@ type PromptTemplateVersion struct {
 
 func (x *PromptTemplateVersion) Reset() {
 	*x = PromptTemplateVersion{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[18]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2579,7 +2635,7 @@ func (x *PromptTemplateVersion) String() string {
 func (*PromptTemplateVersion) ProtoMessage() {}
 
 func (x *PromptTemplateVersion) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[18]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2592,7 +2648,7 @@ func (x *PromptTemplateVersion) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromptTemplateVersion.ProtoReflect.Descriptor instead.
 func (*PromptTemplateVersion) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{18}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *PromptTemplateVersion) GetId() string {
@@ -2688,7 +2744,7 @@ type StageRoleBinding struct {
 
 func (x *StageRoleBinding) Reset() {
 	*x = StageRoleBinding{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[19]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2700,7 +2756,7 @@ func (x *StageRoleBinding) String() string {
 func (*StageRoleBinding) ProtoMessage() {}
 
 func (x *StageRoleBinding) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[19]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2713,7 +2769,7 @@ func (x *StageRoleBinding) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StageRoleBinding.ProtoReflect.Descriptor instead.
 func (*StageRoleBinding) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{19}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *StageRoleBinding) GetId() string {
@@ -2778,7 +2834,7 @@ type AgentSession struct {
 
 func (x *AgentSession) Reset() {
 	*x = AgentSession{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[20]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2790,7 +2846,7 @@ func (x *AgentSession) String() string {
 func (*AgentSession) ProtoMessage() {}
 
 func (x *AgentSession) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[20]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2803,7 +2859,7 @@ func (x *AgentSession) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentSession.ProtoReflect.Descriptor instead.
 func (*AgentSession) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{20}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *AgentSession) GetId() string {
@@ -2912,7 +2968,7 @@ type AgentRun struct {
 
 func (x *AgentRun) Reset() {
 	*x = AgentRun{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[21]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2924,7 +2980,7 @@ func (x *AgentRun) String() string {
 func (*AgentRun) ProtoMessage() {}
 
 func (x *AgentRun) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[21]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2937,7 +2993,7 @@ func (x *AgentRun) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentRun.ProtoReflect.Descriptor instead.
 func (*AgentRun) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{21}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *AgentRun) GetId() string {
@@ -3097,7 +3153,7 @@ type AgentSessionStateSnapshot struct {
 
 func (x *AgentSessionStateSnapshot) Reset() {
 	*x = AgentSessionStateSnapshot{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[22]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3109,7 +3165,7 @@ func (x *AgentSessionStateSnapshot) String() string {
 func (*AgentSessionStateSnapshot) ProtoMessage() {}
 
 func (x *AgentSessionStateSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[22]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3122,7 +3178,7 @@ func (x *AgentSessionStateSnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentSessionStateSnapshot.ProtoReflect.Descriptor instead.
 func (*AgentSessionStateSnapshot) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{22}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *AgentSessionStateSnapshot) GetId() string {
@@ -3202,7 +3258,7 @@ type AcceptanceResult struct {
 
 func (x *AcceptanceResult) Reset() {
 	*x = AcceptanceResult{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[23]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3214,7 +3270,7 @@ func (x *AcceptanceResult) String() string {
 func (*AcceptanceResult) ProtoMessage() {}
 
 func (x *AcceptanceResult) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[23]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3227,7 +3283,7 @@ func (x *AcceptanceResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AcceptanceResult.ProtoReflect.Descriptor instead.
 func (*AcceptanceResult) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{23}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *AcceptanceResult) GetId() string {
@@ -3327,7 +3383,7 @@ type FollowUpIntent struct {
 
 func (x *FollowUpIntent) Reset() {
 	*x = FollowUpIntent{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[24]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3339,7 +3395,7 @@ func (x *FollowUpIntent) String() string {
 func (*FollowUpIntent) ProtoMessage() {}
 
 func (x *FollowUpIntent) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[24]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3352,7 +3408,7 @@ func (x *FollowUpIntent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FollowUpIntent.ProtoReflect.Descriptor instead.
 func (*FollowUpIntent) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{24}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *FollowUpIntent) GetId() string {
@@ -3452,7 +3508,7 @@ type HumanGateRequest struct {
 
 func (x *HumanGateRequest) Reset() {
 	*x = HumanGateRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[25]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3464,7 +3520,7 @@ func (x *HumanGateRequest) String() string {
 func (*HumanGateRequest) ProtoMessage() {}
 
 func (x *HumanGateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[25]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3477,7 +3533,7 @@ func (x *HumanGateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HumanGateRequest.ProtoReflect.Descriptor instead.
 func (*HumanGateRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{25}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *HumanGateRequest) GetId() string {
@@ -3570,7 +3626,7 @@ type FlowDefinitionInput struct {
 
 func (x *FlowDefinitionInput) Reset() {
 	*x = FlowDefinitionInput{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[26]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3582,7 +3638,7 @@ func (x *FlowDefinitionInput) String() string {
 func (*FlowDefinitionInput) ProtoMessage() {}
 
 func (x *FlowDefinitionInput) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[26]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3595,7 +3651,7 @@ func (x *FlowDefinitionInput) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FlowDefinitionInput.ProtoReflect.Descriptor instead.
 func (*FlowDefinitionInput) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{26}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *FlowDefinitionInput) GetStages() []*StageInput {
@@ -3641,7 +3697,7 @@ type StageInput struct {
 
 func (x *StageInput) Reset() {
 	*x = StageInput{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[27]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3653,7 +3709,7 @@ func (x *StageInput) String() string {
 func (*StageInput) ProtoMessage() {}
 
 func (x *StageInput) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[27]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3666,7 +3722,7 @@ func (x *StageInput) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StageInput.ProtoReflect.Descriptor instead.
 func (*StageInput) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{27}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *StageInput) GetSlug() string {
@@ -3730,7 +3786,7 @@ type StageTransitionInput struct {
 
 func (x *StageTransitionInput) Reset() {
 	*x = StageTransitionInput{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[28]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3742,7 +3798,7 @@ func (x *StageTransitionInput) String() string {
 func (*StageTransitionInput) ProtoMessage() {}
 
 func (x *StageTransitionInput) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[28]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3755,7 +3811,7 @@ func (x *StageTransitionInput) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StageTransitionInput.ProtoReflect.Descriptor instead.
 func (*StageTransitionInput) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{28}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *StageTransitionInput) GetFromStageSlug() string {
@@ -3799,7 +3855,7 @@ type StageRoleBindingInput struct {
 
 func (x *StageRoleBindingInput) Reset() {
 	*x = StageRoleBindingInput{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[29]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3811,7 +3867,7 @@ func (x *StageRoleBindingInput) String() string {
 func (*StageRoleBindingInput) ProtoMessage() {}
 
 func (x *StageRoleBindingInput) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[29]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3824,7 +3880,7 @@ func (x *StageRoleBindingInput) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StageRoleBindingInput.ProtoReflect.Descriptor instead.
 func (*StageRoleBindingInput) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{29}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *StageRoleBindingInput) GetStageSlug() string {
@@ -3876,7 +3932,7 @@ type CreateFlowRequest struct {
 
 func (x *CreateFlowRequest) Reset() {
 	*x = CreateFlowRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[30]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3888,7 +3944,7 @@ func (x *CreateFlowRequest) String() string {
 func (*CreateFlowRequest) ProtoMessage() {}
 
 func (x *CreateFlowRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[30]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3901,7 +3957,7 @@ func (x *CreateFlowRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateFlowRequest.ProtoReflect.Descriptor instead.
 func (*CreateFlowRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{30}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *CreateFlowRequest) GetMeta() *CommandMeta {
@@ -3960,7 +4016,7 @@ type UpdateFlowRequest struct {
 
 func (x *UpdateFlowRequest) Reset() {
 	*x = UpdateFlowRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[31]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3972,7 +4028,7 @@ func (x *UpdateFlowRequest) String() string {
 func (*UpdateFlowRequest) ProtoMessage() {}
 
 func (x *UpdateFlowRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[31]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3985,7 +4041,7 @@ func (x *UpdateFlowRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateFlowRequest.ProtoReflect.Descriptor instead.
 func (*UpdateFlowRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{31}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *UpdateFlowRequest) GetMeta() *CommandMeta {
@@ -4042,7 +4098,7 @@ type CreateFlowVersionRequest struct {
 
 func (x *CreateFlowVersionRequest) Reset() {
 	*x = CreateFlowVersionRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[32]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4054,7 +4110,7 @@ func (x *CreateFlowVersionRequest) String() string {
 func (*CreateFlowVersionRequest) ProtoMessage() {}
 
 func (x *CreateFlowVersionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[32]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4067,7 +4123,7 @@ func (x *CreateFlowVersionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateFlowVersionRequest.ProtoReflect.Descriptor instead.
 func (*CreateFlowVersionRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{32}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *CreateFlowVersionRequest) GetMeta() *CommandMeta {
@@ -4108,7 +4164,7 @@ type ActivateFlowVersionRequest struct {
 
 func (x *ActivateFlowVersionRequest) Reset() {
 	*x = ActivateFlowVersionRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[33]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4120,7 +4176,7 @@ func (x *ActivateFlowVersionRequest) String() string {
 func (*ActivateFlowVersionRequest) ProtoMessage() {}
 
 func (x *ActivateFlowVersionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[33]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4133,7 +4189,7 @@ func (x *ActivateFlowVersionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ActivateFlowVersionRequest.ProtoReflect.Descriptor instead.
 func (*ActivateFlowVersionRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{33}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *ActivateFlowVersionRequest) GetMeta() *CommandMeta {
@@ -4160,7 +4216,7 @@ type GetFlowRequest struct {
 
 func (x *GetFlowRequest) Reset() {
 	*x = GetFlowRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[34]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4172,7 +4228,7 @@ func (x *GetFlowRequest) String() string {
 func (*GetFlowRequest) ProtoMessage() {}
 
 func (x *GetFlowRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[34]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4185,7 +4241,7 @@ func (x *GetFlowRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetFlowRequest.ProtoReflect.Descriptor instead.
 func (*GetFlowRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{34}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *GetFlowRequest) GetMeta() *QueryMeta {
@@ -4214,7 +4270,7 @@ type ListFlowsRequest struct {
 
 func (x *ListFlowsRequest) Reset() {
 	*x = ListFlowsRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[35]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4226,7 +4282,7 @@ func (x *ListFlowsRequest) String() string {
 func (*ListFlowsRequest) ProtoMessage() {}
 
 func (x *ListFlowsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[35]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4239,7 +4295,7 @@ func (x *ListFlowsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListFlowsRequest.ProtoReflect.Descriptor instead.
 func (*ListFlowsRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{35}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *ListFlowsRequest) GetMeta() *QueryMeta {
@@ -4280,7 +4336,7 @@ type FlowResponse struct {
 
 func (x *FlowResponse) Reset() {
 	*x = FlowResponse{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[36]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4292,7 +4348,7 @@ func (x *FlowResponse) String() string {
 func (*FlowResponse) ProtoMessage() {}
 
 func (x *FlowResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[36]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4305,7 +4361,7 @@ func (x *FlowResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FlowResponse.ProtoReflect.Descriptor instead.
 func (*FlowResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{36}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *FlowResponse) GetFlow() *Flow {
@@ -4331,7 +4387,7 @@ type FlowVersionResponse struct {
 
 func (x *FlowVersionResponse) Reset() {
 	*x = FlowVersionResponse{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[37]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4343,7 +4399,7 @@ func (x *FlowVersionResponse) String() string {
 func (*FlowVersionResponse) ProtoMessage() {}
 
 func (x *FlowVersionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[37]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4356,7 +4412,7 @@ func (x *FlowVersionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FlowVersionResponse.ProtoReflect.Descriptor instead.
 func (*FlowVersionResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{37}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *FlowVersionResponse) GetFlowVersion() *FlowVersion {
@@ -4376,7 +4432,7 @@ type ListFlowsResponse struct {
 
 func (x *ListFlowsResponse) Reset() {
 	*x = ListFlowsResponse{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[38]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4388,7 +4444,7 @@ func (x *ListFlowsResponse) String() string {
 func (*ListFlowsResponse) ProtoMessage() {}
 
 func (x *ListFlowsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[38]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4401,7 +4457,7 @@ func (x *ListFlowsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListFlowsResponse.ProtoReflect.Descriptor instead.
 func (*ListFlowsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{38}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *ListFlowsResponse) GetFlows() []*Flow {
@@ -4435,7 +4491,7 @@ type CreateRoleProfileRequest struct {
 
 func (x *CreateRoleProfileRequest) Reset() {
 	*x = CreateRoleProfileRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[39]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4447,7 +4503,7 @@ func (x *CreateRoleProfileRequest) String() string {
 func (*CreateRoleProfileRequest) ProtoMessage() {}
 
 func (x *CreateRoleProfileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[39]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4460,7 +4516,7 @@ func (x *CreateRoleProfileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateRoleProfileRequest.ProtoReflect.Descriptor instead.
 func (*CreateRoleProfileRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{39}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *CreateRoleProfileRequest) GetMeta() *CommandMeta {
@@ -4543,7 +4599,7 @@ type UpdateRoleProfileRequest struct {
 
 func (x *UpdateRoleProfileRequest) Reset() {
 	*x = UpdateRoleProfileRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[40]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4555,7 +4611,7 @@ func (x *UpdateRoleProfileRequest) String() string {
 func (*UpdateRoleProfileRequest) ProtoMessage() {}
 
 func (x *UpdateRoleProfileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[40]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4568,7 +4624,7 @@ func (x *UpdateRoleProfileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateRoleProfileRequest.ProtoReflect.Descriptor instead.
 func (*UpdateRoleProfileRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{40}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *UpdateRoleProfileRequest) GetMeta() *CommandMeta {
@@ -4644,7 +4700,7 @@ type GetRoleProfileRequest struct {
 
 func (x *GetRoleProfileRequest) Reset() {
 	*x = GetRoleProfileRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[41]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4656,7 +4712,7 @@ func (x *GetRoleProfileRequest) String() string {
 func (*GetRoleProfileRequest) ProtoMessage() {}
 
 func (x *GetRoleProfileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[41]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4669,7 +4725,7 @@ func (x *GetRoleProfileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRoleProfileRequest.ProtoReflect.Descriptor instead.
 func (*GetRoleProfileRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{41}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *GetRoleProfileRequest) GetMeta() *QueryMeta {
@@ -4699,7 +4755,7 @@ type ListRoleProfilesRequest struct {
 
 func (x *ListRoleProfilesRequest) Reset() {
 	*x = ListRoleProfilesRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[42]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4711,7 +4767,7 @@ func (x *ListRoleProfilesRequest) String() string {
 func (*ListRoleProfilesRequest) ProtoMessage() {}
 
 func (x *ListRoleProfilesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[42]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4724,7 +4780,7 @@ func (x *ListRoleProfilesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRoleProfilesRequest.ProtoReflect.Descriptor instead.
 func (*ListRoleProfilesRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{42}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *ListRoleProfilesRequest) GetMeta() *QueryMeta {
@@ -4771,7 +4827,7 @@ type RoleProfileResponse struct {
 
 func (x *RoleProfileResponse) Reset() {
 	*x = RoleProfileResponse{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[43]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4783,7 +4839,7 @@ func (x *RoleProfileResponse) String() string {
 func (*RoleProfileResponse) ProtoMessage() {}
 
 func (x *RoleProfileResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[43]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4796,7 +4852,7 @@ func (x *RoleProfileResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoleProfileResponse.ProtoReflect.Descriptor instead.
 func (*RoleProfileResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{43}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *RoleProfileResponse) GetRoleProfile() *RoleProfile {
@@ -4816,7 +4872,7 @@ type ListRoleProfilesResponse struct {
 
 func (x *ListRoleProfilesResponse) Reset() {
 	*x = ListRoleProfilesResponse{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[44]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4828,7 +4884,7 @@ func (x *ListRoleProfilesResponse) String() string {
 func (*ListRoleProfilesResponse) ProtoMessage() {}
 
 func (x *ListRoleProfilesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[44]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4841,7 +4897,7 @@ func (x *ListRoleProfilesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRoleProfilesResponse.ProtoReflect.Descriptor instead.
 func (*ListRoleProfilesResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{44}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *ListRoleProfilesResponse) GetRoleProfiles() []*RoleProfile {
@@ -4868,7 +4924,7 @@ type GetPromptTemplateRequest struct {
 
 func (x *GetPromptTemplateRequest) Reset() {
 	*x = GetPromptTemplateRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[45]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4880,7 +4936,7 @@ func (x *GetPromptTemplateRequest) String() string {
 func (*GetPromptTemplateRequest) ProtoMessage() {}
 
 func (x *GetPromptTemplateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[45]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4893,7 +4949,7 @@ func (x *GetPromptTemplateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPromptTemplateRequest.ProtoReflect.Descriptor instead.
 func (*GetPromptTemplateRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{45}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *GetPromptTemplateRequest) GetMeta() *QueryMeta {
@@ -4922,7 +4978,7 @@ type ListPromptTemplatesRequest struct {
 
 func (x *ListPromptTemplatesRequest) Reset() {
 	*x = ListPromptTemplatesRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[46]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4934,7 +4990,7 @@ func (x *ListPromptTemplatesRequest) String() string {
 func (*ListPromptTemplatesRequest) ProtoMessage() {}
 
 func (x *ListPromptTemplatesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[46]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4947,7 +5003,7 @@ func (x *ListPromptTemplatesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPromptTemplatesRequest.ProtoReflect.Descriptor instead.
 func (*ListPromptTemplatesRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{46}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *ListPromptTemplatesRequest) GetMeta() *QueryMeta {
@@ -4988,7 +5044,7 @@ type PromptTemplateResponse struct {
 
 func (x *PromptTemplateResponse) Reset() {
 	*x = PromptTemplateResponse{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[47]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5000,7 +5056,7 @@ func (x *PromptTemplateResponse) String() string {
 func (*PromptTemplateResponse) ProtoMessage() {}
 
 func (x *PromptTemplateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[47]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5013,7 +5069,7 @@ func (x *PromptTemplateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromptTemplateResponse.ProtoReflect.Descriptor instead.
 func (*PromptTemplateResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{47}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *PromptTemplateResponse) GetPromptTemplate() *PromptTemplate {
@@ -5040,7 +5096,7 @@ type ListPromptTemplatesResponse struct {
 
 func (x *ListPromptTemplatesResponse) Reset() {
 	*x = ListPromptTemplatesResponse{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[48]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5052,7 +5108,7 @@ func (x *ListPromptTemplatesResponse) String() string {
 func (*ListPromptTemplatesResponse) ProtoMessage() {}
 
 func (x *ListPromptTemplatesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[48]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5065,7 +5121,7 @@ func (x *ListPromptTemplatesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPromptTemplatesResponse.ProtoReflect.Descriptor instead.
 func (*ListPromptTemplatesResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{48}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *ListPromptTemplatesResponse) GetPromptTemplates() []*PromptTemplate {
@@ -5096,7 +5152,7 @@ type CreatePromptTemplateVersionRequest struct {
 
 func (x *CreatePromptTemplateVersionRequest) Reset() {
 	*x = CreatePromptTemplateVersionRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[49]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5108,7 +5164,7 @@ func (x *CreatePromptTemplateVersionRequest) String() string {
 func (*CreatePromptTemplateVersionRequest) ProtoMessage() {}
 
 func (x *CreatePromptTemplateVersionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[49]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5121,7 +5177,7 @@ func (x *CreatePromptTemplateVersionRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use CreatePromptTemplateVersionRequest.ProtoReflect.Descriptor instead.
 func (*CreatePromptTemplateVersionRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{49}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *CreatePromptTemplateVersionRequest) GetMeta() *CommandMeta {
@@ -5176,7 +5232,7 @@ type ActivatePromptTemplateVersionRequest struct {
 
 func (x *ActivatePromptTemplateVersionRequest) Reset() {
 	*x = ActivatePromptTemplateVersionRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[50]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5188,7 +5244,7 @@ func (x *ActivatePromptTemplateVersionRequest) String() string {
 func (*ActivatePromptTemplateVersionRequest) ProtoMessage() {}
 
 func (x *ActivatePromptTemplateVersionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[50]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5201,7 +5257,7 @@ func (x *ActivatePromptTemplateVersionRequest) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use ActivatePromptTemplateVersionRequest.ProtoReflect.Descriptor instead.
 func (*ActivatePromptTemplateVersionRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{50}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *ActivatePromptTemplateVersionRequest) GetMeta() *CommandMeta {
@@ -5228,7 +5284,7 @@ type GetPromptTemplateVersionRequest struct {
 
 func (x *GetPromptTemplateVersionRequest) Reset() {
 	*x = GetPromptTemplateVersionRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[51]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5240,7 +5296,7 @@ func (x *GetPromptTemplateVersionRequest) String() string {
 func (*GetPromptTemplateVersionRequest) ProtoMessage() {}
 
 func (x *GetPromptTemplateVersionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[51]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5253,7 +5309,7 @@ func (x *GetPromptTemplateVersionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPromptTemplateVersionRequest.ProtoReflect.Descriptor instead.
 func (*GetPromptTemplateVersionRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{51}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *GetPromptTemplateVersionRequest) GetMeta() *QueryMeta {
@@ -5283,7 +5339,7 @@ type ListPromptTemplateVersionsRequest struct {
 
 func (x *ListPromptTemplateVersionsRequest) Reset() {
 	*x = ListPromptTemplateVersionsRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[52]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5295,7 +5351,7 @@ func (x *ListPromptTemplateVersionsRequest) String() string {
 func (*ListPromptTemplateVersionsRequest) ProtoMessage() {}
 
 func (x *ListPromptTemplateVersionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[52]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5308,7 +5364,7 @@ func (x *ListPromptTemplateVersionsRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use ListPromptTemplateVersionsRequest.ProtoReflect.Descriptor instead.
 func (*ListPromptTemplateVersionsRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{52}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *ListPromptTemplateVersionsRequest) GetMeta() *QueryMeta {
@@ -5355,7 +5411,7 @@ type PromptTemplateVersionResponse struct {
 
 func (x *PromptTemplateVersionResponse) Reset() {
 	*x = PromptTemplateVersionResponse{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[53]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5367,7 +5423,7 @@ func (x *PromptTemplateVersionResponse) String() string {
 func (*PromptTemplateVersionResponse) ProtoMessage() {}
 
 func (x *PromptTemplateVersionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[53]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5380,7 +5436,7 @@ func (x *PromptTemplateVersionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromptTemplateVersionResponse.ProtoReflect.Descriptor instead.
 func (*PromptTemplateVersionResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{53}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *PromptTemplateVersionResponse) GetPromptTemplateVersion() *PromptTemplateVersion {
@@ -5400,7 +5456,7 @@ type ListPromptTemplateVersionsResponse struct {
 
 func (x *ListPromptTemplateVersionsResponse) Reset() {
 	*x = ListPromptTemplateVersionsResponse{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[54]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5412,7 +5468,7 @@ func (x *ListPromptTemplateVersionsResponse) String() string {
 func (*ListPromptTemplateVersionsResponse) ProtoMessage() {}
 
 func (x *ListPromptTemplateVersionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[54]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5425,7 +5481,7 @@ func (x *ListPromptTemplateVersionsResponse) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use ListPromptTemplateVersionsResponse.ProtoReflect.Descriptor instead.
 func (*ListPromptTemplateVersionsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{54}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *ListPromptTemplateVersionsResponse) GetPromptTemplateVersions() []*PromptTemplateVersion {
@@ -5456,7 +5512,7 @@ type StartAgentSessionRequest struct {
 
 func (x *StartAgentSessionRequest) Reset() {
 	*x = StartAgentSessionRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[55]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5468,7 +5524,7 @@ func (x *StartAgentSessionRequest) String() string {
 func (*StartAgentSessionRequest) ProtoMessage() {}
 
 func (x *StartAgentSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[55]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5481,7 +5537,7 @@ func (x *StartAgentSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartAgentSessionRequest.ProtoReflect.Descriptor instead.
 func (*StartAgentSessionRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{55}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *StartAgentSessionRequest) GetMeta() *CommandMeta {
@@ -5527,23 +5583,22 @@ func (x *StartAgentSessionRequest) GetCreatedByActorRef() string {
 }
 
 type StartAgentRunRequest struct {
-	state                   protoimpl.MessageState `protogen:"open.v1"`
-	Meta                    *CommandMeta           `protobuf:"bytes,1,opt,name=meta,proto3" json:"meta,omitempty"`
-	SessionId               string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	FlowVersionId           *string                `protobuf:"bytes,3,opt,name=flow_version_id,json=flowVersionId,proto3,oneof" json:"flow_version_id,omitempty"`
-	StageId                 *string                `protobuf:"bytes,4,opt,name=stage_id,json=stageId,proto3,oneof" json:"stage_id,omitempty"`
-	RoleProfileId           string                 `protobuf:"bytes,5,opt,name=role_profile_id,json=roleProfileId,proto3" json:"role_profile_id,omitempty"`
-	PromptTemplateVersionId string                 `protobuf:"bytes,6,opt,name=prompt_template_version_id,json=promptTemplateVersionId,proto3" json:"prompt_template_version_id,omitempty"`
-	RuntimeContext          *RuntimeContextRef     `protobuf:"bytes,7,opt,name=runtime_context,json=runtimeContext,proto3" json:"runtime_context,omitempty"`
-	ProviderTarget          *ProviderTargetRef     `protobuf:"bytes,8,opt,name=provider_target,json=providerTarget,proto3" json:"provider_target,omitempty"`
-	GuidanceRefs            []*GuidanceRef         `protobuf:"bytes,9,rep,name=guidance_refs,json=guidanceRefs,proto3" json:"guidance_refs,omitempty"`
+	state                   protoimpl.MessageState   `protogen:"open.v1"`
+	Meta                    *CommandMeta             `protobuf:"bytes,1,opt,name=meta,proto3" json:"meta,omitempty"`
+	SessionId               string                   `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	FlowVersionId           *string                  `protobuf:"bytes,3,opt,name=flow_version_id,json=flowVersionId,proto3,oneof" json:"flow_version_id,omitempty"`
+	StageId                 *string                  `protobuf:"bytes,4,opt,name=stage_id,json=stageId,proto3,oneof" json:"stage_id,omitempty"`
+	RoleProfileId           string                   `protobuf:"bytes,5,opt,name=role_profile_id,json=roleProfileId,proto3" json:"role_profile_id,omitempty"`
+	PromptTemplateVersionId string                   `protobuf:"bytes,6,opt,name=prompt_template_version_id,json=promptTemplateVersionId,proto3" json:"prompt_template_version_id,omitempty"`
+	ProviderTarget          *ProviderTargetRef       `protobuf:"bytes,7,opt,name=provider_target,json=providerTarget,proto3" json:"provider_target,omitempty"`
+	GuidanceSelectionHints  []*GuidanceSelectionHint `protobuf:"bytes,8,rep,name=guidance_selection_hints,json=guidanceSelectionHints,proto3" json:"guidance_selection_hints,omitempty"`
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
 
 func (x *StartAgentRunRequest) Reset() {
 	*x = StartAgentRunRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[56]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5555,7 +5610,7 @@ func (x *StartAgentRunRequest) String() string {
 func (*StartAgentRunRequest) ProtoMessage() {}
 
 func (x *StartAgentRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[56]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5568,7 +5623,7 @@ func (x *StartAgentRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartAgentRunRequest.ProtoReflect.Descriptor instead.
 func (*StartAgentRunRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{56}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *StartAgentRunRequest) GetMeta() *CommandMeta {
@@ -5613,13 +5668,6 @@ func (x *StartAgentRunRequest) GetPromptTemplateVersionId() string {
 	return ""
 }
 
-func (x *StartAgentRunRequest) GetRuntimeContext() *RuntimeContextRef {
-	if x != nil {
-		return x.RuntimeContext
-	}
-	return nil
-}
-
 func (x *StartAgentRunRequest) GetProviderTarget() *ProviderTargetRef {
 	if x != nil {
 		return x.ProviderTarget
@@ -5627,9 +5675,9 @@ func (x *StartAgentRunRequest) GetProviderTarget() *ProviderTargetRef {
 	return nil
 }
 
-func (x *StartAgentRunRequest) GetGuidanceRefs() []*GuidanceRef {
+func (x *StartAgentRunRequest) GetGuidanceSelectionHints() []*GuidanceSelectionHint {
 	if x != nil {
-		return x.GuidanceRefs
+		return x.GuidanceSelectionHints
 	}
 	return nil
 }
@@ -5651,7 +5699,7 @@ type RecordRunStateRequest struct {
 
 func (x *RecordRunStateRequest) Reset() {
 	*x = RecordRunStateRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[57]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5663,7 +5711,7 @@ func (x *RecordRunStateRequest) String() string {
 func (*RecordRunStateRequest) ProtoMessage() {}
 
 func (x *RecordRunStateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[57]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5676,7 +5724,7 @@ func (x *RecordRunStateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordRunStateRequest.ProtoReflect.Descriptor instead.
 func (*RecordRunStateRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{57}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *RecordRunStateRequest) GetMeta() *CommandMeta {
@@ -5757,7 +5805,7 @@ type RecordSessionStateSnapshotRequest struct {
 
 func (x *RecordSessionStateSnapshotRequest) Reset() {
 	*x = RecordSessionStateSnapshotRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[58]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5769,7 +5817,7 @@ func (x *RecordSessionStateSnapshotRequest) String() string {
 func (*RecordSessionStateSnapshotRequest) ProtoMessage() {}
 
 func (x *RecordSessionStateSnapshotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[58]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5782,7 +5830,7 @@ func (x *RecordSessionStateSnapshotRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use RecordSessionStateSnapshotRequest.ProtoReflect.Descriptor instead.
 func (*RecordSessionStateSnapshotRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{58}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *RecordSessionStateSnapshotRequest) GetMeta() *CommandMeta {
@@ -5848,7 +5896,7 @@ type RequestAcceptanceRequest struct {
 
 func (x *RequestAcceptanceRequest) Reset() {
 	*x = RequestAcceptanceRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[59]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5860,7 +5908,7 @@ func (x *RequestAcceptanceRequest) String() string {
 func (*RequestAcceptanceRequest) ProtoMessage() {}
 
 func (x *RequestAcceptanceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[59]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5873,7 +5921,7 @@ func (x *RequestAcceptanceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestAcceptanceRequest.ProtoReflect.Descriptor instead.
 func (*RequestAcceptanceRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{59}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *RequestAcceptanceRequest) GetMeta() *CommandMeta {
@@ -5931,7 +5979,7 @@ type RecordAcceptanceResultRequest struct {
 
 func (x *RecordAcceptanceResultRequest) Reset() {
 	*x = RecordAcceptanceResultRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[60]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5943,7 +5991,7 @@ func (x *RecordAcceptanceResultRequest) String() string {
 func (*RecordAcceptanceResultRequest) ProtoMessage() {}
 
 func (x *RecordAcceptanceResultRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[60]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5956,7 +6004,7 @@ func (x *RecordAcceptanceResultRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordAcceptanceResultRequest.ProtoReflect.Descriptor instead.
 func (*RecordAcceptanceResultRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{60}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *RecordAcceptanceResultRequest) GetMeta() *CommandMeta {
@@ -6004,7 +6052,7 @@ type GetAcceptanceResultRequest struct {
 
 func (x *GetAcceptanceResultRequest) Reset() {
 	*x = GetAcceptanceResultRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[61]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6016,7 +6064,7 @@ func (x *GetAcceptanceResultRequest) String() string {
 func (*GetAcceptanceResultRequest) ProtoMessage() {}
 
 func (x *GetAcceptanceResultRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[61]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6029,7 +6077,7 @@ func (x *GetAcceptanceResultRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAcceptanceResultRequest.ProtoReflect.Descriptor instead.
 func (*GetAcceptanceResultRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{61}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *GetAcceptanceResultRequest) GetMeta() *QueryMeta {
@@ -6060,7 +6108,7 @@ type ListAcceptanceResultsRequest struct {
 
 func (x *ListAcceptanceResultsRequest) Reset() {
 	*x = ListAcceptanceResultsRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[62]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6072,7 +6120,7 @@ func (x *ListAcceptanceResultsRequest) String() string {
 func (*ListAcceptanceResultsRequest) ProtoMessage() {}
 
 func (x *ListAcceptanceResultsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[62]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6085,7 +6133,7 @@ func (x *ListAcceptanceResultsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAcceptanceResultsRequest.ProtoReflect.Descriptor instead.
 func (*ListAcceptanceResultsRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{62}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *ListAcceptanceResultsRequest) GetMeta() *QueryMeta {
@@ -6145,7 +6193,7 @@ type CreateFollowUpIntentRequest struct {
 
 func (x *CreateFollowUpIntentRequest) Reset() {
 	*x = CreateFollowUpIntentRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[63]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6157,7 +6205,7 @@ func (x *CreateFollowUpIntentRequest) String() string {
 func (*CreateFollowUpIntentRequest) ProtoMessage() {}
 
 func (x *CreateFollowUpIntentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[63]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6170,7 +6218,7 @@ func (x *CreateFollowUpIntentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateFollowUpIntentRequest.ProtoReflect.Descriptor instead.
 func (*CreateFollowUpIntentRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{63}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *CreateFollowUpIntentRequest) GetMeta() *CommandMeta {
@@ -6237,7 +6285,7 @@ type RequestHumanGateRequest struct {
 
 func (x *RequestHumanGateRequest) Reset() {
 	*x = RequestHumanGateRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[64]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6249,7 +6297,7 @@ func (x *RequestHumanGateRequest) String() string {
 func (*RequestHumanGateRequest) ProtoMessage() {}
 
 func (x *RequestHumanGateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[64]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6262,7 +6310,7 @@ func (x *RequestHumanGateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestHumanGateRequest.ProtoReflect.Descriptor instead.
 func (*RequestHumanGateRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{64}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *RequestHumanGateRequest) GetMeta() *CommandMeta {
@@ -6324,7 +6372,7 @@ type GetAgentSessionRequest struct {
 
 func (x *GetAgentSessionRequest) Reset() {
 	*x = GetAgentSessionRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[65]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6336,7 +6384,7 @@ func (x *GetAgentSessionRequest) String() string {
 func (*GetAgentSessionRequest) ProtoMessage() {}
 
 func (x *GetAgentSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[65]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6349,7 +6397,7 @@ func (x *GetAgentSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAgentSessionRequest.ProtoReflect.Descriptor instead.
 func (*GetAgentSessionRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{65}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *GetAgentSessionRequest) GetMeta() *QueryMeta {
@@ -6380,7 +6428,7 @@ type ListAgentRunsRequest struct {
 
 func (x *ListAgentRunsRequest) Reset() {
 	*x = ListAgentRunsRequest{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[66]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6392,7 +6440,7 @@ func (x *ListAgentRunsRequest) String() string {
 func (*ListAgentRunsRequest) ProtoMessage() {}
 
 func (x *ListAgentRunsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[66]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6405,7 +6453,7 @@ func (x *ListAgentRunsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAgentRunsRequest.ProtoReflect.Descriptor instead.
 func (*ListAgentRunsRequest) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{66}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *ListAgentRunsRequest) GetMeta() *QueryMeta {
@@ -6460,7 +6508,7 @@ type AgentSessionResponse struct {
 
 func (x *AgentSessionResponse) Reset() {
 	*x = AgentSessionResponse{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[67]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6472,7 +6520,7 @@ func (x *AgentSessionResponse) String() string {
 func (*AgentSessionResponse) ProtoMessage() {}
 
 func (x *AgentSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[67]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6485,7 +6533,7 @@ func (x *AgentSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentSessionResponse.ProtoReflect.Descriptor instead.
 func (*AgentSessionResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{67}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *AgentSessionResponse) GetSession() *AgentSession {
@@ -6511,7 +6559,7 @@ type AgentRunResponse struct {
 
 func (x *AgentRunResponse) Reset() {
 	*x = AgentRunResponse{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[68]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6523,7 +6571,7 @@ func (x *AgentRunResponse) String() string {
 func (*AgentRunResponse) ProtoMessage() {}
 
 func (x *AgentRunResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[68]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6536,7 +6584,7 @@ func (x *AgentRunResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentRunResponse.ProtoReflect.Descriptor instead.
 func (*AgentRunResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{68}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *AgentRunResponse) GetRun() *AgentRun {
@@ -6556,7 +6604,7 @@ type AgentSessionStateSnapshotResponse struct {
 
 func (x *AgentSessionStateSnapshotResponse) Reset() {
 	*x = AgentSessionStateSnapshotResponse{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[69]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6568,7 +6616,7 @@ func (x *AgentSessionStateSnapshotResponse) String() string {
 func (*AgentSessionStateSnapshotResponse) ProtoMessage() {}
 
 func (x *AgentSessionStateSnapshotResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[69]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6581,7 +6629,7 @@ func (x *AgentSessionStateSnapshotResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use AgentSessionStateSnapshotResponse.ProtoReflect.Descriptor instead.
 func (*AgentSessionStateSnapshotResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{69}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *AgentSessionStateSnapshotResponse) GetSnapshot() *AgentSessionStateSnapshot {
@@ -6607,7 +6655,7 @@ type AcceptanceResultResponse struct {
 
 func (x *AcceptanceResultResponse) Reset() {
 	*x = AcceptanceResultResponse{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[70]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6619,7 +6667,7 @@ func (x *AcceptanceResultResponse) String() string {
 func (*AcceptanceResultResponse) ProtoMessage() {}
 
 func (x *AcceptanceResultResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[70]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6632,7 +6680,7 @@ func (x *AcceptanceResultResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AcceptanceResultResponse.ProtoReflect.Descriptor instead.
 func (*AcceptanceResultResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{70}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *AcceptanceResultResponse) GetAcceptanceResult() *AcceptanceResult {
@@ -6652,7 +6700,7 @@ type ListAcceptanceResultsResponse struct {
 
 func (x *ListAcceptanceResultsResponse) Reset() {
 	*x = ListAcceptanceResultsResponse{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[71]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6664,7 +6712,7 @@ func (x *ListAcceptanceResultsResponse) String() string {
 func (*ListAcceptanceResultsResponse) ProtoMessage() {}
 
 func (x *ListAcceptanceResultsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[71]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6677,7 +6725,7 @@ func (x *ListAcceptanceResultsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAcceptanceResultsResponse.ProtoReflect.Descriptor instead.
 func (*ListAcceptanceResultsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{71}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *ListAcceptanceResultsResponse) GetAcceptanceResults() []*AcceptanceResult {
@@ -6703,7 +6751,7 @@ type FollowUpIntentResponse struct {
 
 func (x *FollowUpIntentResponse) Reset() {
 	*x = FollowUpIntentResponse{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[72]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6715,7 +6763,7 @@ func (x *FollowUpIntentResponse) String() string {
 func (*FollowUpIntentResponse) ProtoMessage() {}
 
 func (x *FollowUpIntentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[72]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6728,7 +6776,7 @@ func (x *FollowUpIntentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FollowUpIntentResponse.ProtoReflect.Descriptor instead.
 func (*FollowUpIntentResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{72}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *FollowUpIntentResponse) GetFollowUpIntent() *FollowUpIntent {
@@ -6747,7 +6795,7 @@ type HumanGateRequestResponse struct {
 
 func (x *HumanGateRequestResponse) Reset() {
 	*x = HumanGateRequestResponse{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[73]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6759,7 +6807,7 @@ func (x *HumanGateRequestResponse) String() string {
 func (*HumanGateRequestResponse) ProtoMessage() {}
 
 func (x *HumanGateRequestResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[73]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6772,7 +6820,7 @@ func (x *HumanGateRequestResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HumanGateRequestResponse.ProtoReflect.Descriptor instead.
 func (*HumanGateRequestResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{73}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *HumanGateRequestResponse) GetHumanGateRequest() *HumanGateRequest {
@@ -6792,7 +6840,7 @@ type ListAgentRunsResponse struct {
 
 func (x *ListAgentRunsResponse) Reset() {
 	*x = ListAgentRunsResponse{}
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[74]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6804,7 +6852,7 @@ func (x *ListAgentRunsResponse) String() string {
 func (*ListAgentRunsResponse) ProtoMessage() {}
 
 func (x *ListAgentRunsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[74]
+	mi := &file_kodex_agents_v1_agent_manager_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6817,7 +6865,7 @@ func (x *ListAgentRunsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAgentRunsResponse.ProtoReflect.Descriptor instead.
 func (*ListAgentRunsResponse) Descriptor() ([]byte, []int) {
-	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{74}
+	return file_kodex_agents_v1_agent_manager_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *ListAgentRunsResponse) GetRuns() []*AgentRun {
@@ -6910,7 +6958,12 @@ const file_kodex_agents_v1_agent_manager_proto_rawDesc = "" +
 	"\x0fmanifest_digest\x18\x03 \x01(\tR\x0emanifestDigest\x12\"\n" +
 	"\n" +
 	"source_ref\x18\x04 \x01(\tH\x00R\tsourceRef\x88\x01\x01B\r\n" +
-	"\v_source_ref\"\x96\x01\n" +
+	"\v_source_ref\"\xac\x01\n" +
+	"\x15GuidanceSelectionHint\x12=\n" +
+	"\x18package_installation_ref\x18\x01 \x01(\tH\x00R\x16packageInstallationRef\x88\x01\x01\x12&\n" +
+	"\fpackage_slug\x18\x02 \x01(\tH\x01R\vpackageSlug\x88\x01\x01B\x1b\n" +
+	"\x19_package_installation_refB\x0f\n" +
+	"\r_package_slug\"\x96\x01\n" +
 	"\tObjectRef\x12\x1d\n" +
 	"\n" +
 	"object_uri\x18\x01 \x01(\tR\tobjectUri\x12#\n" +
@@ -7336,7 +7389,7 @@ const file_kodex_agents_v1_agent_manager_proto_rawDesc = "" +
 	"\x14created_by_actor_ref\x18\x06 \x01(\tR\x11createdByActorRefB\x19\n" +
 	"\x17_provider_work_item_refB\x12\n" +
 	"\x10_flow_version_idB\x13\n" +
-	"\x11_current_stage_id\"\x97\x04\n" +
+	"\x11_current_stage_id\"\xe9\x03\n" +
 	"\x14StartAgentRunRequest\x120\n" +
 	"\x04meta\x18\x01 \x01(\v2\x1c.kodex.agents.v1.CommandMetaR\x04meta\x12\x1d\n" +
 	"\n" +
@@ -7345,9 +7398,8 @@ const file_kodex_agents_v1_agent_manager_proto_rawDesc = "" +
 	"\bstage_id\x18\x04 \x01(\tH\x01R\astageId\x88\x01\x01\x12&\n" +
 	"\x0frole_profile_id\x18\x05 \x01(\tR\rroleProfileId\x12;\n" +
 	"\x1aprompt_template_version_id\x18\x06 \x01(\tR\x17promptTemplateVersionId\x12K\n" +
-	"\x0fruntime_context\x18\a \x01(\v2\".kodex.agents.v1.RuntimeContextRefR\x0eruntimeContext\x12K\n" +
-	"\x0fprovider_target\x18\b \x01(\v2\".kodex.agents.v1.ProviderTargetRefR\x0eproviderTarget\x12A\n" +
-	"\rguidance_refs\x18\t \x03(\v2\x1c.kodex.agents.v1.GuidanceRefR\fguidanceRefsB\x12\n" +
+	"\x0fprovider_target\x18\a \x01(\v2\".kodex.agents.v1.ProviderTargetRefR\x0eproviderTarget\x12`\n" +
+	"\x18guidance_selection_hints\x18\b \x03(\v2&.kodex.agents.v1.GuidanceSelectionHintR\x16guidanceSelectionHintsB\x12\n" +
 	"\x10_flow_version_idB\v\n" +
 	"\t_stage_id\"\x94\x04\n" +
 	"\x15RecordRunStateRequest\x120\n" +
@@ -7651,7 +7703,7 @@ func file_kodex_agents_v1_agent_manager_proto_rawDescGZIP() []byte {
 }
 
 var file_kodex_agents_v1_agent_manager_proto_enumTypes = make([]protoimpl.EnumInfo, 18)
-var file_kodex_agents_v1_agent_manager_proto_msgTypes = make([]protoimpl.MessageInfo, 75)
+var file_kodex_agents_v1_agent_manager_proto_msgTypes = make([]protoimpl.MessageInfo, 76)
 var file_kodex_agents_v1_agent_manager_proto_goTypes = []any{
 	(AgentScopeType)(0),                          // 0: kodex.agents.v1.AgentScopeType
 	(FlowStatus)(0),                              // 1: kodex.agents.v1.FlowStatus
@@ -7682,70 +7734,71 @@ var file_kodex_agents_v1_agent_manager_proto_goTypes = []any{
 	(*ProviderTargetRef)(nil),                    // 26: kodex.agents.v1.ProviderTargetRef
 	(*RuntimeContextRef)(nil),                    // 27: kodex.agents.v1.RuntimeContextRef
 	(*GuidanceRef)(nil),                          // 28: kodex.agents.v1.GuidanceRef
-	(*ObjectRef)(nil),                            // 29: kodex.agents.v1.ObjectRef
-	(*Flow)(nil),                                 // 30: kodex.agents.v1.Flow
-	(*FlowVersion)(nil),                          // 31: kodex.agents.v1.FlowVersion
-	(*Stage)(nil),                                // 32: kodex.agents.v1.Stage
-	(*StageTransition)(nil),                      // 33: kodex.agents.v1.StageTransition
-	(*RoleProfile)(nil),                          // 34: kodex.agents.v1.RoleProfile
-	(*PromptTemplate)(nil),                       // 35: kodex.agents.v1.PromptTemplate
-	(*PromptTemplateVersion)(nil),                // 36: kodex.agents.v1.PromptTemplateVersion
-	(*StageRoleBinding)(nil),                     // 37: kodex.agents.v1.StageRoleBinding
-	(*AgentSession)(nil),                         // 38: kodex.agents.v1.AgentSession
-	(*AgentRun)(nil),                             // 39: kodex.agents.v1.AgentRun
-	(*AgentSessionStateSnapshot)(nil),            // 40: kodex.agents.v1.AgentSessionStateSnapshot
-	(*AcceptanceResult)(nil),                     // 41: kodex.agents.v1.AcceptanceResult
-	(*FollowUpIntent)(nil),                       // 42: kodex.agents.v1.FollowUpIntent
-	(*HumanGateRequest)(nil),                     // 43: kodex.agents.v1.HumanGateRequest
-	(*FlowDefinitionInput)(nil),                  // 44: kodex.agents.v1.FlowDefinitionInput
-	(*StageInput)(nil),                           // 45: kodex.agents.v1.StageInput
-	(*StageTransitionInput)(nil),                 // 46: kodex.agents.v1.StageTransitionInput
-	(*StageRoleBindingInput)(nil),                // 47: kodex.agents.v1.StageRoleBindingInput
-	(*CreateFlowRequest)(nil),                    // 48: kodex.agents.v1.CreateFlowRequest
-	(*UpdateFlowRequest)(nil),                    // 49: kodex.agents.v1.UpdateFlowRequest
-	(*CreateFlowVersionRequest)(nil),             // 50: kodex.agents.v1.CreateFlowVersionRequest
-	(*ActivateFlowVersionRequest)(nil),           // 51: kodex.agents.v1.ActivateFlowVersionRequest
-	(*GetFlowRequest)(nil),                       // 52: kodex.agents.v1.GetFlowRequest
-	(*ListFlowsRequest)(nil),                     // 53: kodex.agents.v1.ListFlowsRequest
-	(*FlowResponse)(nil),                         // 54: kodex.agents.v1.FlowResponse
-	(*FlowVersionResponse)(nil),                  // 55: kodex.agents.v1.FlowVersionResponse
-	(*ListFlowsResponse)(nil),                    // 56: kodex.agents.v1.ListFlowsResponse
-	(*CreateRoleProfileRequest)(nil),             // 57: kodex.agents.v1.CreateRoleProfileRequest
-	(*UpdateRoleProfileRequest)(nil),             // 58: kodex.agents.v1.UpdateRoleProfileRequest
-	(*GetRoleProfileRequest)(nil),                // 59: kodex.agents.v1.GetRoleProfileRequest
-	(*ListRoleProfilesRequest)(nil),              // 60: kodex.agents.v1.ListRoleProfilesRequest
-	(*RoleProfileResponse)(nil),                  // 61: kodex.agents.v1.RoleProfileResponse
-	(*ListRoleProfilesResponse)(nil),             // 62: kodex.agents.v1.ListRoleProfilesResponse
-	(*GetPromptTemplateRequest)(nil),             // 63: kodex.agents.v1.GetPromptTemplateRequest
-	(*ListPromptTemplatesRequest)(nil),           // 64: kodex.agents.v1.ListPromptTemplatesRequest
-	(*PromptTemplateResponse)(nil),               // 65: kodex.agents.v1.PromptTemplateResponse
-	(*ListPromptTemplatesResponse)(nil),          // 66: kodex.agents.v1.ListPromptTemplatesResponse
-	(*CreatePromptTemplateVersionRequest)(nil),   // 67: kodex.agents.v1.CreatePromptTemplateVersionRequest
-	(*ActivatePromptTemplateVersionRequest)(nil), // 68: kodex.agents.v1.ActivatePromptTemplateVersionRequest
-	(*GetPromptTemplateVersionRequest)(nil),      // 69: kodex.agents.v1.GetPromptTemplateVersionRequest
-	(*ListPromptTemplateVersionsRequest)(nil),    // 70: kodex.agents.v1.ListPromptTemplateVersionsRequest
-	(*PromptTemplateVersionResponse)(nil),        // 71: kodex.agents.v1.PromptTemplateVersionResponse
-	(*ListPromptTemplateVersionsResponse)(nil),   // 72: kodex.agents.v1.ListPromptTemplateVersionsResponse
-	(*StartAgentSessionRequest)(nil),             // 73: kodex.agents.v1.StartAgentSessionRequest
-	(*StartAgentRunRequest)(nil),                 // 74: kodex.agents.v1.StartAgentRunRequest
-	(*RecordRunStateRequest)(nil),                // 75: kodex.agents.v1.RecordRunStateRequest
-	(*RecordSessionStateSnapshotRequest)(nil),    // 76: kodex.agents.v1.RecordSessionStateSnapshotRequest
-	(*RequestAcceptanceRequest)(nil),             // 77: kodex.agents.v1.RequestAcceptanceRequest
-	(*RecordAcceptanceResultRequest)(nil),        // 78: kodex.agents.v1.RecordAcceptanceResultRequest
-	(*GetAcceptanceResultRequest)(nil),           // 79: kodex.agents.v1.GetAcceptanceResultRequest
-	(*ListAcceptanceResultsRequest)(nil),         // 80: kodex.agents.v1.ListAcceptanceResultsRequest
-	(*CreateFollowUpIntentRequest)(nil),          // 81: kodex.agents.v1.CreateFollowUpIntentRequest
-	(*RequestHumanGateRequest)(nil),              // 82: kodex.agents.v1.RequestHumanGateRequest
-	(*GetAgentSessionRequest)(nil),               // 83: kodex.agents.v1.GetAgentSessionRequest
-	(*ListAgentRunsRequest)(nil),                 // 84: kodex.agents.v1.ListAgentRunsRequest
-	(*AgentSessionResponse)(nil),                 // 85: kodex.agents.v1.AgentSessionResponse
-	(*AgentRunResponse)(nil),                     // 86: kodex.agents.v1.AgentRunResponse
-	(*AgentSessionStateSnapshotResponse)(nil),    // 87: kodex.agents.v1.AgentSessionStateSnapshotResponse
-	(*AcceptanceResultResponse)(nil),             // 88: kodex.agents.v1.AcceptanceResultResponse
-	(*ListAcceptanceResultsResponse)(nil),        // 89: kodex.agents.v1.ListAcceptanceResultsResponse
-	(*FollowUpIntentResponse)(nil),               // 90: kodex.agents.v1.FollowUpIntentResponse
-	(*HumanGateRequestResponse)(nil),             // 91: kodex.agents.v1.HumanGateRequestResponse
-	(*ListAgentRunsResponse)(nil),                // 92: kodex.agents.v1.ListAgentRunsResponse
+	(*GuidanceSelectionHint)(nil),                // 29: kodex.agents.v1.GuidanceSelectionHint
+	(*ObjectRef)(nil),                            // 30: kodex.agents.v1.ObjectRef
+	(*Flow)(nil),                                 // 31: kodex.agents.v1.Flow
+	(*FlowVersion)(nil),                          // 32: kodex.agents.v1.FlowVersion
+	(*Stage)(nil),                                // 33: kodex.agents.v1.Stage
+	(*StageTransition)(nil),                      // 34: kodex.agents.v1.StageTransition
+	(*RoleProfile)(nil),                          // 35: kodex.agents.v1.RoleProfile
+	(*PromptTemplate)(nil),                       // 36: kodex.agents.v1.PromptTemplate
+	(*PromptTemplateVersion)(nil),                // 37: kodex.agents.v1.PromptTemplateVersion
+	(*StageRoleBinding)(nil),                     // 38: kodex.agents.v1.StageRoleBinding
+	(*AgentSession)(nil),                         // 39: kodex.agents.v1.AgentSession
+	(*AgentRun)(nil),                             // 40: kodex.agents.v1.AgentRun
+	(*AgentSessionStateSnapshot)(nil),            // 41: kodex.agents.v1.AgentSessionStateSnapshot
+	(*AcceptanceResult)(nil),                     // 42: kodex.agents.v1.AcceptanceResult
+	(*FollowUpIntent)(nil),                       // 43: kodex.agents.v1.FollowUpIntent
+	(*HumanGateRequest)(nil),                     // 44: kodex.agents.v1.HumanGateRequest
+	(*FlowDefinitionInput)(nil),                  // 45: kodex.agents.v1.FlowDefinitionInput
+	(*StageInput)(nil),                           // 46: kodex.agents.v1.StageInput
+	(*StageTransitionInput)(nil),                 // 47: kodex.agents.v1.StageTransitionInput
+	(*StageRoleBindingInput)(nil),                // 48: kodex.agents.v1.StageRoleBindingInput
+	(*CreateFlowRequest)(nil),                    // 49: kodex.agents.v1.CreateFlowRequest
+	(*UpdateFlowRequest)(nil),                    // 50: kodex.agents.v1.UpdateFlowRequest
+	(*CreateFlowVersionRequest)(nil),             // 51: kodex.agents.v1.CreateFlowVersionRequest
+	(*ActivateFlowVersionRequest)(nil),           // 52: kodex.agents.v1.ActivateFlowVersionRequest
+	(*GetFlowRequest)(nil),                       // 53: kodex.agents.v1.GetFlowRequest
+	(*ListFlowsRequest)(nil),                     // 54: kodex.agents.v1.ListFlowsRequest
+	(*FlowResponse)(nil),                         // 55: kodex.agents.v1.FlowResponse
+	(*FlowVersionResponse)(nil),                  // 56: kodex.agents.v1.FlowVersionResponse
+	(*ListFlowsResponse)(nil),                    // 57: kodex.agents.v1.ListFlowsResponse
+	(*CreateRoleProfileRequest)(nil),             // 58: kodex.agents.v1.CreateRoleProfileRequest
+	(*UpdateRoleProfileRequest)(nil),             // 59: kodex.agents.v1.UpdateRoleProfileRequest
+	(*GetRoleProfileRequest)(nil),                // 60: kodex.agents.v1.GetRoleProfileRequest
+	(*ListRoleProfilesRequest)(nil),              // 61: kodex.agents.v1.ListRoleProfilesRequest
+	(*RoleProfileResponse)(nil),                  // 62: kodex.agents.v1.RoleProfileResponse
+	(*ListRoleProfilesResponse)(nil),             // 63: kodex.agents.v1.ListRoleProfilesResponse
+	(*GetPromptTemplateRequest)(nil),             // 64: kodex.agents.v1.GetPromptTemplateRequest
+	(*ListPromptTemplatesRequest)(nil),           // 65: kodex.agents.v1.ListPromptTemplatesRequest
+	(*PromptTemplateResponse)(nil),               // 66: kodex.agents.v1.PromptTemplateResponse
+	(*ListPromptTemplatesResponse)(nil),          // 67: kodex.agents.v1.ListPromptTemplatesResponse
+	(*CreatePromptTemplateVersionRequest)(nil),   // 68: kodex.agents.v1.CreatePromptTemplateVersionRequest
+	(*ActivatePromptTemplateVersionRequest)(nil), // 69: kodex.agents.v1.ActivatePromptTemplateVersionRequest
+	(*GetPromptTemplateVersionRequest)(nil),      // 70: kodex.agents.v1.GetPromptTemplateVersionRequest
+	(*ListPromptTemplateVersionsRequest)(nil),    // 71: kodex.agents.v1.ListPromptTemplateVersionsRequest
+	(*PromptTemplateVersionResponse)(nil),        // 72: kodex.agents.v1.PromptTemplateVersionResponse
+	(*ListPromptTemplateVersionsResponse)(nil),   // 73: kodex.agents.v1.ListPromptTemplateVersionsResponse
+	(*StartAgentSessionRequest)(nil),             // 74: kodex.agents.v1.StartAgentSessionRequest
+	(*StartAgentRunRequest)(nil),                 // 75: kodex.agents.v1.StartAgentRunRequest
+	(*RecordRunStateRequest)(nil),                // 76: kodex.agents.v1.RecordRunStateRequest
+	(*RecordSessionStateSnapshotRequest)(nil),    // 77: kodex.agents.v1.RecordSessionStateSnapshotRequest
+	(*RequestAcceptanceRequest)(nil),             // 78: kodex.agents.v1.RequestAcceptanceRequest
+	(*RecordAcceptanceResultRequest)(nil),        // 79: kodex.agents.v1.RecordAcceptanceResultRequest
+	(*GetAcceptanceResultRequest)(nil),           // 80: kodex.agents.v1.GetAcceptanceResultRequest
+	(*ListAcceptanceResultsRequest)(nil),         // 81: kodex.agents.v1.ListAcceptanceResultsRequest
+	(*CreateFollowUpIntentRequest)(nil),          // 82: kodex.agents.v1.CreateFollowUpIntentRequest
+	(*RequestHumanGateRequest)(nil),              // 83: kodex.agents.v1.RequestHumanGateRequest
+	(*GetAgentSessionRequest)(nil),               // 84: kodex.agents.v1.GetAgentSessionRequest
+	(*ListAgentRunsRequest)(nil),                 // 85: kodex.agents.v1.ListAgentRunsRequest
+	(*AgentSessionResponse)(nil),                 // 86: kodex.agents.v1.AgentSessionResponse
+	(*AgentRunResponse)(nil),                     // 87: kodex.agents.v1.AgentRunResponse
+	(*AgentSessionStateSnapshotResponse)(nil),    // 88: kodex.agents.v1.AgentSessionStateSnapshotResponse
+	(*AcceptanceResultResponse)(nil),             // 89: kodex.agents.v1.AcceptanceResultResponse
+	(*ListAcceptanceResultsResponse)(nil),        // 90: kodex.agents.v1.ListAcceptanceResultsResponse
+	(*FollowUpIntentResponse)(nil),               // 91: kodex.agents.v1.FollowUpIntentResponse
+	(*HumanGateRequestResponse)(nil),             // 92: kodex.agents.v1.HumanGateRequestResponse
+	(*ListAgentRunsResponse)(nil),                // 93: kodex.agents.v1.ListAgentRunsResponse
 }
 var file_kodex_agents_v1_agent_manager_proto_depIdxs = []int32{
 	21,  // 0: kodex.agents.v1.CommandMeta.actor:type_name -> kodex.agents.v1.Actor
@@ -7758,9 +7811,9 @@ var file_kodex_agents_v1_agent_manager_proto_depIdxs = []int32{
 	24,  // 7: kodex.agents.v1.Flow.description:type_name -> kodex.agents.v1.LocalizedText
 	1,   // 8: kodex.agents.v1.Flow.status:type_name -> kodex.agents.v1.FlowStatus
 	2,   // 9: kodex.agents.v1.FlowVersion.status:type_name -> kodex.agents.v1.FlowVersionStatus
-	32,  // 10: kodex.agents.v1.FlowVersion.stages:type_name -> kodex.agents.v1.Stage
-	33,  // 11: kodex.agents.v1.FlowVersion.transitions:type_name -> kodex.agents.v1.StageTransition
-	37,  // 12: kodex.agents.v1.FlowVersion.stage_role_bindings:type_name -> kodex.agents.v1.StageRoleBinding
+	33,  // 10: kodex.agents.v1.FlowVersion.stages:type_name -> kodex.agents.v1.Stage
+	34,  // 11: kodex.agents.v1.FlowVersion.transitions:type_name -> kodex.agents.v1.StageTransition
+	38,  // 12: kodex.agents.v1.FlowVersion.stage_role_bindings:type_name -> kodex.agents.v1.StageRoleBinding
 	3,   // 13: kodex.agents.v1.Stage.stage_type:type_name -> kodex.agents.v1.StageType
 	24,  // 14: kodex.agents.v1.Stage.display_name:type_name -> kodex.agents.v1.LocalizedText
 	25,  // 15: kodex.agents.v1.RoleProfile.scope:type_name -> kodex.agents.v1.ScopeRef
@@ -7769,7 +7822,7 @@ var file_kodex_agents_v1_agent_manager_proto_depIdxs = []int32{
 	5,   // 18: kodex.agents.v1.RoleProfile.status:type_name -> kodex.agents.v1.RoleStatus
 	6,   // 19: kodex.agents.v1.PromptTemplate.prompt_kind:type_name -> kodex.agents.v1.PromptKind
 	6,   // 20: kodex.agents.v1.PromptTemplateVersion.prompt_kind:type_name -> kodex.agents.v1.PromptKind
-	29,  // 21: kodex.agents.v1.PromptTemplateVersion.template_object:type_name -> kodex.agents.v1.ObjectRef
+	30,  // 21: kodex.agents.v1.PromptTemplateVersion.template_object:type_name -> kodex.agents.v1.ObjectRef
 	7,   // 22: kodex.agents.v1.PromptTemplateVersion.status:type_name -> kodex.agents.v1.PromptVersionStatus
 	8,   // 23: kodex.agents.v1.StageRoleBinding.binding_kind:type_name -> kodex.agents.v1.StageRoleBindingKind
 	25,  // 24: kodex.agents.v1.AgentSession.scope:type_name -> kodex.agents.v1.ScopeRef
@@ -7779,14 +7832,14 @@ var file_kodex_agents_v1_agent_manager_proto_depIdxs = []int32{
 	28,  // 28: kodex.agents.v1.AgentRun.guidance_refs:type_name -> kodex.agents.v1.GuidanceRef
 	10,  // 29: kodex.agents.v1.AgentRun.status:type_name -> kodex.agents.v1.AgentRunStatus
 	11,  // 30: kodex.agents.v1.AgentSessionStateSnapshot.snapshot_kind:type_name -> kodex.agents.v1.AgentSessionSnapshotKind
-	29,  // 31: kodex.agents.v1.AgentSessionStateSnapshot.object:type_name -> kodex.agents.v1.ObjectRef
+	30,  // 31: kodex.agents.v1.AgentSessionStateSnapshot.object:type_name -> kodex.agents.v1.ObjectRef
 	12,  // 32: kodex.agents.v1.AcceptanceResult.check_kind:type_name -> kodex.agents.v1.AcceptanceCheckKind
 	13,  // 33: kodex.agents.v1.AcceptanceResult.status:type_name -> kodex.agents.v1.AcceptanceStatus
 	14,  // 34: kodex.agents.v1.FollowUpIntent.status:type_name -> kodex.agents.v1.FollowUpIntentStatus
 	15,  // 35: kodex.agents.v1.HumanGateRequest.status:type_name -> kodex.agents.v1.HumanGateStatus
-	45,  // 36: kodex.agents.v1.FlowDefinitionInput.stages:type_name -> kodex.agents.v1.StageInput
-	46,  // 37: kodex.agents.v1.FlowDefinitionInput.transitions:type_name -> kodex.agents.v1.StageTransitionInput
-	47,  // 38: kodex.agents.v1.FlowDefinitionInput.stage_role_bindings:type_name -> kodex.agents.v1.StageRoleBindingInput
+	46,  // 36: kodex.agents.v1.FlowDefinitionInput.stages:type_name -> kodex.agents.v1.StageInput
+	47,  // 37: kodex.agents.v1.FlowDefinitionInput.transitions:type_name -> kodex.agents.v1.StageTransitionInput
+	48,  // 38: kodex.agents.v1.FlowDefinitionInput.stage_role_bindings:type_name -> kodex.agents.v1.StageRoleBindingInput
 	3,   // 39: kodex.agents.v1.StageInput.stage_type:type_name -> kodex.agents.v1.StageType
 	24,  // 40: kodex.agents.v1.StageInput.display_name:type_name -> kodex.agents.v1.LocalizedText
 	8,   // 41: kodex.agents.v1.StageRoleBindingInput.binding_kind:type_name -> kodex.agents.v1.StageRoleBindingKind
@@ -7799,17 +7852,17 @@ var file_kodex_agents_v1_agent_manager_proto_depIdxs = []int32{
 	24,  // 48: kodex.agents.v1.UpdateFlowRequest.description:type_name -> kodex.agents.v1.LocalizedText
 	1,   // 49: kodex.agents.v1.UpdateFlowRequest.status:type_name -> kodex.agents.v1.FlowStatus
 	18,  // 50: kodex.agents.v1.CreateFlowVersionRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	44,  // 51: kodex.agents.v1.CreateFlowVersionRequest.definition:type_name -> kodex.agents.v1.FlowDefinitionInput
+	45,  // 51: kodex.agents.v1.CreateFlowVersionRequest.definition:type_name -> kodex.agents.v1.FlowDefinitionInput
 	18,  // 52: kodex.agents.v1.ActivateFlowVersionRequest.meta:type_name -> kodex.agents.v1.CommandMeta
 	19,  // 53: kodex.agents.v1.GetFlowRequest.meta:type_name -> kodex.agents.v1.QueryMeta
 	19,  // 54: kodex.agents.v1.ListFlowsRequest.meta:type_name -> kodex.agents.v1.QueryMeta
 	25,  // 55: kodex.agents.v1.ListFlowsRequest.scope:type_name -> kodex.agents.v1.ScopeRef
 	1,   // 56: kodex.agents.v1.ListFlowsRequest.status:type_name -> kodex.agents.v1.FlowStatus
 	22,  // 57: kodex.agents.v1.ListFlowsRequest.page:type_name -> kodex.agents.v1.PageRequest
-	30,  // 58: kodex.agents.v1.FlowResponse.flow:type_name -> kodex.agents.v1.Flow
-	31,  // 59: kodex.agents.v1.FlowResponse.active_version:type_name -> kodex.agents.v1.FlowVersion
-	31,  // 60: kodex.agents.v1.FlowVersionResponse.flow_version:type_name -> kodex.agents.v1.FlowVersion
-	30,  // 61: kodex.agents.v1.ListFlowsResponse.flows:type_name -> kodex.agents.v1.Flow
+	31,  // 58: kodex.agents.v1.FlowResponse.flow:type_name -> kodex.agents.v1.Flow
+	32,  // 59: kodex.agents.v1.FlowResponse.active_version:type_name -> kodex.agents.v1.FlowVersion
+	32,  // 60: kodex.agents.v1.FlowVersionResponse.flow_version:type_name -> kodex.agents.v1.FlowVersion
+	31,  // 61: kodex.agents.v1.ListFlowsResponse.flows:type_name -> kodex.agents.v1.Flow
 	23,  // 62: kodex.agents.v1.ListFlowsResponse.page:type_name -> kodex.agents.v1.PageResponse
 	18,  // 63: kodex.agents.v1.CreateRoleProfileRequest.meta:type_name -> kodex.agents.v1.CommandMeta
 	25,  // 64: kodex.agents.v1.CreateRoleProfileRequest.scope:type_name -> kodex.agents.v1.ScopeRef
@@ -7825,129 +7878,128 @@ var file_kodex_agents_v1_agent_manager_proto_depIdxs = []int32{
 	4,   // 74: kodex.agents.v1.ListRoleProfilesRequest.role_kind:type_name -> kodex.agents.v1.RoleKind
 	5,   // 75: kodex.agents.v1.ListRoleProfilesRequest.status:type_name -> kodex.agents.v1.RoleStatus
 	22,  // 76: kodex.agents.v1.ListRoleProfilesRequest.page:type_name -> kodex.agents.v1.PageRequest
-	34,  // 77: kodex.agents.v1.RoleProfileResponse.role_profile:type_name -> kodex.agents.v1.RoleProfile
-	34,  // 78: kodex.agents.v1.ListRoleProfilesResponse.role_profiles:type_name -> kodex.agents.v1.RoleProfile
+	35,  // 77: kodex.agents.v1.RoleProfileResponse.role_profile:type_name -> kodex.agents.v1.RoleProfile
+	35,  // 78: kodex.agents.v1.ListRoleProfilesResponse.role_profiles:type_name -> kodex.agents.v1.RoleProfile
 	23,  // 79: kodex.agents.v1.ListRoleProfilesResponse.page:type_name -> kodex.agents.v1.PageResponse
 	19,  // 80: kodex.agents.v1.GetPromptTemplateRequest.meta:type_name -> kodex.agents.v1.QueryMeta
 	19,  // 81: kodex.agents.v1.ListPromptTemplatesRequest.meta:type_name -> kodex.agents.v1.QueryMeta
 	6,   // 82: kodex.agents.v1.ListPromptTemplatesRequest.prompt_kind:type_name -> kodex.agents.v1.PromptKind
 	22,  // 83: kodex.agents.v1.ListPromptTemplatesRequest.page:type_name -> kodex.agents.v1.PageRequest
-	35,  // 84: kodex.agents.v1.PromptTemplateResponse.prompt_template:type_name -> kodex.agents.v1.PromptTemplate
-	36,  // 85: kodex.agents.v1.PromptTemplateResponse.active_version:type_name -> kodex.agents.v1.PromptTemplateVersion
-	35,  // 86: kodex.agents.v1.ListPromptTemplatesResponse.prompt_templates:type_name -> kodex.agents.v1.PromptTemplate
+	36,  // 84: kodex.agents.v1.PromptTemplateResponse.prompt_template:type_name -> kodex.agents.v1.PromptTemplate
+	37,  // 85: kodex.agents.v1.PromptTemplateResponse.active_version:type_name -> kodex.agents.v1.PromptTemplateVersion
+	36,  // 86: kodex.agents.v1.ListPromptTemplatesResponse.prompt_templates:type_name -> kodex.agents.v1.PromptTemplate
 	23,  // 87: kodex.agents.v1.ListPromptTemplatesResponse.page:type_name -> kodex.agents.v1.PageResponse
 	18,  // 88: kodex.agents.v1.CreatePromptTemplateVersionRequest.meta:type_name -> kodex.agents.v1.CommandMeta
 	6,   // 89: kodex.agents.v1.CreatePromptTemplateVersionRequest.prompt_kind:type_name -> kodex.agents.v1.PromptKind
-	29,  // 90: kodex.agents.v1.CreatePromptTemplateVersionRequest.template_object:type_name -> kodex.agents.v1.ObjectRef
+	30,  // 90: kodex.agents.v1.CreatePromptTemplateVersionRequest.template_object:type_name -> kodex.agents.v1.ObjectRef
 	18,  // 91: kodex.agents.v1.ActivatePromptTemplateVersionRequest.meta:type_name -> kodex.agents.v1.CommandMeta
 	19,  // 92: kodex.agents.v1.GetPromptTemplateVersionRequest.meta:type_name -> kodex.agents.v1.QueryMeta
 	19,  // 93: kodex.agents.v1.ListPromptTemplateVersionsRequest.meta:type_name -> kodex.agents.v1.QueryMeta
 	6,   // 94: kodex.agents.v1.ListPromptTemplateVersionsRequest.prompt_kind:type_name -> kodex.agents.v1.PromptKind
 	7,   // 95: kodex.agents.v1.ListPromptTemplateVersionsRequest.status:type_name -> kodex.agents.v1.PromptVersionStatus
 	22,  // 96: kodex.agents.v1.ListPromptTemplateVersionsRequest.page:type_name -> kodex.agents.v1.PageRequest
-	36,  // 97: kodex.agents.v1.PromptTemplateVersionResponse.prompt_template_version:type_name -> kodex.agents.v1.PromptTemplateVersion
-	36,  // 98: kodex.agents.v1.ListPromptTemplateVersionsResponse.prompt_template_versions:type_name -> kodex.agents.v1.PromptTemplateVersion
+	37,  // 97: kodex.agents.v1.PromptTemplateVersionResponse.prompt_template_version:type_name -> kodex.agents.v1.PromptTemplateVersion
+	37,  // 98: kodex.agents.v1.ListPromptTemplateVersionsResponse.prompt_template_versions:type_name -> kodex.agents.v1.PromptTemplateVersion
 	23,  // 99: kodex.agents.v1.ListPromptTemplateVersionsResponse.page:type_name -> kodex.agents.v1.PageResponse
 	18,  // 100: kodex.agents.v1.StartAgentSessionRequest.meta:type_name -> kodex.agents.v1.CommandMeta
 	25,  // 101: kodex.agents.v1.StartAgentSessionRequest.scope:type_name -> kodex.agents.v1.ScopeRef
 	18,  // 102: kodex.agents.v1.StartAgentRunRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	27,  // 103: kodex.agents.v1.StartAgentRunRequest.runtime_context:type_name -> kodex.agents.v1.RuntimeContextRef
-	26,  // 104: kodex.agents.v1.StartAgentRunRequest.provider_target:type_name -> kodex.agents.v1.ProviderTargetRef
-	28,  // 105: kodex.agents.v1.StartAgentRunRequest.guidance_refs:type_name -> kodex.agents.v1.GuidanceRef
-	18,  // 106: kodex.agents.v1.RecordRunStateRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	10,  // 107: kodex.agents.v1.RecordRunStateRequest.status:type_name -> kodex.agents.v1.AgentRunStatus
-	27,  // 108: kodex.agents.v1.RecordRunStateRequest.runtime_context:type_name -> kodex.agents.v1.RuntimeContextRef
-	26,  // 109: kodex.agents.v1.RecordRunStateRequest.provider_target:type_name -> kodex.agents.v1.ProviderTargetRef
-	18,  // 110: kodex.agents.v1.RecordSessionStateSnapshotRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	11,  // 111: kodex.agents.v1.RecordSessionStateSnapshotRequest.snapshot_kind:type_name -> kodex.agents.v1.AgentSessionSnapshotKind
-	29,  // 112: kodex.agents.v1.RecordSessionStateSnapshotRequest.object:type_name -> kodex.agents.v1.ObjectRef
-	18,  // 113: kodex.agents.v1.RequestAcceptanceRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	12,  // 114: kodex.agents.v1.RequestAcceptanceRequest.check_kinds:type_name -> kodex.agents.v1.AcceptanceCheckKind
-	18,  // 115: kodex.agents.v1.RecordAcceptanceResultRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	13,  // 116: kodex.agents.v1.RecordAcceptanceResultRequest.status:type_name -> kodex.agents.v1.AcceptanceStatus
-	19,  // 117: kodex.agents.v1.GetAcceptanceResultRequest.meta:type_name -> kodex.agents.v1.QueryMeta
-	19,  // 118: kodex.agents.v1.ListAcceptanceResultsRequest.meta:type_name -> kodex.agents.v1.QueryMeta
-	13,  // 119: kodex.agents.v1.ListAcceptanceResultsRequest.status:type_name -> kodex.agents.v1.AcceptanceStatus
-	22,  // 120: kodex.agents.v1.ListAcceptanceResultsRequest.page:type_name -> kodex.agents.v1.PageRequest
-	18,  // 121: kodex.agents.v1.CreateFollowUpIntentRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	18,  // 122: kodex.agents.v1.RequestHumanGateRequest.meta:type_name -> kodex.agents.v1.CommandMeta
-	19,  // 123: kodex.agents.v1.GetAgentSessionRequest.meta:type_name -> kodex.agents.v1.QueryMeta
-	19,  // 124: kodex.agents.v1.ListAgentRunsRequest.meta:type_name -> kodex.agents.v1.QueryMeta
-	10,  // 125: kodex.agents.v1.ListAgentRunsRequest.status:type_name -> kodex.agents.v1.AgentRunStatus
-	22,  // 126: kodex.agents.v1.ListAgentRunsRequest.page:type_name -> kodex.agents.v1.PageRequest
-	38,  // 127: kodex.agents.v1.AgentSessionResponse.session:type_name -> kodex.agents.v1.AgentSession
-	40,  // 128: kodex.agents.v1.AgentSessionResponse.latest_state_snapshot:type_name -> kodex.agents.v1.AgentSessionStateSnapshot
-	39,  // 129: kodex.agents.v1.AgentRunResponse.run:type_name -> kodex.agents.v1.AgentRun
-	40,  // 130: kodex.agents.v1.AgentSessionStateSnapshotResponse.snapshot:type_name -> kodex.agents.v1.AgentSessionStateSnapshot
-	38,  // 131: kodex.agents.v1.AgentSessionStateSnapshotResponse.session:type_name -> kodex.agents.v1.AgentSession
-	41,  // 132: kodex.agents.v1.AcceptanceResultResponse.acceptance_result:type_name -> kodex.agents.v1.AcceptanceResult
-	41,  // 133: kodex.agents.v1.ListAcceptanceResultsResponse.acceptance_results:type_name -> kodex.agents.v1.AcceptanceResult
-	23,  // 134: kodex.agents.v1.ListAcceptanceResultsResponse.page:type_name -> kodex.agents.v1.PageResponse
-	42,  // 135: kodex.agents.v1.FollowUpIntentResponse.follow_up_intent:type_name -> kodex.agents.v1.FollowUpIntent
-	43,  // 136: kodex.agents.v1.HumanGateRequestResponse.human_gate_request:type_name -> kodex.agents.v1.HumanGateRequest
-	39,  // 137: kodex.agents.v1.ListAgentRunsResponse.runs:type_name -> kodex.agents.v1.AgentRun
-	23,  // 138: kodex.agents.v1.ListAgentRunsResponse.page:type_name -> kodex.agents.v1.PageResponse
-	48,  // 139: kodex.agents.v1.AgentManagerService.CreateFlow:input_type -> kodex.agents.v1.CreateFlowRequest
-	49,  // 140: kodex.agents.v1.AgentManagerService.UpdateFlow:input_type -> kodex.agents.v1.UpdateFlowRequest
-	50,  // 141: kodex.agents.v1.AgentManagerService.CreateFlowVersion:input_type -> kodex.agents.v1.CreateFlowVersionRequest
-	51,  // 142: kodex.agents.v1.AgentManagerService.ActivateFlowVersion:input_type -> kodex.agents.v1.ActivateFlowVersionRequest
-	52,  // 143: kodex.agents.v1.AgentManagerService.GetFlow:input_type -> kodex.agents.v1.GetFlowRequest
-	53,  // 144: kodex.agents.v1.AgentManagerService.ListFlows:input_type -> kodex.agents.v1.ListFlowsRequest
-	57,  // 145: kodex.agents.v1.AgentManagerService.CreateRoleProfile:input_type -> kodex.agents.v1.CreateRoleProfileRequest
-	58,  // 146: kodex.agents.v1.AgentManagerService.UpdateRoleProfile:input_type -> kodex.agents.v1.UpdateRoleProfileRequest
-	59,  // 147: kodex.agents.v1.AgentManagerService.GetRoleProfile:input_type -> kodex.agents.v1.GetRoleProfileRequest
-	60,  // 148: kodex.agents.v1.AgentManagerService.ListRoleProfiles:input_type -> kodex.agents.v1.ListRoleProfilesRequest
-	63,  // 149: kodex.agents.v1.AgentManagerService.GetPromptTemplate:input_type -> kodex.agents.v1.GetPromptTemplateRequest
-	64,  // 150: kodex.agents.v1.AgentManagerService.ListPromptTemplates:input_type -> kodex.agents.v1.ListPromptTemplatesRequest
-	67,  // 151: kodex.agents.v1.AgentManagerService.CreatePromptTemplateVersion:input_type -> kodex.agents.v1.CreatePromptTemplateVersionRequest
-	68,  // 152: kodex.agents.v1.AgentManagerService.ActivatePromptTemplateVersion:input_type -> kodex.agents.v1.ActivatePromptTemplateVersionRequest
-	69,  // 153: kodex.agents.v1.AgentManagerService.GetPromptTemplateVersion:input_type -> kodex.agents.v1.GetPromptTemplateVersionRequest
-	70,  // 154: kodex.agents.v1.AgentManagerService.ListPromptTemplateVersions:input_type -> kodex.agents.v1.ListPromptTemplateVersionsRequest
-	73,  // 155: kodex.agents.v1.AgentManagerService.StartAgentSession:input_type -> kodex.agents.v1.StartAgentSessionRequest
-	74,  // 156: kodex.agents.v1.AgentManagerService.StartAgentRun:input_type -> kodex.agents.v1.StartAgentRunRequest
-	75,  // 157: kodex.agents.v1.AgentManagerService.RecordRunState:input_type -> kodex.agents.v1.RecordRunStateRequest
-	76,  // 158: kodex.agents.v1.AgentManagerService.RecordSessionStateSnapshot:input_type -> kodex.agents.v1.RecordSessionStateSnapshotRequest
-	77,  // 159: kodex.agents.v1.AgentManagerService.RequestAcceptance:input_type -> kodex.agents.v1.RequestAcceptanceRequest
-	78,  // 160: kodex.agents.v1.AgentManagerService.RecordAcceptanceResult:input_type -> kodex.agents.v1.RecordAcceptanceResultRequest
-	79,  // 161: kodex.agents.v1.AgentManagerService.GetAcceptanceResult:input_type -> kodex.agents.v1.GetAcceptanceResultRequest
-	80,  // 162: kodex.agents.v1.AgentManagerService.ListAcceptanceResults:input_type -> kodex.agents.v1.ListAcceptanceResultsRequest
-	81,  // 163: kodex.agents.v1.AgentManagerService.CreateFollowUpIntent:input_type -> kodex.agents.v1.CreateFollowUpIntentRequest
-	82,  // 164: kodex.agents.v1.AgentManagerService.RequestHumanGate:input_type -> kodex.agents.v1.RequestHumanGateRequest
-	83,  // 165: kodex.agents.v1.AgentManagerService.GetAgentSession:input_type -> kodex.agents.v1.GetAgentSessionRequest
-	84,  // 166: kodex.agents.v1.AgentManagerService.ListAgentRuns:input_type -> kodex.agents.v1.ListAgentRunsRequest
-	54,  // 167: kodex.agents.v1.AgentManagerService.CreateFlow:output_type -> kodex.agents.v1.FlowResponse
-	54,  // 168: kodex.agents.v1.AgentManagerService.UpdateFlow:output_type -> kodex.agents.v1.FlowResponse
-	55,  // 169: kodex.agents.v1.AgentManagerService.CreateFlowVersion:output_type -> kodex.agents.v1.FlowVersionResponse
-	55,  // 170: kodex.agents.v1.AgentManagerService.ActivateFlowVersion:output_type -> kodex.agents.v1.FlowVersionResponse
-	54,  // 171: kodex.agents.v1.AgentManagerService.GetFlow:output_type -> kodex.agents.v1.FlowResponse
-	56,  // 172: kodex.agents.v1.AgentManagerService.ListFlows:output_type -> kodex.agents.v1.ListFlowsResponse
-	61,  // 173: kodex.agents.v1.AgentManagerService.CreateRoleProfile:output_type -> kodex.agents.v1.RoleProfileResponse
-	61,  // 174: kodex.agents.v1.AgentManagerService.UpdateRoleProfile:output_type -> kodex.agents.v1.RoleProfileResponse
-	61,  // 175: kodex.agents.v1.AgentManagerService.GetRoleProfile:output_type -> kodex.agents.v1.RoleProfileResponse
-	62,  // 176: kodex.agents.v1.AgentManagerService.ListRoleProfiles:output_type -> kodex.agents.v1.ListRoleProfilesResponse
-	65,  // 177: kodex.agents.v1.AgentManagerService.GetPromptTemplate:output_type -> kodex.agents.v1.PromptTemplateResponse
-	66,  // 178: kodex.agents.v1.AgentManagerService.ListPromptTemplates:output_type -> kodex.agents.v1.ListPromptTemplatesResponse
-	71,  // 179: kodex.agents.v1.AgentManagerService.CreatePromptTemplateVersion:output_type -> kodex.agents.v1.PromptTemplateVersionResponse
-	71,  // 180: kodex.agents.v1.AgentManagerService.ActivatePromptTemplateVersion:output_type -> kodex.agents.v1.PromptTemplateVersionResponse
-	71,  // 181: kodex.agents.v1.AgentManagerService.GetPromptTemplateVersion:output_type -> kodex.agents.v1.PromptTemplateVersionResponse
-	72,  // 182: kodex.agents.v1.AgentManagerService.ListPromptTemplateVersions:output_type -> kodex.agents.v1.ListPromptTemplateVersionsResponse
-	85,  // 183: kodex.agents.v1.AgentManagerService.StartAgentSession:output_type -> kodex.agents.v1.AgentSessionResponse
-	86,  // 184: kodex.agents.v1.AgentManagerService.StartAgentRun:output_type -> kodex.agents.v1.AgentRunResponse
-	86,  // 185: kodex.agents.v1.AgentManagerService.RecordRunState:output_type -> kodex.agents.v1.AgentRunResponse
-	87,  // 186: kodex.agents.v1.AgentManagerService.RecordSessionStateSnapshot:output_type -> kodex.agents.v1.AgentSessionStateSnapshotResponse
-	88,  // 187: kodex.agents.v1.AgentManagerService.RequestAcceptance:output_type -> kodex.agents.v1.AcceptanceResultResponse
-	88,  // 188: kodex.agents.v1.AgentManagerService.RecordAcceptanceResult:output_type -> kodex.agents.v1.AcceptanceResultResponse
-	88,  // 189: kodex.agents.v1.AgentManagerService.GetAcceptanceResult:output_type -> kodex.agents.v1.AcceptanceResultResponse
-	89,  // 190: kodex.agents.v1.AgentManagerService.ListAcceptanceResults:output_type -> kodex.agents.v1.ListAcceptanceResultsResponse
-	90,  // 191: kodex.agents.v1.AgentManagerService.CreateFollowUpIntent:output_type -> kodex.agents.v1.FollowUpIntentResponse
-	91,  // 192: kodex.agents.v1.AgentManagerService.RequestHumanGate:output_type -> kodex.agents.v1.HumanGateRequestResponse
-	85,  // 193: kodex.agents.v1.AgentManagerService.GetAgentSession:output_type -> kodex.agents.v1.AgentSessionResponse
-	92,  // 194: kodex.agents.v1.AgentManagerService.ListAgentRuns:output_type -> kodex.agents.v1.ListAgentRunsResponse
-	167, // [167:195] is the sub-list for method output_type
-	139, // [139:167] is the sub-list for method input_type
-	139, // [139:139] is the sub-list for extension type_name
-	139, // [139:139] is the sub-list for extension extendee
-	0,   // [0:139] is the sub-list for field type_name
+	26,  // 103: kodex.agents.v1.StartAgentRunRequest.provider_target:type_name -> kodex.agents.v1.ProviderTargetRef
+	29,  // 104: kodex.agents.v1.StartAgentRunRequest.guidance_selection_hints:type_name -> kodex.agents.v1.GuidanceSelectionHint
+	18,  // 105: kodex.agents.v1.RecordRunStateRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	10,  // 106: kodex.agents.v1.RecordRunStateRequest.status:type_name -> kodex.agents.v1.AgentRunStatus
+	27,  // 107: kodex.agents.v1.RecordRunStateRequest.runtime_context:type_name -> kodex.agents.v1.RuntimeContextRef
+	26,  // 108: kodex.agents.v1.RecordRunStateRequest.provider_target:type_name -> kodex.agents.v1.ProviderTargetRef
+	18,  // 109: kodex.agents.v1.RecordSessionStateSnapshotRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	11,  // 110: kodex.agents.v1.RecordSessionStateSnapshotRequest.snapshot_kind:type_name -> kodex.agents.v1.AgentSessionSnapshotKind
+	30,  // 111: kodex.agents.v1.RecordSessionStateSnapshotRequest.object:type_name -> kodex.agents.v1.ObjectRef
+	18,  // 112: kodex.agents.v1.RequestAcceptanceRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	12,  // 113: kodex.agents.v1.RequestAcceptanceRequest.check_kinds:type_name -> kodex.agents.v1.AcceptanceCheckKind
+	18,  // 114: kodex.agents.v1.RecordAcceptanceResultRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	13,  // 115: kodex.agents.v1.RecordAcceptanceResultRequest.status:type_name -> kodex.agents.v1.AcceptanceStatus
+	19,  // 116: kodex.agents.v1.GetAcceptanceResultRequest.meta:type_name -> kodex.agents.v1.QueryMeta
+	19,  // 117: kodex.agents.v1.ListAcceptanceResultsRequest.meta:type_name -> kodex.agents.v1.QueryMeta
+	13,  // 118: kodex.agents.v1.ListAcceptanceResultsRequest.status:type_name -> kodex.agents.v1.AcceptanceStatus
+	22,  // 119: kodex.agents.v1.ListAcceptanceResultsRequest.page:type_name -> kodex.agents.v1.PageRequest
+	18,  // 120: kodex.agents.v1.CreateFollowUpIntentRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	18,  // 121: kodex.agents.v1.RequestHumanGateRequest.meta:type_name -> kodex.agents.v1.CommandMeta
+	19,  // 122: kodex.agents.v1.GetAgentSessionRequest.meta:type_name -> kodex.agents.v1.QueryMeta
+	19,  // 123: kodex.agents.v1.ListAgentRunsRequest.meta:type_name -> kodex.agents.v1.QueryMeta
+	10,  // 124: kodex.agents.v1.ListAgentRunsRequest.status:type_name -> kodex.agents.v1.AgentRunStatus
+	22,  // 125: kodex.agents.v1.ListAgentRunsRequest.page:type_name -> kodex.agents.v1.PageRequest
+	39,  // 126: kodex.agents.v1.AgentSessionResponse.session:type_name -> kodex.agents.v1.AgentSession
+	41,  // 127: kodex.agents.v1.AgentSessionResponse.latest_state_snapshot:type_name -> kodex.agents.v1.AgentSessionStateSnapshot
+	40,  // 128: kodex.agents.v1.AgentRunResponse.run:type_name -> kodex.agents.v1.AgentRun
+	41,  // 129: kodex.agents.v1.AgentSessionStateSnapshotResponse.snapshot:type_name -> kodex.agents.v1.AgentSessionStateSnapshot
+	39,  // 130: kodex.agents.v1.AgentSessionStateSnapshotResponse.session:type_name -> kodex.agents.v1.AgentSession
+	42,  // 131: kodex.agents.v1.AcceptanceResultResponse.acceptance_result:type_name -> kodex.agents.v1.AcceptanceResult
+	42,  // 132: kodex.agents.v1.ListAcceptanceResultsResponse.acceptance_results:type_name -> kodex.agents.v1.AcceptanceResult
+	23,  // 133: kodex.agents.v1.ListAcceptanceResultsResponse.page:type_name -> kodex.agents.v1.PageResponse
+	43,  // 134: kodex.agents.v1.FollowUpIntentResponse.follow_up_intent:type_name -> kodex.agents.v1.FollowUpIntent
+	44,  // 135: kodex.agents.v1.HumanGateRequestResponse.human_gate_request:type_name -> kodex.agents.v1.HumanGateRequest
+	40,  // 136: kodex.agents.v1.ListAgentRunsResponse.runs:type_name -> kodex.agents.v1.AgentRun
+	23,  // 137: kodex.agents.v1.ListAgentRunsResponse.page:type_name -> kodex.agents.v1.PageResponse
+	49,  // 138: kodex.agents.v1.AgentManagerService.CreateFlow:input_type -> kodex.agents.v1.CreateFlowRequest
+	50,  // 139: kodex.agents.v1.AgentManagerService.UpdateFlow:input_type -> kodex.agents.v1.UpdateFlowRequest
+	51,  // 140: kodex.agents.v1.AgentManagerService.CreateFlowVersion:input_type -> kodex.agents.v1.CreateFlowVersionRequest
+	52,  // 141: kodex.agents.v1.AgentManagerService.ActivateFlowVersion:input_type -> kodex.agents.v1.ActivateFlowVersionRequest
+	53,  // 142: kodex.agents.v1.AgentManagerService.GetFlow:input_type -> kodex.agents.v1.GetFlowRequest
+	54,  // 143: kodex.agents.v1.AgentManagerService.ListFlows:input_type -> kodex.agents.v1.ListFlowsRequest
+	58,  // 144: kodex.agents.v1.AgentManagerService.CreateRoleProfile:input_type -> kodex.agents.v1.CreateRoleProfileRequest
+	59,  // 145: kodex.agents.v1.AgentManagerService.UpdateRoleProfile:input_type -> kodex.agents.v1.UpdateRoleProfileRequest
+	60,  // 146: kodex.agents.v1.AgentManagerService.GetRoleProfile:input_type -> kodex.agents.v1.GetRoleProfileRequest
+	61,  // 147: kodex.agents.v1.AgentManagerService.ListRoleProfiles:input_type -> kodex.agents.v1.ListRoleProfilesRequest
+	64,  // 148: kodex.agents.v1.AgentManagerService.GetPromptTemplate:input_type -> kodex.agents.v1.GetPromptTemplateRequest
+	65,  // 149: kodex.agents.v1.AgentManagerService.ListPromptTemplates:input_type -> kodex.agents.v1.ListPromptTemplatesRequest
+	68,  // 150: kodex.agents.v1.AgentManagerService.CreatePromptTemplateVersion:input_type -> kodex.agents.v1.CreatePromptTemplateVersionRequest
+	69,  // 151: kodex.agents.v1.AgentManagerService.ActivatePromptTemplateVersion:input_type -> kodex.agents.v1.ActivatePromptTemplateVersionRequest
+	70,  // 152: kodex.agents.v1.AgentManagerService.GetPromptTemplateVersion:input_type -> kodex.agents.v1.GetPromptTemplateVersionRequest
+	71,  // 153: kodex.agents.v1.AgentManagerService.ListPromptTemplateVersions:input_type -> kodex.agents.v1.ListPromptTemplateVersionsRequest
+	74,  // 154: kodex.agents.v1.AgentManagerService.StartAgentSession:input_type -> kodex.agents.v1.StartAgentSessionRequest
+	75,  // 155: kodex.agents.v1.AgentManagerService.StartAgentRun:input_type -> kodex.agents.v1.StartAgentRunRequest
+	76,  // 156: kodex.agents.v1.AgentManagerService.RecordRunState:input_type -> kodex.agents.v1.RecordRunStateRequest
+	77,  // 157: kodex.agents.v1.AgentManagerService.RecordSessionStateSnapshot:input_type -> kodex.agents.v1.RecordSessionStateSnapshotRequest
+	78,  // 158: kodex.agents.v1.AgentManagerService.RequestAcceptance:input_type -> kodex.agents.v1.RequestAcceptanceRequest
+	79,  // 159: kodex.agents.v1.AgentManagerService.RecordAcceptanceResult:input_type -> kodex.agents.v1.RecordAcceptanceResultRequest
+	80,  // 160: kodex.agents.v1.AgentManagerService.GetAcceptanceResult:input_type -> kodex.agents.v1.GetAcceptanceResultRequest
+	81,  // 161: kodex.agents.v1.AgentManagerService.ListAcceptanceResults:input_type -> kodex.agents.v1.ListAcceptanceResultsRequest
+	82,  // 162: kodex.agents.v1.AgentManagerService.CreateFollowUpIntent:input_type -> kodex.agents.v1.CreateFollowUpIntentRequest
+	83,  // 163: kodex.agents.v1.AgentManagerService.RequestHumanGate:input_type -> kodex.agents.v1.RequestHumanGateRequest
+	84,  // 164: kodex.agents.v1.AgentManagerService.GetAgentSession:input_type -> kodex.agents.v1.GetAgentSessionRequest
+	85,  // 165: kodex.agents.v1.AgentManagerService.ListAgentRuns:input_type -> kodex.agents.v1.ListAgentRunsRequest
+	55,  // 166: kodex.agents.v1.AgentManagerService.CreateFlow:output_type -> kodex.agents.v1.FlowResponse
+	55,  // 167: kodex.agents.v1.AgentManagerService.UpdateFlow:output_type -> kodex.agents.v1.FlowResponse
+	56,  // 168: kodex.agents.v1.AgentManagerService.CreateFlowVersion:output_type -> kodex.agents.v1.FlowVersionResponse
+	56,  // 169: kodex.agents.v1.AgentManagerService.ActivateFlowVersion:output_type -> kodex.agents.v1.FlowVersionResponse
+	55,  // 170: kodex.agents.v1.AgentManagerService.GetFlow:output_type -> kodex.agents.v1.FlowResponse
+	57,  // 171: kodex.agents.v1.AgentManagerService.ListFlows:output_type -> kodex.agents.v1.ListFlowsResponse
+	62,  // 172: kodex.agents.v1.AgentManagerService.CreateRoleProfile:output_type -> kodex.agents.v1.RoleProfileResponse
+	62,  // 173: kodex.agents.v1.AgentManagerService.UpdateRoleProfile:output_type -> kodex.agents.v1.RoleProfileResponse
+	62,  // 174: kodex.agents.v1.AgentManagerService.GetRoleProfile:output_type -> kodex.agents.v1.RoleProfileResponse
+	63,  // 175: kodex.agents.v1.AgentManagerService.ListRoleProfiles:output_type -> kodex.agents.v1.ListRoleProfilesResponse
+	66,  // 176: kodex.agents.v1.AgentManagerService.GetPromptTemplate:output_type -> kodex.agents.v1.PromptTemplateResponse
+	67,  // 177: kodex.agents.v1.AgentManagerService.ListPromptTemplates:output_type -> kodex.agents.v1.ListPromptTemplatesResponse
+	72,  // 178: kodex.agents.v1.AgentManagerService.CreatePromptTemplateVersion:output_type -> kodex.agents.v1.PromptTemplateVersionResponse
+	72,  // 179: kodex.agents.v1.AgentManagerService.ActivatePromptTemplateVersion:output_type -> kodex.agents.v1.PromptTemplateVersionResponse
+	72,  // 180: kodex.agents.v1.AgentManagerService.GetPromptTemplateVersion:output_type -> kodex.agents.v1.PromptTemplateVersionResponse
+	73,  // 181: kodex.agents.v1.AgentManagerService.ListPromptTemplateVersions:output_type -> kodex.agents.v1.ListPromptTemplateVersionsResponse
+	86,  // 182: kodex.agents.v1.AgentManagerService.StartAgentSession:output_type -> kodex.agents.v1.AgentSessionResponse
+	87,  // 183: kodex.agents.v1.AgentManagerService.StartAgentRun:output_type -> kodex.agents.v1.AgentRunResponse
+	87,  // 184: kodex.agents.v1.AgentManagerService.RecordRunState:output_type -> kodex.agents.v1.AgentRunResponse
+	88,  // 185: kodex.agents.v1.AgentManagerService.RecordSessionStateSnapshot:output_type -> kodex.agents.v1.AgentSessionStateSnapshotResponse
+	89,  // 186: kodex.agents.v1.AgentManagerService.RequestAcceptance:output_type -> kodex.agents.v1.AcceptanceResultResponse
+	89,  // 187: kodex.agents.v1.AgentManagerService.RecordAcceptanceResult:output_type -> kodex.agents.v1.AcceptanceResultResponse
+	89,  // 188: kodex.agents.v1.AgentManagerService.GetAcceptanceResult:output_type -> kodex.agents.v1.AcceptanceResultResponse
+	90,  // 189: kodex.agents.v1.AgentManagerService.ListAcceptanceResults:output_type -> kodex.agents.v1.ListAcceptanceResultsResponse
+	91,  // 190: kodex.agents.v1.AgentManagerService.CreateFollowUpIntent:output_type -> kodex.agents.v1.FollowUpIntentResponse
+	92,  // 191: kodex.agents.v1.AgentManagerService.RequestHumanGate:output_type -> kodex.agents.v1.HumanGateRequestResponse
+	86,  // 192: kodex.agents.v1.AgentManagerService.GetAgentSession:output_type -> kodex.agents.v1.AgentSessionResponse
+	93,  // 193: kodex.agents.v1.AgentManagerService.ListAgentRuns:output_type -> kodex.agents.v1.ListAgentRunsResponse
+	166, // [166:194] is the sub-list for method output_type
+	138, // [138:166] is the sub-list for method input_type
+	138, // [138:138] is the sub-list for extension type_name
+	138, // [138:138] is the sub-list for extension extendee
+	0,   // [0:138] is the sub-list for field type_name
 }
 
 func init() { file_kodex_agents_v1_agent_manager_proto_init() }
@@ -7970,44 +8022,45 @@ func file_kodex_agents_v1_agent_manager_proto_init() {
 	file_kodex_agents_v1_agent_manager_proto_msgTypes[16].OneofWrappers = []any{}
 	file_kodex_agents_v1_agent_manager_proto_msgTypes[17].OneofWrappers = []any{}
 	file_kodex_agents_v1_agent_manager_proto_msgTypes[18].OneofWrappers = []any{}
-	file_kodex_agents_v1_agent_manager_proto_msgTypes[20].OneofWrappers = []any{}
+	file_kodex_agents_v1_agent_manager_proto_msgTypes[19].OneofWrappers = []any{}
 	file_kodex_agents_v1_agent_manager_proto_msgTypes[21].OneofWrappers = []any{}
 	file_kodex_agents_v1_agent_manager_proto_msgTypes[22].OneofWrappers = []any{}
 	file_kodex_agents_v1_agent_manager_proto_msgTypes[23].OneofWrappers = []any{}
 	file_kodex_agents_v1_agent_manager_proto_msgTypes[24].OneofWrappers = []any{}
 	file_kodex_agents_v1_agent_manager_proto_msgTypes[25].OneofWrappers = []any{}
-	file_kodex_agents_v1_agent_manager_proto_msgTypes[27].OneofWrappers = []any{}
+	file_kodex_agents_v1_agent_manager_proto_msgTypes[26].OneofWrappers = []any{}
 	file_kodex_agents_v1_agent_manager_proto_msgTypes[28].OneofWrappers = []any{}
-	file_kodex_agents_v1_agent_manager_proto_msgTypes[30].OneofWrappers = []any{}
+	file_kodex_agents_v1_agent_manager_proto_msgTypes[29].OneofWrappers = []any{}
 	file_kodex_agents_v1_agent_manager_proto_msgTypes[31].OneofWrappers = []any{}
 	file_kodex_agents_v1_agent_manager_proto_msgTypes[32].OneofWrappers = []any{}
-	file_kodex_agents_v1_agent_manager_proto_msgTypes[35].OneofWrappers = []any{}
+	file_kodex_agents_v1_agent_manager_proto_msgTypes[33].OneofWrappers = []any{}
 	file_kodex_agents_v1_agent_manager_proto_msgTypes[36].OneofWrappers = []any{}
-	file_kodex_agents_v1_agent_manager_proto_msgTypes[39].OneofWrappers = []any{}
+	file_kodex_agents_v1_agent_manager_proto_msgTypes[37].OneofWrappers = []any{}
 	file_kodex_agents_v1_agent_manager_proto_msgTypes[40].OneofWrappers = []any{}
-	file_kodex_agents_v1_agent_manager_proto_msgTypes[42].OneofWrappers = []any{}
-	file_kodex_agents_v1_agent_manager_proto_msgTypes[46].OneofWrappers = []any{}
+	file_kodex_agents_v1_agent_manager_proto_msgTypes[41].OneofWrappers = []any{}
+	file_kodex_agents_v1_agent_manager_proto_msgTypes[43].OneofWrappers = []any{}
 	file_kodex_agents_v1_agent_manager_proto_msgTypes[47].OneofWrappers = []any{}
-	file_kodex_agents_v1_agent_manager_proto_msgTypes[49].OneofWrappers = []any{}
-	file_kodex_agents_v1_agent_manager_proto_msgTypes[52].OneofWrappers = []any{}
-	file_kodex_agents_v1_agent_manager_proto_msgTypes[55].OneofWrappers = []any{}
+	file_kodex_agents_v1_agent_manager_proto_msgTypes[48].OneofWrappers = []any{}
+	file_kodex_agents_v1_agent_manager_proto_msgTypes[50].OneofWrappers = []any{}
+	file_kodex_agents_v1_agent_manager_proto_msgTypes[53].OneofWrappers = []any{}
 	file_kodex_agents_v1_agent_manager_proto_msgTypes[56].OneofWrappers = []any{}
 	file_kodex_agents_v1_agent_manager_proto_msgTypes[57].OneofWrappers = []any{}
 	file_kodex_agents_v1_agent_manager_proto_msgTypes[58].OneofWrappers = []any{}
 	file_kodex_agents_v1_agent_manager_proto_msgTypes[59].OneofWrappers = []any{}
 	file_kodex_agents_v1_agent_manager_proto_msgTypes[60].OneofWrappers = []any{}
-	file_kodex_agents_v1_agent_manager_proto_msgTypes[62].OneofWrappers = []any{}
+	file_kodex_agents_v1_agent_manager_proto_msgTypes[61].OneofWrappers = []any{}
 	file_kodex_agents_v1_agent_manager_proto_msgTypes[63].OneofWrappers = []any{}
 	file_kodex_agents_v1_agent_manager_proto_msgTypes[64].OneofWrappers = []any{}
-	file_kodex_agents_v1_agent_manager_proto_msgTypes[66].OneofWrappers = []any{}
+	file_kodex_agents_v1_agent_manager_proto_msgTypes[65].OneofWrappers = []any{}
 	file_kodex_agents_v1_agent_manager_proto_msgTypes[67].OneofWrappers = []any{}
+	file_kodex_agents_v1_agent_manager_proto_msgTypes[68].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kodex_agents_v1_agent_manager_proto_rawDesc), len(file_kodex_agents_v1_agent_manager_proto_rawDesc)),
 			NumEnums:      18,
-			NumMessages:   75,
+			NumMessages:   76,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

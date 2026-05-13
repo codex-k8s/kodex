@@ -306,6 +306,7 @@ approvals:
 - `StageRoleBinding` связывает `Stage` и `RoleProfile`.
 - `AgentSession` содержит несколько `AgentRun`.
 - `AgentRun` фиксирует `FlowVersion`, `Stage`, `RoleProfile` с `role_profile_version` и `role_profile_digest`, `PromptTemplateVersion` с digest и использованные guidance refs.
+- Guidance refs и runtime refs в `AgentRun` появляются только после разрешения через `package-hub` и `runtime-manager`; стартовая команда может передать только selection hints, которые `agent-manager` обязан проверить в своём scope.
 - `AgentSessionStateSnapshot` относится к `AgentSession` и опционально к `AgentRun`; `AgentSession.latest_state_snapshot_id` указывает на актуальный снимок.
 - `AcceptanceResult` и `FollowUpIntent` относятся к `AgentSession`, `AgentRun` и `Stage`.
 - Внутри БД `agent-manager` допустимы внешние ключи между своими таблицами.
