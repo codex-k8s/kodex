@@ -94,6 +94,14 @@ func main() {
 			PayloadSchema:   "FleetEventPayload",
 			OutputPath:      "libs/go/platformevents/fleet/events.gen.go",
 		},
+		{
+			Domain:          "agent",
+			PackageName:     "agent",
+			SpecPath:        "specs/asyncapi/agent-manager.v1.yaml",
+			EventTypeSchema: "AgentEventType",
+			PayloadSchema:   "AgentEventPayload",
+			OutputPath:      "libs/go/platformevents/agent/events.gen.go",
+		},
 	}
 	for _, spec := range specs {
 		if err := generate(spec); err != nil {

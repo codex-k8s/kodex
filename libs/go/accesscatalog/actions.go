@@ -55,6 +55,14 @@ const (
 	ResourceFleetHealth                  = "fleet_health"
 	ResourceFleetPlacementRule           = "fleet_placement_rule"
 	ResourceFleetPlacementDecision       = "fleet_placement_decision"
+	ResourceAgentFlow                    = "agent_flow"
+	ResourceAgentRole                    = "agent_role"
+	ResourceAgentPrompt                  = "agent_prompt"
+	ResourceAgentSession                 = "agent_session"
+	ResourceAgentRun                     = "agent_run"
+	ResourceAgentAcceptance              = "agent_acceptance"
+	ResourceAgentFollowUp                = "agent_follow_up"
+	ResourceAgentHumanGate               = "agent_human_gate"
 )
 
 const (
@@ -156,6 +164,23 @@ const (
 	ActionFleetPlacementResolve                 = "fleet.placement.resolve"
 	ActionFleetPlacementDecisionRead            = "fleet.placement_decision.read"
 	ActionFleetPlacementDecisionList            = "fleet.placement_decision.list"
+	ActionAgentFlowRead                         = "agent.flow.read"
+	ActionAgentFlowManage                       = "agent.flow.manage"
+	ActionAgentRoleRead                         = "agent.role.read"
+	ActionAgentRoleManage                       = "agent.role.manage"
+	ActionAgentPromptRead                       = "agent.prompt.read"
+	ActionAgentPromptManage                     = "agent.prompt.manage"
+	ActionAgentSessionStart                     = "agent.session.start"
+	ActionAgentSessionRead                      = "agent.session.read"
+	ActionAgentSessionUpdate                    = "agent.session.update"
+	ActionAgentRunStart                         = "agent.run.start"
+	ActionAgentRunRead                          = "agent.run.read"
+	ActionAgentRunUpdate                        = "agent.run.update"
+	ActionAgentAcceptanceRun                    = "agent.acceptance.run"
+	ActionAgentAcceptanceRead                   = "agent.acceptance.read"
+	ActionAgentAcceptanceUpdate                 = "agent.acceptance.update"
+	ActionAgentFollowUpCreate                   = "agent.follow_up.create"
+	ActionAgentHumanGateRequest                 = "agent.human_gate.request"
 )
 
 // ProjectCatalogActions returns system actions owned by the projects-and-repositories domain.
@@ -298,6 +323,41 @@ func FleetManagerActions() []ActionDescriptor {
 	return actions
 }
 
+// AgentManagerActions returns system actions owned by the agent orchestration domain.
+func AgentManagerActions() []ActionDescriptor {
+	actions := make([]ActionDescriptor, 0, 17)
+	actions = append(actions, actionDescriptorsForResource(ResourceAgentFlow,
+		ActionAgentFlowRead,
+		ActionAgentFlowManage,
+	)...)
+	actions = append(actions, actionDescriptorsForResource(ResourceAgentRole,
+		ActionAgentRoleRead,
+		ActionAgentRoleManage,
+	)...)
+	actions = append(actions, actionDescriptorsForResource(ResourceAgentPrompt,
+		ActionAgentPromptRead,
+		ActionAgentPromptManage,
+	)...)
+	actions = append(actions, actionDescriptorsForResource(ResourceAgentSession,
+		ActionAgentSessionStart,
+		ActionAgentSessionRead,
+		ActionAgentSessionUpdate,
+	)...)
+	actions = append(actions, actionDescriptorsForResource(ResourceAgentRun,
+		ActionAgentRunStart,
+		ActionAgentRunRead,
+		ActionAgentRunUpdate,
+	)...)
+	actions = append(actions, actionDescriptorsForResource(ResourceAgentAcceptance,
+		ActionAgentAcceptanceRun,
+		ActionAgentAcceptanceRead,
+		ActionAgentAcceptanceUpdate,
+	)...)
+	actions = append(actions, ActionDescriptor{Key: ActionAgentFollowUpCreate, ResourceType: ResourceAgentFollowUp})
+	actions = append(actions, ActionDescriptor{Key: ActionAgentHumanGateRequest, ResourceType: ResourceAgentHumanGate})
+	return actions
+}
+
 func actionDescriptorsForResource(resourceType string, keys ...string) []ActionDescriptor {
 	actions := make([]ActionDescriptor, 0, len(keys))
 	for _, key := range keys {
@@ -308,12 +368,13 @@ func actionDescriptorsForResource(resourceType string, keys ...string) []ActionD
 
 // SystemActions returns all shared code-owned system actions.
 func SystemActions() []ActionDescriptor {
-	actions := make([]ActionDescriptor, 0, len(ProjectCatalogActions())+len(PackageHubActions())+len(ProviderHubActions())+len(RuntimeManagerActions())+len(FleetManagerActions()))
+	actions := make([]ActionDescriptor, 0, len(ProjectCatalogActions())+len(PackageHubActions())+len(ProviderHubActions())+len(RuntimeManagerActions())+len(FleetManagerActions())+len(AgentManagerActions()))
 	actions = append(actions, ProjectCatalogActions()...)
 	actions = append(actions, PackageHubActions()...)
 	actions = append(actions, ProviderHubActions()...)
 	actions = append(actions, RuntimeManagerActions()...)
 	actions = append(actions, FleetManagerActions()...)
+	actions = append(actions, AgentManagerActions()...)
 	return actions
 }
 

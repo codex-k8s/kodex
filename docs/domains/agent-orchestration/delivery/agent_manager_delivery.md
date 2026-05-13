@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-12
 updated_at: 2026-05-13
-related_issues: [733]
+related_issues: [733, 739]
 related_prs: []
 related_docsets:
   - docs/domains/agent-orchestration/product/requirements.md
@@ -42,7 +42,7 @@ approvals:
 | Срез | Issue | Результат |
 |---|---|---|
 | AGO-0 | #733 | Доменная документация, границы `agent-manager`, модель данных, API-обзор, план поставки и карты связей готовы. |
-| AGO-1 | не назначено | gRPC и AsyncAPI контракты `agent-manager`, события `agent.*` и действия доступа готовы. |
+| AGO-1 | #739 | gRPC и AsyncAPI контракты `agent-manager`, события `agent.*` и действия доступа готовы; сервисная реализация не входит в срез. |
 | AGO-2 | не назначено | Сервисный процесс, health, metrics, конфигурация, пустой gRPC service и outbox-каркас готовы. |
 | AGO-3 | не назначено | PostgreSQL-модель flow, stage, role, prompt template, версий и command result готова. |
 | AGO-4 | не назначено | Сессии и agent `Run`: создание, чтение, статусы, идемпотентность и события готовы. |
@@ -56,17 +56,19 @@ approvals:
 
 | Операция | Текущий статус | Плановый срез |
 |---|---|---|
-| `CreateFlow` / `UpdateFlow` / `CreateFlowVersion` / `ActivateFlowVersion` | запланировано | AGO-1..AGO-3 |
-| `CreateRoleProfile` / `UpdateRoleProfile` | запланировано | AGO-1..AGO-3 |
-| `CreatePromptTemplateVersion` / `ActivatePromptTemplateVersion` | запланировано | AGO-1..AGO-3 |
-| `StartAgentSession` | запланировано | AGO-4 |
-| `StartAgentRun` | запланировано | AGO-4, AGO-6 |
-| `RecordRunState` | запланировано | AGO-4, AGO-6 |
-| `RecordSessionStateSnapshot` | запланировано | AGO-4, AGO-6 |
-| `RequestAcceptance` / `RecordAcceptanceResult` | запланировано | AGO-7 |
-| `CreateFollowUpIntent` | запланировано | AGO-8 |
-| `RequestHumanGate` | запланировано | AGO-8 |
-| `GetAgentSession` / `ListAgentRuns` | запланировано | AGO-4 |
+| `CreateFlow` / `UpdateFlow` / `CreateFlowVersion` / `ActivateFlowVersion` | контракт готов, реализация запланирована | AGO-1..AGO-3 |
+| `GetFlow` / `ListFlows` | контракт готов, реализация запланирована | AGO-1..AGO-3 |
+| `CreateRoleProfile` / `UpdateRoleProfile` / `GetRoleProfile` / `ListRoleProfiles` | контракт готов, реализация запланирована | AGO-1..AGO-3 |
+| `GetPromptTemplate` / `ListPromptTemplates` | контракт готов, реализация запланирована | AGO-1..AGO-3 |
+| `CreatePromptTemplateVersion` / `ActivatePromptTemplateVersion` / `GetPromptTemplateVersion` / `ListPromptTemplateVersions` | контракт готов, реализация запланирована | AGO-1..AGO-3 |
+| `StartAgentSession` | контракт готов, реализация запланирована | AGO-4 |
+| `StartAgentRun` | контракт готов, реализация запланирована | AGO-4, AGO-6 |
+| `RecordRunState` | контракт готов, реализация запланирована | AGO-4, AGO-6 |
+| `RecordSessionStateSnapshot` | контракт готов, реализация запланирована | AGO-4, AGO-6 |
+| `RequestAcceptance` / `RecordAcceptanceResult` / `GetAcceptanceResult` / `ListAcceptanceResults` | контракт готов, реализация запланирована | AGO-7 |
+| `CreateFollowUpIntent` | контракт готов, реализация запланирована | AGO-8 |
+| `RequestHumanGate` | контракт готов, реализация запланирована | AGO-8 |
+| `GetAgentSession` / `ListAgentRuns` | контракт готов, реализация запланирована | AGO-4 |
 
 ## Синхронизация с параллельными доменами
 
@@ -77,7 +79,7 @@ approvals:
 | `provider-hub` | Перед AGO-7 и AGO-8 | Нужны проекции `Issue/PR/MR`, ускоряющие сигналы сверки и типизированные provider-операции. |
 | `interaction-hub` | Перед AGO-8 | Нужен контракт Human gate, запроса обратной связи и возврата решения. |
 | `project-catalog` | Перед AGO-5 и AGO-6 | Нужны workspace policy, project/repository refs и release/risk policy. |
-| `access-manager` | Перед AGO-1 и AGO-4 | Нужны действия доступа для flow, role, prompt, session, run и acceptance. |
+| `access-manager` | Перед AGO-4 | Действия доступа заведены в AGO-1; перед реализацией нужны сервисные проверки команд и чтений. |
 | `platform-mcp-server` | Перед AGO-4 | Нужна инструментальная поверхность для agent-manager и агентов в слотах. |
 
 ## Критерии начала кода

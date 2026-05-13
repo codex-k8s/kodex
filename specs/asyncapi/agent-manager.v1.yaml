@@ -1,0 +1,311 @@
+asyncapi: 3.0.0
+info:
+  title: kodex agent-manager events
+  version: 1.0.0
+  description: Stable v1 lifecycle event contract published by agent-manager through the platform outbox.
+x-kodex-contract-status: stable-v1
+channels:
+  agentEvents:
+    address: agent.events
+    messages:
+      agentEvent:
+        $ref: '#/components/messages/AgentEvent'
+operations:
+  publishAgentEvent:
+    action: send
+    channel:
+      $ref: '#/channels/agentEvents'
+    messages:
+      - $ref: '#/channels/agentEvents/messages/agentEvent'
+components:
+  messages:
+    AgentEvent:
+      name: AgentEvent
+      title: Agent domain event envelope
+      payload:
+        $ref: '#/components/schemas/AgentEventEnvelope'
+  schemas:
+    AgentEventEnvelope:
+      oneOf:
+        - $ref: '#/components/schemas/SessionCreatedEvent'
+        - $ref: '#/components/schemas/SessionUpdatedEvent'
+        - $ref: '#/components/schemas/SessionSnapshotRecordedEvent'
+        - $ref: '#/components/schemas/RunRequestedEvent'
+        - $ref: '#/components/schemas/RunStartedEvent'
+        - $ref: '#/components/schemas/RunWaitingEvent'
+        - $ref: '#/components/schemas/RunCompletedEvent'
+        - $ref: '#/components/schemas/RunFailedEvent'
+        - $ref: '#/components/schemas/AcceptanceRequestedEvent'
+        - $ref: '#/components/schemas/AcceptanceCompletedEvent'
+        - $ref: '#/components/schemas/AcceptanceFailedEvent'
+        - $ref: '#/components/schemas/FollowUpRequestedEvent'
+        - $ref: '#/components/schemas/FollowUpCreatedEvent'
+        - $ref: '#/components/schemas/HumanGateRequestedEvent'
+        - $ref: '#/components/schemas/HumanGateResolvedEvent'
+        - $ref: '#/components/schemas/FlowVersionActivatedEvent'
+        - $ref: '#/components/schemas/RoleVersionActivatedEvent'
+        - $ref: '#/components/schemas/PromptVersionActivatedEvent'
+    AgentEventEnvelopeBase:
+      type: object
+      additionalProperties: false
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_type:
+          $ref: '#/components/schemas/AgentEventType'
+        schema_version:
+          type: integer
+          minimum: 1
+        aggregate_type:
+          type: string
+        aggregate_id:
+          type: string
+          format: uuid
+        occurred_at:
+          type: string
+          format: date-time
+        payload:
+          $ref: '#/components/schemas/AgentEventPayload'
+      required: [event_id, event_type, schema_version, aggregate_type, aggregate_id, occurred_at, payload]
+
+    SessionCreatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventEnvelopeBase'
+        - $ref: '#/components/schemas/SessionCreatedEventKind'
+    SessionCreatedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: agent.session.created}, aggregate_type: {type: string, const: session}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+    SessionUpdatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventEnvelopeBase'
+        - $ref: '#/components/schemas/SessionUpdatedEventKind'
+    SessionUpdatedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: agent.session.updated}, aggregate_type: {type: string, const: session}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+    SessionSnapshotRecordedEvent:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventEnvelopeBase'
+        - $ref: '#/components/schemas/SessionSnapshotRecordedEventKind'
+    SessionSnapshotRecordedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: agent.session.snapshot_recorded}, aggregate_type: {type: string, const: session}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    RunRequestedEvent:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventEnvelopeBase'
+        - $ref: '#/components/schemas/RunRequestedEventKind'
+    RunRequestedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: agent.run.requested}, aggregate_type: {type: string, const: run}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+    RunStartedEvent:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventEnvelopeBase'
+        - $ref: '#/components/schemas/RunStartedEventKind'
+    RunStartedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: agent.run.started}, aggregate_type: {type: string, const: run}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+    RunWaitingEvent:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventEnvelopeBase'
+        - $ref: '#/components/schemas/RunWaitingEventKind'
+    RunWaitingEventKind:
+      type: object
+      properties: {event_type: {type: string, const: agent.run.waiting}, aggregate_type: {type: string, const: run}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+    RunCompletedEvent:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventEnvelopeBase'
+        - $ref: '#/components/schemas/RunCompletedEventKind'
+    RunCompletedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: agent.run.completed}, aggregate_type: {type: string, const: run}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+    RunFailedEvent:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventEnvelopeBase'
+        - $ref: '#/components/schemas/RunFailedEventKind'
+    RunFailedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: agent.run.failed}, aggregate_type: {type: string, const: run}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    AcceptanceRequestedEvent:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventEnvelopeBase'
+        - $ref: '#/components/schemas/AcceptanceRequestedEventKind'
+    AcceptanceRequestedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: agent.acceptance.requested}, aggregate_type: {type: string, const: acceptance}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+    AcceptanceCompletedEvent:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventEnvelopeBase'
+        - $ref: '#/components/schemas/AcceptanceCompletedEventKind'
+    AcceptanceCompletedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: agent.acceptance.completed}, aggregate_type: {type: string, const: acceptance}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+    AcceptanceFailedEvent:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventEnvelopeBase'
+        - $ref: '#/components/schemas/AcceptanceFailedEventKind'
+    AcceptanceFailedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: agent.acceptance.failed}, aggregate_type: {type: string, const: acceptance}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    FollowUpRequestedEvent:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventEnvelopeBase'
+        - $ref: '#/components/schemas/FollowUpRequestedEventKind'
+    FollowUpRequestedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: agent.follow_up.requested}, aggregate_type: {type: string, const: follow_up}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+    FollowUpCreatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventEnvelopeBase'
+        - $ref: '#/components/schemas/FollowUpCreatedEventKind'
+    FollowUpCreatedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: agent.follow_up.created}, aggregate_type: {type: string, const: follow_up}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    HumanGateRequestedEvent:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventEnvelopeBase'
+        - $ref: '#/components/schemas/HumanGateRequestedEventKind'
+    HumanGateRequestedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: agent.human_gate.requested}, aggregate_type: {type: string, const: human_gate}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+    HumanGateResolvedEvent:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventEnvelopeBase'
+        - $ref: '#/components/schemas/HumanGateResolvedEventKind'
+    HumanGateResolvedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: agent.human_gate.resolved}, aggregate_type: {type: string, const: human_gate}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    FlowVersionActivatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventEnvelopeBase'
+        - $ref: '#/components/schemas/FlowVersionActivatedEventKind'
+    FlowVersionActivatedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: agent.flow.version_activated}, aggregate_type: {type: string, const: flow}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+    RoleVersionActivatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventEnvelopeBase'
+        - $ref: '#/components/schemas/RoleVersionActivatedEventKind'
+    RoleVersionActivatedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: agent.role.version_activated}, aggregate_type: {type: string, const: role}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+    PromptVersionActivatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/AgentEventEnvelopeBase'
+        - $ref: '#/components/schemas/PromptVersionActivatedEventKind'
+    PromptVersionActivatedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: agent.prompt.version_activated}, aggregate_type: {type: string, const: prompt}, payload: {$ref: '#/components/schemas/AgentEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    AgentEventType:
+      type: string
+      enum:
+        - agent.session.created
+        - agent.session.updated
+        - agent.session.snapshot_recorded
+        - agent.run.requested
+        - agent.run.started
+        - agent.run.waiting
+        - agent.run.completed
+        - agent.run.failed
+        - agent.acceptance.requested
+        - agent.acceptance.completed
+        - agent.acceptance.failed
+        - agent.follow_up.requested
+        - agent.follow_up.created
+        - agent.human_gate.requested
+        - agent.human_gate.resolved
+        - agent.flow.version_activated
+        - agent.role.version_activated
+        - agent.prompt.version_activated
+    AgentEventPayload:
+      type: object
+      additionalProperties: false
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        run_id:
+          type: string
+          format: uuid
+        flow_id:
+          type: string
+          format: uuid
+        flow_version_id:
+          type: string
+          format: uuid
+        stage_id:
+          type: string
+          format: uuid
+        role_profile_id:
+          type: string
+          format: uuid
+        role_profile_version:
+          type: integer
+        role_profile_digest:
+          type: string
+        prompt_template_version_id:
+          type: string
+          format: uuid
+        prompt_template_digest:
+          type: string
+        guidance_ref_count:
+          type: integer
+        acceptance_result_id:
+          type: string
+          format: uuid
+        follow_up_intent_id:
+          type: string
+          format: uuid
+        human_gate_request_id:
+          type: string
+          format: uuid
+        state_snapshot_id:
+          type: string
+          format: uuid
+        state_snapshot_digest:
+          type: string
+        provider_work_item_ref:
+          type: string
+        provider_pull_request_ref:
+          type: string
+        runtime_slot_ref:
+          type: string
+        runtime_job_ref:
+          type: string
+        interaction_ref:
+          type: string
+        status:
+          type: string
+        previous_status:
+          type: string
+        failure_code:
+          type: string
+        reason_code:
+          type: string
+        version:
+          type: integer
+        activated_version:
+          type: integer

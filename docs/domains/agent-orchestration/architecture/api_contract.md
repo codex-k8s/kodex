@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-12
 updated_at: 2026-05-13
-related_issues: [733]
+related_issues: [733, 739]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -20,19 +20,21 @@ approvals:
 
 ## TL;DR
 
-- Тип API: будущий внутренний gRPC `AgentManagerService`, доменные события `agent.*`, MCP-инструменты через `platform-mcp-server`.
+- Тип API: внутренний gRPC `AgentManagerService`, доменные события `agent.*`, MCP-инструменты через `platform-mcp-server`.
 - Аутентификация: gateway, MCP или сервисный токен; доменные команды дополнительно проверяются через `access-manager`.
-- Версионирование: транспортный `v1` будет создан отдельным контрактным срезом; этот документ фиксирует целевую карту операций без proto.
+- Версионирование: стабильное транспортное пространство имён `kodex.agents.v1`.
 - Основные операции: flow, role, prompt template, session, run, acceptance и follow-up.
 
 ## Спецификации
 
-- gRPC proto: будет создан как `proto/kodex/agents/v1/agent_manager.proto`.
-- AsyncAPI: будет создан как `specs/asyncapi/agent-manager.v1.yaml`.
+- gRPC proto: `proto/kodex/agents/v1/agent_manager.proto`.
+- Сгенерированный Go-контракт: `proto/gen/go/kodex/agents/v1/**`.
+- AsyncAPI: `specs/asyncapi/agent-manager.v1.yaml`.
+- Сгенерированные Go-контракты событий: `libs/go/platformevents/agent/events.gen.go`.
 - MCP-инструменты: публикуются через `platform-mcp-server` и маршрутизируются к `agent-manager`.
 - Внешний HTTP для пользовательской и операторской консоли: через профильный gateway, не напрямую из доменного сервиса.
 
-Этот документ является обзором целевого API. Когда появятся proto и AsyncAPI, машинные спецификации станут источником правды для транспорта, а документ должен обновляться в том же PR при расхождении.
+Этот документ является обзором целевого API. Машинные спецификации являются источником правды для транспорта, а документ должен обновляться в том же PR при расхождении.
 
 ## Операции
 
@@ -46,14 +48,22 @@ approvals:
 | `ListFlows` | gRPC query | `agent.flow.read` | нет | Список flow по scope/status. |
 | `CreateRoleProfile` | gRPC command | `agent.role.manage` | `command_id` | Создаёт роль агента. |
 | `UpdateRoleProfile` | gRPC command | `agent.role.manage` | `command_id` + expected version | Меняет профиль роли и доступные MCP-инструменты. |
-| `CreatePromptTemplateVersion` | gRPC command | `agent.prompt.manage` | `command_id` | Создаёт версию prompt для роли. |
+| `GetRoleProfile` | gRPC query | `agent.role.read` | нет | Читает профиль роли. |
+| `ListRoleProfiles` | gRPC query | `agent.role.read` | нет | Список ролей по scope/kind/status. |
+| `GetPromptTemplate` | gRPC query | `agent.prompt.read` | нет | Читает метаданные prompt template и активную версию без обхода роли. |
+| `ListPromptTemplates` | gRPC query | `agent.prompt.read` | нет | Список prompt template по роли и назначению. |
+| `CreatePromptTemplateVersion` | gRPC command | `agent.prompt.manage` | `command_id` | Создаёт версию prompt для роли по `source_ref`, объектной ссылке и digest без передачи свободного текста prompt в события. |
 | `ActivatePromptTemplateVersion` | gRPC command | `agent.prompt.manage` | `command_id` + expected version | Активирует prompt version для новых запусков. |
+| `GetPromptTemplateVersion` | gRPC query | `agent.prompt.read` | нет | Читает одну версию prompt. |
+| `ListPromptTemplateVersions` | gRPC query | `agent.prompt.read` | нет | Список версий prompt по роли, назначению и статусу. |
 | `StartAgentSession` | gRPC command | `agent.session.start` | `command_id` | Создаёт или продолжает сессию по пользовательскому запросу или provider target. |
 | `StartAgentRun` | gRPC command | `agent.run.start` | `command_id` | Создаёт `Run`, фиксирует `flow_version_id`, `stage_id`, `role_profile_id`, `role_profile_version`, `role_profile_digest`, `prompt_template_version_id`, `prompt_template_digest`, guidance refs и запрашивает runtime. |
 | `RecordRunState` | gRPC command | `agent.run.update` | `command_id` + expected version | Фиксирует переход `Run` после сигнала от runtime, MCP или агента. |
 | `RecordSessionStateSnapshot` | gRPC command | `agent.session.update` | `command_id` + expected version | Записывает метаданные Codex session JSON/JSONL в объектном хранилище и обновляет указатель на актуальный снимок сессии. |
 | `RequestAcceptance` | gRPC command | `agent.acceptance.run` | `command_id` | Запускает машину приёмки по session/run/stage. |
 | `RecordAcceptanceResult` | gRPC command | `agent.acceptance.update` | `command_id` + expected version | Фиксирует результат проверки. |
+| `GetAcceptanceResult` | gRPC query | `agent.acceptance.read` | нет | Читает один результат приёмки. |
+| `ListAcceptanceResults` | gRPC query | `agent.acceptance.read` | нет | Список результатов приёмки по session/run/stage/status. |
 | `CreateFollowUpIntent` | gRPC command | `agent.follow_up.create` | `command_id` | Формирует намерение следующей provider-native задачи. |
 | `RequestHumanGate` | gRPC command | `agent.human_gate.request` | `command_id` | Создаёт запрос решения через `interaction-hub`. |
 | `GetAgentSession` | gRPC query | `agent.session.read` | нет | Читает сессию. |
@@ -126,8 +136,8 @@ MCP-инструменты не должны принимать свободны
 | Область | Статус |
 |---|---|
 | Доменная документация | Подготовлена как стартовый срез. |
-| gRPC proto | Запланирован отдельным контрактным срезом. |
-| AsyncAPI `agent.*` | Запланирован отдельным контрактным срезом. |
+| gRPC proto | Подготовлен как контрактный срез `AGO-1`. |
+| AsyncAPI `agent.*` | Подготовлен как контрактный срез `AGO-1`. |
 | Go-реализация `agent-manager` | Не начата в этом срезе. |
 | Интеграция с `package-hub` | Зафиксирована как чтение guidance installations и manifest. |
 | Интеграция с runtime/provider/interaction | Зафиксирована как междоменная граница без реализации. |
@@ -143,4 +153,4 @@ MCP-инструменты не должны принимать свободны
 
 - request_id: `owner-2026-05-12-agent-manager-kickoff`
 - Решение: approved
-- Комментарий: API-обзор `agent-manager` согласован как стартовое целевое состояние; proto и AsyncAPI создаются отдельным срезом.
+- Комментарий: API-обзор `agent-manager` согласован как стартовое целевое состояние; proto и AsyncAPI зафиксированы контрактным срезом.

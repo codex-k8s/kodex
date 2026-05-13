@@ -55,3 +55,15 @@ func TestFleetManagerActionsAreSystemActions(t *testing.T) {
 		t.Fatalf("fleet cluster resource = %q, want %q", action.ResourceType, ResourceFleetCluster)
 	}
 }
+
+func TestAgentManagerActionsAreSystemActions(t *testing.T) {
+	t.Parallel()
+
+	action, ok := SystemActionByKey(ActionAgentAcceptanceRun)
+	if !ok {
+		t.Fatalf("SystemActionByKey(%q) ok = false, want true", ActionAgentAcceptanceRun)
+	}
+	if action.ResourceType != ResourceAgentAcceptance {
+		t.Fatalf("agent acceptance resource = %q, want %q", action.ResourceType, ResourceAgentAcceptance)
+	}
+}

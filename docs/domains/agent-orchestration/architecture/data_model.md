@@ -124,21 +124,23 @@ approvals:
 
 ### PromptTemplate и PromptTemplateVersion
 
-`PromptTemplate` группирует версии prompt для роли. `PromptTemplateVersion` фиксирует конкретный текст, источник и назначение.
+`PromptTemplate` группирует версии prompt для роли и назначения. `PromptTemplateVersion` фиксирует источник, immutable-ссылку при необходимости и digest принятой версии.
 
 | Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
 | `id` | uuid | нет | Идентификатор шаблона или версии. |
+| `prompt_template_id` | uuid | да | Заполняется у версии prompt и указывает на родительский шаблон. |
 | `role_profile_id` | uuid | нет | Роль-владелец. |
 | `prompt_kind` | enum | нет | `work`, `revise`, `review`, `manager`, `custom`. |
-| `version` | bigint | нет | Версия prompt. |
-| `source_ref` | text | да | Репозиторий, пакет или фикстура. |
-| `template_body` | text | нет | Текст шаблона или нормализованный вход рендера. |
-| `template_digest` | text | нет | Digest текста. |
-| `status` | enum | нет | `draft`, `active`, `superseded`, `rejected`. |
-| `created_at`, `activated_at` | timestamptz | да | Временные метки версии. |
+| `active_version_id` | uuid | да | Заполняется у шаблона и указывает на активную версию. |
+| `version` | bigint | нет | Версия шаблона для оптимистичной конкуренции или номер версии prompt. |
+| `source_ref` | text | да | Репозиторий, пакет или фикстура версии. |
+| `template_object_ref` | object ref | да | Ссылка на immutable-копию prompt в объектном хранилище, если версия импортирована не только из репозитория. |
+| `template_digest` | text | да | Digest текста версии. |
+| `status` | enum | да | Статус версии: `draft`, `active`, `superseded`, `rejected`. |
+| `created_at`, `updated_at`, `activated_at` | timestamptz | да | Временные метки шаблона и версии. |
 
-Если prompt поставляется из репозитория или пакета, БД хранит принятую runtime-версию и источник. Изменение через self-improve должно проходить через provider-native PR к исходному репозиторию, а не через тихое изменение активной версии.
+Если prompt поставляется из репозитория или пакета, БД хранит принятую runtime-версию, источник, безопасную ссылку на immutable-копию при необходимости и digest. Текст prompt не публикуется в событиях и не должен передаваться через общие транспортные модели как свободный приватный payload. Изменение через self-improve должно проходить через provider-native PR к исходному репозиторию, а не через тихое изменение активной версии.
 
 ### StageRoleBinding
 

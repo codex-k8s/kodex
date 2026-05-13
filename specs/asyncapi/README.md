@@ -9,3 +9,5 @@
 | `package-hub.v1.yaml` | `package-hub` | Стабильный контракт `v1` доменных событий `package.*`, публикуемых через конверт outbox. |
 | `provider-hub.v1.yaml` | `provider-hub` | Стабильный контракт `v1` доменных событий `provider.*`, публикуемых через конверт outbox. |
 | `runtime-manager.v1.yaml` | `runtime-manager` | Стабильный контракт `v1` доменных событий `runtime.*`, публикуемых через конверт outbox. |
+| `fleet-manager.v1.yaml` | `fleet-manager` | Стабильный контракт `v1` доменных событий `fleet.*`, публикуемых через конверт outbox. |
+| `agent-manager.v1.yaml` | `agent-manager` | Стабильный контракт `v1` доменных событий `agent.*`, публикуемых через конверт outbox. |
