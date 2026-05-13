@@ -1179,6 +1179,126 @@ func TestCreateIssueReplaysStoredCommandWithoutExternalWrite(t *testing.T) {
 	}
 }
 
+func TestUpdateIssueReplaysStoredCommandBeforeExpectedVersionCheck(t *testing.T) {
+	t.Parallel()
+
+	externalAccountID := uuid.New()
+	commandID := uuid.New()
+	expectedVersion := int64(3)
+	storedOperation := entity.ProviderOperation{
+		Base:              entity.Base{ID: uuid.New(), Version: 1},
+		CommandID:         commandID.String(),
+		ExternalAccountID: externalAccountID,
+		ProviderSlug:      enum.ProviderSlugGitHub,
+		OperationType:     enum.ProviderOperationUpdateIssue,
+		TargetRef:         "github:repo:codex-k8s/kodex:issue:42",
+		Status:            enum.ProviderOperationStatusSucceeded,
+		ResultRef:         "https://github.com/codex-k8s/kodex/issues/42",
+		ProviderVersion:   `"new-etag"`,
+		OperationPolicyContext: value.ProviderOperationPolicyContext{
+			OperationType: string(enum.ProviderOperationUpdateIssue),
+			TargetRef:     "github:repo:codex-k8s/kodex:issue:42",
+			RiskLevel:     value.ProviderOperationRiskLevelLow,
+			ChangedFields: []string{"title"},
+		},
+	}
+	repository := &fakeRepository{
+		recordedProviderOperation: storedOperation,
+		workItemProjection: entity.ProviderWorkItemProjection{
+			Base: entity.Base{ID: uuid.New(), Version: 4},
+			Kind: enum.WorkItemKindIssue,
+		},
+	}
+	executor := &fakeWriteExecutor{}
+	service := NewWithDependencies(Dependencies{
+		Repository:             repository,
+		Clock:                  fixedClock{now: time.Date(2026, 5, 12, 10, 8, 0, 0, time.UTC)},
+		IDGenerator:            &sequenceIDs{},
+		AccountUsageResolver:   fakeAccountUsageResolver{},
+		SecretResolver:         &fakeSecretResolver{secret: secretresolver.NewSecretValue([]byte("write-token"))},
+		ProviderWriteExecutors: []providerclient.WriteExecutor{executor},
+	})
+
+	title := "Повтор команды"
+	result, err := service.UpdateIssue(context.Background(), UpdateIssueInput{
+		Target: ProviderTarget{
+			ProviderSlug:       enum.ProviderSlugGitHub,
+			RepositoryFullName: "codex-k8s/kodex",
+			WorkItemKind:       enum.WorkItemKindIssue,
+			Number:             42,
+		},
+		Title:             &title,
+		ExternalAccountID: externalAccountID,
+		Meta: value.CommandMeta{
+			CommandID:       commandID,
+			ExpectedVersion: &expectedVersion,
+			OperationPolicyContext: value.ProviderOperationPolicyContext{
+				RiskLevel:     value.ProviderOperationRiskLevelLow,
+				ChangedFields: []string{"title"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("UpdateIssue(): %v", err)
+	}
+	if executor.calls != 0 {
+		t.Fatalf("executor calls = %d, want replay before expected version check", executor.calls)
+	}
+	if result.ProviderOperation == nil || result.ProviderOperation.ID != storedOperation.ID {
+		t.Fatalf("result operation = %+v, want stored operation", result.ProviderOperation)
+	}
+}
+
+func TestCreateIssueRecordsInProgressBeforeExternalWrite(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 12, 10, 9, 0, 0, time.UTC)
+	operationID := uuid.New()
+	outboxID := uuid.New()
+	externalAccountID := uuid.New()
+	commandID := uuid.New()
+	repository := &fakeRepository{}
+	executor := &fakeWriteExecutor{
+		beforeExecute: func() {
+			if repository.recordedProviderOperation.ID != operationID ||
+				repository.recordedProviderOperation.Status != enum.ProviderOperationStatusInProgress {
+				t.Fatalf("operation before execute = %+v, want durable in-progress operation", repository.recordedProviderOperation)
+			}
+		},
+		result: providerclient.WriteResult{ResultRef: "https://github.com/codex-k8s/kodex/issues/77"},
+	}
+	service := NewWithDependencies(Dependencies{
+		Repository:             repository,
+		Clock:                  fixedClock{now: now},
+		IDGenerator:            &sequenceIDs{ids: []uuid.UUID{operationID, outboxID}},
+		AccountUsageResolver:   fakeAccountUsageResolver{},
+		SecretResolver:         &fakeSecretResolver{secret: secretresolver.NewSecretValue([]byte("write-token"))},
+		ProviderWriteExecutors: []providerclient.WriteExecutor{executor},
+	})
+
+	_, err := service.CreateIssue(context.Background(), CreateIssueInput{
+		ProjectID:         uuid.New(),
+		RepositoryID:      uuid.New(),
+		ProviderSlug:      enum.ProviderSlugGitHub,
+		RepositoryTarget:  ProviderTarget{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
+		Title:             "Новая задача",
+		ExternalAccountID: externalAccountID,
+		Meta: value.CommandMeta{
+			CommandID: commandID,
+			OperationPolicyContext: value.ProviderOperationPolicyContext{
+				RiskLevel:     value.ProviderOperationRiskLevelLow,
+				ChangedFields: []string{"title", "body", "labels", "assignee_provider_logins"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateIssue(): %v", err)
+	}
+	if repository.recordedProviderOperation.Status != enum.ProviderOperationStatusSucceeded {
+		t.Fatalf("operation after execute = %+v, want succeeded operation", repository.recordedProviderOperation)
+	}
+}
+
 func TestUpdateIssueRequiresApprovalGateReferenceWhenPolicyDemandsIt(t *testing.T) {
 	t.Parallel()
 
@@ -1514,8 +1634,12 @@ func (r *fakeRepository) ListLimitSnapshots(context.Context, query.LimitSnapshot
 	return nil, query.PageResult{}, r.err
 }
 
-func (r *fakeRepository) RecordProviderOperation(context.Context, entity.ProviderOperation) (entity.ProviderOperation, error) {
-	return entity.ProviderOperation{}, r.err
+func (r *fakeRepository) RecordProviderOperation(_ context.Context, operation entity.ProviderOperation) (entity.ProviderOperation, error) {
+	if r.recordedProviderOperation.ID != uuid.Nil {
+		return r.recordedProviderOperation, r.err
+	}
+	r.recordedProviderOperation = operation
+	return operation, r.err
 }
 
 func (r *fakeRepository) ApplyProviderOperation(_ context.Context, completion providerrepo.ProviderOperationCompletion) (entity.ProviderOperation, error) {
@@ -1661,6 +1785,7 @@ type fakeWriteExecutor struct {
 	calls            int
 	request          providerclient.WriteRequest
 	observedTokenLen int
+	beforeExecute    func()
 }
 
 func (e *fakeWriteExecutor) ProviderSlug() enum.ProviderSlug {
@@ -1671,6 +1796,9 @@ func (e *fakeWriteExecutor) Execute(_ context.Context, request providerclient.Wr
 	e.calls++
 	e.request = request
 	e.observedTokenLen = request.Credential.Token.Len()
+	if e.beforeExecute != nil {
+		e.beforeExecute()
+	}
 	if e.err != nil {
 		return providerclient.WriteResult{}, e.err
 	}

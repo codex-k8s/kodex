@@ -609,6 +609,43 @@ func TestRepositoryIntegrationRuntimeStateLimitsAndOperations(t *testing.T) {
 	if len(operations) != 1 || operations[0].ID != operation.ID {
 		t.Fatalf("operations = %+v, want operation %s", operations, operation.ID)
 	}
+	startedOperation := operation
+	startedOperation.ID = uuid.New()
+	startedOperation.CommandID = uuid.NewString()
+	startedOperation.Status = enum.ProviderOperationStatusInProgress
+	startedOperation.ResultRef = ""
+	startedOperation.ProviderVersion = ""
+	startedOperation.FinishedAt = nil
+	startedOperation.OperationPolicyContext = value.ProviderOperationPolicyContext{
+		OperationType: string(enum.ProviderOperationCreateIssue),
+		TargetRef:     startedOperation.TargetRef,
+		RiskLevel:     value.ProviderOperationRiskLevelLow,
+		ChangedFields: []string{"title"},
+		RiskTags:      []string{},
+	}
+	if _, err := repository.RecordProviderOperation(ctx, startedOperation); err != nil {
+		t.Fatalf("record started provider operation: %v", err)
+	}
+	completedOperation := startedOperation
+	completedOperation.Status = enum.ProviderOperationStatusSucceeded
+	completedOperation.ResultRef = "https://github.com/codex-k8s/kodex/issues/2"
+	completedOperation.ProviderVersion = `"etag-2"`
+	completedOperation.FinishedAt = &now
+	completedOperation.UpdatedAt = now.Add(time.Minute)
+	completed, err := repository.ApplyProviderOperation(ctx, providerrepo.ProviderOperationCompletion{Operation: completedOperation})
+	if err != nil {
+		t.Fatalf("complete provider operation: %v", err)
+	}
+	if completed.Status != enum.ProviderOperationStatusSucceeded || completed.ID != startedOperation.ID || completed.Version != startedOperation.Version+1 {
+		t.Fatalf("completed operation = %+v, want updated started operation", completed)
+	}
+	loadedCompleted, err := repository.GetProviderOperationByCommand(ctx, startedOperation.OperationType, startedOperation.CommandID)
+	if err != nil {
+		t.Fatalf("get completed operation by command: %v", err)
+	}
+	if loadedCompleted.Status != enum.ProviderOperationStatusSucceeded || loadedCompleted.OperationPolicyContext.RiskLevel != value.ProviderOperationRiskLevelLow {
+		t.Fatalf("loaded operation = %+v, want completed policy round-trip", loadedCompleted)
+	}
 
 	webhook := entity.WebhookEvent{
 		ID:                   uuid.New(),

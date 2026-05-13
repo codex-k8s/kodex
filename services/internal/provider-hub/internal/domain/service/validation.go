@@ -214,7 +214,8 @@ func validOperationTypes(types []enum.ProviderOperationType) bool {
 func validOperationStatuses(statuses []enum.ProviderOperationStatus) bool {
 	for _, status := range statuses {
 		switch status {
-		case enum.ProviderOperationStatusSucceeded,
+		case enum.ProviderOperationStatusInProgress,
+			enum.ProviderOperationStatusSucceeded,
 			enum.ProviderOperationStatusFailed,
 			enum.ProviderOperationStatusRetryableFailed,
 			enum.ProviderOperationStatusDenied:

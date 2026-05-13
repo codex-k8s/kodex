@@ -117,9 +117,11 @@ approvals:
 - безопасный `ProviderOperationResponse` без секретов, token refs и сырых provider payload;
 - GitHub write-адаптер поверх общего command pipeline: создание задач, обновление задач, создание и обновление комментариев, создание `PR`, review-сигналы и обновление provider-native связей;
 - перед внешним write-вызовом `provider-hub` подтверждает выбранный внешний аккаунт через `access-manager`, получает `SecretValue` через общий resolver только в памяти процесса и очищает его после вызова;
-- повтор уже успешно записанной команды по `command_id` возвращает сохранённый `ProviderOperation` и не выполняет внешний GitHub write повторно;
+- перед внешним GitHub write-вызовом `provider-hub` резервирует `ProviderOperation` в состоянии `in_progress`; повтор такой команды получает конфликт и не создаёт второй внешний side effect;
+- повтор уже успешно записанной команды по `command_id` возвращает сохранённый `ProviderOperation` до проверки локальной версии и не выполняет внешний GitHub write повторно;
 - успешные GitHub write-вызовы сразу обновляют локальные проекции рабочих артефактов, комментариев и связей, чтобы UI/MCP не ждали полной сверки;
 - ошибки GitHub классифицируются безопасно: auth/permission, not found, conflict/validation, rate limit/abuse, transient; в журнал операции и события попадает только короткий код без provider payload и без секрета.
+- чтобы не оставлять частичный side effect, GitHub `CreatePullRequest` в текущем срезе не принимает `labels` и `linked_issue_ref`; эти изменения должны идти отдельными командами после создания `PR`.
 
 Миграция `external_account_id` для очереди сверки явно очищает строки `provider_hub_sync_cursors` и `provider_hub_reconciliation_requests`, созданные предыдущим срезом без знания внешнего аккаунта. Эти строки являются эфемерным состоянием планировщика и пересоздаются повторной постановкой сверки; так тестовые кластеры с уже развёрнутым PRV-6.1 не упираются в `ADD COLUMN ... NOT NULL`.
 

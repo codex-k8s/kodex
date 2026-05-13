@@ -158,6 +158,7 @@ const (
 type ProviderOperationStatus string
 
 const (
+	ProviderOperationStatusInProgress      ProviderOperationStatus = "in_progress"
 	ProviderOperationStatusSucceeded       ProviderOperationStatus = "succeeded"
 	ProviderOperationStatusFailed          ProviderOperationStatus = "failed"
 	ProviderOperationStatusRetryableFailed ProviderOperationStatus = "retryable_failed"

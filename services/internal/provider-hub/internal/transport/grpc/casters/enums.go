@@ -99,6 +99,7 @@ var operationTypes = map[providersv1.ProviderOperationType]enum.ProviderOperatio
 }
 
 var operationStatuses = map[providersv1.ProviderOperationStatus]enum.ProviderOperationStatus{
+	providersv1.ProviderOperationStatus_PROVIDER_OPERATION_STATUS_IN_PROGRESS:      enum.ProviderOperationStatusInProgress,
 	providersv1.ProviderOperationStatus_PROVIDER_OPERATION_STATUS_SUCCEEDED:        enum.ProviderOperationStatusSucceeded,
 	providersv1.ProviderOperationStatus_PROVIDER_OPERATION_STATUS_FAILED:           enum.ProviderOperationStatusFailed,
 	providersv1.ProviderOperationStatus_PROVIDER_OPERATION_STATUS_RETRYABLE_FAILED: enum.ProviderOperationStatusRetryableFailed,

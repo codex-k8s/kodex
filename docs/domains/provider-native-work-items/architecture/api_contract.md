@@ -94,7 +94,7 @@ approvals:
 2. Проверить выбранный `external_account_id` через `access-manager` с нужным действием доступа.
 3. Проверить наличие `operation_policy_context`; если `approval_required=true`, проверить наличие `approval_gate_ref`.
 4. Если команда требует внешнего write-вызова, взять значение секрета через `libs/go/secretresolver` только на время вызова адаптера.
-5. Выполнить общий command pipeline: записать `ProviderOperation`, проверить optimistic concurrency, зафиксировать `operation_policy_context` и `approval_gate_ref`, выполнить provider write через подключённый адаптер и сразу обновить локальные проекции или связь.
+5. Выполнить общий command pipeline: до внешнего write-вызова зарезервировать `ProviderOperation` в состоянии `in_progress`, проверить optimistic concurrency только для новой команды, зафиксировать `operation_policy_context` и `approval_gate_ref`, выполнить provider write через подключённый адаптер и сразу завершить операцию вместе с обновлением локальных проекций или связи.
 6. Вернуть `ProviderOperationResponse` с безопасным результатом без токенов, сырых provider payload и внутренних ссылок на секреты.
 
 `provider-hub` не становится владельцем approval-сервиса. Он принимает ссылку на уже принятое решение как `approval_gate_ref`, фиксирует её в журнале операции и отклоняет команду, если политика вызывающего контура указала обязательность gate, но ссылка не передана.
@@ -138,7 +138,8 @@ approvals:
 
 Контекст политики должен перечислять `changed_fields` в терминах типизированного запроса. `provider-hub` не принимает свободный JSON patch для операций записи: inline comments review-сигнала передаются через `ReviewInlineComment`, а не через строковый JSON.
 Для `UpdateRelationship` вызывающий контур берёт `meta.expected_version` из `ProviderRelationship.version`, который возвращается в `ListRelationships` и в `ProviderOperationResponse.relationship`.
-Для GitHub `expected_provider_version` передаётся как `If-Match`, если вызывающий контур получил provider version из предыдущего ответа или проекции. Если команда уже успешно записана по `command_id`, повтор возвращает сохранённый `ProviderOperation` и не выполняет внешний write повторно.
+Для GitHub `expected_provider_version` передаётся как `If-Match`, если вызывающий контур получил provider version из предыдущего ответа или проекции. Если команда уже успешно записана по `command_id`, повтор возвращает сохранённый `ProviderOperation` до проверки локальной версии и не выполняет внешний write повторно. Если команда уже зарезервирована как `in_progress`, повтор получает конфликт и не выполняет второй внешний write.
+В текущем GitHub-адаптере `CreatePullRequest` отклоняет непустые `labels` и `linked_issue_ref`, потому что GitHub требует для этих полей дополнительные write-вызовы или отдельную модель связи. До появления recovery/compensation контура такие изменения должны выполняться отдельными командами после создания `PR`.
 
 ### Операционное состояние аккаунтов и лимиты
 

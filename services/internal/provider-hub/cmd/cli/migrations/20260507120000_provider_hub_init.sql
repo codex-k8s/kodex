@@ -283,7 +283,7 @@ CREATE TABLE provider_hub_operations (
     CONSTRAINT provider_hub_operations_operation_type_chk
         CHECK (operation_type IN ('create_issue', 'update_issue', 'create_comment', 'update_comment', 'create_pull_request', 'create_review_signal', 'update_relationship')),
     CONSTRAINT provider_hub_operations_target_ref_chk CHECK (target_ref <> ''),
-    CONSTRAINT provider_hub_operations_status_chk CHECK (status IN ('succeeded', 'failed', 'retryable_failed', 'denied')),
+    CONSTRAINT provider_hub_operations_status_chk CHECK (status IN ('in_progress', 'succeeded', 'failed', 'retryable_failed', 'denied')),
     CONSTRAINT provider_hub_operations_finished_chk
         CHECK (finished_at IS NULL OR finished_at >= started_at),
     CONSTRAINT provider_hub_operations_version_chk CHECK (version > 0)

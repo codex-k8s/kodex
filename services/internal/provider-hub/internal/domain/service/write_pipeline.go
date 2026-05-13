@@ -2,9 +2,9 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -464,26 +464,7 @@ func (s *Service) buildWritePlan(plan providerWritePlan, changedFields []string)
 }
 
 func (s *Service) executeProviderWrite(ctx context.Context, plan providerWritePlan) (ProviderOperationResult, error) {
-	if plan.validateExpectedVersion != nil {
-		if err := plan.validateExpectedVersion(ctx); err != nil {
-			return ProviderOperationResult{}, err
-		}
-	}
 	now := s.clock.Now().UTC()
-	usage, failure, err := s.resolveWriteAccount(ctx, plan)
-	if err != nil {
-		return ProviderOperationResult{}, err
-	}
-	if failure != nil {
-		return s.finalizeProviderWrite(ctx, plan, providerclient.WriteResult{}, now, *failure)
-	}
-	if plan.meta.OperationPolicyContext.ApprovalRequired && plan.meta.ApprovalGateRef.ApprovalID == "" {
-		return s.finalizeProviderWrite(ctx, plan, providerclient.WriteResult{}, now, providerWriteFailure{
-			status:       enum.ProviderOperationStatusDenied,
-			errorCode:    writeFailureApprovalRequired,
-			errorMessage: "approval gate reference is required",
-		})
-	}
 	replayed, replayedResult, err := s.replayProviderWrite(ctx, plan)
 	if err != nil {
 		return ProviderOperationResult{}, err
@@ -491,9 +472,32 @@ func (s *Service) executeProviderWrite(ctx context.Context, plan providerWritePl
 	if replayed {
 		return replayedResult, nil
 	}
+	if plan.validateExpectedVersion != nil {
+		if err := plan.validateExpectedVersion(ctx); err != nil {
+			return ProviderOperationResult{}, err
+		}
+	}
+	startedOperation, err := s.startProviderWrite(ctx, plan, now)
+	if err != nil {
+		return ProviderOperationResult{}, err
+	}
+	usage, failure, err := s.resolveWriteAccount(ctx, plan)
+	if err != nil {
+		return ProviderOperationResult{}, err
+	}
+	if failure != nil {
+		return s.finalizeProviderWrite(ctx, plan, startedOperation, providerclient.WriteResult{}, *failure)
+	}
+	if plan.meta.OperationPolicyContext.ApprovalRequired && plan.meta.ApprovalGateRef.ApprovalID == "" {
+		return s.finalizeProviderWrite(ctx, plan, startedOperation, providerclient.WriteResult{}, providerWriteFailure{
+			status:       enum.ProviderOperationStatusDenied,
+			errorCode:    writeFailureApprovalRequired,
+			errorMessage: "approval gate reference is required",
+		})
+	}
 	executor := s.providerWriteExecutors[plan.providerSlug]
 	if executor == nil {
-		return s.finalizeProviderWrite(ctx, plan, providerclient.WriteResult{}, now, providerWriteFailure{
+		return s.finalizeProviderWrite(ctx, plan, startedOperation, providerclient.WriteResult{}, providerWriteFailure{
 			status:       enum.ProviderOperationStatusFailed,
 			errorCode:    writeFailureExecutorUnavailable,
 			errorMessage: "provider write executor is unavailable",
@@ -509,17 +513,59 @@ func (s *Service) executeProviderWrite(ctx context.Context, plan providerWritePl
 			return ProviderOperationResult{}, resolveErr
 		}
 		if failure != nil {
-			return s.finalizeProviderWrite(ctx, plan, providerclient.WriteResult{}, now, *failure)
+			return s.finalizeProviderWrite(ctx, plan, startedOperation, providerclient.WriteResult{}, *failure)
 		}
 		defer secret.Clear()
 		credential.Token = secret
 	}
 	result, execErr := executor.Execute(ctx, writeRequestWithCredential(plan.executorRequest, credential))
 	if execErr != nil {
-		return s.finalizeProviderWrite(ctx, plan, providerclient.WriteResult{}, now, mapProviderWriteError(execErr))
+		return s.finalizeProviderWrite(ctx, plan, startedOperation, providerclient.WriteResult{}, mapProviderWriteError(execErr))
 	}
 	_ = usage
-	return s.finalizeProviderWrite(ctx, plan, result, now, providerWriteFailure{status: enum.ProviderOperationStatusSucceeded})
+	return s.finalizeProviderWrite(ctx, plan, startedOperation, result, providerWriteFailure{status: enum.ProviderOperationStatusSucceeded})
+}
+
+func (s *Service) startProviderWrite(ctx context.Context, plan providerWritePlan, now time.Time) (entity.ProviderOperation, error) {
+	operation := entity.ProviderOperation{
+		Base: entity.Base{
+			ID:        s.ids.New(),
+			Version:   1,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		CommandID:              providerCommandKey(plan.meta),
+		ActorID:                actorUUIDPtr(plan.meta.Actor),
+		ExternalAccountID:      plan.externalAccountID,
+		ProviderSlug:           plan.providerSlug,
+		OperationType:          plan.operationType,
+		TargetRef:              plan.targetRef,
+		Status:                 enum.ProviderOperationStatusInProgress,
+		OperationPolicyContext: plan.meta.OperationPolicyContext,
+		ApprovalGateRef:        plan.meta.ApprovalGateRef,
+		StartedAt:              now,
+	}
+	stored, err := s.repository.RecordProviderOperation(ctx, operation)
+	if err == nil {
+		if stored.Status == enum.ProviderOperationStatusInProgress {
+			return stored, nil
+		}
+		if sameProviderWriteReplay(stored, plan) {
+			return entity.ProviderOperation{}, errs.ErrConflict
+		}
+		return entity.ProviderOperation{}, errs.ErrConflict
+	}
+	if !errors.Is(err, errs.ErrConflict) {
+		return entity.ProviderOperation{}, err
+	}
+	existing, replayErr := s.repository.GetProviderOperationByCommand(ctx, plan.operationType, providerCommandKey(plan.meta))
+	if replayErr != nil {
+		return entity.ProviderOperation{}, err
+	}
+	if !sameProviderWriteReplay(existing, plan) {
+		return entity.ProviderOperation{}, errs.ErrConflict
+	}
+	return entity.ProviderOperation{}, errs.ErrConflict
 }
 
 func (s *Service) replayProviderWrite(ctx context.Context, plan providerWritePlan) (bool, ProviderOperationResult, error) {
@@ -535,6 +581,9 @@ func (s *Service) replayProviderWrite(ctx context.Context, plan providerWritePla
 		return false, ProviderOperationResult{}, err
 	}
 	if !sameProviderWriteReplay(stored, plan) {
+		return false, ProviderOperationResult{}, errs.ErrConflict
+	}
+	if stored.Status == enum.ProviderOperationStatusInProgress {
 		return false, ProviderOperationResult{}, errs.ErrConflict
 	}
 	return true, ProviderOperationResult{
@@ -555,8 +604,14 @@ func sameProviderWriteReplay(stored entity.ProviderOperation, plan providerWrite
 		stored.ProviderSlug == plan.providerSlug &&
 		stored.OperationType == plan.operationType &&
 		stored.TargetRef == plan.targetRef &&
-		reflect.DeepEqual(stored.OperationPolicyContext, plan.meta.OperationPolicyContext) &&
-		reflect.DeepEqual(stored.ApprovalGateRef, plan.meta.ApprovalGateRef)
+		sameCanonicalJSON(stored.OperationPolicyContext, plan.meta.OperationPolicyContext) &&
+		sameCanonicalJSON(stored.ApprovalGateRef, plan.meta.ApprovalGateRef)
+}
+
+func sameCanonicalJSON(left any, right any) bool {
+	leftJSON, leftErr := json.Marshal(left)
+	rightJSON, rightErr := json.Marshal(right)
+	return leftErr == nil && rightErr == nil && string(leftJSON) == string(rightJSON)
 }
 
 func sameOptionalUUID(left *uuid.UUID, right *uuid.UUID) bool {
@@ -638,13 +693,13 @@ func (s *Service) resolveWriteAccount(ctx context.Context, plan providerWritePla
 	return ExternalAccountUsageResult{}, &failure, nil
 }
 
-func (s *Service) finalizeProviderWrite(ctx context.Context, plan providerWritePlan, executorResult providerclient.WriteResult, startedAt time.Time, failure providerWriteFailure) (ProviderOperationResult, error) {
+func (s *Service) finalizeProviderWrite(ctx context.Context, plan providerWritePlan, startedOperation entity.ProviderOperation, executorResult providerclient.WriteResult, failure providerWriteFailure) (ProviderOperationResult, error) {
 	finishedAt := s.clock.Now().UTC()
 	operation := entity.ProviderOperation{
 		Base: entity.Base{
-			ID:        s.ids.New(),
-			Version:   1,
-			CreatedAt: startedAt,
+			ID:        startedOperation.ID,
+			Version:   startedOperation.Version,
+			CreatedAt: startedOperation.CreatedAt,
 			UpdatedAt: finishedAt,
 		},
 		CommandID:              providerCommandKey(plan.meta),
@@ -660,7 +715,7 @@ func (s *Service) finalizeProviderWrite(ctx context.Context, plan providerWriteP
 		OperationPolicyContext: plan.meta.OperationPolicyContext,
 		ApprovalGateRef:        plan.meta.ApprovalGateRef,
 		ProviderVersion:        strings.TrimSpace(executorResult.ProviderVersion),
-		StartedAt:              startedAt,
+		StartedAt:              startedOperation.StartedAt,
 		FinishedAt:             &finishedAt,
 	}
 	outboxEvent, err := s.providerOperationOutbox(operation)

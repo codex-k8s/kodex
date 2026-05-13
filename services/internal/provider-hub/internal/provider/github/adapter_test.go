@@ -354,19 +354,17 @@ func TestExecuteUpdateIssueSendsIfMatch(t *testing.T) {
 	}
 }
 
-func TestExecuteCreatePullRequestReusesExistingHeadBaseAfterValidationError(t *testing.T) {
+func TestExecuteCreatePullRequestDoesNotReuseExistingHeadBaseAfterValidationError(t *testing.T) {
 	t.Parallel()
 
+	listCalled := false
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/repos/codex-k8s/kodex/pulls":
 			http.Error(w, "pull request already exists", http.StatusUnprocessableEntity)
 		case r.Method == http.MethodGet && r.URL.Path == "/repos/codex-k8s/kodex/pulls":
-			if r.URL.Query().Get("head") != "codex-k8s:feature/provider-write" || r.URL.Query().Get("base") != "main" {
-				t.Fatalf("query = %s, want head/base lookup", r.URL.RawQuery)
-			}
-			w.Header().Set("ETag", `"existing-pr-etag"`)
-			_, _ = w.Write([]byte(`[{"id":700,"number":77,"html_url":"https://github.com/codex-k8s/kodex/pull/77","title":"Provider write","state":"open","body":"Описание","head":{"ref":"feature/provider-write"},"base":{"ref":"main"},"updated_at":"2026-05-13T10:02:00Z"}]`))
+			listCalled = true
+			t.Fatalf("unexpected duplicate PR lookup for validation error")
 		default:
 			t.Fatalf("unexpected request = %s %s", r.Method, r.URL.String())
 		}
@@ -375,7 +373,7 @@ func TestExecuteCreatePullRequestReusesExistingHeadBaseAfterValidationError(t *t
 
 	token := secretresolver.NewSecretValue([]byte("token-value"))
 	defer token.Clear()
-	result, err := New(Config{BaseURL: server.URL, HTTPClient: server.Client()}).Execute(context.Background(), providerclient.WriteRequest{
+	_, err := New(Config{BaseURL: server.URL, HTTPClient: server.Client()}).Execute(context.Background(), providerclient.WriteRequest{
 		Credential:   providerclient.AccountCredential{ExternalAccountID: uuid.New(), ProviderSlug: enum.ProviderSlugGitHub, Token: token},
 		ProviderSlug: enum.ProviderSlugGitHub,
 		CreatePullRequest: &providerclient.CreatePullRequestCommand{
@@ -386,11 +384,107 @@ func TestExecuteCreatePullRequestReusesExistingHeadBaseAfterValidationError(t *t
 			BaseBranch:       "main",
 		},
 	})
+	if err == nil {
+		t.Fatal("Execute() err = nil, want validation failure")
+	}
+	if listCalled {
+		t.Fatal("duplicate PR lookup was called")
+	}
+}
+
+func TestExecuteCreatePullRequestRejectsUnsupportedLinkedIssueAndLabelsBeforeGitHubWrite(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected GitHub write = %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	token := secretresolver.NewSecretValue([]byte("token-value"))
+	defer token.Clear()
+	_, err := New(Config{BaseURL: server.URL, HTTPClient: server.Client()}).Execute(context.Background(), providerclient.WriteRequest{
+		Credential:   providerclient.AccountCredential{ExternalAccountID: uuid.New(), ProviderSlug: enum.ProviderSlugGitHub, Token: token},
+		ProviderSlug: enum.ProviderSlugGitHub,
+		CreatePullRequest: &providerclient.CreatePullRequestCommand{
+			RepositoryTarget: providerclient.Target{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
+			Title:            "Provider write",
+			Body:             "Описание",
+			HeadBranch:       "feature/provider-write",
+			BaseBranch:       "main",
+			LinkedIssueRef:   "https://github.com/codex-k8s/kodex/issues/737",
+			Labels:           []string{"type:dev"},
+		},
+	})
+	var providerErr *providerclient.Error
+	if !errors.As(err, &providerErr) || providerErr.Kind != providerclient.ErrorKindUnsupported {
+		t.Fatalf("Execute() err = %v, want unsupported provider error", err)
+	}
+}
+
+func TestExecuteCreateReviewSignalAllowsApprovalWithoutBody(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/repos/codex-k8s/kodex/pulls/42":
+			_, _ = w.Write([]byte(`{"id":4200,"number":42,"html_url":"https://github.com/codex-k8s/kodex/pull/42","title":"PR title","state":"open","body":"Описание","head":{"ref":"feature/provider-write"},"base":{"ref":"main"},"updated_at":"2026-05-13T10:00:00Z"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/repos/codex-k8s/kodex/issues/42":
+			_, _ = w.Write([]byte(`{"id":100,"number":42,"html_url":"https://github.com/codex-k8s/kodex/pull/42","title":"PR title","state":"open","body":"Описание","pull_request":{},"updated_at":"2026-05-13T10:00:00Z"}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/repos/codex-k8s/kodex/pulls/42/reviews":
+			var payload map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode request: %v", err)
+			}
+			if payload["event"] != githubReviewEventApprove {
+				t.Fatalf("payload = %+v, want approve event", payload)
+			}
+			if _, ok := payload["body"]; ok {
+				t.Fatalf("payload = %+v, body must be omitted for empty approval", payload)
+			}
+			w.Header().Set("ETag", `"review-etag"`)
+			_, _ = w.Write([]byte(`{"id":900,"html_url":"https://github.com/codex-k8s/kodex/pull/42#pullrequestreview-900","body":"","state":"APPROVED","updated_at":"2026-05-13T10:03:00Z"}`))
+		default:
+			t.Fatalf("unexpected request = %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	token := secretresolver.NewSecretValue([]byte("token-value"))
+	defer token.Clear()
+	result, err := New(Config{BaseURL: server.URL, HTTPClient: server.Client()}).Execute(context.Background(), providerclient.WriteRequest{
+		Credential:   providerclient.AccountCredential{ExternalAccountID: uuid.New(), ProviderSlug: enum.ProviderSlugGitHub, Token: token},
+		ProviderSlug: enum.ProviderSlugGitHub,
+		CreateReviewSignal: &providerclient.CreateReviewSignalCommand{
+			Target: providerclient.Target{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex", WorkItemKind: enum.WorkItemKindPullRequest, Number: 42},
+			Kind:   providerclient.ReviewSignalKindApproval,
+		},
+	})
 	if err != nil {
 		t.Fatalf("Execute(): %v", err)
 	}
-	if result.WorkItem == nil || result.WorkItem.ProviderWorkItemID != "github:codex-k8s/kodex:pull_request:77" {
-		t.Fatalf("work item = %+v, want existing pull request projection", result.WorkItem)
+	if result.Comment == nil || result.Comment.ProviderCommentID != "900" {
+		t.Fatalf("comment = %+v, want review projection", result.Comment)
+	}
+}
+
+func TestBodyWithWatermarkReplacesExistingBlock(t *testing.T) {
+	t.Parallel()
+
+	body := strings.Join([]string{
+		"Описание",
+		"",
+		"<!-- kodex:artifact v1",
+		"kind: old",
+		"-->",
+		"",
+		"Хвост",
+	}, "\n")
+	result, err := bodyWithWatermark(body, []byte(`{"kind":"new","managed_by":"kodex"}`))
+	if err != nil {
+		t.Fatalf("bodyWithWatermark(): %v", err)
+	}
+	if strings.Contains(result, "kind: old") || !strings.Contains(result, "kind: new") || !strings.Contains(result, "Хвост") {
+		t.Fatalf("result = %q, want replaced watermark and preserved body", result)
 	}
 }
 

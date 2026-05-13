@@ -337,14 +337,19 @@ func (r *Repository) RecordProviderOperation(ctx context.Context, operation enti
 func (r *Repository) ApplyProviderOperation(ctx context.Context, completion providerrepo.ProviderOperationCompletion) (entity.ProviderOperation, error) {
 	var stored entity.ProviderOperation
 	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
-		var replay bool
-		var insertErr error
-		stored, replay, insertErr = recordProviderOperation(ctx, tx, operationApplyProviderOperation, completion.Operation)
-		if insertErr != nil {
-			return insertErr
-		}
-		if replay {
-			return nil
+		var err error
+		stored, err = queryOne(ctx, tx, operationApplyProviderOperation, queryProviderOperationComplete, providerOperationArgs(completion.Operation), scanProviderOperation)
+		if errors.Is(err, errs.ErrNotFound) {
+			var replay bool
+			stored, replay, err = recordProviderOperation(ctx, tx, operationApplyProviderOperation, completion.Operation)
+			if err != nil {
+				return err
+			}
+			if replay {
+				return nil
+			}
+		} else if err != nil {
+			return err
 		}
 		projectionResult, err := applyProjectionUpdate(ctx, tx, operationApplyProviderOperation, completion.ProjectionUpdate)
 		if err != nil {

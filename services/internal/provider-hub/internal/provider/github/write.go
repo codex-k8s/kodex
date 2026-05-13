@@ -3,10 +3,8 @@ package github
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
-	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -110,19 +108,13 @@ func (a *Adapter) executeUpdateIssue(ctx context.Context, client *githubapi.Clie
 	if err != nil {
 		return providerclient.WriteResult{}, providerError(providerclient.ErrorKindPermanent, 0, err)
 	}
-	issueRequest, clearMilestone, err := issueRequestForUpdate(command, body)
+	issueRequest, err := issueRequestForUpdate(command, body)
 	if err != nil {
 		return providerclient.WriteResult{}, providerError(providerclient.ErrorKindPermanent, 0, err)
 	}
 	issue, response, err := a.editIssue(ctx, client, target, issueRequest, command.ExpectedProviderVersion)
 	if err != nil {
 		return providerclient.WriteResult{}, classifyGitHubError(err)
-	}
-	if clearMilestone {
-		issue, response, err = client.Issues.RemoveMilestone(ctx, target.owner, target.repo, target.number)
-		if err != nil {
-			return providerclient.WriteResult{}, classifyGitHubError(err)
-		}
 	}
 	snapshot := issueAPISnapshot(target.repository(), issue, enum.WorkItemKindIssue)
 	if issue.IsPullRequest() {
@@ -190,6 +182,9 @@ func (a *Adapter) executeUpdateComment(ctx context.Context, client *githubapi.Cl
 }
 
 func (a *Adapter) executeCreatePullRequest(ctx context.Context, client *githubapi.Client, command *providerclient.CreatePullRequestCommand) (providerclient.WriteResult, error) {
+	if strings.TrimSpace(command.LinkedIssueRef) != "" || len(trimWriteStrings(command.Labels)) > 0 {
+		return providerclient.WriteResult{}, providerError(providerclient.ErrorKindUnsupported, 0, nil)
+	}
 	owner, repo, err := a.repositoryRefFromTarget(ctx, client, command.RepositoryTarget)
 	if err != nil {
 		return providerclient.WriteResult{}, providerError(providerclient.ErrorKindUnsupported, 0, err)
@@ -206,59 +201,15 @@ func (a *Adapter) executeCreatePullRequest(ctx context.Context, client *githubap
 		Draft: githubapi.Ptr(command.Draft),
 	})
 	if err != nil {
-		existing, existingResponse, existingErr := a.findExistingPullRequest(ctx, client, owner, repo, command.HeadBranch, command.BaseBranch, err)
-		if existingErr != nil {
-			return providerclient.WriteResult{}, existingErr
-		}
-		pullRequest = existing
-		response = existingResponse
-	}
-	if labels := trimWriteStrings(command.Labels); len(labels) > 0 {
-		if _, _, err := client.Issues.AddLabelsToIssue(ctx, owner, repo, pullRequest.GetNumber(), labels); err != nil {
-			return providerclient.WriteResult{}, classifyGitHubError(err)
-		}
+		return providerclient.WriteResult{}, classifyGitHubError(err)
 	}
 	snapshot := pullRequestAPISnapshot(owner+"/"+repo, pullRequest)
-	if len(command.Labels) > 0 {
-		snapshot.Labels = trimWriteStrings(command.Labels)
-	}
 	return providerclient.WriteResult{
 		ResultRef:        pullRequest.GetHTMLURL(),
 		ProviderObjectID: snapshot.ProviderWorkItemID,
 		ProviderVersion:  providerVersionFromResponse(response, pullRequest.GetUpdatedAt().Time),
 		WorkItem:         &snapshot,
 	}, nil
-}
-
-func (a *Adapter) findExistingPullRequest(ctx context.Context, client *githubapi.Client, owner string, repo string, headBranch string, baseBranch string, createErr error) (*githubapi.PullRequest, *githubapi.Response, error) {
-	var githubErr *githubapi.ErrorResponse
-	if !errors.As(createErr, &githubErr) || githubErr.Response == nil || githubErr.Response.StatusCode != http.StatusUnprocessableEntity {
-		return nil, nil, classifyGitHubError(createErr)
-	}
-	head := strings.TrimSpace(headBranch)
-	if head != "" && !strings.Contains(head, ":") {
-		head = owner + ":" + head
-	}
-	pullRequests, response, err := client.PullRequests.List(ctx, owner, repo, &githubapi.PullRequestListOptions{
-		State: "open",
-		Head:  head,
-		Base:  strings.TrimSpace(baseBranch),
-		ListOptions: githubapi.ListOptions{
-			PerPage: 10,
-		},
-	})
-	if err != nil {
-		return nil, nil, classifyGitHubError(err)
-	}
-	for _, pullRequest := range pullRequests {
-		if pullRequest == nil {
-			continue
-		}
-		if strings.TrimSpace(pullRequest.GetBase().GetRef()) == strings.TrimSpace(baseBranch) {
-			return pullRequest, response, nil
-		}
-	}
-	return nil, nil, classifyGitHubError(createErr)
 }
 
 func (a *Adapter) executeCreateReviewSignal(ctx context.Context, client *githubapi.Client, command *providerclient.CreateReviewSignalCommand) (providerclient.WriteResult, error) {
@@ -269,29 +220,32 @@ func (a *Adapter) executeCreateReviewSignal(ctx context.Context, client *githuba
 	if target.kind != enum.WorkItemKindPullRequest {
 		return providerclient.WriteResult{}, providerError(providerclient.ErrorKindUnsupported, 0, nil)
 	}
+	workItem, err := a.fetchWorkItemSnapshot(ctx, client, target)
+	if err != nil {
+		return providerclient.WriteResult{}, err
+	}
 	body := strings.TrimSpace(command.Body)
 	comments, err := draftReviewComments(command.InlineComments)
 	if err != nil {
 		return providerclient.WriteResult{}, providerError(providerclient.ErrorKindUnsupported, 0, err)
 	}
-	if body == "" && len(comments) == 0 {
-		return providerclient.WriteResult{}, providerError(providerclient.ErrorKindPermanent, 0, nil)
-	}
 	event, err := reviewSignalEvent(command.Kind)
 	if err != nil {
 		return providerclient.WriteResult{}, providerError(providerclient.ErrorKindUnsupported, 0, err)
 	}
-	review, response, err := client.PullRequests.CreateReview(ctx, target.owner, target.repo, target.number, &githubapi.PullRequestReviewRequest{
-		Body:     githubapi.Ptr(body),
+	if command.Kind != providerclient.ReviewSignalKindApproval && body == "" && len(comments) == 0 {
+		return providerclient.WriteResult{}, providerError(providerclient.ErrorKindPermanent, 0, nil)
+	}
+	reviewRequest := &githubapi.PullRequestReviewRequest{
 		Event:    githubapi.Ptr(event),
 		Comments: comments,
-	})
+	}
+	if body != "" {
+		reviewRequest.Body = githubapi.Ptr(body)
+	}
+	review, response, err := client.PullRequests.CreateReview(ctx, target.owner, target.repo, target.number, reviewRequest)
 	if err != nil {
 		return providerclient.WriteResult{}, classifyGitHubError(err)
-	}
-	workItem, err := a.fetchWorkItemSnapshot(ctx, client, target)
-	if err != nil {
-		return providerclient.WriteResult{}, err
 	}
 	snapshot := reviewSnapshot(workItem.ProviderWorkItemID, review)
 	return providerclient.WriteResult{
@@ -392,7 +346,7 @@ func issueRequestForCreate(command *providerclient.CreateIssueCommand, body stri
 	return request, nil
 }
 
-func issueRequestForUpdate(command *providerclient.UpdateIssueCommand, body *string) (*githubapi.IssueRequest, bool, error) {
+func issueRequestForUpdate(command *providerclient.UpdateIssueCommand, body *string) (*githubapi.IssueRequest, error) {
 	request := &githubapi.IssueRequest{}
 	if command.Title != nil {
 		request.Title = githubapi.Ptr(strings.TrimSpace(*command.Title))
@@ -408,15 +362,14 @@ func issueRequestForUpdate(command *providerclient.UpdateIssueCommand, body *str
 		assignees := trimWriteStrings(command.AssigneeProviderLogins.Values)
 		request.Assignees = &assignees
 	}
-	clearMilestone := false
 	if command.Milestone != nil {
 		milestone := strings.TrimSpace(*command.Milestone)
 		if milestone == "" {
-			clearMilestone = true
+			return nil, providerclient.ErrUnsupported
 		} else {
 			milestoneNumber, err := parsePositiveInt(milestone)
 			if err != nil {
-				return nil, false, err
+				return nil, err
 			}
 			request.Milestone = githubapi.Ptr(milestoneNumber)
 		}
@@ -427,7 +380,7 @@ func issueRequestForUpdate(command *providerclient.UpdateIssueCommand, body *str
 	if command.WorkItemType != nil {
 		request.Type = githubapi.Ptr(strings.TrimSpace(*command.WorkItemType))
 	}
-	return request, clearMilestone, nil
+	return request, nil
 }
 
 func (a *Adapter) editIssue(ctx context.Context, client *githubapi.Client, target workItemScope, request *githubapi.IssueRequest, expectedVersion string) (*githubapi.Issue, *githubapi.Response, error) {
@@ -519,12 +472,36 @@ func bodyWithWatermark(body string, watermarkJSON []byte) (string, error) {
 		return "", err
 	}
 	if strings.Contains(body, githubWatermarkStart) {
-		return body, nil
+		return replaceWatermarkBlock(body, watermark)
 	}
 	if body == "" {
 		return watermark, nil
 	}
 	return body + "\n\n" + watermark, nil
+}
+
+func replaceWatermarkBlock(body string, watermark string) (string, error) {
+	start := strings.Index(body, githubWatermarkStart)
+	if start < 0 {
+		return body, nil
+	}
+	relativeEnd := strings.Index(body[start:], githubWatermarkEnd)
+	if relativeEnd < 0 {
+		return "", providerclient.ErrPermanent
+	}
+	end := start + relativeEnd + len(githubWatermarkEnd)
+	prefix := strings.TrimRight(body[:start], "\n")
+	suffix := strings.TrimLeft(body[end:], "\n")
+	switch {
+	case prefix == "" && suffix == "":
+		return watermark, nil
+	case prefix == "":
+		return watermark + "\n\n" + suffix, nil
+	case suffix == "":
+		return prefix + "\n\n" + watermark, nil
+	default:
+		return prefix + "\n\n" + watermark + "\n\n" + suffix, nil
+	}
 }
 
 func optionalBodyWithWatermark(body *string, watermarkJSON *[]byte) (*string, error) {
