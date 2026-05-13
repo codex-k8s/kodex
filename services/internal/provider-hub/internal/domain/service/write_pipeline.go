@@ -545,9 +545,9 @@ func (s *Service) startProviderWrite(ctx context.Context, plan providerWritePlan
 		ApprovalGateRef:        plan.meta.ApprovalGateRef,
 		StartedAt:              now,
 	}
-	stored, err := s.repository.RecordProviderOperation(ctx, operation)
+	stored, inserted, err := s.repository.RecordProviderOperation(ctx, operation)
 	if err == nil {
-		if stored.Status == enum.ProviderOperationStatusInProgress {
+		if inserted && stored.Status == enum.ProviderOperationStatusInProgress {
 			return stored, nil
 		}
 		if sameProviderWriteReplay(stored, plan) {

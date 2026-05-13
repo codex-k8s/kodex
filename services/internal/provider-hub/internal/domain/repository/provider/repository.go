@@ -42,7 +42,7 @@ type Repository interface {
 	ListLimitSnapshots(context.Context, query.LimitSnapshotFilter) ([]entity.ProviderLimitSnapshot, query.PageResult, error)
 	ApplyProviderOperation(context.Context, ProviderOperationCompletion) (entity.ProviderOperation, error)
 	GetProviderOperationByCommand(context.Context, enum.ProviderOperationType, string) (entity.ProviderOperation, error)
-	RecordProviderOperation(context.Context, entity.ProviderOperation) (entity.ProviderOperation, error)
+	RecordProviderOperation(context.Context, entity.ProviderOperation) (entity.ProviderOperation, bool, error)
 	ListProviderOperations(context.Context, query.ProviderOperationFilter) ([]entity.ProviderOperation, query.PageResult, error)
 	ClaimOutboxEvents(context.Context, int, time.Time, time.Time) ([]entity.OutboxEvent, error)
 	MarkOutboxEventPublished(context.Context, uuid.UUID, int, time.Time) error

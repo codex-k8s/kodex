@@ -575,17 +575,22 @@ func TestRepositoryIntegrationRuntimeStateLimitsAndOperations(t *testing.T) {
 		StartedAt:         now,
 		FinishedAt:        &now,
 	}
-	if _, err := repository.RecordProviderOperation(ctx, operation); err != nil {
+	if _, inserted, err := repository.RecordProviderOperation(ctx, operation); err != nil {
 		t.Fatalf("record provider operation: %v", err)
+	} else if !inserted {
+		t.Fatalf("record provider operation inserted = false, want true")
 	}
 	replayedOperation := operation
 	replayedOperation.ID = uuid.New()
 	replayedOperation.StartedAt = now.Add(time.Minute)
 	replayedOperation.FinishedAt = &replayedOperation.StartedAt
 	replayedOperation.UpdatedAt = now.Add(time.Minute)
-	storedOperation, err := repository.RecordProviderOperation(ctx, replayedOperation)
+	storedOperation, inserted, err := repository.RecordProviderOperation(ctx, replayedOperation)
 	if err != nil {
 		t.Fatalf("record duplicate provider operation: %v", err)
+	}
+	if inserted {
+		t.Fatalf("record duplicate provider operation inserted = true, want false")
 	}
 	if storedOperation.ID != operation.ID || !storedOperation.StartedAt.Equal(operation.StartedAt) {
 		t.Fatalf("duplicate operation = %+v, want original id %s", storedOperation, operation.ID)
@@ -593,7 +598,7 @@ func TestRepositoryIntegrationRuntimeStateLimitsAndOperations(t *testing.T) {
 	changedOperation := operation
 	changedOperation.ID = uuid.New()
 	changedOperation.ExternalAccountID = uuid.New()
-	_, err = repository.RecordProviderOperation(ctx, changedOperation)
+	_, _, err = repository.RecordProviderOperation(ctx, changedOperation)
 	if !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("record changed duplicate provider operation err = %v, want %v", err, errs.ErrConflict)
 	}
@@ -623,8 +628,10 @@ func TestRepositoryIntegrationRuntimeStateLimitsAndOperations(t *testing.T) {
 		ChangedFields: []string{"title"},
 		RiskTags:      []string{},
 	}
-	if _, err := repository.RecordProviderOperation(ctx, startedOperation); err != nil {
+	if _, inserted, err := repository.RecordProviderOperation(ctx, startedOperation); err != nil {
 		t.Fatalf("record started provider operation: %v", err)
+	} else if !inserted {
+		t.Fatalf("record started provider operation inserted = false, want true")
 	}
 	completedOperation := startedOperation
 	completedOperation.Status = enum.ProviderOperationStatusSucceeded

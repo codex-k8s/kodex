@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1299,6 +1300,69 @@ func TestCreateIssueRecordsInProgressBeforeExternalWrite(t *testing.T) {
 	}
 }
 
+func TestCreateIssueConcurrentSameCommandExecutesOnce(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 12, 10, 9, 30, 0, time.UTC)
+	operationID := uuid.New()
+	outboxID := uuid.New()
+	externalAccountID := uuid.New()
+	commandID := uuid.New()
+	enteredExecute := make(chan struct{})
+	releaseExecute := make(chan struct{})
+	repository := &fakeRepository{missProviderOperationReplay: true}
+	executor := &fakeWriteExecutor{
+		beforeExecute: func() {
+			enteredExecute <- struct{}{}
+			<-releaseExecute
+		},
+		result: providerclient.WriteResult{ResultRef: "https://github.com/codex-k8s/kodex/issues/77"},
+	}
+	service := NewWithDependencies(Dependencies{
+		Repository:             repository,
+		Clock:                  fixedClock{now: now},
+		IDGenerator:            &sequenceIDs{ids: []uuid.UUID{operationID, uuid.New(), outboxID}},
+		AccountUsageResolver:   fakeAccountUsageResolver{},
+		SecretResolver:         &fakeSecretResolver{secret: secretresolver.NewSecretValue([]byte("write-token"))},
+		ProviderWriteExecutors: []providerclient.WriteExecutor{executor},
+	})
+	input := CreateIssueInput{
+		ProjectID:         uuid.New(),
+		RepositoryID:      uuid.New(),
+		ProviderSlug:      enum.ProviderSlugGitHub,
+		RepositoryTarget:  ProviderTarget{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
+		Title:             "Новая задача",
+		ExternalAccountID: externalAccountID,
+		Meta: value.CommandMeta{
+			CommandID: commandID,
+			OperationPolicyContext: value.ProviderOperationPolicyContext{
+				RiskLevel:     value.ProviderOperationRiskLevelLow,
+				ChangedFields: []string{"title", "body", "labels", "assignee_provider_logins"},
+			},
+		},
+	}
+
+	firstDone := make(chan error, 1)
+	go func() {
+		_, err := service.CreateIssue(context.Background(), input)
+		firstDone <- err
+	}()
+	<-enteredExecute
+
+	_, secondErr := service.CreateIssue(context.Background(), input)
+	if !errors.Is(secondErr, errs.ErrConflict) {
+		close(releaseExecute)
+		t.Fatalf("second CreateIssue() err = %v, want %v", secondErr, errs.ErrConflict)
+	}
+	close(releaseExecute)
+	if firstErr := <-firstDone; firstErr != nil {
+		t.Fatalf("first CreateIssue(): %v", firstErr)
+	}
+	if executor.calls != 1 {
+		t.Fatalf("executor calls = %d, want 1", executor.calls)
+	}
+}
+
 func TestUpdateIssueRequiresApprovalGateReferenceWhenPolicyDemandsIt(t *testing.T) {
 	t.Parallel()
 
@@ -1476,26 +1540,28 @@ func TestUpdateRelationshipChecksExpectedVersionBeforeExecutor(t *testing.T) {
 }
 
 type fakeRepository struct {
-	err                       error
-	calls                     int
-	recordedSnapshot          entity.ProviderLimitSnapshot
-	recordedRuntimeState      entity.ProviderAccountRuntimeState
-	recordedWebhook           entity.WebhookEvent
-	recordedProjection        providerrepo.ProjectionUpdate
-	processWebhookErr         error
-	webhookAfterProcess       *entity.WebhookEvent
-	recordedProviderEvents    []entity.ProviderEvent
-	recordedOutboxEvents      []entity.OutboxEvent
-	recordedProviderOperation entity.ProviderOperation
-	workItemProjection        entity.ProviderWorkItemProjection
-	relationship              entity.ProviderRelationship
-	lastWorkItemLookup        query.ProviderTargetLookup
-	reconciliationRequest     entity.ReconciliationRequest
-	enqueuedSyncCursors       []entity.SyncCursor
-	providerArtifactSignal    entity.ProviderArtifactSignal
-	syncCursor                entity.SyncCursor
-	syncCursorClaim           providerrepo.SyncCursorClaim
-	reconciliationCompletion  providerrepo.ReconciliationBatchCompletion
+	mu                          sync.Mutex
+	err                         error
+	calls                       int
+	missProviderOperationReplay bool
+	recordedSnapshot            entity.ProviderLimitSnapshot
+	recordedRuntimeState        entity.ProviderAccountRuntimeState
+	recordedWebhook             entity.WebhookEvent
+	recordedProjection          providerrepo.ProjectionUpdate
+	processWebhookErr           error
+	webhookAfterProcess         *entity.WebhookEvent
+	recordedProviderEvents      []entity.ProviderEvent
+	recordedOutboxEvents        []entity.OutboxEvent
+	recordedProviderOperation   entity.ProviderOperation
+	workItemProjection          entity.ProviderWorkItemProjection
+	relationship                entity.ProviderRelationship
+	lastWorkItemLookup          query.ProviderTargetLookup
+	reconciliationRequest       entity.ReconciliationRequest
+	enqueuedSyncCursors         []entity.SyncCursor
+	providerArtifactSignal      entity.ProviderArtifactSignal
+	syncCursor                  entity.SyncCursor
+	syncCursorClaim             providerrepo.SyncCursorClaim
+	reconciliationCompletion    providerrepo.ReconciliationBatchCompletion
 }
 
 func (r *fakeRepository) Ping(context.Context) error {
@@ -1634,15 +1700,22 @@ func (r *fakeRepository) ListLimitSnapshots(context.Context, query.LimitSnapshot
 	return nil, query.PageResult{}, r.err
 }
 
-func (r *fakeRepository) RecordProviderOperation(_ context.Context, operation entity.ProviderOperation) (entity.ProviderOperation, error) {
+func (r *fakeRepository) RecordProviderOperation(_ context.Context, operation entity.ProviderOperation) (entity.ProviderOperation, bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.err != nil {
+		return entity.ProviderOperation{}, false, r.err
+	}
 	if r.recordedProviderOperation.ID != uuid.Nil {
-		return r.recordedProviderOperation, r.err
+		return r.recordedProviderOperation, false, nil
 	}
 	r.recordedProviderOperation = operation
-	return operation, r.err
+	return operation, true, nil
 }
 
 func (r *fakeRepository) ApplyProviderOperation(_ context.Context, completion providerrepo.ProviderOperationCompletion) (entity.ProviderOperation, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.recordedProviderOperation = completion.Operation
 	r.recordedProjection = completion.ProjectionUpdate
 	r.recordedProviderEvents = append([]entity.ProviderEvent(nil), completion.ProviderEvents...)
@@ -1651,6 +1724,11 @@ func (r *fakeRepository) ApplyProviderOperation(_ context.Context, completion pr
 }
 
 func (r *fakeRepository) GetProviderOperationByCommand(context.Context, enum.ProviderOperationType, string) (entity.ProviderOperation, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.missProviderOperationReplay {
+		return entity.ProviderOperation{}, errs.ErrNotFound
+	}
 	if r.recordedProviderOperation.ID != uuid.Nil {
 		return r.recordedProviderOperation, r.err
 	}

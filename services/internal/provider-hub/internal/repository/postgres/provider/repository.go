@@ -327,10 +327,10 @@ func (r *Repository) ListLimitSnapshots(ctx context.Context, filter query.LimitS
 	return queryPage(ctx, r.db, operationListLimitSnapshots, queryLimitSnapshotList, limitSnapshotFilterArgs(filter), scanLimitSnapshot)
 }
 
-// RecordProviderOperation stores a provider operation audit record.
-func (r *Repository) RecordProviderOperation(ctx context.Context, operation entity.ProviderOperation) (entity.ProviderOperation, error) {
-	stored, _, err := recordProviderOperation(ctx, r.db, operationRecordProviderOperation, operation)
-	return stored, err
+// RecordProviderOperation stores a provider operation audit record and reports whether this call acquired a new row.
+func (r *Repository) RecordProviderOperation(ctx context.Context, operation entity.ProviderOperation) (entity.ProviderOperation, bool, error) {
+	stored, replay, err := recordProviderOperation(ctx, r.db, operationRecordProviderOperation, operation)
+	return stored, !replay && err == nil, err
 }
 
 // ApplyProviderOperation stores one finalized provider operation and its outbox side effects atomically.
