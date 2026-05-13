@@ -17,10 +17,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/types/value"
 )
 
-func TestReserveSlotPersistsLeaseAndDefaultFleetRefs(t *testing.T) {
+func TestReserveSlotPersistsLeaseAndFleetPlacementRefs(t *testing.T) {
 	t.Parallel()
 
-	svc, repo := newTestService()
+	resolver := defaultPlacementResolver()
+	svc, repo := newTestServiceWithPlacementResolver(resolver)
 	projectID := mustUUID("00000000-0000-0000-0000-000000000021")
 
 	slot, err := svc.ReserveSlot(context.Background(), ReserveSlotInput{
@@ -50,6 +51,12 @@ func TestReserveSlotPersistsLeaseAndDefaultFleetRefs(t *testing.T) {
 	}
 	if len(repo.events) != 1 || repo.events[0].EventType != eventSlotReserved {
 		t.Fatalf("events = %#v, want slot reserved", repo.events)
+	}
+	if len(resolver.requests) != 1 {
+		t.Fatalf("placement resolver calls = %d, want 1", len(resolver.requests))
+	}
+	if resolver.requests[0].ProjectID == nil || *resolver.requests[0].ProjectID != projectID {
+		t.Fatalf("placement project = %v, want %s", resolver.requests[0].ProjectID, projectID)
 	}
 }
 
@@ -93,6 +100,67 @@ func TestReserveSlotIdempotentReplayChecksScope(t *testing.T) {
 	})
 	if !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("cross-scope replay error = %v, want conflict", err)
+	}
+}
+
+func TestReserveSlotReplayRejectsChangedPlacementInput(t *testing.T) {
+	t.Parallel()
+
+	resolver := defaultPlacementResolver()
+	svc, _ := newTestServiceWithPlacementResolver(resolver)
+	meta := commandMeta(mustUUID("00000000-0000-0000-0000-000000000115"), 0)
+
+	_, err := svc.ReserveSlot(context.Background(), ReserveSlotInput{
+		RuntimeProfile:        "go-backend",
+		RuntimeMode:           enum.RuntimeModeCodeOnly,
+		WorkspacePolicyDigest: "policy-sha",
+		PlacementConstraints: PlacementConstraintsInput{
+			RequiredCapabilities: []string{"standard"},
+			MetadataJSON:         []byte(`{"regions":["eu-1"]}`),
+		},
+		Meta: meta,
+	})
+	if err != nil {
+		t.Fatalf("first ReserveSlot(): %v", err)
+	}
+	_, err = svc.ReserveSlot(context.Background(), ReserveSlotInput{
+		RuntimeProfile:        "go-backend",
+		RuntimeMode:           enum.RuntimeModeCodeOnly,
+		WorkspacePolicyDigest: "policy-sha",
+		PlacementConstraints: PlacementConstraintsInput{
+			RequiredCapabilities: []string{"gpu"},
+			MetadataJSON:         []byte(`{"regions":["eu-1"]}`),
+		},
+		Meta: meta,
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("changed placement replay error = %v, want conflict", err)
+	}
+	if len(resolver.requests) != 1 {
+		t.Fatalf("placement resolver calls = %d, want no fleet call on conflicting replay", len(resolver.requests))
+	}
+}
+
+func TestReserveSlotRejectsUnsupportedWidePlacementRequest(t *testing.T) {
+	t.Parallel()
+
+	resolver := defaultPlacementResolver()
+	svc, _ := newTestServiceWithPlacementResolver(resolver)
+	firstRepositoryID := mustUUID("00000000-0000-0000-0000-000000000116")
+	secondRepositoryID := mustUUID("00000000-0000-0000-0000-000000000117")
+
+	_, err := svc.ReserveSlot(context.Background(), ReserveSlotInput{
+		RuntimeProfile:        "go-backend",
+		RuntimeMode:           enum.RuntimeModeCodeOnly,
+		WorkspacePolicyDigest: "policy-sha",
+		RepositoryIDs:         []uuid.UUID{firstRepositoryID, secondRepositoryID},
+		Meta:                  commandMeta(mustUUID("00000000-0000-0000-0000-000000000118"), 0),
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("ReserveSlot() err = %v, want invalid argument for multi-repository placement", err)
+	}
+	if len(resolver.requests) != 0 {
+		t.Fatalf("placement resolver calls = %d, want none for unsupported request", len(resolver.requests))
 	}
 }
 
@@ -270,6 +338,7 @@ func TestReserveSlotAuthorizesBeforeReplay(t *testing.T) {
 		NamespacePrefix:     "kodex-rt",
 		DefaultLeaseTTL:     30 * time.Minute,
 		Authorizer:          denyAuthorizer{},
+		PlacementResolver:   defaultPlacementResolver(),
 	})
 
 	_, err := svc.ReserveSlot(context.Background(), ReserveSlotInput{
@@ -297,6 +366,14 @@ func newTestService() (*Service, *fakeRepository) {
 }
 
 func newTestServiceWithAuthorizer(authorizer Authorizer) (*Service, *fakeRepository) {
+	return newTestServiceWithAuthorizerAndPlacementResolver(authorizer, defaultPlacementResolver())
+}
+
+func newTestServiceWithPlacementResolver(resolver PlacementResolver) (*Service, *fakeRepository) {
+	return newTestServiceWithAuthorizerAndPlacementResolver(nil, resolver)
+}
+
+func newTestServiceWithAuthorizerAndPlacementResolver(authorizer Authorizer, resolver PlacementResolver) (*Service, *fakeRepository) {
 	repo := &fakeRepository{
 		slots:                     make(map[uuid.UUID]entity.Slot),
 		workspaceMaterializations: make(map[uuid.UUID]entity.WorkspaceMaterialization),
@@ -331,8 +408,27 @@ func newTestServiceWithAuthorizer(authorizer Authorizer) (*Service, *fakeReposit
 	if authorizer != nil {
 		config.Authorizer = authorizer
 	}
+	config.PlacementResolver = resolver
 	svc := NewWithConfig(repo, fixedClock{now: testNow}, ids, config)
 	return svc, repo
+}
+
+type fakePlacementResolver struct {
+	result   PlacementResolution
+	err      error
+	requests []PlacementResolutionRequest
+}
+
+func defaultPlacementResolver() *fakePlacementResolver {
+	return &fakePlacementResolver{result: PlacementResolution{FleetScopeID: testFleetScopeID, ClusterID: testClusterID}}
+}
+
+func (r *fakePlacementResolver) ResolvePlacement(_ context.Context, request PlacementResolutionRequest) (PlacementResolution, error) {
+	r.requests = append(r.requests, request)
+	if r.err != nil {
+		return PlacementResolution{}, r.err
+	}
+	return r.result, nil
 }
 
 func commandMeta(commandID uuid.UUID, expectedVersion int64) value.CommandMeta {

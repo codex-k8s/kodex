@@ -24,6 +24,7 @@ type Config struct {
 	Outbox           RuntimeOutboxConfig     `envPrefix:"KODEX_RUNTIME_MANAGER_OUTBOX_"`
 	Slot             RuntimeSlotConfig       `envPrefix:"KODEX_RUNTIME_MANAGER_SLOT_"`
 	Access           RuntimeAccessConfig     `envPrefix:"KODEX_RUNTIME_MANAGER_ACCESS_"`
+	Fleet            RuntimeFleetConfig      `envPrefix:"KODEX_RUNTIME_MANAGER_FLEET_"`
 }
 
 // RuntimeGRPCConfig contains gRPC boundary limits.
@@ -89,7 +90,7 @@ type RuntimeOutboxConfig struct {
 	FailureMessageLimit int           `env:"FAILURE_MESSAGE_LIMIT" envDefault:"512"`
 }
 
-// RuntimeSlotConfig contains MVP slot lifecycle defaults.
+// RuntimeSlotConfig contains slot lifecycle defaults.
 type RuntimeSlotConfig struct {
 	DefaultFleetScopeID string        `env:"DEFAULT_FLEET_SCOPE_ID" envDefault:"00000000-0000-0000-0000-000000000001"`
 	DefaultClusterID    string        `env:"DEFAULT_CLUSTER_ID" envDefault:"00000000-0000-0000-0000-000000000002"`
@@ -103,6 +104,13 @@ type RuntimeAccessConfig struct {
 	AccessManagerGRPCAddr  string        `env:"MANAGER_GRPC_ADDR" envDefault:"access-manager:9090"`
 	AccessManagerAuthToken string        `env:"MANAGER_GRPC_AUTH_TOKEN"`
 	CheckTimeout           time.Duration `env:"MANAGER_CHECK_TIMEOUT" envDefault:"3s"`
+}
+
+// RuntimeFleetConfig contains fleet-manager placement settings.
+type RuntimeFleetConfig struct {
+	FleetManagerGRPCAddr  string        `env:"MANAGER_GRPC_ADDR" envDefault:"fleet-manager:9090"`
+	FleetManagerAuthToken string        `env:"MANAGER_GRPC_AUTH_TOKEN"`
+	ResolveTimeout        time.Duration `env:"MANAGER_RESOLVE_TIMEOUT" envDefault:"5s"`
 }
 
 // LoadConfig reads process configuration from environment variables.
@@ -134,7 +142,10 @@ func (cfg Config) Validate() error {
 	if err := cfg.validateSlotSettings(); err != nil {
 		return err
 	}
-	return cfg.validateAccessSettings()
+	if err := cfg.validateAccessSettings(); err != nil {
+		return err
+	}
+	return cfg.validateFleetSettings()
 }
 
 func (cfg Config) validateGRPCSettings() error {
@@ -260,6 +271,19 @@ func (cfg Config) validateAccessSettings() error {
 	}
 	if cfg.Access.CheckEnabled && strings.TrimSpace(cfg.Access.AccessManagerAuthToken) == "" {
 		return fmt.Errorf("KODEX_RUNTIME_MANAGER_ACCESS_MANAGER_GRPC_AUTH_TOKEN is required when access checks are enabled")
+	}
+	return nil
+}
+
+func (cfg Config) validateFleetSettings() error {
+	if cfg.Fleet.ResolveTimeout <= 0 {
+		return fmt.Errorf("KODEX_RUNTIME_MANAGER_FLEET_MANAGER_RESOLVE_TIMEOUT is invalid")
+	}
+	if strings.TrimSpace(cfg.Fleet.FleetManagerGRPCAddr) == "" {
+		return fmt.Errorf("KODEX_RUNTIME_MANAGER_FLEET_MANAGER_GRPC_ADDR is required")
+	}
+	if strings.TrimSpace(cfg.Fleet.FleetManagerAuthToken) == "" {
+		return fmt.Errorf("KODEX_RUNTIME_MANAGER_FLEET_MANAGER_GRPC_AUTH_TOKEN is required")
 	}
 	return nil
 }

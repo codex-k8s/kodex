@@ -13,7 +13,9 @@ import (
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
 	accessaccountsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/access_accounts/v1"
+	fleetv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/fleet/v1"
 	accessclient "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/clients/access"
+	fleetclient "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/clients/fleet"
 	runtimeservice "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/domain/service"
 	runtimepostgres "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/repository/postgres/runtime"
 	runtimegrpc "github.com/codex-k8s/kodex/services/internal/runtime-manager/internal/transport/grpc"
@@ -46,6 +48,13 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 			_ = accessConn.Close()
 		}()
 	}
+	placementResolver, fleetConn, err := newPlacementResolver(cfg)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = fleetConn.Close()
+	}()
 
 	runtimeRepository := runtimepostgres.NewRepository(dbPool)
 	slotConfig, err := cfg.SlotServiceConfig()
@@ -53,6 +62,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		return err
 	}
 	slotConfig.Authorizer = authorizer
+	slotConfig.PlacementResolver = placementResolver
 	runtimeService := runtimeservice.NewWithConfig(runtimeRepository, systemClock{}, uuidGenerator{}, slotConfig)
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
@@ -139,6 +149,24 @@ func newAuthorizer(cfg Config) (runtimeservice.Authorizer, *grpcruntime.ClientCo
 		return nil, nil, err
 	}
 	return authorizer, conn, nil
+}
+
+func newPlacementResolver(cfg Config) (runtimeservice.PlacementResolver, *grpcruntime.ClientConn, error) {
+	fleetConfig := fleetclient.Config{
+		Addr:      cfg.Fleet.FleetManagerGRPCAddr,
+		AuthToken: cfg.Fleet.FleetManagerAuthToken,
+		Timeout:   cfg.Fleet.ResolveTimeout,
+	}
+	conn, err := fleetclient.NewConnection(fleetConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+	resolver, err := fleetclient.NewPlacementResolver(fleetv1.NewFleetManagerServiceClient(conn), fleetConfig)
+	if err != nil {
+		_ = conn.Close()
+		return nil, nil, err
+	}
+	return resolver, conn, nil
 }
 
 func readinessChecks(runtime runtimeStore, eventLog pingStore) []serviceprocess.ReadinessCheck {

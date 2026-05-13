@@ -15,13 +15,14 @@ func UnaryErrorInterceptor(logger *slog.Logger) grpcruntime.UnaryServerIntercept
 }
 
 func runtimeErrorMapper() grpcserver.DomainErrorMapper {
-	rules := make([]grpcserver.DomainErrorRule, 0, 7)
+	rules := make([]grpcserver.DomainErrorRule, 0, 8)
 	rules = append(rules, grpcserver.DomainErrorRule{Target: errs.ErrInvalidArgument, Code: codes.InvalidArgument, Message: "invalid request"})
 	rules = append(rules, grpcserver.DomainErrorRule{Target: errs.ErrForbidden, Code: codes.PermissionDenied, Message: "permission denied"})
 	rules = append(rules, grpcserver.DomainErrorRule{Target: errs.ErrNotFound, Code: codes.NotFound, Message: "not found"})
 	rules = append(rules, grpcserver.DomainErrorRule{Target: errs.ErrAlreadyExists, Code: codes.AlreadyExists, Message: "already exists"})
 	rules = append(rules, grpcserver.DomainErrorRule{Target: errs.ErrConflict, Code: codes.Aborted, Message: "version conflict"})
 	rules = append(rules, grpcserver.DomainErrorRule{Target: errs.ErrPreconditionFailed, Code: codes.FailedPrecondition, Message: "precondition failed"})
+	rules = append(rules, grpcserver.DomainErrorRule{Target: errs.ErrPlacementRejected, Code: codes.FailedPrecondition, Message: "placement rejected"})
 	rules = append(rules, grpcserver.DomainErrorRule{Target: errs.ErrDependencyUnavailable, Code: codes.Unavailable, Message: "dependency unavailable"})
 	return grpcserver.NewDomainErrorMapper(rules...)
 }

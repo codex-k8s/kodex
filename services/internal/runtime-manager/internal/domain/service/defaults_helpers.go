@@ -19,13 +19,6 @@ func (s *Service) defaultFleetScopeID(preferred *uuid.UUID) (*uuid.UUID, error) 
 	return &s.config.DefaultFleetScopeID, nil
 }
 
-func (s *Service) defaultClusterID() (*uuid.UUID, error) {
-	if s.config.DefaultClusterID == uuid.Nil {
-		return nil, errs.ErrPreconditionFailed
-	}
-	return &s.config.DefaultClusterID, nil
-}
-
 func (s *Service) slotKey(slotID uuid.UUID) string {
 	return "slot-" + shortID(slotID)
 }

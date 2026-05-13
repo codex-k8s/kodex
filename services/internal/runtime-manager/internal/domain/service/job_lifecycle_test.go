@@ -18,7 +18,8 @@ import (
 func TestJobLifecycleCreatesClaimsProgressesAndFails(t *testing.T) {
 	t.Parallel()
 
-	svc, repo := newTestService()
+	resolver := defaultPlacementResolver()
+	svc, repo := newTestServiceWithPlacementResolver(resolver)
 	projectID := mustUUID("00000000-0000-0000-0000-000000000501")
 	job, err := svc.CreateJob(context.Background(), CreateJobInput{
 		JobType:      enum.JobTypeBuild,
@@ -32,6 +33,12 @@ func TestJobLifecycleCreatesClaimsProgressesAndFails(t *testing.T) {
 	}
 	if job.Status != enum.JobStatusPending || job.CommandID == "" {
 		t.Fatalf("created job = %#v, want pending with command id", job)
+	}
+	if job.FleetScopeID == nil || *job.FleetScopeID != testFleetScopeID || job.ClusterID == nil || *job.ClusterID != testClusterID {
+		t.Fatalf("job placement = %v/%v, want resolver refs", job.FleetScopeID, job.ClusterID)
+	}
+	if len(resolver.requests) != 1 || resolver.requests[0].RuntimeMode != enum.RuntimeModePlatformJob {
+		t.Fatalf("placement resolver requests = %#v, want one platform job request", resolver.requests)
 	}
 	if len(repo.events) != 1 || repo.events[0].EventType != eventJobCreated {
 		t.Fatalf("events = %#v, want job created", repo.events)
@@ -184,6 +191,99 @@ func TestClaimRunnableJobReplayDoesNotClaimAnotherJob(t *testing.T) {
 	}
 	if pending != 1 {
 		t.Fatalf("pending jobs after claim replay = %d, want second job untouched", pending)
+	}
+}
+
+func TestCreateJobWithSlotReusesSlotPlacementWithoutResolver(t *testing.T) {
+	t.Parallel()
+
+	resolver := defaultPlacementResolver()
+	svc, _ := newTestServiceWithPlacementResolver(resolver)
+	slot, err := svc.ReserveSlot(context.Background(), ReserveSlotInput{
+		RuntimeProfile:        "go-backend",
+		RuntimeMode:           enum.RuntimeModeFullEnv,
+		WorkspacePolicyDigest: "policy-sha",
+		Meta:                  commandMeta(mustUUID("00000000-0000-0000-0000-000000000540"), 0),
+	})
+	if err != nil {
+		t.Fatalf("ReserveSlot(): %v", err)
+	}
+	resolver.err = errs.ErrPlacementRejected
+	job, err := svc.CreateJob(context.Background(), CreateJobInput{
+		JobType:      enum.JobTypeBuild,
+		Priority:     enum.JobPriorityNormal,
+		SlotID:       &slot.ID,
+		JobInputJSON: []byte(`{"target":"api"}`),
+		Meta:         commandMeta(mustUUID("00000000-0000-0000-0000-000000000541"), 0),
+	})
+	if err != nil {
+		t.Fatalf("CreateJob(): %v", err)
+	}
+	if !sameUUIDPtr(job.FleetScopeID, slot.FleetScopeID) || !sameUUIDPtr(job.ClusterID, slot.ClusterID) {
+		t.Fatalf("job placement = %v/%v, want slot placement %v/%v", job.FleetScopeID, job.ClusterID, slot.FleetScopeID, slot.ClusterID)
+	}
+	if len(resolver.requests) != 1 {
+		t.Fatalf("placement resolver calls = %d, want only reserve slot call", len(resolver.requests))
+	}
+}
+
+func TestCreateJobAuthorizesBeforePlacement(t *testing.T) {
+	t.Parallel()
+
+	resolver := defaultPlacementResolver()
+	svc, _ := newTestServiceWithAuthorizerAndPlacementResolver(denyAuthorizer{}, resolver)
+	_, err := svc.CreateJob(context.Background(), CreateJobInput{
+		JobType:      enum.JobTypeBuild,
+		Priority:     enum.JobPriorityNormal,
+		JobInputJSON: []byte(`{"target":"api"}`),
+		Meta:         commandMeta(mustUUID("00000000-0000-0000-0000-000000000542"), 0),
+	})
+	if !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("CreateJob() err = %v, want forbidden", err)
+	}
+	if len(resolver.requests) != 0 {
+		t.Fatalf("placement resolver calls = %d, want none before authorization", len(resolver.requests))
+	}
+}
+
+func TestCreateJobReplayRejectsChangedPlacementInput(t *testing.T) {
+	t.Parallel()
+
+	resolver := defaultPlacementResolver()
+	svc, _ := newTestServiceWithPlacementResolver(resolver)
+	projectID := mustUUID("00000000-0000-0000-0000-000000000543")
+	meta := commandMeta(mustUUID("00000000-0000-0000-0000-000000000544"), 0)
+
+	_, err := svc.CreateJob(context.Background(), CreateJobInput{
+		JobType:      enum.JobTypeBuild,
+		Priority:     enum.JobPriorityNormal,
+		ProjectID:    &projectID,
+		JobInputJSON: []byte(`{"target":"api"}`),
+		PlacementConstraints: PlacementConstraintsInput{
+			RequiredCapabilities: []string{"standard"},
+			MetadataJSON:         []byte(`{"regions":["eu-1"]}`),
+		},
+		Meta: meta,
+	})
+	if err != nil {
+		t.Fatalf("first CreateJob(): %v", err)
+	}
+	_, err = svc.CreateJob(context.Background(), CreateJobInput{
+		JobType:      enum.JobTypeBuild,
+		Priority:     enum.JobPriorityNormal,
+		ProjectID:    &projectID,
+		JobInputJSON: []byte(`{"target":"api"}`),
+		PlacementConstraints: PlacementConstraintsInput{
+			RequiredCapabilities: []string{"gpu"},
+			MetadataJSON:         []byte(`{"regions":["eu-1"]}`),
+		},
+		Meta: meta,
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("changed placement replay err = %v, want conflict", err)
+	}
+	if len(resolver.requests) != 1 {
+		t.Fatalf("placement resolver calls = %d, want no fleet call on conflicting replay", len(resolver.requests))
 	}
 }
 

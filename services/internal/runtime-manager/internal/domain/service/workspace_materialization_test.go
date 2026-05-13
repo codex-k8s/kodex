@@ -57,7 +57,8 @@ func TestStartWorkspaceMaterializationPersistsSourcesAndMarksSlotMaterializing(t
 func TestStartWorkspaceMaterializationRejectsCrossProjectPolicy(t *testing.T) {
 	t.Parallel()
 
-	svc, _ := newTestService()
+	resolver := defaultPlacementResolver()
+	svc, _ := newTestServiceWithPlacementResolver(resolver)
 	projectID := mustUUID("00000000-0000-0000-0000-000000000037")
 	otherProjectID := mustUUID("00000000-0000-0000-0000-000000000038")
 	slot, err := svc.ReserveSlot(context.Background(), ReserveSlotInput{
@@ -273,7 +274,8 @@ func TestWorkspaceMaterializationReplayChecksScopeAndAuthorizesBeforeReplay(t *t
 func TestPrepareRuntimeCreatesSlotAndWorkspaceAttempt(t *testing.T) {
 	t.Parallel()
 
-	svc, _ := newTestService()
+	resolver := defaultPlacementResolver()
+	svc, _ := newTestServiceWithPlacementResolver(resolver)
 	projectID := mustUUID("00000000-0000-0000-0000-000000000035")
 	result, err := svc.PrepareRuntime(context.Background(), PrepareRuntimeInput{
 		AgentRunID:      uuidPtr(mustUUID("00000000-0000-0000-0000-000000000036")),
@@ -296,6 +298,49 @@ func TestPrepareRuntimeCreatesSlotAndWorkspaceAttempt(t *testing.T) {
 	}
 	if result.RuntimeContext.WorkspaceRoot != "/workspace" {
 		t.Fatalf("workspace root = %s, want /workspace", result.RuntimeContext.WorkspaceRoot)
+	}
+	if len(resolver.requests) != 1 {
+		t.Fatalf("placement resolver calls = %d, want 1", len(resolver.requests))
+	}
+	if resolver.requests[0].ProjectID == nil || *resolver.requests[0].ProjectID != projectID {
+		t.Fatalf("placement project = %v, want %s", resolver.requests[0].ProjectID, projectID)
+	}
+}
+
+func TestPrepareRuntimeReplayRejectsChangedPlacementInput(t *testing.T) {
+	t.Parallel()
+
+	resolver := defaultPlacementResolver()
+	svc, _ := newTestServiceWithPlacementResolver(resolver)
+	projectID := mustUUID("00000000-0000-0000-0000-000000000042")
+	meta := commandMeta(mustUUID("00000000-0000-0000-0000-000000000317"), 0)
+
+	_, err := svc.PrepareRuntime(context.Background(), PrepareRuntimeInput{
+		RuntimeProfile:  "go-backend",
+		RuntimeMode:     enum.RuntimeModeFullEnv,
+		WorkspacePolicy: testWorkspacePolicy(projectID),
+		PlacementConstraints: PlacementConstraintsInput{
+			RequiredCapabilities: []string{"standard"},
+		},
+		Meta: meta,
+	})
+	if err != nil {
+		t.Fatalf("first PrepareRuntime(): %v", err)
+	}
+	_, err = svc.PrepareRuntime(context.Background(), PrepareRuntimeInput{
+		RuntimeProfile:  "go-backend",
+		RuntimeMode:     enum.RuntimeModeFullEnv,
+		WorkspacePolicy: testWorkspacePolicy(projectID),
+		PlacementConstraints: PlacementConstraintsInput{
+			RequiredCapabilities: []string{"gpu"},
+		},
+		Meta: meta,
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("changed placement replay err = %v, want conflict", err)
+	}
+	if len(resolver.requests) != 1 {
+		t.Fatalf("placement resolver calls = %d, want no fleet call on conflicting replay", len(resolver.requests))
 	}
 }
 

@@ -8,6 +8,7 @@ const (
 	RuntimeModeCodeOnly           RuntimeMode = "code_only"
 	RuntimeModeFullEnv            RuntimeMode = "full_env"
 	RuntimeModeReadOnlyProduction RuntimeMode = "read_only_production"
+	RuntimeModePlatformJob        RuntimeMode = "platform_job"
 )
 
 // SlotStatus is the slot lifecycle status.

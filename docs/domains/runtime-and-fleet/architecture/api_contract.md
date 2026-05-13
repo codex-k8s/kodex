@@ -43,7 +43,7 @@ approvals:
 |---|---|---|---|
 | `PrepareRuntime` | Фасадная команда для типового агентного запуска: получить fleet scope через `fleet-manager`, выделить слот, запустить подготовку workspace и вернуть контекст runtime. | `agent-manager` | `command_id`; повтор возвращает тот же результат выделения слота и подготовки workspace или актуальный конфликт. |
 
-`PrepareRuntime` не создаёт agent `Run`, не меняет flow и не выбирает инфраструктуру самостоятельно. Он принимает внешний `agent_run_id`, runtime profile, workspace policy и placement constraints. Если явный fleet scope не передан вызывающей стороной, `runtime-manager` обращается к `fleet-manager.ResolvePlacement` и исполняет полученное решение размещения. Внутри домена команда использует те же инварианты, что `ReserveSlot` и `StartWorkspaceMaterialization`, а события публикуются как `runtime.slot.*` и `runtime.workspace.*`.
+`PrepareRuntime` не создаёт agent `Run`, не меняет flow и не выбирает инфраструктуру самостоятельно. Он принимает внешний `agent_run_id`, runtime profile, workspace policy и placement constraints, обращается к `fleet-manager.ResolvePlacement` и исполняет полученное решение размещения. Явный `preferred_fleet_scope_id` остаётся только входным ограничением для fleet, а не локальным выбором runtime. Внутри домена команда использует те же инварианты, что `ReserveSlot` и `StartWorkspaceMaterialization`, а события публикуются как `runtime.slot.*` и `runtime.workspace.*`.
 
 ### Слоты
 
@@ -55,6 +55,8 @@ approvals:
 | `MarkSlotFailed` | Перевести слот в failed с классификацией. | `worker`, runtime controller | `command_id + expected_version`. |
 | `GetSlot` | Прочитать слот. | `agent-manager`, `operations-hub`, MCP | Read-only. |
 | `ListSlots` | Список по проекту, статусу, runtime profile, fleet scope. | Операторский контур | Read-only. |
+
+`ReserveSlot` вызывает `fleet-manager.ResolvePlacement`, если слот создаётся или переиспользуется напрямую. Runtime передаёт constraints и сохраняет только возвращённые `fleet_scope_id` и `cluster_id`; журнал решения остаётся в `fleet-manager`.
 
 ### Workspace materialization
 
@@ -77,6 +79,8 @@ approvals:
 | `CancelJob` | Отменить pending/running job по policy. | `agent-manager`, операторский контур | `command_id + expected_version`. |
 | `GetJob` | Прочитать job. | `agent-manager`, `operations-hub`, MCP | Read-only. |
 | `ListJobs` | Список по статусу, типу, проекту, слоту, agent run, release line. | Операторский контур | Read-only. |
+
+`CreateJob` без slot получает `fleet_scope_id` и `cluster_id` через `fleet-manager.ResolvePlacement` с runtime mode `platform_job`. `CreateJob` со slot не вызывает placement повторно и наследует fleet refs из slot.
 
 ### Runtime artifact refs
 
@@ -106,6 +110,7 @@ approvals:
 | `RUNTIME_JOB_NOT_FOUND` | Job не найден. |
 | `RUNTIME_JOB_CONFLICT` | Статус job изменился конкурентно. |
 | `RUNTIME_JOB_FAILED` | Техническая операция завершилась ошибкой. |
+| `RUNTIME_PLACEMENT_REJECTED` | `fleet-manager` отказал в размещении по правилам, health или отсутствию подходящего кластера. |
 | `RUNTIME_FLEET_SCOPE_UNAVAILABLE` | Полученный fleet scope или cluster ref недоступен. |
 | `RUNTIME_KUBERNETES_ERROR` | Ошибка Kubernetes API. |
 | `RUNTIME_PERMISSION_DENIED` | Действие запрещено policy или `access-manager`. |
@@ -137,7 +142,7 @@ approvals:
 - Контракты `v1` должны покрыть согласованный объём домена, даже если реализация идёт несколькими срезами.
 - Если контракт опережает код, delivery-документ должен содержать таблицу реализованных и отложенных операций.
 - Namespace первой версии должен быть transport/runtime detail, а не вечным единственным типом слота.
-- Fleet-ссылки должны быть в контракте сразу, даже если первый MVP использует default cluster.
+- Fleet-ссылки должны быть в контракте сразу; `platform-default` является seed/fallback внутри `fleet-manager`, а не локальным выбором `runtime-manager`.
 
 ## Апрув
 

@@ -25,7 +25,7 @@ approvals:
 
 ## TL;DR
 
-`runtime-manager` поставляется малыми PR-срезами: сначала доменная документация, затем контракты, сервисный каркас и БД, жизненный цикл слотов, подготовка workspace, platform jobs, эксплуатационный контур, cleanup/prewarm/reuse. `fleet-manager` остаётся отдельным сервисом-владельцем серверов и кластеров; на старте runtime использует явно описанный default fleet scope.
+`runtime-manager` поставляется малыми PR-срезами: сначала доменная документация, затем контракты, сервисный каркас и БД, жизненный цикл слотов, подготовка workspace, platform jobs, эксплуатационный контур, cleanup/prewarm/reuse и интеграция с fleet placement. `fleet-manager` остаётся отдельным сервисом-владельцем серверов, кластеров, health и placement decisions; runtime вызывает его для новых слотов и jobs без slot.
 
 ## Входные артефакты
 
@@ -44,11 +44,12 @@ approvals:
 | RTM-0 | #655 | Доменная документация, границы runtime/fleet, карта Issue и план поставки готовы. |
 | RTM-1 | #656 | gRPC и AsyncAPI контракты `runtime-manager`, события и сгенерированные Go-контракты готовы. |
 | RTM-2 | #657 | Сервисный каркас, PostgreSQL-модель, миграции, repository, health/readiness, outbox и базовые тесты готовы. |
-| RTM-3 | #658 | Жизненный цикл слотов готов: reserve, extend lease, release, fail, MVP default cluster ref, проверка доступа через `access-manager` и `runtime.slot.*` события. |
+| RTM-3 | #658 | Жизненный цикл слотов готов: reserve, extend lease, release, fail, fleet refs, проверка доступа через `access-manager` и `runtime.slot.*` события. |
 | RTM-4 | #659 | Workspace materialization готова: source refs, writable/read-only, local paths, fingerprint и ошибки подготовки. |
 | RTM-5 | #660 | Platform job MVP готов: job/step state machine, short log tail, full log ref, executor boundary и `runtime.job.*` события. |
 | RTM-6 | #661 | Эксплуатационный контур готов: Dockerfile, manifests, DB bootstrap, migration job, `services.yaml`, smoke path и runbook. |
 | RTM-7 | #662 | Cleanup, retention, prewarm pool, deterministic reuse и видимость cleanup failures готовы. |
+| RTM-FLEET-1 | #735 | `runtime-manager` переключён на `fleet-manager.ResolvePlacement` для `PrepareRuntime`, `ReserveSlot` и `CreateJob` без slot. |
 
 ## Таблица реализации
 
@@ -56,9 +57,9 @@ approvals:
 
 | Группа | Контракт | Реализация |
 |---|---|---|
-| Слоты | Готов: `PrepareRuntime`, `ReserveSlot`, `ExtendSlotLease`, `ReleaseSlot`, `MarkSlotFailed`, `GetSlot`, `ListSlots`, события `runtime.slot.*`. | Команды `ReserveSlot`, `ExtendSlotLease`, `ReleaseSlot`, `MarkSlotFailed`, чтения `GetSlot`/`ListSlots`, идемпотентность с actor scope, проверка доступа через `access-manager`, проверка версии агрегата, lease expiry guard и MVP default fleet config готовы. `PrepareRuntime` готов как фасад: создаёт слот и запускает подготовку workspace одной идемпотентной командой. |
+| Слоты | Готов: `PrepareRuntime`, `ReserveSlot`, `ExtendSlotLease`, `ReleaseSlot`, `MarkSlotFailed`, `GetSlot`, `ListSlots`, события `runtime.slot.*`. | Команды `ReserveSlot`, `ExtendSlotLease`, `ReleaseSlot`, `MarkSlotFailed`, чтения `GetSlot`/`ListSlots`, идемпотентность с actor scope, проверка доступа через `access-manager`, проверка версии агрегата, lease expiry guard и вызов `fleet-manager.ResolvePlacement` готовы. `PrepareRuntime` готов как фасад: получает fleet decision, создаёт слот и запускает подготовку workspace одной идемпотентной командой. |
 | Workspace materialization | Готов: старт, отчёт прогресса, чтения и события `runtime.workspace.*`. | Готовы команды `StartWorkspaceMaterialization`, `ReportWorkspaceMaterializationProgress`, чтения `GetWorkspaceMaterialization`/`ListWorkspaceMaterializations`, хранение нормализованных source refs, access mode, local path, fingerprint и безопасных ошибок подготовки. При старте слот переходит в `materializing`, при успехе в `ready`, при ошибке в `failed`. Runtime проверяет совпадение проекта workspace policy и слота, а слот хранит активную попытку подготовки для защиты от поздних отчётов старых исполнителей. |
-| Platform jobs | Готов: создание, claim с `lease_token`, progress, complete/fail/cancel, чтения и события `runtime.job.*`. | Команды `CreateJob`, `ClaimRunnableJob`, `ReportJobStepProgress`, `CompleteJob`, `FailJob`, `CancelJob`, чтения `GetJob`/`ListJobs`, PostgreSQL repository, проверка доступа и gRPC wiring готовы. Исполнитель получает короткий lease и одноразовый `lease_token`; Kubernetes executor остаётся за эксплуатационным срезом. |
+| Platform jobs | Готов: создание, claim с `lease_token`, progress, complete/fail/cancel, чтения и события `runtime.job.*`. | Команды `CreateJob`, `ClaimRunnableJob`, `ReportJobStepProgress`, `CompleteJob`, `FailJob`, `CancelJob`, чтения `GetJob`/`ListJobs`, PostgreSQL repository, проверка доступа и gRPC wiring готовы. `CreateJob` без slot получает fleet refs через `ResolvePlacement`; `CreateJob` со slot наследует refs из slot. Исполнитель получает короткий lease и одноразовый `lease_token`; Kubernetes executor остаётся за эксплуатационным срезом. |
 | Runtime artifact refs | Готов: запись и чтение ссылок на внешние runtime-артефакты. | Команды `RecordRuntimeArtifactRef`/`ListRuntimeArtifactRefs` готовы; PostgreSQL хранит только ссылку, digest и ограниченную диагностику без blob, полного лога или registry catalog. |
 | Cleanup/prewarm/reuse | Готов: политики очистки, пакетная очистка, prewarm pool и события cleanup/prewarm. | Готовы команды `CreateOrUpdateCleanupPolicy`, `RunCleanupBatch`, `CreateOrUpdatePrewarmPool`, `ReconcilePrewarmPool`, PostgreSQL repository, проверка доступа и gRPC-подключение. Очистка переводит устаревшие слоты в `cleaned`, очищает короткие хвосты логов job и job step по политике и публикует видимый `runtime.cleanup.failed`, если очистку блокирует активная работа. Cleanup policy временно отклоняет `organization` scope, пока runtime не получает проекцию организации для слотов. Prewarm pool создаёт базовые `code_only` слоты под runtime profile; `ReserveSlot` переиспользует только безопасный prewarmed/ready слот с совпадающим fingerprint и совместимым project/repository scope. Организационный scope для prewarm фиксируется как состояние политики, но остаётся `insufficient`, пока runtime не получает проекцию организации для слотов. |
 | Deploy/manifests | Не gRPC-группа. | Готовы Dockerfile, service/deployment manifests, migration job, `services.yaml`, DB bootstrap wiring, smoke-путь и эксплуатационные документы. |
@@ -81,7 +82,8 @@ Runtime-сервис использует:
 - общий event log через `KODEX_RUNTIME_MANAGER_EVENT_LOG_DATABASE_DSN`;
 - shared token для входящего gRPC;
 - `access-manager` как проверку доступа для runtime-команд и чтений;
-- явные MVP defaults `KODEX_RUNTIME_MANAGER_SLOT_DEFAULT_FLEET_SCOPE_ID` и `KODEX_RUNTIME_MANAGER_SLOT_DEFAULT_CLUSTER_ID`, пока не готов `fleet-manager`.
+- `fleet-manager` как владельца placement decision для новых слотов и jobs без slot;
+- явные slot defaults `KODEX_RUNTIME_MANAGER_SLOT_DEFAULT_FLEET_SCOPE_ID` и `KODEX_RUNTIME_MANAGER_SLOT_DEFAULT_CLUSTER_ID` только для оставшихся внутренних контуров, которые ещё не переведены на `ResolvePlacement`.
 
 Smoke-путь:
 - `scripts/build-runtime-manager-images.sh` собирает образы для runtime-проверки;
@@ -101,7 +103,7 @@ Smoke-путь:
 | `provider-hub` | До RTM-4 и RTM-5 | Provider refs и ускоряющие сигналы после работы slot-агентов. |
 | `package-hub` | До RTM-4, RTM-5 и RTM-7 | Руководящие пакеты и runtime-нагрузки плагинов. |
 | `access-manager` | До RTM-1 и RTM-2 | Действия доступа для runtime-команд, проверка actor и реакция на блокировки. |
-| `fleet-manager` | До RTM-1 и RTM-3 | Поля fleet scope/cluster ref и MVP default cluster boundary. |
+| `fleet-manager` | До RTM-1, RTM-3 и RTM-FLEET-1 | Поля fleet scope/cluster ref, `ResolvePlacement`, health и правила размещения. |
 | `operations-hub` | До RTM-5 и RTM-6 | Набор полей, который нужен операторским экранам и центру внимания. |
 | `billing-hub` | После RTM-5 | Будущие записи затрат по runtime usage. |
 
@@ -120,7 +122,7 @@ Smoke-путь:
 - Runtime публикует `runtime.*` события через outbox и `platform-event-log`.
 - Полные логи и registry catalog не хранятся в PostgreSQL.
 - `agent-manager`, `project-catalog`, `package-hub`, `operations-hub` и будущий release/governance контур могут опираться на runtime-контракты.
-- MVP default cluster не блокирует появление `fleet-manager` и multi-cluster.
+- Runtime не выбирает кластер самостоятельно и не блокирует multi-cluster: placement decision принадлежит `fleet-manager`.
 
 ## Апрув
 

@@ -33,6 +33,7 @@ fi
 if [[ "${KODEX_RUNTIME_MANAGER_ACCESS_CHECK_ENABLED:-true}" == "true" ]]; then
   required_runtime_values+=(KODEX_RUNTIME_MANAGER_ACCESS_MANAGER_GRPC_AUTH_TOKEN)
 fi
+required_runtime_values+=(KODEX_RUNTIME_MANAGER_FLEET_MANAGER_GRPC_AUTH_TOKEN)
 kodex_smoke_require_values "${required_runtime_values[@]}"
 
 kodex_smoke_require_images \

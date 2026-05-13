@@ -31,7 +31,7 @@ func PrepareRuntimeInput(request *runtimev1.PrepareRuntimeRequest) (runtimeservi
 	if err != nil {
 		return runtimeservice.PrepareRuntimeInput{}, err
 	}
-	fleetScopeID, err := preferredFleetScopeID(request.GetPlacementConstraints())
+	constraints, err := PlacementConstraintsInputFromProto(request.GetPlacementConstraints())
 	if err != nil {
 		return runtimeservice.PrepareRuntimeInput{}, err
 	}
@@ -40,12 +40,12 @@ func PrepareRuntimeInput(request *runtimev1.PrepareRuntimeRequest) (runtimeservi
 		return runtimeservice.PrepareRuntimeInput{}, err
 	}
 	return runtimeservice.PrepareRuntimeInput{
-		AgentRunID:            agentRunID,
-		RuntimeProfile:        strings.TrimSpace(request.GetRuntimeProfile()),
-		RuntimeMode:           runtimeMode,
-		WorkspacePolicy:       policy,
-		PreferredFleetScopeID: fleetScopeID,
-		Meta:                  meta,
+		AgentRunID:           agentRunID,
+		RuntimeProfile:       strings.TrimSpace(request.GetRuntimeProfile()),
+		RuntimeMode:          runtimeMode,
+		WorkspacePolicy:      policy,
+		PlacementConstraints: constraints,
+		Meta:                 meta,
 	}, nil
 }
 
@@ -74,7 +74,7 @@ func ReserveSlotInput(request *runtimev1.ReserveSlotRequest) (runtimeservice.Res
 	if err != nil {
 		return runtimeservice.ReserveSlotInput{}, err
 	}
-	fleetScopeID, err := preferredFleetScopeID(request.GetPlacementConstraints())
+	constraints, err := PlacementConstraintsInputFromProto(request.GetPlacementConstraints())
 	if err != nil {
 		return runtimeservice.ReserveSlotInput{}, err
 	}
@@ -85,7 +85,7 @@ func ReserveSlotInput(request *runtimev1.ReserveSlotRequest) (runtimeservice.Res
 		AgentRunID:            agentRunID,
 		ProjectID:             projectID,
 		RepositoryIDs:         repositoryIDs,
-		PreferredFleetScopeID: fleetScopeID,
+		PlacementConstraints:  constraints,
 		Meta:                  meta,
 	}, nil
 }
@@ -356,7 +356,7 @@ func CreateJobInput(request *runtimev1.CreateJobRequest) (runtimeservice.CreateJ
 	if err != nil {
 		return runtimeservice.CreateJobInput{}, err
 	}
-	fleetScopeID, err := preferredFleetScopeID(request.GetPlacementConstraints())
+	constraints, err := PlacementConstraintsInputFromProto(request.GetPlacementConstraints())
 	if err != nil {
 		return runtimeservice.CreateJobInput{}, err
 	}
@@ -373,7 +373,7 @@ func CreateJobInput(request *runtimev1.CreateJobRequest) (runtimeservice.CreateJ
 		RepositoryID:          repositoryID,
 		ReleaseLineID:         releaseLineID,
 		PackageInstallationID: packageInstallationID,
-		PreferredFleetScopeID: fleetScopeID,
+		PlacementConstraints:  constraints,
 		JobInputJSON:          []byte(strings.TrimSpace(request.GetJobInputJson())),
 		Meta:                  meta,
 	}, nil
@@ -861,11 +861,32 @@ func runtimeArtifactRefInputFromProto(ref *runtimev1.RuntimeArtifactRefInput) (r
 	}, nil
 }
 
-func preferredFleetScopeID(constraints *runtimev1.PlacementConstraints) (*uuid.UUID, error) {
+// PlacementConstraintsInputFromProto maps safe placement hints to the runtime domain.
+func PlacementConstraintsInputFromProto(constraints *runtimev1.PlacementConstraints) (runtimeservice.PlacementConstraintsInput, error) {
 	if constraints == nil {
-		return nil, nil
+		return runtimeservice.PlacementConstraintsInput{}, nil
 	}
-	return optionalUUIDPtr(constraints.GetPreferredFleetScopeId())
+	projectID, err := optionalUUIDPtr(constraints.GetProjectId())
+	if err != nil {
+		return runtimeservice.PlacementConstraintsInput{}, err
+	}
+	repositoryIDs, err := repeatedUUIDs(constraints.GetRepositoryIds())
+	if err != nil {
+		return runtimeservice.PlacementConstraintsInput{}, err
+	}
+	preferredFleetScopeID, err := optionalUUIDPtr(constraints.GetPreferredFleetScopeId())
+	if err != nil {
+		return runtimeservice.PlacementConstraintsInput{}, err
+	}
+	return runtimeservice.PlacementConstraintsInput{
+		ProjectID:             projectID,
+		RepositoryIDs:         repositoryIDs,
+		ServiceKeys:           append([]string(nil), constraints.GetServiceKeys()...),
+		RuntimeProfile:        strings.TrimSpace(constraints.GetRuntimeProfile()),
+		PreferredFleetScopeID: preferredFleetScopeID,
+		RequiredCapabilities:  append([]string(nil), constraints.GetRequiredCapabilities()...),
+		MetadataJSON:          []byte(strings.TrimSpace(constraints.GetMetadataJson())),
+	}, nil
 }
 
 func optionalTime(text string) (*time.Time, error) {

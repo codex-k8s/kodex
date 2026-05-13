@@ -21,6 +21,9 @@ var ErrConflict = runtimeError("conflict")
 // ErrPreconditionFailed marks a violated domain precondition.
 var ErrPreconditionFailed = runtimeError("precondition failed")
 
+// ErrPlacementRejected marks a fleet-owned placement refusal.
+var ErrPlacementRejected = runtimeError("placement rejected")
+
 // ErrDependencyUnavailable marks an unavailable external dependency.
 var ErrDependencyUnavailable = runtimeError("dependency unavailable")
 

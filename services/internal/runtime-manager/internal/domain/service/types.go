@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,18 +19,18 @@ type ReserveSlotInput struct {
 	AgentRunID            *uuid.UUID
 	ProjectID             *uuid.UUID
 	RepositoryIDs         []uuid.UUID
-	PreferredFleetScopeID *uuid.UUID
+	PlacementConstraints  PlacementConstraintsInput
 	Meta                  value.CommandMeta
 }
 
 // PrepareRuntimeInput describes a facade request to reserve a slot and start workspace preparation.
 type PrepareRuntimeInput struct {
-	AgentRunID            *uuid.UUID
-	RuntimeProfile        string
-	RuntimeMode           enum.RuntimeMode
-	WorkspacePolicy       WorkspacePolicyInput
-	PreferredFleetScopeID *uuid.UUID
-	Meta                  value.CommandMeta
+	AgentRunID           *uuid.UUID
+	RuntimeProfile       string
+	RuntimeMode          enum.RuntimeMode
+	WorkspacePolicy      WorkspacePolicyInput
+	PlacementConstraints PlacementConstraintsInput
+	Meta                 value.CommandMeta
 }
 
 // PrepareRuntimeResult contains the slot and materialization attempt started by PrepareRuntime.
@@ -110,9 +111,45 @@ type CreateJobInput struct {
 	RepositoryID          *uuid.UUID
 	ReleaseLineID         *uuid.UUID
 	PackageInstallationID *uuid.UUID
-	PreferredFleetScopeID *uuid.UUID
+	PlacementConstraints  PlacementConstraintsInput
 	JobInputJSON          []byte
 	Meta                  value.CommandMeta
+}
+
+// PlacementConstraintsInput contains safe placement hints accepted by runtime-manager callers.
+type PlacementConstraintsInput struct {
+	ProjectID             *uuid.UUID
+	RepositoryIDs         []uuid.UUID
+	ServiceKeys           []string
+	RuntimeProfile        string
+	PreferredFleetScopeID *uuid.UUID
+	RequiredCapabilities  []string
+	MetadataJSON          []byte
+}
+
+// PlacementResolutionRequest is the normalized request sent to the fleet placement owner.
+type PlacementResolutionRequest struct {
+	ProjectID                *uuid.UUID
+	RepositoryIDs            []uuid.UUID
+	ServiceKeys              []string
+	RuntimeMode              enum.RuntimeMode
+	RuntimeProfile           string
+	PreferredFleetScopeID    *uuid.UUID
+	RequiredCapabilities     []string
+	PlacementConstraintsJSON []byte
+	RuntimeRequirementsJSON  []byte
+	Meta                     value.CommandMeta
+}
+
+// PlacementResolution is the fleet-owned result runtime-manager persists on slots and jobs.
+type PlacementResolution struct {
+	FleetScopeID uuid.UUID
+	ClusterID    uuid.UUID
+}
+
+// PlacementResolver resolves runtime placement through fleet-manager.
+type PlacementResolver interface {
+	ResolvePlacement(ctx context.Context, request PlacementResolutionRequest) (PlacementResolution, error)
 }
 
 // ClaimRunnableJobInput describes a worker claim request for a runnable job.

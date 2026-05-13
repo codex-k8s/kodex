@@ -144,6 +144,15 @@ spec:
                   key: KODEX_RUNTIME_MANAGER_ACCESS_MANAGER_GRPC_AUTH_TOKEN
             - name: KODEX_RUNTIME_MANAGER_ACCESS_MANAGER_CHECK_TIMEOUT
               value: "{{ envOr "KODEX_RUNTIME_MANAGER_ACCESS_MANAGER_CHECK_TIMEOUT" "3s" }}"
+            - name: KODEX_RUNTIME_MANAGER_FLEET_MANAGER_GRPC_ADDR
+              value: "{{ envOr "KODEX_RUNTIME_MANAGER_FLEET_MANAGER_GRPC_ADDR" "fleet-manager:9090" }}"
+            - name: KODEX_RUNTIME_MANAGER_FLEET_MANAGER_GRPC_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: kodex-platform-runtime
+                  key: KODEX_RUNTIME_MANAGER_FLEET_MANAGER_GRPC_AUTH_TOKEN
+            - name: KODEX_RUNTIME_MANAGER_FLEET_MANAGER_RESOLVE_TIMEOUT
+              value: "{{ envOr "KODEX_RUNTIME_MANAGER_FLEET_MANAGER_RESOLVE_TIMEOUT" "5s" }}"
             - name: KODEX_RUNTIME_MANAGER_EVENT_LOG_DATABASE_DSN
               valueFrom:
                 secretKeyRef:

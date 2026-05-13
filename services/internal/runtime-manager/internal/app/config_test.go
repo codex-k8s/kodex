@@ -21,6 +21,7 @@ func TestLoadConfigAllowsMissingGRPCAuthTokenWhenAuthDisabled(t *testing.T) {
 	t.Setenv("KODEX_RUNTIME_MANAGER_GRPC_AUTH_TOKEN", "")
 	t.Setenv("KODEX_RUNTIME_MANAGER_OUTBOX_DISPATCH_ENABLED", "false")
 	t.Setenv("KODEX_RUNTIME_MANAGER_ACCESS_CHECK_ENABLED", "false")
+	t.Setenv("KODEX_RUNTIME_MANAGER_FLEET_MANAGER_GRPC_AUTH_TOKEN", "fleet-token")
 
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -73,7 +74,18 @@ func TestValidateRequiresAccessTokenWhenChecksEnabled(t *testing.T) {
 	}
 }
 
-func TestSlotServiceConfigIncludesExplicitMVPPlacement(t *testing.T) {
+func TestValidateRequiresFleetToken(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.Fleet.FleetManagerAuthToken = ""
+
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() err = nil, want missing fleet-manager token error")
+	}
+}
+
+func TestSlotServiceConfigIncludesSlotDefaults(t *testing.T) {
 	t.Parallel()
 
 	cfg := validConfig()
@@ -155,6 +167,11 @@ func validConfig() Config {
 			AccessManagerGRPCAddr:  "access-manager:9090",
 			AccessManagerAuthToken: "access-token",
 			CheckTimeout:           3 * time.Second,
+		},
+		Fleet: RuntimeFleetConfig{
+			FleetManagerGRPCAddr:  "fleet-manager:9090",
+			FleetManagerAuthToken: "fleet-token",
+			ResolveTimeout:        5 * time.Second,
 		},
 	}
 }

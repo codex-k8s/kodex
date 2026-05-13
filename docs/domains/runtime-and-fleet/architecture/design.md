@@ -129,15 +129,13 @@ sequenceDiagram
 
 Сбой cleanup не скрывается в логах. Он остаётся runtime-сигналом для `operations-hub` и будущих уведомлений.
 
-## MVP одного кластера
+## Размещение через `fleet-manager`
 
-В первом контуре допускается один Kubernetes-кластер, но он должен быть выражен явно:
+`runtime-manager` не выбирает Kubernetes-кластер самостоятельно. Для `PrepareRuntime`, `ReserveSlot` и `CreateJob` без уже выбранного slot он вызывает `fleet-manager.ResolvePlacement`, передавая безопасные ограничения размещения, runtime profile, runtime mode и ссылки на проект/репозитории/сервис. В ответ runtime сохраняет только итоговые `fleet_scope_id` и `cluster_id`.
 
-- через config или seed-запись `default_fleet_scope`;
-- через поля `fleet_scope_id` и `cluster_id` в командах и состоянии;
-- через отдельный статус, что placement был разрешён упрощённым MVP-путём.
+`fleet-manager` остаётся владельцем правил размещения, учёта health, fallback на `platform-default` и журнала placement decisions. `runtime-manager` не хранит payload решения, не повторяет health/rules логику и не делает локальный default fallback для новых слотов и jobs.
 
-Для `ReserveSlot` первый контур использует `preferred_fleet_scope_id`, если он уже пришёл из проверенной placement policy. Если явная ссылка не передана, сервис берёт `default_fleet_scope_id` и `default_cluster_id` из собственной конфигурации. Это не является выбором размещения: `runtime-manager` только применяет заранее заданную ссылку, а полноценное решение placement остаётся ответственностью будущего `fleet-manager`.
+Для `CreateJob` со slot повторный выбор размещения не выполняется: job наследует `fleet_scope_id` и `cluster_id` из slot, чтобы исполнитель работал в уже подготовленном runtime-контуре.
 
 Запрещено:
 
@@ -229,16 +227,16 @@ Fleet-события должны иметь отдельный префикс `
 - Логи: команда, slot, job, step, workspace attempt, actor, correlation id, fleet scope, результат.
 - Метрики: активные слоты, прогретые слоты, pending/running/failed jobs, длительность materialization, cleanup failures, cold start rate.
 - Трейсы: входящий gRPC, проверка доступа, materialization, Kubernetes API, outbox publish.
-- Алерты: рост failed jobs, застрявшие leases, cleanup failures, нехватка prewarmed slots, недоступность default cluster.
+- Алерты: рост failed jobs, застрявшие leases, cleanup failures, нехватка prewarmed slots, недоступность fleet placement или выбранного кластера.
 
 ## Риски
 
 | Риск | Митигирующее решение |
 |---|---|
 | `runtime-manager` начнёт владеть agent `Run`. | В API и БД хранить только external `agent_run_id`; run state остаётся в `agent-manager`. |
-| Один стартовый кластер станет вечным архитектурным пределом. | Сразу хранить fleet refs и описать MVP default cluster как упрощение. |
+| Один стартовый кластер станет вечным архитектурным пределом. | Сразу хранить fleet refs и вызывать `fleet-manager.ResolvePlacement`; `platform-default` остаётся seed/fallback внутри fleet. |
 | Полные логи заполнят PostgreSQL. | Хранить только short log tail и ссылку на полный источник. |
-| Runtime начнёт выбирать placement вместо fleet. | `runtime-manager` вызывает `fleet-manager` или использует явный default fleet ref до готовности сервиса. |
+| Runtime начнёт выбирать placement вместо fleet. | `runtime-manager` вызывает `fleet-manager.ResolvePlacement`, сохраняет только refs и не дублирует правила, health и журнал решений. |
 | Cleanup останется невидимым. | Сделать cleanup job и failures доменными событиями runtime. |
 
 ## Апрув

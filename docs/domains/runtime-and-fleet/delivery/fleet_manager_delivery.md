@@ -68,11 +68,11 @@ approvals:
 
 | Домен или сервис | Связь | Статус |
 |---|---|---|
-| `runtime-manager` | Основной потребитель `ResolvePlacement`; после FLEET-5 runtime должен перейти с локального default config на fleet decision. | Сейчас не блокирует FLEET-0..FLEET-5. Интеграция нужна отдельным PR после готовности resolver. |
+| `runtime-manager` | Основной потребитель `ResolvePlacement`; RTM-FLEET-1 переводит новые слоты и jobs без slot на fleet decision. | Не блокирует FLEET-0..FLEET-5; deploy-контур `fleet-manager` остаётся отдельным срезом. |
 | `project-catalog` | Источник placement policy проекта, репозитория и сервиса. | Текущие проектные контракты достаточны для FLEET-5; дальнейшее расширение ограничений идёт отдельными междоменными PR. |
 | `package-hub` | Источник runtime-требований для runtime-нагрузок пакетов и плагинов. | Не блокирует FLEET-0..FLEET-4; нужен контракт требований перед размещением runtime-нагрузки пакета. |
 | `agent-manager` | Инициирует runtime через `runtime-manager`. | Не блокирует fleet kickoff; прямой fleet API для agent-manager не планируется в MVP. |
-| `access-manager` | Проверка прав на управление fleet scope, серверами, кластерами, health и placement rules. | Ключи действий заведены в FLEET-1; проверки доступа registry-команд подключены в FLEET-3; health-команды и чтения подключены в FLEET-4; placement-поверхность подключается в FLEET-5. |
+| `access-manager` | Проверка прав на управление fleet scope, серверами, кластерами, health и placement rules. | Ключи действий заведены в FLEET-1; проверки доступа registry-команд подключены в FLEET-3; health-команды и чтения подключены в FLEET-4; placement-поверхность подключена в FLEET-5. |
 | Secret resolver/Vault/Kubernetes Secret клиент | Получение значения kubeconfig/service account по разрешённой ссылке. | FLEET-4 использует `secretresolver` и Kubernetes client-go только внутри проверки; значение секрета не сохраняется, не логируется и не попадает в события. |
 
 ## Критерии начала кода
@@ -105,7 +105,7 @@ approvals:
 
 ## Рекомендуемый следующий шаг после FLEET-4
 
-После FLEET-5 идти в отдельный интеграционный срез: переключить `runtime-manager` с локального bootstrap fallback на вызов `fleet-manager.ResolvePlacement`, не смешивая эту работу с deploy-контуром FLEET-6.
+После FLEET-5 выполнен отдельный интеграционный срез RTM-FLEET-1: `runtime-manager` вызывает `fleet-manager.ResolvePlacement` для новых слотов и jobs без slot. Дальше отдельно идёт deploy-контур FLEET-6.
 
 ## Апрув
 
