@@ -161,6 +161,7 @@ func scanRelationship(row postgreslib.RowScanner) (entity.ProviderRelationship, 
 		&relationship.RelationshipType,
 		&source,
 		&confidence,
+		&relationship.Version,
 		&relationship.CreatedAt,
 	)
 	relationship.TargetWorkItemID = postgreslib.UUIDPtrFromPG(targetID)
@@ -302,6 +303,7 @@ func scanProviderOperation(row postgreslib.RowScanner) (entity.ProviderOperation
 	var providerSlug, operationType, status string
 	var actorID, snapshotID pgtype.UUID
 	var finishedAt pgtype.Timestamptz
+	var policyJSON, approvalJSON []byte
 	err := row.Scan(
 		&operation.ID,
 		&operation.CommandID,
@@ -315,6 +317,9 @@ func scanProviderOperation(row postgreslib.RowScanner) (entity.ProviderOperation
 		&operation.ErrorCode,
 		&operation.ErrorMessage,
 		&snapshotID,
+		&policyJSON,
+		&approvalJSON,
+		&operation.ProviderVersion,
 		&operation.StartedAt,
 		&finishedAt,
 		&operation.Version,
@@ -327,6 +332,18 @@ func scanProviderOperation(row postgreslib.RowScanner) (entity.ProviderOperation
 	operation.Status = enum.ProviderOperationStatus(status)
 	operation.RateLimitSnapshotID = postgreslib.UUIDPtrFromPG(snapshotID)
 	operation.FinishedAt = timePtrFromPG(finishedAt)
+	if len(policyJSON) == 0 {
+		policyJSON = []byte("{}")
+	}
+	if len(approvalJSON) == 0 {
+		approvalJSON = []byte("{}")
+	}
+	if err := json.Unmarshal(policyJSON, &operation.OperationPolicyContext); err != nil {
+		return entity.ProviderOperation{}, err
+	}
+	if err := json.Unmarshal(approvalJSON, &operation.ApprovalGateRef); err != nil {
+		return entity.ProviderOperation{}, err
+	}
 	return operation, err
 }
 

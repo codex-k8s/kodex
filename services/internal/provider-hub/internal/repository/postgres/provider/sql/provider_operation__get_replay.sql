@@ -12,6 +12,9 @@ SELECT
     error_code,
     error_message,
     rate_limit_snapshot_id,
+    operation_policy_context_json,
+    approval_gate_ref_json,
+    provider_version,
     started_at,
     finished_at,
     version,
@@ -29,4 +32,7 @@ WHERE @command_id <> ''
     AND result_ref = @result_ref
     AND error_code = @error_code
     AND error_message = @error_message
-    AND rate_limit_snapshot_id IS NOT DISTINCT FROM @rate_limit_snapshot_id;
+    AND rate_limit_snapshot_id IS NOT DISTINCT FROM @rate_limit_snapshot_id
+    AND operation_policy_context_json = @operation_policy_context_json::jsonb
+    AND approval_gate_ref_json = @approval_gate_ref_json::jsonb
+    AND provider_version = @provider_version;

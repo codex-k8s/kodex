@@ -25,7 +25,9 @@ type Repository interface {
 	ListProviderEvents(context.Context, query.ProviderEventFilter) ([]entity.ProviderEvent, query.PageResult, error)
 	GetWorkItemProjection(context.Context, query.ProviderTargetLookup) (entity.ProviderWorkItemProjection, error)
 	ListWorkItemProjections(context.Context, query.WorkItemProjectionFilter) ([]entity.ProviderWorkItemProjection, query.PageResult, error)
+	GetCommentProjectionByProviderID(context.Context, uuid.UUID, string) (entity.ProviderCommentProjection, error)
 	ListComments(context.Context, query.CommentProjectionFilter) ([]entity.ProviderCommentProjection, query.PageResult, error)
+	GetRelationshipByIdentity(context.Context, query.RelationshipLookup) (entity.ProviderRelationship, error)
 	ListRelationships(context.Context, query.RelationshipFilter) ([]entity.ProviderRelationship, query.PageResult, error)
 	RegisterProviderArtifactSignal(context.Context, entity.ProviderArtifactSignal, entity.ReconciliationRequest, []entity.SyncCursor) ([]entity.SyncCursor, error)
 	EnqueueSyncCursors(context.Context, entity.ReconciliationRequest, []entity.SyncCursor) ([]entity.SyncCursor, error)
@@ -38,6 +40,7 @@ type Repository interface {
 	ListAccountRuntimeStates(context.Context, query.AccountRuntimeStateFilter) ([]entity.ProviderAccountRuntimeState, query.PageResult, error)
 	RecordLimitSnapshot(context.Context, entity.ProviderLimitSnapshot, entity.ProviderAccountRuntimeState) (entity.ProviderLimitSnapshot, error)
 	ListLimitSnapshots(context.Context, query.LimitSnapshotFilter) ([]entity.ProviderLimitSnapshot, query.PageResult, error)
+	ApplyProviderOperation(context.Context, ProviderOperationCompletion) (entity.ProviderOperation, error)
 	RecordProviderOperation(context.Context, entity.ProviderOperation) (entity.ProviderOperation, error)
 	ListProviderOperations(context.Context, query.ProviderOperationFilter) ([]entity.ProviderOperation, query.PageResult, error)
 	ClaimOutboxEvents(context.Context, int, time.Time, time.Time) ([]entity.OutboxEvent, error)
@@ -73,6 +76,12 @@ type ReconciliationBatchCompletion struct {
 	LimitSnapshots     []entity.ProviderLimitSnapshot
 	RuntimeState       *entity.ProviderAccountRuntimeState
 	Now                time.Time
+}
+
+// ProviderOperationCompletion stores one finalized provider operation and its outbox side effects.
+type ProviderOperationCompletion struct {
+	Operation    entity.ProviderOperation
+	OutboxEvents []entity.OutboxEvent
 }
 
 // WebhookNormalizer isolates provider-specific webhook payload parsing from the domain service.

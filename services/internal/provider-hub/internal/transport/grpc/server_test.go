@@ -424,6 +424,73 @@ func (fakeService) ListProviderOperations(context.Context, providerservice.ListP
 	return providerservice.ListProviderOperationsResult{Page: query.PageResult{}}, nil
 }
 
+func (fakeService) CreateIssue(_ context.Context, input providerservice.CreateIssueInput) (providerservice.ProviderOperationResult, error) {
+	return providerservice.ProviderOperationResult{
+		Result: providerservice.ProviderOperationCommandResult{
+			ResultRef: "issue:create",
+			Target: &providerservice.ProviderTarget{
+				ProviderSlug: enum.ProviderSlugGitHub,
+			},
+		},
+	}, nil
+}
+
+func (fakeService) UpdateIssue(_ context.Context, input providerservice.UpdateIssueInput) (providerservice.ProviderOperationResult, error) {
+	return providerservice.ProviderOperationResult{
+		Result: providerservice.ProviderOperationCommandResult{
+			ResultRef: "issue:update",
+			Target:    &input.Target,
+		},
+	}, nil
+}
+
+func (fakeService) CreateComment(_ context.Context, input providerservice.CreateCommentInput) (providerservice.ProviderOperationResult, error) {
+	return providerservice.ProviderOperationResult{
+		Result: providerservice.ProviderOperationCommandResult{
+			ResultRef: "comment:create",
+			Target:    &input.Target,
+		},
+	}, nil
+}
+
+func (fakeService) UpdateComment(_ context.Context, input providerservice.UpdateCommentInput) (providerservice.ProviderOperationResult, error) {
+	return providerservice.ProviderOperationResult{
+		Result: providerservice.ProviderOperationCommandResult{
+			ResultRef: "comment:update",
+			Target:    &input.Target,
+		},
+	}, nil
+}
+
+func (fakeService) CreatePullRequest(_ context.Context, input providerservice.CreatePullRequestInput) (providerservice.ProviderOperationResult, error) {
+	return providerservice.ProviderOperationResult{
+		Result: providerservice.ProviderOperationCommandResult{
+			ResultRef: "pull_request:create",
+			Target: &providerservice.ProviderTarget{
+				ProviderSlug: input.ProviderSlug,
+			},
+		},
+	}, nil
+}
+
+func (fakeService) CreateReviewSignal(_ context.Context, input providerservice.CreateReviewSignalInput) (providerservice.ProviderOperationResult, error) {
+	return providerservice.ProviderOperationResult{
+		Result: providerservice.ProviderOperationCommandResult{
+			ResultRef: "review_signal:create",
+			Target:    &input.Target,
+		},
+	}, nil
+}
+
+func (fakeService) UpdateRelationship(_ context.Context, input providerservice.UpdateRelationshipInput) (providerservice.ProviderOperationResult, error) {
+	return providerservice.ProviderOperationResult{
+		Result: providerservice.ProviderOperationCommandResult{
+			ResultRef: "relationship:update",
+			Target:    input.Target,
+		},
+	}, nil
+}
+
 func ptrString(value string) *string {
 	return &value
 }

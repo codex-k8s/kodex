@@ -13,13 +13,16 @@ const (
 	providerEventCommentSynced      = providerevents.EventCommentSynced
 	providerEventRelationshipSynced = providerevents.EventRelationshipSynced
 	providerEventSyncCursorAdvanced = providerevents.EventSyncCursorAdvanced
+	providerEventOperationCompleted = providerevents.EventOperationCompleted
+	providerEventOperationFailed    = providerevents.EventOperationFailed
 
-	providerAggregateWebhookEvent  = providerevents.AggregateWebhookEvent
-	providerAggregateProviderEvent = providerevents.AggregateProviderEvent
-	providerAggregateWorkItem      = providerevents.AggregateWorkItem
-	providerAggregateComment       = providerevents.AggregateComment
-	providerAggregateRelationship  = providerevents.AggregateRelationship
-	providerAggregateSyncCursor    = providerevents.AggregateSyncCursor
+	providerAggregateWebhookEvent      = providerevents.AggregateWebhookEvent
+	providerAggregateProviderEvent     = providerevents.AggregateProviderEvent
+	providerAggregateProviderOperation = providerevents.AggregateProviderOperation
+	providerAggregateWorkItem          = providerevents.AggregateWorkItem
+	providerAggregateComment           = providerevents.AggregateComment
+	providerAggregateRelationship      = providerevents.AggregateRelationship
+	providerAggregateSyncCursor        = providerevents.AggregateSyncCursor
 
 	providerEventSchemaVersion = providerevents.SchemaVersion
 	webhookPayloadRetention    = 30 * 24 * time.Hour

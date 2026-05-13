@@ -505,6 +505,8 @@ message ProviderRelationship {
   RelationshipConfidence confidence = 7;
   // created_at is creation time in RFC3339 format.
   string created_at = 8;
+  // version is the local relationship version for optimistic concurrency.
+  int64 version = 9;
 }
 
 // SyncCursor stores reconciliation state for one provider scope.

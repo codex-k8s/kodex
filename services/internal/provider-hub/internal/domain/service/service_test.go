@@ -812,7 +812,7 @@ func TestRunReconciliationBatchClaimsCursor(t *testing.T) {
 		Clock:                fixedClock{now: now},
 		IDGenerator:          &sequenceIDs{ids: []uuid.UUID{uuid.New()}},
 		AccountUsageResolver: fakeAccountUsageResolver{providerSlug: enum.ProviderSlugGitHub},
-		SecretResolver:       fakeSecretResolver{secret: secretresolver.NewSecretValue([]byte("token-value"))},
+		SecretResolver:       &fakeSecretResolver{secret: secretresolver.NewSecretValue([]byte("token-value"))},
 		ProviderAdapters:     []providerclient.Adapter{providerAdapter},
 	})
 
@@ -868,7 +868,7 @@ func TestRunReconciliationBatchMarksSecretResolveFailureWithoutLeakingSecret(t *
 		Clock:                fixedClock{now: now},
 		IDGenerator:          &sequenceIDs{ids: []uuid.UUID{uuid.New()}},
 		AccountUsageResolver: fakeAccountUsageResolver{providerSlug: enum.ProviderSlugGitHub},
-		SecretResolver:       fakeSecretResolver{err: secretresolver.ErrSecretNotFound},
+		SecretResolver:       &fakeSecretResolver{err: secretresolver.ErrSecretNotFound},
 		ProviderAdapters:     []providerclient.Adapter{&fakeProviderAdapter{}},
 	})
 
@@ -907,7 +907,7 @@ func TestRunReconciliationBatchKeepsRateLimitedCursorLeasedForRetry(t *testing.T
 		Clock:                fixedClock{now: now},
 		IDGenerator:          &sequenceIDs{ids: []uuid.UUID{uuid.New()}},
 		AccountUsageResolver: fakeAccountUsageResolver{providerSlug: enum.ProviderSlugGitHub},
-		SecretResolver:       fakeSecretResolver{secret: secretresolver.NewSecretValue([]byte("token-value"))},
+		SecretResolver:       &fakeSecretResolver{secret: secretresolver.NewSecretValue([]byte("token-value"))},
 		ProviderAdapters: []providerclient.Adapter{&fakeProviderAdapter{
 			err: &providerclient.Error{Kind: providerclient.ErrorKindRateLimited, RetryAfter: retryAfter, Cause: errors.New("token-value")},
 		}},
@@ -950,25 +950,291 @@ func TestRunReconciliationBatchRejectsInvalidMaxItems(t *testing.T) {
 	}
 }
 
+func TestCreateIssueRecordsSucceededProviderOperationWithoutSecretResolution(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 12, 10, 0, 0, 0, time.UTC)
+	operationID := uuid.New()
+	outboxID := uuid.New()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	externalAccountID := uuid.New()
+	commandID := uuid.New()
+	workItemType := "dev"
+	secretResolver := &fakeSecretResolver{secret: secretresolver.NewSecretValue([]byte("must-not-be-used"))}
+	executor := &fakeWriteExecutor{
+		result: providerclient.WriteResult{
+			ResultRef:              "provider:issue:77",
+			ProviderObjectID:       "issue-77",
+			ProviderVersion:        "etag-77",
+			ReconciliationEnqueued: true,
+		},
+	}
+	repository := &fakeRepository{}
+	service := NewWithDependencies(Dependencies{
+		Repository:             repository,
+		Clock:                  fixedClock{now: now},
+		IDGenerator:            &sequenceIDs{ids: []uuid.UUID{operationID, outboxID}},
+		AccountUsageResolver:   fakeAccountUsageResolver{},
+		SecretResolver:         secretResolver,
+		ProviderWriteExecutors: []providerclient.WriteExecutor{executor},
+	})
+
+	result, err := service.CreateIssue(context.Background(), CreateIssueInput{
+		ProjectID:         projectID,
+		RepositoryID:      repositoryID,
+		ProviderSlug:      enum.ProviderSlugGitHub,
+		Title:             "  Завести issue  ",
+		Body:              "  Описание  ",
+		Labels:            []string{"kind:bug", "area:provider-hub"},
+		WorkItemType:      &workItemType,
+		ExternalAccountID: externalAccountID,
+		Meta: value.CommandMeta{
+			CommandID: commandID,
+			Actor: value.Actor{
+				Type: "agent",
+				ID:   uuid.NewString(),
+			},
+			OperationPolicyContext: value.ProviderOperationPolicyContext{
+				ProjectID:         projectID.String(),
+				RepositoryID:      repositoryID.String(),
+				RoleKey:           "agent-manager",
+				RiskLevel:         value.ProviderOperationRiskLevelMedium,
+				ChangedFields:     []string{"title", "body", "labels", "assignee_provider_logins", "work_item_type"},
+				PolicyVersion:     "2026-05-12",
+				PolicySnapshotRef: "policy:provider-write:v1",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateIssue(): %v", err)
+	}
+	if secretResolver.calls != 0 {
+		t.Fatalf("secret resolver calls = %d, want 0", secretResolver.calls)
+	}
+	if executor.calls != 1 {
+		t.Fatalf("executor calls = %d, want 1", executor.calls)
+	}
+	if executor.request.Credential.ExternalAccountID != externalAccountID {
+		t.Fatalf("executor credential account = %s, want %s", executor.request.Credential.ExternalAccountID, externalAccountID)
+	}
+	if executor.request.CreateIssue == nil || executor.request.CreateIssue.Title != "Завести issue" {
+		t.Fatalf("executor request = %+v, want trimmed create issue payload", executor.request.CreateIssue)
+	}
+	if repository.recordedProviderOperation.ID != operationID || repository.recordedProviderOperation.Status != enum.ProviderOperationStatusSucceeded {
+		t.Fatalf("operation = %+v, want stored succeeded operation %s", repository.recordedProviderOperation, operationID)
+	}
+	if repository.recordedProviderOperation.ProviderVersion != "etag-77" {
+		t.Fatalf("provider version = %q, want etag-77", repository.recordedProviderOperation.ProviderVersion)
+	}
+	if len(repository.recordedOutboxEvents) != 1 || repository.recordedOutboxEvents[0].EventType != providerEventOperationCompleted {
+		t.Fatalf("outbox = %+v, want completed event", repository.recordedOutboxEvents)
+	}
+	if result.ProviderOperation == nil || result.ProviderOperation.Status != enum.ProviderOperationStatusSucceeded {
+		t.Fatalf("result operation = %+v, want succeeded operation", result.ProviderOperation)
+	}
+	if result.Result.ResultRef != "provider:issue:77" || !result.Result.ReconciliationEnqueued {
+		t.Fatalf("result payload = %+v, want provider result and reconciliation flag", result.Result)
+	}
+}
+
+func TestUpdateIssueRequiresApprovalGateReferenceWhenPolicyDemandsIt(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 12, 10, 10, 0, 0, time.UTC)
+	operationID := uuid.New()
+	outboxID := uuid.New()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	externalAccountID := uuid.New()
+	commandID := uuid.New()
+	executor := &fakeWriteExecutor{}
+	repository := &fakeRepository{}
+	service := NewWithDependencies(Dependencies{
+		Repository:             repository,
+		Clock:                  fixedClock{now: now},
+		IDGenerator:            &sequenceIDs{ids: []uuid.UUID{operationID, outboxID}},
+		AccountUsageResolver:   fakeAccountUsageResolver{},
+		ProviderWriteExecutors: []providerclient.WriteExecutor{executor},
+	})
+
+	title := "Новый заголовок"
+	result, err := service.UpdateIssue(context.Background(), UpdateIssueInput{
+		Target: ProviderTarget{
+			ProviderSlug:       enum.ProviderSlugGitHub,
+			RepositoryFullName: "codex-k8s/kodex",
+			WorkItemKind:       enum.WorkItemKindIssue,
+			Number:             581,
+		},
+		Title:             &title,
+		ExternalAccountID: externalAccountID,
+		Meta: value.CommandMeta{
+			CommandID: commandID,
+			OperationPolicyContext: value.ProviderOperationPolicyContext{
+				ProjectID:        projectID.String(),
+				RepositoryID:     repositoryID.String(),
+				RiskLevel:        value.ProviderOperationRiskLevelHigh,
+				ApprovalRequired: true,
+				ChangedFields:    []string{"title"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("UpdateIssue(): %v", err)
+	}
+	if executor.calls != 0 {
+		t.Fatalf("executor calls = %d, want 0", executor.calls)
+	}
+	if repository.recordedProviderOperation.Status != enum.ProviderOperationStatusDenied ||
+		repository.recordedProviderOperation.ErrorCode != writeFailureApprovalRequired {
+		t.Fatalf("operation = %+v, want denied approval-required operation", repository.recordedProviderOperation)
+	}
+	if len(repository.recordedOutboxEvents) != 1 || repository.recordedOutboxEvents[0].EventType != providerEventOperationFailed {
+		t.Fatalf("outbox = %+v, want failed event", repository.recordedOutboxEvents)
+	}
+	if result.ProviderOperation == nil || result.ProviderOperation.Status != enum.ProviderOperationStatusDenied {
+		t.Fatalf("result operation = %+v, want denied operation", result.ProviderOperation)
+	}
+}
+
+func TestUpdateIssueChecksExpectedVersionBeforeExecutor(t *testing.T) {
+	t.Parallel()
+
+	executor := &fakeWriteExecutor{}
+	repository := &fakeRepository{
+		workItemProjection: entity.ProviderWorkItemProjection{
+			Base: entity.Base{ID: uuid.New(), Version: 4},
+			Kind: enum.WorkItemKindIssue,
+		},
+	}
+	service := NewWithDependencies(Dependencies{
+		Repository:             repository,
+		Clock:                  fixedClock{now: time.Date(2026, 5, 12, 10, 20, 0, 0, time.UTC)},
+		IDGenerator:            &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New()}},
+		AccountUsageResolver:   fakeAccountUsageResolver{},
+		ProviderWriteExecutors: []providerclient.WriteExecutor{executor},
+	})
+
+	title := "Поменять заголовок"
+	expectedVersion := int64(3)
+	_, err := service.UpdateIssue(context.Background(), UpdateIssueInput{
+		Target: ProviderTarget{
+			ProviderSlug:       enum.ProviderSlugGitHub,
+			RepositoryFullName: "codex-k8s/kodex",
+			WorkItemKind:       enum.WorkItemKindIssue,
+			Number:             581,
+		},
+		Title:             &title,
+		ExternalAccountID: uuid.New(),
+		Meta: value.CommandMeta{
+			CommandID:       uuid.New(),
+			ExpectedVersion: &expectedVersion,
+			OperationPolicyContext: value.ProviderOperationPolicyContext{
+				RiskLevel:     value.ProviderOperationRiskLevelLow,
+				ChangedFields: []string{"title"},
+			},
+		},
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("UpdateIssue() err = %v, want %v", err, errs.ErrConflict)
+	}
+	if executor.calls != 0 {
+		t.Fatalf("executor calls = %d, want 0", executor.calls)
+	}
+	if len(repository.recordedOutboxEvents) != 0 {
+		t.Fatalf("outbox = %+v, want no stored operation", repository.recordedOutboxEvents)
+	}
+}
+
+func TestUpdateRelationshipChecksExpectedVersionBeforeExecutor(t *testing.T) {
+	t.Parallel()
+
+	sourceID := uuid.New()
+	targetProviderRef := "https://github.com/codex-k8s/kodex/pull/731"
+	executor := &fakeWriteExecutor{}
+	repository := &fakeRepository{
+		workItemProjection: entity.ProviderWorkItemProjection{
+			Base: entity.Base{ID: sourceID, Version: 7},
+			Kind: enum.WorkItemKindIssue,
+		},
+		relationship: entity.ProviderRelationship{
+			ID:                uuid.New(),
+			Version:           4,
+			SourceWorkItemID:  sourceID,
+			TargetProviderRef: targetProviderRef,
+			RelationshipType:  "linked_pr",
+			Source:            enum.RelationshipSourceManual,
+			Confidence:        enum.RelationshipConfidenceConfirmed,
+		},
+	}
+	service := NewWithDependencies(Dependencies{
+		Repository:             repository,
+		Clock:                  fixedClock{now: time.Date(2026, 5, 12, 10, 30, 0, 0, time.UTC)},
+		IDGenerator:            &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New()}},
+		AccountUsageResolver:   fakeAccountUsageResolver{},
+		ProviderWriteExecutors: []providerclient.WriteExecutor{executor},
+	})
+
+	expectedVersion := int64(3)
+	_, err := service.UpdateRelationship(context.Background(), UpdateRelationshipInput{
+		Source: ProviderTarget{
+			ProviderSlug:       enum.ProviderSlugGitHub,
+			RepositoryFullName: "codex-k8s/kodex",
+			WorkItemKind:       enum.WorkItemKindIssue,
+			Number:             581,
+		},
+		TargetProviderRef: &targetProviderRef,
+		RelationshipType:  "linked_pr",
+		SourceKind:        enum.RelationshipSourceManual,
+		Confidence:        enum.RelationshipConfidenceConfirmed,
+		ExternalAccountID: uuid.New(),
+		Meta: value.CommandMeta{
+			CommandID:       uuid.New(),
+			ExpectedVersion: &expectedVersion,
+			OperationPolicyContext: value.ProviderOperationPolicyContext{
+				RiskLevel: value.ProviderOperationRiskLevelLow,
+				ChangedFields: []string{
+					"source",
+					"target_provider_ref",
+					"relationship_type",
+					"source_kind",
+					"confidence",
+				},
+			},
+		},
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("UpdateRelationship() err = %v, want %v", err, errs.ErrConflict)
+	}
+	if executor.calls != 0 {
+		t.Fatalf("executor calls = %d, want 0", executor.calls)
+	}
+	if len(repository.recordedOutboxEvents) != 0 {
+		t.Fatalf("outbox = %+v, want no stored operation", repository.recordedOutboxEvents)
+	}
+}
+
 type fakeRepository struct {
-	err                      error
-	calls                    int
-	recordedSnapshot         entity.ProviderLimitSnapshot
-	recordedRuntimeState     entity.ProviderAccountRuntimeState
-	recordedWebhook          entity.WebhookEvent
-	recordedProjection       providerrepo.ProjectionUpdate
-	processWebhookErr        error
-	webhookAfterProcess      *entity.WebhookEvent
-	recordedProviderEvents   []entity.ProviderEvent
-	recordedOutboxEvents     []entity.OutboxEvent
-	workItemProjection       entity.ProviderWorkItemProjection
-	lastWorkItemLookup       query.ProviderTargetLookup
-	reconciliationRequest    entity.ReconciliationRequest
-	enqueuedSyncCursors      []entity.SyncCursor
-	providerArtifactSignal   entity.ProviderArtifactSignal
-	syncCursor               entity.SyncCursor
-	syncCursorClaim          providerrepo.SyncCursorClaim
-	reconciliationCompletion providerrepo.ReconciliationBatchCompletion
+	err                       error
+	calls                     int
+	recordedSnapshot          entity.ProviderLimitSnapshot
+	recordedRuntimeState      entity.ProviderAccountRuntimeState
+	recordedWebhook           entity.WebhookEvent
+	recordedProjection        providerrepo.ProjectionUpdate
+	processWebhookErr         error
+	webhookAfterProcess       *entity.WebhookEvent
+	recordedProviderEvents    []entity.ProviderEvent
+	recordedOutboxEvents      []entity.OutboxEvent
+	recordedProviderOperation entity.ProviderOperation
+	workItemProjection        entity.ProviderWorkItemProjection
+	relationship              entity.ProviderRelationship
+	lastWorkItemLookup        query.ProviderTargetLookup
+	reconciliationRequest     entity.ReconciliationRequest
+	enqueuedSyncCursors       []entity.SyncCursor
+	providerArtifactSignal    entity.ProviderArtifactSignal
+	syncCursor                entity.SyncCursor
+	syncCursorClaim           providerrepo.SyncCursorClaim
+	reconciliationCompletion  providerrepo.ReconciliationBatchCompletion
 }
 
 func (r *fakeRepository) Ping(context.Context) error {
@@ -1019,6 +1285,10 @@ func (r *fakeRepository) GetWorkItemProjection(_ context.Context, lookup query.P
 	return r.workItemProjection, r.err
 }
 
+func (r *fakeRepository) GetCommentProjectionByProviderID(context.Context, uuid.UUID, string) (entity.ProviderCommentProjection, error) {
+	return entity.ProviderCommentProjection{}, r.err
+}
+
 func (r *fakeRepository) ListWorkItemProjections(context.Context, query.WorkItemProjectionFilter) ([]entity.ProviderWorkItemProjection, query.PageResult, error) {
 	return nil, query.PageResult{}, r.err
 }
@@ -1027,7 +1297,17 @@ func (r *fakeRepository) ListComments(context.Context, query.CommentProjectionFi
 	return nil, query.PageResult{}, r.err
 }
 
+func (r *fakeRepository) GetRelationshipByIdentity(context.Context, query.RelationshipLookup) (entity.ProviderRelationship, error) {
+	if r.relationship.ID != uuid.Nil {
+		return r.relationship, r.err
+	}
+	return entity.ProviderRelationship{}, errs.ErrNotFound
+}
+
 func (r *fakeRepository) ListRelationships(context.Context, query.RelationshipFilter) ([]entity.ProviderRelationship, query.PageResult, error) {
+	if r.relationship.ID != uuid.Nil {
+		return []entity.ProviderRelationship{r.relationship}, query.PageResult{}, r.err
+	}
 	return nil, query.PageResult{}, r.err
 }
 
@@ -1097,6 +1377,12 @@ func (r *fakeRepository) RecordProviderOperation(context.Context, entity.Provide
 	return entity.ProviderOperation{}, r.err
 }
 
+func (r *fakeRepository) ApplyProviderOperation(_ context.Context, completion providerrepo.ProviderOperationCompletion) (entity.ProviderOperation, error) {
+	r.recordedProviderOperation = completion.Operation
+	r.recordedOutboxEvents = append([]entity.OutboxEvent(nil), completion.OutboxEvents...)
+	return completion.Operation, r.err
+}
+
 func (r *fakeRepository) ListProviderOperations(context.Context, query.ProviderOperationFilter) ([]entity.ProviderOperation, query.PageResult, error) {
 	return nil, query.PageResult{}, r.err
 }
@@ -1157,11 +1443,12 @@ func (n fakeWebhookNormalizer) NormalizeWebhook(entity.WebhookEvent) (value.Prov
 }
 
 type fakeAccountUsageResolver struct {
-	providerSlug enum.ProviderSlug
-	err          error
+	providerSlug      enum.ProviderSlug
+	allowedActionKeys []string
+	err               error
 }
 
-func (r fakeAccountUsageResolver) ResolveExternalAccountUsage(context.Context, ExternalAccountUsageInput) (ExternalAccountUsageResult, error) {
+func (r fakeAccountUsageResolver) ResolveExternalAccountUsage(_ context.Context, input ExternalAccountUsageInput) (ExternalAccountUsageResult, error) {
 	if r.err != nil {
 		return ExternalAccountUsageResult{}, r.err
 	}
@@ -1169,20 +1456,27 @@ func (r fakeAccountUsageResolver) ResolveExternalAccountUsage(context.Context, E
 	if providerSlug == "" {
 		providerSlug = enum.ProviderSlugGitHub
 	}
+	allowedActionKeys := append([]string(nil), r.allowedActionKeys...)
+	if len(allowedActionKeys) == 0 && strings.TrimSpace(input.ActionKey) != "" {
+		allowedActionKeys = []string{strings.TrimSpace(input.ActionKey)}
+	}
 	return ExternalAccountUsageResult{
 		ExternalAccountID: uuid.NewString(),
 		ProviderSlug:      providerSlug,
 		SecretStoreType:   secretresolver.StoreTypeEnv,
 		SecretStoreRef:    "KODEX_TEST_TOKEN",
+		AllowedActionKeys: allowedActionKeys,
 	}, nil
 }
 
 type fakeSecretResolver struct {
 	secret secretresolver.SecretValue
 	err    error
+	calls  int
 }
 
-func (r fakeSecretResolver) Resolve(context.Context, secretresolver.SecretRef) (secretresolver.SecretValue, error) {
+func (r *fakeSecretResolver) Resolve(context.Context, secretresolver.SecretRef) (secretresolver.SecretValue, error) {
+	r.calls++
 	if r.err != nil {
 		return secretresolver.SecretValue{}, r.err
 	}
@@ -1209,4 +1503,24 @@ func (a *fakeProviderAdapter) Reconcile(_ context.Context, request providerclien
 		return providerclient.ReconciliationResult{}, a.err
 	}
 	return a.result, nil
+}
+
+type fakeWriteExecutor struct {
+	result  providerclient.WriteResult
+	err     error
+	calls   int
+	request providerclient.WriteRequest
+}
+
+func (e *fakeWriteExecutor) ProviderSlug() enum.ProviderSlug {
+	return enum.ProviderSlugGitHub
+}
+
+func (e *fakeWriteExecutor) Execute(_ context.Context, request providerclient.WriteRequest) (providerclient.WriteResult, error) {
+	e.calls++
+	e.request = request
+	if e.err != nil {
+		return providerclient.WriteResult{}, e.err
+	}
+	return e.result, nil
 }

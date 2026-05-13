@@ -2457,7 +2457,9 @@ type ProviderRelationship struct {
 	// confidence describes how reliable the relationship is.
 	Confidence RelationshipConfidence `protobuf:"varint,7,opt,name=confidence,proto3,enum=kodex.providers.v1.RelationshipConfidence" json:"confidence,omitempty"`
 	// created_at is creation time in RFC3339 format.
-	CreatedAt     string `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	CreatedAt string `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	// version is the local relationship version for optimistic concurrency.
+	Version       int64 `protobuf:"varint,9,opt,name=version,proto3" json:"version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2546,6 +2548,13 @@ func (x *ProviderRelationship) GetCreatedAt() string {
 		return x.CreatedAt
 	}
 	return ""
+}
+
+func (x *ProviderRelationship) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
 }
 
 // SyncCursor stores reconciliation state for one provider scope.
@@ -6878,7 +6887,7 @@ const file_kodex_providers_v1_provider_hub_proto_rawDesc = "" +
 	"\freview_state\x18\n" +
 	" \x01(\x0e2\x1f.kodex.providers.v1.ReviewStateR\vreviewStateB\x16\n" +
 	"\x14_provider_created_atB\x16\n" +
-	"\x14_provider_updated_at\"\x94\x04\n" +
+	"\x14_provider_updated_at\"\xae\x04\n" +
 	"\x14ProviderRelationship\x12'\n" +
 	"\x0frelationship_id\x18\x01 \x01(\tR\x0erelationshipId\x12B\n" +
 	"\x1esource_work_item_projection_id\x18\x02 \x01(\tR\x1asourceWorkItemProjectionId\x12G\n" +
@@ -6890,7 +6899,8 @@ const file_kodex_providers_v1_provider_hub_proto_rawDesc = "" +
 	"confidence\x18\a \x01(\x0e2*.kodex.providers.v1.RelationshipConfidenceR\n" +
 	"confidence\x12\x1d\n" +
 	"\n" +
-	"created_at\x18\b \x01(\tR\tcreatedAtB!\n" +
+	"created_at\x18\b \x01(\tR\tcreatedAt\x12\x18\n" +
+	"\aversion\x18\t \x01(\x03R\aversionB!\n" +
 	"\x1f_target_work_item_projection_idB\x16\n" +
 	"\x14_target_provider_ref\"\xc6\x06\n" +
 	"\n" +

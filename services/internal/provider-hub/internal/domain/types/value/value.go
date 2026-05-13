@@ -25,14 +25,16 @@ type RequestContext struct {
 
 // CommandMeta carries idempotency, concurrency and audit metadata.
 type CommandMeta struct {
-	CommandID       uuid.UUID
-	IdempotencyKey  string
-	ExpectedVersion *int64
-	Actor           Actor
-	Reason          string
-	RequestID       string
-	RequestContext  RequestContext
-	OccurredAt      time.Time
+	CommandID              uuid.UUID
+	IdempotencyKey         string
+	ExpectedVersion        *int64
+	Actor                  Actor
+	Reason                 string
+	RequestID              string
+	RequestContext         RequestContext
+	OccurredAt             time.Time
+	OperationPolicyContext ProviderOperationPolicyContext
+	ApprovalGateRef        ApprovalGateReference
 }
 
 // QueryMeta carries actor and safe request metadata for reads.

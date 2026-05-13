@@ -8,6 +8,7 @@ import (
 	providersv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1"
 	providerservice "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/service"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/types/enum"
 )
 
 // WebhookEventResponse maps a stored webhook to gRPC.
@@ -112,6 +113,7 @@ func RelationshipToProto(relationship entity.ProviderRelationship) *providersv1.
 		Source:                     RelationshipSourceToProto(relationship.Source),
 		Confidence:                 RelationshipConfidenceToProto(relationship.Confidence),
 		CreatedAt:                  formatTime(relationship.CreatedAt),
+		Version:                    relationship.Version,
 	}
 }
 
@@ -133,15 +135,35 @@ func ProviderArtifactSignalResponse(result providerservice.ProviderArtifactSigna
 }
 
 func ProviderArtifactTargetToProto(target providerservice.ProviderArtifactTarget) *providersv1.ProviderTarget {
-	workItemKind := WorkItemKindToProto(target.WorkItemKind)
+	return providerTargetMessage(
+		target.ProviderSlug,
+		target.RepositoryFullName,
+		target.ProviderRepositoryID,
+		target.WorkItemKind,
+		target.Number,
+		target.ProviderObjectID,
+		target.WebURL,
+	)
+}
+
+func providerTargetMessage(
+	providerSlug enum.ProviderSlug,
+	repositoryFullName string,
+	providerRepositoryID string,
+	workItemKind enum.WorkItemKind,
+	number int64,
+	providerObjectID string,
+	webURL string,
+) *providersv1.ProviderTarget {
+	mappedWorkItemKind := WorkItemKindToProto(workItemKind)
 	return &providersv1.ProviderTarget{
-		ProviderSlug:         string(target.ProviderSlug),
-		RepositoryFullName:   optionalStringPtr(target.RepositoryFullName),
-		ProviderRepositoryId: optionalStringPtr(target.ProviderRepositoryID),
-		WorkItemKind:         optionalWorkItemKindPtr(workItemKind),
-		Number:               optionalPositiveInt64Ptr(target.Number),
-		ProviderObjectId:     optionalStringPtr(target.ProviderObjectID),
-		WebUrl:               optionalStringPtr(target.WebURL),
+		ProviderSlug:         string(providerSlug),
+		RepositoryFullName:   optionalStringPtr(repositoryFullName),
+		ProviderRepositoryId: optionalStringPtr(providerRepositoryID),
+		WorkItemKind:         optionalWorkItemKindPtr(mappedWorkItemKind),
+		Number:               optionalPositiveInt64Ptr(number),
+		ProviderObjectId:     optionalStringPtr(providerObjectID),
+		WebUrl:               optionalStringPtr(webURL),
 	}
 }
 
@@ -251,20 +273,23 @@ func ListProviderLimitSnapshotsResponse(result providerservice.ListProviderLimit
 
 func ProviderOperationToProto(operation entity.ProviderOperation) *providersv1.ProviderOperation {
 	return &providersv1.ProviderOperation{
-		ProviderOperationId: operation.ID.String(),
-		CommandId:           operation.CommandID,
-		ActorId:             uuidPtrString(operation.ActorID),
-		ExternalAccountId:   operation.ExternalAccountID.String(),
-		ProviderSlug:        string(operation.ProviderSlug),
-		OperationType:       OperationTypeToProto(operation.OperationType),
-		TargetRef:           operation.TargetRef,
-		Status:              OperationStatusToProto(operation.Status),
-		ResultRef:           optionalStringPtr(operation.ResultRef),
-		ErrorCode:           optionalStringPtr(operation.ErrorCode),
-		ErrorMessage:        optionalStringPtr(operation.ErrorMessage),
-		RateLimitSnapshotId: uuidPtrString(operation.RateLimitSnapshotID),
-		StartedAt:           formatTime(operation.StartedAt),
-		FinishedAt:          timePtrString(operation.FinishedAt),
+		ProviderOperationId:    operation.ID.String(),
+		CommandId:              operation.CommandID,
+		ActorId:                uuidPtrString(operation.ActorID),
+		ExternalAccountId:      operation.ExternalAccountID.String(),
+		ProviderSlug:           string(operation.ProviderSlug),
+		OperationType:          OperationTypeToProto(operation.OperationType),
+		TargetRef:              operation.TargetRef,
+		Status:                 OperationStatusToProto(operation.Status),
+		ResultRef:              optionalStringPtr(operation.ResultRef),
+		ErrorCode:              optionalStringPtr(operation.ErrorCode),
+		ErrorMessage:           optionalStringPtr(operation.ErrorMessage),
+		RateLimitSnapshotId:    uuidPtrString(operation.RateLimitSnapshotID),
+		StartedAt:              formatTime(operation.StartedAt),
+		FinishedAt:             timePtrString(operation.FinishedAt),
+		OperationPolicyContext: PolicyContextToProto(operation.OperationPolicyContext),
+		ApprovalGateRef:        ApprovalGateRefToProto(operation.ApprovalGateRef),
+		ProviderVersion:        optionalStringPtr(operation.ProviderVersion),
 	}
 }
 

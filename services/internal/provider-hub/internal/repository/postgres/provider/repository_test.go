@@ -737,6 +737,17 @@ func TestRepositoryIntegrationRuntimeStateLimitsAndOperations(t *testing.T) {
 	if len(relationships) != 1 || relationships[0].TargetProviderRef != "https://github.com/codex-k8s/kodex/issues/8" {
 		t.Fatalf("relationships = %+v, want next issue relationship", relationships)
 	}
+	relationship, err := repository.GetRelationshipByIdentity(ctx, query.RelationshipLookup{
+		SourceWorkItemID:  workItem.ID,
+		TargetProviderRef: "https://github.com/codex-k8s/kodex/issues/8",
+		RelationshipType:  "next",
+	})
+	if err != nil {
+		t.Fatalf("get relationship by identity: %v", err)
+	}
+	if relationship.ID != relationships[0].ID || relationship.Version != 1 {
+		t.Fatalf("relationship = %+v, want stored relationship %s with version 1", relationship, relationships[0].ID)
+	}
 	replayedWebhook := webhook
 	replayedWebhook.ID = uuid.New()
 	storedWebhook, providerEvents, err = repository.StoreWebhookEvent(ctx, replayedWebhook, providerrepo.ProjectionUpdate{}, []entity.ProviderEvent{{ID: uuid.New()}}, []entity.OutboxEvent{testOutboxEvent(providerevents.EventWebhookReceived, providerevents.AggregateWebhookEvent, replayedWebhook.ID, now)})

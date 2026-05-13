@@ -7,6 +7,7 @@ SELECT
     relationship_type,
     source,
     confidence,
+    version,
     created_at
 FROM provider_hub_relationships
 WHERE (

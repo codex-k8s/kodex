@@ -39,13 +39,14 @@ type ExternalAccountUsageResult struct {
 
 // Dependencies contains domain service collaborators.
 type Dependencies struct {
-	Repository           providerrepo.Repository
-	Clock                providerrepo.Clock
-	IDGenerator          providerrepo.IDGenerator
-	AccountUsageResolver AccountUsageResolver
-	SecretResolver       secretresolver.Resolver
-	ProviderAdapters     []providerclient.Adapter
-	WebhookNormalizers   []providerrepo.WebhookNormalizer
+	Repository             providerrepo.Repository
+	Clock                  providerrepo.Clock
+	IDGenerator            providerrepo.IDGenerator
+	AccountUsageResolver   AccountUsageResolver
+	SecretResolver         secretresolver.Resolver
+	ProviderAdapters       []providerclient.Adapter
+	ProviderWriteExecutors []providerclient.WriteExecutor
+	WebhookNormalizers     []providerrepo.WebhookNormalizer
 }
 
 // GetProviderAccountRuntimeStateInput identifies one runtime state.
