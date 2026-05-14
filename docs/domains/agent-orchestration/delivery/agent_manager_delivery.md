@@ -5,8 +5,8 @@ title: kodex — поставка agent-manager
 status: active
 owner_role: EM
 created_at: 2026-05-12
-updated_at: 2026-05-13
-related_issues: [733, 739]
+updated_at: 2026-05-14
+related_issues: [733, 739, 744]
 related_prs: []
 related_docsets:
   - docs/domains/agent-orchestration/product/requirements.md
@@ -43,7 +43,7 @@ approvals:
 |---|---|---|
 | AGO-0 | #733 | Доменная документация, границы `agent-manager`, модель данных, API-обзор, план поставки и карты связей готовы. |
 | AGO-1 | #739 | gRPC и AsyncAPI контракты `agent-manager`, события `agent.*` и действия доступа готовы; сервисная реализация не входит в срез. |
-| AGO-2 | не назначено | Сервисный процесс, health, metrics, конфигурация, пустой gRPC service и outbox-каркас готовы. |
+| AGO-2 | #744 | Сервисный процесс, env-конфигурация, health, readiness, metrics, регистрация gRPC `AgentManagerService` и outbox-каркас готовы; бизнес-операции возвращают `Unimplemented`, outbox не имитирует успешную доставку. |
 | AGO-3 | не назначено | PostgreSQL-модель flow, stage, role, prompt template, версий и command result готова. |
 | AGO-4 | не назначено | Сессии и agent `Run`: создание, чтение, статусы, идемпотентность и события готовы. |
 | AGO-5 | не назначено | Интеграция с `package-hub` для guidance packages и рендер агентного контекста готовы без checkout/mount. |
@@ -56,19 +56,19 @@ approvals:
 
 | Операция | Текущий статус | Плановый срез |
 |---|---|---|
-| `CreateFlow` / `UpdateFlow` / `CreateFlowVersion` / `ActivateFlowVersion` | контракт готов, реализация запланирована | AGO-1..AGO-3 |
-| `GetFlow` / `ListFlows` | контракт готов, реализация запланирована | AGO-1..AGO-3 |
-| `CreateRoleProfile` / `UpdateRoleProfile` / `GetRoleProfile` / `ListRoleProfiles` | контракт готов, реализация запланирована | AGO-1..AGO-3 |
-| `GetPromptTemplate` / `ListPromptTemplates` | контракт готов, реализация запланирована | AGO-1..AGO-3 |
-| `CreatePromptTemplateVersion` / `ActivatePromptTemplateVersion` / `GetPromptTemplateVersion` / `ListPromptTemplateVersions` | контракт готов, реализация запланирована | AGO-1..AGO-3 |
-| `StartAgentSession` | контракт готов, реализация запланирована | AGO-4 |
-| `StartAgentRun` | контракт готов, реализация запланирована | AGO-4, AGO-6 |
-| `RecordRunState` | контракт готов, реализация запланирована | AGO-4, AGO-6 |
-| `RecordSessionStateSnapshot` | контракт готов, реализация запланирована | AGO-4, AGO-6 |
-| `RequestAcceptance` / `RecordAcceptanceResult` / `GetAcceptanceResult` / `ListAcceptanceResults` | контракт готов, реализация запланирована | AGO-7 |
-| `CreateFollowUpIntent` | контракт готов, реализация запланирована | AGO-8 |
-| `RequestHumanGate` | контракт готов, реализация запланирована | AGO-8 |
-| `GetAgentSession` / `ListAgentRuns` | контракт готов, реализация запланирована | AGO-4 |
+| `CreateFlow` / `UpdateFlow` / `CreateFlowVersion` / `ActivateFlowVersion` | зарегистрировано в gRPC-каркасе; бизнес-реализация запланирована | AGO-3 |
+| `GetFlow` / `ListFlows` | зарегистрировано в gRPC-каркасе; бизнес-реализация запланирована | AGO-3 |
+| `CreateRoleProfile` / `UpdateRoleProfile` / `GetRoleProfile` / `ListRoleProfiles` | зарегистрировано в gRPC-каркасе; бизнес-реализация запланирована | AGO-3 |
+| `GetPromptTemplate` / `ListPromptTemplates` | зарегистрировано в gRPC-каркасе; бизнес-реализация запланирована | AGO-3 |
+| `CreatePromptTemplateVersion` / `ActivatePromptTemplateVersion` / `GetPromptTemplateVersion` / `ListPromptTemplateVersions` | зарегистрировано в gRPC-каркасе; бизнес-реализация запланирована | AGO-3 |
+| `StartAgentSession` | зарегистрировано в gRPC-каркасе; бизнес-реализация запланирована | AGO-4 |
+| `StartAgentRun` | зарегистрировано в gRPC-каркасе; бизнес-реализация запланирована | AGO-4, AGO-6 |
+| `RecordRunState` | зарегистрировано в gRPC-каркасе; бизнес-реализация запланирована | AGO-4, AGO-6 |
+| `RecordSessionStateSnapshot` | зарегистрировано в gRPC-каркасе; бизнес-реализация запланирована | AGO-4, AGO-6 |
+| `RequestAcceptance` / `RecordAcceptanceResult` / `GetAcceptanceResult` / `ListAcceptanceResults` | зарегистрировано в gRPC-каркасе; бизнес-реализация запланирована | AGO-7 |
+| `CreateFollowUpIntent` | зарегистрировано в gRPC-каркасе; бизнес-реализация запланирована | AGO-8 |
+| `RequestHumanGate` | зарегистрировано в gRPC-каркасе; бизнес-реализация запланирована | AGO-8 |
+| `GetAgentSession` / `ListAgentRuns` | зарегистрировано в gRPC-каркасе; бизнес-реализация запланирована | AGO-4 |
 
 ## Синхронизация с параллельными доменами
 
