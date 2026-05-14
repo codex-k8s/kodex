@@ -5,7 +5,7 @@ title: kodex — поставка fleet-manager
 status: active
 owner_role: EM
 created_at: 2026-05-11
-updated_at: 2026-05-13
+updated_at: 2026-05-14
 related_issues: [699, 708, 714, 717, 726, 730, 735, 738]
 related_prs: []
 related_docsets:
@@ -104,9 +104,9 @@ approvals:
 - разрушительные lifecycle-операции для серверов и кластеров;
 - расширенная автоматизация capacity/rebalancing.
 
-## Рекомендуемый следующий шаг после FLEET-5
+## Рекомендуемый следующий шаг после FLEET-6
 
-RTM-FLEET-1 готов: `runtime-manager` вызывает `fleet-manager.ResolvePlacement` для новых слотов и jobs без slot. Следующий локальный срез домена — FLEET-6: deploy-контур `fleet-manager`, smoke, runbook и monitoring.
+RTM-FLEET-1 готов: `runtime-manager` вызывает `fleet-manager.ResolvePlacement` для новых слотов и jobs без slot. FLEET-6 готов: `fleet-manager` имеет deploy-контур, smoke, runbook и monitoring. Следующие runtime/fleet улучшения нужно запускать отдельными срезами после согласования реального исполнителя platform jobs, capacity automation или расширенных сценариев Kubernetes lifecycle.
 
 ## Апрув
 

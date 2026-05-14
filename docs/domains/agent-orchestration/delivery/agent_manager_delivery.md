@@ -80,7 +80,7 @@ approvals:
 | `interaction-hub` | Перед AGO-8 | Нужен контракт Human gate, запроса обратной связи и возврата решения. |
 | `project-catalog` | Перед AGO-5 и AGO-6 | Нужны workspace policy, project/repository refs и release/risk policy. |
 | `access-manager` | Перед AGO-4 | Действия доступа заведены в AGO-1; перед реализацией нужны сервисные проверки команд и чтений. |
-| `platform-mcp-server` | Перед AGO-4 | Нужна инструментальная поверхность для agent-manager и агентов в слотах. |
+| `platform-mcp-server` | Перед AGO-4 | MCP-0 зафиксировал границы и MVP-группы инструментов. Для реальных run/session/gate вызовов нужен следующий контрактный и сервисный срез MCP, но `agent-manager` остаётся владельцем состояния. |
 
 ## Критерии начала кода
 

@@ -92,8 +92,8 @@
 
 - `project-catalog` зависит от `provider-hub` по provider-native refs, webhook-фактам и связям, но проектная привязка остаётся у `project-catalog`.
 - `package-hub` зависит от `provider-hub`, когда пакетный источник является Git/provider-native источником или когда магазин/пакет обновляется через provider-native PR/Issue.
-- `agent-manager` и `platform-mcp-server` могут использовать ускоряющие сигналы `provider-hub`; provider-инструменты записи получили типизированный контракт, общий pipeline и GitHub write-адаптер, но MCP/server surface и agent-manager integration остаются отдельными срезами.
+- `agent-manager` и `platform-mcp-server` могут использовать ускоряющие сигналы `provider-hub`; provider-инструменты записи получили типизированный контракт, общий pipeline и GitHub write-адаптер. MCP-0 фиксирует внешнюю поверхность и маршрутизацию, но не переносит provider write pipeline, PRV-8a bootstrap/adoption или agent-manager integration в MCP.
 
 ## Рекомендуемый следующий шаг
 
-Следующий provider-срез — PRV-8 или отдельный интеграционный срез для MCP/server surface, если владелец решит сначала подключать provider tools к `agent-manager`. Не смешивать bootstrap/adoption с UI или deploy.
+Следующий provider-срез — PRV-8 или отдельный интеграционный срез для MCP-поверхности, если владелец решит сначала подключать provider tools к `agent-manager`. Не смешивать bootstrap/adoption с UI или deploy.

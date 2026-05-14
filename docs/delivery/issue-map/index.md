@@ -25,6 +25,7 @@ updated_at: 2026-05-05
 | Риски и релизы | `domains/risk-and-release-governance.md` |
 | Биллинг и учёт затрат | `domains/billing-and-cost-accounting.md` |
 | Жизненный цикл знаний | `domains/knowledge-lifecycle.md` |
+| Сервисная MCP-поверхность | `domains/platform-mcp-server.md` |
 
 ## Волновые карты
 

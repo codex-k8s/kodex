@@ -51,6 +51,7 @@
 | `project-catalog` | Привязку пакетных источников и руководящих пакетов к проектной политике. | `package-hub` не должен владеть проектной политикой; ждём готовую модель проекта. |
 | `provider-hub` | Получение пакетов и каталогов из Git/provider-native источников. | `package-hub` принимает нормализованный снимок, а adapter/provider-контур получает исходные данные. |
 | `agent-manager` | Монтирование руководящих пакетов в workspace агента. | `package-hub` отдаёт каталог и установки; agent-контекст собирает `agent-manager`. |
+| `platform-mcp-server` | Чтение установок, manifest и руководящих пакетов через MCP-инструменты. | MCP только маршрутизирует чтения к `package-hub`; пакетная истина и установки остаются у `package-hub`. |
 | `runtime-manager` и `fleet-manager` | Запуск runtime-нагрузок пакетов и размещение в Kubernetes. | `package-hub` публикует событие установки и хранит требования; runtime/fleet исполняют. |
 | Bootstrap/adoption #281/#282 | Использование руководящих пакетов, пакетов из магазина, шаблонов репозиториев и внешних источников при подключении репозитория. | Выбран вариант C из `docs/platform/architecture/repository_onboarding.md`: Git submodule не обязателен, workspace собирается из `services.yaml`, установленных пакетов, шаблонов и `source_ref`. |
 
