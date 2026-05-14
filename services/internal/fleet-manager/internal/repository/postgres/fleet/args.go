@@ -128,6 +128,13 @@ func placementRuleUpdateArgs(rule entity.PlacementRule, previousVersion int64) p
 	return args
 }
 
+func placementRuleScopeKeyArgs(fleetScopeID uuid.UUID, ruleKey string) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"fleet_scope_id": fleetScopeID,
+		"rule_key":       ruleKey,
+	}
+}
+
 func placementDecisionArgs(decision entity.PlacementDecision) pgx.NamedArgs {
 	return pgx.NamedArgs{
 		"id":                  decision.ID,

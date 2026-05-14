@@ -222,7 +222,7 @@ func (r *Repository) GetPlacementRule(ctx context.Context, id uuid.UUID) (entity
 
 // GetPlacementRuleByScopeKey returns a placement rule by scope and rule key.
 func (r *Repository) GetPlacementRuleByScopeKey(ctx context.Context, fleetScopeID uuid.UUID, ruleKey string) (entity.PlacementRule, error) {
-	return queryOne(ctx, r.db, operationGetPlacementRuleByScopeKey, queryPlacementRuleGetByScopeKey, pgx.NamedArgs{"fleet_scope_id": fleetScopeID, "rule_key": ruleKey}, scanPlacementRule)
+	return queryOne(ctx, r.db, operationGetPlacementRuleByScopeKey, queryPlacementRuleGetByScopeKey, placementRuleScopeKeyArgs(fleetScopeID, ruleKey), scanPlacementRule)
 }
 
 // ListPlacementRules returns placement rules by filter.

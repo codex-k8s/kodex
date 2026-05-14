@@ -40,6 +40,8 @@
 | План поставки fleet-manager | `delivery/fleet_manager_delivery.md` |
 | Runbook runtime-manager | `ops/runtime_manager_runbook.md` |
 | Наблюдаемость runtime-manager | `ops/runtime_manager_monitoring.md` |
+| Runbook fleet-manager | `ops/fleet_manager_runbook.md` |
+| Наблюдаемость fleet-manager | `ops/fleet_manager_monitoring.md` |
 
 ## Контракты
 

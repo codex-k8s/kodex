@@ -77,8 +77,10 @@
 | FLEET-3 | #717 | готово | Registry-команды и чтения нескольких scope/server/cluster, bootstrap seed `platform-default`, проверки доступа, идемпотентность, optimistic concurrency, command result и outbox-события. |
 | FLEET-4 | #726 | готово | Проверки связности Kubernetes API, health snapshots, чтения health, события `fleet.health.*`, command result и безопасное получение kubeconfig через `secretresolver`. |
 | FLEET-5 | #730 | готово | Правила размещения, базовый `ResolvePlacement`, журнал placement decisions, проверки доступа, идемпотентность и outbox-события `fleet.placement.*`. |
+| RTM-FLEET-1 | #735 | готово | `runtime-manager` вызывает `fleet-manager.ResolvePlacement` для `PrepareRuntime`, `ReserveSlot` и `CreateJob` без slot; fleet остаётся владельцем выбора кластера и журнала решений. |
+| FLEET-6 | #738 | в PR | Dockerfile, Kubernetes-манифесты, PostgreSQL bootstrap, migration job, `services.yaml`, smoke-путь, runbook и monitoring-документы `fleet-manager`. |
 
-Итог: `fleet-manager` уже имеет сервисный процесс, БД, registry-поверхность, health-поверхность, placement rules, базовый `ResolvePlacement` и журнал решений. Текущий интеграционный срез RTM-FLEET-1 переводит `runtime-manager` на fleet decision. После него остаётся deploy-контур `fleet-manager`.
+Итог: `fleet-manager` уже имеет сервисный процесс, БД, registry-поверхность, health-поверхность, placement rules, базовый `ResolvePlacement` и журнал решений. RTM-FLEET-1 готов: `runtime-manager` вызывает fleet decision для новых runtime-операций. Текущий срез FLEET-6 добавляет эксплуатационный контур `fleet-manager`.
 
 ## Текущий бэклог агента #1
 
@@ -90,7 +92,8 @@
 | `project.policy_override.expired` | запланировано позже | Контракт события есть; нужна логика обслуживания или platform job, которая будет снимать истёкшие переопределения как операционный срез. |
 | Организационные runtime-политики | частично заблокировано | Cleanup для `organization` scope отклоняется, а prewarm хранит политику без фактической раскладки, пока runtime не получает проекцию организации на слоты. |
 | Реальный исполнитель platform jobs | запланировано позже | `runtime-manager` хранит и выдаёт jobs; конкретный исполнитель на Kubernetes или агентный исполнитель нужен отдельным срезом после согласования с `agent-manager`/ops-контуром. |
-| Интеграция `runtime-manager` с fleet placement | текущий локальный срез: #735 | RTM-FLEET-1 переводит `PrepareRuntime`, `ReserveSlot` и `CreateJob` без slot на `fleet-manager.ResolvePlacement`; runtime сохраняет только `fleet_scope_id` и `cluster_id`. |
+| Интеграция `runtime-manager` с fleet placement | готово: #735 | RTM-FLEET-1 перевёл `PrepareRuntime`, `ReserveSlot` и `CreateJob` без slot на `fleet-manager.ResolvePlacement`; runtime сохраняет только `fleet_scope_id` и `cluster_id`. |
+| Deploy-контур `fleet-manager` | текущий локальный срез: #738 | FLEET-6 добавляет Dockerfile, manifests, PostgreSQL bootstrap, migration job, smoke, runbook и monitoring без изменения registry/health/placement бизнес-логики. |
 
 ## Блокировки от `access-manager`
 
@@ -155,13 +158,13 @@
 - `provider-hub` зависит от `project-catalog` при привязке provider-native объектов к локальному проекту и репозиторию.
 - `package-hub` зависит от `project-catalog`, когда пакетные источники и руководящие пакеты становятся частью проектной политики.
 - `agent-manager` зависит от `runtime-manager` для слотов, workspace materialization и platform jobs, но `Run` остаётся сущностью `agent-manager`.
-- `runtime-manager` зависит от `fleet-manager` для целевого `ResolvePlacement`; RTM-FLEET-1 убирает локальный выбор кластера из `PrepareRuntime`, `ReserveSlot` и `CreateJob` без slot.
+- `runtime-manager` зависит от `fleet-manager` для целевого `ResolvePlacement`; RTM-FLEET-1 убрал локальный выбор кластера из `PrepareRuntime`, `ReserveSlot` и `CreateJob` без slot.
 - `operations-hub` и будущий `staff-gateway` зависят от чтений `project-catalog` и `runtime-manager` для операторских экранов.
 
 ## Рекомендуемый следующий шаг
 
-Для агента #1 нет незавершённого локального Wave 8 среза, который нужно закрыть до соседних доменов. После RTM-FLEET-1 рационально идти в один из трёх вариантов:
+Для агента #1 нет незавершённого локального Wave 8 среза, который нужно закрыть до соседних доменов. После FLEET-6 рационально идти в один из трёх вариантов:
 
-- сделать FLEET-6: deploy-контур, smoke и runbook `fleet-manager`;
 - дождаться `provider-hub` bootstrap/adoption контракта и закрывать #281/#282;
 - начать gateway/UI-срез только после согласования состава `staff-gateway` ручек.
+- перейти к runtime/fleet интеграции с реальным исполнителем platform jobs после согласования `agent-manager` и ops-контуров.
