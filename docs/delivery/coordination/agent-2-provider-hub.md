@@ -37,7 +37,7 @@
 
 | Срез | Статус | Почему не завершён |
 |---|---|---|
-| PRV-8 | заблокировано частично | Bootstrap/adoption зависят от проектной политики, repository binding и решения `project-catalog`; запись в провайдера должна использовать общий resolver-контракт после подключения операций записи. |
+| PRV-8 | требует выбора владельца | Bootstrap/adoption зависят от проектной политики, repository binding и решения по модели `services.yaml`, внешней документации и пакетов. Варианты зафиксированы в `docs/platform/architecture/repository_onboarding.md`; provider-запись должна использовать общий resolver-контракт и существующий конвейер операций записи. |
 | PRV-9 | запланировано позже | Kubernetes-манифесты, migration job, metrics, alerts, runbook и smoke можно делать по паттерну `runtime-manager`, когда будет принято решение разворачивать `provider-hub` на сервере. |
 
 ## Блокировки от `access-manager`
@@ -58,7 +58,7 @@
 - GitLab write-адаптер остаётся отдельным расширением того же контура.
 
 Требует отдельного решения:
-- где физически живёт owner approval/gate service для политики по риску; `provider-hub` принимает только `approval_gate_ref` и не владеет решением;
+- где физически живёт подтверждение владельца/gate service для политики по риску; `provider-hub` принимает только `approval_gate_ref` и не владеет решением;
 - где фиксируется политика выбора внешнего аккаунта для автоматических фоновых сверок, если область содержит несколько подходящих аккаунтов.
 
 ## Блокировки от `project-catalog`
@@ -68,7 +68,7 @@
 
 Реальные блокировки:
 - привязка проекций к проекту и repository binding требует контракта сопоставления `provider_slug + repository_full_name/provider repository id -> project_id + repository_id`;
-- PRV-8 bootstrap/adoption требует проектной политики, проверенной версии `services.yaml` и состояния repository binding;
+- PRV-8 bootstrap/adoption требует проектной политики, проверенной версии `services.yaml`, состояния repository binding и выбора владельца по вариантам repository onboarding;
 - фильтры операционных состояний по проекту/организации не должны включаться, пока область аккаунта не связывается с проектной моделью.
 
 ## Блокировки от `package-hub`
@@ -77,7 +77,7 @@
 
 Будущие точки синхронизации:
 - если источник пакета находится в Git/provider, `package-hub` должен хранить пакетную истину и нормализованный снимок, а provider-доступ остаётся за `provider-hub` или отдельным адаптерным контуром;
-- для PRV-7/PRV-8 нужно согласовать, как пакетные PR, source refs и store refs отображаются в provider relationships.
+- для PRV-7/PRV-8 нужно согласовать, как пакетные PR, `source_ref` и store refs отображаются в provider relationships.
 
 ## Блокировки от `runtime-manager`
 
@@ -96,4 +96,4 @@
 
 ## Рекомендуемый следующий шаг
 
-Следующий provider-срез — PRV-8 или отдельный интеграционный срез для MCP/server surface, если owner решит сначала подключать provider tools к `agent-manager`. Не смешивать bootstrap/adoption с UI или deploy.
+Следующий provider-срез — PRV-8 или отдельный интеграционный срез для MCP/server surface, если владелец решит сначала подключать provider tools к `agent-manager`. Не смешивать bootstrap/adoption с UI или deploy.

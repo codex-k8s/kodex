@@ -19,6 +19,7 @@
 | `mcp_and_interaction_model.md` | Платформенный MCP, взаимодействия с человеком, уведомления и внешние каналы. |
 | `secret_resolution.md` | Общий контракт безопасного получения секретов по ссылке без раскрытия значений в API, БД, событиях и логах. |
 | `codex_hooks_and_skills.md` | Варианты использования Codex hooks и skills в платформе. |
+| `repository_onboarding.md` | Варианты bootstrap/adoption репозитория, модели `services.yaml`, внешней документации и пакетов. |
 
 ## Правила развития
 

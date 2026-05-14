@@ -52,6 +52,7 @@
 | `provider-hub` | Получение пакетов и каталогов из Git/provider-native источников. | `package-hub` принимает нормализованный снимок, а adapter/provider-контур получает исходные данные. |
 | `agent-manager` | Монтирование руководящих пакетов в workspace агента. | `package-hub` отдаёт каталог и установки; agent-контекст собирает `agent-manager`. |
 | `runtime-manager` и `fleet-manager` | Запуск runtime-нагрузок пакетов и размещение в Kubernetes. | `package-hub` публикует событие установки и хранит требования; runtime/fleet исполняют. |
+| Bootstrap/adoption #281/#282 | Использование руководящих пакетов, пакетов из магазина и внешних источников при подключении репозитория. | Вариантная рамка зафиксирована в `docs/platform/architecture/repository_onboarding.md`; предварительно рекомендовано не делать Git submodule обязательным и собирать workspace из `services.yaml`, установленных пакетов и `source_ref`. |
 
 ## Рекомендуемый следующий шаг
 
