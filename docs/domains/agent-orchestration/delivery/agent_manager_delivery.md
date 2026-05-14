@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-12
 updated_at: 2026-05-14
-related_issues: [733, 739, 744, 749]
+related_issues: [733, 739, 744, 749, 755]
 related_prs: []
 related_docsets:
   - docs/domains/agent-orchestration/product/requirements.md
@@ -44,7 +44,8 @@ approvals:
 | AGO-0 | #733 | Доменная документация, границы `agent-manager`, модель данных, API-обзор, план поставки и карты связей готовы. |
 | AGO-1 | #739 | gRPC и AsyncAPI контракты `agent-manager`, события `agent.*` и действия доступа готовы; сервисная реализация не входит в срез. |
 | AGO-2 | #744 | Сервисный процесс, env-конфигурация, health, readiness, metrics, регистрация gRPC `AgentManagerService` и outbox-каркас готовы; бизнес-операции возвращают `Unimplemented`, outbox не имитирует успешную доставку. |
-| AGO-3 | #749 | PostgreSQL-модель flow, stage, role, prompt template, версий, command result и service-local outbox готова; storage/use-case слой подключён к process readiness, gRPC handlers для бизнес-операций остаются следующим срезом. |
+| AGO-3 | #749 | PostgreSQL-модель flow, stage, role, prompt template, версий, command result и service-local outbox готова; storage/use-case слой подключён к process readiness. |
+| AGO-3b | #755 | gRPC handlers, casters и безопасное отображение ошибок для flow, role и prompt подключены к готовому storage/use-case слою; session/run не входят в срез. |
 | AGO-4 | не назначено | Сессии и agent `Run`: создание, чтение, статусы, идемпотентность и события готовы. |
 | AGO-5 | не назначено | Интеграция с `package-hub` для guidance packages и рендер агентного контекста готовы без checkout/mount. |
 | AGO-6 | не назначено | Интеграция с `runtime-manager`: подготовка workspace и запуск роли через runtime-контур готовы. |
@@ -56,11 +57,11 @@ approvals:
 
 | Операция | Текущий статус | Плановый срез |
 |---|---|---|
-| `CreateFlow` / `UpdateFlow` / `CreateFlowVersion` / `ActivateFlowVersion` | storage/use-case слой готов; gRPC handler wiring запланирован отдельным малым срезом | AGO-3, следующий transport-срез |
-| `GetFlow` / `ListFlows` | storage/use-case слой готов; gRPC handler wiring запланирован отдельным малым срезом | AGO-3, следующий transport-срез |
-| `CreateRoleProfile` / `UpdateRoleProfile` / `GetRoleProfile` / `ListRoleProfiles` | storage/use-case слой готов; gRPC handler wiring запланирован отдельным малым срезом | AGO-3, следующий transport-срез |
-| `GetPromptTemplate` / `ListPromptTemplates` | storage/use-case слой готов; gRPC handler wiring запланирован отдельным малым срезом | AGO-3, следующий transport-срез |
-| `CreatePromptTemplateVersion` / `ActivatePromptTemplateVersion` / `GetPromptTemplateVersion` / `ListPromptTemplateVersions` | storage/use-case слой готов; gRPC handler wiring запланирован отдельным малым срезом | AGO-3, следующий transport-срез |
+| `CreateFlow` / `UpdateFlow` / `CreateFlowVersion` / `ActivateFlowVersion` | storage/use-case слой и gRPC handlers готовы | AGO-3, AGO-3b |
+| `GetFlow` / `ListFlows` | storage/use-case слой и gRPC handlers готовы; `GetFlow` возвращает активную версию при наличии `active_version_id` | AGO-3, AGO-3b |
+| `CreateRoleProfile` / `UpdateRoleProfile` / `GetRoleProfile` / `ListRoleProfiles` | storage/use-case слой и gRPC handlers готовы | AGO-3, AGO-3b |
+| `GetPromptTemplate` / `ListPromptTemplates` | storage/use-case слой и gRPC handlers готовы; `GetPromptTemplate` возвращает активную версию при наличии `active_version_id` | AGO-3, AGO-3b |
+| `CreatePromptTemplateVersion` / `ActivatePromptTemplateVersion` / `GetPromptTemplateVersion` / `ListPromptTemplateVersions` | storage/use-case слой и gRPC handlers готовы | AGO-3, AGO-3b |
 | `StartAgentSession` | зарегистрировано в gRPC-каркасе; бизнес-реализация запланирована | AGO-4 |
 | `StartAgentRun` | зарегистрировано в gRPC-каркасе; бизнес-реализация запланирована | AGO-4, AGO-6 |
 | `RecordRunState` | зарегистрировано в gRPC-каркасе; бизнес-реализация запланирована | AGO-4, AGO-6 |

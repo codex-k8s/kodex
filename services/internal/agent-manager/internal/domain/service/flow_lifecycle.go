@@ -106,12 +106,20 @@ func (s *Service) ListFlows(ctx context.Context, filter query.FlowFilter) ([]ent
 	return listFromRepository(ctx, s, filter, s.listFlowsFromRepository)
 }
 
+func (s *Service) GetFlowVersion(ctx context.Context, id uuid.UUID) (entity.FlowVersion, error) {
+	return getByID(ctx, s, id, s.getFlowVersionFromRepository)
+}
+
 func (s *Service) getFlowFromRepository(ctx context.Context, id uuid.UUID) (entity.Flow, error) {
 	return s.repository.GetFlow(ctx, id)
 }
 
 func (s *Service) listFlowsFromRepository(ctx context.Context, filter query.FlowFilter) ([]entity.Flow, value.PageResult, error) {
 	return s.repository.ListFlows(ctx, filter)
+}
+
+func (s *Service) getFlowVersionFromRepository(ctx context.Context, id uuid.UUID) (entity.FlowVersion, error) {
+	return s.repository.GetFlowVersion(ctx, id)
 }
 
 func (s *Service) CreateFlowVersion(ctx context.Context, input CreateFlowVersionInput) (entity.FlowVersion, error) {

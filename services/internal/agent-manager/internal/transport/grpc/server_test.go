@@ -2,10 +2,20 @@ package grpc
 
 import (
 	"context"
+	"errors"
+	"io"
+	"log/slog"
 	"testing"
+	"time"
 
+	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	agentsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1"
+	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/errs"
 	agentservice "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/service"
+	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/enum"
+	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/value"
+	"github.com/google/uuid"
 	grpcruntime "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -15,7 +25,7 @@ func TestRegisterAgentManagerService(t *testing.T) {
 	t.Parallel()
 
 	server := grpcruntime.NewServer()
-	RegisterAgentManagerService(server, agentservice.New(agentservice.Config{}))
+	RegisterAgentManagerService(server, &fakeAgentService{})
 }
 
 func TestNewServerRequiresService(t *testing.T) {
@@ -29,20 +39,715 @@ func TestNewServerRequiresService(t *testing.T) {
 	_ = NewServer(nil)
 }
 
-func TestCreateFlowReturnsUnimplementedUntilBusinessSlice(t *testing.T) {
-	t.Parallel()
-
-	_, err := NewServer(agentservice.New(agentservice.Config{})).CreateFlow(context.Background(), &agentsv1.CreateFlowRequest{})
-	if status.Code(err) != codes.Unimplemented {
-		t.Fatalf("CreateFlow() code = %s, want %s", status.Code(err), codes.Unimplemented)
-	}
-}
-
 func TestServerKeepsDomainService(t *testing.T) {
 	t.Parallel()
 
-	agentService := agentservice.New(agentservice.Config{})
-	if NewServer(agentService).service != agentService {
+	service := &fakeAgentService{}
+	if NewServer(service).service != service {
 		t.Fatal("server did not keep composed domain service")
 	}
 }
+
+func TestCreateFlowMapsRequestAndResponse(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+	var captured agentservice.CreateFlowInput
+	service := &fakeAgentService{
+		createFlow: func(_ context.Context, input agentservice.CreateFlowInput) (entity.Flow, error) {
+			captured = input
+			return sampleFlow("22222222-2222-2222-2222-222222222222"), nil
+		},
+	}
+	response, err := NewServer(service).CreateFlow(context.Background(), &agentsv1.CreateFlowRequest{
+		Meta:        commandMeta(commandID.String(), "", nil),
+		Scope:       scopeRef(agentsv1.AgentScopeType_AGENT_SCOPE_TYPE_PROJECT, "project-1"),
+		Slug:        " delivery ",
+		DisplayName: []*agentsv1.LocalizedText{{Locale: "ru", Text: "Поставка"}},
+		Description: []*agentsv1.LocalizedText{{Locale: "ru", Text: "Доставка изменений"}},
+	})
+	if err != nil {
+		t.Fatalf("CreateFlow() error = %v", err)
+	}
+	if captured.Meta.CommandID != commandID || captured.Meta.Actor.ID != "operator-1" {
+		t.Fatalf("captured meta = %+v", captured.Meta)
+	}
+	if captured.Scope.Type != string(enum.AgentScopeTypeProject) || captured.Slug != "delivery" {
+		t.Fatalf("captured input = %+v", captured)
+	}
+	if response.GetFlow().GetStatus() != agentsv1.FlowStatus_FLOW_STATUS_DRAFT {
+		t.Fatalf("flow status = %s", response.GetFlow().GetStatus())
+	}
+}
+
+func TestGetFlowLoadsActiveVersion(t *testing.T) {
+	t.Parallel()
+
+	flowID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	activeID := uuid.MustParse("33333333-3333-3333-3333-333333333333")
+	service := &fakeAgentService{
+		getFlow: func(_ context.Context, id uuid.UUID) (entity.Flow, error) {
+			if id != flowID {
+				t.Fatalf("flow id = %s", id)
+			}
+			flow := sampleFlow(flowID.String())
+			flow.ActiveVersionID = &activeID
+			return flow, nil
+		},
+		getFlowVersion: func(_ context.Context, id uuid.UUID) (entity.FlowVersion, error) {
+			if id != activeID {
+				t.Fatalf("active version id = %s", id)
+			}
+			version := sampleFlowVersion(activeID.String(), flowID.String())
+			version.Status = enum.FlowVersionStatusActive
+			return version, nil
+		},
+	}
+	response, err := NewServer(service).GetFlow(context.Background(), &agentsv1.GetFlowRequest{
+		Meta:   queryMeta(),
+		FlowId: flowID.String(),
+	})
+	if err != nil {
+		t.Fatalf("GetFlow() error = %v", err)
+	}
+	if response.GetActiveVersion().GetId() != activeID.String() {
+		t.Fatalf("active version = %+v", response.GetActiveVersion())
+	}
+}
+
+func TestListFlowsMapsFilterAndPage(t *testing.T) {
+	t.Parallel()
+
+	statusFilter := agentsv1.FlowStatus_FLOW_STATUS_ACTIVE
+	service := &fakeAgentService{
+		listFlows: func(_ context.Context, input agentservice.FlowList) ([]entity.Flow, value.PageResult, error) {
+			if input.Scope.Type != string(enum.AgentScopeTypeOrganization) || input.Scope.Ref != "org-1" {
+				t.Fatalf("scope = %+v", input.Scope)
+			}
+			if input.Status == nil || *input.Status != enum.FlowStatusActive {
+				t.Fatalf("status = %+v", input.Status)
+			}
+			if input.Page.PageSize != 2 || input.Page.PageToken != "cursor-1" {
+				t.Fatalf("page = %+v", input.Page)
+			}
+			return []entity.Flow{sampleFlow("22222222-2222-2222-2222-222222222222")}, value.PageResult{NextPageToken: "cursor-2"}, nil
+		},
+	}
+	response, err := NewServer(service).ListFlows(context.Background(), &agentsv1.ListFlowsRequest{
+		Meta:   queryMeta(),
+		Scope:  scopeRef(agentsv1.AgentScopeType_AGENT_SCOPE_TYPE_ORGANIZATION, "org-1"),
+		Status: &statusFilter,
+		Page:   &agentsv1.PageRequest{PageSize: 2, PageToken: ptr("cursor-1")},
+	})
+	if err != nil {
+		t.Fatalf("ListFlows() error = %v", err)
+	}
+	if len(response.GetFlows()) != 1 || response.GetPage().GetNextPageToken() != "cursor-2" {
+		t.Fatalf("response = %+v", response)
+	}
+}
+
+func TestCreateFlowVersionMapsDefinition(t *testing.T) {
+	t.Parallel()
+
+	roleID := uuid.MustParse("44444444-4444-4444-4444-444444444444")
+	service := &fakeAgentService{
+		createFlowVersion: func(_ context.Context, input agentservice.CreateFlowVersionInput) (entity.FlowVersion, error) {
+			if len(input.Stages) != 1 || input.Stages[0].StageType != enum.StageTypeWork {
+				t.Fatalf("stages = %+v", input.Stages)
+			}
+			if len(input.Transitions) != 1 || input.Transitions[0].FromStageSlug == nil || *input.Transitions[0].FromStageSlug != "intake" {
+				t.Fatalf("transitions = %+v", input.Transitions)
+			}
+			if len(input.RoleBindings) != 1 || input.RoleBindings[0].RoleProfileID != roleID {
+				t.Fatalf("role bindings = %+v", input.RoleBindings)
+			}
+			version := sampleFlowVersion("33333333-3333-3333-3333-333333333333", input.FlowID.String())
+			version.Status = enum.FlowVersionStatusSuperseded
+			return version, nil
+		},
+	}
+	response, err := NewServer(service).CreateFlowVersion(context.Background(), &agentsv1.CreateFlowVersionRequest{
+		Meta:   commandMeta("11111111-1111-1111-1111-111111111111", "", nil),
+		FlowId: "22222222-2222-2222-2222-222222222222",
+		Definition: &agentsv1.FlowDefinitionInput{
+			DefinitionDigest: "sha256:flow",
+			Stages: []*agentsv1.StageInput{{
+				Slug:                  "dev",
+				StageType:             agentsv1.StageType_STAGE_TYPE_WORK,
+				RequiredArtifactsJson: "{}",
+				AcceptancePolicyJson:  "{}",
+			}},
+			Transitions: []*agentsv1.StageTransitionInput{{
+				FromStageSlug: ptr("intake"),
+				ToStageSlug:   "dev",
+				ConditionJson: "{}",
+			}},
+			StageRoleBindings: []*agentsv1.StageRoleBindingInput{{
+				StageSlug:             "dev",
+				RoleProfileId:         roleID.String(),
+				BindingKind:           agentsv1.StageRoleBindingKind_STAGE_ROLE_BINDING_KIND_EXECUTOR,
+				LaunchPolicyJson:      "{}",
+				RequiredForAcceptance: true,
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateFlowVersion() error = %v", err)
+	}
+	if response.GetFlowVersion().GetStatus() != agentsv1.FlowVersionStatus_FLOW_VERSION_STATUS_SUPERSEDED {
+		t.Fatalf("flow version status = %s", response.GetFlowVersion().GetStatus())
+	}
+}
+
+func TestRoleHandlersMapRequests(t *testing.T) {
+	t.Parallel()
+
+	expectedVersion := int64(7)
+	service := &fakeAgentService{
+		createRoleProfile: func(_ context.Context, input agentservice.CreateRoleProfileInput) (entity.RoleProfile, error) {
+			if input.RoleKind != enum.RoleKindReviewer || input.RuntimeProfile != "code" {
+				t.Fatalf("create input = %+v", input)
+			}
+			return sampleRole("55555555-5555-5555-5555-555555555555"), nil
+		},
+		updateRoleProfile: func(_ context.Context, input agentservice.UpdateRoleProfileInput) (entity.RoleProfile, error) {
+			if input.Meta.ExpectedVersion == nil || *input.Meta.ExpectedVersion != expectedVersion || input.Status != enum.RoleStatusActive {
+				t.Fatalf("update input = %+v", input)
+			}
+			role := sampleRole(input.RoleProfileID.String())
+			role.Status = enum.RoleStatusActive
+			return role, nil
+		},
+	}
+	server := NewServer(service)
+	if _, err := server.CreateRoleProfile(context.Background(), &agentsv1.CreateRoleProfileRequest{
+		Meta:           commandMeta("11111111-1111-1111-1111-111111111111", "", nil),
+		Scope:          scopeRef(agentsv1.AgentScopeType_AGENT_SCOPE_TYPE_PROJECT, "project-1"),
+		Slug:           "reviewer",
+		RoleKind:       agentsv1.RoleKind_ROLE_KIND_REVIEWER,
+		RuntimeProfile: "code",
+	}); err != nil {
+		t.Fatalf("CreateRoleProfile() error = %v", err)
+	}
+	active := agentsv1.RoleStatus_ROLE_STATUS_ACTIVE
+	if _, err := server.UpdateRoleProfile(context.Background(), &agentsv1.UpdateRoleProfileRequest{
+		Meta:          commandMeta("11111111-1111-1111-1111-111111111112", "", &expectedVersion),
+		RoleProfileId: "55555555-5555-5555-5555-555555555555",
+		Status:        &active,
+	}); err != nil {
+		t.Fatalf("UpdateRoleProfile() error = %v", err)
+	}
+}
+
+func TestRoleReadHandlersMapRequests(t *testing.T) {
+	t.Parallel()
+
+	roleID := uuid.MustParse("55555555-5555-5555-5555-555555555555")
+	kind := agentsv1.RoleKind_ROLE_KIND_REVIEWER
+	statusFilter := agentsv1.RoleStatus_ROLE_STATUS_ACTIVE
+	service := &fakeAgentService{
+		getRoleProfile: func(_ context.Context, id uuid.UUID) (entity.RoleProfile, error) {
+			if id != roleID {
+				t.Fatalf("role id = %s", id)
+			}
+			return sampleRole(roleID.String()), nil
+		},
+		listRoleProfiles: func(_ context.Context, input agentservice.RoleProfileList) ([]entity.RoleProfile, value.PageResult, error) {
+			if input.Kind == nil || *input.Kind != enum.RoleKindReviewer {
+				t.Fatalf("kind = %+v", input.Kind)
+			}
+			if input.Status == nil || *input.Status != enum.RoleStatusActive {
+				t.Fatalf("status = %+v", input.Status)
+			}
+			return []entity.RoleProfile{sampleRole(roleID.String())}, value.PageResult{NextPageToken: "roles-next"}, nil
+		},
+	}
+	server := NewServer(service)
+	if _, err := server.GetRoleProfile(context.Background(), &agentsv1.GetRoleProfileRequest{Meta: queryMeta(), RoleProfileId: roleID.String()}); err != nil {
+		t.Fatalf("GetRoleProfile() error = %v", err)
+	}
+	response, err := server.ListRoleProfiles(context.Background(), &agentsv1.ListRoleProfilesRequest{
+		Meta:     queryMeta(),
+		Scope:    scopeRef(agentsv1.AgentScopeType_AGENT_SCOPE_TYPE_PROJECT, "project-1"),
+		RoleKind: &kind,
+		Status:   &statusFilter,
+		Page:     &agentsv1.PageRequest{PageSize: 3},
+	})
+	if err != nil {
+		t.Fatalf("ListRoleProfiles() error = %v", err)
+	}
+	if len(response.GetRoleProfiles()) != 1 || response.GetPage().GetNextPageToken() != "roles-next" {
+		t.Fatalf("response = %+v", response)
+	}
+}
+
+func TestPromptTemplateHandlersMapRequests(t *testing.T) {
+	t.Parallel()
+
+	templateID := uuid.MustParse("66666666-6666-6666-6666-666666666666")
+	activeID := uuid.MustParse("77777777-7777-7777-7777-777777777777")
+	service := &fakeAgentService{
+		getPromptTemplate: func(_ context.Context, id uuid.UUID) (entity.PromptTemplate, error) {
+			if id != templateID {
+				t.Fatalf("template id = %s", id)
+			}
+			template := samplePromptTemplate(templateID.String(), "55555555-5555-5555-5555-555555555555")
+			template.ActiveVersionID = &activeID
+			return template, nil
+		},
+		getPromptTemplateVersion: func(_ context.Context, id uuid.UUID) (entity.PromptTemplateVersion, error) {
+			if id != activeID {
+				t.Fatalf("template version id = %s", id)
+			}
+			version := samplePromptVersion(activeID.String(), templateID.String(), "55555555-5555-5555-5555-555555555555")
+			version.Status = enum.PromptVersionStatusActive
+			return version, nil
+		},
+		createPromptTemplateVersion: func(_ context.Context, input agentservice.CreatePromptTemplateVersionInput) (entity.PromptTemplateVersion, error) {
+			if input.PromptKind != enum.PromptKindReview || input.TemplateObject.ObjectURI != "s3://bucket/prompt.md" {
+				t.Fatalf("create prompt version input = %+v", input)
+			}
+			return samplePromptVersion(activeID.String(), templateID.String(), input.RoleProfileID.String()), nil
+		},
+		listPromptTemplates: func(_ context.Context, input agentservice.PromptTemplateList) ([]entity.PromptTemplate, value.PageResult, error) {
+			if input.RoleProfileID.String() != "55555555-5555-5555-5555-555555555555" || input.Kind == nil || *input.Kind != enum.PromptKindReview {
+				t.Fatalf("list prompt template input = %+v", input)
+			}
+			return []entity.PromptTemplate{samplePromptTemplate(templateID.String(), input.RoleProfileID.String())}, value.PageResult{NextPageToken: "templates-next"}, nil
+		},
+	}
+	server := NewServer(service)
+	response, err := server.GetPromptTemplate(context.Background(), &agentsv1.GetPromptTemplateRequest{
+		Meta:             queryMeta(),
+		PromptTemplateId: templateID.String(),
+	})
+	if err != nil {
+		t.Fatalf("GetPromptTemplate() error = %v", err)
+	}
+	if response.GetActiveVersion().GetStatus() != agentsv1.PromptVersionStatus_PROMPT_VERSION_STATUS_ACTIVE {
+		t.Fatalf("active version = %+v", response.GetActiveVersion())
+	}
+	if _, err := server.CreatePromptTemplateVersion(context.Background(), &agentsv1.CreatePromptTemplateVersionRequest{
+		Meta:          commandMeta("11111111-1111-1111-1111-111111111111", "prompt-review-v1", nil),
+		RoleProfileId: "55555555-5555-5555-5555-555555555555",
+		PromptKind:    agentsv1.PromptKind_PROMPT_KIND_REVIEW,
+		TemplateObject: &agentsv1.ObjectRef{
+			ObjectUri:    "s3://bucket/prompt.md",
+			ObjectDigest: "sha256:prompt",
+		},
+		TemplateDigest: "sha256:prompt",
+	}); err != nil {
+		t.Fatalf("CreatePromptTemplateVersion() error = %v", err)
+	}
+	promptKind := agentsv1.PromptKind_PROMPT_KIND_REVIEW
+	list, err := server.ListPromptTemplates(context.Background(), &agentsv1.ListPromptTemplatesRequest{
+		Meta:          queryMeta(),
+		RoleProfileId: "55555555-5555-5555-5555-555555555555",
+		PromptKind:    &promptKind,
+		Page:          &agentsv1.PageRequest{PageSize: 2},
+	})
+	if err != nil {
+		t.Fatalf("ListPromptTemplates() error = %v", err)
+	}
+	if len(list.GetPromptTemplates()) != 1 || list.GetPage().GetNextPageToken() != "templates-next" {
+		t.Fatalf("list = %+v", list)
+	}
+}
+
+func TestPromptVersionHandlersMapRequests(t *testing.T) {
+	t.Parallel()
+
+	templateID := uuid.MustParse("66666666-6666-6666-6666-666666666666")
+	roleID := uuid.MustParse("55555555-5555-5555-5555-555555555555")
+	versionID := uuid.MustParse("77777777-7777-7777-7777-777777777777")
+	expectedVersion := int64(3)
+	promptKind := agentsv1.PromptKind_PROMPT_KIND_REVIEW
+	versionStatus := agentsv1.PromptVersionStatus_PROMPT_VERSION_STATUS_SUPERSEDED
+	service := &fakeAgentService{
+		activatePromptVersion: func(_ context.Context, input agentservice.ActivatePromptTemplateVersionInput) (entity.PromptTemplateVersion, error) {
+			if input.PromptTemplateVersionID != versionID || input.Meta.ExpectedVersion == nil || *input.Meta.ExpectedVersion != expectedVersion {
+				t.Fatalf("activate input = %+v", input)
+			}
+			version := samplePromptVersion(versionID.String(), templateID.String(), roleID.String())
+			version.Status = enum.PromptVersionStatusActive
+			return version, nil
+		},
+		getPromptTemplateVersion: func(_ context.Context, id uuid.UUID) (entity.PromptTemplateVersion, error) {
+			if id != versionID {
+				t.Fatalf("version id = %s", id)
+			}
+			version := samplePromptVersion(versionID.String(), templateID.String(), roleID.String())
+			version.Status = enum.PromptVersionStatusSuperseded
+			return version, nil
+		},
+		listPromptTemplateVersions: func(_ context.Context, input agentservice.PromptTemplateVersionList) ([]entity.PromptTemplateVersion, value.PageResult, error) {
+			if input.RoleProfileID != roleID || input.Kind == nil || *input.Kind != enum.PromptKindReview {
+				t.Fatalf("list input = %+v", input)
+			}
+			if input.Status == nil || *input.Status != enum.PromptVersionStatusSuperseded {
+				t.Fatalf("status = %+v", input.Status)
+			}
+			return []entity.PromptTemplateVersion{samplePromptVersion(versionID.String(), templateID.String(), roleID.String())}, value.PageResult{NextPageToken: "prompt-next"}, nil
+		},
+	}
+	server := NewServer(service)
+	activated, err := server.ActivatePromptTemplateVersion(context.Background(), &agentsv1.ActivatePromptTemplateVersionRequest{
+		Meta:                    commandMeta("11111111-1111-1111-1111-111111111113", "", &expectedVersion),
+		PromptTemplateVersionId: versionID.String(),
+	})
+	if err != nil {
+		t.Fatalf("ActivatePromptTemplateVersion() error = %v", err)
+	}
+	if activated.GetPromptTemplateVersion().GetStatus() != agentsv1.PromptVersionStatus_PROMPT_VERSION_STATUS_ACTIVE {
+		t.Fatalf("activated = %+v", activated)
+	}
+	read, err := server.GetPromptTemplateVersion(context.Background(), &agentsv1.GetPromptTemplateVersionRequest{Meta: queryMeta(), PromptTemplateVersionId: versionID.String()})
+	if err != nil {
+		t.Fatalf("GetPromptTemplateVersion() error = %v", err)
+	}
+	if read.GetPromptTemplateVersion().GetStatus() != agentsv1.PromptVersionStatus_PROMPT_VERSION_STATUS_SUPERSEDED {
+		t.Fatalf("read = %+v", read)
+	}
+	list, err := server.ListPromptTemplateVersions(context.Background(), &agentsv1.ListPromptTemplateVersionsRequest{
+		Meta:          queryMeta(),
+		RoleProfileId: roleID.String(),
+		PromptKind:    &promptKind,
+		Status:        &versionStatus,
+		Page:          &agentsv1.PageRequest{PageSize: 4},
+	})
+	if err != nil {
+		t.Fatalf("ListPromptTemplateVersions() error = %v", err)
+	}
+	if len(list.GetPromptTemplateVersions()) != 1 || list.GetPage().GetNextPageToken() != "prompt-next" {
+		t.Fatalf("list = %+v", list)
+	}
+}
+
+func TestActivateFlowVersionMapsExpectedVersion(t *testing.T) {
+	t.Parallel()
+
+	versionID := uuid.MustParse("33333333-3333-3333-3333-333333333333")
+	flowID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	expectedVersion := int64(5)
+	service := &fakeAgentService{
+		activateFlowVersion: func(_ context.Context, input agentservice.ActivateFlowVersionInput) (entity.FlowVersion, error) {
+			if input.FlowVersionID != versionID || input.Meta.ExpectedVersion == nil || *input.Meta.ExpectedVersion != expectedVersion {
+				t.Fatalf("activate input = %+v", input)
+			}
+			version := sampleFlowVersion(versionID.String(), flowID.String())
+			version.Status = enum.FlowVersionStatusActive
+			return version, nil
+		},
+	}
+	response, err := NewServer(service).ActivateFlowVersion(context.Background(), &agentsv1.ActivateFlowVersionRequest{
+		Meta:          commandMeta("11111111-1111-1111-1111-111111111114", "", &expectedVersion),
+		FlowVersionId: versionID.String(),
+	})
+	if err != nil {
+		t.Fatalf("ActivateFlowVersion() error = %v", err)
+	}
+	if response.GetFlowVersion().GetStatus() != agentsv1.FlowVersionStatus_FLOW_VERSION_STATUS_ACTIVE {
+		t.Fatalf("response = %+v", response)
+	}
+}
+
+func TestTransportRejectsValidationErrorsBeforeDomainCall(t *testing.T) {
+	t.Parallel()
+
+	called := false
+	service := &fakeAgentService{
+		getFlow: func(context.Context, uuid.UUID) (entity.Flow, error) {
+			called = true
+			return entity.Flow{}, nil
+		},
+	}
+	_, err := NewServer(service).GetFlow(context.Background(), &agentsv1.GetFlowRequest{Meta: queryMeta(), FlowId: "not-a-uuid"})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("GetFlow() error = %v, want invalid argument", err)
+	}
+	if called {
+		t.Fatal("domain service was called after invalid transport input")
+	}
+}
+
+func TestUnaryErrorInterceptorMapsDomainErrors(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		err  error
+		code codes.Code
+	}{
+		{name: "validation", err: errs.ErrInvalidArgument, code: codes.InvalidArgument},
+		{name: "not found", err: errs.ErrNotFound, code: codes.NotFound},
+		{name: "conflict", err: errs.ErrConflict, code: codes.Aborted},
+		{name: "precondition", err: errs.ErrPreconditionFailed, code: codes.FailedPrecondition},
+	}
+	interceptor := UnaryErrorInterceptor(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := interceptor(context.Background(), nil, &grpcruntime.UnaryServerInfo{FullMethod: "/test"}, func(context.Context, any) (any, error) {
+				return nil, tt.err
+			})
+			if status.Code(err) != tt.code {
+				t.Fatalf("code = %s, want %s", status.Code(err), tt.code)
+			}
+		})
+	}
+}
+
+func TestStartAgentSessionRemainsUnimplemented(t *testing.T) {
+	t.Parallel()
+
+	_, err := NewServer(&fakeAgentService{}).StartAgentSession(context.Background(), &agentsv1.StartAgentSessionRequest{})
+	if status.Code(err) != codes.Unimplemented {
+		t.Fatalf("StartAgentSession() code = %s, want %s", status.Code(err), codes.Unimplemented)
+	}
+}
+
+type fakeAgentService struct {
+	createFlow                  func(context.Context, agentservice.CreateFlowInput) (entity.Flow, error)
+	updateFlow                  func(context.Context, agentservice.UpdateFlowInput) (entity.Flow, error)
+	getFlow                     func(context.Context, uuid.UUID) (entity.Flow, error)
+	listFlows                   func(context.Context, agentservice.FlowList) ([]entity.Flow, value.PageResult, error)
+	createFlowVersion           func(context.Context, agentservice.CreateFlowVersionInput) (entity.FlowVersion, error)
+	activateFlowVersion         func(context.Context, agentservice.ActivateFlowVersionInput) (entity.FlowVersion, error)
+	getFlowVersion              func(context.Context, uuid.UUID) (entity.FlowVersion, error)
+	createRoleProfile           func(context.Context, agentservice.CreateRoleProfileInput) (entity.RoleProfile, error)
+	updateRoleProfile           func(context.Context, agentservice.UpdateRoleProfileInput) (entity.RoleProfile, error)
+	getRoleProfile              func(context.Context, uuid.UUID) (entity.RoleProfile, error)
+	listRoleProfiles            func(context.Context, agentservice.RoleProfileList) ([]entity.RoleProfile, value.PageResult, error)
+	getPromptTemplate           func(context.Context, uuid.UUID) (entity.PromptTemplate, error)
+	listPromptTemplates         func(context.Context, agentservice.PromptTemplateList) ([]entity.PromptTemplate, value.PageResult, error)
+	createPromptTemplateVersion func(context.Context, agentservice.CreatePromptTemplateVersionInput) (entity.PromptTemplateVersion, error)
+	activatePromptVersion       func(context.Context, agentservice.ActivatePromptTemplateVersionInput) (entity.PromptTemplateVersion, error)
+	getPromptTemplateVersion    func(context.Context, uuid.UUID) (entity.PromptTemplateVersion, error)
+	listPromptTemplateVersions  func(context.Context, agentservice.PromptTemplateVersionList) ([]entity.PromptTemplateVersion, value.PageResult, error)
+}
+
+func (f *fakeAgentService) CreateFlow(ctx context.Context, input agentservice.CreateFlowInput) (entity.Flow, error) {
+	if f.createFlow == nil {
+		return entity.Flow{}, errs.ErrPreconditionFailed
+	}
+	return f.createFlow(ctx, input)
+}
+
+func (f *fakeAgentService) UpdateFlow(ctx context.Context, input agentservice.UpdateFlowInput) (entity.Flow, error) {
+	if f.updateFlow == nil {
+		return entity.Flow{}, errs.ErrPreconditionFailed
+	}
+	return f.updateFlow(ctx, input)
+}
+
+func (f *fakeAgentService) GetFlow(ctx context.Context, id uuid.UUID) (entity.Flow, error) {
+	if f.getFlow == nil {
+		return entity.Flow{}, errs.ErrPreconditionFailed
+	}
+	return f.getFlow(ctx, id)
+}
+
+func (f *fakeAgentService) ListFlows(ctx context.Context, input agentservice.FlowList) ([]entity.Flow, value.PageResult, error) {
+	if f.listFlows == nil {
+		return nil, value.PageResult{}, errs.ErrPreconditionFailed
+	}
+	return f.listFlows(ctx, input)
+}
+
+func (f *fakeAgentService) CreateFlowVersion(ctx context.Context, input agentservice.CreateFlowVersionInput) (entity.FlowVersion, error) {
+	if f.createFlowVersion == nil {
+		return entity.FlowVersion{}, errs.ErrPreconditionFailed
+	}
+	return f.createFlowVersion(ctx, input)
+}
+
+func (f *fakeAgentService) ActivateFlowVersion(ctx context.Context, input agentservice.ActivateFlowVersionInput) (entity.FlowVersion, error) {
+	if f.activateFlowVersion == nil {
+		return entity.FlowVersion{}, errs.ErrPreconditionFailed
+	}
+	return f.activateFlowVersion(ctx, input)
+}
+
+func (f *fakeAgentService) GetFlowVersion(ctx context.Context, id uuid.UUID) (entity.FlowVersion, error) {
+	if f.getFlowVersion == nil {
+		return entity.FlowVersion{}, errs.ErrPreconditionFailed
+	}
+	return f.getFlowVersion(ctx, id)
+}
+
+func (f *fakeAgentService) CreateRoleProfile(ctx context.Context, input agentservice.CreateRoleProfileInput) (entity.RoleProfile, error) {
+	if f.createRoleProfile == nil {
+		return entity.RoleProfile{}, errs.ErrPreconditionFailed
+	}
+	return f.createRoleProfile(ctx, input)
+}
+
+func (f *fakeAgentService) UpdateRoleProfile(ctx context.Context, input agentservice.UpdateRoleProfileInput) (entity.RoleProfile, error) {
+	if f.updateRoleProfile == nil {
+		return entity.RoleProfile{}, errs.ErrPreconditionFailed
+	}
+	return f.updateRoleProfile(ctx, input)
+}
+
+func (f *fakeAgentService) GetRoleProfile(ctx context.Context, id uuid.UUID) (entity.RoleProfile, error) {
+	if f.getRoleProfile == nil {
+		return entity.RoleProfile{}, errs.ErrPreconditionFailed
+	}
+	return f.getRoleProfile(ctx, id)
+}
+
+func (f *fakeAgentService) ListRoleProfiles(ctx context.Context, input agentservice.RoleProfileList) ([]entity.RoleProfile, value.PageResult, error) {
+	if f.listRoleProfiles == nil {
+		return nil, value.PageResult{}, errs.ErrPreconditionFailed
+	}
+	return f.listRoleProfiles(ctx, input)
+}
+
+func (f *fakeAgentService) GetPromptTemplate(ctx context.Context, id uuid.UUID) (entity.PromptTemplate, error) {
+	if f.getPromptTemplate == nil {
+		return entity.PromptTemplate{}, errs.ErrPreconditionFailed
+	}
+	return f.getPromptTemplate(ctx, id)
+}
+
+func (f *fakeAgentService) ListPromptTemplates(ctx context.Context, input agentservice.PromptTemplateList) ([]entity.PromptTemplate, value.PageResult, error) {
+	if f.listPromptTemplates == nil {
+		return nil, value.PageResult{}, errs.ErrPreconditionFailed
+	}
+	return f.listPromptTemplates(ctx, input)
+}
+
+func (f *fakeAgentService) CreatePromptTemplateVersion(ctx context.Context, input agentservice.CreatePromptTemplateVersionInput) (entity.PromptTemplateVersion, error) {
+	if f.createPromptTemplateVersion == nil {
+		return entity.PromptTemplateVersion{}, errs.ErrPreconditionFailed
+	}
+	return f.createPromptTemplateVersion(ctx, input)
+}
+
+func (f *fakeAgentService) ActivatePromptTemplateVersion(ctx context.Context, input agentservice.ActivatePromptTemplateVersionInput) (entity.PromptTemplateVersion, error) {
+	if f.activatePromptVersion == nil {
+		return entity.PromptTemplateVersion{}, errs.ErrPreconditionFailed
+	}
+	return f.activatePromptVersion(ctx, input)
+}
+
+func (f *fakeAgentService) GetPromptTemplateVersion(ctx context.Context, id uuid.UUID) (entity.PromptTemplateVersion, error) {
+	if f.getPromptTemplateVersion == nil {
+		return entity.PromptTemplateVersion{}, errs.ErrPreconditionFailed
+	}
+	return f.getPromptTemplateVersion(ctx, id)
+}
+
+func (f *fakeAgentService) ListPromptTemplateVersions(ctx context.Context, input agentservice.PromptTemplateVersionList) ([]entity.PromptTemplateVersion, value.PageResult, error) {
+	if f.listPromptTemplateVersions == nil {
+		return nil, value.PageResult{}, errs.ErrPreconditionFailed
+	}
+	return f.listPromptTemplateVersions(ctx, input)
+}
+
+func commandMeta(commandID string, idempotencyKey string, expectedVersion *int64) *agentsv1.CommandMeta {
+	return &agentsv1.CommandMeta{
+		CommandId:       optional(commandID),
+		IdempotencyKey:  optional(idempotencyKey),
+		ExpectedVersion: expectedVersion,
+		Actor:           &agentsv1.Actor{Type: "user", Id: "operator-1"},
+		Reason:          "test",
+		RequestId:       "request-1",
+	}
+}
+
+func queryMeta() *agentsv1.QueryMeta {
+	return &agentsv1.QueryMeta{Actor: &agentsv1.Actor{Type: "user", Id: "operator-1"}, RequestId: "request-1"}
+}
+
+func scopeRef(scopeType agentsv1.AgentScopeType, ref string) *agentsv1.ScopeRef {
+	return &agentsv1.ScopeRef{Type: scopeType, Ref: ref}
+}
+
+func sampleFlow(id string) entity.Flow {
+	now := sampleTime()
+	return entity.Flow{
+		VersionedBase: entity.VersionedBase{ID: uuid.MustParse(id), Version: 1, CreatedAt: now, UpdatedAt: now},
+		Scope:         value.ScopeRef{Type: string(enum.AgentScopeTypeProject), Ref: "project-1"},
+		Slug:          "delivery",
+		DisplayName:   []value.LocalizedText{{Locale: "ru", Text: "Поставка"}},
+		Status:        enum.FlowStatusDraft,
+	}
+}
+
+func sampleFlowVersion(id string, flowID string) entity.FlowVersion {
+	now := sampleTime()
+	stageID := uuid.MustParse("88888888-8888-8888-8888-888888888888")
+	return entity.FlowVersion{
+		ID:               uuid.MustParse(id),
+		FlowID:           uuid.MustParse(flowID),
+		Version:          1,
+		DefinitionDigest: "sha256:flow",
+		Status:           enum.FlowVersionStatusDraft,
+		CreatedAt:        now,
+		Stages: []entity.Stage{{
+			ID:                    stageID,
+			FlowVersionID:         uuid.MustParse(id),
+			Slug:                  "dev",
+			StageType:             enum.StageTypeWork,
+			RequiredArtifactsJSON: []byte("{}"),
+			AcceptancePolicyJSON:  []byte("{}"),
+			Position:              1,
+		}},
+	}
+}
+
+func sampleRole(id string) entity.RoleProfile {
+	now := sampleTime()
+	return entity.RoleProfile{
+		VersionedBase:   entity.VersionedBase{ID: uuid.MustParse(id), Version: 1, CreatedAt: now, UpdatedAt: now},
+		Scope:           value.ScopeRef{Type: string(enum.AgentScopeTypeProject), Ref: "project-1"},
+		Slug:            "reviewer",
+		DisplayName:     []value.LocalizedText{{Locale: "ru", Text: "Ревьюер"}},
+		RoleKind:        enum.RoleKindReviewer,
+		RuntimeProfile:  "code",
+		AllowedMCPTools: []string{"provider.github.comment"},
+		Status:          enum.RoleStatusDraft,
+	}
+}
+
+func samplePromptTemplate(id string, roleID string) entity.PromptTemplate {
+	now := sampleTime()
+	return entity.PromptTemplate{
+		VersionedBase: entity.VersionedBase{ID: uuid.MustParse(id), Version: 1, CreatedAt: now, UpdatedAt: now},
+		RoleProfileID: uuid.MustParse(roleID),
+		PromptKind:    enum.PromptKindReview,
+	}
+}
+
+func samplePromptVersion(id string, templateID string, roleID string) entity.PromptTemplateVersion {
+	return entity.PromptTemplateVersion{
+		ID:               uuid.MustParse(id),
+		PromptTemplateID: uuid.MustParse(templateID),
+		RoleProfileID:    uuid.MustParse(roleID),
+		PromptKind:       enum.PromptKindReview,
+		Version:          1,
+		TemplateObject:   value.ObjectRef{ObjectURI: "s3://bucket/prompt.md", ObjectDigest: "sha256:prompt"},
+		TemplateDigest:   "sha256:prompt",
+		Status:           enum.PromptVersionStatusDraft,
+		CreatedAt:        sampleTime(),
+	}
+}
+
+func sampleTime() time.Time {
+	return time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC)
+}
+
+func optional(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
+}
+
+func ptr(value string) *string {
+	return &value
+}
+
+var _ grpcserver.UnaryInterceptor = UnaryErrorInterceptor(nil)

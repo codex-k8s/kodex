@@ -8,7 +8,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
@@ -27,13 +26,17 @@ var SQLFiles embed.FS
 var _ agentrepo.Repository = (*Repository)(nil)
 
 type database interface {
-	execQuerier
-	BeginTx(ctx context.Context, txOptions pgx.TxOptions) (pgx.Tx, error)
+	dataRunner
+	postgreslib.TxBeginner
 }
 
-type execQuerier interface {
-	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
-	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+type dataRunner interface {
+	postgreslib.ExecQuerier
+	postgreslib.RowQuerier
+	queryRowGetter
+}
+
+type queryRowGetter interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
@@ -257,7 +260,7 @@ func (r *Repository) activateVersionWithResult(ctx context.Context, operation st
 	return wrapError(operation, err)
 }
 
-func (r *Repository) createFlowVersionChildren(ctx context.Context, db execQuerier, version entity.FlowVersion) error {
+func (r *Repository) createFlowVersionChildren(ctx context.Context, db dataRunner, version entity.FlowVersion) error {
 	for _, stage := range version.Stages {
 		if err := runMutation(ctx, db, queryStageCreate, stageArgs(stage), true); err != nil {
 			return err
@@ -276,7 +279,7 @@ func (r *Repository) createFlowVersionChildren(ctx context.Context, db execQueri
 	return nil
 }
 
-func (r *Repository) loadFlowVersionChildren(ctx context.Context, db execQuerier, version entity.FlowVersion) (entity.FlowVersion, error) {
+func (r *Repository) loadFlowVersionChildren(ctx context.Context, db dataRunner, version entity.FlowVersion) (entity.FlowVersion, error) {
 	stages, err := queryMany(ctx, db, operationGetFlowVersion, queryStageListByFlowVersion, pgx.NamedArgs{"flow_version_id": version.ID}, scanStage)
 	if err != nil {
 		return entity.FlowVersion{}, err
@@ -295,7 +298,7 @@ func (r *Repository) loadFlowVersionChildren(ctx context.Context, db execQuerier
 	return version, nil
 }
 
-func runMutation(ctx context.Context, db execQuerier, query string, args pgx.NamedArgs, requireAffected bool) error {
+func runMutation(ctx context.Context, db dataRunner, query string, args pgx.NamedArgs, requireAffected bool) error {
 	return postgreslib.RunMutation(ctx, db, errs.ErrConflict, mutation(query, args, requireAffected))
 }
 
@@ -303,15 +306,15 @@ func mutation(query string, args pgx.NamedArgs, requireAffected bool) postgresli
 	return postgreslib.Mutation{Query: query, Args: args, RequireAffected: requireAffected}
 }
 
-func runCommandResult(ctx context.Context, db execQuerier, result entity.CommandResult) error {
+func runCommandResult(ctx context.Context, db dataRunner, result entity.CommandResult) error {
 	return runMutation(ctx, db, queryCommandResultCreate, commandResultArgs(result), true)
 }
 
-func runOutboxEvent(ctx context.Context, db execQuerier, event entity.OutboxEvent) error {
+func runOutboxEvent(ctx context.Context, db dataRunner, event entity.OutboxEvent) error {
 	return runMutation(ctx, db, queryOutboxEventCreate, outboxEventArgs(event), true)
 }
 
-func queryOne[T any](ctx context.Context, db execQuerier, operation string, query string, args pgx.NamedArgs, scan func(postgreslib.RowScanner) (T, error)) (T, error) {
+func queryOne[T any](ctx context.Context, db dataRunner, operation string, query string, args pgx.NamedArgs, scan func(postgreslib.RowScanner) (T, error)) (T, error) {
 	row := db.QueryRow(ctx, query, args)
 	item, err := scan(row)
 	if err != nil {
@@ -321,7 +324,7 @@ func queryOne[T any](ctx context.Context, db execQuerier, operation string, quer
 	return item, nil
 }
 
-func queryMany[T any](ctx context.Context, db execQuerier, operation string, query string, args pgx.NamedArgs, scan func(postgreslib.RowScanner) (T, error)) ([]T, error) {
+func queryMany[T any](ctx context.Context, db dataRunner, operation string, query string, args pgx.NamedArgs, scan func(postgreslib.RowScanner) (T, error)) ([]T, error) {
 	rows, err := db.Query(ctx, query, args)
 	if err != nil {
 		var none []T
@@ -335,7 +338,7 @@ func queryMany[T any](ctx context.Context, db execQuerier, operation string, que
 	return items, nil
 }
 
-func queryPage[T any](ctx context.Context, db execQuerier, operation string, query string, page pageQueryArgs, scan func(postgreslib.RowScanner) (T, error)) ([]T, value.PageResult, error) {
+func queryPage[T any](ctx context.Context, db dataRunner, operation string, query string, page pageQueryArgs, scan func(postgreslib.RowScanner) (T, error)) ([]T, value.PageResult, error) {
 	items, err := queryMany(ctx, db, operation, query, page.NamedArgs, scan)
 	if err != nil {
 		return nil, value.PageResult{}, err
