@@ -6,6 +6,9 @@ import (
 )
 
 func TestLoadConfigAllowsMissingConditionalEnvWhenAuthDisabled(t *testing.T) {
+	t.Setenv("KODEX_AGENT_MANAGER_DATABASE_DSN", "postgres://agent-manager")
+	t.Setenv("KODEX_AGENT_MANAGER_OUTBOX_DISPATCH_ENABLED", "false")
+	t.Setenv("KODEX_AGENT_MANAGER_OUTBOX_PUBLISHER_KIND", "disabled")
 	t.Setenv("KODEX_AGENT_MANAGER_GRPC_AUTH_REQUIRED", "false")
 	t.Setenv("KODEX_AGENT_MANAGER_GRPC_AUTH_TOKEN", "")
 
@@ -28,23 +31,15 @@ func TestValidateRequiresGRPCAuthTokenWhenAuthEnabled(t *testing.T) {
 	}
 }
 
-func TestValidateRejectsOutboxDispatcherUntilStorageExists(t *testing.T) {
+func TestValidateRequiresEventLogDSNWhenPostgresPublisherEnabled(t *testing.T) {
 	t.Parallel()
 
 	cfg := validConfig()
 	cfg.OutboxDispatchEnabled = true
-	if err := cfg.Validate(); err == nil {
-		t.Fatal("Validate() err = nil, want outbox storage error")
-	}
-}
-
-func TestValidateRejectsNonDisabledPublisherUntilStorageExists(t *testing.T) {
-	t.Parallel()
-
-	cfg := validConfig()
 	cfg.OutboxPublisherKind = "postgres-event-log"
+	cfg.EventLogDatabaseDSN = ""
 	if err := cfg.Validate(); err == nil {
-		t.Fatal("Validate() err = nil, want disabled publisher error")
+		t.Fatal("Validate() err = nil, want event-log database dsn error")
 	}
 }
 
@@ -67,6 +62,18 @@ func TestGRPCServerConfigMapsRuntimeLimits(t *testing.T) {
 func validConfig() Config {
 	return Config{
 		HTTPAddr:                 ":8080",
+		DatabaseDSN:              "postgres://agent-manager",
+		DatabaseMaxConns:         8,
+		DatabaseMinConns:         1,
+		DatabaseMaxConnLifetime:  time.Hour,
+		DatabaseMaxConnIdleTime:  15 * time.Minute,
+		DatabaseHealthPeriod:     30 * time.Second,
+		DatabasePingTimeout:      5 * time.Second,
+		DatabaseRetryAttempts:    6,
+		DatabaseRetryInitial:     500 * time.Millisecond,
+		DatabaseRetryMax:         5 * time.Second,
+		DatabaseRetryJitterRatio: 0.2,
+		EventLogDatabaseMaxConns: 4,
 		GRPCAddr:                 ":9090",
 		GRPCAuthRequired:         true,
 		GRPCAuthToken:            "test-token",
@@ -80,5 +87,13 @@ func validConfig() Config {
 		GRPCMaxSendMessageBytes:  4 * 1024 * 1024,
 		OutboxDispatchEnabled:    false,
 		OutboxPublisherKind:      "disabled",
+		OutboxBatchSize:          100,
+		OutboxPollInterval:       time.Second,
+		OutboxLockTTL:            30 * time.Second,
+		OutboxPublishTimeout:     10 * time.Second,
+		OutboxLeaseSafetyMargin:  5 * time.Second,
+		OutboxRetryInitialDelay:  time.Second,
+		OutboxRetryMaxDelay:      time.Minute,
+		OutboxFailureLimit:       512,
 	}
 }

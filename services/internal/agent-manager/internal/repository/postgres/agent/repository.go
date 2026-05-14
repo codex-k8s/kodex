@@ -1,0 +1,339 @@
+// Package agent implements the PostgreSQL repository for agent-manager metadata.
+package agent
+
+import (
+	"context"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
+	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/errs"
+	agentrepo "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/repository/agent"
+	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/value"
+)
+
+var _ agentrepo.Repository = (*Repository)(nil)
+
+type database interface {
+	execQuerier
+	BeginTx(ctx context.Context, txOptions pgx.TxOptions) (pgx.Tx, error)
+}
+
+type execQuerier interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+type Repository struct {
+	db database
+}
+
+const (
+	operationCreateFlow            = "domain.Repository.CreateFlowWithResult"
+	operationUpdateFlow            = "domain.Repository.UpdateFlowWithResult"
+	operationGetFlow               = "domain.Repository.GetFlow"
+	operationListFlows             = "domain.Repository.ListFlows"
+	operationCreateFlowVersion     = "domain.Repository.CreateFlowVersionWithResult"
+	operationActivateFlowVersion   = "domain.Repository.ActivateFlowVersionWithResult"
+	operationGetFlowVersion        = "domain.Repository.GetFlowVersion"
+	operationListFlowVersions      = "domain.Repository.ListFlowVersions"
+	operationCreateRole            = "domain.Repository.CreateRoleProfileWithResult"
+	operationUpdateRole            = "domain.Repository.UpdateRoleProfileWithResult"
+	operationGetRole               = "domain.Repository.GetRoleProfile"
+	operationListRoles             = "domain.Repository.ListRoleProfiles"
+	operationCreatePromptTemplate  = "domain.Repository.CreatePromptTemplateWithResult"
+	operationGetPromptTemplate     = "domain.Repository.GetPromptTemplate"
+	operationListPromptTemplates   = "domain.Repository.ListPromptTemplates"
+	operationCreatePromptVersion   = "domain.Repository.CreatePromptTemplateVersionWithResult"
+	operationActivatePromptVersion = "domain.Repository.ActivatePromptTemplateVersionWithResult"
+	operationGetPromptVersion      = "domain.Repository.GetPromptTemplateVersion"
+	operationListPromptVersions    = "domain.Repository.ListPromptTemplateVersions"
+	operationGetCommandResult      = "domain.Repository.GetCommandResult"
+	operationOutboxClaim           = "domain.Repository.ClaimOutboxEvents"
+	operationOutboxMarkFailed      = "domain.Repository.MarkOutboxEventFailed"
+	operationOutboxMarkPermanent   = "domain.Repository.MarkOutboxEventPermanentlyFailed"
+	operationOutboxMarkPublished   = "domain.Repository.MarkOutboxEventPublished"
+)
+
+func NewRepository(db *pgxpool.Pool) *Repository {
+	return &Repository{db: db}
+}
+
+func (r *Repository) CreateFlowWithResult(ctx context.Context, flow entity.Flow, result entity.CommandResult) error {
+	return r.mutateWithResult(ctx, operationCreateFlow, queryFlowCreate, flowArgs(flow), result, nil)
+}
+
+func (r *Repository) UpdateFlowWithResult(ctx context.Context, flow entity.Flow, previousVersion int64, result entity.CommandResult) error {
+	return r.mutateWithResult(ctx, operationUpdateFlow, queryFlowUpdate, flowUpdateArgs(flow, previousVersion), result, nil)
+}
+
+func (r *Repository) GetFlow(ctx context.Context, id uuid.UUID) (entity.Flow, error) {
+	return queryOne(ctx, r.db, operationGetFlow, queryFlowGet, pgx.NamedArgs{"id": id}, scanFlow)
+}
+
+func (r *Repository) ListFlows(ctx context.Context, filter query.FlowFilter) ([]entity.Flow, value.PageResult, error) {
+	return queryPage(ctx, r.db, operationListFlows, queryFlowList, flowFilterArgs(filter), scanFlow)
+}
+
+func (r *Repository) CreateFlowVersionWithResult(ctx context.Context, version entity.FlowVersion, result entity.CommandResult) (entity.FlowVersion, error) {
+	err := r.createWithResult(ctx, operationCreateFlowVersion, result, func(tx pgx.Tx) error {
+		if err := runMutation(ctx, tx, queryFlowVersionCreate, flowVersionArgs(version), true); err != nil {
+			return err
+		}
+		return r.createFlowVersionChildren(ctx, tx, version)
+	})
+	return version, err
+}
+
+func (r *Repository) ActivateFlowVersionWithResult(ctx context.Context, flow entity.Flow, previousFlowVersion int64, version entity.FlowVersion, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.activateVersionWithResult(ctx, operationActivateFlowVersion, []postgreslib.Mutation{
+		mutation(queryFlowUpdate, flowUpdateArgs(flow, previousFlowVersion), true),
+		mutation(queryFlowVersionSupersede, pgx.NamedArgs{"flow_id": version.FlowID, "id": version.ID}, false),
+		mutation(queryFlowVersionActivate, flowVersionArgs(version), true),
+	}, result, event)
+}
+
+func (r *Repository) GetFlowVersion(ctx context.Context, id uuid.UUID) (entity.FlowVersion, error) {
+	version, err := queryOne(ctx, r.db, operationGetFlowVersion, queryFlowVersionGet, pgx.NamedArgs{"id": id}, scanFlowVersion)
+	if err != nil {
+		return entity.FlowVersion{}, err
+	}
+	return r.loadFlowVersionChildren(ctx, r.db, version)
+}
+
+func (r *Repository) ListFlowVersions(ctx context.Context, filter query.FlowVersionFilter) ([]entity.FlowVersion, value.PageResult, error) {
+	return queryPage(ctx, r.db, operationListFlowVersions, queryFlowVersionList, flowVersionFilterArgs(filter), scanFlowVersion)
+}
+
+func (r *Repository) CreateRoleProfileWithResult(ctx context.Context, role entity.RoleProfile, result entity.CommandResult) error {
+	return r.mutateWithResult(ctx, operationCreateRole, queryRoleCreate, roleProfileArgs(role), result, nil)
+}
+
+func (r *Repository) UpdateRoleProfileWithResult(ctx context.Context, role entity.RoleProfile, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.mutateWithResult(ctx, operationUpdateRole, queryRoleUpdate, roleProfileUpdateArgs(role, previousVersion), result, &event)
+}
+
+func (r *Repository) GetRoleProfile(ctx context.Context, id uuid.UUID) (entity.RoleProfile, error) {
+	return queryOne(ctx, r.db, operationGetRole, queryRoleGet, pgx.NamedArgs{"id": id}, scanRoleProfile)
+}
+
+func (r *Repository) ListRoleProfiles(ctx context.Context, filter query.RoleProfileFilter) ([]entity.RoleProfile, value.PageResult, error) {
+	return queryPage(ctx, r.db, operationListRoles, queryRoleList, roleProfileFilterArgs(filter), scanRoleProfile)
+}
+
+func (r *Repository) CreatePromptTemplateWithResult(ctx context.Context, template entity.PromptTemplate, result entity.CommandResult) error {
+	return r.mutateWithResult(ctx, operationCreatePromptTemplate, queryPromptTemplateCreate, promptTemplateArgs(template), result, nil)
+}
+
+func (r *Repository) GetPromptTemplate(ctx context.Context, id uuid.UUID) (entity.PromptTemplate, error) {
+	return queryOne(ctx, r.db, operationGetPromptTemplate, queryPromptTemplateGet, pgx.NamedArgs{"id": id}, scanPromptTemplate)
+}
+
+func (r *Repository) ListPromptTemplates(ctx context.Context, filter query.PromptTemplateFilter) ([]entity.PromptTemplate, value.PageResult, error) {
+	return queryPage(ctx, r.db, operationListPromptTemplates, queryPromptTemplateList, promptTemplateFilterArgs(filter), scanPromptTemplate)
+}
+
+func (r *Repository) CreatePromptTemplateVersionWithResult(ctx context.Context, newTemplate *entity.PromptTemplate, version entity.PromptTemplateVersion, result entity.CommandResult) (entity.PromptTemplateVersion, error) {
+	err := r.createWithResult(ctx, operationCreatePromptVersion, result, func(tx pgx.Tx) error {
+		if newTemplate != nil {
+			if err := runMutation(ctx, tx, queryPromptTemplateCreate, promptTemplateArgs(*newTemplate), true); err != nil {
+				return err
+			}
+		}
+		return runMutation(ctx, tx, queryPromptVersionCreate, promptTemplateVersionArgs(version), true)
+	})
+	return version, err
+}
+
+func (r *Repository) ActivatePromptTemplateVersionWithResult(ctx context.Context, template entity.PromptTemplate, previousTemplateVersion int64, version entity.PromptTemplateVersion, result entity.CommandResult, event entity.OutboxEvent) error {
+	mutations := []postgreslib.Mutation{
+		mutation(queryPromptTemplateUpdate, promptTemplateUpdateArgs(template, previousTemplateVersion), true),
+		mutation(queryPromptVersionSupersede, pgx.NamedArgs{"prompt_template_id": version.PromptTemplateID, "id": version.ID}, false),
+		mutation(queryPromptVersionActivate, promptTemplateVersionArgs(version), true),
+	}
+	return r.activateVersionWithResult(ctx, operationActivatePromptVersion, mutations, result, event)
+}
+
+func (r *Repository) GetPromptTemplateVersion(ctx context.Context, id uuid.UUID) (entity.PromptTemplateVersion, error) {
+	return queryOne(ctx, r.db, operationGetPromptVersion, queryPromptVersionGet, pgx.NamedArgs{"id": id}, scanPromptTemplateVersion)
+}
+
+func (r *Repository) ListPromptTemplateVersions(ctx context.Context, filter query.PromptTemplateVersionFilter) ([]entity.PromptTemplateVersion, value.PageResult, error) {
+	return queryPage(ctx, r.db, operationListPromptVersions, queryPromptVersionList, promptTemplateVersionFilterArgs(filter), scanPromptTemplateVersion)
+}
+
+func (r *Repository) GetCommandResult(ctx context.Context, identity query.CommandIdentity) (entity.CommandResult, error) {
+	return queryOne(ctx, r.db, operationGetCommandResult, queryCommandResultGet, commandIdentityArgs(identity), scanCommandResult)
+}
+
+func (r *Repository) ClaimOutboxEvents(ctx context.Context, limit int, now time.Time, lockedUntil time.Time) ([]entity.OutboxEvent, error) {
+	events, queryRan, err := postgreslib.ClaimOutboxRows(ctx, r.db, queryOutboxEventClaim, limit, now, lockedUntil, scanOutboxEvent)
+	if !queryRan {
+		return nil, wrapError(operationOutboxClaim, errs.ErrInvalidArgument)
+	}
+	if err != nil {
+		return nil, wrapError(operationOutboxClaim, err)
+	}
+	return events, nil
+}
+
+func (r *Repository) MarkOutboxEventPublished(ctx context.Context, id uuid.UUID, attemptCount int, publishedAt time.Time) error {
+	args, ok := postgreslib.OutboxPublishedArgs(id, attemptCount, publishedAt)
+	if !ok {
+		return wrapError(operationOutboxMarkPublished, errs.ErrInvalidArgument)
+	}
+	_, err := r.db.Exec(ctx, queryOutboxEventMarkPublished, args)
+	return wrapError(operationOutboxMarkPublished, err)
+}
+
+func (r *Repository) MarkOutboxEventFailed(ctx context.Context, id uuid.UUID, attemptCount int, nextAttemptAt time.Time, lastError string) error {
+	return r.markOutboxDeliveryFailure(ctx, operationOutboxMarkFailed, queryOutboxEventMarkFailed, "next_attempt_at", id, attemptCount, nextAttemptAt, lastError)
+}
+
+func (r *Repository) MarkOutboxEventPermanentlyFailed(ctx context.Context, id uuid.UUID, attemptCount int, failedAt time.Time, lastError string) error {
+	return r.markOutboxDeliveryFailure(ctx, operationOutboxMarkPermanent, queryOutboxEventMarkPermanent, "failed_permanently_at", id, attemptCount, failedAt, lastError)
+}
+
+func (r *Repository) mutateWithResult(ctx context.Context, operation string, mutationQuery string, mutationArgs pgx.NamedArgs, result entity.CommandResult, event *entity.OutboxEvent) error {
+	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
+		if err := runMutation(ctx, tx, mutationQuery, mutationArgs, true); err != nil {
+			return err
+		}
+		if err := runCommandResult(ctx, tx, result); err != nil {
+			return err
+		}
+		if event == nil {
+			return nil
+		}
+		return runOutboxEvent(ctx, tx, *event)
+	})
+	return wrapError(operation, err)
+}
+
+func (r *Repository) createWithResult(ctx context.Context, operation string, result entity.CommandResult, create func(pgx.Tx) error) error {
+	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
+		if err := create(tx); err != nil {
+			return err
+		}
+		return runCommandResult(ctx, tx, result)
+	})
+	return wrapError(operation, err)
+}
+
+func (r *Repository) markOutboxDeliveryFailure(ctx context.Context, operation string, query string, timestampName string, id uuid.UUID, attemptCount int, timestamp time.Time, lastError string) error {
+	args, ok := postgreslib.OutboxDeliveryFailureArgs(id, attemptCount, timestampName, timestamp, lastError)
+	if !ok {
+		return wrapError(operation, errs.ErrInvalidArgument)
+	}
+	_, err := r.db.Exec(ctx, query, args)
+	return wrapError(operation, err)
+}
+
+func (r *Repository) activateVersionWithResult(ctx context.Context, operation string, mutations []postgreslib.Mutation, result entity.CommandResult, event entity.OutboxEvent) error {
+	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
+		for _, item := range mutations {
+			if err := postgreslib.RunMutation(ctx, tx, errs.ErrConflict, item); err != nil {
+				return err
+			}
+		}
+		if err := runCommandResult(ctx, tx, result); err != nil {
+			return err
+		}
+		return runOutboxEvent(ctx, tx, event)
+	})
+	return wrapError(operation, err)
+}
+
+func (r *Repository) createFlowVersionChildren(ctx context.Context, db execQuerier, version entity.FlowVersion) error {
+	for _, stage := range version.Stages {
+		if err := runMutation(ctx, db, queryStageCreate, stageArgs(stage), true); err != nil {
+			return err
+		}
+	}
+	for _, transition := range version.Transitions {
+		if err := runMutation(ctx, db, queryStageTransitionCreate, stageTransitionArgs(transition), true); err != nil {
+			return err
+		}
+	}
+	for _, binding := range version.RoleBindings {
+		if err := runMutation(ctx, db, queryStageRoleBindingCreate, stageRoleBindingArgs(binding), true); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *Repository) loadFlowVersionChildren(ctx context.Context, db execQuerier, version entity.FlowVersion) (entity.FlowVersion, error) {
+	stages, err := queryMany(ctx, db, operationGetFlowVersion, queryStageListByFlowVersion, pgx.NamedArgs{"flow_version_id": version.ID}, scanStage)
+	if err != nil {
+		return entity.FlowVersion{}, err
+	}
+	transitions, err := queryMany(ctx, db, operationGetFlowVersion, queryStageTransitionListByFlowVersion, pgx.NamedArgs{"flow_version_id": version.ID}, scanStageTransition)
+	if err != nil {
+		return entity.FlowVersion{}, err
+	}
+	bindings, err := queryMany(ctx, db, operationGetFlowVersion, queryStageRoleBindingListByFlowVersion, pgx.NamedArgs{"flow_version_id": version.ID}, scanStageRoleBinding)
+	if err != nil {
+		return entity.FlowVersion{}, err
+	}
+	version.Stages = stages
+	version.Transitions = transitions
+	version.RoleBindings = bindings
+	return version, nil
+}
+
+func runMutation(ctx context.Context, db execQuerier, query string, args pgx.NamedArgs, requireAffected bool) error {
+	return postgreslib.RunMutation(ctx, db, errs.ErrConflict, mutation(query, args, requireAffected))
+}
+
+func mutation(query string, args pgx.NamedArgs, requireAffected bool) postgreslib.Mutation {
+	return postgreslib.Mutation{Query: query, Args: args, RequireAffected: requireAffected}
+}
+
+func runCommandResult(ctx context.Context, db execQuerier, result entity.CommandResult) error {
+	return runMutation(ctx, db, queryCommandResultCreate, commandResultArgs(result), true)
+}
+
+func runOutboxEvent(ctx context.Context, db execQuerier, event entity.OutboxEvent) error {
+	return runMutation(ctx, db, queryOutboxEventCreate, outboxEventArgs(event), true)
+}
+
+func queryOne[T any](ctx context.Context, db execQuerier, operation string, query string, args pgx.NamedArgs, scan func(postgreslib.RowScanner) (T, error)) (T, error) {
+	row := db.QueryRow(ctx, query, args)
+	item, err := scan(row)
+	if err != nil {
+		var zero T
+		return zero, wrapError(operation, err)
+	}
+	return item, nil
+}
+
+func queryMany[T any](ctx context.Context, db execQuerier, operation string, query string, args pgx.NamedArgs, scan func(postgreslib.RowScanner) (T, error)) ([]T, error) {
+	rows, err := db.Query(ctx, query, args)
+	if err != nil {
+		var none []T
+		return none, wrapError(operation, err)
+	}
+	items, scanErr := postgreslib.ScanRows(rows, scan)
+	if scanErr != nil {
+		var none []T
+		return none, wrapError(operation, scanErr)
+	}
+	return items, nil
+}
+
+func queryPage[T any](ctx context.Context, db execQuerier, operation string, query string, page pageQueryArgs, scan func(postgreslib.RowScanner) (T, error)) ([]T, value.PageResult, error) {
+	items, err := queryMany(ctx, db, operation, query, page.NamedArgs, scan)
+	if err != nil {
+		return nil, value.PageResult{}, err
+	}
+	trimmed, result := pageResult(items, page)
+	return trimmed, result, nil
+}
