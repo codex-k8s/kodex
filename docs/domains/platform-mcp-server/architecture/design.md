@@ -30,9 +30,9 @@ approvals:
 
 - Зафиксировать границу сервиса до контрактов и кода.
 - Разделить MCP-поверхность и доменное владение.
-- Описать связь с #698 hooks без закрытия реализации hooks.
-- Подготовить `agent-manager` к AGO-4+ без конфликта с работой агента #3.
-- Подготовить provider tools без конфликта с PRV-8a и будущей provider-интеграцией агента #2.
+- Описать связь MCP-поверхности с hook emitter и приёмом hook-событий без подмены реализации hooks.
+- Подготовить будущие инструменты `agent-manager` без переноса состояния run/session/gate в MCP.
+- Подготовить provider tools без обхода `provider-hub` и его provider-native pipeline.
 
 ## Не-цели
 
@@ -224,4 +224,4 @@ sequenceDiagram
 
 - request_id: `owner-2026-05-14-platform-mcp-kickoff`
 - Решение: approved
-- Комментарий: дизайн `platform-mcp-server` согласован как целевое состояние MCP-0.
+- Комментарий: дизайн `platform-mcp-server` согласован как целевое состояние.
