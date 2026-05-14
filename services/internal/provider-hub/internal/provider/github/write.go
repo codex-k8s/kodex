@@ -513,6 +513,21 @@ func (a *Adapter) writeBootstrapFiles(ctx context.Context, client *githubapi.Cli
 	if parentSHA == "" {
 		return providerError(providerclient.ErrorKindPermanent, 0, nil)
 	}
+	baseCommit, _, err := client.Git.GetCommit(ctx, owner, repo, parentSHA)
+	if err != nil {
+		return classifyGitHubError(err)
+	}
+	baseTreeSHA := baseCommit.GetTree().GetSHA()
+	if baseTreeSHA == "" {
+		return providerError(providerclient.ErrorKindPermanent, 0, nil)
+	}
+	baseTree, _, err := client.Git.GetTree(ctx, owner, repo, baseTreeSHA, false)
+	if err != nil {
+		return classifyGitHubError(err)
+	}
+	if len(baseTree.Entries) > 0 {
+		return providerError(providerclient.ErrorKindUnsupported, 0, nil)
+	}
 	branchRef, _, err := client.Git.GetRef(ctx, owner, repo, gitBranchRef(bootstrapBranch))
 	if err != nil {
 		if !isGitHubStatus(err, http.StatusNotFound) {
@@ -534,14 +549,6 @@ func (a *Adapter) writeBootstrapFiles(ctx context.Context, client *githubapi.Cli
 	}
 	parentSHA = branchRef.GetObject().GetSHA()
 	if parentSHA == "" {
-		return providerError(providerclient.ErrorKindPermanent, 0, nil)
-	}
-	parentCommit, _, err := client.Git.GetCommit(ctx, owner, repo, parentSHA)
-	if err != nil {
-		return classifyGitHubError(err)
-	}
-	baseTreeSHA := parentCommit.GetTree().GetSHA()
-	if baseTreeSHA == "" {
 		return providerError(providerclient.ErrorKindPermanent, 0, nil)
 	}
 	tree, _, err := client.Git.CreateTree(ctx, owner, repo, baseTreeSHA, bootstrapTreeEntries(command.Files))

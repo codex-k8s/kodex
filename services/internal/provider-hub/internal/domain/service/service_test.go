@@ -1061,6 +1061,8 @@ func TestCreateIssueAppliesProviderProjectionAfterWrite(t *testing.T) {
 			ProviderObjectID: "github:codex-k8s/kodex:issue:77",
 			ProviderVersion:  `"etag-77"`,
 			WorkItem: &value.ProviderWorkItemSnapshot{
+				ProjectID:          projectID.String(),
+				RepositoryID:       repositoryID.String(),
 				ProviderSlug:       string(enum.ProviderSlugGitHub),
 				ProviderWorkItemID: "github:codex-k8s/kodex:issue:77",
 				RepositoryFullName: "codex-k8s/kodex",
@@ -1107,6 +1109,9 @@ func TestCreateIssueAppliesProviderProjectionAfterWrite(t *testing.T) {
 	}
 	if len(repository.recordedProviderEvents) != 1 || repository.recordedProviderEvents[0].ID != providerEventID {
 		t.Fatalf("provider events = %+v, want work item synced event", repository.recordedProviderEvents)
+	}
+	if len(repository.recordedProjection.Relationships) != 0 {
+		t.Fatalf("relationships = %+v, want no project repository binding for ordinary issue", repository.recordedProjection.Relationships)
 	}
 	if len(repository.recordedOutboxEvents) != 2 {
 		t.Fatalf("outbox events = %d, want operation and work item events", len(repository.recordedOutboxEvents))
@@ -1511,6 +1516,40 @@ func TestCreateBootstrapPullRequestRecordsProjectionAndBootstrapEvent(t *testing
 		repository.recordedOutboxEvents[2].ID != bootstrapOutboxID ||
 		repository.recordedOutboxEvents[2].EventType != providerEventRepositoryBootstrapCompleted {
 		t.Fatalf("outbox events = %+v, want operation, work item and bootstrap events", repository.recordedOutboxEvents)
+	}
+}
+
+func TestCreateBootstrapPullRequestRejectsSameBaseAndBootstrapBranch(t *testing.T) {
+	t.Parallel()
+
+	service := NewWithDependencies(Dependencies{
+		Repository:             &fakeRepository{},
+		AccountUsageResolver:   fakeAccountUsageResolver{},
+		SecretResolver:         &fakeSecretResolver{secret: secretresolver.NewSecretValue([]byte("write-token"))},
+		ProviderWriteExecutors: []providerclient.WriteExecutor{&fakeWriteExecutor{}},
+	})
+
+	_, err := service.CreateBootstrapPullRequest(context.Background(), CreateBootstrapPullRequestInput{
+		ProjectID:         uuid.New(),
+		RepositoryID:      uuid.New(),
+		ProviderSlug:      enum.ProviderSlugGitHub,
+		RepositoryTarget:  ProviderTarget{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
+		BaseBranch:        "main",
+		BootstrapBranch:   " main ",
+		CommitMessage:     "Bootstrap repository",
+		Title:             "Bootstrap платформы",
+		Files:             []BootstrapFile{{Path: "services.yaml", Content: "version: 1\n"}},
+		ExternalAccountID: uuid.New(),
+		Meta: value.CommandMeta{
+			CommandID: uuid.New(),
+			OperationPolicyContext: value.ProviderOperationPolicyContext{
+				RiskLevel:     value.ProviderOperationRiskLevelMedium,
+				ChangedFields: []string{"repository_target", "base_branch", "bootstrap_branch", "files"},
+			},
+		},
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("CreateBootstrapPullRequest() err = %v, want invalid argument", err)
 	}
 }
 

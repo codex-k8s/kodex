@@ -342,9 +342,12 @@ func (s *Service) CreateBootstrapPullRequest(ctx context.Context, input CreateBo
 	if err != nil {
 		return ProviderOperationResult{}, err
 	}
+	baseBranch := strings.TrimSpace(input.BaseBranch)
+	bootstrapBranch := strings.TrimSpace(input.BootstrapBranch)
 	if !validCreateProjectRepositoryWriteInput(input.Meta, input.ProjectID, input.RepositoryID, input.ProviderSlug, input.ExternalAccountID) ||
-		strings.TrimSpace(input.BaseBranch) == "" ||
-		strings.TrimSpace(input.BootstrapBranch) == "" ||
+		baseBranch == "" ||
+		bootstrapBranch == "" ||
+		baseBranch == bootstrapBranch ||
 		strings.TrimSpace(input.CommitMessage) == "" ||
 		strings.TrimSpace(input.Title) == "" ||
 		len(files) == 0 {
@@ -355,7 +358,7 @@ func (s *Service) CreateBootstrapPullRequest(ctx context.Context, input CreateBo
 		return ProviderOperationResult{}, err
 	}
 	repositoryID := input.RepositoryID.String()
-	targetRef := repositoryTargetRef(input.ProviderSlug, repositoryID) + "#bootstrap_pull_request:" + strings.TrimSpace(input.BootstrapBranch)
+	targetRef := repositoryTargetRef(input.ProviderSlug, repositoryID) + "#bootstrap_pull_request:" + bootstrapBranch
 	changedFields := requiredChangedFields(
 		"repository_target",
 		"base_branch",
@@ -384,8 +387,8 @@ func (s *Service) CreateBootstrapPullRequest(ctx context.Context, input CreateBo
 				ProjectID:        input.ProjectID.String(),
 				RepositoryID:     repositoryID,
 				RepositoryTarget: toClientTarget(repositoryTarget),
-				BaseBranch:       strings.TrimSpace(input.BaseBranch),
-				BootstrapBranch:  strings.TrimSpace(input.BootstrapBranch),
+				BaseBranch:       baseBranch,
+				BootstrapBranch:  bootstrapBranch,
 				CommitMessage:    strings.TrimSpace(input.CommitMessage),
 				Title:            strings.TrimSpace(input.Title),
 				Body:             strings.TrimSpace(input.Body),
@@ -914,6 +917,9 @@ func (s *Service) providerWriteProjection(ctx context.Context, plan providerWrit
 		workItem, relationships, err := workItemProjectionFromSnapshot(*result.WorkItem, now)
 		if err != nil {
 			return providerrepo.ProjectionUpdate{}, nil, nil, providerWriteProjectionResult{}, err
+		}
+		if plan.operationType == enum.ProviderOperationCreateBootstrapPullRequest {
+			relationships = append(relationships, projectRepositoryBindingRelationships(workItem.ID, workItem.ProjectID, workItem.RepositoryID, now)...)
 		}
 		update.WorkItem = &workItem
 		update.Relationships = append(update.Relationships, relationships...)

@@ -449,6 +449,8 @@ func TestExecuteCreateBootstrapPullRequestWritesBranchAndCreatesPullRequest(t *t
 			_, _ = w.Write([]byte(`{"ref":"refs/heads/kodex-bootstrap","object":{"type":"commit","sha":"base-sha"}}`))
 		case "GET /repos/codex-k8s/kodex/git/commits/base-sha":
 			_, _ = w.Write([]byte(`{"sha":"base-sha","tree":{"sha":"base-tree-sha"}}`))
+		case "GET /repos/codex-k8s/kodex/git/trees/base-tree-sha":
+			_, _ = w.Write([]byte(`{"sha":"base-tree-sha","tree":[]}`))
 		case "POST /repos/codex-k8s/kodex/git/trees":
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
@@ -529,6 +531,115 @@ func TestExecuteCreateBootstrapPullRequestWritesBranchAndCreatesPullRequest(t *t
 	if seen["POST /repos/codex-k8s/kodex/git/trees"] != 1 ||
 		seen["POST /repos/codex-k8s/kodex/pulls"] != 1 {
 		t.Fatalf("seen requests = %+v, want one tree write and one PR create", seen)
+	}
+}
+
+func TestExecuteCreateBootstrapPullRequestRejectsNonEmptyBaseTree(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method + " " + r.URL.Path {
+		case "GET /repos/codex-k8s/kodex/git/ref/heads/main":
+			_, _ = w.Write([]byte(`{"ref":"refs/heads/main","object":{"type":"commit","sha":"base-sha"}}`))
+		case "GET /repos/codex-k8s/kodex/git/commits/base-sha":
+			_, _ = w.Write([]byte(`{"sha":"base-sha","tree":{"sha":"base-tree-sha"}}`))
+		case "GET /repos/codex-k8s/kodex/git/trees/base-tree-sha":
+			_, _ = w.Write([]byte(`{"sha":"base-tree-sha","tree":[{"path":"README.md","type":"blob","sha":"readme-sha"}]}`))
+		default:
+			t.Fatalf("unexpected request = %s %s", r.Method, r.URL.String())
+		}
+	}))
+	defer server.Close()
+
+	token := secretresolver.NewSecretValue([]byte("token-value"))
+	defer token.Clear()
+	_, err := New(Config{BaseURL: server.URL, HTTPClient: server.Client()}).Execute(context.Background(), providerclient.WriteRequest{
+		Credential:   providerclient.AccountCredential{ExternalAccountID: uuid.New(), ProviderSlug: enum.ProviderSlugGitHub, Token: token},
+		ProviderSlug: enum.ProviderSlugGitHub,
+		CreateBootstrapPullRequest: &providerclient.CreateBootstrapPullRequestCommand{
+			ProjectID:        uuid.New().String(),
+			RepositoryID:     uuid.New().String(),
+			RepositoryTarget: providerclient.Target{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
+			BaseBranch:       "main",
+			BootstrapBranch:  "kodex-bootstrap",
+			CommitMessage:    "Bootstrap repository",
+			Title:            "Bootstrap платформы",
+			Files:            []providerclient.BootstrapFile{{Path: "services.yaml", Content: "version: 1\n"}},
+		},
+	})
+	var providerErr *providerclient.Error
+	if !errors.As(err, &providerErr) || providerErr.Kind != providerclient.ErrorKindUnsupported {
+		t.Fatalf("Execute() err = %v, want unsupported provider error", err)
+	}
+}
+
+func TestExecuteCreateBootstrapPullRequestReplacesStaleBootstrapTree(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method + " " + r.URL.Path {
+		case "GET /repos/codex-k8s/kodex/git/ref/heads/main":
+			_, _ = w.Write([]byte(`{"ref":"refs/heads/main","object":{"type":"commit","sha":"base-sha"}}`))
+		case "GET /repos/codex-k8s/kodex/git/commits/base-sha":
+			_, _ = w.Write([]byte(`{"sha":"base-sha","tree":{"sha":"base-tree-sha"}}`))
+		case "GET /repos/codex-k8s/kodex/git/trees/base-tree-sha":
+			_, _ = w.Write([]byte(`{"sha":"base-tree-sha","tree":[]}`))
+		case "GET /repos/codex-k8s/kodex/git/ref/heads/kodex-bootstrap":
+			_, _ = w.Write([]byte(`{"ref":"refs/heads/kodex-bootstrap","object":{"type":"commit","sha":"stale-branch-sha"}}`))
+		case "POST /repos/codex-k8s/kodex/git/trees":
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read tree body: %v", err)
+			}
+			text := string(body)
+			if !strings.Contains(text, `"base_tree":"base-tree-sha"`) || strings.Contains(text, "stale-tree-sha") {
+				t.Fatalf("tree payload = %s, want prepared files on empty base tree", text)
+			}
+			_, _ = w.Write([]byte(`{"sha":"tree-sha","tree":[]}`))
+		case "POST /repos/codex-k8s/kodex/git/commits":
+			var payload map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode commit: %v", err)
+			}
+			parents, ok := payload["parents"].([]any)
+			if !ok || len(parents) != 1 {
+				t.Fatalf("commit payload = %+v, want one parent", payload)
+			}
+			if parents[0] != "stale-branch-sha" {
+				t.Fatalf("commit payload = %+v, want parent stale branch sha", payload)
+			}
+			_, _ = w.Write([]byte(`{"sha":"commit-sha","tree":{"sha":"tree-sha"}}`))
+		case "PATCH /repos/codex-k8s/kodex/git/refs/heads/kodex-bootstrap":
+			_, _ = w.Write([]byte(`{"ref":"refs/heads/kodex-bootstrap","object":{"type":"commit","sha":"commit-sha"}}`))
+		case "GET /repos/codex-k8s/kodex/pulls":
+			_, _ = w.Write([]byte(`[{"id":8800,"number":88,"html_url":"https://github.com/codex-k8s/kodex/pull/88","title":"old","state":"open","body":"old","updated_at":"2026-05-13T10:00:00Z"}]`))
+		case "PATCH /repos/codex-k8s/kodex/pulls/88":
+			_, _ = w.Write([]byte(`{"id":8800,"number":88,"html_url":"https://github.com/codex-k8s/kodex/pull/88","title":"Bootstrap платформы","state":"open","body":"Bootstrap body","updated_at":"2026-05-13T10:05:00Z"}`))
+		default:
+			t.Fatalf("unexpected request = %s %s", r.Method, r.URL.String())
+		}
+	}))
+	defer server.Close()
+
+	token := secretresolver.NewSecretValue([]byte("token-value"))
+	defer token.Clear()
+	_, err := New(Config{BaseURL: server.URL, HTTPClient: server.Client()}).Execute(context.Background(), providerclient.WriteRequest{
+		Credential:   providerclient.AccountCredential{ExternalAccountID: uuid.New(), ProviderSlug: enum.ProviderSlugGitHub, Token: token},
+		ProviderSlug: enum.ProviderSlugGitHub,
+		CreateBootstrapPullRequest: &providerclient.CreateBootstrapPullRequestCommand{
+			ProjectID:        uuid.New().String(),
+			RepositoryID:     uuid.New().String(),
+			RepositoryTarget: providerclient.Target{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
+			BaseBranch:       "main",
+			BootstrapBranch:  "kodex-bootstrap",
+			CommitMessage:    "Bootstrap repository",
+			Title:            "Bootstrap платформы",
+			Body:             "Bootstrap body",
+			Files:            []providerclient.BootstrapFile{{Path: "services.yaml", Content: "version: 1\n"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute(): %v", err)
 	}
 }
 

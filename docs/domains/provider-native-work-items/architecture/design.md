@@ -162,7 +162,7 @@ sequenceDiagram
   H-->>C: ProviderOperationResponse без файлового payload и секрета
 ```
 
-`provider-hub` не создаёт сам репозиторий у провайдера, не создаёт начальный base ref, не генерирует `services.yaml`, не выбирает шаблоны и не сканирует содержимое репозитория. После успешной записи он обновляет локальную проекцию bootstrap `PR/MR`, проставляет `project_id` и `repository_id`, создаёт provider relationship `project_repository_binding` и публикует `provider.repository.bootstrap_completed`. Содержимое подготовленных файлов остаётся только входом provider-вызова и не сохраняется в журнале операций, outbox, событиях, логах, ошибках или трассировке.
+`provider-hub` не создаёт сам репозиторий у провайдера, не создаёт начальный base ref, не генерирует `services.yaml`, не выбирает шаблоны и не сканирует содержимое репозитория. Bootstrap-команда отклоняется, если `base_branch` и `bootstrap_branch` совпадают, либо если дерево `base_branch` непустое. Если bootstrap branch уже существует после неудачной или повторной попытки, новый commit строится от текущей головы bootstrap branch, но дерево commit собирается из пустого дерева base branch и подготовленного набора файлов, чтобы не протащить старые файлы. После успешной записи сервис обновляет локальную проекцию bootstrap `PR/MR`, проставляет `project_id` и `repository_id`, создаёт provider relationship `project_repository_binding` и публикует `provider.repository.bootstrap_completed`. Содержимое подготовленных файлов остаётся только входом provider-вызова и не сохраняется в журнале операций, outbox, событиях, логах, ошибках или трассировке.
 
 ### Сигнал от slot-агента
 

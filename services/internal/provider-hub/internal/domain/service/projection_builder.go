@@ -125,7 +125,6 @@ func workItemProjectionFromSnapshot(snapshot value.ProviderWorkItemSnapshot, now
 		DriftStatus:        enum.WorkItemDriftStatusFresh,
 	}
 	relationships := relationshipsFromWatermark(workItem.ID, watermark.fields, now)
-	relationships = append(relationships, projectRepositoryBindingRelationships(workItem.ID, projectID, repositoryID, now)...)
 	return workItem, relationships, nil
 }
 
