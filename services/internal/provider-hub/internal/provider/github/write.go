@@ -217,12 +217,14 @@ func (a *Adapter) executeUpdatePullRequest(ctx context.Context, client *githubap
 	if target.kind != "" && target.kind != enum.WorkItemKindPullRequest {
 		return providerclient.WriteResult{}, providerError(providerclient.ErrorKindUnsupported, 0, nil)
 	}
-	hasIssueOnlyFields := command.Labels != nil || command.AssigneeProviderLogins != nil || command.Milestone != nil
+	// GitHub exposes labels, assignees and milestone on PRs, but mutates them
+	// through the issue endpoint because every PR is backed by an issue.
+	hasIssueBackedFields := command.Labels != nil || command.AssigneeProviderLogins != nil || command.Milestone != nil
 	hasPullRequestOnlyFields := command.BaseBranch != nil || command.MaintainerCanModify != nil
-	if hasIssueOnlyFields && hasPullRequestOnlyFields {
+	if hasIssueBackedFields && hasPullRequestOnlyFields {
 		return providerclient.WriteResult{}, providerError(providerclient.ErrorKindUnsupported, 0, nil)
 	}
-	if hasIssueOnlyFields {
+	if hasIssueBackedFields {
 		return a.executeUpdateIssue(ctx, client, &providerclient.UpdateIssueCommand{
 			Target:                  command.Target,
 			Title:                   command.Title,

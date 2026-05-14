@@ -122,7 +122,7 @@ approvals:
 - успешные GitHub write-вызовы сразу обновляют локальные проекции рабочих артефактов, комментариев и связей, чтобы UI/MCP не ждали полной сверки;
 - ошибки GitHub классифицируются безопасно: auth/permission, not found, conflict/validation, rate limit/abuse, transient; в журнал операции и события попадает только короткий код без provider payload и без секрета.
 - чтобы не оставлять частичный side effect, GitHub `CreatePullRequest` в текущем срезе не принимает `labels` и `linked_issue_ref`; эти изменения должны идти отдельными командами после создания `PR`.
-- чтобы не оставлять частичный side effect, GitHub `UpdatePullRequest` отклоняет смешанные команды, где одновременно есть issue-side поля `labels`/`assignee_provider_logins`/`milestone` и PR-specific поля `base_branch`/`maintainer_can_modify`; вызывающий контур должен разбивать такие изменения на отдельные идемпотентные команды.
+- чтобы не оставлять частичное изменение без транзакционной гарантии, GitHub `UpdatePullRequest` отклоняет смешанные команды, где одновременно есть метаданные PR на issue-стороне (`labels`/`assignee_provider_logins`/`milestone`) и собственные поля PR (`base_branch`/`maintainer_can_modify`); вызывающий контур должен разбивать такие изменения на отдельные идемпотентные команды и связывать их общим `correlation_id`, если это один пользовательский сценарий.
 
 Миграция `external_account_id` для очереди сверки явно очищает строки `provider_hub_sync_cursors` и `provider_hub_reconciliation_requests`, созданные предыдущим срезом без знания внешнего аккаунта. Эти строки являются эфемерным состоянием планировщика и пересоздаются повторной постановкой сверки; так тестовые кластеры с уже развёрнутым PRV-6.1 не упираются в `ADD COLUMN ... NOT NULL`.
 

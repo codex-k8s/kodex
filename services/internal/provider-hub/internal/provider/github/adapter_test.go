@@ -467,12 +467,12 @@ func TestExecuteUpdatePullRequestUsesPullEndpointForPullFields(t *testing.T) {
 	}
 }
 
-func TestExecuteUpdatePullRequestUsesIssueEndpointForIssueMetadata(t *testing.T) {
+func TestExecuteUpdatePullRequestUsesIssueEndpointForIssueBackedMetadata(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPatch || r.URL.Path != "/repos/codex-k8s/kodex/issues/42" {
-			t.Fatalf("request = %s %s, want issue-side PR metadata update", r.Method, r.URL.Path)
+			t.Fatalf("request = %s %s, want issue-backed PR metadata update", r.Method, r.URL.Path)
 		}
 		var payload map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -505,7 +505,7 @@ func TestExecuteUpdatePullRequestUsesIssueEndpointForIssueMetadata(t *testing.T)
 	}
 }
 
-func TestExecuteUpdatePullRequestRejectsMixedIssueAndPullSpecificFieldsBeforeWrite(t *testing.T) {
+func TestExecuteUpdatePullRequestRejectsMixedIssueBackedAndPullSpecificFieldsBeforeWrite(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
