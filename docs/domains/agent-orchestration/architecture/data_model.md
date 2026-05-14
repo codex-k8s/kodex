@@ -284,7 +284,7 @@ approvals:
 | `result_payload` | jsonb | нет | Безопасный результат повтора. |
 | `created_at` | timestamptz | нет | Время первого выполнения. |
 
-Перед возвратом сохранённого результата сервис ищет запись по `actor + operation + command_id/idempotency_key`, загружает фактический aggregate и сверяет его scope или идентификатор с текущим запросом. `command_id` и `idempotency_key` не являются границей авторизации.
+Перед возвратом сохранённого результата сервис ищет запись по глобальному `command_id` или по паре `operation + actor + idempotency_key`, загружает фактический aggregate и сверяет его scope или идентификатор с текущим запросом. `command_id` и `idempotency_key` не являются границей авторизации.
 
 ### OutboxEvent
 

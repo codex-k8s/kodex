@@ -99,10 +99,10 @@ func commandResult(meta value.CommandMeta, operation string, aggregateType enum.
 }
 
 func commandResultKey(identity query.CommandIdentity) string {
-	actor := identity.Actor.Type + ":" + identity.Actor.ID
 	if identity.CommandID != nil {
-		return identity.Operation + ":" + actor + ":" + identity.CommandID.String()
+		return "command:" + identity.CommandID.String()
 	}
+	actor := identity.Actor.Type + ":" + identity.Actor.ID
 	return identity.Operation + ":" + actor + ":" + identity.IdempotencyKey
 }
 

@@ -168,6 +168,46 @@ func TestCreateFlowSameIdempotencyDifferentActorDoesNotReplay(t *testing.T) {
 	}
 }
 
+func TestCreateFlowSameCommandIDDifferentActorReplaysExistingResult(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.MustParse("67676767-6767-6767-6767-676767676767")
+	flow := entity.Flow{
+		VersionedBase: entity.VersionedBase{ID: uuid.MustParse("68686868-6868-6868-6868-686868686868"), Version: 1},
+		Scope:         value.ScopeRef{Type: string(enum.AgentScopeTypeProject), Ref: "project-1"},
+		Slug:          "global-command",
+		Status:        enum.FlowStatusDraft,
+	}
+	payload, err := marshalCommandPayload(flowCommandPayload{Flow: flow})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	repository := &fakeRepository{replay: &entity.CommandResult{
+		CommandID:     &commandID,
+		Actor:         testActor(),
+		Operation:     operationCreateFlow,
+		AggregateType: enum.CommandAggregateTypeFlow,
+		AggregateID:   flow.ID,
+		ResultPayload: payload,
+	}, flowByID: map[uuid.UUID]entity.Flow{flow.ID: flow}}
+	service := New(Config{Repository: repository})
+
+	replay, err := service.CreateFlow(context.Background(), CreateFlowInput{
+		Meta:  value.CommandMeta{CommandID: commandID, Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+		Scope: flow.Scope,
+		Slug:  flow.Slug,
+	})
+	if err != nil {
+		t.Fatalf("CreateFlow() err = %v", err)
+	}
+	if replay.ID != flow.ID {
+		t.Fatalf("replay id = %s, want %s", replay.ID, flow.ID)
+	}
+	if repository.createFlowCalled {
+		t.Fatal("CreateFlowWithResult was called for same command_id from another actor")
+	}
+}
+
 func TestActivationEventPayloadsMatchAsyncAPIRequiredFields(t *testing.T) {
 	t.Parallel()
 
@@ -250,14 +290,14 @@ func (f *fakeRepository) GetCommandResult(_ context.Context, identity query.Comm
 	if f.replay == nil {
 		return entity.CommandResult{}, errs.ErrNotFound
 	}
-	if f.replay.Operation != identity.Operation || f.replay.Actor != identity.Actor {
-		return entity.CommandResult{}, errs.ErrNotFound
-	}
 	if identity.CommandID != nil {
 		if f.replay.CommandID == nil || *f.replay.CommandID != *identity.CommandID {
 			return entity.CommandResult{}, errs.ErrNotFound
 		}
 		return *f.replay, nil
+	}
+	if f.replay.Operation != identity.Operation || f.replay.Actor != identity.Actor {
+		return entity.CommandResult{}, errs.ErrNotFound
 	}
 	if f.replay.IdempotencyKey != identity.IdempotencyKey {
 		return entity.CommandResult{}, errs.ErrNotFound

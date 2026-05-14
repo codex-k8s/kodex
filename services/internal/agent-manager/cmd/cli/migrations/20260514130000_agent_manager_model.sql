@@ -229,7 +229,7 @@ CREATE TABLE agent_manager_command_results (
 );
 
 CREATE UNIQUE INDEX agent_manager_command_results_command_id_uidx
-    ON agent_manager_command_results (actor_type, actor_id, command_id)
+    ON agent_manager_command_results (command_id)
     WHERE command_id IS NOT NULL;
 
 CREATE UNIQUE INDEX agent_manager_command_results_idempotency_uidx
