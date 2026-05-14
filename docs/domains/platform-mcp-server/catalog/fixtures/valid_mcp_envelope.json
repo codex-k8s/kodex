@@ -1,0 +1,39 @@
+{
+  "tool_name": "project.policy.read",
+  "tool_version": "1.0.0",
+  "request_id": "11111111-1111-4111-8111-111111111111",
+  "correlation_id": "corr-run-001",
+  "actor": {
+    "actor_type": "slot_agent",
+    "actor_id": "agent-run-001"
+  },
+  "source": {
+    "source_type": "slot_agent",
+    "source_instance_id": "slot-001"
+  },
+  "scope": {
+    "organization_id": "org-001",
+    "project_id": "project-001",
+    "repository_id": "repo-001"
+  },
+  "run_context": {
+    "agent_run_id": "run-001",
+    "session_id": "session-001",
+    "slot_id": "slot-001"
+  },
+  "policy_context": {
+    "risk_class": "read",
+    "decision_mode": "allow"
+  },
+  "sanitized_input_summary": {
+    "query": "read workspace policy",
+    "input_hash": "sha256:8b1a9953c4611296a827abf8c47804d7"
+  },
+  "redaction_status": {
+    "status": "not_required"
+  },
+  "retention_class": "metrics_only",
+  "payload": {
+    "policy_ref": "workspace-policy/current"
+  }
+}

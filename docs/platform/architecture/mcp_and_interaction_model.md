@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-04-26
 updated_at: 2026-05-14
-related_issues: [599, 600, 601, 602, 747]
+related_issues: [599, 600, 601, 602, 747, 753]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -59,7 +59,7 @@ approvals:
 
 ## MVP platform-mcp-server
 
-Стартовая реализация `platform-mcp-server` должна поддержать не весь будущий каталог, а минимальную поверхность, нужную для `agent-manager`, slot-агентов и hooks. Codex hooks приходят не как прямые MCP tool calls, а через отдельный входной контур после нормализации hook emitter или локальным sidecar.
+Стартовая реализация `platform-mcp-server` должна поддержать минимальную поверхность, нужную для `agent-manager`, slot-агентов и hooks. Машинно-читаемый каталог инструментов и событий живёт в `docs/domains/platform-mcp-server/catalog/tool_catalog.v1.yaml`. Codex hooks приходят не как прямые MCP tool calls, а через отдельный входной контур после нормализации hook emitter или локальным sidecar.
 
 | Группа | Владелец маршрута | MVP-смысл |
 |---|---|---|
@@ -70,7 +70,7 @@ approvals:
 | Interaction tools | `interaction-hub` | Запросы обратной связи и approval delivery, когда готов контракт `interaction-hub`. |
 | Diagnostics | `platform-mcp-server` и владельцы маршрутов | Ограниченный статус readiness/dependency/error без секретов, больших логов и сырых данных вызова. |
 
-Детальная сервисная граница и план поставки живут в `docs/domains/platform-mcp-server/**`.
+Детальная сервисная граница, каталог инструментов и план поставки живут в `docs/domains/platform-mcp-server/**`.
 
 ## Безопасность и политики
 

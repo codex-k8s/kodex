@@ -1,0 +1,43 @@
+{
+  "hook_event_name": "PostToolUse",
+  "request_id": "44444444-4444-4444-8444-444444444444",
+  "correlation_id": "corr-provider-001",
+  "actor": {
+    "actor_type": "hook_emitter",
+    "actor_id": "hook-emitter-001"
+  },
+  "source": {
+    "source_type": "hook_emitter",
+    "source_instance_id": "slot-001/hooks"
+  },
+  "scope": {
+    "organization_id": "org-001",
+    "project_id": "project-001",
+    "repository_id": "repo-001",
+    "provider_target_ref": "github:codex-k8s/kodex"
+  },
+  "run_context": {
+    "agent_run_id": "run-001",
+    "session_id": "session-001",
+    "slot_id": "slot-001",
+    "turn_id": "turn-012"
+  },
+  "tool_context": {
+    "tool": "gh",
+    "tool_use_id": "tool-use-001",
+    "safe_operation": "pull_request_created",
+    "artifact_ref": {
+      "provider": "github",
+      "artifact_type": "pull_request",
+      "external_number": 812
+    },
+    "input_hash": "sha256:6b86b273ff34fce19d6b804eff5a3f57",
+    "output_hash": "sha256:d4735e3a265e16eee03f59718b9b5d03"
+  },
+  "event_meta": {
+    "status": "ok",
+    "redaction": "redacted",
+    "duration_ms": 1200
+  },
+  "retention_class": "short_operational"
+}

@@ -35,6 +35,7 @@
 | Требования | `product/requirements.md` |
 | Дизайн | `architecture/design.md` |
 | API-обзор | `architecture/api_contract.md` |
+| Каталог инструментов | `catalog/README.md` |
 | План поставки | `delivery/platform_mcp_server_delivery.md` |
 
 ## Карта Issue

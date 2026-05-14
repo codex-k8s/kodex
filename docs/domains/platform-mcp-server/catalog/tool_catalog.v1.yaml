@@ -1,0 +1,425 @@
+schema_version: "platform-mcp-tool-catalog/v1"
+catalog_id: "platform-mcp-server.tools"
+catalog_version: "1.0.0"
+status: "active"
+owner_service: "platform-mcp-server"
+updated_at: "2026-05-14"
+issue_refs:
+  - 753
+
+principles:
+  no_business_state_owner: true
+  route_to_owner_services: true
+  no_raw_tool_payload_storage: true
+  no_secret_values: true
+  no_large_stdout_stderr: true
+  codex_hooks_are_not_mcp_tools: true
+  compact_checkpoints_are_internal_events: true
+
+envelope:
+  required_fields:
+    - tool_name
+    - tool_version
+    - request_id
+    - correlation_id
+    - actor
+    - source
+    - scope
+    - policy_context
+    - retention_class
+  optional_fields:
+    - idempotency_key
+    - approval_gate_ref
+    - run_context
+    - sanitized_input_summary
+    - redaction_status
+    - payload
+  fields:
+    tool_name:
+      type: "string"
+      description: "Stable external tool or event route name."
+    tool_version:
+      type: "semver"
+      description: "External contract version of the tool or event route."
+    request_id:
+      type: "uuid"
+      description: "Unique request id for this call."
+    idempotency_key:
+      type: "string"
+      description: "Stable key for retry-safe mutating calls."
+    correlation_id:
+      type: "string"
+      description: "Cross-service trace id linked to run, slot, provider artifact or approval."
+    actor:
+      type: "object"
+      required:
+        - actor_type
+        - actor_id
+      allowed_actor_types:
+        - user
+        - service_account
+        - agent_manager
+        - slot_agent
+        - hook_emitter
+        - plugin_workload
+    source:
+      type: "object"
+      required:
+        - source_type
+        - source_instance_id
+      allowed_source_types:
+        - agent_manager
+        - slot_agent
+        - hook_emitter
+        - local_sidecar
+        - plugin_workload
+        - operator
+    scope:
+      type: "object"
+      allowed_fields:
+        - organization_id
+        - project_id
+        - repository_id
+        - provider_target_ref
+        - package_scope_ref
+    run_context:
+      type: "object"
+      allowed_fields:
+        - agent_run_id
+        - session_id
+        - slot_id
+        - turn_id
+        - job_id
+    policy_context:
+      type: "object"
+      required:
+        - risk_class
+        - decision_mode
+      allowed_decision_modes:
+        - allow
+        - deny
+        - ask
+        - record_only
+    approval_gate_ref:
+      type: "object"
+      allowed_fields:
+        - gate_id
+        - requested_by
+        - required_decision
+    sanitized_input_summary:
+      type: "object"
+      description: "Short safe summary, hashes and refs instead of raw input."
+    redaction_status:
+      type: "object"
+      allowed_statuses:
+        - not_required
+        - redacted
+        - rejected
+    retention_class:
+      type: "string"
+      allowed_values:
+        - no_store
+        - metrics_only
+        - short_operational
+        - audit_decision
+        - owner_domain_state
+    payload:
+      type: "object"
+      storage_policy: "not_persisted_by_platform_mcp_server"
+
+safe_result_shape:
+  required_fields:
+    - request_id
+    - correlation_id
+    - status
+    - owner_service
+  optional_fields:
+    - safe_summary
+    - refs
+    - retry_after
+    - error
+  allowed_statuses:
+    - ok
+    - accepted
+    - denied
+    - rejected
+    - not_found
+    - conflict
+    - rate_limited
+    - owner_unavailable
+    - failed
+
+error_classification:
+  mcp.invalid_context:
+    retryable: false
+    description: "Missing or incompatible actor/source/scope/run context."
+  mcp.tool_not_found:
+    retryable: false
+    description: "Tool is absent from the current catalog."
+  mcp.tool_not_allowed:
+    retryable: false
+    description: "Policy boundary denied the tool for this actor/source/scope."
+  mcp.payload_rejected:
+    retryable: false
+    description: "Input is too large or failed redaction policy."
+  mcp.owner_unavailable:
+    retryable: true
+    description: "Owner service is unavailable or timed out."
+  mcp.owner_rejected:
+    retryable: false
+    description: "Owner service rejected the command by domain rules."
+  mcp.idempotency_conflict:
+    retryable: false
+    description: "Same idempotency key was reused with a different safe fingerprint."
+  mcp.rate_limited:
+    retryable: true
+    description: "Actor/source/tool group exceeded rate limit."
+
+versioning:
+  add_tool:
+    - "New tool names are additive within a minor catalog version."
+    - "New optional fields are additive if default behavior is unchanged."
+    - "Every new mutating tool must define idempotency, owner service and policy context."
+  breaking_change:
+    - "Removing or renaming a tool."
+    - "Changing required envelope fields."
+    - "Changing safe result semantics or error classes."
+    - "Changing owner service route for a tool without compatibility bridge."
+    - "Expanding stored data beyond the declared retention class."
+  deprecation:
+    min_notice_versions: 1
+    requires_replacement: true
+    rules:
+      - "Mark tool lifecycle as deprecated."
+      - "Keep compatibility fixtures until removal."
+      - "Expose deprecation warning in diagnostics.mcp_status.read."
+  backward_compatibility_tests:
+    - "Validate all fixtures for the previous active catalog version."
+    - "Validate missing optional fields keep default semantics."
+    - "Validate deprecated tools still route or return a planned deprecation error."
+    - "Validate redaction and retention classes do not become weaker."
+
+groups:
+  codex_hooks:
+    kind: "hook_event"
+    transport: "hook_ingress"
+    codex_official_events: true
+    entries:
+      - name: "codex_hooks.session_start"
+        version: "1.0.0"
+        source_event: "SessionStart"
+        owner_services:
+          - agent-manager
+          - runtime-manager
+        retention_class: "owner_domain_state"
+        realtime_ui: true
+      - name: "codex_hooks.user_prompt_submit"
+        version: "1.0.0"
+        source_event: "UserPromptSubmit"
+        owner_services:
+          - agent-manager
+          - interaction-hub
+        retention_class: "audit_decision"
+        realtime_ui: true
+      - name: "codex_hooks.pre_tool_use"
+        version: "1.0.0"
+        source_event: "PreToolUse"
+        owner_services:
+          - agent-manager
+          - runtime-manager
+        retention_class: "short_operational"
+        realtime_ui: true
+        policy_modes:
+          - allow
+          - deny
+          - ask
+      - name: "codex_hooks.permission_request"
+        version: "1.0.0"
+        source_event: "PermissionRequest"
+        owner_services:
+          - agent-manager
+          - interaction-hub
+        retention_class: "audit_decision"
+        realtime_ui: true
+        requires_approval_gate_ref: true
+      - name: "codex_hooks.post_tool_use"
+        version: "1.0.0"
+        source_event: "PostToolUse"
+        owner_services:
+          - provider-hub
+          - runtime-manager
+          - agent-manager
+        retention_class: "short_operational"
+        realtime_ui: true
+      - name: "codex_hooks.stop"
+        version: "1.0.0"
+        source_event: "Stop"
+        owner_services:
+          - agent-manager
+          - runtime-manager
+          - provider-hub
+        retention_class: "owner_domain_state"
+        realtime_ui: true
+
+  internal_session_events:
+    kind: "synthetic_event"
+    transport: "internal_route"
+    codex_official_events: false
+    entries:
+      - name: "agent_session.snapshot_requested"
+        version: "1.0.0"
+        owner_services:
+          - agent-manager
+          - runtime-manager
+        retention_class: "owner_domain_state"
+        description: "Future platform event for session snapshot intent."
+      - name: "agent_session.compact_checkpoint_recorded"
+        version: "1.0.0"
+        owner_services:
+          - agent-manager
+          - runtime-manager
+        retention_class: "owner_domain_state"
+        description: "Future platform event for compact checkpoint metadata."
+
+  agent_manager_tools:
+    kind: "mcp_tool"
+    transport: "mcp"
+    route_owner: "agent-manager"
+    entries:
+      - name: "agent.run.start"
+        version: "1.0.0"
+        idempotent: true
+        retention_class: "owner_domain_state"
+      - name: "agent.session.start"
+        version: "1.0.0"
+        idempotent: true
+        retention_class: "owner_domain_state"
+      - name: "agent.session.record_snapshot"
+        version: "1.0.0"
+        idempotent: true
+        retention_class: "owner_domain_state"
+      - name: "agent.gate.request"
+        version: "1.0.0"
+        idempotent: true
+        retention_class: "audit_decision"
+      - name: "agent.gate.submit_decision"
+        version: "1.0.0"
+        idempotent: true
+        retention_class: "audit_decision"
+      - name: "agent.acceptance.request"
+        version: "1.0.0"
+        idempotent: true
+        retention_class: "owner_domain_state"
+      - name: "agent.follow_up.request"
+        version: "1.0.0"
+        idempotent: true
+        retention_class: "owner_domain_state"
+
+  provider_tools:
+    kind: "mcp_tool"
+    transport: "mcp"
+    route_owner: "provider-hub"
+    entries:
+      - name: "provider.projection.read"
+        version: "1.0.0"
+        operation_class: "read"
+        retention_class: "metrics_only"
+      - name: "provider.issue.create"
+        version: "1.0.0"
+        operation_class: "write"
+        idempotent: true
+        requires_provider_account_ref: true
+        retention_class: "audit_decision"
+      - name: "provider.issue.update"
+        version: "1.0.0"
+        operation_class: "write"
+        idempotent: true
+        requires_provider_account_ref: true
+        retention_class: "audit_decision"
+      - name: "provider.pull_request.create"
+        version: "1.0.0"
+        operation_class: "write"
+        idempotent: true
+        requires_provider_account_ref: true
+        retention_class: "audit_decision"
+      - name: "provider.comment.create"
+        version: "1.0.0"
+        operation_class: "write"
+        idempotent: true
+        requires_provider_account_ref: true
+        retention_class: "audit_decision"
+      - name: "provider.review_signal.create"
+        version: "1.0.0"
+        operation_class: "write"
+        idempotent: true
+        requires_provider_account_ref: true
+        retention_class: "audit_decision"
+      - name: "provider.relationship.update"
+        version: "1.0.0"
+        operation_class: "write"
+        idempotent: true
+        requires_provider_account_ref: true
+        retention_class: "audit_decision"
+      - name: "provider.bootstrap.request"
+        version: "1.0.0"
+        operation_class: "bootstrap"
+        idempotent: true
+        requires_provider_account_ref: true
+        retention_class: "audit_decision"
+      - name: "provider.artifact.signal"
+        version: "1.0.0"
+        operation_class: "signal"
+        idempotent: true
+        retention_class: "short_operational"
+
+  owner_reads:
+    kind: "mcp_tool"
+    transport: "mcp"
+    entries:
+      - name: "project.policy.read"
+        version: "1.0.0"
+        route_owner: "project-catalog"
+        retention_class: "metrics_only"
+      - name: "project.repository.read"
+        version: "1.0.0"
+        route_owner: "project-catalog"
+        retention_class: "metrics_only"
+      - name: "runtime.slot.read"
+        version: "1.0.0"
+        route_owner: "runtime-manager"
+        retention_class: "metrics_only"
+      - name: "runtime.job.read"
+        version: "1.0.0"
+        route_owner: "runtime-manager"
+        retention_class: "metrics_only"
+      - name: "fleet.cluster_health.read"
+        version: "1.0.0"
+        route_owner: "fleet-manager"
+        retention_class: "metrics_only"
+      - name: "package.installation.read"
+        version: "1.0.0"
+        route_owner: "package-hub"
+        retention_class: "metrics_only"
+      - name: "package.manifest.read"
+        version: "1.0.0"
+        route_owner: "package-hub"
+        retention_class: "metrics_only"
+
+  diagnostics:
+    kind: "mcp_tool"
+    transport: "mcp"
+    route_owner: "platform-mcp-server"
+    bounded_only: true
+    entries:
+      - name: "diagnostics.mcp_status.read"
+        version: "1.0.0"
+        retention_class: "metrics_only"
+      - name: "diagnostics.dependency_status.read"
+        version: "1.0.0"
+        retention_class: "metrics_only"
+      - name: "diagnostics.run_context.read"
+        version: "1.0.0"
+        retention_class: "short_operational"
+      - name: "diagnostics.last_errors.read"
+        version: "1.0.0"
+        retention_class: "short_operational"

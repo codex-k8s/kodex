@@ -1,0 +1,36 @@
+{
+  "tool_name": "provider.comment.create",
+  "tool_version": "1.0.0",
+  "request_id": "66666666-6666-4666-8666-666666666666",
+  "correlation_id": "corr-deny-001",
+  "actor": {
+    "actor_type": "slot_agent",
+    "actor_id": "agent-run-003"
+  },
+  "source": {
+    "source_type": "slot_agent",
+    "source_instance_id": "slot-003"
+  },
+  "scope": {
+    "organization_id": "org-001",
+    "project_id": "project-001",
+    "repository_id": "repo-001",
+    "provider_target_ref": "github:codex-k8s/kodex"
+  },
+  "policy_context": {
+    "risk_class": "write_provider",
+    "decision_mode": "deny"
+  },
+  "redaction_status": {
+    "status": "rejected",
+    "reason": "secret-like value detected in tool input"
+  },
+  "retention_class": "audit_decision",
+  "safe_result": {
+    "status": "rejected",
+    "error": {
+      "code": "mcp.payload_rejected",
+      "message": "input rejected by redaction policy"
+    }
+  }
+}

@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-14
 updated_at: 2026-05-14
-related_issues: [747]
+related_issues: [747, 753]
 related_prs: []
 related_adrs: []
 approvals:
@@ -23,7 +23,7 @@ approvals:
 
 - Что меняем: выделяем `platform-mcp-server` как тонкую MCP-поверхность платформы.
 - Почему: `agent-manager`, slot-агенты и hook emitter должны обращаться к платформе через управляемую policy/auth boundary, а не напрямую к каждому сервису.
-- Основные компоненты: MCP transport, source verifier, tool catalog, policy boundary, router к сервисам-владельцам, sanitizer, bounded diagnostics и audit emitter.
+- Основные компоненты: MCP transport, source verifier, машинно-читаемый каталог инструментов, policy boundary, router к сервисам-владельцам, sanitizer, bounded diagnostics и audit emitter.
 - Риски: превратить MCP в доменный монолит, хранить сырые данные вызовов или начать обходить `provider-hub` при операциях провайдера.
 
 ## Цели
@@ -69,7 +69,7 @@ approvals:
 | MCP transport | Принимает tool calls и возвращает нормализованные ответы. |
 | Адаптер приёма hook-событий | Принимает события Codex hooks из slot emitter или локального sidecar. |
 | Source verifier | Проверяет actor, source type, run id, session id, slot id, project/repository scope и подпись или токен вызова. |
-| Tool catalog | Хранит список разрешённых tool groups, версий и владельцев маршрута. |
+| Каталог инструментов | Хранит список разрешённых групп инструментов, событий, версий и владельцев маршрута; машинно-читаемая форма живёт в `docs/domains/platform-mcp-server/catalog/tool_catalog.v1.yaml`. |
 | Policy boundary | Делает минимальную проверку права на инструмент и риск-профиля вызова. Доменную проверку выполняет сервис-владелец. |
 | Router | Вызывает сервис-владелец по внутреннему gRPC-контракту. |
 | Sanitizer | Удаляет секреты, сырые данные вызова, большие логи и небезопасные поля до маршрутизации, аудита и ответа. |

@@ -6,12 +6,13 @@ status: active
 owner_role: EM
 created_at: 2026-05-14
 updated_at: 2026-05-14
-related_issues: [747, 698]
+related_issues: [747, 753, 698]
 related_prs: []
 related_docsets:
   - docs/domains/platform-mcp-server/product/requirements.md
   - docs/domains/platform-mcp-server/architecture/design.md
   - docs/domains/platform-mcp-server/architecture/api_contract.md
+  - docs/domains/platform-mcp-server/catalog/README.md
 approvals:
   required: ["Owner"]
   status: approved
@@ -24,7 +25,7 @@ approvals:
 
 ## TL;DR
 
-`platform-mcp-server` поставляется малыми срезами: сначала границы и верхнеуровневые контракты, затем машинный каталог инструментов, сервисный каркас, приём hook-событий, маршруты к владельцам, безопасность и эксплуатационный контур. Сервис не владеет бизнес-состоянием и не закрывает #698 до реализации hooks.
+`platform-mcp-server` поставляется малыми срезами: сначала границы и верхнеуровневые контракты, затем машинно-читаемый каталог инструментов, сервисный каркас, приём hook-событий, маршруты к владельцам, безопасность и эксплуатационный контур. Сервис не владеет бизнес-состоянием и не закрывает #698 до реализации hooks.
 
 ## Входные артефакты
 
@@ -33,6 +34,7 @@ approvals:
 | Требования | `docs/domains/platform-mcp-server/product/requirements.md` |
 | Дизайн | `docs/domains/platform-mcp-server/architecture/design.md` |
 | API-обзор | `docs/domains/platform-mcp-server/architecture/api_contract.md` |
+| Каталог инструментов | `docs/domains/platform-mcp-server/catalog/README.md` |
 | Карта Issue | `docs/delivery/issue-map/domains/platform-mcp-server.md` |
 
 ## Срезы поставки
@@ -40,7 +42,7 @@ approvals:
 | Срез | Issue | Результат |
 |---|---:|---|
 | MCP-0 | #747 | Доменный пакет сервисной границы, ответственность, MVP-группы инструментов, безопасность и delivery-план готовы. Код, proto и AsyncAPI не входят. |
-| MCP-1 | не назначено | Машинный tool catalog, envelope, политика версионирования MCP-инструментов и тестовые fixtures готовы. |
+| MCP-1 | #753 | Машинно-читаемый каталог инструментов, envelope, политика версионирования MCP-инструментов и тестовые примеры готовы. |
 | MCP-2 | не назначено | Сервисный каркас: процесс, конфигурация, health/readiness/metrics, MCP transport skeleton и dependency clients без бизнес-маршрутов. |
 | MCP-3 | не назначено | Приём hook-событий #698, очистка данных вызова, безопасные сводки и маршруты в `agent-manager`, `runtime-manager`, `provider-hub`. |
 | MCP-4 | не назначено | Agent-manager tools: session/run/gate/acceptance/follow-up маршруты только через `agent-manager`. |
@@ -66,7 +68,7 @@ approvals:
 
 - Принят MCP-0 docset.
 - Для каждого кодового PR заведён отдельный GitHub Issue.
-- До реализации route group есть machine-readable tool catalog или явно оформленный контрактный срез.
+- До реализации route group есть машинно-читаемый каталог инструментов или явно оформленный контрактный срез.
 - Старый код из `deprecated/**` не используется как основа реализации.
 - Provider write tools не реализуются без уже готового typed provider pipeline.
 

@@ -1,0 +1,23 @@
+{
+  "tool_name": "runtime.slot.read",
+  "tool_version": "1.0.0",
+  "request_id": "22222222-2222-4222-8222-222222222222",
+  "correlation_id": "corr-run-002",
+  "actor": {
+    "actor_type": "slot_agent",
+    "actor_id": "agent-run-002"
+  },
+  "scope": {
+    "organization_id": "org-001",
+    "project_id": "project-001"
+  },
+  "policy_context": {
+    "risk_class": "read",
+    "decision_mode": "allow"
+  },
+  "retention_class": "metrics_only",
+  "expected_error": {
+    "code": "mcp.invalid_context",
+    "reason": "source is required for actor/source binding"
+  }
+}
