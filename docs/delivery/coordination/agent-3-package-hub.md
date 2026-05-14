@@ -36,6 +36,7 @@
 | PKG-7 | готово | Эксплуатационный контур `package-hub`: Dockerfile, Kubernetes manifests, migration job, config, health/metrics, smoke-проверка и runbook. |
 | AGO-0 | готово | Временное переключение: стартовая доменная документация `agent-manager`, границы и междоменные интеграции. |
 | AGO-1 | готово | Временное переключение: gRPC/AsyncAPI контракты `agent-manager`, события `agent.*` и действия доступа без сервисной реализации. |
+| AGO-2 | готово | Временное переключение: сервисный каркас `agent-manager`, health/readiness/metrics, gRPC registration и outbox skeleton без БД, миграций, deploy и бизнес-операций. |
 
 ## Текущий бэклог
 
@@ -58,4 +59,4 @@
 
 ## Временное переключение
 
-Агент #3 временно выполняет AGO-0..AGO-1 в домене `agent-orchestration`, чтобы зафиксировать стартовые границы `agent-manager`, его transport-контракты и зависимость от `package-hub` для чтения установленных руководящих пакетов. Код `package-hub` в этих срезах не меняется.
+Агент #3 временно выполняет AGO-0..AGO-2 в домене `agent-orchestration`, чтобы зафиксировать стартовые границы `agent-manager`, его transport-контракты, сервисный каркас и зависимость от `package-hub` для чтения установленных руководящих пакетов. Код `package-hub` в этих срезах не меняется.

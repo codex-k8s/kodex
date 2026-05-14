@@ -5,8 +5,8 @@ title: kodex — API-обзор agent-manager
 status: active
 owner_role: SA
 created_at: 2026-05-12
-updated_at: 2026-05-13
-related_issues: [733, 739]
+updated_at: 2026-05-14
+related_issues: [733, 739, 744]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -138,7 +138,7 @@ MCP-инструменты не должны принимать свободны
 | Доменная документация | Подготовлена как стартовый срез. |
 | gRPC proto | Подготовлен как контрактный срез `AGO-1`. |
 | AsyncAPI `agent.*` | Подготовлен как контрактный срез `AGO-1`. |
-| Go-реализация `agent-manager` | Не начата в этом срезе. |
+| Go-реализация `agent-manager` | Сервисный каркас готов: процесс, health/readiness/metrics и gRPC registration; бизнес-операции пока возвращают `Unimplemented`. |
 | Интеграция с `package-hub` | Зафиксирована как чтение guidance installations и manifest. |
 | Интеграция с runtime/provider/interaction | Зафиксирована как междоменная граница без реализации. |
 
