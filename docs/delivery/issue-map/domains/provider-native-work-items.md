@@ -5,7 +5,7 @@ title: kodex — карта Issue домена рабочих сущностей
 status: active
 owner_role: KM
 created_at: 2026-04-25
-updated_at: 2026-05-13
+updated_at: 2026-05-14
 ---
 
 # Карта Issue — рабочие сущности провайдера
@@ -31,5 +31,5 @@ updated_at: 2026-05-13
 | #725 | `proto/kodex/providers/**`, `docs/domains/provider-native-work-items/architecture/api_contract.md`, `docs/domains/provider-native-work-items/architecture/design.md`, `docs/domains/provider-native-work-items/architecture/data_model.md`, `docs/domains/provider-native-work-items/delivery/provider_hub_delivery.md`, `docs/platform/architecture/provider_integration_model.md`, `docs/platform/architecture/service_boundaries.md` | PRV-7a | done | Контрактный каталог инструментов записи провайдера для `agent-manager`/MCP: типизированные инструменты, общий конвейер команд, контекст политики по риску, ссылка на approval/gate и безопасный результат без реализации операций записи. |
 | #731 | `services/internal/provider-hub/**`, `docs/delivery/coordination/**`, `docs/domains/provider-native-work-items/README.md`, `docs/domains/provider-native-work-items/architecture/design.md`, `docs/domains/provider-native-work-items/architecture/data_model.md`, `docs/domains/provider-native-work-items/architecture/api_contract.md`, `docs/domains/provider-native-work-items/delivery/provider_hub_delivery.md`, `docs/platform/architecture/provider_integration_model.md` | PRV-7b | done | Общий конвейер команд операций записи реализован без реальных GitHub/GitLab write-вызовов: типизированные gRPC handlers, casters, единый доменный конвейер, `ProviderOperation` со следом политики/gate, проверкой ожидаемой версии и outbox-событиями `provider.operation.completed/failed`. |
 | #737 | `services/internal/provider-hub/**`, `proto/kodex/providers/**`, `docs/domains/provider-native-work-items/**`, `docs/platform/architecture/provider_integration_model.md`, `docs/delivery/coordination/**` | PRV-7c | done | GitHub write-адаптер поверх общего pipeline: создание и обновление задач, комментариев, `PR`, review-сигналов и provider-native связей с журналом операций, безопасным secret resolver, идемпотентным replay, проекциями и событиями. |
-| #281, #282 | `docs/domains/provider-native-work-items/delivery/provider_hub_delivery.md` | PRV-8 | planned | Provider-часть empty repository bootstrap и existing repository adoption; сканирование и отчёт по существующему репозиторию выполняет агентная роль через workspace. |
+| #281, #282 | `docs/platform/architecture/repository_onboarding.md`, `docs/domains/provider-native-work-items/delivery/provider_hub_delivery.md` | PRV-8 | модель выбрана, ждёт реализации | Provider-часть empty repository bootstrap и existing repository adoption должна следовать выбранной модели C. `provider-hub` выполняет provider-native запись и зеркало, но не владеет проектной политикой; сканирование, PR и отчёт готовят агентная роль или детерминированный исполнитель по шаблону через workspace. |
 | не назначено | `services/internal/provider-hub/**`, deploy-манифесты, runbook/monitoring docs | PRV-9 | planned | Эксплуатационный контур `provider-hub`. |

@@ -32,6 +32,7 @@
 | `architecture/provider_integration_model.md` | Модель интеграции с провайдерами и синхронизации. |
 | `architecture/mcp_and_interaction_model.md` | Платформенный MCP и модель взаимодействий. |
 | `architecture/codex_hooks_and_skills.md` | Варианты использования Codex hooks и skills в платформе. |
+| `architecture/repository_onboarding.md` | Варианты bootstrap/adoption репозитория, `services.yaml`, внешней документации и пакетов. |
 
 ## Что сюда попадёт позже
 

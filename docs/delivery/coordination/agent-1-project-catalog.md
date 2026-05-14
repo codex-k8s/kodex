@@ -20,7 +20,7 @@
 `runtime-manager` отвечает за:
 
 - слоты и их жизненный цикл;
-- подготовку workspace и статус materialization;
+- подготовку workspace и статус материализация;
 - platform jobs, steps, короткий хвост логов и ссылки на внешние runtime-артефакты;
 - политики очистки, пакетную очистку, prewarm pool и безопасное переиспользование слотов;
 - deploy-контур самого `runtime-manager`;
@@ -60,12 +60,12 @@
 | RTM-1 | #656 | #669 | готово | gRPC/AsyncAPI контракты `runtime-manager`, события и сгенерированные Go-контракты. |
 | RTM-2 | #657 | #672 | готово | Сервисный каркас, PostgreSQL-модель, миграции, repository, health/readiness, outbox и базовые тесты. |
 | RTM-3 | #658 | #676 | готово | Жизненный цикл слотов: reserve, extend lease, release, fail, чтения, идемпотентность и bootstrap-граница fleet. |
-| RTM-4 | #659 | #683 | готово | Workspace materialization: source refs, access mode, local paths, fingerprint, progress и безопасные ошибки подготовки. |
+| RTM-4 | #659 | #683 | готово | Workspace материализация: `source_ref`, access mode, local paths, fingerprint, progress и безопасные ошибки подготовки. |
 | RTM-5 | #660 | #687 | готово | Platform job MVP: job/step state machine, claim lease, progress, complete/fail/cancel, short log tail и runtime artifact refs. |
 | RTM-6 | #661 | #691 | готово | Dockerfile, manifests, PostgreSQL bootstrap, migration job, `services.yaml`, smoke-путь, runbook и monitoring-документы. |
 | RTM-7 | #662 | #696 | готово | Cleanup policy, cleanup batch, prewarm pool, deterministic slot reuse, очистка хвостов логов и видимость cleanup failures. |
 
-Итог: `runtime-manager` имеет стабильные `v1` контракты, БД, миграции, gRPC-слой, outbox, deploy-контур, smoke-путь и реализованный runtime MVP по слотам, workspace materialization, platform jobs, cleanup, prewarm и reuse.
+Итог: `runtime-manager` имеет стабильные `v1` контракты, БД, миграции, gRPC-слой, outbox, deploy-контур, smoke-путь и реализованный runtime MVP по слотам, материализация workspace, platform jobs, cleanup, prewarm и reuse.
 
 ## Что уже сделано по `fleet-manager`
 
@@ -86,8 +86,8 @@
 
 | Направление | Статус | Что осталось |
 |---|---|---|
-| Bootstrap пустого репозитория | открыто: #281 | Проектная часть готова в `project-catalog`; создание provider-native репозитория, первичный PR и связи ждут `provider-hub`/gateway-срез. |
-| Adoption существующего репозитория | открыто: #282 | Проектная часть готова в `project-catalog`; scan у провайдера, bootstrap PR и provider relationships ждут `provider-hub`. |
+| Bootstrap пустого репозитория | модель выбрана, ждёт реализации: #281 | Проектная часть готова в `project-catalog`; выбран вариант C: `services.yaml` как Git-декларация, установки и шаблоны репозиториев хранятся в `package-hub`, provider-native запись идёт через `provider-hub`, материализация workspace выполняется в `runtime-manager`. Bootstrap может идти агентной ролью или детерминированным исполнителем по шаблону. |
+| Adoption существующего репозитория | модель выбрана, ждёт реализации: #282 | Проектная часть готова в `project-catalog`; adoption должен поддерживать агентную роль и быстрый шаблонный режим после проверки конфликтов. |
 | UI/gateway для проектов и runtime | запланировано позже | Делать после определения фактических экранов `web-console` и состава `staff-gateway` ручек. |
 | `project.policy_override.expired` | запланировано позже | Контракт события есть; нужна логика обслуживания или platform job, которая будет снимать истёкшие переопределения как операционный срез. |
 | Организационные runtime-политики | частично заблокировано | Cleanup для `organization` scope отклоняется, а prewarm хранит политику без фактической раскладки, пока runtime не получает проекцию организации на слоты. |
@@ -107,13 +107,13 @@
 
 - проектные экраны членства, групп и организаций должны опираться на `access-manager`, а не на локальные сущности `project-catalog`;
 - организационный scope для cleanup/prewarm требует проекции организации или явного контракта, по которому `runtime-manager` сможет сопоставить слоты с организацией;
-- owner approval и политики риска для части операций должны приходить из общего контура доступа и governance, а не дублироваться в доменных сервисах.
+- подтверждение владельца и политики риска для части операций должны приходить из общего контура доступа и governance, а не дублироваться в доменных сервисах.
 
 Нужны новые или уточнённые контракты:
 
 - модель чтения членства, групп и организаций для операторских экранов проектов;
 - контракт организационной проекции для runtime-политик;
-- единый способ проверки owner approval для операций, которые запускаются из `staff-gateway`, MCP или agent-manager.
+- единый способ проверки подтверждение владельца для операций, которые запускаются из `staff-gateway`, MCP или agent-manager.
 
 ## Блокировки от `provider-hub`
 
@@ -124,9 +124,9 @@
 
 Реальные оставшиеся блокировки:
 
-- #281 и #282 требуют provider-native операций: создать или просканировать репозиторий, открыть bootstrap PR, связать provider Issue/PR/MR с локальными проектом и репозиторием;
+- #281 и #282 требуют provider-native операций: создать или просканировать репозиторий, открыть bootstrap PR, связать provider Issue/PR/MR с локальными проектом и репозиторием; модель C выбрана, перед реализацией нужно разложить агентный и шаблонный режимы по контрактам;
 - `CreatePolicyEditProposal` в `project-catalog` сохраняет предложение, но создание PR с правкой `services.yaml` должно идти через provider-контур;
-- workspace source refs и сигналы после работы slot-агентов должны синхронизироваться с provider-проекциями, но runtime не должен напрямую ходить в GitHub/GitLab.
+- workspace `source_ref` и сигналы после работы slot-агентов должны синхронизироваться с provider-проекциями, но runtime не должен напрямую ходить в GitHub/GitLab.
 
 Нужны новые или уточнённые контракты:
 
@@ -150,14 +150,14 @@
 Нужны новые или уточнённые контракты:
 
 - контракт чтения установленных руководящих пакетов по project/repository scope;
-- контракт передачи требований пакета в workspace materialization;
+- контракт передачи требований пакета в материализация workspace;
 - контракт запуска runtime-нагрузки для пакета или плагина после подтверждённой установки.
 
 ## Блокировки для других агентов
 
 - `provider-hub` зависит от `project-catalog` при привязке provider-native объектов к локальному проекту и репозиторию.
 - `package-hub` зависит от `project-catalog`, когда пакетные источники и руководящие пакеты становятся частью проектной политики.
-- `agent-manager` зависит от `runtime-manager` для слотов, workspace materialization и platform jobs, но `Run` остаётся сущностью `agent-manager`.
+- `agent-manager` зависит от `runtime-manager` для слотов, материализация workspace и platform jobs, но `Run` остаётся сущностью `agent-manager`.
 - `runtime-manager` зависит от `fleet-manager` для целевого `ResolvePlacement`; RTM-FLEET-1 убрал локальный выбор кластера из `PrepareRuntime`, `ReserveSlot` и `CreateJob` без slot.
 - `operations-hub` и будущий `staff-gateway` зависят от чтений `project-catalog` и `runtime-manager` для операторских экранов.
 
