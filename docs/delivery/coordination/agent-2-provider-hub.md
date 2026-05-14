@@ -37,7 +37,7 @@
 
 | Срез | Статус | Почему не завершён |
 |---|---|---|
-| PRV-8 | требует выбора владельца | Bootstrap/adoption зависят от проектной политики, repository binding и решения по модели `services.yaml`, внешней документации и пакетов. Варианты зафиксированы в `docs/platform/architecture/repository_onboarding.md`; provider-запись должна использовать общий resolver-контракт и существующий конвейер операций записи. |
+| PRV-8 | модель выбрана, ждёт реализации | Bootstrap/adoption зависят от проектной политики, repository binding и выбранной модели C для `services.yaml`, внешней документации, пакетов и шаблонов репозиториев. Provider-запись должна использовать общий resolver-контракт и существующий конвейер операций записи. |
 | PRV-9 | запланировано позже | Kubernetes-манифесты, migration job, metrics, alerts, runbook и smoke можно делать по паттерну `runtime-manager`, когда будет принято решение разворачивать `provider-hub` на сервере. |
 
 ## Блокировки от `access-manager`
