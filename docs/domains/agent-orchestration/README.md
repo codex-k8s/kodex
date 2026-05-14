@@ -41,6 +41,15 @@
 - `docs/catalogs/prompt-roles/`.
 - `docs/catalogs/guidance-packages/`.
 
+## Контракты
+
+| Контракт | Путь |
+|---|---|
+| gRPC `agent-manager` | `proto/kodex/agents/v1/agent_manager.proto` |
+| Go-контракты gRPC | `proto/gen/go/kodex/agents/v1/**` |
+| AsyncAPI событий `agent.*` | `specs/asyncapi/agent-manager.v1.yaml` |
+| Go-контракты событий | `libs/go/platformevents/agent/events.gen.go` |
+
 ## Карта Issue
 
 - Доменная карта: `docs/delivery/issue-map/domains/agent-orchestration.md`.

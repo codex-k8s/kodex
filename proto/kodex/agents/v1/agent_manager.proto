@@ -1,0 +1,922 @@
+syntax = "proto3";
+
+package kodex.agents.v1;
+
+option go_package = "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1;agentsv1";
+
+// AgentManagerService is the stable v1 inter-service contract for the agent
+// orchestration domain. It owns flows, stages, roles, prompt templates, agent
+// sessions, agent runs, acceptance state, follow-up intents and human gate refs.
+service AgentManagerService {
+  // CreateFlow creates a flow in the requested scope.
+  rpc CreateFlow(CreateFlowRequest) returns (FlowResponse);
+  // UpdateFlow changes safe flow metadata without mutating immutable versions.
+  rpc UpdateFlow(UpdateFlowRequest) returns (FlowResponse);
+  // CreateFlowVersion creates an immutable flow definition version.
+  rpc CreateFlowVersion(CreateFlowVersionRequest) returns (FlowVersionResponse);
+  // ActivateFlowVersion activates one version for future sessions and runs.
+  rpc ActivateFlowVersion(ActivateFlowVersionRequest) returns (FlowVersionResponse);
+  // GetFlow returns authoritative flow state.
+  rpc GetFlow(GetFlowRequest) returns (FlowResponse);
+  // ListFlows returns flows by scope and status.
+  rpc ListFlows(ListFlowsRequest) returns (ListFlowsResponse);
+  // CreateRoleProfile creates an agent role profile.
+  rpc CreateRoleProfile(CreateRoleProfileRequest) returns (RoleProfileResponse);
+  // UpdateRoleProfile changes safe role metadata and policy refs.
+  rpc UpdateRoleProfile(UpdateRoleProfileRequest) returns (RoleProfileResponse);
+  // GetRoleProfile returns authoritative role state.
+  rpc GetRoleProfile(GetRoleProfileRequest) returns (RoleProfileResponse);
+  // ListRoleProfiles returns role profiles by scope, kind and status.
+  rpc ListRoleProfiles(ListRoleProfilesRequest) returns (ListRoleProfilesResponse);
+  // GetPromptTemplate returns prompt template metadata without template body.
+  rpc GetPromptTemplate(GetPromptTemplateRequest) returns (PromptTemplateResponse);
+  // ListPromptTemplates returns prompt templates by role and kind.
+  rpc ListPromptTemplates(ListPromptTemplatesRequest) returns (ListPromptTemplatesResponse);
+  // CreatePromptTemplateVersion creates a prompt template version for a role.
+  rpc CreatePromptTemplateVersion(CreatePromptTemplateVersionRequest) returns (PromptTemplateVersionResponse);
+  // ActivatePromptTemplateVersion activates one prompt version for future runs.
+  rpc ActivatePromptTemplateVersion(ActivatePromptTemplateVersionRequest) returns (PromptTemplateVersionResponse);
+  // GetPromptTemplateVersion returns one prompt template version.
+  rpc GetPromptTemplateVersion(GetPromptTemplateVersionRequest) returns (PromptTemplateVersionResponse);
+  // ListPromptTemplateVersions returns prompt versions by role and kind.
+  rpc ListPromptTemplateVersions(ListPromptTemplateVersionsRequest) returns (ListPromptTemplateVersionsResponse);
+  // StartAgentSession creates or continues an agent session.
+  rpc StartAgentSession(StartAgentSessionRequest) returns (AgentSessionResponse);
+  // StartAgentRun creates a role run and records immutable context refs.
+  rpc StartAgentRun(StartAgentRunRequest) returns (AgentRunResponse);
+  // RecordRunState records a run lifecycle transition from runtime, MCP or runner.
+  rpc RecordRunState(RecordRunStateRequest) returns (AgentRunResponse);
+  // RecordSessionStateSnapshot records metadata for a Codex session state object.
+  rpc RecordSessionStateSnapshot(RecordSessionStateSnapshotRequest) returns (AgentSessionStateSnapshotResponse);
+  // RequestAcceptance requests acceptance checks for a session, run and stage.
+  rpc RequestAcceptance(RequestAcceptanceRequest) returns (AcceptanceResultResponse);
+  // RecordAcceptanceResult records acceptance state after machine or role checks.
+  rpc RecordAcceptanceResult(RecordAcceptanceResultRequest) returns (AcceptanceResultResponse);
+  // GetAcceptanceResult returns one acceptance result.
+  rpc GetAcceptanceResult(GetAcceptanceResultRequest) returns (AcceptanceResultResponse);
+  // ListAcceptanceResults returns acceptance results by session, run, stage or status.
+  rpc ListAcceptanceResults(ListAcceptanceResultsRequest) returns (ListAcceptanceResultsResponse);
+  // CreateFollowUpIntent creates an intent to create or update the next provider-native Issue.
+  rpc CreateFollowUpIntent(CreateFollowUpIntentRequest) returns (FollowUpIntentResponse);
+  // RequestHumanGate creates a human decision request through interaction-hub.
+  rpc RequestHumanGate(RequestHumanGateRequest) returns (HumanGateRequestResponse);
+  // GetAgentSession returns authoritative session state.
+  rpc GetAgentSession(GetAgentSessionRequest) returns (AgentSessionResponse);
+  // ListAgentRuns returns agent runs by session, role, status or provider target.
+  rpc ListAgentRuns(ListAgentRunsRequest) returns (ListAgentRunsResponse);
+}
+
+// CommandMeta is required for every mutating command.
+message CommandMeta {
+  // command_id is a unique command identifier. Either command_id or idempotency_key is required.
+  optional string command_id = 1;
+  // idempotency_key is an idempotency key scoped by operation and actor.
+  optional string idempotency_key = 2;
+  // expected_version is present only for existing aggregate mutations.
+  optional int64 expected_version = 3;
+  // actor is the authenticated caller.
+  Actor actor = 4;
+  // reason is a machine or operator reason for audit and domain events.
+  string reason = 5;
+  // request_id links the command to logs, traces and audit.
+  string request_id = 6;
+  // request_context carries safe request metadata; no tokens, secrets, email or names.
+  RequestContext request_context = 7;
+}
+
+// QueryMeta carries safe metadata for authoritative reads.
+message QueryMeta {
+  // actor is the authenticated caller.
+  Actor actor = 1;
+  // request_id links the read to logs and traces.
+  string request_id = 2;
+  // request_context carries safe request metadata.
+  RequestContext request_context = 3;
+}
+
+// RequestContext is safe request metadata used for audit and diagnostics.
+message RequestContext {
+  // source identifies caller surface, for example staff-gateway, platform-mcp-server or service.
+  string source = 1;
+  // trace_id links platform traces.
+  optional string trace_id = 2;
+  // session_id links a user session when available.
+  optional string session_id = 3;
+  // client_ip_hash is an optional hashed client address.
+  optional string client_ip_hash = 4;
+}
+
+// Actor identifies a user, service, agent or external account.
+message Actor {
+  // type is a subject type such as user, service, agent or external_account.
+  string type = 1;
+  // id is the subject identifier in its owner domain.
+  string id = 2;
+}
+
+// PageRequest limits list responses.
+message PageRequest {
+  // page_size is the maximum item count requested by caller.
+  int32 page_size = 1;
+  // page_token is an opaque continuation token returned by a previous call.
+  optional string page_token = 2;
+}
+
+// PageResponse describes list continuation state.
+message PageResponse {
+  // next_page_token is empty when there are no more items.
+  optional string next_page_token = 1;
+}
+
+// LocalizedText carries text for one locale.
+message LocalizedText {
+  // locale is a BCP 47 locale code, for example ru or en-US.
+  string locale = 1;
+  // text is localized display text.
+  string text = 2;
+}
+
+// ScopeRef identifies where a flow, role, session or automation applies.
+message ScopeRef {
+  // type classifies the scope.
+  AgentScopeType type = 1;
+  // ref is an external scope identifier owned by another domain.
+  string ref = 2;
+}
+
+// ProviderTargetRef points to provider-native artifacts without copying their state.
+message ProviderTargetRef {
+  // work_item_ref points to Issue or another provider-native work item projection.
+  optional string work_item_ref = 1;
+  // pull_request_ref points to PR/MR projection when available.
+  optional string pull_request_ref = 2;
+  // comment_ref points to a provider comment projection when available.
+  optional string comment_ref = 3;
+  // review_signal_ref points to a provider review signal when available.
+  optional string review_signal_ref = 4;
+}
+
+// RuntimeContextRef points to runtime state owned by runtime-manager.
+message RuntimeContextRef {
+  // slot_ref points to runtime slot state.
+  optional string slot_ref = 1;
+  // job_ref points to platform job state.
+  optional string job_ref = 2;
+  // workspace_ref points to workspace materialization state.
+  optional string workspace_ref = 3;
+  // context_ref is an opaque runtime context reference.
+  optional string context_ref = 4;
+}
+
+// GuidanceRef fixes one guidance package used in an agent run.
+message GuidanceRef {
+  // package_installation_ref points to package-hub installation state.
+  string package_installation_ref = 1;
+  // package_version_ref points to package-hub version state.
+  string package_version_ref = 2;
+  // manifest_digest identifies the manifest used for the run.
+  string manifest_digest = 3;
+  // source_ref optionally identifies a materialized source in runtime workspace.
+  optional string source_ref = 4;
+}
+
+// GuidanceSelectionHint is an untrusted caller hint resolved by agent-manager
+// through package-hub before creating immutable GuidanceRef records on a run.
+message GuidanceSelectionHint {
+  // package_installation_ref optionally narrows selection to an installed guidance package.
+  optional string package_installation_ref = 1;
+  // package_slug optionally narrows selection by package slug inside the run scope.
+  optional string package_slug = 2;
+}
+
+// ObjectRef points to object storage without embedding object content.
+message ObjectRef {
+  // object_uri points to S3-compatible object storage.
+  string object_uri = 1;
+  // object_digest is a digest used for integrity checks.
+  string object_digest = 2;
+  // object_size_bytes is optional object size for limits and retention.
+  optional int64 object_size_bytes = 3;
+}
+
+// AgentScopeType classifies scope ownership.
+enum AgentScopeType {
+  AGENT_SCOPE_TYPE_UNSPECIFIED = 0;
+  AGENT_SCOPE_TYPE_PLATFORM = 1;
+  AGENT_SCOPE_TYPE_ORGANIZATION = 2;
+  AGENT_SCOPE_TYPE_PROJECT = 3;
+  AGENT_SCOPE_TYPE_REPOSITORY = 4;
+}
+
+// FlowStatus is the flow lifecycle status.
+enum FlowStatus {
+  FLOW_STATUS_UNSPECIFIED = 0;
+  FLOW_STATUS_DRAFT = 1;
+  FLOW_STATUS_ACTIVE = 2;
+  FLOW_STATUS_DISABLED = 3;
+  FLOW_STATUS_ARCHIVED = 4;
+}
+
+// FlowVersionStatus is the immutable flow version lifecycle status.
+enum FlowVersionStatus {
+  FLOW_VERSION_STATUS_UNSPECIFIED = 0;
+  FLOW_VERSION_STATUS_DRAFT = 1;
+  FLOW_VERSION_STATUS_ACTIVE = 2;
+  FLOW_VERSION_STATUS_SUPERSEDED = 3;
+  FLOW_VERSION_STATUS_REJECTED = 4;
+}
+
+// StageType classifies stage behavior inside a flow.
+enum StageType {
+  STAGE_TYPE_UNSPECIFIED = 0;
+  STAGE_TYPE_WORK = 1;
+  STAGE_TYPE_REVIEW = 2;
+  STAGE_TYPE_GATE = 3;
+  STAGE_TYPE_RELEASE = 4;
+  STAGE_TYPE_OPS = 5;
+  STAGE_TYPE_CUSTOM = 6;
+}
+
+// RoleKind classifies agent role behavior.
+enum RoleKind {
+  ROLE_KIND_UNSPECIFIED = 0;
+  ROLE_KIND_WORKER = 1;
+  ROLE_KIND_REVIEWER = 2;
+  ROLE_KIND_GATEKEEPER = 3;
+  ROLE_KIND_MANAGER = 4;
+  ROLE_KIND_QA = 5;
+  ROLE_KIND_OPS = 6;
+  ROLE_KIND_CUSTOM = 7;
+}
+
+// RoleStatus is the role lifecycle status.
+enum RoleStatus {
+  ROLE_STATUS_UNSPECIFIED = 0;
+  ROLE_STATUS_DRAFT = 1;
+  ROLE_STATUS_ACTIVE = 2;
+  ROLE_STATUS_DISABLED = 3;
+  ROLE_STATUS_ARCHIVED = 4;
+}
+
+// PromptKind classifies prompt template purpose.
+enum PromptKind {
+  PROMPT_KIND_UNSPECIFIED = 0;
+  PROMPT_KIND_WORK = 1;
+  PROMPT_KIND_REVISE = 2;
+  PROMPT_KIND_REVIEW = 3;
+  PROMPT_KIND_MANAGER = 4;
+  PROMPT_KIND_CUSTOM = 5;
+}
+
+// PromptVersionStatus is the prompt template version lifecycle status.
+enum PromptVersionStatus {
+  PROMPT_VERSION_STATUS_UNSPECIFIED = 0;
+  PROMPT_VERSION_STATUS_DRAFT = 1;
+  PROMPT_VERSION_STATUS_ACTIVE = 2;
+  PROMPT_VERSION_STATUS_SUPERSEDED = 3;
+  PROMPT_VERSION_STATUS_REJECTED = 4;
+}
+
+// StageRoleBindingKind describes how a role participates in a stage.
+enum StageRoleBindingKind {
+  STAGE_ROLE_BINDING_KIND_UNSPECIFIED = 0;
+  STAGE_ROLE_BINDING_KIND_EXECUTOR = 1;
+  STAGE_ROLE_BINDING_KIND_REVIEWER = 2;
+  STAGE_ROLE_BINDING_KIND_GATEKEEPER = 3;
+  STAGE_ROLE_BINDING_KIND_QA = 4;
+  STAGE_ROLE_BINDING_KIND_OBSERVER = 5;
+  STAGE_ROLE_BINDING_KIND_CUSTOM = 6;
+}
+
+// AgentSessionStatus is the lifecycle status of a logical agent session.
+enum AgentSessionStatus {
+  AGENT_SESSION_STATUS_UNSPECIFIED = 0;
+  AGENT_SESSION_STATUS_OPEN = 1;
+  AGENT_SESSION_STATUS_WAITING = 2;
+  AGENT_SESSION_STATUS_COMPLETED = 3;
+  AGENT_SESSION_STATUS_FAILED = 4;
+  AGENT_SESSION_STATUS_CANCELLED = 5;
+}
+
+// AgentRunStatus is the lifecycle status of one role run.
+enum AgentRunStatus {
+  AGENT_RUN_STATUS_UNSPECIFIED = 0;
+  AGENT_RUN_STATUS_REQUESTED = 1;
+  AGENT_RUN_STATUS_STARTING = 2;
+  AGENT_RUN_STATUS_RUNNING = 3;
+  AGENT_RUN_STATUS_WAITING = 4;
+  AGENT_RUN_STATUS_COMPLETED = 5;
+  AGENT_RUN_STATUS_FAILED = 6;
+  AGENT_RUN_STATUS_CANCELLED = 7;
+}
+
+// AgentSessionSnapshotKind classifies Codex session state snapshots.
+enum AgentSessionSnapshotKind {
+  AGENT_SESSION_SNAPSHOT_KIND_UNSPECIFIED = 0;
+  AGENT_SESSION_SNAPSHOT_KIND_TURN_CHECKPOINT = 1;
+  AGENT_SESSION_SNAPSHOT_KIND_RUN_COMPLETION = 2;
+  AGENT_SESSION_SNAPSHOT_KIND_MANUAL_CHECKPOINT = 3;
+  AGENT_SESSION_SNAPSHOT_KIND_RECOVERY_CHECKPOINT = 4;
+}
+
+// AcceptanceCheckKind classifies acceptance logic.
+enum AcceptanceCheckKind {
+  ACCEPTANCE_CHECK_KIND_UNSPECIFIED = 0;
+  ACCEPTANCE_CHECK_KIND_ARTIFACT = 1;
+  ACCEPTANCE_CHECK_KIND_WATERMARK = 2;
+  ACCEPTANCE_CHECK_KIND_POLICY = 3;
+  ACCEPTANCE_CHECK_KIND_ROLE_RESULT = 4;
+  ACCEPTANCE_CHECK_KIND_HUMAN_GATE = 5;
+  ACCEPTANCE_CHECK_KIND_FOLLOW_UP = 6;
+}
+
+// AcceptanceStatus is the lifecycle status of an acceptance result.
+enum AcceptanceStatus {
+  ACCEPTANCE_STATUS_UNSPECIFIED = 0;
+  ACCEPTANCE_STATUS_PENDING = 1;
+  ACCEPTANCE_STATUS_PASSED = 2;
+  ACCEPTANCE_STATUS_FAILED = 3;
+  ACCEPTANCE_STATUS_WAITING = 4;
+  ACCEPTANCE_STATUS_SKIPPED = 5;
+}
+
+// FollowUpIntentStatus is the lifecycle status of a follow-up intent.
+enum FollowUpIntentStatus {
+  FOLLOW_UP_INTENT_STATUS_UNSPECIFIED = 0;
+  FOLLOW_UP_INTENT_STATUS_PLANNED = 1;
+  FOLLOW_UP_INTENT_STATUS_REQUESTED = 2;
+  FOLLOW_UP_INTENT_STATUS_CREATED = 3;
+  FOLLOW_UP_INTENT_STATUS_FAILED = 4;
+  FOLLOW_UP_INTENT_STATUS_CANCELLED = 5;
+}
+
+// HumanGateStatus is the lifecycle status of a human gate request.
+enum HumanGateStatus {
+  HUMAN_GATE_STATUS_UNSPECIFIED = 0;
+  HUMAN_GATE_STATUS_REQUESTED = 1;
+  HUMAN_GATE_STATUS_WAITING = 2;
+  HUMAN_GATE_STATUS_RESOLVED = 3;
+  HUMAN_GATE_STATUS_FAILED = 4;
+  HUMAN_GATE_STATUS_CANCELLED = 5;
+}
+
+// AutomationTriggerKind classifies automation input.
+enum AutomationTriggerKind {
+  AUTOMATION_TRIGGER_KIND_UNSPECIFIED = 0;
+  AUTOMATION_TRIGGER_KIND_SCHEDULE = 1;
+  AUTOMATION_TRIGGER_KIND_DOMAIN_EVENT = 2;
+  AUTOMATION_TRIGGER_KIND_PROVIDER_SIGNAL = 3;
+  AUTOMATION_TRIGGER_KIND_MANUAL = 4;
+  AUTOMATION_TRIGGER_KIND_EXTERNAL_CALLBACK = 5;
+}
+
+// AutomationStatus is the automation binding lifecycle status.
+enum AutomationStatus {
+  AUTOMATION_STATUS_UNSPECIFIED = 0;
+  AUTOMATION_STATUS_ACTIVE = 1;
+  AUTOMATION_STATUS_DISABLED = 2;
+  AUTOMATION_STATUS_PAUSED = 3;
+}
+
+// Flow is a logical process template in a scope.
+message Flow {
+  string id = 1;
+  ScopeRef scope = 2;
+  string slug = 3;
+  repeated LocalizedText display_name = 4;
+  repeated LocalizedText description = 5;
+  optional string icon_object_uri = 6;
+  FlowStatus status = 7;
+  optional string active_version_id = 8;
+  int64 version = 9;
+  string created_at = 10;
+  string updated_at = 11;
+}
+
+// FlowVersion is an immutable flow definition snapshot.
+message FlowVersion {
+  string id = 1;
+  string flow_id = 2;
+  int64 version = 3;
+  optional string source_ref = 4;
+  string definition_digest = 5;
+  FlowVersionStatus status = 6;
+  repeated Stage stages = 7;
+  repeated StageTransition transitions = 8;
+  repeated StageRoleBinding stage_role_bindings = 9;
+  optional string activated_at = 10;
+  string created_at = 11;
+}
+
+// Stage is one flow stage.
+message Stage {
+  string id = 1;
+  string flow_version_id = 2;
+  string slug = 3;
+  StageType stage_type = 4;
+  repeated LocalizedText display_name = 5;
+  optional string icon_object_uri = 6;
+  // required_artifacts_json is bounded policy JSON for expected provider/runtime/package artifacts.
+  string required_artifacts_json = 7;
+  // acceptance_policy_json is bounded policy JSON for checks, watermarks, gates and transitions.
+  string acceptance_policy_json = 8;
+  int32 position = 9;
+}
+
+// StageTransition is an allowed transition between stages.
+message StageTransition {
+  string id = 1;
+  string flow_version_id = 2;
+  optional string from_stage_id = 3;
+  string to_stage_id = 4;
+  // condition_json is bounded policy JSON for acceptance, gate, branch or manual choices.
+  string condition_json = 5;
+  optional string follow_up_type = 6;
+}
+
+// RoleProfile is an agent role profile.
+message RoleProfile {
+  string id = 1;
+  ScopeRef scope = 2;
+  string slug = 3;
+  repeated LocalizedText display_name = 4;
+  optional string icon_object_uri = 5;
+  RoleKind role_kind = 6;
+  string runtime_profile = 7;
+  repeated string allowed_mcp_tools = 8;
+  optional string provider_account_policy_ref = 9;
+  RoleStatus status = 10;
+  int64 version = 11;
+  string created_at = 12;
+  string updated_at = 13;
+}
+
+// PromptTemplate groups prompt versions for one role and purpose.
+message PromptTemplate {
+  string id = 1;
+  string role_profile_id = 2;
+  PromptKind prompt_kind = 3;
+  optional string active_version_id = 4;
+  int64 version = 5;
+  string created_at = 6;
+  string updated_at = 7;
+}
+
+// PromptTemplateVersion fixes prompt template content and its source.
+message PromptTemplateVersion {
+  string id = 1;
+  string prompt_template_id = 2;
+  string role_profile_id = 3;
+  PromptKind prompt_kind = 4;
+  int64 version = 5;
+  optional string source_ref = 6;
+  optional ObjectRef template_object = 7;
+  string template_digest = 8;
+  PromptVersionStatus status = 9;
+  string created_at = 10;
+  optional string activated_at = 11;
+}
+
+// StageRoleBinding links a stage to a role.
+message StageRoleBinding {
+  string id = 1;
+  string stage_id = 2;
+  string role_profile_id = 3;
+  StageRoleBindingKind binding_kind = 4;
+  // launch_policy_json is bounded policy JSON for manual, automatic, parallel and retry launches.
+  string launch_policy_json = 5;
+  bool required_for_acceptance = 6;
+}
+
+// AgentSession is a resumable logical agent context.
+message AgentSession {
+  string id = 1;
+  ScopeRef scope = 2;
+  optional string provider_work_item_ref = 3;
+  optional string flow_version_id = 4;
+  optional string current_stage_id = 5;
+  optional string latest_state_snapshot_id = 6;
+  AgentSessionStatus status = 7;
+  string created_by_actor_ref = 8;
+  int64 version = 9;
+  string created_at = 10;
+  string updated_at = 11;
+}
+
+// AgentRun is one role run inside an agent session.
+message AgentRun {
+  string id = 1;
+  string session_id = 2;
+  optional string flow_version_id = 3;
+  optional string stage_id = 4;
+  string role_profile_id = 5;
+  int64 role_profile_version = 6;
+  string role_profile_digest = 7;
+  string prompt_template_version_id = 8;
+  string prompt_template_digest = 9;
+  RuntimeContextRef runtime_context = 10;
+  ProviderTargetRef provider_target = 11;
+  repeated GuidanceRef guidance_refs = 12;
+  AgentRunStatus status = 13;
+  optional string result_summary = 14;
+  optional string failure_code = 15;
+  int64 version = 16;
+  optional string started_at = 17;
+  optional string finished_at = 18;
+  string created_at = 19;
+  string updated_at = 20;
+}
+
+// AgentSessionStateSnapshot is metadata for an object-store Codex session state.
+message AgentSessionStateSnapshot {
+  string id = 1;
+  string session_id = 2;
+  optional string run_id = 3;
+  AgentSessionSnapshotKind snapshot_kind = 4;
+  optional int64 turn_index = 5;
+  ObjectRef object = 6;
+  string captured_at = 7;
+  string created_at = 8;
+}
+
+// AcceptanceResult records machine, role or human-gate acceptance state.
+message AcceptanceResult {
+  string id = 1;
+  string session_id = 2;
+  optional string run_id = 3;
+  optional string stage_id = 4;
+  AcceptanceCheckKind check_kind = 5;
+  AcceptanceStatus status = 6;
+  optional string target_ref = 7;
+  // details_json is bounded diagnostic JSON without secrets, tokens, email or provider payloads.
+  string details_json = 8;
+  int64 version = 9;
+  string created_at = 10;
+  string updated_at = 11;
+}
+
+// FollowUpIntent is an intent to create or update a provider-native work item.
+message FollowUpIntent {
+  string id = 1;
+  string session_id = 2;
+  optional string from_stage_id = 3;
+  optional string to_stage_id = 4;
+  string provider_work_item_type = 5;
+  optional string provider_operation_ref = 6;
+  FollowUpIntentStatus status = 7;
+  optional string instruction_body_digest = 8;
+  int64 version = 9;
+  string created_at = 10;
+  string updated_at = 11;
+}
+
+// HumanGateRequest is a reference to an interaction-hub human decision request.
+message HumanGateRequest {
+  string id = 1;
+  string session_id = 2;
+  optional string run_id = 3;
+  optional string stage_id = 4;
+  string request_kind = 5;
+  string reason_code = 6;
+  optional string interaction_ref = 7;
+  HumanGateStatus status = 8;
+  int64 version = 9;
+  string created_at = 10;
+  string updated_at = 11;
+}
+
+// FlowDefinitionInput is the typed input for immutable flow version creation.
+message FlowDefinitionInput {
+  repeated StageInput stages = 1;
+  repeated StageTransitionInput transitions = 2;
+  repeated StageRoleBindingInput stage_role_bindings = 3;
+  string definition_digest = 4;
+}
+
+message StageInput {
+  string slug = 1;
+  StageType stage_type = 2;
+  repeated LocalizedText display_name = 3;
+  optional string icon_object_uri = 4;
+  string required_artifacts_json = 5;
+  string acceptance_policy_json = 6;
+  int32 position = 7;
+}
+
+message StageTransitionInput {
+  optional string from_stage_slug = 1;
+  string to_stage_slug = 2;
+  string condition_json = 3;
+  optional string follow_up_type = 4;
+}
+
+message StageRoleBindingInput {
+  string stage_slug = 1;
+  string role_profile_id = 2;
+  StageRoleBindingKind binding_kind = 3;
+  string launch_policy_json = 4;
+  bool required_for_acceptance = 5;
+}
+
+message CreateFlowRequest {
+  CommandMeta meta = 1;
+  ScopeRef scope = 2;
+  string slug = 3;
+  repeated LocalizedText display_name = 4;
+  repeated LocalizedText description = 5;
+  optional string icon_object_uri = 6;
+}
+
+message UpdateFlowRequest {
+  CommandMeta meta = 1;
+  string flow_id = 2;
+  repeated LocalizedText display_name = 3;
+  repeated LocalizedText description = 4;
+  optional string icon_object_uri = 5;
+  optional FlowStatus status = 6;
+}
+
+message CreateFlowVersionRequest {
+  CommandMeta meta = 1;
+  string flow_id = 2;
+  optional string source_ref = 3;
+  FlowDefinitionInput definition = 4;
+}
+
+message ActivateFlowVersionRequest {
+  CommandMeta meta = 1;
+  string flow_version_id = 2;
+}
+
+message GetFlowRequest {
+  QueryMeta meta = 1;
+  string flow_id = 2;
+}
+
+message ListFlowsRequest {
+  QueryMeta meta = 1;
+  ScopeRef scope = 2;
+  optional FlowStatus status = 3;
+  PageRequest page = 4;
+}
+
+message FlowResponse {
+  Flow flow = 1;
+  optional FlowVersion active_version = 2;
+}
+
+message FlowVersionResponse {
+  FlowVersion flow_version = 1;
+}
+
+message ListFlowsResponse {
+  repeated Flow flows = 1;
+  PageResponse page = 2;
+}
+
+message CreateRoleProfileRequest {
+  CommandMeta meta = 1;
+  ScopeRef scope = 2;
+  string slug = 3;
+  repeated LocalizedText display_name = 4;
+  optional string icon_object_uri = 5;
+  RoleKind role_kind = 6;
+  string runtime_profile = 7;
+  repeated string allowed_mcp_tools = 8;
+  optional string provider_account_policy_ref = 9;
+}
+
+message UpdateRoleProfileRequest {
+  CommandMeta meta = 1;
+  string role_profile_id = 2;
+  repeated LocalizedText display_name = 3;
+  optional string icon_object_uri = 4;
+  optional RoleKind role_kind = 5;
+  optional string runtime_profile = 6;
+  repeated string allowed_mcp_tools = 7;
+  optional string provider_account_policy_ref = 8;
+  optional RoleStatus status = 9;
+}
+
+message GetRoleProfileRequest {
+  QueryMeta meta = 1;
+  string role_profile_id = 2;
+}
+
+message ListRoleProfilesRequest {
+  QueryMeta meta = 1;
+  ScopeRef scope = 2;
+  optional RoleKind role_kind = 3;
+  optional RoleStatus status = 4;
+  PageRequest page = 5;
+}
+
+message RoleProfileResponse {
+  RoleProfile role_profile = 1;
+}
+
+message ListRoleProfilesResponse {
+  repeated RoleProfile role_profiles = 1;
+  PageResponse page = 2;
+}
+
+message GetPromptTemplateRequest {
+  QueryMeta meta = 1;
+  string prompt_template_id = 2;
+}
+
+message ListPromptTemplatesRequest {
+  QueryMeta meta = 1;
+  string role_profile_id = 2;
+  optional PromptKind prompt_kind = 3;
+  PageRequest page = 4;
+}
+
+message PromptTemplateResponse {
+  PromptTemplate prompt_template = 1;
+  optional PromptTemplateVersion active_version = 2;
+}
+
+message ListPromptTemplatesResponse {
+  repeated PromptTemplate prompt_templates = 1;
+  PageResponse page = 2;
+}
+
+message CreatePromptTemplateVersionRequest {
+  CommandMeta meta = 1;
+  string role_profile_id = 2;
+  PromptKind prompt_kind = 3;
+  optional string source_ref = 4;
+  optional ObjectRef template_object = 5;
+  string template_digest = 6;
+}
+
+message ActivatePromptTemplateVersionRequest {
+  CommandMeta meta = 1;
+  string prompt_template_version_id = 2;
+}
+
+message GetPromptTemplateVersionRequest {
+  QueryMeta meta = 1;
+  string prompt_template_version_id = 2;
+}
+
+message ListPromptTemplateVersionsRequest {
+  QueryMeta meta = 1;
+  string role_profile_id = 2;
+  optional PromptKind prompt_kind = 3;
+  optional PromptVersionStatus status = 4;
+  PageRequest page = 5;
+}
+
+message PromptTemplateVersionResponse {
+  PromptTemplateVersion prompt_template_version = 1;
+}
+
+message ListPromptTemplateVersionsResponse {
+  repeated PromptTemplateVersion prompt_template_versions = 1;
+  PageResponse page = 2;
+}
+
+message StartAgentSessionRequest {
+  CommandMeta meta = 1;
+  ScopeRef scope = 2;
+  optional string provider_work_item_ref = 3;
+  optional string flow_version_id = 4;
+  optional string current_stage_id = 5;
+  string created_by_actor_ref = 6;
+}
+
+message StartAgentRunRequest {
+  CommandMeta meta = 1;
+  string session_id = 2;
+  optional string flow_version_id = 3;
+  optional string stage_id = 4;
+  string role_profile_id = 5;
+  string prompt_template_version_id = 6;
+  ProviderTargetRef provider_target = 7;
+  repeated GuidanceSelectionHint guidance_selection_hints = 8;
+}
+
+message RecordRunStateRequest {
+  CommandMeta meta = 1;
+  string run_id = 2;
+  AgentRunStatus status = 3;
+  RuntimeContextRef runtime_context = 4;
+  ProviderTargetRef provider_target = 5;
+  optional string result_summary = 6;
+  optional string failure_code = 7;
+  optional string started_at = 8;
+  optional string finished_at = 9;
+}
+
+message RecordSessionStateSnapshotRequest {
+  CommandMeta meta = 1;
+  string session_id = 2;
+  optional string run_id = 3;
+  AgentSessionSnapshotKind snapshot_kind = 4;
+  optional int64 turn_index = 5;
+  ObjectRef object = 6;
+  string captured_at = 7;
+}
+
+message RequestAcceptanceRequest {
+  CommandMeta meta = 1;
+  string session_id = 2;
+  optional string run_id = 3;
+  optional string stage_id = 4;
+  repeated AcceptanceCheckKind check_kinds = 5;
+  optional string target_ref = 6;
+}
+
+message RecordAcceptanceResultRequest {
+  CommandMeta meta = 1;
+  string acceptance_result_id = 2;
+  AcceptanceStatus status = 3;
+  optional string target_ref = 4;
+  string details_json = 5;
+}
+
+message GetAcceptanceResultRequest {
+  QueryMeta meta = 1;
+  string acceptance_result_id = 2;
+}
+
+message ListAcceptanceResultsRequest {
+  QueryMeta meta = 1;
+  optional string session_id = 2;
+  optional string run_id = 3;
+  optional string stage_id = 4;
+  optional AcceptanceStatus status = 5;
+  PageRequest page = 6;
+}
+
+message CreateFollowUpIntentRequest {
+  CommandMeta meta = 1;
+  string session_id = 2;
+  optional string from_stage_id = 3;
+  optional string to_stage_id = 4;
+  string provider_work_item_type = 5;
+  optional string provider_operation_ref = 6;
+  optional string instruction_body_digest = 7;
+}
+
+message RequestHumanGateRequest {
+  CommandMeta meta = 1;
+  string session_id = 2;
+  optional string run_id = 3;
+  optional string stage_id = 4;
+  string request_kind = 5;
+  string reason_code = 6;
+  optional string interaction_ref = 7;
+}
+
+message GetAgentSessionRequest {
+  QueryMeta meta = 1;
+  string session_id = 2;
+}
+
+message ListAgentRunsRequest {
+  QueryMeta meta = 1;
+  optional string session_id = 2;
+  optional string role_profile_id = 3;
+  optional AgentRunStatus status = 4;
+  optional string provider_work_item_ref = 5;
+  PageRequest page = 6;
+}
+
+message AgentSessionResponse {
+  AgentSession session = 1;
+  optional AgentSessionStateSnapshot latest_state_snapshot = 2;
+}
+
+message AgentRunResponse {
+  AgentRun run = 1;
+}
+
+message AgentSessionStateSnapshotResponse {
+  AgentSessionStateSnapshot snapshot = 1;
+  AgentSession session = 2;
+}
+
+message AcceptanceResultResponse {
+  AcceptanceResult acceptance_result = 1;
+}
+
+message ListAcceptanceResultsResponse {
+  repeated AcceptanceResult acceptance_results = 1;
+  PageResponse page = 2;
+}
+
+message FollowUpIntentResponse {
+  FollowUpIntent follow_up_intent = 1;
+}
+
+message HumanGateRequestResponse {
+  HumanGateRequest human_gate_request = 1;
+}
+
+message ListAgentRunsResponse {
+  repeated AgentRun runs = 1;
+  PageResponse page = 2;
+}
