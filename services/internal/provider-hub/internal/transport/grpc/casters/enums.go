@@ -94,6 +94,7 @@ var operationTypes = map[providersv1.ProviderOperationType]enum.ProviderOperatio
 	providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_COMMENT:       enum.ProviderOperationCreateComment,
 	providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_COMMENT:       enum.ProviderOperationUpdateComment,
 	providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_PULL_REQUEST:  enum.ProviderOperationCreatePullRequest,
+	providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_PULL_REQUEST:  enum.ProviderOperationUpdatePullRequest,
 	providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_REVIEW_SIGNAL: enum.ProviderOperationCreateReviewSignal,
 	providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_RELATIONSHIP:  enum.ProviderOperationUpdateRelationship,
 }

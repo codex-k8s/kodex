@@ -49,6 +49,8 @@ service ProviderHubService {
   rpc UpdateComment(UpdateCommentRequest) returns (ProviderOperationResponse);
   // CreatePullRequest creates a provider-native PR/MR for a platform scenario.
   rpc CreatePullRequest(CreatePullRequestRequest) returns (ProviderOperationResponse);
+  // UpdatePullRequest updates allowed PR/MR fields through a managed external account.
+  rpc UpdatePullRequest(UpdatePullRequestRequest) returns (ProviderOperationResponse);
   // CreateReviewSignal creates a review comment, approval or changes-request signal.
   rpc CreateReviewSignal(CreateReviewSignalRequest) returns (ProviderOperationResponse);
   // UpdateRelationship stores or updates a provider-native relationship where supported.
@@ -316,6 +318,7 @@ enum ProviderOperationType {
   PROVIDER_OPERATION_TYPE_CREATE_PULL_REQUEST = 5;
   PROVIDER_OPERATION_TYPE_CREATE_REVIEW_SIGNAL = 6;
   PROVIDER_OPERATION_TYPE_UPDATE_RELATIONSHIP = 7;
+  PROVIDER_OPERATION_TYPE_UPDATE_PULL_REQUEST = 8;
 }
 
 // ProviderOperationStatus is the execution state of a provider operation.
@@ -1040,6 +1043,37 @@ message CreatePullRequestRequest {
   string external_account_id = 13;
   // repository_target identifies the provider repository where the PR/MR must be created.
   ProviderTarget repository_target = 14;
+}
+
+// UpdatePullRequestRequest updates provider-native PR/MR fields.
+message UpdatePullRequestRequest {
+  // target identifies the provider-native PR/MR.
+  ProviderTarget target = 1;
+  // title is optional replacement title.
+  optional string title = 2;
+  // body is optional replacement body.
+  optional string body = 3;
+  // labels replaces provider labels when the message is present; empty values clear labels.
+  StringListPatch labels = 4;
+  // assignee_provider_logins replaces provider assignees when the message is present;
+  // empty values clear assignees.
+  StringListPatch assignee_provider_logins = 5;
+  // milestone is optional provider milestone title or id.
+  optional string milestone = 6;
+  // state is optional provider-normalized lifecycle state.
+  optional string state = 7;
+  // base_branch is optional replacement target branch when supported.
+  optional string base_branch = 8;
+  // maintainer_can_modify controls provider maintainer edit flag when supported.
+  optional bool maintainer_can_modify = 9;
+  // watermark_json is optional platform watermark payload.
+  optional string watermark_json = 10;
+  // expected_provider_version is optional provider version or update marker.
+  optional string expected_provider_version = 11;
+  // meta carries idempotency, expected projection version and audit context.
+  CommandMeta meta = 12;
+  // external_account_id is the account selected by caller policy for the provider write.
+  string external_account_id = 13;
 }
 
 // CreateReviewSignalRequest creates a provider-native review signal.

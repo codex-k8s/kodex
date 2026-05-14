@@ -473,6 +473,15 @@ func (fakeService) CreatePullRequest(_ context.Context, input providerservice.Cr
 	}, nil
 }
 
+func (fakeService) UpdatePullRequest(_ context.Context, input providerservice.UpdatePullRequestInput) (providerservice.ProviderOperationResult, error) {
+	return providerservice.ProviderOperationResult{
+		Result: providerservice.ProviderOperationCommandResult{
+			ResultRef: "pull_request:update",
+			Target:    &input.Target,
+		},
+	}, nil
+}
+
 func (fakeService) CreateReviewSignal(_ context.Context, input providerservice.CreateReviewSignalInput) (providerservice.ProviderOperationResult, error) {
 	return providerservice.ProviderOperationResult{
 		Result: providerservice.ProviderOperationCommandResult{

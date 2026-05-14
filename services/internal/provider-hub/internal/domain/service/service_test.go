@@ -1363,6 +1363,57 @@ func TestCreateIssueConcurrentSameCommandExecutesOnce(t *testing.T) {
 	}
 }
 
+func TestUpdatePullRequestRecordsProviderOperation(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 12, 10, 9, 45, 0, time.UTC)
+	operationID := uuid.New()
+	outboxID := uuid.New()
+	externalAccountID := uuid.New()
+	commandID := uuid.New()
+	executor := &fakeWriteExecutor{result: providerclient.WriteResult{ResultRef: "https://github.com/codex-k8s/kodex/pull/77"}}
+	repository := &fakeRepository{}
+	service := NewWithDependencies(Dependencies{
+		Repository:             repository,
+		Clock:                  fixedClock{now: now},
+		IDGenerator:            &sequenceIDs{ids: []uuid.UUID{operationID, outboxID}},
+		AccountUsageResolver:   fakeAccountUsageResolver{},
+		SecretResolver:         &fakeSecretResolver{secret: secretresolver.NewSecretValue([]byte("write-token"))},
+		ProviderWriteExecutors: []providerclient.WriteExecutor{executor},
+	})
+	title := "Обновлённый PR"
+	baseBranch := "release"
+	_, err := service.UpdatePullRequest(context.Background(), UpdatePullRequestInput{
+		Target: ProviderTarget{
+			ProviderSlug:       enum.ProviderSlugGitHub,
+			RepositoryFullName: "codex-k8s/kodex",
+			WorkItemKind:       enum.WorkItemKindPullRequest,
+			Number:             77,
+		},
+		Title:             &title,
+		BaseBranch:        &baseBranch,
+		ExternalAccountID: externalAccountID,
+		Meta: value.CommandMeta{
+			CommandID: commandID,
+			OperationPolicyContext: value.ProviderOperationPolicyContext{
+				RiskLevel:     value.ProviderOperationRiskLevelMedium,
+				ChangedFields: []string{"title", "base_branch"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("UpdatePullRequest(): %v", err)
+	}
+	if executor.calls != 1 || executor.request.UpdatePullRequest == nil || executor.request.UpdatePullRequest.BaseBranch == nil {
+		t.Fatalf("executor request = %+v, want update pull request command", executor.request)
+	}
+	if repository.recordedProviderOperation.ID != operationID ||
+		repository.recordedProviderOperation.OperationType != enum.ProviderOperationUpdatePullRequest ||
+		repository.recordedProviderOperation.Status != enum.ProviderOperationStatusSucceeded {
+		t.Fatalf("operation = %+v, want succeeded update_pull_request operation %s", repository.recordedProviderOperation, operationID)
+	}
+}
+
 func TestUpdateIssueRequiresApprovalGateReferenceWhenPolicyDemandsIt(t *testing.T) {
 	t.Parallel()
 

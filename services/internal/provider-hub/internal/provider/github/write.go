@@ -57,6 +57,8 @@ func (a *Adapter) Execute(ctx context.Context, request providerclient.WriteReque
 		return a.executeUpdateComment(ctx, client, request.UpdateComment)
 	case request.CreatePullRequest != nil:
 		return a.executeCreatePullRequest(ctx, client, request.CreatePullRequest)
+	case request.UpdatePullRequest != nil:
+		return a.executeUpdatePullRequest(ctx, client, request.UpdatePullRequest)
 	case request.CreateReviewSignal != nil:
 		return a.executeCreateReviewSignal(ctx, client, request.CreateReviewSignal)
 	default:
@@ -95,14 +97,9 @@ func (a *Adapter) executeUpdateIssue(ctx context.Context, client *githubapi.Clie
 	if err != nil {
 		return providerclient.WriteResult{}, providerError(providerclient.ErrorKindUnsupported, 0, err)
 	}
-	bodyInput := command.Body
-	if bodyInput == nil && command.WatermarkJSON != nil {
-		current, _, getErr := client.Issues.Get(ctx, target.owner, target.repo, target.number)
-		if getErr != nil {
-			return providerclient.WriteResult{}, classifyGitHubError(getErr)
-		}
-		currentBody := current.GetBody()
-		bodyInput = &currentBody
+	bodyInput, err := a.bodyInputWithProviderBody(ctx, client, target, command.Body, command.WatermarkJSON, providerBodyIssue)
+	if err != nil {
+		return providerclient.WriteResult{}, err
 	}
 	body, err := optionalBodyWithWatermark(bodyInput, command.WatermarkJSON)
 	if err != nil {
@@ -204,6 +201,57 @@ func (a *Adapter) executeCreatePullRequest(ctx context.Context, client *githubap
 		return providerclient.WriteResult{}, classifyGitHubError(err)
 	}
 	snapshot := pullRequestAPISnapshot(owner+"/"+repo, pullRequest)
+	return providerclient.WriteResult{
+		ResultRef:        pullRequest.GetHTMLURL(),
+		ProviderObjectID: snapshot.ProviderWorkItemID,
+		ProviderVersion:  providerVersionFromResponse(response, pullRequest.GetUpdatedAt().Time),
+		WorkItem:         &snapshot,
+	}, nil
+}
+
+func (a *Adapter) executeUpdatePullRequest(ctx context.Context, client *githubapi.Client, command *providerclient.UpdatePullRequestCommand) (providerclient.WriteResult, error) {
+	target, err := a.workItemScopeFromTarget(ctx, client, command.Target)
+	if err != nil {
+		return providerclient.WriteResult{}, providerError(providerclient.ErrorKindUnsupported, 0, err)
+	}
+	if target.kind != "" && target.kind != enum.WorkItemKindPullRequest {
+		return providerclient.WriteResult{}, providerError(providerclient.ErrorKindUnsupported, 0, nil)
+	}
+	hasIssueOnlyFields := command.Labels != nil || command.AssigneeProviderLogins != nil || command.Milestone != nil
+	hasPullRequestOnlyFields := command.BaseBranch != nil || command.MaintainerCanModify != nil
+	if hasIssueOnlyFields && hasPullRequestOnlyFields {
+		return providerclient.WriteResult{}, providerError(providerclient.ErrorKindUnsupported, 0, nil)
+	}
+	if hasIssueOnlyFields {
+		return a.executeUpdateIssue(ctx, client, &providerclient.UpdateIssueCommand{
+			Target:                  command.Target,
+			Title:                   command.Title,
+			Body:                    command.Body,
+			Labels:                  command.Labels,
+			AssigneeProviderLogins:  command.AssigneeProviderLogins,
+			Milestone:               command.Milestone,
+			State:                   command.State,
+			WatermarkJSON:           command.WatermarkJSON,
+			ExpectedProviderVersion: command.ExpectedProviderVersion,
+		})
+	}
+	bodyInput, err := a.bodyInputWithProviderBody(ctx, client, target, command.Body, command.WatermarkJSON, providerBodyPullRequest)
+	if err != nil {
+		return providerclient.WriteResult{}, err
+	}
+	body, err := optionalBodyWithWatermark(bodyInput, command.WatermarkJSON)
+	if err != nil {
+		return providerclient.WriteResult{}, providerError(providerclient.ErrorKindPermanent, 0, err)
+	}
+	request, err := pullRequestForUpdate(command, body)
+	if err != nil {
+		return providerclient.WriteResult{}, providerError(providerclient.ErrorKindPermanent, 0, err)
+	}
+	pullRequest, response, err := a.editPullRequest(ctx, client, target, request, command.ExpectedProviderVersion)
+	if err != nil {
+		return providerclient.WriteResult{}, classifyGitHubError(err)
+	}
+	snapshot := pullRequestAPISnapshot(target.repository(), pullRequest)
 	return providerclient.WriteResult{
 		ResultRef:        pullRequest.GetHTMLURL(),
 		ProviderObjectID: snapshot.ProviderWorkItemID,
@@ -383,6 +431,33 @@ func issueRequestForUpdate(command *providerclient.UpdateIssueCommand, body *str
 	return request, nil
 }
 
+func pullRequestForUpdate(command *providerclient.UpdatePullRequestCommand, body *string) (*githubapi.PullRequest, error) {
+	request := &githubapi.PullRequest{}
+	if command.Title != nil {
+		request.Title = githubapi.Ptr(strings.TrimSpace(*command.Title))
+	}
+	if body != nil {
+		request.Body = githubapi.Ptr(*body)
+	}
+	if command.State != nil {
+		request.State = githubapi.Ptr(strings.TrimSpace(*command.State))
+	}
+	if command.BaseBranch != nil {
+		baseBranch := strings.TrimSpace(*command.BaseBranch)
+		if baseBranch == "" {
+			return nil, providerclient.ErrUnsupported
+		}
+		if command.State != nil && strings.EqualFold(strings.TrimSpace(*command.State), "closed") {
+			return nil, providerclient.ErrUnsupported
+		}
+		request.Base = &githubapi.PullRequestBranch{Ref: githubapi.Ptr(baseBranch)}
+	}
+	if command.MaintainerCanModify != nil {
+		request.MaintainerCanModify = command.MaintainerCanModify
+	}
+	return request, nil
+}
+
 func (a *Adapter) editIssue(ctx context.Context, client *githubapi.Client, target workItemScope, request *githubapi.IssueRequest, expectedVersion string) (*githubapi.Issue, *githubapi.Response, error) {
 	if strings.TrimSpace(expectedVersion) == "" {
 		return client.Issues.Edit(ctx, target.owner, target.repo, target.number, request)
@@ -399,6 +474,45 @@ func (a *Adapter) editIssue(ctx context.Context, client *githubapi.Client, targe
 		return nil, response, err
 	}
 	return issue, response, nil
+}
+
+func (a *Adapter) editPullRequest(ctx context.Context, client *githubapi.Client, target workItemScope, request *githubapi.PullRequest, expectedVersion string) (*githubapi.PullRequest, *githubapi.Response, error) {
+	if strings.TrimSpace(expectedVersion) == "" {
+		return client.PullRequests.Edit(ctx, target.owner, target.repo, target.number, request)
+	}
+	path := fmt.Sprintf("repos/%s/%s/pulls/%d", target.owner, target.repo, target.number)
+	httpRequest, err := client.NewRequest("PATCH", path, pullRequestUpdatePayload(request))
+	if err != nil {
+		return nil, nil, err
+	}
+	httpRequest.Header.Set("If-Match", strings.TrimSpace(expectedVersion))
+	pullRequest := new(githubapi.PullRequest)
+	response, err := client.Do(ctx, httpRequest, pullRequest)
+	if err != nil {
+		return nil, response, err
+	}
+	return pullRequest, response, nil
+}
+
+type pullRequestUpdatePayloadBody struct {
+	Title               *string `json:"title,omitempty"`
+	Body                *string `json:"body,omitempty"`
+	State               *string `json:"state,omitempty"`
+	Base                *string `json:"base,omitempty"`
+	MaintainerCanModify *bool   `json:"maintainer_can_modify,omitempty"`
+}
+
+func pullRequestUpdatePayload(request *githubapi.PullRequest) pullRequestUpdatePayloadBody {
+	payload := pullRequestUpdatePayloadBody{
+		Title:               request.Title,
+		Body:                request.Body,
+		State:               request.State,
+		MaintainerCanModify: request.MaintainerCanModify,
+	}
+	if request.Base != nil && request.GetState() != "closed" {
+		payload.Base = request.Base.Ref
+	}
+	return payload
 }
 
 func (a *Adapter) editComment(ctx context.Context, client *githubapi.Client, target workItemScope, commentID int64, body string, expectedVersion string) (*githubapi.IssueComment, *githubapi.Response, error) {
@@ -504,6 +618,44 @@ func replaceWatermarkBlock(body string, watermark string) (string, error) {
 	}
 }
 
+type providerBodySource string
+
+const (
+	providerBodyIssue       providerBodySource = "issue"
+	providerBodyPullRequest providerBodySource = "pull_request"
+)
+
+func (a *Adapter) bodyInputWithProviderBody(
+	ctx context.Context,
+	client *githubapi.Client,
+	target workItemScope,
+	bodyInput *string,
+	watermarkJSON *[]byte,
+	source providerBodySource,
+) (*string, error) {
+	if bodyInput != nil || watermarkJSON == nil {
+		return bodyInput, nil
+	}
+	var currentBody string
+	switch source {
+	case providerBodyIssue:
+		current, _, err := client.Issues.Get(ctx, target.owner, target.repo, target.number)
+		if err != nil {
+			return nil, classifyGitHubError(err)
+		}
+		currentBody = current.GetBody()
+	case providerBodyPullRequest:
+		current, _, err := client.PullRequests.Get(ctx, target.owner, target.repo, target.number)
+		if err != nil {
+			return nil, classifyGitHubError(err)
+		}
+		currentBody = current.GetBody()
+	default:
+		return nil, providerclient.ErrUnsupported
+	}
+	return &currentBody, nil
+}
+
 func optionalBodyWithWatermark(body *string, watermarkJSON *[]byte) (*string, error) {
 	if body == nil && watermarkJSON == nil {
 		return nil, nil
@@ -565,6 +717,9 @@ func countWriteCommands(request providerclient.WriteRequest) int {
 		count++
 	}
 	if request.CreatePullRequest != nil {
+		count++
+	}
+	if request.UpdatePullRequest != nil {
 		count++
 	}
 	if request.CreateReviewSignal != nil {

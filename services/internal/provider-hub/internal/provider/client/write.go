@@ -31,6 +31,7 @@ type WriteRequest struct {
 	CreateComment      *CreateCommentCommand
 	UpdateComment      *UpdateCommentCommand
 	CreatePullRequest  *CreatePullRequestCommand
+	UpdatePullRequest  *UpdatePullRequestCommand
 	CreateReviewSignal *CreateReviewSignalCommand
 	UpdateRelationship *UpdateRelationshipCommand
 }
@@ -90,6 +91,21 @@ type CreatePullRequestCommand struct {
 	Labels           []string
 	LinkedIssueRef   string
 	WatermarkJSON    []byte
+}
+
+// UpdatePullRequestCommand describes one provider-native pull request update.
+type UpdatePullRequestCommand struct {
+	Target                  Target
+	Title                   *string
+	Body                    *string
+	Labels                  *value.StringListPatch
+	AssigneeProviderLogins  *value.StringListPatch
+	Milestone               *string
+	State                   *string
+	BaseBranch              *string
+	MaintainerCanModify     *bool
+	WatermarkJSON           *[]byte
+	ExpectedProviderVersion string
 }
 
 // ReviewSignalKind classifies provider-native review actions.

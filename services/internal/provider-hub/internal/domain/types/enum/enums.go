@@ -150,6 +150,7 @@ const (
 	ProviderOperationCreateComment      ProviderOperationType = "create_comment"
 	ProviderOperationUpdateComment      ProviderOperationType = "update_comment"
 	ProviderOperationCreatePullRequest  ProviderOperationType = "create_pull_request"
+	ProviderOperationUpdatePullRequest  ProviderOperationType = "update_pull_request"
 	ProviderOperationCreateReviewSignal ProviderOperationType = "create_review_signal"
 	ProviderOperationUpdateRelationship ProviderOperationType = "update_relationship"
 )

@@ -174,6 +174,46 @@ func CreatePullRequestInput(request *providersv1.CreatePullRequestRequest) (prov
 	}, nil
 }
 
+// UpdatePullRequestInput maps a typed PR/MR update request to the domain model.
+func UpdatePullRequestInput(request *providersv1.UpdatePullRequestRequest) (providerservice.UpdatePullRequestInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return providerservice.UpdatePullRequestInput{}, err
+	}
+	target, err := ProviderTargetFromProto(request.GetTarget())
+	if err != nil {
+		return providerservice.UpdatePullRequestInput{}, err
+	}
+	externalAccountID, err := requiredUUID(request.GetExternalAccountId())
+	if err != nil {
+		return providerservice.UpdatePullRequestInput{}, err
+	}
+	labels, err := stringListPatchFromProto(request.GetLabels())
+	if err != nil {
+		return providerservice.UpdatePullRequestInput{}, err
+	}
+	assignees, err := stringListPatchFromProto(request.GetAssigneeProviderLogins())
+	if err != nil {
+		return providerservice.UpdatePullRequestInput{}, err
+	}
+	watermarkJSON := optionalJSONPointer(request.WatermarkJson)
+	return providerservice.UpdatePullRequestInput{
+		Target:                  target,
+		Title:                   optionalStringPtrValue(request.Title),
+		Body:                    optionalStringPtrValue(request.Body),
+		Labels:                  labels,
+		AssigneeProviderLogins:  assignees,
+		Milestone:               optionalStringPtrValue(request.Milestone),
+		State:                   optionalStringPtrValue(request.State),
+		BaseBranch:              optionalStringPtrValue(request.BaseBranch),
+		MaintainerCanModify:     request.MaintainerCanModify,
+		WatermarkJSON:           watermarkJSON,
+		ExpectedProviderVersion: strings.TrimSpace(request.GetExpectedProviderVersion()),
+		Meta:                    meta,
+		ExternalAccountID:       externalAccountID,
+	}, nil
+}
+
 // CreateReviewSignalInput maps a typed review signal request to the domain model.
 func CreateReviewSignalInput(request *providersv1.CreateReviewSignalRequest) (providerservice.CreateReviewSignalInput, error) {
 	meta, err := CommandMetaFromProto(request.GetMeta())

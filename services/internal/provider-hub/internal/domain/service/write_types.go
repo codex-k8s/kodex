@@ -88,6 +88,23 @@ type CreatePullRequestInput struct {
 	ExternalAccountID uuid.UUID
 }
 
+// UpdatePullRequestInput describes one typed PR/MR update command.
+type UpdatePullRequestInput struct {
+	Target                  ProviderTarget
+	Title                   *string
+	Body                    *string
+	Labels                  *value.StringListPatch
+	AssigneeProviderLogins  *value.StringListPatch
+	Milestone               *string
+	State                   *string
+	BaseBranch              *string
+	MaintainerCanModify     *bool
+	WatermarkJSON           *[]byte
+	ExpectedProviderVersion string
+	Meta                    value.CommandMeta
+	ExternalAccountID       uuid.UUID
+}
+
 // CreateReviewSignalInput describes one typed review-signal command.
 type CreateReviewSignalInput struct {
 	Target            ProviderTarget

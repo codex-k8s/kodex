@@ -332,6 +332,84 @@ func (s *Service) CreatePullRequest(ctx context.Context, input CreatePullRequest
 	return s.executeProviderWrite(ctx, plan)
 }
 
+// UpdatePullRequest records a typed provider PR/MR update command in the shared write pipeline.
+func (s *Service) UpdatePullRequest(ctx context.Context, input UpdatePullRequestInput) (ProviderOperationResult, error) {
+	target := input.Target
+	if target.WorkItemKind == "" {
+		target.WorkItemKind = enum.WorkItemKindPullRequest
+	}
+	if target.WorkItemKind != enum.WorkItemKindPullRequest {
+		return ProviderOperationResult{}, errs.ErrInvalidArgument
+	}
+	targetRef, err := providerTargetRef(target)
+	if err != nil {
+		return ProviderOperationResult{}, err
+	}
+	if !validCommandIdentity(input.Meta) || input.ExternalAccountID == uuid.Nil {
+		return ProviderOperationResult{}, errs.ErrInvalidArgument
+	}
+	labelsPatch, err := normalizeStringListPatch(input.Labels)
+	if err != nil {
+		return ProviderOperationResult{}, err
+	}
+	assigneesPatch, err := normalizeStringListPatch(input.AssigneeProviderLogins)
+	if err != nil {
+		return ProviderOperationResult{}, err
+	}
+	watermarkJSON, err := optionalCanonicalJSONObjectPtr(input.WatermarkJSON)
+	if err != nil {
+		return ProviderOperationResult{}, err
+	}
+	changedFields := requiredChangedFields(
+		optionalChangedField("title", input.Title != nil),
+		optionalChangedField("body", input.Body != nil),
+		optionalChangedField("labels", labelsPatch != nil),
+		optionalChangedField("assignee_provider_logins", assigneesPatch != nil),
+		optionalChangedField("milestone", input.Milestone != nil),
+		optionalChangedField("state", input.State != nil),
+		optionalChangedField("base_branch", input.BaseBranch != nil),
+		optionalChangedField("maintainer_can_modify", input.MaintainerCanModify != nil),
+		optionalChangedField("watermark_json", watermarkJSON != nil),
+	)
+	if len(changedFields) == 0 {
+		return ProviderOperationResult{}, errs.ErrInvalidArgument
+	}
+	plan, err := s.buildWritePlan(providerWritePlan{
+		operationType:     enum.ProviderOperationUpdatePullRequest,
+		actionKey:         accesscatalog.ActionProviderPullRequestWrite,
+		providerSlug:      target.ProviderSlug,
+		externalAccountID: input.ExternalAccountID,
+		targetRef:         targetRef,
+		scopeType:         providerUsageScopeRepository,
+		scopeID:           providerScopeIDFromTarget(target),
+		resultTarget:      targetCopy(target),
+		meta:              input.Meta,
+		executorRequest: providerclient.WriteRequest{
+			CommandID:    providerCommandKey(input.Meta),
+			TargetRef:    targetRef,
+			ProviderSlug: target.ProviderSlug,
+			UpdatePullRequest: &providerclient.UpdatePullRequestCommand{
+				Target:                  toClientTarget(target),
+				Title:                   optionalTextPtr(input.Title),
+				Body:                    optionalTextPtr(input.Body),
+				Labels:                  labelsPatch,
+				AssigneeProviderLogins:  assigneesPatch,
+				Milestone:               optionalTextPtr(input.Milestone),
+				State:                   optionalTextPtr(input.State),
+				BaseBranch:              optionalTextPtr(input.BaseBranch),
+				MaintainerCanModify:     input.MaintainerCanModify,
+				WatermarkJSON:           watermarkJSON,
+				ExpectedProviderVersion: strings.TrimSpace(input.ExpectedProviderVersion),
+			},
+		},
+		validateExpectedVersion: s.expectedWorkItemVersionCheck(target, input.Meta.ExpectedVersion),
+	}, changedFields)
+	if err != nil {
+		return ProviderOperationResult{}, err
+	}
+	return s.executeProviderWrite(ctx, plan)
+}
+
 // CreateReviewSignal records a typed provider review signal in the shared write pipeline.
 func (s *Service) CreateReviewSignal(ctx context.Context, input CreateReviewSignalInput) (ProviderOperationResult, error) {
 	targetRef, err := providerTargetRef(input.Target)
