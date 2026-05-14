@@ -5,14 +5,16 @@ title: kodex — поставка provider-hub
 status: active
 owner_role: EM
 created_at: 2026-05-06
-updated_at: 2026-05-13
-related_issues: [281, 282, 711, 719, 725, 729, 737]
+updated_at: 2026-05-14
+related_issues: [281, 282, 711, 719, 725, 729, 737, 754]
 related_prs: []
 related_docsets:
   - docs/domains/provider-native-work-items/product/requirements.md
   - docs/domains/provider-native-work-items/architecture/design.md
   - docs/domains/provider-native-work-items/architecture/data_model.md
   - docs/domains/provider-native-work-items/architecture/api_contract.md
+  - docs/domains/provider-native-work-items/ops/provider_hub_runbook.md
+  - docs/domains/provider-native-work-items/ops/provider_hub_monitoring.md
 approvals:
   required: ["Owner"]
   status: approved
@@ -36,6 +38,8 @@ approvals:
 | Модель данных | `docs/domains/provider-native-work-items/architecture/data_model.md` |
 | API-обзор | `docs/domains/provider-native-work-items/architecture/api_contract.md` |
 | Сквозная модель интеграции с провайдерами | `docs/platform/architecture/provider_integration_model.md` |
+| Runbook | `docs/domains/provider-native-work-items/ops/provider_hub_runbook.md` |
+| Наблюдаемость | `docs/domains/provider-native-work-items/ops/provider_hub_monitoring.md` |
 
 ## Срезы поставки
 
@@ -57,7 +61,7 @@ approvals:
 | PRV-8a | Provider-часть bootstrap для заранее существующего пустого репозитория: запись подготовленных файлов в bootstrap branch, создание или обновление bootstrap PR, provider relationships и локальные проекции без adoption scan. |
 | PRV-8b | Создание репозитория у провайдера и начальный base ref, если это требуется сценарию bootstrap. |
 | PRV-8c | Provider-часть adoption существующего репозитория; содержательное сканирование и отчёт остаются агентной работой через workspace. |
-| PRV-9 | Kubernetes-манифесты, БД, migration job, metrics, alerts, runbook и smoke-путь. |
+| PRV-9 | Kubernetes-манифесты, БД, migration job, smoke-путь, runbook и документы наблюдаемости готовы. |
 
 ## Таблица реализации
 
@@ -72,6 +76,7 @@ approvals:
 | Операционное состояние аккаунта и лимиты | Готово: состояние аккаунта у провайдера, снимки лимитов и журнал операций. | Реализовано в PRV-3: доменная логика, PostgreSQL-репозиторий, gRPC-чтение/запись снимков лимитов, базовый GitHub-адаптер для проверки лимитов. Фильтры по проекту и организации в списке операционных состояний остаются контрактным заделом до подключения разрешения внешних аккаунтов через `access-manager`. |
 | Первичная инициализация пустого репозитория | Готово: `CreateBootstrapPullRequest` принимает подготовленные файлы и refs, создаёт или обновляет bootstrap branch/PR для уже существующего пустого репозитория. | PRV-8a реализует provider-side запись через общий pipeline и GitHub-адаптер, обновляет проекцию `PR`, provider relationship к project/repository binding и событие `provider.repository.bootstrap_completed`. Создание самого репозитория у провайдера, начальный base ref и end-to-end вызов из проектного или агентного контура остаются PRV-8b+. |
 | Подключение существующего репозитория | Готово на уровне событий adoption required/adoption PR created и операций провайдера. | `PR` у провайдера, зеркало и связи оставлены до PRV-8; сканирование и отчёт выполняет агентная роль через workspace. |
+| Эксплуатационный контур | Готово: Dockerfile, Kubernetes-манифесты, bootstrap БД, migration job, smoke-путь, runbook и monitoring docs. | PRV-9 добавил `deploy/base/provider-hub/**`, подключение `kodex_provider_hub` к PostgreSQL bootstrap/runtime secrets, build/smoke scripts и эксплуатационные документы. Реальная проверка на кластере выполняется отдельным операторским запуском smoke-скрипта с нормализованным bootstrap env. |
 
 ## Текущее состояние реализации
 
@@ -127,10 +132,11 @@ approvals:
 - чтобы не оставлять частичное изменение без транзакционной гарантии, GitHub `UpdatePullRequest` отклоняет смешанные команды, где одновременно есть метаданные PR на issue-стороне (`labels`/`assignee_provider_logins`/`milestone`) и собственные поля PR (`base_branch`/`maintainer_can_modify`); вызывающий контур должен разбивать такие изменения на отдельные идемпотентные команды и связывать их общим `correlation_id`, если это один пользовательский сценарий.
 - `CreateBootstrapPullRequest` создаёт или обновляет bootstrap branch и bootstrap PR для заранее существующего пустого GitHub-репозитория: вызывающий контур передаёт уже подготовленные файлы, base branch, bootstrap branch, title/body и watermark, а `provider-hub` не генерирует `services.yaml` и не сканирует репозиторий. Команда требует существующий пустой base branch, запрещает совпадение base/bootstrap branch и не наследует старые файлы из ранее созданной bootstrap branch.
 - успешный bootstrap PR сразу создаёт локальную PR-проекцию с `project_id` и `repository_id`, provider relationship `project_repository_binding` и событие `provider.repository.bootstrap_completed`; `ProviderOperation` и outbox не содержат файловый payload, секрет или raw provider response.
+- эксплуатационный контур `provider-hub`: Dockerfile, `deploy/base/provider-hub/**`, создание БД `kodex_provider_hub` в PostgreSQL bootstrap, runtime Secret refs без значений секретов, migration job, Service/Deployment с HTTP/gRPC ports, readiness/liveness/metrics, requests/limits, build/smoke scripts и runbook/monitoring документы.
 
 Миграция `external_account_id` для очереди сверки явно очищает строки `provider_hub_sync_cursors` и `provider_hub_reconciliation_requests`, созданные предыдущим срезом без знания внешнего аккаунта. Эти строки являются эфемерным состоянием планировщика и пересоздаются повторной постановкой сверки; так тестовые кластеры с уже развёрнутым PRV-6.1 не упираются в `ADD COLUMN ... NOT NULL`.
 
-Ограничение текущей сверки: пакетная GitHub-сверка работает только на чтение и обрабатывает один provider target за завершение аренды курсора, после чего обработчик повторно входит через продвинутый курсор. GitHub write-адаптер подключён к общему исполнителю команд записи, но MCP-поверхность, интеграция с agent-manager, UI/gateway, GitLab write adapter, создание репозитория у провайдера, начальный base ref, adoption и эксплуатационный контур пока остаются отдельными срезами. Kubernetes-манифесты, создание БД в deploy-контуре, migration job, alerts и runbook остаются в PRV-9.
+Ограничение текущей сверки: пакетная GitHub-сверка работает только на чтение и обрабатывает один provider target за завершение аренды курсора, после чего обработчик повторно входит через продвинутый курсор. GitHub write-адаптер подключён к общему исполнителю команд записи, но MCP-поверхность, интеграция с agent-manager, UI/gateway, GitLab write adapter, создание репозитория у провайдера, начальный base ref и adoption остаются отдельными срезами. Эксплуатационный контур готов на уровне манифестов, smoke-пути и runbook; реальный запуск на кластере выполняется оператором через нормализованный bootstrap env.
 
 Архитектурное исключение среза: вспомогательные функции gRPC caster остаются локальными в `provider-hub`, потому что вынос общего transport-пакета требует согласованного изменения `access-manager`, `project-catalog` и текущего сервиса. Это не должно копироваться в новые сервисы; отдельный малый срез перед следующим доменом должен вынести общую часть в `libs/go/**` и перевести существующие сервисы.
 
@@ -143,7 +149,7 @@ approvals:
 | `package-hub` | Перед PRV-8 | Как пакеты ссылаются на provider-репозитории и PR в пакетных репозиториях. |
 | `integration-gateway` | Перед публичным приёмом webhook | Формат внутреннего вызова `IngestWebhookEvent` уже закреплён в `provider-hub`; `integration-gateway` отвечает за внешний HTTP, проверку подписи и передачу проверенного сигнала. |
 | `agent-manager` и `platform-mcp-server` | После PRV-7c | GitHub write-адаптер готов на внутренней gRPC-границе. MCP-0 фиксирует внешнюю MCP-поверхность: provider tools маршрутизируются в `provider-hub`, а источник решения политики по риску и передача `approval_gate_ref` остаются частью последующих интеграционных срезов. |
-| `operations-hub` | Перед PRV-6 и PRV-9 | Какие дополнительные поля проекций нужны операторским экранам, сверке и диагностике. |
+| `operations-hub` | Перед расширением операторских экранов | Какие дополнительные поля проекций нужны операторским экранам, сверке и диагностике. |
 
 ## Связь с задачами подключения репозиториев
 
