@@ -41,7 +41,8 @@ type Repository interface {
 	RecordLimitSnapshot(context.Context, entity.ProviderLimitSnapshot, entity.ProviderAccountRuntimeState) (entity.ProviderLimitSnapshot, error)
 	ListLimitSnapshots(context.Context, query.LimitSnapshotFilter) ([]entity.ProviderLimitSnapshot, query.PageResult, error)
 	ApplyProviderOperation(context.Context, ProviderOperationCompletion) (entity.ProviderOperation, error)
-	RecordProviderOperation(context.Context, entity.ProviderOperation) (entity.ProviderOperation, error)
+	GetProviderOperationByCommand(context.Context, enum.ProviderOperationType, string) (entity.ProviderOperation, error)
+	RecordProviderOperation(context.Context, entity.ProviderOperation) (entity.ProviderOperation, bool, error)
 	ListProviderOperations(context.Context, query.ProviderOperationFilter) ([]entity.ProviderOperation, query.PageResult, error)
 	ClaimOutboxEvents(context.Context, int, time.Time, time.Time) ([]entity.OutboxEvent, error)
 	MarkOutboxEventPublished(context.Context, uuid.UUID, int, time.Time) error
@@ -80,8 +81,10 @@ type ReconciliationBatchCompletion struct {
 
 // ProviderOperationCompletion stores one finalized provider operation and its outbox side effects.
 type ProviderOperationCompletion struct {
-	Operation    entity.ProviderOperation
-	OutboxEvents []entity.OutboxEvent
+	Operation        entity.ProviderOperation
+	ProjectionUpdate ProjectionUpdate
+	ProviderEvents   []entity.ProviderEvent
+	OutboxEvents     []entity.OutboxEvent
 }
 
 // WebhookNormalizer isolates provider-specific webhook payload parsing from the domain service.

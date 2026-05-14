@@ -72,7 +72,10 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 			AccountUsageResolver: accountUsage,
 			SecretResolver:       secretResolver,
 			ProviderAdapters:     []providerclient.Adapter{githubAdapter},
-			WebhookNormalizers:   []providerrepo.WebhookNormalizer{githubAdapter},
+			ProviderWriteExecutors: []providerclient.WriteExecutor{
+				githubAdapter,
+			},
+			WebhookNormalizers: []providerrepo.WebhookNormalizer{githubAdapter},
 		}),
 		OutboxStore: providerRepository,
 	}

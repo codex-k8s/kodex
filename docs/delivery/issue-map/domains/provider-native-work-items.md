@@ -5,7 +5,7 @@ title: kodex — карта Issue домена рабочих сущностей
 status: active
 owner_role: KM
 created_at: 2026-04-25
-updated_at: 2026-05-12
+updated_at: 2026-05-13
 ---
 
 # Карта Issue — рабочие сущности провайдера
@@ -30,6 +30,6 @@ updated_at: 2026-05-12
 | #711 | `libs/go/secretresolver/**`, `docs/platform/architecture/secret_resolution.md`, `docs/domains/provider-native-work-items/**`, `docs/domains/access-and-accounts/**`, `docs/domains/package-platform/**` | PRV-6.4 | done | Общий контракт безопасного разрешения секретов по ссылке после `ResolveExternalAccountUsage`; реализации хранилища `kubernetes_mounted_secret`, `env` и `vault`; значения не попадают в gRPC-ответы, БД, события, аудит, трассировку, логи или ошибки. |
 | #725 | `proto/kodex/providers/**`, `docs/domains/provider-native-work-items/architecture/api_contract.md`, `docs/domains/provider-native-work-items/architecture/design.md`, `docs/domains/provider-native-work-items/architecture/data_model.md`, `docs/domains/provider-native-work-items/delivery/provider_hub_delivery.md`, `docs/platform/architecture/provider_integration_model.md`, `docs/platform/architecture/service_boundaries.md` | PRV-7a | done | Контрактный каталог инструментов записи провайдера для `agent-manager`/MCP: типизированные инструменты, общий конвейер команд, контекст политики по риску, ссылка на approval/gate и безопасный результат без реализации операций записи. |
 | #731 | `services/internal/provider-hub/**`, `docs/delivery/coordination/**`, `docs/domains/provider-native-work-items/README.md`, `docs/domains/provider-native-work-items/architecture/design.md`, `docs/domains/provider-native-work-items/architecture/data_model.md`, `docs/domains/provider-native-work-items/architecture/api_contract.md`, `docs/domains/provider-native-work-items/delivery/provider_hub_delivery.md`, `docs/platform/architecture/provider_integration_model.md` | PRV-7b | done | Общий конвейер команд операций записи реализован без реальных GitHub/GitLab write-вызовов: типизированные gRPC handlers, casters, единый доменный конвейер, `ProviderOperation` со следом политики/gate, проверкой ожидаемой версии и outbox-событиями `provider.operation.completed/failed`. |
-| не назначено | `services/internal/provider-hub/**`, `docs/domains/provider-native-work-items/delivery/provider_hub_delivery.md` | PRV-7c | planned | GitHub-адаптер записи для операций из каталога с журналом операций, лимитами, проекциями и событиями. |
+| #737 | `services/internal/provider-hub/**`, `proto/kodex/providers/**`, `docs/domains/provider-native-work-items/**`, `docs/platform/architecture/provider_integration_model.md`, `docs/delivery/coordination/**` | PRV-7c | done | GitHub write-адаптер поверх общего pipeline: создание и обновление задач, комментариев, `PR`, review-сигналов и provider-native связей с журналом операций, безопасным secret resolver, идемпотентным replay, проекциями и событиями. |
 | #281, #282 | `docs/domains/provider-native-work-items/delivery/provider_hub_delivery.md` | PRV-8 | planned | Provider-часть empty repository bootstrap и existing repository adoption; сканирование и отчёт по существующему репозиторию выполняет агентная роль через workspace. |
 | не назначено | `services/internal/provider-hub/**`, deploy-манифесты, runbook/monitoring docs | PRV-9 | planned | Эксплуатационный контур `provider-hub`. |

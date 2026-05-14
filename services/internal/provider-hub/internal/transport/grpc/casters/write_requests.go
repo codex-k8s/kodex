@@ -28,10 +28,15 @@ func CreateIssueInput(request *providersv1.CreateIssueRequest) (providerservice.
 	if err != nil {
 		return providerservice.CreateIssueInput{}, err
 	}
+	repositoryTarget, err := ProviderTargetFromProto(request.GetRepositoryTarget())
+	if err != nil {
+		return providerservice.CreateIssueInput{}, err
+	}
 	return providerservice.CreateIssueInput{
 		ProjectID:              projectID,
 		RepositoryID:           repositoryID,
 		ProviderSlug:           providerSlug(request.GetProviderSlug()),
+		RepositoryTarget:       repositoryTarget,
 		Title:                  strings.TrimSpace(request.GetTitle()),
 		Body:                   strings.TrimSpace(request.GetBody()),
 		Labels:                 trimProtoStrings(request.GetLabels()),
@@ -147,10 +152,15 @@ func CreatePullRequestInput(request *providersv1.CreatePullRequestRequest) (prov
 	if err != nil {
 		return providerservice.CreatePullRequestInput{}, err
 	}
+	repositoryTarget, err := ProviderTargetFromProto(request.GetRepositoryTarget())
+	if err != nil {
+		return providerservice.CreatePullRequestInput{}, err
+	}
 	return providerservice.CreatePullRequestInput{
 		ProjectID:         projectID,
 		RepositoryID:      repositoryID,
 		ProviderSlug:      providerSlug(request.GetProviderSlug()),
+		RepositoryTarget:  repositoryTarget,
 		Title:             strings.TrimSpace(request.GetTitle()),
 		Body:              strings.TrimSpace(request.GetBody()),
 		HeadBranch:        strings.TrimSpace(request.GetHeadBranch()),
@@ -161,6 +171,46 @@ func CreatePullRequestInput(request *providersv1.CreatePullRequestRequest) (prov
 		WatermarkJSON:     []byte(strings.TrimSpace(request.GetWatermarkJson())),
 		Meta:              meta,
 		ExternalAccountID: externalAccountID,
+	}, nil
+}
+
+// UpdatePullRequestInput maps a typed PR/MR update request to the domain model.
+func UpdatePullRequestInput(request *providersv1.UpdatePullRequestRequest) (providerservice.UpdatePullRequestInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return providerservice.UpdatePullRequestInput{}, err
+	}
+	target, err := ProviderTargetFromProto(request.GetTarget())
+	if err != nil {
+		return providerservice.UpdatePullRequestInput{}, err
+	}
+	externalAccountID, err := requiredUUID(request.GetExternalAccountId())
+	if err != nil {
+		return providerservice.UpdatePullRequestInput{}, err
+	}
+	labels, err := stringListPatchFromProto(request.GetLabels())
+	if err != nil {
+		return providerservice.UpdatePullRequestInput{}, err
+	}
+	assignees, err := stringListPatchFromProto(request.GetAssigneeProviderLogins())
+	if err != nil {
+		return providerservice.UpdatePullRequestInput{}, err
+	}
+	watermarkJSON := optionalJSONPointer(request.WatermarkJson)
+	return providerservice.UpdatePullRequestInput{
+		Target:                  target,
+		Title:                   optionalStringPtrValue(request.Title),
+		Body:                    optionalStringPtrValue(request.Body),
+		Labels:                  labels,
+		AssigneeProviderLogins:  assignees,
+		Milestone:               optionalStringPtrValue(request.Milestone),
+		State:                   optionalStringPtrValue(request.State),
+		BaseBranch:              optionalStringPtrValue(request.BaseBranch),
+		MaintainerCanModify:     request.MaintainerCanModify,
+		WatermarkJSON:           watermarkJSON,
+		ExpectedProviderVersion: strings.TrimSpace(request.GetExpectedProviderVersion()),
+		Meta:                    meta,
+		ExternalAccountID:       externalAccountID,
 	}, nil
 }
 

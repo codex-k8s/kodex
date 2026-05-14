@@ -575,17 +575,22 @@ func TestRepositoryIntegrationRuntimeStateLimitsAndOperations(t *testing.T) {
 		StartedAt:         now,
 		FinishedAt:        &now,
 	}
-	if _, err := repository.RecordProviderOperation(ctx, operation); err != nil {
+	if _, inserted, err := repository.RecordProviderOperation(ctx, operation); err != nil {
 		t.Fatalf("record provider operation: %v", err)
+	} else if !inserted {
+		t.Fatalf("record provider operation inserted = false, want true")
 	}
 	replayedOperation := operation
 	replayedOperation.ID = uuid.New()
 	replayedOperation.StartedAt = now.Add(time.Minute)
 	replayedOperation.FinishedAt = &replayedOperation.StartedAt
 	replayedOperation.UpdatedAt = now.Add(time.Minute)
-	storedOperation, err := repository.RecordProviderOperation(ctx, replayedOperation)
+	storedOperation, inserted, err := repository.RecordProviderOperation(ctx, replayedOperation)
 	if err != nil {
 		t.Fatalf("record duplicate provider operation: %v", err)
+	}
+	if inserted {
+		t.Fatalf("record duplicate provider operation inserted = true, want false")
 	}
 	if storedOperation.ID != operation.ID || !storedOperation.StartedAt.Equal(operation.StartedAt) {
 		t.Fatalf("duplicate operation = %+v, want original id %s", storedOperation, operation.ID)
@@ -593,7 +598,7 @@ func TestRepositoryIntegrationRuntimeStateLimitsAndOperations(t *testing.T) {
 	changedOperation := operation
 	changedOperation.ID = uuid.New()
 	changedOperation.ExternalAccountID = uuid.New()
-	_, err = repository.RecordProviderOperation(ctx, changedOperation)
+	_, _, err = repository.RecordProviderOperation(ctx, changedOperation)
 	if !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("record changed duplicate provider operation err = %v, want %v", err, errs.ErrConflict)
 	}
@@ -608,6 +613,45 @@ func TestRepositoryIntegrationRuntimeStateLimitsAndOperations(t *testing.T) {
 	}
 	if len(operations) != 1 || operations[0].ID != operation.ID {
 		t.Fatalf("operations = %+v, want operation %s", operations, operation.ID)
+	}
+	startedOperation := operation
+	startedOperation.ID = uuid.New()
+	startedOperation.CommandID = uuid.NewString()
+	startedOperation.Status = enum.ProviderOperationStatusInProgress
+	startedOperation.ResultRef = ""
+	startedOperation.ProviderVersion = ""
+	startedOperation.FinishedAt = nil
+	startedOperation.OperationPolicyContext = value.ProviderOperationPolicyContext{
+		OperationType: string(enum.ProviderOperationCreateIssue),
+		TargetRef:     startedOperation.TargetRef,
+		RiskLevel:     value.ProviderOperationRiskLevelLow,
+		ChangedFields: []string{"title"},
+		RiskTags:      []string{},
+	}
+	if _, inserted, err := repository.RecordProviderOperation(ctx, startedOperation); err != nil {
+		t.Fatalf("record started provider operation: %v", err)
+	} else if !inserted {
+		t.Fatalf("record started provider operation inserted = false, want true")
+	}
+	completedOperation := startedOperation
+	completedOperation.Status = enum.ProviderOperationStatusSucceeded
+	completedOperation.ResultRef = "https://github.com/codex-k8s/kodex/issues/2"
+	completedOperation.ProviderVersion = `"etag-2"`
+	completedOperation.FinishedAt = &now
+	completedOperation.UpdatedAt = now.Add(time.Minute)
+	completed, err := repository.ApplyProviderOperation(ctx, providerrepo.ProviderOperationCompletion{Operation: completedOperation})
+	if err != nil {
+		t.Fatalf("complete provider operation: %v", err)
+	}
+	if completed.Status != enum.ProviderOperationStatusSucceeded || completed.ID != startedOperation.ID || completed.Version != startedOperation.Version+1 {
+		t.Fatalf("completed operation = %+v, want updated started operation", completed)
+	}
+	loadedCompleted, err := repository.GetProviderOperationByCommand(ctx, startedOperation.OperationType, startedOperation.CommandID)
+	if err != nil {
+		t.Fatalf("get completed operation by command: %v", err)
+	}
+	if loadedCompleted.Status != enum.ProviderOperationStatusSucceeded || loadedCompleted.OperationPolicyContext.RiskLevel != value.ProviderOperationRiskLevelLow {
+		t.Fatalf("loaded operation = %+v, want completed policy round-trip", loadedCompleted)
 	}
 
 	webhook := entity.WebhookEvent{

@@ -94,11 +94,13 @@ var operationTypes = map[providersv1.ProviderOperationType]enum.ProviderOperatio
 	providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_COMMENT:       enum.ProviderOperationCreateComment,
 	providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_COMMENT:       enum.ProviderOperationUpdateComment,
 	providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_PULL_REQUEST:  enum.ProviderOperationCreatePullRequest,
+	providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_PULL_REQUEST:  enum.ProviderOperationUpdatePullRequest,
 	providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_REVIEW_SIGNAL: enum.ProviderOperationCreateReviewSignal,
 	providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_RELATIONSHIP:  enum.ProviderOperationUpdateRelationship,
 }
 
 var operationStatuses = map[providersv1.ProviderOperationStatus]enum.ProviderOperationStatus{
+	providersv1.ProviderOperationStatus_PROVIDER_OPERATION_STATUS_IN_PROGRESS:      enum.ProviderOperationStatusInProgress,
 	providersv1.ProviderOperationStatus_PROVIDER_OPERATION_STATUS_SUCCEEDED:        enum.ProviderOperationStatusSucceeded,
 	providersv1.ProviderOperationStatus_PROVIDER_OPERATION_STATUS_FAILED:           enum.ProviderOperationStatusFailed,
 	providersv1.ProviderOperationStatus_PROVIDER_OPERATION_STATUS_RETRYABLE_FAILED: enum.ProviderOperationStatusRetryableFailed,

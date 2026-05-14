@@ -24,6 +24,7 @@ type CreateIssueInput struct {
 	ProjectID              uuid.UUID
 	RepositoryID           uuid.UUID
 	ProviderSlug           enum.ProviderSlug
+	RepositoryTarget       ProviderTarget
 	Title                  string
 	Body                   string
 	Labels                 []string
@@ -74,6 +75,7 @@ type CreatePullRequestInput struct {
 	ProjectID         uuid.UUID
 	RepositoryID      uuid.UUID
 	ProviderSlug      enum.ProviderSlug
+	RepositoryTarget  ProviderTarget
 	Title             string
 	Body              string
 	HeadBranch        string
@@ -84,6 +86,23 @@ type CreatePullRequestInput struct {
 	WatermarkJSON     []byte
 	Meta              value.CommandMeta
 	ExternalAccountID uuid.UUID
+}
+
+// UpdatePullRequestInput describes one typed PR/MR update command.
+type UpdatePullRequestInput struct {
+	Target                  ProviderTarget
+	Title                   *string
+	Body                    *string
+	Labels                  *value.StringListPatch
+	AssigneeProviderLogins  *value.StringListPatch
+	Milestone               *string
+	State                   *string
+	BaseBranch              *string
+	MaintainerCanModify     *bool
+	WatermarkJSON           *[]byte
+	ExpectedProviderVersion string
+	Meta                    value.CommandMeta
+	ExternalAccountID       uuid.UUID
 }
 
 // CreateReviewSignalInput describes one typed review-signal command.

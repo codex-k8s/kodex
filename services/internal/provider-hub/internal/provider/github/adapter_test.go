@@ -2,10 +2,13 @@ package github
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -262,6 +265,365 @@ func TestReconcilePullRequestCommentsReadsReviewPageBeforeAdvancingCursor(t *tes
 	}
 	if result.NextCursorValue != "2026-05-07T11:01:00Z" {
 		t.Fatalf("next cursor = %q, want review watermark", result.NextCursorValue)
+	}
+}
+
+func TestExecuteCreateIssueWritesGitHubIssue(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/repos/codex-k8s/kodex/issues" {
+			t.Fatalf("request = %s %s, want create issue", r.Method, r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer token-value" {
+			t.Fatalf("authorization header = %q", r.Header.Get("Authorization"))
+		}
+		body, _ := io.ReadAll(r.Body)
+		if !strings.Contains(string(body), `"title":"Новая задача"`) || !strings.Contains(string(body), githubWatermarkStart) {
+			t.Fatalf("body = %s, want title and watermark", body)
+		}
+		w.Header().Set("ETag", `"issue-etag"`)
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"id":100,"number":42,"html_url":"https://github.com/codex-k8s/kodex/issues/42","title":"Новая задача","state":"open","body":"Описание\n\n<!-- kodex:artifact v1\nkind: issue\nmanaged_by: kodex\nwork_type: dev\n-->","labels":[{"name":"type:dev"}],"updated_at":"2026-05-13T10:00:00Z"}`))
+	}))
+	defer server.Close()
+
+	token := secretresolver.NewSecretValue([]byte("token-value"))
+	defer token.Clear()
+	result, err := New(Config{BaseURL: server.URL, HTTPClient: server.Client()}).Execute(context.Background(), providerclient.WriteRequest{
+		Credential:   providerclient.AccountCredential{ExternalAccountID: uuid.New(), ProviderSlug: enum.ProviderSlugGitHub, Token: token},
+		ProviderSlug: enum.ProviderSlugGitHub,
+		CreateIssue: &providerclient.CreateIssueCommand{
+			RepositoryTarget: providerclient.Target{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
+			Title:            "Новая задача",
+			Body:             "Описание",
+			Labels:           []string{"type:dev"},
+			WatermarkJSON:    []byte(`{"kind":"issue","managed_by":"kodex","work_type":"dev"}`),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute(): %v", err)
+	}
+	if result.WorkItem == nil || result.WorkItem.ProviderWorkItemID != "github:codex-k8s/kodex:issue:42" {
+		t.Fatalf("work item = %+v, want created issue projection", result.WorkItem)
+	}
+	if result.ProviderVersion != `"issue-etag"` || result.ResultRef != "https://github.com/codex-k8s/kodex/issues/42" {
+		t.Fatalf("result = %+v, want safe provider result", result)
+	}
+}
+
+func TestExecuteUpdateIssueSendsIfMatch(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPatch || r.URL.Path != "/repos/codex-k8s/kodex/issues/42" {
+			t.Fatalf("request = %s %s, want update issue", r.Method, r.URL.Path)
+		}
+		if r.Header.Get("If-Match") != `"old-etag"` {
+			t.Fatalf("if-match = %q, want old etag", r.Header.Get("If-Match"))
+		}
+		var payload map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if payload["title"] != "Обновлённая задача" {
+			t.Fatalf("payload = %+v, want updated title", payload)
+		}
+		w.Header().Set("ETag", `"new-etag"`)
+		_, _ = w.Write([]byte(`{"id":100,"number":42,"html_url":"https://github.com/codex-k8s/kodex/issues/42","title":"Обновлённая задача","state":"open","body":"Описание","updated_at":"2026-05-13T10:01:00Z"}`))
+	}))
+	defer server.Close()
+
+	token := secretresolver.NewSecretValue([]byte("token-value"))
+	defer token.Clear()
+	title := "Обновлённая задача"
+	result, err := New(Config{BaseURL: server.URL, HTTPClient: server.Client()}).Execute(context.Background(), providerclient.WriteRequest{
+		Credential:   providerclient.AccountCredential{ExternalAccountID: uuid.New(), ProviderSlug: enum.ProviderSlugGitHub, Token: token},
+		ProviderSlug: enum.ProviderSlugGitHub,
+		UpdateIssue: &providerclient.UpdateIssueCommand{
+			Target:                  providerclient.Target{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex", WorkItemKind: enum.WorkItemKindIssue, Number: 42},
+			Title:                   &title,
+			ExpectedProviderVersion: `"old-etag"`,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute(): %v", err)
+	}
+	if result.ProviderVersion != `"new-etag"` || result.WorkItem == nil || result.WorkItem.Title != "Обновлённая задача" {
+		t.Fatalf("result = %+v, want updated projection and etag", result)
+	}
+}
+
+func TestExecuteCreatePullRequestDoesNotReuseExistingHeadBaseAfterValidationError(t *testing.T) {
+	t.Parallel()
+
+	listCalled := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/repos/codex-k8s/kodex/pulls":
+			http.Error(w, "pull request already exists", http.StatusUnprocessableEntity)
+		case r.Method == http.MethodGet && r.URL.Path == "/repos/codex-k8s/kodex/pulls":
+			listCalled = true
+			t.Fatalf("unexpected duplicate PR lookup for validation error")
+		default:
+			t.Fatalf("unexpected request = %s %s", r.Method, r.URL.String())
+		}
+	}))
+	defer server.Close()
+
+	token := secretresolver.NewSecretValue([]byte("token-value"))
+	defer token.Clear()
+	_, err := New(Config{BaseURL: server.URL, HTTPClient: server.Client()}).Execute(context.Background(), providerclient.WriteRequest{
+		Credential:   providerclient.AccountCredential{ExternalAccountID: uuid.New(), ProviderSlug: enum.ProviderSlugGitHub, Token: token},
+		ProviderSlug: enum.ProviderSlugGitHub,
+		CreatePullRequest: &providerclient.CreatePullRequestCommand{
+			RepositoryTarget: providerclient.Target{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
+			Title:            "Provider write",
+			Body:             "Описание",
+			HeadBranch:       "feature/provider-write",
+			BaseBranch:       "main",
+		},
+	})
+	if err == nil {
+		t.Fatal("Execute() err = nil, want validation failure")
+	}
+	if listCalled {
+		t.Fatal("duplicate PR lookup was called")
+	}
+}
+
+func TestExecuteCreatePullRequestRejectsUnsupportedLinkedIssueAndLabelsBeforeGitHubWrite(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected GitHub write = %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	token := secretresolver.NewSecretValue([]byte("token-value"))
+	defer token.Clear()
+	_, err := New(Config{BaseURL: server.URL, HTTPClient: server.Client()}).Execute(context.Background(), providerclient.WriteRequest{
+		Credential:   providerclient.AccountCredential{ExternalAccountID: uuid.New(), ProviderSlug: enum.ProviderSlugGitHub, Token: token},
+		ProviderSlug: enum.ProviderSlugGitHub,
+		CreatePullRequest: &providerclient.CreatePullRequestCommand{
+			RepositoryTarget: providerclient.Target{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
+			Title:            "Provider write",
+			Body:             "Описание",
+			HeadBranch:       "feature/provider-write",
+			BaseBranch:       "main",
+			LinkedIssueRef:   "https://github.com/codex-k8s/kodex/issues/737",
+			Labels:           []string{"type:dev"},
+		},
+	})
+	var providerErr *providerclient.Error
+	if !errors.As(err, &providerErr) || providerErr.Kind != providerclient.ErrorKindUnsupported {
+		t.Fatalf("Execute() err = %v, want unsupported provider error", err)
+	}
+}
+
+func TestExecuteUpdatePullRequestUsesPullEndpointForPullFields(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPatch || r.URL.Path != "/repos/codex-k8s/kodex/pulls/42" {
+			t.Fatalf("request = %s %s, want update pull request", r.Method, r.URL.Path)
+		}
+		if r.Header.Get("If-Match") != `"old-pr-etag"` {
+			t.Fatalf("if-match = %q, want old PR etag", r.Header.Get("If-Match"))
+		}
+		var payload map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if payload["title"] != "Обновлённый PR" || payload["base"] != "release" || payload["maintainer_can_modify"] != true {
+			t.Fatalf("payload = %+v, want PR fields", payload)
+		}
+		w.Header().Set("ETag", `"new-pr-etag"`)
+		_, _ = w.Write([]byte(`{"id":100,"number":42,"html_url":"https://github.com/codex-k8s/kodex/pull/42","title":"Обновлённый PR","state":"open","body":"Описание","base":{"ref":"release"},"updated_at":"2026-05-13T10:05:00Z"}`))
+	}))
+	defer server.Close()
+
+	token := secretresolver.NewSecretValue([]byte("token-value"))
+	defer token.Clear()
+	title := "Обновлённый PR"
+	base := "release"
+	maintainerCanModify := true
+	result, err := New(Config{BaseURL: server.URL, HTTPClient: server.Client()}).Execute(context.Background(), providerclient.WriteRequest{
+		Credential:   providerclient.AccountCredential{ExternalAccountID: uuid.New(), ProviderSlug: enum.ProviderSlugGitHub, Token: token},
+		ProviderSlug: enum.ProviderSlugGitHub,
+		UpdatePullRequest: &providerclient.UpdatePullRequestCommand{
+			Target:                  providerclient.Target{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex", WorkItemKind: enum.WorkItemKindPullRequest, Number: 42},
+			Title:                   &title,
+			BaseBranch:              &base,
+			MaintainerCanModify:     &maintainerCanModify,
+			ExpectedProviderVersion: `"old-pr-etag"`,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute(): %v", err)
+	}
+	if result.ProviderVersion != `"new-pr-etag"` || result.WorkItem == nil || result.WorkItem.Kind != string(enum.WorkItemKindPullRequest) || result.WorkItem.Title != "Обновлённый PR" {
+		t.Fatalf("result = %+v, want updated PR projection and etag", result)
+	}
+}
+
+func TestExecuteUpdatePullRequestUsesIssueEndpointForIssueBackedMetadata(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPatch || r.URL.Path != "/repos/codex-k8s/kodex/issues/42" {
+			t.Fatalf("request = %s %s, want issue-backed PR metadata update", r.Method, r.URL.Path)
+		}
+		var payload map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		labels, ok := payload["labels"].([]any)
+		if !ok || len(labels) != 1 || labels[0] != "type:dev" {
+			t.Fatalf("payload = %+v, want labels replacement", payload)
+		}
+		w.Header().Set("ETag", `"new-issue-etag"`)
+		_, _ = w.Write([]byte(`{"id":100,"number":42,"html_url":"https://github.com/codex-k8s/kodex/pull/42","title":"PR title","state":"open","body":"Описание","labels":[{"name":"type:dev"}],"pull_request":{},"updated_at":"2026-05-13T10:05:00Z"}`))
+	}))
+	defer server.Close()
+
+	token := secretresolver.NewSecretValue([]byte("token-value"))
+	defer token.Clear()
+	result, err := New(Config{BaseURL: server.URL, HTTPClient: server.Client()}).Execute(context.Background(), providerclient.WriteRequest{
+		Credential:   providerclient.AccountCredential{ExternalAccountID: uuid.New(), ProviderSlug: enum.ProviderSlugGitHub, Token: token},
+		ProviderSlug: enum.ProviderSlugGitHub,
+		UpdatePullRequest: &providerclient.UpdatePullRequestCommand{
+			Target: providerclient.Target{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex", WorkItemKind: enum.WorkItemKindPullRequest, Number: 42},
+			Labels: &value.StringListPatch{Values: []string{"type:dev"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute(): %v", err)
+	}
+	if result.WorkItem == nil || result.WorkItem.Kind != string(enum.WorkItemKindPullRequest) || len(result.WorkItem.Labels) != 1 || result.WorkItem.Labels[0] != "type:dev" {
+		t.Fatalf("result = %+v, want PR projection with labels", result.WorkItem)
+	}
+}
+
+func TestExecuteUpdatePullRequestRejectsMixedIssueBackedAndPullSpecificFieldsBeforeWrite(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected GitHub write = %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	token := secretresolver.NewSecretValue([]byte("token-value"))
+	defer token.Clear()
+	base := "release"
+	_, err := New(Config{BaseURL: server.URL, HTTPClient: server.Client()}).Execute(context.Background(), providerclient.WriteRequest{
+		Credential:   providerclient.AccountCredential{ExternalAccountID: uuid.New(), ProviderSlug: enum.ProviderSlugGitHub, Token: token},
+		ProviderSlug: enum.ProviderSlugGitHub,
+		UpdatePullRequest: &providerclient.UpdatePullRequestCommand{
+			Target:     providerclient.Target{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex", WorkItemKind: enum.WorkItemKindPullRequest, Number: 42},
+			Labels:     &value.StringListPatch{Values: []string{"type:dev"}},
+			BaseBranch: &base,
+		},
+	})
+	var providerErr *providerclient.Error
+	if !errors.As(err, &providerErr) || providerErr.Kind != providerclient.ErrorKindUnsupported {
+		t.Fatalf("Execute() err = %v, want unsupported provider error", err)
+	}
+}
+
+func TestExecuteCreateReviewSignalAllowsApprovalWithoutBody(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/repos/codex-k8s/kodex/pulls/42":
+			_, _ = w.Write([]byte(`{"id":4200,"number":42,"html_url":"https://github.com/codex-k8s/kodex/pull/42","title":"PR title","state":"open","body":"Описание","head":{"ref":"feature/provider-write"},"base":{"ref":"main"},"updated_at":"2026-05-13T10:00:00Z"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/repos/codex-k8s/kodex/issues/42":
+			_, _ = w.Write([]byte(`{"id":100,"number":42,"html_url":"https://github.com/codex-k8s/kodex/pull/42","title":"PR title","state":"open","body":"Описание","pull_request":{},"updated_at":"2026-05-13T10:00:00Z"}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/repos/codex-k8s/kodex/pulls/42/reviews":
+			var payload map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode request: %v", err)
+			}
+			if payload["event"] != githubReviewEventApprove {
+				t.Fatalf("payload = %+v, want approve event", payload)
+			}
+			if _, ok := payload["body"]; ok {
+				t.Fatalf("payload = %+v, body must be omitted for empty approval", payload)
+			}
+			w.Header().Set("ETag", `"review-etag"`)
+			_, _ = w.Write([]byte(`{"id":900,"html_url":"https://github.com/codex-k8s/kodex/pull/42#pullrequestreview-900","body":"","state":"APPROVED","updated_at":"2026-05-13T10:03:00Z"}`))
+		default:
+			t.Fatalf("unexpected request = %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	token := secretresolver.NewSecretValue([]byte("token-value"))
+	defer token.Clear()
+	result, err := New(Config{BaseURL: server.URL, HTTPClient: server.Client()}).Execute(context.Background(), providerclient.WriteRequest{
+		Credential:   providerclient.AccountCredential{ExternalAccountID: uuid.New(), ProviderSlug: enum.ProviderSlugGitHub, Token: token},
+		ProviderSlug: enum.ProviderSlugGitHub,
+		CreateReviewSignal: &providerclient.CreateReviewSignalCommand{
+			Target: providerclient.Target{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex", WorkItemKind: enum.WorkItemKindPullRequest, Number: 42},
+			Kind:   providerclient.ReviewSignalKindApproval,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute(): %v", err)
+	}
+	if result.Comment == nil || result.Comment.ProviderCommentID != "900" {
+		t.Fatalf("comment = %+v, want review projection", result.Comment)
+	}
+}
+
+func TestBodyWithWatermarkReplacesExistingBlock(t *testing.T) {
+	t.Parallel()
+
+	body := strings.Join([]string{
+		"Описание",
+		"",
+		"<!-- kodex:artifact v1",
+		"kind: old",
+		"-->",
+		"",
+		"Хвост",
+	}, "\n")
+	result, err := bodyWithWatermark(body, []byte(`{"kind":"new","managed_by":"kodex"}`))
+	if err != nil {
+		t.Fatalf("bodyWithWatermark(): %v", err)
+	}
+	if strings.Contains(result, "kind: old") || !strings.Contains(result, "kind: new") || !strings.Contains(result, "Хвост") {
+		t.Fatalf("result = %q, want replaced watermark and preserved body", result)
+	}
+}
+
+func TestExecuteWriteMapsGitHubRateLimitWithoutSecretLeak(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Retry-After", "30")
+		http.Error(w, "token-value must not leak", http.StatusTooManyRequests)
+	}))
+	defer server.Close()
+
+	token := secretresolver.NewSecretValue([]byte("token-value"))
+	defer token.Clear()
+	_, err := New(Config{BaseURL: server.URL, HTTPClient: server.Client()}).Execute(context.Background(), providerclient.WriteRequest{
+		Credential:   providerclient.AccountCredential{ExternalAccountID: uuid.New(), ProviderSlug: enum.ProviderSlugGitHub, Token: token},
+		ProviderSlug: enum.ProviderSlugGitHub,
+		CreateIssue: &providerclient.CreateIssueCommand{
+			RepositoryTarget: providerclient.Target{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
+			Title:            "Новая задача",
+			Body:             "Описание",
+		},
+	})
+	var providerErr *providerclient.Error
+	if !errors.As(err, &providerErr) || providerErr.Kind != providerclient.ErrorKindRateLimited {
+		t.Fatalf("Execute() err = %v, want rate-limited provider error", err)
+	}
+	if strings.Contains(err.Error(), "token-value") {
+		t.Fatalf("error leaks token: %v", err)
 	}
 }
 

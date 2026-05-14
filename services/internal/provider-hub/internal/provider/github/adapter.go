@@ -29,7 +29,10 @@ const (
 	defaultPageSize   = 50
 )
 
-var _ providerclient.Adapter = (*Adapter)(nil)
+var (
+	_ providerclient.Adapter       = (*Adapter)(nil)
+	_ providerclient.WriteExecutor = (*Adapter)(nil)
+)
 
 // Config contains GitHub adapter runtime settings.
 type Config struct {
