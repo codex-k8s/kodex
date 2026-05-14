@@ -63,7 +63,7 @@ approvals:
 
 | Группа | Владелец маршрута | MVP-смысл |
 |---|---|---|
-| Hooks | `agent-manager`, `runtime-manager`, `provider-hub`, `interaction-hub` | Принять `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `PreCompact`, `PostCompact`, `Stop` как безопасный envelope. |
+| Hooks | `agent-manager`, `runtime-manager`, `provider-hub`, `interaction-hub` | Принять `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `Stop` как безопасный envelope. Контрольные точки сжатия контекста проектируются отдельно как внутренние события `agent-manager`/`runtime-manager`. |
 | Agent tools | `agent-manager` | Run, session, gate, acceptance и follow-up операции только через `agent-manager`. |
 | Provider tools | `provider-hub` | Read/write операции провайдера через типизированный provider pipeline, без прямого GitHub/GitLab доступа из MCP. |
 | Project/runtime/fleet/package reads | `project-catalog`, `runtime-manager`, `fleet-manager`, `package-hub` | Авторитетные чтения проектной политики, runtime/fleet состояния и пакетных manifest/installations. |

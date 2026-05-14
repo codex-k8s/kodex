@@ -51,7 +51,7 @@ approvals:
 | ID | Требование | Приоритет |
 |---|---|---|
 | MCP-FR-1 | Сервис должен принимать нормализованные MCP tool calls и hook-события только с явным actor/source/run/session/slot контекстом. Hook-события приходят через отдельный входной контур после нормализации hook emitter или sidecar, а не как прямые MCP tool calls Codex. | Обязательно |
-| MCP-FR-2 | Сервис должен поддерживать MVP-группу hook-событий: `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `PreCompact`, `PostCompact`, `Stop`. | Обязательно |
+| MCP-FR-2 | Сервис должен поддерживать MVP-группу текущих Codex hook-событий: `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `Stop`. | Обязательно |
 | MCP-FR-3 | Операции `Run`, session, gates, flow, role и prompt должны маршрутизироваться только в `agent-manager`. | Обязательно |
 | MCP-FR-4 | Provider-инструменты должны использовать `provider-hub` write/read операции и не должны ходить напрямую в GitHub/GitLab. | Обязательно |
 | MCP-FR-5 | Чтения project/runtime/fleet/package должны идти только к сервисам-владельцам: `project-catalog`, `runtime-manager`, `fleet-manager`, `package-hub`. | Обязательно |
@@ -61,6 +61,8 @@ approvals:
 | MCP-FR-9 | Сервис должен отклонять вызовы без проверенного source binding или с несовместимым run/slot контекстом. | Обязательно |
 | MCP-FR-10 | Сервис должен публиковать или передавать аудит только для решений, отказов, risky operations и permission/gate сценариев. | Обязательно |
 | MCP-FR-11 | Сервис должен передавать route/actor/source/correlation context для учёта запросов к внешним провайдерам. Provider-вызовы через MCP tools или будущий CLI-proxy должны маршрутизироваться через `provider-hub`, чтобы лимиты и расход внешних API контролировались в одном контуре. | Обязательно |
+
+Контрольные точки сжатия контекста и session snapshot нужны платформе как будущие внутренние события `agent-manager`/`runtime-manager`, но не должны описываться как текущие Codex hooks.
 
 ## Нефункциональные требования
 
