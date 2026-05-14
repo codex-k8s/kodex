@@ -27,6 +27,11 @@
     "object_ref": "session-snapshots/run-001/turn-020.jsonl",
     "content_hash": "sha256:4b227777d4dd1fc61c6f884f48641d02"
   },
+  "event_meta": {
+    "recorded_at": "2026-05-14T09:05:00Z",
+    "producer": "agent-manager",
+    "reason": "context compaction checkpoint"
+  },
   "redaction_status": {
     "status": "redacted"
   },

@@ -39,5 +39,6 @@ approvals:
 
 - Codex hooks в каталоге — только реальные события Codex: `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `Stop`.
 - `internal_session_events` — платформенные синтетические события для будущего lifecycle/snapshot/compact контура. Они не являются Codex hooks.
+- Каталог разделяет три формы envelope: `mcp_call`, `hook_event` и `internal_event`; тестовые примеры должны соответствовать одной из этих форм.
 - Любой инструмент маршрутизируется к сервису-владельцу и не делает `platform-mcp-server` владельцем бизнес-состояния.
 - Каталог не заменяет будущие `proto`, `AsyncAPI` или Go-реализацию MCP transport.

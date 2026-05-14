@@ -1,5 +1,6 @@
 {
   "hook_event_name": "PostToolUse",
+  "hook_event_version": "1.0.0",
   "request_id": "44444444-4444-4444-8444-444444444444",
   "correlation_id": "corr-provider-001",
   "actor": {
@@ -38,6 +39,9 @@
     "status": "ok",
     "redaction": "redacted",
     "duration_ms": 1200
+  },
+  "redaction_status": {
+    "status": "redacted"
   },
   "retention_class": "short_operational"
 }

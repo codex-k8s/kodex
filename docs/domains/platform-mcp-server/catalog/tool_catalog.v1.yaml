@@ -16,25 +16,8 @@ principles:
   codex_hooks_are_not_mcp_tools: true
   compact_checkpoints_are_internal_events: true
 
-envelope:
-  required_fields:
-    - tool_name
-    - tool_version
-    - request_id
-    - correlation_id
-    - actor
-    - source
-    - scope
-    - policy_context
-    - retention_class
-  optional_fields:
-    - idempotency_key
-    - approval_gate_ref
-    - run_context
-    - sanitized_input_summary
-    - redaction_status
-    - payload
-  fields:
+envelopes:
+  shared_fields:
     tool_name:
       type: "string"
       description: "Stable external tool or event route name."
@@ -126,6 +109,66 @@ envelope:
     payload:
       type: "object"
       storage_policy: "not_persisted_by_platform_mcp_server"
+  mcp_call:
+    required_fields:
+      - tool_name
+      - tool_version
+      - request_id
+      - correlation_id
+      - actor
+      - source
+      - scope
+      - policy_context
+      - retention_class
+    optional_fields:
+      - idempotency_key
+      - approval_gate_ref
+      - run_context
+      - sanitized_input_summary
+      - redaction_status
+      - payload
+  hook_event:
+    required_fields:
+      - hook_event_name
+      - hook_event_version
+      - request_id
+      - correlation_id
+      - actor
+      - source
+      - scope
+      - run_context
+      - event_meta
+      - redaction_status
+      - retention_class
+    optional_fields:
+      - policy_context
+      - approval_gate_ref
+      - tool_context
+      - sanitized_payload
+    codex_official_events:
+      - SessionStart
+      - UserPromptSubmit
+      - PreToolUse
+      - PermissionRequest
+      - PostToolUse
+      - Stop
+  internal_event:
+    required_fields:
+      - event_name
+      - event_version
+      - request_id
+      - correlation_id
+      - actor
+      - source
+      - scope
+      - run_context
+      - event_meta
+      - redaction_status
+      - retention_class
+    optional_fields:
+      - policy_context
+      - snapshot_ref
+      - safe_summary
 
 safe_result_shape:
   required_fields:
@@ -194,7 +237,7 @@ versioning:
       - "Keep compatibility fixtures until removal."
       - "Expose deprecation warning in diagnostics.mcp_status.read."
   backward_compatibility_tests:
-    - "Validate all fixtures for the previous active catalog version."
+    - "Validate fixtures for every envelope type of the previous active catalog version."
     - "Validate missing optional fields keep default semantics."
     - "Validate deprecated tools still route or return a planned deprecation error."
     - "Validate redaction and retention classes do not become weaker."
@@ -290,6 +333,10 @@ groups:
         version: "1.0.0"
         idempotent: true
         retention_class: "owner_domain_state"
+      - name: "agent.run.record_state"
+        version: "1.0.0"
+        idempotent: true
+        retention_class: "owner_domain_state"
       - name: "agent.session.start"
         version: "1.0.0"
         idempotent: true
@@ -342,7 +389,19 @@ groups:
         idempotent: true
         requires_provider_account_ref: true
         retention_class: "audit_decision"
+      - name: "provider.pull_request.update"
+        version: "1.0.0"
+        operation_class: "write"
+        idempotent: true
+        requires_provider_account_ref: true
+        retention_class: "audit_decision"
       - name: "provider.comment.create"
+        version: "1.0.0"
+        operation_class: "write"
+        idempotent: true
+        requires_provider_account_ref: true
+        retention_class: "audit_decision"
+      - name: "provider.comment.update"
         version: "1.0.0"
         operation_class: "write"
         idempotent: true
@@ -362,10 +421,12 @@ groups:
         retention_class: "audit_decision"
       - name: "provider.bootstrap.request"
         version: "1.0.0"
+        lifecycle: "reserved"
         operation_class: "bootstrap"
         idempotent: true
         requires_provider_account_ref: true
         retention_class: "audit_decision"
+        activation_condition: "Requires approved bootstrap/adoption contract and provider-hub route."
       - name: "provider.artifact.signal"
         version: "1.0.0"
         operation_class: "signal"
@@ -404,6 +465,28 @@ groups:
         version: "1.0.0"
         route_owner: "package-hub"
         retention_class: "metrics_only"
+
+  interaction_tools:
+    kind: "mcp_tool"
+    transport: "mcp"
+    route_owner: "interaction-hub"
+    lifecycle: "reserved"
+    entries:
+      - name: "interaction.feedback.request"
+        version: "1.0.0"
+        idempotent: true
+        retention_class: "audit_decision"
+        activation_condition: "Requires interaction-hub contract."
+      - name: "interaction.approval.request"
+        version: "1.0.0"
+        idempotent: true
+        retention_class: "audit_decision"
+        activation_condition: "Requires interaction-hub contract."
+      - name: "interaction.delivery.status_read"
+        version: "1.0.0"
+        operation_class: "read"
+        retention_class: "metrics_only"
+        activation_condition: "Requires interaction-hub contract."
 
   diagnostics:
     kind: "mcp_tool"

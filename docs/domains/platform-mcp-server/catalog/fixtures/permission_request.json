@@ -1,5 +1,6 @@
 {
   "hook_event_name": "PermissionRequest",
+  "hook_event_version": "1.0.0",
   "request_id": "33333333-3333-4333-8333-333333333333",
   "correlation_id": "corr-permission-001",
   "actor": {
@@ -29,6 +30,11 @@
     "gate_id": "gate-001",
     "requested_by": "agent-manager",
     "required_decision": "owner_approval"
+  },
+  "event_meta": {
+    "received_at": "2026-05-14T09:00:00Z",
+    "source_version": "codex-hooks/v1",
+    "redaction": "redacted"
   },
   "sanitized_input_summary": {
     "tool": "provider.pull_request.create",
