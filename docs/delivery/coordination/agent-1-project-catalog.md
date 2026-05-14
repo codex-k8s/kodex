@@ -6,7 +6,8 @@
 
 - домен проектов и репозиториев, основной сервис `project-catalog`;
 - домен runtime и fleet в части `runtime-manager`;
-- домен runtime и fleet в части `fleet-manager`.
+- домен runtime и fleet в части `fleet-manager`;
+- сервисный пакет `platform-mcp-server` как MCP-поверхность без бизнес-состояния.
 
 `project-catalog` отвечает за:
 
@@ -33,6 +34,15 @@
 - bootstrap seed `platform-default` для одиночной установки;
 - будущий выбор `fleet_scope_id` и `cluster_id` для runtime;
 - события `fleet.*`.
+
+`platform-mcp-server` отвечает за:
+
+- MCP-поверхность инструментов платформы;
+- hook ingress для slot-агентов и локального sidecar;
+- проверку actor/source/run/session/slot binding;
+- минимальную policy/auth boundary;
+- маршрутизацию вызовов к сервисам-владельцам;
+- безопасные ответы и ограниченную диагностику без хранения чужой бизнес-истины.
 
 Агент #1 не владеет пользователями, организациями, членством, внешними аккаунтами, сырыми секретами, provider-native операциями записи, пакетным каталогом, магазином пакетов, UI и внешними gateway.
 
@@ -78,9 +88,15 @@
 | FLEET-4 | #726 | готово | Проверки связности Kubernetes API, health snapshots, чтения health, события `fleet.health.*`, command result и безопасное получение kubeconfig через `secretresolver`. |
 | FLEET-5 | #730 | готово | Правила размещения, базовый `ResolvePlacement`, журнал placement decisions, проверки доступа, идемпотентность и outbox-события `fleet.placement.*`. |
 | RTM-FLEET-1 | #735 | готово | `runtime-manager` вызывает `fleet-manager.ResolvePlacement` для `PrepareRuntime`, `ReserveSlot` и `CreateJob` без slot; fleet остаётся владельцем выбора кластера и журнала решений. |
-| FLEET-6 | #738 | в PR | Dockerfile, Kubernetes-манифесты, PostgreSQL bootstrap, migration job, `services.yaml`, smoke-путь, runbook и monitoring-документы `fleet-manager`. |
+| FLEET-6 | #738 | готово | Dockerfile, Kubernetes-манифесты, PostgreSQL bootstrap, migration job, `services.yaml`, smoke-путь, runbook и monitoring-документы `fleet-manager`. |
 
-Итог: `fleet-manager` уже имеет сервисный процесс, БД, registry-поверхность, health-поверхность, placement rules, базовый `ResolvePlacement` и журнал решений. RTM-FLEET-1 готов: `runtime-manager` вызывает fleet decision для новых runtime-операций. Текущий срез FLEET-6 добавляет эксплуатационный контур `fleet-manager`.
+Итог: `fleet-manager` имеет сервисный процесс, БД, registry-поверхность, health-поверхность, placement rules, базовый `ResolvePlacement`, журнал решений и эксплуатационный контур. RTM-FLEET-1 готов: `runtime-manager` вызывает fleet decision для новых runtime-операций.
+
+## Что зафиксировано по `platform-mcp-server`
+
+| Срез | Issue | Статус | Результат |
+|---|---:|---|---|
+| MCP-0 | #747 | готово | Документационный пакет сервисной границы `platform-mcp-server`: ответственность, MVP-группы инструментов, безопасность, связи с hooks #698 и delivery-план. Код, proto и AsyncAPI не входят. |
 
 ## Текущий бэклог агента #1
 
@@ -93,7 +109,8 @@
 | Организационные runtime-политики | частично заблокировано | Cleanup для `organization` scope отклоняется, а prewarm хранит политику без фактической раскладки, пока runtime не получает проекцию организации на слоты. |
 | Реальный исполнитель platform jobs | запланировано позже | `runtime-manager` хранит и выдаёт jobs; конкретный исполнитель на Kubernetes или агентный исполнитель нужен отдельным срезом после согласования с `agent-manager`/ops-контуром. |
 | Интеграция `runtime-manager` с fleet placement | готово: #735 | RTM-FLEET-1 перевёл `PrepareRuntime`, `ReserveSlot` и `CreateJob` без slot на `fleet-manager.ResolvePlacement`; runtime сохраняет только `fleet_scope_id` и `cluster_id`. |
-| Deploy-контур `fleet-manager` | текущий локальный срез: #738 | FLEET-6 добавляет Dockerfile, manifests, PostgreSQL bootstrap, migration job, smoke, runbook и monitoring без изменения registry/health/placement бизнес-логики. |
+| Deploy-контур `fleet-manager` | готово: #738 | FLEET-6 добавил Dockerfile, manifests, PostgreSQL bootstrap, migration job, smoke, runbook и monitoring без изменения registry/health/placement бизнес-логики. |
+| `platform-mcp-server` | готово: #747 | MCP-0 фиксирует границы, группы инструментов, безопасность и план поставки до кода и контрактов. |
 
 ## Блокировки от `access-manager`
 
@@ -159,12 +176,14 @@
 - `package-hub` зависит от `project-catalog`, когда пакетные источники и руководящие пакеты становятся частью проектной политики.
 - `agent-manager` зависит от `runtime-manager` для слотов, материализация workspace и platform jobs, но `Run` остаётся сущностью `agent-manager`.
 - `runtime-manager` зависит от `fleet-manager` для целевого `ResolvePlacement`; RTM-FLEET-1 убрал локальный выбор кластера из `PrepareRuntime`, `ReserveSlot` и `CreateJob` без slot.
+- `agent-manager` зависит от `platform-mcp-server` для будущих MCP-инструментов run/session/gate и hook ingress; MCP не владеет flow/role/prompt и не конфликтует с AGO-3.
+- `provider-hub` зависит от `platform-mcp-server` только как от внешней инструментальной поверхности; provider write pipeline остаётся у `provider-hub`, а bootstrap/adoption PRV-8a не переносится в MCP.
 - `operations-hub` и будущий `staff-gateway` зависят от чтений `project-catalog` и `runtime-manager` для операторских экранов.
 
 ## Рекомендуемый следующий шаг
 
-Для агента #1 нет незавершённого локального Wave 8 среза, который нужно закрыть до соседних доменов. После FLEET-6 рационально идти в один из трёх вариантов:
+Для агента #1 нет незавершённого локального Wave 8, RTM или FLEET среза, который нужно закрыть до соседних доменов. После MCP-0 рационально идти в один из трёх вариантов:
 
+- выполнить MCP-1: машинный каталог инструментов и envelope `platform-mcp-server`;
 - дождаться `provider-hub` bootstrap/adoption контракта и закрывать #281/#282;
-- начать gateway/UI-срез только после согласования состава `staff-gateway` ручек.
 - перейти к runtime/fleet интеграции с реальным исполнителем platform jobs после согласования `agent-manager` и ops-контуров.

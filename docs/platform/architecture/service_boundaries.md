@@ -5,8 +5,8 @@ title: kodex — границы сервисов
 status: active
 owner_role: SA
 created_at: 2026-04-26
-updated_at: 2026-05-12
-related_issues: [599, 600, 601, 602, 655, 711, 725]
+updated_at: 2026-05-14
+related_issues: [599, 600, 601, 602, 655, 711, 725, 747]
 related_prs: []
 related_adrs: []
 approvals:
@@ -102,6 +102,10 @@ Gateway-сервисы, `web-console` и `platform-mcp-server` не должны
 Отвечает за MCP-поверхность инструментов, проверки политик, аудит MCP-вызовов и маршрутизацию к сервисам-владельцам. Не хранит каноническое состояние агентного запуска, задания, проекта, пакета или артефакта провайдера.
 
 Provider-инструменты в MCP должны оставаться типизированными на внешней поверхности. Для операций записи MCP передаёт в `provider-hub` типизированную команду, выбранный `external_account_id`, безопасный `operation_policy_context` и `approval_gate_ref`, если политика по риску требует gate. MCP и `agent-manager` могут вычислять или получать решение политики, но `provider-hub` владеет только исполнением provider-команды, GitHub/GitLab-адаптером записи и журналом операции.
+
+MVP `platform-mcp-server` также является входной границей для hook-событий slot-агента: `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse` и `Stop`. Эти события приходят через отдельный входной контур после нормализации hook emitter или локальным sidecar, а не как прямые MCP tool calls. Сервис принимает только нормализованный и очищенный envelope, проверяет actor/source/run/session/slot binding и маршрутизирует событие владельцу. Сырые tool payload, значения секретов, большие stdout/stderr, kubeconfig, provider payload и полные session dumps не хранятся и не передаются дальше. Контрольные точки сжатия контекста не считаются текущими Codex hooks и проектируются отдельно как внутренние события `agent-manager`/`runtime-manager`.
+
+Подробный пакет границы: `docs/domains/platform-mcp-server/**`.
 
 ## Исполнительные компоненты
 

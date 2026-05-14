@@ -3,15 +3,15 @@
 ## TL;DR
 
 - Общий контур: параллельная разработка разделена на три доменных потока; каждый агент обновляет свою строку статуса ниже, чтобы не создавать конфликты в общем абзаце.
-- Агент #1: `project-catalog` Wave 8, `runtime-manager` RTM-0..RTM-7, `fleet-manager` FLEET-0..FLEET-5 и RTM-FLEET-1 готовы; текущий срез FLEET-6 добавляет deploy-контур `fleet-manager`. Для #281/#282 выбран вариант C bootstrap/adoption репозитория: `services.yaml` остаётся Git-декларацией, workspace собирается платформой, шаблоны репозиториев приходят через `package-hub`, Git submodule используется только явно. Для runtime/fleet текущий MVP не блокируется соседними доменами, но организационные runtime-политики, workspace с руководящими пакетами и сценарии исполнения runtime-нагрузок требуют новых междоменных контрактов.
-- Агент #2: для `provider-hub` сняты базовые блокировки по provider-действиям, `ResolveExternalAccountUsage`, ускоряющим сигналам, общему resolver-контракту секретов и пакетной GitHub-сверке в режиме только чтения; общий конвейер операций записи уже реализован, GitHub write-адаптер подключён, а GitLab write adapter, MCP/server surface и agent-manager integration остаются отдельными срезами.
+- Агент #1: `project-catalog` Wave 8, `runtime-manager` RTM-0..RTM-7, `fleet-manager` FLEET-0..FLEET-6, RTM-FLEET-1 и MCP-0 готовы. Для #281/#282 выбран вариант C bootstrap/adoption репозитория: `services.yaml` остаётся Git-декларацией, workspace собирается платформой, шаблоны репозиториев приходят через `package-hub`, Git submodule используется только явно. MCP-0 фиксирует границы `platform-mcp-server` как MCP-поверхности без бизнес-состояния. Для runtime/fleet текущий MVP не блокируется соседними доменами, но организационные runtime-политики, workspace с руководящими пакетами и сценарии исполнения runtime-нагрузок требуют новых междоменных контрактов.
+- Агент #2: для `provider-hub` сняты базовые блокировки по provider-действиям, `ResolveExternalAccountUsage`, ускоряющим сигналам, общему resolver-контракту секретов и пакетной GitHub-сверке в режиме только чтения; общий конвейер операций записи уже реализован, GitHub write-адаптер подключён, а GitLab write adapter, MCP-поверхность и интеграция с agent-manager остаются отдельными срезами.
 - Агент #3: `package-hub` доведён до специализации видов пакетов, сценария чтения руководящих пакетов, локальных сценариев `store`/`platform_content`, эксплуатационного контура и сверки заполненности секретов установки через безопасные ссылки `access-manager` без чтения значений; временно выполняет AGO-0..AGO-2, чтобы подготовить будущий `agent-manager` к использованию руководящих пакетов и соседних runtime/provider/interaction контрактов.
 
 ## Раскладка ответственности
 
 | Агент | Домен | Основной сервис | За что отвечает | Файл бэклога |
 |---|---|---|---|---|
-| #1 | Проекты, репозитории, runtime и fleet | `project-catalog`, `runtime-manager`, `fleet-manager` | Проекты, репозитории, проверенная версия `services.yaml`, источники документации, правила веток, релизные политики, слоты, материализация workspace, platform jobs, cleanup, prewarm, reuse, серверы, Kubernetes-кластеры, health и placement scope. | `agent-1-project-catalog.md` |
+| #1 | Проекты, репозитории, runtime, fleet и platform MCP | `project-catalog`, `runtime-manager`, `fleet-manager`, `platform-mcp-server` | Проекты, репозитории, проверенная версия `services.yaml`, источники документации, правила веток, релизные политики, слоты, материализация workspace, platform jobs, cleanup, prewarm, reuse, серверы, Kubernetes-кластеры, health, placement scope и MCP-поверхность без бизнес-состояния. | `agent-1-project-catalog.md` |
 | #2 | Provider-native интеграции | `provider-hub` | Внешние Git-провайдеры, репозитории, Issue/PR/MR, комментарии, review-сигналы, webhook, локальные проекции, связи, сверка внешнего состояния, лимиты и операции провайдера на границе ссылок на секреты. | `agent-2-provider-hub.md` |
 | #3 | Пакетная платформа | `package-hub` | Источники пакетов, доступный каталог, версии, manifest, установки, схемы секретов, верификация пакетов и события `package.*`. | `agent-3-package-hub.md` |
 
@@ -20,6 +20,7 @@
 | Агент | Срез | Почему выполняет |
 |---|---|---|
 | #3 | AGO-0..AGO-2, доменная документация, контракты и сервисный каркас `agent-manager` | `agent-manager` зависит от уже готовой пакетной модели руководящих пакетов; агент #3 фиксирует стартовые границы, transport-контракты и process skeleton без БД, миграций, deploy и бизнес-операций. |
+| #1 | MCP-0, границы `platform-mcp-server` | `agent-manager` перед AGO-4 и slot-агенты нуждаются в безопасной MCP-поверхности; агент #1 фиксирует только сервисную границу, группы инструментов и delivery-план без кода и без вмешательства в AGO-3. |
 
 ## Общие блокировки
 
@@ -39,9 +40,10 @@
 | `package-hub` | `runtime-manager` | Workspace с руководящими пакетами и запуск runtime-нагрузок пакетов или плагинов. | Нужны контракт чтения установленных руководящих пакетов и контракт передачи требований пакета в workspace/runtime-нагрузку. |
 | `package-hub` | `fleet-manager` | Runtime-требования пакетов и плагинов могут влиять на placement. | Fleet не запускает runtime-нагрузки; FLEET-5 поддерживает обобщённый вход `runtime_requirements`, а точный междоменный контракт его заполнения остаётся отдельным согласованием. |
 | `runtime-manager` и `fleet-manager` | `package-hub` | Запуск runtime-нагрузок пакетов и размещение в Kubernetes. | `package-hub` фиксирует установку и требования, runtime/fleet выполняют техническую работу. |
-| `fleet-manager` | `runtime-manager` | Целевой `ResolvePlacement`; реестр нескольких scope/серверов/кластеров реализован в FLEET-3, cluster health реализован в FLEET-4, placement resolver реализован в FLEET-5, а RTM-FLEET-1 перевёл `runtime-manager` на fleet decision. | FLEET-6 добавляет deploy-контур `fleet-manager`; после него runtime/fleet ready-path не должен зависеть от локального default fallback. |
+| `fleet-manager` | `runtime-manager` | Целевой `ResolvePlacement`; реестр нескольких scope/серверов/кластеров реализован в FLEET-3, cluster health реализован в FLEET-4, placement resolver реализован в FLEET-5, а RTM-FLEET-1 перевёл `runtime-manager` на fleet decision. | FLEET-6 добавил deploy-контур `fleet-manager`; runtime/fleet ready-path не зависит от локального default fallback. |
 | `runtime-manager` | `provider-hub` | Не блокирует текущие проекции, webhook, очередь сверки и ускоряющие сигналы; может понадобиться, если пакетная сверка будет запускаться как platform job. | До выбора модели исполнения сверки не завязывать `provider-hub` на runtime job; deploy-паттерн можно переиспользовать позже. |
-| `agent-manager` и `platform-mcp-server` | `provider-hub` | Ускоряющие сигналы уже имеют локальный gRPC-контракт; provider-операции записи получили типизированный внешний контракт, проходят общий конвейер команд и имеют GitHub write-адаптер. | Сигналы передают выбранный `external_account_id` и не требуют секрета; MCP/server surface и agent-manager integration делать отдельными срезами без смешивания с bootstrap/adoption. |
+| `agent-manager` и `platform-mcp-server` | `provider-hub` | Ускоряющие сигналы уже имеют локальный gRPC-контракт; provider-операции записи получили типизированный внешний контракт, проходят общий конвейер команд и имеют GitHub write-адаптер. | Сигналы передают выбранный `external_account_id` и не требуют секрета; MCP-0 фиксирует только внешнюю MCP-поверхность и не смешивается с PRV-8a bootstrap/adoption. |
+| `platform-mcp-server` | `agent-manager` | MCP-поверхность нужна до AGO-4 для run/session/gate инструментов и hooks. | MCP-0 не реализует `agent-manager` БД и не конфликтует с AGO-3; все Run/Session/Flow/Role/Prompt операции остаются за `agent-manager`. |
 
 ## Синхронизационные правила
 

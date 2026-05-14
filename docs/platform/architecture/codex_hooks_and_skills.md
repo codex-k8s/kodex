@@ -8,6 +8,7 @@ created_at: 2026-05-14
 updated_at: 2026-05-14
 related_issues:
   - 698
+  - 747
 related_prs: []
 approvals:
   required:
@@ -22,7 +23,7 @@ approvals:
 
 ## TL;DR
 
-Платформа должна заложить `Codex hooks` до MVP как управляемый канал связи slot-агента с платформой: жизненный цикл, запросы разрешений, сигналы о работе с провайдером, контрольные точки перед и после сжатия контекста, финальная контрольная точка хода и realtime-лента действий агента для UI. Ловим все поддерживаемые hook-события, но сохраняем в БД только доменное состояние и короткие безопасные события с retention.
+Платформа должна заложить `Codex hooks` до MVP как управляемый канал связи slot-агента с платформой: жизненный цикл, запросы разрешений, сигналы о работе с провайдером, финальная контрольная точка хода и realtime-лента действий агента для UI. Ловим все поддерживаемые hook-события, но сохраняем в БД только доменное состояние и короткие безопасные события с retention.
 
 Выбранный путь: до MVP реализовать вариант 1 — минимальный слой hooks через `platform-mcp-server` и `agent-manager`, но со сбором всех hook-событий для realtime UI. `Codex skills` не входят в MVP как полноценная платформа управления. После MVP целевая модель skills — отдельный слой управляемых возможностей, а не расширение package-hub.
 
@@ -70,7 +71,7 @@ Hooks не должны становиться источником истины
 
 1. Среда исполнения Codex вызывает hook-обработчик внутри рабочего пространства slot.
 2. Hook emitter нормализует событие: `run_id`, `session_id`, `slot_id`, `turn_id`, `hook_event_name`, категория инструмента, короткая безопасная сводка, correlation id.
-3. Hook emitter отправляет событие в `platform-mcp-server` или локальный агентный sidecar, если прямой MCP-вызов недоступен.
+3. Hook emitter отправляет событие в `platform-mcp-server` или локальный агентный sidecar. Codex hooks являются command-обработчиками Codex, а не прямыми MCP tool calls, поэтому sidecar или emitter приводит вход Codex hook к платформенному hook envelope. В обоих случаях целевая граница остаётся за `platform-mcp-server`: sidecar только буферизует и нормализует событие, но не принимает доменные решения.
 4. `platform-mcp-server` проверяет источник, отбрасывает запрещённые поля и маршрутизирует событие в сервис-владелец.
 5. Сервис-владелец фиксирует только доменное состояние, которое ему принадлежит.
 
@@ -85,15 +86,15 @@ Hooks не должны становиться источником истины
 | `PreToolUse` | Предварительная проверка инструмента: shell, `apply_patch`, MCP tool; realtime-показ “агент хочет вызвать tool”. | `platform-mcp-server`, `agent-manager`, при необходимости `runtime-manager` | Управление, диагностика, realtime UI | В БД: только deny/ask/risk decision и безопасная сводка. Массовые allow-события держать в короткой операционной ленте и метриках. |
 | `PermissionRequest` | Запрос разрешения Codex на действие с повышенным риском. | `agent-manager`, `interaction-hub`, `platform-mcp-server` | Управление, аудит | В БД: request id, decision id, субъект, действие, риск, gate ref, sanitized reason, решение и время. |
 | `PostToolUse` | Результат инструмента после выполнения; realtime-показ “tool отработал”, provider signals и диагностика. | `provider-hub`, `runtime-manager`, `agent-manager` | Диагностика, аудит для рискованных действий, realtime UI | В БД: только важные итоги, exit status, bounded error, provider artifact signal. Полный stdout/stderr не хранить. |
-| `PreCompact` | Контрольная точка перед сжатием контекста. | `agent-manager`, `runtime-manager` | Управление, диагностика | В БД: метаданные snapshot, trigger `manual/auto`, object ref, hash. Полное состояние сессии — в объектное хранилище. |
-| `PostCompact` | Контрольная точка после сжатия контекста. | `agent-manager`, `runtime-manager` | Управление, диагностика | В БД: новые метаданные snapshot, краткая сводка сжатия, token metrics. Полную стенограмму сессии не хранить. |
 | `Stop` | Завершение хода агента; возможность зафиксировать итог и pending actions. | `agent-manager`, `runtime-manager`, `provider-hub`, `interaction-hub` | Управление, аудит | В БД: контрольная точка run, итоговый status, pending gates, provider signals, короткая сводка. |
+
+Контрольные точки сжатия контекста и session snapshot нужны платформе, но не входят в текущий набор Codex hooks. Их следует проектировать как отдельные внутренние события `agent-manager`/`runtime-manager` или как результат управляемой команды сессии, а не как `PreCompact`/`PostCompact` hook events.
 
 ### Маршрутизация по доменам
 
 | Получатель | Что получает | Что не получает |
 |---|---|---|
-| `agent-manager` | Жизненный цикл run/session, policy gate refs, request/decision, контрольные точки сжатия контекста, stop summary. | Сырые tool outputs, секреты, полные стенограммы сессий. |
+| `agent-manager` | Жизненный цикл run/session, policy gate refs, request/decision, внутренние контрольные точки сессии, stop summary. | Сырые tool outputs, секреты, полные стенограммы сессий. |
 | `runtime-manager` | Slot/session binding, диагностика рабочего пространства, snapshot object refs, короткий хвост ошибок среды исполнения. | Provider payload и решения бизнес-политик. |
 | `platform-mcp-server` | Нормализованные hook calls для проверки источника, минимальной policy pre-check и маршрутизации. | Долгое хранение состояния и доменную бизнес-логику. |
 | `interaction-hub` | Permission request, запрос обратной связи владельца, human gate prompt, notification intent. | Технические tool logs и provider payload. |
@@ -203,7 +204,6 @@ MVP-объём:
 - Очистка чувствительных данных.
 - `PermissionRequest` через `agent-manager` и `interaction-hub`.
 - `PostToolUse` provider artifact signal.
-- `PreCompact`/`PostCompact` snapshot metadata.
 - `Stop` run checkpoint.
 
 Влияние на домены:
@@ -289,11 +289,23 @@ MVP-объём:
 
 Практическая линия:
 
-1. До MVP: hook emitter в рабочем пространстве slot, нормализованный event envelope, `PermissionRequest`, compact checkpoints, `Stop`, provider artifact signals.
+1. До MVP: hook emitter в рабочем пространстве slot, нормализованный event envelope, `PermissionRequest`, `Stop`, provider artifact signals и realtime-лента поддерживаемых hook-событий.
 2. До MVP: все поддерживаемые hook-события попадают в realtime-ленту UI после обязательной очистки чувствительных данных.
 3. До MVP: skills не становятся отдельной сущностью БД; допускаются только встроенные или вручную поставляемые skills как часть контролируемого образа среды исполнения.
 4. После MVP: UI управления skills, установка из магазина, пользовательские skills, политика по role/stage/workspace.
 5. После MVP: полноценное управление skills проектируется через отдельный слой управляемых возможностей; package-hub остаётся источником пакетов и версий, но не владельцем binding/policy skills.
+
+## Связь с platform-mcp-server
+
+`platform-mcp-server` является целевой входной границей для hook-событий MVP. MCP-слой:
+
+- проверяет actor/source/run/session/slot binding;
+- принимает только нормализованный и очищенный envelope;
+- маршрутизирует событие в `agent-manager`, `runtime-manager`, `provider-hub` или `interaction-hub`;
+- не хранит raw tool payload, значения секретов, большие stdout/stderr, kubeconfig, provider payload и полный session dump;
+- пишет аудит только для permission/gate/risky decision сценариев, а массовые безопасные события отдаёт в realtime/короткую операционную историю с retention.
+
+Подробная граница сервиса и план поставки зафиксированы в `docs/domains/platform-mcp-server/**`. Этот документ фиксирует выбранное решение по hooks, но реализация hook emitter и приёма hook-событий выполняется отдельными срезами.
 
 ## Какие документы обновить после выбора
 

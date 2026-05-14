@@ -5,8 +5,8 @@ title: kodex — MCP и модель взаимодействий
 status: active
 owner_role: SA
 created_at: 2026-04-26
-updated_at: 2026-04-26
-related_issues: [599, 600, 601, 602]
+updated_at: 2026-05-14
+related_issues: [599, 600, 601, 602, 747]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -57,6 +57,21 @@ approvals:
 | Инструменты взаимодействий | `interaction-hub` | Запросить обратную связь, создать запрос согласования, отправить уведомление, обработать обратный вызов. |
 | Операционные инструменты | `operations-hub` | Получить операторскую ленту событий, очереди, блокировки и сводку статуса. |
 
+## MVP platform-mcp-server
+
+Стартовая реализация `platform-mcp-server` должна поддержать не весь будущий каталог, а минимальную поверхность, нужную для `agent-manager`, slot-агентов и hooks. Codex hooks приходят не как прямые MCP tool calls, а через отдельный входной контур после нормализации hook emitter или локальным sidecar.
+
+| Группа | Владелец маршрута | MVP-смысл |
+|---|---|---|
+| Hooks | `agent-manager`, `runtime-manager`, `provider-hub`, `interaction-hub` | Принять `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `Stop` как безопасный envelope. Контрольные точки сжатия контекста проектируются отдельно как внутренние события `agent-manager`/`runtime-manager`. |
+| Agent tools | `agent-manager` | Run, session, gate, acceptance и follow-up операции только через `agent-manager`. |
+| Provider tools | `provider-hub` | Read/write операции провайдера через типизированный provider pipeline, без прямого GitHub/GitLab доступа из MCP. |
+| Project/runtime/fleet/package reads | `project-catalog`, `runtime-manager`, `fleet-manager`, `package-hub` | Авторитетные чтения проектной политики, runtime/fleet состояния и пакетных manifest/installations. |
+| Interaction tools | `interaction-hub` | Запросы обратной связи и approval delivery, когда готов контракт `interaction-hub`. |
+| Diagnostics | `platform-mcp-server` и владельцы маршрутов | Ограниченный статус readiness/dependency/error без секретов, больших логов и сырых данных вызова. |
+
+Детальная сервисная граница и план поставки живут в `docs/domains/platform-mcp-server/**`.
+
 ## Безопасность и политики
 
 Каждый MCP-вызов должен иметь:
@@ -66,8 +81,11 @@ approvals:
 - решение политики;
 - запись аудита;
 - идентификатор корреляции для связи с агентным запуском, заданием, слотом, артефактом провайдера или согласованием.
+- привязку source/run/session/slot для вызовов, которые приходят от slot-агента или hook emitter.
 
 Правило: MCP-сервер не должен сам вычислять бизнес-решение, если это решение принадлежит сервису-владельцу. Он проверяет доступ к инструменту и обращается к соответствующему сервису-владельцу.
+
+MCP-вызов не должен сохранять значения секретов, полный tool input/output, полный prompt, исходные данные провайдера, kubeconfig, большие stdout/stderr или session dump. Для аудита и диагностики используются только безопасные refs, hash/digest, короткие сводки, коды ошибок и correlation id.
 
 ## Взаимодействие с человеком
 
