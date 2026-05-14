@@ -33,6 +33,7 @@
 | PRV-7b | #731 | готово | Общий конвейер команд операций записи реализован в `provider-hub`: типизированные gRPC handlers, casters, доменный конвейер, идемпотентная запись `ProviderOperation`, проверка `expected_version`, контекст политики и `approval_gate_ref`, но без реальных GitHub/GitLab write-вызовов. |
 | PRV-7c | #737 | готово | GitHub write-адаптер подключён к общему конвейеру: создаёт и обновляет задачи, комментарии, `PR`, review-сигналы и provider-native связи, получает секрет только через resolver, обновляет локальные проекции после успешной записи и не повторяет внешний write при replay команды. |
 | PRV-8a | #748 | готово | Provider-side bootstrap для заранее существующего пустого репозитория: подготовленные файлы пишутся в bootstrap branch, создаётся или обновляется bootstrap PR, фиксируются проекция, `project_repository_binding` и событие `provider.repository.bootstrap_completed`. |
+| PRV-9 | #754 | готово | Эксплуатационный контур: Dockerfile, Kubernetes manifests, PostgreSQL bootstrap, migration job, build/smoke scripts, runbook и monitoring docs. |
 
 ## Текущий бэклог
 
@@ -40,7 +41,6 @@
 |---|---|---|
 | PRV-8b | ждёт решения владельца | Создание репозитория у провайдера и начальный base ref требуют отдельного права/контракта; PRV-8a работает только с уже существующим пустым репозиторием. |
 | PRV-8c | ждёт проектного и агентного контура | Adoption существующего repo требует agent-manager orchestration, workspace scan/report и проектной политики модели C; provider-hub будет выполнять только provider-native PR/relationship/projection запись. |
-| PRV-9 | запланировано позже | Kubernetes-манифесты, migration job, metrics, alerts, runbook и smoke можно делать по паттерну `runtime-manager`, когда будет принято решение разворачивать `provider-hub` на сервере. |
 
 ## Блокировки от `access-manager`
 
@@ -87,8 +87,8 @@
 
 Требует решения позже:
 - если пакетная сверка будет исполняться как платформенная job, нужен контракт постановки и claim job в `runtime-manager`;
-- если сверка будет внутренним worker-процессом `provider-hub`, `runtime-manager` не нужен для PRV-6.2;
-- deploy-контур `provider-hub` можно делать по уже появившемуся паттерну `runtime-manager`, но только когда будет команда на развёртывание сервиса.
+- если сверка будет внутренним worker-процессом `provider-hub`, `runtime-manager` не нужен для текущего контура;
+- реальный запуск smoke на кластере выполняется операторским действием с нормализованным bootstrap env, когда владелец даст команду на развёртывание сервиса.
 
 ## Блокировки для других агентов
 
@@ -98,4 +98,4 @@
 
 ## Рекомендуемый следующий шаг
 
-Следующий provider-срез — PRV-8b/PRV-8c или отдельный интеграционный срез для MCP-поверхности, если владелец решит сначала подключать provider tools к `agent-manager`. Не смешивать создание репозитория, adoption, UI и deploy.
+Следующий provider-срез — PRV-8b/PRV-8c или отдельный интеграционный срез для MCP-поверхности, если владелец решит сначала подключать provider tools к `agent-manager`. Не смешивать создание репозитория, adoption и UI.

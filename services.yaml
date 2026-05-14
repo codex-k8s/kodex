@@ -368,6 +368,33 @@ spec:
           livez: /health/livez
           readyz: /health/readyz
           metrics: /metrics
+    - name: provider-hub
+      status: foundation
+      zone: internal
+      path: services/internal/provider-hub
+      dockerfile: services/internal/provider-hub/Dockerfile
+      imageEnv: KODEX_PROVIDER_HUB_IMAGE
+      internalImageRepositoryEnv: KODEX_PROVIDER_HUB_INTERNAL_IMAGE_REPOSITORY
+      migrationsImageEnv: KODEX_PROVIDER_HUB_MIGRATIONS_IMAGE
+      migrationsInternalImageRepositoryEnv: KODEX_PROVIDER_HUB_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY
+      ownerDomain: provider-native-work-items
+      apiContracts:
+        grpc: proto/kodex/providers/v1/provider_hub.proto
+        asyncapi: specs/asyncapi/provider-hub.v1.yaml
+      database:
+        owner: provider-hub
+        migrations: services/internal/provider-hub/cmd/cli/migrations
+      dependencies:
+        - access-manager
+        - platform-event-log
+      deploy:
+        serviceManifest: deploy/base/provider-hub/provider-hub.yaml.tpl
+        migrationsManifest: deploy/base/provider-hub/migrations.yaml.tpl
+        kustomization: deploy/base/provider-hub/kustomization.yaml.tpl
+        health:
+          livez: /health/livez
+          readyz: /health/readyz
+          metrics: /metrics
     - name: runtime-manager
       status: foundation
       zone: internal
@@ -449,6 +476,14 @@ spec:
       dockerfile: services/internal/package-hub/Dockerfile
       migrationsImageEnv: KODEX_PACKAGE_HUB_MIGRATIONS_IMAGE
       purpose: package-sources-catalog-installations-manifest
+    - name: provider-hub
+      status: foundation
+      owner: provider-hub
+      databaseName: kodex_provider_hub
+      migrations: services/internal/provider-hub/cmd/cli/migrations
+      dockerfile: services/internal/provider-hub/Dockerfile
+      migrationsImageEnv: KODEX_PROVIDER_HUB_MIGRATIONS_IMAGE
+      purpose: provider-native-projections-webhook-reconciliation-operations
     - name: fleet-manager
       status: foundation
       owner: fleet-manager
@@ -457,29 +492,7 @@ spec:
       dockerfile: services/internal/fleet-manager/Dockerfile
       migrationsImageEnv: KODEX_FLEET_MANAGER_MIGRATIONS_IMAGE
       purpose: fleet-scopes-servers-clusters-health-placement
-  serviceScaffolds:
-    - name: provider-hub
-      status: scaffold
-      zone: internal
-      path: services/internal/provider-hub
-      dockerfile: services/internal/provider-hub/Dockerfile
-      imageEnv: KODEX_PROVIDER_HUB_IMAGE
-      internalImageRepositoryEnv: KODEX_PROVIDER_HUB_INTERNAL_IMAGE_REPOSITORY
-      migrationsImageEnv: KODEX_PROVIDER_HUB_MIGRATIONS_IMAGE
-      migrationsInternalImageRepositoryEnv: KODEX_PROVIDER_HUB_MIGRATIONS_INTERNAL_IMAGE_REPOSITORY
-      ownerDomain: provider-native-work-items
-      apiContracts:
-        grpc: proto/kodex/providers/v1/provider_hub.proto
-        asyncapi: specs/asyncapi/provider-hub.v1.yaml
-      database:
-        owner: provider-hub
-        migrations: services/internal/provider-hub/cmd/cli/migrations
-      deploy:
-        status: planned-after-service-implementation
-        health:
-          livez: /health/livez
-          readyz: /health/readyz
-          metrics: /metrics
+  serviceScaffolds: []
   deployManifests:
     - name: postgres-stack
       path: deploy/base/postgres/kustomization.yaml.tpl
@@ -499,6 +512,7 @@ spec:
         - kodex_access_manager
         - kodex_project_catalog
         - kodex_package_hub
+        - kodex_provider_hub
         - kodex_fleet_manager
         - kodex_runtime_manager
         - kodex_platform_event_log
@@ -529,6 +543,13 @@ spec:
     - name: package-hub-migrations
       path: deploy/base/package-hub/migrations.yaml.tpl
       migratesDatabase: kodex_package_hub
+      requires:
+        - postgres-secrets
+        - postgres
+        - platform-event-log-migrations
+    - name: provider-hub-migrations
+      path: deploy/base/provider-hub/migrations.yaml.tpl
+      migratesDatabase: kodex_provider_hub
       requires:
         - postgres-secrets
         - postgres
@@ -568,6 +589,14 @@ spec:
       deploysService: package-hub
       requires:
         - package-hub-migrations
+        - platform-event-log-migrations
+        - access-manager
+    - name: provider-hub
+      path: deploy/base/provider-hub/provider-hub.yaml.tpl
+      kustomization: deploy/base/provider-hub/kustomization.yaml.tpl
+      deploysService: provider-hub
+      requires:
+        - provider-hub-migrations
         - platform-event-log-migrations
         - access-manager
     - name: fleet-manager

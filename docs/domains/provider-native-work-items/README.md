@@ -28,6 +28,8 @@
 | Модель данных | `architecture/data_model.md` |
 | API-контракт | `architecture/api_contract.md` |
 | План поставки | `delivery/provider_hub_delivery.md` |
+| Runbook | `ops/provider_hub_runbook.md` |
+| Наблюдаемость | `ops/provider_hub_monitoring.md` |
 
 ## Карта Issue
 
