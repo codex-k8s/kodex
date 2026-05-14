@@ -37,6 +37,7 @@
 | AGO-0 | готово | Временное переключение: стартовая доменная документация `agent-manager`, границы и междоменные интеграции. |
 | AGO-1 | готово | Временное переключение: gRPC/AsyncAPI контракты `agent-manager`, события `agent.*` и действия доступа без сервисной реализации. |
 | AGO-2 | готово | Временное переключение: сервисный каркас `agent-manager`, health/readiness/metrics, gRPC registration и outbox skeleton без БД, миграций, deploy и бизнес-операций. |
+| AGO-3 | готово | Временное переключение: PostgreSQL-модель flow, stage, role, prompt template, версий, command result и service-local outbox; storage/use-case слой готов, gRPC handler wiring вынесен в следующий срез. |
 
 ## Текущий бэклог
 
@@ -61,4 +62,4 @@
 
 ## Временное переключение
 
-Агент #3 временно выполняет AGO-0..AGO-2 в домене `agent-orchestration`, чтобы зафиксировать стартовые границы `agent-manager`, его transport-контракты, сервисный каркас и зависимость от `package-hub` для чтения установленных руководящих пакетов. Код `package-hub` в этих срезах не меняется.
+Агент #3 временно выполняет AGO-0..AGO-3 в домене `agent-orchestration`, чтобы зафиксировать стартовые границы `agent-manager`, его transport-контракты, сервисный каркас, модель хранения flow/role/prompt и зависимость от `package-hub` для чтения установленных руководящих пакетов. Код `package-hub` в этих срезах не меняется.
