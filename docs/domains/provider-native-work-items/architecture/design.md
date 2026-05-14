@@ -139,6 +139,31 @@ sequenceDiagram
 
 В пакетной сверке только на чтение обработчик берёт арендованный `SyncCursor`, подтверждает `provider.reconciliation.run` через `access-manager`, получает токен через resolver только на время GitHub API-вызова и сохраняет только нормализованные проекции, операционное состояние, лимитный бюджет и безопасный код ошибки. Исчерпание лимита провайдера не считается бизнес-ошибкой: cursor остаётся с lease до retry-времени. Ошибка авторизации переводит runtime state аккаунта в `reauthorization_required`; отсутствие объекта, временные и постоянные ошибки фиксируются коротким кодом без provider payload и без секрета.
 
+### Bootstrap пустого репозитория
+
+Provider-side часть модели C для пустого репозитория ограничена заранее существующим репозиторием. `project-catalog`, `package-hub`, `agent-manager` или детерминированный bootstrap-исполнитель заранее готовят payload: список текстовых файлов, base branch, bootstrap branch, заголовок и тело PR, watermark и ссылки `project_id`/`repository_id`. `provider-hub` принимает этот payload через `CreateBootstrapPullRequest`, подтверждает внешний аккаунт через `access-manager`, получает секрет только на время GitHub API-вызова и выполняет provider-native запись.
+
+```mermaid
+sequenceDiagram
+  participant C as project/agent contour
+  participant H as provider-hub
+  participant A as access-manager
+  participant R as secret resolver
+  participant P as GitHub
+  participant DB as provider DB
+  C->>H: CreateBootstrapPullRequest(prepared files, refs, project/repository ids)
+  H->>A: ResolveExternalAccountUsage(provider.repository.write)
+  A-->>H: provider_slug + secret_ref
+  H->>R: Resolve(secret_ref)
+  R-->>H: SecretValue in memory
+  H->>P: create/update bootstrap branch + files
+  H->>P: create/update bootstrap PR
+  H->>DB: ProviderOperation + PR projection + relationship + outbox
+  H-->>C: ProviderOperationResponse без файлового payload и секрета
+```
+
+`provider-hub` не создаёт сам репозиторий у провайдера, не создаёт начальный base ref, не генерирует `services.yaml`, не выбирает шаблоны и не сканирует содержимое репозитория. Bootstrap-команда отклоняется, если `base_branch` и `bootstrap_branch` совпадают, либо если дерево `base_branch` непустое. Если bootstrap branch уже существует после неудачной или повторной попытки, новый commit строится от текущей головы bootstrap branch, но дерево commit собирается из пустого дерева base branch и подготовленного набора файлов, чтобы не протащить старые файлы. После успешной записи сервис обновляет локальную проекцию bootstrap `PR/MR`, проставляет `project_id` и `repository_id`, создаёт provider relationship `project_repository_binding` и публикует `provider.repository.bootstrap_completed`. Содержимое подготовленных файлов остаётся только входом provider-вызова и не сохраняется в журнале операций, outbox, событиях, логах, ошибках или трассировке.
+
 ### Сигнал от slot-агента
 
 ```mermaid
@@ -214,4 +239,4 @@ sequenceDiagram
 
 - request_id: `owner-2026-05-06-provider-hub-boundaries`
 - Решение: approved
-- Комментарий: дизайн домена рабочих сущностей провайдера согласован как целевое состояние PRV-0.
+- Комментарий: дизайн домена рабочих сущностей провайдера согласован как целевое состояние.

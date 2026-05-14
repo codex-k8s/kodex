@@ -32,18 +32,20 @@
 | PRV-7a | #725 | готово | Контрактный каталог инструментов записи провайдера для `agent-manager`/MCP: типизированные инструменты, общий конвейер команд, контекст политики, ссылка на approval/gate и безопасный результат команды без реализации операций записи. |
 | PRV-7b | #731 | готово | Общий конвейер команд операций записи реализован в `provider-hub`: типизированные gRPC handlers, casters, доменный конвейер, идемпотентная запись `ProviderOperation`, проверка `expected_version`, контекст политики и `approval_gate_ref`, но без реальных GitHub/GitLab write-вызовов. |
 | PRV-7c | #737 | готово | GitHub write-адаптер подключён к общему конвейеру: создаёт и обновляет задачи, комментарии, `PR`, review-сигналы и provider-native связи, получает секрет только через resolver, обновляет локальные проекции после успешной записи и не повторяет внешний write при replay команды. |
+| PRV-8a | #748 | готово | Provider-side bootstrap для заранее существующего пустого репозитория: подготовленные файлы пишутся в bootstrap branch, создаётся или обновляется bootstrap PR, фиксируются проекция, `project_repository_binding` и событие `provider.repository.bootstrap_completed`. |
 
 ## Текущий бэклог
 
 | Срез | Статус | Почему не завершён |
 |---|---|---|
-| PRV-8 | модель выбрана, ждёт реализации | Bootstrap/adoption зависят от проектной политики, repository binding и выбранной модели C для `services.yaml`, внешней документации, пакетов и шаблонов репозиториев. Provider-запись должна использовать общий resolver-контракт и существующий конвейер операций записи. |
+| PRV-8b | ждёт решения владельца | Создание репозитория у провайдера и начальный base ref требуют отдельного права/контракта; PRV-8a работает только с уже существующим пустым репозиторием. |
+| PRV-8c | ждёт проектного и агентного контура | Adoption существующего repo требует agent-manager orchestration, workspace scan/report и проектной политики модели C; provider-hub будет выполнять только provider-native PR/relationship/projection запись. |
 | PRV-9 | запланировано позже | Kubernetes-манифесты, migration job, metrics, alerts, runbook и smoke можно делать по паттерну `runtime-manager`, когда будет принято решение разворачивать `provider-hub` на сервере. |
 
 ## Блокировки от `access-manager`
 
 Снято:
-- системные действия `provider.work_item.read`, `provider.issue.write`, `provider.pull_request.write`, `provider.comment.write`, `provider.review_signal.write`, `provider.relationship.write`, `provider.reconciliation.run` заведены в `libs/go/accesscatalog`;
+- системные действия `provider.work_item.read`, `provider.issue.write`, `provider.pull_request.write`, `provider.repository.write`, `provider.comment.write`, `provider.review_signal.write`, `provider.relationship.write`, `provider.reconciliation.run` заведены в `libs/go/accesscatalog`;
 - `ResolveExternalAccountUsage` подтверждает выбранный внешний аккаунт, действие и область использования;
 - `access-manager` возвращает `provider_slug`, `secret_store_type` и `secret_store_ref`, но не значение секрета.
 
@@ -68,7 +70,7 @@
 
 Реальные блокировки:
 - привязка проекций к проекту и repository binding требует контракта сопоставления `provider_slug + repository_full_name/provider repository id -> project_id + repository_id`;
-- PRV-8 bootstrap/adoption требует проектной политики, проверенной версии `services.yaml`, состояния repository binding и выбора владельца по вариантам repository onboarding;
+- end-to-end bootstrap/adoption требует проектной политики, проверенной версии `services.yaml`, состояния repository binding и выбора владельца по вариантам repository onboarding; PRV-8a принимает `project_id`, `repository_id`, prepared files и refs как готовый вход и не ходит в `project-catalog`;
 - фильтры операционных состояний по проекту/организации не должны включаться, пока область аккаунта не связывается с проектной моделью.
 
 ## Блокировки от `package-hub`
@@ -77,7 +79,7 @@
 
 Будущие точки синхронизации:
 - если источник пакета находится в Git/provider, `package-hub` должен хранить пакетную истину и нормализованный снимок, а provider-доступ остаётся за `provider-hub` или отдельным адаптерным контуром;
-- для PRV-7/PRV-8 нужно согласовать, как пакетные PR, `source_ref` и store refs отображаются в provider relationships.
+- для end-to-end bootstrap/adoption нужно согласовать, как пакетные шаблоны, `source_ref` и store refs отображаются в provider relationships.
 
 ## Блокировки от `runtime-manager`
 
@@ -96,4 +98,4 @@
 
 ## Рекомендуемый следующий шаг
 
-Следующий provider-срез — PRV-8 или отдельный интеграционный срез для MCP-поверхности, если владелец решит сначала подключать provider tools к `agent-manager`. Не смешивать bootstrap/adoption с UI или deploy.
+Следующий provider-срез — PRV-8b/PRV-8c или отдельный интеграционный срез для MCP-поверхности, если владелец решит сначала подключать provider tools к `agent-manager`. Не смешивать создание репозитория, adoption, UI и deploy.

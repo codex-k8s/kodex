@@ -54,6 +54,38 @@ func TestRegisterProviderArtifactSignalMapsRequestAndResponse(t *testing.T) {
 	}
 }
 
+func TestCreateBootstrapPullRequestMapsRequestAndResponse(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.NewString()
+	externalAccountID := uuid.NewString()
+	projectID := uuid.NewString()
+	repositoryID := uuid.NewString()
+	response, err := NewServer(fakeService{}).CreateBootstrapPullRequest(context.Background(), &providersv1.CreateBootstrapPullRequestRequest{
+		ProjectId:        projectID,
+		RepositoryId:     repositoryID,
+		ProviderSlug:     "github",
+		RepositoryTarget: &providersv1.ProviderTarget{ProviderSlug: "github", RepositoryFullName: ptrString("codex-k8s/kodex")},
+		BaseBranch:       "main",
+		BootstrapBranch:  "kodex/bootstrap",
+		CommitMessage:    "Bootstrap repository",
+		Title:            "Bootstrap платформы",
+		Body:             "Подготовленные файлы bootstrap.",
+		Files: []*providersv1.BootstrapFile{{
+			Path:    "services.yaml",
+			Content: "version: 1\n",
+		}},
+		Meta:              &providersv1.CommandMeta{CommandId: &commandID, RequestId: "req-1"},
+		ExternalAccountId: externalAccountID,
+	})
+	if err != nil {
+		t.Fatalf("CreateBootstrapPullRequest(): %v", err)
+	}
+	if response.GetResult().GetResultRef() != "bootstrap_pull_request:create" {
+		t.Fatalf("result ref = %q, want bootstrap create", response.GetResult().GetResultRef())
+	}
+}
+
 func TestRecordProviderLimitSnapshotMapsRequestAndResponse(t *testing.T) {
 	t.Parallel()
 
@@ -466,6 +498,17 @@ func (fakeService) CreatePullRequest(_ context.Context, input providerservice.Cr
 	return providerservice.ProviderOperationResult{
 		Result: providerservice.ProviderOperationCommandResult{
 			ResultRef: "pull_request:create",
+			Target: &providerservice.ProviderTarget{
+				ProviderSlug: input.ProviderSlug,
+			},
+		},
+	}, nil
+}
+
+func (fakeService) CreateBootstrapPullRequest(_ context.Context, input providerservice.CreateBootstrapPullRequestInput) (providerservice.ProviderOperationResult, error) {
+	return providerservice.ProviderOperationResult{
+		Result: providerservice.ProviderOperationCommandResult{
+			ResultRef: "bootstrap_pull_request:create",
 			Target: &providerservice.ProviderTarget{
 				ProviderSlug: input.ProviderSlug,
 			},

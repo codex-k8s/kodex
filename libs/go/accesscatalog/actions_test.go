@@ -35,12 +35,12 @@ func TestSystemActionByKey(t *testing.T) {
 func TestProviderHubActionsAreSystemActions(t *testing.T) {
 	t.Parallel()
 
-	action, ok := SystemActionByKey(ActionProviderReconciliationRun)
+	action, ok := SystemActionByKey(ActionProviderRepositoryWrite)
 	if !ok {
-		t.Fatalf("SystemActionByKey(%q) ok = false, want true", ActionProviderReconciliationRun)
+		t.Fatalf("SystemActionByKey(%q) ok = false, want true", ActionProviderRepositoryWrite)
 	}
-	if action.ResourceType != ResourceProviderReconciliation {
-		t.Fatalf("provider reconciliation resource = %q, want %q", action.ResourceType, ResourceProviderReconciliation)
+	if action.ResourceType != ResourceProviderRepository {
+		t.Fatalf("provider repository resource = %q, want %q", action.ResourceType, ResourceProviderRepository)
 	}
 }
 

@@ -145,14 +145,15 @@ const (
 type ProviderOperationType string
 
 const (
-	ProviderOperationCreateIssue        ProviderOperationType = "create_issue"
-	ProviderOperationUpdateIssue        ProviderOperationType = "update_issue"
-	ProviderOperationCreateComment      ProviderOperationType = "create_comment"
-	ProviderOperationUpdateComment      ProviderOperationType = "update_comment"
-	ProviderOperationCreatePullRequest  ProviderOperationType = "create_pull_request"
-	ProviderOperationUpdatePullRequest  ProviderOperationType = "update_pull_request"
-	ProviderOperationCreateReviewSignal ProviderOperationType = "create_review_signal"
-	ProviderOperationUpdateRelationship ProviderOperationType = "update_relationship"
+	ProviderOperationCreateIssue                ProviderOperationType = "create_issue"
+	ProviderOperationUpdateIssue                ProviderOperationType = "update_issue"
+	ProviderOperationCreateComment              ProviderOperationType = "create_comment"
+	ProviderOperationUpdateComment              ProviderOperationType = "update_comment"
+	ProviderOperationCreatePullRequest          ProviderOperationType = "create_pull_request"
+	ProviderOperationUpdatePullRequest          ProviderOperationType = "update_pull_request"
+	ProviderOperationCreateBootstrapPullRequest ProviderOperationType = "create_bootstrap_pull_request"
+	ProviderOperationCreateReviewSignal         ProviderOperationType = "create_review_signal"
+	ProviderOperationUpdateRelationship         ProviderOperationType = "update_relationship"
 )
 
 // ProviderOperationStatus is the terminal or current operation state.

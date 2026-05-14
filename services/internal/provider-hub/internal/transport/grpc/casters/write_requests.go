@@ -174,6 +174,61 @@ func CreatePullRequestInput(request *providersv1.CreatePullRequestRequest) (prov
 	}, nil
 }
 
+// CreateBootstrapPullRequestInput maps an empty-repository bootstrap PR request to the domain model.
+func CreateBootstrapPullRequestInput(request *providersv1.CreateBootstrapPullRequestRequest) (providerservice.CreateBootstrapPullRequestInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return providerservice.CreateBootstrapPullRequestInput{}, err
+	}
+	projectID, err := requiredUUID(request.GetProjectId())
+	if err != nil {
+		return providerservice.CreateBootstrapPullRequestInput{}, err
+	}
+	repositoryID, err := requiredUUID(request.GetRepositoryId())
+	if err != nil {
+		return providerservice.CreateBootstrapPullRequestInput{}, err
+	}
+	externalAccountID, err := requiredUUID(request.GetExternalAccountId())
+	if err != nil {
+		return providerservice.CreateBootstrapPullRequestInput{}, err
+	}
+	repositoryTarget, err := ProviderTargetFromProto(request.GetRepositoryTarget())
+	if err != nil {
+		return providerservice.CreateBootstrapPullRequestInput{}, err
+	}
+	return providerservice.CreateBootstrapPullRequestInput{
+		ProjectID:         projectID,
+		RepositoryID:      repositoryID,
+		ProviderSlug:      providerSlug(request.GetProviderSlug()),
+		RepositoryTarget:  repositoryTarget,
+		BaseBranch:        strings.TrimSpace(request.GetBaseBranch()),
+		BootstrapBranch:   strings.TrimSpace(request.GetBootstrapBranch()),
+		CommitMessage:     strings.TrimSpace(request.GetCommitMessage()),
+		Title:             strings.TrimSpace(request.GetTitle()),
+		Body:              strings.TrimSpace(request.GetBody()),
+		Draft:             request.GetDraft(),
+		Files:             bootstrapFilesFromProto(request.GetFiles()),
+		WatermarkJSON:     []byte(strings.TrimSpace(request.GetWatermarkJson())),
+		Meta:              meta,
+		ExternalAccountID: externalAccountID,
+	}, nil
+}
+
+func bootstrapFilesFromProto(files []*providersv1.BootstrapFile) []providerservice.BootstrapFile {
+	result := make([]providerservice.BootstrapFile, 0, len(files))
+	for _, file := range files {
+		if file == nil {
+			continue
+		}
+		result = append(result, providerservice.BootstrapFile{
+			Path:       strings.TrimSpace(file.GetPath()),
+			Content:    file.GetContent(),
+			Executable: file.GetExecutable(),
+		})
+	}
+	return result
+}
+
 // UpdatePullRequestInput maps a typed PR/MR update request to the domain model.
 func UpdatePullRequestInput(request *providersv1.UpdatePullRequestRequest) (providerservice.UpdatePullRequestInput, error) {
 	meta, err := CommandMetaFromProto(request.GetMeta())

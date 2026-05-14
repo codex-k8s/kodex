@@ -3,8 +3,10 @@ package github
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
+	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -59,6 +61,8 @@ func (a *Adapter) Execute(ctx context.Context, request providerclient.WriteReque
 		return a.executeCreatePullRequest(ctx, client, request.CreatePullRequest)
 	case request.UpdatePullRequest != nil:
 		return a.executeUpdatePullRequest(ctx, client, request.UpdatePullRequest)
+	case request.CreateBootstrapPullRequest != nil:
+		return a.executeCreateBootstrapPullRequest(ctx, client, request.CreateBootstrapPullRequest)
 	case request.CreateReviewSignal != nil:
 		return a.executeCreateReviewSignal(ctx, client, request.CreateReviewSignal)
 	default:
@@ -84,6 +88,8 @@ func (a *Adapter) executeCreateIssue(ctx context.Context, client *githubapi.Clie
 		return providerclient.WriteResult{}, classifyGitHubError(err)
 	}
 	snapshot := issueAPISnapshot(owner+"/"+repo, issue, enum.WorkItemKindIssue)
+	snapshot.ProjectID = command.ProjectID
+	snapshot.RepositoryID = command.RepositoryID
 	return providerclient.WriteResult{
 		ResultRef:        issue.GetHTMLURL(),
 		ProviderObjectID: snapshot.ProviderWorkItemID,
@@ -201,6 +207,42 @@ func (a *Adapter) executeCreatePullRequest(ctx context.Context, client *githubap
 		return providerclient.WriteResult{}, classifyGitHubError(err)
 	}
 	snapshot := pullRequestAPISnapshot(owner+"/"+repo, pullRequest)
+	snapshot.ProjectID = command.ProjectID
+	snapshot.RepositoryID = command.RepositoryID
+	return providerclient.WriteResult{
+		ResultRef:        pullRequest.GetHTMLURL(),
+		ProviderObjectID: snapshot.ProviderWorkItemID,
+		ProviderVersion:  providerVersionFromResponse(response, pullRequest.GetUpdatedAt().Time),
+		WorkItem:         &snapshot,
+	}, nil
+}
+
+func (a *Adapter) executeCreateBootstrapPullRequest(ctx context.Context, client *githubapi.Client, command *providerclient.CreateBootstrapPullRequestCommand) (providerclient.WriteResult, error) {
+	owner, repo, err := a.repositoryRefFromTarget(ctx, client, command.RepositoryTarget)
+	if err != nil {
+		return providerclient.WriteResult{}, providerError(providerclient.ErrorKindUnsupported, 0, err)
+	}
+	if len(command.Files) == 0 ||
+		strings.TrimSpace(command.BaseBranch) == "" ||
+		strings.TrimSpace(command.BootstrapBranch) == "" ||
+		strings.TrimSpace(command.CommitMessage) == "" ||
+		strings.TrimSpace(command.Title) == "" {
+		return providerclient.WriteResult{}, providerError(providerclient.ErrorKindUnsupported, 0, nil)
+	}
+	if err := a.writeBootstrapFiles(ctx, client, owner, repo, command); err != nil {
+		return providerclient.WriteResult{}, err
+	}
+	body, err := bodyWithWatermark(command.Body, command.WatermarkJSON)
+	if err != nil {
+		return providerclient.WriteResult{}, providerError(providerclient.ErrorKindPermanent, 0, err)
+	}
+	pullRequest, response, err := a.createOrUpdateBootstrapPullRequest(ctx, client, owner, repo, command, body)
+	if err != nil {
+		return providerclient.WriteResult{}, err
+	}
+	snapshot := pullRequestAPISnapshot(owner+"/"+repo, pullRequest)
+	snapshot.ProjectID = command.ProjectID
+	snapshot.RepositoryID = command.RepositoryID
 	return providerclient.WriteResult{
 		ResultRef:        pullRequest.GetHTMLURL(),
 		ProviderObjectID: snapshot.ProviderWorkItemID,
@@ -458,6 +500,152 @@ func pullRequestForUpdate(command *providerclient.UpdatePullRequestCommand, body
 		request.MaintainerCanModify = command.MaintainerCanModify
 	}
 	return request, nil
+}
+
+func (a *Adapter) writeBootstrapFiles(ctx context.Context, client *githubapi.Client, owner string, repo string, command *providerclient.CreateBootstrapPullRequestCommand) error {
+	baseBranch := strings.TrimSpace(command.BaseBranch)
+	bootstrapBranch := strings.TrimSpace(command.BootstrapBranch)
+	baseRef, _, err := client.Git.GetRef(ctx, owner, repo, gitBranchRef(baseBranch))
+	if err != nil {
+		return classifyGitHubError(err)
+	}
+	parentSHA := baseRef.GetObject().GetSHA()
+	if parentSHA == "" {
+		return providerError(providerclient.ErrorKindPermanent, 0, nil)
+	}
+	baseCommit, _, err := client.Git.GetCommit(ctx, owner, repo, parentSHA)
+	if err != nil {
+		return classifyGitHubError(err)
+	}
+	baseTreeSHA := baseCommit.GetTree().GetSHA()
+	if baseTreeSHA == "" {
+		return providerError(providerclient.ErrorKindPermanent, 0, nil)
+	}
+	baseTree, _, err := client.Git.GetTree(ctx, owner, repo, baseTreeSHA, false)
+	if err != nil {
+		return classifyGitHubError(err)
+	}
+	if len(baseTree.Entries) > 0 {
+		return providerError(providerclient.ErrorKindUnsupported, 0, nil)
+	}
+	branchRef, _, err := client.Git.GetRef(ctx, owner, repo, gitBranchRef(bootstrapBranch))
+	if err != nil {
+		if !isGitHubStatus(err, http.StatusNotFound) {
+			return classifyGitHubError(err)
+		}
+		branchRef, _, err = client.Git.CreateRef(ctx, owner, repo, githubapi.CreateRef{
+			Ref: "refs/" + gitBranchRef(bootstrapBranch),
+			SHA: parentSHA,
+		})
+		if err != nil {
+			if !isGitHubStatus(err, http.StatusUnprocessableEntity) {
+				return classifyGitHubError(err)
+			}
+			branchRef, _, err = client.Git.GetRef(ctx, owner, repo, gitBranchRef(bootstrapBranch))
+			if err != nil {
+				return classifyGitHubError(err)
+			}
+		}
+	}
+	parentSHA = branchRef.GetObject().GetSHA()
+	if parentSHA == "" {
+		return providerError(providerclient.ErrorKindPermanent, 0, nil)
+	}
+	tree, _, err := client.Git.CreateTree(ctx, owner, repo, baseTreeSHA, bootstrapTreeEntries(command.Files))
+	if err != nil {
+		return classifyGitHubError(err)
+	}
+	commit, _, err := client.Git.CreateCommit(ctx, owner, repo, githubapi.Commit{
+		Message: githubapi.Ptr(strings.TrimSpace(command.CommitMessage)),
+		Tree:    tree,
+		Parents: []*githubapi.Commit{{
+			SHA: githubapi.Ptr(parentSHA),
+		}},
+	}, nil)
+	if err != nil {
+		return classifyGitHubError(err)
+	}
+	if commit.GetSHA() == "" {
+		return providerError(providerclient.ErrorKindPermanent, 0, nil)
+	}
+	_, _, err = client.Git.UpdateRef(ctx, owner, repo, gitBranchRef(bootstrapBranch), githubapi.UpdateRef{
+		SHA:   commit.GetSHA(),
+		Force: githubapi.Ptr(false),
+	})
+	if err != nil {
+		return classifyGitHubError(err)
+	}
+	return nil
+}
+
+func (a *Adapter) createOrUpdateBootstrapPullRequest(
+	ctx context.Context,
+	client *githubapi.Client,
+	owner string,
+	repo string,
+	command *providerclient.CreateBootstrapPullRequestCommand,
+	body string,
+) (*githubapi.PullRequest, *githubapi.Response, error) {
+	baseBranch := strings.TrimSpace(command.BaseBranch)
+	bootstrapBranch := strings.TrimSpace(command.BootstrapBranch)
+	pullRequests, _, err := client.PullRequests.List(ctx, owner, repo, &githubapi.PullRequestListOptions{
+		State: "open",
+		Head:  owner + ":" + bootstrapBranch,
+		Base:  baseBranch,
+		ListOptions: githubapi.ListOptions{
+			PerPage: 10,
+		},
+	})
+	if err != nil {
+		return nil, nil, classifyGitHubError(err)
+	}
+	if len(pullRequests) > 0 {
+		pullRequest, response, err := client.PullRequests.Edit(ctx, owner, repo, pullRequests[0].GetNumber(), &githubapi.PullRequest{
+			Title: githubapi.Ptr(strings.TrimSpace(command.Title)),
+			Body:  githubapi.Ptr(body),
+		})
+		if err != nil {
+			return nil, nil, classifyGitHubError(err)
+		}
+		return pullRequest, response, nil
+	}
+	pullRequest, response, err := client.PullRequests.Create(ctx, owner, repo, &githubapi.NewPullRequest{
+		Title: githubapi.Ptr(strings.TrimSpace(command.Title)),
+		Body:  githubapi.Ptr(body),
+		Head:  githubapi.Ptr(bootstrapBranch),
+		Base:  githubapi.Ptr(baseBranch),
+		Draft: githubapi.Ptr(command.Draft),
+	})
+	if err != nil {
+		return nil, nil, classifyGitHubError(err)
+	}
+	return pullRequest, response, nil
+}
+
+func bootstrapTreeEntries(files []providerclient.BootstrapFile) []*githubapi.TreeEntry {
+	entries := make([]*githubapi.TreeEntry, 0, len(files))
+	for _, file := range files {
+		mode := "100644"
+		if file.Executable {
+			mode = "100755"
+		}
+		entries = append(entries, &githubapi.TreeEntry{
+			Path:    githubapi.Ptr(strings.TrimSpace(file.Path)),
+			Mode:    githubapi.Ptr(mode),
+			Type:    githubapi.Ptr("blob"),
+			Content: githubapi.Ptr(file.Content),
+		})
+	}
+	return entries
+}
+
+func gitBranchRef(branch string) string {
+	return "heads/" + strings.TrimSpace(branch)
+}
+
+func isGitHubStatus(err error, statusCode int) bool {
+	var githubErr *githubapi.ErrorResponse
+	return errors.As(err, &githubErr) && githubErr.Response != nil && githubErr.Response.StatusCode == statusCode
 }
 
 func (a *Adapter) editIssue(ctx context.Context, client *githubapi.Client, target workItemScope, request *githubapi.IssueRequest, expectedVersion string) (*githubapi.Issue, *githubapi.Response, error) {
@@ -722,6 +910,9 @@ func countWriteCommands(request providerclient.WriteRequest) int {
 		count++
 	}
 	if request.UpdatePullRequest != nil {
+		count++
+	}
+	if request.CreateBootstrapPullRequest != nil {
 		count++
 	}
 	if request.CreateReviewSignal != nil {

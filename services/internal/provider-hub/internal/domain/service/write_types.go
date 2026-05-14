@@ -88,6 +88,31 @@ type CreatePullRequestInput struct {
 	ExternalAccountID uuid.UUID
 }
 
+// BootstrapFile describes one prepared text file for bootstrap branch creation.
+type BootstrapFile struct {
+	Path       string
+	Content    string
+	Executable bool
+}
+
+// CreateBootstrapPullRequestInput describes provider-side bootstrap PR creation for an existing empty repository.
+type CreateBootstrapPullRequestInput struct {
+	ProjectID         uuid.UUID
+	RepositoryID      uuid.UUID
+	ProviderSlug      enum.ProviderSlug
+	RepositoryTarget  ProviderTarget
+	BaseBranch        string
+	BootstrapBranch   string
+	CommitMessage     string
+	Title             string
+	Body              string
+	Draft             bool
+	Files             []BootstrapFile
+	WatermarkJSON     []byte
+	Meta              value.CommandMeta
+	ExternalAccountID uuid.UUID
+}
+
 // UpdatePullRequestInput describes one typed PR/MR update command.
 type UpdatePullRequestInput struct {
 	Target                  ProviderTarget

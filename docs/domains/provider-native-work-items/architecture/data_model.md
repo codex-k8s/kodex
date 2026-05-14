@@ -5,8 +5,8 @@ title: kodex — модель данных provider-hub
 status: active
 owner_role: SA
 created_at: 2026-05-06
-updated_at: 2026-05-13
-related_issues: [281, 282, 711, 719, 725, 729, 737]
+updated_at: 2026-05-14
+related_issues: [281, 282, 711, 719, 725, 729, 737, 748]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -111,6 +111,7 @@ approvals:
 - одна задача может иметь несколько связанных `PR/MR`;
 - поле `project_id` и `repository_id` являются внешними идентификаторами из `project-catalog`.
 - первичная запись строится из provider webhook или сверки, а `project_id` и `repository_id` могут оставаться пустыми до связывания с `project-catalog`;
+- управляемые provider write-команды, включая bootstrap пустого репозитория, могут сразу проставить `project_id` и `repository_id`, если вызывающий контур уже передал проверенную проектную привязку;
 - watermark хранится только как разобранные безопасные поля; полный текст тела остаётся у провайдера, а в проекции хранится digest.
 
 | Поле | Тип | Nullable | Ограничения | Примечание |
@@ -164,6 +165,8 @@ approvals:
 Примеры связей: исходная задача, связанный `PR/MR`, follow-up, blocks, blocked-by, release link, package source link.
 
 Связь может ссылаться на уже известную внутреннюю проекцию через `target_work_item_id` или на внешнюю ссылку провайдера через `target_provider_ref`, если целевая проекция ещё не создана. Связи, извлечённые из watermark, помечаются source `watermark` и confidence `confirmed`. При свежем обновлении рабочего артефакта набор watermark-связей пересобирается целиком по полям `source_ref`, `parent_ref` и `next_ref`: отсутствующая в текущем watermark связь удаляется из подтверждённой проекции, чтобы `ListRelationships` не возвращал устаревшую ссылку. Локальная версия связи меняется только при изменении управляемых полей связи и используется для оптимистичной конкурентной защиты в `UpdateRelationship`.
+
+Bootstrap-команда может создать служебную связь `project_repository_binding`: источник — созданная bootstrap `PR/MR` проекция, `target_provider_ref` — безопасная ссылка вида `project-catalog:project:<project_id>:repository:<repository_id>`. Эта связь не означает владение проектной политикой со стороны `provider-hub`; она нужна, чтобы UI/MCP и сверка видели provider-native артефакт в контексте проверенного project/repository binding.
 
 | Поле | Тип | Nullable | Ограничения | Примечание |
 |---|---|---:|---|---|
@@ -355,4 +358,4 @@ approvals:
 
 - request_id: `owner-2026-05-06-provider-hub-boundaries`
 - Решение: approved
-- Комментарий: модель данных `provider-hub` согласована как целевое состояние PRV-0.
+- Комментарий: модель данных `provider-hub` согласована как целевое состояние.

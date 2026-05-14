@@ -88,15 +88,20 @@ var syncCursorPriorities = map[providersv1.SyncCursorPriority]enum.SyncCursorPri
 	providersv1.SyncCursorPriority_SYNC_CURSOR_PRIORITY_COLD: enum.SyncCursorPriorityCold,
 }
 
-var operationTypes = map[providersv1.ProviderOperationType]enum.ProviderOperationType{
-	providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_ISSUE:         enum.ProviderOperationCreateIssue,
-	providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_ISSUE:         enum.ProviderOperationUpdateIssue,
-	providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_COMMENT:       enum.ProviderOperationCreateComment,
-	providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_COMMENT:       enum.ProviderOperationUpdateComment,
-	providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_PULL_REQUEST:  enum.ProviderOperationCreatePullRequest,
-	providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_PULL_REQUEST:  enum.ProviderOperationUpdatePullRequest,
-	providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_REVIEW_SIGNAL: enum.ProviderOperationCreateReviewSignal,
-	providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_RELATIONSHIP:  enum.ProviderOperationUpdateRelationship,
+var operationTypes = providerOperationTypes()
+
+func providerOperationTypes() map[providersv1.ProviderOperationType]enum.ProviderOperationType {
+	result := make(map[providersv1.ProviderOperationType]enum.ProviderOperationType, 9)
+	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_ISSUE] = enum.ProviderOperationCreateIssue
+	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_ISSUE] = enum.ProviderOperationUpdateIssue
+	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_COMMENT] = enum.ProviderOperationCreateComment
+	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_COMMENT] = enum.ProviderOperationUpdateComment
+	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_PULL_REQUEST] = enum.ProviderOperationCreatePullRequest
+	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_PULL_REQUEST] = enum.ProviderOperationUpdatePullRequest
+	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_BOOTSTRAP_PULL_REQUEST] = enum.ProviderOperationCreateBootstrapPullRequest
+	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_REVIEW_SIGNAL] = enum.ProviderOperationCreateReviewSignal
+	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_RELATIONSHIP] = enum.ProviderOperationUpdateRelationship
+	return result
 }
 
 var operationStatuses = map[providersv1.ProviderOperationStatus]enum.ProviderOperationStatus{

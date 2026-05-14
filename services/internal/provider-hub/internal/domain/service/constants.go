@@ -7,18 +7,20 @@ import (
 )
 
 const (
-	providerEventWebhookReceived    = providerevents.EventWebhookReceived
-	providerEventWebhookNormalized  = providerevents.EventWebhookNormalized
-	providerEventWorkItemSynced     = providerevents.EventWorkItemSynced
-	providerEventCommentSynced      = providerevents.EventCommentSynced
-	providerEventRelationshipSynced = providerevents.EventRelationshipSynced
-	providerEventSyncCursorAdvanced = providerevents.EventSyncCursorAdvanced
-	providerEventOperationCompleted = providerevents.EventOperationCompleted
-	providerEventOperationFailed    = providerevents.EventOperationFailed
+	providerEventWebhookReceived              = providerevents.EventWebhookReceived
+	providerEventWebhookNormalized            = providerevents.EventWebhookNormalized
+	providerEventWorkItemSynced               = providerevents.EventWorkItemSynced
+	providerEventCommentSynced                = providerevents.EventCommentSynced
+	providerEventRelationshipSynced           = providerevents.EventRelationshipSynced
+	providerEventSyncCursorAdvanced           = providerevents.EventSyncCursorAdvanced
+	providerEventOperationCompleted           = providerevents.EventOperationCompleted
+	providerEventOperationFailed              = providerevents.EventOperationFailed
+	providerEventRepositoryBootstrapCompleted = providerevents.EventRepositoryBootstrapCompleted
 
 	providerAggregateWebhookEvent      = providerevents.AggregateWebhookEvent
 	providerAggregateProviderEvent     = providerevents.AggregateProviderEvent
 	providerAggregateProviderOperation = providerevents.AggregateProviderOperation
+	providerAggregateRepository        = providerevents.AggregateRepository
 	providerAggregateWorkItem          = providerevents.AggregateWorkItem
 	providerAggregateComment           = providerevents.AggregateComment
 	providerAggregateRelationship      = providerevents.AggregateRelationship

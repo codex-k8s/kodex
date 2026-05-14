@@ -49,6 +49,8 @@ service ProviderHubService {
   rpc UpdateComment(UpdateCommentRequest) returns (ProviderOperationResponse);
   // CreatePullRequest creates a provider-native PR/MR for a platform scenario.
   rpc CreatePullRequest(CreatePullRequestRequest) returns (ProviderOperationResponse);
+  // CreateBootstrapPullRequest creates or updates bootstrap branch/PR for an existing empty repository with prepared base branch.
+  rpc CreateBootstrapPullRequest(CreateBootstrapPullRequestRequest) returns (ProviderOperationResponse);
   // UpdatePullRequest updates allowed PR/MR fields through a managed external account.
   rpc UpdatePullRequest(UpdatePullRequestRequest) returns (ProviderOperationResponse);
   // CreateReviewSignal creates a review comment, approval or changes-request signal.
@@ -319,6 +321,7 @@ enum ProviderOperationType {
   PROVIDER_OPERATION_TYPE_CREATE_REVIEW_SIGNAL = 6;
   PROVIDER_OPERATION_TYPE_UPDATE_RELATIONSHIP = 7;
   PROVIDER_OPERATION_TYPE_UPDATE_PULL_REQUEST = 8;
+  PROVIDER_OPERATION_TYPE_CREATE_BOOTSTRAP_PULL_REQUEST = 9;
 }
 
 // ProviderOperationStatus is the execution state of a provider operation.
@@ -1043,6 +1046,48 @@ message CreatePullRequestRequest {
   string external_account_id = 13;
   // repository_target identifies the provider repository where the PR/MR must be created.
   ProviderTarget repository_target = 14;
+}
+
+// BootstrapFile is one text file prepared by project, agent or package contour.
+message BootstrapFile {
+  // path is a repository-relative file path.
+  string path = 1;
+  // content is UTF-8 text content prepared outside provider-hub.
+  string content = 2;
+  // executable marks files that must be written with executable mode when supported.
+  bool executable = 3;
+}
+
+// CreateBootstrapPullRequestRequest creates or updates bootstrap branch and PR/MR for an existing empty repository with prepared base branch.
+message CreateBootstrapPullRequestRequest {
+  // project_id is the project-catalog project id.
+  string project_id = 1;
+  // repository_id is the project-catalog repository binding id.
+  string repository_id = 2;
+  // provider_slug is an extensible provider identifier.
+  string provider_slug = 3;
+  // repository_target identifies an existing empty provider repository.
+  ProviderTarget repository_target = 4;
+  // base_branch is the target branch that already exists at provider side.
+  string base_branch = 5;
+  // bootstrap_branch is the branch provider-hub creates or updates.
+  string bootstrap_branch = 6;
+  // commit_message is the safe commit message for the bootstrap files.
+  string commit_message = 7;
+  // title is PR/MR title.
+  string title = 8;
+  // body is PR/MR body.
+  string body = 9;
+  // draft controls provider draft state when supported.
+  bool draft = 10;
+  // files are prepared text files; provider-hub does not generate their content.
+  repeated BootstrapFile files = 11;
+  // watermark_json is platform watermark payload to place into PR/MR body when required.
+  optional string watermark_json = 12;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 13;
+  // external_account_id is the account selected by caller policy for the provider write.
+  string external_account_id = 14;
 }
 
 // UpdatePullRequestRequest updates provider-native PR/MR fields.
