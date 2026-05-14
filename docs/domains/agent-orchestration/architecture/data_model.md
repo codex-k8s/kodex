@@ -275,12 +275,16 @@ approvals:
 |---|---|---:|---|
 | `key` | text | нет | Первичный ключ идемпотентного следа. |
 | `command_id` | uuid | да | Идемпотентный ключ команды. |
-| `idempotency_key` | text | да | Альтернативный ключ. |
+| `idempotency_key` | text | да | Альтернативный ключ, уникальный в паре `operation + actor`. |
+| `actor_type` | text | нет | Тип инициатора команды. |
+| `actor_id` | text | нет | Идентификатор инициатора команды. |
 | `operation` | text | нет | Имя операции. |
 | `aggregate_type` | text | нет | `flow`, `flow_version`, `role_profile`, `prompt_template`, `prompt_template_version`, далее `session`, `run`, `acceptance`, `follow_up`. |
 | `aggregate_id` | uuid | нет | Затронутый агрегат. |
 | `result_payload` | jsonb | нет | Безопасный результат повтора. |
 | `created_at` | timestamptz | нет | Время первого выполнения. |
+
+Перед возвратом сохранённого результата сервис ищет запись по `actor + operation + command_id/idempotency_key`, загружает фактический aggregate и сверяет его scope или идентификатор с текущим запросом. `command_id` и `idempotency_key` не являются границей авторизации.
 
 ### OutboxEvent
 

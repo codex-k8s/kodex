@@ -22,7 +22,7 @@ type Repository interface {
 	GetFlowVersion(ctx context.Context, id uuid.UUID) (entity.FlowVersion, error)
 	ListFlowVersions(ctx context.Context, filter query.FlowVersionFilter) ([]entity.FlowVersion, value.PageResult, error)
 	CreateRoleProfileWithResult(ctx context.Context, role entity.RoleProfile, result entity.CommandResult) error
-	UpdateRoleProfileWithResult(ctx context.Context, role entity.RoleProfile, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error
+	UpdateRoleProfileWithResult(ctx context.Context, role entity.RoleProfile, previousVersion int64, result entity.CommandResult, event *entity.OutboxEvent) error
 	GetRoleProfile(ctx context.Context, id uuid.UUID) (entity.RoleProfile, error)
 	ListRoleProfiles(ctx context.Context, filter query.RoleProfileFilter) ([]entity.RoleProfile, value.PageResult, error)
 	CreatePromptTemplateWithResult(ctx context.Context, template entity.PromptTemplate, result entity.CommandResult) error

@@ -211,12 +211,16 @@ CREATE TABLE agent_manager_command_results (
     key text PRIMARY KEY,
     command_id uuid,
     idempotency_key text NOT NULL DEFAULT '',
+    actor_type text NOT NULL,
+    actor_id text NOT NULL,
     operation text NOT NULL,
     aggregate_type text NOT NULL,
     aggregate_id uuid NOT NULL,
     result_payload jsonb NOT NULL DEFAULT '{}'::jsonb,
     created_at timestamptz NOT NULL,
     CONSTRAINT agent_manager_command_results_key_chk CHECK (key <> ''),
+    CONSTRAINT agent_manager_command_results_actor_type_chk CHECK (actor_type <> ''),
+    CONSTRAINT agent_manager_command_results_actor_id_chk CHECK (actor_id <> ''),
     CONSTRAINT agent_manager_command_results_operation_chk CHECK (operation <> ''),
     CONSTRAINT agent_manager_command_results_aggregate_type_chk
         CHECK (aggregate_type IN ('flow', 'flow_version', 'role_profile', 'prompt_template', 'prompt_template_version')),
@@ -225,11 +229,11 @@ CREATE TABLE agent_manager_command_results (
 );
 
 CREATE UNIQUE INDEX agent_manager_command_results_command_id_uidx
-    ON agent_manager_command_results (command_id)
+    ON agent_manager_command_results (actor_type, actor_id, command_id)
     WHERE command_id IS NOT NULL;
 
 CREATE UNIQUE INDEX agent_manager_command_results_idempotency_uidx
-    ON agent_manager_command_results (operation, idempotency_key)
+    ON agent_manager_command_results (operation, actor_type, actor_id, idempotency_key)
     WHERE idempotency_key <> '';
 
 CREATE INDEX agent_manager_command_results_aggregate_idx

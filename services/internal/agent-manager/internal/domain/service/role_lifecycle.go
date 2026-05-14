@@ -31,11 +31,7 @@ func (s *Service) CreateRoleProfile(ctx context.Context, input CreateRoleProfile
 	if strings.TrimSpace(input.RuntimeProfile) == "" {
 		return entity.RoleProfile{}, errs.ErrInvalidArgument
 	}
-	if replay, ok, err := findCommandReplayByType(ctx, s, input.Meta, commandReplaySpec[entity.RoleProfile]{
-		Operation:     operationCreateRoleProfile,
-		AggregateType: enum.CommandAggregateTypeRoleProfile,
-		Decode:        roleFromPayload,
-	}); ok || err != nil {
+	if replay, ok, err := findReplay(ctx, s, input.Meta, operationCreateRoleProfile, enum.CommandAggregateTypeRoleProfile, roleFromPayload, verifyScopedReplay(uuid.Nil, &input.Scope, s.repository.GetRoleProfile, roleID, roleScope)); ok || err != nil {
 		return replay, err
 	}
 	now := s.clock.Now()
@@ -73,11 +69,7 @@ func (s *Service) UpdateRoleProfile(ctx context.Context, input UpdateRoleProfile
 	if err != nil {
 		return entity.RoleProfile{}, err
 	}
-	if replay, ok, err := findCommandReplayByType(ctx, s, input.Meta, commandReplaySpec[entity.RoleProfile]{
-		Operation:     operationUpdateRoleProfile,
-		AggregateType: enum.CommandAggregateTypeRoleProfile,
-		Decode:        roleFromPayload,
-	}); ok || err != nil {
+	if replay, ok, err := findReplay(ctx, s, input.Meta, operationUpdateRoleProfile, enum.CommandAggregateTypeRoleProfile, roleFromPayload, verifyScopedReplay(input.RoleProfileID, nil, s.repository.GetRoleProfile, roleID, roleScope)); ok || err != nil {
 		return replay, err
 	}
 	role, err := s.repository.GetRoleProfile(ctx, input.RoleProfileID)
@@ -88,6 +80,7 @@ func (s *Service) UpdateRoleProfile(ctx context.Context, input UpdateRoleProfile
 		return entity.RoleProfile{}, errs.ErrConflict
 	}
 	now := s.clock.Now()
+	previousStatus := role.Status
 	role.DisplayName = input.DisplayName
 	role.IconObjectURI = strings.TrimSpace(input.IconObjectURI)
 	if input.RoleKind != "" {
@@ -111,9 +104,13 @@ func (s *Service) UpdateRoleProfile(ctx context.Context, input UpdateRoleProfile
 	if err != nil {
 		return entity.RoleProfile{}, err
 	}
-	event, err := roleActivatedEvent(s.idGenerator.New(), role, now)
-	if err != nil {
-		return entity.RoleProfile{}, err
+	var event *entity.OutboxEvent
+	if previousStatus != enum.RoleStatusActive && role.Status == enum.RoleStatusActive {
+		activationEvent, err := roleActivatedEvent(s.idGenerator.New(), role, now)
+		if err != nil {
+			return entity.RoleProfile{}, err
+		}
+		event = &activationEvent
 	}
 	return role, s.repository.UpdateRoleProfileWithResult(ctx, role, previousVersion, result, event)
 }

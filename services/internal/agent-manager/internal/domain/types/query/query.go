@@ -12,6 +12,7 @@ type CommandIdentity struct {
 	CommandID      *uuid.UUID
 	IdempotencyKey string
 	Operation      string
+	Actor          value.Actor
 }
 
 type FlowFilter struct {

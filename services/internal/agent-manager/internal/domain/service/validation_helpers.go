@@ -25,6 +25,10 @@ func validateScope(scope value.ScopeRef) error {
 	return nil
 }
 
+func sameScope(left value.ScopeRef, right value.ScopeRef) bool {
+	return left.Type == right.Type && left.Ref == right.Ref
+}
+
 func validateSlug(slug string) error {
 	if strings.TrimSpace(slug) == "" {
 		return errs.ErrInvalidArgument

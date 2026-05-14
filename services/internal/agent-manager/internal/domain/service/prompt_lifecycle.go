@@ -33,11 +33,7 @@ func (s *Service) CreatePromptTemplate(ctx context.Context, input CreatePromptTe
 	if input.PromptKind == "" {
 		return entity.PromptTemplate{}, errs.ErrInvalidArgument
 	}
-	if replay, ok, err := findCommandReplayByType(ctx, s, input.Meta, commandReplaySpec[entity.PromptTemplate]{
-		Operation:     operationCreatePromptTemplate,
-		AggregateType: enum.CommandAggregateTypePromptTemplate,
-		Decode:        promptTemplateFromPayload,
-	}); ok || err != nil {
+	if replay, ok, err := findReplay(ctx, s, input.Meta, operationCreatePromptTemplate, enum.CommandAggregateTypePromptTemplate, promptTemplateFromPayload, verifyPromptReplay(uuid.Nil, input.RoleProfileID, input.PromptKind, s.repository.GetPromptTemplate, promptTemplateID, promptTemplateRoleID, promptTemplateKind)); ok || err != nil {
 		return replay, err
 	}
 	now := s.clock.Now()
@@ -75,11 +71,7 @@ func (s *Service) CreatePromptTemplateVersion(ctx context.Context, input CreateP
 	if input.PromptKind == "" || strings.TrimSpace(input.TemplateDigest) == "" {
 		return entity.PromptTemplateVersion{}, errs.ErrInvalidArgument
 	}
-	if replay, ok, err := findCommandReplayByType(ctx, s, input.Meta, commandReplaySpec[entity.PromptTemplateVersion]{
-		Operation:     operationCreatePromptTemplateVersion,
-		AggregateType: enum.CommandAggregateTypePromptTemplateVersion,
-		Decode:        promptTemplateVersionFromPayload,
-	}); ok || err != nil {
+	if replay, ok, err := findReplay(ctx, s, input.Meta, operationCreatePromptTemplateVersion, enum.CommandAggregateTypePromptTemplateVersion, promptTemplateVersionFromPayload, verifyPromptReplay(uuid.Nil, input.RoleProfileID, input.PromptKind, s.repository.GetPromptTemplateVersion, promptVersionID, promptVersionRoleID, promptVersionKind)); ok || err != nil {
 		return replay, err
 	}
 	now := s.clock.Now()
@@ -125,11 +117,7 @@ func (s *Service) ActivatePromptTemplateVersion(ctx context.Context, input Activ
 	if err != nil {
 		return entity.PromptTemplateVersion{}, err
 	}
-	if replay, ok, err := findCommandReplayByType(ctx, s, input.Meta, commandReplaySpec[entity.PromptTemplateVersion]{
-		Operation:     operationActivatePromptVersion,
-		AggregateType: enum.CommandAggregateTypePromptTemplateVersion,
-		Decode:        promptTemplateVersionFromPayload,
-	}); ok || err != nil {
+	if replay, ok, err := findReplay(ctx, s, input.Meta, operationActivatePromptVersion, enum.CommandAggregateTypePromptTemplateVersion, promptTemplateVersionFromPayload, verifyPromptReplay(input.PromptTemplateVersionID, uuid.Nil, "", s.repository.GetPromptTemplateVersion, promptVersionID, promptVersionRoleID, promptVersionKind)); ok || err != nil {
 		return replay, err
 	}
 	version, err := s.repository.GetPromptTemplateVersion(ctx, input.PromptTemplateVersionID)
@@ -157,7 +145,7 @@ func (s *Service) ActivatePromptTemplateVersion(ctx context.Context, input Activ
 	if err != nil {
 		return entity.PromptTemplateVersion{}, err
 	}
-	event, err := promptActivatedEvent(s.idGenerator.New(), version, now)
+	event, err := promptActivatedEvent(s.idGenerator.New(), template, version, now)
 	if err != nil {
 		return entity.PromptTemplateVersion{}, err
 	}

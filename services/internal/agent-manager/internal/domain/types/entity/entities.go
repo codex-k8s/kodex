@@ -112,6 +112,7 @@ type CommandResult struct {
 	Key            string
 	CommandID      *uuid.UUID
 	IdempotencyKey string
+	Actor          value.Actor
 	Operation      string
 	AggregateType  enum.CommandAggregateType
 	AggregateID    uuid.UUID

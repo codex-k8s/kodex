@@ -3,6 +3,7 @@ package agent
 
 import (
 	"context"
+	"embed"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,6 +18,11 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/value"
 )
+
+// SQLFiles contains named SQL queries for agent-manager repository.
+//
+//go:embed sql/*.sql
+var SQLFiles embed.FS
 
 var _ agentrepo.Repository = (*Repository)(nil)
 
@@ -116,8 +122,8 @@ func (r *Repository) CreateRoleProfileWithResult(ctx context.Context, role entit
 	return r.mutateWithResult(ctx, operationCreateRole, queryRoleCreate, roleProfileArgs(role), result, nil)
 }
 
-func (r *Repository) UpdateRoleProfileWithResult(ctx context.Context, role entity.RoleProfile, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
-	return r.mutateWithResult(ctx, operationUpdateRole, queryRoleUpdate, roleProfileUpdateArgs(role, previousVersion), result, &event)
+func (r *Repository) UpdateRoleProfileWithResult(ctx context.Context, role entity.RoleProfile, previousVersion int64, result entity.CommandResult, event *entity.OutboxEvent) error {
+	return r.mutateWithResult(ctx, operationUpdateRole, queryRoleUpdate, roleProfileUpdateArgs(role, previousVersion), result, event)
 }
 
 func (r *Repository) GetRoleProfile(ctx context.Context, id uuid.UUID) (entity.RoleProfile, error) {

@@ -20,6 +20,7 @@ type commandReplaySpec[T any] struct {
 	Operation     string
 	AggregateType enum.CommandAggregateType
 	Decode        func([]byte) (T, error)
+	Verify        func(context.Context, entity.CommandResult, T) error
 }
 
 func findCommandReplayByType[T any](ctx context.Context, service *Service, meta value.CommandMeta, spec commandReplaySpec[T]) (T, bool, error) {
@@ -42,7 +43,21 @@ func findCommandReplayByType[T any](ctx context.Context, service *Service, meta 
 	if err != nil {
 		return zero, true, err
 	}
+	if spec.Verify != nil {
+		if err := spec.Verify(ctx, result, replay); err != nil {
+			return zero, true, err
+		}
+	}
 	return replay, true, nil
+}
+
+func findReplay[T any](ctx context.Context, service *Service, meta value.CommandMeta, operation string, aggregateType enum.CommandAggregateType, decode func([]byte) (T, error), verify func(context.Context, entity.CommandResult, T) error) (T, bool, error) {
+	return findCommandReplayByType(ctx, service, meta, commandReplaySpec[T]{
+		Operation:     operation,
+		AggregateType: aggregateType,
+		Decode:        decode,
+		Verify:        verify,
+	})
 }
 
 func matchesReplay(result entity.CommandResult, operation string, aggregateType enum.CommandAggregateType) bool {
@@ -54,7 +69,10 @@ func commandIdentity(meta value.CommandMeta, operation string) (query.CommandIde
 	if meta.CommandID == uuid.Nil && idempotencyKey == "" {
 		return query.CommandIdentity{}, errs.ErrInvalidArgument
 	}
-	identity := query.CommandIdentity{Operation: operation, IdempotencyKey: idempotencyKey}
+	if strings.TrimSpace(meta.Actor.Type) == "" || strings.TrimSpace(meta.Actor.ID) == "" {
+		return query.CommandIdentity{}, errs.ErrInvalidArgument
+	}
+	identity := query.CommandIdentity{Operation: operation, IdempotencyKey: idempotencyKey, Actor: meta.Actor}
 	if meta.CommandID == uuid.Nil {
 		return identity, nil
 	}
@@ -71,6 +89,7 @@ func commandResult(meta value.CommandMeta, operation string, aggregateType enum.
 		Key:            commandResultKey(identity),
 		CommandID:      identity.CommandID,
 		IdempotencyKey: identity.IdempotencyKey,
+		Actor:          identity.Actor,
 		Operation:      operation,
 		AggregateType:  aggregateType,
 		AggregateID:    aggregateID,
@@ -80,10 +99,11 @@ func commandResult(meta value.CommandMeta, operation string, aggregateType enum.
 }
 
 func commandResultKey(identity query.CommandIdentity) string {
+	actor := identity.Actor.Type + ":" + identity.Actor.ID
 	if identity.CommandID != nil {
-		return identity.Operation + ":" + identity.CommandID.String()
+		return identity.Operation + ":" + actor + ":" + identity.CommandID.String()
 	}
-	return identity.Operation + ":" + identity.IdempotencyKey
+	return identity.Operation + ":" + actor + ":" + identity.IdempotencyKey
 }
 
 func expectedVersion(meta value.CommandMeta) (int64, error) {

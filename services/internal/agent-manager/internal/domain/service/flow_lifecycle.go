@@ -33,11 +33,7 @@ func (s *Service) CreateFlow(ctx context.Context, input CreateFlowInput) (entity
 	if err := validateSlug(input.Slug); err != nil {
 		return entity.Flow{}, err
 	}
-	if replay, ok, err := findCommandReplayByType(ctx, s, input.Meta, commandReplaySpec[entity.Flow]{
-		Operation:     operationCreateFlow,
-		AggregateType: enum.CommandAggregateTypeFlow,
-		Decode:        flowFromPayload,
-	}); ok || err != nil {
+	if replay, ok, err := findReplay(ctx, s, input.Meta, operationCreateFlow, enum.CommandAggregateTypeFlow, flowFromPayload, verifyScopedReplay(uuid.Nil, &input.Scope, s.repository.GetFlow, flowID, flowScope)); ok || err != nil {
 		return replay, err
 	}
 	now := s.clock.Now()
@@ -72,11 +68,7 @@ func (s *Service) UpdateFlow(ctx context.Context, input UpdateFlowInput) (entity
 	if err != nil {
 		return entity.Flow{}, err
 	}
-	if replay, ok, err := findCommandReplayByType(ctx, s, input.Meta, commandReplaySpec[entity.Flow]{
-		Operation:     operationUpdateFlow,
-		AggregateType: enum.CommandAggregateTypeFlow,
-		Decode:        flowFromPayload,
-	}); ok || err != nil {
+	if replay, ok, err := findReplay(ctx, s, input.Meta, operationUpdateFlow, enum.CommandAggregateTypeFlow, flowFromPayload, verifyScopedReplay(input.FlowID, nil, s.repository.GetFlow, flowID, flowScope)); ok || err != nil {
 		return replay, err
 	}
 	stored, err := s.repository.GetFlow(ctx, input.FlowID)
@@ -132,11 +124,7 @@ func (s *Service) CreateFlowVersion(ctx context.Context, input CreateFlowVersion
 	if strings.TrimSpace(input.DefinitionDigest) == "" {
 		return entity.FlowVersion{}, errs.ErrInvalidArgument
 	}
-	if replay, ok, err := findCommandReplayByType(ctx, s, input.Meta, commandReplaySpec[entity.FlowVersion]{
-		Operation:     operationCreateFlowVersion,
-		AggregateType: enum.CommandAggregateTypeFlowVersion,
-		Decode:        flowVersionFromPayload,
-	}); ok || err != nil {
+	if replay, ok, err := findReplay(ctx, s, input.Meta, operationCreateFlowVersion, enum.CommandAggregateTypeFlowVersion, flowVersionFromPayload, verifyReplay(uuid.Nil, s.repository.GetFlowVersion, flowVersionID, requireFlowID(input.FlowID))); ok || err != nil {
 		return replay, err
 	}
 	now := s.clock.Now()
@@ -171,11 +159,7 @@ func (s *Service) ActivateFlowVersion(ctx context.Context, input ActivateFlowVer
 	if err != nil {
 		return entity.FlowVersion{}, err
 	}
-	if replay, ok, err := findCommandReplayByType(ctx, s, input.Meta, commandReplaySpec[entity.FlowVersion]{
-		Operation:     operationActivateFlowVersion,
-		AggregateType: enum.CommandAggregateTypeFlowVersion,
-		Decode:        flowVersionFromPayload,
-	}); ok || err != nil {
+	if replay, ok, err := findReplay(ctx, s, input.Meta, operationActivateFlowVersion, enum.CommandAggregateTypeFlowVersion, flowVersionFromPayload, verifyReplay(input.FlowVersionID, s.repository.GetFlowVersion, flowVersionID, acceptAnyFlowID)); ok || err != nil {
 		return replay, err
 	}
 	version, err := s.repository.GetFlowVersion(ctx, input.FlowVersionID)
@@ -204,7 +188,7 @@ func (s *Service) ActivateFlowVersion(ctx context.Context, input ActivateFlowVer
 	if err != nil {
 		return entity.FlowVersion{}, err
 	}
-	event, err := flowActivatedEvent(s.idGenerator.New(), version, now)
+	event, err := flowActivatedEvent(s.idGenerator.New(), flow, version, now)
 	if err != nil {
 		return entity.FlowVersion{}, err
 	}

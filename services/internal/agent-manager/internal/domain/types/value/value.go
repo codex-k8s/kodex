@@ -3,6 +3,11 @@ package value
 
 import "github.com/google/uuid"
 
+type Actor struct {
+	Type string
+	ID   string
+}
+
 type LocalizedText struct {
 	Locale string `json:"locale"`
 	Text   string `json:"text"`
@@ -23,12 +28,12 @@ type CommandMeta struct {
 	CommandID       uuid.UUID
 	IdempotencyKey  string
 	ExpectedVersion *int64
-	ActorRef        string
+	Actor           Actor
 }
 
 type QueryMeta struct {
-	ActorRef string
-	Page     PageRequest
+	Actor Actor
+	Page  PageRequest
 }
 
 type PageRequest struct {

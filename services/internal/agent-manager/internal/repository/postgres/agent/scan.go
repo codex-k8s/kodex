@@ -242,6 +242,8 @@ func (r *commandResultRow) scan(row postgreslib.RowScanner) error {
 		&r.result.Key,
 		&r.commandID,
 		&r.result.IdempotencyKey,
+		&r.result.Actor.Type,
+		&r.result.Actor.ID,
 		&r.result.Operation,
 		&r.aggregateType,
 		&r.result.AggregateID,

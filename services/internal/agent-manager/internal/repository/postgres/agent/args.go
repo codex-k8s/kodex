@@ -150,6 +150,8 @@ func commandResultArgs(result entity.CommandResult) pgx.NamedArgs {
 	args := pgx.NamedArgs{"key": result.Key}
 	args["command_id"] = postgreslib.NullableUUID(result.CommandID)
 	args["idempotency_key"] = result.IdempotencyKey
+	args["actor_type"] = result.Actor.Type
+	args["actor_id"] = result.Actor.ID
 	args["operation"] = result.Operation
 	args["aggregate_type"] = string(result.AggregateType)
 	args["aggregate_id"] = result.AggregateID
@@ -163,6 +165,8 @@ func commandIdentityArgs(identity query.CommandIdentity) pgx.NamedArgs {
 		"command_id":      postgreslib.NullableUUID(identity.CommandID),
 		"idempotency_key": identity.IdempotencyKey,
 		"operation":       identity.Operation,
+		"actor_type":      identity.Actor.Type,
+		"actor_id":        identity.Actor.ID,
 	}
 }
 

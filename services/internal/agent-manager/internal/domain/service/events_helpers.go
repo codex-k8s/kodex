@@ -13,11 +13,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/entity"
 )
 
-func flowActivatedEvent(id uuid.UUID, version entity.FlowVersion, occurredAt time.Time) (entity.OutboxEvent, error) {
+func flowActivatedEvent(id uuid.UUID, flow entity.Flow, version entity.FlowVersion, occurredAt time.Time) (entity.OutboxEvent, error) {
 	payload, err := json.Marshal(agentevents.Payload{
 		FlowID:           version.FlowID.String(),
 		FlowVersionID:    version.ID.String(),
 		ActivatedVersion: version.Version,
+		Version:          flow.Version,
 	})
 	if err != nil {
 		return entity.OutboxEvent{}, err
@@ -34,6 +35,7 @@ func roleActivatedEvent(id uuid.UUID, role entity.RoleProfile, occurredAt time.T
 		RoleProfileID:      role.ID.String(),
 		RoleProfileVersion: role.Version,
 		RoleProfileDigest:  digest,
+		Version:            role.Version,
 	})
 	if err != nil {
 		return entity.OutboxEvent{}, err
@@ -41,11 +43,13 @@ func roleActivatedEvent(id uuid.UUID, role entity.RoleProfile, occurredAt time.T
 	return outboxEvent(id, agentevents.EventRoleVersionActivated, agentevents.AggregateRole, role.ID, payload, occurredAt), nil
 }
 
-func promptActivatedEvent(id uuid.UUID, version entity.PromptTemplateVersion, occurredAt time.Time) (entity.OutboxEvent, error) {
+func promptActivatedEvent(id uuid.UUID, template entity.PromptTemplate, version entity.PromptTemplateVersion, occurredAt time.Time) (entity.OutboxEvent, error) {
 	payload, err := json.Marshal(agentevents.Payload{
+		RoleProfileID:           version.RoleProfileID.String(),
 		PromptTemplateVersionID: version.ID.String(),
 		PromptTemplateDigest:    version.TemplateDigest,
-		Version:                 version.Version,
+		ActivatedVersion:        version.Version,
+		Version:                 template.Version,
 	})
 	if err != nil {
 		return entity.OutboxEvent{}, err
