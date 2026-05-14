@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -17,12 +18,13 @@ import (
 )
 
 const (
-	watermarkStart        = "<!-- kodex:artifact v1"
-	watermarkEnd          = "-->"
-	relationshipSource    = "source"
-	relationshipParent    = "parent"
-	relationshipNext      = "next"
-	projectionSummarySize = 320
+	watermarkStart                       = "<!-- kodex:artifact v1"
+	watermarkEnd                         = "-->"
+	relationshipSource                   = "source"
+	relationshipParent                   = "parent"
+	relationshipNext                     = "next"
+	relationshipProjectRepositoryBinding = "project_repository_binding"
+	projectionSummarySize                = 320
 )
 
 var whitespacePattern = regexp.MustCompile(`\s+`)
@@ -84,6 +86,14 @@ func workItemProjectionFromSnapshot(snapshot value.ProviderWorkItemSnapshot, now
 	if err != nil {
 		return entity.ProviderWorkItemProjection{}, nil, err
 	}
+	projectID, err := optionalSnapshotUUID(snapshot.ProjectID)
+	if err != nil {
+		return entity.ProviderWorkItemProjection{}, nil, err
+	}
+	repositoryID, err := optionalSnapshotUUID(snapshot.RepositoryID)
+	if err != nil {
+		return entity.ProviderWorkItemProjection{}, nil, err
+	}
 	assigneesJSON, err := json.Marshal(trimStrings(snapshot.Assignees))
 	if err != nil {
 		return entity.ProviderWorkItemProjection{}, nil, err
@@ -92,6 +102,8 @@ func workItemProjectionFromSnapshot(snapshot value.ProviderWorkItemSnapshot, now
 	workItemID := stableUUID("work-item", string(providerSlug), providerID)
 	workItem := entity.ProviderWorkItemProjection{
 		Base:               entity.Base{ID: workItemID, Version: 1, CreatedAt: now, UpdatedAt: now},
+		ProjectID:          projectID,
+		RepositoryID:       repositoryID,
 		ProviderSlug:       providerSlug,
 		ProviderWorkItemID: providerID,
 		RepositoryFullName: repositoryFullName,
@@ -112,7 +124,38 @@ func workItemProjectionFromSnapshot(snapshot value.ProviderWorkItemSnapshot, now
 		SyncedAt:           now,
 		DriftStatus:        enum.WorkItemDriftStatusFresh,
 	}
-	return workItem, relationshipsFromWatermark(workItem.ID, watermark.fields, now), nil
+	relationships := relationshipsFromWatermark(workItem.ID, watermark.fields, now)
+	relationships = append(relationships, projectRepositoryBindingRelationships(workItem.ID, projectID, repositoryID, now)...)
+	return workItem, relationships, nil
+}
+
+func optionalSnapshotUUID(raw string) (*uuid.UUID, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return nil, nil
+	}
+	id, err := uuid.Parse(value)
+	if err != nil || id == uuid.Nil {
+		return nil, fmt.Errorf("invalid snapshot uuid %q", value)
+	}
+	return &id, nil
+}
+
+func projectRepositoryBindingRelationships(workItemID uuid.UUID, projectID *uuid.UUID, repositoryID *uuid.UUID, now time.Time) []entity.ProviderRelationship {
+	if projectID == nil || repositoryID == nil {
+		return nil
+	}
+	targetProviderRef := "project-catalog:project:" + projectID.String() + ":repository:" + repositoryID.String()
+	return []entity.ProviderRelationship{{
+		ID:                stableUUID("relationship", workItemID.String(), relationshipProjectRepositoryBinding, targetProviderRef),
+		Version:           1,
+		SourceWorkItemID:  workItemID,
+		TargetProviderRef: targetProviderRef,
+		RelationshipType:  relationshipProjectRepositoryBinding,
+		Source:            enum.RelationshipSourceManual,
+		Confidence:        enum.RelationshipConfidenceConfirmed,
+		CreatedAt:         now,
+	}}
 }
 
 func commentProjectionFromSnapshot(snapshot value.ProviderCommentSnapshot, now time.Time) entity.ProviderCommentProjection {

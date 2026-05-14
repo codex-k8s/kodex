@@ -38,6 +38,7 @@ const (
 	ProviderHubService_CreateComment_FullMethodName                    = "/kodex.providers.v1.ProviderHubService/CreateComment"
 	ProviderHubService_UpdateComment_FullMethodName                    = "/kodex.providers.v1.ProviderHubService/UpdateComment"
 	ProviderHubService_CreatePullRequest_FullMethodName                = "/kodex.providers.v1.ProviderHubService/CreatePullRequest"
+	ProviderHubService_CreateBootstrapPullRequest_FullMethodName       = "/kodex.providers.v1.ProviderHubService/CreateBootstrapPullRequest"
 	ProviderHubService_UpdatePullRequest_FullMethodName                = "/kodex.providers.v1.ProviderHubService/UpdatePullRequest"
 	ProviderHubService_CreateReviewSignal_FullMethodName               = "/kodex.providers.v1.ProviderHubService/CreateReviewSignal"
 	ProviderHubService_UpdateRelationship_FullMethodName               = "/kodex.providers.v1.ProviderHubService/UpdateRelationship"
@@ -94,6 +95,8 @@ type ProviderHubServiceClient interface {
 	UpdateComment(ctx context.Context, in *UpdateCommentRequest, opts ...grpc.CallOption) (*ProviderOperationResponse, error)
 	// CreatePullRequest creates a provider-native PR/MR for a platform scenario.
 	CreatePullRequest(ctx context.Context, in *CreatePullRequestRequest, opts ...grpc.CallOption) (*ProviderOperationResponse, error)
+	// CreateBootstrapPullRequest creates or updates bootstrap branch/PR for an existing empty repository with prepared base branch.
+	CreateBootstrapPullRequest(ctx context.Context, in *CreateBootstrapPullRequestRequest, opts ...grpc.CallOption) (*ProviderOperationResponse, error)
 	// UpdatePullRequest updates allowed PR/MR fields through a managed external account.
 	UpdatePullRequest(ctx context.Context, in *UpdatePullRequestRequest, opts ...grpc.CallOption) (*ProviderOperationResponse, error)
 	// CreateReviewSignal creates a review comment, approval or changes-request signal.
@@ -310,6 +313,16 @@ func (c *providerHubServiceClient) CreatePullRequest(ctx context.Context, in *Cr
 	return out, nil
 }
 
+func (c *providerHubServiceClient) CreateBootstrapPullRequest(ctx context.Context, in *CreateBootstrapPullRequestRequest, opts ...grpc.CallOption) (*ProviderOperationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ProviderOperationResponse)
+	err := c.cc.Invoke(ctx, ProviderHubService_CreateBootstrapPullRequest_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *providerHubServiceClient) UpdatePullRequest(ctx context.Context, in *UpdatePullRequestRequest, opts ...grpc.CallOption) (*ProviderOperationResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ProviderOperationResponse)
@@ -436,6 +449,8 @@ type ProviderHubServiceServer interface {
 	UpdateComment(context.Context, *UpdateCommentRequest) (*ProviderOperationResponse, error)
 	// CreatePullRequest creates a provider-native PR/MR for a platform scenario.
 	CreatePullRequest(context.Context, *CreatePullRequestRequest) (*ProviderOperationResponse, error)
+	// CreateBootstrapPullRequest creates or updates bootstrap branch/PR for an existing empty repository with prepared base branch.
+	CreateBootstrapPullRequest(context.Context, *CreateBootstrapPullRequestRequest) (*ProviderOperationResponse, error)
 	// UpdatePullRequest updates allowed PR/MR fields through a managed external account.
 	UpdatePullRequest(context.Context, *UpdatePullRequestRequest) (*ProviderOperationResponse, error)
 	// CreateReviewSignal creates a review comment, approval or changes-request signal.
@@ -518,6 +533,9 @@ func (UnimplementedProviderHubServiceServer) UpdateComment(context.Context, *Upd
 }
 func (UnimplementedProviderHubServiceServer) CreatePullRequest(context.Context, *CreatePullRequestRequest) (*ProviderOperationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreatePullRequest not implemented")
+}
+func (UnimplementedProviderHubServiceServer) CreateBootstrapPullRequest(context.Context, *CreateBootstrapPullRequestRequest) (*ProviderOperationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateBootstrapPullRequest not implemented")
 }
 func (UnimplementedProviderHubServiceServer) UpdatePullRequest(context.Context, *UpdatePullRequestRequest) (*ProviderOperationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdatePullRequest not implemented")
@@ -906,6 +924,24 @@ func _ProviderHubService_CreatePullRequest_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProviderHubService_CreateBootstrapPullRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateBootstrapPullRequestRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderHubServiceServer).CreateBootstrapPullRequest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProviderHubService_CreateBootstrapPullRequest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderHubServiceServer).CreateBootstrapPullRequest(ctx, req.(*CreateBootstrapPullRequestRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ProviderHubService_UpdatePullRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(UpdatePullRequestRequest)
 	if err := dec(in); err != nil {
@@ -1132,6 +1168,10 @@ var ProviderHubService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreatePullRequest",
 			Handler:    _ProviderHubService_CreatePullRequest_Handler,
+		},
+		{
+			MethodName: "CreateBootstrapPullRequest",
+			Handler:    _ProviderHubService_CreateBootstrapPullRequest_Handler,
 		},
 		{
 			MethodName: "UpdatePullRequest",

@@ -38,6 +38,7 @@ type providerService interface {
 	CreateComment(context.Context, providerservice.CreateCommentInput) (providerservice.ProviderOperationResult, error)
 	UpdateComment(context.Context, providerservice.UpdateCommentInput) (providerservice.ProviderOperationResult, error)
 	CreatePullRequest(context.Context, providerservice.CreatePullRequestInput) (providerservice.ProviderOperationResult, error)
+	CreateBootstrapPullRequest(context.Context, providerservice.CreateBootstrapPullRequestInput) (providerservice.ProviderOperationResult, error)
 	UpdatePullRequest(context.Context, providerservice.UpdatePullRequestInput) (providerservice.ProviderOperationResult, error)
 	CreateReviewSignal(context.Context, providerservice.CreateReviewSignalInput) (providerservice.ProviderOperationResult, error)
 	UpdateRelationship(context.Context, providerservice.UpdateRelationshipInput) (providerservice.ProviderOperationResult, error)
@@ -150,6 +151,11 @@ func (s *Server) UpdateComment(ctx context.Context, request *providersv1.UpdateC
 // CreatePullRequest records a typed provider PR/MR creation command.
 func (s *Server) CreatePullRequest(ctx context.Context, request *providersv1.CreatePullRequestRequest) (*providersv1.ProviderOperationResponse, error) {
 	return grpcserver.HandleUnary(ctx, request, grpccasters.CreatePullRequestInput, s.service.CreatePullRequest, grpccasters.ProviderOperationResponse)
+}
+
+// CreateBootstrapPullRequest records an empty-repository bootstrap branch/PR command.
+func (s *Server) CreateBootstrapPullRequest(ctx context.Context, request *providersv1.CreateBootstrapPullRequestRequest) (*providersv1.ProviderOperationResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.CreateBootstrapPullRequestInput, s.service.CreateBootstrapPullRequest, grpccasters.ProviderOperationResponse)
 }
 
 // UpdatePullRequest records a typed provider PR/MR update command.

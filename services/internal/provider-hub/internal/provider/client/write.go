@@ -22,18 +22,19 @@ type ReviewInlineComment struct {
 
 // WriteRequest carries one typed provider write command through the shared executor pipeline.
 type WriteRequest struct {
-	Credential         AccountCredential
-	CommandID          string
-	TargetRef          string
-	ProviderSlug       enum.ProviderSlug
-	CreateIssue        *CreateIssueCommand
-	UpdateIssue        *UpdateIssueCommand
-	CreateComment      *CreateCommentCommand
-	UpdateComment      *UpdateCommentCommand
-	CreatePullRequest  *CreatePullRequestCommand
-	UpdatePullRequest  *UpdatePullRequestCommand
-	CreateReviewSignal *CreateReviewSignalCommand
-	UpdateRelationship *UpdateRelationshipCommand
+	Credential                 AccountCredential
+	CommandID                  string
+	TargetRef                  string
+	ProviderSlug               enum.ProviderSlug
+	CreateIssue                *CreateIssueCommand
+	UpdateIssue                *UpdateIssueCommand
+	CreateComment              *CreateCommentCommand
+	UpdateComment              *UpdateCommentCommand
+	CreatePullRequest          *CreatePullRequestCommand
+	UpdatePullRequest          *UpdatePullRequestCommand
+	CreateBootstrapPullRequest *CreateBootstrapPullRequestCommand
+	CreateReviewSignal         *CreateReviewSignalCommand
+	UpdateRelationship         *UpdateRelationshipCommand
 }
 
 // CreateIssueCommand describes one provider-native create issue request.
@@ -90,6 +91,28 @@ type CreatePullRequestCommand struct {
 	Draft            bool
 	Labels           []string
 	LinkedIssueRef   string
+	WatermarkJSON    []byte
+}
+
+// BootstrapFile describes one prepared repository file to write into a bootstrap branch.
+type BootstrapFile struct {
+	Path       string
+	Content    string
+	Executable bool
+}
+
+// CreateBootstrapPullRequestCommand writes prepared files to a bootstrap branch and opens or updates PR.
+type CreateBootstrapPullRequestCommand struct {
+	ProjectID        string
+	RepositoryID     string
+	RepositoryTarget Target
+	BaseBranch       string
+	BootstrapBranch  string
+	CommitMessage    string
+	Title            string
+	Body             string
+	Draft            bool
+	Files            []BootstrapFile
 	WatermarkJSON    []byte
 }
 

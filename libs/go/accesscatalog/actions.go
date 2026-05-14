@@ -39,6 +39,7 @@ const (
 	ResourceProviderWorkItem             = "provider_work_item"
 	ResourceProviderIssue                = "provider_issue"
 	ResourceProviderPullRequest          = "provider_pull_request"
+	ResourceProviderRepository           = "provider_repository"
 	ResourceProviderComment              = "provider_comment"
 	ResourceProviderReviewSignal         = "provider_review_signal"
 	ResourceProviderRelationship         = "provider_relationship"
@@ -110,6 +111,7 @@ const (
 	ActionProviderWorkItemRead                  = "provider.work_item.read"
 	ActionProviderIssueWrite                    = "provider.issue.write"
 	ActionProviderPullRequestWrite              = "provider.pull_request.write"
+	ActionProviderRepositoryWrite               = "provider.repository.write"
 	ActionProviderCommentWrite                  = "provider.comment.write"
 	ActionProviderReviewSignalWrite             = "provider.review_signal.write"
 	ActionProviderRelationshipWrite             = "provider.relationship.write"
@@ -242,6 +244,7 @@ func ProviderHubActions() []ActionDescriptor {
 		{Key: ActionProviderWorkItemRead, ResourceType: ResourceProviderWorkItem},
 		{Key: ActionProviderIssueWrite, ResourceType: ResourceProviderIssue},
 		{Key: ActionProviderPullRequestWrite, ResourceType: ResourceProviderPullRequest},
+		{Key: ActionProviderRepositoryWrite, ResourceType: ResourceProviderRepository},
 		{Key: ActionProviderCommentWrite, ResourceType: ResourceProviderComment},
 		{Key: ActionProviderReviewSignalWrite, ResourceType: ResourceProviderReviewSignal},
 		{Key: ActionProviderRelationshipWrite, ResourceType: ResourceProviderRelationship},

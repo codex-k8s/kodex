@@ -34,6 +34,10 @@ const (
 	writeFailureProviderTransient   = "provider_transient_error"
 	writeFailureProviderPermanent   = "provider_permanent_error"
 	writeFailureProviderUnsupported = "provider_unsupported"
+
+	maxBootstrapFiles             = 64
+	maxBootstrapFileContentBytes  = 512 * 1024
+	maxBootstrapTotalContentBytes = 4 * 1024 * 1024
 )
 
 type providerWritePlan struct {
@@ -271,11 +275,7 @@ func (s *Service) CreatePullRequest(ctx context.Context, input CreatePullRequest
 	if err != nil {
 		return ProviderOperationResult{}, err
 	}
-	if !validCommandIdentity(input.Meta) ||
-		input.ProjectID == uuid.Nil ||
-		input.RepositoryID == uuid.Nil ||
-		!validProviderSlug(input.ProviderSlug) ||
-		input.ExternalAccountID == uuid.Nil ||
+	if !validCreateProjectRepositoryWriteInput(input.Meta, input.ProjectID, input.RepositoryID, input.ProviderSlug, input.ExternalAccountID) ||
 		strings.TrimSpace(input.Title) == "" ||
 		strings.TrimSpace(input.HeadBranch) == "" ||
 		strings.TrimSpace(input.BaseBranch) == "" ||
@@ -322,6 +322,75 @@ func (s *Service) CreatePullRequest(ctx context.Context, input CreatePullRequest
 				Draft:            input.Draft,
 				Labels:           append([]string(nil), trimStrings(input.Labels)...),
 				LinkedIssueRef:   optionalStringValue(input.LinkedIssueRef),
+				WatermarkJSON:    watermarkJSON,
+			},
+		},
+	}, changedFields)
+	if err != nil {
+		return ProviderOperationResult{}, err
+	}
+	return s.executeProviderWrite(ctx, plan)
+}
+
+// CreateBootstrapPullRequest records provider-side bootstrap branch/PR creation for an existing empty repository.
+func (s *Service) CreateBootstrapPullRequest(ctx context.Context, input CreateBootstrapPullRequestInput) (ProviderOperationResult, error) {
+	repositoryTarget, err := repositoryTarget(input.ProviderSlug, input.RepositoryTarget)
+	if err != nil {
+		return ProviderOperationResult{}, err
+	}
+	files, err := normalizeBootstrapFiles(input.Files)
+	if err != nil {
+		return ProviderOperationResult{}, err
+	}
+	if !validCreateProjectRepositoryWriteInput(input.Meta, input.ProjectID, input.RepositoryID, input.ProviderSlug, input.ExternalAccountID) ||
+		strings.TrimSpace(input.BaseBranch) == "" ||
+		strings.TrimSpace(input.BootstrapBranch) == "" ||
+		strings.TrimSpace(input.CommitMessage) == "" ||
+		strings.TrimSpace(input.Title) == "" ||
+		len(files) == 0 {
+		return ProviderOperationResult{}, errs.ErrInvalidArgument
+	}
+	watermarkJSON, err := optionalCanonicalJSONObject(input.WatermarkJSON)
+	if err != nil {
+		return ProviderOperationResult{}, err
+	}
+	repositoryID := input.RepositoryID.String()
+	targetRef := repositoryTargetRef(input.ProviderSlug, repositoryID) + "#bootstrap_pull_request:" + strings.TrimSpace(input.BootstrapBranch)
+	changedFields := requiredChangedFields(
+		"repository_target",
+		"base_branch",
+		"bootstrap_branch",
+		"commit_message",
+		"title",
+		"body",
+		"files",
+		"draft",
+		optionalChangedField("watermark_json", len(watermarkJSON) > 0),
+	)
+	plan, err := s.buildWritePlan(providerWritePlan{
+		operationType:     enum.ProviderOperationCreateBootstrapPullRequest,
+		actionKey:         accesscatalog.ActionProviderRepositoryWrite,
+		providerSlug:      input.ProviderSlug,
+		externalAccountID: input.ExternalAccountID,
+		targetRef:         targetRef,
+		scopeType:         providerUsageScopeRepository,
+		scopeID:           repositoryID,
+		meta:              input.Meta,
+		executorRequest: providerclient.WriteRequest{
+			CommandID:    providerCommandKey(input.Meta),
+			TargetRef:    targetRef,
+			ProviderSlug: input.ProviderSlug,
+			CreateBootstrapPullRequest: &providerclient.CreateBootstrapPullRequestCommand{
+				ProjectID:        input.ProjectID.String(),
+				RepositoryID:     repositoryID,
+				RepositoryTarget: toClientTarget(repositoryTarget),
+				BaseBranch:       strings.TrimSpace(input.BaseBranch),
+				BootstrapBranch:  strings.TrimSpace(input.BootstrapBranch),
+				CommitMessage:    strings.TrimSpace(input.CommitMessage),
+				Title:            strings.TrimSpace(input.Title),
+				Body:             strings.TrimSpace(input.Body),
+				Draft:            input.Draft,
+				Files:            toClientBootstrapFiles(files),
 				WatermarkJSON:    watermarkJSON,
 			},
 		},
@@ -855,6 +924,13 @@ func (s *Service) providerWriteProjection(ctx context.Context, plan providerWrit
 		}
 		providerEvents = append(providerEvents, providerEvent)
 		outboxEvents = append(outboxEvents, outboxEvent)
+		if plan.operationType == enum.ProviderOperationCreateBootstrapPullRequest {
+			bootstrapEvent, err := s.providerRepositoryBootstrapCompletedOutbox(plan, workItem)
+			if err != nil {
+				return providerrepo.ProjectionUpdate{}, nil, nil, providerWriteProjectionResult{}, err
+			}
+			outboxEvents = append(outboxEvents, bootstrapEvent)
+		}
 	}
 	if result.Comment != nil {
 		comment := commentProjectionFromSnapshot(*result.Comment, now)
@@ -1025,6 +1101,34 @@ func (s *Service) providerWriteRelationshipOutbox(plan providerWritePlan, relati
 		return entity.OutboxEvent{}, err
 	}
 	return outboxEventRecord(s.ids.New(), providerEventRelationshipSynced, providerAggregateRelationship, relationship.ID, payload, relationship.CreatedAt), nil
+}
+
+func (s *Service) providerRepositoryBootstrapCompletedOutbox(plan providerWritePlan, workItem entity.ProviderWorkItemProjection) (entity.OutboxEvent, error) {
+	projectID := ""
+	if workItem.ProjectID != nil {
+		projectID = workItem.ProjectID.String()
+	}
+	repositoryID := ""
+	aggregateID := stableUUID("provider-repository-bootstrap", string(plan.providerSlug), plan.scopeID, workItem.RepositoryFullName)
+	if workItem.RepositoryID != nil {
+		repositoryID = workItem.RepositoryID.String()
+		aggregateID = *workItem.RepositoryID
+	}
+	payload, err := marshalProviderEventPayload(value.ProviderEventPayload{
+		ProviderSlug:         string(plan.providerSlug),
+		ExternalAccountID:    plan.externalAccountID.String(),
+		RepositoryFullName:   workItem.RepositoryFullName,
+		ProjectID:            projectID,
+		RepositoryID:         repositoryID,
+		ProviderWorkItemID:   workItem.ProviderWorkItemID,
+		WorkItemProjectionID: workItem.ID.String(),
+		OperationType:        string(plan.operationType),
+		BootstrapMode:        "branch_pr",
+	})
+	if err != nil {
+		return entity.OutboxEvent{}, err
+	}
+	return outboxEventRecord(s.ids.New(), providerEventRepositoryBootstrapCompleted, providerAggregateRepository, aggregateID, payload, workItem.SyncedAt), nil
 }
 
 func (s *Service) providerOperationOutbox(operation entity.ProviderOperation) (entity.OutboxEvent, error) {
@@ -1292,6 +1396,76 @@ func toClientTarget(target ProviderTarget) providerclient.Target {
 		ProviderObjectID:     strings.TrimSpace(target.ProviderObjectID),
 		WebURL:               strings.TrimSpace(target.WebURL),
 	}
+}
+
+func normalizeBootstrapFiles(files []BootstrapFile) ([]BootstrapFile, error) {
+	if len(files) == 0 || len(files) > maxBootstrapFiles {
+		return nil, errs.ErrInvalidArgument
+	}
+	result := make([]BootstrapFile, 0, len(files))
+	seen := make(map[string]struct{}, len(files))
+	totalSize := 0
+	for _, file := range files {
+		path := strings.TrimSpace(file.Path)
+		if !validBootstrapFilePath(path) {
+			return nil, errs.ErrInvalidArgument
+		}
+		if _, exists := seen[path]; exists {
+			return nil, errs.ErrInvalidArgument
+		}
+		seen[path] = struct{}{}
+		contentSize := len([]byte(file.Content))
+		if contentSize > maxBootstrapFileContentBytes {
+			return nil, errs.ErrInvalidArgument
+		}
+		totalSize += contentSize
+		if totalSize > maxBootstrapTotalContentBytes {
+			return nil, errs.ErrInvalidArgument
+		}
+		result = append(result, BootstrapFile{
+			Path:       path,
+			Content:    file.Content,
+			Executable: file.Executable,
+		})
+	}
+	return result, nil
+}
+
+func validBootstrapFilePath(path string) bool {
+	if path == "" ||
+		strings.HasPrefix(path, "/") ||
+		strings.HasSuffix(path, "/") ||
+		strings.Contains(path, "\\") ||
+		strings.Contains(path, "//") ||
+		strings.Contains(path, "\x00") {
+		return false
+	}
+	for _, segment := range strings.Split(path, "/") {
+		if segment == "" || segment == "." || segment == ".." {
+			return false
+		}
+	}
+	return true
+}
+
+func validCreateProjectRepositoryWriteInput(meta value.CommandMeta, projectID uuid.UUID, repositoryID uuid.UUID, providerSlug enum.ProviderSlug, externalAccountID uuid.UUID) bool {
+	return validCommandIdentity(meta) &&
+		projectID != uuid.Nil &&
+		repositoryID != uuid.Nil &&
+		validProviderSlug(providerSlug) &&
+		externalAccountID != uuid.Nil
+}
+
+func toClientBootstrapFiles(files []BootstrapFile) []providerclient.BootstrapFile {
+	result := make([]providerclient.BootstrapFile, 0, len(files))
+	for _, file := range files {
+		result = append(result, providerclient.BootstrapFile{
+			Path:       file.Path,
+			Content:    file.Content,
+			Executable: file.Executable,
+		})
+	}
+	return result
 }
 
 func toClientReviewSignalKind(kind enum.ReviewSignalKind) providerclient.ReviewSignalKind {

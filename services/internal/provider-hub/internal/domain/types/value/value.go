@@ -82,6 +82,8 @@ type ProviderWebhookFacts struct {
 
 // ProviderWorkItemSnapshot is a provider-neutral snapshot extracted from webhook or sync payload.
 type ProviderWorkItemSnapshot struct {
+	ProjectID          string
+	RepositoryID       string
 	ProviderSlug       string
 	ProviderWorkItemID string
 	RepositoryFullName string
