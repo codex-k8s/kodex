@@ -5,10 +5,11 @@ title: kodex — варианты использования Codex hooks и skil
 status: accepted
 owner_role: SA
 created_at: 2026-05-14
-updated_at: 2026-05-14
+updated_at: 2026-05-15
 related_issues:
   - 698
   - 747
+  - 753
 related_prs: []
 approvals:
   required:
@@ -25,7 +26,7 @@ approvals:
 
 Платформа должна заложить `Codex hooks` до MVP как управляемый канал связи slot-агента с платформой: жизненный цикл, запросы разрешений, сигналы о работе с провайдером, финальная контрольная точка хода и realtime-лента действий агента для UI. Ловим все поддерживаемые hook-события, но сохраняем в БД только доменное состояние и короткие безопасные события с retention.
 
-Выбранный путь: до MVP реализовать вариант 1 — минимальный слой hooks через `platform-mcp-server` и `agent-manager`, но со сбором всех hook-событий для realtime UI. `Codex skills` не входят в MVP как полноценная платформа управления. После MVP целевая модель skills — отдельный слой управляемых возможностей, а не расширение package-hub.
+Выбранный путь: до MVP реализовать вариант 1 — минимальный слой hooks через отдельный `codex-hook-ingress` и `agent-manager`, но со сбором всех hook-событий для realtime UI. `platform-mcp-server` остаётся только MCP-поверхностью инструментов. `Codex skills` не входят в MVP как полноценная платформа управления. После MVP целевая модель skills — отдельный слой управляемых возможностей, а не расширение package-hub.
 
 ## Статус решения
 
@@ -71,8 +72,8 @@ Hooks не должны становиться источником истины
 
 1. Среда исполнения Codex вызывает hook-обработчик внутри рабочего пространства slot.
 2. Hook emitter нормализует событие: `run_id`, `session_id`, `slot_id`, `turn_id`, `hook_event_name`, категория инструмента, короткая безопасная сводка, correlation id.
-3. Hook emitter отправляет событие в `platform-mcp-server` или локальный агентный sidecar. Codex hooks являются command-обработчиками Codex, а не прямыми MCP tool calls, поэтому sidecar или emitter приводит вход Codex hook к платформенному hook envelope. В обоих случаях целевая граница остаётся за `platform-mcp-server`: sidecar только буферизует и нормализует событие, но не принимает доменные решения.
-4. `platform-mcp-server` проверяет источник, отбрасывает запрещённые поля и маршрутизирует событие в сервис-владелец.
+3. Hook emitter или локальный агентный sidecar отправляет событие в `codex-hook-ingress`. Codex hooks являются command-обработчиками Codex, а не прямыми MCP tool calls, поэтому emitter приводит вход Codex hook к платформенному hook envelope до отправки в платформу.
+4. `codex-hook-ingress` проверяет источник, отбрасывает запрещённые поля и маршрутизирует событие в сервис-владелец.
 5. Сервис-владелец фиксирует только доменное состояние, которое ему принадлежит.
 
 Все поддерживаемые hook-события должны проходить через эту цепочку и попадать в realtime-ленту UI. Это не означает построчную запись каждого события в постоянную БД: поток UI, короткая операционная история и доменное состояние имеют разные retention-правила.
@@ -83,8 +84,8 @@ Hooks не должны становиться источником истины
 |---|---|---|---|---|
 | `SessionStart` | Старт или resume Codex-сессии внутри slot. | `agent-manager`, `runtime-manager` | Управление, аудит | В БД: связь session/run/slot, источник старта, время, версия модели, workspace ref. Не хранить стенограмму сессии. |
 | `UserPromptSubmit` | Новый prompt, который может быть проверен на секреты, политику и контекст задачи. | `agent-manager`, `interaction-hub` | Управление, аудит | В БД: факт prompt submit, hash, короткая сводка, решение политики. Полный prompt хранить только в контуре диалога, если это пользовательская переписка. |
-| `PreToolUse` | Предварительная проверка инструмента: shell, `apply_patch`, MCP tool; realtime-показ “агент хочет вызвать tool”. | `platform-mcp-server`, `agent-manager`, при необходимости `runtime-manager` | Управление, диагностика, realtime UI | В БД: только deny/ask/risk decision и безопасная сводка. Массовые allow-события держать в короткой операционной ленте и метриках. |
-| `PermissionRequest` | Запрос разрешения Codex на действие с повышенным риском. | `agent-manager`, `interaction-hub`, `platform-mcp-server` | Управление, аудит | В БД: request id, decision id, субъект, действие, риск, gate ref, sanitized reason, решение и время. |
+| `PreToolUse` | Предварительная проверка инструмента: shell, `apply_patch`, MCP tool; realtime-показ “агент хочет вызвать tool”. | `codex-hook-ingress`, `agent-manager`, при необходимости `runtime-manager` | Управление, диагностика, realtime UI | В БД: только deny/ask/risk decision и безопасная сводка. Массовые allow-события держать в короткой операционной ленте и метриках. |
+| `PermissionRequest` | Запрос разрешения Codex на действие с повышенным риском. | `codex-hook-ingress`, `agent-manager`, `interaction-hub` | Управление, аудит | В БД: request id, decision id, субъект, действие, риск, gate ref, sanitized reason, решение и время. |
 | `PostToolUse` | Результат инструмента после выполнения; realtime-показ “tool отработал”, provider signals и диагностика. | `provider-hub`, `runtime-manager`, `agent-manager` | Диагностика, аудит для рискованных действий, realtime UI | В БД: только важные итоги, exit status, bounded error, provider artifact signal. Полный stdout/stderr не хранить. |
 | `Stop` | Завершение хода агента; возможность зафиксировать итог и pending actions. | `agent-manager`, `runtime-manager`, `provider-hub`, `interaction-hub` | Управление, аудит | В БД: контрольная точка run, итоговый status, pending gates, provider signals, короткая сводка. |
 
@@ -96,7 +97,7 @@ Hooks не должны становиться источником истины
 |---|---|---|
 | `agent-manager` | Жизненный цикл run/session, policy gate refs, request/decision, внутренние контрольные точки сессии, stop summary. | Сырые tool outputs, секреты, полные стенограммы сессий. |
 | `runtime-manager` | Slot/session binding, диагностика рабочего пространства, snapshot object refs, короткий хвост ошибок среды исполнения. | Provider payload и решения бизнес-политик. |
-| `platform-mcp-server` | Нормализованные hook calls для проверки источника, минимальной policy pre-check и маршрутизации. | Долгое хранение состояния и доменную бизнес-логику. |
+| `codex-hook-ingress` | Нормализованные hook events для проверки источника, минимальной policy pre-check и маршрутизации. | MCP tools, `tools/list`, `tools/call`, долгое хранение состояния и доменную бизнес-логику. |
 | `interaction-hub` | Permission request, запрос обратной связи владельца, human gate prompt, notification intent. | Технические tool logs и provider payload. |
 | `provider-hub` | Сигналы об изменённых provider artifacts, rate-limit hints, reconciliation hot cursor. | Сырые токены, значения секретов, полный stdout `gh`. |
 
@@ -120,8 +121,8 @@ Hooks не должны становиться источником истины
 
 `PermissionRequest` должен маппиться не на локальный yes/no без следа, а на доменный gate:
 
-1. Hook emitter отправляет запрос в `platform-mcp-server`.
-2. `platform-mcp-server` определяет actor, run, role, stage, project, repository, tool category.
+1. Hook emitter отправляет запрос в `codex-hook-ingress`.
+2. `codex-hook-ingress` определяет actor, run, role, stage, project, repository, tool category.
 3. `agent-manager` создаёт или находит pending gate.
 4. `interaction-hub` доставляет запрос обратной связи владельца в UI или внешний адаптер.
 5. После решения `agent-manager` фиксирует decision и возвращает allow/deny/ask в hook handler.
@@ -174,7 +175,7 @@ UI должен показывать:
 
 Статус: выбран для MVP с поправкой, что канал обязан ловить все поддерживаемые hook-события для realtime UI.
 
-Суть: до MVP реализовать нормализованный канал hook-событий из slot в `platform-mcp-server` и `agent-manager`. Skills пока не становятся доменной сущностью; их можно использовать вручную в рабочем пространстве или в системной настройке среды исполнения Codex.
+Суть: до MVP реализовать нормализованный канал hook-событий из slot в `codex-hook-ingress` и `agent-manager`. Skills пока не становятся доменной сущностью; их можно использовать вручную в рабочем пространстве или в системной настройке среды исполнения Codex.
 
 Плюсы:
 
@@ -182,7 +183,7 @@ UI должен показывать:
 - Быстро закрывает связь slot-агента с платформой.
 - Даёт UI realtime-ленту действий агента без ожидания полноценного слоя skills.
 - Не создаёт новый сервис и не расширяет package-hub раньше времени.
-- Хорошо ложится на текущую модель `agent-manager` + `runtime-manager` + `platform-mcp-server`.
+- Хорошо ложится на текущую модель `agent-manager` + `runtime-manager` + `codex-hook-ingress`; `platform-mcp-server` остаётся отдельной MCP-поверхностью инструментов.
 
 Минусы:
 
@@ -247,7 +248,7 @@ MVP-объём:
 - `package-hub`: манифест, install, version, digest, skill capability.
 - `agent-manager`: привязка skill refs к role/stage/run.
 - `runtime-manager`: materialization в рабочее пространство.
-- `platform-mcp-server`: проверка разрешённых tools для skill.
+- `platform-mcp-server`: проверка разрешённых MCP-инструментов для skill.
 
 ### Вариант 3. Отдельный слой управляемых возможностей
 
@@ -295,9 +296,9 @@ MVP-объём:
 4. После MVP: UI управления skills, установка из магазина, пользовательские skills, политика по role/stage/workspace.
 5. После MVP: полноценное управление skills проектируется через отдельный слой управляемых возможностей; package-hub остаётся источником пакетов и версий, но не владельцем binding/policy skills.
 
-## Связь с platform-mcp-server
+## Связь с codex-hook-ingress и platform-mcp-server
 
-`platform-mcp-server` является целевой входной границей для hook-событий MVP. MCP-слой:
+`codex-hook-ingress` является целевой входной границей для hook-событий MVP. Входной контур hooks:
 
 - проверяет actor/source/run/session/slot binding;
 - принимает только нормализованный и очищенный envelope;
@@ -305,7 +306,9 @@ MVP-объём:
 - не хранит raw tool payload, значения секретов, большие stdout/stderr, kubeconfig, provider payload и полный session dump;
 - пишет аудит только для permission/gate/risky decision сценариев, а массовые безопасные события отдаёт в realtime/короткую операционную историю с retention.
 
-Подробная граница сервиса и план поставки зафиксированы в `docs/domains/platform-mcp-server/**`. Этот документ фиксирует выбранное решение по hooks, но реализация hook emitter и приёма hook-событий выполняется отдельными срезами.
+`platform-mcp-server` не принимает Codex hooks и не реализует hook transport. Он остаётся MCP-сервером для инструментов: `tools/list`, `tools/call`, схемы входа и маршруты к сервисам-владельцам.
+
+Подробная граница MCP-сервиса и план поставки зафиксированы в `docs/domains/platform-mcp-server/**`. Граница hook ingress зафиксирована в `docs/domains/codex-hook-ingress/**`. Этот документ фиксирует выбранное решение по hooks, но реализация hook emitter и приёма hook-событий выполняется отдельными срезами.
 
 ## Какие документы обновить после выбора
 

@@ -5,8 +5,8 @@ title: kodex — дизайн platform-mcp-server
 status: active
 owner_role: SA
 created_at: 2026-05-14
-updated_at: 2026-05-14
-related_issues: [747]
+updated_at: 2026-05-15
+related_issues: [747, 753]
 related_prs: []
 related_adrs: []
 approvals:
@@ -22,15 +22,15 @@ approvals:
 ## TL;DR
 
 - Что меняем: выделяем `platform-mcp-server` как тонкую MCP-поверхность платформы.
-- Почему: `agent-manager`, slot-агенты и hook emitter должны обращаться к платформе через управляемую policy/auth boundary, а не напрямую к каждому сервису.
-- Основные компоненты: MCP transport, source verifier, tool catalog, policy boundary, router к сервисам-владельцам, sanitizer, bounded diagnostics и audit emitter.
+- Почему: `agent-manager` и slot-агенты должны обращаться к платформе через управляемую MCP-поверхность и policy/auth boundary, а не напрямую к каждому сервису.
+- Основные компоненты: MCP transport, source verifier, MCP tool registry, policy boundary, router к сервисам-владельцам, sanitizer, bounded diagnostics и audit emitter.
 - Риски: превратить MCP в доменный монолит, хранить сырые данные вызовов или начать обходить `provider-hub` при операциях провайдера.
 
 ## Цели
 
 - Зафиксировать границу сервиса до контрактов и кода.
 - Разделить MCP-поверхность и доменное владение.
-- Описать связь входного контура hook-событий с hook emitter без подмены реализации hooks.
+- Зафиксировать, что входной контур Codex hooks вынесен в отдельный `codex-hook-ingress`.
 - Подготовить будущие инструменты `agent-manager` без переноса состояния run/session/gate в MCP.
 - Подготовить provider tools без обхода `provider-hub` и его provider-native pipeline.
 
@@ -46,7 +46,7 @@ approvals:
 
 | Владеет `platform-mcp-server` | Не владеет |
 |---|---|
-| MCP-поверхность инструментов, граница приёма hook-событий, нормализация вызова, проверка источника, минимальная tool-policy, маршрутизация, очистка данных, ограниченная диагностика, idempotency/correlation на границе. | `Run`, session, flow, stage, role, prompt, gates, slot, job, workspace, provider projections, provider write truth, project policy, package installation, dialogue, notification, billing, UI. |
+| MCP-поверхность инструментов, нормализация MCP-вызова, проверка источника, минимальная tool-policy, маршрутизация, очистка данных, ограниченная диагностика, idempotency/correlation на границе. | Codex hook events, `Run`, session, flow, stage, role, prompt, gates, slot, job, workspace, provider projections, provider write truth, project policy, package installation, dialogue, notification, billing, UI. |
 
 Главное правило: `platform-mcp-server` отвечает на вопрос «можно ли этому источнику вызвать этот инструмент в этом контексте и как безопасно передать вызов владельцу». Он не отвечает на вопрос «как меняется бизнес-состояние домена».
 
@@ -67,9 +67,8 @@ approvals:
 | Компонент | Назначение |
 |---|---|
 | MCP transport | Принимает tool calls и возвращает нормализованные ответы. |
-| Адаптер приёма hook-событий | Принимает события Codex hooks из slot emitter или локального sidecar. |
 | Source verifier | Проверяет actor, source type, run id, session id, slot id, project/repository scope и подпись или токен вызова. |
-| Tool catalog | Хранит список разрешённых tool groups, версий и владельцев маршрута. |
+| MCP tool registry | Регистрирует MCP tools через официальный SDK; `tools/list` и snapshot-тесты фиксируют машинно-читаемую поверхность. |
 | Policy boundary | Делает минимальную проверку права на инструмент и риск-профиля вызова. Доменную проверку выполняет сервис-владелец. |
 | Router | Вызывает сервис-владелец по внутреннему gRPC-контракту. |
 | Sanitizer | Удаляет секреты, сырые данные вызова, большие логи и небезопасные поля до маршрутизации, аудита и ответа. |
@@ -77,31 +76,6 @@ approvals:
 | Audit emitter | Фиксирует решения, risky operations, отказы и permission/gate сценарии без сырых данных. |
 
 ## Основные потоки
-
-### Hook-событие из slot
-
-```mermaid
-sequenceDiagram
-  participant C as Codex runtime
-  participant E as hook emitter
-  participant MCP as platform-mcp-server
-  participant AM as agent-manager
-  participant R as runtime-manager
-  participant PH as provider-hub
-  C->>E: hook event
-  E->>E: normalize + redact + attach run/session/slot
-  E->>MCP: hooks.* event
-  MCP->>MCP: verify source + sanitize envelope
-  alt lifecycle или permission
-    MCP->>AM: record lifecycle/gate signal
-  else runtime diagnostics
-    MCP->>R: record bounded runtime signal
-  else provider signal
-    MCP->>PH: RegisterProviderArtifactSignal
-  end
-```
-
-Приём hook-событий не означает постоянное хранение каждого события. `platform-mcp-server` пропускает только нормализованный безопасный envelope и маршрутизирует его владельцу, который решает, что хранить.
 
 ### Provider-инструмент
 
@@ -164,7 +138,7 @@ sequenceDiagram
 Каждый вызов должен иметь:
 
 - `actor_id` и `actor_type`;
-- `source_type`: `agent_manager`, `slot_agent`, `hook_emitter`, `plugin_workload`, `operator`;
+- `source_type`: `agent_manager`, `slot_agent`, `plugin_workload`, `operator`;
 - `source_instance_id`;
 - `organization_id`, `project_id`, `repository_id`, если применимо;
 - `agent_run_id`, `session_id`, `slot_id`, если вызов связан с агентной работой;
@@ -208,7 +182,7 @@ sequenceDiagram
 - изменения статуса run/session через MCP;
 - диагностических запросов с повышенным доступом.
 
-Массовые успешные read-only вызовы и allow-события hook не пишутся как полный аудит, но отражаются в метриках и короткой операционной истории с retention.
+Массовые успешные read-only MCP-вызовы не пишутся как полный аудит, но отражаются в метриках и короткой операционной истории с retention.
 
 ## Наблюдаемость
 
@@ -216,7 +190,6 @@ sequenceDiagram
 |---|---|
 | Tool calls | Количество, задержка, статус, tool group, owner service. |
 | Policy boundary | Allow/deny/ask, причина отказа, риск-класс без данных вызова. |
-| Hooks | Количество по типам, срабатывания очистки, отказы по размеру, результат маршрутизации. |
 | Dependencies | Ошибки gRPC, timeout, unavailable, latency per owner service. |
 | Safety | Количество удалённых секретоподобных значений, отказы из-за размера данных вызова, срабатывания rate limit. |
 

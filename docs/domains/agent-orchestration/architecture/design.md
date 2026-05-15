@@ -5,8 +5,8 @@ title: kodex — дизайн домена оркестрации агентов
 status: active
 owner_role: SA
 created_at: 2026-05-12
-updated_at: 2026-05-13
-related_issues: [733]
+updated_at: 2026-05-15
+related_issues: [733, 753, 698]
 related_prs: []
 related_adrs: []
 approvals:
@@ -30,6 +30,7 @@ approvals:
 
 - Зафиксировать границу `agent-manager` до контрактов и кода.
 - Развести агентную оркестрацию, runtime, provider-native состояние, пакеты и взаимодействия.
+- Развести MCP-инструменты и Codex hook events: MCP идёт через `platform-mcp-server`, а lifecycle/permission/tool-result hooks идут через `codex-hook-ingress`.
 - Подготовить модель для встроенных и пользовательских ролей.
 - Описать, как руководящие пакеты попадают в агентный контекст через package-контур.
 - Описать машину приёмки и создание follow-up задач без введения внутренних заменителей `Issue` и `PR/MR`.
@@ -46,7 +47,7 @@ approvals:
 
 | Владеет `agent-manager` | Не владеет |
 |---|---|
-| Flow, stage, role, stage-role binding, prompt template, prompt version, agent session, agent `Run`, acceptance check, acceptance result, follow-up intent, automation trigger binding, agent events. | Runtime slot, workspace filesystem, platform job, Kubernetes, provider-native проекции и операции, package catalog, package installation, secret value, диалоговые ветки, уведомления, внешние каналы, проектная policy как истина. |
+| Flow, stage, role, stage-role binding, prompt template, prompt version, agent session, agent `Run`, acceptance check, acceptance result, follow-up intent, automation trigger binding, agent events. | Runtime slot, workspace filesystem, platform job, Kubernetes, provider-native проекции и операции, package catalog, package installation, secret value, диалоговые ветки, уведомления, внешние каналы, проектная policy как истина, MCP transport, Codex hook transport. |
 
 Главное правило: `agent-manager` отвечает за вопрос «какая агентная работа должна быть выполнена, кем, по какому процессу и что считать готовым». Технический вопрос «где и как выполнить» решает runtime-контур. Вопрос «как записать provider-native артефакт» решает provider-контур. Вопрос «как получить пакет» решает package-контур. Вопрос «как спросить человека» решает interaction-контур.
 
@@ -116,12 +117,12 @@ Codex session state сохраняется как JSON/JSONL-объект в S3-
 ```mermaid
 sequenceDiagram
   participant Runner as role agent
-  participant MCP as platform-mcp-server
+  participant Hooks as codex-hook-ingress
   participant AM as agent-manager
   participant PH as provider-hub
   participant IH as interaction-hub
-  Runner->>MCP: completion signal + provider refs
-  MCP->>AM: RecordRunResult
+  Runner->>Hooks: Stop/PostToolUse + provider refs
+  Hooks->>AM: normalized lifecycle event
   AM->>PH: прочитать проекции / запросить ускоренную сверку
   PH-->>AM: Issue, PR/MR, comments, relationships
   AM->>AM: acceptance checks
@@ -175,6 +176,17 @@ sequenceDiagram
 - для безопасных provider, runtime, package, access и interaction операций.
 
 MCP не владеет доменным состоянием и не подменяет `agent-manager`: он проверяет политику, пишет аудит и маршрутизирует вызовы к сервисам-владельцам.
+
+### `codex-hook-ingress`
+
+`codex-hook-ingress` является входным контуром Codex hook events для `agent-manager`:
+- `SessionStart` создаёт или связывает Codex-сессию с `AgentSession`;
+- `UserPromptSubmit` фиксирует безопасный факт нового пользовательского ввода и передаёт его в агентный контур;
+- `PreToolUse` и `PostToolUse` дают realtime-сигналы и безопасные provider/runtime hints;
+- `PermissionRequest` преобразуется в gate или запрос решения через `interaction-hub`;
+- `Stop` фиксирует контрольную точку хода, pending actions и итоговую сводку.
+
+`agent-manager` не должен принимать эти события через MCP-инструменты. MCP остаётся для явных tool calls, а hook ingress — для событий, которые Codex command hook передал через локальный emitter или sidecar.
 
 ### `interaction-hub`
 
