@@ -5,8 +5,8 @@ title: kodex — API-обзор agent-manager
 status: active
 owner_role: SA
 created_at: 2026-05-12
-updated_at: 2026-05-14
-related_issues: [733, 739, 744]
+updated_at: 2026-05-15
+related_issues: [733, 739, 744, 753, 698]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -20,7 +20,7 @@ approvals:
 
 ## TL;DR
 
-- Тип API: внутренний gRPC `AgentManagerService`, доменные события `agent.*`, MCP-инструменты через `platform-mcp-server`.
+- Тип API: внутренний gRPC `AgentManagerService`, доменные события `agent.*`, MCP-инструменты через `platform-mcp-server`, Codex hook events через `codex-hook-ingress`.
 - Аутентификация: gateway, MCP или сервисный токен; доменные команды дополнительно проверяются через `access-manager`.
 - Версионирование: стабильное транспортное пространство имён `kodex.agents.v1`.
 - Основные операции: flow, role, prompt template, session, run, acceptance и follow-up.
@@ -32,6 +32,7 @@ approvals:
 - AsyncAPI: `specs/asyncapi/agent-manager.v1.yaml`.
 - Сгенерированные Go-контракты событий: `libs/go/platformevents/agent/events.gen.go`.
 - MCP-инструменты: публикуются через `platform-mcp-server` и маршрутизируются к `agent-manager`.
+- Codex hook events: приходят через `codex-hook-ingress`, а не через MCP tools.
 - Внешний HTTP для пользовательской и операторской консоли: через профильный gateway, не напрямую из доменного сервиса.
 
 Этот документ является обзором целевого API. Машинные спецификации являются источником правды для транспорта, а документ должен обновляться в том же PR при расхождении.
@@ -58,7 +59,7 @@ approvals:
 | `ListPromptTemplateVersions` | gRPC query | `agent.prompt.read` | нет | Список версий prompt по роли, назначению и статусу. |
 | `StartAgentSession` | gRPC command | `agent.session.start` | `command_id` | Создаёт или продолжает сессию по пользовательскому запросу или provider target. |
 | `StartAgentRun` | gRPC command | `agent.run.start` | `command_id` | Создаёт `Run`, фиксирует версии flow/stage/role/prompt, разрешает guidance hints через `package-hub` и запрашивает runtime; вызывающая сторона не передаёт готовые runtime refs или сырые guidance refs. |
-| `RecordRunState` | gRPC command | `agent.run.update` | `command_id` + expected version | Фиксирует переход `Run` после сигнала от runtime, MCP или агента. |
+| `RecordRunState` | gRPC command | `agent.run.update` | `command_id` + expected version | Фиксирует переход `Run` после сигнала от runtime, MCP-инструмента или `codex-hook-ingress`. |
 | `RecordSessionStateSnapshot` | gRPC command | `agent.session.update` | `command_id` + expected version | Записывает метаданные Codex session JSON/JSONL в объектном хранилище и обновляет указатель на актуальный снимок сессии. |
 | `RequestAcceptance` | gRPC command | `agent.acceptance.run` | `command_id` | Запускает машину приёмки по session/run/stage. |
 | `RecordAcceptanceResult` | gRPC command | `agent.acceptance.update` | `command_id` + expected version | Фиксирует результат проверки. |
@@ -85,6 +86,21 @@ approvals:
 
 MCP-инструменты не должны принимать свободный JSON для provider-операций. Если нужно создать `Issue`, комментарий или `PR/MR`, инструмент вызывает `provider-hub` через типизированный provider-контракт.
 
+## Codex hook events
+
+Codex hooks не являются MCP-инструментами. `agent-manager` получает их только после нормализации во входном контуре `codex-hook-ingress`.
+
+| Hook event | Как влияет на `agent-manager` |
+|---|---|
+| `SessionStart` | Создаёт или связывает Codex-сессию с существующим `AgentSession` и `Run`. |
+| `UserPromptSubmit` | Фиксирует безопасный факт нового пользовательского ввода и связывает его с session/run context. |
+| `PreToolUse` | Даёт сигнал намерения вызвать инструмент; может привести к gate или realtime-событию, но не заменяет MCP tool call. |
+| `PermissionRequest` | Преобразуется в human gate или запрос решения через `interaction-hub`. |
+| `PostToolUse` | Передаёт безопасный итог инструмента, provider artifact signal или bounded error. |
+| `Stop` | Фиксирует контрольную точку хода, pending actions и безопасную итоговую сводку. |
+
+Контрольные точки сжатия контекста и session snapshot остаются внутренними событиями `agent-manager`/`runtime-manager`. Они не описываются как Codex hooks и не проходят через `platform-mcp-server`.
+
 ## Интеграции с другими сервисами
 
 | Сервис | Вызовы из `agent-manager` | Правило |
@@ -95,6 +111,7 @@ MCP-инструменты не должны принимать свободны
 | `project-catalog` | Чтение workspace policy, release policy, project/repository refs | Проектная policy остаётся у project. |
 | `access-manager` | Проверка действий, ролей, аккаунтов и scope | `agent-manager` не вычисляет права сам. |
 | `interaction-hub` | Запрос Human gate, обратной связи и уведомления | Диалог и доставка остаются у interaction. |
+| `codex-hook-ingress` | Нормализованные Codex hook events: lifecycle, permission, tool result и stop summary | Hook transport и очистка входа остаются у hook ingress; `agent-manager` хранит только своё состояние. |
 
 ## Модель ошибок
 
@@ -140,7 +157,7 @@ MCP-инструменты не должны принимать свободны
 | AsyncAPI `agent.*` | Подготовлен как контрактный срез `AGO-1`. |
 | Go-реализация `agent-manager` | Сервисный каркас готов: процесс, health/readiness/metrics и gRPC registration; бизнес-операции пока возвращают `Unimplemented`. |
 | Интеграция с `package-hub` | Зафиксирована как чтение guidance installations и manifest. |
-| Интеграция с runtime/provider/interaction | Зафиксирована как междоменная граница без реализации. |
+| Интеграция с runtime/provider/interaction/hooks | Зафиксирована как междоменная граница без реализации. |
 
 ## Совместимость
 
