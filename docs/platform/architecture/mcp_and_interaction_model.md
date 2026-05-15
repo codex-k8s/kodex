@@ -5,7 +5,7 @@ title: kodex — MCP и модель взаимодействий
 status: active
 owner_role: SA
 created_at: 2026-04-26
-updated_at: 2026-05-14
+updated_at: 2026-05-15
 related_issues: [599, 600, 601, 602, 747, 753]
 related_prs: []
 approvals:
@@ -26,7 +26,8 @@ approvals:
 
 | Контур | Назначение |
 |---|---|
-| `platform-mcp-server` | Авторизация MCP-клиента, проверка политики, аудит, маршрутизация инструментов к сервисам-владельцам. |
+| `platform-mcp-server` | Авторизация MCP-клиента, проверка политики, аудит, маршрутизация MCP-инструментов к сервисам-владельцам. |
+| `codex-hook-ingress` | Приём нормализованных Codex hook events от hook emitter или локального sidecar; это не MCP-сервер и не владелец бизнес-состояния. |
 | `agent-manager` | Быстрый управляющий агент, который использует MCP как основной инструментальный интерфейс платформы. |
 | Агент в слоте | Использует MCP для платформенных операций, обратной связи, согласований, среды исполнения и безопасных действий. |
 | Сервисы-владельцы | Реализуют фактические команды и чтения; MCP не подменяет их доменную логику. |
@@ -59,18 +60,19 @@ approvals:
 
 ## MVP platform-mcp-server
 
-Стартовая реализация `platform-mcp-server` должна поддержать минимальную поверхность, нужную для `agent-manager`, slot-агентов и hooks. Машинно-читаемый каталог инструментов и событий живёт в `docs/domains/platform-mcp-server/catalog/tool_catalog.v1.yaml`. Codex hooks приходят не как прямые MCP tool calls, а через отдельный входной контур после нормализации hook emitter или локальным sidecar.
+Стартовая реализация `platform-mcp-server` должна поддержать минимальную MCP-поверхность, нужную для `agent-manager`, slot-агентов и будущих интеграций. Каноническая машинно-читаемая поверхность MCP получается из `tools/list`, где инструменты зарегистрированы в коде через MCP SDK и имеют JSON Schema входа. Codex hooks не являются MCP tool calls: Codex запускает command hooks, а нормализованные hook events принимает отдельный `codex-hook-ingress`.
 
 | Группа | Владелец маршрута | MVP-смысл |
 |---|---|---|
-| Hooks | `agent-manager`, `runtime-manager`, `provider-hub`, `interaction-hub` | Принять `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `Stop` как безопасный envelope. Контрольные точки сжатия контекста проектируются отдельно как внутренние события `agent-manager`/`runtime-manager`. |
 | Agent tools | `agent-manager` | Run, session, gate, acceptance и follow-up операции только через `agent-manager`. |
 | Provider tools | `provider-hub` | Read/write операции провайдера через типизированный provider pipeline, без прямого GitHub/GitLab доступа из MCP. |
 | Project/runtime/fleet/package reads | `project-catalog`, `runtime-manager`, `fleet-manager`, `package-hub` | Авторитетные чтения проектной политики, runtime/fleet состояния и пакетных manifest/installations. |
 | Interaction tools | `interaction-hub` | Запросы обратной связи и approval delivery, когда готов контракт `interaction-hub`. |
 | Diagnostics | `platform-mcp-server` и владельцы маршрутов | Ограниченный статус readiness/dependency/error без секретов, больших логов и сырых данных вызова. |
 
-Детальная сервисная граница, каталог инструментов и план поставки живут в `docs/domains/platform-mcp-server/**`.
+Codex hook events для MVP: `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `Stop`. Они идут через `codex-hook-ingress`; контрольные точки сжатия контекста проектируются отдельно как внутренние события `agent-manager`/`runtime-manager`, а не как Codex hooks.
+
+Детальная сервисная граница, стратегия контрактов и план поставки живут в `docs/domains/platform-mcp-server/**`. Граница входного контура Codex hooks живёт в `docs/domains/codex-hook-ingress/**`.
 
 ## Безопасность и политики
 
@@ -81,7 +83,7 @@ approvals:
 - решение политики;
 - запись аудита;
 - идентификатор корреляции для связи с агентным запуском, заданием, слотом, артефактом провайдера или согласованием.
-- привязку source/run/session/slot для вызовов, которые приходят от slot-агента или hook emitter.
+- привязку source/run/session/slot для вызовов, которые приходят от slot-агента.
 
 Правило: MCP-сервер не должен сам вычислять бизнес-решение, если это решение принадлежит сервису-владельцу. Он проверяет доступ к инструменту и обращается к соответствующему сервису-владельцу.
 

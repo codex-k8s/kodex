@@ -5,12 +5,13 @@ title: kodex — требования к platform-mcp-server
 status: active
 owner_role: PM
 created_at: 2026-05-14
-updated_at: 2026-05-14
-related_issues: [747]
+updated_at: 2026-05-15
+related_issues: [747, 753, 698]
 related_prs: []
 related_docsets:
   - docs/domains/platform-mcp-server/architecture/design.md
   - docs/domains/platform-mcp-server/architecture/api_contract.md
+  - docs/domains/platform-mcp-server/architecture/contract_strategy.md
   - docs/domains/platform-mcp-server/delivery/platform_mcp_server_delivery.md
 approvals:
   required: ["Owner"]
@@ -24,10 +25,10 @@ approvals:
 
 ## TL;DR
 
-- Что строим: платформенный MCP-сервер как безопасную инструментальную поверхность для `agent-manager`, slot-агентов и hook emitter.
-- Для кого: быстрый `agent-manager`, ролевые агенты в слотах, локальный hook emitter, будущие управляемые интеграции и операторы диагностики.
+- Что строим: платформенный MCP-сервер как безопасную инструментальную поверхность для `agent-manager`, slot-агентов, будущих управляемых интеграций и операторов диагностики.
+- Для кого: быстрый `agent-manager`, ролевые агенты в слотах, будущие управляемые интеграции и операторы диагностики.
 - Почему: агентам нужен быстрый и контролируемый способ читать актуальные данные платформы и выполнять разрешённые операции без прямого обхода сервисов-владельцев.
-- MVP: приём hook-событий, группы MCP-инструментов для agent/provider/project/runtime/package чтений, ограниченная диагностика, авторизация источника, очистка данных вызова, идемпотентность и correlation id.
+- MVP: группы MCP-инструментов для agent/provider/project/runtime/package чтений, ограниченная диагностика, авторизация источника, очистка данных вызова, идемпотентность и correlation id.
 - Критерии успеха: MCP не хранит чужую истину, не раскрывает секреты, маршрутизирует операции только к владельцам и даёт `agent-manager` основу для будущих возможностей запуска, сессий и gate-сценариев.
 
 ## Проблема и цель
@@ -42,7 +43,6 @@ approvals:
 |---|---|
 | Быстрый `agent-manager` | Получать инструменты для запуска, продолжения, приёмки, gate и чтений соседних доменов. |
 | Агент в слоте | Запрашивать платформенные действия, обратную связь владельца, статус runtime и безопасные provider-сигналы. |
-| Hook emitter | Передавать события жизненного цикла Codex hooks в платформу. |
 | Операторский контур | Получать ограниченную диагностику MCP-поверхности и зависимостей. |
 | Будущие управляемые интеграции | Использовать те же правила actor/source binding и policy boundary. |
 
@@ -50,8 +50,8 @@ approvals:
 
 | ID | Требование | Приоритет |
 |---|---|---|
-| MCP-FR-1 | Сервис должен принимать нормализованные MCP tool calls и hook-события только с явным actor/source/run/session/slot контекстом. Hook-события приходят через отдельный входной контур после нормализации hook emitter или sidecar, а не как прямые MCP tool calls Codex. | Обязательно |
-| MCP-FR-2 | Сервис должен поддерживать MVP-группу текущих Codex hook-событий: `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `Stop`. | Обязательно |
+| MCP-FR-1 | Сервис должен принимать MCP tool calls только по MCP-протоколу с явным actor/source/run/session/slot контекстом. Codex hook-события принимает отдельный `codex-hook-ingress`, а не MCP-сервер. | Обязательно |
+| MCP-FR-2 | Сервис должен раскрывать инструменты через MCP discovery и execution: `tools/list` и `tools/call`. | Обязательно |
 | MCP-FR-3 | Операции `Run`, session, gates, flow, role и prompt должны маршрутизироваться только в `agent-manager`. | Обязательно |
 | MCP-FR-4 | Provider-инструменты должны использовать `provider-hub` write/read операции и не должны ходить напрямую в GitHub/GitLab. | Обязательно |
 | MCP-FR-5 | Чтения project/runtime/fleet/package должны идти только к сервисам-владельцам: `project-catalog`, `runtime-manager`, `fleet-manager`, `package-hub`. | Обязательно |
@@ -62,7 +62,7 @@ approvals:
 | MCP-FR-10 | Сервис должен публиковать или передавать аудит только для решений, отказов, risky operations и permission/gate сценариев. | Обязательно |
 | MCP-FR-11 | Сервис должен передавать route/actor/source/correlation context для учёта запросов к внешним провайдерам. Provider-вызовы через MCP tools или будущий CLI-proxy должны маршрутизироваться через `provider-hub`, чтобы лимиты и расход внешних API контролировались в одном контуре. | Обязательно |
 
-Контрольные точки сжатия контекста и session snapshot нужны платформе как будущие внутренние события `agent-manager`/`runtime-manager`, но не должны описываться как текущие Codex hooks.
+Контрольные точки сжатия контекста и session snapshot нужны платформе как будущие внутренние события `agent-manager`/`runtime-manager`, но не должны описываться как MCP tools или текущие Codex hooks.
 
 ## Нефункциональные требования
 
@@ -80,7 +80,7 @@ approvals:
 - Сервисная граница явно запрещает владение business state.
 - MVP-группы инструментов описаны без преждевременной детализации proto и AsyncAPI.
 - Для каждого класса инструментов указан сервис-владелец.
-- Hook-события входят в платформенную поверхность `platform-mcp-server`, а реализация hook emitter и приёма hook-событий поставляется отдельным шагом.
+- Codex hook-события вынесены из `platform-mcp-server` в отдельный `codex-hook-ingress`, а реализация hook emitter и приёма hook-событий поставляется отдельным шагом.
 - Безопасность покрывает actor/source/run/slot binding, очистку данных вызова, rate limits, аудит, идемпотентность и correlation id.
 - Вызовы к внешним провайдерам можно учитывать и ограничивать независимо от того, пришли они как MCP tool call или через будущий управляемый proxy для CLI провайдера.
 - Документация отделяет требования от контрактов, каркаса сервиса, hook-событий, инструментальных маршрутов, безопасности и эксплуатации.
@@ -91,14 +91,14 @@ approvals:
 - Не создавать proto, AsyncAPI, миграции или код.
 - Не делать `platform-mcp-server` владельцем `Run`, slot, provider artifact, package installation, project policy или диалогов.
 - Не начинать `staff-gateway`, `interaction-hub` или полноценный UI.
-- Не считать описание hook-событий реализацией hook emitter и приёма hook-событий.
+- Не считать описание связи с `codex-hook-ingress` реализацией hook emitter и приёма hook-событий.
 
 ## Риски
 
 | Риск | Митигирующее решение |
 |---|---|
 | MCP станет скрытым монолитом. | Документы и будущий код требуют маршрутизации к владельцам, без чужой бизнес-логики и чужих таблиц. |
-| В БД попадут сырые hook/tool данные. | MVP фиксирует только безопасные сводки, решения, ссылки, отпечатки и ограниченную диагностику. |
+| В БД попадут сырые tool данные. | MVP фиксирует только безопасные сводки, решения, ссылки, отпечатки и ограниченную диагностику. |
 | Provider-инструменты начнут обходить `provider-hub`. | Внешняя поверхность остаётся типизированной, а запись идёт через provider write pipeline. |
 | `agent-manager` и MCP начнут дублировать gates. | MCP только принимает и маршрутизирует; доменное состояние gate принадлежит `agent-manager` и `interaction-hub`. |
 

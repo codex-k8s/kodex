@@ -38,12 +38,17 @@
 `platform-mcp-server` отвечает за:
 
 - MCP-поверхность инструментов платформы;
-- hook ingress для slot-агентов и локального sidecar;
-- машинно-читаемый каталог инструментов, общий envelope, версии контрактов и тестовые примеры;
 - проверку actor/source/run/session/slot binding;
 - минимальную policy/auth boundary;
 - маршрутизацию вызовов к сервисам-владельцам;
 - безопасные ответы и ограниченную диагностику без хранения чужой бизнес-истины.
+
+`codex-hook-ingress` отвечает за:
+
+- приём нормализованных Codex hook events от hook emitter или локального sidecar;
+- очистку и проверку безопасного hook envelope;
+- маршрутизацию hook events в `agent-manager`, `runtime-manager`, `provider-hub` и `interaction-hub`;
+- отделение command hooks Codex от MCP-протокола.
 
 Агент #1 не владеет пользователями, организациями, членством, внешними аккаунтами, сырыми секретами, provider-native операциями записи, пакетным каталогом, магазином пакетов, UI и внешними gateway.
 
@@ -98,7 +103,7 @@
 | Срез | Issue | Статус | Результат |
 |---|---:|---|---|
 | MCP-0 | #747 | готово | Документационный пакет сервисной границы `platform-mcp-server`: ответственность, MVP-группы инструментов, безопасность, связи с hooks #698 и delivery-план. Код, proto и AsyncAPI не входят. |
-| MCP-1 | #753 | готово | Машинно-читаемый каталог инструментов, envelope, правила версионирования, тестовые примеры, разделение Codex hooks и внутренних session events. Код, proto и AsyncAPI не входят. |
+| MCP-1 | #753 | готово | Стратегия контрактов: MCP tools описываются через MCP SDK, JSON Schema и snapshot-проверки `tools/list`; Codex hooks вынесены в `codex-hook-ingress`; YAML-каталог не является каноникой. Код, proto и AsyncAPI не входят. |
 
 ## Текущий бэклог агента #1
 
@@ -112,7 +117,8 @@
 | Реальный исполнитель platform jobs | запланировано позже | `runtime-manager` хранит и выдаёт jobs; конкретный исполнитель на Kubernetes или агентный исполнитель нужен отдельным срезом после согласования с `agent-manager`/ops-контуром. |
 | Интеграция `runtime-manager` с fleet placement | готово: #735 | RTM-FLEET-1 перевёл `PrepareRuntime`, `ReserveSlot` и `CreateJob` без slot на `fleet-manager.ResolvePlacement`; runtime сохраняет только `fleet_scope_id` и `cluster_id`. |
 | Deploy-контур `fleet-manager` | готово: #738 | FLEET-6 добавил Dockerfile, manifests, PostgreSQL bootstrap, migration job, smoke, runbook и monitoring без изменения registry/health/placement бизнес-логики. |
-| `platform-mcp-server` | готово: #747, #753 | MCP-0 фиксирует границы, группы инструментов, безопасность и план поставки; MCP-1 фиксирует машинно-читаемый каталог инструментов, envelope, версионирование и тестовые примеры до кода, proto и AsyncAPI. |
+| `platform-mcp-server` | готово: #747, #753 | MCP-0 фиксирует границы, группы инструментов, безопасность и план поставки; MCP-1 фиксирует стратегию контрактов через MCP SDK, JSON Schema и snapshot-проверки `tools/list`, а также отделяет Codex hooks в `codex-hook-ingress`. |
+| `codex-hook-ingress` | решение выбрано: #753, ждёт реализации #698 | Входной контур hooks должен принимать нормализованные Codex hook events от hook emitter или sidecar; это не часть MCP-сервера и не закрывается кодом MCP-1. |
 
 ## Блокировки от `access-manager`
 
@@ -178,7 +184,8 @@
 - `package-hub` зависит от `project-catalog`, когда пакетные источники и руководящие пакеты становятся частью проектной политики.
 - `agent-manager` зависит от `runtime-manager` для слотов, материализация workspace и platform jobs, но `Run` остаётся сущностью `agent-manager`.
 - `runtime-manager` зависит от `fleet-manager` для целевого `ResolvePlacement`; RTM-FLEET-1 убрал локальный выбор кластера из `PrepareRuntime`, `ReserveSlot` и `CreateJob` без slot.
-- `agent-manager` зависит от `platform-mcp-server` для будущих MCP-инструментов run/session/gate и hook ingress; MCP не владеет flow/role/prompt и не конфликтует с AGO-3.
+- `agent-manager` зависит от `platform-mcp-server` для будущих MCP-инструментов run/session/gate; MCP не владеет flow/role/prompt и не конфликтует с AGO-3.
+- `agent-manager`, `runtime-manager`, `provider-hub` и `interaction-hub` зависят от `codex-hook-ingress` для будущего приёма Codex hook events; #698 остаётся отдельной реализационной задачей.
 - `provider-hub` зависит от `platform-mcp-server` только как от внешней инструментальной поверхности; provider write pipeline остаётся у `provider-hub`, а bootstrap/adoption PRV-8a не переносится в MCP.
 - `operations-hub` и будущий `staff-gateway` зависят от чтений `project-catalog` и `runtime-manager` для операторских экранов.
 

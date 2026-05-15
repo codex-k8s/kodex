@@ -5,14 +5,14 @@ title: kodex — поставка platform-mcp-server
 status: active
 owner_role: EM
 created_at: 2026-05-14
-updated_at: 2026-05-14
+updated_at: 2026-05-15
 related_issues: [747, 753, 698]
 related_prs: []
 related_docsets:
   - docs/domains/platform-mcp-server/product/requirements.md
   - docs/domains/platform-mcp-server/architecture/design.md
   - docs/domains/platform-mcp-server/architecture/api_contract.md
-  - docs/domains/platform-mcp-server/catalog/README.md
+  - docs/domains/platform-mcp-server/architecture/contract_strategy.md
 approvals:
   required: ["Owner"]
   status: approved
@@ -25,7 +25,7 @@ approvals:
 
 ## TL;DR
 
-`platform-mcp-server` поставляется малыми срезами: сначала границы и верхнеуровневые контракты, затем машинно-читаемый каталог инструментов, сервисный каркас, приём hook-событий, маршруты к владельцам, безопасность и эксплуатационный контур. Сервис не владеет бизнес-состоянием и не закрывает #698 до реализации hooks.
+`platform-mcp-server` поставляется малыми срезами: сначала границы и стратегия контрактов, затем сервисный каркас MCP, маршруты к владельцам, безопасность и эксплуатационный контур. Сервис не владеет бизнес-состоянием и не принимает Codex hooks. Hook emitter, локальный sidecar и входной контур Codex hooks поставляются через отдельный сервисный пакет `codex-hook-ingress` и не закрываются этим планом.
 
 ## Входные артефакты
 
@@ -34,7 +34,7 @@ approvals:
 | Требования | `docs/domains/platform-mcp-server/product/requirements.md` |
 | Дизайн | `docs/domains/platform-mcp-server/architecture/design.md` |
 | API-обзор | `docs/domains/platform-mcp-server/architecture/api_contract.md` |
-| Каталог инструментов | `docs/domains/platform-mcp-server/catalog/README.md` |
+| Стратегия контрактов MCP и Codex hooks | `docs/domains/platform-mcp-server/architecture/contract_strategy.md` |
 | Карта Issue | `docs/delivery/issue-map/domains/platform-mcp-server.md` |
 
 ## Срезы поставки
@@ -42,14 +42,13 @@ approvals:
 | Срез | Issue | Результат |
 |---|---:|---|
 | MCP-0 | #747 | Доменный пакет сервисной границы, ответственность, MVP-группы инструментов, безопасность и delivery-план готовы. Код, proto и AsyncAPI не входят. |
-| MCP-1 | #753 | Машинно-читаемый каталог инструментов, envelope, политика версионирования MCP-инструментов и тестовые примеры готовы. |
-| MCP-2 | не назначено | Сервисный каркас: процесс, конфигурация, health/readiness/metrics, MCP transport skeleton и dependency clients без бизнес-маршрутов. |
-| MCP-3 | не назначено | Приём hook-событий #698, очистка данных вызова, безопасные сводки и маршруты в `agent-manager`, `runtime-manager`, `provider-hub`. |
-| MCP-4 | не назначено | Agent-manager tools: session/run/gate/acceptance/follow-up маршруты только через `agent-manager`. |
-| MCP-5 | не назначено | Provider tools: типизированные provider read/write маршруты через `provider-hub` без прямого GitHub/GitLab доступа. |
-| MCP-6 | не назначено | Project/runtime/fleet/package reads и ограниченная диагностика через сервисы-владельцы. |
-| MCP-7 | не назначено | Security hardening: actor/source binding, rate limits, backpressure, audit, idempotency и redaction metrics. |
-| MCP-8 | не назначено | Deploy-контур: Dockerfile, manifests, migration job только если нужна служебная БД, smoke, runbook и monitoring. |
+| MCP-1 | #753 | Стратегия контрактов готова: MCP-инструменты описываются через MCP SDK, JSON Schema и snapshot-проверки `tools/list`; Codex hooks вынесены в `codex-hook-ingress`; YAML-каталог не является каноникой. |
+| MCP-2 | не назначено | Сервисный каркас: процесс, конфигурация, health/readiness/metrics, MCP transport skeleton и dependency clients без бизнес-маршрутов и без hook ingress. |
+| MCP-3 | не назначено | Agent-manager tools: session/run/gate/acceptance/follow-up маршруты только через `agent-manager`. |
+| MCP-4 | не назначено | Provider tools: типизированные provider read/write маршруты через `provider-hub` без прямого GitHub/GitLab доступа. |
+| MCP-5 | не назначено | Project/runtime/fleet/package reads и ограниченная диагностика через сервисы-владельцы. |
+| MCP-6 | не назначено | Security hardening: actor/source binding, rate limits, backpressure, audit, idempotency и redaction metrics. |
+| MCP-7 | не назначено | Deploy-контур: Dockerfile, manifests, migration job только если нужна служебная БД, smoke, runbook и monitoring. |
 
 ## Зависимости и блокировки
 
@@ -62,24 +61,24 @@ approvals:
 | `project-catalog` | Владеет project/repository policy и workspace policy. | MCP читает проектную политику только через `project-catalog`; `services.yaml` не парсится в MCP. |
 | `package-hub` | Владеет package catalog, installation и manifest. | MCP читает package refs и manifest только через `package-hub`; тексты пакетов не хранятся в MCP. |
 | `interaction-hub` | Владеет feedback/approval delivery. | До готовности `interaction-hub` interaction tools остаются контрактным заделом; MCP не доставляет уведомления сам. |
-| #698 hooks | Hook-события должны войти в MVP. | MCP-0 фиксирует границу, но #698 остаётся открытым до реализации hook emitter и ingress. |
+| #698 hooks | Hook-события должны войти в MVP. | `platform-mcp-server` не закрывает #698. Hook emitter, sidecar и входной контур реализуются через `codex-hook-ingress`; MCP-сервис может только дать отдельные инструменты чтения или управления, если они нужны агенту. |
 
 ## Критерии начала кода
 
 - Принят MCP-0 docset.
 - Для каждого кодового PR заведён отдельный GitHub Issue.
-- До реализации route group есть машинно-читаемый каталог инструментов или явно оформленный контрактный срез.
+- До реализации группы маршрутов есть явно оформленная стратегия MCP-контрактов: Go-регистрация tools через MCP SDK, JSON Schema входов и snapshot-проверки `tools/list`.
 - Старый код из `deprecated/**` не используется как основа реализации.
 - Provider write tools не реализуются без уже готового typed provider pipeline.
 
 ## Критерии завершения MVP
 
 - `platform-mcp-server` имеет сервисный процесс, наблюдаемость, лимиты и безопасную обработку данных вызова.
-- Приём hook-событий принимает все события из согласованного набора #698 и не пишет сырые данные вызова.
 - `agent-manager` и slot-агенты могут вызывать разрешённые инструменты через MCP с actor/source/run/slot binding.
 - Provider tools используют только `provider-hub`.
 - Project/runtime/fleet/package reads используют только сервисы-владельцы.
 - Диагностика ограничена и не раскрывает секреты, большие логи, kubeconfig, исходные данные провайдера и session dumps.
+- Codex hooks принимаются отдельным `codex-hook-ingress`, а не MCP-сервисом.
 
 ## Апрув
 
