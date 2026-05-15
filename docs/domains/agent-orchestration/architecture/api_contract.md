@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-12
 updated_at: 2026-05-15
-related_issues: [733, 739, 744, 753, 698]
+related_issues: [733, 739, 744, 753, 755, 698]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -156,7 +156,7 @@ Codex hooks не являются MCP-инструментами. `agent-manager
 | Доменная документация | Подготовлена как стартовый срез. |
 | gRPC proto | Подготовлен как контрактный срез `AGO-1`. |
 | AsyncAPI `agent.*` | Подготовлен как контрактный срез `AGO-1`. |
-| Go-реализация `agent-manager` | Сервисный каркас готов: процесс, health/readiness/metrics и gRPC registration; бизнес-операции пока возвращают `Unimplemented`. |
+| Go-реализация `agent-manager` | Сервисный каркас готов. Операции flow, role и prompt подключены к storage/use-case слою через gRPC handlers; session, run, acceptance, follow-up и human gate пока остаются зарегистрированными контрактами без бизнес-реализации. |
 | Интеграция с `package-hub` | Зафиксирована как чтение guidance installations и manifest. |
 | Интеграция с runtime/provider/interaction/hooks | Зафиксирована как междоменная граница без реализации. |
 
