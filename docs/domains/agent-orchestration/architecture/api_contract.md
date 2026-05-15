@@ -76,13 +76,14 @@ approvals:
 
 | Инструмент | Назначение |
 |---|---|
-| `agent.start_session` | Начать или продолжить агентную сессию по пользовательскому запросу. |
-| `agent.start_role_run` | Запустить роль в рамках session/stage. |
-| `agent.record_run_result` | Принять результат от ролевого агента или runner. |
-| `agent.record_session_snapshot` | Зафиксировать ссылку на актуальный Codex session state без передачи содержимого JSON через MCP. |
-| `agent.request_acceptance` | Запустить машинную приёмку. |
-| `agent.request_follow_up` | Сформировать следующий provider-native `Issue`. |
-| `agent.ask_owner` | Запросить решение человека через `interaction-hub`. |
+| `agent.session.start` | Начать или продолжить агентную сессию по пользовательскому запросу. |
+| `agent.run.start` | Запустить роль в рамках session/stage. |
+| `agent.run.record_state` | Принять результат от ролевого агента или runner. |
+| `agent.session.record_snapshot` | Зафиксировать ссылку на актуальный Codex session state без передачи содержимого JSON через MCP. |
+| `agent.acceptance.request` | Запустить машинную приёмку. |
+| `agent.follow_up.request` | Сформировать следующий provider-native `Issue`. |
+| `agent.gate.request` | Запросить gate или решение человека через `interaction-hub`. |
+| `agent.gate.submit_decision` | Передать решение, полученное из UI или внешнего канала. |
 
 MCP-инструменты не должны принимать свободный JSON для provider-операций. Если нужно создать `Issue`, комментарий или `PR/MR`, инструмент вызывает `provider-hub` через типизированный provider-контракт.
 
