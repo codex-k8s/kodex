@@ -1419,6 +1419,95 @@ func TestUpdatePullRequestRecordsProviderOperation(t *testing.T) {
 	}
 }
 
+func TestCreateRepositoryRecordsOperationAndRepositoryEvent(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 22, 12, 0, 0, 0, time.UTC)
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	externalAccountID := uuid.New()
+	commandID := uuid.New()
+	operationID := uuid.New()
+	operationOutboxID := uuid.New()
+	repositoryCreatedOutboxID := uuid.New()
+	owner := "codex-k8s"
+	description := "Тестовый сервис"
+	executor := &fakeWriteExecutor{
+		result: providerclient.WriteResult{
+			ResultRef:        "https://github.com/codex-k8s/new-service",
+			ProviderObjectID: "100500",
+			ProviderVersion:  `"repo-etag"`,
+			Target: &providerclient.Target{
+				ProviderSlug:         enum.ProviderSlugGitHub,
+				RepositoryFullName:   "codex-k8s/new-service",
+				ProviderRepositoryID: "100500",
+				WebURL:               "https://github.com/codex-k8s/new-service",
+			},
+			BaseBranch: "main",
+		},
+	}
+	repository := &fakeRepository{}
+	service := NewWithDependencies(Dependencies{
+		Repository:             repository,
+		Clock:                  fixedClock{now: now},
+		IDGenerator:            &sequenceIDs{ids: []uuid.UUID{operationID, operationOutboxID, repositoryCreatedOutboxID}},
+		AccountUsageResolver:   fakeAccountUsageResolver{},
+		SecretResolver:         &fakeSecretResolver{secret: secretresolver.NewSecretValue([]byte("write-token"))},
+		ProviderWriteExecutors: []providerclient.WriteExecutor{executor},
+	})
+
+	result, err := service.CreateRepository(context.Background(), CreateRepositoryInput{
+		ProjectID:         projectID,
+		RepositoryID:      repositoryID,
+		ProviderSlug:      enum.ProviderSlugGitHub,
+		OwnerKind:         enum.RepositoryOwnerKindOrganization,
+		ProviderOwner:     &owner,
+		RepositoryName:    "new-service",
+		Visibility:        enum.RepositoryVisibilityPrivate,
+		Description:       &description,
+		ExternalAccountID: externalAccountID,
+		Meta: value.CommandMeta{
+			CommandID: commandID,
+			OperationPolicyContext: value.ProviderOperationPolicyContext{
+				RiskLevel: value.ProviderOperationRiskLevelMedium,
+				ChangedFields: []string{
+					"auto_init",
+					"description",
+					"owner_kind",
+					"provider_owner",
+					"repository_name",
+					"visibility",
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateRepository(): %v", err)
+	}
+	if executor.calls != 1 ||
+		executor.request.CreateRepository == nil ||
+		executor.request.CreateRepository.ProviderOwner != owner ||
+		executor.request.CreateRepository.Visibility != enum.RepositoryVisibilityPrivate {
+		t.Fatalf("executor request = %+v, want create repository command", executor.request)
+	}
+	if repository.recordedProviderOperation.ID != operationID ||
+		repository.recordedProviderOperation.OperationType != enum.ProviderOperationCreateRepository ||
+		repository.recordedProviderOperation.TargetRef != repositoryTargetRef(enum.ProviderSlugGitHub, repositoryID.String())+"#create_repository:new-service:codex-k8s" {
+		t.Fatalf("operation = %+v, want create_repository operation", repository.recordedProviderOperation)
+	}
+	if len(repository.recordedOutboxEvents) != 2 ||
+		repository.recordedOutboxEvents[1].ID != repositoryCreatedOutboxID ||
+		repository.recordedOutboxEvents[1].EventType != providerEventRepositoryCreated {
+		t.Fatalf("outbox events = %+v, want operation and repository created events", repository.recordedOutboxEvents)
+	}
+	if result.Result.Target == nil ||
+		result.Result.Target.RepositoryFullName != "codex-k8s/new-service" ||
+		result.Result.BaseBranch != "main" ||
+		result.Result.ProviderObjectID != "100500" {
+		t.Fatalf("result = %+v, want repository target and base branch", result.Result)
+	}
+}
+
 func TestCreateBootstrapPullRequestRecordsProjectionAndBootstrapEvent(t *testing.T) {
 	t.Parallel()
 

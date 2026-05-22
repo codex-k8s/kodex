@@ -174,7 +174,47 @@ func CreatePullRequestInput(request *providersv1.CreatePullRequestRequest) (prov
 	}, nil
 }
 
-// CreateBootstrapPullRequestInput maps an empty-repository bootstrap PR request to the domain model.
+// CreateRepositoryInput maps a provider repository creation request to the domain model.
+func CreateRepositoryInput(request *providersv1.CreateRepositoryRequest) (providerservice.CreateRepositoryInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return providerservice.CreateRepositoryInput{}, err
+	}
+	projectID, err := requiredUUID(request.GetProjectId())
+	if err != nil {
+		return providerservice.CreateRepositoryInput{}, err
+	}
+	repositoryID, err := requiredUUID(request.GetRepositoryId())
+	if err != nil {
+		return providerservice.CreateRepositoryInput{}, err
+	}
+	externalAccountID, err := requiredUUID(request.GetExternalAccountId())
+	if err != nil {
+		return providerservice.CreateRepositoryInput{}, err
+	}
+	ownerKind, err := repositoryOwnerKindFromProto(request.GetOwnerKind())
+	if err != nil {
+		return providerservice.CreateRepositoryInput{}, err
+	}
+	visibility, err := repositoryVisibilityFromProto(request.GetVisibility())
+	if err != nil {
+		return providerservice.CreateRepositoryInput{}, err
+	}
+	return providerservice.CreateRepositoryInput{
+		ProjectID:         projectID,
+		RepositoryID:      repositoryID,
+		ProviderSlug:      providerSlug(request.GetProviderSlug()),
+		OwnerKind:         ownerKind,
+		ProviderOwner:     optionalStringPtrValue(request.ProviderOwner),
+		RepositoryName:    strings.TrimSpace(request.GetRepositoryName()),
+		Visibility:        visibility,
+		Description:       optionalStringPtrValue(request.Description),
+		Meta:              meta,
+		ExternalAccountID: externalAccountID,
+	}, nil
+}
+
+// CreateBootstrapPullRequestInput maps a bootstrap PR request to the domain model.
 func CreateBootstrapPullRequestInput(request *providersv1.CreateBootstrapPullRequestRequest) (providerservice.CreateBootstrapPullRequestInput, error) {
 	meta, err := CommandMetaFromProto(request.GetMeta())
 	if err != nil {

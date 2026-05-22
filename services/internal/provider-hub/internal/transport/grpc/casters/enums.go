@@ -91,7 +91,8 @@ var syncCursorPriorities = map[providersv1.SyncCursorPriority]enum.SyncCursorPri
 var operationTypes = providerOperationTypes()
 
 func providerOperationTypes() map[providersv1.ProviderOperationType]enum.ProviderOperationType {
-	result := make(map[providersv1.ProviderOperationType]enum.ProviderOperationType, 9)
+	result := make(map[providersv1.ProviderOperationType]enum.ProviderOperationType, 10)
+	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_REPOSITORY] = enum.ProviderOperationCreateRepository
 	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_ISSUE] = enum.ProviderOperationCreateIssue
 	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_ISSUE] = enum.ProviderOperationUpdateIssue
 	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_COMMENT] = enum.ProviderOperationCreateComment
@@ -102,6 +103,17 @@ func providerOperationTypes() map[providersv1.ProviderOperationType]enum.Provide
 	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_REVIEW_SIGNAL] = enum.ProviderOperationCreateReviewSignal
 	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_RELATIONSHIP] = enum.ProviderOperationUpdateRelationship
 	return result
+}
+
+var repositoryOwnerKinds = map[providersv1.RepositoryOwnerKind]enum.RepositoryOwnerKind{
+	providersv1.RepositoryOwnerKind_REPOSITORY_OWNER_KIND_ORGANIZATION:       enum.RepositoryOwnerKindOrganization,
+	providersv1.RepositoryOwnerKind_REPOSITORY_OWNER_KIND_AUTHENTICATED_USER: enum.RepositoryOwnerKindAuthenticatedUser,
+}
+
+var repositoryVisibilities = map[providersv1.RepositoryVisibility]enum.RepositoryVisibility{
+	providersv1.RepositoryVisibility_REPOSITORY_VISIBILITY_PUBLIC:   enum.RepositoryVisibilityPublic,
+	providersv1.RepositoryVisibility_REPOSITORY_VISIBILITY_PRIVATE:  enum.RepositoryVisibilityPrivate,
+	providersv1.RepositoryVisibility_REPOSITORY_VISIBILITY_INTERNAL: enum.RepositoryVisibilityInternal,
 }
 
 var operationStatuses = map[providersv1.ProviderOperationStatus]enum.ProviderOperationStatus{
@@ -300,6 +312,28 @@ func operationTypesFromProto(types []providersv1.ProviderOperationType) ([]enum.
 
 func OperationTypeToProto(operationType enum.ProviderOperationType) providersv1.ProviderOperationType {
 	return enumToProto(operationType, providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UNSPECIFIED, invertEnum(operationTypes))
+}
+
+func repositoryOwnerKindFromProto(kind providersv1.RepositoryOwnerKind) (enum.RepositoryOwnerKind, error) {
+	if kind == providersv1.RepositoryOwnerKind_REPOSITORY_OWNER_KIND_UNSPECIFIED {
+		return "", errs.ErrInvalidArgument
+	}
+	mapped, ok := repositoryOwnerKinds[kind]
+	if !ok {
+		return "", errs.ErrInvalidArgument
+	}
+	return mapped, nil
+}
+
+func repositoryVisibilityFromProto(visibility providersv1.RepositoryVisibility) (enum.RepositoryVisibility, error) {
+	if visibility == providersv1.RepositoryVisibility_REPOSITORY_VISIBILITY_UNSPECIFIED {
+		return "", errs.ErrInvalidArgument
+	}
+	mapped, ok := repositoryVisibilities[visibility]
+	if !ok {
+		return "", errs.ErrInvalidArgument
+	}
+	return mapped, nil
 }
 
 func operationStatusesFromProto(statuses []providersv1.ProviderOperationStatus) ([]enum.ProviderOperationStatus, error) {

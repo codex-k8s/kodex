@@ -197,7 +197,8 @@ func validCommandIdentity(meta value.CommandMeta) bool {
 func validOperationTypes(types []enum.ProviderOperationType) bool {
 	for _, operationType := range types {
 		switch operationType {
-		case enum.ProviderOperationCreateIssue,
+		case enum.ProviderOperationCreateRepository,
+			enum.ProviderOperationCreateIssue,
 			enum.ProviderOperationUpdateIssue,
 			enum.ProviderOperationCreateComment,
 			enum.ProviderOperationUpdateComment,
@@ -211,6 +212,27 @@ func validOperationTypes(types []enum.ProviderOperationType) bool {
 		}
 	}
 	return true
+}
+
+func validRepositoryOwnerKind(kind enum.RepositoryOwnerKind) bool {
+	switch kind {
+	case enum.RepositoryOwnerKindOrganization,
+		enum.RepositoryOwnerKindAuthenticatedUser:
+		return true
+	default:
+		return false
+	}
+}
+
+func validRepositoryVisibility(visibility enum.RepositoryVisibility) bool {
+	switch visibility {
+	case enum.RepositoryVisibilityPublic,
+		enum.RepositoryVisibilityPrivate,
+		enum.RepositoryVisibilityInternal:
+		return true
+	default:
+		return false
+	}
 }
 
 func validOperationStatuses(statuses []enum.ProviderOperationStatus) bool {

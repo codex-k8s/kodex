@@ -392,6 +392,58 @@ func TestExecuteCreatePullRequestDoesNotReuseExistingHeadBaseAfterValidationErro
 	}
 }
 
+func TestExecuteCreateRepositoryInitializesGitHubRepository(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer token-value" {
+			t.Fatalf("authorization header = %q", r.Header.Get("Authorization"))
+		}
+		if r.Method != http.MethodPost || r.URL.Path != "/orgs/codex-k8s/repos" {
+			t.Fatalf("unexpected request = %s %s", r.Method, r.URL.String())
+		}
+		var payload map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode create repository: %v", err)
+		}
+		if payload["name"] != "new-service" ||
+			payload["visibility"] != "private" ||
+			payload["auto_init"] != true ||
+			payload["has_issues"] != true {
+			t.Fatalf("repository payload = %+v", payload)
+		}
+		w.Header().Set("ETag", `"repo-etag"`)
+		_, _ = w.Write([]byte(`{"id":100500,"name":"new-service","full_name":"codex-k8s/new-service","html_url":"https://github.com/codex-k8s/new-service","default_branch":"main","visibility":"private","updated_at":"2026-05-22T12:00:00Z"}`))
+	}))
+	defer server.Close()
+
+	token := secretresolver.NewSecretValue([]byte("token-value"))
+	defer token.Clear()
+	result, err := New(Config{BaseURL: server.URL, HTTPClient: server.Client()}).Execute(context.Background(), providerclient.WriteRequest{
+		Credential:   providerclient.AccountCredential{ExternalAccountID: uuid.New(), ProviderSlug: enum.ProviderSlugGitHub, Token: token},
+		ProviderSlug: enum.ProviderSlugGitHub,
+		CreateRepository: &providerclient.CreateRepositoryCommand{
+			ProjectID:      uuid.NewString(),
+			RepositoryID:   uuid.NewString(),
+			OwnerKind:      enum.RepositoryOwnerKindOrganization,
+			ProviderOwner:  "codex-k8s",
+			RepositoryName: "new-service",
+			Visibility:     enum.RepositoryVisibilityPrivate,
+			Description:    "Тестовый сервис",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute(): %v", err)
+	}
+	if result.Target == nil ||
+		result.Target.RepositoryFullName != "codex-k8s/new-service" ||
+		result.ProviderObjectID != "100500" ||
+		result.BaseBranch != "main" ||
+		result.ResultRef != "https://github.com/codex-k8s/new-service" {
+		t.Fatalf("result = %+v, want repository creation result", result)
+	}
+}
+
 func TestExecuteCreatePullRequestRejectsUnsupportedLinkedIssueAndLabelsBeforeGitHubWrite(t *testing.T) {
 	t.Parallel()
 
@@ -544,7 +596,7 @@ func TestExecuteCreateBootstrapPullRequestRejectsNonEmptyBaseTree(t *testing.T) 
 		case "GET /repos/codex-k8s/kodex/git/commits/base-sha":
 			_, _ = w.Write([]byte(`{"sha":"base-sha","tree":{"sha":"base-tree-sha"}}`))
 		case "GET /repos/codex-k8s/kodex/git/trees/base-tree-sha":
-			_, _ = w.Write([]byte(`{"sha":"base-tree-sha","tree":[{"path":"README.md","type":"blob","sha":"readme-sha"}]}`))
+			_, _ = w.Write([]byte(`{"sha":"base-tree-sha","tree":[{"path":"README.md","type":"blob","mode":"100644","sha":"readme-sha"},{"path":"go.mod","type":"blob","mode":"100644","sha":"gomod-sha"}]}`))
 		default:
 			t.Fatalf("unexpected request = %s %s", r.Method, r.URL.String())
 		}

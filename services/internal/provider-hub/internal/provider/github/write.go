@@ -49,6 +49,8 @@ func (a *Adapter) Execute(ctx context.Context, request providerclient.WriteReque
 		return providerclient.WriteResult{}, err
 	}
 	switch {
+	case request.CreateRepository != nil:
+		return a.executeCreateRepository(ctx, client, request.CreateRepository)
 	case request.CreateIssue != nil:
 		return a.executeCreateIssue(ctx, client, request.CreateIssue)
 	case request.UpdateIssue != nil:
@@ -68,6 +70,69 @@ func (a *Adapter) Execute(ctx context.Context, request providerclient.WriteReque
 	default:
 		return providerclient.WriteResult{}, providerError(providerclient.ErrorKindUnsupported, 0, nil)
 	}
+}
+
+func (a *Adapter) executeCreateRepository(ctx context.Context, client *githubapi.Client, command *providerclient.CreateRepositoryCommand) (providerclient.WriteResult, error) {
+	repositoryName := strings.TrimSpace(command.RepositoryName)
+	ownerKind := command.OwnerKind
+	providerOwner := strings.TrimSpace(command.ProviderOwner)
+	if repositoryName == "" || !validGitHubRepositoryVisibility(command.Visibility) {
+		return providerclient.WriteResult{}, providerError(providerclient.ErrorKindUnsupported, 0, nil)
+	}
+	switch ownerKind {
+	case enum.RepositoryOwnerKindOrganization:
+		if providerOwner == "" {
+			return providerclient.WriteResult{}, providerError(providerclient.ErrorKindUnsupported, 0, nil)
+		}
+	case enum.RepositoryOwnerKindAuthenticatedUser:
+		if providerOwner != "" {
+			return providerclient.WriteResult{}, providerError(providerclient.ErrorKindUnsupported, 0, nil)
+		}
+	default:
+		return providerclient.WriteResult{}, providerError(providerclient.ErrorKindUnsupported, 0, nil)
+	}
+	repositoryRequest := &githubapi.Repository{
+		Name:       githubapi.Ptr(repositoryName),
+		Visibility: githubapi.Ptr(string(command.Visibility)),
+		AutoInit:   githubapi.Ptr(true),
+		HasIssues:  githubapi.Ptr(true),
+	}
+	if description := strings.TrimSpace(command.Description); description != "" {
+		repositoryRequest.Description = githubapi.Ptr(description)
+	}
+	createOwner := providerOwner
+	if ownerKind == enum.RepositoryOwnerKindAuthenticatedUser {
+		createOwner = ""
+	}
+	repository, response, err := client.Repositories.Create(ctx, createOwner, repositoryRequest)
+	if err != nil {
+		return providerclient.WriteResult{}, classifyGitHubError(err)
+	}
+	fullName := strings.TrimSpace(repository.GetFullName())
+	if fullName == "" {
+		if providerOwner != "" {
+			fullName = providerOwner + "/" + repositoryName
+		} else if owner := repository.GetOwner(); strings.TrimSpace(owner.GetLogin()) != "" {
+			fullName = strings.TrimSpace(owner.GetLogin()) + "/" + repositoryName
+		}
+	}
+	providerRepositoryID := ""
+	if repository.GetID() > 0 {
+		providerRepositoryID = strconv.FormatInt(repository.GetID(), 10)
+	}
+	target := &providerclient.Target{
+		ProviderSlug:         enum.ProviderSlugGitHub,
+		RepositoryFullName:   fullName,
+		ProviderRepositoryID: providerRepositoryID,
+		WebURL:               repository.GetHTMLURL(),
+	}
+	return providerclient.WriteResult{
+		ResultRef:        repository.GetHTMLURL(),
+		ProviderObjectID: providerRepositoryID,
+		ProviderVersion:  providerVersionFromResponse(response, repository.GetUpdatedAt().Time),
+		Target:           target,
+		BaseBranch:       strings.TrimSpace(repository.GetDefaultBranch()),
+	}, nil
 }
 
 func (a *Adapter) executeCreateIssue(ctx context.Context, client *githubapi.Client, command *providerclient.CreateIssueCommand) (providerclient.WriteResult, error) {
@@ -525,7 +590,7 @@ func (a *Adapter) writeBootstrapFiles(ctx context.Context, client *githubapi.Cli
 	if err != nil {
 		return classifyGitHubError(err)
 	}
-	if len(baseTree.Entries) > 0 {
+	if !validBootstrapBaseTree(baseTree) {
 		return providerError(providerclient.ErrorKindUnsupported, 0, nil)
 	}
 	branchRef, _, err := client.Git.GetRef(ctx, owner, repo, gitBranchRef(bootstrapBranch))
@@ -894,6 +959,9 @@ func sortedKeys(values map[string]any) []string {
 
 func countWriteCommands(request providerclient.WriteRequest) int {
 	count := 0
+	if request.CreateRepository != nil {
+		count++
+	}
 	if request.CreateIssue != nil {
 		count++
 	}
@@ -922,6 +990,30 @@ func countWriteCommands(request providerclient.WriteRequest) int {
 		count++
 	}
 	return count
+}
+
+func validGitHubRepositoryVisibility(visibility enum.RepositoryVisibility) bool {
+	switch visibility {
+	case enum.RepositoryVisibilityPublic,
+		enum.RepositoryVisibilityPrivate,
+		enum.RepositoryVisibilityInternal:
+		return true
+	default:
+		return false
+	}
+}
+
+func validBootstrapBaseTree(tree *githubapi.Tree) bool {
+	if tree == nil || len(tree.Entries) == 0 {
+		return true
+	}
+	if len(tree.Entries) != 1 {
+		return false
+	}
+	entry := tree.Entries[0]
+	return entry.GetPath() == "README.md" &&
+		entry.GetType() == "blob" &&
+		(entry.GetMode() == "" || entry.GetMode() == "100644")
 }
 
 func providerVersionFromResponse(response *githubapi.Response, fallback time.Time) string {
