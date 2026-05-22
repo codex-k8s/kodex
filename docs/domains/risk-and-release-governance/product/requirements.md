@@ -6,7 +6,7 @@ status: active
 owner_role: PM
 created_at: 2026-05-22
 updated_at: 2026-05-22
-related_issues: [322]
+related_issues: [322, 769]
 related_prs: []
 related_docsets:
   - docs/platform/architecture/domain_map.md
@@ -83,7 +83,7 @@ approvals:
 | GOV-FR-15 | Домен должен отделять gate decision от доставки: `governance-manager` создаёт и хранит решение, `interaction-hub` доставляет запрос и возвращает callback/result. | Обязательно |
 | GOV-FR-16 | Домен должен публиковать события `governance.*` для оценки риска, review signals, gate lifecycle, release decision и safety-loop state. | Обязательно |
 | GOV-FR-17 | Домен должен поддерживать идемпотентные команды, expected version и аудит для всех решений, влияющих на переход. | Обязательно |
-| GOV-FR-18 | Домен не должен создавать UI/gateway, proto, AsyncAPI или сервисный код до согласования документации стартового пакета. | Обязательно |
+| GOV-FR-18 | Домен не должен создавать UI/gateway, сервисный код, storage, миграции или evaluator до согласования контрактного среза; proto и AsyncAPI появляются отдельным контрактным срезом после стартового пакета документации. | Обязательно |
 
 ## Критерии приёмки
 
@@ -134,4 +134,4 @@ approvals:
 
 - request_id: `owner-2026-05-22-risk-governance-kickoff`
 - Решение: pending
-- Комментарий: стартовый docs-first пакет фиксирует целевую границу отдельного `governance-manager`; утверждение ожидается вместе с доменным срезом.
+- Комментарий: требования фиксируют целевую границу отдельного `governance-manager`; контрактный срез добавляет transport/API без сервисной реализации.

@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-22
-related_issues: [322]
+related_issues: [322, 769]
 related_prs: []
 related_adrs: []
 approvals:
@@ -31,11 +31,11 @@ approvals:
 - Описать классификацию риска по diff, сервису, API, БД, секретам, runtime action и release context.
 - Описать role-driven review gates и policy-based approvals без подмены Human gate агентным комментарием.
 - Отделить decision state от доставки через `interaction-hub`.
-- Подготовить следующий контрактный срез без реализации кода, proto или AsyncAPI.
+- Поддерживать контрактный срез без сервисной бизнес-реализации, storage, evaluator, UI или gateway.
 
 ## Не-цели
 
-- Не реализовывать сервис, proto, AsyncAPI, миграции или UI.
+- Не реализовывать сервисный процесс, handlers, БД, миграции, evaluator, UI или gateway.
 - Не менять `project-catalog`, `agent-manager`, `provider-hub`, `runtime-manager` или `interaction-hub` кодом.
 - Не переносить проектную policy, branch rules или release policy из `project-catalog`.
 - Не делать gateway или web-console экраны.
@@ -197,6 +197,7 @@ Policy может усиливать список. Ослабление возм
 - `governance.gate.resolved`;
 - `governance.release_decision.requested`;
 - `governance.release_decision.resolved`;
+- `governance.release_decision_package.built`;
 - `governance.release_safety_state.changed`;
 - `governance.blocking_signal.recorded`;
 - `governance.policy.version_activated`.
@@ -224,4 +225,4 @@ Policy может усиливать список. Ослабление возм
 
 - request_id: `owner-2026-05-22-risk-governance-kickoff`
 - Решение: pending
-- Комментарий: дизайн фиксирует выбранный owner-ом вариант отдельного `governance-manager` и ожидает утверждения стартового доменного пакета.
+- Комментарий: дизайн фиксирует выбранный owner-ом вариант отдельного `governance-manager`; контрактный срез не меняет сервисную границу.

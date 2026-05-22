@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-22
-related_issues: [322]
+related_issues: [322, 769]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -328,4 +328,4 @@ approvals:
 
 - request_id: `owner-2026-05-22-risk-governance-kickoff`
 - Решение: pending
-- Комментарий: модель данных описывает целевой контур `governance-manager` до создания миграций и транспортных контрактов.
+- Комментарий: модель данных описывает целевой контур `governance-manager` до создания миграций, storage и сервисной реализации.

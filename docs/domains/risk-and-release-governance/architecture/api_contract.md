@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-22
-related_issues: [322]
+related_issues: [322, 769]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -20,17 +20,19 @@ approvals:
 
 - Тип API: внутренний gRPC `GovernanceManagerService`, доменные события `governance.*`, будущие MCP-инструменты через `platform-mcp-server`.
 - Аутентификация: gateway, MCP или сервисный токен; команды управления policy и human/release decisions дополнительно проверяются через `access-manager`.
-- Версионирование: транспортное пространство имён будет `kodex.governance.v1` после согласования документации.
+- Версионирование: стабильное транспортное пространство имён `kodex.governance.v1`.
 - Основные операции: risk profiles, risk assessments, review signals, gate requests/decisions, release decision packages, release decisions и safety-loop signals.
 
 ## Спецификации
 
-- gRPC proto: не создаётся в этом docs-first срезе; плановый путь `proto/kodex/governance/v1/governance_manager.proto`.
-- AsyncAPI: не создаётся в этом docs-first срезе; плановый путь `specs/asyncapi/governance-manager.v1.yaml`.
+- gRPC proto: `proto/kodex/governance/v1/governance_manager.proto`.
+- Сгенерированный Go-контракт: `proto/gen/go/kodex/governance/v1/**`.
+- AsyncAPI: `specs/asyncapi/governance-manager.v1.yaml`.
+- Сгенерированные Go-контракты событий: `libs/go/platformevents/governance/events.gen.go`.
 - MCP-инструменты: будут публиковаться через `platform-mcp-server`, не напрямую из доменного сервиса.
 - Внешний HTTP для будущей консоли: через профильный gateway, не напрямую из `governance-manager`.
 
-Этот документ является обзором целевого API. После создания proto/AsyncAPI машинные спецификации станут источником правды транспорта, а документ должен обновляться синхронно с изменением транспортной спецификации.
+Этот документ является обзором целевого API. Машинные спецификации являются источником правды транспорта, а документ должен обновляться синхронно с изменением транспортной спецификации.
 
 ## Операции
 
@@ -39,23 +41,35 @@ approvals:
 | `CreateRiskProfile` | gRPC command | `governance.policy.manage` | `CommandMeta.command_id` | Создаёт профиль риска для scope. |
 | `CreateRiskProfileVersion` | gRPC command | `governance.policy.manage` | `command_id` | Создаёт версию правил риска и gate policy. |
 | `ActivateRiskProfileVersion` | gRPC command | `governance.policy.manage` | `command_id` + expected version | Активирует версию для новых evaluations. |
+| `ArchiveRiskProfile` | gRPC command | `governance.policy.manage` | `command_id` + expected version | Архивирует профиль без удаления истории решений. |
 | `GetRiskProfile` | gRPC query | `governance.policy.read` | нет | Читает профиль и активную версию. |
+| `GetRiskProfileVersion` | gRPC query | `governance.policy.read` | нет | Читает immutable-версию risk rules и gate policies. |
 | `ListRiskProfiles` | gRPC query | `governance.policy.read` | нет | Читает профили по scope/status. |
+| `ListRiskRules` | gRPC query | `governance.policy.read` | нет | Читает risk rules конкретной версии профиля. |
+| `ListGatePolicies` | gRPC query | `governance.policy.read` | нет | Читает gate policies конкретной версии профиля. |
 | `EvaluateRisk` | gRPC command | `governance.risk.evaluate` | `command_id` | Создаёт или обновляет assessment для transition, PR/MR, release candidate, job или policy change. |
 | `ReevaluateRisk` | gRPC command | `governance.risk.evaluate` | `command_id` + expected version | Пересчитывает assessment после новых signals или policy version. |
 | `GetRiskAssessment` | gRPC query | `governance.risk.read` | нет | Читает assessment, factors и required gates. |
 | `ListRiskAssessments` | gRPC query | `governance.risk.read` | нет | Читает assessments по project/repository/target/risk class/status. |
+| `ListRiskFactors` | gRPC query | `governance.risk.read` | нет | Читает факторы риска assessment без полного diff или логов. |
 | `RecordReviewSignal` | gRPC command | `governance.signal.record` | `command_id` | Записывает signal от reviewer, QA, lexical gatekeeper, SRE, security или custom role. |
 | `ListReviewSignals` | gRPC query | `governance.signal.read` | нет | Читает signals по target или assessment. |
-| `RequestGate` | gRPC command | `governance.gate.request` | `command_id` | Создаёт gate request, evidence package и delivery request в `interaction-hub`. |
+| `RequestGate` | gRPC command | `governance.gate.request` | `command_id` | Создаёт governance gate request и evidence package; delivery request/ref остаётся у `interaction-hub`. |
 | `SubmitGateDecision` | gRPC command | `governance.gate.decide` | `command_id` + expected version | Фиксирует решение из UI/provider/external callback после проверки actor policy. |
+| `GetGateDecision` | gRPC query | `governance.gate.read` | нет | Читает одно final gate decision. |
+| `ListGateDecisions` | gRPC query | `governance.gate.read` | нет | Читает final gate decisions по gate request, target или outcome. |
 | `GetGateRequest` | gRPC query | `governance.gate.read` | нет | Читает gate request, evidence и decision status. |
 | `ListGateRequests` | gRPC query | `governance.gate.read` | нет | Читает ожидающие, resolved или просроченные gates. |
 | `BuildReleaseDecisionPackage` | gRPC command | `governance.release.prepare` | `command_id` | Собирает release evidence из project/provider/runtime/agent refs. |
+| `GetReleaseDecisionPackage` | gRPC query | `governance.release.read` | нет | Читает release evidence package. |
+| `ListReleaseDecisionPackages` | gRPC query | `governance.release.read` | нет | Читает release packages по project/candidate/status. |
 | `RequestReleaseDecision` | gRPC command | `governance.release.request` | `command_id` | Запрашивает release gate или автоматическое decision по policy. |
 | `SubmitReleaseDecision` | gRPC command | `governance.release.decide` | `command_id` + expected version | Фиксирует go/no-go/hold/rollback/follow-up decision. |
+| `GetReleaseDecision` | gRPC query | `governance.release.read` | нет | Читает одно release decision. |
+| `ListReleaseDecisions` | gRPC query | `governance.release.read` | нет | Читает release decisions по package/project/status/outcome. |
 | `RecordBlockingSignal` | gRPC command | `governance.signal.record` | `command_id` | Фиксирует blocking signal от acceptance, runtime, provider, interaction, monitoring или человека. |
 | `ResolveBlockingSignal` | gRPC command | `governance.signal.resolve` | `command_id` + expected version | Закрывает blocking signal с reason. |
+| `ListBlockingSignals` | gRPC query | `governance.signal.read` | нет | Читает активные и исторические blocking signals. |
 | `RecordReleaseSafetyState` | gRPC command | `governance.release.update` | `command_id` + expected version | Обновляет safety-loop после deploy/postdeploy signal. |
 | `GetReleaseSafetyState` | gRPC query | `governance.release.read` | нет | Читает текущее состояние release safety-loop. |
 
@@ -111,6 +125,7 @@ MCP-инструменты не должны принимать свободны
 | `governance.blocking_signal.resolved` | Блокирующий сигнал закрыт или снят. |
 | `governance.gate.requested` | Создан gate request. |
 | `governance.gate.resolved` | Gate получил final decision. |
+| `governance.release_decision_package.built` | Собран release evidence package. |
 | `governance.release_decision.requested` | Запрошено релизное решение. |
 | `governance.release_decision.resolved` | Релизное решение принято. |
 | `governance.release_safety_state.changed` | Изменилось состояние release safety-loop. |
@@ -119,21 +134,23 @@ MCP-инструменты не должны принимать свободны
 
 | Область | Статус |
 |---|---|
-| Доменная документация | Создаётся стартовым docs-first срезом. |
-| gRPC proto | Не создаётся до согласования документации. |
-| AsyncAPI `governance.*` | Не создаётся до согласования документации. |
-| Сервисный процесс `governance-manager` | Не создаётся до контрактного среза. |
-| Интеграции с project/agent/provider/runtime/interaction | Описаны как целевые границы; реализация идёт отдельными срезами. |
+| Доменная документация | Подготовлена как стартовый docs-first срез. |
+| gRPC proto `GovernanceManagerService` | Подготовлен как контрактный срез `GOV-1`; покрывает risk profiles/rules, assessments/factors, review signals, gates, release packages/decisions, blocking signals и safety-loop. |
+| AsyncAPI `governance.*` | Подготовлен как контрактный срез `GOV-1`; Go-константы событий сгенерированы в `libs/go/platformevents/governance`. |
+| Access actions | Добавлены в общий каталог для policy, risk, signal, gate и release операций. |
+| Сервисный процесс `governance-manager` | Не реализован; process, handlers, storage, outbox и evaluator остаются следующими срезами. |
+| Интеграции с project/agent/provider/runtime/interaction | Зафиксированы в refs и границах контрактов; реализация идёт отдельными срезами. |
 
 ## Совместимость
 
-- `v1` контракт должен покрыть согласованный минимум до сервисной реализации.
+- `v1` контракт покрывает согласованный минимум до сервисной реализации.
 - Risk/gate/release refs проектируются provider-neutral, чтобы GitLab не требовал смены модели.
 - События должны быть безопасны для outbox/inbox на PostgreSQL и будущего брокера.
 - Gate/release decisions являются audit-critical и не удаляются без отдельной retention policy.
+- Ошибки, события и evidence package не содержат сырые provider payload, значения секретов, полный diff, полные логи или большие вложения; для них используются typed refs, digest и bounded summary.
 
 ## Апрув
 
 - request_id: `owner-2026-05-22-risk-governance-kickoff`
 - Решение: pending
-- Комментарий: API-обзор описывает будущий контракт без создания proto/AsyncAPI в стартовом документационном срезе.
+- Комментарий: API-обзор синхронизирован с контрактным срезом GOV-1; сервисная реализация и интеграции остаются следующими срезами.

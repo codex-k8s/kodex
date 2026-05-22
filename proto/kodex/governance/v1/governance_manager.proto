@@ -1,0 +1,1205 @@
+syntax = "proto3";
+
+package kodex.governance.v1;
+
+option go_package = "github.com/codex-k8s/kodex/proto/gen/go/kodex/governance/v1;governancev1";
+
+// GovernanceManagerService is the stable v1 inter-service contract for risk
+// and release governance. It owns risk classification, review signals, gate
+// decisions, release decisions and release safety-loop state.
+service GovernanceManagerService {
+  // CreateRiskProfile creates a risk profile for a project-owned or platform scope.
+  rpc CreateRiskProfile(CreateRiskProfileRequest) returns (RiskProfileResponse);
+  // CreateRiskProfileVersion creates an immutable set of risk rules and gate policies.
+  rpc CreateRiskProfileVersion(CreateRiskProfileVersionRequest) returns (RiskProfileVersionResponse);
+  // ActivateRiskProfileVersion activates one profile version for future assessments.
+  rpc ActivateRiskProfileVersion(ActivateRiskProfileVersionRequest) returns (RiskProfileVersionResponse);
+  // ArchiveRiskProfile archives a profile without deleting decision history.
+  rpc ArchiveRiskProfile(ArchiveRiskProfileRequest) returns (RiskProfileResponse);
+  // GetRiskProfile returns authoritative risk profile metadata.
+  rpc GetRiskProfile(GetRiskProfileRequest) returns (RiskProfileResponse);
+  // GetRiskProfileVersion returns one immutable profile version.
+  rpc GetRiskProfileVersion(GetRiskProfileVersionRequest) returns (RiskProfileVersionResponse);
+  // ListRiskProfiles returns profiles by scope and status.
+  rpc ListRiskProfiles(ListRiskProfilesRequest) returns (ListRiskProfilesResponse);
+  // ListRiskRules returns risk rules by profile version, kind and status.
+  rpc ListRiskRules(ListRiskRulesRequest) returns (ListRiskRulesResponse);
+  // ListGatePolicies returns gate policies by profile version, kind and status.
+  rpc ListGatePolicies(ListGatePoliciesRequest) returns (ListGatePoliciesResponse);
+  // EvaluateRisk creates an assessment for a transition, provider artifact, runtime job or release candidate.
+  rpc EvaluateRisk(EvaluateRiskRequest) returns (RiskAssessmentResponse);
+  // ReevaluateRisk recalculates an assessment after policy, evidence or signal changes.
+  rpc ReevaluateRisk(ReevaluateRiskRequest) returns (RiskAssessmentResponse);
+  // GetRiskAssessment returns one assessment with required gate summaries.
+  rpc GetRiskAssessment(GetRiskAssessmentRequest) returns (RiskAssessmentResponse);
+  // ListRiskAssessments returns assessments by target, project, risk class or status.
+  rpc ListRiskAssessments(ListRiskAssessmentsRequest) returns (ListRiskAssessmentsResponse);
+  // ListRiskFactors returns factors recorded for an assessment.
+  rpc ListRiskFactors(ListRiskFactorsRequest) returns (ListRiskFactorsResponse);
+  // RecordReviewSignal records a reviewer, QA, lexical, SRE, security or owner signal.
+  rpc RecordReviewSignal(RecordReviewSignalRequest) returns (ReviewSignalResponse);
+  // ListReviewSignals returns review signals by target, assessment, role or outcome.
+  rpc ListReviewSignals(ListReviewSignalsRequest) returns (ListReviewSignalsResponse);
+  // RequestGate creates a governance gate request and evidence package.
+  rpc RequestGate(RequestGateRequest) returns (GateRequestResponse);
+  // SubmitGateDecision records the final governance decision for a gate request.
+  rpc SubmitGateDecision(SubmitGateDecisionRequest) returns (GateDecisionResponse);
+  // GetGateDecision returns one final governance gate decision.
+  rpc GetGateDecision(GetGateDecisionRequest) returns (GateDecisionResponse);
+  // ListGateDecisions returns final governance gate decisions by gate request, target or outcome.
+  rpc ListGateDecisions(ListGateDecisionsRequest) returns (ListGateDecisionsResponse);
+  // GetGateRequest returns one gate request and its final decision when present.
+  rpc GetGateRequest(GetGateRequestRequest) returns (GateRequestResponse);
+  // ListGateRequests returns gate requests by target, status or decision state.
+  rpc ListGateRequests(ListGateRequestsRequest) returns (ListGateRequestsResponse);
+  // BuildReleaseDecisionPackage builds a bounded evidence package for a release candidate.
+  rpc BuildReleaseDecisionPackage(BuildReleaseDecisionPackageRequest) returns (ReleaseDecisionPackageResponse);
+  // GetReleaseDecisionPackage returns one release decision package.
+  rpc GetReleaseDecisionPackage(GetReleaseDecisionPackageRequest) returns (ReleaseDecisionPackageResponse);
+  // ListReleaseDecisionPackages returns release packages by project, candidate or status.
+  rpc ListReleaseDecisionPackages(ListReleaseDecisionPackagesRequest) returns (ListReleaseDecisionPackagesResponse);
+  // RequestReleaseDecision starts release decision evaluation or required gate flow.
+  rpc RequestReleaseDecision(RequestReleaseDecisionRequest) returns (ReleaseDecisionResponse);
+  // SubmitReleaseDecision records a go/no-go/hold/rollback/follow-up release decision.
+  rpc SubmitReleaseDecision(SubmitReleaseDecisionRequest) returns (ReleaseDecisionResponse);
+  // GetReleaseDecision returns one release decision.
+  rpc GetReleaseDecision(GetReleaseDecisionRequest) returns (ReleaseDecisionResponse);
+  // ListReleaseDecisions returns release decisions by package, project, status or outcome.
+  rpc ListReleaseDecisions(ListReleaseDecisionsRequest) returns (ListReleaseDecisionsResponse);
+  // RecordBlockingSignal records a signal that blocks a transition or release.
+  rpc RecordBlockingSignal(RecordBlockingSignalRequest) returns (BlockingSignalResponse);
+  // ResolveBlockingSignal resolves or dismisses an active blocking signal.
+  rpc ResolveBlockingSignal(ResolveBlockingSignalRequest) returns (BlockingSignalResponse);
+  // ListBlockingSignals returns active or historical blocking signals.
+  rpc ListBlockingSignals(ListBlockingSignalsRequest) returns (ListBlockingSignalsResponse);
+  // RecordReleaseSafetyState records a release safety-loop state transition.
+  rpc RecordReleaseSafetyState(RecordReleaseSafetyStateRequest) returns (ReleaseSafetyStateResponse);
+  // GetReleaseSafetyState returns current safety-loop state for a release package.
+  rpc GetReleaseSafetyState(GetReleaseSafetyStateRequest) returns (ReleaseSafetyStateResponse);
+}
+
+// CommandMeta is required for every mutating command.
+message CommandMeta {
+  // command_id is a unique command identifier. Either command_id or idempotency_key is required.
+  optional string command_id = 1;
+  // idempotency_key is an idempotency key scoped by operation and actor.
+  optional string idempotency_key = 2;
+  // expected_version is present only for existing aggregate mutations.
+  optional int64 expected_version = 3;
+  // actor is the authenticated caller.
+  Actor actor = 4;
+  // reason is a machine or operator reason for audit and domain events.
+  string reason = 5;
+  // request_id links the command to logs, traces and audit.
+  string request_id = 6;
+  // request_context carries safe request metadata; no tokens, secrets, email or names.
+  RequestContext request_context = 7;
+}
+
+// QueryMeta carries safe metadata for authoritative reads.
+message QueryMeta {
+  // actor is the authenticated caller.
+  Actor actor = 1;
+  // request_id links the read to logs and traces.
+  string request_id = 2;
+  // request_context carries safe request metadata.
+  RequestContext request_context = 3;
+}
+
+// RequestContext is safe request metadata used for audit and diagnostics.
+message RequestContext {
+  // source identifies caller surface, for example staff-gateway, platform-mcp-server or service.
+  string source = 1;
+  // trace_id links platform traces.
+  optional string trace_id = 2;
+  // session_id links a user session when available.
+  optional string session_id = 3;
+  // client_ip_hash is an optional hashed client address.
+  optional string client_ip_hash = 4;
+}
+
+// Actor identifies a user, service, agent or external account.
+message Actor {
+  // type is a subject type such as user, service, agent or external_account.
+  string type = 1;
+  // id is the subject identifier in its owner domain.
+  string id = 2;
+}
+
+// PageRequest limits list responses.
+message PageRequest {
+  // page_size is the maximum item count requested by caller.
+  int32 page_size = 1;
+  // page_token is an opaque continuation token returned by a previous call.
+  optional string page_token = 2;
+}
+
+// PageResponse describes list continuation state.
+message PageResponse {
+  // next_page_token is empty when there are no more items.
+  optional string next_page_token = 1;
+}
+
+// LocalizedText carries text for one locale.
+message LocalizedText {
+  // locale is a BCP 47 locale code, for example ru or en-US.
+  string locale = 1;
+  // text is localized display text.
+  string text = 2;
+}
+
+// ScopeRef identifies the scope of a risk profile or decision without copying project policy.
+message ScopeRef {
+  // type classifies the external scope.
+  GovernanceScopeType type = 1;
+  // ref is an external identifier owned by the scope owner domain.
+  string ref = 2;
+}
+
+// TargetRef points to the assessed transition, artifact, document, job or release candidate.
+message TargetRef {
+  // type classifies the assessed target.
+  GovernanceTargetType type = 1;
+  // ref is the external or governance aggregate reference.
+  string ref = 2;
+}
+
+// ProjectContextRef carries project-catalog refs used by governance without copying project policy.
+message ProjectContextRef {
+  // project_ref points to project-catalog project state.
+  optional string project_ref = 1;
+  // repository_ref points to project-catalog repository binding state.
+  optional string repository_ref = 2;
+  // service_ref points to a service descriptor in the checked services.yaml projection.
+  optional string service_ref = 3;
+  // branch_rules_ref points to branch rules owned by project-catalog.
+  optional string branch_rules_ref = 4;
+  // release_policy_ref points to release policy owned by project-catalog.
+  optional string release_policy_ref = 5;
+  // release_line_ref points to release line owned by project-catalog.
+  optional string release_line_ref = 6;
+}
+
+// ProviderContextRef points to provider-hub projections and operation refs.
+message ProviderContextRef {
+  // work_item_ref points to Issue or another provider-native work item projection.
+  optional string work_item_ref = 1;
+  // pull_request_ref points to PR/MR projection when available.
+  optional string pull_request_ref = 2;
+  // comment_ref points to a provider comment projection when available.
+  optional string comment_ref = 3;
+  // review_signal_ref points to a provider review or check projection when available.
+  optional string review_signal_ref = 4;
+  // provider_operation_ref points to provider-hub operation journal state.
+  optional string provider_operation_ref = 5;
+  // changed_files_summary_ref points to a bounded changed-file summary, not a full diff.
+  optional string changed_files_summary_ref = 6;
+}
+
+// AgentContextRef points to agent-manager state without copying run or acceptance truth.
+message AgentContextRef {
+  // session_ref points to an agent-manager session.
+  optional string session_ref = 1;
+  // run_ref points to an agent-manager run.
+  optional string run_ref = 2;
+  // stage_ref points to a flow stage.
+  optional string stage_ref = 3;
+  // acceptance_ref points to an acceptance result.
+  optional string acceptance_ref = 4;
+  // role_ref points to a role profile or role binding.
+  optional string role_ref = 5;
+}
+
+// RuntimeContextRef points to runtime-manager state without copying job or log truth.
+message RuntimeContextRef {
+  // slot_ref points to runtime slot state.
+  optional string slot_ref = 1;
+  // job_ref points to platform job state.
+  optional string job_ref = 2;
+  // environment_ref points to runtime environment state.
+  optional string environment_ref = 3;
+  // artifact_ref points to a runtime artifact reference.
+  optional string artifact_ref = 4;
+  // summary_ref points to a bounded runtime summary, not full logs.
+  optional string summary_ref = 5;
+}
+
+// InteractionDeliveryRef points to interaction-hub delivery and callback facts.
+message InteractionDeliveryRef {
+  // request_ref points to an interaction request created for delivery.
+  optional string request_ref = 1;
+  // delivery_ref points to a delivery attempt.
+  optional string delivery_ref = 2;
+  // callback_ref points to a callback record.
+  optional string callback_ref = 3;
+  // decision_ref points to interaction-hub's delivery answer fact, not the governance decision.
+  optional string decision_ref = 4;
+}
+
+// EvidenceRef points to bounded evidence without embedding raw provider payload, secrets or full logs.
+message EvidenceRef {
+  // kind classifies the evidence source.
+  EvidenceKind kind = 1;
+  // ref points to the source object or summary.
+  string ref = 2;
+  // summary is a short safe human-readable explanation.
+  string summary = 3;
+  // digest is optional integrity metadata for object-backed evidence.
+  optional string digest = 4;
+  // retention_class describes how long the referenced evidence is expected to live.
+  optional string retention_class = 5;
+}
+
+// RequiredGate describes a gate required by a risk assessment.
+message RequiredGate {
+  // gate_policy_id identifies the policy that requires the gate.
+  string gate_policy_id = 1;
+  // gate_kind classifies the required gate.
+  GateKind gate_kind = 2;
+  // min_risk_class is the minimum risk that triggered the gate.
+  RiskClass min_risk_class = 3;
+  // reason is a bounded safe explanation for humans and audit.
+  string reason = 4;
+}
+
+// RiskProfile describes risk and gate policy for a scope.
+message RiskProfile {
+  // id is the governance profile identifier.
+  string id = 1;
+  // scope identifies where the profile applies.
+  ScopeRef scope = 2;
+  // slug is a stable key inside the scope.
+  string slug = 3;
+  // display_name is localized safe display text.
+  repeated LocalizedText display_name = 4;
+  // description is localized safe explanatory text.
+  repeated LocalizedText description = 5;
+  // status is the profile lifecycle status.
+  RiskProfileStatus status = 6;
+  // active_version is the active immutable policy version when present.
+  optional int64 active_version = 7;
+  // version is the optimistic concurrency version for profile metadata.
+  int64 version = 8;
+  // created_at is an RFC3339 timestamp.
+  string created_at = 9;
+  // updated_at is an RFC3339 timestamp.
+  string updated_at = 10;
+}
+
+// RiskProfileVersion is an immutable version of rules and gate policies.
+message RiskProfileVersion {
+  // risk_profile_id identifies the owning profile.
+  string risk_profile_id = 1;
+  // profile_version is the immutable version number.
+  int64 profile_version = 2;
+  // status is the version lifecycle status.
+  RiskProfileVersionStatus status = 3;
+  // rules are the risk rules in this version.
+  repeated RiskRule rules = 4;
+  // gate_policies are gate policies in this version.
+  repeated GatePolicy gate_policies = 5;
+  // content_digest identifies the normalized version content.
+  string content_digest = 6;
+  // created_at is an RFC3339 timestamp.
+  string created_at = 7;
+  // activated_at is an RFC3339 timestamp when the version became active.
+  optional string activated_at = 8;
+}
+
+// RiskRule is a versioned rule that contributes a minimum risk class.
+message RiskRule {
+  // id is the rule identifier.
+  string id = 1;
+  // risk_profile_id identifies the owning profile.
+  string risk_profile_id = 2;
+  // profile_version is the profile version where the rule belongs.
+  int64 profile_version = 3;
+  // rule_kind classifies the rule matcher.
+  RiskRuleKind rule_kind = 4;
+  // matcher_json contains a typed bounded matcher without raw provider payload.
+  string matcher_json = 5;
+  // min_risk_class is the minimum risk produced by this rule.
+  RiskClass min_risk_class = 6;
+  // required_gate_policy_id links to a gate policy when the rule requires one.
+  optional string required_gate_policy_id = 7;
+  // reason_template is localized safe explanation text.
+  repeated LocalizedText reason_template = 8;
+  // status is the rule lifecycle status inside this version.
+  RuleStatus status = 9;
+  // created_at is an RFC3339 timestamp.
+  string created_at = 10;
+  // updated_at is an RFC3339 timestamp.
+  string updated_at = 11;
+}
+
+// GatePolicy defines actor and signal requirements for a gate.
+message GatePolicy {
+  // id is the gate policy identifier.
+  string id = 1;
+  // risk_profile_id identifies the optional owning risk profile.
+  optional string risk_profile_id = 2;
+  // profile_version is the profile version where the policy belongs.
+  int64 profile_version = 3;
+  // gate_kind classifies the gate.
+  GateKind gate_kind = 4;
+  // min_risk_class is the minimum risk that requires the gate.
+  RiskClass min_risk_class = 5;
+  // required_actor_policy_ref points to an access or duty policy, not embedded policy truth.
+  string required_actor_policy_ref = 6;
+  // required_signal_kinds lists review signal kinds expected in evidence.
+  repeated string required_signal_kinds = 7;
+  // timeout_policy_ref points to reminder/escalation policy executed through interaction-hub.
+  optional string timeout_policy_ref = 8;
+  // status is the policy lifecycle status inside this version.
+  RuleStatus status = 9;
+}
+
+// RiskAssessment records risk state for one target.
+message RiskAssessment {
+  // id is the assessment identifier.
+  string id = 1;
+  // target identifies what was assessed.
+  TargetRef target = 2;
+  // project_context carries project/repository/release refs.
+  ProjectContextRef project_context = 3;
+  // provider_context carries provider artifact refs.
+  ProviderContextRef provider_context = 4;
+  // agent_context carries run/session/acceptance refs.
+  AgentContextRef agent_context = 5;
+  // runtime_context carries runtime job/environment refs.
+  RuntimeContextRef runtime_context = 6;
+  // initial_risk_class is the risk before review signals and decisions.
+  RiskClass initial_risk_class = 7;
+  // effective_risk_class is the current maximum risk after factors and signals.
+  RiskClass effective_risk_class = 8;
+  // status is the assessment lifecycle status.
+  RiskAssessmentStatus status = 9;
+  // explanation is a short safe summary without secrets, full diff or logs.
+  string explanation = 10;
+  // required_gates lists gates required by the current assessment state.
+  repeated RequiredGate required_gates = 11;
+  // version is the optimistic concurrency version.
+  int64 version = 12;
+  // created_at is an RFC3339 timestamp.
+  string created_at = 13;
+  // updated_at is an RFC3339 timestamp.
+  string updated_at = 14;
+}
+
+// RiskFactor explains one reason for a risk class.
+message RiskFactor {
+  // id is the risk factor identifier.
+  string id = 1;
+  // risk_assessment_id identifies the owning assessment.
+  string risk_assessment_id = 2;
+  // source_type classifies the factor source.
+  RiskFactorSourceType source_type = 3;
+  // source_ref points to a rule, signal or external summary.
+  optional string source_ref = 4;
+  // risk_class is the risk contributed by the factor.
+  RiskClass risk_class = 5;
+  // summary is a short safe explanation.
+  string summary = 6;
+  // created_at is an RFC3339 timestamp.
+  string created_at = 7;
+}
+
+// ReviewSignal records a role-driven signal used as evidence.
+message ReviewSignal {
+  // id is the signal identifier.
+  string id = 1;
+  // risk_assessment_id links to an assessment when known.
+  optional string risk_assessment_id = 2;
+  // target identifies the artifact or state the signal covers.
+  TargetRef target = 3;
+  // role_kind classifies the reviewer role.
+  ReviewRoleKind role_kind = 4;
+  // author_ref points to a user, agent run or service principal.
+  string author_ref = 5;
+  // outcome is the signal result.
+  ReviewSignalOutcome outcome = 6;
+  // severity is the signal severity.
+  SignalSeverity severity = 7;
+  // confidence is the optional confidence of an automated or agent signal.
+  optional Confidence confidence = 8;
+  // evidence_refs point to comments, checks, docs or summaries.
+  repeated EvidenceRef evidence_refs = 9;
+  // summary is a short safe explanation.
+  string summary = 10;
+  // created_at is an RFC3339 timestamp.
+  string created_at = 11;
+}
+
+// GateRequest describes a concrete governance gate.
+message GateRequest {
+  // id is the gate request identifier.
+  string id = 1;
+  // risk_assessment_id links to the assessment that required the gate.
+  optional string risk_assessment_id = 2;
+  // gate_policy_id identifies the policy that required the gate.
+  optional string gate_policy_id = 3;
+  // target identifies the transition, merge, release, rollback or document approval.
+  TargetRef target = 4;
+  // interaction_delivery_ref links delivery/callback facts owned by interaction-hub.
+  InteractionDeliveryRef interaction_delivery_ref = 5;
+  // evidence_refs are bounded facts presented for decision.
+  repeated EvidenceRef evidence_refs = 6;
+  // evidence_summary is a short safe package summary.
+  string evidence_summary = 7;
+  // status is the gate lifecycle status.
+  GateRequestStatus status = 8;
+  // version is the optimistic concurrency version.
+  int64 version = 9;
+  // created_at is an RFC3339 timestamp.
+  string created_at = 10;
+  // updated_at is an RFC3339 timestamp.
+  string updated_at = 11;
+}
+
+// GateDecision records the final governance decision for a gate.
+message GateDecision {
+  // id is the decision identifier.
+  string id = 1;
+  // gate_request_id identifies the resolved gate request.
+  string gate_request_id = 2;
+  // decision_actor_ref identifies the actor that took the decision.
+  string decision_actor_ref = 3;
+  // decision_policy_ref identifies the actor/policy version used for validation.
+  string decision_policy_ref = 4;
+  // outcome is the final gate decision.
+  GateOutcome outcome = 5;
+  // reason is a bounded safe explanation.
+  string reason = 6;
+  // conditions_summary describes follow-up or limitations without large evidence dumps.
+  optional string conditions_summary = 7;
+  // source_ref points to UI response, provider review or interaction callback.
+  optional string source_ref = 8;
+  // decided_at is an RFC3339 timestamp.
+  string decided_at = 9;
+}
+
+// ReleaseDecisionPackage is a bounded evidence package for release decision.
+message ReleaseDecisionPackage {
+  // id is the package identifier.
+  string id = 1;
+  // release_candidate_ref points to the candidate artifact or tag.
+  string release_candidate_ref = 2;
+  // project_context carries project/release policy refs.
+  ProjectContextRef project_context = 3;
+  // repository_refs point to participating repositories.
+  repeated string repository_refs = 4;
+  // risk_assessment_id links to release risk assessment.
+  optional string risk_assessment_id = 5;
+  // provider_refs point to provider issues, PR/MR, tags or branches.
+  repeated ProviderContextRef provider_refs = 6;
+  // runtime_refs point to build, deploy and postdeploy summaries.
+  repeated RuntimeContextRef runtime_refs = 7;
+  // agent_context carries preparation run/session refs.
+  AgentContextRef agent_context = 8;
+  // review_signal_ids identify signals included in the package.
+  repeated string review_signal_ids = 9;
+  // evidence_refs are bounded facts and summaries.
+  repeated EvidenceRef evidence_refs = 10;
+  // known_limitations_summary is a safe summary of accepted risk or limitations.
+  string known_limitations_summary = 11;
+  // status is the package lifecycle status.
+  ReleaseDecisionPackageStatus status = 12;
+  // version is the optimistic concurrency version.
+  int64 version = 13;
+  // created_at is an RFC3339 timestamp.
+  string created_at = 14;
+  // updated_at is an RFC3339 timestamp.
+  string updated_at = 15;
+}
+
+// ReleaseDecision records the governance release decision.
+message ReleaseDecision {
+  // id is the release decision identifier.
+  string id = 1;
+  // release_decision_package_id identifies the evidence package.
+  string release_decision_package_id = 2;
+  // gate_decision_id links a human gate when one was required.
+  optional string gate_decision_id = 3;
+  // outcome is the final release decision.
+  ReleaseDecisionOutcome outcome = 4;
+  // decision_actor_ref identifies the human or policy automation actor.
+  string decision_actor_ref = 5;
+  // decision_policy_ref identifies the policy/evaluator version used for the decision.
+  string decision_policy_ref = 6;
+  // reason is a bounded safe explanation.
+  string reason = 7;
+  // conditions_summary describes follow-up or limitations.
+  optional string conditions_summary = 8;
+  // status is the decision lifecycle status.
+  ReleaseDecisionStatus status = 9;
+  // version is the optimistic concurrency version.
+  int64 version = 10;
+  // decided_at is an RFC3339 timestamp.
+  string decided_at = 11;
+}
+
+// ReleaseSafetyState records postdeploy safety-loop state.
+message ReleaseSafetyState {
+  // id is the safety state identifier.
+  string id = 1;
+  // release_decision_package_id identifies the release package.
+  string release_decision_package_id = 2;
+  // current_state is the current safety-loop state.
+  ReleaseSafetyStateKind current_state = 3;
+  // runtime_job_ref points to current deploy or postdeploy job.
+  optional string runtime_job_ref = 4;
+  // blocking_signal_count is the number of active blocking signals.
+  int32 blocking_signal_count = 5;
+  // last_state_reason is a short safe transition explanation.
+  string last_state_reason = 6;
+  // version is the optimistic concurrency version.
+  int64 version = 7;
+  // created_at is an RFC3339 timestamp.
+  string created_at = 8;
+  // updated_at is an RFC3339 timestamp.
+  string updated_at = 9;
+}
+
+// BlockingSignal describes a signal that blocks a transition or release.
+message BlockingSignal {
+  // id is the blocking signal identifier.
+  string id = 1;
+  // target identifies the blocked aggregate or external target.
+  TargetRef target = 2;
+  // source_type classifies where the signal came from.
+  BlockingSignalSourceType source_type = 3;
+  // source_ref points to the source signal or external summary.
+  optional string source_ref = 4;
+  // severity is the blocking signal severity.
+  SignalSeverity severity = 5;
+  // summary is a short safe explanation.
+  string summary = 6;
+  // status is the signal lifecycle status.
+  BlockingSignalStatus status = 7;
+  // version is the optimistic concurrency version.
+  int64 version = 8;
+  // created_at is an RFC3339 timestamp.
+  string created_at = 9;
+  // resolved_at is an RFC3339 timestamp when terminal.
+  optional string resolved_at = 10;
+}
+
+message RiskRuleDraft {
+  RiskRuleKind rule_kind = 1;
+  string matcher_json = 2;
+  RiskClass min_risk_class = 3;
+  optional string required_gate_policy_id = 4;
+  repeated LocalizedText reason_template = 5;
+}
+
+message GatePolicyDraft {
+  GateKind gate_kind = 1;
+  RiskClass min_risk_class = 2;
+  string required_actor_policy_ref = 3;
+  repeated string required_signal_kinds = 4;
+  optional string timeout_policy_ref = 5;
+}
+
+message CreateRiskProfileRequest {
+  ScopeRef scope = 1;
+  string slug = 2;
+  repeated LocalizedText display_name = 3;
+  repeated LocalizedText description = 4;
+  CommandMeta meta = 5;
+}
+
+message CreateRiskProfileVersionRequest {
+  string risk_profile_id = 1;
+  repeated RiskRuleDraft rules = 2;
+  repeated GatePolicyDraft gate_policies = 3;
+  string change_summary = 4;
+  CommandMeta meta = 5;
+}
+
+message ActivateRiskProfileVersionRequest {
+  string risk_profile_id = 1;
+  int64 profile_version = 2;
+  CommandMeta meta = 3;
+}
+
+message ArchiveRiskProfileRequest {
+  string risk_profile_id = 1;
+  CommandMeta meta = 2;
+}
+
+message GetRiskProfileRequest {
+  string risk_profile_id = 1;
+  QueryMeta meta = 2;
+}
+
+message GetRiskProfileVersionRequest {
+  string risk_profile_id = 1;
+  int64 profile_version = 2;
+  QueryMeta meta = 3;
+}
+
+message ListRiskProfilesRequest {
+  ScopeRef scope = 1;
+  optional RiskProfileStatus status = 2;
+  PageRequest page = 3;
+  QueryMeta meta = 4;
+}
+
+message ListRiskRulesRequest {
+  string risk_profile_id = 1;
+  int64 profile_version = 2;
+  optional RiskRuleKind rule_kind = 3;
+  optional RuleStatus status = 4;
+  PageRequest page = 5;
+  QueryMeta meta = 6;
+}
+
+message ListGatePoliciesRequest {
+  string risk_profile_id = 1;
+  int64 profile_version = 2;
+  optional GateKind gate_kind = 3;
+  optional RuleStatus status = 4;
+  PageRequest page = 5;
+  QueryMeta meta = 6;
+}
+
+message EvaluateRiskRequest {
+  TargetRef target = 1;
+  ProjectContextRef project_context = 2;
+  ProviderContextRef provider_context = 3;
+  AgentContextRef agent_context = 4;
+  RuntimeContextRef runtime_context = 5;
+  repeated EvidenceRef evidence_refs = 6;
+  optional string risk_profile_ref = 7;
+  CommandMeta meta = 8;
+}
+
+message ReevaluateRiskRequest {
+  string risk_assessment_id = 1;
+  repeated EvidenceRef new_evidence_refs = 2;
+  string reevaluation_reason = 3;
+  CommandMeta meta = 4;
+}
+
+message GetRiskAssessmentRequest {
+  string risk_assessment_id = 1;
+  bool include_factors = 2;
+  bool include_review_signals = 3;
+  QueryMeta meta = 4;
+}
+
+message ListRiskAssessmentsRequest {
+  TargetRef target = 1;
+  ProjectContextRef project_context = 2;
+  optional RiskClass effective_risk_class = 3;
+  optional RiskAssessmentStatus status = 4;
+  PageRequest page = 5;
+  QueryMeta meta = 6;
+}
+
+message ListRiskFactorsRequest {
+  string risk_assessment_id = 1;
+  optional RiskFactorSourceType source_type = 2;
+  PageRequest page = 3;
+  QueryMeta meta = 4;
+}
+
+message RecordReviewSignalRequest {
+  optional string risk_assessment_id = 1;
+  TargetRef target = 2;
+  ReviewRoleKind role_kind = 3;
+  string author_ref = 4;
+  ReviewSignalOutcome outcome = 5;
+  SignalSeverity severity = 6;
+  optional Confidence confidence = 7;
+  repeated EvidenceRef evidence_refs = 8;
+  string summary = 9;
+  CommandMeta meta = 10;
+}
+
+message ListReviewSignalsRequest {
+  optional string risk_assessment_id = 1;
+  TargetRef target = 2;
+  optional ReviewRoleKind role_kind = 3;
+  optional ReviewSignalOutcome outcome = 4;
+  PageRequest page = 5;
+  QueryMeta meta = 6;
+}
+
+message RequestGateRequest {
+  optional string risk_assessment_id = 1;
+  optional string gate_policy_id = 2;
+  TargetRef target = 3;
+  InteractionDeliveryRef interaction_delivery_ref = 4;
+  repeated EvidenceRef evidence_refs = 5;
+  string evidence_summary = 6;
+  optional string deadline_at = 7;
+  CommandMeta meta = 8;
+}
+
+message SubmitGateDecisionRequest {
+  string gate_request_id = 1;
+  string decision_actor_ref = 2;
+  string decision_policy_ref = 3;
+  GateOutcome outcome = 4;
+  string reason = 5;
+  optional string conditions_summary = 6;
+  InteractionDeliveryRef interaction_delivery_ref = 7;
+  CommandMeta meta = 8;
+}
+
+message GetGateDecisionRequest {
+  string gate_decision_id = 1;
+  QueryMeta meta = 2;
+}
+
+message ListGateDecisionsRequest {
+  optional string gate_request_id = 1;
+  TargetRef target = 2;
+  optional GateOutcome outcome = 3;
+  PageRequest page = 4;
+  QueryMeta meta = 5;
+}
+
+message GetGateRequestRequest {
+  string gate_request_id = 1;
+  bool include_decision = 2;
+  QueryMeta meta = 3;
+}
+
+message ListGateRequestsRequest {
+  optional string risk_assessment_id = 1;
+  TargetRef target = 2;
+  optional GateRequestStatus status = 3;
+  PageRequest page = 4;
+  QueryMeta meta = 5;
+}
+
+message BuildReleaseDecisionPackageRequest {
+  string release_candidate_ref = 1;
+  ProjectContextRef project_context = 2;
+  repeated string repository_refs = 3;
+  repeated ProviderContextRef provider_refs = 4;
+  repeated RuntimeContextRef runtime_refs = 5;
+  AgentContextRef agent_context = 6;
+  repeated string review_signal_ids = 7;
+  repeated EvidenceRef evidence_refs = 8;
+  string known_limitations_summary = 9;
+  CommandMeta meta = 10;
+}
+
+message GetReleaseDecisionPackageRequest {
+  string release_decision_package_id = 1;
+  QueryMeta meta = 2;
+}
+
+message ListReleaseDecisionPackagesRequest {
+  ProjectContextRef project_context = 1;
+  optional string release_candidate_ref = 2;
+  optional ReleaseDecisionPackageStatus status = 3;
+  PageRequest page = 4;
+  QueryMeta meta = 5;
+}
+
+message RequestReleaseDecisionRequest {
+  string release_decision_package_id = 1;
+  bool request_gate_if_required = 2;
+  CommandMeta meta = 3;
+}
+
+message SubmitReleaseDecisionRequest {
+  string release_decision_package_id = 1;
+  optional string gate_decision_id = 2;
+  ReleaseDecisionOutcome outcome = 3;
+  string decision_actor_ref = 4;
+  string decision_policy_ref = 5;
+  string reason = 6;
+  optional string conditions_summary = 7;
+  CommandMeta meta = 8;
+}
+
+message GetReleaseDecisionRequest {
+  string release_decision_id = 1;
+  QueryMeta meta = 2;
+}
+
+message ListReleaseDecisionsRequest {
+  optional string release_decision_package_id = 1;
+  ProjectContextRef project_context = 2;
+  optional ReleaseDecisionStatus status = 3;
+  optional ReleaseDecisionOutcome outcome = 4;
+  PageRequest page = 5;
+  QueryMeta meta = 6;
+}
+
+message RecordBlockingSignalRequest {
+  TargetRef target = 1;
+  BlockingSignalSourceType source_type = 2;
+  optional string source_ref = 3;
+  SignalSeverity severity = 4;
+  string summary = 5;
+  CommandMeta meta = 6;
+}
+
+message ResolveBlockingSignalRequest {
+  string blocking_signal_id = 1;
+  BlockingSignalStatus terminal_status = 2;
+  string resolution_summary = 3;
+  CommandMeta meta = 4;
+}
+
+message ListBlockingSignalsRequest {
+  TargetRef target = 1;
+  optional BlockingSignalStatus status = 2;
+  optional SignalSeverity severity = 3;
+  PageRequest page = 4;
+  QueryMeta meta = 5;
+}
+
+message RecordReleaseSafetyStateRequest {
+  string release_decision_package_id = 1;
+  ReleaseSafetyStateKind current_state = 2;
+  optional string runtime_job_ref = 3;
+  string last_state_reason = 4;
+  CommandMeta meta = 5;
+}
+
+message GetReleaseSafetyStateRequest {
+  string release_decision_package_id = 1;
+  QueryMeta meta = 2;
+}
+
+message RiskProfileResponse {
+  RiskProfile risk_profile = 1;
+}
+
+message RiskProfileVersionResponse {
+  RiskProfileVersion risk_profile_version = 1;
+}
+
+message ListRiskProfilesResponse {
+  repeated RiskProfile risk_profiles = 1;
+  PageResponse page = 2;
+}
+
+message ListRiskRulesResponse {
+  repeated RiskRule risk_rules = 1;
+  PageResponse page = 2;
+}
+
+message ListGatePoliciesResponse {
+  repeated GatePolicy gate_policies = 1;
+  PageResponse page = 2;
+}
+
+message RiskAssessmentResponse {
+  RiskAssessment risk_assessment = 1;
+  repeated RiskFactor risk_factors = 2;
+  repeated ReviewSignal review_signals = 3;
+}
+
+message ListRiskAssessmentsResponse {
+  repeated RiskAssessment risk_assessments = 1;
+  PageResponse page = 2;
+}
+
+message ListRiskFactorsResponse {
+  repeated RiskFactor risk_factors = 1;
+  PageResponse page = 2;
+}
+
+message ReviewSignalResponse {
+  ReviewSignal review_signal = 1;
+}
+
+message ListReviewSignalsResponse {
+  repeated ReviewSignal review_signals = 1;
+  PageResponse page = 2;
+}
+
+message GateRequestResponse {
+  GateRequest gate_request = 1;
+  optional GateDecision gate_decision = 2;
+}
+
+message GateDecisionResponse {
+  GateDecision gate_decision = 1;
+  GateRequest gate_request = 2;
+}
+
+message ListGateRequestsResponse {
+  repeated GateRequest gate_requests = 1;
+  PageResponse page = 2;
+}
+
+message ListGateDecisionsResponse {
+  repeated GateDecision gate_decisions = 1;
+  PageResponse page = 2;
+}
+
+message ReleaseDecisionPackageResponse {
+  ReleaseDecisionPackage release_decision_package = 1;
+}
+
+message ListReleaseDecisionPackagesResponse {
+  repeated ReleaseDecisionPackage release_decision_packages = 1;
+  PageResponse page = 2;
+}
+
+message ReleaseDecisionResponse {
+  ReleaseDecision release_decision = 1;
+  ReleaseDecisionPackage release_decision_package = 2;
+}
+
+message ListReleaseDecisionsResponse {
+  repeated ReleaseDecision release_decisions = 1;
+  PageResponse page = 2;
+}
+
+message BlockingSignalResponse {
+  BlockingSignal blocking_signal = 1;
+}
+
+message ListBlockingSignalsResponse {
+  repeated BlockingSignal blocking_signals = 1;
+  PageResponse page = 2;
+}
+
+message ReleaseSafetyStateResponse {
+  ReleaseSafetyState release_safety_state = 1;
+}
+
+enum GovernanceScopeType {
+  GOVERNANCE_SCOPE_TYPE_UNSPECIFIED = 0;
+  GOVERNANCE_SCOPE_TYPE_PLATFORM = 1;
+  GOVERNANCE_SCOPE_TYPE_ORGANIZATION = 2;
+  GOVERNANCE_SCOPE_TYPE_PROJECT = 3;
+  GOVERNANCE_SCOPE_TYPE_REPOSITORY = 4;
+  GOVERNANCE_SCOPE_TYPE_SERVICE = 5;
+  GOVERNANCE_SCOPE_TYPE_PATH = 6;
+  GOVERNANCE_SCOPE_TYPE_API_ENDPOINT = 7;
+  GOVERNANCE_SCOPE_TYPE_DATABASE_OBJECT = 8;
+  GOVERNANCE_SCOPE_TYPE_SECRET_AREA = 9;
+  GOVERNANCE_SCOPE_TYPE_RUNTIME_OPERATION = 10;
+  GOVERNANCE_SCOPE_TYPE_RELEASE_LINE = 11;
+  GOVERNANCE_SCOPE_TYPE_RUNTIME_ENVIRONMENT = 12;
+}
+
+enum GovernanceTargetType {
+  GOVERNANCE_TARGET_TYPE_UNSPECIFIED = 0;
+  GOVERNANCE_TARGET_TYPE_TRANSITION = 1;
+  GOVERNANCE_TARGET_TYPE_PULL_REQUEST = 2;
+  GOVERNANCE_TARGET_TYPE_RELEASE_CANDIDATE = 3;
+  GOVERNANCE_TARGET_TYPE_RUNTIME_JOB = 4;
+  GOVERNANCE_TARGET_TYPE_POLICY_CHANGE = 5;
+  GOVERNANCE_TARGET_TYPE_DOCUMENT = 6;
+  GOVERNANCE_TARGET_TYPE_MERGE = 7;
+  GOVERNANCE_TARGET_TYPE_POSTDEPLOY = 8;
+  GOVERNANCE_TARGET_TYPE_ROLLBACK = 9;
+}
+
+enum RiskClass {
+  RISK_CLASS_UNSPECIFIED = 0;
+  RISK_CLASS_R0 = 1;
+  RISK_CLASS_R1 = 2;
+  RISK_CLASS_R2 = 3;
+  RISK_CLASS_R3 = 4;
+}
+
+enum RiskProfileStatus {
+  RISK_PROFILE_STATUS_UNSPECIFIED = 0;
+  RISK_PROFILE_STATUS_DRAFT = 1;
+  RISK_PROFILE_STATUS_ACTIVE = 2;
+  RISK_PROFILE_STATUS_DISABLED = 3;
+  RISK_PROFILE_STATUS_ARCHIVED = 4;
+}
+
+enum RiskProfileVersionStatus {
+  RISK_PROFILE_VERSION_STATUS_UNSPECIFIED = 0;
+  RISK_PROFILE_VERSION_STATUS_DRAFT = 1;
+  RISK_PROFILE_VERSION_STATUS_ACTIVE = 2;
+  RISK_PROFILE_VERSION_STATUS_SUPERSEDED = 3;
+  RISK_PROFILE_VERSION_STATUS_ARCHIVED = 4;
+}
+
+enum RiskRuleKind {
+  RISK_RULE_KIND_UNSPECIFIED = 0;
+  RISK_RULE_KIND_PATH = 1;
+  RISK_RULE_KIND_SERVICE = 2;
+  RISK_RULE_KIND_API = 3;
+  RISK_RULE_KIND_DATABASE = 4;
+  RISK_RULE_KIND_SECRET = 5;
+  RISK_RULE_KIND_AUTH = 6;
+  RISK_RULE_KIND_RUNTIME_ACTION = 7;
+  RISK_RULE_KIND_RELEASE = 8;
+  RISK_RULE_KIND_AUTOMATION = 9;
+  RISK_RULE_KIND_DOCUMENT = 10;
+  RISK_RULE_KIND_CUSTOM = 11;
+}
+
+enum RuleStatus {
+  RULE_STATUS_UNSPECIFIED = 0;
+  RULE_STATUS_ACTIVE = 1;
+  RULE_STATUS_DISABLED = 2;
+}
+
+enum GateKind {
+  GATE_KIND_UNSPECIFIED = 0;
+  GATE_KIND_PRODUCT = 1;
+  GATE_KIND_ARCHITECTURE = 2;
+  GATE_KIND_TECHNICAL = 3;
+  GATE_KIND_QA = 4;
+  GATE_KIND_RELEASE = 5;
+  GATE_KIND_POSTDEPLOY = 6;
+  GATE_KIND_EMERGENCY = 7;
+  GATE_KIND_CUSTOM = 8;
+}
+
+enum RiskAssessmentStatus {
+  RISK_ASSESSMENT_STATUS_UNSPECIFIED = 0;
+  RISK_ASSESSMENT_STATUS_DRAFT = 1;
+  RISK_ASSESSMENT_STATUS_ACTIVE = 2;
+  RISK_ASSESSMENT_STATUS_SUPERSEDED = 3;
+  RISK_ASSESSMENT_STATUS_CLOSED = 4;
+}
+
+enum RiskFactorSourceType {
+  RISK_FACTOR_SOURCE_TYPE_UNSPECIFIED = 0;
+  RISK_FACTOR_SOURCE_TYPE_POLICY = 1;
+  RISK_FACTOR_SOURCE_TYPE_CHANGED_FILE = 2;
+  RISK_FACTOR_SOURCE_TYPE_SERVICE = 3;
+  RISK_FACTOR_SOURCE_TYPE_API = 4;
+  RISK_FACTOR_SOURCE_TYPE_DATABASE = 5;
+  RISK_FACTOR_SOURCE_TYPE_SECRET = 6;
+  RISK_FACTOR_SOURCE_TYPE_RELEASE = 7;
+  RISK_FACTOR_SOURCE_TYPE_RUNTIME = 8;
+  RISK_FACTOR_SOURCE_TYPE_REVIEW_SIGNAL = 9;
+  RISK_FACTOR_SOURCE_TYPE_HUMAN_DECISION = 10;
+}
+
+enum ReviewRoleKind {
+  REVIEW_ROLE_KIND_UNSPECIFIED = 0;
+  REVIEW_ROLE_KIND_REVIEWER = 1;
+  REVIEW_ROLE_KIND_QA = 2;
+  REVIEW_ROLE_KIND_LEXICAL_GATEKEEPER = 3;
+  REVIEW_ROLE_KIND_RISK_GATEKEEPER = 4;
+  REVIEW_ROLE_KIND_SRE = 5;
+  REVIEW_ROLE_KIND_SECURITY = 6;
+  REVIEW_ROLE_KIND_OWNER = 7;
+  REVIEW_ROLE_KIND_CUSTOM = 8;
+}
+
+enum ReviewSignalOutcome {
+  REVIEW_SIGNAL_OUTCOME_UNSPECIFIED = 0;
+  REVIEW_SIGNAL_OUTCOME_PASS = 1;
+  REVIEW_SIGNAL_OUTCOME_PASS_WITH_NOTES = 2;
+  REVIEW_SIGNAL_OUTCOME_BLOCK = 3;
+  REVIEW_SIGNAL_OUTCOME_REQUEST_CHANGES = 4;
+  REVIEW_SIGNAL_OUTCOME_RAISE_RISK = 5;
+  REVIEW_SIGNAL_OUTCOME_INFORMATIONAL = 6;
+}
+
+enum SignalSeverity {
+  SIGNAL_SEVERITY_UNSPECIFIED = 0;
+  SIGNAL_SEVERITY_INFO = 1;
+  SIGNAL_SEVERITY_WARNING = 2;
+  SIGNAL_SEVERITY_BLOCKING = 3;
+  SIGNAL_SEVERITY_CRITICAL = 4;
+}
+
+enum Confidence {
+  CONFIDENCE_UNSPECIFIED = 0;
+  CONFIDENCE_LOW = 1;
+  CONFIDENCE_MEDIUM = 2;
+  CONFIDENCE_HIGH = 3;
+}
+
+enum EvidenceKind {
+  EVIDENCE_KIND_UNSPECIFIED = 0;
+  EVIDENCE_KIND_PROVIDER_COMMENT = 1;
+  EVIDENCE_KIND_PROVIDER_REVIEW = 2;
+  EVIDENCE_KIND_PROVIDER_CHECK = 3;
+  EVIDENCE_KIND_RUNTIME_SUMMARY = 4;
+  EVIDENCE_KIND_DOCUMENT = 5;
+  EVIDENCE_KIND_RISK_FACTOR = 6;
+  EVIDENCE_KIND_REVIEW_SIGNAL = 7;
+  EVIDENCE_KIND_INTERACTION_CALLBACK = 8;
+  EVIDENCE_KIND_OBJECT_REF = 9;
+  EVIDENCE_KIND_CUSTOM = 10;
+}
+
+enum GateRequestStatus {
+  GATE_REQUEST_STATUS_UNSPECIFIED = 0;
+  GATE_REQUEST_STATUS_REQUESTED = 1;
+  GATE_REQUEST_STATUS_DELIVERING = 2;
+  GATE_REQUEST_STATUS_AWAITING_DECISION = 3;
+  GATE_REQUEST_STATUS_RESOLVED = 4;
+  GATE_REQUEST_STATUS_EXPIRED = 5;
+  GATE_REQUEST_STATUS_CANCELLED = 6;
+}
+
+enum GateOutcome {
+  GATE_OUTCOME_UNSPECIFIED = 0;
+  GATE_OUTCOME_APPROVE = 1;
+  GATE_OUTCOME_APPROVE_WITH_CONDITIONS = 2;
+  GATE_OUTCOME_REVISE = 3;
+  GATE_OUTCOME_REJECT = 4;
+  GATE_OUTCOME_HOLD = 5;
+  GATE_OUTCOME_ROLLBACK = 6;
+  GATE_OUTCOME_ESCALATE = 7;
+}
+
+enum ReleaseDecisionPackageStatus {
+  RELEASE_DECISION_PACKAGE_STATUS_UNSPECIFIED = 0;
+  RELEASE_DECISION_PACKAGE_STATUS_DRAFT = 1;
+  RELEASE_DECISION_PACKAGE_STATUS_READY = 2;
+  RELEASE_DECISION_PACKAGE_STATUS_DECISION_REQUESTED = 3;
+  RELEASE_DECISION_PACKAGE_STATUS_CLOSED = 4;
+}
+
+enum ReleaseDecisionStatus {
+  RELEASE_DECISION_STATUS_UNSPECIFIED = 0;
+  RELEASE_DECISION_STATUS_REQUESTED = 1;
+  RELEASE_DECISION_STATUS_RESOLVED = 2;
+  RELEASE_DECISION_STATUS_CANCELLED = 3;
+}
+
+enum ReleaseDecisionOutcome {
+  RELEASE_DECISION_OUTCOME_UNSPECIFIED = 0;
+  RELEASE_DECISION_OUTCOME_GO = 1;
+  RELEASE_DECISION_OUTCOME_GO_WITH_CONDITIONS = 2;
+  RELEASE_DECISION_OUTCOME_NO_GO = 3;
+  RELEASE_DECISION_OUTCOME_HOLD = 4;
+  RELEASE_DECISION_OUTCOME_ROLLBACK = 5;
+  RELEASE_DECISION_OUTCOME_FOLLOW_UP_REQUIRED = 6;
+}
+
+enum ReleaseSafetyStateKind {
+  RELEASE_SAFETY_STATE_KIND_UNSPECIFIED = 0;
+  RELEASE_SAFETY_STATE_KIND_RELEASE_CANDIDATE = 1;
+  RELEASE_SAFETY_STATE_KIND_AWAITING_RELEASE_GATE = 2;
+  RELEASE_SAFETY_STATE_KIND_DEPLOYING = 3;
+  RELEASE_SAFETY_STATE_KIND_POSTDEPLOY_OBSERVATION = 4;
+  RELEASE_SAFETY_STATE_KIND_STABLE = 5;
+  RELEASE_SAFETY_STATE_KIND_HOLD = 6;
+  RELEASE_SAFETY_STATE_KIND_ROLLBACK = 7;
+  RELEASE_SAFETY_STATE_KIND_FOLLOW_UP_REQUIRED = 8;
+}
+
+enum BlockingSignalSourceType {
+  BLOCKING_SIGNAL_SOURCE_TYPE_UNSPECIFIED = 0;
+  BLOCKING_SIGNAL_SOURCE_TYPE_ACCEPTANCE = 1;
+  BLOCKING_SIGNAL_SOURCE_TYPE_REVIEW_SIGNAL = 2;
+  BLOCKING_SIGNAL_SOURCE_TYPE_RUNTIME = 3;
+  BLOCKING_SIGNAL_SOURCE_TYPE_PROVIDER = 4;
+  BLOCKING_SIGNAL_SOURCE_TYPE_INTERACTION = 5;
+  BLOCKING_SIGNAL_SOURCE_TYPE_HUMAN = 6;
+  BLOCKING_SIGNAL_SOURCE_TYPE_MONITORING = 7;
+}
+
+enum BlockingSignalStatus {
+  BLOCKING_SIGNAL_STATUS_UNSPECIFIED = 0;
+  BLOCKING_SIGNAL_STATUS_ACTIVE = 1;
+  BLOCKING_SIGNAL_STATUS_RESOLVED = 2;
+  BLOCKING_SIGNAL_STATUS_DISMISSED = 3;
+}

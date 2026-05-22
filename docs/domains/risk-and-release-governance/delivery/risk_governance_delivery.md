@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-22
 updated_at: 2026-05-22
-related_issues: [322]
+related_issues: [322, 769]
 related_prs: []
 related_docsets:
   - docs/domains/risk-and-release-governance/product/requirements.md
@@ -40,7 +40,7 @@ approvals:
 | Срез | Issue | Результат |
 |---|---|---|
 | GOV-0 | #322 | Доменная документация, решение об отдельном `governance-manager`, сквозные границы, README и карта Issue готовы. |
-| GOV-1 | не назначено | gRPC и AsyncAPI контракты `governance-manager`, события `governance.*` и действия доступа готовы; сервисная реализация не входит в срез. |
+| GOV-1 | #769 | gRPC и AsyncAPI контракты `governance-manager`, события `governance.*`, generated Go contracts и действия доступа готовы; сервисная реализация не входит в срез. |
 | GOV-2 | не назначено | Сервисный каркас: process, env, health, readiness, metrics, gRPC registration, outbox skeleton и безопасные `Unimplemented` handlers. |
 | GOV-3 | не назначено | PostgreSQL-модель risk profiles, rules, assessments, factors, command result и outbox готова. |
 | GOV-4 | не назначено | Risk classifier и policy evaluator работают по project/provider summaries, changed files, service/path/API/DB/secret/release/runtime factors. |
@@ -55,7 +55,20 @@ approvals:
 2. Сервисный каркас и правила: поднять `governance-manager`, storage, risk profiles, rule evaluation и outbox.
 3. Интеграции: подключить role signals от `agent-manager`, provider refs из `provider-hub`, delivery через `interaction-hub`, job/postdeploy signals от `runtime-manager` и project/release policy refs из `project-catalog`.
 
-Этот порядок запрещает начинать код, proto или AsyncAPI до согласования стартового документационного пакета.
+Этот порядок сохраняет правило: код, proto и AsyncAPI появляются только после согласования стартового документационного пакета, а сервисная бизнес-реализация начинается после контрактного среза.
+
+## Таблица реализации
+
+| Область | Статус | Срез |
+|---|---|---|
+| Доменная документация | Готова как стартовый пакет домена. | GOV-0 |
+| gRPC-контракт `proto/kodex/governance/v1/governance_manager.proto` | Готов; покрывает risk profiles/rules, assessments/factors, review signals, gate lifecycle, release decision package/decision, blocking signals и safety-loop. | GOV-1 |
+| Go-код protobuf `proto/gen/go/kodex/governance/v1/**` | Сгенерирован из proto; вручную не правится. | GOV-1 |
+| AsyncAPI `specs/asyncapi/governance-manager.v1.yaml` | Готов; фиксирует события `governance.*` через outbox envelope. | GOV-1 |
+| Go-контракт событий `libs/go/platformevents/governance/events.gen.go` | Сгенерирован из AsyncAPI; вручную не правится. | GOV-1 |
+| Access actions | Добавлены в общий каталог для policy, risk, signal, gate и release операций. | GOV-1 |
+| Сервисный процесс, gRPC handlers, storage, migrations, evaluator и outbox publisher | Не реализованы. | GOV-2+ |
+| Интеграции с `agent-manager`, `provider-hub`, `interaction-hub`, `runtime-manager` и `project-catalog` | Не реализованы; в GOV-1 зафиксированы typed refs и границы. | GOV-7 |
 
 ## Синхронизация с соседними доменами
 

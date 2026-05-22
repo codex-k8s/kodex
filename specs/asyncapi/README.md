@@ -11,3 +11,4 @@
 | `runtime-manager.v1.yaml` | `runtime-manager` | Стабильный контракт `v1` доменных событий `runtime.*`, публикуемых через конверт outbox. |
 | `fleet-manager.v1.yaml` | `fleet-manager` | Стабильный контракт `v1` доменных событий `fleet.*`, публикуемых через конверт outbox. |
 | `agent-manager.v1.yaml` | `agent-manager` | Стабильный контракт `v1` доменных событий `agent.*`, публикуемых через конверт outbox. |
+| `governance-manager.v1.yaml` | `governance-manager` | Стабильный контракт `v1` доменных событий `governance.*`, публикуемых через конверт outbox. |

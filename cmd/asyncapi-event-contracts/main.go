@@ -102,6 +102,14 @@ func main() {
 			PayloadSchema:   "AgentEventPayload",
 			OutputPath:      "libs/go/platformevents/agent/events.gen.go",
 		},
+		{
+			Domain:          "governance",
+			PackageName:     "governance",
+			SpecPath:        "specs/asyncapi/governance-manager.v1.yaml",
+			EventTypeSchema: "GovernanceEventType",
+			PayloadSchema:   "GovernanceEventPayload",
+			OutputPath:      "libs/go/platformevents/governance/events.gen.go",
+		},
 	}
 	for _, spec := range specs {
 		if err := generate(spec); err != nil {
