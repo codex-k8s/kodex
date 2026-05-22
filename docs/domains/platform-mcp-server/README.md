@@ -19,13 +19,14 @@
 
 ## Что не входит
 
-- `Run`, session, flow, stage, role, prompt и gates — зона `agent-manager`.
+- `Run`, session, flow, stage, role, prompt и состояние ожидания flow — зона `agent-manager`.
+- Risk classification, review gates, policy-based approvals, gate decision и release decision — зона `governance-manager`.
 - Slot, workspace, platform job, cleanup и prewarm — зона `runtime-manager`.
 - Серверы, Kubernetes-кластеры, health и placement — зона `fleet-manager`.
 - `Issue`, `PR/MR`, комментарии, связи, операции GitHub/GitLab и сверка — зона `provider-hub`.
 - Проекты, репозитории, `services.yaml` и workspace policy — зона `project-catalog`.
 - Пакеты, manifest, установки и каталоги — зона `package-hub`.
-- Диалоги, уведомления, запросы владельцу и доставка решений — зона `interaction-hub`.
+- Диалоги, уведомления, внешние каналы, доставка запросов владельцу и callbacks — зона `interaction-hub`.
 - Codex hook events, hook emitter и локальный sidecar — зона `codex-hook-ingress`.
 - Пользовательская HTTP-поверхность, `staff-gateway`, `user-gateway` и `integration-gateway`.
 
