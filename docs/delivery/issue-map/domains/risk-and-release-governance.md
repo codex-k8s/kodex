@@ -5,7 +5,7 @@ title: kodex — карта Issue домена рисков и релизов
 status: active
 owner_role: KM
 created_at: 2026-04-25
-updated_at: 2026-04-25
+updated_at: 2026-05-22
 ---
 
 # Карта Issue — риски и релизы
@@ -18,4 +18,4 @@ updated_at: 2026-04-25
 
 | Issue/PR | Документы | Волна | Статус | Примечание |
 |---|---|---|---|---|
-| не назначено | `docs/domains/risk-and-release-governance/` | wave 15 | planned | Контрольные точки риска, релизные линии, правила веток и релизная автоматизация. |
+| #322 | `docs/domains/risk-and-release-governance/README.md`<br>`docs/domains/risk-and-release-governance/product/requirements.md`<br>`docs/domains/risk-and-release-governance/architecture/design.md`<br>`docs/domains/risk-and-release-governance/architecture/data_model.md`<br>`docs/domains/risk-and-release-governance/architecture/api_contract.md`<br>`docs/domains/risk-and-release-governance/delivery/risk_governance_delivery.md`<br>`docs/platform/architecture/domain_map.md`<br>`docs/platform/architecture/service_boundaries.md`<br>`docs/platform/architecture/data_model.md`<br>`docs/platform/architecture/provider_integration_model.md` | wave 15 | active | Стартовый docs-first срез: отдельный `governance-manager`, risk gates, review signals, approvals, release decisions и release safety-loop. |

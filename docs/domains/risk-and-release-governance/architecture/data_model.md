@@ -1,0 +1,328 @@
+---
+doc_id: DM-CK8S-RISK-GOVERNANCE-0001
+type: data-model
+title: kodex — модель данных домена рисков и релизов
+status: active
+owner_role: SA
+created_at: 2026-05-22
+updated_at: 2026-05-22
+related_issues: [322]
+related_prs: []
+approvals:
+  required: ["Owner"]
+  status: pending
+  request_id: "owner-2026-05-22-risk-governance-kickoff"
+---
+
+# Модель данных: риски и релизы
+
+## TL;DR
+
+- Ключевые сущности: `RiskProfile`, `RiskRule`, `RiskAssessment`, `RiskFactor`, `ReviewSignal`, `GatePolicy`, `GateRequest`, `GateDecision`, `ReleaseDecisionPackage`, `ReleaseDecision`, `ReleaseSafetyState`, `BlockingSignal`.
+- Технические агрегаты: `CommandResult`, `OutboxEvent`.
+- Основные связи: риск-профиль задаёт правила; оценка риска фиксирует факторы; review signals и blocking signals влияют на gate/release decisions; release safety-loop связан с runtime/provider/project refs.
+- Риски миграций: нельзя хранить project policy, provider-native истину, runtime logs, диалоговую доставку, секреты и полный diff в БД `governance-manager`.
+
+## Правило внешних ссылок
+
+`governance-manager` хранит внешние ссылки как typed refs:
+- `project_ref`;
+- `repository_ref`;
+- `service_ref`;
+- `provider_work_item_ref`;
+- `provider_pull_request_ref`;
+- `agent_session_ref`;
+- `agent_run_ref`;
+- `runtime_job_ref`;
+- `runtime_environment_ref`;
+- `interaction_thread_ref`;
+- `release_line_ref`;
+- `release_policy_ref`.
+
+Эти ссылки не являются SQL-связями с БД других сервисов. Источник истины остаётся у сервиса-владельца.
+
+## Сущности
+
+### RiskProfile
+
+`RiskProfile` описывает набор правил риска и gate policy для scope. Он не заменяет проектную политику: scope и привязки к проекту/репозиторию приходят из `project-catalog`.
+
+| Поле | Тип | Может быть пустым | Примечание |
+|---|---|---:|---|
+| `id` | uuid | нет | Идентификатор риск-профиля. |
+| `scope_type` | enum | нет | `platform`, `organization`, `project`, `repository`, `service`, `release_line`, `runtime_environment`. |
+| `scope_ref` | text | нет | Внешняя ссылка на scope. |
+| `slug` | text | нет | Стабильный ключ профиля внутри scope. |
+| `display_name` | jsonb | нет | Локализованное название. |
+| `description` | jsonb | да | Описание профиля. |
+| `status` | enum | нет | `draft`, `active`, `disabled`, `archived`. |
+| `active_version` | bigint | да | Активная версия правил. |
+| `version` | bigint | нет | Оптимистичная конкуренция метаданных профиля. |
+| `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
+
+### RiskRule
+
+`RiskRule` является версионируемой частью профиля.
+
+| Поле | Тип | Может быть пустым | Примечание |
+|---|---|---:|---|
+| `id` | uuid | нет | Идентификатор правила. |
+| `risk_profile_id` | uuid | нет | Профиль-владелец. |
+| `profile_version` | bigint | нет | Версия профиля, где действует правило. |
+| `rule_kind` | enum | нет | `path`, `service`, `api`, `database`, `secret`, `auth`, `runtime_action`, `release`, `automation`, `document`, `custom`. |
+| `matcher` | jsonb | нет | Типизированное условие: glob, service key, endpoint, migration path, release line и подобное. |
+| `min_risk_class` | enum | нет | `R0`, `R1`, `R2`, `R3`. |
+| `required_gate_policy_id` | uuid | да | Gate policy, если правило требует дополнительный gate. |
+| `reason_template` | jsonb | нет | Человекочитаемое объяснение с i18n. |
+| `status` | enum | нет | `active`, `disabled`. |
+| `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
+
+### RiskAssessment
+
+`RiskAssessment` фиксирует оценку риска для конкретного перехода, артефакта или release candidate.
+
+| Поле | Тип | Может быть пустым | Примечание |
+|---|---|---:|---|
+| `id` | uuid | нет | Идентификатор оценки. |
+| `target_type` | enum | нет | `transition`, `pull_request`, `release_candidate`, `runtime_job`, `policy_change`, `document`. |
+| `target_ref` | text | нет | Внешняя ссылка на оцениваемый объект. |
+| `project_ref` | text | да | Проект, если применимо. |
+| `repository_ref` | text | да | Репозиторий, если применимо. |
+| `agent_run_ref` | text | да | Agent run, если оценка связана с flow. |
+| `initial_risk_class` | enum | нет | Автоматически рассчитанный риск. |
+| `effective_risk_class` | enum | нет | Текущий риск с учётом факторов, signals и decisions. |
+| `status` | enum | нет | `draft`, `active`, `superseded`, `closed`. |
+| `explanation` | jsonb | нет | Короткое объяснение для UI/API без секретов. |
+| `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
+
+### RiskFactor
+
+`RiskFactor` объясняет, почему assessment получил такой класс.
+
+| Поле | Тип | Может быть пустым | Примечание |
+|---|---|---:|---|
+| `id` | uuid | нет | Идентификатор фактора. |
+| `risk_assessment_id` | uuid | нет | Оценка-владелец. |
+| `source_type` | enum | нет | `policy`, `changed_file`, `service`, `api`, `database`, `secret`, `release`, `runtime`, `review_signal`, `human_decision`. |
+| `source_ref` | text | да | Ссылка на правило, signal или внешний объект. |
+| `risk_class` | enum | нет | Класс, который даёт фактор. |
+| `summary` | text | нет | Безопасное объяснение. |
+| `created_at` | timestamptz | нет | Когда фактор записан. |
+
+### ReviewSignal
+
+`ReviewSignal` фиксирует результат роли или человека, который влияет на gate/release readiness.
+
+| Поле | Тип | Может быть пустым | Примечание |
+|---|---|---:|---|
+| `id` | uuid | нет | Идентификатор signal. |
+| `risk_assessment_id` | uuid | да | Оценка риска, если signal уже связан. |
+| `target_type` | enum | нет | `pull_request`, `document`, `release_candidate`, `runtime_job`, `postdeploy`, `policy_change`. |
+| `target_ref` | text | нет | Provider/runtime/document ref. |
+| `role_kind` | enum | нет | `reviewer`, `qa`, `lexical_gatekeeper`, `risk_gatekeeper`, `sre`, `security`, `owner`, `custom`. |
+| `author_ref` | text | нет | Actor или agent run. |
+| `outcome` | enum | нет | `pass`, `pass_with_notes`, `block`, `request_changes`, `raise_risk`, `informational`. |
+| `severity` | enum | нет | `info`, `warning`, `blocking`, `critical`. |
+| `confidence` | enum | да | `low`, `medium`, `high`, если применимо. |
+| `evidence_refs` | jsonb | нет | Ссылки на комментарии, checks, runtime summary, документы. |
+| `summary` | text | нет | Короткая безопасная сводка. |
+| `created_at` | timestamptz | нет | Когда signal создан. |
+
+### GatePolicy
+
+`GatePolicy` задаёт, какой Human gate или role-driven gate нужен для risk class и scope.
+
+| Поле | Тип | Может быть пустым | Примечание |
+|---|---|---:|---|
+| `id` | uuid | нет | Идентификатор политики gate. |
+| `risk_profile_id` | uuid | да | Профиль, где policy объявлена. |
+| `gate_kind` | enum | нет | `product`, `architecture`, `technical`, `qa`, `release`, `postdeploy`, `emergency`, `custom`. |
+| `min_risk_class` | enum | нет | Минимальный risk class, где gate обязателен. |
+| `required_actor_policy` | jsonb | нет | Требование к человеку, группе, роли или duty scope. |
+| `required_signal_kinds` | jsonb | нет | Какие review signals должны быть в evidence. |
+| `timeout_policy` | jsonb | да | Reminder/escalation правила, исполняемые через `interaction-hub`. |
+| `status` | enum | нет | `active`, `disabled`. |
+
+### GateRequest
+
+`GateRequest` описывает конкретный запрос решения.
+
+| Поле | Тип | Может быть пустым | Примечание |
+|---|---|---:|---|
+| `id` | uuid | нет | Идентификатор gate. |
+| `risk_assessment_id` | uuid | да | Связанная оценка риска. |
+| `gate_policy_id` | uuid | да | Policy, которая потребовала gate. |
+| `target_type` | enum | нет | `transition`, `merge`, `release`, `postdeploy`, `rollback`, `policy_change`, `document_approval`. |
+| `target_ref` | text | нет | Что именно ждёт решения. |
+| `interaction_request_ref` | text | да | Ссылка на delivery request в `interaction-hub`. |
+| `evidence_package` | jsonb | нет | Безопасный пакет фактов и refs. |
+| `status` | enum | нет | `requested`, `delivering`, `awaiting_decision`, `resolved`, `expired`, `cancelled`. |
+| `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
+
+### GateDecision
+
+`GateDecision` фиксирует итог gate.
+
+| Поле | Тип | Может быть пустым | Примечание |
+|---|---|---:|---|
+| `id` | uuid | нет | Идентификатор решения. |
+| `gate_request_id` | uuid | нет | Gate-владелец. |
+| `decision_actor_ref` | text | нет | Кто принял решение. |
+| `outcome` | enum | нет | `approve`, `approve_with_conditions`, `revise`, `reject`, `hold`, `rollback`, `escalate`. |
+| `reason` | text | нет | Обоснование решения. |
+| `conditions` | jsonb | да | Условия, follow-up или ограничения. |
+| `source_ref` | text | да | Provider review, UI response или external callback ref. |
+| `decided_at` | timestamptz | нет | Когда решение принято. |
+
+### ReleaseDecisionPackage
+
+`ReleaseDecisionPackage` фиксирует снимок evidence перед release decision.
+
+| Поле | Тип | Может быть пустым | Примечание |
+|---|---|---:|---|
+| `id` | uuid | нет | Идентификатор пакета. |
+| `release_candidate_ref` | text | нет | Кандидат релиза. |
+| `project_ref` | text | нет | Проект. |
+| `repository_refs` | text[] | нет | Репозитории в релизе. |
+| `release_policy_ref` | text | да | Релизная политика из `project-catalog`. |
+| `release_line_ref` | text | да | Релизная линия из `project-catalog`. |
+| `risk_assessment_id` | uuid | да | Оценка риска релиза. |
+| `provider_refs` | jsonb | нет | Issue/PR/MR/tag/branch refs без копирования provider-истины. |
+| `runtime_refs` | jsonb | нет | Build/deploy/job refs и summaries. |
+| `review_signal_refs` | uuid[] | нет | Signals, включённые в пакет. |
+| `known_limitations` | jsonb | нет | Осознанные ограничения и accepted risk. |
+| `status` | enum | нет | `draft`, `ready`, `decision_requested`, `closed`. |
+| `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
+
+### ReleaseDecision
+
+`ReleaseDecision` фиксирует go/no-go, hold, rollback или follow-up.
+
+| Поле | Тип | Может быть пустым | Примечание |
+|---|---|---:|---|
+| `id` | uuid | нет | Идентификатор решения. |
+| `release_decision_package_id` | uuid | нет | Пакет подтверждений. |
+| `gate_decision_id` | uuid | да | Связанный gate, если был нужен человек. |
+| `outcome` | enum | нет | `go`, `go_with_conditions`, `no_go`, `hold`, `rollback`, `follow_up_required`. |
+| `decision_actor_ref` | text | да | Человек или policy automation. |
+| `reason` | text | нет | Обоснование решения. |
+| `conditions` | jsonb | да | Условия релиза или follow-up. |
+| `decided_at` | timestamptz | нет | Когда решение принято. |
+
+### ReleaseSafetyState
+
+`ReleaseSafetyState` ведёт postdeploy safety-loop.
+
+| Поле | Тип | Может быть пустым | Примечание |
+|---|---|---:|---|
+| `id` | uuid | нет | Идентификатор состояния. |
+| `release_decision_package_id` | uuid | нет | Релизный пакет. |
+| `current_state` | enum | нет | `release_candidate`, `awaiting_release_gate`, `deploying`, `postdeploy_observation`, `stable`, `hold`, `rollback`, `follow_up_required`. |
+| `runtime_job_ref` | text | да | Текущий deploy/postdeploy job. |
+| `blocking_signal_count` | int | нет | Количество активных blocking signals. |
+| `last_state_reason` | text | нет | Короткое объяснение последнего перехода. |
+| `version` | bigint | нет | Оптимистичная конкуренция. |
+| `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
+
+### BlockingSignal
+
+`BlockingSignal` описывает сигнал, который останавливает переход или релиз.
+
+| Поле | Тип | Может быть пустым | Примечание |
+|---|---|---:|---|
+| `id` | uuid | нет | Идентификатор сигнала. |
+| `target_type` | enum | нет | `risk_assessment`, `gate`, `release`, `postdeploy`, `runtime_job`. |
+| `target_ref` | text | нет | Target или агрегат governance. |
+| `source_type` | enum | нет | `acceptance`, `review_signal`, `runtime`, `provider`, `interaction`, `human`, `monitoring`. |
+| `source_ref` | text | да | Ссылка на первоисточник. |
+| `severity` | enum | нет | `warning`, `blocking`, `critical`. |
+| `summary` | text | нет | Безопасное объяснение. |
+| `status` | enum | нет | `active`, `resolved`, `dismissed`. |
+| `created_at`, `resolved_at` | timestamptz | да | Временные метки. |
+
+### CommandResult
+
+`CommandResult` хранит идемпотентный след команд `governance-manager`.
+
+| Поле | Тип | Может быть пустым | Примечание |
+|---|---|---:|---|
+| `key` | text | нет | Первичный ключ идемпотентного следа. |
+| `command_id` | uuid | да | Идемпотентный ключ команды. |
+| `idempotency_key` | text | да | Альтернативный ключ в паре `operation + actor`. |
+| `operation` | text | нет | Имя операции. |
+| `actor_ref` | text | нет | Инициатор команды. |
+| `aggregate_type` | text | нет | Тип агрегата. |
+| `aggregate_id` | uuid | нет | Идентификатор агрегата. |
+| `result_payload` | jsonb | нет | Безопасный результат повтора. |
+| `created_at` | timestamptz | нет | Когда команда впервые выполнена. |
+
+### OutboxEvent
+
+`OutboxEvent` фиксируется в одной транзакции с изменением агрегата и публикуется через `platform-event-log`.
+
+| Поле | Тип | Может быть пустым | Примечание |
+|---|---|---:|---|
+| `id` | uuid | нет | Идентификатор события. |
+| `aggregate_type` | text | нет | Тип агрегата. |
+| `aggregate_id` | uuid | нет | Идентификатор агрегата. |
+| `event_type` | text | нет | Имя события `governance.*`. |
+| `schema_version` | int | нет | Версия схемы события. |
+| `payload` | jsonb | нет | Минимальная безопасная полезная нагрузка. |
+| `occurred_at` | timestamptz | нет | Время доменного изменения. |
+| `published_at` | timestamptz | да | Заполняется после публикации. |
+| `attempt_count` | int | нет | Число попыток. |
+| `next_attempt_at` | timestamptz | нет | Следующая попытка. |
+| `locked_until` | timestamptz | да | Краткая аренда. |
+| `last_error` | text | да | Короткая безопасная ошибка. |
+
+## Связи
+
+- `RiskProfile` владеет `RiskRule` и может ссылаться на `GatePolicy`.
+- `RiskAssessment` владеет набором `RiskFactor`.
+- `ReviewSignal` может повышать `RiskAssessment` и становиться частью `GateRequest.evidence_package`.
+- `GateRequest` может иметь один финальный `GateDecision`; повторные callbacks записываются через идемпотентность и аудит.
+- `ReleaseDecisionPackage` связывает `RiskAssessment`, `ReviewSignal`, provider refs, runtime refs и project/release refs.
+- `ReleaseDecision` ссылается на `ReleaseDecisionPackage` и опционально на `GateDecision`.
+- `ReleaseSafetyState` ведёт состояние postdeploy вокруг `ReleaseDecisionPackage`.
+- `BlockingSignal` может относиться к risk assessment, gate, release package, safety state или runtime job ref.
+- Внутри БД `governance-manager` допустимы внешние ключи только между своими таблицами.
+- Ссылки на project, provider, agent, runtime, interaction и access домены хранятся как внешние идентификаторы.
+
+## Индексы и запросы
+
+| Запрос | Нужные индексы |
+|---|---|
+| Активные risk profiles по scope | `(scope_type, scope_ref, status, slug)` |
+| Правила активной версии профиля | `(risk_profile_id, profile_version, status, rule_kind)` |
+| Assessment по target | `(target_type, target_ref, status)` |
+| Assessment по проекту и классу риска | `(project_ref, effective_risk_class, status, updated_at)` |
+| Signals по target | `(target_type, target_ref, created_at)` |
+| Blocking signals | `(status, severity, created_at)` |
+| Ожидающие gates | `(status, updated_at)` where status in `requested`, `delivering`, `awaiting_decision` |
+| Gate по assessment | `(risk_assessment_id, status)` |
+| Release package по candidate | `(release_candidate_ref, status)` |
+| Safety state по release package | `(release_decision_package_id, current_state)` |
+| Непубликованные события | `(published_at, occurred_at)` where `published_at is null` |
+| Идемпотентный след команд | `(command_id)` unique и `(operation, actor_ref, idempotency_key)` unique where key present |
+
+## Политика хранения данных
+
+- Risk assessments, gate decisions и release decisions хранятся как audit-critical записи.
+- Evidence package хранит refs и безопасные summaries, а не полный diff, сырые payload, секреты или полные logs.
+- Старые версии risk profiles и rules хранятся для воспроизводимости решений.
+- Review signals могут ссылаться на provider comments/reviews/checks, но не копируют полный provider artifact.
+- Runtime refs указывают на `job` и короткий summary; полные logs остаются у runtime/Kubernetes/logging stack.
+- Interaction refs указывают на delivery/callback thread; диалоговая история остаётся у `interaction-hub`.
+
+## Миграционные ограничения
+
+- Нельзя менять задним числом risk factors и decisions, которые уже разрешили transition или release.
+- Изменение risk profile не меняет историю старых assessments; новая версия применяется только к новым или явно пересчитанным assessments.
+- Enum состояния должны расширяться без удаления старых значений.
+- Любой future backfill должен сохранять исходный `created_at`/`decided_at` и источник миграционного решения.
+
+## Апрув
+
+- request_id: `owner-2026-05-22-risk-governance-kickoff`
+- Решение: pending
+- Комментарий: модель данных описывает целевой контур `governance-manager` до создания миграций и транспортных контрактов.
