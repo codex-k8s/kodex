@@ -444,6 +444,60 @@ func TestExecuteCreateRepositoryInitializesGitHubRepository(t *testing.T) {
 	}
 }
 
+func TestExecuteCreateRepositoryClassifiesValidationErrors(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		body     string
+		wantKind providerclient.ErrorKind
+	}{
+		{
+			name:     "already exists",
+			body:     `{"message":"Repository creation failed.","errors":[{"resource":"Repository","field":"name","code":"custom","message":"name already exists on this account"}]}`,
+			wantKind: providerclient.ErrorKindConflict,
+		},
+		{
+			name:     "invalid request",
+			body:     `{"message":"Validation Failed","errors":[{"resource":"Repository","field":"name","code":"invalid"}]}`,
+			wantKind: providerclient.ErrorKindValidation,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.URL.Path != "/orgs/codex-k8s/repos" {
+					t.Fatalf("unexpected request = %s %s", r.Method, r.URL.String())
+				}
+				w.WriteHeader(http.StatusUnprocessableEntity)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer server.Close()
+
+			token := secretresolver.NewSecretValue([]byte("token-value"))
+			defer token.Clear()
+			_, err := New(Config{BaseURL: server.URL, HTTPClient: server.Client()}).Execute(context.Background(), providerclient.WriteRequest{
+				Credential:   providerclient.AccountCredential{ExternalAccountID: uuid.New(), ProviderSlug: enum.ProviderSlugGitHub, Token: token},
+				ProviderSlug: enum.ProviderSlugGitHub,
+				CreateRepository: &providerclient.CreateRepositoryCommand{
+					ProjectID:      uuid.NewString(),
+					RepositoryID:   uuid.NewString(),
+					OwnerKind:      enum.RepositoryOwnerKindOrganization,
+					ProviderOwner:  "codex-k8s",
+					RepositoryName: "new-service",
+					Visibility:     enum.RepositoryVisibilityPrivate,
+				},
+			})
+			var providerErr *providerclient.Error
+			if !errors.As(err, &providerErr) || providerErr.Kind != tc.wantKind {
+				t.Fatalf("Execute() err = %v, want provider kind %s", err, tc.wantKind)
+			}
+		})
+	}
+}
+
 func TestExecuteCreatePullRequestRejectsUnsupportedLinkedIssueAndLabelsBeforeGitHubWrite(t *testing.T) {
 	t.Parallel()
 

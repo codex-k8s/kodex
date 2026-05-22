@@ -282,12 +282,14 @@ Bootstrap-команда может создать служебную связь
 | `target_ref` | text | no | indexed | Provider target. |
 | `status` | text | no | indexed | `succeeded`, `failed`, `retryable_failed`, `denied`. |
 | `result_ref` | text | no | default '' | URL/id результата. |
+| `provider_object_id` | text | no | default '' | Стабильный id созданного или изменённого объекта у провайдера, если доступен. |
 | `error_code` | text | no | default '' | Классификация ошибки. |
 | `error_message` | text | no | default '' | Короткое сообщение без секрета. |
 | `rate_limit_snapshot_id` | UUID | yes | indexed | Снимок лимитов после операции. |
 | `operation_policy_context_json` | jsonb | no | default {} | Безопасный снимок контекста политики: роль, проект, стадия, операция, цель, изменяемые поля, риск, версия политики. |
 | `approval_gate_ref_json` | jsonb | no | default {} | Ссылка на уже принятое approval/gate решение, если оно требовалось policy. |
 | `provider_version` | text | no | default '' | Версия или update marker результата у провайдера, если доступна. |
+| `base_branch` | text | no | default '' | Начальная ветка, подготовленная provider-side созданием репозитория, если применимо. |
 | `started_at` | timestamptz | no | indexed | Начало. |
 | `finished_at` | timestamptz | yes | indexed | Завершение. |
 | `version` | bigint | no | monotonic | Версия записи операции. |

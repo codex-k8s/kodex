@@ -106,7 +106,7 @@ func (a *Adapter) executeCreateRepository(ctx context.Context, client *githubapi
 	}
 	repository, response, err := client.Repositories.Create(ctx, createOwner, repositoryRequest)
 	if err != nil {
-		return providerclient.WriteResult{}, classifyGitHubError(err)
+		return providerclient.WriteResult{}, classifyGitHubCreateRepositoryError(err)
 	}
 	fullName := strings.TrimSpace(repository.GetFullName())
 	if fullName == "" {
@@ -133,6 +133,35 @@ func (a *Adapter) executeCreateRepository(ctx context.Context, client *githubapi
 		Target:           target,
 		BaseBranch:       strings.TrimSpace(repository.GetDefaultBranch()),
 	}, nil
+}
+
+func classifyGitHubCreateRepositoryError(err error) error {
+	var githubErr *githubapi.ErrorResponse
+	if errors.As(err, &githubErr) && githubErr.Response != nil && githubErr.Response.StatusCode == http.StatusUnprocessableEntity {
+		if githubCreateRepositoryAlreadyExists(githubErr) {
+			return providerError(providerclient.ErrorKindConflict, 0, nil)
+		}
+		return providerError(providerclient.ErrorKindValidation, 0, nil)
+	}
+	return classifyGitHubError(err)
+}
+
+func githubCreateRepositoryAlreadyExists(err *githubapi.ErrorResponse) bool {
+	if err == nil {
+		return false
+	}
+	if strings.Contains(strings.ToLower(err.Message), "already exists") {
+		return true
+	}
+	for _, item := range err.Errors {
+		if strings.EqualFold(item.Resource, "Repository") && strings.EqualFold(item.Field, "name") {
+			text := strings.ToLower(strings.TrimSpace(item.Message + " " + item.Code))
+			if strings.Contains(text, "already exists") || strings.Contains(text, "exists") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (a *Adapter) executeCreateIssue(ctx context.Context, client *githubapi.Client, command *providerclient.CreateIssueCommand) (providerclient.WriteResult, error) {

@@ -32,6 +32,8 @@ const (
 	writeFailureProviderNotFound    = "provider_not_found"
 	writeFailureProviderRateLimited = "provider_rate_limited"
 	writeFailureProviderTransient   = "provider_transient_error"
+	writeFailureProviderConflict    = "provider_conflict"
+	writeFailureProviderValidation  = "provider_validation_error"
 	writeFailureProviderPermanent   = "provider_permanent_error"
 	writeFailureProviderUnsupported = "provider_unsupported"
 
@@ -803,12 +805,30 @@ func (s *Service) replayProviderWrite(ctx context.Context, plan providerWritePla
 	return true, ProviderOperationResult{
 		ProviderOperation: &stored,
 		Result: ProviderOperationCommandResult{
-			Target:            plan.resultTarget,
+			Target:            replayProviderWriteTarget(stored, plan),
 			ResultRef:         stored.ResultRef,
+			ProviderObjectID:  stored.ProviderObjectID,
 			ProviderVersion:   stored.ProviderVersion,
 			EmittedEventTypes: []string{providerOperationEventType(stored.Status)},
+			BaseBranch:        stored.BaseBranch,
 		},
 	}, nil
+}
+
+func replayProviderWriteTarget(stored entity.ProviderOperation, plan providerWritePlan) *ProviderTarget {
+	if plan.resultTarget == nil {
+		return nil
+	}
+	target := *plan.resultTarget
+	if plan.operationType == enum.ProviderOperationCreateRepository {
+		if target.ProviderRepositoryID == "" {
+			target.ProviderRepositoryID = strings.TrimSpace(stored.ProviderObjectID)
+		}
+		if target.WebURL == "" {
+			target.WebURL = strings.TrimSpace(stored.ResultRef)
+		}
+	}
+	return &target
 }
 
 func sameProviderWriteReplay(stored entity.ProviderOperation, plan providerWritePlan) bool {
@@ -924,11 +944,13 @@ func (s *Service) finalizeProviderWrite(ctx context.Context, plan providerWriteP
 		TargetRef:              plan.targetRef,
 		Status:                 failure.status,
 		ResultRef:              strings.TrimSpace(executorResult.ResultRef),
+		ProviderObjectID:       strings.TrimSpace(executorResult.ProviderObjectID),
 		ErrorCode:              failure.errorCode,
 		ErrorMessage:           failure.errorMessage,
 		OperationPolicyContext: plan.meta.OperationPolicyContext,
 		ApprovalGateRef:        plan.meta.ApprovalGateRef,
 		ProviderVersion:        strings.TrimSpace(executorResult.ProviderVersion),
+		BaseBranch:             strings.TrimSpace(executorResult.BaseBranch),
 		StartedAt:              startedOperation.StartedAt,
 		FinishedAt:             &finishedAt,
 	}
@@ -1641,6 +1663,10 @@ func mapProviderWriteError(err error) providerWriteFailure {
 		return providerWriteFailure{status: enum.ProviderOperationStatusRetryableFailed, errorCode: writeFailureProviderRateLimited, errorMessage: providerclient.ErrRateLimited.Error()}
 	case providerclient.ErrorKindTransient:
 		return providerWriteFailure{status: enum.ProviderOperationStatusRetryableFailed, errorCode: writeFailureProviderTransient, errorMessage: providerclient.ErrTransient.Error()}
+	case providerclient.ErrorKindConflict:
+		return providerWriteFailure{status: enum.ProviderOperationStatusFailed, errorCode: writeFailureProviderConflict, errorMessage: providerclient.ErrConflict.Error()}
+	case providerclient.ErrorKindValidation:
+		return providerWriteFailure{status: enum.ProviderOperationStatusFailed, errorCode: writeFailureProviderValidation, errorMessage: providerclient.ErrValidation.Error()}
 	case providerclient.ErrorKindUnsupported:
 		return providerWriteFailure{status: enum.ProviderOperationStatusFailed, errorCode: writeFailureProviderUnsupported, errorMessage: providerclient.ErrUnsupported.Error()}
 	default:

@@ -15,7 +15,15 @@ ALTER TABLE provider_hub_operations
             'update_relationship'
         ));
 
+ALTER TABLE provider_hub_operations
+    ADD COLUMN provider_object_id text NOT NULL DEFAULT '',
+    ADD COLUMN base_branch text NOT NULL DEFAULT '';
+
 -- +goose Down
+ALTER TABLE provider_hub_operations
+    DROP COLUMN base_branch,
+    DROP COLUMN provider_object_id;
+
 ALTER TABLE provider_hub_operations
     DROP CONSTRAINT provider_hub_operations_operation_type_chk,
     ADD CONSTRAINT provider_hub_operations_operation_type_chk

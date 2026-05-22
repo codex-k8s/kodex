@@ -1508,6 +1508,87 @@ func TestCreateRepositoryRecordsOperationAndRepositoryEvent(t *testing.T) {
 	}
 }
 
+func TestCreateRepositoryReplayReturnsRepositoryResult(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 22, 12, 15, 0, 0, time.UTC)
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	externalAccountID := uuid.New()
+	commandID := uuid.New()
+	operationID := uuid.New()
+	operationOutboxID := uuid.New()
+	repositoryCreatedOutboxID := uuid.New()
+	owner := "codex-k8s"
+	executor := &fakeWriteExecutor{
+		result: providerclient.WriteResult{
+			ResultRef:        "https://github.com/codex-k8s/new-service",
+			ProviderObjectID: "100500",
+			ProviderVersion:  `"repo-etag"`,
+			Target: &providerclient.Target{
+				ProviderSlug:         enum.ProviderSlugGitHub,
+				RepositoryFullName:   "codex-k8s/new-service",
+				ProviderRepositoryID: "100500",
+				WebURL:               "https://github.com/codex-k8s/new-service",
+			},
+			BaseBranch: "main",
+		},
+	}
+	repository := &fakeRepository{}
+	service := NewWithDependencies(Dependencies{
+		Repository:             repository,
+		Clock:                  fixedClock{now: now},
+		IDGenerator:            &sequenceIDs{ids: []uuid.UUID{operationID, operationOutboxID, repositoryCreatedOutboxID}},
+		AccountUsageResolver:   fakeAccountUsageResolver{},
+		SecretResolver:         &fakeSecretResolver{secret: secretresolver.NewSecretValue([]byte("write-token"))},
+		ProviderWriteExecutors: []providerclient.WriteExecutor{executor},
+	})
+	input := CreateRepositoryInput{
+		ProjectID:         projectID,
+		RepositoryID:      repositoryID,
+		ProviderSlug:      enum.ProviderSlugGitHub,
+		OwnerKind:         enum.RepositoryOwnerKindOrganization,
+		ProviderOwner:     &owner,
+		RepositoryName:    "new-service",
+		Visibility:        enum.RepositoryVisibilityPrivate,
+		ExternalAccountID: externalAccountID,
+		Meta: value.CommandMeta{
+			CommandID: commandID,
+			OperationPolicyContext: value.ProviderOperationPolicyContext{
+				RiskLevel: value.ProviderOperationRiskLevelMedium,
+				ChangedFields: []string{
+					"auto_init",
+					"owner_kind",
+					"provider_owner",
+					"repository_name",
+					"visibility",
+				},
+			},
+		},
+	}
+	first, err := service.CreateRepository(context.Background(), input)
+	if err != nil {
+		t.Fatalf("CreateRepository() first: %v", err)
+	}
+	second, err := service.CreateRepository(context.Background(), input)
+	if err != nil {
+		t.Fatalf("CreateRepository() replay: %v", err)
+	}
+	if executor.calls != 1 {
+		t.Fatalf("executor calls = %d, want one provider write and one replay", executor.calls)
+	}
+	if first.Result.ProviderObjectID != "100500" ||
+		first.Result.BaseBranch != "main" ||
+		second.Result.ProviderObjectID != first.Result.ProviderObjectID ||
+		second.Result.BaseBranch != first.Result.BaseBranch ||
+		second.Result.ResultRef != first.Result.ResultRef ||
+		second.Result.Target == nil ||
+		second.Result.Target.ProviderRepositoryID != "100500" ||
+		second.Result.Target.WebURL != first.Result.ResultRef {
+		t.Fatalf("replay result = %+v, want same repository id/base branch/result ref as first %+v", second.Result, first.Result)
+	}
+}
+
 func TestCreateBootstrapPullRequestRecordsProjectionAndBootstrapEvent(t *testing.T) {
 	t.Parallel()
 

@@ -9,12 +9,14 @@ SELECT
     target_ref,
     status,
     result_ref,
+    provider_object_id,
     error_code,
     error_message,
     rate_limit_snapshot_id,
     operation_policy_context_json,
     approval_gate_ref_json,
     provider_version,
+    base_branch,
     started_at,
     finished_at,
     version,
@@ -30,9 +32,11 @@ WHERE @command_id <> ''
     AND target_ref = @target_ref
     AND status = @status
     AND result_ref = @result_ref
+    AND provider_object_id = @provider_object_id
     AND error_code = @error_code
     AND error_message = @error_message
     AND rate_limit_snapshot_id IS NOT DISTINCT FROM @rate_limit_snapshot_id
     AND operation_policy_context_json = @operation_policy_context_json::jsonb
     AND approval_gate_ref_json = @approval_gate_ref_json::jsonb
-    AND provider_version = @provider_version;
+    AND provider_version = @provider_version
+    AND base_branch = @base_branch;
