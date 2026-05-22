@@ -6,7 +6,7 @@ status: active
 owner_role: PM
 created_at: 2026-05-14
 updated_at: 2026-05-22
-related_issues: [747, 753, 698, 322]
+related_issues: [747, 753, 771, 698, 322]
 related_prs: []
 related_docsets:
   - docs/domains/platform-mcp-server/architecture/design.md
@@ -50,7 +50,7 @@ approvals:
 
 | ID | Требование | Приоритет |
 |---|---|---|
-| MCP-FR-1 | Сервис должен принимать MCP tool calls только по MCP-протоколу с явным actor/source/run/session/slot контекстом. Codex hook-события принимает отдельный `codex-hook-ingress`, а не MCP-сервер. | Обязательно |
+| MCP-FR-1 | Сервис должен принимать MCP-вызовы инструментов только по MCP-протоколу с явным actor/source/run/session/slot контекстом. Codex hook-события принимает отдельный `codex-hook-ingress`, а не MCP-сервер. | Обязательно |
 | MCP-FR-2 | Сервис должен раскрывать инструменты через MCP discovery и execution: `tools/list` и `tools/call`. | Обязательно |
 | MCP-FR-3 | Операции `Run`, session, flow, role, prompt и ожидания flow должны маршрутизироваться только в `agent-manager`. | Обязательно |
 | MCP-FR-3a | Оценка риска, review signals, gate request/decision и release decision должны маршрутизироваться только в `governance-manager`; MCP не создаёт decision state и не делает `agent-manager` вторым владельцем gate. | Обязательно |
@@ -61,9 +61,9 @@ approvals:
 | MCP-FR-8 | Сервис должен поддерживать идемпотентные команды через `command_id` или idempotency key и единый `correlation_id`. | Обязательно |
 | MCP-FR-9 | Сервис должен отклонять вызовы без проверенного source binding или с несовместимым run/slot контекстом. | Обязательно |
 | MCP-FR-10 | Сервис должен публиковать или передавать аудит только для решений, отказов, risky operations и permission/gate сценариев. | Обязательно |
-| MCP-FR-11 | Сервис должен передавать route/actor/source/correlation context для учёта запросов к внешним провайдерам. Provider-вызовы через MCP tools или будущий CLI-proxy должны маршрутизироваться через `provider-hub`, чтобы лимиты и расход внешних API контролировались в одном контуре. | Обязательно |
+| MCP-FR-11 | Сервис должен передавать route/actor/source/correlation context для учёта запросов к внешним провайдерам. Provider-вызовы через MCP-инструменты или будущий CLI-proxy должны маршрутизироваться через `provider-hub`, чтобы лимиты и расход внешних API контролировались в одном контуре. | Обязательно |
 
-Контрольные точки сжатия контекста и session snapshot нужны платформе как будущие внутренние события `agent-manager`/`runtime-manager`, но не должны описываться как MCP tools или текущие Codex hooks.
+Контрольные точки сжатия контекста и session snapshot нужны платформе как будущие внутренние события `agent-manager`/`runtime-manager`, но не должны описываться как MCP-инструменты или текущие Codex hooks.
 
 ## Нефункциональные требования
 
@@ -78,17 +78,17 @@ approvals:
 
 ## Критерии приёмки
 
-- Сервисная граница явно запрещает владение business state.
+- Сервисная граница явно запрещает владение бизнес-состоянием.
 - MVP-группы инструментов описаны без преждевременной детализации proto и AsyncAPI.
 - Для каждого класса инструментов указан сервис-владелец.
 - Codex hook-события вынесены из `platform-mcp-server` в отдельный `codex-hook-ingress`, а реализация hook emitter и приёма hook-событий поставляется отдельным шагом.
 - Безопасность покрывает actor/source/run/slot binding, очистку данных вызова, rate limits, аудит, идемпотентность и correlation id.
-- Вызовы к внешним провайдерам можно учитывать и ограничивать независимо от того, пришли они как MCP tool call или через будущий управляемый proxy для CLI провайдера.
+- Вызовы к внешним провайдерам можно учитывать и ограничивать независимо от того, пришли они как MCP-вызов инструмента или через будущий управляемый proxy для CLI провайдера.
 - Документация отделяет требования от контрактов, каркаса сервиса, hook-событий, инструментальных маршрутов, безопасности и эксплуатации.
 
 ## Не-цели
 
-- Не описывать реализацию MCP tools на уровне PRD.
+- Не описывать реализацию MCP-инструментов на уровне PRD.
 - Не создавать proto, AsyncAPI, миграции или код.
 - Не делать `platform-mcp-server` владельцем `Run`, slot, provider artifact, package installation, project policy или диалогов.
 - Не начинать `staff-gateway`, `interaction-hub` или полноценный UI.

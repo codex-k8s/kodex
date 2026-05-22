@@ -8,6 +8,7 @@ import (
 
 	"github.com/caarlos0/env/v11"
 
+	agentmanagerclient "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/clients/agentmanager"
 	ownerclients "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/clients/owners"
 	mcptransport "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/transport/mcp"
 )
@@ -91,6 +92,12 @@ func (cfg Config) Validate() error {
 	if cfg.MCP.AuthRequired && cfg.MCP.AuthTokenTTL < minMCPTokenTTL {
 		return fmt.Errorf("KODEX_PLATFORM_MCP_SERVER_MCP_AUTH_TOKEN_TTL must be at least 24h")
 	}
+	if !cfg.AgentManager.Enabled {
+		return fmt.Errorf("KODEX_PLATFORM_MCP_SERVER_AGENT_MANAGER_ENABLED must stay enabled for agent tools")
+	}
+	if strings.TrimSpace(cfg.AgentManager.AuthToken) == "" {
+		return fmt.Errorf("KODEX_PLATFORM_MCP_SERVER_AGENT_MANAGER_GRPC_AUTH_TOKEN is required")
+	}
 	_, err := cfg.OwnerRouteCatalog()
 	return err
 }
@@ -110,7 +117,7 @@ func (cfg Config) OwnerRouteCatalog() (ownerclients.Catalog, error) {
 }
 
 // MCPTransportConfig converts process config to the MCP transport runtime contract.
-func (cfg Config) MCPTransportConfig(routes ownerclients.Catalog) mcptransport.Config {
+func (cfg Config) MCPTransportConfig(routes ownerclients.Catalog, agentManager mcptransport.AgentManagerClient) mcptransport.Config {
 	return mcptransport.Config{
 		ServiceName:     serviceName,
 		RegistryVersion: strings.TrimSpace(cfg.MCP.RegistryVersion),
@@ -118,10 +125,21 @@ func (cfg Config) MCPTransportConfig(routes ownerclients.Catalog) mcptransport.C
 		JSONResponse:    cfg.MCP.JSONResponse,
 		SessionTimeout:  cfg.MCP.SessionTimeout,
 		OwnerRoutes:     routes,
+		AgentManager:    agentManager,
 		AuthRequired:    cfg.MCP.AuthRequired,
 		AuthToken:       strings.TrimSpace(cfg.MCP.AuthToken),
 		AuthScope:       strings.TrimSpace(cfg.MCP.AuthScope),
 		AuthTokenTTL:    cfg.MCP.AuthTokenTTL,
+	}
+}
+
+// AgentManagerClientConfig returns the owner client settings for agent-manager.
+func (cfg Config) AgentManagerClientConfig() agentmanagerclient.Config {
+	route := cfg.AgentManager.route(ownerclients.ServiceAgentManager, "agent-manager:9090")
+	return agentmanagerclient.Config{
+		Addr:      route.GRPCAddr,
+		AuthToken: route.AuthToken,
+		Timeout:   route.Timeout,
 	}
 }
 

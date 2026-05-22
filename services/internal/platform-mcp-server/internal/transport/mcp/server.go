@@ -31,6 +31,8 @@ func NewServer(cfg Config, logger *slog.Logger) (*Server, error) {
 	})
 	diagnostics := NewDiagnosticsHandler(cfg.ServiceName, cfg.RegistryVersion, cfg.OwnerRoutes, registry)
 	registry.addDiagnosticsTools(mcpServer, diagnostics, cfg.RegistryVersion)
+	agentTools := NewAgentToolsHandler(cfg.AgentManager)
+	registry.addAgentTools(mcpServer, agentTools, cfg.RegistryVersion)
 	streamable := mcpsdk.NewStreamableHTTPHandler(func(*http.Request) *mcpsdk.Server {
 		return mcpServer
 	}, &mcpsdk.StreamableHTTPOptions{
@@ -72,6 +74,9 @@ func (cfg Config) Validate() error {
 	}
 	if !cfg.OwnerRoutes.Ready() {
 		return fmt.Errorf("mcp owner route catalog is not ready")
+	}
+	if cfg.AgentManager == nil {
+		return fmt.Errorf("mcp agent-manager client is required")
 	}
 	return nil
 }

@@ -164,8 +164,10 @@ spec:
       value: "0.1.0"
       bumpOn:
         - services/internal/platform-mcp-server
+        - libs/go/grpcserver
         - libs/go/serviceprocess
         - libs/go/servicemain
+        - proto/kodex/agents/v1
     platform-event-log:
       value: "0.1.0"
       bumpOn:
