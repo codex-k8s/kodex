@@ -104,6 +104,7 @@
 |---|---:|---|---|
 | MCP-0 | #747 | готово | Документационный пакет сервисной границы `platform-mcp-server`: ответственность, MVP-группы инструментов, безопасность, связи с hooks #698 и delivery-план. Код, proto и AsyncAPI не входят. |
 | MCP-1 | #753 | готово | Стратегия контрактов: MCP tools описываются через MCP SDK, JSON Schema и snapshot-проверки `tools/list`; Codex hooks вынесены в `codex-hook-ingress`; YAML-каталог не является каноникой. Код, proto и AsyncAPI не входят. |
+| MCP-2 | #760 | готово | Сервисный каркас: процесс, конфигурация через env, health/readiness/metrics, MCP Streamable HTTP, проверка bearer-токена, `diagnostics.mcp_status.read`, каталог маршрутов к сервисам-владельцам и snapshot-проверка `tools/list`. Бизнес-маршруты, входной контур hooks, хранилище skills и манифесты выкладки не входят. |
 
 ## Текущий бэклог агента #1
 
@@ -117,7 +118,7 @@
 | Реальный исполнитель platform jobs | запланировано позже | `runtime-manager` хранит и выдаёт jobs; конкретный исполнитель на Kubernetes или агентный исполнитель нужен отдельным срезом после согласования с `agent-manager`/ops-контуром. |
 | Интеграция `runtime-manager` с fleet placement | готово: #735 | RTM-FLEET-1 перевёл `PrepareRuntime`, `ReserveSlot` и `CreateJob` без slot на `fleet-manager.ResolvePlacement`; runtime сохраняет только `fleet_scope_id` и `cluster_id`. |
 | Deploy-контур `fleet-manager` | готово: #738 | FLEET-6 добавил Dockerfile, manifests, PostgreSQL bootstrap, migration job, smoke, runbook и monitoring без изменения registry/health/placement бизнес-логики. |
-| `platform-mcp-server` | готово: #747, #753 | MCP-0 фиксирует границы, группы инструментов, безопасность и план поставки; MCP-1 фиксирует стратегию контрактов через MCP SDK, JSON Schema и snapshot-проверки `tools/list`, а также отделяет Codex hooks в `codex-hook-ingress`. |
+| `platform-mcp-server` | готово: #747, #753, #760 | MCP-0 фиксирует границы, группы инструментов, безопасность и план поставки; MCP-1 фиксирует стратегию контрактов через MCP SDK, JSON Schema и snapshot-проверки `tools/list`, а также отделяет Codex hooks в `codex-hook-ingress`; MCP-2 добавляет сервисный каркас без бизнес-маршрутов. |
 | `codex-hook-ingress` | решение выбрано: #753, ждёт реализации #698 | Входной контур hooks должен принимать нормализованные Codex hook events от hook emitter или sidecar; это не часть MCP-сервера и не закрывается кодом MCP-1. |
 
 ## Блокировки от `access-manager`
@@ -191,8 +192,8 @@
 
 ## Рекомендуемый следующий шаг
 
-Для агента #1 нет незавершённого локального Wave 8, RTM или FLEET среза, который нужно закрыть до соседних доменов. После MCP-1 рационально идти в один из трёх вариантов:
+Для агента #1 нет незавершённого локального Wave 8, RTM или FLEET среза, который нужно закрыть до соседних доменов. После MCP-2 рационально идти в один из трёх вариантов:
 
-- выполнить MCP-2: сервисный каркас `platform-mcp-server` без бизнес-маршрутов;
+- выполнить MCP-3 после готовности нужной поверхности `agent-manager` и закрепить первые agent tools через уже готовый MCP-каркас;
 - дождаться `provider-hub` bootstrap/adoption контракта и закрывать #281/#282;
 - перейти к runtime/fleet интеграции с реальным исполнителем platform jobs после согласования `agent-manager` и ops-контуров.

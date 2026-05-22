@@ -5,8 +5,8 @@ title: kodex — дизайн platform-mcp-server
 status: active
 owner_role: SA
 created_at: 2026-05-14
-updated_at: 2026-05-15
-related_issues: [747, 753]
+updated_at: 2026-05-22
+related_issues: [747, 753, 760]
 related_prs: []
 related_adrs: []
 approvals:
@@ -37,7 +37,7 @@ approvals:
 ## Не-цели
 
 - Не проектировать полную proto/AsyncAPI спецификацию.
-- Не реализовывать сервисный код.
+- Не переносить в сервис бизнес-реализацию доменов-владельцев.
 - Не создавать БД-модель.
 - Не проектировать `staff-gateway` или `interaction-hub`.
 - Не переносить бизнес-состояние из сервисов-владельцев.

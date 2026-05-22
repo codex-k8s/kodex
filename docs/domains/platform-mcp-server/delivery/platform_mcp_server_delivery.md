@@ -5,8 +5,8 @@ title: kodex — поставка platform-mcp-server
 status: active
 owner_role: EM
 created_at: 2026-05-14
-updated_at: 2026-05-15
-related_issues: [747, 753, 698]
+updated_at: 2026-05-22
+related_issues: [747, 753, 760, 698]
 related_prs: []
 related_docsets:
   - docs/domains/platform-mcp-server/product/requirements.md
@@ -43,7 +43,7 @@ approvals:
 |---|---:|---|
 | MCP-0 | #747 | Доменный пакет сервисной границы, ответственность, MVP-группы инструментов, безопасность и delivery-план готовы. Код, proto и AsyncAPI не входят. |
 | MCP-1 | #753 | Стратегия контрактов готова: MCP-инструменты описываются через MCP SDK, JSON Schema и snapshot-проверки `tools/list`; Codex hooks вынесены в `codex-hook-ingress`; YAML-каталог не является каноникой. |
-| MCP-2 | не назначено | Сервисный каркас: процесс, конфигурация, health/readiness/metrics, MCP transport skeleton и dependency clients без бизнес-маршрутов и без hook ingress. |
+| MCP-2 | #760 | Сервисный каркас готов: процесс, конфигурация, health/readiness/metrics, MCP Streamable HTTP, проверка bearer-токена, `diagnostics.mcp_status.read`, каталог маршрутов к сервисам-владельцам и snapshot-проверка `tools/list`. Бизнес-маршруты, входной контур hooks, хранилище skills и манифесты выкладки не входят. |
 | MCP-3 | не назначено | Agent-manager tools: session/run/gate/acceptance/follow-up маршруты только через `agent-manager`. |
 | MCP-4 | не назначено | Provider tools: типизированные provider read/write маршруты через `provider-hub` без прямого GitHub/GitLab доступа. |
 | MCP-5 | не назначено | Project/runtime/fleet/package reads и ограниченная диагностика через сервисы-владельцы. |
