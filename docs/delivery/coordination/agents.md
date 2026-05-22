@@ -21,6 +21,7 @@
 | #1 | `agent-1-project-catalog.md` | Проекты, репозитории, runtime, fleet и platform MCP | `project-catalog`, `runtime-manager`, `fleet-manager`, `platform-mcp-server`, `codex-hook-ingress` | Проекты, репозитории, проверенная версия `services.yaml`, источники документации, правила веток, релизные политики, слоты, workspace, platform jobs, cleanup, prewarm, reuse, серверы, Kubernetes-кластеры, health, placement scope, MCP-поверхность без бизнес-состояния и входной контур Codex hooks. |
 | #2 | `agent-2-provider-hub.md` | Provider-native интеграции | `provider-hub` | Внешние Git-провайдеры, репозитории, Issue, PR/MR, комментарии, review-сигналы, webhook, локальные проекции, сверка внешнего состояния, лимиты и операции провайдера на границе ссылок на секреты. |
 | #3 | `agent-3-package-hub.md` | Пакетная платформа | `package-hub` | Источники пакетов, доступный каталог, версии, manifest, установки, схемы секретов, верификация пакетов и события `package.*`. |
+| #4 | `agent-4-interaction-hub.md` | Центр взаимодействий | `interaction-hub` | Диалоги, запросы обратной связи, Human gate, approval request, уведомления, подписки, delivery attempts, callback внешних каналов и стабильный channel delivery/callback contract поверх package-owned runtime. |
 
 ## Как читать координацию
 
