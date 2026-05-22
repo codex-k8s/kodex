@@ -182,12 +182,15 @@ type ProviderOperation struct {
 	TargetRef              string
 	Status                 enum.ProviderOperationStatus
 	ResultRef              string
+	ProviderObjectID       string
+	RepositoryFullName     string
 	ErrorCode              string
 	ErrorMessage           string
 	RateLimitSnapshotID    *uuid.UUID
 	OperationPolicyContext value.ProviderOperationPolicyContext
 	ApprovalGateRef        value.ApprovalGateReference
 	ProviderVersion        string
+	BaseBranch             string
 	StartedAt              time.Time
 	FinishedAt             *time.Time
 }

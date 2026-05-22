@@ -18,6 +18,7 @@ const (
 	EventOperationFailed              = "provider.operation.failed"
 	EventRepositoryBootstrapRequired  = "provider.repository.bootstrap_required"
 	EventRepositoryAdoptionRequired   = "provider.repository.adoption_required"
+	EventRepositoryCreated            = "provider.repository.created"
 	EventRepositoryBootstrapCompleted = "provider.repository.bootstrap_completed"
 	EventRepositoryAdoptionPRCreated  = "provider.repository.adoption_pr_created"
 )
@@ -38,6 +39,7 @@ const (
 // Payload is the generated common payload envelope for domain events.
 type Payload struct {
 	AdoptionPRRef                 string `json:"adoption_pr_ref,omitempty"`
+	BaseBranch                    string `json:"base_branch,omitempty"`
 	BootstrapMode                 string `json:"bootstrap_mode,omitempty"`
 	CommentProjectionID           string `json:"comment_projection_id,omitempty"`
 	DeliveryID                    string `json:"delivery_id,omitempty"`

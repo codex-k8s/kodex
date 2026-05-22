@@ -49,7 +49,9 @@ service ProviderHubService {
   rpc UpdateComment(UpdateCommentRequest) returns (ProviderOperationResponse);
   // CreatePullRequest creates a provider-native PR/MR for a platform scenario.
   rpc CreatePullRequest(CreatePullRequestRequest) returns (ProviderOperationResponse);
-  // CreateBootstrapPullRequest creates or updates bootstrap branch/PR for an existing empty repository with prepared base branch.
+  // CreateRepository creates a provider-native repository and prepares an initial provider default branch.
+  rpc CreateRepository(CreateRepositoryRequest) returns (ProviderOperationResponse);
+  // CreateBootstrapPullRequest creates or updates bootstrap branch/PR for an existing bootstrap-ready repository.
   rpc CreateBootstrapPullRequest(CreateBootstrapPullRequestRequest) returns (ProviderOperationResponse);
   // UpdatePullRequest updates allowed PR/MR fields through a managed external account.
   rpc UpdatePullRequest(UpdatePullRequestRequest) returns (ProviderOperationResponse);
@@ -322,6 +324,7 @@ enum ProviderOperationType {
   PROVIDER_OPERATION_TYPE_UPDATE_RELATIONSHIP = 7;
   PROVIDER_OPERATION_TYPE_UPDATE_PULL_REQUEST = 8;
   PROVIDER_OPERATION_TYPE_CREATE_BOOTSTRAP_PULL_REQUEST = 9;
+  PROVIDER_OPERATION_TYPE_CREATE_REPOSITORY = 10;
 }
 
 // ProviderOperationStatus is the execution state of a provider operation.
@@ -332,6 +335,21 @@ enum ProviderOperationStatus {
   PROVIDER_OPERATION_STATUS_RETRYABLE_FAILED = 3;
   PROVIDER_OPERATION_STATUS_DENIED = 4;
   PROVIDER_OPERATION_STATUS_IN_PROGRESS = 5;
+}
+
+// RepositoryOwnerKind selects provider-side repository owner semantics.
+enum RepositoryOwnerKind {
+  REPOSITORY_OWNER_KIND_UNSPECIFIED = 0;
+  REPOSITORY_OWNER_KIND_ORGANIZATION = 1;
+  REPOSITORY_OWNER_KIND_AUTHENTICATED_USER = 2;
+}
+
+// RepositoryVisibility selects provider-side repository visibility.
+enum RepositoryVisibility {
+  REPOSITORY_VISIBILITY_UNSPECIFIED = 0;
+  REPOSITORY_VISIBILITY_PUBLIC = 1;
+  REPOSITORY_VISIBILITY_PRIVATE = 2;
+  REPOSITORY_VISIBILITY_INTERNAL = 3;
 }
 
 // ReviewSignalKind classifies provider-native review actions.
@@ -1048,6 +1066,30 @@ message CreatePullRequestRequest {
   ProviderTarget repository_target = 14;
 }
 
+// CreateRepositoryRequest creates a provider-native repository with provider-side initialization.
+message CreateRepositoryRequest {
+  // project_id is the project-catalog project id.
+  string project_id = 1;
+  // repository_id is the project-catalog repository binding id.
+  string repository_id = 2;
+  // provider_slug is an extensible provider identifier.
+  string provider_slug = 3;
+  // owner_kind disambiguates organization-owned repositories from authenticated user repositories.
+  RepositoryOwnerKind owner_kind = 4;
+  // provider_owner is the provider organization login for organization-owned repositories.
+  optional string provider_owner = 5;
+  // repository_name is the provider repository name without owner prefix.
+  string repository_name = 6;
+  // visibility is the requested provider repository visibility.
+  RepositoryVisibility visibility = 7;
+  // description is an optional safe provider repository description.
+  optional string description = 8;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 9;
+  // external_account_id is the account selected by caller policy for the provider write.
+  string external_account_id = 10;
+}
+
 // BootstrapFile is one text file prepared by project, agent or package contour.
 message BootstrapFile {
   // path is a repository-relative file path.
@@ -1058,7 +1100,7 @@ message BootstrapFile {
   bool executable = 3;
 }
 
-// CreateBootstrapPullRequestRequest creates or updates bootstrap branch and PR/MR for an existing empty repository with prepared base branch.
+// CreateBootstrapPullRequestRequest creates or updates bootstrap branch and PR/MR for a bootstrap-ready repository.
 message CreateBootstrapPullRequestRequest {
   // project_id is the project-catalog project id.
   string project_id = 1;
@@ -1066,7 +1108,7 @@ message CreateBootstrapPullRequestRequest {
   string repository_id = 2;
   // provider_slug is an extensible provider identifier.
   string provider_slug = 3;
-  // repository_target identifies an existing empty provider repository.
+  // repository_target identifies an existing provider repository. GitHub auto_init README seed is allowed.
   ProviderTarget repository_target = 4;
   // base_branch is the target branch that already exists at provider side.
   string base_branch = 5;
@@ -1171,6 +1213,8 @@ message ProviderOperationCommandResult {
   bool reconciliation_enqueued = 5;
   // emitted_event_types are domain event names emitted by provider-hub.
   repeated string emitted_event_types = 6;
+  // base_branch is the provider default branch prepared by repository creation when known.
+  optional string base_branch = 7;
 }
 
 // ProviderOperationResponse returns operation log entry and optional resulting projection.

@@ -86,6 +86,37 @@ func TestCreateBootstrapPullRequestMapsRequestAndResponse(t *testing.T) {
 	}
 }
 
+func TestCreateRepositoryMapsRequestAndResponse(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.NewString()
+	externalAccountID := uuid.NewString()
+	projectID := uuid.NewString()
+	repositoryID := uuid.NewString()
+	owner := "codex-k8s"
+	description := "Тестовый сервис"
+	response, err := NewServer(fakeService{}).CreateRepository(context.Background(), &providersv1.CreateRepositoryRequest{
+		ProjectId:         projectID,
+		RepositoryId:      repositoryID,
+		ProviderSlug:      "github",
+		OwnerKind:         providersv1.RepositoryOwnerKind_REPOSITORY_OWNER_KIND_ORGANIZATION,
+		ProviderOwner:     &owner,
+		RepositoryName:    "new-service",
+		Visibility:        providersv1.RepositoryVisibility_REPOSITORY_VISIBILITY_PRIVATE,
+		Description:       &description,
+		Meta:              &providersv1.CommandMeta{CommandId: &commandID, RequestId: "req-1"},
+		ExternalAccountId: externalAccountID,
+	})
+	if err != nil {
+		t.Fatalf("CreateRepository(): %v", err)
+	}
+	if response.GetResult().GetResultRef() != "repository:create" ||
+		response.GetResult().GetBaseBranch() != "main" ||
+		response.GetResult().GetTarget().GetRepositoryFullName() != "codex-k8s/new-service" {
+		t.Fatalf("result = %+v, want repository create result", response.GetResult())
+	}
+}
+
 func TestRecordProviderLimitSnapshotMapsRequestAndResponse(t *testing.T) {
 	t.Parallel()
 
@@ -500,6 +531,23 @@ func (fakeService) CreatePullRequest(_ context.Context, input providerservice.Cr
 			ResultRef: "pull_request:create",
 			Target: &providerservice.ProviderTarget{
 				ProviderSlug: input.ProviderSlug,
+			},
+		},
+	}, nil
+}
+
+func (fakeService) CreateRepository(_ context.Context, input providerservice.CreateRepositoryInput) (providerservice.ProviderOperationResult, error) {
+	owner := ""
+	if input.ProviderOwner != nil {
+		owner = *input.ProviderOwner
+	}
+	return providerservice.ProviderOperationResult{
+		Result: providerservice.ProviderOperationCommandResult{
+			ResultRef:  "repository:create",
+			BaseBranch: "main",
+			Target: &providerservice.ProviderTarget{
+				ProviderSlug:       input.ProviderSlug,
+				RepositoryFullName: owner + "/" + input.RepositoryName,
 			},
 		},
 	}, nil

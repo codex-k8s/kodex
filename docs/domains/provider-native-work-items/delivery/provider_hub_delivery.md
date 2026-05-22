@@ -5,8 +5,8 @@ title: kodex — поставка provider-hub
 status: active
 owner_role: EM
 created_at: 2026-05-06
-updated_at: 2026-05-14
-related_issues: [281, 282, 711, 719, 725, 729, 737, 754]
+updated_at: 2026-05-22
+related_issues: [281, 282, 711, 719, 725, 729, 737, 754, 761]
 related_prs: []
 related_docsets:
   - docs/domains/provider-native-work-items/product/requirements.md
@@ -58,8 +58,8 @@ approvals:
 | PRV-7a | Контрактный каталог платформенных операций записи для agent-manager/MCP: типизированные инструменты, общий конвейер команд, контекст политики и ссылка на approval/gate. |
 | PRV-7b | Реализация общего конвейера команд операций записи без специфичного для провайдера расползания по сервисному слою. |
 | PRV-7c | Реализация GitHub-адаптера записи для операций из каталога с журналом операций, лимитами, проекциями и событиями. |
-| PRV-8a | Provider-часть bootstrap для заранее существующего пустого репозитория: запись подготовленных файлов в bootstrap branch, создание или обновление bootstrap PR, provider relationships и локальные проекции без adoption scan. |
-| PRV-8b | Создание репозитория у провайдера и начальный base ref, если это требуется сценарию bootstrap. |
+| PRV-8a | Provider-часть bootstrap для уже созданного пустого репозитория: запись подготовленных файлов в bootstrap branch, создание или обновление bootstrap PR, provider relationships и локальные проекции без adoption scan. |
+| PRV-8b | Provider-side создание GitHub-репозитория с начальным default branch через `auto_init` готово. |
 | PRV-8c | Provider-часть adoption существующего репозитория; содержательное сканирование и отчёт остаются агентной работой через workspace. |
 | PRV-9 | Kubernetes-манифесты, БД, migration job, smoke-путь, runbook и документы наблюдаемости готовы. |
 
@@ -74,7 +74,7 @@ approvals:
 | Сверка | Готово: сигналы, очередь сверки, пакетная обработка и курсоры. | Реализовано в режиме только чтения: PRV-6.1 добавил доменную модель `sync_cursor`, постановку области в очередь, чтение, список и короткую аренду курсора; PRV-6.3 добавил ускоряющий сигнал, который ставит `hot` cursor по provider target и выбранному внешнему аккаунту; PRV-6.2b подключил `ResolveExternalAccountUsage` и `libs/go/secretresolver` к обработчику, читает GitHub API по курсорам, обновляет проекции провайдера, лимитный бюджет, операционное состояние и безопасно продвигает курсор. |
 | Операции провайдера | Готово: типизированные команды записи, общий command pipeline, журнал операций и outbox-события результата. | PRV-7a зафиксировал контракт, PRV-7b реализовал gRPC handlers, casters, domain pipeline, optimistic concurrency, `ProviderOperation` с policy/gate trace и безопасный `ProviderOperationResponse`. PRV-7c подключает GitHub write-адаптер для создания и обновления задач, комментариев, `PR`, review-сигналов и provider-native связей без хранения токенов. GitLab-адаптер остаётся следующим расширением той же границы. |
 | Операционное состояние аккаунта и лимиты | Готово: состояние аккаунта у провайдера, снимки лимитов и журнал операций. | Реализовано в PRV-3: доменная логика, PostgreSQL-репозиторий, gRPC-чтение/запись снимков лимитов, базовый GitHub-адаптер для проверки лимитов. Фильтры по проекту и организации в списке операционных состояний остаются контрактным заделом до подключения разрешения внешних аккаунтов через `access-manager`. |
-| Первичная инициализация пустого репозитория | Готово: `CreateBootstrapPullRequest` принимает подготовленные файлы и refs, создаёт или обновляет bootstrap branch/PR для уже существующего пустого репозитория. | PRV-8a реализует provider-side запись через общий pipeline и GitHub-адаптер, обновляет проекцию `PR`, provider relationship к project/repository binding и событие `provider.repository.bootstrap_completed`. Создание самого репозитория у провайдера, начальный base ref и end-to-end вызов из проектного или агентного контура остаются PRV-8b+. |
+| Первичная инициализация пустого репозитория | Готово: `CreateRepository` создаёт GitHub-репозиторий и provider default branch, `CreateBootstrapPullRequest` принимает подготовленные файлы и refs, создаёт или обновляет bootstrap branch/PR. | PRV-8b реализует создание репозитория на стороне провайдера через общий pipeline и GitHub-адаптер с `auto_init=true`, фиксирует `base_branch` и событие `provider.repository.created`. PRV-8a реализует provider-side запись bootstrap branch/PR, обновляет проекцию `PR`, provider relationship к project/repository binding и событие `provider.repository.bootstrap_completed`. End-to-end вызов из проектного или агентного контура остаётся отдельным срезом. |
 | Подключение существующего репозитория | Готово на уровне событий adoption required/adoption PR created и операций провайдера. | `PR` у провайдера, зеркало и связи оставлены до PRV-8; сканирование и отчёт выполняет агентная роль через workspace. |
 | Эксплуатационный контур | Готово: Dockerfile, Kubernetes-манифесты, bootstrap БД, migration job, smoke-путь, runbook и monitoring docs. | PRV-9 добавил `deploy/base/provider-hub/**`, подключение `kodex_provider_hub` к PostgreSQL bootstrap/runtime secrets, build/smoke scripts и эксплуатационные документы. Реальная проверка на кластере выполняется отдельным операторским запуском smoke-скрипта с нормализованным bootstrap env. |
 
@@ -130,13 +130,14 @@ approvals:
 - ошибки GitHub классифицируются безопасно: auth/permission, not found, conflict/validation, rate limit/abuse, transient; в журнал операции и события попадает только короткий код без provider payload и без секрета.
 - чтобы не оставлять частичный side effect, GitHub `CreatePullRequest` в текущем срезе не принимает `labels` и `linked_issue_ref`; эти изменения должны идти отдельными командами после создания `PR`.
 - чтобы не оставлять частичное изменение без транзакционной гарантии, GitHub `UpdatePullRequest` отклоняет смешанные команды, где одновременно есть метаданные PR на issue-стороне (`labels`/`assignee_provider_logins`/`milestone`) и собственные поля PR (`base_branch`/`maintainer_can_modify`); вызывающий контур должен разбивать такие изменения на отдельные идемпотентные команды и связывать их общим `correlation_id`, если это один пользовательский сценарий.
-- `CreateBootstrapPullRequest` создаёт или обновляет bootstrap branch и bootstrap PR для заранее существующего пустого GitHub-репозитория: вызывающий контур передаёт уже подготовленные файлы, base branch, bootstrap branch, title/body и watermark, а `provider-hub` не генерирует `services.yaml` и не сканирует репозиторий. Команда требует существующий пустой base branch, запрещает совпадение base/bootstrap branch и не наследует старые файлы из ранее созданной bootstrap branch.
+- `CreateRepository` создаёт GitHub-репозиторий с `auto_init=true`, чтобы провайдер создал начальный default branch и минимальный начальный commit; команда возвращает `base_branch`, provider repository id и URL, фиксирует `ProviderOperation` и событие `provider.repository.created`, но не генерирует `services.yaml`, не выбирает шаблоны, не сканирует репозиторий и не меняет branch protection.
+- `CreateBootstrapPullRequest` создаёт или обновляет bootstrap branch и bootstrap PR для уже созданного GitHub-репозитория: вызывающий контур передаёт уже подготовленные файлы, base branch, bootstrap branch, title/body и watermark, а `provider-hub` не генерирует `services.yaml` и не сканирует репозиторий. Команда требует существующий base branch, допускает пустое дерево или безопасный `README.md`, созданный GitHub при `auto_init`, запрещает совпадение base/bootstrap branch и не наследует старые файлы из ранее созданной bootstrap branch.
 - успешный bootstrap PR сразу создаёт локальную PR-проекцию с `project_id` и `repository_id`, provider relationship `project_repository_binding` и событие `provider.repository.bootstrap_completed`; `ProviderOperation` и outbox не содержат файловый payload, секрет или raw provider response.
 - эксплуатационный контур `provider-hub`: Dockerfile, `deploy/base/provider-hub/**`, создание БД `kodex_provider_hub` в PostgreSQL bootstrap, runtime Secret refs без значений секретов, migration job, Service/Deployment с HTTP/gRPC ports, readiness/liveness/metrics, requests/limits, build/smoke scripts и runbook/monitoring документы.
 
 Миграция `external_account_id` для очереди сверки явно очищает строки `provider_hub_sync_cursors` и `provider_hub_reconciliation_requests`, созданные предыдущим срезом без знания внешнего аккаунта. Эти строки являются эфемерным состоянием планировщика и пересоздаются повторной постановкой сверки; так тестовые кластеры с уже развёрнутым PRV-6.1 не упираются в `ADD COLUMN ... NOT NULL`.
 
-Ограничение текущей сверки: пакетная GitHub-сверка работает только на чтение и обрабатывает один provider target за завершение аренды курсора, после чего обработчик повторно входит через продвинутый курсор. GitHub write-адаптер подключён к общему исполнителю команд записи, но MCP-поверхность, интеграция с agent-manager, UI/gateway, GitLab write adapter, создание репозитория у провайдера, начальный base ref и adoption остаются отдельными срезами. Эксплуатационный контур готов на уровне манифестов, smoke-пути и runbook; реальный запуск на кластере выполняется оператором через нормализованный bootstrap env.
+Ограничение текущей сверки: пакетная GitHub-сверка работает только на чтение и обрабатывает один provider target за завершение аренды курсора, после чего обработчик повторно входит через продвинутый курсор. GitHub write-адаптер подключён к общему исполнителю команд записи, включая создание GitHub-репозитория и bootstrap PR, но MCP-поверхность, интеграция с agent-manager, UI/gateway, GitLab write adapter и adoption остаются отдельными срезами. Эксплуатационный контур готов на уровне манифестов, smoke-пути и runbook; реальный запуск на кластере выполняется оператором через нормализованный bootstrap env.
 
 Архитектурное исключение среза: вспомогательные функции gRPC caster остаются локальными в `provider-hub`, потому что вынос общего transport-пакета требует согласованного изменения `access-manager`, `project-catalog` и текущего сервиса. Это не должно копироваться в новые сервисы; отдельный малый срез перед следующим доменом должен вынести общую часть в `libs/go/**` и перевести существующие сервисы.
 
@@ -153,7 +154,7 @@ approvals:
 
 ## Связь с задачами подключения репозиториев
 
-Задачи #281 и #282 остаются открытыми до полного end-to-end bootstrap/adoption. PRV-8a закрывает только provider-side часть для заранее существующего пустого репозитория.
+Задачи #281 и #282 остаются открытыми до полного end-to-end bootstrap/adoption. PRV-8a и PRV-8b закрывают только provider-side часть создания репозитория и bootstrap PR.
 
 Решение:
 
@@ -161,7 +162,8 @@ approvals:
 - `provider-hub` владеет фактом provider-состояния, provider-операциями, зеркалом, provider relationships и созданием или обновлением provider-native артефактов;
 - `provider-hub` не владеет содержательным сканированием и отчётом по существующему репозиторию: его выполняет `agent-manager` через агентную роль и workspace с нужными инструкциями;
 - empty repository допускает controlled direct bootstrap только как исключение, при этом `provider-hub` выполняет provider write после решения о составе bootstrap-артефактов;
-- в PRV-8a `provider-hub` принимает подготовленный набор файлов и refs, создаёт или обновляет bootstrap branch/PR и фиксирует связи, но не создаёт репозиторий у провайдера, не создаёт base branch, не генерирует `services.yaml` и не выполняет adoption scan;
+- в PRV-8b `provider-hub` создаёт GitHub-репозиторий с provider-side default branch, но не генерирует `services.yaml`, не выбирает шаблон и не выполняет adoption scan;
+- в PRV-8a `provider-hub` принимает подготовленный набор файлов и refs, создаёт или обновляет bootstrap branch/PR и фиксирует связи, но не генерирует `services.yaml` и не выполняет adoption scan;
 - existing repository adoption идёт через reviewable PR, который `provider-hub` создаёт или обновляет по результату агентного отчёта и проектного решения.
 
 ## Definition of Done для каждого PR
