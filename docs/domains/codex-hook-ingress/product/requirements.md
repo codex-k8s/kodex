@@ -86,7 +86,7 @@ Codex запускает hooks как command-обработчики в рабо
 | CHI-FR-11 | Сервис должен маршрутизировать runtime diagnostics, workspace refs и slot/session binding в `runtime-manager`, не меняя состояние slot сам. | Обязательно |
 | CHI-FR-12 | Сервис должен маршрутизировать provider artifact signals, hot cursor hints и rate-limit hints в `provider-hub`, не выполняя provider read/write operations. | Обязательно |
 | CHI-FR-13 | Сервис должен маршрутизировать owner feedback, approval delivery intent и notification intent в `interaction-hub`, не владея диалогами и доставкой. | Обязательно |
-| CHI-FR-14 | `PermissionRequest` должен превращаться в request/gate у `agent-manager`; `codex-hook-ingress` может ждать итоговое allow/deny/ask только как транспортный bridge с timeout и безопасным отказом. | Обязательно |
+| CHI-FR-14 | `PermissionRequest` должен превращаться в request/gate у `agent-manager`; `codex-hook-ingress` может ждать итоговое allow/deny или `no_decision` только как транспортный bridge с timeout и безопасным отказом. `no_decision` означает отсутствие hook-specific решения и не должен маппиться в неподдерживаемый `permissionDecision: "ask"`. | Обязательно |
 | CHI-FR-15 | `PreToolUse` может вернуть deny или дополнительный контекст только после решения владельца политики; ingress не должен самостоятельно принимать бизнес-решения. | Обязательно |
 | CHI-FR-16 | `PostToolUse` не должен пытаться откатить side effects уже выполненного tool; он передаёт безопасный итог владельцам. | Обязательно |
 | CHI-FR-17 | Сервис должен публиковать короткую операционную ленту и метрики по событиям, отказам, sanitizer, лимитам, latency и retry. | Обязательно |

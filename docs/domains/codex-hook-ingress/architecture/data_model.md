@@ -133,7 +133,7 @@ approvals:
 | `bridge_id` | uuid | нет | generated | PK |  |
 | `event_id` | uuid | нет |  | FK local, indexed | Permission/pre-tool event. |
 | `owner_request_ref` | text | да | null | indexed | Ссылка на gate/request у `agent-manager`. |
-| `status` | enum | нет | `waiting` | `waiting`, `allowed`, `denied`, `asked`, `timed_out`, `failed` | Local bridge status. |
+| `status` | enum | нет | `waiting` | `waiting`, `allowed`, `denied`, `no_decision`, `timed_out`, `failed` | Local bridge status; `no_decision` не является Codex `permissionDecision: "ask"`. |
 | `risk_class` | enum | нет | `unknown` | `low`, `medium`, `high`, `unknown` | Safe classification. |
 | `decision_reason` | text | да | null | max 4 KiB | Sanitized. |
 | `expires_at` | timestamptz | нет |  | indexed | Timeout. |

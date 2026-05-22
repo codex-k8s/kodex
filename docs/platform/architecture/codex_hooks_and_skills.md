@@ -84,7 +84,7 @@ Hooks не должны становиться источником истины
 |---|---|---|---|---|
 | `SessionStart` | Старт или resume Codex-сессии внутри slot. | `agent-manager`, `runtime-manager` | Управление, аудит | В БД: связь session/run/slot, источник старта, время, версия модели, workspace ref. Не хранить стенограмму сессии. |
 | `UserPromptSubmit` | Новый prompt, который может быть проверен на секреты, политику и контекст задачи. | `agent-manager`, `interaction-hub` | Управление, аудит | В БД: факт prompt submit, hash, короткая сводка, решение политики. Полный prompt хранить только в контуре диалога, если это пользовательская переписка. |
-| `PreToolUse` | Предварительная проверка инструмента: shell, `apply_patch`, MCP tool; realtime-показ “агент хочет вызвать tool”. | `codex-hook-ingress`, `agent-manager`, при необходимости `runtime-manager` | Управление, диагностика, realtime UI | В БД: только deny/ask/risk decision и безопасная сводка. Массовые allow-события держать в короткой операционной ленте и метриках. |
+| `PreToolUse` | Предварительная проверка инструмента: shell, `apply_patch`, MCP tool; realtime-показ “агент хочет вызвать tool”. | `codex-hook-ingress`, `agent-manager`, при необходимости `runtime-manager` | Управление, диагностика, realtime UI | В БД: только deny/no_decision/risk decision и безопасная сводка. Массовые allow-события держать в короткой операционной ленте и метриках. |
 | `PermissionRequest` | Запрос разрешения Codex на действие с повышенным риском. | `codex-hook-ingress`, `agent-manager`, `interaction-hub` | Управление, аудит | В БД: request id, decision id, субъект, действие, риск, gate ref, sanitized reason, решение и время. |
 | `PostToolUse` | Результат инструмента после выполнения; realtime-показ “tool отработал”, provider signals и диагностика. | `provider-hub`, `runtime-manager`, `agent-manager` | Диагностика, аудит для рискованных действий, realtime UI | В БД: только важные итоги, exit status, bounded error, provider artifact signal. Полный stdout/stderr не хранить. |
 | `Stop` | Завершение хода агента; возможность зафиксировать итог и pending actions. | `agent-manager`, `runtime-manager`, `provider-hub`, `interaction-hub` | Управление, аудит | В БД: контрольная точка run, итоговый status, pending gates, provider signals, короткая сводка. |
@@ -125,9 +125,9 @@ Hooks не должны становиться источником истины
 2. `codex-hook-ingress` определяет actor, run, role, stage, project, repository, tool category.
 3. `agent-manager` создаёт или находит pending gate.
 4. `interaction-hub` доставляет запрос обратной связи владельца в UI или внешний адаптер.
-5. После решения `agent-manager` фиксирует decision и возвращает allow/deny/ask в hook handler.
+5. После решения `agent-manager` фиксирует decision и возвращает allow/deny или `no_decision` в hook handler.
 
-Если решение не пришло за timeout, действие должно завершиться безопасной ошибкой или перейти в ожидание, но не продолжаться молча.
+`no_decision` означает, что hook handler не возвращает hook-specific decision и Codex может продолжить штатный approval flow только по policy владельца. `PreToolUse` не должен маппить ожидание владельца в `permissionDecision: "ask"`, потому что это не поддерживаемый output Codex hook. Если решение не пришло за timeout, действие должно завершиться безопасной ошибкой или перейти в ожидание, но не продолжаться молча.
 
 ## Общая модель skills
 

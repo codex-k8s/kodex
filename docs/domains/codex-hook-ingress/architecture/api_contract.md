@@ -66,7 +66,7 @@ approvals:
 
 | Field | Type | Required | Notes |
 |---|---|---:|---|
-| `result` | enum | да | `continue`, `allow`, `deny`, `ask`, `retry`, `fail_closed`, `ignored`. |
+| `result` | enum | да | Нормализованный платформенный результат: `continue`, `allow`, `deny`, `no_decision`, `retry`, `fail_closed`, `ignored`. |
 | `hook_event_name` | enum | да | Повторяет событие. |
 | `system_message` | string | нет | Safe text для Codex UI/event stream, если policy разрешает. |
 | `additional_context` | string | нет | Safe model-visible context, если разрешён владельцем. |
@@ -75,6 +75,12 @@ approvals:
 | `updated_input_ref` | object | нет | По умолчанию запрещён. В MVP не использовать без отдельного решения. |
 | `owner_decision_ref` | string | нет | Ссылка на gate/decision у `agent-manager`. |
 | `correlation_id` | string | да | Для связи с request. |
+
+`HookHandlerResult` — внутренняя нормализованная модель, а не дословный JSON stdout Codex hook. Emitter/sidecar обязан маппить её в поддерживаемый Codex output по конкретному event:
+
+- для `PermissionRequest` допустимы `allow`, `deny` или отсутствие hook-specific decision (`no_decision`), после которого Codex продолжает штатный approval flow только если это разрешено policy владельца;
+- для `PreToolUse` нельзя возвращать `permissionDecision: "ask"`; поддерживаются только безопасный `deny`, дополнительный контекст или разрешённое policy изменение input там, где это поддержано Codex runtime;
+- `fail_closed` означает безопасный отказ или ошибку hook handler для рискованных действий, а не молчаливое продолжение.
 
 ## Event-specific contract
 
@@ -142,7 +148,7 @@ Routes:
 
 Output:
 
-- allow/deny/ask/fail-closed с sanitized reason.
+- allow/deny/no_decision/fail_closed с sanitized reason.
 
 ### `PostToolUse`
 
