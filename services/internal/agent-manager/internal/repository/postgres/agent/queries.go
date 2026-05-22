@@ -37,6 +37,7 @@ var (
 	queryRunList                           = mustLoadQuery("run__list")
 	queryRunUpdate                         = mustLoadQuery("run__update")
 	querySessionCreate                     = mustLoadQuery("session__create")
+	querySessionFindActiveByTarget         = mustLoadQuery("session__find_active_by_provider_work_item")
 	querySessionGet                        = mustLoadQuery("session__get")
 	querySessionStateSnapshotCreate        = mustLoadQuery("session_state_snapshot__create")
 	querySessionStateSnapshotGet           = mustLoadQuery("session_state_snapshot__get")

@@ -46,7 +46,7 @@ approvals:
 | AGO-2 | #744 | Сервисный процесс, env-конфигурация, health, readiness, metrics, регистрация gRPC `AgentManagerService` и outbox-каркас готовы; бизнес-операции возвращают `Unimplemented`, outbox не имитирует успешную доставку. |
 | AGO-3 | #749 | PostgreSQL-модель flow, stage, role, prompt template, версий, command result и service-local outbox готова; storage/use-case слой подключён к process readiness. |
 | AGO-3b | #755 | gRPC handlers, casters и безопасное отображение ошибок для flow, role и prompt подключены к готовому storage/use-case слою; session/run не входят в срез. |
-| AGO-4 | #759 | Сессии и agent `Run`: создание, чтение, статусы, снимки состояния, идемпотентность и события готовы. |
+| AGO-4 | #759 | Сессии и agent `Run`: создание, чтение, статусы, снимки состояния, идемпотентность, защита активной session от дублей, stage-bound проверка роли и AsyncAPI-совместимые события готовы. |
 | AGO-5 | не назначено | Интеграция с `package-hub` для guidance packages и рендер агентного контекста готовы без checkout/mount. |
 | AGO-6 | не назначено | Интеграция с `runtime-manager`: подготовка workspace и запуск роли через runtime-контур готовы. |
 | AGO-7 | не назначено | Машина приёмки: проверка provider-native артефактов, watermark, ролей и policy готова. |
@@ -62,9 +62,9 @@ approvals:
 | `CreateRoleProfile` / `UpdateRoleProfile` / `GetRoleProfile` / `ListRoleProfiles` | storage/use-case слой и gRPC handlers готовы | AGO-3, AGO-3b |
 | `GetPromptTemplate` / `ListPromptTemplates` | storage/use-case слой и gRPC handlers готовы; `GetPromptTemplate` возвращает активную версию при наличии `active_version_id` | AGO-3, AGO-3b |
 | `CreatePromptTemplateVersion` / `ActivatePromptTemplateVersion` / `GetPromptTemplateVersion` / `ListPromptTemplateVersions` | storage/use-case слой и gRPC handlers готовы | AGO-3, AGO-3b |
-| `StartAgentSession` | Слой хранения, use-case и gRPC handlers готовы; создаёт авторитетную сессию и событие `agent.session.created` | AGO-4 |
-| `StartAgentRun` | Слой хранения, use-case и gRPC handlers готовы; создаёт `requested` `Run`, фиксирует версии роли и prompt, но руководящие пакеты и runtime подключаются следующими срезами | AGO-4, AGO-5, AGO-6 |
-| `RecordRunState` | Слой хранения, use-case и gRPC handlers готовы; требует ожидаемую версию, пишет результат команды и lifecycle event | AGO-4, AGO-6 |
+| `StartAgentSession` | Слой хранения, use-case и gRPC handlers готовы; создаёт авторитетную сессию, а при непустом provider target продолжает активную `open`/`waiting` session без нового события создания | AGO-4 |
+| `StartAgentRun` | Слой хранения, use-case и gRPC handlers готовы; создаёт `requested` `Run`, фиксирует версии роли и prompt, проверяет stage-bound связку flow/stage/role, но руководящие пакеты и runtime подключаются следующими срезами | AGO-4, AGO-5, AGO-6 |
+| `RecordRunState` | Слой хранения, use-case и gRPC handlers готовы; требует ожидаемую версию, проверяет state machine, пишет результат команды и публикует lifecycle event только с обязательными полями AsyncAPI | AGO-4, AGO-6 |
 | `RecordSessionStateSnapshot` | Слой хранения, use-case и gRPC handlers готовы; пишет метаданные снимка и обновляет указатель сессии через ожидаемую версию | AGO-4, AGO-6 |
 | `RequestAcceptance` / `RecordAcceptanceResult` / `GetAcceptanceResult` / `ListAcceptanceResults` | зарегистрировано в gRPC-каркасе; бизнес-реализация запланирована | AGO-7 |
 | `CreateFollowUpIntent` | зарегистрировано в gRPC-каркасе; бизнес-реализация запланирована | AGO-8 |

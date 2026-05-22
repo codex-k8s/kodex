@@ -44,6 +44,11 @@ CREATE INDEX agent_manager_sessions_provider_work_item_idx
     ON agent_manager_sessions (provider_work_item_ref)
     WHERE provider_work_item_ref <> '';
 
+CREATE UNIQUE INDEX agent_manager_sessions_active_provider_work_item_unique_idx
+    ON agent_manager_sessions (scope_type, scope_ref, provider_work_item_ref)
+    WHERE provider_work_item_ref <> ''
+      AND status IN ('open', 'waiting');
+
 CREATE TABLE agent_manager_runs (
     id uuid PRIMARY KEY,
     session_id uuid NOT NULL REFERENCES agent_manager_sessions(id),

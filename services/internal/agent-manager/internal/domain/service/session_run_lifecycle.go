@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -44,10 +46,21 @@ func (s *Service) StartAgentSession(ctx context.Context, input StartAgentSession
 		return replay, err
 	}
 	now := s.clock.Now()
+	providerWorkItemRef := strings.TrimSpace(input.ProviderWorkItemRef)
+	if providerWorkItemRef != "" {
+		existing, err := s.repository.FindActiveAgentSessionByProviderWorkItem(ctx, input.Scope, providerWorkItemRef)
+		switch {
+		case err == nil:
+			return existing, s.recordSessionCommandResult(ctx, input.Meta, existing, now)
+		case errors.Is(err, errs.ErrNotFound):
+		case err != nil:
+			return entity.AgentSession{}, err
+		}
+	}
 	session := entity.AgentSession{
 		VersionedBase:       entity.VersionedBase{ID: s.idGenerator.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
 		Scope:               input.Scope,
-		ProviderWorkItemRef: strings.TrimSpace(input.ProviderWorkItemRef),
+		ProviderWorkItemRef: providerWorkItemRef,
 		FlowVersionID:       input.FlowVersionID,
 		CurrentStageID:      input.CurrentStageID,
 		Status:              enum.AgentSessionStatusOpen,
@@ -65,7 +78,15 @@ func (s *Service) StartAgentSession(ctx context.Context, input StartAgentSession
 	if err != nil {
 		return entity.AgentSession{}, err
 	}
-	return session, s.repository.CreateAgentSessionWithResult(ctx, session, result, event)
+	err = s.repository.CreateAgentSessionWithResult(ctx, session, result, event)
+	if err == nil || providerWorkItemRef == "" || !errors.Is(err, errs.ErrConflict) {
+		return session, err
+	}
+	existing, findErr := s.repository.FindActiveAgentSessionByProviderWorkItem(ctx, input.Scope, providerWorkItemRef)
+	if findErr != nil {
+		return entity.AgentSession{}, err
+	}
+	return existing, s.recordSessionCommandResult(ctx, input.Meta, existing, now)
 }
 
 func (s *Service) GetAgentSession(ctx context.Context, id uuid.UUID) (entity.AgentSession, error) {
@@ -119,6 +140,9 @@ func (s *Service) StartAgentRun(ctx context.Context, input StartAgentRunInput) (
 	now := s.clock.Now()
 	flowVersionID := chooseUUID(input.FlowVersionID, session.FlowVersionID)
 	stageID := chooseUUID(input.StageID, session.CurrentStageID)
+	if err := s.validateRunStageRoleBinding(ctx, flowVersionID, stageID, role.ID); err != nil {
+		return entity.AgentRun{}, err
+	}
 	providerTarget := input.ProviderTarget
 	if strings.TrimSpace(providerTarget.WorkItemRef) == "" {
 		providerTarget.WorkItemRef = session.ProviderWorkItemRef
@@ -176,6 +200,9 @@ func (s *Service) RecordRunState(ctx context.Context, input RecordRunStateInput)
 	if run.Version != previousVersion {
 		return entity.AgentRun{}, errs.ErrConflict
 	}
+	if err := validateRunStatusTransition(run.Status, input.Status); err != nil {
+		return entity.AgentRun{}, err
+	}
 	now := s.clock.Now()
 	previousStatus := string(run.Status)
 	run.Status = input.Status
@@ -191,8 +218,12 @@ func (s *Service) RecordRunState(ctx context.Context, input RecordRunStateInput)
 	if input.FailureCode != nil {
 		run.FailureCode = strings.TrimSpace(*input.FailureCode)
 	}
-	if input.Status == enum.AgentRunStatusFailed && run.FailureCode == "" {
-		return entity.AgentRun{}, errs.ErrInvalidArgument
+	reasonCode := ""
+	if input.ReasonCode != nil {
+		reasonCode = strings.TrimSpace(*input.ReasonCode)
+	}
+	if err := validateRunStatePayload(run, reasonCode); err != nil {
+		return entity.AgentRun{}, err
 	}
 	if input.StartedAt != nil {
 		run.StartedAt = input.StartedAt
@@ -214,7 +245,7 @@ func (s *Service) RecordRunState(ctx context.Context, input RecordRunStateInput)
 	if err != nil {
 		return entity.AgentRun{}, err
 	}
-	event, err := runStateEvent(s.idGenerator.New(), previousStatus, run, now)
+	event, err := runStateEvent(s.idGenerator.New(), previousStatus, run, reasonCode, now)
 	if err != nil {
 		return entity.AgentRun{}, err
 	}
@@ -306,8 +337,85 @@ func chooseUUID(primary *uuid.UUID, fallback *uuid.UUID) *uuid.UUID {
 	return fallback
 }
 
+func (s *Service) recordSessionCommandResult(ctx context.Context, meta value.CommandMeta, session entity.AgentSession, now time.Time) error {
+	payload, err := marshalCommandPayload(agentSessionCommandPayload{Session: session})
+	if err != nil {
+		return err
+	}
+	result, err := commandResult(meta, operationStartAgentSession, enum.CommandAggregateTypeSession, session.ID, payload, now)
+	if err != nil {
+		return err
+	}
+	return s.repository.RecordCommandResult(ctx, result)
+}
+
+func (s *Service) validateRunStageRoleBinding(ctx context.Context, flowVersionID *uuid.UUID, stageID *uuid.UUID, roleProfileID uuid.UUID) error {
+	if stageID == nil {
+		return nil
+	}
+	if flowVersionID == nil {
+		return errs.ErrInvalidArgument
+	}
+	version, err := s.repository.GetFlowVersion(ctx, *flowVersionID)
+	if err != nil {
+		return err
+	}
+	stageFound := false
+	for _, stage := range version.Stages {
+		if stage.ID == *stageID {
+			stageFound = true
+			break
+		}
+	}
+	if !stageFound {
+		return errs.ErrInvalidArgument
+	}
+	for _, binding := range version.RoleBindings {
+		if binding.StageID == *stageID && binding.RoleProfileID == roleProfileID {
+			return nil
+		}
+	}
+	return errs.ErrPreconditionFailed
+}
+
 func isTerminalRunStatus(status enum.AgentRunStatus) bool {
 	return status == enum.AgentRunStatusCompleted || status == enum.AgentRunStatusFailed || status == enum.AgentRunStatusCancelled
+}
+
+func validateRunStatusTransition(current enum.AgentRunStatus, next enum.AgentRunStatus) error {
+	if current == next && !isTerminalRunStatus(current) {
+		return nil
+	}
+	allowed := map[enum.AgentRunStatus][]enum.AgentRunStatus{
+		enum.AgentRunStatusRequested: {enum.AgentRunStatusStarting, enum.AgentRunStatusFailed, enum.AgentRunStatusCancelled},
+		enum.AgentRunStatusStarting:  {enum.AgentRunStatusRunning, enum.AgentRunStatusWaiting, enum.AgentRunStatusFailed, enum.AgentRunStatusCancelled},
+		enum.AgentRunStatusRunning:   {enum.AgentRunStatusWaiting, enum.AgentRunStatusCompleted, enum.AgentRunStatusFailed, enum.AgentRunStatusCancelled},
+		enum.AgentRunStatusWaiting:   {enum.AgentRunStatusStarting, enum.AgentRunStatusRunning, enum.AgentRunStatusFailed, enum.AgentRunStatusCancelled},
+	}
+	for _, candidate := range allowed[current] {
+		if candidate == next {
+			return nil
+		}
+	}
+	return errs.ErrPreconditionFailed
+}
+
+func validateRunStatePayload(run entity.AgentRun, reasonCode string) error {
+	switch run.Status {
+	case enum.AgentRunStatusStarting, enum.AgentRunStatusRunning:
+		if strings.TrimSpace(run.RuntimeContext.SlotRef) == "" {
+			return errs.ErrInvalidArgument
+		}
+	case enum.AgentRunStatusWaiting:
+		if reasonCode == "" {
+			return errs.ErrInvalidArgument
+		}
+	case enum.AgentRunStatusFailed:
+		if run.FailureCode == "" {
+			return errs.ErrInvalidArgument
+		}
+	}
+	return nil
 }
 
 func sessionFromPayload(payload []byte) (entity.AgentSession, error) {

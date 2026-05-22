@@ -323,6 +323,7 @@ func RecordRunStateInput(request *agentsv1.RecordRunStateRequest) (service.Recor
 		ProviderTarget: providerTargetInput(request.ProviderTarget),
 		ResultSummary:  optionalPresentString(request.ResultSummary),
 		FailureCode:    optionalPresentString(request.FailureCode),
+		ReasonCode:     optionalPresentString(request.ReasonCode),
 		StartedAt:      startedAt,
 		FinishedAt:     finishedAt,
 	}, nil

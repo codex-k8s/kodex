@@ -81,10 +81,13 @@ func sessionEvent(id uuid.UUID, eventType string, session entity.AgentSession, o
 }
 
 func runRequestedEvent(id uuid.UUID, run entity.AgentRun, occurredAt time.Time) (entity.OutboxEvent, error) {
-	return runEvent(id, agentevents.EventRunRequested, "", run, occurredAt)
+	return runEvent(id, agentevents.EventRunRequested, "", "", run, occurredAt)
 }
 
-func runStateEvent(id uuid.UUID, previousStatus string, run entity.AgentRun, occurredAt time.Time) (*entity.OutboxEvent, error) {
+func runStateEvent(id uuid.UUID, previousStatus string, run entity.AgentRun, reasonCode string, occurredAt time.Time) (*entity.OutboxEvent, error) {
+	if previousStatus == string(run.Status) {
+		return nil, nil
+	}
 	var eventType string
 	switch string(run.Status) {
 	case "starting", "running":
@@ -98,14 +101,14 @@ func runStateEvent(id uuid.UUID, previousStatus string, run entity.AgentRun, occ
 	default:
 		return nil, nil
 	}
-	event, err := runEvent(id, eventType, previousStatus, run, occurredAt)
+	event, err := runEvent(id, eventType, previousStatus, reasonCode, run, occurredAt)
 	if err != nil {
 		return nil, err
 	}
 	return &event, nil
 }
 
-func runEvent(id uuid.UUID, eventType string, previousStatus string, run entity.AgentRun, occurredAt time.Time) (entity.OutboxEvent, error) {
+func runEvent(id uuid.UUID, eventType string, previousStatus string, reasonCode string, run entity.AgentRun, occurredAt time.Time) (entity.OutboxEvent, error) {
 	payload, err := json.Marshal(agentevents.Payload{
 		SessionID:               run.SessionID.String(),
 		RunID:                   run.ID.String(),
@@ -123,6 +126,7 @@ func runEvent(id uuid.UUID, eventType string, previousStatus string, run entity.
 		ProviderPullRequestRef:  run.ProviderTarget.PullRequestRef,
 		PreviousStatus:          previousStatus,
 		Status:                  string(run.Status),
+		ReasonCode:              reasonCode,
 		FailureCode:             run.FailureCode,
 		Version:                 run.Version,
 	})

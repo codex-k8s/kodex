@@ -152,6 +152,7 @@ type RecordRunStateInput struct {
 	ProviderTarget *value.ProviderTargetRef
 	ResultSummary  *string
 	FailureCode    *string
+	ReasonCode     *string
 	StartedAt      *time.Time
 	FinishedAt     *time.Time
 }

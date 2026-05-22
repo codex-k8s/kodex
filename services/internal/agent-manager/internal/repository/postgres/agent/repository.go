@@ -67,6 +67,7 @@ const (
 	operationCreateSession         = "domain.Repository.CreateAgentSessionWithResult"
 	operationUpdateSession         = "domain.Repository.UpdateAgentSessionWithResult"
 	operationGetSession            = "domain.Repository.GetAgentSession"
+	operationFindActiveSession     = "domain.Repository.FindActiveAgentSessionByProviderWorkItem"
 	operationCreateRun             = "domain.Repository.CreateAgentRunWithResult"
 	operationUpdateRun             = "domain.Repository.UpdateAgentRunWithResult"
 	operationGetRun                = "domain.Repository.GetAgentRun"
@@ -74,6 +75,7 @@ const (
 	operationCreateSnapshot        = "domain.Repository.CreateSessionStateSnapshotWithResult"
 	operationGetSnapshot           = "domain.Repository.GetSessionStateSnapshot"
 	operationGetCommandResult      = "domain.Repository.GetCommandResult"
+	operationRecordCommandResult   = "domain.Repository.RecordCommandResult"
 	operationOutboxClaim           = "domain.Repository.ClaimOutboxEvents"
 	operationOutboxMarkFailed      = "domain.Repository.MarkOutboxEventFailed"
 	operationOutboxMarkPermanent   = "domain.Repository.MarkOutboxEventPermanentlyFailed"
@@ -199,6 +201,14 @@ func (r *Repository) GetAgentSession(ctx context.Context, id uuid.UUID) (entity.
 	return queryOne(ctx, r.db, operationGetSession, querySessionGet, pgx.NamedArgs{"id": id}, scanAgentSession)
 }
 
+func (r *Repository) FindActiveAgentSessionByProviderWorkItem(ctx context.Context, scope value.ScopeRef, providerWorkItemRef string) (entity.AgentSession, error) {
+	return queryOne(ctx, r.db, operationFindActiveSession, querySessionFindActiveByTarget, pgx.NamedArgs{
+		"scope_type":             scope.Type,
+		"scope_ref":              scope.Ref,
+		"provider_work_item_ref": providerWorkItemRef,
+	}, scanAgentSession)
+}
+
 func (r *Repository) CreateAgentRunWithResult(ctx context.Context, run entity.AgentRun, result entity.CommandResult, event entity.OutboxEvent) error {
 	return r.mutateWithResult(ctx, operationCreateRun, queryRunCreate, agentRunArgs(run), result, &event)
 }
@@ -237,6 +247,10 @@ func (r *Repository) GetSessionStateSnapshot(ctx context.Context, id uuid.UUID) 
 
 func (r *Repository) GetCommandResult(ctx context.Context, identity query.CommandIdentity) (entity.CommandResult, error) {
 	return queryOne(ctx, r.db, operationGetCommandResult, queryCommandResultGet, commandIdentityArgs(identity), scanCommandResult)
+}
+
+func (r *Repository) RecordCommandResult(ctx context.Context, result entity.CommandResult) error {
+	return wrapError(operationRecordCommandResult, runCommandResult(ctx, r.db, result))
 }
 
 func (r *Repository) ClaimOutboxEvents(ctx context.Context, limit int, now time.Time, lockedUntil time.Time) ([]entity.OutboxEvent, error) {
