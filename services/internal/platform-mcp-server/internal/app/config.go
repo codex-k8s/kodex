@@ -66,8 +66,12 @@ func (cfg Config) Validate() error {
 	if strings.TrimSpace(cfg.HTTPAddr) == "" {
 		return fmt.Errorf("KODEX_PLATFORM_MCP_SERVER_HTTP_ADDR is required")
 	}
-	if strings.TrimSpace(cfg.MCP.Path) == "" || !strings.HasPrefix(strings.TrimSpace(cfg.MCP.Path), "/") || strings.TrimSpace(cfg.MCP.Path) == "/" {
+	mcpPath := strings.TrimSpace(cfg.MCP.Path)
+	if mcpPath == "" || !strings.HasPrefix(mcpPath, "/") || mcpPath == "/" {
 		return fmt.Errorf("KODEX_PLATFORM_MCP_SERVER_MCP_PATH must be an absolute non-root path")
+	}
+	if conflictsWithServicePath(mcpPath) {
+		return fmt.Errorf("KODEX_PLATFORM_MCP_SERVER_MCP_PATH conflicts with service HTTP endpoints")
 	}
 	if strings.TrimSpace(cfg.MCP.RegistryVersion) == "" {
 		return fmt.Errorf("KODEX_PLATFORM_MCP_SERVER_MCP_REGISTRY_VERSION is required")
@@ -119,6 +123,13 @@ func (cfg Config) MCPTransportConfig(routes ownerclients.Catalog) mcptransport.C
 		AuthScope:       strings.TrimSpace(cfg.MCP.AuthScope),
 		AuthTokenTTL:    cfg.MCP.AuthTokenTTL,
 	}
+}
+
+func conflictsWithServicePath(path string) bool {
+	return path == "/health" ||
+		strings.HasPrefix(path, "/health/") ||
+		path == "/metrics" ||
+		strings.HasPrefix(path, "/metrics/")
 }
 
 func (cfg OwnerServiceConfig) route(service string, defaultAddr string) ownerclients.RouteConfig {

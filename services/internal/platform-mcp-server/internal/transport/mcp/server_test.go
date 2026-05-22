@@ -3,6 +3,8 @@ package mcptransport
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -183,6 +185,42 @@ func TestDiagnosticsStatusDoesNotExposeSecrets(t *testing.T) {
 	}
 }
 
+func TestHTTPHandlerRequiresBearerToken(t *testing.T) {
+	t.Parallel()
+
+	server := newTestServerWithAuth(t)
+
+	for _, tt := range []struct {
+		name   string
+		header string
+	}{
+		{name: "missing token"},
+		{name: "wrong token", header: "Bearer wrong-token"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{}`))
+			if tt.header != "" {
+				req.Header.Set("Authorization", tt.header)
+			}
+			rr := httptest.NewRecorder()
+			server.HTTPHandler().ServeHTTP(rr, req)
+			if rr.Code != http.StatusUnauthorized {
+				t.Fatalf("status = %d, want %d", rr.Code, http.StatusUnauthorized)
+			}
+		})
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{}`))
+	req.Header.Set("Authorization", "Bearer test-token")
+	rr := httptest.NewRecorder()
+	server.HTTPHandler().ServeHTTP(rr, req)
+	if rr.Code == http.StatusUnauthorized || rr.Code == http.StatusForbidden {
+		t.Fatalf("status = %d, want auth middleware to pass request to MCP handler", rr.Code)
+	}
+}
+
 type toolSnapshot struct {
 	Name         string `json:"name"`
 	Description  string `json:"description"`
@@ -211,6 +249,36 @@ func newTestServer(t *testing.T) *Server {
 		SessionTimeout:  time.Minute,
 		OwnerRoutes:     routes,
 		AuthRequired:    false,
+	}, nil)
+	if err != nil {
+		t.Fatalf("NewServer(): %v", err)
+	}
+	return server
+}
+
+func newTestServerWithAuth(t *testing.T) *Server {
+	t.Helper()
+
+	routes, err := ownerclients.NewCatalog([]ownerclients.RouteConfig{{
+		Service:  ownerclients.ServiceProjectCatalog,
+		GRPCAddr: "project-catalog:9090",
+		Timeout:  3 * time.Second,
+		Enabled:  true,
+	}})
+	if err != nil {
+		t.Fatalf("NewCatalog(): %v", err)
+	}
+	server, err := NewServer(Config{
+		ServiceName:     "platform-mcp-server",
+		RegistryVersion: "mcp-2",
+		ToolsPageSize:   100,
+		JSONResponse:    true,
+		SessionTimeout:  time.Minute,
+		OwnerRoutes:     routes,
+		AuthRequired:    true,
+		AuthToken:       "test-token",
+		AuthScope:       "kodex.mcp",
+		AuthTokenTTL:    24 * time.Hour,
 	}, nil)
 	if err != nil {
 		t.Fatalf("NewServer(): %v", err)

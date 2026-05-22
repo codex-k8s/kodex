@@ -27,6 +27,18 @@ func TestConfigValidateRejectsRootMCPPath(t *testing.T) {
 	}
 }
 
+func TestConfigValidateRejectsServiceHTTPPaths(t *testing.T) {
+	t.Parallel()
+
+	for _, path := range []string{"/health", "/health/livez", "/health/readyz", "/health/custom", "/metrics", "/metrics/custom"} {
+		cfg := validConfig()
+		cfg.MCP.Path = path
+		if err := cfg.Validate(); err == nil {
+			t.Fatalf("Validate() error is nil for %s, want service path conflict", path)
+		}
+	}
+}
+
 func TestOwnerRouteCatalogUsesDefaultOwnerTargets(t *testing.T) {
 	t.Parallel()
 
