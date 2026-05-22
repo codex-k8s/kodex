@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-12
 updated_at: 2026-05-22
-related_issues: [733, 749, 759]
+related_issues: [733, 749, 759, 322]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -36,7 +36,7 @@ approvals:
 - `package_installation_ref`;
 - `guidance_package_version_ref`;
 - `interaction_thread_ref`;
-- `human_gate_ref`.
+- `governance_gate_ref`.
 
 Эти ссылки не являются SQL-связями с БД других сервисов. Источник истины остаётся у сервиса-владельца.
 
@@ -233,9 +233,9 @@ approvals:
 | `session_id` | uuid | нет | Сессия. |
 | `run_id` | uuid | да | Запуск, который дал артефакт. |
 | `stage_id` | uuid | да | Этап. |
-| `check_kind` | enum | нет | `artifact`, `watermark`, `policy`, `role_result`, `human_gate`, `follow_up`. |
+| `check_kind` | enum | нет | `artifact`, `watermark`, `policy`, `role_result`, `governance_gate`, `follow_up`. |
 | `status` | enum | нет | `pending`, `passed`, `failed`, `waiting`, `skipped`. |
-| `target_ref` | text | да | Provider/runtime/package/interaction ref. |
+| `target_ref` | text | да | Provider/runtime/package/governance/interaction ref. |
 | `details` | jsonb | нет | Безопасные детали проверки. |
 | `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
 

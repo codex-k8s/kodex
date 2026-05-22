@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-04-26
 updated_at: 2026-05-22
-related_issues: [599, 600, 601, 602, 711, 725, 729, 737, 761]
+related_issues: [599, 600, 601, 602, 711, 725, 729, 737, 761, 322]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -108,7 +108,7 @@ Webhook является быстрым входом, но не единстве
 
 Создание репозитория у провайдера остаётся provider-native операцией. Для GitHub платформа использует `auto_init=true`, чтобы провайдер создал начальный default branch и безопасный начальный commit, а `provider-hub` вернул `base_branch` для последующего bootstrap PR. `provider-hub` не генерирует `services.yaml`, не выбирает шаблон, не выполняет adoption scan и не становится владельцем project policy.
 
-Risk-based approval policy не живёт в `provider-hub`. Она зависит от роли, проекта, типа операции, target, стадии и изменяемых полей. Вызывающий контур передаёт в команду безопасный `operation_policy_context`; если policy требует подтверждение, он передаёт отдельную ссылку `approval_gate_ref` на уже принятое approval/gate решение. `provider-hub` проверяет наличие этой ссылки, фиксирует её в `ProviderOperation` и не становится владельцем approval-сервиса.
+Risk-based approval policy не живёт в `provider-hub`. Она зависит от роли, проекта, типа операции, target, стадии и изменяемых полей и владеется `governance-manager`. Вызывающий контур передаёт в команду безопасный `operation_policy_context`; если policy требует подтверждение, он передаёт отдельную ссылку `approval_gate_ref` на уже принятое approval/gate решение. `provider-hub` проверяет наличие этой ссылки, фиксирует её в `ProviderOperation` и не становится владельцем risk/gate decision.
 
 Команды записи не принимают свободный JSON patch. Изменяемые поля перечислены в типизированном запросе и отражены в `changed_fields` контекста политики. Inline comments для review-сигнала передаются через типизированный контракт `ReviewInlineComment`, а не через строковый JSON.
 

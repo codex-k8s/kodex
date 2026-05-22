@@ -22,7 +22,8 @@
 - роли агентов, процессы, этапы, шаблоны промптов и agent `Run` — зона `agent-manager`;
 - checkout рабочего контура, slot, `job`, build и deploy — зона `runtime-manager`;
 - серверы, Kubernetes-кластеры и доступность инфраструктуры — зона `fleet-manager`;
-- Human gate, уведомления и внешняя обратная связь — зона `interaction-hub`;
+- Risk classification, Human gate, policy-based approvals и release decision — зона `governance-manager`;
+- уведомления, внешняя обратная связь, delivery и callbacks — зона `interaction-hub`;
 - вычисление прав доступа и внешние аккаунты как субъекты политики — зона `access-manager`.
 
 ## Документы

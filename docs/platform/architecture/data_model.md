@@ -5,8 +5,8 @@ title: kodex — сквозная модель данных
 status: active
 owner_role: SA
 created_at: 2026-04-26
-updated_at: 2026-05-11
-related_issues: [599, 600, 601, 602, 655, 711]
+updated_at: 2026-05-22
+related_issues: [599, 600, 601, 602, 655, 711, 322]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -47,7 +47,8 @@ PostgreSQL хранит платформенное состояние, но не
 | Агентная работа | `agent-manager` | Процесс, этап, профиль роли, версия шаблона промпта, агентный запуск, агентная сессия, правило автоматизации, результат приёмки, состояние ожидания. |
 | Серверы и кластеры | `fleet-manager` | Сервер, кластер, здоровье кластера, связность, привязка размещения. |
 | Среда исполнения | `runtime-manager` | Слот, подготовка workspace, задание, шаг задания, ссылка на технический артефакт среды, политика очистки, prewarm pool, короткий хвост лога. |
-| Взаимодействия | `interaction-hub` | Диалоговая ветка, сообщение, запрос согласования, уведомление, подписка, попытка доставки, обратный вызов канала. |
+| Риски и релизы | `governance-manager` | Risk profile, risk rule, risk assessment, risk factor, review signal, gate policy, gate request, gate decision, release decision package, release decision, release safety state, blocking signal. |
+| Взаимодействия | `interaction-hub` | Диалоговая ветка, сообщение, запрос доставки согласования, уведомление, подписка, попытка доставки, обратный вызов канала. |
 | Операционные проекции | `operations-hub` | Элемент ленты событий, элемент операторской очереди, агрегированный статус, представление блокировки, представление инцидента. |
 | Биллинг | `billing-hub` | Биллинговый аккаунт, запись затрат, правило распределения, черновик счёта, распределение выручки пакета. |
 
@@ -87,7 +88,7 @@ PostgreSQL хранит платформенное состояние, но не
 | `RepositoryBinding` | Привязка репозитория к проекту. | Один проект может иметь несколько репозиториев. |
 | `DocumentationSource` | Источник проектной или сервисной документации. | Доступ агента может быть только на чтение или с правом изменения. |
 | `ServiceDescriptor` | Проверенная часть `services.yaml`. | Не должен тащить устаревшие сервисы из архива. |
-| `ReleasePolicy` | Правила веток, контрольных точек, выкладки и postdeploy. | Ветки и теги остаются нативными объектами провайдера. |
+| `ReleasePolicy` | Правила веток, выкладки, отката и ссылки на risk profile. | Ветки и теги остаются нативными объектами провайдера; gate decisions и release decisions остаются в `governance-manager`. |
 | `PlacementPolicy` | Ограничения инфраструктурного размещения. | Используется `fleet-manager` и `runtime-manager`. |
 
 ### `provider-hub`
@@ -112,6 +113,23 @@ PostgreSQL хранит платформенное состояние, но не
 | `Run` | Агентный запуск. | Не смешивается с платформенным заданием. |
 | `AgentSession` | Продолжаемая сессия агента. | Может быть возобновлена с замечаниями. |
 | `AcceptanceResult` | Результат машинной приёмки. | Должен ссылаться на проверенные артефакты. |
+
+### `governance-manager`
+
+| Агрегат | Назначение | Важные инварианты |
+|---|---|---|
+| `RiskProfile` | Scope набора risk rules и gate policy. | Не заменяет проектную политику; scope и release refs приходят из `project-catalog`. |
+| `RiskRule` | Версионируемое правило классификации риска. | Должно объяснять min risk class и сработавший matcher. |
+| `RiskAssessment` | Оценка риска перехода, `PR/MR`, release candidate, runtime job, policy change или документа. | Effective risk class не может быть ниже initial без явного human decision. |
+| `RiskFactor` | Фактор, повысивший или объяснивший риск. | Полный diff, секреты и сырые payload не хранятся. |
+| `ReviewSignal` | Сигнал от reviewer, QA, lexical gatekeeper, risk gatekeeper, SRE, security или custom role. | Signal входит в evidence package, но не заменяет обязательный Human gate. |
+| `GatePolicy` | Правила, когда нужен Human gate или role-driven gate. | Может усиливать проектную policy, но не владеет проектной policy. |
+| `GateRequest` | Конкретный запрос решения с evidence package. | Delivery и callbacks идут через `interaction-hub`, decision state хранится здесь. |
+| `GateDecision` | Итог Human gate или policy gate. | Должен быть связан с target transition/release и actor/ref решения. |
+| `ReleaseDecisionPackage` | Снимок evidence для релизного go/no-go. | Содержит refs на project/provider/runtime/agent, а не копии чужой истины. |
+| `ReleaseDecision` | Go/no-go/hold/rollback/follow-up решение. | Успешный deploy `job` сам по себе не завершает release decision loop. |
+| `ReleaseSafetyState` | Состояние release safety-loop после deploy и postdeploy. | `stable`, `hold`, `rollback` и `follow_up_required` основаны на signals и decisions. |
+| `BlockingSignal` | Сигнал, блокирующий переход или релиз. | Источник сигнала трассируется и закрывается явным reason. |
 
 ### `runtime-manager`
 

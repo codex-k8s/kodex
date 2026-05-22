@@ -10,6 +10,7 @@ related_issues:
   - 698
   - 747
   - 753
+  - 322
 related_prs: []
 approvals:
   required:
@@ -26,7 +27,7 @@ approvals:
 
 Платформа должна заложить `Codex hooks` до MVP как управляемый канал связи slot-агента с платформой: жизненный цикл, запросы разрешений, сигналы о работе с провайдером, финальная контрольная точка хода и realtime-лента действий агента для UI. Ловим все поддерживаемые hook-события, но сохраняем в БД только доменное состояние и короткие безопасные события с retention.
 
-Выбранный путь: до MVP реализовать вариант 1 — минимальный слой hooks через отдельный `codex-hook-ingress` и `agent-manager`, но со сбором всех hook-событий для realtime UI. `platform-mcp-server` остаётся только MCP-поверхностью инструментов. `Codex skills` не входят в MVP как полноценная платформа управления. После MVP целевая модель skills — отдельный слой управляемых возможностей, а не расширение package-hub.
+Выбранный путь: до MVP реализовать вариант 1 — минимальный слой hooks через отдельный `codex-hook-ingress`, `agent-manager` для жизненного цикла и `governance-manager` для risk/gate decisions, но со сбором всех hook-событий для realtime UI. `platform-mcp-server` остаётся только MCP-поверхностью инструментов. `Codex skills` не входят в MVP как полноценная платформа управления. После MVP целевая модель skills — отдельный слой управляемых возможностей, а не расширение package-hub.
 
 ## Статус решения
 
@@ -43,7 +44,7 @@ approvals:
 
 - Не потерять жизненный цикл slot-агента между локальной средой исполнения Codex и платформой.
 - Дать UI оперативную realtime-картину работы агента: какой tool агент собирается вызвать, какой tool отработал, каким статусом завершился и какой безопасный итог можно показать.
-- Дать платформе быстрый путь для `PermissionRequest`, policy gates, обратной связи владельца и жизненного цикла run/session.
+- Дать платформе быстрый путь для `PermissionRequest`, policy gates через `governance-manager`, обратной связи владельца через `interaction-hub` и жизненного цикла run/session через `agent-manager`.
 - Не засорять БД сырыми логами, стенограммой сессии, входом/выходом инструмента и секретами, несмотря на сбор всех hook-событий.
 - Не привязать provider-hub, package-hub и runtime-manager к частной реализации Codex так, чтобы потом нельзя было поддержать другую агентную среду исполнения.
 - Заранее заложить управление skills через роли, flow/stage, рабочее пространство, права доступа и UI.
@@ -84,10 +85,10 @@ Hooks не должны становиться источником истины
 |---|---|---|---|---|
 | `SessionStart` | Старт или resume Codex-сессии внутри slot. | `agent-manager`, `runtime-manager` | Управление, аудит | В БД: связь session/run/slot, источник старта, время, версия модели, workspace ref. Не хранить стенограмму сессии. |
 | `UserPromptSubmit` | Новый prompt, который может быть проверен на секреты, политику и контекст задачи. | `agent-manager`, `interaction-hub` | Управление, аудит | В БД: факт prompt submit, hash, короткая сводка, решение политики. Полный prompt хранить только в контуре диалога, если это пользовательская переписка. |
-| `PreToolUse` | Предварительная проверка инструмента: shell, `apply_patch`, MCP tool; realtime-показ “агент хочет вызвать tool”. | `codex-hook-ingress`, `agent-manager`, при необходимости `runtime-manager` | Управление, диагностика, realtime UI | В БД: только deny/no_decision/risk decision и безопасная сводка. Массовые allow-события держать в короткой операционной ленте и метриках. |
-| `PermissionRequest` | Запрос разрешения Codex на действие с повышенным риском. | `codex-hook-ingress`, `agent-manager`, `interaction-hub` | Управление, аудит | В БД: request id, decision id, субъект, действие, риск, gate ref, sanitized reason, решение и время. |
+| `PreToolUse` | Предварительная проверка инструмента: shell, `apply_patch`, MCP tool; realtime-показ “агент хочет вызвать tool”. | `codex-hook-ingress`, `agent-manager`, `governance-manager`, при необходимости `runtime-manager` | Управление, диагностика, realtime UI | В БД: только deny/no_decision/risk decision ref и безопасная сводка. Массовые allow-события держать в короткой операционной ленте и метриках. |
+| `PermissionRequest` | Запрос разрешения Codex на действие с повышенным риском. | `codex-hook-ingress`, `governance-manager`, `agent-manager`, `interaction-hub` | Управление, аудит | В БД governance: request id, decision id, субъект, действие, риск, gate ref, sanitized reason, решение и время; `agent-manager` хранит только ожидание flow и refs. |
 | `PostToolUse` | Результат инструмента после выполнения; realtime-показ “tool отработал”, provider signals и диагностика. | `provider-hub`, `runtime-manager`, `agent-manager` | Диагностика, аудит для рискованных действий, realtime UI | В БД: только важные итоги, exit status, bounded error, provider artifact signal. Полный stdout/stderr не хранить. |
-| `Stop` | Завершение хода агента; возможность зафиксировать итог и pending actions. | `agent-manager`, `runtime-manager`, `provider-hub`, `interaction-hub` | Управление, аудит | В БД: контрольная точка run, итоговый status, pending gates, provider signals, короткая сводка. |
+| `Stop` | Завершение хода агента; возможность зафиксировать итог и pending actions. | `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub` | Управление, аудит | В БД: контрольная точка run, итоговый status, pending gate refs, provider signals, короткая сводка. |
 
 Контрольные точки сжатия контекста и session snapshot нужны платформе, но не входят в текущий набор Codex hooks. Их следует проектировать как отдельные внутренние события `agent-manager`/`runtime-manager` или как результат управляемой команды сессии, а не как `PreCompact`/`PostCompact` hook events.
 
@@ -95,15 +96,16 @@ Hooks не должны становиться источником истины
 
 | Получатель | Что получает | Что не получает |
 |---|---|---|
-| `agent-manager` | Жизненный цикл run/session, policy gate refs, request/decision, внутренние контрольные точки сессии, stop summary. | Сырые tool outputs, секреты, полные стенограммы сессий. |
+| `agent-manager` | Жизненный цикл run/session, ожидания flow, governance decision refs, внутренние контрольные точки сессии, stop summary. | Сырые tool outputs, секреты, полные стенограммы сессий, gate decision state. |
 | `runtime-manager` | Slot/session binding, диагностика рабочего пространства, snapshot object refs, короткий хвост ошибок среды исполнения. | Provider payload и решения бизнес-политик. |
 | `codex-hook-ingress` | Нормализованные hook events для проверки источника, минимальной policy pre-check и маршрутизации. | MCP tools, `tools/list`, `tools/call`, долгое хранение состояния и доменную бизнес-логику. |
-| `interaction-hub` | Permission request, запрос обратной связи владельца, human gate prompt, notification intent. | Технические tool logs и provider payload. |
+| `governance-manager` | Risk assessment, gate request/decision, policy-based approvals, release decision refs и audit-critical decision state. | Доставку уведомлений, callback transport, технические tool logs и provider payload. |
+| `interaction-hub` | Доставка Permission request, запрос обратной связи владельца, human gate prompt, notification intent и callback refs. | Технические tool logs, provider payload и decision state. |
 | `provider-hub` | Сигналы об изменённых provider artifacts, rate-limit hints, reconciliation hot cursor. | Сырые токены, значения секретов, полный stdout `gh`. |
 
 ### Политика хранения
 
-- В Postgres хранить только состояние владельца: request/decision, контрольную точку жизненного цикла, метаданные snapshot, operation refs, provider signal, bounded error.
+- В Postgres хранить только состояние владельца: governance request/decision, контрольную точку жизненного цикла, метаданные snapshot, operation refs, provider signal, bounded error.
 - Полную стенограмму сессии, session JSON/JSONL, большие tool outputs и raw logs хранить вне Postgres с retention и ссылкой из сервиса-владельца.
 - Высокочастотные allow-события `PreToolUse` и успешные `PostToolUse` без доменного эффекта не писать в БД построчно, но передавать в realtime UI и короткую операционную историю.
 - Для аудита хранить who/what/when/decision/correlation, но не raw input/output.
@@ -123,9 +125,9 @@ Hooks не должны становиться источником истины
 
 1. Hook emitter отправляет запрос в `codex-hook-ingress`.
 2. `codex-hook-ingress` определяет actor, run, role, stage, project, repository, tool category.
-3. `agent-manager` создаёт или находит pending gate.
-4. `interaction-hub` доставляет запрос обратной связи владельца в UI или внешний адаптер.
-5. После решения `agent-manager` фиксирует decision и возвращает allow/deny или `no_decision` в hook handler.
+3. `governance-manager` создаёт или находит pending gate, а `agent-manager` фиксирует ожидание flow, если действие связано с агентным переходом.
+4. `interaction-hub` доставляет запрос обратной связи владельца в UI или внешний адаптер и возвращает callback/result в governance-контур.
+5. После решения `governance-manager` фиксирует decision и отдаёт decision ref; `agent-manager` или hook handler получает allow/deny или `no_decision` через согласованный callback.
 
 `no_decision` означает, что hook handler не возвращает hook-specific decision и Codex может продолжить штатный approval flow только по policy владельца. `PreToolUse` не должен маппить ожидание владельца в `permissionDecision: "ask"`, потому что это не поддерживаемый output Codex hook. Если решение не пришло за timeout, действие должно завершиться безопасной ошибкой или перейти в ожидание, но не продолжаться молча.
 
@@ -197,7 +199,7 @@ UI должен показывать:
 
 Статус: выбран для MVP с поправкой, что канал обязан ловить все поддерживаемые hook-события для realtime UI.
 
-Суть: до MVP реализовать нормализованный канал hook-событий из slot в `codex-hook-ingress` и `agent-manager`. Skills пока не становятся доменной сущностью; их можно использовать вручную в рабочем пространстве или в системной настройке среды исполнения Codex.
+Суть: до MVP реализовать нормализованный канал hook-событий из slot в `codex-hook-ingress`, `agent-manager` для жизненного цикла и `governance-manager` для risk/gate decisions. Skills пока не становятся доменной сущностью; их можно использовать вручную в рабочем пространстве или в системной настройке среды исполнения Codex.
 
 Плюсы:
 
@@ -205,7 +207,7 @@ UI должен показывать:
 - Быстро закрывает связь slot-агента с платформой.
 - Даёт UI realtime-ленту действий агента без ожидания полноценного слоя skills.
 - Не создаёт новый сервис и не расширяет package-hub раньше времени.
-- Хорошо ложится на текущую модель `agent-manager` + `runtime-manager` + `codex-hook-ingress`; `platform-mcp-server` остаётся отдельной MCP-поверхностью инструментов.
+- Хорошо ложится на текущую модель `agent-manager` + `runtime-manager` + `governance-manager` + `codex-hook-ingress`; `platform-mcp-server` остаётся отдельной MCP-поверхностью инструментов.
 
 Минусы:
 
@@ -225,16 +227,17 @@ MVP-объём:
 - Realtime-лента безопасных событий для UI.
 - Короткая операционная история с retention для восстановления экрана после переподключения.
 - Очистка чувствительных данных.
-- `PermissionRequest` через `agent-manager` и `interaction-hub`.
+- `PermissionRequest` через `governance-manager`, ожидание flow в `agent-manager` и delivery/callback через `interaction-hub`.
 - `PostToolUse` provider artifact signal.
 - `Stop` run checkpoint.
 
 Влияние на домены:
 
-- `agent-manager`: жизненный цикл, gates, контрольные точки.
+- `agent-manager`: жизненный цикл, ожидания flow, governance decision refs и контрольные точки.
+- `governance-manager`: risk assessment, gates, policy-based approvals и decision state.
 - `runtime-manager`: slot/session diagnostics и object refs.
 - `provider-hub`: hot cursor по provider artifacts.
-- `interaction-hub`: обратная связь владельца и notifications.
+- `interaction-hub`: обратная связь владельца, delivery/callback и notifications.
 - `package-hub`: без изменений до следующего этапа.
 
 ### Вариант 2. Пакетная модель skills, hooks как часть политики agent-manager
@@ -324,7 +327,7 @@ MVP-объём:
 
 - проверяет actor/source/run/session/slot binding;
 - принимает только нормализованный и очищенный envelope;
-- маршрутизирует событие в `agent-manager`, `runtime-manager`, `provider-hub` или `interaction-hub`;
+- маршрутизирует событие в `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager` или `interaction-hub`;
 - не хранит raw tool payload, значения секретов, большие stdout/stderr, kubeconfig, provider payload и полный session dump;
 - пишет аудит только для permission/gate/risky decision сценариев, а массовые безопасные события отдаёт в realtime/короткую операционную историю с retention.
 

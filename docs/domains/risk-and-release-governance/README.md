@@ -2,13 +2,54 @@
 
 ## Назначение
 
-Домен описывает классификацию риска, матрицу контрольных точек ревью, пакет данных для релизного решения, правила Human gate, правила утверждения документов, переходов повышенного риска и релизов, безопасную автоматизацию без участия человека, релизные ветки, релизные линии и политики выкладки.
+Домен описывает `governance-manager`: классификацию риска, risk gates, role-driven review gates, policy-based approvals, пакет данных для релизного решения, правила Human gate, правила утверждения документов, переходов повышенного риска и релизов, безопасную автоматизацию без участия человека, релизные ветки, релизные линии и политики выкладки.
+
+## Что входит
+
+- risk profiles, risk rules и gate policy;
+- автоматическая и ручная классификация риска;
+- история факторов риска и объяснение effective risk class;
+- review signals от reviewer, QA, lexical gatekeeper, risk gatekeeper, SRE, security и других ролей;
+- gate requests и gate decisions;
+- release decision package, release decision и release safety-loop state;
+- события `governance.*`;
+- связь risk/release decisions с `project-catalog`, `agent-manager`, `provider-hub`, `runtime-manager`, `interaction-hub` и будущими gateway/UI.
+
+## Что не входит
+
+- Проекты, репозитории, `services.yaml`, branch rules, release policy и release line как проектная истина — зона `project-catalog`.
+- Flow, stage, role, prompt, agent session, `Run` и acceptance machine — зона `agent-manager`.
+- Provider-native `Issue`, `PR/MR`, комментарии, reviews, webhook и reconciliation — зона `provider-hub`.
+- Slot, workspace, build/deploy/cleanup `job` и runtime state — зона `runtime-manager`.
+- Доставка уведомлений, внешние каналы, callbacks и retry доставки — зона `interaction-hub`.
+- UI/gateway и операторские экраны.
+
+## Документы
+
+| Документ | Путь |
+|---|---|
+| Требования | `product/requirements.md` |
+| Дизайн | `architecture/design.md` |
+| Модель данных | `architecture/data_model.md` |
+| API-обзор | `architecture/api_contract.md` |
+| План поставки | `delivery/risk_governance_delivery.md` |
 
 ## Ключевые решения
 
 - Домен не является опциональным и закладывается с самого начала.
+- Сервис-владелец домена — отдельный `governance-manager`.
+- `project-catalog` остаётся владельцем проектной политики, branch rules, release policy и release line; governance использует их через refs и авторитетные чтения.
+- `interaction-hub` доставляет запросы Human gate, уведомления и callbacks, но не принимает risk/release decision.
 - Владелец утверждает документы, переходы повышенного риска и релизы там, где это требуется риском, а не обязательно смотрит код построчно.
 - Автоматизация релизов допустима только в рамках заданных правил риска и контрольных точек.
+
+## Реализация
+
+- Сервис-владелец: `services/internal/governance-manager`.
+- gRPC-контракт: будет создан после согласования документации.
+- AsyncAPI: будет создан после согласования документации.
+- Миграции: будут созданы после согласования модели данных.
+- Статус контрактов и бэклог реализации: `delivery/risk_governance_delivery.md`.
 
 ## Карта Issue
 

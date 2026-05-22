@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-14
 updated_at: 2026-05-22
-related_issues: [747, 753, 760]
+related_issues: [747, 753, 760, 322]
 related_prs: []
 related_adrs: []
 approvals:
@@ -31,7 +31,8 @@ approvals:
 - Зафиксировать границу сервиса до контрактов и кода.
 - Разделить MCP-поверхность и доменное владение.
 - Зафиксировать, что входной контур Codex hooks вынесен в отдельный `codex-hook-ingress`.
-- Подготовить будущие инструменты `agent-manager` без переноса состояния run/session/gate в MCP.
+- Подготовить будущие инструменты `agent-manager` без переноса состояния run/session и ожидания flow в MCP.
+- Подготовить маршруты `governance-manager` без переноса risk/gate/release decisions в MCP или `agent-manager`.
 - Подготовить provider tools без обхода `provider-hub` и его provider-native pipeline.
 
 ## Не-цели
@@ -46,7 +47,7 @@ approvals:
 
 | Владеет `platform-mcp-server` | Не владеет |
 |---|---|
-| MCP-поверхность инструментов, нормализация MCP-вызова, проверка источника, минимальная tool-policy, маршрутизация, очистка данных, ограниченная диагностика, idempotency/correlation на границе. | Codex hook events, `Run`, session, flow, stage, role, prompt, gates, slot, job, workspace, provider projections, provider write truth, project policy, package installation, dialogue, notification, billing, UI. |
+| MCP-поверхность инструментов, нормализация MCP-вызова, проверка источника, минимальная tool-policy, маршрутизация, очистка данных, ограниченная диагностика, idempotency/correlation на границе. | Codex hook events, `Run`, session, flow, stage, role, prompt, risk/gate/release decisions, slot, job, workspace, provider projections, provider write truth, project policy, package installation, dialogue, notification, billing, UI. |
 
 Главное правило: `platform-mcp-server` отвечает на вопрос «можно ли этому источнику вызвать этот инструмент в этом контексте и как безопасно передать вызов владельцу». Он не отвечает на вопрос «как меняется бизнес-состояние домена».
 
@@ -54,13 +55,14 @@ approvals:
 
 | Сервис | Ответственность | Роль MCP |
 |---|---|---|
-| `agent-manager` | `Run`, session, flow, role, prompt, acceptance, gates, agent lifecycle. | MCP вызывает только типизированные agent-инструменты и не хранит состояние run/gate. |
+| `agent-manager` | `Run`, session, flow, role, prompt, acceptance, agent lifecycle и состояние ожидания flow. | MCP вызывает только типизированные agent-инструменты и не хранит состояние run или ожидания. |
+| `governance-manager` | Risk assessment, review signals, gate request/decision, release decision package, release decision и release safety-loop. | MCP вызывает governance-инструменты и не хранит risk/gate/release decision state. |
 | `runtime-manager` | Slot, workspace, job, cleanup, prewarm и runtime refs. | MCP маршрутизирует чтения и разрешённые команды runtime, не выбирает slot и не меняет job state сам. |
 | `fleet-manager` | Серверы, Kubernetes-кластеры, health и placement decision. | MCP маршрутизирует административные чтения и будущие fleet tools без собственной placement-логики. |
 | `provider-hub` | Provider projections, webhook, reconciliation, лимиты, provider write pipeline. | MCP вызывает provider tools только через `provider-hub`, не через GitHub/GitLab напрямую. |
 | `project-catalog` | Проекты, репозитории, `services.yaml`, workspace policy, release/placement policy. | MCP читает проектную политику только через `project-catalog`. |
 | `package-hub` | Пакеты, manifest, установки, catalog, store connections. | MCP читает package/install/manifest через `package-hub`. |
-| `interaction-hub` | Диалоги, owner feedback, approval delivery, notifications, callbacks. | MCP создаёт запросы обратной связи через `interaction-hub`, когда контракт готов. |
+| `interaction-hub` | Диалоги, owner feedback, approval delivery, notifications, callbacks и внешние каналы. | MCP создаёт запросы обратной связи и доставки через `interaction-hub`, когда контракт готов; решения остаются у `governance-manager`. |
 
 ## Компоненты
 
@@ -97,24 +99,30 @@ sequenceDiagram
 
 MCP не выбирает токен провайдера, не хранит секрет и не сохраняет исходные данные провайдера.
 
-### Agent-manager инструмент
+### Agent-manager и governance инструменты
 
 ```mermaid
 sequenceDiagram
   participant A as manager-agent
   participant MCP as platform-mcp-server
   participant AM as agent-manager
+  participant GOV as governance-manager
   participant IH as interaction-hub
-  A->>MCP: agent.gate.submit / agent.run.start
+  A->>MCP: agent.run.start / governance.gate.submit_decision
   MCP->>MCP: source binding + tool policy
-  MCP->>AM: typed agent command
-  alt требуется доставка решения человеку
-    AM->>IH: request feedback or approval
+  alt agent command
+    MCP->>AM: typed agent command
+    AM-->>MCP: agent command result
+  else governance command
+    MCP->>GOV: typed governance command
+    alt требуется доставка решения человеку
+      GOV->>IH: request delivery or callback binding
+    end
+    GOV-->>MCP: governance command result
   end
-  AM-->>MCP: agent command result
 ```
 
-`agent-manager` остаётся владельцем `Run`, session и gate. MCP только проверяет инструментальную границу.
+`agent-manager` остаётся владельцем `Run`, session и состояния ожидания flow. `governance-manager` владеет gate request/decision и release decision. MCP только проверяет инструментальную границу и маршрутизирует вызов владельцу.
 
 ### Ограниченная диагностика
 

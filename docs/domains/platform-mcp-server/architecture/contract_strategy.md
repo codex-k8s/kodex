@@ -5,8 +5,8 @@ title: kodex — стратегия контрактов MCP и Codex hooks
 status: active
 owner_role: SA
 created_at: 2026-05-15
-updated_at: 2026-05-15
-related_issues: [753, 698]
+updated_at: 2026-05-22
+related_issues: [753, 698, 322]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -43,7 +43,7 @@ YAML-файл каталога инструментов не является к
 | Компонент | Владеет | Не владеет |
 |---|---|---|
 | `platform-mcp-server` | MCP transport, регистрация MCP tools, `tools/list`, `tools/call`, проверка источника MCP-клиента, маршрутизация вызова к сервису-владельцу. | Codex hook events, сырые hook payload, агентные запуски, provider write pipeline, бизнес-состояние сервисов-владельцев. |
-| `codex-hook-ingress` | Приём нормализованных Codex hook events от hook emitter или локального sidecar, проверка источника slot/run/session, очистка данных, маршрутизация события владельцу. | MCP tools, `tools/list`, `tools/call`, бизнес-состояние `agent-manager`, `runtime-manager`, `provider-hub` или `interaction-hub`. |
+| `codex-hook-ingress` | Приём нормализованных Codex hook events от hook emitter или локального sidecar, проверка источника slot/run/session, очистка данных, маршрутизация события владельцу. | MCP tools, `tools/list`, `tools/call`, бизнес-состояние `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager` или `interaction-hub`. |
 | Hook emitter или sidecar | Локальный command hook для Codex, нормализация входа Codex, отправка события в `codex-hook-ingress`, локальный буфер и повтор при временной недоступности платформы. | Доменная политика, хранение секретов, принятие бизнес-решений. |
 
 ## MCP-контракты
@@ -67,7 +67,7 @@ MCP-инструмент не должен получать произвольн
 2. Hook command получает исходный Codex JSON на `stdin`.
 3. Hook emitter или sidecar валидирует event name, очищает вход, добавляет run/session/slot/project context и отправляет нормализованное событие в `codex-hook-ingress`.
 4. `codex-hook-ingress` проверяет источник, ограничения размера, redaction и route policy.
-5. Событие маршрутизируется владельцу: `agent-manager`, `runtime-manager`, `provider-hub` или `interaction-hub`.
+5. Событие маршрутизируется владельцу: `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager` или `interaction-hub`.
 
 Поддерживаемый MVP-набор Codex hook events:
 
