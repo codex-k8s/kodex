@@ -10,4 +10,8 @@ const (
 	operationCreatePromptTemplate        = "domain.Service.CreatePromptTemplate"
 	operationCreatePromptTemplateVersion = "domain.Service.CreatePromptTemplateVersion"
 	operationActivatePromptVersion       = "domain.Service.ActivatePromptTemplateVersion"
+	operationStartAgentSession           = "domain.Service.StartAgentSession"
+	operationStartAgentRun               = "domain.Service.StartAgentRun"
+	operationRecordRunState              = "domain.Service.RecordRunState"
+	operationRecordSessionSnapshot       = "domain.Service.RecordSessionStateSnapshot"
 )

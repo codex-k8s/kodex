@@ -452,6 +452,137 @@ func TestActivateFlowVersionMapsExpectedVersion(t *testing.T) {
 	}
 }
 
+func TestSessionRunHandlersMapRequests(t *testing.T) {
+	t.Parallel()
+
+	sessionID := uuid.MustParse("99999999-1111-2222-3333-444444444444")
+	runID := uuid.MustParse("aaaaaaaa-1111-2222-3333-444444444444")
+	roleID := uuid.MustParse("bbbbbbbb-1111-2222-3333-444444444444")
+	promptVersionID := uuid.MustParse("cccccccc-1111-2222-3333-444444444444")
+	expectedVersion := int64(3)
+	runStatus := agentsv1.AgentRunStatus_AGENT_RUN_STATUS_RUNNING
+	service := &fakeAgentService{
+		startAgentSession: func(_ context.Context, input agentservice.StartAgentSessionInput) (entity.AgentSession, error) {
+			if input.Scope.Type != string(enum.AgentScopeTypeProject) || input.ProviderWorkItemRef != "github:issue:42" || input.CreatedByActorRef != "user:owner" {
+				t.Fatalf("start session input = %+v", input)
+			}
+			return entity.AgentSession{
+				VersionedBase:       entity.VersionedBase{ID: sessionID, Version: 1, CreatedAt: sampleTime(), UpdatedAt: sampleTime()},
+				Scope:               input.Scope,
+				ProviderWorkItemRef: input.ProviderWorkItemRef,
+				Status:              enum.AgentSessionStatusOpen,
+				CreatedByActorRef:   input.CreatedByActorRef,
+			}, nil
+		},
+		startAgentRun: func(_ context.Context, input agentservice.StartAgentRunInput) (entity.AgentRun, error) {
+			if input.SessionID != sessionID || input.RoleProfileID != roleID || input.PromptTemplateVersionID != promptVersionID {
+				t.Fatalf("start run input = %+v", input)
+			}
+			if input.ProviderTarget.WorkItemRef != "github:issue:42" {
+				t.Fatalf("provider target = %+v", input.ProviderTarget)
+			}
+			return entity.AgentRun{
+				VersionedBase:           entity.VersionedBase{ID: runID, Version: 1, CreatedAt: sampleTime(), UpdatedAt: sampleTime()},
+				SessionID:               sessionID,
+				RoleProfileID:           roleID,
+				RoleProfileVersion:      1,
+				RoleProfileDigest:       "sha256:role",
+				PromptTemplateVersionID: promptVersionID,
+				PromptTemplateDigest:    "sha256:prompt",
+				ProviderTarget:          input.ProviderTarget,
+				Status:                  enum.AgentRunStatusRequested,
+			}, nil
+		},
+		recordRunState: func(_ context.Context, input agentservice.RecordRunStateInput) (entity.AgentRun, error) {
+			if input.RunID != runID || input.Meta.ExpectedVersion == nil || *input.Meta.ExpectedVersion != expectedVersion {
+				t.Fatalf("record run input = %+v", input)
+			}
+			if input.RuntimeContext == nil || input.RuntimeContext.SlotRef != "slot-1" {
+				t.Fatalf("runtime context = %+v", input.RuntimeContext)
+			}
+			run := entity.AgentRun{
+				VersionedBase:           entity.VersionedBase{ID: runID, Version: expectedVersion + 1, CreatedAt: sampleTime(), UpdatedAt: sampleTime()},
+				SessionID:               sessionID,
+				RoleProfileID:           roleID,
+				RoleProfileVersion:      1,
+				RoleProfileDigest:       "sha256:role",
+				PromptTemplateVersionID: promptVersionID,
+				PromptTemplateDigest:    "sha256:prompt",
+				RuntimeContext:          *input.RuntimeContext,
+				ProviderTarget:          value.ProviderTargetRef{WorkItemRef: "github:issue:42"},
+				Status:                  enum.AgentRunStatusRunning,
+			}
+			return run, nil
+		},
+		listAgentRuns: func(_ context.Context, input agentservice.AgentRunList) ([]entity.AgentRun, value.PageResult, error) {
+			if input.SessionID != sessionID || input.Status == nil || *input.Status != enum.AgentRunStatusRunning {
+				t.Fatalf("list runs input = %+v", input)
+			}
+			return []entity.AgentRun{{
+				VersionedBase:           entity.VersionedBase{ID: runID, Version: 4, CreatedAt: sampleTime(), UpdatedAt: sampleTime()},
+				SessionID:               sessionID,
+				RoleProfileID:           roleID,
+				RoleProfileVersion:      1,
+				RoleProfileDigest:       "sha256:role",
+				PromptTemplateVersionID: promptVersionID,
+				PromptTemplateDigest:    "sha256:prompt",
+				Status:                  enum.AgentRunStatusRunning,
+			}}, value.PageResult{NextPageToken: "runs-next"}, nil
+		},
+	}
+	server := NewServer(service)
+	session, err := server.StartAgentSession(context.Background(), &agentsv1.StartAgentSessionRequest{
+		Meta:                commandMeta("11111111-2222-3333-4444-555555555555", "", nil),
+		Scope:               scopeRef(agentsv1.AgentScopeType_AGENT_SCOPE_TYPE_PROJECT, "project-1"),
+		ProviderWorkItemRef: ptr("github:issue:42"),
+		CreatedByActorRef:   "user:owner",
+	})
+	if err != nil {
+		t.Fatalf("StartAgentSession() error = %v", err)
+	}
+	if session.GetSession().GetStatus() != agentsv1.AgentSessionStatus_AGENT_SESSION_STATUS_OPEN {
+		t.Fatalf("session = %+v", session.GetSession())
+	}
+	startedRun, err := server.StartAgentRun(context.Background(), &agentsv1.StartAgentRunRequest{
+		Meta:                    commandMeta("11111111-2222-3333-4444-555555555556", "", nil),
+		SessionId:               sessionID.String(),
+		RoleProfileId:           roleID.String(),
+		PromptTemplateVersionId: promptVersionID.String(),
+		ProviderTarget:          &agentsv1.ProviderTargetRef{WorkItemRef: ptr("github:issue:42")},
+	})
+	if err != nil {
+		t.Fatalf("StartAgentRun() error = %v", err)
+	}
+	if startedRun.GetRun().GetStatus() != agentsv1.AgentRunStatus_AGENT_RUN_STATUS_REQUESTED {
+		t.Fatalf("started run = %+v", startedRun.GetRun())
+	}
+	recordedRun, err := server.RecordRunState(context.Background(), &agentsv1.RecordRunStateRequest{
+		Meta:           commandMeta("11111111-2222-3333-4444-555555555557", "", &expectedVersion),
+		RunId:          runID.String(),
+		Status:         agentsv1.AgentRunStatus_AGENT_RUN_STATUS_RUNNING,
+		RuntimeContext: &agentsv1.RuntimeContextRef{SlotRef: ptr("slot-1")},
+		ResultSummary:  ptr("agent started"),
+	})
+	if err != nil {
+		t.Fatalf("RecordRunState() error = %v", err)
+	}
+	if recordedRun.GetRun().GetRuntimeContext().GetSlotRef() != "slot-1" {
+		t.Fatalf("recorded run = %+v", recordedRun.GetRun())
+	}
+	list, err := server.ListAgentRuns(context.Background(), &agentsv1.ListAgentRunsRequest{
+		Meta:      queryMeta(),
+		SessionId: ptr(sessionID.String()),
+		Status:    &runStatus,
+		Page:      &agentsv1.PageRequest{PageSize: 2},
+	})
+	if err != nil {
+		t.Fatalf("ListAgentRuns() error = %v", err)
+	}
+	if len(list.GetRuns()) != 1 || list.GetPage().GetNextPageToken() != "runs-next" {
+		t.Fatalf("list = %+v", list)
+	}
+}
+
 func TestTransportRejectsValidationErrorsBeforeDomainCall(t *testing.T) {
 	t.Parallel()
 
@@ -498,15 +629,6 @@ func TestUnaryErrorInterceptorMapsDomainErrors(t *testing.T) {
 	}
 }
 
-func TestStartAgentSessionRemainsUnimplemented(t *testing.T) {
-	t.Parallel()
-
-	_, err := NewServer(&fakeAgentService{}).StartAgentSession(context.Background(), &agentsv1.StartAgentSessionRequest{})
-	if status.Code(err) != codes.Unimplemented {
-		t.Fatalf("StartAgentSession() code = %s, want %s", status.Code(err), codes.Unimplemented)
-	}
-}
-
 type fakeAgentService struct {
 	createFlow                  func(context.Context, agentservice.CreateFlowInput) (entity.Flow, error)
 	updateFlow                  func(context.Context, agentservice.UpdateFlowInput) (entity.Flow, error)
@@ -525,6 +647,13 @@ type fakeAgentService struct {
 	activatePromptVersion       func(context.Context, agentservice.ActivatePromptTemplateVersionInput) (entity.PromptTemplateVersion, error)
 	getPromptTemplateVersion    func(context.Context, uuid.UUID) (entity.PromptTemplateVersion, error)
 	listPromptTemplateVersions  func(context.Context, agentservice.PromptTemplateVersionList) ([]entity.PromptTemplateVersion, value.PageResult, error)
+	startAgentSession           func(context.Context, agentservice.StartAgentSessionInput) (entity.AgentSession, error)
+	getAgentSession             func(context.Context, uuid.UUID) (entity.AgentSession, error)
+	startAgentRun               func(context.Context, agentservice.StartAgentRunInput) (entity.AgentRun, error)
+	recordRunState              func(context.Context, agentservice.RecordRunStateInput) (entity.AgentRun, error)
+	recordSessionSnapshot       func(context.Context, agentservice.RecordSessionStateSnapshotInput) (agentservice.SessionSnapshotResult, error)
+	listAgentRuns               func(context.Context, agentservice.AgentRunList) ([]entity.AgentRun, value.PageResult, error)
+	getSessionStateSnapshot     func(context.Context, uuid.UUID) (entity.AgentSessionStateSnapshot, error)
 }
 
 func (f *fakeAgentService) CreateFlow(ctx context.Context, input agentservice.CreateFlowInput) (entity.Flow, error) {
@@ -644,6 +773,55 @@ func (f *fakeAgentService) ListPromptTemplateVersions(ctx context.Context, input
 		return nil, value.PageResult{}, errs.ErrPreconditionFailed
 	}
 	return f.listPromptTemplateVersions(ctx, input)
+}
+
+func (f *fakeAgentService) StartAgentSession(ctx context.Context, input agentservice.StartAgentSessionInput) (entity.AgentSession, error) {
+	if f.startAgentSession == nil {
+		return entity.AgentSession{}, errs.ErrPreconditionFailed
+	}
+	return f.startAgentSession(ctx, input)
+}
+
+func (f *fakeAgentService) GetAgentSession(ctx context.Context, id uuid.UUID) (entity.AgentSession, error) {
+	if f.getAgentSession == nil {
+		return entity.AgentSession{}, errs.ErrPreconditionFailed
+	}
+	return f.getAgentSession(ctx, id)
+}
+
+func (f *fakeAgentService) StartAgentRun(ctx context.Context, input agentservice.StartAgentRunInput) (entity.AgentRun, error) {
+	if f.startAgentRun == nil {
+		return entity.AgentRun{}, errs.ErrPreconditionFailed
+	}
+	return f.startAgentRun(ctx, input)
+}
+
+func (f *fakeAgentService) RecordRunState(ctx context.Context, input agentservice.RecordRunStateInput) (entity.AgentRun, error) {
+	if f.recordRunState == nil {
+		return entity.AgentRun{}, errs.ErrPreconditionFailed
+	}
+	return f.recordRunState(ctx, input)
+}
+
+func (f *fakeAgentService) RecordSessionStateSnapshot(ctx context.Context, input agentservice.RecordSessionStateSnapshotInput) (agentservice.SessionSnapshotResult, error) {
+	if f.recordSessionSnapshot == nil {
+		return agentservice.SessionSnapshotResult{}, errs.ErrPreconditionFailed
+	}
+	return f.recordSessionSnapshot(ctx, input)
+}
+
+func (f *fakeAgentService) ListAgentRuns(ctx context.Context, input agentservice.AgentRunList) ([]entity.AgentRun, value.PageResult, error) {
+	if f.listAgentRuns == nil {
+		return nil, value.PageResult{}, errs.ErrPreconditionFailed
+	}
+	return f.listAgentRuns(ctx, input)
+}
+
+func (f *fakeAgentService) GetSessionStateSnapshot(ctx context.Context, id uuid.UUID) (entity.AgentSessionStateSnapshot, error) {
+	if f.getSessionStateSnapshot == nil {
+		return entity.AgentSessionStateSnapshot{}, errs.ErrPreconditionFailed
+	}
+	return f.getSessionStateSnapshot(ctx, id)
 }
 
 func commandMeta(commandID string, idempotencyKey string, expectedVersion *int64) *agentsv1.CommandMeta {

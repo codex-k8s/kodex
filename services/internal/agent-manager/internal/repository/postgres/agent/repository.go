@@ -64,7 +64,18 @@ const (
 	operationActivatePromptVersion = "domain.Repository.ActivatePromptTemplateVersionWithResult"
 	operationGetPromptVersion      = "domain.Repository.GetPromptTemplateVersion"
 	operationListPromptVersions    = "domain.Repository.ListPromptTemplateVersions"
+	operationCreateSession         = "domain.Repository.CreateAgentSessionWithResult"
+	operationUpdateSession         = "domain.Repository.UpdateAgentSessionWithResult"
+	operationGetSession            = "domain.Repository.GetAgentSession"
+	operationFindActiveSession     = "domain.Repository.FindActiveAgentSessionByProviderWorkItem"
+	operationCreateRun             = "domain.Repository.CreateAgentRunWithResult"
+	operationUpdateRun             = "domain.Repository.UpdateAgentRunWithResult"
+	operationGetRun                = "domain.Repository.GetAgentRun"
+	operationListRuns              = "domain.Repository.ListAgentRuns"
+	operationCreateSnapshot        = "domain.Repository.CreateSessionStateSnapshotWithResult"
+	operationGetSnapshot           = "domain.Repository.GetSessionStateSnapshot"
 	operationGetCommandResult      = "domain.Repository.GetCommandResult"
+	operationRecordCommandResult   = "domain.Repository.RecordCommandResult"
 	operationOutboxClaim           = "domain.Repository.ClaimOutboxEvents"
 	operationOutboxMarkFailed      = "domain.Repository.MarkOutboxEventFailed"
 	operationOutboxMarkPermanent   = "domain.Repository.MarkOutboxEventPermanentlyFailed"
@@ -178,8 +189,68 @@ func (r *Repository) ListPromptTemplateVersions(ctx context.Context, filter quer
 	return queryPage(ctx, r.db, operationListPromptVersions, queryPromptVersionList, promptTemplateVersionFilterArgs(filter), scanPromptTemplateVersion)
 }
 
+func (r *Repository) CreateAgentSessionWithResult(ctx context.Context, session entity.AgentSession, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.mutateWithResult(ctx, operationCreateSession, querySessionCreate, agentSessionArgs(session), result, &event)
+}
+
+func (r *Repository) UpdateAgentSessionWithResult(ctx context.Context, session entity.AgentSession, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.mutateWithResult(ctx, operationUpdateSession, querySessionUpdate, agentSessionUpdateArgs(session, previousVersion), result, &event)
+}
+
+func (r *Repository) GetAgentSession(ctx context.Context, id uuid.UUID) (entity.AgentSession, error) {
+	return queryOne(ctx, r.db, operationGetSession, querySessionGet, pgx.NamedArgs{"id": id}, scanAgentSession)
+}
+
+func (r *Repository) FindActiveAgentSessionByProviderWorkItem(ctx context.Context, scope value.ScopeRef, providerWorkItemRef string) (entity.AgentSession, error) {
+	return queryOne(ctx, r.db, operationFindActiveSession, querySessionFindActiveByTarget, pgx.NamedArgs{
+		"scope_type":             scope.Type,
+		"scope_ref":              scope.Ref,
+		"provider_work_item_ref": providerWorkItemRef,
+	}, scanAgentSession)
+}
+
+func (r *Repository) CreateAgentRunWithResult(ctx context.Context, run entity.AgentRun, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.mutateWithResult(ctx, operationCreateRun, queryRunCreate, agentRunArgs(run), result, &event)
+}
+
+func (r *Repository) UpdateAgentRunWithResult(ctx context.Context, run entity.AgentRun, previousVersion int64, result entity.CommandResult, event *entity.OutboxEvent) error {
+	return r.mutateWithResult(ctx, operationUpdateRun, queryRunUpdate, agentRunUpdateArgs(run, previousVersion), result, event)
+}
+
+func (r *Repository) GetAgentRun(ctx context.Context, id uuid.UUID) (entity.AgentRun, error) {
+	return queryOne(ctx, r.db, operationGetRun, queryRunGet, pgx.NamedArgs{"id": id}, scanAgentRun)
+}
+
+func (r *Repository) ListAgentRuns(ctx context.Context, filter query.AgentRunFilter) ([]entity.AgentRun, value.PageResult, error) {
+	return queryPage(ctx, r.db, operationListRuns, queryRunList, agentRunFilterArgs(filter), scanAgentRun)
+}
+
+func (r *Repository) CreateSessionStateSnapshotWithResult(ctx context.Context, snapshot entity.AgentSessionStateSnapshot, session entity.AgentSession, previousSessionVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
+	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
+		if err := runMutation(ctx, tx, querySessionStateSnapshotCreate, sessionStateSnapshotArgs(snapshot), true); err != nil {
+			return err
+		}
+		if err := runMutation(ctx, tx, querySessionUpdate, agentSessionUpdateArgs(session, previousSessionVersion), true); err != nil {
+			return err
+		}
+		if err := runCommandResult(ctx, tx, result); err != nil {
+			return err
+		}
+		return runOutboxEvent(ctx, tx, event)
+	})
+	return wrapError(operationCreateSnapshot, err)
+}
+
+func (r *Repository) GetSessionStateSnapshot(ctx context.Context, id uuid.UUID) (entity.AgentSessionStateSnapshot, error) {
+	return queryOne(ctx, r.db, operationGetSnapshot, querySessionStateSnapshotGet, pgx.NamedArgs{"id": id}, scanSessionStateSnapshot)
+}
+
 func (r *Repository) GetCommandResult(ctx context.Context, identity query.CommandIdentity) (entity.CommandResult, error) {
 	return queryOne(ctx, r.db, operationGetCommandResult, queryCommandResultGet, commandIdentityArgs(identity), scanCommandResult)
+}
+
+func (r *Repository) RecordCommandResult(ctx context.Context, result entity.CommandResult) error {
+	return wrapError(operationRecordCommandResult, runCommandResult(ctx, r.db, result))
 }
 
 func (r *Repository) ClaimOutboxEvents(ctx context.Context, limit int, now time.Time, lockedUntil time.Time) ([]entity.OutboxEvent, error) {

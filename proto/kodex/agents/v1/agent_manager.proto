@@ -808,6 +808,7 @@ message RecordRunStateRequest {
   optional string failure_code = 7;
   optional string started_at = 8;
   optional string finished_at = 9;
+  optional string reason_code = 10;
 }
 
 message RecordSessionStateSnapshotRequest {

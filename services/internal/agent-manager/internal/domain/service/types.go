@@ -1,6 +1,8 @@
 package service
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/entity"
@@ -121,3 +123,53 @@ type FlowVersionResult struct {
 	FlowVersion entity.FlowVersion
 	Flow        entity.Flow
 }
+
+type StartAgentSessionInput struct {
+	Meta                value.CommandMeta
+	Scope               value.ScopeRef
+	ProviderWorkItemRef string
+	FlowVersionID       *uuid.UUID
+	CurrentStageID      *uuid.UUID
+	CreatedByActorRef   string
+}
+
+type StartAgentRunInput struct {
+	Meta                    value.CommandMeta
+	SessionID               uuid.UUID
+	FlowVersionID           *uuid.UUID
+	StageID                 *uuid.UUID
+	RoleProfileID           uuid.UUID
+	PromptTemplateVersionID uuid.UUID
+	ProviderTarget          value.ProviderTargetRef
+	GuidanceSelectionHints  []value.GuidanceSelectionHint
+}
+
+type RecordRunStateInput struct {
+	Meta           value.CommandMeta
+	RunID          uuid.UUID
+	Status         enum.AgentRunStatus
+	RuntimeContext *value.RuntimeContextRef
+	ProviderTarget *value.ProviderTargetRef
+	ResultSummary  *string
+	FailureCode    *string
+	ReasonCode     *string
+	StartedAt      *time.Time
+	FinishedAt     *time.Time
+}
+
+type RecordSessionStateSnapshotInput struct {
+	Meta         value.CommandMeta
+	SessionID    uuid.UUID
+	RunID        *uuid.UUID
+	SnapshotKind enum.AgentSessionSnapshotKind
+	TurnIndex    *int64
+	Object       value.ObjectRef
+	CapturedAt   time.Time
+}
+
+type SessionSnapshotResult struct {
+	Snapshot entity.AgentSessionStateSnapshot
+	Session  entity.AgentSession
+}
+
+type AgentRunList = query.AgentRunFilter

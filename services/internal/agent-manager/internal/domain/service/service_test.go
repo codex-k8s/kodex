@@ -261,6 +261,593 @@ func TestActivationEventPayloadsMatchAsyncAPIRequiredFields(t *testing.T) {
 	}
 }
 
+func TestStartAgentSessionStoresCommandResultAndEvent(t *testing.T) {
+	t.Parallel()
+
+	sessionID := uuid.MustParse("11111111-2222-3333-4444-555555555555")
+	eventID := uuid.MustParse("22222222-3333-4444-5555-666666666666")
+	repository := &fakeRepository{}
+	service := New(Config{
+		Repository:  repository,
+		Clock:       fixedClock{now: time.Date(2026, 5, 15, 10, 0, 0, 0, time.UTC)},
+		IDGenerator: &sequenceIDGenerator{ids: []uuid.UUID{sessionID, eventID}},
+	})
+
+	session, err := service.StartAgentSession(context.Background(), StartAgentSessionInput{
+		Meta:                value.CommandMeta{CommandID: uuid.MustParse("33333333-4444-5555-6666-777777777777"), Actor: testActor()},
+		Scope:               value.ScopeRef{Type: string(enum.AgentScopeTypeProject), Ref: "project-1"},
+		ProviderWorkItemRef: "github:issue:42",
+		CreatedByActorRef:   "user:owner",
+	})
+	if err != nil {
+		t.Fatalf("StartAgentSession() err = %v", err)
+	}
+	if session.ID != sessionID || repository.createdSession.ID != sessionID {
+		t.Fatalf("session id = %s, stored = %s", session.ID, repository.createdSession.ID)
+	}
+	if repository.sessionResult.AggregateType != enum.CommandAggregateTypeSession {
+		t.Fatalf("aggregate type = %s, want %s", repository.sessionResult.AggregateType, enum.CommandAggregateTypeSession)
+	}
+	if repository.sessionEvent.EventType != agentevents.EventSessionCreated {
+		t.Fatalf("event type = %s, want %s", repository.sessionEvent.EventType, agentevents.EventSessionCreated)
+	}
+}
+
+func TestStartAgentSessionReplaysCommandResult(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.MustParse("33333333-4444-5555-6666-777777777778")
+	session := entity.AgentSession{
+		VersionedBase:     entity.VersionedBase{ID: uuid.MustParse("33333333-5555-6666-7777-888888888888"), Version: 1},
+		Scope:             value.ScopeRef{Type: string(enum.AgentScopeTypeProject), Ref: "project-1"},
+		Status:            enum.AgentSessionStatusOpen,
+		CreatedByActorRef: "user:owner",
+	}
+	payload, err := marshalCommandPayload(agentSessionCommandPayload{Session: session})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	repository := &fakeRepository{
+		replay: &entity.CommandResult{
+			CommandID:     &commandID,
+			Actor:         testActor(),
+			Operation:     operationStartAgentSession,
+			AggregateType: enum.CommandAggregateTypeSession,
+			AggregateID:   session.ID,
+			ResultPayload: payload,
+		},
+		sessionByID: map[uuid.UUID]entity.AgentSession{session.ID: session},
+	}
+	service := New(Config{Repository: repository})
+
+	replay, err := service.StartAgentSession(context.Background(), StartAgentSessionInput{
+		Meta:              value.CommandMeta{CommandID: commandID, Actor: testActor()},
+		Scope:             session.Scope,
+		CreatedByActorRef: session.CreatedByActorRef,
+	})
+	if err != nil {
+		t.Fatalf("StartAgentSession() err = %v", err)
+	}
+	if replay.ID != session.ID {
+		t.Fatalf("replay id = %s, want %s", replay.ID, session.ID)
+	}
+	if repository.createSessionCalled {
+		t.Fatal("CreateAgentSessionWithResult called during replay")
+	}
+}
+
+func TestStartAgentSessionReusesActiveProviderTarget(t *testing.T) {
+	t.Parallel()
+
+	sessionID := uuid.MustParse("33333333-6666-7777-8888-999999999999")
+	session := entity.AgentSession{
+		VersionedBase:       entity.VersionedBase{ID: sessionID, Version: 3},
+		Scope:               value.ScopeRef{Type: string(enum.AgentScopeTypeProject), Ref: "project-1"},
+		ProviderWorkItemRef: "github:issue:42",
+		Status:              enum.AgentSessionStatusOpen,
+		CreatedByActorRef:   "user:owner",
+	}
+	repository := &fakeRepository{activeSession: session, activeSessionFound: true}
+	service := New(Config{
+		Repository: repository,
+		Clock:      fixedClock{now: time.Date(2026, 5, 15, 10, 0, 0, 0, time.UTC)},
+	})
+
+	reused, err := service.StartAgentSession(context.Background(), StartAgentSessionInput{
+		Meta:                value.CommandMeta{CommandID: uuid.MustParse("33333333-7777-8888-9999-aaaaaaaaaaaa"), Actor: testActor()},
+		Scope:               session.Scope,
+		ProviderWorkItemRef: " github:issue:42 ",
+		CreatedByActorRef:   "user:owner",
+	})
+	if err != nil {
+		t.Fatalf("StartAgentSession() err = %v", err)
+	}
+	if reused.ID != sessionID {
+		t.Fatalf("reused id = %s, want %s", reused.ID, sessionID)
+	}
+	if repository.createSessionCalled {
+		t.Fatal("CreateAgentSessionWithResult called for active provider target")
+	}
+	if repository.recordedCommandResult.AggregateID != sessionID {
+		t.Fatalf("command result aggregate = %s, want %s", repository.recordedCommandResult.AggregateID, sessionID)
+	}
+	if repository.sessionEvent.EventType != "" {
+		t.Fatalf("unexpected session event = %s", repository.sessionEvent.EventType)
+	}
+}
+
+func TestStartAgentRunFreezesRoleAndPrompt(t *testing.T) {
+	t.Parallel()
+
+	sessionID := uuid.MustParse("44444444-5555-6666-7777-888888888888")
+	roleID := uuid.MustParse("55555555-6666-7777-8888-999999999999")
+	promptVersionID := uuid.MustParse("66666666-7777-8888-9999-aaaaaaaaaaaa")
+	runID := uuid.MustParse("77777777-8888-9999-aaaa-bbbbbbbbbbbb")
+	eventID := uuid.MustParse("88888888-9999-aaaa-bbbb-cccccccccccc")
+	repository := &fakeRepository{
+		sessionByID: map[uuid.UUID]entity.AgentSession{
+			sessionID: {
+				VersionedBase:       entity.VersionedBase{ID: sessionID, Version: 1},
+				Scope:               value.ScopeRef{Type: string(enum.AgentScopeTypeProject), Ref: "project-1"},
+				ProviderWorkItemRef: "github:issue:42",
+				Status:              enum.AgentSessionStatusOpen,
+			},
+		},
+		roleByID: map[uuid.UUID]entity.RoleProfile{
+			roleID: {
+				VersionedBase:  entity.VersionedBase{ID: roleID, Version: 3},
+				RoleKind:       enum.RoleKindWorker,
+				RuntimeProfile: "full",
+				Status:         enum.RoleStatusActive,
+			},
+		},
+		promptVersionByID: map[uuid.UUID]entity.PromptTemplateVersion{
+			promptVersionID: {
+				ID:             promptVersionID,
+				RoleProfileID:  roleID,
+				PromptKind:     enum.PromptKindWork,
+				TemplateDigest: "sha256:prompt",
+				Status:         enum.PromptVersionStatusActive,
+			},
+		},
+	}
+	service := New(Config{
+		Repository:  repository,
+		Clock:       fixedClock{now: time.Date(2026, 5, 15, 10, 0, 0, 0, time.UTC)},
+		IDGenerator: &sequenceIDGenerator{ids: []uuid.UUID{runID, eventID}},
+	})
+
+	run, err := service.StartAgentRun(context.Background(), StartAgentRunInput{
+		Meta:                    value.CommandMeta{CommandID: uuid.MustParse("99999999-aaaa-bbbb-cccc-dddddddddddd"), Actor: testActor()},
+		SessionID:               sessionID,
+		RoleProfileID:           roleID,
+		PromptTemplateVersionID: promptVersionID,
+	})
+	if err != nil {
+		t.Fatalf("StartAgentRun() err = %v", err)
+	}
+	if run.ID != runID || repository.createdRun.ProviderTarget.WorkItemRef != "github:issue:42" {
+		t.Fatalf("run = %+v, stored = %+v", run, repository.createdRun)
+	}
+	if repository.createdRun.RoleProfileVersion != 3 || repository.createdRun.RoleProfileDigest == "" {
+		t.Fatalf("role freeze = version %d digest %q", repository.createdRun.RoleProfileVersion, repository.createdRun.RoleProfileDigest)
+	}
+	if repository.runResult.AggregateType != enum.CommandAggregateTypeRun || repository.runEvent.EventType != agentevents.EventRunRequested {
+		t.Fatalf("result/event = %s/%s", repository.runResult.AggregateType, repository.runEvent.EventType)
+	}
+}
+
+func TestStartAgentRunValidatesStageRoleBinding(t *testing.T) {
+	t.Parallel()
+
+	sessionID := uuid.MustParse("55555555-aaaa-bbbb-cccc-dddddddddddd")
+	flowVersionID := uuid.MustParse("55555555-bbbb-cccc-dddd-eeeeeeeeeeee")
+	stageID := uuid.MustParse("55555555-cccc-dddd-eeee-ffffffffffff")
+	roleID := uuid.MustParse("55555555-dddd-eeee-ffff-111111111111")
+	promptVersionID := uuid.MustParse("55555555-eeee-ffff-1111-222222222222")
+	runID := uuid.MustParse("55555555-ffff-1111-2222-333333333333")
+	repository := &fakeRepository{
+		sessionByID: map[uuid.UUID]entity.AgentSession{
+			sessionID: {
+				VersionedBase:       entity.VersionedBase{ID: sessionID, Version: 1},
+				Scope:               value.ScopeRef{Type: string(enum.AgentScopeTypeProject), Ref: "project-1"},
+				ProviderWorkItemRef: "github:issue:42",
+				FlowVersionID:       &flowVersionID,
+				CurrentStageID:      &stageID,
+				Status:              enum.AgentSessionStatusOpen,
+			},
+		},
+		flowVersionByID: map[uuid.UUID]entity.FlowVersion{
+			flowVersionID: {
+				ID: flowVersionID,
+				Stages: []entity.Stage{{
+					ID:            stageID,
+					FlowVersionID: flowVersionID,
+					Slug:          "dev",
+				}},
+				RoleBindings: []entity.StageRoleBinding{{
+					ID:            uuid.MustParse("66666666-1111-2222-3333-444444444444"),
+					StageID:       stageID,
+					RoleProfileID: roleID,
+					BindingKind:   enum.StageRoleBindingKindExecutor,
+				}},
+			},
+		},
+		roleByID: map[uuid.UUID]entity.RoleProfile{
+			roleID: {
+				VersionedBase:  entity.VersionedBase{ID: roleID, Version: 2},
+				RoleKind:       enum.RoleKindWorker,
+				RuntimeProfile: "full",
+				Status:         enum.RoleStatusActive,
+			},
+		},
+		promptVersionByID: map[uuid.UUID]entity.PromptTemplateVersion{
+			promptVersionID: {
+				ID:             promptVersionID,
+				RoleProfileID:  roleID,
+				PromptKind:     enum.PromptKindWork,
+				TemplateDigest: "sha256:prompt",
+				Status:         enum.PromptVersionStatusActive,
+			},
+		},
+	}
+	service := New(Config{
+		Repository:  repository,
+		Clock:       fixedClock{now: time.Date(2026, 5, 15, 10, 0, 0, 0, time.UTC)},
+		IDGenerator: &sequenceIDGenerator{ids: []uuid.UUID{runID, uuid.MustParse("66666666-2222-3333-4444-555555555555")}},
+	})
+
+	run, err := service.StartAgentRun(context.Background(), StartAgentRunInput{
+		Meta:                    value.CommandMeta{CommandID: uuid.MustParse("66666666-3333-4444-5555-666666666666"), Actor: testActor()},
+		SessionID:               sessionID,
+		RoleProfileID:           roleID,
+		PromptTemplateVersionID: promptVersionID,
+	})
+	if err != nil {
+		t.Fatalf("StartAgentRun() err = %v", err)
+	}
+	if run.FlowVersionID == nil || *run.FlowVersionID != flowVersionID || run.StageID == nil || *run.StageID != stageID {
+		t.Fatalf("run flow/stage = %v/%v", run.FlowVersionID, run.StageID)
+	}
+}
+
+func TestStartAgentRunRejectsRoleWithoutStageBinding(t *testing.T) {
+	t.Parallel()
+
+	sessionID := uuid.MustParse("77777777-aaaa-bbbb-cccc-dddddddddddd")
+	flowVersionID := uuid.MustParse("77777777-bbbb-cccc-dddd-eeeeeeeeeeee")
+	stageID := uuid.MustParse("77777777-cccc-dddd-eeee-ffffffffffff")
+	roleID := uuid.MustParse("77777777-dddd-eeee-ffff-111111111111")
+	promptVersionID := uuid.MustParse("77777777-eeee-ffff-1111-222222222222")
+	repository := &fakeRepository{
+		sessionByID: map[uuid.UUID]entity.AgentSession{
+			sessionID: {
+				VersionedBase:  entity.VersionedBase{ID: sessionID, Version: 1},
+				FlowVersionID:  &flowVersionID,
+				CurrentStageID: &stageID,
+				Status:         enum.AgentSessionStatusOpen,
+			},
+		},
+		flowVersionByID: map[uuid.UUID]entity.FlowVersion{
+			flowVersionID: {
+				ID:     flowVersionID,
+				Stages: []entity.Stage{{ID: stageID, FlowVersionID: flowVersionID, Slug: "dev"}},
+			},
+		},
+		roleByID: map[uuid.UUID]entity.RoleProfile{
+			roleID: {
+				VersionedBase:  entity.VersionedBase{ID: roleID, Version: 1},
+				RoleKind:       enum.RoleKindWorker,
+				RuntimeProfile: "full",
+				Status:         enum.RoleStatusActive,
+			},
+		},
+		promptVersionByID: map[uuid.UUID]entity.PromptTemplateVersion{
+			promptVersionID: {
+				ID:             promptVersionID,
+				RoleProfileID:  roleID,
+				PromptKind:     enum.PromptKindWork,
+				TemplateDigest: "sha256:prompt",
+				Status:         enum.PromptVersionStatusActive,
+			},
+		},
+	}
+	service := New(Config{Repository: repository})
+
+	_, err := service.StartAgentRun(context.Background(), StartAgentRunInput{
+		Meta:                    value.CommandMeta{CommandID: uuid.MustParse("77777777-ffff-1111-2222-333333333333"), Actor: testActor()},
+		SessionID:               sessionID,
+		RoleProfileID:           roleID,
+		PromptTemplateVersionID: promptVersionID,
+	})
+	if !errors.Is(err, errs.ErrPreconditionFailed) {
+		t.Fatalf("StartAgentRun() err = %v, want %v", err, errs.ErrPreconditionFailed)
+	}
+}
+
+func TestRecordRunStateRequiresExpectedVersionAndPublishesLifecycleEvent(t *testing.T) {
+	t.Parallel()
+
+	runID := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+	expectedVersion := int64(1)
+	repository := &fakeRepository{
+		runByID: map[uuid.UUID]entity.AgentRun{
+			runID: {
+				VersionedBase:           entity.VersionedBase{ID: runID, Version: expectedVersion},
+				SessionID:               uuid.MustParse("bbbbbbbb-cccc-dddd-eeee-ffffffffffff"),
+				RoleProfileID:           uuid.MustParse("cccccccc-dddd-eeee-ffff-111111111111"),
+				RoleProfileVersion:      1,
+				RoleProfileDigest:       "sha256:role",
+				PromptTemplateVersionID: uuid.MustParse("dddddddd-eeee-ffff-1111-222222222222"),
+				PromptTemplateDigest:    "sha256:prompt",
+				Status:                  enum.AgentRunStatusRequested,
+			},
+		},
+	}
+	service := New(Config{
+		Repository:  repository,
+		Clock:       fixedClock{now: time.Date(2026, 5, 15, 10, 0, 0, 0, time.UTC)},
+		IDGenerator: &sequenceIDGenerator{ids: []uuid.UUID{uuid.MustParse("eeeeeeee-ffff-1111-2222-333333333333")}},
+	})
+
+	run, err := service.RecordRunState(context.Background(), RecordRunStateInput{
+		Meta:           value.CommandMeta{CommandID: uuid.MustParse("ffffffff-1111-2222-3333-444444444444"), ExpectedVersion: &expectedVersion, Actor: testActor()},
+		RunID:          runID,
+		Status:         enum.AgentRunStatusStarting,
+		RuntimeContext: &value.RuntimeContextRef{SlotRef: "slot-1"},
+	})
+	if err != nil {
+		t.Fatalf("RecordRunState() err = %v", err)
+	}
+	if run.Version != 2 || repository.updatedRun.Version != 2 {
+		t.Fatalf("run version = %d, stored = %d", run.Version, repository.updatedRun.Version)
+	}
+	if repository.updateRunEvent == nil || repository.updateRunEvent.EventType != agentevents.EventRunStarted {
+		t.Fatalf("event = %+v", repository.updateRunEvent)
+	}
+	payload := decodeAgentPayload(t, *repository.updateRunEvent)
+	if payload.RuntimeSlotRef != "slot-1" {
+		t.Fatalf("runtime slot ref = %q, want slot-1", payload.RuntimeSlotRef)
+	}
+}
+
+func TestRecordRunStatePublishesWaitingReason(t *testing.T) {
+	t.Parallel()
+
+	runID := uuid.MustParse("88888888-aaaa-bbbb-cccc-dddddddddddd")
+	expectedVersion := int64(2)
+	repository := &fakeRepository{
+		runByID: map[uuid.UUID]entity.AgentRun{
+			runID: {
+				VersionedBase:           entity.VersionedBase{ID: runID, Version: expectedVersion},
+				SessionID:               uuid.MustParse("88888888-bbbb-cccc-dddd-eeeeeeeeeeee"),
+				RoleProfileID:           uuid.MustParse("88888888-cccc-dddd-eeee-ffffffffffff"),
+				RoleProfileVersion:      1,
+				RoleProfileDigest:       "sha256:role",
+				PromptTemplateVersionID: uuid.MustParse("88888888-dddd-eeee-ffff-111111111111"),
+				PromptTemplateDigest:    "sha256:prompt",
+				RuntimeContext:          value.RuntimeContextRef{SlotRef: "slot-1"},
+				Status:                  enum.AgentRunStatusRunning,
+			},
+		},
+	}
+	service := New(Config{
+		Repository:  repository,
+		Clock:       fixedClock{now: time.Date(2026, 5, 15, 10, 0, 0, 0, time.UTC)},
+		IDGenerator: &sequenceIDGenerator{ids: []uuid.UUID{uuid.MustParse("88888888-eeee-ffff-1111-222222222222")}},
+	})
+	reasonCode := "owner_feedback"
+
+	_, err := service.RecordRunState(context.Background(), RecordRunStateInput{
+		Meta:       value.CommandMeta{CommandID: uuid.MustParse("88888888-ffff-1111-2222-333333333333"), ExpectedVersion: &expectedVersion, Actor: testActor()},
+		RunID:      runID,
+		Status:     enum.AgentRunStatusWaiting,
+		ReasonCode: &reasonCode,
+	})
+	if err != nil {
+		t.Fatalf("RecordRunState() err = %v", err)
+	}
+	if repository.updateRunEvent == nil || repository.updateRunEvent.EventType != agentevents.EventRunWaiting {
+		t.Fatalf("event = %+v", repository.updateRunEvent)
+	}
+	payload := decodeAgentPayload(t, *repository.updateRunEvent)
+	if payload.ReasonCode != reasonCode {
+		t.Fatalf("reason_code = %q, want %q", payload.ReasonCode, reasonCode)
+	}
+}
+
+func TestRecordRunStateRejectsStaleExpectedVersion(t *testing.T) {
+	t.Parallel()
+
+	runID := uuid.MustParse("99999999-aaaa-bbbb-cccc-dddddddddddd")
+	currentVersion := int64(3)
+	expectedVersion := int64(2)
+	repository := &fakeRepository{
+		runByID: map[uuid.UUID]entity.AgentRun{
+			runID: {
+				VersionedBase:           entity.VersionedBase{ID: runID, Version: currentVersion},
+				SessionID:               uuid.MustParse("99999999-bbbb-cccc-dddd-eeeeeeeeeeee"),
+				RoleProfileID:           uuid.MustParse("99999999-cccc-dddd-eeee-ffffffffffff"),
+				RoleProfileVersion:      1,
+				RoleProfileDigest:       "sha256:role",
+				PromptTemplateVersionID: uuid.MustParse("99999999-dddd-eeee-ffff-111111111111"),
+				PromptTemplateDigest:    "sha256:prompt",
+				Status:                  enum.AgentRunStatusStarting,
+			},
+		},
+	}
+	service := New(Config{Repository: repository})
+
+	_, err := service.RecordRunState(context.Background(), RecordRunStateInput{
+		Meta:           value.CommandMeta{CommandID: uuid.MustParse("99999999-eeee-ffff-1111-222222222222"), ExpectedVersion: &expectedVersion, Actor: testActor()},
+		RunID:          runID,
+		Status:         enum.AgentRunStatusRunning,
+		RuntimeContext: &value.RuntimeContextRef{SlotRef: "slot-1"},
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("RecordRunState() err = %v, want %v", err, errs.ErrConflict)
+	}
+}
+
+func TestRecordRunStateAllowsRepeatNonTerminalWithoutLifecycleEvent(t *testing.T) {
+	t.Parallel()
+
+	runID := uuid.MustParse("99999999-ffff-1111-2222-333333333333")
+	expectedVersion := int64(5)
+	repository := &fakeRepository{
+		runByID: map[uuid.UUID]entity.AgentRun{
+			runID: {
+				VersionedBase:           entity.VersionedBase{ID: runID, Version: expectedVersion},
+				SessionID:               uuid.New(),
+				RoleProfileID:           uuid.New(),
+				RoleProfileVersion:      1,
+				RoleProfileDigest:       "sha256:role",
+				PromptTemplateVersionID: uuid.New(),
+				PromptTemplateDigest:    "sha256:prompt",
+				RuntimeContext:          value.RuntimeContextRef{SlotRef: "slot-1"},
+				Status:                  enum.AgentRunStatusRunning,
+			},
+		},
+	}
+	service := New(Config{
+		Repository: repository,
+		Clock:      fixedClock{now: time.Date(2026, 5, 15, 10, 0, 0, 0, time.UTC)},
+	})
+
+	run, err := service.RecordRunState(context.Background(), RecordRunStateInput{
+		Meta:           value.CommandMeta{CommandID: uuid.MustParse("99999999-1111-2222-3333-444444444444"), ExpectedVersion: &expectedVersion, Actor: testActor()},
+		RunID:          runID,
+		Status:         enum.AgentRunStatusRunning,
+		RuntimeContext: &value.RuntimeContextRef{SlotRef: "slot-1"},
+	})
+	if err != nil {
+		t.Fatalf("RecordRunState() err = %v", err)
+	}
+	if run.Version != expectedVersion+1 || repository.updateRunEvent != nil {
+		t.Fatalf("run version/event = %d/%+v", run.Version, repository.updateRunEvent)
+	}
+}
+
+func TestRecordRunStateRejectsBackwardAndTerminalTransitions(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		current     enum.AgentRunStatus
+		next        enum.AgentRunStatus
+		runtimeSlot string
+	}{
+		{name: "backward", current: enum.AgentRunStatusRunning, next: enum.AgentRunStatusStarting, runtimeSlot: "slot-1"},
+		{name: "terminal", current: enum.AgentRunStatusCompleted, next: enum.AgentRunStatusRunning, runtimeSlot: "slot-1"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			runID := uuid.New()
+			expectedVersion := int64(4)
+			repository := &fakeRepository{
+				runByID: map[uuid.UUID]entity.AgentRun{
+					runID: {
+						VersionedBase:           entity.VersionedBase{ID: runID, Version: expectedVersion},
+						SessionID:               uuid.New(),
+						RoleProfileID:           uuid.New(),
+						RoleProfileVersion:      1,
+						RoleProfileDigest:       "sha256:role",
+						PromptTemplateVersionID: uuid.New(),
+						PromptTemplateDigest:    "sha256:prompt",
+						RuntimeContext:          value.RuntimeContextRef{SlotRef: tc.runtimeSlot},
+						Status:                  tc.current,
+					},
+				},
+			}
+			service := New(Config{Repository: repository})
+
+			_, err := service.RecordRunState(context.Background(), RecordRunStateInput{
+				Meta:           value.CommandMeta{CommandID: uuid.New(), ExpectedVersion: &expectedVersion, Actor: testActor()},
+				RunID:          runID,
+				Status:         tc.next,
+				RuntimeContext: &value.RuntimeContextRef{SlotRef: tc.runtimeSlot},
+			})
+			if !errors.Is(err, errs.ErrPreconditionFailed) {
+				t.Fatalf("RecordRunState() err = %v, want %v", err, errs.ErrPreconditionFailed)
+			}
+		})
+	}
+}
+
+func TestRecordRunStateRejectsStartedEventWithoutRuntimeSlot(t *testing.T) {
+	t.Parallel()
+
+	runID := uuid.MustParse("aaaaaaaa-1111-2222-3333-444444444444")
+	expectedVersion := int64(1)
+	repository := &fakeRepository{
+		runByID: map[uuid.UUID]entity.AgentRun{
+			runID: {
+				VersionedBase:           entity.VersionedBase{ID: runID, Version: expectedVersion},
+				SessionID:               uuid.New(),
+				RoleProfileID:           uuid.New(),
+				RoleProfileVersion:      1,
+				RoleProfileDigest:       "sha256:role",
+				PromptTemplateVersionID: uuid.New(),
+				PromptTemplateDigest:    "sha256:prompt",
+				Status:                  enum.AgentRunStatusRequested,
+			},
+		},
+	}
+	service := New(Config{Repository: repository})
+
+	_, err := service.RecordRunState(context.Background(), RecordRunStateInput{
+		Meta:   value.CommandMeta{CommandID: uuid.MustParse("aaaaaaaa-2222-3333-4444-555555555555"), ExpectedVersion: &expectedVersion, Actor: testActor()},
+		RunID:  runID,
+		Status: enum.AgentRunStatusStarting,
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("RecordRunState() err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+}
+
+func TestRecordSessionStateSnapshotUpdatesLatestSnapshot(t *testing.T) {
+	t.Parallel()
+
+	sessionID := uuid.MustParse("11111111-aaaa-bbbb-cccc-222222222222")
+	expectedVersion := int64(2)
+	snapshotID := uuid.MustParse("22222222-bbbb-cccc-dddd-333333333333")
+	eventID := uuid.MustParse("33333333-cccc-dddd-eeee-444444444444")
+	repository := &fakeRepository{
+		sessionByID: map[uuid.UUID]entity.AgentSession{
+			sessionID: {
+				VersionedBase:     entity.VersionedBase{ID: sessionID, Version: expectedVersion},
+				Scope:             value.ScopeRef{Type: string(enum.AgentScopeTypeProject), Ref: "project-1"},
+				Status:            enum.AgentSessionStatusOpen,
+				CreatedByActorRef: "user:owner",
+			},
+		},
+	}
+	service := New(Config{
+		Repository:  repository,
+		Clock:       fixedClock{now: time.Date(2026, 5, 15, 10, 0, 0, 0, time.UTC)},
+		IDGenerator: &sequenceIDGenerator{ids: []uuid.UUID{snapshotID, eventID}},
+	})
+
+	output, err := service.RecordSessionStateSnapshot(context.Background(), RecordSessionStateSnapshotInput{
+		Meta:         value.CommandMeta{CommandID: uuid.MustParse("44444444-dddd-eeee-ffff-555555555555"), ExpectedVersion: &expectedVersion, Actor: testActor()},
+		SessionID:    sessionID,
+		SnapshotKind: enum.AgentSessionSnapshotKindTurnCheckpoint,
+		Object:       value.ObjectRef{ObjectURI: "s3://bucket/session.jsonl", ObjectDigest: "sha256:state"},
+		CapturedAt:   time.Date(2026, 5, 15, 9, 59, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("RecordSessionStateSnapshot() err = %v", err)
+	}
+	if output.Snapshot.ID != snapshotID || output.Session.LatestStateSnapshotID == nil || *output.Session.LatestStateSnapshotID != snapshotID {
+		t.Fatalf("output = %+v", output)
+	}
+	if repository.snapshotSession.Version != expectedVersion+1 || repository.snapshotEvent.EventType != agentevents.EventSessionSnapshotRecorded {
+		t.Fatalf("session/event = %+v/%s", repository.snapshotSession, repository.snapshotEvent.EventType)
+	}
+}
+
 func decodeAgentPayload(t *testing.T, event entity.OutboxEvent) agentevents.Payload {
 	t.Helper()
 
@@ -272,11 +859,34 @@ func decodeAgentPayload(t *testing.T, event entity.OutboxEvent) agentevents.Payl
 }
 
 type fakeRepository struct {
-	replay           *entity.CommandResult
-	createdFlow      entity.Flow
-	createdResult    entity.CommandResult
-	flowByID         map[uuid.UUID]entity.Flow
-	createFlowCalled bool
+	replay                *entity.CommandResult
+	createdFlow           entity.Flow
+	createdResult         entity.CommandResult
+	flowByID              map[uuid.UUID]entity.Flow
+	flowVersionByID       map[uuid.UUID]entity.FlowVersion
+	sessionByID           map[uuid.UUID]entity.AgentSession
+	runByID               map[uuid.UUID]entity.AgentRun
+	roleByID              map[uuid.UUID]entity.RoleProfile
+	promptVersionByID     map[uuid.UUID]entity.PromptTemplateVersion
+	activeSession         entity.AgentSession
+	activeSessionFound    bool
+	recordedCommandResult entity.CommandResult
+	createdSession        entity.AgentSession
+	sessionResult         entity.CommandResult
+	sessionEvent          entity.OutboxEvent
+	createdRun            entity.AgentRun
+	runResult             entity.CommandResult
+	runEvent              entity.OutboxEvent
+	updatedRun            entity.AgentRun
+	updateRunResult       entity.CommandResult
+	updateRunEvent        *entity.OutboxEvent
+	createdSnapshot       entity.AgentSessionStateSnapshot
+	snapshotSession       entity.AgentSession
+	snapshotResult        entity.CommandResult
+	snapshotEvent         entity.OutboxEvent
+	createFlowCalled      bool
+	createSessionCalled   bool
+	createRunCalled       bool
 }
 
 func (f *fakeRepository) CreateFlowWithResult(_ context.Context, flow entity.Flow, result entity.CommandResult) error {
@@ -329,7 +939,13 @@ func (f *fakeRepository) ActivateFlowVersionWithResult(context.Context, entity.F
 	return errors.ErrUnsupported
 }
 
-func (f *fakeRepository) GetFlowVersion(context.Context, uuid.UUID) (entity.FlowVersion, error) {
+func (f *fakeRepository) GetFlowVersion(_ context.Context, id uuid.UUID) (entity.FlowVersion, error) {
+	if f.flowVersionByID != nil {
+		version, ok := f.flowVersionByID[id]
+		if ok {
+			return version, nil
+		}
+	}
 	return entity.FlowVersion{}, errors.ErrUnsupported
 }
 
@@ -345,7 +961,13 @@ func (f *fakeRepository) UpdateRoleProfileWithResult(context.Context, entity.Rol
 	return errors.ErrUnsupported
 }
 
-func (f *fakeRepository) GetRoleProfile(context.Context, uuid.UUID) (entity.RoleProfile, error) {
+func (f *fakeRepository) GetRoleProfile(_ context.Context, id uuid.UUID) (entity.RoleProfile, error) {
+	if f.roleByID != nil {
+		role, ok := f.roleByID[id]
+		if ok {
+			return role, nil
+		}
+	}
 	return entity.RoleProfile{}, errors.ErrUnsupported
 }
 
@@ -373,12 +995,96 @@ func (f *fakeRepository) ActivatePromptTemplateVersionWithResult(context.Context
 	return errors.ErrUnsupported
 }
 
-func (f *fakeRepository) GetPromptTemplateVersion(context.Context, uuid.UUID) (entity.PromptTemplateVersion, error) {
+func (f *fakeRepository) GetPromptTemplateVersion(_ context.Context, id uuid.UUID) (entity.PromptTemplateVersion, error) {
+	if f.promptVersionByID != nil {
+		version, ok := f.promptVersionByID[id]
+		if ok {
+			return version, nil
+		}
+	}
 	return entity.PromptTemplateVersion{}, errors.ErrUnsupported
 }
 
 func (f *fakeRepository) ListPromptTemplateVersions(context.Context, query.PromptTemplateVersionFilter) ([]entity.PromptTemplateVersion, value.PageResult, error) {
 	return nil, value.PageResult{}, errors.ErrUnsupported
+}
+
+func (f *fakeRepository) CreateAgentSessionWithResult(_ context.Context, session entity.AgentSession, result entity.CommandResult, event entity.OutboxEvent) error {
+	f.createSessionCalled = true
+	f.createdSession = session
+	f.sessionResult = result
+	f.sessionEvent = event
+	return nil
+}
+
+func (f *fakeRepository) UpdateAgentSessionWithResult(_ context.Context, session entity.AgentSession, _ int64, result entity.CommandResult, event entity.OutboxEvent) error {
+	f.snapshotSession = session
+	f.snapshotResult = result
+	f.snapshotEvent = event
+	return nil
+}
+
+func (f *fakeRepository) GetAgentSession(_ context.Context, id uuid.UUID) (entity.AgentSession, error) {
+	if f.sessionByID != nil {
+		session, ok := f.sessionByID[id]
+		if ok {
+			return session, nil
+		}
+	}
+	return entity.AgentSession{}, errors.ErrUnsupported
+}
+
+func (f *fakeRepository) FindActiveAgentSessionByProviderWorkItem(_ context.Context, scope value.ScopeRef, providerWorkItemRef string) (entity.AgentSession, error) {
+	if f.activeSessionFound && f.activeSession.Scope == scope && f.activeSession.ProviderWorkItemRef == providerWorkItemRef {
+		return f.activeSession, nil
+	}
+	return entity.AgentSession{}, errs.ErrNotFound
+}
+
+func (f *fakeRepository) RecordCommandResult(_ context.Context, result entity.CommandResult) error {
+	f.recordedCommandResult = result
+	return nil
+}
+
+func (f *fakeRepository) CreateAgentRunWithResult(_ context.Context, run entity.AgentRun, result entity.CommandResult, event entity.OutboxEvent) error {
+	f.createRunCalled = true
+	f.createdRun = run
+	f.runResult = result
+	f.runEvent = event
+	return nil
+}
+
+func (f *fakeRepository) UpdateAgentRunWithResult(_ context.Context, run entity.AgentRun, _ int64, result entity.CommandResult, event *entity.OutboxEvent) error {
+	f.updatedRun = run
+	f.updateRunResult = result
+	f.updateRunEvent = event
+	return nil
+}
+
+func (f *fakeRepository) GetAgentRun(_ context.Context, id uuid.UUID) (entity.AgentRun, error) {
+	if f.runByID != nil {
+		run, ok := f.runByID[id]
+		if ok {
+			return run, nil
+		}
+	}
+	return entity.AgentRun{}, errors.ErrUnsupported
+}
+
+func (f *fakeRepository) ListAgentRuns(context.Context, query.AgentRunFilter) ([]entity.AgentRun, value.PageResult, error) {
+	return nil, value.PageResult{}, errors.ErrUnsupported
+}
+
+func (f *fakeRepository) CreateSessionStateSnapshotWithResult(_ context.Context, snapshot entity.AgentSessionStateSnapshot, session entity.AgentSession, _ int64, result entity.CommandResult, event entity.OutboxEvent) error {
+	f.createdSnapshot = snapshot
+	f.snapshotSession = session
+	f.snapshotResult = result
+	f.snapshotEvent = event
+	return nil
+}
+
+func (f *fakeRepository) GetSessionStateSnapshot(context.Context, uuid.UUID) (entity.AgentSessionStateSnapshot, error) {
+	return entity.AgentSessionStateSnapshot{}, errors.ErrUnsupported
 }
 
 func (f *fakeRepository) ClaimOutboxEvents(context.Context, int, time.Time, time.Time) ([]entity.OutboxEvent, error) {
@@ -414,6 +1120,20 @@ func (g fixedIDGenerator) New() uuid.UUID {
 		return uuid.Nil
 	}
 	return g.ids[0]
+}
+
+type sequenceIDGenerator struct {
+	ids   []uuid.UUID
+	index int
+}
+
+func (g *sequenceIDGenerator) New() uuid.UUID {
+	if g.index >= len(g.ids) {
+		return uuid.Nil
+	}
+	id := g.ids[g.index]
+	g.index++
+	return id
 }
 
 func testActor() value.Actor {
