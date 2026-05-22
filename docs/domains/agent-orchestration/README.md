@@ -15,7 +15,7 @@
 - запуск ролевых агентов через `runtime-manager`;
 - чтение руководящих пакетов через `package-hub`;
 - provider-native операции через `provider-hub`;
-- Human gate и обратная связь через `interaction-hub`;
+- ожидание Human gate через `governance-manager`, доставка и обратная связь через `interaction-hub`;
 - MCP-инструменты через `platform-mcp-server`.
 
 ## Что не входит
@@ -23,7 +23,7 @@
 - Слоты, workspace filesystem и platform jobs принадлежат `runtime-manager`.
 - Provider-native `Issue`, `PR/MR`, комментарии, связи и GitHub/GitLab операции принадлежат `provider-hub`.
 - Пакеты, версии, manifest и установки принадлежат `package-hub`.
-- Диалоги, уведомления, внешние каналы и решения человека принадлежат `interaction-hub`.
+- Диалоги, уведомления, внешние каналы и доставка решений принадлежат `interaction-hub`; gate request и decision record принадлежат `governance-manager`.
 - Проектная политика, `services.yaml` и workspace policy принадлежат `project-catalog`.
 
 ## Документы

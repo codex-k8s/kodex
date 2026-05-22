@@ -5,7 +5,7 @@ title: kodex — карта Issue домена оркестрации агент
 status: active
 owner_role: KM
 created_at: 2026-04-25
-updated_at: 2026-05-15
+updated_at: 2026-05-22
 ---
 
 # Карта Issue — оркестрация агентов
@@ -25,5 +25,6 @@ updated_at: 2026-05-15
 | #749 | `services/internal/agent-manager/**`, `docs/domains/agent-orchestration/architecture/data_model.md`, `docs/domains/agent-orchestration/delivery/agent_manager_delivery.md` | AGO-3 | готово | PostgreSQL-модель flow, stage, role, prompt template, версий, command result и service-local outbox; storage/use-case слой готов, gRPC handler wiring вынесен в следующий срез. |
 | #755 | `services/internal/agent-manager/**`, `docs/domains/agent-orchestration/architecture/api_contract.md`, `docs/domains/agent-orchestration/delivery/agent_manager_delivery.md` | AGO-3b | готово | gRPC handlers, casters и безопасное отображение ошибок для flow, role и prompt подключены к готовому storage/use-case слою; session/run остаются вне среза. |
 | #281, #282 | `docs/platform/architecture/repository_onboarding.md`, `docs/domains/agent-orchestration/**` | междоменное решение | модель выбрана, ждёт реализации | Выбран вариант C. `agent-manager` должен запускать bootstrap/adoption роли и детерминированные запуски по шаблону, готовить отчёт и PR через provider-контур, но не владеть проектной политикой, пакетами или файловой системой workspace. |
-| #747 | `docs/domains/platform-mcp-server/**`, `docs/platform/architecture/mcp_and_interaction_model.md`, `docs/platform/architecture/codex_hooks_and_skills.md` | MCP-0 | готово | `platform-mcp-server` зафиксирован как MCP-инструментальная поверхность для будущих agent-manager tools; `Run`, session, flow, role, prompt и gates остаются у `agent-manager`. |
+| #747 | `docs/domains/platform-mcp-server/**`, `docs/platform/architecture/mcp_and_interaction_model.md`, `docs/platform/architecture/codex_hooks_and_skills.md` | MCP-0 | готово | `platform-mcp-server` зафиксирован как MCP-инструментальная поверхность для будущих agent-manager tools; `Run`, session, flow, role, prompt и ожидания flow остаются у `agent-manager`, а risk/gate decisions выносятся в governance-контур. |
 | #753 | `docs/domains/platform-mcp-server/architecture/contract_strategy.md`, `docs/domains/codex-hook-ingress/**`, `docs/platform/architecture/codex_hooks_and_skills.md`, `docs/domains/agent-orchestration/product/requirements.md`, `docs/domains/agent-orchestration/architecture/design.md`, `docs/domains/agent-orchestration/architecture/api_contract.md` | MCP-1 | готово | Codex hooks отделены от MCP-инструментов: `agent-manager` будет потреблять hook events через `codex-hook-ingress`, а MCP tools через `platform-mcp-server`. |
+| #322 | `docs/domains/agent-orchestration/README.md`, `docs/domains/agent-orchestration/product/requirements.md`, `docs/domains/agent-orchestration/architecture/design.md`, `docs/domains/agent-orchestration/architecture/data_model.md`, `docs/domains/agent-orchestration/architecture/api_contract.md`, `docs/domains/agent-orchestration/delivery/agent_manager_delivery.md` | GOV-0 | active | Синхронизация границы Human gate: `agent-manager` хранит ожидание flow и ссылки, а gate request/decision владеет `governance-manager`; delivery остаётся у `interaction-hub`. |

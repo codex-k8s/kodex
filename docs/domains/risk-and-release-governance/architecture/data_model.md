@@ -50,7 +50,7 @@ approvals:
 | Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
 | `id` | uuid | нет | Идентификатор риск-профиля. |
-| `scope_type` | enum | нет | `platform`, `organization`, `project`, `repository`, `service`, `release_line`, `runtime_environment`. |
+| `scope_type` | enum | нет | `platform`, `organization`, `project`, `repository`, `service`, `path`, `api_endpoint`, `database_object`, `secret_area`, `runtime_operation`, `release_line`, `runtime_environment`. |
 | `scope_ref` | text | нет | Внешняя ссылка на scope. |
 | `slug` | text | нет | Стабильный ключ профиля внутри scope. |
 | `display_name` | jsonb | нет | Локализованное название. |
@@ -136,6 +136,7 @@ approvals:
 |---|---|---:|---|
 | `id` | uuid | нет | Идентификатор политики gate. |
 | `risk_profile_id` | uuid | да | Профиль, где policy объявлена. |
+| `profile_version` | bigint | нет | Версия профиля, где действует policy. |
 | `gate_kind` | enum | нет | `product`, `architecture`, `technical`, `qa`, `release`, `postdeploy`, `emergency`, `custom`. |
 | `min_risk_class` | enum | нет | Минимальный risk class, где gate обязателен. |
 | `required_actor_policy` | jsonb | нет | Требование к человеку, группе, роли или duty scope. |
@@ -204,7 +205,8 @@ approvals:
 | `release_decision_package_id` | uuid | нет | Пакет подтверждений. |
 | `gate_decision_id` | uuid | да | Связанный gate, если был нужен человек. |
 | `outcome` | enum | нет | `go`, `go_with_conditions`, `no_go`, `hold`, `rollback`, `follow_up_required`. |
-| `decision_actor_ref` | text | да | Человек или policy automation. |
+| `decision_actor_ref` | text | нет | Человек или policy automation. |
+| `decision_policy_ref` | text | да | Версия policy/evaluator; обязательна для автоматического решения. |
 | `reason` | text | нет | Обоснование решения. |
 | `conditions` | jsonb | да | Условия релиза или follow-up. |
 | `decided_at` | timestamptz | нет | Когда решение принято. |
@@ -277,7 +279,7 @@ approvals:
 
 ## Связи
 
-- `RiskProfile` владеет `RiskRule` и может ссылаться на `GatePolicy`.
+- `RiskProfile` владеет `RiskRule` и версионированными `GatePolicy`.
 - `RiskAssessment` владеет набором `RiskFactor`.
 - `ReviewSignal` может повышать `RiskAssessment` и становиться частью `GateRequest.evidence_package`.
 - `GateRequest` может иметь один финальный `GateDecision`; повторные callbacks записываются через идемпотентность и аудит.
@@ -294,6 +296,7 @@ approvals:
 |---|---|
 | Активные risk profiles по scope | `(scope_type, scope_ref, status, slug)` |
 | Правила активной версии профиля | `(risk_profile_id, profile_version, status, rule_kind)` |
+| Gate policies активной версии профиля | `(risk_profile_id, profile_version, status, gate_kind)` |
 | Assessment по target | `(target_type, target_ref, status)` |
 | Assessment по проекту и классу риска | `(project_ref, effective_risk_class, status, updated_at)` |
 | Signals по target | `(target_type, target_ref, created_at)` |
@@ -309,7 +312,7 @@ approvals:
 
 - Risk assessments, gate decisions и release decisions хранятся как audit-critical записи.
 - Evidence package хранит refs и безопасные summaries, а не полный diff, сырые payload, секреты или полные logs.
-- Старые версии risk profiles и rules хранятся для воспроизводимости решений.
+- Старые версии risk profiles, rules и gate policies хранятся для воспроизводимости решений.
 - Review signals могут ссылаться на provider comments/reviews/checks, но не копируют полный provider artifact.
 - Runtime refs указывают на `job` и короткий summary; полные logs остаются у runtime/Kubernetes/logging stack.
 - Interaction refs указывают на delivery/callback thread; диалоговая история остаётся у `interaction-hub`.

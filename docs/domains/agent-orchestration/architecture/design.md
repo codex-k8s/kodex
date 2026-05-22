@@ -5,8 +5,8 @@ title: kodex — дизайн домена оркестрации агентов
 status: active
 owner_role: SA
 created_at: 2026-05-12
-updated_at: 2026-05-15
-related_issues: [733, 753, 698]
+updated_at: 2026-05-22
+related_issues: [733, 753, 698, 322]
 related_prs: []
 related_adrs: []
 approvals:
@@ -47,9 +47,9 @@ approvals:
 
 | Владеет `agent-manager` | Не владеет |
 |---|---|
-| Flow, stage, role, stage-role binding, prompt template, prompt version, agent session, agent `Run`, acceptance check, acceptance result, follow-up intent, automation trigger binding, agent events. | Runtime slot, workspace filesystem, platform job, Kubernetes, provider-native проекции и операции, package catalog, package installation, secret value, диалоговые ветки, уведомления, внешние каналы, проектная policy как истина, MCP transport, Codex hook transport. |
+| Flow, stage, role, stage-role binding, prompt template, prompt version, agent session, agent `Run`, acceptance check, acceptance result, follow-up intent, automation trigger binding, agent events и состояние ожидания flow. | Runtime slot, workspace filesystem, platform job, Kubernetes, provider-native проекции и операции, package catalog, package installation, secret value, risk/gate/release decisions, диалоговые ветки, уведомления, внешние каналы, проектная policy как истина, MCP transport, Codex hook transport. |
 
-Главное правило: `agent-manager` отвечает за вопрос «какая агентная работа должна быть выполнена, кем, по какому процессу и что считать готовым». Технический вопрос «где и как выполнить» решает runtime-контур. Вопрос «как записать provider-native артефакт» решает provider-контур. Вопрос «как получить пакет» решает package-контур. Вопрос «как спросить человека» решает interaction-контур.
+Главное правило: `agent-manager` отвечает за вопрос «какая агентная работа должна быть выполнена, кем, по какому процессу и что считать готовым». Технический вопрос «где и как выполнить» решает runtime-контур. Вопрос «как записать provider-native артефакт» решает provider-контур. Вопрос «как получить пакет» решает package-контур. Вопрос «нужен ли gate и какое решение принято» решает governance-контур. Вопрос «как доставить запрос человеку» решает interaction-контур.
 
 ## Компоненты
 
@@ -120,6 +120,7 @@ sequenceDiagram
   participant Hooks as codex-hook-ingress
   participant AM as agent-manager
   participant PH as provider-hub
+  participant GOV as governance-manager
   participant IH as interaction-hub
   Runner->>Hooks: Stop/PostToolUse + provider refs
   Hooks->>AM: normalized lifecycle event
@@ -127,7 +128,8 @@ sequenceDiagram
   PH-->>AM: Issue, PR/MR, comments, relationships
   AM->>AM: acceptance checks
   alt требуется решение человека
-    AM->>IH: request human decision
+    AM->>GOV: RequestGate(acceptance refs, flow transition)
+    GOV->>IH: deliver gate request
   else готово к следующему этапу
     AM->>PH: CreateIssue or UpdateIssue for follow-up
   end
@@ -183,14 +185,18 @@ MCP не владеет доменным состоянием и не подме
 - `SessionStart` создаёт или связывает Codex-сессию с `AgentSession`;
 - `UserPromptSubmit` фиксирует безопасный факт нового пользовательского ввода и передаёт его в агентный контур;
 - `PreToolUse` и `PostToolUse` дают realtime-сигналы и безопасные provider/runtime hints;
-- `PermissionRequest` преобразуется в gate или запрос решения через `interaction-hub`;
+- `PermissionRequest` преобразуется в risk/gate evaluation через `governance-manager`, а доставка запроса человеку остаётся у `interaction-hub`;
 - `Stop` фиксирует контрольную точку хода, pending actions и итоговую сводку.
 
 `agent-manager` не должен принимать эти события через MCP-инструменты. MCP остаётся для явных tool calls, а hook ingress — для событий, которые Codex command hook передал через локальный emitter или sidecar.
 
+### `governance-manager`
+
+`agent-manager` обращается к `governance-manager` за оценкой риска, записью review signals, созданием gate request и чтением итогового gate/release decision. `agent-manager` хранит только ожидание flow и ссылки на governance-решения; сами risk/gate/release decisions остаются в governance-контуре.
+
 ### `interaction-hub`
 
-`agent-manager` создаёт запрос решения, обратной связи или уведомления, но не хранит диалоговую ветку и попытки доставки. Результат решения возвращается как событие или команда продолжения сессии.
+`agent-manager` создаёт запрос обратной связи или уведомления, но не хранит диалоговую ветку и попытки доставки. Human gate доставляется через `interaction-hub` по запросу `governance-manager`, а результат решения возвращается в `agent-manager` как governance decision ref или событие продолжения flow.
 
 ## Flow, stage, role и prompt
 
@@ -215,7 +221,7 @@ MCP не владеет доменным состоянием и не подме
 - результаты ролевых проверок;
 - риск и необходимость Human gate.
 
-Результат приёмки не меняет чужую истину напрямую. Он создаёт `AcceptanceResult` в `agent-manager`, публикует событие и инициирует provider/interaction/runtime операции через владельцев.
+Результат приёмки не меняет чужую истину напрямую. Он создаёт `AcceptanceResult` в `agent-manager`, публикует событие и инициирует provider/governance/interaction/runtime операции через владельцев.
 
 ## События
 
@@ -232,8 +238,8 @@ MCP не владеет доменным состоянием и не подме
 - `agent.acceptance.failed`;
 - `agent.follow_up.requested`;
 - `agent.follow_up.created`;
-- `agent.human_gate.requested`;
-- `agent.human_gate.resolved`;
+- `agent.human_gate.requested` как ожидание governance gate в flow;
+- `agent.human_gate.resolved` как получение ссылки на resolved governance decision;
 - `agent.flow.version_activated`;
 - `agent.role.version_activated`;
 - `agent.prompt.version_activated`.
@@ -243,13 +249,13 @@ MCP не владеет доменным состоянием и не подме
 - Flow, role, prompt template и automation rule имеют версии.
 - `Run` фиксирует версии и digest, использованные при запуске, и не меняется при последующем редактировании flow, роли или prompt.
 - Команды изменения состояния `Run` и acceptance передают ожидаемую версию.
-- Долгие операции не держат SQL-блокировки: runtime-запуск, provider-операция и Human gate выполняются через внешние контуры и события.
+- Долгие операции не держат SQL-блокировки: runtime-запуск, provider-операция и Human gate через governance/interaction выполняются через внешние контуры и события.
 - Повтор команды с тем же `command_id` возвращает сохранённый результат или безопасный конфликт.
 
 ## Наблюдаемость
 
 - Логи: session id, run id, flow, stage, role, provider target, runtime ref, correlation id, результат.
-- Метрики: запрошенные, выполняемые, ожидающие, упавшие и завершённые `Run`; длительность этапов; ошибки приёмки; повторные запуски; ожидания Human gate.
+- Метрики: запрошенные, выполняемые, ожидающие, упавшие и завершённые `Run`; длительность этапов; ошибки приёмки; повторные запуски; ожидания governance gate.
 - Трейсы: входящий gRPC/MCP, чтение package/project/provider, runtime prepare, acceptance, outbox.
 - Алерты: рост упавших `Run`, застрявшие ожидающие `Run`, рост ошибок приёмки, массовые ошибки package/runtime/provider зависимостей.
 

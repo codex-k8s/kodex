@@ -5,8 +5,8 @@ title: kodex — API-обзор agent-manager
 status: active
 owner_role: SA
 created_at: 2026-05-12
-updated_at: 2026-05-15
-related_issues: [733, 739, 744, 753, 755, 698]
+updated_at: 2026-05-22
+related_issues: [733, 739, 744, 753, 755, 698, 322]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -35,7 +35,7 @@ approvals:
 - Codex hook events: приходят через `codex-hook-ingress`, а не через MCP tools.
 - Внешний HTTP для пользовательской и операторской консоли: через профильный gateway, не напрямую из доменного сервиса.
 
-Этот документ является обзором целевого API. Машинные спецификации являются источником правды для транспорта, а документ должен обновляться в том же PR при расхождении.
+Этот документ является обзором целевого API. Машинные спецификации являются источником правды для транспорта, а документ должен обновляться синхронно с изменением транспортной спецификации.
 
 ## Операции
 
@@ -66,7 +66,7 @@ approvals:
 | `GetAcceptanceResult` | gRPC query | `agent.acceptance.read` | нет | Читает один результат приёмки. |
 | `ListAcceptanceResults` | gRPC query | `agent.acceptance.read` | нет | Список результатов приёмки по session/run/stage/status. |
 | `CreateFollowUpIntent` | gRPC command | `agent.follow_up.create` | `command_id` | Формирует намерение следующей provider-native задачи. |
-| `RequestHumanGate` | gRPC command | `agent.human_gate.request` | `command_id` | Создаёт запрос решения через `interaction-hub`. |
+| `RequestHumanGate` | gRPC command | `agent.human_gate.request` | `command_id` | Фиксирует ожидание flow и запрашивает gate у `governance-manager`; gate request/decision хранится в governance, delivery идёт через `interaction-hub`. |
 | `GetAgentSession` | gRPC query | `agent.session.read` | нет | Читает сессию. |
 | `ListAgentRuns` | gRPC query | `agent.run.read` | нет | Читает запуски по session/status/provider target. |
 
@@ -82,8 +82,8 @@ approvals:
 | `agent.session.record_snapshot` | Зафиксировать ссылку на актуальный Codex session state без передачи содержимого JSON через MCP. |
 | `agent.acceptance.request` | Запустить машинную приёмку. |
 | `agent.follow_up.request` | Сформировать следующий provider-native `Issue`. |
-| `agent.gate.request` | Запросить gate или решение человека через `interaction-hub`. |
-| `agent.gate.submit_decision` | Передать решение, полученное из UI или внешнего канала. |
+| `agent.gate.request` | Запросить governance gate для перехода flow; `agent-manager` фиксирует ожидание, а решение хранит `governance-manager`. |
+| `agent.gate.submit_decision` | Передать ссылку на принятое governance decision для продолжения flow; само решение не создаётся в `agent-manager`. |
 
 MCP-инструменты не должны принимать свободный JSON для provider-операций. Если нужно создать `Issue`, комментарий или `PR/MR`, инструмент вызывает `provider-hub` через типизированный provider-контракт.
 
@@ -96,7 +96,7 @@ Codex hooks не являются MCP-инструментами. `agent-manager
 | `SessionStart` | Создаёт или связывает Codex-сессию с существующим `AgentSession` и `Run`. |
 | `UserPromptSubmit` | Фиксирует безопасный факт нового пользовательского ввода и связывает его с session/run context. |
 | `PreToolUse` | Даёт сигнал намерения вызвать инструмент; может привести к gate или realtime-событию, но не заменяет MCP tool call. |
-| `PermissionRequest` | Преобразуется в human gate или запрос решения через `interaction-hub`. |
+| `PermissionRequest` | Преобразуется в запрос risk/gate evaluation через `governance-manager`; доставка человеку остаётся у `interaction-hub`. |
 | `PostToolUse` | Передаёт безопасный итог инструмента, provider artifact signal или bounded error. |
 | `Stop` | Фиксирует контрольную точку хода, pending actions и безопасную итоговую сводку. |
 
@@ -110,8 +110,9 @@ Codex hooks не являются MCP-инструментами. `agent-manager
 | `runtime-manager` | `PrepareRuntime`, будущие команды запуска или продолжения slot-agent | Состояние runtime остаётся у runtime. |
 | `provider-hub` | Типизированные операции `CreateIssue`, `UpdateIssue`, `CreatePullRequest`, `CreateComment`, `CreateReviewSignal`, чтение проекций и ускоряющий сигнал сверки | Provider-native состояние остаётся у provider. |
 | `project-catalog` | Чтение workspace policy, release policy, project/repository refs | Проектная policy остаётся у project. |
+| `governance-manager` | Risk assessment, record review signal, request gate, read gate/release decision | Risk/gate/release decisions остаются у governance. |
 | `access-manager` | Проверка действий, ролей, аккаунтов и scope | `agent-manager` не вычисляет права сам. |
-| `interaction-hub` | Запрос Human gate, обратной связи и уведомления | Диалог и доставка остаются у interaction. |
+| `interaction-hub` | Обратная связь, уведомления и delivery refs, полученные через governance gate | Диалог и доставка остаются у interaction; decision state не хранится здесь. |
 | `codex-hook-ingress` | Нормализованные Codex hook events: lifecycle, permission, tool result и stop summary | Hook transport и очистка входа остаются у hook ingress; `agent-manager` хранит только своё состояние. |
 
 ## Модель ошибок
@@ -143,8 +144,8 @@ Codex hooks не являются MCP-инструментами. `agent-manager
 | `agent.acceptance.failed` | Приёмка обнаружила блокеры или ошибку. |
 | `agent.follow_up.requested` | Нужно создать или обновить follow-up `Issue`. |
 | `agent.follow_up.created` | Follow-up provider-native задача создана или подтверждена. |
-| `agent.human_gate.requested` | Требуется решение человека. |
-| `agent.human_gate.resolved` | Решение человека получено. |
+| `agent.human_gate.requested` | Flow ожидает governance gate, требующий решения человека. |
+| `agent.human_gate.resolved` | `agent-manager` получил ссылку на resolved governance decision и может продолжить flow. |
 | `agent.flow.version_activated` | Активирована версия flow. |
 | `agent.role.version_activated` | Активирована версия роли. |
 | `agent.prompt.version_activated` | Активирована версия prompt. |
