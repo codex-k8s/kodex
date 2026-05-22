@@ -102,6 +102,14 @@ func main() {
 			PayloadSchema:   "AgentEventPayload",
 			OutputPath:      "libs/go/platformevents/agent/events.gen.go",
 		},
+		{
+			Domain:          "interaction",
+			PackageName:     "interaction",
+			SpecPath:        "specs/asyncapi/interaction-hub.v1.yaml",
+			EventTypeSchema: "InteractionEventType",
+			PayloadSchema:   "InteractionEventPayload",
+			OutputPath:      "libs/go/platformevents/interaction/events.gen.go",
+		},
 	}
 	for _, spec := range specs {
 		if err := generate(spec); err != nil {

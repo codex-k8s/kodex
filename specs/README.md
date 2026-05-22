@@ -34,3 +34,4 @@
 | `project-catalog` | нет прямого OpenAPI; HTTP принадлежит gateway-спецификациям | `asyncapi/project-catalog.v1.yaml` стабильный `v1` | `../proto/kodex/projects/v1/project_catalog.proto` стабильный `v1` |
 | `package-hub` | нет прямого OpenAPI; HTTP принадлежит gateway-спецификациям | `asyncapi/package-hub.v1.yaml` стабильный `v1` | `../proto/kodex/packages/v1/package_hub.proto` стабильный `v1` |
 | `runtime-manager` | нет прямого OpenAPI; HTTP принадлежит gateway-спецификациям | `asyncapi/runtime-manager.v1.yaml` стабильный `v1` | `../proto/kodex/runtime/v1/runtime_manager.proto` стабильный `v1` |
+| `interaction-hub` | нет прямого OpenAPI; HTTP принадлежит gateway-спецификациям | `asyncapi/interaction-hub.v1.yaml` стабильный `v1` | `../proto/kodex/interactions/v1/interaction_hub.proto` стабильный `v1` |

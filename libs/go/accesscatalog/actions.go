@@ -64,6 +64,14 @@ const (
 	ResourceAgentAcceptance              = "agent_acceptance"
 	ResourceAgentFollowUp                = "agent_follow_up"
 	ResourceAgentHumanGate               = "agent_human_gate"
+	ResourceInteractionThread            = "interaction_thread"
+	ResourceInteractionMessage           = "interaction_message"
+	ResourceInteractionRequest           = "interaction_request"
+	ResourceInteractionResponse          = "interaction_response"
+	ResourceInteractionNotification      = "interaction_notification"
+	ResourceInteractionSubscription      = "interaction_subscription"
+	ResourceInteractionDelivery          = "interaction_delivery"
+	ResourceInteractionCallback          = "interaction_callback"
 )
 
 const (
@@ -183,6 +191,24 @@ const (
 	ActionAgentAcceptanceUpdate                 = "agent.acceptance.update"
 	ActionAgentFollowUpCreate                   = "agent.follow_up.create"
 	ActionAgentHumanGateRequest                 = "agent.human_gate.request"
+	ActionInteractionThreadCreate               = "interaction.thread.create"
+	ActionInteractionThreadRead                 = "interaction.thread.read"
+	ActionInteractionMessageRecord              = "interaction.message.record"
+	ActionInteractionMessageRead                = "interaction.message.read"
+	ActionInteractionFeedbackRequest            = "interaction.feedback.request"
+	ActionInteractionApprovalRequest            = "interaction.approval.request"
+	ActionInteractionHumanGateRequest           = "interaction.human_gate.request"
+	ActionInteractionRequestRespond             = "interaction.request.respond"
+	ActionInteractionRequestCancel              = "interaction.request.cancel"
+	ActionInteractionRequestExpire              = "interaction.request.expire"
+	ActionInteractionRequestRead                = "interaction.request.read"
+	ActionInteractionNotificationRequest        = "interaction.notification.request"
+	ActionInteractionSubscriptionManage         = "interaction.subscription.manage"
+	ActionInteractionSubscriptionRead           = "interaction.subscription.read"
+	ActionInteractionDeliveryPlan               = "interaction.delivery.plan"
+	ActionInteractionDeliveryUpdate             = "interaction.delivery.update"
+	ActionInteractionDeliveryRead               = "interaction.delivery.read"
+	ActionInteractionCallbackRecord             = "interaction.callback.record"
 )
 
 // ProjectCatalogActions returns system actions owned by the projects-and-repositories domain.
@@ -361,6 +387,40 @@ func AgentManagerActions() []ActionDescriptor {
 	return actions
 }
 
+// InteractionHubActions returns system actions owned by the interaction hub domain.
+func InteractionHubActions() []ActionDescriptor {
+	actions := make([]ActionDescriptor, 0, 18)
+	actions = append(actions, actionDescriptorsForResource(ResourceInteractionThread,
+		ActionInteractionThreadCreate,
+		ActionInteractionThreadRead,
+	)...)
+	actions = append(actions, actionDescriptorsForResource(ResourceInteractionMessage,
+		ActionInteractionMessageRecord,
+		ActionInteractionMessageRead,
+	)...)
+	actions = append(actions, actionDescriptorsForResource(ResourceInteractionRequest,
+		ActionInteractionFeedbackRequest,
+		ActionInteractionApprovalRequest,
+		ActionInteractionHumanGateRequest,
+		ActionInteractionRequestCancel,
+		ActionInteractionRequestExpire,
+		ActionInteractionRequestRead,
+	)...)
+	actions = append(actions, ActionDescriptor{Key: ActionInteractionRequestRespond, ResourceType: ResourceInteractionResponse})
+	actions = append(actions, ActionDescriptor{Key: ActionInteractionNotificationRequest, ResourceType: ResourceInteractionNotification})
+	actions = append(actions, actionDescriptorsForResource(ResourceInteractionSubscription,
+		ActionInteractionSubscriptionManage,
+		ActionInteractionSubscriptionRead,
+	)...)
+	actions = append(actions, actionDescriptorsForResource(ResourceInteractionDelivery,
+		ActionInteractionDeliveryPlan,
+		ActionInteractionDeliveryUpdate,
+		ActionInteractionDeliveryRead,
+	)...)
+	actions = append(actions, ActionDescriptor{Key: ActionInteractionCallbackRecord, ResourceType: ResourceInteractionCallback})
+	return actions
+}
+
 func actionDescriptorsForResource(resourceType string, keys ...string) []ActionDescriptor {
 	actions := make([]ActionDescriptor, 0, len(keys))
 	for _, key := range keys {
@@ -371,13 +431,14 @@ func actionDescriptorsForResource(resourceType string, keys ...string) []ActionD
 
 // SystemActions returns all shared code-owned system actions.
 func SystemActions() []ActionDescriptor {
-	actions := make([]ActionDescriptor, 0, len(ProjectCatalogActions())+len(PackageHubActions())+len(ProviderHubActions())+len(RuntimeManagerActions())+len(FleetManagerActions())+len(AgentManagerActions()))
+	actions := make([]ActionDescriptor, 0, len(ProjectCatalogActions())+len(PackageHubActions())+len(ProviderHubActions())+len(RuntimeManagerActions())+len(FleetManagerActions())+len(AgentManagerActions())+len(InteractionHubActions()))
 	actions = append(actions, ProjectCatalogActions()...)
 	actions = append(actions, PackageHubActions()...)
 	actions = append(actions, ProviderHubActions()...)
 	actions = append(actions, RuntimeManagerActions()...)
 	actions = append(actions, FleetManagerActions()...)
 	actions = append(actions, AgentManagerActions()...)
+	actions = append(actions, InteractionHubActions()...)
 	return actions
 }
 

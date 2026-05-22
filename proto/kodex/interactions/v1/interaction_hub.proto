@@ -1,0 +1,997 @@
+syntax = "proto3";
+
+package kodex.interactions.v1;
+
+option go_package = "github.com/codex-k8s/kodex/proto/gen/go/kodex/interactions/v1;interactionsv1";
+
+// InteractionHubService is the stable v1 inter-service contract for human
+// interaction lifecycle. It owns conversations, feedback and approval delivery,
+// notifications, subscriptions, delivery attempts and safe channel callbacks.
+// Business decision state stays with the owner service that requested the
+// interaction.
+service InteractionHubService {
+  // CreateConversationThread creates a platform conversation thread.
+  rpc CreateConversationThread(CreateConversationThreadRequest) returns (ConversationThreadResponse);
+  // RecordConversationMessage records a safe message summary in a thread.
+  rpc RecordConversationMessage(RecordConversationMessageRequest) returns (ConversationMessageResponse);
+  // GetConversationThread returns authoritative thread state.
+  rpc GetConversationThread(GetConversationThreadRequest) returns (ConversationThreadResponse);
+  // ListConversationMessages returns thread messages with pagination.
+  rpc ListConversationMessages(ListConversationMessagesRequest) returns (ListConversationMessagesResponse);
+
+  // RequestFeedback creates a feedback request without choosing a concrete channel.
+  rpc RequestFeedback(RequestFeedbackRequest) returns (InteractionRequestResponse);
+  // RequestApproval creates an approval delivery request for an owner service decision.
+  rpc RequestApproval(RequestApprovalRequest) returns (InteractionRequestResponse);
+  // RequestHumanGate creates a Human gate delivery request for an owner service decision.
+  rpc RequestHumanGate(RequestHumanGateRequest) returns (InteractionRequestResponse);
+  // RecordInteractionResponse records a human response and returns it to the owner service.
+  rpc RecordInteractionResponse(RecordInteractionResponseRequest) returns (InteractionResponseResponse);
+  // CancelInteractionRequest cancels a request by owner command.
+  rpc CancelInteractionRequest(CancelInteractionRequestRequest) returns (InteractionRequestResponse);
+  // ExpireInteractionRequests expires waiting requests by deadline.
+  rpc ExpireInteractionRequests(ExpireInteractionRequestsRequest) returns (ExpireInteractionRequestsResponse);
+  // GetInteractionRequest returns authoritative request state.
+  rpc GetInteractionRequest(GetInteractionRequestRequest) returns (InteractionRequestResponse);
+  // ListInteractionRequests returns requests by scope, kind, source owner and status.
+  rpc ListInteractionRequests(ListInteractionRequestsRequest) returns (ListInteractionRequestsResponse);
+
+  // RequestNotification creates a one-way notification or reminder intent.
+  rpc RequestNotification(RequestNotificationRequest) returns (NotificationResponse);
+  // UpsertSubscription creates or updates a notification subscription.
+  rpc UpsertSubscription(UpsertSubscriptionRequest) returns (SubscriptionResponse);
+  // DisableSubscription disables a subscription.
+  rpc DisableSubscription(DisableSubscriptionRequest) returns (SubscriptionResponse);
+  // ListSubscriptions returns subscriptions by scope or subscriber.
+  rpc ListSubscriptions(ListSubscriptionsRequest) returns (ListSubscriptionsResponse);
+
+  // PlanDelivery creates a delivery attempt for a request or notification.
+  rpc PlanDelivery(PlanDeliveryRequest) returns (DeliveryAttemptResponse);
+  // RecordDeliveryResult records a safe result from the runtime/channel boundary.
+  rpc RecordDeliveryResult(RecordDeliveryResultRequest) returns (DeliveryAttemptResponse);
+  // RecordChannelCallback records a sanitized callback envelope from a gateway.
+  rpc RecordChannelCallback(RecordChannelCallbackRequest) returns (ChannelCallbackResponse);
+  // GetDeliveryStatus returns request, notification and delivery attempt status.
+  rpc GetDeliveryStatus(GetDeliveryStatusRequest) returns (DeliveryStatusResponse);
+}
+
+// CommandMeta is required for every mutating command.
+message CommandMeta {
+  // command_id is a unique command identifier. Either command_id or idempotency_key is required.
+  optional string command_id = 1;
+  // idempotency_key is an idempotency key scoped by operation and actor.
+  optional string idempotency_key = 2;
+  // expected_version is present only for existing aggregate mutations.
+  optional int64 expected_version = 3;
+  // actor is the authenticated caller.
+  Actor actor = 4;
+  // reason is a machine or operator reason for audit and domain events.
+  string reason = 5;
+  // request_id links the command to logs, traces and audit.
+  string request_id = 6;
+  // request_context carries safe request metadata; no tokens, secrets, email or names.
+  RequestContext request_context = 7;
+}
+
+// QueryMeta carries safe metadata for authoritative reads.
+message QueryMeta {
+  // actor is the authenticated caller.
+  Actor actor = 1;
+  // request_id links the read to logs and traces.
+  string request_id = 2;
+  // request_context carries safe request metadata.
+  RequestContext request_context = 3;
+}
+
+// RequestContext is safe request metadata used for audit and diagnostics.
+message RequestContext {
+  // source identifies caller surface, for example staff-gateway, platform-mcp-server or service.
+  string source = 1;
+  // trace_id links platform traces.
+  optional string trace_id = 2;
+  // session_id links a user session when available.
+  optional string session_id = 3;
+  // client_ip_hash is an optional hashed client address.
+  optional string client_ip_hash = 4;
+}
+
+// Actor identifies a user, service, agent or external account.
+message Actor {
+  // type is a subject type such as user, service, agent or external_account.
+  string type = 1;
+  // id is the subject identifier in its owner domain.
+  string id = 2;
+}
+
+// PageRequest limits list responses.
+message PageRequest {
+  // page_size is the maximum item count requested by caller.
+  int32 page_size = 1;
+  // page_token is an opaque continuation token returned by a previous call.
+  optional string page_token = 2;
+}
+
+// PageResponse describes list continuation state.
+message PageResponse {
+  // next_page_token is empty when there are no more items.
+  optional string next_page_token = 1;
+}
+
+// ScopeRef identifies the platform scope for an interaction.
+message ScopeRef {
+  // type classifies the scope.
+  InteractionScopeType type = 1;
+  // ref is an external scope identifier owned by another domain.
+  string ref = 2;
+}
+
+// ObjectRef points to object storage without embedding object content.
+message ObjectRef {
+  // object_uri points to S3-compatible object storage.
+  string object_uri = 1;
+  // object_digest is a digest used for integrity checks.
+  string object_digest = 2;
+  // object_size_bytes is optional object size for limits and retention.
+  optional int64 object_size_bytes = 3;
+}
+
+// ExternalRef points to another domain aggregate without creating ownership.
+message ExternalRef {
+  // ref_kind classifies the referenced object, for example agent_run or provider_operation.
+  string ref_kind = 1;
+  // ref is the owner-domain identifier.
+  string ref = 2;
+}
+
+// ActorRef is a safe target, recipient or response actor reference.
+message ActorRef {
+  // ref_kind classifies the actor reference, for example user, group, role or service.
+  string ref_kind = 1;
+  // ref is the owner-domain identifier.
+  string ref = 2;
+}
+
+// SourceOwnerRef identifies the business owner of the scenario that requested interaction.
+message SourceOwnerRef {
+  // kind identifies the owner service or scenario.
+  SourceOwnerKind kind = 1;
+  // ref points to the owner-domain aggregate, for example run, gate request or provider operation.
+  optional string ref = 2;
+}
+
+// IngressRef identifies the transport or ingress path that carried the command.
+message IngressRef {
+  // kind identifies the ingress route.
+  IngressKind kind = 1;
+  // ref points to the ingress command, hook event or gateway request when available.
+  optional string ref = 2;
+}
+
+// DecisionOwnerRef identifies the service that owns the business decision.
+message DecisionOwnerRef {
+  // owner_kind is the service that validates and records the final business decision.
+  DecisionOwnerKind owner_kind = 1;
+  // owner_request_ref points to the owner-domain request or gate record.
+  string owner_request_ref = 2;
+  // owner_decision_ref points to a final owner-domain decision when it already exists.
+  optional string owner_decision_ref = 3;
+}
+
+// InteractionAction describes an action a human can choose in an interaction.
+message InteractionAction {
+  // action_key is a stable action key such as answer, approve, reject, defer or acknowledge.
+  string action_key = 1;
+  // label_template_ref points to a localized label template.
+  optional string label_template_ref = 2;
+  // is_terminal tells whether this action resolves the interaction request lifecycle.
+  bool is_terminal = 3;
+}
+
+// ConversationThread stores platform-owned conversation lifecycle.
+message ConversationThread {
+  // id is the thread identifier.
+  string id = 1;
+  // scope is the thread scope.
+  ScopeRef scope = 2;
+  // thread_kind classifies the thread.
+  ConversationThreadKind thread_kind = 3;
+  // primary_actor_ref is the actor that initiated or owns the thread when known.
+  optional string primary_actor_ref = 4;
+  // source_kind identifies the surface or service that opened the thread.
+  ConversationSourceKind source_kind = 5;
+  // source_ref is an optional safe source reference.
+  optional string source_ref = 6;
+  // status is the current thread lifecycle state.
+  ConversationThreadStatus status = 7;
+  // latest_message_id points to the latest message when one exists.
+  optional string latest_message_id = 8;
+  // correlation_id links the thread to neighboring context and traces.
+  string correlation_id = 9;
+  // retention_class selects the message and attachment retention policy.
+  string retention_class = 10;
+  // version is used for optimistic concurrency.
+  int64 version = 11;
+  // created_at is an RFC3339 timestamp.
+  string created_at = 12;
+  // updated_at is an RFC3339 timestamp.
+  string updated_at = 13;
+  // closed_at is set when the thread becomes terminal.
+  optional string closed_at = 14;
+}
+
+// ConversationMessage stores a safe message summary in a thread.
+message ConversationMessage {
+  // id is the message identifier.
+  string id = 1;
+  // thread_id is the owning thread.
+  string thread_id = 2;
+  // message_kind classifies the message.
+  ConversationMessageKind message_kind = 3;
+  // author_ref is a safe actor, agent, service or channel package reference.
+  string author_ref = 4;
+  // body_summary is a bounded safe summary.
+  optional string body_summary = 5;
+  // body_object points to full text or attachments after policy-controlled storage.
+  optional ObjectRef body_object = 6;
+  // body_digest is the digest of the full body when stored outside PostgreSQL.
+  optional string body_digest = 7;
+  // locale is a BCP 47 locale code when known.
+  optional string locale = 8;
+  // safe_metadata carries small non-secret diagnostic keys.
+  map<string, string> safe_metadata = 9;
+  // created_at is an RFC3339 timestamp.
+  string created_at = 10;
+}
+
+// InteractionRequest stores the delivery/request lifecycle for feedback,
+// approval and Human gate interactions. It does not own the final governance,
+// agent-manager or provider decision state.
+message InteractionRequest {
+  // id is the request identifier.
+  string id = 1;
+  // request_kind classifies the request.
+  InteractionRequestKind request_kind = 2;
+  // scope is the request scope.
+  ScopeRef scope = 3;
+  // thread_id links an optional conversation thread.
+  optional string thread_id = 4;
+  // source_owner identifies the business owner that asked for the interaction.
+  SourceOwnerRef source_owner = 5;
+  // ingress identifies the transport route that carried the command.
+  IngressRef ingress = 6;
+  // decision_owner identifies the service that owns the resulting business decision.
+  optional DecisionOwnerRef decision_owner = 7;
+  // target_refs are safe refs for users, groups or roles that may respond.
+  repeated ActorRef target_refs = 8;
+  // context_refs point to run, session, provider, runtime, package or incident context.
+  repeated ExternalRef context_refs = 9;
+  // prompt_summary is a bounded safe request text.
+  string prompt_summary = 10;
+  // prompt_object points to full evidence or prompt content after sanitization.
+  optional ObjectRef prompt_object = 11;
+  // allowed_actions lists actions the interaction lifecycle can accept.
+  repeated InteractionAction allowed_actions = 12;
+  // risk_class is a safe classification copied from the owner context when relevant.
+  InteractionRiskClass risk_class = 13;
+  // status is the interaction request lifecycle status.
+  InteractionRequestStatus status = 14;
+  // deadline_at is an RFC3339 timestamp when the request expires.
+  optional string deadline_at = 15;
+  // reminder_policy_ref points to policy data owned by interaction-hub or governance.
+  optional string reminder_policy_ref = 16;
+  // version is used for optimistic concurrency.
+  int64 version = 17;
+  // created_at is an RFC3339 timestamp.
+  string created_at = 18;
+  // updated_at is an RFC3339 timestamp.
+  string updated_at = 19;
+  // resolved_at is set when the request reaches a terminal state.
+  optional string resolved_at = 20;
+}
+
+// InteractionResponse records a human response captured by interaction-hub. The
+// owner service decides whether and how this response changes its own state.
+message InteractionResponse {
+  // id is the response identifier.
+  string id = 1;
+  // request_id is the interaction request being answered.
+  string request_id = 2;
+  // response_action is the normalized human action.
+  InteractionResponseAction response_action = 3;
+  // responded_by_actor_ref is the verified platform actor or external subject.
+  string responded_by_actor_ref = 4;
+  // response_summary is a bounded safe answer summary.
+  optional string response_summary = 5;
+  // response_object points to full response content after sanitization.
+  optional ObjectRef response_object = 6;
+  // source_kind identifies where the response came from.
+  InteractionResponseSourceKind source_kind = 7;
+  // source_ref points to callback, message or command record when available.
+  optional string source_ref = 8;
+  // owner_decision_ref points to the final owner-domain decision if already recorded.
+  optional string owner_decision_ref = 9;
+  // created_at is an RFC3339 timestamp.
+  string created_at = 10;
+}
+
+// Notification stores one-way notification or reminder lifecycle.
+message Notification {
+  // id is the notification identifier.
+  string id = 1;
+  // scope is the notification scope.
+  ScopeRef scope = 2;
+  // notification_kind classifies the notification.
+  NotificationKind notification_kind = 3;
+  // request_id points to an interaction request when the notification is a reminder.
+  optional string request_id = 4;
+  // subscription_id points to the subscription that created the notification.
+  optional string subscription_id = 5;
+  // recipient_refs are safe refs for users, groups or roles.
+  repeated ActorRef recipient_refs = 6;
+  // message_template_ref points to a localized message template.
+  string message_template_ref = 7;
+  // message_summary is a bounded safe summary.
+  string message_summary = 8;
+  // priority classifies urgency.
+  NotificationPriority priority = 9;
+  // status is the notification lifecycle status.
+  NotificationStatus status = 10;
+  // created_at is an RFC3339 timestamp.
+  string created_at = 11;
+  // updated_at is an RFC3339 timestamp.
+  string updated_at = 12;
+  // expires_at is an RFC3339 timestamp when notification is no longer useful.
+  optional string expires_at = 13;
+}
+
+// Subscription stores canonical notification delivery preferences for a subscriber.
+message Subscription {
+  // id is the subscription identifier.
+  string id = 1;
+  // scope is the subscription scope.
+  ScopeRef scope = 2;
+  // subscriber_ref points to actor, group, role or service principal.
+  ActorRef subscriber_ref = 3;
+  // event_filter_json is bounded policy data without secrets.
+  string event_filter_json = 4;
+  // delivery_preferences_json describes generic surfaces and fallback policy, not concrete vendor state.
+  string delivery_preferences_json = 5;
+  // status is the subscription lifecycle status.
+  SubscriptionStatus status = 6;
+  // version is used for optimistic concurrency.
+  int64 version = 7;
+  // created_at is an RFC3339 timestamp.
+  string created_at = 8;
+  // updated_at is an RFC3339 timestamp.
+  string updated_at = 9;
+}
+
+// DeliveryRoute stores a selected generic route without owning package installation.
+message DeliveryRoute {
+  // id is the route identifier.
+  string id = 1;
+  // scope is the route scope.
+  ScopeRef scope = 2;
+  // surface_kind identifies a generic delivery surface.
+  DeliverySurfaceKind surface_kind = 3;
+  // channel_capability_ref points to package-hub channel capability when relevant.
+  optional string channel_capability_ref = 4;
+  // package_installation_ref points to package-hub installation state when relevant.
+  optional string package_installation_ref = 5;
+  // routing_policy_ref points to route policy without embedding secrets.
+  optional string routing_policy_ref = 6;
+  // status is the route lifecycle status.
+  DeliveryRouteStatus status = 7;
+  // created_at is an RFC3339 timestamp.
+  string created_at = 8;
+  // updated_at is an RFC3339 timestamp.
+  string updated_at = 9;
+}
+
+// DeliveryTarget identifies whether delivery belongs to a request or notification.
+message DeliveryTarget {
+  oneof target {
+    // request_id is set for feedback, approval and Human gate delivery.
+    string request_id = 1;
+    // notification_id is set for one-way notification or reminder delivery.
+    string notification_id = 2;
+  }
+}
+
+// DeliveryAttempt stores one attempt to deliver a request or notification.
+message DeliveryAttempt {
+  // id is the delivery attempt identifier.
+  string id = 1;
+  // target identifies the request or notification being delivered.
+  DeliveryTarget target = 2;
+  // route_id is the selected route.
+  string route_id = 3;
+  // delivery_id is the idempotency key passed to the channel contract.
+  string delivery_id = 4;
+  // delivery_kind classifies payload semantics.
+  DeliveryKind delivery_kind = 5;
+  // status is the delivery lifecycle status.
+  DeliveryAttemptStatus status = 6;
+  // channel_message_ref is a safe channel message reference when available.
+  optional string channel_message_ref = 7;
+  // attempt_number is the retry attempt number.
+  int32 attempt_number = 8;
+  // next_retry_at is an RFC3339 timestamp for retry.
+  optional string next_retry_at = 9;
+  // error_code is a short safe error code.
+  optional string error_code = 10;
+  // error_class classifies retry behavior.
+  DeliveryErrorClass error_class = 11;
+  // payload_digest is the digest of the normalized delivery command.
+  string payload_digest = 12;
+  // created_at is an RFC3339 timestamp.
+  string created_at = 13;
+  // updated_at is an RFC3339 timestamp.
+  string updated_at = 14;
+  // sent_at is an RFC3339 timestamp when the command left interaction-hub.
+  optional string sent_at = 15;
+}
+
+// ChannelCallback stores a safe normalized callback record.
+message ChannelCallback {
+  // id is the callback record identifier.
+  string id = 1;
+  // callback_id is the idempotency key received from the gateway.
+  string callback_id = 2;
+  // delivery_attempt_id links the matched delivery attempt when known.
+  optional string delivery_attempt_id = 3;
+  // request_id links the matched request when known.
+  optional string request_id = 4;
+  // source_route_id links the matched route when known.
+  optional string source_route_id = 5;
+  // actor_ref is the verified actor or external subject.
+  optional string actor_ref = 6;
+  // action is the action key selected by the actor.
+  optional string action = 7;
+  // callback_summary is a bounded safe callback summary.
+  optional string callback_summary = 8;
+  // callback_object points to the full sanitized callback payload or attachments.
+  optional ObjectRef callback_object = 9;
+  // signature_status describes gateway verification without raw signature data.
+  CallbackSignatureStatus signature_status = 10;
+  // processing_status describes domain processing.
+  CallbackProcessingStatus processing_status = 11;
+  // error_code is a short safe processing error.
+  optional string error_code = 12;
+  // received_at is an RFC3339 timestamp from the gateway.
+  string received_at = 13;
+  // created_at is an RFC3339 timestamp when the callback was stored.
+  string created_at = 14;
+}
+
+// ChannelDeliveryCommand is the stable DTO sent through the runtime boundary to
+// a package-owned channel workload. It carries no channel secrets or raw payloads.
+message ChannelDeliveryCommand {
+  // contract_version is the channel delivery contract version, for example interaction.channel.v1.
+  string contract_version = 1;
+  // delivery_id is the idempotency key for the channel package workload.
+  string delivery_id = 2;
+  // target identifies the request or notification.
+  DeliveryTarget target = 3;
+  // delivery_kind classifies payload semantics.
+  DeliveryKind delivery_kind = 4;
+  // scope is the interaction scope.
+  ScopeRef scope = 5;
+  // recipient_refs are safe refs for target users, groups or roles.
+  repeated ActorRef recipient_refs = 6;
+  // message_template_ref points to a localized template when available.
+  optional string message_template_ref = 7;
+  // message_summary is a bounded safe summary.
+  string message_summary = 8;
+  // actions are allowed callback actions.
+  repeated InteractionAction actions = 9;
+  // callback_ref is the opaque reference used to match callbacks.
+  string callback_ref = 10;
+  // correlation_id links this delivery to traces and owner context.
+  string correlation_id = 11;
+  // expires_at is an RFC3339 timestamp for the delivery attempt.
+  optional string expires_at = 12;
+  // context_refs point to neighboring domain context without copying state.
+  repeated ExternalRef context_refs = 13;
+}
+
+// ChannelDeliveryResult is the safe result returned from runtime or channel package workload.
+message ChannelDeliveryResult {
+  // contract_version is the channel delivery contract version.
+  string contract_version = 1;
+  // delivery_id identifies the attempted delivery.
+  string delivery_id = 2;
+  // result_status describes channel package acceptance or failure.
+  ChannelDeliveryResultStatus result_status = 3;
+  // channel_message_ref is a safe external message reference when available.
+  optional string channel_message_ref = 4;
+  // error_code is a short safe error code.
+  optional string error_code = 5;
+  // error_class classifies retry behavior.
+  DeliveryErrorClass error_class = 6;
+  // retry_after is an RFC3339 timestamp or duration token chosen by the channel package.
+  optional string retry_after = 7;
+  // occurred_at is an RFC3339 timestamp.
+  string occurred_at = 8;
+}
+
+// ChannelCallbackEnvelope is the safe callback DTO passed from a gateway to the domain.
+message ChannelCallbackEnvelope {
+  // contract_version is the channel callback contract version.
+  string contract_version = 1;
+  // callback_id is the idempotency key for callback processing.
+  string callback_id = 2;
+  // delivery_id links the callback to a delivery attempt when available.
+  optional string delivery_id = 3;
+  // request_ref points to the interaction request when available.
+  optional string request_ref = 4;
+  // actor_ref is the verified gateway actor or external subject.
+  optional string actor_ref = 5;
+  // action is the action key selected by the actor.
+  string action = 6;
+  // answer_summary is a bounded safe answer summary.
+  optional string answer_summary = 7;
+  // answer_object points to full sanitized answer or attachments.
+  optional ObjectRef answer_object = 8;
+  // signature_status describes gateway verification without raw signature data.
+  CallbackSignatureStatus signature_status = 9;
+  // gateway_ref is a safe gateway request reference.
+  optional string gateway_ref = 10;
+  // received_at is an RFC3339 timestamp from the gateway.
+  string received_at = 11;
+  // correlation_id links this callback to traces and owner context.
+  string correlation_id = 12;
+}
+
+message CreateConversationThreadRequest {
+  CommandMeta meta = 1;
+  ScopeRef scope = 2;
+  ConversationThreadKind thread_kind = 3;
+  optional string primary_actor_ref = 4;
+  ConversationSourceKind source_kind = 5;
+  optional string source_ref = 6;
+  string correlation_id = 7;
+  string retention_class = 8;
+}
+
+message RecordConversationMessageRequest {
+  CommandMeta meta = 1;
+  string thread_id = 2;
+  ConversationMessageKind message_kind = 3;
+  string author_ref = 4;
+  optional string body_summary = 5;
+  optional ObjectRef body_object = 6;
+  optional string body_digest = 7;
+  optional string locale = 8;
+  map<string, string> safe_metadata = 9;
+}
+
+message GetConversationThreadRequest {
+  QueryMeta meta = 1;
+  string thread_id = 2;
+}
+
+message ListConversationMessagesRequest {
+  QueryMeta meta = 1;
+  string thread_id = 2;
+  PageRequest page = 3;
+}
+
+message InteractionRequestDraft {
+  ScopeRef scope = 1;
+  optional string thread_id = 2;
+  SourceOwnerRef source_owner = 3;
+  IngressRef ingress = 4;
+  optional DecisionOwnerRef decision_owner = 5;
+  repeated ActorRef target_refs = 6;
+  repeated ExternalRef context_refs = 7;
+  string prompt_summary = 8;
+  optional ObjectRef prompt_object = 9;
+  repeated InteractionAction allowed_actions = 10;
+  InteractionRiskClass risk_class = 11;
+  optional string deadline_at = 12;
+  optional string reminder_policy_ref = 13;
+}
+
+message RequestFeedbackRequest {
+  CommandMeta meta = 1;
+  InteractionRequestDraft request = 2;
+}
+
+message RequestApprovalRequest {
+  CommandMeta meta = 1;
+  InteractionRequestDraft request = 2;
+}
+
+message RequestHumanGateRequest {
+  CommandMeta meta = 1;
+  InteractionRequestDraft request = 2;
+}
+
+message RecordInteractionResponseRequest {
+  CommandMeta meta = 1;
+  string request_id = 2;
+  InteractionResponseAction response_action = 3;
+  string responded_by_actor_ref = 4;
+  optional string response_summary = 5;
+  optional ObjectRef response_object = 6;
+  InteractionResponseSourceKind source_kind = 7;
+  optional string source_ref = 8;
+  optional string owner_decision_ref = 9;
+}
+
+message CancelInteractionRequestRequest {
+  CommandMeta meta = 1;
+  string request_id = 2;
+}
+
+message ExpireInteractionRequestsRequest {
+  CommandMeta meta = 1;
+  ScopeRef scope = 2;
+  optional string deadline_before = 3;
+  int32 limit = 4;
+}
+
+message GetInteractionRequestRequest {
+  QueryMeta meta = 1;
+  string request_id = 2;
+}
+
+message ListInteractionRequestsRequest {
+  QueryMeta meta = 1;
+  ScopeRef scope = 2;
+  optional InteractionRequestKind request_kind = 3;
+  optional InteractionRequestStatus status = 4;
+  optional SourceOwnerKind source_owner_kind = 5;
+  optional string source_owner_ref = 6;
+  optional string deadline_before = 7;
+  PageRequest page = 8;
+}
+
+message RequestNotificationRequest {
+  CommandMeta meta = 1;
+  ScopeRef scope = 2;
+  NotificationKind notification_kind = 3;
+  optional string request_id = 4;
+  optional string subscription_id = 5;
+  repeated ActorRef recipient_refs = 6;
+  string message_template_ref = 7;
+  string message_summary = 8;
+  NotificationPriority priority = 9;
+  optional string expires_at = 10;
+}
+
+message UpsertSubscriptionRequest {
+  CommandMeta meta = 1;
+  optional string subscription_id = 2;
+  ScopeRef scope = 3;
+  ActorRef subscriber_ref = 4;
+  string event_filter_json = 5;
+  string delivery_preferences_json = 6;
+  SubscriptionStatus status = 7;
+}
+
+message DisableSubscriptionRequest {
+  CommandMeta meta = 1;
+  string subscription_id = 2;
+}
+
+message ListSubscriptionsRequest {
+  QueryMeta meta = 1;
+  ScopeRef scope = 2;
+  optional string subscriber_ref = 3;
+  optional SubscriptionStatus status = 4;
+  PageRequest page = 5;
+}
+
+message PlanDeliveryRequest {
+  CommandMeta meta = 1;
+  DeliveryTarget target = 2;
+  optional string route_id = 3;
+  optional string correlation_id = 4;
+}
+
+message RecordDeliveryResultRequest {
+  CommandMeta meta = 1;
+  ChannelDeliveryResult result = 2;
+}
+
+message RecordChannelCallbackRequest {
+  CommandMeta meta = 1;
+  ChannelCallbackEnvelope callback = 2;
+}
+
+message GetDeliveryStatusRequest {
+  QueryMeta meta = 1;
+  DeliveryTarget target = 2;
+  optional string delivery_id = 3;
+}
+
+message ConversationThreadResponse {
+  ConversationThread thread = 1;
+}
+
+message ConversationMessageResponse {
+  ConversationMessage message = 1;
+}
+
+message ListConversationMessagesResponse {
+  repeated ConversationMessage messages = 1;
+  PageResponse page = 2;
+}
+
+message InteractionRequestResponse {
+  InteractionRequest request = 1;
+}
+
+message InteractionResponseResponse {
+  InteractionRequest request = 1;
+  InteractionResponse response = 2;
+}
+
+message ExpireInteractionRequestsResponse {
+  repeated string expired_request_ids = 1;
+  int32 expired_count = 2;
+}
+
+message ListInteractionRequestsResponse {
+  repeated InteractionRequest requests = 1;
+  PageResponse page = 2;
+}
+
+message NotificationResponse {
+  Notification notification = 1;
+}
+
+message SubscriptionResponse {
+  Subscription subscription = 1;
+}
+
+message ListSubscriptionsResponse {
+  repeated Subscription subscriptions = 1;
+  PageResponse page = 2;
+}
+
+message DeliveryAttemptResponse {
+  DeliveryAttempt delivery_attempt = 1;
+}
+
+message ChannelCallbackResponse {
+  ChannelCallback callback = 1;
+  optional InteractionResponse response = 2;
+}
+
+message DeliveryStatusResponse {
+  optional InteractionRequest request = 1;
+  optional Notification notification = 2;
+  repeated DeliveryAttempt delivery_attempts = 3;
+  optional ChannelCallback latest_callback = 4;
+}
+
+// InteractionScopeType classifies scope ownership.
+enum InteractionScopeType {
+  INTERACTION_SCOPE_TYPE_UNSPECIFIED = 0;
+  INTERACTION_SCOPE_TYPE_PLATFORM = 1;
+  INTERACTION_SCOPE_TYPE_ORGANIZATION = 2;
+  INTERACTION_SCOPE_TYPE_PROJECT = 3;
+  INTERACTION_SCOPE_TYPE_REPOSITORY = 4;
+  INTERACTION_SCOPE_TYPE_SERVICE = 5;
+}
+
+// ConversationThreadKind classifies thread purpose.
+enum ConversationThreadKind {
+  CONVERSATION_THREAD_KIND_UNSPECIFIED = 0;
+  CONVERSATION_THREAD_KIND_USER_DIALOG = 1;
+  CONVERSATION_THREAD_KIND_OWNER_FEEDBACK = 2;
+  CONVERSATION_THREAD_KIND_APPROVAL = 3;
+  CONVERSATION_THREAD_KIND_HUMAN_GATE = 4;
+  CONVERSATION_THREAD_KIND_NOTIFICATION = 5;
+  CONVERSATION_THREAD_KIND_OPS = 6;
+}
+
+enum ConversationThreadStatus {
+  CONVERSATION_THREAD_STATUS_UNSPECIFIED = 0;
+  CONVERSATION_THREAD_STATUS_OPEN = 1;
+  CONVERSATION_THREAD_STATUS_WAITING = 2;
+  CONVERSATION_THREAD_STATUS_CLOSED = 3;
+  CONVERSATION_THREAD_STATUS_ARCHIVED = 4;
+}
+
+enum ConversationSourceKind {
+  CONVERSATION_SOURCE_KIND_UNSPECIFIED = 0;
+  CONVERSATION_SOURCE_KIND_WEB_CONSOLE = 1;
+  CONVERSATION_SOURCE_KIND_VOICE = 2;
+  CONVERSATION_SOURCE_KIND_MCP = 3;
+  CONVERSATION_SOURCE_KIND_PROVIDER = 4;
+  CONVERSATION_SOURCE_KIND_CHANNEL_PACKAGE = 5;
+  CONVERSATION_SOURCE_KIND_CODEX_HOOK = 6;
+  CONVERSATION_SOURCE_KIND_SYSTEM = 7;
+  CONVERSATION_SOURCE_KIND_SERVICE = 8;
+}
+
+enum ConversationMessageKind {
+  CONVERSATION_MESSAGE_KIND_UNSPECIFIED = 0;
+  CONVERSATION_MESSAGE_KIND_USER_TEXT = 1;
+  CONVERSATION_MESSAGE_KIND_VOICE_TRANSCRIPT = 2;
+  CONVERSATION_MESSAGE_KIND_AGENT_TEXT = 3;
+  CONVERSATION_MESSAGE_KIND_SYSTEM_NOTICE = 4;
+  CONVERSATION_MESSAGE_KIND_RESPONSE_SUMMARY = 5;
+  CONVERSATION_MESSAGE_KIND_CALLBACK_SUMMARY = 6;
+}
+
+enum SourceOwnerKind {
+  SOURCE_OWNER_KIND_UNSPECIFIED = 0;
+  SOURCE_OWNER_KIND_AGENT_MANAGER = 1;
+  SOURCE_OWNER_KIND_SLOT_AGENT = 2;
+  SOURCE_OWNER_KIND_GOVERNANCE_MANAGER = 3;
+  SOURCE_OWNER_KIND_PROVIDER_HUB = 4;
+  SOURCE_OWNER_KIND_OPERATIONS_HUB = 5;
+  SOURCE_OWNER_KIND_USER = 6;
+  SOURCE_OWNER_KIND_SYSTEM = 7;
+}
+
+enum DecisionOwnerKind {
+  DECISION_OWNER_KIND_UNSPECIFIED = 0;
+  DECISION_OWNER_KIND_AGENT_MANAGER = 1;
+  DECISION_OWNER_KIND_GOVERNANCE_MANAGER = 2;
+  DECISION_OWNER_KIND_PROVIDER_HUB = 3;
+  DECISION_OWNER_KIND_OPERATIONS_HUB = 4;
+  DECISION_OWNER_KIND_SYSTEM = 5;
+}
+
+enum IngressKind {
+  INGRESS_KIND_UNSPECIFIED = 0;
+  INGRESS_KIND_DIRECT_GRPC = 1;
+  INGRESS_KIND_MCP = 2;
+  INGRESS_KIND_CODEX_HOOK = 3;
+  INGRESS_KIND_GATEWAY = 4;
+  INGRESS_KIND_SYSTEM = 5;
+  INGRESS_KIND_SERVICE = 6;
+}
+
+enum InteractionRequestKind {
+  INTERACTION_REQUEST_KIND_UNSPECIFIED = 0;
+  INTERACTION_REQUEST_KIND_FEEDBACK = 1;
+  INTERACTION_REQUEST_KIND_APPROVAL = 2;
+  INTERACTION_REQUEST_KIND_HUMAN_GATE = 3;
+}
+
+enum InteractionRiskClass {
+  INTERACTION_RISK_CLASS_UNSPECIFIED = 0;
+  INTERACTION_RISK_CLASS_LOW = 1;
+  INTERACTION_RISK_CLASS_MEDIUM = 2;
+  INTERACTION_RISK_CLASS_HIGH = 3;
+  INTERACTION_RISK_CLASS_CRITICAL = 4;
+}
+
+enum InteractionRequestStatus {
+  INTERACTION_REQUEST_STATUS_UNSPECIFIED = 0;
+  INTERACTION_REQUEST_STATUS_CREATED = 1;
+  INTERACTION_REQUEST_STATUS_ROUTED = 2;
+  INTERACTION_REQUEST_STATUS_WAITING = 3;
+  INTERACTION_REQUEST_STATUS_ANSWERED = 4;
+  INTERACTION_REQUEST_STATUS_EXPIRED = 5;
+  INTERACTION_REQUEST_STATUS_CANCELLED = 6;
+  INTERACTION_REQUEST_STATUS_FAILED = 7;
+}
+
+enum InteractionResponseAction {
+  INTERACTION_RESPONSE_ACTION_UNSPECIFIED = 0;
+  INTERACTION_RESPONSE_ACTION_ANSWER = 1;
+  INTERACTION_RESPONSE_ACTION_APPROVE = 2;
+  INTERACTION_RESPONSE_ACTION_REJECT = 3;
+  INTERACTION_RESPONSE_ACTION_DEFER = 4;
+  INTERACTION_RESPONSE_ACTION_ACKNOWLEDGE = 5;
+  INTERACTION_RESPONSE_ACTION_CUSTOM = 6;
+}
+
+enum InteractionResponseSourceKind {
+  INTERACTION_RESPONSE_SOURCE_KIND_UNSPECIFIED = 0;
+  INTERACTION_RESPONSE_SOURCE_KIND_WEB_CONSOLE = 1;
+  INTERACTION_RESPONSE_SOURCE_KIND_MCP = 2;
+  INTERACTION_RESPONSE_SOURCE_KIND_CHANNEL_CALLBACK = 3;
+  INTERACTION_RESPONSE_SOURCE_KIND_SYSTEM = 4;
+  INTERACTION_RESPONSE_SOURCE_KIND_SERVICE = 5;
+}
+
+enum NotificationKind {
+  NOTIFICATION_KIND_UNSPECIFIED = 0;
+  NOTIFICATION_KIND_STATUS = 1;
+  NOTIFICATION_KIND_REMINDER = 2;
+  NOTIFICATION_KIND_ERROR = 3;
+  NOTIFICATION_KIND_ATTENTION = 4;
+  NOTIFICATION_KIND_DECISION_REQUIRED = 5;
+  NOTIFICATION_KIND_OPS = 6;
+}
+
+enum NotificationPriority {
+  NOTIFICATION_PRIORITY_UNSPECIFIED = 0;
+  NOTIFICATION_PRIORITY_LOW = 1;
+  NOTIFICATION_PRIORITY_NORMAL = 2;
+  NOTIFICATION_PRIORITY_HIGH = 3;
+  NOTIFICATION_PRIORITY_URGENT = 4;
+}
+
+enum NotificationStatus {
+  NOTIFICATION_STATUS_UNSPECIFIED = 0;
+  NOTIFICATION_STATUS_CREATED = 1;
+  NOTIFICATION_STATUS_QUEUED = 2;
+  NOTIFICATION_STATUS_DELIVERED = 3;
+  NOTIFICATION_STATUS_ACKNOWLEDGED = 4;
+  NOTIFICATION_STATUS_EXPIRED = 5;
+  NOTIFICATION_STATUS_FAILED = 6;
+}
+
+enum SubscriptionStatus {
+  SUBSCRIPTION_STATUS_UNSPECIFIED = 0;
+  SUBSCRIPTION_STATUS_ACTIVE = 1;
+  SUBSCRIPTION_STATUS_PAUSED = 2;
+  SUBSCRIPTION_STATUS_DISABLED = 3;
+}
+
+enum DeliverySurfaceKind {
+  DELIVERY_SURFACE_KIND_UNSPECIFIED = 0;
+  DELIVERY_SURFACE_KIND_WEB_CONSOLE = 1;
+  DELIVERY_SURFACE_KIND_VOICE = 2;
+  DELIVERY_SURFACE_KIND_PROVIDER_SURFACE = 3;
+  DELIVERY_SURFACE_KIND_CHANNEL_PACKAGE = 4;
+  DELIVERY_SURFACE_KIND_SYSTEM = 5;
+}
+
+enum DeliveryRouteStatus {
+  DELIVERY_ROUTE_STATUS_UNSPECIFIED = 0;
+  DELIVERY_ROUTE_STATUS_ACTIVE = 1;
+  DELIVERY_ROUTE_STATUS_PAUSED = 2;
+  DELIVERY_ROUTE_STATUS_DISABLED = 3;
+}
+
+enum DeliveryKind {
+  DELIVERY_KIND_UNSPECIFIED = 0;
+  DELIVERY_KIND_FEEDBACK = 1;
+  DELIVERY_KIND_APPROVAL = 2;
+  DELIVERY_KIND_HUMAN_GATE = 3;
+  DELIVERY_KIND_NOTIFICATION = 4;
+}
+
+enum DeliveryAttemptStatus {
+  DELIVERY_ATTEMPT_STATUS_UNSPECIFIED = 0;
+  DELIVERY_ATTEMPT_STATUS_QUEUED = 1;
+  DELIVERY_ATTEMPT_STATUS_SENT = 2;
+  DELIVERY_ATTEMPT_STATUS_ACCEPTED = 3;
+  DELIVERY_ATTEMPT_STATUS_DELIVERED = 4;
+  DELIVERY_ATTEMPT_STATUS_FAILED = 5;
+  DELIVERY_ATTEMPT_STATUS_CANCELLED = 6;
+  DELIVERY_ATTEMPT_STATUS_EXPIRED = 7;
+}
+
+enum DeliveryErrorClass {
+  DELIVERY_ERROR_CLASS_UNSPECIFIED = 0;
+  DELIVERY_ERROR_CLASS_TEMPORARY = 1;
+  DELIVERY_ERROR_CLASS_PERMANENT = 2;
+  DELIVERY_ERROR_CLASS_AUTH = 3;
+  DELIVERY_ERROR_CLASS_RATE_LIMITED = 4;
+  DELIVERY_ERROR_CLASS_POLICY = 5;
+}
+
+enum ChannelDeliveryResultStatus {
+  CHANNEL_DELIVERY_RESULT_STATUS_UNSPECIFIED = 0;
+  CHANNEL_DELIVERY_RESULT_STATUS_ACCEPTED = 1;
+  CHANNEL_DELIVERY_RESULT_STATUS_DEFERRED = 2;
+  CHANNEL_DELIVERY_RESULT_STATUS_REJECTED = 3;
+  CHANNEL_DELIVERY_RESULT_STATUS_FAILED = 4;
+}
+
+enum CallbackSignatureStatus {
+  CALLBACK_SIGNATURE_STATUS_UNSPECIFIED = 0;
+  CALLBACK_SIGNATURE_STATUS_VERIFIED = 1;
+  CALLBACK_SIGNATURE_STATUS_TRUSTED_INTERNAL = 2;
+  CALLBACK_SIGNATURE_STATUS_REJECTED_BEFORE_DOMAIN = 3;
+}
+
+enum CallbackProcessingStatus {
+  CALLBACK_PROCESSING_STATUS_UNSPECIFIED = 0;
+  CALLBACK_PROCESSING_STATUS_ACCEPTED = 1;
+  CALLBACK_PROCESSING_STATUS_DUPLICATE = 2;
+  CALLBACK_PROCESSING_STATUS_REJECTED = 3;
+  CALLBACK_PROCESSING_STATUS_FAILED = 4;
+}
