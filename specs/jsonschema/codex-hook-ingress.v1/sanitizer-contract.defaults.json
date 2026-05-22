@@ -1,0 +1,213 @@
+{
+  "contract_id": "codex-hook-ingress.sanitizer.v1",
+  "schema_version": "codex-hook-ingress.sanitizer-contract.v1",
+  "max_envelope_bytes": 65536,
+  "max_text_preview_bytes": 4096,
+  "max_bounded_error_bytes": 8192,
+  "binary_payload": "forbidden",
+  "supported_hook_events": [
+    "SessionStart",
+    "UserPromptSubmit",
+    "PreToolUse",
+    "PermissionRequest",
+    "PostToolUse",
+    "Stop"
+  ],
+  "forbidden_field_paths": [
+    "tool_input",
+    "tool_response",
+    "stdout",
+    "stderr",
+    "transcript_path",
+    "session_dump",
+    "session_json",
+    "session_jsonl",
+    "prompt.raw",
+    "env",
+    "headers.authorization",
+    "headers.cookie",
+    "kubeconfig",
+    "provider_payload",
+    "secret_value",
+    "private_key",
+    "binary_payload",
+    "skill_manifest",
+    "skill_content",
+    "mcp.tools_call_payload"
+  ],
+  "forbidden_field_classes": [
+    "raw_tool_input",
+    "raw_tool_output",
+    "raw_prompt",
+    "raw_transcript",
+    "raw_session",
+    "secret",
+    "credential",
+    "provider_raw_payload",
+    "binary",
+    "large_log",
+    "skill_manifest_or_content",
+    "mcp_transport_payload",
+    "business_command_payload"
+  ],
+  "redaction_rules": [
+    {
+      "rule_id": "authorization-header",
+      "input_class": "authorization_header",
+      "action": "reject",
+      "replacement": "reject_event"
+    },
+    {
+      "rule_id": "token-like-string",
+      "input_class": "token_like",
+      "action": "redact",
+      "replacement": "[REDACTED]"
+    },
+    {
+      "rule_id": "private-key-like",
+      "input_class": "private_key_like",
+      "action": "reject",
+      "replacement": "reject_event"
+    },
+    {
+      "rule_id": "provider-credential",
+      "input_class": "provider_credential",
+      "action": "digest_only",
+      "replacement": "sha256_digest"
+    }
+  ],
+  "digest_rules": [
+    {
+      "source_class": "prompt",
+      "algorithm": "sha256",
+      "output_field": "prompt_digest"
+    },
+    {
+      "source_class": "command",
+      "algorithm": "sha256",
+      "output_field": "command_digest"
+    },
+    {
+      "source_class": "tool_output",
+      "algorithm": "sha256",
+      "output_field": "output_digest"
+    },
+    {
+      "source_class": "bounded_error",
+      "algorithm": "sha256",
+      "output_field": "error_digest"
+    },
+    {
+      "source_class": "normalized_payload",
+      "algorithm": "sha256",
+      "output_field": "payload_digest"
+    },
+    {
+      "source_class": "capability_context",
+      "algorithm": "sha256",
+      "output_field": "capability_digest"
+    }
+  ],
+  "preview_rules": [
+    {
+      "field_class": "safe_summary",
+      "max_bytes": 4096,
+      "must_be_sanitized": true
+    },
+    {
+      "field_class": "sanitized_reason",
+      "max_bytes": 4096,
+      "must_be_sanitized": true
+    },
+    {
+      "field_class": "bounded_error",
+      "max_bytes": 8192,
+      "must_be_sanitized": true
+    }
+  ],
+  "bounded_error_rules": {
+    "max_bytes": 8192,
+    "required_fields": [
+      "error_class",
+      "safe_message",
+      "truncated",
+      "error_digest"
+    ],
+    "forbidden_content": [
+      "secret_value",
+      "raw_command",
+      "raw_stdout",
+      "raw_stderr",
+      "raw_provider_payload",
+      "kubeconfig",
+      "private_key"
+    ]
+  },
+  "downstream_owner_parts": {
+    "agent-manager": [
+      "source_context",
+      "run_context",
+      "capability_context",
+      "safe_summary",
+      "prompt_digest",
+      "risk_class",
+      "pending_action_refs",
+      "checkpoint_ref",
+      "payload_digest",
+      "correlation_id"
+    ],
+    "runtime-manager": [
+      "source_context",
+      "run_context",
+      "tool_context",
+      "capability_context",
+      "bounded_error",
+      "checkpoint_ref",
+      "payload_digest",
+      "correlation_id"
+    ],
+    "provider-hub": [
+      "run_context",
+      "tool_context",
+      "provider_artifact_signal",
+      "rate_limit_hint",
+      "payload_digest",
+      "correlation_id"
+    ],
+    "governance-manager": [
+      "source_context",
+      "run_context",
+      "tool_context",
+      "risk_class",
+      "sanitized_reason",
+      "payload_digest",
+      "correlation_id"
+    ],
+    "interaction-hub": [
+      "source_context",
+      "run_context",
+      "sanitized_reason",
+      "risk_class",
+      "correlation_id"
+    ],
+    "operations-feed": [
+      "run_context",
+      "tool_context",
+      "safe_summary",
+      "bounded_error",
+      "provider_artifact_signal",
+      "sanitizer_report",
+      "correlation_id"
+    ],
+    "audit-log": [
+      "source_context",
+      "run_context",
+      "tool_context",
+      "risk_class",
+      "sanitized_reason",
+      "sanitizer_report",
+      "payload_digest",
+      "correlation_id"
+    ]
+  }
+}

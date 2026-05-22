@@ -10,6 +10,7 @@ related_issues:
   - 698
   - 747
   - 753
+  - 778
   - 322
 related_prs: []
 approvals:
@@ -76,6 +77,8 @@ Hooks не должны становиться источником истины
 3. Hook emitter или локальный агентный sidecar отправляет событие в `codex-hook-ingress`. Codex hooks являются command-обработчиками Codex, а не прямыми MCP tool calls, поэтому emitter приводит вход Codex hook к платформенному hook envelope до отправки в платформу.
 4. `codex-hook-ingress` проверяет источник, отбрасывает запрещённые поля и маршрутизирует событие в сервис-владелец.
 5. Сервис-владелец фиксирует только доменное состояние, которое ему принадлежит.
+
+Машинная форма normalized envelope и sanitizer contract фиксируется в `specs/jsonschema/codex-hook-ingress.v1/**`. Это не transport contract: gRPC, OpenAPI или AsyncAPI для `SubmitHookEvent` выбираются отдельным срезом.
 
 Все поддерживаемые hook-события должны проходить через эту цепочку и попадать в realtime-ленту UI. Это не означает построчную запись каждого события в постоянную БД: поток UI, короткая операционная история и доменное состояние имеют разные retention-правила.
 
@@ -334,6 +337,8 @@ MVP-объём:
 `platform-mcp-server` не принимает Codex hooks и не реализует hook transport. Он остаётся MCP-сервером для инструментов: `tools/list`, `tools/call`, схемы входа и маршруты к сервисам-владельцам.
 
 Подробная граница MCP-сервиса и план поставки зафиксированы в `docs/domains/platform-mcp-server/**`. Граница hook ingress зафиксирована в `docs/domains/codex-hook-ingress/**`. Этот документ фиксирует выбранное решение по hooks и целевую линию skills как capability layer, но реализация hook emitter, приёма hook-событий и полноценного управления skills выполняется отдельными срезами.
+
+Machine-readable схемы CHI-1 находятся в `specs/jsonschema/codex-hook-ingress.v1/**`; они описывают безопасный envelope и sanitizer contract без выбора транспорта и без создания skill catalog.
 
 ## Какие документы обновить после выбора
 

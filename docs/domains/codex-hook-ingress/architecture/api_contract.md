@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-22
-related_issues: [698, 753]
+related_issues: [698, 753, 778, 322]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -29,11 +29,15 @@ approvals:
 
 | Область | Статус |
 |---|---|
-| Нормализованный hook envelope | Описан в этом API overview и data model; машинная схема создаётся отдельным срезом. |
+| Нормализованный hook envelope | Machine-readable source of truth: `specs/jsonschema/codex-hook-ingress.v1/normalized-hook-envelope.v1.schema.json`. |
+| Sanitizer contract | Machine-readable source of truth: `specs/jsonschema/codex-hook-ingress.v1/sanitizer-contract.v1.schema.json` и стартовый экземпляр `sanitizer-contract.defaults.json`. |
+| Safe examples | `specs/jsonschema/codex-hook-ingress.v1/examples/*.safe.json`; примеры не содержат raw payload, секреты, stdout/stderr или session dumps. |
 | Transport contract | Не выбран. Возможные варианты: internal gRPC command или internal HTTP endpoint за сервисной mesh-границей. |
-| OpenAPI | Не создаётся в docs-first срезе. Внешняя пользовательская HTTP-поверхность не планируется. |
-| AsyncAPI | Не создаётся в docs-first срезе. Downstream events проектируются после выбора event transport. |
+| OpenAPI | Не создаётся в CHI-1. Внешняя пользовательская HTTP-поверхность не планируется. |
+| AsyncAPI | Не создаётся в CHI-1. Downstream events проектируются после выбора event transport. |
 | MCP | Не применяется. MCP discovery and calls обслуживает `platform-mcp-server`. |
+
+Проверка CHI-1 выполняется JSON Schema validation для safe examples и sanitizer defaults. Генерация Go-кода не выполняется, потому что JSON Schema описывает pre-transport payload model; кодовые DTO, proto/gRPC или HTTP transport создаются отдельным срезом после выбора транспорта.
 
 ## Операции
 
@@ -60,7 +64,10 @@ approvals:
 | `capability_context` | object | нет | Только refs/digests selected by `agent-manager` and materialized by `runtime-manager`. |
 | `safe_payload` | object | да | Sanitized payload, bounded previews, exit status, artifact signals. |
 | `payload_digest` | string | да | Digest normalized significant data. |
+| `sanitizer_report` | object | да | Audit-safe факт очистки: результат, применённые правила, счётчики redaction/truncation без значений. |
+| `downstream_routes` | array | да | Список владельцев и safe parts, которые может получить каждый downstream route. |
 | `correlation_id` | string | да | Сквозная корреляция. |
+| `retention_class` | enum | да | `audit`, `operational` или `realtime`; не заменяет retention владельцев. |
 
 ## DTO: HookHandlerResult
 
@@ -73,7 +80,7 @@ approvals:
 | `decision_reason` | string | нет | Sanitized reason. |
 | `stop_reason` | string | нет | Только для events, где Codex поддерживает stop/continue semantics. |
 | `updated_input_ref` | object | нет | По умолчанию запрещён. В MVP не использовать без отдельного решения. |
-| `owner_decision_ref` | string | нет | Ссылка на gate/decision у `agent-manager`. |
+| `owner_decision_ref` | string | нет | Ссылка на gate/decision у `governance-manager` или flow-wait ref у `agent-manager`. |
 | `correlation_id` | string | да | Для связи с request. |
 
 `HookHandlerResult` — внутренняя нормализованная модель, а не дословный JSON stdout Codex hook. Emitter/sidecar обязан маппить её в поддерживаемый Codex output по конкретному event:
@@ -109,7 +116,7 @@ Input:
 
 Routes:
 
-- `agent-manager`: факт нового turn и policy decision;
+- `agent-manager`: факт нового turn и lifecycle context;
 - `interaction-hub`: только если prompt является пользовательской перепиской с отдельной retention-политикой.
 
 Ingress не хранит полный prompt.
@@ -125,7 +132,8 @@ Input:
 
 Routes:
 
-- `agent-manager`: gate/risk decision или realtime event;
+- `agent-manager`: realtime event или flow-wait ref;
+- `governance-manager`: risk context или policy-controlled decision ref;
 - `runtime-manager`: workspace/runtime diagnostics;
 - operations/realtime feed: safe preview.
 
@@ -143,8 +151,9 @@ Input:
 
 Routes:
 
-- `agent-manager`: создать или найти gate/decision;
-- `interaction-hub`: доставить owner feedback request, если требуется человек.
+- `governance-manager`: создать или найти gate/decision;
+- `agent-manager`: зафиксировать ожидание flow, если действие связано с агентным переходом;
+- `interaction-hub`: доставить owner feedback или Human gate request, если требуется человек.
 
 Output:
 
@@ -181,7 +190,7 @@ Input:
 
 Routes:
 
-- `agent-manager`: turn checkpoint, pending gates, run state;
+- `agent-manager`: turn checkpoint, pending gate refs, flow waiting refs, run state;
 - `runtime-manager`: session/workspace checkpoint refs;
 - `provider-hub`: provider hot cursor hints;
 - `interaction-hub`: notification/feedback intents.
@@ -198,7 +207,7 @@ Routes:
 | `hook.duplicate_conflict` | Повторный `event_id` пришёл с другим digest. |
 | `hook.rate_limited` | Превышен лимит source/run/event class. |
 | `hook.owner_unavailable` | Downstream-владелец недоступен. |
-| `hook.decision_timeout` | Для permission/pre-tool bridge не получено решение до timeout. |
+| `hook.decision_timeout` | Для permission/pre-tool bridge не получено решение от governance/interaction контуров до timeout. |
 | `hook.route_rejected` | Сервис-владелец отклонил safe event по доменным правилам. |
 
 Ошибки должны быть audit-safe: без secret values, raw command, raw stdout/stderr, full prompt и provider payload.
@@ -212,7 +221,7 @@ Routes:
 | Bounded error | 8 KiB. |
 | High-frequency realtime events | Лимит по source/run/event class, с деградацией до sampling. |
 | Audit-critical events | Не дропать молча; при перегрузке возвращать fail-closed или retryable error. |
-| Decision bridge timeout | Определяется `agent-manager` policy; risky requests fail-closed. |
+| Decision bridge timeout | Определяется `governance-manager` policy; risky requests fail-closed. |
 
 Конкретные значения должны стать typed platform settings или transport config с audit trail.
 

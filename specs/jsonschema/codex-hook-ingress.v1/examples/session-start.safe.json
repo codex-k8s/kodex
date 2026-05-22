@@ -1,0 +1,73 @@
+{
+  "event_id": "11111111-1111-4111-8111-111111111111",
+  "schema_version": "codex-hook-ingress.normalized-hook-envelope.v1",
+  "hook_event_name": "SessionStart",
+  "event_time": "2026-05-22T15:00:00Z",
+  "source_context": {
+    "source_ref": "hook-emitter:slot-7",
+    "source_kind": "hook_emitter",
+    "actor_ref": "agent-manager:run-worker",
+    "organization_id": "22222222-2222-4222-8222-222222222222",
+    "project_id": "33333333-3333-4333-8333-333333333333",
+    "repository_id": "44444444-4444-4444-8444-444444444444",
+    "emitter_version": "0.1.0",
+    "trust_level": "managed"
+  },
+  "run_context": {
+    "run_id": "55555555-5555-4555-8555-555555555555",
+    "session_id": "codex-session-7",
+    "slot_id": "66666666-6666-4666-8666-666666666666",
+    "turn_id": null,
+    "role_ref": "role:developer",
+    "stage_ref": "stage:implementation"
+  },
+  "capability_context": {
+    "capability_context_id": "77777777-7777-4777-8777-777777777777",
+    "selected_by_ref": "agent-manager:capability-selection:123",
+    "materialized_by_ref": "runtime-manager:materialization:456",
+    "scope_kind": "repository",
+    "skill_refs": [
+      {
+        "source_kind": "package",
+        "skill_ref": "skill:docs-review",
+        "version_ref": "1.0.0",
+        "package_installation_ref": "package-installation:guidance:docs-review",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ]
+  },
+  "safe_payload": {
+    "start_source": "resume",
+    "model": "gpt-5.5",
+    "permission_mode": "default",
+    "workspace_ref": "runtime-workspace:slot-7",
+    "safe_summary": "Codex session resumed for an existing agent run."
+  },
+  "payload_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "sanitizer_report": {
+    "result": "accepted",
+    "applied_rules": ["drop-transcript-path", "drop-cwd-raw-path", "capability-refs-only"],
+    "redaction_count": 0,
+    "truncated_fields": [],
+    "rejected_field_classes": []
+  },
+  "downstream_routes": [
+    {
+      "owner": "agent-manager",
+      "delivery_mode": "async",
+      "safe_parts": ["source_context", "run_context", "capability_context", "safe_summary", "payload_digest", "correlation_id"]
+    },
+    {
+      "owner": "runtime-manager",
+      "delivery_mode": "async",
+      "safe_parts": ["source_context", "run_context", "capability_context", "payload_digest", "correlation_id"]
+    },
+    {
+      "owner": "operations-feed",
+      "delivery_mode": "realtime",
+      "safe_parts": ["run_context", "safe_summary", "sanitizer_report", "correlation_id"]
+    }
+  ],
+  "correlation_id": "run-5555:session-start:1",
+  "retention_class": "operational"
+}

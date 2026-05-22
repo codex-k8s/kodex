@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-22
-related_issues: [698, 753]
+related_issues: [698, 753, 778, 322]
 related_prs: []
 related_adrs: []
 approvals:
@@ -30,13 +30,13 @@ approvals:
 - Зафиксировать MVP hook events и их маршрутизацию к сервисам-владельцам.
 - Описать очистку входа, лимиты размера, запрет секретов и безопасные preview/hash/ref поля.
 - Увязать hooks с Codex skills как capability layer без создания skill-хранилища в `codex-hook-ingress`.
-- Подготовить delivery-план, который позволит отдельно согласовать контракты и только потом писать код.
+- Подготовить delivery-план, который позволит отдельно согласовать транспортные контракты и только потом писать код.
 
 ## Не-цели
 
-- Не реализовывать сервис, sidecar, emitter, контракты или схемы.
+- Не реализовывать сервис, sidecar, emitter, proto, OpenAPI, AsyncAPI или транспортный контракт.
 - Не проектировать `platform-mcp-server` заново.
-- Не менять контракты `agent-manager`, `runtime-manager`, `provider-hub`, `interaction-hub` или `package-hub`.
+- Не менять контракты `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub` или `package-hub`.
 - Не добавлять Codex hook events вне MVP-набора.
 - Не использовать `codex-hook-ingress` как каталог skills или package store.
 
@@ -58,7 +58,7 @@ approvals:
 
 | Владеет `codex-hook-ingress` | Не владеет |
 |---|---|
-| Приём нормализованных hook events, проверка source binding, redaction, размерные лимиты, классификация события, маршрутизация владельцам, короткая операционная лента, метрики ingress, idempotency на границе. | MCP transport, MCP discovery, `Run`, session, flow, gate, slot, workspace, provider state, package catalog, skill catalog, dialogue, notification delivery, billing, UI state. |
+| Приём нормализованных hook events, проверка source binding, redaction, размерные лимиты, классификация события, маршрутизация владельцам, короткая операционная лента, метрики ingress, idempotency на границе. | MCP transport, MCP discovery, `Run`, session, flow, risk/gate decisions, slot, workspace, provider state, package catalog, skill catalog, dialogue, notification delivery, billing, UI state. |
 
 Главное правило: `codex-hook-ingress` отвечает на вопрос "можно ли принять этот hook event от этого источника и каким владельцам передать безопасную сводку". Он не отвечает на вопрос "как меняется доменное состояние".
 
@@ -73,7 +73,7 @@ approvals:
 | Sanitizer | Проверяет размер, типы полей, forbidden keys, secret-like patterns, binary payload, stdout/stderr и session/transcript references. |
 | Event classifier | Приводит событие к одному из MVP event types и вычисляет safe category: lifecycle, prompt, pre-tool, permission, post-tool, stop. |
 | Route planner | Формирует набор downstream-владельцев и safe payload для каждого владельца. |
-| Decision bridge | Для `PermissionRequest` и отдельных `PreToolUse` ждёт решение `agent-manager`/`interaction-hub` в пределах timeout и возвращает hook handler результат. |
+| Decision bridge | Для `PermissionRequest` и отдельных `PreToolUse` ждёт решение `governance-manager` и delivery/callback через `interaction-hub` в пределах timeout; `agent-manager` получает только ожидание flow и refs. |
 | Operational feed | Пишет короткую ленту для realtime UI и диагностики с retention. |
 | Audit/metrics emitter | Фиксирует решения, отказы, sanitizer events, route latency, duplicates, rate limits и owner timeouts. |
 
@@ -87,16 +87,18 @@ sequenceDiagram
   participant A as agent-manager
   participant R as runtime-manager
   participant P as provider-hub
+  participant G as governance-manager
   participant H as interaction-hub
 
   C->>E: Hook JSON on stdin
   E->>E: Normalize, redact, add platform context
   E->>I: Submit normalized envelope
   I->>I: Verify source, limits, sanitizer, idempotency
-  I->>A: Lifecycle/gate/run signal
+  I->>A: Lifecycle/run signal or flow waiting ref
   I->>R: Slot/workspace diagnostic signal
   I->>P: Provider artifact signal
-  I->>H: Owner feedback or approval intent
+  I->>G: Risk/gate safe context
+  I->>H: Owner feedback or delivery intent
   I-->>E: Hook handler result
   E-->>C: stdout/stderr/exit code
 ```
@@ -104,6 +106,8 @@ sequenceDiagram
 ## Нормализованный envelope
 
 Envelope должен быть стабильнее исходного Codex input и не должен повторять его полностью.
+
+Machine-readable форма CHI-1 живёт в `specs/jsonschema/codex-hook-ingress.v1/normalized-hook-envelope.v1.schema.json`. Схема фиксирует только безопасный payload contract до выбора транспорта ingress.
 
 | Поле | Назначение |
 |---|---|
@@ -124,6 +128,8 @@ Envelope должен быть стабильнее исходного Codex inp
 
 ## Очистка входа и лимиты
 
+Machine-readable sanitizer contract живёт в `specs/jsonschema/codex-hook-ingress.v1/sanitizer-contract.v1.schema.json`; стартовые defaults и safe examples находятся рядом. Этот контракт задаёт правила до сервисной реализации sanitizer.
+
 | Область | Правило |
 |---|---|
 | Размер envelope | По умолчанию до 64 KiB после нормализации. Событие больше лимита отклоняется или требует sidecar truncation до отправки. |
@@ -141,10 +147,10 @@ Envelope должен быть стабильнее исходного Codex inp
 |---|---|---|
 | `SessionStart` | `agent-manager`, `runtime-manager` | Session/run/slot binding, start source, model slug, workspace ref, emitter version. |
 | `UserPromptSubmit` | `agent-manager`, `interaction-hub` | Prompt hash, prompt class, policy pre-check result, safe summary. |
-| `PreToolUse` | `agent-manager`, `runtime-manager`, realtime UI | Tool category, tool name, command hash, path category, risk hints, skill/capability ref. |
-| `PermissionRequest` | `agent-manager`, `interaction-hub` | Request id, tool category, sanitized reason, risk class, timeout, capability ref. |
+| `PreToolUse` | `agent-manager`, `governance-manager`, `runtime-manager`, realtime UI | Tool category, tool name, command hash, path category, risk hints, skill/capability ref. |
+| `PermissionRequest` | `governance-manager`, `agent-manager`, `interaction-hub` | Request id, tool category, sanitized reason, risk class, timeout, capability ref. |
 | `PostToolUse` | `agent-manager`, `runtime-manager`, `provider-hub`, realtime UI | Exit status, bounded error, artifact signal, rate-limit hint, command digest. |
-| `Stop` | `agent-manager`, `runtime-manager`, `provider-hub`, `interaction-hub` | Turn status, pending actions, stop summary, provider signals, checkpoint refs. |
+| `Stop` | `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub` | Turn status, pending actions, stop summary, provider signals, checkpoint refs. |
 
 ## PermissionRequest bridge
 
@@ -152,10 +158,11 @@ Envelope должен быть стабильнее исходного Codex inp
 
 1. Ingress принимает normalized event.
 2. Source verifier подтверждает actor/run/session/slot/scope.
-3. Ingress создаёт safe request context и вызывает `agent-manager`.
-4. `agent-manager` создаёт или находит gate/decision и при необходимости обращается в `interaction-hub`.
-5. Ingress ждёт решение в пределах timeout, возвращает allow/deny или безопасный отказ hook emitter.
-6. Все решения, timeouts и отказы идут в audit/metrics без raw payload.
+3. Ingress создаёт safe request context и вызывает `governance-manager`.
+4. `governance-manager` создаёт или находит gate/decision; `agent-manager` фиксирует ожидание flow только если действие связано с агентным переходом.
+5. `interaction-hub` доставляет запрос человеку и возвращает callback/result в governance-контур.
+6. Ingress ждёт решение в пределах timeout, возвращает allow/deny, `no_decision` или безопасный отказ hook emitter.
+7. Все решения, timeouts и отказы идут в audit/metrics без raw payload.
 
 Если owner decision не пришёл вовремя, поведение должно быть fail-closed для рискованных действий. Для нерискованных событий ingress может вернуть retryable error или safe continue только по policy владельца.
 
@@ -199,7 +206,7 @@ sequenceDiagram
 | `hook.payload_rejected` | Отклонить из-за forbidden fields, binary data или secret-like content. |
 | `hook.duplicate_event` | Вернуть прежний результат, если fingerprint совпадает; иначе idempotency conflict. |
 | `hook.owner_unavailable` | Retry/backoff для asynchronous routes; fail-closed для permission bridge по policy. |
-| `hook.decision_timeout` | Безопасный отказ или controlled wait по policy `agent-manager`. |
+| `hook.decision_timeout` | Безопасный отказ или controlled wait по policy `governance-manager`. |
 | `hook.rate_limited` | Отклонить или деградировать realtime-only events; не терять audit-critical events. |
 
 ## Наблюдаемость

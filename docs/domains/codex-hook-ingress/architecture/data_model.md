@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-22
-related_issues: [698, 753]
+related_issues: [698, 753, 778, 322]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -28,7 +28,8 @@ approvals:
 
 | Данные | Владелец |
 |---|---|
-| `Run`, agent session, gate, decision, flow/stage/role | `agent-manager` |
+| `Run`, agent session, flow/stage/role, ожидание flow | `agent-manager` |
+| Risk/gate request, decision, policy-based approval | `governance-manager` |
 | Slot, workspace, runtime job, materialized skills | `runtime-manager` |
 | Provider artifacts, projections, limits, reconciliation | `provider-hub` |
 | Dialogues, notifications, owner feedback delivery | `interaction-hub` |
@@ -110,7 +111,7 @@ approvals:
 |---|---|---:|---|---|---|
 | `attempt_id` | uuid | нет | generated | PK |  |
 | `event_id` | uuid | нет |  | FK local, indexed |  |
-| `route` | enum | нет |  | `agent-manager`, `runtime-manager`, `provider-hub`, `interaction-hub`, `operations` | Downstream route. |
+| `route` | enum | нет |  | `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub`, `operations` | Downstream route. |
 | `attempt_no` | int | нет | 1 |  | Retry count. |
 | `status` | enum | нет | `pending` | `pending`, `delivered`, `retrying`, `failed`, `dropped` |  |
 | `last_error_code` | text | да | null |  | Error class без payload. |
@@ -124,7 +125,8 @@ approvals:
 
 Важные инварианты:
 
-- Gate/decision принадлежит `agent-manager`, не ingress.
+- Gate/decision принадлежит `governance-manager`, не ingress.
+- Ожидание flow принадлежит `agent-manager` и передаётся как ref, если нужно продолжить агентный процесс после решения.
 - После timeout bridge закрывается безопасным результатом.
 - Decision payload не содержит raw command или secret.
 
@@ -132,7 +134,7 @@ approvals:
 |---|---|---:|---|---|---|
 | `bridge_id` | uuid | нет | generated | PK |  |
 | `event_id` | uuid | нет |  | FK local, indexed | Permission/pre-tool event. |
-| `owner_request_ref` | text | да | null | indexed | Ссылка на gate/request у `agent-manager`. |
+| `owner_request_ref` | text | да | null | indexed | Ссылка на gate/request у `governance-manager` или flow-wait ref у `agent-manager`. |
 | `status` | enum | нет | `waiting` | `waiting`, `allowed`, `denied`, `no_decision`, `timed_out`, `failed` | Local bridge status; `no_decision` не является Codex `permissionDecision: "ask"`. |
 | `risk_class` | enum | нет | `unknown` | `low`, `medium`, `high`, `unknown` | Safe classification. |
 | `decision_reason` | text | да | null | max 4 KiB | Sanitized. |

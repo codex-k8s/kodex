@@ -1,0 +1,273 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:kodex:schemas:codex-hook-ingress:v1:sanitizer-contract",
+  "title": "codex-hook-ingress sanitizer contract v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_id",
+    "schema_version",
+    "max_envelope_bytes",
+    "max_text_preview_bytes",
+    "max_bounded_error_bytes",
+    "binary_payload",
+    "supported_hook_events",
+    "forbidden_field_paths",
+    "forbidden_field_classes",
+    "redaction_rules",
+    "digest_rules",
+    "preview_rules",
+    "bounded_error_rules",
+    "downstream_owner_parts"
+  ],
+  "properties": {
+    "contract_id": {"const": "codex-hook-ingress.sanitizer.v1"},
+    "schema_version": {"const": "codex-hook-ingress.sanitizer-contract.v1"},
+    "max_envelope_bytes": {"type": "integer", "const": 65536},
+    "max_text_preview_bytes": {"type": "integer", "const": 4096},
+    "max_bounded_error_bytes": {"type": "integer", "const": 8192},
+    "binary_payload": {"const": "forbidden"},
+    "supported_hook_events": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "SessionStart",
+          "UserPromptSubmit",
+          "PreToolUse",
+          "PermissionRequest",
+          "PostToolUse",
+          "Stop"
+        ]
+      }
+    },
+    "forbidden_field_paths": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "tool_input",
+          "tool_response",
+          "stdout",
+          "stderr",
+          "transcript_path",
+          "session_dump",
+          "session_json",
+          "session_jsonl",
+          "prompt.raw",
+          "env",
+          "headers.authorization",
+          "headers.cookie",
+          "kubeconfig",
+          "provider_payload",
+          "secret_value",
+          "private_key",
+          "binary_payload",
+          "skill_manifest",
+          "skill_content",
+          "mcp.tools_call_payload"
+        ]
+      }
+    },
+    "forbidden_field_classes": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "raw_tool_input",
+          "raw_tool_output",
+          "raw_prompt",
+          "raw_transcript",
+          "raw_session",
+          "secret",
+          "credential",
+          "provider_raw_payload",
+          "binary",
+          "large_log",
+          "skill_manifest_or_content",
+          "mcp_transport_payload",
+          "business_command_payload"
+        ]
+      }
+    },
+    "redaction_rules": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/redactionRule"}
+    },
+    "digest_rules": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/digestRule"}
+    },
+    "preview_rules": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/previewRule"}
+    },
+    "bounded_error_rules": {"$ref": "#/$defs/boundedErrorRules"},
+    "downstream_owner_parts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "agent-manager",
+        "runtime-manager",
+        "provider-hub",
+        "governance-manager",
+        "interaction-hub",
+        "operations-feed"
+      ],
+      "properties": {
+        "agent-manager": {"$ref": "#/$defs/safePartList"},
+        "runtime-manager": {"$ref": "#/$defs/safePartList"},
+        "provider-hub": {"$ref": "#/$defs/safePartList"},
+        "governance-manager": {"$ref": "#/$defs/safePartList"},
+        "interaction-hub": {"$ref": "#/$defs/safePartList"},
+        "operations-feed": {"$ref": "#/$defs/safePartList"},
+        "audit-log": {"$ref": "#/$defs/safePartList"}
+      }
+    }
+  },
+  "$defs": {
+    "safePart": {
+      "type": "string",
+      "enum": [
+        "source_context",
+        "run_context",
+        "tool_context",
+        "capability_context",
+        "safe_summary",
+        "prompt_digest",
+        "risk_class",
+        "sanitized_reason",
+        "bounded_error",
+        "provider_artifact_signal",
+        "rate_limit_hint",
+        "pending_action_refs",
+        "checkpoint_ref",
+        "sanitizer_report",
+        "payload_digest",
+        "correlation_id"
+      ]
+    },
+    "safePartList": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/safePart"}
+    },
+    "redactionRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rule_id", "input_class", "action", "replacement"],
+      "properties": {
+        "rule_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "input_class": {
+          "type": "string",
+          "enum": [
+            "authorization_header",
+            "token_like",
+            "private_key_like",
+            "kubeconfig_like",
+            "env_value",
+            "provider_credential",
+            "secret_like_string"
+          ]
+        },
+        "action": {"type": "string", "enum": ["reject", "redact", "digest_only"]},
+        "replacement": {"type": "string", "enum": ["[REDACTED]", "sha256_digest", "reject_event"]}
+      }
+    },
+    "digestRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_class", "algorithm", "output_field"],
+      "properties": {
+        "source_class": {
+          "type": "string",
+          "enum": [
+            "prompt",
+            "command",
+            "tool_output",
+            "bounded_error",
+            "provider_artifact",
+            "capability_context",
+            "normalized_payload"
+          ]
+        },
+        "algorithm": {"const": "sha256"},
+        "output_field": {
+          "type": "string",
+          "enum": [
+            "prompt_digest",
+            "command_digest",
+            "output_digest",
+            "error_digest",
+            "payload_digest",
+            "capability_digest"
+          ]
+        }
+      }
+    },
+    "previewRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field_class", "max_bytes", "must_be_sanitized"],
+      "properties": {
+        "field_class": {
+          "type": "string",
+          "enum": [
+            "safe_summary",
+            "sanitized_reason",
+            "bounded_error",
+            "status_message",
+            "provider_artifact_label"
+          ]
+        },
+        "max_bytes": {"type": "integer", "minimum": 1, "maximum": 8192},
+        "must_be_sanitized": {"const": true}
+      }
+    },
+    "boundedErrorRules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_bytes", "required_fields", "forbidden_content"],
+      "properties": {
+        "max_bytes": {"const": 8192},
+        "required_fields": {
+          "type": "array",
+          "minItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": ["error_class", "safe_message", "truncated", "error_digest"]
+          }
+        },
+        "forbidden_content": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "secret_value",
+              "raw_command",
+              "raw_stdout",
+              "raw_stderr",
+              "raw_provider_payload",
+              "kubeconfig",
+              "private_key"
+            ]
+          }
+        }
+      }
+    }
+  }
+}
