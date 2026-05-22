@@ -41,6 +41,10 @@ type Config struct {
 	GRPCKeepaliveTimeout     time.Duration `env:"KODEX_AGENT_MANAGER_GRPC_KEEPALIVE_TIMEOUT" envDefault:"20s"`
 	GRPCPermitWithoutStream  bool          `env:"KODEX_AGENT_MANAGER_GRPC_PERMIT_WITHOUT_STREAM" envDefault:"false"`
 	GRPCUnaryTimeout         time.Duration `env:"KODEX_AGENT_MANAGER_GRPC_UNARY_TIMEOUT" envDefault:"30s"`
+	PackageHubEnabled        bool          `env:"KODEX_AGENT_MANAGER_PACKAGE_HUB_ENABLED" envDefault:"true"`
+	PackageHubGRPCAddr       string        `env:"KODEX_AGENT_MANAGER_PACKAGE_HUB_GRPC_ADDR" envDefault:"package-hub:9090"`
+	PackageHubGRPCAuthToken  string        `env:"KODEX_AGENT_MANAGER_PACKAGE_HUB_GRPC_AUTH_TOKEN"`
+	PackageHubReadTimeout    time.Duration `env:"KODEX_AGENT_MANAGER_PACKAGE_HUB_READ_TIMEOUT" envDefault:"3s"`
 	OutboxDispatchEnabled    bool          `env:"KODEX_AGENT_MANAGER_OUTBOX_DISPATCH_ENABLED" envDefault:"true"`
 	OutboxPublisherKind      string        `env:"KODEX_AGENT_MANAGER_OUTBOX_PUBLISHER_KIND" envDefault:"postgres-event-log"`
 	OutboxEventLogSource     string        `env:"KODEX_AGENT_MANAGER_OUTBOX_EVENT_LOG_SOURCE" envDefault:"agent-manager"`
@@ -83,6 +87,12 @@ func (cfg Config) Validate() error {
 	if cfg.GRPCAuthRequired && strings.TrimSpace(cfg.GRPCAuthToken) == "" {
 		return fmt.Errorf("KODEX_AGENT_MANAGER_GRPC_AUTH_TOKEN is required when gRPC auth is enabled")
 	}
+	if cfg.PackageHubEnabled && strings.TrimSpace(cfg.PackageHubGRPCAddr) == "" {
+		return fmt.Errorf("KODEX_AGENT_MANAGER_PACKAGE_HUB_GRPC_ADDR is required when package-hub integration is enabled")
+	}
+	if cfg.PackageHubEnabled && strings.TrimSpace(cfg.PackageHubGRPCAuthToken) == "" {
+		return fmt.Errorf("KODEX_AGENT_MANAGER_PACKAGE_HUB_GRPC_AUTH_TOKEN is required when package-hub integration is enabled")
+	}
 	if err := cfg.GRPCServerConfig().Validate(); err != nil {
 		return err
 	}
@@ -101,6 +111,7 @@ func (cfg Config) Validate() error {
 		{name: "KODEX_AGENT_MANAGER_DATABASE_CONNECT_RETRY_MAX_DELAY", valid: cfg.DatabaseRetryMax >= cfg.DatabaseRetryInitial},
 		{name: "KODEX_AGENT_MANAGER_EVENT_LOG_DATABASE_MAX_CONNS", valid: cfg.EventLogDatabaseMaxConns >= 0},
 		{name: "KODEX_AGENT_MANAGER_EVENT_LOG_DATABASE_MIN_CONNS", valid: cfg.EventLogDatabaseMinConns >= 0},
+		{name: "KODEX_AGENT_MANAGER_PACKAGE_HUB_READ_TIMEOUT", valid: cfg.PackageHubReadTimeout > 0},
 		{name: "KODEX_AGENT_MANAGER_OUTBOX_BATCH_SIZE", valid: cfg.OutboxBatchSize > 0},
 		{name: "KODEX_AGENT_MANAGER_OUTBOX_POLL_INTERVAL", valid: cfg.OutboxPollInterval > 0},
 		{name: "KODEX_AGENT_MANAGER_OUTBOX_LOCK_TTL", valid: cfg.OutboxLockTTL > 0},

@@ -106,9 +106,6 @@ func (s *Service) StartAgentRun(ctx context.Context, input StartAgentRunInput) (
 	if err := validateID(input.PromptTemplateVersionID); err != nil {
 		return entity.AgentRun{}, err
 	}
-	if len(input.GuidanceSelectionHints) > 0 {
-		return entity.AgentRun{}, errs.ErrPreconditionFailed
-	}
 	if replay, ok, err := findReplay(ctx, s, input.Meta, operationStartAgentRun, enum.CommandAggregateTypeRun, runFromPayload, verifyReplay(uuid.Nil, s.repository.GetAgentRun, runID, requireRunSessionID(input.SessionID))); ok || err != nil {
 		return replay, err
 	}
@@ -147,6 +144,14 @@ func (s *Service) StartAgentRun(ctx context.Context, input StartAgentRunInput) (
 	if strings.TrimSpace(providerTarget.WorkItemRef) == "" {
 		providerTarget.WorkItemRef = session.ProviderWorkItemRef
 	}
+	guidanceRefs, err := s.guidanceResolver.ResolveGuidanceRefs(ctx, GuidanceResolutionInput{
+		Meta:  input.Meta,
+		Scope: session.Scope,
+		Hints: input.GuidanceSelectionHints,
+	})
+	if err != nil {
+		return entity.AgentRun{}, err
+	}
 	run := entity.AgentRun{
 		VersionedBase:           entity.VersionedBase{ID: s.idGenerator.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
 		SessionID:               session.ID,
@@ -158,7 +163,7 @@ func (s *Service) StartAgentRun(ctx context.Context, input StartAgentRunInput) (
 		PromptTemplateVersionID: promptVersion.ID,
 		PromptTemplateDigest:    promptVersion.TemplateDigest,
 		ProviderTarget:          providerTarget,
-		GuidanceRefs:            nil,
+		GuidanceRefs:            guidanceRefs,
 		Status:                  enum.AgentRunStatusRequested,
 	}
 	payload, err := marshalCommandPayload(agentRunCommandPayload{Run: run})
@@ -433,7 +438,7 @@ func runFromPayload(payload []byte) (entity.AgentRun, error) {
 func sessionSnapshotResultFromPayload(payload []byte) (SessionSnapshotResult, error) {
 	var result sessionSnapshotCommandPayload
 	err := json.Unmarshal(payload, &result)
-	return SessionSnapshotResult{Snapshot: result.Snapshot, Session: result.Session}, err
+	return SessionSnapshotResult(result), err
 }
 
 func sessionID(session entity.AgentSession) uuid.UUID { return session.ID }
@@ -445,15 +450,6 @@ func runID(run entity.AgentRun) uuid.UUID { return run.ID }
 func requireRunSessionID(expectedSessionID uuid.UUID) func(entity.AgentRun) error {
 	return func(run entity.AgentRun) error {
 		if expectedSessionID != uuid.Nil && run.SessionID != expectedSessionID {
-			return errs.ErrConflict
-		}
-		return nil
-	}
-}
-
-func requireSnapshotSessionID(expectedSessionID uuid.UUID) func(entity.AgentSessionStateSnapshot) error {
-	return func(snapshot entity.AgentSessionStateSnapshot) error {
-		if expectedSessionID != uuid.Nil && snapshot.SessionID != expectedSessionID {
 			return errs.ErrConflict
 		}
 		return nil

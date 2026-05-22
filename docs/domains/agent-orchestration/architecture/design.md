@@ -98,11 +98,13 @@ sequenceDiagram
   participant MCP as platform-mcp-server
   AM->>PKG: ListPackageInstallations(package_kind=guidance, scope)
   PKG-->>AM: installed guidance packages
+  AM->>PKG: GetPackage + GetPackageVersion
+  PKG-->>AM: package metadata + version digest
   AM->>PKG: GetPackageManifest(package_version_id)
-  PKG-->>AM: guidance manifest
+  PKG-->>AM: manifest validation state
   AM->>PC: GetWorkspacePolicy(project context)
   PC-->>AM: workspace policy + placement constraints
-  AM->>AM: render prompt + create Run
+  AM->>AM: freeze role/prompt/guidance refs + create Run
   AM->>R: PrepareRuntime(agent_run_id, workspace policy, runtime profile)
   R-->>AM: slot ref + runtime context
   AM->>MCP: создать инструментальный контекст для агента
@@ -143,10 +145,12 @@ sequenceDiagram
 
 `agent-manager` использует `package-hub` только для чтения пакетной истины:
 - `ListPackageInstallations(package_kind=guidance, scope=...)` — найти установленные руководящие пакеты для платформы, организации, проекта или репозитория;
-- `GetPackageManifest(package_version_id)` — получить проверенный manifest руководящего пакета;
+- `GetPackageInstallation(installation_id)` — проверить конкретную установку из selection hint;
+- `GetPackage` и `GetPackageVersion` — зафиксировать safe refs, version label, source ref и digest;
+- `GetPackageManifest(package_version_id)` — проверить состояние manifest руководящего пакета без сохранения `payload_json`;
 - `ListPackages(package_kind=guidance)` — показать доступные руководящие пакеты в будущих настройках.
 
-`agent-manager` не хранит копию пакетного каталога, не меняет установки и не выполняет checkout пакетов.
+`agent-manager` не хранит копию пакетного каталога, не меняет установки, не сохраняет тексты `SKILL.md`, scripts, assets, package source или manifest payload и не выполняет checkout пакетов.
 
 ### `runtime-manager`
 

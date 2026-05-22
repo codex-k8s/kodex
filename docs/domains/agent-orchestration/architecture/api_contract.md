@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-12
 updated_at: 2026-05-22
-related_issues: [733, 739, 744, 753, 755, 698, 759, 322]
+related_issues: [733, 739, 744, 753, 755, 698, 759, 772, 322]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -58,7 +58,7 @@ approvals:
 | `GetPromptTemplateVersion` | gRPC query | `agent.prompt.read` | нет | Читает одну версию prompt. |
 | `ListPromptTemplateVersions` | gRPC query | `agent.prompt.read` | нет | Список версий prompt по роли, назначению и статусу. |
 | `StartAgentSession` | gRPC command | `agent.session.start` | `command_id` | Создаёт новую сессию или продолжает активную `open`/`waiting` session по тому же `scope + provider_work_item_ref`; повторное продолжение фиксируется как результат команды без нового `agent.session.created`. |
-| `StartAgentRun` | gRPC command | `agent.run.start` | `command_id` | Создаёт `Run`, фиксирует версии flow/stage/role/prompt и проверяет, что stage-bound run использует stage из выбранной версии flow и роль, разрешённую через `StageRoleBinding`; прямой запуск роли без stage остаётся отдельным допустимым режимом. Guidance hints через `package-hub` и runtime подключаются следующими срезами. |
+| `StartAgentRun` | gRPC command | `agent.run.start` | `command_id` | Создаёт `Run`, фиксирует версии flow/stage/role/prompt, проверяет stage-bound связку через `StageRoleBinding`, разрешает guidance selection hints через `package-hub` и сохраняет только безопасные refs/summary без manifest payload; прямой запуск роли без stage остаётся отдельным допустимым режимом. |
 | `RecordRunState` | gRPC command | `agent.run.update` | `command_id` + expected version | Фиксирует переход `Run` после сигнала от runtime, MCP-инструмента или `codex-hook-ingress`; переход проходит через доменную state machine и не может вернуть terminal run обратно в работу. |
 | `RecordSessionStateSnapshot` | gRPC command | `agent.session.update` | `command_id` + expected version | Записывает метаданные Codex session JSON/JSONL в объектном хранилище и обновляет указатель на актуальный снимок сессии. |
 | `RequestAcceptance` | gRPC command | `agent.acceptance.run` | `command_id` | Запускает машину приёмки по session/run/stage. |
@@ -106,7 +106,7 @@ Codex hooks не являются MCP-инструментами. `agent-manager
 
 | Сервис | Вызовы из `agent-manager` | Правило |
 |---|---|---|
-| `package-hub` | `ListPackageInstallations(package_kind=guidance)`, `GetPackageManifest` | Только чтение руководящих пакетов и manifest. |
+| `package-hub` | `ListPackageInstallations(package_kind=guidance)`, `GetPackageInstallation`, `ListPackages(package_kind=guidance)`, `GetPackage`, `GetPackageVersion`, `GetPackageManifest` | Только чтение установок, версии и проверенного manifest руководящего пакета; `agent-manager` сохраняет refs, версии, digest и безопасную summary, но не manifest payload, `SKILL.md`, scripts, assets или package source. |
 | `runtime-manager` | `PrepareRuntime`, будущие команды запуска или продолжения slot-agent | Состояние runtime остаётся у runtime. |
 | `provider-hub` | Типизированные операции `CreateIssue`, `UpdateIssue`, `CreatePullRequest`, `CreateComment`, `CreateReviewSignal`, чтение проекций и ускоряющий сигнал сверки | Provider-native состояние остаётся у provider. |
 | `project-catalog` | Чтение workspace policy, release policy, project/repository refs | Проектная policy остаётся у project. |
@@ -157,8 +157,8 @@ Codex hooks не являются MCP-инструментами. `agent-manager
 | Доменная документация | Подготовлена как стартовый срез. |
 | gRPC proto | Подготовлен как контрактный срез `AGO-1`. |
 | AsyncAPI `agent.*` | Подготовлен как контрактный срез `AGO-1`. |
-| Go-реализация `agent-manager` | Сервисный каркас готов. Операции flow, role, prompt, session и run подключены к слою хранения и use-case через gRPC handlers. `StartAgentSession` защищает активную session от дублей по provider target, `StartAgentRun` фиксирует версии роли/prompt и проверяет stage-bound связку flow/stage/role, `RecordRunState` применяет state machine и публикует только AsyncAPI-совместимые lifecycle-события. Руководящие пакеты, runtime workspace, приёмка, follow-up и human gate остаются следующими срезами. |
-| Интеграция с `package-hub` | Зафиксирована как чтение guidance installations и manifest. |
+| Go-реализация `agent-manager` | Сервисный каркас готов. Операции flow, role, prompt, session и run подключены к слою хранения и use-case через gRPC handlers. `StartAgentSession` защищает активную session от дублей по provider target, `StartAgentRun` фиксирует версии роли/prompt, проверяет stage-bound связку flow/stage/role и замораживает безопасные guidance refs из `package-hub`, `RecordRunState` применяет state machine и публикует только AsyncAPI-совместимые lifecycle-события. Runtime workspace, приёмка, follow-up и human gate остаются следующими срезами. |
+| Интеграция с `package-hub` | Реализована как чтение guidance installations, package/version metadata и manifest validation state; сырое содержимое manifest и package source в `agent-manager` не сохраняются. |
 | Интеграция с runtime/provider/interaction/hooks | Зафиксирована как междоменная граница без реализации. |
 
 ## Совместимость
