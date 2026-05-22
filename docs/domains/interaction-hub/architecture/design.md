@@ -69,7 +69,7 @@ approvals:
 |---|---|
 | `interaction-hub` | Сервис-владелец домена взаимодействий. |
 | БД `interaction-hub` | Диалоги, запросы, уведомления, подписки, попытки доставки, callback, command result и outbox. |
-| Lifecycle engine | Переходы feedback, approval, Human gate и notification request. |
+| Lifecycle engine | Переходы feedback, approval, Human gate и one-way notification/reminder. |
 | Delivery planner | Выбор допустимого delivery route по scope, policy, подпискам и channel capability. |
 | Channel contract boundary | Стабильный контракт доставки в установленный channel package и обратного callback. |
 | Callback resolver | Идемпотентная привязка callback к delivery attempt и request. |
@@ -86,21 +86,26 @@ sequenceDiagram
   participant MCP as platform-mcp-server
   participant IH as interaction-hub
   participant PKG as package-hub
-  participant CH as channel package
+  participant R as runtime-manager
+  participant CH as channel package workload
+  participant GW as future gateway
   participant AM as agent-manager
   Runner->>MCP: interaction.feedback.request
   MCP->>IH: RequestFeedback(command)
   IH->>PKG: read installed channel capability
   IH->>IH: create request + delivery attempt + outbox
-  IH->>CH: DeliverInteraction(channel contract)
-  CH-->>IH: accepted or failed delivery result
+  IH->>R: deliver to package workload endpoint
+  R->>CH: DeliverInteraction(channel contract)
+  CH-->>R: accepted or failed delivery result
+  R-->>IH: RecordDeliveryResult(delivery_id)
   IH-->>MCP: request ref + status
-  CH-->>IH: callback with answer
+  CH-->>GW: callback with answer
+  GW->>IH: RecordChannelCallback(safe envelope)
   IH->>IH: resolve request
   IH-->>AM: interaction.feedback.answered event
 ```
 
-Slot-агент не выбирает внешний канал и не получает секреты канала. MCP проверяет actor/source/run/session/slot binding и маршрутизирует команду к владельцу.
+Slot-агент не выбирает внешний канал и не получает секреты канала. MCP проверяет actor/source/run/session/slot binding и маршрутизирует команду к владельцу. `interaction-hub` не создаёт runtime job сам: delivery command передаётся в уже согласованный runtime boundary для package workload, а публичный callback проходит через профильный gateway.
 
 ### Approval request для provider write
 
@@ -163,8 +168,9 @@ sequenceDiagram
 | Поле | Назначение |
 |---|---|
 | `delivery_id` | Идемпотентный идентификатор попытки доставки. |
-| `request_ref` | Ссылка на feedback, approval, Human gate или notification request. |
-| `request_kind` | `feedback`, `approval`, `human_gate`, `notification`. |
+| `request_ref` | Ссылка на feedback, approval или Human gate request. |
+| `notification_ref` | Ссылка на one-way notification или reminder, если delivery не связан с request. |
+| `delivery_kind` | `feedback`, `approval`, `human_gate`, `notification`. |
 | `scope` | Организация, проект, репозиторий или platform scope. |
 | `recipient_refs` | Пользователи, группы или роли получателей без раскрытия лишних PII. |
 | `message_template_ref` | Ссылка на локализуемый шаблон или безопасный текст сообщения. |

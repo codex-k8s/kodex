@@ -22,7 +22,7 @@ approvals:
 
 - Ключевые сущности: `ConversationThread`, `ConversationMessage`, `InteractionRequest`, `Notification`, `Subscription`, `DeliveryRoute`, `DeliveryAttempt`, `ChannelCallback`, `InteractionDecision`.
 - Технические агрегаты: `CommandResult`, `OutboxEvent`.
-- Основные связи: thread содержит сообщения; request может быть feedback, approval, Human gate или notification; request имеет delivery attempts и callbacks; decision завершает request; subscription создаёт notification intent.
+- Основные связи: thread содержит сообщения; request может быть feedback, approval или Human gate; request имеет delivery attempts и callbacks; decision завершает request; subscription создаёт notification intent.
 - Риски миграций: нельзя хранить flow/run/session, provider write operation, runtime job, package installation, UI state, сырые секреты, полные внешние callback payload, голосовые и медиа-файлы в PostgreSQL.
 
 ## Правило внешних ссылок
@@ -87,17 +87,19 @@ approvals:
 
 ### InteractionRequest
 
-`InteractionRequest` является общим агрегатом для feedback, approval, Human gate и notification request.
+`InteractionRequest` является общим агрегатом для decision-bearing feedback, approval и Human gate request.
 
 | Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
 | `id` | uuid | нет | Идентификатор запроса. |
-| `request_kind` | enum | нет | `feedback`, `approval`, `human_gate`, `notification`. |
+| `request_kind` | enum | нет | `feedback`, `approval`, `human_gate`. |
 | `scope_type` | enum | нет | Область запроса. |
 | `scope_ref` | text | нет | Внешняя ссылка области. |
 | `thread_id` | uuid | да | Диалоговая ветка, если запрос связан с диалогом. |
-| `source_service` | text | нет | `agent-manager`, `platform-mcp-server`, `codex-hook-ingress`, `provider-hub`, `operations-hub`, `system`. |
-| `source_ref` | text | да | Внешняя ссылка источника. |
+| `source_owner_kind` | enum | нет | `agent_manager`, `slot_agent`, `provider_hub`, `operations_hub`, `user`, `system`. |
+| `source_owner_ref` | text | да | Внешняя ссылка владельца сценария: run/session/provider operation/user/system rule. |
+| `ingress_kind` | enum | нет | `direct_grpc`, `mcp`, `codex_hook`, `gateway`, `system`. |
+| `ingress_ref` | text | да | Ссылка на transport/ingress command, hook event или gateway request. |
 | `target_refs` | jsonb | нет | Actor/group/role refs получателей. |
 | `context_refs` | jsonb | нет | Run, session, provider, runtime, package и incident refs. |
 | `prompt_summary` | text | нет | Короткая безопасная формулировка запроса. |
@@ -110,7 +112,7 @@ approvals:
 | `version` | bigint | нет | Оптимистичная конкуренция. |
 | `created_at`, `updated_at`, `resolved_at` | timestamptz | да | Временные метки. |
 
-`InteractionRequest` не хранит канонический статус `Run`, provider operation или runtime job. Он хранит только связь с ними.
+`InteractionRequest` не хранит канонический статус `Run`, provider operation или runtime job. Он хранит только связь с ними. `platform-mcp-server`, `codex-hook-ingress` и gateway являются transport/ingress route, а не владельцами бизнес-источника request.
 
 ### InteractionDecision
 
@@ -134,6 +136,8 @@ approvals:
 ### Notification
 
 `Notification` описывает уведомление или reminder, созданные явно или по подписке.
+
+One-way уведомления и reminders не создают `InteractionRequest`. Если уведомление связано с feedback, approval или Human gate, оно хранит `request_id` как ссылку на request; собственный delivery status остаётся в `Notification` и `DeliveryAttempt`.
 
 | Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
@@ -193,8 +197,8 @@ approvals:
 | Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
 | `id` | uuid | нет | Идентификатор попытки. |
-| `request_id` | uuid | да | Запрос, если попытка связана с request. |
-| `notification_id` | uuid | да | Уведомление, если попытка связана с notification. |
+| `request_id` | uuid | да | Запрос, если попытка доставляет decision-bearing request. |
+| `notification_id` | uuid | да | Уведомление, если попытка доставляет one-way notification или reminder. |
 | `route_id` | uuid | нет | Выбранный маршрут. |
 | `delivery_id` | text | нет | Идемпотентный ключ channel contract. |
 | `status` | enum | нет | `queued`, `sent`, `accepted`, `delivered`, `failed`, `cancelled`, `expired`. |
@@ -205,6 +209,8 @@ approvals:
 | `error_class` | enum | да | `temporary`, `permanent`, `auth`, `rate_limited`, `policy`. |
 | `payload_digest` | text | нет | Digest нормализованного delivery command. |
 | `created_at`, `updated_at`, `sent_at` | timestamptz | да | Временные метки. |
+
+Ровно одно из полей `request_id` или `notification_id` должно быть заполнено. Статус request не выводится из статуса one-way notification; request завершает только `InteractionDecision` или доменная команда истечения/отмены.
 
 ### ChannelCallback
 
@@ -276,7 +282,7 @@ approvals:
 | Запрос | Индексы |
 |---|---|
 | Найти активные request по scope и status | `(scope_type, scope_ref, status, deadline_at)` |
-| Найти request по source service/ref | `(source_service, source_ref)` |
+| Найти request по владельцу сценария | `(source_owner_kind, source_owner_ref)` |
 | Найти попытки доставки для retry | `(status, next_retry_at, route_id)` |
 | Найти callback по idempotency key | unique `(callback_id)` |
 | Найти delivery attempt по channel delivery id | unique `(delivery_id)` |
