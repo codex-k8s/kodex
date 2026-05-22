@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-06
 updated_at: 2026-05-22
-related_issues: [281, 282, 711, 719, 725, 729, 737, 754, 761]
+related_issues: [281, 282, 711, 719, 725, 729, 737, 754, 761, 770]
 related_prs: []
 related_docsets:
   - docs/domains/provider-native-work-items/product/requirements.md
@@ -75,7 +75,7 @@ approvals:
 | Операции провайдера | Готово: типизированные команды записи, общий command pipeline, журнал операций и outbox-события результата. | PRV-7a зафиксировал контракт, PRV-7b реализовал gRPC handlers, casters, domain pipeline, optimistic concurrency, `ProviderOperation` с policy/gate trace и безопасный `ProviderOperationResponse`. PRV-7c подключает GitHub write-адаптер для создания и обновления задач, комментариев, `PR`, review-сигналов и provider-native связей без хранения токенов. GitLab-адаптер остаётся следующим расширением той же границы. |
 | Операционное состояние аккаунта и лимиты | Готово: состояние аккаунта у провайдера, снимки лимитов и журнал операций. | Реализовано в PRV-3: доменная логика, PostgreSQL-репозиторий, gRPC-чтение/запись снимков лимитов, базовый GitHub-адаптер для проверки лимитов. Фильтры по проекту и организации в списке операционных состояний остаются контрактным заделом до подключения разрешения внешних аккаунтов через `access-manager`. |
 | Первичная инициализация пустого репозитория | Готово: `CreateRepository` создаёт GitHub-репозиторий и provider default branch, `CreateBootstrapPullRequest` принимает подготовленные файлы и refs, создаёт или обновляет bootstrap branch/PR. | PRV-8b реализует создание репозитория на стороне провайдера через общий pipeline и GitHub-адаптер с `auto_init=true`, фиксирует `base_branch` и событие `provider.repository.created`. PRV-8a реализует provider-side запись bootstrap branch/PR, обновляет проекцию `PR`, provider relationship к project/repository binding и событие `provider.repository.bootstrap_completed`. End-to-end вызов из проектного или агентного контура остаётся отдельным срезом. |
-| Подключение существующего репозитория | Готово на уровне событий adoption required/adoption PR created и операций провайдера. | `PR` у провайдера, зеркало и связи оставлены до PRV-8; сканирование и отчёт выполняет агентная роль через workspace. |
+| Подключение существующего репозитория | Готово: `CreateAdoptionPullRequest` принимает подготовленные файлы и refs, создаёт или обновляет adoption branch/PR, фиксирует проекцию, связь и событие `provider.repository.adoption_pr_created`. | Реализовано в PRV-8c: provider-side запись adoption branch/PR без scan, генерации `services.yaml`, выбора шаблонов и project policy decision. End-to-end вызов из агентного или проектного контура остаётся отдельным срезом. |
 | Эксплуатационный контур | Готово: Dockerfile, Kubernetes-манифесты, bootstrap БД, migration job, smoke-путь, runbook и monitoring docs. | PRV-9 добавил `deploy/base/provider-hub/**`, подключение `kodex_provider_hub` к PostgreSQL bootstrap/runtime secrets, build/smoke scripts и эксплуатационные документы. Реальная проверка на кластере выполняется отдельным операторским запуском smoke-скрипта с нормализованным bootstrap env. |
 
 ## Текущее состояние реализации
@@ -133,11 +133,13 @@ approvals:
 - `CreateRepository` создаёт GitHub-репозиторий с `auto_init=true`, чтобы провайдер создал начальный default branch и минимальный начальный commit; команда возвращает `base_branch`, provider repository id и URL, фиксирует `ProviderOperation` и событие `provider.repository.created`, но не генерирует `services.yaml`, не выбирает шаблоны, не сканирует репозиторий и не меняет branch protection.
 - `CreateBootstrapPullRequest` создаёт или обновляет bootstrap branch и bootstrap PR для уже созданного GitHub-репозитория: вызывающий контур передаёт уже подготовленные файлы, base branch, bootstrap branch, title/body и watermark, а `provider-hub` не генерирует `services.yaml` и не сканирует репозиторий. Команда требует существующий base branch, допускает пустое дерево или безопасный `README.md`, созданный GitHub при `auto_init`, запрещает совпадение base/bootstrap branch и не наследует старые файлы из ранее созданной bootstrap branch.
 - успешный bootstrap PR сразу создаёт локальную PR-проекцию с `project_id` и `repository_id`, provider relationship `project_repository_binding` и событие `provider.repository.bootstrap_completed`; `ProviderOperation` и outbox не содержат файловый payload, секрет или raw provider response.
+- `CreateAdoptionPullRequest` создаёт или обновляет adoption branch и reviewable adoption PR для существующего GitHub-репозитория: вызывающий контур передаёт уже подготовленные файлы, base branch, adoption branch, title/body и watermark, а `provider-hub` не сканирует репозиторий, не генерирует `services.yaml`, не выбирает шаблон и не принимает проектное решение. Команда требует существующий base branch, допускает непустое дерево base branch, запрещает совпадение base/adoption branch и не хранит файловый payload.
+- успешный adoption PR сразу создаёт локальную PR-проекцию с `project_id` и `repository_id`, provider relationship `project_repository_binding` и событие `provider.repository.adoption_pr_created`; `ProviderOperation` и outbox не содержат файловый payload, секрет или raw provider response.
 - эксплуатационный контур `provider-hub`: Dockerfile, `deploy/base/provider-hub/**`, создание БД `kodex_provider_hub` в PostgreSQL bootstrap, runtime Secret refs без значений секретов, migration job, Service/Deployment с HTTP/gRPC ports, readiness/liveness/metrics, requests/limits, build/smoke scripts и runbook/monitoring документы.
 
 Миграция `external_account_id` для очереди сверки явно очищает строки `provider_hub_sync_cursors` и `provider_hub_reconciliation_requests`, созданные предыдущим срезом без знания внешнего аккаунта. Эти строки являются эфемерным состоянием планировщика и пересоздаются повторной постановкой сверки; так тестовые кластеры с уже развёрнутым PRV-6.1 не упираются в `ADD COLUMN ... NOT NULL`.
 
-Ограничение текущей сверки: пакетная GitHub-сверка работает только на чтение и обрабатывает один provider target за завершение аренды курсора, после чего обработчик повторно входит через продвинутый курсор. GitHub write-адаптер подключён к общему исполнителю команд записи, включая создание GitHub-репозитория и bootstrap PR, но MCP-поверхность, интеграция с agent-manager, UI/gateway, GitLab write adapter и adoption остаются отдельными срезами. Эксплуатационный контур готов на уровне манифестов, smoke-пути и runbook; реальный запуск на кластере выполняется оператором через нормализованный bootstrap env.
+Ограничение текущей сверки: пакетная GitHub-сверка работает только на чтение и обрабатывает один provider target за завершение аренды курсора, после чего обработчик повторно входит через продвинутый курсор. GitHub write-адаптер подключён к общему исполнителю команд записи, включая создание GitHub-репозитория, bootstrap PR и adoption PR, но MCP-поверхность, интеграция с agent-manager, UI/gateway и GitLab write adapter остаются отдельными срезами. Эксплуатационный контур готов на уровне манифестов, smoke-пути и runbook; реальный запуск на кластере выполняется оператором через нормализованный bootstrap env.
 
 Архитектурное исключение среза: вспомогательные функции gRPC caster остаются локальными в `provider-hub`, потому что вынос общего transport-пакета требует согласованного изменения `access-manager`, `project-catalog` и текущего сервиса. Это не должно копироваться в новые сервисы; отдельный малый срез перед следующим доменом должен вынести общую часть в `libs/go/**` и перевести существующие сервисы.
 
@@ -145,7 +147,7 @@ approvals:
 
 | С кем синхронизироваться | Когда | Что согласовать |
 |---|---|---|
-| `project-catalog` | Перед end-to-end bootstrap/adoption | `project_id`, `repository_id`, provider ref, состояние подключения репозитория, `services.yaml` bootstrap/adoption. PRV-8a принимает эти ссылки как готовый вход и не ходит в `project-catalog`. |
+| `project-catalog` | Перед end-to-end bootstrap/adoption | `project_id`, `repository_id`, provider ref, состояние подключения репозитория, `services.yaml` bootstrap/adoption. PRV-8a и PRV-8c принимают эти ссылки как готовый вход и не ходят в `project-catalog`. |
 | `access-manager` | Перед PRV-6.2/PRV-7 и при включении фильтров области операционных состояний | Системные действия провайдера, контракт `ResolveExternalAccountUsage`, подтверждение выбранного внешнего аккаунта, `provider_slug` и ссылка на секрет без значения секрета. Значение после разрешения доступа получает общий `libs/go/secretresolver`; `provider-hub` не хранит токен. |
 | `package-hub` | Перед PRV-8 | Как пакеты ссылаются на provider-репозитории и PR в пакетных репозиториях. |
 | `integration-gateway` | Перед публичным приёмом webhook | Формат внутреннего вызова `IngestWebhookEvent` уже закреплён в `provider-hub`; `integration-gateway` отвечает за внешний HTTP, проверку подписи и передачу проверенного сигнала. |
@@ -154,7 +156,7 @@ approvals:
 
 ## Связь с задачами подключения репозиториев
 
-Задачи #281 и #282 остаются открытыми до полного end-to-end bootstrap/adoption. PRV-8a и PRV-8b закрывают только provider-side часть создания репозитория и bootstrap PR.
+Задачи #281 и #282 остаются открытыми до полного end-to-end bootstrap/adoption. PRV-8a, PRV-8b и PRV-8c закрывают только provider-side часть создания репозитория, bootstrap PR и adoption PR.
 
 Решение:
 
@@ -164,7 +166,8 @@ approvals:
 - empty repository допускает controlled direct bootstrap только как исключение, при этом `provider-hub` выполняет provider write после решения о составе bootstrap-артефактов;
 - в PRV-8b `provider-hub` создаёт GitHub-репозиторий с provider-side default branch, но не генерирует `services.yaml`, не выбирает шаблон и не выполняет adoption scan;
 - в PRV-8a `provider-hub` принимает подготовленный набор файлов и refs, создаёт или обновляет bootstrap branch/PR и фиксирует связи, но не генерирует `services.yaml` и не выполняет adoption scan;
-- existing repository adoption идёт через reviewable PR, который `provider-hub` создаёт или обновляет по результату агентного отчёта и проектного решения.
+- в PRV-8c `provider-hub` принимает подготовленный набор файлов и refs, создаёт или обновляет adoption branch/PR и фиксирует связи, но не выполняет scan, не генерирует `services.yaml` и не выбирает шаблон;
+- existing repository adoption end-to-end остаётся проектно-агентным сценарием: scan, отчёт, выбор шаблона, approval и импорт политики выполняют соседние домены.
 
 ## Definition of Done для каждого PR
 

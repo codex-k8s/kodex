@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-06
 updated_at: 2026-05-22
-related_issues: [281, 282, 711, 719, 725, 729, 737, 761]
+related_issues: [281, 282, 711, 719, 725, 729, 737, 761, 770]
 related_prs: []
 related_adrs: []
 approvals:
@@ -190,6 +190,31 @@ sequenceDiagram
 ```
 
 Bootstrap-команда не создаёт сам репозиторий у провайдера, не создаёт начальный base ref, не генерирует `services.yaml`, не выбирает шаблоны и не сканирует содержимое репозитория. Она отклоняется, если `base_branch` и `bootstrap_branch` совпадают, либо если дерево `base_branch` содержит что-либо кроме безопасного `README.md`, созданного провайдером при `auto_init`. Если bootstrap branch уже существует после неудачной или повторной попытки, новый commit строится от текущей головы bootstrap branch, но дерево commit собирается из пустого дерева или дерева только с `README.md` и подготовленного набора файлов, чтобы не протащить старые файлы. После успешной записи сервис обновляет локальную проекцию bootstrap `PR/MR`, проставляет `project_id` и `repository_id`, создаёт provider relationship `project_repository_binding` и публикует `provider.repository.bootstrap_completed`. Содержимое подготовленных файлов остаётся только входом provider-вызова и не сохраняется в журнале операций, outbox, событиях, логах, ошибках или трассировке.
+
+### Подключение существующего репозитория через adoption PR
+
+Provider-side часть adoption работает с уже существующим репозиторием и не принимает проектные решения. `agent-manager`, детерминированный исполнитель или другой проектный контур заранее сканирует репозиторий в workspace, готовит отчёт, выбирает шаблон или фиксирует отказ от шаблона, формирует набор текстовых файлов, refs, заголовок и тело reviewable `PR/MR`. `provider-hub` принимает этот готовый payload через `CreateAdoptionPullRequest`, подтверждает внешний аккаунт через `access-manager`, получает секрет только на время GitHub API-вызова и выполняет provider-native запись.
+
+```mermaid
+sequenceDiagram
+  participant C as project/agent contour
+  participant H as provider-hub
+  participant A as access-manager
+  participant R as secret resolver
+  participant P as GitHub
+  participant DB as provider DB
+  C->>H: CreateAdoptionPullRequest(prepared files, refs, project/repository ids)
+  H->>A: ResolveExternalAccountUsage(provider.repository.write)
+  A-->>H: provider_slug + secret_ref
+  H->>R: Resolve(secret_ref)
+  R-->>H: SecretValue in memory
+  H->>P: create/update adoption branch + files
+  H->>P: create/update adoption PR
+  H->>DB: ProviderOperation + PR projection + relationship + outbox
+  H-->>C: ProviderOperationResponse без файлового payload и секрета
+```
+
+Adoption-команда не создаёт репозиторий, не выполняет scan, не генерирует `services.yaml`, не выбирает шаблон и не меняет branch protection. В отличие от bootstrap, она допускает непустой `base_branch`, потому что работает с существующим репозиторием. Если adoption branch уже существует, новая команда строит commit от текущей головы adoption branch, но дерево commit собирается из текущего дерева base branch и подготовленного набора файлов. После успешной записи сервис обновляет локальную проекцию adoption `PR/MR`, проставляет `project_id` и `repository_id`, создаёт provider relationship `project_repository_binding` и публикует `provider.repository.adoption_pr_created`. Содержимое подготовленных файлов не сохраняется в журнале операций, outbox, событиях, логах, ошибках или трассировке.
 
 ### Сигнал от slot-агента
 

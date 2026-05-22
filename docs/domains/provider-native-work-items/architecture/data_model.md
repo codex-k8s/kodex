@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-06
 updated_at: 2026-05-22
-related_issues: [281, 282, 711, 719, 725, 729, 737, 748, 761]
+related_issues: [281, 282, 711, 719, 725, 729, 737, 748, 761, 770]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -111,7 +111,7 @@ approvals:
 - одна задача может иметь несколько связанных `PR/MR`;
 - поле `project_id` и `repository_id` являются внешними идентификаторами из `project-catalog`.
 - первичная запись строится из provider webhook или сверки, а `project_id` и `repository_id` могут оставаться пустыми до связывания с `project-catalog`;
-- управляемые provider write-команды, включая bootstrap пустого репозитория, могут сразу проставить `project_id` и `repository_id`, если вызывающий контур уже передал проверенную проектную привязку;
+- управляемые provider write-команды, включая bootstrap пустого репозитория и adoption существующего репозитория, могут сразу проставить `project_id` и `repository_id`, если вызывающий контур уже передал проверенную проектную привязку;
 - watermark хранится только как разобранные безопасные поля; полный текст тела остаётся у провайдера, а в проекции хранится digest.
 
 | Поле | Тип | Nullable | Ограничения | Примечание |
@@ -166,7 +166,7 @@ approvals:
 
 Связь может ссылаться на уже известную внутреннюю проекцию через `target_work_item_id` или на внешнюю ссылку провайдера через `target_provider_ref`, если целевая проекция ещё не создана. Связи, извлечённые из watermark, помечаются source `watermark` и confidence `confirmed`. При свежем обновлении рабочего артефакта набор watermark-связей пересобирается целиком по полям `source_ref`, `parent_ref` и `next_ref`: отсутствующая в текущем watermark связь удаляется из подтверждённой проекции, чтобы `ListRelationships` не возвращал устаревшую ссылку. Локальная версия связи меняется только при изменении управляемых полей связи и используется для оптимистичной конкурентной защиты в `UpdateRelationship`.
 
-Bootstrap-команда может создать служебную связь `project_repository_binding`: источник — созданная bootstrap `PR/MR` проекция, `target_provider_ref` — безопасная ссылка вида `project-catalog:project:<project_id>:repository:<repository_id>`. Эта связь не означает владение проектной политикой со стороны `provider-hub`; она нужна, чтобы UI/MCP и сверка видели provider-native артефакт в контексте проверенного project/repository binding.
+Bootstrap/adoption-команды могут создать служебную связь `project_repository_binding`: источник — созданная bootstrap или adoption `PR/MR` проекция, `target_provider_ref` — безопасная ссылка вида `project-catalog:project:<project_id>:repository:<repository_id>`. Эта связь не означает владение проектной политикой со стороны `provider-hub`; она нужна, чтобы UI/MCP и сверка видели provider-native артефакт в контексте проверенного project/repository binding.
 
 | Поле | Тип | Nullable | Ограничения | Примечание |
 |---|---|---:|---|---|
@@ -299,7 +299,7 @@ Bootstrap-команда может создать служебную связь
 
 Идемпотентный повтор provider-операции по `operation_type + command_id` сначала читает уже записанную операцию по ключу команды. Replay разрешён только при совпадении области команды: `actor_id`, `external_account_id`, `provider_slug`, `operation_type`, `target_ref`, `operation_policy_context_json` и `approval_gate_ref_json`. Сравнение контекста выполняется по каноническому JSON, чтобы round-trip через PostgreSQL не превращал пустые списки и отсутствующие поля в ложный конфликт. Если тот же `command_id` приходит с другой областью, операция конфликтует.
 Перед внешним write-вызовом `provider-hub` создаёт durable-запись `ProviderOperation` в состоянии `in_progress`. Если процесс упал после provider side effect, но до завершения локальной транзакции, повтор той же команды увидит `in_progress`, вернёт конфликт и не выполнит второй внешний write. Recovery такого состояния выполняется отдельным эксплуатационным контуром через сверку и разбор незавершённых операций.
-`ProviderOperation` является идемпотентным журналом внешней записи: после успешного сохранения повтор той же команды возвращает записанный результат и не выполняет provider write повторно. Реальный адаптер записи после успешного ответа провайдера завершает `in_progress`-операцию и обновляет локальные проекции и связи в той же транзакции, где фиксируются outbox-события. Для `CreateRepository` отдельная таблица репозитория у провайдера не создаётся: команда сохраняет безопасный `target_ref`, result URL, provider repository id, provider version и публикует `provider.repository.created`, а авторитетная проектная привязка остаётся в `project-catalog`. Ошибки провайдера сохраняются только как безопасная классификация без сырого payload и без секретов.
+`ProviderOperation` является идемпотентным журналом внешней записи: после успешного сохранения повтор той же команды возвращает записанный результат и не выполняет provider write повторно. Реальный адаптер записи после успешного ответа провайдера завершает `in_progress`-операцию и обновляет локальные проекции и связи в той же транзакции, где фиксируются outbox-события. Для `CreateRepository` отдельная таблица репозитория у провайдера не создаётся: команда сохраняет безопасный `target_ref`, result URL, provider repository id, provider version и публикует `provider.repository.created`, а авторитетная проектная привязка остаётся в `project-catalog`. Для `CreateBootstrapPullRequest` и `CreateAdoptionPullRequest` подготовленные файлы являются только входом внешнего вызова: их содержимое не сохраняется в `ProviderOperation`, outbox, событиях, логах и ошибках. Ошибки провайдера сохраняются только как безопасная классификация без сырого payload и без секретов.
 
 ### `ProviderHubOutboxEvent`
 

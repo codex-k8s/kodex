@@ -37,9 +37,9 @@ const (
 	writeFailureProviderPermanent   = "provider_permanent_error"
 	writeFailureProviderUnsupported = "provider_unsupported"
 
-	maxBootstrapFiles             = 64
-	maxBootstrapFileContentBytes  = 512 * 1024
-	maxBootstrapTotalContentBytes = 4 * 1024 * 1024
+	maxRepositoryWriteFiles             = 64
+	maxRepositoryWriteFileContentBytes  = 512 * 1024
+	maxRepositoryWriteTotalContentBytes = 4 * 1024 * 1024
 )
 
 type providerWritePlan struct {
@@ -398,22 +398,43 @@ func (s *Service) CreateRepository(ctx context.Context, input CreateRepositoryIn
 	return s.executeProviderWrite(ctx, plan)
 }
 
-// CreateBootstrapPullRequest records provider-side bootstrap branch/PR creation for an existing bootstrap-ready repository.
-func (s *Service) CreateBootstrapPullRequest(ctx context.Context, input CreateBootstrapPullRequestInput) (ProviderOperationResult, error) {
+type repositoryBranchPullRequestInput struct {
+	ProjectID         uuid.UUID
+	RepositoryID      uuid.UUID
+	ProviderSlug      enum.ProviderSlug
+	RepositoryTarget  ProviderTarget
+	BaseBranch        string
+	WorkBranch        string
+	WorkBranchField   string
+	TargetRefKind     string
+	CommitMessage     string
+	Title             string
+	Body              string
+	Draft             bool
+	Files             []RepositoryFile
+	WatermarkJSON     []byte
+	Meta              value.CommandMeta
+	ExternalAccountID uuid.UUID
+	OperationType     enum.ProviderOperationType
+}
+
+func (s *Service) createRepositoryBranchPullRequest(ctx context.Context, input repositoryBranchPullRequestInput) (ProviderOperationResult, error) {
 	repositoryTarget, err := repositoryTarget(input.ProviderSlug, input.RepositoryTarget)
 	if err != nil {
 		return ProviderOperationResult{}, err
 	}
-	files, err := normalizeBootstrapFiles(input.Files)
+	files, err := normalizeRepositoryFiles(input.Files)
 	if err != nil {
 		return ProviderOperationResult{}, err
 	}
 	baseBranch := strings.TrimSpace(input.BaseBranch)
-	bootstrapBranch := strings.TrimSpace(input.BootstrapBranch)
+	workBranch := strings.TrimSpace(input.WorkBranch)
 	if !validCreateProjectRepositoryWriteInput(input.Meta, input.ProjectID, input.RepositoryID, input.ProviderSlug, input.ExternalAccountID) ||
 		baseBranch == "" ||
-		bootstrapBranch == "" ||
-		baseBranch == bootstrapBranch ||
+		workBranch == "" ||
+		baseBranch == workBranch ||
+		input.WorkBranchField == "" ||
+		input.TargetRefKind == "" ||
 		strings.TrimSpace(input.CommitMessage) == "" ||
 		strings.TrimSpace(input.Title) == "" ||
 		len(files) == 0 {
@@ -424,11 +445,11 @@ func (s *Service) CreateBootstrapPullRequest(ctx context.Context, input CreateBo
 		return ProviderOperationResult{}, err
 	}
 	repositoryID := input.RepositoryID.String()
-	targetRef := repositoryTargetRef(input.ProviderSlug, repositoryID) + "#bootstrap_pull_request:" + bootstrapBranch
+	targetRef := repositoryTargetRef(input.ProviderSlug, repositoryID) + "#" + input.TargetRefKind + ":" + workBranch
 	changedFields := requiredChangedFields(
 		"repository_target",
 		"base_branch",
-		"bootstrap_branch",
+		input.WorkBranchField,
 		"commit_message",
 		"title",
 		"body",
@@ -437,7 +458,7 @@ func (s *Service) CreateBootstrapPullRequest(ctx context.Context, input CreateBo
 		optionalChangedField("watermark_json", len(watermarkJSON) > 0),
 	)
 	plan, err := s.buildWritePlan(providerWritePlan{
-		operationType:     enum.ProviderOperationCreateBootstrapPullRequest,
+		operationType:     input.OperationType,
 		actionKey:         accesscatalog.ActionProviderRepositoryWrite,
 		providerSlug:      input.ProviderSlug,
 		externalAccountID: input.ExternalAccountID,
@@ -445,29 +466,110 @@ func (s *Service) CreateBootstrapPullRequest(ctx context.Context, input CreateBo
 		scopeType:         providerUsageScopeRepository,
 		scopeID:           repositoryID,
 		meta:              input.Meta,
-		executorRequest: providerclient.WriteRequest{
-			CommandID:    providerCommandKey(input.Meta),
-			TargetRef:    targetRef,
-			ProviderSlug: input.ProviderSlug,
-			CreateBootstrapPullRequest: &providerclient.CreateBootstrapPullRequestCommand{
-				ProjectID:        input.ProjectID.String(),
-				RepositoryID:     repositoryID,
-				RepositoryTarget: toClientTarget(repositoryTarget),
-				BaseBranch:       baseBranch,
-				BootstrapBranch:  bootstrapBranch,
-				CommitMessage:    strings.TrimSpace(input.CommitMessage),
-				Title:            strings.TrimSpace(input.Title),
-				Body:             strings.TrimSpace(input.Body),
-				Draft:            input.Draft,
-				Files:            toClientBootstrapFiles(files),
-				WatermarkJSON:    watermarkJSON,
-			},
-		},
+		executorRequest:   repositoryBranchPullRequestCommand(input, repositoryTarget, repositoryID, targetRef, baseBranch, workBranch, files, watermarkJSON),
 	}, changedFields)
 	if err != nil {
 		return ProviderOperationResult{}, err
 	}
 	return s.executeProviderWrite(ctx, plan)
+}
+
+func repositoryBranchPullRequestCommand(
+	input repositoryBranchPullRequestInput,
+	repositoryTarget ProviderTarget,
+	repositoryID string,
+	targetRef string,
+	baseBranch string,
+	workBranch string,
+	files []RepositoryFile,
+	watermarkJSON []byte,
+) providerclient.WriteRequest {
+	request := providerclient.WriteRequest{
+		CommandID:    providerCommandKey(input.Meta),
+		TargetRef:    targetRef,
+		ProviderSlug: input.ProviderSlug,
+	}
+	commonCommand := providerclient.RepositoryBranchPullRequestCommand{
+		ProjectID:        input.ProjectID.String(),
+		RepositoryID:     repositoryID,
+		RepositoryTarget: toClientTarget(repositoryTarget),
+		BaseBranch:       baseBranch,
+		CommitMessage:    strings.TrimSpace(input.CommitMessage),
+		Title:            strings.TrimSpace(input.Title),
+		Body:             strings.TrimSpace(input.Body),
+		Draft:            input.Draft,
+		WatermarkJSON:    watermarkJSON,
+	}
+	switch input.OperationType {
+	case enum.ProviderOperationCreateBootstrapPullRequest:
+		request.CreateBootstrapPullRequest = &providerclient.CreateBootstrapPullRequestCommand{
+			RepositoryBranchPullRequestCommand: commonCommand,
+			BootstrapBranch:                    workBranch,
+			Files:                              toClientBootstrapFiles(files),
+		}
+	case enum.ProviderOperationCreateAdoptionPullRequest:
+		request.CreateAdoptionPullRequest = &providerclient.CreateAdoptionPullRequestCommand{
+			RepositoryBranchPullRequestCommand: commonCommand,
+			AdoptionBranch:                     workBranch,
+			Files:                              toClientAdoptionFiles(files),
+		}
+	}
+	return request
+}
+
+func newRepositoryBranchPullRequestInput(
+	input RepositoryBranchPullRequestInput,
+	workBranch string,
+	files []RepositoryFile,
+	workBranchField string,
+	targetRefKind string,
+	operationType enum.ProviderOperationType,
+) repositoryBranchPullRequestInput {
+	return repositoryBranchPullRequestInput{
+		ProjectID:         input.ProjectID,
+		RepositoryID:      input.RepositoryID,
+		ProviderSlug:      input.ProviderSlug,
+		RepositoryTarget:  input.RepositoryTarget,
+		BaseBranch:        input.BaseBranch,
+		WorkBranch:        workBranch,
+		WorkBranchField:   workBranchField,
+		TargetRefKind:     targetRefKind,
+		CommitMessage:     input.CommitMessage,
+		Title:             input.Title,
+		Body:              input.Body,
+		Draft:             input.Draft,
+		Files:             files,
+		WatermarkJSON:     input.WatermarkJSON,
+		Meta:              input.Meta,
+		ExternalAccountID: input.ExternalAccountID,
+		OperationType:     operationType,
+	}
+}
+
+// CreateBootstrapPullRequest records provider-side bootstrap branch/PR creation for an existing bootstrap-ready repository.
+func (s *Service) CreateBootstrapPullRequest(ctx context.Context, input CreateBootstrapPullRequestInput) (ProviderOperationResult, error) {
+	request := newRepositoryBranchPullRequestInput(
+		input.RepositoryBranchPullRequestInput,
+		input.BootstrapBranch,
+		input.Files,
+		"bootstrap_branch",
+		"bootstrap_pull_request",
+		enum.ProviderOperationCreateBootstrapPullRequest,
+	)
+	return s.createRepositoryBranchPullRequest(ctx, request)
+}
+
+// CreateAdoptionPullRequest records provider-side adoption branch/PR creation for an existing repository.
+func (s *Service) CreateAdoptionPullRequest(ctx context.Context, input CreateAdoptionPullRequestInput) (ProviderOperationResult, error) {
+	request := newRepositoryBranchPullRequestInput(
+		input.RepositoryBranchPullRequestInput,
+		input.AdoptionBranch,
+		input.Files,
+		"adoption_branch",
+		"adoption_pull_request",
+		enum.ProviderOperationCreateAdoptionPullRequest,
+	)
+	return s.createRepositoryBranchPullRequest(ctx, request)
 }
 
 // UpdatePullRequest records a typed provider PR/MR update command in the shared write pipeline.
@@ -834,6 +936,11 @@ func replayProviderWriteTarget(stored entity.ProviderOperation, plan providerWri
 	return &target
 }
 
+func isRepositoryOnboardingOperation(operationType enum.ProviderOperationType) bool {
+	return operationType == enum.ProviderOperationCreateBootstrapPullRequest ||
+		operationType == enum.ProviderOperationCreateAdoptionPullRequest
+}
+
 func writeResultRepositoryFullName(result providerclient.WriteResult) string {
 	if result.Target == nil {
 		return ""
@@ -1020,7 +1127,7 @@ func (s *Service) providerWriteProjection(ctx context.Context, plan providerWrit
 		if err != nil {
 			return providerrepo.ProjectionUpdate{}, nil, nil, providerWriteProjectionResult{}, err
 		}
-		if plan.operationType == enum.ProviderOperationCreateBootstrapPullRequest {
+		if isRepositoryOnboardingOperation(plan.operationType) {
 			relationships = append(relationships, projectRepositoryBindingRelationships(workItem.ID, workItem.ProjectID, workItem.RepositoryID, now)...)
 		}
 		update.WorkItem = &workItem
@@ -1038,6 +1145,13 @@ func (s *Service) providerWriteProjection(ctx context.Context, plan providerWrit
 				return providerrepo.ProjectionUpdate{}, nil, nil, providerWriteProjectionResult{}, err
 			}
 			outboxEvents = append(outboxEvents, bootstrapEvent)
+		}
+		if plan.operationType == enum.ProviderOperationCreateAdoptionPullRequest {
+			adoptionEvent, err := s.providerRepositoryAdoptionPRCreatedOutbox(plan, workItem)
+			if err != nil {
+				return providerrepo.ProjectionUpdate{}, nil, nil, providerWriteProjectionResult{}, err
+			}
+			outboxEvents = append(outboxEvents, adoptionEvent)
 		}
 	}
 	if result.Comment != nil {
@@ -1244,6 +1358,34 @@ func (s *Service) providerRepositoryBootstrapCompletedOutbox(plan providerWriteP
 		return entity.OutboxEvent{}, err
 	}
 	return outboxEventRecord(s.ids.New(), providerEventRepositoryBootstrapCompleted, providerAggregateRepository, aggregateID, payload, workItem.SyncedAt), nil
+}
+
+func (s *Service) providerRepositoryAdoptionPRCreatedOutbox(plan providerWritePlan, workItem entity.ProviderWorkItemProjection) (entity.OutboxEvent, error) {
+	projectID := ""
+	if workItem.ProjectID != nil {
+		projectID = workItem.ProjectID.String()
+	}
+	repositoryID := ""
+	aggregateID := stableUUID("provider-repository-adoption", string(plan.providerSlug), plan.scopeID, workItem.RepositoryFullName)
+	if workItem.RepositoryID != nil {
+		repositoryID = workItem.RepositoryID.String()
+		aggregateID = *workItem.RepositoryID
+	}
+	payload, err := marshalProviderEventPayload(value.ProviderEventPayload{
+		ProviderSlug:         string(plan.providerSlug),
+		ExternalAccountID:    plan.externalAccountID.String(),
+		RepositoryFullName:   workItem.RepositoryFullName,
+		ProjectID:            projectID,
+		RepositoryID:         repositoryID,
+		ProviderWorkItemID:   workItem.ProviderWorkItemID,
+		WorkItemProjectionID: workItem.ID.String(),
+		OperationType:        string(plan.operationType),
+		AdoptionPRRef:        workItem.URL,
+	})
+	if err != nil {
+		return entity.OutboxEvent{}, err
+	}
+	return outboxEventRecord(s.ids.New(), providerEventRepositoryAdoptionPRCreated, providerAggregateRepository, aggregateID, payload, workItem.SyncedAt), nil
 }
 
 func (s *Service) providerRepositoryCreatedOutbox(plan providerWritePlan, result providerclient.WriteResult, occurredAt time.Time) (entity.OutboxEvent, error) {
@@ -1551,16 +1693,16 @@ func fromClientTarget(target providerclient.Target) *ProviderTarget {
 	}
 }
 
-func normalizeBootstrapFiles(files []BootstrapFile) ([]BootstrapFile, error) {
-	if len(files) == 0 || len(files) > maxBootstrapFiles {
+func normalizeRepositoryFiles(files []RepositoryFile) ([]RepositoryFile, error) {
+	if len(files) == 0 || len(files) > maxRepositoryWriteFiles {
 		return nil, errs.ErrInvalidArgument
 	}
-	result := make([]BootstrapFile, 0, len(files))
+	result := make([]RepositoryFile, 0, len(files))
 	seen := make(map[string]struct{}, len(files))
 	totalSize := 0
 	for _, file := range files {
 		path := strings.TrimSpace(file.Path)
-		if !validBootstrapFilePath(path) {
+		if !validRepositoryFilePath(path) {
 			return nil, errs.ErrInvalidArgument
 		}
 		if _, exists := seen[path]; exists {
@@ -1568,14 +1710,14 @@ func normalizeBootstrapFiles(files []BootstrapFile) ([]BootstrapFile, error) {
 		}
 		seen[path] = struct{}{}
 		contentSize := len([]byte(file.Content))
-		if contentSize > maxBootstrapFileContentBytes {
+		if contentSize > maxRepositoryWriteFileContentBytes {
 			return nil, errs.ErrInvalidArgument
 		}
 		totalSize += contentSize
-		if totalSize > maxBootstrapTotalContentBytes {
+		if totalSize > maxRepositoryWriteTotalContentBytes {
 			return nil, errs.ErrInvalidArgument
 		}
-		result = append(result, BootstrapFile{
+		result = append(result, RepositoryFile{
 			Path:       path,
 			Content:    file.Content,
 			Executable: file.Executable,
@@ -1584,7 +1726,7 @@ func normalizeBootstrapFiles(files []BootstrapFile) ([]BootstrapFile, error) {
 	return result, nil
 }
 
-func validBootstrapFilePath(path string) bool {
+func validRepositoryFilePath(path string) bool {
 	if path == "" ||
 		strings.HasPrefix(path, "/") ||
 		strings.HasSuffix(path, "/") ||
@@ -1610,9 +1752,17 @@ func validCreateProjectRepositoryWriteInput(meta value.CommandMeta, projectID uu
 }
 
 func toClientBootstrapFiles(files []BootstrapFile) []providerclient.BootstrapFile {
-	result := make([]providerclient.BootstrapFile, 0, len(files))
+	return toClientRepositoryFiles(files)
+}
+
+func toClientAdoptionFiles(files []AdoptionFile) []providerclient.AdoptionFile {
+	return toClientRepositoryFiles(files)
+}
+
+func toClientRepositoryFiles(files []RepositoryFile) []providerclient.RepositoryFile {
+	result := make([]providerclient.RepositoryFile, 0, len(files))
 	for _, file := range files {
-		result = append(result, providerclient.BootstrapFile{
+		result = append(result, providerclient.RepositoryFile{
 			Path:       file.Path,
 			Content:    file.Content,
 			Executable: file.Executable,

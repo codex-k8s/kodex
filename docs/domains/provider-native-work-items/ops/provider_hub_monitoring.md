@@ -6,7 +6,7 @@ status: active
 owner_role: SRE
 created_at: 2026-05-14
 updated_at: 2026-05-14
-related_issues: [754]
+related_issues: [754, 770]
 approvals:
   required: ["Owner"]
   status: approved
@@ -19,10 +19,10 @@ approvals:
 
 ## TL;DR
 
-- Дашборды: readiness, gRPC, PostgreSQL, outbox, webhook inbox, reconciliation cursors, provider operations, лимиты и bootstrap PR.
+- Дашборды: readiness, gRPC, PostgreSQL, outbox, webhook inbox, reconciliation cursors, provider operations, лимиты, bootstrap PR и adoption PR.
 - Метрики: ошибки доступа, ошибки secret resolver, rate limit, backlog webhook/outbox/reconciliation, latency provider API и частота retryable ошибок.
 - Логи: только безопасные идентификаторы `request_id`, `provider_slug`, `external_account_id`, `work_item_id`, `operation_id`, `sync_cursor_id`.
-- Алерты: недоступность readiness, падение migration job, outbox backlog, рост webhook backlog, stuck cursors, auth failure, rate limit exhaustion и bootstrap PR failures.
+- Алерты: недоступность readiness, падение migration job, outbox backlog, рост webhook backlog, stuck cursors, auth failure, rate limit exhaustion, bootstrap PR failures и adoption PR failures.
 
 ## Источники данных
 
@@ -40,7 +40,7 @@ approvals:
 | Provider hub overview | TBD | Общий статус сервиса, readiness, gRPC, БД и outbox. | SRE |
 | Provider webhook inbox | TBD | Pending/failed webhook backlog, дедупликация, возраст старейшей записи. | SRE |
 | Provider reconciliation | TBD | Hot/warm/cold cursors, lease, retry, drift status и ошибки сверки. | SRE |
-| Provider operations | TBD | Write pipeline, статусы операций, retryable/permanent ошибки, bootstrap PR. | SRE |
+| Provider operations | TBD | Write pipeline, статусы операций, retryable/permanent ошибки, bootstrap/adoption PR. | SRE |
 | Provider limits | TBD | Rate limit budget по provider/account, auth failure и reauthorization required. | SRE |
 
 ## Golden signals
@@ -59,7 +59,7 @@ approvals:
 - Количество `ProviderOperation` по типу операции и статусу.
 - Частота `provider.operation.completed` и `provider.operation.failed`.
 - Количество внешних аккаунтов в состояниях `healthy`, `rate_limited`, `reauthorization_required`, `disabled`.
-- Доля bootstrap PR операций с отказом по причине пустоты base branch, конфликтов refs, отсутствия прав или provider validation.
+- Доля bootstrap/adoption PR операций с отказом по причине пустоты base branch для bootstrap, конфликтов refs, отсутствия прав или provider validation.
 
 ## Логи
 
@@ -75,7 +75,7 @@ approvals:
 
 - provider token, Vault token, gRPC token, DSN;
 - `secret_store_ref`, если он раскрывает путь к чувствительному хранилищу;
-- raw webhook payload, raw provider response и тело файлов bootstrap PR;
+- raw webhook payload, raw provider response и тело файлов bootstrap/adoption PR;
 - email, имена пользователей, приватные домены и адреса серверов из локального bootstrap-профиля.
 
 ## Проверки и рутинные health checks

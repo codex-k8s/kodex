@@ -6,7 +6,7 @@ status: active
 owner_role: SRE
 created_at: 2026-05-14
 updated_at: 2026-05-14
-related_issues: [754]
+related_issues: [754, 770]
 related_alerts: []
 approvals:
   required: ["Owner"]
@@ -143,6 +143,7 @@ Readiness должна видеть:
 | webhook backlog растёт | Не успевает нормализация или повторная обработка | статусы inbox, oldest pending/failed, ошибки нормализации |
 | reconciliation errors | Ошибка provider API, secret resolver или конфликт курсора | sync cursor, lease, last_error code, rate budget |
 | bootstrap PR error | Непустой base branch, совпадающие base/bootstrap refs, нет прав на branch/PR | короткий код операции, refs, права внешнего аккаунта |
+| adoption PR error | Совпадающие base/adoption refs, нет прав на branch/PR, конфликт provider validation | короткий код операции, refs, права внешнего аккаунта |
 
 ## Митигирование
 

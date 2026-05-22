@@ -34,13 +34,14 @@
 | PRV-7c | #737 | готово | GitHub write-адаптер подключён к общему конвейеру: создаёт и обновляет задачи, комментарии, `PR`, review-сигналы и provider-native связи, получает секрет только через resolver, обновляет локальные проекции после успешной записи и не повторяет внешний write при replay команды. |
 | PRV-8a | #748 | готово | Provider-side bootstrap для уже созданного пустого репозитория: подготовленные файлы пишутся в bootstrap branch, создаётся или обновляется bootstrap PR, фиксируются проекция, `project_repository_binding` и событие `provider.repository.bootstrap_completed`. |
 | PRV-8b | #761 | готово | Создание GitHub-репозитория на стороне провайдера: `CreateRepository` создаёт репозиторий с `auto_init=true`, фиксирует начальный default branch как `base_branch`, журнал операции и событие `provider.repository.created`; `services.yaml`, шаблоны и adoption scan остаются вне `provider-hub`. |
+| PRV-8c | #770 | готово | Provider-side adoption существующего репозитория: подготовленные файлы пишутся в adoption branch, создаётся или обновляется adoption PR, фиксируются проекция, `project_repository_binding` и событие `provider.repository.adoption_pr_created`; scan, отчёт и проектное решение остаются вне `provider-hub`. |
 | PRV-9 | #754 | готово | Эксплуатационный контур: Dockerfile, Kubernetes manifests, PostgreSQL bootstrap, migration job, build/smoke scripts, runbook и monitoring docs. |
 
 ## Текущий бэклог
 
 | Срез | Статус | Почему не завершён |
 |---|---|---|
-| PRV-8c | ждёт проектного и агентного контура | Adoption существующего repo требует agent-manager orchestration, workspace scan/report и проектной политики модели C; provider-hub будет выполнять только provider-native PR/relationship/projection запись. |
+| End-to-end repository adoption | ждёт проектного и агентного контура | Adoption существующего repo требует agent-manager orchestration, workspace scan/report, approval и импорт проектной политики модели C; provider-hub уже закрывает provider-native PR/relationship/projection запись. |
 
 ## Блокировки от `access-manager`
 
@@ -70,7 +71,7 @@
 
 Реальные блокировки:
 - привязка проекций к проекту и repository binding требует контракта сопоставления `provider_slug + repository_full_name/provider repository id -> project_id + repository_id`;
-- end-to-end bootstrap/adoption требует проектной политики, проверенной версии `services.yaml`, состояния repository binding и выбора владельца по вариантам repository onboarding; PRV-8a/PRV-8b принимают `project_id`, `repository_id`, provider-native параметры, prepared files и refs как готовый вход и не ходят в `project-catalog`;
+- end-to-end bootstrap/adoption требует проектной политики, проверенной версии `services.yaml`, состояния repository binding и выбора владельца по вариантам repository onboarding; PRV-8a/PRV-8b/PRV-8c принимают `project_id`, `repository_id`, provider-native параметры, prepared files и refs как готовый вход и не ходят в `project-catalog`;
 - фильтры операционных состояний по проекту/организации не должны включаться, пока область аккаунта не связывается с проектной моделью.
 
 ## Блокировки от `package-hub`
@@ -98,4 +99,4 @@
 
 ## Рекомендуемый следующий шаг
 
-Следующий provider-срез — PRV-8c или отдельный интеграционный срез для MCP-поверхности, если владелец решит сначала подключать provider tools к `agent-manager`. Не смешивать создание репозитория, adoption и UI.
+Следующий provider-срез — интеграция provider tools с `agent-manager`/platform MCP или GitLab write adapter после решения владельца. End-to-end bootstrap/adoption не смешивать с UI и gateway.
