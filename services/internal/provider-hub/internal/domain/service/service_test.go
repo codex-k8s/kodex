@@ -1519,17 +1519,16 @@ func TestCreateRepositoryReplayReturnsRepositoryResult(t *testing.T) {
 	operationID := uuid.New()
 	operationOutboxID := uuid.New()
 	repositoryCreatedOutboxID := uuid.New()
-	owner := "codex-k8s"
 	executor := &fakeWriteExecutor{
 		result: providerclient.WriteResult{
-			ResultRef:        "https://github.com/codex-k8s/new-service",
+			ResultRef:        "https://github.com/alexey/new-service",
 			ProviderObjectID: "100500",
 			ProviderVersion:  `"repo-etag"`,
 			Target: &providerclient.Target{
 				ProviderSlug:         enum.ProviderSlugGitHub,
-				RepositoryFullName:   "codex-k8s/new-service",
+				RepositoryFullName:   "alexey/new-service",
 				ProviderRepositoryID: "100500",
-				WebURL:               "https://github.com/codex-k8s/new-service",
+				WebURL:               "https://github.com/alexey/new-service",
 			},
 			BaseBranch: "main",
 		},
@@ -1547,8 +1546,7 @@ func TestCreateRepositoryReplayReturnsRepositoryResult(t *testing.T) {
 		ProjectID:         projectID,
 		RepositoryID:      repositoryID,
 		ProviderSlug:      enum.ProviderSlugGitHub,
-		OwnerKind:         enum.RepositoryOwnerKindOrganization,
-		ProviderOwner:     &owner,
+		OwnerKind:         enum.RepositoryOwnerKindAuthenticatedUser,
 		RepositoryName:    "new-service",
 		Visibility:        enum.RepositoryVisibilityPrivate,
 		ExternalAccountID: externalAccountID,
@@ -1559,7 +1557,6 @@ func TestCreateRepositoryReplayReturnsRepositoryResult(t *testing.T) {
 				ChangedFields: []string{
 					"auto_init",
 					"owner_kind",
-					"provider_owner",
 					"repository_name",
 					"visibility",
 				},
@@ -1583,6 +1580,7 @@ func TestCreateRepositoryReplayReturnsRepositoryResult(t *testing.T) {
 		second.Result.BaseBranch != first.Result.BaseBranch ||
 		second.Result.ResultRef != first.Result.ResultRef ||
 		second.Result.Target == nil ||
+		second.Result.Target.RepositoryFullName != "alexey/new-service" ||
 		second.Result.Target.ProviderRepositoryID != "100500" ||
 		second.Result.Target.WebURL != first.Result.ResultRef {
 		t.Fatalf("replay result = %+v, want same repository id/base branch/result ref as first %+v", second.Result, first.Result)

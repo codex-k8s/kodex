@@ -10,6 +10,7 @@ SELECT
     status,
     result_ref,
     provider_object_id,
+    repository_full_name,
     error_code,
     error_message,
     rate_limit_snapshot_id,
@@ -33,6 +34,7 @@ WHERE @command_id <> ''
     AND status = @status
     AND result_ref = @result_ref
     AND provider_object_id = @provider_object_id
+    AND repository_full_name = @repository_full_name
     AND error_code = @error_code
     AND error_message = @error_message
     AND rate_limit_snapshot_id IS NOT DISTINCT FROM @rate_limit_snapshot_id

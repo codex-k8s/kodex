@@ -821,6 +821,9 @@ func replayProviderWriteTarget(stored entity.ProviderOperation, plan providerWri
 	}
 	target := *plan.resultTarget
 	if plan.operationType == enum.ProviderOperationCreateRepository {
+		if repositoryFullName := strings.TrimSpace(stored.RepositoryFullName); repositoryFullName != "" {
+			target.RepositoryFullName = repositoryFullName
+		}
 		if target.ProviderRepositoryID == "" {
 			target.ProviderRepositoryID = strings.TrimSpace(stored.ProviderObjectID)
 		}
@@ -829,6 +832,13 @@ func replayProviderWriteTarget(stored entity.ProviderOperation, plan providerWri
 		}
 	}
 	return &target
+}
+
+func writeResultRepositoryFullName(result providerclient.WriteResult) string {
+	if result.Target == nil {
+		return ""
+	}
+	return strings.TrimSpace(result.Target.RepositoryFullName)
 }
 
 func sameProviderWriteReplay(stored entity.ProviderOperation, plan providerWritePlan) bool {
@@ -945,6 +955,7 @@ func (s *Service) finalizeProviderWrite(ctx context.Context, plan providerWriteP
 		Status:                 failure.status,
 		ResultRef:              strings.TrimSpace(executorResult.ResultRef),
 		ProviderObjectID:       strings.TrimSpace(executorResult.ProviderObjectID),
+		RepositoryFullName:     writeResultRepositoryFullName(executorResult),
 		ErrorCode:              failure.errorCode,
 		ErrorMessage:           failure.errorMessage,
 		OperationPolicyContext: plan.meta.OperationPolicyContext,

@@ -10,6 +10,7 @@ SELECT
     status,
     result_ref,
     provider_object_id,
+    repository_full_name,
     error_code,
     error_message,
     rate_limit_snapshot_id,

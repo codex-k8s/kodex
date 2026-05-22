@@ -399,6 +399,7 @@ func providerOperationArgs(operation entity.ProviderOperation) pgx.NamedArgs {
 		"status":                        string(operation.Status),
 		"result_ref":                    operation.ResultRef,
 		"provider_object_id":            operation.ProviderObjectID,
+		"repository_full_name":          operation.RepositoryFullName,
 		"error_code":                    operation.ErrorCode,
 		"error_message":                 operation.ErrorMessage,
 		"rate_limit_snapshot_id":        postgreslib.NullableUUID(operation.RateLimitSnapshotID),

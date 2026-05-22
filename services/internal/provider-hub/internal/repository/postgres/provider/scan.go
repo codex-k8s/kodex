@@ -315,6 +315,7 @@ func scanProviderOperation(row postgreslib.RowScanner) (entity.ProviderOperation
 		&status,
 		&operation.ResultRef,
 		&operation.ProviderObjectID,
+		&operation.RepositoryFullName,
 		&operation.ErrorCode,
 		&operation.ErrorMessage,
 		&snapshotID,

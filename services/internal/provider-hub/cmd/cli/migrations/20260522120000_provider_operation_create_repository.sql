@@ -17,11 +17,13 @@ ALTER TABLE provider_hub_operations
 
 ALTER TABLE provider_hub_operations
     ADD COLUMN provider_object_id text NOT NULL DEFAULT '',
+    ADD COLUMN repository_full_name text NOT NULL DEFAULT '',
     ADD COLUMN base_branch text NOT NULL DEFAULT '';
 
 -- +goose Down
 ALTER TABLE provider_hub_operations
     DROP COLUMN base_branch,
+    DROP COLUMN repository_full_name,
     DROP COLUMN provider_object_id;
 
 ALTER TABLE provider_hub_operations

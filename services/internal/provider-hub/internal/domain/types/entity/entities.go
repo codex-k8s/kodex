@@ -183,6 +183,7 @@ type ProviderOperation struct {
 	Status                 enum.ProviderOperationStatus
 	ResultRef              string
 	ProviderObjectID       string
+	RepositoryFullName     string
 	ErrorCode              string
 	ErrorMessage           string
 	RateLimitSnapshotID    *uuid.UUID

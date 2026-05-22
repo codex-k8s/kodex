@@ -283,6 +283,7 @@ Bootstrap-команда может создать служебную связь
 | `status` | text | no | indexed | `succeeded`, `failed`, `retryable_failed`, `denied`. |
 | `result_ref` | text | no | default '' | URL/id результата. |
 | `provider_object_id` | text | no | default '' | Стабильный id созданного или изменённого объекта у провайдера, если доступен. |
+| `repository_full_name` | text | no | default '' | Фактическое имя репозитория в формате `owner/name`, если результат операции относится к репозиторию. |
 | `error_code` | text | no | default '' | Классификация ошибки. |
 | `error_message` | text | no | default '' | Короткое сообщение без секрета. |
 | `rate_limit_snapshot_id` | UUID | yes | indexed | Снимок лимитов после операции. |
