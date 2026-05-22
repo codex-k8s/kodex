@@ -90,6 +90,37 @@ const (
 	PromptVersionStatusRejected   PromptVersionStatus = "rejected"
 )
 
+type AgentSessionStatus string
+
+const (
+	AgentSessionStatusOpen      AgentSessionStatus = "open"
+	AgentSessionStatusWaiting   AgentSessionStatus = "waiting"
+	AgentSessionStatusCompleted AgentSessionStatus = "completed"
+	AgentSessionStatusFailed    AgentSessionStatus = "failed"
+	AgentSessionStatusCancelled AgentSessionStatus = "cancelled"
+)
+
+type AgentRunStatus string
+
+const (
+	AgentRunStatusRequested AgentRunStatus = "requested"
+	AgentRunStatusStarting  AgentRunStatus = "starting"
+	AgentRunStatusRunning   AgentRunStatus = "running"
+	AgentRunStatusWaiting   AgentRunStatus = "waiting"
+	AgentRunStatusCompleted AgentRunStatus = "completed"
+	AgentRunStatusFailed    AgentRunStatus = "failed"
+	AgentRunStatusCancelled AgentRunStatus = "cancelled"
+)
+
+type AgentSessionSnapshotKind string
+
+const (
+	AgentSessionSnapshotKindTurnCheckpoint     AgentSessionSnapshotKind = "turn_checkpoint"
+	AgentSessionSnapshotKindRunCompletion      AgentSessionSnapshotKind = "run_completion"
+	AgentSessionSnapshotKindManualCheckpoint   AgentSessionSnapshotKind = "manual_checkpoint"
+	AgentSessionSnapshotKindRecoveryCheckpoint AgentSessionSnapshotKind = "recovery_checkpoint"
+)
+
 type CommandAggregateType string
 
 const (
@@ -98,4 +129,7 @@ const (
 	CommandAggregateTypeRoleProfile           CommandAggregateType = "role_profile"
 	CommandAggregateTypePromptTemplate        CommandAggregateType = "prompt_template"
 	CommandAggregateTypePromptTemplateVersion CommandAggregateType = "prompt_template_version"
+	CommandAggregateTypeSession               CommandAggregateType = "session"
+	CommandAggregateTypeRun                   CommandAggregateType = "run"
+	CommandAggregateTypeSessionStateSnapshot  CommandAggregateType = "session_state_snapshot"
 )

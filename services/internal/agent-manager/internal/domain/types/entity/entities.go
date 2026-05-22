@@ -108,6 +108,48 @@ type PromptTemplateVersion struct {
 	CreatedAt        time.Time
 }
 
+type AgentSession struct {
+	VersionedBase
+	Scope                 value.ScopeRef
+	ProviderWorkItemRef   string
+	FlowVersionID         *uuid.UUID
+	CurrentStageID        *uuid.UUID
+	LatestStateSnapshotID *uuid.UUID
+	Status                enum.AgentSessionStatus
+	CreatedByActorRef     string
+}
+
+type AgentRun struct {
+	VersionedBase
+	SessionID               uuid.UUID
+	FlowVersionID           *uuid.UUID
+	StageID                 *uuid.UUID
+	RoleProfileID           uuid.UUID
+	RoleProfileVersion      int64
+	RoleProfileDigest       string
+	PromptTemplateVersionID uuid.UUID
+	PromptTemplateDigest    string
+	RuntimeContext          value.RuntimeContextRef
+	ProviderTarget          value.ProviderTargetRef
+	GuidanceRefs            []value.GuidanceRef
+	Status                  enum.AgentRunStatus
+	ResultSummary           string
+	FailureCode             string
+	StartedAt               *time.Time
+	FinishedAt              *time.Time
+}
+
+type AgentSessionStateSnapshot struct {
+	ID           uuid.UUID
+	SessionID    uuid.UUID
+	RunID        *uuid.UUID
+	SnapshotKind enum.AgentSessionSnapshotKind
+	TurnIndex    *int64
+	Object       value.ObjectRef
+	CapturedAt   time.Time
+	CreatedAt    time.Time
+}
+
 type CommandResult struct {
 	Key            string
 	CommandID      *uuid.UUID

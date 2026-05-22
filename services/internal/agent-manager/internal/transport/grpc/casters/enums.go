@@ -70,15 +70,34 @@ var promptVersionStatusesFromProto = map[agentsv1.PromptVersionStatus]enum.Promp
 	agentsv1.PromptVersionStatus_PROMPT_VERSION_STATUS_REJECTED:   enum.PromptVersionStatusRejected,
 }
 
+var agentRunStatusesFromProto = map[agentsv1.AgentRunStatus]enum.AgentRunStatus{
+	agentsv1.AgentRunStatus_AGENT_RUN_STATUS_REQUESTED: enum.AgentRunStatusRequested,
+	agentsv1.AgentRunStatus_AGENT_RUN_STATUS_STARTING:  enum.AgentRunStatusStarting,
+	agentsv1.AgentRunStatus_AGENT_RUN_STATUS_RUNNING:   enum.AgentRunStatusRunning,
+	agentsv1.AgentRunStatus_AGENT_RUN_STATUS_WAITING:   enum.AgentRunStatusWaiting,
+	agentsv1.AgentRunStatus_AGENT_RUN_STATUS_COMPLETED: enum.AgentRunStatusCompleted,
+	agentsv1.AgentRunStatus_AGENT_RUN_STATUS_FAILED:    enum.AgentRunStatusFailed,
+	agentsv1.AgentRunStatus_AGENT_RUN_STATUS_CANCELLED: enum.AgentRunStatusCancelled,
+}
+
+var agentSessionSnapshotKindsFromProto = map[agentsv1.AgentSessionSnapshotKind]enum.AgentSessionSnapshotKind{
+	agentsv1.AgentSessionSnapshotKind_AGENT_SESSION_SNAPSHOT_KIND_TURN_CHECKPOINT:     enum.AgentSessionSnapshotKindTurnCheckpoint,
+	agentsv1.AgentSessionSnapshotKind_AGENT_SESSION_SNAPSHOT_KIND_RUN_COMPLETION:      enum.AgentSessionSnapshotKindRunCompletion,
+	agentsv1.AgentSessionSnapshotKind_AGENT_SESSION_SNAPSHOT_KIND_MANUAL_CHECKPOINT:   enum.AgentSessionSnapshotKindManualCheckpoint,
+	agentsv1.AgentSessionSnapshotKind_AGENT_SESSION_SNAPSHOT_KIND_RECOVERY_CHECKPOINT: enum.AgentSessionSnapshotKindRecoveryCheckpoint,
+}
+
 var (
-	scopeTypesToProto            = reverseEnumMap(scopeTypesFromProto)
-	flowStatusesToProto          = reverseEnumMap(flowStatusesFromProto)
-	stageTypesToProto            = reverseEnumMap(stageTypesFromProto)
-	stageRoleBindingKindsToProto = reverseEnumMap(stageRoleBindingKindsFromProto)
-	roleKindsToProto             = reverseEnumMap(roleKindsFromProto)
-	roleStatusesToProto          = reverseEnumMap(roleStatusesFromProto)
-	promptKindsToProto           = reverseEnumMap(promptKindsFromProto)
-	promptVersionStatusesToProto = reverseEnumMap(promptVersionStatusesFromProto)
+	scopeTypesToProto                = reverseEnumMap(scopeTypesFromProto)
+	flowStatusesToProto              = reverseEnumMap(flowStatusesFromProto)
+	stageTypesToProto                = reverseEnumMap(stageTypesFromProto)
+	stageRoleBindingKindsToProto     = reverseEnumMap(stageRoleBindingKindsFromProto)
+	roleKindsToProto                 = reverseEnumMap(roleKindsFromProto)
+	roleStatusesToProto              = reverseEnumMap(roleStatusesFromProto)
+	promptKindsToProto               = reverseEnumMap(promptKindsFromProto)
+	promptVersionStatusesToProto     = reverseEnumMap(promptVersionStatusesFromProto)
+	agentRunStatusesToProto          = reverseEnumMap(agentRunStatusesFromProto)
+	agentSessionSnapshotKindsToProto = reverseEnumMap(agentSessionSnapshotKindsFromProto)
 )
 
 func ScopeTypeFromProto(value agentsv1.AgentScopeType) (enum.AgentScopeType, error) {
@@ -167,6 +186,37 @@ func OptionalPromptVersionStatusFromProto(value *agentsv1.PromptVersionStatus) (
 
 func PromptVersionStatusToProto(value enum.PromptVersionStatus) agentsv1.PromptVersionStatus {
 	return enumToProto(value, promptVersionStatusesToProto, agentsv1.PromptVersionStatus_PROMPT_VERSION_STATUS_UNSPECIFIED)
+}
+
+func AgentRunStatusFromProto(value agentsv1.AgentRunStatus) (enum.AgentRunStatus, error) {
+	return enumFromProto(value, agentRunStatusesFromProto)
+}
+
+func OptionalAgentRunStatusFromProto(value *agentsv1.AgentRunStatus) (*enum.AgentRunStatus, error) {
+	return optionalEnumFromProto(value, agentRunStatusesFromProto)
+}
+
+func AgentRunStatusToProto(value enum.AgentRunStatus) agentsv1.AgentRunStatus {
+	return enumToProto(value, agentRunStatusesToProto, agentsv1.AgentRunStatus_AGENT_RUN_STATUS_UNSPECIFIED)
+}
+
+func AgentSessionStatusToProto(value enum.AgentSessionStatus) agentsv1.AgentSessionStatus {
+	status := map[enum.AgentSessionStatus]agentsv1.AgentSessionStatus{
+		enum.AgentSessionStatusOpen:      agentsv1.AgentSessionStatus_AGENT_SESSION_STATUS_OPEN,
+		enum.AgentSessionStatusWaiting:   agentsv1.AgentSessionStatus_AGENT_SESSION_STATUS_WAITING,
+		enum.AgentSessionStatusCompleted: agentsv1.AgentSessionStatus_AGENT_SESSION_STATUS_COMPLETED,
+		enum.AgentSessionStatusFailed:    agentsv1.AgentSessionStatus_AGENT_SESSION_STATUS_FAILED,
+		enum.AgentSessionStatusCancelled: agentsv1.AgentSessionStatus_AGENT_SESSION_STATUS_CANCELLED,
+	}
+	return enumToProto(value, status, agentsv1.AgentSessionStatus_AGENT_SESSION_STATUS_UNSPECIFIED)
+}
+
+func AgentSessionSnapshotKindFromProto(value agentsv1.AgentSessionSnapshotKind) (enum.AgentSessionSnapshotKind, error) {
+	return enumFromProto(value, agentSessionSnapshotKindsFromProto)
+}
+
+func AgentSessionSnapshotKindToProto(value enum.AgentSessionSnapshotKind) agentsv1.AgentSessionSnapshotKind {
+	return enumToProto(value, agentSessionSnapshotKindsToProto, agentsv1.AgentSessionSnapshotKind_AGENT_SESSION_SNAPSHOT_KIND_UNSPECIFIED)
 }
 
 func enumFromProto[Proto comparable, Domain comparable](value Proto, values map[Proto]Domain) (Domain, error) {

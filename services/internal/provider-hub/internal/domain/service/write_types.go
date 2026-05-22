@@ -88,6 +88,20 @@ type CreatePullRequestInput struct {
 	ExternalAccountID uuid.UUID
 }
 
+// CreateRepositoryInput describes one provider-native repository creation command.
+type CreateRepositoryInput struct {
+	ProjectID         uuid.UUID
+	RepositoryID      uuid.UUID
+	ProviderSlug      enum.ProviderSlug
+	OwnerKind         enum.RepositoryOwnerKind
+	ProviderOwner     *string
+	RepositoryName    string
+	Visibility        enum.RepositoryVisibility
+	Description       *string
+	Meta              value.CommandMeta
+	ExternalAccountID uuid.UUID
+}
+
 // BootstrapFile describes one prepared text file for bootstrap branch creation.
 type BootstrapFile struct {
 	Path       string
@@ -160,6 +174,7 @@ type ProviderOperationCommandResult struct {
 	ProviderVersion        string
 	ReconciliationEnqueued bool
 	EmittedEventTypes      []string
+	BaseBranch             string
 }
 
 // ProviderOperationResult returns the final audited provider operation and optional projections.

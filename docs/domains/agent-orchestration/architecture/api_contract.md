@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-12
 updated_at: 2026-05-22
-related_issues: [733, 739, 744, 753, 755, 698, 322]
+related_issues: [733, 739, 744, 753, 755, 698, 759, 322]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -57,9 +57,9 @@ approvals:
 | `ActivatePromptTemplateVersion` | gRPC command | `agent.prompt.manage` | `command_id` + expected version | Активирует prompt version для новых запусков. |
 | `GetPromptTemplateVersion` | gRPC query | `agent.prompt.read` | нет | Читает одну версию prompt. |
 | `ListPromptTemplateVersions` | gRPC query | `agent.prompt.read` | нет | Список версий prompt по роли, назначению и статусу. |
-| `StartAgentSession` | gRPC command | `agent.session.start` | `command_id` | Создаёт или продолжает сессию по пользовательскому запросу или provider target. |
-| `StartAgentRun` | gRPC command | `agent.run.start` | `command_id` | Создаёт `Run`, фиксирует версии flow/stage/role/prompt, разрешает guidance hints через `package-hub` и запрашивает runtime; вызывающая сторона не передаёт готовые runtime refs или сырые guidance refs. |
-| `RecordRunState` | gRPC command | `agent.run.update` | `command_id` + expected version | Фиксирует переход `Run` после сигнала от runtime, MCP-инструмента или `codex-hook-ingress`. |
+| `StartAgentSession` | gRPC command | `agent.session.start` | `command_id` | Создаёт новую сессию или продолжает активную `open`/`waiting` session по тому же `scope + provider_work_item_ref`; повторное продолжение фиксируется как результат команды без нового `agent.session.created`. |
+| `StartAgentRun` | gRPC command | `agent.run.start` | `command_id` | Создаёт `Run`, фиксирует версии flow/stage/role/prompt и проверяет, что stage-bound run использует stage из выбранной версии flow и роль, разрешённую через `StageRoleBinding`; прямой запуск роли без stage остаётся отдельным допустимым режимом. Guidance hints через `package-hub` и runtime подключаются следующими срезами. |
+| `RecordRunState` | gRPC command | `agent.run.update` | `command_id` + expected version | Фиксирует переход `Run` после сигнала от runtime, MCP-инструмента или `codex-hook-ingress`; переход проходит через доменную state machine и не может вернуть terminal run обратно в работу. |
 | `RecordSessionStateSnapshot` | gRPC command | `agent.session.update` | `command_id` + expected version | Записывает метаданные Codex session JSON/JSONL в объектном хранилище и обновляет указатель на актуальный снимок сессии. |
 | `RequestAcceptance` | gRPC command | `agent.acceptance.run` | `command_id` | Запускает машину приёмки по session/run/stage. |
 | `RecordAcceptanceResult` | gRPC command | `agent.acceptance.update` | `command_id` + expected version | Фиксирует результат проверки. |
@@ -134,10 +134,10 @@ Codex hooks не являются MCP-инструментами. `agent-manager
 | `agent.session.created` | Создана новая агентная сессия. |
 | `agent.session.updated` | Изменился текущий этап или статус сессии. |
 | `agent.run.requested` | Запрошен ролевой запуск. |
-| `agent.run.started` | Runtime подтвердил старт или подготовку. |
-| `agent.run.waiting` | Запуск ожидает человека, runtime, provider или retry. |
+| `agent.run.started` | Runtime подтвердил старт или подготовку; payload обязан содержать `runtime_slot_ref`. |
+| `agent.run.waiting` | Запуск ожидает человека, runtime, provider или retry; payload обязан содержать машинный `reason_code`. |
 | `agent.run.completed` | Ролевой запуск завершён. |
-| `agent.run.failed` | Ролевой запуск завершился ошибкой. |
+| `agent.run.failed` | Ролевой запуск завершился ошибкой; payload обязан содержать `failure_code`. |
 | `agent.session.snapshot_recorded` | Зафиксирован новый снимок Codex session state. |
 | `agent.acceptance.requested` | Запрошена машинная приёмка. |
 | `agent.acceptance.completed` | Приёмка завершилась успешно. |
@@ -157,7 +157,7 @@ Codex hooks не являются MCP-инструментами. `agent-manager
 | Доменная документация | Подготовлена как стартовый срез. |
 | gRPC proto | Подготовлен как контрактный срез `AGO-1`. |
 | AsyncAPI `agent.*` | Подготовлен как контрактный срез `AGO-1`. |
-| Go-реализация `agent-manager` | Сервисный каркас готов. Операции flow, role и prompt подключены к storage/use-case слою через gRPC handlers; session, run, acceptance, follow-up и human gate пока остаются зарегистрированными контрактами без бизнес-реализации. |
+| Go-реализация `agent-manager` | Сервисный каркас готов. Операции flow, role, prompt, session и run подключены к слою хранения и use-case через gRPC handlers. `StartAgentSession` защищает активную session от дублей по provider target, `StartAgentRun` фиксирует версии роли/prompt и проверяет stage-bound связку flow/stage/role, `RecordRunState` применяет state machine и публикует только AsyncAPI-совместимые lifecycle-события. Руководящие пакеты, runtime workspace, приёмка, follow-up и human gate остаются следующими срезами. |
 | Интеграция с `package-hub` | Зафиксирована как чтение guidance installations и manifest. |
 | Интеграция с runtime/provider/interaction/hooks | Зафиксирована как междоменная граница без реализации. |
 

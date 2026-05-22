@@ -145,6 +145,7 @@ const (
 type ProviderOperationType string
 
 const (
+	ProviderOperationCreateRepository           ProviderOperationType = "create_repository"
 	ProviderOperationCreateIssue                ProviderOperationType = "create_issue"
 	ProviderOperationUpdateIssue                ProviderOperationType = "update_issue"
 	ProviderOperationCreateComment              ProviderOperationType = "create_comment"
@@ -154,6 +155,23 @@ const (
 	ProviderOperationCreateBootstrapPullRequest ProviderOperationType = "create_bootstrap_pull_request"
 	ProviderOperationCreateReviewSignal         ProviderOperationType = "create_review_signal"
 	ProviderOperationUpdateRelationship         ProviderOperationType = "update_relationship"
+)
+
+// RepositoryOwnerKind selects provider-side repository owner semantics.
+type RepositoryOwnerKind string
+
+const (
+	RepositoryOwnerKindOrganization      RepositoryOwnerKind = "organization"
+	RepositoryOwnerKindAuthenticatedUser RepositoryOwnerKind = "authenticated_user"
+)
+
+// RepositoryVisibility selects provider-side repository visibility.
+type RepositoryVisibility string
+
+const (
+	RepositoryVisibilityPublic   RepositoryVisibility = "public"
+	RepositoryVisibilityPrivate  RepositoryVisibility = "private"
+	RepositoryVisibilityInternal RepositoryVisibility = "internal"
 )
 
 // ProviderOperationStatus is the terminal or current operation state.

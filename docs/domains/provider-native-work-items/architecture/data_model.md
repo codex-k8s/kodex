@@ -5,8 +5,8 @@ title: kodex — модель данных provider-hub
 status: active
 owner_role: SA
 created_at: 2026-05-06
-updated_at: 2026-05-14
-related_issues: [281, 282, 711, 719, 725, 729, 737, 748]
+updated_at: 2026-05-22
+related_issues: [281, 282, 711, 719, 725, 729, 737, 748, 761]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -282,12 +282,15 @@ Bootstrap-команда может создать служебную связь
 | `target_ref` | text | no | indexed | Provider target. |
 | `status` | text | no | indexed | `succeeded`, `failed`, `retryable_failed`, `denied`. |
 | `result_ref` | text | no | default '' | URL/id результата. |
+| `provider_object_id` | text | no | default '' | Стабильный id созданного или изменённого объекта у провайдера, если доступен. |
+| `repository_full_name` | text | no | default '' | Фактическое имя репозитория в формате `owner/name`, если результат операции относится к репозиторию. |
 | `error_code` | text | no | default '' | Классификация ошибки. |
 | `error_message` | text | no | default '' | Короткое сообщение без секрета. |
 | `rate_limit_snapshot_id` | UUID | yes | indexed | Снимок лимитов после операции. |
 | `operation_policy_context_json` | jsonb | no | default {} | Безопасный снимок контекста политики: роль, проект, стадия, операция, цель, изменяемые поля, риск, версия политики. |
 | `approval_gate_ref_json` | jsonb | no | default {} | Ссылка на уже принятое approval/gate решение, если оно требовалось policy. |
 | `provider_version` | text | no | default '' | Версия или update marker результата у провайдера, если доступна. |
+| `base_branch` | text | no | default '' | Начальная ветка, подготовленная provider-side созданием репозитория, если применимо. |
 | `started_at` | timestamptz | no | indexed | Начало. |
 | `finished_at` | timestamptz | yes | indexed | Завершение. |
 | `version` | bigint | no | monotonic | Версия записи операции. |
@@ -296,7 +299,7 @@ Bootstrap-команда может создать служебную связь
 
 Идемпотентный повтор provider-операции по `operation_type + command_id` сначала читает уже записанную операцию по ключу команды. Replay разрешён только при совпадении области команды: `actor_id`, `external_account_id`, `provider_slug`, `operation_type`, `target_ref`, `operation_policy_context_json` и `approval_gate_ref_json`. Сравнение контекста выполняется по каноническому JSON, чтобы round-trip через PostgreSQL не превращал пустые списки и отсутствующие поля в ложный конфликт. Если тот же `command_id` приходит с другой областью, операция конфликтует.
 Перед внешним write-вызовом `provider-hub` создаёт durable-запись `ProviderOperation` в состоянии `in_progress`. Если процесс упал после provider side effect, но до завершения локальной транзакции, повтор той же команды увидит `in_progress`, вернёт конфликт и не выполнит второй внешний write. Recovery такого состояния выполняется отдельным эксплуатационным контуром через сверку и разбор незавершённых операций.
-`ProviderOperation` является идемпотентным журналом внешней записи: после успешного сохранения повтор той же команды возвращает записанный результат и не выполняет provider write повторно. Реальный адаптер записи после успешного ответа провайдера завершает `in_progress`-операцию и обновляет локальные проекции и связи в той же транзакции, где фиксируются outbox-события. Ошибки провайдера сохраняются только как безопасная классификация без сырого payload и без секретов.
+`ProviderOperation` является идемпотентным журналом внешней записи: после успешного сохранения повтор той же команды возвращает записанный результат и не выполняет provider write повторно. Реальный адаптер записи после успешного ответа провайдера завершает `in_progress`-операцию и обновляет локальные проекции и связи в той же транзакции, где фиксируются outbox-события. Для `CreateRepository` отдельная таблица репозитория у провайдера не создаётся: команда сохраняет безопасный `target_ref`, result URL, provider repository id, provider version и публикует `provider.repository.created`, а авторитетная проектная привязка остаётся в `project-catalog`. Ошибки провайдера сохраняются только как безопасная классификация без сырого payload и без секретов.
 
 ### `ProviderHubOutboxEvent`
 

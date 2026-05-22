@@ -5693,6 +5693,7 @@ type RecordRunStateRequest struct {
 	FailureCode    *string                `protobuf:"bytes,7,opt,name=failure_code,json=failureCode,proto3,oneof" json:"failure_code,omitempty"`
 	StartedAt      *string                `protobuf:"bytes,8,opt,name=started_at,json=startedAt,proto3,oneof" json:"started_at,omitempty"`
 	FinishedAt     *string                `protobuf:"bytes,9,opt,name=finished_at,json=finishedAt,proto3,oneof" json:"finished_at,omitempty"`
+	ReasonCode     *string                `protobuf:"bytes,10,opt,name=reason_code,json=reasonCode,proto3,oneof" json:"reason_code,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -5786,6 +5787,13 @@ func (x *RecordRunStateRequest) GetStartedAt() string {
 func (x *RecordRunStateRequest) GetFinishedAt() string {
 	if x != nil && x.FinishedAt != nil {
 		return *x.FinishedAt
+	}
+	return ""
+}
+
+func (x *RecordRunStateRequest) GetReasonCode() string {
+	if x != nil && x.ReasonCode != nil {
+		return *x.ReasonCode
 	}
 	return ""
 }
@@ -7401,7 +7409,7 @@ const file_kodex_agents_v1_agent_manager_proto_rawDesc = "" +
 	"\x0fprovider_target\x18\a \x01(\v2\".kodex.agents.v1.ProviderTargetRefR\x0eproviderTarget\x12`\n" +
 	"\x18guidance_selection_hints\x18\b \x03(\v2&.kodex.agents.v1.GuidanceSelectionHintR\x16guidanceSelectionHintsB\x12\n" +
 	"\x10_flow_version_idB\v\n" +
-	"\t_stage_id\"\x94\x04\n" +
+	"\t_stage_id\"\xca\x04\n" +
 	"\x15RecordRunStateRequest\x120\n" +
 	"\x04meta\x18\x01 \x01(\v2\x1c.kodex.agents.v1.CommandMetaR\x04meta\x12\x15\n" +
 	"\x06run_id\x18\x02 \x01(\tR\x05runId\x127\n" +
@@ -7413,11 +7421,15 @@ const file_kodex_agents_v1_agent_manager_proto_rawDesc = "" +
 	"\n" +
 	"started_at\x18\b \x01(\tH\x02R\tstartedAt\x88\x01\x01\x12$\n" +
 	"\vfinished_at\x18\t \x01(\tH\x03R\n" +
-	"finishedAt\x88\x01\x01B\x11\n" +
+	"finishedAt\x88\x01\x01\x12$\n" +
+	"\vreason_code\x18\n" +
+	" \x01(\tH\x04R\n" +
+	"reasonCode\x88\x01\x01B\x11\n" +
 	"\x0f_result_summaryB\x0f\n" +
 	"\r_failure_codeB\r\n" +
 	"\v_started_atB\x0e\n" +
-	"\f_finished_at\"\xf3\x02\n" +
+	"\f_finished_atB\x0e\n" +
+	"\f_reason_code\"\xf3\x02\n" +
 	"!RecordSessionStateSnapshotRequest\x120\n" +
 	"\x04meta\x18\x01 \x01(\v2\x1c.kodex.agents.v1.CommandMetaR\x04meta\x12\x1d\n" +
 	"\n" +

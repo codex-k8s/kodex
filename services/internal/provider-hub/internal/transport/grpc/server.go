@@ -38,6 +38,7 @@ type providerService interface {
 	CreateComment(context.Context, providerservice.CreateCommentInput) (providerservice.ProviderOperationResult, error)
 	UpdateComment(context.Context, providerservice.UpdateCommentInput) (providerservice.ProviderOperationResult, error)
 	CreatePullRequest(context.Context, providerservice.CreatePullRequestInput) (providerservice.ProviderOperationResult, error)
+	CreateRepository(context.Context, providerservice.CreateRepositoryInput) (providerservice.ProviderOperationResult, error)
 	CreateBootstrapPullRequest(context.Context, providerservice.CreateBootstrapPullRequestInput) (providerservice.ProviderOperationResult, error)
 	UpdatePullRequest(context.Context, providerservice.UpdatePullRequestInput) (providerservice.ProviderOperationResult, error)
 	CreateReviewSignal(context.Context, providerservice.CreateReviewSignalInput) (providerservice.ProviderOperationResult, error)
@@ -153,7 +154,12 @@ func (s *Server) CreatePullRequest(ctx context.Context, request *providersv1.Cre
 	return grpcserver.HandleUnary(ctx, request, grpccasters.CreatePullRequestInput, s.service.CreatePullRequest, grpccasters.ProviderOperationResponse)
 }
 
-// CreateBootstrapPullRequest records an empty-repository bootstrap branch/PR command.
+// CreateRepository records a provider repository creation command.
+func (s *Server) CreateRepository(ctx context.Context, request *providersv1.CreateRepositoryRequest) (*providersv1.ProviderOperationResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.CreateRepositoryInput, s.service.CreateRepository, grpccasters.ProviderOperationResponse)
+}
+
+// CreateBootstrapPullRequest records a bootstrap branch/PR command.
 func (s *Server) CreateBootstrapPullRequest(ctx context.Context, request *providersv1.CreateBootstrapPullRequestRequest) (*providersv1.ProviderOperationResponse, error) {
 	return grpcserver.HandleUnary(ctx, request, grpccasters.CreateBootstrapPullRequestInput, s.service.CreateBootstrapPullRequest, grpccasters.ProviderOperationResponse)
 }

@@ -22,6 +22,8 @@ const (
 	ErrorKindAuthFailed  ErrorKind = "auth_failed"
 	ErrorKindNotFound    ErrorKind = "not_found"
 	ErrorKindTransient   ErrorKind = "transient"
+	ErrorKindConflict    ErrorKind = "conflict"
+	ErrorKindValidation  ErrorKind = "validation"
 	ErrorKindPermanent   ErrorKind = "permanent"
 	ErrorKindUnsupported ErrorKind = "unsupported"
 )
@@ -31,6 +33,8 @@ var (
 	ErrAuthFailed  = errors.New("provider auth failed")
 	ErrNotFound    = errors.New("provider object not found")
 	ErrTransient   = errors.New("provider transient error")
+	ErrConflict    = errors.New("provider conflict")
+	ErrValidation  = errors.New("provider validation error")
 	ErrPermanent   = errors.New("provider permanent error")
 	ErrUnsupported = errors.New("provider reconciliation unsupported")
 )
@@ -55,6 +59,10 @@ func (e *Error) Error() string {
 		return ErrNotFound.Error()
 	case ErrorKindTransient:
 		return ErrTransient.Error()
+	case ErrorKindConflict:
+		return ErrConflict.Error()
+	case ErrorKindValidation:
+		return ErrValidation.Error()
 	case ErrorKindUnsupported:
 		return ErrUnsupported.Error()
 	default:
@@ -78,6 +86,10 @@ func (e *Error) Unwrap() error {
 		return ErrNotFound
 	case ErrorKindTransient:
 		return ErrTransient
+	case ErrorKindConflict:
+		return ErrConflict
+	case ErrorKindValidation:
+		return ErrValidation
 	case ErrorKindUnsupported:
 		return ErrUnsupported
 	default:

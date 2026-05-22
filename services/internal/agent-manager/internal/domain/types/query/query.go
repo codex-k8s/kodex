@@ -46,3 +46,11 @@ type PromptTemplateVersionFilter struct {
 	Status        *enum.PromptVersionStatus
 	Page          value.PageRequest
 }
+
+type AgentRunFilter struct {
+	SessionID           uuid.UUID
+	RoleProfileID       uuid.UUID
+	Status              *enum.AgentRunStatus
+	ProviderWorkItemRef string
+	Page                value.PageRequest
+}

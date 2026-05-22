@@ -160,6 +160,12 @@ spec:
         - proto/kodex/fleet/v1
         - specs/asyncapi/fleet-manager.v1.yaml
         - deploy/base/fleet-manager
+    platform-mcp-server:
+      value: "0.1.0"
+      bumpOn:
+        - services/internal/platform-mcp-server
+        - libs/go/serviceprocess
+        - libs/go/servicemain
     platform-event-log:
       value: "0.1.0"
       bumpOn:
@@ -492,7 +498,29 @@ spec:
       dockerfile: services/internal/fleet-manager/Dockerfile
       migrationsImageEnv: KODEX_FLEET_MANAGER_MIGRATIONS_IMAGE
       purpose: fleet-scopes-servers-clusters-health-placement
-  serviceScaffolds: []
+  serviceScaffolds:
+    - name: platform-mcp-server
+      status: scaffold
+      zone: internal
+      path: services/internal/platform-mcp-server
+      ownerDomain: platform-mcp-server
+      apiContracts:
+        mcp: MCP Go SDK tools/list snapshot
+      dependencies:
+        - access-manager
+        - agent-manager
+        - project-catalog
+        - provider-hub
+        - runtime-manager
+        - fleet-manager
+        - package-hub
+        - interaction-hub
+      deploy:
+        health:
+          livez: /health/livez
+          readyz: /health/readyz
+          metrics: /metrics
+        mcp: /mcp
   deployManifests:
     - name: postgres-stack
       path: deploy/base/postgres/kustomization.yaml.tpl

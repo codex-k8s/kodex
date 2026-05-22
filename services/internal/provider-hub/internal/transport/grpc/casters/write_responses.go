@@ -16,6 +16,7 @@ func ProviderOperationResponse(result providerservice.ProviderOperationResult) *
 			ProviderVersion:        optionalStringPtr(result.Result.ProviderVersion),
 			ReconciliationEnqueued: result.Result.ReconciliationEnqueued,
 			EmittedEventTypes:      append([]string(nil), result.Result.EmittedEventTypes...),
+			BaseBranch:             optionalStringPtr(result.Result.BaseBranch),
 		},
 	}
 	if result.ProviderOperation != nil {

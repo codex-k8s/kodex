@@ -89,6 +89,44 @@ func ObjectRefFromProto(object *agentsv1.ObjectRef) value.ObjectRef {
 	}
 }
 
+func RuntimeContextFromProto(context *agentsv1.RuntimeContextRef) value.RuntimeContextRef {
+	if context == nil {
+		return value.RuntimeContextRef{}
+	}
+	return value.RuntimeContextRef{
+		SlotRef:      strings.TrimSpace(context.GetSlotRef()),
+		JobRef:       strings.TrimSpace(context.GetJobRef()),
+		WorkspaceRef: strings.TrimSpace(context.GetWorkspaceRef()),
+		ContextRef:   strings.TrimSpace(context.GetContextRef()),
+	}
+}
+
+func ProviderTargetFromProto(target *agentsv1.ProviderTargetRef) value.ProviderTargetRef {
+	if target == nil {
+		return value.ProviderTargetRef{}
+	}
+	return value.ProviderTargetRef{
+		WorkItemRef:     strings.TrimSpace(target.GetWorkItemRef()),
+		PullRequestRef:  strings.TrimSpace(target.GetPullRequestRef()),
+		CommentRef:      strings.TrimSpace(target.GetCommentRef()),
+		ReviewSignalRef: strings.TrimSpace(target.GetReviewSignalRef()),
+	}
+}
+
+func GuidanceSelectionHintsFromProto(hints []*agentsv1.GuidanceSelectionHint) []value.GuidanceSelectionHint {
+	result := make([]value.GuidanceSelectionHint, 0, len(hints))
+	for _, hint := range hints {
+		if hint == nil {
+			continue
+		}
+		result = append(result, value.GuidanceSelectionHint{
+			PackageInstallationRef: strings.TrimSpace(hint.GetPackageInstallationRef()),
+			PackageSlug:            strings.TrimSpace(hint.GetPackageSlug()),
+		})
+	}
+	return result
+}
+
 func requiredUUID(text string) (uuid.UUID, error) {
 	id, ok, err := parseUUID(text)
 	if err != nil || !ok || id == uuid.Nil {

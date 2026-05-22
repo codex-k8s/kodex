@@ -466,6 +466,8 @@ func reconciliationProviderError(err *providerclient.Error) (string, error) {
 		return reconciliationErrorProviderNotFound, errs.ErrNotFound
 	case providerclient.ErrorKindUnsupported:
 		return reconciliationErrorProviderUnsupported, errs.ErrPreconditionFailed
+	case providerclient.ErrorKindConflict, providerclient.ErrorKindValidation:
+		return reconciliationErrorProviderPermanent, errs.ErrPreconditionFailed
 	case providerclient.ErrorKindPermanent:
 		return reconciliationErrorProviderPermanent, errs.ErrPreconditionFailed
 	default:

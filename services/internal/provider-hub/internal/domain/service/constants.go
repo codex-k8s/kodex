@@ -15,6 +15,7 @@ const (
 	providerEventSyncCursorAdvanced           = providerevents.EventSyncCursorAdvanced
 	providerEventOperationCompleted           = providerevents.EventOperationCompleted
 	providerEventOperationFailed              = providerevents.EventOperationFailed
+	providerEventRepositoryCreated            = providerevents.EventRepositoryCreated
 	providerEventRepositoryBootstrapCompleted = providerevents.EventRepositoryBootstrapCompleted
 
 	providerAggregateWebhookEvent      = providerevents.AggregateWebhookEvent

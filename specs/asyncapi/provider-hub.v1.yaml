@@ -40,6 +40,7 @@ components:
         - $ref: '#/components/schemas/OperationFailedEvent'
         - $ref: '#/components/schemas/RepositoryBootstrapRequiredEvent'
         - $ref: '#/components/schemas/RepositoryAdoptionRequiredEvent'
+        - $ref: '#/components/schemas/RepositoryCreatedEvent'
         - $ref: '#/components/schemas/RepositoryBootstrapCompletedEvent'
         - $ref: '#/components/schemas/RepositoryAdoptionPRCreatedEvent'
     ProviderEventEnvelopeBase:
@@ -169,6 +170,14 @@ components:
       type: object
       properties: {event_type: {type: string, const: provider.repository.adoption_required}, aggregate_type: {type: string, const: repository}, payload: {$ref: '#/components/schemas/ProviderEventPayload'}}
       required: [event_type, aggregate_type, payload]
+    RepositoryCreatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/ProviderEventEnvelopeBase'
+        - $ref: '#/components/schemas/RepositoryCreatedEventKind'
+    RepositoryCreatedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: provider.repository.created}, aggregate_type: {type: string, const: repository}, payload: {$ref: '#/components/schemas/ProviderEventPayload'}}
+      required: [event_type, aggregate_type, payload]
     RepositoryBootstrapCompletedEvent:
       allOf:
         - $ref: '#/components/schemas/ProviderEventEnvelopeBase'
@@ -202,6 +211,7 @@ components:
         - provider.operation.failed
         - provider.repository.bootstrap_required
         - provider.repository.adoption_required
+        - provider.repository.created
         - provider.repository.bootstrap_completed
         - provider.repository.adoption_pr_created
     ProviderEventPayload:
@@ -293,6 +303,8 @@ components:
         watermark_status:
           type: string
         bootstrap_mode:
+          type: string
+        base_branch:
           type: string
         adoption_pr_ref:
           type: string

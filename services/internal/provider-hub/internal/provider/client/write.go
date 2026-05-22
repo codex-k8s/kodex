@@ -26,6 +26,7 @@ type WriteRequest struct {
 	CommandID                  string
 	TargetRef                  string
 	ProviderSlug               enum.ProviderSlug
+	CreateRepository           *CreateRepositoryCommand
 	CreateIssue                *CreateIssueCommand
 	UpdateIssue                *UpdateIssueCommand
 	CreateComment              *CreateCommentCommand
@@ -35,6 +36,17 @@ type WriteRequest struct {
 	CreateBootstrapPullRequest *CreateBootstrapPullRequestCommand
 	CreateReviewSignal         *CreateReviewSignalCommand
 	UpdateRelationship         *UpdateRelationshipCommand
+}
+
+// CreateRepositoryCommand describes one provider-native repository creation.
+type CreateRepositoryCommand struct {
+	ProjectID      string
+	RepositoryID   string
+	OwnerKind      enum.RepositoryOwnerKind
+	ProviderOwner  string
+	RepositoryName string
+	Visibility     enum.RepositoryVisibility
+	Description    string
 }
 
 // CreateIssueCommand describes one provider-native create issue request.
@@ -184,6 +196,7 @@ type WriteResult struct {
 	ResultRef              string
 	ProviderObjectID       string
 	ProviderVersion        string
+	Target                 *Target
 	WorkItem               *value.ProviderWorkItemSnapshot
 	Comment                *value.ProviderCommentSnapshot
 	Relationship           *RelationshipResult
@@ -191,6 +204,7 @@ type WriteResult struct {
 	CommentProjectionID    *uuid.UUID
 	RelationshipID         *uuid.UUID
 	ReconciliationEnqueued bool
+	BaseBranch             string
 }
 
 // WriteExecutor isolates provider-specific write execution behind the shared pipeline.

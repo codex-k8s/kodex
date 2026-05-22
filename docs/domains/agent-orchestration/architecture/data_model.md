@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-12
 updated_at: 2026-05-22
-related_issues: [733, 749, 322]
+related_issues: [733, 749, 759, 322]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -24,7 +24,7 @@ approvals:
 - Технические агрегаты: `CommandResult`, `OutboxEvent`.
 - Основные связи: flow содержит этапы; этапы привязывают роли; роль использует prompt version; сессия содержит agent `Run`; `Run` фиксирует immutable-ссылки и версии flow/stage/role/prompt/guidance, а также ссылки на provider/runtime/package.
 - Риски миграций: нельзя хранить runtime filesystem, provider-native истину, пакетную истину, диалоговые сообщения, секреты и полные логи в БД `agent-manager`.
-- Первый контур хранения `agent-manager` покрывает flow, версии flow, этапы, переходы, роли, шаблоны prompt, версии prompt, идемпотентные результаты команд и service-local outbox.
+- Первый контур хранения `agent-manager` покрывает flow, версии flow, этапы, переходы, роли, шаблоны prompt, версии prompt, сессии, agent `Run`, снимки состояния, идемпотентные результаты команд и service-local outbox.
 
 ## Правило внешних ссылок
 
@@ -175,6 +175,8 @@ approvals:
 | `created_by_actor_ref` | text | нет | Кто инициировал сессию. |
 | `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
 
+Для непустого `provider_work_item_ref` в одном `scope` допускается только одна активная `open`/`waiting` session. Новая команда с тем же provider target должна продолжать найденную session, а не создавать дубль.
+
 ### AgentRun
 
 `AgentRun` описывает один запуск агента внутри сессии.
@@ -198,6 +200,8 @@ approvals:
 | `failure_code` | text | да | Короткий код ошибки без секретов и PII. |
 | `version` | bigint | нет | Оптимистичная конкуренция. |
 | `started_at`, `finished_at` | timestamptz | да | Временные метки выполнения. |
+
+`AgentRun.status` меняется только по доменной state machine: terminal-статусы `completed`, `failed` и `cancelled` не возвращаются в работу, `running` не откатывается в `starting`, а повтор текущего non-terminal статуса допускается только как безопасная идемпотентная фиксация без нового lifecycle event.
 | `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
 
 ### AgentSessionStateSnapshot
@@ -323,7 +327,7 @@ approvals:
 
 | Запрос | Нужные индексы |
 |---|---|
-| Активные сессии по provider-native задаче | `(provider_work_item_ref, status)` |
+| Активные сессии по provider-native задаче | частичный unique index `(scope_type, scope_ref, provider_work_item_ref)` для `open`/`waiting` при непустом provider target |
 | Запуски по сессии и статусу | `(session_id, status, created_at)` |
 | Запуски по flow/stage/role | `(flow_version_id, stage_id, role_profile_id, status)` |
 | Последний снимок session state | `(session_id, captured_at DESC)` и `latest_state_snapshot_id` на `AgentSession`. |
