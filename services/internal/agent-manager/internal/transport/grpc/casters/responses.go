@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 
 	agentsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1"
+	agentservice "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/service"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/value"
 )
@@ -32,6 +33,13 @@ type PromptTemplateOutput struct {
 type PromptTemplateListOutput = PageOutput[entity.PromptTemplate]
 
 type PromptTemplateVersionListOutput = PageOutput[entity.PromptTemplateVersion]
+
+type AgentRunListOutput = PageOutput[entity.AgentRun]
+
+type AgentSessionOutput struct {
+	Session        entity.AgentSession
+	LatestSnapshot *entity.AgentSessionStateSnapshot
+}
 
 func NewFlowOutput(flow entity.Flow, active *entity.FlowVersion) FlowOutput {
 	return FlowOutput{Flow: flow, ActiveVersion: active}
@@ -87,6 +95,37 @@ func PromptTemplateVersionResponse(version entity.PromptTemplateVersion) *agents
 
 func ListPromptTemplateVersionsResponse(output PromptTemplateVersionListOutput) *agentsv1.ListPromptTemplateVersionsResponse {
 	return &agentsv1.ListPromptTemplateVersionsResponse{PromptTemplateVersions: protoList(output.Items, PromptTemplateVersionToProto), Page: pageResponseToProto(output.Page)}
+}
+
+func NewAgentSessionOutput(session entity.AgentSession, snapshot *entity.AgentSessionStateSnapshot) AgentSessionOutput {
+	return AgentSessionOutput{Session: session, LatestSnapshot: snapshot}
+}
+
+func AgentSessionEntityResponse(session entity.AgentSession) *agentsv1.AgentSessionResponse {
+	return AgentSessionResponse(NewAgentSessionOutput(session, nil))
+}
+
+func AgentSessionResponse(output AgentSessionOutput) *agentsv1.AgentSessionResponse {
+	response := &agentsv1.AgentSessionResponse{Session: AgentSessionToProto(output.Session)}
+	if output.LatestSnapshot != nil {
+		response.LatestStateSnapshot = AgentSessionStateSnapshotToProto(*output.LatestSnapshot)
+	}
+	return response
+}
+
+func AgentRunResponse(run entity.AgentRun) *agentsv1.AgentRunResponse {
+	return &agentsv1.AgentRunResponse{Run: AgentRunToProto(run)}
+}
+
+func AgentSessionStateSnapshotResponse(output agentservice.SessionSnapshotResult) *agentsv1.AgentSessionStateSnapshotResponse {
+	return &agentsv1.AgentSessionStateSnapshotResponse{
+		Snapshot: AgentSessionStateSnapshotToProto(output.Snapshot),
+		Session:  AgentSessionToProto(output.Session),
+	}
+}
+
+func ListAgentRunsResponse(output AgentRunListOutput) *agentsv1.ListAgentRunsResponse {
+	return &agentsv1.ListAgentRunsResponse{Runs: protoList(output.Items, AgentRunToProto), Page: pageResponseToProto(output.Page)}
 }
 
 func protoList[Domain any, Proto any](items []Domain, cast func(Domain) *Proto) []*Proto {
@@ -226,6 +265,60 @@ func PromptTemplateVersionToProto(version entity.PromptTemplateVersion) *agentsv
 	}
 }
 
+func AgentSessionToProto(session entity.AgentSession) *agentsv1.AgentSession {
+	return &agentsv1.AgentSession{
+		Id:                    session.ID.String(),
+		Scope:                 ScopeToProto(session.Scope),
+		ProviderWorkItemRef:   optionalStringPtr(session.ProviderWorkItemRef),
+		FlowVersionId:         optionalUUIDStringPtr(session.FlowVersionID),
+		CurrentStageId:        optionalUUIDStringPtr(session.CurrentStageID),
+		LatestStateSnapshotId: optionalUUIDStringPtr(session.LatestStateSnapshotID),
+		Status:                AgentSessionStatusToProto(session.Status),
+		CreatedByActorRef:     session.CreatedByActorRef,
+		Version:               session.Version,
+		CreatedAt:             formatTime(session.CreatedAt),
+		UpdatedAt:             formatTime(session.UpdatedAt),
+	}
+}
+
+func AgentRunToProto(run entity.AgentRun) *agentsv1.AgentRun {
+	return &agentsv1.AgentRun{
+		Id:                      run.ID.String(),
+		SessionId:               run.SessionID.String(),
+		FlowVersionId:           optionalUUIDStringPtr(run.FlowVersionID),
+		StageId:                 optionalUUIDStringPtr(run.StageID),
+		RoleProfileId:           run.RoleProfileID.String(),
+		RoleProfileVersion:      run.RoleProfileVersion,
+		RoleProfileDigest:       run.RoleProfileDigest,
+		PromptTemplateVersionId: run.PromptTemplateVersionID.String(),
+		PromptTemplateDigest:    run.PromptTemplateDigest,
+		RuntimeContext:          RuntimeContextToProto(run.RuntimeContext),
+		ProviderTarget:          ProviderTargetToProto(run.ProviderTarget),
+		GuidanceRefs:            protoList(run.GuidanceRefs, GuidanceRefToProto),
+		Status:                  AgentRunStatusToProto(run.Status),
+		ResultSummary:           optionalStringPtr(run.ResultSummary),
+		FailureCode:             optionalStringPtr(run.FailureCode),
+		Version:                 run.Version,
+		StartedAt:               optionalTimePtr(run.StartedAt),
+		FinishedAt:              optionalTimePtr(run.FinishedAt),
+		CreatedAt:               formatTime(run.CreatedAt),
+		UpdatedAt:               formatTime(run.UpdatedAt),
+	}
+}
+
+func AgentSessionStateSnapshotToProto(snapshot entity.AgentSessionStateSnapshot) *agentsv1.AgentSessionStateSnapshot {
+	return &agentsv1.AgentSessionStateSnapshot{
+		Id:           snapshot.ID.String(),
+		SessionId:    snapshot.SessionID.String(),
+		RunId:        optionalUUIDStringPtr(snapshot.RunID),
+		SnapshotKind: AgentSessionSnapshotKindToProto(snapshot.SnapshotKind),
+		TurnIndex:    snapshot.TurnIndex,
+		Object:       ObjectRefToProto(snapshot.Object),
+		CapturedAt:   formatTime(snapshot.CapturedAt),
+		CreatedAt:    formatTime(snapshot.CreatedAt),
+	}
+}
+
 func ScopeToProto(scope value.ScopeRef) *agentsv1.ScopeRef {
 	return &agentsv1.ScopeRef{Type: ScopeTypeToProto(scope.Type), Ref: scope.Ref}
 }
@@ -246,6 +339,39 @@ func ObjectRefToProto(object value.ObjectRef) *agentsv1.ObjectRef {
 		ObjectUri:       object.ObjectURI,
 		ObjectDigest:    object.ObjectDigest,
 		ObjectSizeBytes: object.ObjectSizeBytes,
+	}
+}
+
+func RuntimeContextToProto(context value.RuntimeContextRef) *agentsv1.RuntimeContextRef {
+	if context.SlotRef == "" && context.JobRef == "" && context.WorkspaceRef == "" && context.ContextRef == "" {
+		return nil
+	}
+	return &agentsv1.RuntimeContextRef{
+		SlotRef:      optionalStringPtr(context.SlotRef),
+		JobRef:       optionalStringPtr(context.JobRef),
+		WorkspaceRef: optionalStringPtr(context.WorkspaceRef),
+		ContextRef:   optionalStringPtr(context.ContextRef),
+	}
+}
+
+func ProviderTargetToProto(target value.ProviderTargetRef) *agentsv1.ProviderTargetRef {
+	if target.WorkItemRef == "" && target.PullRequestRef == "" && target.CommentRef == "" && target.ReviewSignalRef == "" {
+		return nil
+	}
+	return &agentsv1.ProviderTargetRef{
+		WorkItemRef:     optionalStringPtr(target.WorkItemRef),
+		PullRequestRef:  optionalStringPtr(target.PullRequestRef),
+		CommentRef:      optionalStringPtr(target.CommentRef),
+		ReviewSignalRef: optionalStringPtr(target.ReviewSignalRef),
+	}
+}
+
+func GuidanceRefToProto(ref value.GuidanceRef) *agentsv1.GuidanceRef {
+	return &agentsv1.GuidanceRef{
+		PackageInstallationRef: ref.PackageInstallationRef,
+		PackageVersionRef:      ref.PackageVersionRef,
+		ManifestDigest:         ref.ManifestDigest,
+		SourceRef:              optionalStringPtr(ref.SourceRef),
 	}
 }
 

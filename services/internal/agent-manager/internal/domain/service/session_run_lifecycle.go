@@ -1,0 +1,371 @@
+package service
+
+import (
+	"context"
+	"encoding/json"
+	"strings"
+
+	"github.com/google/uuid"
+
+	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/errs"
+	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/enum"
+	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/value"
+)
+
+type agentSessionCommandPayload struct {
+	Session entity.AgentSession `json:"session"`
+}
+
+type agentRunCommandPayload struct {
+	Run entity.AgentRun `json:"run"`
+}
+
+type sessionSnapshotCommandPayload struct {
+	Snapshot entity.AgentSessionStateSnapshot `json:"snapshot"`
+	Session  entity.AgentSession              `json:"session"`
+}
+
+func (s *Service) StartAgentSession(ctx context.Context, input StartAgentSessionInput) (entity.AgentSession, error) {
+	if err := s.requireRepository(); err != nil {
+		return entity.AgentSession{}, err
+	}
+	if err := validateScope(input.Scope); err != nil {
+		return entity.AgentSession{}, err
+	}
+	if strings.TrimSpace(input.CreatedByActorRef) == "" {
+		return entity.AgentSession{}, errs.ErrInvalidArgument
+	}
+	if input.CurrentStageID != nil && input.FlowVersionID == nil {
+		return entity.AgentSession{}, errs.ErrInvalidArgument
+	}
+	if replay, ok, err := findReplay(ctx, s, input.Meta, operationStartAgentSession, enum.CommandAggregateTypeSession, sessionFromPayload, verifyScopedReplay(uuid.Nil, &input.Scope, s.repository.GetAgentSession, sessionID, sessionScope)); ok || err != nil {
+		return replay, err
+	}
+	now := s.clock.Now()
+	session := entity.AgentSession{
+		VersionedBase:       entity.VersionedBase{ID: s.idGenerator.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		Scope:               input.Scope,
+		ProviderWorkItemRef: strings.TrimSpace(input.ProviderWorkItemRef),
+		FlowVersionID:       input.FlowVersionID,
+		CurrentStageID:      input.CurrentStageID,
+		Status:              enum.AgentSessionStatusOpen,
+		CreatedByActorRef:   strings.TrimSpace(input.CreatedByActorRef),
+	}
+	payload, err := marshalCommandPayload(agentSessionCommandPayload{Session: session})
+	if err != nil {
+		return entity.AgentSession{}, err
+	}
+	result, err := commandResult(input.Meta, operationStartAgentSession, enum.CommandAggregateTypeSession, session.ID, payload, now)
+	if err != nil {
+		return entity.AgentSession{}, err
+	}
+	event, err := sessionCreatedEvent(s.idGenerator.New(), session, now)
+	if err != nil {
+		return entity.AgentSession{}, err
+	}
+	return session, s.repository.CreateAgentSessionWithResult(ctx, session, result, event)
+}
+
+func (s *Service) GetAgentSession(ctx context.Context, id uuid.UUID) (entity.AgentSession, error) {
+	return getByID(ctx, s, id, s.repository.GetAgentSession)
+}
+
+func (s *Service) StartAgentRun(ctx context.Context, input StartAgentRunInput) (entity.AgentRun, error) {
+	if err := s.requireRepository(); err != nil {
+		return entity.AgentRun{}, err
+	}
+	if err := validateID(input.SessionID); err != nil {
+		return entity.AgentRun{}, err
+	}
+	if err := validateID(input.RoleProfileID); err != nil {
+		return entity.AgentRun{}, err
+	}
+	if err := validateID(input.PromptTemplateVersionID); err != nil {
+		return entity.AgentRun{}, err
+	}
+	if len(input.GuidanceSelectionHints) > 0 {
+		return entity.AgentRun{}, errs.ErrPreconditionFailed
+	}
+	if replay, ok, err := findReplay(ctx, s, input.Meta, operationStartAgentRun, enum.CommandAggregateTypeRun, runFromPayload, verifyReplay(uuid.Nil, s.repository.GetAgentRun, runID, requireRunSessionID(input.SessionID))); ok || err != nil {
+		return replay, err
+	}
+	session, err := s.repository.GetAgentSession(ctx, input.SessionID)
+	if err != nil {
+		return entity.AgentRun{}, err
+	}
+	if session.Status == enum.AgentSessionStatusCompleted || session.Status == enum.AgentSessionStatusFailed || session.Status == enum.AgentSessionStatusCancelled {
+		return entity.AgentRun{}, errs.ErrPreconditionFailed
+	}
+	role, err := s.repository.GetRoleProfile(ctx, input.RoleProfileID)
+	if err != nil {
+		return entity.AgentRun{}, err
+	}
+	if role.Status != enum.RoleStatusActive {
+		return entity.AgentRun{}, errs.ErrPreconditionFailed
+	}
+	promptVersion, err := s.repository.GetPromptTemplateVersion(ctx, input.PromptTemplateVersionID)
+	if err != nil {
+		return entity.AgentRun{}, err
+	}
+	if promptVersion.RoleProfileID != role.ID || promptVersion.Status != enum.PromptVersionStatusActive {
+		return entity.AgentRun{}, errs.ErrPreconditionFailed
+	}
+	roleDigest, err := roleProfileDigest(role)
+	if err != nil {
+		return entity.AgentRun{}, err
+	}
+	now := s.clock.Now()
+	flowVersionID := chooseUUID(input.FlowVersionID, session.FlowVersionID)
+	stageID := chooseUUID(input.StageID, session.CurrentStageID)
+	providerTarget := input.ProviderTarget
+	if strings.TrimSpace(providerTarget.WorkItemRef) == "" {
+		providerTarget.WorkItemRef = session.ProviderWorkItemRef
+	}
+	run := entity.AgentRun{
+		VersionedBase:           entity.VersionedBase{ID: s.idGenerator.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		SessionID:               session.ID,
+		FlowVersionID:           flowVersionID,
+		StageID:                 stageID,
+		RoleProfileID:           role.ID,
+		RoleProfileVersion:      role.Version,
+		RoleProfileDigest:       roleDigest,
+		PromptTemplateVersionID: promptVersion.ID,
+		PromptTemplateDigest:    promptVersion.TemplateDigest,
+		ProviderTarget:          providerTarget,
+		GuidanceRefs:            nil,
+		Status:                  enum.AgentRunStatusRequested,
+	}
+	payload, err := marshalCommandPayload(agentRunCommandPayload{Run: run})
+	if err != nil {
+		return entity.AgentRun{}, err
+	}
+	result, err := commandResult(input.Meta, operationStartAgentRun, enum.CommandAggregateTypeRun, run.ID, payload, now)
+	if err != nil {
+		return entity.AgentRun{}, err
+	}
+	event, err := runRequestedEvent(s.idGenerator.New(), run, now)
+	if err != nil {
+		return entity.AgentRun{}, err
+	}
+	return run, s.repository.CreateAgentRunWithResult(ctx, run, result, event)
+}
+
+func (s *Service) RecordRunState(ctx context.Context, input RecordRunStateInput) (entity.AgentRun, error) {
+	if err := s.requireRepository(); err != nil {
+		return entity.AgentRun{}, err
+	}
+	if err := validateID(input.RunID); err != nil {
+		return entity.AgentRun{}, err
+	}
+	previousVersion, err := expectedVersion(input.Meta)
+	if err != nil {
+		return entity.AgentRun{}, err
+	}
+	if input.Status == "" || input.Status == enum.AgentRunStatusRequested {
+		return entity.AgentRun{}, errs.ErrInvalidArgument
+	}
+	if replay, ok, err := findReplay(ctx, s, input.Meta, operationRecordRunState, enum.CommandAggregateTypeRun, runFromPayload, verifyReplay(input.RunID, s.repository.GetAgentRun, runID, acceptAnyRun)); ok || err != nil {
+		return replay, err
+	}
+	run, err := s.repository.GetAgentRun(ctx, input.RunID)
+	if err != nil {
+		return entity.AgentRun{}, err
+	}
+	if run.Version != previousVersion {
+		return entity.AgentRun{}, errs.ErrConflict
+	}
+	now := s.clock.Now()
+	previousStatus := string(run.Status)
+	run.Status = input.Status
+	if input.RuntimeContext != nil {
+		run.RuntimeContext = *input.RuntimeContext
+	}
+	if input.ProviderTarget != nil {
+		run.ProviderTarget = *input.ProviderTarget
+	}
+	if input.ResultSummary != nil {
+		run.ResultSummary = strings.TrimSpace(*input.ResultSummary)
+	}
+	if input.FailureCode != nil {
+		run.FailureCode = strings.TrimSpace(*input.FailureCode)
+	}
+	if input.Status == enum.AgentRunStatusFailed && run.FailureCode == "" {
+		return entity.AgentRun{}, errs.ErrInvalidArgument
+	}
+	if input.StartedAt != nil {
+		run.StartedAt = input.StartedAt
+	} else if run.StartedAt == nil && (input.Status == enum.AgentRunStatusStarting || input.Status == enum.AgentRunStatusRunning) {
+		run.StartedAt = &now
+	}
+	if input.FinishedAt != nil {
+		run.FinishedAt = input.FinishedAt
+	} else if run.FinishedAt == nil && isTerminalRunStatus(input.Status) {
+		run.FinishedAt = &now
+	}
+	run.Version++
+	run.UpdatedAt = now
+	payload, err := marshalCommandPayload(agentRunCommandPayload{Run: run})
+	if err != nil {
+		return entity.AgentRun{}, err
+	}
+	result, err := commandResult(input.Meta, operationRecordRunState, enum.CommandAggregateTypeRun, run.ID, payload, now)
+	if err != nil {
+		return entity.AgentRun{}, err
+	}
+	event, err := runStateEvent(s.idGenerator.New(), previousStatus, run, now)
+	if err != nil {
+		return entity.AgentRun{}, err
+	}
+	return run, s.repository.UpdateAgentRunWithResult(ctx, run, previousVersion, result, event)
+}
+
+func (s *Service) RecordSessionStateSnapshot(ctx context.Context, input RecordSessionStateSnapshotInput) (SessionSnapshotResult, error) {
+	if err := s.requireRepository(); err != nil {
+		return SessionSnapshotResult{}, err
+	}
+	if err := validateID(input.SessionID); err != nil {
+		return SessionSnapshotResult{}, err
+	}
+	if input.SnapshotKind == "" || strings.TrimSpace(input.Object.ObjectURI) == "" || strings.TrimSpace(input.Object.ObjectDigest) == "" || input.CapturedAt.IsZero() {
+		return SessionSnapshotResult{}, errs.ErrInvalidArgument
+	}
+	if input.Object.ObjectSizeBytes != nil && *input.Object.ObjectSizeBytes < 0 {
+		return SessionSnapshotResult{}, errs.ErrInvalidArgument
+	}
+	if input.TurnIndex != nil && *input.TurnIndex < 0 {
+		return SessionSnapshotResult{}, errs.ErrInvalidArgument
+	}
+	previousVersion, err := expectedVersion(input.Meta)
+	if err != nil {
+		return SessionSnapshotResult{}, err
+	}
+	if replay, ok, err := findReplay(ctx, s, input.Meta, operationRecordSessionSnapshot, enum.CommandAggregateTypeSessionStateSnapshot, sessionSnapshotResultFromPayload, verifySnapshotResultReplay(input.SessionID, s.repository.GetSessionStateSnapshot)); ok || err != nil {
+		return replay, err
+	}
+	session, err := s.repository.GetAgentSession(ctx, input.SessionID)
+	if err != nil {
+		return SessionSnapshotResult{}, err
+	}
+	if session.Version != previousVersion {
+		return SessionSnapshotResult{}, errs.ErrConflict
+	}
+	if input.RunID != nil {
+		run, err := s.repository.GetAgentRun(ctx, *input.RunID)
+		if err != nil {
+			return SessionSnapshotResult{}, err
+		}
+		if run.SessionID != session.ID {
+			return SessionSnapshotResult{}, errs.ErrConflict
+		}
+	}
+	now := s.clock.Now()
+	snapshot := entity.AgentSessionStateSnapshot{
+		ID:           s.idGenerator.New(),
+		SessionID:    session.ID,
+		RunID:        input.RunID,
+		SnapshotKind: input.SnapshotKind,
+		TurnIndex:    input.TurnIndex,
+		Object:       input.Object,
+		CapturedAt:   input.CapturedAt.UTC(),
+		CreatedAt:    now,
+	}
+	session.LatestStateSnapshotID = &snapshot.ID
+	session.Version++
+	session.UpdatedAt = now
+	output := SessionSnapshotResult{Snapshot: snapshot, Session: session}
+	payload, err := marshalCommandPayload(sessionSnapshotCommandPayload{Snapshot: snapshot, Session: session})
+	if err != nil {
+		return SessionSnapshotResult{}, err
+	}
+	result, err := commandResult(input.Meta, operationRecordSessionSnapshot, enum.CommandAggregateTypeSessionStateSnapshot, snapshot.ID, payload, now)
+	if err != nil {
+		return SessionSnapshotResult{}, err
+	}
+	event, err := sessionSnapshotRecordedEvent(s.idGenerator.New(), snapshot, session, now)
+	if err != nil {
+		return SessionSnapshotResult{}, err
+	}
+	err = s.repository.CreateSessionStateSnapshotWithResult(ctx, snapshot, session, previousVersion, result, event)
+	return output, err
+}
+
+func (s *Service) ListAgentRuns(ctx context.Context, filter query.AgentRunFilter) ([]entity.AgentRun, value.PageResult, error) {
+	return listFromRepository(ctx, s, filter, s.repository.ListAgentRuns)
+}
+
+func (s *Service) GetSessionStateSnapshot(ctx context.Context, id uuid.UUID) (entity.AgentSessionStateSnapshot, error) {
+	return getByID(ctx, s, id, s.repository.GetSessionStateSnapshot)
+}
+
+func chooseUUID(primary *uuid.UUID, fallback *uuid.UUID) *uuid.UUID {
+	if primary != nil {
+		return primary
+	}
+	return fallback
+}
+
+func isTerminalRunStatus(status enum.AgentRunStatus) bool {
+	return status == enum.AgentRunStatusCompleted || status == enum.AgentRunStatusFailed || status == enum.AgentRunStatusCancelled
+}
+
+func sessionFromPayload(payload []byte) (entity.AgentSession, error) {
+	var result agentSessionCommandPayload
+	err := json.Unmarshal(payload, &result)
+	return result.Session, err
+}
+
+func runFromPayload(payload []byte) (entity.AgentRun, error) {
+	var result agentRunCommandPayload
+	err := json.Unmarshal(payload, &result)
+	return result.Run, err
+}
+
+func sessionSnapshotResultFromPayload(payload []byte) (SessionSnapshotResult, error) {
+	var result sessionSnapshotCommandPayload
+	err := json.Unmarshal(payload, &result)
+	return SessionSnapshotResult{Snapshot: result.Snapshot, Session: result.Session}, err
+}
+
+func sessionID(session entity.AgentSession) uuid.UUID { return session.ID }
+
+func sessionScope(session entity.AgentSession) value.ScopeRef { return session.Scope }
+
+func runID(run entity.AgentRun) uuid.UUID { return run.ID }
+
+func requireRunSessionID(expectedSessionID uuid.UUID) func(entity.AgentRun) error {
+	return func(run entity.AgentRun) error {
+		if expectedSessionID != uuid.Nil && run.SessionID != expectedSessionID {
+			return errs.ErrConflict
+		}
+		return nil
+	}
+}
+
+func requireSnapshotSessionID(expectedSessionID uuid.UUID) func(entity.AgentSessionStateSnapshot) error {
+	return func(snapshot entity.AgentSessionStateSnapshot) error {
+		if expectedSessionID != uuid.Nil && snapshot.SessionID != expectedSessionID {
+			return errs.ErrConflict
+		}
+		return nil
+	}
+}
+
+func verifySnapshotResultReplay(expectedSessionID uuid.UUID, load func(context.Context, uuid.UUID) (entity.AgentSessionStateSnapshot, error)) func(context.Context, entity.CommandResult, SessionSnapshotResult) error {
+	return func(ctx context.Context, result entity.CommandResult, replay SessionSnapshotResult) error {
+		if replay.Snapshot.ID != result.AggregateID {
+			return errs.ErrConflict
+		}
+		stored, err := load(ctx, result.AggregateID)
+		if err != nil {
+			return err
+		}
+		if expectedSessionID != uuid.Nil && stored.SessionID != expectedSessionID {
+			return errs.ErrConflict
+		}
+		return nil
+	}
+}
+
+func acceptAnyRun(entity.AgentRun) error { return nil }

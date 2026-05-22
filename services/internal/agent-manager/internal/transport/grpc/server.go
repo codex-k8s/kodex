@@ -41,6 +41,13 @@ type agentService interface {
 	ActivatePromptTemplateVersion(context.Context, agentservice.ActivatePromptTemplateVersionInput) (entity.PromptTemplateVersion, error)
 	GetPromptTemplateVersion(context.Context, uuid.UUID) (entity.PromptTemplateVersion, error)
 	ListPromptTemplateVersions(context.Context, agentservice.PromptTemplateVersionList) ([]entity.PromptTemplateVersion, value.PageResult, error)
+	StartAgentSession(context.Context, agentservice.StartAgentSessionInput) (entity.AgentSession, error)
+	GetAgentSession(context.Context, uuid.UUID) (entity.AgentSession, error)
+	StartAgentRun(context.Context, agentservice.StartAgentRunInput) (entity.AgentRun, error)
+	RecordRunState(context.Context, agentservice.RecordRunStateInput) (entity.AgentRun, error)
+	RecordSessionStateSnapshot(context.Context, agentservice.RecordSessionStateSnapshotInput) (agentservice.SessionSnapshotResult, error)
+	ListAgentRuns(context.Context, agentservice.AgentRunList) ([]entity.AgentRun, value.PageResult, error)
+	GetSessionStateSnapshot(context.Context, uuid.UUID) (entity.AgentSessionStateSnapshot, error)
 }
 
 // NewServer creates an agent-manager gRPC server boundary.
@@ -136,6 +143,36 @@ func (server *Server) ListPromptTemplateVersions(ctx context.Context, request *a
 	return grpcserver.HandleUnary(ctx, request, grpccasters.ListPromptTemplateVersionsInput, server.listPromptTemplateVersions, grpccasters.ListPromptTemplateVersionsResponse)
 }
 
+// StartAgentSession creates a logical resumable agent session.
+func (server *Server) StartAgentSession(ctx context.Context, request *agentsv1.StartAgentSessionRequest) (*agentsv1.AgentSessionResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.StartAgentSessionInput, server.service.StartAgentSession, grpccasters.AgentSessionEntityResponse)
+}
+
+// GetAgentSession returns authoritative session state and latest snapshot metadata when available.
+func (server *Server) GetAgentSession(ctx context.Context, request *agentsv1.GetAgentSessionRequest) (*agentsv1.AgentSessionResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.GetAgentSessionInput, server.getAgentSession, grpccasters.AgentSessionResponse)
+}
+
+// StartAgentRun creates a role run inside an existing session.
+func (server *Server) StartAgentRun(ctx context.Context, request *agentsv1.StartAgentRunRequest) (*agentsv1.AgentRunResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.StartAgentRunInput, server.service.StartAgentRun, grpccasters.AgentRunResponse)
+}
+
+// RecordRunState records a lifecycle transition from runtime, MCP or hook ingress.
+func (server *Server) RecordRunState(ctx context.Context, request *agentsv1.RecordRunStateRequest) (*agentsv1.AgentRunResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.RecordRunStateInput, server.service.RecordRunState, grpccasters.AgentRunResponse)
+}
+
+// RecordSessionStateSnapshot records metadata for a Codex session state object.
+func (server *Server) RecordSessionStateSnapshot(ctx context.Context, request *agentsv1.RecordSessionStateSnapshotRequest) (*agentsv1.AgentSessionStateSnapshotResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.RecordSessionStateSnapshotInput, server.service.RecordSessionStateSnapshot, grpccasters.AgentSessionStateSnapshotResponse)
+}
+
+// ListAgentRuns returns runs by session, role, status or provider target.
+func (server *Server) ListAgentRuns(ctx context.Context, request *agentsv1.ListAgentRunsRequest) (*agentsv1.ListAgentRunsResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.ListAgentRunsInput, server.listAgentRuns, grpccasters.ListAgentRunsResponse)
+}
+
 func (server *Server) getFlow(ctx context.Context, input grpccasters.IDQueryInput) (grpccasters.FlowOutput, error) {
 	return entityOutputByID(ctx, input, server.service.GetFlow, server.flowOutput)
 }
@@ -174,6 +211,18 @@ func (server *Server) getPromptTemplateVersion(ctx context.Context, input grpcca
 
 func (server *Server) listPromptTemplateVersions(ctx context.Context, input agentservice.PromptTemplateVersionList) (grpccasters.PromptTemplateVersionListOutput, error) {
 	return listWithPage(ctx, input, server.service.ListPromptTemplateVersions)
+}
+
+func (server *Server) getAgentSession(ctx context.Context, input grpccasters.IDQueryInput) (grpccasters.AgentSessionOutput, error) {
+	return entityOutputByID(ctx, input, server.service.GetAgentSession, server.agentSessionOutput)
+}
+
+func (server *Server) agentSessionOutput(ctx context.Context, session entity.AgentSession) (grpccasters.AgentSessionOutput, error) {
+	return outputWithActiveVersion(ctx, session, session.LatestStateSnapshotID, server.service.GetSessionStateSnapshot, grpccasters.NewAgentSessionOutput)
+}
+
+func (server *Server) listAgentRuns(ctx context.Context, input agentservice.AgentRunList) (grpccasters.AgentRunListOutput, error) {
+	return listWithPage(ctx, input, server.service.ListAgentRuns)
 }
 
 func listWithPage[Input any, Item any](

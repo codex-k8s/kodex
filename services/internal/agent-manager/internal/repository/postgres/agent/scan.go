@@ -214,6 +214,109 @@ func scanPromptTemplateVersion(row postgreslib.RowScanner) (entity.PromptTemplat
 	return version, err
 }
 
+func scanAgentSession(row postgreslib.RowScanner) (entity.AgentSession, error) {
+	var session entity.AgentSession
+	var flowVersionID, currentStageID, latestSnapshotID pgtype.UUID
+	var status string
+	err := row.Scan(
+		&session.ID,
+		&session.Scope.Type,
+		&session.Scope.Ref,
+		&session.ProviderWorkItemRef,
+		&flowVersionID,
+		&currentStageID,
+		&latestSnapshotID,
+		&status,
+		&session.CreatedByActorRef,
+		&session.Version,
+		&session.CreatedAt,
+		&session.UpdatedAt,
+	)
+	session.FlowVersionID = postgreslib.UUIDPtrFromPG(flowVersionID)
+	session.CurrentStageID = postgreslib.UUIDPtrFromPG(currentStageID)
+	session.LatestStateSnapshotID = postgreslib.UUIDPtrFromPG(latestSnapshotID)
+	session.Status = enum.AgentSessionStatus(status)
+	return session, err
+}
+
+func scanAgentRun(row postgreslib.RowScanner) (entity.AgentRun, error) {
+	var run entity.AgentRun
+	var flowVersionID, stageID pgtype.UUID
+	var runtimeContext, providerTarget, guidanceRefs []byte
+	var status string
+	var startedAt, finishedAt pgtype.Timestamptz
+	err := row.Scan(
+		&run.ID,
+		&run.SessionID,
+		&flowVersionID,
+		&stageID,
+		&run.RoleProfileID,
+		&run.RoleProfileVersion,
+		&run.RoleProfileDigest,
+		&run.PromptTemplateVersionID,
+		&run.PromptTemplateDigest,
+		&runtimeContext,
+		&providerTarget,
+		&guidanceRefs,
+		&status,
+		&run.ResultSummary,
+		&run.FailureCode,
+		&run.Version,
+		&startedAt,
+		&finishedAt,
+		&run.CreatedAt,
+		&run.UpdatedAt,
+	)
+	run.FlowVersionID = postgreslib.UUIDPtrFromPG(flowVersionID)
+	run.StageID = postgreslib.UUIDPtrFromPG(stageID)
+	run.Status = enum.AgentRunStatus(status)
+	run.StartedAt = postgreslib.TimePtrFromPG(startedAt)
+	run.FinishedAt = postgreslib.TimePtrFromPG(finishedAt)
+	if err != nil {
+		return run, err
+	}
+	if err := json.Unmarshal(runtimeContext, &run.RuntimeContext); err != nil {
+		return run, fmt.Errorf("scan run runtime_context: %w", err)
+	}
+	if err := json.Unmarshal(providerTarget, &run.ProviderTarget); err != nil {
+		return run, fmt.Errorf("scan run provider_target: %w", err)
+	}
+	if err := json.Unmarshal(guidanceRefs, &run.GuidanceRefs); err != nil {
+		return run, fmt.Errorf("scan run guidance_refs: %w", err)
+	}
+	return run, nil
+}
+
+func scanSessionStateSnapshot(row postgreslib.RowScanner) (entity.AgentSessionStateSnapshot, error) {
+	var snapshot entity.AgentSessionStateSnapshot
+	var runID pgtype.UUID
+	var snapshotKind string
+	var turnIndex, objectSize pgtype.Int8
+	err := row.Scan(
+		&snapshot.ID,
+		&snapshot.SessionID,
+		&runID,
+		&snapshotKind,
+		&turnIndex,
+		&snapshot.Object.ObjectURI,
+		&snapshot.Object.ObjectDigest,
+		&objectSize,
+		&snapshot.CapturedAt,
+		&snapshot.CreatedAt,
+	)
+	snapshot.RunID = postgreslib.UUIDPtrFromPG(runID)
+	snapshot.SnapshotKind = enum.AgentSessionSnapshotKind(snapshotKind)
+	if turnIndex.Valid {
+		value := turnIndex.Int64
+		snapshot.TurnIndex = &value
+	}
+	if objectSize.Valid {
+		value := objectSize.Int64
+		snapshot.Object.ObjectSizeBytes = &value
+	}
+	return snapshot, err
+}
+
 func scanCommandResult(row postgreslib.RowScanner) (entity.CommandResult, error) {
 	var raw commandResultRow
 	if err := raw.scan(row); err != nil {

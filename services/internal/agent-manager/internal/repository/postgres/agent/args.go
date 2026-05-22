@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strconv"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
@@ -146,6 +147,67 @@ func promptTemplateVersionArgs(version entity.PromptTemplateVersion) pgx.NamedAr
 	}
 }
 
+func agentSessionArgs(session entity.AgentSession) pgx.NamedArgs {
+	return postgreslib.AddBaseArgs(pgx.NamedArgs{
+		"scope_type":               session.Scope.Type,
+		"scope_ref":                session.Scope.Ref,
+		"provider_work_item_ref":   session.ProviderWorkItemRef,
+		"flow_version_id":          postgreslib.NullableUUID(session.FlowVersionID),
+		"current_stage_id":         postgreslib.NullableUUID(session.CurrentStageID),
+		"latest_state_snapshot_id": postgreslib.NullableUUID(session.LatestStateSnapshotID),
+		"status":                   string(session.Status),
+		"created_by_actor_ref":     session.CreatedByActorRef,
+	}, session.ID, session.Version, session.CreatedAt, session.UpdatedAt)
+}
+
+func agentSessionUpdateArgs(session entity.AgentSession, previousVersion int64) pgx.NamedArgs {
+	args := agentSessionArgs(session)
+	args["previous_version"] = previousVersion
+	return args
+}
+
+func agentRunArgs(run entity.AgentRun) pgx.NamedArgs {
+	return postgreslib.AddBaseArgs(pgx.NamedArgs{
+		"session_id":                 run.SessionID,
+		"flow_version_id":            postgreslib.NullableUUID(run.FlowVersionID),
+		"stage_id":                   postgreslib.NullableUUID(run.StageID),
+		"role_profile_id":            run.RoleProfileID,
+		"role_profile_version":       run.RoleProfileVersion,
+		"role_profile_digest":        run.RoleProfileDigest,
+		"prompt_template_version_id": run.PromptTemplateVersionID,
+		"prompt_template_digest":     run.PromptTemplateDigest,
+		"runtime_context":            jsonObjectPayload(run.RuntimeContext),
+		"provider_target":            jsonObjectPayload(run.ProviderTarget),
+		"guidance_refs":              jsonArrayPayload(run.GuidanceRefs),
+		"status":                     string(run.Status),
+		"result_summary":             run.ResultSummary,
+		"failure_code":               run.FailureCode,
+		"started_at":                 postgreslib.NullableTime(run.StartedAt),
+		"finished_at":                postgreslib.NullableTime(run.FinishedAt),
+	}, run.ID, run.Version, run.CreatedAt, run.UpdatedAt)
+}
+
+func agentRunUpdateArgs(run entity.AgentRun, previousVersion int64) pgx.NamedArgs {
+	args := agentRunArgs(run)
+	args["previous_version"] = previousVersion
+	return args
+}
+
+func sessionStateSnapshotArgs(snapshot entity.AgentSessionStateSnapshot) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"id":                snapshot.ID,
+		"session_id":        snapshot.SessionID,
+		"run_id":            postgreslib.NullableUUID(snapshot.RunID),
+		"snapshot_kind":     string(snapshot.SnapshotKind),
+		"turn_index":        snapshot.TurnIndex,
+		"object_uri":        snapshot.Object.ObjectURI,
+		"object_digest":     snapshot.Object.ObjectDigest,
+		"object_size_bytes": snapshot.Object.ObjectSizeBytes,
+		"captured_at":       snapshot.CapturedAt,
+		"created_at":        snapshot.CreatedAt,
+	}
+}
+
 func commandResultArgs(result entity.CommandResult) pgx.NamedArgs {
 	args := pgx.NamedArgs{"key": result.Key}
 	args["command_id"] = postgreslib.NullableUUID(result.CommandID)
@@ -222,6 +284,15 @@ func promptTemplateVersionFilterArgs(filter query.PromptTemplateVersionFilter) p
 	})
 }
 
+func agentRunFilterArgs(filter query.AgentRunFilter) pageQueryArgs {
+	return withPage(filter.Page, pgx.NamedArgs{
+		"session_id":             optionalUUID(filter.SessionID),
+		"role_profile_id":        optionalUUID(filter.RoleProfileID),
+		"status":                 optionalEnum(filter.Status),
+		"provider_work_item_ref": optionalString(filter.ProviderWorkItemRef),
+	})
+}
+
 func withPage(page value.PageRequest, args pgx.NamedArgs) pageQueryArgs {
 	limit, offset, _ := postgreslib.OffsetPageBounds(page.PageSize, decodePageToken(page.PageToken), defaultPageSize, maxPageSize)
 	args["limit"] = limit + 1
@@ -248,6 +319,13 @@ func optionalString(value string) any {
 	return value
 }
 
+func optionalUUID(value uuid.UUID) any {
+	if value == uuid.Nil {
+		return nil
+	}
+	return value
+}
+
 func optionalEnum[T ~string](value *T) any {
 	if value == nil || *value == "" {
 		return nil
@@ -259,6 +337,14 @@ func jsonArrayPayload(value any) string {
 	payload, err := json.Marshal(value)
 	if err != nil || string(payload) == "null" {
 		return "[]"
+	}
+	return string(payload)
+}
+
+func jsonObjectPayload(value any) string {
+	payload, err := json.Marshal(value)
+	if err != nil || string(payload) == "null" {
+		return "{}"
 	}
 	return string(payload)
 }

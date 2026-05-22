@@ -32,6 +32,15 @@ type Repository interface {
 	ActivatePromptTemplateVersionWithResult(ctx context.Context, template entity.PromptTemplate, previousTemplateVersion int64, version entity.PromptTemplateVersion, result entity.CommandResult, event entity.OutboxEvent) error
 	GetPromptTemplateVersion(ctx context.Context, id uuid.UUID) (entity.PromptTemplateVersion, error)
 	ListPromptTemplateVersions(ctx context.Context, filter query.PromptTemplateVersionFilter) ([]entity.PromptTemplateVersion, value.PageResult, error)
+	CreateAgentSessionWithResult(ctx context.Context, session entity.AgentSession, result entity.CommandResult, event entity.OutboxEvent) error
+	UpdateAgentSessionWithResult(ctx context.Context, session entity.AgentSession, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error
+	GetAgentSession(ctx context.Context, id uuid.UUID) (entity.AgentSession, error)
+	CreateAgentRunWithResult(ctx context.Context, run entity.AgentRun, result entity.CommandResult, event entity.OutboxEvent) error
+	UpdateAgentRunWithResult(ctx context.Context, run entity.AgentRun, previousVersion int64, result entity.CommandResult, event *entity.OutboxEvent) error
+	GetAgentRun(ctx context.Context, id uuid.UUID) (entity.AgentRun, error)
+	ListAgentRuns(ctx context.Context, filter query.AgentRunFilter) ([]entity.AgentRun, value.PageResult, error)
+	CreateSessionStateSnapshotWithResult(ctx context.Context, snapshot entity.AgentSessionStateSnapshot, session entity.AgentSession, previousSessionVersion int64, result entity.CommandResult, event entity.OutboxEvent) error
+	GetSessionStateSnapshot(ctx context.Context, id uuid.UUID) (entity.AgentSessionStateSnapshot, error)
 	GetCommandResult(ctx context.Context, identity query.CommandIdentity) (entity.CommandResult, error)
 	ClaimOutboxEvents(ctx context.Context, limit int, now time.Time, lockedUntil time.Time) ([]entity.OutboxEvent, error)
 	MarkOutboxEventPublished(ctx context.Context, id uuid.UUID, attemptCount int, publishedAt time.Time) error
