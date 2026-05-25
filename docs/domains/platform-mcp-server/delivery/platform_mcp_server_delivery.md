@@ -5,8 +5,8 @@ title: kodex — поставка platform-mcp-server
 status: active
 owner_role: EM
 created_at: 2026-05-14
-updated_at: 2026-05-22
-related_issues: [747, 753, 760, 771, 698, 322]
+updated_at: 2026-05-25
+related_issues: [747, 753, 760, 771, 780, 698, 322]
 related_prs: []
 related_docsets:
   - docs/domains/platform-mcp-server/product/requirements.md
@@ -46,7 +46,7 @@ approvals:
 | MCP-2 | #760 | Сервисный каркас готов: процесс, конфигурация, health/readiness/metrics, MCP Streamable HTTP, проверка bearer-токена, `diagnostics.mcp_status.read`, каталог маршрутов к сервисам-владельцам и snapshot-проверка `tools/list`. Бизнес-маршруты, входной контур hooks, хранилище skills и манифесты выкладки не входят. |
 | MCP-3 | #771 | Инструменты `agent-manager` для реализованной поверхности: `agent.session.start`, `agent.run.start`, `agent.run.record_state`, `agent.session.record_snapshot` и `diagnostics.run_context.read` маршрутизируются только через `agent-manager`; acceptance, follow-up и Human gate остаются следующими срезами до готовности владельца. |
 | MCP-3g | не назначено | Инструменты governance: risk assessment, review signals, gate/release decisions маршрутизируются только через `governance-manager`, delivery/callback — через `interaction-hub`. |
-| MCP-4 | не назначено | Инструменты provider: типизированные provider read/write маршруты через `provider-hub` без прямого GitHub/GitLab доступа. |
+| MCP-4 | #780 | Инструменты provider готовы: маршруты чтения и записи проекций work item, комментариев, связей, artifact signal, операций Issue/PR/comment/review и repository bootstrap/adoption идут только через `provider-hub`; webhook/reconciliation/limits не входят в этот срез. |
 | MCP-5 | не назначено | Project/runtime/fleet/package reads и ограниченная диагностика через сервисы-владельцы. |
 | MCP-6 | не назначено | Security hardening: actor/source binding, rate limits, backpressure, audit, idempotency и redaction metrics. |
 | MCP-7 | не назначено | Deploy-контур: Dockerfile, manifests, migration job только если нужна служебная БД, smoke, runbook и monitoring. |
@@ -57,7 +57,7 @@ approvals:
 |---|---|---|
 | `agent-manager` | Владеет `Run`, session, flow, role, prompt, acceptance и состоянием ожидания flow. | MCP-3 подключает только готовые операции сессии, `Run`, session snapshot и безопасного чтения. Acceptance, follow-up и Human gate не регистрируются как MCP-инструменты до бизнес-реализации в `agent-manager` и соседних доменах. |
 | `governance-manager` | Владеет risk assessment, review signals, gate request/decision, release decision package и release decision. | Инструменты governance требуют отдельного контрактного среза; MCP не хранит decision state и не делает `agent-manager` вторым владельцем gate. |
-| `provider-hub` | Владеет provider read/write и зеркалом. | MCP-0 не конфликтует с PRV-8a: инструменты provider должны идти через существующий write pipeline и будущие provider bootstrap/adoption контракты. |
+| `provider-hub` | Владеет чтением, записью и зеркалом provider-данных. | MCP-4 подключает только реализованные операции чтения и записи через `provider-hub`; MCP не ходит в GitHub/GitLab напрямую, не хранит provider-состояние и не возвращает сырой provider payload. |
 | `runtime-manager` | Владеет slot, workspace, job и runtime state. | MCP читает и маршрутизирует runtime-инструменты, но не выбирает слот и не исполняет job. |
 | `fleet-manager` | Владеет cluster health и placement decisions. | MCP может читать fleet status, но не повторяет placement resolver. |
 | `project-catalog` | Владеет project/repository policy и workspace policy. | MCP читает проектную политику только через `project-catalog`; `services.yaml` не парсится в MCP. |

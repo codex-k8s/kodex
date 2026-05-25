@@ -80,6 +80,74 @@ func (registry *Registry) addAgentTools(server *mcpsdk.Server, handler *AgentToo
 	}
 }
 
+func (registry *Registry) addProviderTools(server *mcpsdk.Server, handler *ProviderToolsHandler, version string) {
+	tools := []struct {
+		name     string
+		register func(string)
+	}{
+		{name: ToolProviderProjectionGet, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolProviderProjectionGet, Description: description}, handler.GetProjection)
+		}},
+		{name: ToolProviderProjectionFind, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolProviderProjectionFind, Description: description}, handler.FindProjection)
+		}},
+		{name: ToolProviderProjectionsList, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolProviderProjectionsList, Description: description}, handler.ListProjections)
+		}},
+		{name: ToolProviderCommentsList, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolProviderCommentsList, Description: description}, handler.ListComments)
+		}},
+		{name: ToolProviderRelationshipsList, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolProviderRelationshipsList, Description: description}, handler.ListRelationships)
+		}},
+		{name: ToolProviderArtifactSignalRegister, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolProviderArtifactSignalRegister, Description: description}, handler.RegisterArtifactSignal)
+		}},
+		{name: ToolProviderIssueCreate, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolProviderIssueCreate, Description: description}, handler.CreateIssue)
+		}},
+		{name: ToolProviderIssueUpdate, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolProviderIssueUpdate, Description: description}, handler.UpdateIssue)
+		}},
+		{name: ToolProviderCommentCreate, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolProviderCommentCreate, Description: description}, handler.CreateComment)
+		}},
+		{name: ToolProviderCommentUpdate, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolProviderCommentUpdate, Description: description}, handler.UpdateComment)
+		}},
+		{name: ToolProviderPullRequestCreate, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolProviderPullRequestCreate, Description: description}, handler.CreatePullRequest)
+		}},
+		{name: ToolProviderPullRequestUpdate, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolProviderPullRequestUpdate, Description: description}, handler.UpdatePullRequest)
+		}},
+		{name: ToolProviderReviewSignalCreate, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolProviderReviewSignalCreate, Description: description}, handler.CreateReviewSignal)
+		}},
+		{name: ToolProviderRelationshipUpdate, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolProviderRelationshipUpdate, Description: description}, handler.UpdateRelationship)
+		}},
+		{name: ToolProviderRepositoryCreate, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolProviderRepositoryCreate, Description: description}, handler.CreateRepository)
+		}},
+		{name: ToolProviderRepositoryBootstrapPullRequestCreate, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolProviderRepositoryBootstrapPullRequestCreate, Description: description}, handler.CreateBootstrapPullRequest)
+		}},
+		{name: ToolProviderRepositoryAdoptionPullRequestCreate, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolProviderRepositoryAdoptionPullRequestCreate, Description: description}, handler.CreateAdoptionPullRequest)
+		}},
+	}
+	for _, tool := range tools {
+		description := providerToolDescriptions[tool.name]
+		tool.register(description)
+		registry.tools = append(registry.tools, ToolDescriptor{
+			Name:        tool.name,
+			Description: description,
+			Version:     version,
+		})
+	}
+}
+
 // Tools returns a copy of registered tool descriptors.
 func (registry *Registry) Tools() []ToolDescriptor {
 	result := make([]ToolDescriptor, len(registry.tools))
