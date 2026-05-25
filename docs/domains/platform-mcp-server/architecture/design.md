@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-14
 updated_at: 2026-05-22
-related_issues: [747, 753, 760, 322]
+related_issues: [747, 753, 760, 771, 322]
 related_prs: []
 related_adrs: []
 approvals:
@@ -23,7 +23,7 @@ approvals:
 
 - Что меняем: выделяем `platform-mcp-server` как тонкую MCP-поверхность платформы.
 - Почему: `agent-manager` и slot-агенты должны обращаться к платформе через управляемую MCP-поверхность и policy/auth boundary, а не напрямую к каждому сервису.
-- Основные компоненты: MCP transport, source verifier, MCP tool registry, policy boundary, router к сервисам-владельцам, sanitizer, bounded diagnostics и audit emitter.
+- Основные компоненты: MCP-транспорт, source verifier, MCP tool registry, policy boundary, router к сервисам-владельцам, sanitizer, bounded diagnostics и audit emitter.
 - Риски: превратить MCP в доменный монолит, хранить сырые данные вызовов или начать обходить `provider-hub` при операциях провайдера.
 
 ## Цели
@@ -33,7 +33,7 @@ approvals:
 - Зафиксировать, что входной контур Codex hooks вынесен в отдельный `codex-hook-ingress`.
 - Подготовить будущие инструменты `agent-manager` без переноса состояния run/session и ожидания flow в MCP.
 - Подготовить маршруты `governance-manager` без переноса risk/gate/release decisions в MCP или `agent-manager`.
-- Подготовить provider tools без обхода `provider-hub` и его provider-native pipeline.
+- Подготовить инструменты provider без обхода `provider-hub` и его provider-native pipeline.
 
 ## Не-цели
 
@@ -55,11 +55,11 @@ approvals:
 
 | Сервис | Ответственность | Роль MCP |
 |---|---|---|
-| `agent-manager` | `Run`, session, flow, role, prompt, acceptance, agent lifecycle и состояние ожидания flow. | MCP вызывает только типизированные agent-инструменты и не хранит состояние run или ожидания. |
+| `agent-manager` | `Run`, session, flow, role, prompt, acceptance, agent lifecycle и состояние ожидания flow. | MCP вызывает только типизированные инструменты agent-manager и не хранит состояние `Run` или ожидания. |
 | `governance-manager` | Risk assessment, review signals, gate request/decision, release decision package, release decision и release safety-loop. | MCP вызывает governance-инструменты и не хранит risk/gate/release decision state. |
 | `runtime-manager` | Slot, workspace, job, cleanup, prewarm и runtime refs. | MCP маршрутизирует чтения и разрешённые команды runtime, не выбирает slot и не меняет job state сам. |
-| `fleet-manager` | Серверы, Kubernetes-кластеры, health и placement decision. | MCP маршрутизирует административные чтения и будущие fleet tools без собственной placement-логики. |
-| `provider-hub` | Provider projections, webhook, reconciliation, лимиты, provider write pipeline. | MCP вызывает provider tools только через `provider-hub`, не через GitHub/GitLab напрямую. |
+| `fleet-manager` | Серверы, Kubernetes-кластеры, health и placement decision. | MCP маршрутизирует административные чтения и будущие fleet-инструменты без собственной placement-логики. |
+| `provider-hub` | Provider projections, webhook, reconciliation, лимиты, provider write pipeline. | MCP вызывает инструменты provider только через `provider-hub`, не через GitHub/GitLab напрямую. |
 | `project-catalog` | Проекты, репозитории, `services.yaml`, workspace policy, release/placement policy. | MCP читает проектную политику только через `project-catalog`. |
 | `package-hub` | Пакеты, manifest, установки, catalog, store connections. | MCP читает package/install/manifest через `package-hub`. |
 | `interaction-hub` | Диалоги, owner feedback, approval delivery, notifications, callbacks и внешние каналы. | MCP создаёт запросы обратной связи и доставки через `interaction-hub`, когда контракт готов; решения остаются у `governance-manager`. |
@@ -68,9 +68,9 @@ approvals:
 
 | Компонент | Назначение |
 |---|---|
-| MCP transport | Принимает tool calls и возвращает нормализованные ответы. |
+| MCP-транспорт | Принимает вызовы инструментов и возвращает нормализованные ответы. |
 | Source verifier | Проверяет actor, source type, run id, session id, slot id, project/repository scope и подпись или токен вызова. |
-| MCP tool registry | Регистрирует MCP tools через официальный SDK; `tools/list` и snapshot-тесты фиксируют машинно-читаемую поверхность. |
+| Реестр MCP-инструментов | Регистрирует MCP-инструменты через официальный SDK; `tools/list` и snapshot-тесты фиксируют машинно-читаемую поверхность. |
 | Policy boundary | Делает минимальную проверку права на инструмент и риск-профиля вызова. Доменную проверку выполняет сервис-владелец. |
 | Router | Вызывает сервис-владелец по внутреннему gRPC-контракту. |
 | Sanitizer | Удаляет секреты, сырые данные вызова, большие логи и небезопасные поля до маршрутизации, аудита и ответа. |

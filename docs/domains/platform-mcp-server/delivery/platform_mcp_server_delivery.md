@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-14
 updated_at: 2026-05-22
-related_issues: [747, 753, 760, 698, 322]
+related_issues: [747, 753, 760, 771, 698, 322]
 related_prs: []
 related_docsets:
   - docs/domains/platform-mcp-server/product/requirements.md
@@ -44,9 +44,9 @@ approvals:
 | MCP-0 | #747 | Доменный пакет сервисной границы, ответственность, MVP-группы инструментов, безопасность и delivery-план готовы. Код, proto и AsyncAPI не входят. |
 | MCP-1 | #753 | Стратегия контрактов готова: MCP-инструменты описываются через MCP SDK, JSON Schema и snapshot-проверки `tools/list`; Codex hooks вынесены в `codex-hook-ingress`; YAML-каталог не является каноникой. |
 | MCP-2 | #760 | Сервисный каркас готов: процесс, конфигурация, health/readiness/metrics, MCP Streamable HTTP, проверка bearer-токена, `diagnostics.mcp_status.read`, каталог маршрутов к сервисам-владельцам и snapshot-проверка `tools/list`. Бизнес-маршруты, входной контур hooks, хранилище skills и манифесты выкладки не входят. |
-| MCP-3 | не назначено | Agent-manager tools: session/run/acceptance/follow-up и ожидание flow маршрутизируются только через `agent-manager`. |
-| MCP-3g | не назначено | Governance tools: risk assessment, review signals, gate/release decisions маршрутизируются только через `governance-manager`, delivery/callback — через `interaction-hub`. |
-| MCP-4 | не назначено | Provider tools: типизированные provider read/write маршруты через `provider-hub` без прямого GitHub/GitLab доступа. |
+| MCP-3 | #771 | Инструменты `agent-manager` для реализованной поверхности: `agent.session.start`, `agent.run.start`, `agent.run.record_state`, `agent.session.record_snapshot` и `diagnostics.run_context.read` маршрутизируются только через `agent-manager`; acceptance, follow-up и Human gate остаются следующими срезами до готовности владельца. |
+| MCP-3g | не назначено | Инструменты governance: risk assessment, review signals, gate/release decisions маршрутизируются только через `governance-manager`, delivery/callback — через `interaction-hub`. |
+| MCP-4 | не назначено | Инструменты provider: типизированные provider read/write маршруты через `provider-hub` без прямого GitHub/GitLab доступа. |
 | MCP-5 | не назначено | Project/runtime/fleet/package reads и ограниченная диагностика через сервисы-владельцы. |
 | MCP-6 | не назначено | Security hardening: actor/source binding, rate limits, backpressure, audit, idempotency и redaction metrics. |
 | MCP-7 | не назначено | Deploy-контур: Dockerfile, manifests, migration job только если нужна служебная БД, smoke, runbook и monitoring. |
@@ -55,29 +55,29 @@ approvals:
 
 | Домен или сервис | Связь | Статус |
 |---|---|---|
-| `agent-manager` | Владеет `Run`, session, flow, role, prompt, acceptance и состоянием ожидания flow. | MCP-0 не конфликтует с AGO-3: фиксирует внешний инструментальный слой, а не БД flow/role/prompt. Реальные agent tools требуют готовности соответствующих операций `agent-manager`. |
-| `governance-manager` | Владеет risk assessment, review signals, gate request/decision, release decision package и release decision. | Governance tools требуют отдельного контрактного среза; MCP не хранит decision state и не делает `agent-manager` вторым владельцем gate. |
-| `provider-hub` | Владеет provider read/write и зеркалом. | MCP-0 не конфликтует с PRV-8a: provider tools должны идти через существующий write pipeline и будущие provider bootstrap/adoption контракты. |
-| `runtime-manager` | Владеет slot, workspace, job и runtime state. | MCP читает и маршрутизирует runtime tools, но не выбирает слот и не исполняет job. |
+| `agent-manager` | Владеет `Run`, session, flow, role, prompt, acceptance и состоянием ожидания flow. | MCP-3 подключает только готовые операции сессии, `Run`, session snapshot и безопасного чтения. Acceptance, follow-up и Human gate не регистрируются как MCP-инструменты до бизнес-реализации в `agent-manager` и соседних доменах. |
+| `governance-manager` | Владеет risk assessment, review signals, gate request/decision, release decision package и release decision. | Инструменты governance требуют отдельного контрактного среза; MCP не хранит decision state и не делает `agent-manager` вторым владельцем gate. |
+| `provider-hub` | Владеет provider read/write и зеркалом. | MCP-0 не конфликтует с PRV-8a: инструменты provider должны идти через существующий write pipeline и будущие provider bootstrap/adoption контракты. |
+| `runtime-manager` | Владеет slot, workspace, job и runtime state. | MCP читает и маршрутизирует runtime-инструменты, но не выбирает слот и не исполняет job. |
 | `fleet-manager` | Владеет cluster health и placement decisions. | MCP может читать fleet status, но не повторяет placement resolver. |
 | `project-catalog` | Владеет project/repository policy и workspace policy. | MCP читает проектную политику только через `project-catalog`; `services.yaml` не парсится в MCP. |
 | `package-hub` | Владеет package catalog, installation и manifest. | MCP читает package refs и manifest только через `package-hub`; тексты пакетов не хранятся в MCP. |
-| `interaction-hub` | Владеет feedback/approval delivery, callbacks и внешними каналами. | До готовности `interaction-hub` interaction tools остаются контрактным заделом; MCP не доставляет уведомления сам и не хранит decision state. |
+| `interaction-hub` | Владеет feedback/approval delivery, callbacks и внешними каналами. | До готовности `interaction-hub` инструменты interaction остаются контрактным заделом; MCP не доставляет уведомления сам и не хранит decision state. |
 | #698 hooks | Hook-события должны войти в MVP. | `platform-mcp-server` не закрывает #698. Hook emitter, sidecar и входной контур реализуются через `codex-hook-ingress`; MCP-сервис может только дать отдельные инструменты чтения или управления, если они нужны агенту. |
 
 ## Критерии начала кода
 
 - Принят MCP-0 docset.
 - Для каждого кодового PR заведён отдельный GitHub Issue.
-- До реализации группы маршрутов есть явно оформленная стратегия MCP-контрактов: Go-регистрация tools через MCP SDK, JSON Schema входов и snapshot-проверки `tools/list`.
+- До реализации группы маршрутов есть явно оформленная стратегия MCP-контрактов: Go-регистрация инструментов через MCP SDK, JSON Schema входов и snapshot-проверки `tools/list`.
 - Старый код из `deprecated/**` не используется как основа реализации.
-- Provider write tools не реализуются без уже готового typed provider pipeline.
+- Инструменты записи provider не реализуются без уже готового типизированного provider pipeline.
 
 ## Критерии завершения MVP
 
 - `platform-mcp-server` имеет сервисный процесс, наблюдаемость, лимиты и безопасную обработку данных вызова.
 - `agent-manager` и slot-агенты могут вызывать разрешённые инструменты через MCP с actor/source/run/slot binding.
-- Provider tools используют только `provider-hub`.
+- Инструменты provider используют только `provider-hub`.
 - Project/runtime/fleet/package reads используют только сервисы-владельцы.
 - Диагностика ограничена и не раскрывает секреты, большие логи, kubeconfig, исходные данные провайдера и session dumps.
 - Codex hooks принимаются отдельным `codex-hook-ingress`, а не MCP-сервисом.
