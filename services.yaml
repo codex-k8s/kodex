@@ -160,6 +160,15 @@ spec:
         - proto/kodex/fleet/v1
         - specs/asyncapi/fleet-manager.v1.yaml
         - deploy/base/fleet-manager
+    governance-manager:
+      value: "0.1.0"
+      bumpOn:
+        - services/internal/governance-manager
+        - libs/go/grpcserver
+        - libs/go/serviceprocess
+        - libs/go/servicemain
+        - proto/kodex/governance/v1
+        - specs/asyncapi/governance-manager.v1.yaml
     platform-mcp-server:
       value: "0.1.0"
       bumpOn:
@@ -523,6 +532,27 @@ spec:
           readyz: /health/readyz
           metrics: /metrics
         mcp: /mcp
+    - name: governance-manager
+      status: scaffold
+      zone: internal
+      path: services/internal/governance-manager
+      ownerDomain: risk-and-release-governance
+      apiContracts:
+        grpc: proto/kodex/governance/v1/governance_manager.proto
+        asyncapi: specs/asyncapi/governance-manager.v1.yaml
+      dependencies:
+        - access-manager
+        - project-catalog
+        - provider-hub
+        - agent-manager
+        - runtime-manager
+        - interaction-hub
+        - platform-event-log
+      deploy:
+        health:
+          livez: /health/livez
+          readyz: /health/readyz
+          metrics: /metrics
   deployManifests:
     - name: postgres-stack
       path: deploy/base/postgres/kustomization.yaml.tpl

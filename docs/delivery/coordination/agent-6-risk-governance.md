@@ -14,11 +14,17 @@
 - Issue: #322.
 - Результат среза: docs-first пакет домена, сквозная сервисная граница `governance-manager`, карта Issue и план поставки.
 
-## Текущий контрактный срез
+## Завершённый контрактный срез
 
 - Issue: #769.
 - Результат среза: gRPC/AsyncAPI контракты `governance-manager`, generated Go contracts событий и protobuf, действия доступа и обновлённая карта поставки.
 - Сервисный процесс, handlers, БД, миграции, evaluator, UI/gateway и межсервисные интеграции не входят в GOV-1.
+
+## Текущий сервисный срез
+
+- Issue: #790.
+- Результат среза: runnable skeleton `services/internal/governance-manager` с process/config, health/readiness/metrics, gRPC registration, доменным backlog-use-case и repository stub.
+- PostgreSQL storage, миграции, rule evaluator, outbox publisher, access checks, UI/gateway и интеграции с соседними сервисами остаются следующими срезами.
 
 ## Ближайшие зависимости
 
