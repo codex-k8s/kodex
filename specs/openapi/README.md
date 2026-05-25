@@ -6,4 +6,4 @@
 
 | Файл | Поверхность | Назначение |
 |---|---|---|
-| Пока нет активных спецификаций | - | HTTP-контракты будут добавляться вместе с gateway-сервисами. |
+| `integration-gateway.v1.yaml` | Внешние webhook и callback события | Предварительный HTTP-каркас `integration-gateway`: первый MVP route provider webhook -> `provider-hub.IngestWebhookEvent` и резервная callback-поверхность для будущих владельцев. |

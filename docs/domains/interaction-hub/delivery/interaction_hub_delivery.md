@@ -5,8 +5,8 @@ title: kodex — поставка interaction-hub
 status: active
 owner_role: EM
 created_at: 2026-05-22
-updated_at: 2026-05-22
-related_issues: [582, 768]
+updated_at: 2026-05-25
+related_issues: [582, 768, 781]
 related_prs: []
 related_docsets:
   - docs/domains/interaction-hub/product/requirements.md
@@ -106,7 +106,7 @@ IH-1 не должен:
 | `package-hub` | Перед IH-6 | Channel package capability, installation refs и manifest requirements читаются из пакетного домена. |
 | `runtime-manager` и `fleet-manager` | Перед IH-6 | Runtime-нагрузку channel package запускает runtime/fleet контур. |
 | `operations-hub` | Перед IH-9 | Операторские очереди и dual-surface inbox читают проекции и события `interaction.*`. |
-| Future gateway | После IH-6 | Публичный callback transport и OpenAPI проектируются отдельным gateway-срезом. |
+| `integration-gateway` | После IH-6 | Публичный callback transport имеет OpenAPI-каркас в `integration-gateway`; активация маршрута требует согласованного callback lifecycle и idempotency contract `interaction-hub`. |
 
 ## Критерии начала кода
 
@@ -122,7 +122,7 @@ IH-1 не должен:
 - `interaction-hub` имеет свой контур данных, миграций, контрактов и событий.
 - Feedback, approval, Human gate, notification, subscriptions, delivery attempts и callback имеют авторитетные команды и чтения.
 - Сервис публикует `interaction.*` события через outbox и `platform-event-log`.
-- `agent-manager`, `platform-mcp-server`, `codex-hook-ingress`, `provider-hub`, `package-hub`, `runtime-manager`, `operations-hub` и future gateway связаны через согласованные контракты.
+- `agent-manager`, `platform-mcp-server`, `codex-hook-ingress`, `provider-hub`, `package-hub`, `runtime-manager`, `operations-hub` и `integration-gateway` связаны через согласованные контракты.
 - UI и внешние каналы используют один request lifecycle и не становятся отдельными источниками правды.
 - Документы и карты Issue обновлены, хвосты перенесены в следующие срезы явно.
 

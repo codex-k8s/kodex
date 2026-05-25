@@ -1,0 +1,311 @@
+openapi: 3.1.0
+info:
+  title: kodex integration-gateway API
+  version: 1.0.0
+  description: |
+    Public HTTP surface for external webhook and callback events.
+    The gateway verifies the edge request and routes safe envelopes to internal owner services.
+  license:
+    name: Proprietary
+    url: https://github.com/codex-k8s/kodex
+servers:
+  - url: https://{host}
+    variables:
+      host:
+        default: integration.example.local
+        description: Deployment-specific public host.
+tags:
+  - name: provider-webhooks
+    description: Provider webhook intake routed to provider-hub.
+  - name: external-callbacks
+    description: External callback intake routed to owner services.
+x-kodex-contract-status: mvp-skeleton
+paths:
+  /v1/provider-webhooks/{provider_slug}:
+    post:
+      tags: [provider-webhooks]
+      operationId: ingestProviderWebhook
+      summary: Accept verified provider webhook candidate.
+      description: |
+        Accepts an external provider webhook, verifies source, signature, payload limits and backpressure,
+        then routes the safe envelope to provider-hub.IngestWebhookEvent.
+        The gateway does not normalize provider business events.
+      security:
+        - GitHubWebhookSignature: []
+        - GitLabWebhookToken: []
+      parameters:
+        - $ref: '#/components/parameters/ProviderSlug'
+        - $ref: '#/components/parameters/RequestIdHeader'
+        - $ref: '#/components/parameters/GitHubDeliveryHeader'
+        - $ref: '#/components/parameters/GitHubEventHeader'
+        - $ref: '#/components/parameters/GitHubSignatureHeader'
+        - $ref: '#/components/parameters/GitLabEventHeader'
+        - $ref: '#/components/parameters/GitLabTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExternalJsonPayload'
+      responses:
+        '202':
+          description: Webhook passed edge checks and was routed to the owner service.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderWebhookAccepted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Backpressure'
+  /v1/external-callbacks/{callback_source}:
+    post:
+      tags: [external-callbacks]
+      operationId: ingestExternalCallback
+      summary: Accept external channel or package callback.
+      description: |
+        Reserved gateway route for callbacks owned by interaction-hub, package-hub or another owner service.
+        The route uses the same edge checks as provider webhooks and must not store callback business state in the gateway.
+      security:
+        - ExternalCallbackSignature: []
+      parameters:
+        - $ref: '#/components/parameters/CallbackSource'
+        - $ref: '#/components/parameters/RequestIdHeader'
+        - $ref: '#/components/parameters/ExternalDeliveryHeader'
+        - $ref: '#/components/parameters/ExternalSignatureHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExternalJsonPayload'
+      responses:
+        '202':
+          description: Callback passed edge checks and was routed to the owner service.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExternalCallbackAccepted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Backpressure'
+components:
+  securitySchemes:
+    GitHubWebhookSignature:
+      type: apiKey
+      in: header
+      name: X-Hub-Signature-256
+      description: GitHub HMAC SHA-256 webhook signature.
+    GitLabWebhookToken:
+      type: apiKey
+      in: header
+      name: X-Gitlab-Token
+      description: GitLab webhook token. Gateway must redact the value before logs, metrics and errors.
+    ExternalCallbackSignature:
+      type: apiKey
+      in: header
+      name: X-Kodex-External-Signature
+      description: External callback signature or token. Gateway must redact the value before logs, metrics and errors.
+  parameters:
+    ProviderSlug:
+      name: provider_slug
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^[a-z0-9][a-z0-9-]{1,62}$'
+      description: Provider identifier from the route registry, for example github or gitlab.
+    CallbackSource:
+      name: callback_source
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^[a-z0-9][a-z0-9-]{1,62}$'
+      description: External callback source from the route registry.
+    RequestIdHeader:
+      name: X-Kodex-Request-Id
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 128
+      description: Optional caller-supplied request id. Gateway may replace invalid values.
+    GitHubDeliveryHeader:
+      name: X-GitHub-Delivery
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 128
+      description: GitHub delivery id used as provider webhook idempotency key.
+    GitHubEventHeader:
+      name: X-GitHub-Event
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 128
+      description: GitHub event name.
+    GitHubSignatureHeader:
+      name: X-Hub-Signature-256
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 256
+      description: GitHub HMAC SHA-256 signature.
+    GitLabEventHeader:
+      name: X-Gitlab-Event
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 128
+      description: GitLab event name.
+    GitLabTokenHeader:
+      name: X-Gitlab-Token
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 512
+      description: GitLab webhook token. It must be redacted before logs, metrics and errors.
+    ExternalDeliveryHeader:
+      name: X-Kodex-External-Delivery
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 128
+      description: External callback idempotency key.
+    ExternalSignatureHeader:
+      name: X-Kodex-External-Signature
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 512
+      description: External callback signature or token. It must be redacted before logs, metrics and errors.
+  schemas:
+    ExternalJsonPayload:
+      type: object
+      additionalProperties: true
+      description: Raw JSON payload intended for the owner service. Gateway must not log it in full.
+    ProviderWebhookAccepted:
+      type: object
+      required: [request_id, correlation_id, provider_slug, delivery_id, event_name, status]
+      properties:
+        request_id:
+          type: string
+        correlation_id:
+          type: string
+        provider_slug:
+          type: string
+        delivery_id:
+          type: string
+        event_name:
+          type: string
+        provider_hub_webhook_event_id:
+          type: string
+          description: Stored webhook id returned by provider-hub when available.
+        status:
+          type: string
+          enum: [accepted, duplicate_accepted]
+    ExternalCallbackAccepted:
+      type: object
+      required: [request_id, correlation_id, callback_source, delivery_id, status]
+      properties:
+        request_id:
+          type: string
+        correlation_id:
+          type: string
+        callback_source:
+          type: string
+        delivery_id:
+          type: string
+        owner_service:
+          type: string
+          description: Owner service selected by route registry.
+        status:
+          type: string
+          enum: [accepted, duplicate_accepted]
+    SafeError:
+      type: object
+      required: [request_id, code, message, retryable]
+      properties:
+        request_id:
+          type: string
+        correlation_id:
+          type: string
+        code:
+          type: string
+          enum:
+            - invalid_request
+            - source_not_allowed
+            - signature_invalid
+            - payload_too_large
+            - rate_limited
+            - downstream_unavailable
+            - backpressure
+        message:
+          type: string
+          maxLength: 512
+        retryable:
+          type: boolean
+  responses:
+    BadRequest:
+      description: Request route, headers, delivery id, event name or JSON body is invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SafeError'
+    Unauthorized:
+      description: Source binding, token or signature verification failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SafeError'
+    PayloadTooLarge:
+      description: Payload exceeds configured route limit.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SafeError'
+    RateLimited:
+      description: Source, route or downstream rate limit was exceeded.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+            minimum: 1
+          description: Suggested retry delay in seconds.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SafeError'
+    Backpressure:
+      description: Downstream owner service is temporarily unavailable or gateway backpressure is active.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+            minimum: 1
+          description: Suggested retry delay in seconds.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SafeError'
