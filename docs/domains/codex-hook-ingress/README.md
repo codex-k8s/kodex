@@ -36,7 +36,7 @@ Codex hooks являются command-обработчиками Codex: hook emit
 | `PostToolUse` | Итог поддерживаемого tool. |
 | `Stop` | Завершение хода и финальная контрольная точка. |
 
-`PreCompact` и `PostCompact` не входят в текущий набор Codex hooks. Контрольные точки сжатия контекста проектируются как внутренние события `agent-manager`/`runtime-manager`.
+`PreCompact` и `PostCompact` не входят в текущий платформенный MVP-набор Codex hooks. Контрольные точки сжатия контекста проектируются как внутренние события `agent-manager`/`runtime-manager`.
 
 ## Документы
 
@@ -46,8 +46,9 @@ Codex hooks являются command-обработчиками Codex: hook emit
 | Дизайн | `architecture/design.md` |
 | Модель данных и состояния | `architecture/data_model.md` |
 | API-обзор | `architecture/api_contract.md` |
+| Контракт hook emitter/local sidecar | `architecture/emitter_sidecar_contract.md` |
 | План поставки | `delivery/codex_hook_ingress_delivery.md` |
-| JSON Schema CHI-1 | `../../../specs/jsonschema/codex-hook-ingress.v1/` |
+| JSON Schema CHI-1/CHI-2 | `../../../specs/jsonschema/codex-hook-ingress.v1/` |
 
 ## Связанные документы
 
@@ -57,8 +58,9 @@ Codex hooks являются command-обработчиками Codex: hook emit
 | Дизайн `codex-hook-ingress` | `docs/domains/codex-hook-ingress/architecture/design.md` |
 | Модель данных и состояния `codex-hook-ingress` | `docs/domains/codex-hook-ingress/architecture/data_model.md` |
 | API-обзор `codex-hook-ingress` | `docs/domains/codex-hook-ingress/architecture/api_contract.md` |
+| Контракт hook emitter/local sidecar | `docs/domains/codex-hook-ingress/architecture/emitter_sidecar_contract.md` |
 | Поставка `codex-hook-ingress` | `docs/domains/codex-hook-ingress/delivery/codex_hook_ingress_delivery.md` |
-| Machine-readable schemas CHI-1 | `specs/jsonschema/codex-hook-ingress.v1/` |
+| Machine-readable schemas CHI-1/CHI-2 | `specs/jsonschema/codex-hook-ingress.v1/` |
 | Стратегия контрактов MCP и Codex hooks | `docs/domains/platform-mcp-server/architecture/contract_strategy.md` |
 | Codex hooks и skills | `docs/platform/architecture/codex_hooks_and_skills.md` |
 | Карта Issue | `docs/delivery/issue-map/domains/codex-hook-ingress.md` |

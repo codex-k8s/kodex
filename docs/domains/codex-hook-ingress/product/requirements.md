@@ -5,13 +5,14 @@ title: kodex - требования к codex-hook-ingress
 status: active
 owner_role: PM
 created_at: 2026-05-22
-updated_at: 2026-05-22
-related_issues: [698, 753, 778, 322]
+updated_at: 2026-05-25
+related_issues: [698, 753, 778, 786, 322]
 related_prs: []
 related_docsets:
   - docs/domains/codex-hook-ingress/architecture/design.md
   - docs/domains/codex-hook-ingress/architecture/data_model.md
   - docs/domains/codex-hook-ingress/architecture/api_contract.md
+  - docs/domains/codex-hook-ingress/architecture/emitter_sidecar_contract.md
   - docs/domains/codex-hook-ingress/delivery/codex_hook_ingress_delivery.md
   - docs/platform/architecture/codex_hooks_and_skills.md
   - docs/platform/architecture/mcp_and_interaction_model.md
@@ -95,6 +96,14 @@ Codex запускает hooks как command-обработчики в рабо
 | CHI-FR-19 | Сервис должен поддерживать идемпотентность по `event_id` и `correlation_id`, чтобы retries emitter/sidecar не создавали дубликаты downstream-событий. | Обязательно |
 | CHI-FR-20 | Сервис должен принимать только ссылки на выбранный capability context и skill refs, если они уже выбраны `agent-manager` и материализованы `runtime-manager`; хранение каталога skills, manifest и текстов `SKILL.md` в `codex-hook-ingress` запрещено. | Обязательно |
 | CHI-FR-21 | Machine-readable контракт CHI-1 должен быть JSON Schema в `specs/jsonschema/codex-hook-ingress.v1/**`: normalized hook envelope, sanitizer contract и safe examples. Эти схемы не являются proto, OpenAPI, AsyncAPI или MCP tool schema. | Обязательно |
+| CHI-FR-22 | Hook emitter должен запускаться как Codex command hook в slot runtime и читать только JSON object из `stdin`; `transcript_path` не является стабильным интерфейсом и не должен читаться, буферизоваться или пересылаться. | Обязательно |
+| CHI-FR-23 | Local sidecar может использоваться как локальный процесс рядом с Codex runtime для bounded retry buffer, но он должен принимать и хранить только normalized/sanitized envelope после sanitizer. | Обязательно |
+| CHI-FR-24 | Emitter/sidecar должен отправлять события только в логическую операцию `SubmitHookEvent` сервиса `codex-hook-ingress`; `integration-gateway`, MCP transport и бизнес-команды не являются получателями hook events. | Обязательно |
+| CHI-FR-25 | Emitter/sidecar должен использовать source binding плюс workload identity, short-lived source token или mTLS service identity; secret material запрещён в config, логах и buffer. | Обязательно |
+| CHI-FR-26 | Emitter/sidecar должен поддерживать идемпотентность по `event_id + payload_digest`, best-effort ordering внутри `run_id/session_id` и retry с тем же `event_id`. | Обязательно |
+| CHI-FR-27 | Backpressure должен различать audit-critical/decision events и realtime-only events: рискованные события fail-closed или retry until TTL, realtime-only события могут быть отброшены с metric после переполнения buffer. | Обязательно |
+| CHI-FR-28 | Compact checkpoints не должны появляться в `supported_hook_events`; будущая поддержка compact оформляется как внутренние события `agent-manager`/`runtime-manager`, а не `PreCompact`/`PostCompact` Codex hooks. | Обязательно |
+| CHI-FR-29 | Machine-readable контракт CHI-2 должен быть JSON Schema `hook-emitter-config.v1`, описывающей runtime input, delivery, auth, idempotency, ordering, retry, buffer, backpressure и failure policy без выбора физического транспорта. | Обязательно |
 
 ## Поддержка Codex skills как capability layer
 
@@ -134,6 +143,8 @@ Codex skills рассматриваются как управляемые capabi
 | CHI-AC-6 | Skills описаны как capability layer: source, version, scope, metadata, workspace requirements, selection и materialization, без хранилища skills в hook ingress. |
 | CHI-AC-7 | Delivery-план запрещает код, proto и AsyncAPI до согласования документации и отдельного среза контрактов. |
 | CHI-AC-8 | CHI-1 содержит machine-readable схемы и safe examples, которые валидируются локальной JSON Schema проверкой без генерации сервисного кода. |
+| CHI-AC-9 | CHI-2 содержит контракт hook emitter/local sidecar: runtime placement, чтение `stdin`, sanitizer до buffer/send, retry/backpressure/failure policy и логический `SubmitHookEvent` в `codex-hook-ingress`. |
+| CHI-AC-10 | CHI-2 не выбирает gRPC/HTTP transport, не создаёт OpenAPI/AsyncAPI/proto, не добавляет `PreCompact`/`PostCompact` в MVP hook set и не хранит raw payload. |
 
 ## Не-цели
 

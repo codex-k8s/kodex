@@ -5,8 +5,8 @@ title: codex-hook-ingress - API overview
 status: active
 owner_role: SA
 created_at: 2026-05-22
-updated_at: 2026-05-22
-related_issues: [698, 753, 778, 322]
+updated_at: 2026-05-25
+related_issues: [698, 753, 778, 786, 322]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -31,13 +31,14 @@ approvals:
 |---|---|
 | Нормализованный hook envelope | Machine-readable source of truth: `specs/jsonschema/codex-hook-ingress.v1/normalized-hook-envelope.v1.schema.json`. |
 | Sanitizer contract | Machine-readable source of truth: `specs/jsonschema/codex-hook-ingress.v1/sanitizer-contract.v1.schema.json` и стартовый экземпляр `sanitizer-contract.defaults.json`. |
+| Hook emitter/local sidecar runtime config | Machine-readable source of truth: `specs/jsonschema/codex-hook-ingress.v1/hook-emitter-config.v1.schema.json` и стартовый экземпляр `hook-emitter-config.defaults.json`. |
 | Safe examples | `specs/jsonschema/codex-hook-ingress.v1/examples/*.safe.json`; примеры не содержат raw payload, секреты, stdout/stderr или session dumps. |
 | Transport contract | Не выбран. Возможные варианты: internal gRPC command или internal HTTP endpoint за сервисной mesh-границей. |
-| OpenAPI | Не создаётся в CHI-1. Внешняя пользовательская HTTP-поверхность не планируется. |
-| AsyncAPI | Не создаётся в CHI-1. Downstream events проектируются после выбора event transport. |
+| OpenAPI | Не создаётся в CHI-1/CHI-2. Внешняя пользовательская HTTP-поверхность не планируется, а physical transport `SubmitHookEvent` не выбран. |
+| AsyncAPI | Не создаётся в CHI-1/CHI-2. Downstream events проектируются после выбора event transport. |
 | MCP | Не применяется. MCP discovery and calls обслуживает `platform-mcp-server`. |
 
-Проверка CHI-1 выполняется JSON Schema validation для safe examples и sanitizer defaults. Генерация Go-кода не выполняется, потому что JSON Schema описывает pre-transport payload model; кодовые DTO, proto/gRPC или HTTP transport создаются отдельным срезом после выбора транспорта.
+Проверка CHI-1/CHI-2 выполняется JSON Schema validation для safe examples, sanitizer defaults и hook emitter defaults. Генерация Go-кода не выполняется, потому что JSON Schema описывает pre-transport payload/runtime policy; кодовые DTO, proto/gRPC или HTTP transport создаются отдельным срезом после выбора транспорта.
 
 ## Операции
 
@@ -49,6 +50,25 @@ approvals:
 | `AckHookDelivery` | internal callback, optional | Downstream service auth | `event_id` + route | Подтверждает доставку, если выбран asynchronous route. |
 
 `SubmitHookEvent` является единственной обязательной MVP-операцией. Остальные операции могут быть реализованы соседними контурами или отложены, если будут лишними для MVP.
+
+## Логический контракт hook emitter/local sidecar
+
+CHI-2 фиксирует поведение вызывающей стороны `SubmitHookEvent`, но не выбирает physical transport.
+
+| Область | Контракт |
+|---|---|
+| Source | Codex command hook передаёт один JSON object на `stdin`; emitter не читает `transcript_path` и не зависит от формата session transcript. |
+| Receiver | Только `codex-hook-ingress`; `integration-gateway` не принимает slot-local hook events. |
+| Endpoint | `runtime-manager` выдаёт endpoint ref внутри slot/runtime boundary; raw URL и секреты не фиксируются в документации. |
+| Protocol | `transport_tbd_internal_command`: future gRPC command или internal HTTP endpoint. |
+| Auth | Source binding плюс workload identity, short-lived source token или mTLS service identity. Secret material запрещён в config. |
+| Payload | Только `normalized-hook-envelope.v1` после sanitizer. |
+| Buffer | Только normalized/sanitized envelope, bounded by count/bytes/TTL; raw payload не буферизуется. |
+| Retry | Повтор с тем же `event_id`, `payload_digest` и correlation id; non-retryable sanitizer/binding errors не повторяются. |
+| Backpressure | Realtime-only events можно отбрасывать с metric; audit-critical и decision events fail-closed или retry until TTL по policy. |
+| Response mapping | Emitter маппит `HookHandlerResult` в поддерживаемый Codex stdout/stderr/exit code для конкретного event. |
+
+Machine-readable конфигурация: `specs/jsonschema/codex-hook-ingress.v1/hook-emitter-config.v1.schema.json`.
 
 ## DTO: SubmitHookEventRequest
 

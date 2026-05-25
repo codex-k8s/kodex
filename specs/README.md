@@ -37,4 +37,4 @@
 | `package-hub` | нет прямого OpenAPI; HTTP принадлежит gateway-спецификациям | `asyncapi/package-hub.v1.yaml` стабильный `v1` | `../proto/kodex/packages/v1/package_hub.proto` стабильный `v1` | нет |
 | `runtime-manager` | нет прямого OpenAPI; HTTP принадлежит gateway-спецификациям | `asyncapi/runtime-manager.v1.yaml` стабильный `v1` | `../proto/kodex/runtime/v1/runtime_manager.proto` стабильный `v1` | нет |
 | `interaction-hub` | нет прямого OpenAPI; HTTP принадлежит gateway-спецификациям | `asyncapi/interaction-hub.v1.yaml` стабильный `v1` | `../proto/kodex/interactions/v1/interaction_hub.proto` стабильный `v1` | нет |
-| `codex-hook-ingress` | нет прямого OpenAPI; transport contract не выбран | transport events не создаются в CHI-1 | transport contract не выбран | `jsonschema/codex-hook-ingress.v1/**` для normalized envelope и sanitizer contract |
+| `codex-hook-ingress` | нет прямого OpenAPI; transport contract не выбран | transport events не создаются в CHI-1/CHI-2 | transport contract не выбран | `jsonschema/codex-hook-ingress.v1/**` для normalized envelope, sanitizer contract и hook emitter/local sidecar runtime config |

@@ -5,14 +5,15 @@ title: kodex - поставка codex-hook-ingress
 status: active
 owner_role: EM
 created_at: 2026-05-22
-updated_at: 2026-05-22
-related_issues: [698, 753, 778, 322]
+updated_at: 2026-05-25
+related_issues: [698, 753, 778, 786, 322]
 related_prs: []
 related_docsets:
   - docs/domains/codex-hook-ingress/product/requirements.md
   - docs/domains/codex-hook-ingress/architecture/design.md
   - docs/domains/codex-hook-ingress/architecture/data_model.md
   - docs/domains/codex-hook-ingress/architecture/api_contract.md
+  - docs/domains/codex-hook-ingress/architecture/emitter_sidecar_contract.md
 approvals:
   required: ["Owner"]
   status: pending
@@ -33,7 +34,8 @@ approvals:
 | Дизайн | `docs/domains/codex-hook-ingress/architecture/design.md` |
 | Модель данных и состояния | `docs/domains/codex-hook-ingress/architecture/data_model.md` |
 | API overview | `docs/domains/codex-hook-ingress/architecture/api_contract.md` |
-| JSON Schema CHI-1 | `specs/jsonschema/codex-hook-ingress.v1/**` |
+| Контракт hook emitter/local sidecar | `docs/domains/codex-hook-ingress/architecture/emitter_sidecar_contract.md` |
+| JSON Schema CHI-1/CHI-2 | `specs/jsonschema/codex-hook-ingress.v1/**` |
 | Карта Issue | `docs/delivery/issue-map/domains/codex-hook-ingress.md` |
 | Сквозная рамка hooks/skills | `docs/platform/architecture/codex_hooks_and_skills.md` |
 | MCP и взаимодействия | `docs/platform/architecture/mcp_and_interaction_model.md` |
@@ -44,7 +46,7 @@ approvals:
 |---|---:|---|
 | CHI-0 | #698 | Доменная документация `codex-hook-ingress`: требования, дизайн, модель состояния, API overview, delivery-план и карта Issue. Код, proto, OpenAPI и AsyncAPI не входят. |
 | CHI-1 | #778 | JSON Schema `normalized-hook-envelope.v1` и `sanitizer-contract.v1`, safe examples, validation command и явное разделение hook envelope, MCP tools и business commands. |
-| CHI-2 | не назначено | Hook emitter или local sidecar: чтение Codex hook JSON, redaction, size limits, retry buffer, безопасная отправка. |
+| CHI-2 | #786 | Контракт hook emitter/local sidecar: runtime role, чтение Codex hook JSON из `stdin`, sanitizer до buffer/send, logical `SubmitHookEvent`, auth, idempotency, ordering, retry, bounded buffer, backpressure и failure policy без выбора physical transport. |
 | CHI-3 | не назначено | Сервисный каркас `codex-hook-ingress`: process, config, health/readiness, metrics, source verifier, sanitizer, idempotency. |
 | CHI-4 | не назначено | Routes к `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub` для safe events без бизнес-состояния в ingress. |
 | CHI-5 | не назначено | `PermissionRequest` и policy-controlled `PreToolUse` bridge к gate/decision у `governance-manager`, ожиданию flow у `agent-manager` и delivery через `interaction-hub`. |
@@ -58,7 +60,7 @@ approvals:
 |---|---|---|
 | `platform-mcp-server` | Отдельная MCP-поверхность tools. | CHI-0 фиксирует разделение; hook ingress не добавляет MCP transport. |
 | `agent-manager` | Владеет run/session, ожиданием flow и выбором skills. | CHI-4/CHI-5 требуют согласованных операций приёма lifecycle signals и flow-wait refs. |
-| `runtime-manager` | Владеет slot, workspace, materialization skills и runtime diagnostics. | CHI-2/CHI-4/CHI-7 требуют runtime context и подготовку emitter/sidecar. |
+| `runtime-manager` | Владеет slot, workspace, materialization skills и runtime diagnostics. | CHI-2 фиксирует runtime placement, endpoint ref и auth policy для emitter/sidecar; CHI-4/CHI-7 требуют runtime context и подготовку materialization. |
 | `provider-hub` | Владеет provider artifacts, limits и reconciliation. | CHI-4 требует safe provider artifact signal contract без stdout `gh`. |
 | `governance-manager` | Владеет risk assessment, gate request/decision и policy-based approvals. | CHI-4/CHI-5 требуют safe risk/gate context и fail-closed policy для рискованных действий. |
 | `interaction-hub` | Владеет owner feedback, approvals, Human gate delivery и notifications. | CHI-5 требует delivery request/callback contract без владения decision state. |
@@ -72,6 +74,7 @@ approvals:
 - Выбран и согласован транспорт `SubmitHookEvent`.
 - JSON Schema normalized envelope согласована отдельно от MCP tools и transport contract.
 - Для sanitizer есть machine-readable contract со списком forbidden fields, size limits, redaction, digest/preview правилами и safe examples без секретов.
+- Для emitter/sidecar есть machine-readable runtime config с supported events, delivery, auth, idempotency, ordering, retry, buffer, backpressure и failure policy.
 - Старый код из `deprecated/**` не используется как основа реализации.
 - Реализация не меняет `platform-mcp-server`, `agent-manager`, `package-hub` или соседние сервисы без отдельного среза владельца.
 

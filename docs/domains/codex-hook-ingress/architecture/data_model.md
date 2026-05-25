@@ -5,8 +5,8 @@ title: codex-hook-ingress - модель данных и состояния
 status: active
 owner_role: SA
 created_at: 2026-05-22
-updated_at: 2026-05-22
-related_issues: [698, 753, 778, 322]
+updated_at: 2026-05-25
+related_issues: [698, 753, 778, 786, 322]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -18,7 +18,7 @@ approvals:
 
 ## TL;DR
 
-- Ключевые сущности: `HookSourceBinding`, `HookEventEnvelope`, `HookDeliveryAttempt`, `HookDecisionBridge`, `HookSanitizationReport`, `HookOperationalEvent`.
+- Ключевые сущности: `HookSourceBinding`, `HookEventEnvelope`, `HookDeliveryAttempt`, `HookDecisionBridge`, `HookSanitizationReport`, `HookOperationalEvent`; CHI-2 добавляет edge value objects для hook emitter/local sidecar без новой доменной БД.
 - Основные связи: hook event связывается с `run_id`, `session_id`, `slot_id`, `turn_id`, scope, route и correlation id, но не становится владельцем `Run`, slot, provider artifact, dialogue или skill.
 - Риски миграций: нельзя хранить raw hook input, raw tool input/output, stdout/stderr, prompt, transcript, session dump, secret values или `SKILL.md` content.
 
@@ -166,7 +166,7 @@ approvals:
 
 Важные инварианты:
 
-- Лента не является аудитом всех hooks.
+- Лента не является аудитом всех событий платформенного MVP-набора.
 - Retention короткий и задаётся policy.
 - Запись содержит только safe summary.
 
@@ -198,6 +198,47 @@ approvals:
 | `workspace_ref` | Ref на materialized path или workspace mount без локального raw path, если path чувствителен. |
 
 `codex-hook-ingress` может копировать этот value object в sanitized event только как refs/digests. Тексты `SKILL.md`, scripts, references, assets и package manifest не хранятся здесь.
+
+## Edge value object: HookEmitterRuntimeConfig
+
+Назначение: machine-readable runtime policy для hook emitter/local sidecar. Source of truth: `specs/jsonschema/codex-hook-ingress.v1/hook-emitter-config.v1.schema.json`.
+
+Это не таблица `codex-hook-ingress`: config выдаётся или материализуется runtime-контуром рядом со slot и валидируется до запуска emitter/sidecar.
+
+| Field | Meaning |
+|---|---|
+| `runtime_role` | `hook_emitter` или `local_sidecar`. |
+| `codex_hook_input` | Command hook читает JSON object из `stdin`; transcript path не читается и не пересылается. |
+| `supported_hook_events` | Ровно `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `Stop`. |
+| `internal_session_events` | Будущие compact/session checkpoints как внутренние события платформы, не Codex hooks. |
+| `delivery_contract` | Логический receiver `codex-hook-ingress`, operation `SubmitHookEvent`, transport profile `transport_tbd_internal_command`. |
+| `auth_policy` | Source binding, workload identity/short-lived token/mTLS и запрет secret material в config. |
+| `retry_policy` | Backoff, jitter, max attempts и список non-retryable ошибок. |
+| `buffer_policy` | Лимиты count/bytes/TTL, encrypted local spool и запрет raw payload storage. |
+| `backpressure_policy` | Разделение audit-critical, decision bridge и realtime-only событий. |
+
+## Edge value object: LocalSidecarBufferEntry
+
+Назначение: временная запись локального buffer в slot runtime. Она не является канонической записью ingress и не заменяет `HookDeliveryAttempt`.
+
+| Field | Meaning |
+|---|---|
+| `event_id` | Идемпотентный id envelope. |
+| `payload_digest` | Digest sanitized payload; raw payload не хранится. |
+| `schema_version` | Версия normalized envelope. |
+| `hook_event_name` | Только MVP event. |
+| `attempt_no` | Номер локальной попытки отправки. |
+| `next_retry_at` | Локальный backoff checkpoint. |
+| `expires_at` | TTL buffer entry; после него применяется failure policy. |
+| `event_class` | `audit_critical`, `decision_bridge`, `operational` или `realtime_only`. |
+| `envelope_json` | Уже sanitized envelope, размером не больше policy limit. |
+
+Инварианты:
+
+- buffer создаётся после sanitizer и schema validation;
+- raw `stdin`, raw prompt, tool payload, stdout/stderr и transcript не записываются;
+- переполнение buffer не должно превращаться в молчаливое продолжение рискованного действия;
+- sidecar retry использует тот же `event_id`, `payload_digest` и correlation id.
 
 ## Политика хранения
 
