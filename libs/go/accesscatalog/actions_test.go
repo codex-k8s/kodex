@@ -68,6 +68,18 @@ func TestAgentManagerActionsAreSystemActions(t *testing.T) {
 	}
 }
 
+func TestGovernanceManagerActionsAreSystemActions(t *testing.T) {
+	t.Parallel()
+
+	action, ok := SystemActionByKey(ActionGovernanceGateDecide)
+	if !ok {
+		t.Fatalf("SystemActionByKey(%q) ok = false, want true", ActionGovernanceGateDecide)
+	}
+	if action.ResourceType != ResourceGovernanceGate {
+		t.Fatalf("governance gate resource = %q, want %q", action.ResourceType, ResourceGovernanceGate)
+	}
+}
+
 func TestInteractionHubActionsAreSystemActions(t *testing.T) {
 	t.Parallel()
 

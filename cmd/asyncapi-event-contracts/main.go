@@ -103,6 +103,14 @@ func main() {
 			OutputPath:      "libs/go/platformevents/agent/events.gen.go",
 		},
 		{
+			Domain:          "governance",
+			PackageName:     "governance",
+			SpecPath:        "specs/asyncapi/governance-manager.v1.yaml",
+			EventTypeSchema: "GovernanceEventType",
+			PayloadSchema:   "GovernanceEventPayload",
+			OutputPath:      "libs/go/platformevents/governance/events.gen.go",
+		},
+		{
 			Domain:          "interaction",
 			PackageName:     "interaction",
 			SpecPath:        "specs/asyncapi/interaction-hub.v1.yaml",

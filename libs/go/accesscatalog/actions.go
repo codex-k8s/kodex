@@ -64,6 +64,12 @@ const (
 	ResourceAgentAcceptance              = "agent_acceptance"
 	ResourceAgentFollowUp                = "agent_follow_up"
 	ResourceAgentHumanGate               = "agent_human_gate"
+	ResourceGovernanceRiskProfile        = "governance_risk_profile"
+	ResourceGovernanceRiskAssessment     = "governance_risk_assessment"
+	ResourceGovernanceSignal             = "governance_signal"
+	ResourceGovernanceGate               = "governance_gate"
+	ResourceGovernanceReleaseDecision    = "governance_release_decision"
+	ResourceGovernanceReleaseSafetyState = "governance_release_safety_state"
 	ResourceInteractionThread            = "interaction_thread"
 	ResourceInteractionMessage           = "interaction_message"
 	ResourceInteractionRequest           = "interaction_request"
@@ -191,6 +197,21 @@ const (
 	ActionAgentAcceptanceUpdate                 = "agent.acceptance.update"
 	ActionAgentFollowUpCreate                   = "agent.follow_up.create"
 	ActionAgentHumanGateRequest                 = "agent.human_gate.request"
+	ActionGovernancePolicyManage                = "governance.policy.manage"
+	ActionGovernancePolicyRead                  = "governance.policy.read"
+	ActionGovernanceRiskEvaluate                = "governance.risk.evaluate"
+	ActionGovernanceRiskRead                    = "governance.risk.read"
+	ActionGovernanceSignalRecord                = "governance.signal.record"
+	ActionGovernanceSignalRead                  = "governance.signal.read"
+	ActionGovernanceSignalResolve               = "governance.signal.resolve"
+	ActionGovernanceGateRequest                 = "governance.gate.request"
+	ActionGovernanceGateRead                    = "governance.gate.read"
+	ActionGovernanceGateDecide                  = "governance.gate.decide"
+	ActionGovernanceReleasePrepare              = "governance.release.prepare"
+	ActionGovernanceReleaseRequest              = "governance.release.request"
+	ActionGovernanceReleaseRead                 = "governance.release.read"
+	ActionGovernanceReleaseDecide               = "governance.release.decide"
+	ActionGovernanceReleaseUpdate               = "governance.release.update"
 	ActionInteractionThreadCreate               = "interaction.thread.create"
 	ActionInteractionThreadRead                 = "interaction.thread.read"
 	ActionInteractionMessageRecord              = "interaction.message.record"
@@ -387,6 +408,37 @@ func AgentManagerActions() []ActionDescriptor {
 	return actions
 }
 
+// GovernanceManagerActions returns system actions owned by the risk and release governance domain.
+func GovernanceManagerActions() []ActionDescriptor {
+	actions := make([]ActionDescriptor, 0, 15)
+	actions = append(actions, actionDescriptorsForResource(ResourceGovernanceRiskProfile,
+		ActionGovernancePolicyManage,
+		ActionGovernancePolicyRead,
+	)...)
+	actions = append(actions, actionDescriptorsForResource(ResourceGovernanceRiskAssessment,
+		ActionGovernanceRiskEvaluate,
+		ActionGovernanceRiskRead,
+	)...)
+	actions = append(actions, actionDescriptorsForResource(ResourceGovernanceSignal,
+		ActionGovernanceSignalRecord,
+		ActionGovernanceSignalRead,
+		ActionGovernanceSignalResolve,
+	)...)
+	actions = append(actions, actionDescriptorsForResource(ResourceGovernanceGate,
+		ActionGovernanceGateRequest,
+		ActionGovernanceGateRead,
+		ActionGovernanceGateDecide,
+	)...)
+	actions = append(actions, actionDescriptorsForResource(ResourceGovernanceReleaseDecision,
+		ActionGovernanceReleasePrepare,
+		ActionGovernanceReleaseRequest,
+		ActionGovernanceReleaseRead,
+		ActionGovernanceReleaseDecide,
+	)...)
+	actions = append(actions, ActionDescriptor{Key: ActionGovernanceReleaseUpdate, ResourceType: ResourceGovernanceReleaseSafetyState})
+	return actions
+}
+
 // InteractionHubActions returns system actions owned by the interaction hub domain.
 func InteractionHubActions() []ActionDescriptor {
 	actions := make([]ActionDescriptor, 0, 18)
@@ -431,13 +483,22 @@ func actionDescriptorsForResource(resourceType string, keys ...string) []ActionD
 
 // SystemActions returns all shared code-owned system actions.
 func SystemActions() []ActionDescriptor {
-	actions := make([]ActionDescriptor, 0, len(ProjectCatalogActions())+len(PackageHubActions())+len(ProviderHubActions())+len(RuntimeManagerActions())+len(FleetManagerActions())+len(AgentManagerActions())+len(InteractionHubActions()))
+	actions := make([]ActionDescriptor, 0,
+		len(ProjectCatalogActions())+
+			len(PackageHubActions())+
+			len(ProviderHubActions())+
+			len(RuntimeManagerActions())+
+			len(FleetManagerActions())+
+			len(AgentManagerActions())+
+			len(GovernanceManagerActions())+
+			len(InteractionHubActions()))
 	actions = append(actions, ProjectCatalogActions()...)
 	actions = append(actions, PackageHubActions()...)
 	actions = append(actions, ProviderHubActions()...)
 	actions = append(actions, RuntimeManagerActions()...)
 	actions = append(actions, FleetManagerActions()...)
 	actions = append(actions, AgentManagerActions()...)
+	actions = append(actions, GovernanceManagerActions()...)
 	actions = append(actions, InteractionHubActions()...)
 	return actions
 }

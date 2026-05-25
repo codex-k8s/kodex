@@ -1,0 +1,339 @@
+asyncapi: 3.0.0
+info:
+  title: kodex governance-manager events
+  version: 1.0.0
+  description: Stable v1 lifecycle event contract published by governance-manager through the platform outbox.
+x-kodex-contract-status: stable-v1
+channels:
+  governanceEvents:
+    address: governance.events
+    messages:
+      governanceEvent:
+        $ref: '#/components/messages/GovernanceEvent'
+operations:
+  publishGovernanceEvent:
+    action: send
+    channel:
+      $ref: '#/channels/governanceEvents'
+    messages:
+      - $ref: '#/channels/governanceEvents/messages/governanceEvent'
+components:
+  messages:
+    GovernanceEvent:
+      name: GovernanceEvent
+      title: Governance domain event envelope
+      payload:
+        $ref: '#/components/schemas/GovernanceEventEnvelope'
+  schemas:
+    GovernanceEventEnvelope:
+      oneOf:
+        - $ref: '#/components/schemas/PolicyVersionActivatedEvent'
+        - $ref: '#/components/schemas/RiskAssessmentRequestedEvent'
+        - $ref: '#/components/schemas/RiskAssessmentCompletedEvent'
+        - $ref: '#/components/schemas/RiskAssessmentChangedEvent'
+        - $ref: '#/components/schemas/ReviewSignalRecordedEvent'
+        - $ref: '#/components/schemas/BlockingSignalRecordedEvent'
+        - $ref: '#/components/schemas/BlockingSignalResolvedEvent'
+        - $ref: '#/components/schemas/GateRequestedEvent'
+        - $ref: '#/components/schemas/GateResolvedEvent'
+        - $ref: '#/components/schemas/ReleaseDecisionPackageBuiltEvent'
+        - $ref: '#/components/schemas/ReleaseDecisionRequestedEvent'
+        - $ref: '#/components/schemas/ReleaseDecisionResolvedEvent'
+        - $ref: '#/components/schemas/ReleaseSafetyStateChangedEvent'
+    GovernanceEventEnvelopeBase:
+      type: object
+      additionalProperties: false
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_type:
+          $ref: '#/components/schemas/GovernanceEventType'
+        schema_version:
+          type: integer
+          minimum: 1
+        aggregate_type:
+          type: string
+        aggregate_id:
+          type: string
+          format: uuid
+        occurred_at:
+          type: string
+          format: date-time
+        payload:
+          $ref: '#/components/schemas/GovernanceEventPayload'
+      required: [event_id, event_type, schema_version, aggregate_type, aggregate_id, occurred_at, payload]
+
+    PolicyVersionActivatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventEnvelopeBase'
+        - $ref: '#/components/schemas/PolicyVersionActivatedEventKind'
+    PolicyVersionActivatedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: governance.policy.version_activated}, aggregate_type: {type: string, const: risk_profile}, payload: {$ref: '#/components/schemas/PolicyVersionActivatedPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    RiskAssessmentRequestedEvent:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventEnvelopeBase'
+        - $ref: '#/components/schemas/RiskAssessmentRequestedEventKind'
+    RiskAssessmentRequestedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: governance.risk_assessment.requested}, aggregate_type: {type: string, const: risk_assessment}, payload: {$ref: '#/components/schemas/RiskAssessmentRequestedPayload'}}
+      required: [event_type, aggregate_type, payload]
+    RiskAssessmentCompletedEvent:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventEnvelopeBase'
+        - $ref: '#/components/schemas/RiskAssessmentCompletedEventKind'
+    RiskAssessmentCompletedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: governance.risk_assessment.completed}, aggregate_type: {type: string, const: risk_assessment}, payload: {$ref: '#/components/schemas/RiskAssessmentCompletedPayload'}}
+      required: [event_type, aggregate_type, payload]
+    RiskAssessmentChangedEvent:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventEnvelopeBase'
+        - $ref: '#/components/schemas/RiskAssessmentChangedEventKind'
+    RiskAssessmentChangedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: governance.risk_assessment.changed}, aggregate_type: {type: string, const: risk_assessment}, payload: {$ref: '#/components/schemas/RiskAssessmentChangedPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    ReviewSignalRecordedEvent:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventEnvelopeBase'
+        - $ref: '#/components/schemas/ReviewSignalRecordedEventKind'
+    ReviewSignalRecordedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: governance.review_signal.recorded}, aggregate_type: {type: string, const: review_signal}, payload: {$ref: '#/components/schemas/ReviewSignalRecordedPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    BlockingSignalRecordedEvent:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventEnvelopeBase'
+        - $ref: '#/components/schemas/BlockingSignalRecordedEventKind'
+    BlockingSignalRecordedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: governance.blocking_signal.recorded}, aggregate_type: {type: string, const: blocking_signal}, payload: {$ref: '#/components/schemas/BlockingSignalRecordedPayload'}}
+      required: [event_type, aggregate_type, payload]
+    BlockingSignalResolvedEvent:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventEnvelopeBase'
+        - $ref: '#/components/schemas/BlockingSignalResolvedEventKind'
+    BlockingSignalResolvedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: governance.blocking_signal.resolved}, aggregate_type: {type: string, const: blocking_signal}, payload: {$ref: '#/components/schemas/BlockingSignalResolvedPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    GateRequestedEvent:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventEnvelopeBase'
+        - $ref: '#/components/schemas/GateRequestedEventKind'
+    GateRequestedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: governance.gate.requested}, aggregate_type: {type: string, const: gate}, payload: {$ref: '#/components/schemas/GateRequestedPayload'}}
+      required: [event_type, aggregate_type, payload]
+    GateResolvedEvent:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventEnvelopeBase'
+        - $ref: '#/components/schemas/GateResolvedEventKind'
+    GateResolvedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: governance.gate.resolved}, aggregate_type: {type: string, const: gate}, payload: {$ref: '#/components/schemas/GateResolvedPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    ReleaseDecisionPackageBuiltEvent:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventEnvelopeBase'
+        - $ref: '#/components/schemas/ReleaseDecisionPackageBuiltEventKind'
+    ReleaseDecisionPackageBuiltEventKind:
+      type: object
+      properties: {event_type: {type: string, const: governance.release_decision_package.built}, aggregate_type: {type: string, const: release_decision_package}, payload: {$ref: '#/components/schemas/ReleaseDecisionPackageBuiltPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    ReleaseDecisionRequestedEvent:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventEnvelopeBase'
+        - $ref: '#/components/schemas/ReleaseDecisionRequestedEventKind'
+    ReleaseDecisionRequestedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: governance.release_decision.requested}, aggregate_type: {type: string, const: release_decision}, payload: {$ref: '#/components/schemas/ReleaseDecisionRequestedPayload'}}
+      required: [event_type, aggregate_type, payload]
+    ReleaseDecisionResolvedEvent:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventEnvelopeBase'
+        - $ref: '#/components/schemas/ReleaseDecisionResolvedEventKind'
+    ReleaseDecisionResolvedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: governance.release_decision.resolved}, aggregate_type: {type: string, const: release_decision}, payload: {$ref: '#/components/schemas/ReleaseDecisionResolvedPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    ReleaseSafetyStateChangedEvent:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventEnvelopeBase'
+        - $ref: '#/components/schemas/ReleaseSafetyStateChangedEventKind'
+    ReleaseSafetyStateChangedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: governance.release_safety_state.changed}, aggregate_type: {type: string, const: release_safety_state}, payload: {$ref: '#/components/schemas/ReleaseSafetyStateChangedPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    GovernanceEventType:
+      type: string
+      enum:
+        - governance.policy.version_activated
+        - governance.risk_assessment.requested
+        - governance.risk_assessment.completed
+        - governance.risk_assessment.changed
+        - governance.review_signal.recorded
+        - governance.blocking_signal.recorded
+        - governance.blocking_signal.resolved
+        - governance.gate.requested
+        - governance.gate.resolved
+        - governance.release_decision_package.built
+        - governance.release_decision.requested
+        - governance.release_decision.resolved
+        - governance.release_safety_state.changed
+    GovernanceEventPayload:
+      type: object
+      additionalProperties: false
+      properties:
+        risk_profile_id:
+          type: string
+          format: uuid
+        profile_version:
+          type: integer
+        risk_rule_count:
+          type: integer
+        gate_policy_count:
+          type: integer
+        risk_assessment_id:
+          type: string
+          format: uuid
+        initial_risk_class:
+          type: string
+        effective_risk_class:
+          type: string
+        previous_effective_risk_class:
+          type: string
+        risk_factor_count:
+          type: integer
+        required_gate_count:
+          type: integer
+        review_signal_id:
+          type: string
+          format: uuid
+        blocking_signal_id:
+          type: string
+          format: uuid
+        gate_request_id:
+          type: string
+          format: uuid
+        gate_decision_id:
+          type: string
+          format: uuid
+        release_decision_package_id:
+          type: string
+          format: uuid
+        release_decision_id:
+          type: string
+          format: uuid
+        release_safety_state_id:
+          type: string
+          format: uuid
+        release_candidate_ref:
+          type: string
+        project_ref:
+          type: string
+        repository_ref:
+          type: string
+        provider_work_item_ref:
+          type: string
+        provider_pull_request_ref:
+          type: string
+        agent_session_ref:
+          type: string
+        agent_run_ref:
+          type: string
+        runtime_job_ref:
+          type: string
+        interaction_request_ref:
+          type: string
+        interaction_delivery_ref:
+          type: string
+        decision_actor_ref:
+          type: string
+        status:
+          type: string
+        previous_status:
+          type: string
+        outcome:
+          type: string
+        reason_code:
+          type: string
+        version:
+          type: integer
+      required: []
+    PolicyVersionActivatedPayload:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventPayload'
+        - type: object
+          required: [risk_profile_id, profile_version, risk_rule_count, gate_policy_count]
+    RiskAssessmentRequestedPayload:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventPayload'
+        - type: object
+          required: [risk_assessment_id, project_ref, status, version]
+    RiskAssessmentCompletedPayload:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventPayload'
+        - type: object
+          required: [risk_assessment_id, initial_risk_class, effective_risk_class, risk_factor_count, required_gate_count, status, version]
+    RiskAssessmentChangedPayload:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventPayload'
+        - type: object
+          required: [risk_assessment_id, previous_effective_risk_class, effective_risk_class, risk_factor_count, required_gate_count, status, version]
+    ReviewSignalRecordedPayload:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventPayload'
+        - type: object
+          required: [review_signal_id, outcome, status]
+    BlockingSignalRecordedPayload:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventPayload'
+        - type: object
+          required: [blocking_signal_id, status, reason_code, version]
+    BlockingSignalResolvedPayload:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventPayload'
+        - type: object
+          required: [blocking_signal_id, previous_status, status, reason_code, version]
+    GateRequestedPayload:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventPayload'
+        - type: object
+          required: [gate_request_id, risk_assessment_id, status, version]
+    GateResolvedPayload:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventPayload'
+        - type: object
+          required: [gate_request_id, gate_decision_id, decision_actor_ref, outcome, status, version]
+    ReleaseDecisionPackageBuiltPayload:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventPayload'
+        - type: object
+          required: [release_decision_package_id, release_candidate_ref, project_ref, status, version]
+    ReleaseDecisionRequestedPayload:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventPayload'
+        - type: object
+          required: [release_decision_id, release_decision_package_id, status, version]
+    ReleaseDecisionResolvedPayload:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventPayload'
+        - type: object
+          required: [release_decision_id, release_decision_package_id, decision_actor_ref, outcome, status, version]
+    ReleaseSafetyStateChangedPayload:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventPayload'
+        - type: object
+          required: [release_safety_state_id, release_decision_package_id, previous_status, status, reason_code, version]
