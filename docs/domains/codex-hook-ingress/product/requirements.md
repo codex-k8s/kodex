@@ -6,7 +6,7 @@ status: active
 owner_role: PM
 created_at: 2026-05-22
 updated_at: 2026-05-22
-related_issues: [698, 753]
+related_issues: [698, 753, 778, 322]
 related_prs: []
 related_docsets:
   - docs/domains/codex-hook-ingress/architecture/design.md
@@ -26,7 +26,7 @@ approvals:
 ## TL;DR
 
 - Что строим: входной сервисный контур для нормализованных Codex hook events от hook emitter или локального sidecar.
-- Для кого: slot-агенты Codex, `agent-manager`, `runtime-manager`, `provider-hub`, `interaction-hub`, realtime UI и операторский контур.
+- Для кого: slot-агенты Codex, `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub`, realtime UI и операторский контур.
 - Почему: Codex hooks являются lifecycle command hooks, а не MCP tools; смешивание их с `platform-mcp-server` сломает границы протоколов, аудита и владения состоянием.
 - MVP: принять и очистить `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `Stop`; проверить binding, применить размерные лимиты, отрезать секреты и маршрутизировать безопасные события владельцам.
 - Критерии успеха: hook ingress не хранит бизнес-истину, не принимает MCP calls, не пропускает raw secrets/session dumps и даёт соседним сервисам безопасный сигнал для lifecycle, gate, provider signal и realtime-ленты.
@@ -39,7 +39,7 @@ Codex запускает hooks как command-обработчики в рабо
 
 - MCP-сервер начнёт принимать не-MCP transport и станет скрытым монолитом lifecycle-событий.
 - В платформу попадут сырые `tool_input`, `tool_response`, stdout/stderr, transcript или session dump.
-- `agent-manager`, `runtime-manager`, `provider-hub` и `interaction-hub` начнут дублировать очистку и проверку источника.
+- `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager` и `interaction-hub` начнут дублировать очистку и проверку источника.
 - Поддержка Codex skills смешается с hook transport и создаст новое хранилище capabilities не в своём домене.
 
 Цель `codex-hook-ingress` - быть тонкой входной границей для hook events, а не сервисом бизнес-состояния.
@@ -50,10 +50,11 @@ Codex запускает hooks как command-обработчики в рабо
 |---|---|
 | Hook emitter | Получить JSON от Codex, очистить его, добавить platform context и отправить нормализованное событие. |
 | Локальный sidecar | Буферизовать безопасные события, повторять отправку при временной недоступности платформы и не хранить секреты. |
-| `agent-manager` | Получать lifecycle, permission/gate, prompt submit, stop checkpoint и capability usage signals без raw payload. |
+| `agent-manager` | Получать lifecycle, prompt submit, stop checkpoint, ожидание flow и capability usage signals без raw payload. |
 | `runtime-manager` | Получать slot/session binding, workspace diagnostics, tool execution summary и materialized capability refs. |
 | `provider-hub` | Получать provider artifact signals, rate-limit hints и hot reconciliation hints без stdout `gh` и токенов. |
-| `interaction-hub` | Получать `PermissionRequest`, owner feedback request и notification intent без технических логов. |
+| `governance-manager` | Получать risk/gate context для `PermissionRequest`, policy-controlled `PreToolUse` и audit-critical decision refs без raw payload. |
+| `interaction-hub` | Получать delivery intent для `PermissionRequest`, owner feedback request и notification intent без технических логов и без владения decision state. |
 | Realtime UI и оператор | Видеть короткую безопасную ленту действий агента и классы отказов ingress. |
 
 ## MVP hook events
@@ -62,10 +63,10 @@ Codex запускает hooks как command-обработчики в рабо
 |---|---|---|
 | `SessionStart` | Старт или resume Codex-сессии внутри slot. | `agent-manager`, `runtime-manager` |
 | `UserPromptSubmit` | Факт отправки пользовательского prompt и результат pre-check. | `agent-manager`, `interaction-hub` |
-| `PreToolUse` | Намерение вызвать поддерживаемый tool и риск-сигнал до выполнения. | `agent-manager`, `runtime-manager`, realtime UI |
-| `PermissionRequest` | Запрос разрешения Codex на действие, требующее решения. | `agent-manager`, `interaction-hub` |
+| `PreToolUse` | Намерение вызвать поддерживаемый tool и риск-сигнал до выполнения. | `agent-manager`, `governance-manager`, `runtime-manager`, realtime UI |
+| `PermissionRequest` | Запрос разрешения Codex на действие, требующее решения. | `governance-manager`, `agent-manager`, `interaction-hub` |
 | `PostToolUse` | Итог поддерживаемого tool, bounded error или provider artifact signal. | `agent-manager`, `runtime-manager`, `provider-hub` |
-| `Stop` | Завершение хода агента, checkpoint и pending actions. | `agent-manager`, `runtime-manager`, `provider-hub`, `interaction-hub` |
+| `Stop` | Завершение хода агента, checkpoint и pending actions. | `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub` |
 
 Контрольные точки сжатия контекста не входят в Codex hook set. Они проектируются только как будущие внутренние события `agent-manager` или `runtime-manager`.
 
@@ -82,17 +83,18 @@ Codex запускает hooks как command-обработчики в рабо
 | CHI-FR-7 | Сервис должен применять размерные лимиты: нормализованный envelope до 64 KiB, отдельный текстовый preview до 4 KiB, bounded error до 8 KiB, binary payload запрещён. Значения являются стартовыми policy defaults и должны быть настройками платформы. | Обязательно |
 | CHI-FR-8 | Сервис должен отбрасывать raw `tool_input`, raw `tool_response`, большие stdout/stderr, transcript, session dump, kubeconfig, provider payload и значения секретов. | Обязательно |
 | CHI-FR-9 | Сервис должен сохранять или передавать только hash/digest, безопасный preview, tool category, exit status, bounded error, artifact signal, refs и correlation id. | Обязательно |
-| CHI-FR-10 | Сервис должен маршрутизировать `SessionStart`, `UserPromptSubmit`, `PermissionRequest` и `Stop` в `agent-manager` как lifecycle или gate-сигналы. | Обязательно |
+| CHI-FR-10 | Сервис должен маршрутизировать `SessionStart`, `UserPromptSubmit` и `Stop` в `agent-manager` как lifecycle/checkpoint-сигналы; для `PermissionRequest` `agent-manager` получает только ожидание flow и refs, если действие связано с агентным переходом. | Обязательно |
 | CHI-FR-11 | Сервис должен маршрутизировать runtime diagnostics, workspace refs и slot/session binding в `runtime-manager`, не меняя состояние slot сам. | Обязательно |
 | CHI-FR-12 | Сервис должен маршрутизировать provider artifact signals, hot cursor hints и rate-limit hints в `provider-hub`, не выполняя provider read/write operations. | Обязательно |
 | CHI-FR-13 | Сервис должен маршрутизировать owner feedback, approval delivery intent и notification intent в `interaction-hub`, не владея диалогами и доставкой. | Обязательно |
-| CHI-FR-14 | `PermissionRequest` должен превращаться в request/gate у `agent-manager`; `codex-hook-ingress` может ждать итоговое allow/deny или `no_decision` только как транспортный bridge с timeout и безопасным отказом. `no_decision` означает отсутствие hook-specific решения и не должен маппиться в неподдерживаемый `permissionDecision: "ask"`. | Обязательно |
+| CHI-FR-14 | `PermissionRequest` должен превращаться в risk/gate request у `governance-manager`; `agent-manager` хранит только ожидание flow и refs, а `interaction-hub` доставляет запрос человеку. `codex-hook-ingress` может ждать итоговое allow/deny или `no_decision` только как транспортный bridge с timeout и безопасным отказом. `no_decision` означает отсутствие hook-specific решения и не должен маппиться в неподдерживаемый `permissionDecision: "ask"`. | Обязательно |
 | CHI-FR-15 | `PreToolUse` может вернуть deny или дополнительный контекст только после решения владельца политики; ingress не должен самостоятельно принимать бизнес-решения. | Обязательно |
 | CHI-FR-16 | `PostToolUse` не должен пытаться откатить side effects уже выполненного tool; он передаёт безопасный итог владельцам. | Обязательно |
 | CHI-FR-17 | Сервис должен публиковать короткую операционную ленту и метрики по событиям, отказам, sanitizer, лимитам, latency и retry. | Обязательно |
 | CHI-FR-18 | Высокочастотные allow-события должны иметь короткий retention и не должны писаться в БД построчно без доменной причины. | Обязательно |
 | CHI-FR-19 | Сервис должен поддерживать идемпотентность по `event_id` и `correlation_id`, чтобы retries emitter/sidecar не создавали дубликаты downstream-событий. | Обязательно |
 | CHI-FR-20 | Сервис должен принимать только ссылки на выбранный capability context и skill refs, если они уже выбраны `agent-manager` и материализованы `runtime-manager`; хранение каталога skills, manifest и текстов `SKILL.md` в `codex-hook-ingress` запрещено. | Обязательно |
+| CHI-FR-21 | Machine-readable контракт CHI-1 должен быть JSON Schema в `specs/jsonschema/codex-hook-ingress.v1/**`: normalized hook envelope, sanitizer contract и safe examples. Эти схемы не являются proto, OpenAPI, AsyncAPI или MCP tool schema. | Обязательно |
 
 ## Поддержка Codex skills как capability layer
 
@@ -128,9 +130,10 @@ Codex skills рассматриваются как управляемые capabi
 | CHI-AC-2 | MVP hook set содержит только `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `Stop`. |
 | CHI-AC-3 | Размерные лимиты, redaction, запрет секретов, запрет больших stdout/stderr и запрет session dumps описаны до контрактов и кода. |
 | CHI-AC-4 | Для каждого hook event указан сервис-владелец downstream-состояния. |
-| CHI-AC-5 | `PermissionRequest` описан как bridge к gate/decision у `agent-manager` и `interaction-hub`, а не как локальный yes/no без аудита. |
+| CHI-AC-5 | `PermissionRequest` описан как bridge к risk/gate decision у `governance-manager`, ожиданию flow у `agent-manager` и delivery у `interaction-hub`, а не как локальный yes/no без аудита. |
 | CHI-AC-6 | Skills описаны как capability layer: source, version, scope, metadata, workspace requirements, selection и materialization, без хранилища skills в hook ingress. |
 | CHI-AC-7 | Delivery-план запрещает код, proto и AsyncAPI до согласования документации и отдельного среза контрактов. |
+| CHI-AC-8 | CHI-1 содержит machine-readable схемы и safe examples, которые валидируются локальной JSON Schema проверкой без генерации сервисного кода. |
 
 ## Не-цели
 
@@ -146,10 +149,11 @@ Codex skills рассматриваются как управляемые capabi
 
 | Зависимость | Зачем нужна |
 |---|---|
-| `agent-manager` | Run/session binding, gate, decision, stop checkpoint, skill selection и metadata run. |
+| `agent-manager` | Run/session binding, ожидание flow, stop checkpoint, skill selection и metadata run. |
 | `runtime-manager` | Slot/session binding, workspace, materialized skills, local sidecar/emitter config и runtime diagnostics. |
 | `provider-hub` | Provider artifact signals, hot reconciliation hints, provider limits и typed provider operations вне hook ingress. |
-| `interaction-hub` | Доставка owner feedback, approvals и notifications для `PermissionRequest`. |
+| `governance-manager` | Risk assessment, gate request/decision, policy-based approvals и audit-critical decision state. |
+| `interaction-hub` | Доставка owner feedback, approvals, Human gate prompts и notifications для `PermissionRequest` без владения decision state. |
 | `platform-mcp-server` | Отдельная MCP-поверхность tools; hook ingress только ссылается на MCP tool names в sanitized events. |
 | `package-hub` | Package source, package installation refs, versions и manifest snapshots для skills, поставляемых через пакеты. |
 | `access-manager` | Проверка actor, role, scope и policy для source binding и tool/capability use. |

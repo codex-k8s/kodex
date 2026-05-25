@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-22
 updated_at: 2026-05-22
-related_issues: [698, 753]
+related_issues: [698, 753, 778, 322]
 related_prs: []
 related_docsets:
   - docs/domains/codex-hook-ingress/product/requirements.md
@@ -23,7 +23,7 @@ approvals:
 
 ## TL;DR
 
-`codex-hook-ingress` поставляется малыми срезами: сначала доменный пакет документации, затем схемы normalized envelope, hook emitter/sidecar, сервисный каркас ingress, маршрутизация владельцам, permission bridge, realtime/metrics и только потом расширение вокруг skills capability context. Код, proto и AsyncAPI не входят в текущий docs-first срез.
+`codex-hook-ingress` поставляется малыми срезами: сначала доменный пакет документации, затем machine-readable схемы normalized envelope и sanitizer contract, hook emitter/sidecar, сервисный каркас ingress, маршрутизация владельцам, permission bridge, realtime/metrics и только потом расширение вокруг skills capability context. Код, proto и AsyncAPI не входят в текущий docs-first срез.
 
 ## Входные артефакты
 
@@ -33,6 +33,7 @@ approvals:
 | Дизайн | `docs/domains/codex-hook-ingress/architecture/design.md` |
 | Модель данных и состояния | `docs/domains/codex-hook-ingress/architecture/data_model.md` |
 | API overview | `docs/domains/codex-hook-ingress/architecture/api_contract.md` |
+| JSON Schema CHI-1 | `specs/jsonschema/codex-hook-ingress.v1/**` |
 | Карта Issue | `docs/delivery/issue-map/domains/codex-hook-ingress.md` |
 | Сквозная рамка hooks/skills | `docs/platform/architecture/codex_hooks_and_skills.md` |
 | MCP и взаимодействия | `docs/platform/architecture/mcp_and_interaction_model.md` |
@@ -42,11 +43,11 @@ approvals:
 | Срез | Issue | Результат |
 |---|---:|---|
 | CHI-0 | #698 | Доменная документация `codex-hook-ingress`: требования, дизайн, модель состояния, API overview, delivery-план и карта Issue. Код, proto, OpenAPI и AsyncAPI не входят. |
-| CHI-1 | не назначено | Машинные схемы normalized hook envelope и sanitizer contract; выбор транспорта ingress отдельно от MCP. |
+| CHI-1 | #778 | JSON Schema `normalized-hook-envelope.v1` и `sanitizer-contract.v1`, safe examples, validation command и явное разделение hook envelope, MCP tools и business commands. |
 | CHI-2 | не назначено | Hook emitter или local sidecar: чтение Codex hook JSON, redaction, size limits, retry buffer, безопасная отправка. |
 | CHI-3 | не назначено | Сервисный каркас `codex-hook-ingress`: process, config, health/readiness, metrics, source verifier, sanitizer, idempotency. |
-| CHI-4 | не назначено | Routes к `agent-manager`, `runtime-manager`, `provider-hub`, `interaction-hub` для safe events без бизнес-состояния в ingress. |
-| CHI-5 | не назначено | `PermissionRequest` и policy-controlled `PreToolUse` bridge к gate/decision у `agent-manager` и delivery через `interaction-hub`. |
+| CHI-4 | не назначено | Routes к `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub` для safe events без бизнес-состояния в ingress. |
+| CHI-5 | не назначено | `PermissionRequest` и policy-controlled `PreToolUse` bridge к gate/decision у `governance-manager`, ожиданию flow у `agent-manager` и delivery через `interaction-hub`. |
 | CHI-6 | не назначено | Realtime/ops feed, retention, sanitizer metrics, rate limits, backpressure и operator diagnostics. |
 | CHI-7 | не назначено | Capability context refs для skills: связь с `package-hub`, выбором `agent-manager` и materialization `runtime-manager`; без skill catalog в ingress. |
 | CHI-8 | не назначено | Deploy-контур: Dockerfile, Kubernetes manifests, migration job только если нужна служебная БД, smoke, runbook и monitoring. |
@@ -56,10 +57,11 @@ approvals:
 | Домен или сервис | Связь | Статус |
 |---|---|---|
 | `platform-mcp-server` | Отдельная MCP-поверхность tools. | CHI-0 фиксирует разделение; hook ingress не добавляет MCP transport. |
-| `agent-manager` | Владеет run/session/gate/decision и выбором skills. | CHI-4/CHI-5 требуют согласованных операций приёма lifecycle/gate signals. |
+| `agent-manager` | Владеет run/session, ожиданием flow и выбором skills. | CHI-4/CHI-5 требуют согласованных операций приёма lifecycle signals и flow-wait refs. |
 | `runtime-manager` | Владеет slot, workspace, materialization skills и runtime diagnostics. | CHI-2/CHI-4/CHI-7 требуют runtime context и подготовку emitter/sidecar. |
 | `provider-hub` | Владеет provider artifacts, limits и reconciliation. | CHI-4 требует safe provider artifact signal contract без stdout `gh`. |
-| `interaction-hub` | Владеет owner feedback, approvals и notifications. | CHI-5 требует delivery request/decision callback contract. |
+| `governance-manager` | Владеет risk assessment, gate request/decision и policy-based approvals. | CHI-4/CHI-5 требуют safe risk/gate context и fail-closed policy для рискованных действий. |
+| `interaction-hub` | Владеет owner feedback, approvals, Human gate delivery и notifications. | CHI-5 требует delivery request/callback contract без владения decision state. |
 | `package-hub` | Владеет package source/version/install/manifest для package-backed skills. | CHI-7 использует только package refs и manifest snapshots, не переносит их в ingress. |
 | `access-manager` | Владеет правами actor/source/tool/capability. | CHI-3/CHI-5 требуют проверки source и role policy. |
 
@@ -68,8 +70,8 @@ approvals:
 - CHI-0 принят как доменный docs-first пакет.
 - Для каждого кодового среза есть отдельный GitHub Issue.
 - Выбран и согласован транспорт `SubmitHookEvent`.
-- Машинная схема normalized envelope согласована отдельно от MCP tools.
-- Для sanitizer есть список forbidden fields, size limits и тестовые примеры без секретов.
+- JSON Schema normalized envelope согласована отдельно от MCP tools и transport contract.
+- Для sanitizer есть machine-readable contract со списком forbidden fields, size limits, redaction, digest/preview правилами и safe examples без секретов.
 - Старый код из `deprecated/**` не используется как основа реализации.
 - Реализация не меняет `platform-mcp-server`, `agent-manager`, `package-hub` или соседние сервисы без отдельного среза владельца.
 
@@ -79,7 +81,7 @@ approvals:
 - `codex-hook-ingress` принимает MVP events: `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `Stop`.
 - Source/run/session/slot binding проверяется до маршрутизации.
 - Raw secrets, raw tool input/output, большие stdout/stderr, transcript и session dumps не попадают в ingress storage, logs, metrics и downstream payload.
-- `PermissionRequest` проходит через `agent-manager` gate и `interaction-hub` delivery, если требуется человек.
+- `PermissionRequest` проходит через `governance-manager` gate, ожидание flow у `agent-manager` и `interaction-hub` delivery, если требуется человек.
 - `PostToolUse` может передать provider artifact signal в `provider-hub` без provider payload.
 - Realtime UI получает короткую безопасную ленту событий.
 - Skills доступны как refs на выбранный capability context; каталог, manifest и materialization остаются у `package-hub`, `agent-manager` и `runtime-manager`.

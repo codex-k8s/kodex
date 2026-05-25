@@ -43,13 +43,6 @@
 - маршрутизацию вызовов к сервисам-владельцам;
 - безопасные ответы и ограниченную диагностику без хранения чужой бизнес-истины.
 
-`codex-hook-ingress` отвечает за:
-
-- приём нормализованных Codex hook events от hook emitter или локального sidecar;
-- очистку и проверку безопасного hook envelope;
-- маршрутизацию hook events в `agent-manager`, `runtime-manager`, `provider-hub` и `interaction-hub`;
-- отделение command hooks Codex от MCP-протокола.
-
 Агент #1 не владеет пользователями, организациями, членством, внешними аккаунтами, сырыми секретами, provider-native операциями записи, пакетным каталогом, магазином пакетов, UI и внешними gateway.
 
 ## Что уже сделано по `project-catalog`
@@ -120,7 +113,6 @@
 | Интеграция `runtime-manager` с fleet placement | готово: #735 | RTM-FLEET-1 перевёл `PrepareRuntime`, `ReserveSlot` и `CreateJob` без slot на `fleet-manager.ResolvePlacement`; runtime сохраняет только `fleet_scope_id` и `cluster_id`. |
 | Deploy-контур `fleet-manager` | готово: #738 | FLEET-6 добавил Dockerfile, manifests, PostgreSQL bootstrap, migration job, smoke, runbook и monitoring без изменения registry/health/placement бизнес-логики. |
 | `platform-mcp-server` | готово: #747, #753, #760, #771 | MCP-0 фиксирует границы, группы инструментов, безопасность и план поставки; MCP-1 фиксирует стратегию контрактов через MCP SDK, JSON Schema и snapshot-проверки `tools/list`, а также отделяет Codex hooks в `codex-hook-ingress`; MCP-2 добавляет сервисный каркас; MCP-3 подключает первые маршруты к `agent-manager` без хранения бизнес-состояния в MCP. |
-| `codex-hook-ingress` | решение выбрано: #753, ждёт реализации #698 | Входной контур hooks должен принимать нормализованные Codex hook events от hook emitter или sidecar; это не часть MCP-сервера и не закрывается кодом MCP-1. |
 
 ## Блокировки от `access-manager`
 
@@ -187,7 +179,7 @@
 - `agent-manager` зависит от `runtime-manager` для слотов, материализация workspace и platform jobs, но `Run` остаётся сущностью `agent-manager`.
 - `runtime-manager` зависит от `fleet-manager` для целевого `ResolvePlacement`; RTM-FLEET-1 убрал локальный выбор кластера из `PrepareRuntime`, `ReserveSlot` и `CreateJob` без slot.
 - `agent-manager` зависит от `platform-mcp-server` для будущих MCP-инструментов run/session/gate; MCP не владеет flow/role/prompt и не конфликтует с AGO-3.
-- `agent-manager`, `runtime-manager`, `provider-hub` и `interaction-hub` зависят от `codex-hook-ingress` для будущего приёма Codex hook events; #698 остаётся отдельной реализационной задачей.
+- `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager` и `interaction-hub` зависят от `codex-hook-ingress` для будущего приёма Codex hook events; домен ведёт агент #5, а #1 сохраняет только историческую связь через разделение MCP и hooks.
 - `provider-hub` зависит от `platform-mcp-server` только как от внешней инструментальной поверхности; provider write pipeline остаётся у `provider-hub`, а bootstrap/adoption PRV-8a не переносится в MCP.
 - `operations-hub` и будущий `staff-gateway` зависят от чтений `project-catalog` и `runtime-manager` для операторских экранов.
 

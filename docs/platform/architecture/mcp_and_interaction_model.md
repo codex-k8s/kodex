@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-04-26
 updated_at: 2026-05-22
-related_issues: [599, 600, 601, 602, 747, 753, 322]
+related_issues: [599, 600, 601, 602, 747, 753, 778, 322]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -73,7 +73,7 @@ approvals:
 | Interaction tools | `interaction-hub` | Запросы обратной связи, approval delivery и callbacks, когда готов контракт `interaction-hub`. |
 | Diagnostics | `platform-mcp-server` и владельцы маршрутов | Ограниченный статус readiness/dependency/error без секретов, больших логов и сырых данных вызова. |
 
-Codex hook events для MVP: `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `Stop`. Они идут через `codex-hook-ingress`; контрольные точки сжатия контекста проектируются отдельно как внутренние события `agent-manager`/`runtime-manager`, а не как Codex hooks.
+Codex hook events для MVP: `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `Stop`. Они идут через `codex-hook-ingress`; machine-readable envelope и sanitizer contract живут в `specs/jsonschema/codex-hook-ingress.v1/**`. Контрольные точки сжатия контекста проектируются отдельно как внутренние события `agent-manager`/`runtime-manager`, а не как Codex hooks.
 
 Детальная сервисная граница, стратегия контрактов и план поставки живут в `docs/domains/platform-mcp-server/**`. Граница входного контура Codex hooks живёт в `docs/domains/codex-hook-ingress/**`.
 

@@ -1,0 +1,56 @@
+{
+  "event_id": "11111111-5555-4111-8111-111111111111",
+  "schema_version": "codex-hook-ingress.normalized-hook-envelope.v1",
+  "hook_event_name": "UserPromptSubmit",
+  "event_time": "2026-05-22T15:00:30Z",
+  "source_context": {
+    "source_ref": "hook-emitter:slot-7",
+    "source_kind": "hook_emitter",
+    "actor_ref": "agent-manager:run-worker",
+    "organization_id": "22222222-2222-4222-8222-222222222222",
+    "project_id": "33333333-3333-4333-8333-333333333333",
+    "repository_id": "44444444-4444-4444-8444-444444444444",
+    "emitter_version": "0.1.0",
+    "trust_level": "managed"
+  },
+  "run_context": {
+    "run_id": "55555555-5555-4555-8555-555555555555",
+    "session_id": "codex-session-7",
+    "slot_id": "66666666-6666-4666-8666-666666666666",
+    "turn_id": "turn-12",
+    "role_ref": "role:developer",
+    "stage_ref": "stage:implementation"
+  },
+  "safe_payload": {
+    "prompt_digest": "sha256:1212121212121212121212121212121212121212121212121212121212121212",
+    "prompt_class": "user_instruction",
+    "safe_summary": "User submitted a documentation task instruction for the current run."
+  },
+  "payload_digest": "sha256:2323232323232323232323232323232323232323232323232323232323232323",
+  "sanitizer_report": {
+    "result": "redacted",
+    "applied_rules": ["hash-prompt", "safe-summary-only"],
+    "redaction_count": 1,
+    "truncated_fields": [],
+    "rejected_field_classes": []
+  },
+  "downstream_routes": [
+    {
+      "owner": "agent-manager",
+      "delivery_mode": "async",
+      "safe_parts": ["source_context", "run_context", "safe_summary", "prompt_digest", "payload_digest", "correlation_id"]
+    },
+    {
+      "owner": "interaction-hub",
+      "delivery_mode": "async",
+      "safe_parts": ["source_context", "run_context", "safe_summary", "prompt_digest", "correlation_id"]
+    },
+    {
+      "owner": "operations-feed",
+      "delivery_mode": "realtime",
+      "safe_parts": ["run_context", "safe_summary", "sanitizer_report", "correlation_id"]
+    }
+  ],
+  "correlation_id": "run-5555:user-prompt-submit:turn-12",
+  "retention_class": "audit"
+}
