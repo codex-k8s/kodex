@@ -7,10 +7,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	grpcruntime "google.golang.org/grpc"
 
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
+	packagesv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/packages/v1"
+	packagehubclient "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/clients/packagehub"
 	agentservice "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/service"
 	agentpostgres "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/repository/postgres/agent"
 	agentgrpc "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/transport/grpc"
@@ -35,12 +38,20 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if eventLogPool != nil {
 		defer eventLogPool.Close()
 	}
+	guidanceResolver, packageHubConn, err := newGuidanceResolver(cfg)
+	if err != nil {
+		return err
+	}
+	if packageHubConn != nil {
+		defer func() { _ = packageHubConn.Close() }()
+	}
 	agentRepository := agentpostgres.NewRepository(dbPool)
 	agentService := agentservice.New(agentservice.Config{
-		Repository:     agentRepository,
-		Clock:          systemClock{},
-		IDGenerator:    uuidGenerator{},
-		EventPublisher: agentservice.DisabledEventPublisher{},
+		Repository:       agentRepository,
+		Clock:            systemClock{},
+		IDGenerator:      uuidGenerator{},
+		GuidanceResolver: guidanceResolver,
+		EventPublisher:   agentservice.DisabledEventPublisher{},
 	})
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
@@ -98,6 +109,30 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		_ = httpServer.Close()
 		return err
 	}
+}
+
+func newGuidanceResolver(cfg Config) (agentservice.GuidanceResolver, *grpcruntime.ClientConn, error) {
+	if !cfg.PackageHubEnabled {
+		return agentservice.DisabledGuidanceResolver{}, nil, nil
+	}
+	return connectPackageHubGuidance(packagehubclient.Config{
+		Addr:      cfg.PackageHubGRPCAddr,
+		AuthToken: cfg.PackageHubGRPCAuthToken,
+		Timeout:   cfg.PackageHubReadTimeout,
+	})
+}
+
+func connectPackageHubGuidance(clientConfig packagehubclient.Config) (agentservice.GuidanceResolver, *grpcruntime.ClientConn, error) {
+	conn, err := packagehubclient.NewConnection(clientConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+	resolver, err := packagehubclient.NewGuidanceResolver(packagesv1.NewPackageHubServiceClient(conn), clientConfig)
+	if err != nil {
+		_ = conn.Close()
+		return nil, nil, err
+	}
+	return resolver, conn, nil
 }
 
 func readinessChecks(agentService *agentservice.Service, agentDB serviceprocess.PingStore, eventLogDB serviceprocess.PingStore) []serviceprocess.ReadinessCheck {

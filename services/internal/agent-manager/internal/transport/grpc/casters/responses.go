@@ -346,11 +346,15 @@ func RuntimeContextToProto(context value.RuntimeContextRef) *agentsv1.RuntimeCon
 	if context.SlotRef == "" && context.JobRef == "" && context.WorkspaceRef == "" && context.ContextRef == "" {
 		return nil
 	}
+	slotRef := optionalStringPtr(context.SlotRef)
+	jobRef := optionalStringPtr(context.JobRef)
+	workspaceRef := optionalStringPtr(context.WorkspaceRef)
+	contextRef := optionalStringPtr(context.ContextRef)
 	return &agentsv1.RuntimeContextRef{
-		SlotRef:      optionalStringPtr(context.SlotRef),
-		JobRef:       optionalStringPtr(context.JobRef),
-		WorkspaceRef: optionalStringPtr(context.WorkspaceRef),
-		ContextRef:   optionalStringPtr(context.ContextRef),
+		SlotRef:      slotRef,
+		JobRef:       jobRef,
+		WorkspaceRef: workspaceRef,
+		ContextRef:   contextRef,
 	}
 }
 
@@ -372,6 +376,12 @@ func GuidanceRefToProto(ref value.GuidanceRef) *agentsv1.GuidanceRef {
 		PackageVersionRef:      ref.PackageVersionRef,
 		ManifestDigest:         ref.ManifestDigest,
 		SourceRef:              optionalStringPtr(ref.SourceRef),
+		CapabilityRef:          optionalStringPtr(ref.CapabilityRef),
+		CapabilityKind:         optionalStringPtr(ref.CapabilityKind),
+		PackageRef:             optionalStringPtr(ref.PackageRef),
+		PackageSlug:            optionalStringPtr(ref.PackageSlug),
+		PackageVersionLabel:    optionalStringPtr(ref.PackageVersionLabel),
+		PolicySummaryJson:      optionalStringPtr(ref.PolicySummaryJSON),
 	}
 }
 

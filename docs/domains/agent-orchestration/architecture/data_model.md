@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-12
 updated_at: 2026-05-22
-related_issues: [733, 749, 759, 322]
+related_issues: [733, 749, 759, 772, 322]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -194,7 +194,7 @@ approvals:
 | `prompt_template_digest` | text | нет | Digest prompt version, использованной при запуске. |
 | `runtime_ref` | text | да | Ссылка на slot/runtime context. |
 | `provider_target_ref` | text | да | Основная provider-native цель. |
-| `guidance_refs` | jsonb | нет | Использованные руководящие пакеты и версии. |
+| `guidance_refs` | jsonb | нет | Замороженные безопасные refs руководящих пакетов: installation ref, package/version ref, manifest digest, source ref, package slug/version label, capability ref и bounded policy summary без manifest payload. |
 | `status` | enum | нет | `requested`, `starting`, `running`, `waiting`, `completed`, `failed`, `cancelled`. |
 | `result_summary` | text | да | Короткая безопасная сводка. |
 | `failure_code` | text | да | Короткий код ошибки без секретов и PII. |
@@ -317,7 +317,8 @@ approvals:
 - `StageRoleBinding` связывает `Stage` и `RoleProfile`.
 - `AgentSession` содержит несколько `AgentRun`.
 - `AgentRun` фиксирует `FlowVersion`, `Stage`, `RoleProfile` с `role_profile_version` и `role_profile_digest`, `PromptTemplateVersion` с digest и использованные guidance refs.
-- Guidance refs и runtime refs в `AgentRun` появляются только после разрешения через `package-hub` и `runtime-manager`; стартовая команда может передать только selection hints, которые `agent-manager` обязан проверить в своём scope.
+- Guidance refs в `AgentRun` появляются только после разрешения через `package-hub`: стартовая команда может передать selection hints, а `agent-manager` проверяет scope, активность установки, статус версии и состояние manifest. Runtime refs появляются только после подготовки workspace в `runtime-manager`.
+- В `guidance_refs` запрещено хранить `SKILL.md`, scripts, assets, исходники пакета, полный manifest или секреты; для диагностики сохраняется только bounded policy-safe summary.
 - `AgentSessionStateSnapshot` относится к `AgentSession` и опционально к `AgentRun`; `AgentSession.latest_state_snapshot_id` указывает на актуальный снимок.
 - `AcceptanceResult` и `FollowUpIntent` относятся к `AgentSession`, `AgentRun` и `Stage`.
 - Внутри БД `agent-manager` допустимы внешние ключи между своими таблицами.

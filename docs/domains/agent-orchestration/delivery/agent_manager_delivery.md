@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-12
 updated_at: 2026-05-22
-related_issues: [733, 739, 744, 749, 755, 759, 322]
+related_issues: [733, 739, 744, 749, 755, 759, 772, 322]
 related_prs: []
 related_docsets:
   - docs/domains/agent-orchestration/product/requirements.md
@@ -47,7 +47,7 @@ approvals:
 | AGO-3 | #749 | PostgreSQL-модель flow, stage, role, prompt template, версий, command result и service-local outbox готова; storage/use-case слой подключён к process readiness. |
 | AGO-3b | #755 | gRPC handlers, casters и безопасное отображение ошибок для flow, role и prompt подключены к готовому storage/use-case слою; session/run не входят в срез. |
 | AGO-4 | #759 | Сессии и agent `Run`: создание, чтение, статусы, снимки состояния, идемпотентность, защита активной session от дублей, stage-bound проверка роли и AsyncAPI-совместимые события готовы. |
-| AGO-5 | не назначено | Интеграция с `package-hub` для guidance packages и рендер агентного контекста готовы без checkout/mount. |
+| AGO-5 | #772 | Интеграция с `package-hub` для guidance packages готова: `agent-manager` выбирает установки, проверяет manifest/version metadata и фиксирует refs/summary в `Run` без checkout/mount. |
 | AGO-6 | не назначено | Интеграция с `runtime-manager`: подготовка workspace и запуск роли через runtime-контур готовы. |
 | AGO-7 | не назначено | Машина приёмки: проверка provider-native артефактов, watermark, ролей и policy готова. |
 | AGO-8 | не назначено | Follow-up задачи через `provider-hub`; ожидание Human gate идёт через `governance-manager`, delivery — через `interaction-hub`. |
@@ -63,7 +63,7 @@ approvals:
 | `GetPromptTemplate` / `ListPromptTemplates` | storage/use-case слой и gRPC handlers готовы; `GetPromptTemplate` возвращает активную версию при наличии `active_version_id` | AGO-3, AGO-3b |
 | `CreatePromptTemplateVersion` / `ActivatePromptTemplateVersion` / `GetPromptTemplateVersion` / `ListPromptTemplateVersions` | storage/use-case слой и gRPC handlers готовы | AGO-3, AGO-3b |
 | `StartAgentSession` | Слой хранения, use-case и gRPC handlers готовы; создаёт авторитетную сессию, а при непустом provider target продолжает активную `open`/`waiting` session без нового события создания | AGO-4 |
-| `StartAgentRun` | Слой хранения, use-case и gRPC handlers готовы; создаёт `requested` `Run`, фиксирует версии роли и prompt, проверяет stage-bound связку flow/stage/role, но руководящие пакеты и runtime подключаются следующими срезами | AGO-4, AGO-5, AGO-6 |
+| `StartAgentRun` | Слой хранения, use-case и gRPC handlers готовы; создаёт `requested` `Run`, фиксирует версии роли и prompt, проверяет stage-bound связку flow/stage/role, разрешает guidance hints через `package-hub` и сохраняет безопасные refs; runtime подключается следующим срезом | AGO-4, AGO-5, AGO-6 |
 | `RecordRunState` | Слой хранения, use-case и gRPC handlers готовы; требует ожидаемую версию, проверяет state machine, пишет результат команды и публикует lifecycle event только с обязательными полями AsyncAPI | AGO-4, AGO-6 |
 | `RecordSessionStateSnapshot` | Слой хранения, use-case и gRPC handlers готовы; пишет метаданные снимка и обновляет указатель сессии через ожидаемую версию | AGO-4, AGO-6 |
 | `RequestAcceptance` / `RecordAcceptanceResult` / `GetAcceptanceResult` / `ListAcceptanceResults` | зарегистрировано в gRPC-каркасе; бизнес-реализация запланирована | AGO-7 |
@@ -75,7 +75,7 @@ approvals:
 
 | Домен | Когда синхронизироваться | Причина |
 |---|---|---|
-| `package-hub` | Перед AGO-5 | Нужны чтения `ListPackageInstallations(package_kind=guidance)` и `GetPackageManifest`. |
+| `package-hub` | Готово для AGO-5 | Используются чтения установок, package/version metadata и manifest validation state; `agent-manager` не хранит manifest payload и не меняет установки. |
 | `runtime-manager` | Перед AGO-6 | Нужен контракт подготовки workspace, запуска слота и передачи `agent_run_id`. |
 | `provider-hub` | Перед AGO-7 и AGO-8 | Нужны проекции `Issue/PR/MR`, ускоряющие сигналы сверки и типизированные provider-операции. |
 | `risk-and-release-governance` | Перед AGO-7 и AGO-8 | Нужны контракты risk assessment, review signals, gate request и gate decision refs. |

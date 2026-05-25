@@ -11,6 +11,7 @@ func TestLoadConfigAllowsMissingConditionalEnvWhenAuthDisabled(t *testing.T) {
 	t.Setenv("KODEX_AGENT_MANAGER_OUTBOX_PUBLISHER_KIND", "disabled")
 	t.Setenv("KODEX_AGENT_MANAGER_GRPC_AUTH_REQUIRED", "false")
 	t.Setenv("KODEX_AGENT_MANAGER_GRPC_AUTH_TOKEN", "")
+	t.Setenv("KODEX_AGENT_MANAGER_PACKAGE_HUB_ENABLED", "false")
 
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -85,6 +86,10 @@ func validConfig() Config {
 		GRPCKeepaliveMinTime:     30 * time.Second,
 		GRPCMaxRecvMessageBytes:  4 * 1024 * 1024,
 		GRPCMaxSendMessageBytes:  4 * 1024 * 1024,
+		PackageHubEnabled:        true,
+		PackageHubGRPCAddr:       "package-hub:9090",
+		PackageHubGRPCAuthToken:  "package-token",
+		PackageHubReadTimeout:    3 * time.Second,
 		OutboxDispatchEnabled:    false,
 		OutboxPublisherKind:      "disabled",
 		OutboxBatchSize:          100,
