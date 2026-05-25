@@ -5,8 +5,8 @@ title: kodex — дизайн домена runtime и fleet
 status: active
 owner_role: SA
 created_at: 2026-05-07
-updated_at: 2026-05-07
-related_issues: [655, 656, 657, 658, 659, 660, 661, 662]
+updated_at: 2026-05-25
+related_issues: [655, 656, 657, 658, 659, 660, 661, 662, 782]
 related_prs: []
 related_adrs: []
 approvals:
@@ -89,6 +89,8 @@ sequenceDiagram
 ```
 
 `agent-manager` остаётся владельцем `Run`. `runtime-manager` не выбирает flow, роль, prompt или следующий этап.
+
+Руководящие пакеты приходят в `workspace policy` как `WorkspaceSource.kind=guidance_package`. Механизм materialization получает только безопасные refs: package installation, package version, source ref, manifest digest, package slug и capability refs. Он готовит checkout/mount только для чтения в `.kodex/guidance/<package_slug>` и сгенерированный контекст `.kodex/context/agent-run.json`. Runtime не меняет пакетную истину и не записывает manifest payload обратно в `agent-manager`.
 
 ### Выполнение platform job
 

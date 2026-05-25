@@ -5,8 +5,8 @@ title: kodex — API-контракт runtime-manager
 status: active
 owner_role: SA
 created_at: 2026-05-07
-updated_at: 2026-05-07
-related_issues: [655, 656]
+updated_at: 2026-05-25
+related_issues: [655, 656, 782]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -44,6 +44,10 @@ approvals:
 | `PrepareRuntime` | Фасадная команда для типового агентного запуска: получить fleet scope через `fleet-manager`, выделить слот, запустить подготовку workspace и вернуть контекст runtime. | `agent-manager` | `command_id`; повтор возвращает тот же результат выделения слота и подготовки workspace или актуальный конфликт. |
 
 `PrepareRuntime` не создаёт agent `Run`, не меняет flow и не выбирает инфраструктуру самостоятельно. Он принимает внешний `agent_run_id`, runtime profile, workspace policy и placement constraints, обращается к `fleet-manager.ResolvePlacement` и исполняет полученное решение размещения. Явный `preferred_fleet_scope_id` остаётся только входным ограничением для fleet, а не локальным выбором runtime. Внутри домена команда использует те же инварианты, что `ReserveSlot` и `StartWorkspaceMaterialization`, а события публикуются как `runtime.slot.*` и `runtime.workspace.*`.
+
+Для руководящих пакетов `WorkspacePolicyInput.sources` использует `WorkspaceSource.kind=guidance_package`. Источник должен быть только для чтения, иметь `local_path` вида `.kodex/guidance/<package_slug>`, `source_id=guidance:<package_installation_ref>`, `source_ref` из package version, `digest=manifest_digest` и безопасный `metadata_json` без manifest payload, секретов, scripts, assets или содержимого документов. Если в наборе источников конфликтуют локальные пути, runtime отклоняет policy до materialization.
+
+Generated execution context передаётся отдельным `WorkspaceSource.kind=generated_context` с локальным путём `.kodex/context/agent-run.json`. Runtime отвечает за запись этого файла в workspace; `agent-manager` хранит только refs и runtime context.
 
 ### Слоты
 

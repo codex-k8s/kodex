@@ -41,6 +41,7 @@
 | AGO-3b | готово | Временное переключение: gRPC handlers, casters и безопасное отображение ошибок для flow, role и prompt подключены к storage/use-case слою; session/run остаются вне среза. |
 | AGO-4 | готово | Временное переключение: авторитетная модель session/run, слой хранения, use-case, gRPC handlers, результат команды, ожидаемая версия, защита активной session от дублей, stage-bound проверка роли и service-local outbox события для session/run готовы; руководящие пакеты, runtime и приёмка остаются следующими срезами. |
 | AGO-5 | готово | Временное переключение: `agent-manager` читает активные guidance installations и manifest/version metadata через `package-hub`, фиксирует refs/digests/policy-safe summary в `AgentRun` и не сохраняет тексты пакетов, scripts, assets, package source или manifest payload. |
+| AGO-6 | готово | Временное переключение: контекст руководящих пакетов в workspace зафиксирован; `AgentRun.guidance_refs` превращаются в `runtime.WorkspaceSource.kind=guidance_package`, runtime готовит путь `.kodex/guidance/<package_slug>` только для чтения, сгенерированный контекст живёт в `.kodex/context/agent-run.json`, а прямой checkout из `agent-manager` запрещён. |
 
 ## Текущий бэклог
 
@@ -54,15 +55,15 @@
 |---|---|---|
 | `project-catalog` | Привязку пакетных источников и руководящих пакетов к проектной политике. | `package-hub` не должен владеть проектной политикой; ждём готовую модель проекта. |
 | `provider-hub` | Получение пакетов и каталогов из Git/provider-native источников. | `package-hub` принимает нормализованный снимок, а adapter/provider-контур получает исходные данные. |
-| `agent-manager` | Монтирование руководящих пакетов в workspace агента. | `package-hub` отдаёт каталог и установки; agent-контекст собирает `agent-manager`. |
+| `agent-manager` | Монтирование руководящих пакетов в workspace агента. | Контракт готов: `agent-manager` замораживает безопасные refs, а runtime-контур получает источники `guidance_package`. |
 | `platform-mcp-server` | Чтение установок, manifest и руководящих пакетов через MCP-инструменты. | MCP только маршрутизирует чтения к `package-hub`; пакетная истина и установки остаются у `package-hub`. |
 | `runtime-manager` и `fleet-manager` | Запуск runtime-нагрузок пакетов и размещение в Kubernetes. | `package-hub` публикует событие установки и хранит требования; runtime/fleet исполняют. |
 | Bootstrap/adoption #281/#282 | Использование руководящих пакетов, пакетов из магазина, шаблонов репозиториев и внешних источников при подключении репозитория. | Выбран вариант C из `docs/platform/architecture/repository_onboarding.md`: Git submodule не обязателен, workspace собирается из `services.yaml`, установленных пакетов, шаблонов и `source_ref`. |
 
 ## Рекомендуемый следующий шаг
 
-После PKG-5.3b и PKG-7 независимого package-hub среза без соседних доменов почти не осталось. Интеграционные сценарии магазина продолжают ждать `provider-hub`, внешний адаптер магазина и runtime/fleet-контур. Использование руководящих пакетов в workspace остаётся за `agent-manager`.
+После PKG-5.3b и PKG-7 независимого package-hub среза без соседних доменов почти не осталось. Интеграционные сценарии магазина продолжают ждать `provider-hub`, внешний адаптер магазина и runtime/fleet-контур. Использование руководящих пакетов в workspace зафиксировано в `docs/domains/agent-orchestration/architecture/guidance_workspace_context.md`; следующий кодовый шаг зависит от готовой workspace policy и прямого вызова `runtime-manager.PrepareRuntime`.
 
 ## Временное переключение
 
-Агент #3 временно выполняет AGO-0..AGO-5 в домене `agent-orchestration`, чтобы зафиксировать стартовые границы `agent-manager`, его transport-контракты, сервисный каркас, модель хранения flow/role/prompt/session/run, gRPC-доступ к этим операциям, защиту session/run инвариантов и зависимость от `package-hub` для чтения установленных руководящих пакетов. Код `package-hub` в этих срезах не меняется.
+Агент #3 временно выполняет AGO-0..AGO-6 в домене `agent-orchestration`, чтобы зафиксировать стартовые границы `agent-manager`, его transport-контракты, сервисный каркас, модель хранения flow/role/prompt/session/run, gRPC-доступ к этим операциям, защиту session/run инвариантов, зависимость от `package-hub` для чтения установленных руководящих пакетов и границу передачи guidance refs в runtime workspace. Код `package-hub` в этих срезах не меняется.

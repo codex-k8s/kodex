@@ -5,8 +5,8 @@ title: kodex — дизайн домена оркестрации агентов
 status: active
 owner_role: SA
 created_at: 2026-05-12
-updated_at: 2026-05-22
-related_issues: [733, 753, 698, 322]
+updated_at: 2026-05-25
+related_issues: [733, 753, 698, 322, 782]
 related_prs: []
 related_adrs: []
 approvals:
@@ -146,11 +146,24 @@ sequenceDiagram
 `agent-manager` использует `package-hub` только для чтения пакетной истины:
 - `ListPackageInstallations(package_kind=guidance, scope=...)` — найти установленные руководящие пакеты для платформы, организации, проекта или репозитория;
 - `GetPackageInstallation(installation_id)` — проверить конкретную установку из selection hint;
-- `GetPackage` и `GetPackageVersion` — зафиксировать safe refs, version label, source ref и digest;
+- `GetPackage` и `GetPackageVersion` — зафиксировать безопасные refs, version label, source ref и digest;
 - `GetPackageManifest(package_version_id)` — проверить состояние manifest руководящего пакета без сохранения `payload_json`;
 - `ListPackages(package_kind=guidance)` — показать доступные руководящие пакеты в будущих настройках.
 
 `agent-manager` не хранит копию пакетного каталога, не меняет установки, не сохраняет тексты `SKILL.md`, scripts, assets, package source или manifest payload и не выполняет checkout пакетов.
+
+### Руководящие пакеты в workspace
+
+Детальный контракт использования руководящих пакетов в runtime workspace закреплён в `docs/domains/agent-orchestration/architecture/guidance_workspace_context.md`.
+
+MVP-путь:
+
+1. `StartAgentRun` разрешает guidance selection hints через `package-hub` и сохраняет в `AgentRun.guidance_refs` только `package_installation_ref`, `package_version_ref`, `manifest_digest`, `source_ref`, capability refs, slug/version label и bounded policy summary.
+2. Оркестрационный контур получает проверенную workspace policy у `project-catalog` и добавляет в неё `WorkspaceSource` с видом `guidance_package` для каждого `GuidanceRef`.
+3. `runtime-manager.PrepareRuntime` материализует эти источники только для чтения в `.kodex/guidance/<package_slug>` и создаёт сгенерированный контекст в `.kodex/context/agent-run.json`.
+4. `RecordRunState` фиксирует только `runtime_context` и переход статуса `Run`; локальные файлы, manifest payload, prompt text, flow files и scripts остаются в workspace/PVC.
+
+Если выбранный набор руководящих пакетов содержит конфликтующие `package_slug`, подготовка runtime должна завершиться безопасной ошибкой до checkout. `agent-manager` не создаёт альтернативные имена путей и не копирует файлы пакетов в свою БД.
 
 ### `runtime-manager`
 

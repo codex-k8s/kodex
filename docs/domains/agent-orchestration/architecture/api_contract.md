@@ -5,8 +5,8 @@ title: kodex — API-обзор agent-manager
 status: active
 owner_role: SA
 created_at: 2026-05-12
-updated_at: 2026-05-22
-related_issues: [733, 739, 744, 753, 755, 698, 759, 772, 322]
+updated_at: 2026-05-25
+related_issues: [733, 739, 744, 753, 755, 698, 759, 772, 322, 782]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -107,7 +107,7 @@ Codex hooks не являются MCP-инструментами. `agent-manager
 | Сервис | Вызовы из `agent-manager` | Правило |
 |---|---|---|
 | `package-hub` | `ListPackageInstallations(package_kind=guidance)`, `GetPackageInstallation`, `ListPackages(package_kind=guidance)`, `GetPackage`, `GetPackageVersion`, `GetPackageManifest` | Только чтение установок, версии и проверенного manifest руководящего пакета; `agent-manager` сохраняет refs, версии, digest и безопасную summary, но не manifest payload, `SKILL.md`, scripts, assets или package source. |
-| `runtime-manager` | `PrepareRuntime`, будущие команды запуска или продолжения slot-agent | Состояние runtime остаётся у runtime. |
+| `runtime-manager` | `PrepareRuntime`, будущие команды запуска или продолжения slot-agent | Состояние runtime остаётся у runtime. `agent-manager` передаёт `WorkspaceSource.kind=guidance_package` для замороженных `guidance_refs` и `WorkspaceSource.kind=generated_context` для `.kodex/context/agent-run.json`; checkout и materialization выполняет runtime. |
 | `provider-hub` | Типизированные операции `CreateIssue`, `UpdateIssue`, `CreatePullRequest`, `CreateComment`, `CreateReviewSignal`, чтение проекций и ускоряющий сигнал сверки | Provider-native состояние остаётся у provider. |
 | `project-catalog` | Чтение workspace policy, release policy, project/repository refs | Проектная policy остаётся у project. |
 | `governance-manager` | Risk assessment, record review signal, request gate, read gate/release decision | Risk/gate/release decisions остаются у governance. |
@@ -157,7 +157,7 @@ Codex hooks не являются MCP-инструментами. `agent-manager
 | Доменная документация | Подготовлена как стартовый срез. |
 | gRPC proto | Подготовлен как контрактный срез `AGO-1`. |
 | AsyncAPI `agent.*` | Подготовлен как контрактный срез `AGO-1`. |
-| Go-реализация `agent-manager` | Сервисный каркас готов. Операции flow, role, prompt, session и run подключены к слою хранения и use-case через gRPC handlers. `StartAgentSession` защищает активную session от дублей по provider target, `StartAgentRun` фиксирует версии роли/prompt, проверяет stage-bound связку flow/stage/role и замораживает безопасные guidance refs из `package-hub`, `RecordRunState` применяет state machine и публикует только AsyncAPI-совместимые lifecycle-события. Runtime workspace, приёмка, follow-up и human gate остаются следующими срезами. |
+| Go-реализация `agent-manager` | Сервисный каркас готов. Операции flow, role, prompt, session и run подключены к слою хранения и use-case через gRPC handlers. `StartAgentSession` защищает активную session от дублей по provider target, `StartAgentRun` фиксирует версии роли/prompt, проверяет stage-bound связку flow/stage/role и замораживает безопасные guidance refs из `package-hub`, `RecordRunState` применяет state machine и публикует только AsyncAPI-совместимые lifecycle-события. Контракт руководящих пакетов в workspace зафиксирован: runtime получает источники `guidance_package` и сгенерированный контекст, но прямой вызов `PrepareRuntime` из `agent-manager` ждёт проверенную workspace policy от `project-catalog`. Приёмка, follow-up и human gate остаются следующими срезами. |
 | Интеграция с `package-hub` | Реализована как чтение guidance installations, package/version metadata и manifest validation state; сырое содержимое manifest и package source в `agent-manager` не сохраняются. |
 | Интеграция с runtime/provider/interaction/hooks | Зафиксирована как междоменная граница без реализации. |
 
