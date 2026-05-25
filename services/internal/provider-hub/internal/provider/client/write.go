@@ -34,6 +34,7 @@ type WriteRequest struct {
 	CreatePullRequest          *CreatePullRequestCommand
 	UpdatePullRequest          *UpdatePullRequestCommand
 	CreateBootstrapPullRequest *CreateBootstrapPullRequestCommand
+	CreateAdoptionPullRequest  *CreateAdoptionPullRequestCommand
 	CreateReviewSignal         *CreateReviewSignalCommand
 	UpdateRelationship         *UpdateRelationshipCommand
 }
@@ -106,26 +107,44 @@ type CreatePullRequestCommand struct {
 	WatermarkJSON    []byte
 }
 
-// BootstrapFile describes one prepared repository file to write into a bootstrap branch.
-type BootstrapFile struct {
+// RepositoryFile describes one prepared repository file to write into a provider branch.
+type RepositoryFile struct {
 	Path       string
 	Content    string
 	Executable bool
 }
 
-// CreateBootstrapPullRequestCommand writes prepared files to a bootstrap branch and opens or updates PR.
-type CreateBootstrapPullRequestCommand struct {
+// BootstrapFile describes one prepared repository file to write into a bootstrap branch.
+type BootstrapFile = RepositoryFile
+
+// AdoptionFile describes one prepared repository file to write into an adoption branch.
+type AdoptionFile = RepositoryFile
+
+// RepositoryBranchPullRequestCommand describes shared branch/PR provider write parameters.
+type RepositoryBranchPullRequestCommand struct {
 	ProjectID        string
 	RepositoryID     string
 	RepositoryTarget Target
 	BaseBranch       string
-	BootstrapBranch  string
 	CommitMessage    string
 	Title            string
 	Body             string
 	Draft            bool
-	Files            []BootstrapFile
 	WatermarkJSON    []byte
+}
+
+// CreateBootstrapPullRequestCommand writes prepared files to a bootstrap branch and opens or updates PR.
+type CreateBootstrapPullRequestCommand struct {
+	RepositoryBranchPullRequestCommand
+	BootstrapBranch string
+	Files           []BootstrapFile
+}
+
+// CreateAdoptionPullRequestCommand writes prepared files to an adoption branch and opens or updates PR.
+type CreateAdoptionPullRequestCommand struct {
+	RepositoryBranchPullRequestCommand
+	AdoptionBranch string
+	Files          []AdoptionFile
 }
 
 // UpdatePullRequestCommand describes one provider-native pull request update.

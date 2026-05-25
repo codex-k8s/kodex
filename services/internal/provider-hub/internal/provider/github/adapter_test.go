@@ -614,15 +614,17 @@ func TestExecuteCreateBootstrapPullRequestWritesBranchAndCreatesPullRequest(t *t
 		Credential:   providerclient.AccountCredential{ExternalAccountID: uuid.New(), ProviderSlug: enum.ProviderSlugGitHub, Token: token},
 		ProviderSlug: enum.ProviderSlugGitHub,
 		CreateBootstrapPullRequest: &providerclient.CreateBootstrapPullRequestCommand{
-			ProjectID:        projectID,
-			RepositoryID:     repositoryID,
-			RepositoryTarget: providerclient.Target{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
-			BaseBranch:       "main",
-			BootstrapBranch:  "kodex-bootstrap",
-			CommitMessage:    "Bootstrap repository",
-			Title:            "Bootstrap платформы",
-			Body:             "Bootstrap body",
-			Files:            []providerclient.BootstrapFile{{Path: "services.yaml", Content: "version: 1\n"}},
+			RepositoryBranchPullRequestCommand: providerclient.RepositoryBranchPullRequestCommand{
+				ProjectID:        projectID,
+				RepositoryID:     repositoryID,
+				RepositoryTarget: providerclient.Target{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
+				BaseBranch:       "main",
+				CommitMessage:    "Bootstrap repository",
+				Title:            "Bootstrap платформы",
+				Body:             "Bootstrap body",
+			},
+			BootstrapBranch: "kodex-bootstrap",
+			Files:           []providerclient.BootstrapFile{{Path: "services.yaml", Content: "version: 1\n"}},
 		},
 	})
 	if err != nil {
@@ -663,19 +665,118 @@ func TestExecuteCreateBootstrapPullRequestRejectsNonEmptyBaseTree(t *testing.T) 
 		Credential:   providerclient.AccountCredential{ExternalAccountID: uuid.New(), ProviderSlug: enum.ProviderSlugGitHub, Token: token},
 		ProviderSlug: enum.ProviderSlugGitHub,
 		CreateBootstrapPullRequest: &providerclient.CreateBootstrapPullRequestCommand{
-			ProjectID:        uuid.New().String(),
-			RepositoryID:     uuid.New().String(),
-			RepositoryTarget: providerclient.Target{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
-			BaseBranch:       "main",
-			BootstrapBranch:  "kodex-bootstrap",
-			CommitMessage:    "Bootstrap repository",
-			Title:            "Bootstrap платформы",
-			Files:            []providerclient.BootstrapFile{{Path: "services.yaml", Content: "version: 1\n"}},
+			RepositoryBranchPullRequestCommand: providerclient.RepositoryBranchPullRequestCommand{
+				ProjectID:        uuid.New().String(),
+				RepositoryID:     uuid.New().String(),
+				RepositoryTarget: providerclient.Target{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
+				BaseBranch:       "main",
+				CommitMessage:    "Bootstrap repository",
+				Title:            "Bootstrap платформы",
+			},
+			BootstrapBranch: "kodex-bootstrap",
+			Files:           []providerclient.BootstrapFile{{Path: "services.yaml", Content: "version: 1\n"}},
 		},
 	})
 	var providerErr *providerclient.Error
 	if !errors.As(err, &providerErr) || providerErr.Kind != providerclient.ErrorKindUnsupported {
 		t.Fatalf("Execute() err = %v, want unsupported provider error", err)
+	}
+}
+
+func TestExecuteCreateAdoptionPullRequestAllowsNonEmptyBaseTree(t *testing.T) {
+	t.Parallel()
+
+	projectID := uuid.New().String()
+	repositoryID := uuid.New().String()
+	seen := make(map[string]int)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		key := r.Method + " " + r.URL.Path
+		seen[key]++
+		switch key {
+		case "GET /repos/codex-k8s/kodex/git/ref/heads/main":
+			_, _ = w.Write([]byte(`{"ref":"refs/heads/main","object":{"type":"commit","sha":"base-sha"}}`))
+		case "GET /repos/codex-k8s/kodex/git/commits/base-sha":
+			_, _ = w.Write([]byte(`{"sha":"base-sha","tree":{"sha":"base-tree-sha"}}`))
+		case "GET /repos/codex-k8s/kodex/git/trees/base-tree-sha":
+			_, _ = w.Write([]byte(`{"sha":"base-tree-sha","tree":[{"path":"go.mod","type":"blob","mode":"100644","sha":"gomod-sha"}]}`))
+		case "GET /repos/codex-k8s/kodex/git/ref/heads/kodex-adoption":
+			http.NotFound(w, r)
+		case "POST /repos/codex-k8s/kodex/git/refs":
+			_, _ = w.Write([]byte(`{"ref":"refs/heads/kodex-adoption","object":{"type":"commit","sha":"base-sha"}}`))
+		case "POST /repos/codex-k8s/kodex/git/trees":
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read tree body: %v", err)
+			}
+			text := string(body)
+			if !strings.Contains(text, `"path":"services.yaml"`) ||
+				!strings.Contains(text, `"base_tree":"base-tree-sha"`) {
+				t.Fatalf("tree payload = %s", text)
+			}
+			_, _ = w.Write([]byte(`{"sha":"tree-sha","tree":[]}`))
+		case "POST /repos/codex-k8s/kodex/git/commits":
+			var payload map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode commit: %v", err)
+			}
+			if payload["message"] != "Prepare repository adoption" {
+				t.Fatalf("commit payload = %+v", payload)
+			}
+			_, _ = w.Write([]byte(`{"sha":"commit-sha","tree":{"sha":"tree-sha"}}`))
+		case "PATCH /repos/codex-k8s/kodex/git/refs/heads/kodex-adoption":
+			_, _ = w.Write([]byte(`{"ref":"refs/heads/kodex-adoption","object":{"type":"commit","sha":"commit-sha"}}`))
+		case "GET /repos/codex-k8s/kodex/pulls":
+			if r.URL.Query().Get("head") != "codex-k8s:kodex-adoption" || r.URL.Query().Get("base") != "main" {
+				t.Fatalf("pull list query = %s", r.URL.RawQuery)
+			}
+			_, _ = w.Write([]byte(`[]`))
+		case "POST /repos/codex-k8s/kodex/pulls":
+			var payload map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode pull request: %v", err)
+			}
+			if payload["head"] != "kodex-adoption" || payload["base"] != "main" || payload["title"] != "Подключение существующего репозитория" {
+				t.Fatalf("pull request payload = %+v", payload)
+			}
+			w.Header().Set("ETag", `"adoption-pr"`)
+			_, _ = w.Write([]byte(`{"id":9100,"number":91,"html_url":"https://github.com/codex-k8s/kodex/pull/91","title":"Подключение существующего репозитория","state":"open","body":"Adoption body","updated_at":"2026-05-22T14:05:00Z"}`))
+		default:
+			t.Fatalf("unexpected request = %s %s", r.Method, r.URL.String())
+		}
+	}))
+	defer server.Close()
+
+	token := secretresolver.NewSecretValue([]byte("token-value"))
+	defer token.Clear()
+	result, err := New(Config{BaseURL: server.URL, HTTPClient: server.Client()}).Execute(context.Background(), providerclient.WriteRequest{
+		Credential:   providerclient.AccountCredential{ExternalAccountID: uuid.New(), ProviderSlug: enum.ProviderSlugGitHub, Token: token},
+		ProviderSlug: enum.ProviderSlugGitHub,
+		CreateAdoptionPullRequest: &providerclient.CreateAdoptionPullRequestCommand{
+			RepositoryBranchPullRequestCommand: providerclient.RepositoryBranchPullRequestCommand{
+				ProjectID:        projectID,
+				RepositoryID:     repositoryID,
+				RepositoryTarget: providerclient.Target{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
+				BaseBranch:       "main",
+				CommitMessage:    "Prepare repository adoption",
+				Title:            "Подключение существующего репозитория",
+				Body:             "Adoption body",
+			},
+			AdoptionBranch: "kodex-adoption",
+			Files:          []providerclient.AdoptionFile{{Path: "services.yaml", Content: "version: 1\n"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute(): %v", err)
+	}
+	if result.ResultRef != "https://github.com/codex-k8s/kodex/pull/91" ||
+		result.WorkItem == nil ||
+		result.WorkItem.ProjectID != projectID ||
+		result.WorkItem.RepositoryID != repositoryID {
+		t.Fatalf("result = %+v, want adoption PR projection bound to project/repository", result)
+	}
+	if seen["POST /repos/codex-k8s/kodex/git/trees"] != 1 ||
+		seen["POST /repos/codex-k8s/kodex/pulls"] != 1 {
+		t.Fatalf("seen requests = %+v, want one tree write and one PR create", seen)
 	}
 }
 
@@ -733,15 +834,17 @@ func TestExecuteCreateBootstrapPullRequestReplacesStaleBootstrapTree(t *testing.
 		Credential:   providerclient.AccountCredential{ExternalAccountID: uuid.New(), ProviderSlug: enum.ProviderSlugGitHub, Token: token},
 		ProviderSlug: enum.ProviderSlugGitHub,
 		CreateBootstrapPullRequest: &providerclient.CreateBootstrapPullRequestCommand{
-			ProjectID:        uuid.New().String(),
-			RepositoryID:     uuid.New().String(),
-			RepositoryTarget: providerclient.Target{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
-			BaseBranch:       "main",
-			BootstrapBranch:  "kodex-bootstrap",
-			CommitMessage:    "Bootstrap repository",
-			Title:            "Bootstrap платформы",
-			Body:             "Bootstrap body",
-			Files:            []providerclient.BootstrapFile{{Path: "services.yaml", Content: "version: 1\n"}},
+			RepositoryBranchPullRequestCommand: providerclient.RepositoryBranchPullRequestCommand{
+				ProjectID:        uuid.New().String(),
+				RepositoryID:     uuid.New().String(),
+				RepositoryTarget: providerclient.Target{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
+				BaseBranch:       "main",
+				CommitMessage:    "Bootstrap repository",
+				Title:            "Bootstrap платформы",
+				Body:             "Bootstrap body",
+			},
+			BootstrapBranch: "kodex-bootstrap",
+			Files:           []providerclient.BootstrapFile{{Path: "services.yaml", Content: "version: 1\n"}},
 		},
 	})
 	if err != nil {

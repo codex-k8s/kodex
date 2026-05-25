@@ -86,6 +86,38 @@ func TestCreateBootstrapPullRequestMapsRequestAndResponse(t *testing.T) {
 	}
 }
 
+func TestCreateAdoptionPullRequestMapsRequestAndResponse(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.NewString()
+	externalAccountID := uuid.NewString()
+	projectID := uuid.NewString()
+	repositoryID := uuid.NewString()
+	response, err := NewServer(fakeService{}).CreateAdoptionPullRequest(context.Background(), &providersv1.CreateAdoptionPullRequestRequest{
+		ProjectId:        projectID,
+		RepositoryId:     repositoryID,
+		ProviderSlug:     "github",
+		RepositoryTarget: &providersv1.ProviderTarget{ProviderSlug: "github", RepositoryFullName: ptrString("codex-k8s/kodex")},
+		BaseBranch:       "main",
+		AdoptionBranch:   "kodex/adoption",
+		CommitMessage:    "Prepare repository adoption",
+		Title:            "Подключение существующего репозитория",
+		Body:             "Подготовленные изменения adoption.",
+		Files: []*providersv1.AdoptionFile{{
+			Path:    "services.yaml",
+			Content: "version: 1\n",
+		}},
+		Meta:              &providersv1.CommandMeta{CommandId: &commandID, RequestId: "req-1"},
+		ExternalAccountId: externalAccountID,
+	})
+	if err != nil {
+		t.Fatalf("CreateAdoptionPullRequest(): %v", err)
+	}
+	if response.GetResult().GetResultRef() != "adoption_pull_request:create" {
+		t.Fatalf("result ref = %q, want adoption create", response.GetResult().GetResultRef())
+	}
+}
+
 func TestCreateRepositoryMapsRequestAndResponse(t *testing.T) {
 	t.Parallel()
 
@@ -557,6 +589,17 @@ func (fakeService) CreateBootstrapPullRequest(_ context.Context, input providers
 	return providerservice.ProviderOperationResult{
 		Result: providerservice.ProviderOperationCommandResult{
 			ResultRef: "bootstrap_pull_request:create",
+			Target: &providerservice.ProviderTarget{
+				ProviderSlug: input.ProviderSlug,
+			},
+		},
+	}, nil
+}
+
+func (fakeService) CreateAdoptionPullRequest(_ context.Context, input providerservice.CreateAdoptionPullRequestInput) (providerservice.ProviderOperationResult, error) {
+	return providerservice.ProviderOperationResult{
+		Result: providerservice.ProviderOperationCommandResult{
+			ResultRef: "adoption_pull_request:create",
 			Target: &providerservice.ProviderTarget{
 				ProviderSlug: input.ProviderSlug,
 			},

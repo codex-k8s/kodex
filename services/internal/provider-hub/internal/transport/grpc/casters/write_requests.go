@@ -3,6 +3,8 @@ package casters
 import (
 	"strings"
 
+	"github.com/google/uuid"
+
 	providersv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1"
 	"github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/errs"
 	providerservice "github.com/codex-k8s/kodex/services/internal/provider-hub/internal/domain/service"
@@ -214,59 +216,182 @@ func CreateRepositoryInput(request *providersv1.CreateRepositoryRequest) (provid
 	}, nil
 }
 
-// CreateBootstrapPullRequestInput maps a bootstrap PR request to the domain model.
-func CreateBootstrapPullRequestInput(request *providersv1.CreateBootstrapPullRequestRequest) (providerservice.CreateBootstrapPullRequestInput, error) {
-	meta, err := CommandMetaFromProto(request.GetMeta())
+type repositoryBranchPullRequestFields struct {
+	Meta              value.CommandMeta
+	ProjectID         uuid.UUID
+	RepositoryID      uuid.UUID
+	ExternalAccountID uuid.UUID
+	RepositoryTarget  providerservice.ProviderTarget
+}
+
+type repositoryBranchPullRequestProto interface {
+	GetMeta() *providersv1.CommandMeta
+	GetProjectId() string
+	GetRepositoryId() string
+	GetExternalAccountId() string
+	GetRepositoryTarget() *providersv1.ProviderTarget
+	GetProviderSlug() string
+	GetBaseBranch() string
+	GetCommitMessage() string
+	GetTitle() string
+	GetBody() string
+	GetDraft() bool
+	GetWatermarkJson() string
+}
+
+type repositoryFileProto interface {
+	GetPath() string
+	GetContent() string
+	GetExecutable() bool
+}
+
+func repositoryBranchPullRequestFieldsFromProto(
+	meta *providersv1.CommandMeta,
+	projectID string,
+	repositoryID string,
+	externalAccountID string,
+	repositoryTarget *providersv1.ProviderTarget,
+) (repositoryBranchPullRequestFields, error) {
+	commandMeta, err := CommandMetaFromProto(meta)
 	if err != nil {
-		return providerservice.CreateBootstrapPullRequestInput{}, err
+		return repositoryBranchPullRequestFields{}, err
 	}
-	projectID, err := requiredUUID(request.GetProjectId())
+	parsedProjectID, err := requiredUUID(projectID)
 	if err != nil {
-		return providerservice.CreateBootstrapPullRequestInput{}, err
+		return repositoryBranchPullRequestFields{}, err
 	}
-	repositoryID, err := requiredUUID(request.GetRepositoryId())
+	parsedRepositoryID, err := requiredUUID(repositoryID)
 	if err != nil {
-		return providerservice.CreateBootstrapPullRequestInput{}, err
+		return repositoryBranchPullRequestFields{}, err
 	}
-	externalAccountID, err := requiredUUID(request.GetExternalAccountId())
+	parsedExternalAccountID, err := requiredUUID(externalAccountID)
 	if err != nil {
-		return providerservice.CreateBootstrapPullRequestInput{}, err
+		return repositoryBranchPullRequestFields{}, err
 	}
-	repositoryTarget, err := ProviderTargetFromProto(request.GetRepositoryTarget())
+	parsedRepositoryTarget, err := ProviderTargetFromProto(repositoryTarget)
 	if err != nil {
-		return providerservice.CreateBootstrapPullRequestInput{}, err
+		return repositoryBranchPullRequestFields{}, err
 	}
-	return providerservice.CreateBootstrapPullRequestInput{
-		ProjectID:         projectID,
-		RepositoryID:      repositoryID,
+	return repositoryBranchPullRequestFields{
+		Meta:              commandMeta,
+		ProjectID:         parsedProjectID,
+		RepositoryID:      parsedRepositoryID,
+		ExternalAccountID: parsedExternalAccountID,
+		RepositoryTarget:  parsedRepositoryTarget,
+	}, nil
+}
+
+func repositoryBranchPullRequestInputFromProto(request repositoryBranchPullRequestProto) (providerservice.RepositoryBranchPullRequestInput, error) {
+	fields, err := repositoryBranchPullRequestFieldsFromProto(
+		request.GetMeta(),
+		request.GetProjectId(),
+		request.GetRepositoryId(),
+		request.GetExternalAccountId(),
+		request.GetRepositoryTarget(),
+	)
+	if err != nil {
+		return providerservice.RepositoryBranchPullRequestInput{}, err
+	}
+	return providerservice.RepositoryBranchPullRequestInput{
+		ProjectID:         fields.ProjectID,
+		RepositoryID:      fields.RepositoryID,
 		ProviderSlug:      providerSlug(request.GetProviderSlug()),
-		RepositoryTarget:  repositoryTarget,
+		RepositoryTarget:  fields.RepositoryTarget,
 		BaseBranch:        strings.TrimSpace(request.GetBaseBranch()),
-		BootstrapBranch:   strings.TrimSpace(request.GetBootstrapBranch()),
 		CommitMessage:     strings.TrimSpace(request.GetCommitMessage()),
 		Title:             strings.TrimSpace(request.GetTitle()),
 		Body:              strings.TrimSpace(request.GetBody()),
 		Draft:             request.GetDraft(),
-		Files:             bootstrapFilesFromProto(request.GetFiles()),
 		WatermarkJSON:     []byte(strings.TrimSpace(request.GetWatermarkJson())),
-		Meta:              meta,
-		ExternalAccountID: externalAccountID,
+		Meta:              fields.Meta,
+		ExternalAccountID: fields.ExternalAccountID,
 	}, nil
 }
 
-func bootstrapFilesFromProto(files []*providersv1.BootstrapFile) []providerservice.BootstrapFile {
-	result := make([]providerservice.BootstrapFile, 0, len(files))
+func repositoryFilesFromProto[T any](files []T, fields func(T) (string, string, bool)) []providerservice.RepositoryFile {
+	result := make([]providerservice.RepositoryFile, 0, len(files))
 	for _, file := range files {
-		if file == nil {
+		path, content, executable := fields(file)
+		if strings.TrimSpace(path) == "" && content == "" && !executable {
 			continue
 		}
-		result = append(result, providerservice.BootstrapFile{
-			Path:       strings.TrimSpace(file.GetPath()),
-			Content:    file.GetContent(),
-			Executable: file.GetExecutable(),
+		result = append(result, providerservice.RepositoryFile{
+			Path:       strings.TrimSpace(path),
+			Content:    content,
+			Executable: executable,
 		})
 	}
 	return result
+}
+
+func repositoryFilesFromTypedProto[T repositoryFileProto](files []T) []providerservice.RepositoryFile {
+	return repositoryFilesFromProto(files, func(file T) (string, string, bool) {
+		return file.GetPath(), file.GetContent(), file.GetExecutable()
+	})
+}
+
+func repositoryBranchPullRequestFromProto[T repositoryBranchPullRequestProto, O any](
+	request T,
+	branch func(T) string,
+	files func(T) []providerservice.RepositoryFile,
+	output func(providerservice.RepositoryBranchPullRequestInput, string, []providerservice.RepositoryFile) O,
+) (O, error) {
+	commonInput, err := repositoryBranchPullRequestInputFromProto(request)
+	if err != nil {
+		var zero O
+		return zero, err
+	}
+	return output(commonInput, strings.TrimSpace(branch(request)), files(request)), nil
+}
+
+// CreateBootstrapPullRequestInput maps a bootstrap PR request to the domain model.
+func CreateBootstrapPullRequestInput(request *providersv1.CreateBootstrapPullRequestRequest) (providerservice.CreateBootstrapPullRequestInput, error) {
+	return repositoryBranchPullRequestFromProto(request, bootstrapBranchFromProto, bootstrapFilesFromRequest, newBootstrapPullRequestInput)
+}
+
+func bootstrapBranchFromProto(request *providersv1.CreateBootstrapPullRequestRequest) string {
+	return request.GetBootstrapBranch()
+}
+
+func bootstrapFilesFromRequest(request *providersv1.CreateBootstrapPullRequestRequest) []providerservice.RepositoryFile {
+	return repositoryFilesFromTypedProto(request.GetFiles())
+}
+
+func newBootstrapPullRequestInput(
+	commonInput providerservice.RepositoryBranchPullRequestInput,
+	bootstrapBranch string,
+	files []providerservice.RepositoryFile,
+) providerservice.CreateBootstrapPullRequestInput {
+	return providerservice.CreateBootstrapPullRequestInput{
+		RepositoryBranchPullRequestInput: commonInput,
+		BootstrapBranch:                  bootstrapBranch,
+		Files:                            files,
+	}
+}
+
+// CreateAdoptionPullRequestInput maps an adoption PR request to the domain model.
+func CreateAdoptionPullRequestInput(request *providersv1.CreateAdoptionPullRequestRequest) (providerservice.CreateAdoptionPullRequestInput, error) {
+	return repositoryBranchPullRequestFromProto(request, adoptionBranchFromProto, adoptionFilesFromRequest, newAdoptionPullRequestInput)
+}
+
+func adoptionBranchFromProto(request *providersv1.CreateAdoptionPullRequestRequest) string {
+	return request.GetAdoptionBranch()
+}
+
+func adoptionFilesFromRequest(request *providersv1.CreateAdoptionPullRequestRequest) []providerservice.RepositoryFile {
+	return repositoryFilesFromTypedProto(request.GetFiles())
+}
+
+func newAdoptionPullRequestInput(
+	commonInput providerservice.RepositoryBranchPullRequestInput,
+	adoptionBranch string,
+	files []providerservice.RepositoryFile,
+) providerservice.CreateAdoptionPullRequestInput {
+	return providerservice.CreateAdoptionPullRequestInput{
+		RepositoryBranchPullRequestInput: commonInput,
+		AdoptionBranch:                   adoptionBranch,
+		Files:                            files,
+	}
 }
 
 // UpdatePullRequestInput maps a typed PR/MR update request to the domain model.

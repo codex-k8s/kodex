@@ -17,6 +17,7 @@ const (
 	providerEventOperationFailed              = providerevents.EventOperationFailed
 	providerEventRepositoryCreated            = providerevents.EventRepositoryCreated
 	providerEventRepositoryBootstrapCompleted = providerevents.EventRepositoryBootstrapCompleted
+	providerEventRepositoryAdoptionPRCreated  = providerevents.EventRepositoryAdoptionPRCreated
 
 	providerAggregateWebhookEvent      = providerevents.AggregateWebhookEvent
 	providerAggregateProviderEvent     = providerevents.AggregateProviderEvent
