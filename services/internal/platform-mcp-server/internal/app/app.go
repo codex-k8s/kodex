@@ -8,6 +8,8 @@ import (
 	"time"
 
 	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
+	agentsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1"
+	agentmanagerclient "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/clients/agentmanager"
 	mcptransport "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/transport/mcp"
 )
 
@@ -22,7 +24,18 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	mcpServer, err := mcptransport.NewServer(cfg.MCPTransportConfig(ownerRoutes), logger)
+	agentConn, err := agentmanagerclient.NewConnection(cfg.AgentManagerClientConfig())
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = agentConn.Close()
+	}()
+	agentClient, err := agentmanagerclient.New(agentsv1.NewAgentManagerServiceClient(agentConn), cfg.AgentManagerClientConfig())
+	if err != nil {
+		return err
+	}
+	mcpServer, err := mcptransport.NewServer(cfg.MCPTransportConfig(ownerRoutes, agentClient), logger)
 	if err != nil {
 		return err
 	}

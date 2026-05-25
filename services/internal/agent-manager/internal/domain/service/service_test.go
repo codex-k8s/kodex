@@ -437,6 +437,135 @@ func TestStartAgentRunFreezesRoleAndPrompt(t *testing.T) {
 	}
 }
 
+func TestStartAgentRunFreezesGuidanceRefs(t *testing.T) {
+	t.Parallel()
+
+	sessionID := uuid.MustParse("11111111-aaaa-bbbb-cccc-dddddddddddd")
+	roleID := uuid.MustParse("11111111-bbbb-cccc-dddd-eeeeeeeeeeee")
+	promptVersionID := uuid.MustParse("11111111-cccc-dddd-eeee-ffffffffffff")
+	runID := uuid.MustParse("11111111-dddd-eeee-ffff-111111111111")
+	guidanceRef := value.GuidanceRef{
+		PackageInstallationRef: "installation-1",
+		PackageVersionRef:      "version-1",
+		ManifestDigest:         "sha256:manifest",
+		CapabilityRef:          "guidance:installation-1",
+		CapabilityKind:         "guidance",
+		PackageRef:             "package-1",
+		PackageSlug:            "go-guidelines",
+		PackageVersionLabel:    "v1.0.0",
+		PolicySummaryJSON:      `{"package_status":"available"}`,
+	}
+	repository := &fakeRepository{
+		sessionByID: map[uuid.UUID]entity.AgentSession{
+			sessionID: {
+				VersionedBase: entity.VersionedBase{ID: sessionID, Version: 1},
+				Scope:         value.ScopeRef{Type: string(enum.AgentScopeTypeProject), Ref: "project-1"},
+				Status:        enum.AgentSessionStatusOpen,
+			},
+		},
+		roleByID: map[uuid.UUID]entity.RoleProfile{
+			roleID: {
+				VersionedBase:  entity.VersionedBase{ID: roleID, Version: 1},
+				RoleKind:       enum.RoleKindWorker,
+				RuntimeProfile: "full",
+				Status:         enum.RoleStatusActive,
+			},
+		},
+		promptVersionByID: map[uuid.UUID]entity.PromptTemplateVersion{
+			promptVersionID: {
+				ID:             promptVersionID,
+				RoleProfileID:  roleID,
+				PromptKind:     enum.PromptKindWork,
+				TemplateDigest: "sha256:prompt",
+				Status:         enum.PromptVersionStatusActive,
+			},
+		},
+	}
+	resolver := &fakeGuidanceResolver{refs: []value.GuidanceRef{guidanceRef}}
+	service := New(Config{
+		Repository:       repository,
+		Clock:            fixedClock{now: time.Date(2026, 5, 15, 10, 0, 0, 0, time.UTC)},
+		IDGenerator:      &sequenceIDGenerator{ids: []uuid.UUID{runID, uuid.MustParse("11111111-eeee-ffff-1111-222222222222")}},
+		GuidanceResolver: resolver,
+	})
+
+	run, err := service.StartAgentRun(context.Background(), StartAgentRunInput{
+		Meta:                    value.CommandMeta{CommandID: uuid.MustParse("11111111-ffff-1111-2222-333333333333"), Actor: testActor()},
+		SessionID:               sessionID,
+		RoleProfileID:           roleID,
+		PromptTemplateVersionID: promptVersionID,
+		GuidanceSelectionHints:  []value.GuidanceSelectionHint{{PackageSlug: "go-guidelines"}},
+	})
+	if err != nil {
+		t.Fatalf("StartAgentRun() err = %v", err)
+	}
+	if len(run.GuidanceRefs) != 1 || run.GuidanceRefs[0].PackageSlug != "go-guidelines" {
+		t.Fatalf("guidance refs = %+v", run.GuidanceRefs)
+	}
+	if resolver.calls != 1 || resolver.last.Scope.Ref != "project-1" || resolver.last.Hints[0].PackageSlug != "go-guidelines" {
+		t.Fatalf("resolver calls/input = %d/%+v", resolver.calls, resolver.last)
+	}
+	if repository.createdRun.GuidanceRefs[0].PolicySummaryJSON == "" {
+		t.Fatalf("stored run guidance refs = %+v", repository.createdRun.GuidanceRefs)
+	}
+}
+
+func TestStartAgentRunReplayKeepsFrozenGuidanceRefs(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.MustParse("22222222-aaaa-bbbb-cccc-dddddddddddd")
+	run := entity.AgentRun{
+		VersionedBase:           entity.VersionedBase{ID: uuid.MustParse("22222222-bbbb-cccc-dddd-eeeeeeeeeeee"), Version: 1},
+		SessionID:               uuid.MustParse("22222222-cccc-dddd-eeee-ffffffffffff"),
+		RoleProfileID:           uuid.MustParse("22222222-dddd-eeee-ffff-111111111111"),
+		RoleProfileVersion:      1,
+		RoleProfileDigest:       "sha256:role",
+		PromptTemplateVersionID: uuid.MustParse("22222222-eeee-ffff-1111-222222222222"),
+		PromptTemplateDigest:    "sha256:prompt",
+		GuidanceRefs: []value.GuidanceRef{{
+			PackageInstallationRef: "installation-frozen",
+			PackageVersionRef:      "version-frozen",
+			ManifestDigest:         "sha256:frozen",
+			PackageSlug:            "frozen-guidelines",
+		}},
+		Status: enum.AgentRunStatusRequested,
+	}
+	payload, err := marshalCommandPayload(agentRunCommandPayload{Run: run})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	repository := &fakeRepository{
+		replay: &entity.CommandResult{
+			CommandID:     &commandID,
+			Actor:         testActor(),
+			Operation:     operationStartAgentRun,
+			AggregateType: enum.CommandAggregateTypeRun,
+			AggregateID:   run.ID,
+			ResultPayload: payload,
+		},
+		runByID: map[uuid.UUID]entity.AgentRun{run.ID: run},
+	}
+	resolver := &fakeGuidanceResolver{err: errs.ErrDependencyUnavailable}
+	service := New(Config{Repository: repository, GuidanceResolver: resolver})
+
+	replay, err := service.StartAgentRun(context.Background(), StartAgentRunInput{
+		Meta:                    value.CommandMeta{CommandID: commandID, Actor: testActor()},
+		SessionID:               run.SessionID,
+		RoleProfileID:           run.RoleProfileID,
+		PromptTemplateVersionID: run.PromptTemplateVersionID,
+		GuidanceSelectionHints:  []value.GuidanceSelectionHint{{PackageSlug: "new-guidelines"}},
+	})
+	if err != nil {
+		t.Fatalf("StartAgentRun() err = %v", err)
+	}
+	if resolver.calls != 0 {
+		t.Fatalf("resolver calls = %d, want 0", resolver.calls)
+	}
+	if replay.GuidanceRefs[0].PackageSlug != "frozen-guidelines" {
+		t.Fatalf("replayed guidance refs = %+v", replay.GuidanceRefs)
+	}
+}
+
 func TestStartAgentRunValidatesStageRoleBinding(t *testing.T) {
 	t.Parallel()
 
@@ -1138,4 +1267,20 @@ func (g *sequenceIDGenerator) New() uuid.UUID {
 
 func testActor() value.Actor {
 	return value.Actor{Type: "user", ID: "owner"}
+}
+
+type fakeGuidanceResolver struct {
+	refs  []value.GuidanceRef
+	err   error
+	calls int
+	last  GuidanceResolutionInput
+}
+
+func (f *fakeGuidanceResolver) ResolveGuidanceRefs(_ context.Context, input GuidanceResolutionInput) ([]value.GuidanceRef, error) {
+	f.calls++
+	f.last = input
+	if f.err != nil {
+		return nil, f.err
+	}
+	return append([]value.GuidanceRef(nil), f.refs...), nil
 }

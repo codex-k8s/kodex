@@ -1,0 +1,295 @@
+asyncapi: 3.0.0
+info:
+  title: kodex interaction-hub events
+  version: 1.0.0
+  description: Stable v1 event contract published by interaction-hub through the platform outbox.
+x-kodex-contract-status: stable-v1
+channels:
+  interactionEvents:
+    address: interaction.events
+    messages:
+      interactionEvent:
+        $ref: '#/components/messages/InteractionEvent'
+operations:
+  publishInteractionEvent:
+    action: send
+    channel:
+      $ref: '#/channels/interactionEvents'
+    messages:
+      - $ref: '#/channels/interactionEvents/messages/interactionEvent'
+components:
+  messages:
+    InteractionEvent:
+      name: InteractionEvent
+      title: Interaction domain event envelope
+      payload:
+        $ref: '#/components/schemas/InteractionEventEnvelope'
+  schemas:
+    InteractionEventEnvelope:
+      oneOf:
+        - $ref: '#/components/schemas/ThreadCreatedEvent'
+        - $ref: '#/components/schemas/MessageRecordedEvent'
+        - $ref: '#/components/schemas/FeedbackRequestedEvent'
+        - $ref: '#/components/schemas/ApprovalRequestedEvent'
+        - $ref: '#/components/schemas/HumanGateRequestedEvent'
+        - $ref: '#/components/schemas/NotificationRequestedEvent'
+        - $ref: '#/components/schemas/SubscriptionUpdatedEvent'
+        - $ref: '#/components/schemas/DeliveryRequestedEvent'
+        - $ref: '#/components/schemas/DeliveryAcceptedEvent'
+        - $ref: '#/components/schemas/DeliveryFailedEvent'
+        - $ref: '#/components/schemas/CallbackReceivedEvent'
+        - $ref: '#/components/schemas/RequestResponseRecordedEvent'
+        - $ref: '#/components/schemas/RequestExpiredEvent'
+        - $ref: '#/components/schemas/RequestCancelledEvent'
+    InteractionEventEnvelopeBase:
+      type: object
+      additionalProperties: false
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_type:
+          $ref: '#/components/schemas/InteractionEventType'
+        schema_version:
+          type: integer
+          minimum: 1
+        aggregate_type:
+          type: string
+        aggregate_id:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        payload:
+          $ref: '#/components/schemas/InteractionEventPayload'
+      required: [event_id, event_type, schema_version, aggregate_type, aggregate_id, occurred_at, payload]
+
+    ThreadCreatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/InteractionEventEnvelopeBase'
+        - $ref: '#/components/schemas/ThreadCreatedEventKind'
+    ThreadCreatedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: interaction.thread.created}, aggregate_type: {type: string, const: thread}, payload: {$ref: '#/components/schemas/InteractionEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    MessageRecordedEvent:
+      allOf:
+        - $ref: '#/components/schemas/InteractionEventEnvelopeBase'
+        - $ref: '#/components/schemas/MessageRecordedEventKind'
+    MessageRecordedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: interaction.message.recorded}, aggregate_type: {type: string, const: message}, payload: {$ref: '#/components/schemas/InteractionEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    FeedbackRequestedEvent:
+      allOf:
+        - $ref: '#/components/schemas/InteractionEventEnvelopeBase'
+        - $ref: '#/components/schemas/FeedbackRequestedEventKind'
+    FeedbackRequestedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: interaction.feedback.requested}, aggregate_type: {type: string, const: request}, payload: {$ref: '#/components/schemas/InteractionEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    ApprovalRequestedEvent:
+      allOf:
+        - $ref: '#/components/schemas/InteractionEventEnvelopeBase'
+        - $ref: '#/components/schemas/ApprovalRequestedEventKind'
+    ApprovalRequestedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: interaction.approval.requested}, aggregate_type: {type: string, const: request}, payload: {$ref: '#/components/schemas/InteractionEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    HumanGateRequestedEvent:
+      allOf:
+        - $ref: '#/components/schemas/InteractionEventEnvelopeBase'
+        - $ref: '#/components/schemas/HumanGateRequestedEventKind'
+    HumanGateRequestedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: interaction.human_gate.requested}, aggregate_type: {type: string, const: request}, payload: {$ref: '#/components/schemas/InteractionEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    NotificationRequestedEvent:
+      allOf:
+        - $ref: '#/components/schemas/InteractionEventEnvelopeBase'
+        - $ref: '#/components/schemas/NotificationRequestedEventKind'
+    NotificationRequestedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: interaction.notification.requested}, aggregate_type: {type: string, const: notification}, payload: {$ref: '#/components/schemas/InteractionEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    SubscriptionUpdatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/InteractionEventEnvelopeBase'
+        - $ref: '#/components/schemas/SubscriptionUpdatedEventKind'
+    SubscriptionUpdatedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: interaction.subscription.updated}, aggregate_type: {type: string, const: subscription}, payload: {$ref: '#/components/schemas/InteractionEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    DeliveryRequestedEvent:
+      allOf:
+        - $ref: '#/components/schemas/InteractionEventEnvelopeBase'
+        - $ref: '#/components/schemas/DeliveryRequestedEventKind'
+    DeliveryRequestedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: interaction.delivery.requested}, aggregate_type: {type: string, const: delivery}, payload: {$ref: '#/components/schemas/InteractionEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    DeliveryAcceptedEvent:
+      allOf:
+        - $ref: '#/components/schemas/InteractionEventEnvelopeBase'
+        - $ref: '#/components/schemas/DeliveryAcceptedEventKind'
+    DeliveryAcceptedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: interaction.delivery.accepted}, aggregate_type: {type: string, const: delivery}, payload: {$ref: '#/components/schemas/InteractionEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    DeliveryFailedEvent:
+      allOf:
+        - $ref: '#/components/schemas/InteractionEventEnvelopeBase'
+        - $ref: '#/components/schemas/DeliveryFailedEventKind'
+    DeliveryFailedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: interaction.delivery.failed}, aggregate_type: {type: string, const: delivery}, payload: {$ref: '#/components/schemas/InteractionEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    CallbackReceivedEvent:
+      allOf:
+        - $ref: '#/components/schemas/InteractionEventEnvelopeBase'
+        - $ref: '#/components/schemas/CallbackReceivedEventKind'
+    CallbackReceivedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: interaction.callback.received}, aggregate_type: {type: string, const: callback}, payload: {$ref: '#/components/schemas/InteractionEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    RequestResponseRecordedEvent:
+      allOf:
+        - $ref: '#/components/schemas/InteractionEventEnvelopeBase'
+        - $ref: '#/components/schemas/RequestResponseRecordedEventKind'
+    RequestResponseRecordedEventKind:
+      type: object
+      properties: {event_type: {type: string, const: interaction.request.response_recorded}, aggregate_type: {type: string, const: request}, payload: {$ref: '#/components/schemas/InteractionEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    RequestExpiredEvent:
+      allOf:
+        - $ref: '#/components/schemas/InteractionEventEnvelopeBase'
+        - $ref: '#/components/schemas/RequestExpiredEventKind'
+    RequestExpiredEventKind:
+      type: object
+      properties: {event_type: {type: string, const: interaction.request.expired}, aggregate_type: {type: string, const: request}, payload: {$ref: '#/components/schemas/InteractionEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    RequestCancelledEvent:
+      allOf:
+        - $ref: '#/components/schemas/InteractionEventEnvelopeBase'
+        - $ref: '#/components/schemas/RequestCancelledEventKind'
+    RequestCancelledEventKind:
+      type: object
+      properties: {event_type: {type: string, const: interaction.request.cancelled}, aggregate_type: {type: string, const: request}, payload: {$ref: '#/components/schemas/InteractionEventPayload'}}
+      required: [event_type, aggregate_type, payload]
+
+    InteractionEventType:
+      type: string
+      enum:
+        - interaction.thread.created
+        - interaction.message.recorded
+        - interaction.feedback.requested
+        - interaction.approval.requested
+        - interaction.human_gate.requested
+        - interaction.notification.requested
+        - interaction.subscription.updated
+        - interaction.delivery.requested
+        - interaction.delivery.accepted
+        - interaction.delivery.failed
+        - interaction.callback.received
+        - interaction.request.response_recorded
+        - interaction.request.expired
+        - interaction.request.cancelled
+    InteractionEventPayload:
+      type: object
+      additionalProperties: false
+      properties:
+        thread_id:
+          type: string
+        message_id:
+          type: string
+        request_id:
+          type: string
+        response_id:
+          type: string
+        notification_id:
+          type: string
+        subscription_id:
+          type: string
+        delivery_attempt_id:
+          type: string
+        delivery_id:
+          type: string
+        callback_id:
+          type: string
+        route_id:
+          type: string
+        scope_type:
+          type: string
+        scope_ref:
+          type: string
+        request_kind:
+          type: string
+        notification_kind:
+          type: string
+        source_kind:
+          type: string
+        source_owner_kind:
+          type: string
+        source_owner_ref:
+          type: string
+        ingress_kind:
+          type: string
+        risk_class:
+          type: string
+        provider_operation_ref:
+          type: string
+        agent_run_ref:
+          type: string
+        owner_service:
+          type: string
+        owner_request_ref:
+          type: string
+        owner_decision_ref:
+          type: string
+        actor_ref:
+          type: string
+        response_action:
+          type: string
+        priority:
+          type: string
+        subscriber_ref:
+          type: string
+        attempt_number:
+          type: integer
+          minimum: 0
+        channel_message_ref:
+          type: string
+        error_code:
+          type: string
+        error_class:
+          type: string
+        processing_status:
+          type: string
+        status:
+          type: string
+        deadline_at:
+          type: string
+          format: date-time
+        next_retry_at:
+          type: string
+          format: date-time
+        cancelled_by_ref:
+          type: string
+        correlation_id:
+          type: string
+        version:
+          type: integer
+          minimum: 0

@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-22
-related_issues: [582]
+related_issues: [582, 768]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -20,9 +20,9 @@ approvals:
 
 ## TL;DR
 
-- Ключевые сущности: `ConversationThread`, `ConversationMessage`, `InteractionRequest`, `Notification`, `Subscription`, `DeliveryRoute`, `DeliveryAttempt`, `ChannelCallback`, `InteractionDecision`.
+- Ключевые сущности: `ConversationThread`, `ConversationMessage`, `InteractionRequest`, `InteractionResponse`, `Notification`, `Subscription`, `DeliveryRoute`, `DeliveryAttempt`, `ChannelCallback`.
 - Технические агрегаты: `CommandResult`, `OutboxEvent`.
-- Основные связи: thread содержит сообщения; request может быть feedback, approval или Human gate; request имеет delivery attempts и callbacks; decision завершает request; subscription создаёт notification intent.
+- Основные связи: thread содержит сообщения; request может быть feedback, approval или Human gate; request имеет delivery attempts и callbacks; response завершает interaction lifecycle и передаётся владельцу business decision; subscription создаёт notification intent.
 - Риски миграций: нельзя хранить flow/run/session, provider write operation, runtime job, package installation, UI state, сырые секреты, полные внешние callback payload, голосовые и медиа-файлы в PostgreSQL.
 
 ## Правило внешних ссылок
@@ -74,7 +74,7 @@ approvals:
 |---|---|---:|---|
 | `id` | uuid | нет | Идентификатор сообщения. |
 | `thread_id` | uuid | нет | Диалоговая ветка. |
-| `message_kind` | enum | нет | `user_text`, `voice_transcript`, `agent_text`, `system_notice`, `decision_summary`, `callback_summary`. |
+| `message_kind` | enum | нет | `user_text`, `voice_transcript`, `agent_text`, `system_notice`, `response_summary`, `callback_summary`. |
 | `author_ref` | text | нет | Пользователь, агент, service principal или channel package. |
 | `body_summary` | text | да | Короткая безопасная сводка. |
 | `body_object_ref` | text | да | Ссылка на полный текст или вложение во внешнем хранилище. |
@@ -87,7 +87,7 @@ approvals:
 
 ### InteractionRequest
 
-`InteractionRequest` является общим агрегатом для decision-bearing feedback, approval и Human gate request.
+`InteractionRequest` является общим агрегатом для feedback, approval и Human gate delivery request. Business decision state остаётся у сервиса-владельца решения.
 
 | Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
@@ -96,42 +96,44 @@ approvals:
 | `scope_type` | enum | нет | Область запроса. |
 | `scope_ref` | text | нет | Внешняя ссылка области. |
 | `thread_id` | uuid | да | Диалоговая ветка, если запрос связан с диалогом. |
-| `source_owner_kind` | enum | нет | `agent_manager`, `slot_agent`, `provider_hub`, `operations_hub`, `user`, `system`. |
+| `source_owner_kind` | enum | нет | `agent_manager`, `slot_agent`, `governance_manager`, `provider_hub`, `operations_hub`, `user`, `system`. |
 | `source_owner_ref` | text | да | Внешняя ссылка владельца сценария: run/session/provider operation/user/system rule. |
 | `ingress_kind` | enum | нет | `direct_grpc`, `mcp`, `codex_hook`, `gateway`, `system`. |
 | `ingress_ref` | text | да | Ссылка на transport/ingress command, hook event или gateway request. |
+| `decision_owner_kind` | enum | да | `agent_manager`, `governance_manager`, `provider_hub`, `operations_hub`, `system`; кто валидирует ответ и владеет business decision. |
+| `decision_owner_ref` | text | да | Ссылка на gate/request/operation у владельца решения. |
 | `target_refs` | jsonb | нет | Actor/group/role refs получателей. |
 | `context_refs` | jsonb | нет | Run, session, provider, runtime, package и incident refs. |
 | `prompt_summary` | text | нет | Короткая безопасная формулировка запроса. |
 | `prompt_object_ref` | text | да | Ссылка на расширенное описание. |
-| `allowed_actions` | jsonb | нет | Допустимые действия решения. |
+| `allowed_actions` | jsonb | нет | Допустимые действия ответа. |
 | `risk_class` | enum | да | `low`, `medium`, `high`, `critical`. |
-| `status` | enum | нет | `created`, `routed`, `waiting`, `answered`, `approved`, `rejected`, `expired`, `cancelled`, `failed`. |
-| `deadline_at` | timestamptz | да | Срок ожидания решения. |
+| `status` | enum | нет | `created`, `routed`, `waiting`, `answered`, `expired`, `cancelled`, `failed`. |
+| `deadline_at` | timestamptz | да | Срок ожидания ответа. |
 | `reminder_policy` | jsonb | нет | Правила напоминаний и эскалации. |
 | `version` | bigint | нет | Оптимистичная конкуренция. |
 | `created_at`, `updated_at`, `resolved_at` | timestamptz | да | Временные метки. |
 
 `InteractionRequest` не хранит канонический статус `Run`, provider operation или runtime job. Он хранит только связь с ними. `platform-mcp-server`, `codex-hook-ingress` и gateway являются transport/ingress route, а не владельцами бизнес-источника request.
 
-### InteractionDecision
+### InteractionResponse
 
-`InteractionDecision` фиксирует итоговый ответ человека или подтверждённого внешнего субъекта.
+`InteractionResponse` фиксирует ответ человека или подтверждённого внешнего субъекта, полученный через UI, MCP или внешний channel callback. Эта запись не является каноническим `GateDecision`, release decision, provider approval или состоянием `Run`; сервис-владелец решения валидирует actor/policy и фиксирует итоговое business decision у себя.
 
 | Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
-| `id` | uuid | нет | Идентификатор решения. |
-| `request_id` | uuid | нет | Запрос, который решён. |
-| `decision_kind` | enum | нет | `answer`, `approve`, `reject`, `defer`, `acknowledge`, `custom`. |
-| `decided_by_actor_ref` | text | нет | Проверенный actor. |
-| `decision_summary` | text | да | Короткая безопасная сводка. |
-| `decision_object_ref` | text | да | Ссылка на полный ответ или вложения. |
+| `id` | uuid | нет | Идентификатор ответа. |
+| `request_id` | uuid | нет | Запрос, на который получен ответ. |
+| `response_action` | enum | нет | `answer`, `approve`, `reject`, `defer`, `acknowledge`, `custom`. |
+| `responded_by_actor_ref` | text | нет | Проверенный actor. |
+| `response_summary` | text | да | Короткая безопасная сводка. |
+| `response_object_ref` | text | да | Ссылка на полный ответ или вложения. |
 | `source_kind` | enum | нет | `web_console`, `mcp`, `channel_callback`, `system`. |
 | `source_ref` | text | да | Callback, message или command ref. |
-| `policy_snapshot` | jsonb | нет | Безопасный снимок применённой policy. |
-| `created_at` | timestamptz | нет | Время решения. |
+| `owner_decision_ref` | text | да | Ссылка на решение у сервиса-владельца, если оно уже зафиксировано. |
+| `created_at` | timestamptz | нет | Время ответа. |
 
-Для request с terminal state допускается только одно итоговое решение. Повторная доставка того же callback возвращает уже сохранённое решение.
+Для request с terminal state допускается только один итоговый ответ. Повторная доставка того же callback возвращает уже сохранённый ответ.
 
 ### Notification
 
@@ -197,7 +199,7 @@ One-way уведомления и reminders не создают `InteractionRequ
 | Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
 | `id` | uuid | нет | Идентификатор попытки. |
-| `request_id` | uuid | да | Запрос, если попытка доставляет decision-bearing request. |
+| `request_id` | uuid | да | Запрос, если попытка доставляет feedback, approval или Human gate request. |
 | `notification_id` | uuid | да | Уведомление, если попытка доставляет one-way notification или reminder. |
 | `route_id` | uuid | нет | Выбранный маршрут. |
 | `delivery_id` | text | нет | Идемпотентный ключ channel contract. |
@@ -210,7 +212,7 @@ One-way уведомления и reminders не создают `InteractionRequ
 | `payload_digest` | text | нет | Digest нормализованного delivery command. |
 | `created_at`, `updated_at`, `sent_at` | timestamptz | да | Временные метки. |
 
-Ровно одно из полей `request_id` или `notification_id` должно быть заполнено. Статус request не выводится из статуса one-way notification; request завершает только `InteractionDecision` или доменная команда истечения/отмены.
+Ровно одно из полей `request_id` или `notification_id` должно быть заполнено. Статус request не выводится из статуса one-way notification; request завершает только `InteractionResponse` или доменная команда истечения/отмены.
 
 ### ChannelCallback
 
@@ -271,7 +273,7 @@ One-way уведомления и reminders не создают `InteractionRequ
 |---|---|---|
 | `ConversationThread` -> `ConversationMessage` | 1:N | Сообщения не меняют thread lifecycle без команды владельца. |
 | `ConversationThread` -> `InteractionRequest` | 1:N | Запрос может быть создан из диалога или без него. |
-| `InteractionRequest` -> `InteractionDecision` | 1:0..1 | Terminal request имеет одно итоговое решение. |
+| `InteractionRequest` -> `InteractionResponse` | 1:0..1 | Terminal request имеет один итоговый ответ. |
 | `InteractionRequest` -> `DeliveryAttempt` | 1:N | Повторы и fallback фиксируются отдельными попытками. |
 | `Notification` -> `DeliveryAttempt` | 1:N | Уведомление может доставляться нескольким получателям и поверхностям. |
 | `Subscription` -> `Notification` | 1:N | Подписка может создавать много уведомлений. |
@@ -291,7 +293,7 @@ One-way уведомления и reminders не создают `InteractionRequ
 
 ## Политика хранения данных
 
-- Диалоговые сообщения и решения хранятся по retention class, заданному request или scope policy.
+- Диалоговые сообщения и ответы хранятся по retention class, заданному request или scope policy.
 - Голосовые записи, медиа, полные ответы и большие callback payload хранятся во внешнем объектном хранилище ссылками.
 - Delivery attempts и callback records хранятся достаточно долго для аудита, расследования доставки и повторов, затем архивируются или агрегируются по политике.
 - Сырые внешние подписи, токены, секреты и непроверенные payload не хранятся.

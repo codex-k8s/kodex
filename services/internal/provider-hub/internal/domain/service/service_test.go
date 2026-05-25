@@ -1631,33 +1631,35 @@ func TestCreateBootstrapPullRequestRecordsProjectionAndBootstrapEvent(t *testing
 	})
 
 	_, err := service.CreateBootstrapPullRequest(context.Background(), CreateBootstrapPullRequestInput{
-		ProjectID:         projectID,
-		RepositoryID:      repositoryID,
-		ProviderSlug:      enum.ProviderSlugGitHub,
-		RepositoryTarget:  ProviderTarget{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
-		BaseBranch:        "main",
-		BootstrapBranch:   "kodex/bootstrap",
-		CommitMessage:     "Bootstrap repository",
-		Title:             "Bootstrap платформы",
-		Body:              "Подготовленные файлы bootstrap.",
-		Files:             []BootstrapFile{{Path: "services.yaml", Content: "version: 1\n"}},
-		ExternalAccountID: externalAccountID,
-		Meta: value.CommandMeta{
-			CommandID: commandID,
-			OperationPolicyContext: value.ProviderOperationPolicyContext{
-				RiskLevel: value.ProviderOperationRiskLevelMedium,
-				ChangedFields: []string{
-					"repository_target",
-					"base_branch",
-					"bootstrap_branch",
-					"commit_message",
-					"title",
-					"body",
-					"files",
-					"draft",
+		RepositoryBranchPullRequestInput: RepositoryBranchPullRequestInput{
+			ProjectID:         projectID,
+			RepositoryID:      repositoryID,
+			ProviderSlug:      enum.ProviderSlugGitHub,
+			RepositoryTarget:  ProviderTarget{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
+			BaseBranch:        "main",
+			CommitMessage:     "Bootstrap repository",
+			Title:             "Bootstrap платформы",
+			Body:              "Подготовленные файлы bootstrap.",
+			ExternalAccountID: externalAccountID,
+			Meta: value.CommandMeta{
+				CommandID: commandID,
+				OperationPolicyContext: value.ProviderOperationPolicyContext{
+					RiskLevel: value.ProviderOperationRiskLevelMedium,
+					ChangedFields: []string{
+						"repository_target",
+						"base_branch",
+						"bootstrap_branch",
+						"commit_message",
+						"title",
+						"body",
+						"files",
+						"draft",
+					},
 				},
 			},
 		},
+		BootstrapBranch: "kodex/bootstrap",
+		Files:           []BootstrapFile{{Path: "services.yaml", Content: "version: 1\n"}},
 	})
 	if err != nil {
 		t.Fatalf("CreateBootstrapPullRequest(): %v", err)
@@ -1687,6 +1689,186 @@ func TestCreateBootstrapPullRequestRecordsProjectionAndBootstrapEvent(t *testing
 	}
 }
 
+func TestCreateAdoptionPullRequestRecordsProjectionRelationshipAndEvent(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 22, 14, 9, 50, 0, time.UTC)
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	externalAccountID := uuid.New()
+	commandID := uuid.New()
+	operationID := uuid.New()
+	operationOutboxID := uuid.New()
+	providerEventID := uuid.New()
+	workItemOutboxID := uuid.New()
+	adoptionOutboxID := uuid.New()
+	executor := &fakeWriteExecutor{
+		result: providerclient.WriteResult{
+			ResultRef:        "https://github.com/codex-k8s/kodex/pull/91",
+			ProviderObjectID: "github:codex-k8s/kodex:pull_request:91",
+			ProviderVersion:  `"etag-91"`,
+			WorkItem: &value.ProviderWorkItemSnapshot{
+				ProjectID:          projectID.String(),
+				RepositoryID:       repositoryID.String(),
+				ProviderSlug:       string(enum.ProviderSlugGitHub),
+				ProviderWorkItemID: "github:codex-k8s/kodex:pull_request:91",
+				RepositoryFullName: "codex-k8s/kodex",
+				Kind:               string(enum.WorkItemKindPullRequest),
+				Number:             91,
+				URL:                "https://github.com/codex-k8s/kodex/pull/91",
+				Title:              "Подключение существующего репозитория",
+				State:              "open",
+				ProviderUpdatedAt:  now.Add(time.Minute),
+			},
+		},
+	}
+	repository := &fakeRepository{}
+	service := NewWithDependencies(Dependencies{
+		Repository:             repository,
+		Clock:                  fixedClock{now: now},
+		IDGenerator:            &sequenceIDs{ids: []uuid.UUID{operationID, operationOutboxID, providerEventID, workItemOutboxID, adoptionOutboxID}},
+		AccountUsageResolver:   fakeAccountUsageResolver{},
+		SecretResolver:         &fakeSecretResolver{secret: secretresolver.NewSecretValue([]byte("write-token"))},
+		ProviderWriteExecutors: []providerclient.WriteExecutor{executor},
+	})
+
+	_, err := service.CreateAdoptionPullRequest(context.Background(), CreateAdoptionPullRequestInput{
+		RepositoryBranchPullRequestInput: RepositoryBranchPullRequestInput{
+			ProjectID:         projectID,
+			RepositoryID:      repositoryID,
+			ProviderSlug:      enum.ProviderSlugGitHub,
+			RepositoryTarget:  ProviderTarget{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
+			BaseBranch:        "main",
+			CommitMessage:     "Prepare repository adoption",
+			Title:             "Подключение существующего репозитория",
+			Body:              "Подготовленные изменения adoption.",
+			ExternalAccountID: externalAccountID,
+			Meta: value.CommandMeta{
+				CommandID: commandID,
+				OperationPolicyContext: value.ProviderOperationPolicyContext{
+					RiskLevel: value.ProviderOperationRiskLevelMedium,
+					ChangedFields: []string{
+						"repository_target",
+						"base_branch",
+						"adoption_branch",
+						"commit_message",
+						"title",
+						"body",
+						"files",
+						"draft",
+					},
+				},
+			},
+		},
+		AdoptionBranch: "kodex/adoption",
+		Files:          []AdoptionFile{{Path: "services.yaml", Content: "version: 1\n"}},
+	})
+	if err != nil {
+		t.Fatalf("CreateAdoptionPullRequest(): %v", err)
+	}
+	if executor.calls != 1 || executor.request.CreateAdoptionPullRequest == nil {
+		t.Fatalf("executor request = %+v, want adoption pull request command", executor.request)
+	}
+	if repository.recordedProviderOperation.OperationType != enum.ProviderOperationCreateAdoptionPullRequest ||
+		repository.recordedProviderOperation.TargetRef != repositoryTargetRef(enum.ProviderSlugGitHub, repositoryID.String())+"#adoption_pull_request:kodex/adoption" {
+		t.Fatalf("operation = %+v, want adoption pull request operation", repository.recordedProviderOperation)
+	}
+	if len(repository.recordedProjection.Relationships) != 1 ||
+		repository.recordedProjection.Relationships[0].RelationshipType != relationshipProjectRepositoryBinding {
+		t.Fatalf("relationships = %+v, want project repository binding", repository.recordedProjection.Relationships)
+	}
+	if len(repository.recordedOutboxEvents) != 3 ||
+		repository.recordedOutboxEvents[2].ID != adoptionOutboxID ||
+		repository.recordedOutboxEvents[2].EventType != providerEventRepositoryAdoptionPRCreated {
+		t.Fatalf("outbox events = %+v, want operation, work item and adoption events", repository.recordedOutboxEvents)
+	}
+}
+
+func TestCreateAdoptionPullRequestReplayDoesNotWriteProviderTwice(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 22, 14, 30, 0, 0, time.UTC)
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	externalAccountID := uuid.New()
+	commandID := uuid.New()
+	executor := &fakeWriteExecutor{
+		result: providerclient.WriteResult{
+			ResultRef:        "https://github.com/codex-k8s/kodex/pull/92",
+			ProviderObjectID: "github:codex-k8s/kodex:pull_request:92",
+			ProviderVersion:  `"etag-92"`,
+			WorkItem: &value.ProviderWorkItemSnapshot{
+				ProjectID:          projectID.String(),
+				RepositoryID:       repositoryID.String(),
+				ProviderSlug:       string(enum.ProviderSlugGitHub),
+				ProviderWorkItemID: "github:codex-k8s/kodex:pull_request:92",
+				RepositoryFullName: "codex-k8s/kodex",
+				Kind:               string(enum.WorkItemKindPullRequest),
+				Number:             92,
+				URL:                "https://github.com/codex-k8s/kodex/pull/92",
+				Title:              "Подключение существующего репозитория",
+				State:              "open",
+				ProviderUpdatedAt:  now.Add(time.Minute),
+			},
+		},
+	}
+	service := NewWithDependencies(Dependencies{
+		Repository:             &fakeRepository{},
+		Clock:                  fixedClock{now: now},
+		IDGenerator:            &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()}},
+		AccountUsageResolver:   fakeAccountUsageResolver{},
+		SecretResolver:         &fakeSecretResolver{secret: secretresolver.NewSecretValue([]byte("write-token"))},
+		ProviderWriteExecutors: []providerclient.WriteExecutor{executor},
+	})
+	input := CreateAdoptionPullRequestInput{
+		RepositoryBranchPullRequestInput: RepositoryBranchPullRequestInput{
+			ProjectID:         projectID,
+			RepositoryID:      repositoryID,
+			ProviderSlug:      enum.ProviderSlugGitHub,
+			RepositoryTarget:  ProviderTarget{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
+			BaseBranch:        "main",
+			CommitMessage:     "Prepare repository adoption",
+			Title:             "Подключение существующего репозитория",
+			Body:              "Подготовленные изменения adoption.",
+			ExternalAccountID: externalAccountID,
+			Meta: value.CommandMeta{
+				CommandID: commandID,
+				OperationPolicyContext: value.ProviderOperationPolicyContext{
+					RiskLevel: value.ProviderOperationRiskLevelMedium,
+					ChangedFields: []string{
+						"repository_target",
+						"base_branch",
+						"adoption_branch",
+						"commit_message",
+						"title",
+						"body",
+						"files",
+						"draft",
+					},
+				},
+			},
+		},
+		AdoptionBranch: "kodex/adoption",
+		Files:          []AdoptionFile{{Path: "services.yaml", Content: "version: 1\n"}},
+	}
+	first, err := service.CreateAdoptionPullRequest(context.Background(), input)
+	if err != nil {
+		t.Fatalf("CreateAdoptionPullRequest() first: %v", err)
+	}
+	second, err := service.CreateAdoptionPullRequest(context.Background(), input)
+	if err != nil {
+		t.Fatalf("CreateAdoptionPullRequest() replay: %v", err)
+	}
+	if executor.calls != 1 {
+		t.Fatalf("executor calls = %d, want one provider write and one replay", executor.calls)
+	}
+	if second.Result.ResultRef != first.Result.ResultRef ||
+		second.Result.ProviderObjectID != first.Result.ProviderObjectID ||
+		second.Result.ProviderVersion != first.Result.ProviderVersion {
+		t.Fatalf("replay result = %+v, want same safe provider result as first %+v", second.Result, first.Result)
+	}
+}
+
 func TestCreateBootstrapPullRequestRejectsSameBaseAndBootstrapBranch(t *testing.T) {
 	t.Parallel()
 
@@ -1698,23 +1880,25 @@ func TestCreateBootstrapPullRequestRejectsSameBaseAndBootstrapBranch(t *testing.
 	})
 
 	_, err := service.CreateBootstrapPullRequest(context.Background(), CreateBootstrapPullRequestInput{
-		ProjectID:         uuid.New(),
-		RepositoryID:      uuid.New(),
-		ProviderSlug:      enum.ProviderSlugGitHub,
-		RepositoryTarget:  ProviderTarget{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
-		BaseBranch:        "main",
-		BootstrapBranch:   " main ",
-		CommitMessage:     "Bootstrap repository",
-		Title:             "Bootstrap платформы",
-		Files:             []BootstrapFile{{Path: "services.yaml", Content: "version: 1\n"}},
-		ExternalAccountID: uuid.New(),
-		Meta: value.CommandMeta{
-			CommandID: uuid.New(),
-			OperationPolicyContext: value.ProviderOperationPolicyContext{
-				RiskLevel:     value.ProviderOperationRiskLevelMedium,
-				ChangedFields: []string{"repository_target", "base_branch", "bootstrap_branch", "files"},
+		RepositoryBranchPullRequestInput: RepositoryBranchPullRequestInput{
+			ProjectID:         uuid.New(),
+			RepositoryID:      uuid.New(),
+			ProviderSlug:      enum.ProviderSlugGitHub,
+			RepositoryTarget:  ProviderTarget{ProviderSlug: enum.ProviderSlugGitHub, RepositoryFullName: "codex-k8s/kodex"},
+			BaseBranch:        "main",
+			CommitMessage:     "Bootstrap repository",
+			Title:             "Bootstrap платформы",
+			ExternalAccountID: uuid.New(),
+			Meta: value.CommandMeta{
+				CommandID: uuid.New(),
+				OperationPolicyContext: value.ProviderOperationPolicyContext{
+					RiskLevel:     value.ProviderOperationRiskLevelMedium,
+					ChangedFields: []string{"repository_target", "base_branch", "bootstrap_branch", "files"},
+				},
 			},
 		},
+		BootstrapBranch: " main ",
+		Files:           []BootstrapFile{{Path: "services.yaml", Content: "version: 1\n"}},
 	})
 	if !errors.Is(err, errs.ErrInvalidArgument) {
 		t.Fatalf("CreateBootstrapPullRequest() err = %v, want invalid argument", err)

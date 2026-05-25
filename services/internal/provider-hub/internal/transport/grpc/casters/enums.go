@@ -91,7 +91,7 @@ var syncCursorPriorities = map[providersv1.SyncCursorPriority]enum.SyncCursorPri
 var operationTypes = providerOperationTypes()
 
 func providerOperationTypes() map[providersv1.ProviderOperationType]enum.ProviderOperationType {
-	result := make(map[providersv1.ProviderOperationType]enum.ProviderOperationType, 10)
+	result := make(map[providersv1.ProviderOperationType]enum.ProviderOperationType, 11)
 	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_REPOSITORY] = enum.ProviderOperationCreateRepository
 	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_ISSUE] = enum.ProviderOperationCreateIssue
 	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_ISSUE] = enum.ProviderOperationUpdateIssue
@@ -100,6 +100,7 @@ func providerOperationTypes() map[providersv1.ProviderOperationType]enum.Provide
 	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_PULL_REQUEST] = enum.ProviderOperationCreatePullRequest
 	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_PULL_REQUEST] = enum.ProviderOperationUpdatePullRequest
 	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_BOOTSTRAP_PULL_REQUEST] = enum.ProviderOperationCreateBootstrapPullRequest
+	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_ADOPTION_PULL_REQUEST] = enum.ProviderOperationCreateAdoptionPullRequest
 	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_REVIEW_SIGNAL] = enum.ProviderOperationCreateReviewSignal
 	result[providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_UPDATE_RELATIONSHIP] = enum.ProviderOperationUpdateRelationship
 	return result

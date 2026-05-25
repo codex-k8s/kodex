@@ -1739,9 +1739,21 @@ type GuidanceRef struct {
 	// manifest_digest identifies the manifest used for the run.
 	ManifestDigest string `protobuf:"bytes,3,opt,name=manifest_digest,json=manifestDigest,proto3" json:"manifest_digest,omitempty"`
 	// source_ref optionally identifies a materialized source in runtime workspace.
-	SourceRef     *string `protobuf:"bytes,4,opt,name=source_ref,json=sourceRef,proto3,oneof" json:"source_ref,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	SourceRef *string `protobuf:"bytes,4,opt,name=source_ref,json=sourceRef,proto3,oneof" json:"source_ref,omitempty"`
+	// capability_ref is a stable safe ref for realtime hooks and runtime materialization.
+	CapabilityRef *string `protobuf:"bytes,5,opt,name=capability_ref,json=capabilityRef,proto3,oneof" json:"capability_ref,omitempty"`
+	// capability_kind classifies the selected capability context, for example guidance.
+	CapabilityKind *string `protobuf:"bytes,6,opt,name=capability_kind,json=capabilityKind,proto3,oneof" json:"capability_kind,omitempty"`
+	// package_ref points to package-hub package state.
+	PackageRef *string `protobuf:"bytes,7,opt,name=package_ref,json=packageRef,proto3,oneof" json:"package_ref,omitempty"`
+	// package_slug is a safe package slug captured for policy/debug displays.
+	PackageSlug *string `protobuf:"bytes,8,opt,name=package_slug,json=packageSlug,proto3,oneof" json:"package_slug,omitempty"`
+	// package_version_label is a safe human-readable package version label.
+	PackageVersionLabel *string `protobuf:"bytes,9,opt,name=package_version_label,json=packageVersionLabel,proto3,oneof" json:"package_version_label,omitempty"`
+	// policy_summary_json carries a bounded safe status summary without manifest payload.
+	PolicySummaryJson *string `protobuf:"bytes,10,opt,name=policy_summary_json,json=policySummaryJson,proto3,oneof" json:"policy_summary_json,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *GuidanceRef) Reset() {
@@ -1798,6 +1810,48 @@ func (x *GuidanceRef) GetManifestDigest() string {
 func (x *GuidanceRef) GetSourceRef() string {
 	if x != nil && x.SourceRef != nil {
 		return *x.SourceRef
+	}
+	return ""
+}
+
+func (x *GuidanceRef) GetCapabilityRef() string {
+	if x != nil && x.CapabilityRef != nil {
+		return *x.CapabilityRef
+	}
+	return ""
+}
+
+func (x *GuidanceRef) GetCapabilityKind() string {
+	if x != nil && x.CapabilityKind != nil {
+		return *x.CapabilityKind
+	}
+	return ""
+}
+
+func (x *GuidanceRef) GetPackageRef() string {
+	if x != nil && x.PackageRef != nil {
+		return *x.PackageRef
+	}
+	return ""
+}
+
+func (x *GuidanceRef) GetPackageSlug() string {
+	if x != nil && x.PackageSlug != nil {
+		return *x.PackageSlug
+	}
+	return ""
+}
+
+func (x *GuidanceRef) GetPackageVersionLabel() string {
+	if x != nil && x.PackageVersionLabel != nil {
+		return *x.PackageVersionLabel
+	}
+	return ""
+}
+
+func (x *GuidanceRef) GetPolicySummaryJson() string {
+	if x != nil && x.PolicySummaryJson != nil {
+		return *x.PolicySummaryJson
 	}
 	return ""
 }
@@ -6959,14 +7013,28 @@ const file_kodex_agents_v1_agent_manager_proto_rawDesc = "" +
 	"\n" +
 	"\b_job_refB\x10\n" +
 	"\x0e_workspace_refB\x0e\n" +
-	"\f_context_ref\"\xd3\x01\n" +
+	"\f_context_ref\"\xe3\x04\n" +
 	"\vGuidanceRef\x128\n" +
 	"\x18package_installation_ref\x18\x01 \x01(\tR\x16packageInstallationRef\x12.\n" +
 	"\x13package_version_ref\x18\x02 \x01(\tR\x11packageVersionRef\x12'\n" +
 	"\x0fmanifest_digest\x18\x03 \x01(\tR\x0emanifestDigest\x12\"\n" +
 	"\n" +
-	"source_ref\x18\x04 \x01(\tH\x00R\tsourceRef\x88\x01\x01B\r\n" +
-	"\v_source_ref\"\xac\x01\n" +
+	"source_ref\x18\x04 \x01(\tH\x00R\tsourceRef\x88\x01\x01\x12*\n" +
+	"\x0ecapability_ref\x18\x05 \x01(\tH\x01R\rcapabilityRef\x88\x01\x01\x12,\n" +
+	"\x0fcapability_kind\x18\x06 \x01(\tH\x02R\x0ecapabilityKind\x88\x01\x01\x12$\n" +
+	"\vpackage_ref\x18\a \x01(\tH\x03R\n" +
+	"packageRef\x88\x01\x01\x12&\n" +
+	"\fpackage_slug\x18\b \x01(\tH\x04R\vpackageSlug\x88\x01\x01\x127\n" +
+	"\x15package_version_label\x18\t \x01(\tH\x05R\x13packageVersionLabel\x88\x01\x01\x123\n" +
+	"\x13policy_summary_json\x18\n" +
+	" \x01(\tH\x06R\x11policySummaryJson\x88\x01\x01B\r\n" +
+	"\v_source_refB\x11\n" +
+	"\x0f_capability_refB\x12\n" +
+	"\x10_capability_kindB\x0e\n" +
+	"\f_package_refB\x0f\n" +
+	"\r_package_slugB\x18\n" +
+	"\x16_package_version_labelB\x16\n" +
+	"\x14_policy_summary_json\"\xac\x01\n" +
 	"\x15GuidanceSelectionHint\x12=\n" +
 	"\x18package_installation_ref\x18\x01 \x01(\tH\x00R\x16packageInstallationRef\x88\x01\x01\x12&\n" +
 	"\fpackage_slug\x18\x02 \x01(\tH\x01R\vpackageSlug\x88\x01\x01B\x1b\n" +

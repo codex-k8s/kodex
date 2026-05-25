@@ -61,10 +61,6 @@ func sessionCreatedEvent(id uuid.UUID, session entity.AgentSession, occurredAt t
 	return sessionEvent(id, agentevents.EventSessionCreated, session, occurredAt)
 }
 
-func sessionUpdatedEvent(id uuid.UUID, session entity.AgentSession, occurredAt time.Time) (entity.OutboxEvent, error) {
-	return sessionEvent(id, agentevents.EventSessionUpdated, session, occurredAt)
-}
-
 func sessionEvent(id uuid.UUID, eventType string, session entity.AgentSession, occurredAt time.Time) (entity.OutboxEvent, error) {
 	payload, err := json.Marshal(agentevents.Payload{
 		SessionID:           session.ID.String(),

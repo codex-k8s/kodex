@@ -614,6 +614,7 @@ func TestUnaryErrorInterceptorMapsDomainErrors(t *testing.T) {
 		{name: "not found", err: errs.ErrNotFound, code: codes.NotFound},
 		{name: "conflict", err: errs.ErrConflict, code: codes.Aborted},
 		{name: "precondition", err: errs.ErrPreconditionFailed, code: codes.FailedPrecondition},
+		{name: "dependency unavailable", err: errs.ErrDependencyUnavailable, code: codes.Unavailable},
 	}
 	interceptor := UnaryErrorInterceptor(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	for _, tt := range tests {

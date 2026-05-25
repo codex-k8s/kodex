@@ -16,6 +16,7 @@ type Config struct {
 	JSONResponse    bool
 	SessionTimeout  time.Duration
 	OwnerRoutes     ownerclients.Catalog
+	AgentManager    AgentManagerClient
 	AuthRequired    bool
 	AuthToken       string
 	AuthScope       string

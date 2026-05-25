@@ -28,6 +28,58 @@ func (registry *Registry) addDiagnosticsTools(server *mcpsdk.Server, handler *Di
 	})
 }
 
+func (registry *Registry) addAgentTools(server *mcpsdk.Server, handler *AgentToolsHandler, version string) {
+	tools := []struct {
+		name        string
+		description string
+		register    func()
+	}{
+		{
+			name:        ToolAgentSessionStart,
+			description: agentSessionStartDescription,
+			register: func() {
+				mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolAgentSessionStart, Description: agentSessionStartDescription}, handler.StartSession)
+			},
+		},
+		{
+			name:        ToolAgentRunStart,
+			description: agentRunStartDescription,
+			register: func() {
+				mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolAgentRunStart, Description: agentRunStartDescription}, handler.StartRun)
+			},
+		},
+		{
+			name:        ToolAgentRunRecordState,
+			description: agentRunRecordStateDescription,
+			register: func() {
+				mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolAgentRunRecordState, Description: agentRunRecordStateDescription}, handler.RecordRunState)
+			},
+		},
+		{
+			name:        ToolAgentSessionRecordSnapshot,
+			description: agentSessionRecordSnapshotDescription,
+			register: func() {
+				mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolAgentSessionRecordSnapshot, Description: agentSessionRecordSnapshotDescription}, handler.RecordSessionSnapshot)
+			},
+		},
+		{
+			name:        ToolDiagnosticsRunContextRead,
+			description: diagnosticsRunContextReadDescription,
+			register: func() {
+				mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolDiagnosticsRunContextRead, Description: diagnosticsRunContextReadDescription}, handler.ReadRunContext)
+			},
+		},
+	}
+	for _, tool := range tools {
+		tool.register()
+		registry.tools = append(registry.tools, ToolDescriptor{
+			Name:        tool.name,
+			Description: tool.description,
+			Version:     version,
+		})
+	}
+}
+
 // Tools returns a copy of registered tool descriptors.
 func (registry *Registry) Tools() []ToolDescriptor {
 	result := make([]ToolDescriptor, len(registry.tools))
