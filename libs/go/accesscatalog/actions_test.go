@@ -67,3 +67,23 @@ func TestAgentManagerActionsAreSystemActions(t *testing.T) {
 		t.Fatalf("agent acceptance resource = %q, want %q", action.ResourceType, ResourceAgentAcceptance)
 	}
 }
+
+func TestInteractionHubActionsAreSystemActions(t *testing.T) {
+	t.Parallel()
+
+	action, ok := SystemActionByKey(ActionInteractionCallbackRecord)
+	if !ok {
+		t.Fatalf("SystemActionByKey(%q) ok = false, want true", ActionInteractionCallbackRecord)
+	}
+	if action.ResourceType != ResourceInteractionCallback {
+		t.Fatalf("interaction callback resource = %q, want %q", action.ResourceType, ResourceInteractionCallback)
+	}
+
+	responseAction, ok := SystemActionByKey(ActionInteractionRequestRespond)
+	if !ok {
+		t.Fatalf("SystemActionByKey(%q) ok = false, want true", ActionInteractionRequestRespond)
+	}
+	if responseAction.ResourceType != ResourceInteractionResponse {
+		t.Fatalf("interaction response resource = %q, want %q", responseAction.ResourceType, ResourceInteractionResponse)
+	}
+}

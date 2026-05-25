@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-22
-related_issues: [582]
+related_issues: [582, 768]
 related_prs: []
 related_adrs: []
 approvals:
@@ -46,9 +46,9 @@ approvals:
 
 | Владеет `interaction-hub` | Не владеет |
 |---|---|
-| Диалоговые ветки, сообщения, feedback request, approval request, Human gate request, уведомления, подписки, delivery route choice, delivery attempts, reminders, callback records, решения человека, события `interaction.*`. | Flow, stage, role, prompt, agent session, agent `Run`, acceptance result, provider write pipeline, provider projections, package catalog, package installation, runtime job, Kubernetes workload, UI, внешний HTTP gateway, операции биллинга. |
+| Диалоговые ветки, сообщения, feedback request, approval request, Human gate request, уведомления, подписки, delivery route choice, delivery attempts, reminders, callback records, ответы человека, события `interaction.*`. | Flow, stage, role, prompt, agent session, agent `Run`, acceptance result, provider write pipeline, provider projections, risk/gate/release/provider business decision state, package catalog, package installation, runtime job, Kubernetes workload, UI, внешний HTTP gateway, операции биллинга. |
 
-Правило: `interaction-hub` отвечает за вопрос "какой запрос к человеку существует, как он доставляется и какое решение получено". Соседний сервис-владелец отвечает за то, как это решение меняет его собственное состояние.
+Правило: `interaction-hub` отвечает за вопрос "какой запрос к человеку существует, как он доставляется и какой ответ получен". Соседний сервис-владелец отвечает за проверку ответа и изменение своего business decision state.
 
 ## Выбранная модель внешних каналов
 
@@ -102,7 +102,7 @@ sequenceDiagram
   CH-->>GW: callback with answer
   GW->>IH: RecordChannelCallback(safe envelope)
   IH->>IH: resolve request
-  IH-->>AM: interaction.feedback.answered event
+  IH-->>AM: interaction.request.response_recorded event
 ```
 
 Slot-агент не выбирает внешний канал и не получает секреты канала. MCP проверяет actor/source/run/session/slot binding и маршрутизирует команду к владельцу. `interaction-hub` не создаёт runtime job сам: delivery command передаётся в уже согласованный runtime boundary для package workload, а публичный callback проходит через профильный gateway.
@@ -112,35 +112,42 @@ Slot-агент не выбирает внешний канал и не полу
 ```mermaid
 sequenceDiagram
   participant AM as agent-manager
+  participant GOV as governance-manager
   participant IH as interaction-hub
   participant PH as provider-hub
-  AM->>IH: RequestApproval(provider operation context)
+  AM->>GOV: RequestGate(provider operation context)
+  GOV->>IH: RequestApproval(delivery request)
   IH->>IH: create approval request
   IH->>IH: deliver via UI or channel route
-  IH-->>AM: approval request ref
-  IH->>IH: record decision
-  AM->>PH: provider write command with approval_gate_ref
+  IH-->>GOV: approval request ref
+  IH->>IH: record interaction response
+  GOV->>GOV: validate actor and record owner decision
+  GOV-->>AM: owner decision ref
+  AM->>PH: provider write command with owner decision ref
   PH->>PH: execute provider command by its own pipeline
 ```
 
-`interaction-hub` не выполняет provider write. Он возвращает проверяемую ссылку на принятое решение, а `provider-hub` применяет свой typed write pipeline.
+`interaction-hub` не выполняет provider write и не принимает provider approval как бизнес-решение. Он возвращает callback/response result владельцу decision state, а `provider-hub` применяет свой typed write pipeline только с decision ref от владельца.
 
 ### Human gate в agent flow
 
 ```mermaid
 sequenceDiagram
   participant AM as agent-manager
+  participant GOV as governance-manager
   participant IH as interaction-hub
   participant Ops as operations-hub
-  AM->>IH: RequestHumanGate(run/stage/risk context)
+  AM->>GOV: RequestGate(run/stage/risk context)
+  GOV->>IH: RequestHumanGate(delivery request)
   IH->>IH: create gate request + reminders policy
   IH-->>Ops: interaction.human_gate.requested event
-  IH->>IH: collect decision
-  IH-->>AM: interaction.human_gate.resolved event
+  IH->>IH: record interaction response
+  IH-->>GOV: interaction.request.response_recorded event
+  GOV-->>AM: governance decision ref
   AM->>AM: update Run or acceptance state
 ```
 
-`agent-manager` остаётся владельцем `Run`, stage и acceptance. `interaction-hub` хранит запрос и решение.
+`agent-manager` остаётся владельцем `Run`, stage и acceptance. `governance-manager` владеет gate decision, а `interaction-hub` хранит запрос доставки и ответ человека.
 
 ### Callback внешнего канала
 
@@ -174,7 +181,7 @@ sequenceDiagram
 | `scope` | Организация, проект, репозиторий или platform scope. |
 | `recipient_refs` | Пользователи, группы или роли получателей без раскрытия лишних PII. |
 | `message_template_ref` | Ссылка на локализуемый шаблон или безопасный текст сообщения. |
-| `actions` | Допустимые действия решения: answer, approve, reject, defer, acknowledge или custom action key. |
+| `actions` | Допустимые действия ответа: answer, approve, reject, defer, acknowledge или custom action key. |
 | `callback_ref` | Внутренняя ссылка, по которой gateway сможет сопоставить callback. |
 | `correlation_id` | Связь с run, provider operation, runtime job, issue или инцидентом. |
 | `expires_at` | Срок действия запроса или попытки доставки. |
@@ -209,13 +216,13 @@ sequenceDiagram
 
 | Домен или сервис | Связь |
 |---|---|
-| `agent-manager` | Создаёт feedback, Human gate и approval requests; получает события решения и сам меняет `Run`, session и acceptance. |
+| `agent-manager` | Создаёт feedback и получает события ответа; для Human gate ждёт governance decision ref и сам меняет `Run`, session и acceptance. |
 | `platform-mcp-server` | Публикует MCP tools `interaction.*`, проверяет source/run/session/slot binding и маршрутизирует вызовы к `interaction-hub`. |
 | `codex-hook-ingress` | Передаёт нормализованные hook events, которые требуют разрешения, вопроса или уведомления человеку. |
-| `provider-hub` | Использует `approval_gate_ref` и provider refs; provider write pipeline остаётся у `provider-hub`. |
+| `provider-hub` | Использует owner decision ref и provider refs; provider write pipeline остаётся у `provider-hub`. |
 | `package-hub` | Даёт сведения об установленном channel package, manifest capability и required platform APIs; установка и секреты пакета остаются там. |
 | `runtime-manager` и `fleet-manager` | Исполняют runtime-нагрузку channel package; `interaction-hub` не создаёт jobs сам. |
-| `access-manager` | Проверяет права создания запроса, принятия решения, чтения статуса и использования channel package. |
+| `access-manager` | Проверяет права создания запроса, отправки ответа, чтения статуса и использования channel package. |
 | `operations-hub` | Получает события и читает авторитетные статусы для операторской очереди и dual-surface inbox. |
 | Future gateways | Выполняют внешнюю аутентификацию, public rate limit, signature verification и маршрутизацию callback. |
 
@@ -233,11 +240,8 @@ sequenceDiagram
 - `interaction.delivery.requested`;
 - `interaction.delivery.accepted`;
 - `interaction.delivery.failed`;
-- `interaction.delivery.reminder_scheduled`;
 - `interaction.callback.received`;
-- `interaction.request.answered`;
-- `interaction.request.approved`;
-- `interaction.request.rejected`;
+- `interaction.request.response_recorded`;
 - `interaction.request.expired`;
 - `interaction.request.cancelled`.
 
@@ -246,7 +250,7 @@ sequenceDiagram
 ## Конкурентные изменения
 
 - Каждый изменяемый request имеет `version`.
-- Команда решения передаёт expected version или идемпотентный `decision_id`.
+- Команда ответа передаёт expected version или идемпотентный `command_id`.
 - Повтор callback с тем же `callback_id` возвращает уже сохранённый безопасный результат.
 - Две разные попытки решить один request конфликтуют, если request уже находится в terminal state.
 - Долгие ожидания человека не держат SQL-блокировку; срок ожидания хранится в request и reminder policy.
@@ -255,7 +259,7 @@ sequenceDiagram
 ## Наблюдаемость
 
 - Логи: request id, request kind, scope, source service, delivery id, channel package ref, correlation id, outcome и safe error code.
-- Метрики: количество активных запросов, время до первого delivery attempt, время до решения, retry count, callback duplicates, expired requests и delivery failures.
+- Метрики: количество активных запросов, время до первого delivery attempt, время до ответа, retry count, callback duplicates, expired requests и delivery failures.
 - Трейсы: входящий gRPC/MCP, проверка доступа, выбор delivery route, вызов channel package, запись callback, outbox publish.
 - Алерты: рост застрявших Human gate, массовые ошибки delivery, истёкшие approval requests, недоступность channel package и всплеск callback conflicts.
 
@@ -267,7 +271,7 @@ sequenceDiagram
 | Внешний канал станет источником правды. | Channel package только доставляет и возвращает callback; lifecycle request хранится в `interaction-hub`. |
 | Домен превратится в gateway. | Публичная аутентификация, подпись и HTTP находятся в future gateway; домен принимает безопасный internal envelope. |
 | Домен начнёт управлять пакетами. | Использовать `package-hub` readings и refs, не менять installation и manifest. |
-| Provider write смешается с approval. | `interaction-hub` хранит решение; `provider-hub` выполняет write по своей политике и pipeline. |
+| Provider write смешается с approval. | `interaction-hub` хранит response/callback result; final approval decision остаётся у владельца decision state, а `provider-hub` выполняет write по своей политике и pipeline. |
 
 ## Апрув
 

@@ -6,7 +6,7 @@ status: active
 owner_role: PM
 created_at: 2026-05-22
 updated_at: 2026-05-22
-related_issues: [582]
+related_issues: [582, 768]
 related_prs: []
 related_docsets:
   - docs/platform/architecture/domain_map.md
@@ -28,14 +28,14 @@ approvals:
 - Для кого: пользователи платформы, Owner, операторы, быстрый `agent-manager`, ролевые агенты в слотах, соседние сервисы и будущие channel packages.
 - Почему: owner feedback, approvals и inbox/outbox должны иметь один platform-owned lifecycle, а UI и внешние каналы не должны становиться отдельными источниками правды.
 - Минимум первой версии: контракт запросов к человеку, delivery lifecycle, callback envelope, события `interaction.*` и интеграционные точки для MCP, `agent-manager`, `codex-hook-ingress`, `provider-hub` и `operations-hub`.
-- Критерии успеха: `agent-manager` и slot-агенты могут запросить feedback или approval через `platform-mcp-server`, человек отвечает через UI или внешний канал, а платформа видит единое состояние запроса, доставки, решения и аудита.
+- Критерии успеха: `agent-manager` и slot-агенты могут запросить feedback или approval через `platform-mcp-server`, человек отвечает через UI или внешний канал, а платформа видит единое состояние запроса, доставки, ответа и аудита.
 
 ## Проблема и цель
 
 Проблема:
 
 - платформа должна спрашивать человека в разных местах: интерактивный диалог, owner feedback, Human gate, approval перед risk action, permission request от Codex hook, операционное уведомление;
-- UI, голосовой ввод и внешние каналы не должны вводить разные статусы и разные правила жизненного цикла одного решения;
+- UI, голосовой ввод и внешние каналы не должны вводить разные статусы и разные правила жизненного цикла одного ответа человеку;
 - внешние каналы должны подключаться без vendor-specific списка в ядре;
 - `agent-manager`, `provider-hub`, `runtime-manager` и `operations-hub` не должны хранить доставку, callback и диалоговую переписку как свою доменную истину.
 
@@ -75,8 +75,8 @@ approvals:
 | INT-FR-12 | Домен должен принимать от `agent-manager` запросы feedback, Human gate и notification intent, но не хранить flow, `Run`, session или acceptance как свою истину. | Обязательно |
 | INT-FR-13 | Домен должен принимать нормализованные события `codex-hook-ingress`, если hook требует вопроса, разрешения или уведомления человеку. | Обязательно |
 | INT-FR-14 | Домен должен связывать запросы с provider-native артефактами через safe refs и события, но не выполнять provider write pipeline. | Обязательно |
-| INT-FR-15 | Домен должен публиковать `interaction.*` события по созданию запроса, доставке, callback, решению, истечению срока и ошибке. | Обязательно |
-| INT-FR-16 | Домен должен поддерживать идемпотентные команды, ожидаемую версию для конкурентных решений и audit-safe повтор callback. | Обязательно |
+| INT-FR-15 | Домен должен публиковать `interaction.*` события по созданию запроса, доставке, callback, ответу человека, истечению срока и ошибке. | Обязательно |
+| INT-FR-16 | Домен должен поддерживать идемпотентные команды, ожидаемую версию для конкурентных ответов и audit-safe повтор callback. | Обязательно |
 | INT-FR-17 | Домен не должен владеть UI, внешним HTTP gateway, runtime job, package installation, provider write operation, flow/run/session или operations read model. | Обязательно |
 
 ## Критерии приёмки
@@ -84,12 +84,12 @@ approvals:
 | ID | Критерий |
 |---|---|
 | INT-AC-1 | Если slot-агент запрашивает feedback через MCP, `interaction-hub` создаёт request, выбирает допустимый delivery route и возвращает request ref без знания конкретного внешнего канала агентом. |
-| INT-AC-2 | Если `agent-manager` запрашивает Human gate, `interaction-hub` хранит запрос, delivery attempts и итоговое решение, а состояние `Run` меняется только через `agent-manager`. |
-| INT-AC-3 | Если provider write operation требует approval, `provider-hub` получает только `approval_gate_ref` после принятого решения и не становится владельцем approval lifecycle. |
+| INT-AC-2 | Если `agent-manager` или `governance-manager` запрашивает Human gate, `interaction-hub` хранит delivery request, attempts и ответ человека, а состояние `Run` или gate decision меняется только через сервис-владелец. |
+| INT-AC-3 | Если provider write operation требует approval, `provider-hub` получает ссылку на решение от владельца decision state; `interaction-hub` передаёт только delivery/callback результат и не становится владельцем provider approval. |
 | INT-AC-4 | Если пользователь отвечает через UI или внешний канал, callback приводит к одному и тому же lifecycle переходу запроса. |
 | INT-AC-5 | Если внешний канал недоступен, `interaction-hub` фиксирует ошибку доставки, retry/reminder policy и событие для операторской видимости. |
 | INT-AC-6 | Если установлен channel package, `interaction-hub` использует его capability и package installation ref, но не меняет установку и не запускает runtime-нагрузку сам. |
-| INT-AC-7 | Если канал возвращает callback повторно, команда идемпотентна и не создаёт второе решение. |
+| INT-AC-7 | Если канал возвращает callback повторно, команда идемпотентна и не создаёт второй ответ. |
 | INT-AC-8 | Если запрос истёк, домен публикует событие истечения и соседний сервис-владелец решает, как менять своё состояние. |
 
 ## Что не входит
@@ -107,12 +107,12 @@ approvals:
 
 | ID | Категория | Требование |
 |---|---|---|
-| INT-NFR-1 | Надёжность | Запрос, решение, callback и delivery attempt фиксируются транзакционно вместе с outbox-событием. |
+| INT-NFR-1 | Надёжность | Запрос, ответ, callback и delivery attempt фиксируются транзакционно вместе с outbox-событием. |
 | INT-NFR-2 | Безопасность | Callback принимает только проверенный пограничный контур; сырые секреты, токены channel package и непроверенные payload не хранятся в БД. |
 | INT-NFR-3 | Наблюдаемость | Каждый request, delivery attempt и callback имеет correlation id, source refs, безопасный error code и метрики задержки. |
 | INT-NFR-4 | Расширяемость | Новый внешний канал добавляется как plugin package capability и channel contract, а не через изменение enum конкретных каналов. |
-| INT-NFR-5 | Совместимость | Lifecycle запроса не зависит от поверхности: UI, голос, MCP и внешний канал используют одни статусы и одну модель решения. |
-| INT-NFR-6 | Локализация | Сообщения, действия решения, причины отказа и ошибки доставки должны иметь локализуемые шаблоны или message id. |
+| INT-NFR-5 | Совместимость | Lifecycle запроса не зависит от поверхности: UI, голос, MCP и внешний канал используют одни статусы и одну модель ответа. |
+| INT-NFR-6 | Локализация | Сообщения, действия ответа, причины отказа и ошибки доставки должны иметь локализуемые шаблоны или message id. |
 | INT-NFR-7 | Хранение данных | Временные медиа и голосовые вложения хранятся ссылками с retention policy, а не binary payload в PostgreSQL. |
 
 ## Зависимости
@@ -122,10 +122,10 @@ approvals:
 | `agent-manager` | Источник запросов feedback, Human gate, approval и продолжения агентной сессии после решения. |
 | `platform-mcp-server` | Контролируемая MCP-поверхность для slot-агентов и быстрого `agent-manager`. |
 | `codex-hook-ingress` | Нормализованные Codex hook events, включая permission request и пользовательский ввод, который требует реакции человека. |
-| `provider-hub` | Provider refs, provider operation refs, approval refs для рискованных provider write commands и события provider-состояния. |
+| `provider-hub` | Provider refs, provider operation refs, owner decision refs для рискованных provider write commands и события provider-состояния. |
 | `package-hub` | Установленные plugin packages, manifest capability канала, required APIs, права и секреты; установка пакета остаётся у `package-hub`. |
 | `runtime-manager` и `fleet-manager` | Технический запуск runtime-нагрузки channel package и размещение; `interaction-hub` только вызывает согласованный delivery contract. |
-| `access-manager` | Проверка прав на создание запросов, принятие решений, использование channel package и чтение статусов. |
+| `access-manager` | Проверка прав на создание запросов, отправку ответа, использование channel package и чтение статусов. |
 | `operations-hub` | Операторские очереди, ленты событий и агрегированные статусы по запросам и ошибкам доставки. |
 | Future gateways | Аутентификация внешнего HTTP, проверка подписи callback и маршрутизация в доменный сервис без владения lifecycle. |
 

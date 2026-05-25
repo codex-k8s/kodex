@@ -4,6 +4,6 @@
 
 `libs/go/accesscatalog` содержит стабильные ключи системных действий доступа и типы ресурсов, которые используют несколько сервисов платформы.
 
-Пакет хранит только системные действия, принадлежащие коду платформы, например `project-catalog`, `package-hub`, `provider-hub`, `runtime-manager`, `fleet-manager` и `agent-manager`.
+Пакет хранит только системные действия, принадлежащие коду платформы, например `project-catalog`, `package-hub`, `provider-hub`, `runtime-manager`, `fleet-manager`, `agent-manager` и `interaction-hub`.
 
 Пользовательские действия и действия, которые объявляют устанавливаемые пакеты через manifest, остаются данными в `access-manager`.
