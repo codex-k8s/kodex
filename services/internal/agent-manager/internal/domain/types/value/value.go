@@ -43,6 +43,12 @@ type GuidanceRef struct {
 	PackageVersionRef      string `json:"package_version_ref"`
 	ManifestDigest         string `json:"manifest_digest"`
 	SourceRef              string `json:"source_ref,omitempty"`
+	CapabilityRef          string `json:"capability_ref,omitempty"`
+	CapabilityKind         string `json:"capability_kind,omitempty"`
+	PackageRef             string `json:"package_ref,omitempty"`
+	PackageSlug            string `json:"package_slug,omitempty"`
+	PackageVersionLabel    string `json:"package_version_label,omitempty"`
+	PolicySummaryJSON      string `json:"policy_summary_json,omitempty"`
 }
 
 type GuidanceSelectionHint struct {

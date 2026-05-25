@@ -178,6 +178,18 @@ message GuidanceRef {
   string manifest_digest = 3;
   // source_ref optionally identifies a materialized source in runtime workspace.
   optional string source_ref = 4;
+  // capability_ref is a stable safe ref for realtime hooks and runtime materialization.
+  optional string capability_ref = 5;
+  // capability_kind classifies the selected capability context, for example guidance.
+  optional string capability_kind = 6;
+  // package_ref points to package-hub package state.
+  optional string package_ref = 7;
+  // package_slug is a safe package slug captured for policy/debug displays.
+  optional string package_slug = 8;
+  // package_version_label is a safe human-readable package version label.
+  optional string package_version_label = 9;
+  // policy_summary_json carries a bounded safe status summary without manifest payload.
+  optional string policy_summary_json = 10;
 }
 
 // GuidanceSelectionHint is an untrusted caller hint resolved by agent-manager

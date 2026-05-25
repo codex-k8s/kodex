@@ -69,5 +69,10 @@ func validConfig() Config {
 			AuthScope:       "kodex.mcp",
 			AuthTokenTTL:    24 * time.Hour,
 		},
+		AgentManager: OwnerServiceConfig{
+			Enabled:   true,
+			AuthToken: "agent-manager-token",
+			Timeout:   3 * time.Second,
+		},
 	}
 }

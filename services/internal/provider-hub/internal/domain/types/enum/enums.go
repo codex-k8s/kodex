@@ -153,6 +153,7 @@ const (
 	ProviderOperationCreatePullRequest          ProviderOperationType = "create_pull_request"
 	ProviderOperationUpdatePullRequest          ProviderOperationType = "update_pull_request"
 	ProviderOperationCreateBootstrapPullRequest ProviderOperationType = "create_bootstrap_pull_request"
+	ProviderOperationCreateAdoptionPullRequest  ProviderOperationType = "create_adoption_pull_request"
 	ProviderOperationCreateReviewSignal         ProviderOperationType = "create_review_signal"
 	ProviderOperationUpdateRelationship         ProviderOperationType = "update_relationship"
 )

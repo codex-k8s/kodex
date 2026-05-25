@@ -102,29 +102,47 @@ type CreateRepositoryInput struct {
 	ExternalAccountID uuid.UUID
 }
 
-// BootstrapFile describes one prepared text file for bootstrap branch creation.
-type BootstrapFile struct {
+// RepositoryFile describes one prepared text file for provider-side branch creation.
+type RepositoryFile struct {
 	Path       string
 	Content    string
 	Executable bool
 }
 
-// CreateBootstrapPullRequestInput describes provider-side bootstrap PR creation for an existing empty repository.
-type CreateBootstrapPullRequestInput struct {
+// BootstrapFile describes one prepared text file for bootstrap branch creation.
+type BootstrapFile = RepositoryFile
+
+// AdoptionFile describes one prepared text file for adoption branch creation.
+type AdoptionFile = RepositoryFile
+
+// RepositoryBranchPullRequestInput describes common provider-side branch/PR creation parameters.
+type RepositoryBranchPullRequestInput struct {
 	ProjectID         uuid.UUID
 	RepositoryID      uuid.UUID
 	ProviderSlug      enum.ProviderSlug
 	RepositoryTarget  ProviderTarget
 	BaseBranch        string
-	BootstrapBranch   string
 	CommitMessage     string
 	Title             string
 	Body              string
 	Draft             bool
-	Files             []BootstrapFile
 	WatermarkJSON     []byte
 	Meta              value.CommandMeta
 	ExternalAccountID uuid.UUID
+}
+
+// CreateBootstrapPullRequestInput describes provider-side bootstrap PR creation for an existing empty repository.
+type CreateBootstrapPullRequestInput struct {
+	RepositoryBranchPullRequestInput
+	BootstrapBranch string
+	Files           []BootstrapFile
+}
+
+// CreateAdoptionPullRequestInput describes provider-side adoption PR creation for an existing repository.
+type CreateAdoptionPullRequestInput struct {
+	RepositoryBranchPullRequestInput
+	AdoptionBranch string
+	Files          []AdoptionFile
 }
 
 // UpdatePullRequestInput describes one typed PR/MR update command.

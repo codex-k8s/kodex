@@ -40,6 +40,7 @@
 | AGO-3 | готово | Временное переключение: PostgreSQL-модель flow, stage, role, prompt template, версий, command result и service-local outbox; storage/use-case слой готов, gRPC handler wiring вынесен в следующий срез. |
 | AGO-3b | готово | Временное переключение: gRPC handlers, casters и безопасное отображение ошибок для flow, role и prompt подключены к storage/use-case слою; session/run остаются вне среза. |
 | AGO-4 | готово | Временное переключение: авторитетная модель session/run, слой хранения, use-case, gRPC handlers, результат команды, ожидаемая версия, защита активной session от дублей, stage-bound проверка роли и service-local outbox события для session/run готовы; руководящие пакеты, runtime и приёмка остаются следующими срезами. |
+| AGO-5 | готово | Временное переключение: `agent-manager` читает активные guidance installations и manifest/version metadata через `package-hub`, фиксирует refs/digests/policy-safe summary в `AgentRun` и не сохраняет тексты пакетов, scripts, assets, package source или manifest payload. |
 
 ## Текущий бэклог
 
@@ -64,4 +65,4 @@
 
 ## Временное переключение
 
-Агент #3 временно выполняет AGO-0..AGO-4 в домене `agent-orchestration`, чтобы зафиксировать стартовые границы `agent-manager`, его transport-контракты, сервисный каркас, модель хранения flow/role/prompt/session/run, gRPC-доступ к этим операциям, защиту session/run инвариантов и зависимость от `package-hub` для чтения установленных руководящих пакетов. Код `package-hub` в этих срезах не меняется.
+Агент #3 временно выполняет AGO-0..AGO-5 в домене `agent-orchestration`, чтобы зафиксировать стартовые границы `agent-manager`, его transport-контракты, сервисный каркас, модель хранения flow/role/prompt/session/run, gRPC-доступ к этим операциям, защиту session/run инвариантов и зависимость от `package-hub` для чтения установленных руководящих пакетов. Код `package-hub` в этих срезах не меняется.

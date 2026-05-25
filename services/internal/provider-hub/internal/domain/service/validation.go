@@ -205,6 +205,7 @@ func validOperationTypes(types []enum.ProviderOperationType) bool {
 			enum.ProviderOperationCreatePullRequest,
 			enum.ProviderOperationUpdatePullRequest,
 			enum.ProviderOperationCreateBootstrapPullRequest,
+			enum.ProviderOperationCreateAdoptionPullRequest,
 			enum.ProviderOperationCreateReviewSignal,
 			enum.ProviderOperationUpdateRelationship:
 		default:

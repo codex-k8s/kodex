@@ -40,6 +40,7 @@ type providerService interface {
 	CreatePullRequest(context.Context, providerservice.CreatePullRequestInput) (providerservice.ProviderOperationResult, error)
 	CreateRepository(context.Context, providerservice.CreateRepositoryInput) (providerservice.ProviderOperationResult, error)
 	CreateBootstrapPullRequest(context.Context, providerservice.CreateBootstrapPullRequestInput) (providerservice.ProviderOperationResult, error)
+	CreateAdoptionPullRequest(context.Context, providerservice.CreateAdoptionPullRequestInput) (providerservice.ProviderOperationResult, error)
 	UpdatePullRequest(context.Context, providerservice.UpdatePullRequestInput) (providerservice.ProviderOperationResult, error)
 	CreateReviewSignal(context.Context, providerservice.CreateReviewSignalInput) (providerservice.ProviderOperationResult, error)
 	UpdateRelationship(context.Context, providerservice.UpdateRelationshipInput) (providerservice.ProviderOperationResult, error)
@@ -162,6 +163,11 @@ func (s *Server) CreateRepository(ctx context.Context, request *providersv1.Crea
 // CreateBootstrapPullRequest records a bootstrap branch/PR command.
 func (s *Server) CreateBootstrapPullRequest(ctx context.Context, request *providersv1.CreateBootstrapPullRequestRequest) (*providersv1.ProviderOperationResponse, error) {
 	return grpcserver.HandleUnary(ctx, request, grpccasters.CreateBootstrapPullRequestInput, s.service.CreateBootstrapPullRequest, grpccasters.ProviderOperationResponse)
+}
+
+// CreateAdoptionPullRequest records an adoption branch/PR command.
+func (s *Server) CreateAdoptionPullRequest(ctx context.Context, request *providersv1.CreateAdoptionPullRequestRequest) (*providersv1.ProviderOperationResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.CreateAdoptionPullRequestInput, s.service.CreateAdoptionPullRequest, grpccasters.ProviderOperationResponse)
 }
 
 // UpdatePullRequest records a typed provider PR/MR update command.
