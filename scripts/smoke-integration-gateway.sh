@@ -95,6 +95,8 @@ fi
 status="$(curl -sS -o "$response_file" -w "%{http_code}" \
   -X POST "http://127.0.0.1:18086/v1/provider-webhooks/gitlab" \
   -H "Content-Type: application/json" \
+  -H "X-GitHub-Delivery: smoke-delivery-unsupported-provider" \
+  -H "X-GitHub-Event: ping" \
   --data '{"action":"ping","payload":"safe-smoke"}')"
 if [[ "$status" != "400" ]]; then
   cat "$response_file" >&2 || true
