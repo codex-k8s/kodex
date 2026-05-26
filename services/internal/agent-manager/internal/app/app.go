@@ -13,7 +13,11 @@ import (
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
 	packagesv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/packages/v1"
+	projectsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/projects/v1"
+	runtimev1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/runtime/v1"
 	packagehubclient "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/clients/packagehub"
+	projectcatalogclient "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/clients/projectcatalog"
+	runtimeclient "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/clients/runtime"
 	agentservice "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/service"
 	agentpostgres "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/repository/postgres/agent"
 	agentgrpc "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/transport/grpc"
@@ -45,13 +49,30 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if packageHubConn != nil {
 		defer func() { _ = packageHubConn.Close() }()
 	}
+	workspacePolicyResolver, projectCatalogConn, err := newWorkspacePolicyResolver(cfg)
+	if err != nil {
+		return err
+	}
+	if projectCatalogConn != nil {
+		defer func() { _ = projectCatalogConn.Close() }()
+	}
+	runtimePreparer, runtimeManagerConn, err := newRuntimePreparer(cfg)
+	if err != nil {
+		return err
+	}
+	if runtimeManagerConn != nil {
+		defer func() { _ = runtimeManagerConn.Close() }()
+	}
 	agentRepository := agentpostgres.NewRepository(dbPool)
 	agentService := agentservice.New(agentservice.Config{
-		Repository:       agentRepository,
-		Clock:            systemClock{},
-		IDGenerator:      uuidGenerator{},
-		GuidanceResolver: guidanceResolver,
-		EventPublisher:   agentservice.DisabledEventPublisher{},
+		Repository:                agentRepository,
+		Clock:                     systemClock{},
+		IDGenerator:               uuidGenerator{},
+		GuidanceResolver:          guidanceResolver,
+		WorkspacePolicyResolver:   workspacePolicyResolver,
+		RuntimePreparer:           runtimePreparer,
+		RuntimePreparationEnabled: cfg.RuntimePreparationEnabled,
+		EventPublisher:            agentservice.DisabledEventPublisher{},
 	})
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
@@ -133,6 +154,52 @@ func connectPackageHubGuidance(clientConfig packagehubclient.Config) (agentservi
 		return nil, nil, err
 	}
 	return resolver, conn, nil
+}
+
+func newWorkspacePolicyResolver(cfg Config) (agentservice.WorkspacePolicyResolver, *grpcruntime.ClientConn, error) {
+	if cfg.RuntimePreparationEnabled {
+		return connectOwnerService[agentservice.WorkspacePolicyResolver](projectcatalogclient.Config{
+			Addr:      cfg.ProjectCatalogGRPCAddr,
+			AuthToken: cfg.ProjectCatalogGRPCAuthToken,
+			Timeout:   cfg.ProjectCatalogReadTimeout,
+		}, projectcatalogclient.NewConnection, func(conn *grpcruntime.ClientConn, clientConfig projectcatalogclient.Config) (agentservice.WorkspacePolicyResolver, error) {
+			return projectcatalogclient.NewWorkspacePolicyResolver(projectsv1.NewProjectCatalogServiceClient(conn), clientConfig)
+		})
+	}
+	return agentservice.DisabledWorkspacePolicyResolver{}, nil, nil
+}
+
+func newRuntimePreparer(cfg Config) (agentservice.RuntimePreparer, *grpcruntime.ClientConn, error) {
+	if !cfg.RuntimePreparationEnabled {
+		disabled := agentservice.DisabledRuntimePreparer{}
+		return disabled, nil, nil
+	}
+	clientConfig := runtimeclient.Config{
+		Addr:      cfg.RuntimeManagerGRPCAddr,
+		AuthToken: cfg.RuntimeManagerGRPCAuthToken,
+		Timeout:   cfg.RuntimeManagerPrepareTimeout,
+	}
+	return connectOwnerService[agentservice.RuntimePreparer](clientConfig, runtimeclient.NewConnection, func(conn *grpcruntime.ClientConn, clientConfig runtimeclient.Config) (agentservice.RuntimePreparer, error) {
+		return runtimeclient.NewPreparer(runtimev1.NewRuntimeManagerServiceClient(conn), clientConfig)
+	})
+}
+
+func connectOwnerService[T any, C any](
+	clientConfig C,
+	newConnection func(C) (*grpcruntime.ClientConn, error),
+	newAdapter func(*grpcruntime.ClientConn, C) (T, error),
+) (T, *grpcruntime.ClientConn, error) {
+	var zero T
+	conn, err := newConnection(clientConfig)
+	if err != nil {
+		return zero, nil, err
+	}
+	adapter, err := newAdapter(conn, clientConfig)
+	if err != nil {
+		_ = conn.Close()
+		return zero, nil, err
+	}
+	return adapter, conn, nil
 }
 
 func readinessChecks(agentService *agentservice.Service, agentDB serviceprocess.PingStore, eventLogDB serviceprocess.PingStore) []serviceprocess.ReadinessCheck {

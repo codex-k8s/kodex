@@ -144,6 +144,100 @@ type StartAgentRunInput struct {
 	GuidanceSelectionHints  []value.GuidanceSelectionHint
 }
 
+const (
+	RuntimeModeFullEnv = "full_env"
+
+	WorkspaceSourceKindCode             = "code"
+	WorkspaceSourceKindDocumentation    = "documentation"
+	WorkspaceSourceKindGuidancePackage  = "guidance_package"
+	WorkspaceSourceKindGeneratedContext = "generated_context"
+
+	WorkspaceSourceAccessRead  = "read"
+	WorkspaceSourceAccessWrite = "write"
+)
+
+type WorkspacePolicySnapshot struct {
+	ProjectID             uuid.UUID
+	CodeSources           []WorkspaceCodeSource
+	DocumentationSources  []WorkspaceDocumentationSource
+	GuidancePackageRefs   []string
+	ActivePolicyOverrides []PolicyOverrideRef
+	PolicyVersion         int64
+}
+
+type WorkspaceCodeSource struct {
+	RepositoryID  uuid.UUID
+	Provider      string
+	ProviderOwner string
+	ProviderName  string
+	DefaultBranch string
+	LocalPath     string
+	AccessMode    string
+}
+
+type WorkspaceDocumentationSource struct {
+	DocumentationSourceID uuid.UUID
+	RepositoryID          *uuid.UUID
+	ScopeType             string
+	ScopeID               string
+	LocalPath             string
+	AccessMode            string
+}
+
+type PolicyOverrideRef struct {
+	ID string
+}
+
+type RuntimeWorkspacePolicy struct {
+	ProjectID               uuid.UUID
+	PolicyDigest            string
+	PolicyVersion           int64
+	Sources                 []RuntimeWorkspaceSource
+	ActivePolicyOverrideIDs []string
+}
+
+type RuntimeWorkspaceSource struct {
+	SourceID      string
+	Kind          string
+	RepositoryID  *uuid.UUID
+	Provider      string
+	ProviderOwner string
+	ProviderName  string
+	SourceRef     string
+	CommitSHA     string
+	LocalPath     string
+	AccessMode    string
+	Digest        string
+	MetadataJSON  string
+}
+
+type RuntimePlacementConstraints struct {
+	ProjectID             uuid.UUID
+	RepositoryIDs         []uuid.UUID
+	ServiceKeys           []string
+	RuntimeProfile        string
+	PreferredFleetScopeID *uuid.UUID
+	RequiredCapabilities  []string
+	MetadataJSON          string
+}
+
+type RuntimePreparationInput struct {
+	Meta                 value.CommandMeta
+	AgentRunID           uuid.UUID
+	RuntimeProfile       string
+	RuntimeMode          string
+	WorkspacePolicy      RuntimeWorkspacePolicy
+	PlacementConstraints RuntimePlacementConstraints
+}
+
+type RuntimePreparationResult struct {
+	SlotRef                    string
+	WorkspaceRef               string
+	ContextRef                 string
+	MaterializationFingerprint string
+	DiagnosticSummary          string
+}
+
 type RecordRunStateInput struct {
 	Meta           value.CommandMeta
 	RunID          uuid.UUID

@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-25
 updated_at: 2026-05-26
-related_issues: [782]
+related_issues: [782, 795]
 related_prs: []
 related_docsets:
   - docs/domains/agent-orchestration/architecture/design.md
@@ -98,7 +98,7 @@ sequenceDiagram
 | `access_mode` | `read` |
 | `metadata_json` | безопасные поля: `package_installation_ref`, `package_version_ref`, `package_ref`, `package_slug`, `package_version_label`, `safe_local_name`, `source_ref_kind`, `source_commit_sha`, `package_source_id`, `package_source_kind`, `package_source_repository_ref`, `package_source_catalog_endpoint_ref`, `capability_ref`, `capability_kind`, `manifest_digest` |
 
-`local_path` является runtime-контрактом, а не полем `AgentRun`. Он вычисляется из замороженных refs при подготовке workspace. Так старый `Run` не меняется при будущей смене правил layout, а runtime materialization всегда имеет собственный fingerprint.
+`local_path` является runtime-контрактом, а не полем `AgentRun`. В текущем proto `WorkspaceSource.local_path` обязателен, поэтому `agent-manager` передаёт детерминированный request-local путь для `guidance_package` и `generated_context`, но не сохраняет его в своей БД и не материализует файлы. `runtime-manager` остаётся владельцем нормализации, хранения, fingerprint и фактического layout workspace.
 
 `package_slug` нельзя напрямую конкатенировать в путь. `safe_local_name` является единственным разрешённым сегментом локального пути для руководящего пакета. Правила:
 
@@ -142,9 +142,8 @@ sequenceDiagram
 
 ## Бэклог реализации
 
-- Подключить прямой вызов `runtime-manager.PrepareRuntime` из оркестрационного контура после того, как `project-catalog` отдаст проверенную workspace policy для конкретного run context.
+- Доработать runtime materializer до фактической записи `.kodex/context/agent-run.json` и checkout/mount руководящих пакетов по авторитетным refs из `package-hub`.
 - Добавить механизм materialization, который умеет получать guidance package source по `WorkspaceSource.kind=guidance_package`.
-- Добавить writer сгенерированного контекста в runtime/workspace слой.
 - Добавить проверку формата и конфликтов `safe_local_name` в selected guidance set до подготовки runtime.
 
 ## Апрув

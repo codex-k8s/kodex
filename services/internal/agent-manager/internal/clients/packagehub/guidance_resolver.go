@@ -4,22 +4,17 @@ package packagehub
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
 
-	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	packagesv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/packages/v1"
+	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/clients/grpcclient"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/errs"
 	agentservice "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/service"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/value"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
 )
 
 const (
@@ -56,19 +51,7 @@ var _ agentservice.GuidanceResolver = (*GuidanceResolver)(nil)
 
 // NewConnection creates a gRPC connection to package-hub.
 func NewConnection(cfg Config) (*grpc.ClientConn, error) {
-	addr, err := packageHubAddress(cfg)
-	if err != nil {
-		return nil, err
-	}
-	return grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-}
-
-func packageHubAddress(cfg Config) (string, error) {
-	addr := strings.TrimSpace(cfg.Addr)
-	if addr == "" {
-		return "", fmt.Errorf("package-hub address is required")
-	}
-	return addr, nil
+	return grpcclient.NewConnection(cfg.Addr, "package-hub")
 }
 
 // NewGuidanceResolver creates package-hub guidance resolver.
@@ -77,18 +60,9 @@ func NewGuidanceResolver(client packagesv1.PackageHubServiceClient, cfg Config) 
 }
 
 func newGuidanceResolver(client packageHubClient, cfg Config) (*GuidanceResolver, error) {
-	if client == nil {
-		return nil, fmt.Errorf("package-hub client is required")
-	}
-	authToken := strings.TrimSpace(cfg.AuthToken)
-	if authToken == "" {
-		return nil, fmt.Errorf("package-hub auth token is required")
-	}
-	timeout := cfg.Timeout
-	if timeout <= 0 {
-		timeout = defaultReadTimeout
-	}
-	return &GuidanceResolver{client: client, authToken: authToken, timeout: timeout}, nil
+	return grpcclient.BuildAdapter(client, cfg.AuthToken, cfg.Timeout, defaultReadTimeout, "package-hub", func(settings grpcclient.ClientSettings) *GuidanceResolver {
+		return &GuidanceResolver{client: client, authToken: settings.AuthToken, timeout: settings.Timeout}
+	})
 }
 
 // ResolveGuidanceRefs resolves caller hints or active guidance installations in scope.
@@ -334,15 +308,7 @@ func (r *GuidanceResolver) packageManifest(ctx context.Context, meta value.Comma
 }
 
 func (r *GuidanceResolver) outgoingContext(ctx context.Context) context.Context {
-	return metadata.AppendToOutgoingContext(
-		ctx,
-		grpcserver.MetadataAuthorization,
-		"Bearer "+r.authToken,
-		grpcserver.MetadataCallerType,
-		"service",
-		grpcserver.MetadataCallerID,
-		callerID,
-	)
+	return grpcclient.OutgoingContext(ctx, r.authToken, callerID)
 }
 
 func normalizeHints(input []value.GuidanceSelectionHint) ([]value.GuidanceSelectionHint, error) {
@@ -510,29 +476,5 @@ func sourceRefString(source *packagesv1.SourceRef) string {
 }
 
 func mapPackageHubError(err error) error {
-	if err == nil {
-		return nil
-	}
-	if errors.Is(err, context.Canceled) {
-		return err
-	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		return errs.ErrDependencyUnavailable
-	}
-	switch status.Code(err) {
-	case codes.InvalidArgument:
-		return errs.ErrInvalidArgument
-	case codes.NotFound:
-		return errs.ErrNotFound
-	case codes.AlreadyExists:
-		return errs.ErrAlreadyExists
-	case codes.Aborted:
-		return errs.ErrConflict
-	case codes.FailedPrecondition:
-		return errs.ErrPreconditionFailed
-	case codes.PermissionDenied, codes.Unauthenticated, codes.Unavailable, codes.DeadlineExceeded, codes.ResourceExhausted:
-		return errs.ErrDependencyUnavailable
-	default:
-		return fmt.Errorf("%w: package-hub read failed", errs.ErrDependencyUnavailable)
-	}
+	return grpcclient.MapReadError(err, "package-hub read failed")
 }
