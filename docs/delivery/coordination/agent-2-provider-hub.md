@@ -2,7 +2,7 @@
 
 ## Зона ответственности
 
-Агент #2 ведёт домен provider-native интеграций. Основной сервис: `provider-hub`.
+Агент #2 ведёт домен provider-native интеграций. Основные сервисы: `provider-hub`, `integration-gateway`.
 
 Подтверждённая ответственность:
 - GitHub/GitLab и другие provider-native источники;
@@ -16,7 +16,7 @@
 
 ## Что уже сделано
 
-| Срез | PR | Статус | Результат |
+| Срез | Issue/PR | Статус | Результат |
 |---|---:|---|---|
 | PRV-0 | #645 | готово | Доменная документация, границы, требования, модель данных, API-карта и delivery-план `provider-hub`. |
 | PRV-1 | #648 | готово | gRPC/AsyncAPI контракты, сгенерированный Go-код и таблица реализации операций. |
@@ -37,13 +37,14 @@
 | PRV-8c | #770 | готово | Provider-side adoption существующего репозитория: подготовленные файлы пишутся в adoption branch, создаётся или обновляется adoption PR, фиксируются проекция, `project_repository_binding` и событие `provider.repository.adoption_pr_created`; scan, отчёт и проектное решение остаются вне `provider-hub`. |
 | PRV-9 | #754 | готово | Эксплуатационный контур: Dockerfile, Kubernetes manifests, PostgreSQL bootstrap, migration job, build/smoke scripts, runbook и monitoring docs. |
 | IGW-0 | #781 | готово | Смежный срез `integration-gateway`: зафиксированы границы внешнего HTTP-входа, первый route provider webhook -> `provider-hub.IngestWebhookEvent`, требования security/backpressure/retry/idempotency и OpenAPI-каркас. Реализация gateway-сервиса не входит. |
+| IGW-1 | #792 | готово | Сервисный каркас `integration-gateway`: process/config/graceful shutdown, health/readiness/metrics, HTTP router, OpenAPI validation/generated models, safe middleware и provider-hub client interface. Provider route зарегистрирован как отключённый stub до verifier-среза. |
 
 ## Текущий бэклог
 
 | Срез | Статус | Почему не завершён |
 |---|---|---|
 | End-to-end repository adoption | ждёт проектного и агентного контура | Adoption существующего repo требует agent-manager orchestration, workspace scan/report, approval и импорт проектной политики модели C; provider-hub уже закрывает provider-native PR/relationship/projection запись. |
-| IGW-1/IGW-2 | ждёт отдельного решения владельца | После IGW-0 можно делать сервисный каркас `integration-gateway` и реальный provider webhook route, но это отдельные срезы с кодом, deployment config и проверками подписи. |
+| IGW-2 | ждёт отдельного решения владельца | После IGW-1 можно делать реальный provider webhook route, но это отдельный срез с проверкой подписи, source binding, route registry policy и вызовом `provider-hub.IngestWebhookEvent`. |
 
 ## Блокировки от `access-manager`
 
@@ -101,4 +102,4 @@
 
 ## Рекомендуемый следующий шаг
 
-Следующий provider-срез — интеграция provider tools с `agent-manager`/platform MCP, GitLab write adapter или кодовый срез `integration-gateway` IGW-1/IGW-2 после решения владельца. End-to-end bootstrap/adoption не смешивать с UI и gateway.
+Следующий provider-срез — интеграция provider tools с `agent-manager`/platform MCP, GitLab write adapter или `integration-gateway` IGW-2 после решения владельца. End-to-end bootstrap/adoption не смешивать с UI и gateway.

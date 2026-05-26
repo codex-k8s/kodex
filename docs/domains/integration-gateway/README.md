@@ -13,6 +13,8 @@
 - Очистка и безопасная нормализация edge envelope.
 - Маршрутизация проверенного события во внутренний сервис-владелец по gRPC.
 - Первый MVP-маршрут: provider webhook -> `provider-hub.IngestWebhookEvent`.
+- Минимальный runnable-каркас сервиса: process/config/graceful shutdown, health/readiness/metrics,
+  HTTP router, OpenAPI runtime validation и provider-hub client interface.
 - Ограниченная диагностика входящего контура без сырых секретов, больших payload и бизнес-проекций.
 
 ## Что не входит

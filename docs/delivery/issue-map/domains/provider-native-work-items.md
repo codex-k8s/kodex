@@ -5,7 +5,7 @@ title: kodex — карта Issue домена рабочих сущностей
 status: active
 owner_role: KM
 created_at: 2026-04-25
-updated_at: 2026-05-25
+updated_at: 2026-05-26
 ---
 
 # Карта Issue — рабочие сущности провайдера
@@ -37,4 +37,5 @@ updated_at: 2026-05-25
 | #770 | `services/internal/provider-hub/**`, `proto/kodex/providers/**`, `docs/domains/provider-native-work-items/**`, `docs/platform/architecture/repository_onboarding.md`, `docs/delivery/coordination/**` | PRV-8c | done | Provider-side adoption существующего репозитория: `CreateAdoptionPullRequest` принимает подготовленные файлы и refs, создаёт или обновляет adoption branch/PR через GitHub write pipeline, обновляет проекцию, provider relationship и событие `provider.repository.adoption_pr_created`. |
 | #281, #282 | `docs/platform/architecture/repository_onboarding.md`, `docs/domains/provider-native-work-items/delivery/provider_hub_delivery.md` | PRV-8c+ | модель выбрана, ждёт реализации | Полный end-to-end bootstrap/adoption остаётся открытым: проектный вызов, пакетные шаблоны, agent-manager orchestration, adoption scan и импорт политики не закрываются provider-side срезами PRV-8a/PRV-8b/PRV-8c. |
 | #781 | `docs/domains/integration-gateway/**`, `specs/openapi/integration-gateway.v1.yaml`, `docs/platform/architecture/provider_integration_model.md`, `docs/platform/architecture/service_boundaries.md`, `docs/platform/architecture/c4_container.md`, `docs/delivery/coordination/agent-2-provider-hub.md` | IGW-0 | готово | Смежный gateway-срез для публичного provider webhook входа: `integration-gateway` проверяет HTTP edge, а `provider-hub` остаётся владельцем webhook inbox и нормализации через `IngestWebhookEvent`. |
+| #792 | `services/external/integration-gateway/**`, `services.yaml`, `docs/domains/integration-gateway/**`, `docs/delivery/coordination/agent-2-provider-hub.md`, `docs/delivery/issue-map/domains/integration-gateway.md` | IGW-1 | готово | Смежный сервисный каркас `integration-gateway`: внешний HTTP edge собирается и фиксирует client interface к `provider-hub.IngestWebhookEvent`; provider-hub остаётся владельцем webhook inbox и нормализации. |
 | #754 | `services/internal/provider-hub/**`, `deploy/base/provider-hub/**`, `deploy/base/postgres/**`, `scripts/build-provider-hub-images.sh`, `scripts/smoke-provider-hub.sh`, `bootstrap/host/config.env.example`, `bootstrap/host/bootstrap_remote_production.sh`, `services.yaml`, `docs/domains/provider-native-work-items/ops/provider_hub_runbook.md`, `docs/domains/provider-native-work-items/ops/provider_hub_monitoring.md`, `docs/domains/provider-native-work-items/delivery/provider_hub_delivery.md` | PRV-9 | done | Эксплуатационный контур `provider-hub`: БД, манифесты, migration job, smoke, runbook и наблюдаемость. |

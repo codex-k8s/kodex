@@ -5,8 +5,8 @@ title: kodex — требования integration-gateway
 status: active
 owner_role: PM
 created_at: 2026-05-25
-updated_at: 2026-05-25
-related_issues: [781, 770]
+updated_at: 2026-05-26
+related_issues: [781, 792, 770]
 related_prs: []
 related_docsets:
   - docs/platform/architecture/service_boundaries.md
@@ -46,7 +46,7 @@ approvals:
 |---|---|---|
 | IGW-FR-1 | Сервис должен принимать внешние provider webhook через публичный HTTP endpoint. | Обязательно |
 | IGW-FR-2 | Сервис должен проверять источник, подпись или token, content type, размер payload и route policy до вызова внутреннего владельца. | Обязательно |
-| IGW-FR-3 | Сервис должен передавать provider webhook в `provider-hub.IngestWebhookEvent` с `provider_slug`, `delivery_id`, `event_name`, `payload_json`, `received_at` и безопасным `meta`. | Обязательно |
+| IGW-FR-3 | Сервис должен передавать provider webhook в `provider-hub.IngestWebhookEvent` с `provider_slug`, `delivery_id`, `event_name`, `payload_json`, `received_at` и безопасным `meta` после успешной edge-проверки. | Обязательно |
 | IGW-FR-4 | Сервис не должен нормализовать provider business events, строить provider projections или хранить webhook inbox. | Обязательно |
 | IGW-FR-5 | Сервис должен поддерживать backpressure и rate limits по source, route и downstream owner service. | Обязательно |
 | IGW-FR-6 | Сервис должен возвращать безопасные HTTP-ошибки без секретов, подписей, токенов и полного payload. | Обязательно |
@@ -75,7 +75,7 @@ approvals:
 
 ## Не входит
 
-- Сервисная реализация gateway в IGW-0.
+- Полная активация provider webhook route без проверки подписи и source binding.
 - Хранение provider projections, cursors, operations или provider business state.
 - UI/staff/user endpoints.
 - Codex hooks и MCP tools.
