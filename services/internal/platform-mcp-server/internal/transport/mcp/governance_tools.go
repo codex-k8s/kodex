@@ -176,17 +176,21 @@ type GovernanceToolsHandler struct {
 	client GovernanceManagerClient
 }
 
+type governanceRiskCommandRequest interface {
+	GetMeta() *governancev1.CommandMeta
+}
+
 // NewGovernanceToolsHandler creates a governance tool handler.
 func NewGovernanceToolsHandler(client GovernanceManagerClient) *GovernanceToolsHandler {
 	return &GovernanceToolsHandler{client: client}
 }
 
 func (handler *GovernanceToolsHandler) EvaluateRisk(ctx context.Context, _ *mcpsdk.CallToolRequest, input EvaluateGovernanceRiskInput) (*mcpsdk.CallToolResult, GovernanceRiskAssessmentOutput, error) {
-	return routeOwnerTool(ctx, input, evaluateRiskRequest, handler.client.EvaluateRisk, governanceRiskAssessmentOutput, ToolGovernanceRiskEvaluate)
+	return routeRiskCommand(ctx, handler, input, evaluateRiskRequest, handler.client.EvaluateRisk, ToolGovernanceRiskEvaluate)
 }
 
 func (handler *GovernanceToolsHandler) ReevaluateRisk(ctx context.Context, _ *mcpsdk.CallToolRequest, input ReevaluateGovernanceRiskInput) (*mcpsdk.CallToolResult, GovernanceRiskAssessmentOutput, error) {
-	return routeOwnerTool(ctx, input, reevaluateRiskRequest, handler.client.ReevaluateRisk, governanceRiskAssessmentOutput, ToolGovernanceRiskReevaluate)
+	return routeRiskCommand(ctx, handler, input, reevaluateRiskRequest, handler.client.ReevaluateRisk, ToolGovernanceRiskReevaluate)
 }
 
 func (handler *GovernanceToolsHandler) GetRiskAssessment(ctx context.Context, _ *mcpsdk.CallToolRequest, input GetGovernanceRiskAssessmentInput) (*mcpsdk.CallToolResult, GovernanceRiskAssessmentOutput, error) {
@@ -194,7 +198,20 @@ func (handler *GovernanceToolsHandler) GetRiskAssessment(ctx context.Context, _ 
 }
 
 func (handler *GovernanceToolsHandler) ListRiskAssessments(ctx context.Context, _ *mcpsdk.CallToolRequest, input ListGovernanceRiskAssessmentsInput) (*mcpsdk.CallToolResult, GovernanceRiskAssessmentListOutput, error) {
-	return routeOwnerTool(ctx, input, listRiskAssessmentsRequest, handler.client.ListRiskAssessments, governanceRiskAssessmentListOutput, ToolGovernanceRiskList)
+	var empty GovernanceRiskAssessmentListOutput
+	request, err := listRiskAssessmentsRequest(input)
+	if err != nil {
+		return nil, empty, err
+	}
+	response, err := handler.client.ListRiskAssessments(ctx, request)
+	if err != nil {
+		return nil, empty, ownerToolError(ToolGovernanceRiskList, err)
+	}
+	factorsByAssessmentID, err := handler.riskFactorsByAssessmentID(ctx, response.GetRiskAssessments(), request.GetMeta(), ToolGovernanceRiskList)
+	if err != nil {
+		return nil, empty, err
+	}
+	return nil, governanceRiskAssessmentListOutput(response, factorsByAssessmentID), nil
 }
 
 func (handler *GovernanceToolsHandler) RequestGate(ctx context.Context, _ *mcpsdk.CallToolRequest, input RequestGovernanceGateInput) (*mcpsdk.CallToolResult, GovernanceGateOutput, error) {
@@ -219,6 +236,80 @@ func (handler *GovernanceToolsHandler) CancelGate(ctx context.Context, _ *mcpsdk
 
 func (handler *GovernanceToolsHandler) ExpireGate(ctx context.Context, _ *mcpsdk.CallToolRequest, input ExpireGovernanceGateInput) (*mcpsdk.CallToolResult, GovernanceGateOutput, error) {
 	return routeOwnerTool(ctx, input, expireGateRequest, handler.client.ExpireGate, governanceGateOutput, ToolGovernanceGateExpire)
+}
+
+func routeRiskCommand[Input any, Request governanceRiskCommandRequest](
+	ctx context.Context,
+	handler *GovernanceToolsHandler,
+	input Input,
+	build func(Input) (Request, error),
+	call func(context.Context, Request) (*governancev1.RiskAssessmentResponse, error),
+	tool string,
+) (*mcpsdk.CallToolResult, GovernanceRiskAssessmentOutput, error) {
+	var empty GovernanceRiskAssessmentOutput
+	request, err := build(input)
+	if err != nil {
+		return nil, empty, err
+	}
+	response, err := call(ctx, request)
+	if err != nil {
+		return nil, empty, ownerToolError(tool, err)
+	}
+	enriched, err := handler.riskAssessmentWithFactors(ctx, response, governanceQueryMetaFromCommand(request.GetMeta()), true, tool)
+	if err != nil {
+		return nil, empty, err
+	}
+	return nil, governanceRiskAssessmentOutput(enriched), nil
+}
+
+func (handler *GovernanceToolsHandler) riskAssessmentWithFactors(
+	ctx context.Context,
+	response *governancev1.RiskAssessmentResponse,
+	meta *governancev1.QueryMeta,
+	includeReviewSignals bool,
+	tool string,
+) (*governancev1.RiskAssessmentResponse, error) {
+	assessmentID := riskAssessmentID(response.GetRiskAssessment())
+	if assessmentID == "" {
+		return response, nil
+	}
+	enriched, err := handler.client.GetRiskAssessment(ctx, &governancev1.GetRiskAssessmentRequest{
+		RiskAssessmentId:     assessmentID,
+		IncludeFactors:       true,
+		IncludeReviewSignals: includeReviewSignals,
+		Meta:                 meta,
+	})
+	if err != nil {
+		return nil, ownerToolError(tool, err)
+	}
+	if enriched.GetRiskAssessment() == nil {
+		return response, nil
+	}
+	return enriched, nil
+}
+
+func (handler *GovernanceToolsHandler) riskFactorsByAssessmentID(
+	ctx context.Context,
+	assessments []*governancev1.RiskAssessment,
+	meta *governancev1.QueryMeta,
+	tool string,
+) (map[string][]*governancev1.RiskFactor, error) {
+	if len(assessments) == 0 {
+		return nil, nil
+	}
+	result := make(map[string][]*governancev1.RiskFactor, len(assessments))
+	for _, assessment := range assessments {
+		assessmentID := riskAssessmentID(assessment)
+		if assessmentID == "" {
+			continue
+		}
+		enriched, err := handler.riskAssessmentWithFactors(ctx, &governancev1.RiskAssessmentResponse{RiskAssessment: assessment}, meta, false, tool)
+		if err != nil {
+			return nil, err
+		}
+		result[assessmentID] = enriched.GetRiskFactors()
+	}
+	return result, nil
 }
 
 func evaluateRiskRequest(input EvaluateGovernanceRiskInput) (*governancev1.EvaluateRiskRequest, error) {
@@ -512,6 +603,17 @@ func governanceQueryMeta(input GovernanceQueryMetaInput) (*governancev1.QueryMet
 	return &governancev1.QueryMeta{Actor: actorValue, RequestId: requestID, RequestContext: contextValue}, nil
 }
 
+func governanceQueryMetaFromCommand(meta *governancev1.CommandMeta) *governancev1.QueryMeta {
+	if meta == nil {
+		return nil
+	}
+	return &governancev1.QueryMeta{
+		Actor:          meta.GetActor(),
+		RequestId:      meta.GetRequestId(),
+		RequestContext: meta.GetRequestContext(),
+	}
+}
+
 func governanceMetaBase(actorInput GovernanceActorInput, contextInput GovernanceRequestContextInput, requestIDInput string) (*governancev1.Actor, *governancev1.RequestContext, string, error) {
 	actorValue, err := governanceActor(actorInput)
 	if err != nil {
@@ -754,19 +856,25 @@ func governanceRiskAssessmentOutput(response *governancev1.RiskAssessmentRespons
 	}
 }
 
-func governanceRiskAssessmentListOutput(response *governancev1.ListRiskAssessmentsResponse) GovernanceRiskAssessmentListOutput {
+func governanceRiskAssessmentListOutput(
+	response *governancev1.ListRiskAssessmentsResponse,
+	factorsByAssessmentID map[string][]*governancev1.RiskFactor,
+) GovernanceRiskAssessmentListOutput {
 	if response == nil {
 		return GovernanceRiskAssessmentListOutput{}
 	}
 	return GovernanceRiskAssessmentListOutput{
-		RiskAssessments: governanceRiskAssessmentSummaries(response.GetRiskAssessments()),
+		RiskAssessments: governanceRiskAssessmentSummaries(response.GetRiskAssessments(), factorsByAssessmentID),
 		Page:            governancePageSummary(response.GetPage()),
 	}
 }
 
-func governanceRiskAssessmentSummaries(assessments []*governancev1.RiskAssessment) []GovernanceRiskAssessmentSummary {
+func governanceRiskAssessmentSummaries(
+	assessments []*governancev1.RiskAssessment,
+	factorsByAssessmentID map[string][]*governancev1.RiskFactor,
+) []GovernanceRiskAssessmentSummary {
 	return summarizeItems(assessments, func(assessment *governancev1.RiskAssessment) GovernanceRiskAssessmentSummary {
-		return governanceRiskAssessmentSummary(assessment, nil)
+		return governanceRiskAssessmentSummary(assessment, factorsByAssessmentID[riskAssessmentID(assessment)])
 	})
 }
 
@@ -801,6 +909,13 @@ func governanceRiskAssessmentSummary(assessment *governancev1.RiskAssessment, fa
 		CreatedAt:          assessment.GetCreatedAt(),
 		UpdatedAt:          assessment.GetUpdatedAt(),
 	}
+}
+
+func riskAssessmentID(assessment *governancev1.RiskAssessment) string {
+	if assessment == nil {
+		return ""
+	}
+	return strings.TrimSpace(assessment.GetId())
 }
 
 func governanceRequiredGateSummaries(gates []*governancev1.RequiredGate) []GovernanceRequiredGateSummary {

@@ -720,11 +720,14 @@ func TestGovernanceRiskEvaluateRoutesToOwner(t *testing.T) {
 	if governance.evaluateRiskCalls != 1 {
 		t.Fatalf("evaluateRiskCalls = %d, want 1", governance.evaluateRiskCalls)
 	}
+	if governance.getRiskAssessmentCalls != 1 {
+		t.Fatalf("getRiskAssessmentCalls = %d, want 1 enrichment read", governance.getRiskAssessmentCalls)
+	}
 	data, err := json.Marshal(result.StructuredContent)
 	if err != nil {
 		t.Fatalf("Marshal(): %v", err)
 	}
-	if !strings.Contains(string(data), "risk-assessment-1") || !strings.Contains(string(data), "gate-policy-1") {
+	if !strings.Contains(string(data), "risk-assessment-1") || !strings.Contains(string(data), "gate-policy-1") || !strings.Contains(string(data), "rule:path-sensitive") {
 		t.Fatalf("structured content does not include safe risk summary: %s", data)
 	}
 	if strings.Contains(string(data), "raw_provider_payload") || strings.Contains(string(data), "secret-token") {
@@ -767,6 +770,9 @@ func TestGovernanceRiskReevaluateRoutesToOwnerWithExpectedVersion(t *testing.T) 
 	}
 	if governance.reevaluateRiskCalls != 1 {
 		t.Fatalf("reevaluateRiskCalls = %d, want 1", governance.reevaluateRiskCalls)
+	}
+	if governance.getRiskAssessmentCalls != 1 {
+		t.Fatalf("getRiskAssessmentCalls = %d, want 1 enrichment read", governance.getRiskAssessmentCalls)
 	}
 	if governance.lastExpectedVersion == nil || *governance.lastExpectedVersion != expectedVersion {
 		t.Fatalf("lastExpectedVersion = %v, want %d", governance.lastExpectedVersion, expectedVersion)
@@ -865,11 +871,14 @@ func TestGovernanceRiskListRoutesToOwnerWithProjectScope(t *testing.T) {
 	if governance.listRiskAssessmentsCalls != 1 {
 		t.Fatalf("listRiskAssessmentsCalls = %d, want 1", governance.listRiskAssessmentsCalls)
 	}
+	if governance.getRiskAssessmentCalls != 1 {
+		t.Fatalf("getRiskAssessmentCalls = %d, want 1 enrichment read", governance.getRiskAssessmentCalls)
+	}
 	data, err := json.Marshal(result.StructuredContent)
 	if err != nil {
 		t.Fatalf("Marshal(): %v", err)
 	}
-	if !strings.Contains(string(data), "risk-assessment-1") {
+	if !strings.Contains(string(data), "risk-assessment-1") || !strings.Contains(string(data), "rule:path-sensitive") {
 		t.Fatalf("structured content does not include risk assessment summary: %s", data)
 	}
 }
@@ -1678,7 +1687,7 @@ func (f *fakeGovernanceManagerClient) EvaluateRisk(_ context.Context, request *g
 	if f.err != nil {
 		return nil, f.err
 	}
-	return fakeRiskAssessmentResponse(request.GetTarget()), nil
+	return fakeRiskAssessmentOnlyResponse(request.GetTarget()), nil
 }
 
 func (f *fakeGovernanceManagerClient) ReevaluateRisk(_ context.Context, request *governancev1.ReevaluateRiskRequest) (*governancev1.RiskAssessmentResponse, error) {
@@ -1687,7 +1696,7 @@ func (f *fakeGovernanceManagerClient) ReevaluateRisk(_ context.Context, request 
 	if f.err != nil {
 		return nil, f.err
 	}
-	return fakeRiskAssessmentResponse(&governancev1.TargetRef{
+	return fakeRiskAssessmentOnlyResponse(&governancev1.TargetRef{
 		Type: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_PULL_REQUEST,
 		Ref:  "provider:pr:1",
 	}), nil
@@ -1812,6 +1821,10 @@ func fakeRiskAssessmentResponse(target *governancev1.TargetRef) *governancev1.Ri
 		},
 		ReviewSignals: []*governancev1.ReviewSignal{{Id: "review-signal-1"}},
 	}
+}
+
+func fakeRiskAssessmentOnlyResponse(target *governancev1.TargetRef) *governancev1.RiskAssessmentResponse {
+	return &governancev1.RiskAssessmentResponse{RiskAssessment: fakeRiskAssessment(target)}
 }
 
 func fakeRiskAssessment(target *governancev1.TargetRef) *governancev1.RiskAssessment {
