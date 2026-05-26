@@ -90,7 +90,7 @@ sequenceDiagram
 
 `agent-manager` остаётся владельцем `Run`. `runtime-manager` не выбирает flow, роль, prompt или следующий этап.
 
-Руководящие пакеты приходят в `workspace policy` как `WorkspaceSource.kind=guidance_package`. Механизм materialization получает только безопасные refs: package installation, package version, тип source ref, значение source ref, commit SHA при наличии, manifest digest, package slug, `safe_local_name` и capability refs. Он проверяет идентичность источника через `package-hub`, готовит checkout/mount только для чтения в `.kodex/guidance/<safe_local_name>` и сгенерированный контекст `.kodex/context/agent-run.json`. Runtime не меняет пакетную истину и не записывает manifest payload обратно в `agent-manager`.
+Руководящие пакеты приходят в `workspace policy` как `WorkspaceSource.kind=guidance_package`. Механизм materialization получает безопасные refs запуска: package installation, package version, manifest digest, package slug, `safe_local_name` и capability refs. Перед checkout он по `package_version_ref` читает в `package-hub` тип source ref, значение source ref, commit SHA и идентичность источника, готовит checkout/mount только для чтения в `.kodex/guidance/<safe_local_name>` и сгенерированный контекст `.kodex/context/agent-run.json`. Runtime не меняет пакетную истину и не записывает manifest payload обратно в `agent-manager`.
 
 ### Выполнение platform job
 

@@ -194,7 +194,7 @@ approvals:
 | `prompt_template_digest` | text | нет | Digest prompt version, использованной при запуске. |
 | `runtime_ref` | text | да | Ссылка на slot/runtime context. |
 | `provider_target_ref` | text | да | Основная provider-native цель. |
-| `guidance_refs` | jsonb | нет | Замороженные безопасные refs руководящих пакетов: installation ref, package/version ref, manifest digest, source ref kind/ref/commit SHA, package slug/version label, capability ref и bounded policy summary без manifest payload. |
+| `guidance_refs` | jsonb | нет | Замороженные безопасные refs руководящих пакетов: installation ref, package/version ref, manifest digest, строковый source ref как подсказка, package slug/version label, capability ref и bounded policy summary без manifest payload. |
 | `status` | enum | нет | `requested`, `starting`, `running`, `waiting`, `completed`, `failed`, `cancelled`. |
 | `result_summary` | text | да | Короткая безопасная сводка. |
 | `failure_code` | text | да | Короткий код ошибки без секретов и PII. |
@@ -204,7 +204,7 @@ approvals:
 `AgentRun.status` меняется только по доменной state machine: terminal-статусы `completed`, `failed` и `cancelled` не возвращаются в работу, `running` не откатывается в `starting`, а повтор текущего non-terminal статуса допускается только как безопасная идемпотентная фиксация без нового lifecycle event.
 | `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
 
-`guidance_refs` не является manifest cache. В этом поле нельзя хранить `payload_json`, `SKILL.md`, prompt templates, flow files, scripts, assets или package source. Локальные пути workspace также не являются частью модели `AgentRun`: они вычисляются при подготовке runtime policy, строятся через безопасный `safe_local_name` и фиксируются в `runtime-manager` как `WorkspaceSource.local_path`.
+`guidance_refs` не является manifest cache. В этом поле нельзя хранить `payload_json`, `SKILL.md`, prompt templates, flow files, scripts, assets, package source или расширенный снимок `PackageSource`. Локальные пути workspace также не являются частью модели `AgentRun`: они вычисляются при подготовке runtime policy, строятся через безопасный `safe_local_name` и фиксируются в `runtime-manager` как `WorkspaceSource.local_path`. Тип source ref, commit SHA и идентичность источника runtime получает из `package-hub` по `package_version_ref` перед materialization.
 
 ### AgentSessionStateSnapshot
 

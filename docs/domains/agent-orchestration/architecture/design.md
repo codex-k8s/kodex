@@ -146,7 +146,7 @@ sequenceDiagram
 `agent-manager` использует `package-hub` только для чтения пакетной истины:
 - `ListPackageInstallations(package_kind=guidance, scope=...)` — найти установленные руководящие пакеты для платформы, организации, проекта или репозитория;
 - `GetPackageInstallation(installation_id)` — проверить конкретную установку из selection hint;
-- `GetPackage` и `GetPackageVersion` — зафиксировать безопасные refs, version label, тип source ref, значение source ref, commit SHA при наличии и digest;
+- `GetPackage` и `GetPackageVersion` — зафиксировать безопасные refs, version label, строковый source ref как подсказку и digest;
 - `GetPackageManifest(package_version_id)` — проверить состояние manifest руководящего пакета без сохранения `payload_json`;
 - `ListPackages(package_kind=guidance)` — показать доступные руководящие пакеты в будущих настройках.
 
@@ -158,9 +158,9 @@ sequenceDiagram
 
 MVP-путь:
 
-1. `StartAgentRun` разрешает guidance selection hints через `package-hub` и сохраняет в `AgentRun.guidance_refs` только `package_installation_ref`, `package_version_ref`, `manifest_digest`, тип source ref, значение source ref, commit SHA при наличии, capability refs, slug/version label и bounded policy summary.
+1. `StartAgentRun` разрешает guidance selection hints через `package-hub` и сохраняет в `AgentRun.guidance_refs` только `package_installation_ref`, `package_version_ref`, `manifest_digest`, строковый source ref как подсказку, capability refs, slug/version label и bounded policy summary.
 2. Оркестрационный контур получает проверенную workspace policy у `project-catalog` и добавляет в неё `WorkspaceSource` с видом `guidance_package` для каждого `GuidanceRef`.
-3. `runtime-manager.PrepareRuntime` проверяет идентичность источника пакета через `package-hub`, вычисляет безопасный `safe_local_name`, материализует эти источники только для чтения в `.kodex/guidance/<safe_local_name>` и создаёт сгенерированный контекст в `.kodex/context/agent-run.json`.
+3. `runtime-manager.PrepareRuntime` по `package_version_ref` читает в `package-hub` тип source ref, commit SHA и идентичность источника пакета, вычисляет безопасный `safe_local_name`, материализует эти источники только для чтения в `.kodex/guidance/<safe_local_name>` и создаёт сгенерированный контекст в `.kodex/context/agent-run.json`.
 4. `RecordRunState` фиксирует только `runtime_context` и переход статуса `Run`; локальные файлы, manifest payload, prompt text, flow files и scripts остаются в workspace/PVC.
 
 Если выбранный набор руководящих пакетов содержит конфликтующие `safe_local_name` после нормализации, подготовка runtime должна завершиться безопасной ошибкой до checkout. `package_slug` используется для диагностики и отображения, но не конкатенируется в путь напрямую. `agent-manager` не создаёт альтернативные имена путей и не копирует файлы пакетов в свою БД.

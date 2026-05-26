@@ -73,7 +73,8 @@ sequenceDiagram
 | `package_installation_ref` | да | может дублироваться в manifest контекста |
 | `package_version_ref` | да | может дублироваться в manifest контекста |
 | `manifest_digest` | да | используется runtime для проверки входного источника |
-| `source_ref.kind`, `source_ref.ref`, `source_ref.commit_sha` | да | используется runtime для проверки фиксированной версии перед checkout |
+| `source_ref` | да, только текущая строковая подсказка | не является авторитетным указанием способа получения пакета |
+| `source_ref.kind`, `source_ref.commit_sha`, идентичность `PackageSource` | нет | runtime получает из `package-hub` по `package_version_ref` перед checkout |
 | `package_slug`, `package_version_label` | да | используется только для диагностики и человекочитаемого контекста |
 | `safe_local_name` | нет | runtime-контур вычисляет при построении `WorkspaceSource`; может дублироваться в manifest контекста |
 | `policy_summary_json` | да, только ограниченная summary без payload | может дублироваться в сгенерированном контексте |
@@ -84,7 +85,7 @@ sequenceDiagram
 
 ## WorkspaceSource для руководящего пакета
 
-Для каждого замороженного `GuidanceRef` оркестрационный контур строит `runtime.WorkspaceSource`:
+Для каждого замороженного `GuidanceRef` runtime-контур строит или нормализует `runtime.WorkspaceSource` после авторитетного чтения `package-hub` по `package_version_ref`:
 
 | Поле `WorkspaceSource` | Значение |
 |---|---|
@@ -107,7 +108,7 @@ sequenceDiagram
 - если `package_slug` не соответствует формату, `safe_local_name` строится детерминированно из `package_ref`, `package_version_ref` и `sha256(package_slug)` в виде безопасного ASCII-имени;
 - конфликт двух `safe_local_name` внутри одного workspace считается ошибкой входной политики и отклоняется до checkout.
 
-Перед materialization runtime-контур не должен доверять только строковому `source_ref`. Он выполняет авторитетное чтение `package_version_ref`, `package_ref` и `package_source_id` из `package-hub` либо получает от оркестрационного контура уже проверенный снимок этих данных и сверяет его с `WorkspaceSource.metadata_json`. Для checkout используются тип источника `source_ref_kind`, значение `source_ref`, `source_commit_sha`, идентичность `PackageSource` и `manifest_digest`; если хотя бы одно значение расходится с замороженными refs `Run`, подготовка завершается `failed_precondition` до обращения к внешнему источнику.
+Перед materialization runtime-контур не должен доверять строковому `source_ref` из `AgentRun`. Обязательный MVP-путь: runtime выполняет авторитетное чтение `package_version_ref`, `package_ref` и `package_source_id` из `package-hub`, получает `PackageVersion.source_ref.kind`, `PackageVersion.source_ref.ref`, `PackageVersion.source_ref.commit_sha` и идентичность `PackageSource`, затем сверяет их с `manifest_digest` и безопасными refs `Run`. Для checkout используются только эти авторитетно разрешённые значения; если хотя бы одно значение расходится с замороженными refs `Run`, подготовка завершается `failed_precondition` до обращения к внешнему источнику.
 
 ## Сгенерированный контекст
 
@@ -136,7 +137,7 @@ sequenceDiagram
 - Если `package-hub` больше не отдаёт установку или manifest после создания `Run`, уже замороженный `Run` остаётся исторически валидным, но новый runtime start должен завершиться безопасной ошибкой зависимости.
 - `package-hub` не создаёт локальные пути и не подготавливает workspace.
 - `runtime-manager` не выбирает flow, stage, role, prompt или guidance packages самостоятельно.
-- `runtime-manager` не выводит способ получения пакета из произвольной строки `source_ref`: тип источника, commit и идентичность источника приходят из `package-hub` и проверяются до checkout.
+- `runtime-manager` не выводит способ получения пакета из произвольной строки `source_ref`: тип источника, commit и идентичность источника всегда читаются из `package-hub` по `package_version_ref` и проверяются до checkout.
 - `platform-mcp-server` может инициировать подготовку runtime как инструментальная поверхность, но не становится владельцем `Run` или workspace policy.
 
 ## Бэклог реализации
