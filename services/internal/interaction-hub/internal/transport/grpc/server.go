@@ -32,7 +32,7 @@ type interactionService interface {
 	ListSubscriptions(context.Context, interactionservice.ListSubscriptionsInput) ([]entity.Subscription, value.PageResult, error)
 	PlanDelivery(context.Context, interactionservice.PlanDeliveryInput) (entity.DeliveryAttempt, error)
 	RecordDeliveryResult(context.Context, interactionservice.RecordDeliveryResultInput) (entity.DeliveryAttempt, error)
-	RecordChannelCallback(context.Context) error
+	RecordChannelCallback(context.Context, interactionservice.RecordChannelCallbackInput) (interactionservice.ChannelCallbackResult, error)
 	GetDeliveryStatus(context.Context, interactionservice.GetDeliveryStatusInput) (interactionservice.DeliveryStatusResult, error)
 }
 
@@ -159,19 +159,12 @@ func (s *Server) RecordDeliveryResult(ctx context.Context, request *interactions
 	return commandResponse(ctx, request, casters.RecordDeliveryResultInput, s.service.RecordDeliveryResult, casters.DeliveryAttemptResponse)
 }
 
-func (s *Server) RecordChannelCallback(ctx context.Context, _ *interactionsv1.RecordChannelCallbackRequest) (*interactionsv1.ChannelCallbackResponse, error) {
-	return emptyResponse[interactionsv1.ChannelCallbackResponse](ctx, s.service.RecordChannelCallback)
+func (s *Server) RecordChannelCallback(ctx context.Context, request *interactionsv1.RecordChannelCallbackRequest) (*interactionsv1.ChannelCallbackResponse, error) {
+	return commandResponse(ctx, request, casters.RecordChannelCallbackInput, s.service.RecordChannelCallback, casters.ChannelCallbackResponse)
 }
 
 func (s *Server) GetDeliveryStatus(ctx context.Context, request *interactionsv1.GetDeliveryStatusRequest) (*interactionsv1.DeliveryStatusResponse, error) {
 	return commandResponse(ctx, request, casters.GetDeliveryStatusInput, s.service.GetDeliveryStatus, casters.DeliveryStatusResponse)
-}
-
-func emptyResponse[Response any](ctx context.Context, call func(context.Context) error) (*Response, error) {
-	if err := call(ctx); err != nil {
-		return nil, err
-	}
-	return new(Response), nil
 }
 
 func commandResponse[Request any, Input any, Output any, Response any](

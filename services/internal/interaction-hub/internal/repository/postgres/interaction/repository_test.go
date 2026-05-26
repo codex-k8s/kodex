@@ -377,7 +377,7 @@ func TestRepositoryIntegrationDeliveryAttemptLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get route: %v", err)
 	}
-	if storedRoute.Scope != route.Scope || storedRoute.RoutingPolicyRef != "policy:route-standard" {
+	if storedRoute.Scope != route.Scope || storedRoute.RoutingPolicyRef != "policy:route-standard" || storedRoute.PackageVersionRef != route.PackageVersionRef || storedRoute.CallbackRouteRef != route.CallbackRouteRef || storedRoute.RuntimeRef != route.RuntimeRef {
 		t.Fatalf("route = %+v, want stored route", storedRoute)
 	}
 	activeRoute, err := repository.FindActiveDeliveryRoute(ctx, route.Scope)
@@ -398,7 +398,7 @@ func TestRepositoryIntegrationDeliveryAttemptLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get attempt by delivery id: %v", err)
 	}
-	if storedAttempt.Target.ID != request.ID || storedAttempt.Status != enum.DeliveryAttemptStatusQueued || storedAttempt.PayloadDigest != attempt.PayloadDigest {
+	if storedAttempt.Target.ID != request.ID || storedAttempt.Status != enum.DeliveryAttemptStatusQueued || storedAttempt.PayloadDigest != attempt.PayloadDigest || storedAttempt.DeliveryCommandRef != attempt.DeliveryCommandRef {
 		t.Fatalf("stored attempt = %+v, want queued request attempt", storedAttempt)
 	}
 	listedAttempts, err := repository.ListDeliveryAttempts(ctx, query.DeliveryAttemptFilter{Target: attempt.Target, Limit: 10})
@@ -427,6 +427,27 @@ func TestRepositoryIntegrationDeliveryAttemptLifecycle(t *testing.T) {
 	}
 	if storedAccepted.Status != enum.DeliveryAttemptStatusAccepted || storedAccepted.ChannelMessageRef != "channel:message-1" || storedAccepted.ResultFingerprint != accepted.ResultFingerprint || storedAccepted.SentAt == nil {
 		t.Fatalf("accepted attempt = %+v, want accepted with channel ref", storedAccepted)
+	}
+
+	callback := testChannelCallback(storedAccepted, request.ID, sentAt.Add(time.Minute))
+	callbackResult := testCommandResult(uuid.New(), "callback-record", enum.OperationRecordChannelCallback, interactionevents.AggregateCallback, callback.ID, "callback-record-fingerprint", callback.CreatedAt)
+	callbackEvent := testOutboxEvent(interactionevents.EventCallbackReceived, interactionevents.AggregateCallback, callback.ID, callback.CreatedAt)
+	if err := repository.CreateChannelCallbackWithResult(ctx, callback, callbackResult, callbackEvent); err != nil {
+		t.Fatalf("create channel callback: %v", err)
+	}
+	storedCallback, err := repository.GetChannelCallbackByCallbackID(ctx, callback.CallbackID)
+	if err != nil {
+		t.Fatalf("get callback by callback id: %v", err)
+	}
+	if storedCallback.DeliveryAttemptID == nil || *storedCallback.DeliveryAttemptID != storedAccepted.ID || storedCallback.CallbackRouteRef != callback.CallbackRouteRef || storedCallback.CallbackFingerprint != callback.CallbackFingerprint {
+		t.Fatalf("stored callback = %+v, want linked callback refs", storedCallback)
+	}
+	latestCallback, err := repository.GetLatestChannelCallback(ctx, query.ChannelCallbackFilter{DeliveryAttemptIDs: []uuid.UUID{storedAccepted.ID}})
+	if err != nil {
+		t.Fatalf("get latest callback: %v", err)
+	}
+	if latestCallback.ID != callback.ID {
+		t.Fatalf("latest callback = %+v, want %s", latestCallback, callback.ID)
 	}
 }
 
@@ -574,10 +595,13 @@ func testDeliveryRoute(now time.Time) entity.DeliveryRoute {
 	return entity.DeliveryRoute{
 		ID:                     uuid.New(),
 		Scope:                  value.ScopeRef{Type: enum.ScopeTypeService, Ref: "agent-manager"},
-		SurfaceKind:            enum.DeliverySurfaceKindWebConsole,
-		ChannelCapabilityRef:   "capability:web-console",
-		PackageInstallationRef: "package:interaction-core",
+		SurfaceKind:            enum.DeliverySurfaceKindChannelPackage,
+		ChannelCapabilityRef:   "capability:channel",
+		PackageInstallationRef: "package-installation:channel-core",
+		PackageVersionRef:      "package-version:channel-core:v1",
 		RoutingPolicyRef:       "policy:route-standard",
+		CallbackRouteRef:       "callback-route:interaction-channel",
+		RuntimeRef:             "runtime:channel-core",
 		Status:                 enum.DeliveryRouteStatusActive,
 		CreatedAt:              now,
 		UpdatedAt:              now,
@@ -586,16 +610,48 @@ func testDeliveryRoute(now time.Time) entity.DeliveryRoute {
 
 func testDeliveryAttempt(requestID uuid.UUID, routeID uuid.UUID, now time.Time) entity.DeliveryAttempt {
 	return entity.DeliveryAttempt{
-		ID:            uuid.New(),
-		Target:        value.DeliveryTarget{Kind: value.DeliveryTargetKindRequest, ID: requestID},
-		RouteID:       routeID,
-		DeliveryID:    "delivery-" + uuid.NewString(),
-		DeliveryKind:  enum.DeliveryKindApproval,
-		Status:        enum.DeliveryAttemptStatusQueued,
-		AttemptNumber: 1,
-		PayloadDigest: "sha256:" + strings.Repeat("e", 64),
-		CreatedAt:     now,
-		UpdatedAt:     now,
+		ID:                     uuid.New(),
+		Target:                 value.DeliveryTarget{Kind: value.DeliveryTargetKindRequest, ID: requestID},
+		RouteID:                routeID,
+		DeliveryID:             "delivery-" + uuid.NewString(),
+		DeliveryKind:           enum.DeliveryKindApproval,
+		Status:                 enum.DeliveryAttemptStatusQueued,
+		AttemptNumber:          1,
+		PayloadDigest:          "sha256:" + strings.Repeat("e", 64),
+		ChannelCapabilityRef:   "capability:channel",
+		PackageInstallationRef: "package-installation:channel-core",
+		PackageVersionRef:      "package-version:channel-core:v1",
+		DeliveryCommandRef:     "interaction.delivery_command:" + uuid.NewString(),
+		CallbackRef:            "interaction.callback:" + uuid.NewString(),
+		CallbackRouteRef:       "callback-route:interaction-channel",
+		RuntimeRef:             "runtime:channel-core",
+		RoutingPolicyRef:       "policy:route-standard",
+		CreatedAt:              now,
+		UpdatedAt:              now,
+	}
+}
+
+func testChannelCallback(attempt entity.DeliveryAttempt, requestID uuid.UUID, now time.Time) entity.ChannelCallback {
+	size := int64(256)
+	return entity.ChannelCallback{
+		ID:                  uuid.New(),
+		CallbackID:          "callback-" + uuid.NewString(),
+		DeliveryID:          attempt.DeliveryID,
+		DeliveryAttemptID:   &attempt.ID,
+		RequestID:           &requestID,
+		SourceRouteID:       &attempt.RouteID,
+		ActorRef:            "user:approver-1",
+		Action:              string(enum.InteractionResponseActionApprove),
+		CallbackSummary:     "safe callback summary",
+		CallbackObject:      value.ObjectRef{URI: "s3://kodex-interactions/callbacks/1", Digest: "sha256:" + strings.Repeat("c", 64), SizeBytes: &size},
+		SignatureStatus:     enum.CallbackSignatureStatusVerified,
+		ProcessingStatus:    enum.CallbackProcessingStatusAccepted,
+		ReceivedAt:          now,
+		CreatedAt:           now,
+		CallbackRouteRef:    attempt.CallbackRouteRef,
+		GatewayRef:          "gateway:request-1",
+		CorrelationID:       "trace-callback",
+		CallbackFingerprint: "sha256:" + strings.Repeat("d", 64),
 	}
 }
 
@@ -613,9 +669,12 @@ INSERT INTO interaction_hub_delivery_routes (
     routing_policy_ref,
     status,
     created_at,
-    updated_at
-) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-`, route.ID, string(route.Scope.Type), route.Scope.Ref, string(route.SurfaceKind), route.ChannelCapabilityRef, route.PackageInstallationRef, route.RoutingPolicyRef, string(route.Status), route.CreatedAt, route.UpdatedAt)
+    updated_at,
+    package_version_ref,
+    callback_route_ref,
+    runtime_ref
+) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+`, route.ID, string(route.Scope.Type), route.Scope.Ref, string(route.SurfaceKind), route.ChannelCapabilityRef, route.PackageInstallationRef, route.RoutingPolicyRef, string(route.Status), route.CreatedAt, route.UpdatedAt, route.PackageVersionRef, route.CallbackRouteRef, route.RuntimeRef)
 	if err != nil {
 		t.Fatalf("insert delivery route: %v", err)
 	}

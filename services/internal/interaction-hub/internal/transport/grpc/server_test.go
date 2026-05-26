@@ -111,7 +111,7 @@ func TestServerRoutesAllStableRPCsToDomainUseCases(t *testing.T) {
 			return err
 		}},
 		{name: "RecordChannelCallback", want: enum.OperationRecordChannelCallback, call: func(ctx context.Context, s *Server) error {
-			_, err := s.RecordChannelCallback(ctx, &interactionsv1.RecordChannelCallbackRequest{})
+			_, err := s.RecordChannelCallback(ctx, validRecordChannelCallbackRequest())
 			return err
 		}},
 		{name: "GetDeliveryStatus", want: enum.OperationGetDeliveryStatus, call: func(ctx context.Context, s *Server) error {
@@ -443,8 +443,26 @@ func (f *fakeInteractionService) RecordDeliveryResult(_ context.Context, input i
 	}, nil
 }
 
-func (f *fakeInteractionService) RecordChannelCallback(context.Context) error {
-	return f.record(enum.OperationRecordChannelCallback)
+func (f *fakeInteractionService) RecordChannelCallback(_ context.Context, input interactionservice.RecordChannelCallbackInput) (interactionservice.ChannelCallbackResult, error) {
+	if err := f.record(enum.OperationRecordChannelCallback); err != nil {
+		return interactionservice.ChannelCallbackResult{}, err
+	}
+	now := time.Date(2026, 5, 26, 12, 7, 0, 0, time.UTC)
+	return interactionservice.ChannelCallbackResult{Callback: entity.ChannelCallback{
+		ID:               uuid.New(),
+		CallbackID:       input.Callback.CallbackID,
+		DeliveryID:       input.Callback.DeliveryID,
+		ActorRef:         input.Callback.ActorRef,
+		Action:           input.Callback.Action,
+		CallbackSummary:  input.Callback.AnswerSummary,
+		SignatureStatus:  input.Callback.SignatureStatus,
+		ProcessingStatus: enum.CallbackProcessingStatusAccepted,
+		ReceivedAt:       input.Callback.ReceivedAt,
+		CreatedAt:        now,
+		CallbackRouteRef: "callback-route:interaction-channel",
+		GatewayRef:       input.Callback.GatewayRef,
+		CorrelationID:    input.Callback.CorrelationID,
+	}}, nil
 }
 
 func (f *fakeInteractionService) GetDeliveryStatus(_ context.Context, input interactionservice.GetDeliveryStatusInput) (interactionservice.DeliveryStatusResult, error) {
@@ -607,6 +625,26 @@ func validRecordDeliveryResultRequest() *interactionsv1.RecordDeliveryResultRequ
 			ResultStatus:      interactionsv1.ChannelDeliveryResultStatus_CHANNEL_DELIVERY_RESULT_STATUS_ACCEPTED,
 			ChannelMessageRef: ptr("channel:message-1"),
 			OccurredAt:        occurredAt,
+		},
+	}
+}
+
+func validRecordChannelCallbackRequest() *interactionsv1.RecordChannelCallbackRequest {
+	receivedAt := time.Date(2026, 5, 26, 12, 7, 0, 0, time.UTC).Format(time.RFC3339Nano)
+	return &interactionsv1.RecordChannelCallbackRequest{
+		Meta: commandMeta(),
+		Callback: &interactionsv1.ChannelCallbackEnvelope{
+			ContractVersion: "interaction.channel.v1",
+			CallbackId:      "callback-1",
+			DeliveryId:      ptr("delivery-1"),
+			RequestRef:      ptr(uuid.NewString()),
+			ActorRef:        ptr("user:approver-1"),
+			Action:          "approve",
+			AnswerSummary:   ptr("safe callback summary"),
+			SignatureStatus: interactionsv1.CallbackSignatureStatus_CALLBACK_SIGNATURE_STATUS_VERIFIED,
+			GatewayRef:      ptr("gateway:request-1"),
+			ReceivedAt:      receivedAt,
+			CorrelationId:   "trace-callback",
 		},
 	}
 }

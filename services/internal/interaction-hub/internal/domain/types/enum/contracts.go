@@ -435,15 +435,61 @@ func (v DeliveryErrorClass) Valid() bool {
 type ChannelDeliveryResultStatus string
 
 const (
-	ChannelDeliveryResultStatusAccepted ChannelDeliveryResultStatus = "accepted"
-	ChannelDeliveryResultStatusDeferred ChannelDeliveryResultStatus = "deferred"
-	ChannelDeliveryResultStatusRejected ChannelDeliveryResultStatus = "rejected"
-	ChannelDeliveryResultStatusFailed   ChannelDeliveryResultStatus = "failed"
+	ChannelDeliveryResultStatusAccepted  ChannelDeliveryResultStatus = "accepted"
+	ChannelDeliveryResultStatusDeferred  ChannelDeliveryResultStatus = "deferred"
+	ChannelDeliveryResultStatusRejected  ChannelDeliveryResultStatus = "rejected"
+	ChannelDeliveryResultStatusFailed    ChannelDeliveryResultStatus = "failed"
+	ChannelDeliveryResultStatusDelivered ChannelDeliveryResultStatus = "delivered"
+	ChannelDeliveryResultStatusExpired   ChannelDeliveryResultStatus = "expired"
 )
 
 func (v ChannelDeliveryResultStatus) Valid() bool {
 	switch v {
-	case ChannelDeliveryResultStatusAccepted, ChannelDeliveryResultStatusDeferred, ChannelDeliveryResultStatusRejected, ChannelDeliveryResultStatusFailed:
+	case ChannelDeliveryResultStatusAccepted, ChannelDeliveryResultStatusDeferred, ChannelDeliveryResultStatusRejected, ChannelDeliveryResultStatusFailed, ChannelDeliveryResultStatusDelivered, ChannelDeliveryResultStatusExpired:
+		return true
+	default:
+		return false
+	}
+}
+
+type CallbackSignatureStatus string
+
+const (
+	CallbackSignatureStatusVerified             CallbackSignatureStatus = "verified"
+	CallbackSignatureStatusTrustedInternal      CallbackSignatureStatus = "trusted_internal"
+	CallbackSignatureStatusRejectedBeforeDomain CallbackSignatureStatus = "rejected_before_domain"
+)
+
+func (v CallbackSignatureStatus) Valid() bool {
+	switch v {
+	case CallbackSignatureStatusVerified, CallbackSignatureStatusTrustedInternal, CallbackSignatureStatusRejectedBeforeDomain:
+		return true
+	default:
+		return false
+	}
+}
+
+func (v CallbackSignatureStatus) Accepted() bool {
+	switch v {
+	case CallbackSignatureStatusVerified, CallbackSignatureStatusTrustedInternal:
+		return true
+	default:
+		return false
+	}
+}
+
+type CallbackProcessingStatus string
+
+const (
+	CallbackProcessingStatusAccepted  CallbackProcessingStatus = "accepted"
+	CallbackProcessingStatusDuplicate CallbackProcessingStatus = "duplicate"
+	CallbackProcessingStatusRejected  CallbackProcessingStatus = "rejected"
+	CallbackProcessingStatusFailed    CallbackProcessingStatus = "failed"
+)
+
+func (v CallbackProcessingStatus) Valid() bool {
+	switch v {
+	case CallbackProcessingStatusAccepted, CallbackProcessingStatusDuplicate, CallbackProcessingStatusRejected, CallbackProcessingStatusFailed:
 		return true
 	default:
 		return false

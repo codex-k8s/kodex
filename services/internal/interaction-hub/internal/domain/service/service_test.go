@@ -584,6 +584,15 @@ func TestServicePlansDeliveryWithSafeOutboxAndIdempotentReplay(t *testing.T) {
 	if !strings.HasPrefix(attempt.PayloadDigest, "sha256:") {
 		t.Fatalf("payload digest = %q, want sha256 digest", attempt.PayloadDigest)
 	}
+	if attempt.ChannelCapabilityRef != "capability:channel" ||
+		attempt.PackageInstallationRef != "package-installation:channel-core" ||
+		attempt.PackageVersionRef != "package-version:channel-core:v1" ||
+		attempt.DeliveryCommandRef == "" ||
+		attempt.CallbackRef == "" ||
+		attempt.CallbackRouteRef != "callback-route:interaction-channel" ||
+		attempt.RuntimeRef != "runtime:channel-core" {
+		t.Fatalf("attempt refs = %+v, want channel package refs and command envelope refs", attempt)
+	}
 	if len(repository.events) != 1 {
 		t.Fatalf("events = %d, want 1", len(repository.events))
 	}
@@ -593,6 +602,9 @@ func TestServicePlansDeliveryWithSafeOutboxAndIdempotentReplay(t *testing.T) {
 	}
 	if payload["delivery_attempt_id"] != attempt.ID.String() || payload["route_id"] != routeID.String() || payload["status"] != "queued" {
 		t.Fatalf("payload = %+v, want safe delivery refs", payload)
+	}
+	if payload["delivery_command_ref"] != attempt.DeliveryCommandRef || payload["channel_capability_ref"] != attempt.ChannelCapabilityRef {
+		t.Fatalf("payload = %+v, want safe channel contract refs", payload)
 	}
 	if _, ok := payload["prompt_summary"]; ok {
 		t.Fatalf("outbox payload contains prompt_summary: %+v", payload)
@@ -624,18 +636,21 @@ func TestServiceRecordsDeliveryResultAndBlocksTerminalRollback(t *testing.T) {
 	input := RecordDeliveryResultInput{
 		Meta: validCommandMeta(),
 		Result: value.ChannelDeliveryResult{
-			ContractVersion:   "interaction.channel.v1",
-			DeliveryID:        planned.DeliveryID,
-			ResultStatus:      enum.ChannelDeliveryResultStatusAccepted,
-			ChannelMessageRef: "channel:message-1",
-			OccurredAt:        now.Add(2 * time.Minute),
+			ContractVersion:    "interaction.channel.v1",
+			DeliveryID:         planned.DeliveryID,
+			ResultStatus:       enum.ChannelDeliveryResultStatusAccepted,
+			ChannelMessageRef:  "channel:message-1",
+			OccurredAt:         now.Add(2 * time.Minute),
+			DeliveryCommandRef: planned.DeliveryCommandRef,
+			RuntimeRef:         planned.RuntimeRef,
+			RuntimeJobRef:      "runtime-job:delivery-1",
 		},
 	}
 	accepted, err := svc.RecordDeliveryResult(context.Background(), input)
 	if err != nil {
 		t.Fatalf("RecordDeliveryResult(): %v", err)
 	}
-	if accepted.Status != enum.DeliveryAttemptStatusAccepted || accepted.ChannelMessageRef != "channel:message-1" || accepted.SentAt == nil {
+	if accepted.Status != enum.DeliveryAttemptStatusAccepted || accepted.ChannelMessageRef != "channel:message-1" || accepted.SentAt == nil || accepted.RuntimeJobRef != "runtime-job:delivery-1" {
 		t.Fatalf("accepted = %+v, want accepted with channel ref", accepted)
 	}
 	if len(repository.events) != 2 {
@@ -728,6 +743,58 @@ func TestServiceRecordsTerminalDeliveryResultIdempotentlyByDeliveryID(t *testing
 	changed.Result.ErrorCode = "DIFFERENT"
 	if _, err := svc.RecordDeliveryResult(context.Background(), changed); !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("RecordDeliveryResult() changed terminal result err = %v, want ErrConflict", err)
+	}
+}
+
+func TestServiceRecordsDeliveredAndExpiredDeliveryResults(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name       string
+		status     enum.ChannelDeliveryResultStatus
+		wantStatus enum.DeliveryAttemptStatus
+		wantEvent  string
+	}{
+		{name: "delivered", status: enum.ChannelDeliveryResultStatusDelivered, wantStatus: enum.DeliveryAttemptStatusDelivered, wantEvent: "interaction.delivery.delivered"},
+		{name: "expired", status: enum.ChannelDeliveryResultStatusExpired, wantStatus: enum.DeliveryAttemptStatusExpired, wantEvent: "interaction.delivery.expired"},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			repository := newFakeRepository()
+			now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+			requestID := uuid.New()
+			routeID := uuid.New()
+			seedInteractionRequest(repository, requestID, now, enum.InteractionRequestStatusWaiting)
+			seedDeliveryRoute(repository, routeID, now)
+			svc := NewWithConfig(repository, Config{Clock: fixedClock{now: now.Add(time.Minute)}, UUIDGenerator: &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New()}}})
+			planned, err := svc.PlanDelivery(context.Background(), validPlanDeliveryInput(requestID, routeID))
+			if err != nil {
+				t.Fatalf("PlanDelivery(): %v", err)
+			}
+			updated, err := svc.RecordDeliveryResult(context.Background(), RecordDeliveryResultInput{
+				Meta: validCommandMeta(),
+				Result: value.ChannelDeliveryResult{
+					ContractVersion:    "interaction.channel.v1",
+					DeliveryID:         planned.DeliveryID,
+					ResultStatus:       tc.status,
+					ChannelMessageRef:  "channel:message-final",
+					OccurredAt:         now.Add(2 * time.Minute),
+					DeliveryCommandRef: planned.DeliveryCommandRef,
+				},
+			})
+			if err != nil {
+				t.Fatalf("RecordDeliveryResult(): %v", err)
+			}
+			if updated.Status != tc.wantStatus {
+				t.Fatalf("status = %s, want %s", updated.Status, tc.wantStatus)
+			}
+			if len(repository.events) != 2 || repository.events[1].EventType != tc.wantEvent {
+				t.Fatalf("events = %+v, want %s after requested", repository.events, tc.wantEvent)
+			}
+		})
 	}
 }
 
@@ -858,6 +925,113 @@ func TestServiceGetsDeliveryStatusByDeliveryID(t *testing.T) {
 	}
 }
 
+func TestServiceRecordsChannelCallbackWithSafeOutboxAndReplay(t *testing.T) {
+	t.Parallel()
+
+	repository := newFakeRepository()
+	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+	requestID := uuid.New()
+	routeID := uuid.New()
+	seedInteractionRequest(repository, requestID, now, enum.InteractionRequestStatusWaiting)
+	seedDeliveryRoute(repository, routeID, now)
+	svc := NewWithConfig(repository, Config{Clock: fixedClock{now: now.Add(time.Minute)}, UUIDGenerator: &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()}}})
+	planned, err := svc.PlanDelivery(context.Background(), validPlanDeliveryInput(requestID, routeID))
+	if err != nil {
+		t.Fatalf("PlanDelivery(): %v", err)
+	}
+	input := validRecordChannelCallbackInput(planned.DeliveryID, requestID)
+	result, err := svc.RecordChannelCallback(context.Background(), input)
+	if err != nil {
+		t.Fatalf("RecordChannelCallback(): %v", err)
+	}
+	callback := result.Callback
+	if callback.CallbackID != input.Callback.CallbackID || callback.DeliveryAttemptID == nil || *callback.DeliveryAttemptID != planned.ID || callback.RequestID == nil || *callback.RequestID != requestID {
+		t.Fatalf("callback = %+v, want linked callback", callback)
+	}
+	if callback.CallbackRouteRef != "callback-route:interaction-channel" || callback.ProcessingStatus != enum.CallbackProcessingStatusAccepted {
+		t.Fatalf("callback = %+v, want accepted callback with route ref", callback)
+	}
+	if len(repository.events) != 2 {
+		t.Fatalf("events=%d, want requested and callback", len(repository.events))
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(repository.events[1].Payload, &payload); err != nil {
+		t.Fatalf("unmarshal callback event: %v", err)
+	}
+	if payload["callback_id"] != callback.CallbackID || payload["delivery_id"] != planned.DeliveryID || payload["callback_route_ref"] != callback.CallbackRouteRef {
+		t.Fatalf("payload = %+v, want safe callback refs", payload)
+	}
+	if _, ok := payload["answer_summary"]; ok {
+		t.Fatalf("outbox payload contains answer_summary: %+v", payload)
+	}
+
+	replayed, err := svc.RecordChannelCallback(context.Background(), input)
+	if err != nil {
+		t.Fatalf("RecordChannelCallback() replay: %v", err)
+	}
+	if replayed.Callback.ID != callback.ID || len(repository.events) != 2 {
+		t.Fatalf("replay callback = %+v events=%d, want original callback and no extra event", replayed.Callback, len(repository.events))
+	}
+
+	changed := input
+	changed.Meta = validCommandMeta()
+	changed.Callback.AnswerSummary = "different safe callback summary"
+	if _, err := svc.RecordChannelCallback(context.Background(), changed); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("RecordChannelCallback() changed replay err = %v, want ErrConflict", err)
+	}
+}
+
+func TestServiceRejectsUnsafeChannelCallbackEnvelope(t *testing.T) {
+	t.Parallel()
+
+	repository := newFakeRepository()
+	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+	requestID := uuid.New()
+	routeID := uuid.New()
+	seedInteractionRequest(repository, requestID, now, enum.InteractionRequestStatusWaiting)
+	seedDeliveryRoute(repository, routeID, now)
+	svc := NewWithConfig(repository, Config{Clock: fixedClock{now: now.Add(time.Minute)}, UUIDGenerator: &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New()}}})
+	planned, err := svc.PlanDelivery(context.Background(), validPlanDeliveryInput(requestID, routeID))
+	if err != nil {
+		t.Fatalf("PlanDelivery(): %v", err)
+	}
+	input := validRecordChannelCallbackInput(planned.DeliveryID, requestID)
+	input.Callback.AnswerSummary = "Authorization: bearer secret-token"
+	if _, err := svc.RecordChannelCallback(context.Background(), input); !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("RecordChannelCallback() err = %v, want ErrInvalidArgument", err)
+	}
+	if len(repository.callbacks) != 0 {
+		t.Fatalf("callbacks=%d, want no callback writes", len(repository.callbacks))
+	}
+}
+
+func TestServiceGetsLatestCallbackInDeliveryStatus(t *testing.T) {
+	t.Parallel()
+
+	repository := newFakeRepository()
+	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+	requestID := uuid.New()
+	routeID := uuid.New()
+	seedInteractionRequest(repository, requestID, now, enum.InteractionRequestStatusWaiting)
+	seedDeliveryRoute(repository, routeID, now)
+	svc := NewWithConfig(repository, Config{Clock: fixedClock{now: now.Add(time.Minute)}, UUIDGenerator: &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()}}})
+	planned, err := svc.PlanDelivery(context.Background(), validPlanDeliveryInput(requestID, routeID))
+	if err != nil {
+		t.Fatalf("PlanDelivery(): %v", err)
+	}
+	callback, err := svc.RecordChannelCallback(context.Background(), validRecordChannelCallbackInput(planned.DeliveryID, requestID))
+	if err != nil {
+		t.Fatalf("RecordChannelCallback(): %v", err)
+	}
+	status, err := svc.GetDeliveryStatus(context.Background(), GetDeliveryStatusInput{DeliveryID: planned.DeliveryID})
+	if err != nil {
+		t.Fatalf("GetDeliveryStatus(): %v", err)
+	}
+	if status.LatestCallback == nil || status.LatestCallback.ID != callback.Callback.ID {
+		t.Fatalf("status latest callback = %+v, want callback %s", status.LatestCallback, callback.Callback.ID)
+	}
+}
+
 func TestServiceReadinessDependsOnRepository(t *testing.T) {
 	t.Parallel()
 
@@ -869,10 +1043,10 @@ func TestServiceReadinessDependsOnRepository(t *testing.T) {
 	}
 }
 
-func TestServiceBacklogRequiresReadyRepository(t *testing.T) {
+func TestServiceRecordChannelCallbackRequiresReadyRepository(t *testing.T) {
 	t.Parallel()
 
-	err := New(&fakeRepository{}).RecordChannelCallback(context.Background())
+	_, err := New(&fakeRepository{}).RecordChannelCallback(context.Background(), validRecordChannelCallbackInput("delivery-1", uuid.New()))
 	if !errors.Is(err, errs.ErrUnavailable) {
 		t.Fatalf("RecordChannelCallback() err = %v, want ErrUnavailable", err)
 	}
@@ -889,6 +1063,7 @@ type fakeRepository struct {
 	subscriptions        map[uuid.UUID]entity.Subscription
 	routes               map[uuid.UUID]entity.DeliveryRoute
 	deliveries           map[uuid.UUID]entity.DeliveryAttempt
+	callbacks            map[uuid.UUID]entity.ChannelCallback
 	results              map[string]entity.CommandResult
 	events               []entity.OutboxEvent
 	beforeDeliveryUpdate func(*fakeRepository)
@@ -905,6 +1080,7 @@ func newFakeRepository() *fakeRepository {
 		subscriptions: map[uuid.UUID]entity.Subscription{},
 		routes:        map[uuid.UUID]entity.DeliveryRoute{},
 		deliveries:    map[uuid.UUID]entity.DeliveryAttempt{},
+		callbacks:     map[uuid.UUID]entity.ChannelCallback{},
 		results:       map[string]entity.CommandResult{},
 	}
 }
@@ -1034,6 +1210,25 @@ func validPlanDeliveryInput(requestID uuid.UUID, routeID uuid.UUID) PlanDelivery
 	}
 }
 
+func validRecordChannelCallbackInput(deliveryID string, requestID uuid.UUID) RecordChannelCallbackInput {
+	return RecordChannelCallbackInput{
+		Meta: validCommandMeta(),
+		Callback: value.ChannelCallbackEnvelope{
+			ContractVersion: "interaction.channel.v1",
+			CallbackID:      uuid.NewString(),
+			DeliveryID:      deliveryID,
+			RequestRef:      requestID.String(),
+			ActorRef:        "user:approver-1",
+			Action:          string(enum.InteractionResponseActionApprove),
+			AnswerSummary:   "safe callback summary",
+			SignatureStatus: enum.CallbackSignatureStatusVerified,
+			GatewayRef:      "gateway:request-1",
+			ReceivedAt:      time.Date(2026, 5, 26, 12, 10, 0, 0, time.UTC),
+			CorrelationID:   "trace-callback",
+		},
+	}
+}
+
 func ptrTime(value time.Time) *time.Time {
 	return &value
 }
@@ -1070,10 +1265,13 @@ func seedDeliveryRoute(repository *fakeRepository, routeID uuid.UUID, now time.T
 	repository.routes[routeID] = entity.DeliveryRoute{
 		ID:                     routeID,
 		Scope:                  value.ScopeRef{Type: enum.ScopeTypeService, Ref: "agent-manager"},
-		SurfaceKind:            enum.DeliverySurfaceKindWebConsole,
-		ChannelCapabilityRef:   "capability:web-console",
-		PackageInstallationRef: "package:interaction-core",
+		SurfaceKind:            enum.DeliverySurfaceKindChannelPackage,
+		ChannelCapabilityRef:   "capability:channel",
+		PackageInstallationRef: "package-installation:channel-core",
+		PackageVersionRef:      "package-version:channel-core:v1",
 		RoutingPolicyRef:       "policy:route-standard",
+		CallbackRouteRef:       "callback-route:interaction-channel",
+		RuntimeRef:             "runtime:channel-core",
 		Status:                 enum.DeliveryRouteStatusActive,
 		CreatedAt:              now,
 		UpdatedAt:              now,
@@ -1398,6 +1596,69 @@ func (r *fakeRepository) ListDeliveryAttempts(_ context.Context, filter query.De
 		}
 	}
 	return deliveries, nil
+}
+
+func (r *fakeRepository) CreateChannelCallbackWithResult(_ context.Context, callback entity.ChannelCallback, result entity.CommandResult, event entity.OutboxEvent) error {
+	if _, ok := r.callbacks[callback.ID]; ok {
+		return errs.ErrAlreadyExists
+	}
+	for _, existing := range r.callbacks {
+		if existing.CallbackID == callback.CallbackID {
+			return errs.ErrAlreadyExists
+		}
+	}
+	r.callbacks[callback.ID] = callback
+	r.results[result.Key] = result
+	r.events = append(r.events, event)
+	return nil
+}
+
+func (r *fakeRepository) GetChannelCallback(_ context.Context, id uuid.UUID) (entity.ChannelCallback, error) {
+	callback, ok := r.callbacks[id]
+	if !ok {
+		return entity.ChannelCallback{}, errs.ErrNotFound
+	}
+	return callback, nil
+}
+
+func (r *fakeRepository) GetChannelCallbackByCallbackID(_ context.Context, callbackID string) (entity.ChannelCallback, error) {
+	for _, callback := range r.callbacks {
+		if callback.CallbackID == callbackID {
+			return callback, nil
+		}
+	}
+	return entity.ChannelCallback{}, errs.ErrNotFound
+}
+
+func (r *fakeRepository) GetLatestChannelCallback(_ context.Context, filter query.ChannelCallbackFilter) (entity.ChannelCallback, error) {
+	var latest entity.ChannelCallback
+	for _, callback := range r.callbacks {
+		if !callbackMatchesFilter(callback, filter) {
+			continue
+		}
+		if latest.ID == uuid.Nil || callback.CreatedAt.After(latest.CreatedAt) {
+			latest = callback
+		}
+	}
+	if latest.ID == uuid.Nil {
+		return entity.ChannelCallback{}, errs.ErrNotFound
+	}
+	return latest, nil
+}
+
+func callbackMatchesFilter(callback entity.ChannelCallback, filter query.ChannelCallbackFilter) bool {
+	if filter.DeliveryID != "" && callback.DeliveryID == filter.DeliveryID {
+		return true
+	}
+	if filter.RequestID != uuid.Nil && callback.RequestID != nil && *callback.RequestID == filter.RequestID {
+		return true
+	}
+	for _, id := range filter.DeliveryAttemptIDs {
+		if callback.DeliveryAttemptID != nil && *callback.DeliveryAttemptID == id {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *fakeRepository) GetCommandResult(_ context.Context, identity query.CommandIdentity) (entity.CommandResult, error) {

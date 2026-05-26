@@ -54,6 +54,7 @@ const (
 	operationCreateSubscription        = "domain.Repository.CreateSubscriptionWithResult"
 	operationCreateDeliveryAttempt     = "domain.Repository.CreateDeliveryAttemptWithResult"
 	operationUpdateDeliveryAttempt     = "domain.Repository.UpdateDeliveryAttemptWithResult"
+	operationCreateChannelCallback     = "domain.Repository.CreateChannelCallbackWithResult"
 	operationUpdateSubscription        = "domain.Repository.UpdateSubscriptionWithResult"
 	operationGetCommandResult          = "domain.Repository.GetCommandResult"
 	operationGetConversationMessage    = "domain.Repository.GetConversationMessage"
@@ -61,12 +62,15 @@ const (
 	operationGetDeliveryAttempt        = "domain.Repository.GetDeliveryAttempt"
 	operationGetDeliveryByDeliveryID   = "domain.Repository.GetDeliveryAttemptByDeliveryID"
 	operationGetDeliveryRoute          = "domain.Repository.GetDeliveryRoute"
+	operationGetChannelCallback        = "domain.Repository.GetChannelCallback"
+	operationGetCallbackByCallbackID   = "domain.Repository.GetChannelCallbackByCallbackID"
 	operationGetInteractionRequest     = "domain.Repository.GetInteractionRequest"
 	operationGetInteractionResponse    = "domain.Repository.GetInteractionResponse"
 	operationGetNotification           = "domain.Repository.GetNotification"
 	operationGetSubscription           = "domain.Repository.GetSubscription"
 	operationFindActiveDeliveryRoute   = "domain.Repository.FindActiveDeliveryRoute"
 	operationListDeliveryAttempts      = "domain.Repository.ListDeliveryAttempts"
+	operationGetLatestCallback         = "domain.Repository.GetLatestChannelCallback"
 	operationListConversationMessages  = "domain.Repository.ListConversationMessages"
 	operationListInteractionRequests   = "domain.Repository.ListInteractionRequests"
 	operationListExpirableRequests     = "domain.Repository.ListExpirableInteractionRequests"
@@ -272,6 +276,26 @@ func (r *Repository) GetDeliveryAttemptByDeliveryID(ctx context.Context, deliver
 
 func (r *Repository) ListDeliveryAttempts(ctx context.Context, filter query.DeliveryAttemptFilter) ([]entity.DeliveryAttempt, error) {
 	return queryAll(ctx, r.db, operationListDeliveryAttempts, queryDeliveryAttemptList, deliveryAttemptFilterArgs(filter), scanDeliveryAttempt)
+}
+
+func (r *Repository) CreateChannelCallbackWithResult(ctx context.Context, callback entity.ChannelCallback, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.mutate(ctx, operationCreateChannelCallback,
+		affectedMutation(queryChannelCallbackCreate, channelCallbackArgs(callback)),
+		commandResultMutation(result),
+		outboxEventMutation(event),
+	)
+}
+
+func (r *Repository) GetChannelCallback(ctx context.Context, id uuid.UUID) (entity.ChannelCallback, error) {
+	return queryOne(ctx, r.db, operationGetChannelCallback, queryChannelCallbackGet, pgx.NamedArgs{"id": id}, scanChannelCallback)
+}
+
+func (r *Repository) GetChannelCallbackByCallbackID(ctx context.Context, callbackID string) (entity.ChannelCallback, error) {
+	return queryOne(ctx, r.db, operationGetCallbackByCallbackID, queryChannelCallbackGetByID, pgx.NamedArgs{"callback_id": callbackID}, scanChannelCallback)
+}
+
+func (r *Repository) GetLatestChannelCallback(ctx context.Context, filter query.ChannelCallbackFilter) (entity.ChannelCallback, error) {
+	return queryOne(ctx, r.db, operationGetLatestCallback, queryChannelCallbackLatest, channelCallbackFilterArgs(filter), scanChannelCallback)
 }
 
 func (r *Repository) GetCommandResult(ctx context.Context, identity query.CommandIdentity) (entity.CommandResult, error) {

@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-26
-related_issues: [582, 768, 781, 800, 821, 835]
+related_issues: [582, 768, 781, 800, 821, 835, 843]
 related_prs: []
 related_adrs: []
 approvals:
@@ -76,7 +76,7 @@ approvals:
 | Subscription engine | Правила подписки на события и области, создание notification intent и reminders. |
 | Outbox-доставщик | Публикация `interaction.*` событий через `platform-event-log`. |
 
-Текущая сервисная основа реализует authoritative lifecycle `Notification`, `Subscription` и delivery attempts: создание notification intent, создание/изменение/отключение/чтение подписок, `PlanDelivery`, `RecordDeliveryResult`, `GetDeliveryStatus`, command idempotency, optimistic concurrency для subscription и safe `interaction.*` outbox events. Callback routes, channel contract integration и channel package runtime остаются отдельным delivery/callback контуром.
+Текущая сервисная основа реализует authoritative lifecycle `Notification`, `Subscription`, delivery attempts и safe callback records: создание notification intent, создание/изменение/отключение/чтение подписок, `PlanDelivery`, `RecordDeliveryResult`, `RecordChannelCallback`, `GetDeliveryStatus`, command idempotency, optimistic concurrency для subscription и safe `interaction.*` outbox events. Внешний `integration-gateway` callback route, конкретные channel packages и runtime worker остаются отдельным контуром.
 
 ## Основные потоки
 
@@ -188,6 +188,11 @@ sequenceDiagram
 | `correlation_id` | Связь с run, provider operation, runtime job, issue или инцидентом. |
 | `expires_at` | Срок действия запроса или попытки доставки. |
 | `retention_class` | Политика хранения callback и вложений. |
+| `package_installation_ref` / `package_version_ref` | Safe refs установленного channel package; package truth остаётся у `package-hub`. |
+| `channel_capability_ref` | Capability ref, выбранная route planner. |
+| `delivery_command_ref` | Safe ref подготовленного runtime command envelope. |
+| `callback_route_ref` | Safe ref gateway-owned callback route. |
+| `runtime_ref` | Safe ref package-owned runtime boundary. |
 
 ### Delivery result
 
@@ -195,6 +200,8 @@ sequenceDiagram
 |---|---|
 | `delivery_id` | Та же попытка доставки. |
 | `accepted` | Пакет принял попытку к доставке. |
+| `delivered` | Пакет сообщил доставку на внешнюю поверхность. |
+| `expired` | Пакет или runtime сообщил истечение попытки. |
 | `channel_message_ref` | Безопасная ссылка на сообщение канала, если она есть. |
 | `retry_after` | Когда можно повторить, если ошибка временная. |
 | `error_code` | Короткий безопасный код ошибки. |
@@ -241,7 +248,9 @@ sequenceDiagram
 - `interaction.subscription.updated`;
 - `interaction.delivery.requested` с safe refs попытки, route и request/notification target;
 - `interaction.delivery.accepted` с safe channel message ref;
+- `interaction.delivery.delivered`;
 - `interaction.delivery.failed` с bounded diagnostics и retry metadata;
+- `interaction.delivery.expired`;
 - `interaction.callback.received`;
 - `interaction.request.response_recorded`;
 - `interaction.request.expired`;

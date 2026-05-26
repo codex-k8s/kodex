@@ -42,6 +42,10 @@ type Repository interface {
 	GetDeliveryAttempt(context.Context, uuid.UUID) (entity.DeliveryAttempt, error)
 	GetDeliveryAttemptByDeliveryID(context.Context, string) (entity.DeliveryAttempt, error)
 	ListDeliveryAttempts(context.Context, query.DeliveryAttemptFilter) ([]entity.DeliveryAttempt, error)
+	CreateChannelCallbackWithResult(context.Context, entity.ChannelCallback, entity.CommandResult, entity.OutboxEvent) error
+	GetChannelCallback(context.Context, uuid.UUID) (entity.ChannelCallback, error)
+	GetChannelCallbackByCallbackID(context.Context, string) (entity.ChannelCallback, error)
+	GetLatestChannelCallback(context.Context, query.ChannelCallbackFilter) (entity.ChannelCallback, error)
 	GetCommandResult(context.Context, query.CommandIdentity) (entity.CommandResult, error)
 	ClaimOutboxEvents(ctx context.Context, limit int, now time.Time, lockedUntil time.Time) ([]entity.OutboxEvent, error)
 	MarkOutboxEventPublished(ctx context.Context, id uuid.UUID, attemptCount int, publishedAt time.Time) error

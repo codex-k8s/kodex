@@ -138,6 +138,22 @@ func (r *Repository) ListDeliveryAttempts(context.Context, query.DeliveryAttempt
 	return nil, errs.ErrNotImplemented
 }
 
+func (r *Repository) CreateChannelCallbackWithResult(context.Context, entity.ChannelCallback, entity.CommandResult, entity.OutboxEvent) error {
+	return errs.ErrNotImplemented
+}
+
+func (r *Repository) GetChannelCallback(context.Context, uuid.UUID) (entity.ChannelCallback, error) {
+	return entity.ChannelCallback{}, errs.ErrNotFound
+}
+
+func (r *Repository) GetChannelCallbackByCallbackID(context.Context, string) (entity.ChannelCallback, error) {
+	return entity.ChannelCallback{}, errs.ErrNotFound
+}
+
+func (r *Repository) GetLatestChannelCallback(context.Context, query.ChannelCallbackFilter) (entity.ChannelCallback, error) {
+	return entity.ChannelCallback{}, errs.ErrNotFound
+}
+
 func (r *Repository) GetCommandResult(context.Context, query.CommandIdentity) (entity.CommandResult, error) {
 	return entity.CommandResult{}, errs.ErrNotFound
 }

@@ -120,29 +120,63 @@ type DeliveryRoute struct {
 	SurfaceKind            enum.DeliverySurfaceKind
 	ChannelCapabilityRef   string
 	PackageInstallationRef string
+	PackageVersionRef      string
 	RoutingPolicyRef       string
+	CallbackRouteRef       string
+	RuntimeRef             string
 	Status                 enum.DeliveryRouteStatus
 	CreatedAt              time.Time
 	UpdatedAt              time.Time
 }
 
 type DeliveryAttempt struct {
-	ID                uuid.UUID
-	Target            value.DeliveryTarget
-	RouteID           uuid.UUID
-	DeliveryID        string
-	DeliveryKind      enum.DeliveryKind
-	Status            enum.DeliveryAttemptStatus
-	ChannelMessageRef string
-	AttemptNumber     int32
-	NextRetryAt       *time.Time
-	ErrorCode         string
-	ErrorClass        enum.DeliveryErrorClass
-	PayloadDigest     string
-	ResultFingerprint string
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
-	SentAt            *time.Time
+	ID                     uuid.UUID
+	Target                 value.DeliveryTarget
+	RouteID                uuid.UUID
+	DeliveryID             string
+	DeliveryKind           enum.DeliveryKind
+	Status                 enum.DeliveryAttemptStatus
+	ChannelMessageRef      string
+	AttemptNumber          int32
+	NextRetryAt            *time.Time
+	ErrorCode              string
+	ErrorClass             enum.DeliveryErrorClass
+	PayloadDigest          string
+	ResultFingerprint      string
+	ChannelCapabilityRef   string
+	PackageInstallationRef string
+	PackageVersionRef      string
+	DeliveryCommandRef     string
+	CallbackRef            string
+	CallbackRouteRef       string
+	RuntimeRef             string
+	RuntimeJobRef          string
+	RoutingPolicyRef       string
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
+	SentAt                 *time.Time
+}
+
+type ChannelCallback struct {
+	ID                  uuid.UUID
+	CallbackID          string
+	DeliveryID          string
+	DeliveryAttemptID   *uuid.UUID
+	RequestID           *uuid.UUID
+	SourceRouteID       *uuid.UUID
+	ActorRef            string
+	Action              string
+	CallbackSummary     string
+	CallbackObject      value.ObjectRef
+	SignatureStatus     enum.CallbackSignatureStatus
+	ProcessingStatus    enum.CallbackProcessingStatus
+	ErrorCode           string
+	ReceivedAt          time.Time
+	CreatedAt           time.Time
+	CallbackRouteRef    string
+	GatewayRef          string
+	CorrelationID       string
+	CallbackFingerprint string
 }
 
 type CommandResult struct {

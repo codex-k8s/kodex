@@ -406,6 +406,12 @@ message DeliveryRoute {
   string created_at = 8;
   // updated_at is an RFC3339 timestamp.
   string updated_at = 9;
+  // package_version_ref points to the selected package version without owning package truth.
+  optional string package_version_ref = 10;
+  // callback_route_ref points to a gateway-owned callback route when configured.
+  optional string callback_route_ref = 11;
+  // runtime_ref points to the package-owned runtime boundary, not a Kubernetes workload.
+  optional string runtime_ref = 12;
 }
 
 // DeliveryTarget identifies whether delivery belongs to a request or notification.
@@ -450,6 +456,24 @@ message DeliveryAttempt {
   string updated_at = 14;
   // sent_at is an RFC3339 timestamp when the command left interaction-hub.
   optional string sent_at = 15;
+  // channel_capability_ref is the selected package channel capability snapshot.
+  optional string channel_capability_ref = 16;
+  // package_installation_ref is the selected package installation snapshot.
+  optional string package_installation_ref = 17;
+  // package_version_ref is the selected package version snapshot.
+  optional string package_version_ref = 18;
+  // delivery_command_ref identifies the safe command envelope prepared for runtime.
+  optional string delivery_command_ref = 19;
+  // callback_ref is the opaque callback matching reference in the command envelope.
+  optional string callback_ref = 20;
+  // callback_route_ref points to a gateway-owned callback route when configured.
+  optional string callback_route_ref = 21;
+  // runtime_ref points to the package-owned runtime boundary, not a Kubernetes workload.
+  optional string runtime_ref = 22;
+  // runtime_job_ref is a safe runtime job ref reported by runtime when available.
+  optional string runtime_job_ref = 23;
+  // routing_policy_ref is the selected route policy snapshot.
+  optional string routing_policy_ref = 24;
 }
 
 // ChannelCallback stores a safe normalized callback record.
@@ -482,6 +506,14 @@ message ChannelCallback {
   string received_at = 13;
   // created_at is an RFC3339 timestamp when the callback was stored.
   string created_at = 14;
+  // delivery_id is the safe delivery id from the callback envelope when present.
+  optional string delivery_id = 15;
+  // callback_route_ref points to a gateway-owned callback route when present.
+  optional string callback_route_ref = 16;
+  // gateway_ref is a safe gateway request reference.
+  optional string gateway_ref = 17;
+  // correlation_id links this callback to traces and owner context.
+  optional string correlation_id = 18;
 }
 
 // ChannelDeliveryCommand is the stable DTO sent through the runtime boundary to
@@ -513,6 +545,22 @@ message ChannelDeliveryCommand {
   optional string expires_at = 12;
   // context_refs point to neighboring domain context without copying state.
   repeated ExternalRef context_refs = 13;
+  // route_id is the selected delivery route.
+  string route_id = 14;
+  // channel_capability_ref points to the package channel capability.
+  optional string channel_capability_ref = 15;
+  // package_installation_ref points to package-hub installation state.
+  optional string package_installation_ref = 16;
+  // package_version_ref points to selected package version state.
+  optional string package_version_ref = 17;
+  // delivery_command_ref identifies this safe runtime command envelope.
+  string delivery_command_ref = 18;
+  // callback_route_ref points to a gateway-owned callback route when configured.
+  optional string callback_route_ref = 19;
+  // runtime_ref points to the package-owned runtime boundary, not a Kubernetes workload.
+  optional string runtime_ref = 20;
+  // routing_policy_ref is the selected routing policy reference.
+  optional string routing_policy_ref = 21;
 }
 
 // ChannelDeliveryResult is the safe result returned from runtime or channel package workload.
@@ -533,6 +581,12 @@ message ChannelDeliveryResult {
   optional string retry_after = 7;
   // occurred_at is an RFC3339 timestamp.
   string occurred_at = 8;
+  // delivery_command_ref identifies the safe command envelope this result belongs to.
+  optional string delivery_command_ref = 9;
+  // runtime_ref points to the package-owned runtime boundary that produced the result.
+  optional string runtime_ref = 10;
+  // runtime_job_ref is a safe runtime job reference when available.
+  optional string runtime_job_ref = 11;
 }
 
 // ChannelCallbackEnvelope is the safe callback DTO passed from a gateway to the domain.
@@ -1009,6 +1063,8 @@ enum ChannelDeliveryResultStatus {
   CHANNEL_DELIVERY_RESULT_STATUS_DEFERRED = 2;
   CHANNEL_DELIVERY_RESULT_STATUS_REJECTED = 3;
   CHANNEL_DELIVERY_RESULT_STATUS_FAILED = 4;
+  CHANNEL_DELIVERY_RESULT_STATUS_DELIVERED = 5;
+  CHANNEL_DELIVERY_RESULT_STATUS_EXPIRED = 6;
 }
 
 enum CallbackSignatureStatus {

@@ -214,23 +214,32 @@ func subscriptionFilterArgs(filter query.SubscriptionFilter) pageQueryArgs {
 
 func deliveryAttemptArgs(attempt entity.DeliveryAttempt) pgx.NamedArgs {
 	return pgx.NamedArgs{
-		"id":                  attempt.ID,
-		"request_id":          postgreslib.NullableUUID(deliveryTargetID(attempt.Target, value.DeliveryTargetKindRequest)),
-		"notification_id":     postgreslib.NullableUUID(deliveryTargetID(attempt.Target, value.DeliveryTargetKindNotification)),
-		"route_id":            attempt.RouteID,
-		"delivery_id":         attempt.DeliveryID,
-		"delivery_kind":       string(attempt.DeliveryKind),
-		"status":              string(attempt.Status),
-		"channel_message_ref": attempt.ChannelMessageRef,
-		"attempt_number":      attempt.AttemptNumber,
-		"next_retry_at":       postgreslib.NullableTime(attempt.NextRetryAt),
-		"error_code":          attempt.ErrorCode,
-		"error_class":         string(attempt.ErrorClass),
-		"payload_digest":      attempt.PayloadDigest,
-		"result_fingerprint":  attempt.ResultFingerprint,
-		"created_at":          attempt.CreatedAt,
-		"updated_at":          attempt.UpdatedAt,
-		"sent_at":             postgreslib.NullableTime(attempt.SentAt),
+		"id":                       attempt.ID,
+		"request_id":               postgreslib.NullableUUID(deliveryTargetID(attempt.Target, value.DeliveryTargetKindRequest)),
+		"notification_id":          postgreslib.NullableUUID(deliveryTargetID(attempt.Target, value.DeliveryTargetKindNotification)),
+		"route_id":                 attempt.RouteID,
+		"delivery_id":              attempt.DeliveryID,
+		"delivery_kind":            string(attempt.DeliveryKind),
+		"status":                   string(attempt.Status),
+		"channel_message_ref":      attempt.ChannelMessageRef,
+		"attempt_number":           attempt.AttemptNumber,
+		"next_retry_at":            postgreslib.NullableTime(attempt.NextRetryAt),
+		"error_code":               attempt.ErrorCode,
+		"error_class":              string(attempt.ErrorClass),
+		"payload_digest":           attempt.PayloadDigest,
+		"result_fingerprint":       attempt.ResultFingerprint,
+		"channel_capability_ref":   attempt.ChannelCapabilityRef,
+		"package_installation_ref": attempt.PackageInstallationRef,
+		"package_version_ref":      attempt.PackageVersionRef,
+		"delivery_command_ref":     attempt.DeliveryCommandRef,
+		"callback_ref":             attempt.CallbackRef,
+		"callback_route_ref":       attempt.CallbackRouteRef,
+		"runtime_ref":              attempt.RuntimeRef,
+		"runtime_job_ref":          attempt.RuntimeJobRef,
+		"routing_policy_ref":       attempt.RoutingPolicyRef,
+		"created_at":               attempt.CreatedAt,
+		"updated_at":               attempt.UpdatedAt,
+		"sent_at":                  postgreslib.NullableTime(attempt.SentAt),
 	}
 }
 
@@ -249,6 +258,48 @@ func deliveryAttemptFilterArgs(filter query.DeliveryAttemptFilter) pgx.NamedArgs
 		"delivery_id":     filter.DeliveryID,
 		"limit":           filter.Limit,
 	}
+}
+
+func channelCallbackArgs(callback entity.ChannelCallback) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"id":                         callback.ID,
+		"callback_id":                callback.CallbackID,
+		"delivery_id":                callback.DeliveryID,
+		"delivery_attempt_id":        postgreslib.NullableUUID(callback.DeliveryAttemptID),
+		"request_id":                 postgreslib.NullableUUID(callback.RequestID),
+		"source_route_id":            postgreslib.NullableUUID(callback.SourceRouteID),
+		"actor_ref":                  callback.ActorRef,
+		"action":                     callback.Action,
+		"callback_summary":           callback.CallbackSummary,
+		"callback_object_uri":        callback.CallbackObject.URI,
+		"callback_object_digest":     callback.CallbackObject.Digest,
+		"callback_object_size_bytes": nullableInt64(callback.CallbackObject.SizeBytes),
+		"signature_status":           string(callback.SignatureStatus),
+		"processing_status":          string(callback.ProcessingStatus),
+		"error_code":                 callback.ErrorCode,
+		"received_at":                callback.ReceivedAt,
+		"created_at":                 callback.CreatedAt,
+		"callback_route_ref":         callback.CallbackRouteRef,
+		"gateway_ref":                callback.GatewayRef,
+		"correlation_id":             callback.CorrelationID,
+		"callback_fingerprint":       callback.CallbackFingerprint,
+	}
+}
+
+func channelCallbackFilterArgs(filter query.ChannelCallbackFilter) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"delivery_attempt_ids": filter.DeliveryAttemptIDs,
+		"request_id":           postgreslib.NullableUUID(uuidPtrOrNil(filter.RequestID)),
+		"delivery_id":          filter.DeliveryID,
+	}
+}
+
+func uuidPtrOrNil(id uuid.UUID) *uuid.UUID {
+	if id == uuid.Nil {
+		return nil
+	}
+	value := id
+	return &value
 }
 
 func commandResultArgs(result entity.CommandResult) pgx.NamedArgs {

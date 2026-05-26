@@ -106,14 +106,56 @@ func (t DeliveryTarget) Valid() bool {
 }
 
 type ChannelDeliveryResult struct {
-	ContractVersion   string
-	DeliveryID        string
-	ResultStatus      enum.ChannelDeliveryResultStatus
-	ChannelMessageRef string
-	ErrorCode         string
-	ErrorClass        enum.DeliveryErrorClass
-	RetryAfter        *time.Time
-	OccurredAt        time.Time
+	ContractVersion    string
+	DeliveryID         string
+	ResultStatus       enum.ChannelDeliveryResultStatus
+	ChannelMessageRef  string
+	ErrorCode          string
+	ErrorClass         enum.DeliveryErrorClass
+	RetryAfter         *time.Time
+	OccurredAt         time.Time
+	DeliveryCommandRef string
+	RuntimeRef         string
+	RuntimeJobRef      string
+}
+
+type ChannelDeliveryCommand struct {
+	ContractVersion        string
+	DeliveryID             string
+	Target                 DeliveryTarget
+	DeliveryKind           enum.DeliveryKind
+	Scope                  ScopeRef
+	RecipientRefs          []ActorRef
+	MessageTemplateRef     string
+	MessageSummary         string
+	Actions                []InteractionAction
+	CallbackRef            string
+	CorrelationID          string
+	ExpiresAt              *time.Time
+	ContextRefs            []ExternalRef
+	RouteID                uuid.UUID
+	ChannelCapabilityRef   string
+	PackageInstallationRef string
+	PackageVersionRef      string
+	DeliveryCommandRef     string
+	CallbackRouteRef       string
+	RuntimeRef             string
+	RoutingPolicyRef       string
+}
+
+type ChannelCallbackEnvelope struct {
+	ContractVersion string
+	CallbackID      string
+	DeliveryID      string
+	RequestRef      string
+	ActorRef        string
+	Action          string
+	AnswerSummary   string
+	AnswerObject    ObjectRef
+	SignatureStatus enum.CallbackSignatureStatus
+	GatewayRef      string
+	ReceivedAt      time.Time
+	CorrelationID   string
 }
 
 type PageRequest struct {
