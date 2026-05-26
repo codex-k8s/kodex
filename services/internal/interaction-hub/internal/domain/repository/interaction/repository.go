@@ -2,12 +2,28 @@ package interaction
 
 import (
 	"context"
+	"time"
 
+	"github.com/google/uuid"
+
+	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/enum"
+	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/value"
 )
 
 // Repository is the domain persistence port for interaction-hub.
 type Repository interface {
 	Ready() bool
 	RecordBacklogOperation(context.Context, enum.Operation) error
+	CreateConversationThreadWithResult(context.Context, entity.ConversationThread, entity.CommandResult, entity.OutboxEvent) error
+	GetConversationThread(context.Context, uuid.UUID) (entity.ConversationThread, error)
+	CreateConversationMessageWithResult(context.Context, entity.ConversationMessage, entity.ConversationThread, int64, entity.CommandResult, entity.OutboxEvent) error
+	GetConversationMessage(context.Context, uuid.UUID) (entity.ConversationMessage, error)
+	ListConversationMessages(context.Context, query.ConversationMessageFilter) ([]entity.ConversationMessage, value.PageResult, error)
+	GetCommandResult(context.Context, query.CommandIdentity) (entity.CommandResult, error)
+	ClaimOutboxEvents(ctx context.Context, limit int, now time.Time, lockedUntil time.Time) ([]entity.OutboxEvent, error)
+	MarkOutboxEventPublished(ctx context.Context, id uuid.UUID, attemptCount int, publishedAt time.Time) error
+	MarkOutboxEventFailed(ctx context.Context, id uuid.UUID, attemptCount int, nextAttemptAt time.Time, lastError string) error
+	MarkOutboxEventPermanentlyFailed(ctx context.Context, id uuid.UUID, attemptCount int, failedAt time.Time, lastError string) error
 }

@@ -5,8 +5,8 @@ title: kodex — требования домена центра взаимоде
 status: active
 owner_role: PM
 created_at: 2026-05-22
-updated_at: 2026-05-25
-related_issues: [582, 768, 781]
+updated_at: 2026-05-26
+related_issues: [582, 768, 781, 800]
 related_prs: []
 related_docsets:
   - docs/platform/architecture/domain_map.md
@@ -87,7 +87,7 @@ approvals:
 | INT-AC-2 | Если `agent-manager` или `governance-manager` запрашивает Human gate, `interaction-hub` хранит delivery request, attempts и ответ человека, а состояние `Run` или gate decision меняется только через сервис-владелец. |
 | INT-AC-3 | Если provider write operation требует approval, `provider-hub` получает ссылку на решение от владельца decision state; `interaction-hub` передаёт только delivery/callback результат и не становится владельцем provider approval. |
 | INT-AC-4 | Если пользователь отвечает через UI или внешний канал, callback приводит к одному и тому же lifecycle переходу запроса. |
-| INT-AC-5 | Если внешний канал недоступен, `interaction-hub` фиксирует ошибку доставки, retry/reminder policy и событие для операторской видимости. |
+| INT-AC-5 | Если внешний канал недоступен, `interaction-hub` фиксирует ошибку доставки, refs retry/reminder policy и событие для операторской видимости. |
 | INT-AC-6 | Если установлен channel package, `interaction-hub` использует его capability и package installation ref, но не меняет установку и не запускает runtime-нагрузку сам. |
 | INT-AC-7 | Если канал возвращает callback повторно, команда идемпотентна и не создаёт второй ответ. |
 | INT-AC-8 | Если запрос истёк, домен публикует событие истечения и соседний сервис-владелец решает, как менять своё состояние. |

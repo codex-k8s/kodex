@@ -11,16 +11,24 @@ import (
 func TestReadinessChecksRequireComposedService(t *testing.T) {
 	t.Parallel()
 
-	checks := readinessChecks(interactionservice.New(interactionstub.NewRepository()))
-	if len(checks) != 1 {
-		t.Fatalf("len(checks) = %d, want 1", len(checks))
+	checks := readinessChecks(interactionservice.New(interactionstub.NewRepository()), fakePingStore{}, nil)
+	if len(checks) != 2 {
+		t.Fatalf("len(checks) = %d, want 2", len(checks))
 	}
-	if err := checks[0].Check(context.Background()); err != nil {
-		t.Fatalf("readiness check: %v", err)
+	for i, check := range checks {
+		if err := check.Check(context.Background()); err != nil {
+			t.Fatalf("readiness check %d: %v", i, err)
+		}
 	}
 
-	checks = readinessChecks(nil)
+	checks = readinessChecks(nil, fakePingStore{}, nil)
 	if err := checks[0].Check(context.Background()); err == nil {
 		t.Fatal("nil service readiness succeeded, want failure")
 	}
+}
+
+type fakePingStore struct{}
+
+func (fakePingStore) Ping(context.Context) error {
+	return nil
 }
