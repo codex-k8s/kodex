@@ -52,7 +52,7 @@ func (h handlers) providerWebhook(c *echo.Context) error {
 		CorrelationID: requestIDFromContext(c.Request().Context()),
 	})
 	if err != nil {
-		return WrapSafeError(stdhttp.StatusServiceUnavailable, CodeDownstreamUnavailable, "provider-hub is unavailable", true, err)
+		return providerHubError(err)
 	}
 	status := generated.ProviderWebhookAcceptedStatusAccepted
 	if result.Duplicate {
@@ -91,9 +91,6 @@ func (h handlers) openAPISpec(c *echo.Context) error {
 func providerHeaders(req *stdhttp.Request) (string, string, error) {
 	deliveryID := strings.TrimSpace(req.Header.Get("X-GitHub-Delivery"))
 	eventName := strings.TrimSpace(req.Header.Get("X-GitHub-Event"))
-	if deliveryID == "" {
-		deliveryID = strings.TrimSpace(req.Header.Get("X-Kodex-External-Delivery"))
-	}
 	if eventName == "" {
 		eventName = strings.TrimSpace(req.Header.Get("X-Gitlab-Event"))
 	}

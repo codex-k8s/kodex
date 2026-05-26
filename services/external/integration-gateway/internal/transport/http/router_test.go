@@ -11,6 +11,8 @@ import (
 
 	providerhubclient "github.com/codex-k8s/kodex/services/external/integration-gateway/internal/clients/providerhub"
 	"github.com/codex-k8s/kodex/services/external/integration-gateway/internal/transport/http/generated"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestRouterServesOpenAPISpec(t *testing.T) {
@@ -122,6 +124,120 @@ func TestProviderWebhookRejectsWhenVerifierMissing(t *testing.T) {
 	}
 	if providerHub.event.ProviderSlug != "" {
 		t.Fatalf("provider hub was called: %+v", providerHub.event)
+	}
+}
+
+func TestProviderWebhookRejectsUndeclaredExternalDeliveryFallback(t *testing.T) {
+	providerHub := &fakeProviderHub{}
+	router := newTestRouter(t, Config{
+		ServiceName:            "integration-gateway",
+		OpenAPISpecPath:        "../../../../../../specs/openapi/integration-gateway.v1.yaml",
+		RequestTimeout:         time.Second,
+		MaxBodyBytes:           1024,
+		ProviderWebhookEnabled: true,
+		AllowedProviderSlugs:   []string{"github"},
+	}, providerHub)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/provider-webhooks/github", strings.NewReader(`{"action":"ping"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Kodex-External-Delivery", "external-delivery")
+	req.Header.Set("X-GitHub-Event", "ping")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d, body = %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	var body generated.SafeError
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode SafeError: %v", err)
+	}
+	if body.Code != generated.SafeErrorCodeInvalidRequest {
+		t.Fatalf("code = %s, want invalid_request", body.Code)
+	}
+	if providerHub.event.ProviderSlug != "" {
+		t.Fatalf("provider hub was called: %+v", providerHub.event)
+	}
+}
+
+func TestProviderHubErrorMapping(t *testing.T) {
+	tests := []struct {
+		name       string
+		code       codes.Code
+		statusCode int
+		errorCode  generated.SafeErrorCode
+		retryable  bool
+	}{
+		{
+			name:       "invalid argument",
+			code:       codes.InvalidArgument,
+			statusCode: http.StatusBadRequest,
+			errorCode:  generated.SafeErrorCodeInvalidRequest,
+			retryable:  false,
+		},
+		{
+			name:       "failed precondition",
+			code:       codes.FailedPrecondition,
+			statusCode: http.StatusBadRequest,
+			errorCode:  generated.SafeErrorCodeInvalidRequest,
+			retryable:  false,
+		},
+		{
+			name:       "resource exhausted",
+			code:       codes.ResourceExhausted,
+			statusCode: http.StatusTooManyRequests,
+			errorCode:  generated.SafeErrorCodeRateLimited,
+			retryable:  true,
+		},
+		{
+			name:       "deadline exceeded",
+			code:       codes.DeadlineExceeded,
+			statusCode: http.StatusServiceUnavailable,
+			errorCode:  generated.SafeErrorCodeDownstreamUnavailable,
+			retryable:  true,
+		},
+		{
+			name:       "unavailable",
+			code:       codes.Unavailable,
+			statusCode: http.StatusServiceUnavailable,
+			errorCode:  generated.SafeErrorCodeDownstreamUnavailable,
+			retryable:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			providerHub := &fakeProviderHub{err: status.Error(tt.code, "internal provider-hub detail")}
+			router := newTestRouterWithVerifier(t, Config{
+				ServiceName:            "integration-gateway",
+				OpenAPISpecPath:        "../../../../../../specs/openapi/integration-gateway.v1.yaml",
+				RequestTimeout:         time.Second,
+				MaxBodyBytes:           1024,
+				ProviderWebhookEnabled: true,
+				AllowedProviderSlugs:   []string{"github"},
+			}, providerHub, allowAllVerifier{})
+
+			req := httptest.NewRequest(http.MethodPost, "/v1/provider-webhooks/github", strings.NewReader(`{"action":"ping"}`))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("X-GitHub-Delivery", "delivery-error")
+			req.Header.Set("X-GitHub-Event", "ping")
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != tt.statusCode {
+				t.Fatalf("status = %d, want %d, body = %s", rec.Code, tt.statusCode, rec.Body.String())
+			}
+			var body generated.SafeError
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatalf("decode SafeError: %v", err)
+			}
+			if body.Code != tt.errorCode || body.Retryable != tt.retryable {
+				t.Fatalf("SafeError = %+v, want code %s retryable %t", body, tt.errorCode, tt.retryable)
+			}
+			if strings.Contains(body.Message, "internal provider-hub detail") {
+				t.Fatalf("SafeError leaked downstream details: %+v", body)
+			}
+		})
 	}
 }
 
