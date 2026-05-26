@@ -40,6 +40,7 @@
 | IGW-1 | #792 | готово | Сервисный каркас `integration-gateway`: process/config/graceful shutdown, health/readiness/metrics, HTTP router, OpenAPI validation/generated models, safe middleware и provider-hub client interface. Provider route зарегистрирован как отключённый stub до verifier-среза. |
 | IGW-2 | #807 | готово | GitHub provider webhook route в `integration-gateway`: source binding `provider_slug=github`, обязательные GitHub headers, HMAC SHA-256 проверка `X-Hub-Signature-256` через `secret_store_type + secret_store_ref`, payload limit и вызов `provider-hub.IngestWebhookEvent` без хранения state в gateway. |
 | IGW-4 | #819 | готово | Security hardening активного GitHub route: per-route/per-source in-memory limits, backpressure с `Retry-After`, safe audit summary, replay/idempotency tests и OpenAPI compatibility tests без gateway inbox, БД или provider business logic. |
+| IGW-5 | #829 | готово | Deploy-контур `integration-gateway`: Dockerfile, Kubernetes manifests, secret refs, smoke, runbook, monitoring и rollback без реального remote deploy и без хранения gateway state. |
 
 ## Текущий бэклог
 
@@ -104,4 +105,4 @@
 
 ## Рекомендуемый следующий шаг
 
-Следующий provider-срез — интеграция provider tools с `agent-manager`/platform MCP, GitLab write/webhook adapter или эксплуатационный контур `integration-gateway`. End-to-end bootstrap/adoption не смешивать с UI и gateway.
+Следующий provider-срез — интеграция provider tools с `agent-manager`/platform MCP, GitLab write/webhook adapter или будущие callback routes `integration-gateway` после появления owner-service contracts. End-to-end bootstrap/adoption не смешивать с UI и gateway.
