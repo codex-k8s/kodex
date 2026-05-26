@@ -87,6 +87,16 @@ var agentSessionSnapshotKindsFromProto = map[agentsv1.AgentSessionSnapshotKind]e
 	agentsv1.AgentSessionSnapshotKind_AGENT_SESSION_SNAPSHOT_KIND_RECOVERY_CHECKPOINT: enum.AgentSessionSnapshotKindRecoveryCheckpoint,
 }
 
+var acceptanceCheckKindsFromProto = acceptanceCheckKindValues()
+
+var acceptanceStatusesFromProto = enumMap(
+	enumPair(agentsv1.AcceptanceStatus_ACCEPTANCE_STATUS_PENDING, enum.AcceptanceStatusPending),
+	enumPair(agentsv1.AcceptanceStatus_ACCEPTANCE_STATUS_PASSED, enum.AcceptanceStatusPassed),
+	enumPair(agentsv1.AcceptanceStatus_ACCEPTANCE_STATUS_FAILED, enum.AcceptanceStatusFailed),
+	enumPair(agentsv1.AcceptanceStatus_ACCEPTANCE_STATUS_WAITING, enum.AcceptanceStatusWaiting),
+	enumPair(agentsv1.AcceptanceStatus_ACCEPTANCE_STATUS_SKIPPED, enum.AcceptanceStatusSkipped),
+)
+
 var (
 	scopeTypesToProto                = reverseEnumMap(scopeTypesFromProto)
 	flowStatusesToProto              = reverseEnumMap(flowStatusesFromProto)
@@ -98,6 +108,8 @@ var (
 	promptVersionStatusesToProto     = reverseEnumMap(promptVersionStatusesFromProto)
 	agentRunStatusesToProto          = reverseEnumMap(agentRunStatusesFromProto)
 	agentSessionSnapshotKindsToProto = reverseEnumMap(agentSessionSnapshotKindsFromProto)
+	acceptanceCheckKindsToProto      = reverseEnumMap(acceptanceCheckKindsFromProto)
+	acceptanceStatusesToProto        = reverseEnumMap(acceptanceStatusesFromProto)
 )
 
 func ScopeTypeFromProto(value agentsv1.AgentScopeType) (enum.AgentScopeType, error) {
@@ -219,6 +231,26 @@ func AgentSessionSnapshotKindToProto(value enum.AgentSessionSnapshotKind) agents
 	return enumToProto(value, agentSessionSnapshotKindsToProto, agentsv1.AgentSessionSnapshotKind_AGENT_SESSION_SNAPSHOT_KIND_UNSPECIFIED)
 }
 
+func AcceptanceCheckKindFromProto(value agentsv1.AcceptanceCheckKind) (enum.AcceptanceCheckKind, error) {
+	return enumFromProto(value, acceptanceCheckKindsFromProto)
+}
+
+func AcceptanceCheckKindToProto(value enum.AcceptanceCheckKind) agentsv1.AcceptanceCheckKind {
+	return enumToProto(value, acceptanceCheckKindsToProto, agentsv1.AcceptanceCheckKind_ACCEPTANCE_CHECK_KIND_UNSPECIFIED)
+}
+
+func AcceptanceStatusFromProto(value agentsv1.AcceptanceStatus) (enum.AcceptanceStatus, error) {
+	return enumFromProto(value, acceptanceStatusesFromProto)
+}
+
+func OptionalAcceptanceStatusFromProto(value *agentsv1.AcceptanceStatus) (*enum.AcceptanceStatus, error) {
+	return optionalEnumFromProto(value, acceptanceStatusesFromProto)
+}
+
+func AcceptanceStatusToProto(value enum.AcceptanceStatus) agentsv1.AcceptanceStatus {
+	return enumToProto(value, acceptanceStatusesToProto, agentsv1.AcceptanceStatus_ACCEPTANCE_STATUS_UNSPECIFIED)
+}
+
 func enumFromProto[Proto comparable, Domain comparable](value Proto, values map[Proto]Domain) (Domain, error) {
 	result, ok := values[value]
 	if !ok {
@@ -280,5 +312,29 @@ func stageRoleBindingKindValues() map[agentsv1.StageRoleBindingKind]enum.StageRo
 	values[agentsv1.StageRoleBindingKind_STAGE_ROLE_BINDING_KIND_QA] = enum.StageRoleBindingKindQA
 	values[agentsv1.StageRoleBindingKind_STAGE_ROLE_BINDING_KIND_OBSERVER] = enum.StageRoleBindingKindObserver
 	values[agentsv1.StageRoleBindingKind_STAGE_ROLE_BINDING_KIND_CUSTOM] = enum.StageRoleBindingKindCustom
+	return values
+}
+
+func acceptanceCheckKindValues() map[agentsv1.AcceptanceCheckKind]enum.AcceptanceCheckKind {
+	protoValues := []agentsv1.AcceptanceCheckKind{
+		agentsv1.AcceptanceCheckKind_ACCEPTANCE_CHECK_KIND_ARTIFACT,
+		agentsv1.AcceptanceCheckKind_ACCEPTANCE_CHECK_KIND_WATERMARK,
+		agentsv1.AcceptanceCheckKind_ACCEPTANCE_CHECK_KIND_POLICY,
+		agentsv1.AcceptanceCheckKind_ACCEPTANCE_CHECK_KIND_ROLE_RESULT,
+		agentsv1.AcceptanceCheckKind_ACCEPTANCE_CHECK_KIND_HUMAN_GATE,
+		agentsv1.AcceptanceCheckKind_ACCEPTANCE_CHECK_KIND_FOLLOW_UP,
+	}
+	domainValues := []enum.AcceptanceCheckKind{
+		enum.AcceptanceCheckKindArtifact,
+		enum.AcceptanceCheckKindWatermark,
+		enum.AcceptanceCheckKindPolicy,
+		enum.AcceptanceCheckKindRoleResult,
+		enum.AcceptanceCheckKindHumanGate,
+		enum.AcceptanceCheckKindFollowUp,
+	}
+	values := make(map[agentsv1.AcceptanceCheckKind]enum.AcceptanceCheckKind, len(protoValues))
+	for idx, protoValue := range protoValues {
+		values[protoValue] = domainValues[idx]
+	}
 	return values
 }

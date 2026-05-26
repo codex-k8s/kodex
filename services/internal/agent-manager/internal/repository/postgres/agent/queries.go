@@ -5,6 +5,10 @@ import "fmt"
 var (
 	queryCommandResultCreate               = mustLoadQuery("command_result__create")
 	queryCommandResultGet                  = mustLoadQuery("command_result__get")
+	queryAcceptanceResultCreate            = mustLoadQuery("acceptance_result__create")
+	queryAcceptanceResultGet               = mustLoadQuery("acceptance_result__get")
+	queryAcceptanceResultList              = mustLoadQuery("acceptance_result__list")
+	queryAcceptanceResultUpdate            = mustLoadQuery("acceptance_result__update")
 	queryFlowCreate                        = mustLoadQuery("flow__create")
 	queryFlowGet                           = mustLoadQuery("flow__get")
 	queryFlowList                          = mustLoadQuery("flow__list")

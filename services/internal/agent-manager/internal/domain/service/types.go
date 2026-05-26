@@ -267,3 +267,22 @@ type SessionSnapshotResult struct {
 }
 
 type AgentRunList = query.AgentRunFilter
+
+type RequestAcceptanceInput struct {
+	Meta       value.CommandMeta
+	SessionID  uuid.UUID
+	RunID      *uuid.UUID
+	StageID    *uuid.UUID
+	CheckKinds []enum.AcceptanceCheckKind
+	TargetRef  string
+}
+
+type RecordAcceptanceResultInput struct {
+	Meta               value.CommandMeta
+	AcceptanceResultID uuid.UUID
+	Status             enum.AcceptanceStatus
+	TargetRef          string
+	DetailsJSON        []byte
+}
+
+type AcceptanceResultList = query.AcceptanceResultFilter

@@ -42,6 +42,10 @@ type Repository interface {
 	ListAgentRuns(ctx context.Context, filter query.AgentRunFilter) ([]entity.AgentRun, value.PageResult, error)
 	CreateSessionStateSnapshotWithResult(ctx context.Context, snapshot entity.AgentSessionStateSnapshot, session entity.AgentSession, previousSessionVersion int64, result entity.CommandResult, event entity.OutboxEvent) error
 	GetSessionStateSnapshot(ctx context.Context, id uuid.UUID) (entity.AgentSessionStateSnapshot, error)
+	CreateAcceptanceResultWithResult(ctx context.Context, acceptance entity.AcceptanceResult, result entity.CommandResult, event entity.OutboxEvent) error
+	UpdateAcceptanceResultWithResult(ctx context.Context, acceptance entity.AcceptanceResult, previousVersion int64, result entity.CommandResult, event *entity.OutboxEvent) error
+	GetAcceptanceResult(ctx context.Context, id uuid.UUID) (entity.AcceptanceResult, error)
+	ListAcceptanceResults(ctx context.Context, filter query.AcceptanceResultFilter) ([]entity.AcceptanceResult, value.PageResult, error)
 	GetCommandResult(ctx context.Context, identity query.CommandIdentity) (entity.CommandResult, error)
 	RecordCommandResult(ctx context.Context, result entity.CommandResult) error
 	ClaimOutboxEvents(ctx context.Context, limit int, now time.Time, lockedUntil time.Time) ([]entity.OutboxEvent, error)

@@ -208,6 +208,24 @@ func sessionStateSnapshotArgs(snapshot entity.AgentSessionStateSnapshot) pgx.Nam
 	}
 }
 
+func acceptanceResultArgs(acceptance entity.AcceptanceResult) pgx.NamedArgs {
+	return postgreslib.AddBaseArgs(pgx.NamedArgs{
+		"session_id":   acceptance.SessionID,
+		"run_id":       postgreslib.NullableUUID(acceptance.RunID),
+		"stage_id":     postgreslib.NullableUUID(acceptance.StageID),
+		"check_kind":   string(acceptance.CheckKind),
+		"status":       string(acceptance.Status),
+		"target_ref":   acceptance.TargetRef,
+		"details_json": objectPayload(acceptance.DetailsJSON),
+	}, acceptance.ID, acceptance.Version, acceptance.CreatedAt, acceptance.UpdatedAt)
+}
+
+func acceptanceResultUpdateArgs(acceptance entity.AcceptanceResult, previousVersion int64) pgx.NamedArgs {
+	args := acceptanceResultArgs(acceptance)
+	args["previous_version"] = previousVersion
+	return args
+}
+
 func commandResultArgs(result entity.CommandResult) pgx.NamedArgs {
 	args := pgx.NamedArgs{"key": result.Key}
 	args["command_id"] = postgreslib.NullableUUID(result.CommandID)
@@ -291,6 +309,15 @@ func agentRunFilterArgs(filter query.AgentRunFilter) pageQueryArgs {
 		"status":                 optionalEnum(filter.Status),
 		"provider_work_item_ref": optionalString(filter.ProviderWorkItemRef),
 	})
+}
+
+func acceptanceResultFilterArgs(filter query.AcceptanceResultFilter) pageQueryArgs {
+	args := pgx.NamedArgs{}
+	args["session_id"] = optionalUUID(filter.SessionID)
+	args["run_id"] = optionalUUID(filter.RunID)
+	args["stage_id"] = optionalUUID(filter.StageID)
+	args["status"] = optionalEnum(filter.Status)
+	return withPage(filter.Page, args)
 }
 
 func withPage(page value.PageRequest, args pgx.NamedArgs) pageQueryArgs {

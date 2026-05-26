@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-12
 updated_at: 2026-05-26
-related_issues: [733, 749, 759, 772, 322, 782, 795]
+related_issues: [733, 749, 759, 772, 322, 782, 795, 809]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -24,7 +24,7 @@ approvals:
 - Технические агрегаты: `CommandResult`, `OutboxEvent`.
 - Основные связи: flow содержит этапы; этапы привязывают роли; роль использует prompt version; сессия содержит agent `Run`; `Run` фиксирует immutable-ссылки и версии flow/stage/role/prompt/guidance, а также ссылки на provider/runtime/package.
 - Риски миграций: нельзя хранить runtime filesystem, provider-native истину, пакетную истину, диалоговые сообщения, секреты и полные логи в БД `agent-manager`.
-- Первый контур хранения `agent-manager` покрывает flow, версии flow, этапы, переходы, роли, шаблоны prompt, версии prompt, сессии, agent `Run`, снимки состояния, идемпотентные результаты команд и service-local outbox.
+- Первый контур хранения `agent-manager` покрывает flow, версии flow, этапы, переходы, роли, шаблоны prompt, версии prompt, сессии, agent `Run`, снимки состояния, acceptance result, идемпотентные результаты команд и service-local outbox.
 
 ## Правило внешних ссылок
 
@@ -227,7 +227,7 @@ approvals:
 
 ### AcceptanceCheck и AcceptanceResult
 
-`AcceptanceCheck` описывает проверку, `AcceptanceResult` фиксирует результат.
+`AcceptanceCheck` описывает тип проверки в policy/flow-контексте, а `AcceptanceResult` является хранимым агрегатом результата. Базовый lifecycle создаёт один pending result на команду `RequestAcceptance`, затем `RecordAcceptanceResult` переводит его в `passed`, `failed`, `waiting` или `skipped` через ожидаемую версию.
 
 | Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
@@ -235,11 +235,14 @@ approvals:
 | `session_id` | uuid | нет | Сессия. |
 | `run_id` | uuid | да | Запуск, который дал артефакт. |
 | `stage_id` | uuid | да | Этап. |
-| `check_kind` | enum | нет | `artifact`, `watermark`, `policy`, `role_result`, `governance_gate`, `follow_up`. |
+| `check_kind` | enum | нет | `artifact`, `watermark`, `policy`, `role_result`, `human_gate`, `follow_up`. |
 | `status` | enum | нет | `pending`, `passed`, `failed`, `waiting`, `skipped`. |
 | `target_ref` | text | да | Provider/runtime/package/governance/interaction ref. |
-| `details` | jsonb | нет | Безопасные детали проверки. |
+| `details_json` | jsonb | нет | Bounded JSON-object с безопасными `summary`, `digest`, `artifact_refs`, `risk_ref`, `gate_ref` и другими refs. |
+| `version` | bigint | нет | Оптимистичная конкуренция результата приёмки. |
 | `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
+
+`details_json` не является отчётом QA runner и не хранит raw provider payload, workspace files, prompt text, flow files, руководящие документы, stdout/stderr/logs, секреты, токены или PII. Если приёмка ждёт Human gate или governance decision, `agent-manager` фиксирует только статус ожидания и безопасные refs; само решение хранит сервис-владелец.
 
 ### FollowUpIntent
 

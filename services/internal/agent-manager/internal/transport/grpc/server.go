@@ -48,6 +48,10 @@ type agentService interface {
 	RecordSessionStateSnapshot(context.Context, agentservice.RecordSessionStateSnapshotInput) (agentservice.SessionSnapshotResult, error)
 	ListAgentRuns(context.Context, agentservice.AgentRunList) ([]entity.AgentRun, value.PageResult, error)
 	GetSessionStateSnapshot(context.Context, uuid.UUID) (entity.AgentSessionStateSnapshot, error)
+	RequestAcceptance(context.Context, agentservice.RequestAcceptanceInput) (entity.AcceptanceResult, error)
+	RecordAcceptanceResult(context.Context, agentservice.RecordAcceptanceResultInput) (entity.AcceptanceResult, error)
+	GetAcceptanceResult(context.Context, uuid.UUID) (entity.AcceptanceResult, error)
+	ListAcceptanceResults(context.Context, agentservice.AcceptanceResultList) ([]entity.AcceptanceResult, value.PageResult, error)
 }
 
 // NewServer creates an agent-manager gRPC server boundary.
@@ -173,6 +177,26 @@ func (server *Server) ListAgentRuns(ctx context.Context, request *agentsv1.ListA
 	return grpcserver.HandleUnary(ctx, request, grpccasters.ListAgentRunsInput, server.listAgentRuns, grpccasters.ListAgentRunsResponse)
 }
 
+// RequestAcceptance creates a pending machine acceptance check.
+func (server *Server) RequestAcceptance(ctx context.Context, request *agentsv1.RequestAcceptanceRequest) (*agentsv1.AcceptanceResultResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.RequestAcceptanceInput, server.service.RequestAcceptance, grpccasters.AcceptanceResultResponse)
+}
+
+// RecordAcceptanceResult records safe machine acceptance result metadata.
+func (server *Server) RecordAcceptanceResult(ctx context.Context, request *agentsv1.RecordAcceptanceResultRequest) (*agentsv1.AcceptanceResultResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.RecordAcceptanceResultInput, server.service.RecordAcceptanceResult, grpccasters.AcceptanceResultResponse)
+}
+
+// GetAcceptanceResult returns one acceptance result.
+func (server *Server) GetAcceptanceResult(ctx context.Context, request *agentsv1.GetAcceptanceResultRequest) (*agentsv1.AcceptanceResultResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.GetAcceptanceResultInput, server.getAcceptanceResult, grpccasters.AcceptanceResultResponse)
+}
+
+// ListAcceptanceResults returns acceptance results by session, run, stage or status.
+func (server *Server) ListAcceptanceResults(ctx context.Context, request *agentsv1.ListAcceptanceResultsRequest) (*agentsv1.ListAcceptanceResultsResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.ListAcceptanceResultsInput, server.listAcceptanceResults, grpccasters.ListAcceptanceResultsResponse)
+}
+
 func (server *Server) getFlow(ctx context.Context, input grpccasters.IDQueryInput) (grpccasters.FlowOutput, error) {
 	return entityOutputByID(ctx, input, server.service.GetFlow, server.flowOutput)
 }
@@ -223,6 +247,14 @@ func (server *Server) agentSessionOutput(ctx context.Context, session entity.Age
 
 func (server *Server) listAgentRuns(ctx context.Context, input agentservice.AgentRunList) (grpccasters.AgentRunListOutput, error) {
 	return listWithPage(ctx, input, server.service.ListAgentRuns)
+}
+
+func (server *Server) getAcceptanceResult(ctx context.Context, input grpccasters.IDQueryInput) (entity.AcceptanceResult, error) {
+	return server.service.GetAcceptanceResult(ctx, input.ID)
+}
+
+func (server *Server) listAcceptanceResults(ctx context.Context, input agentservice.AcceptanceResultList) (grpccasters.AcceptanceResultListOutput, error) {
+	return listWithPage(ctx, input, server.service.ListAcceptanceResults)
 }
 
 func listWithPage[Input any, Item any](
