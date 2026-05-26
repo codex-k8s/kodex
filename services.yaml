@@ -178,6 +178,13 @@ spec:
         - libs/go/servicemain
         - proto/kodex/agents/v1
         - proto/kodex/providers/v1
+    codex-hook-ingress:
+      value: "0.1.0"
+      bumpOn:
+        - services/internal/codex-hook-ingress
+        - libs/go/serviceprocess
+        - libs/go/servicemain
+        - specs/jsonschema/codex-hook-ingress.v1
     interaction-hub:
       value: "0.1.0"
       bumpOn:
@@ -542,6 +549,24 @@ spec:
           readyz: /health/readyz
           metrics: /metrics
         mcp: /mcp
+    - name: codex-hook-ingress
+      status: scaffold
+      zone: internal
+      path: services/internal/codex-hook-ingress
+      ownerDomain: codex-hook-ingress
+      apiContracts:
+        jsonschema: specs/jsonschema/codex-hook-ingress.v1/**
+        logicalCommand: SubmitHookEvent
+        physicalTransport: not-selected
+      implementation:
+        businessRoutes: planned-CHI-4
+        database: stub-only-no-raw-payload-storage
+        transport: in-process-logical-boundary-only
+      deploy:
+        health:
+          livez: /health/livez
+          readyz: /health/readyz
+          metrics: /metrics
     - name: governance-manager
       status: scaffold
       zone: internal

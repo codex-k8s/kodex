@@ -5,8 +5,8 @@ title: codex-hook-ingress - модель данных и состояния
 status: active
 owner_role: SA
 created_at: 2026-05-22
-updated_at: 2026-05-25
-related_issues: [698, 753, 778, 786, 322]
+updated_at: 2026-05-26
+related_issues: [698, 753, 778, 786, 793, 322]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -271,7 +271,9 @@ approvals:
 
 ## Миграции
 
-Этот документ не создаёт миграции. Перед кодовым срезом нужно отдельно согласовать:
+CHI-3 не создаёт миграции и использует только repository interfaces плюс in-memory stub для проверки service skeleton. Stub хранит безопасный idempotency record: `event_id`, `payload_digest`, `hook_event_name`, `correlation_id`, `retention_class`, normalized `HookHandlerResult` и время записи. Raw prompt, raw tool input/output, stdout/stderr, transcript, session dump, provider payload, kubeconfig, secret values, `SKILL.md` или package manifest не хранятся.
+
+Перед появлением persistent storage нужно отдельно согласовать:
 
 - нужен ли `codex-hook-ingress` собственный PostgreSQL schema или достаточно общего event log plus short retention store;
 - какие таблицы требуются для MVP service skeleton;

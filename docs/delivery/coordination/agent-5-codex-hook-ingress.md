@@ -31,12 +31,12 @@
 | CHI-0 | #698 | готово | Доменная документация `codex-hook-ingress`: требования, дизайн, модель состояния, API overview, delivery-план, карта Issue и связь со сквозной архитектурой hooks/skills. |
 | CHI-1 | #778 | готово | Machine-readable JSON Schema для normalized hook envelope и sanitizer contract, safe examples, индексы спецификаций и обновлённая трассируемость. |
 | CHI-2 | #786 | готово | Контракт hook emitter/local sidecar, runtime config JSON Schema, logical `SubmitHookEvent`, sanitizer до buffer/send, auth, idempotency, ordering, retry, bounded buffer, backpressure и failure policy без выбора physical transport. |
+| CHI-3 | #793 | готово | Сервисный каркас `services/internal/codex-hook-ingress`: process, config, graceful shutdown, health/readiness/metrics, in-process logical `SubmitHookEvent`, source binding placeholder, schema validation hook, sanitizer boundary, idempotency repository stub без raw payload storage. |
 
 ## Текущий бэклог агента #5
 
 | Срез | Что осталось |
 |---|---|
-| CHI-3 | Сервисный каркас `codex-hook-ingress`: process, config, health/readiness, metrics, source verifier, sanitizer и idempotency. |
 | CHI-4 | Routes к `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub` и operations/realtime контуру для safe event parts. |
 | CHI-5 | `PermissionRequest` и policy-controlled `PreToolUse` bridge через `governance-manager`, ожидание flow у `agent-manager` и delivery через `interaction-hub`. |
 | CHI-6 | Realtime/ops feed, retention, sanitizer metrics, rate limits, backpressure и operator diagnostics. |
@@ -62,4 +62,4 @@
 - Не переносить MCP `tools/list` или `tools/call` в hook ingress.
 - Не создавать skill catalog, package manifest store или materialization state внутри `codex-hook-ingress`.
 - Не хранить raw `tool_input`, raw `tool_response`, prompt, stdout/stderr, transcript, session dump, kubeconfig, provider payload или secret values.
-- Следующий кодовый срез должен опираться на machine-readable схемы CHI-1/CHI-2 и не начинать транспортный контракт без отдельного решения по gRPC/HTTP.
+- Физический transport `SubmitHookEvent` не выбран: до отдельного решения по gRPC/HTTP разрешён только in-process logical boundary, без proto, OpenAPI и AsyncAPI.

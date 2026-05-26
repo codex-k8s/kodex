@@ -5,8 +5,8 @@ title: kodex - дизайн codex-hook-ingress
 status: active
 owner_role: SA
 created_at: 2026-05-22
-updated_at: 2026-05-25
-related_issues: [698, 753, 778, 786, 322]
+updated_at: 2026-05-26
+related_issues: [698, 753, 778, 786, 793, 322]
 related_prs: []
 related_adrs: []
 approvals:
@@ -34,7 +34,8 @@ approvals:
 
 ## Не-цели
 
-- Не реализовывать сервис, sidecar, emitter, proto, OpenAPI, AsyncAPI или транспортный контракт.
+- Не реализовывать sidecar, emitter, proto, OpenAPI, AsyncAPI или physical transport contract до отдельного решения.
+- Сервисный каркас допускается как отдельный срез: process, health/readiness/metrics, in-process logical `SubmitHookEvent`, source verifier placeholder, sanitizer boundary and idempotency.
 - Не проектировать `platform-mcp-server` заново.
 - Не менять контракты `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub` или `package-hub`.
 - Не добавлять Codex hook events вне MVP-набора.

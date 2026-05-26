@@ -5,8 +5,8 @@ title: kodex - требования к codex-hook-ingress
 status: active
 owner_role: PM
 created_at: 2026-05-22
-updated_at: 2026-05-25
-related_issues: [698, 753, 778, 786, 322]
+updated_at: 2026-05-26
+related_issues: [698, 753, 778, 786, 793, 322]
 related_prs: []
 related_docsets:
   - docs/domains/codex-hook-ingress/architecture/design.md
@@ -141,14 +141,14 @@ Codex skills рассматриваются как управляемые capabi
 | CHI-AC-4 | Для каждого hook event указан сервис-владелец downstream-состояния. |
 | CHI-AC-5 | `PermissionRequest` описан как bridge к risk/gate decision у `governance-manager`, ожиданию flow у `agent-manager` и delivery у `interaction-hub`, а не как локальный yes/no без аудита. |
 | CHI-AC-6 | Skills описаны как capability layer: source, version, scope, metadata, workspace requirements, selection и materialization, без хранилища skills в hook ingress. |
-| CHI-AC-7 | Delivery-план запрещает код, proto и AsyncAPI до согласования документации и отдельного среза контрактов. |
+| CHI-AC-7 | Delivery-план разделяет docs-first, JSON Schema, runtime contract, сервисный каркас и будущий physical transport; proto, OpenAPI и AsyncAPI требуют отдельного транспортного решения. |
 | CHI-AC-8 | CHI-1 содержит machine-readable схемы и safe examples, которые валидируются локальной JSON Schema проверкой без генерации сервисного кода. |
 | CHI-AC-9 | CHI-2 содержит контракт hook emitter/local sidecar: runtime placement, чтение `stdin`, sanitizer до buffer/send, retry/backpressure/failure policy и логический `SubmitHookEvent` в `codex-hook-ingress`. |
 | CHI-AC-10 | CHI-2 не выбирает gRPC/HTTP transport, не создаёт OpenAPI/AsyncAPI/proto, не добавляет `PreCompact`/`PostCompact` в MVP hook set и не хранит raw payload. |
 
 ## Не-цели
 
-- Не реализовывать код, proto, OpenAPI, AsyncAPI, миграции или Kubernetes manifests в этом срезе.
+- Не реализовывать physical transport, proto, OpenAPI, AsyncAPI, миграции или Kubernetes manifests без отдельного транспортного или deploy-среза.
 - Не добавлять новые Codex hook events сверх MVP-набора.
 - Не проектировать hooks как MCP tools.
 - Не создавать отдельное хранилище skills, manifest или package catalog внутри `codex-hook-ingress`.

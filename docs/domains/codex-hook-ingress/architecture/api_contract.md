@@ -5,8 +5,8 @@ title: codex-hook-ingress - API overview
 status: active
 owner_role: SA
 created_at: 2026-05-22
-updated_at: 2026-05-25
-related_issues: [698, 753, 778, 786, 322]
+updated_at: 2026-05-26
+related_issues: [698, 753, 778, 786, 793, 322]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -50,6 +50,12 @@ approvals:
 | `AckHookDelivery` | internal callback, optional | Downstream service auth | `event_id` + route | Подтверждает доставку, если выбран asynchronous route. |
 
 `SubmitHookEvent` является единственной обязательной MVP-операцией. Остальные операции могут быть реализованы соседними контурами или отложены, если будут лишними для MVP.
+
+## Состояние реализации CHI-3
+
+Кодовый каркас `services/internal/codex-hook-ingress` реализует `SubmitHookEvent` только как in-process logical boundary в `internal/transport/command`. Он нужен для проверки доменного use-case, idempotency и sanitizer boundary без фиксации physical transport.
+
+В CHI-3 не создаются proto, OpenAPI, AsyncAPI, HTTP/gRPC handler для `SubmitHookEvent` и network client emitter/sidecar. Служебный HTTP-процесс отдаёт только `/health/livez`, `/health/readyz` и `/metrics`.
 
 ## Логический контракт hook emitter/local sidecar
 
