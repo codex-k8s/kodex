@@ -26,10 +26,10 @@ type interactionService interface {
 	ExpireInteractionRequests(context.Context, interactionservice.ExpireInteractionRequestsInput) (interactionservice.ExpireInteractionRequestsResult, error)
 	GetInteractionRequest(context.Context, interactionservice.GetInteractionRequestInput) (entity.InteractionRequest, error)
 	ListInteractionRequests(context.Context, interactionservice.ListInteractionRequestsInput) ([]entity.InteractionRequest, value.PageResult, error)
-	RequestNotification(context.Context) error
-	UpsertSubscription(context.Context) error
-	DisableSubscription(context.Context) error
-	ListSubscriptions(context.Context) error
+	RequestNotification(context.Context, interactionservice.RequestNotificationInput) (entity.Notification, error)
+	UpsertSubscription(context.Context, interactionservice.UpsertSubscriptionInput) (entity.Subscription, error)
+	DisableSubscription(context.Context, interactionservice.DisableSubscriptionInput) (entity.Subscription, error)
+	ListSubscriptions(context.Context, interactionservice.ListSubscriptionsInput) ([]entity.Subscription, value.PageResult, error)
 	PlanDelivery(context.Context) error
 	RecordDeliveryResult(context.Context) error
 	RecordChannelCallback(context.Context) error
@@ -127,20 +127,28 @@ func (s *Server) ListInteractionRequests(ctx context.Context, request *interacti
 	return casters.ListInteractionRequestsResponse(requests, page), nil
 }
 
-func (s *Server) RequestNotification(ctx context.Context, _ *interactionsv1.RequestNotificationRequest) (*interactionsv1.NotificationResponse, error) {
-	return emptyResponse[interactionsv1.NotificationResponse](ctx, s.service.RequestNotification)
+func (s *Server) RequestNotification(ctx context.Context, request *interactionsv1.RequestNotificationRequest) (*interactionsv1.NotificationResponse, error) {
+	return commandResponse(ctx, request, casters.RequestNotificationInput, s.service.RequestNotification, casters.NotificationResponse)
 }
 
-func (s *Server) UpsertSubscription(ctx context.Context, _ *interactionsv1.UpsertSubscriptionRequest) (*interactionsv1.SubscriptionResponse, error) {
-	return emptyResponse[interactionsv1.SubscriptionResponse](ctx, s.service.UpsertSubscription)
+func (s *Server) UpsertSubscription(ctx context.Context, request *interactionsv1.UpsertSubscriptionRequest) (*interactionsv1.SubscriptionResponse, error) {
+	return commandResponse(ctx, request, casters.UpsertSubscriptionInput, s.service.UpsertSubscription, casters.SubscriptionResponse)
 }
 
-func (s *Server) DisableSubscription(ctx context.Context, _ *interactionsv1.DisableSubscriptionRequest) (*interactionsv1.SubscriptionResponse, error) {
-	return emptyResponse[interactionsv1.SubscriptionResponse](ctx, s.service.DisableSubscription)
+func (s *Server) DisableSubscription(ctx context.Context, request *interactionsv1.DisableSubscriptionRequest) (*interactionsv1.SubscriptionResponse, error) {
+	return commandResponse(ctx, request, casters.DisableSubscriptionInput, s.service.DisableSubscription, casters.SubscriptionResponse)
 }
 
-func (s *Server) ListSubscriptions(ctx context.Context, _ *interactionsv1.ListSubscriptionsRequest) (*interactionsv1.ListSubscriptionsResponse, error) {
-	return emptyResponse[interactionsv1.ListSubscriptionsResponse](ctx, s.service.ListSubscriptions)
+func (s *Server) ListSubscriptions(ctx context.Context, request *interactionsv1.ListSubscriptionsRequest) (*interactionsv1.ListSubscriptionsResponse, error) {
+	input, err := casters.ListSubscriptionsInput(request)
+	if err != nil {
+		return nil, err
+	}
+	subscriptions, page, err := s.service.ListSubscriptions(ctx, input)
+	if err != nil {
+		return nil, err
+	}
+	return casters.ListSubscriptionsResponse(subscriptions, page), nil
 }
 
 func (s *Server) PlanDelivery(ctx context.Context, _ *interactionsv1.PlanDeliveryRequest) (*interactionsv1.DeliveryAttemptResponse, error) {

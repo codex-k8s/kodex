@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-26
-related_issues: [582, 768, 781, 783, 800, 806]
+related_issues: [582, 768, 781, 783, 800, 806, 821]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -52,8 +52,8 @@ approvals:
 | `ExpireInteractionRequests` | gRPC command | `interaction.request.expire` | batch id | Переводит просроченные request в terminal state. |
 | `GetInteractionRequest` | gRPC query | `interaction.request.read` | нет | Авторитетное чтение request. |
 | `ListInteractionRequests` | gRPC query | `interaction.request.read` | нет | Список по scope, status, kind, source owner и deadline. |
-| `RequestNotification` | gRPC command | `interaction.notification.request` | `command_id` | Создаёт one-way уведомление или reminder intent, не `InteractionRequest`. |
-| `UpsertSubscription` | gRPC command | `interaction.subscription.manage` | `command_id` + expected version | Создаёт или меняет подписку. |
+| `RequestNotification` | gRPC command | `interaction.notification.request` | `command_id` | Создаёт one-way уведомление или reminder intent, не `InteractionRequest`; хранит только safe refs, safe summary/title/preview и policy refs. |
+| `UpsertSubscription` | gRPC command | `interaction.subscription.manage` | `command_id` + expected version | Создаёт или меняет подписку с optimistic concurrency для существующего aggregate. |
 | `DisableSubscription` | gRPC command | `interaction.subscription.manage` | `command_id` + expected version | Отключает подписку. |
 | `ListSubscriptions` | gRPC query | `interaction.subscription.read` | нет | Читает подписки по scope или subscriber. |
 | `PlanDelivery` | gRPC command | `interaction.delivery.plan` | `command_id` | Выбирает route и создаёт delivery attempt. |
@@ -161,8 +161,8 @@ Delivery-specific safe error codes:
 | `interaction.feedback.requested` | request | `request_id`, `scope`, `source_owner_kind`, `deadline_at` |
 | `interaction.approval.requested` | request | `request_id`, `scope`, `risk_class`, `provider_operation_ref` |
 | `interaction.human_gate.requested` | request | `request_id`, `scope`, `agent_run_ref`, `deadline_at` |
-| `interaction.notification.requested` | notification | `notification_id`, `scope`, `notification_kind`, `priority` |
-| `interaction.subscription.updated` | subscription | `subscription_id`, `scope`, `subscriber_ref`, `version` |
+| `interaction.notification.requested` | notification | `notification_id`, `scope`, `notification_kind`, `priority`, `source_owner_kind`, `status` |
+| `interaction.subscription.updated` | subscription | `subscription_id`, `scope`, `subscriber_ref`, `source_owner_kind`, `status`, `version` |
 | `interaction.delivery.requested` | delivery | `delivery_attempt_id`, `request_id`, `route_id`, `attempt_number` |
 | `interaction.delivery.accepted` | delivery | `delivery_attempt_id`, `channel_message_ref` |
 | `interaction.delivery.failed` | delivery | `delivery_attempt_id`, `error_code`, `error_class`, `next_retry_at` |
@@ -180,7 +180,7 @@ Delivery-specific safe error codes:
 | AsyncAPI `interaction.*` | Подготовлен как контрактный срез `IH-1`. |
 | Go-контракты transport/events | Сгенерированы из proto и AsyncAPI. |
 | Действия доступа | Добавлены в общий каталог системных действий. |
-| Go-реализация `interaction-hub` | Готовы process config, health/readiness/metrics, gRPC registration, PostgreSQL repository, service-local outbox, thread/message MVP lifecycle и feedback/approval/Human gate request lifecycle. Notification, delivery и callback операции остаются будущими срезами и возвращают `Unimplemented`. |
+| Go-реализация `interaction-hub` | Готовы process config, health/readiness/metrics, gRPC registration, PostgreSQL repository, service-local outbox, thread/message MVP lifecycle, feedback/approval/Human gate request lifecycle и lifecycle уведомлений/подписок. Delivery attempt и callback операции остаются будущими срезами и возвращают `Unimplemented`. |
 | MCP-инструменты | Зафиксированы как контрактный задел `platform-mcp-server`; реализация зависит от готовности доменного контракта. |
 | Channel package integration | Зафиксирована как гибрид package-owned runtime + channel contract; конкретные каналы не проектируются. |
 | Gateway callback OpenAPI | Каркас закреплён в `specs/openapi/integration-gateway.v1.yaml`; активация маршрута требует owner-среза `interaction-hub`. |

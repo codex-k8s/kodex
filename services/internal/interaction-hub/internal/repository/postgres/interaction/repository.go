@@ -50,14 +50,20 @@ const (
 	operationUpdateInteractionRequest  = "domain.Repository.UpdateInteractionRequestWithResult"
 	operationUpdateInteractionRequests = "domain.Repository.UpdateInteractionRequestsWithResult"
 	operationCreateInteractionResponse = "domain.Repository.CreateInteractionResponseWithResult"
+	operationCreateNotification        = "domain.Repository.CreateNotificationWithResult"
+	operationCreateSubscription        = "domain.Repository.CreateSubscriptionWithResult"
+	operationUpdateSubscription        = "domain.Repository.UpdateSubscriptionWithResult"
 	operationGetCommandResult          = "domain.Repository.GetCommandResult"
 	operationGetConversationMessage    = "domain.Repository.GetConversationMessage"
 	operationGetConversationThread     = "domain.Repository.GetConversationThread"
 	operationGetInteractionRequest     = "domain.Repository.GetInteractionRequest"
 	operationGetInteractionResponse    = "domain.Repository.GetInteractionResponse"
+	operationGetNotification           = "domain.Repository.GetNotification"
+	operationGetSubscription           = "domain.Repository.GetSubscription"
 	operationListConversationMessages  = "domain.Repository.ListConversationMessages"
 	operationListInteractionRequests   = "domain.Repository.ListInteractionRequests"
 	operationListExpirableRequests     = "domain.Repository.ListExpirableInteractionRequests"
+	operationListSubscriptions         = "domain.Repository.ListSubscriptions"
 	operationOutboxClaim               = "domain.Repository.ClaimOutboxEvents"
 	operationOutboxMarkFailed          = "domain.Repository.MarkOutboxEventFailed"
 	operationOutboxMarkPermanent       = "domain.Repository.MarkOutboxEventPermanentlyFailed"
@@ -178,6 +184,48 @@ func (r *Repository) ListInteractionRequests(ctx context.Context, filter query.I
 
 func (r *Repository) ListExpirableInteractionRequests(ctx context.Context, scope value.ScopeRef, deadlineBefore time.Time, limit int32) ([]entity.InteractionRequest, error) {
 	return queryAll(ctx, r.db, operationListExpirableRequests, queryRequestListExpirable, expirableRequestArgs(scope, deadlineBefore, limit), scanRequest)
+}
+
+func (r *Repository) CreateNotificationWithResult(ctx context.Context, notification entity.Notification, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.mutate(ctx, operationCreateNotification,
+		affectedMutation(queryNotificationCreate, notificationArgs(notification)),
+		commandResultMutation(result),
+		outboxEventMutation(event),
+	)
+}
+
+func (r *Repository) GetNotification(ctx context.Context, id uuid.UUID) (entity.Notification, error) {
+	return queryOne(ctx, r.db, operationGetNotification, queryNotificationGet, pgx.NamedArgs{"id": id}, scanNotification)
+}
+
+func (r *Repository) CreateSubscriptionWithResult(ctx context.Context, subscription entity.Subscription, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.mutate(ctx, operationCreateSubscription,
+		affectedMutation(querySubscriptionCreate, subscriptionArgs(subscription)),
+		commandResultMutation(result),
+		outboxEventMutation(event),
+	)
+}
+
+func (r *Repository) UpdateSubscriptionWithResult(ctx context.Context, subscription entity.Subscription, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.mutate(ctx, operationUpdateSubscription,
+		affectedMutation(querySubscriptionUpdate, subscriptionUpdateArgs(subscription, previousVersion)),
+		commandResultMutation(result),
+		outboxEventMutation(event),
+	)
+}
+
+func (r *Repository) GetSubscription(ctx context.Context, id uuid.UUID) (entity.Subscription, error) {
+	return queryOne(ctx, r.db, operationGetSubscription, querySubscriptionGet, pgx.NamedArgs{"id": id}, scanSubscription)
+}
+
+func (r *Repository) ListSubscriptions(ctx context.Context, filter query.SubscriptionFilter) ([]entity.Subscription, value.PageResult, error) {
+	args := subscriptionFilterArgs(filter)
+	items, err := queryAll(ctx, r.db, operationListSubscriptions, querySubscriptionList, args.NamedArgs, scanSubscription)
+	if err != nil {
+		return nil, value.PageResult{}, err
+	}
+	pageItems, page := pageFromItems(items, args)
+	return pageItems, page, nil
 }
 
 func (r *Repository) GetCommandResult(ctx context.Context, identity query.CommandIdentity) (entity.CommandResult, error) {

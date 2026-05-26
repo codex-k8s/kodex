@@ -86,6 +86,30 @@ func (r *Repository) ListExpirableInteractionRequests(context.Context, value.Sco
 	return nil, errs.ErrNotImplemented
 }
 
+func (r *Repository) CreateNotificationWithResult(context.Context, entity.Notification, entity.CommandResult, entity.OutboxEvent) error {
+	return errs.ErrNotImplemented
+}
+
+func (r *Repository) GetNotification(context.Context, uuid.UUID) (entity.Notification, error) {
+	return entity.Notification{}, errs.ErrNotFound
+}
+
+func (r *Repository) CreateSubscriptionWithResult(context.Context, entity.Subscription, entity.CommandResult, entity.OutboxEvent) error {
+	return errs.ErrNotImplemented
+}
+
+func (r *Repository) UpdateSubscriptionWithResult(context.Context, entity.Subscription, int64, entity.CommandResult, entity.OutboxEvent) error {
+	return errs.ErrNotImplemented
+}
+
+func (r *Repository) GetSubscription(context.Context, uuid.UUID) (entity.Subscription, error) {
+	return entity.Subscription{}, errs.ErrNotFound
+}
+
+func (r *Repository) ListSubscriptions(context.Context, query.SubscriptionFilter) ([]entity.Subscription, value.PageResult, error) {
+	return nil, value.PageResult{}, errs.ErrNotImplemented
+}
+
 func (r *Repository) GetCommandResult(context.Context, query.CommandIdentity) (entity.CommandResult, error) {
 	return entity.CommandResult{}, errs.ErrNotFound
 }

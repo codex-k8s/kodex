@@ -122,3 +122,49 @@ type ListInteractionRequestsInput struct {
 	DeadlineBefore  *time.Time
 	Page            value.PageRequest
 }
+
+type RequestNotificationInput struct {
+	Meta                  value.CommandMeta
+	Scope                 value.ScopeRef
+	NotificationKind      enum.NotificationKind
+	RequestID             uuid.UUID
+	SubscriptionID        uuid.UUID
+	RecipientRefs         []value.ActorRef
+	MessageTemplateRef    string
+	MessageTitle          string
+	MessageSummary        string
+	BodyPreview           string
+	Priority              enum.NotificationPriority
+	ExpiresAt             *time.Time
+	SourceOwner           value.SourceOwnerRef
+	Ingress               value.IngressRef
+	ContextRefs           []value.ExternalRef
+	ChannelHintRefs       []value.ExternalRef
+	NotificationPolicyRef string
+}
+
+type UpsertSubscriptionInput struct {
+	Meta                    value.CommandMeta
+	SubscriptionID          uuid.UUID
+	Scope                   value.ScopeRef
+	SubscriberRef           value.ActorRef
+	EventFilterJSON         string
+	DeliveryPreferencesJSON string
+	Status                  enum.SubscriptionStatus
+	SourceOwner             value.SourceOwnerRef
+	ChannelHintRefs         []value.ExternalRef
+	SubscriptionPolicyRef   string
+}
+
+type DisableSubscriptionInput struct {
+	Meta           value.CommandMeta
+	SubscriptionID uuid.UUID
+}
+
+type ListSubscriptionsInput struct {
+	Meta          value.QueryMeta
+	Scope         value.ScopeRef
+	SubscriberRef string
+	Status        enum.SubscriptionStatus
+	Page          value.PageRequest
+}

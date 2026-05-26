@@ -76,6 +76,44 @@ type InteractionResponse struct {
 	CreatedAt           time.Time
 }
 
+type Notification struct {
+	ID                    uuid.UUID
+	Scope                 value.ScopeRef
+	NotificationKind      enum.NotificationKind
+	RequestID             *uuid.UUID
+	SubscriptionID        *uuid.UUID
+	RecipientRefs         []value.ActorRef
+	MessageTemplateRef    string
+	MessageTitle          string
+	MessageSummary        string
+	BodyPreview           string
+	Priority              enum.NotificationPriority
+	Status                enum.NotificationStatus
+	SourceOwner           value.SourceOwnerRef
+	Ingress               value.IngressRef
+	ContextRefs           []value.ExternalRef
+	ChannelHintRefs       []value.ExternalRef
+	NotificationPolicyRef string
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+	ExpiresAt             *time.Time
+}
+
+type Subscription struct {
+	ID                      uuid.UUID
+	Scope                   value.ScopeRef
+	SubscriberRef           value.ActorRef
+	EventFilterJSON         string
+	DeliveryPreferencesJSON string
+	Status                  enum.SubscriptionStatus
+	Version                 int64
+	SourceOwner             value.SourceOwnerRef
+	ChannelHintRefs         []value.ExternalRef
+	SubscriptionPolicyRef   string
+	CreatedAt               time.Time
+	UpdatedAt               time.Time
+}
+
 type CommandResult struct {
 	Key                string
 	CommandID          uuid.UUID

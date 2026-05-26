@@ -383,6 +383,113 @@ func TestServiceReplaysExpireInteractionRequestsWithoutDeadline(t *testing.T) {
 	}
 }
 
+func TestServiceRequestsNotificationWithOutboxAndIdempotentReplay(t *testing.T) {
+	t.Parallel()
+
+	repository := newFakeRepository()
+	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+	svc := NewWithConfig(repository, Config{Clock: fixedClock{now: now}, UUIDGenerator: &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New()}}})
+	input := validNotificationInput(now.Add(time.Hour))
+
+	notification, err := svc.RequestNotification(context.Background(), input)
+	if err != nil {
+		t.Fatalf("RequestNotification(): %v", err)
+	}
+	if notification.NotificationKind != enum.NotificationKindAttention || notification.Status != enum.NotificationStatusCreated {
+		t.Fatalf("notification = %+v, want attention created", notification)
+	}
+	if notification.MessageTitle != "Safe title" || notification.BodyPreview != "Safe bounded preview" || notification.SourceOwner.Kind != enum.SourceOwnerKindAgentManager {
+		t.Fatalf("notification = %+v, want persisted safe title/body/source owner", notification)
+	}
+	if len(repository.events) != 1 {
+		t.Fatalf("events = %d, want 1", len(repository.events))
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(repository.events[0].Payload, &payload); err != nil {
+		t.Fatalf("unmarshal outbox payload: %v", err)
+	}
+	if payload["notification_id"] != notification.ID.String() || payload["source_owner_kind"] != "agent_manager" || payload["priority"] != "high" {
+		t.Fatalf("payload = %+v, want notification safe refs", payload)
+	}
+	for _, unsafeField := range []string{"message_summary", "message_title", "body_preview"} {
+		if _, ok := payload[unsafeField]; ok {
+			t.Fatalf("outbox payload contains %s: %+v", unsafeField, payload)
+		}
+	}
+
+	replayed, err := svc.RequestNotification(context.Background(), input)
+	if err != nil {
+		t.Fatalf("RequestNotification() replay: %v", err)
+	}
+	if replayed.ID != notification.ID || len(repository.events) != 1 {
+		t.Fatalf("replay notification = %+v events=%d, want original notification and no extra event", replayed, len(repository.events))
+	}
+}
+
+func TestServiceUpsertsListsAndDisablesSubscription(t *testing.T) {
+	t.Parallel()
+
+	repository := newFakeRepository()
+	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+	svc := NewWithConfig(repository, Config{Clock: fixedClock{now: now}, UUIDGenerator: &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()}}})
+	createInput := validSubscriptionInput()
+
+	subscription, err := svc.UpsertSubscription(context.Background(), createInput)
+	if err != nil {
+		t.Fatalf("UpsertSubscription() create: %v", err)
+	}
+	if subscription.Status != enum.SubscriptionStatusActive || subscription.Version != 1 || subscription.SubscriptionPolicyRef != "policy:ops-notifications" {
+		t.Fatalf("subscription = %+v, want active v1 with policy ref", subscription)
+	}
+	replayed, err := svc.UpsertSubscription(context.Background(), createInput)
+	if err != nil {
+		t.Fatalf("UpsertSubscription() replay: %v", err)
+	}
+	if replayed.ID != subscription.ID || len(repository.events) != 1 {
+		t.Fatalf("replay subscription = %+v events=%d, want original subscription", replayed, len(repository.events))
+	}
+
+	updateInput := createInput
+	updateInput.Meta = validVersionedCommandMeta(1)
+	updateInput.SubscriptionID = subscription.ID
+	updateInput.Status = enum.SubscriptionStatusPaused
+	updateInput.DeliveryPreferencesJSON = `{"surfaces":["web_console"],"quiet_hours_policy_ref":"policy:quiet"}`
+	updated, err := svc.UpsertSubscription(context.Background(), updateInput)
+	if err != nil {
+		t.Fatalf("UpsertSubscription() update: %v", err)
+	}
+	if updated.Status != enum.SubscriptionStatusPaused || updated.Version != 2 {
+		t.Fatalf("updated subscription = %+v, want paused v2", updated)
+	}
+	listed, _, err := svc.ListSubscriptions(context.Background(), ListSubscriptionsInput{
+		Scope:         createInput.Scope,
+		SubscriberRef: createInput.SubscriberRef.String(),
+		Status:        enum.SubscriptionStatusPaused,
+	})
+	if err != nil {
+		t.Fatalf("ListSubscriptions(): %v", err)
+	}
+	if len(listed) != 1 || listed[0].ID != subscription.ID {
+		t.Fatalf("listed = %+v, want updated subscription", listed)
+	}
+
+	staleInput := updateInput
+	staleInput.Meta = validVersionedCommandMeta(1)
+	staleInput.Meta.CommandID = uuid.New()
+	staleInput.Status = enum.SubscriptionStatusActive
+	if _, err := svc.UpsertSubscription(context.Background(), staleInput); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("UpsertSubscription() stale err = %v, want ErrConflict", err)
+	}
+
+	disabled, err := svc.DisableSubscription(context.Background(), DisableSubscriptionInput{Meta: validVersionedCommandMeta(2), SubscriptionID: subscription.ID})
+	if err != nil {
+		t.Fatalf("DisableSubscription(): %v", err)
+	}
+	if disabled.Status != enum.SubscriptionStatusDisabled || disabled.Version != 3 {
+		t.Fatalf("disabled subscription = %+v, want disabled v3", disabled)
+	}
+}
+
 func TestServiceRejectsUnsafeInteractionLifecycleInput(t *testing.T) {
 	t.Parallel()
 
@@ -417,6 +524,42 @@ func TestServiceRejectsUnsafeInteractionLifecycleInput(t *testing.T) {
 	if len(repository.responses) != 0 {
 		t.Fatalf("responses=%d, want no response writes", len(repository.responses))
 	}
+
+	notificationInput := validNotificationInput(now.Add(time.Hour))
+	notificationInput.MessageSummary = strings.Repeat("n", maxMessageBodySummaryRunes+1)
+	if _, err := svc.RequestNotification(context.Background(), notificationInput); !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("RequestNotification() err = %v, want ErrInvalidArgument", err)
+	}
+	if len(repository.notifications) != 0 {
+		t.Fatalf("notifications=%d, want no notification writes", len(repository.notifications))
+	}
+
+	notificationInput = validNotificationInput(now.Add(time.Hour))
+	notificationInput.SourceOwner.Ref = strings.Repeat("x", maxInteractionRefBytes+1)
+	if _, err := svc.RequestNotification(context.Background(), notificationInput); !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("RequestNotification() oversized source owner err = %v, want ErrInvalidArgument", err)
+	}
+	if len(repository.notifications) != 0 {
+		t.Fatalf("notifications=%d, want no notification writes", len(repository.notifications))
+	}
+
+	subscriptionInput := validSubscriptionInput()
+	subscriptionInput.EventFilterJSON = `["not-an-object"]`
+	if _, err := svc.UpsertSubscription(context.Background(), subscriptionInput); !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("UpsertSubscription() err = %v, want ErrInvalidArgument", err)
+	}
+	if len(repository.subscriptions) != 0 {
+		t.Fatalf("subscriptions=%d, want no subscription writes", len(repository.subscriptions))
+	}
+
+	subscriptionInput = validSubscriptionInput()
+	subscriptionInput.DeliveryPreferencesJSON = `{"bot_token":"secret"}`
+	if _, err := svc.UpsertSubscription(context.Background(), subscriptionInput); !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("UpsertSubscription() secret policy err = %v, want ErrInvalidArgument", err)
+	}
+	if len(repository.subscriptions) != 0 {
+		t.Fatalf("subscriptions=%d, want no subscription writes", len(repository.subscriptions))
+	}
 }
 
 func TestServiceBacklogOperationsReturnUnimplemented(t *testing.T) {
@@ -425,12 +568,12 @@ func TestServiceBacklogOperationsReturnUnimplemented(t *testing.T) {
 	repository := newFakeRepository()
 	svc := New(repository)
 
-	err := svc.RequestNotification(context.Background())
+	err := svc.PlanDelivery(context.Background())
 	if !errors.Is(err, errs.ErrNotImplemented) {
-		t.Fatalf("RequestNotification() err = %v, want ErrNotImplemented", err)
+		t.Fatalf("PlanDelivery() err = %v, want ErrNotImplemented", err)
 	}
-	if len(repository.operations) != 1 || repository.operations[0] != enum.OperationRequestNotification {
-		t.Fatalf("operations = %v, want RequestNotification", repository.operations)
+	if len(repository.operations) != 1 || repository.operations[0] != enum.OperationPlanDelivery {
+		t.Fatalf("operations = %v, want PlanDelivery", repository.operations)
 	}
 }
 
@@ -448,31 +591,35 @@ func TestServiceReadinessDependsOnRepository(t *testing.T) {
 func TestServiceBacklogRequiresReadyRepository(t *testing.T) {
 	t.Parallel()
 
-	err := New(&fakeRepository{}).RequestNotification(context.Background())
+	err := New(&fakeRepository{}).PlanDelivery(context.Background())
 	if !errors.Is(err, errs.ErrUnavailable) {
-		t.Fatalf("RequestNotification() err = %v, want ErrUnavailable", err)
+		t.Fatalf("PlanDelivery() err = %v, want ErrUnavailable", err)
 	}
 }
 
 type fakeRepository struct {
-	ready      bool
-	operations []enum.Operation
-	threads    map[uuid.UUID]entity.ConversationThread
-	messages   map[uuid.UUID]entity.ConversationMessage
-	requests   map[uuid.UUID]entity.InteractionRequest
-	responses  map[uuid.UUID]entity.InteractionResponse
-	results    map[string]entity.CommandResult
-	events     []entity.OutboxEvent
+	ready         bool
+	operations    []enum.Operation
+	threads       map[uuid.UUID]entity.ConversationThread
+	messages      map[uuid.UUID]entity.ConversationMessage
+	requests      map[uuid.UUID]entity.InteractionRequest
+	responses     map[uuid.UUID]entity.InteractionResponse
+	notifications map[uuid.UUID]entity.Notification
+	subscriptions map[uuid.UUID]entity.Subscription
+	results       map[string]entity.CommandResult
+	events        []entity.OutboxEvent
 }
 
 func newFakeRepository() *fakeRepository {
 	return &fakeRepository{
-		ready:     true,
-		threads:   map[uuid.UUID]entity.ConversationThread{},
-		messages:  map[uuid.UUID]entity.ConversationMessage{},
-		requests:  map[uuid.UUID]entity.InteractionRequest{},
-		responses: map[uuid.UUID]entity.InteractionResponse{},
-		results:   map[string]entity.CommandResult{},
+		ready:         true,
+		threads:       map[uuid.UUID]entity.ConversationThread{},
+		messages:      map[uuid.UUID]entity.ConversationMessage{},
+		requests:      map[uuid.UUID]entity.InteractionRequest{},
+		responses:     map[uuid.UUID]entity.InteractionResponse{},
+		notifications: map[uuid.UUID]entity.Notification{},
+		subscriptions: map[uuid.UUID]entity.Subscription{},
+		results:       map[string]entity.CommandResult{},
 	}
 }
 
@@ -547,6 +694,48 @@ func validInteractionRequestDraft(deadline time.Time) InteractionRequestDraftInp
 		RiskClass:         enum.InteractionRiskClassHigh,
 		DeadlineAt:        &deadline,
 		ReminderPolicyRef: "policy:standard",
+	}
+}
+
+func validNotificationInput(expiresAt time.Time) RequestNotificationInput {
+	return RequestNotificationInput{
+		Meta:             validCommandMeta(),
+		Scope:            value.ScopeRef{Type: enum.ScopeTypeService, Ref: "agent-manager"},
+		NotificationKind: enum.NotificationKindAttention,
+		RecipientRefs: []value.ActorRef{
+			{Kind: "user", Ref: "owner-1"},
+		},
+		MessageTemplateRef: "interaction.notification.attention",
+		MessageTitle:       "Safe title",
+		MessageSummary:     "Safe bounded summary",
+		BodyPreview:        "Safe bounded preview",
+		Priority:           enum.NotificationPriorityHigh,
+		ExpiresAt:          &expiresAt,
+		SourceOwner:        value.SourceOwnerRef{Kind: enum.SourceOwnerKindAgentManager, Ref: "run:123"},
+		Ingress:            value.IngressRef{Kind: enum.IngressKindDirectGRPC, Ref: "grpc:notify-1"},
+		ContextRefs: []value.ExternalRef{
+			{Kind: "agent_run", Ref: "run:123"},
+		},
+		ChannelHintRefs: []value.ExternalRef{
+			{Kind: "surface", Ref: "web_console"},
+		},
+		NotificationPolicyRef: "policy:notify-standard",
+	}
+}
+
+func validSubscriptionInput() UpsertSubscriptionInput {
+	return UpsertSubscriptionInput{
+		Meta:                    validCommandMeta(),
+		Scope:                   value.ScopeRef{Type: enum.ScopeTypeService, Ref: "agent-manager"},
+		SubscriberRef:           value.ActorRef{Kind: "user", Ref: "owner-1"},
+		EventFilterJSON:         `{"event_kind":["run_waiting"],"severity":["high"]}`,
+		DeliveryPreferencesJSON: `{"surfaces":["web_console"],"fallback_policy_ref":"policy:fallback"}`,
+		Status:                  enum.SubscriptionStatusActive,
+		SourceOwner:             value.SourceOwnerRef{Kind: enum.SourceOwnerKindAgentManager, Ref: "run:123"},
+		ChannelHintRefs: []value.ExternalRef{
+			{Kind: "surface", Ref: "web_console"},
+		},
+		SubscriptionPolicyRef: "policy:ops-notifications",
 	}
 }
 
@@ -751,6 +940,67 @@ func (r *fakeRepository) ListExpirableInteractionRequests(_ context.Context, sco
 		}
 	}
 	return requests, nil
+}
+
+func (r *fakeRepository) CreateNotificationWithResult(_ context.Context, notification entity.Notification, result entity.CommandResult, event entity.OutboxEvent) error {
+	r.notifications[notification.ID] = notification
+	r.results[result.Key] = result
+	r.events = append(r.events, event)
+	return nil
+}
+
+func (r *fakeRepository) GetNotification(_ context.Context, id uuid.UUID) (entity.Notification, error) {
+	notification, ok := r.notifications[id]
+	if !ok {
+		return entity.Notification{}, errs.ErrNotFound
+	}
+	return notification, nil
+}
+
+func (r *fakeRepository) CreateSubscriptionWithResult(_ context.Context, subscription entity.Subscription, result entity.CommandResult, event entity.OutboxEvent) error {
+	r.subscriptions[subscription.ID] = subscription
+	r.results[result.Key] = result
+	r.events = append(r.events, event)
+	return nil
+}
+
+func (r *fakeRepository) UpdateSubscriptionWithResult(_ context.Context, subscription entity.Subscription, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
+	stored, ok := r.subscriptions[subscription.ID]
+	if !ok {
+		return errs.ErrNotFound
+	}
+	if stored.Version != previousVersion {
+		return errs.ErrConflict
+	}
+	r.subscriptions[subscription.ID] = subscription
+	r.results[result.Key] = result
+	r.events = append(r.events, event)
+	return nil
+}
+
+func (r *fakeRepository) GetSubscription(_ context.Context, id uuid.UUID) (entity.Subscription, error) {
+	subscription, ok := r.subscriptions[id]
+	if !ok {
+		return entity.Subscription{}, errs.ErrNotFound
+	}
+	return subscription, nil
+}
+
+func (r *fakeRepository) ListSubscriptions(_ context.Context, filter query.SubscriptionFilter) ([]entity.Subscription, value.PageResult, error) {
+	subscriptions := make([]entity.Subscription, 0, len(r.subscriptions))
+	for _, subscription := range r.subscriptions {
+		if subscription.Scope != filter.Scope {
+			continue
+		}
+		if filter.SubscriberRef != "" && subscription.SubscriberRef.String() != filter.SubscriberRef {
+			continue
+		}
+		if filter.Status != "" && subscription.Status != filter.Status {
+			continue
+		}
+		subscriptions = append(subscriptions, subscription)
+	}
+	return subscriptions, value.PageResult{}, nil
 }
 
 func (r *fakeRepository) GetCommandResult(_ context.Context, identity query.CommandIdentity) (entity.CommandResult, error) {

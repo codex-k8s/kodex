@@ -24,6 +24,13 @@ type InteractionRequestFilter struct {
 	Page            value.PageRequest
 }
 
+type SubscriptionFilter struct {
+	Scope         value.ScopeRef
+	SubscriberRef string
+	Status        enum.SubscriptionStatus
+	Page          value.PageRequest
+}
+
 type CommandIdentity struct {
 	CommandID      uuid.UUID
 	IdempotencyKey string

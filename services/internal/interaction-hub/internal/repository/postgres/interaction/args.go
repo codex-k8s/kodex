@@ -148,6 +148,69 @@ func responseArgs(response entity.InteractionResponse) pgx.NamedArgs {
 	}
 }
 
+func notificationArgs(notification entity.Notification) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"id":                      notification.ID,
+		"scope_type":              string(notification.Scope.Type),
+		"scope_ref":               notification.Scope.Ref,
+		"notification_kind":       string(notification.NotificationKind),
+		"request_id":              postgreslib.NullableUUID(notification.RequestID),
+		"subscription_id":         postgreslib.NullableUUID(notification.SubscriptionID),
+		"recipient_refs":          arrayPayload(notification.RecipientRefs),
+		"message_template_ref":    notification.MessageTemplateRef,
+		"message_summary":         notification.MessageSummary,
+		"priority":                string(notification.Priority),
+		"status":                  string(notification.Status),
+		"created_at":              notification.CreatedAt,
+		"updated_at":              notification.UpdatedAt,
+		"expires_at":              postgreslib.NullableTime(notification.ExpiresAt),
+		"source_owner_kind":       string(notification.SourceOwner.Kind),
+		"source_owner_ref":        notification.SourceOwner.Ref,
+		"ingress_kind":            string(notification.Ingress.Kind),
+		"ingress_ref":             notification.Ingress.Ref,
+		"context_refs":            arrayPayload(notification.ContextRefs),
+		"channel_hint_refs":       arrayPayload(notification.ChannelHintRefs),
+		"notification_policy_ref": notification.NotificationPolicyRef,
+		"message_title":           notification.MessageTitle,
+		"body_preview":            notification.BodyPreview,
+	}
+}
+
+func subscriptionArgs(subscription entity.Subscription) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"id":                      subscription.ID,
+		"scope_type":              string(subscription.Scope.Type),
+		"scope_ref":               subscription.Scope.Ref,
+		"subscriber_ref_kind":     subscription.SubscriberRef.Kind,
+		"subscriber_ref":          subscription.SubscriberRef.Ref,
+		"event_filter":            postgreslib.JSONPayload([]byte(subscription.EventFilterJSON)),
+		"delivery_preferences":    postgreslib.JSONPayload([]byte(subscription.DeliveryPreferencesJSON)),
+		"status":                  string(subscription.Status),
+		"version":                 subscription.Version,
+		"created_at":              subscription.CreatedAt,
+		"updated_at":              subscription.UpdatedAt,
+		"source_owner_kind":       string(subscription.SourceOwner.Kind),
+		"source_owner_ref":        subscription.SourceOwner.Ref,
+		"channel_hint_refs":       arrayPayload(subscription.ChannelHintRefs),
+		"subscription_policy_ref": subscription.SubscriptionPolicyRef,
+	}
+}
+
+func subscriptionUpdateArgs(subscription entity.Subscription, previousVersion int64) pgx.NamedArgs {
+	args := subscriptionArgs(subscription)
+	args["previous_version"] = previousVersion
+	return args
+}
+
+func subscriptionFilterArgs(filter query.SubscriptionFilter) pageQueryArgs {
+	return withPage(filter.Page, pgx.NamedArgs{
+		"scope_type":     string(filter.Scope.Type),
+		"scope_ref":      filter.Scope.Ref,
+		"subscriber_ref": filter.SubscriberRef,
+		"status":         string(filter.Status),
+	})
+}
+
 func commandResultArgs(result entity.CommandResult) pgx.NamedArgs {
 	return pgx.NamedArgs{
 		"key":                 result.Key,

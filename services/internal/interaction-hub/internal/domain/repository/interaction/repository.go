@@ -29,6 +29,12 @@ type Repository interface {
 	GetInteractionResponse(context.Context, uuid.UUID) (entity.InteractionResponse, error)
 	ListInteractionRequests(context.Context, query.InteractionRequestFilter) ([]entity.InteractionRequest, value.PageResult, error)
 	ListExpirableInteractionRequests(context.Context, value.ScopeRef, time.Time, int32) ([]entity.InteractionRequest, error)
+	CreateNotificationWithResult(context.Context, entity.Notification, entity.CommandResult, entity.OutboxEvent) error
+	GetNotification(context.Context, uuid.UUID) (entity.Notification, error)
+	CreateSubscriptionWithResult(context.Context, entity.Subscription, entity.CommandResult, entity.OutboxEvent) error
+	UpdateSubscriptionWithResult(context.Context, entity.Subscription, int64, entity.CommandResult, entity.OutboxEvent) error
+	GetSubscription(context.Context, uuid.UUID) (entity.Subscription, error)
+	ListSubscriptions(context.Context, query.SubscriptionFilter) ([]entity.Subscription, value.PageResult, error)
 	GetCommandResult(context.Context, query.CommandIdentity) (entity.CommandResult, error)
 	ClaimOutboxEvents(ctx context.Context, limit int, now time.Time, lockedUntil time.Time) ([]entity.OutboxEvent, error)
 	MarkOutboxEventPublished(ctx context.Context, id uuid.UUID, attemptCount int, publishedAt time.Time) error

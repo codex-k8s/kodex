@@ -3001,7 +3001,21 @@ type Notification struct {
 	// updated_at is an RFC3339 timestamp.
 	UpdatedAt string `protobuf:"bytes,12,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	// expires_at is an RFC3339 timestamp when notification is no longer useful.
-	ExpiresAt     *string `protobuf:"bytes,13,opt,name=expires_at,json=expiresAt,proto3,oneof" json:"expires_at,omitempty"`
+	ExpiresAt *string `protobuf:"bytes,13,opt,name=expires_at,json=expiresAt,proto3,oneof" json:"expires_at,omitempty"`
+	// source_owner identifies the business owner that requested the notification.
+	SourceOwner *SourceOwnerRef `protobuf:"bytes,14,opt,name=source_owner,json=sourceOwner,proto3" json:"source_owner,omitempty"`
+	// ingress identifies the route that carried the notification command.
+	Ingress *IngressRef `protobuf:"bytes,15,opt,name=ingress,proto3" json:"ingress,omitempty"`
+	// context_refs point to neighboring domain context without copying state.
+	ContextRefs []*ExternalRef `protobuf:"bytes,16,rep,name=context_refs,json=contextRefs,proto3" json:"context_refs,omitempty"`
+	// channel_hint_refs are generic channel/package/surface refs, not vendor-specific state.
+	ChannelHintRefs []*ExternalRef `protobuf:"bytes,17,rep,name=channel_hint_refs,json=channelHintRefs,proto3" json:"channel_hint_refs,omitempty"`
+	// notification_policy_ref points to notification policy without embedding policy JSON.
+	NotificationPolicyRef *string `protobuf:"bytes,18,opt,name=notification_policy_ref,json=notificationPolicyRef,proto3,oneof" json:"notification_policy_ref,omitempty"`
+	// message_title is a bounded safe display title.
+	MessageTitle *string `protobuf:"bytes,19,opt,name=message_title,json=messageTitle,proto3,oneof" json:"message_title,omitempty"`
+	// body_preview is a bounded safe body preview; raw transcripts/artifacts are not stored here.
+	BodyPreview   *string `protobuf:"bytes,20,opt,name=body_preview,json=bodyPreview,proto3,oneof" json:"body_preview,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3127,6 +3141,55 @@ func (x *Notification) GetExpiresAt() string {
 	return ""
 }
 
+func (x *Notification) GetSourceOwner() *SourceOwnerRef {
+	if x != nil {
+		return x.SourceOwner
+	}
+	return nil
+}
+
+func (x *Notification) GetIngress() *IngressRef {
+	if x != nil {
+		return x.Ingress
+	}
+	return nil
+}
+
+func (x *Notification) GetContextRefs() []*ExternalRef {
+	if x != nil {
+		return x.ContextRefs
+	}
+	return nil
+}
+
+func (x *Notification) GetChannelHintRefs() []*ExternalRef {
+	if x != nil {
+		return x.ChannelHintRefs
+	}
+	return nil
+}
+
+func (x *Notification) GetNotificationPolicyRef() string {
+	if x != nil && x.NotificationPolicyRef != nil {
+		return *x.NotificationPolicyRef
+	}
+	return ""
+}
+
+func (x *Notification) GetMessageTitle() string {
+	if x != nil && x.MessageTitle != nil {
+		return *x.MessageTitle
+	}
+	return ""
+}
+
+func (x *Notification) GetBodyPreview() string {
+	if x != nil && x.BodyPreview != nil {
+		return *x.BodyPreview
+	}
+	return ""
+}
+
 // Subscription stores canonical notification delivery preferences for a subscriber.
 type Subscription struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -3147,9 +3210,15 @@ type Subscription struct {
 	// created_at is an RFC3339 timestamp.
 	CreatedAt string `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	// updated_at is an RFC3339 timestamp.
-	UpdatedAt     string `protobuf:"bytes,9,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	UpdatedAt string `protobuf:"bytes,9,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	// source_owner identifies the business owner that manages this subscription.
+	SourceOwner *SourceOwnerRef `protobuf:"bytes,10,opt,name=source_owner,json=sourceOwner,proto3,oneof" json:"source_owner,omitempty"`
+	// channel_hint_refs are generic channel/package/surface refs, not vendor-specific state.
+	ChannelHintRefs []*ExternalRef `protobuf:"bytes,11,rep,name=channel_hint_refs,json=channelHintRefs,proto3" json:"channel_hint_refs,omitempty"`
+	// subscription_policy_ref points to subscription policy without embedding policy JSON.
+	SubscriptionPolicyRef *string `protobuf:"bytes,12,opt,name=subscription_policy_ref,json=subscriptionPolicyRef,proto3,oneof" json:"subscription_policy_ref,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *Subscription) Reset() {
@@ -3241,6 +3310,27 @@ func (x *Subscription) GetCreatedAt() string {
 func (x *Subscription) GetUpdatedAt() string {
 	if x != nil {
 		return x.UpdatedAt
+	}
+	return ""
+}
+
+func (x *Subscription) GetSourceOwner() *SourceOwnerRef {
+	if x != nil {
+		return x.SourceOwner
+	}
+	return nil
+}
+
+func (x *Subscription) GetChannelHintRefs() []*ExternalRef {
+	if x != nil {
+		return x.ChannelHintRefs
+	}
+	return nil
+}
+
+func (x *Subscription) GetSubscriptionPolicyRef() string {
+	if x != nil && x.SubscriptionPolicyRef != nil {
+		return *x.SubscriptionPolicyRef
 	}
 	return ""
 }
@@ -5189,19 +5279,26 @@ func (x *ListInteractionRequestsRequest) GetPage() *PageRequest {
 }
 
 type RequestNotificationRequest struct {
-	state              protoimpl.MessageState `protogen:"open.v1"`
-	Meta               *CommandMeta           `protobuf:"bytes,1,opt,name=meta,proto3" json:"meta,omitempty"`
-	Scope              *ScopeRef              `protobuf:"bytes,2,opt,name=scope,proto3" json:"scope,omitempty"`
-	NotificationKind   NotificationKind       `protobuf:"varint,3,opt,name=notification_kind,json=notificationKind,proto3,enum=kodex.interactions.v1.NotificationKind" json:"notification_kind,omitempty"`
-	RequestId          *string                `protobuf:"bytes,4,opt,name=request_id,json=requestId,proto3,oneof" json:"request_id,omitempty"`
-	SubscriptionId     *string                `protobuf:"bytes,5,opt,name=subscription_id,json=subscriptionId,proto3,oneof" json:"subscription_id,omitempty"`
-	RecipientRefs      []*ActorRef            `protobuf:"bytes,6,rep,name=recipient_refs,json=recipientRefs,proto3" json:"recipient_refs,omitempty"`
-	MessageTemplateRef string                 `protobuf:"bytes,7,opt,name=message_template_ref,json=messageTemplateRef,proto3" json:"message_template_ref,omitempty"`
-	MessageSummary     string                 `protobuf:"bytes,8,opt,name=message_summary,json=messageSummary,proto3" json:"message_summary,omitempty"`
-	Priority           NotificationPriority   `protobuf:"varint,9,opt,name=priority,proto3,enum=kodex.interactions.v1.NotificationPriority" json:"priority,omitempty"`
-	ExpiresAt          *string                `protobuf:"bytes,10,opt,name=expires_at,json=expiresAt,proto3,oneof" json:"expires_at,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	Meta                  *CommandMeta           `protobuf:"bytes,1,opt,name=meta,proto3" json:"meta,omitempty"`
+	Scope                 *ScopeRef              `protobuf:"bytes,2,opt,name=scope,proto3" json:"scope,omitempty"`
+	NotificationKind      NotificationKind       `protobuf:"varint,3,opt,name=notification_kind,json=notificationKind,proto3,enum=kodex.interactions.v1.NotificationKind" json:"notification_kind,omitempty"`
+	RequestId             *string                `protobuf:"bytes,4,opt,name=request_id,json=requestId,proto3,oneof" json:"request_id,omitempty"`
+	SubscriptionId        *string                `protobuf:"bytes,5,opt,name=subscription_id,json=subscriptionId,proto3,oneof" json:"subscription_id,omitempty"`
+	RecipientRefs         []*ActorRef            `protobuf:"bytes,6,rep,name=recipient_refs,json=recipientRefs,proto3" json:"recipient_refs,omitempty"`
+	MessageTemplateRef    string                 `protobuf:"bytes,7,opt,name=message_template_ref,json=messageTemplateRef,proto3" json:"message_template_ref,omitempty"`
+	MessageSummary        string                 `protobuf:"bytes,8,opt,name=message_summary,json=messageSummary,proto3" json:"message_summary,omitempty"`
+	Priority              NotificationPriority   `protobuf:"varint,9,opt,name=priority,proto3,enum=kodex.interactions.v1.NotificationPriority" json:"priority,omitempty"`
+	ExpiresAt             *string                `protobuf:"bytes,10,opt,name=expires_at,json=expiresAt,proto3,oneof" json:"expires_at,omitempty"`
+	SourceOwner           *SourceOwnerRef        `protobuf:"bytes,11,opt,name=source_owner,json=sourceOwner,proto3" json:"source_owner,omitempty"`
+	Ingress               *IngressRef            `protobuf:"bytes,12,opt,name=ingress,proto3" json:"ingress,omitempty"`
+	ContextRefs           []*ExternalRef         `protobuf:"bytes,13,rep,name=context_refs,json=contextRefs,proto3" json:"context_refs,omitempty"`
+	ChannelHintRefs       []*ExternalRef         `protobuf:"bytes,14,rep,name=channel_hint_refs,json=channelHintRefs,proto3" json:"channel_hint_refs,omitempty"`
+	NotificationPolicyRef *string                `protobuf:"bytes,15,opt,name=notification_policy_ref,json=notificationPolicyRef,proto3,oneof" json:"notification_policy_ref,omitempty"`
+	MessageTitle          *string                `protobuf:"bytes,16,opt,name=message_title,json=messageTitle,proto3,oneof" json:"message_title,omitempty"`
+	BodyPreview           *string                `protobuf:"bytes,17,opt,name=body_preview,json=bodyPreview,proto3,oneof" json:"body_preview,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *RequestNotificationRequest) Reset() {
@@ -5304,6 +5401,55 @@ func (x *RequestNotificationRequest) GetExpiresAt() string {
 	return ""
 }
 
+func (x *RequestNotificationRequest) GetSourceOwner() *SourceOwnerRef {
+	if x != nil {
+		return x.SourceOwner
+	}
+	return nil
+}
+
+func (x *RequestNotificationRequest) GetIngress() *IngressRef {
+	if x != nil {
+		return x.Ingress
+	}
+	return nil
+}
+
+func (x *RequestNotificationRequest) GetContextRefs() []*ExternalRef {
+	if x != nil {
+		return x.ContextRefs
+	}
+	return nil
+}
+
+func (x *RequestNotificationRequest) GetChannelHintRefs() []*ExternalRef {
+	if x != nil {
+		return x.ChannelHintRefs
+	}
+	return nil
+}
+
+func (x *RequestNotificationRequest) GetNotificationPolicyRef() string {
+	if x != nil && x.NotificationPolicyRef != nil {
+		return *x.NotificationPolicyRef
+	}
+	return ""
+}
+
+func (x *RequestNotificationRequest) GetMessageTitle() string {
+	if x != nil && x.MessageTitle != nil {
+		return *x.MessageTitle
+	}
+	return ""
+}
+
+func (x *RequestNotificationRequest) GetBodyPreview() string {
+	if x != nil && x.BodyPreview != nil {
+		return *x.BodyPreview
+	}
+	return ""
+}
+
 type UpsertSubscriptionRequest struct {
 	state                   protoimpl.MessageState `protogen:"open.v1"`
 	Meta                    *CommandMeta           `protobuf:"bytes,1,opt,name=meta,proto3" json:"meta,omitempty"`
@@ -5313,6 +5459,9 @@ type UpsertSubscriptionRequest struct {
 	EventFilterJson         string                 `protobuf:"bytes,5,opt,name=event_filter_json,json=eventFilterJson,proto3" json:"event_filter_json,omitempty"`
 	DeliveryPreferencesJson string                 `protobuf:"bytes,6,opt,name=delivery_preferences_json,json=deliveryPreferencesJson,proto3" json:"delivery_preferences_json,omitempty"`
 	Status                  SubscriptionStatus     `protobuf:"varint,7,opt,name=status,proto3,enum=kodex.interactions.v1.SubscriptionStatus" json:"status,omitempty"`
+	SourceOwner             *SourceOwnerRef        `protobuf:"bytes,8,opt,name=source_owner,json=sourceOwner,proto3,oneof" json:"source_owner,omitempty"`
+	ChannelHintRefs         []*ExternalRef         `protobuf:"bytes,9,rep,name=channel_hint_refs,json=channelHintRefs,proto3" json:"channel_hint_refs,omitempty"`
+	SubscriptionPolicyRef   *string                `protobuf:"bytes,10,opt,name=subscription_policy_ref,json=subscriptionPolicyRef,proto3,oneof" json:"subscription_policy_ref,omitempty"`
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
@@ -5394,6 +5543,27 @@ func (x *UpsertSubscriptionRequest) GetStatus() SubscriptionStatus {
 		return x.Status
 	}
 	return SubscriptionStatus_SUBSCRIPTION_STATUS_UNSPECIFIED
+}
+
+func (x *UpsertSubscriptionRequest) GetSourceOwner() *SourceOwnerRef {
+	if x != nil {
+		return x.SourceOwner
+	}
+	return nil
+}
+
+func (x *UpsertSubscriptionRequest) GetChannelHintRefs() []*ExternalRef {
+	if x != nil {
+		return x.ChannelHintRefs
+	}
+	return nil
+}
+
+func (x *UpsertSubscriptionRequest) GetSubscriptionPolicyRef() string {
+	if x != nil && x.SubscriptionPolicyRef != nil {
+		return *x.SubscriptionPolicyRef
+	}
+	return ""
 }
 
 type DisableSubscriptionRequest struct {
@@ -6583,7 +6753,7 @@ const file_kodex_interactions_v1_interaction_hub_proto_rawDesc = "" +
 	"\x11_response_summaryB\x12\n" +
 	"\x10_response_objectB\r\n" +
 	"\v_source_refB\x15\n" +
-	"\x13_owner_decision_ref\"\xc0\x05\n" +
+	"\x13_owner_decision_ref\"\xac\t\n" +
 	"\fNotification\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x125\n" +
 	"\x05scope\x18\x02 \x01(\v2\x1f.kodex.interactions.v1.ScopeRefR\x05scope\x12T\n" +
@@ -6602,10 +6772,20 @@ const file_kodex_interactions_v1_interaction_hub_proto_rawDesc = "" +
 	"\n" +
 	"updated_at\x18\f \x01(\tR\tupdatedAt\x12\"\n" +
 	"\n" +
-	"expires_at\x18\r \x01(\tH\x02R\texpiresAt\x88\x01\x01B\r\n" +
+	"expires_at\x18\r \x01(\tH\x02R\texpiresAt\x88\x01\x01\x12H\n" +
+	"\fsource_owner\x18\x0e \x01(\v2%.kodex.interactions.v1.SourceOwnerRefR\vsourceOwner\x12;\n" +
+	"\aingress\x18\x0f \x01(\v2!.kodex.interactions.v1.IngressRefR\aingress\x12E\n" +
+	"\fcontext_refs\x18\x10 \x03(\v2\".kodex.interactions.v1.ExternalRefR\vcontextRefs\x12N\n" +
+	"\x11channel_hint_refs\x18\x11 \x03(\v2\".kodex.interactions.v1.ExternalRefR\x0fchannelHintRefs\x12;\n" +
+	"\x17notification_policy_ref\x18\x12 \x01(\tH\x03R\x15notificationPolicyRef\x88\x01\x01\x12(\n" +
+	"\rmessage_title\x18\x13 \x01(\tH\x04R\fmessageTitle\x88\x01\x01\x12&\n" +
+	"\fbody_preview\x18\x14 \x01(\tH\x05R\vbodyPreview\x88\x01\x01B\r\n" +
 	"\v_request_idB\x12\n" +
 	"\x10_subscription_idB\r\n" +
-	"\v_expires_at\"\xa0\x03\n" +
+	"\v_expires_atB\x1a\n" +
+	"\x18_notification_policy_refB\x10\n" +
+	"\x0e_message_titleB\x0f\n" +
+	"\r_body_preview\"\xa9\x05\n" +
 	"\fSubscription\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x125\n" +
 	"\x05scope\x18\x02 \x01(\v2\x1f.kodex.interactions.v1.ScopeRefR\x05scope\x12F\n" +
@@ -6617,7 +6797,13 @@ const file_kodex_interactions_v1_interaction_hub_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\b \x01(\tR\tcreatedAt\x12\x1d\n" +
 	"\n" +
-	"updated_at\x18\t \x01(\tR\tupdatedAt\"\xa3\x04\n" +
+	"updated_at\x18\t \x01(\tR\tupdatedAt\x12M\n" +
+	"\fsource_owner\x18\n" +
+	" \x01(\v2%.kodex.interactions.v1.SourceOwnerRefH\x00R\vsourceOwner\x88\x01\x01\x12N\n" +
+	"\x11channel_hint_refs\x18\v \x03(\v2\".kodex.interactions.v1.ExternalRefR\x0fchannelHintRefs\x12;\n" +
+	"\x17subscription_policy_ref\x18\f \x01(\tH\x01R\x15subscriptionPolicyRef\x88\x01\x01B\x0f\n" +
+	"\r_source_ownerB\x1a\n" +
+	"\x18_subscription_policy_ref\"\xa3\x04\n" +
 	"\rDeliveryRoute\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x125\n" +
 	"\x05scope\x18\x02 \x01(\v2\x1f.kodex.interactions.v1.ScopeRefR\x05scope\x12M\n" +
@@ -6875,7 +7061,7 @@ const file_kodex_interactions_v1_interaction_hub_proto_rawDesc = "" +
 	"\a_statusB\x14\n" +
 	"\x12_source_owner_kindB\x13\n" +
 	"\x11_source_owner_refB\x12\n" +
-	"\x10_deadline_before\"\xf5\x04\n" +
+	"\x10_deadline_before\"\xe1\b\n" +
 	"\x1aRequestNotificationRequest\x126\n" +
 	"\x04meta\x18\x01 \x01(\v2\".kodex.interactions.v1.CommandMetaR\x04meta\x125\n" +
 	"\x05scope\x18\x02 \x01(\v2\x1f.kodex.interactions.v1.ScopeRefR\x05scope\x12T\n" +
@@ -6889,10 +7075,20 @@ const file_kodex_interactions_v1_interaction_hub_proto_rawDesc = "" +
 	"\bpriority\x18\t \x01(\x0e2+.kodex.interactions.v1.NotificationPriorityR\bpriority\x12\"\n" +
 	"\n" +
 	"expires_at\x18\n" +
-	" \x01(\tH\x02R\texpiresAt\x88\x01\x01B\r\n" +
+	" \x01(\tH\x02R\texpiresAt\x88\x01\x01\x12H\n" +
+	"\fsource_owner\x18\v \x01(\v2%.kodex.interactions.v1.SourceOwnerRefR\vsourceOwner\x12;\n" +
+	"\aingress\x18\f \x01(\v2!.kodex.interactions.v1.IngressRefR\aingress\x12E\n" +
+	"\fcontext_refs\x18\r \x03(\v2\".kodex.interactions.v1.ExternalRefR\vcontextRefs\x12N\n" +
+	"\x11channel_hint_refs\x18\x0e \x03(\v2\".kodex.interactions.v1.ExternalRefR\x0fchannelHintRefs\x12;\n" +
+	"\x17notification_policy_ref\x18\x0f \x01(\tH\x03R\x15notificationPolicyRef\x88\x01\x01\x12(\n" +
+	"\rmessage_title\x18\x10 \x01(\tH\x04R\fmessageTitle\x88\x01\x01\x12&\n" +
+	"\fbody_preview\x18\x11 \x01(\tH\x05R\vbodyPreview\x88\x01\x01B\r\n" +
 	"\v_request_idB\x12\n" +
 	"\x10_subscription_idB\r\n" +
-	"\v_expires_at\"\xbf\x03\n" +
+	"\v_expires_atB\x1a\n" +
+	"\x18_notification_policy_refB\x10\n" +
+	"\x0e_message_titleB\x0f\n" +
+	"\r_body_preview\"\xc8\x05\n" +
 	"\x19UpsertSubscriptionRequest\x126\n" +
 	"\x04meta\x18\x01 \x01(\v2\".kodex.interactions.v1.CommandMetaR\x04meta\x12,\n" +
 	"\x0fsubscription_id\x18\x02 \x01(\tH\x00R\x0esubscriptionId\x88\x01\x01\x125\n" +
@@ -6900,8 +7096,14 @@ const file_kodex_interactions_v1_interaction_hub_proto_rawDesc = "" +
 	"\x0esubscriber_ref\x18\x04 \x01(\v2\x1f.kodex.interactions.v1.ActorRefR\rsubscriberRef\x12*\n" +
 	"\x11event_filter_json\x18\x05 \x01(\tR\x0feventFilterJson\x12:\n" +
 	"\x19delivery_preferences_json\x18\x06 \x01(\tR\x17deliveryPreferencesJson\x12A\n" +
-	"\x06status\x18\a \x01(\x0e2).kodex.interactions.v1.SubscriptionStatusR\x06statusB\x12\n" +
-	"\x10_subscription_id\"}\n" +
+	"\x06status\x18\a \x01(\x0e2).kodex.interactions.v1.SubscriptionStatusR\x06status\x12M\n" +
+	"\fsource_owner\x18\b \x01(\v2%.kodex.interactions.v1.SourceOwnerRefH\x01R\vsourceOwner\x88\x01\x01\x12N\n" +
+	"\x11channel_hint_refs\x18\t \x03(\v2\".kodex.interactions.v1.ExternalRefR\x0fchannelHintRefs\x12;\n" +
+	"\x17subscription_policy_ref\x18\n" +
+	" \x01(\tH\x02R\x15subscriptionPolicyRef\x88\x01\x01B\x12\n" +
+	"\x10_subscription_idB\x0f\n" +
+	"\r_source_ownerB\x1a\n" +
+	"\x18_subscription_policy_ref\"}\n" +
 	"\x1aDisableSubscriptionRequest\x126\n" +
 	"\x04meta\x18\x01 \x01(\v2\".kodex.interactions.v1.CommandMetaR\x04meta\x12'\n" +
 	"\x0fsubscription_id\x18\x02 \x01(\tR\x0esubscriptionId\"\xd1\x02\n" +
@@ -7309,156 +7511,168 @@ var file_kodex_interactions_v1_interaction_hub_proto_depIdxs = []int32{
 	34,  // 31: kodex.interactions.v1.Notification.recipient_refs:type_name -> kodex.interactions.v1.ActorRef
 	14,  // 32: kodex.interactions.v1.Notification.priority:type_name -> kodex.interactions.v1.NotificationPriority
 	15,  // 33: kodex.interactions.v1.Notification.status:type_name -> kodex.interactions.v1.NotificationStatus
-	31,  // 34: kodex.interactions.v1.Subscription.scope:type_name -> kodex.interactions.v1.ScopeRef
-	34,  // 35: kodex.interactions.v1.Subscription.subscriber_ref:type_name -> kodex.interactions.v1.ActorRef
-	16,  // 36: kodex.interactions.v1.Subscription.status:type_name -> kodex.interactions.v1.SubscriptionStatus
-	31,  // 37: kodex.interactions.v1.DeliveryRoute.scope:type_name -> kodex.interactions.v1.ScopeRef
-	17,  // 38: kodex.interactions.v1.DeliveryRoute.surface_kind:type_name -> kodex.interactions.v1.DeliverySurfaceKind
-	18,  // 39: kodex.interactions.v1.DeliveryRoute.status:type_name -> kodex.interactions.v1.DeliveryRouteStatus
-	46,  // 40: kodex.interactions.v1.DeliveryAttempt.target:type_name -> kodex.interactions.v1.DeliveryTarget
-	19,  // 41: kodex.interactions.v1.DeliveryAttempt.delivery_kind:type_name -> kodex.interactions.v1.DeliveryKind
-	20,  // 42: kodex.interactions.v1.DeliveryAttempt.status:type_name -> kodex.interactions.v1.DeliveryAttemptStatus
-	21,  // 43: kodex.interactions.v1.DeliveryAttempt.error_class:type_name -> kodex.interactions.v1.DeliveryErrorClass
-	32,  // 44: kodex.interactions.v1.ChannelCallback.callback_object:type_name -> kodex.interactions.v1.ObjectRef
-	23,  // 45: kodex.interactions.v1.ChannelCallback.signature_status:type_name -> kodex.interactions.v1.CallbackSignatureStatus
-	24,  // 46: kodex.interactions.v1.ChannelCallback.processing_status:type_name -> kodex.interactions.v1.CallbackProcessingStatus
-	46,  // 47: kodex.interactions.v1.ChannelDeliveryCommand.target:type_name -> kodex.interactions.v1.DeliveryTarget
-	19,  // 48: kodex.interactions.v1.ChannelDeliveryCommand.delivery_kind:type_name -> kodex.interactions.v1.DeliveryKind
-	31,  // 49: kodex.interactions.v1.ChannelDeliveryCommand.scope:type_name -> kodex.interactions.v1.ScopeRef
-	34,  // 50: kodex.interactions.v1.ChannelDeliveryCommand.recipient_refs:type_name -> kodex.interactions.v1.ActorRef
-	38,  // 51: kodex.interactions.v1.ChannelDeliveryCommand.actions:type_name -> kodex.interactions.v1.InteractionAction
-	33,  // 52: kodex.interactions.v1.ChannelDeliveryCommand.context_refs:type_name -> kodex.interactions.v1.ExternalRef
-	22,  // 53: kodex.interactions.v1.ChannelDeliveryResult.result_status:type_name -> kodex.interactions.v1.ChannelDeliveryResultStatus
-	21,  // 54: kodex.interactions.v1.ChannelDeliveryResult.error_class:type_name -> kodex.interactions.v1.DeliveryErrorClass
-	32,  // 55: kodex.interactions.v1.ChannelCallbackEnvelope.answer_object:type_name -> kodex.interactions.v1.ObjectRef
-	23,  // 56: kodex.interactions.v1.ChannelCallbackEnvelope.signature_status:type_name -> kodex.interactions.v1.CallbackSignatureStatus
-	25,  // 57: kodex.interactions.v1.CreateConversationThreadRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
-	31,  // 58: kodex.interactions.v1.CreateConversationThreadRequest.scope:type_name -> kodex.interactions.v1.ScopeRef
-	1,   // 59: kodex.interactions.v1.CreateConversationThreadRequest.thread_kind:type_name -> kodex.interactions.v1.ConversationThreadKind
-	3,   // 60: kodex.interactions.v1.CreateConversationThreadRequest.source_kind:type_name -> kodex.interactions.v1.ConversationSourceKind
-	25,  // 61: kodex.interactions.v1.RecordConversationMessageRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
-	4,   // 62: kodex.interactions.v1.RecordConversationMessageRequest.message_kind:type_name -> kodex.interactions.v1.ConversationMessageKind
-	32,  // 63: kodex.interactions.v1.RecordConversationMessageRequest.body_object:type_name -> kodex.interactions.v1.ObjectRef
-	87,  // 64: kodex.interactions.v1.RecordConversationMessageRequest.safe_metadata:type_name -> kodex.interactions.v1.RecordConversationMessageRequest.SafeMetadataEntry
-	26,  // 65: kodex.interactions.v1.GetConversationThreadRequest.meta:type_name -> kodex.interactions.v1.QueryMeta
-	26,  // 66: kodex.interactions.v1.ListConversationMessagesRequest.meta:type_name -> kodex.interactions.v1.QueryMeta
-	29,  // 67: kodex.interactions.v1.ListConversationMessagesRequest.page:type_name -> kodex.interactions.v1.PageRequest
-	31,  // 68: kodex.interactions.v1.InteractionRequestDraft.scope:type_name -> kodex.interactions.v1.ScopeRef
-	35,  // 69: kodex.interactions.v1.InteractionRequestDraft.source_owner:type_name -> kodex.interactions.v1.SourceOwnerRef
-	36,  // 70: kodex.interactions.v1.InteractionRequestDraft.ingress:type_name -> kodex.interactions.v1.IngressRef
-	37,  // 71: kodex.interactions.v1.InteractionRequestDraft.decision_owner:type_name -> kodex.interactions.v1.DecisionOwnerRef
-	34,  // 72: kodex.interactions.v1.InteractionRequestDraft.target_refs:type_name -> kodex.interactions.v1.ActorRef
-	33,  // 73: kodex.interactions.v1.InteractionRequestDraft.context_refs:type_name -> kodex.interactions.v1.ExternalRef
-	32,  // 74: kodex.interactions.v1.InteractionRequestDraft.prompt_object:type_name -> kodex.interactions.v1.ObjectRef
-	38,  // 75: kodex.interactions.v1.InteractionRequestDraft.allowed_actions:type_name -> kodex.interactions.v1.InteractionAction
-	9,   // 76: kodex.interactions.v1.InteractionRequestDraft.risk_class:type_name -> kodex.interactions.v1.InteractionRiskClass
-	25,  // 77: kodex.interactions.v1.RequestFeedbackRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
-	56,  // 78: kodex.interactions.v1.RequestFeedbackRequest.request:type_name -> kodex.interactions.v1.InteractionRequestDraft
-	25,  // 79: kodex.interactions.v1.RequestApprovalRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
-	56,  // 80: kodex.interactions.v1.RequestApprovalRequest.request:type_name -> kodex.interactions.v1.InteractionRequestDraft
-	25,  // 81: kodex.interactions.v1.RequestHumanGateRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
-	56,  // 82: kodex.interactions.v1.RequestHumanGateRequest.request:type_name -> kodex.interactions.v1.InteractionRequestDraft
-	25,  // 83: kodex.interactions.v1.RecordInteractionResponseRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
-	11,  // 84: kodex.interactions.v1.RecordInteractionResponseRequest.response_action:type_name -> kodex.interactions.v1.InteractionResponseAction
-	32,  // 85: kodex.interactions.v1.RecordInteractionResponseRequest.response_object:type_name -> kodex.interactions.v1.ObjectRef
-	12,  // 86: kodex.interactions.v1.RecordInteractionResponseRequest.source_kind:type_name -> kodex.interactions.v1.InteractionResponseSourceKind
-	25,  // 87: kodex.interactions.v1.CancelInteractionRequestRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
-	25,  // 88: kodex.interactions.v1.ExpireInteractionRequestsRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
-	31,  // 89: kodex.interactions.v1.ExpireInteractionRequestsRequest.scope:type_name -> kodex.interactions.v1.ScopeRef
-	26,  // 90: kodex.interactions.v1.GetInteractionRequestRequest.meta:type_name -> kodex.interactions.v1.QueryMeta
-	26,  // 91: kodex.interactions.v1.ListInteractionRequestsRequest.meta:type_name -> kodex.interactions.v1.QueryMeta
-	31,  // 92: kodex.interactions.v1.ListInteractionRequestsRequest.scope:type_name -> kodex.interactions.v1.ScopeRef
-	8,   // 93: kodex.interactions.v1.ListInteractionRequestsRequest.request_kind:type_name -> kodex.interactions.v1.InteractionRequestKind
-	10,  // 94: kodex.interactions.v1.ListInteractionRequestsRequest.status:type_name -> kodex.interactions.v1.InteractionRequestStatus
-	5,   // 95: kodex.interactions.v1.ListInteractionRequestsRequest.source_owner_kind:type_name -> kodex.interactions.v1.SourceOwnerKind
-	29,  // 96: kodex.interactions.v1.ListInteractionRequestsRequest.page:type_name -> kodex.interactions.v1.PageRequest
-	25,  // 97: kodex.interactions.v1.RequestNotificationRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
-	31,  // 98: kodex.interactions.v1.RequestNotificationRequest.scope:type_name -> kodex.interactions.v1.ScopeRef
-	13,  // 99: kodex.interactions.v1.RequestNotificationRequest.notification_kind:type_name -> kodex.interactions.v1.NotificationKind
-	34,  // 100: kodex.interactions.v1.RequestNotificationRequest.recipient_refs:type_name -> kodex.interactions.v1.ActorRef
-	14,  // 101: kodex.interactions.v1.RequestNotificationRequest.priority:type_name -> kodex.interactions.v1.NotificationPriority
-	25,  // 102: kodex.interactions.v1.UpsertSubscriptionRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
-	31,  // 103: kodex.interactions.v1.UpsertSubscriptionRequest.scope:type_name -> kodex.interactions.v1.ScopeRef
-	34,  // 104: kodex.interactions.v1.UpsertSubscriptionRequest.subscriber_ref:type_name -> kodex.interactions.v1.ActorRef
-	16,  // 105: kodex.interactions.v1.UpsertSubscriptionRequest.status:type_name -> kodex.interactions.v1.SubscriptionStatus
-	25,  // 106: kodex.interactions.v1.DisableSubscriptionRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
-	26,  // 107: kodex.interactions.v1.ListSubscriptionsRequest.meta:type_name -> kodex.interactions.v1.QueryMeta
-	31,  // 108: kodex.interactions.v1.ListSubscriptionsRequest.scope:type_name -> kodex.interactions.v1.ScopeRef
-	16,  // 109: kodex.interactions.v1.ListSubscriptionsRequest.status:type_name -> kodex.interactions.v1.SubscriptionStatus
-	29,  // 110: kodex.interactions.v1.ListSubscriptionsRequest.page:type_name -> kodex.interactions.v1.PageRequest
-	25,  // 111: kodex.interactions.v1.PlanDeliveryRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
-	46,  // 112: kodex.interactions.v1.PlanDeliveryRequest.target:type_name -> kodex.interactions.v1.DeliveryTarget
-	25,  // 113: kodex.interactions.v1.RecordDeliveryResultRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
-	50,  // 114: kodex.interactions.v1.RecordDeliveryResultRequest.result:type_name -> kodex.interactions.v1.ChannelDeliveryResult
-	25,  // 115: kodex.interactions.v1.RecordChannelCallbackRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
-	51,  // 116: kodex.interactions.v1.RecordChannelCallbackRequest.callback:type_name -> kodex.interactions.v1.ChannelCallbackEnvelope
-	26,  // 117: kodex.interactions.v1.GetDeliveryStatusRequest.meta:type_name -> kodex.interactions.v1.QueryMeta
-	46,  // 118: kodex.interactions.v1.GetDeliveryStatusRequest.target:type_name -> kodex.interactions.v1.DeliveryTarget
-	39,  // 119: kodex.interactions.v1.ConversationThreadResponse.thread:type_name -> kodex.interactions.v1.ConversationThread
-	40,  // 120: kodex.interactions.v1.ConversationMessageResponse.message:type_name -> kodex.interactions.v1.ConversationMessage
-	40,  // 121: kodex.interactions.v1.ListConversationMessagesResponse.messages:type_name -> kodex.interactions.v1.ConversationMessage
-	30,  // 122: kodex.interactions.v1.ListConversationMessagesResponse.page:type_name -> kodex.interactions.v1.PageResponse
-	41,  // 123: kodex.interactions.v1.InteractionRequestResponse.request:type_name -> kodex.interactions.v1.InteractionRequest
-	41,  // 124: kodex.interactions.v1.InteractionResponseResponse.request:type_name -> kodex.interactions.v1.InteractionRequest
-	42,  // 125: kodex.interactions.v1.InteractionResponseResponse.response:type_name -> kodex.interactions.v1.InteractionResponse
-	41,  // 126: kodex.interactions.v1.ListInteractionRequestsResponse.requests:type_name -> kodex.interactions.v1.InteractionRequest
-	30,  // 127: kodex.interactions.v1.ListInteractionRequestsResponse.page:type_name -> kodex.interactions.v1.PageResponse
-	43,  // 128: kodex.interactions.v1.NotificationResponse.notification:type_name -> kodex.interactions.v1.Notification
-	44,  // 129: kodex.interactions.v1.SubscriptionResponse.subscription:type_name -> kodex.interactions.v1.Subscription
-	44,  // 130: kodex.interactions.v1.ListSubscriptionsResponse.subscriptions:type_name -> kodex.interactions.v1.Subscription
-	30,  // 131: kodex.interactions.v1.ListSubscriptionsResponse.page:type_name -> kodex.interactions.v1.PageResponse
-	47,  // 132: kodex.interactions.v1.DeliveryAttemptResponse.delivery_attempt:type_name -> kodex.interactions.v1.DeliveryAttempt
-	48,  // 133: kodex.interactions.v1.ChannelCallbackResponse.callback:type_name -> kodex.interactions.v1.ChannelCallback
-	42,  // 134: kodex.interactions.v1.ChannelCallbackResponse.response:type_name -> kodex.interactions.v1.InteractionResponse
-	41,  // 135: kodex.interactions.v1.DeliveryStatusResponse.request:type_name -> kodex.interactions.v1.InteractionRequest
-	43,  // 136: kodex.interactions.v1.DeliveryStatusResponse.notification:type_name -> kodex.interactions.v1.Notification
-	47,  // 137: kodex.interactions.v1.DeliveryStatusResponse.delivery_attempts:type_name -> kodex.interactions.v1.DeliveryAttempt
-	48,  // 138: kodex.interactions.v1.DeliveryStatusResponse.latest_callback:type_name -> kodex.interactions.v1.ChannelCallback
-	52,  // 139: kodex.interactions.v1.InteractionHubService.CreateConversationThread:input_type -> kodex.interactions.v1.CreateConversationThreadRequest
-	53,  // 140: kodex.interactions.v1.InteractionHubService.RecordConversationMessage:input_type -> kodex.interactions.v1.RecordConversationMessageRequest
-	54,  // 141: kodex.interactions.v1.InteractionHubService.GetConversationThread:input_type -> kodex.interactions.v1.GetConversationThreadRequest
-	55,  // 142: kodex.interactions.v1.InteractionHubService.ListConversationMessages:input_type -> kodex.interactions.v1.ListConversationMessagesRequest
-	57,  // 143: kodex.interactions.v1.InteractionHubService.RequestFeedback:input_type -> kodex.interactions.v1.RequestFeedbackRequest
-	58,  // 144: kodex.interactions.v1.InteractionHubService.RequestApproval:input_type -> kodex.interactions.v1.RequestApprovalRequest
-	59,  // 145: kodex.interactions.v1.InteractionHubService.RequestHumanGate:input_type -> kodex.interactions.v1.RequestHumanGateRequest
-	60,  // 146: kodex.interactions.v1.InteractionHubService.RecordInteractionResponse:input_type -> kodex.interactions.v1.RecordInteractionResponseRequest
-	61,  // 147: kodex.interactions.v1.InteractionHubService.CancelInteractionRequest:input_type -> kodex.interactions.v1.CancelInteractionRequestRequest
-	62,  // 148: kodex.interactions.v1.InteractionHubService.ExpireInteractionRequests:input_type -> kodex.interactions.v1.ExpireInteractionRequestsRequest
-	63,  // 149: kodex.interactions.v1.InteractionHubService.GetInteractionRequest:input_type -> kodex.interactions.v1.GetInteractionRequestRequest
-	64,  // 150: kodex.interactions.v1.InteractionHubService.ListInteractionRequests:input_type -> kodex.interactions.v1.ListInteractionRequestsRequest
-	65,  // 151: kodex.interactions.v1.InteractionHubService.RequestNotification:input_type -> kodex.interactions.v1.RequestNotificationRequest
-	66,  // 152: kodex.interactions.v1.InteractionHubService.UpsertSubscription:input_type -> kodex.interactions.v1.UpsertSubscriptionRequest
-	67,  // 153: kodex.interactions.v1.InteractionHubService.DisableSubscription:input_type -> kodex.interactions.v1.DisableSubscriptionRequest
-	68,  // 154: kodex.interactions.v1.InteractionHubService.ListSubscriptions:input_type -> kodex.interactions.v1.ListSubscriptionsRequest
-	69,  // 155: kodex.interactions.v1.InteractionHubService.PlanDelivery:input_type -> kodex.interactions.v1.PlanDeliveryRequest
-	70,  // 156: kodex.interactions.v1.InteractionHubService.RecordDeliveryResult:input_type -> kodex.interactions.v1.RecordDeliveryResultRequest
-	71,  // 157: kodex.interactions.v1.InteractionHubService.RecordChannelCallback:input_type -> kodex.interactions.v1.RecordChannelCallbackRequest
-	72,  // 158: kodex.interactions.v1.InteractionHubService.GetDeliveryStatus:input_type -> kodex.interactions.v1.GetDeliveryStatusRequest
-	73,  // 159: kodex.interactions.v1.InteractionHubService.CreateConversationThread:output_type -> kodex.interactions.v1.ConversationThreadResponse
-	74,  // 160: kodex.interactions.v1.InteractionHubService.RecordConversationMessage:output_type -> kodex.interactions.v1.ConversationMessageResponse
-	73,  // 161: kodex.interactions.v1.InteractionHubService.GetConversationThread:output_type -> kodex.interactions.v1.ConversationThreadResponse
-	75,  // 162: kodex.interactions.v1.InteractionHubService.ListConversationMessages:output_type -> kodex.interactions.v1.ListConversationMessagesResponse
-	76,  // 163: kodex.interactions.v1.InteractionHubService.RequestFeedback:output_type -> kodex.interactions.v1.InteractionRequestResponse
-	76,  // 164: kodex.interactions.v1.InteractionHubService.RequestApproval:output_type -> kodex.interactions.v1.InteractionRequestResponse
-	76,  // 165: kodex.interactions.v1.InteractionHubService.RequestHumanGate:output_type -> kodex.interactions.v1.InteractionRequestResponse
-	77,  // 166: kodex.interactions.v1.InteractionHubService.RecordInteractionResponse:output_type -> kodex.interactions.v1.InteractionResponseResponse
-	76,  // 167: kodex.interactions.v1.InteractionHubService.CancelInteractionRequest:output_type -> kodex.interactions.v1.InteractionRequestResponse
-	78,  // 168: kodex.interactions.v1.InteractionHubService.ExpireInteractionRequests:output_type -> kodex.interactions.v1.ExpireInteractionRequestsResponse
-	76,  // 169: kodex.interactions.v1.InteractionHubService.GetInteractionRequest:output_type -> kodex.interactions.v1.InteractionRequestResponse
-	79,  // 170: kodex.interactions.v1.InteractionHubService.ListInteractionRequests:output_type -> kodex.interactions.v1.ListInteractionRequestsResponse
-	80,  // 171: kodex.interactions.v1.InteractionHubService.RequestNotification:output_type -> kodex.interactions.v1.NotificationResponse
-	81,  // 172: kodex.interactions.v1.InteractionHubService.UpsertSubscription:output_type -> kodex.interactions.v1.SubscriptionResponse
-	81,  // 173: kodex.interactions.v1.InteractionHubService.DisableSubscription:output_type -> kodex.interactions.v1.SubscriptionResponse
-	82,  // 174: kodex.interactions.v1.InteractionHubService.ListSubscriptions:output_type -> kodex.interactions.v1.ListSubscriptionsResponse
-	83,  // 175: kodex.interactions.v1.InteractionHubService.PlanDelivery:output_type -> kodex.interactions.v1.DeliveryAttemptResponse
-	83,  // 176: kodex.interactions.v1.InteractionHubService.RecordDeliveryResult:output_type -> kodex.interactions.v1.DeliveryAttemptResponse
-	84,  // 177: kodex.interactions.v1.InteractionHubService.RecordChannelCallback:output_type -> kodex.interactions.v1.ChannelCallbackResponse
-	85,  // 178: kodex.interactions.v1.InteractionHubService.GetDeliveryStatus:output_type -> kodex.interactions.v1.DeliveryStatusResponse
-	159, // [159:179] is the sub-list for method output_type
-	139, // [139:159] is the sub-list for method input_type
-	139, // [139:139] is the sub-list for extension type_name
-	139, // [139:139] is the sub-list for extension extendee
-	0,   // [0:139] is the sub-list for field type_name
+	35,  // 34: kodex.interactions.v1.Notification.source_owner:type_name -> kodex.interactions.v1.SourceOwnerRef
+	36,  // 35: kodex.interactions.v1.Notification.ingress:type_name -> kodex.interactions.v1.IngressRef
+	33,  // 36: kodex.interactions.v1.Notification.context_refs:type_name -> kodex.interactions.v1.ExternalRef
+	33,  // 37: kodex.interactions.v1.Notification.channel_hint_refs:type_name -> kodex.interactions.v1.ExternalRef
+	31,  // 38: kodex.interactions.v1.Subscription.scope:type_name -> kodex.interactions.v1.ScopeRef
+	34,  // 39: kodex.interactions.v1.Subscription.subscriber_ref:type_name -> kodex.interactions.v1.ActorRef
+	16,  // 40: kodex.interactions.v1.Subscription.status:type_name -> kodex.interactions.v1.SubscriptionStatus
+	35,  // 41: kodex.interactions.v1.Subscription.source_owner:type_name -> kodex.interactions.v1.SourceOwnerRef
+	33,  // 42: kodex.interactions.v1.Subscription.channel_hint_refs:type_name -> kodex.interactions.v1.ExternalRef
+	31,  // 43: kodex.interactions.v1.DeliveryRoute.scope:type_name -> kodex.interactions.v1.ScopeRef
+	17,  // 44: kodex.interactions.v1.DeliveryRoute.surface_kind:type_name -> kodex.interactions.v1.DeliverySurfaceKind
+	18,  // 45: kodex.interactions.v1.DeliveryRoute.status:type_name -> kodex.interactions.v1.DeliveryRouteStatus
+	46,  // 46: kodex.interactions.v1.DeliveryAttempt.target:type_name -> kodex.interactions.v1.DeliveryTarget
+	19,  // 47: kodex.interactions.v1.DeliveryAttempt.delivery_kind:type_name -> kodex.interactions.v1.DeliveryKind
+	20,  // 48: kodex.interactions.v1.DeliveryAttempt.status:type_name -> kodex.interactions.v1.DeliveryAttemptStatus
+	21,  // 49: kodex.interactions.v1.DeliveryAttempt.error_class:type_name -> kodex.interactions.v1.DeliveryErrorClass
+	32,  // 50: kodex.interactions.v1.ChannelCallback.callback_object:type_name -> kodex.interactions.v1.ObjectRef
+	23,  // 51: kodex.interactions.v1.ChannelCallback.signature_status:type_name -> kodex.interactions.v1.CallbackSignatureStatus
+	24,  // 52: kodex.interactions.v1.ChannelCallback.processing_status:type_name -> kodex.interactions.v1.CallbackProcessingStatus
+	46,  // 53: kodex.interactions.v1.ChannelDeliveryCommand.target:type_name -> kodex.interactions.v1.DeliveryTarget
+	19,  // 54: kodex.interactions.v1.ChannelDeliveryCommand.delivery_kind:type_name -> kodex.interactions.v1.DeliveryKind
+	31,  // 55: kodex.interactions.v1.ChannelDeliveryCommand.scope:type_name -> kodex.interactions.v1.ScopeRef
+	34,  // 56: kodex.interactions.v1.ChannelDeliveryCommand.recipient_refs:type_name -> kodex.interactions.v1.ActorRef
+	38,  // 57: kodex.interactions.v1.ChannelDeliveryCommand.actions:type_name -> kodex.interactions.v1.InteractionAction
+	33,  // 58: kodex.interactions.v1.ChannelDeliveryCommand.context_refs:type_name -> kodex.interactions.v1.ExternalRef
+	22,  // 59: kodex.interactions.v1.ChannelDeliveryResult.result_status:type_name -> kodex.interactions.v1.ChannelDeliveryResultStatus
+	21,  // 60: kodex.interactions.v1.ChannelDeliveryResult.error_class:type_name -> kodex.interactions.v1.DeliveryErrorClass
+	32,  // 61: kodex.interactions.v1.ChannelCallbackEnvelope.answer_object:type_name -> kodex.interactions.v1.ObjectRef
+	23,  // 62: kodex.interactions.v1.ChannelCallbackEnvelope.signature_status:type_name -> kodex.interactions.v1.CallbackSignatureStatus
+	25,  // 63: kodex.interactions.v1.CreateConversationThreadRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
+	31,  // 64: kodex.interactions.v1.CreateConversationThreadRequest.scope:type_name -> kodex.interactions.v1.ScopeRef
+	1,   // 65: kodex.interactions.v1.CreateConversationThreadRequest.thread_kind:type_name -> kodex.interactions.v1.ConversationThreadKind
+	3,   // 66: kodex.interactions.v1.CreateConversationThreadRequest.source_kind:type_name -> kodex.interactions.v1.ConversationSourceKind
+	25,  // 67: kodex.interactions.v1.RecordConversationMessageRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
+	4,   // 68: kodex.interactions.v1.RecordConversationMessageRequest.message_kind:type_name -> kodex.interactions.v1.ConversationMessageKind
+	32,  // 69: kodex.interactions.v1.RecordConversationMessageRequest.body_object:type_name -> kodex.interactions.v1.ObjectRef
+	87,  // 70: kodex.interactions.v1.RecordConversationMessageRequest.safe_metadata:type_name -> kodex.interactions.v1.RecordConversationMessageRequest.SafeMetadataEntry
+	26,  // 71: kodex.interactions.v1.GetConversationThreadRequest.meta:type_name -> kodex.interactions.v1.QueryMeta
+	26,  // 72: kodex.interactions.v1.ListConversationMessagesRequest.meta:type_name -> kodex.interactions.v1.QueryMeta
+	29,  // 73: kodex.interactions.v1.ListConversationMessagesRequest.page:type_name -> kodex.interactions.v1.PageRequest
+	31,  // 74: kodex.interactions.v1.InteractionRequestDraft.scope:type_name -> kodex.interactions.v1.ScopeRef
+	35,  // 75: kodex.interactions.v1.InteractionRequestDraft.source_owner:type_name -> kodex.interactions.v1.SourceOwnerRef
+	36,  // 76: kodex.interactions.v1.InteractionRequestDraft.ingress:type_name -> kodex.interactions.v1.IngressRef
+	37,  // 77: kodex.interactions.v1.InteractionRequestDraft.decision_owner:type_name -> kodex.interactions.v1.DecisionOwnerRef
+	34,  // 78: kodex.interactions.v1.InteractionRequestDraft.target_refs:type_name -> kodex.interactions.v1.ActorRef
+	33,  // 79: kodex.interactions.v1.InteractionRequestDraft.context_refs:type_name -> kodex.interactions.v1.ExternalRef
+	32,  // 80: kodex.interactions.v1.InteractionRequestDraft.prompt_object:type_name -> kodex.interactions.v1.ObjectRef
+	38,  // 81: kodex.interactions.v1.InteractionRequestDraft.allowed_actions:type_name -> kodex.interactions.v1.InteractionAction
+	9,   // 82: kodex.interactions.v1.InteractionRequestDraft.risk_class:type_name -> kodex.interactions.v1.InteractionRiskClass
+	25,  // 83: kodex.interactions.v1.RequestFeedbackRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
+	56,  // 84: kodex.interactions.v1.RequestFeedbackRequest.request:type_name -> kodex.interactions.v1.InteractionRequestDraft
+	25,  // 85: kodex.interactions.v1.RequestApprovalRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
+	56,  // 86: kodex.interactions.v1.RequestApprovalRequest.request:type_name -> kodex.interactions.v1.InteractionRequestDraft
+	25,  // 87: kodex.interactions.v1.RequestHumanGateRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
+	56,  // 88: kodex.interactions.v1.RequestHumanGateRequest.request:type_name -> kodex.interactions.v1.InteractionRequestDraft
+	25,  // 89: kodex.interactions.v1.RecordInteractionResponseRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
+	11,  // 90: kodex.interactions.v1.RecordInteractionResponseRequest.response_action:type_name -> kodex.interactions.v1.InteractionResponseAction
+	32,  // 91: kodex.interactions.v1.RecordInteractionResponseRequest.response_object:type_name -> kodex.interactions.v1.ObjectRef
+	12,  // 92: kodex.interactions.v1.RecordInteractionResponseRequest.source_kind:type_name -> kodex.interactions.v1.InteractionResponseSourceKind
+	25,  // 93: kodex.interactions.v1.CancelInteractionRequestRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
+	25,  // 94: kodex.interactions.v1.ExpireInteractionRequestsRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
+	31,  // 95: kodex.interactions.v1.ExpireInteractionRequestsRequest.scope:type_name -> kodex.interactions.v1.ScopeRef
+	26,  // 96: kodex.interactions.v1.GetInteractionRequestRequest.meta:type_name -> kodex.interactions.v1.QueryMeta
+	26,  // 97: kodex.interactions.v1.ListInteractionRequestsRequest.meta:type_name -> kodex.interactions.v1.QueryMeta
+	31,  // 98: kodex.interactions.v1.ListInteractionRequestsRequest.scope:type_name -> kodex.interactions.v1.ScopeRef
+	8,   // 99: kodex.interactions.v1.ListInteractionRequestsRequest.request_kind:type_name -> kodex.interactions.v1.InteractionRequestKind
+	10,  // 100: kodex.interactions.v1.ListInteractionRequestsRequest.status:type_name -> kodex.interactions.v1.InteractionRequestStatus
+	5,   // 101: kodex.interactions.v1.ListInteractionRequestsRequest.source_owner_kind:type_name -> kodex.interactions.v1.SourceOwnerKind
+	29,  // 102: kodex.interactions.v1.ListInteractionRequestsRequest.page:type_name -> kodex.interactions.v1.PageRequest
+	25,  // 103: kodex.interactions.v1.RequestNotificationRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
+	31,  // 104: kodex.interactions.v1.RequestNotificationRequest.scope:type_name -> kodex.interactions.v1.ScopeRef
+	13,  // 105: kodex.interactions.v1.RequestNotificationRequest.notification_kind:type_name -> kodex.interactions.v1.NotificationKind
+	34,  // 106: kodex.interactions.v1.RequestNotificationRequest.recipient_refs:type_name -> kodex.interactions.v1.ActorRef
+	14,  // 107: kodex.interactions.v1.RequestNotificationRequest.priority:type_name -> kodex.interactions.v1.NotificationPriority
+	35,  // 108: kodex.interactions.v1.RequestNotificationRequest.source_owner:type_name -> kodex.interactions.v1.SourceOwnerRef
+	36,  // 109: kodex.interactions.v1.RequestNotificationRequest.ingress:type_name -> kodex.interactions.v1.IngressRef
+	33,  // 110: kodex.interactions.v1.RequestNotificationRequest.context_refs:type_name -> kodex.interactions.v1.ExternalRef
+	33,  // 111: kodex.interactions.v1.RequestNotificationRequest.channel_hint_refs:type_name -> kodex.interactions.v1.ExternalRef
+	25,  // 112: kodex.interactions.v1.UpsertSubscriptionRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
+	31,  // 113: kodex.interactions.v1.UpsertSubscriptionRequest.scope:type_name -> kodex.interactions.v1.ScopeRef
+	34,  // 114: kodex.interactions.v1.UpsertSubscriptionRequest.subscriber_ref:type_name -> kodex.interactions.v1.ActorRef
+	16,  // 115: kodex.interactions.v1.UpsertSubscriptionRequest.status:type_name -> kodex.interactions.v1.SubscriptionStatus
+	35,  // 116: kodex.interactions.v1.UpsertSubscriptionRequest.source_owner:type_name -> kodex.interactions.v1.SourceOwnerRef
+	33,  // 117: kodex.interactions.v1.UpsertSubscriptionRequest.channel_hint_refs:type_name -> kodex.interactions.v1.ExternalRef
+	25,  // 118: kodex.interactions.v1.DisableSubscriptionRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
+	26,  // 119: kodex.interactions.v1.ListSubscriptionsRequest.meta:type_name -> kodex.interactions.v1.QueryMeta
+	31,  // 120: kodex.interactions.v1.ListSubscriptionsRequest.scope:type_name -> kodex.interactions.v1.ScopeRef
+	16,  // 121: kodex.interactions.v1.ListSubscriptionsRequest.status:type_name -> kodex.interactions.v1.SubscriptionStatus
+	29,  // 122: kodex.interactions.v1.ListSubscriptionsRequest.page:type_name -> kodex.interactions.v1.PageRequest
+	25,  // 123: kodex.interactions.v1.PlanDeliveryRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
+	46,  // 124: kodex.interactions.v1.PlanDeliveryRequest.target:type_name -> kodex.interactions.v1.DeliveryTarget
+	25,  // 125: kodex.interactions.v1.RecordDeliveryResultRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
+	50,  // 126: kodex.interactions.v1.RecordDeliveryResultRequest.result:type_name -> kodex.interactions.v1.ChannelDeliveryResult
+	25,  // 127: kodex.interactions.v1.RecordChannelCallbackRequest.meta:type_name -> kodex.interactions.v1.CommandMeta
+	51,  // 128: kodex.interactions.v1.RecordChannelCallbackRequest.callback:type_name -> kodex.interactions.v1.ChannelCallbackEnvelope
+	26,  // 129: kodex.interactions.v1.GetDeliveryStatusRequest.meta:type_name -> kodex.interactions.v1.QueryMeta
+	46,  // 130: kodex.interactions.v1.GetDeliveryStatusRequest.target:type_name -> kodex.interactions.v1.DeliveryTarget
+	39,  // 131: kodex.interactions.v1.ConversationThreadResponse.thread:type_name -> kodex.interactions.v1.ConversationThread
+	40,  // 132: kodex.interactions.v1.ConversationMessageResponse.message:type_name -> kodex.interactions.v1.ConversationMessage
+	40,  // 133: kodex.interactions.v1.ListConversationMessagesResponse.messages:type_name -> kodex.interactions.v1.ConversationMessage
+	30,  // 134: kodex.interactions.v1.ListConversationMessagesResponse.page:type_name -> kodex.interactions.v1.PageResponse
+	41,  // 135: kodex.interactions.v1.InteractionRequestResponse.request:type_name -> kodex.interactions.v1.InteractionRequest
+	41,  // 136: kodex.interactions.v1.InteractionResponseResponse.request:type_name -> kodex.interactions.v1.InteractionRequest
+	42,  // 137: kodex.interactions.v1.InteractionResponseResponse.response:type_name -> kodex.interactions.v1.InteractionResponse
+	41,  // 138: kodex.interactions.v1.ListInteractionRequestsResponse.requests:type_name -> kodex.interactions.v1.InteractionRequest
+	30,  // 139: kodex.interactions.v1.ListInteractionRequestsResponse.page:type_name -> kodex.interactions.v1.PageResponse
+	43,  // 140: kodex.interactions.v1.NotificationResponse.notification:type_name -> kodex.interactions.v1.Notification
+	44,  // 141: kodex.interactions.v1.SubscriptionResponse.subscription:type_name -> kodex.interactions.v1.Subscription
+	44,  // 142: kodex.interactions.v1.ListSubscriptionsResponse.subscriptions:type_name -> kodex.interactions.v1.Subscription
+	30,  // 143: kodex.interactions.v1.ListSubscriptionsResponse.page:type_name -> kodex.interactions.v1.PageResponse
+	47,  // 144: kodex.interactions.v1.DeliveryAttemptResponse.delivery_attempt:type_name -> kodex.interactions.v1.DeliveryAttempt
+	48,  // 145: kodex.interactions.v1.ChannelCallbackResponse.callback:type_name -> kodex.interactions.v1.ChannelCallback
+	42,  // 146: kodex.interactions.v1.ChannelCallbackResponse.response:type_name -> kodex.interactions.v1.InteractionResponse
+	41,  // 147: kodex.interactions.v1.DeliveryStatusResponse.request:type_name -> kodex.interactions.v1.InteractionRequest
+	43,  // 148: kodex.interactions.v1.DeliveryStatusResponse.notification:type_name -> kodex.interactions.v1.Notification
+	47,  // 149: kodex.interactions.v1.DeliveryStatusResponse.delivery_attempts:type_name -> kodex.interactions.v1.DeliveryAttempt
+	48,  // 150: kodex.interactions.v1.DeliveryStatusResponse.latest_callback:type_name -> kodex.interactions.v1.ChannelCallback
+	52,  // 151: kodex.interactions.v1.InteractionHubService.CreateConversationThread:input_type -> kodex.interactions.v1.CreateConversationThreadRequest
+	53,  // 152: kodex.interactions.v1.InteractionHubService.RecordConversationMessage:input_type -> kodex.interactions.v1.RecordConversationMessageRequest
+	54,  // 153: kodex.interactions.v1.InteractionHubService.GetConversationThread:input_type -> kodex.interactions.v1.GetConversationThreadRequest
+	55,  // 154: kodex.interactions.v1.InteractionHubService.ListConversationMessages:input_type -> kodex.interactions.v1.ListConversationMessagesRequest
+	57,  // 155: kodex.interactions.v1.InteractionHubService.RequestFeedback:input_type -> kodex.interactions.v1.RequestFeedbackRequest
+	58,  // 156: kodex.interactions.v1.InteractionHubService.RequestApproval:input_type -> kodex.interactions.v1.RequestApprovalRequest
+	59,  // 157: kodex.interactions.v1.InteractionHubService.RequestHumanGate:input_type -> kodex.interactions.v1.RequestHumanGateRequest
+	60,  // 158: kodex.interactions.v1.InteractionHubService.RecordInteractionResponse:input_type -> kodex.interactions.v1.RecordInteractionResponseRequest
+	61,  // 159: kodex.interactions.v1.InteractionHubService.CancelInteractionRequest:input_type -> kodex.interactions.v1.CancelInteractionRequestRequest
+	62,  // 160: kodex.interactions.v1.InteractionHubService.ExpireInteractionRequests:input_type -> kodex.interactions.v1.ExpireInteractionRequestsRequest
+	63,  // 161: kodex.interactions.v1.InteractionHubService.GetInteractionRequest:input_type -> kodex.interactions.v1.GetInteractionRequestRequest
+	64,  // 162: kodex.interactions.v1.InteractionHubService.ListInteractionRequests:input_type -> kodex.interactions.v1.ListInteractionRequestsRequest
+	65,  // 163: kodex.interactions.v1.InteractionHubService.RequestNotification:input_type -> kodex.interactions.v1.RequestNotificationRequest
+	66,  // 164: kodex.interactions.v1.InteractionHubService.UpsertSubscription:input_type -> kodex.interactions.v1.UpsertSubscriptionRequest
+	67,  // 165: kodex.interactions.v1.InteractionHubService.DisableSubscription:input_type -> kodex.interactions.v1.DisableSubscriptionRequest
+	68,  // 166: kodex.interactions.v1.InteractionHubService.ListSubscriptions:input_type -> kodex.interactions.v1.ListSubscriptionsRequest
+	69,  // 167: kodex.interactions.v1.InteractionHubService.PlanDelivery:input_type -> kodex.interactions.v1.PlanDeliveryRequest
+	70,  // 168: kodex.interactions.v1.InteractionHubService.RecordDeliveryResult:input_type -> kodex.interactions.v1.RecordDeliveryResultRequest
+	71,  // 169: kodex.interactions.v1.InteractionHubService.RecordChannelCallback:input_type -> kodex.interactions.v1.RecordChannelCallbackRequest
+	72,  // 170: kodex.interactions.v1.InteractionHubService.GetDeliveryStatus:input_type -> kodex.interactions.v1.GetDeliveryStatusRequest
+	73,  // 171: kodex.interactions.v1.InteractionHubService.CreateConversationThread:output_type -> kodex.interactions.v1.ConversationThreadResponse
+	74,  // 172: kodex.interactions.v1.InteractionHubService.RecordConversationMessage:output_type -> kodex.interactions.v1.ConversationMessageResponse
+	73,  // 173: kodex.interactions.v1.InteractionHubService.GetConversationThread:output_type -> kodex.interactions.v1.ConversationThreadResponse
+	75,  // 174: kodex.interactions.v1.InteractionHubService.ListConversationMessages:output_type -> kodex.interactions.v1.ListConversationMessagesResponse
+	76,  // 175: kodex.interactions.v1.InteractionHubService.RequestFeedback:output_type -> kodex.interactions.v1.InteractionRequestResponse
+	76,  // 176: kodex.interactions.v1.InteractionHubService.RequestApproval:output_type -> kodex.interactions.v1.InteractionRequestResponse
+	76,  // 177: kodex.interactions.v1.InteractionHubService.RequestHumanGate:output_type -> kodex.interactions.v1.InteractionRequestResponse
+	77,  // 178: kodex.interactions.v1.InteractionHubService.RecordInteractionResponse:output_type -> kodex.interactions.v1.InteractionResponseResponse
+	76,  // 179: kodex.interactions.v1.InteractionHubService.CancelInteractionRequest:output_type -> kodex.interactions.v1.InteractionRequestResponse
+	78,  // 180: kodex.interactions.v1.InteractionHubService.ExpireInteractionRequests:output_type -> kodex.interactions.v1.ExpireInteractionRequestsResponse
+	76,  // 181: kodex.interactions.v1.InteractionHubService.GetInteractionRequest:output_type -> kodex.interactions.v1.InteractionRequestResponse
+	79,  // 182: kodex.interactions.v1.InteractionHubService.ListInteractionRequests:output_type -> kodex.interactions.v1.ListInteractionRequestsResponse
+	80,  // 183: kodex.interactions.v1.InteractionHubService.RequestNotification:output_type -> kodex.interactions.v1.NotificationResponse
+	81,  // 184: kodex.interactions.v1.InteractionHubService.UpsertSubscription:output_type -> kodex.interactions.v1.SubscriptionResponse
+	81,  // 185: kodex.interactions.v1.InteractionHubService.DisableSubscription:output_type -> kodex.interactions.v1.SubscriptionResponse
+	82,  // 186: kodex.interactions.v1.InteractionHubService.ListSubscriptions:output_type -> kodex.interactions.v1.ListSubscriptionsResponse
+	83,  // 187: kodex.interactions.v1.InteractionHubService.PlanDelivery:output_type -> kodex.interactions.v1.DeliveryAttemptResponse
+	83,  // 188: kodex.interactions.v1.InteractionHubService.RecordDeliveryResult:output_type -> kodex.interactions.v1.DeliveryAttemptResponse
+	84,  // 189: kodex.interactions.v1.InteractionHubService.RecordChannelCallback:output_type -> kodex.interactions.v1.ChannelCallbackResponse
+	85,  // 190: kodex.interactions.v1.InteractionHubService.GetDeliveryStatus:output_type -> kodex.interactions.v1.DeliveryStatusResponse
+	171, // [171:191] is the sub-list for method output_type
+	151, // [151:171] is the sub-list for method input_type
+	151, // [151:151] is the sub-list for extension type_name
+	151, // [151:151] is the sub-list for extension extendee
+	0,   // [0:151] is the sub-list for field type_name
 }
 
 func init() { file_kodex_interactions_v1_interaction_hub_proto_init() }
@@ -7480,6 +7694,7 @@ func file_kodex_interactions_v1_interaction_hub_proto_init() {
 	file_kodex_interactions_v1_interaction_hub_proto_msgTypes[16].OneofWrappers = []any{}
 	file_kodex_interactions_v1_interaction_hub_proto_msgTypes[17].OneofWrappers = []any{}
 	file_kodex_interactions_v1_interaction_hub_proto_msgTypes[18].OneofWrappers = []any{}
+	file_kodex_interactions_v1_interaction_hub_proto_msgTypes[19].OneofWrappers = []any{}
 	file_kodex_interactions_v1_interaction_hub_proto_msgTypes[20].OneofWrappers = []any{}
 	file_kodex_interactions_v1_interaction_hub_proto_msgTypes[21].OneofWrappers = []any{
 		(*DeliveryTarget_RequestId)(nil),

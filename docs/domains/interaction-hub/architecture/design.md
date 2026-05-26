@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-26
-related_issues: [582, 768, 781, 800]
+related_issues: [582, 768, 781, 800, 821]
 related_prs: []
 related_adrs: []
 approvals:
@@ -75,6 +75,8 @@ approvals:
 | Callback resolver | Идемпотентная привязка callback к delivery attempt и request. |
 | Subscription engine | Правила подписки на события и области, создание notification intent и reminders. |
 | Outbox-доставщик | Публикация `interaction.*` событий через `platform-event-log`. |
+
+Текущая сервисная основа реализует authoritative lifecycle `Notification` и `Subscription`: создание notification intent, создание/изменение/отключение/чтение подписок, command idempotency, optimistic concurrency и safe `interaction.*` outbox events. Планирование доставки, delivery attempts, callback routes и channel package runtime остаются отдельным delivery/callback контуром.
 
 ## Основные потоки
 

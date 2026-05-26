@@ -253,3 +253,78 @@ func (v InteractionResponseSourceKind) Valid() bool {
 		return false
 	}
 }
+
+type NotificationKind string
+
+const (
+	NotificationKindStatus           NotificationKind = "status"
+	NotificationKindReminder         NotificationKind = "reminder"
+	NotificationKindError            NotificationKind = "error"
+	NotificationKindAttention        NotificationKind = "attention"
+	NotificationKindDecisionRequired NotificationKind = "decision_required"
+	NotificationKindOps              NotificationKind = "ops"
+)
+
+func (v NotificationKind) Valid() bool {
+	switch v {
+	case NotificationKindStatus, NotificationKindReminder, NotificationKindError, NotificationKindAttention, NotificationKindDecisionRequired, NotificationKindOps:
+		return true
+	default:
+		return false
+	}
+}
+
+type NotificationPriority string
+
+const (
+	NotificationPriorityLow    NotificationPriority = "low"
+	NotificationPriorityNormal NotificationPriority = "normal"
+	NotificationPriorityHigh   NotificationPriority = "high"
+	NotificationPriorityUrgent NotificationPriority = "urgent"
+)
+
+func (v NotificationPriority) Valid() bool {
+	switch v {
+	case NotificationPriorityLow, NotificationPriorityNormal, NotificationPriorityHigh, NotificationPriorityUrgent:
+		return true
+	default:
+		return false
+	}
+}
+
+type NotificationStatus string
+
+const (
+	NotificationStatusCreated      NotificationStatus = "created"
+	NotificationStatusQueued       NotificationStatus = "queued"
+	NotificationStatusDelivered    NotificationStatus = "delivered"
+	NotificationStatusAcknowledged NotificationStatus = "acknowledged"
+	NotificationStatusExpired      NotificationStatus = "expired"
+	NotificationStatusFailed       NotificationStatus = "failed"
+)
+
+func (v NotificationStatus) Valid() bool {
+	switch v {
+	case NotificationStatusCreated, NotificationStatusQueued, NotificationStatusDelivered, NotificationStatusAcknowledged, NotificationStatusExpired, NotificationStatusFailed:
+		return true
+	default:
+		return false
+	}
+}
+
+type SubscriptionStatus string
+
+const (
+	SubscriptionStatusActive   SubscriptionStatus = "active"
+	SubscriptionStatusPaused   SubscriptionStatus = "paused"
+	SubscriptionStatusDisabled SubscriptionStatus = "disabled"
+)
+
+func (v SubscriptionStatus) Valid() bool {
+	switch v {
+	case SubscriptionStatusActive, SubscriptionStatusPaused, SubscriptionStatusDisabled:
+		return true
+	default:
+		return false
+	}
+}

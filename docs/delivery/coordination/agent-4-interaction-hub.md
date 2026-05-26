@@ -28,12 +28,13 @@
 | IH-2 | #783 | готово как сервисный каркас | `services/internal/interaction-hub` содержит runnable process scaffold, env config, health/readiness/metrics, gRPC transport registration, domain service skeleton и repository stub; бизнес-операции возвращают `Unimplemented`. |
 | IH-3 | #800 | готово как persistence foundation | PostgreSQL-модель, real repository для thread/message MVP lifecycle, command result idempotency и service-local outbox `interaction.*`; request/delivery/callback lifecycle остаётся для следующих срезов. |
 | IH-4 | #806 | готово как request lifecycle | Feedback, approval и Human gate request lifecycle работает поверх PostgreSQL repository: create/get/list, response, cancel, expire, idempotency и безопасные `interaction.*` outbox events без внешних channel adapters и без владения decision state. |
+| IH-5a | #821 | готово как notification/subscription lifecycle | `RequestNotification`, `UpsertSubscription`, `DisableSubscription`, `ListSubscriptions`, idempotency, optimistic concurrency и safe `interaction.*` outbox events работают без delivery attempts, callback routes и hardcoded external channel list. |
 
 ## Текущий бэклог
 
 | Срез | Статус | Почему не завершён |
 |---|---|---|
-| IH-5+ | ожидает отдельные срезы | Notifications, subscriptions, delivery attempts, channel contract integration, callback lifecycle, MCP и ops-связки должны поставляться малыми PR. |
+| IH-5b+ | ожидает отдельные срезы | Delivery attempts, channel contract integration, callback lifecycle, MCP и ops-связки должны поставляться малыми PR. |
 
 ## Блокировки от других доменов
 
@@ -50,4 +51,4 @@
 
 ## Рекомендуемый следующий шаг
 
-Следующий рациональный срез — IH-5: notifications, subscriptions, delivery attempts и безопасные статусы доставки без конкретных внешних каналов. Callback routes `integration-gateway`, package channel runtime и MCP-связки остаются отдельными последующими срезами.
+Следующий рациональный срез — IH-5b: delivery attempts и безопасные статусы доставки без конкретных внешних каналов. Callback routes `integration-gateway`, package channel runtime и MCP-связки остаются отдельными последующими срезами.

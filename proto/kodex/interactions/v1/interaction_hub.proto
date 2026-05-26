@@ -342,6 +342,20 @@ message Notification {
   string updated_at = 12;
   // expires_at is an RFC3339 timestamp when notification is no longer useful.
   optional string expires_at = 13;
+  // source_owner identifies the business owner that requested the notification.
+  SourceOwnerRef source_owner = 14;
+  // ingress identifies the route that carried the notification command.
+  IngressRef ingress = 15;
+  // context_refs point to neighboring domain context without copying state.
+  repeated ExternalRef context_refs = 16;
+  // channel_hint_refs are generic channel/package/surface refs, not vendor-specific state.
+  repeated ExternalRef channel_hint_refs = 17;
+  // notification_policy_ref points to notification policy without embedding policy JSON.
+  optional string notification_policy_ref = 18;
+  // message_title is a bounded safe display title.
+  optional string message_title = 19;
+  // body_preview is a bounded safe body preview; raw transcripts/artifacts are not stored here.
+  optional string body_preview = 20;
 }
 
 // Subscription stores canonical notification delivery preferences for a subscriber.
@@ -364,6 +378,12 @@ message Subscription {
   string created_at = 8;
   // updated_at is an RFC3339 timestamp.
   string updated_at = 9;
+  // source_owner identifies the business owner that manages this subscription.
+  optional SourceOwnerRef source_owner = 10;
+  // channel_hint_refs are generic channel/package/surface refs, not vendor-specific state.
+  repeated ExternalRef channel_hint_refs = 11;
+  // subscription_policy_ref points to subscription policy without embedding policy JSON.
+  optional string subscription_policy_ref = 12;
 }
 
 // DeliveryRoute stores a selected generic route without owning package installation.
@@ -659,6 +679,13 @@ message RequestNotificationRequest {
   string message_summary = 8;
   NotificationPriority priority = 9;
   optional string expires_at = 10;
+  SourceOwnerRef source_owner = 11;
+  IngressRef ingress = 12;
+  repeated ExternalRef context_refs = 13;
+  repeated ExternalRef channel_hint_refs = 14;
+  optional string notification_policy_ref = 15;
+  optional string message_title = 16;
+  optional string body_preview = 17;
 }
 
 message UpsertSubscriptionRequest {
@@ -669,6 +696,9 @@ message UpsertSubscriptionRequest {
   string event_filter_json = 5;
   string delivery_preferences_json = 6;
   SubscriptionStatus status = 7;
+  optional SourceOwnerRef source_owner = 8;
+  repeated ExternalRef channel_hint_refs = 9;
+  optional string subscription_policy_ref = 10;
 }
 
 message DisableSubscriptionRequest {
