@@ -6,7 +6,7 @@ status: active
 owner_role: PM
 created_at: 2026-05-12
 updated_at: 2026-05-26
-related_issues: [733, 753, 698, 322, 782]
+related_issues: [733, 753, 698, 322, 782, 834]
 related_prs: []
 related_docsets:
   - docs/platform/product/product_model.md
@@ -27,7 +27,7 @@ approvals:
 - Что строим: домен `agent-manager` для процессов `flow`, этапов, ролей, шаблонов промптов, сессий, агентных запусков, машины приёмки и создания follow-up задач.
 - Для кого: владелец платформы, пользователи, операторы, быстрый управляющий агент, ролевые агенты и соседние сервисы платформы.
 - Почему: агентная работа должна быть управляемым процессом с явными ролями, проверками, переходами и артефактами, а не набором ручных запусков в слотах.
-- Минимум первой версии: описание flow, stage, role, prompt template, session, run, acceptance result, follow-up intent и запуск ролевого агента через runtime-контур.
+- Минимум первой версии: описание flow, stage, role, prompt template, session, run, safe activity timeline, acceptance result, follow-up intent и запуск ролевого агента через runtime-контур.
 - Критерии успеха: платформа понимает, какая роль что делает, в какой стадии находится задача, какие артефакты нужны для приёмки и какой следующий шаг должен быть создан.
 
 ## Проблема и цель
@@ -73,7 +73,8 @@ approvals:
 | AGO-FR-13 | Домен должен работать через `platform-mcp-server` как инструментальную поверхность быстрого agent-manager и агентов в слотах. | Обязательно |
 | AGO-FR-14 | Домен должен принимать события жизненного цикла Codex-сессии через `codex-hook-ingress`, а не через MCP-инструменты. Минимальный набор событий: `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `Stop`. | Обязательно |
 | AGO-FR-15 | Домен должен хранить актуальную ссылку на Codex session JSON/JSONL в S3-compatible объектном хранилище после каждого значимого turn/checkpoint, не записывая большой JSON в PostgreSQL. | Обязательно |
-| AGO-FR-16 | Домен не должен владеть слотами, workspace filesystem, platform jobs, GitHub/GitLab состоянием, пакетами, установками пакетов, диалогами или уведомлениями. | Обязательно |
+| AGO-FR-16 | Домен должен хранить безопасную persistent timeline действий агента по session/run: lifecycle, tool intent/result, permission, runtime/provider signals, статус, время, bounded summary/error, digest и safe refs/details без raw tool input/output, stdout/stderr, prompt, transcript, provider payload или workspace paths. | Обязательно |
+| AGO-FR-17 | Домен не должен владеть слотами, workspace filesystem, platform jobs, GitHub/GitLab состоянием, пакетами, установками пакетов, диалогами или уведомлениями. | Обязательно |
 
 ## Критерии приёмки
 
@@ -89,6 +90,7 @@ approvals:
 | AGO-AC-8 | Если runtime-слот упал, `agent-manager` видит ошибку запуска, но техническое состояние слота остаётся у `runtime-manager`. |
 | AGO-AC-9 | Если runner передал новый session state snapshot, `agent-manager` фиксирует ссылку, digest и размер объекта, а `AgentSession` указывает на последний актуальный снимок. |
 | AGO-AC-10 | Если Codex отправил `SessionStart`, `PermissionRequest`, `PostToolUse` или `Stop`, `agent-manager` получает нормализованное событие через `codex-hook-ingress`; `platform-mcp-server` используется только для MCP-инструментов. |
+| AGO-AC-11 | Если future UI запрашивает историю действий агента, `agent-manager` отдаёт bounded safe timeline по session/run; `codex-hook-ingress` остаётся sanitizer/router/realtime feed и не хранит долгую историю tool calls. |
 
 ## Что не входит
 
@@ -108,6 +110,7 @@ approvals:
 | AGO-NFR-2 | Производительность | Быстрый agent-manager должен получать нужные чтения локально через сервисы и MCP, без постоянных обходов GitHub/GitLab. |
 | AGO-NFR-3 | Безопасность | Все действия роли проходят через policy, доступные MCP-инструменты и разрешённые внешние аккаунты. |
 | AGO-NFR-4 | Наблюдаемость | Сессии, `Run`, acceptance, retry, follow-up и ожидание governance gate имеют correlation id, метрики и безопасные ошибки. |
+| AGO-NFR-4a | Наблюдаемость | Activity timeline имеет correlation/idempotency trace, cursor pagination и безопасные summaries без raw payload. |
 | AGO-NFR-5 | Совместимость | `Run` фиксирует версии flow, stage, role, prompt и руководящих пакетов, чтобы будущие изменения не меняли историю выполнения. |
 | AGO-NFR-6 | Расширяемость | Новый flow, stage или роль добавляется через версионируемую конфигурацию и policy, а не через изменение кода ядра. |
 | AGO-NFR-7 | Локализация | Пользовательские описания flow, stage, role и ошибок должны поддерживать локаль, выбранную пользователем. |

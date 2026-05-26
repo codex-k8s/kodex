@@ -379,6 +379,50 @@ func scanFollowUpIntent(row postgreslib.RowScanner) (entity.FollowUpIntent, erro
 	return intent, err
 }
 
+func scanAgentActivity(row postgreslib.RowScanner) (entity.AgentActivity, error) {
+	var activity entity.AgentActivity
+	var runID pgtype.UUID
+	var activityKind, status string
+	var finishedAt pgtype.Timestamptz
+	var durationMs pgtype.Int8
+	var refs, details []byte
+	err := row.Scan(
+		&activity.ID,
+		&activity.SessionID,
+		&runID,
+		&activity.TurnID,
+		&activity.ToolUseID,
+		&activityKind,
+		&activity.ToolName,
+		&activity.ToolCategory,
+		&status,
+		&activity.StartedAt,
+		&finishedAt,
+		&durationMs,
+		&activity.SafeSummary,
+		&activity.PayloadDigest,
+		&activity.BoundedError,
+		&refs,
+		&details,
+		&activity.CorrelationID,
+		&activity.IdempotencyKey,
+		&activity.Version,
+		&activity.CreatedAt,
+		&activity.UpdatedAt,
+	)
+	activity.RunID = postgreslib.UUIDPtrFromPG(runID)
+	activity.ActivityKind = enum.AgentActivityKind(activityKind)
+	activity.Status = enum.AgentActivityStatus(status)
+	activity.FinishedAt = postgreslib.TimePtrFromPG(finishedAt)
+	if durationMs.Valid {
+		value := durationMs.Int64
+		activity.DurationMs = &value
+	}
+	activity.SafeRefsJSON = append(activity.SafeRefsJSON[:0], refs...)
+	activity.SafeDetailsJSON = append(activity.SafeDetailsJSON[:0], details...)
+	return activity, err
+}
+
 func scanCommandResult(row postgreslib.RowScanner) (entity.CommandResult, error) {
 	var raw commandResultRow
 	if err := raw.scan(row); err != nil {

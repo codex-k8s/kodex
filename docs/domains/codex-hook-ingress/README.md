@@ -14,6 +14,7 @@ Codex hooks являются command-обработчиками Codex: hook emit
 - Маршрутизация событий к сервисам-владельцам: `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub`.
 - Короткая операционная лента для realtime UI и метрики срабатываний hooks.
 - Передача только ссылок на выбранный capability context и skill refs, если они уже выбраны `agent-manager` и материализованы `runtime-manager`.
+- Маршрутизация sanitized `PreToolUse`/`PostToolUse` в `agent-manager` для persistent activity timeline, когда owner-side contract подключён.
 
 ## Состояние реализации
 
@@ -24,7 +25,7 @@ Codex hooks являются command-обработчиками Codex: hook emit
 ## Что не входит
 
 - MCP tools, `tools/list`, `tools/call` и MCP transport — зона `platform-mcp-server`.
-- `Run`, session, flow, ожидания flow и acceptance — зона `agent-manager`.
+- `Run`, session, flow, ожидания flow, persistent tool/activity history и acceptance — зона `agent-manager`.
 - Risk/gate request и decision state — зона `governance-manager`.
 - Slot, workspace и platform jobs — зона `runtime-manager`.
 - Provider write/read pipeline — зона `provider-hub`.

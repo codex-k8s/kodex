@@ -62,3 +62,11 @@ type AcceptanceResultFilter struct {
 	Status    *enum.AcceptanceStatus
 	Page      value.PageRequest
 }
+
+type AgentActivityFilter struct {
+	SessionID    uuid.UUID
+	RunID        uuid.UUID
+	ActivityKind *enum.AgentActivityKind
+	Status       *enum.AgentActivityStatus
+	Page         value.PageRequest
+}

@@ -1824,6 +1824,258 @@ func TestCreateFollowUpIntentRejectsInvalidStateAndUnsafePayload(t *testing.T) {
 	})
 }
 
+func TestRecordAgentActivityStoresSafeTimelineEntry(t *testing.T) {
+	t.Parallel()
+
+	sessionID := uuid.MustParse("84848484-1111-2222-3333-444444444444")
+	runID := uuid.MustParse("84848484-2222-3333-4444-555555555555")
+	activityID := uuid.MustParse("84848484-3333-4444-5555-666666666666")
+	startedAt := time.Date(2026, 5, 26, 19, 0, 0, 0, time.UTC)
+	finishedAt := startedAt.Add(2 * time.Second)
+	digest := "sha256:" + strings.Repeat("b", 64)
+	repository := &fakeRepository{
+		sessionByID: map[uuid.UUID]entity.AgentSession{
+			sessionID: {VersionedBase: entity.VersionedBase{ID: sessionID, Version: 2}, Status: enum.AgentSessionStatusOpen},
+		},
+		runByID: map[uuid.UUID]entity.AgentRun{
+			runID: {VersionedBase: entity.VersionedBase{ID: runID, Version: 3}, SessionID: sessionID, Status: enum.AgentRunStatusRunning},
+		},
+	}
+	service := New(Config{
+		Repository:  repository,
+		Clock:       fixedClock{now: time.Date(2026, 5, 26, 19, 1, 0, 0, time.UTC)},
+		IDGenerator: &sequenceIDGenerator{ids: []uuid.UUID{activityID}},
+	})
+
+	activity, err := service.RecordAgentActivity(context.Background(), RecordAgentActivityInput{
+		Meta:            value.CommandMeta{IdempotencyKey: "activity-1", Actor: testActor()},
+		SessionID:       sessionID,
+		RunID:           &runID,
+		TurnID:          "turn:1",
+		ToolUseID:       "tool:call-1",
+		ActivityKind:    enum.AgentActivityKindToolResult,
+		ToolName:        "functions.exec_command",
+		ToolCategory:    "shell",
+		Status:          enum.AgentActivityStatusSucceeded,
+		StartedAt:       &startedAt,
+		FinishedAt:      &finishedAt,
+		SafeSummary:     "Listed repository files.",
+		PayloadDigest:   digest,
+		SafeRefsJSON:    []byte(`{"artifact_ref":"artifact:activity-summary"}`),
+		SafeDetailsJSON: []byte(`{"summary":"bounded metadata","exit_code":0,"artifact_refs":["artifact:activity-summary"]}`),
+		CorrelationID:   "trace:activity-1",
+	})
+	if err != nil {
+		t.Fatalf("RecordAgentActivity() err = %v", err)
+	}
+	if activity.ID != activityID || activity.RunID == nil || *activity.RunID != runID || activity.DurationMs == nil || *activity.DurationMs != 2000 {
+		t.Fatalf("activity = %+v", activity)
+	}
+	if repository.createdActivity.ID != activityID || repository.activityResult.AggregateType != enum.CommandAggregateTypeActivity {
+		t.Fatalf("stored/result = %+v/%s", repository.createdActivity, repository.activityResult.AggregateType)
+	}
+	if strings.Contains(string(repository.createdActivity.SafeDetailsJSON), "\n") || strings.Contains(string(repository.activityResult.ResultPayload), "tool_input") {
+		t.Fatalf("unsafe or uncompact payload persisted: %s", repository.activityResult.ResultPayload)
+	}
+}
+
+func TestRecordAgentActivityReplaysAndRejectsConflictingPayload(t *testing.T) {
+	t.Parallel()
+
+	sessionID := uuid.MustParse("85858585-1111-2222-3333-444444444444")
+	startedAt := time.Date(2026, 5, 26, 19, 5, 0, 0, time.UTC)
+	activity := entity.AgentActivity{
+		VersionedBase:   entity.VersionedBase{ID: uuid.MustParse("85858585-2222-3333-4444-555555555555"), Version: 1},
+		SessionID:       sessionID,
+		ActivityKind:    enum.AgentActivityKindLifecycle,
+		Status:          enum.AgentActivityStatusStarted,
+		StartedAt:       startedAt,
+		SafeSummary:     "Run started.",
+		SafeRefsJSON:    []byte("{}"),
+		SafeDetailsJSON: []byte("{}"),
+		IdempotencyKey:  operationRecordAgentActivity + ":user:owner:activity-replay",
+	}
+	payload, err := marshalCommandPayload(activityCommandPayload{Activity: activity})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	repository := &fakeRepository{
+		replay: &entity.CommandResult{
+			IdempotencyKey: "activity-replay",
+			Actor:          testActor(),
+			Operation:      operationRecordAgentActivity,
+			AggregateType:  enum.CommandAggregateTypeActivity,
+			AggregateID:    activity.ID,
+			ResultPayload:  payload,
+		},
+		sessionByID:  map[uuid.UUID]entity.AgentSession{sessionID: {VersionedBase: entity.VersionedBase{ID: sessionID, Version: 1}, Status: enum.AgentSessionStatusOpen}},
+		activityByID: map[uuid.UUID]entity.AgentActivity{activity.ID: activity},
+	}
+	service := New(Config{Repository: repository})
+
+	replay, err := service.RecordAgentActivity(context.Background(), RecordAgentActivityInput{
+		Meta:            value.CommandMeta{IdempotencyKey: "activity-replay", Actor: testActor()},
+		SessionID:       sessionID,
+		ActivityKind:    enum.AgentActivityKindLifecycle,
+		Status:          enum.AgentActivityStatusStarted,
+		StartedAt:       &startedAt,
+		SafeSummary:     "Run started.",
+		SafeRefsJSON:    []byte("{}"),
+		SafeDetailsJSON: []byte("{}"),
+	})
+	if err != nil {
+		t.Fatalf("RecordAgentActivity() err = %v", err)
+	}
+	if replay.ID != activity.ID {
+		t.Fatalf("replay id = %s, want %s", replay.ID, activity.ID)
+	}
+	if repository.createActivityCalled {
+		t.Fatal("RecordAgentActivityWithResult called during replay")
+	}
+
+	_, err = service.RecordAgentActivity(context.Background(), RecordAgentActivityInput{
+		Meta:            value.CommandMeta{IdempotencyKey: "activity-replay", Actor: testActor()},
+		SessionID:       sessionID,
+		ActivityKind:    enum.AgentActivityKindLifecycle,
+		Status:          enum.AgentActivityStatusStarted,
+		StartedAt:       &startedAt,
+		SafeSummary:     "Different safe summary.",
+		SafeRefsJSON:    []byte("{}"),
+		SafeDetailsJSON: []byte("{}"),
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("RecordAgentActivity() err = %v, want %v", err, errs.ErrConflict)
+	}
+}
+
+func TestRecordAgentActivityRejectsUnsafePayloadAndRunMismatch(t *testing.T) {
+	t.Parallel()
+
+	t.Run("unsafe details", func(t *testing.T) {
+		t.Parallel()
+
+		sessionID := uuid.MustParse("86868686-1111-2222-3333-444444444444")
+		startedAt := time.Date(2026, 5, 26, 19, 10, 0, 0, time.UTC)
+		repository := &fakeRepository{
+			sessionByID: map[uuid.UUID]entity.AgentSession{sessionID: {VersionedBase: entity.VersionedBase{ID: sessionID, Version: 1}, Status: enum.AgentSessionStatusOpen}},
+		}
+		service := New(Config{Repository: repository})
+
+		_, err := service.RecordAgentActivity(context.Background(), RecordAgentActivityInput{
+			Meta:            value.CommandMeta{IdempotencyKey: "unsafe-activity", Actor: testActor()},
+			SessionID:       sessionID,
+			ActivityKind:    enum.AgentActivityKindToolUse,
+			ToolName:        "functions.exec_command",
+			Status:          enum.AgentActivityStatusFailed,
+			StartedAt:       &startedAt,
+			SafeSummary:     "raw_tool_input dump",
+			SafeDetailsJSON: []byte(`{"stdout":"not safe"}`),
+		})
+		if !errors.Is(err, errs.ErrInvalidArgument) {
+			t.Fatalf("RecordAgentActivity() err = %v, want %v", err, errs.ErrInvalidArgument)
+		}
+		if repository.createActivityCalled {
+			t.Fatal("unsafe activity was persisted")
+		}
+	})
+
+	t.Run("run session mismatch", func(t *testing.T) {
+		t.Parallel()
+
+		sessionID := uuid.MustParse("86868686-2222-3333-4444-555555555555")
+		otherSessionID := uuid.MustParse("86868686-3333-4444-5555-666666666666")
+		runID := uuid.MustParse("86868686-4444-5555-6666-777777777777")
+		startedAt := time.Date(2026, 5, 26, 19, 11, 0, 0, time.UTC)
+		repository := &fakeRepository{
+			sessionByID: map[uuid.UUID]entity.AgentSession{sessionID: {VersionedBase: entity.VersionedBase{ID: sessionID, Version: 1}, Status: enum.AgentSessionStatusOpen}},
+			runByID:     map[uuid.UUID]entity.AgentRun{runID: {VersionedBase: entity.VersionedBase{ID: runID, Version: 1}, SessionID: otherSessionID}},
+		}
+		service := New(Config{Repository: repository})
+
+		_, err := service.RecordAgentActivity(context.Background(), RecordAgentActivityInput{
+			Meta:         value.CommandMeta{IdempotencyKey: "mismatch-activity", Actor: testActor()},
+			SessionID:    sessionID,
+			RunID:        &runID,
+			ActivityKind: enum.AgentActivityKindLifecycle,
+			Status:       enum.AgentActivityStatusStarted,
+			StartedAt:    &startedAt,
+		})
+		if !errors.Is(err, errs.ErrConflict) {
+			t.Fatalf("RecordAgentActivity() err = %v, want %v", err, errs.ErrConflict)
+		}
+	})
+
+	t.Run("unsafe idempotency trace", func(t *testing.T) {
+		t.Parallel()
+
+		sessionID := uuid.MustParse("86868686-5555-6666-7777-888888888888")
+		startedAt := time.Date(2026, 5, 26, 19, 12, 0, 0, time.UTC)
+		repository := &fakeRepository{
+			sessionByID: map[uuid.UUID]entity.AgentSession{sessionID: {VersionedBase: entity.VersionedBase{ID: sessionID, Version: 1}, Status: enum.AgentSessionStatusOpen}},
+		}
+		service := New(Config{Repository: repository})
+
+		_, err := service.RecordAgentActivity(context.Background(), RecordAgentActivityInput{
+			Meta:         value.CommandMeta{IdempotencyKey: "activity-token-dump", Actor: testActor()},
+			SessionID:    sessionID,
+			ActivityKind: enum.AgentActivityKindLifecycle,
+			Status:       enum.AgentActivityStatusStarted,
+			StartedAt:    &startedAt,
+		})
+		if !errors.Is(err, errs.ErrInvalidArgument) {
+			t.Fatalf("RecordAgentActivity() err = %v, want %v", err, errs.ErrInvalidArgument)
+		}
+		if repository.createActivityCalled {
+			t.Fatal("unsafe idempotency trace was persisted")
+		}
+	})
+}
+
+func TestListAgentActivitiesValidatesFilterAndDelegates(t *testing.T) {
+	t.Parallel()
+
+	sessionID := uuid.MustParse("87878787-1111-2222-3333-444444444444")
+	runID := uuid.MustParse("87878787-2222-3333-4444-555555555555")
+	kind := enum.AgentActivityKindToolResult
+	status := enum.AgentActivityStatusSucceeded
+	repository := &fakeRepository{
+		sessionByID: map[uuid.UUID]entity.AgentSession{sessionID: {VersionedBase: entity.VersionedBase{ID: sessionID, Version: 1}, Status: enum.AgentSessionStatusOpen}},
+		runByID:     map[uuid.UUID]entity.AgentRun{runID: {VersionedBase: entity.VersionedBase{ID: runID, Version: 1}, SessionID: sessionID}},
+		activityList: []entity.AgentActivity{{
+			VersionedBase: entity.VersionedBase{ID: uuid.MustParse("87878787-3333-4444-5555-666666666666"), Version: 1},
+			SessionID:     sessionID,
+			RunID:         &runID,
+			ActivityKind:  kind,
+			Status:        status,
+		}},
+		activityPage: value.PageResult{NextPageToken: "next"},
+	}
+	service := New(Config{Repository: repository})
+
+	activities, page, err := service.ListAgentActivities(context.Background(), query.AgentActivityFilter{
+		SessionID:    sessionID,
+		RunID:        runID,
+		ActivityKind: &kind,
+		Status:       &status,
+		Page:         value.PageRequest{PageSize: 10},
+	})
+	if err != nil {
+		t.Fatalf("ListAgentActivities() err = %v", err)
+	}
+	if len(activities) != 1 || page.NextPageToken != "next" {
+		t.Fatalf("activities/page = %+v/%+v", activities, page)
+	}
+	if repository.activityFilter.SessionID != sessionID || repository.activityFilter.RunID != runID ||
+		repository.activityFilter.ActivityKind == nil || *repository.activityFilter.ActivityKind != kind {
+		t.Fatalf("filter = %+v", repository.activityFilter)
+	}
+
+	_, _, err = service.ListAgentActivities(context.Background(), query.AgentActivityFilter{})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("ListAgentActivities() err = %v, want %v", err, errs.ErrInvalidArgument)
+	}
+}
+
 func decodeAgentPayload(t *testing.T, event entity.OutboxEvent) agentevents.Payload {
 	t.Helper()
 
@@ -1845,6 +2097,10 @@ type fakeRepository struct {
 	acceptanceByID         map[uuid.UUID]entity.AcceptanceResult
 	acceptanceGetErr       error
 	followUpByID           map[uuid.UUID]entity.FollowUpIntent
+	activityByID           map[uuid.UUID]entity.AgentActivity
+	activityList           []entity.AgentActivity
+	activityPage           value.PageResult
+	activityFilter         query.AgentActivityFilter
 	roleByID               map[uuid.UUID]entity.RoleProfile
 	promptVersionByID      map[uuid.UUID]entity.PromptTemplateVersion
 	activeSession          entity.AgentSession
@@ -1872,11 +2128,14 @@ type fakeRepository struct {
 	createdFollowUp        entity.FollowUpIntent
 	followUpResult         entity.CommandResult
 	followUpEvent          entity.OutboxEvent
+	createdActivity        entity.AgentActivity
+	activityResult         entity.CommandResult
 	createFlowCalled       bool
 	createSessionCalled    bool
 	createRunCalled        bool
 	createAcceptanceCalled bool
 	createFollowUpCalled   bool
+	createActivityCalled   bool
 }
 
 func (f *fakeRepository) CreateFlowWithResult(_ context.Context, flow entity.Flow, result entity.CommandResult) error {
@@ -2125,6 +2384,28 @@ func (f *fakeRepository) GetFollowUpIntent(_ context.Context, id uuid.UUID) (ent
 		}
 	}
 	return entity.FollowUpIntent{}, errors.ErrUnsupported
+}
+
+func (f *fakeRepository) RecordAgentActivityWithResult(_ context.Context, activity entity.AgentActivity, result entity.CommandResult) error {
+	f.createActivityCalled = true
+	f.createdActivity = activity
+	f.activityResult = result
+	return nil
+}
+
+func (f *fakeRepository) GetAgentActivity(_ context.Context, id uuid.UUID) (entity.AgentActivity, error) {
+	if f.activityByID != nil {
+		activity, ok := f.activityByID[id]
+		if ok {
+			return activity, nil
+		}
+	}
+	return entity.AgentActivity{}, errors.ErrUnsupported
+}
+
+func (f *fakeRepository) ListAgentActivities(_ context.Context, filter query.AgentActivityFilter) ([]entity.AgentActivity, value.PageResult, error) {
+	f.activityFilter = filter
+	return f.activityList, f.activityPage, nil
 }
 
 func (f *fakeRepository) ClaimOutboxEvents(context.Context, int, time.Time, time.Time) ([]entity.OutboxEvent, error) {

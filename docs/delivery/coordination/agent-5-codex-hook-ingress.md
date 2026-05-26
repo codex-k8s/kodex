@@ -17,7 +17,7 @@
 `codex-hook-ingress` не владеет:
 
 - MCP tools, `tools/list`, `tools/call` и MCP transport — это зона `platform-mcp-server`;
-- `Run`, session, flow, stage, role и состояние ожидания flow — это зона `agent-manager`;
+- `Run`, session, flow, stage, role, persistent activity timeline и состояние ожидания flow — это зона `agent-manager`;
 - risk/gate decision state — это зона `governance-manager`;
 - slot, workspace, materialization и runtime job — это зона `runtime-manager`;
 - provider-native artifacts и write pipeline — это зона `provider-hub`;
@@ -39,6 +39,7 @@
 
 | Срез | Что осталось |
 |---|---|
+| CHI-4b | Маршрутизация sanitized `PreToolUse`/`PostToolUse` в `agent-manager.RecordAgentActivity` после готовности owner-side timeline; ingress не хранит persistent tool history. |
 | CHI-5 | `PermissionRequest` и policy-controlled `PreToolUse` bridge через `governance-manager`, ожидание flow у `agent-manager` и delivery через `interaction-hub`. |
 | CHI-6b | Persistent ops feed или integration с operations-hub, если понадобится восстановление ленты после рестарта и отдельные retention jobs. |
 | CHI-7 | Capability context refs для Codex skills без skill catalog в ingress. |
@@ -49,7 +50,7 @@
 | Домен или сервис | Что согласовывать |
 |---|---|
 | `platform-mcp-server` | Hooks не являются MCP tools; MCP видит только tool calls, а hook ingress может фиксировать MCP tool name как безопасное имя в `tool_context`. |
-| `agent-manager` | Run/session binding, flow waiting refs, lifecycle events, stop checkpoint и capability context selection. |
+| `agent-manager` | Run/session binding, flow waiting refs, lifecycle events, stop checkpoint, safe activity timeline и capability context selection. |
 | `governance-manager` | Risk assessment, gate request/decision refs и fail-closed policy для рискованных `PermissionRequest` и `PreToolUse`. |
 | `runtime-manager` | Slot/session binding, workspace refs, materialized capability refs, local emitter/sidecar placement и runtime diagnostics. |
 | `provider-hub` | Provider artifact signals, rate-limit hints и hot reconciliation hints без provider payload и stdout `gh`. |

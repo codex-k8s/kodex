@@ -152,6 +152,32 @@ const (
 	FollowUpIntentStatusCancelled FollowUpIntentStatus = "cancelled"
 )
 
+type AgentActivityKind string
+
+const (
+	AgentActivityKindLifecycle      AgentActivityKind = "lifecycle"
+	AgentActivityKindToolUse        AgentActivityKind = "tool_use"
+	AgentActivityKindToolResult     AgentActivityKind = "tool_result"
+	AgentActivityKindPermission     AgentActivityKind = "permission"
+	AgentActivityKindProviderSignal AgentActivityKind = "provider_signal"
+	AgentActivityKindRuntimeSignal  AgentActivityKind = "runtime_signal"
+	AgentActivityKindCheckpoint     AgentActivityKind = "checkpoint"
+	AgentActivityKindOther          AgentActivityKind = "other"
+)
+
+type AgentActivityStatus string
+
+const (
+	AgentActivityStatusPlanned   AgentActivityStatus = "planned"
+	AgentActivityStatusStarted   AgentActivityStatus = "started"
+	AgentActivityStatusSucceeded AgentActivityStatus = "succeeded"
+	AgentActivityStatusFailed    AgentActivityStatus = "failed"
+	AgentActivityStatusDenied    AgentActivityStatus = "denied"
+	AgentActivityStatusWaiting   AgentActivityStatus = "waiting"
+	AgentActivityStatusCancelled AgentActivityStatus = "cancelled"
+	AgentActivityStatusSkipped   AgentActivityStatus = "skipped"
+)
+
 type CommandAggregateType string
 
 const (
@@ -165,4 +191,5 @@ const (
 	CommandAggregateTypeSessionStateSnapshot  CommandAggregateType = "session_state_snapshot"
 	CommandAggregateTypeAcceptance            CommandAggregateType = "acceptance"
 	CommandAggregateTypeFollowUp              CommandAggregateType = "follow_up"
+	CommandAggregateTypeActivity              CommandAggregateType = "activity"
 )

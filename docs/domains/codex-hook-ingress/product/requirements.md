@@ -6,7 +6,7 @@ status: active
 owner_role: PM
 created_at: 2026-05-22
 updated_at: 2026-05-26
-related_issues: [698, 753, 778, 786, 793, 808, 322]
+related_issues: [698, 753, 778, 786, 793, 808, 322, 834]
 related_prs: []
 related_docsets:
   - docs/domains/codex-hook-ingress/architecture/design.md
@@ -30,7 +30,7 @@ approvals:
 - Для кого: slot-агенты Codex, `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub`, realtime UI и операторский контур.
 - Почему: Codex hooks являются lifecycle command hooks, а не MCP tools; смешивание их с `platform-mcp-server` сломает границы протоколов, аудита и владения состоянием.
 - MVP: принять и очистить `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `Stop`; проверить binding, применить размерные лимиты, отрезать секреты и маршрутизировать безопасные события владельцам.
-- Критерии успеха: hook ingress не хранит бизнес-истину, не принимает MCP calls, не пропускает raw secrets/session dumps и даёт соседним сервисам безопасный сигнал для lifecycle, gate, provider signal и realtime-ленты.
+- Критерии успеха: hook ingress не хранит бизнес-истину или долгую историю tool calls, не принимает MCP calls, не пропускает raw secrets/session dumps и даёт соседним сервисам безопасный сигнал для lifecycle, gate, provider signal и realtime-ленты.
 
 ## Проблема и цель
 
@@ -51,7 +51,7 @@ Codex запускает hooks как command-обработчики в рабо
 |---|---|
 | Hook emitter | Получить JSON от Codex, очистить его, добавить platform context и отправить нормализованное событие. |
 | Локальный sidecar | Буферизовать безопасные события, повторять отправку при временной недоступности платформы и не хранить секреты. |
-| `agent-manager` | Получать lifecycle, prompt submit, stop checkpoint, ожидание flow и capability usage signals без raw payload. |
+| `agent-manager` | Получать lifecycle, prompt submit, stop checkpoint, ожидание flow, safe activity timeline inputs и capability usage signals без raw payload. |
 | `runtime-manager` | Получать slot/session binding, workspace diagnostics, tool execution summary и materialized capability refs. |
 | `provider-hub` | Получать provider artifact signals, rate-limit hints и hot reconciliation hints без stdout `gh` и токенов. |
 | `governance-manager` | Получать risk/gate context для `PermissionRequest`, policy-controlled `PreToolUse` и audit-critical decision refs без raw payload. |
@@ -104,6 +104,7 @@ Codex запускает hooks как command-обработчики в рабо
 | CHI-FR-27 | Backpressure должен различать audit-critical/decision events и realtime-only events: рискованные события fail-closed или retry until TTL, realtime-only события могут быть отброшены с metric после переполнения buffer. | Обязательно |
 | CHI-FR-28 | Compact checkpoints не должны появляться в `supported_hook_events`; будущая поддержка compact оформляется как внутренние события `agent-manager`/`runtime-manager`, а не `PreCompact`/`PostCompact` Codex hooks. | Обязательно |
 | CHI-FR-29 | Machine-readable контракт CHI-2 должен быть JSON Schema `hook-emitter-config.v1`, описывающей runtime input, delivery, auth, idempotency, ordering, retry, buffer, backpressure и failure policy без выбора физического транспорта. | Обязательно |
+| CHI-FR-30 | Долгая persistent история действий агента и tool calls должна маршрутизироваться в `agent-manager.RecordAgentActivity`; `codex-hook-ingress` хранит только короткую operational/realtime feed и sanitizer/route diagnostics. | Обязательно |
 
 ## Поддержка Codex skills как capability layer
 

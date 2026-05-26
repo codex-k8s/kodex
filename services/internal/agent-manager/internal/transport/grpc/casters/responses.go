@@ -38,6 +38,8 @@ type AgentRunListOutput = PageOutput[entity.AgentRun]
 
 type AcceptanceResultListOutput = PageOutput[entity.AcceptanceResult]
 
+type AgentActivityListOutput = PageOutput[entity.AgentActivity]
+
 type AgentSessionOutput struct {
 	Session        entity.AgentSession
 	LatestSnapshot *entity.AgentSessionStateSnapshot
@@ -140,6 +142,14 @@ func ListAcceptanceResultsResponse(output AcceptanceResultListOutput) *agentsv1.
 
 func FollowUpIntentResponse(intent entity.FollowUpIntent) *agentsv1.FollowUpIntentResponse {
 	return &agentsv1.FollowUpIntentResponse{FollowUpIntent: FollowUpIntentToProto(intent)}
+}
+
+func AgentActivityResponse(activity entity.AgentActivity) *agentsv1.AgentActivityResponse {
+	return &agentsv1.AgentActivityResponse{Activity: AgentActivityToProto(activity)}
+}
+
+func ListAgentActivitiesResponse(output AgentActivityListOutput) *agentsv1.ListAgentActivitiesResponse {
+	return &agentsv1.ListAgentActivitiesResponse{Activities: protoList(output.Items, AgentActivityToProto), Page: pageResponseToProto(output.Page)}
 }
 
 func protoList[Domain any, Proto any](items []Domain, cast func(Domain) *Proto) []*Proto {
@@ -373,6 +383,33 @@ func FollowUpIntentToProto(intent entity.FollowUpIntent) *agentsv1.FollowUpInten
 	}
 }
 
+func AgentActivityToProto(activity entity.AgentActivity) *agentsv1.AgentActivity {
+	return &agentsv1.AgentActivity{
+		Id:              activity.ID.String(),
+		SessionId:       activity.SessionID.String(),
+		RunId:           optionalUUIDStringPtr(activity.RunID),
+		TurnId:          optionalStringPtr(activity.TurnID),
+		ToolUseId:       optionalStringPtr(activity.ToolUseID),
+		ActivityKind:    AgentActivityKindToProto(activity.ActivityKind),
+		ToolName:        optionalStringPtr(activity.ToolName),
+		ToolCategory:    optionalStringPtr(activity.ToolCategory),
+		Status:          AgentActivityStatusToProto(activity.Status),
+		StartedAt:       optionalTimeValuePtr(activity.StartedAt),
+		FinishedAt:      optionalTimePtr(activity.FinishedAt),
+		DurationMs:      activity.DurationMs,
+		SafeSummary:     optionalStringPtr(activity.SafeSummary),
+		PayloadDigest:   optionalStringPtr(activity.PayloadDigest),
+		BoundedError:    optionalStringPtr(activity.BoundedError),
+		SafeRefsJson:    string(activity.SafeRefsJSON),
+		SafeDetailsJson: string(activity.SafeDetailsJSON),
+		CorrelationId:   optionalStringPtr(activity.CorrelationID),
+		IdempotencyKey:  activity.IdempotencyKey,
+		Version:         activity.Version,
+		CreatedAt:       formatTime(activity.CreatedAt),
+		UpdatedAt:       formatTime(activity.UpdatedAt),
+	}
+}
+
 func ScopeToProto(scope value.ScopeRef) *agentsv1.ScopeRef {
 	return &agentsv1.ScopeRef{Type: ScopeTypeToProto(scope.Type), Ref: scope.Ref}
 }
@@ -452,6 +489,14 @@ func optionalTimePtr(value *time.Time) *string {
 		return nil
 	}
 	formatted := formatTime(*value)
+	return &formatted
+}
+
+func optionalTimeValuePtr(value time.Time) *string {
+	if value.IsZero() {
+		return nil
+	}
+	formatted := formatTime(value)
 	return &formatted
 }
 

@@ -249,6 +249,29 @@ func followUpIntentArgs(intent entity.FollowUpIntent) pgx.NamedArgs {
 	}, intent.ID, intent.Version, intent.CreatedAt, intent.UpdatedAt)
 }
 
+func agentActivityArgs(activity entity.AgentActivity) pgx.NamedArgs {
+	return postgreslib.AddBaseArgs(pgx.NamedArgs{
+		"session_id":        activity.SessionID,
+		"run_id":            postgreslib.NullableUUID(activity.RunID),
+		"turn_id":           activity.TurnID,
+		"tool_use_id":       activity.ToolUseID,
+		"activity_kind":     string(activity.ActivityKind),
+		"tool_name":         activity.ToolName,
+		"tool_category":     activity.ToolCategory,
+		"status":            string(activity.Status),
+		"started_at":        activity.StartedAt,
+		"finished_at":       postgreslib.NullableTime(activity.FinishedAt),
+		"duration_ms":       optionalInt64(activity.DurationMs),
+		"safe_summary":      activity.SafeSummary,
+		"payload_digest":    activity.PayloadDigest,
+		"bounded_error":     activity.BoundedError,
+		"safe_refs_json":    objectPayload(activity.SafeRefsJSON),
+		"safe_details_json": objectPayload(activity.SafeDetailsJSON),
+		"correlation_id":    activity.CorrelationID,
+		"idempotency_key":   activity.IdempotencyKey,
+	}, activity.ID, activity.Version, activity.CreatedAt, activity.UpdatedAt)
+}
+
 func commandResultArgs(result entity.CommandResult) pgx.NamedArgs {
 	args := pgx.NamedArgs{"key": result.Key}
 	args["command_id"] = postgreslib.NullableUUID(result.CommandID)
@@ -343,6 +366,16 @@ func acceptanceResultFilterArgs(filter query.AcceptanceResultFilter) pageQueryAr
 	return withPage(filter.Page, args)
 }
 
+func agentActivityFilterArgs(filter query.AgentActivityFilter) pageQueryArgs {
+	args := pgx.NamedArgs{
+		"activity_kind":   optionalEnum(filter.ActivityKind),
+		"activity_status": optionalEnum(filter.Status),
+	}
+	args["session_id"] = optionalUUID(filter.SessionID)
+	args["run_id"] = optionalUUID(filter.RunID)
+	return withPage(filter.Page, args)
+}
+
 func withPage(page value.PageRequest, args pgx.NamedArgs) pageQueryArgs {
 	limit, offset, _ := postgreslib.OffsetPageBounds(page.PageSize, decodePageToken(page.PageToken), defaultPageSize, maxPageSize)
 	args["limit"] = limit + 1
@@ -374,6 +407,13 @@ func optionalUUID(value uuid.UUID) any {
 		return nil
 	}
 	return value
+}
+
+func optionalInt64(value *int64) any {
+	if value == nil {
+		return nil
+	}
+	return *value
 }
 
 func optionalEnum[T ~string](value *T) any {

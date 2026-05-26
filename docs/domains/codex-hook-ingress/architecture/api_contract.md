@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-26
-related_issues: [698, 753, 778, 786, 793, 808, 823, 322]
+related_issues: [698, 753, 778, 786, 793, 808, 823, 322, 834]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -52,6 +52,8 @@ approvals:
 `SubmitHookEvent` является единственной обязательной MVP-операцией. Остальные операции могут быть реализованы соседними контурами или отложены, если будут лишними для MVP.
 
 Logical response CHI-4 также содержит route delivery diagnostics. Unsupported, disabled или failed route не считается успешной доставкой. Diagnostic text должен быть safe: без raw downstream error, prompt, tool input/output, stdout/stderr, provider payload, kubeconfig и secret values.
+
+Persistent история tool/activity не является операцией `codex-hook-ingress`. Следующий CHI-срез должен маршрутизировать sanitized `PreToolUse`/`PostToolUse` в `agent-manager.RecordAgentActivity`; `codex-hook-ingress` остаётся sanitizer/router/realtime ops feed и не хранит долгую историю tool calls.
 
 ## Состояние реализации CHI-3/CHI-4/CHI-6a
 
@@ -168,7 +170,7 @@ Input:
 
 Routes:
 
-- `agent-manager`: realtime event или flow-wait ref;
+- `agent-manager`: safe activity timeline entry, realtime event или flow-wait ref;
 - `governance-manager`: risk context или policy-controlled decision ref;
 - `runtime-manager`: workspace/runtime diagnostics;
 - operations/realtime feed: safe preview.
@@ -210,7 +212,7 @@ Routes:
 
 - `provider-hub`: hot reconciliation hint or provider artifact signal;
 - `runtime-manager`: runtime diagnostic summary;
-- `agent-manager`: run state or acceptance signal;
+- `agent-manager`: safe activity timeline entry, run state or acceptance signal;
 - operations/realtime feed.
 
 Ingress не пытается undo side effects.

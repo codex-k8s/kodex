@@ -80,6 +80,9 @@ const (
 	operationListAcceptance        = "domain.Repository.ListAcceptanceResults"
 	operationCreateFollowUp        = "domain.Repository.CreateFollowUpIntentWithResult"
 	operationGetFollowUp           = "domain.Repository.GetFollowUpIntent"
+	operationRecordActivity        = "domain.Repository.RecordAgentActivityWithResult"
+	operationGetActivity           = "domain.Repository.GetAgentActivity"
+	operationListActivities        = "domain.Repository.ListAgentActivities"
 	operationGetCommandResult      = "domain.Repository.GetCommandResult"
 	operationRecordCommandResult   = "domain.Repository.RecordCommandResult"
 	operationOutboxClaim           = "domain.Repository.ClaimOutboxEvents"
@@ -274,6 +277,18 @@ func (r *Repository) CreateFollowUpIntentWithResult(ctx context.Context, intent 
 
 func (r *Repository) GetFollowUpIntent(ctx context.Context, id uuid.UUID) (entity.FollowUpIntent, error) {
 	return queryOne(ctx, r.db, operationGetFollowUp, queryFollowUpIntentGet, pgx.NamedArgs{"id": id}, scanFollowUpIntent)
+}
+
+func (r *Repository) RecordAgentActivityWithResult(ctx context.Context, activity entity.AgentActivity, result entity.CommandResult) error {
+	return r.mutateWithResult(ctx, operationRecordActivity, queryAgentActivityCreate, agentActivityArgs(activity), result, nil)
+}
+
+func (r *Repository) GetAgentActivity(ctx context.Context, id uuid.UUID) (entity.AgentActivity, error) {
+	return queryOne(ctx, r.db, operationGetActivity, queryAgentActivityGet, pgx.NamedArgs{"id": id}, scanAgentActivity)
+}
+
+func (r *Repository) ListAgentActivities(ctx context.Context, filter query.AgentActivityFilter) ([]entity.AgentActivity, value.PageResult, error) {
+	return queryPage(ctx, r.db, operationListActivities, queryAgentActivityList, agentActivityFilterArgs(filter), scanAgentActivity)
 }
 
 func (r *Repository) GetCommandResult(ctx context.Context, identity query.CommandIdentity) (entity.CommandResult, error) {

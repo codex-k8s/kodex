@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-12
 updated_at: 2026-05-26
-related_issues: [733, 749, 759, 772, 322, 782, 795, 809, 820]
+related_issues: [733, 749, 759, 772, 322, 782, 795, 809, 820, 834]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -20,11 +20,11 @@ approvals:
 
 ## TL;DR
 
-- Ключевые сущности: `Flow`, `FlowVersion`, `Stage`, `StageTransition`, `RoleProfile`, `StageRoleBinding`, `PromptTemplate`, `PromptTemplateVersion`, `AgentSession`, `AgentRun`, `AgentSessionStateSnapshot`, `AcceptanceCheck`, `AcceptanceResult`, `FollowUpIntent`, `AutomationBinding`.
+- Ключевые сущности: `Flow`, `FlowVersion`, `Stage`, `StageTransition`, `RoleProfile`, `StageRoleBinding`, `PromptTemplate`, `PromptTemplateVersion`, `AgentSession`, `AgentRun`, `AgentSessionStateSnapshot`, `AgentActivity`, `AcceptanceCheck`, `AcceptanceResult`, `FollowUpIntent`, `AutomationBinding`.
 - Технические агрегаты: `CommandResult`, `OutboxEvent`.
 - Основные связи: flow содержит этапы; этапы привязывают роли; роль использует prompt version; сессия содержит agent `Run`; `Run` фиксирует immutable-ссылки и версии flow/stage/role/prompt/guidance, а также ссылки на provider/runtime/package.
 - Риски миграций: нельзя хранить runtime filesystem, provider-native истину, пакетную истину, диалоговые сообщения, секреты и полные логи в БД `agent-manager`.
-- Первый контур хранения `agent-manager` покрывает flow, версии flow, этапы, переходы, роли, шаблоны prompt, версии prompt, сессии, agent `Run`, снимки состояния, acceptance result, идемпотентные результаты команд и service-local outbox.
+- Первый контур хранения `agent-manager` покрывает flow, версии flow, этапы, переходы, роли, шаблоны prompt, версии prompt, сессии, agent `Run`, снимки состояния, безопасную activity timeline, acceptance result, follow-up intent, идемпотентные результаты команд и service-local outbox.
 
 ## Правило внешних ссылок
 
@@ -225,6 +225,34 @@ approvals:
 
 `agent-manager` владеет только метаданными и указателем `latest_state_snapshot_id`. Загрузку объекта, проверку размера, шифрование и выдачу содержимого выполняет платформенный storage-контур; большой session JSON не хранится в PostgreSQL.
 
+### AgentActivity
+
+`AgentActivity` является канонической persistent-историей безопасных действий агента внутри session/run. Это состояние принадлежит `agent-manager`, потому что именно он владеет `AgentSession` и `AgentRun`; `codex-hook-ingress` остаётся sanitizer/router/realtime ops feed и не становится долгим хранилищем tool calls.
+
+| Поле | Тип | Может быть пустым | Примечание |
+|---|---|---:|---|
+| `id` | uuid | нет | Идентификатор записи timeline. |
+| `session_id` | uuid | нет | Сессия-владелец. |
+| `run_id` | uuid | да | Запуск, если действие связано с конкретным `Run`. |
+| `turn_id` | text | да | Safe turn ref без transcript или session dump. |
+| `tool_use_id` | text | да | Safe id tool call, если запись относится к tool activity. |
+| `activity_kind` | enum | нет | `lifecycle`, `tool_use`, `tool_result`, `permission`, `provider_signal`, `runtime_signal`, `checkpoint`, `other`. |
+| `tool_name`, `tool_category` | text | да | Safe имя и категория инструмента; для tool-scoped записей нужен хотя бы один из этих признаков. |
+| `status` | enum | нет | `planned`, `started`, `succeeded`, `failed`, `denied`, `waiting`, `cancelled`, `skipped`. |
+| `started_at`, `finished_at` | timestamptz | да | Время начала обязательно; окончание может отсутствовать для pending/waiting записи. |
+| `duration_ms` | bigint | да | Длительность, если известна или вычислена из временных меток. |
+| `safe_summary` | text | да | Короткая безопасная сводка для UI. |
+| `payload_digest` | text | да | Digest очищенного payload или значимых частей, например `sha256:<hex>`. |
+| `bounded_error` | text | да | Короткая безопасная ошибка без stdout/stderr/log body. |
+| `safe_refs_json` | jsonb | нет | Bounded JSON-object только с refs: artifact/risk/gate/provider/runtime refs. |
+| `safe_details_json` | jsonb | нет | Bounded JSON-object с безопасными display details без raw payload. |
+| `correlation_id` | text | да | Trace/correlation ref. |
+| `idempotency_key` | text | нет | Command idempotency trace для replay. |
+| `version` | bigint | нет | Версия записи timeline. |
+| `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
+
+В `AgentActivity` запрещено хранить `tool_input`, `tool_response`, stdout/stderr/logs, raw provider payload, prompt, transcript, session dump, kubeconfig, секреты, токены, локальные workspace paths и файлы workspace. Если нужно показать полный output или отчёт, запись должна содержать только digest, object/artifact ref и bounded summary.
+
 ### AcceptanceCheck и AcceptanceResult
 
 `AcceptanceCheck` описывает тип проверки в policy/flow-контексте, а `AcceptanceResult` является хранимым агрегатом результата. Базовый lifecycle создаёт один pending result на команду `RequestAcceptance`, затем `RecordAcceptanceResult` переводит его в `passed`, `failed`, `waiting` или `skipped` через ожидаемую версию. Для `human_gate` доступна только фиксация ожидания `waiting` с безопасной ссылкой на gate/risk/governance; финальное решение остаётся в сервисе-владельце.
@@ -298,7 +326,7 @@ approvals:
 | `actor_type` | text | нет | Тип инициатора команды. |
 | `actor_id` | text | нет | Идентификатор инициатора команды. |
 | `operation` | text | нет | Имя операции. |
-| `aggregate_type` | text | нет | `flow`, `flow_version`, `role_profile`, `prompt_template`, `prompt_template_version`, далее `session`, `run`, `acceptance`, `follow_up`. |
+| `aggregate_type` | text | нет | `flow`, `flow_version`, `role_profile`, `prompt_template`, `prompt_template_version`, далее `session`, `run`, `session_state_snapshot`, `acceptance`, `follow_up`, `activity`. |
 | `aggregate_id` | uuid | нет | Затронутый агрегат. |
 | `result_payload` | jsonb | нет | Безопасный результат повтора. |
 | `created_at` | timestamptz | нет | Время первого выполнения. |
@@ -335,6 +363,7 @@ approvals:
 - Guidance refs в `AgentRun` появляются только после разрешения через `package-hub`: стартовая команда может передать selection hints, а `agent-manager` проверяет scope, активность установки, статус версии и состояние manifest. Runtime refs появляются только после подготовки workspace в `runtime-manager`.
 - В `guidance_refs` запрещено хранить `SKILL.md`, scripts, assets, исходники пакета, полный manifest или секреты; для диагностики сохраняется только bounded policy-safe summary.
 - `AgentSessionStateSnapshot` относится к `AgentSession` и опционально к `AgentRun`; `AgentSession.latest_state_snapshot_id` указывает на актуальный снимок.
+- `AgentActivity` относится к `AgentSession` и опционально к `AgentRun`; это authoritative safe timeline для будущего UI, а не копия hook payload.
 - `AcceptanceResult` и `FollowUpIntent` относятся к `AgentSession`, `AgentRun` и `Stage`.
 - Внутри БД `agent-manager` допустимы внешние ключи между своими таблицами.
 - Ссылки на provider, runtime, package, interaction, project и access домены хранятся как внешние идентификаторы без SQL-связей с чужими БД.
@@ -348,6 +377,8 @@ approvals:
 | Запуски по flow/stage/role | `(flow_version_id, stage_id, role_profile_id, status)` |
 | Последний снимок session state | `(session_id, captured_at DESC)` и `latest_state_snapshot_id` на `AgentSession`. |
 | Ожидающие решения или runtime | `(status, updated_at)` для `AgentRun` и `AcceptanceResult`. |
+| История действий по session/run | `(session_id, started_at DESC, id DESC)` и `(run_id, started_at DESC, id DESC)`. |
+| Tool timeline | `(session_id, activity_kind, started_at DESC, id DESC)`, `(run_id, status, started_at DESC, id DESC)` и частичный индекс по `tool_use_id`. |
 | Активная версия flow | `(flow_id, status, version)` |
 | Активные роли по scope | `(scope_type, scope_ref, status, slug)` |
 | Prompt version для роли | `(role_profile_id, prompt_kind, status, version)` |
@@ -359,7 +390,7 @@ approvals:
 - Codex session JSON/JSONL хранится объектом в S3-compatible хранилище; `agent-manager` хранит только ссылку, digest, размер и актуальный указатель на последний снимок.
 - Prompt render может храниться как digest и безопасная диагностическая ссылка; полный prompt хранится только если это отдельно согласовано политикой аудита.
 - Секреты, токены, сырые provider payload и вложения не попадают в `agent-manager`.
-- История `Run`, acceptance и follow-up нужна для аудита и воспроизводимости; retention определяется платформенной политикой после согласования с операционным контуром.
+- История `Run`, activity timeline, acceptance и follow-up нужна для аудита и воспроизводимости; retention определяется платформенной политикой после согласования с операционным контуром.
 
 ## Миграционные ограничения
 

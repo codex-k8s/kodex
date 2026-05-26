@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-12
 updated_at: 2026-05-26
-related_issues: [733, 753, 698, 322, 782, 795, 820]
+related_issues: [733, 753, 698, 322, 782, 795, 820, 834]
 related_prs: []
 related_adrs: []
 approvals:
@@ -21,7 +21,7 @@ approvals:
 
 ## TL;DR
 
-- Что меняем: выделяем `agent-manager` как сервис-владелец flow, stage, role, prompt template, session, agent `Run`, acceptance machine и follow-up задач.
+- Что меняем: выделяем `agent-manager` как сервис-владелец flow, stage, role, prompt template, session, agent `Run`, безопасной activity timeline, acceptance machine и follow-up задач.
 - Почему: агентная работа должна иметь явную state machine и границы, а runtime, provider, package и interaction контуры не должны владеть процессом.
 - Основные компоненты: БД `agent-manager`, gRPC API, outbox событий, движок flow, запускатель ролей, рендер prompt, движок приёмки и планировщик follow-up.
 - Риски: смешать `Run` со slot/job, начать ходить в GitHub напрямую из управляющего сервиса или скопировать пакетную/проектную истину в agent-домен.
@@ -47,7 +47,7 @@ approvals:
 
 | Владеет `agent-manager` | Не владеет |
 |---|---|
-| Flow, stage, role, stage-role binding, prompt template, prompt version, agent session, agent `Run`, acceptance check, acceptance result, follow-up intent, automation trigger binding, agent events и состояние ожидания flow. | Runtime slot, workspace filesystem, platform job, Kubernetes, provider-native проекции и операции, package catalog, package installation, secret value, risk/gate/release decisions, диалоговые ветки, уведомления, внешние каналы, проектная policy как истина, MCP transport, Codex hook transport. |
+| Flow, stage, role, stage-role binding, prompt template, prompt version, agent session, agent `Run`, safe activity timeline, acceptance check, acceptance result, follow-up intent, automation trigger binding, agent events и состояние ожидания flow. | Runtime slot, workspace filesystem, platform job, Kubernetes, provider-native проекции и операции, package catalog, package installation, secret value, risk/gate/release decisions, диалоговые ветки, уведомления, внешние каналы, проектная policy как истина, MCP transport, Codex hook transport, сырые tool payload и долгую ops feed hook ingress. |
 
 Главное правило: `agent-manager` отвечает за вопрос «какая агентная работа должна быть выполнена, кем, по какому процессу и что считать готовым». Технический вопрос «где и как выполнить» решает runtime-контур. Вопрос «как записать provider-native артефакт» решает provider-контур. Вопрос «как получить пакет» решает package-контур. Вопрос «нужен ли gate и какое решение принято» решает governance-контур. Вопрос «как доставить запрос человеку» решает interaction-контур.
 
@@ -61,6 +61,7 @@ approvals:
 | Запускатель ролей | Создаёт `Run`, фиксирует версии flow, этапа, роли, prompt и руководящих пакетов, затем запрашивает runtime-запуск. |
 | Рендер prompt | Собирает prompt из версии роли, задачи, stage, policy, руководящих пакетов и рабочего контекста. |
 | Запись снимков сессии | Фиксирует метаданные Codex session state после turn/checkpoint и обновляет указатель на актуальный снимок. |
+| История действий агента | Хранит canonical persistent safe timeline по session/run: tool intent/result, lifecycle, permission, runtime/provider signals, bounded summary, digest, refs и timestamps без raw payload. |
 | Движок приёмки | Проверяет артефакты, watermark, статусы provider-native сущностей и условия перехода. |
 | Планировщик follow-up | Формирует авторитетное намерение следующей задачи с safe refs/status/summary; provider-контур создаёт или обновляет `Issue` отдельной интеграционной командой. |
 | Outbox-доставщик | Публикует `agent.*` события через `platform-event-log`. |
@@ -113,6 +114,8 @@ sequenceDiagram
 `agent-manager` не выполняет checkout и не монтирует файлы сам. Он выбирает руководящие пакеты и контекст, а подготовку workspace выполняет runtime-контур по проверенной политике.
 
 Codex session state сохраняется как JSON/JSONL-объект в S3-compatible хранилище после каждого значимого turn/checkpoint. `agent-manager` хранит метаданные снимка, digest, размер и указатель на последний актуальный объект; сам большой файл сессии не пишется в PostgreSQL.
+
+Безопасная история действий хранится отдельно от session snapshot. `RecordAgentActivity` фиксирует только kind, safe tool metadata, status, timestamps/duration, bounded summary/error, digest, safe refs/details и correlation trace. Полные `tool_input`, `tool_response`, stdout/stderr, prompt, transcript, session dump, provider payload, kubeconfig, локальные workspace paths и файлы workspace не сохраняются в `agent-manager`.
 
 ### Приёмка результата агента
 
@@ -203,11 +206,11 @@ MCP не владеет доменным состоянием и не подме
 `codex-hook-ingress` является входным контуром Codex hook events для `agent-manager`:
 - `SessionStart` создаёт или связывает Codex-сессию с `AgentSession`;
 - `UserPromptSubmit` фиксирует безопасный факт нового пользовательского ввода и передаёт его в агентный контур;
-- `PreToolUse` и `PostToolUse` дают realtime-сигналы и безопасные provider/runtime hints;
+- `PreToolUse` и `PostToolUse` дают realtime-сигналы и безопасные provider/runtime hints; следующий CHI-срез должен отправлять sanitized tool metadata в `agent-manager.RecordAgentActivity`;
 - `PermissionRequest` преобразуется в risk/gate evaluation через `governance-manager`, а доставка запроса человеку остаётся у `interaction-hub`;
 - `Stop` фиксирует контрольную точку хода, pending actions и итоговую сводку.
 
-`agent-manager` не должен принимать эти события через MCP-инструменты. MCP остаётся для явных tool calls, а hook ingress — для событий, которые Codex command hook передал через локальный emitter или sidecar.
+`agent-manager` не должен принимать эти события через MCP-инструменты. MCP остаётся для явных tool calls, а hook ingress — для событий, которые Codex command hook передал через локальный emitter или sidecar. `codex-hook-ingress` очищает и маршрутизирует события, держит короткую realtime/ops ленту, но не хранит долгую историю tool calls; canonical persistent timeline принадлежит `agent-manager`.
 
 ### `governance-manager`
 
@@ -263,6 +266,8 @@ MCP не владеет доменным состоянием и не подме
 - `agent.role.version_activated`;
 - `agent.prompt.version_activated`.
 
+Для `AgentActivity` отдельное `agent.*` событие не вводится: запись timeline является owner-side read/write моделью `agent-manager`, а высокочастотный realtime-поток остаётся в `codex-hook-ingress`.
+
 ## Конкурентные изменения
 
 - Flow, role, prompt template и automation rule имеют версии.
@@ -273,9 +278,9 @@ MCP не владеет доменным состоянием и не подме
 
 ## Наблюдаемость
 
-- Логи: session id, run id, flow, stage, role, provider target, runtime ref, correlation id, результат.
+- Логи: session id, run id, flow, stage, role, provider target, runtime ref, activity id, correlation id, результат.
 - Метрики: запрошенные, выполняемые, ожидающие, упавшие и завершённые `Run`; длительность этапов; ошибки приёмки; повторные запуски; ожидания governance gate.
-- Трейсы: входящий gRPC/MCP, чтение package/project/provider, runtime prepare, acceptance, outbox.
+- Трейсы: входящий gRPC/MCP, чтение package/project/provider, runtime prepare, activity record/list, acceptance, outbox.
 - Алерты: рост упавших `Run`, застрявшие ожидающие `Run`, рост ошибок приёмки, массовые ошибки package/runtime/provider зависимостей.
 
 ## Риски
