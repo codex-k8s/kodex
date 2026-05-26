@@ -76,6 +76,17 @@ func TestValidateRequiresRuntimeClientTokensWhenPreparationEnabled(t *testing.T)
 	}
 }
 
+func TestValidateRequiresProviderHubWriteTokenWhenEnabled(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.ProviderHubWriteEnabled = true
+	cfg.ProviderHubGRPCAuthToken = ""
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() err = nil, want provider-hub auth token error")
+	}
+}
+
 func TestGRPCServerConfigMapsRuntimeLimits(t *testing.T) {
 	t.Parallel()
 
@@ -129,6 +140,9 @@ func validConfig() Config {
 		RuntimeManagerGRPCAddr:       "runtime-manager:9090",
 		RuntimeManagerGRPCAuthToken:  "runtime-token",
 		RuntimeManagerPrepareTimeout: 10 * time.Second,
+		ProviderHubGRPCAddr:          "provider-hub:9090",
+		ProviderHubGRPCAuthToken:     "provider-token",
+		ProviderHubWriteTimeout:      10 * time.Second,
 		OutboxDispatchEnabled:        false,
 		OutboxPublisherKind:          "disabled",
 		OutboxBatchSize:              100,

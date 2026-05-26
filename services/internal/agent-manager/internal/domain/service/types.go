@@ -238,6 +238,106 @@ type RuntimePreparationResult struct {
 	DiagnosticSummary          string
 }
 
+type ProviderOperationStatus string
+
+const (
+	ProviderOperationStatusSucceeded       ProviderOperationStatus = "succeeded"
+	ProviderOperationStatusFailed          ProviderOperationStatus = "failed"
+	ProviderOperationStatusRetryableFailed ProviderOperationStatus = "retryable_failed"
+	ProviderOperationStatusDenied          ProviderOperationStatus = "denied"
+	ProviderOperationStatusInProgress      ProviderOperationStatus = "in_progress"
+)
+
+const (
+	ProviderOperationTypeCreateIssue = "create_issue"
+	ProviderRiskLevelLow             = "low"
+	ProviderRiskLevelMedium          = "medium"
+	ProviderRiskLevelHigh            = "high"
+	ProviderRiskLevelCritical        = "critical"
+)
+
+type ProviderCommandTarget struct {
+	ProviderSlug         string
+	RepositoryFullName   string
+	ProviderRepositoryID string
+	WorkItemKind         string
+	Number               int64
+	ProviderObjectID     string
+	WebURL               string
+}
+
+type ProviderOperationPolicyContext struct {
+	ProjectID         string
+	RepositoryID      string
+	Stage             string
+	RoleID            string
+	RoleKey           string
+	OperationType     string
+	TargetRef         string
+	ChangedFields     []string
+	RiskTags          []string
+	RiskLevel         string
+	ApprovalRequired  bool
+	PolicyVersion     string
+	PolicySnapshotRef string
+}
+
+type ProviderApprovalGateReference struct {
+	ApprovalID       string
+	GateType         string
+	Decision         string
+	DecidedByActorID string
+	DecidedAt        string
+	EvidenceRef      string
+	PolicyVersion    string
+}
+
+type DispatchFollowUpIntentInput struct {
+	Meta                   value.CommandMeta
+	FollowUpIntentID       uuid.UUID
+	ProjectID              uuid.UUID
+	RepositoryID           uuid.UUID
+	ProviderSlug           string
+	ExternalAccountID      uuid.UUID
+	RepositoryTarget       ProviderCommandTarget
+	Labels                 []string
+	AssigneeProviderLogins []string
+	Milestone              string
+	WatermarkJSON          []byte
+	OperationPolicyContext ProviderOperationPolicyContext
+	ApprovalGateRef        ProviderApprovalGateReference
+	SafeBodyHint           string
+}
+
+type ProviderCreateIssueInput struct {
+	Meta                   value.CommandMeta
+	ProjectID              uuid.UUID
+	RepositoryID           uuid.UUID
+	ProviderSlug           string
+	RepositoryTarget       ProviderCommandTarget
+	Title                  string
+	Body                   string
+	Labels                 []string
+	AssigneeProviderLogins []string
+	Milestone              string
+	WorkItemType           string
+	WatermarkJSON          []byte
+	OperationPolicyContext ProviderOperationPolicyContext
+	ApprovalGateRef        ProviderApprovalGateReference
+	ExternalAccountID      uuid.UUID
+}
+
+type ProviderIssueCommandResult struct {
+	ProviderOperationRef string
+	ResultRef            string
+	ProviderObjectID     string
+	ProviderVersion      string
+	Target               ProviderCommandTarget
+	Status               ProviderOperationStatus
+	ErrorCode            string
+	ErrorMessage         string
+}
+
 type RecordRunStateInput struct {
 	Meta           value.CommandMeta
 	RunID          uuid.UUID

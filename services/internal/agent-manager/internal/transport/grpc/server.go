@@ -53,6 +53,7 @@ type agentService interface {
 	GetAcceptanceResult(context.Context, uuid.UUID) (entity.AcceptanceResult, error)
 	ListAcceptanceResults(context.Context, agentservice.AcceptanceResultList) ([]entity.AcceptanceResult, value.PageResult, error)
 	CreateFollowUpIntent(context.Context, agentservice.CreateFollowUpIntentInput) (entity.FollowUpIntent, error)
+	DispatchFollowUpIntent(context.Context, agentservice.DispatchFollowUpIntentInput) (entity.FollowUpIntent, error)
 	RecordAgentActivity(context.Context, agentservice.RecordAgentActivityInput) (entity.AgentActivity, error)
 	ListAgentActivities(context.Context, agentservice.AgentActivityList) ([]entity.AgentActivity, value.PageResult, error)
 }
@@ -203,6 +204,11 @@ func (server *Server) ListAcceptanceResults(ctx context.Context, request *agents
 // CreateFollowUpIntent records intent to create the next provider-native work item.
 func (server *Server) CreateFollowUpIntent(ctx context.Context, request *agentsv1.CreateFollowUpIntentRequest) (*agentsv1.FollowUpIntentResponse, error) {
 	return grpcserver.HandleUnary(ctx, request, grpccasters.CreateFollowUpIntentInput, server.service.CreateFollowUpIntent, grpccasters.FollowUpIntentResponse)
+}
+
+// DispatchFollowUpIntent sends a planned follow-up through provider-hub CreateIssue.
+func (server *Server) DispatchFollowUpIntent(ctx context.Context, request *agentsv1.DispatchFollowUpIntentRequest) (*agentsv1.FollowUpIntentResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.DispatchFollowUpIntentInput, server.service.DispatchFollowUpIntent, grpccasters.FollowUpIntentResponse)
 }
 
 // RecordAgentActivity records a safe persistent activity timeline entry.

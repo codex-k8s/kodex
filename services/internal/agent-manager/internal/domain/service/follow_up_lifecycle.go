@@ -1,8 +1,13 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"sort"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -19,10 +24,35 @@ const (
 	followUpSummaryLimit = 1000
 	followUpHintLimit    = 128
 	followUpTypeLimit    = 64
+	followUpBodyLimit    = 4000
+	followUpRefTextLimit = 512
 )
 
 type followUpIntentCommandPayload struct {
 	FollowUpIntent entity.FollowUpIntent `json:"follow_up_intent"`
+}
+
+type followUpProviderCommandPayload struct {
+	FollowUpIntent entity.FollowUpIntent       `json:"follow_up_intent"`
+	CreateIssue    followUpCreateIssueSnapshot `json:"create_issue"`
+}
+
+type followUpCreateIssueSnapshot struct {
+	FollowUpIntentID       string                         `json:"follow_up_intent_id"`
+	ProjectID              string                         `json:"project_id"`
+	RepositoryID           string                         `json:"repository_id"`
+	ProviderSlug           string                         `json:"provider_slug"`
+	ExternalAccountID      string                         `json:"external_account_id"`
+	RepositoryTarget       ProviderCommandTarget          `json:"repository_target"`
+	Title                  string                         `json:"title"`
+	BodyDigest             string                         `json:"body_digest"`
+	Labels                 []string                       `json:"labels,omitempty"`
+	AssigneeProviderLogins []string                       `json:"assignee_provider_logins,omitempty"`
+	Milestone              string                         `json:"milestone,omitempty"`
+	WorkItemType           string                         `json:"work_item_type"`
+	WatermarkJSON          string                         `json:"watermark_json,omitempty"`
+	OperationPolicyContext ProviderOperationPolicyContext `json:"operation_policy_context"`
+	ApprovalGateRef        ProviderApprovalGateReference  `json:"approval_gate_ref,omitempty"`
 }
 
 func (s *Service) CreateFollowUpIntent(ctx context.Context, input CreateFollowUpIntentInput) (entity.FollowUpIntent, error) {
@@ -68,6 +98,61 @@ func (s *Service) CreateFollowUpIntent(ctx context.Context, input CreateFollowUp
 		return entity.FollowUpIntent{}, err
 	}
 	return intent, s.repository.CreateFollowUpIntentWithResult(ctx, intent, result, event)
+}
+
+func (s *Service) DispatchFollowUpIntent(ctx context.Context, input DispatchFollowUpIntentInput) (entity.FollowUpIntent, error) {
+	if err := s.requireRepository(); err != nil {
+		return entity.FollowUpIntent{}, err
+	}
+	if err := validateID(input.FollowUpIntentID); err != nil {
+		return entity.FollowUpIntent{}, err
+	}
+	if _, err := expectedVersion(input.Meta); err != nil {
+		return entity.FollowUpIntent{}, err
+	}
+	intent, err := s.repository.GetFollowUpIntent(ctx, input.FollowUpIntentID)
+	if err != nil {
+		return entity.FollowUpIntent{}, err
+	}
+	createIssue, snapshot, err := normalizeFollowUpCreateIssueCommand(intent, input)
+	if err != nil {
+		return entity.FollowUpIntent{}, err
+	}
+	if replay, ok, err := findReplay(ctx, s, input.Meta, operationDispatchFollowUpIntent, enum.CommandAggregateTypeFollowUp, followUpProviderIntentFromPayload, verifyFollowUpProviderReplay(snapshot, s.repository.GetFollowUpIntent)); ok || err != nil {
+		return replay, err
+	}
+	previousVersion := *input.Meta.ExpectedVersion
+	if intent.Version != previousVersion {
+		return entity.FollowUpIntent{}, errs.ErrConflict
+	}
+	if !dispatchableFollowUpStatus(intent.Status) {
+		return entity.FollowUpIntent{}, errs.ErrPreconditionFailed
+	}
+	providerResult, err := s.providerIssueCreator.CreateIssue(ctx, createIssue)
+	if err != nil {
+		return entity.FollowUpIntent{}, err
+	}
+	next, err := applyFollowUpProviderIssueResult(intent, providerResult)
+	if err != nil {
+		return entity.FollowUpIntent{}, err
+	}
+	now := s.clock.Now()
+	previousStatus := string(intent.Status)
+	next.Version++
+	next.UpdatedAt = now
+	payload, err := marshalCommandPayload(followUpProviderCommandPayload{FollowUpIntent: next, CreateIssue: snapshot})
+	if err != nil {
+		return entity.FollowUpIntent{}, err
+	}
+	result, err := commandResult(input.Meta, operationDispatchFollowUpIntent, enum.CommandAggregateTypeFollowUp, next.ID, payload, now)
+	if err != nil {
+		return entity.FollowUpIntent{}, err
+	}
+	event, err := followUpResultEvent(s.idGenerator.New(), previousStatus, next, now)
+	if err != nil {
+		return entity.FollowUpIntent{}, err
+	}
+	return next, s.repository.UpdateFollowUpIntentWithResult(ctx, next, previousVersion, result, event)
 }
 
 func (s *Service) normalizeFollowUpIntent(ctx context.Context, session entity.AgentSession, input CreateFollowUpIntentInput, idempotencyKey string) (entity.FollowUpIntent, error) {
@@ -188,6 +273,375 @@ func followUpIntentIdempotencyKey(meta value.CommandMeta) (string, error) {
 		return "", err
 	}
 	return commandResultKey(identity), nil
+}
+
+func dispatchableFollowUpStatus(status enum.FollowUpIntentStatus) bool {
+	return status == enum.FollowUpIntentStatusPlanned || status == enum.FollowUpIntentStatusRequested
+}
+
+func normalizeFollowUpCreateIssueCommand(intent entity.FollowUpIntent, input DispatchFollowUpIntentInput) (ProviderCreateIssueInput, followUpCreateIssueSnapshot, error) {
+	if input.ProjectID == uuid.Nil || input.RepositoryID == uuid.Nil || input.ExternalAccountID == uuid.Nil {
+		return ProviderCreateIssueInput{}, followUpCreateIssueSnapshot{}, errs.ErrInvalidArgument
+	}
+	providerSlug, err := normalizeFollowUpWorkItemType(input.ProviderSlug)
+	if err != nil || providerSlug == "" {
+		return ProviderCreateIssueInput{}, followUpCreateIssueSnapshot{}, errs.ErrInvalidArgument
+	}
+	repositoryTarget, err := normalizeFollowUpRepositoryTarget(providerSlug, input.RepositoryTarget)
+	if err != nil {
+		return ProviderCreateIssueInput{}, followUpCreateIssueSnapshot{}, err
+	}
+	labels, err := normalizeFollowUpStringSet(input.Labels)
+	if err != nil {
+		return ProviderCreateIssueInput{}, followUpCreateIssueSnapshot{}, err
+	}
+	assignees, err := normalizeFollowUpStringSet(input.AssigneeProviderLogins)
+	if err != nil {
+		return ProviderCreateIssueInput{}, followUpCreateIssueSnapshot{}, err
+	}
+	milestone, err := normalizeFollowUpText(input.Milestone, followUpHintLimit, false)
+	if err != nil {
+		return ProviderCreateIssueInput{}, followUpCreateIssueSnapshot{}, err
+	}
+	bodyHint, err := normalizeFollowUpText(input.SafeBodyHint, followUpBodyLimit, false)
+	if err != nil {
+		return ProviderCreateIssueInput{}, followUpCreateIssueSnapshot{}, err
+	}
+	body := followUpIssueBody(intent, bodyHint)
+	watermarkJSON, err := normalizeFollowUpCommandJSON(input.WatermarkJSON)
+	if err != nil {
+		return ProviderCreateIssueInput{}, followUpCreateIssueSnapshot{}, err
+	}
+	changedFields := followUpCreateIssueChangedFields(milestone != "", intent.ProviderWorkItemType != "", len(watermarkJSON) > 0)
+	policy, err := normalizeFollowUpProviderPolicy(input.OperationPolicyContext, input.ProjectID, input.RepositoryID, providerSlug, changedFields)
+	if err != nil {
+		return ProviderCreateIssueInput{}, followUpCreateIssueSnapshot{}, err
+	}
+	approval, err := normalizeFollowUpApprovalGateRef(input.ApprovalGateRef)
+	if err != nil {
+		return ProviderCreateIssueInput{}, followUpCreateIssueSnapshot{}, err
+	}
+	command := ProviderCreateIssueInput{
+		Meta:                   input.Meta,
+		ProjectID:              input.ProjectID,
+		RepositoryID:           input.RepositoryID,
+		ProviderSlug:           providerSlug,
+		RepositoryTarget:       repositoryTarget,
+		Title:                  intent.SafeTitle,
+		Body:                   body,
+		Labels:                 labels,
+		AssigneeProviderLogins: assignees,
+		Milestone:              milestone,
+		WorkItemType:           intent.ProviderWorkItemType,
+		WatermarkJSON:          watermarkJSON,
+		OperationPolicyContext: policy,
+		ApprovalGateRef:        approval,
+		ExternalAccountID:      input.ExternalAccountID,
+	}
+	snapshot := followUpCreateIssueSnapshot{
+		FollowUpIntentID:       intent.ID.String(),
+		ProjectID:              input.ProjectID.String(),
+		RepositoryID:           input.RepositoryID.String(),
+		ProviderSlug:           providerSlug,
+		ExternalAccountID:      input.ExternalAccountID.String(),
+		RepositoryTarget:       repositoryTarget,
+		Title:                  command.Title,
+		BodyDigest:             followUpBodyDigest(command.Body),
+		Labels:                 append([]string(nil), labels...),
+		AssigneeProviderLogins: append([]string(nil), assignees...),
+		Milestone:              milestone,
+		WorkItemType:           command.WorkItemType,
+		WatermarkJSON:          string(watermarkJSON),
+		OperationPolicyContext: policy,
+		ApprovalGateRef:        approval,
+	}
+	return command, snapshot, nil
+}
+
+func normalizeFollowUpRepositoryTarget(providerSlug string, target ProviderCommandTarget) (ProviderCommandTarget, error) {
+	target.ProviderSlug = strings.TrimSpace(target.ProviderSlug)
+	if target.ProviderSlug == "" {
+		target.ProviderSlug = providerSlug
+	}
+	if target.ProviderSlug != providerSlug || target.WorkItemKind != "" || target.Number != 0 || target.ProviderObjectID != "" {
+		return ProviderCommandTarget{}, errs.ErrInvalidArgument
+	}
+	var err error
+	if target.RepositoryFullName, err = normalizeFollowUpRefText(target.RepositoryFullName, false); err != nil {
+		return ProviderCommandTarget{}, err
+	}
+	if target.ProviderRepositoryID, err = normalizeFollowUpRefText(target.ProviderRepositoryID, false); err != nil {
+		return ProviderCommandTarget{}, err
+	}
+	if target.WebURL, err = normalizeFollowUpRefText(target.WebURL, false); err != nil {
+		return ProviderCommandTarget{}, err
+	}
+	if target.RepositoryFullName == "" && target.ProviderRepositoryID == "" && target.WebURL == "" {
+		return ProviderCommandTarget{}, errs.ErrInvalidArgument
+	}
+	return target, nil
+}
+
+func normalizeFollowUpRefText(value string, required bool) (string, error) {
+	trimmed := strings.TrimSpace(value)
+	if required && trimmed == "" {
+		return "", errs.ErrInvalidArgument
+	}
+	if trimmed == "" {
+		return "", nil
+	}
+	if len(trimmed) > followUpRefTextLimit || unsafeFollowUpText(trimmed) {
+		return "", errs.ErrInvalidArgument
+	}
+	for _, char := range trimmed {
+		if char < 32 || char == 127 {
+			return "", errs.ErrInvalidArgument
+		}
+		if !safeFollowUpProviderChar(char) {
+			return "", errs.ErrInvalidArgument
+		}
+	}
+	return trimmed, nil
+}
+
+func safeFollowUpProviderChar(char rune) bool {
+	if asciiLetter(char) || asciiDigit(char) {
+		return true
+	}
+	switch char {
+	case '-', '.', '_', ':', '/', '#', '@', '+', '=', ',', '%':
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizeFollowUpStringSet(values []string) ([]string, error) {
+	seen := map[string]struct{}{}
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		item, err := normalizeFollowUpHint(value)
+		if err != nil {
+			return nil, err
+		}
+		if item == "" {
+			return nil, errs.ErrInvalidArgument
+		}
+		if _, ok := seen[item]; ok {
+			continue
+		}
+		seen[item] = struct{}{}
+		result = append(result, item)
+	}
+	sort.Strings(result)
+	return result, nil
+}
+
+func normalizeFollowUpCommandJSON(payload []byte) ([]byte, error) {
+	trimmed := bytes.TrimSpace(payload)
+	if len(trimmed) == 0 {
+		return nil, nil
+	}
+	normalized, err := normalizeActivityJSON(trimmed, false)
+	if err != nil {
+		return nil, err
+	}
+	if string(normalized) == "{}" {
+		return nil, nil
+	}
+	return normalized, nil
+}
+
+func followUpIssueBody(intent entity.FollowUpIntent, bodyHint string) string {
+	if bodyHint != "" {
+		return bodyHint
+	}
+	if intent.SafeSummary != "" {
+		return intent.SafeSummary
+	}
+	return intent.SafeTitle
+}
+
+func followUpBodyDigest(body string) string {
+	sum := sha256.Sum256([]byte(body))
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+func followUpCreateIssueChangedFields(hasMilestone bool, hasWorkItemType bool, hasWatermark bool) []string {
+	fields := []string{"assignee_provider_logins", "body", "labels", "title"}
+	if hasMilestone {
+		fields = append(fields, "milestone")
+	}
+	if hasWorkItemType {
+		fields = append(fields, "work_item_type")
+	}
+	if hasWatermark {
+		fields = append(fields, "watermark_json")
+	}
+	sort.Strings(fields)
+	return fields
+}
+
+func normalizeFollowUpProviderPolicy(policy ProviderOperationPolicyContext, projectID uuid.UUID, repositoryID uuid.UUID, providerSlug string, changedFields []string) (ProviderOperationPolicyContext, error) {
+	if policy.RiskLevel == "" {
+		return ProviderOperationPolicyContext{}, errs.ErrInvalidArgument
+	}
+	policy.ProjectID = projectID.String()
+	policy.RepositoryID = repositoryID.String()
+	policy.OperationType = ProviderOperationTypeCreateIssue
+	policy.TargetRef = providerSlug + ":repository:" + repositoryID.String()
+	var err error
+	policy.ChangedFields, err = normalizeFollowUpPolicyList(policy.ChangedFields)
+	if err != nil {
+		return ProviderOperationPolicyContext{}, err
+	}
+	if len(policy.ChangedFields) == 0 {
+		policy.ChangedFields = append([]string(nil), changedFields...)
+	}
+	sort.Strings(policy.ChangedFields)
+	if !sameStringSet(policy.ChangedFields, changedFields) {
+		return ProviderOperationPolicyContext{}, errs.ErrInvalidArgument
+	}
+	policy.RiskTags, err = normalizeFollowUpPolicyList(policy.RiskTags)
+	if err != nil {
+		return ProviderOperationPolicyContext{}, err
+	}
+	if policy.Stage, err = normalizeFollowUpHint(policy.Stage); err != nil {
+		return ProviderOperationPolicyContext{}, err
+	}
+	if policy.RoleID, err = normalizeFollowUpRefText(policy.RoleID, false); err != nil {
+		return ProviderOperationPolicyContext{}, err
+	}
+	if policy.RoleKey, err = normalizeFollowUpHint(policy.RoleKey); err != nil {
+		return ProviderOperationPolicyContext{}, err
+	}
+	if policy.PolicyVersion, err = normalizeFollowUpRefText(policy.PolicyVersion, false); err != nil {
+		return ProviderOperationPolicyContext{}, err
+	}
+	if policy.PolicySnapshotRef, err = normalizeFollowUpOptionalRef(policy.PolicySnapshotRef); err != nil {
+		return ProviderOperationPolicyContext{}, err
+	}
+	if !validFollowUpRiskLevel(policy.RiskLevel) {
+		return ProviderOperationPolicyContext{}, errs.ErrInvalidArgument
+	}
+	return policy, nil
+}
+
+func normalizeFollowUpPolicyList(values []string) ([]string, error) {
+	seen := map[string]struct{}{}
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		item, err := normalizeFollowUpHint(value)
+		if err != nil {
+			return nil, err
+		}
+		if item == "" {
+			continue
+		}
+		if _, ok := seen[item]; ok {
+			continue
+		}
+		seen[item] = struct{}{}
+		result = append(result, item)
+	}
+	sort.Strings(result)
+	return result, nil
+}
+
+func validFollowUpRiskLevel(level string) bool {
+	switch strings.TrimSpace(level) {
+	case ProviderRiskLevelLow, ProviderRiskLevelMedium, ProviderRiskLevelHigh, ProviderRiskLevelCritical:
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizeFollowUpApprovalGateRef(reference ProviderApprovalGateReference) (ProviderApprovalGateReference, error) {
+	var err error
+	if reference.ApprovalID, err = normalizeFollowUpRefText(reference.ApprovalID, false); err != nil {
+		return ProviderApprovalGateReference{}, err
+	}
+	if reference.GateType, err = normalizeFollowUpHint(reference.GateType); err != nil {
+		return ProviderApprovalGateReference{}, err
+	}
+	if reference.Decision, err = normalizeFollowUpHint(reference.Decision); err != nil {
+		return ProviderApprovalGateReference{}, err
+	}
+	if reference.DecidedByActorID, err = normalizeFollowUpRefText(reference.DecidedByActorID, false); err != nil {
+		return ProviderApprovalGateReference{}, err
+	}
+	if reference.DecidedAt, err = normalizeFollowUpRefText(reference.DecidedAt, false); err != nil {
+		return ProviderApprovalGateReference{}, err
+	}
+	if reference.EvidenceRef, err = normalizeFollowUpOptionalRef(reference.EvidenceRef); err != nil {
+		return ProviderApprovalGateReference{}, err
+	}
+	if reference.PolicyVersion, err = normalizeFollowUpRefText(reference.PolicyVersion, false); err != nil {
+		return ProviderApprovalGateReference{}, err
+	}
+	empty := reference.ApprovalID == "" && reference.GateType == "" && reference.Decision == "" && reference.DecidedByActorID == "" && reference.DecidedAt == "" && reference.EvidenceRef == "" && reference.PolicyVersion == ""
+	if empty {
+		return ProviderApprovalGateReference{}, nil
+	}
+	if reference.ApprovalID == "" || reference.GateType == "" || reference.Decision == "" {
+		return ProviderApprovalGateReference{}, errs.ErrInvalidArgument
+	}
+	return reference, nil
+}
+
+func sameStringSet(left []string, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for idx := range left {
+		if left[idx] != right[idx] {
+			return false
+		}
+	}
+	return true
+}
+
+func applyFollowUpProviderIssueResult(intent entity.FollowUpIntent, result ProviderIssueCommandResult) (entity.FollowUpIntent, error) {
+	operationRef, err := normalizeFollowUpOptionalRef(result.ProviderOperationRef)
+	if err != nil || operationRef == "" {
+		return entity.FollowUpIntent{}, errs.ErrDependencyUnavailable
+	}
+	intent.ProviderOperationRef = operationRef
+	switch result.Status {
+	case ProviderOperationStatusSucceeded:
+		workItemRef, err := followUpProviderResultRef(result)
+		if err != nil {
+			return entity.FollowUpIntent{}, err
+		}
+		intent.ProviderTarget.WorkItemRef = workItemRef
+		intent.Status = enum.FollowUpIntentStatusCreated
+	case ProviderOperationStatusFailed, ProviderOperationStatusRetryableFailed, ProviderOperationStatusDenied:
+		intent.Status = enum.FollowUpIntentStatusFailed
+	default:
+		return entity.FollowUpIntent{}, errs.ErrDependencyUnavailable
+	}
+	return intent, nil
+}
+
+func followUpProviderResultRef(result ProviderIssueCommandResult) (string, error) {
+	candidates := []string{
+		result.ResultRef,
+		result.Target.WebURL,
+	}
+	if result.Target.ProviderSlug != "" && result.Target.RepositoryFullName != "" && result.Target.Number > 0 {
+		candidates = append(candidates, result.Target.ProviderSlug+":repo:"+result.Target.RepositoryFullName+":issue:"+strconv.FormatInt(result.Target.Number, 10))
+	}
+	if result.Target.ProviderSlug != "" && result.Target.ProviderObjectID != "" {
+		candidates = append(candidates, result.Target.ProviderSlug+":object:"+result.Target.ProviderObjectID)
+	}
+	for _, candidate := range candidates {
+		ref, err := normalizeFollowUpOptionalRef(candidate)
+		if err == nil && ref != "" {
+			return ref, nil
+		}
+	}
+	return "", errs.ErrDependencyUnavailable
 }
 
 func bindOptionalUUID(target **uuid.UUID, candidate *uuid.UUID) error {
@@ -412,6 +866,12 @@ func followUpIntentFromPayload(payload []byte) (entity.FollowUpIntent, error) {
 	return result.FollowUpIntent, err
 }
 
+func followUpProviderIntentFromPayload(payload []byte) (entity.FollowUpIntent, error) {
+	var result followUpProviderCommandPayload
+	err := json.Unmarshal(payload, &result)
+	return result.FollowUpIntent, err
+}
+
 func verifyFollowUpIntentReplay(expected entity.FollowUpIntent, load func(context.Context, uuid.UUID) (entity.FollowUpIntent, error)) func(context.Context, entity.CommandResult, entity.FollowUpIntent) error {
 	return func(ctx context.Context, result entity.CommandResult, replay entity.FollowUpIntent) error {
 		if replay.ID != result.AggregateID {
@@ -422,6 +882,26 @@ func verifyFollowUpIntentReplay(expected entity.FollowUpIntent, load func(contex
 			return err
 		}
 		if stored.ID != replay.ID || !sameFollowUpIntentRequest(stored, expected) {
+			return errs.ErrConflict
+		}
+		return nil
+	}
+}
+
+func verifyFollowUpProviderReplay(expected followUpCreateIssueSnapshot, load func(context.Context, uuid.UUID) (entity.FollowUpIntent, error)) func(context.Context, entity.CommandResult, entity.FollowUpIntent) error {
+	return func(ctx context.Context, result entity.CommandResult, replay entity.FollowUpIntent) error {
+		if replay.ID != result.AggregateID || replay.ID.String() != expected.FollowUpIntentID {
+			return errs.ErrConflict
+		}
+		stored, err := load(ctx, result.AggregateID)
+		if err != nil {
+			return err
+		}
+		var payload followUpProviderCommandPayload
+		if err := json.Unmarshal(result.ResultPayload, &payload); err != nil {
+			return err
+		}
+		if stored.ID != replay.ID || !sameFollowUpCreateIssueSnapshot(payload.CreateIssue, expected) {
 			return errs.ErrConflict
 		}
 		return nil
@@ -444,6 +924,44 @@ func sameFollowUpIntentRequest(stored entity.FollowUpIntent, expected entity.Fol
 		stored.StageHint == expected.StageHint &&
 		stored.IdempotencyKey == expected.IdempotencyKey &&
 		stored.Status == expected.Status
+}
+
+func sameFollowUpCreateIssueSnapshot(left followUpCreateIssueSnapshot, right followUpCreateIssueSnapshot) bool {
+	left.Labels = append([]string(nil), left.Labels...)
+	right.Labels = append([]string(nil), right.Labels...)
+	left.AssigneeProviderLogins = append([]string(nil), left.AssigneeProviderLogins...)
+	right.AssigneeProviderLogins = append([]string(nil), right.AssigneeProviderLogins...)
+	sort.Strings(left.Labels)
+	sort.Strings(right.Labels)
+	sort.Strings(left.AssigneeProviderLogins)
+	sort.Strings(right.AssigneeProviderLogins)
+	return left.FollowUpIntentID == right.FollowUpIntentID &&
+		left.ProjectID == right.ProjectID &&
+		left.RepositoryID == right.RepositoryID &&
+		left.ProviderSlug == right.ProviderSlug &&
+		left.ExternalAccountID == right.ExternalAccountID &&
+		left.RepositoryTarget == right.RepositoryTarget &&
+		left.Title == right.Title &&
+		left.BodyDigest == right.BodyDigest &&
+		sameStringSet(left.Labels, right.Labels) &&
+		sameStringSet(left.AssigneeProviderLogins, right.AssigneeProviderLogins) &&
+		left.Milestone == right.Milestone &&
+		left.WorkItemType == right.WorkItemType &&
+		left.WatermarkJSON == right.WatermarkJSON &&
+		left.OperationPolicyContext.ProjectID == right.OperationPolicyContext.ProjectID &&
+		left.OperationPolicyContext.RepositoryID == right.OperationPolicyContext.RepositoryID &&
+		left.OperationPolicyContext.Stage == right.OperationPolicyContext.Stage &&
+		left.OperationPolicyContext.RoleID == right.OperationPolicyContext.RoleID &&
+		left.OperationPolicyContext.RoleKey == right.OperationPolicyContext.RoleKey &&
+		left.OperationPolicyContext.OperationType == right.OperationPolicyContext.OperationType &&
+		left.OperationPolicyContext.TargetRef == right.OperationPolicyContext.TargetRef &&
+		sameStringSet(left.OperationPolicyContext.ChangedFields, right.OperationPolicyContext.ChangedFields) &&
+		sameStringSet(left.OperationPolicyContext.RiskTags, right.OperationPolicyContext.RiskTags) &&
+		left.OperationPolicyContext.RiskLevel == right.OperationPolicyContext.RiskLevel &&
+		left.OperationPolicyContext.ApprovalRequired == right.OperationPolicyContext.ApprovalRequired &&
+		left.OperationPolicyContext.PolicyVersion == right.OperationPolicyContext.PolicyVersion &&
+		left.OperationPolicyContext.PolicySnapshotRef == right.OperationPolicyContext.PolicySnapshotRef &&
+		left.ApprovalGateRef == right.ApprovalGateRef
 }
 
 func sameOptionalUUID(left *uuid.UUID, right *uuid.UUID) bool {

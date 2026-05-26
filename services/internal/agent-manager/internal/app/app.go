@@ -14,9 +14,11 @@ import (
 	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
 	packagesv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/packages/v1"
 	projectsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/projects/v1"
+	providersv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1"
 	runtimev1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/runtime/v1"
 	packagehubclient "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/clients/packagehub"
 	projectcatalogclient "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/clients/projectcatalog"
+	providerhubclient "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/clients/providerhub"
 	runtimeclient "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/clients/runtime"
 	agentservice "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/service"
 	agentpostgres "github.com/codex-k8s/kodex/services/internal/agent-manager/internal/repository/postgres/agent"
@@ -63,6 +65,13 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if runtimeManagerConn != nil {
 		defer func() { _ = runtimeManagerConn.Close() }()
 	}
+	providerIssueCreator, providerHubConn, err := newProviderIssueCreator(cfg)
+	if err != nil {
+		return err
+	}
+	if providerHubConn != nil {
+		defer func() { _ = providerHubConn.Close() }()
+	}
 	agentRepository := agentpostgres.NewRepository(dbPool)
 	agentService := agentservice.New(agentservice.Config{
 		Repository:                agentRepository,
@@ -71,6 +80,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		GuidanceResolver:          guidanceResolver,
 		WorkspacePolicyResolver:   workspacePolicyResolver,
 		RuntimePreparer:           runtimePreparer,
+		ProviderIssueCreator:      providerIssueCreator,
 		RuntimePreparationEnabled: cfg.RuntimePreparationEnabled,
 		EventPublisher:            agentservice.DisabledEventPublisher{},
 	})
@@ -181,6 +191,24 @@ func newRuntimePreparer(cfg Config) (agentservice.RuntimePreparer, *grpcruntime.
 	}
 	return connectOwnerService[agentservice.RuntimePreparer](clientConfig, runtimeclient.NewConnection, func(conn *grpcruntime.ClientConn, clientConfig runtimeclient.Config) (agentservice.RuntimePreparer, error) {
 		return runtimeclient.NewPreparer(runtimev1.NewRuntimeManagerServiceClient(conn), clientConfig)
+	})
+}
+
+func newProviderIssueCreator(cfg Config) (agentservice.ProviderIssueCreator, *grpcruntime.ClientConn, error) {
+	if !cfg.ProviderHubWriteEnabled {
+		disabled := agentservice.DisabledProviderIssueCreator{}
+		return disabled, nil, nil
+	}
+	return connectProviderIssueCreator(providerhubclient.Config{
+		Addr:      cfg.ProviderHubGRPCAddr,
+		AuthToken: cfg.ProviderHubGRPCAuthToken,
+		Timeout:   cfg.ProviderHubWriteTimeout,
+	})
+}
+
+func connectProviderIssueCreator(clientConfig providerhubclient.Config) (agentservice.ProviderIssueCreator, *grpcruntime.ClientConn, error) {
+	return connectOwnerService[agentservice.ProviderIssueCreator](clientConfig, providerhubclient.NewConnection, func(conn *grpcruntime.ClientConn, clientConfig providerhubclient.Config) (agentservice.ProviderIssueCreator, error) {
+		return providerhubclient.NewIssueCreator(providersv1.NewProviderHubServiceClient(conn), clientConfig)
 	})
 }
 

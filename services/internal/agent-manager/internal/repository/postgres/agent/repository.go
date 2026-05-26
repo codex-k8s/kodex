@@ -79,6 +79,7 @@ const (
 	operationGetAcceptance         = "domain.Repository.GetAcceptanceResult"
 	operationListAcceptance        = "domain.Repository.ListAcceptanceResults"
 	operationCreateFollowUp        = "domain.Repository.CreateFollowUpIntentWithResult"
+	operationUpdateFollowUp        = "domain.Repository.UpdateFollowUpIntentWithResult"
 	operationGetFollowUp           = "domain.Repository.GetFollowUpIntent"
 	operationRecordActivity        = "domain.Repository.RecordAgentActivityWithResult"
 	operationGetActivity           = "domain.Repository.GetAgentActivity"
@@ -273,6 +274,10 @@ func (r *Repository) ListAcceptanceResults(ctx context.Context, filter query.Acc
 
 func (r *Repository) CreateFollowUpIntentWithResult(ctx context.Context, intent entity.FollowUpIntent, result entity.CommandResult, event entity.OutboxEvent) error {
 	return r.mutateWithResult(ctx, operationCreateFollowUp, queryFollowUpIntentCreate, followUpIntentArgs(intent), result, &event)
+}
+
+func (r *Repository) UpdateFollowUpIntentWithResult(ctx context.Context, intent entity.FollowUpIntent, previousVersion int64, result entity.CommandResult, event *entity.OutboxEvent) error {
+	return r.mutateWithResult(ctx, operationUpdateFollowUp, queryFollowUpIntentUpdate, followUpIntentUpdateArgs(intent, previousVersion), result, event)
 }
 
 func (r *Repository) GetFollowUpIntent(ctx context.Context, id uuid.UUID) (entity.FollowUpIntent, error) {

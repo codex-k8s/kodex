@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-12
 updated_at: 2026-05-26
-related_issues: [733, 739, 744, 753, 755, 698, 759, 772, 322, 782, 795, 809, 820, 834]
+related_issues: [733, 739, 744, 753, 755, 698, 759, 772, 322, 782, 795, 809, 820, 834, 842]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -66,6 +66,7 @@ approvals:
 | `GetAcceptanceResult` | gRPC query | `agent.acceptance.read` | нет | Читает один результат приёмки. |
 | `ListAcceptanceResults` | gRPC query | `agent.acceptance.read` | нет | Список результатов приёмки по session/run/stage/status. |
 | `CreateFollowUpIntent` | gRPC command | `agent.follow_up.create` | `command_id` или `idempotency_key` | Формирует авторитетное намерение следующей provider-native задачи по session/run/stage/acceptance refs. Команда сохраняет только safe provider target refs, тип следующего work item, bounded title/summary/hints, digest и статус; provider write не выполняется. |
+| `DispatchFollowUpIntent` | gRPC command | `agent.follow_up.create` | `command_id` + expected version | Переводит `planned/requested` follow-up intent в typed `provider-hub.CreateIssue` command, сохраняет только `provider_operation_ref`, safe result refs и статус `created`/`failed`. Update существующей provider-native задачи не включён, потому что текущий intent не выражает безопасно update target. |
 | `RecordAgentActivity` | gRPC command | `agent.activity.record` | `command_id` или `idempotency_key` | Записывает одну safe timeline entry для session/run: kind, tool metadata, status, timings, summary, digest, bounded error, safe refs/details и correlation trace без raw tool payload, prompt, transcript, stdout/stderr или workspace paths. |
 | `ListAgentActivities` | gRPC query | `agent.activity.read` | cursor | Читает safe timeline по session или run с фильтрами kind/status и cursor pagination для будущего UI. |
 | `RequestHumanGate` | gRPC command | `agent.human_gate.request` | `command_id` | Фиксирует ожидание flow и запрашивает gate у `governance-manager`; gate request/decision хранится в governance, delivery идёт через `interaction-hub`. |
@@ -112,7 +113,7 @@ Codex hooks не являются MCP-инструментами. `agent-manager
 |---|---|---|
 | `package-hub` | `ListPackageInstallations(package_kind=guidance)`, `GetPackageInstallation`, `ListPackages(package_kind=guidance)`, `GetPackage`, `GetPackageVersion`, `GetPackageManifest` | Только чтение установок, версии и проверенного manifest руководящего пакета; `agent-manager` сохраняет refs, версии, digest и безопасную summary, но не manifest payload, `SKILL.md`, scripts, assets или package source. |
 | `runtime-manager` | `PrepareRuntime`, будущие команды запуска или продолжения slot-agent | Состояние runtime остаётся у runtime. `agent-manager` передаёт `WorkspaceSource.kind=guidance_package` для замороженных `guidance_refs` и `WorkspaceSource.kind=generated_context` для `.kodex/context/agent-run.json`; checkout и materialization выполняет runtime. |
-| `provider-hub` | Типизированные операции `CreateIssue`, `UpdateIssue`, `CreatePullRequest`, `CreateComment`, `CreateReviewSignal`, чтение проекций и ускоряющий сигнал сверки | Provider-native состояние остаётся у provider. |
+| `provider-hub` | `CreateIssue` для dispatch follow-up intent; будущие `UpdateIssue`, `CreatePullRequest`, `CreateComment`, `CreateReviewSignal`, чтение проекций и ускоряющий сигнал сверки | Provider-native состояние и write pipeline остаются у provider. `agent-manager` не ходит напрямую в GitHub/GitLab и сохраняет только safe operation/result refs. |
 | `project-catalog` | Чтение workspace policy, release policy, project/repository refs | Проектная policy остаётся у project. |
 | `governance-manager` | Risk assessment, record review signal, request gate, read gate/release decision | Risk/gate/release decisions остаются у governance. |
 | `access-manager` | Проверка действий, ролей, аккаунтов и scope | `agent-manager` не вычисляет права сам. |
@@ -129,7 +130,7 @@ Codex hooks не являются MCP-инструментами. `agent-manager
 | `permission_denied` | `access-manager` запретил действие или роль не имеет нужного MCP-инструмента. |
 | `not_found` | Flow, роль, prompt, session, run или acceptance result не найдены. |
 | `already_exists` | Дубликат slug или повтор создания активной сущности в scope. |
-| `failed_precondition` | Нельзя запустить роль без prompt, workspace policy, provider target или обязательного решения; `human_gate` acceptance пытаются закрыть финальным статусом вместо ожидания owner decision; follow-up создаётся из незавершённого run или неположительного acceptance. |
+| `failed_precondition` | Нельзя запустить роль без prompt, workspace policy, provider target или обязательного решения; `human_gate` acceptance пытаются закрыть финальным статусом вместо ожидания owner decision; follow-up создаётся из незавершённого run или неположительного acceptance либо dispatch выполняется из terminal intent. |
 | `aborted` | Конфликт expected version или устаревший `Run` state. |
 | `unavailable` | Временная ошибка package, runtime, provider, interaction или event log. |
 
@@ -148,8 +149,9 @@ Codex hooks не являются MCP-инструментами. `agent-manager
 | `agent.acceptance.requested` | Запрошена машинная приёмка. |
 | `agent.acceptance.completed` | Приёмка завершилась статусом `passed` или `skipped`. |
 | `agent.acceptance.failed` | Приёмка завершилась статусом `failed` и содержит машинный `reason_code`. |
-| `agent.follow_up.requested` | Зафиксирован follow-up intent с safe refs/status/summary; создание или обновление provider-native `Issue` остаётся за `provider-hub`. |
+| `agent.follow_up.requested` | Зафиксирован follow-up intent с safe refs/status/summary; provider command ещё не выполнена. |
 | `agent.follow_up.created` | Follow-up provider-native задача создана или подтверждена. |
+| `agent.follow_up.failed` | Provider command завершилась безопасно классифицированной ошибкой; payload содержит только intent ref, operation ref, status и reason/failure code. |
 | `agent.human_gate.requested` | Flow ожидает governance gate, требующий решения человека. |
 | `agent.human_gate.resolved` | `agent-manager` получил ссылку на resolved governance decision и может продолжить flow. |
 | `agent.flow.version_activated` | Активирована версия flow. |
@@ -165,10 +167,10 @@ Activity timeline не добавляет новое `agent.*` событие в
 | Доменная документация | Подготовлена как стартовый срез. |
 | gRPC proto | Подготовлен как контрактный срез `AGO-1`. |
 | AsyncAPI `agent.*` | Подготовлен как контрактный срез `AGO-1`. |
-| Go-реализация `agent-manager` | Сервисный каркас готов. Операции flow, role, prompt, session, run, machine acceptance, follow-up intent и safe activity timeline подключены к слою хранения и use-case через gRPC handlers. `StartAgentSession` защищает активную session от дублей по provider target, `StartAgentRun` фиксирует версии роли/prompt, проверяет stage-bound связку flow/stage/role, замораживает безопасные guidance refs из `package-hub`, читает workspace policy у `project-catalog` и вызывает `runtime-manager.PrepareRuntime`. В `Run` сохраняются только runtime refs, fingerprint/diagnostic summary и безопасная классификация ошибки подготовки; workspace paths, файлы, prompt text, flow files и package payload остаются вне БД `agent-manager`. `RecordRunState` применяет state machine и публикует только AsyncAPI-совместимые lifecycle-события. `RecordAgentActivity`/`ListAgentActivities` хранят и читают только bounded safe timeline entries без raw tool input/response, stdout/stderr, prompt, transcript, provider payload или workspace paths. `RequestAcceptance`/`RecordAcceptanceResult`/`GetAcceptanceResult`/`ListAcceptanceResults` реализуют базовый lifecycle результата приёмки с idempotency, expected version, безопасными `target_ref`/`details_json`, `human_gate` waiting-only guard и outbox events. `CreateFollowUpIntent` создаёт intent-only состояние с idempotency, проверкой session/run/stage/acceptance связей, safe title/summary/provider refs и событием `agent.follow_up.requested`. Human gate decision, QA runner и provider write pipeline остаются следующими срезами. |
+| Go-реализация `agent-manager` | Сервисный каркас готов. Операции flow, role, prompt, session, run, machine acceptance, follow-up intent, provider follow-up dispatch и safe activity timeline подключены к слою хранения и use-case через gRPC handlers. `StartAgentSession` защищает активную session от дублей по provider target, `StartAgentRun` фиксирует версии роли/prompt, проверяет stage-bound связку flow/stage/role, замораживает безопасные guidance refs из `package-hub`, читает workspace policy у `project-catalog` и вызывает `runtime-manager.PrepareRuntime`. В `Run` сохраняются только runtime refs, fingerprint/diagnostic summary и безопасная классификация ошибки подготовки; workspace paths, файлы, prompt text, flow files и package payload остаются вне БД `agent-manager`. `RecordRunState` применяет state machine и публикует только AsyncAPI-совместимые lifecycle-события. `RecordAgentActivity`/`ListAgentActivities` хранят и читают только bounded safe timeline entries без raw tool input/response, stdout/stderr, prompt, transcript, provider payload или workspace paths. `RequestAcceptance`/`RecordAcceptanceResult`/`GetAcceptanceResult`/`ListAcceptanceResults` реализуют базовый lifecycle результата приёмки с idempotency, expected version, безопасными `target_ref`/`details_json`, `human_gate` waiting-only guard и outbox events. `CreateFollowUpIntent` создаёт intent-only состояние с idempotency, проверкой session/run/stage/acceptance связей, safe title/summary/provider refs и событием `agent.follow_up.requested`; `DispatchFollowUpIntent` вызывает только typed `provider-hub.CreateIssue`, сохраняет `provider_operation_ref`, safe result refs и статус `created`/`failed`. Human gate decision, QA runner, update существующей provider-native задачи и provider write adapters остаются следующими срезами. |
 | Интеграция с `package-hub` | Реализована как чтение guidance installations, package/version metadata и manifest validation state; сырое содержимое manifest и package source в `agent-manager` не сохраняются. |
 | Интеграция с runtime | Реализован прямой вызов `PrepareRuntime` для старта `AgentRun`; executor и выполнение slot-agent не входят в текущий контур. |
-| Интеграция с provider/interaction/hooks | Зафиксирована как междоменная граница без реализации. |
+| Интеграция с provider/interaction/hooks | Follow-up create path подключён к `provider-hub.CreateIssue` через typed gRPC client. `agent-manager` не реализует provider write adapter и не использует прямой GitHub/GitLab доступ. Interaction, Human gate и hook routing остаются отдельными срезами. |
 
 ## Совместимость
 

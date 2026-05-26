@@ -19,6 +19,7 @@ type Config struct {
 	GuidanceResolver          GuidanceResolver
 	WorkspacePolicyResolver   WorkspacePolicyResolver
 	RuntimePreparer           RuntimePreparer
+	ProviderIssueCreator      ProviderIssueCreator
 	RuntimePreparationEnabled bool
 	// EventPublisher is a future outbox-backed publisher for agent domain events.
 	EventPublisher EventPublisher
@@ -32,6 +33,7 @@ type Service struct {
 	guidanceResolver          GuidanceResolver
 	workspacePolicyResolver   WorkspacePolicyResolver
 	runtimePreparer           RuntimePreparer
+	providerIssueCreator      ProviderIssueCreator
 	runtimePreparationEnabled bool
 	eventPublisher            EventPublisher
 }
@@ -67,6 +69,11 @@ type RuntimePreparer interface {
 	PrepareRuntime(context.Context, RuntimePreparationInput) (RuntimePreparationResult, error)
 }
 
+// ProviderIssueCreator calls provider-hub typed issue write operations.
+type ProviderIssueCreator interface {
+	CreateIssue(context.Context, ProviderCreateIssueInput) (ProviderIssueCommandResult, error)
+}
+
 // DisabledGuidanceResolver keeps agent-manager runnable before package-hub is wired.
 type DisabledGuidanceResolver struct{}
 
@@ -94,6 +101,14 @@ func (DisabledRuntimePreparer) PrepareRuntime(context.Context, RuntimePreparatio
 	return RuntimePreparationResult{}, errs.ErrDependencyUnavailable
 }
 
+// DisabledProviderIssueCreator keeps follow-up provider dispatch opt-in at composition time.
+type DisabledProviderIssueCreator struct{}
+
+// CreateIssue reports that provider-hub write operations are unavailable.
+func (DisabledProviderIssueCreator) CreateIssue(context.Context, ProviderCreateIssueInput) (ProviderIssueCommandResult, error) {
+	return ProviderIssueCommandResult{}, errs.ErrDependencyUnavailable
+}
+
 // New creates an agent-manager service scaffold.
 func New(cfg Config) *Service {
 	if cfg.EventPublisher == nil {
@@ -108,6 +123,9 @@ func New(cfg Config) *Service {
 	if cfg.RuntimePreparer == nil {
 		cfg.RuntimePreparer = DisabledRuntimePreparer{}
 	}
+	if cfg.ProviderIssueCreator == nil {
+		cfg.ProviderIssueCreator = DisabledProviderIssueCreator{}
+	}
 	if cfg.Clock == nil {
 		cfg.Clock = systemClock{}
 	}
@@ -121,6 +139,7 @@ func New(cfg Config) *Service {
 		guidanceResolver:          cfg.GuidanceResolver,
 		workspacePolicyResolver:   cfg.WorkspacePolicyResolver,
 		runtimePreparer:           cfg.RuntimePreparer,
+		providerIssueCreator:      cfg.ProviderIssueCreator,
 		runtimePreparationEnabled: cfg.RuntimePreparationEnabled,
 		eventPublisher:            cfg.EventPublisher,
 	}

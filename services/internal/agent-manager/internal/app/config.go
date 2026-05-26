@@ -52,6 +52,10 @@ type Config struct {
 	RuntimeManagerGRPCAddr       string        `env:"KODEX_AGENT_MANAGER_RUNTIME_MANAGER_GRPC_ADDR" envDefault:"runtime-manager:9090"`
 	RuntimeManagerGRPCAuthToken  string        `env:"KODEX_AGENT_MANAGER_RUNTIME_MANAGER_GRPC_AUTH_TOKEN"`
 	RuntimeManagerPrepareTimeout time.Duration `env:"KODEX_AGENT_MANAGER_RUNTIME_MANAGER_PREPARE_TIMEOUT" envDefault:"10s"`
+	ProviderHubWriteEnabled      bool          `env:"KODEX_AGENT_MANAGER_PROVIDER_HUB_WRITE_ENABLED" envDefault:"false"`
+	ProviderHubGRPCAddr          string        `env:"KODEX_AGENT_MANAGER_PROVIDER_HUB_GRPC_ADDR" envDefault:"provider-hub:9090"`
+	ProviderHubGRPCAuthToken     string        `env:"KODEX_AGENT_MANAGER_PROVIDER_HUB_GRPC_AUTH_TOKEN"`
+	ProviderHubWriteTimeout      time.Duration `env:"KODEX_AGENT_MANAGER_PROVIDER_HUB_WRITE_TIMEOUT" envDefault:"10s"`
 	OutboxDispatchEnabled        bool          `env:"KODEX_AGENT_MANAGER_OUTBOX_DISPATCH_ENABLED" envDefault:"true"`
 	OutboxPublisherKind          string        `env:"KODEX_AGENT_MANAGER_OUTBOX_PUBLISHER_KIND" envDefault:"postgres-event-log"`
 	OutboxEventLogSource         string        `env:"KODEX_AGENT_MANAGER_OUTBOX_EVENT_LOG_SOURCE" envDefault:"agent-manager"`
@@ -112,6 +116,12 @@ func (cfg Config) Validate() error {
 	if cfg.RuntimePreparationEnabled && strings.TrimSpace(cfg.RuntimeManagerGRPCAuthToken) == "" {
 		return fmt.Errorf("KODEX_AGENT_MANAGER_RUNTIME_MANAGER_GRPC_AUTH_TOKEN is required when runtime preparation is enabled")
 	}
+	if cfg.ProviderHubWriteEnabled && strings.TrimSpace(cfg.ProviderHubGRPCAddr) == "" {
+		return fmt.Errorf("KODEX_AGENT_MANAGER_PROVIDER_HUB_GRPC_ADDR is required when provider-hub write integration is enabled")
+	}
+	if cfg.ProviderHubWriteEnabled && strings.TrimSpace(cfg.ProviderHubGRPCAuthToken) == "" {
+		return fmt.Errorf("KODEX_AGENT_MANAGER_PROVIDER_HUB_GRPC_AUTH_TOKEN is required when provider-hub write integration is enabled")
+	}
 	if err := cfg.GRPCServerConfig().Validate(); err != nil {
 		return err
 	}
@@ -133,6 +143,7 @@ func (cfg Config) Validate() error {
 		{name: "KODEX_AGENT_MANAGER_PACKAGE_HUB_READ_TIMEOUT", valid: cfg.PackageHubReadTimeout > 0},
 		{name: "KODEX_AGENT_MANAGER_PROJECT_CATALOG_READ_TIMEOUT", valid: cfg.ProjectCatalogReadTimeout > 0},
 		{name: "KODEX_AGENT_MANAGER_RUNTIME_MANAGER_PREPARE_TIMEOUT", valid: cfg.RuntimeManagerPrepareTimeout > 0},
+		{name: "KODEX_AGENT_MANAGER_PROVIDER_HUB_WRITE_TIMEOUT", valid: cfg.ProviderHubWriteTimeout > 0},
 		{name: "KODEX_AGENT_MANAGER_OUTBOX_BATCH_SIZE", valid: cfg.OutboxBatchSize > 0},
 		{name: "KODEX_AGENT_MANAGER_OUTBOX_POLL_INTERVAL", valid: cfg.OutboxPollInterval > 0},
 		{name: "KODEX_AGENT_MANAGER_OUTBOX_LOCK_TTL", valid: cfg.OutboxLockTTL > 0},
