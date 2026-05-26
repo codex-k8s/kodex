@@ -569,6 +569,12 @@ func listWithAuthorization[Item any, Filter any](
 
 // BuildReleaseDecisionPackage stores bounded release evidence refs.
 func (s *Service) BuildReleaseDecisionPackage(ctx context.Context, input BuildReleaseDecisionPackageInput) (entity.ReleaseDecisionPackage, error) {
+	if strings.TrimSpace(input.ReleaseCandidateRef) == "" || strings.TrimSpace(input.ProjectContext.ProjectRef) == "" {
+		return entity.ReleaseDecisionPackage{}, errs.ErrInvalidArgument
+	}
+	if err := s.authorizeCommand(ctx, input.Meta, actionReleasePrepare, releaseDecisionContextResource(input.ReleaseCandidateRef)); err != nil {
+		return entity.ReleaseDecisionPackage{}, err
+	}
 	result, replayed, err := s.replayCommand(ctx, input.Meta, enum.OperationBuildReleaseDecisionPackage.String(), governanceevents.AggregateReleaseDecisionPackage)
 	if err != nil {
 		return entity.ReleaseDecisionPackage{}, err
@@ -583,8 +589,18 @@ func (s *Service) BuildReleaseDecisionPackage(ctx context.Context, input BuildRe
 		}
 		return item, nil
 	}
-	if strings.TrimSpace(input.ReleaseCandidateRef) == "" || strings.TrimSpace(input.ProjectContext.ProjectRef) == "" {
-		return entity.ReleaseDecisionPackage{}, errs.ErrInvalidArgument
+	if input.RiskAssessmentID != nil {
+		if _, err := s.repository.GetRiskAssessment(ctx, *input.RiskAssessmentID); err != nil {
+			return entity.ReleaseDecisionPackage{}, err
+		}
+	}
+	for _, reviewSignalID := range input.ReviewSignalIDs {
+		if reviewSignalID == uuid.Nil {
+			return entity.ReleaseDecisionPackage{}, errs.ErrInvalidArgument
+		}
+		if _, err := s.repository.GetReviewSignal(ctx, reviewSignalID); err != nil {
+			return entity.ReleaseDecisionPackage{}, err
+		}
 	}
 	now := s.clock.Now()
 	item := entity.ReleaseDecisionPackage{
@@ -615,12 +631,447 @@ func (s *Service) BuildReleaseDecisionPackage(ctx context.Context, input BuildRe
 	return item, nil
 }
 
-func (s *Service) GetReleaseDecisionPackage(ctx context.Context, id uuid.UUID) (entity.ReleaseDecisionPackage, error) {
-	return s.repository.GetReleaseDecisionPackage(ctx, id)
+func (s *Service) GetReleaseDecisionPackage(ctx context.Context, input GetReleaseDecisionPackageInput) (entity.ReleaseDecisionPackage, error) {
+	return readByID(ctx, input.ReleaseDecisionPackageID, input.Meta, s.authorizeReleaseRead, s.repository.GetReleaseDecisionPackage)
 }
 
 func (s *Service) ListReleaseDecisionPackages(ctx context.Context, input ListReleaseDecisionPackagesInput) ([]entity.ReleaseDecisionPackage, query.PageResult, error) {
+	if err := s.authorizeReleasePackageList(ctx, input.Meta, input.Filter); err != nil {
+		return nil, query.PageResult{}, err
+	}
 	return s.repository.ListReleaseDecisionPackages(ctx, input.Filter)
+}
+
+// RequestReleaseDecision starts the minimal release decision lifecycle.
+func (s *Service) RequestReleaseDecision(ctx context.Context, input RequestReleaseDecisionInput) (entity.ReleaseDecision, entity.ReleaseDecisionPackage, error) {
+	if input.ReleaseDecisionPackageID == uuid.Nil {
+		return entity.ReleaseDecision{}, entity.ReleaseDecisionPackage{}, errs.ErrInvalidArgument
+	}
+	if err := s.authorizeCommand(ctx, input.Meta, actionReleaseRequest, releaseDecisionResource(input.ReleaseDecisionPackageID)); err != nil {
+		return entity.ReleaseDecision{}, entity.ReleaseDecisionPackage{}, err
+	}
+	result, replayed, err := s.replayCommand(ctx, input.Meta, enum.OperationRequestReleaseDecision.String(), governanceevents.AggregateReleaseDecision)
+	if err != nil {
+		return entity.ReleaseDecision{}, entity.ReleaseDecisionPackage{}, err
+	}
+	if replayed {
+		decision, pkg, err := s.replayedReleaseDecision(ctx, result.AggregateID)
+		if err != nil {
+			return entity.ReleaseDecision{}, entity.ReleaseDecisionPackage{}, err
+		}
+		if decision.ReleaseDecisionPackageID != input.ReleaseDecisionPackageID {
+			return entity.ReleaseDecision{}, entity.ReleaseDecisionPackage{}, errs.ErrConflict
+		}
+		return decision, pkg, nil
+	}
+	previousVersion, err := requireExpectedVersion(input.Meta)
+	if err != nil {
+		return entity.ReleaseDecision{}, entity.ReleaseDecisionPackage{}, err
+	}
+	pkg, err := s.repository.GetReleaseDecisionPackage(ctx, input.ReleaseDecisionPackageID)
+	if err != nil {
+		return entity.ReleaseDecision{}, entity.ReleaseDecisionPackage{}, err
+	}
+	if pkg.Version != previousVersion {
+		return entity.ReleaseDecision{}, entity.ReleaseDecisionPackage{}, errs.ErrConflict
+	}
+	if pkg.Status != enum.ReleaseDecisionPackageStatusReady {
+		return entity.ReleaseDecision{}, entity.ReleaseDecisionPackage{}, errs.ErrPreconditionFailed
+	}
+	now := s.clock.Now()
+	pkg.Status = enum.ReleaseDecisionPackageStatusDecisionRequested
+	pkg.Version = previousVersion + 1
+	pkg.UpdatedAt = now
+	decision := entity.ReleaseDecision{
+		VersionedBase:            entity.VersionedBase{ID: s.idGenerator.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		ReleaseDecisionPackageID: pkg.ID,
+		DecisionActorRef:         actorRef(input.Meta.Actor),
+		DecisionPolicyRef:        strings.TrimSpace(pkg.ProjectContext.ReleasePolicyRef),
+		Reason:                   strings.TrimSpace(input.Meta.Reason),
+		Status:                   enum.ReleaseDecisionStatusRequested,
+		DecidedAt:                now,
+	}
+	if decision.Reason == "" && input.RequestGateIfRequired {
+		decision.Reason = "release_gate_requested"
+	}
+	result = commandResultWithPayload(input.Meta, enum.OperationRequestReleaseDecision.String(), governanceevents.AggregateReleaseDecision, decision.ID, now, map[string]any{
+		"release_decision_package_id": pkg.ID.String(),
+	})
+	event := outboxEvent(s.idGenerator.New(), governanceevents.EventReleaseDecisionRequested, governanceevents.AggregateReleaseDecision, decision.ID, now, governanceevents.Payload{
+		ReleaseDecisionID:        decision.ID.String(),
+		ReleaseDecisionPackageID: pkg.ID.String(),
+		ReleaseCandidateRef:      pkg.ReleaseCandidateRef,
+		ProjectRef:               pkg.ProjectContext.ProjectRef,
+		Status:                   string(decision.Status),
+		Version:                  decision.Version,
+	})
+	if err := s.repository.CreateReleaseDecision(ctx, pkg, previousVersion, decision, result, event); err != nil {
+		return entity.ReleaseDecision{}, entity.ReleaseDecisionPackage{}, err
+	}
+	return decision, pkg, nil
+}
+
+// SubmitReleaseDecision resolves the current release decision for a package.
+func (s *Service) SubmitReleaseDecision(ctx context.Context, input SubmitReleaseDecisionInput) (entity.ReleaseDecision, entity.ReleaseDecisionPackage, error) {
+	if input.ReleaseDecisionPackageID == uuid.Nil || input.Outcome == "" {
+		return entity.ReleaseDecision{}, entity.ReleaseDecisionPackage{}, errs.ErrInvalidArgument
+	}
+	if err := s.authorizeCommand(ctx, input.Meta, actionReleaseDecide, releaseDecisionResource(input.ReleaseDecisionPackageID)); err != nil {
+		return entity.ReleaseDecision{}, entity.ReleaseDecisionPackage{}, err
+	}
+	result, replayed, err := s.replayCommand(ctx, input.Meta, enum.OperationSubmitReleaseDecision.String(), governanceevents.AggregateReleaseDecision)
+	if err != nil {
+		return entity.ReleaseDecision{}, entity.ReleaseDecisionPackage{}, err
+	}
+	if replayed {
+		decision, pkg, err := s.replayedReleaseDecision(ctx, result.AggregateID)
+		if err != nil {
+			return entity.ReleaseDecision{}, entity.ReleaseDecisionPackage{}, err
+		}
+		if decision.ReleaseDecisionPackageID != input.ReleaseDecisionPackageID || decision.Outcome != input.Outcome {
+			return entity.ReleaseDecision{}, entity.ReleaseDecisionPackage{}, errs.ErrConflict
+		}
+		return decision, pkg, nil
+	}
+	previousDecisionVersion, err := requireExpectedVersion(input.Meta)
+	if err != nil {
+		return entity.ReleaseDecision{}, entity.ReleaseDecisionPackage{}, err
+	}
+	pkg, err := s.repository.GetReleaseDecisionPackage(ctx, input.ReleaseDecisionPackageID)
+	if err != nil {
+		return entity.ReleaseDecision{}, entity.ReleaseDecisionPackage{}, err
+	}
+	decision, err := s.repository.GetReleaseDecisionByPackage(ctx, pkg.ID)
+	if err != nil {
+		return entity.ReleaseDecision{}, entity.ReleaseDecisionPackage{}, err
+	}
+	if decision.Version != previousDecisionVersion {
+		return entity.ReleaseDecision{}, entity.ReleaseDecisionPackage{}, errs.ErrConflict
+	}
+	if decision.Status != enum.ReleaseDecisionStatusRequested || pkg.Status != enum.ReleaseDecisionPackageStatusDecisionRequested {
+		return entity.ReleaseDecision{}, entity.ReleaseDecisionPackage{}, errs.ErrPreconditionFailed
+	}
+	if err := s.ensureReleaseDecisionAllowed(ctx, pkg, input); err != nil {
+		return entity.ReleaseDecision{}, entity.ReleaseDecisionPackage{}, err
+	}
+	now := s.clock.Now()
+	previousPackageVersion := pkg.Version
+	pkg.Status = enum.ReleaseDecisionPackageStatusClosed
+	pkg.Version++
+	pkg.UpdatedAt = now
+	decision.GateDecisionID = input.GateDecisionID
+	decision.Outcome = input.Outcome
+	decision.DecisionActorRef = strings.TrimSpace(input.DecisionActorRef)
+	decision.DecisionPolicyRef = strings.TrimSpace(input.DecisionPolicyRef)
+	decision.Reason = strings.TrimSpace(input.Reason)
+	decision.ConditionsSummary = strings.TrimSpace(input.ConditionsSummary)
+	decision.Status = enum.ReleaseDecisionStatusResolved
+	decision.Version = previousDecisionVersion + 1
+	decision.DecidedAt = now
+	decision.UpdatedAt = now
+	if decision.DecisionActorRef == "" || decision.Reason == "" {
+		return entity.ReleaseDecision{}, entity.ReleaseDecisionPackage{}, errs.ErrInvalidArgument
+	}
+	result = commandResultWithPayload(input.Meta, enum.OperationSubmitReleaseDecision.String(), governanceevents.AggregateReleaseDecision, decision.ID, now, map[string]any{
+		"release_decision_package_id": pkg.ID.String(),
+		"outcome":                     string(decision.Outcome),
+	})
+	event := outboxEvent(s.idGenerator.New(), governanceevents.EventReleaseDecisionResolved, governanceevents.AggregateReleaseDecision, decision.ID, now, governanceevents.Payload{
+		ReleaseDecisionID:        decision.ID.String(),
+		ReleaseDecisionPackageID: pkg.ID.String(),
+		ReleaseCandidateRef:      pkg.ReleaseCandidateRef,
+		ProjectRef:               pkg.ProjectContext.ProjectRef,
+		DecisionActorRef:         decision.DecisionActorRef,
+		Outcome:                  string(decision.Outcome),
+		Status:                   string(decision.Status),
+		Version:                  decision.Version,
+	})
+	if err := s.repository.UpdateReleaseDecision(ctx, pkg, previousPackageVersion, decision, previousDecisionVersion, result, event); err != nil {
+		return entity.ReleaseDecision{}, entity.ReleaseDecisionPackage{}, err
+	}
+	return decision, pkg, nil
+}
+
+func (s *Service) GetReleaseDecision(ctx context.Context, input GetReleaseDecisionInput) (entity.ReleaseDecision, error) {
+	return readByID(ctx, input.ReleaseDecisionID, input.Meta, s.authorizeReleaseRead, s.repository.GetReleaseDecision)
+}
+
+func (s *Service) ListReleaseDecisions(ctx context.Context, input ListReleaseDecisionsInput) ([]entity.ReleaseDecision, query.PageResult, error) {
+	if err := s.authorizeReleaseDecisionList(ctx, input.Meta, input.Filter); err != nil {
+		return nil, query.PageResult{}, err
+	}
+	return s.repository.ListReleaseDecisions(ctx, input.Filter)
+}
+
+// RecordBlockingSignal stores a bounded blocking signal reference.
+func (s *Service) RecordBlockingSignal(ctx context.Context, input RecordBlockingSignalInput) (entity.BlockingSignal, error) {
+	if input.Target.Type == "" || input.Target.Ref == "" || input.SourceType == "" || input.Severity == "" || input.Severity == enum.SignalSeverityInfo {
+		return entity.BlockingSignal{}, errs.ErrInvalidArgument
+	}
+	if err := s.authorizeCommand(ctx, input.Meta, actionSignalRecord, signalTargetResource(input.Target)); err != nil {
+		return entity.BlockingSignal{}, err
+	}
+	result, replayed, err := s.replayCommand(ctx, input.Meta, enum.OperationRecordBlockingSignal.String(), governanceevents.AggregateBlockingSignal)
+	if err != nil {
+		return entity.BlockingSignal{}, err
+	}
+	if replayed {
+		signal, err := s.repository.GetBlockingSignal(ctx, result.AggregateID)
+		if err != nil {
+			return entity.BlockingSignal{}, err
+		}
+		if !sameExternalRef(signal.Target, input.Target) {
+			return entity.BlockingSignal{}, errs.ErrConflict
+		}
+		return signal, nil
+	}
+	now := s.clock.Now()
+	signal := entity.BlockingSignal{
+		VersionedBase: entity.VersionedBase{ID: s.idGenerator.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		Target:        input.Target,
+		SourceType:    input.SourceType,
+		SourceRef:     strings.TrimSpace(input.SourceRef),
+		Severity:      input.Severity,
+		Summary:       strings.TrimSpace(input.Summary),
+		Status:        enum.BlockingSignalStatusActive,
+	}
+	result = commandResult(input.Meta, enum.OperationRecordBlockingSignal.String(), governanceevents.AggregateBlockingSignal, signal.ID, now)
+	event := outboxEvent(s.idGenerator.New(), governanceevents.EventBlockingSignalRecorded, governanceevents.AggregateBlockingSignal, signal.ID, now, governanceevents.Payload{
+		BlockingSignalID: signal.ID.String(),
+		Status:           string(signal.Status),
+		ReasonCode:       string(signal.SourceType),
+		Version:          signal.Version,
+	})
+	if err := s.repository.RecordBlockingSignal(ctx, signal, result, event); err != nil {
+		return entity.BlockingSignal{}, err
+	}
+	return signal, nil
+}
+
+// ResolveBlockingSignal records a terminal resolution or dismissal.
+func (s *Service) ResolveBlockingSignal(ctx context.Context, input ResolveBlockingSignalInput) (entity.BlockingSignal, error) {
+	if input.BlockingSignalID == uuid.Nil || !terminalBlockingSignalStatus(input.TerminalStatus) {
+		return entity.BlockingSignal{}, errs.ErrInvalidArgument
+	}
+	if err := s.authorizeCommand(ctx, input.Meta, actionSignalResolve, signalResource(input.BlockingSignalID)); err != nil {
+		return entity.BlockingSignal{}, err
+	}
+	result, replayed, err := s.replayCommand(ctx, input.Meta, enum.OperationResolveBlockingSignal.String(), governanceevents.AggregateBlockingSignal)
+	if err != nil {
+		return entity.BlockingSignal{}, err
+	}
+	if replayed {
+		if result.AggregateID != input.BlockingSignalID {
+			return entity.BlockingSignal{}, errs.ErrConflict
+		}
+		return s.repository.GetBlockingSignal(ctx, result.AggregateID)
+	}
+	previousVersion, err := requireExpectedVersion(input.Meta)
+	if err != nil {
+		return entity.BlockingSignal{}, err
+	}
+	signal, err := s.repository.GetBlockingSignal(ctx, input.BlockingSignalID)
+	if err != nil {
+		return entity.BlockingSignal{}, err
+	}
+	if signal.Version != previousVersion {
+		return entity.BlockingSignal{}, errs.ErrConflict
+	}
+	if signal.Status != enum.BlockingSignalStatusActive {
+		return entity.BlockingSignal{}, errs.ErrPreconditionFailed
+	}
+	now := s.clock.Now()
+	previousStatus := signal.Status
+	signal.Status = input.TerminalStatus
+	signal.Summary = strings.TrimSpace(input.ResolutionSummary)
+	signal.Version = previousVersion + 1
+	signal.UpdatedAt = now
+	signal.ResolvedAt = &now
+	result = commandResultWithPayload(input.Meta, enum.OperationResolveBlockingSignal.String(), governanceevents.AggregateBlockingSignal, signal.ID, now, map[string]any{
+		"status": string(signal.Status),
+	})
+	event := outboxEvent(s.idGenerator.New(), governanceevents.EventBlockingSignalResolved, governanceevents.AggregateBlockingSignal, signal.ID, now, governanceevents.Payload{
+		BlockingSignalID: signal.ID.String(),
+		PreviousStatus:   string(previousStatus),
+		Status:           string(signal.Status),
+		Version:          signal.Version,
+	})
+	if err := s.repository.UpdateBlockingSignal(ctx, signal, previousVersion, result, event); err != nil {
+		return entity.BlockingSignal{}, err
+	}
+	return signal, nil
+}
+
+func (s *Service) ListBlockingSignals(ctx context.Context, input ListBlockingSignalsInput) ([]entity.BlockingSignal, query.PageResult, error) {
+	if err := s.authorizeBlockingSignalList(ctx, input.Meta, input.Filter); err != nil {
+		return nil, query.PageResult{}, err
+	}
+	return s.repository.ListBlockingSignals(ctx, input.Filter)
+}
+
+// RecordReleaseSafetyState creates or updates current safety-loop state.
+func (s *Service) RecordReleaseSafetyState(ctx context.Context, input RecordReleaseSafetyStateInput) (entity.ReleaseSafetyState, error) {
+	if input.ReleaseDecisionPackageID == uuid.Nil || input.CurrentState == "" {
+		return entity.ReleaseSafetyState{}, errs.ErrInvalidArgument
+	}
+	if err := s.authorizeCommand(ctx, input.Meta, actionReleaseUpdate, releaseSafetyStateResource(input.ReleaseDecisionPackageID)); err != nil {
+		return entity.ReleaseSafetyState{}, err
+	}
+	result, replayed, err := s.replayCommand(ctx, input.Meta, enum.OperationRecordReleaseSafetyState.String(), governanceevents.AggregateReleaseSafetyState)
+	if err != nil {
+		return entity.ReleaseSafetyState{}, err
+	}
+	if replayed {
+		state, err := s.repository.GetReleaseSafetyStateByPackage(ctx, input.ReleaseDecisionPackageID)
+		if err != nil {
+			return entity.ReleaseSafetyState{}, err
+		}
+		if state.ID != result.AggregateID {
+			return entity.ReleaseSafetyState{}, errs.ErrConflict
+		}
+		return state, nil
+	}
+	pkg, err := s.repository.GetReleaseDecisionPackage(ctx, input.ReleaseDecisionPackageID)
+	if err != nil {
+		return entity.ReleaseSafetyState{}, err
+	}
+	now := s.clock.Now()
+	existing, err := s.repository.GetReleaseSafetyStateByPackage(ctx, input.ReleaseDecisionPackageID)
+	existingFound := err == nil
+	if err != nil && !errors.Is(err, errs.ErrNotFound) {
+		return entity.ReleaseSafetyState{}, err
+	}
+	activeSignals, _, err := s.repository.ListBlockingSignals(ctx, query.BlockingSignalFilter{
+		Target: value.ExternalRef{Type: "release_candidate", Ref: pkg.ReleaseCandidateRef},
+		Status: enum.BlockingSignalStatusActive,
+		Page:   query.PageRequest{PageSize: 500},
+	})
+	if err != nil {
+		return entity.ReleaseSafetyState{}, err
+	}
+	if !existingFound || existing.ID == uuid.Nil {
+		state := entity.ReleaseSafetyState{
+			VersionedBase:            entity.VersionedBase{ID: s.idGenerator.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+			ReleaseDecisionPackageID: input.ReleaseDecisionPackageID,
+			CurrentState:             input.CurrentState,
+			RuntimeJobRef:            strings.TrimSpace(input.RuntimeJobRef),
+			BlockingSignalCount:      int32(len(activeSignals)),
+			LastStateReason:          strings.TrimSpace(input.LastStateReason),
+		}
+		result = commandResult(input.Meta, enum.OperationRecordReleaseSafetyState.String(), governanceevents.AggregateReleaseSafetyState, state.ID, now)
+		event := releaseSafetyEvent(s.idGenerator.New(), now, state, pkg, "", state.Version)
+		if err := s.repository.RecordReleaseSafetyState(ctx, state, result, event); err != nil {
+			return entity.ReleaseSafetyState{}, err
+		}
+		return state, nil
+	}
+	previousVersion, err := requireExpectedVersion(input.Meta)
+	if err != nil {
+		return entity.ReleaseSafetyState{}, err
+	}
+	if existing.Version != previousVersion {
+		return entity.ReleaseSafetyState{}, errs.ErrConflict
+	}
+	previousState := existing.CurrentState
+	existing.CurrentState = input.CurrentState
+	existing.RuntimeJobRef = strings.TrimSpace(input.RuntimeJobRef)
+	existing.BlockingSignalCount = int32(len(activeSignals))
+	existing.LastStateReason = strings.TrimSpace(input.LastStateReason)
+	existing.Version = previousVersion + 1
+	existing.UpdatedAt = now
+	result = commandResult(input.Meta, enum.OperationRecordReleaseSafetyState.String(), governanceevents.AggregateReleaseSafetyState, existing.ID, now)
+	event := releaseSafetyEvent(s.idGenerator.New(), now, existing, pkg, string(previousState), existing.Version)
+	if err := s.repository.UpdateReleaseSafetyState(ctx, existing, previousVersion, result, event); err != nil {
+		return entity.ReleaseSafetyState{}, err
+	}
+	return existing, nil
+}
+
+func (s *Service) GetReleaseSafetyState(ctx context.Context, input GetReleaseSafetyStateInput) (entity.ReleaseSafetyState, error) {
+	if input.ReleaseDecisionPackageID == uuid.Nil {
+		return entity.ReleaseSafetyState{}, errs.ErrInvalidArgument
+	}
+	if err := s.authorizeReleaseRead(ctx, input.Meta, input.ReleaseDecisionPackageID); err != nil {
+		return entity.ReleaseSafetyState{}, err
+	}
+	return s.repository.GetReleaseSafetyStateByPackage(ctx, input.ReleaseDecisionPackageID)
+}
+
+func (s *Service) replayedReleaseDecision(ctx context.Context, id uuid.UUID) (entity.ReleaseDecision, entity.ReleaseDecisionPackage, error) {
+	decision, err := s.repository.GetReleaseDecision(ctx, id)
+	if err != nil {
+		return entity.ReleaseDecision{}, entity.ReleaseDecisionPackage{}, err
+	}
+	pkg, err := s.repository.GetReleaseDecisionPackage(ctx, decision.ReleaseDecisionPackageID)
+	if err != nil {
+		return entity.ReleaseDecision{}, entity.ReleaseDecisionPackage{}, err
+	}
+	return decision, pkg, nil
+}
+
+func (s *Service) ensureReleaseDecisionAllowed(ctx context.Context, pkg entity.ReleaseDecisionPackage, input SubmitReleaseDecisionInput) error {
+	if !releaseOutcomeNeedsClearance(input.Outcome) {
+		return nil
+	}
+	if pkg.RiskAssessmentID != nil {
+		assessment, err := s.repository.GetRiskAssessment(ctx, *pkg.RiskAssessmentID)
+		if err != nil {
+			return err
+		}
+		if riskRequiresGate(assessment.EffectiveRiskClass) && input.GateDecisionID == nil {
+			return errs.ErrPreconditionFailed
+		}
+	}
+	if input.GateDecisionID != nil {
+		gateDecision, err := s.repository.GetGateDecision(ctx, *input.GateDecisionID)
+		if err != nil {
+			return err
+		}
+		if !gateOutcomeClearsRelease(gateDecision.Outcome) {
+			return errs.ErrPreconditionFailed
+		}
+	}
+	signals, _, err := s.repository.ListBlockingSignals(ctx, query.BlockingSignalFilter{
+		Target: value.ExternalRef{Type: "release_candidate", Ref: pkg.ReleaseCandidateRef},
+		Status: enum.BlockingSignalStatusActive,
+		Page:   query.PageRequest{PageSize: 1},
+	})
+	if err != nil {
+		return err
+	}
+	if len(signals) > 0 {
+		return errs.ErrPreconditionFailed
+	}
+	return nil
+}
+
+func releaseSafetyEvent(id uuid.UUID, now time.Time, state entity.ReleaseSafetyState, pkg entity.ReleaseDecisionPackage, previousStatus string, version int64) entity.OutboxEvent {
+	return outboxEvent(id, governanceevents.EventReleaseSafetyStateChanged, governanceevents.AggregateReleaseSafetyState, state.ID, now, governanceevents.Payload{
+		ReleaseSafetyStateID:     state.ID.String(),
+		ReleaseDecisionPackageID: pkg.ID.String(),
+		ReleaseCandidateRef:      pkg.ReleaseCandidateRef,
+		ProjectRef:               pkg.ProjectContext.ProjectRef,
+		RuntimeJobRef:            state.RuntimeJobRef,
+		PreviousStatus:           previousStatus,
+		Status:                   string(state.CurrentState),
+		Version:                  version,
+	})
+}
+
+func releaseOutcomeNeedsClearance(outcome enum.ReleaseDecisionOutcome) bool {
+	return outcome == enum.ReleaseDecisionOutcomeGo || outcome == enum.ReleaseDecisionOutcomeGoWithConditions
+}
+
+func riskRequiresGate(risk enum.RiskClass) bool {
+	return risk == enum.RiskClassR2 || risk == enum.RiskClassR3
+}
+
+func gateOutcomeClearsRelease(outcome enum.GateOutcome) bool {
+	return outcome == enum.GateOutcomeApprove || outcome == enum.GateOutcomeApproveWithConditions
+}
+
+func terminalBlockingSignalStatus(status enum.BlockingSignalStatus) bool {
+	return status == enum.BlockingSignalStatusResolved || status == enum.BlockingSignalStatusDismissed
 }
 
 type closeGateRequestInput struct {
@@ -754,6 +1205,40 @@ func (s *Service) authorizeGateDecisionList(ctx context.Context, meta QueryMeta,
 		return s.authorizeGateTargetRead(ctx, meta, filter.Target)
 	}
 	return errs.ErrInvalidArgument
+}
+
+func (s *Service) authorizeReleaseRead(ctx context.Context, meta QueryMeta, id uuid.UUID) error {
+	return s.authorizeQuery(ctx, meta, actionReleaseRead, releaseDecisionResource(id))
+}
+
+func (s *Service) authorizeReleasePackageList(ctx context.Context, meta QueryMeta, filter query.ReleaseDecisionPackageFilter) error {
+	if strings.TrimSpace(filter.ReleaseCandidateRef) != "" {
+		return s.authorizeQuery(ctx, meta, actionReleaseRead, releaseDecisionContextResource(filter.ReleaseCandidateRef))
+	}
+	if resourceID := firstNonEmpty(filter.ProjectContext.ProjectRef, filter.ProjectContext.RepositoryRef, filter.ProjectContext.ReleaseLineRef); resourceID != "" {
+		return s.authorizeQuery(ctx, meta, actionReleaseRead, releaseDecisionContextResource(resourceID))
+	}
+	return errs.ErrInvalidArgument
+}
+
+func (s *Service) authorizeReleaseDecisionList(ctx context.Context, meta QueryMeta, filter query.ReleaseDecisionFilter) error {
+	if filter.ReleaseDecisionPackageID != nil {
+		return s.authorizeReleaseRead(ctx, meta, *filter.ReleaseDecisionPackageID)
+	}
+	if resourceID := firstNonEmpty(filter.ProjectContext.ProjectRef, filter.ProjectContext.RepositoryRef, filter.ProjectContext.ReleaseLineRef); resourceID != "" {
+		return s.authorizeQuery(ctx, meta, actionReleaseRead, releaseDecisionContextResource(resourceID))
+	}
+	return errs.ErrInvalidArgument
+}
+
+func (s *Service) authorizeBlockingSignalList(ctx context.Context, meta QueryMeta, filter query.BlockingSignalFilter) error {
+	if !externalRefProvided(filter.Target) {
+		return errs.ErrInvalidArgument
+	}
+	if strings.TrimSpace(filter.Target.Type) == "" || strings.TrimSpace(filter.Target.Ref) == "" {
+		return errs.ErrInvalidArgument
+	}
+	return s.authorizeQuery(ctx, meta, actionSignalRead, signalTargetResource(filter.Target))
 }
 
 func readByID[T any](

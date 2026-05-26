@@ -2,7 +2,6 @@ package grpc
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/google/uuid"
@@ -98,16 +97,27 @@ func TestGetRiskAssessmentIncludesFactorsAndReviewSignals(t *testing.T) {
 	}
 }
 
-func TestRequestReleaseDecisionRoutesToDomainBacklog(t *testing.T) {
+func TestRequestReleaseDecisionRoutesToDomainService(t *testing.T) {
 	t.Parallel()
 
+	packageID := "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa"
 	service := &fakeBacklogService{}
-	_, err := NewServer(service).RequestReleaseDecision(context.Background(), &governancev1.RequestReleaseDecisionRequest{})
-	if !errors.Is(err, errs.ErrNotImplemented) {
-		t.Fatalf("RequestReleaseDecision() error = %v, want ErrNotImplemented", err)
+	response, err := NewServer(service).RequestReleaseDecision(context.Background(), &governancev1.RequestReleaseDecisionRequest{
+		ReleaseDecisionPackageId: packageID,
+		RequestGateIfRequired:    true,
+		Meta: &governancev1.CommandMeta{
+			Actor:     &governancev1.Actor{Type: "service", Id: "agent-manager"},
+			CommandId: ptrString("bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb"),
+		},
+	})
+	if err != nil {
+		t.Fatalf("RequestReleaseDecision(): %v", err)
 	}
-	if service.operation != enum.OperationRequestReleaseDecision {
-		t.Fatalf("operation = %q, want %q", service.operation, enum.OperationRequestReleaseDecision)
+	if service.requestReleaseDecisionInput.ReleaseDecisionPackageID.String() != packageID || !service.requestReleaseDecisionInput.RequestGateIfRequired {
+		t.Fatalf("input = %+v, want package %s and gate flag", service.requestReleaseDecisionInput, packageID)
+	}
+	if response.GetReleaseDecision().GetReleaseDecisionPackageId() != packageID {
+		t.Fatalf("response package id = %q, want %q", response.GetReleaseDecision().GetReleaseDecisionPackageId(), packageID)
 	}
 }
 
@@ -156,11 +166,12 @@ func TestUnaryErrorInterceptorMapsRepositoryDomainErrors(t *testing.T) {
 
 type fakeBacklogService struct {
 	governanceService
-	operation           enum.Operation
-	reevaluateRiskInput governanceservice.ReevaluateRiskInput
-	riskAssessmentID    uuid.UUID
-	riskFactorsInput    governanceservice.ListRiskFactorsInput
-	reviewSignalsInput  governanceservice.ListReviewSignalsInput
+	operation                   enum.Operation
+	reevaluateRiskInput         governanceservice.ReevaluateRiskInput
+	riskAssessmentID            uuid.UUID
+	riskFactorsInput            governanceservice.ListRiskFactorsInput
+	reviewSignalsInput          governanceservice.ListReviewSignalsInput
+	requestReleaseDecisionInput governanceservice.RequestReleaseDecisionInput
 }
 
 func (service *fakeBacklogService) BacklogOperation(_ context.Context, input governanceservice.BacklogOperationInput) error {
@@ -199,4 +210,15 @@ func (service *fakeBacklogService) ListReviewSignals(_ context.Context, input go
 		Outcome:          enum.ReviewSignalOutcomePass,
 		Summary:          "approved",
 	}}, query.PageResult{}, nil
+}
+
+func (service *fakeBacklogService) RequestReleaseDecision(_ context.Context, input governanceservice.RequestReleaseDecisionInput) (entity.ReleaseDecision, entity.ReleaseDecisionPackage, error) {
+	service.requestReleaseDecisionInput = input
+	return entity.ReleaseDecision{
+			VersionedBase:            entity.VersionedBase{ID: uuid.MustParse("dddddddd-dddd-4ddd-8ddd-dddddddddddd"), Version: 1},
+			ReleaseDecisionPackageID: input.ReleaseDecisionPackageID,
+			Status:                   enum.ReleaseDecisionStatusRequested,
+		},
+		entity.ReleaseDecisionPackage{VersionedBase: entity.VersionedBase{ID: input.ReleaseDecisionPackageID, Version: 2}},
+		nil
 }

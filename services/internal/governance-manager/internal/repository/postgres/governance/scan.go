@@ -331,6 +331,74 @@ func scanReleaseDecisionPackage(row postgreslib.RowScanner) (entity.ReleaseDecis
 	return item, nil
 }
 
+func scanReleaseDecision(row postgreslib.RowScanner) (entity.ReleaseDecision, error) {
+	var item entity.ReleaseDecision
+	var gateDecisionID pgtype.UUID
+	var outcome, status string
+	err := row.Scan(
+		&item.ID,
+		&item.ReleaseDecisionPackageID,
+		&gateDecisionID,
+		&outcome,
+		&item.DecisionActorRef,
+		&item.DecisionPolicyRef,
+		&item.Reason,
+		&item.ConditionsSummary,
+		&status,
+		&item.Version,
+		&item.DecidedAt,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+	)
+	item.GateDecisionID = postgreslib.UUIDPtrFromPG(gateDecisionID)
+	item.Outcome = enum.ReleaseDecisionOutcome(outcome)
+	item.Status = enum.ReleaseDecisionStatus(status)
+	return item, err
+}
+
+func scanReleaseSafetyState(row postgreslib.RowScanner) (entity.ReleaseSafetyState, error) {
+	var item entity.ReleaseSafetyState
+	var state string
+	err := row.Scan(
+		&item.ID,
+		&item.ReleaseDecisionPackageID,
+		&state,
+		&item.RuntimeJobRef,
+		&item.BlockingSignalCount,
+		&item.LastStateReason,
+		&item.Version,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+	)
+	item.CurrentState = enum.ReleaseSafetyStateKind(state)
+	return item, err
+}
+
+func scanBlockingSignal(row postgreslib.RowScanner) (entity.BlockingSignal, error) {
+	var item entity.BlockingSignal
+	var sourceType, severity, status string
+	var resolvedAt pgtype.Timestamptz
+	err := row.Scan(
+		&item.ID,
+		&item.Target.Type,
+		&item.Target.Ref,
+		&sourceType,
+		&item.SourceRef,
+		&severity,
+		&item.Summary,
+		&status,
+		&item.Version,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+		&resolvedAt,
+	)
+	item.SourceType = enum.BlockingSignalSourceType(sourceType)
+	item.Severity = enum.SignalSeverity(severity)
+	item.Status = enum.BlockingSignalStatus(status)
+	item.ResolvedAt = postgreslib.TimePtrFromPG(resolvedAt)
+	return item, err
+}
+
 func scanCommandResult(row postgreslib.RowScanner) (entity.CommandResult, error) {
 	var result entity.CommandResult
 	var commandID pgtype.UUID

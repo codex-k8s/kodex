@@ -167,6 +167,42 @@ type ReleaseDecisionPackage struct {
 	Status                  enum.ReleaseDecisionPackageStatus
 }
 
+// ReleaseDecision records the release go/no-go decision for one package.
+type ReleaseDecision struct {
+	VersionedBase
+	ReleaseDecisionPackageID uuid.UUID
+	GateDecisionID           *uuid.UUID
+	Outcome                  enum.ReleaseDecisionOutcome
+	DecisionActorRef         string
+	DecisionPolicyRef        string
+	Reason                   string
+	ConditionsSummary        string
+	Status                   enum.ReleaseDecisionStatus
+	DecidedAt                time.Time
+}
+
+// ReleaseSafetyState records current safety-loop state for one release package.
+type ReleaseSafetyState struct {
+	VersionedBase
+	ReleaseDecisionPackageID uuid.UUID
+	CurrentState             enum.ReleaseSafetyStateKind
+	RuntimeJobRef            string
+	BlockingSignalCount      int32
+	LastStateReason          string
+}
+
+// BlockingSignal records a bounded signal that blocks transition or release.
+type BlockingSignal struct {
+	VersionedBase
+	Target     value.ExternalRef
+	SourceType enum.BlockingSignalSourceType
+	SourceRef  string
+	Severity   enum.SignalSeverity
+	Summary    string
+	Status     enum.BlockingSignalStatus
+	ResolvedAt *time.Time
+}
+
 // CommandResult stores the idempotent command trace.
 type CommandResult struct {
 	Key            string

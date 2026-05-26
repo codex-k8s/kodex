@@ -50,8 +50,17 @@ type governanceService interface {
 	GetGateRequest(context.Context, governanceservice.GetGateRequestInput) (entity.GateRequest, error)
 	ListGateRequests(context.Context, governanceservice.ListGateRequestsInput) ([]entity.GateRequest, query.PageResult, error)
 	BuildReleaseDecisionPackage(context.Context, governanceservice.BuildReleaseDecisionPackageInput) (entity.ReleaseDecisionPackage, error)
-	GetReleaseDecisionPackage(context.Context, uuid.UUID) (entity.ReleaseDecisionPackage, error)
+	GetReleaseDecisionPackage(context.Context, governanceservice.GetReleaseDecisionPackageInput) (entity.ReleaseDecisionPackage, error)
 	ListReleaseDecisionPackages(context.Context, governanceservice.ListReleaseDecisionPackagesInput) ([]entity.ReleaseDecisionPackage, query.PageResult, error)
+	RequestReleaseDecision(context.Context, governanceservice.RequestReleaseDecisionInput) (entity.ReleaseDecision, entity.ReleaseDecisionPackage, error)
+	SubmitReleaseDecision(context.Context, governanceservice.SubmitReleaseDecisionInput) (entity.ReleaseDecision, entity.ReleaseDecisionPackage, error)
+	GetReleaseDecision(context.Context, governanceservice.GetReleaseDecisionInput) (entity.ReleaseDecision, error)
+	ListReleaseDecisions(context.Context, governanceservice.ListReleaseDecisionsInput) ([]entity.ReleaseDecision, query.PageResult, error)
+	RecordBlockingSignal(context.Context, governanceservice.RecordBlockingSignalInput) (entity.BlockingSignal, error)
+	ResolveBlockingSignal(context.Context, governanceservice.ResolveBlockingSignalInput) (entity.BlockingSignal, error)
+	ListBlockingSignals(context.Context, governanceservice.ListBlockingSignalsInput) ([]entity.BlockingSignal, query.PageResult, error)
+	RecordReleaseSafetyState(context.Context, governanceservice.RecordReleaseSafetyStateInput) (entity.ReleaseSafetyState, error)
+	GetReleaseSafetyState(context.Context, governanceservice.GetReleaseSafetyStateInput) (entity.ReleaseSafetyState, error)
 }
 
 // NewServer creates a governance-manager gRPC server boundary.
@@ -685,6 +694,10 @@ func (server *Server) BuildReleaseDecisionPackage(ctx context.Context, req *gove
 	if err != nil {
 		return nil, err
 	}
+	riskAssessmentID, err := optionalUUID(req.GetRiskAssessmentId())
+	if err != nil {
+		return nil, err
+	}
 	providers, err := providerRefs(req.GetProviderRefs())
 	if err != nil {
 		return nil, err
@@ -705,6 +718,7 @@ func (server *Server) BuildReleaseDecisionPackage(ctx context.Context, req *gove
 		ReleaseCandidateRef:     req.GetReleaseCandidateRef(),
 		ProjectContext:          projectContext(req.GetProjectContext()),
 		RepositoryRefs:          req.GetRepositoryRefs(),
+		RiskAssessmentID:        riskAssessmentID,
 		ProviderRefs:            providers,
 		RuntimeRefs:             runtimes,
 		AgentContext:            agentContext,
@@ -721,11 +735,15 @@ func (server *Server) BuildReleaseDecisionPackage(ctx context.Context, req *gove
 
 // GetReleaseDecisionPackage returns one release decision package.
 func (server *Server) GetReleaseDecisionPackage(ctx context.Context, req *governancev1.GetReleaseDecisionPackageRequest) (*governancev1.ReleaseDecisionPackageResponse, error) {
+	meta, err := queryMeta(req.GetMeta())
+	if err != nil {
+		return nil, err
+	}
 	id, err := requiredUUID(req.GetReleaseDecisionPackageId())
 	if err != nil {
 		return nil, err
 	}
-	item, err := server.service.GetReleaseDecisionPackage(ctx, id)
+	item, err := server.service.GetReleaseDecisionPackage(ctx, governanceservice.GetReleaseDecisionPackageInput{ReleaseDecisionPackageID: id, Meta: meta})
 	if err != nil {
 		return nil, err
 	}
@@ -734,6 +752,10 @@ func (server *Server) GetReleaseDecisionPackage(ctx context.Context, req *govern
 
 // ListReleaseDecisionPackages returns release packages by project, candidate or status.
 func (server *Server) ListReleaseDecisionPackages(ctx context.Context, req *governancev1.ListReleaseDecisionPackagesRequest) (*governancev1.ListReleaseDecisionPackagesResponse, error) {
+	meta, err := queryMeta(req.GetMeta())
+	if err != nil {
+		return nil, err
+	}
 	items, page, err := server.service.ListReleaseDecisionPackages(ctx, governanceservice.ListReleaseDecisionPackagesInput{
 		Filter: query.ReleaseDecisionPackageFilter{
 			ProjectContext:      projectContext(req.GetProjectContext()),
@@ -741,6 +763,7 @@ func (server *Server) ListReleaseDecisionPackages(ctx context.Context, req *gove
 			Status:              releaseDecisionPackageStatus(req.GetStatus()),
 			Page:                pageRequest(req.GetPage()),
 		},
+		Meta: meta,
 	})
 	if err != nil {
 		return nil, err
@@ -748,51 +771,199 @@ func (server *Server) ListReleaseDecisionPackages(ctx context.Context, req *gove
 	return &governancev1.ListReleaseDecisionPackagesResponse{ReleaseDecisionPackages: toReleaseDecisionPackages(items), Page: pageResponse(page)}, nil
 }
 
-// RequestReleaseDecision is a stable contract handler reserved for GOV-6 release decisions.
-func (server *Server) RequestReleaseDecision(ctx context.Context, _ *governancev1.RequestReleaseDecisionRequest) (*governancev1.ReleaseDecisionResponse, error) {
-	return nil, server.backlog(ctx, enum.OperationRequestReleaseDecision)
+// RequestReleaseDecision starts release decision lifecycle.
+func (server *Server) RequestReleaseDecision(ctx context.Context, req *governancev1.RequestReleaseDecisionRequest) (*governancev1.ReleaseDecisionResponse, error) {
+	meta, err := commandMeta(req.GetMeta())
+	if err != nil {
+		return nil, err
+	}
+	packageID, err := requiredUUID(req.GetReleaseDecisionPackageId())
+	if err != nil {
+		return nil, err
+	}
+	decision, pkg, err := server.service.RequestReleaseDecision(ctx, governanceservice.RequestReleaseDecisionInput{
+		ReleaseDecisionPackageID: packageID,
+		RequestGateIfRequired:    req.GetRequestGateIfRequired(),
+		Meta:                     meta,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &governancev1.ReleaseDecisionResponse{ReleaseDecision: toReleaseDecision(decision), ReleaseDecisionPackage: toReleaseDecisionPackage(pkg)}, nil
 }
 
-// SubmitReleaseDecision is a stable contract handler reserved for GOV-6 release decisions.
-func (server *Server) SubmitReleaseDecision(ctx context.Context, _ *governancev1.SubmitReleaseDecisionRequest) (*governancev1.ReleaseDecisionResponse, error) {
-	return nil, server.backlog(ctx, enum.OperationSubmitReleaseDecision)
+// SubmitReleaseDecision resolves a release decision.
+func (server *Server) SubmitReleaseDecision(ctx context.Context, req *governancev1.SubmitReleaseDecisionRequest) (*governancev1.ReleaseDecisionResponse, error) {
+	meta, err := commandMeta(req.GetMeta())
+	if err != nil {
+		return nil, err
+	}
+	packageID, err := requiredUUID(req.GetReleaseDecisionPackageId())
+	if err != nil {
+		return nil, err
+	}
+	gateDecisionID, err := optionalUUID(req.GetGateDecisionId())
+	if err != nil {
+		return nil, err
+	}
+	decision, pkg, err := server.service.SubmitReleaseDecision(ctx, governanceservice.SubmitReleaseDecisionInput{
+		ReleaseDecisionPackageID: packageID,
+		GateDecisionID:           gateDecisionID,
+		Outcome:                  releaseDecisionOutcome(req.GetOutcome()),
+		DecisionActorRef:         req.GetDecisionActorRef(),
+		DecisionPolicyRef:        req.GetDecisionPolicyRef(),
+		Reason:                   req.GetReason(),
+		ConditionsSummary:        req.GetConditionsSummary(),
+		Meta:                     meta,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &governancev1.ReleaseDecisionResponse{ReleaseDecision: toReleaseDecision(decision), ReleaseDecisionPackage: toReleaseDecisionPackage(pkg)}, nil
 }
 
-// GetReleaseDecision is a stable contract handler reserved for GOV-6 release decision reads.
-func (server *Server) GetReleaseDecision(ctx context.Context, _ *governancev1.GetReleaseDecisionRequest) (*governancev1.ReleaseDecisionResponse, error) {
-	return nil, server.backlog(ctx, enum.OperationGetReleaseDecision)
+// GetReleaseDecision returns one release decision.
+func (server *Server) GetReleaseDecision(ctx context.Context, req *governancev1.GetReleaseDecisionRequest) (*governancev1.ReleaseDecisionResponse, error) {
+	meta, err := queryMeta(req.GetMeta())
+	if err != nil {
+		return nil, err
+	}
+	id, err := requiredUUID(req.GetReleaseDecisionId())
+	if err != nil {
+		return nil, err
+	}
+	decision, err := server.service.GetReleaseDecision(ctx, governanceservice.GetReleaseDecisionInput{ReleaseDecisionID: id, Meta: meta})
+	if err != nil {
+		return nil, err
+	}
+	return &governancev1.ReleaseDecisionResponse{ReleaseDecision: toReleaseDecision(decision)}, nil
 }
 
-// ListReleaseDecisions is a stable contract handler reserved for GOV-6 release decision reads.
-func (server *Server) ListReleaseDecisions(ctx context.Context, _ *governancev1.ListReleaseDecisionsRequest) (*governancev1.ListReleaseDecisionsResponse, error) {
-	return nil, server.backlog(ctx, enum.OperationListReleaseDecisions)
+// ListReleaseDecisions returns release decisions by package or project context.
+func (server *Server) ListReleaseDecisions(ctx context.Context, req *governancev1.ListReleaseDecisionsRequest) (*governancev1.ListReleaseDecisionsResponse, error) {
+	meta, err := queryMeta(req.GetMeta())
+	if err != nil {
+		return nil, err
+	}
+	packageID, err := optionalUUID(req.GetReleaseDecisionPackageId())
+	if err != nil {
+		return nil, err
+	}
+	items, page, err := server.service.ListReleaseDecisions(ctx, governanceservice.ListReleaseDecisionsInput{
+		Filter: query.ReleaseDecisionFilter{
+			ReleaseDecisionPackageID: packageID,
+			ProjectContext:           projectContext(req.GetProjectContext()),
+			Status:                   releaseDecisionStatus(req.GetStatus()),
+			Outcome:                  releaseDecisionOutcome(req.GetOutcome()),
+			Page:                     pageRequest(req.GetPage()),
+		},
+		Meta: meta,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &governancev1.ListReleaseDecisionsResponse{ReleaseDecisions: toReleaseDecisions(items), Page: pageResponse(page)}, nil
 }
 
-// RecordBlockingSignal is a stable contract handler reserved for GOV-5 blocking signals.
-func (server *Server) RecordBlockingSignal(ctx context.Context, _ *governancev1.RecordBlockingSignalRequest) (*governancev1.BlockingSignalResponse, error) {
-	return nil, server.backlog(ctx, enum.OperationRecordBlockingSignal)
+// RecordBlockingSignal records a safe blocking signal.
+func (server *Server) RecordBlockingSignal(ctx context.Context, req *governancev1.RecordBlockingSignalRequest) (*governancev1.BlockingSignalResponse, error) {
+	meta, err := commandMeta(req.GetMeta())
+	if err != nil {
+		return nil, err
+	}
+	signal, err := server.service.RecordBlockingSignal(ctx, governanceservice.RecordBlockingSignalInput{
+		Target:     targetRef(req.GetTarget()),
+		SourceType: blockingSignalSourceType(req.GetSourceType()),
+		SourceRef:  req.GetSourceRef(),
+		Severity:   signalSeverity(req.GetSeverity()),
+		Summary:    req.GetSummary(),
+		Meta:       meta,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &governancev1.BlockingSignalResponse{BlockingSignal: toBlockingSignal(signal)}, nil
 }
 
-// ResolveBlockingSignal is a stable contract handler reserved for GOV-5 blocking signals.
-func (server *Server) ResolveBlockingSignal(ctx context.Context, _ *governancev1.ResolveBlockingSignalRequest) (*governancev1.BlockingSignalResponse, error) {
-	return nil, server.backlog(ctx, enum.OperationResolveBlockingSignal)
+// ResolveBlockingSignal resolves or dismisses a blocking signal.
+func (server *Server) ResolveBlockingSignal(ctx context.Context, req *governancev1.ResolveBlockingSignalRequest) (*governancev1.BlockingSignalResponse, error) {
+	meta, err := commandMeta(req.GetMeta())
+	if err != nil {
+		return nil, err
+	}
+	id, err := requiredUUID(req.GetBlockingSignalId())
+	if err != nil {
+		return nil, err
+	}
+	signal, err := server.service.ResolveBlockingSignal(ctx, governanceservice.ResolveBlockingSignalInput{
+		BlockingSignalID:  id,
+		TerminalStatus:    blockingSignalStatus(req.GetTerminalStatus()),
+		ResolutionSummary: req.GetResolutionSummary(),
+		Meta:              meta,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &governancev1.BlockingSignalResponse{BlockingSignal: toBlockingSignal(signal)}, nil
 }
 
-// ListBlockingSignals is a stable contract handler reserved for GOV-5 blocking signal reads.
-func (server *Server) ListBlockingSignals(ctx context.Context, _ *governancev1.ListBlockingSignalsRequest) (*governancev1.ListBlockingSignalsResponse, error) {
-	return nil, server.backlog(ctx, enum.OperationListBlockingSignals)
+// ListBlockingSignals returns blocking signals by target.
+func (server *Server) ListBlockingSignals(ctx context.Context, req *governancev1.ListBlockingSignalsRequest) (*governancev1.ListBlockingSignalsResponse, error) {
+	meta, err := queryMeta(req.GetMeta())
+	if err != nil {
+		return nil, err
+	}
+	items, page, err := server.service.ListBlockingSignals(ctx, governanceservice.ListBlockingSignalsInput{
+		Filter: query.BlockingSignalFilter{
+			Target:   targetRef(req.GetTarget()),
+			Status:   blockingSignalStatus(req.GetStatus()),
+			Severity: signalSeverity(req.GetSeverity()),
+			Page:     pageRequest(req.GetPage()),
+		},
+		Meta: meta,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &governancev1.ListBlockingSignalsResponse{BlockingSignals: toBlockingSignals(items), Page: pageResponse(page)}, nil
 }
 
-// RecordReleaseSafetyState is a stable contract handler reserved for GOV-6 release safety-loop.
-func (server *Server) RecordReleaseSafetyState(ctx context.Context, _ *governancev1.RecordReleaseSafetyStateRequest) (*governancev1.ReleaseSafetyStateResponse, error) {
-	return nil, server.backlog(ctx, enum.OperationRecordReleaseSafetyState)
+// RecordReleaseSafetyState records current safety-loop state.
+func (server *Server) RecordReleaseSafetyState(ctx context.Context, req *governancev1.RecordReleaseSafetyStateRequest) (*governancev1.ReleaseSafetyStateResponse, error) {
+	meta, err := commandMeta(req.GetMeta())
+	if err != nil {
+		return nil, err
+	}
+	packageID, err := requiredUUID(req.GetReleaseDecisionPackageId())
+	if err != nil {
+		return nil, err
+	}
+	state, err := server.service.RecordReleaseSafetyState(ctx, governanceservice.RecordReleaseSafetyStateInput{
+		ReleaseDecisionPackageID: packageID,
+		CurrentState:             releaseSafetyStateKind(req.GetCurrentState()),
+		RuntimeJobRef:            req.GetRuntimeJobRef(),
+		LastStateReason:          req.GetLastStateReason(),
+		Meta:                     meta,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &governancev1.ReleaseSafetyStateResponse{ReleaseSafetyState: toReleaseSafetyState(state)}, nil
 }
 
-// GetReleaseSafetyState is a stable contract handler reserved for GOV-6 release safety-loop reads.
-func (server *Server) GetReleaseSafetyState(ctx context.Context, _ *governancev1.GetReleaseSafetyStateRequest) (*governancev1.ReleaseSafetyStateResponse, error) {
-	return nil, server.backlog(ctx, enum.OperationGetReleaseSafetyState)
-}
-
-func (server *Server) backlog(ctx context.Context, operation enum.Operation) error {
-	return server.service.BacklogOperation(ctx, governanceservice.BacklogOperationInput{Operation: operation})
+// GetReleaseSafetyState returns current safety-loop state.
+func (server *Server) GetReleaseSafetyState(ctx context.Context, req *governancev1.GetReleaseSafetyStateRequest) (*governancev1.ReleaseSafetyStateResponse, error) {
+	meta, err := queryMeta(req.GetMeta())
+	if err != nil {
+		return nil, err
+	}
+	packageID, err := requiredUUID(req.GetReleaseDecisionPackageId())
+	if err != nil {
+		return nil, err
+	}
+	state, err := server.service.GetReleaseSafetyState(ctx, governanceservice.GetReleaseSafetyStateInput{ReleaseDecisionPackageID: packageID, Meta: meta})
+	if err != nil {
+		return nil, err
+	}
+	return &governancev1.ReleaseSafetyStateResponse{ReleaseSafetyState: toReleaseSafetyState(state)}, nil
 }

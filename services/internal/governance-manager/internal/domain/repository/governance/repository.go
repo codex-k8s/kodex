@@ -39,8 +39,21 @@ type Repository interface {
 	ListGateRequests(ctx context.Context, filter query.GateRequestFilter) ([]entity.GateRequest, query.PageResult, error)
 	ListGateDecisions(ctx context.Context, filter query.GateDecisionFilter) ([]entity.GateDecision, query.PageResult, error)
 	CreateReleaseDecisionPackage(ctx context.Context, item entity.ReleaseDecisionPackage, result entity.CommandResult, event entity.OutboxEvent) error
+	UpdateReleaseDecisionPackageStatus(ctx context.Context, item entity.ReleaseDecisionPackage, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error
 	GetReleaseDecisionPackage(ctx context.Context, id uuid.UUID) (entity.ReleaseDecisionPackage, error)
 	ListReleaseDecisionPackages(ctx context.Context, filter query.ReleaseDecisionPackageFilter) ([]entity.ReleaseDecisionPackage, query.PageResult, error)
+	CreateReleaseDecision(ctx context.Context, pkg entity.ReleaseDecisionPackage, previousPackageVersion int64, decision entity.ReleaseDecision, result entity.CommandResult, event entity.OutboxEvent) error
+	UpdateReleaseDecision(ctx context.Context, pkg entity.ReleaseDecisionPackage, previousPackageVersion int64, decision entity.ReleaseDecision, previousDecisionVersion int64, result entity.CommandResult, event entity.OutboxEvent) error
+	GetReleaseDecision(ctx context.Context, id uuid.UUID) (entity.ReleaseDecision, error)
+	GetReleaseDecisionByPackage(ctx context.Context, releaseDecisionPackageID uuid.UUID) (entity.ReleaseDecision, error)
+	ListReleaseDecisions(ctx context.Context, filter query.ReleaseDecisionFilter) ([]entity.ReleaseDecision, query.PageResult, error)
+	RecordReleaseSafetyState(ctx context.Context, state entity.ReleaseSafetyState, result entity.CommandResult, event entity.OutboxEvent) error
+	UpdateReleaseSafetyState(ctx context.Context, state entity.ReleaseSafetyState, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error
+	GetReleaseSafetyStateByPackage(ctx context.Context, releaseDecisionPackageID uuid.UUID) (entity.ReleaseSafetyState, error)
+	RecordBlockingSignal(ctx context.Context, signal entity.BlockingSignal, result entity.CommandResult, event entity.OutboxEvent) error
+	UpdateBlockingSignal(ctx context.Context, signal entity.BlockingSignal, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error
+	GetBlockingSignal(ctx context.Context, id uuid.UUID) (entity.BlockingSignal, error)
+	ListBlockingSignals(ctx context.Context, filter query.BlockingSignalFilter) ([]entity.BlockingSignal, query.PageResult, error)
 	GetCommandResult(ctx context.Context, identity query.CommandIdentity) (entity.CommandResult, error)
 	RecordCommandResult(ctx context.Context, result entity.CommandResult) error
 	ClaimOutboxEvents(ctx context.Context, limit int, now time.Time, lockedUntil time.Time) ([]entity.OutboxEvent, error)

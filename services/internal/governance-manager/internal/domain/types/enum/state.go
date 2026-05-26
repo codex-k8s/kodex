@@ -176,6 +176,63 @@ const (
 	ReleaseDecisionPackageStatusClosed            ReleaseDecisionPackageStatus = "closed"
 )
 
+// ReleaseDecisionStatus is the lifecycle status of a release decision.
+type ReleaseDecisionStatus string
+
+const (
+	ReleaseDecisionStatusRequested ReleaseDecisionStatus = "requested"
+	ReleaseDecisionStatusResolved  ReleaseDecisionStatus = "resolved"
+	ReleaseDecisionStatusCancelled ReleaseDecisionStatus = "cancelled"
+)
+
+// ReleaseDecisionOutcome is the deterministic outcome of a release decision.
+type ReleaseDecisionOutcome string
+
+const (
+	ReleaseDecisionOutcomeGo               ReleaseDecisionOutcome = "go"
+	ReleaseDecisionOutcomeGoWithConditions ReleaseDecisionOutcome = "go_with_conditions"
+	ReleaseDecisionOutcomeNoGo             ReleaseDecisionOutcome = "no_go"
+	ReleaseDecisionOutcomeHold             ReleaseDecisionOutcome = "hold"
+	ReleaseDecisionOutcomeRollback         ReleaseDecisionOutcome = "rollback"
+	ReleaseDecisionOutcomeFollowUpRequired ReleaseDecisionOutcome = "follow_up_required"
+)
+
+// ReleaseSafetyStateKind classifies release safety-loop state.
+type ReleaseSafetyStateKind string
+
+const (
+	ReleaseSafetyStateKindReleaseCandidate      ReleaseSafetyStateKind = "release_candidate"
+	ReleaseSafetyStateKindAwaitingReleaseGate   ReleaseSafetyStateKind = "awaiting_release_gate"
+	ReleaseSafetyStateKindDeploying             ReleaseSafetyStateKind = "deploying"
+	ReleaseSafetyStateKindPostdeployObservation ReleaseSafetyStateKind = "postdeploy_observation"
+	ReleaseSafetyStateKindStable                ReleaseSafetyStateKind = "stable"
+	ReleaseSafetyStateKindHold                  ReleaseSafetyStateKind = "hold"
+	ReleaseSafetyStateKindRollback              ReleaseSafetyStateKind = "rollback"
+	ReleaseSafetyStateKindFollowUpRequired      ReleaseSafetyStateKind = "follow_up_required"
+)
+
+// BlockingSignalSourceType classifies the source of a release blocking signal.
+type BlockingSignalSourceType string
+
+const (
+	BlockingSignalSourceTypeAcceptance   BlockingSignalSourceType = "acceptance"
+	BlockingSignalSourceTypeReviewSignal BlockingSignalSourceType = "review_signal"
+	BlockingSignalSourceTypeRuntime      BlockingSignalSourceType = "runtime"
+	BlockingSignalSourceTypeProvider     BlockingSignalSourceType = "provider"
+	BlockingSignalSourceTypeInteraction  BlockingSignalSourceType = "interaction"
+	BlockingSignalSourceTypeHuman        BlockingSignalSourceType = "human"
+	BlockingSignalSourceTypeMonitoring   BlockingSignalSourceType = "monitoring"
+)
+
+// BlockingSignalStatus is the lifecycle status of a blocking signal.
+type BlockingSignalStatus string
+
+const (
+	BlockingSignalStatusActive    BlockingSignalStatus = "active"
+	BlockingSignalStatusResolved  BlockingSignalStatus = "resolved"
+	BlockingSignalStatusDismissed BlockingSignalStatus = "dismissed"
+)
+
 // DecisionAuditKind classifies audit refs for gate and release decisions.
 type DecisionAuditKind string
 

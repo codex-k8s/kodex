@@ -218,7 +218,10 @@ approvals:
 | `decision_policy_ref` | text | да | Версия policy/evaluator; обязательна для автоматического решения. |
 | `reason` | text | нет | Обоснование решения. |
 | `conditions` | jsonb | да | Условия релиза или follow-up. |
+| `status` | enum | нет | `requested`, `resolved`, `cancelled`. |
+| `version` | bigint | нет | Оптимистичная конкуренция. |
 | `decided_at` | timestamptz | нет | Когда решение принято. |
+| `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
 
 ### ReleaseSafetyState
 

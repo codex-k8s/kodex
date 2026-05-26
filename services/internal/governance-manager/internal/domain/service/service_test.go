@@ -1039,34 +1039,377 @@ func TestCancelGateReturnsNotFound(t *testing.T) {
 	}
 }
 
+func TestReleaseDecisionLifecycleHappyPath(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+	packageID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+	decisionID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb")
+	requestCommandID := uuid.MustParse("cccccccc-cccc-4ccc-cccc-cccccccccccc")
+	submitCommandID := uuid.MustParse("dddddddd-dddd-4ddd-dddd-dddddddddddd")
+	requestEventID := uuid.MustParse("eeeeeeee-eeee-4eee-eeee-eeeeeeeeeeee")
+	submitEventID := uuid.MustParse("ffffffff-ffff-4fff-8fff-ffffffffffff")
+	expectedPackageVersion := int64(1)
+	expectedDecisionVersion := int64(1)
+	repository := &fakeRepository{
+		ready: true,
+		releasePackage: entity.ReleaseDecisionPackage{
+			VersionedBase:       entity.VersionedBase{ID: packageID, Version: 1, CreatedAt: now, UpdatedAt: now},
+			ReleaseCandidateRef: "release:v1.0.0",
+			ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha", ReleasePolicyRef: "policy:stable"},
+			Status:              enum.ReleaseDecisionPackageStatusReady,
+		},
+	}
+	service := NewWithConfig(Config{
+		Repository:  repository,
+		Clock:       fixedClock{now: now},
+		IDGenerator: &fixedIDs{ids: []uuid.UUID{decisionID, requestEventID, submitEventID}},
+		Authorizer:  AllowAllAuthorizer{},
+	})
+
+	decision, pkg, err := service.RequestReleaseDecision(context.Background(), RequestReleaseDecisionInput{
+		ReleaseDecisionPackageID: packageID,
+		RequestGateIfRequired:    true,
+		Meta: CommandMeta{
+			CommandID:       &requestCommandID,
+			ExpectedVersion: &expectedPackageVersion,
+			Actor:           value.Actor{Type: "service", ID: "agent-manager"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("RequestReleaseDecision(): %v", err)
+	}
+	if decision.Status != enum.ReleaseDecisionStatusRequested || pkg.Status != enum.ReleaseDecisionPackageStatusDecisionRequested || pkg.Version != 2 {
+		t.Fatalf("decision/package = %+v/%+v, want requested package v2", decision, pkg)
+	}
+	if repository.events[0].EventType != governanceevents.EventReleaseDecisionRequested {
+		t.Fatalf("event type = %q, want release decision requested", repository.events[0].EventType)
+	}
+
+	decision, pkg, err = service.SubmitReleaseDecision(context.Background(), SubmitReleaseDecisionInput{
+		ReleaseDecisionPackageID: packageID,
+		Outcome:                  enum.ReleaseDecisionOutcomeHold,
+		DecisionActorRef:         "user:release-owner",
+		DecisionPolicyRef:        "policy:stable",
+		Reason:                   "waiting for rollout window",
+		Meta: CommandMeta{
+			CommandID:       &submitCommandID,
+			ExpectedVersion: &expectedDecisionVersion,
+			Actor:           value.Actor{Type: "user", ID: "release-owner"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("SubmitReleaseDecision(): %v", err)
+	}
+	if decision.Status != enum.ReleaseDecisionStatusResolved || decision.Outcome != enum.ReleaseDecisionOutcomeHold || decision.Version != 2 {
+		t.Fatalf("decision = %+v, want resolved hold v2", decision)
+	}
+	if pkg.Status != enum.ReleaseDecisionPackageStatusClosed || pkg.Version != 3 {
+		t.Fatalf("package = %+v, want closed v3", pkg)
+	}
+	if payload := string(repository.events[0].Payload); strings.Contains(payload, "waiting for rollout") || strings.Contains(payload, "raw_diff") {
+		t.Fatalf("release decision event leaked unsafe text: %s", payload)
+	}
+}
+
+func TestReleaseDecisionBlocksGoWhenRiskRequiresGate(t *testing.T) {
+	t.Parallel()
+
+	packageID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+	assessmentID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb")
+	decisionID := uuid.MustParse("cccccccc-cccc-4ccc-cccc-cccccccccccc")
+	expectedVersion := int64(1)
+	repository := &fakeRepository{
+		ready: true,
+		releasePackage: entity.ReleaseDecisionPackage{
+			VersionedBase:       entity.VersionedBase{ID: packageID, Version: 2},
+			ReleaseCandidateRef: "release:v1.0.0",
+			ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha"},
+			RiskAssessmentID:    &assessmentID,
+			Status:              enum.ReleaseDecisionPackageStatusDecisionRequested,
+		},
+		releaseDecision: entity.ReleaseDecision{
+			VersionedBase:            entity.VersionedBase{ID: decisionID, Version: 1},
+			ReleaseDecisionPackageID: packageID,
+			Status:                   enum.ReleaseDecisionStatusRequested,
+		},
+		assessment: entity.RiskAssessment{
+			VersionedBase:      entity.VersionedBase{ID: assessmentID, Version: 1},
+			EffectiveRiskClass: enum.RiskClassR3,
+		},
+	}
+	service := newTestService(repository)
+
+	_, _, err := service.SubmitReleaseDecision(context.Background(), SubmitReleaseDecisionInput{
+		ReleaseDecisionPackageID: packageID,
+		Outcome:                  enum.ReleaseDecisionOutcomeGo,
+		DecisionActorRef:         "user:owner",
+		Reason:                   "release",
+		Meta: CommandMeta{
+			CommandID:       ptrUUID(uuid.MustParse("dddddddd-dddd-4ddd-dddd-dddddddddddd")),
+			ExpectedVersion: &expectedVersion,
+			Actor:           value.Actor{Type: "user", ID: "owner"},
+		},
+	})
+	if !errors.Is(err, errs.ErrPreconditionFailed) {
+		t.Fatalf("SubmitReleaseDecision() error = %v, want ErrPreconditionFailed", err)
+	}
+	if repository.mutationCalls != 0 {
+		t.Fatalf("mutation calls = %d, want 0", repository.mutationCalls)
+	}
+}
+
+func TestReleaseDecisionBlocksGoWhenActiveSignalExists(t *testing.T) {
+	t.Parallel()
+
+	packageID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+	decisionID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb")
+	expectedVersion := int64(1)
+	repository := &fakeRepository{
+		ready: true,
+		releasePackage: entity.ReleaseDecisionPackage{
+			VersionedBase:       entity.VersionedBase{ID: packageID, Version: 2},
+			ReleaseCandidateRef: "release:v1.0.0",
+			ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha"},
+			Status:              enum.ReleaseDecisionPackageStatusDecisionRequested,
+		},
+		releaseDecision: entity.ReleaseDecision{
+			VersionedBase:            entity.VersionedBase{ID: decisionID, Version: 1},
+			ReleaseDecisionPackageID: packageID,
+			Status:                   enum.ReleaseDecisionStatusRequested,
+		},
+		blockingSignals: []entity.BlockingSignal{{
+			VersionedBase: entity.VersionedBase{ID: uuid.MustParse("cccccccc-cccc-4ccc-cccc-cccccccccccc"), Version: 1},
+			Target:        value.ExternalRef{Type: "release_candidate", Ref: "release:v1.0.0"},
+			Status:        enum.BlockingSignalStatusActive,
+			Severity:      enum.SignalSeverityBlocking,
+		}},
+	}
+	service := newTestService(repository)
+
+	_, _, err := service.SubmitReleaseDecision(context.Background(), SubmitReleaseDecisionInput{
+		ReleaseDecisionPackageID: packageID,
+		Outcome:                  enum.ReleaseDecisionOutcomeGoWithConditions,
+		DecisionActorRef:         "user:owner",
+		Reason:                   "release",
+		Meta: CommandMeta{
+			CommandID:       ptrUUID(uuid.MustParse("dddddddd-dddd-4ddd-dddd-dddddddddddd")),
+			ExpectedVersion: &expectedVersion,
+			Actor:           value.Actor{Type: "user", ID: "owner"},
+		},
+	})
+	if !errors.Is(err, errs.ErrPreconditionFailed) {
+		t.Fatalf("SubmitReleaseDecision() error = %v, want ErrPreconditionFailed", err)
+	}
+}
+
+func TestReleaseDecisionExpectedVersionConflict(t *testing.T) {
+	t.Parallel()
+
+	packageID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+	expectedVersion := int64(1)
+	repository := &fakeRepository{
+		ready: true,
+		releasePackage: entity.ReleaseDecisionPackage{
+			VersionedBase:       entity.VersionedBase{ID: packageID, Version: 2},
+			ReleaseCandidateRef: "release:v1.0.0",
+			ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha"},
+			Status:              enum.ReleaseDecisionPackageStatusReady,
+		},
+	}
+	service := newTestService(repository)
+
+	_, _, err := service.RequestReleaseDecision(context.Background(), RequestReleaseDecisionInput{
+		ReleaseDecisionPackageID: packageID,
+		Meta: CommandMeta{
+			CommandID:       ptrUUID(uuid.MustParse("bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb")),
+			ExpectedVersion: &expectedVersion,
+			Actor:           value.Actor{Type: "service", ID: "agent-manager"},
+		},
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("RequestReleaseDecision() error = %v, want ErrConflict", err)
+	}
+}
+
+func TestReleaseReadAccessDeniedBeforeRepositoryRead(t *testing.T) {
+	t.Parallel()
+
+	packageID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+	repository := &fakeRepository{ready: true}
+	service := NewWithConfig(Config{
+		Repository: repository,
+		Authorizer: authorizerFunc(func(context.Context, AuthorizationRequest) error {
+			return errs.ErrForbidden
+		}),
+	})
+
+	_, err := service.GetReleaseDecisionPackage(context.Background(), GetReleaseDecisionPackageInput{
+		ReleaseDecisionPackageID: packageID,
+		Meta:                     QueryMeta{Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+	})
+	if !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("GetReleaseDecisionPackage() error = %v, want ErrForbidden", err)
+	}
+	if repository.releasePackageReads != 0 {
+		t.Fatalf("release package reads = %d, want 0 before access allow", repository.releasePackageReads)
+	}
+}
+
+func TestBlockingSignalLifecycleAndSafeEventPayload(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+	signalID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+	recordCommandID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb")
+	resolveCommandID := uuid.MustParse("cccccccc-cccc-4ccc-cccc-cccccccccccc")
+	recordEventID := uuid.MustParse("dddddddd-dddd-4ddd-dddd-dddddddddddd")
+	resolveEventID := uuid.MustParse("eeeeeeee-eeee-4eee-eeee-eeeeeeeeeeee")
+	expectedVersion := int64(1)
+	repository := &fakeRepository{ready: true}
+	service := NewWithConfig(Config{
+		Repository:  repository,
+		Clock:       fixedClock{now: now},
+		IDGenerator: &fixedIDs{ids: []uuid.UUID{signalID, recordEventID, resolveEventID}},
+		Authorizer:  AllowAllAuthorizer{},
+	})
+
+	signal, err := service.RecordBlockingSignal(context.Background(), RecordBlockingSignalInput{
+		Target:     value.ExternalRef{Type: "release_candidate", Ref: "release:v1.0.0"},
+		SourceType: enum.BlockingSignalSourceTypeRuntime,
+		SourceRef:  "runtime:job:1",
+		Severity:   enum.SignalSeverityCritical,
+		Summary:    "safe bounded summary without logs",
+		Meta:       CommandMeta{CommandID: &recordCommandID, Actor: value.Actor{Type: "service", ID: "runtime-manager"}},
+	})
+	if err != nil {
+		t.Fatalf("RecordBlockingSignal(): %v", err)
+	}
+	if signal.Status != enum.BlockingSignalStatusActive || signal.Version != 1 {
+		t.Fatalf("signal = %+v, want active v1", signal)
+	}
+	if payload := string(repository.events[0].Payload); strings.Contains(payload, "bounded summary") || strings.Contains(payload, "runtime:job:1") {
+		t.Fatalf("blocking signal event leaked signal details: %s", payload)
+	}
+	signal, err = service.ResolveBlockingSignal(context.Background(), ResolveBlockingSignalInput{
+		BlockingSignalID:  signalID,
+		TerminalStatus:    enum.BlockingSignalStatusResolved,
+		ResolutionSummary: "fixed",
+		Meta: CommandMeta{
+			CommandID:       &resolveCommandID,
+			ExpectedVersion: &expectedVersion,
+			Actor:           value.Actor{Type: "service", ID: "runtime-manager"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("ResolveBlockingSignal(): %v", err)
+	}
+	if signal.Status != enum.BlockingSignalStatusResolved || signal.ResolvedAt == nil || signal.Version != 2 {
+		t.Fatalf("resolved signal = %+v, want resolved v2", signal)
+	}
+}
+
+func TestReleaseSafetyStateCreateAndUpdate(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+	packageID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+	stateID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb")
+	createCommandID := uuid.MustParse("cccccccc-cccc-4ccc-cccc-cccccccccccc")
+	updateCommandID := uuid.MustParse("dddddddd-dddd-4ddd-dddd-dddddddddddd")
+	createEventID := uuid.MustParse("eeeeeeee-eeee-4eee-eeee-eeeeeeeeeeee")
+	updateEventID := uuid.MustParse("ffffffff-ffff-4fff-8fff-ffffffffffff")
+	expectedVersion := int64(1)
+	repository := &fakeRepository{
+		ready: true,
+		releasePackage: entity.ReleaseDecisionPackage{
+			VersionedBase:       entity.VersionedBase{ID: packageID, Version: 3},
+			ReleaseCandidateRef: "release:v1.0.0",
+			ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha"},
+		},
+		blockingSignals: []entity.BlockingSignal{{
+			VersionedBase: entity.VersionedBase{ID: uuid.MustParse("99999999-9999-4999-8999-999999999999"), Version: 1},
+			Target:        value.ExternalRef{Type: "release_candidate", Ref: "release:v1.0.0"},
+			Status:        enum.BlockingSignalStatusActive,
+			Severity:      enum.SignalSeverityBlocking,
+		}},
+	}
+	service := NewWithConfig(Config{
+		Repository:  repository,
+		Clock:       fixedClock{now: now},
+		IDGenerator: &fixedIDs{ids: []uuid.UUID{stateID, createEventID, updateEventID}},
+		Authorizer:  AllowAllAuthorizer{},
+	})
+
+	state, err := service.RecordReleaseSafetyState(context.Background(), RecordReleaseSafetyStateInput{
+		ReleaseDecisionPackageID: packageID,
+		CurrentState:             enum.ReleaseSafetyStateKindAwaitingReleaseGate,
+		LastStateReason:          "active blocker",
+		Meta:                     CommandMeta{CommandID: &createCommandID, Actor: value.Actor{Type: "service", ID: "runtime-manager"}},
+	})
+	if err != nil {
+		t.Fatalf("RecordReleaseSafetyState(create): %v", err)
+	}
+	if state.Version != 1 || state.BlockingSignalCount != 1 {
+		t.Fatalf("state = %+v, want v1 with one active blocker", state)
+	}
+	state, err = service.RecordReleaseSafetyState(context.Background(), RecordReleaseSafetyStateInput{
+		ReleaseDecisionPackageID: packageID,
+		CurrentState:             enum.ReleaseSafetyStateKindStable,
+		RuntimeJobRef:            "runtime:job:stable",
+		LastStateReason:          "postdeploy healthy",
+		Meta: CommandMeta{
+			CommandID:       &updateCommandID,
+			ExpectedVersion: &expectedVersion,
+			Actor:           value.Actor{Type: "service", ID: "runtime-manager"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("RecordReleaseSafetyState(update): %v", err)
+	}
+	if state.Version != 2 || state.CurrentState != enum.ReleaseSafetyStateKindStable {
+		t.Fatalf("state = %+v, want stable v2", state)
+	}
+}
+
 type fakeRepository struct {
 	governancerepo.Repository
-	ready                   bool
-	hasCommandResult        bool
-	commandResult           entity.CommandResult
-	profile                 entity.RiskProfile
-	profileVersion          entity.RiskProfileVersion
-	assessment              entity.RiskAssessment
-	assessmentReads         int
-	riskFactors             []entity.RiskFactor
-	riskAssessmentListCalls int
-	riskFactorListCalls     int
-	assessmentUpdateCalls   int
-	reviewSignal            entity.ReviewSignal
-	reviewSignals           []entity.ReviewSignal
-	reviewSignalListCalls   int
-	gateRequest             entity.GateRequest
-	gateRequestErr          error
-	gateRequestReads        int
-	gateRequestListCalls    int
-	gateDecision            entity.GateDecision
-	gateDecisionErr         error
-	gateDecisionReads       int
-	gateDecisionListCalls   int
-	releasePackage          entity.ReleaseDecisionPackage
-	result                  entity.CommandResult
-	events                  []entity.OutboxEvent
-	mutationCalls           int
+	ready                    bool
+	hasCommandResult         bool
+	commandResult            entity.CommandResult
+	profile                  entity.RiskProfile
+	profileVersion           entity.RiskProfileVersion
+	assessment               entity.RiskAssessment
+	assessmentReads          int
+	riskFactors              []entity.RiskFactor
+	riskAssessmentListCalls  int
+	riskFactorListCalls      int
+	assessmentUpdateCalls    int
+	reviewSignal             entity.ReviewSignal
+	reviewSignals            []entity.ReviewSignal
+	reviewSignalListCalls    int
+	gateRequest              entity.GateRequest
+	gateRequestErr           error
+	gateRequestReads         int
+	gateRequestListCalls     int
+	gateDecision             entity.GateDecision
+	gateDecisionErr          error
+	gateDecisionReads        int
+	gateDecisionListCalls    int
+	releasePackage           entity.ReleaseDecisionPackage
+	releasePackageReads      int
+	releaseDecision          entity.ReleaseDecision
+	releaseDecisionReads     int
+	releaseDecisionListCalls int
+	releaseSafetyState       entity.ReleaseSafetyState
+	releaseSafetyStateErr    error
+	blockingSignal           entity.BlockingSignal
+	blockingSignals          []entity.BlockingSignal
+	blockingSignalReads      int
+	blockingSignalListCalls  int
+	result                   entity.CommandResult
+	events                   []entity.OutboxEvent
+	mutationCalls            int
 }
 
 func newTestService(repository *fakeRepository) *Service {
@@ -1237,8 +1580,126 @@ func (repository *fakeRepository) CreateReleaseDecisionPackage(_ context.Context
 	return nil
 }
 
+func (repository *fakeRepository) UpdateReleaseDecisionPackageStatus(_ context.Context, item entity.ReleaseDecisionPackage, _ int64, result entity.CommandResult, event entity.OutboxEvent) error {
+	repository.mutationCalls++
+	repository.releasePackage = item
+	repository.result = result
+	repository.events = []entity.OutboxEvent{event}
+	return nil
+}
+
 func (repository *fakeRepository) GetReleaseDecisionPackage(_ context.Context, _ uuid.UUID) (entity.ReleaseDecisionPackage, error) {
+	repository.releasePackageReads++
 	return repository.releasePackage, nil
+}
+
+func (repository *fakeRepository) ListReleaseDecisionPackages(_ context.Context, _ query.ReleaseDecisionPackageFilter) ([]entity.ReleaseDecisionPackage, query.PageResult, error) {
+	return []entity.ReleaseDecisionPackage{repository.releasePackage}, query.PageResult{}, nil
+}
+
+func (repository *fakeRepository) CreateReleaseDecision(_ context.Context, pkg entity.ReleaseDecisionPackage, _ int64, decision entity.ReleaseDecision, result entity.CommandResult, event entity.OutboxEvent) error {
+	repository.mutationCalls++
+	repository.releasePackage = pkg
+	repository.releaseDecision = decision
+	repository.result = result
+	repository.events = []entity.OutboxEvent{event}
+	return nil
+}
+
+func (repository *fakeRepository) UpdateReleaseDecision(_ context.Context, pkg entity.ReleaseDecisionPackage, _ int64, decision entity.ReleaseDecision, _ int64, result entity.CommandResult, event entity.OutboxEvent) error {
+	repository.mutationCalls++
+	repository.releasePackage = pkg
+	repository.releaseDecision = decision
+	repository.result = result
+	repository.events = []entity.OutboxEvent{event}
+	return nil
+}
+
+func (repository *fakeRepository) GetReleaseDecision(_ context.Context, _ uuid.UUID) (entity.ReleaseDecision, error) {
+	repository.releaseDecisionReads++
+	return repository.releaseDecision, nil
+}
+
+func (repository *fakeRepository) GetReleaseDecisionByPackage(_ context.Context, _ uuid.UUID) (entity.ReleaseDecision, error) {
+	repository.releaseDecisionReads++
+	if repository.releaseDecision.ID == uuid.Nil {
+		return entity.ReleaseDecision{}, errs.ErrNotFound
+	}
+	return repository.releaseDecision, nil
+}
+
+func (repository *fakeRepository) ListReleaseDecisions(_ context.Context, _ query.ReleaseDecisionFilter) ([]entity.ReleaseDecision, query.PageResult, error) {
+	repository.releaseDecisionListCalls++
+	return []entity.ReleaseDecision{repository.releaseDecision}, query.PageResult{}, nil
+}
+
+func (repository *fakeRepository) RecordReleaseSafetyState(_ context.Context, state entity.ReleaseSafetyState, result entity.CommandResult, event entity.OutboxEvent) error {
+	repository.mutationCalls++
+	repository.releaseSafetyState = state
+	repository.result = result
+	repository.events = []entity.OutboxEvent{event}
+	return nil
+}
+
+func (repository *fakeRepository) UpdateReleaseSafetyState(_ context.Context, state entity.ReleaseSafetyState, _ int64, result entity.CommandResult, event entity.OutboxEvent) error {
+	repository.mutationCalls++
+	repository.releaseSafetyState = state
+	repository.result = result
+	repository.events = []entity.OutboxEvent{event}
+	return nil
+}
+
+func (repository *fakeRepository) GetReleaseSafetyStateByPackage(_ context.Context, _ uuid.UUID) (entity.ReleaseSafetyState, error) {
+	if repository.releaseSafetyStateErr != nil {
+		return entity.ReleaseSafetyState{}, repository.releaseSafetyStateErr
+	}
+	if repository.releaseSafetyState.ID == uuid.Nil {
+		return entity.ReleaseSafetyState{}, errs.ErrNotFound
+	}
+	return repository.releaseSafetyState, nil
+}
+
+func (repository *fakeRepository) RecordBlockingSignal(_ context.Context, signal entity.BlockingSignal, result entity.CommandResult, event entity.OutboxEvent) error {
+	repository.mutationCalls++
+	repository.blockingSignal = signal
+	repository.blockingSignals = append(repository.blockingSignals, signal)
+	repository.result = result
+	repository.events = []entity.OutboxEvent{event}
+	return nil
+}
+
+func (repository *fakeRepository) UpdateBlockingSignal(_ context.Context, signal entity.BlockingSignal, _ int64, result entity.CommandResult, event entity.OutboxEvent) error {
+	repository.mutationCalls++
+	repository.blockingSignal = signal
+	repository.result = result
+	repository.events = []entity.OutboxEvent{event}
+	return nil
+}
+
+func (repository *fakeRepository) GetBlockingSignal(_ context.Context, _ uuid.UUID) (entity.BlockingSignal, error) {
+	repository.blockingSignalReads++
+	return repository.blockingSignal, nil
+}
+
+func (repository *fakeRepository) ListBlockingSignals(_ context.Context, filter query.BlockingSignalFilter) ([]entity.BlockingSignal, query.PageResult, error) {
+	repository.blockingSignalListCalls++
+	if len(repository.blockingSignals) == 0 {
+		return nil, query.PageResult{}, nil
+	}
+	items := make([]entity.BlockingSignal, 0, len(repository.blockingSignals))
+	for _, signal := range repository.blockingSignals {
+		if externalRefProvided(filter.Target) && !sameExternalRef(signal.Target, filter.Target) {
+			continue
+		}
+		if filter.Status != "" && signal.Status != filter.Status {
+			continue
+		}
+		if filter.Severity != "" && signal.Severity != filter.Severity {
+			continue
+		}
+		items = append(items, signal)
+	}
+	return items, query.PageResult{}, nil
 }
 
 type fixedClock struct {
@@ -1260,6 +1721,10 @@ func (generator *fixedIDs) New() uuid.UUID {
 	id := generator.ids[0]
 	generator.ids = generator.ids[1:]
 	return id
+}
+
+func ptrUUID(id uuid.UUID) *uuid.UUID {
+	return &id
 }
 
 type authorizerFunc func(context.Context, AuthorizationRequest) error
