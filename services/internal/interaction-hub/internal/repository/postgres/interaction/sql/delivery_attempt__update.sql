@@ -5,6 +5,7 @@ SET status = @status,
     next_retry_at = @next_retry_at::timestamptz,
     error_code = @error_code,
     error_class = @error_class,
+    result_fingerprint = @result_fingerprint,
     updated_at = @updated_at,
     sent_at = @sent_at::timestamptz
 WHERE id = @id

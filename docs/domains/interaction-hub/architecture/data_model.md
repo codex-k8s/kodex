@@ -230,6 +230,7 @@ One-way уведомления и reminders не создают `InteractionRequ
 | `error_code` | text | да | Короткий безопасный код ошибки. |
 | `error_class` | enum | да | `temporary`, `permanent`, `auth`, `rate_limited`, `policy`. |
 | `payload_digest` | text | нет | Digest нормализованного delivery command. |
+| `result_fingerprint` | text | да | Digest нормализованного safe delivery result; используется для идемпотентного replay по `delivery_id` без повторного outbox event. |
 | `created_at`, `updated_at`, `sent_at` | timestamptz | да | Временные метки. |
 
 Ровно одно из полей `request_id` или `notification_id` должно быть заполнено. Статус request не выводится из статуса one-way notification; request завершает только `InteractionResponse` или доменная команда истечения/отмены.

@@ -57,7 +57,7 @@ approvals:
 | `DisableSubscription` | gRPC command | `interaction.subscription.manage` | `command_id` + expected version | Отключает подписку. |
 | `ListSubscriptions` | gRPC query | `interaction.subscription.read` | нет | Читает подписки по scope или subscriber. |
 | `PlanDelivery` | gRPC command | `interaction.delivery.plan` | `command_id` | Выбирает route и создаёт delivery attempt. |
-| `RecordDeliveryResult` | gRPC command | `interaction.delivery.update` | `delivery_id` | Фиксирует ответ package workload через согласованный runtime boundary. |
+| `RecordDeliveryResult` | gRPC command | `interaction.delivery.update` | `delivery_id` + safe result fingerprint | Фиксирует ответ package workload через согласованный runtime boundary; replay того же `delivery_id/result` возвращает сохранённое состояние без нового event. |
 | `RecordChannelCallback` | gRPC command | `interaction.callback.record` | `callback_id` | Принимает безопасный callback envelope от gateway. |
 | `GetDeliveryStatus` | gRPC query | `interaction.delivery.read` | нет | Читает состояние request/notification и delivery attempts. |
 

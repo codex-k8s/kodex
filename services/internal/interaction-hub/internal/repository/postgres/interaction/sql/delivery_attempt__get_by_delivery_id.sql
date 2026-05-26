@@ -13,6 +13,7 @@ SELECT
     error_code,
     error_class,
     payload_digest,
+    result_fingerprint,
     created_at,
     updated_at,
     sent_at

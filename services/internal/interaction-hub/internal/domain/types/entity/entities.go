@@ -139,6 +139,7 @@ type DeliveryAttempt struct {
 	ErrorCode         string
 	ErrorClass        enum.DeliveryErrorClass
 	PayloadDigest     string
+	ResultFingerprint string
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
 	SentAt            *time.Time

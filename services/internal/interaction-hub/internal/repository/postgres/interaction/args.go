@@ -227,6 +227,7 @@ func deliveryAttemptArgs(attempt entity.DeliveryAttempt) pgx.NamedArgs {
 		"error_code":          attempt.ErrorCode,
 		"error_class":         string(attempt.ErrorClass),
 		"payload_digest":      attempt.PayloadDigest,
+		"result_fingerprint":  attempt.ResultFingerprint,
 		"created_at":          attempt.CreatedAt,
 		"updated_at":          attempt.UpdatedAt,
 		"sent_at":             postgreslib.NullableTime(attempt.SentAt),

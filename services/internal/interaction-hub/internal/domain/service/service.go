@@ -699,10 +699,17 @@ func (s *Service) RecordDeliveryResult(ctx context.Context, input RecordDelivery
 	if attempt, ok, err := replayAggregate(ctx, s, input.Meta, enum.OperationRecordDeliveryResult, fingerprint, s.repository.GetDeliveryAttempt); err != nil || ok {
 		return attempt, err
 	}
+	resultFingerprint, err := deliveryResultFingerprint(input.Result)
+	if err != nil {
+		return entity.DeliveryAttempt{}, err
+	}
 
 	attempt, err := s.repository.GetDeliveryAttemptByDeliveryID(ctx, input.Result.DeliveryID)
 	if err != nil {
 		return entity.DeliveryAttempt{}, err
+	}
+	if replayed, ok, err := replayDeliveryResultByFingerprint(attempt, resultFingerprint); err != nil || ok {
+		return replayed, err
 	}
 	if attempt.Status.Terminal() {
 		return entity.DeliveryAttempt{}, errs.ErrConflict
@@ -712,6 +719,7 @@ func (s *Service) RecordDeliveryResult(ctx context.Context, input RecordDelivery
 	if err != nil {
 		return entity.DeliveryAttempt{}, err
 	}
+	updated.ResultFingerprint = resultFingerprint
 	result := commandResult(input.Meta, enum.OperationRecordDeliveryResult, interactionevents.AggregateDelivery, updated.ID, fingerprint, now)
 	event, err := s.outboxEvent(eventType, interactionevents.AggregateDelivery, updated.ID, deliveryResultPayload(updated), now)
 	if err != nil {
@@ -1320,6 +1328,47 @@ func deliveryAttemptWithResult(attempt entity.DeliveryAttempt, result value.Chan
 	default:
 		return entity.DeliveryAttempt{}, "", errs.ErrInvalidArgument
 	}
+}
+
+func replayDeliveryResultByFingerprint(attempt entity.DeliveryAttempt, resultFingerprint string) (entity.DeliveryAttempt, bool, error) {
+	if resultFingerprint == "" {
+		return entity.DeliveryAttempt{}, false, errs.ErrInvalidArgument
+	}
+	if attempt.ResultFingerprint == "" {
+		return entity.DeliveryAttempt{}, false, nil
+	}
+	if attempt.ResultFingerprint != resultFingerprint {
+		return entity.DeliveryAttempt{}, true, errs.ErrConflict
+	}
+	return attempt, true, nil
+}
+
+type deliveryResultFingerprintInput struct {
+	ContractVersion   string                           `json:"contract_version"`
+	DeliveryID        string                           `json:"delivery_id"`
+	ResultStatus      enum.ChannelDeliveryResultStatus `json:"result_status"`
+	ChannelMessageRef string                           `json:"channel_message_ref,omitempty"`
+	ErrorCode         string                           `json:"error_code,omitempty"`
+	ErrorClass        enum.DeliveryErrorClass          `json:"error_class,omitempty"`
+	RetryAfter        string                           `json:"retry_after,omitempty"`
+	OccurredAt        string                           `json:"occurred_at"`
+}
+
+func deliveryResultFingerprint(result value.ChannelDeliveryResult) (string, error) {
+	fingerprint, err := fingerprintInput(deliveryResultFingerprintInput{
+		ContractVersion:   result.ContractVersion,
+		DeliveryID:        result.DeliveryID,
+		ResultStatus:      result.ResultStatus,
+		ChannelMessageRef: result.ChannelMessageRef,
+		ErrorCode:         result.ErrorCode,
+		ErrorClass:        result.ErrorClass,
+		RetryAfter:        timeProto(result.RetryAfter),
+		OccurredAt:        timeProto(&result.OccurredAt),
+	})
+	if err != nil {
+		return "", err
+	}
+	return "sha256:" + fingerprint, nil
 }
 
 func nextAttemptNumber(attempts []entity.DeliveryAttempt) int32 {

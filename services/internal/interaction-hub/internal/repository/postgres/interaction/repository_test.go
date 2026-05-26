@@ -413,6 +413,7 @@ func TestRepositoryIntegrationDeliveryAttemptLifecycle(t *testing.T) {
 	sentAt := now.Add(2 * time.Minute)
 	accepted.Status = enum.DeliveryAttemptStatusAccepted
 	accepted.ChannelMessageRef = "channel:message-1"
+	accepted.ResultFingerprint = "sha256:" + strings.Repeat("f", 64)
 	accepted.SentAt = &sentAt
 	accepted.UpdatedAt = sentAt
 	acceptedResult := testCommandResult(uuid.New(), "delivery-result", enum.OperationRecordDeliveryResult, interactionevents.AggregateDelivery, accepted.ID, "delivery-result-fingerprint", sentAt)
@@ -424,7 +425,7 @@ func TestRepositoryIntegrationDeliveryAttemptLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get accepted attempt: %v", err)
 	}
-	if storedAccepted.Status != enum.DeliveryAttemptStatusAccepted || storedAccepted.ChannelMessageRef != "channel:message-1" || storedAccepted.SentAt == nil {
+	if storedAccepted.Status != enum.DeliveryAttemptStatusAccepted || storedAccepted.ChannelMessageRef != "channel:message-1" || storedAccepted.ResultFingerprint != accepted.ResultFingerprint || storedAccepted.SentAt == nil {
 		t.Fatalf("accepted attempt = %+v, want accepted with channel ref", storedAccepted)
 	}
 }

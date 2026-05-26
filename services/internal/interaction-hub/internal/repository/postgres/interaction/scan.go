@@ -306,6 +306,7 @@ func scanDeliveryAttempt(row postgreslib.RowScanner) (entity.DeliveryAttempt, er
 		&attempt.ErrorCode,
 		&errorClass,
 		&attempt.PayloadDigest,
+		&attempt.ResultFingerprint,
 		&attempt.CreatedAt,
 		&attempt.UpdatedAt,
 		&sentAt,
