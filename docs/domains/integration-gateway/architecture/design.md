@@ -95,7 +95,9 @@ sequenceDiagram
 
 `integration-gateway` передаёт в `provider-hub` минимальный transport envelope: `provider_slug`, `delivery_id`, `event_name`, `payload_json`, `received_at` и безопасный `CommandMeta`. Он не извлекает provider work item, не строит проекцию и не решает, какие доменные события публиковать.
 
-В IGW-2 активный provider route поддерживает только `provider_slug=github`: gateway требует `X-GitHub-Delivery`, `X-GitHub-Event`, валидную `X-Hub-Signature-256`, JSON payload в пределах лимита и настроенную ссылку на webhook secret. GitLab и другие provider sources остаются будущими расширениями route registry.
+Активный provider route поддерживает только `provider_slug=github`: gateway требует `X-GitHub-Delivery`, `X-GitHub-Event`, валидную `X-Hub-Signature-256`, JSON payload в пределах лимита и настроенную ссылку на webhook secret. GitLab и другие provider sources остаются будущими расширениями route registry.
+
+Публичный provider route защищён per-route/per-source guard: статический deployment config задаёт `max_in_flight`, fixed-window `rate_limit_burst`, `rate_limit_window` и `retry_after`. Guard живёт только в памяти процесса, не является inbox или дедупликацией и нужен только для edge backpressure до вызова `provider-hub`.
 
 Если provider не даёт устойчивый delivery id, gateway отклоняет запрос или строит idempotency key только по заранее согласованному правилу source registry. Само доменное дублирование webhook остаётся в `provider-hub`.
 
@@ -148,6 +150,7 @@ sequenceDiagram
 ### Rate limits и backpressure
 
 - Лимиты задаются по route, source, provider/channel slug, IP/ASN при необходимости и downstream owner service.
+- Для активного GitHub route gateway применяет per-source `max_in_flight` и fixed-window burst limit до вызова владельца.
 - При перегрузке gateway возвращает `429` или `503` без постановки скрытой фоновой работы.
 - Timeout downstream gRPC меньше общего HTTP timeout, чтобы внешний отправитель получил контролируемый ответ.
 - Retry внешнего отправителя должен быть безопасен: provider webhook route передаёт delivery id в `provider-hub`, который дедуплицирует событие.
@@ -160,6 +163,8 @@ sequenceDiagram
 | Проверки | Отказы подписи, неизвестные source, превышение размера, redaction hits. |
 | Backpressure | Rate limited, downstream unavailable, queue saturation или rejected before owner call. |
 | gRPC маршруты | Owner service, method, latency, status, retryable/non-retryable classification. |
+
+Safe audit summary gateway пишет только redaction-safe поля: request id, route, source, status, latency, payload size bucket и короткую причину отказа.
 
 ## Риски
 

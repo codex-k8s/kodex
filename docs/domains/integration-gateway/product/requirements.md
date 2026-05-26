@@ -64,6 +64,8 @@ approvals:
 | IGW-NFR-4 | Наблюдаемость | Метрики и логи должны содержать route, source, статус, latency, payload size bucket и безопасную причину отказа. |
 | IGW-NFR-5 | Расширяемость | Новый внешний source добавляется через route registry и owner-service contract, а не через доменную логику в gateway. |
 
+Для активного GitHub provider route лимиты и backpressure задаются runtime config процесса: максимальное число одновременных запросов, размер burst в fixed-window окне, длительность окна и безопасный `Retry-After`. Эти параметры не создают бизнес-состояние и не заменяют дедупликацию `provider-hub`.
+
 ## Критерии приёмки MVP
 
 | ID | Критерий |

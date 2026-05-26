@@ -24,6 +24,10 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if len(cfg.ProviderWebhook.AllowedProviderSlugs) != 1 || cfg.ProviderWebhook.AllowedProviderSlugs[0] != "github" {
 		t.Fatalf("AllowedProviderSlugs = %#v, want github default", cfg.ProviderWebhook.AllowedProviderSlugs)
 	}
+	if cfg.ProviderWebhook.MaxInFlight != 32 || cfg.ProviderWebhook.RateLimitBurst != 120 ||
+		cfg.ProviderWebhook.RateLimitWindow != time.Second || cfg.ProviderWebhook.RetryAfter != time.Second {
+		t.Fatalf("ProviderWebhook limits = %+v, want safe defaults", cfg.ProviderWebhook)
+	}
 }
 
 func TestLoadConfigEnabledGitHubWebhook(t *testing.T) {
@@ -80,6 +84,10 @@ func TestConfigValidateRequiresProviderHubTokenWhenProviderWebhookEnabled(t *tes
 			AllowedProviderSlugs:  []string{"github"},
 			GitHubSecretStoreType: "env",
 			GitHubSecretStoreRef:  "KODEX_TEST_GITHUB_WEBHOOK_SECRET",
+			MaxInFlight:           32,
+			RateLimitBurst:        120,
+			RateLimitWindow:       time.Second,
+			RetryAfter:            time.Second,
 		},
 		ProviderHub:    ProviderHubConfig{GRPCAddr: "provider-hub:9090", Timeout: time.Second},
 		SecretResolver: SecretResolverConfig{EnvEnabled: true, MountedKubernetesMaxBytes: 1024},
@@ -103,6 +111,57 @@ func TestConfigValidateRequiresGitHubSecretRefWhenProviderWebhookEnabled(t *test
 	}
 	if !strings.Contains(err.Error(), "KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_GITHUB_SECRET_STORE_REF") {
 		t.Fatalf("Validate() error = %v, want github secret ref error", err)
+	}
+}
+
+func TestConfigValidateRejectsInvalidProviderWebhookLimits(t *testing.T) {
+	tests := []struct {
+		name    string
+		mutate  func(*Config)
+		wantErr string
+	}{
+		{
+			name: "max in flight",
+			mutate: func(cfg *Config) {
+				cfg.ProviderWebhook.MaxInFlight = 0
+			},
+			wantErr: "KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_MAX_IN_FLIGHT",
+		},
+		{
+			name: "rate limit burst",
+			mutate: func(cfg *Config) {
+				cfg.ProviderWebhook.RateLimitBurst = 0
+			},
+			wantErr: "KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_RATE_LIMIT_BURST",
+		},
+		{
+			name: "rate limit window",
+			mutate: func(cfg *Config) {
+				cfg.ProviderWebhook.RateLimitWindow = 0
+			},
+			wantErr: "KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_RATE_LIMIT_WINDOW",
+		},
+		{
+			name: "retry after",
+			mutate: func(cfg *Config) {
+				cfg.ProviderWebhook.RetryAfter = 0
+			},
+			wantErr: "KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_RETRY_AFTER",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validEnabledConfig()
+			tt.mutate(&cfg)
+			err := cfg.Validate()
+			if err == nil {
+				t.Fatal("Validate() error = nil, want limit error")
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("Validate() error = %v, want %s", err, tt.wantErr)
+			}
+		})
 	}
 }
 
@@ -149,6 +208,10 @@ func validEnabledConfig() Config {
 			AllowedProviderSlugs:  []string{"github"},
 			GitHubSecretStoreType: "env",
 			GitHubSecretStoreRef:  "KODEX_TEST_GITHUB_WEBHOOK_SECRET",
+			MaxInFlight:           32,
+			RateLimitBurst:        120,
+			RateLimitWindow:       time.Second,
+			RetryAfter:            time.Second,
 		},
 		ProviderHub: ProviderHubConfig{
 			GRPCAddr:  "provider-hub:9090",

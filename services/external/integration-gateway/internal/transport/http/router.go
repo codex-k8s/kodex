@@ -35,7 +35,8 @@ func NewRouterWithVerifier(ctx context.Context, cfg Config, providerHub Provider
 		return nil, err
 	}
 	registry := newRouteRegistry(cfg.ProviderWebhookEnabled, cfg.AllowedProviderSlugs)
-	handlers := newHandlers(registry, providerHub, verifier, cfg.OpenAPISpecPath)
+	guard := newProviderWebhookGuard(cfg)
+	handlers := newHandlers(registry, providerHub, verifier, guard, cfg.OpenAPISpecPath)
 	e := echo.New()
 	e.HTTPErrorHandler = ErrorHandler(logger)
 	e.POST("/v1/provider-webhooks/:provider_slug", handlers.providerWebhook)
@@ -43,10 +44,12 @@ func NewRouterWithVerifier(ctx context.Context, cfg Config, providerHub Provider
 	e.GET("/openapi/integration-gateway.v1.yaml", handlers.openAPISpec)
 
 	handler := RequestIDMiddleware(
-		LoggingMiddleware(logger)(
-			TimeoutMiddleware(cfg.RequestTimeout)(
-				BodyCaptureMiddleware(cfg.MaxBodyBytes)(
-					validator.Middleware(e),
+		RouteDiagnosticsMiddleware(
+			LoggingMiddleware(logger)(
+				TimeoutMiddleware(cfg.RequestTimeout)(
+					BodyCaptureMiddleware(cfg.MaxBodyBytes)(
+						validator.Middleware(e),
+					),
 				),
 			),
 		),

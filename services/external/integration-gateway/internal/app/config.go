@@ -34,10 +34,14 @@ type HTTPConfig struct {
 
 // ProviderWebhookConfig controls the first provider webhook route.
 type ProviderWebhookConfig struct {
-	Enabled               bool     `env:"ENABLED" envDefault:"false"`
-	AllowedProviderSlugs  []string `env:"ALLOWED_PROVIDER_SLUGS" envDefault:"github" envSeparator:","`
-	GitHubSecretStoreType string   `env:"GITHUB_SECRET_STORE_TYPE"`
-	GitHubSecretStoreRef  string   `env:"GITHUB_SECRET_STORE_REF"`
+	Enabled               bool          `env:"ENABLED" envDefault:"false"`
+	AllowedProviderSlugs  []string      `env:"ALLOWED_PROVIDER_SLUGS" envDefault:"github" envSeparator:","`
+	GitHubSecretStoreType string        `env:"GITHUB_SECRET_STORE_TYPE"`
+	GitHubSecretStoreRef  string        `env:"GITHUB_SECRET_STORE_REF"`
+	MaxInFlight           int           `env:"MAX_IN_FLIGHT" envDefault:"32"`
+	RateLimitBurst        int           `env:"RATE_LIMIT_BURST" envDefault:"120"`
+	RateLimitWindow       time.Duration `env:"RATE_LIMIT_WINDOW" envDefault:"1s"`
+	RetryAfter            time.Duration `env:"RETRY_AFTER" envDefault:"1s"`
 }
 
 // ProviderHubConfig contains the future owner-service route settings.
@@ -118,11 +122,23 @@ func (cfg ProviderWebhookConfig) validate() error {
 			return fmt.Errorf("KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_ALLOWED_PROVIDER_SLUGS contains an empty slug")
 		}
 		if cfg.Enabled && normalized != "github" {
-			return fmt.Errorf("KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_ALLOWED_PROVIDER_SLUGS supports only github in IGW-2")
+			return fmt.Errorf("KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_ALLOWED_PROVIDER_SLUGS supports only github for the active provider webhook route")
 		}
 	}
 	if !cfg.Enabled {
 		return nil
+	}
+	if cfg.MaxInFlight <= 0 {
+		return fmt.Errorf("KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_MAX_IN_FLIGHT is invalid")
+	}
+	if cfg.RateLimitBurst <= 0 {
+		return fmt.Errorf("KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_RATE_LIMIT_BURST is invalid")
+	}
+	if cfg.RateLimitWindow <= 0 {
+		return fmt.Errorf("KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_RATE_LIMIT_WINDOW is invalid")
+	}
+	if cfg.RetryAfter <= 0 {
+		return fmt.Errorf("KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_RETRY_AFTER is invalid")
 	}
 	if strings.TrimSpace(cfg.GitHubSecretStoreType) == "" {
 		return fmt.Errorf("KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_GITHUB_SECRET_STORE_TYPE is required when provider webhook route is enabled")
@@ -181,12 +197,16 @@ func (cfg SecretResolverConfig) validate(required bool, requiredStoreType string
 // HTTPRouterConfig converts process config to the HTTP transport runtime contract.
 func (cfg Config) HTTPRouterConfig() httptransport.Config {
 	return httptransport.Config{
-		ServiceName:            serviceName,
-		OpenAPISpecPath:        strings.TrimSpace(cfg.OpenAPISpecPath),
-		RequestTimeout:         cfg.HTTP.RequestTimeout,
-		MaxBodyBytes:           cfg.HTTP.MaxBodyBytes,
-		ProviderWebhookEnabled: cfg.ProviderWebhook.Enabled,
-		AllowedProviderSlugs:   cfg.ProviderWebhook.AllowedProviderSlugs,
+		ServiceName:                    serviceName,
+		OpenAPISpecPath:                strings.TrimSpace(cfg.OpenAPISpecPath),
+		RequestTimeout:                 cfg.HTTP.RequestTimeout,
+		MaxBodyBytes:                   cfg.HTTP.MaxBodyBytes,
+		ProviderWebhookEnabled:         cfg.ProviderWebhook.Enabled,
+		AllowedProviderSlugs:           cfg.ProviderWebhook.AllowedProviderSlugs,
+		ProviderWebhookMaxInFlight:     cfg.ProviderWebhook.MaxInFlight,
+		ProviderWebhookRateLimitBurst:  cfg.ProviderWebhook.RateLimitBurst,
+		ProviderWebhookRateLimitWindow: cfg.ProviderWebhook.RateLimitWindow,
+		ProviderWebhookRetryAfter:      cfg.ProviderWebhook.RetryAfter,
 	}
 }
 

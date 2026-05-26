@@ -5,6 +5,8 @@ import (
 	"errors"
 	"log/slog"
 	stdhttp "net/http"
+	"strconv"
+	"time"
 
 	"github.com/labstack/echo/v5"
 
@@ -26,11 +28,12 @@ const (
 
 // SafeError is a redaction-safe HTTP error boundary object.
 type SafeError struct {
-	Status    int
-	Code      ErrorCode
-	Message   string
-	Retryable bool
-	Cause     error
+	Status            int
+	Code              ErrorCode
+	Message           string
+	Retryable         bool
+	RetryAfterSeconds int
+	Cause             error
 }
 
 // Error returns the safe public message.
@@ -51,6 +54,23 @@ func NewSafeError(status int, code ErrorCode, message string, retryable bool) *S
 // WrapSafeError creates a safe HTTP error with an internal cause.
 func WrapSafeError(status int, code ErrorCode, message string, retryable bool, cause error) *SafeError {
 	return &SafeError{Status: status, Code: code, Message: message, Retryable: retryable, Cause: cause}
+}
+
+// WithRetryAfter sets a bounded Retry-After header value for retryable edge errors.
+func (e *SafeError) WithRetryAfter(delay time.Duration) *SafeError {
+	if e == nil {
+		return nil
+	}
+	if delay <= 0 {
+		e.RetryAfterSeconds = 1
+		return e
+	}
+	seconds := int((delay + time.Second - 1) / time.Second)
+	if seconds < 1 {
+		seconds = 1
+	}
+	e.RetryAfterSeconds = seconds
+	return e
 }
 
 // ErrorHandler is Echo's central error boundary.
@@ -75,6 +95,10 @@ func ErrorHandler(logger *slog.Logger) echo.HTTPErrorHandler {
 
 // WriteSafeError writes a stable OpenAPI error response.
 func WriteSafeError(w stdhttp.ResponseWriter, req *stdhttp.Request, safeErr *SafeError) {
+	setRejectReason(req, safeErr.Code)
+	if safeErr.RetryAfterSeconds > 0 {
+		w.Header().Set("Retry-After", strconv.Itoa(safeErr.RetryAfterSeconds))
+	}
 	correlationID := requestIDFromContext(req.Context())
 	body := generated.SafeError{
 		RequestId:     requestIDFromContext(req.Context()),

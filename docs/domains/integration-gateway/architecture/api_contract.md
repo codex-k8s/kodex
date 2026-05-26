@@ -38,7 +38,7 @@ approvals:
 
 | HTTP endpoint | Назначение | Внутренний владелец | Статус |
 |---|---|---|---|
-| `POST /v1/provider-webhooks/{provider_slug}` | Принять GitHub provider webhook по `provider_slug=github`. | `provider-hub.IngestWebhookEvent` | Активный IGW-2 route с source binding и проверкой `X-Hub-Signature-256`; другие providers добавляются отдельными срезами. |
+| `POST /v1/provider-webhooks/{provider_slug}` | Принять GitHub provider webhook по `provider_slug=github`. | `provider-hub.IngestWebhookEvent` | Активный route с source binding, проверкой `X-Hub-Signature-256`, per-source limits и backpressure guard; другие providers добавляются отдельными срезами. |
 | `POST /v1/external-callbacks/{callback_source}` | Принять callback внешнего канала, пакета или интеграции. | `interaction-hub`, `package-hub` или другой владелец по route registry | Контрактный задел, активируется отдельным owner-срезом. |
 
 ## Provider webhook envelope
@@ -66,12 +66,13 @@ approvals:
 | `429` | Сработал rate limit по source/route/downstream. |
 | `503` | Downstream owner service недоступен или backpressure guard временно закрыт маршрут. |
 
-Тело ошибки содержит только безопасный код, короткое сообщение, `request_id`, `correlation_id` и retryable flag. Секреты, подписи и полный payload не возвращаются.
+Тело ошибки содержит только безопасный код, короткое сообщение, `request_id`, `correlation_id` и retryable flag. Для `429` и edge backpressure `503` gateway добавляет `Retry-After`. Секреты, подписи и полный payload не возвращаются.
 
 ## Идемпотентность и retry
 
 - Provider webhook дедуплицируется доменным владельцем `provider-hub` по `provider_slug + delivery_id`.
-- Gateway не создаёт скрытую очередь side effects в IGW-0. Если downstream недоступен, внешний sender получает retryable ответ.
+- Повтор с тем же GitHub delivery id проходит тот же edge-контур и передаётся владельцу; gateway не заводит собственный cache, inbox или бизнес-состояние для дедупликации.
+- Gateway не создаёт скрытую очередь side effects. Если downstream недоступен, внешний sender получает retryable ответ.
 - Для callback routes idempotency key является обязательной частью route contract владельца перед активацией endpoint.
 - Повтор с тем же delivery id должен возвращать безопасный ответ без создания второго бизнес-события у владельца.
 
@@ -81,8 +82,9 @@ approvals:
 - Значения секретов разрешаются только по ссылке и удерживаются в памяти процесса на время проверки.
 - Gateway не хранит raw payload в собственной БД.
 - Логи, ошибки и метрики проходят redaction до записи.
+- Safe audit summary ограничен route/source/status/latency/payload size bucket/reject reason и не содержит signature, token, secret или полный payload.
 - Внутренний gRPC-вызов содержит только безопасный edge context и payload, предназначенный сервису-владельцу.
-- Активный IGW-2 provider route принимает только GitHub webhook с валидной HMAC SHA-256 подписью и настроенной ссылкой на webhook secret.
+- Активный provider route принимает только GitHub webhook с валидной HMAC SHA-256 подписью и настроенной ссылкой на webhook secret.
 
 ## Совместимость
 
