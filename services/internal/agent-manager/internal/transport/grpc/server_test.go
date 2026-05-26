@@ -583,6 +583,97 @@ func TestSessionRunHandlersMapRequests(t *testing.T) {
 	}
 }
 
+func TestAcceptanceHandlersMapRequests(t *testing.T) {
+	t.Parallel()
+
+	sessionID := uuid.MustParse("dddddddd-1111-2222-3333-444444444444")
+	runID := uuid.MustParse("dddddddd-2222-3333-4444-555555555555")
+	stageID := uuid.MustParse("dddddddd-3333-4444-5555-666666666666")
+	acceptanceID := uuid.MustParse("dddddddd-4444-5555-6666-777777777777")
+	expectedVersion := int64(2)
+	statusFilter := agentsv1.AcceptanceStatus_ACCEPTANCE_STATUS_PASSED
+	service := &fakeAgentService{
+		requestAcceptance: func(_ context.Context, input agentservice.RequestAcceptanceInput) (entity.AcceptanceResult, error) {
+			if input.SessionID != sessionID || input.RunID == nil || *input.RunID != runID || len(input.CheckKinds) != 1 || input.CheckKinds[0] != enum.AcceptanceCheckKindRoleResult {
+				t.Fatalf("request acceptance input = %+v", input)
+			}
+			return sampleAcceptanceResult(acceptanceID, sessionID, &runID, &stageID, enum.AcceptanceCheckKindRoleResult, enum.AcceptanceStatusPending), nil
+		},
+		recordAcceptanceResult: func(_ context.Context, input agentservice.RecordAcceptanceResultInput) (entity.AcceptanceResult, error) {
+			if input.AcceptanceResultID != acceptanceID || input.Meta.ExpectedVersion == nil || *input.Meta.ExpectedVersion != expectedVersion || input.Status != enum.AcceptanceStatusPassed {
+				t.Fatalf("record acceptance input = %+v", input)
+			}
+			if string(input.DetailsJSON) != `{"summary":"ok"}` {
+				t.Fatalf("details_json = %s", input.DetailsJSON)
+			}
+			return sampleAcceptanceResult(acceptanceID, sessionID, &runID, &stageID, enum.AcceptanceCheckKindRoleResult, enum.AcceptanceStatusPassed), nil
+		},
+		getAcceptanceResult: func(_ context.Context, id uuid.UUID) (entity.AcceptanceResult, error) {
+			if id != acceptanceID {
+				t.Fatalf("acceptance id = %s", id)
+			}
+			return sampleAcceptanceResult(acceptanceID, sessionID, &runID, &stageID, enum.AcceptanceCheckKindRoleResult, enum.AcceptanceStatusPassed), nil
+		},
+		listAcceptanceResults: func(_ context.Context, input agentservice.AcceptanceResultList) ([]entity.AcceptanceResult, value.PageResult, error) {
+			if input.SessionID != sessionID || input.RunID != runID || input.StageID != stageID || input.Status == nil || *input.Status != enum.AcceptanceStatusPassed {
+				t.Fatalf("list acceptance input = %+v", input)
+			}
+			return []entity.AcceptanceResult{sampleAcceptanceResult(acceptanceID, sessionID, &runID, &stageID, enum.AcceptanceCheckKindRoleResult, enum.AcceptanceStatusPassed)}, value.PageResult{NextPageToken: "acceptance-next"}, nil
+		},
+	}
+	server := NewServer(service)
+	requested, err := server.RequestAcceptance(context.Background(), &agentsv1.RequestAcceptanceRequest{
+		Meta:       commandMeta("eeeeeeee-1111-2222-3333-444444444444", "", nil),
+		SessionId:  sessionID.String(),
+		RunId:      ptr(runID.String()),
+		StageId:    ptr(stageID.String()),
+		CheckKinds: []agentsv1.AcceptanceCheckKind{agentsv1.AcceptanceCheckKind_ACCEPTANCE_CHECK_KIND_ROLE_RESULT},
+		TargetRef:  ptr("artifact:run-summary"),
+	})
+	if err != nil {
+		t.Fatalf("RequestAcceptance() error = %v", err)
+	}
+	if requested.GetAcceptanceResult().GetStatus() != agentsv1.AcceptanceStatus_ACCEPTANCE_STATUS_PENDING {
+		t.Fatalf("requested = %+v", requested.GetAcceptanceResult())
+	}
+	recorded, err := server.RecordAcceptanceResult(context.Background(), &agentsv1.RecordAcceptanceResultRequest{
+		Meta:               commandMeta("eeeeeeee-2222-3333-4444-555555555555", "", &expectedVersion),
+		AcceptanceResultId: acceptanceID.String(),
+		Status:             agentsv1.AcceptanceStatus_ACCEPTANCE_STATUS_PASSED,
+		DetailsJson:        `{"summary":"ok"}`,
+	})
+	if err != nil {
+		t.Fatalf("RecordAcceptanceResult() error = %v", err)
+	}
+	if recorded.GetAcceptanceResult().GetStatus() != agentsv1.AcceptanceStatus_ACCEPTANCE_STATUS_PASSED {
+		t.Fatalf("recorded = %+v", recorded.GetAcceptanceResult())
+	}
+	read, err := server.GetAcceptanceResult(context.Background(), &agentsv1.GetAcceptanceResultRequest{
+		Meta:               queryMeta(),
+		AcceptanceResultId: acceptanceID.String(),
+	})
+	if err != nil {
+		t.Fatalf("GetAcceptanceResult() error = %v", err)
+	}
+	if read.GetAcceptanceResult().GetId() != acceptanceID.String() {
+		t.Fatalf("read = %+v", read.GetAcceptanceResult())
+	}
+	list, err := server.ListAcceptanceResults(context.Background(), &agentsv1.ListAcceptanceResultsRequest{
+		Meta:      queryMeta(),
+		SessionId: ptr(sessionID.String()),
+		RunId:     ptr(runID.String()),
+		StageId:   ptr(stageID.String()),
+		Status:    &statusFilter,
+		Page:      &agentsv1.PageRequest{PageSize: 2},
+	})
+	if err != nil {
+		t.Fatalf("ListAcceptanceResults() error = %v", err)
+	}
+	if len(list.GetAcceptanceResults()) != 1 || list.GetPage().GetNextPageToken() != "acceptance-next" {
+		t.Fatalf("list = %+v", list)
+	}
+}
+
 func TestTransportRejectsValidationErrorsBeforeDomainCall(t *testing.T) {
 	t.Parallel()
 
@@ -655,6 +746,10 @@ type fakeAgentService struct {
 	recordSessionSnapshot       func(context.Context, agentservice.RecordSessionStateSnapshotInput) (agentservice.SessionSnapshotResult, error)
 	listAgentRuns               func(context.Context, agentservice.AgentRunList) ([]entity.AgentRun, value.PageResult, error)
 	getSessionStateSnapshot     func(context.Context, uuid.UUID) (entity.AgentSessionStateSnapshot, error)
+	requestAcceptance           func(context.Context, agentservice.RequestAcceptanceInput) (entity.AcceptanceResult, error)
+	recordAcceptanceResult      func(context.Context, agentservice.RecordAcceptanceResultInput) (entity.AcceptanceResult, error)
+	getAcceptanceResult         func(context.Context, uuid.UUID) (entity.AcceptanceResult, error)
+	listAcceptanceResults       func(context.Context, agentservice.AcceptanceResultList) ([]entity.AcceptanceResult, value.PageResult, error)
 }
 
 func (f *fakeAgentService) CreateFlow(ctx context.Context, input agentservice.CreateFlowInput) (entity.Flow, error) {
@@ -825,6 +920,34 @@ func (f *fakeAgentService) GetSessionStateSnapshot(ctx context.Context, id uuid.
 	return f.getSessionStateSnapshot(ctx, id)
 }
 
+func (f *fakeAgentService) RequestAcceptance(ctx context.Context, input agentservice.RequestAcceptanceInput) (entity.AcceptanceResult, error) {
+	if f.requestAcceptance == nil {
+		return entity.AcceptanceResult{}, errs.ErrPreconditionFailed
+	}
+	return f.requestAcceptance(ctx, input)
+}
+
+func (f *fakeAgentService) RecordAcceptanceResult(ctx context.Context, input agentservice.RecordAcceptanceResultInput) (entity.AcceptanceResult, error) {
+	if f.recordAcceptanceResult == nil {
+		return entity.AcceptanceResult{}, errs.ErrPreconditionFailed
+	}
+	return f.recordAcceptanceResult(ctx, input)
+}
+
+func (f *fakeAgentService) GetAcceptanceResult(ctx context.Context, id uuid.UUID) (entity.AcceptanceResult, error) {
+	if f.getAcceptanceResult == nil {
+		return entity.AcceptanceResult{}, errs.ErrPreconditionFailed
+	}
+	return f.getAcceptanceResult(ctx, id)
+}
+
+func (f *fakeAgentService) ListAcceptanceResults(ctx context.Context, input agentservice.AcceptanceResultList) ([]entity.AcceptanceResult, value.PageResult, error) {
+	if f.listAcceptanceResults == nil {
+		return nil, value.PageResult{}, errs.ErrPreconditionFailed
+	}
+	return f.listAcceptanceResults(ctx, input)
+}
+
 func commandMeta(commandID string, idempotencyKey string, expectedVersion *int64) *agentsv1.CommandMeta {
 	return &agentsv1.CommandMeta{
 		CommandId:       optional(commandID),
@@ -911,6 +1034,20 @@ func samplePromptVersion(id string, templateID string, roleID string) entity.Pro
 		TemplateDigest:   "sha256:prompt",
 		Status:           enum.PromptVersionStatusDraft,
 		CreatedAt:        sampleTime(),
+	}
+}
+
+func sampleAcceptanceResult(id uuid.UUID, sessionID uuid.UUID, runID *uuid.UUID, stageID *uuid.UUID, checkKind enum.AcceptanceCheckKind, status enum.AcceptanceStatus) entity.AcceptanceResult {
+	now := sampleTime()
+	return entity.AcceptanceResult{
+		VersionedBase: entity.VersionedBase{ID: id, Version: 1, CreatedAt: now, UpdatedAt: now},
+		SessionID:     sessionID,
+		RunID:         runID,
+		StageID:       stageID,
+		CheckKind:     checkKind,
+		Status:        status,
+		TargetRef:     "artifact:run-summary",
+		DetailsJSON:   []byte(`{"summary":"ok"}`),
 	}
 }
 

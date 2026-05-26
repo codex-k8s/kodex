@@ -239,7 +239,7 @@ MCP не владеет доменным состоянием и не подме
 - результаты ролевых проверок;
 - риск и необходимость Human gate.
 
-Результат приёмки не меняет чужую истину напрямую. Он создаёт `AcceptanceResult` в `agent-manager`, публикует событие и инициирует provider/governance/interaction/runtime операции через владельцев.
+Результат приёмки не меняет чужую истину напрямую. Базовый lifecycle создаёт и обновляет `AcceptanceResult` в `agent-manager`, хранит только статусы, safe refs, bounded summary/digest и публикует события. Если проверка требует provider/governance/interaction/runtime действия, `agent-manager` фиксирует ожидание или ссылку, а операцию выполняет сервис-владелец в отдельном срезе. Для `human_gate` `agent-manager` фиксирует только `waiting` с безопасным gate/risk/governance ref и не записывает финальное решение.
 
 ## События
 

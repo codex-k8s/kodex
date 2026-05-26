@@ -74,6 +74,10 @@ const (
 	operationListRuns              = "domain.Repository.ListAgentRuns"
 	operationCreateSnapshot        = "domain.Repository.CreateSessionStateSnapshotWithResult"
 	operationGetSnapshot           = "domain.Repository.GetSessionStateSnapshot"
+	operationCreateAcceptance      = "domain.Repository.CreateAcceptanceResultWithResult"
+	operationUpdateAcceptance      = "domain.Repository.UpdateAcceptanceResultWithResult"
+	operationGetAcceptance         = "domain.Repository.GetAcceptanceResult"
+	operationListAcceptance        = "domain.Repository.ListAcceptanceResults"
 	operationGetCommandResult      = "domain.Repository.GetCommandResult"
 	operationRecordCommandResult   = "domain.Repository.RecordCommandResult"
 	operationOutboxClaim           = "domain.Repository.ClaimOutboxEvents"
@@ -243,6 +247,23 @@ func (r *Repository) CreateSessionStateSnapshotWithResult(ctx context.Context, s
 
 func (r *Repository) GetSessionStateSnapshot(ctx context.Context, id uuid.UUID) (entity.AgentSessionStateSnapshot, error) {
 	return queryOne(ctx, r.db, operationGetSnapshot, querySessionStateSnapshotGet, pgx.NamedArgs{"id": id}, scanSessionStateSnapshot)
+}
+
+func (r *Repository) CreateAcceptanceResultWithResult(ctx context.Context, acceptance entity.AcceptanceResult, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.mutateWithResult(ctx, operationCreateAcceptance, queryAcceptanceResultCreate, acceptanceResultArgs(acceptance), result, &event)
+}
+
+func (r *Repository) UpdateAcceptanceResultWithResult(ctx context.Context, acceptance entity.AcceptanceResult, previousVersion int64, result entity.CommandResult, event *entity.OutboxEvent) error {
+	args := acceptanceResultUpdateArgs(acceptance, previousVersion)
+	return r.mutateWithResult(ctx, operationUpdateAcceptance, queryAcceptanceResultUpdate, args, result, event)
+}
+
+func (r *Repository) GetAcceptanceResult(ctx context.Context, id uuid.UUID) (entity.AcceptanceResult, error) {
+	return queryOne(ctx, r.db, operationGetAcceptance, queryAcceptanceResultGet, pgx.NamedArgs{"id": id}, scanAcceptanceResult)
+}
+
+func (r *Repository) ListAcceptanceResults(ctx context.Context, filter query.AcceptanceResultFilter) ([]entity.AcceptanceResult, value.PageResult, error) {
+	return queryPage(ctx, r.db, operationListAcceptance, queryAcceptanceResultList, acceptanceResultFilterArgs(filter), scanAcceptanceResult)
 }
 
 func (r *Repository) GetCommandResult(ctx context.Context, identity query.CommandIdentity) (entity.CommandResult, error) {

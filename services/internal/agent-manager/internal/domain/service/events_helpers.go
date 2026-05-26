@@ -11,6 +11,7 @@ import (
 	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
 	agentevents "github.com/codex-k8s/kodex/libs/go/platformevents/agent"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/enum"
 )
 
 func flowActivatedEvent(id uuid.UUID, flow entity.Flow, version entity.FlowVersion, occurredAt time.Time) (entity.OutboxEvent, error) {
@@ -144,6 +145,48 @@ func sessionSnapshotRecordedEvent(id uuid.UUID, snapshot entity.AgentSessionStat
 		return entity.OutboxEvent{}, err
 	}
 	return outboxEvent(id, agentevents.EventSessionSnapshotRecorded, agentevents.AggregateSession, session.ID, payload, occurredAt), nil
+}
+
+func acceptanceRequestedEvent(id uuid.UUID, acceptance entity.AcceptanceResult, occurredAt time.Time) (entity.OutboxEvent, error) {
+	return acceptanceEvent(id, agentevents.EventAcceptanceRequested, "", acceptance, occurredAt)
+}
+
+func acceptanceResultEvent(id uuid.UUID, previousStatus string, acceptance entity.AcceptanceResult, occurredAt time.Time) (*entity.OutboxEvent, error) {
+	if previousStatus == string(acceptance.Status) {
+		return nil, nil
+	}
+	eventType := ""
+	reasonCode := ""
+	switch acceptance.Status {
+	case enum.AcceptanceStatusPassed, enum.AcceptanceStatusSkipped:
+		eventType = agentevents.EventAcceptanceCompleted
+	case enum.AcceptanceStatusFailed:
+		eventType = agentevents.EventAcceptanceFailed
+		reasonCode = acceptanceFailureReasonCode
+	default:
+		return nil, nil
+	}
+	event, err := acceptanceEvent(id, eventType, reasonCode, acceptance, occurredAt)
+	if err != nil {
+		return nil, err
+	}
+	return &event, nil
+}
+
+func acceptanceEvent(id uuid.UUID, eventType string, reasonCode string, acceptance entity.AcceptanceResult, occurredAt time.Time) (entity.OutboxEvent, error) {
+	payload, err := json.Marshal(agentevents.Payload{
+		SessionID:          acceptance.SessionID.String(),
+		RunID:              optionalUUIDValue(acceptance.RunID),
+		StageID:            optionalUUIDValue(acceptance.StageID),
+		AcceptanceResultID: acceptance.ID.String(),
+		Status:             string(acceptance.Status),
+		ReasonCode:         reasonCode,
+		Version:            acceptance.Version,
+	})
+	if err != nil {
+		return entity.OutboxEvent{}, err
+	}
+	return outboxEvent(id, eventType, agentevents.AggregateAcceptance, acceptance.ID, payload, occurredAt), nil
 }
 
 func optionalUUIDValue(id *uuid.UUID) string {

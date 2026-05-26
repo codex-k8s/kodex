@@ -54,3 +54,11 @@ type AgentRunFilter struct {
 	ProviderWorkItemRef string
 	Page                value.PageRequest
 }
+
+type AcceptanceResultFilter struct {
+	SessionID uuid.UUID
+	RunID     uuid.UUID
+	StageID   uuid.UUID
+	Status    *enum.AcceptanceStatus
+	Page      value.PageRequest
+}

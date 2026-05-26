@@ -150,6 +150,17 @@ type AgentSessionStateSnapshot struct {
 	CreatedAt    time.Time
 }
 
+type AcceptanceResult struct {
+	VersionedBase
+	SessionID   uuid.UUID
+	RunID       *uuid.UUID
+	StageID     *uuid.UUID
+	CheckKind   enum.AcceptanceCheckKind
+	Status      enum.AcceptanceStatus
+	TargetRef   string
+	DetailsJSON []byte
+}
+
 type CommandResult struct {
 	Key            string
 	CommandID      *uuid.UUID

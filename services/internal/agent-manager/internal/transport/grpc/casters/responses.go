@@ -36,6 +36,8 @@ type PromptTemplateVersionListOutput = PageOutput[entity.PromptTemplateVersion]
 
 type AgentRunListOutput = PageOutput[entity.AgentRun]
 
+type AcceptanceResultListOutput = PageOutput[entity.AcceptanceResult]
+
 type AgentSessionOutput struct {
 	Session        entity.AgentSession
 	LatestSnapshot *entity.AgentSessionStateSnapshot
@@ -126,6 +128,14 @@ func AgentSessionStateSnapshotResponse(output agentservice.SessionSnapshotResult
 
 func ListAgentRunsResponse(output AgentRunListOutput) *agentsv1.ListAgentRunsResponse {
 	return &agentsv1.ListAgentRunsResponse{Runs: protoList(output.Items, AgentRunToProto), Page: pageResponseToProto(output.Page)}
+}
+
+func AcceptanceResultResponse(acceptance entity.AcceptanceResult) *agentsv1.AcceptanceResultResponse {
+	return &agentsv1.AcceptanceResultResponse{AcceptanceResult: AcceptanceResultToProto(acceptance)}
+}
+
+func ListAcceptanceResultsResponse(output AcceptanceResultListOutput) *agentsv1.ListAcceptanceResultsResponse {
+	return &agentsv1.ListAcceptanceResultsResponse{AcceptanceResults: protoList(output.Items, AcceptanceResultToProto), Page: pageResponseToProto(output.Page)}
 }
 
 func protoList[Domain any, Proto any](items []Domain, cast func(Domain) *Proto) []*Proto {
@@ -316,6 +326,22 @@ func AgentSessionStateSnapshotToProto(snapshot entity.AgentSessionStateSnapshot)
 		Object:       ObjectRefToProto(snapshot.Object),
 		CapturedAt:   formatTime(snapshot.CapturedAt),
 		CreatedAt:    formatTime(snapshot.CreatedAt),
+	}
+}
+
+func AcceptanceResultToProto(acceptance entity.AcceptanceResult) *agentsv1.AcceptanceResult {
+	return &agentsv1.AcceptanceResult{
+		Id:          acceptance.ID.String(),
+		SessionId:   acceptance.SessionID.String(),
+		RunId:       optionalUUIDStringPtr(acceptance.RunID),
+		StageId:     optionalUUIDStringPtr(acceptance.StageID),
+		CheckKind:   AcceptanceCheckKindToProto(acceptance.CheckKind),
+		Status:      AcceptanceStatusToProto(acceptance.Status),
+		TargetRef:   optionalStringPtr(acceptance.TargetRef),
+		DetailsJson: string(acceptance.DetailsJSON),
+		Version:     acceptance.Version,
+		CreatedAt:   formatTime(acceptance.CreatedAt),
+		UpdatedAt:   formatTime(acceptance.UpdatedAt),
 	}
 }
 

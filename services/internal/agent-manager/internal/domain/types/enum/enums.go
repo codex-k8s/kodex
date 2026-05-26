@@ -121,6 +121,27 @@ const (
 	AgentSessionSnapshotKindRecoveryCheckpoint AgentSessionSnapshotKind = "recovery_checkpoint"
 )
 
+type AcceptanceCheckKind string
+
+const (
+	AcceptanceCheckKindArtifact   AcceptanceCheckKind = "artifact"
+	AcceptanceCheckKindWatermark  AcceptanceCheckKind = "watermark"
+	AcceptanceCheckKindPolicy     AcceptanceCheckKind = "policy"
+	AcceptanceCheckKindRoleResult AcceptanceCheckKind = "role_result"
+	AcceptanceCheckKindHumanGate  AcceptanceCheckKind = "human_gate"
+	AcceptanceCheckKindFollowUp   AcceptanceCheckKind = "follow_up"
+)
+
+type AcceptanceStatus string
+
+const (
+	AcceptanceStatusPending AcceptanceStatus = "pending"
+	AcceptanceStatusPassed  AcceptanceStatus = "passed"
+	AcceptanceStatusFailed  AcceptanceStatus = "failed"
+	AcceptanceStatusWaiting AcceptanceStatus = "waiting"
+	AcceptanceStatusSkipped AcceptanceStatus = "skipped"
+)
+
 type CommandAggregateType string
 
 const (
@@ -132,4 +153,5 @@ const (
 	CommandAggregateTypeSession               CommandAggregateType = "session"
 	CommandAggregateTypeRun                   CommandAggregateType = "run"
 	CommandAggregateTypeSessionStateSnapshot  CommandAggregateType = "session_state_snapshot"
+	CommandAggregateTypeAcceptance            CommandAggregateType = "acceptance"
 )

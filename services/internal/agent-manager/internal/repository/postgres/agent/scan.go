@@ -317,6 +317,32 @@ func scanSessionStateSnapshot(row postgreslib.RowScanner) (entity.AgentSessionSt
 	return snapshot, err
 }
 
+func scanAcceptanceResult(row postgreslib.RowScanner) (entity.AcceptanceResult, error) {
+	var acceptance entity.AcceptanceResult
+	var runID, stageID pgtype.UUID
+	var checkKind, status string
+	var details []byte
+	err := row.Scan(
+		&acceptance.ID,
+		&acceptance.SessionID,
+		&runID,
+		&stageID,
+		&checkKind,
+		&status,
+		&acceptance.TargetRef,
+		&details,
+		&acceptance.Version,
+		&acceptance.CreatedAt,
+		&acceptance.UpdatedAt,
+	)
+	acceptance.RunID = postgreslib.UUIDPtrFromPG(runID)
+	acceptance.StageID = postgreslib.UUIDPtrFromPG(stageID)
+	acceptance.CheckKind = enum.AcceptanceCheckKind(checkKind)
+	acceptance.Status = enum.AcceptanceStatus(status)
+	acceptance.DetailsJSON = append(acceptance.DetailsJSON[:0], details...)
+	return acceptance, err
+}
+
 func scanCommandResult(row postgreslib.RowScanner) (entity.CommandResult, error) {
 	var raw commandResultRow
 	if err := raw.scan(row); err != nil {

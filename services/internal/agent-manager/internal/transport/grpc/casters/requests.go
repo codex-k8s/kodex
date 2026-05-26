@@ -361,6 +361,92 @@ func RecordSessionStateSnapshotInput(request *agentsv1.RecordSessionStateSnapsho
 	}, nil
 }
 
+func RequestAcceptanceInput(request *agentsv1.RequestAcceptanceRequest) (service.RequestAcceptanceInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return service.RequestAcceptanceInput{}, err
+	}
+	sessionID, err := requiredUUID(request.GetSessionId())
+	if err != nil {
+		return service.RequestAcceptanceInput{}, err
+	}
+	runID, err := optionalUUIDPtr(request.GetRunId())
+	if err != nil {
+		return service.RequestAcceptanceInput{}, err
+	}
+	stageID, err := optionalUUIDPtr(request.GetStageId())
+	if err != nil {
+		return service.RequestAcceptanceInput{}, err
+	}
+	checkKinds, err := acceptanceCheckKindsFromProtoList(request.GetCheckKinds())
+	if err != nil {
+		return service.RequestAcceptanceInput{}, err
+	}
+	return service.RequestAcceptanceInput{
+		Meta:       meta,
+		SessionID:  sessionID,
+		RunID:      runID,
+		StageID:    stageID,
+		CheckKinds: checkKinds,
+		TargetRef:  strings.TrimSpace(request.GetTargetRef()),
+	}, nil
+}
+
+func RecordAcceptanceResultInput(request *agentsv1.RecordAcceptanceResultRequest) (service.RecordAcceptanceResultInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return service.RecordAcceptanceResultInput{}, err
+	}
+	acceptanceID, err := requiredUUID(request.GetAcceptanceResultId())
+	if err != nil {
+		return service.RecordAcceptanceResultInput{}, err
+	}
+	status, err := AcceptanceStatusFromProto(request.GetStatus())
+	if err != nil {
+		return service.RecordAcceptanceResultInput{}, err
+	}
+	return service.RecordAcceptanceResultInput{
+		Meta:               meta,
+		AcceptanceResultID: acceptanceID,
+		Status:             status,
+		TargetRef:          strings.TrimSpace(request.GetTargetRef()),
+		DetailsJSON:        []byte(strings.TrimSpace(request.GetDetailsJson())),
+	}, nil
+}
+
+func GetAcceptanceResultInput(request *agentsv1.GetAcceptanceResultRequest) (IDQueryInput, error) {
+	return idQueryInput(request.GetAcceptanceResultId(), request.GetMeta())
+}
+
+func ListAcceptanceResultsInput(request *agentsv1.ListAcceptanceResultsRequest) (service.AcceptanceResultList, error) {
+	if _, err := QueryMetaFromProto(request.GetMeta()); err != nil {
+		return service.AcceptanceResultList{}, err
+	}
+	sessionID, err := optionalUUIDValue(request.GetSessionId())
+	if err != nil {
+		return service.AcceptanceResultList{}, err
+	}
+	runID, err := optionalUUIDValue(request.GetRunId())
+	if err != nil {
+		return service.AcceptanceResultList{}, err
+	}
+	stageID, err := optionalUUIDValue(request.GetStageId())
+	if err != nil {
+		return service.AcceptanceResultList{}, err
+	}
+	status, err := OptionalAcceptanceStatusFromProto(request.Status)
+	if err != nil {
+		return service.AcceptanceResultList{}, err
+	}
+	return service.AcceptanceResultList{
+		SessionID: sessionID,
+		RunID:     runID,
+		StageID:   stageID,
+		Status:    status,
+		Page:      pageRequestFromProto(request.GetPage()),
+	}, nil
+}
+
 func GetAgentSessionInput(request *agentsv1.GetAgentSessionRequest) (IDQueryInput, error) {
 	return idQueryInput(request.GetSessionId(), request.GetMeta())
 }
@@ -446,6 +532,18 @@ func stageRoleBindingInputs(items []*agentsv1.StageRoleBindingInput) ([]service.
 			LaunchPolicyJSON:      []byte(strings.TrimSpace(item.GetLaunchPolicyJson())),
 			RequiredForAcceptance: item.GetRequiredForAcceptance(),
 		})
+	}
+	return result, nil
+}
+
+func acceptanceCheckKindsFromProtoList(items []agentsv1.AcceptanceCheckKind) ([]enum.AcceptanceCheckKind, error) {
+	result := make([]enum.AcceptanceCheckKind, 0, len(items))
+	for _, item := range items {
+		kind, err := AcceptanceCheckKindFromProto(item)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, kind)
 	}
 	return result, nil
 }
