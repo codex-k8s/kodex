@@ -6,7 +6,7 @@ status: active
 owner_role: PM
 created_at: 2026-05-25
 updated_at: 2026-05-26
-related_issues: [781, 792, 770]
+related_issues: [781, 792, 807, 770]
 related_prs: []
 related_docsets:
   - docs/platform/architecture/service_boundaries.md
@@ -27,13 +27,14 @@ approvals:
 
 `integration-gateway` нужен как отдельный внешний HTTP-вход для webhook и callback событий. Он принимает запросы от GitHub/GitLab, внешних каналов, пакетов и будущих интеграций, проверяет их на границе и передаёт безопасный envelope сервису-владельцу.
 
-Первый MVP-сценарий: provider webhook -> `provider-hub.IngestWebhookEvent`.
+Первый активный MVP-сценарий: GitHub provider webhook -> `provider-hub.IngestWebhookEvent`.
 
 ## Пользователи и системы
 
 | Участник | Потребность |
 |---|---|
-| GitHub/GitLab | Доставить webhook в публичный HTTPS endpoint платформы. |
+| GitHub | Доставить webhook в публичный HTTPS endpoint платформы. |
+| GitLab и другие providers | Подключаются отдельными расширениями route registry после GitHub-среза. |
 | Внешний канал | Вернуть callback по доставленному запросу обратной связи или approval. |
 | Пакет или интеграция | Передать callback в платформу по согласованному route. |
 | `provider-hub` | Получить уже проверенный webhook через внутренний gRPC без публичной HTTP-логики. |

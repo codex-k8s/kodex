@@ -38,13 +38,14 @@
 | PRV-9 | #754 | готово | Эксплуатационный контур: Dockerfile, Kubernetes manifests, PostgreSQL bootstrap, migration job, build/smoke scripts, runbook и monitoring docs. |
 | IGW-0 | #781 | готово | Смежный срез `integration-gateway`: зафиксированы границы внешнего HTTP-входа, первый route provider webhook -> `provider-hub.IngestWebhookEvent`, требования security/backpressure/retry/idempotency и OpenAPI-каркас. Реализация gateway-сервиса не входит. |
 | IGW-1 | #792 | готово | Сервисный каркас `integration-gateway`: process/config/graceful shutdown, health/readiness/metrics, HTTP router, OpenAPI validation/generated models, safe middleware и provider-hub client interface. Provider route зарегистрирован как отключённый stub до verifier-среза. |
+| IGW-2 | #807 | готово | GitHub provider webhook route в `integration-gateway`: source binding `provider_slug=github`, обязательные GitHub headers, HMAC SHA-256 проверка `X-Hub-Signature-256` через `secret_store_type + secret_store_ref`, payload limit и вызов `provider-hub.IngestWebhookEvent` без хранения state в gateway. |
 
 ## Текущий бэклог
 
 | Срез | Статус | Почему не завершён |
 |---|---|---|
 | End-to-end repository adoption | ждёт проектного и агентного контура | Adoption существующего repo требует agent-manager orchestration, workspace scan/report, approval и импорт проектной политики модели C; provider-hub уже закрывает provider-native PR/relationship/projection запись. |
-| IGW-2 | ждёт отдельного решения владельца | После IGW-1 можно делать реальный provider webhook route, но это отдельный срез с проверкой подписи, source binding, route registry policy и вызовом `provider-hub.IngestWebhookEvent`. |
+| GitLab webhook route | ждёт отдельного решения владельца | IGW-2 активирует только GitHub; GitLab требует отдельный verifier/source policy и OpenAPI-уточнение. |
 
 ## Блокировки от `access-manager`
 
@@ -102,4 +103,4 @@
 
 ## Рекомендуемый следующий шаг
 
-Следующий provider-срез — интеграция provider tools с `agent-manager`/platform MCP, GitLab write adapter или `integration-gateway` IGW-2 после решения владельца. End-to-end bootstrap/adoption не смешивать с UI и gateway.
+Следующий provider-срез — интеграция provider tools с `agent-manager`/platform MCP, GitLab write/webhook adapter или эксплуатационный контур `integration-gateway`. End-to-end bootstrap/adoption не смешивать с UI и gateway.

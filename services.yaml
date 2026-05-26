@@ -135,6 +135,7 @@ spec:
         - tools/codegen/openapi/integration-gateway.oapi-codegen.yaml
         - libs/go/servicemain
         - libs/go/serviceprocess
+        - libs/go/secretresolver
     runtime-manager:
       value: "0.1.0"
       bumpOn:
@@ -559,8 +560,15 @@ spec:
         - provider-hub
       implementation:
         businessState: none
-        providerWebhookRoute: registered-disabled-by-default
-        signatureVerification: planned
+        providerWebhookRoute: github-hmac-sha256-to-provider-hub
+        signatureVerification: github-x-hub-signature-256
+        webhookSecretRefs:
+          storeTypeEnv: KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_GITHUB_SECRET_STORE_TYPE
+          storeRefEnv: KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_GITHUB_SECRET_STORE_REF
+          resolverBackends:
+            - env
+            - kubernetes_mounted_secret
+            - vault
         callbackRoutes: reserved-only
       deploy:
         health:

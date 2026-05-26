@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-25
 updated_at: 2026-05-26
-related_issues: [781, 792, 770]
+related_issues: [781, 792, 807, 770]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -38,7 +38,7 @@ approvals:
 
 | HTTP endpoint | Назначение | Внутренний владелец | Статус |
 |---|---|---|---|
-| `POST /v1/provider-webhooks/{provider_slug}` | Принять provider webhook от GitHub/GitLab или другого provider source. | `provider-hub.IngestWebhookEvent` | Сервисный stub IGW-1, реальная активация после проверки подписи. |
+| `POST /v1/provider-webhooks/{provider_slug}` | Принять GitHub provider webhook по `provider_slug=github`. | `provider-hub.IngestWebhookEvent` | Активный IGW-2 route с source binding и проверкой `X-Hub-Signature-256`; другие providers добавляются отдельными срезами. |
 | `POST /v1/external-callbacks/{callback_source}` | Принять callback внешнего канала, пакета или интеграции. | `interaction-hub`, `package-hub` или другой владелец по route registry | Контрактный задел, активируется отдельным owner-срезом. |
 
 ## Provider webhook envelope
@@ -48,8 +48,8 @@ approvals:
 | Поле | Источник | Правило |
 |---|---|---|
 | `provider_slug` | path parameter | Проверяется по route registry. |
-| `delivery_id` | Provider header или согласованный idempotency header | Обязателен для MVP provider webhook. |
-| `event_name` | Provider event header | Gateway не интерпретирует бизнес-смысл события. |
+| `delivery_id` | `X-GitHub-Delivery` | Обязателен для активного GitHub provider webhook и используется для идемпотентности. |
+| `event_name` | `X-GitHub-Event` | Gateway не интерпретирует бизнес-смысл события. |
 | `repository_provider_id` | Не заполняется в базовом MVP | Может появиться только если provider даёт безопасный edge metadata без разбора payload. |
 | `payload_json` | HTTP body | Передаётся в `provider-hub` после size guard; не пишется в gateway logs. |
 | `received_at` | Время приёма gateway | UTC timestamp. |
@@ -82,7 +82,7 @@ approvals:
 - Gateway не хранит raw payload в собственной БД.
 - Логи, ошибки и метрики проходят redaction до записи.
 - Внутренний gRPC-вызов содержит только безопасный edge context и payload, предназначенный сервису-владельцу.
-- В IGW-1 provider route отключён по умолчанию, потому что проверка подписи и source binding ещё не реализованы.
+- Активный IGW-2 provider route принимает только GitHub webhook с валидной HMAC SHA-256 подписью и настроенной ссылкой на webhook secret.
 
 ## Совместимость
 

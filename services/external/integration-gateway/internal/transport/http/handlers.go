@@ -40,7 +40,7 @@ func (h handlers) providerWebhook(c *echo.Context) error {
 		ProviderSlug: providerSlug,
 		Payload:      body,
 	}); err != nil {
-		return WrapSafeError(stdhttp.StatusUnauthorized, CodeSignatureInvalid, "provider webhook signature is invalid", false, err)
+		return providerWebhookVerificationError(err)
 	}
 	result, err := h.providerHub.IngestWebhookEvent(c.Request().Context(), providerhubclient.WebhookEvent{
 		ProviderSlug:  providerSlug,
@@ -91,9 +91,6 @@ func (h handlers) openAPISpec(c *echo.Context) error {
 func providerHeaders(req *stdhttp.Request) (string, string, error) {
 	deliveryID := strings.TrimSpace(req.Header.Get("X-GitHub-Delivery"))
 	eventName := strings.TrimSpace(req.Header.Get("X-GitHub-Event"))
-	if eventName == "" {
-		eventName = strings.TrimSpace(req.Header.Get("X-Gitlab-Event"))
-	}
 	if deliveryID == "" {
 		return "", "", NewSafeError(stdhttp.StatusBadRequest, CodeInvalidRequest, "delivery id is required", false)
 	}
