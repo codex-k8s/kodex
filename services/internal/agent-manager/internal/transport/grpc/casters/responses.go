@@ -138,6 +138,10 @@ func ListAcceptanceResultsResponse(output AcceptanceResultListOutput) *agentsv1.
 	return &agentsv1.ListAcceptanceResultsResponse{AcceptanceResults: protoList(output.Items, AcceptanceResultToProto), Page: pageResponseToProto(output.Page)}
 }
 
+func FollowUpIntentResponse(intent entity.FollowUpIntent) *agentsv1.FollowUpIntentResponse {
+	return &agentsv1.FollowUpIntentResponse{FollowUpIntent: FollowUpIntentToProto(intent)}
+}
+
 func protoList[Domain any, Proto any](items []Domain, cast func(Domain) *Proto) []*Proto {
 	if len(items) == 0 {
 		return nil
@@ -342,6 +346,30 @@ func AcceptanceResultToProto(acceptance entity.AcceptanceResult) *agentsv1.Accep
 		Version:     acceptance.Version,
 		CreatedAt:   formatTime(acceptance.CreatedAt),
 		UpdatedAt:   formatTime(acceptance.UpdatedAt),
+	}
+}
+
+func FollowUpIntentToProto(intent entity.FollowUpIntent) *agentsv1.FollowUpIntent {
+	return &agentsv1.FollowUpIntent{
+		Id:                    intent.ID.String(),
+		SessionId:             intent.SessionID.String(),
+		FromStageId:           optionalUUIDStringPtr(intent.FromStageID),
+		ToStageId:             optionalUUIDStringPtr(intent.ToStageID),
+		ProviderWorkItemType:  intent.ProviderWorkItemType,
+		ProviderOperationRef:  optionalStringPtr(intent.ProviderOperationRef),
+		Status:                FollowUpIntentStatusToProto(intent.Status),
+		InstructionBodyDigest: optionalStringPtr(intent.InstructionBodyDigest),
+		Version:               intent.Version,
+		CreatedAt:             formatTime(intent.CreatedAt),
+		UpdatedAt:             formatTime(intent.UpdatedAt),
+		RunId:                 optionalUUIDStringPtr(intent.RunID),
+		AcceptanceResultId:    optionalUUIDStringPtr(intent.AcceptanceResultID),
+		ProviderTarget:        ProviderTargetToProto(intent.ProviderTarget),
+		SafeTitle:             optionalStringPtr(intent.SafeTitle),
+		SafeSummary:           optionalStringPtr(intent.SafeSummary),
+		RoleHint:              optionalStringPtr(intent.RoleHint),
+		StageHint:             optionalStringPtr(intent.StageHint),
+		IdempotencyKey:        intent.IdempotencyKey,
 	}
 }
 

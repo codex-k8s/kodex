@@ -52,6 +52,7 @@ type agentService interface {
 	RecordAcceptanceResult(context.Context, agentservice.RecordAcceptanceResultInput) (entity.AcceptanceResult, error)
 	GetAcceptanceResult(context.Context, uuid.UUID) (entity.AcceptanceResult, error)
 	ListAcceptanceResults(context.Context, agentservice.AcceptanceResultList) ([]entity.AcceptanceResult, value.PageResult, error)
+	CreateFollowUpIntent(context.Context, agentservice.CreateFollowUpIntentInput) (entity.FollowUpIntent, error)
 }
 
 // NewServer creates an agent-manager gRPC server boundary.
@@ -195,6 +196,11 @@ func (server *Server) GetAcceptanceResult(ctx context.Context, request *agentsv1
 // ListAcceptanceResults returns acceptance results by session, run, stage or status.
 func (server *Server) ListAcceptanceResults(ctx context.Context, request *agentsv1.ListAcceptanceResultsRequest) (*agentsv1.ListAcceptanceResultsResponse, error) {
 	return grpcserver.HandleUnary(ctx, request, grpccasters.ListAcceptanceResultsInput, server.listAcceptanceResults, grpccasters.ListAcceptanceResultsResponse)
+}
+
+// CreateFollowUpIntent records intent to create the next provider-native work item.
+func (server *Server) CreateFollowUpIntent(ctx context.Context, request *agentsv1.CreateFollowUpIntentRequest) (*agentsv1.FollowUpIntentResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.CreateFollowUpIntentInput, server.service.CreateFollowUpIntent, grpccasters.FollowUpIntentResponse)
 }
 
 func (server *Server) getFlow(ctx context.Context, input grpccasters.IDQueryInput) (grpccasters.FlowOutput, error) {

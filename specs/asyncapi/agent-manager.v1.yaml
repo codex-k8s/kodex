@@ -279,6 +279,12 @@ components:
         follow_up_intent_id:
           type: string
           format: uuid
+        from_stage_id:
+          type: string
+          format: uuid
+        to_stage_id:
+          type: string
+          format: uuid
         human_gate_request_id:
           type: string
           format: uuid
@@ -290,6 +296,16 @@ components:
         provider_work_item_ref:
           type: string
         provider_pull_request_ref:
+          type: string
+        provider_comment_ref:
+          type: string
+        provider_review_signal_ref:
+          type: string
+        provider_operation_ref:
+          type: string
+        provider_work_item_type:
+          type: string
+        summary:
           type: string
         runtime_slot_ref:
           type: string

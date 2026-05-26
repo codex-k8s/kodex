@@ -447,6 +447,49 @@ func ListAcceptanceResultsInput(request *agentsv1.ListAcceptanceResultsRequest) 
 	}, nil
 }
 
+func CreateFollowUpIntentInput(request *agentsv1.CreateFollowUpIntentRequest) (service.CreateFollowUpIntentInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return service.CreateFollowUpIntentInput{}, err
+	}
+	sessionID, err := requiredUUID(request.GetSessionId())
+	if err != nil {
+		return service.CreateFollowUpIntentInput{}, err
+	}
+	runID, err := optionalUUIDPtr(request.GetRunId())
+	if err != nil {
+		return service.CreateFollowUpIntentInput{}, err
+	}
+	fromStageID, err := optionalUUIDPtr(request.GetFromStageId())
+	if err != nil {
+		return service.CreateFollowUpIntentInput{}, err
+	}
+	toStageID, err := optionalUUIDPtr(request.GetToStageId())
+	if err != nil {
+		return service.CreateFollowUpIntentInput{}, err
+	}
+	acceptanceID, err := optionalUUIDPtr(request.GetAcceptanceResultId())
+	if err != nil {
+		return service.CreateFollowUpIntentInput{}, err
+	}
+	return service.CreateFollowUpIntentInput{
+		Meta:                  meta,
+		SessionID:             sessionID,
+		RunID:                 runID,
+		FromStageID:           fromStageID,
+		ToStageID:             toStageID,
+		AcceptanceResultID:    acceptanceID,
+		ProviderTarget:        ProviderTargetFromProto(request.GetProviderTarget()),
+		ProviderWorkItemType:  strings.TrimSpace(request.GetProviderWorkItemType()),
+		ProviderOperationRef:  strings.TrimSpace(request.GetProviderOperationRef()),
+		InstructionBodyDigest: strings.TrimSpace(request.GetInstructionBodyDigest()),
+		SafeTitle:             strings.TrimSpace(request.GetSafeTitle()),
+		SafeSummary:           strings.TrimSpace(request.GetSafeSummary()),
+		RoleHint:              strings.TrimSpace(request.GetRoleHint()),
+		StageHint:             strings.TrimSpace(request.GetStageHint()),
+	}, nil
+}
+
 func GetAgentSessionInput(request *agentsv1.GetAgentSessionRequest) (IDQueryInput, error) {
 	return idQueryInput(request.GetSessionId(), request.GetMeta())
 }

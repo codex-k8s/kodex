@@ -286,3 +286,20 @@ type RecordAcceptanceResultInput struct {
 }
 
 type AcceptanceResultList = query.AcceptanceResultFilter
+
+type CreateFollowUpIntentInput struct {
+	Meta                  value.CommandMeta
+	SessionID             uuid.UUID
+	RunID                 *uuid.UUID
+	FromStageID           *uuid.UUID
+	ToStageID             *uuid.UUID
+	AcceptanceResultID    *uuid.UUID
+	ProviderTarget        value.ProviderTargetRef
+	ProviderWorkItemType  string
+	ProviderOperationRef  string
+	InstructionBodyDigest string
+	SafeTitle             string
+	SafeSummary           string
+	RoleHint              string
+	StageHint             string
+}

@@ -674,6 +674,73 @@ func TestAcceptanceHandlersMapRequests(t *testing.T) {
 	}
 }
 
+func TestCreateFollowUpIntentHandlerMapsRequest(t *testing.T) {
+	t.Parallel()
+
+	sessionID := uuid.MustParse("85858585-1111-2222-3333-444444444444")
+	runID := uuid.MustParse("85858585-2222-3333-4444-555555555555")
+	fromStageID := uuid.MustParse("85858585-3333-4444-5555-666666666666")
+	toStageID := uuid.MustParse("85858585-4444-5555-6666-777777777777")
+	acceptanceID := uuid.MustParse("85858585-5555-6666-7777-888888888888")
+	intentID := uuid.MustParse("85858585-6666-7777-8888-999999999999")
+	service := &fakeAgentService{
+		createFollowUpIntent: func(_ context.Context, input agentservice.CreateFollowUpIntentInput) (entity.FollowUpIntent, error) {
+			if input.SessionID != sessionID || input.RunID == nil || *input.RunID != runID || input.FromStageID == nil || *input.FromStageID != fromStageID || input.ToStageID == nil || *input.ToStageID != toStageID {
+				t.Fatalf("stage/run input = %+v", input)
+			}
+			if input.AcceptanceResultID == nil || *input.AcceptanceResultID != acceptanceID {
+				t.Fatalf("acceptance input = %+v", input.AcceptanceResultID)
+			}
+			if input.ProviderTarget.WorkItemRef != "issue:123" || input.ProviderWorkItemType != "task" || input.SafeTitle != "Follow-up" || input.SafeSummary != "Summary" {
+				t.Fatalf("payload input = %+v", input)
+			}
+			now := sampleTime()
+			return entity.FollowUpIntent{
+				VersionedBase:        entity.VersionedBase{ID: intentID, Version: 1, CreatedAt: now, UpdatedAt: now},
+				SessionID:            sessionID,
+				RunID:                &runID,
+				FromStageID:          &fromStageID,
+				ToStageID:            &toStageID,
+				AcceptanceResultID:   &acceptanceID,
+				ProviderTarget:       input.ProviderTarget,
+				ProviderWorkItemType: input.ProviderWorkItemType,
+				SafeTitle:            input.SafeTitle,
+				SafeSummary:          input.SafeSummary,
+				RoleHint:             input.RoleHint,
+				StageHint:            input.StageHint,
+				IdempotencyKey:       "domain.Service.CreateFollowUpIntent:user:operator-1:follow-up",
+				Status:               enum.FollowUpIntentStatusRequested,
+			}, nil
+		},
+	}
+	server := NewServer(service)
+
+	response, err := server.CreateFollowUpIntent(context.Background(), &agentsv1.CreateFollowUpIntentRequest{
+		Meta:                 commandMeta("", "follow-up", nil),
+		SessionId:            sessionID.String(),
+		RunId:                ptr(runID.String()),
+		FromStageId:          ptr(fromStageID.String()),
+		ToStageId:            ptr(toStageID.String()),
+		AcceptanceResultId:   ptr(acceptanceID.String()),
+		ProviderTarget:       &agentsv1.ProviderTargetRef{WorkItemRef: ptr("issue:123")},
+		ProviderWorkItemType: "task",
+		SafeTitle:            ptr("Follow-up"),
+		SafeSummary:          ptr("Summary"),
+		RoleHint:             ptr("worker"),
+		StageHint:            ptr("review"),
+	})
+	if err != nil {
+		t.Fatalf("CreateFollowUpIntent() error = %v", err)
+	}
+	intent := response.GetFollowUpIntent()
+	if intent.GetId() != intentID.String() || intent.GetStatus() != agentsv1.FollowUpIntentStatus_FOLLOW_UP_INTENT_STATUS_REQUESTED {
+		t.Fatalf("intent = %+v", intent)
+	}
+	if intent.GetProviderTarget().GetWorkItemRef() != "issue:123" || intent.GetSafeSummary() != "Summary" {
+		t.Fatalf("intent target = %+v", intent)
+	}
+}
+
 func TestTransportRejectsValidationErrorsBeforeDomainCall(t *testing.T) {
 	t.Parallel()
 
@@ -750,6 +817,7 @@ type fakeAgentService struct {
 	recordAcceptanceResult      func(context.Context, agentservice.RecordAcceptanceResultInput) (entity.AcceptanceResult, error)
 	getAcceptanceResult         func(context.Context, uuid.UUID) (entity.AcceptanceResult, error)
 	listAcceptanceResults       func(context.Context, agentservice.AcceptanceResultList) ([]entity.AcceptanceResult, value.PageResult, error)
+	createFollowUpIntent        func(context.Context, agentservice.CreateFollowUpIntentInput) (entity.FollowUpIntent, error)
 }
 
 func (f *fakeAgentService) CreateFlow(ctx context.Context, input agentservice.CreateFlowInput) (entity.Flow, error) {
@@ -946,6 +1014,13 @@ func (f *fakeAgentService) ListAcceptanceResults(ctx context.Context, input agen
 		return nil, value.PageResult{}, errs.ErrPreconditionFailed
 	}
 	return f.listAcceptanceResults(ctx, input)
+}
+
+func (f *fakeAgentService) CreateFollowUpIntent(ctx context.Context, input agentservice.CreateFollowUpIntentInput) (entity.FollowUpIntent, error) {
+	if f.createFollowUpIntent == nil {
+		return entity.FollowUpIntent{}, errs.ErrPreconditionFailed
+	}
+	return f.createFollowUpIntent(ctx, input)
 }
 
 func commandMeta(commandID string, idempotencyKey string, expectedVersion *int64) *agentsv1.CommandMeta {

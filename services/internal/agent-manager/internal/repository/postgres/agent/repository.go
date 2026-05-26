@@ -78,6 +78,8 @@ const (
 	operationUpdateAcceptance      = "domain.Repository.UpdateAcceptanceResultWithResult"
 	operationGetAcceptance         = "domain.Repository.GetAcceptanceResult"
 	operationListAcceptance        = "domain.Repository.ListAcceptanceResults"
+	operationCreateFollowUp        = "domain.Repository.CreateFollowUpIntentWithResult"
+	operationGetFollowUp           = "domain.Repository.GetFollowUpIntent"
 	operationGetCommandResult      = "domain.Repository.GetCommandResult"
 	operationRecordCommandResult   = "domain.Repository.RecordCommandResult"
 	operationOutboxClaim           = "domain.Repository.ClaimOutboxEvents"
@@ -264,6 +266,14 @@ func (r *Repository) GetAcceptanceResult(ctx context.Context, id uuid.UUID) (ent
 
 func (r *Repository) ListAcceptanceResults(ctx context.Context, filter query.AcceptanceResultFilter) ([]entity.AcceptanceResult, value.PageResult, error) {
 	return queryPage(ctx, r.db, operationListAcceptance, queryAcceptanceResultList, acceptanceResultFilterArgs(filter), scanAcceptanceResult)
+}
+
+func (r *Repository) CreateFollowUpIntentWithResult(ctx context.Context, intent entity.FollowUpIntent, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.mutateWithResult(ctx, operationCreateFollowUp, queryFollowUpIntentCreate, followUpIntentArgs(intent), result, &event)
+}
+
+func (r *Repository) GetFollowUpIntent(ctx context.Context, id uuid.UUID) (entity.FollowUpIntent, error) {
+	return queryOne(ctx, r.db, operationGetFollowUp, queryFollowUpIntentGet, pgx.NamedArgs{"id": id}, scanFollowUpIntent)
 }
 
 func (r *Repository) GetCommandResult(ctx context.Context, identity query.CommandIdentity) (entity.CommandResult, error) {
