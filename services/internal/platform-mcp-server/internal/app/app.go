@@ -9,8 +9,10 @@ import (
 
 	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
 	agentsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1"
+	governancev1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/governance/v1"
 	providersv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1"
 	agentmanagerclient "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/clients/agentmanager"
+	governanceclient "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/clients/governance"
 	providerhubclient "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/clients/providerhub"
 	mcptransport "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/transport/mcp"
 )
@@ -40,6 +42,13 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	defer func() {
 		_ = providerConn.Close()
 	}()
+	governanceConn, err := governanceclient.NewConnection(cfg.GovernanceManagerClientConfig())
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = governanceConn.Close()
+	}()
 	agentClient, err := agentmanagerclient.New(agentsv1.NewAgentManagerServiceClient(agentConn), cfg.AgentManagerClientConfig())
 	if err != nil {
 		return err
@@ -48,7 +57,11 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	mcpServer, err := mcptransport.NewServer(cfg.MCPTransportConfig(ownerRoutes, agentClient, providerClient), logger)
+	governanceManagerClient, err := governanceclient.New(governancev1.NewGovernanceManagerServiceClient(governanceConn), cfg.GovernanceManagerClientConfig())
+	if err != nil {
+		return err
+	}
+	mcpServer, err := mcptransport.NewServer(cfg.MCPTransportConfig(ownerRoutes, agentClient, providerClient, governanceManagerClient), logger)
 	if err != nil {
 		return err
 	}

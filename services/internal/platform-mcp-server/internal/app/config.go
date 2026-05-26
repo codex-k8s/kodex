@@ -9,6 +9,7 @@ import (
 	"github.com/caarlos0/env/v11"
 
 	agentmanagerclient "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/clients/agentmanager"
+	governanceclient "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/clients/governance"
 	ownerclients "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/clients/owners"
 	providerhubclient "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/clients/providerhub"
 	mcptransport "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/transport/mcp"
@@ -18,16 +19,17 @@ const minMCPTokenTTL = 24 * time.Hour
 
 // Config contains process-level platform-mcp-server configuration.
 type Config struct {
-	HTTPAddr       string             `env:"KODEX_PLATFORM_MCP_SERVER_HTTP_ADDR" envDefault:":8080"`
-	MCP            MCPConfig          `envPrefix:"KODEX_PLATFORM_MCP_SERVER_MCP_"`
-	AccessManager  OwnerServiceConfig `envPrefix:"KODEX_PLATFORM_MCP_SERVER_ACCESS_MANAGER_"`
-	AgentManager   OwnerServiceConfig `envPrefix:"KODEX_PLATFORM_MCP_SERVER_AGENT_MANAGER_"`
-	ProjectCatalog OwnerServiceConfig `envPrefix:"KODEX_PLATFORM_MCP_SERVER_PROJECT_CATALOG_"`
-	ProviderHub    OwnerServiceConfig `envPrefix:"KODEX_PLATFORM_MCP_SERVER_PROVIDER_HUB_"`
-	RuntimeManager OwnerServiceConfig `envPrefix:"KODEX_PLATFORM_MCP_SERVER_RUNTIME_MANAGER_"`
-	FleetManager   OwnerServiceConfig `envPrefix:"KODEX_PLATFORM_MCP_SERVER_FLEET_MANAGER_"`
-	PackageHub     OwnerServiceConfig `envPrefix:"KODEX_PLATFORM_MCP_SERVER_PACKAGE_HUB_"`
-	InteractionHub OwnerServiceConfig `envPrefix:"KODEX_PLATFORM_MCP_SERVER_INTERACTION_HUB_"`
+	HTTPAddr          string             `env:"KODEX_PLATFORM_MCP_SERVER_HTTP_ADDR" envDefault:":8080"`
+	MCP               MCPConfig          `envPrefix:"KODEX_PLATFORM_MCP_SERVER_MCP_"`
+	AccessManager     OwnerServiceConfig `envPrefix:"KODEX_PLATFORM_MCP_SERVER_ACCESS_MANAGER_"`
+	AgentManager      OwnerServiceConfig `envPrefix:"KODEX_PLATFORM_MCP_SERVER_AGENT_MANAGER_"`
+	ProjectCatalog    OwnerServiceConfig `envPrefix:"KODEX_PLATFORM_MCP_SERVER_PROJECT_CATALOG_"`
+	ProviderHub       OwnerServiceConfig `envPrefix:"KODEX_PLATFORM_MCP_SERVER_PROVIDER_HUB_"`
+	GovernanceManager OwnerServiceConfig `envPrefix:"KODEX_PLATFORM_MCP_SERVER_GOVERNANCE_MANAGER_"`
+	RuntimeManager    OwnerServiceConfig `envPrefix:"KODEX_PLATFORM_MCP_SERVER_RUNTIME_MANAGER_"`
+	FleetManager      OwnerServiceConfig `envPrefix:"KODEX_PLATFORM_MCP_SERVER_FLEET_MANAGER_"`
+	PackageHub        OwnerServiceConfig `envPrefix:"KODEX_PLATFORM_MCP_SERVER_PACKAGE_HUB_"`
+	InteractionHub    OwnerServiceConfig `envPrefix:"KODEX_PLATFORM_MCP_SERVER_INTERACTION_HUB_"`
 }
 
 // MCPConfig contains MCP HTTP transport and registry settings.
@@ -105,6 +107,12 @@ func (cfg Config) Validate() error {
 	if strings.TrimSpace(cfg.ProviderHub.AuthToken) == "" {
 		return fmt.Errorf("KODEX_PLATFORM_MCP_SERVER_PROVIDER_HUB_GRPC_AUTH_TOKEN is required")
 	}
+	if !cfg.GovernanceManager.Enabled {
+		return fmt.Errorf("KODEX_PLATFORM_MCP_SERVER_GOVERNANCE_MANAGER_ENABLED must stay enabled for governance tools")
+	}
+	if strings.TrimSpace(cfg.GovernanceManager.AuthToken) == "" {
+		return fmt.Errorf("KODEX_PLATFORM_MCP_SERVER_GOVERNANCE_MANAGER_GRPC_AUTH_TOKEN is required")
+	}
 	_, err := cfg.OwnerRouteCatalog()
 	return err
 }
@@ -116,6 +124,7 @@ func (cfg Config) OwnerRouteCatalog() (ownerclients.Catalog, error) {
 		cfg.AgentManager.route(ownerclients.ServiceAgentManager, "agent-manager:9090"),
 		cfg.ProjectCatalog.route(ownerclients.ServiceProjectCatalog, "project-catalog:9090"),
 		cfg.ProviderHub.route(ownerclients.ServiceProviderHub, "provider-hub:9090"),
+		cfg.GovernanceManager.route(ownerclients.ServiceGovernanceManager, "governance-manager:9090"),
 		cfg.RuntimeManager.route(ownerclients.ServiceRuntimeManager, "runtime-manager:9090"),
 		cfg.FleetManager.route(ownerclients.ServiceFleetManager, "fleet-manager:9090"),
 		cfg.PackageHub.route(ownerclients.ServicePackageHub, "package-hub:9090"),
@@ -124,20 +133,26 @@ func (cfg Config) OwnerRouteCatalog() (ownerclients.Catalog, error) {
 }
 
 // MCPTransportConfig converts process config to the MCP transport runtime contract.
-func (cfg Config) MCPTransportConfig(routes ownerclients.Catalog, agentManager mcptransport.AgentManagerClient, providerHub mcptransport.ProviderHubClient) mcptransport.Config {
+func (cfg Config) MCPTransportConfig(
+	routes ownerclients.Catalog,
+	agentManager mcptransport.AgentManagerClient,
+	providerHub mcptransport.ProviderHubClient,
+	governanceManager mcptransport.GovernanceManagerClient,
+) mcptransport.Config {
 	return mcptransport.Config{
-		ServiceName:     serviceName,
-		RegistryVersion: strings.TrimSpace(cfg.MCP.RegistryVersion),
-		ToolsPageSize:   cfg.MCP.ToolsPageSize,
-		JSONResponse:    cfg.MCP.JSONResponse,
-		SessionTimeout:  cfg.MCP.SessionTimeout,
-		OwnerRoutes:     routes,
-		AgentManager:    agentManager,
-		ProviderHub:     providerHub,
-		AuthRequired:    cfg.MCP.AuthRequired,
-		AuthToken:       strings.TrimSpace(cfg.MCP.AuthToken),
-		AuthScope:       strings.TrimSpace(cfg.MCP.AuthScope),
-		AuthTokenTTL:    cfg.MCP.AuthTokenTTL,
+		ServiceName:       serviceName,
+		RegistryVersion:   strings.TrimSpace(cfg.MCP.RegistryVersion),
+		ToolsPageSize:     cfg.MCP.ToolsPageSize,
+		JSONResponse:      cfg.MCP.JSONResponse,
+		SessionTimeout:    cfg.MCP.SessionTimeout,
+		OwnerRoutes:       routes,
+		AgentManager:      agentManager,
+		ProviderHub:       providerHub,
+		GovernanceManager: governanceManager,
+		AuthRequired:      cfg.MCP.AuthRequired,
+		AuthToken:         strings.TrimSpace(cfg.MCP.AuthToken),
+		AuthScope:         strings.TrimSpace(cfg.MCP.AuthScope),
+		AuthTokenTTL:      cfg.MCP.AuthTokenTTL,
 	}
 }
 
@@ -155,6 +170,16 @@ func (cfg Config) AgentManagerClientConfig() agentmanagerclient.Config {
 func (cfg Config) ProviderHubClientConfig() providerhubclient.Config {
 	route := cfg.ProviderHub.route(ownerclients.ServiceProviderHub, "provider-hub:9090")
 	return providerhubclient.Config{
+		Addr:      route.GRPCAddr,
+		AuthToken: route.AuthToken,
+		Timeout:   route.Timeout,
+	}
+}
+
+// GovernanceManagerClientConfig returns the owner client settings for governance-manager.
+func (cfg Config) GovernanceManagerClientConfig() governanceclient.Config {
+	route := cfg.GovernanceManager.route(ownerclients.ServiceGovernanceManager, "governance-manager:9090")
+	return governanceclient.Config{
 		Addr:      route.GRPCAddr,
 		AuthToken: route.AuthToken,
 		Timeout:   route.Timeout,

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	agentsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1"
+	governancev1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/governance/v1"
 	providersv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1"
 	ownerclients "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/clients/owners"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -75,6 +76,42 @@ func TestToolsListSnapshot(t *testing.T) {
   {
     "name": "diagnostics.run_context.read",
     "description": "Прочитать безопасную сводку сессии и агентных запусков через agent-manager без бизнес-состояния в MCP.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "governance.gate.cancel",
+    "description": "Cancel an open governance gate request through governance-manager.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "governance.gate.expire",
+    "description": "Expire an open governance gate request through governance-manager.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "governance.gate.get",
+    "description": "Read a safe governance gate request summary through governance-manager.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "governance.gate.list",
+    "description": "List safe governance gate request summaries through governance-manager.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "governance.gate.request",
+    "description": "Request a governance gate through governance-manager without storing decision state in MCP.",
+    "has_input_schema": true,
+    "has_output_schema": true
+  },
+  {
+    "name": "governance.gate.submit_decision",
+    "description": "Submit a governance gate decision through governance-manager.",
     "has_input_schema": true,
     "has_output_schema": true
   },
@@ -599,6 +636,159 @@ func TestProviderToolOwnerErrorIsSafe(t *testing.T) {
 	}
 }
 
+func TestGovernanceGateRequestRoutesToOwner(t *testing.T) {
+	t.Parallel()
+
+	governance := newFakeGovernanceManagerClient()
+	server := newTestServerWithGovernance(t, governance)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolGovernanceGateRequest,
+		Arguments: map[string]any{
+			"meta":               validGovernanceCommandMetaArgs("request_gate", nil),
+			"risk_assessment_id": "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
+			"gate_policy_id":     "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb",
+			"target":             map[string]any{"type": "pull_request", "ref": "provider:pr:1"},
+			"interaction_delivery_ref": map[string]any{
+				"request_ref": "interaction-request-1",
+			},
+			"evidence_refs": []any{
+				map[string]any{
+					"kind":    "provider_review",
+					"ref":     "provider-review-1",
+					"summary": "review requested by policy",
+					"digest":  "sha256:evidence",
+				},
+			},
+			"evidence_summary": "bounded evidence summary",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(): %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("CallTool() returned tool error: %+v", result.Content)
+	}
+	if governance.requestGateCalls != 1 {
+		t.Fatalf("requestGateCalls = %d, want 1", governance.requestGateCalls)
+	}
+	data, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("Marshal(): %v", err)
+	}
+	if !strings.Contains(string(data), "gate-request-1") || strings.Contains(string(data), "raw_provider_payload") {
+		t.Fatalf("structured content is not safe gate summary: %s", data)
+	}
+}
+
+func TestGovernanceGateSubmitDecisionRoutesToOwnerWithExpectedVersion(t *testing.T) {
+	t.Parallel()
+
+	governance := newFakeGovernanceManagerClient()
+	server := newTestServerWithGovernance(t, governance)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	expectedVersion := int64(3)
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolGovernanceGateSubmitDecision,
+		Arguments: map[string]any{
+			"meta":                validGovernanceCommandMetaArgs("submit_gate_decision", &expectedVersion),
+			"gate_request_id":     "gate-request-1",
+			"decision_actor_ref":  "user:owner",
+			"decision_policy_ref": "gate-policy:v1",
+			"outcome":             "approve_with_conditions",
+			"reason":              "bounded decision reason",
+			"conditions_summary":  "ship after QA sign-off",
+			"interaction_delivery_ref": map[string]any{
+				"decision_ref": "interaction-decision-1",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(): %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("CallTool() returned tool error: %+v", result.Content)
+	}
+	if governance.submitDecisionCalls != 1 {
+		t.Fatalf("submitDecisionCalls = %d, want 1", governance.submitDecisionCalls)
+	}
+	if governance.lastExpectedVersion == nil || *governance.lastExpectedVersion != expectedVersion {
+		t.Fatalf("lastExpectedVersion = %v, want %d", governance.lastExpectedVersion, expectedVersion)
+	}
+	data, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("Marshal(): %v", err)
+	}
+	if !strings.Contains(string(data), "approve_with_conditions") {
+		t.Fatalf("structured content does not include decision summary: %s", data)
+	}
+}
+
+func TestGovernanceGateListRequiresAssessmentOrTarget(t *testing.T) {
+	t.Parallel()
+
+	governance := newFakeGovernanceManagerClient()
+	server := newTestServerWithGovernance(t, governance)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolGovernanceGateList,
+		Arguments: map[string]any{
+			"meta":   validGovernanceQueryMetaArgs(),
+			"status": "requested",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(): %v", err)
+	}
+	if !result.IsError {
+		t.Fatalf("CallTool() IsError = false, want true")
+	}
+	if governance.listGateRequestsCalls != 0 {
+		t.Fatalf("listGateRequestsCalls = %d, want 0", governance.listGateRequestsCalls)
+	}
+}
+
+func TestGovernanceGateOwnerErrorIsSafe(t *testing.T) {
+	t.Parallel()
+
+	governance := newFakeGovernanceManagerClient()
+	governance.err = fakeOwnerError()
+	server := newTestServerWithGovernance(t, governance)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolGovernanceGateGet,
+		Arguments: map[string]any{
+			"meta":             validGovernanceQueryMetaArgs(),
+			"gate_request_id":  "gate-request-1",
+			"include_decision": true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(): %v", err)
+	}
+	if !result.IsError {
+		t.Fatalf("CallTool() IsError = false, want true")
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("Marshal(): %v", err)
+	}
+	if strings.Contains(string(data), "secret-token") {
+		t.Fatalf("tool error exposes owner detail: %s", data)
+	}
+	if !strings.Contains(string(data), "owner returned Internal") {
+		t.Fatalf("tool error does not include safe owner code: %s", data)
+	}
+}
+
 func TestHTTPHandlerRequiresBearerToken(t *testing.T) {
 	t.Parallel()
 
@@ -645,22 +835,28 @@ type toolSnapshot struct {
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
 
-	return newTestServerWithOwners(t, newFakeAgentManagerClient(), newFakeProviderHubClient())
+	return newTestServerWithOwners(t, newFakeAgentManagerClient(), newFakeProviderHubClient(), newFakeGovernanceManagerClient())
 }
 
 func newTestServerWithAgent(t *testing.T, agentManager AgentManagerClient) *Server {
 	t.Helper()
 
-	return newTestServerWithOwners(t, agentManager, newFakeProviderHubClient())
+	return newTestServerWithOwners(t, agentManager, newFakeProviderHubClient(), newFakeGovernanceManagerClient())
 }
 
 func newTestServerWithProvider(t *testing.T, provider ProviderHubClient) *Server {
 	t.Helper()
 
-	return newTestServerWithOwners(t, newFakeAgentManagerClient(), provider)
+	return newTestServerWithOwners(t, newFakeAgentManagerClient(), provider, newFakeGovernanceManagerClient())
 }
 
-func newTestServerWithOwners(t *testing.T, agentManager AgentManagerClient, provider ProviderHubClient) *Server {
+func newTestServerWithGovernance(t *testing.T, governance GovernanceManagerClient) *Server {
+	t.Helper()
+
+	return newTestServerWithOwners(t, newFakeAgentManagerClient(), newFakeProviderHubClient(), governance)
+}
+
+func newTestServerWithOwners(t *testing.T, agentManager AgentManagerClient, provider ProviderHubClient, governance GovernanceManagerClient) *Server {
 	t.Helper()
 
 	routes, err := ownerclients.NewCatalog([]ownerclients.RouteConfig{
@@ -679,6 +875,13 @@ func newTestServerWithOwners(t *testing.T, agentManager AgentManagerClient, prov
 			Enabled:   true,
 		},
 		{
+			Service:   ownerclients.ServiceGovernanceManager,
+			GRPCAddr:  "governance-manager:9090",
+			AuthToken: "secret-token",
+			Timeout:   3 * time.Second,
+			Enabled:   true,
+		},
+		{
 			Service:   ownerclients.ServiceProjectCatalog,
 			GRPCAddr:  "project-catalog:9090",
 			AuthToken: "secret-token",
@@ -690,15 +893,16 @@ func newTestServerWithOwners(t *testing.T, agentManager AgentManagerClient, prov
 		t.Fatalf("NewCatalog(): %v", err)
 	}
 	server, err := NewServer(Config{
-		ServiceName:     "platform-mcp-server",
-		RegistryVersion: "mcp-2",
-		ToolsPageSize:   100,
-		JSONResponse:    true,
-		SessionTimeout:  time.Minute,
-		OwnerRoutes:     routes,
-		AgentManager:    agentManager,
-		ProviderHub:     provider,
-		AuthRequired:    false,
+		ServiceName:       "platform-mcp-server",
+		RegistryVersion:   "mcp-2",
+		ToolsPageSize:     100,
+		JSONResponse:      true,
+		SessionTimeout:    time.Minute,
+		OwnerRoutes:       routes,
+		AgentManager:      agentManager,
+		ProviderHub:       provider,
+		GovernanceManager: governance,
+		AuthRequired:      false,
 	}, nil)
 	if err != nil {
 		t.Fatalf("NewServer(): %v", err)
@@ -752,6 +956,19 @@ func validProviderQueryMetaArgs() map[string]any {
 	return validQueryMetaArgs()
 }
 
+func validGovernanceCommandMetaArgs(commandID string, expectedVersion *int64) map[string]any {
+	meta := validCommandMetaArgs()
+	meta["command_id"] = commandID
+	if expectedVersion != nil {
+		meta["expected_version"] = *expectedVersion
+	}
+	return meta
+}
+
+func validGovernanceQueryMetaArgs() map[string]any {
+	return validQueryMetaArgs()
+}
+
 func newTestServerWithAuth(t *testing.T) *Server {
 	t.Helper()
 
@@ -774,23 +991,30 @@ func newTestServerWithAuth(t *testing.T) *Server {
 			Timeout:  3 * time.Second,
 			Enabled:  true,
 		},
+		{
+			Service:  ownerclients.ServiceGovernanceManager,
+			GRPCAddr: "governance-manager:9090",
+			Timeout:  3 * time.Second,
+			Enabled:  true,
+		},
 	})
 	if err != nil {
 		t.Fatalf("NewCatalog(): %v", err)
 	}
 	server, err := NewServer(Config{
-		ServiceName:     "platform-mcp-server",
-		RegistryVersion: "mcp-2",
-		ToolsPageSize:   100,
-		JSONResponse:    true,
-		SessionTimeout:  time.Minute,
-		OwnerRoutes:     routes,
-		AgentManager:    newFakeAgentManagerClient(),
-		ProviderHub:     newFakeProviderHubClient(),
-		AuthRequired:    true,
-		AuthToken:       "test-token",
-		AuthScope:       "kodex.mcp",
-		AuthTokenTTL:    24 * time.Hour,
+		ServiceName:       "platform-mcp-server",
+		RegistryVersion:   "mcp-2",
+		ToolsPageSize:     100,
+		JSONResponse:      true,
+		SessionTimeout:    time.Minute,
+		OwnerRoutes:       routes,
+		AgentManager:      newFakeAgentManagerClient(),
+		ProviderHub:       newFakeProviderHubClient(),
+		GovernanceManager: newFakeGovernanceManagerClient(),
+		AuthRequired:      true,
+		AuthToken:         "test-token",
+		AuthScope:         "kodex.mcp",
+		AuthTokenTTL:      24 * time.Hour,
 	}, nil)
 	if err != nil {
 		t.Fatalf("NewServer(): %v", err)
@@ -1155,6 +1379,147 @@ func (f *fakeProviderHubClient) CreateAdoptionPullRequest(_ context.Context, req
 		return nil, f.err
 	}
 	return fakeProviderOperationResponse(providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_ADOPTION_PULL_REQUEST), nil
+}
+
+type fakeGovernanceManagerClient struct {
+	requestGateCalls      int
+	getGateRequestCalls   int
+	listGateRequestsCalls int
+	submitDecisionCalls   int
+	cancelGateCalls       int
+	expireGateCalls       int
+	lastExpectedVersion   *int64
+	err                   error
+}
+
+func newFakeGovernanceManagerClient() *fakeGovernanceManagerClient {
+	return &fakeGovernanceManagerClient{}
+}
+
+func (f *fakeGovernanceManagerClient) RequestGate(_ context.Context, request *governancev1.RequestGateRequest) (*governancev1.GateRequestResponse, error) {
+	f.requestGateCalls++
+	f.lastExpectedVersion = request.GetMeta().ExpectedVersion
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &governancev1.GateRequestResponse{GateRequest: fakeGateRequest(request.GetTarget())}, nil
+}
+
+func (f *fakeGovernanceManagerClient) GetGateRequest(_ context.Context, request *governancev1.GetGateRequestRequest) (*governancev1.GateRequestResponse, error) {
+	f.getGateRequestCalls++
+	if f.err != nil {
+		return nil, f.err
+	}
+	response := &governancev1.GateRequestResponse{GateRequest: fakeGateRequest(&governancev1.TargetRef{
+		Type: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_PULL_REQUEST,
+		Ref:  "provider:pr:1",
+	})}
+	if request.GetIncludeDecision() {
+		response.GateDecision = fakeGateDecision()
+	}
+	return response, nil
+}
+
+func (f *fakeGovernanceManagerClient) ListGateRequests(_ context.Context, _ *governancev1.ListGateRequestsRequest) (*governancev1.ListGateRequestsResponse, error) {
+	f.listGateRequestsCalls++
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &governancev1.ListGateRequestsResponse{
+		GateRequests: []*governancev1.GateRequest{fakeGateRequest(&governancev1.TargetRef{
+			Type: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_PULL_REQUEST,
+			Ref:  "provider:pr:1",
+		})},
+		Page: &governancev1.PageResponse{},
+	}, nil
+}
+
+func (f *fakeGovernanceManagerClient) SubmitGateDecision(_ context.Context, request *governancev1.SubmitGateDecisionRequest) (*governancev1.GateDecisionResponse, error) {
+	f.submitDecisionCalls++
+	f.lastExpectedVersion = request.GetMeta().ExpectedVersion
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &governancev1.GateDecisionResponse{
+		GateDecision: fakeGateDecision(),
+		GateRequest:  fakeResolvedGateRequest(),
+	}, nil
+}
+
+func (f *fakeGovernanceManagerClient) CancelGate(_ context.Context, request *governancev1.CancelGateRequest) (*governancev1.GateRequestResponse, error) {
+	f.cancelGateCalls++
+	f.lastExpectedVersion = request.GetMeta().ExpectedVersion
+	if f.err != nil {
+		return nil, f.err
+	}
+	gate := fakeGateRequest(&governancev1.TargetRef{
+		Type: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_PULL_REQUEST,
+		Ref:  "provider:pr:1",
+	})
+	gate.Status = governancev1.GateRequestStatus_GATE_REQUEST_STATUS_CANCELLED
+	return &governancev1.GateRequestResponse{GateRequest: gate}, nil
+}
+
+func (f *fakeGovernanceManagerClient) ExpireGate(_ context.Context, request *governancev1.ExpireGateRequest) (*governancev1.GateRequestResponse, error) {
+	f.expireGateCalls++
+	f.lastExpectedVersion = request.GetMeta().ExpectedVersion
+	if f.err != nil {
+		return nil, f.err
+	}
+	gate := fakeGateRequest(&governancev1.TargetRef{
+		Type: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_PULL_REQUEST,
+		Ref:  "provider:pr:1",
+	})
+	gate.Status = governancev1.GateRequestStatus_GATE_REQUEST_STATUS_EXPIRED
+	return &governancev1.GateRequestResponse{GateRequest: gate}, nil
+}
+
+func fakeGateRequest(target *governancev1.TargetRef) *governancev1.GateRequest {
+	return &governancev1.GateRequest{
+		Id:               "gate-request-1",
+		RiskAssessmentId: stringPtr("risk-assessment-1"),
+		GatePolicyId:     stringPtr("gate-policy-1"),
+		Target:           target,
+		InteractionDeliveryRef: &governancev1.InteractionDeliveryRef{
+			RequestRef: stringPtr("interaction-request-1"),
+		},
+		EvidenceRefs: []*governancev1.EvidenceRef{{
+			Kind:    governancev1.EvidenceKind_EVIDENCE_KIND_PROVIDER_REVIEW,
+			Ref:     "provider-review-1",
+			Summary: "review requested by policy",
+			Digest:  stringPtr("sha256:evidence"),
+		}},
+		EvidenceSummary: "bounded evidence summary",
+		Status:          governancev1.GateRequestStatus_GATE_REQUEST_STATUS_REQUESTED,
+		Version:         1,
+		CreatedAt:       "2026-05-25T00:00:00Z",
+		UpdatedAt:       "2026-05-25T00:00:00Z",
+	}
+}
+
+func fakeResolvedGateRequest() *governancev1.GateRequest {
+	gate := fakeGateRequest(&governancev1.TargetRef{
+		Type: governancev1.GovernanceTargetType_GOVERNANCE_TARGET_TYPE_PULL_REQUEST,
+		Ref:  "provider:pr:1",
+	})
+	gate.Status = governancev1.GateRequestStatus_GATE_REQUEST_STATUS_RESOLVED
+	gate.Version = 4
+	gate.UpdatedAt = "2026-05-25T00:01:00Z"
+	return gate
+}
+
+func fakeGateDecision() *governancev1.GateDecision {
+	return &governancev1.GateDecision{
+		Id:                "gate-decision-1",
+		GateRequestId:     "gate-request-1",
+		DecisionActorRef:  "user:owner",
+		DecisionPolicyRef: "gate-policy:v1",
+		Outcome:           governancev1.GateOutcome_GATE_OUTCOME_APPROVE_WITH_CONDITIONS,
+		Reason:            "bounded decision reason",
+		ConditionsSummary: stringPtr("ship after QA sign-off"),
+		SourceRef:         stringPtr("interaction-decision-1"),
+		DecidedAt:         "2026-05-25T00:01:00Z",
+	}
 }
 
 func fakeWorkItemProjection() *providersv1.WorkItemProjection {

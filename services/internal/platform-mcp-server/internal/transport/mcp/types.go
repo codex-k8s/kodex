@@ -10,18 +10,19 @@ const ToolDiagnosticsMCPStatusRead = "diagnostics.mcp_status.read"
 
 // Config contains MCP transport settings that are independent from env parsing.
 type Config struct {
-	ServiceName     string
-	RegistryVersion string
-	ToolsPageSize   int
-	JSONResponse    bool
-	SessionTimeout  time.Duration
-	OwnerRoutes     ownerclients.Catalog
-	AgentManager    AgentManagerClient
-	ProviderHub     ProviderHubClient
-	AuthRequired    bool
-	AuthToken       string
-	AuthScope       string
-	AuthTokenTTL    time.Duration
+	ServiceName       string
+	RegistryVersion   string
+	ToolsPageSize     int
+	JSONResponse      bool
+	SessionTimeout    time.Duration
+	OwnerRoutes       ownerclients.Catalog
+	AgentManager      AgentManagerClient
+	ProviderHub       ProviderHubClient
+	GovernanceManager GovernanceManagerClient
+	AuthRequired      bool
+	AuthToken         string
+	AuthScope         string
+	AuthTokenTTL      time.Duration
 }
 
 // ToolDescriptor is a stable summary used by diagnostics and snapshot tests.
