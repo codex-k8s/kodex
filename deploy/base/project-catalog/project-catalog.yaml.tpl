@@ -144,6 +144,17 @@ spec:
                   key: KODEX_ACCESS_MANAGER_GRPC_AUTH_TOKEN
             - name: KODEX_PROJECT_CATALOG_ACCESS_MANAGER_CHECK_TIMEOUT
               value: "{{ envOr "KODEX_PROJECT_CATALOG_ACCESS_MANAGER_CHECK_TIMEOUT" "3s" }}"
+            - name: KODEX_PROJECT_CATALOG_PROVIDER_HUB_BOOTSTRAP_ENABLED
+              value: "{{ envOr "KODEX_PROJECT_CATALOG_PROVIDER_HUB_BOOTSTRAP_ENABLED" "true" }}"
+            - name: KODEX_PROJECT_CATALOG_PROVIDER_HUB_GRPC_ADDR
+              value: "{{ envOr "KODEX_PROJECT_CATALOG_PROVIDER_HUB_GRPC_ADDR" "provider-hub:9090" }}"
+            - name: KODEX_PROJECT_CATALOG_PROVIDER_HUB_GRPC_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: kodex-platform-runtime
+                  key: KODEX_PROVIDER_HUB_GRPC_AUTH_TOKEN
+            - name: KODEX_PROJECT_CATALOG_PROVIDER_HUB_REQUEST_TIMEOUT
+              value: "{{ envOr "KODEX_PROJECT_CATALOG_PROVIDER_HUB_REQUEST_TIMEOUT" "5s" }}"
             - name: KODEX_PROJECT_CATALOG_EVENT_LOG_DATABASE_DSN
               valueFrom:
                 secretKeyRef:

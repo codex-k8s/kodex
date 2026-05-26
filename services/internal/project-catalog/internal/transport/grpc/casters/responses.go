@@ -56,6 +56,32 @@ func ListRepositoriesResponse(result projectservice.ListRepositoriesResult) *pro
 	return &projectsv1.ListRepositoriesResponse{Repositories: mapSlice(result.Repositories, RepositoryToProto), Page: pageResponseToProto(result.Page)}
 }
 
+// RepositoryBootstrapPullRequestResponse maps bootstrap PR result to gRPC.
+func RepositoryBootstrapPullRequestResponse(result projectservice.RepositoryBootstrapPullRequestResult) *projectsv1.RepositoryBootstrapPullRequestResponse {
+	return &projectsv1.RepositoryBootstrapPullRequestResponse{
+		Repository:                   RepositoryToProto(result.Repository),
+		ProviderTarget:               bootstrapProviderTargetToProto(result.ProviderTarget),
+		BaseBranch:                   result.BaseBranch,
+		BootstrapBranch:              result.BootstrapBranch,
+		ServicesPolicySourcePath:     result.ServicesPolicy.SourcePath,
+		ServicesPolicyContentHash:    result.ServicesPolicy.ContentHash,
+		ProviderOperationId:          optionalStringPtr(result.ProviderResult.ProviderOperationID),
+		ProviderResultRef:            optionalStringPtr(result.ProviderResult.ProviderResultRef),
+		ProviderWorkItemProjectionId: optionalStringPtr(result.ProviderResult.ProviderWorkItemProjectionID),
+		ProviderWebUrl:               optionalStringPtr(result.ProviderResult.ProviderWebURL),
+		ProviderObjectId:             optionalStringPtr(result.ProviderResult.ProviderObjectID),
+	}
+}
+
+func bootstrapProviderTargetToProto(target projectservice.RepositoryBootstrapProviderTarget) *projectsv1.RepositoryBootstrapProviderTarget {
+	return &projectsv1.RepositoryBootstrapProviderTarget{
+		ProviderSlug:         target.ProviderSlug,
+		RepositoryFullName:   target.RepositoryFullName,
+		ProviderRepositoryId: optionalStringPtr(target.ProviderRepositoryID),
+		WebUrl:               optionalStringPtr(target.WebURL),
+	}
+}
+
 func ServicesPolicyResponse(policy entity.ServicesPolicy) *projectsv1.ServicesPolicyResponse {
 	return &projectsv1.ServicesPolicyResponse{ServicesPolicy: ServicesPolicyToProto(policy)}
 }

@@ -14,49 +14,53 @@ import (
 
 // Config contains process-level project-catalog server configuration.
 type Config struct {
-	HTTPAddr                   string        `env:"KODEX_PROJECT_CATALOG_HTTP_ADDR" envDefault:":8080"`
-	GRPCAddr                   string        `env:"KODEX_PROJECT_CATALOG_GRPC_ADDR" envDefault:":9090"`
-	GRPCAuthRequired           bool          `env:"KODEX_PROJECT_CATALOG_GRPC_AUTH_REQUIRED" envDefault:"true"`
-	GRPCAuthToken              string        `env:"KODEX_PROJECT_CATALOG_GRPC_AUTH_TOKEN"`
-	GRPCMaxInFlight            int           `env:"KODEX_PROJECT_CATALOG_GRPC_MAX_IN_FLIGHT" envDefault:"128"`
-	GRPCMaxConcurrentStreams   uint32        `env:"KODEX_PROJECT_CATALOG_GRPC_MAX_CONCURRENT_STREAMS" envDefault:"128"`
-	GRPCUnaryTimeout           time.Duration `env:"KODEX_PROJECT_CATALOG_GRPC_UNARY_TIMEOUT" envDefault:"30s"`
-	GRPCKeepaliveTime          time.Duration `env:"KODEX_PROJECT_CATALOG_GRPC_KEEPALIVE_TIME" envDefault:"2m"`
-	GRPCKeepaliveTimeout       time.Duration `env:"KODEX_PROJECT_CATALOG_GRPC_KEEPALIVE_TIMEOUT" envDefault:"20s"`
-	GRPCKeepaliveMinTime       time.Duration `env:"KODEX_PROJECT_CATALOG_GRPC_KEEPALIVE_MIN_TIME" envDefault:"30s"`
-	GRPCPermitWithoutStream    bool          `env:"KODEX_PROJECT_CATALOG_GRPC_PERMIT_WITHOUT_STREAM" envDefault:"false"`
-	GRPCMaxRecvMessageBytes    int           `env:"KODEX_PROJECT_CATALOG_GRPC_MAX_RECV_MESSAGE_BYTES" envDefault:"4194304"`
-	GRPCMaxSendMessageBytes    int           `env:"KODEX_PROJECT_CATALOG_GRPC_MAX_SEND_MESSAGE_BYTES" envDefault:"4194304"`
-	DatabaseDSN                string        `env:"KODEX_PROJECT_CATALOG_DATABASE_DSN,required,notEmpty"`
-	DatabaseMaxConns           int32         `env:"KODEX_PROJECT_CATALOG_DATABASE_MAX_CONNS" envDefault:"8"`
-	DatabaseMinConns           int32         `env:"KODEX_PROJECT_CATALOG_DATABASE_MIN_CONNS" envDefault:"1"`
-	DatabaseMaxConnLifetime    time.Duration `env:"KODEX_PROJECT_CATALOG_DATABASE_MAX_CONN_LIFETIME" envDefault:"1h"`
-	DatabaseMaxConnIdleTime    time.Duration `env:"KODEX_PROJECT_CATALOG_DATABASE_MAX_CONN_IDLE_TIME" envDefault:"15m"`
-	DatabaseHealthCheckPeriod  time.Duration `env:"KODEX_PROJECT_CATALOG_DATABASE_HEALTH_CHECK_PERIOD" envDefault:"30s"`
-	DatabasePingTimeout        time.Duration `env:"KODEX_PROJECT_CATALOG_DATABASE_PING_TIMEOUT" envDefault:"5s"`
-	DatabaseRetryMaxAttempts   int           `env:"KODEX_PROJECT_CATALOG_DATABASE_CONNECT_RETRY_MAX_ATTEMPTS" envDefault:"6"`
-	DatabaseRetryInitialDelay  time.Duration `env:"KODEX_PROJECT_CATALOG_DATABASE_CONNECT_RETRY_INITIAL_DELAY" envDefault:"500ms"`
-	DatabaseRetryMaxDelay      time.Duration `env:"KODEX_PROJECT_CATALOG_DATABASE_CONNECT_RETRY_MAX_DELAY" envDefault:"5s"`
-	DatabaseRetryJitterRatio   float64       `env:"KODEX_PROJECT_CATALOG_DATABASE_CONNECT_RETRY_JITTER_RATIO" envDefault:"0.2"`
-	AccessCheckEnabled         bool          `env:"KODEX_PROJECT_CATALOG_ACCESS_CHECK_ENABLED" envDefault:"true"`
-	AccessManagerGRPCAddr      string        `env:"KODEX_PROJECT_CATALOG_ACCESS_MANAGER_GRPC_ADDR" envDefault:"access-manager:9090"`
-	AccessManagerGRPCAuthToken string        `env:"KODEX_PROJECT_CATALOG_ACCESS_MANAGER_GRPC_AUTH_TOKEN"`
-	AccessManagerCheckTimeout  time.Duration `env:"KODEX_PROJECT_CATALOG_ACCESS_MANAGER_CHECK_TIMEOUT" envDefault:"3s"`
-	EventLogDatabaseDSN        string        `env:"KODEX_PROJECT_CATALOG_EVENT_LOG_DATABASE_DSN"`
-	EventLogDatabaseMaxConns   int32         `env:"KODEX_PROJECT_CATALOG_EVENT_LOG_DATABASE_MAX_CONNS" envDefault:"4"`
-	EventLogDatabaseMinConns   int32         `env:"KODEX_PROJECT_CATALOG_EVENT_LOG_DATABASE_MIN_CONNS" envDefault:"0"`
-	OutboxDispatchEnabled      bool          `env:"KODEX_PROJECT_CATALOG_OUTBOX_DISPATCH_ENABLED" envDefault:"true"`
-	OutboxPublisherKind        string        `env:"KODEX_PROJECT_CATALOG_OUTBOX_PUBLISHER_KIND" envDefault:"postgres-event-log"`
-	OutboxEventLogSource       string        `env:"KODEX_PROJECT_CATALOG_OUTBOX_EVENT_LOG_SOURCE" envDefault:"project-catalog"`
-	OutboxAllowLossyPublisher  bool          `env:"KODEX_PROJECT_CATALOG_OUTBOX_ALLOW_LOSSY_DIAGNOSTIC_PUBLISHER" envDefault:"false"`
-	OutboxBatchSize            int           `env:"KODEX_PROJECT_CATALOG_OUTBOX_BATCH_SIZE" envDefault:"100"`
-	OutboxPollInterval         time.Duration `env:"KODEX_PROJECT_CATALOG_OUTBOX_POLL_INTERVAL" envDefault:"1s"`
-	OutboxLockTTL              time.Duration `env:"KODEX_PROJECT_CATALOG_OUTBOX_LOCK_TTL" envDefault:"30s"`
-	OutboxPublishTimeout       time.Duration `env:"KODEX_PROJECT_CATALOG_OUTBOX_PUBLISH_TIMEOUT" envDefault:"10s"`
-	OutboxLeaseSafetyMargin    time.Duration `env:"KODEX_PROJECT_CATALOG_OUTBOX_LEASE_SAFETY_MARGIN" envDefault:"5s"`
-	OutboxRetryInitialDelay    time.Duration `env:"KODEX_PROJECT_CATALOG_OUTBOX_RETRY_INITIAL_DELAY" envDefault:"1s"`
-	OutboxRetryMaxDelay        time.Duration `env:"KODEX_PROJECT_CATALOG_OUTBOX_RETRY_MAX_DELAY" envDefault:"1m"`
-	OutboxFailureMessageLimit  int           `env:"KODEX_PROJECT_CATALOG_OUTBOX_FAILURE_MESSAGE_LIMIT" envDefault:"512"`
+	HTTPAddr                    string        `env:"KODEX_PROJECT_CATALOG_HTTP_ADDR" envDefault:":8080"`
+	GRPCAddr                    string        `env:"KODEX_PROJECT_CATALOG_GRPC_ADDR" envDefault:":9090"`
+	GRPCAuthRequired            bool          `env:"KODEX_PROJECT_CATALOG_GRPC_AUTH_REQUIRED" envDefault:"true"`
+	GRPCAuthToken               string        `env:"KODEX_PROJECT_CATALOG_GRPC_AUTH_TOKEN"`
+	GRPCMaxInFlight             int           `env:"KODEX_PROJECT_CATALOG_GRPC_MAX_IN_FLIGHT" envDefault:"128"`
+	GRPCMaxConcurrentStreams    uint32        `env:"KODEX_PROJECT_CATALOG_GRPC_MAX_CONCURRENT_STREAMS" envDefault:"128"`
+	GRPCUnaryTimeout            time.Duration `env:"KODEX_PROJECT_CATALOG_GRPC_UNARY_TIMEOUT" envDefault:"30s"`
+	GRPCKeepaliveTime           time.Duration `env:"KODEX_PROJECT_CATALOG_GRPC_KEEPALIVE_TIME" envDefault:"2m"`
+	GRPCKeepaliveTimeout        time.Duration `env:"KODEX_PROJECT_CATALOG_GRPC_KEEPALIVE_TIMEOUT" envDefault:"20s"`
+	GRPCKeepaliveMinTime        time.Duration `env:"KODEX_PROJECT_CATALOG_GRPC_KEEPALIVE_MIN_TIME" envDefault:"30s"`
+	GRPCPermitWithoutStream     bool          `env:"KODEX_PROJECT_CATALOG_GRPC_PERMIT_WITHOUT_STREAM" envDefault:"false"`
+	GRPCMaxRecvMessageBytes     int           `env:"KODEX_PROJECT_CATALOG_GRPC_MAX_RECV_MESSAGE_BYTES" envDefault:"4194304"`
+	GRPCMaxSendMessageBytes     int           `env:"KODEX_PROJECT_CATALOG_GRPC_MAX_SEND_MESSAGE_BYTES" envDefault:"4194304"`
+	DatabaseDSN                 string        `env:"KODEX_PROJECT_CATALOG_DATABASE_DSN,required,notEmpty"`
+	DatabaseMaxConns            int32         `env:"KODEX_PROJECT_CATALOG_DATABASE_MAX_CONNS" envDefault:"8"`
+	DatabaseMinConns            int32         `env:"KODEX_PROJECT_CATALOG_DATABASE_MIN_CONNS" envDefault:"1"`
+	DatabaseMaxConnLifetime     time.Duration `env:"KODEX_PROJECT_CATALOG_DATABASE_MAX_CONN_LIFETIME" envDefault:"1h"`
+	DatabaseMaxConnIdleTime     time.Duration `env:"KODEX_PROJECT_CATALOG_DATABASE_MAX_CONN_IDLE_TIME" envDefault:"15m"`
+	DatabaseHealthCheckPeriod   time.Duration `env:"KODEX_PROJECT_CATALOG_DATABASE_HEALTH_CHECK_PERIOD" envDefault:"30s"`
+	DatabasePingTimeout         time.Duration `env:"KODEX_PROJECT_CATALOG_DATABASE_PING_TIMEOUT" envDefault:"5s"`
+	DatabaseRetryMaxAttempts    int           `env:"KODEX_PROJECT_CATALOG_DATABASE_CONNECT_RETRY_MAX_ATTEMPTS" envDefault:"6"`
+	DatabaseRetryInitialDelay   time.Duration `env:"KODEX_PROJECT_CATALOG_DATABASE_CONNECT_RETRY_INITIAL_DELAY" envDefault:"500ms"`
+	DatabaseRetryMaxDelay       time.Duration `env:"KODEX_PROJECT_CATALOG_DATABASE_CONNECT_RETRY_MAX_DELAY" envDefault:"5s"`
+	DatabaseRetryJitterRatio    float64       `env:"KODEX_PROJECT_CATALOG_DATABASE_CONNECT_RETRY_JITTER_RATIO" envDefault:"0.2"`
+	AccessCheckEnabled          bool          `env:"KODEX_PROJECT_CATALOG_ACCESS_CHECK_ENABLED" envDefault:"true"`
+	AccessManagerGRPCAddr       string        `env:"KODEX_PROJECT_CATALOG_ACCESS_MANAGER_GRPC_ADDR" envDefault:"access-manager:9090"`
+	AccessManagerGRPCAuthToken  string        `env:"KODEX_PROJECT_CATALOG_ACCESS_MANAGER_GRPC_AUTH_TOKEN"`
+	AccessManagerCheckTimeout   time.Duration `env:"KODEX_PROJECT_CATALOG_ACCESS_MANAGER_CHECK_TIMEOUT" envDefault:"3s"`
+	ProviderHubBootstrapEnabled bool          `env:"KODEX_PROJECT_CATALOG_PROVIDER_HUB_BOOTSTRAP_ENABLED" envDefault:"true"`
+	ProviderHubGRPCAddr         string        `env:"KODEX_PROJECT_CATALOG_PROVIDER_HUB_GRPC_ADDR" envDefault:"provider-hub:9090"`
+	ProviderHubGRPCAuthToken    string        `env:"KODEX_PROJECT_CATALOG_PROVIDER_HUB_GRPC_AUTH_TOKEN"`
+	ProviderHubRequestTimeout   time.Duration `env:"KODEX_PROJECT_CATALOG_PROVIDER_HUB_REQUEST_TIMEOUT" envDefault:"5s"`
+	EventLogDatabaseDSN         string        `env:"KODEX_PROJECT_CATALOG_EVENT_LOG_DATABASE_DSN"`
+	EventLogDatabaseMaxConns    int32         `env:"KODEX_PROJECT_CATALOG_EVENT_LOG_DATABASE_MAX_CONNS" envDefault:"4"`
+	EventLogDatabaseMinConns    int32         `env:"KODEX_PROJECT_CATALOG_EVENT_LOG_DATABASE_MIN_CONNS" envDefault:"0"`
+	OutboxDispatchEnabled       bool          `env:"KODEX_PROJECT_CATALOG_OUTBOX_DISPATCH_ENABLED" envDefault:"true"`
+	OutboxPublisherKind         string        `env:"KODEX_PROJECT_CATALOG_OUTBOX_PUBLISHER_KIND" envDefault:"postgres-event-log"`
+	OutboxEventLogSource        string        `env:"KODEX_PROJECT_CATALOG_OUTBOX_EVENT_LOG_SOURCE" envDefault:"project-catalog"`
+	OutboxAllowLossyPublisher   bool          `env:"KODEX_PROJECT_CATALOG_OUTBOX_ALLOW_LOSSY_DIAGNOSTIC_PUBLISHER" envDefault:"false"`
+	OutboxBatchSize             int           `env:"KODEX_PROJECT_CATALOG_OUTBOX_BATCH_SIZE" envDefault:"100"`
+	OutboxPollInterval          time.Duration `env:"KODEX_PROJECT_CATALOG_OUTBOX_POLL_INTERVAL" envDefault:"1s"`
+	OutboxLockTTL               time.Duration `env:"KODEX_PROJECT_CATALOG_OUTBOX_LOCK_TTL" envDefault:"30s"`
+	OutboxPublishTimeout        time.Duration `env:"KODEX_PROJECT_CATALOG_OUTBOX_PUBLISH_TIMEOUT" envDefault:"10s"`
+	OutboxLeaseSafetyMargin     time.Duration `env:"KODEX_PROJECT_CATALOG_OUTBOX_LEASE_SAFETY_MARGIN" envDefault:"5s"`
+	OutboxRetryInitialDelay     time.Duration `env:"KODEX_PROJECT_CATALOG_OUTBOX_RETRY_INITIAL_DELAY" envDefault:"1s"`
+	OutboxRetryMaxDelay         time.Duration `env:"KODEX_PROJECT_CATALOG_OUTBOX_RETRY_MAX_DELAY" envDefault:"1m"`
+	OutboxFailureMessageLimit   int           `env:"KODEX_PROJECT_CATALOG_OUTBOX_FAILURE_MESSAGE_LIMIT" envDefault:"512"`
 }
 
 // LoadConfig reads process configuration from environment variables.
@@ -98,6 +102,7 @@ func (cfg Config) Validate() error {
 		{name: "KODEX_PROJECT_CATALOG_DATABASE_CONNECT_RETRY_INITIAL_DELAY", valid: cfg.DatabaseRetryInitialDelay >= 0},
 		{name: "KODEX_PROJECT_CATALOG_DATABASE_CONNECT_RETRY_MAX_DELAY", valid: cfg.DatabaseRetryMaxDelay >= cfg.DatabaseRetryInitialDelay},
 		{name: "KODEX_PROJECT_CATALOG_ACCESS_MANAGER_CHECK_TIMEOUT", valid: cfg.AccessManagerCheckTimeout > 0},
+		{name: "KODEX_PROJECT_CATALOG_PROVIDER_HUB_REQUEST_TIMEOUT", valid: cfg.ProviderHubRequestTimeout > 0},
 		{name: "KODEX_PROJECT_CATALOG_EVENT_LOG_DATABASE_MAX_CONNS", valid: cfg.EventLogDatabaseMaxConns >= 0},
 		{name: "KODEX_PROJECT_CATALOG_EVENT_LOG_DATABASE_MIN_CONNS", valid: cfg.EventLogDatabaseMinConns >= 0},
 		{name: "KODEX_PROJECT_CATALOG_OUTBOX_BATCH_SIZE", valid: cfg.OutboxBatchSize > 0},
@@ -125,6 +130,14 @@ func (cfg Config) Validate() error {
 		}
 		if strings.TrimSpace(cfg.AccessManagerGRPCAuthToken) == "" {
 			return fmt.Errorf("KODEX_PROJECT_CATALOG_ACCESS_MANAGER_GRPC_AUTH_TOKEN is required when access checks are enabled")
+		}
+	}
+	if cfg.ProviderHubBootstrapEnabled {
+		if strings.TrimSpace(cfg.ProviderHubGRPCAddr) == "" {
+			return fmt.Errorf("KODEX_PROJECT_CATALOG_PROVIDER_HUB_GRPC_ADDR is required when provider-hub bootstrap is enabled")
+		}
+		if strings.TrimSpace(cfg.ProviderHubGRPCAuthToken) == "" {
+			return fmt.Errorf("KODEX_PROJECT_CATALOG_PROVIDER_HUB_GRPC_AUTH_TOKEN is required when provider-hub bootstrap is enabled")
 		}
 	}
 	switch strings.TrimSpace(cfg.OutboxPublisherKind) {

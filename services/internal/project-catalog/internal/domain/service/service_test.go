@@ -615,6 +615,110 @@ func TestImportServicesPolicyRejectsUnknownDependency(t *testing.T) {
 	}
 }
 
+func TestCreateRepositoryBootstrapPullRequestDelegatesProviderWrite(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	externalAccountID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = entity.RepositoryBinding{
+		Base:                 entity.Base{ID: repositoryID, Version: 1},
+		ProjectID:            projectID,
+		Provider:             enum.RepositoryProviderGitHub,
+		ProviderOwner:        "codex-k8s",
+		ProviderName:         "kodex",
+		WebURL:               "https://github.com/codex-k8s/kodex",
+		DefaultBranch:        "main",
+		Status:               enum.RepositoryStatusPending,
+		ProviderRepositoryID: "R_123",
+	}
+	authorizer := &spyAuthorizer{}
+	provider := &spyBootstrapProvider{
+		result: RepositoryBootstrapProviderResult{
+			ProviderOperationID:          "operation-1",
+			ProviderWorkItemProjectionID: "projection-1",
+			ProviderWebURL:               "https://github.com/codex-k8s/kodex/pull/1",
+		},
+	}
+	svc := NewWithConfig(store, fixedClock{}, &sequenceIDs{}, Config{Authorizer: authorizer, BootstrapProvider: provider})
+
+	result, err := svc.CreateRepositoryBootstrapPullRequest(ctx, CreateRepositoryBootstrapPullRequestInput{
+		ProjectID:       projectID,
+		RepositoryID:    repositoryID,
+		BaseBranch:      "main",
+		BootstrapBranch: "kodex/bootstrap",
+		CommitMessage:   "Bootstrap repository",
+		Title:           "Bootstrap repository",
+		Files: []RepositoryBootstrapFile{{
+			Path:    "services.yaml",
+			Content: "services:\n",
+		}},
+		WatermarkJSON:     []byte(`{"kind":"provider_pr","managed_by":"kodex","work_type":"repository_bootstrap","source_ref":"services.yaml"}`),
+		ServicesPolicy:    bootstrapServicesPolicy(),
+		ExternalAccountID: externalAccountID,
+		Meta:              commandMeta(uuid.New()),
+	})
+	if err != nil {
+		t.Fatalf("CreateRepositoryBootstrapPullRequest(): %v", err)
+	}
+	if provider.calls != 1 {
+		t.Fatalf("provider calls = %d, want 1", provider.calls)
+	}
+	if provider.input.ProviderSlug != "github" || provider.input.RepositoryTarget.RepositoryFullName != "codex-k8s/kodex" || provider.input.RepositoryTarget.ProviderRepositoryID != "R_123" {
+		t.Fatalf("provider target = %+v, want binding-derived target", provider.input.RepositoryTarget)
+	}
+	if provider.input.BaseBranch != "main" || provider.input.BootstrapBranch != "kodex/bootstrap" || provider.input.ExternalAccountID != externalAccountID {
+		t.Fatalf("provider input = %+v, want branch and account fields", provider.input)
+	}
+	if len(authorizer.requests) != 1 || authorizer.requests[0].ActionKey != projectActionRepositoryBootstrap {
+		t.Fatalf("access requests = %+v, want repository bootstrap check", authorizer.requests)
+	}
+	if result.ProviderResult.ProviderOperationID != "operation-1" || result.ProviderTarget.RepositoryFullName != "codex-k8s/kodex" {
+		t.Fatalf("result = %+v, want provider refs and target", result)
+	}
+	if len(store.events) != 0 {
+		t.Fatalf("events = %d, want no project event before services policy import", len(store.events))
+	}
+}
+
+func TestCreateRepositoryBootstrapPullRequestValidatesProjectPolicyLink(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = entity.RepositoryBinding{
+		Base:          entity.Base{ID: repositoryID, Version: 1},
+		ProjectID:     projectID,
+		Provider:      enum.RepositoryProviderGitHub,
+		ProviderOwner: "codex-k8s",
+		ProviderName:  "kodex",
+		DefaultBranch: "main",
+		Status:        enum.RepositoryStatusPending,
+	}
+	provider := &spyBootstrapProvider{}
+	svc := NewWithConfig(store, fixedClock{}, &sequenceIDs{}, Config{BootstrapProvider: provider})
+
+	_, err := svc.CreateRepositoryBootstrapPullRequest(ctx, CreateRepositoryBootstrapPullRequestInput{
+		ProjectID:         projectID,
+		RepositoryID:      repositoryID,
+		BaseBranch:        "main",
+		BootstrapBranch:   "kodex/bootstrap",
+		CommitMessage:     "Bootstrap repository",
+		Title:             "Bootstrap repository",
+		Files:             []RepositoryBootstrapFile{{Path: "README.md", Content: "# Project\n"}},
+		WatermarkJSON:     []byte(`{"kind":"provider_pr","managed_by":"kodex","work_type":"repository_bootstrap","source_ref":"services.yaml"}`),
+		ServicesPolicy:    bootstrapServicesPolicy(),
+		ExternalAccountID: uuid.New(),
+		Meta:              commandMeta(uuid.New()),
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("CreateRepositoryBootstrapPullRequest() err = %v, want invalid argument", err)
+	}
+	if provider.calls != 0 {
+		t.Fatalf("provider calls = %d, want validation to stop before provider", provider.calls)
+	}
+}
+
 func TestPutDocumentationSourceNormalizesAndPublishesEvent(t *testing.T) {
 	ctx := context.Background()
 	store := newMemoryRepository()
@@ -699,6 +803,19 @@ func (a *spyAuthorizer) Authorize(_ context.Context, request AuthorizationReques
 	return a.err
 }
 
+type spyBootstrapProvider struct {
+	calls  int
+	input  ProviderBootstrapPullRequestInput
+	result RepositoryBootstrapProviderResult
+	err    error
+}
+
+func (p *spyBootstrapProvider) CreateRepositoryBootstrapPullRequest(_ context.Context, input ProviderBootstrapPullRequestInput) (RepositoryBootstrapProviderResult, error) {
+	p.calls++
+	p.input = input
+	return p.result, p.err
+}
+
 type fixedClock struct{}
 
 func (fixedClock) Now() time.Time {
@@ -748,6 +865,14 @@ func stringPtr(value string) *string {
 
 func servicesPolicyPayload(key string, rootPath string, kind string) string {
 	return `{"spec":{"services":[{"key":"` + key + `","rootPath":"` + rootPath + `","kind":"` + kind + `"}]}}`
+}
+
+func bootstrapServicesPolicy() RepositoryBootstrapServicesPolicy {
+	return RepositoryBootstrapServicesPolicy{
+		SourcePath:       "services.yaml",
+		ContentHash:      "sha256:policy",
+		ValidatedPayload: []byte(servicesPolicyPayload("api", "services/api", "backend")),
+	}
 }
 
 type memoryRepository struct {

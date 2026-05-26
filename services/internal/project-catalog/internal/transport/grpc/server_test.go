@@ -58,6 +58,81 @@ func TestCreateProjectCallsDomainService(t *testing.T) {
 	}
 }
 
+func TestCreateRepositoryBootstrapPullRequestCallsDomainService(t *testing.T) {
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	externalAccountID := uuid.New()
+	commandID := uuid.New()
+	service := &fakeProjectService{}
+	service.createBootstrap = func(_ context.Context, input projectservice.CreateRepositoryBootstrapPullRequestInput) (projectservice.RepositoryBootstrapPullRequestResult, error) {
+		if input.ProjectID != projectID || input.RepositoryID != repositoryID || input.ExternalAccountID != externalAccountID {
+			t.Fatalf("ids = %s/%s/%s, want request ids", input.ProjectID, input.RepositoryID, input.ExternalAccountID)
+		}
+		if input.BaseBranch != "main" || input.BootstrapBranch != "kodex/bootstrap" || len(input.Files) != 1 {
+			t.Fatalf("bootstrap input = %+v, want branch and file fields", input)
+		}
+		if input.ServicesPolicy.SourcePath != "services.yaml" || input.ServicesPolicy.ContentHash != "sha256:policy" {
+			t.Fatalf("services policy = %+v, want checked policy fields", input.ServicesPolicy)
+		}
+		return projectservice.RepositoryBootstrapPullRequestResult{
+			Repository: entity.RepositoryBinding{
+				Base:          entity.Base{ID: repositoryID, Version: 1},
+				ProjectID:     projectID,
+				Provider:      enum.RepositoryProviderGitHub,
+				ProviderOwner: "codex-k8s",
+				ProviderName:  "kodex",
+				DefaultBranch: "main",
+				Status:        enum.RepositoryStatusPending,
+			},
+			ProviderTarget: projectservice.RepositoryBootstrapProviderTarget{
+				ProviderSlug:       "github",
+				RepositoryFullName: "codex-k8s/kodex",
+			},
+			BaseBranch:      "main",
+			BootstrapBranch: "kodex/bootstrap",
+			ServicesPolicy: projectservice.RepositoryBootstrapServicesPolicy{
+				SourcePath:  "services.yaml",
+				ContentHash: "sha256:policy",
+			},
+			ProviderResult: projectservice.RepositoryBootstrapProviderResult{
+				ProviderOperationID:          "operation-1",
+				ProviderWorkItemProjectionID: "projection-1",
+				ProviderWebURL:               "https://example.test/pull/1",
+			},
+		}, nil
+	}
+	server := NewServer(service)
+
+	response, err := server.CreateRepositoryBootstrapPullRequest(context.Background(), &projectsv1.CreateRepositoryBootstrapPullRequestRequest{
+		ProjectId:       projectID.String(),
+		RepositoryId:    repositoryID.String(),
+		BaseBranch:      "main",
+		BootstrapBranch: "kodex/bootstrap",
+		CommitMessage:   "Bootstrap repository",
+		Title:           "Bootstrap repository",
+		Files: []*projectsv1.RepositoryBootstrapFile{{
+			Path:    "services.yaml",
+			Content: "services:\n",
+		}},
+		WatermarkJson: `{"kind":"provider_pr","managed_by":"kodex","work_type":"repository_bootstrap","source_ref":"test"}`,
+		ServicesPolicy: &projectsv1.RepositoryBootstrapServicesPolicy{
+			SourcePath:           "services.yaml",
+			ContentHash:          "sha256:policy",
+			ValidatedPayloadJson: `{"spec":{"services":[{"key":"api","rootPath":"services/api"}]}}`,
+		},
+		ExternalAccountId: externalAccountID.String(),
+		Meta:              commandMeta(commandID.String()),
+	})
+	if err != nil {
+		t.Fatalf("CreateRepositoryBootstrapPullRequest(): %v", err)
+	}
+	if response.GetProviderTarget().GetRepositoryFullName() != "codex-k8s/kodex" ||
+		response.GetProviderOperationId() != "operation-1" ||
+		response.GetProviderWebUrl() != "https://example.test/pull/1" {
+		t.Fatalf("response = %+v, want provider refs", response)
+	}
+}
+
 func TestErrorToStatusMapsDomainErrors(t *testing.T) {
 	t.Parallel()
 
@@ -107,7 +182,8 @@ func commandMeta(commandID string) *projectsv1.CommandMeta {
 
 type fakeProjectService struct {
 	unimplementedProjectService
-	createProject func(context.Context, projectservice.CreateProjectInput) (entity.Project, error)
+	createProject   func(context.Context, projectservice.CreateProjectInput) (entity.Project, error)
+	createBootstrap func(context.Context, projectservice.CreateRepositoryBootstrapPullRequestInput) (projectservice.RepositoryBootstrapPullRequestResult, error)
 }
 
 func (s *fakeProjectService) CreateProject(ctx context.Context, input projectservice.CreateProjectInput) (entity.Project, error) {
@@ -115,6 +191,13 @@ func (s *fakeProjectService) CreateProject(ctx context.Context, input projectser
 		return entity.Project{}, errs.ErrInvalidArgument
 	}
 	return s.createProject(ctx, input)
+}
+
+func (s *fakeProjectService) CreateRepositoryBootstrapPullRequest(ctx context.Context, input projectservice.CreateRepositoryBootstrapPullRequestInput) (projectservice.RepositoryBootstrapPullRequestResult, error) {
+	if s.createBootstrap == nil {
+		return projectservice.RepositoryBootstrapPullRequestResult{}, errs.ErrInvalidArgument
+	}
+	return s.createBootstrap(ctx, input)
 }
 
 type unimplementedProjectService struct{}
@@ -137,6 +220,10 @@ func (unimplementedProjectService) ListProjects(context.Context, projectservice.
 
 func (unimplementedProjectService) AttachRepository(context.Context, projectservice.AttachRepositoryInput) (entity.RepositoryBinding, error) {
 	return entity.RepositoryBinding{}, errs.ErrInvalidArgument
+}
+
+func (unimplementedProjectService) CreateRepositoryBootstrapPullRequest(context.Context, projectservice.CreateRepositoryBootstrapPullRequestInput) (projectservice.RepositoryBootstrapPullRequestResult, error) {
+	return projectservice.RepositoryBootstrapPullRequestResult{}, errs.ErrInvalidArgument
 }
 
 func (unimplementedProjectService) UpdateRepository(context.Context, projectservice.UpdateRepositoryInput) (entity.RepositoryBinding, error) {

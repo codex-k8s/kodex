@@ -58,8 +58,9 @@
 | Wave 8.4.2 | #632 | #649 | готово | `GetWorkspacePolicy`, источники документации, операторские переопределения и политика рабочего контура. |
 | Wave 8.5 | #633 | #652 | готово | Правила веток, релизная политика, политика размещения, Dockerfile, Kubernetes-манифесты, migration job и smoke-путь. |
 | Wave 8 closeout | #633 | #654 | готово | Статусы Wave 8, карты Issue и документы поставки приведены к завершённому состоянию. |
+| ONB-1 | #794 | готово | `CreateRepositoryBootstrapPullRequest` готовит project-side bootstrap-контекст для существующего binding и вызывает `provider-hub CreateBootstrapPullRequest` без Git-клиента, генерации шаблона и adoption scan. |
 
-Итог: `project-catalog` имеет стабильные `v1` контракты, БД, миграции, gRPC-слой, outbox-публикацию в `platform-event-log`, deploy-манифесты и smoke-контур. Все операции из `proto/kodex/projects/v1/project_catalog.proto` реализованы в рамках согласованного объёма Wave 8.
+Итог: `project-catalog` имеет стабильные `v1` контракты, БД, миграции, gRPC-слой, outbox-публикацию в `platform-event-log`, deploy-манифесты и smoke-контур. Операции из Wave 8 реализованы; ONB-1 добавил project-side bootstrap команду для уже существующего repository binding.
 
 ## Что уже сделано по `runtime-manager`
 
@@ -105,7 +106,7 @@
 
 | Направление | Статус | Что осталось |
 |---|---|---|
-| Bootstrap пустого репозитория | модель выбрана, provider-side PR готов частично: #281, #748 | Проектная часть готова в `project-catalog`; выбран вариант C: `services.yaml` как Git-декларация, установки и шаблоны репозиториев хранятся в `package-hub`, provider-native запись идёт через `provider-hub`, материализация workspace выполняется в `runtime-manager`. PRV-8a умеет создать bootstrap branch/PR для заранее существующего пустого repo по готовым файлам и refs; end-to-end вызов, создание repo/base ref и adoption остаются отдельными срезами. |
+| Bootstrap пустого репозитория | ONB-1 готов, полный сценарий открыт: #281, #748 | `project-catalog` владеет проектной политикой и binding: новая команда проверяет существующий repository binding, provider target, `base_branch`, prepared files, watermark и проверенную проекцию `services.yaml`, затем вызывает `provider-hub CreateBootstrapPullRequest`. Создание provider repo/base ref, выбор и применение шаблона, импорт политики после merge и adoption остаются отдельными срезами. |
 | Adoption существующего репозитория | модель выбрана, ждёт реализации: #282 | Проектная часть готова в `project-catalog`; adoption должен поддерживать агентную роль и быстрый шаблонный режим после проверки конфликтов. |
 | UI/gateway для проектов и runtime | запланировано позже | Делать после определения фактических экранов `web-console` и состава `staff-gateway` ручек. |
 | `project.policy_override.expired` | запланировано позже | Контракт события есть; нужна логика обслуживания или platform job, которая будет снимать истёкшие переопределения как операционный срез. |
@@ -144,7 +145,7 @@
 
 Реальные оставшиеся блокировки:
 
-- #281 и #282 требуют provider-native операций: создать или просканировать репозиторий, открыть bootstrap/adoption PR, связать provider Issue/PR/MR с локальными проектом и репозиторием; PRV-8a уже закрывает открытие bootstrap PR для заранее существующего пустого repo по готовым файлам и refs, но создание repo/base ref, проектный вызов и adoption scan остаются открытыми;
+- #281 и #282 требуют provider-native операций: создать или просканировать репозиторий, открыть bootstrap/adoption PR, связать provider Issue/PR/MR с локальными проектом и репозиторием; PRV-8a закрывает provider-side открытие bootstrap PR для заранее существующего пустого repo по готовым файлам и refs, ONB-1 закрывает project-side вызов для существующего binding, но создание repo/base ref, импорт политики после merge и adoption scan остаются открытыми;
 - `CreatePolicyEditProposal` в `project-catalog` сохраняет предложение, но создание PR с правкой `services.yaml` должно идти через provider-контур;
 - workspace `source_ref` и сигналы после работы slot-агентов должны синхронизироваться с provider-проекциями, но runtime не должен напрямую ходить в GitHub/GitLab.
 
@@ -189,5 +190,5 @@
 Для агента #1 нет незавершённого локального Wave 8, RTM или FLEET среза, который нужно закрыть до соседних доменов. После MCP-4 рационально идти в один из трёх вариантов:
 
 - выполнить MCP-3g после готовности контрактов `governance-manager`, чтобы маршрутизировать risk/gate/release инструменты без хранения decision state в MCP;
-- дождаться `provider-hub` bootstrap/adoption контракта и закрывать #281/#282;
+- продолжить bootstrap пустого репозитория следующим ONB-срезом: создать provider repo/base ref через `provider-hub CreateRepository`, завести binding в `project-catalog` и связать последующий импорт `services.yaml` после merge;
 - перейти к runtime/fleet интеграции с реальным исполнителем platform jobs после согласования `agent-manager` и ops-контуров.

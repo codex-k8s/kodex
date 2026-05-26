@@ -86,6 +86,7 @@ const (
 	ActionProjectRead                           = "project.read"
 	ActionProjectList                           = "project.list"
 	ActionRepositoryAttach                      = "repository.attach"
+	ActionRepositoryBootstrap                   = "repository.bootstrap"
 	ActionRepositoryUpdate                      = "repository.update"
 	ActionRepositoryDetach                      = "repository.detach"
 	ActionRepositoryRead                        = "repository.read"
@@ -240,6 +241,7 @@ func ProjectCatalogActions() []ActionDescriptor {
 		{Key: ActionProjectRead, ResourceType: ResourceProject},
 		{Key: ActionProjectList, ResourceType: ResourceProject},
 		{Key: ActionRepositoryAttach, ResourceType: ResourceRepository},
+		{Key: ActionRepositoryBootstrap, ResourceType: ResourceRepository},
 		{Key: ActionRepositoryUpdate, ResourceType: ResourceRepository},
 		{Key: ActionRepositoryDetach, ResourceType: ResourceRepository},
 		{Key: ActionRepositoryRead, ResourceType: ResourceRepository},
