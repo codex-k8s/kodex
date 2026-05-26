@@ -9,4 +9,5 @@ SET status = @status,
     updated_at = @updated_at,
     sent_at = @sent_at::timestamptz
 WHERE id = @id
-  AND status NOT IN ('delivered', 'failed', 'cancelled', 'expired');
+  AND status NOT IN ('delivered', 'failed', 'cancelled', 'expired')
+  AND result_fingerprint = '';

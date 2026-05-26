@@ -731,6 +731,101 @@ func TestServiceRecordsTerminalDeliveryResultIdempotentlyByDeliveryID(t *testing
 	}
 }
 
+func TestServiceReplaysDeliveryResultAfterAtomicClaimConflict(t *testing.T) {
+	t.Parallel()
+
+	repository := newFakeRepository()
+	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+	requestID := uuid.New()
+	routeID := uuid.New()
+	seedInteractionRequest(repository, requestID, now, enum.InteractionRequestStatusWaiting)
+	seedDeliveryRoute(repository, routeID, now)
+	svc := NewWithConfig(repository, Config{Clock: fixedClock{now: now.Add(time.Minute)}, UUIDGenerator: &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New()}}})
+	planned, err := svc.PlanDelivery(context.Background(), validPlanDeliveryInput(requestID, routeID))
+	if err != nil {
+		t.Fatalf("PlanDelivery(): %v", err)
+	}
+	input := RecordDeliveryResultInput{
+		Meta: validCommandMeta(),
+		Result: value.ChannelDeliveryResult{
+			ContractVersion:   "interaction.channel.v1",
+			DeliveryID:        planned.DeliveryID,
+			ResultStatus:      enum.ChannelDeliveryResultStatusAccepted,
+			ChannelMessageRef: "channel:message-race",
+			OccurredAt:        now.Add(2 * time.Minute),
+		},
+	}
+	resultFingerprint, err := deliveryResultFingerprint(input.Result)
+	if err != nil {
+		t.Fatalf("deliveryResultFingerprint(): %v", err)
+	}
+	repository.beforeDeliveryUpdate = func(r *fakeRepository) {
+		claimed := r.deliveries[planned.ID]
+		claimed.Status = enum.DeliveryAttemptStatusAccepted
+		claimed.ChannelMessageRef = input.Result.ChannelMessageRef
+		claimed.ResultFingerprint = resultFingerprint
+		claimed.SentAt = &input.Result.OccurredAt
+		claimed.UpdatedAt = now.Add(2 * time.Minute)
+		r.deliveries[planned.ID] = claimed
+	}
+
+	replayed, err := svc.RecordDeliveryResult(context.Background(), input)
+	if err != nil {
+		t.Fatalf("RecordDeliveryResult() concurrent replay: %v", err)
+	}
+	if replayed.ID != planned.ID || replayed.ResultFingerprint != resultFingerprint || len(repository.events) != 1 {
+		t.Fatalf("concurrent replay = %+v events=%d, want claimed attempt without extra event", replayed, len(repository.events))
+	}
+}
+
+func TestServiceConflictsDeliveryResultAfterAtomicClaimConflict(t *testing.T) {
+	t.Parallel()
+
+	repository := newFakeRepository()
+	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+	requestID := uuid.New()
+	routeID := uuid.New()
+	seedInteractionRequest(repository, requestID, now, enum.InteractionRequestStatusWaiting)
+	seedDeliveryRoute(repository, routeID, now)
+	svc := NewWithConfig(repository, Config{Clock: fixedClock{now: now.Add(time.Minute)}, UUIDGenerator: &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New()}}})
+	planned, err := svc.PlanDelivery(context.Background(), validPlanDeliveryInput(requestID, routeID))
+	if err != nil {
+		t.Fatalf("PlanDelivery(): %v", err)
+	}
+	input := RecordDeliveryResultInput{
+		Meta: validCommandMeta(),
+		Result: value.ChannelDeliveryResult{
+			ContractVersion:   "interaction.channel.v1",
+			DeliveryID:        planned.DeliveryID,
+			ResultStatus:      enum.ChannelDeliveryResultStatusAccepted,
+			ChannelMessageRef: "channel:message-loser",
+			OccurredAt:        now.Add(2 * time.Minute),
+		},
+	}
+	winning := input.Result
+	winning.ChannelMessageRef = "channel:message-winner"
+	winningFingerprint, err := deliveryResultFingerprint(winning)
+	if err != nil {
+		t.Fatalf("deliveryResultFingerprint(): %v", err)
+	}
+	repository.beforeDeliveryUpdate = func(r *fakeRepository) {
+		claimed := r.deliveries[planned.ID]
+		claimed.Status = enum.DeliveryAttemptStatusAccepted
+		claimed.ChannelMessageRef = winning.ChannelMessageRef
+		claimed.ResultFingerprint = winningFingerprint
+		claimed.SentAt = &winning.OccurredAt
+		claimed.UpdatedAt = now.Add(2 * time.Minute)
+		r.deliveries[planned.ID] = claimed
+	}
+
+	if _, err := svc.RecordDeliveryResult(context.Background(), input); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("RecordDeliveryResult() concurrent conflict err = %v, want ErrConflict", err)
+	}
+	if len(repository.events) != 1 {
+		t.Fatalf("events=%d, want no extra event after conflict", len(repository.events))
+	}
+}
+
 func TestServiceGetsDeliveryStatusByDeliveryID(t *testing.T) {
 	t.Parallel()
 
@@ -784,18 +879,19 @@ func TestServiceBacklogRequiresReadyRepository(t *testing.T) {
 }
 
 type fakeRepository struct {
-	ready         bool
-	operations    []enum.Operation
-	threads       map[uuid.UUID]entity.ConversationThread
-	messages      map[uuid.UUID]entity.ConversationMessage
-	requests      map[uuid.UUID]entity.InteractionRequest
-	responses     map[uuid.UUID]entity.InteractionResponse
-	notifications map[uuid.UUID]entity.Notification
-	subscriptions map[uuid.UUID]entity.Subscription
-	routes        map[uuid.UUID]entity.DeliveryRoute
-	deliveries    map[uuid.UUID]entity.DeliveryAttempt
-	results       map[string]entity.CommandResult
-	events        []entity.OutboxEvent
+	ready                bool
+	operations           []enum.Operation
+	threads              map[uuid.UUID]entity.ConversationThread
+	messages             map[uuid.UUID]entity.ConversationMessage
+	requests             map[uuid.UUID]entity.InteractionRequest
+	responses            map[uuid.UUID]entity.InteractionResponse
+	notifications        map[uuid.UUID]entity.Notification
+	subscriptions        map[uuid.UUID]entity.Subscription
+	routes               map[uuid.UUID]entity.DeliveryRoute
+	deliveries           map[uuid.UUID]entity.DeliveryAttempt
+	results              map[string]entity.CommandResult
+	events               []entity.OutboxEvent
+	beforeDeliveryUpdate func(*fakeRepository)
 }
 
 func newFakeRepository() *fakeRepository {
@@ -1236,11 +1332,15 @@ func (r *fakeRepository) CreateDeliveryAttemptWithResult(_ context.Context, atte
 }
 
 func (r *fakeRepository) UpdateDeliveryAttemptWithResult(_ context.Context, attempt entity.DeliveryAttempt, result entity.CommandResult, event entity.OutboxEvent) error {
+	if r.beforeDeliveryUpdate != nil {
+		r.beforeDeliveryUpdate(r)
+		r.beforeDeliveryUpdate = nil
+	}
 	stored, ok := r.deliveries[attempt.ID]
 	if !ok {
 		return errs.ErrNotFound
 	}
-	if stored.Status.Terminal() {
+	if stored.Status.Terminal() || stored.ResultFingerprint != "" {
 		return errs.ErrConflict
 	}
 	r.deliveries[attempt.ID] = attempt

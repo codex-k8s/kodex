@@ -726,6 +726,9 @@ func (s *Service) RecordDeliveryResult(ctx context.Context, input RecordDelivery
 		return entity.DeliveryAttempt{}, err
 	}
 	if err := s.repository.UpdateDeliveryAttemptWithResult(ctx, updated, result, event); err != nil {
+		if errors.Is(err, errs.ErrConflict) {
+			return s.replayDeliveryResultConflict(ctx, input.Result.DeliveryID, resultFingerprint)
+		}
 		return entity.DeliveryAttempt{}, err
 	}
 	return updated, nil
@@ -1341,6 +1344,21 @@ func replayDeliveryResultByFingerprint(attempt entity.DeliveryAttempt, resultFin
 		return entity.DeliveryAttempt{}, true, errs.ErrConflict
 	}
 	return attempt, true, nil
+}
+
+func (s *Service) replayDeliveryResultConflict(ctx context.Context, deliveryID string, resultFingerprint string) (entity.DeliveryAttempt, error) {
+	current, err := s.repository.GetDeliveryAttemptByDeliveryID(ctx, deliveryID)
+	if err != nil {
+		return entity.DeliveryAttempt{}, err
+	}
+	replayed, ok, err := replayDeliveryResultByFingerprint(current, resultFingerprint)
+	if err != nil {
+		return entity.DeliveryAttempt{}, err
+	}
+	if !ok {
+		return entity.DeliveryAttempt{}, errs.ErrConflict
+	}
+	return replayed, nil
 }
 
 type deliveryResultFingerprintInput struct {
