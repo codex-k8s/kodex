@@ -5,8 +5,8 @@ title: kodex — API-обзор package-hub
 status: active
 owner_role: SA
 created_at: 2026-05-06
-updated_at: 2026-05-12
-related_issues: [642, 646, 650, 673, 678, 680, 684, 689, 692, 700, 704, 706, 711, 718, 723]
+updated_at: 2026-05-25
+related_issues: [642, 646, 650, 673, 678, 680, 684, 689, 692, 700, 704, 706, 711, 718, 723, 782]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -79,7 +79,7 @@ approvals:
 | Найти установленные руководящие пакеты в scope | `ListPackageInstallations(package_kind=guidance, scope=...)` |
 | Прочитать правила получения и состав пакета | `GetPackageManifest(package_version_id)` |
 
-`package-hub` отдаёт только пакетную истину: запись каталога, установку, выбранную версию и проверенный manifest. Подготовка workspace, checkout источника и mount локальных документов остаются за `agent-manager` и runtime-контуром.
+`package-hub` отдаёт только пакетную истину: запись каталога, установку, выбранную версию, source ref, manifest digest и проверенный manifest. Подготовка workspace, checkout источника, выбор локального пути и mount локальных документов остаются за `agent-manager` и runtime-контуром. Для `guidance` пакетный API не возвращает значения секретов, filesystem path, `SKILL.md`, scripts, assets или полный package source.
 
 Для пакета магазина и пользовательского контента платформы отдельный transport-контракт также не вводится:
 

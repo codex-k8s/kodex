@@ -5,8 +5,8 @@ title: kodex — дизайн домена пакетной платформы
 status: active
 owner_role: SA
 created_at: 2026-05-06
-updated_at: 2026-05-12
-related_issues: [642, 655, 678, 680, 684, 689, 692, 700, 704, 706, 711, 718]
+updated_at: 2026-05-26
+related_issues: [642, 655, 678, 680, 684, 689, 692, 700, 704, 706, 711, 718, 782]
 related_prs: []
 related_adrs: []
 approvals:
@@ -162,7 +162,9 @@ sequenceDiagram
   AM->>R: PrepareRuntime(agent_run_id, workspace policy, runtime profile, placement constraints)
 ```
 
-Руководящий пакет не смешивается с проектной документацией. `project-catalog` отвечает за проектные источники и политику рабочего контура, `package-hub` отвечает за пакет, выбранную версию, установку в scope и проверенный снимок manifest. Отдельный RPC для руководящих пакетов не нужен: будущий `agent-manager` получает их через `ListPackages`, `ListPackageInstallations` с фильтром `package_kind=guidance` и `GetPackageManifest`, а checkout и mount документов выполняет не `package-hub`.
+Руководящий пакет не смешивается с проектной документацией. `project-catalog` отвечает за проектные источники и политику рабочего контура, `package-hub` отвечает за пакет, выбранную версию, установку в scope, идентичность источника и проверенный снимок manifest. Отдельный RPC для руководящих пакетов не нужен: `agent-manager` получает их через `ListPackages`, `ListPackageInstallations` с фильтром `package_kind=guidance`, `GetPackageVersion` и `GetPackageManifest`, а checkout и mount документов выполняет не `package-hub`. Перед checkout `runtime-manager` отдельно читает `PackageVersion` и `PackageSource` в `package-hub`, чтобы получить тип source ref, commit SHA и идентичность источника по замороженному `package_version_ref`.
+
+`package-hub` не выдаёт локальные пути workspace и не готовит materialization payload. Он отдаёт только package/install/version/manifest refs, идентичность источника и статусы проверки. Оркестрационный контур превращает эти refs в `runtime.WorkspaceSource.kind=guidance_package`, а `runtime-manager` материализует источник только для чтения в `.kodex/guidance/<safe_local_name>`. `safe_local_name` вычисляется вне `package-hub` из безопасного ASCII-сегмента или детерминированного имени с хэшем; сырой `package_slug` не используется как путь. Полный manifest payload, тексты руководств, `SKILL.md`, scripts и assets не копируются в БД `agent-manager`.
 
 ### Использование пакета магазина и пользовательского контента платформы
 

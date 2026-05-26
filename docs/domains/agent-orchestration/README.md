@@ -32,6 +32,7 @@
 |---|---|
 | Требования | `product/requirements.md` |
 | Дизайн | `architecture/design.md` |
+| Контекст руководящих пакетов в workspace | `architecture/guidance_workspace_context.md` |
 | Модель данных | `architecture/data_model.md` |
 | API-обзор | `architecture/api_contract.md` |
 | План поставки | `delivery/agent_manager_delivery.md` |

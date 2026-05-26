@@ -5,8 +5,8 @@ title: kodex — требования домена оркестрации аге
 status: active
 owner_role: PM
 created_at: 2026-05-12
-updated_at: 2026-05-22
-related_issues: [733, 753, 698, 322]
+updated_at: 2026-05-26
+related_issues: [733, 753, 698, 322, 782]
 related_prs: []
 related_docsets:
   - docs/platform/product/product_model.md
@@ -63,7 +63,7 @@ approvals:
 | AGO-FR-3 | Домен должен поддерживать встроенные и пользовательские роли без переписывания ядра платформы. | Обязательно |
 | AGO-FR-4 | Домен должен хранить сессии и `Run` агентов как агентное состояние, отдельно от runtime-слотов и platform jobs. | Обязательно |
 | AGO-FR-5 | Домен должен запускать ролевого агента через `runtime-manager`, передавая runtime profile, workspace policy, роль, prompt и контекст задачи. | Обязательно |
-| AGO-FR-6 | Домен должен читать установленные руководящие пакеты через `package-hub` и включать их в агентный контекст без копирования пакетной истины. | Обязательно |
+| AGO-FR-6 | Домен должен читать установленные руководящие пакеты через `package-hub`, замораживать безопасные refs в `Run` и передавать runtime-контуру источники `guidance_package` без копирования пакетной истины, manifest payload и файлов руководств в БД. | Обязательно |
 | AGO-FR-7 | Домен должен использовать `provider-hub` для типизированных provider-операций и сигналов после работы агента, но не владеть provider-native состоянием. | Обязательно |
 | AGO-FR-8 | Домен должен описывать машину приёмки: ожидаемые артефакты, правила проверки, статусы, ошибки и решение о следующем этапе. | Обязательно |
 | AGO-FR-9 | Домен должен создавать или запрашивать создание follow-up `Issue` как provider-native задачи нужного типа через provider-контур. | Обязательно |
@@ -85,7 +85,7 @@ approvals:
 | AGO-AC-4 | Если требуется решение человека, `agent-manager` запрашивает gate у `governance-manager`, фиксирует ожидание flow и ждёт результат, не владея gate decision или каналом доставки. |
 | AGO-AC-5 | Если flow требует следующий этап, follow-up `Issue` создаётся или обновляется через provider-контур с правильным типом и открытыми инструкциями. |
 | AGO-AC-6 | Если роль или flow меняется, новая версия не ломает уже запущенные сессии: `Run` фиксирует использованные версии. |
-| AGO-AC-7 | Если руководящий пакет установлен в scope, `agent-manager` читает его через `ListPackageInstallations(package_kind=guidance)` и `GetPackageManifest`. |
+| AGO-AC-7 | Если руководящий пакет установлен в scope, `agent-manager` читает его через `ListPackageInstallations(package_kind=guidance)`, `GetPackageVersion` и `GetPackageManifest`, а runtime workspace получает read-only локальный источник `.kodex/guidance/<safe_local_name>`; перед checkout `runtime-manager` читает `PackageVersion` и `PackageSource` в `package-hub` по замороженному `package_version_ref`. |
 | AGO-AC-8 | Если runtime-слот упал, `agent-manager` видит ошибку запуска, но техническое состояние слота остаётся у `runtime-manager`. |
 | AGO-AC-9 | Если runner передал новый session state snapshot, `agent-manager` фиксирует ссылку, digest и размер объекта, а `AgentSession` указывает на последний актуальный снимок. |
 | AGO-AC-10 | Если Codex отправил `SessionStart`, `PermissionRequest`, `PostToolUse` или `Stop`, `agent-manager` получает нормализованное событие через `codex-hook-ingress`; `platform-mcp-server` используется только для MCP-инструментов. |
