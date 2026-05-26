@@ -1,0 +1,36 @@
+-- name: delivery_attempt__create :exec
+INSERT INTO interaction_hub_delivery_attempts (
+    id,
+    request_id,
+    notification_id,
+    route_id,
+    delivery_id,
+    delivery_kind,
+    status,
+    channel_message_ref,
+    attempt_number,
+    next_retry_at,
+    error_code,
+    error_class,
+    payload_digest,
+    created_at,
+    updated_at,
+    sent_at
+) VALUES (
+    @id,
+    @request_id::uuid,
+    @notification_id::uuid,
+    @route_id,
+    @delivery_id,
+    @delivery_kind,
+    @status,
+    @channel_message_ref,
+    @attempt_number,
+    @next_retry_at::timestamptz,
+    @error_code,
+    @error_class,
+    @payload_digest,
+    @created_at,
+    @updated_at,
+    @sent_at::timestamptz
+);

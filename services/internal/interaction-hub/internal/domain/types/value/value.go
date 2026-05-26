@@ -84,6 +84,38 @@ type InteractionAction struct {
 	Terminal         bool
 }
 
+type DeliveryTargetKind string
+
+const (
+	DeliveryTargetKindRequest      DeliveryTargetKind = "request"
+	DeliveryTargetKindNotification DeliveryTargetKind = "notification"
+)
+
+type DeliveryTarget struct {
+	Kind DeliveryTargetKind
+	ID   uuid.UUID
+}
+
+func (t DeliveryTarget) Valid() bool {
+	switch t.Kind {
+	case DeliveryTargetKindRequest, DeliveryTargetKindNotification:
+		return t.ID != uuid.Nil
+	default:
+		return false
+	}
+}
+
+type ChannelDeliveryResult struct {
+	ContractVersion   string
+	DeliveryID        string
+	ResultStatus      enum.ChannelDeliveryResultStatus
+	ChannelMessageRef string
+	ErrorCode         string
+	ErrorClass        enum.DeliveryErrorClass
+	RetryAfter        *time.Time
+	OccurredAt        time.Time
+}
+
 type PageRequest struct {
 	PageSize  int32
 	PageToken string

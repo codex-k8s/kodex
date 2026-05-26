@@ -103,11 +103,11 @@ func TestServerRoutesAllStableRPCsToDomainUseCases(t *testing.T) {
 			return err
 		}},
 		{name: "PlanDelivery", want: enum.OperationPlanDelivery, call: func(ctx context.Context, s *Server) error {
-			_, err := s.PlanDelivery(ctx, &interactionsv1.PlanDeliveryRequest{})
+			_, err := s.PlanDelivery(ctx, validPlanDeliveryRequest(uuid.New()))
 			return err
 		}},
 		{name: "RecordDeliveryResult", want: enum.OperationRecordDeliveryResult, call: func(ctx context.Context, s *Server) error {
-			_, err := s.RecordDeliveryResult(ctx, &interactionsv1.RecordDeliveryResultRequest{})
+			_, err := s.RecordDeliveryResult(ctx, validRecordDeliveryResultRequest())
 			return err
 		}},
 		{name: "RecordChannelCallback", want: enum.OperationRecordChannelCallback, call: func(ctx context.Context, s *Server) error {
@@ -115,7 +115,7 @@ func TestServerRoutesAllStableRPCsToDomainUseCases(t *testing.T) {
 			return err
 		}},
 		{name: "GetDeliveryStatus", want: enum.OperationGetDeliveryStatus, call: func(ctx context.Context, s *Server) error {
-			_, err := s.GetDeliveryStatus(ctx, &interactionsv1.GetDeliveryStatusRequest{})
+			_, err := s.GetDeliveryStatus(ctx, validGetDeliveryStatusRequest(uuid.New()))
 			return err
 		}},
 	}
@@ -401,20 +401,74 @@ func (f *fakeInteractionService) ListSubscriptions(context.Context, interactions
 	}}, value.PageResult{}, nil
 }
 
-func (f *fakeInteractionService) PlanDelivery(context.Context) error {
-	return f.record(enum.OperationPlanDelivery)
+func (f *fakeInteractionService) PlanDelivery(_ context.Context, input interactionservice.PlanDeliveryInput) (entity.DeliveryAttempt, error) {
+	if err := f.record(enum.OperationPlanDelivery); err != nil {
+		return entity.DeliveryAttempt{}, err
+	}
+	now := time.Date(2026, 5, 26, 12, 5, 0, 0, time.UTC)
+	id := uuid.New()
+	return entity.DeliveryAttempt{
+		ID:            id,
+		Target:        input.Target,
+		RouteID:       input.RouteID,
+		DeliveryID:    id.String(),
+		DeliveryKind:  enum.DeliveryKindApproval,
+		Status:        enum.DeliveryAttemptStatusQueued,
+		AttemptNumber: 1,
+		PayloadDigest: "sha256:digest",
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}, nil
 }
 
-func (f *fakeInteractionService) RecordDeliveryResult(context.Context) error {
-	return f.record(enum.OperationRecordDeliveryResult)
+func (f *fakeInteractionService) RecordDeliveryResult(_ context.Context, input interactionservice.RecordDeliveryResultInput) (entity.DeliveryAttempt, error) {
+	if err := f.record(enum.OperationRecordDeliveryResult); err != nil {
+		return entity.DeliveryAttempt{}, err
+	}
+	now := time.Date(2026, 5, 26, 12, 6, 0, 0, time.UTC)
+	id := uuid.New()
+	return entity.DeliveryAttempt{
+		ID:                id,
+		Target:            value.DeliveryTarget{Kind: value.DeliveryTargetKindRequest, ID: uuid.New()},
+		RouteID:           uuid.New(),
+		DeliveryID:        input.Result.DeliveryID,
+		DeliveryKind:      enum.DeliveryKindApproval,
+		Status:            enum.DeliveryAttemptStatusAccepted,
+		ChannelMessageRef: input.Result.ChannelMessageRef,
+		AttemptNumber:     1,
+		PayloadDigest:     "sha256:digest",
+		CreatedAt:         now.Add(-time.Minute),
+		UpdatedAt:         now,
+		SentAt:            &now,
+	}, nil
 }
 
 func (f *fakeInteractionService) RecordChannelCallback(context.Context) error {
 	return f.record(enum.OperationRecordChannelCallback)
 }
 
-func (f *fakeInteractionService) GetDeliveryStatus(context.Context) error {
-	return f.record(enum.OperationGetDeliveryStatus)
+func (f *fakeInteractionService) GetDeliveryStatus(_ context.Context, input interactionservice.GetDeliveryStatusInput) (interactionservice.DeliveryStatusResult, error) {
+	if err := f.record(enum.OperationGetDeliveryStatus); err != nil {
+		return interactionservice.DeliveryStatusResult{}, err
+	}
+	now := time.Date(2026, 5, 26, 12, 7, 0, 0, time.UTC)
+	request := fakeRequest(validInteractionRequestDraftInput(), enum.InteractionRequestKindApproval)
+	request.ID = input.Target.ID
+	return interactionservice.DeliveryStatusResult{
+		Request: &request,
+		DeliveryAttempts: []entity.DeliveryAttempt{{
+			ID:            uuid.New(),
+			Target:        input.Target,
+			RouteID:       uuid.New(),
+			DeliveryID:    "delivery:1",
+			DeliveryKind:  enum.DeliveryKindApproval,
+			Status:        enum.DeliveryAttemptStatusAccepted,
+			AttemptNumber: 1,
+			PayloadDigest: "sha256:digest",
+			CreatedAt:     now.Add(-time.Minute),
+			UpdatedAt:     now,
+		}},
+	}, nil
 }
 
 var _ interactionService = (*fakeInteractionService)(nil)
@@ -529,6 +583,39 @@ func validUpsertSubscriptionRequest() *interactionsv1.UpsertSubscriptionRequest 
 			{RefKind: "surface", Ref: "web_console"},
 		},
 		SubscriptionPolicyRef: ptr("policy:ops-notifications"),
+	}
+}
+
+func validPlanDeliveryRequest(requestID uuid.UUID) *interactionsv1.PlanDeliveryRequest {
+	return &interactionsv1.PlanDeliveryRequest{
+		Meta: commandMeta(),
+		Target: &interactionsv1.DeliveryTarget{
+			Target: &interactionsv1.DeliveryTarget_RequestId{RequestId: requestID.String()},
+		},
+		RouteId:       ptr(uuid.NewString()),
+		CorrelationId: ptr("trace-delivery"),
+	}
+}
+
+func validRecordDeliveryResultRequest() *interactionsv1.RecordDeliveryResultRequest {
+	occurredAt := time.Date(2026, 5, 26, 12, 6, 0, 0, time.UTC).Format(time.RFC3339Nano)
+	return &interactionsv1.RecordDeliveryResultRequest{
+		Meta: commandMeta(),
+		Result: &interactionsv1.ChannelDeliveryResult{
+			ContractVersion:   "interaction.channel.v1",
+			DeliveryId:        "delivery-1",
+			ResultStatus:      interactionsv1.ChannelDeliveryResultStatus_CHANNEL_DELIVERY_RESULT_STATUS_ACCEPTED,
+			ChannelMessageRef: ptr("channel:message-1"),
+			OccurredAt:        occurredAt,
+		},
+	}
+}
+
+func validGetDeliveryStatusRequest(requestID uuid.UUID) *interactionsv1.GetDeliveryStatusRequest {
+	return &interactionsv1.GetDeliveryStatusRequest{
+		Target: &interactionsv1.DeliveryTarget{
+			Target: &interactionsv1.DeliveryTarget_RequestId{RequestId: requestID.String()},
+		},
 	}
 }
 

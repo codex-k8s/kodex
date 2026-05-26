@@ -110,6 +110,34 @@ func (r *Repository) ListSubscriptions(context.Context, query.SubscriptionFilter
 	return nil, value.PageResult{}, errs.ErrNotImplemented
 }
 
+func (r *Repository) CreateDeliveryAttemptWithResult(context.Context, entity.DeliveryAttempt, entity.CommandResult, entity.OutboxEvent) error {
+	return errs.ErrNotImplemented
+}
+
+func (r *Repository) UpdateDeliveryAttemptWithResult(context.Context, entity.DeliveryAttempt, entity.CommandResult, entity.OutboxEvent) error {
+	return errs.ErrNotImplemented
+}
+
+func (r *Repository) GetDeliveryRoute(context.Context, uuid.UUID) (entity.DeliveryRoute, error) {
+	return entity.DeliveryRoute{}, errs.ErrNotFound
+}
+
+func (r *Repository) FindActiveDeliveryRoute(context.Context, value.ScopeRef) (entity.DeliveryRoute, error) {
+	return entity.DeliveryRoute{}, errs.ErrNotFound
+}
+
+func (r *Repository) GetDeliveryAttempt(context.Context, uuid.UUID) (entity.DeliveryAttempt, error) {
+	return entity.DeliveryAttempt{}, errs.ErrNotFound
+}
+
+func (r *Repository) GetDeliveryAttemptByDeliveryID(context.Context, string) (entity.DeliveryAttempt, error) {
+	return entity.DeliveryAttempt{}, errs.ErrNotFound
+}
+
+func (r *Repository) ListDeliveryAttempts(context.Context, query.DeliveryAttemptFilter) ([]entity.DeliveryAttempt, error) {
+	return nil, errs.ErrNotImplemented
+}
+
 func (r *Repository) GetCommandResult(context.Context, query.CommandIdentity) (entity.CommandResult, error) {
 	return entity.CommandResult{}, errs.ErrNotFound
 }

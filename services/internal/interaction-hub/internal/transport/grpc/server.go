@@ -30,10 +30,10 @@ type interactionService interface {
 	UpsertSubscription(context.Context, interactionservice.UpsertSubscriptionInput) (entity.Subscription, error)
 	DisableSubscription(context.Context, interactionservice.DisableSubscriptionInput) (entity.Subscription, error)
 	ListSubscriptions(context.Context, interactionservice.ListSubscriptionsInput) ([]entity.Subscription, value.PageResult, error)
-	PlanDelivery(context.Context) error
-	RecordDeliveryResult(context.Context) error
+	PlanDelivery(context.Context, interactionservice.PlanDeliveryInput) (entity.DeliveryAttempt, error)
+	RecordDeliveryResult(context.Context, interactionservice.RecordDeliveryResultInput) (entity.DeliveryAttempt, error)
 	RecordChannelCallback(context.Context) error
-	GetDeliveryStatus(context.Context) error
+	GetDeliveryStatus(context.Context, interactionservice.GetDeliveryStatusInput) (interactionservice.DeliveryStatusResult, error)
 }
 
 // Server implements the generated InteractionHubServiceServer contract.
@@ -151,20 +151,20 @@ func (s *Server) ListSubscriptions(ctx context.Context, request *interactionsv1.
 	return casters.ListSubscriptionsResponse(subscriptions, page), nil
 }
 
-func (s *Server) PlanDelivery(ctx context.Context, _ *interactionsv1.PlanDeliveryRequest) (*interactionsv1.DeliveryAttemptResponse, error) {
-	return emptyResponse[interactionsv1.DeliveryAttemptResponse](ctx, s.service.PlanDelivery)
+func (s *Server) PlanDelivery(ctx context.Context, request *interactionsv1.PlanDeliveryRequest) (*interactionsv1.DeliveryAttemptResponse, error) {
+	return commandResponse(ctx, request, casters.PlanDeliveryInput, s.service.PlanDelivery, casters.DeliveryAttemptResponse)
 }
 
-func (s *Server) RecordDeliveryResult(ctx context.Context, _ *interactionsv1.RecordDeliveryResultRequest) (*interactionsv1.DeliveryAttemptResponse, error) {
-	return emptyResponse[interactionsv1.DeliveryAttemptResponse](ctx, s.service.RecordDeliveryResult)
+func (s *Server) RecordDeliveryResult(ctx context.Context, request *interactionsv1.RecordDeliveryResultRequest) (*interactionsv1.DeliveryAttemptResponse, error) {
+	return commandResponse(ctx, request, casters.RecordDeliveryResultInput, s.service.RecordDeliveryResult, casters.DeliveryAttemptResponse)
 }
 
 func (s *Server) RecordChannelCallback(ctx context.Context, _ *interactionsv1.RecordChannelCallbackRequest) (*interactionsv1.ChannelCallbackResponse, error) {
 	return emptyResponse[interactionsv1.ChannelCallbackResponse](ctx, s.service.RecordChannelCallback)
 }
 
-func (s *Server) GetDeliveryStatus(ctx context.Context, _ *interactionsv1.GetDeliveryStatusRequest) (*interactionsv1.DeliveryStatusResponse, error) {
-	return emptyResponse[interactionsv1.DeliveryStatusResponse](ctx, s.service.GetDeliveryStatus)
+func (s *Server) GetDeliveryStatus(ctx context.Context, request *interactionsv1.GetDeliveryStatusRequest) (*interactionsv1.DeliveryStatusResponse, error) {
+	return commandResponse(ctx, request, casters.GetDeliveryStatusInput, s.service.GetDeliveryStatus, casters.DeliveryStatusResponse)
 }
 
 func emptyResponse[Response any](ctx context.Context, call func(context.Context) error) (*Response, error) {

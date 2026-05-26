@@ -29,12 +29,13 @@
 | IH-3 | #800 | готово как persistence foundation | PostgreSQL-модель, real repository для thread/message MVP lifecycle, command result idempotency и service-local outbox `interaction.*`; request/delivery/callback lifecycle остаётся для следующих срезов. |
 | IH-4 | #806 | готово как request lifecycle | Feedback, approval и Human gate request lifecycle работает поверх PostgreSQL repository: create/get/list, response, cancel, expire, idempotency и безопасные `interaction.*` outbox events без внешних channel adapters и без владения decision state. |
 | IH-5a | #821 | готово как notification/subscription lifecycle | `RequestNotification`, `UpsertSubscription`, `DisableSubscription`, `ListSubscriptions`, idempotency, optimistic concurrency и safe `interaction.*` outbox events работают без delivery attempts, callback routes и hardcoded external channel list. |
+| IH-5b | #835 | готово как delivery attempt lifecycle | `PlanDelivery`, `RecordDeliveryResult`, `GetDeliveryStatus`, delivery attempt state machine, safe retry metadata и outbox events работают без channel adapters, callback routes и package runtime. |
 
 ## Текущий бэклог
 
 | Срез | Статус | Почему не завершён |
 |---|---|---|
-| IH-5b+ | ожидает отдельные срезы | Delivery attempts, channel contract integration, callback lifecycle, MCP и ops-связки должны поставляться малыми PR. |
+| IH-6+ | ожидает отдельные срезы | Channel contract integration, callback lifecycle, MCP и ops-связки должны поставляться малыми PR. |
 
 ## Блокировки от других доменов
 
@@ -51,4 +52,4 @@
 
 ## Рекомендуемый следующий шаг
 
-Следующий рациональный срез — IH-5b: delivery attempts и безопасные статусы доставки без конкретных внешних каналов. Callback routes `integration-gateway`, package channel runtime и MCP-связки остаются отдельными последующими срезами.
+Следующий рациональный срез — IH-6: channel contract integration без hardcoded внешних каналов. Callback routes `integration-gateway`, package channel runtime и MCP-связки остаются отдельными последующими срезами.

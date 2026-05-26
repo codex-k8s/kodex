@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-26
-related_issues: [582, 768, 800, 821]
+related_issues: [582, 768, 800, 821, 835]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -213,6 +213,8 @@ One-way уведомления и reminders не создают `InteractionRequ
 ### DeliveryAttempt
 
 `DeliveryAttempt` описывает одну попытку доставки request или notification.
+
+Подписочный контекст проходит через связанное уведомление: `notification_id` указывает на `Notification`, а `Notification.subscription_id` хранит safe ref подписки. Прямая delivery attempt цель по subscription не вводится в текущем proto-контракте.
 
 | Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|

@@ -266,6 +266,69 @@ func scanSubscription(row postgreslib.RowScanner) (entity.Subscription, error) {
 	return subscription, nil
 }
 
+func scanDeliveryRoute(row postgreslib.RowScanner) (entity.DeliveryRoute, error) {
+	var route entity.DeliveryRoute
+	var scopeType, surfaceKind, status string
+	err := row.Scan(
+		&route.ID,
+		&scopeType,
+		&route.Scope.Ref,
+		&surfaceKind,
+		&route.ChannelCapabilityRef,
+		&route.PackageInstallationRef,
+		&route.RoutingPolicyRef,
+		&status,
+		&route.CreatedAt,
+		&route.UpdatedAt,
+	)
+	route.Scope.Type = enum.ScopeType(scopeType)
+	route.SurfaceKind = enum.DeliverySurfaceKind(surfaceKind)
+	route.Status = enum.DeliveryRouteStatus(status)
+	return route, err
+}
+
+func scanDeliveryAttempt(row postgreslib.RowScanner) (entity.DeliveryAttempt, error) {
+	var attempt entity.DeliveryAttempt
+	var requestID, notificationID pgtype.UUID
+	var deliveryKind, status, errorClass string
+	var nextRetryAt, sentAt pgtype.Timestamptz
+	err := row.Scan(
+		&attempt.ID,
+		&requestID,
+		&notificationID,
+		&attempt.RouteID,
+		&attempt.DeliveryID,
+		&deliveryKind,
+		&status,
+		&attempt.ChannelMessageRef,
+		&attempt.AttemptNumber,
+		&nextRetryAt,
+		&attempt.ErrorCode,
+		&errorClass,
+		&attempt.PayloadDigest,
+		&attempt.CreatedAt,
+		&attempt.UpdatedAt,
+		&sentAt,
+	)
+	attempt.Target = deliveryTargetFromPG(requestID, notificationID)
+	attempt.DeliveryKind = enum.DeliveryKind(deliveryKind)
+	attempt.Status = enum.DeliveryAttemptStatus(status)
+	attempt.ErrorClass = enum.DeliveryErrorClass(errorClass)
+	attempt.NextRetryAt = postgreslib.TimePtrFromPG(nextRetryAt)
+	attempt.SentAt = postgreslib.TimePtrFromPG(sentAt)
+	return attempt, err
+}
+
+func deliveryTargetFromPG(requestID pgtype.UUID, notificationID pgtype.UUID) value.DeliveryTarget {
+	if requestID.Valid {
+		return value.DeliveryTarget{Kind: value.DeliveryTargetKindRequest, ID: uuid.UUID(requestID.Bytes)}
+	}
+	if notificationID.Valid {
+		return value.DeliveryTarget{Kind: value.DeliveryTargetKindNotification, ID: uuid.UUID(notificationID.Bytes)}
+	}
+	return value.DeliveryTarget{}
+}
+
 func scanCommandResult(row postgreslib.RowScanner) (entity.CommandResult, error) {
 	var result entity.CommandResult
 	var commandID pgtype.UUID

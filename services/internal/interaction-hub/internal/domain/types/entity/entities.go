@@ -114,6 +114,36 @@ type Subscription struct {
 	UpdatedAt               time.Time
 }
 
+type DeliveryRoute struct {
+	ID                     uuid.UUID
+	Scope                  value.ScopeRef
+	SurfaceKind            enum.DeliverySurfaceKind
+	ChannelCapabilityRef   string
+	PackageInstallationRef string
+	RoutingPolicyRef       string
+	Status                 enum.DeliveryRouteStatus
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
+}
+
+type DeliveryAttempt struct {
+	ID                uuid.UUID
+	Target            value.DeliveryTarget
+	RouteID           uuid.UUID
+	DeliveryID        string
+	DeliveryKind      enum.DeliveryKind
+	Status            enum.DeliveryAttemptStatus
+	ChannelMessageRef string
+	AttemptNumber     int32
+	NextRetryAt       *time.Time
+	ErrorCode         string
+	ErrorClass        enum.DeliveryErrorClass
+	PayloadDigest     string
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	SentAt            *time.Time
+}
+
 type CommandResult struct {
 	Key                string
 	CommandID          uuid.UUID
