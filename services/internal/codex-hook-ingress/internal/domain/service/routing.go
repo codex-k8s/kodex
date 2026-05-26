@@ -42,10 +42,12 @@ func (registry *RouteRegistry) Ready() bool {
 	return registry != nil && registry.dispatchers != nil
 }
 
-// DispatchRoutes sends safe event projections to enabled owner route ports.
+// DispatchRoutes sends canonical safe event projections to enabled owner route ports.
 func (registry *RouteRegistry) DispatchRoutes(ctx context.Context, cfg Config, envelope value.HookEnvelope) []value.RouteDeliveryResult {
-	results := make([]value.RouteDeliveryResult, 0, len(envelope.DownstreamRoutes))
-	for _, route := range envelope.DownstreamRoutes {
+	plan := canonicalRoutePlan(envelope.HookEventName)
+	results := make([]value.RouteDeliveryResult, 0, len(plan)+len(envelope.DownstreamRoutes))
+	results = append(results, unexpectedRouteDiagnostics(envelope, plan)...)
+	for _, route := range plan {
 		result := value.RouteDeliveryResult{
 			Owner:        route.Owner,
 			DeliveryMode: route.DeliveryMode,
@@ -80,6 +82,35 @@ func (registry *RouteRegistry) DispatchRoutes(ctx context.Context, cfg Config, e
 		results = append(results, result)
 	}
 	return results
+}
+
+func unexpectedRouteDiagnostics(envelope value.HookEnvelope, plan []value.DownstreamRoute) []value.RouteDeliveryResult {
+	var diagnostics []value.RouteDeliveryResult
+	for _, route := range envelope.DownstreamRoutes {
+		canonical, ok := canonicalRouteForOwner(plan, route.Owner)
+		if !ok {
+			diagnostics = append(diagnostics, value.RouteDeliveryResult{
+				Owner:             route.Owner,
+				DeliveryMode:      route.DeliveryMode,
+				Status:            hookenum.RouteDeliveryStatusUnsupported,
+				DiagnosticCode:    value.RouteDiagnosticUnexpected,
+				DiagnosticMessage: "route owner is not allowed for hook event",
+				SafeParts:         cloneStrings(route.SafeParts),
+			})
+			continue
+		}
+		if canonical.DeliveryMode != route.DeliveryMode || !safePartsAllowed(route.SafeParts, canonical.SafeParts) {
+			diagnostics = append(diagnostics, value.RouteDeliveryResult{
+				Owner:             route.Owner,
+				DeliveryMode:      route.DeliveryMode,
+				Status:            hookenum.RouteDeliveryStatusUnsupported,
+				DiagnosticCode:    value.RouteDiagnosticUnexpected,
+				DiagnosticMessage: "route safe parts are not allowed for hook event",
+				SafeParts:         cloneStrings(route.SafeParts),
+			})
+		}
+	}
+	return diagnostics
 }
 
 // NoopOwnerRoute is a placeholder port for owners whose physical transport is not selected yet.
@@ -158,6 +189,81 @@ func projectSafeHookEvent(envelope value.HookEnvelope, route value.DownstreamRou
 		}
 	}
 	return event
+}
+
+func canonicalRoutePlan(event hookenum.HookEventName) []value.DownstreamRoute {
+	switch event {
+	case hookenum.HookEventSessionStart:
+		return []value.DownstreamRoute{
+			canonicalRoute(hookenum.DownstreamOwnerAgentManager, hookenum.DeliveryModeAsync, "source_context", "run_context", "safe_summary", "correlation_id"),
+			canonicalRoute(hookenum.DownstreamOwnerRuntimeManager, hookenum.DeliveryModeAsync, "source_context", "run_context", "safe_summary", "correlation_id"),
+		}
+	case hookenum.HookEventUserPromptSubmit:
+		return []value.DownstreamRoute{
+			canonicalRoute(hookenum.DownstreamOwnerAgentManager, hookenum.DeliveryModeAsync, "source_context", "run_context", "safe_summary", "prompt_digest", "correlation_id"),
+			canonicalRoute(hookenum.DownstreamOwnerInteractionHub, hookenum.DeliveryModeAsync, "source_context", "run_context", "safe_summary", "prompt_digest", "correlation_id"),
+		}
+	case hookenum.HookEventPreToolUse:
+		return []value.DownstreamRoute{
+			canonicalRoute(hookenum.DownstreamOwnerAgentManager, hookenum.DeliveryModeAsync, "source_context", "run_context", "tool_context", "capability_context", "safe_summary", "risk_class", "correlation_id"),
+			canonicalRoute(hookenum.DownstreamOwnerGovernanceManager, hookenum.DeliveryModeAsync, "source_context", "run_context", "tool_context", "capability_context", "safe_summary", "risk_class", "correlation_id"),
+			canonicalRoute(hookenum.DownstreamOwnerRuntimeManager, hookenum.DeliveryModeAsync, "source_context", "run_context", "tool_context", "safe_summary", "risk_class", "correlation_id"),
+			canonicalRoute(hookenum.DownstreamOwnerOperationsFeed, hookenum.DeliveryModeRealtime, "run_context", "tool_context", "safe_summary", "risk_class", "correlation_id"),
+		}
+	case hookenum.HookEventPermissionRequest:
+		return []value.DownstreamRoute{
+			canonicalRoute(hookenum.DownstreamOwnerGovernanceManager, hookenum.DeliveryModeSync, "source_context", "run_context", "tool_context", "capability_context", "risk_class", "sanitized_reason", "payload_digest", "correlation_id"),
+			canonicalRoute(hookenum.DownstreamOwnerAgentManager, hookenum.DeliveryModeAsync, "source_context", "run_context", "tool_context", "capability_context", "risk_class", "sanitized_reason", "correlation_id"),
+			canonicalRoute(hookenum.DownstreamOwnerInteractionHub, hookenum.DeliveryModeAsync, "source_context", "run_context", "tool_context", "risk_class", "sanitized_reason", "correlation_id"),
+		}
+	case hookenum.HookEventPostToolUse:
+		return []value.DownstreamRoute{
+			canonicalRoute(hookenum.DownstreamOwnerAgentManager, hookenum.DeliveryModeAsync, "source_context", "run_context", "tool_context", "bounded_error", "provider_artifact_signal", "rate_limit_hint", "payload_digest", "correlation_id"),
+			canonicalRoute(hookenum.DownstreamOwnerRuntimeManager, hookenum.DeliveryModeAsync, "source_context", "run_context", "tool_context", "bounded_error", "payload_digest", "correlation_id"),
+			canonicalRoute(hookenum.DownstreamOwnerProviderHub, hookenum.DeliveryModeAsync, "source_context", "run_context", "provider_artifact_signal", "rate_limit_hint", "payload_digest", "correlation_id"),
+			canonicalRoute(hookenum.DownstreamOwnerOperationsFeed, hookenum.DeliveryModeRealtime, "run_context", "tool_context", "bounded_error", "provider_artifact_signal", "rate_limit_hint", "correlation_id"),
+		}
+	case hookenum.HookEventStop:
+		return []value.DownstreamRoute{
+			canonicalRoute(hookenum.DownstreamOwnerAgentManager, hookenum.DeliveryModeAsync, "source_context", "run_context", "safe_summary", "pending_action_refs", "checkpoint_ref", "correlation_id"),
+			canonicalRoute(hookenum.DownstreamOwnerRuntimeManager, hookenum.DeliveryModeAsync, "source_context", "run_context", "safe_summary", "checkpoint_ref", "correlation_id"),
+			canonicalRoute(hookenum.DownstreamOwnerProviderHub, hookenum.DeliveryModeAsync, "source_context", "run_context", "provider_artifact_signal", "rate_limit_hint", "pending_action_refs", "correlation_id"),
+			canonicalRoute(hookenum.DownstreamOwnerGovernanceManager, hookenum.DeliveryModeAsync, "source_context", "run_context", "safe_summary", "pending_action_refs", "correlation_id"),
+			canonicalRoute(hookenum.DownstreamOwnerInteractionHub, hookenum.DeliveryModeAsync, "source_context", "run_context", "safe_summary", "pending_action_refs", "correlation_id"),
+		}
+	default:
+		return nil
+	}
+}
+
+func canonicalRoute(owner hookenum.DownstreamOwner, deliveryMode hookenum.DeliveryMode, safeParts ...string) value.DownstreamRoute {
+	return value.DownstreamRoute{
+		Owner:        owner,
+		DeliveryMode: deliveryMode,
+		SafeParts:    cloneStrings(safeParts),
+	}
+}
+
+func canonicalRouteForOwner(plan []value.DownstreamRoute, owner hookenum.DownstreamOwner) (value.DownstreamRoute, bool) {
+	for _, route := range plan {
+		if route.Owner == owner {
+			return route, true
+		}
+	}
+	return value.DownstreamRoute{}, false
+}
+
+func safePartsAllowed(requested []string, allowed []string) bool {
+	allowedSet := make(map[string]struct{}, len(allowed))
+	for _, part := range allowed {
+		allowedSet[part] = struct{}{}
+	}
+	for _, part := range requested {
+		if _, ok := allowedSet[part]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func cloneCapabilityContext(context value.CapabilityContext) value.CapabilityContext {

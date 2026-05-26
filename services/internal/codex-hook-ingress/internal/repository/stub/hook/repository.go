@@ -67,6 +67,7 @@ func (r *Repository) RecordDeliveryResults(_ context.Context, update entity.Deli
 	}
 	existing.Result = update.Result
 	existing.RouteDiagnostics = cloneRouteDiagnostics(update.RouteDiagnostics)
+	existing.DeliveryCompleted = true
 	r.events[update.EventID] = existing
 	existing.RouteDiagnostics = cloneRouteDiagnostics(existing.RouteDiagnostics)
 	return existing, nil

@@ -10,6 +10,7 @@ const (
 	RouteDiagnosticDelivered          = "route.delivered"
 	RouteDiagnosticDisabled           = "route.disabled"
 	RouteDiagnosticUnsupported        = "route.unsupported"
+	RouteDiagnosticUnexpected         = "route.unexpected"
 	RouteDiagnosticDownstreamFailed   = "route.downstream_failed"
 	RouteDiagnosticFailurePolicyFired = "route.failure_policy_fired"
 )

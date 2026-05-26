@@ -12,14 +12,15 @@ import (
 
 // AcceptedEvent is the safe idempotency record for a normalized hook event.
 type AcceptedEvent struct {
-	EventID          uuid.UUID
-	PayloadDigest    string
-	HookEventName    hookenum.HookEventName
-	CorrelationID    string
-	RetentionClass   hookenum.RetentionClass
-	Result           value.HookHandlerResult
-	RouteDiagnostics []value.RouteDeliveryResult
-	RecordedAt       time.Time
+	EventID           uuid.UUID
+	PayloadDigest     string
+	HookEventName     hookenum.HookEventName
+	CorrelationID     string
+	RetentionClass    hookenum.RetentionClass
+	Result            value.HookHandlerResult
+	RouteDiagnostics  []value.RouteDeliveryResult
+	DeliveryCompleted bool
+	RecordedAt        time.Time
 }
 
 // DeliveryUpdate stores safe owner route diagnostics after first acceptance.

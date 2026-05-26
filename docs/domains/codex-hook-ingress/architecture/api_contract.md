@@ -57,9 +57,11 @@ Logical response CHI-4 также содержит route delivery diagnostics. U
 
 Кодовый каркас `services/internal/codex-hook-ingress` реализует `SubmitHookEvent` только как in-process logical boundary в `internal/transport/command`. Он нужен для проверки доменного use-case, idempotency и sanitizer boundary без фиксации physical transport.
 
-CHI-4 добавляет route registry и owner ports/stubs для dispatch безопасных частей события к `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub`, operations/realtime placeholder и audit placeholder. Registry выбирает route, проецирует только перечисленные `safe_parts`, возвращает safe delivery diagnostics и не вызывает business command у соседнего домена.
+CHI-4 добавляет route registry и owner ports/stubs для dispatch безопасных частей события к `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub`, operations/realtime placeholder и audit placeholder. Registry строит canonical route plan по `hook_event_name`; `downstream_routes` из envelope сверяются с этой матрицей и не являются источником истины для dispatch. Registry проецирует только canonical `safe_parts`, возвращает safe delivery diagnostics и не вызывает business command у соседнего домена.
 
 Process config CHI-4 добавляет `KODEX_CODEX_HOOK_INGRESS_DISABLED_ROUTES` для отключения отдельных owner routes и `KODEX_CODEX_HOOK_INGRESS_ROUTE_FAILURE_POLICY` со значениями `diagnostic` или `fail_closed`. В режиме `diagnostic` неуспешные routes отражаются только в diagnostics; в режиме `fail_closed` handler result становится безопасным `fail_closed`.
+
+Idempotency record имеет состояние завершённости delivery. Повтор после уже завершённого delivery возвращает cached diagnostics; повтор после incomplete delivery не считается успешным cached replay и пытается дозавершить canonical dispatch.
 
 В CHI-3/CHI-4 не создаются proto, OpenAPI, AsyncAPI, HTTP/gRPC handler для `SubmitHookEvent` и network client emitter/sidecar. Служебный HTTP-процесс отдаёт только `/health/livez`, `/health/readyz` и `/metrics`.
 

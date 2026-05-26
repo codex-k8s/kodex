@@ -271,7 +271,7 @@ approvals:
 
 ## Миграции
 
-CHI-3/CHI-4 не создают миграции и используют только repository interfaces плюс in-memory stub для проверки service skeleton и route registry. Stub хранит безопасный idempotency record: `event_id`, `payload_digest`, `hook_event_name`, `correlation_id`, `retention_class`, normalized `HookHandlerResult`, safe route delivery diagnostics и время записи. Raw prompt, raw tool input/output, stdout/stderr, transcript, session dump, provider payload, kubeconfig, secret values, `SKILL.md` или package manifest не хранятся.
+CHI-3/CHI-4 не создают миграции и используют только repository interfaces плюс in-memory stub для проверки service skeleton и route registry. Stub хранит безопасный idempotency record: `event_id`, `payload_digest`, `hook_event_name`, `correlation_id`, `retention_class`, normalized `HookHandlerResult`, delivery completion state, safe route delivery diagnostics и время записи. Raw prompt, raw tool input/output, stdout/stderr, transcript, session dump, provider payload, kubeconfig, secret values, `SKILL.md` или package manifest не хранятся.
 
 Перед появлением persistent storage нужно отдельно согласовать:
 

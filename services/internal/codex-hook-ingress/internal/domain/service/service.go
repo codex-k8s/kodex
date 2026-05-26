@@ -106,6 +106,14 @@ func (s *Service) SubmitHookEvent(ctx context.Context, input SubmitHookEventInpu
 		return SubmitHookEventResult{}, fmt.Errorf("%w: store hook idempotency record: %v", hookerrs.ErrDependencyUnavailable, err)
 	}
 	if duplicate {
+		if !accepted.DeliveryCompleted {
+			retried, err := s.dispatchAndRecordRoutes(ctx, envelope, accepted.Result)
+			if err != nil {
+				return SubmitHookEventResult{}, err
+			}
+			retried.Duplicate = true
+			return retried, nil
+		}
 		routeDiagnostics := cloneRouteDeliveryResults(accepted.RouteDiagnostics)
 		return SubmitHookEventResult{
 			HandlerResult:    accepted.Result,
@@ -114,9 +122,13 @@ func (s *Service) SubmitHookEvent(ctx context.Context, input SubmitHookEventInpu
 			RouteDiagnostics: routeDiagnostics,
 		}, nil
 	}
+	return s.dispatchAndRecordRoutes(ctx, envelope, result)
+}
+
+func (s *Service) dispatchAndRecordRoutes(ctx context.Context, envelope value.HookEnvelope, result value.HookHandlerResult) (SubmitHookEventResult, error) {
 	routeDiagnostics := s.routeRegistry.DispatchRoutes(ctx, s.config, envelope)
 	result = s.applyRouteFailurePolicy(result, routeDiagnostics)
-	accepted, err = s.repository.RecordDeliveryResults(ctx, entity.DeliveryUpdate{
+	accepted, err := s.repository.RecordDeliveryResults(ctx, entity.DeliveryUpdate{
 		EventID:          envelope.EventID,
 		PayloadDigest:    envelope.PayloadDigest,
 		Result:           result,
