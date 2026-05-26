@@ -18,14 +18,14 @@ type interactionService interface {
 	RecordConversationMessage(context.Context, interactionservice.RecordConversationMessageInput) (entity.ConversationMessage, error)
 	GetConversationThread(context.Context, interactionservice.GetConversationThreadInput) (entity.ConversationThread, error)
 	ListConversationMessages(context.Context, interactionservice.ListConversationMessagesInput) ([]entity.ConversationMessage, value.PageResult, error)
-	RequestFeedback(context.Context) error
-	RequestApproval(context.Context) error
-	RequestHumanGate(context.Context) error
-	RecordInteractionResponse(context.Context) error
-	CancelInteractionRequest(context.Context) error
-	ExpireInteractionRequests(context.Context) error
-	GetInteractionRequest(context.Context) error
-	ListInteractionRequests(context.Context) error
+	RequestFeedback(context.Context, interactionservice.RequestFeedbackInput) (entity.InteractionRequest, error)
+	RequestApproval(context.Context, interactionservice.RequestApprovalInput) (entity.InteractionRequest, error)
+	RequestHumanGate(context.Context, interactionservice.RequestHumanGateInput) (entity.InteractionRequest, error)
+	RecordInteractionResponse(context.Context, interactionservice.RecordInteractionResponseInput) (entity.InteractionRequest, entity.InteractionResponse, error)
+	CancelInteractionRequest(context.Context, interactionservice.CancelInteractionRequestInput) (entity.InteractionRequest, error)
+	ExpireInteractionRequests(context.Context, interactionservice.ExpireInteractionRequestsInput) (interactionservice.ExpireInteractionRequestsResult, error)
+	GetInteractionRequest(context.Context, interactionservice.GetInteractionRequestInput) (entity.InteractionRequest, error)
+	ListInteractionRequests(context.Context, interactionservice.ListInteractionRequestsInput) ([]entity.InteractionRequest, value.PageResult, error)
 	RequestNotification(context.Context) error
 	UpsertSubscription(context.Context) error
 	DisableSubscription(context.Context) error
@@ -79,36 +79,52 @@ func (s *Server) ListConversationMessages(ctx context.Context, request *interact
 	return casters.ListConversationMessagesResponse(messages, page), nil
 }
 
-func (s *Server) RequestFeedback(ctx context.Context, _ *interactionsv1.RequestFeedbackRequest) (*interactionsv1.InteractionRequestResponse, error) {
-	return emptyResponse[interactionsv1.InteractionRequestResponse](ctx, s.service.RequestFeedback)
+func (s *Server) RequestFeedback(ctx context.Context, request *interactionsv1.RequestFeedbackRequest) (*interactionsv1.InteractionRequestResponse, error) {
+	return commandResponse(ctx, request, casters.RequestFeedbackInput, s.service.RequestFeedback, casters.InteractionRequestResponse)
 }
 
-func (s *Server) RequestApproval(ctx context.Context, _ *interactionsv1.RequestApprovalRequest) (*interactionsv1.InteractionRequestResponse, error) {
-	return emptyResponse[interactionsv1.InteractionRequestResponse](ctx, s.service.RequestApproval)
+func (s *Server) RequestApproval(ctx context.Context, request *interactionsv1.RequestApprovalRequest) (*interactionsv1.InteractionRequestResponse, error) {
+	return commandResponse(ctx, request, casters.RequestApprovalInput, s.service.RequestApproval, casters.InteractionRequestResponse)
 }
 
-func (s *Server) RequestHumanGate(ctx context.Context, _ *interactionsv1.RequestHumanGateRequest) (*interactionsv1.InteractionRequestResponse, error) {
-	return emptyResponse[interactionsv1.InteractionRequestResponse](ctx, s.service.RequestHumanGate)
+func (s *Server) RequestHumanGate(ctx context.Context, request *interactionsv1.RequestHumanGateRequest) (*interactionsv1.InteractionRequestResponse, error) {
+	return commandResponse(ctx, request, casters.RequestHumanGateInput, s.service.RequestHumanGate, casters.InteractionRequestResponse)
 }
 
-func (s *Server) RecordInteractionResponse(ctx context.Context, _ *interactionsv1.RecordInteractionResponseRequest) (*interactionsv1.InteractionResponseResponse, error) {
-	return emptyResponse[interactionsv1.InteractionResponseResponse](ctx, s.service.RecordInteractionResponse)
+func (s *Server) RecordInteractionResponse(ctx context.Context, request *interactionsv1.RecordInteractionResponseRequest) (*interactionsv1.InteractionResponseResponse, error) {
+	input, err := casters.RecordInteractionResponseInput(request)
+	if err != nil {
+		return nil, err
+	}
+	interactionRequest, response, err := s.service.RecordInteractionResponse(ctx, input)
+	if err != nil {
+		return nil, err
+	}
+	return casters.InteractionResponseResponse(interactionRequest, response), nil
 }
 
-func (s *Server) CancelInteractionRequest(ctx context.Context, _ *interactionsv1.CancelInteractionRequestRequest) (*interactionsv1.InteractionRequestResponse, error) {
-	return emptyResponse[interactionsv1.InteractionRequestResponse](ctx, s.service.CancelInteractionRequest)
+func (s *Server) CancelInteractionRequest(ctx context.Context, request *interactionsv1.CancelInteractionRequestRequest) (*interactionsv1.InteractionRequestResponse, error) {
+	return commandResponse(ctx, request, casters.CancelInteractionRequestInput, s.service.CancelInteractionRequest, casters.InteractionRequestResponse)
 }
 
-func (s *Server) ExpireInteractionRequests(ctx context.Context, _ *interactionsv1.ExpireInteractionRequestsRequest) (*interactionsv1.ExpireInteractionRequestsResponse, error) {
-	return emptyResponse[interactionsv1.ExpireInteractionRequestsResponse](ctx, s.service.ExpireInteractionRequests)
+func (s *Server) ExpireInteractionRequests(ctx context.Context, request *interactionsv1.ExpireInteractionRequestsRequest) (*interactionsv1.ExpireInteractionRequestsResponse, error) {
+	return commandResponse(ctx, request, casters.ExpireInteractionRequestsInput, s.service.ExpireInteractionRequests, casters.ExpireInteractionRequestsResponse)
 }
 
-func (s *Server) GetInteractionRequest(ctx context.Context, _ *interactionsv1.GetInteractionRequestRequest) (*interactionsv1.InteractionRequestResponse, error) {
-	return emptyResponse[interactionsv1.InteractionRequestResponse](ctx, s.service.GetInteractionRequest)
+func (s *Server) GetInteractionRequest(ctx context.Context, request *interactionsv1.GetInteractionRequestRequest) (*interactionsv1.InteractionRequestResponse, error) {
+	return commandResponse(ctx, request, casters.GetInteractionRequestInput, s.service.GetInteractionRequest, casters.InteractionRequestResponse)
 }
 
-func (s *Server) ListInteractionRequests(ctx context.Context, _ *interactionsv1.ListInteractionRequestsRequest) (*interactionsv1.ListInteractionRequestsResponse, error) {
-	return emptyResponse[interactionsv1.ListInteractionRequestsResponse](ctx, s.service.ListInteractionRequests)
+func (s *Server) ListInteractionRequests(ctx context.Context, request *interactionsv1.ListInteractionRequestsRequest) (*interactionsv1.ListInteractionRequestsResponse, error) {
+	input, err := casters.ListInteractionRequestsInput(request)
+	if err != nil {
+		return nil, err
+	}
+	requests, page, err := s.service.ListInteractionRequests(ctx, input)
+	if err != nil {
+		return nil, err
+	}
+	return casters.ListInteractionRequestsResponse(requests, page), nil
 }
 
 func (s *Server) RequestNotification(ctx context.Context, _ *interactionsv1.RequestNotificationRequest) (*interactionsv1.NotificationResponse, error) {

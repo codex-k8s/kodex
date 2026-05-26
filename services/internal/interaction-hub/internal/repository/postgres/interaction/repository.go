@@ -46,10 +46,18 @@ const (
 	operationBacklog                   = "domain.Repository.RecordBacklogOperation"
 	operationCreateConversationThread  = "domain.Repository.CreateConversationThreadWithResult"
 	operationCreateConversationMessage = "domain.Repository.CreateConversationMessageWithResult"
+	operationCreateInteractionRequest  = "domain.Repository.CreateInteractionRequestWithResult"
+	operationUpdateInteractionRequest  = "domain.Repository.UpdateInteractionRequestWithResult"
+	operationUpdateInteractionRequests = "domain.Repository.UpdateInteractionRequestsWithResult"
+	operationCreateInteractionResponse = "domain.Repository.CreateInteractionResponseWithResult"
 	operationGetCommandResult          = "domain.Repository.GetCommandResult"
 	operationGetConversationMessage    = "domain.Repository.GetConversationMessage"
 	operationGetConversationThread     = "domain.Repository.GetConversationThread"
+	operationGetInteractionRequest     = "domain.Repository.GetInteractionRequest"
+	operationGetInteractionResponse    = "domain.Repository.GetInteractionResponse"
 	operationListConversationMessages  = "domain.Repository.ListConversationMessages"
+	operationListInteractionRequests   = "domain.Repository.ListInteractionRequests"
+	operationListExpirableRequests     = "domain.Repository.ListExpirableInteractionRequests"
 	operationOutboxClaim               = "domain.Repository.ClaimOutboxEvents"
 	operationOutboxMarkFailed          = "domain.Repository.MarkOutboxEventFailed"
 	operationOutboxMarkPermanent       = "domain.Repository.MarkOutboxEventPermanentlyFailed"
@@ -107,6 +115,71 @@ func (r *Repository) ListConversationMessages(ctx context.Context, filter query.
 	return pageItems, page, nil
 }
 
+func (r *Repository) CreateInteractionRequestWithResult(ctx context.Context, request entity.InteractionRequest, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.mutate(ctx, operationCreateInteractionRequest,
+		affectedMutation(queryRequestCreate, requestArgs(request)),
+		commandResultMutation(result),
+		outboxEventMutation(event),
+	)
+}
+
+func (r *Repository) UpdateInteractionRequestWithResult(ctx context.Context, request entity.InteractionRequest, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.mutate(ctx, operationUpdateInteractionRequest,
+		affectedMutation(queryRequestUpdateStatus, requestUpdateStatusArgs(request, previousVersion)),
+		commandResultMutation(result),
+		outboxEventMutation(event),
+	)
+}
+
+func (r *Repository) UpdateInteractionRequestsWithResult(ctx context.Context, requests []entity.InteractionRequest, previousVersions map[uuid.UUID]int64, result entity.CommandResult, events []entity.OutboxEvent) error {
+	if len(requests) != len(events) {
+		return wrapError(operationUpdateInteractionRequests, errs.ErrInvalidArgument)
+	}
+	err := postgreslib.WithTx(ctx, r.db, func(tx pgx.Tx) error {
+		if len(requests) > 0 {
+			if err := runRequestStatusBatch(ctx, tx, requests, previousVersions); err != nil {
+				return err
+			}
+			if err := runOutboxBatch(ctx, tx, events); err != nil {
+				return err
+			}
+		}
+		return postgreslib.RunMutation(ctx, tx, errs.ErrConflict, commandResultMutation(result))
+	})
+	return wrapError(operationUpdateInteractionRequests, err)
+}
+
+func (r *Repository) CreateInteractionResponseWithResult(ctx context.Context, response entity.InteractionResponse, request entity.InteractionRequest, previousRequestVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.mutate(ctx, operationCreateInteractionResponse,
+		affectedMutation(queryResponseCreate, responseArgs(response)),
+		affectedMutation(queryRequestUpdateStatus, requestUpdateStatusArgs(request, previousRequestVersion)),
+		commandResultMutation(result),
+		outboxEventMutation(event),
+	)
+}
+
+func (r *Repository) GetInteractionRequest(ctx context.Context, id uuid.UUID) (entity.InteractionRequest, error) {
+	return queryOne(ctx, r.db, operationGetInteractionRequest, queryRequestGet, pgx.NamedArgs{"id": id}, scanRequest)
+}
+
+func (r *Repository) GetInteractionResponse(ctx context.Context, id uuid.UUID) (entity.InteractionResponse, error) {
+	return queryOne(ctx, r.db, operationGetInteractionResponse, queryResponseGet, pgx.NamedArgs{"id": id}, scanResponse)
+}
+
+func (r *Repository) ListInteractionRequests(ctx context.Context, filter query.InteractionRequestFilter) ([]entity.InteractionRequest, value.PageResult, error) {
+	args := requestFilterArgs(filter)
+	items, err := queryAll(ctx, r.db, operationListInteractionRequests, queryRequestList, args.NamedArgs, scanRequest)
+	if err != nil {
+		return nil, value.PageResult{}, err
+	}
+	pageItems, page := pageFromItems(items, args)
+	return pageItems, page, nil
+}
+
+func (r *Repository) ListExpirableInteractionRequests(ctx context.Context, scope value.ScopeRef, deadlineBefore time.Time, limit int32) ([]entity.InteractionRequest, error) {
+	return queryAll(ctx, r.db, operationListExpirableRequests, queryRequestListExpirable, expirableRequestArgs(scope, deadlineBefore, limit), scanRequest)
+}
+
 func (r *Repository) GetCommandResult(ctx context.Context, identity query.CommandIdentity) (entity.CommandResult, error) {
 	return queryOne(ctx, r.db, operationGetCommandResult, queryCommandResultGet, commandIdentityArgs(identity), scanCommandResult)
 }
@@ -156,6 +229,50 @@ func commandResultMutation(result entity.CommandResult) mutation {
 
 func outboxEventMutation(event entity.OutboxEvent) mutation {
 	return affectedMutation(queryOutboxEventCreate, outboxEventArgs(event))
+}
+
+func runRequestStatusBatch(ctx context.Context, tx pgx.Tx, requests []entity.InteractionRequest, previousVersions map[uuid.UUID]int64) error {
+	batch := &pgx.Batch{}
+	for _, request := range requests {
+		previousVersion, ok := previousVersions[request.ID]
+		if !ok {
+			return errs.ErrInvalidArgument
+		}
+		batch.Queue(queryRequestUpdateStatus, requestUpdateStatusArgs(request, previousVersion))
+	}
+	results := tx.SendBatch(ctx, batch)
+	for range requests {
+		tag, err := results.Exec()
+		if err != nil {
+			_ = results.Close()
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			_ = results.Close()
+			return errs.ErrConflict
+		}
+	}
+	return results.Close()
+}
+
+func runOutboxBatch(ctx context.Context, tx pgx.Tx, events []entity.OutboxEvent) error {
+	batch := &pgx.Batch{}
+	for _, event := range events {
+		batch.Queue(queryOutboxEventCreate, outboxEventArgs(event))
+	}
+	results := tx.SendBatch(ctx, batch)
+	for range events {
+		tag, err := results.Exec()
+		if err != nil {
+			_ = results.Close()
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			_ = results.Close()
+			return errs.ErrConflict
+		}
+	}
+	return results.Close()
 }
 
 func queryOne[T any](ctx context.Context, db execQuerier, operation string, queryText string, args pgx.NamedArgs, scan func(postgreslib.RowScanner) (T, error)) (T, error) {

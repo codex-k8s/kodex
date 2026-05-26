@@ -2,6 +2,7 @@ package interaction
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -71,6 +72,82 @@ func messageFilterArgs(filter query.ConversationMessageFilter) pageQueryArgs {
 	})
 }
 
+func requestArgs(request entity.InteractionRequest) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"id":                          request.ID,
+		"request_kind":                string(request.RequestKind),
+		"scope_type":                  string(request.Scope.Type),
+		"scope_ref":                   request.Scope.Ref,
+		"thread_id":                   postgreslib.NullableUUID(request.ThreadID),
+		"source_owner_kind":           string(request.SourceOwner.Kind),
+		"source_owner_ref":            request.SourceOwner.Ref,
+		"ingress_kind":                string(request.Ingress.Kind),
+		"ingress_ref":                 request.Ingress.Ref,
+		"decision_owner_kind":         string(request.DecisionOwner.Kind),
+		"decision_owner_request_ref":  request.DecisionOwner.OwnerRequestRef,
+		"decision_owner_decision_ref": request.DecisionOwner.OwnerDecisionRef,
+		"target_refs":                 arrayPayload(request.TargetRefs),
+		"context_refs":                arrayPayload(request.ContextRefs),
+		"prompt_summary":              request.PromptSummary,
+		"prompt_object_uri":           request.PromptObject.URI,
+		"prompt_object_digest":        request.PromptObject.Digest,
+		"prompt_object_size_bytes":    nullableInt64(request.PromptObject.SizeBytes),
+		"allowed_actions":             arrayPayload(request.AllowedActions),
+		"risk_class":                  string(request.RiskClass),
+		"status":                      string(request.Status),
+		"deadline_at":                 postgreslib.NullableTime(request.DeadlineAt),
+		"reminder_policy_ref":         request.ReminderPolicyRef,
+		"version":                     request.Version,
+		"created_at":                  request.CreatedAt,
+		"updated_at":                  request.UpdatedAt,
+		"resolved_at":                 postgreslib.NullableTime(request.ResolvedAt),
+	}
+}
+
+func requestUpdateStatusArgs(request entity.InteractionRequest, previousVersion int64) pgx.NamedArgs {
+	args := requestArgs(request)
+	args["previous_version"] = previousVersion
+	return args
+}
+
+func requestFilterArgs(filter query.InteractionRequestFilter) pageQueryArgs {
+	return withPage(filter.Page, pgx.NamedArgs{
+		"scope_type":        string(filter.Scope.Type),
+		"scope_ref":         filter.Scope.Ref,
+		"request_kind":      string(filter.RequestKind),
+		"status":            string(filter.Status),
+		"source_owner_kind": string(filter.SourceOwnerKind),
+		"source_owner_ref":  filter.SourceOwnerRef,
+		"deadline_before":   postgreslib.NullableTime(filter.DeadlineBefore),
+	})
+}
+
+func expirableRequestArgs(scope value.ScopeRef, deadlineBefore time.Time, limit int32) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"scope_type":      string(scope.Type),
+		"scope_ref":       scope.Ref,
+		"deadline_before": deadlineBefore,
+		"limit":           limit,
+	}
+}
+
+func responseArgs(response entity.InteractionResponse) pgx.NamedArgs {
+	return pgx.NamedArgs{
+		"id":                         response.ID,
+		"request_id":                 response.RequestID,
+		"response_action":            string(response.ResponseAction),
+		"responded_by_actor_ref":     response.RespondedByActorRef,
+		"response_summary":           response.ResponseSummary,
+		"response_object_uri":        response.ResponseObject.URI,
+		"response_object_digest":     response.ResponseObject.Digest,
+		"response_object_size_bytes": nullableInt64(response.ResponseObject.SizeBytes),
+		"source_kind":                string(response.SourceKind),
+		"source_ref":                 response.SourceRef,
+		"owner_decision_ref":         response.OwnerDecisionRef,
+		"created_at":                 response.CreatedAt,
+	}
+}
+
 func commandResultArgs(result entity.CommandResult) pgx.NamedArgs {
 	return pgx.NamedArgs{
 		"key":                 result.Key,
@@ -121,12 +198,20 @@ func pageFromItems[T any](items []T, args pageQueryArgs) ([]T, value.PageResult)
 }
 
 func objectPayload(value any) string {
+	return jsonPayload(value, "{}")
+}
+
+func arrayPayload(value any) string {
+	return jsonPayload(value, "[]")
+}
+
+func jsonPayload(value any, fallback string) string {
 	if value == nil {
-		return "{}"
+		return fallback
 	}
 	payload, err := json.Marshal(value)
 	if err != nil || string(payload) == "null" {
-		return "{}"
+		return fallback
 	}
 	return string(payload)
 }

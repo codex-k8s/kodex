@@ -21,6 +21,14 @@ type Repository interface {
 	CreateConversationMessageWithResult(context.Context, entity.ConversationMessage, entity.ConversationThread, int64, entity.CommandResult, entity.OutboxEvent) error
 	GetConversationMessage(context.Context, uuid.UUID) (entity.ConversationMessage, error)
 	ListConversationMessages(context.Context, query.ConversationMessageFilter) ([]entity.ConversationMessage, value.PageResult, error)
+	CreateInteractionRequestWithResult(context.Context, entity.InteractionRequest, entity.CommandResult, entity.OutboxEvent) error
+	UpdateInteractionRequestWithResult(context.Context, entity.InteractionRequest, int64, entity.CommandResult, entity.OutboxEvent) error
+	UpdateInteractionRequestsWithResult(context.Context, []entity.InteractionRequest, map[uuid.UUID]int64, entity.CommandResult, []entity.OutboxEvent) error
+	CreateInteractionResponseWithResult(context.Context, entity.InteractionResponse, entity.InteractionRequest, int64, entity.CommandResult, entity.OutboxEvent) error
+	GetInteractionRequest(context.Context, uuid.UUID) (entity.InteractionRequest, error)
+	GetInteractionResponse(context.Context, uuid.UUID) (entity.InteractionResponse, error)
+	ListInteractionRequests(context.Context, query.InteractionRequestFilter) ([]entity.InteractionRequest, value.PageResult, error)
+	ListExpirableInteractionRequests(context.Context, value.ScopeRef, time.Time, int32) ([]entity.InteractionRequest, error)
 	GetCommandResult(context.Context, query.CommandIdentity) (entity.CommandResult, error)
 	ClaimOutboxEvents(ctx context.Context, limit int, now time.Time, lockedUntil time.Time) ([]entity.OutboxEvent, error)
 	MarkOutboxEventPublished(ctx context.Context, id uuid.UUID, attemptCount int, publishedAt time.Time) error

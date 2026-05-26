@@ -10,6 +10,7 @@ import (
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/enum"
+	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/value"
 )
 
 func scanThread(row postgreslib.RowScanner) (entity.ConversationThread, error) {
@@ -83,6 +84,98 @@ func scanMessage(row postgreslib.RowScanner) (entity.ConversationMessage, error)
 	return message, nil
 }
 
+func scanRequest(row postgreslib.RowScanner) (entity.InteractionRequest, error) {
+	var request entity.InteractionRequest
+	var requestKind, scopeType, sourceOwnerKind, ingressKind, decisionOwnerKind, riskClass, status string
+	var threadID pgtype.UUID
+	var promptObjectSize pgtype.Int8
+	var targetRefs, contextRefs, allowedActions []byte
+	var deadlineAt, resolvedAt pgtype.Timestamptz
+	err := row.Scan(
+		&request.ID,
+		&requestKind,
+		&scopeType,
+		&request.Scope.Ref,
+		&threadID,
+		&sourceOwnerKind,
+		&request.SourceOwner.Ref,
+		&ingressKind,
+		&request.Ingress.Ref,
+		&decisionOwnerKind,
+		&request.DecisionOwner.OwnerRequestRef,
+		&request.DecisionOwner.OwnerDecisionRef,
+		&targetRefs,
+		&contextRefs,
+		&request.PromptSummary,
+		&request.PromptObject.URI,
+		&request.PromptObject.Digest,
+		&promptObjectSize,
+		&allowedActions,
+		&riskClass,
+		&status,
+		&deadlineAt,
+		&request.ReminderPolicyRef,
+		&request.Version,
+		&request.CreatedAt,
+		&request.UpdatedAt,
+		&resolvedAt,
+	)
+	request.RequestKind = enum.InteractionRequestKind(requestKind)
+	request.Scope.Type = enum.ScopeType(scopeType)
+	request.ThreadID = postgreslib.UUIDPtrFromPG(threadID)
+	request.SourceOwner.Kind = enum.SourceOwnerKind(sourceOwnerKind)
+	request.Ingress.Kind = enum.IngressKind(ingressKind)
+	request.DecisionOwner.Kind = enum.DecisionOwnerKind(decisionOwnerKind)
+	if promptObjectSize.Valid {
+		value := promptObjectSize.Int64
+		request.PromptObject.SizeBytes = &value
+	}
+	request.RiskClass = enum.InteractionRiskClass(riskClass)
+	request.Status = enum.InteractionRequestStatus(status)
+	request.DeadlineAt = postgreslib.TimePtrFromPG(deadlineAt)
+	request.ResolvedAt = postgreslib.TimePtrFromPG(resolvedAt)
+	if err != nil {
+		return request, err
+	}
+	if request.TargetRefs, err = unmarshalArray[value.ActorRef](targetRefs); err != nil {
+		return request, err
+	}
+	if request.ContextRefs, err = unmarshalArray[value.ExternalRef](contextRefs); err != nil {
+		return request, err
+	}
+	if request.AllowedActions, err = unmarshalArray[value.InteractionAction](allowedActions); err != nil {
+		return request, err
+	}
+	return request, nil
+}
+
+func scanResponse(row postgreslib.RowScanner) (entity.InteractionResponse, error) {
+	var response entity.InteractionResponse
+	var responseAction, sourceKind string
+	var responseObjectSize pgtype.Int8
+	err := row.Scan(
+		&response.ID,
+		&response.RequestID,
+		&responseAction,
+		&response.RespondedByActorRef,
+		&response.ResponseSummary,
+		&response.ResponseObject.URI,
+		&response.ResponseObject.Digest,
+		&responseObjectSize,
+		&sourceKind,
+		&response.SourceRef,
+		&response.OwnerDecisionRef,
+		&response.CreatedAt,
+	)
+	response.ResponseAction = enum.InteractionResponseAction(responseAction)
+	response.SourceKind = enum.InteractionResponseSourceKind(sourceKind)
+	if responseObjectSize.Valid {
+		value := responseObjectSize.Int64
+		response.ResponseObject.SizeBytes = &value
+	}
+	return response, err
+}
+
 func scanCommandResult(row postgreslib.RowScanner) (entity.CommandResult, error) {
 	var result entity.CommandResult
 	var commandID pgtype.UUID
@@ -131,4 +224,18 @@ func scanOutboxEvent(row postgreslib.RowScanner) (entity.OutboxEvent, error) {
 		FailureKind:         raw.Failure.FailureCode,
 		LastError:           raw.Failure.ErrorText,
 	}, nil
+}
+
+func unmarshalArray[T any](input []byte) ([]T, error) {
+	if len(input) == 0 || string(input) == "null" {
+		return []T{}, nil
+	}
+	var result []T
+	if err := json.Unmarshal(input, &result); err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return []T{}, nil
+	}
+	return result, nil
 }

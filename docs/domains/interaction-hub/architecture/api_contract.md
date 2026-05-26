@@ -5,8 +5,8 @@ title: kodex — API-обзор interaction-hub
 status: active
 owner_role: SA
 created_at: 2026-05-22
-updated_at: 2026-05-25
-related_issues: [582, 768, 781, 783]
+updated_at: 2026-05-26
+related_issues: [582, 768, 781, 783, 800, 806]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -180,7 +180,7 @@ Delivery-specific safe error codes:
 | AsyncAPI `interaction.*` | Подготовлен как контрактный срез `IH-1`. |
 | Go-контракты transport/events | Сгенерированы из proto и AsyncAPI. |
 | Действия доступа | Добавлены в общий каталог системных действий. |
-| Go-реализация `interaction-hub` | Сервисный каркас готов: process config, health/readiness/metrics, gRPC registration, domain service skeleton и repository stub. Бизнес-операции возвращают `Unimplemented`. |
+| Go-реализация `interaction-hub` | Готовы process config, health/readiness/metrics, gRPC registration, PostgreSQL repository, service-local outbox, thread/message MVP lifecycle и feedback/approval/Human gate request lifecycle. Notification, delivery и callback операции остаются будущими срезами и возвращают `Unimplemented`. |
 | MCP-инструменты | Зафиксированы как контрактный задел `platform-mcp-server`; реализация зависит от готовности доменного контракта. |
 | Channel package integration | Зафиксирована как гибрид package-owned runtime + channel contract; конкретные каналы не проектируются. |
 | Gateway callback OpenAPI | Каркас закреплён в `specs/openapi/integration-gateway.v1.yaml`; активация маршрута требует owner-среза `interaction-hub`. |

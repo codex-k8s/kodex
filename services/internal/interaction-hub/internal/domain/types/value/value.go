@@ -26,11 +26,12 @@ func (a Actor) Ref() string {
 }
 
 type CommandMeta struct {
-	CommandID      uuid.UUID
-	IdempotencyKey string
-	Actor          Actor
-	Reason         string
-	RequestID      string
+	CommandID       uuid.UUID
+	IdempotencyKey  string
+	ExpectedVersion *int64
+	Actor           Actor
+	Reason          string
+	RequestID       string
 }
 
 type QueryMeta struct {
@@ -42,6 +43,45 @@ type ObjectRef struct {
 	URI       string
 	Digest    string
 	SizeBytes *int64
+}
+
+type ActorRef struct {
+	Kind string
+	Ref  string
+}
+
+func (r ActorRef) String() string {
+	if r.Kind == "" || r.Ref == "" {
+		return ""
+	}
+	return r.Kind + ":" + r.Ref
+}
+
+type ExternalRef struct {
+	Kind string
+	Ref  string
+}
+
+type SourceOwnerRef struct {
+	Kind enum.SourceOwnerKind
+	Ref  string
+}
+
+type IngressRef struct {
+	Kind enum.IngressKind
+	Ref  string
+}
+
+type DecisionOwnerRef struct {
+	Kind             enum.DecisionOwnerKind
+	OwnerRequestRef  string
+	OwnerDecisionRef string
+}
+
+type InteractionAction struct {
+	ActionKey        string
+	LabelTemplateRef string
+	Terminal         bool
 }
 
 type PageRequest struct {

@@ -193,6 +193,100 @@ func TestRepositoryIntegrationThreadMessageAndOutbox(t *testing.T) {
 	}
 }
 
+func TestRepositoryIntegrationInteractionRequestResponseLifecycle(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openIntegrationPool(t, ctx)
+	repository := NewRepository(pool)
+	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+
+	request := testInteractionRequest(now)
+	createResult := testCommandResult(uuid.New(), "request-create", enum.OperationRequestApproval, interactionevents.AggregateRequest, request.ID, "request-fingerprint", now)
+	createEvent := testOutboxEvent(interactionevents.EventApprovalRequested, interactionevents.AggregateRequest, request.ID, now)
+	if err := repository.CreateInteractionRequestWithResult(ctx, request, createResult, createEvent); err != nil {
+		t.Fatalf("create request with result: %v", err)
+	}
+	storedRequest, err := repository.GetInteractionRequest(ctx, request.ID)
+	if err != nil {
+		t.Fatalf("get request: %v", err)
+	}
+	if storedRequest.Scope.Type != enum.ScopeTypeService || storedRequest.ReminderPolicyRef != "policy:standard" || len(storedRequest.TargetRefs) != 1 {
+		t.Fatalf("stored request = %+v, want service request with refs", storedRequest)
+	}
+	listed, _, err := repository.ListInteractionRequests(ctx, query.InteractionRequestFilter{Scope: request.Scope, Status: enum.InteractionRequestStatusWaiting, Page: value.PageRequest{PageSize: 10}})
+	if err != nil {
+		t.Fatalf("list requests: %v", err)
+	}
+	if len(listed) != 1 || listed[0].ID != request.ID {
+		t.Fatalf("listed requests = %+v, want created request", listed)
+	}
+
+	response := testInteractionResponse(request.ID, now.Add(time.Minute))
+	answered := storedRequest
+	answered.Status = enum.InteractionRequestStatusAnswered
+	answered.Version = 2
+	answered.UpdatedAt = response.CreatedAt
+	answered.ResolvedAt = &response.CreatedAt
+	responseResult := testCommandResult(uuid.New(), "response-create", enum.OperationRecordInteractionResponse, "response", response.ID, "response-fingerprint", response.CreatedAt)
+	responseEvent := testOutboxEvent(interactionevents.EventRequestResponseRecorded, interactionevents.AggregateRequest, request.ID, response.CreatedAt)
+	if err := repository.CreateInteractionResponseWithResult(ctx, response, answered, 99, responseResult, responseEvent); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("stale response create err = %v, want ErrConflict", err)
+	}
+	if err := repository.CreateInteractionResponseWithResult(ctx, response, answered, 1, responseResult, responseEvent); err != nil {
+		t.Fatalf("create response with result: %v", err)
+	}
+	storedResponse, err := repository.GetInteractionResponse(ctx, response.ID)
+	if err != nil {
+		t.Fatalf("get response: %v", err)
+	}
+	if storedResponse.ResponseObject.SizeBytes == nil || *storedResponse.ResponseObject.SizeBytes != 256 || storedResponse.OwnerDecisionRef != "decision:1" {
+		t.Fatalf("stored response = %+v, want object ref and decision ref", storedResponse)
+	}
+	updatedRequest, err := repository.GetInteractionRequest(ctx, request.ID)
+	if err != nil {
+		t.Fatalf("get answered request: %v", err)
+	}
+	if updatedRequest.Status != enum.InteractionRequestStatusAnswered || updatedRequest.Version != 2 || updatedRequest.ResolvedAt == nil {
+		t.Fatalf("updated request = %+v, want answered v2", updatedRequest)
+	}
+
+	expiringRequest := testInteractionRequest(now.Add(2 * time.Minute))
+	expiringRequest.ID = uuid.New()
+	expireDeadline := now.Add(-time.Minute)
+	expiringRequest.DeadlineAt = &expireDeadline
+	expireCreateResult := testCommandResult(uuid.New(), "request-expiring", enum.OperationRequestApproval, interactionevents.AggregateRequest, expiringRequest.ID, "request-expiring-fingerprint", now)
+	expireCreateEvent := testOutboxEvent(interactionevents.EventApprovalRequested, interactionevents.AggregateRequest, expiringRequest.ID, now)
+	if err := repository.CreateInteractionRequestWithResult(ctx, expiringRequest, expireCreateResult, expireCreateEvent); err != nil {
+		t.Fatalf("create expiring request: %v", err)
+	}
+	candidates, err := repository.ListExpirableInteractionRequests(ctx, expiringRequest.Scope, now, 10)
+	if err != nil {
+		t.Fatalf("list expirable requests: %v", err)
+	}
+	if len(candidates) != 1 || candidates[0].ID != expiringRequest.ID {
+		t.Fatalf("candidates = %+v, want expiring request", candidates)
+	}
+	expired := candidates[0]
+	previousVersions := map[uuid.UUID]int64{expired.ID: expired.Version}
+	expired.Status = enum.InteractionRequestStatusExpired
+	expired.Version = 2
+	expired.UpdatedAt = now.Add(3 * time.Minute)
+	expired.ResolvedAt = &expired.UpdatedAt
+	expireResult := testCommandResult(uuid.New(), "expire", enum.OperationExpireInteractionRequests, interactionevents.AggregateRequest, uuid.Nil, "expire-fingerprint", expired.UpdatedAt)
+	expireEvent := testOutboxEvent(interactionevents.EventRequestExpired, interactionevents.AggregateRequest, expired.ID, expired.UpdatedAt)
+	if err := repository.UpdateInteractionRequestsWithResult(ctx, []entity.InteractionRequest{expired}, previousVersions, expireResult, []entity.OutboxEvent{expireEvent}); err != nil {
+		t.Fatalf("expire request with result: %v", err)
+	}
+	storedExpired, err := repository.GetInteractionRequest(ctx, expired.ID)
+	if err != nil {
+		t.Fatalf("get expired request: %v", err)
+	}
+	if storedExpired.Status != enum.InteractionRequestStatusExpired || storedExpired.Version != 2 {
+		t.Fatalf("stored expired = %+v, want expired v2", storedExpired)
+	}
+}
+
 func testThread(now time.Time) entity.ConversationThread {
 	return entity.ConversationThread{
 		ID:              uuid.New(),
@@ -227,6 +321,62 @@ func testMessage(threadID uuid.UUID, now time.Time) entity.ConversationMessage {
 		Locale:       "ru",
 		SafeMetadata: map[string]string{"surface": "mcp"},
 		CreatedAt:    now,
+	}
+}
+
+func testInteractionRequest(now time.Time) entity.InteractionRequest {
+	deadline := now.Add(time.Hour)
+	size := int64(1024)
+	return entity.InteractionRequest{
+		ID:            uuid.New(),
+		RequestKind:   enum.InteractionRequestKindApproval,
+		Scope:         value.ScopeRef{Type: enum.ScopeTypeService, Ref: "agent-manager"},
+		SourceOwner:   value.SourceOwnerRef{Kind: enum.SourceOwnerKindAgentManager, Ref: "run:123"},
+		Ingress:       value.IngressRef{Kind: enum.IngressKindDirectGRPC, Ref: "grpc:command-1"},
+		DecisionOwner: value.DecisionOwnerRef{Kind: enum.DecisionOwnerKindGovernanceManager, OwnerRequestRef: "gate:req-1"},
+		TargetRefs: []value.ActorRef{
+			{Kind: "user", Ref: "approver-1"},
+		},
+		ContextRefs: []value.ExternalRef{
+			{Kind: "agent_run", Ref: "run:123"},
+			{Kind: "provider_operation", Ref: "provider:op-1"},
+		},
+		PromptSummary: "safe prompt summary",
+		PromptObject: value.ObjectRef{
+			URI:       "s3://kodex-interactions/prompts/1",
+			Digest:    "sha256:" + strings.Repeat("c", 64),
+			SizeBytes: &size,
+		},
+		AllowedActions: []value.InteractionAction{
+			{ActionKey: string(enum.InteractionResponseActionApprove), LabelTemplateRef: "interaction.actions.approve", Terminal: true},
+		},
+		RiskClass:         enum.InteractionRiskClassHigh,
+		Status:            enum.InteractionRequestStatusWaiting,
+		DeadlineAt:        &deadline,
+		ReminderPolicyRef: "policy:standard",
+		Version:           1,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+}
+
+func testInteractionResponse(requestID uuid.UUID, now time.Time) entity.InteractionResponse {
+	size := int64(256)
+	return entity.InteractionResponse{
+		ID:                  uuid.New(),
+		RequestID:           requestID,
+		ResponseAction:      enum.InteractionResponseActionApprove,
+		RespondedByActorRef: "user:approver-1",
+		ResponseSummary:     "approved",
+		ResponseObject: value.ObjectRef{
+			URI:       "s3://kodex-interactions/responses/1",
+			Digest:    "sha256:" + strings.Repeat("d", 64),
+			SizeBytes: &size,
+		},
+		SourceKind:       enum.InteractionResponseSourceKindMCP,
+		SourceRef:        "mcp:command-1",
+		OwnerDecisionRef: "decision:1",
+		CreatedAt:        now,
 	}
 }
 
