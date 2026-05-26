@@ -8,6 +8,7 @@ import (
 	"errors"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -19,6 +20,14 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/value"
+)
+
+const (
+	maxMessageBodySummaryRunes = 2000
+	maxSafeMetadataEntries     = 20
+	maxSafeMetadataKeyBytes    = 64
+	maxSafeMetadataValueBytes  = 256
+	maxSafeMetadataTotalBytes  = 2048
 )
 
 // Service coordinates interaction-hub domain use cases.
@@ -109,8 +118,9 @@ func (s *Service) RecordConversationMessage(ctx context.Context, input RecordCon
 	if err := validateCommandMeta(input.Meta); err != nil {
 		return entity.ConversationMessage{}, err
 	}
-	if input.ThreadID == uuid.Nil || !input.MessageKind.Valid() || blank(input.AuthorRef) {
-		return entity.ConversationMessage{}, errs.ErrInvalidArgument
+	input, err := normalizeRecordConversationMessageInput(input)
+	if err != nil {
+		return entity.ConversationMessage{}, err
 	}
 	fingerprint, err := fingerprintInput(input)
 	if err != nil {
@@ -129,12 +139,12 @@ func (s *Service) RecordConversationMessage(ctx context.Context, input RecordCon
 		ID:           s.ids.New(),
 		ThreadID:     input.ThreadID,
 		MessageKind:  input.MessageKind,
-		AuthorRef:    strings.TrimSpace(input.AuthorRef),
-		BodySummary:  strings.TrimSpace(input.BodySummary),
+		AuthorRef:    input.AuthorRef,
+		BodySummary:  input.BodySummary,
 		BodyObject:   input.BodyObject,
-		BodyDigest:   strings.TrimSpace(input.BodyDigest),
-		Locale:       strings.TrimSpace(input.Locale),
-		SafeMetadata: copyMetadata(input.SafeMetadata),
+		BodyDigest:   input.BodyDigest,
+		Locale:       input.Locale,
+		SafeMetadata: input.SafeMetadata,
 		CreatedAt:    now,
 	}
 	thread.LatestMessageID = &message.ID
@@ -316,6 +326,115 @@ func validateScope(scope value.ScopeRef) error {
 	return nil
 }
 
+func normalizeRecordConversationMessageInput(input RecordConversationMessageInput) (RecordConversationMessageInput, error) {
+	input.AuthorRef = strings.TrimSpace(input.AuthorRef)
+	input.BodySummary = strings.TrimSpace(input.BodySummary)
+	input.BodyObject = normalizeObjectRef(input.BodyObject)
+	input.BodyDigest = strings.TrimSpace(input.BodyDigest)
+	input.Locale = strings.TrimSpace(input.Locale)
+
+	metadata, err := normalizeSafeMetadata(input.SafeMetadata)
+	if err != nil {
+		return RecordConversationMessageInput{}, err
+	}
+	input.SafeMetadata = metadata
+
+	if input.ThreadID == uuid.Nil || !input.MessageKind.Valid() || blank(input.AuthorRef) {
+		return RecordConversationMessageInput{}, errs.ErrInvalidArgument
+	}
+	if err := validateMessageBodyStorage(input); err != nil {
+		return RecordConversationMessageInput{}, err
+	}
+	return input, nil
+}
+
+func normalizeObjectRef(input value.ObjectRef) value.ObjectRef {
+	result := value.ObjectRef{
+		URI:    strings.TrimSpace(input.URI),
+		Digest: strings.TrimSpace(input.Digest),
+	}
+	if input.SizeBytes != nil {
+		size := *input.SizeBytes
+		result.SizeBytes = &size
+	}
+	return result
+}
+
+func validateMessageBodyStorage(input RecordConversationMessageInput) error {
+	if utf8.RuneCountInString(input.BodySummary) > maxMessageBodySummaryRunes {
+		return errs.ErrInvalidArgument
+	}
+	if input.BodyObject.SizeBytes != nil && *input.BodyObject.SizeBytes < 0 {
+		return errs.ErrInvalidArgument
+	}
+
+	hasObject := hasObjectRef(input.BodyObject)
+	hasDigest := !blank(input.BodyDigest)
+	if hasObject || hasDigest {
+		if !hasObject || blank(input.BodyObject.URI) || blank(input.BodyObject.Digest) || !hasDigest {
+			return errs.ErrInvalidArgument
+		}
+	}
+	if blank(input.BodySummary) && (!hasObject || !hasDigest) {
+		return errs.ErrInvalidArgument
+	}
+	return nil
+}
+
+func hasObjectRef(input value.ObjectRef) bool {
+	return !blank(input.URI) || !blank(input.Digest) || input.SizeBytes != nil
+}
+
+func normalizeSafeMetadata(input map[string]string) (map[string]string, error) {
+	if len(input) == 0 {
+		return map[string]string{}, nil
+	}
+	if len(input) > maxSafeMetadataEntries {
+		return nil, errs.ErrInvalidArgument
+	}
+
+	result := make(map[string]string, len(input))
+	totalBytes := 0
+	for rawKey, rawValue := range input {
+		key := strings.TrimSpace(rawKey)
+		value := strings.TrimSpace(rawValue)
+		if key == "" || len(key) > maxSafeMetadataKeyBytes || len(value) > maxSafeMetadataValueBytes {
+			return nil, errs.ErrInvalidArgument
+		}
+		if sensitiveMetadataKey(key) {
+			return nil, errs.ErrInvalidArgument
+		}
+		if _, exists := result[key]; exists {
+			return nil, errs.ErrInvalidArgument
+		}
+		totalBytes += len(key) + len(value)
+		if totalBytes > maxSafeMetadataTotalBytes {
+			return nil, errs.ErrInvalidArgument
+		}
+		result[key] = value
+	}
+	return result, nil
+}
+
+func sensitiveMetadataKey(key string) bool {
+	normalized := strings.ToLower(key)
+	normalized = strings.NewReplacer("-", "_", ".", "_", " ", "_", "/", "_").Replace(normalized)
+	compact := strings.ReplaceAll(normalized, "_", "")
+	return strings.Contains(compact, "secret") ||
+		strings.Contains(compact, "token") ||
+		strings.Contains(compact, "password") ||
+		strings.Contains(compact, "passwd") ||
+		strings.Contains(compact, "pwd") ||
+		strings.Contains(compact, "credential") ||
+		strings.Contains(compact, "authorization") ||
+		strings.Contains(compact, "bearer") ||
+		strings.Contains(compact, "cookie") ||
+		strings.Contains(compact, "session") ||
+		strings.Contains(compact, "apikey") ||
+		strings.Contains(compact, "privatekey") ||
+		strings.Contains(compact, "accesskey")
+}
+
 func commandResult(meta value.CommandMeta, operation enum.Operation, aggregateType string, aggregateID uuid.UUID, fingerprint string, now time.Time) entity.CommandResult {
 	actorRef := meta.Actor.Ref()
 	key := "idempotency:" + string(operation) + ":" + actorRef + ":" + strings.TrimSpace(meta.IdempotencyKey)
@@ -354,17 +473,6 @@ func fingerprintInput(input any) (string, error) {
 	}
 	sum := sha256.Sum256(body)
 	return hex.EncodeToString(sum[:]), nil
-}
-
-func copyMetadata(input map[string]string) map[string]string {
-	if len(input) == 0 {
-		return map[string]string{}
-	}
-	result := make(map[string]string, len(input))
-	for key, value := range input {
-		result[key] = value
-	}
-	return result
 }
 
 func blank(value string) bool {

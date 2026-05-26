@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -71,19 +72,9 @@ func TestServiceRecordsMessageWithoutRawBodyOutbox(t *testing.T) {
 	repository := newFakeRepository()
 	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
 	threadID := uuid.New()
-	repository.threads[threadID] = entity.ConversationThread{
-		ID:             threadID,
-		Scope:          value.ScopeRef{Type: enum.ScopeTypeRepository, Ref: "repo"},
-		ThreadKind:     enum.ConversationThreadKindUserDialog,
-		SourceKind:     enum.ConversationSourceKindMCP,
-		Status:         enum.ConversationThreadStatusOpen,
-		CorrelationID:  "trace",
-		RetentionClass: "standard",
-		Version:        1,
-		CreatedAt:      now,
-		UpdatedAt:      now,
-	}
+	seedConversationThread(repository, threadID, now)
 	svc := NewWithConfig(repository, Config{Clock: fixedClock{now: now.Add(time.Minute)}, UUIDGenerator: &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New()}}})
+	objectSize := int64(128)
 	input := RecordConversationMessageInput{
 		Meta: value.CommandMeta{
 			CommandID: uuid.New(),
@@ -95,6 +86,7 @@ func TestServiceRecordsMessageWithoutRawBodyOutbox(t *testing.T) {
 		MessageKind:  enum.ConversationMessageKindAgentText,
 		AuthorRef:    "agent:codex",
 		BodySummary:  "summary that must stay outside the outbox",
+		BodyObject:   value.ObjectRef{URI: "s3://kodex-interactions/messages/1", Digest: "sha256:object", SizeBytes: &objectSize},
 		BodyDigest:   "sha256:body",
 		Locale:       "ru",
 		SafeMetadata: map[string]string{"surface": "mcp"},
@@ -119,6 +111,84 @@ func TestServiceRecordsMessageWithoutRawBodyOutbox(t *testing.T) {
 	}
 	if payload["message_id"] != message.ID.String() || payload["thread_id"] != threadID.String() {
 		t.Fatalf("payload = %+v, want message/thread refs", payload)
+	}
+}
+
+func TestServiceRejectsUnsafeConversationMessages(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		mutate func(*RecordConversationMessageInput)
+	}{
+		{
+			name: "body summary exceeds safe bound",
+			mutate: func(input *RecordConversationMessageInput) {
+				input.BodySummary = strings.Repeat("a", maxMessageBodySummaryRunes+1)
+			},
+		},
+		{
+			name: "blank body has no object ref and digest",
+			mutate: func(input *RecordConversationMessageInput) {
+				input.BodySummary = " "
+				input.BodyObject = value.ObjectRef{}
+				input.BodyDigest = ""
+			},
+		},
+		{
+			name: "body digest without object ref",
+			mutate: func(input *RecordConversationMessageInput) {
+				input.BodyObject = value.ObjectRef{}
+			},
+		},
+		{
+			name: "object ref without body digest",
+			mutate: func(input *RecordConversationMessageInput) {
+				input.BodyDigest = ""
+			},
+		},
+		{
+			name: "negative object size",
+			mutate: func(input *RecordConversationMessageInput) {
+				size := int64(-1)
+				input.BodyObject.SizeBytes = &size
+			},
+		},
+		{
+			name: "sensitive metadata key",
+			mutate: func(input *RecordConversationMessageInput) {
+				input.SafeMetadata = map[string]string{"github_token": "redacted"}
+			},
+		},
+		{
+			name: "metadata value exceeds safe bound",
+			mutate: func(input *RecordConversationMessageInput) {
+				input.SafeMetadata = map[string]string{"surface": strings.Repeat("x", maxSafeMetadataValueBytes+1)}
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			repository := newFakeRepository()
+			now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+			threadID := uuid.New()
+			seedConversationThread(repository, threadID, now)
+			svc := NewWithConfig(repository, Config{Clock: fixedClock{now: now.Add(time.Minute)}, UUIDGenerator: &sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New()}}})
+			input := validRecordConversationMessageInput(threadID)
+			tc.mutate(&input)
+
+			_, err := svc.RecordConversationMessage(context.Background(), input)
+			if !errors.Is(err, errs.ErrInvalidArgument) {
+				t.Fatalf("RecordConversationMessage() err = %v, want ErrInvalidArgument", err)
+			}
+			if len(repository.messages) != 0 || len(repository.events) != 0 {
+				t.Fatalf("messages=%d events=%d, want no writes", len(repository.messages), len(repository.events))
+			}
+		})
 	}
 }
 
@@ -172,6 +242,41 @@ func newFakeRepository() *fakeRepository {
 		threads:  map[uuid.UUID]entity.ConversationThread{},
 		messages: map[uuid.UUID]entity.ConversationMessage{},
 		results:  map[string]entity.CommandResult{},
+	}
+}
+
+func seedConversationThread(repository *fakeRepository, threadID uuid.UUID, now time.Time) {
+	repository.threads[threadID] = entity.ConversationThread{
+		ID:             threadID,
+		Scope:          value.ScopeRef{Type: enum.ScopeTypeRepository, Ref: "repo"},
+		ThreadKind:     enum.ConversationThreadKindUserDialog,
+		SourceKind:     enum.ConversationSourceKindMCP,
+		Status:         enum.ConversationThreadStatusOpen,
+		CorrelationID:  "trace",
+		RetentionClass: "standard",
+		Version:        1,
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+}
+
+func validRecordConversationMessageInput(threadID uuid.UUID) RecordConversationMessageInput {
+	objectSize := int64(128)
+	return RecordConversationMessageInput{
+		Meta: value.CommandMeta{
+			CommandID: uuid.New(),
+			Actor:     value.Actor{Type: "agent", ID: "codex"},
+			Reason:    "test",
+			RequestID: "request-2",
+		},
+		ThreadID:     threadID,
+		MessageKind:  enum.ConversationMessageKindAgentText,
+		AuthorRef:    "agent:codex",
+		BodySummary:  "safe summary",
+		BodyObject:   value.ObjectRef{URI: "s3://kodex-interactions/messages/1", Digest: "sha256:object", SizeBytes: &objectSize},
+		BodyDigest:   "sha256:body",
+		Locale:       "ru",
+		SafeMetadata: map[string]string{"surface": "mcp"},
 	}
 }
 
