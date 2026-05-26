@@ -626,6 +626,7 @@ spec:
       implementation:
         businessRoutes: route-registry-safe-parts-only
         database: stub-only-no-raw-payload-storage
+        decisionBridge: permission-and-policy-pre-tool-owner-ports-stubbed
         opsFeed: bounded-in-memory-safe-summary-only
         rateLimit: fixed-window-logical-boundary
         routeFailurePolicy: diagnostic-or-fail-closed

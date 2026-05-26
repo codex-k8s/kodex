@@ -26,6 +26,7 @@ type Service struct {
 	routeRegistry  *RouteRegistry
 	opsFeed        opsrepo.Repository
 	rateLimiter    RateLimiter
+	decisionBridge DecisionBridge
 }
 
 // New creates a codex-hook-ingress domain service with explicit skeleton ports.
@@ -52,6 +53,9 @@ func New(repository hookrepo.Repository, cfg Config, deps Dependencies) *Service
 	if deps.RateLimiter == nil {
 		deps.RateLimiter = noopRateLimiter{}
 	}
+	if deps.DecisionBridge == nil {
+		deps.DecisionBridge = NewOwnerDecisionBridge(nil)
+	}
 	return &Service{
 		repository:     repository,
 		config:         cfg,
@@ -62,6 +66,7 @@ func New(repository hookrepo.Repository, cfg Config, deps Dependencies) *Service
 		routeRegistry:  deps.RouteRegistry,
 		opsFeed:        deps.OpsFeed,
 		rateLimiter:    deps.RateLimiter,
+		decisionBridge: deps.DecisionBridge,
 	}
 }
 
@@ -78,7 +83,9 @@ func (s *Service) Ready() bool {
 		s.opsFeed != nil &&
 		s.opsFeed.Ready() &&
 		s.rateLimiter != nil &&
-		s.rateLimiter.Ready()
+		s.rateLimiter.Ready() &&
+		s.decisionBridge != nil &&
+		s.decisionBridge.Ready()
 }
 
 // SubmitHookEvent accepts a normalized hook event through the logical command boundary.
@@ -124,7 +131,7 @@ func (s *Service) SubmitHookEvent(ctx context.Context, input SubmitHookEventInpu
 		return SubmitHookEventResult{}, fmt.Errorf("%w: read hook idempotency record: %v", hookerrs.ErrDependencyUnavailable, err)
 	}
 	if exists {
-		if existing.PayloadDigest != envelope.PayloadDigest {
+		if !acceptedEventMatchesEnvelope(existing, envelope) {
 			return SubmitHookEventResult{}, hookerrs.ErrDuplicateConflict
 		}
 		return s.handleDuplicateAcceptedEvent(ctx, envelope, existing, sanitizerDecision, startedAt)
@@ -151,6 +158,9 @@ func (s *Service) SubmitHookEvent(ctx context.Context, input SubmitHookEventInpu
 		return SubmitHookEventResult{}, fmt.Errorf("%w: store hook idempotency record: %v", hookerrs.ErrDependencyUnavailable, err)
 	}
 	if duplicate {
+		if !acceptedEventMatchesEnvelope(accepted, envelope) {
+			return SubmitHookEventResult{}, hookerrs.ErrDuplicateConflict
+		}
 		return s.handleDuplicateAcceptedEvent(ctx, envelope, accepted, sanitizerDecision, startedAt)
 	}
 	reservation, err := s.admitOpsFeed(ctx, envelope, sanitizerDecision, startedAt)
@@ -196,7 +206,15 @@ func (s *Service) dispatchAndRecordRoutes(
 	sanitizerDecision SanitizerDecision,
 	startedAt time.Time,
 ) (SubmitHookEventResult, error) {
-	routeDiagnostics := s.routeRegistry.DispatchRoutes(ctx, s.config, envelope)
+	decisionResult, decisionHandled, err := s.decisionBridge.Evaluate(ctx, s.config, envelope)
+	if err != nil {
+		return SubmitHookEventResult{}, fmt.Errorf("%w: evaluate hook decision bridge: %v", hookerrs.ErrDependencyUnavailable, err)
+	}
+	routeDiagnostics := s.routeRegistry.DispatchRoutesExcluding(ctx, s.config, envelope, ownerSet(decisionResult.HandledOwners))
+	if decisionHandled {
+		result = decisionResult.HandlerResult
+		routeDiagnostics = append(routeDiagnostics, decisionResult.RouteDiagnostics...)
+	}
 	result = s.applyRouteFailurePolicy(result, routeDiagnostics)
 	if err := s.completeOpsFeed(ctx, reservation, envelope, sanitizerDecision, routeDiagnostics, startedAt); err != nil {
 		return SubmitHookEventResult{}, err
@@ -228,6 +246,10 @@ func (s *Service) handlerResult(envelope value.HookEnvelope) value.HookHandlerRe
 		HookEventName: envelope.HookEventName,
 		CorrelationID: envelope.CorrelationID,
 	}
+}
+
+func acceptedEventMatchesEnvelope(accepted entity.AcceptedEvent, envelope value.HookEnvelope) bool {
+	return accepted.PayloadDigest == envelope.PayloadDigest && accepted.CorrelationID == envelope.CorrelationID
 }
 
 func (s *Service) applyRouteFailurePolicy(result value.HookHandlerResult, diagnostics []value.RouteDeliveryResult) value.HookHandlerResult {
@@ -267,6 +289,18 @@ func normalizedConfig(cfg Config) Config {
 	}
 	if cfg.RateLimitBurst <= 0 {
 		cfg.RateLimitBurst = defaultRateLimitBurst
+	}
+	if cfg.DecisionBridgeTimeout <= 0 {
+		cfg.DecisionBridgeTimeout = 30 * time.Second
+	}
+	if len(cfg.PreToolUseDecisionRiskClasses) == 0 {
+		cfg.PreToolUseDecisionRiskClasses = []string{"medium", "high", "unknown"}
+	}
+	if cfg.PermissionDecisionFailurePolicy == "" {
+		cfg.PermissionDecisionFailurePolicy = hookenum.DecisionFailurePolicyFailClosed
+	}
+	if cfg.PreToolUseDecisionFailurePolicy == "" {
+		cfg.PreToolUseDecisionFailurePolicy = hookenum.DecisionFailurePolicyNoDecision
 	}
 	return cfg
 }

@@ -13,6 +13,13 @@ const (
 	RouteDiagnosticUnexpected         = "route.unexpected"
 	RouteDiagnosticDownstreamFailed   = "route.downstream_failed"
 	RouteDiagnosticFailurePolicyFired = "route.failure_policy_fired"
+	RouteDiagnosticDecisionAllowed    = "decision.allowed"
+	RouteDiagnosticDecisionDenied     = "decision.denied"
+	RouteDiagnosticNoDecision         = "decision.no_decision"
+	RouteDiagnosticDecisionTimeout    = "hook.decision_timeout"
+	RouteDiagnosticRetryableError     = "decision.retryable_error"
+	RouteDiagnosticFailClosed         = "decision.fail_closed"
+	RouteDiagnosticOwnerUnavailable   = "hook.owner_unavailable"
 )
 
 // SafeHookEvent is the owner-dispatch payload projected from schema-approved safe parts only.

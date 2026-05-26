@@ -199,6 +199,10 @@ func errorReasonCode(err error) string {
 		return string(hookerrs.ErrBackpressure)
 	case errors.Is(err, hookerrs.ErrRateLimited):
 		return string(hookerrs.ErrRateLimited)
+	case errors.Is(err, hookerrs.ErrDecisionTimeout):
+		return string(hookerrs.ErrDecisionTimeout)
+	case errors.Is(err, hookerrs.ErrOwnerUnavailable):
+		return string(hookerrs.ErrOwnerUnavailable)
 	case errors.Is(err, hookerrs.ErrInvalidBinding):
 		return string(hookerrs.ErrInvalidBinding)
 	case errors.Is(err, hookerrs.ErrPayloadTooLarge):

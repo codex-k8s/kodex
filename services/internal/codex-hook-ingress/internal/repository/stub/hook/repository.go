@@ -55,7 +55,7 @@ func (r *Repository) RegisterAcceptedEvent(_ context.Context, event entity.Accep
 	defer r.mu.Unlock()
 	existing, ok := r.events[event.EventID]
 	if ok {
-		if existing.PayloadDigest != event.PayloadDigest {
+		if existing.PayloadDigest != event.PayloadDigest || existing.CorrelationID != event.CorrelationID {
 			return entity.AcceptedEvent{}, false, hookerrs.ErrDuplicateConflict
 		}
 		existing.RouteDiagnostics = cloneRouteDiagnostics(existing.RouteDiagnostics)
