@@ -31,6 +31,7 @@ type Repository interface {
 	GetReviewSignal(ctx context.Context, id uuid.UUID) (entity.ReviewSignal, error)
 	ListReviewSignals(ctx context.Context, filter query.ReviewSignalFilter) ([]entity.ReviewSignal, query.PageResult, error)
 	CreateGateRequest(ctx context.Context, request entity.GateRequest, result entity.CommandResult, event entity.OutboxEvent) error
+	UpdateGateRequestStatus(ctx context.Context, request entity.GateRequest, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error
 	UpdateGateRequestWithDecision(ctx context.Context, request entity.GateRequest, previousVersion int64, decision entity.GateDecision, result entity.CommandResult, event entity.OutboxEvent) error
 	GetGateRequest(ctx context.Context, id uuid.UUID) (entity.GateRequest, error)
 	GetGateDecision(ctx context.Context, id uuid.UUID) (entity.GateDecision, error)

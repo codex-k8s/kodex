@@ -14,6 +14,7 @@ func UnaryErrorInterceptor(logger *slog.Logger) grpcruntime.UnaryServerIntercept
 	return grpcserver.UnaryBoundaryErrorInterceptor("governance-manager", logger, grpcserver.NewDomainErrorMapper(
 		grpcserver.DomainErrorRule{Target: errs.ErrAlreadyExists, Code: codes.AlreadyExists, Message: "resource already exists"},
 		grpcserver.DomainErrorRule{Target: errs.ErrConflict, Code: codes.Aborted, Message: "concurrent change conflict"},
+		grpcserver.DomainErrorRule{Target: errs.ErrForbidden, Code: codes.PermissionDenied, Message: "permission denied"},
 		grpcserver.DomainErrorRule{Target: errs.ErrInvalidArgument, Code: codes.InvalidArgument, Message: "invalid request"},
 		grpcserver.DomainErrorRule{Target: errs.ErrNotFound, Code: codes.NotFound, Message: "resource not found"},
 		grpcserver.DomainErrorRule{Target: errs.ErrPreconditionFailed, Code: codes.FailedPrecondition, Message: "precondition failed"},

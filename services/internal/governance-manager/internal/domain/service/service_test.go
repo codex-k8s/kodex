@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -93,6 +94,8 @@ func TestMutatingUseCasesReplayStoredCommandResults(t *testing.T) {
 	reviewSignalID := uuid.MustParse("dddddddd-dddd-4ddd-dddd-dddddddddddd")
 	gateRequestID := uuid.MustParse("eeeeeeee-eeee-4eee-eeee-eeeeeeeeeeee")
 	gateDecisionID := uuid.MustParse("ffffffff-ffff-4fff-ffff-ffffffffffff")
+	cancelledGateID := uuid.MustParse("22222222-2222-4222-8222-222222222222")
+	expiredGateID := uuid.MustParse("33333333-3333-4333-8333-333333333333")
 	releasePackageID := uuid.MustParse("11111111-1111-4111-8111-111111111111")
 	profileVersion := int64(20260526123000)
 
@@ -206,7 +209,7 @@ func TestMutatingUseCasesReplayStoredCommandResults(t *testing.T) {
 		},
 		{
 			name:   "request gate",
-			result: commandResult(meta, enum.OperationRequestGate.String(), governanceevents.AggregateGate, gateRequestID, now),
+			result: commandResult(meta, enum.OperationRequestGate.String(), aggregateGateRequest, gateRequestID, now),
 			configure: func(repository *fakeRepository) {
 				repository.gateRequest = entity.GateRequest{VersionedBase: entity.VersionedBase{ID: gateRequestID, Version: 1}, Target: target}
 			},
@@ -236,6 +239,40 @@ func TestMutatingUseCasesReplayStoredCommandResults(t *testing.T) {
 				}
 				if decision.ID != gateDecisionID || request.ID != gateRequestID {
 					t.Fatalf("decision/request ids = %s/%s, want %s/%s", decision.ID, request.ID, gateDecisionID, gateRequestID)
+				}
+			},
+		},
+		{
+			name:   "cancel gate",
+			result: commandResultWithPayload(meta, enum.OperationCancelGate.String(), aggregateGateRequest, cancelledGateID, now, map[string]any{"status": string(enum.GateRequestStatusCancelled)}),
+			configure: func(repository *fakeRepository) {
+				repository.gateRequest = entity.GateRequest{VersionedBase: entity.VersionedBase{ID: cancelledGateID, Version: 2}, Target: target, Status: enum.GateRequestStatusCancelled}
+			},
+			run: func(t *testing.T, service *Service) {
+				t.Helper()
+				request, err := service.CancelGate(context.Background(), CancelGateInput{GateRequestID: cancelledGateID, Meta: meta})
+				if err != nil {
+					t.Fatalf("CancelGate(): %v", err)
+				}
+				if request.ID != cancelledGateID || request.Status != enum.GateRequestStatusCancelled {
+					t.Fatalf("gate request = %+v, want cancelled %s", request, cancelledGateID)
+				}
+			},
+		},
+		{
+			name:   "expire gate",
+			result: commandResultWithPayload(meta, enum.OperationExpireGate.String(), aggregateGateRequest, expiredGateID, now, map[string]any{"status": string(enum.GateRequestStatusExpired)}),
+			configure: func(repository *fakeRepository) {
+				repository.gateRequest = entity.GateRequest{VersionedBase: entity.VersionedBase{ID: expiredGateID, Version: 2}, Target: target, Status: enum.GateRequestStatusExpired}
+			},
+			run: func(t *testing.T, service *Service) {
+				t.Helper()
+				request, err := service.ExpireGate(context.Background(), ExpireGateInput{GateRequestID: expiredGateID, Meta: meta})
+				if err != nil {
+					t.Fatalf("ExpireGate(): %v", err)
+				}
+				if request.ID != expiredGateID || request.Status != enum.GateRequestStatusExpired {
+					t.Fatalf("gate request = %+v, want expired %s", request, expiredGateID)
 				}
 			},
 		},
@@ -313,6 +350,20 @@ func TestExistingAggregateMutationsRequireExpectedVersion(t *testing.T) {
 				return err
 			},
 		},
+		{
+			name: "cancel gate",
+			run: func(service *Service) error {
+				_, err := service.CancelGate(context.Background(), CancelGateInput{GateRequestID: gateRequestID, Meta: meta})
+				return err
+			},
+		},
+		{
+			name: "expire gate",
+			run: func(service *Service) error {
+				_, err := service.ExpireGate(context.Background(), ExpireGateInput{GateRequestID: gateRequestID, Meta: meta})
+				return err
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -374,6 +425,26 @@ func TestExistingAggregateMutationsRejectStaleExpectedVersion(t *testing.T) {
 				return err
 			},
 		},
+		{
+			name: "cancel gate",
+			configure: func(repository *fakeRepository) {
+				repository.gateRequest = entity.GateRequest{VersionedBase: entity.VersionedBase{ID: gateRequestID, Version: 2}, Status: enum.GateRequestStatusRequested}
+			},
+			run: func(service *Service) error {
+				_, err := service.CancelGate(context.Background(), CancelGateInput{GateRequestID: gateRequestID, Meta: meta})
+				return err
+			},
+		},
+		{
+			name: "expire gate",
+			configure: func(repository *fakeRepository) {
+				repository.gateRequest = entity.GateRequest{VersionedBase: entity.VersionedBase{ID: gateRequestID, Version: 2}, Status: enum.GateRequestStatusRequested}
+			},
+			run: func(service *Service) error {
+				_, err := service.ExpireGate(context.Background(), ExpireGateInput{GateRequestID: gateRequestID, Meta: meta})
+				return err
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -394,6 +465,128 @@ func TestExistingAggregateMutationsRejectStaleExpectedVersion(t *testing.T) {
 	}
 }
 
+func TestCancelGateStoresTerminalStateAndSafeOutbox(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 5, 26, 13, 0, 0, 0, time.UTC)
+	commandID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+	eventID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb")
+	gateRequestID := uuid.MustParse("cccccccc-cccc-4ccc-cccc-cccccccccccc")
+	expectedVersion := int64(1)
+	repository := &fakeRepository{
+		ready: true,
+		gateRequest: entity.GateRequest{
+			VersionedBase: entity.VersionedBase{ID: gateRequestID, Version: 1, CreatedAt: now, UpdatedAt: now},
+			Target:        value.ExternalRef{Type: "pull_request", Ref: "provider:pr:1"},
+			Status:        enum.GateRequestStatusRequested,
+		},
+	}
+	service := NewWithConfig(Config{Repository: repository, Clock: fixedClock{now: now}, IDGenerator: &fixedIDs{ids: []uuid.UUID{eventID}}})
+
+	request, err := service.CancelGate(context.Background(), CancelGateInput{
+		GateRequestID: gateRequestID,
+		Reason:        "safe operator cancellation summary",
+		InteractionDeliveryRef: value.InteractionDeliveryRef{
+			RequestRef: "interaction:request:1",
+		},
+		Meta: CommandMeta{
+			CommandID:       &commandID,
+			ExpectedVersion: &expectedVersion,
+			Actor:           value.Actor{Type: "service", ID: "agent-manager"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CancelGate(): %v", err)
+	}
+	if request.Status != enum.GateRequestStatusCancelled || request.Version != 2 {
+		t.Fatalf("gate request status/version = %s/%d, want cancelled/2", request.Status, request.Version)
+	}
+	if request.TerminalActorRef != "service:agent-manager" || request.TerminalReason != "safe operator cancellation summary" || request.TerminalAt == nil {
+		t.Fatalf("terminal metadata = actor %q reason %q at %v", request.TerminalActorRef, request.TerminalReason, request.TerminalAt)
+	}
+	if len(repository.events) != 1 || repository.events[0].EventType != governanceevents.EventGateCancelled {
+		t.Fatalf("events = %+v, want one gate cancelled event", repository.events)
+	}
+	payload := string(repository.events[0].Payload)
+	if strings.Contains(payload, "safe operator cancellation summary") || strings.Contains(payload, "interaction:request:1") {
+		t.Fatalf("outbox payload leaked terminal summary or interaction ref: %s", payload)
+	}
+}
+
+func TestExpireGateRejectsClosedGate(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+	gateRequestID := uuid.MustParse("cccccccc-cccc-4ccc-cccc-cccccccccccc")
+	expectedVersion := int64(1)
+	service := New(&fakeRepository{
+		ready: true,
+		gateRequest: entity.GateRequest{
+			VersionedBase: entity.VersionedBase{ID: gateRequestID, Version: 1},
+			Status:        enum.GateRequestStatusResolved,
+		},
+	})
+
+	_, err := service.ExpireGate(context.Background(), ExpireGateInput{
+		GateRequestID: gateRequestID,
+		Meta: CommandMeta{
+			CommandID:       &commandID,
+			ExpectedVersion: &expectedVersion,
+			Actor:           value.Actor{Type: "service", ID: "interaction-hub"},
+		},
+	})
+	if !errors.Is(err, errs.ErrPreconditionFailed) {
+		t.Fatalf("ExpireGate() error = %v, want ErrPreconditionFailed", err)
+	}
+}
+
+func TestGateLifecycleAccessDenied(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+	gateRequestID := uuid.MustParse("cccccccc-cccc-4ccc-cccc-cccccccccccc")
+	meta := CommandMeta{CommandID: &commandID, Actor: value.Actor{Type: "service", ID: "agent-manager"}}
+	queryMeta := QueryMeta{Actor: value.Actor{Type: "service", ID: "agent-manager"}}
+	repository := &fakeRepository{ready: true}
+	service := NewWithConfig(Config{
+		Repository: repository,
+		Authorizer: authorizerFunc(func(context.Context, AuthorizationRequest) error {
+			return errs.ErrForbidden
+		}),
+	})
+
+	if _, err := service.RequestGate(context.Background(), RequestGateInput{Target: value.ExternalRef{Type: "pull_request", Ref: "provider:pr:1"}, Meta: meta}); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("RequestGate() error = %v, want ErrForbidden", err)
+	}
+	if _, err := service.GetGateRequest(context.Background(), GetGateRequestInput{GateRequestID: gateRequestID, Meta: queryMeta}); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("GetGateRequest() error = %v, want ErrForbidden", err)
+	}
+	if repository.mutationCalls != 0 {
+		t.Fatalf("mutation calls = %d, want 0 when access denied", repository.mutationCalls)
+	}
+}
+
+func TestCancelGateReturnsNotFound(t *testing.T) {
+	t.Parallel()
+
+	commandID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+	gateRequestID := uuid.MustParse("cccccccc-cccc-4ccc-cccc-cccccccccccc")
+	expectedVersion := int64(1)
+	service := New(&fakeRepository{ready: true, gateRequestErr: errs.ErrNotFound})
+
+	_, err := service.CancelGate(context.Background(), CancelGateInput{
+		GateRequestID: gateRequestID,
+		Meta: CommandMeta{
+			CommandID:       &commandID,
+			ExpectedVersion: &expectedVersion,
+			Actor:           value.Actor{Type: "service", ID: "agent-manager"},
+		},
+	})
+	if !errors.Is(err, errs.ErrNotFound) {
+		t.Fatalf("CancelGate() error = %v, want ErrNotFound", err)
+	}
+}
+
 type fakeRepository struct {
 	governancerepo.Repository
 	ready            bool
@@ -404,6 +597,7 @@ type fakeRepository struct {
 	assessment       entity.RiskAssessment
 	reviewSignal     entity.ReviewSignal
 	gateRequest      entity.GateRequest
+	gateRequestErr   error
 	gateDecision     entity.GateDecision
 	releasePackage   entity.ReleaseDecisionPackage
 	result           entity.CommandResult
@@ -492,6 +686,14 @@ func (repository *fakeRepository) CreateGateRequest(_ context.Context, request e
 	return nil
 }
 
+func (repository *fakeRepository) UpdateGateRequestStatus(_ context.Context, request entity.GateRequest, _ int64, result entity.CommandResult, event entity.OutboxEvent) error {
+	repository.mutationCalls++
+	repository.gateRequest = request
+	repository.result = result
+	repository.events = []entity.OutboxEvent{event}
+	return nil
+}
+
 func (repository *fakeRepository) UpdateGateRequestWithDecision(_ context.Context, request entity.GateRequest, _ int64, decision entity.GateDecision, result entity.CommandResult, event entity.OutboxEvent) error {
 	repository.mutationCalls++
 	repository.gateRequest = request
@@ -502,6 +704,9 @@ func (repository *fakeRepository) UpdateGateRequestWithDecision(_ context.Contex
 }
 
 func (repository *fakeRepository) GetGateRequest(_ context.Context, _ uuid.UUID) (entity.GateRequest, error) {
+	if repository.gateRequestErr != nil {
+		return entity.GateRequest{}, repository.gateRequestErr
+	}
 	return repository.gateRequest, nil
 }
 
@@ -540,4 +745,10 @@ func (generator *fixedIDs) New() uuid.UUID {
 	id := generator.ids[0]
 	generator.ids = generator.ids[1:]
 	return id
+}
+
+type authorizerFunc func(context.Context, AuthorizationRequest) error
+
+func (fn authorizerFunc) Authorize(ctx context.Context, request AuthorizationRequest) error {
+	return fn(ctx, request)
 }

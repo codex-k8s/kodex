@@ -81,6 +81,7 @@ func TestUnaryErrorInterceptorMapsRepositoryDomainErrors(t *testing.T) {
 		{name: "not found", err: errs.ErrNotFound, want: codes.NotFound},
 		{name: "already exists", err: errs.ErrAlreadyExists, want: codes.AlreadyExists},
 		{name: "conflict", err: errs.ErrConflict, want: codes.Aborted},
+		{name: "forbidden", err: errs.ErrForbidden, want: codes.PermissionDenied},
 		{name: "precondition failed", err: errs.ErrPreconditionFailed, want: codes.FailedPrecondition},
 	}
 

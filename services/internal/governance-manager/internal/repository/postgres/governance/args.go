@@ -140,6 +140,9 @@ func gateRequestArgs(request entity.GateRequest) pgx.NamedArgs {
 		"evidence_refs":            jsonArrayPayload(request.EvidenceRefs),
 		"evidence_summary":         request.EvidenceSummary,
 		"status":                   string(request.Status),
+		"terminal_actor_ref":       request.TerminalActorRef,
+		"terminal_reason":          request.TerminalReason,
+		"terminal_at":              postgreslib.NullableTime(request.TerminalAt),
 	}, request.ID, request.Version, request.CreatedAt, request.UpdatedAt)
 }
 

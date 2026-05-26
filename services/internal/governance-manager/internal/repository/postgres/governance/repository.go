@@ -76,6 +76,7 @@ const (
 	operationRecordCommandResult         = "domain.Repository.RecordCommandResult"
 	operationRecordReviewSignal          = "domain.Repository.RecordReviewSignal"
 	operationSubmitGateDecision          = "domain.Repository.UpdateGateRequestWithDecision"
+	operationUpdateGateRequestStatus     = "domain.Repository.UpdateGateRequestStatus"
 )
 
 // NewRepository creates a PostgreSQL repository.
@@ -227,6 +228,11 @@ func (r *Repository) ListReviewSignals(ctx context.Context, filter query.ReviewS
 // CreateGateRequest stores a gate request and outbox event.
 func (r *Repository) CreateGateRequest(ctx context.Context, request entity.GateRequest, result entity.CommandResult, event entity.OutboxEvent) error {
 	return r.mutateWithResult(ctx, operationCreateGateRequest, queryGateRequestCreate, gateRequestArgs(request), result, &event)
+}
+
+// UpdateGateRequestStatus stores a terminal gate request lifecycle transition.
+func (r *Repository) UpdateGateRequestStatus(ctx context.Context, request entity.GateRequest, previousVersion int64, result entity.CommandResult, event entity.OutboxEvent) error {
+	return r.mutateWithResult(ctx, operationUpdateGateRequestStatus, queryGateRequestUpdate, gateRequestUpdateArgs(request, previousVersion), result, &event)
 }
 
 // UpdateGateRequestWithDecision stores a final gate decision and resolves the request.

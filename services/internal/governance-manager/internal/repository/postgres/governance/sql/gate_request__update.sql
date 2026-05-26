@@ -5,6 +5,9 @@ SET
     evidence_refs = @evidence_refs::jsonb,
     evidence_summary = @evidence_summary,
     status = @status,
+    terminal_actor_ref = @terminal_actor_ref,
+    terminal_reason = @terminal_reason,
+    terminal_at = @terminal_at,
     version = @version,
     updated_at = @updated_at
 WHERE id = @id

@@ -36,6 +36,8 @@ components:
         - $ref: '#/components/schemas/BlockingSignalResolvedEvent'
         - $ref: '#/components/schemas/GateRequestedEvent'
         - $ref: '#/components/schemas/GateResolvedEvent'
+        - $ref: '#/components/schemas/GateCancelledEvent'
+        - $ref: '#/components/schemas/GateExpiredEvent'
         - $ref: '#/components/schemas/ReleaseDecisionPackageBuiltEvent'
         - $ref: '#/components/schemas/ReleaseDecisionRequestedEvent'
         - $ref: '#/components/schemas/ReleaseDecisionResolvedEvent'
@@ -140,6 +142,22 @@ components:
       type: object
       properties: {event_type: {type: string, const: governance.gate.resolved}, aggregate_type: {type: string, const: gate}, payload: {$ref: '#/components/schemas/GateResolvedPayload'}}
       required: [event_type, aggregate_type, payload]
+    GateCancelledEvent:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventEnvelopeBase'
+        - $ref: '#/components/schemas/GateCancelledEventKind'
+    GateCancelledEventKind:
+      type: object
+      properties: {event_type: {type: string, const: governance.gate.cancelled}, aggregate_type: {type: string, const: gate}, payload: {$ref: '#/components/schemas/GateTerminalPayload'}}
+      required: [event_type, aggregate_type, payload]
+    GateExpiredEvent:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventEnvelopeBase'
+        - $ref: '#/components/schemas/GateExpiredEventKind'
+    GateExpiredEventKind:
+      type: object
+      properties: {event_type: {type: string, const: governance.gate.expired}, aggregate_type: {type: string, const: gate}, payload: {$ref: '#/components/schemas/GateTerminalPayload'}}
+      required: [event_type, aggregate_type, payload]
 
     ReleaseDecisionPackageBuiltEvent:
       allOf:
@@ -188,6 +206,8 @@ components:
         - governance.blocking_signal.resolved
         - governance.gate.requested
         - governance.gate.resolved
+        - governance.gate.cancelled
+        - governance.gate.expired
         - governance.release_decision_package.built
         - governance.release_decision.requested
         - governance.release_decision.resolved
@@ -317,6 +337,11 @@ components:
         - $ref: '#/components/schemas/GovernanceEventPayload'
         - type: object
           required: [gate_request_id, gate_decision_id, decision_actor_ref, outcome, status, version]
+    GateTerminalPayload:
+      allOf:
+        - $ref: '#/components/schemas/GovernanceEventPayload'
+        - type: object
+          required: [gate_request_id, previous_status, status, reason_code, version]
     ReleaseDecisionPackageBuiltPayload:
       allOf:
         - $ref: '#/components/schemas/GovernanceEventPayload'

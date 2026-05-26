@@ -24,6 +24,14 @@ type CommandMeta struct {
 	Actor           value.Actor
 	Reason          string
 	RequestID       string
+	RequestContext  value.RequestContext
+}
+
+// QueryMeta carries actor and safe request metadata for authoritative reads.
+type QueryMeta struct {
+	Actor          value.Actor
+	RequestID      string
+	RequestContext value.RequestContext
 }
 
 // Clock supplies deterministic time to use-cases.
@@ -109,6 +117,20 @@ type SubmitGateDecisionInput struct {
 	Meta                   CommandMeta
 }
 
+type CancelGateInput struct {
+	GateRequestID          uuid.UUID
+	Reason                 string
+	InteractionDeliveryRef value.InteractionDeliveryRef
+	Meta                   CommandMeta
+}
+
+type ExpireGateInput struct {
+	GateRequestID          uuid.UUID
+	Reason                 string
+	InteractionDeliveryRef value.InteractionDeliveryRef
+	Meta                   CommandMeta
+}
+
 type BuildReleaseDecisionPackageInput struct {
 	ReleaseCandidateRef     string
 	ProjectContext          value.ProjectContextRef
@@ -149,10 +171,22 @@ type ListReviewSignalsInput struct {
 
 type ListGateRequestsInput struct {
 	Filter query.GateRequestFilter
+	Meta   QueryMeta
 }
 
 type ListGateDecisionsInput struct {
 	Filter query.GateDecisionFilter
+	Meta   QueryMeta
+}
+
+type GetGateRequestInput struct {
+	GateRequestID uuid.UUID
+	Meta          QueryMeta
+}
+
+type GetGateDecisionInput struct {
+	GateDecisionID uuid.UUID
+	Meta           QueryMeta
 }
 
 type ListReleaseDecisionPackagesInput struct {

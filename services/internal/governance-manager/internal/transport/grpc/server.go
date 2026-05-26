@@ -10,6 +10,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/types/query"
+	"github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/types/value"
 	grpcruntime "google.golang.org/grpc"
 )
 
@@ -41,9 +42,11 @@ type governanceService interface {
 	ListReviewSignals(context.Context, governanceservice.ListReviewSignalsInput) ([]entity.ReviewSignal, query.PageResult, error)
 	RequestGate(context.Context, governanceservice.RequestGateInput) (entity.GateRequest, error)
 	SubmitGateDecision(context.Context, governanceservice.SubmitGateDecisionInput) (entity.GateDecision, entity.GateRequest, error)
-	GetGateDecision(context.Context, uuid.UUID) (entity.GateDecision, error)
+	CancelGate(context.Context, governanceservice.CancelGateInput) (entity.GateRequest, error)
+	ExpireGate(context.Context, governanceservice.ExpireGateInput) (entity.GateRequest, error)
+	GetGateDecision(context.Context, governanceservice.GetGateDecisionInput) (entity.GateDecision, error)
 	ListGateDecisions(context.Context, governanceservice.ListGateDecisionsInput) ([]entity.GateDecision, query.PageResult, error)
-	GetGateRequest(context.Context, uuid.UUID) (entity.GateRequest, error)
+	GetGateRequest(context.Context, governanceservice.GetGateRequestInput) (entity.GateRequest, error)
 	ListGateRequests(context.Context, governanceservice.ListGateRequestsInput) ([]entity.GateRequest, query.PageResult, error)
 	BuildReleaseDecisionPackage(context.Context, governanceservice.BuildReleaseDecisionPackageInput) (entity.ReleaseDecisionPackage, error)
 	GetReleaseDecisionPackage(context.Context, uuid.UUID) (entity.ReleaseDecisionPackage, error)
@@ -61,6 +64,74 @@ func NewServer(service governanceService) *Server {
 // RegisterGovernanceManagerService registers governance-manager handlers in a gRPC runtime.
 func RegisterGovernanceManagerService(registrar grpcruntime.ServiceRegistrar, service governanceService) {
 	governancev1.RegisterGovernanceManagerServiceServer(registrar, NewServer(service))
+}
+
+type terminalGateCommandInput struct {
+	gateRequestID          uuid.UUID
+	reason                 string
+	interactionDeliveryRef value.InteractionDeliveryRef
+	meta                   governanceservice.CommandMeta
+}
+
+type terminalGateHandler func(context.Context, terminalGateCommandInput) (entity.GateRequest, error)
+
+func terminalGateCommand(gateRequestID string, reason string, ref *governancev1.InteractionDeliveryRef, meta *governancev1.CommandMeta) (terminalGateCommandInput, error) {
+	metaValue, err := commandMeta(meta)
+	if err != nil {
+		return terminalGateCommandInput{}, err
+	}
+	id, err := requiredUUID(gateRequestID)
+	if err != nil {
+		return terminalGateCommandInput{}, err
+	}
+	return terminalGateCommandInput{
+		gateRequestID:          id,
+		reason:                 reason,
+		interactionDeliveryRef: interactionDeliveryRef(ref),
+		meta:                   metaValue,
+	}, nil
+}
+
+func (server *Server) terminalGateCommandResponse(
+	ctx context.Context,
+	gateRequestID string,
+	reason string,
+	ref *governancev1.InteractionDeliveryRef,
+	meta *governancev1.CommandMeta,
+	handler terminalGateHandler,
+) (*governancev1.GateRequestResponse, error) {
+	command, err := terminalGateCommand(gateRequestID, reason, ref, meta)
+	if err != nil {
+		return nil, err
+	}
+	return server.terminalGateResponse(ctx, command, handler)
+}
+
+func (server *Server) terminalGateResponse(ctx context.Context, command terminalGateCommandInput, handler terminalGateHandler) (*governancev1.GateRequestResponse, error) {
+	request, err := handler(ctx, command)
+	if err != nil {
+		return nil, err
+	}
+	return &governancev1.GateRequestResponse{GateRequest: toGateRequest(request)}, nil
+}
+
+func (server *Server) cancelGate(ctx context.Context, command terminalGateCommandInput) (entity.GateRequest, error) {
+	return server.service.CancelGate(ctx, governanceservice.CancelGateInput{
+		GateRequestID:          command.gateRequestID,
+		Reason:                 command.reason,
+		InteractionDeliveryRef: command.interactionDeliveryRef,
+		Meta:                   command.meta,
+	})
+}
+
+func (server *Server) expireGate(ctx context.Context, command terminalGateCommandInput) (entity.GateRequest, error) {
+	input := governanceservice.ExpireGateInput{
+		GateRequestID:          command.gateRequestID,
+		Reason:                 command.reason,
+		InteractionDeliveryRef: command.interactionDeliveryRef,
+		Meta:                   command.meta,
+	}
+	return server.service.ExpireGate(ctx, input)
 }
 
 // CreateRiskProfile creates risk profile metadata.
@@ -434,13 +505,28 @@ func (server *Server) SubmitGateDecision(ctx context.Context, req *governancev1.
 	return &governancev1.GateDecisionResponse{GateDecision: toGateDecision(decision), GateRequest: toGateRequest(request)}, nil
 }
 
+// CancelGate cancels an open governance gate request.
+func (server *Server) CancelGate(ctx context.Context, req *governancev1.CancelGateRequest) (*governancev1.GateRequestResponse, error) {
+	return server.terminalGateCommandResponse(ctx, req.GetGateRequestId(), req.GetReason(), req.GetInteractionDeliveryRef(), req.GetMeta(), server.cancelGate)
+}
+
+// ExpireGate expires an open governance gate request.
+func (server *Server) ExpireGate(ctx context.Context, req *governancev1.ExpireGateRequest) (*governancev1.GateRequestResponse, error) {
+	response, err := server.terminalGateCommandResponse(ctx, req.GetGateRequestId(), req.GetReason(), req.GetInteractionDeliveryRef(), req.GetMeta(), server.expireGate)
+	return response, err
+}
+
 // GetGateDecision returns one final governance gate decision.
 func (server *Server) GetGateDecision(ctx context.Context, req *governancev1.GetGateDecisionRequest) (*governancev1.GateDecisionResponse, error) {
+	meta, err := queryMeta(req.GetMeta())
+	if err != nil {
+		return nil, err
+	}
 	id, err := requiredUUID(req.GetGateDecisionId())
 	if err != nil {
 		return nil, err
 	}
-	decision, err := server.service.GetGateDecision(ctx, id)
+	decision, err := server.service.GetGateDecision(ctx, governanceservice.GetGateDecisionInput{GateDecisionID: id, Meta: meta})
 	if err != nil {
 		return nil, err
 	}
@@ -449,6 +535,10 @@ func (server *Server) GetGateDecision(ctx context.Context, req *governancev1.Get
 
 // ListGateDecisions returns gate decisions by gate request, target or outcome.
 func (server *Server) ListGateDecisions(ctx context.Context, req *governancev1.ListGateDecisionsRequest) (*governancev1.ListGateDecisionsResponse, error) {
+	meta, err := queryMeta(req.GetMeta())
+	if err != nil {
+		return nil, err
+	}
 	gateRequestID, err := optionalUUID(req.GetGateRequestId())
 	if err != nil {
 		return nil, err
@@ -460,6 +550,7 @@ func (server *Server) ListGateDecisions(ctx context.Context, req *governancev1.L
 			Outcome:       gateOutcome(req.GetOutcome()),
 			Page:          pageRequest(req.GetPage()),
 		},
+		Meta: meta,
 	})
 	if err != nil {
 		return nil, err
@@ -469,17 +560,21 @@ func (server *Server) ListGateDecisions(ctx context.Context, req *governancev1.L
 
 // GetGateRequest returns one gate request.
 func (server *Server) GetGateRequest(ctx context.Context, req *governancev1.GetGateRequestRequest) (*governancev1.GateRequestResponse, error) {
+	meta, err := queryMeta(req.GetMeta())
+	if err != nil {
+		return nil, err
+	}
 	id, err := requiredUUID(req.GetGateRequestId())
 	if err != nil {
 		return nil, err
 	}
-	request, err := server.service.GetGateRequest(ctx, id)
+	request, err := server.service.GetGateRequest(ctx, governanceservice.GetGateRequestInput{GateRequestID: id, Meta: meta})
 	if err != nil {
 		return nil, err
 	}
 	response := &governancev1.GateRequestResponse{GateRequest: toGateRequest(request)}
 	if req.GetIncludeDecision() {
-		decisions, _, err := server.service.ListGateDecisions(ctx, governanceservice.ListGateDecisionsInput{Filter: query.GateDecisionFilter{GateRequestID: &id, Page: query.PageRequest{PageSize: 1}}})
+		decisions, _, err := server.service.ListGateDecisions(ctx, governanceservice.ListGateDecisionsInput{Filter: query.GateDecisionFilter{GateRequestID: &id, Page: query.PageRequest{PageSize: 1}}, Meta: meta})
 		if err != nil {
 			return nil, err
 		}
@@ -492,6 +587,10 @@ func (server *Server) GetGateRequest(ctx context.Context, req *governancev1.GetG
 
 // ListGateRequests returns gate requests by target or status.
 func (server *Server) ListGateRequests(ctx context.Context, req *governancev1.ListGateRequestsRequest) (*governancev1.ListGateRequestsResponse, error) {
+	meta, err := queryMeta(req.GetMeta())
+	if err != nil {
+		return nil, err
+	}
 	riskAssessmentID, err := optionalUUID(req.GetRiskAssessmentId())
 	if err != nil {
 		return nil, err
@@ -503,6 +602,7 @@ func (server *Server) ListGateRequests(ctx context.Context, req *governancev1.Li
 			Status:           gateRequestStatus(req.GetStatus()),
 			Page:             pageRequest(req.GetPage()),
 		},
+		Meta: meta,
 	})
 	if err != nil {
 		return nil, err

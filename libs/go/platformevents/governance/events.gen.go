@@ -14,6 +14,8 @@ const (
 	EventBlockingSignalResolved      = "governance.blocking_signal.resolved"
 	EventGateRequested               = "governance.gate.requested"
 	EventGateResolved                = "governance.gate.resolved"
+	EventGateCancelled               = "governance.gate.cancelled"
+	EventGateExpired                 = "governance.gate.expired"
 	EventReleaseDecisionPackageBuilt = "governance.release_decision_package.built"
 	EventReleaseDecisionRequested    = "governance.release_decision.requested"
 	EventReleaseDecisionResolved     = "governance.release_decision.resolved"

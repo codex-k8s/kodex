@@ -5,8 +5,8 @@ title: kodex — API-обзор governance-manager
 status: active
 owner_role: SA
 created_at: 2026-05-22
-updated_at: 2026-05-22
-related_issues: [322, 769, 790]
+updated_at: 2026-05-26
+related_issues: [322, 769, 790, 815]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -56,6 +56,8 @@ approvals:
 | `ListReviewSignals` | gRPC query | `governance.signal.read` | нет | Читает signals по target или assessment. |
 | `RequestGate` | gRPC command | `governance.gate.request` | `command_id` | Создаёт governance gate request и evidence package; delivery request/ref остаётся у `interaction-hub`. |
 | `SubmitGateDecision` | gRPC command | `governance.gate.decide` | `command_id` + expected version | Фиксирует решение из UI/provider/external callback после проверки actor policy. |
+| `CancelGate` | gRPC command | `governance.gate.decide` | `command_id` + expected version | Переводит открытый gate request в `cancelled`; доставка и callback остаются у `interaction-hub`. |
+| `ExpireGate` | gRPC command | `governance.gate.decide` | `command_id` + expected version | Переводит открытый gate request в `expired` после timeout policy или delivery expiry. |
 | `GetGateDecision` | gRPC query | `governance.gate.read` | нет | Читает одно final gate decision. |
 | `ListGateDecisions` | gRPC query | `governance.gate.read` | нет | Читает final gate decisions по gate request, target или outcome. |
 | `GetGateRequest` | gRPC query | `governance.gate.read` | нет | Читает gate request, evidence и decision status. |
@@ -95,6 +97,8 @@ approvals:
 | `governance.signal.record_review` | Передать role-driven review signal. |
 | `governance.gate.request` | Создать gate request с evidence package. |
 | `governance.gate.submit_decision` | Передать human decision, полученное через UI или внешний канал. |
+| `governance.gate.cancel` | Отменить открытый gate request без владения delivery callback. |
+| `governance.gate.expire` | Зафиксировать истечение открытого gate request. |
 | `governance.release.prepare_decision_package` | Собрать пакет релизного решения. |
 | `governance.release.submit_decision` | Зафиксировать release go/no-go/hold/rollback/follow-up. |
 
@@ -125,6 +129,8 @@ MCP-инструменты не должны принимать свободны
 | `governance.blocking_signal.resolved` | Блокирующий сигнал закрыт или снят. |
 | `governance.gate.requested` | Создан gate request. |
 | `governance.gate.resolved` | Gate получил final decision. |
+| `governance.gate.cancelled` | Открытый gate request отменён. |
+| `governance.gate.expired` | Открытый gate request истёк. |
 | `governance.release_decision_package.built` | Собран release evidence package. |
 | `governance.release_decision.requested` | Запрошено релизное решение. |
 | `governance.release_decision.resolved` | Релизное решение принято. |

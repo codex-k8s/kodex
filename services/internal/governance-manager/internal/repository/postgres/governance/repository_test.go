@@ -213,6 +213,35 @@ func TestRepositoryIntegrationGovernanceStateAndOutbox(t *testing.T) {
 	if storedDecision.Outcome != enum.GateOutcomeApprove {
 		t.Fatalf("gate decision outcome = %q, want approve", storedDecision.Outcome)
 	}
+	expiredGateRequest := entity.GateRequest{
+		VersionedBase:          entity.VersionedBase{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
+		RiskAssessmentID:       &assessment.ID,
+		GatePolicyID:           &gatePolicyID,
+		Target:                 assessment.Target,
+		InteractionDeliveryRef: value.InteractionDeliveryRef{RequestRef: "interaction:request:2"},
+		EvidenceSummary:        "release evidence",
+		Status:                 enum.GateRequestStatusRequested,
+	}
+	if err := repository.CreateGateRequest(ctx, expiredGateRequest, testCommandResult(uuid.New(), operationCreateGateRequest, "gate_request", expiredGateRequest.ID, now), testEvent("governance.gate.requested", "gate", expiredGateRequest.ID, now)); err != nil {
+		t.Fatalf("create expiring gate request: %v", err)
+	}
+	terminalAt := now.Add(2 * time.Minute)
+	expiredGateRequest.Version = 2
+	expiredGateRequest.Status = enum.GateRequestStatusExpired
+	expiredGateRequest.TerminalActorRef = "service:interaction-hub"
+	expiredGateRequest.TerminalReason = "timeout"
+	expiredGateRequest.TerminalAt = &terminalAt
+	expiredGateRequest.UpdatedAt = terminalAt
+	if err := repository.UpdateGateRequestStatus(ctx, expiredGateRequest, 1, testCommandResult(uuid.New(), operationUpdateGateRequestStatus, "gate_request", expiredGateRequest.ID, now), testEvent("governance.gate.expired", "gate", expiredGateRequest.ID, now)); err != nil {
+		t.Fatalf("expire gate request: %v", err)
+	}
+	storedExpiredGate, err := repository.GetGateRequest(ctx, expiredGateRequest.ID)
+	if err != nil {
+		t.Fatalf("get expired gate request: %v", err)
+	}
+	if storedExpiredGate.Status != enum.GateRequestStatusExpired || storedExpiredGate.TerminalActorRef != "service:interaction-hub" || storedExpiredGate.TerminalAt == nil {
+		t.Fatalf("expired gate request = %+v, want terminal metadata", storedExpiredGate)
+	}
 
 	releasePackage := entity.ReleaseDecisionPackage{
 		VersionedBase:           entity.VersionedBase{ID: uuid.New(), Version: 1, CreatedAt: now, UpdatedAt: now},

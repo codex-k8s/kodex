@@ -27,6 +27,7 @@ type Service struct {
 	repository  governancerepo.Repository
 	clock       Clock
 	idGenerator IDGenerator
+	authorizer  Authorizer
 }
 
 // Config contains explicit service dependencies.
@@ -34,10 +35,12 @@ type Config struct {
 	Repository  governancerepo.Repository
 	Clock       Clock
 	IDGenerator IDGenerator
+	Authorizer  Authorizer
 }
 
 const (
 	aggregateGateDecision       = "gate_decision"
+	aggregateGateRequest        = "gate_request"
 	aggregateRiskProfileVersion = "risk_profile_version"
 )
 
@@ -48,12 +51,16 @@ func New(repository governancerepo.Repository) *Service {
 
 // NewWithConfig creates a governance-manager service with explicit dependencies.
 func NewWithConfig(cfg Config) *Service {
-	return &Service{repository: cfg.Repository, clock: cfg.Clock, idGenerator: cfg.IDGenerator}
+	authorizer := cfg.Authorizer
+	if authorizer == nil {
+		authorizer = AllowAllAuthorizer{}
+	}
+	return &Service{repository: cfg.Repository, clock: cfg.Clock, idGenerator: cfg.IDGenerator, authorizer: authorizer}
 }
 
 // Ready reports whether the minimal service dependencies are composed.
 func (s *Service) Ready() bool {
-	return s != nil && s.repository != nil && s.repository.Ready() && s.clock != nil && s.idGenerator != nil
+	return s != nil && s.repository != nil && s.repository.Ready() && s.clock != nil && s.idGenerator != nil && s.authorizer != nil
 }
 
 // BacklogOperation returns Unimplemented for stable contract operations outside this slice.
@@ -400,7 +407,16 @@ func (s *Service) ListReviewSignals(ctx context.Context, input ListReviewSignals
 
 // RequestGate stores a gate request without owning delivery retries.
 func (s *Service) RequestGate(ctx context.Context, input RequestGateInput) (entity.GateRequest, error) {
-	result, replayed, err := s.replayCommand(ctx, input.Meta, enum.OperationRequestGate.String(), governanceevents.AggregateGate)
+	if input.Target.Type == "" || input.Target.Ref == "" {
+		return entity.GateRequest{}, errs.ErrInvalidArgument
+	}
+	if err := requireCommand(input.Meta, enum.OperationRequestGate.String()); err != nil {
+		return entity.GateRequest{}, err
+	}
+	if err := s.authorizeCommand(ctx, input.Meta, actionGateRequest, gateTargetResource(input.Target)); err != nil {
+		return entity.GateRequest{}, err
+	}
+	result, replayed, err := s.replayCommand(ctx, input.Meta, enum.OperationRequestGate.String(), aggregateGateRequest)
 	if err != nil {
 		return entity.GateRequest{}, err
 	}
@@ -414,9 +430,6 @@ func (s *Service) RequestGate(ctx context.Context, input RequestGateInput) (enti
 		}
 		return request, nil
 	}
-	if input.Target.Type == "" || input.Target.Ref == "" {
-		return entity.GateRequest{}, errs.ErrInvalidArgument
-	}
 	now := s.clock.Now()
 	request := entity.GateRequest{
 		VersionedBase:          entity.VersionedBase{ID: s.idGenerator.New(), Version: 1, CreatedAt: now, UpdatedAt: now},
@@ -428,7 +441,7 @@ func (s *Service) RequestGate(ctx context.Context, input RequestGateInput) (enti
 		EvidenceSummary:        input.EvidenceSummary,
 		Status:                 enum.GateRequestStatusRequested,
 	}
-	result = commandResult(input.Meta, enum.OperationRequestGate.String(), governanceevents.AggregateGate, request.ID, now)
+	result = commandResult(input.Meta, enum.OperationRequestGate.String(), aggregateGateRequest, request.ID, now)
 	event := outboxEvent(s.idGenerator.New(), governanceevents.EventGateRequested, governanceevents.AggregateGate, request.ID, now, governanceevents.Payload{
 		GateRequestID:    request.ID.String(),
 		RiskAssessmentID: optionalUUIDString(request.RiskAssessmentID),
@@ -443,6 +456,15 @@ func (s *Service) RequestGate(ctx context.Context, input RequestGateInput) (enti
 
 // SubmitGateDecision stores a final gate decision and resolves the gate request.
 func (s *Service) SubmitGateDecision(ctx context.Context, input SubmitGateDecisionInput) (entity.GateDecision, entity.GateRequest, error) {
+	if input.GateRequestID == uuid.Nil {
+		return entity.GateDecision{}, entity.GateRequest{}, errs.ErrInvalidArgument
+	}
+	if err := requireCommand(input.Meta, enum.OperationSubmitGateDecision.String()); err != nil {
+		return entity.GateDecision{}, entity.GateRequest{}, err
+	}
+	if err := s.authorizeCommand(ctx, input.Meta, actionGateDecide, gateResource(input.GateRequestID)); err != nil {
+		return entity.GateDecision{}, entity.GateRequest{}, err
+	}
 	result, replayed, err := s.replayCommand(ctx, input.Meta, enum.OperationSubmitGateDecision.String(), aggregateGateDecision)
 	if err != nil {
 		return entity.GateDecision{}, entity.GateRequest{}, err
@@ -472,6 +494,9 @@ func (s *Service) SubmitGateDecision(ctx context.Context, input SubmitGateDecisi
 	now := s.clock.Now()
 	if request.Version != previousVersion {
 		return entity.GateDecision{}, entity.GateRequest{}, errs.ErrConflict
+	}
+	if err := ensureGateRequestOpen(request.Status); err != nil {
+		return entity.GateDecision{}, entity.GateRequest{}, err
 	}
 	request.Version = previousVersion + 1
 	request.Status = enum.GateRequestStatusResolved
@@ -508,19 +533,78 @@ func (s *Service) SubmitGateDecision(ctx context.Context, input SubmitGateDecisi
 	return decision, request, nil
 }
 
-func (s *Service) GetGateRequest(ctx context.Context, id uuid.UUID) (entity.GateRequest, error) {
-	return s.repository.GetGateRequest(ctx, id)
+// CancelGate records a terminal cancellation for an open gate request.
+func (s *Service) CancelGate(ctx context.Context, input CancelGateInput) (entity.GateRequest, error) {
+	return s.closeGateRequest(ctx, closeGateRequestInput{
+		GateRequestID:          input.GateRequestID,
+		Reason:                 input.Reason,
+		InteractionDeliveryRef: input.InteractionDeliveryRef,
+		Meta:                   input.Meta,
+		Operation:              enum.OperationCancelGate,
+		Status:                 enum.GateRequestStatusCancelled,
+		EventType:              governanceevents.EventGateCancelled,
+		ReasonCode:             "cancelled",
+	})
 }
 
-func (s *Service) GetGateDecision(ctx context.Context, id uuid.UUID) (entity.GateDecision, error) {
-	return s.repository.GetGateDecision(ctx, id)
+// ExpireGate records a terminal expiry for an open gate request.
+func (s *Service) ExpireGate(ctx context.Context, input ExpireGateInput) (entity.GateRequest, error) {
+	closeInput := closeGateRequestInput{
+		Operation:  enum.OperationExpireGate,
+		Status:     enum.GateRequestStatusExpired,
+		EventType:  governanceevents.EventGateExpired,
+		ReasonCode: "expired",
+	}
+	closeInput.GateRequestID = input.GateRequestID
+	closeInput.Reason = input.Reason
+	closeInput.InteractionDeliveryRef = input.InteractionDeliveryRef
+	closeInput.Meta = input.Meta
+	return s.closeGateRequest(ctx, closeInput)
+}
+
+func (s *Service) GetGateRequest(ctx context.Context, input GetGateRequestInput) (entity.GateRequest, error) {
+	if input.GateRequestID == uuid.Nil {
+		return entity.GateRequest{}, errs.ErrInvalidArgument
+	}
+	request, err := s.repository.GetGateRequest(ctx, input.GateRequestID)
+	if err == nil {
+		err = s.authorizeGateRead(ctx, input.Meta, input.GateRequestID)
+	}
+	if err != nil {
+		return entity.GateRequest{}, err
+	}
+	return request, nil
+}
+
+func (s *Service) GetGateDecision(ctx context.Context, input GetGateDecisionInput) (entity.GateDecision, error) {
+	if input.GateDecisionID == uuid.Nil {
+		return entity.GateDecision{}, errs.ErrInvalidArgument
+	}
+	decision, err := s.repository.GetGateDecision(ctx, input.GateDecisionID)
+	if err != nil {
+		return entity.GateDecision{}, err
+	}
+	if err := s.authorizeGateRead(ctx, input.Meta, decision.GateRequestID); err != nil {
+		return entity.GateDecision{}, err
+	}
+	return decision, nil
 }
 
 func (s *Service) ListGateRequests(ctx context.Context, input ListGateRequestsInput) ([]entity.GateRequest, query.PageResult, error) {
+	if err := s.authorizeGateTargetRead(ctx, input.Meta, input.Filter.Target); err != nil {
+		return nil, query.PageResult{}, err
+	}
 	return s.repository.ListGateRequests(ctx, input.Filter)
 }
 
 func (s *Service) ListGateDecisions(ctx context.Context, input ListGateDecisionsInput) ([]entity.GateDecision, query.PageResult, error) {
+	if input.Filter.GateRequestID != nil {
+		if err := s.authorizeGateRead(ctx, input.Meta, *input.Filter.GateRequestID); err != nil {
+			return nil, query.PageResult{}, err
+		}
+	} else if err := s.authorizeGateTargetRead(ctx, input.Meta, input.Filter.Target); err != nil {
+		return nil, query.PageResult{}, err
+	}
 	return s.repository.ListGateDecisions(ctx, input.Filter)
 }
 
@@ -578,6 +662,106 @@ func (s *Service) GetReleaseDecisionPackage(ctx context.Context, id uuid.UUID) (
 
 func (s *Service) ListReleaseDecisionPackages(ctx context.Context, input ListReleaseDecisionPackagesInput) ([]entity.ReleaseDecisionPackage, query.PageResult, error) {
 	return s.repository.ListReleaseDecisionPackages(ctx, input.Filter)
+}
+
+type closeGateRequestInput struct {
+	GateRequestID          uuid.UUID
+	Reason                 string
+	InteractionDeliveryRef value.InteractionDeliveryRef
+	Meta                   CommandMeta
+	Operation              enum.Operation
+	Status                 enum.GateRequestStatus
+	EventType              string
+	ReasonCode             string
+}
+
+func (s *Service) closeGateRequest(ctx context.Context, input closeGateRequestInput) (entity.GateRequest, error) {
+	if input.GateRequestID == uuid.Nil {
+		return entity.GateRequest{}, errs.ErrInvalidArgument
+	}
+	if err := requireCommand(input.Meta, input.Operation.String()); err != nil {
+		return entity.GateRequest{}, err
+	}
+	if err := s.authorizeCommand(ctx, input.Meta, actionGateDecide, gateResource(input.GateRequestID)); err != nil {
+		return entity.GateRequest{}, err
+	}
+	result, replayed, err := s.replayCommand(ctx, input.Meta, input.Operation.String(), aggregateGateRequest)
+	if err != nil {
+		return entity.GateRequest{}, err
+	}
+	if replayed {
+		if result.AggregateID != input.GateRequestID {
+			return entity.GateRequest{}, errs.ErrConflict
+		}
+		return s.repository.GetGateRequest(ctx, result.AggregateID)
+	}
+	previousVersion, err := requireExpectedVersion(input.Meta)
+	if err != nil {
+		return entity.GateRequest{}, err
+	}
+	request, err := s.repository.GetGateRequest(ctx, input.GateRequestID)
+	if err != nil {
+		return entity.GateRequest{}, err
+	}
+	if request.Version != previousVersion {
+		return entity.GateRequest{}, errs.ErrConflict
+	}
+	if err := ensureGateRequestOpen(request.Status); err != nil {
+		return entity.GateRequest{}, err
+	}
+	now := s.clock.Now()
+	previousStatus := request.Status
+	request.Version = previousVersion + 1
+	request.Status = input.Status
+	request.UpdatedAt = now
+	request.TerminalActorRef = actorRef(input.Meta.Actor)
+	request.TerminalReason = strings.TrimSpace(input.Reason)
+	request.TerminalAt = &now
+	if !emptyInteractionDeliveryRef(input.InteractionDeliveryRef) {
+		request.InteractionDeliveryRef = input.InteractionDeliveryRef
+	}
+	result = commandResultWithPayload(input.Meta, input.Operation.String(), aggregateGateRequest, request.ID, now, map[string]any{
+		"status": string(request.Status),
+	})
+	event := outboxEvent(s.idGenerator.New(), input.EventType, governanceevents.AggregateGate, request.ID, now, governanceevents.Payload{
+		GateRequestID:  request.ID.String(),
+		PreviousStatus: string(previousStatus),
+		Status:         string(request.Status),
+		ReasonCode:     input.ReasonCode,
+		Version:        request.Version,
+	})
+	if err := s.repository.UpdateGateRequestStatus(ctx, request, previousVersion, result, event); err != nil {
+		return entity.GateRequest{}, err
+	}
+	return request, nil
+}
+
+func (s *Service) authorizeGateRead(ctx context.Context, meta QueryMeta, gateRequestID uuid.UUID) error {
+	return s.authorizeQuery(ctx, meta, actionGateRead, gateResource(gateRequestID))
+}
+
+func (s *Service) authorizeGateTargetRead(ctx context.Context, meta QueryMeta, target value.ExternalRef) error {
+	return s.authorizeQuery(ctx, meta, actionGateRead, gateTargetResource(target))
+}
+
+func ensureGateRequestOpen(status enum.GateRequestStatus) error {
+	switch status {
+	case enum.GateRequestStatusRequested, enum.GateRequestStatusDelivering, enum.GateRequestStatusAwaitingDecision:
+		return nil
+	default:
+		return errs.ErrPreconditionFailed
+	}
+}
+
+func emptyInteractionDeliveryRef(ref value.InteractionDeliveryRef) bool {
+	return strings.TrimSpace(ref.RequestRef) == "" &&
+		strings.TrimSpace(ref.DeliveryRef) == "" &&
+		strings.TrimSpace(ref.CallbackRef) == "" &&
+		strings.TrimSpace(ref.DecisionRef) == ""
+}
+
+func actorRef(actor value.Actor) string {
+	return strings.TrimSpace(actor.Type) + ":" + strings.TrimSpace(actor.ID)
 }
 
 func requireCommand(meta CommandMeta, operation string) error {
