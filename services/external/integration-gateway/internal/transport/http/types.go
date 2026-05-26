@@ -11,12 +11,16 @@ import (
 
 // Config contains the HTTP transport runtime contract.
 type Config struct {
-	ServiceName            string
-	OpenAPISpecPath        string
-	RequestTimeout         time.Duration
-	MaxBodyBytes           int64
-	ProviderWebhookEnabled bool
-	AllowedProviderSlugs   []string
+	ServiceName                    string
+	OpenAPISpecPath                string
+	RequestTimeout                 time.Duration
+	MaxBodyBytes                   int64
+	ProviderWebhookEnabled         bool
+	AllowedProviderSlugs           []string
+	ProviderWebhookMaxInFlight     int
+	ProviderWebhookRateLimitBurst  int
+	ProviderWebhookRateLimitWindow time.Duration
+	ProviderWebhookRetryAfter      time.Duration
 }
 
 // ProviderHubClient is the owner-service client interface used by provider webhook routes.

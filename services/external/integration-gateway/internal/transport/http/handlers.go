@@ -15,11 +15,12 @@ type handlers struct {
 	registry        routeRegistry
 	providerHub     ProviderHubClient
 	verifier        ProviderWebhookVerifier
+	webhookGuard    *providerWebhookGuard
 	openAPISpecPath string
 }
 
-func newHandlers(registry routeRegistry, providerHub ProviderHubClient, verifier ProviderWebhookVerifier, openAPISpecPath string) handlers {
-	return handlers{registry: registry, providerHub: providerHub, verifier: verifier, openAPISpecPath: openAPISpecPath}
+func newHandlers(registry routeRegistry, providerHub ProviderHubClient, verifier ProviderWebhookVerifier, webhookGuard *providerWebhookGuard, openAPISpecPath string) handlers {
+	return handlers{registry: registry, providerHub: providerHub, verifier: verifier, webhookGuard: webhookGuard, openAPISpecPath: openAPISpecPath}
 }
 
 func (h handlers) providerWebhook(c *echo.Context) error {
@@ -28,6 +29,7 @@ func (h handlers) providerWebhook(c *echo.Context) error {
 		return NewSafeError(stdhttp.StatusBadRequest, CodeInvalidRequest, "provider slug is invalid", false)
 	}
 	providerSlug = strings.TrimSpace(providerSlug)
+	setRouteDiagnostics(c.Request(), routeIDProviderWebhook, providerSlug)
 	if !h.registry.providerWebhookAllowed(providerSlug) {
 		return NewSafeError(stdhttp.StatusBadRequest, CodeSourceNotAllowed, "provider webhook route is not active", false)
 	}
@@ -42,6 +44,11 @@ func (h handlers) providerWebhook(c *echo.Context) error {
 	}); err != nil {
 		return providerWebhookVerificationError(err)
 	}
+	lease, safeErr := h.webhookGuard.acquire(routeIDProviderWebhook, providerSlug)
+	if safeErr != nil {
+		return safeErr
+	}
+	defer lease.Release()
 	result, err := h.providerHub.IngestWebhookEvent(c.Request().Context(), providerhubclient.WebhookEvent{
 		ProviderSlug:  providerSlug,
 		DeliveryID:    deliveryID,

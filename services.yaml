@@ -565,6 +565,20 @@ spec:
         businessState: none
         providerWebhookRoute: github-hmac-sha256-to-provider-hub
         signatureVerification: github-x-hub-signature-256
+        routeProtection:
+          maxInFlightEnv: KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_MAX_IN_FLIGHT
+          rateLimitBurstEnv: KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_RATE_LIMIT_BURST
+          rateLimitWindowEnv: KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_RATE_LIMIT_WINDOW
+          retryAfterEnv: KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_RETRY_AFTER
+          state: in-memory-operational-only
+        safeDiagnostics:
+          labels:
+            - route
+            - source
+            - status
+            - latency
+            - payload-size-bucket
+            - reject-reason
         webhookSecretRefs:
           storeTypeEnv: KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_GITHUB_SECRET_STORE_TYPE
           storeRefEnv: KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_GITHUB_SECRET_STORE_REF

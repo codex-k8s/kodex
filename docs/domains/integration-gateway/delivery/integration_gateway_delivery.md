@@ -45,7 +45,7 @@ approvals:
 | IGW-1 | #792 | Сервисный каркас: процесс, конфигурация, graceful shutdown, health/readiness/metrics, HTTP router, OpenAPI runtime validation/codegen-модели, payload guard, request id, timeout, structured safe errors, redaction-safe logging и provider-hub client interface без provider business logic. Provider route зарегистрирован как отключённый stub до проверки подписи. |
 | IGW-2 | #807 | Реальный route `POST /v1/provider-webhooks/{provider_slug}` для `provider_slug=github`: проверка `X-Hub-Signature-256`, обязательных GitHub headers, лимита payload, idempotency mapping и вызов `provider-hub.IngestWebhookEvent`. |
 | IGW-3 | не назначено | Callback routes для внешних каналов и пакетов после готовности owner-service contracts: `interaction-hub`, `package-hub` или другой владелец. |
-| IGW-4 | не назначено | Security hardening: per-source limits, backpressure policies, audit summary, redaction metrics, replay tests и compatibility tests OpenAPI. |
+| IGW-4 | #819 | Security hardening: per-source/per-route limits, backpressure policy, safe audit summary, replay/idempotency tests и compatibility tests OpenAPI без расширения бизнес-состояния gateway. |
 | IGW-5 | не назначено | Deploy-контур: Dockerfile, manifests, secrets refs, smoke, runbook, monitoring и rollback. |
 
 ## Зависимости и блокировки
@@ -68,6 +68,15 @@ approvals:
 | Service endpoints | `/health/livez`, `/health/readyz`, `/metrics`, `/openapi/integration-gateway.v1.yaml`. |
 | Provider owner client | Зафиксирован интерфейс и gRPC adapter к `provider-hub.IngestWebhookEvent`; GitHub route активируется только при включённом route flag, provider-hub token и настроенной ссылке на webhook secret. |
 | Состояние | Gateway не добавляет БД, inbox, projections, cursors, operations или raw payload storage. |
+
+## Реализованное усиление IGW-4
+
+| Область | Состояние |
+|---|---|
+| Route protection | Активный GitHub route имеет per-route/per-source in-memory guard: `max_in_flight`, `rate_limit_burst`, `rate_limit_window`, `retry_after`. |
+| Backpressure | Guard возвращает `429/rate_limited` или `503/backpressure` с `Retry-After` до вызова `provider-hub`. |
+| Replay | Повторный GitHub delivery id проходит edge verification и передаётся в `provider-hub`; gateway не хранит dedupe state. |
+| Safe diagnostics | Request summary содержит только route, source, status, latency, payload size bucket и reject reason; raw payload, подписи, токены и секреты не логируются. |
 
 ## Критерии начала реального provider route
 

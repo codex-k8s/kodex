@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	stdhttp "net/http"
+	"strings"
 	"time"
 )
 
@@ -19,6 +20,14 @@ func RequestIDMiddleware(next stdhttp.Handler) stdhttp.Handler {
 		requestID := requestIDFromRequest(req)
 		w.Header().Set(headerRequestID, requestID)
 		next.ServeHTTP(w, req.WithContext(contextWithRequestID(req.Context(), requestID)))
+	})
+}
+
+// RouteDiagnosticsMiddleware derives non-sensitive route/source labels before body handling.
+func RouteDiagnosticsMiddleware(next stdhttp.Handler) stdhttp.Handler {
+	return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, req *stdhttp.Request) {
+		setPathDiagnostics(req)
+		next.ServeHTTP(w, req)
 	})
 }
 
@@ -81,15 +90,70 @@ func LoggingMiddleware(logger *slog.Logger) Middleware {
 			if recorder.status >= 500 || errors.Is(req.Context().Err(), context.DeadlineExceeded) {
 				level = slog.LevelWarn
 			}
+			duration := time.Since(startedAt)
+			payloadSizeBucket := payloadSizeBucket(payloadBytesFromContext(req.Context()))
+			routeID := diagnosticsString(req.Context(), func(d *requestDiagnostics) string { return d.RouteID })
+			source := diagnosticsString(req.Context(), func(d *requestDiagnostics) string { return d.Source })
+			rejectReason := diagnosticsString(req.Context(), func(d *requestDiagnostics) string { return d.RejectReason })
 			logger.Log(req.Context(), level, "integration-gateway http request",
 				"request_id", requestIDFromContext(req.Context()),
+				"route_id", routeID,
+				"source", source,
 				"method", req.Method,
 				"path", req.URL.Path,
 				"status", recorder.status,
-				"duration_ms", time.Since(startedAt).Milliseconds(),
-				"payload_bytes", payloadBytesFromContext(req.Context()),
+				"duration_ms", duration.Milliseconds(),
+				"payload_size_bucket", payloadSizeBucket,
+				"reject_reason", rejectReason,
 			)
+			recordEdgeSummary(edgeSummary{
+				RouteID:           routeID,
+				Source:            source,
+				Status:            recorder.status,
+				Latency:           duration,
+				PayloadSizeBucket: payloadSizeBucket,
+				RejectReason:      rejectReason,
+			})
 		})
+	}
+}
+
+func setPathDiagnostics(req *stdhttp.Request) {
+	path := strings.Trim(req.URL.Path, "/")
+	segments := strings.Split(path, "/")
+	if len(segments) != 3 || segments[0] != "v1" {
+		return
+	}
+	switch segments[1] {
+	case "provider-webhooks":
+		setRouteDiagnostics(req, routeIDProviderWebhook, segments[2])
+	case "external-callbacks":
+		setRouteDiagnostics(req, routeIDExternalCallback, segments[2])
+	}
+}
+
+func diagnosticsString(ctx context.Context, value func(*requestDiagnostics) string) string {
+	diagnostics := diagnosticsFromContext(ctx)
+	if diagnostics == nil {
+		return ""
+	}
+	return value(diagnostics)
+}
+
+func payloadSizeBucket(size int) string {
+	switch {
+	case size <= 0:
+		return "0"
+	case size <= 1024:
+		return "1-1KiB"
+	case size <= 16*1024:
+		return "1KiB-16KiB"
+	case size <= 256*1024:
+		return "16KiB-256KiB"
+	case size <= 1024*1024:
+		return "256KiB-1MiB"
+	default:
+		return ">1MiB"
 	}
 }
 

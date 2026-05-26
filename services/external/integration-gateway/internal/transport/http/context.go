@@ -19,6 +19,9 @@ type requestDiagnosticsContextKey struct{}
 type requestDiagnostics struct {
 	RequestID    string
 	PayloadBytes int
+	RouteID      string
+	Source       string
+	RejectReason string
 }
 
 func contextWithRequestID(ctx context.Context, requestID string) context.Context {
@@ -44,6 +47,46 @@ func requestBodyFromContext(ctx context.Context) []byte {
 func diagnosticsFromContext(ctx context.Context) *requestDiagnostics {
 	diagnostics, _ := ctx.Value(requestDiagnosticsContextKey{}).(*requestDiagnostics)
 	return diagnostics
+}
+
+func setRouteDiagnostics(req *stdhttp.Request, routeID string, source string) {
+	diagnostics := diagnosticsFromContext(req.Context())
+	if diagnostics == nil {
+		return
+	}
+	diagnostics.RouteID = safeDiagnosticLabel(routeID)
+	diagnostics.Source = safeDiagnosticLabel(source)
+}
+
+func setRejectReason(req *stdhttp.Request, reason ErrorCode) {
+	diagnostics := diagnosticsFromContext(req.Context())
+	if diagnostics == nil {
+		return
+	}
+	diagnostics.RejectReason = string(reason)
+}
+
+func safeDiagnosticLabel(value string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	if normalized == "" {
+		return ""
+	}
+	if len(normalized) > 64 {
+		return "invalid"
+	}
+	for _, char := range normalized {
+		if char >= 'a' && char <= 'z' {
+			continue
+		}
+		if char >= '0' && char <= '9' {
+			continue
+		}
+		if char == '-' || char == '_' {
+			continue
+		}
+		return "invalid"
+	}
+	return normalized
 }
 
 func payloadBytesFromContext(ctx context.Context) int {
