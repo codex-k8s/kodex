@@ -28,6 +28,17 @@ var repositoryStatuses = map[projectsv1.RepositoryStatus]enum.RepositoryStatus{
 	projectsv1.RepositoryStatus_REPOSITORY_STATUS_ARCHIVED: enum.RepositoryStatusArchived,
 }
 
+var repositoryOwnerKinds = map[projectsv1.RepositoryOwnerKind]enum.RepositoryOwnerKind{
+	projectsv1.RepositoryOwnerKind_REPOSITORY_OWNER_KIND_ORGANIZATION:       enum.RepositoryOwnerKindOrganization,
+	projectsv1.RepositoryOwnerKind_REPOSITORY_OWNER_KIND_AUTHENTICATED_USER: enum.RepositoryOwnerKindAuthenticatedUser,
+}
+
+var repositoryVisibilities = map[projectsv1.RepositoryVisibility]enum.RepositoryVisibility{
+	projectsv1.RepositoryVisibility_REPOSITORY_VISIBILITY_PUBLIC:   enum.RepositoryVisibilityPublic,
+	projectsv1.RepositoryVisibility_REPOSITORY_VISIBILITY_PRIVATE:  enum.RepositoryVisibilityPrivate,
+	projectsv1.RepositoryVisibility_REPOSITORY_VISIBILITY_INTERNAL: enum.RepositoryVisibilityInternal,
+}
+
 var validationStatuses = map[projectsv1.ServicesPolicyValidationStatus]enum.ServicesPolicyValidationStatus{
 	projectsv1.ServicesPolicyValidationStatus_SERVICES_POLICY_VALIDATION_STATUS_VALID:   enum.ServicesPolicyValidationValid,
 	projectsv1.ServicesPolicyValidationStatus_SERVICES_POLICY_VALIDATION_STATUS_INVALID: enum.ServicesPolicyValidationInvalid,
@@ -151,6 +162,14 @@ func repositoryStatusFromProto(status projectsv1.RepositoryStatus) (enum.Reposit
 
 func RepositoryStatusToProto(status enum.RepositoryStatus) projectsv1.RepositoryStatus {
 	return enumToProto(status, projectsv1.RepositoryStatus_REPOSITORY_STATUS_UNSPECIFIED, invertEnum(repositoryStatuses))
+}
+
+func repositoryOwnerKindFromProto(kind projectsv1.RepositoryOwnerKind) (enum.RepositoryOwnerKind, error) {
+	return enumFromProto(kind, projectsv1.RepositoryOwnerKind_REPOSITORY_OWNER_KIND_UNSPECIFIED, repositoryOwnerKinds, false)
+}
+
+func repositoryVisibilityFromProto(visibility projectsv1.RepositoryVisibility) (enum.RepositoryVisibility, error) {
+	return enumFromProto(visibility, projectsv1.RepositoryVisibility_REPOSITORY_VISIBILITY_UNSPECIFIED, repositoryVisibilities, false)
 }
 
 func validationStatusFromProto(status projectsv1.ServicesPolicyValidationStatus) (enum.ServicesPolicyValidationStatus, error) {

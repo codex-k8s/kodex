@@ -56,6 +56,21 @@ func ListRepositoriesResponse(result projectservice.ListRepositoriesResult) *pro
 	return &projectsv1.ListRepositoriesResponse{Repositories: mapSlice(result.Repositories, RepositoryToProto), Page: pageResponseToProto(result.Page)}
 }
 
+// RepositoryProviderCreateResponse maps provider repository create result to gRPC.
+func RepositoryProviderCreateResponse(result projectservice.RepositoryProviderCreateResult) *projectsv1.RepositoryProviderCreateResponse {
+	return &projectsv1.RepositoryProviderCreateResponse{
+		Repository:           RepositoryToProto(result.Repository),
+		ProviderTarget:       bootstrapProviderTargetToProto(result.ProviderTarget),
+		BaseBranch:           result.BaseBranch,
+		ProviderOperationId:  optionalStringPtr(result.ProviderResult.ProviderOperationID),
+		ProviderResultRef:    optionalStringPtr(result.ProviderResult.ProviderResultRef),
+		ProviderRepositoryId: optionalStringPtr(result.ProviderResult.ProviderRepositoryID),
+		ProviderWebUrl:       optionalStringPtr(result.ProviderResult.ProviderWebURL),
+		ProviderObjectId:     optionalStringPtr(result.ProviderResult.ProviderObjectID),
+		ProviderVersion:      optionalStringPtr(result.ProviderResult.ProviderVersion),
+	}
+}
+
 // RepositoryBootstrapPullRequestResponse maps bootstrap PR result to gRPC.
 func RepositoryBootstrapPullRequestResponse(result projectservice.RepositoryBootstrapPullRequestResult) *projectsv1.RepositoryBootstrapPullRequestResponse {
 	return &projectsv1.RepositoryBootstrapPullRequestResponse{

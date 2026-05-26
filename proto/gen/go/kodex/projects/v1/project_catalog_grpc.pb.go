@@ -24,6 +24,7 @@ const (
 	ProjectCatalogService_GetProject_FullMethodName                           = "/kodex.projects.v1.ProjectCatalogService/GetProject"
 	ProjectCatalogService_ListProjects_FullMethodName                         = "/kodex.projects.v1.ProjectCatalogService/ListProjects"
 	ProjectCatalogService_AttachRepository_FullMethodName                     = "/kodex.projects.v1.ProjectCatalogService/AttachRepository"
+	ProjectCatalogService_CreateProviderRepository_FullMethodName             = "/kodex.projects.v1.ProjectCatalogService/CreateProviderRepository"
 	ProjectCatalogService_CreateRepositoryBootstrapPullRequest_FullMethodName = "/kodex.projects.v1.ProjectCatalogService/CreateRepositoryBootstrapPullRequest"
 	ProjectCatalogService_UpdateRepository_FullMethodName                     = "/kodex.projects.v1.ProjectCatalogService/UpdateRepository"
 	ProjectCatalogService_DetachRepository_FullMethodName                     = "/kodex.projects.v1.ProjectCatalogService/DetachRepository"
@@ -72,6 +73,8 @@ type ProjectCatalogServiceClient interface {
 	ListProjects(ctx context.Context, in *ListProjectsRequest, opts ...grpc.CallOption) (*ListProjectsResponse, error)
 	// AttachRepository binds a provider repository to a project.
 	AttachRepository(ctx context.Context, in *AttachRepositoryRequest, opts ...grpc.CallOption) (*RepositoryResponse, error)
+	// CreateProviderRepository asks provider-hub to create a provider repository and records a project binding.
+	CreateProviderRepository(ctx context.Context, in *CreateProviderRepositoryRequest, opts ...grpc.CallOption) (*RepositoryProviderCreateResponse, error)
 	// CreateRepositoryBootstrapPullRequest asks provider-hub to open or update a bootstrap PR for an existing binding.
 	CreateRepositoryBootstrapPullRequest(ctx context.Context, in *CreateRepositoryBootstrapPullRequestRequest, opts ...grpc.CallOption) (*RepositoryBootstrapPullRequestResponse, error)
 	// UpdateRepository changes safe repository binding fields.
@@ -182,6 +185,16 @@ func (c *projectCatalogServiceClient) AttachRepository(ctx context.Context, in *
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RepositoryResponse)
 	err := c.cc.Invoke(ctx, ProjectCatalogService_AttachRepository_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectCatalogServiceClient) CreateProviderRepository(ctx context.Context, in *CreateProviderRepositoryRequest, opts ...grpc.CallOption) (*RepositoryProviderCreateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RepositoryProviderCreateResponse)
+	err := c.cc.Invoke(ctx, ProjectCatalogService_CreateProviderRepository_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -486,6 +499,8 @@ type ProjectCatalogServiceServer interface {
 	ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error)
 	// AttachRepository binds a provider repository to a project.
 	AttachRepository(context.Context, *AttachRepositoryRequest) (*RepositoryResponse, error)
+	// CreateProviderRepository asks provider-hub to create a provider repository and records a project binding.
+	CreateProviderRepository(context.Context, *CreateProviderRepositoryRequest) (*RepositoryProviderCreateResponse, error)
 	// CreateRepositoryBootstrapPullRequest asks provider-hub to open or update a bootstrap PR for an existing binding.
 	CreateRepositoryBootstrapPullRequest(context.Context, *CreateRepositoryBootstrapPullRequestRequest) (*RepositoryBootstrapPullRequestResponse, error)
 	// UpdateRepository changes safe repository binding fields.
@@ -566,6 +581,9 @@ func (UnimplementedProjectCatalogServiceServer) ListProjects(context.Context, *L
 }
 func (UnimplementedProjectCatalogServiceServer) AttachRepository(context.Context, *AttachRepositoryRequest) (*RepositoryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AttachRepository not implemented")
+}
+func (UnimplementedProjectCatalogServiceServer) CreateProviderRepository(context.Context, *CreateProviderRepositoryRequest) (*RepositoryProviderCreateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateProviderRepository not implemented")
 }
 func (UnimplementedProjectCatalogServiceServer) CreateRepositoryBootstrapPullRequest(context.Context, *CreateRepositoryBootstrapPullRequestRequest) (*RepositoryBootstrapPullRequestResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateRepositoryBootstrapPullRequest not implemented")
@@ -758,6 +776,24 @@ func _ProjectCatalogService_AttachRepository_Handler(srv interface{}, ctx contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProjectCatalogServiceServer).AttachRepository(ctx, req.(*AttachRepositoryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectCatalogService_CreateProviderRepository_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateProviderRepositoryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectCatalogServiceServer).CreateProviderRepository(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectCatalogService_CreateProviderRepository_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectCatalogServiceServer).CreateProviderRepository(ctx, req.(*CreateProviderRepositoryRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1292,6 +1328,10 @@ var ProjectCatalogService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AttachRepository",
 			Handler:    _ProjectCatalogService_AttachRepository_Handler,
+		},
+		{
+			MethodName: "CreateProviderRepository",
+			Handler:    _ProjectCatalogService_CreateProviderRepository_Handler,
 		},
 		{
 			MethodName: "CreateRepositoryBootstrapPullRequest",

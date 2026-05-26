@@ -46,6 +46,7 @@ const (
 	projectOperationCreateProject        = "domain.Service.CreateProject"
 	projectOperationUpdateProject        = "domain.Service.UpdateProject"
 	projectOperationAttachRepository     = "domain.Service.AttachRepository"
+	projectOperationCreateProviderRepo   = "domain.Service.CreateProviderRepository"
 	projectOperationBootstrapRepository  = "domain.Service.CreateRepositoryBootstrapPullRequest"
 	projectOperationUpdateRepository     = "domain.Service.UpdateRepository"
 	projectOperationDetachRepository     = "domain.Service.DetachRepository"

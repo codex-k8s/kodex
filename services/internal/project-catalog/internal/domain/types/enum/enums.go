@@ -18,6 +18,23 @@ const (
 	RepositoryProviderGitLab RepositoryProvider = "gitlab"
 )
 
+// RepositoryOwnerKind selects provider-side repository owner semantics.
+type RepositoryOwnerKind string
+
+const (
+	RepositoryOwnerKindOrganization      RepositoryOwnerKind = "organization"
+	RepositoryOwnerKindAuthenticatedUser RepositoryOwnerKind = "authenticated_user"
+)
+
+// RepositoryVisibility selects provider-side repository visibility.
+type RepositoryVisibility string
+
+const (
+	RepositoryVisibilityPublic   RepositoryVisibility = "public"
+	RepositoryVisibilityPrivate  RepositoryVisibility = "private"
+	RepositoryVisibilityInternal RepositoryVisibility = "internal"
+)
+
 // RepositoryStatus describes the lifecycle state of a repository binding.
 type RepositoryStatus string
 

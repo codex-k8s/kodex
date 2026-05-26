@@ -109,6 +109,26 @@ sequenceDiagram
 
 `provider-hub` отвечает за факт существования репозитория у провайдера и webhook. `project-catalog` отвечает за то, что репозиторий входит в проект, какую политику использует и какие источники документации с ним связаны.
 
+### Создание provider repository для пустого bootstrap
+
+```mermaid
+sequenceDiagram
+  participant O as operator or bootstrap executor
+  participant P as project-catalog
+  participant DB as project DB
+  participant H as provider-hub
+  participant G as Git provider
+  O->>P: CreateProviderRepository(project, provider owner/name, visibility)
+  P->>DB: reserve pending repository binding
+  P->>H: CreateRepository(project_id, repository_id, provider target)
+  H->>G: create repository + provider default branch
+  H-->>P: ProviderOperationResponse(base_branch, provider refs)
+  P->>DB: store safe provider refs + base_branch in binding
+  P-->>O: pending binding + provider target
+```
+
+`project-catalog` не вызывает GitHub/GitLab API напрямую и не хранит сырой provider response. Он владеет локальным `Repository` binding, выбирает project-side `repository_id`, передаёт этот id в `provider-hub CreateRepository`, а после успешной provider-операции сохраняет только `provider_repository_id`, `web_url`, `repository_full_name` и `base_branch`. Binding остаётся `pending` до импорта проверенного `services.yaml` после merge bootstrap PR; это позволяет следующей команде bootstrap PR использовать уже проверенный provider target и base branch.
+
 ### Bootstrap пустого репозитория по существующему binding
 
 ```mermaid

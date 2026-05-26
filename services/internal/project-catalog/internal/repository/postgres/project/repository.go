@@ -64,6 +64,7 @@ const (
 	operationGetReleaseLine                   = "domain.Repository.GetReleaseLine"
 	operationGetReleasePolicy                 = "domain.Repository.GetReleasePolicy"
 	operationGetRepository                    = "domain.Repository.GetRepository"
+	operationGetRepositoryByProviderRef       = "domain.Repository.GetRepositoryByProviderRef"
 	operationGetServicesPolicy                = "domain.Repository.GetServicesPolicy"
 	operationGetWorkspacePolicy               = "domain.Repository.GetWorkspacePolicy"
 	operationImportServicesPolicy             = "domain.Repository.ImportServicesPolicy"
@@ -84,6 +85,7 @@ const (
 	operationPutPlacementPolicy               = "domain.Repository.PutPlacementPolicy"
 	operationPutReleaseLine                   = "domain.Repository.PutReleaseLine"
 	operationPutReleasePolicy                 = "domain.Repository.PutReleasePolicy"
+	operationReserveRepositoryBinding         = "domain.Repository.ReserveRepositoryBinding"
 	operationUpdateProject                    = "domain.Repository.UpdateProject"
 	operationUpdateRepository                 = "domain.Repository.UpdateRepository"
 )
@@ -117,6 +119,10 @@ func (r *Repository) AttachRepository(ctx context.Context, repository entity.Rep
 	return r.createWithCommandResult(ctx, operationAttachRepository, event, insertMutation(queryRepositoryCreate, repositoryArgs(repository)), result)
 }
 
+func (r *Repository) ReserveRepositoryBinding(ctx context.Context, repository entity.RepositoryBinding, event entity.OutboxEvent) error {
+	return r.mutateWithOutbox(ctx, operationReserveRepositoryBinding, event, insertMutation(queryRepositoryCreate, repositoryArgs(repository)))
+}
+
 func (r *Repository) UpdateRepository(ctx context.Context, repository entity.RepositoryBinding, previousVersion int64, event entity.OutboxEvent, result *entity.CommandResult) error {
 	update := repositoryUpdateMutation(repository, previousVersion)
 	return r.updateWithOptionalCommand(ctx, operationUpdateRepository, event, result, update)
@@ -124,6 +130,14 @@ func (r *Repository) UpdateRepository(ctx context.Context, repository entity.Rep
 
 func (r *Repository) GetRepository(ctx context.Context, id uuid.UUID) (entity.RepositoryBinding, error) {
 	return queryOne(ctx, r.db, operationGetRepository, queryRepositoryGetByID, pgx.NamedArgs{"id": id}, scanRepository)
+}
+
+func (r *Repository) GetRepositoryByProviderRef(ctx context.Context, provider enum.RepositoryProvider, owner string, name string) (entity.RepositoryBinding, error) {
+	return queryOne(ctx, r.db, operationGetRepositoryByProviderRef, queryRepositoryGetByProviderRef, pgx.NamedArgs{
+		"provider":       string(provider),
+		"provider_owner": owner,
+		"provider_name":  name,
+	}, scanRepository)
 }
 
 func (r *Repository) ListRepositories(ctx context.Context, filter query.RepositoryFilter) ([]entity.RepositoryBinding, query.PageResult, error) {

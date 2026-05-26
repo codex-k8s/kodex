@@ -44,6 +44,7 @@ var (
 	queryReleasePolicyUpdate                          = mustLoadQuery("release_policy__update")
 	queryRepositoryCreate                             = mustLoadQuery("repository__create")
 	queryRepositoryGetByID                            = mustLoadQuery("repository__get_by_id")
+	queryRepositoryGetByProviderRef                   = mustLoadQuery("repository__get_by_provider_ref")
 	queryRepositoryList                               = mustLoadQuery("repository__list")
 	queryRepositoryUpdate                             = mustLoadQuery("repository__update")
 	queryServiceDescriptorInsert                      = mustLoadQuery("service_descriptor__insert")

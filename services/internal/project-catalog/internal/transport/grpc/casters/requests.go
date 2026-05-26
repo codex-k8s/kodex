@@ -118,6 +118,46 @@ func AttachRepositoryInput(request *projectsv1.AttachRepositoryRequest) (project
 	}, nil
 }
 
+// CreateProviderRepositoryInput maps a provider repository create request to the domain command input.
+func CreateProviderRepositoryInput(request *projectsv1.CreateProviderRepositoryRequest) (projectservice.CreateProviderRepositoryInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return projectservice.CreateProviderRepositoryInput{}, err
+	}
+	projectID, err := requiredUUID(request.GetProjectId())
+	if err != nil {
+		return projectservice.CreateProviderRepositoryInput{}, err
+	}
+	provider, err := repositoryProviderFromProto(request.GetProvider())
+	if err != nil {
+		return projectservice.CreateProviderRepositoryInput{}, err
+	}
+	ownerKind, err := repositoryOwnerKindFromProto(request.GetOwnerKind())
+	if err != nil {
+		return projectservice.CreateProviderRepositoryInput{}, err
+	}
+	visibility, err := repositoryVisibilityFromProto(request.GetVisibility())
+	if err != nil {
+		return projectservice.CreateProviderRepositoryInput{}, err
+	}
+	externalAccountID, err := requiredUUID(request.GetExternalAccountId())
+	if err != nil {
+		return projectservice.CreateProviderRepositoryInput{}, err
+	}
+	return projectservice.CreateProviderRepositoryInput{
+		ProjectID:         projectID,
+		Provider:          provider,
+		OwnerKind:         ownerKind,
+		ProviderOwner:     strings.TrimSpace(request.GetProviderOwner()),
+		ProviderName:      strings.TrimSpace(request.GetProviderName()),
+		Visibility:        visibility,
+		Description:       strings.TrimSpace(request.GetDescription()),
+		IconObjectURI:     strings.TrimSpace(request.GetIconObjectUri()),
+		ExternalAccountID: externalAccountID,
+		Meta:              meta,
+	}, nil
+}
+
 // CreateRepositoryBootstrapPullRequestInput maps a bootstrap PR request to the domain command input.
 func CreateRepositoryBootstrapPullRequestInput(request *projectsv1.CreateRepositoryBootstrapPullRequestRequest) (projectservice.CreateRepositoryBootstrapPullRequestInput, error) {
 	meta, err := CommandMetaFromProto(request.GetMeta())

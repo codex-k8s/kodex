@@ -18,6 +18,8 @@ service ProjectCatalogService {
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
   // AttachRepository binds a provider repository to a project.
   rpc AttachRepository(AttachRepositoryRequest) returns (RepositoryResponse);
+  // CreateProviderRepository asks provider-hub to create a provider repository and records a project binding.
+  rpc CreateProviderRepository(CreateProviderRepositoryRequest) returns (RepositoryProviderCreateResponse);
   // CreateRepositoryBootstrapPullRequest asks provider-hub to open or update a bootstrap PR for an existing binding.
   rpc CreateRepositoryBootstrapPullRequest(CreateRepositoryBootstrapPullRequestRequest) returns (RepositoryBootstrapPullRequestResponse);
   // UpdateRepository changes safe repository binding fields.
@@ -160,6 +162,21 @@ enum RepositoryStatus {
   REPOSITORY_STATUS_PENDING = 2;
   REPOSITORY_STATUS_BLOCKED = 3;
   REPOSITORY_STATUS_ARCHIVED = 4;
+}
+
+// RepositoryOwnerKind selects provider-side repository owner semantics.
+enum RepositoryOwnerKind {
+  REPOSITORY_OWNER_KIND_UNSPECIFIED = 0;
+  REPOSITORY_OWNER_KIND_ORGANIZATION = 1;
+  REPOSITORY_OWNER_KIND_AUTHENTICATED_USER = 2;
+}
+
+// RepositoryVisibility selects provider-side repository visibility.
+enum RepositoryVisibility {
+  REPOSITORY_VISIBILITY_UNSPECIFIED = 0;
+  REPOSITORY_VISIBILITY_PUBLIC = 1;
+  REPOSITORY_VISIBILITY_PRIVATE = 2;
+  REPOSITORY_VISIBILITY_INTERNAL = 3;
 }
 
 // ServicesPolicyValidationStatus is the validation state of imported services.yaml.
@@ -725,6 +742,52 @@ message DetachRepositoryRequest {
 message RepositoryResponse {
   // repository is the returned repository state.
   Repository repository = 1;
+}
+
+// CreateProviderRepositoryRequest creates a provider repository through provider-hub and links it to the project.
+message CreateProviderRepositoryRequest {
+  // project_id owns the project repository binding.
+  string project_id = 1;
+  // provider is the repository provider.
+  RepositoryProvider provider = 2;
+  // owner_kind selects organization or authenticated-user provider create semantics.
+  RepositoryOwnerKind owner_kind = 3;
+  // provider_owner is the owner/group path stored in the project binding. For authenticated-user creates this is the expected account login, while provider-hub receives no explicit owner override.
+  string provider_owner = 4;
+  // provider_name is repository name at provider.
+  string provider_name = 5;
+  // visibility is the requested provider repository visibility.
+  RepositoryVisibility visibility = 6;
+  // description is an optional safe provider repository description.
+  optional string description = 7;
+  // icon_object_uri is an optional object-store URI for repository icon.
+  optional string icon_object_uri = 8;
+  // external_account_id is the selected provider account for provider-hub writes.
+  string external_account_id = 9;
+  // meta carries command identity, actor and audit context.
+  CommandMeta meta = 10;
+}
+
+// RepositoryProviderCreateResponse returns the project binding and safe provider repository refs.
+message RepositoryProviderCreateResponse {
+  // repository is the pending project binding updated with provider refs and base branch.
+  Repository repository = 1;
+  // provider_target is the provider repository target derived from the binding.
+  RepositoryBootstrapProviderTarget provider_target = 2;
+  // base_branch is the provider default branch prepared by repository creation.
+  string base_branch = 3;
+  // provider_operation_id is the provider-hub operation id when returned.
+  optional string provider_operation_id = 4;
+  // provider_result_ref is a safe provider result URL or id.
+  optional string provider_result_ref = 5;
+  // provider_repository_id is the provider-native repository id when known.
+  optional string provider_repository_id = 6;
+  // provider_web_url is a safe URL to the provider repository.
+  optional string provider_web_url = 7;
+  // provider_object_id is the provider-native object id when known.
+  optional string provider_object_id = 8;
+  // provider_version is the provider version or update marker when known.
+  optional string provider_version = 9;
 }
 
 // CreateRepositoryBootstrapPullRequestRequest prepares project context for an empty-repository bootstrap PR.
