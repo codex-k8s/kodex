@@ -5,8 +5,8 @@ title: kodex — поставка interaction-hub
 status: active
 owner_role: EM
 created_at: 2026-05-22
-updated_at: 2026-05-25
-related_issues: [582, 768, 781, 783]
+updated_at: 2026-05-26
+related_issues: [582, 768, 781, 783, 800]
 related_prs: []
 related_docsets:
   - docs/domains/interaction-hub/product/requirements.md
@@ -46,9 +46,9 @@ approvals:
 | IH-0 | #582 | Доменная документация, границы, модель данных, API-обзор, delivery-план и карта связей готовы. Код, proto, AsyncAPI и OpenAPI не входят. |
 | IH-1 | #768 | gRPC и AsyncAPI контракты `interaction-hub`, события `interaction.*`, действия доступа и channel contract DTO готовы; сервисная реализация не входит. |
 | IH-2 | #783 | Сервисный процесс, env-конфигурация, health, readiness, metrics, регистрация `InteractionHubService`, domain service skeleton и repository stub готовы; бизнес-операции возвращают `Unimplemented`. |
-| IH-3 | не назначено | PostgreSQL-модель thread, message, request, response, notification, subscription, route, delivery attempt, callback, command result и service-local outbox готова. |
+| IH-3 | #800 | PostgreSQL-модель thread, message, request, response, notification, subscription, route, delivery attempt, callback, command result и service-local outbox готова; thread/message MVP lifecycle работает через repository. |
 | IH-4 | не назначено | Lifecycle feedback, approval и Human gate requests готов: создать, прочитать, записать ответ, отменить, истечь, идемпотентность и события. |
-| IH-5 | не назначено | Notifications, subscriptions, delivery attempts, retry/reminder policy и безопасные статусы доставки готовы без конкретных внешних каналов. |
+| IH-5 | не назначено | Notifications, subscriptions, delivery attempts, retry/reminder policy refs и безопасные статусы доставки готовы без конкретных внешних каналов. |
 | IH-6 | не назначено | Channel contract integration готова: чтение channel package capability из `package-hub`, delivery command в package-owned runtime boundary, callback envelope и delivery result без vendor-specific канала. |
 | IH-7 | не назначено | MCP-интеграция готова: `platform-mcp-server` маршрутизирует `interaction.feedback.request`, `interaction.approval.request`, `interaction.human_gate.request`, status reads. |
 | IH-8 | не назначено | Связка с `agent-manager`, `codex-hook-ingress`, `governance-manager` и `provider-hub` готова для PermissionRequest, owner feedback, owner decision refs и событий ответа. |
@@ -98,15 +98,15 @@ IH-2 не должен:
 
 | Операция | Текущий статус | Плановый срез |
 |---|---|---|
-| `CreateConversationThread` / `RecordConversationMessage` | scaffold готов, возвращает `Unimplemented` | IH-3, IH-4 |
-| `GetConversationThread` / `ListConversationMessages` | scaffold готов, возвращает `Unimplemented` | IH-3, IH-4 |
+| `CreateConversationThread` / `RecordConversationMessage` | MVP lifecycle реализован через PostgreSQL repository и service-local outbox | IH-3 |
+| `GetConversationThread` / `ListConversationMessages` | MVP чтения реализованы через PostgreSQL repository | IH-3 |
 | `RequestFeedback` | scaffold готов, возвращает `Unimplemented` | IH-4 |
 | `RequestApproval` | scaffold готов, возвращает `Unimplemented` | IH-4 |
 | `RequestHumanGate` | scaffold готов, возвращает `Unimplemented` | IH-4 |
 | `RecordInteractionResponse` | scaffold готов, возвращает `Unimplemented` | IH-4 |
 | `CancelInteractionRequest` | scaffold готов, возвращает `Unimplemented` | IH-4 |
 | `ExpireInteractionRequests` | scaffold готов, возвращает `Unimplemented` | IH-4 |
-| `GetInteractionRequest` / `ListInteractionRequests` | scaffold готов, возвращает `Unimplemented` | IH-3, IH-4 |
+| `GetInteractionRequest` / `ListInteractionRequests` | PostgreSQL-модель готова, lifecycle-команды возвращают `Unimplemented` | IH-4 |
 | `RequestNotification` | scaffold готов, возвращает `Unimplemented` | IH-5 |
 | `UpsertSubscription` / `DisableSubscription` / `ListSubscriptions` | scaffold готов, возвращает `Unimplemented` | IH-5 |
 | `PlanDelivery` | scaffold готов, возвращает `Unimplemented` | IH-5 |

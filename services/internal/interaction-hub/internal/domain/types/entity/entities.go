@@ -1,0 +1,64 @@
+package entity
+
+import (
+	"time"
+
+	"github.com/google/uuid"
+
+	outboxlib "github.com/codex-k8s/kodex/libs/go/outbox"
+	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/enum"
+	"github.com/codex-k8s/kodex/services/internal/interaction-hub/internal/domain/types/value"
+)
+
+type ConversationThread struct {
+	ID              uuid.UUID
+	Scope           value.ScopeRef
+	ThreadKind      enum.ConversationThreadKind
+	PrimaryActorRef string
+	SourceKind      enum.ConversationSourceKind
+	SourceRef       string
+	Status          enum.ConversationThreadStatus
+	LatestMessageID *uuid.UUID
+	CorrelationID   string
+	RetentionClass  string
+	Version         int64
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	ClosedAt        *time.Time
+}
+
+type ConversationMessage struct {
+	ID           uuid.UUID
+	ThreadID     uuid.UUID
+	MessageKind  enum.ConversationMessageKind
+	AuthorRef    string
+	BodySummary  string
+	BodyObject   value.ObjectRef
+	BodyDigest   string
+	Locale       string
+	SafeMetadata map[string]string
+	CreatedAt    time.Time
+}
+
+type CommandResult struct {
+	Key                string
+	CommandID          uuid.UUID
+	IdempotencyKey     string
+	ActorRef           string
+	Operation          enum.Operation
+	AggregateType      string
+	AggregateID        uuid.UUID
+	RequestFingerprint string
+	ResultPayload      []byte
+	CreatedAt          time.Time
+}
+
+type OutboxEvent struct {
+	outboxlib.Event
+	PublishedAt         *time.Time
+	NextAttemptAt       time.Time
+	LockedUntil         *time.Time
+	FailedPermanentlyAt *time.Time
+	FailureKind         string
+	LastError           string
+}

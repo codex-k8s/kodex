@@ -182,7 +182,12 @@ spec:
       value: "0.1.0"
       bumpOn:
         - services/internal/interaction-hub
+        - libs/go/eventlog
         - libs/go/grpcserver
+        - libs/go/migrationtest
+        - libs/go/outbox
+        - libs/go/platformevents/interaction
+        - libs/go/postgres
         - libs/go/serviceprocess
         - libs/go/servicemain
         - proto/kodex/interactions/v1
@@ -578,9 +583,10 @@ spec:
         - fleet-manager
         - platform-event-log
       implementation:
-        businessOperations: unimplemented
-        database: planned
-        migrations: planned
+        businessOperations: thread-message-mvp
+        database: postgresql-foundation
+        migrations: services/internal/interaction-hub/cmd/cli/migrations
+        outbox: service-local-postgres-event-log
         channelAdapters: planned
       deploy:
         health:

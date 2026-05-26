@@ -5,8 +5,8 @@ title: kodex — дизайн домена центра взаимодейств
 status: active
 owner_role: SA
 created_at: 2026-05-22
-updated_at: 2026-05-25
-related_issues: [582, 768, 781]
+updated_at: 2026-05-26
+related_issues: [582, 768, 781, 800]
 related_prs: []
 related_adrs: []
 approvals:
@@ -178,7 +178,7 @@ sequenceDiagram
 | `request_ref` | Ссылка на feedback, approval или Human gate request. |
 | `notification_ref` | Ссылка на one-way notification или reminder, если delivery не связан с request. |
 | `delivery_kind` | `feedback`, `approval`, `human_gate`, `notification`. |
-| `scope` | Организация, проект, репозиторий или platform scope. |
+| `scope` | Platform, организация, проект, репозиторий или сервис. |
 | `recipient_refs` | Пользователи, группы или роли получателей без раскрытия лишних PII. |
 | `message_template_ref` | Ссылка на локализуемый шаблон или безопасный текст сообщения. |
 | `actions` | Допустимые действия ответа: answer, approve, reject, defer, acknowledge или custom action key. |
@@ -253,7 +253,7 @@ sequenceDiagram
 - Команда ответа передаёт expected version или идемпотентный `command_id`.
 - Повтор callback с тем же `callback_id` возвращает уже сохранённый безопасный результат.
 - Две разные попытки решить один request конфликтуют, если request уже находится в terminal state.
-- Долгие ожидания человека не держат SQL-блокировку; срок ожидания хранится в request и reminder policy.
+- Долгие ожидания человека не держат SQL-блокировку; срок ожидания хранится в request, а правила напоминаний передаются как `reminder_policy_ref`.
 - Повтор delivery command не создаёт новую попытку, если `delivery_id` уже принят с тем же безопасным отпечатком.
 
 ## Наблюдаемость
