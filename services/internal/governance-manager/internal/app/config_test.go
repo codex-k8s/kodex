@@ -37,43 +37,58 @@ func TestConfigValidateRejectsInvalidGRPCLimit(t *testing.T) {
 	}
 }
 
+func TestConfigValidateRequiresAccessTokenWhenChecksEnabled(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.AccessCheckEnabled = true
+	cfg.AccessManagerGRPCAuthToken = ""
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "KODEX_GOVERNANCE_MANAGER_ACCESS_MANAGER_GRPC_AUTH_TOKEN") {
+		t.Fatalf("Validate() error = %v, want missing access-manager token", err)
+	}
+}
+
 func validConfig() Config {
 	return Config{
-		DatabaseDSN:              "postgres://kodex:kodex@localhost:5432/kodex?sslmode=disable",
-		DatabaseMaxConns:         8,
-		DatabaseMinConns:         1,
-		DatabaseMaxConnLifetime:  time.Hour,
-		DatabaseMaxConnIdleTime:  15 * time.Minute,
-		DatabaseHealthPeriod:     30 * time.Second,
-		DatabasePingTimeout:      5 * time.Second,
-		DatabaseRetryAttempts:    6,
-		DatabaseRetryInitial:     500 * time.Millisecond,
-		DatabaseRetryMax:         5 * time.Second,
-		DatabaseRetryJitterRatio: 0.2,
-		EventLogDatabaseMaxConns: 4,
-		EventLogDatabaseMinConns: 0,
-		HTTPAddr:                 ":8080",
-		GRPCAddr:                 ":9090",
-		GRPCAuthRequired:         true,
-		GRPCAuthToken:            "test-token",
-		GRPCMaxConcurrentStreams: 128,
-		GRPCMaxInFlight:          128,
-		GRPCMaxRecvMessageBytes:  4 << 20,
-		GRPCMaxSendMessageBytes:  4 << 20,
-		GRPCKeepaliveMinTime:     30 * time.Second,
-		GRPCKeepaliveTime:        2 * time.Minute,
-		GRPCKeepaliveTimeout:     20 * time.Second,
-		GRPCUnaryTimeout:         30 * time.Second,
-		OutboxDispatchEnabled:    false,
-		OutboxPublisherKind:      "disabled",
-		OutboxEventLogSource:     "governance-manager",
-		OutboxBatchSize:          100,
-		OutboxPollInterval:       time.Second,
-		OutboxLockTTL:            30 * time.Second,
-		OutboxPublishTimeout:     10 * time.Second,
-		OutboxLeaseSafetyMargin:  5 * time.Second,
-		OutboxRetryInitialDelay:  time.Second,
-		OutboxRetryMaxDelay:      time.Minute,
-		OutboxFailureLimit:       512,
+		DatabaseDSN:                "postgres://kodex:kodex@localhost:5432/kodex?sslmode=disable",
+		DatabaseMaxConns:           8,
+		DatabaseMinConns:           1,
+		DatabaseMaxConnLifetime:    time.Hour,
+		DatabaseMaxConnIdleTime:    15 * time.Minute,
+		DatabaseHealthPeriod:       30 * time.Second,
+		DatabasePingTimeout:        5 * time.Second,
+		DatabaseRetryAttempts:      6,
+		DatabaseRetryInitial:       500 * time.Millisecond,
+		DatabaseRetryMax:           5 * time.Second,
+		DatabaseRetryJitterRatio:   0.2,
+		EventLogDatabaseMaxConns:   4,
+		EventLogDatabaseMinConns:   0,
+		HTTPAddr:                   ":8080",
+		GRPCAddr:                   ":9090",
+		GRPCAuthRequired:           true,
+		GRPCAuthToken:              "test-token",
+		GRPCMaxConcurrentStreams:   128,
+		GRPCMaxInFlight:            128,
+		GRPCMaxRecvMessageBytes:    4 << 20,
+		GRPCMaxSendMessageBytes:    4 << 20,
+		GRPCKeepaliveMinTime:       30 * time.Second,
+		GRPCKeepaliveTime:          2 * time.Minute,
+		GRPCKeepaliveTimeout:       20 * time.Second,
+		GRPCUnaryTimeout:           30 * time.Second,
+		AccessCheckEnabled:         false,
+		AccessManagerGRPCAddr:      "access-manager:9090",
+		AccessManagerGRPCAuthToken: "access-token",
+		AccessManagerCheckTimeout:  3 * time.Second,
+		OutboxDispatchEnabled:      false,
+		OutboxPublisherKind:        "disabled",
+		OutboxEventLogSource:       "governance-manager",
+		OutboxBatchSize:            100,
+		OutboxPollInterval:         time.Second,
+		OutboxLockTTL:              30 * time.Second,
+		OutboxPublishTimeout:       10 * time.Second,
+		OutboxLeaseSafetyMargin:    5 * time.Second,
+		OutboxRetryInitialDelay:    time.Second,
+		OutboxRetryMaxDelay:        time.Minute,
+		OutboxFailureLimit:         512,
 	}
 }

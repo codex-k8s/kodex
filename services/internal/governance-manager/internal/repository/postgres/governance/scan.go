@@ -220,6 +220,7 @@ func scanGateRequest(row postgreslib.RowScanner) (entity.GateRequest, error) {
 	var request entity.GateRequest
 	var riskAssessmentID, gatePolicyID pgtype.UUID
 	var interactionDeliveryRef, evidenceRefs []byte
+	var terminalAt pgtype.Timestamptz
 	var status string
 	err := row.Scan(
 		&request.ID,
@@ -231,6 +232,9 @@ func scanGateRequest(row postgreslib.RowScanner) (entity.GateRequest, error) {
 		&evidenceRefs,
 		&request.EvidenceSummary,
 		&status,
+		&request.TerminalActorRef,
+		&request.TerminalReason,
+		&terminalAt,
 		&request.Version,
 		&request.CreatedAt,
 		&request.UpdatedAt,
@@ -238,6 +242,7 @@ func scanGateRequest(row postgreslib.RowScanner) (entity.GateRequest, error) {
 	request.RiskAssessmentID = postgreslib.UUIDPtrFromPG(riskAssessmentID)
 	request.GatePolicyID = postgreslib.UUIDPtrFromPG(gatePolicyID)
 	request.Status = enum.GateRequestStatus(status)
+	request.TerminalAt = postgreslib.TimePtrFromPG(terminalAt)
 	if err != nil {
 		return request, err
 	}

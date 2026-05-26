@@ -44,13 +44,17 @@ service GovernanceManagerService {
   rpc RequestGate(RequestGateRequest) returns (GateRequestResponse);
   // SubmitGateDecision records the final governance decision for a gate request.
   rpc SubmitGateDecision(SubmitGateDecisionRequest) returns (GateDecisionResponse);
+  // CancelGate cancels an open governance gate request without owning delivery callbacks.
+  rpc CancelGate(CancelGateRequest) returns (GateRequestResponse);
+  // ExpireGate expires an open governance gate request after its delivery or policy timeout.
+  rpc ExpireGate(ExpireGateRequest) returns (GateRequestResponse);
   // GetGateDecision returns one final governance gate decision.
   rpc GetGateDecision(GetGateDecisionRequest) returns (GateDecisionResponse);
-  // ListGateDecisions returns final governance gate decisions by gate request, target or outcome.
+  // ListGateDecisions returns final governance gate decisions by gate request or target, optionally refined by outcome.
   rpc ListGateDecisions(ListGateDecisionsRequest) returns (ListGateDecisionsResponse);
   // GetGateRequest returns one gate request and its final decision when present.
   rpc GetGateRequest(GetGateRequestRequest) returns (GateRequestResponse);
-  // ListGateRequests returns gate requests by target, status or decision state.
+  // ListGateRequests returns gate requests by target or assessment, optionally refined by status.
   rpc ListGateRequests(ListGateRequestsRequest) returns (ListGateRequestsResponse);
   // BuildReleaseDecisionPackage builds a bounded evidence package for a release candidate.
   rpc BuildReleaseDecisionPackage(BuildReleaseDecisionPackageRequest) returns (ReleaseDecisionPackageResponse);
@@ -454,6 +458,12 @@ message GateRequest {
   string created_at = 10;
   // updated_at is an RFC3339 timestamp.
   string updated_at = 11;
+  // terminal_actor_ref identifies who cancelled or expired the gate request.
+  optional string terminal_actor_ref = 12;
+  // terminal_reason is a bounded safe cancellation or expiry summary.
+  optional string terminal_reason = 13;
+  // terminal_at is an RFC3339 timestamp for cancelled or expired states.
+  optional string terminal_at = 14;
 }
 
 // GateDecision records the final governance decision for a gate.
@@ -748,14 +758,35 @@ message SubmitGateDecisionRequest {
   CommandMeta meta = 8;
 }
 
+message CancelGateRequest {
+  string gate_request_id = 1;
+  // reason is a bounded safe summary; it must not contain raw provider payload, logs or secrets.
+  string reason = 2;
+  InteractionDeliveryRef interaction_delivery_ref = 3;
+  CommandMeta meta = 4;
+}
+
+message ExpireGateRequest {
+  string gate_request_id = 1;
+  // reason is a bounded safe summary; it must not contain raw provider payload, logs or secrets.
+  string reason = 2;
+  InteractionDeliveryRef interaction_delivery_ref = 3;
+  CommandMeta meta = 4;
+}
+
 message GetGateDecisionRequest {
   string gate_decision_id = 1;
   QueryMeta meta = 2;
+  // gate_request_id is required for fail-closed authorization before reading the decision row.
+  string gate_request_id = 3;
 }
 
 message ListGateDecisionsRequest {
+  // gate_request_id is one accepted fail-closed authorization context.
   optional string gate_request_id = 1;
+  // target is one accepted fail-closed authorization context.
   TargetRef target = 2;
+  // outcome refines a gate request or target query; it is not a standalone authorization context.
   optional GateOutcome outcome = 3;
   PageRequest page = 4;
   QueryMeta meta = 5;
@@ -768,8 +799,11 @@ message GetGateRequestRequest {
 }
 
 message ListGateRequestsRequest {
+  // risk_assessment_id is one accepted fail-closed authorization context.
   optional string risk_assessment_id = 1;
+  // target is one accepted fail-closed authorization context.
   TargetRef target = 2;
+  // status refines an assessment or target query; it is not a standalone authorization context.
   optional GateRequestStatus status = 3;
   PageRequest page = 4;
   QueryMeta meta = 5;

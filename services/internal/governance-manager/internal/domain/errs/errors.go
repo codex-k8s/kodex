@@ -7,6 +7,7 @@ const (
 	alreadyExistsMessage         = "already exists"
 	conflictMessage              = "conflict"
 	dependencyUnavailableMessage = "dependency unavailable"
+	forbiddenMessage             = "forbidden"
 	invalidArgumentMessage       = "invalid argument"
 	notFoundMessage              = "not found"
 	notImplementedMessage        = "not implemented"
@@ -17,6 +18,7 @@ var (
 	ErrAlreadyExists         = errors.New(alreadyExistsMessage)
 	ErrConflict              = errors.New(conflictMessage)
 	ErrDependencyUnavailable = errors.New(dependencyUnavailableMessage)
+	ErrForbidden             = errors.New(forbiddenMessage)
 	ErrInvalidArgument       = errors.New(invalidArgumentMessage)
 	ErrNotFound              = errors.New(notFoundMessage)
 	ErrNotImplemented        = errors.New(notImplementedMessage)

@@ -25,11 +25,17 @@
 - Issue: #790.
 - Результат среза: runnable skeleton `services/internal/governance-manager` с process/config, health/readiness/metrics, gRPC registration, доменным backlog-use-case и repository stub.
 
-## Текущий storage-срез
+## Завершённый storage-срез
 
 - Issue: #802.
 - Результат среза: PostgreSQL-модель MVP-сущностей, real repository, service-local outbox и gRPC handlers для поддержанных storage-операций `governance-manager`.
-- Полный rule evaluator, release decision engine, access checks, UI/gateway, deploy manifests и интеграции с соседними сервисами остаются следующими срезами.
+- Полный rule evaluator, release decision engine, UI/gateway, deploy manifests и интеграции с соседними сервисами остаются следующими срезами.
+
+## Текущий gate lifecycle-срез
+
+- Issue: #815.
+- Результат среза: lifecycle gate request/decision `request/read/decision/cancel/expire`, access checks через `access-manager`, optimistic concurrency, idempotent replay и безопасные события `governance.gate.*`.
+- Delivery/callback orchestration остаётся у `interaction-hub`; `governance-manager` хранит только governance state и safe refs.
 
 ## Ближайшие зависимости
 

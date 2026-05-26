@@ -175,6 +175,8 @@ spec:
       value: "0.1.0"
       bumpOn:
         - services/internal/governance-manager
+        - libs/go/accesscatalog
+        - libs/go/accesscheck
         - libs/go/grpcserver
         - libs/go/postgres
         - libs/go/eventlog
@@ -183,6 +185,7 @@ spec:
         - libs/go/platformevents/governance
         - libs/go/serviceprocess
         - libs/go/servicemain
+        - proto/kodex/access_accounts/v1
         - proto/kodex/governance/v1
         - specs/asyncapi/governance-manager.v1.yaml
     platform-mcp-server:

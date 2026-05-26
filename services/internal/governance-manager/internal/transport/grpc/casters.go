@@ -41,6 +41,18 @@ func commandMeta(meta *governancev1.CommandMeta) (governanceservice.CommandMeta,
 		Actor:           actor(meta.GetActor()),
 		Reason:          meta.GetReason(),
 		RequestID:       meta.GetRequestId(),
+		RequestContext:  requestContext(meta.GetRequestContext()),
+	}, nil
+}
+
+func queryMeta(meta *governancev1.QueryMeta) (governanceservice.QueryMeta, error) {
+	if meta == nil {
+		return governanceservice.QueryMeta{}, errs.ErrInvalidArgument
+	}
+	return governanceservice.QueryMeta{
+		Actor:          actor(meta.GetActor()),
+		RequestID:      meta.GetRequestId(),
+		RequestContext: requestContext(meta.GetRequestContext()),
 	}, nil
 }
 
@@ -49,6 +61,18 @@ func actor(item *governancev1.Actor) value.Actor {
 		return value.Actor{}
 	}
 	return value.Actor{Type: item.GetType(), ID: item.GetId()}
+}
+
+func requestContext(item *governancev1.RequestContext) value.RequestContext {
+	if item == nil {
+		return value.RequestContext{}
+	}
+	return value.RequestContext{
+		Source:       item.GetSource(),
+		TraceID:      item.GetTraceId(),
+		SessionID:    item.GetSessionId(),
+		ClientIPHash: item.GetClientIpHash(),
+	}
 }
 
 func pageRequest(item *governancev1.PageRequest) query.PageRequest {
@@ -374,6 +398,11 @@ func toGateRequest(item entity.GateRequest) *governancev1.GateRequest {
 		Version:                item.Version,
 		CreatedAt:              formatTime(item.CreatedAt),
 		UpdatedAt:              formatTime(item.UpdatedAt),
+		TerminalActorRef:       ptrStringNonEmpty(item.TerminalActorRef),
+		TerminalReason:         ptrStringNonEmpty(item.TerminalReason),
+	}
+	if item.TerminalAt != nil {
+		result.TerminalAt = ptrString(formatTime(*item.TerminalAt))
 	}
 	if item.RiskAssessmentID != nil {
 		result.RiskAssessmentId = ptrString(item.RiskAssessmentID.String())

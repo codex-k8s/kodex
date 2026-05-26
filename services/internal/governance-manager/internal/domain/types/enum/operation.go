@@ -23,6 +23,8 @@ const (
 	OperationListReviewSignals           Operation = "ListReviewSignals"
 	OperationRequestGate                 Operation = "RequestGate"
 	OperationSubmitGateDecision          Operation = "SubmitGateDecision"
+	OperationCancelGate                  Operation = "CancelGate"
+	OperationExpireGate                  Operation = "ExpireGate"
 	OperationGetGateDecision             Operation = "GetGateDecision"
 	OperationListGateDecisions           Operation = "ListGateDecisions"
 	OperationGetGateRequest              Operation = "GetGateRequest"

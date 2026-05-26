@@ -13,6 +13,14 @@ type Actor struct {
 	ID   string
 }
 
+// RequestContext stores safe request metadata for audit and access checks.
+type RequestContext struct {
+	Source       string
+	TraceID      string
+	SessionID    string
+	ClientIPHash string
+}
+
 // LocalizedText carries text for one locale.
 type LocalizedText struct {
 	Locale string `json:"locale"`

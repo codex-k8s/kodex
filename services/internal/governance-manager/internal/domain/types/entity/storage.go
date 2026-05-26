@@ -129,6 +129,9 @@ type GateRequest struct {
 	EvidenceRefs           []value.EvidenceRef
 	EvidenceSummary        string
 	Status                 enum.GateRequestStatus
+	TerminalActorRef       string
+	TerminalReason         string
+	TerminalAt             *time.Time
 }
 
 // GateDecision records the final governance decision for a gate.

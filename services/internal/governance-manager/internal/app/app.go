@@ -11,9 +11,12 @@ import (
 	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
+	accessaccountsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/access_accounts/v1"
+	accessclient "github.com/codex-k8s/kodex/services/internal/governance-manager/internal/clients/access"
 	governanceservice "github.com/codex-k8s/kodex/services/internal/governance-manager/internal/domain/service"
 	governancepostgres "github.com/codex-k8s/kodex/services/internal/governance-manager/internal/repository/postgres/governance"
 	governancegrpc "github.com/codex-k8s/kodex/services/internal/governance-manager/internal/transport/grpc"
+	grpcruntime "google.golang.org/grpc"
 )
 
 const serviceName = "governance-manager"
@@ -35,12 +38,22 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if eventLogPool != nil {
 		defer eventLogPool.Close()
 	}
+	authorizer, accessConn, err := newAuthorizer(cfg)
+	if err != nil {
+		return err
+	}
+	if accessConn != nil {
+		defer func() {
+			_ = accessConn.Close()
+		}()
+	}
 
 	governanceRepository := governancepostgres.NewRepository(dbPool)
 	governanceService := governanceservice.NewWithConfig(governanceservice.Config{
 		Repository:  governanceRepository,
 		Clock:       systemClock{},
 		IDGenerator: uuidGenerator{},
+		Authorizer:  authorizer,
 	})
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
@@ -98,6 +111,27 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 		_ = httpServer.Close()
 		return err
 	}
+}
+
+func newAuthorizer(cfg Config) (governanceservice.Authorizer, *grpcruntime.ClientConn, error) {
+	if !cfg.AccessCheckEnabled {
+		return governanceservice.AllowAllAuthorizer{}, nil, nil
+	}
+	accessConfig := accessclient.Config{
+		Addr:      cfg.AccessManagerGRPCAddr,
+		AuthToken: cfg.AccessManagerGRPCAuthToken,
+		Timeout:   cfg.AccessManagerCheckTimeout,
+	}
+	conn, err := accessclient.NewConnection(accessConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+	authorizer, err := accessclient.NewAuthorizer(accessaccountsv1.NewAccessManagerServiceClient(conn), accessConfig)
+	if err != nil {
+		_ = conn.Close()
+		return nil, nil, err
+	}
+	return authorizer, conn, nil
 }
 
 type readyService interface {
