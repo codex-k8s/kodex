@@ -72,6 +72,24 @@ func TestProviderWebhookRouteDisabledReturnsSafeError(t *testing.T) {
 	}
 }
 
+func TestProviderWebhookUnsupportedProviderWithRequiredHeadersReturnsSourceNotAllowed(t *testing.T) {
+	providerHub := &fakeProviderHub{}
+	router := newTestRouterWithVerifier(t, enabledTestConfig(1024), providerHub, newGitHubVerifier(t, testWebhookSecret))
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/provider-webhooks/gitlab", strings.NewReader(`{"action":"ping"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-GitHub-Delivery", "delivery-unsupported-provider")
+	req.Header.Set("X-GitHub-Event", "ping")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	body := expectSafeError(t, rec, http.StatusBadRequest)
+	if body.Code != generated.SafeErrorCodeSourceNotAllowed || body.RequestId == "" || body.Retryable {
+		t.Fatalf("SafeError = %+v, want source_not_allowed with request_id", body)
+	}
+	expectProviderHubCalls(t, providerHub, 0)
+}
+
 func TestProviderWebhookCallsProviderHubWhenEnabled(t *testing.T) {
 	providerHub := &fakeProviderHub{result: providerhubclient.WebhookResult{WebhookEventID: "webhook-1"}}
 	payload := `{"action":"ping"}`

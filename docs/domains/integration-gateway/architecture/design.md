@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-25
 updated_at: 2026-05-26
-related_issues: [781, 792, 807, 770]
+related_issues: [781, 792, 807, 770, 829]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -35,7 +35,7 @@ approvals:
 
 ## Не-цели
 
-- Не реализовывать storage, Kubernetes manifests или дополнительные provider routes за пределами активного GitHub webhook route.
+- Не реализовывать storage или дополнительные provider routes за пределами активного GitHub webhook route.
 - Не переносить webhook inbox, provider projections, cursors, операции провайдера или reconciliation из `provider-hub`.
 - Не парсить бизнес-смысл GitHub/GitLab событий глубже edge envelope.
 - Не создавать UI endpoints.
@@ -75,6 +75,7 @@ approvals:
 | Idempotency mapper | Извлекает delivery id или строит безопасный idempotency key для передачи владельцу. |
 | gRPC router | Вызывает сервис-владелец по внутреннему контракту и не выполняет доменную обработку. |
 | Bounded diagnostics | Возвращает и пишет только короткие статусы и безопасные причины отказа. |
+| Deploy contour | Собирает stateless container image, Kubernetes manifests, secret refs, probes, smoke и rollback/runbook без БД, inbox или provider business state. |
 
 ## Первый MVP-поток provider webhook
 
@@ -165,6 +166,17 @@ sequenceDiagram
 | gRPC маршруты | Owner service, method, latency, status, retryable/non-retryable classification. |
 
 Safe audit summary gateway пишет только redaction-safe поля: request id, route, source, status, latency, payload size bucket и короткую причину отказа.
+
+## Deploy contour
+
+`integration-gateway` разворачивается как stateless edge service:
+
+- образ собирается из `services/external/integration-gateway/Dockerfile` и включает бинарник gateway и OpenAPI spec;
+- Kubernetes base живёт в `deploy/base/integration-gateway/**` и содержит `ServiceAccount`, `ConfigMap`, `Service`, `Deployment`, health probes и metrics endpoint;
+- route guard задаётся env-конфигурацией deployment: `max_in_flight`, `rate_limit_burst`, `rate_limit_window`, `retry_after`;
+- GitHub webhook secret и provider-hub gRPC token подключаются только через Kubernetes Secret refs, без значений в manifests и документации;
+- smoke проверяет health/readiness/OpenAPI и safe negative responses для GitHub route без реального webhook secret;
+- rollback выполняется через предыдущий image tag или `kubectl rollout undo`, без отката `provider-hub` БД, inbox или projections.
 
 ## Риски
 
