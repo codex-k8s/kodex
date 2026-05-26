@@ -287,6 +287,76 @@ func TestRepositoryIntegrationInteractionRequestResponseLifecycle(t *testing.T) 
 	}
 }
 
+func TestRepositoryIntegrationNotificationSubscriptionLifecycle(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	pool := openIntegrationPool(t, ctx)
+	repository := NewRepository(pool)
+	now := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+
+	subscription := testSubscription(now)
+	createResult := testCommandResult(uuid.New(), "subscription-create", enum.OperationUpsertSubscription, interactionevents.AggregateSubscription, subscription.ID, "subscription-create-fingerprint", now)
+	createEvent := testOutboxEvent(interactionevents.EventSubscriptionUpdated, interactionevents.AggregateSubscription, subscription.ID, now)
+	if err := repository.CreateSubscriptionWithResult(ctx, subscription, createResult, createEvent); err != nil {
+		t.Fatalf("create subscription with result: %v", err)
+	}
+	storedSubscription, err := repository.GetSubscription(ctx, subscription.ID)
+	if err != nil {
+		t.Fatalf("get subscription: %v", err)
+	}
+	if storedSubscription.SourceOwner.Kind != enum.SourceOwnerKindAgentManager || storedSubscription.SubscriptionPolicyRef != "policy:ops-notifications" || len(storedSubscription.ChannelHintRefs) != 1 {
+		t.Fatalf("stored subscription = %+v, want source owner, channel hints and policy ref", storedSubscription)
+	}
+	listedSubscriptions, _, err := repository.ListSubscriptions(ctx, query.SubscriptionFilter{
+		Scope:         subscription.Scope,
+		SubscriberRef: subscription.SubscriberRef.String(),
+		Status:        enum.SubscriptionStatusActive,
+		Page:          value.PageRequest{PageSize: 10},
+	})
+	if err != nil {
+		t.Fatalf("list subscriptions: %v", err)
+	}
+	if len(listedSubscriptions) != 1 || listedSubscriptions[0].ID != subscription.ID {
+		t.Fatalf("listed subscriptions = %+v, want created subscription", listedSubscriptions)
+	}
+
+	updatedSubscription := storedSubscription
+	updatedSubscription.Status = enum.SubscriptionStatusPaused
+	updatedSubscription.Version = 2
+	updatedSubscription.UpdatedAt = now.Add(time.Minute)
+	updateResult := testCommandResult(uuid.New(), "subscription-update", enum.OperationUpsertSubscription, interactionevents.AggregateSubscription, subscription.ID, "subscription-update-fingerprint", updatedSubscription.UpdatedAt)
+	updateEvent := testOutboxEvent(interactionevents.EventSubscriptionUpdated, interactionevents.AggregateSubscription, subscription.ID, updatedSubscription.UpdatedAt)
+	if err := repository.UpdateSubscriptionWithResult(ctx, updatedSubscription, 99, updateResult, updateEvent); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("stale subscription update err = %v, want ErrConflict", err)
+	}
+	if err := repository.UpdateSubscriptionWithResult(ctx, updatedSubscription, 1, updateResult, updateEvent); err != nil {
+		t.Fatalf("update subscription with result: %v", err)
+	}
+	storedUpdatedSubscription, err := repository.GetSubscription(ctx, subscription.ID)
+	if err != nil {
+		t.Fatalf("get updated subscription: %v", err)
+	}
+	if storedUpdatedSubscription.Status != enum.SubscriptionStatusPaused || storedUpdatedSubscription.Version != 2 {
+		t.Fatalf("updated subscription = %+v, want paused v2", storedUpdatedSubscription)
+	}
+
+	notification := testNotification(now.Add(2 * time.Minute))
+	notification.SubscriptionID = &subscription.ID
+	notificationResult := testCommandResult(uuid.New(), "notification-create", enum.OperationRequestNotification, interactionevents.AggregateNotification, notification.ID, "notification-create-fingerprint", notification.CreatedAt)
+	notificationEvent := testOutboxEvent(interactionevents.EventNotificationRequested, interactionevents.AggregateNotification, notification.ID, notification.CreatedAt)
+	if err := repository.CreateNotificationWithResult(ctx, notification, notificationResult, notificationEvent); err != nil {
+		t.Fatalf("create notification with result: %v", err)
+	}
+	storedNotification, err := repository.GetNotification(ctx, notification.ID)
+	if err != nil {
+		t.Fatalf("get notification: %v", err)
+	}
+	if storedNotification.SubscriptionID == nil || *storedNotification.SubscriptionID != subscription.ID || storedNotification.MessageTitle != "Safe title" || storedNotification.NotificationPolicyRef != "policy:notify-standard" {
+		t.Fatalf("stored notification = %+v, want subscription ref and safe policy fields", storedNotification)
+	}
+}
+
 func testThread(now time.Time) entity.ConversationThread {
 	return entity.ConversationThread{
 		ID:              uuid.New(),
@@ -377,6 +447,53 @@ func testInteractionResponse(requestID uuid.UUID, now time.Time) entity.Interact
 		SourceRef:        "mcp:command-1",
 		OwnerDecisionRef: "decision:1",
 		CreatedAt:        now,
+	}
+}
+
+func testNotification(now time.Time) entity.Notification {
+	expiresAt := now.Add(time.Hour)
+	return entity.Notification{
+		ID:                 uuid.New(),
+		Scope:              value.ScopeRef{Type: enum.ScopeTypeService, Ref: "agent-manager"},
+		NotificationKind:   enum.NotificationKindAttention,
+		RecipientRefs:      []value.ActorRef{{Kind: "user", Ref: "owner-1"}},
+		MessageTemplateRef: "interaction.notification.attention",
+		MessageTitle:       "Safe title",
+		MessageSummary:     "safe bounded summary",
+		BodyPreview:        "safe bounded preview",
+		Priority:           enum.NotificationPriorityHigh,
+		Status:             enum.NotificationStatusCreated,
+		SourceOwner:        value.SourceOwnerRef{Kind: enum.SourceOwnerKindAgentManager, Ref: "run:123"},
+		Ingress:            value.IngressRef{Kind: enum.IngressKindDirectGRPC, Ref: "grpc:notify-1"},
+		ContextRefs: []value.ExternalRef{
+			{Kind: "agent_run", Ref: "run:123"},
+		},
+		ChannelHintRefs: []value.ExternalRef{
+			{Kind: "surface", Ref: "web_console"},
+		},
+		NotificationPolicyRef: "policy:notify-standard",
+		CreatedAt:             now,
+		UpdatedAt:             now,
+		ExpiresAt:             &expiresAt,
+	}
+}
+
+func testSubscription(now time.Time) entity.Subscription {
+	return entity.Subscription{
+		ID:                      uuid.New(),
+		Scope:                   value.ScopeRef{Type: enum.ScopeTypeService, Ref: "agent-manager"},
+		SubscriberRef:           value.ActorRef{Kind: "user", Ref: "owner-1"},
+		EventFilterJSON:         `{"event_kind":["run_waiting"],"severity":["high"]}`,
+		DeliveryPreferencesJSON: `{"surfaces":["web_console"],"fallback_policy_ref":"policy:fallback"}`,
+		Status:                  enum.SubscriptionStatusActive,
+		Version:                 1,
+		SourceOwner:             value.SourceOwnerRef{Kind: enum.SourceOwnerKindAgentManager, Ref: "run:123"},
+		ChannelHintRefs: []value.ExternalRef{
+			{Kind: "surface", Ref: "web_console"},
+		},
+		SubscriptionPolicyRef: "policy:ops-notifications",
+		CreatedAt:             now,
+		UpdatedAt:             now,
 	}
 }
 

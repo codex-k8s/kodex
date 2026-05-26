@@ -30,6 +30,8 @@ const (
 	maxSafeMetadataTotalBytes  = 2048
 	maxInteractionRefs         = 50
 	maxInteractionRefBytes     = 256
+	maxPolicyJSONBytes         = 8192
+	maxPolicyJSONDepth         = 8
 	defaultExpireLimit         = int32(100)
 	maxExpireLimit             = int32(500)
 	aggregateResponse          = "response"
@@ -427,20 +429,201 @@ func (s *Service) ListInteractionRequests(ctx context.Context, input ListInterac
 	})
 }
 
-func (s *Service) RequestNotification(ctx context.Context) error {
-	return s.backlog(ctx, enum.OperationRequestNotification)
+func (s *Service) RequestNotification(ctx context.Context, input RequestNotificationInput) (entity.Notification, error) {
+	if err := s.ensureReady(); err != nil {
+		return entity.Notification{}, err
+	}
+	if err := validateCommandMeta(input.Meta); err != nil {
+		return entity.Notification{}, err
+	}
+	input, err := normalizeRequestNotificationInput(input, s.clock.Now())
+	if err != nil {
+		return entity.Notification{}, err
+	}
+	fingerprint, err := fingerprintInput(input)
+	if err != nil {
+		return entity.Notification{}, err
+	}
+	if notification, ok, err := s.replayNotificationCommand(ctx, input.Meta, enum.OperationRequestNotification, fingerprint); err != nil || ok {
+		return notification, err
+	}
+	if input.RequestID != uuid.Nil {
+		if _, err := s.repository.GetInteractionRequest(ctx, input.RequestID); err != nil {
+			return entity.Notification{}, err
+		}
+	}
+	if input.SubscriptionID != uuid.Nil {
+		if _, err := s.repository.GetSubscription(ctx, input.SubscriptionID); err != nil {
+			return entity.Notification{}, err
+		}
+	}
+
+	now := s.clock.Now()
+	notification := entity.Notification{
+		ID:                    s.ids.New(),
+		Scope:                 input.Scope,
+		NotificationKind:      input.NotificationKind,
+		RequestID:             optionalUUID(input.RequestID),
+		SubscriptionID:        optionalUUID(input.SubscriptionID),
+		RecipientRefs:         input.RecipientRefs,
+		MessageTemplateRef:    input.MessageTemplateRef,
+		MessageTitle:          input.MessageTitle,
+		MessageSummary:        input.MessageSummary,
+		BodyPreview:           input.BodyPreview,
+		Priority:              input.Priority,
+		Status:                enum.NotificationStatusCreated,
+		SourceOwner:           input.SourceOwner,
+		Ingress:               input.Ingress,
+		ContextRefs:           input.ContextRefs,
+		ChannelHintRefs:       input.ChannelHintRefs,
+		NotificationPolicyRef: input.NotificationPolicyRef,
+		CreatedAt:             now,
+		UpdatedAt:             now,
+		ExpiresAt:             input.ExpiresAt,
+	}
+	result := commandResult(input.Meta, enum.OperationRequestNotification, interactionevents.AggregateNotification, notification.ID, fingerprint, now)
+	event, err := s.outboxEvent(interactionevents.EventNotificationRequested, interactionevents.AggregateNotification, notification.ID, notificationEventPayload(notification), now)
+	if err != nil {
+		return entity.Notification{}, err
+	}
+	if err := s.repository.CreateNotificationWithResult(ctx, notification, result, event); err != nil {
+		return entity.Notification{}, err
+	}
+	return notification, nil
 }
 
-func (s *Service) UpsertSubscription(ctx context.Context) error {
-	return s.backlog(ctx, enum.OperationUpsertSubscription)
+func (s *Service) UpsertSubscription(ctx context.Context, input UpsertSubscriptionInput) (entity.Subscription, error) {
+	if err := s.ensureReady(); err != nil {
+		return entity.Subscription{}, err
+	}
+	if err := validateCommandMeta(input.Meta); err != nil {
+		return entity.Subscription{}, err
+	}
+	input, err := normalizeUpsertSubscriptionInput(input)
+	if err != nil {
+		return entity.Subscription{}, err
+	}
+	fingerprint, err := fingerprintInput(input)
+	if err != nil {
+		return entity.Subscription{}, err
+	}
+	if subscription, ok, err := s.replaySubscriptionCommand(ctx, input.Meta, enum.OperationUpsertSubscription, fingerprint); err != nil || ok {
+		return subscription, err
+	}
+
+	now := s.clock.Now()
+	subscription := entity.Subscription{
+		ID:                      input.SubscriptionID,
+		Scope:                   input.Scope,
+		SubscriberRef:           input.SubscriberRef,
+		EventFilterJSON:         input.EventFilterJSON,
+		DeliveryPreferencesJSON: input.DeliveryPreferencesJSON,
+		Status:                  input.Status,
+		SourceOwner:             input.SourceOwner,
+		ChannelHintRefs:         input.ChannelHintRefs,
+		SubscriptionPolicyRef:   input.SubscriptionPolicyRef,
+		CreatedAt:               now,
+		UpdatedAt:               now,
+	}
+	resultAggregateID := subscription.ID
+	if subscription.ID == uuid.Nil {
+		subscription.ID = s.ids.New()
+		resultAggregateID = subscription.ID
+		subscription.Version = 1
+		result := commandResult(input.Meta, enum.OperationUpsertSubscription, interactionevents.AggregateSubscription, resultAggregateID, fingerprint, now)
+		event, err := s.outboxEvent(interactionevents.EventSubscriptionUpdated, interactionevents.AggregateSubscription, subscription.ID, subscriptionEventPayload(subscription), now)
+		if err != nil {
+			return entity.Subscription{}, err
+		}
+		if err := s.repository.CreateSubscriptionWithResult(ctx, subscription, result, event); err != nil {
+			return entity.Subscription{}, err
+		}
+		return subscription, nil
+	}
+
+	current, err := s.repository.GetSubscription(ctx, subscription.ID)
+	if err != nil {
+		return entity.Subscription{}, err
+	}
+	if err := validateExpectedVersion(input.Meta, current.Version); err != nil {
+		return entity.Subscription{}, err
+	}
+	previousVersion := current.Version
+	subscription.Version = current.Version + 1
+	subscription.CreatedAt = current.CreatedAt
+	subscription.UpdatedAt = now
+	result := commandResult(input.Meta, enum.OperationUpsertSubscription, interactionevents.AggregateSubscription, resultAggregateID, fingerprint, now)
+	event, err := s.outboxEvent(interactionevents.EventSubscriptionUpdated, interactionevents.AggregateSubscription, subscription.ID, subscriptionEventPayload(subscription), now)
+	if err != nil {
+		return entity.Subscription{}, err
+	}
+	if err := s.repository.UpdateSubscriptionWithResult(ctx, subscription, previousVersion, result, event); err != nil {
+		return entity.Subscription{}, err
+	}
+	return subscription, nil
 }
 
-func (s *Service) DisableSubscription(ctx context.Context) error {
-	return s.backlog(ctx, enum.OperationDisableSubscription)
+func (s *Service) DisableSubscription(ctx context.Context, input DisableSubscriptionInput) (entity.Subscription, error) {
+	if err := s.ensureReady(); err != nil {
+		return entity.Subscription{}, err
+	}
+	if err := validateCommandMeta(input.Meta); err != nil {
+		return entity.Subscription{}, err
+	}
+	if input.SubscriptionID == uuid.Nil {
+		return entity.Subscription{}, errs.ErrInvalidArgument
+	}
+	fingerprint, err := fingerprintInput(input)
+	if err != nil {
+		return entity.Subscription{}, err
+	}
+	if subscription, ok, err := s.replaySubscriptionCommand(ctx, input.Meta, enum.OperationDisableSubscription, fingerprint); err != nil || ok {
+		return subscription, err
+	}
+	subscription, err := s.repository.GetSubscription(ctx, input.SubscriptionID)
+	if err != nil {
+		return entity.Subscription{}, err
+	}
+	if err := validateExpectedVersion(input.Meta, subscription.Version); err != nil {
+		return entity.Subscription{}, err
+	}
+	if subscription.Status == enum.SubscriptionStatusDisabled {
+		return entity.Subscription{}, errs.ErrConflict
+	}
+
+	now := s.clock.Now()
+	previousVersion := subscription.Version
+	subscription.Status = enum.SubscriptionStatusDisabled
+	subscription.Version++
+	subscription.UpdatedAt = now
+	result := commandResult(input.Meta, enum.OperationDisableSubscription, interactionevents.AggregateSubscription, subscription.ID, fingerprint, now)
+	event, err := s.outboxEvent(interactionevents.EventSubscriptionUpdated, interactionevents.AggregateSubscription, subscription.ID, subscriptionEventPayload(subscription), now)
+	if err != nil {
+		return entity.Subscription{}, err
+	}
+	if err := s.repository.UpdateSubscriptionWithResult(ctx, subscription, previousVersion, result, event); err != nil {
+		return entity.Subscription{}, err
+	}
+	return subscription, nil
 }
 
-func (s *Service) ListSubscriptions(ctx context.Context) error {
-	return s.backlog(ctx, enum.OperationListSubscriptions)
+func (s *Service) ListSubscriptions(ctx context.Context, input ListSubscriptionsInput) ([]entity.Subscription, value.PageResult, error) {
+	if err := s.ensureReady(); err != nil {
+		return nil, value.PageResult{}, err
+	}
+	if err := validateScope(input.Scope); err != nil {
+		return nil, value.PageResult{}, err
+	}
+	input.SubscriberRef = strings.TrimSpace(input.SubscriberRef)
+	if input.Status != "" && !input.Status.Valid() {
+		return nil, value.PageResult{}, errs.ErrInvalidArgument
+	}
+	return s.repository.ListSubscriptions(ctx, query.SubscriptionFilter{
+		Scope:         input.Scope,
+		SubscriberRef: input.SubscriberRef,
+		Status:        input.Status,
+		Page:          input.Page,
+	})
 }
 
 func (s *Service) PlanDelivery(ctx context.Context) error {
@@ -542,6 +725,14 @@ func (s *Service) replayMessageCommand(ctx context.Context, meta value.CommandMe
 
 func (s *Service) replayRequestCommand(ctx context.Context, meta value.CommandMeta, operation enum.Operation, fingerprint string) (entity.InteractionRequest, bool, error) {
 	return replayAggregate(ctx, s, meta, operation, fingerprint, s.repository.GetInteractionRequest)
+}
+
+func (s *Service) replayNotificationCommand(ctx context.Context, meta value.CommandMeta, operation enum.Operation, fingerprint string) (entity.Notification, bool, error) {
+	return replayAggregate(ctx, s, meta, operation, fingerprint, s.repository.GetNotification)
+}
+
+func (s *Service) replaySubscriptionCommand(ctx context.Context, meta value.CommandMeta, operation enum.Operation, fingerprint string) (entity.Subscription, bool, error) {
+	return replayAggregate(ctx, s, meta, operation, fingerprint, s.repository.GetSubscription)
 }
 
 func (s *Service) replayResponseCommand(ctx context.Context, meta value.CommandMeta, fingerprint string) (entity.InteractionRequest, entity.InteractionResponse, bool, error) {
@@ -719,6 +910,105 @@ func normalizeExpireInteractionRequestsInput(input ExpireInteractionRequestsInpu
 	return input, nil
 }
 
+func normalizeRequestNotificationInput(input RequestNotificationInput, now time.Time) (RequestNotificationInput, error) {
+	if err := validateScope(input.Scope); err != nil {
+		return RequestNotificationInput{}, err
+	}
+	if !input.NotificationKind.Valid() {
+		return RequestNotificationInput{}, errs.ErrInvalidArgument
+	}
+	input.SourceOwner.Ref = strings.TrimSpace(input.SourceOwner.Ref)
+	if !input.SourceOwner.Kind.Valid() || len(input.SourceOwner.Ref) > maxInteractionRefBytes {
+		return RequestNotificationInput{}, errs.ErrInvalidArgument
+	}
+	input.Ingress.Ref = strings.TrimSpace(input.Ingress.Ref)
+	if !input.Ingress.Kind.Valid() || len(input.Ingress.Ref) > maxInteractionRefBytes {
+		return RequestNotificationInput{}, errs.ErrInvalidArgument
+	}
+	recipients, err := normalizeActorRefs(input.RecipientRefs)
+	if err != nil {
+		return RequestNotificationInput{}, err
+	}
+	input.RecipientRefs = recipients
+	contextRefs, err := normalizeExternalRefs(input.ContextRefs)
+	if err != nil {
+		return RequestNotificationInput{}, err
+	}
+	input.ContextRefs = contextRefs
+	channelHints, err := normalizeExternalRefs(input.ChannelHintRefs)
+	if err != nil {
+		return RequestNotificationInput{}, err
+	}
+	input.ChannelHintRefs = channelHints
+	input.MessageTemplateRef = strings.TrimSpace(input.MessageTemplateRef)
+	input.MessageTitle = strings.TrimSpace(input.MessageTitle)
+	input.MessageSummary = strings.TrimSpace(input.MessageSummary)
+	input.BodyPreview = strings.TrimSpace(input.BodyPreview)
+	input.NotificationPolicyRef = strings.TrimSpace(input.NotificationPolicyRef)
+	if blank(input.MessageTemplateRef) ||
+		blank(input.MessageSummary) ||
+		len(input.MessageTemplateRef) > maxInteractionRefBytes ||
+		len(input.NotificationPolicyRef) > maxInteractionRefBytes ||
+		utf8.RuneCountInString(input.MessageTitle) > maxMessageBodySummaryRunes ||
+		utf8.RuneCountInString(input.MessageSummary) > maxMessageBodySummaryRunes ||
+		utf8.RuneCountInString(input.BodyPreview) > maxMessageBodySummaryRunes {
+		return RequestNotificationInput{}, errs.ErrInvalidArgument
+	}
+	if input.Priority == "" {
+		input.Priority = enum.NotificationPriorityNormal
+	}
+	if !input.Priority.Valid() {
+		return RequestNotificationInput{}, errs.ErrInvalidArgument
+	}
+	if input.ExpiresAt != nil {
+		expiresAt := input.ExpiresAt.UTC()
+		if !expiresAt.After(now) {
+			return RequestNotificationInput{}, errs.ErrInvalidArgument
+		}
+		input.ExpiresAt = &expiresAt
+	}
+	return input, nil
+}
+
+func normalizeUpsertSubscriptionInput(input UpsertSubscriptionInput) (UpsertSubscriptionInput, error) {
+	if err := validateScope(input.Scope); err != nil {
+		return UpsertSubscriptionInput{}, err
+	}
+	subscriber, err := normalizeActorRef(input.SubscriberRef)
+	if err != nil {
+		return UpsertSubscriptionInput{}, err
+	}
+	input.SubscriberRef = subscriber
+	input.SourceOwner.Ref = strings.TrimSpace(input.SourceOwner.Ref)
+	if !input.SourceOwner.Kind.Valid() || len(input.SourceOwner.Ref) > maxInteractionRefBytes {
+		return UpsertSubscriptionInput{}, errs.ErrInvalidArgument
+	}
+	channelHints, err := normalizeExternalRefs(input.ChannelHintRefs)
+	if err != nil {
+		return UpsertSubscriptionInput{}, err
+	}
+	input.ChannelHintRefs = channelHints
+	input.EventFilterJSON, err = normalizePolicyObjectJSON(input.EventFilterJSON)
+	if err != nil {
+		return UpsertSubscriptionInput{}, err
+	}
+	input.DeliveryPreferencesJSON, err = normalizePolicyObjectJSON(input.DeliveryPreferencesJSON)
+	if err != nil {
+		return UpsertSubscriptionInput{}, err
+	}
+	input.SubscriptionPolicyRef = strings.TrimSpace(input.SubscriptionPolicyRef)
+	if len(input.SubscriptionPolicyRef) > maxInteractionRefBytes {
+		return UpsertSubscriptionInput{}, errs.ErrInvalidArgument
+	}
+	if input.Status == "" {
+		input.Status = enum.SubscriptionStatusActive
+	}
+	if !input.Status.Valid() {
+		return UpsertSubscriptionInput{}, errs.ErrInvalidArgument
+	}
+	return input, nil
+}
+
 func normalizeActorRefs(input []value.ActorRef) ([]value.ActorRef, error) {
 	if len(input) == 0 || len(input) > maxInteractionRefs {
 		return nil, errs.ErrInvalidArgument
@@ -726,9 +1016,9 @@ func normalizeActorRefs(input []value.ActorRef) ([]value.ActorRef, error) {
 	result := make([]value.ActorRef, 0, len(input))
 	seen := map[string]struct{}{}
 	for _, ref := range input {
-		item := value.ActorRef{Kind: strings.TrimSpace(ref.Kind), Ref: strings.TrimSpace(ref.Ref)}
-		if blank(item.Kind) || blank(item.Ref) || len(item.Kind) > maxInteractionRefBytes || len(item.Ref) > maxInteractionRefBytes {
-			return nil, errs.ErrInvalidArgument
+		item, err := normalizeActorRef(ref)
+		if err != nil {
+			return nil, err
 		}
 		key := item.String()
 		if _, exists := seen[key]; exists {
@@ -738,6 +1028,14 @@ func normalizeActorRefs(input []value.ActorRef) ([]value.ActorRef, error) {
 		result = append(result, item)
 	}
 	return result, nil
+}
+
+func normalizeActorRef(ref value.ActorRef) (value.ActorRef, error) {
+	item := value.ActorRef{Kind: strings.TrimSpace(ref.Kind), Ref: strings.TrimSpace(ref.Ref)}
+	if blank(item.Kind) || blank(item.Ref) || len(item.Kind) > maxInteractionRefBytes || len(item.Ref) > maxInteractionRefBytes {
+		return value.ActorRef{}, errs.ErrInvalidArgument
+	}
+	return item, nil
 }
 
 func normalizeExternalRefs(input []value.ExternalRef) ([]value.ExternalRef, error) {
@@ -753,6 +1051,53 @@ func normalizeExternalRefs(input []value.ExternalRef) ([]value.ExternalRef, erro
 		result = append(result, item)
 	}
 	return result, nil
+}
+
+func normalizePolicyObjectJSON(input string) (string, error) {
+	value := strings.TrimSpace(input)
+	if value == "" {
+		value = "{}"
+	}
+	if len(value) > maxPolicyJSONBytes || !json.Valid([]byte(value)) {
+		return "", errs.ErrInvalidArgument
+	}
+	var object map[string]any
+	if err := json.Unmarshal([]byte(value), &object); err != nil || object == nil {
+		return "", errs.ErrInvalidArgument
+	}
+	if err := validateSafePolicyObject(object, 0); err != nil {
+		return "", err
+	}
+	return value, nil
+}
+
+func validateSafePolicyObject(object map[string]any, depth int) error {
+	if depth > maxPolicyJSONDepth {
+		return errs.ErrInvalidArgument
+	}
+	for rawKey, value := range object {
+		key := strings.TrimSpace(rawKey)
+		if key == "" || len(key) > maxSafeMetadataKeyBytes || sensitiveMetadataKey(key) {
+			return errs.ErrInvalidArgument
+		}
+		switch typed := value.(type) {
+		case map[string]any:
+			if err := validateSafePolicyObject(typed, depth+1); err != nil {
+				return err
+			}
+		case []any:
+			for _, item := range typed {
+				nested, ok := item.(map[string]any)
+				if !ok {
+					continue
+				}
+				if err := validateSafePolicyObject(nested, depth+1); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func normalizeInteractionActions(input []value.InteractionAction) ([]value.InteractionAction, error) {
@@ -943,6 +1288,35 @@ func requestEventPayload(request entity.InteractionRequest) interactionevents.Pa
 	}
 }
 
+func notificationEventPayload(notification entity.Notification) interactionevents.Payload {
+	return interactionevents.Payload{
+		NotificationID:   notification.ID.String(),
+		RequestID:        uuidProto(notification.RequestID),
+		SubscriptionID:   uuidProto(notification.SubscriptionID),
+		NotificationKind: string(notification.NotificationKind),
+		ScopeType:        string(notification.Scope.Type),
+		ScopeRef:         notification.Scope.Ref,
+		SourceOwnerKind:  string(notification.SourceOwner.Kind),
+		SourceOwnerRef:   notification.SourceOwner.Ref,
+		IngressKind:      string(notification.Ingress.Kind),
+		Priority:         string(notification.Priority),
+		Status:           string(notification.Status),
+	}
+}
+
+func subscriptionEventPayload(subscription entity.Subscription) interactionevents.Payload {
+	return interactionevents.Payload{
+		SubscriptionID:  subscription.ID.String(),
+		ScopeType:       string(subscription.Scope.Type),
+		ScopeRef:        subscription.Scope.Ref,
+		SourceOwnerKind: string(subscription.SourceOwner.Kind),
+		SourceOwnerRef:  subscription.SourceOwner.Ref,
+		SubscriberRef:   subscription.SubscriberRef.String(),
+		Status:          string(subscription.Status),
+		Version:         subscription.Version,
+	}
+}
+
 func contextRef(refs []value.ExternalRef, kind string) string {
 	for _, ref := range refs {
 		if ref.Kind == kind {
@@ -950,6 +1324,13 @@ func contextRef(refs []value.ExternalRef, kind string) string {
 		}
 	}
 	return ""
+}
+
+func uuidProto(input *uuid.UUID) string {
+	if input == nil || *input == uuid.Nil {
+		return ""
+	}
+	return input.String()
 }
 
 func timeProto(input *time.Time) string {

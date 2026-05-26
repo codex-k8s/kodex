@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-26
-related_issues: [582, 768, 800]
+related_issues: [582, 768, 800, 821]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -57,7 +57,7 @@ approvals:
 | `scope_ref` | text | нет | Внешний идентификатор области. |
 | `thread_kind` | enum | нет | `user_dialog`, `owner_feedback`, `approval`, `human_gate`, `notification`, `ops`. |
 | `primary_actor_ref` | text | да | Пользователь или service principal, с которого начался диалог. |
-| `source_kind` | enum | нет | `web_console`, `voice`, `mcp`, `provider`, `channel_package`, `codex_hook`, `system`. |
+| `source_kind` | enum | нет | `web_console`, `voice`, `mcp`, `provider`, `channel_package`, `codex_hook`, `system`, `service`. |
 | `source_ref` | text | да | Ссылка на внешний или соседний источник. |
 | `status` | enum | нет | `open`, `waiting`, `closed`, `archived`. |
 | `latest_message_id` | uuid | да | Последнее сообщение ветки. |
@@ -98,7 +98,7 @@ approvals:
 | `thread_id` | uuid | да | Диалоговая ветка, если запрос связан с диалогом. |
 | `source_owner_kind` | enum | нет | `agent_manager`, `slot_agent`, `governance_manager`, `provider_hub`, `operations_hub`, `user`, `system`. |
 | `source_owner_ref` | text | да | Внешняя ссылка владельца сценария: run/session/provider operation/user/system rule. |
-| `ingress_kind` | enum | нет | `direct_grpc`, `mcp`, `codex_hook`, `gateway`, `system`. |
+| `ingress_kind` | enum | нет | `direct_grpc`, `mcp`, `codex_hook`, `gateway`, `system`, `service`. |
 | `ingress_ref` | text | да | Ссылка на transport/ingress command, hook event или gateway request. |
 | `decision_owner_kind` | enum | да | `agent_manager`, `governance_manager`, `provider_hub`, `operations_hub`, `system`; кто валидирует ответ и владеет business decision. |
 | `decision_owner_ref` | text | да | Ссылка на gate/request/operation у владельца решения. |
@@ -154,6 +154,15 @@ One-way уведомления и reminders не создают `InteractionRequ
 | `message_summary` | text | нет | Короткая безопасная сводка. |
 | `priority` | enum | нет | `low`, `normal`, `high`, `urgent`. |
 | `status` | enum | нет | `created`, `queued`, `delivered`, `acknowledged`, `expired`, `failed`. |
+| `source_owner_kind` | enum | нет | Сервис или сценарий, который запросил уведомление: `agent_manager`, `slot_agent`, `governance_manager`, `provider_hub`, `operations_hub`, `user`, `system`. |
+| `source_owner_ref` | text | да | Safe ref агрегата владельца: run, gate request, provider operation, system rule. |
+| `ingress_kind` | enum | нет | `direct_grpc`, `mcp`, `codex_hook`, `gateway`, `system`, `service`. |
+| `ingress_ref` | text | да | Safe ref команды, hook event или gateway request. |
+| `context_refs` | jsonb | нет | Ссылки на соседний контекст без копирования state. |
+| `channel_hint_refs` | jsonb | нет | Generic surface/package/channel hints без hardcoded vendor list. |
+| `notification_policy_ref` | text | да | Ссылка на policy; тело policy не хранится локально без отдельного расширения контракта. |
+| `message_title` | text | да | Короткий безопасный заголовок. |
+| `body_preview` | text | да | Короткий безопасный preview; raw transcript/artifact не хранится. |
 | `created_at`, `updated_at`, `expires_at` | timestamptz | да | Временные метки. |
 
 ### Subscription
@@ -165,14 +174,21 @@ One-way уведомления и reminders не создают `InteractionRequ
 | `id` | uuid | нет | Идентификатор подписки. |
 | `scope_type` | enum | нет | Где действует подписка. |
 | `scope_ref` | text | нет | Внешняя ссылка области. |
-| `subscriber_ref` | text | нет | Пользователь, группа, роль или service principal. |
+| `subscriber_ref_kind` | text | нет | Тип подписчика: пользователь, группа, роль или service principal. |
+| `subscriber_ref` | text | нет | Идентификатор подписчика в owner domain. |
 | `event_filter` | jsonb | нет | Типы событий, severity, domain refs и ограничения. |
 | `delivery_preferences` | jsonb | нет | Предпочтения поверхностей без vendor-specific enum конкретных каналов. |
 | `status` | enum | нет | `active`, `paused`, `disabled`. |
 | `version` | bigint | нет | Оптимистичная конкуренция. |
+| `source_owner_kind` | enum | нет | Сервис или сценарий, который управляет подпиской. |
+| `source_owner_ref` | text | да | Safe ref owner-domain агрегата. |
+| `channel_hint_refs` | jsonb | нет | Generic surface/package/channel hints без vendor-specific списка. |
+| `subscription_policy_ref` | text | да | Ссылка на policy; local policy table не вводится без отдельного расширения контракта. |
 | `created_at`, `updated_at` | timestamptz | нет | Временные метки. |
 
 Подписка не является UI-настройкой конкретного клиента. UI может управлять подпиской через gateway, но каноническая подписка хранится здесь.
+
+Если `interaction-hub` понадобится service-local таблица policy для notification или subscription rules, она вводится отдельным срезом после явного расширения контракта. Текущий контракт хранит только `notification_policy_ref` и `subscription_policy_ref`.
 
 ### DeliveryRoute
 

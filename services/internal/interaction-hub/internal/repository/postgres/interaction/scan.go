@@ -176,6 +176,96 @@ func scanResponse(row postgreslib.RowScanner) (entity.InteractionResponse, error
 	return response, err
 }
 
+func scanNotification(row postgreslib.RowScanner) (entity.Notification, error) {
+	var notification entity.Notification
+	var scopeType, notificationKind, priority, status, sourceOwnerKind, ingressKind string
+	var requestID, subscriptionID pgtype.UUID
+	var recipientRefs, contextRefs, channelHintRefs []byte
+	var expiresAt pgtype.Timestamptz
+	err := row.Scan(
+		&notification.ID,
+		&scopeType,
+		&notification.Scope.Ref,
+		&notificationKind,
+		&requestID,
+		&subscriptionID,
+		&recipientRefs,
+		&notification.MessageTemplateRef,
+		&notification.MessageSummary,
+		&priority,
+		&status,
+		&notification.CreatedAt,
+		&notification.UpdatedAt,
+		&expiresAt,
+		&sourceOwnerKind,
+		&notification.SourceOwner.Ref,
+		&ingressKind,
+		&notification.Ingress.Ref,
+		&contextRefs,
+		&channelHintRefs,
+		&notification.NotificationPolicyRef,
+		&notification.MessageTitle,
+		&notification.BodyPreview,
+	)
+	notification.Scope.Type = enum.ScopeType(scopeType)
+	notification.NotificationKind = enum.NotificationKind(notificationKind)
+	notification.RequestID = postgreslib.UUIDPtrFromPG(requestID)
+	notification.SubscriptionID = postgreslib.UUIDPtrFromPG(subscriptionID)
+	notification.Priority = enum.NotificationPriority(priority)
+	notification.Status = enum.NotificationStatus(status)
+	notification.ExpiresAt = postgreslib.TimePtrFromPG(expiresAt)
+	notification.SourceOwner.Kind = enum.SourceOwnerKind(sourceOwnerKind)
+	notification.Ingress.Kind = enum.IngressKind(ingressKind)
+	if err != nil {
+		return notification, err
+	}
+	if notification.RecipientRefs, err = unmarshalArray[value.ActorRef](recipientRefs); err != nil {
+		return notification, err
+	}
+	if notification.ContextRefs, err = unmarshalArray[value.ExternalRef](contextRefs); err != nil {
+		return notification, err
+	}
+	if notification.ChannelHintRefs, err = unmarshalArray[value.ExternalRef](channelHintRefs); err != nil {
+		return notification, err
+	}
+	return notification, nil
+}
+
+func scanSubscription(row postgreslib.RowScanner) (entity.Subscription, error) {
+	var subscription entity.Subscription
+	var scopeType, status, sourceOwnerKind string
+	var eventFilter, deliveryPreferences, channelHintRefs []byte
+	err := row.Scan(
+		&subscription.ID,
+		&scopeType,
+		&subscription.Scope.Ref,
+		&subscription.SubscriberRef.Kind,
+		&subscription.SubscriberRef.Ref,
+		&eventFilter,
+		&deliveryPreferences,
+		&status,
+		&subscription.Version,
+		&subscription.CreatedAt,
+		&subscription.UpdatedAt,
+		&sourceOwnerKind,
+		&subscription.SourceOwner.Ref,
+		&channelHintRefs,
+		&subscription.SubscriptionPolicyRef,
+	)
+	subscription.Scope.Type = enum.ScopeType(scopeType)
+	subscription.Status = enum.SubscriptionStatus(status)
+	subscription.SourceOwner.Kind = enum.SourceOwnerKind(sourceOwnerKind)
+	if err != nil {
+		return subscription, err
+	}
+	subscription.EventFilterJSON = jsonString(eventFilter)
+	subscription.DeliveryPreferencesJSON = jsonString(deliveryPreferences)
+	if subscription.ChannelHintRefs, err = unmarshalArray[value.ExternalRef](channelHintRefs); err != nil {
+		return subscription, err
+	}
+	return subscription, nil
+}
+
 func scanCommandResult(row postgreslib.RowScanner) (entity.CommandResult, error) {
 	var result entity.CommandResult
 	var commandID pgtype.UUID
@@ -238,4 +328,11 @@ func unmarshalArray[T any](input []byte) ([]T, error) {
 		return []T{}, nil
 	}
 	return result, nil
+}
+
+func jsonString(input []byte) string {
+	if len(input) == 0 || string(input) == "null" {
+		return "{}"
+	}
+	return string(input)
 }

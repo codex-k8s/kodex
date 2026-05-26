@@ -84,19 +84,22 @@ func TestServerRoutesAllStableRPCsToDomainUseCases(t *testing.T) {
 			return err
 		}},
 		{name: "RequestNotification", want: enum.OperationRequestNotification, call: func(ctx context.Context, s *Server) error {
-			_, err := s.RequestNotification(ctx, &interactionsv1.RequestNotificationRequest{})
+			_, err := s.RequestNotification(ctx, validRequestNotificationRequest())
 			return err
 		}},
 		{name: "UpsertSubscription", want: enum.OperationUpsertSubscription, call: func(ctx context.Context, s *Server) error {
-			_, err := s.UpsertSubscription(ctx, &interactionsv1.UpsertSubscriptionRequest{})
+			_, err := s.UpsertSubscription(ctx, validUpsertSubscriptionRequest())
 			return err
 		}},
 		{name: "DisableSubscription", want: enum.OperationDisableSubscription, call: func(ctx context.Context, s *Server) error {
-			_, err := s.DisableSubscription(ctx, &interactionsv1.DisableSubscriptionRequest{})
+			_, err := s.DisableSubscription(ctx, &interactionsv1.DisableSubscriptionRequest{Meta: commandMetaWithExpected(1), SubscriptionId: uuid.NewString()})
 			return err
 		}},
 		{name: "ListSubscriptions", want: enum.OperationListSubscriptions, call: func(ctx context.Context, s *Server) error {
-			_, err := s.ListSubscriptions(ctx, &interactionsv1.ListSubscriptionsRequest{})
+			_, err := s.ListSubscriptions(ctx, &interactionsv1.ListSubscriptionsRequest{
+				Scope: &interactionsv1.ScopeRef{Type: interactionsv1.InteractionScopeType_INTERACTION_SCOPE_TYPE_SERVICE, Ref: "agent-manager"},
+				Page:  &interactionsv1.PageRequest{PageSize: 10},
+			})
 			return err
 		}},
 		{name: "PlanDelivery", want: enum.OperationPlanDelivery, call: func(ctx context.Context, s *Server) error {
@@ -310,20 +313,92 @@ func (f *fakeInteractionService) ListInteractionRequests(context.Context, intera
 	return []entity.InteractionRequest{fakeRequest(validInteractionRequestDraftInput(), enum.InteractionRequestKindApproval)}, value.PageResult{}, nil
 }
 
-func (f *fakeInteractionService) RequestNotification(context.Context) error {
-	return f.record(enum.OperationRequestNotification)
+func (f *fakeInteractionService) RequestNotification(_ context.Context, input interactionservice.RequestNotificationInput) (entity.Notification, error) {
+	if err := f.record(enum.OperationRequestNotification); err != nil {
+		return entity.Notification{}, err
+	}
+	now := time.Date(2026, 5, 26, 12, 3, 0, 0, time.UTC)
+	return entity.Notification{
+		ID:                    uuid.New(),
+		Scope:                 input.Scope,
+		NotificationKind:      input.NotificationKind,
+		RequestID:             optionalUUID(input.RequestID),
+		SubscriptionID:        optionalUUID(input.SubscriptionID),
+		RecipientRefs:         input.RecipientRefs,
+		MessageTemplateRef:    input.MessageTemplateRef,
+		MessageTitle:          input.MessageTitle,
+		MessageSummary:        input.MessageSummary,
+		BodyPreview:           input.BodyPreview,
+		Priority:              input.Priority,
+		Status:                enum.NotificationStatusCreated,
+		SourceOwner:           input.SourceOwner,
+		Ingress:               input.Ingress,
+		ContextRefs:           input.ContextRefs,
+		ChannelHintRefs:       input.ChannelHintRefs,
+		NotificationPolicyRef: input.NotificationPolicyRef,
+		CreatedAt:             now,
+		UpdatedAt:             now,
+		ExpiresAt:             input.ExpiresAt,
+	}, nil
 }
 
-func (f *fakeInteractionService) UpsertSubscription(context.Context) error {
-	return f.record(enum.OperationUpsertSubscription)
+func (f *fakeInteractionService) UpsertSubscription(_ context.Context, input interactionservice.UpsertSubscriptionInput) (entity.Subscription, error) {
+	if err := f.record(enum.OperationUpsertSubscription); err != nil {
+		return entity.Subscription{}, err
+	}
+	now := time.Date(2026, 5, 26, 12, 3, 0, 0, time.UTC)
+	id := input.SubscriptionID
+	if id == uuid.Nil {
+		id = uuid.New()
+	}
+	return entity.Subscription{
+		ID:                      id,
+		Scope:                   input.Scope,
+		SubscriberRef:           input.SubscriberRef,
+		EventFilterJSON:         input.EventFilterJSON,
+		DeliveryPreferencesJSON: input.DeliveryPreferencesJSON,
+		Status:                  input.Status,
+		Version:                 1,
+		SourceOwner:             input.SourceOwner,
+		ChannelHintRefs:         input.ChannelHintRefs,
+		SubscriptionPolicyRef:   input.SubscriptionPolicyRef,
+		CreatedAt:               now,
+		UpdatedAt:               now,
+	}, nil
 }
 
-func (f *fakeInteractionService) DisableSubscription(context.Context) error {
-	return f.record(enum.OperationDisableSubscription)
+func (f *fakeInteractionService) DisableSubscription(_ context.Context, input interactionservice.DisableSubscriptionInput) (entity.Subscription, error) {
+	if err := f.record(enum.OperationDisableSubscription); err != nil {
+		return entity.Subscription{}, err
+	}
+	now := time.Date(2026, 5, 26, 12, 4, 0, 0, time.UTC)
+	return entity.Subscription{
+		ID:            input.SubscriptionID,
+		Scope:         value.ScopeRef{Type: enum.ScopeTypeService, Ref: "agent-manager"},
+		SubscriberRef: value.ActorRef{Kind: "user", Ref: "owner-1"},
+		Status:        enum.SubscriptionStatusDisabled,
+		Version:       2,
+		SourceOwner:   value.SourceOwnerRef{Kind: enum.SourceOwnerKindAgentManager, Ref: "run:123"},
+		CreatedAt:     now.Add(-time.Minute),
+		UpdatedAt:     now,
+	}, nil
 }
 
-func (f *fakeInteractionService) ListSubscriptions(context.Context) error {
-	return f.record(enum.OperationListSubscriptions)
+func (f *fakeInteractionService) ListSubscriptions(context.Context, interactionservice.ListSubscriptionsInput) ([]entity.Subscription, value.PageResult, error) {
+	if err := f.record(enum.OperationListSubscriptions); err != nil {
+		return nil, value.PageResult{}, err
+	}
+	now := time.Date(2026, 5, 26, 12, 3, 0, 0, time.UTC)
+	return []entity.Subscription{{
+		ID:            uuid.New(),
+		Scope:         value.ScopeRef{Type: enum.ScopeTypeService, Ref: "agent-manager"},
+		SubscriberRef: value.ActorRef{Kind: "user", Ref: "owner-1"},
+		Status:        enum.SubscriptionStatusActive,
+		Version:       1,
+		SourceOwner:   value.SourceOwnerRef{Kind: enum.SourceOwnerKindAgentManager, Ref: "run:123"},
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}}, value.PageResult{}, nil
 }
 
 func (f *fakeInteractionService) PlanDelivery(context.Context) error {
@@ -414,6 +489,49 @@ func validRecordInteractionResponseRequest(requestID uuid.UUID) *interactionsv1.
 	}
 }
 
+func validRequestNotificationRequest() *interactionsv1.RequestNotificationRequest {
+	expiresAt := time.Date(2026, 5, 26, 13, 0, 0, 0, time.UTC).Format(time.RFC3339Nano)
+	return &interactionsv1.RequestNotificationRequest{
+		Meta:             commandMeta(),
+		Scope:            &interactionsv1.ScopeRef{Type: interactionsv1.InteractionScopeType_INTERACTION_SCOPE_TYPE_SERVICE, Ref: "agent-manager"},
+		NotificationKind: interactionsv1.NotificationKind_NOTIFICATION_KIND_ATTENTION,
+		RecipientRefs: []*interactionsv1.ActorRef{
+			{RefKind: "user", Ref: "owner-1"},
+		},
+		MessageTemplateRef: "interaction.notification.attention",
+		MessageTitle:       ptr("Safe title"),
+		MessageSummary:     "Safe summary",
+		BodyPreview:        ptr("Safe preview"),
+		Priority:           interactionsv1.NotificationPriority_NOTIFICATION_PRIORITY_HIGH,
+		ExpiresAt:          &expiresAt,
+		SourceOwner:        &interactionsv1.SourceOwnerRef{Kind: interactionsv1.SourceOwnerKind_SOURCE_OWNER_KIND_AGENT_MANAGER, Ref: ptr("run:123")},
+		Ingress:            &interactionsv1.IngressRef{Kind: interactionsv1.IngressKind_INGRESS_KIND_DIRECT_GRPC, Ref: ptr("grpc:notify-1")},
+		ContextRefs: []*interactionsv1.ExternalRef{
+			{RefKind: "agent_run", Ref: "run:123"},
+		},
+		ChannelHintRefs: []*interactionsv1.ExternalRef{
+			{RefKind: "surface", Ref: "web_console"},
+		},
+		NotificationPolicyRef: ptr("policy:notify-standard"),
+	}
+}
+
+func validUpsertSubscriptionRequest() *interactionsv1.UpsertSubscriptionRequest {
+	return &interactionsv1.UpsertSubscriptionRequest{
+		Meta:                    commandMeta(),
+		Scope:                   &interactionsv1.ScopeRef{Type: interactionsv1.InteractionScopeType_INTERACTION_SCOPE_TYPE_SERVICE, Ref: "agent-manager"},
+		SubscriberRef:           &interactionsv1.ActorRef{RefKind: "user", Ref: "owner-1"},
+		EventFilterJson:         `{"event_kind":["run_waiting"],"severity":["high"]}`,
+		DeliveryPreferencesJson: `{"surfaces":["web_console"],"fallback_policy_ref":"policy:fallback"}`,
+		Status:                  interactionsv1.SubscriptionStatus_SUBSCRIPTION_STATUS_ACTIVE,
+		SourceOwner:             &interactionsv1.SourceOwnerRef{Kind: interactionsv1.SourceOwnerKind_SOURCE_OWNER_KIND_AGENT_MANAGER, Ref: ptr("run:123")},
+		ChannelHintRefs: []*interactionsv1.ExternalRef{
+			{RefKind: "surface", Ref: "web_console"},
+		},
+		SubscriptionPolicyRef: ptr("policy:ops-notifications"),
+	}
+}
+
 func validInteractionRequestDraft() *interactionsv1.InteractionRequestDraft {
 	deadline := time.Date(2026, 5, 26, 13, 0, 0, 0, time.UTC).Format(time.RFC3339Nano)
 	policy := "policy:standard"
@@ -471,6 +589,14 @@ func validInteractionRequestDraftInput() interactionservice.InteractionRequestDr
 		DeadlineAt:        &deadline,
 		ReminderPolicyRef: "policy:standard",
 	}
+}
+
+func optionalUUID(input uuid.UUID) *uuid.UUID {
+	if input == uuid.Nil {
+		return nil
+	}
+	value := input
+	return &value
 }
 
 func fakeRequest(input interactionservice.InteractionRequestDraftInput, kind enum.InteractionRequestKind) entity.InteractionRequest {
