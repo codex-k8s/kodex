@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-26
-related_issues: [698, 753, 778, 786, 793, 808, 322]
+related_issues: [698, 753, 778, 786, 793, 808, 823, 322]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -168,7 +168,7 @@ approvals:
 
 - Лента не является аудитом всех событий платформенного MVP-набора.
 - Retention короткий и задаётся policy.
-- Запись содержит только safe summary.
+- Запись содержит только safe summary, event kind, route result, owner target, digest, size bucket, status, reject reason и timestamps.
 
 | Field | Type | Nullable | Default | Constraints | Notes |
 |---|---|---:|---|---|---|
@@ -180,7 +180,14 @@ approvals:
 | `event_kind` | text | нет |  | indexed | UI-friendly kind. |
 | `severity` | enum | нет | `info` | `debug`, `info`, `warn`, `error` |  |
 | `summary` | text | нет |  | max 4 KiB | Safe text. |
-| `route` | text | да | null |  | Downstream route. |
+| `payload_digest` | text | да | null |  | Digest sanitized payload или значимых частей. |
+| `payload_size_bucket` | text | нет | `unknown` | `unknown`, `le_1KiB`, `le_4KiB`, `le_16KiB`, `le_64KiB`, `gt_64KiB` | Бакет для metrics без raw size leak. |
+| `latency_bucket` | text | нет | `le_10ms` | bounded set | Бакет обработки ingress/route. |
+| `status` | enum | нет |  | `accepted`, `rejected`, `dropped` | Итог ingress admission. |
+| `reject_reason` | text | да | null |  | Safe error code, например `hook.rate_limited`. |
+| `sanitizer_result` | enum | да | null | `accepted`, `redacted`, `truncated` | Safe sanitizer status. |
+| `redaction_count` | int | нет | 0 | `>= 0` | Только счётчик, без значений. |
+| `route_results_json` | jsonb | да | null | bounded safe DTO | Owner target, delivery mode, route result, diagnostic code, retryable, safe parts digest. |
 | `created_at` | timestamptz | нет | now | indexed |  |
 | `expires_at` | timestamptz | нет |  | indexed | Retention. |
 
@@ -250,13 +257,15 @@ approvals:
 
 Полные transcripts, session JSON/JSONL, raw logs, stdout/stderr и вложения должны храниться только во владельцах, если они вообще нужны, и только как object refs с отдельной retention-политикой.
 
+CHI-6a использует bounded in-memory feed/stub вместо служебной БД: текущий MVP должен дать realtime/ops диагностику в рамках живого процесса, но не требует восстановления ленты после рестарта и не является audit trail. Capacity и TTL задаются config, переполнение возвращает safe backpressure до downstream dispatch, а постоянное хранение остаётся отдельным решением для будущего ops/storage среза.
+
 ## Индексы и запросы
 
 | Запрос | Индексы |
 |---|---|
 | Найти событие по `event_id` | `HookEventEnvelope(event_id)` |
 | Проверить duplicate/retry | `HookEventEnvelope(event_id, payload_digest)` |
-| Лента run/session | `HookOperationalEvent(run_id, session_id, created_at desc)` |
+| Лента run/session | `HookOperationalEvent(run_id, session_id, created_at desc)`; в CHI-6a реализовано как in-memory snapshot без БД-индекса. |
 | Pending delivery attempts | `HookDeliveryAttempt(status, next_retry_at)` |
 | Ожидающие решения | `HookDecisionBridge(status, expires_at)` |
 | Sanitizer metrics | `HookSanitizationReport(reason_code, created_at)` |
@@ -271,7 +280,7 @@ approvals:
 
 ## Миграции
 
-CHI-3/CHI-4 не создают миграции и используют только repository interfaces плюс in-memory stub для проверки service skeleton и route registry. Stub хранит безопасный idempotency record: `event_id`, `payload_digest`, `hook_event_name`, `correlation_id`, `retention_class`, normalized `HookHandlerResult`, delivery completion state, safe route delivery diagnostics и время записи. Raw prompt, raw tool input/output, stdout/stderr, transcript, session dump, provider payload, kubeconfig, secret values, `SKILL.md` или package manifest не хранятся.
+CHI-3/CHI-4/CHI-6a не создают миграции и используют только repository interfaces плюс in-memory stubs для проверки service skeleton, route registry и ops feed. Stub idempotency хранит безопасный record: `event_id`, `payload_digest`, `hook_event_name`, `correlation_id`, `retention_class`, normalized `HookHandlerResult`, delivery completion state, safe route delivery diagnostics и время записи. Stub ops feed хранит bounded safe entries и counters: accepted/rejected/redacted/dropped/downstream_failed/disabled/unsupported, payload size bucket и latency bucket. Raw prompt, raw tool input/output, stdout/stderr, transcript, session dump, provider payload, kubeconfig, secret values, `SKILL.md` или package manifest не хранятся.
 
 Перед появлением persistent storage нужно отдельно согласовать:
 

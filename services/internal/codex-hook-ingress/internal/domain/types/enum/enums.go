@@ -160,6 +160,15 @@ const (
 	RouteDeliveryStatusFailed      RouteDeliveryStatus = "failed"
 )
 
+// OpsFeedStatus describes the safe lifecycle state stored in the short diagnostics feed.
+type OpsFeedStatus string
+
+const (
+	OpsFeedStatusAccepted OpsFeedStatus = "accepted"
+	OpsFeedStatusRejected OpsFeedStatus = "rejected"
+	OpsFeedStatusDropped  OpsFeedStatus = "dropped"
+)
+
 // RouteFailurePolicy describes how SubmitHookEvent reacts to failed owner dispatch.
 type RouteFailurePolicy string
 

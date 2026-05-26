@@ -31,6 +31,10 @@ type Config struct {
 	MaxBoundedErrorBytes     int           `env:"KODEX_CODEX_HOOK_INGRESS_MAX_BOUNDED_ERROR_BYTES" envDefault:"8192"`
 	DisabledRoutes           string        `env:"KODEX_CODEX_HOOK_INGRESS_DISABLED_ROUTES" envDefault:""`
 	RouteFailurePolicy       string        `env:"KODEX_CODEX_HOOK_INGRESS_ROUTE_FAILURE_POLICY" envDefault:"diagnostic"`
+	OpsFeedCapacity          int           `env:"KODEX_CODEX_HOOK_INGRESS_OPS_FEED_CAPACITY" envDefault:"1024"`
+	OpsFeedRetention         time.Duration `env:"KODEX_CODEX_HOOK_INGRESS_OPS_FEED_RETENTION" envDefault:"15m"`
+	RateLimitWindow          time.Duration `env:"KODEX_CODEX_HOOK_INGRESS_RATE_LIMIT_WINDOW" envDefault:"1m"`
+	RateLimitBurst           int           `env:"KODEX_CODEX_HOOK_INGRESS_RATE_LIMIT_BURST" envDefault:"300"`
 	LogicalTransportReadOnly bool          `env:"KODEX_CODEX_HOOK_INGRESS_LOGICAL_TRANSPORT_READ_ONLY" envDefault:"true"`
 }
 
@@ -84,6 +88,18 @@ func (cfg Config) Validate() error {
 	}
 	if !hookenum.IsRouteFailurePolicy(cfg.RouteFailureMode()) {
 		return fmt.Errorf("unsupported KODEX_CODEX_HOOK_INGRESS_ROUTE_FAILURE_POLICY %q", cfg.RouteFailurePolicy)
+	}
+	if cfg.OpsFeedCapacity <= 0 {
+		return fmt.Errorf("KODEX_CODEX_HOOK_INGRESS_OPS_FEED_CAPACITY must be positive")
+	}
+	if cfg.OpsFeedRetention <= 0 {
+		return fmt.Errorf("KODEX_CODEX_HOOK_INGRESS_OPS_FEED_RETENTION must be positive")
+	}
+	if cfg.RateLimitWindow <= 0 {
+		return fmt.Errorf("KODEX_CODEX_HOOK_INGRESS_RATE_LIMIT_WINDOW must be positive")
+	}
+	if cfg.RateLimitBurst <= 0 {
+		return fmt.Errorf("KODEX_CODEX_HOOK_INGRESS_RATE_LIMIT_BURST must be positive")
 	}
 	return nil
 }

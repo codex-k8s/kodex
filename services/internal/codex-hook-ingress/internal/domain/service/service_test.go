@@ -15,6 +15,7 @@ import (
 	hookenum "github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/domain/types/value"
 	hookstub "github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/repository/stub/hook"
+	opsstub "github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/repository/stub/ops"
 )
 
 func TestSubmitHookEventAcceptsSafeEnvelope(t *testing.T) {
@@ -211,6 +212,7 @@ func TestSubmitHookEventRetriesIncompleteDuplicateDelivery(t *testing.T) {
 		RouteRegistry: testRouteRegistry(map[hookenum.DownstreamOwner]OwnerRoute{
 			hookenum.DownstreamOwnerOperationsFeed: route,
 		}),
+		RateLimiter: NewFixedWindowRateLimiter(RateLimitConfig{Window: time.Minute, Burst: 1}),
 	})
 	envelope := validPreToolUseEnvelope()
 
@@ -253,6 +255,172 @@ func TestSubmitHookEventCanFailClosedOnRouteFailure(t *testing.T) {
 	}
 	if result.HandlerResult.DecisionReason != value.RouteDiagnosticFailurePolicyFired {
 		t.Fatalf("decision reason = %q, want route failure policy", result.HandlerResult.DecisionReason)
+	}
+}
+
+func TestSubmitHookEventRecordsSafeOpsFeedAndDiagnosticsMetrics(t *testing.T) {
+	t.Parallel()
+
+	opsFeed := opsstub.NewRepository(opsstub.Config{Capacity: 8, Retention: 365 * 24 * time.Hour})
+	service := newTestServiceWithDependencies(
+		Config{
+			DisabledRoutes:   []hookenum.DownstreamOwner{hookenum.DownstreamOwnerRuntimeManager},
+			OpsFeedRetention: 365 * 24 * time.Hour,
+		},
+		NewRouteRegistry(map[hookenum.DownstreamOwner]OwnerRoute{
+			hookenum.DownstreamOwnerAgentManager:   NoopOwnerRoute{Owner: hookenum.DownstreamOwnerAgentManager},
+			hookenum.DownstreamOwnerOperationsFeed: failingOwnerRoute{err: errors.New("raw stdout secret detail")},
+		}),
+		opsFeed,
+		NewFixedWindowRateLimiter(RateLimitConfig{Window: time.Minute, Burst: 10}),
+	)
+	envelope := validPreToolUseEnvelope()
+	envelope.SanitizerReport.Result = hookenum.SanitizerResultRedacted
+	envelope.SanitizerReport.RedactionCount = 2
+
+	result, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: envelope})
+	if err != nil {
+		t.Fatalf("SubmitHookEvent(): %v", err)
+	}
+	if result.RoutesAccepted != 1 {
+		t.Fatalf("routes accepted = %d, want 1", result.RoutesAccepted)
+	}
+	snapshot := service.OpsDiagnosticsSnapshot(context.Background())
+	if snapshot.Accepted != 1 || snapshot.Redacted != 1 || snapshot.Disabled != 1 || snapshot.Unsupported != 1 || snapshot.DownstreamFailed != 1 {
+		t.Fatalf("ops snapshot = %+v, want accepted/redacted/disabled/unsupported/downstream_failed", snapshot)
+	}
+	entries := service.RecentOpsFeed(context.Background(), 1)
+	if len(entries) != 1 {
+		t.Fatalf("ops feed entries = %d, want 1", len(entries))
+	}
+	entry := entries[0]
+	if entry.SafeSummary == "" || entry.PayloadDigest != envelope.PayloadDigest || entry.PayloadSizeBucket == "" || entry.LatencyBucket == "" {
+		t.Fatalf("ops entry is missing safe summary/digest/buckets: %+v", entry)
+	}
+	if strings.Contains(entry.SafeSummary, "raw stdout secret detail") || strings.Contains(entry.RejectReason, "raw stdout secret detail") {
+		t.Fatalf("ops entry leaked downstream raw detail: %+v", entry)
+	}
+}
+
+func TestSubmitHookEventRateLimitDropsBeforeDispatch(t *testing.T) {
+	t.Parallel()
+
+	route := &recordingOwnerRoute{}
+	service := newTestServiceWithDependencies(
+		Config{OpsFeedRetention: 365 * 24 * time.Hour},
+		testRouteRegistry(map[hookenum.DownstreamOwner]OwnerRoute{
+			hookenum.DownstreamOwnerOperationsFeed: route,
+		}),
+		opsstub.NewRepository(opsstub.Config{Capacity: 8, Retention: 365 * 24 * time.Hour}),
+		NewFixedWindowRateLimiter(RateLimitConfig{Window: time.Minute, Burst: 1}),
+	)
+	first := validPreToolUseEnvelope()
+	second := validPreToolUseEnvelopeWith(uuid.MustParse("11111111-2222-4111-8111-222222222222"), digest("b"), "run-5555:pre-tool-use:toolu-002")
+
+	if _, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: first}); err != nil {
+		t.Fatalf("first SubmitHookEvent(): %v", err)
+	}
+	_, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: second})
+	if !errors.Is(err, hookerrs.ErrRateLimited) {
+		t.Fatalf("second SubmitHookEvent() error = %v, want ErrRateLimited", err)
+	}
+	if len(route.Events()) != 1 {
+		t.Fatalf("route dispatch count = %d, want only first event", len(route.Events()))
+	}
+	snapshot := service.OpsDiagnosticsSnapshot(context.Background())
+	if snapshot.Dropped != 1 {
+		t.Fatalf("dropped metric = %d, want 1", snapshot.Dropped)
+	}
+}
+
+func TestSubmitHookEventRejectedOpsDiagnosticOmitsUnsafeSummary(t *testing.T) {
+	t.Parallel()
+
+	service := newTestServiceWithDependencies(
+		Config{OpsFeedRetention: 365 * 24 * time.Hour},
+		NewDefaultRouteRegistry(),
+		opsstub.NewRepository(opsstub.Config{Capacity: 8, Retention: 365 * 24 * time.Hour}),
+		NewFixedWindowRateLimiter(RateLimitConfig{Window: time.Minute, Burst: 10}),
+	)
+	envelope := validPreToolUseEnvelope()
+	envelope.SafePayload.SafeSummary = "unsafe rejected preview must not be copied"
+	envelope.SanitizerReport.RejectedFieldClasses = []string{"secret"}
+
+	_, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: envelope})
+	if !errors.Is(err, hookerrs.ErrPayloadRejected) {
+		t.Fatalf("SubmitHookEvent() error = %v, want ErrPayloadRejected", err)
+	}
+	entries := service.RecentOpsFeed(context.Background(), 1)
+	if len(entries) != 1 {
+		t.Fatalf("ops feed entries = %d, want 1", len(entries))
+	}
+	entry := entries[0]
+	if entry.Status != hookenum.OpsFeedStatusRejected || entry.RejectReason != string(hookerrs.ErrPayloadRejected) {
+		t.Fatalf("ops entry = %+v, want rejected payload diagnostic", entry)
+	}
+	if entry.SafeSummary != "" {
+		t.Fatalf("rejected ops entry copied unsafe summary: %q", entry.SafeSummary)
+	}
+}
+
+func TestSubmitHookEventBackpressurePreventsDispatch(t *testing.T) {
+	t.Parallel()
+
+	route := &recordingOwnerRoute{}
+	service := newTestServiceWithDependencies(
+		Config{OpsFeedRetention: 365 * 24 * time.Hour},
+		testRouteRegistry(map[hookenum.DownstreamOwner]OwnerRoute{
+			hookenum.DownstreamOwnerOperationsFeed: route,
+		}),
+		opsstub.NewRepository(opsstub.Config{Capacity: 1, Retention: 365 * 24 * time.Hour}),
+		NewFixedWindowRateLimiter(RateLimitConfig{Window: time.Minute, Burst: 10}),
+	)
+	first := validPreToolUseEnvelope()
+	second := validPreToolUseEnvelopeWith(uuid.MustParse("11111111-2222-4111-8111-333333333333"), digest("c"), "run-5555:pre-tool-use:toolu-003")
+
+	if _, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: first}); err != nil {
+		t.Fatalf("first SubmitHookEvent(): %v", err)
+	}
+	_, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: second})
+	if !errors.Is(err, hookerrs.ErrBackpressure) {
+		t.Fatalf("second SubmitHookEvent() error = %v, want ErrBackpressure", err)
+	}
+	if len(route.Events()) != 1 {
+		t.Fatalf("route dispatch count = %d, want backpressure before second dispatch", len(route.Events()))
+	}
+}
+
+func TestSubmitHookEventDuplicateReplayDoesNotDuplicateOpsFeed(t *testing.T) {
+	t.Parallel()
+
+	route := &recordingOwnerRoute{}
+	service := newTestServiceWithDependencies(
+		Config{OpsFeedRetention: 365 * 24 * time.Hour},
+		testRouteRegistry(map[hookenum.DownstreamOwner]OwnerRoute{
+			hookenum.DownstreamOwnerOperationsFeed: route,
+		}),
+		opsstub.NewRepository(opsstub.Config{Capacity: 8, Retention: 365 * 24 * time.Hour}),
+		NewFixedWindowRateLimiter(RateLimitConfig{Window: time.Minute, Burst: 1}),
+	)
+	envelope := validPreToolUseEnvelope()
+	if _, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: envelope}); err != nil {
+		t.Fatalf("first SubmitHookEvent(): %v", err)
+	}
+	result, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: envelope})
+	if err != nil {
+		t.Fatalf("second SubmitHookEvent(): %v", err)
+	}
+	if !result.Duplicate {
+		t.Fatal("duplicate = false, want true")
+	}
+	if len(route.Events()) != 1 {
+		t.Fatalf("route dispatch count = %d, want one dispatch", len(route.Events()))
+	}
+	if entries := service.RecentOpsFeed(context.Background(), 10); len(entries) != 1 {
+		t.Fatalf("ops feed entries = %d, want 1", len(entries))
+	}
+	if snapshot := service.OpsDiagnosticsSnapshot(context.Background()); snapshot.Dropped != 0 {
+		t.Fatalf("dropped metric = %d, want duplicate replay to bypass rate limit", snapshot.Dropped)
 	}
 }
 
@@ -455,6 +623,20 @@ func newTestServiceWithConfig(cfg Config, registry *RouteRegistry) *Service {
 	})
 }
 
+func newTestServiceWithDependencies(
+	cfg Config,
+	registry *RouteRegistry,
+	opsFeed *opsstub.Repository,
+	rateLimiter RateLimiter,
+) *Service {
+	return New(hookstub.NewRepository(), cfg, Dependencies{
+		Clock:         fixedClock{now: time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)},
+		RouteRegistry: registry,
+		OpsFeed:       opsFeed,
+		RateLimiter:   rateLimiter,
+	})
+}
+
 func testRouteRegistry(overrides map[hookenum.DownstreamOwner]OwnerRoute) *RouteRegistry {
 	dispatchers := make(map[hookenum.DownstreamOwner]OwnerRoute, len(hookenum.DownstreamOwners()))
 	for _, owner := range hookenum.DownstreamOwners() {
@@ -515,6 +697,15 @@ func validPreToolUseEnvelope() value.HookEnvelope {
 	}
 }
 
+func validPreToolUseEnvelopeWith(eventID uuid.UUID, payloadDigest string, correlationID string) value.HookEnvelope {
+	envelope := validPreToolUseEnvelope()
+	envelope.EventID = eventID
+	envelope.PayloadDigest = payloadDigest
+	envelope.CorrelationID = correlationID
+	envelope.ToolContext.ToolUseID = correlationID[strings.LastIndex(correlationID, ":")+1:]
+	return envelope
+}
+
 func digest(char string) string {
 	return "sha256:" + strings.Repeat(char, 64)
 }
@@ -565,6 +756,10 @@ func (repository *failOnceDeliveryRepository) Ready() bool {
 
 func (repository *failOnceDeliveryRepository) RegisterAcceptedEvent(ctx context.Context, event entity.AcceptedEvent) (entity.AcceptedEvent, bool, error) {
 	return repository.inner.RegisterAcceptedEvent(ctx, event)
+}
+
+func (repository *failOnceDeliveryRepository) FindAcceptedEvent(ctx context.Context, eventID uuid.UUID) (entity.AcceptedEvent, bool, error) {
+	return repository.inner.FindAcceptedEvent(ctx, eventID)
 }
 
 func (repository *failOnceDeliveryRepository) RecordDeliveryResults(ctx context.Context, update entity.DeliveryUpdate) (entity.AcceptedEvent, error) {

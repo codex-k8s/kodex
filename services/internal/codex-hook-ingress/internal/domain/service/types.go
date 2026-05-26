@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	opsrepo "github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/domain/repository/ops"
 	hookenum "github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/domain/types/value"
 )
@@ -17,6 +18,9 @@ type Config struct {
 	SupportedEvents      []hookenum.HookEventName
 	DisabledRoutes       []hookenum.DownstreamOwner
 	RouteFailurePolicy   hookenum.RouteFailurePolicy
+	OpsFeedRetention     time.Duration
+	RateLimitWindow      time.Duration
+	RateLimitBurst       int
 }
 
 // Dependencies contains replaceable domain ports.
@@ -26,6 +30,8 @@ type Dependencies struct {
 	SourceVerifier SourceVerifier
 	Sanitizer      Sanitizer
 	RouteRegistry  *RouteRegistry
+	OpsFeed        opsrepo.Repository
+	RateLimiter    RateLimiter
 }
 
 // Clock provides deterministic time for idempotency records and tests.
@@ -48,6 +54,12 @@ type Sanitizer interface {
 	VerifyBoundary(ctx context.Context, cfg Config, envelope value.HookEnvelope) (SanitizerDecision, error)
 }
 
+// RateLimiter applies logical SubmitHookEvent admission limits before dispatch.
+type RateLimiter interface {
+	Ready() bool
+	Allow(ctx context.Context, check RateLimitCheck) (RateLimitDecision, error)
+}
+
 // SourceBindingCheck contains safe context needed by source binding verification.
 type SourceBindingCheck struct {
 	SourceContext value.SourceContext
@@ -64,6 +76,22 @@ type SourceBindingDecision struct {
 type SanitizerDecision struct {
 	Accepted      bool
 	EnvelopeBytes int
+}
+
+// RateLimitCheck carries safe dimensions for admission control.
+type RateLimitCheck struct {
+	SourceRef      string
+	RunID          string
+	HookEventName  hookenum.HookEventName
+	RetentionClass hookenum.RetentionClass
+	At             time.Time
+}
+
+// RateLimitDecision describes a logical admission result.
+type RateLimitDecision struct {
+	Allowed    bool
+	ReasonCode string
+	RetryAfter time.Duration
 }
 
 // SubmitHookEventInput is the in-process logical SubmitHookEvent request.

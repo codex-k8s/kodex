@@ -9,6 +9,7 @@ import (
 
 	hookerrs "github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/domain/errs"
 	hookrepo "github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/domain/repository/hook"
+	opsrepo "github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/domain/repository/ops"
 	"github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/domain/types/entity"
 	hookenum "github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/domain/types/value"
@@ -23,6 +24,8 @@ type Service struct {
 	sourceVerifier SourceVerifier
 	sanitizer      Sanitizer
 	routeRegistry  *RouteRegistry
+	opsFeed        opsrepo.Repository
+	rateLimiter    RateLimiter
 }
 
 // New creates a codex-hook-ingress domain service with explicit skeleton ports.
@@ -43,6 +46,12 @@ func New(repository hookrepo.Repository, cfg Config, deps Dependencies) *Service
 	if deps.RouteRegistry == nil {
 		deps.RouteRegistry = NewDefaultRouteRegistry()
 	}
+	if deps.OpsFeed == nil {
+		deps.OpsFeed = noopOpsFeed{}
+	}
+	if deps.RateLimiter == nil {
+		deps.RateLimiter = noopRateLimiter{}
+	}
 	return &Service{
 		repository:     repository,
 		config:         cfg,
@@ -51,6 +60,8 @@ func New(repository hookrepo.Repository, cfg Config, deps Dependencies) *Service
 		sourceVerifier: deps.SourceVerifier,
 		sanitizer:      deps.Sanitizer,
 		routeRegistry:  deps.RouteRegistry,
+		opsFeed:        deps.OpsFeed,
+		rateLimiter:    deps.RateLimiter,
 	}
 }
 
@@ -63,7 +74,11 @@ func (s *Service) Ready() bool {
 		s.sourceVerifier != nil &&
 		s.sanitizer != nil &&
 		s.routeRegistry != nil &&
-		s.routeRegistry.Ready()
+		s.routeRegistry.Ready() &&
+		s.opsFeed != nil &&
+		s.opsFeed.Ready() &&
+		s.rateLimiter != nil &&
+		s.rateLimiter.Ready()
 }
 
 // SubmitHookEvent accepts a normalized hook event through the logical command boundary.
@@ -71,11 +86,15 @@ func (s *Service) SubmitHookEvent(ctx context.Context, input SubmitHookEventInpu
 	if !s.Ready() {
 		return SubmitHookEventResult{}, fmt.Errorf("%w: hook service is not ready", hookerrs.ErrDependencyUnavailable)
 	}
+	startedAt := s.clock.Now()
 	envelope := input.Envelope
 	if err := s.validator.ValidateEnvelope(ctx, s.config, envelope); err != nil {
+		s.recordRejectedOpsDiagnostic(ctx, envelope, 0, startedAt, err)
 		return SubmitHookEventResult{}, err
 	}
-	if _, err := s.sanitizer.VerifyBoundary(ctx, s.config, envelope); err != nil {
+	sanitizerDecision, err := s.sanitizer.VerifyBoundary(ctx, s.config, envelope)
+	if err != nil {
+		s.recordRejectedOpsDiagnostic(ctx, envelope, estimatedEnvelopeBytes(envelope), startedAt, err)
 		return SubmitHookEventResult{}, err
 	}
 	decision, err := s.sourceVerifier.VerifySourceBinding(ctx, SourceBindingCheck{
@@ -83,9 +102,11 @@ func (s *Service) SubmitHookEvent(ctx context.Context, input SubmitHookEventInpu
 		RunContext:    envelope.RunContext,
 	})
 	if err != nil {
+		s.recordRejectedOpsDiagnostic(ctx, envelope, sanitizerDecision.EnvelopeBytes, startedAt, err)
 		return SubmitHookEventResult{}, err
 	}
 	if !decision.Accepted {
+		s.recordRejectedOpsDiagnostic(ctx, envelope, sanitizerDecision.EnvelopeBytes, startedAt, hookerrs.ErrInvalidBinding)
 		return SubmitHookEventResult{}, hookerrs.ErrInvalidBinding
 	}
 	result := s.handlerResult(envelope)
@@ -98,6 +119,30 @@ func (s *Service) SubmitHookEvent(ctx context.Context, input SubmitHookEventInpu
 		Result:         result,
 		RecordedAt:     s.clock.Now(),
 	}
+	existing, exists, err := s.repository.FindAcceptedEvent(ctx, envelope.EventID)
+	if err != nil {
+		return SubmitHookEventResult{}, fmt.Errorf("%w: read hook idempotency record: %v", hookerrs.ErrDependencyUnavailable, err)
+	}
+	if exists {
+		if existing.PayloadDigest != envelope.PayloadDigest {
+			return SubmitHookEventResult{}, hookerrs.ErrDuplicateConflict
+		}
+		return s.handleDuplicateAcceptedEvent(ctx, envelope, existing, sanitizerDecision, startedAt)
+	}
+	rateDecision, err := s.rateLimiter.Allow(ctx, RateLimitCheck{
+		SourceRef:      envelope.SourceContext.SourceRef,
+		RunID:          envelope.RunContext.RunID.String(),
+		HookEventName:  envelope.HookEventName,
+		RetentionClass: envelope.RetentionClass,
+		At:             startedAt,
+	})
+	if err != nil {
+		return SubmitHookEventResult{}, fmt.Errorf("%w: check hook admission rate limit: %v", hookerrs.ErrDependencyUnavailable, err)
+	}
+	if !rateDecision.Allowed {
+		s.recordDroppedOpsDiagnostic(ctx, envelope, sanitizerDecision.EnvelopeBytes, startedAt, hookerrs.ErrRateLimited)
+		return SubmitHookEventResult{}, hookerrs.ErrRateLimited
+	}
 	accepted, duplicate, err := s.repository.RegisterAcceptedEvent(ctx, record)
 	if err != nil {
 		if errors.Is(err, hookerrs.ErrDuplicateConflict) {
@@ -106,28 +151,56 @@ func (s *Service) SubmitHookEvent(ctx context.Context, input SubmitHookEventInpu
 		return SubmitHookEventResult{}, fmt.Errorf("%w: store hook idempotency record: %v", hookerrs.ErrDependencyUnavailable, err)
 	}
 	if duplicate {
-		if !accepted.DeliveryCompleted {
-			retried, err := s.dispatchAndRecordRoutes(ctx, envelope, accepted.Result)
-			if err != nil {
-				return SubmitHookEventResult{}, err
-			}
-			retried.Duplicate = true
-			return retried, nil
-		}
-		routeDiagnostics := cloneRouteDeliveryResults(accepted.RouteDiagnostics)
-		return SubmitHookEventResult{
-			HandlerResult:    accepted.Result,
-			Duplicate:        true,
-			RoutesAccepted:   countDeliveredRoutes(routeDiagnostics),
-			RouteDiagnostics: routeDiagnostics,
-		}, nil
+		return s.handleDuplicateAcceptedEvent(ctx, envelope, accepted, sanitizerDecision, startedAt)
 	}
-	return s.dispatchAndRecordRoutes(ctx, envelope, result)
+	reservation, err := s.admitOpsFeed(ctx, envelope, sanitizerDecision, startedAt)
+	if err != nil {
+		return SubmitHookEventResult{}, err
+	}
+	return s.dispatchAndRecordRoutes(ctx, envelope, result, reservation, sanitizerDecision, startedAt)
 }
 
-func (s *Service) dispatchAndRecordRoutes(ctx context.Context, envelope value.HookEnvelope, result value.HookHandlerResult) (SubmitHookEventResult, error) {
+func (s *Service) handleDuplicateAcceptedEvent(
+	ctx context.Context,
+	envelope value.HookEnvelope,
+	accepted entity.AcceptedEvent,
+	sanitizerDecision SanitizerDecision,
+	startedAt time.Time,
+) (SubmitHookEventResult, error) {
+	if !accepted.DeliveryCompleted {
+		reservation, err := s.admitOpsFeed(ctx, envelope, sanitizerDecision, startedAt)
+		if err != nil {
+			return SubmitHookEventResult{}, err
+		}
+		retried, err := s.dispatchAndRecordRoutes(ctx, envelope, accepted.Result, reservation, sanitizerDecision, startedAt)
+		if err != nil {
+			return SubmitHookEventResult{}, err
+		}
+		retried.Duplicate = true
+		return retried, nil
+	}
+	routeDiagnostics := cloneRouteDeliveryResults(accepted.RouteDiagnostics)
+	return SubmitHookEventResult{
+		HandlerResult:    accepted.Result,
+		Duplicate:        true,
+		RoutesAccepted:   countDeliveredRoutes(routeDiagnostics),
+		RouteDiagnostics: routeDiagnostics,
+	}, nil
+}
+
+func (s *Service) dispatchAndRecordRoutes(
+	ctx context.Context,
+	envelope value.HookEnvelope,
+	result value.HookHandlerResult,
+	reservation value.OpsFeedReservation,
+	sanitizerDecision SanitizerDecision,
+	startedAt time.Time,
+) (SubmitHookEventResult, error) {
 	routeDiagnostics := s.routeRegistry.DispatchRoutes(ctx, s.config, envelope)
 	result = s.applyRouteFailurePolicy(result, routeDiagnostics)
+	if err := s.completeOpsFeed(ctx, reservation, envelope, sanitizerDecision, routeDiagnostics, startedAt); err != nil {
+		return SubmitHookEventResult{}, err
+	}
 	accepted, err := s.repository.RecordDeliveryResults(ctx, entity.DeliveryUpdate{
 		EventID:          envelope.EventID,
 		PayloadDigest:    envelope.PayloadDigest,
@@ -185,6 +258,15 @@ func normalizedConfig(cfg Config) Config {
 	}
 	if cfg.RouteFailurePolicy == "" {
 		cfg.RouteFailurePolicy = hookenum.RouteFailurePolicyDiagnostic
+	}
+	if cfg.OpsFeedRetention <= 0 {
+		cfg.OpsFeedRetention = 15 * time.Minute
+	}
+	if cfg.RateLimitWindow <= 0 {
+		cfg.RateLimitWindow = defaultRateLimitWindow
+	}
+	if cfg.RateLimitBurst <= 0 {
+		cfg.RateLimitBurst = defaultRateLimitBurst
 	}
 	return cfg
 }

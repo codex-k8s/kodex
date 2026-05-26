@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-26
-related_issues: [698, 753, 778, 786, 793, 808, 322]
+related_issues: [698, 753, 778, 786, 793, 808, 823, 322]
 related_prs: []
 related_adrs: []
 approvals:
@@ -75,7 +75,7 @@ approvals:
 | Event classifier | Приводит событие к одному из MVP event types и вычисляет safe category: lifecycle, prompt, pre-tool, permission, post-tool, stop. |
 | Route planner/registry | Формирует набор downstream-владельцев, проверяет включение route config и проецирует только разрешённые `safe_parts` для каждого owner port. |
 | Decision bridge | Для `PermissionRequest` и отдельных `PreToolUse` ждёт решение `governance-manager` и delivery/callback через `interaction-hub` в пределах timeout; `agent-manager` получает только ожидание flow и refs. |
-| Operational feed | Пишет короткую ленту для realtime UI и диагностики с retention. |
+| Operational feed | Пишет bounded короткую ленту для realtime UI и диагностики с retention: safe summary, event kind, route result, owner target, digest, size bucket, status, reject reason и timestamps. |
 | Audit/metrics emitter | Фиксирует решения, отказы, sanitizer events, route latency, duplicates, rate limits и owner timeouts. |
 
 ## Runtime contract emitter/sidecar
@@ -225,6 +225,7 @@ sequenceDiagram
 | `hook.owner_unavailable` | Retry/backoff для asynchronous routes; fail-closed для permission bridge по policy. |
 | `hook.decision_timeout` | Безопасный отказ или controlled wait по policy `governance-manager`. |
 | `hook.rate_limited` | Отклонить или деградировать realtime-only events; не терять audit-critical events. |
+| `hook.backpressure` | Не маршрутизировать событие дальше и вернуть безопасную ошибку, если bounded ops/feed admission не может принять событие. |
 
 ## Наблюдаемость
 
@@ -234,12 +235,16 @@ sequenceDiagram
 - `hook_ingress_rejected_total{reason}`
 - `hook_ingress_sanitized_total{reason}`
 - `hook_ingress_payload_bytes{event}`
+- `hook_ingress_payload_size_bucket_total{event,bucket}`
 - `hook_ingress_route_latency_seconds{route}`
+- `hook_ingress_route_diagnostics_total{route,result}` со значениями `accepted`, `rejected`, `redacted`, `dropped`, `downstream_failed`, `disabled`, `unsupported`
 - `hook_ingress_decision_latency_seconds{event}`
 - `hook_ingress_duplicates_total`
 - `hook_ingress_retry_queue_depth`
 
 Логи должны содержать только ids, route, result, error class, size class и correlation id. Секреты, raw payload и большие previews запрещены.
+
+Сервисный MVP использует in-memory bounded ops feed как service-local diagnostic boundary. Это не аудит, не источник бизнес-истины и не persistent store: entries живут только в памяти процесса, ограничены capacity/TTL и содержат только safe поля. Постоянное хранилище для ops feed вводится отдельным решением, если realtime UI или SRE-требования потребуют восстановления ленты после рестарта.
 
 ## Совместимость
 
