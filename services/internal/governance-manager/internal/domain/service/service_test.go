@@ -1232,6 +1232,34 @@ func TestReleaseDecisionExpectedVersionConflict(t *testing.T) {
 	}
 }
 
+func TestBuildReleaseDecisionPackageRejectsUnsafeEvidence(t *testing.T) {
+	t.Parallel()
+
+	repository := &fakeRepository{ready: true}
+	service := newTestService(repository)
+
+	_, err := service.BuildReleaseDecisionPackage(context.Background(), BuildReleaseDecisionPackageInput{
+		ReleaseCandidateRef: "release:v1.0.0",
+		ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha"},
+		ProviderRefs:        []byte(`[{"pull_request_ref":"provider:pr:1","raw_provider_payload":"token=secret"}]`),
+		EvidenceRefs: []value.EvidenceRef{{
+			Kind:    "provider_check",
+			Ref:     "provider:check:1",
+			Summary: "bounded check summary",
+		}},
+		Meta: CommandMeta{
+			CommandID: ptrUUID(uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")),
+			Actor:     value.Actor{Type: "service", ID: "agent-manager"},
+		},
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("BuildReleaseDecisionPackage() error = %v, want ErrInvalidArgument", err)
+	}
+	if repository.mutationCalls != 0 {
+		t.Fatalf("mutation calls = %d, want 0", repository.mutationCalls)
+	}
+}
+
 func TestReleaseReadAccessDeniedBeforeRepositoryRead(t *testing.T) {
 	t.Parallel()
 
@@ -1253,6 +1281,46 @@ func TestReleaseReadAccessDeniedBeforeRepositoryRead(t *testing.T) {
 	}
 	if repository.releasePackageReads != 0 {
 		t.Fatalf("release package reads = %d, want 0 before access allow", repository.releasePackageReads)
+	}
+}
+
+func TestReleaseListRejectsUnappliedAccessContexts(t *testing.T) {
+	t.Parallel()
+
+	repository := &fakeRepository{ready: true}
+	service := newTestService(repository)
+	meta := QueryMeta{Actor: value.Actor{Type: "service", ID: "agent-manager"}}
+
+	_, _, err := service.ListReleaseDecisionPackages(context.Background(), ListReleaseDecisionPackagesInput{
+		Filter: query.ReleaseDecisionPackageFilter{ProjectContext: value.ProjectContextRef{RepositoryRef: "repo:alpha"}},
+		Meta:   meta,
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("ListReleaseDecisionPackages(repository only) error = %v, want ErrInvalidArgument", err)
+	}
+	_, _, err = service.ListReleaseDecisionPackages(context.Background(), ListReleaseDecisionPackagesInput{
+		Filter: query.ReleaseDecisionPackageFilter{ProjectContext: value.ProjectContextRef{ReleaseLineRef: "release-line:stable"}},
+		Meta:   meta,
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("ListReleaseDecisionPackages(release line only) error = %v, want ErrInvalidArgument", err)
+	}
+	_, _, err = service.ListReleaseDecisions(context.Background(), ListReleaseDecisionsInput{
+		Filter: query.ReleaseDecisionFilter{ProjectContext: value.ProjectContextRef{RepositoryRef: "repo:alpha"}},
+		Meta:   meta,
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("ListReleaseDecisions(repository only) error = %v, want ErrInvalidArgument", err)
+	}
+	_, _, err = service.ListReleaseDecisions(context.Background(), ListReleaseDecisionsInput{
+		Filter: query.ReleaseDecisionFilter{ProjectContext: value.ProjectContextRef{ReleaseLineRef: "release-line:stable"}},
+		Meta:   meta,
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("ListReleaseDecisions(release line only) error = %v, want ErrInvalidArgument", err)
+	}
+	if repository.releasePackageListCalls != 0 || repository.releaseDecisionListCalls != 0 {
+		t.Fatalf("list calls = packages:%d decisions:%d, want 0 before valid access context", repository.releasePackageListCalls, repository.releaseDecisionListCalls)
 	}
 }
 
@@ -1307,6 +1375,9 @@ func TestBlockingSignalLifecycleAndSafeEventPayload(t *testing.T) {
 	if signal.Status != enum.BlockingSignalStatusResolved || signal.ResolvedAt == nil || signal.Version != 2 {
 		t.Fatalf("resolved signal = %+v, want resolved v2", signal)
 	}
+	if payload := string(repository.events[0].Payload); !strings.Contains(payload, `"reason_code":"resolved"`) {
+		t.Fatalf("resolved signal event payload = %s, want reason_code", payload)
+	}
 }
 
 func TestReleaseSafetyStateCreateAndUpdate(t *testing.T) {
@@ -1343,8 +1414,8 @@ func TestReleaseSafetyStateCreateAndUpdate(t *testing.T) {
 
 	state, err := service.RecordReleaseSafetyState(context.Background(), RecordReleaseSafetyStateInput{
 		ReleaseDecisionPackageID: packageID,
-		CurrentState:             enum.ReleaseSafetyStateKindAwaitingReleaseGate,
-		LastStateReason:          "active blocker",
+		CurrentState:             enum.ReleaseSafetyStateKindPostdeployObservation,
+		LastStateReason:          "postdeploy observation",
 		Meta:                     CommandMeta{CommandID: &createCommandID, Actor: value.Actor{Type: "service", ID: "runtime-manager"}},
 	})
 	if err != nil {
@@ -1352,6 +1423,9 @@ func TestReleaseSafetyStateCreateAndUpdate(t *testing.T) {
 	}
 	if state.Version != 1 || state.BlockingSignalCount != 1 {
 		t.Fatalf("state = %+v, want v1 with one active blocker", state)
+	}
+	if payload := string(repository.events[0].Payload); !strings.Contains(payload, `"previous_status":"none"`) || !strings.Contains(payload, `"reason_code":"created"`) {
+		t.Fatalf("created safety event payload = %s, want previous_status and reason_code", payload)
 	}
 	state, err = service.RecordReleaseSafetyState(context.Background(), RecordReleaseSafetyStateInput{
 		ReleaseDecisionPackageID: packageID,
@@ -1369,6 +1443,49 @@ func TestReleaseSafetyStateCreateAndUpdate(t *testing.T) {
 	}
 	if state.Version != 2 || state.CurrentState != enum.ReleaseSafetyStateKindStable {
 		t.Fatalf("state = %+v, want stable v2", state)
+	}
+	if payload := string(repository.events[0].Payload); !strings.Contains(payload, `"previous_status":"postdeploy_observation"`) || !strings.Contains(payload, `"reason_code":"stable"`) {
+		t.Fatalf("updated safety event payload = %s, want previous_status and reason_code", payload)
+	}
+}
+
+func TestReleaseSafetyStateRejectsTerminalRollback(t *testing.T) {
+	t.Parallel()
+
+	packageID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa")
+	stateID := uuid.MustParse("bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb")
+	expectedVersion := int64(1)
+	repository := &fakeRepository{
+		ready: true,
+		releasePackage: entity.ReleaseDecisionPackage{
+			VersionedBase:       entity.VersionedBase{ID: packageID, Version: 3},
+			ReleaseCandidateRef: "release:v1.0.0",
+			ProjectContext:      value.ProjectContextRef{ProjectRef: "project:alpha"},
+		},
+		releaseSafetyState: entity.ReleaseSafetyState{
+			VersionedBase:            entity.VersionedBase{ID: stateID, Version: 1},
+			ReleaseDecisionPackageID: packageID,
+			CurrentState:             enum.ReleaseSafetyStateKindStable,
+		},
+	}
+	service := newTestService(repository)
+
+	_, err := service.RecordReleaseSafetyState(context.Background(), RecordReleaseSafetyStateInput{
+		ReleaseDecisionPackageID: packageID,
+		CurrentState:             enum.ReleaseSafetyStateKindDeploying,
+		RuntimeJobRef:            "runtime:job:redeploy",
+		LastStateReason:          "redeploy",
+		Meta: CommandMeta{
+			CommandID:       ptrUUID(uuid.MustParse("cccccccc-cccc-4ccc-8ccc-cccccccccccc")),
+			ExpectedVersion: &expectedVersion,
+			Actor:           value.Actor{Type: "service", ID: "runtime-manager"},
+		},
+	})
+	if !errors.Is(err, errs.ErrPreconditionFailed) {
+		t.Fatalf("RecordReleaseSafetyState() error = %v, want ErrPreconditionFailed", err)
+	}
+	if repository.mutationCalls != 0 {
+		t.Fatalf("mutation calls = %d, want 0", repository.mutationCalls)
 	}
 }
 
@@ -1398,6 +1515,7 @@ type fakeRepository struct {
 	gateDecisionListCalls    int
 	releasePackage           entity.ReleaseDecisionPackage
 	releasePackageReads      int
+	releasePackageListCalls  int
 	releaseDecision          entity.ReleaseDecision
 	releaseDecisionReads     int
 	releaseDecisionListCalls int
@@ -1594,6 +1712,7 @@ func (repository *fakeRepository) GetReleaseDecisionPackage(_ context.Context, _
 }
 
 func (repository *fakeRepository) ListReleaseDecisionPackages(_ context.Context, _ query.ReleaseDecisionPackageFilter) ([]entity.ReleaseDecisionPackage, query.PageResult, error) {
+	repository.releasePackageListCalls++
 	return []entity.ReleaseDecisionPackage{repository.releasePackage}, query.PageResult{}, nil
 }
 
