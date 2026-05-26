@@ -762,7 +762,7 @@ func (s *Service) RecordChannelCallback(ctx context.Context, input RecordChannel
 	if err != nil {
 		return ChannelCallbackResult{}, err
 	}
-	fingerprint, err := fingerprintInput(input)
+	fingerprint, err := channelCallbackRequestFingerprint(input)
 	if err != nil {
 		return ChannelCallbackResult{}, err
 	}
@@ -1367,14 +1367,19 @@ func (s *Service) resolveChannelCallback(ctx context.Context, envelope value.Cha
 		if err != nil {
 			return callbackResolution{}, errs.ErrInvalidArgument
 		}
-		request, err := s.repository.GetInteractionRequest(ctx, requestID)
+		if resolved.requestID != nil && *resolved.requestID != requestID {
+			return callbackResolution{}, errs.ErrConflict
+		}
+		resolved.requestID = uuidPtr(requestID)
+	}
+	if resolved.requestID != nil {
+		request, err := s.repository.GetInteractionRequest(ctx, *resolved.requestID)
 		if err != nil {
 			return callbackResolution{}, err
 		}
-		if resolved.requestID != nil && *resolved.requestID != request.ID {
+		if request.Status.Terminal() {
 			return callbackResolution{}, errs.ErrConflict
 		}
-		resolved.requestID = uuidPtr(request.ID)
 		if !callbackActionAllowed(request.AllowedActions, envelope.Action) {
 			return callbackResolution{}, errs.ErrConflict
 		}
@@ -1506,17 +1511,8 @@ func deliveryAttemptWithResult(attempt entity.DeliveryAttempt, result value.Chan
 		attempt.Status = enum.DeliveryAttemptStatusExpired
 		applyDeliveryResultError(&attempt, result, nil, enum.DeliveryErrorClassTemporary, "DELIVERY_EXPIRED")
 		return attempt, interactionevents.EventDeliveryExpired, nil
-	case enum.ChannelDeliveryResultStatusDeferred:
-		if result.RetryAfter == nil {
-			return entity.DeliveryAttempt{}, "", errs.ErrInvalidArgument
-		}
-		attempt.Status = enum.DeliveryAttemptStatusFailed
-		applyDeliveryResultError(&attempt, result, result.RetryAfter, enum.DeliveryErrorClassTemporary, "DELIVERY_DEFERRED")
-		return attempt, interactionevents.EventDeliveryFailed, nil
-	case enum.ChannelDeliveryResultStatusRejected:
-		attempt.Status = enum.DeliveryAttemptStatusFailed
-		applyDeliveryResultError(&attempt, result, nil, enum.DeliveryErrorClassPolicy, "DELIVERY_REJECTED")
-		return attempt, interactionevents.EventDeliveryFailed, nil
+	case enum.ChannelDeliveryResultStatusDeferred, enum.ChannelDeliveryResultStatusRejected:
+		return entity.DeliveryAttempt{}, "", errs.ErrInvalidArgument
 	case enum.ChannelDeliveryResultStatusFailed:
 		if result.ErrorClass == "" || result.ErrorCode == "" {
 			return entity.DeliveryAttempt{}, "", errs.ErrInvalidArgument
@@ -1624,12 +1620,31 @@ type callbackEnvelopeFingerprintInput struct {
 	AnswerObject    value.ObjectRef              `json:"answer_object,omitempty"`
 	SignatureStatus enum.CallbackSignatureStatus `json:"signature_status"`
 	GatewayRef      string                       `json:"gateway_ref,omitempty"`
-	ReceivedAt      string                       `json:"received_at"`
 	CorrelationID   string                       `json:"correlation_id,omitempty"`
 }
 
+type callbackCommandFingerprintInput struct {
+	Meta     value.CommandMeta                `json:"meta"`
+	Callback callbackEnvelopeFingerprintInput `json:"callback"`
+}
+
+func channelCallbackRequestFingerprint(input RecordChannelCallbackInput) (string, error) {
+	return fingerprintInput(callbackCommandFingerprintInput{
+		Meta:     input.Meta,
+		Callback: callbackEnvelopeSemanticFingerprintInput(input.Callback),
+	})
+}
+
 func callbackEnvelopeFingerprint(callback value.ChannelCallbackEnvelope) (string, error) {
-	fingerprint, err := fingerprintInput(callbackEnvelopeFingerprintInput{
+	fingerprint, err := fingerprintInput(callbackEnvelopeSemanticFingerprintInput(callback))
+	if err != nil {
+		return "", err
+	}
+	return "sha256:" + fingerprint, nil
+}
+
+func callbackEnvelopeSemanticFingerprintInput(callback value.ChannelCallbackEnvelope) callbackEnvelopeFingerprintInput {
+	return callbackEnvelopeFingerprintInput{
 		ContractVersion: callback.ContractVersion,
 		CallbackID:      callback.CallbackID,
 		DeliveryID:      callback.DeliveryID,
@@ -1640,13 +1655,8 @@ func callbackEnvelopeFingerprint(callback value.ChannelCallbackEnvelope) (string
 		AnswerObject:    callback.AnswerObject,
 		SignatureStatus: callback.SignatureStatus,
 		GatewayRef:      callback.GatewayRef,
-		ReceivedAt:      timeProto(&callback.ReceivedAt),
 		CorrelationID:   callback.CorrelationID,
-	})
-	if err != nil {
-		return "", err
 	}
-	return "sha256:" + fingerprint, nil
 }
 
 func nextAttemptNumber(attempts []entity.DeliveryAttempt) int32 {
