@@ -67,6 +67,9 @@ func recordAgentActivityRequest(event value.SafeHookEvent) (*agentsv1.RecordAgen
 	if event.RunContext == nil || event.ToolContext == nil || event.EventTime.IsZero() {
 		return nil, hookerrs.ErrInvalidArgument
 	}
+	if event.HookEventName == hookenum.HookEventPostToolUse && (event.ExitStatus == nil || strings.TrimSpace(event.OutputDigest) == "") {
+		return nil, hookerrs.ErrInvalidArgument
+	}
 	kind, status := activityKindAndStatus(event)
 	if kind == agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_UNSPECIFIED {
 		return nil, hookerrs.ErrInvalidArgument
@@ -111,13 +114,17 @@ func activityKindAndStatus(event value.SafeHookEvent) (agentsv1.AgentActivityKin
 	case hookenum.HookEventPreToolUse:
 		return agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_TOOL_USE, agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_STARTED
 	case hookenum.HookEventPostToolUse:
-		if event.BoundedError != nil {
+		if postToolUseFailed(event) {
 			return agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_TOOL_RESULT, agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_FAILED
 		}
 		return agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_TOOL_RESULT, agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_SUCCEEDED
 	default:
 		return agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_UNSPECIFIED, agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_UNSPECIFIED
 	}
+}
+
+func postToolUseFailed(event value.SafeHookEvent) bool {
+	return event.BoundedError != nil || (event.ExitStatus != nil && *event.ExitStatus != 0)
 }
 
 func activityCommandMeta(event value.SafeHookEvent) *agentsv1.CommandMeta {
@@ -183,6 +190,8 @@ type activitySafeDetails struct {
 	ProviderSignalKind    string `json:"provider_signal_kind,omitempty"`
 	RateLimitScope        string `json:"rate_limit_scope,omitempty"`
 	RateLimitHintClass    string `json:"rate_limit_hint_class,omitempty"`
+	ExitStatus            *int   `json:"exit_status,omitempty"`
+	OutputDigest          string `json:"output_digest,omitempty"`
 	BoundedErrorClass     string `json:"bounded_error_class,omitempty"`
 	BoundedErrorDigest    string `json:"bounded_error_digest,omitempty"`
 	BoundedErrorTruncated bool   `json:"bounded_error_truncated,omitempty"`
@@ -252,6 +261,11 @@ func marshalActivitySafeDetails(event value.SafeHookEvent) (string, error) {
 		details.MCPToolName = stringPtrValue(event.ToolContext.MCPToolName)
 		details.CommandDigest = stringPtrValue(event.ToolContext.CommandDigest)
 	}
+	if event.ExitStatus != nil {
+		exitStatus := *event.ExitStatus
+		details.ExitStatus = &exitStatus
+	}
+	details.OutputDigest = strings.TrimSpace(event.OutputDigest)
 	if event.ProviderArtifactSignal != nil {
 		details.ProviderKind = event.ProviderArtifactSignal.ProviderKind
 		details.ProviderArtifactKind = event.ProviderArtifactSignal.ArtifactKind

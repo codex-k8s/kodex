@@ -61,6 +61,7 @@ func TestActivityRouteRecordsPostToolUseSafeFailureWithoutRawLeak(t *testing.T) 
 	route := NewActivityRoute(recorder)
 	event := validActivityEvent(hookenum.HookEventPostToolUse)
 	event.SafeSummary = "Command finished with a bounded error digest."
+	*event.ExitStatus = 1
 	event.BoundedError = &value.BoundedError{
 		ErrorClass:  "command_failed",
 		SafeMessage: "raw stdout secret-value /home/s/projects-second/kodex-agent-2 must not leave ingress",
@@ -88,6 +89,42 @@ func TestActivityRouteRecordsPostToolUseSafeFailureWithoutRawLeak(t *testing.T) 
 		}
 	}
 	assertContainsAll(t, request.GetBoundedError(), "class=command_failed", "digest="+digest("e"), "truncated=true")
+	assertContainsAll(t, request.GetSafeDetailsJson(), `"exit_status":1`, `"output_digest":"`+digest("o")+`"`)
+}
+
+func TestActivityRouteRecordsPostToolUseFailedExitStatusWithoutBoundedError(t *testing.T) {
+	t.Parallel()
+
+	recorder := &recordingActivityRecorder{}
+	route := NewActivityRoute(recorder)
+	event := validActivityEvent(hookenum.HookEventPostToolUse)
+	*event.ExitStatus = 2
+	event.BoundedError = nil
+
+	if err := route.DispatchSafeHookEvent(context.Background(), event); err != nil {
+		t.Fatalf("DispatchSafeHookEvent(): %v", err)
+	}
+	request := recorder.onlyRequest(t)
+	if request.GetStatus() != agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_FAILED {
+		t.Fatalf("status = %s, want failed for non-zero exit_status", request.GetStatus())
+	}
+	if request.GetBoundedError() != "" {
+		t.Fatalf("bounded_error = %q, want empty when sanitizer did not provide bounded_error", request.GetBoundedError())
+	}
+	assertContainsAll(t, request.GetSafeDetailsJson(), `"exit_status":2`, `"output_digest":"`+digest("o")+`"`)
+}
+
+func TestActivityRouteRejectsPostToolUseWithoutRequiredSafeResultParts(t *testing.T) {
+	t.Parallel()
+
+	route := NewActivityRoute(&recordingActivityRecorder{})
+	event := validActivityEvent(hookenum.HookEventPostToolUse)
+	event.ExitStatus = nil
+
+	err := route.DispatchSafeHookEvent(context.Background(), event)
+	if !errors.Is(err, hookerrs.ErrInvalidArgument) {
+		t.Fatalf("DispatchSafeHookEvent() error = %v, want ErrInvalidArgument", err)
+	}
 }
 
 func TestActivityRouteSkipsNonActivityHooks(t *testing.T) {
@@ -122,7 +159,7 @@ func validActivityEvent(eventName hookenum.HookEventName) value.SafeHookEvent {
 	mcpToolName := "functions.exec_command"
 	versionRef := "skill-version:go-guidelines@v1"
 	packageRef := "package-installation:guidance-1"
-	return value.SafeHookEvent{
+	event := value.SafeHookEvent{
 		EventID:       uuid.MustParse("11111111-2222-4111-8111-111111111111"),
 		HookEventName: eventName,
 		EventTime:     time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC),
@@ -168,6 +205,13 @@ func validActivityEvent(eventName hookenum.HookEventName) value.SafeHookEvent {
 		PayloadDigest: digest("a"),
 		CorrelationID: "run-5555:pre-tool-use:toolu-001",
 	}
+	if eventName == hookenum.HookEventPostToolUse {
+		exitStatus := 0
+		event.ExitStatus = &exitStatus
+		event.OutputDigest = digest("o")
+		event.CorrelationID = "run-5555:post-tool-use:toolu-001"
+	}
+	return event
 }
 
 func assertContainsAll(t *testing.T, value string, parts ...string) {

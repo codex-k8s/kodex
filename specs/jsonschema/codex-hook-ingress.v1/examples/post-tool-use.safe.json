@@ -53,7 +53,7 @@
     {
       "owner": "agent-manager",
       "delivery_mode": "async",
-      "safe_parts": ["source_context", "run_context", "tool_context", "capability_context", "safe_summary", "bounded_error", "provider_artifact_signal", "rate_limit_hint", "payload_digest", "correlation_id"]
+      "safe_parts": ["source_context", "run_context", "tool_context", "capability_context", "safe_summary", "exit_status", "output_digest", "bounded_error", "provider_artifact_signal", "rate_limit_hint", "payload_digest", "correlation_id"]
     },
     {
       "owner": "provider-hub",

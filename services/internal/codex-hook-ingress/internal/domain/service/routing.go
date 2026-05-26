@@ -189,6 +189,13 @@ func projectSafeHookEvent(envelope value.HookEnvelope, route value.DownstreamRou
 			event.RiskClass = envelope.SafePayload.RiskClass
 		case hookenum.SafeEventPartSanitizedReason:
 			event.SanitizedReason = envelope.SafePayload.SanitizedReason
+		case hookenum.SafeEventPartExitStatus:
+			if envelope.SafePayload.ExitStatus != nil {
+				exitStatus := *envelope.SafePayload.ExitStatus
+				event.ExitStatus = &exitStatus
+			}
+		case hookenum.SafeEventPartOutputDigest:
+			event.OutputDigest = envelope.SafePayload.OutputDigest
 		case hookenum.SafeEventPartBoundedError:
 			if envelope.SafePayload.BoundedError != nil {
 				boundedError := *envelope.SafePayload.BoundedError
@@ -250,7 +257,7 @@ func canonicalRoutePlan(event hookenum.HookEventName) []value.DownstreamRoute {
 		}
 	case hookenum.HookEventPostToolUse:
 		return []value.DownstreamRoute{
-			canonicalRoute(hookenum.DownstreamOwnerAgentManager, hookenum.DeliveryModeAsync, "source_context", "run_context", "tool_context", "capability_context", "safe_summary", "bounded_error", "provider_artifact_signal", "rate_limit_hint", "payload_digest", "correlation_id"),
+			canonicalRoute(hookenum.DownstreamOwnerAgentManager, hookenum.DeliveryModeAsync, "source_context", "run_context", "tool_context", "capability_context", "safe_summary", "exit_status", "output_digest", "bounded_error", "provider_artifact_signal", "rate_limit_hint", "payload_digest", "correlation_id"),
 			canonicalRoute(hookenum.DownstreamOwnerRuntimeManager, hookenum.DeliveryModeAsync, "source_context", "run_context", "tool_context", "bounded_error", "payload_digest", "correlation_id"),
 			canonicalRoute(hookenum.DownstreamOwnerProviderHub, hookenum.DeliveryModeAsync, "source_context", "run_context", "provider_artifact_signal", "rate_limit_hint", "payload_digest", "correlation_id"),
 			canonicalRoute(hookenum.DownstreamOwnerOperationsFeed, hookenum.DeliveryModeRealtime, "run_context", "tool_context", "bounded_error", "provider_artifact_signal", "rate_limit_hint", "correlation_id"),

@@ -96,7 +96,7 @@ func TestAgentActivityRoutePlanCarriesSafeActivityParts(t *testing.T) {
 	if !ok {
 		t.Fatal("PostToolUse agent-manager route is missing")
 	}
-	for _, part := range []string{"source_context", "run_context", "tool_context", "capability_context", "safe_summary", "bounded_error", "provider_artifact_signal", "rate_limit_hint", "payload_digest", "correlation_id"} {
+	for _, part := range []string{"source_context", "run_context", "tool_context", "capability_context", "safe_summary", "exit_status", "output_digest", "bounded_error", "provider_artifact_signal", "rate_limit_hint", "payload_digest", "correlation_id"} {
 		if !containsString(postRoute.SafeParts, part) {
 			t.Fatalf("PostToolUse agent-manager safe parts = %v, want %s", postRoute.SafeParts, part)
 		}
@@ -242,6 +242,10 @@ func TestSubmitHookEventDoesNotReplayAgentActivityDispatchForDuplicate(t *testin
 	}
 	if len(route.Events()) != 1 {
 		t.Fatalf("agent-manager route dispatch count = %d, want 1", len(route.Events()))
+	}
+	activityEvent := route.Events()[0]
+	if activityEvent.ExitStatus == nil || *activityEvent.ExitStatus != 1 || activityEvent.OutputDigest != digest("b") {
+		t.Fatalf("agent-manager activity result parts = exit_status %v output_digest %q", activityEvent.ExitStatus, activityEvent.OutputDigest)
 	}
 }
 

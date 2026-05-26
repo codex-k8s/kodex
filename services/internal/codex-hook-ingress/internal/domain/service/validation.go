@@ -81,6 +81,8 @@ var (
 		"prompt_digest",
 		"risk_class",
 		"sanitized_reason",
+		"exit_status",
+		"output_digest",
 		"bounded_error",
 		"provider_artifact_signal",
 		"rate_limit_hint",

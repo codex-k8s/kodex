@@ -40,6 +40,8 @@ type SafeHookEvent struct {
 	PromptDigest           string                   `json:"prompt_digest,omitempty"`
 	RiskClass              string                   `json:"risk_class,omitempty"`
 	SanitizedReason        string                   `json:"sanitized_reason,omitempty"`
+	ExitStatus             *int                     `json:"exit_status,omitempty"`
+	OutputDigest           string                   `json:"output_digest,omitempty"`
 	BoundedError           *BoundedError            `json:"bounded_error,omitempty"`
 	ProviderArtifactSignal *ProviderArtifactSignal  `json:"provider_artifact_signal,omitempty"`
 	RateLimitHint          *RateLimitHint           `json:"rate_limit_hint,omitempty"`
