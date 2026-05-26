@@ -586,21 +586,24 @@ func (s *Service) GetGateDecision(ctx context.Context, input GetGateDecisionInpu
 }
 
 func (s *Service) ListGateRequests(ctx context.Context, input ListGateRequestsInput) ([]entity.GateRequest, query.PageResult, error) {
-	if err := s.authorizeGateTargetRead(ctx, input.Meta, input.Filter.Target); err != nil {
-		return nil, query.PageResult{}, err
-	}
-	return s.repository.ListGateRequests(ctx, input.Filter)
+	return listWithAuthorization(ctx, input.Meta, input.Filter, s.authorizeGateRequestList, s.repository.ListGateRequests)
 }
 
 func (s *Service) ListGateDecisions(ctx context.Context, input ListGateDecisionsInput) ([]entity.GateDecision, query.PageResult, error) {
-	if input.Filter.GateRequestID != nil {
-		if err := s.authorizeGateRead(ctx, input.Meta, *input.Filter.GateRequestID); err != nil {
-			return nil, query.PageResult{}, err
-		}
-	} else if err := s.authorizeGateTargetRead(ctx, input.Meta, input.Filter.Target); err != nil {
+	return listWithAuthorization(ctx, input.Meta, input.Filter, s.authorizeGateDecisionList, s.repository.ListGateDecisions)
+}
+
+func listWithAuthorization[Item any, Filter any](
+	ctx context.Context,
+	meta QueryMeta,
+	filter Filter,
+	authorize func(context.Context, QueryMeta, Filter) error,
+	list func(context.Context, Filter) ([]Item, query.PageResult, error),
+) ([]Item, query.PageResult, error) {
+	if err := authorize(ctx, meta, filter); err != nil {
 		return nil, query.PageResult{}, err
 	}
-	return s.repository.ListGateDecisions(ctx, input.Filter)
+	return list(ctx, filter)
 }
 
 // BuildReleaseDecisionPackage stores bounded release evidence refs.
@@ -736,7 +739,38 @@ func (s *Service) authorizeGateRead(ctx context.Context, meta QueryMeta, gateReq
 }
 
 func (s *Service) authorizeGateTargetRead(ctx context.Context, meta QueryMeta, target value.ExternalRef) error {
+	if strings.TrimSpace(target.Type) == "" || strings.TrimSpace(target.Ref) == "" {
+		return errs.ErrInvalidArgument
+	}
 	return s.authorizeQuery(ctx, meta, actionGateRead, gateTargetResource(target))
+}
+
+func (s *Service) authorizeRiskAssessmentRead(ctx context.Context, meta QueryMeta, riskAssessmentID uuid.UUID) error {
+	return s.authorizeQuery(ctx, meta, actionRiskRead, riskAssessmentResource(riskAssessmentID))
+}
+
+func (s *Service) authorizeGateRequestList(ctx context.Context, meta QueryMeta, filter query.GateRequestFilter) error {
+	if externalRefProvided(filter.Target) {
+		return s.authorizeGateTargetRead(ctx, meta, filter.Target)
+	}
+	if filter.RiskAssessmentID != nil {
+		return s.authorizeRiskAssessmentRead(ctx, meta, *filter.RiskAssessmentID)
+	}
+	return errs.ErrInvalidArgument
+}
+
+func (s *Service) authorizeGateDecisionList(ctx context.Context, meta QueryMeta, filter query.GateDecisionFilter) error {
+	if filter.GateRequestID != nil {
+		return s.authorizeGateRead(ctx, meta, *filter.GateRequestID)
+	}
+	if externalRefProvided(filter.Target) {
+		return s.authorizeGateTargetRead(ctx, meta, filter.Target)
+	}
+	return errs.ErrInvalidArgument
+}
+
+func externalRefProvided(ref value.ExternalRef) bool {
+	return strings.TrimSpace(ref.Type) != "" || strings.TrimSpace(ref.Ref) != ""
 }
 
 func ensureGateRequestOpen(status enum.GateRequestStatus) error {

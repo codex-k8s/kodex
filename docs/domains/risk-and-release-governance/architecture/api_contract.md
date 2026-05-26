@@ -59,9 +59,9 @@ approvals:
 | `CancelGate` | gRPC command | `governance.gate.decide` | `command_id` + expected version | Переводит открытый gate request в `cancelled`; доставка и callback остаются у `interaction-hub`. |
 | `ExpireGate` | gRPC command | `governance.gate.decide` | `command_id` + expected version | Переводит открытый gate request в `expired` после timeout policy или delivery expiry. |
 | `GetGateDecision` | gRPC query | `governance.gate.read` | `gate_request_id` | Читает одно final gate decision после fail-closed проверки доступа по gate request. |
-| `ListGateDecisions` | gRPC query | `governance.gate.read` | нет | Читает final gate decisions по gate request, target или outcome. |
+| `ListGateDecisions` | gRPC query | `governance.gate.read` | gate request или target | Читает final gate decisions по gate request или target; outcome используется только как уточняющий фильтр. |
 | `GetGateRequest` | gRPC query | `governance.gate.read` | нет | Читает gate request, evidence и decision status. |
-| `ListGateRequests` | gRPC query | `governance.gate.read` | нет | Читает ожидающие, resolved или просроченные gates. |
+| `ListGateRequests` | gRPC query | `governance.gate.read` или `governance.risk.read` | target или risk assessment | Читает ожидающие, resolved или просроченные gates по target или assessment; status используется только как уточняющий фильтр. |
 | `BuildReleaseDecisionPackage` | gRPC command | `governance.release.prepare` | `command_id` | Собирает release evidence из project/provider/runtime/agent refs. |
 | `GetReleaseDecisionPackage` | gRPC query | `governance.release.read` | нет | Читает release evidence package. |
 | `ListReleaseDecisionPackages` | gRPC query | `governance.release.read` | нет | Читает release packages по project/candidate/status. |

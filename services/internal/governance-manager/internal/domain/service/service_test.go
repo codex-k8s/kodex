@@ -606,6 +606,44 @@ func TestGateLifecycleRejectsMissingAccessResource(t *testing.T) {
 	if !errors.Is(err, errs.ErrInvalidArgument) {
 		t.Fatalf("ListGateDecisions() error = %v, want ErrInvalidArgument", err)
 	}
+	_, _, err = service.ListGateDecisions(context.Background(), ListGateDecisionsInput{
+		Filter: query.GateDecisionFilter{Outcome: enum.GateOutcomeApprove},
+		Meta:   meta,
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("ListGateDecisions(outcome only) error = %v, want ErrInvalidArgument", err)
+	}
+}
+
+func TestListGateRequestsByAssessmentUsesRiskReadAccessContext(t *testing.T) {
+	t.Parallel()
+
+	riskAssessmentID := uuid.MustParse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+	repository := &fakeRepository{ready: true}
+	var captured AuthorizationRequest
+	service := NewWithConfig(Config{
+		Repository:  repository,
+		Clock:       systemClock{},
+		IDGenerator: uuidGenerator{},
+		Authorizer: authorizerFunc(func(_ context.Context, request AuthorizationRequest) error {
+			captured = request
+			return nil
+		}),
+	})
+
+	_, _, err := service.ListGateRequests(context.Background(), ListGateRequestsInput{
+		Filter: query.GateRequestFilter{RiskAssessmentID: &riskAssessmentID},
+		Meta:   QueryMeta{Actor: value.Actor{Type: "service", ID: "agent-manager"}},
+	})
+	if err != nil {
+		t.Fatalf("ListGateRequests(): %v", err)
+	}
+	if captured.ActionKey != actionRiskRead || captured.ResourceType != "governance_risk_assessment" || captured.ResourceID != riskAssessmentID.String() {
+		t.Fatalf("access request = %+v, want risk read on assessment %s", captured, riskAssessmentID)
+	}
+	if repository.gateRequestListCalls != 1 {
+		t.Fatalf("gate request list calls = %d, want 1", repository.gateRequestListCalls)
+	}
 }
 
 func TestGetGateDecisionRequiresGateRequestForAuthorization(t *testing.T) {
@@ -667,23 +705,25 @@ func TestCancelGateReturnsNotFound(t *testing.T) {
 
 type fakeRepository struct {
 	governancerepo.Repository
-	ready             bool
-	hasCommandResult  bool
-	commandResult     entity.CommandResult
-	profile           entity.RiskProfile
-	profileVersion    entity.RiskProfileVersion
-	assessment        entity.RiskAssessment
-	reviewSignal      entity.ReviewSignal
-	gateRequest       entity.GateRequest
-	gateRequestErr    error
-	gateRequestReads  int
-	gateDecision      entity.GateDecision
-	gateDecisionErr   error
-	gateDecisionReads int
-	releasePackage    entity.ReleaseDecisionPackage
-	result            entity.CommandResult
-	events            []entity.OutboxEvent
-	mutationCalls     int
+	ready                 bool
+	hasCommandResult      bool
+	commandResult         entity.CommandResult
+	profile               entity.RiskProfile
+	profileVersion        entity.RiskProfileVersion
+	assessment            entity.RiskAssessment
+	reviewSignal          entity.ReviewSignal
+	gateRequest           entity.GateRequest
+	gateRequestErr        error
+	gateRequestReads      int
+	gateRequestListCalls  int
+	gateDecision          entity.GateDecision
+	gateDecisionErr       error
+	gateDecisionReads     int
+	gateDecisionListCalls int
+	releasePackage        entity.ReleaseDecisionPackage
+	result                entity.CommandResult
+	events                []entity.OutboxEvent
+	mutationCalls         int
 }
 
 func newTestService(repository *fakeRepository) *Service {
@@ -807,6 +847,16 @@ func (repository *fakeRepository) GetGateDecision(_ context.Context, _ uuid.UUID
 		return entity.GateDecision{}, repository.gateDecisionErr
 	}
 	return repository.gateDecision, nil
+}
+
+func (repository *fakeRepository) ListGateRequests(_ context.Context, _ query.GateRequestFilter) ([]entity.GateRequest, query.PageResult, error) {
+	repository.gateRequestListCalls++
+	return nil, query.PageResult{}, nil
+}
+
+func (repository *fakeRepository) ListGateDecisions(_ context.Context, _ query.GateDecisionFilter) ([]entity.GateDecision, query.PageResult, error) {
+	repository.gateDecisionListCalls++
+	return nil, query.PageResult{}, nil
 }
 
 func (repository *fakeRepository) CreateReleaseDecisionPackage(_ context.Context, item entity.ReleaseDecisionPackage, result entity.CommandResult, event entity.OutboxEvent) error {

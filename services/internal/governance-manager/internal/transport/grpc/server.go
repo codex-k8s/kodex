@@ -537,7 +537,7 @@ func (server *Server) GetGateDecision(ctx context.Context, req *governancev1.Get
 	return &governancev1.GateDecisionResponse{GateDecision: toGateDecision(decision)}, nil
 }
 
-// ListGateDecisions returns gate decisions by gate request, target or outcome.
+// ListGateDecisions returns gate decisions by gate request or target, optionally refined by outcome.
 func (server *Server) ListGateDecisions(ctx context.Context, req *governancev1.ListGateDecisionsRequest) (*governancev1.ListGateDecisionsResponse, error) {
 	meta, err := queryMeta(req.GetMeta())
 	if err != nil {
@@ -589,7 +589,7 @@ func (server *Server) GetGateRequest(ctx context.Context, req *governancev1.GetG
 	return response, nil
 }
 
-// ListGateRequests returns gate requests by target or status.
+// ListGateRequests returns gate requests by target or assessment, optionally refined by status.
 func (server *Server) ListGateRequests(ctx context.Context, req *governancev1.ListGateRequestsRequest) (*governancev1.ListGateRequestsResponse, error) {
 	meta, err := queryMeta(req.GetMeta())
 	if err != nil {

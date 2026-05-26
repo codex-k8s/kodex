@@ -50,11 +50,11 @@ service GovernanceManagerService {
   rpc ExpireGate(ExpireGateRequest) returns (GateRequestResponse);
   // GetGateDecision returns one final governance gate decision.
   rpc GetGateDecision(GetGateDecisionRequest) returns (GateDecisionResponse);
-  // ListGateDecisions returns final governance gate decisions by gate request, target or outcome.
+  // ListGateDecisions returns final governance gate decisions by gate request or target, optionally refined by outcome.
   rpc ListGateDecisions(ListGateDecisionsRequest) returns (ListGateDecisionsResponse);
   // GetGateRequest returns one gate request and its final decision when present.
   rpc GetGateRequest(GetGateRequestRequest) returns (GateRequestResponse);
-  // ListGateRequests returns gate requests by target, status or decision state.
+  // ListGateRequests returns gate requests by target or assessment, optionally refined by status.
   rpc ListGateRequests(ListGateRequestsRequest) returns (ListGateRequestsResponse);
   // BuildReleaseDecisionPackage builds a bounded evidence package for a release candidate.
   rpc BuildReleaseDecisionPackage(BuildReleaseDecisionPackageRequest) returns (ReleaseDecisionPackageResponse);
@@ -782,8 +782,11 @@ message GetGateDecisionRequest {
 }
 
 message ListGateDecisionsRequest {
+  // gate_request_id is one accepted fail-closed authorization context.
   optional string gate_request_id = 1;
+  // target is one accepted fail-closed authorization context.
   TargetRef target = 2;
+  // outcome refines a gate request or target query; it is not a standalone authorization context.
   optional GateOutcome outcome = 3;
   PageRequest page = 4;
   QueryMeta meta = 5;
@@ -796,8 +799,11 @@ message GetGateRequestRequest {
 }
 
 message ListGateRequestsRequest {
+  // risk_assessment_id is one accepted fail-closed authorization context.
   optional string risk_assessment_id = 1;
+  // target is one accepted fail-closed authorization context.
   TargetRef target = 2;
+  // status refines an assessment or target query; it is not a standalone authorization context.
   optional GateRequestStatus status = 3;
   PageRequest page = 4;
   QueryMeta meta = 5;

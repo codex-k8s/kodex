@@ -6046,12 +6046,15 @@ func (x *GetGateDecisionRequest) GetGateRequestId() string {
 }
 
 type ListGateDecisionsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	GateRequestId *string                `protobuf:"bytes,1,opt,name=gate_request_id,json=gateRequestId,proto3,oneof" json:"gate_request_id,omitempty"`
-	Target        *TargetRef             `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
-	Outcome       *GateOutcome           `protobuf:"varint,3,opt,name=outcome,proto3,enum=kodex.governance.v1.GateOutcome,oneof" json:"outcome,omitempty"`
-	Page          *PageRequest           `protobuf:"bytes,4,opt,name=page,proto3" json:"page,omitempty"`
-	Meta          *QueryMeta             `protobuf:"bytes,5,opt,name=meta,proto3" json:"meta,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// gate_request_id is one accepted fail-closed authorization context.
+	GateRequestId *string `protobuf:"bytes,1,opt,name=gate_request_id,json=gateRequestId,proto3,oneof" json:"gate_request_id,omitempty"`
+	// target is one accepted fail-closed authorization context.
+	Target *TargetRef `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
+	// outcome refines a gate request or target query; it is not a standalone authorization context.
+	Outcome       *GateOutcome `protobuf:"varint,3,opt,name=outcome,proto3,enum=kodex.governance.v1.GateOutcome,oneof" json:"outcome,omitempty"`
+	Page          *PageRequest `protobuf:"bytes,4,opt,name=page,proto3" json:"page,omitempty"`
+	Meta          *QueryMeta   `protobuf:"bytes,5,opt,name=meta,proto3" json:"meta,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -6182,14 +6185,17 @@ func (x *GetGateRequestRequest) GetMeta() *QueryMeta {
 }
 
 type ListGateRequestsRequest struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	RiskAssessmentId *string                `protobuf:"bytes,1,opt,name=risk_assessment_id,json=riskAssessmentId,proto3,oneof" json:"risk_assessment_id,omitempty"`
-	Target           *TargetRef             `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
-	Status           *GateRequestStatus     `protobuf:"varint,3,opt,name=status,proto3,enum=kodex.governance.v1.GateRequestStatus,oneof" json:"status,omitempty"`
-	Page             *PageRequest           `protobuf:"bytes,4,opt,name=page,proto3" json:"page,omitempty"`
-	Meta             *QueryMeta             `protobuf:"bytes,5,opt,name=meta,proto3" json:"meta,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// risk_assessment_id is one accepted fail-closed authorization context.
+	RiskAssessmentId *string `protobuf:"bytes,1,opt,name=risk_assessment_id,json=riskAssessmentId,proto3,oneof" json:"risk_assessment_id,omitempty"`
+	// target is one accepted fail-closed authorization context.
+	Target *TargetRef `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
+	// status refines an assessment or target query; it is not a standalone authorization context.
+	Status        *GateRequestStatus `protobuf:"varint,3,opt,name=status,proto3,enum=kodex.governance.v1.GateRequestStatus,oneof" json:"status,omitempty"`
+	Page          *PageRequest       `protobuf:"bytes,4,opt,name=page,proto3" json:"page,omitempty"`
+	Meta          *QueryMeta         `protobuf:"bytes,5,opt,name=meta,proto3" json:"meta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ListGateRequestsRequest) Reset() {

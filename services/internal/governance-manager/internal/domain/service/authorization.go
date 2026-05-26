@@ -15,6 +15,7 @@ const (
 	actionGateRequest = accesscatalog.ActionGovernanceGateRequest
 	actionGateRead    = accesscatalog.ActionGovernanceGateRead
 	actionGateDecide  = accesscatalog.ActionGovernanceGateDecide
+	actionRiskRead    = accesscatalog.ActionGovernanceRiskRead
 )
 
 // Authorizer checks whether the caller may access governance-manager state.
@@ -99,4 +100,12 @@ func gateTargetResource(target value.ExternalRef) resourceRef {
 	resource := gateResource(uuid.Nil)
 	resource.ID = strings.TrimSpace(target.Ref)
 	return resource
+}
+
+func riskAssessmentResource(id uuid.UUID) resourceRef {
+	resourceID := ""
+	if id != uuid.Nil {
+		resourceID = id.String()
+	}
+	return resourceRef{Type: accesscatalog.ResourceGovernanceRiskAssessment, ID: resourceID, ScopeType: accesscatalog.ScopeGlobal}
 }

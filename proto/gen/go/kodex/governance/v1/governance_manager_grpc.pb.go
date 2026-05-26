@@ -107,11 +107,11 @@ type GovernanceManagerServiceClient interface {
 	ExpireGate(ctx context.Context, in *ExpireGateRequest, opts ...grpc.CallOption) (*GateRequestResponse, error)
 	// GetGateDecision returns one final governance gate decision.
 	GetGateDecision(ctx context.Context, in *GetGateDecisionRequest, opts ...grpc.CallOption) (*GateDecisionResponse, error)
-	// ListGateDecisions returns final governance gate decisions by gate request, target or outcome.
+	// ListGateDecisions returns final governance gate decisions by gate request or target, optionally refined by outcome.
 	ListGateDecisions(ctx context.Context, in *ListGateDecisionsRequest, opts ...grpc.CallOption) (*ListGateDecisionsResponse, error)
 	// GetGateRequest returns one gate request and its final decision when present.
 	GetGateRequest(ctx context.Context, in *GetGateRequestRequest, opts ...grpc.CallOption) (*GateRequestResponse, error)
-	// ListGateRequests returns gate requests by target, status or decision state.
+	// ListGateRequests returns gate requests by target or assessment, optionally refined by status.
 	ListGateRequests(ctx context.Context, in *ListGateRequestsRequest, opts ...grpc.CallOption) (*ListGateRequestsResponse, error)
 	// BuildReleaseDecisionPackage builds a bounded evidence package for a release candidate.
 	BuildReleaseDecisionPackage(ctx context.Context, in *BuildReleaseDecisionPackageRequest, opts ...grpc.CallOption) (*ReleaseDecisionPackageResponse, error)
@@ -557,11 +557,11 @@ type GovernanceManagerServiceServer interface {
 	ExpireGate(context.Context, *ExpireGateRequest) (*GateRequestResponse, error)
 	// GetGateDecision returns one final governance gate decision.
 	GetGateDecision(context.Context, *GetGateDecisionRequest) (*GateDecisionResponse, error)
-	// ListGateDecisions returns final governance gate decisions by gate request, target or outcome.
+	// ListGateDecisions returns final governance gate decisions by gate request or target, optionally refined by outcome.
 	ListGateDecisions(context.Context, *ListGateDecisionsRequest) (*ListGateDecisionsResponse, error)
 	// GetGateRequest returns one gate request and its final decision when present.
 	GetGateRequest(context.Context, *GetGateRequestRequest) (*GateRequestResponse, error)
-	// ListGateRequests returns gate requests by target, status or decision state.
+	// ListGateRequests returns gate requests by target or assessment, optionally refined by status.
 	ListGateRequests(context.Context, *ListGateRequestsRequest) (*ListGateRequestsResponse, error)
 	// BuildReleaseDecisionPackage builds a bounded evidence package for a release candidate.
 	BuildReleaseDecisionPackage(context.Context, *BuildReleaseDecisionPackageRequest) (*ReleaseDecisionPackageResponse, error)
