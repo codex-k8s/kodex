@@ -5,8 +5,8 @@ title: kodex — C4 Container
 status: active
 owner_role: SA
 created_at: 2026-04-26
-updated_at: 2026-05-15
-related_issues: [599, 600, 601, 602, 655, 711, 747, 753]
+updated_at: 2026-05-25
+related_issues: [599, 600, 601, 602, 655, 711, 747, 753, 781]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -92,7 +92,9 @@ Rel(staffGateway, agent, "Команды запусков и процессов"
 Rel(staffGateway, interaction, "Команды диалогов и согласований", "gRPC")
 Rel(staffGateway, operations, "Проекции для пользовательского интерфейса", "gRPC")
 Rel(provider, integrationGateway, "Доставляет webhook-события", "HTTPS")
-Rel(integrationGateway, providerHub, "Маршрутизация webhook", "gRPC")
+Rel(channels, integrationGateway, "Доставляет callback внешних каналов", "HTTPS")
+Rel(integrationGateway, providerHub, "Маршрутизирует проверенные provider webhook", "gRPC")
+Rel(integrationGateway, interaction, "Маршрутизирует проверенные callback внешних каналов", "gRPC")
 Rel(agent, mcp, "Использует инструменты платформы", "MCP")
 Rel(runner, mcp, "Использует инструменты платформы", "MCP")
 Rel(runner, hookIngress, "Отправляет нормализованные Codex hook events", "HTTP/gRPC")
@@ -179,7 +181,8 @@ Rel(interaction, obj, "Хранит ссылки на медиа", "S3 API")
 ## Тонкие пограничные компоненты
 
 - `web-console` не принимает доменных решений и не собирает состояние напрямую из БД нескольких сервисов-владельцев.
-- `user-gateway`, `staff-gateway` и `integration-gateway` отвечают за входящий HTTP-трафик по своим направлениям, авторизацию, маршрутизацию, пограничную обработку webhook и ограничение частоты запросов на границе, но не хранят доменную правду.
+- `user-gateway`, `staff-gateway` и `integration-gateway` отвечают за входящий HTTP-трафик по своим направлениям, авторизацию, маршрутизацию, пограничную обработку webhook/callback событий и ограничение частоты запросов на границе, но не хранят доменную правду.
+- `integration-gateway` принимает внешние webhook и callback события, проверяет источник, подпись, размер payload, лимиты и backpressure, затем вызывает сервис-владелец по gRPC. Первый MVP-маршрут — provider webhook -> `provider-hub.IngestWebhookEvent`; бизнес-нормализация и provider inbox остаются у `provider-hub`.
 - `platform-mcp-server` даёт MCP-инструментальную поверхность для agent-manager, агентов в слотах и будущих интеграций. Agent-manager и agent-runner обращаются к нему как клиенты MCP. Сам `platform-mcp-server` проверяет источник, очищает данные вызова и маршрутизирует разрешённые инструменты во все сервисы-владельцы по gRPC. Он не становится владельцем агентных запусков, заданий, состояния провайдера, пакетов или проектов.
 - `codex-hook-ingress` принимает нормализованные Codex hook events от hook emitter или локального sidecar. Он не является MCP-сервером и не хранит бизнес-состояние; его задача — проверить источник, очистку и маршрутизировать событие сервису-владельцу.
 

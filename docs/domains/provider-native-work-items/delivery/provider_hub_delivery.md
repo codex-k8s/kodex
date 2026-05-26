@@ -5,8 +5,8 @@ title: kodex — поставка provider-hub
 status: active
 owner_role: EM
 created_at: 2026-05-06
-updated_at: 2026-05-22
-related_issues: [281, 282, 711, 719, 725, 729, 737, 754, 761, 770]
+updated_at: 2026-05-25
+related_issues: [281, 282, 711, 719, 725, 729, 737, 754, 761, 770, 781]
 related_prs: []
 related_docsets:
   - docs/domains/provider-native-work-items/product/requirements.md
@@ -150,7 +150,7 @@ approvals:
 | `project-catalog` | Перед end-to-end bootstrap/adoption | `project_id`, `repository_id`, provider ref, состояние подключения репозитория, `services.yaml` bootstrap/adoption. PRV-8a и PRV-8c принимают эти ссылки как готовый вход и не ходят в `project-catalog`. |
 | `access-manager` | Перед PRV-6.2/PRV-7 и при включении фильтров области операционных состояний | Системные действия провайдера, контракт `ResolveExternalAccountUsage`, подтверждение выбранного внешнего аккаунта, `provider_slug` и ссылка на секрет без значения секрета. Значение после разрешения доступа получает общий `libs/go/secretresolver`; `provider-hub` не хранит токен. |
 | `package-hub` | Перед PRV-8 | Как пакеты ссылаются на provider-репозитории и PR в пакетных репозиториях. |
-| `integration-gateway` | Перед публичным приёмом webhook | Формат внутреннего вызова `IngestWebhookEvent` уже закреплён в `provider-hub`; `integration-gateway` отвечает за внешний HTTP, проверку подписи и передачу проверенного сигнала. |
+| `integration-gateway` | Перед публичным приёмом webhook | IGW-0 закрепил границу и OpenAPI-каркас внешнего HTTP-входа. Формат внутреннего вызова `IngestWebhookEvent` уже закреплён в `provider-hub`; `integration-gateway` отвечает за внешний HTTP, проверку подписи, лимиты, backpressure и передачу проверенного сигнала. |
 | `agent-manager` и `platform-mcp-server` | После PRV-7c | GitHub write-адаптер готов на внутренней gRPC-границе. MCP-0 фиксирует внешнюю MCP-поверхность: provider tools маршрутизируются в `provider-hub`, а источник решения политики по риску и передача `approval_gate_ref` остаются частью последующих интеграционных срезов. |
 | `operations-hub` | Перед расширением операторских экранов | Какие дополнительные поля проекций нужны операторским экранам, сверке и диагностике. |
 

@@ -5,8 +5,8 @@ title: kodex — поставка interaction-hub
 status: active
 owner_role: EM
 created_at: 2026-05-22
-updated_at: 2026-05-22
-related_issues: [582, 768]
+updated_at: 2026-05-25
+related_issues: [582, 768, 781, 783]
 related_prs: []
 related_docsets:
   - docs/domains/interaction-hub/product/requirements.md
@@ -45,7 +45,7 @@ approvals:
 |---|---|---|
 | IH-0 | #582 | Доменная документация, границы, модель данных, API-обзор, delivery-план и карта связей готовы. Код, proto, AsyncAPI и OpenAPI не входят. |
 | IH-1 | #768 | gRPC и AsyncAPI контракты `interaction-hub`, события `interaction.*`, действия доступа и channel contract DTO готовы; сервисная реализация не входит. |
-| IH-2 | не назначено | Сервисный процесс, env-конфигурация, health, readiness, metrics, регистрация `InteractionHubService` и outbox-каркас готовы; бизнес-операции возвращают `Unimplemented`. |
+| IH-2 | #783 | Сервисный процесс, env-конфигурация, health, readiness, metrics, регистрация `InteractionHubService`, domain service skeleton и repository stub готовы; бизнес-операции возвращают `Unimplemented`. |
 | IH-3 | не назначено | PostgreSQL-модель thread, message, request, response, notification, subscription, route, delivery attempt, callback, command result и service-local outbox готова. |
 | IH-4 | не назначено | Lifecycle feedback, approval и Human gate requests готов: создать, прочитать, записать ответ, отменить, истечь, идемпотентность и события. |
 | IH-5 | не назначено | Notifications, subscriptions, delivery attempts, retry/reminder policy и безопасные статусы доставки готовы без конкретных внешних каналов. |
@@ -75,25 +75,44 @@ IH-1 не должен:
 - подключать конкретный внешний канал;
 - менять код соседних сервисов.
 
+## Минимальный сервисный срез IH-2
+
+IH-2 создаёт только runnable scaffold:
+
+- `services/internal/interaction-hub/cmd/interaction-hub/main.go`;
+- `internal/app` с env config, graceful shutdown, `/health/livez`, `/health/readyz`, `/metrics` и gRPC server;
+- `internal/transport/grpc` с регистрацией `InteractionHubService`;
+- `internal/domain/service` с use-case skeleton для всех операций контракта;
+- `internal/domain/repository/interaction` и stub-реализацию без PostgreSQL;
+- запись scaffold в `services.yaml`.
+
+IH-2 не должен:
+
+- создавать PostgreSQL-схему, миграции или service-local outbox table;
+- реализовывать lifecycle feedback, approval, Human gate или notification;
+- подключать channel package runtime или любой конкретный внешний канал;
+- добавлять `staff-gateway`, `integration-gateway`, UI или внешний OpenAPI;
+- менять код соседних сервисов.
+
 ## Статус будущего `InteractionHubService`
 
 | Операция | Текущий статус | Плановый срез |
 |---|---|---|
-| `CreateConversationThread` / `RecordConversationMessage` | контракт готов, реализация запланирована | IH-1, IH-3, IH-4 |
-| `GetConversationThread` / `ListConversationMessages` | контракт готов, реализация запланирована | IH-1, IH-3, IH-4 |
-| `RequestFeedback` | контракт готов, реализация запланирована | IH-1, IH-4 |
-| `RequestApproval` | контракт готов, реализация запланирована | IH-1, IH-4 |
-| `RequestHumanGate` | контракт готов, реализация запланирована | IH-1, IH-4 |
-| `RecordInteractionResponse` | контракт готов, реализация запланирована | IH-1, IH-4 |
-| `CancelInteractionRequest` | контракт готов, реализация запланирована | IH-1, IH-4 |
-| `ExpireInteractionRequests` | контракт готов, реализация запланирована | IH-1, IH-4 |
-| `GetInteractionRequest` / `ListInteractionRequests` | контракт готов, реализация запланирована | IH-1, IH-3, IH-4 |
-| `RequestNotification` | контракт готов, реализация запланирована | IH-1, IH-5 |
-| `UpsertSubscription` / `DisableSubscription` / `ListSubscriptions` | контракт готов, реализация запланирована | IH-1, IH-5 |
-| `PlanDelivery` | контракт готов, реализация запланирована | IH-1, IH-5 |
-| `RecordDeliveryResult` | контракт готов, реализация запланирована | IH-1, IH-5, IH-6 |
-| `RecordChannelCallback` | контракт готов, реализация запланирована | IH-1, IH-6 |
-| `GetDeliveryStatus` | контракт готов, реализация запланирована | IH-1, IH-5 |
+| `CreateConversationThread` / `RecordConversationMessage` | scaffold готов, возвращает `Unimplemented` | IH-3, IH-4 |
+| `GetConversationThread` / `ListConversationMessages` | scaffold готов, возвращает `Unimplemented` | IH-3, IH-4 |
+| `RequestFeedback` | scaffold готов, возвращает `Unimplemented` | IH-4 |
+| `RequestApproval` | scaffold готов, возвращает `Unimplemented` | IH-4 |
+| `RequestHumanGate` | scaffold готов, возвращает `Unimplemented` | IH-4 |
+| `RecordInteractionResponse` | scaffold готов, возвращает `Unimplemented` | IH-4 |
+| `CancelInteractionRequest` | scaffold готов, возвращает `Unimplemented` | IH-4 |
+| `ExpireInteractionRequests` | scaffold готов, возвращает `Unimplemented` | IH-4 |
+| `GetInteractionRequest` / `ListInteractionRequests` | scaffold готов, возвращает `Unimplemented` | IH-3, IH-4 |
+| `RequestNotification` | scaffold готов, возвращает `Unimplemented` | IH-5 |
+| `UpsertSubscription` / `DisableSubscription` / `ListSubscriptions` | scaffold готов, возвращает `Unimplemented` | IH-5 |
+| `PlanDelivery` | scaffold готов, возвращает `Unimplemented` | IH-5 |
+| `RecordDeliveryResult` | scaffold готов, возвращает `Unimplemented` | IH-5, IH-6 |
+| `RecordChannelCallback` | scaffold готов, возвращает `Unimplemented` | IH-6 |
+| `GetDeliveryStatus` | scaffold готов, возвращает `Unimplemented` | IH-5 |
 
 ## Синхронизация с параллельными доменами
 
@@ -106,7 +125,7 @@ IH-1 не должен:
 | `package-hub` | Перед IH-6 | Channel package capability, installation refs и manifest requirements читаются из пакетного домена. |
 | `runtime-manager` и `fleet-manager` | Перед IH-6 | Runtime-нагрузку channel package запускает runtime/fleet контур. |
 | `operations-hub` | Перед IH-9 | Операторские очереди и dual-surface inbox читают проекции и события `interaction.*`. |
-| Future gateway | После IH-6 | Публичный callback transport и OpenAPI проектируются отдельным gateway-срезом. |
+| `integration-gateway` | После IH-6 | Публичный callback transport имеет OpenAPI-каркас в `integration-gateway`; активация маршрута требует согласованного callback lifecycle и idempotency contract `interaction-hub`. |
 
 ## Критерии начала кода
 
@@ -122,7 +141,7 @@ IH-1 не должен:
 - `interaction-hub` имеет свой контур данных, миграций, контрактов и событий.
 - Feedback, approval, Human gate, notification, subscriptions, delivery attempts и callback имеют авторитетные команды и чтения.
 - Сервис публикует `interaction.*` события через outbox и `platform-event-log`.
-- `agent-manager`, `platform-mcp-server`, `codex-hook-ingress`, `provider-hub`, `package-hub`, `runtime-manager`, `operations-hub` и future gateway связаны через согласованные контракты.
+- `agent-manager`, `platform-mcp-server`, `codex-hook-ingress`, `provider-hub`, `package-hub`, `runtime-manager`, `operations-hub` и `integration-gateway` связаны через согласованные контракты.
 - UI и внешние каналы используют один request lifecycle и не становятся отдельными источниками правды.
 - Документы и карты Issue обновлены, хвосты перенесены в следующие срезы явно.
 

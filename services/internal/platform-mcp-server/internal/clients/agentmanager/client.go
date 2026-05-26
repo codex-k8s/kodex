@@ -4,17 +4,14 @@ package agentmanager
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
-	grpcserver "github.com/codex-k8s/kodex/libs/go/grpcserver"
 	agentsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/agents/v1"
+	ownergrpc "github.com/codex-k8s/kodex/services/internal/platform-mcp-server/internal/clients/ownergrpc"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/metadata"
 )
 
-const callerID = "platform-mcp-server"
+const serviceName = "agent-manager"
 
 // Config contains agent-manager gRPC connection settings.
 type Config struct {
@@ -32,12 +29,7 @@ type Client struct {
 
 // NewConnection creates a gRPC client connection to agent-manager.
 func NewConnection(cfg Config) (*grpc.ClientConn, error) {
-	addr, err := requiredConfigValue(cfg.Addr, "agent-manager address")
-	if err != nil {
-		return nil, err
-	}
-	dialOptions := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-	return grpc.NewClient(addr, dialOptions...)
+	return ownergrpc.NewConnection(ownerConfig(cfg))
 }
 
 // New wraps a generated agent-manager client.
@@ -45,23 +37,11 @@ func New(client agentsv1.AgentManagerServiceClient, cfg Config) (*Client, error)
 	if client == nil {
 		return nil, fmt.Errorf("agent-manager client is required")
 	}
-	authToken, err := requiredConfigValue(cfg.AuthToken, "agent-manager auth token")
+	ownerCfg, err := ownergrpc.AuthenticatedConfig(ownerConfig(cfg))
 	if err != nil {
 		return nil, err
 	}
-	timeout := cfg.Timeout
-	if timeout <= 0 {
-		timeout = 3 * time.Second
-	}
-	return &Client{client: client, authToken: authToken, timeout: timeout}, nil
-}
-
-func requiredConfigValue(value string, name string) (string, error) {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return "", fmt.Errorf("%s is required", name)
-	}
-	return trimmed, nil
+	return &Client{client: client, authToken: ownerCfg.AuthToken, timeout: ownerCfg.Timeout}, nil
 }
 
 // StartAgentSession routes a session command to agent-manager.
@@ -100,19 +80,18 @@ func callOwner[Request any, Response any](
 	request Request,
 	call func(context.Context, Request, ...grpc.CallOption) (Response, error),
 ) (Response, error) {
-	callCtx, cancel := context.WithTimeout(client.outgoingContext(ctx), client.timeout)
-	defer cancel()
-	return call(callCtx, request)
+	return ownergrpc.Call(ctx, client.callConfig(), request, call)
 }
 
-func (c *Client) outgoingContext(ctx context.Context) context.Context {
-	return metadata.AppendToOutgoingContext(
-		ctx,
-		grpcserver.MetadataAuthorization,
-		"Bearer "+c.authToken,
-		grpcserver.MetadataCallerType,
-		"service",
-		grpcserver.MetadataCallerID,
-		callerID,
-	)
+func (c *Client) callConfig() ownergrpc.Config {
+	return ownergrpc.Config{Service: serviceName, AuthToken: c.authToken, Timeout: c.timeout}
+}
+
+func ownerConfig(cfg Config) ownergrpc.Config {
+	return ownergrpc.Config{
+		Service:   serviceName,
+		Addr:      cfg.Addr,
+		AuthToken: cfg.AuthToken,
+		Timeout:   cfg.Timeout,
+	}
 }

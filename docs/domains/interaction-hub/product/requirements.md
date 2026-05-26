@@ -5,8 +5,8 @@ title: kodex — требования домена центра взаимоде
 status: active
 owner_role: PM
 created_at: 2026-05-22
-updated_at: 2026-05-22
-related_issues: [582, 768]
+updated_at: 2026-05-25
+related_issues: [582, 768, 781]
 related_prs: []
 related_docsets:
   - docs/platform/architecture/domain_map.md
@@ -127,7 +127,7 @@ approvals:
 | `runtime-manager` и `fleet-manager` | Технический запуск runtime-нагрузки channel package и размещение; `interaction-hub` только вызывает согласованный delivery contract. |
 | `access-manager` | Проверка прав на создание запросов, отправку ответа, использование channel package и чтение статусов. |
 | `operations-hub` | Операторские очереди, ленты событий и агрегированные статусы по запросам и ошибкам доставки. |
-| Future gateways | Аутентификация внешнего HTTP, проверка подписи callback и маршрутизация в доменный сервис без владения lifecycle. |
+| `integration-gateway` | Аутентификация внешнего HTTP, проверка подписи callback и маршрутизация в доменный сервис без владения lifecycle. |
 
 ## Апрув
 

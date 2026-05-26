@@ -5,7 +5,7 @@ title: kodex — индекс карты Issue
 status: active
 owner_role: KM
 created_at: 2026-04-25
-updated_at: 2026-05-15
+updated_at: 2026-05-25
 ---
 
 # Индекс карты Issue
@@ -27,6 +27,7 @@ updated_at: 2026-05-15
 | Жизненный цикл знаний | `domains/knowledge-lifecycle.md` |
 | Сервисная MCP-поверхность | `domains/platform-mcp-server.md` |
 | Входной контур Codex hooks | `domains/codex-hook-ingress.md` |
+| Внешний HTTP-вход интеграций | `domains/integration-gateway.md` |
 
 ## Волновые карты
 

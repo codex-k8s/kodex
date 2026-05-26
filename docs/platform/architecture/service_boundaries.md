@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-04-26
 updated_at: 2026-05-25
-related_issues: [599, 600, 601, 602, 655, 711, 725, 747, 753, 778, 786, 322]
+related_issues: [599, 600, 601, 602, 655, 711, 725, 747, 753, 778, 781, 786, 322]
 related_prs: []
 related_adrs: []
 approvals:
@@ -97,6 +97,10 @@ Gateway-сервисы, `web-console`, `platform-mcp-server` и `codex-hook-ingr
 - `integration-gateway` появляется после `provider-hub`, когда известны webhook, обратные вызовы и внешние события, которые нужно принимать на границе платформы.
 - `user-gateway` можно сдвинуть на границу MVP или после MVP, пока не подтверждены сценарии внешних пользователей.
 - Общий `api-gateway` не создаётся: каждый gateway-сервис отвечает за своё направление доступа и не становится местом доменной оркестрации.
+
+`integration-gateway` принимает внешние webhook и callback события. Он проверяет source binding, подпись, content type, размер payload, лимиты, redaction и backpressure, после чего вызывает сервис-владелец по gRPC. Первый MVP-маршрут — provider webhook -> `provider-hub.IngestWebhookEvent`. `integration-gateway` не хранит provider projections, cursors, операции провайдера, состояние доставки внешнего канала или business decisions; эти данные остаются у `provider-hub`, `interaction-hub`, `package-hub` или другого владельца.
+
+Подробный пакет границы: `docs/domains/integration-gateway/**`.
 
 ### `platform-mcp-server`
 

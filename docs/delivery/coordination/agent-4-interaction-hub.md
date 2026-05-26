@@ -25,13 +25,13 @@
 |---|---:|---|---|
 | IH-0 | #582 | готово как docs-first срез | Доменная документация, границы, требования, дизайн, модель данных, API-обзор, delivery-план, карта Issue и координация агента #4 подготовлены без кода, proto, AsyncAPI и OpenAPI. |
 | IH-1 | #768 | готово как контрактный срез | gRPC/AsyncAPI контракты `interaction-hub`, события `interaction.*`, Go-сгенерированные transport/event contracts, действия доступа и stable channel delivery/callback DTO подготовлены без сервисной реализации, БД, миграций, gateway OpenAPI и конкретных каналов. |
+| IH-2 | #783 | готово как сервисный каркас | `services/internal/interaction-hub` содержит runnable process scaffold, env config, health/readiness/metrics, gRPC transport registration, domain service skeleton и repository stub; бизнес-операции возвращают `Unimplemented`. |
 
 ## Текущий бэклог
 
 | Срез | Статус | Почему не завершён |
 |---|---|---|
-| IH-2 | ожидает IH-1 | Сервисный каркас должен опираться на утверждённые transport и event contracts. |
-| IH-3 | ожидает IH-1/IH-2 | PostgreSQL-модель должна следовать утверждённому lifecycle и не опережать контракты. |
+| IH-3 | ожидает IH-2 | PostgreSQL-модель должна следовать утверждённому lifecycle и не опережать контракты. |
 | IH-4+ | ожидает контрактные срезы | Lifecycle feedback, approval, Human gate, notifications, delivery, callback, MCP и ops-связки должны поставляться малыми PR. |
 
 ## Блокировки от других доменов
@@ -44,9 +44,9 @@
 | `provider-hub` | Owner decision refs для provider write pipeline. | `interaction-hub` хранит delivery/response lifecycle, а provider write и approval decision остаются у владельцев. |
 | `package-hub` | Channel package capability, installation refs и manifest requirements. | Использовать чтения `package-hub`; не управлять установками пакетов. |
 | `runtime-manager` и `fleet-manager` | Runtime-нагрузки channel package. | Runtime/fleet исполняют package-owned workloads; `interaction-hub` работает через channel contract. |
-| Future gateway | Публичный callback transport, подписи и OpenAPI. | Gateway проектируется отдельным срезом после стабилизации channel contract. |
+| `integration-gateway` | Публичный callback transport, подписи и OpenAPI. | IGW-0 закрепил HTTP-каркас gateway; активация callback route требует стабилизации channel contract `interaction-hub`. |
 | `operations-hub` | Dual-surface inbox, operator queue и агрегированные статусы. | `operations-hub` строит read models по событиям и чтениям `interaction-hub`. |
 
 ## Рекомендуемый следующий шаг
 
-Следующий рациональный срез — IH-2: сервисный каркас `interaction-hub` поверх утверждённых контрактов. Конкретные внешние каналы, gateway OpenAPI и runtime-нагрузки пакетов не смешивать с IH-2.
+Следующий рациональный срез — IH-3: PostgreSQL-модель `interaction-hub` и service-local outbox. Конкретные внешние каналы, callback routes `integration-gateway` и runtime-нагрузки пакетов не смешивать с IH-3.
