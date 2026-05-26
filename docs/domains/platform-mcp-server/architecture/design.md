@@ -5,8 +5,8 @@ title: kodex — дизайн platform-mcp-server
 status: active
 owner_role: SA
 created_at: 2026-05-14
-updated_at: 2026-05-22
-related_issues: [747, 753, 760, 771, 322]
+updated_at: 2026-05-25
+related_issues: [747, 753, 760, 771, 322, 782]
 related_prs: []
 related_adrs: []
 approvals:
@@ -123,6 +123,8 @@ sequenceDiagram
 ```
 
 `agent-manager` остаётся владельцем `Run`, session и состояния ожидания flow. `governance-manager` владеет gate request/decision и release decision. MCP только проверяет инструментальную границу и маршрутизирует вызов владельцу.
+
+Если MCP-инструмент инициирует подготовку agent runtime, он передаёт владельцам уже согласованные refs: `agent-manager` остаётся владельцем `Run`, `package-hub` — пакетной истины, а `runtime-manager` материализует источники `guidance_package` в workspace. MCP не делает checkout руководящих пакетов и не хранит сгенерированный контекст.
 
 ### Ограниченная диагностика
 

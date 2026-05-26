@@ -5,8 +5,8 @@ title: kodex — границы сервисов
 status: active
 owner_role: SA
 created_at: 2026-04-26
-updated_at: 2026-05-25
-related_issues: [599, 600, 601, 602, 655, 711, 725, 747, 753, 781, 322]
+updated_at: 2026-05-26
+related_issues: [599, 600, 601, 602, 655, 711, 725, 747, 753, 781, 322, 782]
 related_prs: []
 related_adrs: []
 approvals:
@@ -107,6 +107,8 @@ Gateway-сервисы, `web-console`, `platform-mcp-server` и `codex-hook-ingr
 Отвечает за MCP-поверхность инструментов, проверки политик, аудит MCP-вызовов и маршрутизацию к сервисам-владельцам. Не хранит каноническое состояние агентного запуска, задания, проекта, пакета или артефакта провайдера.
 
 Provider-инструменты в MCP должны оставаться типизированными на внешней поверхности. Для операций записи MCP передаёт в `provider-hub` типизированную команду, выбранный `external_account_id`, безопасный `operation_policy_context` и `approval_gate_ref`, если политика по риску требует gate. MCP и `agent-manager` получают risk/gate decision из `governance-manager`, а `provider-hub` владеет только исполнением provider-команды, GitHub/GitLab-адаптером записи и журналом операции.
+
+Контекст руководящих пакетов в workspace не меняет границы сервисов: `agent-manager` выбирает и замораживает refs руководящих пакетов, `package-hub` остаётся владельцем package/install/version/source/manifest истины, `project-catalog` отдаёт проверенную workspace policy, а `runtime-manager` материализует источники `guidance_package` и сгенерированный контекст в workspace. Ни MCP, ни `agent-manager` не делают checkout руководящих пакетов. Runtime-контур строит локальные пути только через `safe_local_name` и перед checkout читает тип источника, commit и идентичность источника из `package-hub` по `package_version_ref`, а не выводит способ получения из произвольной строки `source_ref`.
 
 Подробный пакет границы: `docs/domains/platform-mcp-server/**`.
 
