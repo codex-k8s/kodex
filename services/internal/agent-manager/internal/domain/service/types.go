@@ -303,3 +303,26 @@ type CreateFollowUpIntentInput struct {
 	RoleHint              string
 	StageHint             string
 }
+
+type RecordAgentActivityInput struct {
+	Meta            value.CommandMeta
+	SessionID       uuid.UUID
+	RunID           *uuid.UUID
+	TurnID          string
+	ToolUseID       string
+	ActivityKind    enum.AgentActivityKind
+	ToolName        string
+	ToolCategory    string
+	Status          enum.AgentActivityStatus
+	StartedAt       *time.Time
+	FinishedAt      *time.Time
+	DurationMs      *int64
+	SafeSummary     string
+	PayloadDigest   string
+	BoundedError    string
+	SafeRefsJSON    []byte
+	SafeDetailsJSON []byte
+	CorrelationID   string
+}
+
+type AgentActivityList = query.AgentActivityFilter

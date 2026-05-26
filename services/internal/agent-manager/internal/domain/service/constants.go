@@ -17,4 +17,5 @@ const (
 	operationRequestAcceptance           = "domain.Service.RequestAcceptance"
 	operationRecordAcceptanceResult      = "domain.Service.RecordAcceptanceResult"
 	operationCreateFollowUpIntent        = "domain.Service.CreateFollowUpIntent"
+	operationRecordAgentActivity         = "domain.Service.RecordAgentActivity"
 )

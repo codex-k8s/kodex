@@ -490,6 +490,86 @@ func CreateFollowUpIntentInput(request *agentsv1.CreateFollowUpIntentRequest) (s
 	}, nil
 }
 
+func RecordAgentActivityInput(request *agentsv1.RecordAgentActivityRequest) (service.RecordAgentActivityInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return service.RecordAgentActivityInput{}, err
+	}
+	sessionID, err := requiredUUID(request.GetSessionId())
+	if err != nil {
+		return service.RecordAgentActivityInput{}, err
+	}
+	runID, err := optionalUUIDPtr(request.GetRunId())
+	if err != nil {
+		return service.RecordAgentActivityInput{}, err
+	}
+	kind, err := AgentActivityKindFromProto(request.GetActivityKind())
+	if err != nil {
+		return service.RecordAgentActivityInput{}, err
+	}
+	status, err := AgentActivityStatusFromProto(request.GetStatus())
+	if err != nil {
+		return service.RecordAgentActivityInput{}, err
+	}
+	startedAt, err := optionalTimeFromProto(request.StartedAt)
+	if err != nil {
+		return service.RecordAgentActivityInput{}, err
+	}
+	finishedAt, err := optionalTimeFromProto(request.FinishedAt)
+	if err != nil {
+		return service.RecordAgentActivityInput{}, err
+	}
+	return service.RecordAgentActivityInput{
+		Meta:            meta,
+		SessionID:       sessionID,
+		RunID:           runID,
+		TurnID:          strings.TrimSpace(request.GetTurnId()),
+		ToolUseID:       strings.TrimSpace(request.GetToolUseId()),
+		ActivityKind:    kind,
+		ToolName:        strings.TrimSpace(request.GetToolName()),
+		ToolCategory:    strings.TrimSpace(request.GetToolCategory()),
+		Status:          status,
+		StartedAt:       startedAt,
+		FinishedAt:      finishedAt,
+		DurationMs:      request.DurationMs,
+		SafeSummary:     strings.TrimSpace(request.GetSafeSummary()),
+		PayloadDigest:   strings.TrimSpace(request.GetPayloadDigest()),
+		BoundedError:    strings.TrimSpace(request.GetBoundedError()),
+		SafeRefsJSON:    []byte(strings.TrimSpace(request.GetSafeRefsJson())),
+		SafeDetailsJSON: []byte(strings.TrimSpace(request.GetSafeDetailsJson())),
+		CorrelationID:   strings.TrimSpace(request.GetCorrelationId()),
+	}, nil
+}
+
+func ListAgentActivitiesInput(request *agentsv1.ListAgentActivitiesRequest) (service.AgentActivityList, error) {
+	if _, err := QueryMetaFromProto(request.GetMeta()); err != nil {
+		return service.AgentActivityList{}, err
+	}
+	sessionID, err := optionalUUIDValue(request.GetSessionId())
+	if err != nil {
+		return service.AgentActivityList{}, err
+	}
+	runID, err := optionalUUIDValue(request.GetRunId())
+	if err != nil {
+		return service.AgentActivityList{}, err
+	}
+	kind, err := OptionalAgentActivityKindFromProto(request.ActivityKind)
+	if err != nil {
+		return service.AgentActivityList{}, err
+	}
+	status, err := OptionalAgentActivityStatusFromProto(request.Status)
+	if err != nil {
+		return service.AgentActivityList{}, err
+	}
+	return service.AgentActivityList{
+		SessionID:    sessionID,
+		RunID:        runID,
+		ActivityKind: kind,
+		Status:       status,
+		Page:         pageRequestFromProto(request.GetPage()),
+	}, nil
+}
+
 func GetAgentSessionInput(request *agentsv1.GetAgentSessionRequest) (IDQueryInput, error) {
 	return idQueryInput(request.GetSessionId(), request.GetMeta())
 }

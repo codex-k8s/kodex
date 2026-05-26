@@ -19,7 +19,6 @@ const (
 	followUpSummaryLimit = 1000
 	followUpHintLimit    = 128
 	followUpTypeLimit    = 64
-	followUpDigestLength = 71
 )
 
 type followUpIntentCommandPayload struct {
@@ -336,19 +335,7 @@ func normalizeFollowUpWorkItemType(value string) (string, error) {
 }
 
 func normalizeFollowUpDigest(value string) (string, error) {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return "", nil
-	}
-	if len(trimmed) != followUpDigestLength || !strings.HasPrefix(trimmed, "sha256:") {
-		return "", errs.ErrInvalidArgument
-	}
-	for _, char := range trimmed[len("sha256:"):] {
-		if !asciiHex(char) {
-			return "", errs.ErrInvalidArgument
-		}
-	}
-	return trimmed, nil
+	return normalizeSHA256Digest(value)
 }
 
 func normalizeFollowUpText(value string, limit int, required bool) (string, error) {
@@ -371,19 +358,7 @@ func normalizeFollowUpText(value string, limit int, required bool) (string, erro
 }
 
 func normalizeFollowUpHint(value string) (string, error) {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return "", nil
-	}
-	if len(trimmed) > followUpHintLimit || unsafeFollowUpText(trimmed) {
-		return "", errs.ErrInvalidArgument
-	}
-	for _, char := range trimmed {
-		if !safeAcceptanceRefChar(char) {
-			return "", errs.ErrInvalidArgument
-		}
-	}
-	return trimmed, nil
+	return normalizeSafeIdentifier(value, followUpHintLimit, unsafeFollowUpText)
 }
 
 func unsafeFollowUpText(value string) bool {

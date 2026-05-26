@@ -44,6 +44,8 @@ const (
 	AgentManagerService_GetAcceptanceResult_FullMethodName           = "/kodex.agents.v1.AgentManagerService/GetAcceptanceResult"
 	AgentManagerService_ListAcceptanceResults_FullMethodName         = "/kodex.agents.v1.AgentManagerService/ListAcceptanceResults"
 	AgentManagerService_CreateFollowUpIntent_FullMethodName          = "/kodex.agents.v1.AgentManagerService/CreateFollowUpIntent"
+	AgentManagerService_RecordAgentActivity_FullMethodName           = "/kodex.agents.v1.AgentManagerService/RecordAgentActivity"
+	AgentManagerService_ListAgentActivities_FullMethodName           = "/kodex.agents.v1.AgentManagerService/ListAgentActivities"
 	AgentManagerService_RequestHumanGate_FullMethodName              = "/kodex.agents.v1.AgentManagerService/RequestHumanGate"
 	AgentManagerService_GetAgentSession_FullMethodName               = "/kodex.agents.v1.AgentManagerService/GetAgentSession"
 	AgentManagerService_ListAgentRuns_FullMethodName                 = "/kodex.agents.v1.AgentManagerService/ListAgentRuns"
@@ -107,6 +109,10 @@ type AgentManagerServiceClient interface {
 	ListAcceptanceResults(ctx context.Context, in *ListAcceptanceResultsRequest, opts ...grpc.CallOption) (*ListAcceptanceResultsResponse, error)
 	// CreateFollowUpIntent creates an intent to create or update the next provider-native Issue.
 	CreateFollowUpIntent(ctx context.Context, in *CreateFollowUpIntentRequest, opts ...grpc.CallOption) (*FollowUpIntentResponse, error)
+	// RecordAgentActivity records one safe timeline entry for a session or run.
+	RecordAgentActivity(ctx context.Context, in *RecordAgentActivityRequest, opts ...grpc.CallOption) (*AgentActivityResponse, error)
+	// ListAgentActivities returns safe timeline entries by session or run.
+	ListAgentActivities(ctx context.Context, in *ListAgentActivitiesRequest, opts ...grpc.CallOption) (*ListAgentActivitiesResponse, error)
 	// RequestHumanGate creates a human decision request through interaction-hub.
 	RequestHumanGate(ctx context.Context, in *RequestHumanGateRequest, opts ...grpc.CallOption) (*HumanGateRequestResponse, error)
 	// GetAgentSession returns authoritative session state.
@@ -373,6 +379,26 @@ func (c *agentManagerServiceClient) CreateFollowUpIntent(ctx context.Context, in
 	return out, nil
 }
 
+func (c *agentManagerServiceClient) RecordAgentActivity(ctx context.Context, in *RecordAgentActivityRequest, opts ...grpc.CallOption) (*AgentActivityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AgentActivityResponse)
+	err := c.cc.Invoke(ctx, AgentManagerService_RecordAgentActivity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentManagerServiceClient) ListAgentActivities(ctx context.Context, in *ListAgentActivitiesRequest, opts ...grpc.CallOption) (*ListAgentActivitiesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAgentActivitiesResponse)
+	err := c.cc.Invoke(ctx, AgentManagerService_ListAgentActivities_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *agentManagerServiceClient) RequestHumanGate(ctx context.Context, in *RequestHumanGateRequest, opts ...grpc.CallOption) (*HumanGateRequestResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(HumanGateRequestResponse)
@@ -461,6 +487,10 @@ type AgentManagerServiceServer interface {
 	ListAcceptanceResults(context.Context, *ListAcceptanceResultsRequest) (*ListAcceptanceResultsResponse, error)
 	// CreateFollowUpIntent creates an intent to create or update the next provider-native Issue.
 	CreateFollowUpIntent(context.Context, *CreateFollowUpIntentRequest) (*FollowUpIntentResponse, error)
+	// RecordAgentActivity records one safe timeline entry for a session or run.
+	RecordAgentActivity(context.Context, *RecordAgentActivityRequest) (*AgentActivityResponse, error)
+	// ListAgentActivities returns safe timeline entries by session or run.
+	ListAgentActivities(context.Context, *ListAgentActivitiesRequest) (*ListAgentActivitiesResponse, error)
 	// RequestHumanGate creates a human decision request through interaction-hub.
 	RequestHumanGate(context.Context, *RequestHumanGateRequest) (*HumanGateRequestResponse, error)
 	// GetAgentSession returns authoritative session state.
@@ -551,6 +581,12 @@ func (UnimplementedAgentManagerServiceServer) ListAcceptanceResults(context.Cont
 }
 func (UnimplementedAgentManagerServiceServer) CreateFollowUpIntent(context.Context, *CreateFollowUpIntentRequest) (*FollowUpIntentResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateFollowUpIntent not implemented")
+}
+func (UnimplementedAgentManagerServiceServer) RecordAgentActivity(context.Context, *RecordAgentActivityRequest) (*AgentActivityResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RecordAgentActivity not implemented")
+}
+func (UnimplementedAgentManagerServiceServer) ListAgentActivities(context.Context, *ListAgentActivitiesRequest) (*ListAgentActivitiesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListAgentActivities not implemented")
 }
 func (UnimplementedAgentManagerServiceServer) RequestHumanGate(context.Context, *RequestHumanGateRequest) (*HumanGateRequestResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RequestHumanGate not implemented")
@@ -1032,6 +1068,42 @@ func _AgentManagerService_CreateFollowUpIntent_Handler(srv interface{}, ctx cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentManagerService_RecordAgentActivity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecordAgentActivityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentManagerServiceServer).RecordAgentActivity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentManagerService_RecordAgentActivity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentManagerServiceServer).RecordAgentActivity(ctx, req.(*RecordAgentActivityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentManagerService_ListAgentActivities_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAgentActivitiesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentManagerServiceServer).ListAgentActivities(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentManagerService_ListAgentActivities_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentManagerServiceServer).ListAgentActivities(ctx, req.(*ListAgentActivitiesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AgentManagerService_RequestHumanGate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RequestHumanGateRequest)
 	if err := dec(in); err != nil {
@@ -1192,6 +1264,14 @@ var AgentManagerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateFollowUpIntent",
 			Handler:    _AgentManagerService_CreateFollowUpIntent_Handler,
+		},
+		{
+			MethodName: "RecordAgentActivity",
+			Handler:    _AgentManagerService_RecordAgentActivity_Handler,
+		},
+		{
+			MethodName: "ListAgentActivities",
+			Handler:    _AgentManagerService_ListAgentActivities_Handler,
 		},
 		{
 			MethodName: "RequestHumanGate",

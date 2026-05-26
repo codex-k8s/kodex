@@ -180,6 +180,28 @@ type FollowUpIntent struct {
 	Status                enum.FollowUpIntentStatus
 }
 
+type AgentActivity struct {
+	VersionedBase
+	SessionID       uuid.UUID
+	RunID           *uuid.UUID
+	TurnID          string
+	ToolUseID       string
+	ActivityKind    enum.AgentActivityKind
+	ToolName        string
+	ToolCategory    string
+	Status          enum.AgentActivityStatus
+	StartedAt       time.Time
+	FinishedAt      *time.Time
+	DurationMs      *int64
+	SafeSummary     string
+	PayloadDigest   string
+	BoundedError    string
+	SafeRefsJSON    []byte
+	SafeDetailsJSON []byte
+	CorrelationID   string
+	IdempotencyKey  string
+}
+
 type CommandResult struct {
 	Key            string
 	CommandID      *uuid.UUID

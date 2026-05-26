@@ -14,6 +14,7 @@ Codex hooks являются command-обработчиками Codex: hook emit
 - Маршрутизация событий к сервисам-владельцам: `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub`.
 - Короткая операционная лента для realtime UI и метрики срабатываний hooks.
 - Передача только ссылок на выбранный capability context и skill refs, если они уже выбраны `agent-manager` и материализованы `runtime-manager`.
+- Маршрутизация sanitized `PreToolUse`/`PostToolUse` в `agent-manager` для persistent activity timeline, когда owner-side contract подключён.
 
 ## Состояние реализации
 

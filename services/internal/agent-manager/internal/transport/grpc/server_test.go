@@ -741,6 +741,116 @@ func TestCreateFollowUpIntentHandlerMapsRequest(t *testing.T) {
 	}
 }
 
+func TestAgentActivityHandlersMapRequests(t *testing.T) {
+	t.Parallel()
+
+	sessionID := uuid.MustParse("86868686-1111-2222-3333-444444444444")
+	runID := uuid.MustParse("86868686-2222-3333-4444-555555555555")
+	activityID := uuid.MustParse("86868686-3333-4444-5555-666666666666")
+	startedAt := sampleTime()
+	finishedAt := startedAt.Add(time.Second)
+	durationMs := int64(1000)
+	statusFilter := agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_SUCCEEDED
+	kindFilter := agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_TOOL_RESULT
+	service := &fakeAgentService{
+		recordAgentActivity: func(_ context.Context, input agentservice.RecordAgentActivityInput) (entity.AgentActivity, error) {
+			if input.SessionID != sessionID || input.RunID == nil || *input.RunID != runID {
+				t.Fatalf("activity refs = %+v", input)
+			}
+			if input.ActivityKind != enum.AgentActivityKindToolResult || input.Status != enum.AgentActivityStatusSucceeded ||
+				input.ToolName != "functions.exec_command" || input.ToolCategory != "shell" {
+				t.Fatalf("activity kind/status/tool = %+v", input)
+			}
+			if input.StartedAt == nil || !input.StartedAt.Equal(startedAt) || input.FinishedAt == nil || !input.FinishedAt.Equal(finishedAt) {
+				t.Fatalf("activity time = %+v/%+v", input.StartedAt, input.FinishedAt)
+			}
+			if string(input.SafeRefsJSON) != `{"artifact_ref":"artifact:1"}` || string(input.SafeDetailsJSON) != `{"summary":"ok"}` {
+				t.Fatalf("activity json = %s/%s", input.SafeRefsJSON, input.SafeDetailsJSON)
+			}
+			return entity.AgentActivity{
+				VersionedBase:   entity.VersionedBase{ID: activityID, Version: 1, CreatedAt: sampleTime(), UpdatedAt: sampleTime()},
+				SessionID:       sessionID,
+				RunID:           &runID,
+				TurnID:          input.TurnID,
+				ToolUseID:       input.ToolUseID,
+				ActivityKind:    input.ActivityKind,
+				ToolName:        input.ToolName,
+				ToolCategory:    input.ToolCategory,
+				Status:          input.Status,
+				StartedAt:       *input.StartedAt,
+				FinishedAt:      input.FinishedAt,
+				DurationMs:      input.DurationMs,
+				SafeSummary:     input.SafeSummary,
+				SafeRefsJSON:    input.SafeRefsJSON,
+				SafeDetailsJSON: input.SafeDetailsJSON,
+				CorrelationID:   input.CorrelationID,
+				IdempotencyKey:  "domain.Service.RecordAgentActivity:user:operator-1:activity-1",
+			}, nil
+		},
+		listAgentActivities: func(_ context.Context, input agentservice.AgentActivityList) ([]entity.AgentActivity, value.PageResult, error) {
+			if input.SessionID != sessionID || input.RunID != runID {
+				t.Fatalf("list refs = %+v", input)
+			}
+			if input.ActivityKind == nil || *input.ActivityKind != enum.AgentActivityKindToolResult ||
+				input.Status == nil || *input.Status != enum.AgentActivityStatusSucceeded {
+				t.Fatalf("list filters = %+v", input)
+			}
+			return []entity.AgentActivity{{
+				VersionedBase:   entity.VersionedBase{ID: activityID, Version: 1, CreatedAt: sampleTime(), UpdatedAt: sampleTime()},
+				SessionID:       sessionID,
+				RunID:           &runID,
+				ActivityKind:    enum.AgentActivityKindToolResult,
+				ToolName:        "functions.exec_command",
+				Status:          enum.AgentActivityStatusSucceeded,
+				StartedAt:       startedAt,
+				SafeRefsJSON:    []byte("{}"),
+				SafeDetailsJSON: []byte("{}"),
+				IdempotencyKey:  "domain.Service.RecordAgentActivity:user:operator-1:activity-1",
+			}}, value.PageResult{NextPageToken: "activities-next"}, nil
+		},
+	}
+	server := NewServer(service)
+
+	recorded, err := server.RecordAgentActivity(context.Background(), &agentsv1.RecordAgentActivityRequest{
+		Meta:            commandMeta("", "activity-1", nil),
+		SessionId:       sessionID.String(),
+		RunId:           ptr(runID.String()),
+		TurnId:          ptr("turn:1"),
+		ToolUseId:       ptr("tool:1"),
+		ActivityKind:    agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_TOOL_RESULT,
+		ToolName:        ptr("functions.exec_command"),
+		ToolCategory:    ptr("shell"),
+		Status:          agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_SUCCEEDED,
+		StartedAt:       ptr(startedAt.Format(time.RFC3339Nano)),
+		FinishedAt:      ptr(finishedAt.Format(time.RFC3339Nano)),
+		DurationMs:      &durationMs,
+		SafeSummary:     ptr("Tool completed."),
+		SafeRefsJson:    `{"artifact_ref":"artifact:1"}`,
+		SafeDetailsJson: `{"summary":"ok"}`,
+		CorrelationId:   ptr("trace:1"),
+	})
+	if err != nil {
+		t.Fatalf("RecordAgentActivity() error = %v", err)
+	}
+	if recorded.GetActivity().GetId() != activityID.String() || recorded.GetActivity().GetToolName() != "functions.exec_command" {
+		t.Fatalf("recorded = %+v", recorded.GetActivity())
+	}
+	list, err := server.ListAgentActivities(context.Background(), &agentsv1.ListAgentActivitiesRequest{
+		Meta:         queryMeta(),
+		SessionId:    ptr(sessionID.String()),
+		RunId:        ptr(runID.String()),
+		ActivityKind: &kindFilter,
+		Status:       &statusFilter,
+		Page:         &agentsv1.PageRequest{PageSize: 2},
+	})
+	if err != nil {
+		t.Fatalf("ListAgentActivities() error = %v", err)
+	}
+	if len(list.GetActivities()) != 1 || list.GetPage().GetNextPageToken() != "activities-next" {
+		t.Fatalf("list = %+v", list)
+	}
+}
+
 func TestTransportRejectsValidationErrorsBeforeDomainCall(t *testing.T) {
 	t.Parallel()
 
@@ -818,6 +928,8 @@ type fakeAgentService struct {
 	getAcceptanceResult         func(context.Context, uuid.UUID) (entity.AcceptanceResult, error)
 	listAcceptanceResults       func(context.Context, agentservice.AcceptanceResultList) ([]entity.AcceptanceResult, value.PageResult, error)
 	createFollowUpIntent        func(context.Context, agentservice.CreateFollowUpIntentInput) (entity.FollowUpIntent, error)
+	recordAgentActivity         func(context.Context, agentservice.RecordAgentActivityInput) (entity.AgentActivity, error)
+	listAgentActivities         func(context.Context, agentservice.AgentActivityList) ([]entity.AgentActivity, value.PageResult, error)
 }
 
 func (f *fakeAgentService) CreateFlow(ctx context.Context, input agentservice.CreateFlowInput) (entity.Flow, error) {
@@ -1021,6 +1133,20 @@ func (f *fakeAgentService) CreateFollowUpIntent(ctx context.Context, input agent
 		return entity.FollowUpIntent{}, errs.ErrPreconditionFailed
 	}
 	return f.createFollowUpIntent(ctx, input)
+}
+
+func (f *fakeAgentService) RecordAgentActivity(ctx context.Context, input agentservice.RecordAgentActivityInput) (entity.AgentActivity, error) {
+	if f.recordAgentActivity == nil {
+		return entity.AgentActivity{}, errs.ErrPreconditionFailed
+	}
+	return f.recordAgentActivity(ctx, input)
+}
+
+func (f *fakeAgentService) ListAgentActivities(ctx context.Context, input agentservice.AgentActivityList) ([]entity.AgentActivity, value.PageResult, error) {
+	if f.listAgentActivities == nil {
+		return nil, value.PageResult{}, errs.ErrPreconditionFailed
+	}
+	return f.listAgentActivities(ctx, input)
 }
 
 func commandMeta(commandID string, idempotencyKey string, expectedVersion *int64) *agentsv1.CommandMeta {

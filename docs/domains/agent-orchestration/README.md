@@ -2,7 +2,7 @@
 
 ## Назначение
 
-Домен описывает `agent-manager`: flow, этапы, роли, шаблоны промптов, агентные сессии, `Run`, машину приёмки, follow-up задачи и запуск ролевых агентов через runtime-контур.
+Домен описывает `agent-manager`: flow, этапы, роли, шаблоны промптов, агентные сессии, `Run`, безопасную историю действий, машину приёмки, follow-up задачи и запуск ролевых агентов через runtime-контур.
 
 ## Что входит
 
@@ -10,6 +10,7 @@
 - flow, stage, role, stage-role binding и prompt template;
 - версии flow, ролей и prompt, используемые в конкретном `Run`;
 - агентные сессии и агентные запуски;
+- safe activity timeline по session/run без raw tool payload, stdout/stderr, prompt, transcript и workspace paths;
 - машина приёмки;
 - правила создания follow-up provider-native задач;
 - запуск ролевых агентов через `runtime-manager`;

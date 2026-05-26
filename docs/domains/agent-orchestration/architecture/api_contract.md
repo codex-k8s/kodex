@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-12
 updated_at: 2026-05-26
-related_issues: [733, 739, 744, 753, 755, 698, 759, 772, 322, 782, 795, 809, 820]
+related_issues: [733, 739, 744, 753, 755, 698, 759, 772, 322, 782, 795, 809, 820, 834]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -23,7 +23,7 @@ approvals:
 - Тип API: внутренний gRPC `AgentManagerService`, доменные события `agent.*`, MCP-инструменты через `platform-mcp-server`, Codex hook events через `codex-hook-ingress`.
 - Аутентификация: gateway, MCP или сервисный токен; доменные команды дополнительно проверяются через `access-manager`.
 - Версионирование: стабильное транспортное пространство имён `kodex.agents.v1`.
-- Основные операции: flow, role, prompt template, session, run, acceptance и follow-up.
+- Основные операции: flow, role, prompt template, session, run, safe activity timeline, acceptance и follow-up.
 
 ## Спецификации
 
@@ -66,6 +66,8 @@ approvals:
 | `GetAcceptanceResult` | gRPC query | `agent.acceptance.read` | нет | Читает один результат приёмки. |
 | `ListAcceptanceResults` | gRPC query | `agent.acceptance.read` | нет | Список результатов приёмки по session/run/stage/status. |
 | `CreateFollowUpIntent` | gRPC command | `agent.follow_up.create` | `command_id` или `idempotency_key` | Формирует авторитетное намерение следующей provider-native задачи по session/run/stage/acceptance refs. Команда сохраняет только safe provider target refs, тип следующего work item, bounded title/summary/hints, digest и статус; provider write не выполняется. |
+| `RecordAgentActivity` | gRPC command | `agent.activity.record` | `command_id` или `idempotency_key` | Записывает одну safe timeline entry для session/run: kind, tool metadata, status, timings, summary, digest, bounded error, safe refs/details и correlation trace без raw tool payload, prompt, transcript, stdout/stderr или workspace paths. |
+| `ListAgentActivities` | gRPC query | `agent.activity.read` | cursor | Читает safe timeline по session или run с фильтрами kind/status и cursor pagination для будущего UI. |
 | `RequestHumanGate` | gRPC command | `agent.human_gate.request` | `command_id` | Фиксирует ожидание flow и запрашивает gate у `governance-manager`; gate request/decision хранится в governance, delivery идёт через `interaction-hub`. |
 | `GetAgentSession` | gRPC query | `agent.session.read` | нет | Читает сессию. |
 | `ListAgentRuns` | gRPC query | `agent.run.read` | нет | Читает запуски по session/status/provider target. |
@@ -82,6 +84,8 @@ approvals:
 | `agent.session.record_snapshot` | Зафиксировать ссылку на актуальный Codex session state без передачи содержимого JSON через MCP. |
 | `agent.acceptance.request` | Запустить машинную приёмку. |
 | `agent.follow_up.request` | Сформировать следующий provider-native `Issue`. |
+| `agent.activity.record` | Зафиксировать безопасную timeline entry от owner-side интеграции. |
+| `agent.activity.list` | Получить безопасную историю действий по session/run для UI. |
 | `agent.gate.request` | Запросить governance gate для перехода flow; `agent-manager` фиксирует ожидание, а решение хранит `governance-manager`. |
 | `agent.gate.submit_decision` | Передать ссылку на принятое governance decision для продолжения flow; само решение не создаётся в `agent-manager`. |
 
@@ -95,9 +99,9 @@ Codex hooks не являются MCP-инструментами. `agent-manager
 |---|---|
 | `SessionStart` | Создаёт или связывает Codex-сессию с существующим `AgentSession` и `Run`. |
 | `UserPromptSubmit` | Фиксирует безопасный факт нового пользовательского ввода и связывает его с session/run context. |
-| `PreToolUse` | Даёт сигнал намерения вызвать инструмент; может привести к gate или realtime-событию, но не заменяет MCP tool call. |
+| `PreToolUse` | Даёт сигнал намерения вызвать инструмент; следующий CHI-срез должен передавать только sanitized tool metadata в `RecordAgentActivity`, а risk-controlled действия могут привести к gate или realtime-событию. |
 | `PermissionRequest` | Преобразуется в запрос risk/gate evaluation через `governance-manager`; доставка человеку остаётся у `interaction-hub`. |
-| `PostToolUse` | Передаёт безопасный итог инструмента, provider artifact signal или bounded error. |
+| `PostToolUse` | Передаёт безопасный итог инструмента, provider artifact signal или bounded error; persistent история пишется как `AgentActivity` без raw stdout/stderr, tool response или provider payload. |
 | `Stop` | Фиксирует контрольную точку хода, pending actions и безопасную итоговую сводку. |
 
 Контрольные точки сжатия контекста и session snapshot остаются внутренними событиями `agent-manager`/`runtime-manager`. Они не описываются как Codex hooks и не проходят через `platform-mcp-server`.
@@ -115,11 +119,13 @@ Codex hooks не являются MCP-инструментами. `agent-manager
 | `interaction-hub` | Обратная связь, уведомления и delivery refs, полученные через governance gate | Диалог и доставка остаются у interaction; decision state не хранится здесь. |
 | `codex-hook-ingress` | Нормализованные Codex hook events: lifecycle, permission, tool result и stop summary | Hook transport и очистка входа остаются у hook ingress; `agent-manager` хранит только своё состояние. |
 
+`codex-hook-ingress` не хранит долгую историю tool calls. Он очищает событие, строит route plan и держит короткую realtime/ops feed; каноническая persistent история действий для UI записывается в `agent-manager.RecordAgentActivity`.
+
 ## Модель ошибок
 
 | Ошибка | Когда возвращается |
 |---|---|
-| `invalid_argument` | Невалидный flow, stage, role, prompt, transition, provider target, request context, acceptance batch-запрос, небезопасный `target_ref`, небезопасный `details_json` или небезопасный follow-up payload. |
+| `invalid_argument` | Невалидный flow, stage, role, prompt, transition, provider target, request context, acceptance batch-запрос, небезопасный `target_ref`, небезопасный `details_json`, небезопасный follow-up payload или небезопасная activity timeline запись. |
 | `permission_denied` | `access-manager` запретил действие или роль не имеет нужного MCP-инструмента. |
 | `not_found` | Flow, роль, prompt, session, run или acceptance result не найдены. |
 | `already_exists` | Дубликат slug или повтор создания активной сущности в scope. |
@@ -150,6 +156,8 @@ Codex hooks не являются MCP-инструментами. `agent-manager
 | `agent.role.version_activated` | Активирована версия роли. |
 | `agent.prompt.version_activated` | Активирована версия prompt. |
 
+Activity timeline не добавляет новое `agent.*` событие в этом срезе: это read/write-модель `agent-manager` для UI и аудита. Высокочастотная realtime-лента остаётся в `codex-hook-ingress`, а доменные события публикуются только для значимых lifecycle/acceptance/follow-up изменений.
+
 ## Состояние реализации
 
 | Область | Статус |
@@ -157,7 +165,7 @@ Codex hooks не являются MCP-инструментами. `agent-manager
 | Доменная документация | Подготовлена как стартовый срез. |
 | gRPC proto | Подготовлен как контрактный срез `AGO-1`. |
 | AsyncAPI `agent.*` | Подготовлен как контрактный срез `AGO-1`. |
-| Go-реализация `agent-manager` | Сервисный каркас готов. Операции flow, role, prompt, session, run, machine acceptance и follow-up intent подключены к слою хранения и use-case через gRPC handlers. `StartAgentSession` защищает активную session от дублей по provider target, `StartAgentRun` фиксирует версии роли/prompt, проверяет stage-bound связку flow/stage/role, замораживает безопасные guidance refs из `package-hub`, читает workspace policy у `project-catalog` и вызывает `runtime-manager.PrepareRuntime`. В `Run` сохраняются только runtime refs, fingerprint/diagnostic summary и безопасная классификация ошибки подготовки; workspace paths, файлы, prompt text, flow files и package payload остаются вне БД `agent-manager`. `RecordRunState` применяет state machine и публикует только AsyncAPI-совместимые lifecycle-события. `RequestAcceptance`/`RecordAcceptanceResult`/`GetAcceptanceResult`/`ListAcceptanceResults` реализуют базовый lifecycle результата приёмки с idempotency, expected version, безопасными `target_ref`/`details_json`, `human_gate` waiting-only guard и outbox events. `CreateFollowUpIntent` создаёт intent-only состояние с idempotency, проверкой session/run/stage/acceptance связей, safe title/summary/provider refs и событием `agent.follow_up.requested`. Human gate decision, QA runner и provider write pipeline остаются следующими срезами. |
+| Go-реализация `agent-manager` | Сервисный каркас готов. Операции flow, role, prompt, session, run, machine acceptance, follow-up intent и safe activity timeline подключены к слою хранения и use-case через gRPC handlers. `StartAgentSession` защищает активную session от дублей по provider target, `StartAgentRun` фиксирует версии роли/prompt, проверяет stage-bound связку flow/stage/role, замораживает безопасные guidance refs из `package-hub`, читает workspace policy у `project-catalog` и вызывает `runtime-manager.PrepareRuntime`. В `Run` сохраняются только runtime refs, fingerprint/diagnostic summary и безопасная классификация ошибки подготовки; workspace paths, файлы, prompt text, flow files и package payload остаются вне БД `agent-manager`. `RecordRunState` применяет state machine и публикует только AsyncAPI-совместимые lifecycle-события. `RecordAgentActivity`/`ListAgentActivities` хранят и читают только bounded safe timeline entries без raw tool input/response, stdout/stderr, prompt, transcript, provider payload или workspace paths. `RequestAcceptance`/`RecordAcceptanceResult`/`GetAcceptanceResult`/`ListAcceptanceResults` реализуют базовый lifecycle результата приёмки с idempotency, expected version, безопасными `target_ref`/`details_json`, `human_gate` waiting-only guard и outbox events. `CreateFollowUpIntent` создаёт intent-only состояние с idempotency, проверкой session/run/stage/acceptance связей, safe title/summary/provider refs и событием `agent.follow_up.requested`. Human gate decision, QA runner и provider write pipeline остаются следующими срезами. |
 | Интеграция с `package-hub` | Реализована как чтение guidance installations, package/version metadata и manifest validation state; сырое содержимое manifest и package source в `agent-manager` не сохраняются. |
 | Интеграция с runtime | Реализован прямой вызов `PrepareRuntime` для старта `AgentRun`; executor и выполнение slot-agent не входят в текущий контур. |
 | Интеграция с provider/interaction/hooks | Зафиксирована как междоменная граница без реализации. |

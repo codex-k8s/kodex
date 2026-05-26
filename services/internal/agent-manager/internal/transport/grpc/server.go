@@ -53,6 +53,8 @@ type agentService interface {
 	GetAcceptanceResult(context.Context, uuid.UUID) (entity.AcceptanceResult, error)
 	ListAcceptanceResults(context.Context, agentservice.AcceptanceResultList) ([]entity.AcceptanceResult, value.PageResult, error)
 	CreateFollowUpIntent(context.Context, agentservice.CreateFollowUpIntentInput) (entity.FollowUpIntent, error)
+	RecordAgentActivity(context.Context, agentservice.RecordAgentActivityInput) (entity.AgentActivity, error)
+	ListAgentActivities(context.Context, agentservice.AgentActivityList) ([]entity.AgentActivity, value.PageResult, error)
 }
 
 // NewServer creates an agent-manager gRPC server boundary.
@@ -203,6 +205,16 @@ func (server *Server) CreateFollowUpIntent(ctx context.Context, request *agentsv
 	return grpcserver.HandleUnary(ctx, request, grpccasters.CreateFollowUpIntentInput, server.service.CreateFollowUpIntent, grpccasters.FollowUpIntentResponse)
 }
 
+// RecordAgentActivity records a safe persistent activity timeline entry.
+func (server *Server) RecordAgentActivity(ctx context.Context, request *agentsv1.RecordAgentActivityRequest) (*agentsv1.AgentActivityResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.RecordAgentActivityInput, server.service.RecordAgentActivity, grpccasters.AgentActivityResponse)
+}
+
+// ListAgentActivities returns safe timeline entries by session or run.
+func (server *Server) ListAgentActivities(ctx context.Context, request *agentsv1.ListAgentActivitiesRequest) (*agentsv1.ListAgentActivitiesResponse, error) {
+	return grpcserver.HandleUnary(ctx, request, grpccasters.ListAgentActivitiesInput, server.listAgentActivities, grpccasters.ListAgentActivitiesResponse)
+}
+
 func (server *Server) getFlow(ctx context.Context, input grpccasters.IDQueryInput) (grpccasters.FlowOutput, error) {
 	return entityOutputByID(ctx, input, server.service.GetFlow, server.flowOutput)
 }
@@ -261,6 +273,10 @@ func (server *Server) getAcceptanceResult(ctx context.Context, input grpccasters
 
 func (server *Server) listAcceptanceResults(ctx context.Context, input agentservice.AcceptanceResultList) (grpccasters.AcceptanceResultListOutput, error) {
 	return listWithPage(ctx, input, server.service.ListAcceptanceResults)
+}
+
+func (server *Server) listAgentActivities(ctx context.Context, input agentservice.AgentActivityList) (grpccasters.AgentActivityListOutput, error) {
+	return listWithPage(ctx, input, server.service.ListAgentActivities)
 }
 
 func listWithPage[Input any, Item any](

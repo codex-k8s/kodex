@@ -58,6 +58,10 @@ service AgentManagerService {
   rpc ListAcceptanceResults(ListAcceptanceResultsRequest) returns (ListAcceptanceResultsResponse);
   // CreateFollowUpIntent creates an intent to create or update the next provider-native Issue.
   rpc CreateFollowUpIntent(CreateFollowUpIntentRequest) returns (FollowUpIntentResponse);
+  // RecordAgentActivity records one safe timeline entry for a session or run.
+  rpc RecordAgentActivity(RecordAgentActivityRequest) returns (AgentActivityResponse);
+  // ListAgentActivities returns safe timeline entries by session or run.
+  rpc ListAgentActivities(ListAgentActivitiesRequest) returns (ListAgentActivitiesResponse);
   // RequestHumanGate creates a human decision request through interaction-hub.
   rpc RequestHumanGate(RequestHumanGateRequest) returns (HumanGateRequestResponse);
   // GetAgentSession returns authoritative session state.
@@ -362,6 +366,32 @@ enum FollowUpIntentStatus {
   FOLLOW_UP_INTENT_STATUS_CANCELLED = 5;
 }
 
+// AgentActivityKind classifies a safe timeline entry.
+enum AgentActivityKind {
+  AGENT_ACTIVITY_KIND_UNSPECIFIED = 0;
+  AGENT_ACTIVITY_KIND_LIFECYCLE = 1;
+  AGENT_ACTIVITY_KIND_TOOL_USE = 2;
+  AGENT_ACTIVITY_KIND_TOOL_RESULT = 3;
+  AGENT_ACTIVITY_KIND_PERMISSION = 4;
+  AGENT_ACTIVITY_KIND_PROVIDER_SIGNAL = 5;
+  AGENT_ACTIVITY_KIND_RUNTIME_SIGNAL = 6;
+  AGENT_ACTIVITY_KIND_CHECKPOINT = 7;
+  AGENT_ACTIVITY_KIND_OTHER = 8;
+}
+
+// AgentActivityStatus is the lifecycle status of one timeline entry.
+enum AgentActivityStatus {
+  AGENT_ACTIVITY_STATUS_UNSPECIFIED = 0;
+  AGENT_ACTIVITY_STATUS_PLANNED = 1;
+  AGENT_ACTIVITY_STATUS_STARTED = 2;
+  AGENT_ACTIVITY_STATUS_SUCCEEDED = 3;
+  AGENT_ACTIVITY_STATUS_FAILED = 4;
+  AGENT_ACTIVITY_STATUS_DENIED = 5;
+  AGENT_ACTIVITY_STATUS_WAITING = 6;
+  AGENT_ACTIVITY_STATUS_CANCELLED = 7;
+  AGENT_ACTIVITY_STATUS_SKIPPED = 8;
+}
+
 // HumanGateStatus is the lifecycle status of a human gate request.
 enum HumanGateStatus {
   HUMAN_GATE_STATUS_UNSPECIFIED = 0;
@@ -596,6 +626,34 @@ message FollowUpIntent {
   optional string stage_hint = 18;
   // idempotency_key is the command idempotency key stored with this intent.
   string idempotency_key = 19;
+}
+
+// AgentActivity is a safe persistent timeline entry owned by agent-manager.
+message AgentActivity {
+  string id = 1;
+  string session_id = 2;
+  optional string run_id = 3;
+  optional string turn_id = 4;
+  optional string tool_use_id = 5;
+  AgentActivityKind activity_kind = 6;
+  optional string tool_name = 7;
+  optional string tool_category = 8;
+  AgentActivityStatus status = 9;
+  optional string started_at = 10;
+  optional string finished_at = 11;
+  optional int64 duration_ms = 12;
+  optional string safe_summary = 13;
+  optional string payload_digest = 14;
+  optional string bounded_error = 15;
+  // safe_refs_json is bounded JSON object with refs only, never raw payload.
+  string safe_refs_json = 16;
+  // safe_details_json is bounded JSON object with safe display details only.
+  string safe_details_json = 17;
+  optional string correlation_id = 18;
+  string idempotency_key = 19;
+  int64 version = 20;
+  string created_at = 21;
+  string updated_at = 22;
 }
 
 // HumanGateRequest is a reference to an interaction-hub human decision request.
@@ -897,6 +955,36 @@ message CreateFollowUpIntentRequest {
   optional string stage_hint = 14;
 }
 
+message RecordAgentActivityRequest {
+  CommandMeta meta = 1;
+  string session_id = 2;
+  optional string run_id = 3;
+  optional string turn_id = 4;
+  optional string tool_use_id = 5;
+  AgentActivityKind activity_kind = 6;
+  optional string tool_name = 7;
+  optional string tool_category = 8;
+  AgentActivityStatus status = 9;
+  optional string started_at = 10;
+  optional string finished_at = 11;
+  optional int64 duration_ms = 12;
+  optional string safe_summary = 13;
+  optional string payload_digest = 14;
+  optional string bounded_error = 15;
+  string safe_refs_json = 16;
+  string safe_details_json = 17;
+  optional string correlation_id = 18;
+}
+
+message ListAgentActivitiesRequest {
+  QueryMeta meta = 1;
+  optional string session_id = 2;
+  optional string run_id = 3;
+  optional AgentActivityKind activity_kind = 4;
+  optional AgentActivityStatus status = 5;
+  PageRequest page = 6;
+}
+
 message RequestHumanGateRequest {
   CommandMeta meta = 1;
   string session_id = 2;
@@ -946,6 +1034,15 @@ message ListAcceptanceResultsResponse {
 
 message FollowUpIntentResponse {
   FollowUpIntent follow_up_intent = 1;
+}
+
+message AgentActivityResponse {
+  AgentActivity activity = 1;
+}
+
+message ListAgentActivitiesResponse {
+  repeated AgentActivity activities = 1;
+  PageResponse page = 2;
 }
 
 message HumanGateRequestResponse {

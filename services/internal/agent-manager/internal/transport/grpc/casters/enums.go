@@ -105,6 +105,28 @@ var followUpIntentStatusesToProto = enumMap(
 	enumPair(enum.FollowUpIntentStatusCancelled, agentsv1.FollowUpIntentStatus_FOLLOW_UP_INTENT_STATUS_CANCELLED),
 )
 
+var agentActivityKindsFromProto = enumMap(
+	enumPair(agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_LIFECYCLE, enum.AgentActivityKindLifecycle),
+	enumPair(agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_TOOL_USE, enum.AgentActivityKindToolUse),
+	enumPair(agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_TOOL_RESULT, enum.AgentActivityKindToolResult),
+	enumPair(agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_PERMISSION, enum.AgentActivityKindPermission),
+	enumPair(agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_PROVIDER_SIGNAL, enum.AgentActivityKindProviderSignal),
+	enumPair(agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_RUNTIME_SIGNAL, enum.AgentActivityKindRuntimeSignal),
+	enumPair(agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_CHECKPOINT, enum.AgentActivityKindCheckpoint),
+	enumPair(agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_OTHER, enum.AgentActivityKindOther),
+)
+
+var agentActivityStatusesFromProto = map[agentsv1.AgentActivityStatus]enum.AgentActivityStatus{
+	agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_PLANNED:   enum.AgentActivityStatusPlanned,
+	agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_STARTED:   enum.AgentActivityStatusStarted,
+	agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_SUCCEEDED: enum.AgentActivityStatusSucceeded,
+	agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_FAILED:    enum.AgentActivityStatusFailed,
+	agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_DENIED:    enum.AgentActivityStatusDenied,
+	agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_WAITING:   enum.AgentActivityStatusWaiting,
+	agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_CANCELLED: enum.AgentActivityStatusCancelled,
+	agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_SKIPPED:   enum.AgentActivityStatusSkipped,
+}
+
 var (
 	scopeTypesToProto                = reverseEnumMap(scopeTypesFromProto)
 	flowStatusesToProto              = reverseEnumMap(flowStatusesFromProto)
@@ -118,6 +140,8 @@ var (
 	agentSessionSnapshotKindsToProto = reverseEnumMap(agentSessionSnapshotKindsFromProto)
 	acceptanceCheckKindsToProto      = reverseEnumMap(acceptanceCheckKindsFromProto)
 	acceptanceStatusesToProto        = reverseEnumMap(acceptanceStatusesFromProto)
+	agentActivityKindsToProto        = reverseEnumMap(agentActivityKindsFromProto)
+	agentActivityStatusesToProto     = reverseEnumMap(agentActivityStatusesFromProto)
 )
 
 func ScopeTypeFromProto(value agentsv1.AgentScopeType) (enum.AgentScopeType, error) {
@@ -261,6 +285,30 @@ func AcceptanceStatusToProto(value enum.AcceptanceStatus) agentsv1.AcceptanceSta
 
 func FollowUpIntentStatusToProto(value enum.FollowUpIntentStatus) agentsv1.FollowUpIntentStatus {
 	return enumToProto(value, followUpIntentStatusesToProto, agentsv1.FollowUpIntentStatus_FOLLOW_UP_INTENT_STATUS_UNSPECIFIED)
+}
+
+func AgentActivityKindFromProto(value agentsv1.AgentActivityKind) (enum.AgentActivityKind, error) {
+	return enumFromProto(value, agentActivityKindsFromProto)
+}
+
+func OptionalAgentActivityKindFromProto(value *agentsv1.AgentActivityKind) (*enum.AgentActivityKind, error) {
+	return optionalEnumFromProto(value, agentActivityKindsFromProto)
+}
+
+func AgentActivityKindToProto(value enum.AgentActivityKind) agentsv1.AgentActivityKind {
+	return enumToProto(value, agentActivityKindsToProto, agentsv1.AgentActivityKind_AGENT_ACTIVITY_KIND_UNSPECIFIED)
+}
+
+func AgentActivityStatusFromProto(value agentsv1.AgentActivityStatus) (enum.AgentActivityStatus, error) {
+	return enumFromProto(value, agentActivityStatusesFromProto)
+}
+
+func OptionalAgentActivityStatusFromProto(value *agentsv1.AgentActivityStatus) (*enum.AgentActivityStatus, error) {
+	return optionalEnumFromProto(value, agentActivityStatusesFromProto)
+}
+
+func AgentActivityStatusToProto(value enum.AgentActivityStatus) agentsv1.AgentActivityStatus {
+	return enumToProto(value, agentActivityStatusesToProto, agentsv1.AgentActivityStatus_AGENT_ACTIVITY_STATUS_UNSPECIFIED)
 }
 
 func enumFromProto[Proto comparable, Domain comparable](value Proto, values map[Proto]Domain) (Domain, error) {

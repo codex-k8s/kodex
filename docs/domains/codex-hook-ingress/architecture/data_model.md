@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-26
-related_issues: [698, 753, 778, 786, 793, 808, 823, 836, 322]
+related_issues: [698, 753, 778, 786, 793, 808, 823, 836, 322, 834]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -18,7 +18,7 @@ approvals:
 
 ## TL;DR
 
-- Ключевые сущности: `HookSourceBinding`, `HookEventEnvelope`, `HookDeliveryAttempt`, `HookDecisionBridge`, `HookSanitizationReport`, `HookOperationalEvent`; CHI-2 добавляет edge value objects для hook emitter/local sidecar без новой доменной БД.
+- Ключевые сущности: `HookSourceBinding`, `HookEventEnvelope`, `HookDeliveryAttempt`, `HookDecisionBridge`, `HookSanitizationReport`, `HookOperationalEvent`; CHI-2 добавляет edge value objects для hook emitter/local sidecar без новой доменной БД. Эти сущности не являются долгой историей tool calls.
 - Основные связи: hook event связывается с `run_id`, `session_id`, `slot_id`, `turn_id`, scope, route и correlation id, но не становится владельцем `Run`, slot, provider artifact, dialogue или skill.
 - Риски миграций: нельзя хранить raw hook input, raw tool input/output, stdout/stderr, prompt, transcript, session dump, secret values или `SKILL.md` content.
 
@@ -74,6 +74,7 @@ approvals:
 - `payload_json` содержит только sanitized fields.
 - Размер `payload_json` после нормализации не больше policy limit.
 - High-frequency allow-события могут не сохраняться полностью и жить только в operational feed.
+- Если событие должно попасть в долгую историю действий агента, `codex-hook-ingress` маршрутизирует sanitized refs/details в `agent-manager.RecordAgentActivity`; сам ingress не становится canonical store tool calls.
 
 | Field | Type | Nullable | Default | Constraints | Notes |
 |---|---|---:|---|---|---|
@@ -170,6 +171,7 @@ approvals:
 - Лента не является аудитом всех событий платформенного MVP-набора.
 - Retention короткий и задаётся policy.
 - Запись содержит только safe summary, event kind, route result, owner target, digest, size bucket, status, reject reason и timestamps.
+- Для будущего UI "какой агент когда что делал" authoritative persistent view строится из `agent-manager.AgentActivity`; `HookOperationalEvent` остаётся короткой operational feed.
 
 | Field | Type | Nullable | Default | Constraints | Notes |
 |---|---|---:|---|---|---|

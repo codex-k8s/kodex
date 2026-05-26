@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-26
-related_issues: [698, 753, 778, 786, 793, 808, 823, 836, 322]
+related_issues: [698, 753, 778, 786, 793, 808, 823, 836, 322, 834]
 related_prs: []
 related_adrs: []
 approvals:
@@ -59,9 +59,9 @@ approvals:
 
 | Владеет `codex-hook-ingress` | Не владеет |
 |---|---|
-| Приём нормализованных hook events, проверка source binding, redaction, размерные лимиты, классификация события, маршрутизация владельцам, короткая операционная лента, метрики ingress, idempotency на границе. | MCP transport, MCP discovery, `Run`, session, flow, risk/gate decisions, slot, workspace, provider state, package catalog, skill catalog, dialogue, notification delivery, billing, UI state. |
+| Приём нормализованных hook events, проверка source binding, redaction, размерные лимиты, классификация события, маршрутизация владельцам, короткая операционная лента, метрики ingress, idempotency на границе. | MCP transport, MCP discovery, `Run`, session, flow, persistent tool/activity history, risk/gate decisions, slot, workspace, provider state, package catalog, skill catalog, dialogue, notification delivery, billing, UI state. |
 
-Главное правило: `codex-hook-ingress` отвечает на вопрос "можно ли принять этот hook event от этого источника и каким владельцам передать безопасную сводку". Он не отвечает на вопрос "как меняется доменное состояние".
+Главное правило: `codex-hook-ingress` отвечает на вопрос "можно ли принять этот hook event от этого источника и каким владельцам передать безопасную сводку". Он не отвечает на вопрос "как меняется доменное состояние". Долгая persistent история действий агента и tool calls принадлежит `agent-manager`, потому что он владеет session/run.
 
 ## Компоненты
 
@@ -74,8 +74,8 @@ approvals:
 | Sanitizer | Проверяет размер, типы полей, forbidden keys, secret-like patterns, binary payload, stdout/stderr и session/transcript references. |
 | Event classifier | Приводит событие к одному из MVP event types и вычисляет safe category: lifecycle, prompt, pre-tool, permission, post-tool, stop. |
 | Route planner/registry | Формирует набор downstream-владельцев, проверяет включение route config и проецирует только разрешённые `safe_parts` для каждого owner port. |
-| Decision bridge | Для `PermissionRequest` и policy-controlled `PreToolUse` строит safe request context, вызывает owner decision ports/stubs и возвращает explicit result; `agent-manager` получает только ожидание flow, refs и future timeline context. |
-| Operational feed | Пишет bounded короткую ленту для realtime UI и диагностики с retention: safe summary, event kind, route result, owner target, digest, size bucket, status, reject reason и timestamps. |
+| Decision bridge | Для `PermissionRequest` и policy-controlled `PreToolUse` строит safe request context, вызывает owner decision ports/stubs и возвращает explicit result; `agent-manager` получает только ожидание flow, refs и safe timeline context. |
+| Operational feed | Пишет bounded короткую ленту для realtime UI и диагностики с retention: safe summary, event kind, route result, owner target, digest, size bucket, status, reject reason и timestamps. Это не canonical history; persistent timeline пишет `agent-manager`. |
 | Audit/metrics emitter | Фиксирует решения, отказы, sanitizer events, route latency, duplicates, rate limits и owner timeouts. |
 
 ## Runtime contract emitter/sidecar
@@ -162,9 +162,9 @@ Machine-readable sanitizer contract живёт в `specs/jsonschema/codex-hook-i
 |---|---|---|
 | `SessionStart` | `agent-manager`, `runtime-manager` | Session/run/slot binding, start source, model slug, workspace ref, emitter version. |
 | `UserPromptSubmit` | `agent-manager`, `interaction-hub` | Prompt hash, prompt class, policy pre-check result, safe summary. |
-| `PreToolUse` | `agent-manager`, `governance-manager`, `runtime-manager`, realtime UI | Tool category, tool name, command hash, path category, risk hints, skill/capability ref. |
+| `PreToolUse` | `agent-manager`, `governance-manager`, `runtime-manager`, realtime UI | Tool category, tool name, command hash, path category, risk hints, skill/capability ref. Для persistent UI history следующий CHI-срез вызывает `agent-manager.RecordAgentActivity` с sanitized refs/details. |
 | `PermissionRequest` | `governance-manager`, `agent-manager`, `interaction-hub` | Request id, tool category, sanitized reason, risk class, timeout, capability ref. |
-| `PostToolUse` | `agent-manager`, `runtime-manager`, `provider-hub`, realtime UI | Exit status, bounded error, artifact signal, rate-limit hint, command digest. |
+| `PostToolUse` | `agent-manager`, `runtime-manager`, `provider-hub`, realtime UI | Exit status, bounded error, artifact signal, rate-limit hint, command digest. Для persistent UI history следующий CHI-срез вызывает `agent-manager.RecordAgentActivity` без raw stdout/stderr/tool response. |
 | `Stop` | `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub` | Turn status, pending actions, stop summary, provider signals, checkpoint refs. |
 
 ## PermissionRequest bridge
@@ -244,7 +244,7 @@ sequenceDiagram
 
 Логи должны содержать только ids, route, result, error class, size class и correlation id. Секреты, raw payload и большие previews запрещены.
 
-Сервисный MVP использует in-memory bounded ops feed как service-local diagnostic boundary. Это не аудит, не источник бизнес-истины и не persistent store: entries живут только в памяти процесса, ограничены capacity/TTL и содержат только safe поля. Постоянное хранилище для ops feed вводится отдельным решением, если realtime UI или SRE-требования потребуют восстановления ленты после рестарта.
+Сервисный MVP использует in-memory bounded ops feed как service-local diagnostic boundary. Это не аудит, не источник бизнес-истины и не persistent store: entries живут только в памяти процесса, ограничены capacity/TTL и содержат только safe поля. Каноническая persistent история действий агента находится в `agent-manager.AgentActivity`; постоянное хранилище для собственной ops feed ingress вводится только отдельным решением, если SRE-требования потребуют восстановления именно ingress-ленты после рестарта.
 
 ## Совместимость
 

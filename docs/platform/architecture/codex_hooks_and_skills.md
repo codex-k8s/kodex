@@ -5,7 +5,7 @@ title: kodex — варианты использования Codex hooks и skil
 status: accepted
 owner_role: SA
 created_at: 2026-05-14
-updated_at: 2026-05-25
+updated_at: 2026-05-26
 related_issues:
   - 698
   - 747
@@ -14,6 +14,7 @@ related_issues:
   - 786
   - 322
   - 782
+  - 834
 related_prs: []
 approvals:
   required:
@@ -92,9 +93,9 @@ CHI-2 закрепляет локальную runtime-роль emitter/sidecar: 
 |---|---|---|---|---|
 | `SessionStart` | Старт или resume Codex-сессии внутри slot. | `agent-manager`, `runtime-manager` | Управление, аудит | В БД: связь session/run/slot, источник старта, время, версия модели, workspace ref. Не хранить стенограмму сессии. |
 | `UserPromptSubmit` | Новый prompt, который может быть проверен на секреты, политику и контекст задачи. | `agent-manager`, `interaction-hub` | Управление, аудит | В БД: факт prompt submit, hash, короткая сводка, решение политики. Полный prompt хранить только в контуре диалога, если это пользовательская переписка. |
-| `PreToolUse` | Предварительная проверка инструмента: shell, `apply_patch`, MCP tool; realtime-показ “агент хочет вызвать tool”. | `codex-hook-ingress`, `agent-manager`, `governance-manager`, при необходимости `runtime-manager` | Управление, диагностика, realtime UI | В БД: только deny/no_decision/risk decision ref и безопасная сводка. Массовые allow-события держать в короткой операционной ленте и метриках. |
+| `PreToolUse` | Предварительная проверка инструмента: shell, `apply_patch`, MCP tool; realtime-показ “агент хочет вызвать tool”. | `codex-hook-ingress`, `agent-manager`, `governance-manager`, при необходимости `runtime-manager` | Управление, диагностика, realtime UI | В `agent-manager.AgentActivity`: только safe tool metadata, status, summary, digest, refs/details и correlation trace. Массовые realtime-сигналы держать в короткой операционной ленте ingress и метриках. |
 | `PermissionRequest` | Запрос разрешения Codex на действие с повышенным риском. | `codex-hook-ingress`, `governance-manager`, `agent-manager`, `interaction-hub` | Управление, аудит | В БД governance: request id, decision id, субъект, действие, риск, gate ref, sanitized reason, решение и время; `agent-manager` хранит только ожидание flow и refs. |
-| `PostToolUse` | Результат инструмента после выполнения; realtime-показ “tool отработал”, provider signals и диагностика. | `provider-hub`, `runtime-manager`, `agent-manager` | Диагностика, аудит для рискованных действий, realtime UI | В БД: только важные итоги, exit status, bounded error, provider artifact signal. Полный stdout/stderr не хранить. |
+| `PostToolUse` | Результат инструмента после выполнения; realtime-показ “tool отработал”, provider signals и диагностика. | `provider-hub`, `runtime-manager`, `agent-manager` | Диагностика, аудит для рискованных действий, realtime UI | В `agent-manager.AgentActivity`: только важные итоги, bounded error, digest, safe refs/details и provider artifact signal. Полный stdout/stderr и raw tool response не хранить. |
 | `Stop` | Завершение хода агента; возможность зафиксировать итог и pending actions. | `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub` | Управление, аудит | В БД: контрольная точка run, итоговый status, pending gate refs, provider signals, короткая сводка. |
 
 Контрольные точки сжатия контекста и session snapshot нужны платформе, но не входят в текущий платформенный MVP-набор Codex hooks. Их следует проектировать как отдельные внутренние события `agent-manager`/`runtime-manager` или как результат управляемой команды сессии, а не как `PreCompact`/`PostCompact` hook events.
@@ -103,9 +104,9 @@ CHI-2 закрепляет локальную runtime-роль emitter/sidecar: 
 
 | Получатель | Что получает | Что не получает |
 |---|---|---|
-| `agent-manager` | Жизненный цикл run/session, ожидания flow, governance decision refs, внутренние контрольные точки сессии, stop summary. | Сырые tool outputs, секреты, полные стенограммы сессий, gate decision state. |
+| `agent-manager` | Жизненный цикл run/session, persistent safe activity timeline, ожидания flow, governance decision refs, внутренние контрольные точки сессии, stop summary. | Сырые tool input/output, секреты, полные стенограммы сессий, gate decision state. |
 | `runtime-manager` | Slot/session binding, диагностика рабочего пространства, snapshot object refs, короткий хвост ошибок среды исполнения. | Provider payload и решения бизнес-политик. |
-| `codex-hook-ingress` | Нормализованные hook events для проверки источника, минимальной policy pre-check и маршрутизации. | MCP tools, `tools/list`, `tools/call`, долгое хранение состояния и доменную бизнес-логику. |
+| `codex-hook-ingress` | Нормализованные hook events для проверки источника, минимальной policy pre-check, маршрутизации и короткой realtime/ops feed. | MCP tools, `tools/list`, `tools/call`, долгое хранение состояния, persistent tool history и доменную бизнес-логику. |
 | `governance-manager` | Risk assessment, gate request/decision, policy-based approvals, release decision refs и audit-critical decision state. | Доставку уведомлений, callback transport, технические tool logs и provider payload. |
 | `interaction-hub` | Доставка Permission request, запрос обратной связи владельца, human gate prompt, notification intent и callback refs. | Технические tool logs, provider payload и decision state. |
 | `provider-hub` | Сигналы об изменённых provider artifacts, rate-limit hints, reconciliation hot cursor. | Сырые токены, значения секретов, полный stdout `gh`. |
@@ -122,6 +123,7 @@ CHI-2 закрепляет локальную runtime-роль emitter/sidecar: 
 
 - Hook emitter обязан удалять значения env, токены, authorization headers, строки, похожие на секреты, большие stdout/stderr и бинарные данные.
 - Нельзя отправлять `tool_input` и `tool_response` целиком в платформу по умолчанию.
+- Каноническая persistent история "какой агент когда что делал" хранится в `agent-manager` как bounded safe activity timeline; `codex-hook-ingress` не должен становиться долговременным журналом tool calls.
 - Для shell-команд хранить только нормализованную категорию, command hash, bounded sanitized preview и exit status.
 - Для provider-операций хранить provider, repository, artifact type, artifact id/number, command id и correlation id.
 - Для prompt хранить полный текст только там, где это является пользовательским диалогом и имеет отдельную retention-политику.

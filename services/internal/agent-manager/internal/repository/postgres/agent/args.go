@@ -4,11 +4,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"strconv"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
+	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/agent-manager/internal/domain/types/value"
@@ -23,6 +25,21 @@ type pageQueryArgs struct {
 	pgx.NamedArgs
 	PageSize int32
 	Offset   int32
+}
+
+type activityPageQueryArgs struct {
+	pgx.NamedArgs
+	PageSize int32
+}
+
+type activityPageCursor struct {
+	StartedAt time.Time
+	ID        uuid.UUID
+}
+
+type activityPageToken struct {
+	StartedAt string `json:"started_at"`
+	ID        string `json:"id"`
 }
 
 func flowArgs(flow entity.Flow) pgx.NamedArgs {
@@ -249,6 +266,29 @@ func followUpIntentArgs(intent entity.FollowUpIntent) pgx.NamedArgs {
 	}, intent.ID, intent.Version, intent.CreatedAt, intent.UpdatedAt)
 }
 
+func agentActivityArgs(activity entity.AgentActivity) pgx.NamedArgs {
+	return postgreslib.AddBaseArgs(pgx.NamedArgs{
+		"session_id":        activity.SessionID,
+		"run_id":            postgreslib.NullableUUID(activity.RunID),
+		"turn_id":           activity.TurnID,
+		"tool_use_id":       activity.ToolUseID,
+		"activity_kind":     string(activity.ActivityKind),
+		"tool_name":         activity.ToolName,
+		"tool_category":     activity.ToolCategory,
+		"status":            string(activity.Status),
+		"started_at":        activity.StartedAt,
+		"finished_at":       postgreslib.NullableTime(activity.FinishedAt),
+		"duration_ms":       optionalInt64(activity.DurationMs),
+		"safe_summary":      activity.SafeSummary,
+		"payload_digest":    activity.PayloadDigest,
+		"bounded_error":     activity.BoundedError,
+		"safe_refs_json":    objectPayload(activity.SafeRefsJSON),
+		"safe_details_json": objectPayload(activity.SafeDetailsJSON),
+		"correlation_id":    activity.CorrelationID,
+		"idempotency_key":   activity.IdempotencyKey,
+	}, activity.ID, activity.Version, activity.CreatedAt, activity.UpdatedAt)
+}
+
 func commandResultArgs(result entity.CommandResult) pgx.NamedArgs {
 	args := pgx.NamedArgs{"key": result.Key}
 	args["command_id"] = postgreslib.NullableUUID(result.CommandID)
@@ -343,6 +383,28 @@ func acceptanceResultFilterArgs(filter query.AcceptanceResultFilter) pageQueryAr
 	return withPage(filter.Page, args)
 }
 
+func agentActivityFilterArgs(filter query.AgentActivityFilter) (activityPageQueryArgs, error) {
+	cursor, err := decodeActivityPageToken(filter.Page.PageToken)
+	if err != nil {
+		return activityPageQueryArgs{}, err
+	}
+	args := pgx.NamedArgs{
+		"activity_kind":     optionalEnum(filter.ActivityKind),
+		"activity_status":   optionalEnum(filter.Status),
+		"cursor_started_at": nil,
+		"cursor_id":         nil,
+	}
+	if cursor != nil {
+		args["cursor_started_at"] = cursor.StartedAt
+		args["cursor_id"] = cursor.ID
+	}
+	limit := pageSize(filter.Page)
+	args["session_id"] = optionalUUID(filter.SessionID)
+	args["run_id"] = optionalUUID(filter.RunID)
+	args["limit"] = limit + 1
+	return activityPageQueryArgs{NamedArgs: args, PageSize: limit}, nil
+}
+
 func withPage(page value.PageRequest, args pgx.NamedArgs) pageQueryArgs {
 	limit, offset, _ := postgreslib.OffsetPageBounds(page.PageSize, decodePageToken(page.PageToken), defaultPageSize, maxPageSize)
 	args["limit"] = limit + 1
@@ -355,11 +417,36 @@ func pageResult[T any](items []T, page pageQueryArgs) ([]T, value.PageResult) {
 	return trimmed, value.PageResult{NextPageToken: encodePageToken(next)}
 }
 
+func activityPageResult(items []entity.AgentActivity, page activityPageQueryArgs) ([]entity.AgentActivity, value.PageResult) {
+	if int32(len(items)) <= page.PageSize {
+		return items, value.PageResult{}
+	}
+	trimmed := items[:int(page.PageSize)]
+	next := encodeActivityPageToken(trimmed[len(trimmed)-1])
+	return trimmed, value.PageResult{NextPageToken: next}
+}
+
+func pageSize(page value.PageRequest) int32 {
+	limit, _, _ := postgreslib.OffsetPageBounds(page.PageSize, "", defaultPageSize, maxPageSize)
+	return limit
+}
+
 func encodePageToken(token string) string {
 	if token == "" {
 		return ""
 	}
 	return base64.RawURLEncoding.EncodeToString([]byte(token))
+}
+
+func encodeActivityPageToken(activity entity.AgentActivity) string {
+	payload, err := json.Marshal(activityPageToken{
+		StartedAt: activity.StartedAt.UTC().Format(time.RFC3339Nano),
+		ID:        activity.ID.String(),
+	})
+	if err != nil {
+		return ""
+	}
+	return base64.RawURLEncoding.EncodeToString(payload)
 }
 
 func optionalString(value string) any {
@@ -374,6 +461,13 @@ func optionalUUID(value uuid.UUID) any {
 		return nil
 	}
 	return value
+}
+
+func optionalInt64(value *int64) any {
+	if value == nil {
+		return nil
+	}
+	return *value
 }
 
 func optionalEnum[T ~string](value *T) any {
@@ -416,4 +510,27 @@ func decodePageToken(token string) string {
 		return ""
 	}
 	return string(decoded)
+}
+
+func decodeActivityPageToken(token string) (*activityPageCursor, error) {
+	if token == "" {
+		return nil, nil
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil {
+		return nil, errs.ErrInvalidArgument
+	}
+	var payload activityPageToken
+	if err := json.Unmarshal(decoded, &payload); err != nil {
+		return nil, errs.ErrInvalidArgument
+	}
+	startedAt, err := time.Parse(time.RFC3339Nano, payload.StartedAt)
+	if err != nil || startedAt.IsZero() {
+		return nil, errs.ErrInvalidArgument
+	}
+	id, err := uuid.Parse(payload.ID)
+	if err != nil || id == uuid.Nil {
+		return nil, errs.ErrInvalidArgument
+	}
+	return &activityPageCursor{StartedAt: startedAt.UTC(), ID: id}, nil
 }

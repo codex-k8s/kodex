@@ -17,7 +17,7 @@
 `codex-hook-ingress` не владеет:
 
 - MCP tools, `tools/list`, `tools/call` и MCP transport — это зона `platform-mcp-server`;
-- `Run`, session, flow, stage, role и состояние ожидания flow — это зона `agent-manager`;
+- `Run`, session, flow, stage, role, persistent activity timeline и состояние ожидания flow — это зона `agent-manager`;
 - risk/gate decision state — это зона `governance-manager`;
 - slot, workspace, materialization и runtime job — это зона `runtime-manager`;
 - provider-native artifacts и write pipeline — это зона `provider-hub`;
@@ -40,6 +40,7 @@
 
 | Срез | Что осталось |
 |---|---|
+| CHI-4b | Маршрутизация sanitized `PreToolUse`/`PostToolUse` в `agent-manager.RecordAgentActivity` после готовности owner-side timeline; ingress не хранит persistent tool history. |
 | CHI-6b | Persistent ops feed или integration с operations-hub, если понадобится восстановление ленты после рестарта и отдельные retention jobs. |
 | CHI-7 | Capability context refs для Codex skills без skill catalog в ingress. |
 | CHI-8 | Deploy-контур: Dockerfile, manifests, migration job только если нужна служебная БД, smoke, runbook и monitoring. |
