@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -63,6 +64,48 @@ func TestSubmitHookEventRejectsDuplicateConflict(t *testing.T) {
 	}
 }
 
+func TestSubmitHookEventDetectsConcurrentDuplicateDigestConflict(t *testing.T) {
+	t.Parallel()
+
+	service := newTestService()
+	first := validPreToolUseEnvelope()
+	second := first
+	second.PayloadDigest = digest("b")
+
+	start := make(chan struct{})
+	errs := make(chan error, 2)
+	var wg sync.WaitGroup
+	for _, envelope := range []value.HookEnvelope{first, second} {
+		envelope := envelope
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			_, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: envelope})
+			errs <- err
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(errs)
+
+	successes := 0
+	conflicts := 0
+	for err := range errs {
+		switch {
+		case err == nil:
+			successes++
+		case errors.Is(err, hookerrs.ErrDuplicateConflict):
+			conflicts++
+		default:
+			t.Fatalf("error = %v, want nil or ErrDuplicateConflict", err)
+		}
+	}
+	if successes != 1 || conflicts != 1 {
+		t.Fatalf("successes=%d conflicts=%d, want 1/1", successes, conflicts)
+	}
+}
+
 func TestSubmitHookEventRejectsUntrustedSource(t *testing.T) {
 	t.Parallel()
 
@@ -78,7 +121,7 @@ func TestSubmitHookEventRejectsOversizedSafeSummary(t *testing.T) {
 	t.Parallel()
 
 	envelope := validPreToolUseEnvelope()
-	envelope.SafePayload.SafeSummary = strings.Repeat("x", 4097)
+	envelope.SafePayload.SafeSummary = strings.Repeat("\u0100", 4096)
 	_, err := newTestService().SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: envelope})
 	if !errors.Is(err, hookerrs.ErrPayloadRejected) {
 		t.Fatalf("error = %v, want ErrPayloadRejected", err)
@@ -93,6 +136,87 @@ func TestSubmitHookEventRejectsSanitizerRejectedClasses(t *testing.T) {
 	_, err := newTestService().SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: envelope})
 	if !errors.Is(err, hookerrs.ErrPayloadRejected) {
 		t.Fatalf("error = %v, want ErrPayloadRejected", err)
+	}
+}
+
+func TestDefaultEnvelopeValidatorRejectsSchemaBoundViolations(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		mutate func(*value.HookEnvelope)
+	}{
+		{
+			name: "retention class enum",
+			mutate: func(envelope *value.HookEnvelope) {
+				envelope.RetentionClass = "forever"
+			},
+		},
+		{
+			name: "route owner enum",
+			mutate: func(envelope *value.HookEnvelope) {
+				envelope.DownstreamRoutes[0].Owner = "raw-store"
+			},
+		},
+		{
+			name: "safe part allowlist",
+			mutate: func(envelope *value.HookEnvelope) {
+				envelope.DownstreamRoutes[0].SafeParts = []string{"raw_prompt"}
+			},
+		},
+		{
+			name: "tool category enum",
+			mutate: func(envelope *value.HookEnvelope) {
+				envelope.ToolContext.ToolCategory = "network"
+			},
+		},
+		{
+			name: "risk class enum",
+			mutate: func(envelope *value.HookEnvelope) {
+				envelope.SafePayload.RiskClass = "critical"
+			},
+		},
+		{
+			name: "timeout budget range",
+			mutate: func(envelope *value.HookEnvelope) {
+				timeout := 0
+				envelope.SafePayload.TimeoutBudgetMS = &timeout
+			},
+		},
+		{
+			name: "exit status range",
+			mutate: func(envelope *value.HookEnvelope) {
+				status := 256
+				envelope.SafePayload.ExitStatus = &status
+			},
+		},
+		{
+			name: "correlation id pattern",
+			mutate: func(envelope *value.HookEnvelope) {
+				envelope.CorrelationID = "run 5555"
+			},
+		},
+		{
+			name: "prompt digest format",
+			mutate: func(envelope *value.HookEnvelope) {
+				envelope.SafePayload.PromptDigest = "sha256:short"
+			},
+		},
+	}
+
+	validator := DefaultEnvelopeValidator{}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			envelope := validPreToolUseEnvelope()
+			tc.mutate(&envelope)
+			err := validator.ValidateEnvelope(context.Background(), normalizedConfig(Config{}), envelope)
+			if !errors.Is(err, hookerrs.ErrInvalidArgument) {
+				t.Fatalf("ValidateEnvelope() error = %v, want ErrInvalidArgument", err)
+			}
+		})
 	}
 }
 

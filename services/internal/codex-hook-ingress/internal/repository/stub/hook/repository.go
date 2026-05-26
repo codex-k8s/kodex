@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
+	hookerrs "github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/domain/errs"
 	hookrepo "github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/domain/repository/hook"
 	"github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/domain/types/entity"
 )
@@ -29,24 +30,20 @@ func (r *Repository) Ready() bool {
 	return r != nil && r.events != nil
 }
 
-// GetAcceptedEvent returns the existing event idempotency record.
-func (r *Repository) GetAcceptedEvent(_ context.Context, eventID uuid.UUID) (entity.AcceptedEvent, bool, error) {
+// RegisterAcceptedEvent atomically stores or returns the existing event idempotency record.
+func (r *Repository) RegisterAcceptedEvent(_ context.Context, event entity.AcceptedEvent) (entity.AcceptedEvent, bool, error) {
 	if r == nil {
 		return entity.AcceptedEvent{}, false, nil
 	}
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	event, ok := r.events[eventID]
-	return event, ok, nil
-}
-
-// RecordAcceptedEvent stores a safe accepted event record.
-func (r *Repository) RecordAcceptedEvent(_ context.Context, event entity.AcceptedEvent) error {
-	if r == nil {
-		return nil
-	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	existing, ok := r.events[event.EventID]
+	if ok {
+		if existing.PayloadDigest != event.PayloadDigest {
+			return entity.AcceptedEvent{}, false, hookerrs.ErrDuplicateConflict
+		}
+		return existing, true, nil
+	}
 	r.events[event.EventID] = event
-	return nil
+	return event, false, nil
 }

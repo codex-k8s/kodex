@@ -3,6 +3,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -75,20 +76,6 @@ func (s *Service) SubmitHookEvent(ctx context.Context, input SubmitHookEventInpu
 	if !decision.Accepted {
 		return SubmitHookEventResult{}, hookerrs.ErrInvalidBinding
 	}
-	existing, found, err := s.repository.GetAcceptedEvent(ctx, envelope.EventID)
-	if err != nil {
-		return SubmitHookEventResult{}, fmt.Errorf("%w: read hook idempotency record: %v", hookerrs.ErrDependencyUnavailable, err)
-	}
-	if found {
-		if existing.PayloadDigest != envelope.PayloadDigest {
-			return SubmitHookEventResult{}, hookerrs.ErrDuplicateConflict
-		}
-		return SubmitHookEventResult{
-			HandlerResult:  existing.Result,
-			Duplicate:      true,
-			RoutesAccepted: len(envelope.DownstreamRoutes),
-		}, nil
-	}
 	result := s.handlerResult(envelope)
 	record := entity.AcceptedEvent{
 		EventID:        envelope.EventID,
@@ -99,8 +86,19 @@ func (s *Service) SubmitHookEvent(ctx context.Context, input SubmitHookEventInpu
 		Result:         result,
 		RecordedAt:     s.clock.Now(),
 	}
-	if err := s.repository.RecordAcceptedEvent(ctx, record); err != nil {
+	accepted, duplicate, err := s.repository.RegisterAcceptedEvent(ctx, record)
+	if err != nil {
+		if errors.Is(err, hookerrs.ErrDuplicateConflict) {
+			return SubmitHookEventResult{}, err
+		}
 		return SubmitHookEventResult{}, fmt.Errorf("%w: store hook idempotency record: %v", hookerrs.ErrDependencyUnavailable, err)
+	}
+	if duplicate {
+		return SubmitHookEventResult{
+			HandlerResult:  accepted.Result,
+			Duplicate:      true,
+			RoutesAccepted: len(envelope.DownstreamRoutes),
+		}, nil
 	}
 	return SubmitHookEventResult{
 		HandlerResult:  result,
