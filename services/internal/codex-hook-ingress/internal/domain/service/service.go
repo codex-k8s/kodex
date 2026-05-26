@@ -54,7 +54,7 @@ func New(repository hookrepo.Repository, cfg Config, deps Dependencies) *Service
 		deps.RateLimiter = noopRateLimiter{}
 	}
 	if deps.DecisionBridge == nil {
-		deps.DecisionBridge = NewOwnerDecisionBridge(nil)
+		deps.DecisionBridge = NewOwnerDecisionBridge(NewDefaultDecisionOwnerPorts())
 	}
 	return &Service{
 		repository:     repository,
@@ -249,7 +249,9 @@ func (s *Service) handlerResult(envelope value.HookEnvelope) value.HookHandlerRe
 }
 
 func acceptedEventMatchesEnvelope(accepted entity.AcceptedEvent, envelope value.HookEnvelope) bool {
-	return accepted.PayloadDigest == envelope.PayloadDigest && accepted.CorrelationID == envelope.CorrelationID
+	return accepted.PayloadDigest == envelope.PayloadDigest &&
+		accepted.CorrelationID == envelope.CorrelationID &&
+		accepted.HookEventName == envelope.HookEventName
 }
 
 func (s *Service) applyRouteFailurePolicy(result value.HookHandlerResult, diagnostics []value.RouteDeliveryResult) value.HookHandlerResult {

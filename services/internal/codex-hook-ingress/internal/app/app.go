@@ -57,6 +57,7 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 			SourceVerifier: hookservice.StaticSourceVerifier{},
 			Sanitizer:      hookservice.DefaultSanitizer{},
 			RouteRegistry:  hookservice.NewDefaultRouteRegistry(),
+			DecisionBridge: hookservice.NewOwnerDecisionBridge(hookservice.NewDefaultDecisionOwnerPorts()),
 			OpsFeed: opsstub.NewRepository(opsstub.Config{
 				Capacity:  cfg.OpsFeedCapacity,
 				Retention: cfg.OpsFeedRetention,

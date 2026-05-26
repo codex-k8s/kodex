@@ -20,6 +20,24 @@ func NewOwnerDecisionBridge(ports map[hookenum.DownstreamOwner]DecisionOwnerPort
 	return &OwnerDecisionBridge{ports: cloneDecisionOwnerPorts(ports)}
 }
 
+// NewDefaultDecisionOwnerPorts returns safe unavailable stubs until owner clients are wired.
+func NewDefaultDecisionOwnerPorts() map[hookenum.DownstreamOwner]DecisionOwnerPort {
+	return NewUnavailableDecisionOwnerPorts(
+		hookenum.DownstreamOwnerGovernanceManager,
+		hookenum.DownstreamOwnerAgentManager,
+		hookenum.DownstreamOwnerInteractionHub,
+	)
+}
+
+// NewUnavailableDecisionOwnerPorts creates explicit stubs that fail safely instead of reporting unsupported routes.
+func NewUnavailableDecisionOwnerPorts(owners ...hookenum.DownstreamOwner) map[hookenum.DownstreamOwner]DecisionOwnerPort {
+	ports := map[hookenum.DownstreamOwner]DecisionOwnerPort{}
+	for _, owner := range owners {
+		ports[owner] = UnavailableDecisionOwnerPort{Owner: owner}
+	}
+	return ports
+}
+
 // Ready reports whether the bridge is composed.
 func (bridge *OwnerDecisionBridge) Ready() bool {
 	return bridge != nil && bridge.ports != nil
@@ -266,4 +284,22 @@ func cloneDecisionOwnerPorts(ports map[hookenum.DownstreamOwner]DecisionOwnerPor
 		cloned[owner] = port
 	}
 	return cloned
+}
+
+// UnavailableDecisionOwnerPort is an explicit process-level placeholder for owners without a selected transport.
+type UnavailableDecisionOwnerPort struct {
+	Owner hookenum.DownstreamOwner
+}
+
+// RequestHookDecision reports a safe unavailable decision owner without accepting delivery.
+func (port UnavailableDecisionOwnerPort) RequestHookDecision(_ context.Context, request HookDecisionRequest) (HookOwnerDecision, error) {
+	owner := port.Owner
+	if owner == "" {
+		owner = request.Owner
+	}
+	return HookOwnerDecision{
+		Owner:     owner,
+		Result:    hookenum.HandlerResultNoDecision,
+		Retryable: true,
+	}, hookerrs.ErrOwnerUnavailable
 }

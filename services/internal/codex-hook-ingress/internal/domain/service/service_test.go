@@ -386,6 +386,31 @@ func TestSubmitHookEventPermissionBridgeFailClosedWhenOwnerUnavailable(t *testin
 	}
 }
 
+func TestSubmitHookEventPermissionBridgeDefaultPortsAreUnavailableStubs(t *testing.T) {
+	t.Parallel()
+
+	result, err := newTestService().SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: validPermissionRequestEnvelope()})
+	if err != nil {
+		t.Fatalf("SubmitHookEvent(): %v", err)
+	}
+	if result.HandlerResult.Result != hookenum.HandlerResultFailClosed {
+		t.Fatalf("handler result = %s, want fail_closed", result.HandlerResult.Result)
+	}
+	if result.RoutesAccepted != 0 {
+		t.Fatalf("routes accepted = %d, want 0 for unavailable owner stubs", result.RoutesAccepted)
+	}
+	for _, owner := range []hookenum.DownstreamOwner{
+		hookenum.DownstreamOwnerGovernanceManager,
+		hookenum.DownstreamOwnerAgentManager,
+		hookenum.DownstreamOwnerInteractionHub,
+	} {
+		diagnostic := diagnosticForOwner(result.RouteDiagnostics, owner)
+		if diagnostic.Status != hookenum.RouteDeliveryStatusFailed || diagnostic.DiagnosticCode != value.RouteDiagnosticOwnerUnavailable {
+			t.Fatalf("diagnostic for %s = %+v, want failed owner_unavailable", owner, diagnostic)
+		}
+	}
+}
+
 func TestSubmitHookEventPermissionBridgeIdempotencyReplayAndCorrelationConflict(t *testing.T) {
 	t.Parallel()
 
@@ -417,6 +442,24 @@ func TestSubmitHookEventPermissionBridgeIdempotencyReplayAndCorrelationConflict(
 	_, err = service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: envelope})
 	if !errors.Is(err, hookerrs.ErrDuplicateConflict) {
 		t.Fatalf("correlation replay error = %v, want ErrDuplicateConflict", err)
+	}
+}
+
+func TestSubmitHookEventRejectsDuplicateHookEventNameConflict(t *testing.T) {
+	t.Parallel()
+
+	service := newTestService()
+	first := validPreToolUseEnvelope()
+	if _, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: first}); err != nil {
+		t.Fatalf("first SubmitHookEvent(): %v", err)
+	}
+	second := validPermissionRequestEnvelope()
+	second.EventID = first.EventID
+	second.PayloadDigest = first.PayloadDigest
+	second.CorrelationID = first.CorrelationID
+	_, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: second})
+	if !errors.Is(err, hookerrs.ErrDuplicateConflict) {
+		t.Fatalf("event-name replay error = %v, want ErrDuplicateConflict", err)
 	}
 }
 

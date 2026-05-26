@@ -12,7 +12,7 @@ func (code Code) Error() string {
 const (
 	// ErrDependencyUnavailable means a required skeleton dependency is not composed.
 	ErrDependencyUnavailable Code = "hook.dependency_unavailable"
-	// ErrDuplicateConflict means the same event id was retried with another payload digest.
+	// ErrDuplicateConflict means the same event id was retried with another hook fingerprint.
 	ErrDuplicateConflict Code = "hook.duplicate_conflict"
 	// ErrInvalidArgument means a normalized hook envelope violates domain invariants.
 	ErrInvalidArgument Code = "hook.invalid_argument"
