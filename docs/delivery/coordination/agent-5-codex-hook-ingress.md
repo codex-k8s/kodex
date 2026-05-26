@@ -32,12 +32,12 @@
 | CHI-1 | #778 | готово | Machine-readable JSON Schema для normalized hook envelope и sanitizer contract, safe examples, индексы спецификаций и обновлённая трассируемость. |
 | CHI-2 | #786 | готово | Контракт hook emitter/local sidecar, runtime config JSON Schema, logical `SubmitHookEvent`, sanitizer до buffer/send, auth, idempotency, ordering, retry, bounded buffer, backpressure и failure policy без выбора physical transport. |
 | CHI-3 | #793 | готово | Сервисный каркас `services/internal/codex-hook-ingress`: process, config, graceful shutdown, health/readiness/metrics, in-process logical `SubmitHookEvent`, source binding placeholder, schema validation hook, sanitizer boundary, idempotency repository stub без raw payload storage. |
+| CHI-4 | #808 | готово | Route registry и dispatch безопасных частей hook events через owner ports/stubs к `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub` и operations/realtime placeholder; unsupported/disabled/downstream-failed routes дают safe diagnostics и не считаются успешной доставкой. |
 
 ## Текущий бэклог агента #5
 
 | Срез | Что осталось |
 |---|---|
-| CHI-4 | Routes к `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub` и operations/realtime контуру для safe event parts. |
 | CHI-5 | `PermissionRequest` и policy-controlled `PreToolUse` bridge через `governance-manager`, ожидание flow у `agent-manager` и delivery через `interaction-hub`. |
 | CHI-6 | Realtime/ops feed, retention, sanitizer metrics, rate limits, backpressure и operator diagnostics. |
 | CHI-7 | Capability context refs для Codex skills без skill catalog в ingress. |

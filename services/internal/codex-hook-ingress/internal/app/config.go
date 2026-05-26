@@ -15,6 +15,7 @@ const (
 	defaultSchemaVersion       = "codex-hook-ingress.normalized-hook-envelope.v1"
 	defaultSanitizerContractID = "codex-hook-ingress.sanitizer.v1"
 	defaultSupportedEvents     = "SessionStart,UserPromptSubmit,PreToolUse,PermissionRequest,PostToolUse,Stop"
+	defaultRouteFailurePolicy  = "diagnostic"
 )
 
 // Config contains process-level codex-hook-ingress configuration.
@@ -28,6 +29,8 @@ type Config struct {
 	MaxEnvelopeBytes         int           `env:"KODEX_CODEX_HOOK_INGRESS_MAX_ENVELOPE_BYTES" envDefault:"65536"`
 	MaxTextPreviewBytes      int           `env:"KODEX_CODEX_HOOK_INGRESS_MAX_TEXT_PREVIEW_BYTES" envDefault:"4096"`
 	MaxBoundedErrorBytes     int           `env:"KODEX_CODEX_HOOK_INGRESS_MAX_BOUNDED_ERROR_BYTES" envDefault:"8192"`
+	DisabledRoutes           string        `env:"KODEX_CODEX_HOOK_INGRESS_DISABLED_ROUTES" envDefault:""`
+	RouteFailurePolicy       string        `env:"KODEX_CODEX_HOOK_INGRESS_ROUTE_FAILURE_POLICY" envDefault:"diagnostic"`
 	LogicalTransportReadOnly bool          `env:"KODEX_CODEX_HOOK_INGRESS_LOGICAL_TRANSPORT_READ_ONLY" envDefault:"true"`
 }
 
@@ -76,6 +79,12 @@ func (cfg Config) Validate() error {
 	if len(events) != len(hookenum.SupportedHookEvents()) {
 		return fmt.Errorf("KODEX_CODEX_HOOK_INGRESS_SUPPORTED_HOOK_EVENTS must contain exactly the MVP hook set")
 	}
+	if _, err := cfg.DisabledRouteOwners(); err != nil {
+		return err
+	}
+	if !hookenum.IsRouteFailurePolicy(cfg.RouteFailureMode()) {
+		return fmt.Errorf("unsupported KODEX_CODEX_HOOK_INGRESS_ROUTE_FAILURE_POLICY %q", cfg.RouteFailurePolicy)
+	}
 	return nil
 }
 
@@ -106,4 +115,34 @@ func (cfg Config) SupportedEvents() ([]hookenum.HookEventName, error) {
 		}
 	}
 	return events, nil
+}
+
+// DisabledRouteOwners returns owner routes disabled by process config.
+func (cfg Config) DisabledRouteOwners() ([]hookenum.DownstreamOwner, error) {
+	seen := map[hookenum.DownstreamOwner]struct{}{}
+	var owners []hookenum.DownstreamOwner
+	for _, raw := range strings.Split(cfg.DisabledRoutes, ",") {
+		owner := hookenum.DownstreamOwner(strings.TrimSpace(raw))
+		if owner == "" {
+			continue
+		}
+		if !hookenum.IsDownstreamOwner(owner) {
+			return nil, fmt.Errorf("unsupported disabled route %q", owner)
+		}
+		if _, ok := seen[owner]; ok {
+			return nil, fmt.Errorf("duplicate disabled route %q", owner)
+		}
+		seen[owner] = struct{}{}
+		owners = append(owners, owner)
+	}
+	return owners, nil
+}
+
+// RouteFailureMode returns the configured safe route failure behavior.
+func (cfg Config) RouteFailureMode() hookenum.RouteFailurePolicy {
+	policy := strings.TrimSpace(cfg.RouteFailurePolicy)
+	if policy == "" {
+		policy = defaultRouteFailurePolicy
+	}
+	return hookenum.RouteFailurePolicy(policy)
 }

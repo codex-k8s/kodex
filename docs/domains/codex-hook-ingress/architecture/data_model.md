@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-26
-related_issues: [698, 753, 778, 786, 793, 322]
+related_issues: [698, 753, 778, 786, 793, 808, 322]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -271,7 +271,7 @@ approvals:
 
 ## Миграции
 
-CHI-3 не создаёт миграции и использует только repository interfaces плюс in-memory stub для проверки service skeleton. Stub хранит безопасный idempotency record: `event_id`, `payload_digest`, `hook_event_name`, `correlation_id`, `retention_class`, normalized `HookHandlerResult` и время записи. Raw prompt, raw tool input/output, stdout/stderr, transcript, session dump, provider payload, kubeconfig, secret values, `SKILL.md` или package manifest не хранятся.
+CHI-3/CHI-4 не создают миграции и используют только repository interfaces плюс in-memory stub для проверки service skeleton и route registry. Stub хранит безопасный idempotency record: `event_id`, `payload_digest`, `hook_event_name`, `correlation_id`, `retention_class`, normalized `HookHandlerResult`, delivery completion state, safe route delivery diagnostics и время записи. Raw prompt, raw tool input/output, stdout/stderr, transcript, session dump, provider payload, kubeconfig, secret values, `SKILL.md` или package manifest не хранятся.
 
 Перед появлением persistent storage нужно отдельно согласовать:
 

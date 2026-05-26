@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-22
 updated_at: 2026-05-26
-related_issues: [698, 753, 778, 786, 793, 322]
+related_issues: [698, 753, 778, 786, 793, 808, 322]
 related_prs: []
 related_docsets:
   - docs/domains/codex-hook-ingress/product/requirements.md
@@ -48,7 +48,7 @@ approvals:
 | CHI-1 | #778 | JSON Schema `normalized-hook-envelope.v1` и `sanitizer-contract.v1`, safe examples, validation command и явное разделение hook envelope, MCP tools и business commands. |
 | CHI-2 | #786 | Контракт hook emitter/local sidecar: runtime role, чтение Codex hook JSON из `stdin`, sanitizer до buffer/send, logical `SubmitHookEvent`, auth, idempotency, ordering, retry, bounded buffer, backpressure и failure policy без выбора physical transport. |
 | CHI-3 | #793 | Сервисный каркас `codex-hook-ingress`: process, config, graceful shutdown, health/readiness/metrics, in-process logical `SubmitHookEvent`, source verifier placeholder, schema validation hook, sanitizer boundary, idempotency repository stub без raw payload storage. |
-| CHI-4 | не назначено | Routes к `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub` для safe events без бизнес-состояния в ingress. |
+| CHI-4 | #808 | Route registry и dispatch безопасных частей events через owner ports/stubs к `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub` и operations/realtime placeholder без бизнес-состояния в ingress. |
 | CHI-5 | не назначено | `PermissionRequest` и policy-controlled `PreToolUse` bridge к gate/decision у `governance-manager`, ожиданию flow у `agent-manager` и delivery через `interaction-hub`. |
 | CHI-6 | не назначено | Realtime/ops feed, retention, sanitizer metrics, rate limits, backpressure и operator diagnostics. |
 | CHI-7 | не назначено | Capability context refs для skills: связь с `package-hub`, выбором `agent-manager` и materialization `runtime-manager`; без skill catalog в ingress. |
@@ -59,10 +59,10 @@ approvals:
 | Домен или сервис | Связь | Статус |
 |---|---|---|
 | `platform-mcp-server` | Отдельная MCP-поверхность tools. | CHI-0 фиксирует разделение; hook ingress не добавляет MCP transport. |
-| `agent-manager` | Владеет run/session, ожиданием flow и выбором skills. | CHI-4/CHI-5 требуют согласованных операций приёма lifecycle signals и flow-wait refs. |
-| `runtime-manager` | Владеет slot, workspace, materialization skills и runtime diagnostics. | CHI-2 фиксирует runtime placement, endpoint ref и auth policy для emitter/sidecar; CHI-4/CHI-7 требуют runtime context и подготовку materialization. |
-| `provider-hub` | Владеет provider artifacts, limits и reconciliation. | CHI-4 требует safe provider artifact signal contract без stdout `gh`. |
-| `governance-manager` | Владеет risk assessment, gate request/decision и policy-based approvals. | CHI-4/CHI-5 требуют safe risk/gate context и fail-closed policy для рискованных действий. |
+| `agent-manager` | Владеет run/session, ожиданием flow и выбором skills. | CHI-4 отправляет только safe projections через owner port; CHI-5 согласует операции ожидания flow и bridge. |
+| `runtime-manager` | Владеет slot, workspace, materialization skills и runtime diagnostics. | CHI-2 фиксирует runtime placement, endpoint ref и auth policy для emitter/sidecar; CHI-4 отправляет runtime-safe refs, CHI-7 требует подготовку materialization. |
+| `provider-hub` | Владеет provider artifacts, limits и reconciliation. | CHI-4 отправляет только safe provider artifact signal/rate limit parts без stdout `gh` и provider payload. |
+| `governance-manager` | Владеет risk assessment, gate request/decision и policy-based approvals. | CHI-4 передаёт safe risk/gate context без full `PermissionRequest` bridge; CHI-5 согласует decision lifecycle. |
 | `interaction-hub` | Владеет owner feedback, approvals, Human gate delivery и notifications. | CHI-5 требует delivery request/callback contract без владения decision state. |
 | `package-hub` | Владеет package source/version/install/manifest для package-backed skills. | CHI-7 использует только package refs и manifest snapshots, не переносит их в ingress. |
 | `access-manager` | Владеет правами actor/source/tool/capability. | CHI-3/CHI-5 требуют проверки source и role policy. |

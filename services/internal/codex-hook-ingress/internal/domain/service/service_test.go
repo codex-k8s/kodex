@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	hookerrs "github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/domain/errs"
+	"github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/domain/types/entity"
 	hookenum "github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/domain/types/value"
 	hookstub "github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/repository/stub/hook"
@@ -27,8 +28,231 @@ func TestSubmitHookEventAcceptsSafeEnvelope(t *testing.T) {
 	if result.HandlerResult.Result != hookenum.HandlerResultContinue {
 		t.Fatalf("result = %s, want continue", result.HandlerResult.Result)
 	}
-	if result.RoutesAccepted != 1 {
-		t.Fatalf("routes accepted = %d, want 1", result.RoutesAccepted)
+	if result.RoutesAccepted != 4 {
+		t.Fatalf("routes accepted = %d, want 4", result.RoutesAccepted)
+	}
+}
+
+func TestSubmitHookEventDispatchesSelectedSafeRoutes(t *testing.T) {
+	t.Parallel()
+
+	agentRoute := &recordingOwnerRoute{}
+	runtimeRoute := &recordingOwnerRoute{}
+	service := newTestServiceWithConfig(Config{}, testRouteRegistry(map[hookenum.DownstreamOwner]OwnerRoute{
+		hookenum.DownstreamOwnerAgentManager:   agentRoute,
+		hookenum.DownstreamOwnerRuntimeManager: runtimeRoute,
+	}))
+	envelope := validPreToolUseEnvelope()
+	envelope.DownstreamRoutes = []value.DownstreamRoute{
+		{
+			Owner:        hookenum.DownstreamOwnerAgentManager,
+			DeliveryMode: hookenum.DeliveryModeAsync,
+			SafeParts:    []string{"source_context", "run_context", "tool_context", "correlation_id"},
+		},
+		{
+			Owner:        hookenum.DownstreamOwnerRuntimeManager,
+			DeliveryMode: hookenum.DeliveryModeAsync,
+			SafeParts:    []string{"run_context", "risk_class"},
+		},
+	}
+
+	result, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: envelope})
+	if err != nil {
+		t.Fatalf("SubmitHookEvent(): %v", err)
+	}
+	if result.RoutesAccepted != 4 {
+		t.Fatalf("routes accepted = %d, want 4", result.RoutesAccepted)
+	}
+	agentEvents := agentRoute.Events()
+	if len(agentEvents) != 1 {
+		t.Fatalf("agent route events = %d, want 1", len(agentEvents))
+	}
+	if agentEvents[0].SourceContext == nil || agentEvents[0].RunContext == nil || agentEvents[0].ToolContext == nil || agentEvents[0].CorrelationID == "" {
+		t.Fatalf("agent route event did not receive selected safe parts: %+v", agentEvents[0])
+	}
+	runtimeEvents := runtimeRoute.Events()
+	if len(runtimeEvents) != 1 {
+		t.Fatalf("runtime route events = %d, want 1", len(runtimeEvents))
+	}
+	if runtimeEvents[0].RunContext == nil || runtimeEvents[0].RiskClass != "low" {
+		t.Fatalf("runtime route event did not receive selected safe parts: %+v", runtimeEvents[0])
+	}
+}
+
+func TestSubmitHookEventReportsDisabledRouteWithoutDispatch(t *testing.T) {
+	t.Parallel()
+
+	route := &recordingOwnerRoute{}
+	service := newTestServiceWithConfig(
+		Config{DisabledRoutes: []hookenum.DownstreamOwner{hookenum.DownstreamOwnerOperationsFeed}},
+		testRouteRegistry(map[hookenum.DownstreamOwner]OwnerRoute{
+			hookenum.DownstreamOwnerOperationsFeed: route,
+		}),
+	)
+
+	result, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: validPreToolUseEnvelope()})
+	if err != nil {
+		t.Fatalf("SubmitHookEvent(): %v", err)
+	}
+	if result.RoutesAccepted != 3 {
+		t.Fatalf("routes accepted = %d, want 3", result.RoutesAccepted)
+	}
+	if !hasRouteStatus(result.RouteDiagnostics, hookenum.DownstreamOwnerOperationsFeed, hookenum.RouteDeliveryStatusDisabled) {
+		t.Fatalf("route diagnostics = %+v, want disabled", result.RouteDiagnostics)
+	}
+	if len(route.Events()) != 0 {
+		t.Fatalf("disabled route received %d events, want 0", len(route.Events()))
+	}
+}
+
+func TestSubmitHookEventReportsUnsupportedRoute(t *testing.T) {
+	t.Parallel()
+
+	service := newTestServiceWithConfig(Config{}, NewRouteRegistry(map[hookenum.DownstreamOwner]OwnerRoute{}))
+	result, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: validPreToolUseEnvelope()})
+	if err != nil {
+		t.Fatalf("SubmitHookEvent(): %v", err)
+	}
+	if result.RoutesAccepted != 0 {
+		t.Fatalf("routes accepted = %d, want 0", result.RoutesAccepted)
+	}
+	if len(result.RouteDiagnostics) != 4 {
+		t.Fatalf("route diagnostics = %+v, want four canonical unsupported routes", result.RouteDiagnostics)
+	}
+	for _, diagnostic := range result.RouteDiagnostics {
+		if diagnostic.Status != hookenum.RouteDeliveryStatusUnsupported {
+			t.Fatalf("route diagnostics = %+v, want unsupported", result.RouteDiagnostics)
+		}
+	}
+}
+
+func TestSubmitHookEventReportsDownstreamFailureSafely(t *testing.T) {
+	t.Parallel()
+
+	service := newTestServiceWithConfig(Config{}, testRouteRegistry(map[hookenum.DownstreamOwner]OwnerRoute{
+		hookenum.DownstreamOwnerOperationsFeed: failingOwnerRoute{err: errors.New("sensitive downstream detail")},
+	}))
+
+	result, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: validPreToolUseEnvelope()})
+	if err != nil {
+		t.Fatalf("SubmitHookEvent(): %v", err)
+	}
+	if result.RoutesAccepted != 3 {
+		t.Fatalf("routes accepted = %d, want 3", result.RoutesAccepted)
+	}
+	if !hasRouteStatus(result.RouteDiagnostics, hookenum.DownstreamOwnerOperationsFeed, hookenum.RouteDeliveryStatusFailed) {
+		t.Fatalf("route diagnostics = %+v, want failed", result.RouteDiagnostics)
+	}
+	diagnostic := diagnosticForOwner(result.RouteDiagnostics, hookenum.DownstreamOwnerOperationsFeed).DiagnosticMessage
+	if strings.Contains(diagnostic, "sensitive downstream detail") {
+		t.Fatalf("diagnostic leaked downstream error: %q", diagnostic)
+	}
+}
+
+func TestSubmitHookEventRejectsSenderControlledUnexpectedRoute(t *testing.T) {
+	t.Parallel()
+
+	providerRoute := &recordingOwnerRoute{}
+	service := newTestServiceWithConfig(Config{}, testRouteRegistry(map[hookenum.DownstreamOwner]OwnerRoute{
+		hookenum.DownstreamOwnerProviderHub: providerRoute,
+	}))
+	envelope := validPreToolUseEnvelope()
+	envelope.DownstreamRoutes = append(envelope.DownstreamRoutes, value.DownstreamRoute{
+		Owner:        hookenum.DownstreamOwnerProviderHub,
+		DeliveryMode: hookenum.DeliveryModeAsync,
+		SafeParts:    []string{"run_context", "tool_context", "safe_summary", "correlation_id"},
+	})
+
+	result, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: envelope})
+	if err != nil {
+		t.Fatalf("SubmitHookEvent(): %v", err)
+	}
+	if len(providerRoute.Events()) != 0 {
+		t.Fatalf("provider route received %d events, want 0", len(providerRoute.Events()))
+	}
+	if !hasDiagnosticCode(result.RouteDiagnostics, hookenum.DownstreamOwnerProviderHub, value.RouteDiagnosticUnexpected) {
+		t.Fatalf("route diagnostics = %+v, want unexpected provider route", result.RouteDiagnostics)
+	}
+}
+
+func TestSubmitHookEventDoesNotReplayDispatchForDuplicate(t *testing.T) {
+	t.Parallel()
+
+	route := &recordingOwnerRoute{}
+	service := newTestServiceWithConfig(Config{}, testRouteRegistry(map[hookenum.DownstreamOwner]OwnerRoute{
+		hookenum.DownstreamOwnerOperationsFeed: route,
+	}))
+	envelope := validPreToolUseEnvelope()
+	if _, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: envelope}); err != nil {
+		t.Fatalf("first SubmitHookEvent(): %v", err)
+	}
+	result, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: envelope})
+	if err != nil {
+		t.Fatalf("second SubmitHookEvent(): %v", err)
+	}
+	if !result.Duplicate {
+		t.Fatal("duplicate = false, want true")
+	}
+	if result.RoutesAccepted != 4 {
+		t.Fatalf("duplicate routes accepted = %d, want cached 4", result.RoutesAccepted)
+	}
+	if len(route.Events()) != 1 {
+		t.Fatalf("route dispatch count = %d, want 1", len(route.Events()))
+	}
+}
+
+func TestSubmitHookEventRetriesIncompleteDuplicateDelivery(t *testing.T) {
+	t.Parallel()
+
+	route := &recordingOwnerRoute{}
+	repository := &failOnceDeliveryRepository{inner: hookstub.NewRepository()}
+	service := New(repository, Config{}, Dependencies{
+		Clock: fixedClock{now: time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)},
+		RouteRegistry: testRouteRegistry(map[hookenum.DownstreamOwner]OwnerRoute{
+			hookenum.DownstreamOwnerOperationsFeed: route,
+		}),
+	})
+	envelope := validPreToolUseEnvelope()
+
+	_, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: envelope})
+	if err == nil {
+		t.Fatal("first SubmitHookEvent() error is nil, want delivery persistence error")
+	}
+	result, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: envelope})
+	if err != nil {
+		t.Fatalf("second SubmitHookEvent(): %v", err)
+	}
+	if !result.Duplicate {
+		t.Fatal("duplicate = false, want true for retry after incomplete delivery")
+	}
+	if result.RoutesAccepted != 4 {
+		t.Fatalf("routes accepted = %d, want 4 after retry", result.RoutesAccepted)
+	}
+	if len(route.Events()) != 2 {
+		t.Fatalf("route dispatch count = %d, want retry dispatch", len(route.Events()))
+	}
+}
+
+func TestSubmitHookEventCanFailClosedOnRouteFailure(t *testing.T) {
+	t.Parallel()
+
+	service := newTestServiceWithConfig(
+		Config{
+			DisabledRoutes:     []hookenum.DownstreamOwner{hookenum.DownstreamOwnerOperationsFeed},
+			RouteFailurePolicy: hookenum.RouteFailurePolicyFailClosed,
+		},
+		NewDefaultRouteRegistry(),
+	)
+
+	result, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: validPreToolUseEnvelope()})
+	if err != nil {
+		t.Fatalf("SubmitHookEvent(): %v", err)
+	}
+	if result.HandlerResult.Result != hookenum.HandlerResultFailClosed {
+		t.Fatalf("handler result = %s, want fail_closed", result.HandlerResult.Result)
+	}
+	if result.HandlerResult.DecisionReason != value.RouteDiagnosticFailurePolicyFired {
+		t.Fatalf("decision reason = %q, want route failure policy", result.HandlerResult.DecisionReason)
 	}
 }
 
@@ -221,7 +445,25 @@ func TestDefaultEnvelopeValidatorRejectsSchemaBoundViolations(t *testing.T) {
 }
 
 func newTestService() *Service {
-	return New(hookstub.NewRepository(), Config{}, Dependencies{Clock: fixedClock{now: time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)}})
+	return newTestServiceWithConfig(Config{}, NewDefaultRouteRegistry())
+}
+
+func newTestServiceWithConfig(cfg Config, registry *RouteRegistry) *Service {
+	return New(hookstub.NewRepository(), cfg, Dependencies{
+		Clock:         fixedClock{now: time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)},
+		RouteRegistry: registry,
+	})
+}
+
+func testRouteRegistry(overrides map[hookenum.DownstreamOwner]OwnerRoute) *RouteRegistry {
+	dispatchers := make(map[hookenum.DownstreamOwner]OwnerRoute, len(hookenum.DownstreamOwners()))
+	for _, owner := range hookenum.DownstreamOwners() {
+		dispatchers[owner] = NoopOwnerRoute{Owner: owner}
+	}
+	for owner, route := range overrides {
+		dispatchers[owner] = route
+	}
+	return NewRouteRegistry(dispatchers)
 }
 
 func validPreToolUseEnvelope() value.HookEnvelope {
@@ -283,4 +525,72 @@ type fixedClock struct {
 
 func (c fixedClock) Now() time.Time {
 	return c.now
+}
+
+type recordingOwnerRoute struct {
+	mu     sync.Mutex
+	events []value.SafeHookEvent
+}
+
+func (route *recordingOwnerRoute) DispatchSafeHookEvent(_ context.Context, event value.SafeHookEvent) error {
+	route.mu.Lock()
+	defer route.mu.Unlock()
+	route.events = append(route.events, event)
+	return nil
+}
+
+func (route *recordingOwnerRoute) Events() []value.SafeHookEvent {
+	route.mu.Lock()
+	defer route.mu.Unlock()
+	return append([]value.SafeHookEvent(nil), route.events...)
+}
+
+type failingOwnerRoute struct {
+	err error
+}
+
+func (route failingOwnerRoute) DispatchSafeHookEvent(_ context.Context, _ value.SafeHookEvent) error {
+	return route.err
+}
+
+type failOnceDeliveryRepository struct {
+	inner  *hookstub.Repository
+	mu     sync.Mutex
+	failed bool
+}
+
+func (repository *failOnceDeliveryRepository) Ready() bool {
+	return repository != nil && repository.inner != nil && repository.inner.Ready()
+}
+
+func (repository *failOnceDeliveryRepository) RegisterAcceptedEvent(ctx context.Context, event entity.AcceptedEvent) (entity.AcceptedEvent, bool, error) {
+	return repository.inner.RegisterAcceptedEvent(ctx, event)
+}
+
+func (repository *failOnceDeliveryRepository) RecordDeliveryResults(ctx context.Context, update entity.DeliveryUpdate) (entity.AcceptedEvent, error) {
+	repository.mu.Lock()
+	if !repository.failed {
+		repository.failed = true
+		repository.mu.Unlock()
+		return entity.AcceptedEvent{}, errors.New("delivery diagnostics persistence failed")
+	}
+	repository.mu.Unlock()
+	return repository.inner.RecordDeliveryResults(ctx, update)
+}
+
+func hasRouteStatus(diagnostics []value.RouteDeliveryResult, owner hookenum.DownstreamOwner, status hookenum.RouteDeliveryStatus) bool {
+	return diagnosticForOwner(diagnostics, owner).Status == status
+}
+
+func hasDiagnosticCode(diagnostics []value.RouteDeliveryResult, owner hookenum.DownstreamOwner, code string) bool {
+	return diagnosticForOwner(diagnostics, owner).DiagnosticCode == code
+}
+
+func diagnosticForOwner(diagnostics []value.RouteDeliveryResult, owner hookenum.DownstreamOwner) value.RouteDeliveryResult {
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Owner == owner {
+			return diagnostic
+		}
+	}
+	return value.RouteDeliveryResult{}
 }

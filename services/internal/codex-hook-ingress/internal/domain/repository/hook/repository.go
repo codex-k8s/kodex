@@ -12,4 +12,6 @@ type Repository interface {
 	Ready() bool
 	// RegisterAcceptedEvent atomically inserts event_id+payload_digest or returns the existing record.
 	RegisterAcceptedEvent(ctx context.Context, event entity.AcceptedEvent) (entity.AcceptedEvent, bool, error)
+	// RecordDeliveryResults stores safe owner route diagnostics for the accepted event.
+	RecordDeliveryResults(ctx context.Context, update entity.DeliveryUpdate) (entity.AcceptedEvent, error)
 }

@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-26
-related_issues: [698, 753, 778, 786, 793, 322]
+related_issues: [698, 753, 778, 786, 793, 808, 322]
 related_prs: []
 related_adrs: []
 approvals:
@@ -73,7 +73,7 @@ approvals:
 | Source verifier | Проверяет actor/source/run/session/slot/scope binding и совместимость `emitter_version`/`schema_version`. |
 | Sanitizer | Проверяет размер, типы полей, forbidden keys, secret-like patterns, binary payload, stdout/stderr и session/transcript references. |
 | Event classifier | Приводит событие к одному из MVP event types и вычисляет safe category: lifecycle, prompt, pre-tool, permission, post-tool, stop. |
-| Route planner | Формирует набор downstream-владельцев и safe payload для каждого владельца. |
+| Route planner/registry | Формирует набор downstream-владельцев, проверяет включение route config и проецирует только разрешённые `safe_parts` для каждого owner port. |
 | Decision bridge | Для `PermissionRequest` и отдельных `PreToolUse` ждёт решение `governance-manager` и delivery/callback через `interaction-hub` в пределах timeout; `agent-manager` получает только ожидание flow и refs. |
 | Operational feed | Пишет короткую ленту для realtime UI и диагностики с retention. |
 | Audit/metrics emitter | Фиксирует решения, отказы, sanitizer events, route latency, duplicates, rate limits и owner timeouts. |
@@ -220,6 +220,8 @@ sequenceDiagram
 | `hook.payload_too_large` | Отклонить или запросить truncation; не сохранять payload. |
 | `hook.payload_rejected` | Отклонить из-за forbidden fields, binary data или secret-like content. |
 | `hook.duplicate_event` | Вернуть прежний результат, если fingerprint совпадает; иначе idempotency conflict. |
+| `hook.route_disabled` | Не вызывать owner port, вернуть safe diagnostic и не считать route успешной доставкой. |
+| `hook.route_unsupported` | Не считать route успешной доставкой, вернуть safe diagnostic о незарегистрированном owner port. |
 | `hook.owner_unavailable` | Retry/backoff для asynchronous routes; fail-closed для permission bridge по policy. |
 | `hook.decision_timeout` | Безопасный отказ или controlled wait по policy `governance-manager`. |
 | `hook.rate_limited` | Отклонить или деградировать realtime-only events; не терять audit-critical events. |
