@@ -19,7 +19,7 @@ tags:
     description: Provider webhook intake routed to provider-hub.
   - name: external-callbacks
     description: External callback intake routed to owner services.
-x-kodex-contract-status: mvp-skeleton
+x-kodex-contract-status: mvp-github-webhook-route
 paths:
   /v1/provider-webhooks/{provider_slug}:
     post:
@@ -29,18 +29,15 @@ paths:
       description: |
         Accepts an external provider webhook, verifies source, signature, payload limits and backpressure,
         then routes the safe envelope to provider-hub.IngestWebhookEvent.
-        The gateway does not normalize provider business events.
+        The first active provider source is GitHub. The gateway does not normalize provider business events.
       security:
         - GitHubWebhookSignature: []
-        - GitLabWebhookToken: []
       parameters:
         - $ref: '#/components/parameters/ProviderSlug'
         - $ref: '#/components/parameters/RequestIdHeader'
         - $ref: '#/components/parameters/GitHubDeliveryHeader'
         - $ref: '#/components/parameters/GitHubEventHeader'
         - $ref: '#/components/parameters/GitHubSignatureHeader'
-        - $ref: '#/components/parameters/GitLabEventHeader'
-        - $ref: '#/components/parameters/GitLabTokenHeader'
       requestBody:
         required: true
         content:
@@ -109,11 +106,6 @@ components:
       in: header
       name: X-Hub-Signature-256
       description: GitHub HMAC SHA-256 webhook signature.
-    GitLabWebhookToken:
-      type: apiKey
-      in: header
-      name: X-Gitlab-Token
-      description: GitLab webhook token. Gateway must redact the value before logs, metrics and errors.
     ExternalCallbackSignature:
       type: apiKey
       in: header
@@ -127,7 +119,7 @@ components:
       schema:
         type: string
         pattern: '^[a-z0-9][a-z0-9-]{1,62}$'
-      description: Provider identifier from the route registry, for example github or gitlab.
+      description: Provider identifier from the route registry. IGW-2 activates github only.
     CallbackSource:
       name: callback_source
       in: path
@@ -147,7 +139,7 @@ components:
     GitHubDeliveryHeader:
       name: X-GitHub-Delivery
       in: header
-      required: false
+      required: true
       schema:
         type: string
         maxLength: 128
@@ -155,7 +147,7 @@ components:
     GitHubEventHeader:
       name: X-GitHub-Event
       in: header
-      required: false
+      required: true
       schema:
         type: string
         maxLength: 128
@@ -168,22 +160,6 @@ components:
         type: string
         maxLength: 256
       description: GitHub HMAC SHA-256 signature.
-    GitLabEventHeader:
-      name: X-Gitlab-Event
-      in: header
-      required: false
-      schema:
-        type: string
-        maxLength: 128
-      description: GitLab event name.
-    GitLabTokenHeader:
-      name: X-Gitlab-Token
-      in: header
-      required: false
-      schema:
-        type: string
-        maxLength: 512
-      description: GitLab webhook token. It must be redacted before logs, metrics and errors.
     ExternalDeliveryHeader:
       name: X-Kodex-External-Delivery
       in: header

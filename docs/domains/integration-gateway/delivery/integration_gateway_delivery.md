@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-25
 updated_at: 2026-05-26
-related_issues: [781, 792, 770]
+related_issues: [781, 792, 807, 770]
 related_prs: []
 related_docsets:
   - docs/domains/integration-gateway/product/requirements.md
@@ -43,7 +43,7 @@ approvals:
 |---|---:|---|
 | IGW-0 | #781 | Граница `integration-gateway`, первый MVP route provider webhook -> `provider-hub.IngestWebhookEvent`, требования security/backpressure/retry/idempotency и OpenAPI-каркас зафиксированы. Код сервиса не входит. |
 | IGW-1 | #792 | Сервисный каркас: процесс, конфигурация, graceful shutdown, health/readiness/metrics, HTTP router, OpenAPI runtime validation/codegen-модели, payload guard, request id, timeout, structured safe errors, redaction-safe logging и provider-hub client interface без provider business logic. Provider route зарегистрирован как отключённый stub до проверки подписи. |
-| IGW-2 | не назначено | Реальный route `POST /v1/provider-webhooks/{provider_slug}`: проверка GitHub/GitLab подписи, лимиты, idempotency mapping и вызов `provider-hub.IngestWebhookEvent`. |
+| IGW-2 | #807 | Реальный route `POST /v1/provider-webhooks/{provider_slug}` для `provider_slug=github`: проверка `X-Hub-Signature-256`, обязательных GitHub headers, лимита payload, idempotency mapping и вызов `provider-hub.IngestWebhookEvent`. |
 | IGW-3 | не назначено | Callback routes для внешних каналов и пакетов после готовности owner-service contracts: `interaction-hub`, `package-hub` или другой владелец. |
 | IGW-4 | не назначено | Security hardening: per-source limits, backpressure policies, audit summary, redaction metrics, replay tests и compatibility tests OpenAPI. |
 | IGW-5 | не назначено | Deploy-контур: Dockerfile, manifests, secrets refs, smoke, runbook, monitoring и rollback. |
@@ -55,7 +55,7 @@ approvals:
 | `provider-hub` | Владеет webhook inbox, дедупликацией и нормализацией provider events. | Первый внутренний контракт готов: `IngestWebhookEvent`. |
 | `interaction-hub` | Владеет delivery/callback lifecycle внешних каналов. | Callback route остаётся контрактным заделом до готовности owner-service callback API. |
 | `package-hub` | Владеет пакетами, package-owned runtime metadata и package callbacks. | Callback route добавляется только после package-owned контракта. |
-| `access-manager` / secret resolver | Нужны для безопасного разрешения secret refs webhook источников. | Способ хранения route registry и secret refs уточняется в IGW-2. |
+| `access-manager` / secret resolver | Нужны для безопасного разрешения secret refs webhook источников. | В IGW-2 GitHub webhook secret задаётся через `secret_store_type + secret_store_ref` в deployment config; значение разрешается через `libs/go/secretresolver` только в памяти процесса. |
 | `platform-event-log` | Доменные события публикуют сервисы-владельцы. | Gateway не публикует provider business events сам. |
 
 ## Реализованный каркас IGW-1
@@ -66,7 +66,7 @@ approvals:
 | Процесс | `cmd/integration-gateway`, shared `servicemain`, graceful shutdown по сигналам. |
 | HTTP | Echo router за outer middleware stack: request id, timeout, body size guard, OpenAPI validation и safe errors. |
 | Service endpoints | `/health/livez`, `/health/readyz`, `/metrics`, `/openapi/integration-gateway.v1.yaml`. |
-| Provider owner client | Зафиксирован интерфейс и gRPC adapter к `provider-hub.IngestWebhookEvent`; route выключен по умолчанию до verifier-среза. |
+| Provider owner client | Зафиксирован интерфейс и gRPC adapter к `provider-hub.IngestWebhookEvent`; GitHub route активируется только при включённом route flag, provider-hub token и настроенной ссылке на webhook secret. |
 | Состояние | Gateway не добавляет БД, inbox, projections, cursors, operations или raw payload storage. |
 
 ## Критерии начала реального provider route

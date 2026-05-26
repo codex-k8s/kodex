@@ -4,8 +4,10 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/secretresolver"
 	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
 	providersv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1"
 	providerhubclient "github.com/codex-k8s/kodex/services/external/integration-gateway/internal/clients/providerhub"
@@ -25,7 +27,12 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	}
 	defer closeProviderClient()
 
-	apiHandler, err := httptransport.NewRouter(ctx, cfg.HTTPRouterConfig(), providerClient, logger)
+	verifier, err := buildProviderWebhookVerifier(cfg)
+	if err != nil {
+		return err
+	}
+
+	apiHandler, err := httptransport.NewRouterWithVerifier(ctx, cfg.HTTPRouterConfig(), providerClient, verifier, logger)
 	if err != nil {
 		return err
 	}
@@ -64,6 +71,46 @@ func buildProviderHubClient(cfg Config) (httptransport.ProviderHubClient, func()
 		return nil, nil, err
 	}
 	return client, closeFn, nil
+}
+
+func buildProviderWebhookVerifier(cfg Config) (httptransport.ProviderWebhookVerifier, error) {
+	if !cfg.ProviderWebhook.Enabled {
+		return nil, nil
+	}
+	resolver, err := buildSecretResolver(cfg.SecretResolver)
+	if err != nil {
+		return nil, err
+	}
+	return httptransport.NewGitHubProviderWebhookVerifier(resolver, cfg.GitHubWebhookSecretRef()), nil
+}
+
+func buildSecretResolver(cfg SecretResolverConfig) (secretresolver.Resolver, error) {
+	backends := make(map[string]secretresolver.Backend)
+	if cfg.EnvEnabled {
+		backends[secretresolver.StoreTypeEnv] = secretresolver.NewEnvBackend()
+	}
+	if strings.TrimSpace(cfg.MountedKubernetesRoot) != "" {
+		backend, err := secretresolver.NewMountedKubernetesBackend(secretresolver.MountedKubernetesBackendConfig{
+			Root:           cfg.MountedKubernetesRoot,
+			MaxSecretBytes: cfg.MountedKubernetesMaxBytes,
+		})
+		if err != nil {
+			return nil, err
+		}
+		backends[secretresolver.StoreTypeKubernetesMountedSecret] = backend
+	}
+	if strings.TrimSpace(cfg.VaultAddr) != "" {
+		backend, err := secretresolver.NewVaultBackendFromClientConfig(secretresolver.VaultClientConfig{
+			Addr:      cfg.VaultAddr,
+			Token:     cfg.VaultToken,
+			Namespace: cfg.VaultNamespace,
+		})
+		if err != nil {
+			return nil, err
+		}
+		backends[secretresolver.StoreTypeVault] = backend
+	}
+	return secretresolver.NewMux(backends)
 }
 
 func readinessChecks(apiHandler *httptransport.Router) []serviceprocess.ReadinessCheck {

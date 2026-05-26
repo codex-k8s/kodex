@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-25
 updated_at: 2026-05-26
-related_issues: [781, 792, 770]
+related_issues: [781, 792, 807, 770]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -35,7 +35,7 @@ approvals:
 
 ## Не-цели
 
-- Не реализовывать storage, Kubernetes manifests или полный provider webhook route с проверкой подписи в сервисном каркасе IGW-1.
+- Не реализовывать storage, Kubernetes manifests или дополнительные provider routes за пределами активного GitHub webhook route.
 - Не переносить webhook inbox, provider projections, cursors, операции провайдера или reconciliation из `provider-hub`.
 - Не парсить бизнес-смысл GitHub/GitLab событий глубже edge envelope.
 - Не создавать UI endpoints.
@@ -68,7 +68,7 @@ approvals:
 | HTTP router | Принимает публичные webhook/callback запросы по OpenAPI gateway-поверхности. |
 | OpenAPI validation | Загружает `specs/openapi/integration-gateway.v1.yaml` на старте и валидирует входящие HTTP requests по контракту. |
 | Source registry | Сопоставляет входящий route, provider/channel slug и ожидаемый способ проверки. В MVP допускается статическая конфигурация deployment; динамический registry добавляется отдельным срезом. |
-| Signature verifier | Проверяет подписи GitHub/GitLab или callback secret по ссылке на секрет. Значение секрета держится только в памяти процесса. |
+| Signature verifier | Проверяет GitHub `X-Hub-Signature-256` через HMAC SHA-256 по ссылке на секрет; будущие provider/callback verifier добавляются отдельными срезами. Значение секрета держится только в памяти процесса. |
 | Payload guard | Отклоняет слишком большие payload и неподдерживаемые content type до gRPC-вызова владельца. |
 | Redactor | Удаляет секретоподобные заголовки и небезопасные диагностические поля из логов, ошибок, метрик и audit summary. |
 | Backpressure guard | Ограничивает входящий поток по source, provider, route и downstream-сервису. |
@@ -80,7 +80,7 @@ approvals:
 
 ```mermaid
 sequenceDiagram
-  participant P as GitHub/GitLab
+  participant P as GitHub
   participant IGW as integration-gateway
   participant PH as provider-hub
   participant DB as БД provider-hub
@@ -95,7 +95,7 @@ sequenceDiagram
 
 `integration-gateway` передаёт в `provider-hub` минимальный transport envelope: `provider_slug`, `delivery_id`, `event_name`, `payload_json`, `received_at` и безопасный `CommandMeta`. Он не извлекает provider work item, не строит проекцию и не решает, какие доменные события публиковать.
 
-В сервисном каркасе IGW-1 этот route смонтирован как отключённый по умолчанию stub: он валидирует HTTP-контракт, отдаёт безопасные ошибки и фиксирует provider-hub client interface, но не принимает webhook как проверенный, пока не подключён verifier подписи и source binding.
+В IGW-2 активный provider route поддерживает только `provider_slug=github`: gateway требует `X-GitHub-Delivery`, `X-GitHub-Event`, валидную `X-Hub-Signature-256`, JSON payload в пределах лимита и настроенную ссылку на webhook secret. GitLab и другие provider sources остаются будущими расширениями route registry.
 
 Если provider не даёт устойчивый delivery id, gateway отклоняет запрос или строит idempotency key только по заранее согласованному правилу source registry. Само доменное дублирование webhook остаётся в `provider-hub`.
 

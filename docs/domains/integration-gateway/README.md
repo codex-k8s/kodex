@@ -15,6 +15,7 @@
 - Первый MVP-маршрут: provider webhook -> `provider-hub.IngestWebhookEvent`.
 - Минимальный runnable-каркас сервиса: process/config/graceful shutdown, health/readiness/metrics,
   HTTP router, OpenAPI runtime validation и provider-hub client interface.
+- Активный GitHub provider webhook route с source binding, HMAC SHA-256 проверкой подписи и безопасной ссылкой на webhook secret.
 - Ограниченная диагностика входящего контура без сырых секретов, больших payload и бизнес-проекций.
 
 ## Что не входит

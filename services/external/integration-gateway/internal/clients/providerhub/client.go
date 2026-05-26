@@ -85,6 +85,7 @@ func New(client providersv1.ProviderHubServiceClient, cfg Config) (*Client, erro
 func (c *Client) IngestWebhookEvent(ctx context.Context, event WebhookEvent) (WebhookResult, error) {
 	callCtx, cancel := context.WithTimeout(outgoingContext(ctx, c.authToken, event), c.timeout)
 	defer cancel()
+	idempotencyKey := webhookIdempotencyKey(event)
 	request := &providersv1.IngestWebhookEventRequest{
 		ProviderSlug: event.ProviderSlug,
 		DeliveryId:   event.DeliveryID,
@@ -92,7 +93,7 @@ func (c *Client) IngestWebhookEvent(ctx context.Context, event WebhookEvent) (We
 		PayloadJson:  event.PayloadJSON,
 		ReceivedAt:   event.ReceivedAt.UTC().Format(time.RFC3339Nano),
 		Meta: &providersv1.CommandMeta{
-			IdempotencyKey: &event.DeliveryID,
+			IdempotencyKey: &idempotencyKey,
 			Actor:          &providersv1.Actor{Type: "service", Id: callerID},
 			Reason:         "provider webhook edge ingress",
 			RequestId:      event.RequestID,
@@ -115,6 +116,18 @@ func (c *Client) IngestWebhookEvent(ctx context.Context, event WebhookEvent) (We
 		result.WebhookEventID = response.GetWebhookEvent().GetWebhookEventId()
 	}
 	return result, nil
+}
+
+func webhookIdempotencyKey(event WebhookEvent) string {
+	providerSlug := strings.TrimSpace(event.ProviderSlug)
+	deliveryID := strings.TrimSpace(event.DeliveryID)
+	if providerSlug == "" {
+		return deliveryID
+	}
+	if deliveryID == "" {
+		return providerSlug
+	}
+	return providerSlug + ":" + deliveryID
 }
 
 func outgoingContext(ctx context.Context, authToken string, event WebhookEvent) context.Context {

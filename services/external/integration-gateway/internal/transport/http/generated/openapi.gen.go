@@ -6,7 +6,6 @@ package generated
 const (
 	ExternalCallbackSignatureScopes = "ExternalCallbackSignature.Scopes"
 	GitHubWebhookSignatureScopes    = "GitHubWebhookSignature.Scopes"
-	GitLabWebhookTokenScopes        = "GitLabWebhookToken.Scopes"
 )
 
 // Defines values for ExternalCallbackAcceptedStatus.
@@ -96,12 +95,6 @@ type GitHubEventHeader = string
 // GitHubSignatureHeader defines model for GitHubSignatureHeader.
 type GitHubSignatureHeader = string
 
-// GitLabEventHeader defines model for GitLabEventHeader.
-type GitLabEventHeader = string
-
-// GitLabTokenHeader defines model for GitLabTokenHeader.
-type GitLabTokenHeader = string
-
 // ProviderSlug defines model for ProviderSlug.
 type ProviderSlug = string
 
@@ -141,19 +134,13 @@ type IngestProviderWebhookParams struct {
 	XKodexRequestId *RequestIdHeader `json:"X-Kodex-Request-Id,omitempty"`
 
 	// XGitHubDelivery GitHub delivery id used as provider webhook idempotency key.
-	XGitHubDelivery *GitHubDeliveryHeader `json:"X-GitHub-Delivery,omitempty"`
+	XGitHubDelivery GitHubDeliveryHeader `json:"X-GitHub-Delivery"`
 
 	// XGitHubEvent GitHub event name.
-	XGitHubEvent *GitHubEventHeader `json:"X-GitHub-Event,omitempty"`
+	XGitHubEvent GitHubEventHeader `json:"X-GitHub-Event"`
 
 	// XHubSignature256 GitHub HMAC SHA-256 signature.
 	XHubSignature256 *GitHubSignatureHeader `json:"X-Hub-Signature-256,omitempty"`
-
-	// XGitlabEvent GitLab event name.
-	XGitlabEvent *GitLabEventHeader `json:"X-Gitlab-Event,omitempty"`
-
-	// XGitlabToken GitLab webhook token. It must be redacted before logs, metrics and errors.
-	XGitlabToken *GitLabTokenHeader `json:"X-Gitlab-Token,omitempty"`
 }
 
 // IngestExternalCallbackJSONRequestBody defines body for IngestExternalCallback for application/json ContentType.

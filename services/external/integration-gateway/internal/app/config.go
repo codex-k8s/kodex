@@ -8,6 +8,7 @@ import (
 
 	"github.com/caarlos0/env/v11"
 
+	"github.com/codex-k8s/kodex/libs/go/secretresolver"
 	providerhubclient "github.com/codex-k8s/kodex/services/external/integration-gateway/internal/clients/providerhub"
 	httptransport "github.com/codex-k8s/kodex/services/external/integration-gateway/internal/transport/http"
 )
@@ -19,6 +20,7 @@ type Config struct {
 	HTTP            HTTPConfig            `envPrefix:"KODEX_INTEGRATION_GATEWAY_HTTP_"`
 	ProviderWebhook ProviderWebhookConfig `envPrefix:"KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_"`
 	ProviderHub     ProviderHubConfig     `envPrefix:"KODEX_INTEGRATION_GATEWAY_PROVIDER_HUB_"`
+	SecretResolver  SecretResolverConfig  `envPrefix:"KODEX_INTEGRATION_GATEWAY_SECRET_RESOLVER_"`
 }
 
 // HTTPConfig contains edge HTTP limits and lifecycle timeouts.
@@ -32,8 +34,10 @@ type HTTPConfig struct {
 
 // ProviderWebhookConfig controls the first provider webhook route.
 type ProviderWebhookConfig struct {
-	Enabled              bool     `env:"ENABLED" envDefault:"false"`
-	AllowedProviderSlugs []string `env:"ALLOWED_PROVIDER_SLUGS" envDefault:"github,gitlab" envSeparator:","`
+	Enabled               bool     `env:"ENABLED" envDefault:"false"`
+	AllowedProviderSlugs  []string `env:"ALLOWED_PROVIDER_SLUGS" envDefault:"github" envSeparator:","`
+	GitHubSecretStoreType string   `env:"GITHUB_SECRET_STORE_TYPE"`
+	GitHubSecretStoreRef  string   `env:"GITHUB_SECRET_STORE_REF"`
 }
 
 // ProviderHubConfig contains the future owner-service route settings.
@@ -41,6 +45,16 @@ type ProviderHubConfig struct {
 	GRPCAddr  string        `env:"GRPC_ADDR" envDefault:"provider-hub:9090"`
 	AuthToken string        `env:"GRPC_AUTH_TOKEN"`
 	Timeout   time.Duration `env:"TIMEOUT" envDefault:"3s"`
+}
+
+// SecretResolverConfig contains value-safe secret resolver backend settings.
+type SecretResolverConfig struct {
+	EnvEnabled                bool   `env:"ENV_ENABLED" envDefault:"true"`
+	MountedKubernetesRoot     string `env:"MOUNTED_KUBERNETES_ROOT"`
+	MountedKubernetesMaxBytes int64  `env:"MOUNTED_KUBERNETES_MAX_SECRET_BYTES" envDefault:"1048576"`
+	VaultAddr                 string `env:"VAULT_ADDR"`
+	VaultToken                string `env:"VAULT_TOKEN"`
+	VaultNamespace            string `env:"VAULT_NAMESPACE"`
 }
 
 // LoadConfig reads process configuration from environment variables.
@@ -69,6 +83,9 @@ func (cfg Config) Validate() error {
 	if err := cfg.ProviderWebhook.validate(); err != nil {
 		return err
 	}
+	if err := cfg.SecretResolver.validate(cfg.ProviderWebhook.Enabled, cfg.ProviderWebhook.GitHubSecretStoreType); err != nil {
+		return err
+	}
 	return cfg.ProviderHub.validate(cfg.ProviderWebhook.Enabled)
 }
 
@@ -92,10 +109,26 @@ func (cfg HTTPConfig) validate() error {
 }
 
 func (cfg ProviderWebhookConfig) validate() error {
+	if len(cfg.AllowedProviderSlugs) == 0 {
+		return fmt.Errorf("KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_ALLOWED_PROVIDER_SLUGS is required")
+	}
 	for _, slug := range cfg.AllowedProviderSlugs {
-		if strings.TrimSpace(slug) == "" {
+		normalized := strings.ToLower(strings.TrimSpace(slug))
+		if normalized == "" {
 			return fmt.Errorf("KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_ALLOWED_PROVIDER_SLUGS contains an empty slug")
 		}
+		if cfg.Enabled && normalized != "github" {
+			return fmt.Errorf("KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_ALLOWED_PROVIDER_SLUGS supports only github in IGW-2")
+		}
+	}
+	if !cfg.Enabled {
+		return nil
+	}
+	if strings.TrimSpace(cfg.GitHubSecretStoreType) == "" {
+		return fmt.Errorf("KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_GITHUB_SECRET_STORE_TYPE is required when provider webhook route is enabled")
+	}
+	if strings.TrimSpace(cfg.GitHubSecretStoreRef) == "" {
+		return fmt.Errorf("KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_GITHUB_SECRET_STORE_REF is required when provider webhook route is enabled")
 	}
 	return nil
 }
@@ -112,6 +145,35 @@ func (cfg ProviderHubConfig) validate(required bool) error {
 	}
 	if cfg.Timeout <= 0 {
 		return fmt.Errorf("KODEX_INTEGRATION_GATEWAY_PROVIDER_HUB_TIMEOUT is invalid")
+	}
+	return nil
+}
+
+func (cfg SecretResolverConfig) validate(required bool, requiredStoreType string) error {
+	if cfg.MountedKubernetesMaxBytes <= 0 {
+		return fmt.Errorf("KODEX_INTEGRATION_GATEWAY_SECRET_RESOLVER_MOUNTED_KUBERNETES_MAX_SECRET_BYTES is invalid")
+	}
+	if strings.TrimSpace(cfg.VaultAddr) != "" && strings.TrimSpace(cfg.VaultToken) == "" {
+		return fmt.Errorf("KODEX_INTEGRATION_GATEWAY_SECRET_RESOLVER_VAULT_TOKEN is required when Vault address is configured")
+	}
+	if !required {
+		return nil
+	}
+	switch strings.TrimSpace(requiredStoreType) {
+	case secretresolver.StoreTypeEnv:
+		if !cfg.EnvEnabled {
+			return fmt.Errorf("KODEX_INTEGRATION_GATEWAY_SECRET_RESOLVER_ENV_ENABLED must be true for env webhook secret refs")
+		}
+	case secretresolver.StoreTypeKubernetesMountedSecret:
+		if strings.TrimSpace(cfg.MountedKubernetesRoot) == "" {
+			return fmt.Errorf("KODEX_INTEGRATION_GATEWAY_SECRET_RESOLVER_MOUNTED_KUBERNETES_ROOT is required for mounted Kubernetes webhook secret refs")
+		}
+	case secretresolver.StoreTypeVault:
+		if strings.TrimSpace(cfg.VaultAddr) == "" {
+			return fmt.Errorf("KODEX_INTEGRATION_GATEWAY_SECRET_RESOLVER_VAULT_ADDR is required for Vault webhook secret refs")
+		}
+	default:
+		return fmt.Errorf("KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_GITHUB_SECRET_STORE_TYPE is unsupported")
 	}
 	return nil
 }
@@ -134,5 +196,13 @@ func (cfg Config) ProviderHubClientConfig() providerhubclient.Config {
 		Addr:      cfg.ProviderHub.GRPCAddr,
 		AuthToken: cfg.ProviderHub.AuthToken,
 		Timeout:   cfg.ProviderHub.Timeout,
+	}
+}
+
+// GitHubWebhookSecretRef converts process config to a safe secret reference.
+func (cfg Config) GitHubWebhookSecretRef() secretresolver.SecretRef {
+	return secretresolver.SecretRef{
+		StoreType: strings.TrimSpace(cfg.ProviderWebhook.GitHubSecretStoreType),
+		StoreRef:  strings.TrimSpace(cfg.ProviderWebhook.GitHubSecretStoreRef),
 	}
 }

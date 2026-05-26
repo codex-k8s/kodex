@@ -2,6 +2,9 @@ package httptransport
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/secretresolver"
 	providerhubclient "github.com/codex-k8s/kodex/services/external/integration-gateway/internal/clients/providerhub"
 	"github.com/codex-k8s/kodex/services/external/integration-gateway/internal/transport/http/generated"
 	"google.golang.org/grpc/codes"
@@ -67,6 +71,7 @@ func TestProviderWebhookRouteDisabledReturnsSafeError(t *testing.T) {
 
 func TestProviderWebhookCallsProviderHubWhenEnabled(t *testing.T) {
 	providerHub := &fakeProviderHub{result: providerhubclient.WebhookResult{WebhookEventID: "webhook-1"}}
+	payload := `{"action":"ping"}`
 	router := newTestRouterWithVerifier(t, Config{
 		ServiceName:            "integration-gateway",
 		OpenAPISpecPath:        "../../../../../../specs/openapi/integration-gateway.v1.yaml",
@@ -74,12 +79,13 @@ func TestProviderWebhookCallsProviderHubWhenEnabled(t *testing.T) {
 		MaxBodyBytes:           1024,
 		ProviderWebhookEnabled: true,
 		AllowedProviderSlugs:   []string{"github"},
-	}, providerHub, allowAllVerifier{})
+	}, providerHub, newGitHubVerifier(t, testWebhookSecret))
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/provider-webhooks/github", strings.NewReader(`{"action":"ping"}`))
+	req := httptest.NewRequest(http.MethodPost, "/v1/provider-webhooks/github", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-GitHub-Delivery", "delivery-2")
 	req.Header.Set("X-GitHub-Event", "ping")
+	req.Header.Set("X-Hub-Signature-256", githubSignature(testWebhookSecret, payload))
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -91,6 +97,112 @@ func TestProviderWebhookCallsProviderHubWhenEnabled(t *testing.T) {
 	}
 	if providerHub.event.PayloadJSON != `{"action":"ping"}` {
 		t.Fatalf("payload = %q", providerHub.event.PayloadJSON)
+	}
+	if providerHub.event.RequestID == "" || providerHub.event.CorrelationID == "" {
+		t.Fatalf("providerHub event lacks correlation metadata: %+v", providerHub.event)
+	}
+}
+
+func TestProviderWebhookRejectsInvalidGitHubSignature(t *testing.T) {
+	providerHub := &fakeProviderHub{}
+	payload := `{"action":"ping","secret":"do-not-leak"}`
+	router := newTestRouterWithVerifier(t, Config{
+		ServiceName:            "integration-gateway",
+		OpenAPISpecPath:        "../../../../../../specs/openapi/integration-gateway.v1.yaml",
+		RequestTimeout:         time.Second,
+		MaxBodyBytes:           1024,
+		ProviderWebhookEnabled: true,
+		AllowedProviderSlugs:   []string{"github"},
+	}, providerHub, newGitHubVerifier(t, testWebhookSecret))
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/provider-webhooks/github", strings.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-GitHub-Delivery", "delivery-bad-signature")
+	req.Header.Set("X-GitHub-Event", "ping")
+	req.Header.Set("X-Hub-Signature-256", githubSignature("wrong-secret", payload))
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d, body = %s", rec.Code, http.StatusUnauthorized, rec.Body.String())
+	}
+	var body generated.SafeError
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode SafeError: %v", err)
+	}
+	if body.Code != generated.SafeErrorCodeSignatureInvalid || body.Retryable {
+		t.Fatalf("SafeError = %+v, want signature_invalid non-retryable", body)
+	}
+	if strings.Contains(rec.Body.String(), "do-not-leak") || strings.Contains(rec.Body.String(), testWebhookSecret) || strings.Contains(rec.Body.String(), "wrong-secret") {
+		t.Fatalf("SafeError leaked sensitive input: %s", rec.Body.String())
+	}
+	if providerHub.event.ProviderSlug != "" {
+		t.Fatalf("provider hub was called: %+v", providerHub.event)
+	}
+}
+
+func TestProviderWebhookRejectsMissingGitHubSignature(t *testing.T) {
+	providerHub := &fakeProviderHub{}
+	router := newTestRouterWithVerifier(t, Config{
+		ServiceName:            "integration-gateway",
+		OpenAPISpecPath:        "../../../../../../specs/openapi/integration-gateway.v1.yaml",
+		RequestTimeout:         time.Second,
+		MaxBodyBytes:           1024,
+		ProviderWebhookEnabled: true,
+		AllowedProviderSlugs:   []string{"github"},
+	}, providerHub, newGitHubVerifier(t, testWebhookSecret))
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/provider-webhooks/github", strings.NewReader(`{"action":"ping"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-GitHub-Delivery", "delivery-missing-signature")
+	req.Header.Set("X-GitHub-Event", "ping")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d, body = %s", rec.Code, http.StatusUnauthorized, rec.Body.String())
+	}
+	var body generated.SafeError
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode SafeError: %v", err)
+	}
+	if body.Code != generated.SafeErrorCodeSignatureInvalid {
+		t.Fatalf("code = %s, want signature_invalid", body.Code)
+	}
+	if providerHub.event.ProviderSlug != "" {
+		t.Fatalf("provider hub was called: %+v", providerHub.event)
+	}
+}
+
+func TestProviderWebhookRejectsMissingGitHubEventHeader(t *testing.T) {
+	providerHub := &fakeProviderHub{}
+	router := newTestRouterWithVerifier(t, Config{
+		ServiceName:            "integration-gateway",
+		OpenAPISpecPath:        "../../../../../../specs/openapi/integration-gateway.v1.yaml",
+		RequestTimeout:         time.Second,
+		MaxBodyBytes:           1024,
+		ProviderWebhookEnabled: true,
+		AllowedProviderSlugs:   []string{"github"},
+	}, providerHub, newGitHubVerifier(t, testWebhookSecret))
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/provider-webhooks/github", strings.NewReader(`{"action":"ping"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-GitHub-Delivery", "delivery-missing-event")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d, body = %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	var body generated.SafeError
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode SafeError: %v", err)
+	}
+	if body.Code != generated.SafeErrorCodeInvalidRequest {
+		t.Fatalf("code = %s, want invalid_request", body.Code)
+	}
+	if providerHub.event.ProviderSlug != "" {
+		t.Fatalf("provider hub was called: %+v", providerHub.event)
 	}
 }
 
@@ -208,6 +320,7 @@ func TestProviderHubErrorMapping(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			providerHub := &fakeProviderHub{err: status.Error(tt.code, "internal provider-hub detail")}
+			payload := `{"action":"ping"}`
 			router := newTestRouterWithVerifier(t, Config{
 				ServiceName:            "integration-gateway",
 				OpenAPISpecPath:        "../../../../../../specs/openapi/integration-gateway.v1.yaml",
@@ -215,12 +328,13 @@ func TestProviderHubErrorMapping(t *testing.T) {
 				MaxBodyBytes:           1024,
 				ProviderWebhookEnabled: true,
 				AllowedProviderSlugs:   []string{"github"},
-			}, providerHub, allowAllVerifier{})
+			}, providerHub, newGitHubVerifier(t, testWebhookSecret))
 
-			req := httptest.NewRequest(http.MethodPost, "/v1/provider-webhooks/github", strings.NewReader(`{"action":"ping"}`))
+			req := httptest.NewRequest(http.MethodPost, "/v1/provider-webhooks/github", strings.NewReader(payload))
 			req.Header.Set("Content-Type", "application/json")
 			req.Header.Set("X-GitHub-Delivery", "delivery-error")
 			req.Header.Set("X-GitHub-Event", "ping")
+			req.Header.Set("X-Hub-Signature-256", githubSignature(testWebhookSecret, payload))
 			rec := httptest.NewRecorder()
 			router.ServeHTTP(rec, req)
 
@@ -317,10 +431,27 @@ func newTestRouterWithVerifier(t *testing.T, cfg Config, providerHub ProviderHub
 	return router
 }
 
-type allowAllVerifier struct{}
+const testWebhookSecret = "github-webhook-secret"
 
-func (allowAllVerifier) VerifyProviderWebhook(context.Context, *http.Request, ProviderWebhookVerificationInput) error {
-	return nil
+func newGitHubVerifier(t *testing.T, secret string) ProviderWebhookVerifier {
+	t.Helper()
+	t.Setenv("KODEX_TEST_GITHUB_WEBHOOK_SECRET", secret)
+	resolver, err := secretresolver.NewMux(map[string]secretresolver.Backend{
+		secretresolver.StoreTypeEnv: secretresolver.NewEnvBackend(),
+	})
+	if err != nil {
+		t.Fatalf("NewMux() error = %v", err)
+	}
+	return NewGitHubProviderWebhookVerifier(resolver, secretresolver.SecretRef{
+		StoreType: secretresolver.StoreTypeEnv,
+		StoreRef:  "KODEX_TEST_GITHUB_WEBHOOK_SECRET",
+	})
+}
+
+func githubSignature(secret string, payload string) string {
+	mac := hmac.New(sha256.New, []byte(secret))
+	_, _ = mac.Write([]byte(payload))
+	return "sha256=" + hex.EncodeToString(mac.Sum(nil))
 }
 
 type fakeProviderHub struct {
