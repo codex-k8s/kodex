@@ -176,7 +176,6 @@ type RegisterProviderArtifactSignalInput struct {
 	Target            ProviderTargetInput      `json:"target" jsonschema:"provider-native target"`
 	Source            string                   `json:"source" jsonschema:"signal source"`
 	ObservedAt        string                   `json:"observed_at" jsonschema:"RFC3339 observation timestamp"`
-	PayloadJSON       string                   `json:"payload_json,omitempty" jsonschema:"bounded typed signal payload"`
 	ExternalAccountID string                   `json:"external_account_id" jsonschema:"selected external account identifier"`
 }
 

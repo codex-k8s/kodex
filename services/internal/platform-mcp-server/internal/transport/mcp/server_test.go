@@ -80,103 +80,103 @@ func TestToolsListSnapshot(t *testing.T) {
   },
   {
     "name": "provider.artifact_signal.register",
-    "description": "Зарегистрировать сигнал об артефакте provider-native объекта через provider-hub.",
+    "description": "Register a provider-native artifact signal through provider-hub without raw payload input.",
     "has_input_schema": true,
     "has_output_schema": true
   },
   {
     "name": "provider.comment.create",
-    "description": "Создать provider-native комментарий через provider-hub.",
+    "description": "Create a provider-native comment through provider-hub.",
     "has_input_schema": true,
     "has_output_schema": true
   },
   {
     "name": "provider.comment.update",
-    "description": "Обновить platform-owned provider-native комментарий через provider-hub.",
+    "description": "Update a platform-owned provider-native comment through provider-hub.",
     "has_input_schema": true,
     "has_output_schema": true
   },
   {
     "name": "provider.comments.list",
-    "description": "Получить безопасные сводки комментариев, упоминаний и review-сигналов через provider-hub.",
+    "description": "List safe comment, mention, and review-signal summaries through provider-hub.",
     "has_input_schema": true,
     "has_output_schema": true
   },
   {
     "name": "provider.issue.create",
-    "description": "Создать provider-native Issue через provider-hub.",
+    "description": "Create a provider-native Issue through provider-hub.",
     "has_input_schema": true,
     "has_output_schema": true
   },
   {
     "name": "provider.issue.update",
-    "description": "Обновить разрешённые поля provider-native Issue через provider-hub.",
+    "description": "Update allowed provider-native Issue fields through provider-hub.",
     "has_input_schema": true,
     "has_output_schema": true
   },
   {
     "name": "provider.projection.find",
-    "description": "Найти безопасную проекцию Issue или PR/MR по provider-native ссылке через provider-hub.",
+    "description": "Find a safe Issue or PR/MR projection by provider-native reference through provider-hub.",
     "has_input_schema": true,
     "has_output_schema": true
   },
   {
     "name": "provider.projection.get",
-    "description": "Прочитать безопасную проекцию Issue или PR/MR через provider-hub.",
+    "description": "Read a safe Issue or PR/MR projection through provider-hub.",
     "has_input_schema": true,
     "has_output_schema": true
   },
   {
     "name": "provider.projections.list",
-    "description": "Получить список безопасных проекций Issue и PR/MR через provider-hub.",
+    "description": "List safe Issue and PR/MR projections through provider-hub.",
     "has_input_schema": true,
     "has_output_schema": true
   },
   {
     "name": "provider.pull_request.create",
-    "description": "Создать provider-native PR/MR через provider-hub.",
+    "description": "Create a provider-native PR/MR through provider-hub.",
     "has_input_schema": true,
     "has_output_schema": true
   },
   {
     "name": "provider.pull_request.update",
-    "description": "Обновить разрешённые поля provider-native PR/MR через provider-hub.",
+    "description": "Update allowed provider-native PR/MR fields through provider-hub.",
     "has_input_schema": true,
     "has_output_schema": true
   },
   {
     "name": "provider.relationship.update",
-    "description": "Сохранить или обновить provider-native связь через provider-hub.",
+    "description": "Save or update a provider-native relationship through provider-hub.",
     "has_input_schema": true,
     "has_output_schema": true
   },
   {
     "name": "provider.relationships.list",
-    "description": "Получить provider-native связи между work items через provider-hub.",
+    "description": "List provider-native work item relationships through provider-hub.",
     "has_input_schema": true,
     "has_output_schema": true
   },
   {
     "name": "provider.repository.adoption_pull_request.create",
-    "description": "Создать или обновить adoption branch и PR/MR через provider-hub.",
+    "description": "Create or update an adoption branch and PR/MR through provider-hub.",
     "has_input_schema": true,
     "has_output_schema": true
   },
   {
     "name": "provider.repository.bootstrap_pull_request.create",
-    "description": "Создать или обновить bootstrap branch и PR/MR через provider-hub.",
+    "description": "Create or update a bootstrap branch and PR/MR through provider-hub.",
     "has_input_schema": true,
     "has_output_schema": true
   },
   {
     "name": "provider.repository.create",
-    "description": "Создать provider-native репозиторий через provider-hub.",
+    "description": "Create a provider-native repository through provider-hub.",
     "has_input_schema": true,
     "has_output_schema": true
   },
   {
     "name": "provider.review_signal.create",
-    "description": "Создать review-сигнал, approval или changes-request через provider-hub.",
+    "description": "Create a review signal, approval, or changes-request through provider-hub.",
     "has_input_schema": true,
     "has_output_schema": true
   }
@@ -430,6 +430,98 @@ func TestProviderIssueCreateRoutesToOwnerWithIdempotency(t *testing.T) {
 	}
 	if strings.Contains(string(data), "Безопасное тело issue") {
 		t.Fatalf("structured content exposes submitted body: %s", data)
+	}
+}
+
+func TestProviderArtifactSignalDoesNotExposeRawPayloadInput(t *testing.T) {
+	t.Parallel()
+
+	provider := newFakeProviderHubClient()
+	server := newTestServerWithProvider(t, provider)
+	session, cleanup := connectClient(t, server)
+	defer cleanup()
+
+	tools, err := session.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("ListTools(): %v", err)
+	}
+	foundTool := false
+	for _, tool := range tools.Tools {
+		if tool.Name != ToolProviderArtifactSignalRegister {
+			continue
+		}
+		foundTool = true
+		schema, err := json.Marshal(tool.InputSchema)
+		if err != nil {
+			t.Fatalf("Marshal(input schema): %v", err)
+		}
+		if strings.Contains(string(schema), "payload_json") {
+			t.Fatalf("artifact signal input schema exposes raw payload_json: %s", schema)
+		}
+		break
+	}
+	if !foundTool {
+		t.Fatalf("%s tool is not registered", ToolProviderArtifactSignalRegister)
+	}
+
+	result, err := session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolProviderArtifactSignalRegister,
+		Arguments: map[string]any{
+			"meta":      validProviderCommandMetaArgs("update_issue"),
+			"signal_id": "signal-1",
+			"target": map[string]any{
+				"provider_slug":        "github",
+				"repository_full_name": "codex-k8s/kodex",
+				"work_item_kind":       "issue",
+				"number":               780,
+			},
+			"source":              "agent_manager",
+			"observed_at":         "2026-05-25T00:00:00Z",
+			"payload_json":        `{"raw_provider_payload":"must not be forwarded"}`,
+			"external_account_id": "external-account-1",
+		},
+	})
+	if err == nil {
+		t.Fatalf("CallTool() err = nil, want schema validation error; result = %+v", result)
+	}
+	if provider.registerSignalCalls != 0 {
+		t.Fatalf("registerSignalCalls = %d, want 0 after invalid raw payload input", provider.registerSignalCalls)
+	}
+
+	result, err = session.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name: ToolProviderArtifactSignalRegister,
+		Arguments: map[string]any{
+			"meta":      validProviderCommandMetaArgs("update_issue"),
+			"signal_id": "signal-1",
+			"target": map[string]any{
+				"provider_slug":        "github",
+				"repository_full_name": "codex-k8s/kodex",
+				"work_item_kind":       "issue",
+				"number":               780,
+			},
+			"source":              "agent_manager",
+			"observed_at":         "2026-05-25T00:00:00Z",
+			"external_account_id": "external-account-1",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool() without raw payload: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("CallTool() returned tool error: %+v", result.Content)
+	}
+	if provider.registerSignalCalls != 1 {
+		t.Fatalf("registerSignalCalls = %d, want 1", provider.registerSignalCalls)
+	}
+	if provider.lastArtifactPayload != "" {
+		t.Fatalf("artifact signal forwarded raw payload = %q, want empty", provider.lastArtifactPayload)
+	}
+	data, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("Marshal(): %v", err)
+	}
+	if strings.Contains(string(data), "raw_provider_payload") {
+		t.Fatalf("structured content exposes raw payload: %s", data)
 	}
 }
 
@@ -889,6 +981,7 @@ type fakeProviderHubClient struct {
 	createBootstrapPRCalls  int
 	createAdoptionPRCalls   int
 	lastCommandID           string
+	lastArtifactPayload     string
 	err                     error
 }
 
@@ -948,6 +1041,7 @@ func (f *fakeProviderHubClient) ListRelationships(_ context.Context, _ *provider
 func (f *fakeProviderHubClient) RegisterProviderArtifactSignal(_ context.Context, request *providersv1.RegisterProviderArtifactSignalRequest) (*providersv1.ProviderArtifactSignalResponse, error) {
 	f.registerSignalCalls++
 	f.lastCommandID = request.GetMeta().GetCommandId()
+	f.lastArtifactPayload = request.GetPayloadJson()
 	if f.err != nil {
 		return nil, f.err
 	}
