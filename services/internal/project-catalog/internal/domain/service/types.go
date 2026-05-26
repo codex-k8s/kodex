@@ -189,6 +189,35 @@ type RepositoryBootstrapPullRequestResult struct {
 	ProviderResult  RepositoryBootstrapProviderResult
 }
 
+// ImportBootstrapServicesPolicyInput imports checked services.yaml after a merged bootstrap PR.
+type ImportBootstrapServicesPolicyInput struct {
+	ProjectID                    uuid.UUID
+	RepositoryID                 uuid.UUID
+	ProviderTarget               RepositoryBootstrapProviderTarget
+	BaseBranch                   string
+	SourceRef                    string
+	SourceCommitSHA              string
+	SourceBlobSHA                string
+	SourcePath                   string
+	ContentHash                  string
+	ValidatedPayload             []byte
+	WatermarkJSON                []byte
+	ProviderWorkItemProjectionID string
+	ProviderWebURL               string
+	ProviderObjectID             string
+	MergeObservedAt              string
+	Meta                         value.CommandMeta
+}
+
+// BootstrapServicesPolicyImportResult returns activated binding and checked policy state.
+type BootstrapServicesPolicyImportResult struct {
+	Repository      entity.RepositoryBinding
+	ServicesPolicy  entity.ServicesPolicy
+	SourceRef       string
+	SourceCommitSHA string
+	Summary         string
+}
+
 // ProviderBootstrapPullRequestInput is the domain port request sent to provider-hub.
 type ProviderBootstrapPullRequestInput struct {
 	ProjectID         uuid.UUID

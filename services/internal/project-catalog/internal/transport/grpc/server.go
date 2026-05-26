@@ -28,6 +28,7 @@ type projectService interface {
 	GetRepository(context.Context, uuid.UUID, value.QueryMeta) (entity.RepositoryBinding, error)
 	ListRepositories(context.Context, projectservice.ListRepositoriesInput) (projectservice.ListRepositoriesResult, error)
 	ImportServicesPolicy(context.Context, projectservice.ImportServicesPolicyInput) (entity.ServicesPolicy, error)
+	ImportBootstrapServicesPolicy(context.Context, projectservice.ImportBootstrapServicesPolicyInput) (projectservice.BootstrapServicesPolicyImportResult, error)
 	GetServicesPolicy(context.Context, projectservice.GetServicesPolicyInput) (entity.ServicesPolicy, error)
 	ListServiceDescriptors(context.Context, projectservice.ListServiceDescriptorsInput) (projectservice.ListServiceDescriptorsResult, error)
 	CreatePolicyEditProposal(context.Context, projectservice.CreatePolicyEditProposalInput) (entity.PolicyEditProposal, error)
@@ -133,6 +134,11 @@ func (s *Server) ListRepositories(ctx context.Context, request *projectsv1.ListR
 // ImportServicesPolicy stores a checked services.yaml projection.
 func (s *Server) ImportServicesPolicy(ctx context.Context, request *projectsv1.ImportServicesPolicyRequest) (*projectsv1.ServicesPolicyResponse, error) {
 	return handleUnary(ctx, request, grpccasters.ImportServicesPolicyInput, s.service.ImportServicesPolicy, grpccasters.ServicesPolicyResponse)
+}
+
+// ImportBootstrapServicesPolicy imports checked services.yaml after bootstrap merge and activates the repository binding.
+func (s *Server) ImportBootstrapServicesPolicy(ctx context.Context, request *projectsv1.ImportBootstrapServicesPolicyRequest) (*projectsv1.BootstrapServicesPolicyImportResponse, error) {
+	return handleUnary(ctx, request, grpccasters.ImportBootstrapServicesPolicyInput, s.service.ImportBootstrapServicesPolicy, grpccasters.BootstrapServicesPolicyImportResponse)
 }
 
 // GetServicesPolicy returns a checked services.yaml projection.

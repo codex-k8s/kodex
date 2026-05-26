@@ -602,8 +602,20 @@ components:
           type: string
         source_blob_sha:
           type: string
+        source_ref:
+          type: string
+        source_path:
+          type: string
         content_hash:
           type: string
+        summary:
+          type: string
+          maxLength: 200
+        provider_work_item_projection_id:
+          type: string
+        provider_web_url:
+          type: string
+          format: uri
         override_id:
           type: string
           format: uuid

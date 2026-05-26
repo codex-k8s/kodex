@@ -299,6 +299,52 @@ func ImportServicesPolicyInput(request *projectsv1.ImportServicesPolicyRequest) 
 	}, nil
 }
 
+func ImportBootstrapServicesPolicyInput(request *projectsv1.ImportBootstrapServicesPolicyRequest) (projectservice.ImportBootstrapServicesPolicyInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return projectservice.ImportBootstrapServicesPolicyInput{}, err
+	}
+	projectID, err := requiredUUID(request.GetProjectId())
+	if err != nil {
+		return projectservice.ImportBootstrapServicesPolicyInput{}, err
+	}
+	repositoryID, err := requiredUUID(request.GetRepositoryId())
+	if err != nil {
+		return projectservice.ImportBootstrapServicesPolicyInput{}, err
+	}
+	providerTarget := request.GetProviderTarget()
+	if providerTarget == nil {
+		return projectservice.ImportBootstrapServicesPolicyInput{}, errs.ErrInvalidArgument
+	}
+	return projectservice.ImportBootstrapServicesPolicyInput{
+		ProjectID:                    projectID,
+		RepositoryID:                 repositoryID,
+		ProviderTarget:               bootstrapProviderTargetFromProto(providerTarget),
+		BaseBranch:                   strings.TrimSpace(request.GetBaseBranch()),
+		SourceRef:                    strings.TrimSpace(request.GetSourceRef()),
+		SourceCommitSHA:              strings.TrimSpace(request.GetSourceCommitSha()),
+		SourceBlobSHA:                strings.TrimSpace(request.GetSourceBlobSha()),
+		SourcePath:                   strings.TrimSpace(request.GetSourcePath()),
+		ContentHash:                  strings.TrimSpace(request.GetContentHash()),
+		ValidatedPayload:             []byte(strings.TrimSpace(request.GetValidatedPayloadJson())),
+		WatermarkJSON:                []byte(strings.TrimSpace(request.GetWatermarkJson())),
+		ProviderWorkItemProjectionID: strings.TrimSpace(request.GetProviderWorkItemProjectionId()),
+		ProviderWebURL:               strings.TrimSpace(request.GetProviderWebUrl()),
+		ProviderObjectID:             strings.TrimSpace(request.GetProviderObjectId()),
+		MergeObservedAt:              strings.TrimSpace(request.GetMergeObservedAt()),
+		Meta:                         meta,
+	}, nil
+}
+
+func bootstrapProviderTargetFromProto(target *projectsv1.RepositoryBootstrapProviderTarget) projectservice.RepositoryBootstrapProviderTarget {
+	return projectservice.RepositoryBootstrapProviderTarget{
+		ProviderSlug:         strings.TrimSpace(target.GetProviderSlug()),
+		RepositoryFullName:   strings.TrimSpace(target.GetRepositoryFullName()),
+		ProviderRepositoryID: strings.TrimSpace(target.GetProviderRepositoryId()),
+		WebURL:               strings.TrimSpace(target.GetWebUrl()),
+	}
+}
+
 func GetServicesPolicyInput(request *projectsv1.GetServicesPolicyRequest) (projectservice.GetServicesPolicyInput, error) {
 	meta, err := QueryMetaFromProto(request.GetMeta())
 	if err != nil {
@@ -754,28 +800,20 @@ func trimStrings(values []string) []string {
 }
 
 func idWithQueryMeta(rawID string, rawMeta *projectsv1.QueryMeta) (uuid.UUID, value.QueryMeta, error) {
-	id, err := requiredUUID(rawID)
-	if err != nil {
-		return uuid.Nil, value.QueryMeta{}, err
-	}
-	return queryMetaForID(id, rawMeta)
+	return idWithMeta(rawID, rawMeta, QueryMetaFromProto)
 }
 
 func idWithCommandMeta(rawID string, rawMeta *projectsv1.CommandMeta) (uuid.UUID, value.CommandMeta, error) {
+	return idWithMeta(rawID, rawMeta, CommandMetaFromProto)
+}
+
+func idWithMeta[Meta any, ProtoMeta any](rawID string, rawMeta ProtoMeta, castMeta func(ProtoMeta) (Meta, error)) (uuid.UUID, Meta, error) {
 	id, err := requiredUUID(rawID)
 	if err != nil {
-		return uuid.Nil, value.CommandMeta{}, err
+		var zero Meta
+		return uuid.Nil, zero, err
 	}
-	return commandMetaForID(id, rawMeta)
-}
-
-func queryMetaForID(id uuid.UUID, rawMeta *projectsv1.QueryMeta) (uuid.UUID, value.QueryMeta, error) {
-	meta, err := QueryMetaFromProto(rawMeta)
-	return id, meta, err
-}
-
-func commandMetaForID(id uuid.UUID, rawMeta *projectsv1.CommandMeta) (uuid.UUID, value.CommandMeta, error) {
-	meta, err := CommandMetaFromProto(rawMeta)
+	meta, err := castMeta(rawMeta)
 	return id, meta, err
 }
 

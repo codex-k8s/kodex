@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-05
 updated_at: 2026-05-26
-related_issues: [628, 629, 630, 631, 632, 633, 655, 794]
+related_issues: [628, 629, 630, 631, 632, 633, 655, 794, 810, 818]
 related_prs: []
 related_adrs: []
 approvals:
@@ -23,7 +23,7 @@ approvals:
 
 - Что меняем: вводим `project-catalog` как сервис-владелец проектов, репозиториев, проектной политики, `services.yaml`, источников проектной документации, правил веток, релизных политик и политики размещения.
 - Почему: `provider-hub`, `agent-manager`, `runtime-manager` и пользовательский интерфейс через `staff-gateway` должны получать одну авторитетную проектную картину, а не собирать её из провайдера, файлов и локальных настроек.
-- Основные компоненты: БД `project-catalog`, gRPC API, outbox событий, валидатор политики, путь чтения политики рабочего контура и project-side команда bootstrap PR для уже привязанного пустого репозитория.
+- Основные компоненты: БД `project-catalog`, gRPC API, outbox событий, валидатор политики, путь чтения политики рабочего контура, project-side команды создания provider repository, bootstrap PR и импорта проверенной политики после merge.
 - Риски: смешать проектный каталог с provider-native зеркалом, начать выполнять checkout в этом сервисе, заставить сервисы читать сырой `services.yaml` напрямую или разрешить обход Git/PR для декларативной проектной политики.
 
 ## Цели
@@ -54,7 +54,7 @@ approvals:
 
 - Основной путь изменения: агент или человек правит `services.yaml` в PR вместе с кодом и документацией.
 - PR должен проходить валидацию `services.yaml`, включая сервисы, зависимости, источники документации, правила выкладки, правила управления рисками и правила обязательного ревью человеком.
-- После слияния PR webhook или периодическая сверка передаёт новую версию файла в `project-catalog`.
+- После слияния PR webhook или периодическая сверка передаёт новую версию файла в `project-catalog` как уже проверенный внутренний сигнал с provider projection refs, source ref, commit, хэшем и watermark; `project-catalog` не читает файл из GitHub/GitLab напрямую.
 - `project-catalog` валидирует нормализованное представление файла, сохраняет новую проекцию в БД, сам строит типизированные модели чтения и публикует `project.services_policy.imported`.
 - Валидатор проверяет не только список сервисов, но и источники документации: scope, безопасный локальный путь, режим доступа, статус, связь с сервисом или зависимым сервисом.
 - Сырой YAML остаётся в Git; в БД сохраняется нормализованный JSON-снимок для аудита, повторной проверки и воспроизводимости проекции.
@@ -146,6 +146,26 @@ sequenceDiagram
 ```
 
 В этом потоке `project-catalog` не становится Git-клиентом и не создаёт шаблон репозитория. Он выводит provider target из `Repository` binding, проверяет, что `base_branch` соответствует проектной привязке, связывает подготовленный `services.yaml` с проверенной нормализованной проекцией и передаёт provider-native запись в `provider-hub`. Полная генерация файлов остаётся у `package-hub` и bootstrap executor; импорт активной политики выполняется отдельным шагом после merge bootstrap PR.
+
+### Импорт политики после merge bootstrap PR
+
+```mermaid
+sequenceDiagram
+  participant W as webhook/reconciliation
+  participant H as provider-hub
+  participant P as project-catalog
+  participant DB as project DB
+  W->>H: provider merge event or reconciliation
+  H->>H: update PR/MR projection and safe refs
+  W->>P: ImportBootstrapServicesPolicy(checked signal, validated services.yaml)
+  P->>P: validate binding, provider refs, base branch, source ref, commit, watermark
+  P->>DB: insert ServicesPolicy + descriptors + docs, activate repository binding
+  P-->>W: active binding + checked policy
+```
+
+Команда `ImportBootstrapServicesPolicy` завершает только bootstrap пустого репозитория. Она принимает нормализованный `validated_payload_json`, а не сырой YAML и не raw provider payload; сырое содержимое остаётся в Git и во временном контуре проверки вызывающей стороны. `project-catalog` проверяет, что `provider_target` соответствует сохранённому binding, `base_branch` равен проектной default branch, `source_ref` указывает на эту ветку, commit и `content_hash` заданы, watermark относится к `repository_bootstrap`, а ожидаемая версия совпадает с pending binding.
+
+Импорт и активация binding выполняются в одной транзакции: создаётся новая `ServicesPolicy`, пересобираются `ServiceDescriptor` и источники документации из checked projection, binding переводится из `pending` в `active`, а outbox получает `project.repository.updated` и `project.services_policy.imported`. Событие политики содержит только безопасные refs и короткий summary. Повтор того же commit/source ref возвращает уже сохранённую проекцию, другой commit/ref после активации считается конфликтом и не меняет состояние.
 
 ### Подготовка политики рабочего контура
 

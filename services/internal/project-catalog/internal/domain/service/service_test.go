@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -1042,6 +1043,189 @@ func TestCreateRepositoryBootstrapPullRequestRejectsPolicyContentDrift(t *testin
 	}
 }
 
+func TestImportBootstrapServicesPolicyActivatesBindingAndStoresCheckedProjection(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = pendingBootstrapRepository(projectID, repositoryID)
+	authorizer := &spyAuthorizer{}
+	svc := NewWithConfig(
+		store,
+		fixedClock{},
+		&sequenceIDs{ids: []uuid.UUID{policyID, uuid.New(), uuid.New(), uuid.New()}},
+		Config{Authorizer: authorizer},
+	)
+
+	result, err := svc.ImportBootstrapServicesPolicy(ctx, importBootstrapServicesPolicyInput(projectID, repositoryID, commandMetaWithVersion(uuid.New(), 3)))
+	if err != nil {
+		t.Fatalf("ImportBootstrapServicesPolicy(): %v", err)
+	}
+	if result.Repository.Status != enum.RepositoryStatusActive || result.Repository.Version != 4 {
+		t.Fatalf("repository result = %+v, want active version 4", result.Repository)
+	}
+	if result.ServicesPolicy.ID != policyID ||
+		result.ServicesPolicy.SourceRepositoryID == nil ||
+		*result.ServicesPolicy.SourceRepositoryID != repositoryID ||
+		result.ServicesPolicy.SourceRef != "refs/heads/main" ||
+		result.ServicesPolicy.SourceCommitSHA != bootstrapMergeCommitSHA ||
+		result.ServicesPolicy.ContentHash != bootstrapContentHash(bootstrapServicesPolicyFileContent) ||
+		!bytes.Equal(result.ServicesPolicy.ValidatedPayload, []byte(bootstrapServicesPolicyPayload)) {
+		t.Fatalf("services policy = %+v, want checked bootstrap projection", result.ServicesPolicy)
+	}
+	if result.Summary == "" || !strings.Contains(result.Summary, bootstrapMergeCommitSHA[:12]) {
+		t.Fatalf("summary = %q, want short commit summary", result.Summary)
+	}
+	if len(authorizer.requests) != 1 || authorizer.requests[0].ActionKey != projectActionPolicyImport {
+		t.Fatalf("access requests = %+v, want policy import check", authorizer.requests)
+	}
+	if len(store.events) != 2 ||
+		store.events[0].EventType != projectEventRepositoryUpdated ||
+		store.events[1].EventType != projectEventServicesPolicyImported {
+		t.Fatalf("events = %+v, want repository update and policy import", store.events)
+	}
+	var payload value.ProjectEventPayload
+	if err := json.Unmarshal(store.events[1].Payload, &payload); err != nil {
+		t.Fatalf("unmarshal policy event: %v", err)
+	}
+	if payload.RepositoryID != repositoryID.String() ||
+		payload.SourceRef != "refs/heads/main" ||
+		payload.SourceCommitSHA != bootstrapMergeCommitSHA ||
+		payload.ProviderWorkItemProjectionID != "projection-1" ||
+		payload.ProviderWebURL != "https://github.com/codex-k8s/kodex/pull/7" ||
+		payload.Summary == "" {
+		t.Fatalf("policy event payload = %+v, want safe refs and summary", payload)
+	}
+	if len(store.commandResults) != 1 {
+		t.Fatalf("command results = %d, want one import result", len(store.commandResults))
+	}
+	for _, commandResult := range store.commandResults {
+		for _, forbidden := range [][]byte{
+			[]byte("validated_payload_json"),
+			[]byte(bootstrapServicesPolicyPayload),
+			[]byte("watermark_json"),
+			[]byte("raw_provider_payload"),
+			[]byte("files"),
+		} {
+			if bytes.Contains(commandResult.ResultPayload, forbidden) {
+				t.Fatalf("command payload stores unsafe import data %q in %s", forbidden, commandResult.ResultPayload)
+			}
+		}
+	}
+}
+
+func TestImportBootstrapServicesPolicyCommandReplayDoesNotCreateDuplicates(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	commandID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = pendingBootstrapRepository(projectID, repositoryID)
+	svc := NewWithConfig(
+		store,
+		fixedClock{},
+		&sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New()}},
+		Config{},
+	)
+	input := importBootstrapServicesPolicyInput(projectID, repositoryID, commandMetaWithVersion(commandID, 3))
+
+	first, err := svc.ImportBootstrapServicesPolicy(ctx, input)
+	if err != nil {
+		t.Fatalf("first ImportBootstrapServicesPolicy(): %v", err)
+	}
+	input.SourceCommitSHA = strings.Repeat("a", 40)
+	second, err := svc.ImportBootstrapServicesPolicy(ctx, input)
+	if err != nil {
+		t.Fatalf("replay ImportBootstrapServicesPolicy(): %v", err)
+	}
+	if first.ServicesPolicy.ID != second.ServicesPolicy.ID || second.SourceCommitSHA != bootstrapMergeCommitSHA {
+		t.Fatalf("replay result = %+v, want original policy", second)
+	}
+	if len(store.policies) != 1 || len(store.events) != 2 {
+		t.Fatalf("policies=%d events=%d, want no duplicate writes", len(store.policies), len(store.events))
+	}
+}
+
+func TestImportBootstrapServicesPolicySourceReplayDoesNotCreateDuplicates(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = pendingBootstrapRepository(projectID, repositoryID)
+	svc := NewWithConfig(
+		store,
+		fixedClock{},
+		&sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New()}},
+		Config{},
+	)
+
+	first, err := svc.ImportBootstrapServicesPolicy(ctx, importBootstrapServicesPolicyInput(projectID, repositoryID, commandMetaWithVersion(uuid.New(), 3)))
+	if err != nil {
+		t.Fatalf("first ImportBootstrapServicesPolicy(): %v", err)
+	}
+	second, err := svc.ImportBootstrapServicesPolicy(ctx, importBootstrapServicesPolicyInput(projectID, repositoryID, commandMeta(uuid.New())))
+	if err != nil {
+		t.Fatalf("source replay ImportBootstrapServicesPolicy(): %v", err)
+	}
+	if first.ServicesPolicy.ID != second.ServicesPolicy.ID || second.Repository.Status != enum.RepositoryStatusActive {
+		t.Fatalf("source replay = %+v, want existing active import", second)
+	}
+	if len(store.policies) != 1 || len(store.commandResults) != 1 || len(store.events) != 2 {
+		t.Fatalf("policies=%d commandResults=%d events=%d, want no duplicate source import", len(store.policies), len(store.commandResults), len(store.events))
+	}
+}
+
+func TestImportBootstrapServicesPolicyConflictsOnDifferentSourceAfterActivation(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = pendingBootstrapRepository(projectID, repositoryID)
+	svc := NewWithConfig(
+		store,
+		fixedClock{},
+		&sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New()}},
+		Config{},
+	)
+	if _, err := svc.ImportBootstrapServicesPolicy(ctx, importBootstrapServicesPolicyInput(projectID, repositoryID, commandMetaWithVersion(uuid.New(), 3))); err != nil {
+		t.Fatalf("initial ImportBootstrapServicesPolicy(): %v", err)
+	}
+
+	changedCommit := importBootstrapServicesPolicyInput(projectID, repositoryID, commandMeta(uuid.New()))
+	changedCommit.SourceCommitSHA = strings.Repeat("a", 40)
+	if _, err := svc.ImportBootstrapServicesPolicy(ctx, changedCommit); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("changed commit err = %v, want conflict", err)
+	}
+	changedRef := importBootstrapServicesPolicyInput(projectID, repositoryID, commandMeta(uuid.New()))
+	changedRef.SourceRef = "main"
+	if _, err := svc.ImportBootstrapServicesPolicy(ctx, changedRef); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("changed source ref err = %v, want conflict", err)
+	}
+	if len(store.policies) != 1 || len(store.events) != 2 {
+		t.Fatalf("policies=%d events=%d, want no writes on conflict", len(store.policies), len(store.events))
+	}
+}
+
+func TestImportBootstrapServicesPolicyRejectsProviderTargetMismatch(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = pendingBootstrapRepository(projectID, repositoryID)
+	svc := NewWithConfig(store, fixedClock{}, &sequenceIDs{}, Config{})
+	input := importBootstrapServicesPolicyInput(projectID, repositoryID, commandMetaWithVersion(uuid.New(), 3))
+	input.ProviderTarget.RepositoryFullName = "codex-k8s/other"
+
+	_, err := svc.ImportBootstrapServicesPolicy(ctx, input)
+	if !errors.Is(err, errs.ErrPreconditionFailed) {
+		t.Fatalf("ImportBootstrapServicesPolicy() err = %v, want precondition failed", err)
+	}
+	if len(store.policies) != 0 || len(store.events) != 0 || len(store.commandResults) != 0 {
+		t.Fatalf("policies=%d events=%d commandResults=%d, want no writes", len(store.policies), len(store.events), len(store.commandResults))
+	}
+}
+
 func TestPutDocumentationSourceNormalizesAndPublishesEvent(t *testing.T) {
 	ctx := context.Background()
 	store := newMemoryRepository()
@@ -1204,8 +1388,56 @@ const bootstrapServicesPolicyFileContent = "spec:\n  services:\n    - key: api\n
 
 const bootstrapServicesPolicyPayload = `{"spec":{"services":[{"key":"api","rootPath":"services/api","kind":"backend"}]}}`
 
+const bootstrapMergeCommitSHA = "0123456789abcdef0123456789abcdef01234567"
+
 func bootstrapServicesPolicy() RepositoryBootstrapServicesPolicy {
 	return bootstrapServicesPolicyForContent(bootstrapServicesPolicyFileContent, []byte(bootstrapServicesPolicyPayload))
+}
+
+func pendingBootstrapRepository(projectID uuid.UUID, repositoryID uuid.UUID) entity.RepositoryBinding {
+	now := fixedClock{}.Now()
+	return entity.RepositoryBinding{
+		Base: entity.Base{
+			ID:        repositoryID,
+			Version:   3,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		ProjectID:            projectID,
+		Provider:             enum.RepositoryProviderGitHub,
+		ProviderOwner:        "codex-k8s",
+		ProviderName:         "kodex",
+		WebURL:               "https://github.com/codex-k8s/kodex",
+		DefaultBranch:        "main",
+		Status:               enum.RepositoryStatusPending,
+		ProviderRepositoryID: "R_123",
+	}
+}
+
+func importBootstrapServicesPolicyInput(projectID uuid.UUID, repositoryID uuid.UUID, meta value.CommandMeta) ImportBootstrapServicesPolicyInput {
+	return ImportBootstrapServicesPolicyInput{
+		ProjectID:    projectID,
+		RepositoryID: repositoryID,
+		ProviderTarget: RepositoryBootstrapProviderTarget{
+			ProviderSlug:         "github",
+			RepositoryFullName:   "codex-k8s/kodex",
+			ProviderRepositoryID: "R_123",
+			WebURL:               "https://github.com/codex-k8s/kodex",
+		},
+		BaseBranch:                   "main",
+		SourceRef:                    "refs/heads/main",
+		SourceCommitSHA:              bootstrapMergeCommitSHA,
+		SourceBlobSHA:                "blob-1",
+		SourcePath:                   "services.yaml",
+		ContentHash:                  bootstrapContentHash(bootstrapServicesPolicyFileContent),
+		ValidatedPayload:             []byte(bootstrapServicesPolicyPayload),
+		WatermarkJSON:                []byte(`{"kind":"provider_pr","managed_by":"kodex","work_type":"repository_bootstrap","source_ref":"services.yaml"}`),
+		ProviderWorkItemProjectionID: "projection-1",
+		ProviderWebURL:               "https://github.com/codex-k8s/kodex/pull/7",
+		ProviderObjectID:             "PR_123",
+		MergeObservedAt:              fixedClock{}.Now().Format(time.RFC3339Nano),
+		Meta:                         meta,
+	}
 }
 
 func bootstrapServicesPolicyForContent(content string, payload []byte) RepositoryBootstrapServicesPolicy {
@@ -1365,6 +1597,39 @@ func (r *memoryRepository) ImportServicesPolicy(_ context.Context, policy entity
 	return policy, nil
 }
 
+func (r *memoryRepository) ImportBootstrapServicesPolicy(
+	_ context.Context,
+	repository entity.RepositoryBinding,
+	previousVersion int64,
+	policy entity.ServicesPolicy,
+	descriptors []entity.ServiceDescriptor,
+	documentationSources []entity.DocumentationSource,
+	repositoryEvent entity.OutboxEvent,
+	result entity.CommandResult,
+	buildPolicyEvent projectrepo.ServicesPolicyEventBuilder,
+) (entity.ServicesPolicy, entity.RepositoryBinding, error) {
+	current, ok := r.repositories[repository.ID]
+	if !ok {
+		return entity.ServicesPolicy{}, entity.RepositoryBinding{}, errs.ErrNotFound
+	}
+	if current.Version != previousVersion {
+		return entity.ServicesPolicy{}, entity.RepositoryBinding{}, errs.ErrConflict
+	}
+	r.policyVersions[policy.ProjectID]++
+	policy.PolicyVersion = r.policyVersions[policy.ProjectID]
+	policyEvent, err := buildPolicyEvent(policy)
+	if err != nil {
+		return entity.ServicesPolicy{}, entity.RepositoryBinding{}, err
+	}
+	r.repositories[repository.ID] = repository
+	r.policies[policy.ID] = policy
+	r.serviceDescriptors[policy.ID] = descriptors
+	r.policyDocumentationSources[policy.ID] = documentationSources
+	r.events = append(r.events, repositoryEvent, policyEvent)
+	r.commandResults[result.Key] = result
+	return policy, repository, nil
+}
+
 func (r *memoryRepository) GetServicesPolicy(_ context.Context, projectID uuid.UUID, policyID *uuid.UUID) (entity.ServicesPolicy, error) {
 	if policyID != nil {
 		policy, ok := r.policies[*policyID]
@@ -1376,6 +1641,26 @@ func (r *memoryRepository) GetServicesPolicy(_ context.Context, projectID uuid.U
 	var latest entity.ServicesPolicy
 	for _, policy := range r.policies {
 		if policy.ProjectID == projectID && policy.PolicyVersion > latest.PolicyVersion {
+			latest = policy
+		}
+	}
+	if latest.ID == uuid.Nil {
+		return entity.ServicesPolicy{}, errs.ErrNotFound
+	}
+	return latest, nil
+}
+
+func (r *memoryRepository) GetServicesPolicyBySource(_ context.Context, projectID uuid.UUID, sourceRepositoryID uuid.UUID, sourcePath string, sourceCommitSHA string) (entity.ServicesPolicy, error) {
+	var latest entity.ServicesPolicy
+	for _, policy := range r.policies {
+		if policy.ProjectID != projectID ||
+			policy.SourceRepositoryID == nil ||
+			*policy.SourceRepositoryID != sourceRepositoryID ||
+			policy.SourcePath != sourcePath ||
+			policy.SourceCommitSHA != sourceCommitSHA {
+			continue
+		}
+		if policy.PolicyVersion > latest.PolicyVersion {
 			latest = policy
 		}
 	}

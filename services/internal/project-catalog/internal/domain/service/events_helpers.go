@@ -27,7 +27,12 @@ const (
 	projectPayloadPolicyID
 	projectPayloadSourceCommit
 	projectPayloadSourceBlob
+	projectPayloadSourceRef
+	projectPayloadSourcePath
 	projectPayloadContentHash
+	projectPayloadSummary
+	projectPayloadProviderWorkItemProjectionID
+	projectPayloadProviderWebURL
 	projectPayloadOverrideID
 	projectPayloadTargetType
 	projectPayloadExpiresAt
@@ -96,8 +101,18 @@ func payloadField(field projectPayloadStringField, text string) projectEventPayl
 			payload.SourceCommitSHA = text
 		case projectPayloadSourceBlob:
 			payload.SourceBlobSHA = text
+		case projectPayloadSourceRef:
+			payload.SourceRef = text
+		case projectPayloadSourcePath:
+			payload.SourcePath = text
 		case projectPayloadContentHash:
 			payload.ContentHash = text
+		case projectPayloadSummary:
+			payload.Summary = text
+		case projectPayloadProviderWorkItemProjectionID:
+			payload.ProviderWorkItemProjectionID = text
+		case projectPayloadProviderWebURL:
+			payload.ProviderWebURL = text
 		case projectPayloadOverrideID:
 			payload.OverrideID = text
 		case projectPayloadTargetType:

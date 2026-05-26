@@ -261,13 +261,30 @@ func (s *Service) servicesPolicyEvent(policy entity.ServicesPolicy) (entity.Outb
 		payloadProjectID(policy.ProjectID),
 		payloadField(projectPayloadPolicyID, policy.ID.String()),
 		payloadPolicyVersion(policy.PolicyVersion),
+		payloadField(projectPayloadSourcePath, policy.SourcePath),
 		payloadField(projectPayloadSourceCommit, policy.SourceCommitSHA),
 		payloadField(projectPayloadContentHash, policy.ContentHash),
+		payloadField(projectPayloadSummary, servicesPolicyImportSummary(policy.SourceRef, policy.SourceCommitSHA)),
+	}
+	if policy.SourceRepositoryID != nil {
+		options = append(options, payloadRepositoryID(*policy.SourceRepositoryID))
+	}
+	if policy.SourceRef != "" {
+		options = append(options, payloadField(projectPayloadSourceRef, policy.SourceRef))
 	}
 	if policy.SourceBlobSHA != "" {
 		options = append(options, payloadField(projectPayloadSourceBlob, policy.SourceBlobSHA))
 	}
 	return s.aggregateEvent(projectEventServicesPolicyImported, projectAggregateServicesPolicy, policy.ID, policy.ImportedAt, options...)
+}
+
+func servicesPolicyImportSummary(sourceRef string, sourceCommitSHA string) string {
+	ref := strings.TrimSpace(sourceRef)
+	commit := shortCommitSHA(sourceCommitSHA)
+	if ref == "" {
+		return "services.yaml imported at " + commit
+	}
+	return "services.yaml imported from " + ref + " at " + commit
 }
 
 func (s *Service) policyOverrideEvent(eventType string, override entity.PolicyOverride) (entity.OutboxEvent, error) {

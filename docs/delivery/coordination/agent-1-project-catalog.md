@@ -60,8 +60,9 @@
 | Wave 8 closeout | #633 | #654 | готово | Статусы Wave 8, карты Issue и документы поставки приведены к завершённому состоянию. |
 | ONB-1 | #794 | готово | `CreateRepositoryBootstrapPullRequest` готовит project-side bootstrap-контекст для существующего binding и вызывает `provider-hub CreateBootstrapPullRequest` без Git-клиента, генерации шаблона и adoption scan. |
 | ONB-2 | #810 | готово | `CreateProviderRepository` резервирует pending project-owned repository binding, вызывает `provider-hub CreateRepository`, сохраняет безопасные provider refs и `base_branch` для последующего bootstrap PR. |
+| ONB-3 | #818 | готово | `ImportBootstrapServicesPolicy` принимает проверенный merge/artifact-сигнал, импортирует checked `services.yaml` и атомарно переводит pending repository binding в `active` без прямого GitHub/GitLab доступа. |
 
-Итог: `project-catalog` имеет стабильные `v1` контракты, БД, миграции, gRPC-слой, outbox-публикацию в `platform-event-log`, deploy-манифесты и smoke-контур. Операции из Wave 8 реализованы; ONB-1 добавил project-side bootstrap команду для уже существующего repository binding, ONB-2 добавил project-side создание provider repo/base ref через `provider-hub` и связывание результата с binding.
+Итог: `project-catalog` имеет стабильные `v1` контракты, БД, миграции, gRPC-слой, outbox-публикацию в `platform-event-log`, deploy-манифесты и smoke-контур. Операции из Wave 8 реализованы; ONB-1 добавил project-side bootstrap команду для уже существующего repository binding, ONB-2 добавил project-side создание provider repo/base ref через `provider-hub` и связывание результата с binding, ONB-3 добавил импорт проверенной политики после merge bootstrap PR и активацию binding.
 
 ## Что уже сделано по `runtime-manager`
 
@@ -107,7 +108,7 @@
 
 | Направление | Статус | Что осталось |
 |---|---|---|
-| Bootstrap пустого репозитория | ONB-1 и ONB-2 готовы, полный сценарий открыт: #281, #748 | `project-catalog` владеет проектной политикой и binding: `CreateProviderRepository` создаёт provider repo/base ref через `provider-hub CreateRepository` и сохраняет безопасные refs в pending binding; `CreateRepositoryBootstrapPullRequest` проверяет существующий binding, provider target, `base_branch`, prepared files, watermark и проверенную проекцию `services.yaml`, затем вызывает `provider-hub CreateBootstrapPullRequest`. Выбор и применение шаблона, импорт политики после merge и adoption остаются отдельными срезами. |
+| Bootstrap пустого репозитория | ONB-1, ONB-2 и ONB-3 готовы, полный сценарий открыт: #281, #748 | `project-catalog` владеет проектной политикой и binding: `CreateProviderRepository` создаёт provider repo/base ref через `provider-hub CreateRepository` и сохраняет безопасные refs в pending binding; `CreateRepositoryBootstrapPullRequest` проверяет существующий binding, provider target, `base_branch`, prepared files, watermark и checked `services.yaml`, затем вызывает `provider-hub CreateBootstrapPullRequest`; `ImportBootstrapServicesPolicy` принимает проверенный merge/artifact-сигнал, импортирует checked projection и переводит binding в `active`. Выбор и применение шаблона, фактический webhook/reconciliation caller и adoption остаются отдельными срезами. |
 | Adoption существующего репозитория | модель выбрана, ждёт реализации: #282 | Проектная часть готова в `project-catalog`; adoption должен поддерживать агентную роль и быстрый шаблонный режим после проверки конфликтов. |
 | UI/gateway для проектов и runtime | запланировано позже | Делать после определения фактических экранов `web-console` и состава `staff-gateway` ручек. |
 | `project.policy_override.expired` | запланировано позже | Контракт события есть; нужна логика обслуживания или platform job, которая будет снимать истёкшие переопределения как операционный срез. |
@@ -146,13 +147,13 @@
 
 Реальные оставшиеся блокировки:
 
-- #281 и #282 требуют provider-native операций: создать или просканировать репозиторий, открыть bootstrap/adoption PR, связать provider Issue/PR/MR с локальными проектом и репозиторием; PRV-8a закрывает provider-side открытие bootstrap PR для заранее существующего пустого repo по готовым файлам и refs, ONB-1 закрывает project-side вызов для существующего binding, ONB-2 закрывает project-side создание provider repo/base ref, но импорт политики после merge и adoption scan остаются открытыми;
+- #281 и #282 требуют provider-native операций: создать или просканировать репозиторий, открыть bootstrap/adoption PR, связать provider Issue/PR/MR с локальными проектом и репозиторием; PRV-8a закрывает provider-side открытие bootstrap PR для заранее существующего пустого repo по готовым файлам и refs, ONB-1 закрывает project-side вызов для существующего binding, ONB-2 закрывает project-side создание provider repo/base ref, ONB-3 закрывает project-side import checked policy after merge, но фактический webhook/reconciliation caller и adoption scan остаются открытыми;
 - `CreatePolicyEditProposal` в `project-catalog` сохраняет предложение, но создание PR с правкой `services.yaml` должно идти через provider-контур;
 - workspace `source_ref` и сигналы после работы slot-агентов должны синхронизироваться с provider-проекциями, но runtime не должен напрямую ходить в GitHub/GitLab.
 
 Нужны новые или уточнённые контракты:
 
-- импорт `services.yaml` после merge bootstrap PR через webhook/reconciliation -> provider projection -> checked import в `project-catalog`;
+- фактический вызов `ImportBootstrapServicesPolicy` из webhook/reconciliation контура после provider projection merge-сигнала;
 - команда provider-контура на создание bootstrap/policy PR по проверенному предложению `project-catalog`;
 - событие или команда ускоряющего сигнала после появления provider-native артефакта из runtime/agent workspace.
 
@@ -191,5 +192,5 @@
 Для агента #1 нет незавершённого локального Wave 8, RTM или FLEET среза, который нужно закрыть до соседних доменов. После MCP-4 рационально идти в один из трёх вариантов:
 
 - выполнить MCP-3g после готовности контрактов `governance-manager`, чтобы маршрутизировать risk/gate/release инструменты без хранения decision state в MCP;
-- продолжить bootstrap пустого репозитория следующим ONB-срезом: реализовать import/reconciliation путь после merge bootstrap PR без прямого GitHub/GitLab доступа из `project-catalog`;
+- продолжить bootstrap пустого репозитория следующим ONB-срезом: подключить фактический webhook/reconciliation caller к `ImportBootstrapServicesPolicy` или закрыть детерминированный template executor без переноса шаблонов в `project-catalog`;
 - перейти к runtime/fleet интеграции с реальным исполнителем platform jobs после согласования `agent-manager` и ops-контуров.

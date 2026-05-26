@@ -101,6 +101,16 @@ func ServicesPolicyResponse(policy entity.ServicesPolicy) *projectsv1.ServicesPo
 	return &projectsv1.ServicesPolicyResponse{ServicesPolicy: ServicesPolicyToProto(policy)}
 }
 
+func BootstrapServicesPolicyImportResponse(result projectservice.BootstrapServicesPolicyImportResult) *projectsv1.BootstrapServicesPolicyImportResponse {
+	return &projectsv1.BootstrapServicesPolicyImportResponse{
+		Repository:      RepositoryToProto(result.Repository),
+		ServicesPolicy:  ServicesPolicyToProto(result.ServicesPolicy),
+		SourceRef:       result.SourceRef,
+		SourceCommitSha: result.SourceCommitSHA,
+		Summary:         result.Summary,
+	}
+}
+
 func ServicesPolicyToProto(policy entity.ServicesPolicy) *projectsv1.ServicesPolicy {
 	return &projectsv1.ServicesPolicy{
 		ServicesPolicyId:     policy.ID.String(),

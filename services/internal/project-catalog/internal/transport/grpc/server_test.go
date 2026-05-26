@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -202,6 +203,86 @@ func TestCreateProviderRepositoryCallsDomainService(t *testing.T) {
 	}
 }
 
+func TestImportBootstrapServicesPolicyCallsDomainService(t *testing.T) {
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	policyID := uuid.New()
+	commandID := uuid.New()
+	projectionID := "projection-1"
+	expectedVersion := int64(3)
+	service := &fakeProjectService{}
+	service.importBootstrapPolicy = func(_ context.Context, input projectservice.ImportBootstrapServicesPolicyInput) (projectservice.BootstrapServicesPolicyImportResult, error) {
+		if input.ProjectID != projectID ||
+			input.RepositoryID != repositoryID ||
+			input.ProviderTarget.ProviderSlug != "github" ||
+			input.ProviderTarget.RepositoryFullName != "codex-k8s/kodex" ||
+			input.BaseBranch != "main" ||
+			input.SourceRef != "refs/heads/main" ||
+			input.SourceCommitSHA != "0123456789abcdef0123456789abcdef01234567" ||
+			input.SourcePath != "services.yaml" ||
+			input.ProviderWorkItemProjectionID != "projection-1" {
+			t.Fatalf("input = %+v, want bootstrap policy import fields", input)
+		}
+		if input.Meta.CommandID != commandID || input.Meta.ExpectedVersion == nil || *input.Meta.ExpectedVersion != expectedVersion {
+			t.Fatalf("meta = %+v, want command id and expected version", input.Meta)
+		}
+		return projectservice.BootstrapServicesPolicyImportResult{
+			Repository: entity.RepositoryBinding{
+				Base:          entity.Base{ID: repositoryID, Version: 4},
+				ProjectID:     projectID,
+				Provider:      enum.RepositoryProviderGitHub,
+				ProviderOwner: "codex-k8s",
+				ProviderName:  "kodex",
+				DefaultBranch: "main",
+				Status:        enum.RepositoryStatusActive,
+			},
+			ServicesPolicy: entity.ServicesPolicy{
+				Base:            entity.Base{ID: policyID, Version: 1},
+				ProjectID:       projectID,
+				SourcePath:      "services.yaml",
+				SourceRef:       "refs/heads/main",
+				SourceCommitSHA: "0123456789abcdef0123456789abcdef01234567",
+				PolicyVersion:   1,
+				ContentHash:     "sha256:policy",
+				ImportedAt:      time.Date(2026, 5, 6, 12, 0, 0, 0, time.UTC),
+			},
+			SourceRef:       "refs/heads/main",
+			SourceCommitSHA: "0123456789abcdef0123456789abcdef01234567",
+			Summary:         "services.yaml imported from refs/heads/main at 0123456789ab",
+		}, nil
+	}
+	server := NewServer(service)
+	meta := commandMeta(commandID.String())
+	meta.ExpectedVersion = &expectedVersion
+
+	response, err := server.ImportBootstrapServicesPolicy(context.Background(), &projectsv1.ImportBootstrapServicesPolicyRequest{
+		ProjectId:    projectID.String(),
+		RepositoryId: repositoryID.String(),
+		ProviderTarget: &projectsv1.RepositoryBootstrapProviderTarget{
+			ProviderSlug:       "github",
+			RepositoryFullName: "codex-k8s/kodex",
+		},
+		BaseBranch:                   "main",
+		SourceRef:                    "refs/heads/main",
+		SourceCommitSha:              "0123456789abcdef0123456789abcdef01234567",
+		SourcePath:                   "services.yaml",
+		ContentHash:                  "sha256:policy",
+		ValidatedPayloadJson:         `{"spec":{"services":[{"key":"api","rootPath":"services/api"}]}}`,
+		WatermarkJson:                `{"kind":"provider_pr","managed_by":"kodex","work_type":"repository_bootstrap","source_ref":"services.yaml"}`,
+		ProviderWorkItemProjectionId: &projectionID,
+		Meta:                         meta,
+	})
+	if err != nil {
+		t.Fatalf("ImportBootstrapServicesPolicy(): %v", err)
+	}
+	if response.GetRepository().GetStatus() != projectsv1.RepositoryStatus_REPOSITORY_STATUS_ACTIVE ||
+		response.GetServicesPolicy().GetServicesPolicyId() != policyID.String() ||
+		response.GetSourceCommitSha() != "0123456789abcdef0123456789abcdef01234567" ||
+		response.GetSummary() == "" {
+		t.Fatalf("response = %+v, want active repository and imported policy", response)
+	}
+}
+
 func TestErrorToStatusMapsDomainErrors(t *testing.T) {
 	t.Parallel()
 
@@ -254,6 +335,7 @@ type fakeProjectService struct {
 	createProject            func(context.Context, projectservice.CreateProjectInput) (entity.Project, error)
 	createProviderRepository func(context.Context, projectservice.CreateProviderRepositoryInput) (projectservice.RepositoryProviderCreateResult, error)
 	createBootstrap          func(context.Context, projectservice.CreateRepositoryBootstrapPullRequestInput) (projectservice.RepositoryBootstrapPullRequestResult, error)
+	importBootstrapPolicy    func(context.Context, projectservice.ImportBootstrapServicesPolicyInput) (projectservice.BootstrapServicesPolicyImportResult, error)
 }
 
 func (s *fakeProjectService) CreateProject(ctx context.Context, input projectservice.CreateProjectInput) (entity.Project, error) {
@@ -275,6 +357,13 @@ func (s *fakeProjectService) CreateRepositoryBootstrapPullRequest(ctx context.Co
 		return projectservice.RepositoryBootstrapPullRequestResult{}, errs.ErrInvalidArgument
 	}
 	return s.createBootstrap(ctx, input)
+}
+
+func (s *fakeProjectService) ImportBootstrapServicesPolicy(ctx context.Context, input projectservice.ImportBootstrapServicesPolicyInput) (projectservice.BootstrapServicesPolicyImportResult, error) {
+	if s.importBootstrapPolicy == nil {
+		return projectservice.BootstrapServicesPolicyImportResult{}, errs.ErrInvalidArgument
+	}
+	return s.importBootstrapPolicy(ctx, input)
 }
 
 type unimplementedProjectService struct{}
@@ -325,6 +414,10 @@ func (unimplementedProjectService) ListRepositories(context.Context, projectserv
 
 func (unimplementedProjectService) ImportServicesPolicy(context.Context, projectservice.ImportServicesPolicyInput) (entity.ServicesPolicy, error) {
 	return entity.ServicesPolicy{}, errs.ErrInvalidArgument
+}
+
+func (unimplementedProjectService) ImportBootstrapServicesPolicy(context.Context, projectservice.ImportBootstrapServicesPolicyInput) (projectservice.BootstrapServicesPolicyImportResult, error) {
+	return projectservice.BootstrapServicesPolicyImportResult{}, errs.ErrInvalidArgument
 }
 
 func (unimplementedProjectService) GetServicesPolicy(context.Context, projectservice.GetServicesPolicyInput) (entity.ServicesPolicy, error) {

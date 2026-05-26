@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-05
 updated_at: 2026-05-26
-related_issues: [628, 629, 630, 631, 632, 633, 794]
+related_issues: [628, 629, 630, 631, 632, 633, 794, 810, 818]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -43,6 +43,8 @@ approvals:
 
 `CreateRepositoryBootstrapPullRequest` — project-side команда для сценария пустого репозитория по модели C. Она работает только по уже существующему `Repository` binding, проверяет проектную принадлежность, provider target, `base_branch`, подготовленные файлы, обязательный watermark и проверенную проекцию `services.yaml`, затем делегирует запись в `provider-hub CreateBootstrapPullRequest`. Команда не создаёт provider-native репозиторий, не генерирует шаблон репозитория, не выполняет adoption scan и не импортирует политику после merge; эти шаги остаются отдельными срезами.
 
+`ImportBootstrapServicesPolicy` — project-side команда завершения bootstrap после merge provider-native PR/MR. Команда не читает GitHub/GitLab и не принимает raw provider payload: вызывающий внутренний контур передаёт уже проверенный сигнал с provider target, `base_branch`, `source_ref`, commit, `content_hash`, watermark и нормализованным `validated_payload_json`. `project-catalog` сверяет сигнал с repository binding, проверяет ожидаемую версию pending binding, импортирует `services.yaml` штатным валидатором, сохраняет checked projection и переводит binding в `active`. Повтор того же commit/source ref идемпотентен; другой commit/ref после активации возвращает конфликт.
+
 | Операция | Вид | Доступ | Идемпотентность | Примечание |
 |---|---|---|---|---|
 | `CreateProject` | gRPC command | `project.create` | `CommandMeta.command_id` | Создаёт проект, включая опциональную ссылку на иконку. |
@@ -57,6 +59,7 @@ approvals:
 | `GetRepository` | gRPC query | `repository.read` | нет | Авторитетное чтение привязки репозитория. |
 | `ListRepositories` | gRPC query | `repository.list` | нет | Список репозиториев проекта. |
 | `ImportServicesPolicy` | gRPC command | `project.policy.import` | `CommandMeta.command_id` | Импортирует `services.yaml`, управляемый через Git, после первичной загрузки, слияния PR или сверки и сохраняет проверенную проекцию. |
+| `ImportBootstrapServicesPolicy` | gRPC command | `project.policy.import` | `CommandMeta.command_id` + source commit replay | Принимает проверенный merge-сигнал bootstrap PR, импортирует `services.yaml` и активирует pending repository binding. |
 | `GetServicesPolicy` | gRPC query | `project.policy.read` | нет | Читает активную проверенную проекцию `services.yaml`. |
 | `ListServiceDescriptors` | gRPC query | `project.policy.read` | нет | Читает типизированный список сервисов из последней политики `valid + synced/overridden`. |
 | `CreatePolicyEditProposal` | gRPC command | `project.policy.propose` | `CommandMeta.command_id` | Создаёт запрос на PR-изменение `services.yaml` вместо прямой записи в БД. |
@@ -105,7 +108,7 @@ approvals:
 | `project.repository.attached` | repository | `project_id`, `repository_id`, `provider`, `provider_owner`, `provider_name`, `version`; `icon_object_uri`, если задано |
 | `project.repository.updated` | repository | `project_id`, `repository_id`, `status`, `version`; `icon_object_uri`, если задано |
 | `project.repository.detached` | repository | `project_id`, `repository_id`, `status`, `version` |
-| `project.services_policy.imported` | services_policy | `project_id`, `policy_id`, `policy_version`, `source_commit_sha`, `content_hash`; `source_blob_sha` передаётся, когда доступен у провайдера |
+| `project.services_policy.imported` | services_policy | `project_id`, `policy_id`, `policy_version`, `source_commit_sha`, `content_hash`, `source_path`, `summary`; `repository_id`, `source_ref`, `source_blob_sha`, `provider_work_item_projection_id`, `provider_web_url` передаются, когда доступны как безопасные ссылки |
 | `project.policy_override.created` | policy_override | `project_id`, `override_id`, `target_type`, `expires_at` |
 | `project.policy_override.expired` | policy_override | `project_id`, `override_id`, `target_type` |
 | `project.policy_override.cancelled` | policy_override | `project_id`, `override_id`, `target_type` |
@@ -134,7 +137,7 @@ approvals:
 | gRPC proto `ProjectCatalogService` | Стабильный `v1`, покрывает весь согласованный объём операций. |
 | AsyncAPI `project.*` | Стабильный `v1`, покрывает события из этого документа. |
 | Сервисный процесс `project-catalog` | Подключены entrypoint, конфигурация, health/readyz/metrics, gRPC-сервер, проверка доступа через `access-manager` и outbox-dispatcher. |
-| Бизнес-обработчики gRPC | Подключены к доменному сервису для проектов, репозиториев, создания provider repo/base ref через `provider-hub`, bootstrap PR по существующему binding, проверенной проекции `services.yaml`, операторских переопределений, источников документации, правил веток, релизных политик, релизных линий и политики размещения. |
+| Бизнес-обработчики gRPC | Подключены к доменному сервису для проектов, репозиториев, создания provider repo/base ref через `provider-hub`, bootstrap PR по существующему binding, импорта bootstrap policy после merge, проверенной проекции `services.yaml`, операторских переопределений, источников документации, правил веток, релизных политик, релизных линий и политики размещения. |
 | PostgreSQL и outbox | Модель БД, миграции, слой репозитория, сервисный outbox и публикация событий в `platform-event-log` подключены. |
 
 ## Совместимость
