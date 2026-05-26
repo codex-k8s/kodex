@@ -73,4 +73,8 @@
 - Если PR затрагивает Go: выполнен `docs/design-guidelines/go/check_list.md`.
 - Если PR затрагивает Vue: выполнен `docs/design-guidelines/vue/check_list.md`.
 - Если PR затрагивает Go: выполнен `go mod tidy` в изменённых модулях и прогнаны `make lint-go` и `make dupl-go` (или `make lint`) с устранением нарушений.
+- Для Go PR `make test-go` трактуется как герметичная unit/component проверка. PostgreSQL integration tests запускаются
+  отдельно через `make test-go-postgres` или вместе с unit-контуром через `make test-go-all`.
+- Если `make test-go-postgres` не запущен из-за отсутствия внешних DSN, Docker и Kubernetes test namespace/RBAC,
+  это не записывается как дефект изменённого PR, но обязательно отмечается как незапущенная integration-проверка.
 - Перед пушем выполнена повторная сверка с релевантными чек-листами и устранены все нарушения по размещению моделей/типов/констант/helper-кода.

@@ -68,5 +68,13 @@
 - В каждом изменённом Go-модуле выполнен `go mod tidy`.
 - Если добавлена/обновлена внешняя Go библиотека, обновлён
   `docs/design-guidelines/common/external_dependencies_catalog.md`.
+- Прогнан `make test-go`: это герметичный unit/component контур без PostgreSQL, Docker и `KODEX_*_TEST_DATABASE_DSN`.
+- Если менялись PostgreSQL repository, миграции, SQL или outbox/event-log storage, прогнан явный integration target
+  `make test-go-postgres` с внешними DSN или `KODEX_TEST_POSTGRES_MODE=kubernetes`.
+- Для полной Go-проверки окружения с тестовой БД используется `make test-go-all`: сначала hermetic tests,
+  затем PostgreSQL integration tests.
+- Падение `make test-go-postgres` из-за отсутствия Docker, внешних DSN и доступного Kubernetes test namespace
+  не считается багом конкретного PR, но означает незапущенную обязательную integration-проверку; это явно фиксируется
+  в PR/QA-отчёте.
 - Прогнан `make lint-go` и исправлены нарушения.
 - Прогнан `make dupl-go`; дубли устранены или выделены в отдельную задачу.
