@@ -14,7 +14,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/domain/types/value"
 )
 
-// Service coordinates normalized hook event acceptance without downstream routing.
+// Service coordinates normalized hook event acceptance and safe owner routing.
 type Service struct {
 	repository     hookrepo.Repository
 	config         Config
@@ -22,6 +22,7 @@ type Service struct {
 	validator      EnvelopeValidator
 	sourceVerifier SourceVerifier
 	sanitizer      Sanitizer
+	routeRegistry  *RouteRegistry
 }
 
 // New creates a codex-hook-ingress domain service with explicit skeleton ports.
@@ -39,6 +40,9 @@ func New(repository hookrepo.Repository, cfg Config, deps Dependencies) *Service
 	if deps.Sanitizer == nil {
 		deps.Sanitizer = DefaultSanitizer{}
 	}
+	if deps.RouteRegistry == nil {
+		deps.RouteRegistry = NewDefaultRouteRegistry()
+	}
 	return &Service{
 		repository:     repository,
 		config:         cfg,
@@ -46,12 +50,20 @@ func New(repository hookrepo.Repository, cfg Config, deps Dependencies) *Service
 		validator:      deps.Validator,
 		sourceVerifier: deps.SourceVerifier,
 		sanitizer:      deps.Sanitizer,
+		routeRegistry:  deps.RouteRegistry,
 	}
 }
 
 // Ready reports whether the domain skeleton and repository are composed.
 func (s *Service) Ready() bool {
-	return s != nil && s.repository != nil && s.repository.Ready() && s.validator != nil && s.sourceVerifier != nil && s.sanitizer != nil
+	return s != nil &&
+		s.repository != nil &&
+		s.repository.Ready() &&
+		s.validator != nil &&
+		s.sourceVerifier != nil &&
+		s.sanitizer != nil &&
+		s.routeRegistry != nil &&
+		s.routeRegistry.Ready()
 }
 
 // SubmitHookEvent accepts a normalized hook event through the logical command boundary.
@@ -94,15 +106,30 @@ func (s *Service) SubmitHookEvent(ctx context.Context, input SubmitHookEventInpu
 		return SubmitHookEventResult{}, fmt.Errorf("%w: store hook idempotency record: %v", hookerrs.ErrDependencyUnavailable, err)
 	}
 	if duplicate {
+		routeDiagnostics := cloneRouteDeliveryResults(accepted.RouteDiagnostics)
 		return SubmitHookEventResult{
-			HandlerResult:  accepted.Result,
-			Duplicate:      true,
-			RoutesAccepted: len(envelope.DownstreamRoutes),
+			HandlerResult:    accepted.Result,
+			Duplicate:        true,
+			RoutesAccepted:   countDeliveredRoutes(routeDiagnostics),
+			RouteDiagnostics: routeDiagnostics,
 		}, nil
 	}
+	routeDiagnostics := s.routeRegistry.DispatchRoutes(ctx, s.config, envelope)
+	result = s.applyRouteFailurePolicy(result, routeDiagnostics)
+	accepted, err = s.repository.RecordDeliveryResults(ctx, entity.DeliveryUpdate{
+		EventID:          envelope.EventID,
+		PayloadDigest:    envelope.PayloadDigest,
+		Result:           result,
+		RouteDiagnostics: routeDiagnostics,
+	})
+	if err != nil {
+		return SubmitHookEventResult{}, fmt.Errorf("%w: store hook route diagnostics: %v", hookerrs.ErrDependencyUnavailable, err)
+	}
+	routeDiagnostics = cloneRouteDeliveryResults(accepted.RouteDiagnostics)
 	return SubmitHookEventResult{
-		HandlerResult:  result,
-		RoutesAccepted: len(envelope.DownstreamRoutes),
+		HandlerResult:    accepted.Result,
+		RoutesAccepted:   countDeliveredRoutes(routeDiagnostics),
+		RouteDiagnostics: routeDiagnostics,
 	}, nil
 }
 
@@ -116,6 +143,16 @@ func (s *Service) handlerResult(envelope value.HookEnvelope) value.HookHandlerRe
 		HookEventName: envelope.HookEventName,
 		CorrelationID: envelope.CorrelationID,
 	}
+}
+
+func (s *Service) applyRouteFailurePolicy(result value.HookHandlerResult, diagnostics []value.RouteDeliveryResult) value.HookHandlerResult {
+	if s.config.RouteFailurePolicy != hookenum.RouteFailurePolicyFailClosed || !hasUndeliveredRoute(diagnostics) {
+		return result
+	}
+	result.Result = hookenum.HandlerResultFailClosed
+	result.SystemMessage = "hook route delivery failed safely"
+	result.DecisionReason = value.RouteDiagnosticFailurePolicyFired
+	return result
 }
 
 func normalizedConfig(cfg Config) Config {
@@ -134,7 +171,19 @@ func normalizedConfig(cfg Config) Config {
 	if len(cfg.SupportedEvents) == 0 {
 		cfg.SupportedEvents = hookenum.SupportedHookEvents()
 	}
+	if cfg.RouteFailurePolicy == "" {
+		cfg.RouteFailurePolicy = hookenum.RouteFailurePolicyDiagnostic
+	}
 	return cfg
+}
+
+func (cfg Config) routeEnabled(owner hookenum.DownstreamOwner) bool {
+	for _, disabled := range cfg.DisabledRoutes {
+		if disabled == owner {
+			return false
+		}
+	}
+	return true
 }
 
 type systemClock struct{}

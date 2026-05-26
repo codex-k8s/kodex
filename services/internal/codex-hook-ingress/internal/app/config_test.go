@@ -38,6 +38,43 @@ func TestConfigValidateKeepsSchemaLimitsPinned(t *testing.T) {
 	}
 }
 
+func TestConfigValidateAcceptsDisabledRoutes(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.DisabledRoutes = "operations-feed,governance-manager"
+	owners, err := cfg.DisabledRouteOwners()
+	if err != nil {
+		t.Fatalf("DisabledRouteOwners(): %v", err)
+	}
+	if len(owners) != 2 {
+		t.Fatalf("disabled routes len = %d, want 2", len(owners))
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate(): %v", err)
+	}
+}
+
+func TestConfigValidateRejectsUnknownDisabledRoute(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.DisabledRoutes = "raw-store"
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() error is nil, want disabled route error")
+	}
+}
+
+func TestConfigValidateRejectsUnknownRouteFailurePolicy(t *testing.T) {
+	t.Parallel()
+
+	cfg := validConfig()
+	cfg.RouteFailurePolicy = "continue_anyway"
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() error is nil, want route failure policy error")
+	}
+}
+
 func validConfig() Config {
 	return Config{
 		HTTPAddr:                 ":8080",
@@ -49,6 +86,7 @@ func validConfig() Config {
 		MaxEnvelopeBytes:         65536,
 		MaxTextPreviewBytes:      4096,
 		MaxBoundedErrorBytes:     8192,
+		RouteFailurePolicy:       defaultRouteFailurePolicy,
 		LogicalTransportReadOnly: true,
 	}
 }

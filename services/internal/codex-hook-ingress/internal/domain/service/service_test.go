@@ -32,6 +32,193 @@ func TestSubmitHookEventAcceptsSafeEnvelope(t *testing.T) {
 	}
 }
 
+func TestSubmitHookEventDispatchesSelectedSafeRoutes(t *testing.T) {
+	t.Parallel()
+
+	agentRoute := &recordingOwnerRoute{}
+	runtimeRoute := &recordingOwnerRoute{}
+	service := newTestServiceWithConfig(Config{}, NewRouteRegistry(map[hookenum.DownstreamOwner]OwnerRoute{
+		hookenum.DownstreamOwnerAgentManager:   agentRoute,
+		hookenum.DownstreamOwnerRuntimeManager: runtimeRoute,
+	}))
+	envelope := validPreToolUseEnvelope()
+	envelope.DownstreamRoutes = []value.DownstreamRoute{
+		{
+			Owner:        hookenum.DownstreamOwnerAgentManager,
+			DeliveryMode: hookenum.DeliveryModeAsync,
+			SafeParts:    []string{"source_context", "run_context", "tool_context", "correlation_id"},
+		},
+		{
+			Owner:        hookenum.DownstreamOwnerRuntimeManager,
+			DeliveryMode: hookenum.DeliveryModeAsync,
+			SafeParts:    []string{"run_context", "risk_class"},
+		},
+	}
+
+	result, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: envelope})
+	if err != nil {
+		t.Fatalf("SubmitHookEvent(): %v", err)
+	}
+	if result.RoutesAccepted != 2 {
+		t.Fatalf("routes accepted = %d, want 2", result.RoutesAccepted)
+	}
+	agentEvents := agentRoute.Events()
+	if len(agentEvents) != 1 {
+		t.Fatalf("agent route events = %d, want 1", len(agentEvents))
+	}
+	if agentEvents[0].SourceContext == nil || agentEvents[0].RunContext == nil || agentEvents[0].ToolContext == nil || agentEvents[0].CorrelationID == "" {
+		t.Fatalf("agent route event did not receive selected safe parts: %+v", agentEvents[0])
+	}
+	runtimeEvents := runtimeRoute.Events()
+	if len(runtimeEvents) != 1 {
+		t.Fatalf("runtime route events = %d, want 1", len(runtimeEvents))
+	}
+	if runtimeEvents[0].RunContext == nil || runtimeEvents[0].RiskClass != "low" {
+		t.Fatalf("runtime route event did not receive selected safe parts: %+v", runtimeEvents[0])
+	}
+}
+
+func TestSubmitHookEventReportsDisabledRouteWithoutDispatch(t *testing.T) {
+	t.Parallel()
+
+	route := &recordingOwnerRoute{}
+	service := newTestServiceWithConfig(
+		Config{DisabledRoutes: []hookenum.DownstreamOwner{hookenum.DownstreamOwnerOperationsFeed}},
+		NewRouteRegistry(map[hookenum.DownstreamOwner]OwnerRoute{
+			hookenum.DownstreamOwnerOperationsFeed: route,
+		}),
+	)
+
+	result, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: validPreToolUseEnvelope()})
+	if err != nil {
+		t.Fatalf("SubmitHookEvent(): %v", err)
+	}
+	if result.RoutesAccepted != 0 {
+		t.Fatalf("routes accepted = %d, want 0", result.RoutesAccepted)
+	}
+	if len(result.RouteDiagnostics) != 1 || result.RouteDiagnostics[0].Status != hookenum.RouteDeliveryStatusDisabled {
+		t.Fatalf("route diagnostics = %+v, want disabled", result.RouteDiagnostics)
+	}
+	if len(route.Events()) != 0 {
+		t.Fatalf("disabled route received %d events, want 0", len(route.Events()))
+	}
+}
+
+func TestSubmitHookEventReportsUnsupportedRoute(t *testing.T) {
+	t.Parallel()
+
+	service := newTestServiceWithConfig(Config{}, NewRouteRegistry(map[hookenum.DownstreamOwner]OwnerRoute{}))
+	result, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: validPreToolUseEnvelope()})
+	if err != nil {
+		t.Fatalf("SubmitHookEvent(): %v", err)
+	}
+	if result.RoutesAccepted != 0 {
+		t.Fatalf("routes accepted = %d, want 0", result.RoutesAccepted)
+	}
+	if len(result.RouteDiagnostics) != 1 || result.RouteDiagnostics[0].Status != hookenum.RouteDeliveryStatusUnsupported {
+		t.Fatalf("route diagnostics = %+v, want unsupported", result.RouteDiagnostics)
+	}
+}
+
+func TestSubmitHookEventReportsDownstreamFailureSafely(t *testing.T) {
+	t.Parallel()
+
+	service := newTestServiceWithConfig(Config{}, NewRouteRegistry(map[hookenum.DownstreamOwner]OwnerRoute{
+		hookenum.DownstreamOwnerOperationsFeed: failingOwnerRoute{err: errors.New("sensitive downstream detail")},
+	}))
+
+	result, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: validPreToolUseEnvelope()})
+	if err != nil {
+		t.Fatalf("SubmitHookEvent(): %v", err)
+	}
+	if result.RoutesAccepted != 0 {
+		t.Fatalf("routes accepted = %d, want 0", result.RoutesAccepted)
+	}
+	if len(result.RouteDiagnostics) != 1 || result.RouteDiagnostics[0].Status != hookenum.RouteDeliveryStatusFailed {
+		t.Fatalf("route diagnostics = %+v, want failed", result.RouteDiagnostics)
+	}
+	diagnostic := result.RouteDiagnostics[0].DiagnosticMessage
+	if strings.Contains(diagnostic, "sensitive downstream detail") {
+		t.Fatalf("diagnostic leaked downstream error: %q", diagnostic)
+	}
+}
+
+func TestSubmitHookEventProjectsOnlyRequestedSafeParts(t *testing.T) {
+	t.Parallel()
+
+	route := &recordingOwnerRoute{}
+	service := newTestServiceWithConfig(Config{}, NewRouteRegistry(map[hookenum.DownstreamOwner]OwnerRoute{
+		hookenum.DownstreamOwnerOperationsFeed: route,
+	}))
+	envelope := validPreToolUseEnvelope()
+	envelope.SafePayload.PromptDigest = digest("c")
+	envelope.DownstreamRoutes[0].SafeParts = []string{"correlation_id"}
+
+	if _, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: envelope}); err != nil {
+		t.Fatalf("SubmitHookEvent(): %v", err)
+	}
+	events := route.Events()
+	if len(events) != 1 {
+		t.Fatalf("route events = %d, want 1", len(events))
+	}
+	event := events[0]
+	if event.CorrelationID == "" {
+		t.Fatal("correlation_id was not projected")
+	}
+	if event.SafeSummary != "" || event.PromptDigest != "" || event.RiskClass != "" || event.ToolContext != nil || event.RunContext != nil {
+		t.Fatalf("event projected unrequested safe parts: %+v", event)
+	}
+}
+
+func TestSubmitHookEventDoesNotReplayDispatchForDuplicate(t *testing.T) {
+	t.Parallel()
+
+	route := &recordingOwnerRoute{}
+	service := newTestServiceWithConfig(Config{}, NewRouteRegistry(map[hookenum.DownstreamOwner]OwnerRoute{
+		hookenum.DownstreamOwnerOperationsFeed: route,
+	}))
+	envelope := validPreToolUseEnvelope()
+	if _, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: envelope}); err != nil {
+		t.Fatalf("first SubmitHookEvent(): %v", err)
+	}
+	result, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: envelope})
+	if err != nil {
+		t.Fatalf("second SubmitHookEvent(): %v", err)
+	}
+	if !result.Duplicate {
+		t.Fatal("duplicate = false, want true")
+	}
+	if result.RoutesAccepted != 1 {
+		t.Fatalf("duplicate routes accepted = %d, want cached 1", result.RoutesAccepted)
+	}
+	if len(route.Events()) != 1 {
+		t.Fatalf("route dispatch count = %d, want 1", len(route.Events()))
+	}
+}
+
+func TestSubmitHookEventCanFailClosedOnRouteFailure(t *testing.T) {
+	t.Parallel()
+
+	service := newTestServiceWithConfig(
+		Config{
+			DisabledRoutes:     []hookenum.DownstreamOwner{hookenum.DownstreamOwnerOperationsFeed},
+			RouteFailurePolicy: hookenum.RouteFailurePolicyFailClosed,
+		},
+		NewDefaultRouteRegistry(),
+	)
+
+	result, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: validPreToolUseEnvelope()})
+	if err != nil {
+		t.Fatalf("SubmitHookEvent(): %v", err)
+	}
+	if result.HandlerResult.Result != hookenum.HandlerResultFailClosed {
+		t.Fatalf("handler result = %s, want fail_closed", result.HandlerResult.Result)
+	}
+	if result.HandlerResult.DecisionReason != value.RouteDiagnosticFailurePolicyFired {
+		t.Fatalf("decision reason = %q, want route failure policy", result.HandlerResult.DecisionReason)
+	}
+}
+
 func TestSubmitHookEventReturnsCachedResultForDuplicateDigest(t *testing.T) {
 	t.Parallel()
 
@@ -221,7 +408,14 @@ func TestDefaultEnvelopeValidatorRejectsSchemaBoundViolations(t *testing.T) {
 }
 
 func newTestService() *Service {
-	return New(hookstub.NewRepository(), Config{}, Dependencies{Clock: fixedClock{now: time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)}})
+	return newTestServiceWithConfig(Config{}, NewDefaultRouteRegistry())
+}
+
+func newTestServiceWithConfig(cfg Config, registry *RouteRegistry) *Service {
+	return New(hookstub.NewRepository(), cfg, Dependencies{
+		Clock:         fixedClock{now: time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)},
+		RouteRegistry: registry,
+	})
 }
 
 func validPreToolUseEnvelope() value.HookEnvelope {
@@ -283,4 +477,30 @@ type fixedClock struct {
 
 func (c fixedClock) Now() time.Time {
 	return c.now
+}
+
+type recordingOwnerRoute struct {
+	mu     sync.Mutex
+	events []value.SafeHookEvent
+}
+
+func (route *recordingOwnerRoute) DispatchSafeHookEvent(_ context.Context, event value.SafeHookEvent) error {
+	route.mu.Lock()
+	defer route.mu.Unlock()
+	route.events = append(route.events, event)
+	return nil
+}
+
+func (route *recordingOwnerRoute) Events() []value.SafeHookEvent {
+	route.mu.Lock()
+	defer route.mu.Unlock()
+	return append([]value.SafeHookEvent(nil), route.events...)
+}
+
+type failingOwnerRoute struct {
+	err error
+}
+
+func (route failingOwnerRoute) DispatchSafeHookEvent(_ context.Context, _ value.SafeHookEvent) error {
+	return route.err
 }

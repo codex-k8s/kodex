@@ -63,6 +63,29 @@ const (
 	DownstreamOwnerAuditLog          DownstreamOwner = "audit-log"
 )
 
+// DownstreamOwners returns all schema-defined downstream route owners.
+func DownstreamOwners() []DownstreamOwner {
+	return []DownstreamOwner{
+		DownstreamOwnerAgentManager,
+		DownstreamOwnerRuntimeManager,
+		DownstreamOwnerProviderHub,
+		DownstreamOwnerGovernanceManager,
+		DownstreamOwnerInteractionHub,
+		DownstreamOwnerOperationsFeed,
+		DownstreamOwnerAuditLog,
+	}
+}
+
+// IsDownstreamOwner reports whether owner belongs to the normalized envelope route set.
+func IsDownstreamOwner(owner DownstreamOwner) bool {
+	for _, known := range DownstreamOwners() {
+		if known == owner {
+			return true
+		}
+	}
+	return false
+}
+
 // DeliveryMode identifies future delivery behavior without selecting a transport.
 type DeliveryMode string
 
@@ -72,6 +95,83 @@ const (
 	DeliveryModeRealtime DeliveryMode = "realtime"
 	DeliveryModeAudit    DeliveryMode = "audit"
 )
+
+// SafeEventPart identifies one schema-approved payload part for owner dispatch.
+type SafeEventPart string
+
+const (
+	SafeEventPartSourceContext          SafeEventPart = "source_context"
+	SafeEventPartRunContext             SafeEventPart = "run_context"
+	SafeEventPartToolContext            SafeEventPart = "tool_context"
+	SafeEventPartCapabilityContext      SafeEventPart = "capability_context"
+	SafeEventPartSafeSummary            SafeEventPart = "safe_summary"
+	SafeEventPartPromptDigest           SafeEventPart = "prompt_digest"
+	SafeEventPartRiskClass              SafeEventPart = "risk_class"
+	SafeEventPartSanitizedReason        SafeEventPart = "sanitized_reason"
+	SafeEventPartBoundedError           SafeEventPart = "bounded_error"
+	SafeEventPartProviderArtifactSignal SafeEventPart = "provider_artifact_signal"
+	SafeEventPartRateLimitHint          SafeEventPart = "rate_limit_hint"
+	SafeEventPartPendingActionRefs      SafeEventPart = "pending_action_refs"
+	SafeEventPartCheckpointRef          SafeEventPart = "checkpoint_ref"
+	SafeEventPartSanitizerReport        SafeEventPart = "sanitizer_report"
+	SafeEventPartPayloadDigest          SafeEventPart = "payload_digest"
+	SafeEventPartCorrelationID          SafeEventPart = "correlation_id"
+)
+
+// SafeEventParts returns all schema-approved safe parts.
+func SafeEventParts() []SafeEventPart {
+	return []SafeEventPart{
+		SafeEventPartSourceContext,
+		SafeEventPartRunContext,
+		SafeEventPartToolContext,
+		SafeEventPartCapabilityContext,
+		SafeEventPartSafeSummary,
+		SafeEventPartPromptDigest,
+		SafeEventPartRiskClass,
+		SafeEventPartSanitizedReason,
+		SafeEventPartBoundedError,
+		SafeEventPartProviderArtifactSignal,
+		SafeEventPartRateLimitHint,
+		SafeEventPartPendingActionRefs,
+		SafeEventPartCheckpointRef,
+		SafeEventPartSanitizerReport,
+		SafeEventPartPayloadDigest,
+		SafeEventPartCorrelationID,
+	}
+}
+
+// IsSafeEventPart reports whether part belongs to the schema-approved safe part set.
+func IsSafeEventPart(part SafeEventPart) bool {
+	for _, known := range SafeEventParts() {
+		if known == part {
+			return true
+		}
+	}
+	return false
+}
+
+// RouteDeliveryStatus describes a safe owner dispatch outcome.
+type RouteDeliveryStatus string
+
+const (
+	RouteDeliveryStatusDelivered   RouteDeliveryStatus = "delivered"
+	RouteDeliveryStatusDisabled    RouteDeliveryStatus = "disabled"
+	RouteDeliveryStatusUnsupported RouteDeliveryStatus = "unsupported"
+	RouteDeliveryStatusFailed      RouteDeliveryStatus = "failed"
+)
+
+// RouteFailurePolicy describes how SubmitHookEvent reacts to failed owner dispatch.
+type RouteFailurePolicy string
+
+const (
+	RouteFailurePolicyDiagnostic RouteFailurePolicy = "diagnostic"
+	RouteFailurePolicyFailClosed RouteFailurePolicy = "fail_closed"
+)
+
+// IsRouteFailurePolicy reports whether policy is supported by CHI-4.
+func IsRouteFailurePolicy(policy RouteFailurePolicy) bool {
+	return policy == RouteFailurePolicyDiagnostic || policy == RouteFailurePolicyFailClosed
+}
 
 // HandlerResult is the normalized hook handler outcome returned to an emitter.
 type HandlerResult string

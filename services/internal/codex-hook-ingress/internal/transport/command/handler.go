@@ -21,9 +21,10 @@ type SubmitHookEventRequest struct {
 
 // SubmitHookEventResponse carries the normalized hook handler result.
 type SubmitHookEventResponse struct {
-	Result         value.HookHandlerResult
-	Duplicate      bool
-	RoutesAccepted int
+	Result           value.HookHandlerResult
+	Duplicate        bool
+	RoutesAccepted   int
+	RouteDiagnostics []value.RouteDeliveryResult
 }
 
 // NewHandler creates a logical SubmitHookEvent handler.
@@ -46,8 +47,9 @@ func (h *Handler) SubmitHookEvent(ctx context.Context, request SubmitHookEventRe
 		return SubmitHookEventResponse{}, err
 	}
 	return SubmitHookEventResponse{
-		Result:         result.HandlerResult,
-		Duplicate:      result.Duplicate,
-		RoutesAccepted: result.RoutesAccepted,
+		Result:           result.HandlerResult,
+		Duplicate:        result.Duplicate,
+		RoutesAccepted:   result.RoutesAccepted,
+		RouteDiagnostics: result.RouteDiagnostics,
 	}, nil
 }

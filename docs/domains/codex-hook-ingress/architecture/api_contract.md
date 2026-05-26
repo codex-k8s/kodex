@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-26
-related_issues: [698, 753, 778, 786, 793, 322]
+related_issues: [698, 753, 778, 786, 793, 808, 322]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -51,11 +51,17 @@ approvals:
 
 `SubmitHookEvent` является единственной обязательной MVP-операцией. Остальные операции могут быть реализованы соседними контурами или отложены, если будут лишними для MVP.
 
-## Состояние реализации CHI-3
+Logical response CHI-4 также содержит route delivery diagnostics. Unsupported, disabled или failed route не считается успешной доставкой. Diagnostic text должен быть safe: без raw downstream error, prompt, tool input/output, stdout/stderr, provider payload, kubeconfig и secret values.
+
+## Состояние реализации CHI-3/CHI-4
 
 Кодовый каркас `services/internal/codex-hook-ingress` реализует `SubmitHookEvent` только как in-process logical boundary в `internal/transport/command`. Он нужен для проверки доменного use-case, idempotency и sanitizer boundary без фиксации physical transport.
 
-В CHI-3 не создаются proto, OpenAPI, AsyncAPI, HTTP/gRPC handler для `SubmitHookEvent` и network client emitter/sidecar. Служебный HTTP-процесс отдаёт только `/health/livez`, `/health/readyz` и `/metrics`.
+CHI-4 добавляет route registry и owner ports/stubs для dispatch безопасных частей события к `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub`, operations/realtime placeholder и audit placeholder. Registry выбирает route, проецирует только перечисленные `safe_parts`, возвращает safe delivery diagnostics и не вызывает business command у соседнего домена.
+
+Process config CHI-4 добавляет `KODEX_CODEX_HOOK_INGRESS_DISABLED_ROUTES` для отключения отдельных owner routes и `KODEX_CODEX_HOOK_INGRESS_ROUTE_FAILURE_POLICY` со значениями `diagnostic` или `fail_closed`. В режиме `diagnostic` неуспешные routes отражаются только в diagnostics; в режиме `fail_closed` handler result становится безопасным `fail_closed`.
+
+В CHI-3/CHI-4 не создаются proto, OpenAPI, AsyncAPI, HTTP/gRPC handler для `SubmitHookEvent` и network client emitter/sidecar. Служебный HTTP-процесс отдаёт только `/health/livez`, `/health/readyz` и `/metrics`.
 
 ## Логический контракт hook emitter/local sidecar
 

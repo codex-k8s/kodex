@@ -23,6 +23,10 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	disabledRoutes, err := cfg.DisabledRouteOwners()
+	if err != nil {
+		return err
+	}
 	repository := hookstub.NewRepository()
 	domainService := hookservice.New(
 		repository,
@@ -32,12 +36,15 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 			MaxTextPreviewBytes:  cfg.MaxTextPreviewBytes,
 			MaxBoundedErrorBytes: cfg.MaxBoundedErrorBytes,
 			SupportedEvents:      events,
+			DisabledRoutes:       disabledRoutes,
+			RouteFailurePolicy:   cfg.RouteFailureMode(),
 		},
 		hookservice.Dependencies{
 			Clock:          systemClock{},
 			Validator:      hookservice.DefaultEnvelopeValidator{},
 			SourceVerifier: hookservice.StaticSourceVerifier{},
 			Sanitizer:      hookservice.DefaultSanitizer{},
+			RouteRegistry:  hookservice.NewDefaultRouteRegistry(),
 		},
 	)
 	logicalHandler := commandtransport.NewHandler(domainService)

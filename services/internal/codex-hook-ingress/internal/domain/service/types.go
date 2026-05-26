@@ -15,14 +15,17 @@ type Config struct {
 	MaxTextPreviewBytes  int
 	MaxBoundedErrorBytes int
 	SupportedEvents      []hookenum.HookEventName
+	DisabledRoutes       []hookenum.DownstreamOwner
+	RouteFailurePolicy   hookenum.RouteFailurePolicy
 }
 
-// Dependencies contains replaceable CHI-3 domain ports.
+// Dependencies contains replaceable domain ports.
 type Dependencies struct {
 	Clock          Clock
 	Validator      EnvelopeValidator
 	SourceVerifier SourceVerifier
 	Sanitizer      Sanitizer
+	RouteRegistry  *RouteRegistry
 }
 
 // Clock provides deterministic time for idempotency records and tests.
@@ -70,7 +73,8 @@ type SubmitHookEventInput struct {
 
 // SubmitHookEventResult is the in-process logical SubmitHookEvent response.
 type SubmitHookEventResult struct {
-	HandlerResult  value.HookHandlerResult
-	Duplicate      bool
-	RoutesAccepted int
+	HandlerResult    value.HookHandlerResult
+	Duplicate        bool
+	RoutesAccepted   int
+	RouteDiagnostics []value.RouteDeliveryResult
 }

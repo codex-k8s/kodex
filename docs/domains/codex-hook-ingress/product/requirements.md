@@ -6,7 +6,7 @@ status: active
 owner_role: PM
 created_at: 2026-05-22
 updated_at: 2026-05-26
-related_issues: [698, 753, 778, 786, 793, 322]
+related_issues: [698, 753, 778, 786, 793, 808, 322]
 related_prs: []
 related_docsets:
   - docs/domains/codex-hook-ingress/architecture/design.md
@@ -145,6 +145,7 @@ Codex skills рассматриваются как управляемые capabi
 | CHI-AC-8 | CHI-1 содержит machine-readable схемы и safe examples, которые валидируются локальной JSON Schema проверкой без генерации сервисного кода. |
 | CHI-AC-9 | CHI-2 содержит контракт hook emitter/local sidecar: runtime placement, чтение `stdin`, sanitizer до buffer/send, retry/backpressure/failure policy и логический `SubmitHookEvent` в `codex-hook-ingress`. |
 | CHI-AC-10 | CHI-2 не выбирает gRPC/HTTP transport, не создаёт OpenAPI/AsyncAPI/proto, не добавляет `PreCompact`/`PostCompact` в MVP hook set и не хранит raw payload. |
+| CHI-AC-11 | Сервисный каркас поддерживает route registry и dispatch только перечисленных safe event parts через owner ports/stubs; disabled, unsupported и failed routes возвращают safe diagnostics и не считаются успешной доставкой. |
 
 ## Не-цели
 
