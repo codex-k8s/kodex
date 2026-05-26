@@ -5,8 +5,8 @@ title: kodex — дизайн домена центра взаимодейств
 status: active
 owner_role: SA
 created_at: 2026-05-22
-updated_at: 2026-05-22
-related_issues: [582, 768]
+updated_at: 2026-05-25
+related_issues: [582, 768, 781]
 related_prs: []
 related_adrs: []
 approvals:
@@ -32,7 +32,7 @@ approvals:
 - Подготовить первый кодовый PR с proto/AsyncAPI контрактами и следующий PR с сервисным каркасом.
 - Описать единый lifecycle feedback, approval, Human gate и notification delivery.
 - Закрепить гибридную модель внешних каналов: package-owned runtime плюс stable channel delivery/callback contract.
-- Развести `interaction-hub`, `agent-manager`, `platform-mcp-server`, `codex-hook-ingress`, `provider-hub`, `operations-hub`, future gateways и plugin packages.
+- Развести `interaction-hub`, `agent-manager`, `platform-mcp-server`, `codex-hook-ingress`, `provider-hub`, `operations-hub`, `integration-gateway` и plugin packages.
 
 ## Не-цели
 
@@ -59,9 +59,9 @@ approvals:
 3. `runtime-manager` и `fleet-manager` исполняют runtime-нагрузку установленного пакета.
 4. `interaction-hub` хранит только channel binding refs, delivery attempts, callback records и lifecycle запроса.
 5. Стабильный `ChannelDeliveryContract` описывает delivery command, delivery result, callback envelope и error model.
-6. Future `integration-gateway` или другой профильный gateway принимает внешний HTTP callback, проверяет публичную подпись и маршрутизирует безопасный внутренний вызов в `interaction-hub`.
+6. `integration-gateway` принимает внешний HTTP callback, проверяет публичную подпись и маршрутизирует безопасный внутренний вызов в `interaction-hub`, когда callback route активирован срезом владельца.
 
-Эта модель не фиксирует OpenAPI как текущий источник правды. OpenAPI для внешнего gateway создаётся отдельным срезом, когда будет утверждён сам gateway. На доменной границе сейчас фиксируется payload и lifecycle channel contract, а не транспорт конкретного gateway.
+Эта модель фиксирует lifecycle channel contract как доменную истину. OpenAPI-каркас внешнего callback-входа находится в `integration-gateway`, но активация маршрута требует согласованного callback lifecycle `interaction-hub`.
 
 ## Компоненты
 
@@ -88,7 +88,7 @@ sequenceDiagram
   participant PKG as package-hub
   participant R as runtime-manager
   participant CH as channel package workload
-  participant GW as future gateway
+  participant GW as integration-gateway
   participant AM as agent-manager
   Runner->>MCP: interaction.feedback.request
   MCP->>IH: RequestFeedback(command)
@@ -164,7 +164,7 @@ sequenceDiagram
   IH-->>Ops: interaction.callback.received / request resolved
 ```
 
-Публичная проверка подписи и rate limit живут в future gateway. `interaction-hub` принимает только безопасный внутренний envelope.
+Публичная проверка подписи и rate limit живут в `integration-gateway`. `interaction-hub` принимает только безопасный внутренний envelope.
 
 ## Channel delivery contract
 
@@ -224,7 +224,7 @@ sequenceDiagram
 | `runtime-manager` и `fleet-manager` | Исполняют runtime-нагрузку channel package; `interaction-hub` не создаёт jobs сам. |
 | `access-manager` | Проверяет права создания запроса, отправки ответа, чтения статуса и использования channel package. |
 | `operations-hub` | Получает события и читает авторитетные статусы для операторской очереди и dual-surface inbox. |
-| Future gateways | Выполняют внешнюю аутентификацию, public rate limit, signature verification и маршрутизацию callback. |
+| `integration-gateway` | Выполняет внешнюю аутентификацию, public rate limit, signature verification и маршрутизацию callback. |
 
 ## События
 
@@ -269,7 +269,7 @@ sequenceDiagram
 |---|---|
 | `interaction-hub` начнёт владеть flow/run/session. | В request хранить только refs; переходы `Run` выполняет `agent-manager`. |
 | Внешний канал станет источником правды. | Channel package только доставляет и возвращает callback; lifecycle request хранится в `interaction-hub`. |
-| Домен превратится в gateway. | Публичная аутентификация, подпись и HTTP находятся в future gateway; домен принимает безопасный internal envelope. |
+| Домен превратится в gateway. | Публичная аутентификация, подпись и HTTP находятся в `integration-gateway`; домен принимает безопасный internal envelope. |
 | Домен начнёт управлять пакетами. | Использовать `package-hub` readings и refs, не менять installation и manifest. |
 | Provider write смешается с approval. | `interaction-hub` хранит response/callback result; final approval decision остаётся у владельца decision state, а `provider-hub` выполняет write по своей политике и pipeline. |
 

@@ -5,8 +5,8 @@ title: kodex — API-контракт provider-hub
 status: active
 owner_role: SA
 created_at: 2026-05-06
-updated_at: 2026-05-22
-related_issues: [281, 282, 711, 719, 725, 729, 737, 761, 770]
+updated_at: 2026-05-25
+related_issues: [281, 282, 711, 719, 725, 729, 737, 761, 770, 781]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -44,7 +44,7 @@ approvals:
 | `ListWebhookEvents` | Получить журнал входящих событий с фильтрами. | Операторский контур | Read-only. |
 | `RetryWebhookEventProcessing` | Поставить событие на повторную нормализацию. | Операторский контур | По версии события. |
 
-`provider-hub` не проверяет публичную подпись webhook. Он принимает только уже проверенный внутренний вызов.
+`provider-hub` не проверяет публичную подпись webhook. Он принимает только уже проверенный внутренний вызов от `integration-gateway`. Edge-проверки источника, подписи, размера payload, лимитов и backpressure находятся в `integration-gateway`; входящий журнал, дедупликация и нормализация остаются в `provider-hub`.
 
 ### Проекции рабочих артефактов
 

@@ -44,9 +44,9 @@
 | `provider-hub` | Owner decision refs для provider write pipeline. | `interaction-hub` хранит delivery/response lifecycle, а provider write и approval decision остаются у владельцев. |
 | `package-hub` | Channel package capability, installation refs и manifest requirements. | Использовать чтения `package-hub`; не управлять установками пакетов. |
 | `runtime-manager` и `fleet-manager` | Runtime-нагрузки channel package. | Runtime/fleet исполняют package-owned workloads; `interaction-hub` работает через channel contract. |
-| Future gateway | Публичный callback transport, подписи и OpenAPI. | Gateway проектируется отдельным срезом после стабилизации channel contract. |
+| `integration-gateway` | Публичный callback transport, подписи и OpenAPI. | IGW-0 закрепил HTTP-каркас gateway; активация callback route требует стабилизации channel contract `interaction-hub`. |
 | `operations-hub` | Dual-surface inbox, operator queue и агрегированные статусы. | `operations-hub` строит read models по событиям и чтениям `interaction-hub`. |
 
 ## Рекомендуемый следующий шаг
 
-Следующий рациональный срез — IH-3: PostgreSQL-модель `interaction-hub` и service-local outbox. Конкретные внешние каналы, gateway OpenAPI и runtime-нагрузки пакетов не смешивать с IH-3.
+Следующий рациональный срез — IH-3: PostgreSQL-модель `interaction-hub` и service-local outbox. Конкретные внешние каналы, callback routes `integration-gateway` и runtime-нагрузки пакетов не смешивать с IH-3.
