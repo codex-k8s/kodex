@@ -199,6 +199,7 @@ spec:
         - libs/go/serviceprocess
         - libs/go/servicemain
         - proto/kodex/agents/v1
+        - proto/kodex/governance/v1
         - proto/kodex/providers/v1
     codex-hook-ingress:
       value: "0.1.0"
@@ -630,6 +631,7 @@ spec:
         - agent-manager
         - project-catalog
         - provider-hub
+        - governance-manager
         - runtime-manager
         - fleet-manager
         - package-hub
