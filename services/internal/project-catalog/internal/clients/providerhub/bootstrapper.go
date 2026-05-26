@@ -18,6 +18,7 @@ import (
 	providersv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1"
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/errs"
 	projectservice "github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/service"
+	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/value"
 )
 
@@ -77,16 +78,48 @@ func bootstrapperRuntimeConfig(cfg Config) (string, time.Duration, error) {
 
 // CreateRepositoryBootstrapPullRequest calls provider-hub CreateBootstrapPullRequest.
 func (b *Bootstrapper) CreateRepositoryBootstrapPullRequest(ctx context.Context, input projectservice.ProviderBootstrapPullRequestInput) (projectservice.RepositoryBootstrapProviderResult, error) {
+	return callProviderOperationAs(b, ctx, providerOperationCall(createBootstrapRequest(input), b.client.CreateBootstrapPullRequest), bootstrapProviderResult)
+}
+
+// CreateProviderRepository calls provider-hub CreateRepository.
+func (b *Bootstrapper) CreateProviderRepository(ctx context.Context, input projectservice.ProviderRepositoryCreateInput) (projectservice.RepositoryProviderCreateProviderResult, error) {
+	return callProviderOperationAs(b, ctx, providerOperationCall(createRepositoryRequest(input), b.client.CreateRepository), createRepositoryProviderResult)
+}
+
+func providerOperationCall[Request any](
+	request Request,
+	call func(context.Context, Request, ...grpc.CallOption) (*providersv1.ProviderOperationResponse, error),
+) func(context.Context) (*providersv1.ProviderOperationResponse, error) {
+	return func(ctx context.Context) (*providersv1.ProviderOperationResponse, error) {
+		return call(ctx, request)
+	}
+}
+
+func callProviderOperationAs[T any](
+	b *Bootstrapper,
+	ctx context.Context,
+	call func(context.Context) (*providersv1.ProviderOperationResponse, error),
+	convert func(*providersv1.ProviderOperationResponse) T,
+) (T, error) {
+	response, err := b.callProviderOperation(ctx, call)
+	if err != nil {
+		var zero T
+		return zero, err
+	}
+	return convert(response), nil
+}
+
+func (b *Bootstrapper) callProviderOperation(ctx context.Context, call func(context.Context) (*providersv1.ProviderOperationResponse, error)) (*providersv1.ProviderOperationResponse, error) {
 	callCtx, cancel := context.WithTimeout(b.outgoingContext(ctx), b.timeout)
 	defer cancel()
-	response, err := b.client.CreateBootstrapPullRequest(callCtx, createBootstrapRequest(input))
+	response, err := call(callCtx)
 	if err != nil {
-		return projectservice.RepositoryBootstrapProviderResult{}, mapProviderError(err)
+		return nil, mapProviderError(err)
 	}
 	if response == nil {
-		return projectservice.RepositoryBootstrapProviderResult{}, errs.ErrDependencyUnavailable
+		return nil, errs.ErrDependencyUnavailable
 	}
-	return bootstrapProviderResult(response), nil
+	return response, nil
 }
 
 func (b *Bootstrapper) outgoingContext(ctx context.Context) context.Context {
@@ -99,6 +132,23 @@ func (b *Bootstrapper) outgoingContext(ctx context.Context) context.Context {
 		grpcserver.MetadataCallerID,
 		callerID,
 	)
+}
+
+func createRepositoryRequest(input projectservice.ProviderRepositoryCreateInput) *providersv1.CreateRepositoryRequest {
+	providerOwner := optionalString(input.ProviderOwner, strings.TrimSpace(input.ProviderOwner) != "")
+	description := optionalString(input.Description, strings.TrimSpace(input.Description) != "")
+	return &providersv1.CreateRepositoryRequest{
+		ProjectId:         input.ProjectID.String(),
+		RepositoryId:      input.RepositoryID.String(),
+		ProviderSlug:      strings.TrimSpace(input.ProviderSlug),
+		OwnerKind:         repositoryOwnerKind(input.OwnerKind),
+		ProviderOwner:     providerOwner,
+		RepositoryName:    strings.TrimSpace(input.RepositoryName),
+		Visibility:        repositoryVisibility(input.Visibility),
+		Description:       description,
+		Meta:              providerCommandMeta(input.Meta, createRepositoryPolicyContext(input)),
+		ExternalAccountId: input.ExternalAccountID.String(),
+	}
 }
 
 func createBootstrapRequest(input projectservice.ProviderBootstrapPullRequestInput) *providersv1.CreateBootstrapPullRequestRequest {
@@ -115,7 +165,7 @@ func createBootstrapRequest(input projectservice.ProviderBootstrapPullRequestInp
 		Draft:             input.Draft,
 		Files:             bootstrapFiles(input.Files),
 		WatermarkJson:     optionalString(string(input.WatermarkJSON), len(input.WatermarkJSON) > 0),
-		Meta:              providerCommandMeta(input),
+		Meta:              providerCommandMeta(input.Meta, bootstrapPolicyContext(input)),
 		ExternalAccountId: input.ExternalAccountID.String(),
 	}
 }
@@ -144,8 +194,7 @@ func bootstrapFiles(files []projectservice.RepositoryBootstrapFile) []*providers
 	return result
 }
 
-func providerCommandMeta(input projectservice.ProviderBootstrapPullRequestInput) *providersv1.CommandMeta {
-	meta := input.Meta
+func providerCommandMeta(meta value.CommandMeta, policyContext *providersv1.ProviderOperationPolicyContext) *providersv1.CommandMeta {
 	return &providersv1.CommandMeta{
 		CommandId:      optionalUUID(meta.CommandID),
 		IdempotencyKey: optionalString(meta.IdempotencyKey, strings.TrimSpace(meta.IdempotencyKey) != ""),
@@ -156,7 +205,7 @@ func providerCommandMeta(input projectservice.ProviderBootstrapPullRequestInput)
 		Reason:                 strings.TrimSpace(meta.Reason),
 		RequestId:              strings.TrimSpace(meta.RequestID),
 		RequestContext:         providerRequestContext(meta.RequestContext),
-		OperationPolicyContext: bootstrapPolicyContext(input),
+		OperationPolicyContext: policyContext,
 	}
 }
 
@@ -172,6 +221,29 @@ func providerRequestContext(context value.RequestContext) *providersv1.RequestCo
 		requestContext.ClientIpHash = &clientIPHash
 	}
 	return requestContext
+}
+
+func createRepositoryPolicyContext(input projectservice.ProviderRepositoryCreateInput) *providersv1.ProviderOperationPolicyContext {
+	changedFields := []string{"owner_kind", "repository_name", "visibility"}
+	if strings.TrimSpace(input.ProviderOwner) != "" {
+		changedFields = append(changedFields, "provider_owner")
+	}
+	if strings.TrimSpace(input.Description) != "" {
+		changedFields = append(changedFields, "description")
+	}
+	return &providersv1.ProviderOperationPolicyContext{
+		ProjectId:         optionalString(input.ProjectID.String(), input.ProjectID != uuid.Nil),
+		RepositoryId:      optionalString(input.RepositoryID.String(), input.RepositoryID != uuid.Nil),
+		Stage:             optionalString("repository_onboarding", true),
+		RoleKey:           optionalString("project-catalog.repository-create", true),
+		OperationType:     providersv1.ProviderOperationType_PROVIDER_OPERATION_TYPE_CREATE_REPOSITORY,
+		ChangedFields:     changedFields,
+		RiskTags:          []string{"repository_bootstrap", "provider_repository_create"},
+		RiskLevel:         providersv1.ProviderOperationRiskLevel_PROVIDER_OPERATION_RISK_LEVEL_MEDIUM,
+		ApprovalRequired:  false,
+		PolicyVersion:     optionalString("project-catalog:onb-2", true),
+		PolicySnapshotRef: optionalString("repository_binding:"+strings.TrimSpace(input.RepositoryName), strings.TrimSpace(input.RepositoryName) != ""),
+	}
 }
 
 func bootstrapPolicyContext(input projectservice.ProviderBootstrapPullRequestInput) *providersv1.ProviderOperationPolicyContext {
@@ -222,6 +294,52 @@ func bootstrapProviderResult(response *providersv1.ProviderOperationResponse) pr
 		}
 	}
 	return result
+}
+
+func createRepositoryProviderResult(response *providersv1.ProviderOperationResponse) projectservice.RepositoryProviderCreateProviderResult {
+	var result projectservice.RepositoryProviderCreateProviderResult
+	if operation := response.GetProviderOperation(); operation != nil {
+		result.ProviderOperationID = strings.TrimSpace(operation.GetProviderOperationId())
+	}
+	if commandResult := response.GetResult(); commandResult != nil {
+		result.ProviderResultRef = strings.TrimSpace(commandResult.GetResultRef())
+		result.ProviderObjectID = strings.TrimSpace(commandResult.GetProviderObjectId())
+		result.ProviderVersion = strings.TrimSpace(commandResult.GetProviderVersion())
+		result.BaseBranch = strings.TrimSpace(commandResult.GetBaseBranch())
+		if target := commandResult.GetTarget(); target != nil {
+			result.RepositoryFullName = strings.TrimSpace(target.GetRepositoryFullName())
+			result.ProviderRepositoryID = strings.TrimSpace(target.GetProviderRepositoryId())
+			result.ProviderWebURL = strings.TrimSpace(target.GetWebUrl())
+		}
+	}
+	if result.ProviderRepositoryID == "" {
+		result.ProviderRepositoryID = result.ProviderObjectID
+	}
+	return result
+}
+
+func repositoryOwnerKind(kind enum.RepositoryOwnerKind) providersv1.RepositoryOwnerKind {
+	switch kind {
+	case enum.RepositoryOwnerKindOrganization:
+		return providersv1.RepositoryOwnerKind_REPOSITORY_OWNER_KIND_ORGANIZATION
+	case enum.RepositoryOwnerKindAuthenticatedUser:
+		return providersv1.RepositoryOwnerKind_REPOSITORY_OWNER_KIND_AUTHENTICATED_USER
+	default:
+		return providersv1.RepositoryOwnerKind_REPOSITORY_OWNER_KIND_UNSPECIFIED
+	}
+}
+
+func repositoryVisibility(visibility enum.RepositoryVisibility) providersv1.RepositoryVisibility {
+	switch visibility {
+	case enum.RepositoryVisibilityPublic:
+		return providersv1.RepositoryVisibility_REPOSITORY_VISIBILITY_PUBLIC
+	case enum.RepositoryVisibilityPrivate:
+		return providersv1.RepositoryVisibility_REPOSITORY_VISIBILITY_PRIVATE
+	case enum.RepositoryVisibilityInternal:
+		return providersv1.RepositoryVisibility_REPOSITORY_VISIBILITY_INTERNAL
+	default:
+		return providersv1.RepositoryVisibility_REPOSITORY_VISIBILITY_UNSPECIFIED
+	}
 }
 
 func optionalUUID(id uuid.UUID) *string {

@@ -69,8 +69,15 @@ func commandIdentity(meta value.CommandMeta, operation string) (query.CommandIde
 }
 
 func commandResult(meta value.CommandMeta, operation string, aggregateType string, aggregateID uuid.UUID, now time.Time) (*entity.CommandResult, error) {
+	return commandResultWithPayload(meta, operation, aggregateType, aggregateID, now, []byte("{}"))
+}
+
+func commandResultWithPayload(meta value.CommandMeta, operation string, aggregateType string, aggregateID uuid.UUID, now time.Time, payload []byte) (*entity.CommandResult, error) {
 	if meta.CommandID == uuid.Nil && strings.TrimSpace(meta.IdempotencyKey) == "" {
 		return nil, errs.ErrInvalidArgument
+	}
+	if len(payload) == 0 {
+		payload = []byte("{}")
 	}
 	identityKey := meta.CommandID.String()
 	if meta.CommandID == uuid.Nil {
@@ -83,7 +90,7 @@ func commandResult(meta value.CommandMeta, operation string, aggregateType strin
 		Operation:      operation,
 		AggregateType:  aggregateType,
 		AggregateID:    aggregateID,
-		ResultPayload:  []byte("{}"),
+		ResultPayload:  append([]byte(nil), payload...),
 		CreatedAt:      now,
 	}, nil
 }

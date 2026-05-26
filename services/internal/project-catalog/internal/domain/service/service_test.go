@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -617,6 +618,264 @@ func TestImportServicesPolicyRejectsUnknownDependency(t *testing.T) {
 	}
 }
 
+func TestCreateProviderRepositoryCreatesPendingBindingAndStoresSafeRefs(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	externalAccountID := uuid.New()
+	provider := &spyBootstrapProvider{
+		createRepoResult: RepositoryProviderCreateProviderResult{
+			ProviderOperationID:  "operation-1",
+			ProviderResultRef:    "https://github.com/codex-k8s/new-service",
+			ProviderRepositoryID: "100500",
+			ProviderWebURL:       "https://github.com/codex-k8s/new-service",
+			ProviderObjectID:     "100500",
+			ProviderVersion:      "etag-1",
+			BaseBranch:           "main",
+			RepositoryFullName:   "codex-k8s/new-service",
+		},
+	}
+	authorizer := &spyAuthorizer{}
+	store := newMemoryRepository()
+	svc := NewWithConfig(
+		store,
+		fixedClock{},
+		&sequenceIDs{ids: []uuid.UUID{repositoryID, uuid.New(), uuid.New()}},
+		Config{Authorizer: authorizer, BootstrapProvider: provider},
+	)
+
+	result, err := svc.CreateProviderRepository(ctx, CreateProviderRepositoryInput{
+		ProjectID:         projectID,
+		Provider:          enum.RepositoryProviderGitHub,
+		OwnerKind:         enum.RepositoryOwnerKindOrganization,
+		ProviderOwner:     "codex-k8s",
+		ProviderName:      "new-service",
+		Visibility:        enum.RepositoryVisibilityPrivate,
+		Description:       "safe description",
+		ExternalAccountID: externalAccountID,
+		Meta:              commandMeta(uuid.New()),
+	})
+	if err != nil {
+		t.Fatalf("CreateProviderRepository(): %v", err)
+	}
+	if provider.createRepoCalls != 1 {
+		t.Fatalf("provider calls = %d, want 1", provider.createRepoCalls)
+	}
+	if provider.createRepoInput.RepositoryID != repositoryID ||
+		provider.createRepoInput.ProviderSlug != "github" ||
+		provider.createRepoInput.ProviderOwner != "codex-k8s" ||
+		provider.createRepoInput.RepositoryName != "new-service" ||
+		provider.createRepoInput.Visibility != enum.RepositoryVisibilityPrivate ||
+		provider.createRepoInput.ExternalAccountID != externalAccountID {
+		t.Fatalf("provider input = %+v, want create repository request", provider.createRepoInput)
+	}
+	if result.Repository.ID != repositoryID ||
+		result.Repository.Status != enum.RepositoryStatusPending ||
+		result.Repository.DefaultBranch != "main" ||
+		result.Repository.ProviderRepositoryID != "100500" ||
+		result.Repository.WebURL != "https://github.com/codex-k8s/new-service" {
+		t.Fatalf("repository result = %+v, want pending binding with provider refs", result.Repository)
+	}
+	if result.ProviderTarget.RepositoryFullName != "codex-k8s/new-service" ||
+		result.ProviderTarget.ProviderRepositoryID != "100500" ||
+		result.BaseBranch != "main" {
+		t.Fatalf("provider target = %+v base=%q, want repository target and base branch", result.ProviderTarget, result.BaseBranch)
+	}
+	if len(authorizer.requests) != 1 || authorizer.requests[0].ActionKey != projectActionRepositoryAttach {
+		t.Fatalf("access requests = %+v, want repository attach check", authorizer.requests)
+	}
+	if len(store.events) != 2 ||
+		store.events[0].EventType != projectEventRepositoryAttached ||
+		store.events[1].EventType != projectEventRepositoryUpdated {
+		t.Fatalf("events = %+v, want pending attach and provider refs update", store.events)
+	}
+	if len(store.commandResults) != 1 {
+		t.Fatalf("command results = %d, want final idempotency record", len(store.commandResults))
+	}
+	for _, commandResult := range store.commandResults {
+		if bytes.Contains(commandResult.ResultPayload, []byte("safe description")) ||
+			bytes.Contains(commandResult.ResultPayload, []byte("raw_provider_payload")) ||
+			bytes.Contains(commandResult.ResultPayload, []byte("files")) {
+			t.Fatalf("command payload stores unsafe provider/bootstrap data: %s", commandResult.ResultPayload)
+		}
+	}
+}
+
+func TestCreateProviderRepositoryProviderFailureLeavesPendingBindingWithoutFinalResult(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	provider := &spyBootstrapProvider{createRepoErr: errs.ErrDependencyUnavailable}
+	store := newMemoryRepository()
+	svc := NewWithConfig(
+		store,
+		fixedClock{},
+		&sequenceIDs{ids: []uuid.UUID{repositoryID, uuid.New()}},
+		Config{BootstrapProvider: provider},
+	)
+
+	_, err := svc.CreateProviderRepository(ctx, CreateProviderRepositoryInput{
+		ProjectID:         projectID,
+		Provider:          enum.RepositoryProviderGitHub,
+		OwnerKind:         enum.RepositoryOwnerKindOrganization,
+		ProviderOwner:     "codex-k8s",
+		ProviderName:      "new-service",
+		Visibility:        enum.RepositoryVisibilityPrivate,
+		ExternalAccountID: uuid.New(),
+		Meta:              commandMeta(uuid.New()),
+	})
+	if !errors.Is(err, errs.ErrDependencyUnavailable) {
+		t.Fatalf("CreateProviderRepository() err = %v, want dependency unavailable", err)
+	}
+	binding := store.repositories[repositoryID]
+	if binding.ID != repositoryID ||
+		binding.Status != enum.RepositoryStatusPending ||
+		binding.DefaultBranch != "" ||
+		binding.ProviderRepositoryID != "" ||
+		binding.WebURL != "" {
+		t.Fatalf("binding after provider failure = %+v, want only pending reservation", binding)
+	}
+	if len(store.commandResults) != 0 {
+		t.Fatalf("command results = %d, want no final replay record after provider failure", len(store.commandResults))
+	}
+	if len(store.events) != 1 || store.events[0].EventType != projectEventRepositoryAttached {
+		t.Fatalf("events = %+v, want only pending attach event", store.events)
+	}
+}
+
+func TestCreateProviderRepositoryReplayDoesNotCallProviderAgain(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	commandID := uuid.New()
+	provider := &spyBootstrapProvider{
+		createRepoResult: RepositoryProviderCreateProviderResult{
+			ProviderOperationID:  "operation-1",
+			ProviderRepositoryID: "100500",
+			ProviderWebURL:       "https://github.com/codex-k8s/new-service",
+			BaseBranch:           "main",
+			RepositoryFullName:   "codex-k8s/new-service",
+		},
+	}
+	store := newMemoryRepository()
+	svc := NewWithConfig(
+		store,
+		fixedClock{},
+		&sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New(), uuid.New()}},
+		Config{BootstrapProvider: provider},
+	)
+	input := CreateProviderRepositoryInput{
+		ProjectID:         projectID,
+		Provider:          enum.RepositoryProviderGitHub,
+		OwnerKind:         enum.RepositoryOwnerKindOrganization,
+		ProviderOwner:     "codex-k8s",
+		ProviderName:      "new-service",
+		Visibility:        enum.RepositoryVisibilityPrivate,
+		ExternalAccountID: uuid.New(),
+		Meta:              commandMeta(commandID),
+	}
+
+	first, err := svc.CreateProviderRepository(ctx, input)
+	if err != nil {
+		t.Fatalf("CreateProviderRepository() first: %v", err)
+	}
+	input.ProviderName = "changed"
+	second, err := svc.CreateProviderRepository(ctx, input)
+	if err != nil {
+		t.Fatalf("CreateProviderRepository() replay: %v", err)
+	}
+	if provider.createRepoCalls != 1 {
+		t.Fatalf("provider calls = %d, want one call after replay", provider.createRepoCalls)
+	}
+	if second.Repository.ID != first.Repository.ID ||
+		second.ProviderResult.ProviderOperationID != "operation-1" ||
+		second.ProviderTarget.RepositoryFullName != "codex-k8s/new-service" {
+		t.Fatalf("replay result = %+v, want original provider repository result", second)
+	}
+	if len(store.events) != 2 {
+		t.Fatalf("events = %d, want no new events after replay", len(store.events))
+	}
+}
+
+func TestCreateProviderRepositoryRetriesPendingReservation(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	provider := &spyBootstrapProvider{createRepoErr: errs.ErrDependencyUnavailable}
+	store := newMemoryRepository()
+	svc := NewWithConfig(
+		store,
+		fixedClock{},
+		&sequenceIDs{ids: []uuid.UUID{repositoryID, uuid.New(), uuid.New()}},
+		Config{BootstrapProvider: provider},
+	)
+	input := CreateProviderRepositoryInput{
+		ProjectID:         projectID,
+		Provider:          enum.RepositoryProviderGitHub,
+		OwnerKind:         enum.RepositoryOwnerKindOrganization,
+		ProviderOwner:     "codex-k8s",
+		ProviderName:      "new-service",
+		Visibility:        enum.RepositoryVisibilityPrivate,
+		ExternalAccountID: uuid.New(),
+		Meta:              commandMeta(uuid.New()),
+	}
+
+	_, err := svc.CreateProviderRepository(ctx, input)
+	if !errors.Is(err, errs.ErrDependencyUnavailable) {
+		t.Fatalf("first err = %v, want dependency unavailable", err)
+	}
+	provider.createRepoErr = nil
+	provider.createRepoResult = RepositoryProviderCreateProviderResult{
+		ProviderRepositoryID: "100500",
+		ProviderWebURL:       "https://github.com/codex-k8s/new-service",
+		BaseBranch:           "main",
+		RepositoryFullName:   "codex-k8s/new-service",
+	}
+	result, err := svc.CreateProviderRepository(ctx, input)
+	if err != nil {
+		t.Fatalf("retry CreateProviderRepository(): %v", err)
+	}
+	if result.Repository.ID != repositoryID || result.Repository.DefaultBranch != "main" {
+		t.Fatalf("retry result = %+v, want same binding completed", result.Repository)
+	}
+	if provider.createRepoCalls != 2 {
+		t.Fatalf("provider calls = %d, want retry to call provider again", provider.createRepoCalls)
+	}
+}
+
+func TestCreateProviderRepositoryRejectsIncompleteProviderResult(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryRepository()
+	provider := &spyBootstrapProvider{
+		createRepoResult: RepositoryProviderCreateProviderResult{
+			ProviderRepositoryID: "100500",
+			ProviderWebURL:       "https://github.com/codex-k8s/new-service",
+		},
+	}
+	svc := NewWithConfig(
+		store,
+		fixedClock{},
+		&sequenceIDs{ids: []uuid.UUID{uuid.New(), uuid.New()}},
+		Config{BootstrapProvider: provider},
+	)
+
+	_, err := svc.CreateProviderRepository(ctx, CreateProviderRepositoryInput{
+		ProjectID:         uuid.New(),
+		Provider:          enum.RepositoryProviderGitHub,
+		OwnerKind:         enum.RepositoryOwnerKindOrganization,
+		ProviderOwner:     "codex-k8s",
+		ProviderName:      "new-service",
+		Visibility:        enum.RepositoryVisibilityPrivate,
+		ExternalAccountID: uuid.New(),
+		Meta:              commandMeta(uuid.New()),
+	})
+	if !errors.Is(err, errs.ErrDependencyUnavailable) {
+		t.Fatalf("CreateProviderRepository() err = %v, want dependency unavailable for missing base branch", err)
+	}
+	if len(store.commandResults) != 0 {
+		t.Fatalf("command results = %d, want no final replay record", len(store.commandResults))
+	}
+}
+
 func TestCreateRepositoryBootstrapPullRequestDelegatesProviderWrite(t *testing.T) {
 	ctx := context.Background()
 	projectID := uuid.New()
@@ -868,10 +1127,20 @@ func (a *spyAuthorizer) Authorize(_ context.Context, request AuthorizationReques
 }
 
 type spyBootstrapProvider struct {
-	calls  int
-	input  ProviderBootstrapPullRequestInput
-	result RepositoryBootstrapProviderResult
-	err    error
+	calls            int
+	input            ProviderBootstrapPullRequestInput
+	result           RepositoryBootstrapProviderResult
+	err              error
+	createRepoCalls  int
+	createRepoInput  ProviderRepositoryCreateInput
+	createRepoResult RepositoryProviderCreateProviderResult
+	createRepoErr    error
+}
+
+func (p *spyBootstrapProvider) CreateProviderRepository(_ context.Context, input ProviderRepositoryCreateInput) (RepositoryProviderCreateProviderResult, error) {
+	p.createRepoCalls++
+	p.createRepoInput = input
+	return p.createRepoResult, p.createRepoErr
 }
 
 func (p *spyBootstrapProvider) CreateRepositoryBootstrapPullRequest(_ context.Context, input ProviderBootstrapPullRequestInput) (RepositoryBootstrapProviderResult, error) {
@@ -1034,6 +1303,20 @@ func (r *memoryRepository) AttachRepository(_ context.Context, repository entity
 	return nil
 }
 
+func (r *memoryRepository) ReserveRepositoryBinding(_ context.Context, repository entity.RepositoryBinding, event entity.OutboxEvent) error {
+	for _, existing := range r.repositories {
+		if existing.Status != enum.RepositoryStatusArchived &&
+			existing.Provider == repository.Provider &&
+			existing.ProviderOwner == repository.ProviderOwner &&
+			existing.ProviderName == repository.ProviderName {
+			return errs.ErrConflict
+		}
+	}
+	r.repositories[repository.ID] = repository
+	r.events = append(r.events, event)
+	return nil
+}
+
 func (r *memoryRepository) UpdateRepository(_ context.Context, repository entity.RepositoryBinding, _ int64, event entity.OutboxEvent, result *entity.CommandResult) error {
 	r.repositories[repository.ID] = repository
 	r.events = append(r.events, event)
@@ -1049,6 +1332,18 @@ func (r *memoryRepository) GetRepository(_ context.Context, id uuid.UUID) (entit
 		return entity.RepositoryBinding{}, errs.ErrNotFound
 	}
 	return repository, nil
+}
+
+func (r *memoryRepository) GetRepositoryByProviderRef(_ context.Context, provider enum.RepositoryProvider, owner string, name string) (entity.RepositoryBinding, error) {
+	for _, repository := range r.repositories {
+		if repository.Status != enum.RepositoryStatusArchived &&
+			repository.Provider == provider &&
+			repository.ProviderOwner == owner &&
+			repository.ProviderName == name {
+			return repository, nil
+		}
+	}
+	return entity.RepositoryBinding{}, errs.ErrNotFound
 }
 
 func (r *memoryRepository) ListRepositories(context.Context, query.RepositoryFilter) ([]entity.RepositoryBinding, query.PageResult, error) {

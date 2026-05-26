@@ -60,6 +60,20 @@ type AttachRepositoryInput struct {
 	Meta                 value.CommandMeta
 }
 
+// CreateProviderRepositoryInput creates a provider repository and links it to a project binding.
+type CreateProviderRepositoryInput struct {
+	ProjectID         uuid.UUID
+	Provider          enum.RepositoryProvider
+	OwnerKind         enum.RepositoryOwnerKind
+	ProviderOwner     string
+	ProviderName      string
+	Visibility        enum.RepositoryVisibility
+	Description       string
+	IconObjectURI     string
+	ExternalAccountID uuid.UUID
+	Meta              value.CommandMeta
+}
+
 // UpdateRepositoryInput changes safe repository binding fields.
 type UpdateRepositoryInput struct {
 	RepositoryID  uuid.UUID
@@ -114,6 +128,40 @@ type RepositoryBootstrapProviderResult struct {
 	ProviderObjectID             string
 }
 
+// RepositoryProviderCreateProviderResult contains safe refs returned by provider-hub repository creation.
+type RepositoryProviderCreateProviderResult struct {
+	ProviderOperationID  string
+	ProviderResultRef    string
+	ProviderRepositoryID string
+	ProviderWebURL       string
+	ProviderObjectID     string
+	ProviderVersion      string
+	BaseBranch           string
+	RepositoryFullName   string
+}
+
+// RepositoryProviderCreateResult returns project binding and provider refs for repository bootstrap.
+type RepositoryProviderCreateResult struct {
+	Repository     entity.RepositoryBinding
+	ProviderTarget RepositoryBootstrapProviderTarget
+	BaseBranch     string
+	ProviderResult RepositoryProviderCreateProviderResult
+}
+
+// ProviderRepositoryCreateInput is the domain port request sent to provider-hub.
+type ProviderRepositoryCreateInput struct {
+	ProjectID         uuid.UUID
+	RepositoryID      uuid.UUID
+	ProviderSlug      string
+	OwnerKind         enum.RepositoryOwnerKind
+	ProviderOwner     string
+	RepositoryName    string
+	Visibility        enum.RepositoryVisibility
+	Description       string
+	ExternalAccountID uuid.UUID
+	Meta              value.CommandMeta
+}
+
 // CreateRepositoryBootstrapPullRequestInput creates or updates a provider-side bootstrap PR for a bound repository.
 type CreateRepositoryBootstrapPullRequestInput struct {
 	ProjectID         uuid.UUID
@@ -160,8 +208,9 @@ type ProviderBootstrapPullRequestInput struct {
 	Meta              value.CommandMeta
 }
 
-// BootstrapProvider delegates provider-native bootstrap writes to provider-hub.
+// BootstrapProvider delegates provider-native repository onboarding writes to provider-hub.
 type BootstrapProvider interface {
+	CreateProviderRepository(context.Context, ProviderRepositoryCreateInput) (RepositoryProviderCreateProviderResult, error)
 	CreateRepositoryBootstrapPullRequest(context.Context, ProviderBootstrapPullRequestInput) (RepositoryBootstrapProviderResult, error)
 }
 

@@ -94,7 +94,7 @@ approvals:
 
 1. Пользователь или оператор создаёт проект и выбирает режим bootstrap.
 2. `project-catalog` создаёт проект и repository binding в состоянии ожидания provider-операции.
-3. Если репозиторий ещё не создан у провайдера, проектный или агентный контур вызывает `provider-hub CreateRepository`: для GitHub репозиторий создаётся с `auto_init=true`, а ответ возвращает provider default branch как `base_branch`.
+3. Если репозиторий ещё не создан у провайдера, проектный или агентный контур вызывает project-side команду `project-catalog CreateProviderRepository`. `project-catalog` резервирует project/repository binding, делегирует provider-native создание в `provider-hub CreateRepository`, сохраняет только безопасные provider refs и provider default branch как `base_branch` в binding.
 4. Пользователь выбирает способ подготовки:
    - агентный режим, если нужно проектирование структуры или нестандартный bootstrap;
    - детерминированный режим по шаблону, если достаточно системного или пользовательского шаблона.
@@ -103,9 +103,9 @@ approvals:
 7. `project-catalog` принимает project-side bootstrap-команду по существующему repository binding: проверяет provider target, `base_branch`, подготовленные файлы, watermark и связь с проверенной политикой `services.yaml`.
 8. `project-catalog` вызывает `provider-hub CreateBootstrapPullRequest` с готовым provider target, refs, файлами и policy context. `provider-hub` использует уже созданный репозиторий, создаёт или обновляет bootstrap branch и PR с подготовленным bootstrap-набором файлов. Bootstrap-команда допускает пустой base branch или `README.md`, созданный GitHub при `auto_init`.
 9. Владелец проверяет PR у провайдера и подтверждает переход через merge.
-10. Webhook или сверка провайдера фиксирует merge; `project-catalog` импортирует проверенную политику из commit и переводит repository binding в активное состояние.
+10. Webhook или сверка провайдера фиксирует merge; provider projection связывает merged `PR/MR` с `project_id` и `repository_id`; `project-catalog` импортирует проверенную политику из commit и переводит repository binding в активное состояние.
 
-В реализованном project-side срезе пустого репозитория покрыта только середина этого потока: существующий `Repository` binding и уже подготовленный bootstrap payload превращаются в provider-native bootstrap PR через `provider-hub`. Создание provider-native репозитория, создание или сверка base branch, выбор и применение шаблона, импорт `services.yaml` после merge и adoption существующего репозитория остаются отдельными шагами модели C.
+В реализованном project-side контуре пустого репозитория покрыты два шага модели C: создание provider-native репозитория с фиксацией `base_branch` в project-owned binding и создание bootstrap PR по уже подготовленному payload. Выбор и применение шаблона, импорт `services.yaml` после merge и adoption существующего репозитория остаются отдельными шагами модели C.
 
 ### Существующий репозиторий
 

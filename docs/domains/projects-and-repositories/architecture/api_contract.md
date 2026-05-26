@@ -39,6 +39,8 @@ approvals:
 
 Нормализованный payload также содержит источники документации. Для `valid` политики сервис проверяет scope, путь рабочего контура, режим доступа и связь с сервисами или зависимостями, затем атомарно синхронизирует источники документации, управляемые политикой, вместе с импортом политики. `project-catalog` не выполняет checkout: `GetWorkspacePolicy` возвращает только разрешённый состав источников для `agent-manager` и `runtime-manager`.
 
+`CreateProviderRepository` — project-side команда для начала bootstrap пустого репозитория. Она создаёт или переиспользует pending `Repository` binding, вызывает `provider-hub CreateRepository` по существующему provider contract, сохраняет только безопасные provider refs и `base_branch`, а provider-native запись, журнал `ProviderOperation`, provider projection и webhook-сверка остаются у `provider-hub`.
+
 `CreateRepositoryBootstrapPullRequest` — project-side команда для сценария пустого репозитория по модели C. Она работает только по уже существующему `Repository` binding, проверяет проектную принадлежность, provider target, `base_branch`, подготовленные файлы, обязательный watermark и проверенную проекцию `services.yaml`, затем делегирует запись в `provider-hub CreateBootstrapPullRequest`. Команда не создаёт provider-native репозиторий, не генерирует шаблон репозитория, не выполняет adoption scan и не импортирует политику после merge; эти шаги остаются отдельными срезами.
 
 | Операция | Вид | Доступ | Идемпотентность | Примечание |
@@ -48,6 +50,7 @@ approvals:
 | `GetProject` | gRPC query | `project.read` | нет | Авторитетное чтение проекта. |
 | `ListProjects` | gRPC query | `project.list` | нет | Пакетное чтение для внутренних сервисов и `staff-gateway`. |
 | `AttachRepository` | gRPC command | `repository.attach` | `CommandMeta.command_id` | Привязывает репозиторий к проекту. |
+| `CreateProviderRepository` | gRPC command | `repository.attach` + provider-side `provider.repository.write` | `CommandMeta.command_id` через `provider-hub` | Резервирует pending binding, создаёт provider repo/base ref через `provider-hub CreateRepository` и сохраняет безопасные refs в binding. |
 | `CreateRepositoryBootstrapPullRequest` | gRPC command | `repository.bootstrap` | `CommandMeta.command_id` через `provider-hub` | Готовит project-side bootstrap-контекст для существующего binding и вызывает provider-native bootstrap PR. |
 | `UpdateRepository` | gRPC command | `repository.update` | ожидаемая версия | Обновляет статус, ссылку на иконку и поля политики привязки. |
 | `DetachRepository` | gRPC command | `repository.detach` | ожидаемая версия | Архивирует привязку репозитория и убирает её из активной политики проекта. |
@@ -131,7 +134,7 @@ approvals:
 | gRPC proto `ProjectCatalogService` | Стабильный `v1`, покрывает весь согласованный объём операций. |
 | AsyncAPI `project.*` | Стабильный `v1`, покрывает события из этого документа. |
 | Сервисный процесс `project-catalog` | Подключены entrypoint, конфигурация, health/readyz/metrics, gRPC-сервер, проверка доступа через `access-manager` и outbox-dispatcher. |
-| Бизнес-обработчики gRPC | Подключены к доменному сервису для проектов, репозиториев, bootstrap PR по существующему binding, проверенной проекции `services.yaml`, операторских переопределений, источников документации, правил веток, релизных политик, релизных линий и политики размещения. |
+| Бизнес-обработчики gRPC | Подключены к доменному сервису для проектов, репозиториев, создания provider repo/base ref через `provider-hub`, bootstrap PR по существующему binding, проверенной проекции `services.yaml`, операторских переопределений, источников документации, правил веток, релизных политик, релизных линий и политики размещения. |
 | PostgreSQL и outbox | Модель БД, миграции, слой репозитория, сервисный outbox и публикация событий в `platform-event-log` подключены. |
 
 ## Совместимость

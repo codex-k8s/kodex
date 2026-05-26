@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/query"
 )
 
@@ -28,10 +29,14 @@ type Repository interface {
 	ListProjects(ctx context.Context, filter query.ProjectFilter) ([]entity.Project, query.PageResult, error)
 	// AttachRepository stores a repository binding, outbox event and command result atomically.
 	AttachRepository(ctx context.Context, repository entity.RepositoryBinding, event entity.OutboxEvent, result entity.CommandResult) error
+	// ReserveRepositoryBinding stores a pending repository binding and outbox event atomically.
+	ReserveRepositoryBinding(ctx context.Context, repository entity.RepositoryBinding, event entity.OutboxEvent) error
 	// UpdateRepository updates a repository binding with optimistic concurrency.
 	UpdateRepository(ctx context.Context, repository entity.RepositoryBinding, previousVersion int64, event entity.OutboxEvent, result *entity.CommandResult) error
 	// GetRepository returns a repository binding by id.
 	GetRepository(ctx context.Context, id uuid.UUID) (entity.RepositoryBinding, error)
+	// GetRepositoryByProviderRef returns a non-archived repository binding by provider owner/name.
+	GetRepositoryByProviderRef(ctx context.Context, provider enum.RepositoryProvider, owner string, name string) (entity.RepositoryBinding, error)
 	// ListRepositories returns repository bindings matching filter.
 	ListRepositories(ctx context.Context, filter query.RepositoryFilter) ([]entity.RepositoryBinding, query.PageResult, error)
 	// ImportServicesPolicy stores checked policy, descriptors, documentation sources, outbox event and command result atomically.

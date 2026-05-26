@@ -133,6 +133,75 @@ func TestCreateRepositoryBootstrapPullRequestCallsDomainService(t *testing.T) {
 	}
 }
 
+func TestCreateProviderRepositoryCallsDomainService(t *testing.T) {
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	externalAccountID := uuid.New()
+	commandID := uuid.New()
+	service := &fakeProjectService{}
+	service.createProviderRepository = func(_ context.Context, input projectservice.CreateProviderRepositoryInput) (projectservice.RepositoryProviderCreateResult, error) {
+		if input.ProjectID != projectID ||
+			input.Provider != enum.RepositoryProviderGitHub ||
+			input.OwnerKind != enum.RepositoryOwnerKindOrganization ||
+			input.ProviderOwner != "codex-k8s" ||
+			input.ProviderName != "new-service" ||
+			input.Visibility != enum.RepositoryVisibilityPrivate ||
+			input.ExternalAccountID != externalAccountID {
+			t.Fatalf("input = %+v, want provider repository create fields", input)
+		}
+		if input.Meta.CommandID != commandID {
+			t.Fatalf("meta = %+v, want command id", input.Meta)
+		}
+		return projectservice.RepositoryProviderCreateResult{
+			Repository: entity.RepositoryBinding{
+				Base:                 entity.Base{ID: repositoryID, Version: 2},
+				ProjectID:            projectID,
+				Provider:             enum.RepositoryProviderGitHub,
+				ProviderOwner:        "codex-k8s",
+				ProviderName:         "new-service",
+				WebURL:               "https://github.com/codex-k8s/new-service",
+				DefaultBranch:        "main",
+				Status:               enum.RepositoryStatusPending,
+				ProviderRepositoryID: "100500",
+			},
+			ProviderTarget: projectservice.RepositoryBootstrapProviderTarget{
+				ProviderSlug:         "github",
+				RepositoryFullName:   "codex-k8s/new-service",
+				ProviderRepositoryID: "100500",
+				WebURL:               "https://github.com/codex-k8s/new-service",
+			},
+			BaseBranch: "main",
+			ProviderResult: projectservice.RepositoryProviderCreateProviderResult{
+				ProviderOperationID:  "operation-1",
+				ProviderRepositoryID: "100500",
+				ProviderWebURL:       "https://github.com/codex-k8s/new-service",
+				BaseBranch:           "main",
+			},
+		}, nil
+	}
+	server := NewServer(service)
+
+	response, err := server.CreateProviderRepository(context.Background(), &projectsv1.CreateProviderRepositoryRequest{
+		ProjectId:         projectID.String(),
+		Provider:          projectsv1.RepositoryProvider_REPOSITORY_PROVIDER_GITHUB,
+		OwnerKind:         projectsv1.RepositoryOwnerKind_REPOSITORY_OWNER_KIND_ORGANIZATION,
+		ProviderOwner:     "codex-k8s",
+		ProviderName:      "new-service",
+		Visibility:        projectsv1.RepositoryVisibility_REPOSITORY_VISIBILITY_PRIVATE,
+		ExternalAccountId: externalAccountID.String(),
+		Meta:              commandMeta(commandID.String()),
+	})
+	if err != nil {
+		t.Fatalf("CreateProviderRepository(): %v", err)
+	}
+	if response.GetRepository().GetRepositoryId() != repositoryID.String() ||
+		response.GetProviderTarget().GetProviderRepositoryId() != "100500" ||
+		response.GetBaseBranch() != "main" ||
+		response.GetProviderOperationId() != "operation-1" {
+		t.Fatalf("response = %+v, want provider repository refs", response)
+	}
+}
+
 func TestErrorToStatusMapsDomainErrors(t *testing.T) {
 	t.Parallel()
 
@@ -182,8 +251,9 @@ func commandMeta(commandID string) *projectsv1.CommandMeta {
 
 type fakeProjectService struct {
 	unimplementedProjectService
-	createProject   func(context.Context, projectservice.CreateProjectInput) (entity.Project, error)
-	createBootstrap func(context.Context, projectservice.CreateRepositoryBootstrapPullRequestInput) (projectservice.RepositoryBootstrapPullRequestResult, error)
+	createProject            func(context.Context, projectservice.CreateProjectInput) (entity.Project, error)
+	createProviderRepository func(context.Context, projectservice.CreateProviderRepositoryInput) (projectservice.RepositoryProviderCreateResult, error)
+	createBootstrap          func(context.Context, projectservice.CreateRepositoryBootstrapPullRequestInput) (projectservice.RepositoryBootstrapPullRequestResult, error)
 }
 
 func (s *fakeProjectService) CreateProject(ctx context.Context, input projectservice.CreateProjectInput) (entity.Project, error) {
@@ -191,6 +261,13 @@ func (s *fakeProjectService) CreateProject(ctx context.Context, input projectser
 		return entity.Project{}, errs.ErrInvalidArgument
 	}
 	return s.createProject(ctx, input)
+}
+
+func (s *fakeProjectService) CreateProviderRepository(ctx context.Context, input projectservice.CreateProviderRepositoryInput) (projectservice.RepositoryProviderCreateResult, error) {
+	if s.createProviderRepository == nil {
+		return projectservice.RepositoryProviderCreateResult{}, errs.ErrInvalidArgument
+	}
+	return s.createProviderRepository(ctx, input)
 }
 
 func (s *fakeProjectService) CreateRepositoryBootstrapPullRequest(ctx context.Context, input projectservice.CreateRepositoryBootstrapPullRequestInput) (projectservice.RepositoryBootstrapPullRequestResult, error) {
@@ -220,6 +297,10 @@ func (unimplementedProjectService) ListProjects(context.Context, projectservice.
 
 func (unimplementedProjectService) AttachRepository(context.Context, projectservice.AttachRepositoryInput) (entity.RepositoryBinding, error) {
 	return entity.RepositoryBinding{}, errs.ErrInvalidArgument
+}
+
+func (unimplementedProjectService) CreateProviderRepository(context.Context, projectservice.CreateProviderRepositoryInput) (projectservice.RepositoryProviderCreateResult, error) {
+	return projectservice.RepositoryProviderCreateResult{}, errs.ErrInvalidArgument
 }
 
 func (unimplementedProjectService) CreateRepositoryBootstrapPullRequest(context.Context, projectservice.CreateRepositoryBootstrapPullRequestInput) (projectservice.RepositoryBootstrapPullRequestResult, error) {
