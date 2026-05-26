@@ -26,6 +26,24 @@
   Последовательные вспомогательные функции допустимы только для короткого фиксированного набора разных мутаций
   внутри транзакции, например агрегат + outbox + idempotency result.
 
+## PostgreSQL: тестовый контур
+
+- `make test-go` запускает только герметичные Go unit/component tests и не должен требовать PostgreSQL, Docker
+  или `KODEX_*_TEST_DATABASE_DSN`.
+- PostgreSQL repository, migrations, SQL и storage-level изменения проверяются явным target `make test-go-postgres`.
+  Этот target не делает silent skip в required mode: если тестовая БД недоступна, проверка считается незапущенной
+  или упавшей в зависимости от требований среза.
+- Полный Go-контур с тестовой БД запускается через `make test-go-all`; он объединяет `make test-go`
+  и `make test-go-postgres`.
+- Предпочтительный remote-agent путь для integration tests — Kubernetes-native runner:
+  `KODEX_TEST_POSTGRES_MODE=kubernetes make test-go-postgres`. Runner поднимает временный namespace или использует
+  заданный `KODEX_TEST_POSTGRES_K8S_NAMESPACE`, создаёт ephemeral PostgreSQL pod/service, тестовые БД, локальный
+  `port-forward`, экспортирует `KODEX_*_TEST_DATABASE_DSN` и удаляет созданные ресурсы после завершения.
+- Docker fallback допустим только как локальный convenience path (`KODEX_TEST_POSTGRES_MODE=docker make test-go-postgres`)
+  и не является требованием к remote-agent серверу или CI.
+- Production PostgreSQL запрещено использовать для repository integration tests. Для required integration-проверки
+  нужны внешние тестовые DSN, Kubernetes test namespace/RBAC или локальный Docker fallback в developer-окружении.
+
 ## Redis (опционально)
 
 - Только для кэша/эфемерных данных/локов.
