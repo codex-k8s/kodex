@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"errors"
 
+	hookerrs "github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/domain/errs"
 	hookenum "github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/domain/types/enum"
 	"github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/domain/types/value"
 )
@@ -30,9 +32,19 @@ func NewRouteRegistry(dispatchers map[hookenum.DownstreamOwner]OwnerRoute) *Rout
 
 // NewDefaultRouteRegistry creates no-op ports for all schema-defined owner routes.
 func NewDefaultRouteRegistry() *RouteRegistry {
+	return NewRouteRegistryWithDefaults(nil)
+}
+
+// NewRouteRegistryWithDefaults creates placeholder ports and applies explicit owner overrides.
+func NewRouteRegistryWithDefaults(overrides map[hookenum.DownstreamOwner]OwnerRoute) *RouteRegistry {
 	dispatchers := make(map[hookenum.DownstreamOwner]OwnerRoute, len(hookenum.DownstreamOwners()))
 	for _, owner := range hookenum.DownstreamOwners() {
 		dispatchers[owner] = NoopOwnerRoute{Owner: owner}
+	}
+	for owner, dispatcher := range overrides {
+		if dispatcher != nil {
+			dispatchers[owner] = dispatcher
+		}
 	}
 	return NewRouteRegistry(dispatchers)
 }
@@ -79,8 +91,8 @@ func (registry *RouteRegistry) DispatchRoutesExcluding(ctx context.Context, cfg 
 		event := projectSafeHookEvent(envelope, route)
 		if err := dispatcher.DispatchSafeHookEvent(ctx, event); err != nil {
 			result.Status = hookenum.RouteDeliveryStatusFailed
-			result.DiagnosticCode = value.RouteDiagnosticDownstreamFailed
-			result.DiagnosticMessage = "route owner port returned a safe failure"
+			result.DiagnosticCode = routeFailureDiagnosticCode(err)
+			result.DiagnosticMessage = routeFailureDiagnosticMessage(err)
 			result.Retryable = true
 			results = append(results, result)
 			continue
@@ -146,6 +158,7 @@ func projectSafeHookEvent(envelope value.HookEnvelope, route value.DownstreamRou
 	event := value.SafeHookEvent{
 		EventID:       envelope.EventID,
 		HookEventName: envelope.HookEventName,
+		EventTime:     envelope.EventTime,
 		Owner:         route.Owner,
 		DeliveryMode:  route.DeliveryMode,
 		SafeParts:     cloneStrings(route.SafeParts),
@@ -224,7 +237,7 @@ func canonicalRoutePlan(event hookenum.HookEventName) []value.DownstreamRoute {
 		}
 	case hookenum.HookEventPreToolUse:
 		return []value.DownstreamRoute{
-			canonicalRoute(hookenum.DownstreamOwnerAgentManager, hookenum.DeliveryModeAsync, "source_context", "run_context", "tool_context", "capability_context", "safe_summary", "risk_class", "correlation_id"),
+			canonicalRoute(hookenum.DownstreamOwnerAgentManager, hookenum.DeliveryModeAsync, "source_context", "run_context", "tool_context", "capability_context", "safe_summary", "risk_class", "payload_digest", "correlation_id"),
 			canonicalRoute(hookenum.DownstreamOwnerGovernanceManager, hookenum.DeliveryModeAsync, "source_context", "run_context", "tool_context", "capability_context", "safe_summary", "risk_class", "correlation_id"),
 			canonicalRoute(hookenum.DownstreamOwnerRuntimeManager, hookenum.DeliveryModeAsync, "source_context", "run_context", "tool_context", "safe_summary", "risk_class", "correlation_id"),
 			canonicalRoute(hookenum.DownstreamOwnerOperationsFeed, hookenum.DeliveryModeRealtime, "run_context", "tool_context", "safe_summary", "risk_class", "correlation_id"),
@@ -237,7 +250,7 @@ func canonicalRoutePlan(event hookenum.HookEventName) []value.DownstreamRoute {
 		}
 	case hookenum.HookEventPostToolUse:
 		return []value.DownstreamRoute{
-			canonicalRoute(hookenum.DownstreamOwnerAgentManager, hookenum.DeliveryModeAsync, "source_context", "run_context", "tool_context", "bounded_error", "provider_artifact_signal", "rate_limit_hint", "payload_digest", "correlation_id"),
+			canonicalRoute(hookenum.DownstreamOwnerAgentManager, hookenum.DeliveryModeAsync, "source_context", "run_context", "tool_context", "capability_context", "safe_summary", "bounded_error", "provider_artifact_signal", "rate_limit_hint", "payload_digest", "correlation_id"),
 			canonicalRoute(hookenum.DownstreamOwnerRuntimeManager, hookenum.DeliveryModeAsync, "source_context", "run_context", "tool_context", "bounded_error", "payload_digest", "correlation_id"),
 			canonicalRoute(hookenum.DownstreamOwnerProviderHub, hookenum.DeliveryModeAsync, "source_context", "run_context", "provider_artifact_signal", "rate_limit_hint", "payload_digest", "correlation_id"),
 			canonicalRoute(hookenum.DownstreamOwnerOperationsFeed, hookenum.DeliveryModeRealtime, "run_context", "tool_context", "bounded_error", "provider_artifact_signal", "rate_limit_hint", "correlation_id"),
@@ -283,6 +296,20 @@ func safePartsAllowed(requested []string, allowed []string) bool {
 		}
 	}
 	return true
+}
+
+func routeFailureDiagnosticCode(err error) string {
+	if errors.Is(err, hookerrs.ErrOwnerUnavailable) {
+		return value.RouteDiagnosticOwnerUnavailable
+	}
+	return value.RouteDiagnosticDownstreamFailed
+}
+
+func routeFailureDiagnosticMessage(err error) string {
+	if errors.Is(err, hookerrs.ErrOwnerUnavailable) {
+		return "route owner port is unavailable"
+	}
+	return "route owner port returned a safe failure"
 }
 
 func cloneCapabilityContext(context value.CapabilityContext) value.CapabilityContext {

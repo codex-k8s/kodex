@@ -1,6 +1,8 @@
 package value
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 
 	hookenum "github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/domain/types/enum"
@@ -26,6 +28,7 @@ const (
 type SafeHookEvent struct {
 	EventID                uuid.UUID                `json:"event_id"`
 	HookEventName          hookenum.HookEventName   `json:"hook_event_name"`
+	EventTime              time.Time                `json:"event_time"`
 	Owner                  hookenum.DownstreamOwner `json:"owner"`
 	DeliveryMode           hookenum.DeliveryMode    `json:"delivery_mode"`
 	SafeParts              []string                 `json:"safe_parts"`

@@ -80,6 +80,29 @@ func TestSubmitHookEventDispatchesSelectedSafeRoutes(t *testing.T) {
 	}
 }
 
+func TestAgentActivityRoutePlanCarriesSafeActivityParts(t *testing.T) {
+	t.Parallel()
+
+	preRoute, ok := canonicalRouteForOwner(canonicalRoutePlan(hookenum.HookEventPreToolUse), hookenum.DownstreamOwnerAgentManager)
+	if !ok {
+		t.Fatal("PreToolUse agent-manager route is missing")
+	}
+	for _, part := range []string{"source_context", "run_context", "tool_context", "capability_context", "safe_summary", "risk_class", "payload_digest", "correlation_id"} {
+		if !containsString(preRoute.SafeParts, part) {
+			t.Fatalf("PreToolUse agent-manager safe parts = %v, want %s", preRoute.SafeParts, part)
+		}
+	}
+	postRoute, ok := canonicalRouteForOwner(canonicalRoutePlan(hookenum.HookEventPostToolUse), hookenum.DownstreamOwnerAgentManager)
+	if !ok {
+		t.Fatal("PostToolUse agent-manager route is missing")
+	}
+	for _, part := range []string{"source_context", "run_context", "tool_context", "capability_context", "safe_summary", "bounded_error", "provider_artifact_signal", "rate_limit_hint", "payload_digest", "correlation_id"} {
+		if !containsString(postRoute.SafeParts, part) {
+			t.Fatalf("PostToolUse agent-manager safe parts = %v, want %s", postRoute.SafeParts, part)
+		}
+	}
+}
+
 func TestSubmitHookEventReportsDisabledRouteWithoutDispatch(t *testing.T) {
 	t.Parallel()
 
@@ -106,6 +129,32 @@ func TestSubmitHookEventReportsDisabledRouteWithoutDispatch(t *testing.T) {
 	}
 }
 
+func TestSubmitHookEventReportsDisabledAgentActivityRouteWithoutDispatch(t *testing.T) {
+	t.Parallel()
+
+	route := &recordingOwnerRoute{}
+	service := newTestServiceWithConfig(
+		Config{DisabledRoutes: []hookenum.DownstreamOwner{hookenum.DownstreamOwnerAgentManager}},
+		testRouteRegistry(map[hookenum.DownstreamOwner]OwnerRoute{
+			hookenum.DownstreamOwnerAgentManager: route,
+		}),
+	)
+
+	result, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: validPreToolUseEnvelope()})
+	if err != nil {
+		t.Fatalf("SubmitHookEvent(): %v", err)
+	}
+	if result.RoutesAccepted != 3 {
+		t.Fatalf("routes accepted = %d, want 3", result.RoutesAccepted)
+	}
+	if !hasRouteStatus(result.RouteDiagnostics, hookenum.DownstreamOwnerAgentManager, hookenum.RouteDeliveryStatusDisabled) {
+		t.Fatalf("route diagnostics = %+v, want disabled agent-manager", result.RouteDiagnostics)
+	}
+	if len(route.Events()) != 0 {
+		t.Fatalf("disabled agent-manager route received %d events, want 0", len(route.Events()))
+	}
+}
+
 func TestSubmitHookEventReportsUnsupportedRoute(t *testing.T) {
 	t.Parallel()
 
@@ -124,6 +173,29 @@ func TestSubmitHookEventReportsUnsupportedRoute(t *testing.T) {
 		if diagnostic.Status != hookenum.RouteDeliveryStatusUnsupported {
 			t.Fatalf("route diagnostics = %+v, want unsupported", result.RouteDiagnostics)
 		}
+	}
+}
+
+func TestSubmitHookEventReportsUnavailableAgentActivityOwnerSafely(t *testing.T) {
+	t.Parallel()
+
+	service := newTestServiceWithConfig(Config{}, testRouteRegistry(map[hookenum.DownstreamOwner]OwnerRoute{
+		hookenum.DownstreamOwnerAgentManager: failingOwnerRoute{err: hookerrs.ErrOwnerUnavailable},
+	}))
+
+	result, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: validPreToolUseEnvelope()})
+	if err != nil {
+		t.Fatalf("SubmitHookEvent(): %v", err)
+	}
+	if result.RoutesAccepted != 3 {
+		t.Fatalf("routes accepted = %d, want 3", result.RoutesAccepted)
+	}
+	diagnostic := diagnosticForOwner(result.RouteDiagnostics, hookenum.DownstreamOwnerAgentManager)
+	if diagnostic.Status != hookenum.RouteDeliveryStatusFailed || diagnostic.DiagnosticCode != value.RouteDiagnosticOwnerUnavailable {
+		t.Fatalf("agent-manager diagnostic = %+v, want owner_unavailable failed", diagnostic)
+	}
+	if strings.Contains(diagnostic.DiagnosticMessage, "tool_input") || strings.Contains(diagnostic.DiagnosticMessage, "secret") {
+		t.Fatalf("diagnostic leaked unsafe detail: %q", diagnostic.DiagnosticMessage)
 	}
 }
 
@@ -147,6 +219,29 @@ func TestSubmitHookEventReportsDownstreamFailureSafely(t *testing.T) {
 	diagnostic := diagnosticForOwner(result.RouteDiagnostics, hookenum.DownstreamOwnerOperationsFeed).DiagnosticMessage
 	if strings.Contains(diagnostic, "sensitive downstream detail") {
 		t.Fatalf("diagnostic leaked downstream error: %q", diagnostic)
+	}
+}
+
+func TestSubmitHookEventDoesNotReplayAgentActivityDispatchForDuplicate(t *testing.T) {
+	t.Parallel()
+
+	route := &recordingOwnerRoute{}
+	service := newTestServiceWithConfig(Config{}, testRouteRegistry(map[hookenum.DownstreamOwner]OwnerRoute{
+		hookenum.DownstreamOwnerAgentManager: route,
+	}))
+	envelope := validPostToolUseEnvelope()
+	if _, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: envelope}); err != nil {
+		t.Fatalf("first SubmitHookEvent(): %v", err)
+	}
+	result, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: envelope})
+	if err != nil {
+		t.Fatalf("second SubmitHookEvent(): %v", err)
+	}
+	if !result.Duplicate {
+		t.Fatal("duplicate = false, want true")
+	}
+	if len(route.Events()) != 1 {
+		t.Fatalf("agent-manager route dispatch count = %d, want 1", len(route.Events()))
 	}
 }
 
@@ -480,6 +575,25 @@ func TestSubmitHookEventSanitizerRejectDoesNotCallDecisionBridge(t *testing.T) {
 	}
 	if len(governancePort.Requests()) != 0 {
 		t.Fatalf("governance decision calls = %d, want 0 after sanitizer rejection", len(governancePort.Requests()))
+	}
+}
+
+func TestSubmitHookEventSanitizerRejectDoesNotCallAgentActivityRoute(t *testing.T) {
+	t.Parallel()
+
+	route := &recordingOwnerRoute{}
+	service := newTestServiceWithConfig(Config{}, testRouteRegistry(map[hookenum.DownstreamOwner]OwnerRoute{
+		hookenum.DownstreamOwnerAgentManager: route,
+	}))
+	envelope := validPreToolUseEnvelope()
+	envelope.SanitizerReport.RejectedFieldClasses = []string{"tool_input"}
+
+	_, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: envelope})
+	if !errors.Is(err, hookerrs.ErrPayloadRejected) {
+		t.Fatalf("SubmitHookEvent() error = %v, want ErrPayloadRejected", err)
+	}
+	if len(route.Events()) != 0 {
+		t.Fatalf("agent-manager route dispatch count = %d, want 0 after sanitizer rejection", len(route.Events()))
 	}
 }
 
@@ -1006,6 +1120,36 @@ func validPermissionRequestEnvelope() value.HookEnvelope {
 	return envelope
 }
 
+func validPostToolUseEnvelope() value.HookEnvelope {
+	envelope := validPreToolUseEnvelope()
+	errorDigest := digest("e")
+	exitStatus := 1
+	envelope.EventID = uuid.MustParse("11111111-4444-4111-8111-111111111111")
+	envelope.HookEventName = hookenum.HookEventPostToolUse
+	envelope.SafePayload = value.SafePayload{
+		SafeSummary:  "Tool execution completed with a bounded diagnostic.",
+		ExitStatus:   &exitStatus,
+		OutputDigest: digest("b"),
+		BoundedError: &value.BoundedError{
+			ErrorClass:  "command_failed",
+			SafeMessage: "Command failed; details are stored only as digest.",
+			Truncated:   true,
+			ErrorDigest: &errorDigest,
+		},
+	}
+	envelope.PayloadDigest = digest("d")
+	envelope.DownstreamRoutes = []value.DownstreamRoute{
+		{
+			Owner:        hookenum.DownstreamOwnerAgentManager,
+			DeliveryMode: hookenum.DeliveryModeAsync,
+			SafeParts:    []string{"source_context", "run_context", "tool_context", "bounded_error", "payload_digest", "correlation_id"},
+		},
+	}
+	envelope.CorrelationID = "run-5555:post-tool-use:toolu-001"
+	envelope.RetentionClass = hookenum.RetentionClassOperational
+	return envelope
+}
+
 func digest(char string) string {
 	return "sha256:" + strings.Repeat(char, 64)
 }
@@ -1123,4 +1267,13 @@ func diagnosticForOwner(diagnostics []value.RouteDeliveryResult, owner hookenum.
 		}
 	}
 	return value.RouteDeliveryResult{}
+}
+
+func containsString(values []string, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+	return false
 }

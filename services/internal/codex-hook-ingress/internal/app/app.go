@@ -7,7 +7,9 @@ import (
 	"time"
 
 	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
+	agentmanagerclient "github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/clients/agentmanager"
 	hookservice "github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/domain/service"
+	hookenum "github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/domain/types/enum"
 	hookstub "github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/repository/stub/hook"
 	opsstub "github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/repository/stub/ops"
 	commandtransport "github.com/codex-k8s/kodex/services/internal/codex-hook-ingress/internal/transport/command"
@@ -56,7 +58,9 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 			Validator:      hookservice.DefaultEnvelopeValidator{},
 			SourceVerifier: hookservice.StaticSourceVerifier{},
 			Sanitizer:      hookservice.DefaultSanitizer{},
-			RouteRegistry:  hookservice.NewDefaultRouteRegistry(),
+			RouteRegistry: hookservice.NewRouteRegistryWithDefaults(map[hookenum.DownstreamOwner]hookservice.OwnerRoute{
+				hookenum.DownstreamOwnerAgentManager: agentmanagerclient.NewActivityRoute(agentmanagerclient.UnavailableRecorder{}),
+			}),
 			DecisionBridge: hookservice.NewOwnerDecisionBridge(hookservice.NewDefaultDecisionOwnerPorts()),
 			OpsFeed: opsstub.NewRepository(opsstub.Config{
 				Capacity:  cfg.OpsFeedCapacity,
