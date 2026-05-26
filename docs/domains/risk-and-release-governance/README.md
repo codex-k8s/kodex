@@ -46,11 +46,12 @@
 ## Реализация
 
 - Сервис-владелец: `services/internal/governance-manager`.
+- Сервисный каркас: процесс, конфигурация, health/readiness/metrics, gRPC registration и безопасные backlog-handlers.
 - gRPC-контракт: `proto/kodex/governance/v1/governance_manager.proto`.
 - Сгенерированный Go-контракт: `proto/gen/go/kodex/governance/v1/**`.
 - AsyncAPI: `specs/asyncapi/governance-manager.v1.yaml`.
 - Сгенерированные Go-контракты событий: `libs/go/platformevents/governance/events.gen.go`.
-- Миграции: будут созданы после согласования модели данных.
+- Миграции и постоянное хранилище: будут созданы отдельным срезом после каркаса.
 - Статус контрактов и бэклог реализации: `delivery/risk_governance_delivery.md`.
 
 ## Карта Issue
