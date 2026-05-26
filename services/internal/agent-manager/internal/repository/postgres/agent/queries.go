@@ -14,6 +14,7 @@ var (
 	queryAgentActivityList                 = mustLoadQuery("agent_activity__list")
 	queryFollowUpIntentCreate              = mustLoadQuery("follow_up_intent__create")
 	queryFollowUpIntentGet                 = mustLoadQuery("follow_up_intent__get")
+	queryFollowUpIntentReserveDispatch     = mustLoadQuery("follow_up_intent__reserve_dispatch")
 	queryFollowUpIntentUpdate              = mustLoadQuery("follow_up_intent__update")
 	queryFlowCreate                        = mustLoadQuery("flow__create")
 	queryFlowGet                           = mustLoadQuery("flow__get")

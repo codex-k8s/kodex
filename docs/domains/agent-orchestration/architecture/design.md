@@ -137,13 +137,14 @@ sequenceDiagram
     GOV->>IH: deliver gate request
   else готово к следующему этапу
     AM->>AM: CreateFollowUpIntent(safe refs, title, summary)
-    AM->>PH: CreateIssue(safe title/body hints, policy/gate refs)
+    AM->>AM: Reserve dispatch by expected_version + deterministic provider command ref
+    AM->>PH: CreateIssue(safe title/body hints, policy/gate refs, deterministic command id)
     PH-->>AM: provider_operation_ref + safe result refs
     AM->>AM: status created/failed
   end
 ```
 
-Приёмка не считает локальный ответ агента источником истины. Она сверяется с provider-native артефактами и platform watermark, а затем фиксирует follow-up intent. Создание следующего `Issue` выполняется только через `provider-hub.CreateIssue`; `agent-manager` хранит `provider_operation_ref`, safe result refs и статус, но не provider payload, raw response или body будущего `Issue`.
+Приёмка не считает локальный ответ агента источником истины. Она сверяется с provider-native артефактами и platform watermark, а затем фиксирует follow-up intent. Создание следующего `Issue` выполняется только через `provider-hub.CreateIssue`; перед вызовом `agent-manager` атомарно резервирует dispatch локальной версией, а provider command id детерминирован от intent. Поэтому параллельный dispatch с тем же `expected_version` получает conflict до повторного provider write, а retry после частичного сбоя идёт в provider-hub с тем же command id. `agent-manager` хранит `provider_operation_ref`, safe result refs и статус, но не provider payload, raw response или body будущего `Issue`.
 
 ## Интеграции
 

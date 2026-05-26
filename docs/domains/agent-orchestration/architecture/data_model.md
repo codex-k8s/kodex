@@ -296,7 +296,7 @@ approvals:
 | `version` | bigint | нет | Версия intent для будущих lifecycle-переходов. |
 | `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
 
-`FollowUpIntent` не хранит raw prompt, transcript, файлы workspace, большие отчёты, provider response, body будущего `Issue`, тексты руководящих документов, prompt templates или flow files. При dispatch `agent-manager` формирует bounded safe body только на момент вызова `provider-hub.CreateIssue`; в БД остаются `safe_title`, `safe_summary`, digest, статус, `provider_operation_ref` и safe provider result refs. Повтор команды с тем же ключом возвращает тот же intent только при совпадении нормализованного payload; отличающийся payload получает безопасный conflict.
+`FollowUpIntent` не хранит raw prompt, transcript, файлы workspace, большие отчёты, provider response, body будущего `Issue`, тексты руководящих документов, prompt templates или flow files. При dispatch `agent-manager` сначала атомарно резервирует локальный переход bump версии и safe `provider_command:<uuid>` ref, сформированный детерминированно от intent. Только после этого формируется bounded safe body для вызова `provider-hub.CreateIssue`; в БД остаются `safe_title`, `safe_summary`, digest, статус, `provider_operation_ref` и safe provider result refs. Повтор команды с тем же ключом возвращает тот же intent только при совпадении нормализованного payload; отличающийся payload или stale `expected_version` получает безопасный conflict до повторного provider write.
 
 ### AutomationBinding
 

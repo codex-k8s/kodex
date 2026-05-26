@@ -28,6 +28,8 @@ const (
 	followUpRefTextLimit = 512
 )
 
+var followUpProviderCommandNamespace = uuid.MustParse("9f3d6f38-d3f3-4c07-aeb6-3f49e862f0c4")
+
 type followUpIntentCommandPayload struct {
 	FollowUpIntent entity.FollowUpIntent `json:"follow_up_intent"`
 }
@@ -39,6 +41,8 @@ type followUpProviderCommandPayload struct {
 
 type followUpCreateIssueSnapshot struct {
 	FollowUpIntentID       string                         `json:"follow_up_intent_id"`
+	ProviderCommandID      string                         `json:"provider_command_id"`
+	ProviderIdempotencyKey string                         `json:"provider_idempotency_key"`
 	ProjectID              string                         `json:"project_id"`
 	RepositoryID           string                         `json:"repository_id"`
 	ProviderSlug           string                         `json:"provider_slug"`
@@ -128,16 +132,20 @@ func (s *Service) DispatchFollowUpIntent(ctx context.Context, input DispatchFoll
 	if !dispatchableFollowUpStatus(intent.Status) {
 		return entity.FollowUpIntent{}, errs.ErrPreconditionFailed
 	}
+	reserved, err := reserveFollowUpDispatch(ctx, s, intent, previousVersion, snapshot)
+	if err != nil {
+		return entity.FollowUpIntent{}, err
+	}
 	providerResult, err := s.providerIssueCreator.CreateIssue(ctx, createIssue)
 	if err != nil {
 		return entity.FollowUpIntent{}, err
 	}
-	next, err := applyFollowUpProviderIssueResult(intent, providerResult)
+	next, err := applyFollowUpProviderIssueResult(reserved, providerResult)
 	if err != nil {
 		return entity.FollowUpIntent{}, err
 	}
 	now := s.clock.Now()
-	previousStatus := string(intent.Status)
+	previousStatus := string(reserved.Status)
 	next.Version++
 	next.UpdatedAt = now
 	payload, err := marshalCommandPayload(followUpProviderCommandPayload{FollowUpIntent: next, CreateIssue: snapshot})
@@ -152,7 +160,7 @@ func (s *Service) DispatchFollowUpIntent(ctx context.Context, input DispatchFoll
 	if err != nil {
 		return entity.FollowUpIntent{}, err
 	}
-	return next, s.repository.UpdateFollowUpIntentWithResult(ctx, next, previousVersion, result, event)
+	return next, s.repository.UpdateFollowUpIntentWithResult(ctx, next, reserved.Version, result, event)
 }
 
 func (s *Service) normalizeFollowUpIntent(ctx context.Context, session entity.AgentSession, input CreateFollowUpIntentInput, idempotencyKey string) (entity.FollowUpIntent, error) {
@@ -321,8 +329,9 @@ func normalizeFollowUpCreateIssueCommand(intent entity.FollowUpIntent, input Dis
 	if err != nil {
 		return ProviderCreateIssueInput{}, followUpCreateIssueSnapshot{}, err
 	}
+	providerMeta := followUpProviderCommandMeta(input.Meta, intent.ID)
 	command := ProviderCreateIssueInput{
-		Meta:                   input.Meta,
+		Meta:                   providerMeta,
 		ProjectID:              input.ProjectID,
 		RepositoryID:           input.RepositoryID,
 		ProviderSlug:           providerSlug,
@@ -340,6 +349,8 @@ func normalizeFollowUpCreateIssueCommand(intent entity.FollowUpIntent, input Dis
 	}
 	snapshot := followUpCreateIssueSnapshot{
 		FollowUpIntentID:       intent.ID.String(),
+		ProviderCommandID:      providerMeta.CommandID.String(),
+		ProviderIdempotencyKey: providerMeta.IdempotencyKey,
 		ProjectID:              input.ProjectID.String(),
 		RepositoryID:           input.RepositoryID.String(),
 		ProviderSlug:           providerSlug,
@@ -356,6 +367,17 @@ func normalizeFollowUpCreateIssueCommand(intent entity.FollowUpIntent, input Dis
 		ApprovalGateRef:        approval,
 	}
 	return command, snapshot, nil
+}
+
+func reserveFollowUpDispatch(ctx context.Context, service *Service, intent entity.FollowUpIntent, previousVersion int64, snapshot followUpCreateIssueSnapshot) (entity.FollowUpIntent, error) {
+	reserved := intent
+	reserved.ProviderOperationRef = followUpProviderCommandRef(snapshot.ProviderCommandID)
+	reserved.Version = previousVersion + 1
+	reserved.UpdatedAt = service.clock.Now()
+	if err := service.repository.ReserveFollowUpIntentDispatch(ctx, reserved, previousVersion); err != nil {
+		return entity.FollowUpIntent{}, err
+	}
+	return reserved, nil
 }
 
 func normalizeFollowUpRepositoryTarget(providerSlug string, target ProviderCommandTarget) (ProviderCommandTarget, error) {
@@ -465,6 +487,26 @@ func followUpIssueBody(intent entity.FollowUpIntent, bodyHint string) string {
 func followUpBodyDigest(body string) string {
 	sum := sha256.Sum256([]byte(body))
 	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+func followUpProviderCommandMeta(meta value.CommandMeta, intentID uuid.UUID) value.CommandMeta {
+	result := meta
+	result.CommandID = followUpProviderCommandID(intentID)
+	result.IdempotencyKey = followUpProviderIdempotencyKey(intentID)
+	result.ExpectedVersion = nil
+	return result
+}
+
+func followUpProviderCommandID(intentID uuid.UUID) uuid.UUID {
+	return uuid.NewSHA1(followUpProviderCommandNamespace, []byte("provider-create-issue:"+intentID.String()))
+}
+
+func followUpProviderIdempotencyKey(intentID uuid.UUID) string {
+	return "agent-follow-up:create-issue:" + intentID.String()
+}
+
+func followUpProviderCommandRef(commandID string) string {
+	return "provider_command:" + strings.TrimSpace(commandID)
 }
 
 func followUpCreateIssueChangedFields(hasMilestone bool, hasWorkItemType bool, hasWatermark bool) []string {
@@ -936,6 +978,8 @@ func sameFollowUpCreateIssueSnapshot(left followUpCreateIssueSnapshot, right fol
 	sort.Strings(left.AssigneeProviderLogins)
 	sort.Strings(right.AssigneeProviderLogins)
 	return left.FollowUpIntentID == right.FollowUpIntentID &&
+		left.ProviderCommandID == right.ProviderCommandID &&
+		left.ProviderIdempotencyKey == right.ProviderIdempotencyKey &&
 		left.ProjectID == right.ProjectID &&
 		left.RepositoryID == right.RepositoryID &&
 		left.ProviderSlug == right.ProviderSlug &&

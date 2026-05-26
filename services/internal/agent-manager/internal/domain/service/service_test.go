@@ -1863,9 +1863,10 @@ func TestDispatchFollowUpIntentCreatesProviderIssueAndOutbox(t *testing.T) {
 		IDGenerator:          &sequenceIDGenerator{ids: []uuid.UUID{eventID}},
 		ProviderIssueCreator: creator,
 	})
+	callerCommandID := uuid.MustParse("87878787-7777-8888-9999-aaaaaaaaaaaa")
 
 	updated, err := service.DispatchFollowUpIntent(context.Background(), DispatchFollowUpIntentInput{
-		Meta:              value.CommandMeta{CommandID: uuid.MustParse("87878787-7777-8888-9999-aaaaaaaaaaaa"), ExpectedVersion: &expectedVersion, Actor: testActor()},
+		Meta:              value.CommandMeta{CommandID: callerCommandID, ExpectedVersion: &expectedVersion, Actor: testActor()},
 		FollowUpIntentID:  intentID,
 		ProjectID:         projectID,
 		RepositoryID:      repositoryID,
@@ -1880,14 +1881,24 @@ func TestDispatchFollowUpIntentCreatesProviderIssueAndOutbox(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DispatchFollowUpIntent() err = %v", err)
 	}
-	if updated.Status != enum.FollowUpIntentStatusCreated || updated.Version != expectedVersion+1 {
+	if updated.Status != enum.FollowUpIntentStatusCreated || updated.Version != expectedVersion+2 {
 		t.Fatalf("updated intent = %+v", updated)
 	}
 	if updated.ProviderOperationRef != "provider_operation:op-123" || updated.ProviderTarget.WorkItemRef != "github:issue:456" {
 		t.Fatalf("provider refs = %+v", updated.ProviderTarget)
 	}
+	if !repository.reserveFollowUpCalled || repository.reservedFollowUp.Version != expectedVersion+1 ||
+		repository.reservedFollowUp.ProviderOperationRef != followUpProviderCommandRef(followUpProviderCommandID(intentID).String()) {
+		t.Fatalf("reservation = %+v called=%v", repository.reservedFollowUp, repository.reserveFollowUpCalled)
+	}
 	if creator.calls != 1 || creator.input.Body != "Use the safe summary only." || creator.input.Title != intent.SafeTitle {
 		t.Fatalf("provider input = %+v calls=%d", creator.input, creator.calls)
+	}
+	if creator.input.Meta.CommandID == callerCommandID ||
+		creator.input.Meta.CommandID != followUpProviderCommandID(intentID) ||
+		creator.input.Meta.IdempotencyKey != followUpProviderIdempotencyKey(intentID) ||
+		creator.input.Meta.ExpectedVersion != nil {
+		t.Fatalf("provider command meta = %+v", creator.input.Meta)
 	}
 	if creator.input.OperationPolicyContext.OperationType != ProviderOperationTypeCreateIssue ||
 		creator.input.OperationPolicyContext.TargetRef != "github:repository:"+repositoryID.String() {
@@ -1910,6 +1921,26 @@ func TestDispatchFollowUpIntentCreatesProviderIssueAndOutbox(t *testing.T) {
 	}
 	if !strings.Contains(resultPayload, `"body_digest":"sha256:`) {
 		t.Fatalf("result payload does not contain body digest: %s", repository.updateFollowUpResult.ResultPayload)
+	}
+
+	_, err = service.DispatchFollowUpIntent(context.Background(), DispatchFollowUpIntentInput{
+		Meta:              value.CommandMeta{CommandID: uuid.MustParse("87878787-8888-9999-aaaa-bbbbbbbbbbbb"), ExpectedVersion: &expectedVersion, Actor: testActor()},
+		FollowUpIntentID:  intentID,
+		ProjectID:         projectID,
+		RepositoryID:      repositoryID,
+		ProviderSlug:      "github",
+		ExternalAccountID: accountID,
+		RepositoryTarget:  ProviderCommandTarget{ProviderSlug: "github", RepositoryFullName: "codex-k8s/kodex"},
+		SafeBodyHint:      "Use the safe summary only.",
+		OperationPolicyContext: ProviderOperationPolicyContext{
+			RiskLevel: ProviderRiskLevelLow,
+		},
+	})
+	if !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("stale DispatchFollowUpIntent() err = %v, want %v", err, errs.ErrConflict)
+	}
+	if creator.calls != 1 {
+		t.Fatalf("provider called for stale dispatch: %d", creator.calls)
 	}
 }
 
@@ -2419,6 +2450,7 @@ type fakeRepository struct {
 	updatedFollowUp        entity.FollowUpIntent
 	updateFollowUpResult   entity.CommandResult
 	updateFollowUpEvent    *entity.OutboxEvent
+	reservedFollowUp       entity.FollowUpIntent
 	createdActivity        entity.AgentActivity
 	activityResult         entity.CommandResult
 	createFlowCalled       bool
@@ -2426,6 +2458,7 @@ type fakeRepository struct {
 	createRunCalled        bool
 	createAcceptanceCalled bool
 	createFollowUpCalled   bool
+	reserveFollowUpCalled  bool
 	updateFollowUpCalled   bool
 	createActivityCalled   bool
 }
@@ -2668,8 +2701,28 @@ func (f *fakeRepository) CreateFollowUpIntentWithResult(_ context.Context, inten
 	return nil
 }
 
+func (f *fakeRepository) ReserveFollowUpIntentDispatch(_ context.Context, intent entity.FollowUpIntent, previousVersion int64) error {
+	stored, ok := f.followUpByID[intent.ID]
+	if !ok {
+		return errs.ErrNotFound
+	}
+	if stored.Version != previousVersion || intent.Version != previousVersion+1 || !dispatchableFollowUpStatus(stored.Status) {
+		return errs.ErrConflict
+	}
+	f.reserveFollowUpCalled = true
+	f.reservedFollowUp = intent
+	if f.followUpByID != nil {
+		f.followUpByID[intent.ID] = intent
+	}
+	return nil
+}
+
 func (f *fakeRepository) UpdateFollowUpIntentWithResult(_ context.Context, intent entity.FollowUpIntent, previousVersion int64, result entity.CommandResult, event *entity.OutboxEvent) error {
-	if intent.Version != previousVersion+1 {
+	stored, ok := f.followUpByID[intent.ID]
+	if !ok {
+		return errs.ErrNotFound
+	}
+	if stored.Version != previousVersion || intent.Version != previousVersion+1 {
 		return errs.ErrConflict
 	}
 	f.updateFollowUpCalled = true
@@ -2933,10 +2986,12 @@ type fakeProviderIssueCreator struct {
 	err    error
 	calls  int
 	input  ProviderCreateIssueInput
+	inputs []ProviderCreateIssueInput
 }
 
 func (f *fakeProviderIssueCreator) CreateIssue(_ context.Context, input ProviderCreateIssueInput) (ProviderIssueCommandResult, error) {
 	f.calls++
 	f.input = input
+	f.inputs = append(f.inputs, input)
 	return f.result, f.err
 }

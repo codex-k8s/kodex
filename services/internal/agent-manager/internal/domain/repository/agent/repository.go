@@ -47,6 +47,7 @@ type Repository interface {
 	GetAcceptanceResult(ctx context.Context, id uuid.UUID) (entity.AcceptanceResult, error)
 	ListAcceptanceResults(ctx context.Context, filter query.AcceptanceResultFilter) ([]entity.AcceptanceResult, value.PageResult, error)
 	CreateFollowUpIntentWithResult(ctx context.Context, intent entity.FollowUpIntent, result entity.CommandResult, event entity.OutboxEvent) error
+	ReserveFollowUpIntentDispatch(ctx context.Context, intent entity.FollowUpIntent, previousVersion int64) error
 	UpdateFollowUpIntentWithResult(ctx context.Context, intent entity.FollowUpIntent, previousVersion int64, result entity.CommandResult, event *entity.OutboxEvent) error
 	GetFollowUpIntent(ctx context.Context, id uuid.UUID) (entity.FollowUpIntent, error)
 	RecordAgentActivityWithResult(ctx context.Context, activity entity.AgentActivity, result entity.CommandResult) error
