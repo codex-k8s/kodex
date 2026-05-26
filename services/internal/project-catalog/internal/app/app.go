@@ -8,6 +8,7 @@ import (
 	"time"
 
 	accessaccountsv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/access_accounts/v1"
+	providersv1 "github.com/codex-k8s/kodex/proto/gen/go/kodex/providers/v1"
 	"github.com/google/uuid"
 	grpcruntime "google.golang.org/grpc"
 
@@ -15,6 +16,7 @@ import (
 	postgreslib "github.com/codex-k8s/kodex/libs/go/postgres"
 	serviceprocess "github.com/codex-k8s/kodex/libs/go/serviceprocess"
 	accessclient "github.com/codex-k8s/kodex/services/internal/project-catalog/internal/clients/access"
+	providerhubclient "github.com/codex-k8s/kodex/services/internal/project-catalog/internal/clients/providerhub"
 	projectservice "github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/service"
 	projectpostgres "github.com/codex-k8s/kodex/services/internal/project-catalog/internal/repository/postgres/project"
 	projectgrpc "github.com/codex-k8s/kodex/services/internal/project-catalog/internal/transport/grpc"
@@ -46,9 +48,21 @@ func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
 			_ = accessConn.Close()
 		}()
 	}
+	bootstrapProvider, providerConn, err := newBootstrapProvider(cfg)
+	if err != nil {
+		return err
+	}
+	if providerConn != nil {
+		defer func() {
+			_ = providerConn.Close()
+		}()
+	}
 
 	projectRepository := projectpostgres.NewRepository(dbPool)
-	projectService := projectservice.NewWithConfig(projectRepository, systemClock{}, uuidGenerator{}, projectservice.Config{Authorizer: authorizer})
+	projectService := projectservice.NewWithConfig(projectRepository, systemClock{}, uuidGenerator{}, projectservice.Config{
+		Authorizer:        authorizer,
+		BootstrapProvider: bootstrapProvider,
+	})
 	components := processComponents{
 		ProjectService: projectService,
 	}
@@ -133,6 +147,27 @@ func newAuthorizer(cfg Config) (projectservice.Authorizer, *grpcruntime.ClientCo
 		return nil, nil, err
 	}
 	return authorizer, conn, nil
+}
+
+func newBootstrapProvider(cfg Config) (projectservice.BootstrapProvider, *grpcruntime.ClientConn, error) {
+	if !cfg.ProviderHubBootstrapEnabled {
+		return nil, nil, nil
+	}
+	providerConfig := providerhubclient.Config{
+		Addr:      cfg.ProviderHubGRPCAddr,
+		AuthToken: cfg.ProviderHubGRPCAuthToken,
+		Timeout:   cfg.ProviderHubRequestTimeout,
+	}
+	conn, err := providerhubclient.NewConnection(providerConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+	bootstrapper, err := providerhubclient.NewBootstrapper(providersv1.NewProviderHubServiceClient(conn), providerConfig)
+	if err != nil {
+		_ = conn.Close()
+		return nil, nil, err
+	}
+	return bootstrapper, conn, nil
 }
 
 func readinessChecks(projectService *projectservice.Service, projectDB serviceprocess.PingStore, eventLogDB serviceprocess.PingStore) []serviceprocess.ReadinessCheck {

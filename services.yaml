@@ -86,6 +86,7 @@ spec:
         - libs/go/platformevents/project
         - libs/go/serviceprocess
         - libs/go/servicemain
+        - proto/kodex/providers/v1
         - proto/kodex/projects/v1
         - specs/asyncapi/project-catalog.v1.yaml
         - deploy/base/project-catalog

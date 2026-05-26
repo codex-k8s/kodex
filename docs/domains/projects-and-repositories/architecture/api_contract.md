@@ -5,8 +5,8 @@ title: kodex — API-обзор project-catalog
 status: active
 owner_role: SA
 created_at: 2026-05-05
-updated_at: 2026-05-06
-related_issues: [628, 629, 630, 631, 632, 633]
+updated_at: 2026-05-26
+related_issues: [628, 629, 630, 631, 632, 633, 794]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -39,6 +39,8 @@ approvals:
 
 Нормализованный payload также содержит источники документации. Для `valid` политики сервис проверяет scope, путь рабочего контура, режим доступа и связь с сервисами или зависимостями, затем атомарно синхронизирует источники документации, управляемые политикой, вместе с импортом политики. `project-catalog` не выполняет checkout: `GetWorkspacePolicy` возвращает только разрешённый состав источников для `agent-manager` и `runtime-manager`.
 
+`CreateRepositoryBootstrapPullRequest` — project-side команда для сценария пустого репозитория по модели C. Она работает только по уже существующему `Repository` binding, проверяет проектную принадлежность, provider target, `base_branch`, подготовленные файлы, обязательный watermark и проверенную проекцию `services.yaml`, затем делегирует запись в `provider-hub CreateBootstrapPullRequest`. Команда не создаёт provider-native репозиторий, не генерирует шаблон репозитория, не выполняет adoption scan и не импортирует политику после merge; эти шаги остаются отдельными срезами.
+
 | Операция | Вид | Доступ | Идемпотентность | Примечание |
 |---|---|---|---|---|
 | `CreateProject` | gRPC command | `project.create` | `CommandMeta.command_id` | Создаёт проект, включая опциональную ссылку на иконку. |
@@ -46,6 +48,7 @@ approvals:
 | `GetProject` | gRPC query | `project.read` | нет | Авторитетное чтение проекта. |
 | `ListProjects` | gRPC query | `project.list` | нет | Пакетное чтение для внутренних сервисов и `staff-gateway`. |
 | `AttachRepository` | gRPC command | `repository.attach` | `CommandMeta.command_id` | Привязывает репозиторий к проекту. |
+| `CreateRepositoryBootstrapPullRequest` | gRPC command | `repository.bootstrap` | `CommandMeta.command_id` через `provider-hub` | Готовит project-side bootstrap-контекст для существующего binding и вызывает provider-native bootstrap PR. |
 | `UpdateRepository` | gRPC command | `repository.update` | ожидаемая версия | Обновляет статус, ссылку на иконку и поля политики привязки. |
 | `DetachRepository` | gRPC command | `repository.detach` | ожидаемая версия | Архивирует привязку репозитория и убирает её из активной политики проекта. |
 | `GetRepository` | gRPC query | `repository.read` | нет | Авторитетное чтение привязки репозитория. |
@@ -82,9 +85,9 @@ approvals:
 | `permission_denied` | `access-manager` запретил действие. |
 | `not_found` | Проект, репозиторий или политика не найдены. |
 | `already_exists` | Дубликат slug проекта или идентичности провайдера у активного репозитория. |
-| `failed_precondition` | Нельзя применить политику к архивному проекту или отключённому репозиторию. |
+| `failed_precondition` | Нельзя применить политику к архивному проекту, отключённому репозиторию или repository binding не принадлежит указанному проекту. |
 | `aborted` | Конфликт ожидаемой версии. |
-| `unavailable` | Временная ошибка зависимости или БД. |
+| `unavailable` | Временная ошибка зависимости, БД или provider-side bootstrap команды. |
 
 ## События
 
@@ -128,7 +131,7 @@ approvals:
 | gRPC proto `ProjectCatalogService` | Стабильный `v1`, покрывает весь согласованный объём операций. |
 | AsyncAPI `project.*` | Стабильный `v1`, покрывает события из этого документа. |
 | Сервисный процесс `project-catalog` | Подключены entrypoint, конфигурация, health/readyz/metrics, gRPC-сервер, проверка доступа через `access-manager` и outbox-dispatcher. |
-| Бизнес-обработчики gRPC | Подключены к доменному сервису для проектов, репозиториев, проверенной проекции `services.yaml`, операторских переопределений, источников документации, правил веток, релизных политик, релизных линий и политики размещения. |
+| Бизнес-обработчики gRPC | Подключены к доменному сервису для проектов, репозиториев, bootstrap PR по существующему binding, проверенной проекции `services.yaml`, операторских переопределений, источников документации, правил веток, релизных политик, релизных линий и политики размещения. |
 | PostgreSQL и outbox | Модель БД, миграции, слой репозитория, сервисный outbox и публикация событий в `platform-event-log` подключены. |
 
 ## Совместимость

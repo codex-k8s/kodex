@@ -18,6 +18,8 @@ service ProjectCatalogService {
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
   // AttachRepository binds a provider repository to a project.
   rpc AttachRepository(AttachRepositoryRequest) returns (RepositoryResponse);
+  // CreateRepositoryBootstrapPullRequest asks provider-hub to open or update a bootstrap PR for an existing binding.
+  rpc CreateRepositoryBootstrapPullRequest(CreateRepositoryBootstrapPullRequestRequest) returns (RepositoryBootstrapPullRequestResponse);
   // UpdateRepository changes safe repository binding fields.
   rpc UpdateRepository(UpdateRepositoryRequest) returns (RepositoryResponse);
   // DetachRepository archives a repository binding and removes it from active project policy.
@@ -337,6 +339,38 @@ message Repository {
   optional string icon_object_uri = 10;
   // version is the aggregate version.
   int64 version = 11;
+}
+
+// RepositoryBootstrapFile is one prepared text file for an empty-repository bootstrap branch.
+message RepositoryBootstrapFile {
+  // path is a repository-relative file path.
+  string path = 1;
+  // content is UTF-8 text prepared outside project-catalog.
+  string content = 2;
+  // executable marks files that should be executable when the provider supports it.
+  bool executable = 3;
+}
+
+// RepositoryBootstrapServicesPolicy links prepared bootstrap files to a checked services.yaml projection.
+message RepositoryBootstrapServicesPolicy {
+  // source_path is the repository-relative path of services.yaml inside prepared files.
+  string source_path = 1;
+  // content_hash is the checked source content hash accepted by project policy.
+  string content_hash = 2;
+  // validated_payload_json is normalized services.yaml payload accepted by project policy.
+  string validated_payload_json = 3;
+}
+
+// RepositoryBootstrapProviderTarget is the provider repository target derived from project binding.
+message RepositoryBootstrapProviderTarget {
+  // provider_slug is the extensible provider identifier passed to provider-hub.
+  string provider_slug = 1;
+  // repository_full_name is owner/name or provider equivalent.
+  string repository_full_name = 2;
+  // provider_repository_id is the provider-native repository id when known.
+  optional string provider_repository_id = 3;
+  // web_url is the safe provider repository URL from the binding.
+  optional string web_url = 4;
 }
 
 // ServicesPolicy describes a checked services.yaml projection.
@@ -691,6 +725,62 @@ message DetachRepositoryRequest {
 message RepositoryResponse {
   // repository is the returned repository state.
   Repository repository = 1;
+}
+
+// CreateRepositoryBootstrapPullRequestRequest prepares project context for an empty-repository bootstrap PR.
+message CreateRepositoryBootstrapPullRequestRequest {
+  // project_id is the project that owns the repository binding.
+  string project_id = 1;
+  // repository_id is the project-catalog repository binding id.
+  string repository_id = 2;
+  // base_branch is the verified project base branch and must match the binding default branch in this slice.
+  string base_branch = 3;
+  // bootstrap_branch is the branch provider-hub creates or updates.
+  string bootstrap_branch = 4;
+  // commit_message is the safe commit message for prepared files.
+  string commit_message = 5;
+  // title is PR/MR title.
+  string title = 6;
+  // body is PR/MR body.
+  string body = 7;
+  // draft controls provider draft state when supported.
+  bool draft = 8;
+  // files are prepared text files. project-catalog does not generate a repository template.
+  repeated RepositoryBootstrapFile files = 9;
+  // watermark_json is the required platform watermark payload for provider-native PR/MR linking.
+  string watermark_json = 10;
+  // services_policy links prepared files to a caller-checked services.yaml projection.
+  RepositoryBootstrapServicesPolicy services_policy = 11;
+  // external_account_id is the provider account selected by caller policy for the write.
+  string external_account_id = 12;
+  // meta carries idempotency and audit context.
+  CommandMeta meta = 13;
+}
+
+// RepositoryBootstrapPullRequestResponse returns project and provider refs for the bootstrap PR command.
+message RepositoryBootstrapPullRequestResponse {
+  // repository is the authoritative project repository binding used for the provider command.
+  Repository repository = 1;
+  // provider_target is the provider repository target derived from the binding.
+  RepositoryBootstrapProviderTarget provider_target = 2;
+  // base_branch is the target branch accepted by project-catalog.
+  string base_branch = 3;
+  // bootstrap_branch is the provider-side bootstrap branch.
+  string bootstrap_branch = 4;
+  // services_policy_source_path is the checked services.yaml source path.
+  string services_policy_source_path = 5;
+  // services_policy_content_hash is the checked services.yaml content hash.
+  string services_policy_content_hash = 6;
+  // provider_operation_id is the provider-hub operation id when available.
+  optional string provider_operation_id = 7;
+  // provider_result_ref is provider-hub command result ref when available.
+  optional string provider_result_ref = 8;
+  // provider_work_item_projection_id is provider-hub PR/MR projection id when available.
+  optional string provider_work_item_projection_id = 9;
+  // provider_web_url is the provider PR/MR URL when available.
+  optional string provider_web_url = 10;
+  // provider_object_id is the provider-native object id when available.
+  optional string provider_object_id = 11;
 }
 
 // GetRepositoryRequest reads a repository binding.

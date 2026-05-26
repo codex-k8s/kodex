@@ -1,6 +1,8 @@
 package service
 
 import (
+	"context"
+
 	"github.com/google/uuid"
 
 	"github.com/codex-k8s/kodex/services/internal/project-catalog/internal/domain/types/entity"
@@ -79,6 +81,88 @@ type ListRepositoriesInput struct {
 type ListRepositoriesResult struct {
 	Repositories []entity.RepositoryBinding
 	Page         value.PageResult
+}
+
+// RepositoryBootstrapFile is one prepared text file for empty-repository bootstrap.
+type RepositoryBootstrapFile struct {
+	Path       string
+	Content    string
+	Executable bool
+}
+
+// RepositoryBootstrapServicesPolicy links prepared files to a checked services.yaml projection.
+type RepositoryBootstrapServicesPolicy struct {
+	SourcePath       string
+	ContentHash      string
+	ValidatedPayload []byte
+}
+
+// RepositoryBootstrapProviderTarget is the provider repository target derived from project binding.
+type RepositoryBootstrapProviderTarget struct {
+	ProviderSlug         string
+	RepositoryFullName   string
+	ProviderRepositoryID string
+	WebURL               string
+}
+
+// RepositoryBootstrapProviderResult contains provider-hub refs returned from the delegated write.
+type RepositoryBootstrapProviderResult struct {
+	ProviderOperationID          string
+	ProviderResultRef            string
+	ProviderWorkItemProjectionID string
+	ProviderWebURL               string
+	ProviderObjectID             string
+}
+
+// CreateRepositoryBootstrapPullRequestInput creates or updates a provider-side bootstrap PR for a bound repository.
+type CreateRepositoryBootstrapPullRequestInput struct {
+	ProjectID         uuid.UUID
+	RepositoryID      uuid.UUID
+	BaseBranch        string
+	BootstrapBranch   string
+	CommitMessage     string
+	Title             string
+	Body              string
+	Draft             bool
+	Files             []RepositoryBootstrapFile
+	WatermarkJSON     []byte
+	ServicesPolicy    RepositoryBootstrapServicesPolicy
+	ExternalAccountID uuid.UUID
+	Meta              value.CommandMeta
+}
+
+// RepositoryBootstrapPullRequestResult returns project binding and provider refs for bootstrap.
+type RepositoryBootstrapPullRequestResult struct {
+	Repository      entity.RepositoryBinding
+	ProviderTarget  RepositoryBootstrapProviderTarget
+	BaseBranch      string
+	BootstrapBranch string
+	ServicesPolicy  RepositoryBootstrapServicesPolicy
+	ProviderResult  RepositoryBootstrapProviderResult
+}
+
+// ProviderBootstrapPullRequestInput is the domain port request sent to provider-hub.
+type ProviderBootstrapPullRequestInput struct {
+	ProjectID         uuid.UUID
+	RepositoryID      uuid.UUID
+	ProviderSlug      string
+	RepositoryTarget  RepositoryBootstrapProviderTarget
+	BaseBranch        string
+	BootstrapBranch   string
+	CommitMessage     string
+	Title             string
+	Body              string
+	Draft             bool
+	Files             []RepositoryBootstrapFile
+	WatermarkJSON     []byte
+	ServicesPolicy    RepositoryBootstrapServicesPolicy
+	ExternalAccountID uuid.UUID
+	Meta              value.CommandMeta
+}
+
+// BootstrapProvider delegates provider-native bootstrap writes to provider-hub.
+type BootstrapProvider interface {
+	CreateRepositoryBootstrapPullRequest(context.Context, ProviderBootstrapPullRequestInput) (RepositoryBootstrapProviderResult, error)
 }
 
 // ImportServicesPolicyInput imports a checked services.yaml projection.

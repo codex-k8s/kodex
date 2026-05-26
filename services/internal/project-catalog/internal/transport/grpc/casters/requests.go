@@ -118,6 +118,68 @@ func AttachRepositoryInput(request *projectsv1.AttachRepositoryRequest) (project
 	}, nil
 }
 
+// CreateRepositoryBootstrapPullRequestInput maps a bootstrap PR request to the domain command input.
+func CreateRepositoryBootstrapPullRequestInput(request *projectsv1.CreateRepositoryBootstrapPullRequestRequest) (projectservice.CreateRepositoryBootstrapPullRequestInput, error) {
+	meta, err := CommandMetaFromProto(request.GetMeta())
+	if err != nil {
+		return projectservice.CreateRepositoryBootstrapPullRequestInput{}, err
+	}
+	projectID, err := requiredUUID(request.GetProjectId())
+	if err != nil {
+		return projectservice.CreateRepositoryBootstrapPullRequestInput{}, err
+	}
+	repositoryID, err := requiredUUID(request.GetRepositoryId())
+	if err != nil {
+		return projectservice.CreateRepositoryBootstrapPullRequestInput{}, err
+	}
+	externalAccountID, err := requiredUUID(request.GetExternalAccountId())
+	if err != nil {
+		return projectservice.CreateRepositoryBootstrapPullRequestInput{}, err
+	}
+	servicesPolicy := request.GetServicesPolicy()
+	if servicesPolicy == nil {
+		return projectservice.CreateRepositoryBootstrapPullRequestInput{}, errs.ErrInvalidArgument
+	}
+	return projectservice.CreateRepositoryBootstrapPullRequestInput{
+		ProjectID:         projectID,
+		RepositoryID:      repositoryID,
+		BaseBranch:        strings.TrimSpace(request.GetBaseBranch()),
+		BootstrapBranch:   strings.TrimSpace(request.GetBootstrapBranch()),
+		CommitMessage:     strings.TrimSpace(request.GetCommitMessage()),
+		Title:             strings.TrimSpace(request.GetTitle()),
+		Body:              strings.TrimSpace(request.GetBody()),
+		Draft:             request.GetDraft(),
+		Files:             bootstrapFilesFromProto(request.GetFiles()),
+		WatermarkJSON:     []byte(strings.TrimSpace(request.GetWatermarkJson())),
+		ServicesPolicy:    bootstrapServicesPolicyFromProto(servicesPolicy),
+		ExternalAccountID: externalAccountID,
+		Meta:              meta,
+	}, nil
+}
+
+func bootstrapFilesFromProto(files []*projectsv1.RepositoryBootstrapFile) []projectservice.RepositoryBootstrapFile {
+	result := make([]projectservice.RepositoryBootstrapFile, 0, len(files))
+	for _, file := range files {
+		if file == nil {
+			continue
+		}
+		result = append(result, projectservice.RepositoryBootstrapFile{
+			Path:       strings.TrimSpace(file.GetPath()),
+			Content:    file.GetContent(),
+			Executable: file.GetExecutable(),
+		})
+	}
+	return result
+}
+
+func bootstrapServicesPolicyFromProto(policy *projectsv1.RepositoryBootstrapServicesPolicy) projectservice.RepositoryBootstrapServicesPolicy {
+	return projectservice.RepositoryBootstrapServicesPolicy{
+		SourcePath:       strings.TrimSpace(policy.GetSourcePath()),
+		ContentHash:      strings.TrimSpace(policy.GetContentHash()),
+		ValidatedPayload: []byte(strings.TrimSpace(policy.GetValidatedPayloadJson())),
+	}
+}
+
 // UpdateRepositoryInput maps a gRPC request to the domain command input.
 func UpdateRepositoryInput(request *projectsv1.UpdateRepositoryRequest) (projectservice.UpdateRepositoryInput, error) {
 	meta, err := CommandMetaFromProto(request.GetMeta())

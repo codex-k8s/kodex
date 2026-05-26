@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"testing"
@@ -615,6 +617,172 @@ func TestImportServicesPolicyRejectsUnknownDependency(t *testing.T) {
 	}
 }
 
+func TestCreateRepositoryBootstrapPullRequestDelegatesProviderWrite(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	externalAccountID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = entity.RepositoryBinding{
+		Base:                 entity.Base{ID: repositoryID, Version: 1},
+		ProjectID:            projectID,
+		Provider:             enum.RepositoryProviderGitHub,
+		ProviderOwner:        "codex-k8s",
+		ProviderName:         "kodex",
+		WebURL:               "https://github.com/codex-k8s/kodex",
+		DefaultBranch:        "main",
+		Status:               enum.RepositoryStatusPending,
+		ProviderRepositoryID: "R_123",
+	}
+	authorizer := &spyAuthorizer{}
+	provider := &spyBootstrapProvider{
+		result: RepositoryBootstrapProviderResult{
+			ProviderOperationID:          "operation-1",
+			ProviderWorkItemProjectionID: "projection-1",
+			ProviderWebURL:               "https://github.com/codex-k8s/kodex/pull/1",
+		},
+	}
+	svc := NewWithConfig(store, fixedClock{}, &sequenceIDs{}, Config{Authorizer: authorizer, BootstrapProvider: provider})
+
+	result, err := svc.CreateRepositoryBootstrapPullRequest(ctx, CreateRepositoryBootstrapPullRequestInput{
+		ProjectID:       projectID,
+		RepositoryID:    repositoryID,
+		BaseBranch:      "main",
+		BootstrapBranch: "kodex/bootstrap",
+		CommitMessage:   "Bootstrap repository",
+		Title:           "Bootstrap repository",
+		Files: []RepositoryBootstrapFile{{
+			Path:    "services.yaml",
+			Content: bootstrapServicesPolicyFileContent,
+		}},
+		WatermarkJSON:     []byte(`{"kind":"provider_pr","managed_by":"kodex","work_type":"repository_bootstrap","source_ref":"services.yaml"}`),
+		ServicesPolicy:    bootstrapServicesPolicy(),
+		ExternalAccountID: externalAccountID,
+		Meta:              commandMeta(uuid.New()),
+	})
+	if err != nil {
+		t.Fatalf("CreateRepositoryBootstrapPullRequest(): %v", err)
+	}
+	if provider.calls != 1 {
+		t.Fatalf("provider calls = %d, want 1", provider.calls)
+	}
+	if provider.input.ProviderSlug != "github" || provider.input.RepositoryTarget.RepositoryFullName != "codex-k8s/kodex" || provider.input.RepositoryTarget.ProviderRepositoryID != "R_123" {
+		t.Fatalf("provider target = %+v, want binding-derived target", provider.input.RepositoryTarget)
+	}
+	if provider.input.BaseBranch != "main" || provider.input.BootstrapBranch != "kodex/bootstrap" || provider.input.ExternalAccountID != externalAccountID {
+		t.Fatalf("provider input = %+v, want branch and account fields", provider.input)
+	}
+	if len(authorizer.requests) != 1 || authorizer.requests[0].ActionKey != projectActionRepositoryBootstrap {
+		t.Fatalf("access requests = %+v, want repository bootstrap check", authorizer.requests)
+	}
+	if result.ProviderResult.ProviderOperationID != "operation-1" || result.ProviderTarget.RepositoryFullName != "codex-k8s/kodex" {
+		t.Fatalf("result = %+v, want provider refs and target", result)
+	}
+	if len(store.events) != 0 {
+		t.Fatalf("events = %d, want no project event before services policy import", len(store.events))
+	}
+}
+
+func TestCreateRepositoryBootstrapPullRequestValidatesProjectPolicyLink(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = entity.RepositoryBinding{
+		Base:          entity.Base{ID: repositoryID, Version: 1},
+		ProjectID:     projectID,
+		Provider:      enum.RepositoryProviderGitHub,
+		ProviderOwner: "codex-k8s",
+		ProviderName:  "kodex",
+		DefaultBranch: "main",
+		Status:        enum.RepositoryStatusPending,
+	}
+	provider := &spyBootstrapProvider{}
+	svc := NewWithConfig(store, fixedClock{}, &sequenceIDs{}, Config{BootstrapProvider: provider})
+
+	_, err := svc.CreateRepositoryBootstrapPullRequest(ctx, CreateRepositoryBootstrapPullRequestInput{
+		ProjectID:         projectID,
+		RepositoryID:      repositoryID,
+		BaseBranch:        "main",
+		BootstrapBranch:   "kodex/bootstrap",
+		CommitMessage:     "Bootstrap repository",
+		Title:             "Bootstrap repository",
+		Files:             []RepositoryBootstrapFile{{Path: "README.md", Content: "# Project\n"}},
+		WatermarkJSON:     []byte(`{"kind":"provider_pr","managed_by":"kodex","work_type":"repository_bootstrap","source_ref":"services.yaml"}`),
+		ServicesPolicy:    bootstrapServicesPolicy(),
+		ExternalAccountID: uuid.New(),
+		Meta:              commandMeta(uuid.New()),
+	})
+	if !errors.Is(err, errs.ErrInvalidArgument) {
+		t.Fatalf("CreateRepositoryBootstrapPullRequest() err = %v, want invalid argument", err)
+	}
+	if provider.calls != 0 {
+		t.Fatalf("provider calls = %d, want validation to stop before provider", provider.calls)
+	}
+}
+
+func TestCreateRepositoryBootstrapPullRequestRejectsPolicyContentDrift(t *testing.T) {
+	ctx := context.Background()
+	projectID := uuid.New()
+	repositoryID := uuid.New()
+	store := newMemoryRepository()
+	store.repositories[repositoryID] = entity.RepositoryBinding{
+		Base:          entity.Base{ID: repositoryID, Version: 1},
+		ProjectID:     projectID,
+		Provider:      enum.RepositoryProviderGitHub,
+		ProviderOwner: "codex-k8s",
+		ProviderName:  "kodex",
+		DefaultBranch: "main",
+		Status:        enum.RepositoryStatusPending,
+	}
+
+	for _, tc := range []struct {
+		name     string
+		content  string
+		policy   RepositoryBootstrapServicesPolicy
+		provider *spyBootstrapProvider
+	}{
+		{
+			name:     "hash mismatch",
+			content:  "spec:\n  services:\n    - key: api\n      rootPath: services/other\n      kind: backend\n",
+			policy:   bootstrapServicesPolicy(),
+			provider: &spyBootstrapProvider{},
+		},
+		{
+			name:    "payload mismatch",
+			content: "spec:\n  services:\n    - key: api\n      rootPath: services/other\n      kind: backend\n",
+			policy: bootstrapServicesPolicyForContent(
+				"spec:\n  services:\n    - key: api\n      rootPath: services/other\n      kind: backend\n",
+				[]byte(bootstrapServicesPolicyPayload),
+			),
+			provider: &spyBootstrapProvider{},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := NewWithConfig(store, fixedClock{}, &sequenceIDs{}, Config{BootstrapProvider: tc.provider})
+			_, err := svc.CreateRepositoryBootstrapPullRequest(ctx, CreateRepositoryBootstrapPullRequestInput{
+				ProjectID:         projectID,
+				RepositoryID:      repositoryID,
+				BaseBranch:        "main",
+				BootstrapBranch:   "kodex/bootstrap",
+				CommitMessage:     "Bootstrap repository",
+				Title:             "Bootstrap repository",
+				Files:             []RepositoryBootstrapFile{{Path: "services.yaml", Content: tc.content}},
+				WatermarkJSON:     []byte(`{"kind":"provider_pr","managed_by":"kodex","work_type":"repository_bootstrap","source_ref":"services.yaml"}`),
+				ServicesPolicy:    tc.policy,
+				ExternalAccountID: uuid.New(),
+				Meta:              commandMeta(uuid.New()),
+			})
+			if !errors.Is(err, errs.ErrInvalidArgument) {
+				t.Fatalf("CreateRepositoryBootstrapPullRequest() err = %v, want invalid argument", err)
+			}
+			if tc.provider.calls != 0 {
+				t.Fatalf("provider calls = %d, want validation to stop before provider", tc.provider.calls)
+			}
+		})
+	}
+}
+
 func TestPutDocumentationSourceNormalizesAndPublishesEvent(t *testing.T) {
 	ctx := context.Background()
 	store := newMemoryRepository()
@@ -699,6 +867,19 @@ func (a *spyAuthorizer) Authorize(_ context.Context, request AuthorizationReques
 	return a.err
 }
 
+type spyBootstrapProvider struct {
+	calls  int
+	input  ProviderBootstrapPullRequestInput
+	result RepositoryBootstrapProviderResult
+	err    error
+}
+
+func (p *spyBootstrapProvider) CreateRepositoryBootstrapPullRequest(_ context.Context, input ProviderBootstrapPullRequestInput) (RepositoryBootstrapProviderResult, error) {
+	p.calls++
+	p.input = input
+	return p.result, p.err
+}
+
 type fixedClock struct{}
 
 func (fixedClock) Now() time.Time {
@@ -748,6 +929,27 @@ func stringPtr(value string) *string {
 
 func servicesPolicyPayload(key string, rootPath string, kind string) string {
 	return `{"spec":{"services":[{"key":"` + key + `","rootPath":"` + rootPath + `","kind":"` + kind + `"}]}}`
+}
+
+const bootstrapServicesPolicyFileContent = "spec:\n  services:\n    - key: api\n      rootPath: services/api\n      kind: backend\n"
+
+const bootstrapServicesPolicyPayload = `{"spec":{"services":[{"key":"api","rootPath":"services/api","kind":"backend"}]}}`
+
+func bootstrapServicesPolicy() RepositoryBootstrapServicesPolicy {
+	return bootstrapServicesPolicyForContent(bootstrapServicesPolicyFileContent, []byte(bootstrapServicesPolicyPayload))
+}
+
+func bootstrapServicesPolicyForContent(content string, payload []byte) RepositoryBootstrapServicesPolicy {
+	return RepositoryBootstrapServicesPolicy{
+		SourcePath:       "services.yaml",
+		ContentHash:      bootstrapContentHash(content),
+		ValidatedPayload: payload,
+	}
+}
+
+func bootstrapContentHash(content string) string {
+	sum := sha256.Sum256([]byte(content))
+	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
 type memoryRepository struct {

@@ -5,8 +5,8 @@ title: kodex — API-контракт provider-hub
 status: active
 owner_role: SA
 created_at: 2026-05-06
-updated_at: 2026-05-25
-related_issues: [281, 282, 711, 719, 725, 729, 737, 761, 770, 781]
+updated_at: 2026-05-26
+related_issues: [281, 282, 711, 719, 725, 729, 737, 761, 770, 781, 794]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -151,6 +151,8 @@ approvals:
 Для `UpdatePullRequest` GitHub-адаптер не смешивает в одной команде метаданные PR, которые GitHub хранит на issue-стороне (`labels`, `assignee_provider_logins`, `milestone`), и собственные поля PR (`base_branch`, `maintainer_can_modify`). В UI GitHub эти поля видны как поля PR, но API меняет их через разные HTTP-ручки. Такая смешанная команда отклоняется до внешнего write, чтобы не оставить частичное изменение без транзакционной гарантии. Вызывающий контур должен разбить действие на две идемпотентные команды: `UpdateIssue` для метаданных PR на issue-стороне и `UpdatePullRequest` для собственных полей PR. Если нужен один пользовательский сценарий, внешний контур оркестрации должен связать эти команды общим `correlation_id`, а не требовать атомарности от GitHub.
 `CreateRepository` является provider-side командой модели C: проектный или агентный контур заранее выбирает владельца, имя, видимость и внешний аккаунт, а `provider-hub` только выполняет нативное создание репозитория у провайдера. Для GitHub команда использует инициализацию на стороне провайдера `auto_init=true`, чтобы провайдер создал начальный default branch и минимальный начальный commit. Ответ возвращает `base_branch` из default branch провайдера. Для организации `provider_owner` обязателен; для authenticated user `provider_owner` не передаётся, чтобы не смешивать пользовательский и организационный режимы. Команда не генерирует `services.yaml`, не выбирает шаблон, не сканирует репозиторий и не меняет branch protection.
 `CreateBootstrapPullRequest` является provider-side командой модели C: проектный или агентный контур готовит payload и refs заранее, а `provider-hub` только пишет их в уже созданный репозиторий через provider API, создаёт или обновляет bootstrap branch/PR, обновляет проекцию и фиксирует безопасный журнал операции. `base_branch` должен существовать, отличаться от `bootstrap_branch` и иметь пустое дерево или только безопасный `README.md`, созданный инициализацией на стороне провайдера. Если bootstrap branch уже существует, новая команда строит commit от текущей головы bootstrap branch, но дерево commit собирается из пустого дерева или дерева только с `README.md` и подготовленного набора файлов, чтобы не наследовать старые файлы. Содержимое файлов не хранится в `ProviderOperation`, outbox, событиях, audit payload и логах.
+
+Когда bootstrap запускается через `project-catalog`, именно `project-catalog` владеет project/repository binding, проектной `base_branch` policy, связью prepared files с проверенной проекцией `services.yaml`, watermark и безопасным `operation_policy_context`. `provider-hub` остаётся владельцем provider-native записи, журнала `ProviderOperation`, локальной PR/MR-проекции и событий `provider.*`; он не принимает решение о проектной политике и не превращается в генератор шаблонов репозитория.
 
 `CreateAdoptionPullRequest` является provider-side командой модели C для существующего репозитория: проектный или агентный контур заранее выполняет scan, готовит отчёт, принимает проектное решение и передаёт в `provider-hub` только готовые файлы, refs, title/body и watermark. `provider-hub` проверяет существование `base_branch`, создаёт или обновляет adoption branch и reviewable `PR/MR`, но не требует пустого дерева base branch, не сканирует репозиторий, не генерирует `services.yaml`, не выбирает шаблон и не хранит содержимое файлов в БД, событиях или логах.
 

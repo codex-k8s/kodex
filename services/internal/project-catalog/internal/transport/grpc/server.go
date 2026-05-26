@@ -21,6 +21,7 @@ type projectService interface {
 	GetProject(context.Context, uuid.UUID, value.QueryMeta) (entity.Project, error)
 	ListProjects(context.Context, projectservice.ListProjectsInput) (projectservice.ListProjectsResult, error)
 	AttachRepository(context.Context, projectservice.AttachRepositoryInput) (entity.RepositoryBinding, error)
+	CreateRepositoryBootstrapPullRequest(context.Context, projectservice.CreateRepositoryBootstrapPullRequestInput) (projectservice.RepositoryBootstrapPullRequestResult, error)
 	UpdateRepository(context.Context, projectservice.UpdateRepositoryInput) (entity.RepositoryBinding, error)
 	DetachRepository(context.Context, uuid.UUID, value.CommandMeta) (entity.RepositoryBinding, error)
 	GetRepository(context.Context, uuid.UUID, value.QueryMeta) (entity.RepositoryBinding, error)
@@ -96,6 +97,11 @@ func (s *Server) ListProjects(ctx context.Context, request *projectsv1.ListProje
 // AttachRepository binds a provider repository to a project.
 func (s *Server) AttachRepository(ctx context.Context, request *projectsv1.AttachRepositoryRequest) (*projectsv1.RepositoryResponse, error) {
 	return handleUnary(ctx, request, grpccasters.AttachRepositoryInput, s.service.AttachRepository, grpccasters.RepositoryResponse)
+}
+
+// CreateRepositoryBootstrapPullRequest asks provider-hub to open or update a bootstrap PR for an existing binding.
+func (s *Server) CreateRepositoryBootstrapPullRequest(ctx context.Context, request *projectsv1.CreateRepositoryBootstrapPullRequestRequest) (*projectsv1.RepositoryBootstrapPullRequestResponse, error) {
+	return handleUnary(ctx, request, grpccasters.CreateRepositoryBootstrapPullRequestInput, s.service.CreateRepositoryBootstrapPullRequest, grpccasters.RepositoryBootstrapPullRequestResponse)
 }
 
 // UpdateRepository changes safe repository binding fields.

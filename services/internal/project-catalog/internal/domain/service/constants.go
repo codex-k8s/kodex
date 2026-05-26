@@ -46,6 +46,7 @@ const (
 	projectOperationCreateProject        = "domain.Service.CreateProject"
 	projectOperationUpdateProject        = "domain.Service.UpdateProject"
 	projectOperationAttachRepository     = "domain.Service.AttachRepository"
+	projectOperationBootstrapRepository  = "domain.Service.CreateRepositoryBootstrapPullRequest"
 	projectOperationUpdateRepository     = "domain.Service.UpdateRepository"
 	projectOperationDetachRepository     = "domain.Service.DetachRepository"
 	projectOperationImportServicesPolicy = "domain.Service.ImportServicesPolicy"
@@ -62,6 +63,7 @@ const (
 	projectActionRead                    = accesscatalog.ActionProjectRead
 	projectActionList                    = accesscatalog.ActionProjectList
 	projectActionRepositoryAttach        = accesscatalog.ActionRepositoryAttach
+	projectActionRepositoryBootstrap     = accesscatalog.ActionRepositoryBootstrap
 	projectActionRepositoryUpdate        = accesscatalog.ActionRepositoryUpdate
 	projectActionRepositoryDetach        = accesscatalog.ActionRepositoryDetach
 	projectActionRepositoryRead          = accesscatalog.ActionRepositoryRead
