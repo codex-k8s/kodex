@@ -17,6 +17,7 @@ import (
 
 const (
 	acceptanceDetailsLimit      = 4096
+	acceptanceTargetRefLimit    = 512
 	acceptanceFailureReasonCode = "machine_acceptance_failed"
 )
 
@@ -34,6 +35,10 @@ func (s *Service) RequestAcceptance(ctx context.Context, input RequestAcceptance
 		return entity.AcceptanceResult{}, err
 	}
 	checkKind, err := singleAcceptanceCheckKind(input.CheckKinds)
+	if err != nil {
+		return entity.AcceptanceResult{}, err
+	}
+	targetRef, err := normalizeAcceptanceTargetRef(input.TargetRef)
 	if err != nil {
 		return entity.AcceptanceResult{}, err
 	}
@@ -59,7 +64,7 @@ func (s *Service) RequestAcceptance(ctx context.Context, input RequestAcceptance
 		StageID:       stageID,
 		CheckKind:     checkKind,
 		Status:        enum.AcceptanceStatusPending,
-		TargetRef:     strings.TrimSpace(input.TargetRef),
+		TargetRef:     targetRef,
 		DetailsJSON:   []byte("{}"),
 	}
 	payload, err := marshalCommandPayload(acceptanceCommandPayload{AcceptanceResult: acceptance})
@@ -95,6 +100,10 @@ func (s *Service) RecordAcceptanceResult(ctx context.Context, input RecordAccept
 	if err != nil {
 		return entity.AcceptanceResult{}, err
 	}
+	targetRef, err := normalizeAcceptanceTargetRef(input.TargetRef)
+	if err != nil {
+		return entity.AcceptanceResult{}, err
+	}
 	if replay, ok, err := findReplay(ctx, s, input.Meta, operationRecordAcceptanceResult, enum.CommandAggregateTypeAcceptance, acceptanceFromPayload, verifyAcceptanceReplay(uuid.Nil, input.AcceptanceResultID, s.repository.GetAcceptanceResult)); ok || err != nil {
 		return replay, err
 	}
@@ -108,12 +117,17 @@ func (s *Service) RecordAcceptanceResult(ctx context.Context, input RecordAccept
 	if err := validateAcceptanceStatusTransition(acceptance.Status, input.Status); err != nil {
 		return entity.AcceptanceResult{}, err
 	}
+	nextTargetRef := acceptance.TargetRef
+	if targetRef != "" {
+		nextTargetRef = targetRef
+	}
+	if err := validateAcceptanceCheckKindRecord(acceptance.CheckKind, input.Status, nextTargetRef, details); err != nil {
+		return entity.AcceptanceResult{}, err
+	}
 	now := s.clock.Now()
 	previousStatus := string(acceptance.Status)
 	acceptance.Status = input.Status
-	if targetRef := strings.TrimSpace(input.TargetRef); targetRef != "" {
-		acceptance.TargetRef = targetRef
-	}
+	acceptance.TargetRef = nextTargetRef
 	acceptance.DetailsJSON = details
 	acceptance.Version++
 	acceptance.UpdatedAt = now
@@ -235,6 +249,19 @@ func validateAcceptanceStatusTransition(current enum.AcceptanceStatus, next enum
 	return errs.ErrPreconditionFailed
 }
 
+func validateAcceptanceCheckKindRecord(kind enum.AcceptanceCheckKind, status enum.AcceptanceStatus, targetRef string, details []byte) error {
+	if kind != enum.AcceptanceCheckKindHumanGate {
+		return nil
+	}
+	if status != enum.AcceptanceStatusWaiting {
+		return errs.ErrPreconditionFailed
+	}
+	if !humanGateOwnerRef(targetRef) && !acceptanceDetailsHasHumanGateOwnerRef(details) {
+		return errs.ErrInvalidArgument
+	}
+	return nil
+}
+
 func isTerminalAcceptanceStatus(status enum.AcceptanceStatus) bool {
 	return status == enum.AcceptanceStatusPassed || status == enum.AcceptanceStatusFailed || status == enum.AcceptanceStatusSkipped
 }
@@ -268,6 +295,68 @@ func normalizeAcceptanceDetails(payload []byte) ([]byte, error) {
 	return compact.Bytes(), nil
 }
 
+func normalizeAcceptanceTargetRef(value string) (string, error) {
+	ref := strings.TrimSpace(value)
+	if ref == "" {
+		return "", nil
+	}
+	namespaceEnd := strings.IndexByte(ref, ':')
+	if len(ref) > acceptanceTargetRefLimit || namespaceEnd <= 0 || namespaceEnd == len(ref)-1 {
+		return "", errs.ErrInvalidArgument
+	}
+	for _, char := range ref {
+		if !safeAcceptanceRefChar(char) {
+			return "", errs.ErrInvalidArgument
+		}
+	}
+	if unsafeAcceptanceTargetRef(ref) {
+		return "", errs.ErrInvalidArgument
+	}
+	return ref, nil
+}
+
+func safeAcceptanceRefChar(char rune) bool {
+	if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') {
+		return true
+	}
+	switch char {
+	case '-', '.', '_', ':', '/', '#', '@', '+', '=', ',':
+		return true
+	default:
+		return false
+	}
+}
+
+func unsafeAcceptanceTargetRef(ref string) bool {
+	lower := strings.ToLower(ref)
+	markers := []string{
+		"raw_provider_payload",
+		"provider_payload",
+		"workspace_file",
+		"workspace_files",
+		"prompt_text",
+		"prompt_template",
+		"flow_file",
+		"large_report",
+		"report_body",
+		"raw_report",
+		"secret",
+		"token",
+		"authorization",
+		"stdout",
+		"stderr",
+		"logs",
+		"-----begin",
+		"bearer",
+	}
+	for _, marker := range markers {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
+}
+
 func validateAcceptanceDetailsObject(object acceptanceDetailsObject) error {
 	if object == nil {
 		return errs.ErrInvalidArgument
@@ -281,6 +370,32 @@ func validateAcceptanceDetailsObject(object acceptanceDetailsObject) error {
 		}
 	}
 	return nil
+}
+
+func acceptanceDetailsHasHumanGateOwnerRef(details []byte) bool {
+	var object acceptanceDetailsObject
+	if err := json.Unmarshal(details, &object); err != nil {
+		return false
+	}
+	for _, key := range []string{"gate_ref", "risk_ref"} {
+		raw, ok := object[key]
+		if !ok {
+			continue
+		}
+		var ref string
+		if err := json.Unmarshal(raw, &ref); err != nil {
+			continue
+		}
+		normalized, err := normalizeAcceptanceTargetRef(ref)
+		if err == nil && humanGateOwnerRef(normalized) {
+			return true
+		}
+	}
+	return false
+}
+
+func humanGateOwnerRef(ref string) bool {
+	return strings.HasPrefix(ref, "gate:") || strings.HasPrefix(ref, "risk:") || strings.HasPrefix(ref, "governance:")
 }
 
 func validateAcceptanceDetailsValue(raw json.RawMessage) error {

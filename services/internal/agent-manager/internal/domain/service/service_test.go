@@ -1180,13 +1180,16 @@ func TestRequestAcceptanceCreatesPendingResultAndEvent(t *testing.T) {
 		SessionID:  sessionID,
 		RunID:      &runID,
 		CheckKinds: []enum.AcceptanceCheckKind{enum.AcceptanceCheckKindRoleResult},
-		TargetRef:  "artifact:run-summary",
+		TargetRef:  " artifact:run-summary ",
 	})
 	if err != nil {
 		t.Fatalf("RequestAcceptance() err = %v", err)
 	}
 	if acceptance.ID != acceptanceID || acceptance.Status != enum.AcceptanceStatusPending || acceptance.RunID == nil || *acceptance.RunID != runID {
 		t.Fatalf("acceptance = %+v", acceptance)
+	}
+	if acceptance.TargetRef != "artifact:run-summary" {
+		t.Fatalf("target ref = %q", acceptance.TargetRef)
 	}
 	if repository.acceptanceResult.AggregateType != enum.CommandAggregateTypeAcceptance || repository.acceptanceEvent.EventType != agentevents.EventAcceptanceRequested {
 		t.Fatalf("result/event = %s/%s", repository.acceptanceResult.AggregateType, repository.acceptanceEvent.EventType)
@@ -1239,6 +1242,37 @@ func TestRequestAcceptanceReplaysCommandResult(t *testing.T) {
 	}
 	if repository.createAcceptanceCalled {
 		t.Fatal("CreateAcceptanceResultWithResult called during replay")
+	}
+}
+
+func TestRequestAcceptanceRejectsUnsafeTargetRef(t *testing.T) {
+	t.Parallel()
+
+	service := New(Config{Repository: &fakeRepository{}})
+
+	cases := map[string]string{
+		"raw marker":        "raw_provider_payload:body",
+		"json-like value":   "artifact:{\"body\":\"not safe\"}",
+		"too long":          strings.Repeat("a", acceptanceTargetRefLimit+1) + ":ref",
+		"missing namespace": "artifact without namespace",
+		"empty namespace":   ":artifact",
+		"empty value":       "artifact:",
+	}
+	for name, targetRef := range cases {
+		targetRef := targetRef
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := service.RequestAcceptance(context.Background(), RequestAcceptanceInput{
+				Meta:       value.CommandMeta{CommandID: uuid.New(), Actor: testActor()},
+				SessionID:  uuid.New(),
+				CheckKinds: []enum.AcceptanceCheckKind{enum.AcceptanceCheckKindArtifact},
+				TargetRef:  targetRef,
+			})
+			if !errors.Is(err, errs.ErrInvalidArgument) {
+				t.Fatalf("RequestAcceptance() err = %v, want %v", err, errs.ErrInvalidArgument)
+			}
+		})
 	}
 }
 
@@ -1416,6 +1450,138 @@ func TestRecordAcceptanceResultRejectsConflictNotFoundAndUnsafePayload(t *testin
 		}
 		if repository.updatedAcceptance.ID != uuid.Nil {
 			t.Fatal("unsafe payload was persisted")
+		}
+	})
+
+	t.Run("unsafe target ref", func(t *testing.T) {
+		t.Parallel()
+
+		expectedVersion := int64(1)
+		service := New(Config{Repository: &fakeRepository{}})
+
+		_, err := service.RecordAcceptanceResult(context.Background(), RecordAcceptanceResultInput{
+			Meta:               value.CommandMeta{CommandID: uuid.New(), ExpectedVersion: &expectedVersion, Actor: testActor()},
+			AcceptanceResultID: uuid.New(),
+			Status:             enum.AcceptanceStatusFailed,
+			TargetRef:          "logs:raw-provider-stdout",
+			DetailsJSON:        []byte(`{"summary":"not persisted"}`),
+		})
+		if !errors.Is(err, errs.ErrInvalidArgument) {
+			t.Fatalf("RecordAcceptanceResult() err = %v, want %v", err, errs.ErrInvalidArgument)
+		}
+	})
+}
+
+func TestRecordAcceptanceResultHumanGateOnlyWaitsForOwnerDecision(t *testing.T) {
+	t.Parallel()
+
+	for _, status := range []enum.AcceptanceStatus{
+		enum.AcceptanceStatusPassed,
+		enum.AcceptanceStatusFailed,
+		enum.AcceptanceStatusSkipped,
+	} {
+		status := status
+		t.Run("reject "+string(status), func(t *testing.T) {
+			t.Parallel()
+
+			acceptanceID := uuid.New()
+			expectedVersion := int64(1)
+			repository := &fakeRepository{
+				acceptanceByID: map[uuid.UUID]entity.AcceptanceResult{
+					acceptanceID: {
+						VersionedBase: entity.VersionedBase{ID: acceptanceID, Version: expectedVersion},
+						SessionID:     uuid.New(),
+						CheckKind:     enum.AcceptanceCheckKindHumanGate,
+						Status:        enum.AcceptanceStatusPending,
+						TargetRef:     "gate:request-1",
+						DetailsJSON:   []byte("{}"),
+					},
+				},
+			}
+			service := New(Config{Repository: repository})
+
+			_, err := service.RecordAcceptanceResult(context.Background(), RecordAcceptanceResultInput{
+				Meta:               value.CommandMeta{CommandID: uuid.New(), ExpectedVersion: &expectedVersion, Actor: testActor()},
+				AcceptanceResultID: acceptanceID,
+				Status:             status,
+				TargetRef:          "gate:decision-1",
+				DetailsJSON:        []byte(`{"gate_ref":"gate:request-1"}`),
+			})
+			if !errors.Is(err, errs.ErrPreconditionFailed) {
+				t.Fatalf("RecordAcceptanceResult() err = %v, want %v", err, errs.ErrPreconditionFailed)
+			}
+			if repository.updatedAcceptance.ID != uuid.Nil {
+				t.Fatal("human gate final status was persisted")
+			}
+		})
+	}
+
+	t.Run("waiting with owner ref", func(t *testing.T) {
+		t.Parallel()
+
+		acceptanceID := uuid.MustParse("70707070-1111-2222-3333-444444444444")
+		expectedVersion := int64(1)
+		repository := &fakeRepository{
+			acceptanceByID: map[uuid.UUID]entity.AcceptanceResult{
+				acceptanceID: {
+					VersionedBase: entity.VersionedBase{ID: acceptanceID, Version: expectedVersion},
+					SessionID:     uuid.New(),
+					CheckKind:     enum.AcceptanceCheckKindHumanGate,
+					Status:        enum.AcceptanceStatusPending,
+					DetailsJSON:   []byte("{}"),
+				},
+			},
+		}
+		service := New(Config{Repository: repository})
+
+		acceptance, err := service.RecordAcceptanceResult(context.Background(), RecordAcceptanceResultInput{
+			Meta:               value.CommandMeta{CommandID: uuid.New(), ExpectedVersion: &expectedVersion, Actor: testActor()},
+			AcceptanceResultID: acceptanceID,
+			Status:             enum.AcceptanceStatusWaiting,
+			TargetRef:          " gate:request-1 ",
+			DetailsJSON:        []byte(`{"gate_ref":"gate:request-1","risk_ref":"risk:low"}`),
+		})
+		if err != nil {
+			t.Fatalf("RecordAcceptanceResult() err = %v", err)
+		}
+		if acceptance.Status != enum.AcceptanceStatusWaiting || acceptance.TargetRef != "gate:request-1" || acceptance.Version != expectedVersion+1 {
+			t.Fatalf("acceptance = %+v", acceptance)
+		}
+		if repository.updateAcceptanceEvent != nil {
+			t.Fatalf("waiting status emitted event: %+v", repository.updateAcceptanceEvent)
+		}
+	})
+
+	t.Run("waiting requires gate or risk ref", func(t *testing.T) {
+		t.Parallel()
+
+		acceptanceID := uuid.New()
+		expectedVersion := int64(1)
+		repository := &fakeRepository{
+			acceptanceByID: map[uuid.UUID]entity.AcceptanceResult{
+				acceptanceID: {
+					VersionedBase: entity.VersionedBase{ID: acceptanceID, Version: expectedVersion},
+					SessionID:     uuid.New(),
+					CheckKind:     enum.AcceptanceCheckKindHumanGate,
+					Status:        enum.AcceptanceStatusPending,
+					DetailsJSON:   []byte("{}"),
+				},
+			},
+		}
+		service := New(Config{Repository: repository})
+
+		_, err := service.RecordAcceptanceResult(context.Background(), RecordAcceptanceResultInput{
+			Meta:               value.CommandMeta{CommandID: uuid.New(), ExpectedVersion: &expectedVersion, Actor: testActor()},
+			AcceptanceResultID: acceptanceID,
+			Status:             enum.AcceptanceStatusWaiting,
+			TargetRef:          "artifact:not-a-gate",
+			DetailsJSON:        []byte(`{"summary":"waiting"}`),
+		})
+		if !errors.Is(err, errs.ErrInvalidArgument) {
+			t.Fatalf("RecordAcceptanceResult() err = %v, want %v", err, errs.ErrInvalidArgument)
+		}
+		if repository.updatedAcceptance.ID != uuid.Nil {
+			t.Fatal("human gate waiting without owner ref was persisted")
 		}
 	})
 }

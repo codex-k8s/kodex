@@ -227,7 +227,7 @@ approvals:
 
 ### AcceptanceCheck и AcceptanceResult
 
-`AcceptanceCheck` описывает тип проверки в policy/flow-контексте, а `AcceptanceResult` является хранимым агрегатом результата. Базовый lifecycle создаёт один pending result на команду `RequestAcceptance`, затем `RecordAcceptanceResult` переводит его в `passed`, `failed`, `waiting` или `skipped` через ожидаемую версию.
+`AcceptanceCheck` описывает тип проверки в policy/flow-контексте, а `AcceptanceResult` является хранимым агрегатом результата. Базовый lifecycle создаёт один pending result на команду `RequestAcceptance`, затем `RecordAcceptanceResult` переводит его в `passed`, `failed`, `waiting` или `skipped` через ожидаемую версию. Для `human_gate` доступна только фиксация ожидания `waiting` с безопасной ссылкой на gate/risk/governance; финальное решение остаётся в сервисе-владельце.
 
 | Поле | Тип | Может быть пустым | Примечание |
 |---|---|---:|---|
@@ -237,12 +237,12 @@ approvals:
 | `stage_id` | uuid | да | Этап. |
 | `check_kind` | enum | нет | `artifact`, `watermark`, `policy`, `role_result`, `human_gate`, `follow_up`. |
 | `status` | enum | нет | `pending`, `passed`, `failed`, `waiting`, `skipped`. |
-| `target_ref` | text | да | Provider/runtime/package/governance/interaction ref. |
+| `target_ref` | text | да | Provider/runtime/package/governance/interaction ref: trim, до 512 символов, видимый ASCII safe-ref с namespace (`kind:value`) и без raw/log/secret markers. |
 | `details_json` | jsonb | нет | Bounded JSON-object с безопасными `summary`, `digest`, `artifact_refs`, `risk_ref`, `gate_ref` и другими refs. |
 | `version` | bigint | нет | Оптимистичная конкуренция результата приёмки. |
 | `created_at`, `updated_at` | timestamptz | нет | Технические временные метки. |
 
-`details_json` не является отчётом QA runner и не хранит raw provider payload, workspace files, prompt text, flow files, руководящие документы, stdout/stderr/logs, секреты, токены или PII. Если приёмка ждёт Human gate или governance decision, `agent-manager` фиксирует только статус ожидания и безопасные refs; само решение хранит сервис-владелец.
+`details_json` не является отчётом QA runner и не хранит raw provider payload, workspace files, prompt text, flow files, руководящие документы, stdout/stderr/logs, секреты, токены или PII. Если приёмка ждёт Human gate или governance decision, `agent-manager` фиксирует только статус ожидания и безопасные `gate_ref`/`risk_ref`/`governance` refs; само решение хранит сервис-владелец.
 
 ### FollowUpIntent
 

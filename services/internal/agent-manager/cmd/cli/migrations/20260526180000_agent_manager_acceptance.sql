@@ -32,6 +32,19 @@ CREATE TABLE agent_manager_acceptance_results (
         CHECK (check_kind IN ('artifact', 'watermark', 'policy', 'role_result', 'human_gate', 'follow_up')),
     CONSTRAINT agent_manager_acceptance_results_status_chk
         CHECK (status IN ('pending', 'passed', 'failed', 'waiting', 'skipped')),
+    CONSTRAINT agent_manager_acceptance_results_target_ref_chk
+        CHECK (
+            char_length(target_ref) <= 512
+            AND (
+                target_ref = ''
+                OR (
+                    target_ref ~ '^[A-Za-z0-9._:/#@+=,-]+$'
+                    AND position(':' IN target_ref) > 1
+                    AND position(':' IN target_ref) < char_length(target_ref)
+                    AND lower(target_ref) !~ '(raw_provider_payload|provider_payload|workspace_file|workspace_files|prompt_text|prompt_template|flow_file|large_report|report_body|raw_report|secret|token|authorization|stdout|stderr|logs|-----begin|bearer)'
+                )
+            )
+        ),
     CONSTRAINT agent_manager_acceptance_results_details_chk CHECK (jsonb_typeof(details_json) = 'object'),
     CONSTRAINT agent_manager_acceptance_results_version_chk CHECK (version > 0)
 );
