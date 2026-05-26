@@ -5,8 +5,8 @@ title: kodex - дизайн codex-hook-ingress
 status: active
 owner_role: SA
 created_at: 2026-05-22
-updated_at: 2026-05-22
-related_issues: [698, 753, 778, 322]
+updated_at: 2026-05-25
+related_issues: [698, 753, 778, 786, 322]
 related_prs: []
 related_adrs: []
 approvals:
@@ -76,6 +76,20 @@ approvals:
 | Decision bridge | Для `PermissionRequest` и отдельных `PreToolUse` ждёт решение `governance-manager` и delivery/callback через `interaction-hub` в пределах timeout; `agent-manager` получает только ожидание flow и refs. |
 | Operational feed | Пишет короткую ленту для realtime UI и диагностики с retention. |
 | Audit/metrics emitter | Фиксирует решения, отказы, sanitizer events, route latency, duplicates, rate limits и owner timeouts. |
+
+## Runtime contract emitter/sidecar
+
+Детальный контракт CHI-2 живёт в `docs/domains/codex-hook-ingress/architecture/emitter_sidecar_contract.md`, а machine-readable runtime policy — в `specs/jsonschema/codex-hook-ingress.v1/hook-emitter-config.v1.schema.json`.
+
+Инварианты runtime-границы:
+
+- hook emitter запускается как Codex command hook и читает только JSON object из `stdin`;
+- local sidecar опционален и может держать retry buffer только после sanitizer;
+- sidecar не является доменным сервисом, не принимает бизнес-решения и не владеет состоянием run/session/slot;
+- receiver всегда `codex-hook-ingress`; `integration-gateway` остаётся для внешних webhook/callback;
+- `SubmitHookEvent` в CHI-2 является логической операцией без выбранного physical transport;
+- endpoint ref, source binding и auth material подготавливает `runtime-manager` в рамках slot/runtime boundary;
+- `PreCompact` и `PostCompact` не попадают в `supported_hook_events`; compact checkpoints остаются внутренними событиями `agent-manager`/`runtime-manager`.
 
 ## Поток данных
 

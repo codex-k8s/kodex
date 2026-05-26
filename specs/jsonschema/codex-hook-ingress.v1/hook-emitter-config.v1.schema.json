@@ -1,0 +1,271 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:kodex:schemas:codex-hook-ingress:v1:hook-emitter-config",
+  "title": "codex-hook-ingress hook emitter runtime config v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "config_id",
+    "schema_version",
+    "runtime_role",
+    "codex_hook_input",
+    "supported_hook_events",
+    "internal_session_events",
+    "sanitizer_contract_ref",
+    "delivery_contract",
+    "auth_policy",
+    "idempotency_policy",
+    "ordering_policy",
+    "retry_policy",
+    "buffer_policy",
+    "backpressure_policy",
+    "failure_policy"
+  ],
+  "properties": {
+    "config_id": {"const": "codex-hook-ingress.hook-emitter.v1"},
+    "schema_version": {"const": "codex-hook-ingress.hook-emitter-config.v1"},
+    "runtime_role": {"type": "string", "enum": ["hook_emitter", "local_sidecar"]},
+    "codex_hook_input": {"$ref": "#/$defs/codexHookInput"},
+    "supported_hook_events": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/supportedHookEvent"}
+    },
+    "internal_session_events": {"$ref": "#/$defs/internalSessionEvents"},
+    "sanitizer_contract_ref": {
+      "type": "string",
+      "const": "urn:kodex:schemas:codex-hook-ingress:v1:sanitizer-contract"
+    },
+    "delivery_contract": {"$ref": "#/$defs/deliveryContract"},
+    "auth_policy": {"$ref": "#/$defs/authPolicy"},
+    "idempotency_policy": {"$ref": "#/$defs/idempotencyPolicy"},
+    "ordering_policy": {"$ref": "#/$defs/orderingPolicy"},
+    "retry_policy": {"$ref": "#/$defs/retryPolicy"},
+    "buffer_policy": {"$ref": "#/$defs/bufferPolicy"},
+    "backpressure_policy": {"$ref": "#/$defs/backpressurePolicy"},
+    "failure_policy": {"$ref": "#/$defs/failurePolicy"}
+  },
+  "$defs": {
+    "supportedHookEvent": {
+      "type": "string",
+      "enum": [
+        "SessionStart",
+        "UserPromptSubmit",
+        "PreToolUse",
+        "PermissionRequest",
+        "PostToolUse",
+        "Stop"
+      ]
+    },
+    "codexHookInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "handler_type",
+        "input_stream",
+        "output_mapping",
+        "session_cwd_policy",
+        "transcript_policy",
+        "codex_version_policy"
+      ],
+      "properties": {
+        "handler_type": {"const": "command_hook"},
+        "input_stream": {"const": "stdin_json_object"},
+        "output_mapping": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["stdout", "stderr", "exit_code"],
+          "properties": {
+            "stdout": {"const": "codex_supported_hook_result"},
+            "stderr": {"const": "bounded_safe_error_only"},
+            "exit_code": {"const": "codex_hook_exit_semantics"}
+          }
+        },
+        "session_cwd_policy": {"const": "runs_in_codex_session_cwd"},
+        "transcript_policy": {"const": "do_not_read_or_forward_transcript_path"},
+        "codex_version_policy": {"const": "not_pinned_by_schema_use_capability_probe"}
+      }
+    },
+    "internalSessionEvents": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["compact_policy", "future_event_names"],
+      "properties": {
+        "compact_policy": {"const": "internal_agent_runtime_events_only"},
+        "future_event_names": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "SessionCompactCheckpointRequested",
+              "SessionCompactCheckpointCompleted"
+            ]
+          }
+        }
+      }
+    },
+    "deliveryContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "receiver",
+        "logical_operation",
+        "transport_profile",
+        "endpoint_ref_policy",
+        "endpoint_ref",
+        "envelope_schema_ref",
+        "response_model",
+        "max_envelope_bytes"
+      ],
+      "properties": {
+        "receiver": {"const": "codex-hook-ingress"},
+        "logical_operation": {"const": "SubmitHookEvent"},
+        "transport_profile": {"const": "transport_tbd_internal_command"},
+        "endpoint_ref_policy": {"const": "runtime_manager_resolves_endpoint_ref"},
+        "endpoint_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z0-9_.:/-]+$"
+        },
+        "envelope_schema_ref": {
+          "type": "string",
+          "const": "urn:kodex:schemas:codex-hook-ingress:v1:normalized-hook-envelope"
+        },
+        "response_model": {"const": "HookHandlerResult"},
+        "max_envelope_bytes": {"type": "integer", "const": 65536}
+      }
+    },
+    "authPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed_modes",
+        "source_binding_required",
+        "secret_material_in_config",
+        "rotation_required"
+      ],
+      "properties": {
+        "allowed_modes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "workload_identity",
+              "short_lived_source_token",
+              "mtls_service_identity"
+            ]
+          }
+        },
+        "source_binding_required": {"const": true},
+        "secret_material_in_config": {"const": "forbidden"},
+        "rotation_required": {"const": true}
+      }
+    },
+    "idempotencyPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key_expression", "duplicate_same_digest", "duplicate_different_digest"],
+      "properties": {
+        "key_expression": {"const": "event_id + payload_digest"},
+        "duplicate_same_digest": {"const": "return_cached_or_acknowledged_result"},
+        "duplicate_different_digest": {"const": "reject_duplicate_conflict"}
+      }
+    },
+    "orderingPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "sequence_field", "clock_policy"],
+      "properties": {
+        "scope": {"const": "per_run_session"},
+        "sequence_field": {"const": "local_monotonic_sequence"},
+        "clock_policy": {"const": "event_time_plus_ingress_received_time"}
+      }
+    },
+    "retryPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "base_delay_ms",
+        "max_delay_ms",
+        "max_attempts",
+        "jitter",
+        "non_retryable_errors"
+      ],
+      "properties": {
+        "base_delay_ms": {"type": "integer", "minimum": 50, "maximum": 5000},
+        "max_delay_ms": {"type": "integer", "minimum": 1000, "maximum": 60000},
+        "max_attempts": {"type": "integer", "minimum": 1, "maximum": 20},
+        "jitter": {"const": "full"},
+        "non_retryable_errors": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "hook.unsupported_event",
+              "hook.payload_rejected",
+              "hook.payload_too_large",
+              "hook.invalid_binding",
+              "hook.duplicate_conflict"
+            ]
+          }
+        }
+      }
+    },
+    "bufferPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "payload_class",
+        "max_events",
+        "max_bytes",
+        "ttl_seconds",
+        "persistence",
+        "encryption_required",
+        "raw_payload_storage"
+      ],
+      "properties": {
+        "payload_class": {"const": "normalized_sanitized_envelope_only"},
+        "max_events": {"type": "integer", "minimum": 1, "maximum": 5000},
+        "max_bytes": {"type": "integer", "minimum": 65536, "maximum": 16777216},
+        "ttl_seconds": {"type": "integer", "minimum": 1, "maximum": 86400},
+        "persistence": {"type": "string", "enum": ["memory", "encrypted_local_spool"]},
+        "encryption_required": {"const": true},
+        "raw_payload_storage": {"const": "forbidden"}
+      }
+    },
+    "backpressurePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["audit_critical", "decision_bridge", "realtime_only"],
+      "properties": {
+        "audit_critical": {"const": "fail_closed_or_retry_until_ttl"},
+        "decision_bridge": {"const": "bounded_wait_then_fail_closed_or_no_decision_by_policy"},
+        "realtime_only": {"const": "drop_with_metric_after_buffer_limit"}
+      }
+    },
+    "failurePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform_unavailable",
+        "buffer_overflow",
+        "partial_delivery",
+        "sanitizer_failure"
+      ],
+      "properties": {
+        "platform_unavailable": {"const": "buffer_safe_events_and_apply_event_class_policy"},
+        "buffer_overflow": {"const": "drop_realtime_fail_closed_audit_critical"},
+        "partial_delivery": {"const": "retry_undelivered_routes_with_same_event_id"},
+        "sanitizer_failure": {"const": "reject_without_buffering_raw_payload"}
+      }
+    }
+  }
+}

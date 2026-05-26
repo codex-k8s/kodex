@@ -1,0 +1,96 @@
+{
+  "config_id": "codex-hook-ingress.hook-emitter.v1",
+  "schema_version": "codex-hook-ingress.hook-emitter-config.v1",
+  "runtime_role": "local_sidecar",
+  "codex_hook_input": {
+    "handler_type": "command_hook",
+    "input_stream": "stdin_json_object",
+    "output_mapping": {
+      "stdout": "codex_supported_hook_result",
+      "stderr": "bounded_safe_error_only",
+      "exit_code": "codex_hook_exit_semantics"
+    },
+    "session_cwd_policy": "runs_in_codex_session_cwd",
+    "transcript_policy": "do_not_read_or_forward_transcript_path",
+    "codex_version_policy": "not_pinned_by_schema_use_capability_probe"
+  },
+  "supported_hook_events": [
+    "SessionStart",
+    "UserPromptSubmit",
+    "PreToolUse",
+    "PermissionRequest",
+    "PostToolUse",
+    "Stop"
+  ],
+  "internal_session_events": {
+    "compact_policy": "internal_agent_runtime_events_only",
+    "future_event_names": [
+      "SessionCompactCheckpointRequested",
+      "SessionCompactCheckpointCompleted"
+    ]
+  },
+  "sanitizer_contract_ref": "urn:kodex:schemas:codex-hook-ingress:v1:sanitizer-contract",
+  "delivery_contract": {
+    "receiver": "codex-hook-ingress",
+    "logical_operation": "SubmitHookEvent",
+    "transport_profile": "transport_tbd_internal_command",
+    "endpoint_ref_policy": "runtime_manager_resolves_endpoint_ref",
+    "endpoint_ref": "runtime-manager/slot/codex-hook-ingress",
+    "envelope_schema_ref": "urn:kodex:schemas:codex-hook-ingress:v1:normalized-hook-envelope",
+    "response_model": "HookHandlerResult",
+    "max_envelope_bytes": 65536
+  },
+  "auth_policy": {
+    "allowed_modes": [
+      "workload_identity",
+      "short_lived_source_token",
+      "mtls_service_identity"
+    ],
+    "source_binding_required": true,
+    "secret_material_in_config": "forbidden",
+    "rotation_required": true
+  },
+  "idempotency_policy": {
+    "key_expression": "event_id + payload_digest",
+    "duplicate_same_digest": "return_cached_or_acknowledged_result",
+    "duplicate_different_digest": "reject_duplicate_conflict"
+  },
+  "ordering_policy": {
+    "scope": "per_run_session",
+    "sequence_field": "local_monotonic_sequence",
+    "clock_policy": "event_time_plus_ingress_received_time"
+  },
+  "retry_policy": {
+    "base_delay_ms": 250,
+    "max_delay_ms": 10000,
+    "max_attempts": 7,
+    "jitter": "full",
+    "non_retryable_errors": [
+      "hook.unsupported_event",
+      "hook.payload_rejected",
+      "hook.payload_too_large",
+      "hook.invalid_binding",
+      "hook.duplicate_conflict"
+    ]
+  },
+  "buffer_policy": {
+    "payload_class": "normalized_sanitized_envelope_only",
+    "max_events": 512,
+    "max_bytes": 4194304,
+    "ttl_seconds": 900,
+    "persistence": "encrypted_local_spool",
+    "encryption_required": true,
+    "raw_payload_storage": "forbidden"
+  },
+  "backpressure_policy": {
+    "audit_critical": "fail_closed_or_retry_until_ttl",
+    "decision_bridge": "bounded_wait_then_fail_closed_or_no_decision_by_policy",
+    "realtime_only": "drop_with_metric_after_buffer_limit"
+  },
+  "failure_policy": {
+    "platform_unavailable": "buffer_safe_events_and_apply_event_class_policy",
+    "buffer_overflow": "drop_realtime_fail_closed_audit_critical",
+    "partial_delivery": "retry_undelivered_routes_with_same_event_id",
+    "sanitizer_failure": "reject_without_buffering_raw_payload"
+  }
+}
