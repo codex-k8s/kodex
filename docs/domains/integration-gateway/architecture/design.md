@@ -5,8 +5,8 @@ title: kodex — дизайн integration-gateway
 status: active
 owner_role: SA
 created_at: 2026-05-25
-updated_at: 2026-05-25
-related_issues: [781, 770]
+updated_at: 2026-05-26
+related_issues: [781, 792, 770]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -22,7 +22,7 @@ approvals:
 
 - Что меняем: выделяем `integration-gateway` как тонкий HTTP-вход для внешних webhook и callback событий.
 - Почему: внешние системы должны попадать в платформу через отдельную пограничную поверхность с проверкой источника, подписи, лимитов, размера payload и backpressure.
-- Основные компоненты: HTTP router, source registry, signature verifier, payload guard, redactor, backpressure guard, idempotency mapper, gRPC router к сервисам-владельцам и bounded diagnostics.
+- Основные компоненты: HTTP router, OpenAPI validation, source registry, signature verifier interface, payload guard, redactor, backpressure guard, idempotency mapper, gRPC router к сервисам-владельцам и bounded diagnostics.
 - Риски: превратить gateway в второй `provider-hub`, начать хранить business state или смешать внешние callback события с UI/staff/user API.
 
 ## Цели
@@ -35,7 +35,7 @@ approvals:
 
 ## Не-цели
 
-- Не реализовывать сервисный процесс, storage, handlers или Kubernetes manifests.
+- Не реализовывать storage, Kubernetes manifests или полный provider webhook route с проверкой подписи в сервисном каркасе IGW-1.
 - Не переносить webhook inbox, provider projections, cursors, операции провайдера или reconciliation из `provider-hub`.
 - Не парсить бизнес-смысл GitHub/GitLab событий глубже edge envelope.
 - Не создавать UI endpoints.
@@ -66,6 +66,7 @@ approvals:
 | Компонент | Назначение |
 |---|---|
 | HTTP router | Принимает публичные webhook/callback запросы по OpenAPI gateway-поверхности. |
+| OpenAPI validation | Загружает `specs/openapi/integration-gateway.v1.yaml` на старте и валидирует входящие HTTP requests по контракту. |
 | Source registry | Сопоставляет входящий route, provider/channel slug и ожидаемый способ проверки. В MVP допускается статическая конфигурация deployment; динамический registry добавляется отдельным срезом. |
 | Signature verifier | Проверяет подписи GitHub/GitLab или callback secret по ссылке на секрет. Значение секрета держится только в памяти процесса. |
 | Payload guard | Отклоняет слишком большие payload и неподдерживаемые content type до gRPC-вызова владельца. |
@@ -93,6 +94,8 @@ sequenceDiagram
 ```
 
 `integration-gateway` передаёт в `provider-hub` минимальный transport envelope: `provider_slug`, `delivery_id`, `event_name`, `payload_json`, `received_at` и безопасный `CommandMeta`. Он не извлекает provider work item, не строит проекцию и не решает, какие доменные события публиковать.
+
+В сервисном каркасе IGW-1 этот route смонтирован как отключённый по умолчанию stub: он валидирует HTTP-контракт, отдаёт безопасные ошибки и фиксирует provider-hub client interface, но не принимает webhook как проверенный, пока не подключён verifier подписи и source binding.
 
 Если provider не даёт устойчивый delivery id, gateway отклоняет запрос или строит idempotency key только по заранее согласованному правилу source registry. Само доменное дублирование webhook остаётся в `provider-hub`.
 

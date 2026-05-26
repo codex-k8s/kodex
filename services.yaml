@@ -125,6 +125,15 @@ spec:
         - proto/kodex/providers/v1
         - specs/asyncapi/provider-hub.v1.yaml
         - deploy/base/provider-hub
+    integration-gateway:
+      value: "0.1.0"
+      bumpOn:
+        - services/external/integration-gateway
+        - specs/openapi/integration-gateway.v1.yaml
+        - proto/kodex/providers/v1
+        - tools/codegen/openapi/integration-gateway.oapi-codegen.yaml
+        - libs/go/servicemain
+        - libs/go/serviceprocess
     runtime-manager:
       value: "0.1.0"
       bumpOn:
@@ -520,6 +529,26 @@ spec:
       migrationsImageEnv: KODEX_FLEET_MANAGER_MIGRATIONS_IMAGE
       purpose: fleet-scopes-servers-clusters-health-placement
   serviceScaffolds:
+    - name: integration-gateway
+      status: scaffold
+      zone: external
+      path: services/external/integration-gateway
+      ownerDomain: integration-gateway
+      apiContracts:
+        openapi: specs/openapi/integration-gateway.v1.yaml
+        ownerGrpcClient: proto/kodex/providers/v1/provider_hub.proto
+      dependencies:
+        - provider-hub
+      implementation:
+        businessState: none
+        providerWebhookRoute: registered-disabled-by-default
+        signatureVerification: planned
+        callbackRoutes: reserved-only
+      deploy:
+        health:
+          livez: /health/livez
+          readyz: /health/readyz
+          metrics: /metrics
     - name: platform-mcp-server
       status: scaffold
       zone: internal

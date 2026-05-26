@@ -5,8 +5,8 @@ title: kodex — API-обзор integration-gateway
 status: active
 owner_role: SA
 created_at: 2026-05-25
-updated_at: 2026-05-25
-related_issues: [781, 770]
+updated_at: 2026-05-26
+related_issues: [781, 792, 770]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -38,12 +38,12 @@ approvals:
 
 | HTTP endpoint | Назначение | Внутренний владелец | Статус |
 |---|---|---|---|
-| `POST /v1/provider-webhooks/{provider_slug}` | Принять provider webhook от GitHub/GitLab или другого provider source. | `provider-hub.IngestWebhookEvent` | MVP |
+| `POST /v1/provider-webhooks/{provider_slug}` | Принять provider webhook от GitHub/GitLab или другого provider source. | `provider-hub.IngestWebhookEvent` | Сервисный stub IGW-1, реальная активация после проверки подписи. |
 | `POST /v1/external-callbacks/{callback_source}` | Принять callback внешнего канала, пакета или интеграции. | `interaction-hub`, `package-hub` или другой владелец по route registry | Контрактный задел, активируется отдельным owner-срезом. |
 
 ## Provider webhook envelope
 
-Gateway передаёт в `provider-hub.IngestWebhookEvent`:
+После активации provider route gateway передаёт в `provider-hub.IngestWebhookEvent`:
 
 | Поле | Источник | Правило |
 |---|---|---|
@@ -82,6 +82,7 @@ Gateway передаёт в `provider-hub.IngestWebhookEvent`:
 - Gateway не хранит raw payload в собственной БД.
 - Логи, ошибки и метрики проходят redaction до записи.
 - Внутренний gRPC-вызов содержит только безопасный edge context и payload, предназначенный сервису-владельцу.
+- В IGW-1 provider route отключён по умолчанию, потому что проверка подписи и source binding ещё не реализованы.
 
 ## Совместимость
 

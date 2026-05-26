@@ -8,7 +8,7 @@ help:
 	@echo "  make test-go-postgres - run mandatory PostgreSQL repository integration tests"
 	@echo "  make test-go-migrations - run migration guard tests for active service goose files"
 	@echo "  make fmt-go    - gofmt -w on tracked .go files"
-	@echo "  make gen-openapi-go [SVC=services/external/api-gateway] - generate Go transport code from OpenAPI"
+	@echo "  make gen-openapi-go [SVC=services/external/integration-gateway] - generate Go transport code from OpenAPI"
 	@echo "  make gen-openapi-ts [APP=services/staff/web-console] - generate TS API client from OpenAPI"
 	@echo "  make gen-openapi - run Go+TS OpenAPI generators for default services"
 	@echo "  make gen-proto-go - generate Go gRPC contracts from active proto/**/*.proto"
@@ -100,11 +100,12 @@ fmt-go:
 	printf '%s\n' "$$files" | xargs -r gofmt -w
 
 gen-openapi-go:
-	@svc="$${SVC:-services/external/api-gateway}"; \
+	@svc="$${SVC:-services/external/integration-gateway}"; \
 	spec="$$svc/api/server/api.yaml"; \
 	cfg="tools/codegen/openapi/$$(basename "$$svc").oapi-codegen.yaml"; \
 	out="$$svc/internal/transport/http/generated/openapi.gen.go"; \
 	case "$$svc" in \
+		services/external/integration-gateway) spec="specs/openapi/integration-gateway.v1.yaml" ;; \
 		services/external/api-gateway|services/external/telegram-interaction-adapter) ;; \
 		*) echo "gen-openapi-go: unsupported SVC=$$svc"; exit 1 ;; \
 	esac; \
@@ -122,9 +123,8 @@ gen-openapi-ts:
 	npm --prefix "$$app" run gen:openapi
 
 gen-openapi:
-	@$(MAKE) gen-openapi-go SVC=services/external/api-gateway
-	@$(MAKE) gen-openapi-go SVC=services/external/telegram-interaction-adapter
-	@$(MAKE) gen-openapi-ts
+	@$(MAKE) gen-openapi-go SVC=services/external/integration-gateway
+	@if [ -d services/staff/web-console ]; then $(MAKE) gen-openapi-ts; else echo "gen-openapi-ts: services/staff/web-console is not present"; fi
 
 gen-proto-go:
 	@mkdir -p proto/gen/go; \
