@@ -148,6 +148,41 @@ func (registry *Registry) addProviderTools(server *mcpsdk.Server, handler *Provi
 	}
 }
 
+func (registry *Registry) addGovernanceTools(server *mcpsdk.Server, handler *GovernanceToolsHandler, version string) {
+	tools := []struct {
+		name     string
+		register func(string)
+	}{
+		{name: ToolGovernanceGateRequest, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolGovernanceGateRequest, Description: description}, handler.RequestGate)
+		}},
+		{name: ToolGovernanceGateGet, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolGovernanceGateGet, Description: description}, handler.GetGateRequest)
+		}},
+		{name: ToolGovernanceGateList, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolGovernanceGateList, Description: description}, handler.ListGateRequests)
+		}},
+		{name: ToolGovernanceGateSubmitDecision, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolGovernanceGateSubmitDecision, Description: description}, handler.SubmitGateDecision)
+		}},
+		{name: ToolGovernanceGateCancel, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolGovernanceGateCancel, Description: description}, handler.CancelGate)
+		}},
+		{name: ToolGovernanceGateExpire, register: func(description string) {
+			mcpsdk.AddTool(server, &mcpsdk.Tool{Name: ToolGovernanceGateExpire, Description: description}, handler.ExpireGate)
+		}},
+	}
+	for _, tool := range tools {
+		description := governanceToolDescriptions[tool.name]
+		tool.register(description)
+		registry.tools = append(registry.tools, ToolDescriptor{
+			Name:        tool.name,
+			Description: description,
+			Version:     version,
+		})
+	}
+}
+
 // Tools returns a copy of registered tool descriptors.
 func (registry *Registry) Tools() []ToolDescriptor {
 	result := make([]ToolDescriptor, len(registry.tools))

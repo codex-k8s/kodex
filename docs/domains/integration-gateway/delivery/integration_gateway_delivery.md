@@ -6,12 +6,14 @@ status: active
 owner_role: EM
 created_at: 2026-05-25
 updated_at: 2026-05-26
-related_issues: [781, 792, 807, 770]
+related_issues: [781, 792, 807, 770, 829]
 related_prs: []
 related_docsets:
   - docs/domains/integration-gateway/product/requirements.md
   - docs/domains/integration-gateway/architecture/design.md
   - docs/domains/integration-gateway/architecture/api_contract.md
+  - docs/domains/integration-gateway/ops/integration_gateway_runbook.md
+  - docs/domains/integration-gateway/ops/integration_gateway_monitoring.md
   - specs/openapi/integration-gateway.v1.yaml
 approvals:
   required: ["Owner"]
@@ -46,7 +48,7 @@ approvals:
 | IGW-2 | #807 | Реальный route `POST /v1/provider-webhooks/{provider_slug}` для `provider_slug=github`: проверка `X-Hub-Signature-256`, обязательных GitHub headers, лимита payload, idempotency mapping и вызов `provider-hub.IngestWebhookEvent`. |
 | IGW-3 | не назначено | Callback routes для внешних каналов и пакетов после готовности owner-service contracts: `interaction-hub`, `package-hub` или другой владелец. |
 | IGW-4 | #819 | Security hardening: per-source/per-route limits, backpressure policy, safe audit summary, replay/idempotency tests и compatibility tests OpenAPI без расширения бизнес-состояния gateway. |
-| IGW-5 | не назначено | Deploy-контур: Dockerfile, manifests, secrets refs, smoke, runbook, monitoring и rollback. |
+| IGW-5 | #829 | Deploy-контур: Dockerfile, manifests, secrets refs, smoke, runbook, monitoring и rollback. |
 
 ## Зависимости и блокировки
 
@@ -77,6 +79,17 @@ approvals:
 | Backpressure | Guard возвращает `429/rate_limited` или `503/backpressure` с `Retry-After` до вызова `provider-hub`. |
 | Replay | Повторный GitHub delivery id проходит edge verification и передаётся в `provider-hub`; gateway не хранит dedupe state. |
 | Safe diagnostics | Request summary содержит только route, source, status, latency, payload size bucket и reject reason; raw payload, подписи, токены и секреты не логируются. |
+
+## Реализованный deploy-контур IGW-5
+
+| Область | Состояние |
+|---|---|
+| Image | `services/external/integration-gateway/Dockerfile` собирает `build`, `dev` и `prod` stages; prod содержит бинарник и OpenAPI spec без исходников и секретов. |
+| Manifests | `deploy/base/integration-gateway/**` содержит kustomize base для `ServiceAccount`, `ConfigMap`, `Service`, `Deployment`, probes и metrics scrape annotations. |
+| Secret refs | GitHub webhook secret и provider-hub gRPC token подключаются через `kodex-platform-runtime` keys без значений в manifests/docs/tests. |
+| Config | Route guard, HTTP limits, OpenAPI path, provider-hub address/timeout и secret resolver backends задаются env/config refs. |
+| Smoke | `scripts/smoke-integration-gateway.sh` проверяет health/readiness/metrics/OpenAPI и safe negative responses для GitHub route без реального webhook secret. |
+| Ops | Runbook и monitoring docs описывают route checks, backpressure, safe errors, provider-hub connectivity и rollback. |
 
 ## Критерии начала реального provider route
 

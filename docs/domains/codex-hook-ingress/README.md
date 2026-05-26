@@ -20,12 +20,13 @@ Codex hooks являются command-обработчиками Codex: hook emit
 
 Сервисный каркас расположен в `services/internal/codex-hook-ingress`.
 
-Текущий срез реализует process, config, graceful shutdown, `/health/livez`, `/health/readyz`, `/metrics`, in-process logical boundary `SubmitHookEvent`, source binding placeholder, schema validation hook, sanitizer boundary, idempotency repository stub, route registry для dispatch безопасных частей событий через owner ports/stubs и bounded in-memory ops/realtime feed для operator diagnostics. Физический transport для `SubmitHookEvent` не выбран и не реализован; соседние домены получают только safe projections без raw payload и без бизнес-команд.
+Текущий срез реализует process, config, graceful shutdown, `/health/livez`, `/health/readyz`, `/metrics`, in-process logical boundary `SubmitHookEvent`, source binding placeholder, schema validation hook, sanitizer boundary, idempotency repository stub, route registry для dispatch безопасных частей событий через owner ports/stubs, decision bridge для `PermissionRequest` и policy-controlled `PreToolUse`, а также bounded in-memory ops/realtime feed для operator diagnostics. Физический transport для `SubmitHookEvent` не выбран и не реализован; соседние домены получают только safe projections/context без raw payload и без бизнес-команд.
 
 ## Что не входит
 
 - MCP tools, `tools/list`, `tools/call` и MCP transport — зона `platform-mcp-server`.
-- `Run`, session, flow, ожидания flow, persistent tool/activity history и acceptance — зона `agent-manager`.
+- `Run`, session, flow, ожидания flow и acceptance — зона `agent-manager`.
+- Persistent история tool/activity и UI timeline — зона `agent-manager`.
 - Risk/gate request и decision state — зона `governance-manager`.
 - Slot, workspace и platform jobs — зона `runtime-manager`.
 - Provider write/read pipeline — зона `provider-hub`.

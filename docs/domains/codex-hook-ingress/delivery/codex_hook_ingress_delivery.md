@@ -6,7 +6,7 @@ status: active
 owner_role: EM
 created_at: 2026-05-22
 updated_at: 2026-05-26
-related_issues: [698, 753, 778, 786, 793, 808, 823, 322, 834]
+related_issues: [698, 753, 778, 786, 793, 808, 823, 836, 322, 834]
 related_prs: []
 related_docsets:
   - docs/domains/codex-hook-ingress/product/requirements.md
@@ -50,7 +50,7 @@ approvals:
 | CHI-3 | #793 | Сервисный каркас `codex-hook-ingress`: process, config, graceful shutdown, health/readiness/metrics, in-process logical `SubmitHookEvent`, source verifier placeholder, schema validation hook, sanitizer boundary, idempotency repository stub без raw payload storage. |
 | CHI-4 | #808 | Route registry и dispatch безопасных частей events через owner ports/stubs к `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub` и operations/realtime placeholder без бизнес-состояния в ingress. |
 | CHI-4b | не назначено | Маршрутизация sanitized `PreToolUse`/`PostToolUse` в `agent-manager.RecordAgentActivity` после готовности AGO-9b; ingress остаётся sanitizer/router/realtime feed и не хранит persistent tool history. |
-| CHI-5 | не назначено | `PermissionRequest` и policy-controlled `PreToolUse` bridge к gate/decision у `governance-manager`, ожиданию flow у `agent-manager` и delivery через `interaction-hub`. |
+| CHI-5 | #836 | `PermissionRequest` и policy-controlled `PreToolUse` bridge к gate/decision у `governance-manager`, ожиданию flow у `agent-manager` и delivery через `interaction-hub`; ingress держит только safe context, idempotency и bounded diagnostics без persistent tool/activity timeline. |
 | CHI-6a | #823 | Bounded in-memory realtime/ops feed, retention TTL/capacity, sanitizer metrics, route diagnostics, fixed-window rate limits, safe backpressure и operator diagnostics без служебной БД. |
 | CHI-6b | не назначено | Persistent ops feed или integration с operations-hub, если требуется восстановление ленты после рестарта, отдельные retention jobs и SRE runbook. |
 | CHI-7 | не назначено | Capability context refs для skills: связь с `package-hub`, выбором `agent-manager` и materialization `runtime-manager`; без skill catalog в ingress. |
@@ -61,11 +61,11 @@ approvals:
 | Домен или сервис | Связь | Статус |
 |---|---|---|
 | `platform-mcp-server` | Отдельная MCP-поверхность tools. | CHI-0 фиксирует разделение; hook ingress не добавляет MCP transport. |
-| `agent-manager` | Владеет run/session, ожиданием flow, persistent activity timeline и выбором skills. | CHI-4 отправляет только safe projections через owner port; после AGO-9b следующий CHI-срез отправляет sanitized tool activity в `RecordAgentActivity`; CHI-5 согласует операции ожидания flow и bridge. |
+| `agent-manager` | Владеет run/session, ожиданием flow, persistent tool/activity timeline и выбором skills. | CHI-4 отправляет только safe projections через owner port; CHI-4b маршрутизирует sanitized tool activity в `RecordAgentActivity`; CHI-5 передаёт safe decision context и refs без хранения долгосрочной истории tool calls в ingress. |
 | `runtime-manager` | Владеет slot, workspace, materialization skills и runtime diagnostics. | CHI-2 фиксирует runtime placement, endpoint ref и auth policy для emitter/sidecar; CHI-4 отправляет runtime-safe refs, CHI-7 требует подготовку materialization. |
 | `provider-hub` | Владеет provider artifacts, limits и reconciliation. | CHI-4 отправляет только safe provider artifact signal/rate limit parts без stdout `gh` и provider payload. |
-| `governance-manager` | Владеет risk assessment, gate request/decision и policy-based approvals. | CHI-4 передаёт safe risk/gate context без full `PermissionRequest` bridge; CHI-5 согласует decision lifecycle. |
-| `interaction-hub` | Владеет owner feedback, approvals, Human gate delivery и notifications. | CHI-5 требует delivery request/callback contract без владения decision state. |
+| `governance-manager` | Владеет risk assessment, gate request/decision и policy-based approvals. | CHI-5 вызывает owner decision port/stub для `PermissionRequest` и рискованных `PreToolUse`; unavailable/timeout даёт safe result по policy. |
+| `interaction-hub` | Владеет owner feedback, approvals, Human gate delivery и notifications. | CHI-5 передаёт safe request context через owner port/stub без владения decision state. |
 | `package-hub` | Владеет package source/version/install/manifest для package-backed skills. | CHI-7 использует только package refs и manifest snapshots, не переносит их в ingress. |
 | `access-manager` | Владеет правами actor/source/tool/capability. | CHI-3/CHI-5 требуют проверки source и role policy. |
 

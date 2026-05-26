@@ -6,7 +6,7 @@ status: active
 owner_role: SA
 created_at: 2026-05-22
 updated_at: 2026-05-26
-related_issues: [698, 753, 778, 786, 793, 808, 823, 322, 834]
+related_issues: [698, 753, 778, 786, 793, 808, 823, 836, 322, 834]
 related_prs: []
 approvals:
   required: ["Owner"]
@@ -53,9 +53,9 @@ approvals:
 
 Logical response CHI-4 также содержит route delivery diagnostics. Unsupported, disabled или failed route не считается успешной доставкой. Diagnostic text должен быть safe: без raw downstream error, prompt, tool input/output, stdout/stderr, provider payload, kubeconfig и secret values.
 
-Persistent история tool/activity не является операцией `codex-hook-ingress`. Следующий CHI-срез должен маршрутизировать sanitized `PreToolUse`/`PostToolUse` в `agent-manager.RecordAgentActivity`; `codex-hook-ingress` остаётся sanitizer/router/realtime ops feed и не хранит долгую историю tool calls.
+Persistent история tool/activity не является операцией `codex-hook-ingress`. Отдельный CHI-срез маршрутизирует sanitized `PreToolUse`/`PostToolUse` в `agent-manager.RecordAgentActivity`; `codex-hook-ingress` остаётся sanitizer/router/realtime ops feed и не хранит долгую историю tool calls.
 
-## Состояние реализации CHI-3/CHI-4/CHI-6a
+## Состояние реализации CHI-3/CHI-4/CHI-5/CHI-6a
 
 Кодовый каркас `services/internal/codex-hook-ingress` реализует `SubmitHookEvent` только как in-process logical boundary в `internal/transport/command`. Он нужен для проверки доменного use-case, idempotency и sanitizer boundary без фиксации physical transport.
 
@@ -65,9 +65,13 @@ Process config CHI-4 добавляет `KODEX_CODEX_HOOK_INGRESS_DISABLED_ROUTE
 
 Idempotency record имеет состояние завершённости delivery. Повтор после уже завершённого delivery возвращает cached diagnostics; повтор после incomplete delivery не считается успешным cached replay и пытается дозавершить canonical dispatch.
 
+CHI-5 добавляет owner decision bridge для `PermissionRequest` и policy-controlled `PreToolUse`. Bridge строит только safe request context, вызывает owner ports/stubs `governance-manager`, `agent-manager` и `interaction-hub`, возвращает explicit handler state и пишет bounded diagnostics. Ingress не хранит persistent историю tool/activity; долгосрочная timeline принадлежит `agent-manager`.
+
+Process config CHI-5 добавляет `KODEX_CODEX_HOOK_INGRESS_DECISION_BRIDGE_TIMEOUT`, `KODEX_CODEX_HOOK_INGRESS_PERMISSION_DECISION_FAILURE_POLICY`, `KODEX_CODEX_HOOK_INGRESS_PRE_TOOL_USE_DECISION_FAILURE_POLICY` и `KODEX_CODEX_HOOK_INGRESS_PRE_TOOL_USE_DECISION_RISK_CLASSES`. Failure policy поддерживает только `fail_closed`, `no_decision`, `timeout` и `retryable_error`; неподдерживаемый Codex output `ask` не используется.
+
 CHI-6a добавляет bounded in-memory ops/realtime feed, безопасный snapshot diagnostics, sanitizer/route counters, payload/latency buckets, fixed-window logical rate limit и backpressure перед downstream dispatch. Ops entry содержит только safe summary, event kind, route result, owner target, digest, size bucket, status, reject reason и timestamps. Перегрузка возвращает `hook.rate_limited` или `hook.backpressure` и не считается успешной доставкой.
 
-В CHI-3/CHI-4/CHI-6a не создаются proto, OpenAPI, AsyncAPI, HTTP/gRPC handler для `SubmitHookEvent` и network client emitter/sidecar. Служебный HTTP-процесс отдаёт только `/health/livez`, `/health/readyz` и `/metrics`.
+В CHI-3/CHI-4/CHI-5/CHI-6a не создаются proto, OpenAPI, AsyncAPI, HTTP/gRPC handler для `SubmitHookEvent` и network client emitter/sidecar. Служебный HTTP-процесс отдаёт только `/health/livez`, `/health/readyz` и `/metrics`.
 
 ## Логический контракт hook emitter/local sidecar
 
@@ -111,7 +115,7 @@ Machine-readable конфигурация: `specs/jsonschema/codex-hook-ingress.
 
 | Field | Type | Required | Notes |
 |---|---|---:|---|
-| `result` | enum | да | Нормализованный платформенный результат: `continue`, `allow`, `deny`, `no_decision`, `retry`, `fail_closed`, `ignored`. |
+| `result` | enum | да | Нормализованный платформенный результат: `continue`, `allow`, `deny`, `no_decision`, `timeout`, `retry`, `retryable_error`, `fail_closed`, `ignored`. |
 | `hook_event_name` | enum | да | Повторяет событие. |
 | `system_message` | string | нет | Safe text для Codex UI/event stream, если policy разрешает. |
 | `additional_context` | string | нет | Safe model-visible context, если разрешён владельцем. |
@@ -262,7 +266,10 @@ Routes:
 | Ops feed retention | Стартовое значение `15m` через `KODEX_CODEX_HOOK_INGRESS_OPS_FEED_RETENTION`; записи удаляются из памяти без persistent storage. |
 | High-frequency realtime events | Fixed-window limit по source/run/event class, стартово `300` событий за `1m` через `KODEX_CODEX_HOOK_INGRESS_RATE_LIMIT_BURST` и `KODEX_CODEX_HOOK_INGRESS_RATE_LIMIT_WINDOW`. |
 | Audit-critical events | Не дропать молча; при перегрузке возвращать fail-closed или retryable error. |
-| Decision bridge timeout | Определяется `governance-manager` policy; risky requests fail-closed. |
+| Decision bridge timeout | Стартовое значение `30s` через `KODEX_CODEX_HOOK_INGRESS_DECISION_BRIDGE_TIMEOUT`; меньший `timeout_budget_ms` из safe payload может ужать ожидание. |
+| Permission decision failure policy | Стартовое значение `fail_closed` через `KODEX_CODEX_HOOK_INGRESS_PERMISSION_DECISION_FAILURE_POLICY`. |
+| PreToolUse decision failure policy | Стартовое значение `no_decision` через `KODEX_CODEX_HOOK_INGRESS_PRE_TOOL_USE_DECISION_FAILURE_POLICY`. |
+| PreToolUse decision risk classes | Стартовое значение `medium,high,unknown` через `KODEX_CODEX_HOOK_INGRESS_PRE_TOOL_USE_DECISION_RISK_CLASSES`; `low` не блокируется без отдельной policy. |
 
 Текущие значения являются service config для MVP. Если они должны меняться на лету, следующий срез переводит их в typed platform settings с audit trail.
 

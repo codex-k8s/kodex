@@ -235,6 +235,254 @@ func TestSubmitHookEventRetriesIncompleteDuplicateDelivery(t *testing.T) {
 	}
 }
 
+func TestSubmitHookEventPermissionRequestBridgeAllowsWithOwnerPorts(t *testing.T) {
+	t.Parallel()
+
+	governancePort := &recordingDecisionPort{decision: HookOwnerDecision{
+		Result:           hookenum.HandlerResultAllow,
+		OwnerDecisionRef: "governance:gate-decision:1",
+		DecisionReason:   value.RouteDiagnosticDecisionAllowed,
+	}}
+	agentPort := &recordingDecisionPort{decision: HookOwnerDecision{
+		Result:           hookenum.HandlerResultNoDecision,
+		OwnerDecisionRef: "agent-manager:flow-wait:1",
+	}}
+	interactionPort := &recordingDecisionPort{decision: HookOwnerDecision{
+		Result:           hookenum.HandlerResultNoDecision,
+		OwnerDecisionRef: "interaction-hub:human-gate:1",
+	}}
+	service := newTestServiceWithDecisionBridge(Config{}, NewOwnerDecisionBridge(map[hookenum.DownstreamOwner]DecisionOwnerPort{
+		hookenum.DownstreamOwnerGovernanceManager: governancePort,
+		hookenum.DownstreamOwnerAgentManager:      agentPort,
+		hookenum.DownstreamOwnerInteractionHub:    interactionPort,
+	}))
+
+	result, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: validPermissionRequestEnvelope()})
+	if err != nil {
+		t.Fatalf("SubmitHookEvent(): %v", err)
+	}
+	if result.HandlerResult.Result != hookenum.HandlerResultAllow {
+		t.Fatalf("handler result = %s, want allow", result.HandlerResult.Result)
+	}
+	if result.HandlerResult.OwnerDecisionRef != "governance:gate-decision:1" {
+		t.Fatalf("owner decision ref = %q, want governance ref", result.HandlerResult.OwnerDecisionRef)
+	}
+	if result.RoutesAccepted != 3 {
+		t.Fatalf("routes accepted = %d, want decision owner ports only", result.RoutesAccepted)
+	}
+	for _, port := range []*recordingDecisionPort{governancePort, agentPort, interactionPort} {
+		requests := port.Requests()
+		if len(requests) != 1 {
+			t.Fatalf("owner port requests = %d, want 1", len(requests))
+		}
+		request := requests[0]
+		if request.ToolContext == nil || request.SourceContext.SourceRef == "" || request.RunContext.SessionID == "" || request.PayloadDigest == "" {
+			t.Fatalf("decision request is missing safe context: %+v", request)
+		}
+	}
+}
+
+func TestSubmitHookEventRiskyPreToolUseUsesGovernanceDecision(t *testing.T) {
+	t.Parallel()
+
+	governancePort := &recordingDecisionPort{decision: HookOwnerDecision{
+		Result:           hookenum.HandlerResultDeny,
+		OwnerDecisionRef: "governance:gate-decision:deny",
+		DecisionReason:   value.RouteDiagnosticDecisionDenied,
+	}}
+	service := newTestServiceWithDecisionBridge(Config{}, NewOwnerDecisionBridge(map[hookenum.DownstreamOwner]DecisionOwnerPort{
+		hookenum.DownstreamOwnerGovernanceManager: governancePort,
+	}))
+	envelope := validPreToolUseEnvelope()
+	envelope.SafePayload.RiskClass = "high"
+
+	result, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: envelope})
+	if err != nil {
+		t.Fatalf("SubmitHookEvent(): %v", err)
+	}
+	if result.HandlerResult.Result != hookenum.HandlerResultDeny {
+		t.Fatalf("handler result = %s, want deny", result.HandlerResult.Result)
+	}
+	if !hasDiagnosticCode(result.RouteDiagnostics, hookenum.DownstreamOwnerGovernanceManager, value.RouteDiagnosticDecisionDenied) {
+		t.Fatalf("route diagnostics = %+v, want governance decision deny", result.RouteDiagnostics)
+	}
+	if len(governancePort.Requests()) != 1 {
+		t.Fatalf("governance decision calls = %d, want 1", len(governancePort.Requests()))
+	}
+}
+
+func TestSubmitHookEventLowRiskPreToolUseDoesNotBlockOnDecisionBridge(t *testing.T) {
+	t.Parallel()
+
+	governancePort := &recordingDecisionPort{err: errors.New("should not be called")}
+	service := newTestServiceWithDecisionBridge(Config{}, NewOwnerDecisionBridge(map[hookenum.DownstreamOwner]DecisionOwnerPort{
+		hookenum.DownstreamOwnerGovernanceManager: governancePort,
+	}))
+
+	result, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: validPreToolUseEnvelope()})
+	if err != nil {
+		t.Fatalf("SubmitHookEvent(): %v", err)
+	}
+	if result.HandlerResult.Result != hookenum.HandlerResultContinue {
+		t.Fatalf("handler result = %s, want continue for low-risk pre-tool", result.HandlerResult.Result)
+	}
+	if len(governancePort.Requests()) != 0 {
+		t.Fatalf("governance decision calls = %d, want 0", len(governancePort.Requests()))
+	}
+}
+
+func TestSubmitHookEventPermissionBridgeTimeoutUsesPolicyResult(t *testing.T) {
+	t.Parallel()
+
+	governancePort := &recordingDecisionPort{waitForContext: true}
+	service := newTestServiceWithDecisionBridge(
+		Config{
+			DecisionBridgeTimeout:           time.Millisecond,
+			PermissionDecisionFailurePolicy: hookenum.DecisionFailurePolicyTimeout,
+		},
+		NewOwnerDecisionBridge(map[hookenum.DownstreamOwner]DecisionOwnerPort{
+			hookenum.DownstreamOwnerGovernanceManager: governancePort,
+			hookenum.DownstreamOwnerAgentManager: &recordingDecisionPort{decision: HookOwnerDecision{
+				Result: hookenum.HandlerResultNoDecision,
+			}},
+			hookenum.DownstreamOwnerInteractionHub: &recordingDecisionPort{decision: HookOwnerDecision{
+				Result: hookenum.HandlerResultNoDecision,
+			}},
+		}),
+	)
+
+	result, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: validPermissionRequestEnvelope()})
+	if err != nil {
+		t.Fatalf("SubmitHookEvent(): %v", err)
+	}
+	if result.HandlerResult.Result != hookenum.HandlerResultTimeout {
+		t.Fatalf("handler result = %s, want timeout", result.HandlerResult.Result)
+	}
+	if !hasDiagnosticCode(result.RouteDiagnostics, hookenum.DownstreamOwnerGovernanceManager, value.RouteDiagnosticDecisionTimeout) {
+		t.Fatalf("route diagnostics = %+v, want governance timeout", result.RouteDiagnostics)
+	}
+}
+
+func TestSubmitHookEventPermissionBridgeFailClosedWhenOwnerUnavailable(t *testing.T) {
+	t.Parallel()
+
+	service := newTestServiceWithDecisionBridge(
+		Config{PermissionDecisionFailurePolicy: hookenum.DecisionFailurePolicyFailClosed},
+		NewOwnerDecisionBridge(map[hookenum.DownstreamOwner]DecisionOwnerPort{
+			hookenum.DownstreamOwnerGovernanceManager: &recordingDecisionPort{err: errors.New("raw tool_input secret should not leak")},
+		}),
+	)
+
+	result, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: validPermissionRequestEnvelope()})
+	if err != nil {
+		t.Fatalf("SubmitHookEvent(): %v", err)
+	}
+	if result.HandlerResult.Result != hookenum.HandlerResultFailClosed {
+		t.Fatalf("handler result = %s, want fail_closed", result.HandlerResult.Result)
+	}
+	diagnostic := diagnosticForOwner(result.RouteDiagnostics, hookenum.DownstreamOwnerGovernanceManager).DiagnosticMessage
+	if strings.Contains(diagnostic, "raw tool_input secret") {
+		t.Fatalf("diagnostic leaked downstream error: %q", diagnostic)
+	}
+}
+
+func TestSubmitHookEventPermissionBridgeDefaultPortsAreUnavailableStubs(t *testing.T) {
+	t.Parallel()
+
+	result, err := newTestService().SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: validPermissionRequestEnvelope()})
+	if err != nil {
+		t.Fatalf("SubmitHookEvent(): %v", err)
+	}
+	if result.HandlerResult.Result != hookenum.HandlerResultFailClosed {
+		t.Fatalf("handler result = %s, want fail_closed", result.HandlerResult.Result)
+	}
+	if result.RoutesAccepted != 0 {
+		t.Fatalf("routes accepted = %d, want 0 for unavailable owner stubs", result.RoutesAccepted)
+	}
+	for _, owner := range []hookenum.DownstreamOwner{
+		hookenum.DownstreamOwnerGovernanceManager,
+		hookenum.DownstreamOwnerAgentManager,
+		hookenum.DownstreamOwnerInteractionHub,
+	} {
+		diagnostic := diagnosticForOwner(result.RouteDiagnostics, owner)
+		if diagnostic.Status != hookenum.RouteDeliveryStatusFailed || diagnostic.DiagnosticCode != value.RouteDiagnosticOwnerUnavailable {
+			t.Fatalf("diagnostic for %s = %+v, want failed owner_unavailable", owner, diagnostic)
+		}
+	}
+}
+
+func TestSubmitHookEventPermissionBridgeIdempotencyReplayAndCorrelationConflict(t *testing.T) {
+	t.Parallel()
+
+	governancePort := &recordingDecisionPort{decision: HookOwnerDecision{
+		Result:           hookenum.HandlerResultAllow,
+		OwnerDecisionRef: "governance:gate-decision:1",
+	}}
+	service := newTestServiceWithDecisionBridge(Config{}, NewOwnerDecisionBridge(map[hookenum.DownstreamOwner]DecisionOwnerPort{
+		hookenum.DownstreamOwnerGovernanceManager: governancePort,
+		hookenum.DownstreamOwnerAgentManager:      &recordingDecisionPort{decision: HookOwnerDecision{Result: hookenum.HandlerResultNoDecision}},
+		hookenum.DownstreamOwnerInteractionHub:    &recordingDecisionPort{decision: HookOwnerDecision{Result: hookenum.HandlerResultNoDecision}},
+	}))
+	envelope := validPermissionRequestEnvelope()
+
+	if _, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: envelope}); err != nil {
+		t.Fatalf("first SubmitHookEvent(): %v", err)
+	}
+	result, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: envelope})
+	if err != nil {
+		t.Fatalf("second SubmitHookEvent(): %v", err)
+	}
+	if !result.Duplicate || result.HandlerResult.Result != hookenum.HandlerResultAllow {
+		t.Fatalf("duplicate result = %+v, want cached allow", result)
+	}
+	if len(governancePort.Requests()) != 1 {
+		t.Fatalf("governance decision calls = %d, want cached replay without dispatch", len(governancePort.Requests()))
+	}
+	envelope.CorrelationID = "run-5555:permission-request:changed"
+	_, err = service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: envelope})
+	if !errors.Is(err, hookerrs.ErrDuplicateConflict) {
+		t.Fatalf("correlation replay error = %v, want ErrDuplicateConflict", err)
+	}
+}
+
+func TestSubmitHookEventRejectsDuplicateHookEventNameConflict(t *testing.T) {
+	t.Parallel()
+
+	service := newTestService()
+	first := validPreToolUseEnvelope()
+	if _, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: first}); err != nil {
+		t.Fatalf("first SubmitHookEvent(): %v", err)
+	}
+	second := validPermissionRequestEnvelope()
+	second.EventID = first.EventID
+	second.PayloadDigest = first.PayloadDigest
+	second.CorrelationID = first.CorrelationID
+	_, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: second})
+	if !errors.Is(err, hookerrs.ErrDuplicateConflict) {
+		t.Fatalf("event-name replay error = %v, want ErrDuplicateConflict", err)
+	}
+}
+
+func TestSubmitHookEventSanitizerRejectDoesNotCallDecisionBridge(t *testing.T) {
+	t.Parallel()
+
+	governancePort := &recordingDecisionPort{decision: HookOwnerDecision{Result: hookenum.HandlerResultAllow}}
+	service := newTestServiceWithDecisionBridge(Config{}, NewOwnerDecisionBridge(map[hookenum.DownstreamOwner]DecisionOwnerPort{
+		hookenum.DownstreamOwnerGovernanceManager: governancePort,
+	}))
+	envelope := validPermissionRequestEnvelope()
+	envelope.SafePayload.SanitizedReason = "unsafe preview must not pass sanitizer"
+	envelope.SanitizerReport.RejectedFieldClasses = []string{"tool_input"}
+
+	_, err := service.SubmitHookEvent(context.Background(), SubmitHookEventInput{Envelope: envelope})
+	if !errors.Is(err, hookerrs.ErrPayloadRejected) {
+		t.Fatalf("SubmitHookEvent() error = %v, want ErrPayloadRejected", err)
+	}
+	if len(governancePort.Requests()) != 0 {
+		t.Fatalf("governance decision calls = %d, want 0 after sanitizer rejection", len(governancePort.Requests()))
+	}
+}
+
 func TestSubmitHookEventCanFailClosedOnRouteFailure(t *testing.T) {
 	t.Parallel()
 
@@ -623,6 +871,14 @@ func newTestServiceWithConfig(cfg Config, registry *RouteRegistry) *Service {
 	})
 }
 
+func newTestServiceWithDecisionBridge(cfg Config, bridge DecisionBridge) *Service {
+	return New(hookstub.NewRepository(), cfg, Dependencies{
+		Clock:          fixedClock{now: time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)},
+		RouteRegistry:  testRouteRegistry(nil),
+		DecisionBridge: bridge,
+	})
+}
+
 func newTestServiceWithDependencies(
 	cfg Config,
 	registry *RouteRegistry,
@@ -706,6 +962,50 @@ func validPreToolUseEnvelopeWith(eventID uuid.UUID, payloadDigest string, correl
 	return envelope
 }
 
+func validPermissionRequestEnvelope() value.HookEnvelope {
+	envelope := validPreToolUseEnvelope()
+	timeoutBudgetMS := 5000
+	commandDigest := digest("c")
+	envelope.EventID = uuid.MustParse("11111111-3333-4111-8111-111111111111")
+	envelope.HookEventName = hookenum.HookEventPermissionRequest
+	envelope.ToolContext.ToolUseID = "toolu-002"
+	envelope.ToolContext.CommandDigest = &commandDigest
+	envelope.ToolContext.PathCategory = "config"
+	envelope.SafePayload = value.SafePayload{
+		SafeSummary:     "Codex asks for permission before running a higher-risk shell action.",
+		RiskClass:       "medium",
+		SanitizedReason: "Command requests elevated shell access for a repository configuration check.",
+		PermissionClass: "shell_escalation",
+		TimeoutBudgetMS: &timeoutBudgetMS,
+	}
+	envelope.PayloadDigest = digest("f")
+	envelope.SanitizerReport = value.SanitizerReport{
+		Result:         hookenum.SanitizerResultRedacted,
+		AppliedRules:   []string{"drop-tool-input", "hash-command", "sanitize-reason"},
+		RedactionCount: 1,
+	}
+	envelope.DownstreamRoutes = []value.DownstreamRoute{
+		{
+			Owner:        hookenum.DownstreamOwnerGovernanceManager,
+			DeliveryMode: hookenum.DeliveryModeSync,
+			SafeParts:    []string{"source_context", "run_context", "tool_context", "capability_context", "risk_class", "sanitized_reason", "payload_digest", "correlation_id"},
+		},
+		{
+			Owner:        hookenum.DownstreamOwnerAgentManager,
+			DeliveryMode: hookenum.DeliveryModeAsync,
+			SafeParts:    []string{"source_context", "run_context", "tool_context", "capability_context", "risk_class", "sanitized_reason", "correlation_id"},
+		},
+		{
+			Owner:        hookenum.DownstreamOwnerInteractionHub,
+			DeliveryMode: hookenum.DeliveryModeAsync,
+			SafeParts:    []string{"source_context", "run_context", "tool_context", "risk_class", "sanitized_reason", "correlation_id"},
+		},
+	}
+	envelope.CorrelationID = "run-5555:permission-request:toolu-002"
+	envelope.RetentionClass = hookenum.RetentionClassAudit
+	return envelope
+}
+
 func digest(char string) string {
 	return "sha256:" + strings.Repeat(char, 64)
 }
@@ -742,6 +1042,41 @@ type failingOwnerRoute struct {
 
 func (route failingOwnerRoute) DispatchSafeHookEvent(_ context.Context, _ value.SafeHookEvent) error {
 	return route.err
+}
+
+type recordingDecisionPort struct {
+	mu             sync.Mutex
+	decision       HookOwnerDecision
+	err            error
+	waitForContext bool
+	requests       []HookDecisionRequest
+}
+
+func (port *recordingDecisionPort) RequestHookDecision(ctx context.Context, request HookDecisionRequest) (HookOwnerDecision, error) {
+	port.mu.Lock()
+	port.requests = append(port.requests, request)
+	port.mu.Unlock()
+	if port.waitForContext {
+		<-ctx.Done()
+		return HookOwnerDecision{}, ctx.Err()
+	}
+	if port.err != nil {
+		return HookOwnerDecision{}, port.err
+	}
+	decision := port.decision
+	if decision.Owner == "" {
+		decision.Owner = request.Owner
+	}
+	if decision.Result == "" {
+		decision.Result = hookenum.HandlerResultNoDecision
+	}
+	return decision, nil
+}
+
+func (port *recordingDecisionPort) Requests() []HookDecisionRequest {
+	port.mu.Lock()
+	defer port.mu.Unlock()
+	return append([]HookDecisionRequest(nil), port.requests...)
 }
 
 type failOnceDeliveryRepository struct {

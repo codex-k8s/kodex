@@ -47,11 +47,14 @@ func TestOwnerRouteCatalogUsesDefaultOwnerTargets(t *testing.T) {
 		t.Fatalf("OwnerRouteCatalog(): %v", err)
 	}
 	routes := catalog.Routes()
-	if len(routes) != 8 {
-		t.Fatalf("routes len = %d, want 8", len(routes))
+	if len(routes) != 9 {
+		t.Fatalf("routes len = %d, want 9", len(routes))
 	}
 	if routes[0].Service != ownerclients.ServiceAccessManager || routes[0].Target != "access-manager:9090" {
 		t.Fatalf("first route = %+v", routes[0])
+	}
+	if routes[4].Service != ownerclients.ServiceGovernanceManager || routes[4].Target != "governance-manager:9090" {
+		t.Fatalf("governance route = %+v", routes[4])
 	}
 }
 
@@ -77,6 +80,11 @@ func validConfig() Config {
 		ProviderHub: OwnerServiceConfig{
 			Enabled:   true,
 			AuthToken: "provider-hub-token",
+			Timeout:   3 * time.Second,
+		},
+		GovernanceManager: OwnerServiceConfig{
+			Enabled:   true,
+			AuthToken: "governance-manager-token",
 			Timeout:   3 * time.Second,
 		},
 	}

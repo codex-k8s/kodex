@@ -33,6 +33,7 @@
 | CHI-2 | #786 | готово | Контракт hook emitter/local sidecar, runtime config JSON Schema, logical `SubmitHookEvent`, sanitizer до buffer/send, auth, idempotency, ordering, retry, bounded buffer, backpressure и failure policy без выбора physical transport. |
 | CHI-3 | #793 | готово | Сервисный каркас `services/internal/codex-hook-ingress`: process, config, graceful shutdown, health/readiness/metrics, in-process logical `SubmitHookEvent`, source binding placeholder, schema validation hook, sanitizer boundary, idempotency repository stub без raw payload storage. |
 | CHI-4 | #808 | готово | Route registry и dispatch безопасных частей hook events через owner ports/stubs к `agent-manager`, `runtime-manager`, `provider-hub`, `governance-manager`, `interaction-hub` и operations/realtime placeholder; unsupported/disabled/downstream-failed routes дают safe diagnostics и не считаются успешной доставкой. |
+| CHI-5 | #836 | готово | `PermissionRequest` bridge и policy-controlled `PreToolUse`: safe request context, owner decision ports/stubs для `governance-manager`, `agent-manager`, `interaction-hub`, explicit handler states, timeout/fail-closed policy и idempotent replay без persistent истории tool/activity в ingress. |
 | CHI-6a | #823 | готово | Bounded in-memory ops/realtime feed, TTL/capacity retention, sanitizer metrics, route diagnostics, fixed-window rate limits, safe backpressure и operator diagnostics поверх CHI-4 registry без служебной БД. |
 
 ## Текущий бэклог агента #5
@@ -40,7 +41,6 @@
 | Срез | Что осталось |
 |---|---|
 | CHI-4b | Маршрутизация sanitized `PreToolUse`/`PostToolUse` в `agent-manager.RecordAgentActivity` после готовности owner-side timeline; ingress не хранит persistent tool history. |
-| CHI-5 | `PermissionRequest` и policy-controlled `PreToolUse` bridge через `governance-manager`, ожидание flow у `agent-manager` и delivery через `interaction-hub`. |
 | CHI-6b | Persistent ops feed или integration с operations-hub, если понадобится восстановление ленты после рестарта и отдельные retention jobs. |
 | CHI-7 | Capability context refs для Codex skills без skill catalog в ingress. |
 | CHI-8 | Deploy-контур: Dockerfile, manifests, migration job только если нужна служебная БД, smoke, runbook и monitoring. |
@@ -50,8 +50,8 @@
 | Домен или сервис | Что согласовывать |
 |---|---|
 | `platform-mcp-server` | Hooks не являются MCP tools; MCP видит только tool calls, а hook ingress может фиксировать MCP tool name как безопасное имя в `tool_context`. |
-| `agent-manager` | Run/session binding, flow waiting refs, lifecycle events, stop checkpoint, safe activity timeline и capability context selection. |
-| `governance-manager` | Risk assessment, gate request/decision refs и fail-closed policy для рискованных `PermissionRequest` и `PreToolUse`. |
+| `agent-manager` | Run/session binding, flow waiting refs, lifecycle events, stop checkpoint, persistent tool/activity timeline и capability context selection. |
+| `governance-manager` | Risk assessment, gate request/decision refs и fail-closed/no-decision policy для рискованных `PermissionRequest` и `PreToolUse`. |
 | `runtime-manager` | Slot/session binding, workspace refs, materialized capability refs, local emitter/sidecar placement и runtime diagnostics. |
 | `provider-hub` | Provider artifact signals, rate-limit hints и hot reconciliation hints без provider payload и stdout `gh`. |
 | `interaction-hub` | Delivery request refs, owner feedback, Human gate prompt и callback refs без хранения decision state в interaction. |
@@ -64,4 +64,5 @@
 - Не переносить MCP `tools/list` или `tools/call` в hook ingress.
 - Не создавать skill catalog, package manifest store или materialization state внутри `codex-hook-ingress`.
 - Не хранить raw `tool_input`, raw `tool_response`, prompt, stdout/stderr, transcript, session dump, kubeconfig, provider payload или secret values.
+- Не создавать persistent историю tool calls/activity внутри ingress; долгосрочная timeline принадлежит `agent-manager`.
 - Физический transport `SubmitHookEvent` не выбран: до отдельного решения по gRPC/HTTP разрешён только in-process logical boundary, без proto, OpenAPI и AsyncAPI.

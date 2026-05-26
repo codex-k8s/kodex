@@ -130,6 +130,9 @@ spec:
       value: "0.1.0"
       bumpOn:
         - services/external/integration-gateway
+        - deploy/base/integration-gateway
+        - scripts/build-integration-gateway-images.sh
+        - scripts/smoke-integration-gateway.sh
         - specs/openapi/integration-gateway.v1.yaml
         - proto/kodex/providers/v1
         - tools/codegen/openapi/integration-gateway.oapi-codegen.yaml
@@ -196,6 +199,7 @@ spec:
         - libs/go/serviceprocess
         - libs/go/servicemain
         - proto/kodex/agents/v1
+        - proto/kodex/governance/v1
         - proto/kodex/providers/v1
     codex-hook-ingress:
       value: "0.1.0"
@@ -307,6 +311,14 @@ spec:
       context: .
       imageEnv: KODEX_PROVIDER_HUB_MIGRATIONS_IMAGE
       migratesDatabase: kodex_provider_hub
+    integration-gateway:
+      type: build
+      repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_INTEGRATION_GATEWAY_INTERNAL_IMAGE_REPOSITORY" "kodex/integration-gateway" }}'
+      tagTemplate: '{{ index .Versions "integration-gateway" }}'
+      dockerfile: services/external/integration-gateway/Dockerfile
+      target: prod
+      context: .
+      imageEnv: KODEX_INTEGRATION_GATEWAY_IMAGE
     runtime-manager:
       type: build
       repository: '{{ envOr "KODEX_INTERNAL_REGISTRY_HOST" "127.0.0.1:5000" }}/{{ envOr "KODEX_RUNTIME_MANAGER_INTERNAL_IMAGE_REPOSITORY" "kodex/runtime-manager" }}'
@@ -453,6 +465,62 @@ spec:
           livez: /health/livez
           readyz: /health/readyz
           metrics: /metrics
+    - name: integration-gateway
+      status: foundation
+      zone: external
+      path: services/external/integration-gateway
+      dockerfile: services/external/integration-gateway/Dockerfile
+      imageEnv: KODEX_INTEGRATION_GATEWAY_IMAGE
+      internalImageRepositoryEnv: KODEX_INTEGRATION_GATEWAY_INTERNAL_IMAGE_REPOSITORY
+      ownerDomain: integration-gateway
+      apiContracts:
+        openapi: specs/openapi/integration-gateway.v1.yaml
+        ownerGrpcClient: proto/kodex/providers/v1/provider_hub.proto
+      dependencies:
+        - provider-hub
+      implementation:
+        businessState: none
+        providerWebhookRoute: github-hmac-sha256-to-provider-hub
+        signatureVerification: github-x-hub-signature-256
+        routeProtection:
+          maxInFlightEnv: KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_MAX_IN_FLIGHT
+          rateLimitBurstEnv: KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_RATE_LIMIT_BURST
+          rateLimitWindowEnv: KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_RATE_LIMIT_WINDOW
+          retryAfterEnv: KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_RETRY_AFTER
+          state: in-memory-operational-only
+        safeDiagnostics:
+          labels:
+            - route
+            - source
+            - status
+            - latency
+            - payload-size-bucket
+            - reject-reason
+        webhookSecretRefs:
+          storeTypeEnv: KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_GITHUB_SECRET_STORE_TYPE
+          storeRefEnv: KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_GITHUB_SECRET_STORE_REF
+          valueEnvRef: KODEX_GITHUB_WEBHOOK_SECRET
+          kubernetesSecretRef:
+            name: kodex-platform-runtime
+            key: KODEX_GITHUB_WEBHOOK_SECRET
+          resolverBackends:
+            - env
+            - kubernetes_mounted_secret
+            - vault
+        providerHubRefs:
+          grpcAddrEnv: KODEX_INTEGRATION_GATEWAY_PROVIDER_HUB_GRPC_ADDR
+          grpcAuthTokenSecret:
+            name: kodex-platform-runtime
+            key: KODEX_PROVIDER_HUB_GRPC_AUTH_TOKEN
+        callbackRoutes: reserved-only
+      deploy:
+        serviceManifest: deploy/base/integration-gateway/integration-gateway.yaml.tpl
+        kustomization: deploy/base/integration-gateway/kustomization.yaml.tpl
+        health:
+          livez: /health/livez
+          readyz: /health/readyz
+          metrics: /metrics
+          openapi: /openapi/integration-gateway.v1.yaml
     - name: runtime-manager
       status: foundation
       zone: internal
@@ -551,47 +619,6 @@ spec:
       migrationsImageEnv: KODEX_FLEET_MANAGER_MIGRATIONS_IMAGE
       purpose: fleet-scopes-servers-clusters-health-placement
   serviceScaffolds:
-    - name: integration-gateway
-      status: scaffold
-      zone: external
-      path: services/external/integration-gateway
-      ownerDomain: integration-gateway
-      apiContracts:
-        openapi: specs/openapi/integration-gateway.v1.yaml
-        ownerGrpcClient: proto/kodex/providers/v1/provider_hub.proto
-      dependencies:
-        - provider-hub
-      implementation:
-        businessState: none
-        providerWebhookRoute: github-hmac-sha256-to-provider-hub
-        signatureVerification: github-x-hub-signature-256
-        routeProtection:
-          maxInFlightEnv: KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_MAX_IN_FLIGHT
-          rateLimitBurstEnv: KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_RATE_LIMIT_BURST
-          rateLimitWindowEnv: KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_RATE_LIMIT_WINDOW
-          retryAfterEnv: KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_RETRY_AFTER
-          state: in-memory-operational-only
-        safeDiagnostics:
-          labels:
-            - route
-            - source
-            - status
-            - latency
-            - payload-size-bucket
-            - reject-reason
-        webhookSecretRefs:
-          storeTypeEnv: KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_GITHUB_SECRET_STORE_TYPE
-          storeRefEnv: KODEX_INTEGRATION_GATEWAY_PROVIDER_WEBHOOK_GITHUB_SECRET_STORE_REF
-          resolverBackends:
-            - env
-            - kubernetes_mounted_secret
-            - vault
-        callbackRoutes: reserved-only
-      deploy:
-        health:
-          livez: /health/livez
-          readyz: /health/readyz
-          metrics: /metrics
     - name: platform-mcp-server
       status: scaffold
       zone: internal
@@ -604,6 +631,7 @@ spec:
         - agent-manager
         - project-catalog
         - provider-hub
+        - governance-manager
         - runtime-manager
         - fleet-manager
         - package-hub
@@ -626,6 +654,7 @@ spec:
       implementation:
         businessRoutes: route-registry-safe-parts-only
         database: stub-only-no-raw-payload-storage
+        decisionBridge: permission-and-policy-pre-tool-owner-ports-stubbed
         opsFeed: bounded-in-memory-safe-summary-only
         rateLimit: fixed-window-logical-boundary
         routeFailurePolicy: diagnostic-or-fail-closed
@@ -792,6 +821,16 @@ spec:
         - provider-hub-migrations
         - platform-event-log-migrations
         - access-manager
+    - name: integration-gateway
+      path: deploy/base/integration-gateway/integration-gateway.yaml.tpl
+      kustomization: deploy/base/integration-gateway/kustomization.yaml.tpl
+      deploysService: integration-gateway
+      exposes:
+        - http
+        - metrics
+        - openapi
+      requires:
+        - provider-hub
     - name: fleet-manager
       path: deploy/base/fleet-manager/fleet-manager.yaml.tpl
       kustomization: deploy/base/fleet-manager/kustomization.yaml.tpl

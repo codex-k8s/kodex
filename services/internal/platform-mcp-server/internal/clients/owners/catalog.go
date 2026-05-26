@@ -13,14 +13,15 @@ const (
 )
 
 const (
-	ServiceAccessManager  = "access-manager"
-	ServiceAgentManager   = "agent-manager"
-	ServiceProjectCatalog = "project-catalog"
-	ServiceProviderHub    = "provider-hub"
-	ServiceRuntimeManager = "runtime-manager"
-	ServiceFleetManager   = "fleet-manager"
-	ServicePackageHub     = "package-hub"
-	ServiceInteractionHub = "interaction-hub"
+	ServiceAccessManager     = "access-manager"
+	ServiceAgentManager      = "agent-manager"
+	ServiceProjectCatalog    = "project-catalog"
+	ServiceProviderHub       = "provider-hub"
+	ServiceGovernanceManager = "governance-manager"
+	ServiceRuntimeManager    = "runtime-manager"
+	ServiceFleetManager      = "fleet-manager"
+	ServicePackageHub        = "package-hub"
+	ServiceInteractionHub    = "interaction-hub"
 )
 
 // RouteConfig describes a future client route to an authoritative service owner.
