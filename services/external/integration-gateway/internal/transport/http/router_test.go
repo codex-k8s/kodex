@@ -177,18 +177,7 @@ func TestProviderWebhookRejectsInvalidGitHubSignature(t *testing.T) {
 
 func TestProviderWebhookRateLimitRejectsBeforeProviderHub(t *testing.T) {
 	providerHub := &fakeProviderHub{result: providerhubclient.WebhookResult{WebhookEventID: "webhook-1"}}
-	router := newTestRouterWithVerifier(t, Config{
-		ServiceName:                    "integration-gateway",
-		OpenAPISpecPath:                "../../../../../../specs/openapi/integration-gateway.v1.yaml",
-		RequestTimeout:                 time.Second,
-		MaxBodyBytes:                   1024,
-		ProviderWebhookEnabled:         true,
-		AllowedProviderSlugs:           []string{"github"},
-		ProviderWebhookMaxInFlight:     10,
-		ProviderWebhookRateLimitBurst:  1,
-		ProviderWebhookRateLimitWindow: time.Minute,
-		ProviderWebhookRetryAfter:      time.Second,
-	}, providerHub, newGitHubVerifier(t, testWebhookSecret))
+	router := newTestRouterWithVerifier(t, rateLimitTestConfig(), providerHub, newGitHubVerifier(t, testWebhookSecret))
 
 	first := httptest.NewRecorder()
 	router.ServeHTTP(first, signedGitHubWebhookRequest("delivery-rate-1", `{"action":"ping"}`))
@@ -209,6 +198,29 @@ func TestProviderWebhookRateLimitRejectsBeforeProviderHub(t *testing.T) {
 	}
 	if body.Code != generated.SafeErrorCodeRateLimited || !body.Retryable {
 		t.Fatalf("SafeError = %+v, want retryable rate_limited", body)
+	}
+	if providerHub.eventCount() != 1 {
+		t.Fatalf("provider-hub calls = %d, want 1", providerHub.eventCount())
+	}
+}
+
+func TestProviderWebhookInvalidSignatureDoesNotConsumeRateLimit(t *testing.T) {
+	providerHub := &fakeProviderHub{result: providerhubclient.WebhookResult{WebhookEventID: "webhook-1"}}
+	router := newTestRouterWithVerifier(t, rateLimitTestConfig(), providerHub, newGitHubVerifier(t, testWebhookSecret))
+
+	payload := `{"action":"ping"}`
+	invalidReq := githubWebhookRequest("delivery-auth-before-limit-1", payload)
+	invalidReq.Header.Set("X-Hub-Signature-256", githubSignature("wrong-secret", payload))
+	invalid := httptest.NewRecorder()
+	router.ServeHTTP(invalid, invalidReq)
+	if invalid.Code != http.StatusUnauthorized {
+		t.Fatalf("invalid status = %d, want %d, body = %s", invalid.Code, http.StatusUnauthorized, invalid.Body.String())
+	}
+
+	valid := httptest.NewRecorder()
+	router.ServeHTTP(valid, signedGitHubWebhookRequest("delivery-auth-before-limit-2", payload))
+	if valid.Code != http.StatusAccepted {
+		t.Fatalf("valid status = %d, want %d, body = %s", valid.Code, http.StatusAccepted, valid.Body.String())
 	}
 	if providerHub.eventCount() != 1 {
 		t.Fatalf("provider-hub calls = %d, want 1", providerHub.eventCount())
@@ -641,6 +653,15 @@ func enabledTestConfig(maxBodyBytes int64) Config {
 		ProviderWebhookEnabled: true,
 		AllowedProviderSlugs:   []string{"github"},
 	}
+}
+
+func rateLimitTestConfig() Config {
+	cfg := enabledTestConfig(1024)
+	cfg.ProviderWebhookMaxInFlight = 10
+	cfg.ProviderWebhookRateLimitBurst = 1
+	cfg.ProviderWebhookRateLimitWindow = time.Minute
+	cfg.ProviderWebhookRetryAfter = time.Second
+	return cfg
 }
 
 func expectSafeError(t *testing.T, rec *httptest.ResponseRecorder, status int) generated.SafeError {

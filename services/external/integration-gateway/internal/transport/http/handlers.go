@@ -37,11 +37,6 @@ func (h handlers) providerWebhook(c *echo.Context) error {
 	if err != nil {
 		return err
 	}
-	lease, safeErr := h.webhookGuard.acquire(routeIDProviderWebhook, providerSlug)
-	if safeErr != nil {
-		return safeErr
-	}
-	defer lease.Release()
 	body := requestBodyFromContext(c.Request().Context())
 	if err := h.verifier.VerifyProviderWebhook(c.Request().Context(), c.Request(), ProviderWebhookVerificationInput{
 		ProviderSlug: providerSlug,
@@ -49,6 +44,11 @@ func (h handlers) providerWebhook(c *echo.Context) error {
 	}); err != nil {
 		return providerWebhookVerificationError(err)
 	}
+	lease, safeErr := h.webhookGuard.acquire(routeIDProviderWebhook, providerSlug)
+	if safeErr != nil {
+		return safeErr
+	}
+	defer lease.Release()
 	result, err := h.providerHub.IngestWebhookEvent(c.Request().Context(), providerhubclient.WebhookEvent{
 		ProviderSlug:  providerSlug,
 		DeliveryID:    deliveryID,
