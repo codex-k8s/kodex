@@ -115,6 +115,7 @@
         "logical_operation",
         "transport_profile",
         "endpoint_ref_policy",
+        "endpoint_ref",
         "envelope_schema_ref",
         "response_model",
         "max_envelope_bytes"
